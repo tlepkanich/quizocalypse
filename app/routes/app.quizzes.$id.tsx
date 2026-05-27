@@ -93,6 +93,7 @@ export const loader = async ({ params, request }: LoaderFunctionArgs) => {
     return {
       product_id: p.productId,
       title: p.title,
+      handle: p.handle,
       price: p.priceMin ? String(p.priceMin) : null,
       image_url: p.imageUrl,
       tags: p.tags,
@@ -836,6 +837,7 @@ function FlowBuilder({
   );
 
   const [allPathsOpen, setAllPathsOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
   const applyDesignToAll = useCallback(
     (type: "question" | "result", tokens: DesignTokensT) => {
@@ -861,6 +863,9 @@ function FlowBuilder({
           <QzButton size="sm" onClick={() => setAllPathsOpen(true)}>
             View all paths
           </QzButton>
+          <QzButton size="sm" onClick={() => setSettingsOpen(true)}>
+            Settings
+          </QzButton>
           {allIssues.length > 0 && (
             <QzBadge tone="crit">
               {`${allIssues.length} issue${allIssues.length === 1 ? "" : "s"}`}
@@ -877,6 +882,13 @@ function FlowBuilder({
         onClose={() => setAllPathsOpen(false)}
         doc={doc}
         productIndex={productIndex}
+      />
+      <QuizSettingsModal
+        open={settingsOpen}
+        onClose={() => setSettingsOpen(false)}
+        doc={doc}
+        collections={collections}
+        onSave={(next) => commit(next)}
       />
 
       <div style={{ display: "flex", gap: 12 }}>
@@ -1269,6 +1281,43 @@ function ContentTab({
             />
           </QzField>
         )}
+        <label
+          style={{
+            display: "flex",
+            gap: 10,
+            alignItems: "flex-start",
+            cursor: "pointer",
+            paddingTop: 4,
+          }}
+        >
+          <input
+            type="checkbox"
+            checked={node.data.show_preview_after === true}
+            onChange={(e) =>
+              onChange({
+                ...node,
+                data: {
+                  ...node.data,
+                  show_preview_after: e.target.checked,
+                } as never,
+              })
+            }
+            style={{ marginTop: 3, accentColor: "var(--qz-accent)" }}
+          />
+          <span>
+            <span style={{ display: "block", fontSize: 14, fontWeight: 500 }}>
+              Show product preview after this question
+            </span>
+            <span
+              className="qz-muted"
+              style={{ fontSize: 12, display: "block", marginTop: 2 }}
+            >
+              Storefront opens a refining picks rail once a shopper answers
+              this question. Pre-tag fallback is the quiz&apos;s Featured
+              collection (set in Quiz settings).
+            </span>
+          </span>
+        </label>
       </div>
     );
   }
@@ -1904,6 +1953,83 @@ function ResultPreviewTab({
             ))}
           </div>
         )}
+      </div>
+    </div>
+  );
+}
+
+function QuizSettingsModal({
+  open,
+  onClose,
+  doc,
+  collections,
+  onSave,
+}: {
+  open: boolean;
+  onClose: () => void;
+  doc: QuizDoc;
+  collections: Array<{ collectionId: string; title: string }>;
+  onSave: (next: QuizDoc) => void;
+}) {
+  if (!open) return null;
+  return (
+    <div
+      role="dialog"
+      aria-modal="true"
+      onClick={onClose}
+      style={{
+        position: "fixed",
+        inset: 0,
+        background: "rgba(27, 26, 23, 0.4)",
+        display: "grid",
+        placeItems: "center",
+        zIndex: 100,
+        backdropFilter: "blur(4px)",
+        padding: 24,
+      }}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className="qz-card"
+        style={{ maxWidth: 520, width: "100%", padding: 28 }}
+      >
+        <div className="qz-label">Quiz settings</div>
+        <h2 className="qz-h1 qz-mt-8">Quiz settings</h2>
+        <p className="qz-muted qz-mt-16" style={{ fontSize: 14 }}>
+          Quiz-level configuration. These apply across every node in this quiz.
+        </p>
+
+        <div className="qz-col qz-gap-16 qz-mt-24">
+          <QzField
+            label="Featured collection"
+            hint="Used as the fallback for the mid-quiz product preview when accumulated answer tags don't match anything in your catalog. Pick something like 'Best Sellers'."
+          >
+            <QzSelect
+              value={doc.featured_collection_id ?? ""}
+              onChange={(e) => {
+                const v = e.target.value;
+                const next = { ...doc };
+                if (v) next.featured_collection_id = v;
+                else delete next.featured_collection_id;
+                onSave(next);
+              }}
+            >
+              <option value="">(none — fall back to scope)</option>
+              {collections.map((c) => (
+                <option key={c.collectionId} value={c.collectionId}>
+                  {c.title}
+                </option>
+              ))}
+            </QzSelect>
+          </QzField>
+        </div>
+
+        <div
+          className="qz-row qz-gap-8 qz-mt-24"
+          style={{ justifyContent: "flex-end" }}
+        >
+          <QzButton onClick={onClose}>Done</QzButton>
+        </div>
       </div>
     </div>
   );

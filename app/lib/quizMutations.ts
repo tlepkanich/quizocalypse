@@ -31,6 +31,7 @@ export function addQuestionNode(doc: QuizDoc, anchorId: string | null): QuizDoc 
       text: "New question",
       question_type: "single_select",
       required: true,
+      show_preview_after: false,
       answers: [
         {
           id: uid("a"),

@@ -44,6 +44,10 @@ export const QuestionData = z.object({
   required: z.boolean().default(true),
   max_selections: z.number().int().positive().optional(),
   answers: z.array(Answer).min(2),
+  // Mid-quiz product preview: when true, after this question is answered the
+  // storefront opens a refining product list. Defaults off — only the
+  // questions a merchant explicitly flags start the preview.
+  show_preview_after: z.boolean().default(false),
 });
 
 export const EmailGateData = z.object({
@@ -164,6 +168,9 @@ export const Quiz = z.object({
   scope: z.object({
     collection_ids: z.array(z.string()),
   }),
+  // Optional collection ID for the mid-quiz preview cold-start. Used when
+  // accumulated answer tags score zero against the candidate pool.
+  featured_collection_id: z.string().optional(),
   nodes: z.array(QuizNode).min(2),
   edges: z.array(QuizEdge).default([]),
   recommendation_logic: z.array(RecommendationRule).default([]),
@@ -196,6 +203,7 @@ export const quizToolJsonSchema = {
         collection_ids: { type: "array", items: { type: "string" } },
       },
     },
+    featured_collection_id: { type: "string" },
     nodes: {
       type: "array",
       minItems: 2,
@@ -220,7 +228,7 @@ export const quizToolJsonSchema = {
             type: "object",
             description:
               "Node-type-specific payload. For type=intro: { headline, subtext?, button_label?, hero_image_url? }. " +
-              "For type=question: { text, question_type ('single_select'|'multi_select'|'image_tile'), required?, max_selections?, answers: [{id, text, image_url?, tags[], collection_filter?, edge_handle_id}] (≥2 answers) }. " +
+              "For type=question: { text, question_type ('single_select'|'multi_select'|'image_tile'), required?, max_selections?, show_preview_after? (boolean, default false), answers: [{id, text, image_url?, tags[], collection_filter?, edge_handle_id}] (≥2 answers) }. " +
               "For type=email_gate: { headline, subtext?, email_required?, name_optional?, skip_allowed? }. " +
               "For type=result: { headline, subtext?, slot_count? (1..6), cta_label?, fallback_collection_id }.",
           },

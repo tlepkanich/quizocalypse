@@ -8,6 +8,7 @@ type QuizDoc = z.infer<typeof Quiz>;
 export interface IndexedProduct {
   product_id: string;
   title: string;
+  handle: string;
   price: string | null;
   image_url: string | null;
   tags: string[];
@@ -43,7 +44,64 @@ export function recommendForResult(input: RecommendationInput): RecommendedProdu
   const slotCount = resultNode.data.slot_count;
   const fallbackCollectionId = resultNode.data.fallback_collection_id;
 
-  // Gather tags + collection filters across all selected answers.
+  const matches = scoreAndRank(quiz, productIndex, selectedAnswerIds);
+  if (matches.length > 0) return matches.slice(0, slotCount);
+
+  // Fallback: nothing scored. Serve fallback collection products.
+  const pool = productIndex.filter((p) =>
+    p.collection_ids.includes(fallbackCollectionId),
+  );
+  return rank(pool.map((p) => ({ ...p, score: 0 }))).slice(0, slotCount);
+}
+
+export interface PreviewRecommendationInput {
+  quiz: QuizDoc;
+  productIndex: IndexedProduct[];
+  selectedAnswerIds: string[];
+  slotCount?: number;
+}
+
+// Mid-quiz preview. Same scoring as the result-page engine, but with a different
+// fallback ladder since there's no result node context yet:
+//   1. featured_collection_id (if set on the quiz)
+//   2. scope.collection_ids (the quiz's own scope)
+//   3. all products in the index (in-stock first, price asc)
+export function recommendPreview(
+  input: PreviewRecommendationInput,
+): RecommendedProduct[] {
+  const { quiz, productIndex, selectedAnswerIds, slotCount = 3 } = input;
+
+  const matches = scoreAndRank(quiz, productIndex, selectedAnswerIds);
+  if (matches.length > 0) return matches.slice(0, slotCount);
+
+  const featured = quiz.featured_collection_id;
+  if (featured) {
+    const pool = productIndex.filter((p) => p.collection_ids.includes(featured));
+    if (pool.length > 0) {
+      return rank(pool.map((p) => ({ ...p, score: 0 }))).slice(0, slotCount);
+    }
+  }
+
+  const scopeIds = quiz.scope.collection_ids;
+  if (scopeIds.length > 0) {
+    const pool = productIndex.filter((p) =>
+      p.collection_ids.some((c) => scopeIds.includes(c)),
+    );
+    if (pool.length > 0) {
+      return rank(pool.map((p) => ({ ...p, score: 0 }))).slice(0, slotCount);
+    }
+  }
+
+  return rank(productIndex.map((p) => ({ ...p, score: 0 }))).slice(0, slotCount);
+}
+
+// Shared scoring + ranking used by both result and preview engines. Returns
+// only products with score > 0 — fallback handling is up to the caller.
+function scoreAndRank(
+  quiz: QuizDoc,
+  productIndex: IndexedProduct[],
+  selectedAnswerIds: string[],
+): RecommendedProduct[] {
   const selectedAnswerSet = new Set(selectedAnswerIds);
   const tagBag = new Set<string>();
   const collectionFilters = new Set<string>();
@@ -68,17 +126,7 @@ export function recommendForResult(input: RecommendationInput): RecommendedProdu
     score: p.tags.reduce((acc, t) => acc + (tagBag.has(t) ? 1 : 0), 0),
   }));
 
-  const matches = scored.filter((p) => p.score > 0);
-
-  // Fallback: nothing scored. Serve fallback collection products.
-  if (matches.length === 0) {
-    const pool = productIndex.filter((p) =>
-      p.collection_ids.includes(fallbackCollectionId),
-    );
-    return rank(pool.map((p) => ({ ...p, score: 0 }))).slice(0, slotCount);
-  }
-
-  return rank(matches).slice(0, slotCount);
+  return rank(scored.filter((p) => p.score > 0));
 }
 
 function rank(products: RecommendedProduct[]): RecommendedProduct[] {

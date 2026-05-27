@@ -15,6 +15,10 @@ export interface PublishedQuiz extends QuizDoc {
   product_index: IndexedProduct[];
   published_at: string;
   version: number;
+  // Shop's myshopify domain, baked at publish time so the runtime can
+  // construct PDP URLs (https://<shop>/products/<handle>) without an
+  // extra DB lookup.
+  shop_domain: string;
 }
 
 export interface PublishResult {
@@ -66,7 +70,8 @@ export async function publishQuiz(
 
   // Build product_index from shop's products that are in any scoped collection
   // OR any fallback collection referenced by result nodes (so fallback always
-  // has products available). If no scope is set, include all shop products.
+  // has products available) OR the quiz's featured collection (for mid-quiz
+  // preview cold-start). If no scope is set, include all shop products.
   const fallbackCollectionIds = doc.nodes
     .filter((n) => n.type === "result")
     .map((n) =>
@@ -77,6 +82,7 @@ export async function publishQuiz(
   const scopeIds = new Set<string>([
     ...doc.scope.collection_ids,
     ...fallbackCollectionIds,
+    ...(doc.featured_collection_id ? [doc.featured_collection_id] : []),
   ]);
 
   const products = await prisma.product.findMany({
@@ -97,6 +103,7 @@ export async function publishQuiz(
       return {
         product_id: p.productId,
         title: p.title,
+        handle: p.handle,
         price: p.priceMin ? String(p.priceMin) : null,
         image_url: p.imageUrl,
         tags: p.tags,
@@ -110,7 +117,7 @@ export async function publishQuiz(
   // render time by the storefront against this baked baseline.
   const shop = await prisma.shop.findUnique({
     where: { id: args.shopId },
-    select: { brandTokens: true },
+    select: { brandTokens: true, shopDomain: true },
   });
   const shopParsed = BrandTokens.safeParse(shop?.brandTokens ?? {});
   const shopTokens: DesignTokensT | null = shopParsed.success
@@ -126,6 +133,7 @@ export async function publishQuiz(
     product_index: productIndex,
     published_at: new Date().toISOString(),
     version: nextVersion,
+    shop_domain: shop?.shopDomain ?? "",
   };
 
   await prisma.$transaction([

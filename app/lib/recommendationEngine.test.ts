@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   recommendForResult,
+  recommendPreview,
   nextNodeFor,
   type IndexedProduct,
 } from "./recommendationEngine";
@@ -10,6 +11,7 @@ const baseProducts: IndexedProduct[] = [
   {
     product_id: "p1",
     title: "Oily Cleanser",
+    handle: "oily-cleanser",
     price: "20.00",
     image_url: null,
     tags: ["oily", "oil-control"],
@@ -19,6 +21,7 @@ const baseProducts: IndexedProduct[] = [
   {
     product_id: "p2",
     title: "Dry Cream",
+    handle: "dry-cream",
     price: "30.00",
     image_url: null,
     tags: ["dry", "hydrating"],
@@ -28,6 +31,7 @@ const baseProducts: IndexedProduct[] = [
   {
     product_id: "p3",
     title: "Balanced Wash",
+    handle: "balanced-wash",
     price: "25.00",
     image_url: null,
     tags: ["balanced", "gentle"],
@@ -37,6 +41,7 @@ const baseProducts: IndexedProduct[] = [
   {
     product_id: "p4",
     title: "Out of Stock Oily",
+    handle: "out-of-stock-oily",
     price: "18.00",
     image_url: null,
     tags: ["oily"],
@@ -46,6 +51,7 @@ const baseProducts: IndexedProduct[] = [
   {
     product_id: "p5",
     title: "Cheap Oily",
+    handle: "cheap-oily",
     price: "12.00",
     image_url: null,
     tags: ["oily"],
@@ -164,6 +170,7 @@ describe("recommendForResult", () => {
       {
         product_id: "p99",
         title: "Wrong Collection",
+        handle: "wrong-collection",
         price: "10.00",
         image_url: null,
         tags: ["oily", "oil-control"],
@@ -197,6 +204,80 @@ describe("recommendForResult", () => {
     });
     // p99 has higher tag score but is filtered out by collection.
     expect(result.find((p) => p.product_id === "p99")).toBeUndefined();
+  });
+});
+
+describe("recommendPreview", () => {
+  it("returns featured-collection products when no answers have been picked", () => {
+    const products: IndexedProduct[] = [
+      ...baseProducts,
+      {
+        product_id: "p-feat-1",
+        title: "Featured Hero",
+        handle: "featured-hero",
+        price: "40.00",
+        image_url: null,
+        tags: [],
+        collection_ids: ["c-featured"],
+        inventory_in_stock: true,
+      },
+      {
+        product_id: "p-feat-2",
+        title: "Featured Sidekick",
+        handle: "featured-sidekick",
+        price: "35.00",
+        image_url: null,
+        tags: [],
+        collection_ids: ["c-featured"],
+        inventory_in_stock: true,
+      },
+    ];
+    const quiz = Quiz.parse({
+      ...quizDoc,
+      featured_collection_id: "c-featured",
+    });
+    const result = recommendPreview({
+      quiz,
+      productIndex: products,
+      selectedAnswerIds: [],
+    });
+    expect(result.length).toBeGreaterThan(0);
+    expect(
+      result.every((r) => r.collection_ids.includes("c-featured")),
+    ).toBe(true);
+  });
+
+  it("falls back to scope products when no featured collection set", () => {
+    const result = recommendPreview({
+      quiz: quizDoc,
+      productIndex: baseProducts,
+      selectedAnswerIds: [],
+    });
+    expect(result.length).toBeGreaterThan(0);
+    expect(
+      result.every((r) => r.collection_ids.includes("c-cleansers")),
+    ).toBe(true);
+  });
+
+  it("ranks by tag overlap when answers have tags", () => {
+    const result = recommendPreview({
+      quiz: quizDoc,
+      productIndex: baseProducts,
+      selectedAnswerIds: ["a-oily"],
+    });
+    // a-oily tags: ["oily", "oil-control"]. p1 has both → score 2.
+    expect(result[0]!.product_id).toBe("p1");
+    expect(result[0]!.score).toBe(2);
+  });
+
+  it("respects slotCount cap", () => {
+    const result = recommendPreview({
+      quiz: quizDoc,
+      productIndex: baseProducts,
+      selectedAnswerIds: ["a-oily"],
+      slotCount: 2,
+    });
+    expect(result.length).toBe(2);
   });
 });
 

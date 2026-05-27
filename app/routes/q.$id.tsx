@@ -7,6 +7,7 @@ import { Quiz } from "../lib/quizSchema";
 import {
   nextNodeFor,
   recommendForResult,
+  recommendPreview,
   type IndexedProduct,
   type RecommendedProduct,
 } from "../lib/recommendationEngine";
@@ -67,8 +68,11 @@ export const loader = async ({ params }: LoaderFunctionArgs) => {
   if (!parsed.success) {
     throw new Response("Published JSON failed validation", { status: 500 });
   }
-  // product_index isn't in the Zod schema (it's added at publish time).
-  const publishedRaw = quiz.publishedJson as { product_index?: IndexedProduct[] };
+  // product_index + shop_domain aren't in the Zod schema (added at publish time).
+  const publishedRaw = quiz.publishedJson as {
+    product_index?: IndexedProduct[];
+    shop_domain?: string;
+  };
 
   return json({
     quizId: quiz.id,
@@ -77,6 +81,7 @@ export const loader = async ({ params }: LoaderFunctionArgs) => {
     productIndex: publishedRaw.product_index ?? [],
     designTokens: parsed.data.design_tokens ?? null,
     designOverrides: parsed.data.design_overrides ?? {},
+    shopDomain: publishedRaw.shop_domain ?? "",
   });
 };
 
@@ -160,7 +165,7 @@ interface PathStep {
 }
 
 export default function StorefrontRuntime() {
-  const { doc, productIndex, designTokens, designOverrides, quizId } =
+  const { doc, productIndex, designTokens, designOverrides, quizId, shopDomain } =
     useLoaderData<typeof loader>();
   const introNode = useMemo(
     () => doc.nodes.find((n) => n.type === "intro") ?? doc.nodes[0],
@@ -220,9 +225,54 @@ export default function StorefrontRuntime() {
   // Apply CSS vars at the very root so all children resolve var(--qz-*).
   const rootStyle: React.CSSProperties = { ...cssVars };
 
+  // Mid-quiz product preview: active once any answered question is flagged.
+  const previewActive = useMemo(
+    () =>
+      path.some((step) => {
+        const node = doc.nodes.find((n) => n.id === step.questionNodeId);
+        return node?.type === "question" && node.data.show_preview_after === true;
+      }),
+    [path, doc.nodes],
+  );
+
+  const previewRecs = useMemo(() => {
+    if (!previewActive) return [];
+    const ids = path.flatMap((p) => p.answerIds);
+    return recommendPreview({
+      quiz: doc,
+      productIndex,
+      selectedAnswerIds: ids,
+    });
+  }, [previewActive, path, doc, productIndex]);
+
+  // Fire recommendation_viewed once when the preview first activates.
+  const previewViewedRef = useRef(false);
+  useEffect(() => {
+    if (
+      previewActive &&
+      !previewViewedRef.current &&
+      analyticsRef.current
+    ) {
+      previewViewedRef.current = true;
+      analyticsRef.current.track("recommendation_viewed", {
+        stage: "preview",
+        product_ids: previewRecs.map((r) => r.product_id),
+      });
+    }
+  }, [previewActive, previewRecs]);
+
+  const handlePreviewClick = (product: RecommendedProduct, position: number) => {
+    analyticsRef.current?.track("recommendation_clicked", {
+      stage: "preview",
+      product_id: product.product_id,
+      position,
+    });
+  };
+
   function reset() {
     setCurrentNodeId(introNode ? introNode.id : null);
     setPath([]);
+    previewViewedRef.current = false;
   }
 
   function gotoNextFrom(nodeId: string, handle: string | null) {
@@ -319,6 +369,11 @@ export default function StorefrontRuntime() {
     }
   }
 
+  const currentNode = currentNodeId
+    ? doc.nodes.find((n) => n.id === currentNodeId)
+    : null;
+  const showPreview = previewActive && currentNode?.type !== "result";
+
   return (
     <div style={rootStyle}>
       {fontUrl && <link rel="stylesheet" href={fontUrl} />}
@@ -331,8 +386,294 @@ export default function StorefrontRuntime() {
             scroll-behavior: auto !important;
           }
         }
+        .qz-runtime-shell { width: 100%; display: flex; flex-direction: column; align-items: center; gap: 24px; }
+        @media (min-width: 900px) {
+          .qz-runtime-page {
+            align-items: flex-start !important;
+            justify-content: center !important;
+            padding-top: 64px !important;
+          }
+          .qz-runtime-shell {
+            flex-direction: row;
+            align-items: flex-start;
+            max-width: 1100px;
+            gap: 40px;
+          }
+          .qz-runtime-content {
+            flex: 1;
+            min-width: 0;
+            display: flex;
+            justify-content: center;
+          }
+          .qz-preview-rail {
+            flex: 0 0 320px;
+            position: sticky;
+            top: 64px;
+          }
+          .qz-preview-chip { display: none !important; }
+        }
+        @media (max-width: 899px) {
+          .qz-preview-rail { display: none; }
+        }
       `}</style>
-      <div style={styles.page}>{content}</div>
+      <div className="qz-runtime-page" style={styles.page}>
+        <div className="qz-runtime-shell">
+          <div className="qz-runtime-content">{content}</div>
+          {showPreview && (
+            <div className="qz-preview-rail">
+              <PreviewRail
+                recs={previewRecs}
+                shopDomain={shopDomain}
+                onClick={handlePreviewClick}
+              />
+            </div>
+          )}
+        </div>
+        {showPreview && (
+          <PreviewChip
+            recs={previewRecs}
+            shopDomain={shopDomain}
+            onClick={handlePreviewClick}
+          />
+        )}
+      </div>
+    </div>
+  );
+}
+
+function PreviewRail({
+  recs,
+  shopDomain,
+  onClick,
+}: {
+  recs: RecommendedProduct[];
+  shopDomain: string;
+  onClick: (product: RecommendedProduct, position: number) => void;
+}) {
+  return (
+    <aside
+      style={{
+        background: "var(--qz-color-bg)",
+        borderRadius: "var(--qz-radius)",
+        padding: 20,
+        boxShadow: "0 4px 24px rgba(0,0,0,0.06)",
+      }}
+    >
+      <div
+        style={{
+          fontFamily: "var(--qz-font-body)",
+          fontSize: 11,
+          letterSpacing: "0.12em",
+          textTransform: "uppercase",
+          color: "var(--qz-color-muted)",
+          marginBottom: 4,
+        }}
+      >
+        Picks for you
+      </div>
+      <div
+        style={{
+          fontFamily: "var(--qz-font-heading)",
+          fontSize: 20,
+          marginBottom: 14,
+          color: "var(--qz-color-text)",
+        }}
+      >
+        Updating as you answer
+      </div>
+      <PreviewList recs={recs} shopDomain={shopDomain} onClick={onClick} />
+    </aside>
+  );
+}
+
+function PreviewChip({
+  recs,
+  shopDomain,
+  onClick,
+}: {
+  recs: RecommendedProduct[];
+  shopDomain: string;
+  onClick: (product: RecommendedProduct, position: number) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      <button
+        type="button"
+        className="qz-preview-chip"
+        onClick={() => setOpen((o) => !o)}
+        style={{
+          position: "fixed",
+          top: 16,
+          right: 16,
+          zIndex: 50,
+          padding: "8px 14px",
+          background: "var(--qz-color-text)",
+          color: "var(--qz-color-bg)",
+          border: "none",
+          borderRadius: 100,
+          fontSize: 13,
+          fontFamily: "var(--qz-font-body)",
+          fontWeight: 600,
+          cursor: "pointer",
+          boxShadow: "0 4px 12px rgba(0,0,0,0.2)",
+        }}
+      >
+        Picks for you ({recs.length}) {open ? "▴" : "▾"}
+      </button>
+      {open && (
+        <>
+          <div
+            onClick={() => setOpen(false)}
+            style={{
+              position: "fixed",
+              inset: 0,
+              background: "rgba(0,0,0,0.4)",
+              zIndex: 49,
+            }}
+          />
+          <div
+            style={{
+              position: "fixed",
+              left: 0,
+              right: 0,
+              bottom: 0,
+              zIndex: 50,
+              background: "var(--qz-color-bg)",
+              borderTopLeftRadius: 16,
+              borderTopRightRadius: 16,
+              padding: 20,
+              maxHeight: "70vh",
+              overflowY: "auto",
+              boxShadow: "0 -8px 32px rgba(0,0,0,0.2)",
+            }}
+          >
+            <div
+              style={{
+                fontFamily: "var(--qz-font-heading)",
+                fontSize: 22,
+                marginBottom: 12,
+                color: "var(--qz-color-text)",
+              }}
+            >
+              Picks for you
+            </div>
+            <PreviewList recs={recs} shopDomain={shopDomain} onClick={onClick} />
+          </div>
+        </>
+      )}
+    </>
+  );
+}
+
+function PreviewList({
+  recs,
+  shopDomain,
+  onClick,
+}: {
+  recs: RecommendedProduct[];
+  shopDomain: string;
+  onClick: (product: RecommendedProduct, position: number) => void;
+}) {
+  if (recs.length === 0) {
+    return (
+      <p
+        style={{
+          color: "var(--qz-color-muted)",
+          fontSize: 13,
+          margin: 0,
+        }}
+      >
+        Pick more answers to see refined picks.
+      </p>
+    );
+  }
+  return (
+    <div style={{ display: "grid", gap: 10 }}>
+      {recs.map((r, idx) => {
+        const href = shopDomain
+          ? `https://${shopDomain}/products/${r.handle}`
+          : undefined;
+        const inner = (
+          <>
+            {r.image_url ? (
+              <img
+                src={r.image_url}
+                alt=""
+                style={{
+                  width: 56,
+                  height: 56,
+                  objectFit: "cover",
+                  borderRadius: "var(--qz-radius)",
+                  flexShrink: 0,
+                }}
+              />
+            ) : (
+              <div
+                style={{
+                  width: 56,
+                  height: 56,
+                  background: "#00000010",
+                  borderRadius: "var(--qz-radius)",
+                  flexShrink: 0,
+                }}
+              />
+            )}
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div
+                style={{
+                  fontWeight: 500,
+                  fontSize: 14,
+                  color: "var(--qz-color-text)",
+                  whiteSpace: "nowrap",
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                }}
+              >
+                {r.title}
+              </div>
+              {r.price && (
+                <div
+                  style={{
+                    fontSize: 12,
+                    color: "var(--qz-color-muted)",
+                    marginTop: 2,
+                  }}
+                >
+                  ${r.price}
+                </div>
+              )}
+            </div>
+          </>
+        );
+        const cardStyle: React.CSSProperties = {
+          display: "flex",
+          gap: 10,
+          alignItems: "center",
+          padding: 8,
+          borderRadius: "var(--qz-radius)",
+          border: "1px solid #00000012",
+          textDecoration: "none",
+          color: "inherit",
+          background: "var(--qz-color-bg)",
+        };
+        return href ? (
+          <a
+            key={r.product_id}
+            href={href}
+            target="_blank"
+            rel="noreferrer"
+            onClick={() => onClick(r, idx)}
+            style={cardStyle}
+          >
+            {inner}
+          </a>
+        ) : (
+          <div key={r.product_id} style={cardStyle}>
+            {inner}
+          </div>
+        );
+      })}
     </div>
   );
 }
