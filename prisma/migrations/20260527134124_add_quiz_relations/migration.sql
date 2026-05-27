@@ -1,0 +1,5 @@
+-- AddForeignKey
+ALTER TABLE "Event" ADD CONSTRAINT "Event_quizId_fkey" FOREIGN KEY ("quizId") REFERENCES "Quiz"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "EmailCapture" ADD CONSTRAINT "EmailCapture_quizId_fkey" FOREIGN KEY ("quizId") REFERENCES "Quiz"("id") ON DELETE CASCADE ON UPDATE CASCADE;

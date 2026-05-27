@@ -91,8 +91,10 @@ model Quiz {
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
-  shop     Shop          @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  shop     Shop           @relation(fields: [shopId], references: [id], onDelete: Cascade)
   versions QuizVersion[]
+  events   Event[]
+  captures EmailCapture[]
 
   @@index([shopId])
 }
@@ -118,6 +120,8 @@ model Event {
   payload   Json
   ts        DateTime @default(now())
 
+  quiz Quiz @relation(fields: [quizId], references: [id], onDelete: Cascade)
+
   @@index([quizId, ts])
   @@index([quizId, eventType, ts])
 }
@@ -130,6 +134,8 @@ model EmailCapture {
   email      String
   firstName  String?
   capturedAt DateTime @default(now())
+
+  quiz Quiz @relation(fields: [quizId], references: [id], onDelete: Cascade)
 
   @@index([quizId, capturedAt])
   @@index([email])
