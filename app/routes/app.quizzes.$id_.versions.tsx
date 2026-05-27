@@ -7,21 +7,17 @@ import {
   useNavigation,
   useSubmit,
 } from "@remix-run/react";
-import {
-  Page,
-  Card,
-  IndexTable,
-  Text,
-  Badge,
-  Button,
-  Modal,
-  BlockStack,
-  EmptyState,
-} from "@shopify/polaris";
 import { TitleBar } from "@shopify/app-bridge-react";
 import { authenticate } from "../shopify.server";
 import prisma from "../db.server";
 import { Quiz } from "../lib/quizSchema";
+import {
+  QzPage,
+  QzPageHeader,
+  QzCard,
+  QzButton,
+  QzBadge,
+} from "../components/qz";
 
 export const loader = async ({ params, request }: LoaderFunctionArgs) => {
   const { session } = await authenticate.admin(request);
@@ -77,8 +73,8 @@ export const action = async ({ params, request }: ActionFunctionArgs) => {
     return json({ ok: false, error: "Version not found" }, { status: 404 });
   }
 
-  // The publishedJson includes publish-only fields (product_index, published_at).
-  // Zod's default `strip` discards them; we keep only the Quiz subset for the draft.
+  // publishedJson contains publish-only fields (product_index, published_at).
+  // Zod's default `strip` discards them; we keep only the Quiz subset for draft.
   const parsed = Quiz.safeParse(version.publishedJson);
   if (!parsed.success) {
     return json(
@@ -92,10 +88,7 @@ export const action = async ({ params, request }: ActionFunctionArgs) => {
     data: { draftJson: parsed.data as never },
   });
 
-  return json({
-    ok: true,
-    revertedTo: version.version,
-  });
+  return json({ ok: true, revertedTo: version.version });
 };
 
 export default function QuizVersions() {
@@ -120,101 +113,170 @@ export default function QuizVersions() {
   };
 
   return (
-    <Page
-      backAction={{ content: "Quiz", url: `/app/quizzes/${quiz.id}` }}
-      title={`Versions: ${quiz.name}`}
-      titleMetadata={
-        <Badge tone={quiz.status === "published" ? "success" : "info"}>
-          {quiz.status}
-        </Badge>
-      }
-    >
+    <QzPage>
       <TitleBar title="Versions" />
-      <Card padding="0">
-        {versions.length === 0 ? (
-          <EmptyState
-            heading="No published versions yet"
-            action={{ content: "Back to editor", url: `/app/quizzes/${quiz.id}` }}
-            image=""
-          >
-            <p>Publish your quiz to start tracking versions you can revert to.</p>
-          </EmptyState>
-        ) : (
-          <IndexTable
-            resourceName={{ singular: "version", plural: "versions" }}
-            itemCount={versions.length}
-            selectable={false}
-            headings={[
-              { title: "Version" },
-              { title: "Published" },
-              { title: "" },
-            ]}
-          >
-            {versions.map((v, idx) => (
-              <IndexTable.Row id={v.id} key={v.id} position={idx}>
-                <IndexTable.Cell>
-                  <Text as="span" variant="bodyMd" fontWeight="semibold">
-                    v{v.version}
-                  </Text>{" "}
-                  {v.version === quiz.version && (
-                    <Badge tone="success">active</Badge>
-                  )}
-                </IndexTable.Cell>
-                <IndexTable.Cell>
-                  <Text as="span" variant="bodyMd" tone="subdued">
-                    {new Date(v.publishedAt).toLocaleString()}
-                  </Text>
-                </IndexTable.Cell>
-                <IndexTable.Cell>
-                  <Button
-                    onClick={() => setPending({ id: v.id, version: v.version })}
-                    variant="plain"
-                    disabled={v.version === quiz.version}
-                  >
-                    Revert to this version
-                  </Button>
-                </IndexTable.Cell>
-              </IndexTable.Row>
-            ))}
-          </IndexTable>
-        )}
-      </Card>
 
-      {pending && (
-        <Modal
-          open
-          onClose={() => setPending(null)}
-          title={`Revert to v${pending.version}?`}
-          primaryAction={{
-            content: "Revert",
-            destructive: true,
-            loading: isReverting,
-            onAction: confirmRevert,
-          }}
-          secondaryActions={[
-            { content: "Cancel", onAction: () => setPending(null) },
-          ]}
-        >
-          <Modal.Section>
-            <BlockStack gap="200">
-              <Text as="p" variant="bodyMd">
-                This replaces your current draft with the contents of v
-                {pending.version}. Any unsaved changes in the editor will be
-                lost. You'll then need to publish again to push the reverted
-                version to your storefront.
-              </Text>
-            </BlockStack>
-          </Modal.Section>
-        </Modal>
+      <QzPageHeader
+        eyebrow={
+          <>
+            <Link
+              to={`/app/quizzes/${quiz.id}`}
+              style={{ color: "inherit", textDecoration: "none" }}
+            >
+              ← {quiz.name}
+            </Link>
+          </>
+        }
+        title="Versions"
+        subtitle="Every published snapshot of this quiz, newest first. Revert replaces the current draft — you publish again to push that revision to your storefront."
+        actions={
+          <QzBadge tone={quiz.status === "published" ? "ok" : "draft"}>
+            {quiz.status}
+          </QzBadge>
+        }
+      />
+
+      {versions.length === 0 ? (
+        <QzCard dashed>
+          <div className="qz-label">No versions yet</div>
+          <h2 className="qz-h1 qz-mt-8">Publish to start tracking history</h2>
+          <p className="qz-muted qz-mt-8" style={{ maxWidth: "44ch" }}>
+            Once you publish, each release becomes a revert point. We keep the
+            last ten and prune older ones automatically.
+          </p>
+          <div className="qz-mt-24">
+            <Link to={`/app/quizzes/${quiz.id}`}>
+              <QzButton variant="accent">Back to editor</QzButton>
+            </Link>
+          </div>
+        </QzCard>
+      ) : (
+        <QzCard flush>
+          <table className="qz-table">
+            <thead>
+              <tr>
+                <th style={{ width: "30%" }}>Version</th>
+                <th>Published</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              {versions.map((v) => (
+                <tr key={v.id}>
+                  <td>
+                    <div className="qz-row qz-gap-8" style={{ alignItems: "center" }}>
+                      <span className="qz-cell-name qz-mono qz-tnum">
+                        v{v.version}
+                      </span>
+                      {v.version === quiz.version && (
+                        <QzBadge tone="ok">active</QzBadge>
+                      )}
+                    </div>
+                  </td>
+                  <td className="qz-mono qz-dim">
+                    {new Date(v.publishedAt).toLocaleString()}
+                  </td>
+                  <td className="qz-cell-actions">
+                    <QzButton
+                      variant="ghost"
+                      size="sm"
+                      onClick={() =>
+                        setPending({ id: v.id, version: v.version })
+                      }
+                      disabled={v.version === quiz.version}
+                    >
+                      Revert to this version
+                    </QzButton>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </QzCard>
       )}
 
-      <BlockStack gap="200">
-        <div style={{ marginTop: 12 }}>
-          <Link to={`/app/quizzes/${quiz.id}`}>
-            <Button variant="plain">← Back to editor</Button>
-          </Link>
+      <div className="qz-mt-24">
+        <Link to={`/app/quizzes/${quiz.id}`}>
+          <QzButton variant="ghost" size="sm">← Back to editor</QzButton>
+        </Link>
+      </div>
+
+      {pending && (
+        <ConfirmModal
+          title={`Revert to v${pending.version}?`}
+          body={
+            <>
+              This replaces your current draft with the contents of v
+              {pending.version}. Any unsaved changes in the editor will be
+              lost. You&apos;ll need to publish again to push the reverted
+              version to your storefront.
+            </>
+          }
+          loading={isReverting}
+          onCancel={() => setPending(null)}
+          onConfirm={confirmRevert}
+        />
+      )}
+    </QzPage>
+  );
+}
+
+function ConfirmModal({
+  title,
+  body,
+  loading,
+  onCancel,
+  onConfirm,
+}: {
+  title: string;
+  body: React.ReactNode;
+  loading: boolean;
+  onCancel: () => void;
+  onConfirm: () => void;
+}) {
+  return (
+    <div
+      role="dialog"
+      aria-modal="true"
+      onClick={onCancel}
+      style={{
+        position: "fixed",
+        inset: 0,
+        background: "rgba(27, 26, 23, 0.4)",
+        display: "grid",
+        placeItems: "center",
+        zIndex: 100,
+        backdropFilter: "blur(4px)",
+      }}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className="qz-card"
+        style={{ maxWidth: 480, width: "calc(100% - 32px)", padding: 28 }}
+      >
+        <div className="qz-label">Revert</div>
+        <h2 className="qz-h1 qz-mt-8">{title}</h2>
+        <p className="qz-muted qz-mt-16" style={{ fontSize: 14 }}>
+          {body}
+        </p>
+        <div
+          className="qz-row qz-gap-8 qz-mt-24"
+          style={{ justifyContent: "flex-end" }}
+        >
+          <QzButton onClick={onCancel}>Cancel</QzButton>
+          <QzButton
+            variant="accent"
+            onClick={onConfirm}
+            disabled={loading}
+            style={{
+              background: "var(--qz-crit)",
+              borderColor: "var(--qz-crit)",
+            }}
+          >
+            {loading ? "Reverting…" : "Revert"}
+          </QzButton>
         </div>
-      </BlockStack>
-    </Page>
+      </div>
+    </div>
   );
 }

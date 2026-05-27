@@ -1,21 +1,18 @@
 import type { LoaderFunctionArgs } from "@remix-run/node";
 import { json } from "@remix-run/node";
-import { useLoaderData } from "@remix-run/react";
-import {
-  Page,
-  Card,
-  BlockStack,
-  Text,
-  InlineStack,
-  Banner,
-  DataTable,
-  Box,
-  Layout,
-  Badge,
-} from "@shopify/polaris";
+import { Link, useLoaderData } from "@remix-run/react";
 import { TitleBar } from "@shopify/app-bridge-react";
 import { authenticate } from "../shopify.server";
 import prisma from "../db.server";
+import {
+  QzPage,
+  QzPageHeader,
+  QzCard,
+  QzBanner,
+  QzBadge,
+  QzStat,
+  QzStatGrid,
+} from "../components/qz";
 
 export const loader = async ({ params, request }: LoaderFunctionArgs) => {
   const { session } = await authenticate.admin(request);
@@ -33,7 +30,6 @@ export const loader = async ({ params, request }: LoaderFunctionArgs) => {
   });
   if (!quiz) throw new Response("Quiz not found", { status: 404 });
 
-  // Distinct-session funnel: a session counts once at each stage it reached.
   const eventRows = await prisma.event.findMany({
     where: { quizId: quiz.id },
     select: { sessionId: true, eventType: true, ts: true },
@@ -85,126 +81,154 @@ export default function QuizAnalytics() {
     funnel.viewed > 0 ? funnel.clicked / funnel.viewed : 0;
 
   return (
-    <Page
-      backAction={{ content: "Quiz", url: `/app/quizzes/${data.quiz.id}` }}
-      title={`Analytics: ${data.quiz.name}`}
-      titleMetadata={
-        <Badge tone={data.quiz.status === "published" ? "success" : "info"}>
-          {data.quiz.status}
-        </Badge>
-      }
-    >
+    <QzPage>
       <TitleBar title="Analytics" />
-      <BlockStack gap="400">
-        {funnel.started === 0 && (
-          <Banner tone="info">
-            <p>
-              No events yet. Once shoppers take this quiz on the storefront,
-              counts will populate here.
-            </p>
-          </Banner>
-        )}
 
-        <Layout>
-          <Layout.Section>
-            <Card>
-              <BlockStack gap="400">
-                <Text as="h2" variant="headingMd">
-                  Funnel
-                </Text>
-                <Text as="p" variant="bodySm" tone="subdued">
-                  Distinct sessions reaching each stage.{" "}
-                  {data.earliest && (
-                    <>
-                      Earliest event{" "}
-                      {new Date(data.earliest).toLocaleString()} · latest{" "}
-                      {data.latest && new Date(data.latest).toLocaleString()}
-                    </>
-                  )}
-                </Text>
-                <BlockStack gap="200">
-                  <FunnelRow label="Started" value={funnel.started} />
-                  <FunnelRow
-                    label="Answered ≥1 question"
-                    value={funnel.answered}
-                  />
-                  <FunnelRow label="Completed" value={funnel.completed} />
-                  <FunnelRow
-                    label="Saw recommendations"
-                    value={funnel.viewed}
-                  />
-                  <FunnelRow label="Clicked a product" value={funnel.clicked} />
-                </BlockStack>
-                <InlineStack gap="500">
-                  <Stat
-                    label="Completion rate"
-                    value={`${(completionRate * 100).toFixed(1)}%`}
-                  />
-                  <Stat
-                    label="Recommendation click-through"
-                    value={`${(clickThroughRate * 100).toFixed(1)}%`}
-                  />
-                </InlineStack>
-              </BlockStack>
-            </Card>
-          </Layout.Section>
+      <QzPageHeader
+        eyebrow={
+          <Link
+            to={`/app/quizzes/${data.quiz.id}`}
+            style={{ color: "inherit", textDecoration: "none" }}
+          >
+            ← {data.quiz.name}
+          </Link>
+        }
+        title="Analytics"
+        subtitle={
+          data.earliest
+            ? `Distinct shopper sessions reaching each stage. Earliest event ${new Date(data.earliest).toLocaleString()}.`
+            : "Distinct shopper sessions reaching each stage. No events yet — counts will populate as shoppers take the quiz."
+        }
+        actions={
+          <QzBadge tone={data.quiz.status === "published" ? "ok" : "draft"}>
+            {data.quiz.status}
+          </QzBadge>
+        }
+      />
 
-          <Layout.Section variant="oneThird">
-            <Card>
-              <BlockStack gap="300">
-                <Text as="h2" variant="headingMd">
-                  Email captures
-                </Text>
-                <Text as="p" variant="bodySm" tone="subdued">
-                  Most recent 25. Webhook delivery to external endpoints
-                  (Klaviyo, etc.) lands in a follow-up.
-                </Text>
-                {data.captures.length === 0 ? (
-                  <Text as="p" variant="bodySm" tone="subdued">
-                    No captures yet.
-                  </Text>
-                ) : (
-                  <DataTable
-                    columnContentTypes={["text", "text", "text"]}
-                    headings={["Email", "Name", "Captured"]}
-                    rows={data.captures.map((c) => [
-                      c.email,
-                      c.firstName ?? "—",
-                      new Date(c.capturedAt).toLocaleString(),
-                    ])}
-                  />
-                )}
-              </BlockStack>
-            </Card>
-          </Layout.Section>
-        </Layout>
-      </BlockStack>
-    </Page>
+      {funnel.started === 0 && (
+        <div style={{ marginBottom: 24 }}>
+          <QzBanner tone="default" title="No events yet">
+            Once shoppers take this quiz on the storefront, the funnel counts
+            will populate here.
+          </QzBanner>
+        </div>
+      )}
+
+      <QzStatGrid>
+        <QzStat
+          label="Completion rate"
+          value={`${(completionRate * 100).toFixed(1)}%`}
+          delta={`${funnel.completed} of ${funnel.started} started`}
+        />
+        <QzStat
+          label="Click-through"
+          value={`${(clickThroughRate * 100).toFixed(1)}%`}
+          delta={`${funnel.clicked} of ${funnel.viewed} viewed`}
+        />
+        <QzStat
+          label="Email captures"
+          value={data.captureCount}
+          delta={
+            data.latest
+              ? `Latest event ${new Date(data.latest).toLocaleString()}`
+              : "—"
+          }
+        />
+      </QzStatGrid>
+
+      <section
+        className="qz-mt-48"
+        style={{
+          display: "grid",
+          gridTemplateColumns: "minmax(0, 1.4fr) minmax(0, 1fr)",
+          gap: 32,
+        }}
+      >
+        <div className="qz-col qz-gap-16">
+          <div className="qz-section-head">
+            <div>
+              <div className="qz-label">Funnel</div>
+              <h2 className="qz-h1 qz-mt-8">Stage-by-stage drop-off</h2>
+            </div>
+          </div>
+          <QzCard flush>
+            <FunnelRow label="Started" value={funnel.started} />
+            <FunnelRow label="Answered ≥1 question" value={funnel.answered} />
+            <FunnelRow label="Completed" value={funnel.completed} />
+            <FunnelRow label="Saw recommendations" value={funnel.viewed} />
+            <FunnelRow label="Clicked a product" value={funnel.clicked} last />
+          </QzCard>
+        </div>
+
+        <div className="qz-col qz-gap-16">
+          <div className="qz-section-head">
+            <div>
+              <div className="qz-label">Captures</div>
+              <h2 className="qz-h1 qz-mt-8">Email list</h2>
+            </div>
+          </div>
+          <QzCard flush>
+            {data.captures.length === 0 ? (
+              <div style={{ padding: 22 }}>
+                <p className="qz-muted" style={{ margin: 0 }}>
+                  No captures yet. Add an email-gate node to capture leads.
+                </p>
+              </div>
+            ) : (
+              <table className="qz-table">
+                <thead>
+                  <tr>
+                    <th>Email</th>
+                    <th>Name</th>
+                    <th>When</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {data.captures.map((c) => (
+                    <tr key={c.id}>
+                      <td className="qz-cell-name">{c.email}</td>
+                      <td className="qz-muted">{c.firstName ?? "—"}</td>
+                      <td className="qz-mono qz-dim" style={{ fontSize: 12 }}>
+                        {new Date(c.capturedAt).toLocaleString()}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </QzCard>
+          <p className="qz-mono qz-dim" style={{ fontSize: 11.5 }}>
+            Webhook delivery to external endpoints (Klaviyo, etc.) lands in a
+            follow-up. Captures are stored locally for now.
+          </p>
+        </div>
+      </section>
+    </QzPage>
   );
 }
 
-function FunnelRow({ label, value }: { label: string; value: number }) {
+function FunnelRow({
+  label,
+  value,
+  last,
+}: {
+  label: string;
+  value: number;
+  last?: boolean;
+}) {
   return (
-    <InlineStack align="space-between">
-      <Text as="span" variant="bodyMd">
-        {label}
-      </Text>
-      <Text as="span" variant="bodyMd" fontWeight="semibold">
+    <div
+      className="qz-row qz-row-between"
+      style={{
+        padding: "16px 22px",
+        borderBottom: last ? 0 : "1px solid var(--qz-rule)",
+      }}
+    >
+      <span>{label}</span>
+      <span className="qz-mono qz-tnum" style={{ fontWeight: 600 }}>
         {value}
-      </Text>
-    </InlineStack>
-  );
-}
-
-function Stat({ label, value }: { label: string; value: string }) {
-  return (
-    <Box>
-      <Text as="p" variant="bodySm" tone="subdued">
-        {label}
-      </Text>
-      <Text as="p" variant="headingLg">
-        {value}
-      </Text>
-    </Box>
+      </span>
+    </div>
   );
 }

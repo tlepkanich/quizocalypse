@@ -2,28 +2,19 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "@remix-run/node";
 import { json } from "@remix-run/node";
 import { Link, useFetcher, useLoaderData } from "@remix-run/react";
-import {
-  Page,
-  Card,
-  BlockStack,
-  Text,
-  Banner,
-  Badge,
-  InlineStack,
-  Button,
-  Popover,
-  ActionList,
-  Tabs,
-  TextField,
-  Tag,
-  Select,
-  Box,
-  Combobox,
-  Listbox,
-  Modal,
-  DataTable,
-} from "@shopify/polaris";
 import { TitleBar } from "@shopify/app-bridge-react";
+import {
+  QzPage,
+  QzPageHeader,
+  QzCard,
+  QzButton,
+  QzBanner,
+  QzBadge,
+  QzField,
+  QzInput,
+  QzTextarea,
+  QzSelect,
+} from "../components/qz";
 import {
   ReactFlow,
   Background,
@@ -92,8 +83,6 @@ export const loader = async ({ params, request }: LoaderFunctionArgs) => {
     orderBy: { title: "asc" },
   });
 
-  // Catalog tags + slim product index for the drawer's Logic tab autocomplete
-  // and the result node's live recommendation preview.
   const products = await prisma.product.findMany({
     where: { shopId: shop.id },
   });
@@ -119,9 +108,6 @@ export const loader = async ({ params, request }: LoaderFunctionArgs) => {
   ].sort((a, b) => a.localeCompare(b));
 
   const parsed = Quiz.safeParse(quiz.draftJson);
-  // Build an absolute preview URL using the request origin (the tunnel host),
-  // so opening the preview in a new tab from inside the admin iframe lands on
-  // the tunnel rather than admin.shopify.com/q/...
   const origin = new URL(request.url).origin;
   return json({
     quizId: quiz.id,
@@ -154,7 +140,6 @@ export const action = async ({ params, request }: ActionFunctionArgs) => {
   });
   if (!shop) return json({ ok: false, error: "Shop not found" }, { status: 404 });
 
-  // Content-Type drives the intent: JSON body = autosave; form = publish action.
   const contentType = request.headers.get("content-type") ?? "";
 
   if (contentType.includes("application/json")) {
@@ -244,7 +229,6 @@ export const action = async ({ params, request }: ActionFunctionArgs) => {
       return json({ ok: false, error: message }, { status: 502 });
     }
 
-    // Merge: preserve existing answer ids/edge_handle_ids by order so edges survive.
     const oldAnswers = target.data.answers;
     const mergedAnswers = regen.answers.map((newA, idx) => {
       const oldA = oldAnswers[idx];
@@ -263,7 +247,6 @@ export const action = async ({ params, request }: ActionFunctionArgs) => {
       };
     });
 
-    // Prune edges whose source handle no longer exists.
     const handlesNow = new Set(mergedAnswers.map((a) => a.edge_handle_id));
     const prunedEdges = doc.edges.filter(
       (e) =>
@@ -290,7 +273,6 @@ export const action = async ({ params, request }: ActionFunctionArgs) => {
       edges: prunedEdges,
     };
 
-    // Re-validate before persisting.
     const reparsed = Quiz.safeParse(updatedDoc);
     if (!reparsed.success) {
       return json(
@@ -322,7 +304,10 @@ export const action = async ({ params, request }: ActionFunctionArgs) => {
   return json({ ok: false, error: "Unknown intent" }, { status: 400 });
 };
 
-// ---------- Custom node renderers ----------
+// ---------- Custom node renderers (React Flow) ----------
+// These use plain HTML inputs and inherit the redesign palette via CSS vars
+// when possible. Node accent colors stay distinct so node types remain
+// visually identifiable in the graph.
 
 interface NodeData extends Record<string, unknown> {
   doc: QuizNodeDoc;
@@ -337,14 +322,14 @@ function IntroNodeView({ data }: NodeProps) {
   if (d.doc.type !== "intro") return null;
   return (
     <NodeShell accent="#5563DE" label="intro" handles="source" issues={d.issues}>
-      <Field
+      <NodeField
         label="Headline"
         value={d.doc.data.headline}
         onChange={(v) =>
           d.onChange({ ...d.doc, data: { ...d.doc.data, headline: v } as never })
         }
       />
-      <Field
+      <NodeField
         label="Subtext"
         value={d.doc.data.subtext}
         onChange={(v) =>
@@ -352,7 +337,7 @@ function IntroNodeView({ data }: NodeProps) {
         }
         multiline
       />
-      <Field
+      <NodeField
         label="Button"
         value={d.doc.data.button_label}
         onChange={(v) =>
@@ -373,7 +358,7 @@ function QuestionNodeView({ data }: NodeProps) {
   return (
     <NodeShell accent="#2C7A4B" label={`question · ${d.doc.data.question_type}`} issues={d.issues}>
       <Handle type="target" position={Position.Left} />
-      <Field
+      <NodeField
         label="Question"
         value={d.doc.data.text}
         onChange={(v) =>
@@ -381,11 +366,11 @@ function QuestionNodeView({ data }: NodeProps) {
         }
         multiline
       />
-      <div style={{ marginTop: 8, fontSize: 11, color: "#666" }}>Answers</div>
+      <div style={{ marginTop: 8, fontSize: 11, color: "var(--qz-ink-3)" }}>Answers</div>
       {answers.map((answer, idx) => (
         <div key={answer.id} style={{ position: "relative" }}>
           <InlineNoDrag>
-            <Field
+            <NodeField
               label={`#${idx + 1}`}
               inline
               value={answer.text}
@@ -409,7 +394,6 @@ function QuestionNodeView({ data }: NodeProps) {
               </button>
             )}
           </InlineNoDrag>
-          {/* Per-answer source handle, stacked vertically along the right edge. */}
           <Handle
             type="source"
             position={Position.Right}
@@ -442,14 +426,14 @@ function EmailGateNodeView({ data }: NodeProps) {
   if (d.doc.type !== "email_gate") return null;
   return (
     <NodeShell accent="#7E57C2" label="email_gate" handles="both" issues={d.issues}>
-      <Field
+      <NodeField
         label="Headline"
         value={d.doc.data.headline}
         onChange={(v) =>
           d.onChange({ ...d.doc, data: { ...d.doc.data, headline: v } as never })
         }
       />
-      <Field
+      <NodeField
         label="Subtext"
         value={d.doc.data.subtext}
         onChange={(v) =>
@@ -466,14 +450,14 @@ function ResultNodeView({ data }: NodeProps) {
   if (d.doc.type !== "result") return null;
   return (
     <NodeShell accent="#BB6622" label="result" handles="target" issues={d.issues}>
-      <Field
+      <NodeField
         label="Headline"
         value={d.doc.data.headline}
         onChange={(v) =>
           d.onChange({ ...d.doc, data: { ...d.doc.data, headline: v } as never })
         }
       />
-      <Field
+      <NodeField
         label="Subtext"
         value={d.doc.data.subtext}
         onChange={(v) =>
@@ -481,14 +465,14 @@ function ResultNodeView({ data }: NodeProps) {
         }
         multiline
       />
-      <Field
+      <NodeField
         label="CTA"
         value={d.doc.data.cta_label}
         onChange={(v) =>
           d.onChange({ ...d.doc, data: { ...d.doc.data, cta_label: v } as never })
         }
       />
-      <Field
+      <NodeField
         label="Fallback collection"
         value={d.doc.data.fallback_collection_id}
         onChange={(v) =>
@@ -498,7 +482,7 @@ function ResultNodeView({ data }: NodeProps) {
           })
         }
       />
-      <div style={{ marginTop: 6, fontSize: 10, color: "#888" }}>
+      <div style={{ marginTop: 6, fontSize: 10, color: "var(--qz-ink-4)" }}>
         slots: {d.doc.data.slot_count}
       </div>
     </NodeShell>
@@ -529,14 +513,15 @@ function NodeShell({
   return (
     <div
       style={{
-        background: "white",
-        border: `2px solid ${hasIssue ? "#D72C0D" : accent}`,
-        borderRadius: 8,
-        padding: 10,
+        background: "var(--qz-paper)",
+        border: `2px solid ${hasIssue ? "var(--qz-crit)" : accent}`,
+        borderRadius: "var(--qz-radius-lg)",
+        padding: 12,
         minWidth: 260,
         maxWidth: 320,
-        boxShadow: "0 1px 3px rgba(0,0,0,0.1)",
+        boxShadow: "0 1px 3px rgba(0,0,0,0.08)",
         fontSize: 12,
+        fontFamily: "var(--qz-font-body)",
         position: "relative",
       }}
     >
@@ -545,12 +530,13 @@ function NodeShell({
       )}
       <div
         style={{
+          fontFamily: "var(--qz-font-mono)",
           fontSize: 10,
           color: accent,
           textTransform: "uppercase",
           fontWeight: 600,
-          letterSpacing: 0.5,
-          marginBottom: 6,
+          letterSpacing: "0.1em",
+          marginBottom: 8,
           display: "flex",
           justifyContent: "space-between",
         }}
@@ -560,8 +546,8 @@ function NodeShell({
           <span
             title={issues.map((i) => i.message).join(" · ")}
             style={{
-              background: "#D72C0D",
-              color: "white",
+              background: "var(--qz-crit)",
+              color: "#FFF",
               borderRadius: 4,
               padding: "1px 6px",
               fontSize: 9,
@@ -579,7 +565,7 @@ function NodeShell({
   );
 }
 
-function Field({
+function NodeField({
   label,
   value,
   onChange,
@@ -595,16 +581,19 @@ function Field({
   const Tag = multiline ? "textarea" : "input";
   return (
     <label
-      style={{ display: "block", marginBottom: inline ? 4 : 6 }}
+      style={{ display: "block", marginBottom: inline ? 4 : 8 }}
       onClick={(e) => e.stopPropagation()}
       onMouseDown={(e) => e.stopPropagation()}
     >
       <span
         style={{
+          fontFamily: "var(--qz-font-mono)",
           fontSize: 10,
-          color: "#666",
+          color: "var(--qz-ink-3)",
           display: "block",
           marginBottom: 2,
+          textTransform: "uppercase",
+          letterSpacing: "0.08em",
         }}
       >
         {label}
@@ -615,13 +604,14 @@ function Field({
         rows={multiline ? 2 : undefined}
         style={{
           width: "100%",
-          padding: "4px 6px",
-          border: "1px solid #ddd",
-          borderRadius: 4,
+          padding: "5px 8px",
+          border: "1px solid var(--qz-rule)",
+          borderRadius: "var(--qz-radius)",
           fontSize: 12,
           fontFamily: "inherit",
           resize: multiline ? "vertical" : "none",
           boxSizing: "border-box",
+          background: "var(--qz-cream)",
         }}
       />
     </label>
@@ -642,26 +632,29 @@ function InlineNoDrag({ children }: { children: React.ReactNode }) {
 
 const btnIcon: React.CSSProperties = {
   background: "transparent",
-  border: "1px solid #ddd",
-  borderRadius: 4,
+  border: "1px solid var(--qz-rule)",
+  borderRadius: "var(--qz-radius)",
   cursor: "pointer",
   width: 22,
   height: 22,
   fontSize: 16,
   lineHeight: 1,
-  color: "#888",
+  color: "var(--qz-ink-3)",
 };
 
 const btnGhost: React.CSSProperties = {
   background: "transparent",
-  border: "1px dashed #aaa",
-  borderRadius: 4,
-  padding: "4px 8px",
+  border: "1px dashed var(--qz-ink-4)",
+  borderRadius: "var(--qz-radius)",
+  padding: "5px 10px",
   cursor: "pointer",
   fontSize: 11,
-  color: "#555",
+  fontFamily: "var(--qz-font-mono)",
+  color: "var(--qz-ink-3)",
   width: "100%",
-  marginTop: 6,
+  marginTop: 8,
+  textTransform: "uppercase",
+  letterSpacing: "0.06em",
 };
 
 // ---------- Builder component ----------
@@ -759,8 +752,6 @@ function FlowBuilder({
   const [nodes, setNodes] = useNodesState(rfNodes);
   const [edges, setEdges] = useEdgesState(rfEdges);
 
-  // Keep React Flow state in sync with the source-of-truth doc whenever the
-  // doc changes externally (autosave round-trip, mutation outside drag).
   useEffect(() => {
     setNodes(rfNodes);
   }, [rfNodes, setNodes]);
@@ -768,7 +759,6 @@ function FlowBuilder({
     setEdges(rfEdges);
   }, [rfEdges, setEdges]);
 
-  // Position changes: apply locally for smooth dragging, commit to doc on drop.
   const handleNodesChange = useCallback(
     (changes: NodeChange[]) => {
       setNodes((nds) => applyNodeChanges(changes, nds));
@@ -803,7 +793,6 @@ function FlowBuilder({
     (deleted: Node[]) => {
       let next = doc;
       for (const n of deleted) {
-        // Don't delete the intro node — it's required.
         if (n.type === "intro") continue;
         next = deleteQuizNode(next, n.id);
       }
@@ -861,18 +850,28 @@ function FlowBuilder({
 
   return (
     <div style={{ width: "100%" }}>
-      <InlineStack gap="200" align="space-between">
-        <InlineStack gap="200">
-          <Button onClick={handleAutoLayout}>Auto-layout</Button>
-          <Button onClick={() => setAllPathsOpen(true)}>View all paths</Button>
+      <div
+        className="qz-row qz-row-between"
+        style={{ marginBottom: 12, flexWrap: "wrap", gap: 8 }}
+      >
+        <div className="qz-row qz-gap-8">
+          <QzButton size="sm" onClick={handleAutoLayout}>
+            Auto-layout
+          </QzButton>
+          <QzButton size="sm" onClick={() => setAllPathsOpen(true)}>
+            View all paths
+          </QzButton>
           {allIssues.length > 0 && (
-            <Badge tone="critical">{`${allIssues.length} validation issue${allIssues.length === 1 ? "" : "s"}`}</Badge>
+            <QzBadge tone="crit">
+              {`${allIssues.length} issue${allIssues.length === 1 ? "" : "s"}`}
+            </QzBadge>
           )}
-        </InlineStack>
-        <Text as="span" variant="bodySm" tone="subdued">
-          {doc.nodes.length} nodes · {doc.edges.length} edges · Press Delete to remove selection
-        </Text>
-      </InlineStack>
+        </div>
+        <span className="qz-mono qz-dim" style={{ fontSize: 11 }}>
+          {doc.nodes.length} nodes · {doc.edges.length} edges · Delete to remove
+          selection
+        </span>
+      </div>
       <AllPathsModal
         open={allPathsOpen}
         onClose={() => setAllPathsOpen(false)}
@@ -880,13 +879,15 @@ function FlowBuilder({
         productIndex={productIndex}
       />
 
-      <div style={{ display: "flex", gap: 12, marginTop: 12 }}>
+      <div style={{ display: "flex", gap: 12 }}>
         <div
           style={{
             flex: 1,
             height: 640,
-            background: "#FAFAFA",
+            background: "var(--qz-cream-2)",
             position: "relative",
+            border: "1px solid var(--qz-rule)",
+            borderRadius: "var(--qz-radius)",
           }}
         >
           <ReactFlow
@@ -906,39 +907,92 @@ function FlowBuilder({
             <MiniMap pannable zoomable />
           </ReactFlow>
 
-          <div style={{ position: "absolute", right: 20, bottom: 20, zIndex: 5 }}>
-            <Popover
-              active={addMenuOpen}
-              onClose={() => setAddMenuOpen(false)}
-              activator={
-                <button
-                  type="button"
-                  onClick={() => setAddMenuOpen((o) => !o)}
-                  style={{
-                    width: 48,
-                    height: 48,
-                    borderRadius: 24,
-                    background: "#5563DE",
-                    color: "white",
-                    border: "none",
-                    fontSize: 26,
-                    cursor: "pointer",
-                    boxShadow: "0 4px 12px rgba(0,0,0,0.25)",
-                  }}
-                  title={selectedId ? "Add node connected to selection" : "Add node"}
-                >
-                  +
-                </button>
-              }
-            >
-              <ActionList
-                items={[
-                  { content: "Add question", onAction: () => handleAddNode("question") },
-                  { content: "Add result", onAction: () => handleAddNode("result") },
-                  { content: "Add email gate", onAction: () => handleAddNode("email_gate") },
-                ]}
-              />
-            </Popover>
+          <div
+            style={{
+              position: "absolute",
+              right: 20,
+              bottom: 20,
+              zIndex: 5,
+            }}
+          >
+            <div style={{ position: "relative" }}>
+              <button
+                type="button"
+                onClick={() => setAddMenuOpen((o) => !o)}
+                style={{
+                  width: 48,
+                  height: 48,
+                  borderRadius: 24,
+                  background: "var(--qz-accent)",
+                  color: "var(--qz-paper)",
+                  border: "none",
+                  fontSize: 26,
+                  cursor: "pointer",
+                  boxShadow: "0 4px 12px rgba(0,0,0,0.2)",
+                }}
+                title={
+                  selectedId ? "Add node connected to selection" : "Add node"
+                }
+              >
+                +
+              </button>
+              {addMenuOpen && (
+                <>
+                  <div
+                    onClick={() => setAddMenuOpen(false)}
+                    style={{ position: "fixed", inset: 0, zIndex: 6 }}
+                  />
+                  <div
+                    style={{
+                      position: "absolute",
+                      right: 0,
+                      bottom: 56,
+                      background: "var(--qz-paper)",
+                      border: "1px solid var(--qz-rule)",
+                      borderRadius: "var(--qz-radius)",
+                      boxShadow: "0 8px 24px rgba(0,0,0,0.12)",
+                      zIndex: 7,
+                      minWidth: 180,
+                      padding: 4,
+                    }}
+                  >
+                    {(
+                      [
+                        ["Add question", "question"],
+                        ["Add result", "result"],
+                        ["Add email gate", "email_gate"],
+                      ] as const
+                    ).map(([label, kind]) => (
+                      <button
+                        key={kind}
+                        onClick={() => handleAddNode(kind)}
+                        style={{
+                          display: "block",
+                          width: "100%",
+                          background: "transparent",
+                          border: "none",
+                          padding: "8px 12px",
+                          textAlign: "left",
+                          fontSize: 14,
+                          fontFamily: "inherit",
+                          color: "var(--qz-ink)",
+                          cursor: "pointer",
+                          borderRadius: "var(--qz-radius)",
+                        }}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.background = "var(--qz-rule-2)";
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.background = "transparent";
+                        }}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                </>
+              )}
+            </div>
           </div>
         </div>
 
@@ -1008,104 +1062,132 @@ function NodeDrawer({
   const isQuestion = node.type === "question";
   const isResult = node.type === "result";
   const availableTabs = [
-    { id: "content", content: "Content" },
-    ...(isQuestion ? [{ id: "logic", content: "Logic" }] : []),
-    ...(isResult ? [{ id: "preview", content: "Preview" }] : []),
-    { id: "design", content: "Design" },
-    ...(isQuestion ? [{ id: "ai", content: "AI" }] : []),
+    { id: "content", label: "Content" },
+    ...(isQuestion ? [{ id: "logic", label: "Logic" }] : []),
+    ...(isResult ? [{ id: "preview", label: "Preview" }] : []),
+    { id: "design", label: "Design" },
+    ...(isQuestion ? [{ id: "ai", label: "AI" }] : []),
   ];
-  const [tabIndex, setTabIndex] = useState(0);
+  const [tabId, setTabId] = useState<string>("content");
   const [steeringPrompt, setSteeringPrompt] = useState("");
-  const tabId = availableTabs[tabIndex]?.id ?? "content";
+
+  // If the active tab disappears when the node type changes, fall back to content.
+  const validTab = availableTabs.some((t) => t.id === tabId) ? tabId : "content";
 
   return (
-    <Card>
-      <BlockStack gap="300">
-        <InlineStack align="space-between" blockAlign="center">
-          <Text as="h3" variant="headingSm">
+    <QzCard>
+      <div className="qz-col qz-gap-12">
+        <div className="qz-row qz-row-between" style={{ alignItems: "baseline" }}>
+          <h3 className="qz-h2" style={{ flex: 1, minWidth: 0 }}>
             {nodeLabel(node)}
-          </Text>
-          <Button variant="plain" onClick={onClose}>
-            Close
-          </Button>
-        </InlineStack>
+          </h3>
+          <button
+            type="button"
+            onClick={onClose}
+            style={{
+              background: "transparent",
+              border: "none",
+              color: "var(--qz-ink-3)",
+              cursor: "pointer",
+              fontSize: 13,
+              fontFamily: "var(--qz-font-mono)",
+            }}
+          >
+            close ×
+          </button>
+        </div>
 
-        <Tabs
+        <TabBar
           tabs={availableTabs}
-          selected={tabIndex}
-          onSelect={setTabIndex}
-          fitted
+          active={validTab}
+          onSelect={setTabId}
         />
 
-        {tabId === "content" && (
-          <ContentTab node={node} onChange={onChange} />
-        )}
-        {tabId === "logic" && isQuestion && node.type === "question" && (
-          <LogicTab
-            node={node}
-            collections={collections}
-            catalogTags={catalogTags}
-            onChange={onChange}
-          />
-        )}
-        {tabId === "preview" && isResult && node.type === "result" && (
-          <ResultPreviewTab
-            node={node}
-            doc={doc}
-            productIndex={productIndex}
-          />
-        )}
-        {tabId === "design" && (
-          <DesignTab
-            nodeType={node.type}
-            override={nodeOverride}
-            onChange={onNodeDesignChange}
-            onApplyToAll={onApplyDesignToAll}
-          />
-        )}
-        {tabId === "ai" && isQuestion && (
-          <AiTab
-            steeringPrompt={steeringPrompt}
-            onSteeringPromptChange={setSteeringPrompt}
-            onRegenerate={() => onRegenerate(steeringPrompt)}
-            regenState={regenState}
-            regenError={regenError}
-          />
-        )}
-      </BlockStack>
-    </Card>
+        <div style={{ marginTop: 4 }}>
+          {validTab === "content" && <ContentTab node={node} onChange={onChange} />}
+          {validTab === "logic" && node.type === "question" && (
+            <LogicTab
+              node={node}
+              collections={collections}
+              catalogTags={catalogTags}
+              onChange={onChange}
+            />
+          )}
+          {validTab === "preview" && node.type === "result" && (
+            <ResultPreviewTab
+              node={node}
+              doc={doc}
+              productIndex={productIndex}
+            />
+          )}
+          {validTab === "design" && (
+            <DesignTab
+              nodeType={node.type}
+              override={nodeOverride}
+              onChange={onNodeDesignChange}
+              onApplyToAll={onApplyDesignToAll}
+            />
+          )}
+          {validTab === "ai" && isQuestion && (
+            <AiTab
+              steeringPrompt={steeringPrompt}
+              onSteeringPromptChange={setSteeringPrompt}
+              onRegenerate={() => onRegenerate(steeringPrompt)}
+              regenState={regenState}
+              regenError={regenError}
+            />
+          )}
+        </div>
+      </div>
+    </QzCard>
   );
 }
 
-function EmbedSnippet({
-  quizId,
-  previewUrl,
+function TabBar({
+  tabs,
+  active,
+  onSelect,
 }: {
-  quizId: string;
-  previewUrl: string;
+  tabs: Array<{ id: string; label: string }>;
+  active: string;
+  onSelect: (id: string) => void;
 }) {
-  const appOrigin = new URL(previewUrl).origin;
   return (
-    <Box
-      padding="300"
-      background="bg-surface-secondary"
-      borderRadius="200"
+    <div
+      className="qz-row"
+      style={{
+        gap: 4,
+        borderBottom: "1px solid var(--qz-rule)",
+        paddingBottom: 0,
+      }}
     >
-      <BlockStack gap="100">
-        <Text as="p" variant="bodySm" fontWeight="semibold">
-          Theme block settings
-        </Text>
-        <Text as="p" variant="bodySm" tone="subdued">
-          When adding the Quizocalypse block to a storefront section, paste:
-        </Text>
-        <code style={{ fontSize: 12, display: "block" }}>
-          Quiz ID: {quizId}
-        </code>
-        <code style={{ fontSize: 12, display: "block" }}>
-          App URL: {appOrigin}
-        </code>
-      </BlockStack>
-    </Box>
+      {tabs.map((t) => {
+        const on = t.id === active;
+        return (
+          <button
+            key={t.id}
+            type="button"
+            onClick={() => onSelect(t.id)}
+            style={{
+              background: "transparent",
+              border: "none",
+              borderBottom: on
+                ? "2px solid var(--qz-ink)"
+                : "2px solid transparent",
+              padding: "8px 6px",
+              fontSize: 13,
+              fontFamily: "var(--qz-font-body)",
+              fontWeight: on ? 600 : 500,
+              color: on ? "var(--qz-ink)" : "var(--qz-ink-3)",
+              cursor: "pointer",
+              marginBottom: -1,
+            }}
+          >
+            {t.label}
+          </button>
+        );
+      })}
+    </div>
   );
 }
 
@@ -1131,163 +1213,193 @@ function ContentTab({
 }) {
   if (node.type === "question") {
     return (
-      <BlockStack gap="300">
-        <TextField
-          label="Question text"
-          value={node.data.text}
-          onChange={(v) =>
-            onChange({ ...node, data: { ...node.data, text: v } as never })
-          }
-          autoComplete="off"
-          multiline={3}
-        />
-        <Select
-          label="Question type"
-          value={node.data.question_type}
-          onChange={(v) =>
-            onChange({
-              ...node,
-              data: {
-                ...node.data,
-                question_type: v as typeof node.data.question_type,
-              } as never,
-            })
-          }
-          options={[
-            { label: "Single select", value: "single_select" },
-            { label: "Multi select", value: "multi_select" },
-            { label: "Image tile", value: "image_tile" },
-          ]}
-        />
-        {node.data.question_type === "multi_select" && (
-          <TextField
-            label="Max selections (optional)"
-            type="number"
-            value={
-              node.data.max_selections !== undefined
-                ? String(node.data.max_selections)
-                : ""
+      <div className="qz-col qz-gap-12">
+        <QzField label="Question text">
+          <QzTextarea
+            rows={3}
+            value={node.data.text}
+            onChange={(e) =>
+              onChange({
+                ...node,
+                data: { ...node.data, text: e.target.value } as never,
+              })
             }
-            onChange={(v) => {
-              const num = v ? Number(v) : undefined;
+          />
+        </QzField>
+        <QzField label="Question type">
+          <QzSelect
+            value={node.data.question_type}
+            onChange={(e) =>
               onChange({
                 ...node,
                 data: {
                   ...node.data,
-                  ...(num ? { max_selections: num } : { max_selections: undefined }),
+                  question_type: e.target
+                    .value as typeof node.data.question_type,
                 } as never,
-              });
-            }}
-            autoComplete="off"
-          />
+              })
+            }
+          >
+            <option value="single_select">Single select</option>
+            <option value="multi_select">Multi select</option>
+            <option value="image_tile">Image tile</option>
+          </QzSelect>
+        </QzField>
+        {node.data.question_type === "multi_select" && (
+          <QzField label="Max selections (optional)">
+            <QzInput
+              type="number"
+              value={
+                node.data.max_selections !== undefined
+                  ? String(node.data.max_selections)
+                  : ""
+              }
+              onChange={(e) => {
+                const num = e.target.value ? Number(e.target.value) : undefined;
+                onChange({
+                  ...node,
+                  data: {
+                    ...node.data,
+                    ...(num
+                      ? { max_selections: num }
+                      : { max_selections: undefined }),
+                  } as never,
+                });
+              }}
+            />
+          </QzField>
         )}
-      </BlockStack>
+      </div>
     );
   }
 
   if (node.type === "intro") {
     return (
-      <BlockStack gap="300">
-        <TextField
-          label="Headline"
-          value={node.data.headline}
-          onChange={(v) =>
-            onChange({ ...node, data: { ...node.data, headline: v } as never })
-          }
-          autoComplete="off"
-        />
-        <TextField
-          label="Subtext"
-          value={node.data.subtext}
-          onChange={(v) =>
-            onChange({ ...node, data: { ...node.data, subtext: v } as never })
-          }
-          autoComplete="off"
-          multiline={3}
-        />
-        <TextField
-          label="Button label"
-          value={node.data.button_label}
-          onChange={(v) =>
-            onChange({
-              ...node,
-              data: { ...node.data, button_label: v } as never,
-            })
-          }
-          autoComplete="off"
-        />
-      </BlockStack>
+      <div className="qz-col qz-gap-12">
+        <QzField label="Headline">
+          <QzInput
+            value={node.data.headline}
+            onChange={(e) =>
+              onChange({
+                ...node,
+                data: { ...node.data, headline: e.target.value } as never,
+              })
+            }
+          />
+        </QzField>
+        <QzField label="Subtext">
+          <QzTextarea
+            rows={3}
+            value={node.data.subtext}
+            onChange={(e) =>
+              onChange({
+                ...node,
+                data: { ...node.data, subtext: e.target.value } as never,
+              })
+            }
+          />
+        </QzField>
+        <QzField label="Button label">
+          <QzInput
+            value={node.data.button_label}
+            onChange={(e) =>
+              onChange({
+                ...node,
+                data: { ...node.data, button_label: e.target.value } as never,
+              })
+            }
+          />
+        </QzField>
+      </div>
     );
   }
 
   if (node.type === "email_gate") {
     return (
-      <BlockStack gap="300">
-        <TextField
-          label="Headline"
-          value={node.data.headline}
-          onChange={(v) =>
-            onChange({ ...node, data: { ...node.data, headline: v } as never })
-          }
-          autoComplete="off"
-        />
-        <TextField
-          label="Subtext"
-          value={node.data.subtext}
-          onChange={(v) =>
-            onChange({ ...node, data: { ...node.data, subtext: v } as never })
-          }
-          autoComplete="off"
-          multiline={3}
-        />
-      </BlockStack>
+      <div className="qz-col qz-gap-12">
+        <QzField label="Headline">
+          <QzInput
+            value={node.data.headline}
+            onChange={(e) =>
+              onChange({
+                ...node,
+                data: { ...node.data, headline: e.target.value } as never,
+              })
+            }
+          />
+        </QzField>
+        <QzField label="Subtext">
+          <QzTextarea
+            rows={3}
+            value={node.data.subtext}
+            onChange={(e) =>
+              onChange({
+                ...node,
+                data: { ...node.data, subtext: e.target.value } as never,
+              })
+            }
+          />
+        </QzField>
+      </div>
     );
   }
 
   // result
   return (
-    <BlockStack gap="300">
-      <TextField
-        label="Headline"
-        value={node.data.headline}
-        onChange={(v) =>
-          onChange({ ...node, data: { ...node.data, headline: v } as never })
-        }
-        autoComplete="off"
-      />
-      <TextField
-        label="Subtext"
-        value={node.data.subtext}
-        onChange={(v) =>
-          onChange({ ...node, data: { ...node.data, subtext: v } as never })
-        }
-        autoComplete="off"
-        multiline={3}
-      />
-      <TextField
-        label="CTA label"
-        value={node.data.cta_label}
-        onChange={(v) =>
-          onChange({ ...node, data: { ...node.data, cta_label: v } as never })
-        }
-        autoComplete="off"
-      />
-      <TextField
-        label="Slot count (1–6)"
-        type="number"
-        value={String(node.data.slot_count)}
-        onChange={(v) =>
-          onChange({
-            ...node,
-            data: {
-              ...node.data,
-              slot_count: Math.max(1, Math.min(6, Number(v) || 1)),
-            } as never,
-          })
-        }
-        autoComplete="off"
-      />
-    </BlockStack>
+    <div className="qz-col qz-gap-12">
+      <QzField label="Headline">
+        <QzInput
+          value={node.data.headline}
+          onChange={(e) =>
+            onChange({
+              ...node,
+              data: { ...node.data, headline: e.target.value } as never,
+            })
+          }
+        />
+      </QzField>
+      <QzField label="Subtext">
+        <QzTextarea
+          rows={3}
+          value={node.data.subtext}
+          onChange={(e) =>
+            onChange({
+              ...node,
+              data: { ...node.data, subtext: e.target.value } as never,
+            })
+          }
+        />
+      </QzField>
+      <QzField label="CTA label">
+        <QzInput
+          value={node.data.cta_label}
+          onChange={(e) =>
+            onChange({
+              ...node,
+              data: { ...node.data, cta_label: e.target.value } as never,
+            })
+          }
+        />
+      </QzField>
+      <QzField label="Slot count" hint="1–6">
+        <QzInput
+          type="number"
+          value={String(node.data.slot_count)}
+          onChange={(e) =>
+            onChange({
+              ...node,
+              data: {
+                ...node.data,
+                slot_count: Math.max(
+                  1,
+                  Math.min(6, Number(e.target.value) || 1),
+                ),
+              } as never,
+            })
+          }
+        />
+      </QzField>
+    </div>
   );
 }
 
@@ -1303,10 +1415,6 @@ function LogicTab({
   onChange: (next: QuizNodeDoc) => void;
 }) {
   const isImageTile = node.data.question_type === "image_tile";
-  const collectionOptions = [
-    { label: "(no filter)", value: "" },
-    ...collections.map((c) => ({ label: c.title, value: c.collectionId })),
-  ];
 
   const updateAnswer = (
     idx: number,
@@ -1320,49 +1428,73 @@ function LogicTab({
   };
 
   return (
-    <BlockStack gap="400">
-      <Text as="p" variant="bodySm" tone="subdued">
+    <div className="qz-col qz-gap-16">
+      <p className="qz-muted" style={{ fontSize: 13, margin: 0 }}>
         Each answer adds tags to the recommendation bag and optionally narrows
         candidates to a specific collection. Tag suggestions come from your
         live catalog — typing a non-catalog tag is allowed but won&apos;t match
         any products.
-      </Text>
+      </p>
       {node.data.answers.map((answer, idx) => (
-        <BlockStack key={answer.id} gap="200">
-          <Text as="h4" variant="headingSm">
-            Answer {idx + 1}: {answer.text || "(untitled)"}
-          </Text>
-          <TagAutocomplete
-            tags={answer.tags}
-            catalogTags={catalogTags}
-            onChange={(tags) => updateAnswer(idx, { tags })}
-          />
-          <Select
-            label="Collection filter"
-            value={answer.collection_filter ?? ""}
-            onChange={(v) =>
-              updateAnswer(idx, {
-                ...(v ? { collection_filter: v } : { collection_filter: undefined }),
-              })
-            }
-            options={collectionOptions}
-          />
-          {isImageTile && (
-            <TextField
-              label="Image URL"
-              value={answer.image_url ?? ""}
-              onChange={(v) =>
+        <div
+          key={answer.id}
+          className="qz-col qz-gap-8"
+          style={{
+            paddingTop: 12,
+            borderTop:
+              idx > 0 ? "1px solid var(--qz-rule)" : undefined,
+          }}
+        >
+          <div className="qz-row qz-gap-8" style={{ alignItems: "baseline" }}>
+            <span className="qz-label">Answer {idx + 1}</span>
+            <span className="qz-muted" style={{ fontSize: 13 }}>
+              {answer.text || "(untitled)"}
+            </span>
+          </div>
+          <QzField label="Tags">
+            <TagAutocomplete
+              tags={answer.tags}
+              catalogTags={catalogTags}
+              onChange={(tags) => updateAnswer(idx, { tags })}
+            />
+          </QzField>
+          <QzField label="Collection filter">
+            <QzSelect
+              value={answer.collection_filter ?? ""}
+              onChange={(e) =>
                 updateAnswer(idx, {
-                  ...(v ? { image_url: v } : { image_url: undefined }),
+                  ...(e.target.value
+                    ? { collection_filter: e.target.value }
+                    : { collection_filter: undefined }),
                 })
               }
-              autoComplete="off"
-              placeholder="https://cdn.shopify.com/..."
-            />
+            >
+              <option value="">(no filter)</option>
+              {collections.map((c) => (
+                <option key={c.collectionId} value={c.collectionId}>
+                  {c.title}
+                </option>
+              ))}
+            </QzSelect>
+          </QzField>
+          {isImageTile && (
+            <QzField label="Image URL">
+              <QzInput
+                value={answer.image_url ?? ""}
+                placeholder="https://cdn.shopify.com/..."
+                onChange={(e) =>
+                  updateAnswer(idx, {
+                    ...(e.target.value
+                      ? { image_url: e.target.value }
+                      : { image_url: undefined }),
+                  })
+                }
+              />
+            </QzField>
           )}
-        </BlockStack>
+        </div>
       ))}
-    </BlockStack>
+    </div>
   );
 }
 
@@ -1376,6 +1508,7 @@ function TagAutocomplete({
   onChange: (tags: string[]) => void;
 }) {
   const [input, setInput] = useState("");
+  const [open, setOpen] = useState(false);
   const filtered = useMemo(() => {
     const q = input.toLowerCase().trim();
     if (!q) return catalogTags.filter((t) => !tags.includes(t)).slice(0, 8);
@@ -1390,6 +1523,7 @@ function TagAutocomplete({
     if (tags.includes(t)) return;
     onChange([...tags, t]);
     setInput("");
+    setOpen(false);
   };
 
   const removeTag = (tag: string) => {
@@ -1397,51 +1531,142 @@ function TagAutocomplete({
   };
 
   const inCatalog = (t: string) => catalogTags.includes(t);
-  const customTagButton =
-    input.trim() && !catalogTags.includes(input.trim()) && !tags.includes(input.trim());
+  const showCustom =
+    input.trim() &&
+    !catalogTags.includes(input.trim()) &&
+    !tags.includes(input.trim());
 
   return (
-    <BlockStack gap="200">
-      <InlineStack gap="100" wrap>
+    <div className="qz-col qz-gap-8">
+      <div className="qz-row" style={{ flexWrap: "wrap", gap: 6 }}>
         {tags.length === 0 && (
-          <Text as="span" variant="bodySm" tone="subdued">
+          <span className="qz-dim" style={{ fontSize: 12 }}>
             No tags yet
-          </Text>
+          </span>
         )}
         {tags.map((t) => (
-          <Tag key={t} onRemove={() => removeTag(t)}>
-            {inCatalog(t) ? t : `${t} (not in catalog)`}
-          </Tag>
-        ))}
-      </InlineStack>
-      <Combobox
-        activator={
-          <Combobox.TextField
-            label="Add tag"
-            labelHidden
-            autoComplete="off"
-            placeholder="Search catalog tags…"
-            value={input}
-            onChange={setInput}
+          <Chip
+            key={t}
+            label={inCatalog(t) ? t : `${t} (not in catalog)`}
+            onRemove={() => removeTag(t)}
           />
-        }
-      >
-        {filtered.length > 0 ? (
-          <Listbox onSelect={addTag}>
+        ))}
+      </div>
+      <div style={{ position: "relative" }}>
+        <QzInput
+          placeholder="Search catalog tags…"
+          value={input}
+          onChange={(e) => {
+            setInput(e.target.value);
+            setOpen(true);
+          }}
+          onFocus={() => setOpen(true)}
+          onBlur={() => setTimeout(() => setOpen(false), 120)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && input.trim()) {
+              e.preventDefault();
+              addTag(input);
+            }
+          }}
+        />
+        {open && filtered.length > 0 && (
+          <div
+            style={{
+              position: "absolute",
+              top: "100%",
+              left: 0,
+              right: 0,
+              marginTop: 4,
+              background: "var(--qz-paper)",
+              border: "1px solid var(--qz-rule)",
+              borderRadius: "var(--qz-radius)",
+              boxShadow: "0 8px 24px rgba(0,0,0,0.08)",
+              zIndex: 10,
+              maxHeight: 220,
+              overflowY: "auto",
+            }}
+          >
             {filtered.map((t) => (
-              <Listbox.Option key={t} value={t}>
+              <button
+                key={t}
+                type="button"
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  addTag(t);
+                }}
+                style={{
+                  display: "block",
+                  width: "100%",
+                  background: "transparent",
+                  border: "none",
+                  padding: "8px 12px",
+                  textAlign: "left",
+                  fontSize: 13,
+                  fontFamily: "inherit",
+                  color: "var(--qz-ink)",
+                  cursor: "pointer",
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background = "var(--qz-rule-2)";
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = "transparent";
+                }}
+              >
                 {t}
-              </Listbox.Option>
+              </button>
             ))}
-          </Listbox>
-        ) : undefined}
-      </Combobox>
-      {customTagButton && (
-        <Button variant="plain" onClick={() => addTag(input)}>
-          Add custom tag &ldquo;{input.trim()}&rdquo; (not in catalog)
-        </Button>
+          </div>
+        )}
+      </div>
+      {showCustom && (
+        <QzButton variant="ghost" size="sm" onClick={() => addTag(input)}>
+          + Add custom tag &ldquo;{input.trim()}&rdquo;
+        </QzButton>
       )}
-    </BlockStack>
+    </div>
+  );
+}
+
+function Chip({
+  label,
+  onRemove,
+}: {
+  label: string;
+  onRemove: () => void;
+}) {
+  return (
+    <span
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        gap: 6,
+        padding: "3px 8px 3px 10px",
+        background: "var(--qz-rule-2)",
+        borderRadius: 100,
+        fontSize: 12,
+        fontFamily: "var(--qz-font-mono)",
+        color: "var(--qz-ink-2)",
+      }}
+    >
+      {label}
+      <button
+        type="button"
+        onClick={onRemove}
+        style={{
+          background: "transparent",
+          border: "none",
+          cursor: "pointer",
+          color: "var(--qz-ink-3)",
+          fontSize: 14,
+          lineHeight: 1,
+          padding: 0,
+        }}
+        title="Remove tag"
+      >
+        ×
+      </button>
+    </span>
   );
 }
 
@@ -1485,63 +1710,93 @@ function DesignTab({
   const hasOverrides = Object.keys(override).length > 0;
 
   return (
-    <BlockStack gap="300">
-      <Text as="p" variant="bodySm" tone="subdued">
-        Per-node overrides on top of your brand defaults + quiz tokens. Leave
-        a color blank to inherit from the parent layer.
-      </Text>
+    <div className="qz-col qz-gap-12">
+      <p className="qz-muted" style={{ fontSize: 13, margin: 0 }}>
+        Per-node overrides on top of your brand defaults + quiz tokens. Leave a
+        color blank to inherit from the parent layer.
+      </p>
       {colorRoles.map((role) => {
         const value = override.colors?.[role.key];
         return (
-          <InlineStack key={role.key} gap="300" blockAlign="center">
-            <Box minWidth="90px">
-              <Text as="span" variant="bodyMd">
-                {role.label}
-              </Text>
-            </Box>
+          <div
+            key={role.key}
+            className="qz-row qz-gap-8"
+            style={{ alignItems: "center" }}
+          >
+            <span
+              className="qz-mono"
+              style={{
+                minWidth: 80,
+                fontSize: 11,
+                color: "var(--qz-ink-3)",
+                textTransform: "uppercase",
+                letterSpacing: "0.1em",
+              }}
+            >
+              {role.label}
+            </span>
             <input
               type="color"
               value={value ?? "#000000"}
               onChange={(e) => setColor(role.key, e.target.value)}
-              style={{ width: 40, height: 32, border: "none", padding: 0 }}
+              style={{
+                width: 36,
+                height: 28,
+                border: "1px solid var(--qz-rule)",
+                borderRadius: "var(--qz-radius)",
+                padding: 0,
+                background: "var(--qz-paper)",
+              }}
             />
             <div style={{ flex: 1 }}>
-              <TextField
-                label=""
-                labelHidden
+              <QzInput
                 value={value ?? ""}
-                onChange={(v) => setColor(role.key, v || null)}
                 placeholder="(inherit)"
-                autoComplete="off"
+                onChange={(e) => setColor(role.key, e.target.value || null)}
+                style={{ fontFamily: "var(--qz-font-mono)", fontSize: 12 }}
               />
             </div>
             {value && (
-              <Button
-                variant="plain"
+              <button
+                type="button"
                 onClick={() => setColor(role.key, null)}
+                style={{
+                  background: "transparent",
+                  border: "none",
+                  color: "var(--qz-ink-3)",
+                  fontSize: 12,
+                  cursor: "pointer",
+                  fontFamily: "var(--qz-font-mono)",
+                }}
               >
-                Clear
-              </Button>
+                clear
+              </button>
             )}
-          </InlineStack>
+          </div>
         );
       })}
-      <InlineStack gap="200" wrap>
+      <div className="qz-row qz-gap-8" style={{ flexWrap: "wrap" }}>
         {(nodeType === "question" || nodeType === "result") && hasOverrides && (
-          <Button
-            variant="plain"
+          <QzButton
+            variant="ghost"
+            size="sm"
             onClick={() => onApplyToAll(nodeType, override)}
           >
             Apply to all {nodeType === "question" ? "questions" : "results"}
-          </Button>
+          </QzButton>
         )}
         {hasOverrides && (
-          <Button variant="plain" tone="critical" onClick={reset}>
-            Reset all node overrides
-          </Button>
+          <QzButton
+            variant="ghost"
+            size="sm"
+            onClick={reset}
+            style={{ color: "var(--qz-crit)" }}
+          >
+            Reset overrides
+          </QzButton>
         )}
-      </InlineStack>
-    </BlockStack>
+      </div>
+    </div>
   );
 }
 
@@ -1562,14 +1817,16 @@ function ResultPreviewTab({
       ),
     [doc.nodes],
   );
-  // For each question, track which answer the merchant is simulating.
   const [picks, setPicks] = useState<Record<string, string | "_first">>({});
 
   const selectedAnswerIds = useMemo(() => {
     return questionNodes
       .map((q) => {
         const pick = picks[q.id] ?? "_first";
-        const ans = pick === "_first" ? q.data.answers[0] : q.data.answers.find((a) => a.id === pick);
+        const ans =
+          pick === "_first"
+            ? q.data.answers[0]
+            : q.data.answers.find((a) => a.id === pick);
         return ans?.id;
       })
       .filter((id): id is string => !!id);
@@ -1587,66 +1844,68 @@ function ResultPreviewTab({
   );
 
   return (
-    <BlockStack gap="300">
-      <Text as="p" variant="bodySm" tone="subdued">
-        Simulate the quiz against your live catalog. Pick an answer per
-        question and the recommendation engine ranks products for this result
-        in real time.
-      </Text>
+    <div className="qz-col qz-gap-12">
+      <p className="qz-muted" style={{ fontSize: 13, margin: 0 }}>
+        Simulate the quiz against your live catalog. Pick an answer per question
+        and the recommendation engine ranks products for this result in real
+        time.
+      </p>
       {questionNodes.length === 0 ? (
-        <Banner tone="info">
-          <p>No question nodes to simulate against.</p>
-        </Banner>
+        <QzBanner tone="default">
+          No question nodes to simulate against.
+        </QzBanner>
       ) : (
         questionNodes.map((q) => (
-          <Select
-            key={q.id}
-            label={q.data.text.slice(0, 70) || "Question"}
-            value={picks[q.id] ?? "_first"}
-            onChange={(v) => setPicks({ ...picks, [q.id]: v })}
-            options={[
-              { label: "First answer", value: "_first" },
-              ...q.data.answers.map((a) => ({
-                label: a.text || a.id,
-                value: a.id,
-              })),
-            ]}
-          />
+          <QzField key={q.id} label={(q.data.text || "Question").slice(0, 70)}>
+            <QzSelect
+              value={picks[q.id] ?? "_first"}
+              onChange={(e) => setPicks({ ...picks, [q.id]: e.target.value })}
+            >
+              <option value="_first">First answer</option>
+              {q.data.answers.map((a) => (
+                <option key={a.id} value={a.id}>
+                  {a.text || a.id}
+                </option>
+              ))}
+            </QzSelect>
+          </QzField>
         ))
       )}
-      <BlockStack gap="100">
-        <Text as="h4" variant="headingSm">
+      <div>
+        <h4 className="qz-h3" style={{ marginBottom: 8 }}>
           Top {node.data.slot_count} products
-        </Text>
+        </h4>
         {recs.length === 0 ? (
-          <Text as="p" variant="bodySm" tone="subdued">
+          <p className="qz-muted" style={{ fontSize: 13, margin: 0 }}>
             No matches — would fall back to{" "}
             <code>{node.data.fallback_collection_id || "(no fallback)"}</code>.
-          </Text>
+          </p>
         ) : (
-          recs.map((r) => (
-            <Box
-              key={r.product_id}
-              padding="200"
-              background="bg-surface-secondary"
-              borderRadius="200"
-            >
-              <InlineStack gap="200" align="space-between">
-                <Text as="span" variant="bodyMd" fontWeight="semibold">
-                  {r.title}
-                </Text>
-                <InlineStack gap="100">
-                  <Badge>{`score ${r.score}`}</Badge>
-                  {!r.inventory_in_stock && (
-                    <Badge tone="critical">out of stock</Badge>
-                  )}
-                </InlineStack>
-              </InlineStack>
-            </Box>
-          ))
+          <div className="qz-col qz-gap-8">
+            {recs.map((r) => (
+              <div
+                key={r.product_id}
+                style={{
+                  padding: 10,
+                  background: "var(--qz-rule-2)",
+                  borderRadius: "var(--qz-radius)",
+                }}
+              >
+                <div className="qz-row qz-row-between">
+                  <span style={{ fontWeight: 500 }}>{r.title}</span>
+                  <div className="qz-row qz-gap-4">
+                    <QzBadge>{`score ${r.score}`}</QzBadge>
+                    {!r.inventory_in_stock && (
+                      <QzBadge tone="crit">out of stock</QzBadge>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
         )}
-      </BlockStack>
-    </BlockStack>
+      </div>
+    </div>
   );
 }
 
@@ -1683,45 +1942,92 @@ function AllPathsModal({
   const introCount = doc.nodes.filter((n) => n.type === "intro").length;
   const questionCount = doc.nodes.filter((n) => n.type === "question").length;
 
+  if (!open) return null;
+
   return (
-    <Modal
-      open={open}
-      onClose={onClose}
-      title="All paths"
-      size="large"
-      primaryAction={{ content: "Close", onAction: onClose }}
+    <div
+      role="dialog"
+      aria-modal="true"
+      onClick={onClose}
+      style={{
+        position: "fixed",
+        inset: 0,
+        background: "rgba(27, 26, 23, 0.4)",
+        display: "grid",
+        placeItems: "center",
+        zIndex: 100,
+        backdropFilter: "blur(4px)",
+        padding: 24,
+      }}
     >
-      <Modal.Section>
-        <BlockStack gap="300">
-          <Text as="p" variant="bodySm" tone="subdued">
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className="qz-card qz-flush"
+        style={{
+          maxWidth: 980,
+          width: "100%",
+          maxHeight: "85vh",
+          display: "flex",
+          flexDirection: "column",
+        }}
+      >
+        <div
+          className="qz-row qz-row-between"
+          style={{ padding: 20, borderBottom: "1px solid var(--qz-rule)" }}
+        >
+          <div>
+            <div className="qz-label">Debug</div>
+            <h2 className="qz-h1 qz-mt-8">All paths</h2>
+          </div>
+          <QzButton variant="ghost" size="sm" onClick={onClose}>
+            Close
+          </QzButton>
+        </div>
+        <div style={{ padding: 20, overflowY: "auto" }}>
+          <p className="qz-muted" style={{ fontSize: 13 }}>
             Every reachable answer combination simulated against the live
             catalog. Rows showing zero products would fall back to the
             destination result&apos;s fallback collection at runtime.
-          </Text>
+          </p>
           {introCount === 0 || questionCount === 0 ? (
-            <Banner tone="warning">
-              <p>Need an intro and at least one question to enumerate paths.</p>
-            </Banner>
+            <QzBanner tone="warn">
+              Need an intro and at least one question to enumerate paths.
+            </QzBanner>
           ) : rows.length === 0 ? (
-            <Text as="p" variant="bodySm">
+            <p className="qz-muted">
               No paths could be walked. Check edge connections.
-            </Text>
+            </p>
           ) : (
-            <DataTable
-              columnContentTypes={["text", "text", "text"]}
-              headings={["Path", "Result", "Top products"]}
-              rows={rows.map(({ combo, resultNode, recs }) => [
-                combo.map((c) => c.ans.text || c.ans.id).join(" → "),
-                resultNode ? resultNode.data.headline : "(no result)",
-                recs.length === 0
-                  ? "— fallback —"
-                  : recs.map((r) => r.title).join(", "),
-              ])}
-            />
+            <table className="qz-table" style={{ marginTop: 12 }}>
+              <thead>
+                <tr>
+                  <th>Path</th>
+                  <th>Result</th>
+                  <th>Top products</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map(({ combo, resultNode, recs }, idx) => (
+                  <tr key={idx}>
+                    <td className="qz-mono" style={{ fontSize: 12 }}>
+                      {combo.map((c) => c.ans.text || c.ans.id).join(" → ")}
+                    </td>
+                    <td>
+                      {resultNode ? resultNode.data.headline : "(no result)"}
+                    </td>
+                    <td className="qz-muted" style={{ fontSize: 13 }}>
+                      {recs.length === 0
+                        ? "— fallback —"
+                        : recs.map((r) => r.title).join(", ")}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           )}
-        </BlockStack>
-      </Modal.Section>
-    </Modal>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -1801,31 +2107,66 @@ function AiTab({
 }) {
   const isRegen = regenState !== "idle";
   return (
-    <BlockStack gap="300">
-      <Text as="p" variant="bodySm" tone="subdued">
+    <div className="qz-col qz-gap-12">
+      <p className="qz-muted" style={{ fontSize: 13, margin: 0 }}>
         Ask Claude to rewrite this question. Tags will only be drawn from your
         real catalog. Answer IDs are preserved by order so connected edges
         survive when possible.
-      </Text>
-      <TextField
+      </p>
+      <QzField
         label="Steering (optional)"
-        value={steeringPrompt}
-        onChange={onSteeringPromptChange}
-        autoComplete="off"
-        multiline={3}
-        placeholder="e.g. 'Lean more playful' or 'Add a sensitivity option'"
-        maxLength={300}
-        showCharacterCount
-      />
-      <Button variant="primary" onClick={onRegenerate} loading={isRegen}>
-        Regenerate
-      </Button>
+        meta={`${steeringPrompt.length} / 300`}
+      >
+        <QzTextarea
+          rows={3}
+          maxLength={300}
+          placeholder="e.g. 'Lean more playful' or 'Add a sensitivity option'"
+          value={steeringPrompt}
+          onChange={(e) => onSteeringPromptChange(e.target.value)}
+        />
+      </QzField>
+      <QzButton variant="accent" onClick={onRegenerate} disabled={isRegen}>
+        {isRegen ? "Regenerating…" : "Regenerate"}
+      </QzButton>
       {regenError && (
-        <Banner tone="critical" title="Regenerate failed">
-          <p>{regenError}</p>
-        </Banner>
+        <QzBanner tone="crit" title="Regenerate failed">
+          {regenError}
+        </QzBanner>
       )}
-    </BlockStack>
+    </div>
+  );
+}
+
+function EmbedSnippet({
+  quizId,
+  previewUrl,
+}: {
+  quizId: string;
+  previewUrl: string;
+}) {
+  const appOrigin = new URL(previewUrl).origin;
+  return (
+    <div
+      style={{
+        padding: 12,
+        background: "var(--qz-rule-2)",
+        borderRadius: "var(--qz-radius)",
+      }}
+    >
+      <div className="qz-label" style={{ marginBottom: 6 }}>
+        Theme block settings
+      </div>
+      <p className="qz-muted" style={{ fontSize: 13, margin: "0 0 8px" }}>
+        When adding the Quizocalypse block to a storefront section, paste:
+      </p>
+      <div
+        className="qz-mono"
+        style={{ fontSize: 12, color: "var(--qz-ink-2)" }}
+      >
+        <div>Quiz ID: {quizId}</div>
+        <div>App URL: {appOrigin}</div>
+      </div>
+    </div>
   );
 }
 
@@ -1863,9 +2204,6 @@ export default function QuizEditor() {
     publishFetcher.submit(form, { method: "POST" });
   }, [publishFetcher]);
 
-  // Per-question regenerate. After it completes successfully, bump a counter
-  // used as a `key` on FlowBuilder to force remount with the loader's revalidated
-  // doc (Remix auto-revalidates loaders after an action succeeds).
   const regenFetcher = useFetcher<{
     ok: boolean;
     action?: "regenerate-node";
@@ -1892,11 +2230,24 @@ export default function QuizEditor() {
 
   if (!data.valid || !data.doc) {
     return (
-      <Page backAction={{ content: "Dashboard", url: "/app" }}>
+      <QzPage>
         <TitleBar title={data.name} />
-        <Banner tone="critical" title="Quiz JSON failed validation">
-          <p>The stored draft does not match the Quiz schema. Issues:</p>
-          <ul>
+        <QzPageHeader
+          eyebrow={
+            <Link
+              to="/app/quizzes"
+              style={{ color: "inherit", textDecoration: "none" }}
+            >
+              ← Quizzes
+            </Link>
+          }
+          title={data.name}
+        />
+        <QzBanner tone="crit" title="Quiz JSON failed validation">
+          <p style={{ margin: "0 0 8px" }}>
+            The stored draft does not match the Quiz schema. Issues:
+          </p>
+          <ul style={{ margin: 0, paddingLeft: 18 }}>
             {data.issues.map((i, idx) => (
               <li key={idx}>
                 <strong>{i.path || "(root)"}</strong>: {i.message}
@@ -1905,18 +2256,17 @@ export default function QuizEditor() {
           </ul>
           <details style={{ marginTop: 12 }}>
             <summary>Raw stored JSON</summary>
-            <pre style={{ fontSize: 11 }}>
+            <pre style={{ fontSize: 11, overflowX: "auto" }}>
               {JSON.stringify(data.rawJson, null, 2)}
             </pre>
           </details>
-        </Banner>
-      </Page>
+        </QzBanner>
+      </QzPage>
     );
   }
 
   const isSaving =
-    saveFetcher.state !== "idle" &&
-    saveFetcher.formMethod === "PUT";
+    saveFetcher.state !== "idle" && saveFetcher.formMethod === "PUT";
   const savedAt =
     saveFetcher.data?.ok && "savedAt" in saveFetcher.data
       ? saveFetcher.data.savedAt
@@ -1935,18 +2285,48 @@ export default function QuizEditor() {
   const previewUrl = data.previewUrl;
 
   return (
-    <Page
-      backAction={{ content: "Quizzes", url: "/app/quizzes" }}
-      title={data.name}
-      titleMetadata={<Badge tone="info">{data.status}</Badge>}
-    >
+    <QzPage>
       <TitleBar title={data.name} />
-      <BlockStack gap="300">
+
+      <QzPageHeader
+        eyebrow={
+          <Link
+            to="/app/quizzes"
+            style={{ color: "inherit", textDecoration: "none" }}
+          >
+            ← Quizzes
+          </Link>
+        }
+        title={data.name}
+        subtitle="Edit the flow visually. Click any node to open its drawer. Autosave is on — publish to push to the storefront."
+        actions={
+          <>
+            <Link to={`/app/quizzes/${data.quizId}/versions`}>
+              <QzButton size="sm">Versions</QzButton>
+            </Link>
+            <Link to={`/app/quizzes/${data.quizId}/analytics`}>
+              <QzButton size="sm">Analytics</QzButton>
+            </Link>
+            <a href={previewUrl} target="_blank" rel="noreferrer">
+              <QzButton size="sm">Preview</QzButton>
+            </a>
+            <QzButton
+              variant="accent"
+              onClick={handlePublish}
+              disabled={isPublishing}
+            >
+              {isPublishing ? "Publishing…" : "Publish"}
+            </QzButton>
+          </>
+        }
+      />
+
+      <div className="qz-col qz-gap-16">
         {publishError && (
-          <Banner tone="critical" title="Publish blocked">
-            <p>{publishError.error}</p>
+          <QzBanner tone="crit" title="Publish blocked">
+            <p style={{ margin: "0 0 8px" }}>{publishError.error}</p>
             {publishError.issues && publishError.issues.length > 0 && (
-              <ul>
+              <ul style={{ margin: 0, paddingLeft: 18, fontSize: 13 }}>
                 {publishError.issues.map((i, idx) => (
                   <li key={idx}>
                     <strong>{i.path || "(root)"}</strong>: {i.message}
@@ -1954,70 +2334,58 @@ export default function QuizEditor() {
                 ))}
               </ul>
             )}
-          </Banner>
+          </QzBanner>
         )}
         {publishResult && (
-          <Banner tone="success" title={`Published v${publishResult.version}`}>
-            <BlockStack gap="200">
-              <p>
+          <QzBanner tone="ok" title={`Published v${publishResult.version}`}>
+            <div className="qz-col qz-gap-8">
+              <p style={{ margin: 0 }}>
                 {publishResult.productCount} products indexed.{" "}
-                <a href={previewUrl} target="_blank" rel="noreferrer">
+                <a
+                  href={previewUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  style={{ color: "inherit" }}
+                >
                   Open the live storefront preview
                 </a>{" "}
-                — share this link, or embed in any storefront page via the
-                Quizocalypse theme block (Online Store → Customize → Add
-                block).
+                — share this link, or embed via the Quizocalypse theme block.
               </p>
               <EmbedSnippet quizId={data.quizId} previewUrl={previewUrl} />
-            </BlockStack>
-          </Banner>
+            </div>
+          </QzBanner>
         )}
-        <Card padding="0">
-          <div style={{ padding: 12 }}>
-            <ReactFlowProvider>
-              <FlowBuilder
-                key={regenCount}
-                initialDoc={data.doc}
-                collections={data.collections}
-                catalogTags={data.catalogTags}
-                productIndex={data.productIndex}
-                onChange={triggerSave}
-                onRegenerate={handleRegenerate}
-                regenState={regenFetcher.state}
-                regenError={regenError}
-              />
-            </ReactFlowProvider>
-          </div>
-        </Card>
-        <InlineStack gap="200" align="space-between">
-          <Text as="span" variant="bodySm" tone="subdued">
+
+        <ReactFlowProvider>
+          <FlowBuilder
+            key={regenCount}
+            initialDoc={data.doc}
+            collections={data.collections}
+            catalogTags={data.catalogTags}
+            productIndex={data.productIndex}
+            onChange={triggerSave}
+            onRegenerate={handleRegenerate}
+            regenState={regenFetcher.state}
+            regenError={regenError}
+          />
+        </ReactFlowProvider>
+
+        <div className="qz-row qz-row-between qz-mono qz-dim" style={{ fontSize: 11 }}>
+          <span>
             {isSaving
               ? "Saving…"
               : savedAt
                 ? `Saved at ${new Date(savedAt).toLocaleTimeString()}`
                 : "Edit any field to autosave."}
             {saveError ? ` — error: ${saveError}` : ""}
-          </Text>
-          <InlineStack gap="200">
-            <Link to={`/app/quizzes/${data.quizId}/versions`}>
-              <Button>Versions</Button>
-            </Link>
-            <Link to={`/app/quizzes/${data.quizId}/analytics`}>
-              <Button>Analytics</Button>
-            </Link>
-            <Button url={previewUrl} target="_blank">
-              Preview
-            </Button>
-            <Button
-              variant="primary"
-              onClick={handlePublish}
-              loading={isPublishing}
-            >
-              Publish
-            </Button>
-          </InlineStack>
-        </InlineStack>
-      </BlockStack>
-    </Page>
+          </span>
+          <span>
+            <QzBadge tone={data.status === "published" ? "ok" : "draft"}>
+              {data.status}
+            </QzBadge>
+          </span>
+        </div>
+      </div>
+    </QzPage>
   );
 }

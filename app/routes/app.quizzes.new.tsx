@@ -1,27 +1,19 @@
-import { useState, useMemo, useEffect } from "react";
+import { useEffect, useState } from "react";
 import type { LoaderFunctionArgs } from "@remix-run/node";
 import { json } from "@remix-run/node";
 import { useFetcher, useLoaderData, useNavigate } from "@remix-run/react";
-import {
-  Page,
-  Card,
-  BlockStack,
-  Text,
-  TextField,
-  RangeSlider,
-  Button,
-  Banner,
-  ChoiceList,
-  InlineStack,
-} from "@shopify/polaris";
 import { TitleBar } from "@shopify/app-bridge-react";
 import { authenticate } from "../shopify.server";
 import prisma from "../db.server";
-
-interface ChoiceOption {
-  label: string;
-  value: string;
-}
+import {
+  QzPage,
+  QzPageHeader,
+  QzCard,
+  QzButton,
+  QzBanner,
+  QzField,
+  QzTextarea,
+} from "../components/qz";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { session } = await authenticate.admin(request);
@@ -57,23 +49,20 @@ export default function NewQuiz() {
   const [prompt, setPrompt] = useState("");
   const [count, setCount] = useState(5);
 
-  // On successful generation, hop straight into the flow builder.
   useEffect(() => {
     if (fetcher.data?.ok && fetcher.data.quizId) {
       navigate(`/app/quizzes/${fetcher.data.quizId}`);
     }
   }, [fetcher.data, navigate]);
 
-  const collectionChoices: ChoiceOption[] = useMemo(
-    () =>
-      collections.map((c) => ({
-        label: c.title,
-        value: c.collectionId,
-      })),
-    [collections],
-  );
+  const toggleCollection = (id: string) => {
+    setSelected((prev) =>
+      prev.includes(id) ? prev.filter((c) => c !== id) : [...prev, id],
+    );
+  };
 
   const canSubmit = prompt.trim().length > 0 && !isGenerating;
+  const promptChars = prompt.length;
 
   const submit = () => {
     const formData = new FormData();
@@ -87,85 +76,136 @@ export default function NewQuiz() {
   };
 
   return (
-    <Page backAction={{ content: "Dashboard", url: "/app" }}>
+    <QzPage>
       <TitleBar title="New AI quiz" />
-      <BlockStack gap="500">
-        <Card>
-          <BlockStack gap="400">
-            <Text as="h2" variant="headingMd">
-              Generate a draft
-            </Text>
-            <Text as="p" variant="bodyMd" tone="subdued">
-              Pick which collections the AI can recommend from, describe what
-              the quiz should do, and how many questions you want. The model
-              returns a structured quiz JSON which you&apos;ll later edit on the
-              visual flow builder.
-            </Text>
+      <QzPageHeader
+        eyebrow="New quiz"
+        title={
+          <>
+            Generate a quiz from your{" "}
+            <span className="qz-serif-italic">catalog</span>.
+          </>
+        }
+        subtitle="Pick a scope, describe the goal in plain English, and Claude drafts the questions, answers, and product mappings against your real product tags. You'll edit the result on the visual flow canvas."
+      />
 
-            <ChoiceList
-              title="Collection scope"
-              titleHidden={false}
-              allowMultiple
-              choices={collectionChoices}
-              selected={selected}
-              onChange={setSelected}
-            />
-            {collectionChoices.length === 0 && (
-              <Banner tone="warning">
-                <p>No collections synced yet. Run a catalog sync first.</p>
-              </Banner>
-            )}
+      <div className="qz-col qz-gap-24" style={{ maxWidth: 720 }}>
+        <QzCard>
+          <div className="qz-col qz-gap-24">
+            <QzField
+              label="Collection scope"
+              hint={
+                collections.length === 0
+                  ? "No collections synced yet. Run a catalog sync first."
+                  : "Optional. Leave empty to let the AI use your whole catalog."
+              }
+              meta={`${selected.length} selected`}
+            >
+              {collections.length === 0 ? (
+                <QzBanner tone="warn">
+                  No collections available. Go back to the dashboard and resync.
+                </QzBanner>
+              ) : (
+                <div className="qz-row" style={{ flexWrap: "wrap", gap: 8 }}>
+                  {collections.map((c) => {
+                    const on = selected.includes(c.collectionId);
+                    return (
+                      <button
+                        key={c.collectionId}
+                        type="button"
+                        onClick={() => toggleCollection(c.collectionId)}
+                        className="qz-btn qz-btn-sm"
+                        style={{
+                          background: on
+                            ? "var(--qz-ink)"
+                            : "var(--qz-paper)",
+                          color: on
+                            ? "var(--qz-paper)"
+                            : "var(--qz-ink-2)",
+                          borderColor: on
+                            ? "var(--qz-ink)"
+                            : "var(--qz-rule)",
+                        }}
+                      >
+                        {c.title}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </QzField>
 
-            <TextField
-              label="Quiz goal"
-              value={prompt}
-              onChange={setPrompt}
-              autoComplete="off"
-              multiline={4}
-              maxLength={500}
-              showCharacterCount
-              placeholder="Describe your quiz goal, customer, and vibe."
-            />
+            <QzField
+              label="Goal prompt"
+              hint="What should the shopper learn about themselves, and what should they end up shopping?"
+              meta={`${promptChars} / 500`}
+            >
+              <QzTextarea
+                value={prompt}
+                onChange={(e) => setPrompt(e.target.value.slice(0, 500))}
+                rows={5}
+                placeholder="e.g. Help shoppers pick the right hoodie for their style, season, and fit preference."
+              />
+            </QzField>
 
-            <RangeSlider
-              label={`Question count: ${count}`}
-              min={3}
-              max={8}
-              step={1}
-              value={count}
-              onChange={(v) => setCount(Array.isArray(v) ? (v[0] ?? 5) : v)}
-            />
+            <QzField
+              label="Question count"
+              hint="Three is tight, eight is exhaustive. Five usually hits the sweet spot."
+              meta={String(count)}
+            >
+              <input
+                type="range"
+                min={3}
+                max={8}
+                step={1}
+                value={count}
+                onChange={(e) => setCount(Number(e.target.value))}
+                style={{ width: "100%", accentColor: "var(--qz-accent)" }}
+              />
+              <div
+                className="qz-row qz-row-between qz-mono qz-dim"
+                style={{ fontSize: 11 }}
+              >
+                <span>3</span>
+                <span>4</span>
+                <span>5</span>
+                <span>6</span>
+                <span>7</span>
+                <span>8</span>
+              </div>
+            </QzField>
 
-            <InlineStack gap="300">
-              <Button
-                variant="primary"
+            <div className="qz-row qz-gap-12">
+              <QzButton
+                variant="accent"
+                size="lg"
                 onClick={submit}
                 disabled={!canSubmit}
-                loading={isGenerating}
               >
-                Generate quiz
-              </Button>
-            </InlineStack>
-          </BlockStack>
-        </Card>
+                {isGenerating ? "Generating…" : "Generate quiz"}
+              </QzButton>
+              {!canSubmit && !isGenerating && (
+                <span className="qz-mono qz-dim" style={{ fontSize: 11 }}>
+                  Type a goal prompt to continue
+                </span>
+              )}
+            </div>
+          </div>
+        </QzCard>
 
         {fetcher.data?.ok === false && (
-          <Banner tone="critical" title="Generation failed">
-            <p>
-              {fetcher.data.error ?? "Unknown error"}
-              {fetcher.data.attempts
-                ? ` (${fetcher.data.attempts} attempts)`
-                : ""}
-            </p>
-          </Banner>
+          <QzBanner tone="crit" title="Generation failed">
+            {fetcher.data.error ?? "Unknown error"}
+            {fetcher.data.attempts ? ` (${fetcher.data.attempts} attempts)` : ""}
+          </QzBanner>
         )}
 
         {fetcher.data?.ok && fetcher.data.quizId && (
-          <Banner tone="success" title="Generated">
-            <p>Opening the flow builder…</p>
-          </Banner>
+          <QzBanner tone="ok" title="Generated">
+            Opening the flow builder…
+          </QzBanner>
         )}
-      </BlockStack>
-    </Page>
+      </div>
+    </QzPage>
   );
 }

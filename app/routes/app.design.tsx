@@ -2,20 +2,6 @@ import { useState } from "react";
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "@remix-run/node";
 import { json } from "@remix-run/node";
 import { useFetcher, useLoaderData } from "@remix-run/react";
-import {
-  Page,
-  Card,
-  BlockStack,
-  Text,
-  TextField,
-  Select,
-  RangeSlider,
-  Button,
-  InlineStack,
-  Banner,
-  Box,
-  Layout,
-} from "@shopify/polaris";
 import { TitleBar } from "@shopify/app-bridge-react";
 import { authenticate } from "../shopify.server";
 import prisma from "../db.server";
@@ -28,6 +14,16 @@ import {
   findContrastIssues,
   type DesignTokensT,
 } from "../lib/designTokens";
+import {
+  QzPage,
+  QzPageHeader,
+  QzCard,
+  QzButton,
+  QzBanner,
+  QzField,
+  QzInput,
+  QzSelect,
+} from "../components/qz";
 
 const COLOR_ROLES = [
   { key: "primary", label: "Primary" },
@@ -153,51 +149,87 @@ export default function DesignSettings() {
   const error = fetcher.data?.ok === false ? fetcher.data.error : null;
 
   const headingFont =
-    tokens.typography?.heading?.family ?? DEFAULT_TOKENS.typography?.heading?.family ?? "Inter";
+    tokens.typography?.heading?.family ??
+    DEFAULT_TOKENS.typography?.heading?.family ??
+    "Inter";
   const bodyFont =
-    tokens.typography?.body?.family ?? DEFAULT_TOKENS.typography?.body?.family ?? "Inter";
+    tokens.typography?.body?.family ??
+    DEFAULT_TOKENS.typography?.body?.family ??
+    "Inter";
   const baseSize = tokens.typography?.body?.base_size ?? 16;
   const scaleRatio = tokens.typography?.body?.scale_ratio ?? 1.25;
 
   const contrastIssues = findContrastIssues(resolved);
 
   return (
-    <Page backAction={{ content: "Dashboard", url: "/app" }} title="Brand design">
+    <QzPage>
       <TitleBar title="Brand design" />
-      <BlockStack gap="400">
-        {error && (
-          <Banner tone="critical" title="Save failed">
-            <p>{error}</p>
-          </Banner>
-        )}
-        {contrastIssues.length > 0 && (
-          <Banner tone="warning" title="Low contrast — may fail accessibility">
-            <p>
-              The following color pairs don&apos;t meet WCAG AA contrast
-              targets. Shoppers using assistive tech may struggle to read these
-              parts of the quiz. Saved anyway — fix at your discretion.
+
+      <QzPageHeader
+        eyebrow="Brand design"
+        title={
+          <>
+            How the storefront <span className="qz-serif-italic">looks</span>.
+          </>
+        }
+        subtitle="Colors, fonts, and layout for the shopper-facing quiz. Changes apply to all future published quizzes — re-publish to push the new tokens to a quiz already live."
+        actions={
+          <span className="qz-mono qz-dim" style={{ fontSize: 11 }}>
+            {isSaving
+              ? "Saving…"
+              : savedAt
+                ? `Saved ${new Date(savedAt).toLocaleTimeString()}`
+                : ""}
+          </span>
+        }
+      />
+
+      {error && (
+        <div style={{ marginBottom: 16 }}>
+          <QzBanner tone="crit" title="Save failed">
+            {error}
+          </QzBanner>
+        </div>
+      )}
+      {contrastIssues.length > 0 && (
+        <div style={{ marginBottom: 24 }}>
+          <QzBanner tone="warn" title="Low contrast — may fail WCAG AA">
+            <p style={{ margin: "0 0 8px" }}>
+              These color pairs don&apos;t meet AA contrast targets. Shoppers
+              using assistive tech may struggle to read these parts of the
+              quiz. Saved anyway — fix at your discretion.
             </p>
-            <ul>
+            <ul style={{ margin: 0, paddingLeft: 18, fontSize: 13 }}>
               {contrastIssues.map((i, idx) => (
                 <li key={idx}>
-                  <strong>{i.pair}</strong> — ratio {i.ratio.toFixed(2)}:1 (
+                  <strong>{i.pair}</strong> — {i.ratio.toFixed(2)}:1 (
                   <code>{i.fg}</code> on <code>{i.bg}</code>)
                 </li>
               ))}
             </ul>
-          </Banner>
-        )}
-        <Layout>
-          <Layout.Section>
-            <Card>
-              <BlockStack gap="400">
-                <Text as="h2" variant="headingMd">
-                  Colors
-                </Text>
-                <Text as="p" variant="bodyMd" tone="subdued">
-                  Used across the storefront quiz. Roles map to specific UI
-                  elements at render time.
-                </Text>
+          </QzBanner>
+        </div>
+      )}
+
+      <section
+        style={{
+          display: "grid",
+          gridTemplateColumns: "minmax(0, 1.5fr) minmax(0, 1fr)",
+          gap: 32,
+        }}
+      >
+        <div className="qz-col qz-gap-24">
+          <QzCard>
+            <div className="qz-col qz-gap-16">
+              <div>
+                <div className="qz-label">Palette</div>
+                <h2 className="qz-h1 qz-mt-8">Colors</h2>
+                <p className="qz-muted qz-mt-8" style={{ maxWidth: "52ch" }}>
+                  Six roles. The storefront uses these tokens for backgrounds,
+                  text, buttons, and accents.
+                </p>
+              </div>
+              <div className="qz-col qz-gap-12 qz-mt-16">
                 {COLOR_ROLES.map((role) => (
                   <ColorRow
                     key={role.key}
@@ -210,142 +242,141 @@ export default function DesignSettings() {
                     onChange={(hex) => setColor(role.key, hex)}
                   />
                 ))}
-              </BlockStack>
-            </Card>
+              </div>
+            </div>
+          </QzCard>
 
-            <div style={{ height: 16 }} />
-
-            <Card>
-              <BlockStack gap="400">
-                <Text as="h2" variant="headingMd">
-                  Typography
-                </Text>
-                <TextField
-                  label="Heading font"
-                  helpText="Google Fonts name or system stack (e.g. 'Inter', 'Playfair Display', 'system-ui')"
+          <QzCard>
+            <div className="qz-col qz-gap-16">
+              <div>
+                <div className="qz-label">Type</div>
+                <h2 className="qz-h1 qz-mt-8">Typography</h2>
+              </div>
+              <QzField
+                label="Heading font"
+                hint="Google Fonts name or system stack (e.g. 'Playfair Display', 'system-ui')"
+              >
+                <QzInput
                   value={headingFont}
-                  onChange={setHeadingFont}
-                  autoComplete="off"
+                  onChange={(e) => setHeadingFont(e.target.value)}
                 />
-                <TextField
-                  label="Body font"
+              </QzField>
+              <QzField label="Body font">
+                <QzInput
                   value={bodyFont}
-                  onChange={setBodyFont}
-                  autoComplete="off"
+                  onChange={(e) => setBodyFont(e.target.value)}
                 />
-                <RangeSlider
-                  label={`Base size: ${baseSize}px`}
+              </QzField>
+              <QzField label="Base font size" meta={`${baseSize}px`}>
+                <input
+                  type="range"
                   min={14}
                   max={18}
                   step={1}
                   value={baseSize}
-                  onChange={(v) =>
-                    setBaseSize(Array.isArray(v) ? (v[0] ?? 16) : v)
-                  }
+                  onChange={(e) => setBaseSize(Number(e.target.value))}
+                  style={{ width: "100%", accentColor: "var(--qz-accent)" }}
                 />
-                <Select
-                  label="Scale ratio"
+              </QzField>
+              <QzField label="Scale ratio">
+                <QzSelect
                   value={String(scaleRatio)}
-                  onChange={(v) => setScaleRatio(Number(v))}
-                  options={[
-                    { label: "1.125 (minor second)", value: "1.125" },
-                    { label: "1.2 (minor third)", value: "1.2" },
-                    { label: "1.25 (major third)", value: "1.25" },
-                    { label: "1.333 (perfect fourth)", value: "1.333" },
-                  ]}
-                />
-              </BlockStack>
-            </Card>
-
-            <div style={{ height: 16 }} />
-
-            <Card>
-              <BlockStack gap="400">
-                <Text as="h2" variant="headingMd">
-                  Layout
-                </Text>
-                <Select
-                  label="Border radius"
-                  value={tokens.radius ?? "rounded"}
-                  onChange={(v) =>
-                    save({
-                      ...tokens,
-                      radius: v as DesignTokensT["radius"],
-                    })
-                  }
-                  options={[
-                    { label: "Square", value: "square" },
-                    { label: "Rounded", value: "rounded" },
-                    { label: "Pill", value: "pill" },
-                  ]}
-                />
-                <Select
-                  label="Button style"
-                  value={tokens.button_style ?? "filled"}
-                  onChange={(v) =>
-                    save({
-                      ...tokens,
-                      button_style: v as DesignTokensT["button_style"],
-                    })
-                  }
-                  options={[
-                    { label: "Filled", value: "filled" },
-                    { label: "Outline", value: "outline" },
-                    { label: "Ghost", value: "ghost" },
-                  ]}
-                />
-                <Select
-                  label="Spacing density"
-                  value={tokens.spacing ?? "normal"}
-                  onChange={(v) =>
-                    save({
-                      ...tokens,
-                      spacing: v as DesignTokensT["spacing"],
-                    })
-                  }
-                  options={[
-                    { label: "Compact", value: "compact" },
-                    { label: "Normal", value: "normal" },
-                    { label: "Spacious", value: "spacious" },
-                  ]}
-                />
-              </BlockStack>
-            </Card>
-          </Layout.Section>
-
-          <Layout.Section variant="oneThird">
-            <Card>
-              <BlockStack gap="300">
-                <InlineStack align="space-between">
-                  <Text as="h3" variant="headingMd">
-                    Live preview
-                  </Text>
-                  <Text as="span" variant="bodySm" tone="subdued">
-                    {isSaving
-                      ? "Saving…"
-                      : savedAt
-                        ? `Saved ${new Date(savedAt).toLocaleTimeString()}`
-                        : ""}
-                  </Text>
-                </InlineStack>
-                <Preview resolved={resolved} />
-                <Text as="p" variant="bodySm" tone="subdued">
-                  Changes apply to all future published quizzes. Re-publish a
-                  quiz to push the new tokens to its public storefront page.
-                </Text>
-                <Button
-                  onClick={() => save(DEFAULT_TOKENS)}
-                  variant="plain"
-                  tone="critical"
+                  onChange={(e) => setScaleRatio(Number(e.target.value))}
                 >
-                  Reset to defaults
-                </Button>
-              </BlockStack>
-            </Card>
-          </Layout.Section>
-        </Layout>
-      </BlockStack>
-    </Page>
+                  <option value="1.125">1.125 (minor second)</option>
+                  <option value="1.2">1.2 (minor third)</option>
+                  <option value="1.25">1.25 (major third)</option>
+                  <option value="1.333">1.333 (perfect fourth)</option>
+                </QzSelect>
+              </QzField>
+            </div>
+          </QzCard>
+
+          <QzCard>
+            <div className="qz-col qz-gap-16">
+              <div>
+                <div className="qz-label">Shape</div>
+                <h2 className="qz-h1 qz-mt-8">Layout</h2>
+              </div>
+              <QzField label="Border radius">
+                <QzSelect
+                  value={tokens.radius ?? "rounded"}
+                  onChange={(e) =>
+                    save({
+                      ...tokens,
+                      radius: e.target.value as DesignTokensT["radius"],
+                    })
+                  }
+                >
+                  <option value="square">Square</option>
+                  <option value="rounded">Rounded</option>
+                  <option value="pill">Pill</option>
+                </QzSelect>
+              </QzField>
+              <QzField label="Button style">
+                <QzSelect
+                  value={tokens.button_style ?? "filled"}
+                  onChange={(e) =>
+                    save({
+                      ...tokens,
+                      button_style: e.target
+                        .value as DesignTokensT["button_style"],
+                    })
+                  }
+                >
+                  <option value="filled">Filled</option>
+                  <option value="outline">Outline</option>
+                  <option value="ghost">Ghost</option>
+                </QzSelect>
+              </QzField>
+              <QzField label="Spacing density">
+                <QzSelect
+                  value={tokens.spacing ?? "normal"}
+                  onChange={(e) =>
+                    save({
+                      ...tokens,
+                      spacing: e.target.value as DesignTokensT["spacing"],
+                    })
+                  }
+                >
+                  <option value="compact">Compact</option>
+                  <option value="normal">Normal</option>
+                  <option value="spacious">Spacious</option>
+                </QzSelect>
+              </QzField>
+            </div>
+          </QzCard>
+
+          <div>
+            <QzButton
+              onClick={() => save(DEFAULT_TOKENS)}
+              variant="ghost"
+              size="sm"
+              style={{ color: "var(--qz-crit)" }}
+            >
+              Reset to defaults
+            </QzButton>
+          </div>
+        </div>
+
+        <div style={{ position: "sticky", top: 24, alignSelf: "start" }}>
+          <div className="qz-section-head">
+            <div>
+              <div className="qz-label">Preview</div>
+              <h2 className="qz-h1 qz-mt-8">Live storefront</h2>
+            </div>
+          </div>
+          <Preview resolved={resolved} />
+          <p
+            className="qz-mono qz-dim qz-mt-16"
+            style={{ fontSize: 11.5, lineHeight: 1.6 }}
+          >
+            Renders with your tokens applied. Re-publish a quiz to push these
+            tokens to its public storefront page.
+          </p>
+        </div>
+      </section>
+    </QzPage>
   );
 }
 
@@ -359,28 +390,40 @@ function ColorRow({
   onChange: (hex: string) => void;
 }) {
   return (
-    <InlineStack gap="300" blockAlign="center">
-      <Box minWidth="100px">
-        <Text as="span" variant="bodyMd">
-          {label}
-        </Text>
-      </Box>
+    <div className="qz-row qz-gap-12" style={{ alignItems: "center" }}>
+      <span
+        className="qz-mono"
+        style={{
+          minWidth: 88,
+          fontSize: 11,
+          color: "var(--qz-ink-3)",
+          textTransform: "uppercase",
+          letterSpacing: "0.12em",
+        }}
+      >
+        {label}
+      </span>
       <input
         type="color"
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        style={{ width: 40, height: 32, border: "none", padding: 0 }}
+        style={{
+          width: 44,
+          height: 32,
+          border: "1px solid var(--qz-rule)",
+          borderRadius: "var(--qz-radius)",
+          padding: 0,
+          background: "var(--qz-paper)",
+        }}
       />
       <div style={{ flex: 1 }}>
-        <TextField
-          label=""
-          labelHidden
+        <QzInput
           value={value}
-          onChange={onChange}
-          autoComplete="off"
+          onChange={(e) => onChange(e.target.value)}
+          style={{ fontFamily: "var(--qz-font-mono)", fontSize: 13 }}
         />
       </div>
-    </InlineStack>
+    </div>
   );
 }
 
@@ -404,7 +447,8 @@ function Preview({ resolved }: { resolved: DesignTokensT }) {
           borderRadius: "var(--qz-radius)",
           fontFamily: "var(--qz-font-body)",
           fontSize: "var(--qz-base-size)",
-          border: "1px solid #00000010",
+          border: "1px solid #00000020",
+          boxShadow: "0 4px 24px rgba(0,0,0,0.06)",
         }}
       >
         <div
