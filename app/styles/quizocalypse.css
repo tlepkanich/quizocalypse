@@ -1,0 +1,251 @@
+/* =====================================================================
+   Quizocalypse — Grid Notebook design system (Direction B)
+   Drop into app/styles/quizocalypse.css and import from app/root.tsx.
+
+   Loads via Remix's `links` export; see implementation/README.md.
+   ===================================================================== */
+
+/* — Fonts (free, Google Fonts) — */
+@import url("https://fonts.googleapis.com/css2?family=Spectral:ital,wght@0,300..600;1,400&family=Geist:wght@300..700&family=JetBrains+Mono:wght@400;500;600&display=swap");
+
+:root {
+  /* Palette */
+  --qz-cream:    #F8F6F1;
+  --qz-cream-2:  #F2EFE7;
+  --qz-paper:    #FFFEFA;
+  --qz-ink:      #1B1A17;
+  --qz-ink-2:    #2E2B25;
+  --qz-ink-3:    #5C564B;
+  --qz-ink-4:    #8B8377;
+  --qz-rule:     #1B1A1714;
+  --qz-rule-2:   #1B1A170A;
+  --qz-accent:   #E8623C;     /* persimmon — change to rebrand */
+  --qz-accent-2: #C04F2D;
+  --qz-ok:       #2E7A5C;
+  --qz-warn:     #B45A1A;
+  --qz-crit:     #B22A22;
+
+  /* Type */
+  --qz-font-display: "Spectral", Georgia, serif;
+  --qz-font-body:    "Geist", -apple-system, "Helvetica Neue", sans-serif;
+  --qz-font-mono:    "JetBrains Mono", ui-monospace, monospace;
+
+  /* Sizes — Grid Notebook (tighter than Editorial) */
+  --qz-t-display: 42px;
+  --qz-t-h1: 24px;
+  --qz-t-h2: 17px;
+  --qz-t-h3: 14px;
+  --qz-t-body: 14px;
+  --qz-t-small: 12.5px;
+  --qz-t-mono: 11.5px;
+
+  /* Layout */
+  --qz-radius: 2px;
+  --qz-radius-lg: 4px;
+  --qz-pad-card: 22px;
+  --qz-pad-gap: 18px;
+}
+
+/* — Scope: wrap your admin app in <body data-qz="1"> to opt in
+     without breaking unrelated routes (auth.login, etc.) — */
+body[data-qz] {
+  margin: 0;
+  font-family: var(--qz-font-body);
+  font-size: var(--qz-t-body);
+  color: var(--qz-ink);
+  background: var(--qz-cream);
+  background-image:
+    linear-gradient(to right, var(--qz-rule-2) 1px, transparent 1px),
+    linear-gradient(to bottom, var(--qz-rule-2) 1px, transparent 1px);
+  background-size: 24px 24px;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  line-height: 1.5;
+}
+body[data-qz] *, body[data-qz] *::before, body[data-qz] *::after { box-sizing: border-box; }
+
+/* — Typography helpers — */
+.qz-display { font-family: var(--qz-font-display); font-weight: 400; font-size: var(--qz-t-display); line-height: 1.06; letter-spacing: -0.02em; margin: 0; }
+.qz-h1 { font-family: var(--qz-font-display); font-weight: 400; font-size: var(--qz-t-h1); line-height: 1.2; letter-spacing: -0.01em; margin: 0; }
+.qz-h2 { font-family: var(--qz-font-display); font-weight: 400; font-size: var(--qz-t-h2); line-height: 1.25; margin: 0; }
+.qz-h3 { font-family: var(--qz-font-body); font-weight: 600; font-size: var(--qz-t-h3); margin: 0; }
+.qz-label { font-family: var(--qz-font-mono); font-size: 11px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.12em; color: var(--qz-ink-4); }
+.qz-mono { font-family: var(--qz-font-mono); font-size: var(--qz-t-mono); }
+.qz-muted { color: var(--qz-ink-3); }
+.qz-dim { color: var(--qz-ink-4); }
+.qz-serif-italic { font-family: var(--qz-font-display); font-style: italic; }
+.qz-tnum { font-variant-numeric: tabular-nums; }
+
+/* — Card — */
+.qz-card {
+  background: var(--qz-paper);
+  border: 1px solid var(--qz-rule);
+  border-radius: var(--qz-radius);
+  padding: var(--qz-pad-card);
+}
+.qz-card.qz-flush { padding: 0; }
+.qz-card.qz-dash { border-style: dashed; background: transparent; }
+
+/* — Button — */
+.qz-btn {
+  display: inline-flex; align-items: center; gap: 8px;
+  height: 34px; padding: 0 14px;
+  background: var(--qz-paper); color: var(--qz-ink);
+  border: 1px solid var(--qz-rule); border-radius: var(--qz-radius);
+  font-size: 13.5px; font-weight: 500;
+  font-family: var(--qz-font-body);
+  cursor: pointer; transition: background 120ms, border-color 120ms, color 120ms;
+  white-space: nowrap;
+}
+.qz-btn:hover { border-color: var(--qz-ink-3); }
+.qz-btn:focus-visible { outline: 2px solid var(--qz-accent); outline-offset: 2px; }
+.qz-btn[disabled], .qz-btn[aria-disabled="true"] { opacity: 0.5; cursor: not-allowed; }
+.qz-btn-primary {
+  background: var(--qz-ink); color: var(--qz-paper); border-color: var(--qz-ink);
+}
+.qz-btn-primary:hover { background: var(--qz-ink-2); border-color: var(--qz-ink-2); }
+.qz-btn-accent {
+  background: var(--qz-accent); color: var(--qz-paper); border-color: var(--qz-accent);
+}
+.qz-btn-accent:hover { background: var(--qz-accent-2); border-color: var(--qz-accent-2); }
+.qz-btn-ghost { background: transparent; border-color: transparent; }
+.qz-btn-ghost:hover { background: var(--qz-rule-2); border-color: var(--qz-rule); }
+.qz-btn-sm { height: 28px; padding: 0 10px; font-size: 12.5px; }
+.qz-btn-lg { height: 44px; padding: 0 22px; font-size: 14.5px; }
+
+/* — Badge — */
+.qz-badge {
+  display: inline-flex; align-items: center; gap: 6px;
+  height: 22px; padding: 0 8px;
+  font-family: var(--qz-font-mono); font-size: 11px; font-weight: 500;
+  letter-spacing: 0.06em; text-transform: uppercase;
+  border-radius: 100px; background: var(--qz-rule-2);
+  color: var(--qz-ink-2);
+}
+.qz-badge::before {
+  content: ""; width: 6px; height: 6px; border-radius: 50%;
+  background: var(--qz-ink-3);
+}
+.qz-badge.qz-ok    { color: var(--qz-ok);   background: #2E7A5C14; }
+.qz-badge.qz-ok::before    { background: var(--qz-ok); }
+.qz-badge.qz-draft { color: var(--qz-ink-3); background: var(--qz-rule-2); }
+.qz-badge.qz-draft::before { background: var(--qz-ink-4); }
+.qz-badge.qz-warn  { color: var(--qz-warn); background: #B45A1A14; }
+.qz-badge.qz-warn::before  { background: var(--qz-warn); }
+.qz-badge.qz-crit  { color: var(--qz-crit); background: #B22A2214; }
+.qz-badge.qz-crit::before  { background: var(--qz-crit); }
+
+/* — Banner — */
+.qz-banner {
+  display: flex; gap: 14px;
+  padding: 14px 16px;
+  border: 1px solid var(--qz-rule);
+  border-radius: var(--qz-radius);
+  background: var(--qz-paper);
+}
+.qz-banner-ok    { background: #2E7A5C0F; border-color: #2E7A5C40; color: #1F5740; }
+.qz-banner-warn  { background: #B45A1A0F; border-color: #B45A1A40; color: #7C3F11; }
+.qz-banner-crit  { background: #B22A220F; border-color: #B22A2240; color: #7C1D17; }
+.qz-banner-title { font-weight: 600; margin-bottom: 2px; }
+.qz-banner-body  { font-size: 13.5px; opacity: 0.85; }
+
+/* — Stat — */
+.qz-stat-grid {
+  display: grid; grid-template-columns: repeat(3, 1fr);
+  gap: 1px; background: var(--qz-rule);
+  border: 1px solid var(--qz-rule); border-radius: var(--qz-radius); overflow: hidden;
+}
+.qz-stat {
+  background: var(--qz-paper);
+  padding: 20px 24px 22px;
+  display: flex; flex-direction: column; gap: 10px;
+}
+.qz-stat .qz-label { color: var(--qz-ink-3); }
+.qz-stat-value {
+  font-family: var(--qz-font-display); font-size: 36px; line-height: 1;
+  letter-spacing: -0.02em; font-variant-numeric: tabular-nums;
+}
+.qz-stat-delta { font-family: var(--qz-font-mono); font-size: 11.5px; color: var(--qz-ink-3); }
+.qz-stat-delta.up   { color: var(--qz-ok); }
+.qz-stat-delta.down { color: var(--qz-crit); }
+
+/* — Table — */
+.qz-table { width: 100%; border-collapse: collapse; }
+.qz-table thead th {
+  text-align: left; padding: 12px 16px;
+  font-family: var(--qz-font-mono); font-size: 11px; font-weight: 500;
+  text-transform: uppercase; letter-spacing: 0.12em;
+  color: var(--qz-ink-3);
+  border-bottom: 1px solid var(--qz-rule);
+}
+.qz-table tbody td {
+  padding: 16px;
+  border-bottom: 1px solid var(--qz-rule);
+  font-size: 14px;
+  vertical-align: middle;
+}
+.qz-table tbody tr:last-child td { border-bottom: 0; }
+.qz-table tbody tr { transition: background 80ms; }
+.qz-table tbody tr.qz-clickable { cursor: pointer; }
+.qz-table tbody tr.qz-clickable:hover { background: var(--qz-rule-2); }
+.qz-table .qz-cell-name { font-weight: 500; }
+.qz-table .qz-cell-sub { color: var(--qz-ink-3); font-size: 12.5px; margin-top: 2px; }
+.qz-table .qz-cell-actions { text-align: right; }
+
+/* — Field — */
+.qz-field { display: flex; flex-direction: column; gap: 8px; }
+.qz-field-label {
+  font-family: var(--qz-font-mono); font-size: 11px; font-weight: 500;
+  text-transform: uppercase; letter-spacing: 0.12em; color: var(--qz-ink-3);
+}
+.qz-field-hint { font-size: 12.5px; color: var(--qz-ink-3); }
+.qz-input, .qz-textarea, .qz-select {
+  background: var(--qz-paper); color: var(--qz-ink);
+  border: 1px solid var(--qz-rule); border-radius: var(--qz-radius);
+  padding: 10px 12px; font-size: 14px; line-height: 1.4;
+  width: 100%; outline: none;
+  font-family: inherit;
+  transition: border-color 120ms, box-shadow 120ms;
+}
+.qz-input:focus, .qz-textarea:focus, .qz-select:focus {
+  border-color: var(--qz-ink); box-shadow: 0 0 0 3px var(--qz-rule);
+}
+.qz-textarea { resize: vertical; min-height: 96px; }
+
+/* — Page layout — */
+.qz-page { padding: 36px 48px 96px; max-width: 1240px; margin: 0 auto; }
+.qz-page-header { margin-bottom: 32px; }
+.qz-page-header .qz-eyebrow { color: var(--qz-ink-3); margin-bottom: 12px; }
+.qz-page-header .qz-subtitle { color: var(--qz-ink-3); margin-top: 12px; max-width: 56ch; line-height: 1.55; font-size: 15px; }
+
+/* — Page actions row (the row of buttons under a title) — */
+.qz-actions { display: flex; gap: 10px; flex-wrap: wrap; }
+
+/* — Section heading — */
+.qz-section-head {
+  display: flex; align-items: baseline; justify-content: space-between;
+  gap: 16px; margin-bottom: 18px;
+}
+
+/* — Utility — */
+.qz-row { display: flex; align-items: center; gap: 12px; }
+.qz-row-between { justify-content: space-between; }
+.qz-col { display: flex; flex-direction: column; }
+.qz-gap-4  { gap: 4px; }
+.qz-gap-8  { gap: 8px; }
+.qz-gap-12 { gap: 12px; }
+.qz-gap-16 { gap: 16px; }
+.qz-gap-24 { gap: 24px; }
+.qz-mt-8   { margin-top: 8px; }
+.qz-mt-16  { margin-top: 16px; }
+.qz-mt-24  { margin-top: 24px; }
+.qz-mt-32  { margin-top: 32px; }
+.qz-mt-48  { margin-top: 48px; }
+
+/* — Selection — */
+body[data-qz] ::selection { background: var(--qz-ink); color: var(--qz-cream); }
+
+/* — Quiet Polaris reset for the screens we hand-build —
+     If you have a route that still uses Polaris, just don't put `data-qz`
+     on its body and Polaris keeps working untouched.
+   ============================================================ */
