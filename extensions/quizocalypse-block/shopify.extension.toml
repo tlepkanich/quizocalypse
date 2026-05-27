@@ -1,0 +1,12 @@
+# Theme App Extension — Quizocalypse Quiz block.
+# Merchants drag this block into their theme editor on any section that allows
+# app blocks. The block renders an iframe loading our published quiz runtime
+# from /q/:id on the App URL the merchant configures.
+
+api_version = "2025-01"
+
+[[extensions]]
+name = "Quizocalypse Quiz"
+handle = "quizocalypse-block"
+uid = "83292ef3-2d13-bd59-035d-1846fa2ecdd8f98f630f"
+type = "theme"

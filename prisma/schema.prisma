@@ -1,0 +1,136 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Session {
+  id                  String    @id
+  shop                String
+  state               String
+  isOnline            Boolean   @default(false)
+  scope               String?
+  expires             DateTime?
+  accessToken         String
+  userId              BigInt?
+  firstName           String?
+  lastName            String?
+  email               String?
+  accountOwner        Boolean   @default(false)
+  locale              String?
+  collaborator        Boolean?  @default(false)
+  emailVerified       Boolean?  @default(false)
+  refreshToken        String?
+  refreshTokenExpires DateTime?
+
+  @@index([shop])
+}
+
+model Shop {
+  id             String    @id @default(cuid())
+  shopDomain     String    @unique
+  installedAt    DateTime  @default(now())
+  scope          String?
+  lastSyncAt     DateTime?
+  lastSyncStatus String?
+  lastSyncError  String?
+  brandTokens    Json?
+
+  products    Product[]
+  collections Collection[]
+  quizzes     Quiz[]
+}
+
+model Product {
+  productId     String   @id
+  shopId        String
+  title         String
+  handle        String
+  vendor        String?
+  productType   String?
+  status        String?
+  tags          String[]
+  collectionIds String[]
+  variants      Json
+  metafields    Json
+  imageUrl      String?
+  priceMin      Decimal? @db.Decimal(10, 2)
+  priceMax      Decimal? @db.Decimal(10, 2)
+  updatedAt     DateTime @default(now()) @updatedAt
+
+  shop Shop @relation(fields: [shopId], references: [id], onDelete: Cascade)
+
+  @@index([shopId])
+  @@index([shopId, handle])
+}
+
+model Collection {
+  collectionId String   @id
+  shopId       String
+  title        String
+  handle       String?
+  productIds   String[]
+  updatedAt    DateTime @default(now()) @updatedAt
+
+  shop Shop @relation(fields: [shopId], references: [id], onDelete: Cascade)
+
+  @@index([shopId])
+}
+
+model Quiz {
+  id            String   @id @default(cuid())
+  shopId        String
+  name          String
+  status        String   @default("draft")
+  draftJson     Json
+  publishedJson Json?
+  version       Int      @default(0)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  shop     Shop          @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  versions QuizVersion[]
+
+  @@index([shopId])
+}
+
+model QuizVersion {
+  id            String   @id @default(cuid())
+  quizId        String
+  version       Int
+  publishedJson Json
+  publishedAt   DateTime @default(now())
+
+  quiz Quiz @relation(fields: [quizId], references: [id], onDelete: Cascade)
+
+  @@unique([quizId, version])
+}
+
+model Event {
+  id        String   @id @default(cuid())
+  shopId    String?
+  quizId    String
+  sessionId String
+  eventType String
+  payload   Json
+  ts        DateTime @default(now())
+
+  @@index([quizId, ts])
+  @@index([quizId, eventType, ts])
+}
+
+model EmailCapture {
+  id         String   @id @default(cuid())
+  shopId     String?
+  quizId     String
+  sessionId  String
+  email      String
+  firstName  String?
+  capturedAt DateTime @default(now())
+
+  @@index([quizId, capturedAt])
+  @@index([email])
+}

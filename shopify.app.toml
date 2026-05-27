@@ -1,0 +1,23 @@
+# Learn more about configuring your app at https://shopify.dev/docs/apps/tools/cli/configuration
+
+client_id = "f3734ef453742fe039d91aed5cbc4da3"
+application_url = "https://foundations-nhs-skilled-suggestions.trycloudflare.com"
+embedded = true
+name = "quizocalypse"
+
+[access_scopes]
+# Learn more at https://shopify.dev/docs/apps/tools/cli/configuration#access_scopes
+scopes = "read_inventory,read_products,read_themes,write_discounts"
+
+[auth]
+redirect_urls = [
+  "https://foundations-nhs-skilled-suggestions.trycloudflare.com/auth/callback",
+  "https://foundations-nhs-skilled-suggestions.trycloudflare.com/auth/shopify/callback",
+  "https://foundations-nhs-skilled-suggestions.trycloudflare.com/api/auth/callback"
+]
+
+[webhooks]
+api_version = "2026-07"
+
+[build]
+automatically_update_urls_on_dev = true
