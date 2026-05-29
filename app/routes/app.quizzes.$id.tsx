@@ -43,16 +43,28 @@ import {
   recommendForResult,
   type IndexedProduct,
 } from "../lib/recommendationEngine";
-import type { DesignTokensT } from "../lib/designTokens";
+import {
+  buttonStyle,
+  resolveDesignTokens,
+  tokensToCssVars,
+  type DesignTokensT,
+} from "../lib/designTokens";
 import {
   addAnswer,
+  addAskAINode,
+  addBranchNode,
+  addBranchSlot,
   addEdge as addQuizEdge,
   addEmailGateNode,
+  addEndNode,
+  addMessageNode,
   addQuestionNode,
   addResultNode,
   deleteEdge as deleteQuizEdge,
   deleteNode as deleteQuizNode,
   removeAnswer,
+  removeBranchSlot,
+  setEdgeCondition,
   setNodePosition,
 } from "../lib/quizMutations";
 import { autoLayout } from "../lib/autoLayout";
@@ -313,16 +325,32 @@ export const action = async ({ params, request }: ActionFunctionArgs) => {
 interface NodeData extends Record<string, unknown> {
   doc: QuizNodeDoc;
   issues: NodeIssue[];
+  hasDrift: boolean;
   onChange: (next: QuizNodeDoc) => void;
   onAddAnswer: (nodeId: string) => void;
   onRemoveAnswer: (nodeId: string, answerId: string) => void;
+  onHandlePlus: (nodeId: string, handle?: string) => void;
+}
+
+// True if the node's desktop and mobile breakpoint overrides differ from each
+// other (shallow JSON compare — overrides are pure data). Used to surface a
+// drift badge on the canvas so authors know which breakpoint they last touched.
+function hasBreakpointDrift(
+  bpOverrides: QuizDoc["breakpoint_overrides"],
+  nodeId: string,
+): boolean {
+  const rec = bpOverrides[nodeId];
+  if (!rec) return false;
+  const desktop = rec.desktop ?? {};
+  const mobile = rec.mobile ?? {};
+  return JSON.stringify(desktop) !== JSON.stringify(mobile);
 }
 
 function IntroNodeView({ data }: NodeProps) {
   const d = data as NodeData;
   if (d.doc.type !== "intro") return null;
   return (
-    <NodeShell accent="#5563DE" label="intro" handles="source" issues={d.issues}>
+    <NodeShell accent="#5563DE" label="welcome" handles="source" issues={d.issues} hasDrift={d.hasDrift} onPlus={() => d.onHandlePlus(d.doc.id)}>
       <NodeField
         label="Headline"
         value={d.doc.data.headline}
@@ -357,7 +385,7 @@ function QuestionNodeView({ data }: NodeProps) {
   if (d.doc.type !== "question") return null;
   const answers = d.doc.data.answers;
   return (
-    <NodeShell accent="#2C7A4B" label={`question · ${d.doc.data.question_type}`} issues={d.issues}>
+    <NodeShell accent="#2C7A4B" label={`question · ${d.doc.data.question_type}`} issues={d.issues} hasDrift={d.hasDrift}>
       <Handle type="target" position={Position.Left} />
       <NodeField
         label="Question"
@@ -407,6 +435,10 @@ function QuestionNodeView({ data }: NodeProps) {
               height: 10,
             }}
           />
+          <HandlePlus
+            onClick={() => d.onHandlePlus(d.doc.id, answer.edge_handle_id)}
+            ariaLabel={`Add next module after answer ${idx + 1}`}
+          />
         </div>
       ))}
       <InlineNoDrag>
@@ -426,7 +458,7 @@ function EmailGateNodeView({ data }: NodeProps) {
   const d = data as NodeData;
   if (d.doc.type !== "email_gate") return null;
   return (
-    <NodeShell accent="#7E57C2" label="email_gate" handles="both" issues={d.issues}>
+    <NodeShell accent="#7E57C2" label="email_gate" handles="both" issues={d.issues} hasDrift={d.hasDrift} onPlus={() => d.onHandlePlus(d.doc.id)}>
       <NodeField
         label="Headline"
         value={d.doc.data.headline}
@@ -450,7 +482,7 @@ function ResultNodeView({ data }: NodeProps) {
   const d = data as NodeData;
   if (d.doc.type !== "result") return null;
   return (
-    <NodeShell accent="#BB6622" label="result" handles="target" issues={d.issues}>
+    <NodeShell accent="#BB6622" label="result" handles="target" issues={d.issues} hasDrift={d.hasDrift}>
       <NodeField
         label="Headline"
         value={d.doc.data.headline}
@@ -490,12 +522,238 @@ function ResultNodeView({ data }: NodeProps) {
   );
 }
 
+function MessageNodeView({ data }: NodeProps) {
+  const d = data as NodeData;
+  if (d.doc.type !== "message") return null;
+  return (
+    <NodeShell accent="#3D7E9F" label="message" handles="both" issues={d.issues} hasDrift={d.hasDrift} onPlus={() => d.onHandlePlus(d.doc.id)}>
+      <NodeField
+        label="Text"
+        value={d.doc.data.text}
+        onChange={(v) =>
+          d.onChange({ ...d.doc, data: { ...d.doc.data, text: v } as never })
+        }
+        multiline
+      />
+      <div style={{ marginTop: 6, fontSize: 10, color: "var(--qz-ink-4)" }}>
+        merge tags: @name, @email, @answer.&lt;id&gt;
+      </div>
+    </NodeShell>
+  );
+}
+
+function EndNodeView({ data }: NodeProps) {
+  const d = data as NodeData;
+  if (d.doc.type !== "end") return null;
+  return (
+    <NodeShell accent="#7C5295" label="end" handles="target" issues={d.issues} hasDrift={d.hasDrift}>
+      <NodeField
+        label="Headline"
+        value={d.doc.data.headline}
+        onChange={(v) =>
+          d.onChange({ ...d.doc, data: { ...d.doc.data, headline: v } as never })
+        }
+      />
+      <NodeField
+        label="Subtext"
+        value={d.doc.data.subtext}
+        onChange={(v) =>
+          d.onChange({ ...d.doc, data: { ...d.doc.data, subtext: v } as never })
+        }
+        multiline
+      />
+      {(d.doc.data.cta_label || d.doc.data.cta_url) && (
+        <div style={{ marginTop: 6, fontSize: 10, color: "var(--qz-ink-4)" }}>
+          CTA: {d.doc.data.cta_label ?? "(no label)"}
+        </div>
+      )}
+      {d.doc.data.redirect_url && (
+        <div style={{ marginTop: 4, fontSize: 10, color: "var(--qz-ink-4)" }}>
+          → auto-redirect
+        </div>
+      )}
+    </NodeShell>
+  );
+}
+
+function BranchNodeView({ data }: NodeProps) {
+  const d = data as NodeData;
+  if (d.doc.type !== "branch") return null;
+  const branchDoc = d.doc;
+  const branchData = branchDoc.data;
+  const slots = branchData.slots;
+  return (
+    <NodeShell
+      accent="#C4673B"
+      label={`branch · ${branchData.mode}`}
+      issues={d.issues}
+      hasDrift={d.hasDrift}
+    >
+      <Handle type="target" position={Position.Left} />
+      <div
+        style={{
+          fontSize: 12,
+          fontWeight: 600,
+          color: "var(--qz-ink)",
+          marginBottom: 6,
+        }}
+      >
+        {branchData.label}
+      </div>
+      <div style={{ fontSize: 10, color: "var(--qz-ink-3)", marginBottom: 8 }}>
+        {branchData.mode === "ab_split"
+          ? "A/B split — weighted random, sticky per session"
+          : "Rules — first matching slot wins"}
+      </div>
+      {slots.map((slot) => (
+        <div
+          key={slot.id}
+          style={{
+            position: "relative",
+            padding: "6px 8px",
+            border: "1px solid var(--qz-rule)",
+            borderRadius: "var(--qz-radius)",
+            marginBottom: 4,
+            background: "var(--qz-cream-2)",
+            fontSize: 11,
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+          }}
+        >
+          <span style={{ fontWeight: 600 }}>{slot.label}</span>
+          {branchData.mode === "ab_split" && (
+            <span
+              className="qz-mono"
+              style={{ fontSize: 10, color: "var(--qz-ink-3)" }}
+            >
+              w{slot.weight}
+            </span>
+          )}
+          <Handle
+            type="source"
+            position={Position.Right}
+            id={slot.id}
+            style={{
+              top: undefined,
+              right: -6,
+              background: "#C4673B",
+              width: 10,
+              height: 10,
+            }}
+          />
+          <HandlePlus
+            onClick={() => d.onHandlePlus(branchDoc.id, slot.id)}
+            ariaLabel={`Add next module from branch slot ${slot.label}`}
+          />
+        </div>
+      ))}
+    </NodeShell>
+  );
+}
+
+function AskAINodeView({ data }: NodeProps) {
+  const d = data as NodeData;
+  if (d.doc.type !== "ask_ai") return null;
+  const aiData = d.doc.data;
+  return (
+    <NodeShell
+      accent="#1F7A6E"
+      label="ask AI · chat"
+      handles="both"
+      issues={d.issues}
+      hasDrift={d.hasDrift}
+      onPlus={() => d.onHandlePlus(d.doc.id)}
+    >
+      <div style={{ fontSize: 11, color: "var(--qz-ink-3)", marginBottom: 4 }}>
+        Persona
+      </div>
+      <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 6 }}>
+        {aiData.persona_name}
+      </div>
+      <div style={{ fontSize: 11, color: "var(--qz-ink-3)", marginBottom: 4 }}>
+        Opener
+      </div>
+      <div
+        style={{
+          fontSize: 11,
+          color: "var(--qz-ink-2)",
+          marginBottom: 6,
+          fontStyle: "italic",
+        }}
+      >
+        “{aiData.opening_message.slice(0, 80)}
+        {aiData.opening_message.length > 80 ? "…" : ""}”
+      </div>
+      <div style={{ fontSize: 10, color: "var(--qz-ink-4)" }}>
+        {aiData.suggested_questions.length} suggested ·{" "}
+        {aiData.max_turns} turn cap
+      </div>
+    </NodeShell>
+  );
+}
+
 const nodeTypes = {
   intro: IntroNodeView,
   question: QuestionNodeView,
   email_gate: EmailGateNodeView,
   result: ResultNodeView,
+  message: MessageNodeView,
+  end: EndNodeView,
+  branch: BranchNodeView,
+  ask_ai: AskAINodeView,
 };
+
+// Small "+" button that floats off the right edge of a source handle. Opens
+// the module picker so the author can pick what kind of node to add next.
+// Drag-to-connect still works — this is just the click-driven alternative.
+function HandlePlus({
+  onClick,
+  top,
+  ariaLabel,
+}: {
+  onClick: () => void;
+  top?: number | string;
+  ariaLabel?: string;
+}) {
+  return (
+    <button
+      type="button"
+      aria-label={ariaLabel ?? "Add next module"}
+      title={ariaLabel ?? "Add next module"}
+      onClick={(e) => {
+        e.stopPropagation();
+        onClick();
+      }}
+      onMouseDown={(e) => e.stopPropagation()}
+      className="nodrag nopan"
+      style={{
+        position: "absolute",
+        right: -28,
+        top: top ?? "50%",
+        transform: top === undefined ? "translateY(-50%)" : "none",
+        width: 18,
+        height: 18,
+        borderRadius: 9,
+        border: "1px solid var(--qz-rule)",
+        background: "var(--qz-paper)",
+        color: "var(--qz-ink)",
+        fontSize: 13,
+        fontWeight: 700,
+        lineHeight: 1,
+        cursor: "pointer",
+        boxShadow: "0 1px 3px rgba(0,0,0,0.15)",
+        zIndex: 4,
+        padding: 0,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+      }}
+    >
+      +
+    </button>
+  );
+}
 
 function NodeShell({
   accent,
@@ -503,12 +761,16 @@ function NodeShell({
   children,
   handles,
   issues,
+  hasDrift,
+  onPlus,
 }: {
   accent: string;
   label: string;
   children: React.ReactNode;
   handles?: "source" | "target" | "both";
   issues: NodeIssue[];
+  hasDrift?: boolean;
+  onPlus?: () => void;
 }) {
   const hasIssue = issues.length > 0;
   return (
@@ -543,24 +805,46 @@ function NodeShell({
         }}
       >
         <span>{label}</span>
-        {hasIssue && (
-          <span
-            title={issues.map((i) => i.message).join(" · ")}
-            style={{
-              background: "var(--qz-crit)",
-              color: "#FFF",
-              borderRadius: 4,
-              padding: "1px 6px",
-              fontSize: 9,
-            }}
-          >
-            {issues.length} issue{issues.length === 1 ? "" : "s"}
-          </span>
-        )}
+        <span style={{ display: "flex", gap: 4, alignItems: "center" }}>
+          {hasDrift && (
+            <span
+              title="Desktop and mobile overrides differ for this node."
+              style={{
+                background: "var(--qz-paper)",
+                color: "var(--qz-ink-2)",
+                border: "1px solid var(--qz-rule)",
+                borderRadius: 4,
+                padding: "1px 5px",
+                fontSize: 10,
+                fontWeight: 700,
+                lineHeight: 1,
+              }}
+            >
+              ◐
+            </span>
+          )}
+          {hasIssue && (
+            <span
+              title={issues.map((i) => i.message).join(" · ")}
+              style={{
+                background: "var(--qz-crit)",
+                color: "#FFF",
+                borderRadius: 4,
+                padding: "1px 6px",
+                fontSize: 9,
+              }}
+            >
+              {issues.length} issue{issues.length === 1 ? "" : "s"}
+            </span>
+          )}
+        </span>
       </div>
       {children}
       {(handles === "source" || handles === "both") && (
-        <Handle type="source" position={Position.Right} />
+        <>
+          <Handle type="source" position={Position.Right} />
+          {onPlus && <HandlePlus onClick={onPlus} />}
+        </>
       )}
     </div>
   );
@@ -721,6 +1005,16 @@ function FlowBuilder({
     [doc, commit],
   );
 
+  // Module-picker state lives at FlowBuilder scope so any node's `+` button
+  // can pop the picker. handleHandlePlus is hoisted above rfNodes because
+  // rfNodes' useMemo references it in its deps.
+  const [pickerSource, setPickerSource] = useState<
+    { nodeId: string; handle?: string } | null
+  >(null);
+  const handleHandlePlus = useCallback((nodeId: string, handle?: string) => {
+    setPickerSource({ nodeId, handle });
+  }, []);
+
   const rfNodes: Node[] = useMemo(
     () =>
       doc.nodes.map((n) => ({
@@ -730,13 +1024,24 @@ function FlowBuilder({
         data: {
           doc: n,
           issues: issuesByNode.get(n.id) ?? [],
+          hasDrift: hasBreakpointDrift(doc.breakpoint_overrides, n.id),
           onChange: updateNode,
           onAddAnswer: handleAddAnswer,
           onRemoveAnswer: handleRemoveAnswer,
+          onHandlePlus: handleHandlePlus,
         } satisfies NodeData,
         ...(selectedId === n.id ? { selected: true } : {}),
       })),
-    [doc.nodes, issuesByNode, updateNode, handleAddAnswer, handleRemoveAnswer, selectedId],
+    [
+      doc.nodes,
+      doc.breakpoint_overrides,
+      issuesByNode,
+      updateNode,
+      handleAddAnswer,
+      handleRemoveAnswer,
+      handleHandlePlus,
+      selectedId,
+    ],
   );
 
   const rfEdges: Edge[] = useMemo(
@@ -816,17 +1121,68 @@ function FlowBuilder({
   }, [doc, commit]);
 
   const handleAddNode = useCallback(
-    (kind: "question" | "result" | "email_gate") => {
+    (
+      kind:
+        | "question"
+        | "result"
+        | "email_gate"
+        | "message"
+        | "end"
+        | "branch"
+        | "ask_ai",
+    ) => {
       setAddMenuOpen(false);
       const anchor = selectedId;
       if (kind === "question") commit(addQuestionNode(doc, anchor));
       else if (kind === "email_gate") commit(addEmailGateNode(doc, anchor));
+      else if (kind === "message") commit(addMessageNode(doc, anchor));
+      else if (kind === "end") commit(addEndNode(doc, anchor));
+      else if (kind === "branch") commit(addBranchNode(doc, anchor));
+      else if (kind === "ask_ai") commit(addAskAINode(doc, anchor));
       else {
         const fallback = collections[0]?.collectionId ?? "";
         commit(addResultNode(doc, anchor, fallback));
       }
     },
     [doc, commit, selectedId, collections],
+  );
+
+  // Picker → create node + edge, then select it. Hoisting note: pickerSource
+  // state and handleHandlePlus live above rfNodes; handlePickerPick can stay
+  // here because it isn't referenced until render of the popover.
+  const handlePickerPick = useCallback(
+    (
+      kind:
+        | "question"
+        | "result"
+        | "email_gate"
+        | "message"
+        | "end"
+        | "branch"
+        | "ask_ai",
+    ) => {
+      if (!pickerSource) return;
+      const anchor = pickerSource.nodeId;
+      const handle = pickerSource.handle;
+      let next: QuizDoc;
+      if (kind === "question") next = addQuestionNode(doc, anchor, handle);
+      else if (kind === "email_gate")
+        next = addEmailGateNode(doc, anchor, handle);
+      else if (kind === "message") next = addMessageNode(doc, anchor, handle);
+      else if (kind === "end") next = addEndNode(doc, anchor, handle);
+      else if (kind === "branch") next = addBranchNode(doc, anchor, handle);
+      else if (kind === "ask_ai") next = addAskAINode(doc, anchor, handle);
+      else {
+        const fallback = collections[0]?.collectionId ?? "";
+        next = addResultNode(doc, anchor, fallback, handle);
+      }
+      // The freshly created node is the last one in next.nodes.
+      const newNodeId = next.nodes[next.nodes.length - 1]?.id ?? null;
+      commit(next);
+      if (newNodeId) setSelectedId(newNodeId);
+      setPickerSource(null);
+    },
+    [doc, commit, pickerSource, collections, setSelectedId],
   );
 
   const allIssues = useMemo(() => validateQuiz(doc), [doc]);
@@ -890,6 +1246,12 @@ function FlowBuilder({
         collections={collections}
         onSave={(next) => commit(next)}
       />
+      {pickerSource && (
+        <ModulePickerPopover
+          onPick={handlePickerPick}
+          onClose={() => setPickerSource(null)}
+        />
+      )}
 
       <div style={{ display: "flex", gap: 12 }}>
         <div
@@ -971,8 +1333,12 @@ function FlowBuilder({
                     {(
                       [
                         ["Add question", "question"],
-                        ["Add result", "result"],
+                        ["Add message", "message"],
+                        ["Add Ask AI", "ask_ai"],
+                        ["Add branch", "branch"],
                         ["Add email gate", "email_gate"],
+                        ["Add result", "result"],
+                        ["Add end", "end"],
                       ] as const
                     ).map(([label, kind]) => (
                       <button
@@ -1017,13 +1383,32 @@ function FlowBuilder({
               catalogTags={catalogTags}
               productIndex={productIndex}
               nodeOverride={doc.design_overrides[selectedNode.id] ?? {}}
+              desktopOverride={
+                doc.breakpoint_overrides[selectedNode.id]?.desktop ?? {}
+              }
+              mobileOverride={
+                doc.breakpoint_overrides[selectedNode.id]?.mobile ?? {}
+              }
               onChange={updateNode}
+              onDocChange={commit}
               onNodeDesignChange={(next) =>
                 commit({
                   ...doc,
                   design_overrides: {
                     ...doc.design_overrides,
                     [selectedNode.id]: next,
+                  },
+                })
+              }
+              onBreakpointDesignChange={(bp, next) =>
+                commit({
+                  ...doc,
+                  breakpoint_overrides: {
+                    ...doc.breakpoint_overrides,
+                    [selectedNode.id]: {
+                      ...(doc.breakpoint_overrides[selectedNode.id] ?? {}),
+                      [bp]: next,
+                    },
                   },
                 })
               }
@@ -1042,6 +1427,8 @@ function FlowBuilder({
 
 // ---------- Drawer ----------
 
+type Breakpoint = "synced" | "desktop" | "mobile";
+
 function NodeDrawer({
   node,
   doc,
@@ -1049,8 +1436,12 @@ function NodeDrawer({
   catalogTags,
   productIndex,
   nodeOverride,
+  desktopOverride,
+  mobileOverride,
   onChange,
+  onDocChange,
   onNodeDesignChange,
+  onBreakpointDesignChange,
   onApplyDesignToAll,
   onClose,
   onRegenerate,
@@ -1063,28 +1454,52 @@ function NodeDrawer({
   catalogTags: string[];
   productIndex: IndexedProduct[];
   nodeOverride: DesignTokensT;
+  desktopOverride: DesignTokensT;
+  mobileOverride: DesignTokensT;
   onChange: (next: QuizNodeDoc) => void;
+  onDocChange: (next: QuizDoc) => void;
   onNodeDesignChange: (next: DesignTokensT) => void;
+  onBreakpointDesignChange: (bp: "desktop" | "mobile", next: DesignTokensT) => void;
   onApplyDesignToAll: (type: "question" | "result", tokens: DesignTokensT) => void;
   onClose: () => void;
   onRegenerate: (prompt: string) => void;
   regenState: "idle" | "submitting" | "loading";
   regenError: string | null;
 }) {
-  const isQuestion = node.type === "question";
-  const isResult = node.type === "result";
-  const availableTabs = [
+  const tabs = [
+    { id: "preview", label: "Preview" },
     { id: "content", label: "Content" },
-    ...(isQuestion ? [{ id: "logic", label: "Logic" }] : []),
-    ...(isResult ? [{ id: "preview", label: "Preview" }] : []),
     { id: "design", label: "Design" },
-    ...(isQuestion ? [{ id: "ai", label: "AI" }] : []),
   ];
-  const [tabId, setTabId] = useState<string>("content");
+  const [tabId, setTabId] = useState<string>("preview");
+  const [breakpoint, setBreakpoint] = useState<Breakpoint>("synced");
   const [steeringPrompt, setSteeringPrompt] = useState("");
 
-  // If the active tab disappears when the node type changes, fall back to content.
-  const validTab = availableTabs.some((t) => t.id === tabId) ? tabId : "content";
+  // Pick the override layer currently being edited / previewed.
+  const activeOverride =
+    breakpoint === "desktop"
+      ? desktopOverride
+      : breakpoint === "mobile"
+        ? mobileOverride
+        : nodeOverride;
+
+  const previewTokens = useMemo(
+    () =>
+      resolveDesignTokens(
+        doc.design_tokens ?? null,
+        nodeOverride,
+        breakpoint === "desktop" ? desktopOverride : null,
+        breakpoint === "mobile" ? mobileOverride : null,
+      ),
+    [doc.design_tokens, nodeOverride, desktopOverride, mobileOverride, breakpoint],
+  );
+
+  const previewWidth = breakpoint === "mobile" ? 375 : 760;
+
+  const handleDesignChange = (next: DesignTokensT) => {
+    if (breakpoint === "synced") onNodeDesignChange(next);
+    else onBreakpointDesignChange(breakpoint, next);
+  };
 
   return (
     <QzCard>
@@ -1109,50 +1524,538 @@ function NodeDrawer({
           </button>
         </div>
 
-        <TabBar
-          tabs={availableTabs}
-          active={validTab}
-          onSelect={setTabId}
-        />
+        <BreakpointToggle value={breakpoint} onChange={setBreakpoint} />
+
+        <TabBar tabs={tabs} active={tabId} onSelect={setTabId} />
 
         <div style={{ marginTop: 4 }}>
-          {validTab === "content" && <ContentTab node={node} onChange={onChange} />}
-          {validTab === "logic" && node.type === "question" && (
-            <LogicTab
-              node={node}
-              collections={collections}
-              catalogTags={catalogTags}
-              onChange={onChange}
-            />
-          )}
-          {validTab === "preview" && node.type === "result" && (
-            <ResultPreviewTab
+          {tabId === "preview" && (
+            <NodePreviewTab
               node={node}
               doc={doc}
               productIndex={productIndex}
+              tokens={previewTokens}
+              width={previewWidth}
             />
           )}
-          {validTab === "design" && (
-            <DesignTab
-              nodeType={node.type}
-              override={nodeOverride}
-              onChange={onNodeDesignChange}
-              onApplyToAll={onApplyDesignToAll}
-            />
+          {tabId === "content" && (
+            <div className="qz-col qz-gap-16">
+              <ContentTab node={node} onChange={onChange} />
+              {node.type === "branch" && (
+                <div
+                  style={{
+                    borderTop: "1px solid var(--qz-rule)",
+                    paddingTop: 12,
+                  }}
+                >
+                  <div className="qz-label qz-mt-8" style={{ marginBottom: 6 }}>
+                    Branch slots
+                  </div>
+                  <BranchEditor
+                    node={node}
+                    doc={doc}
+                    catalogTags={catalogTags}
+                    onChange={onChange}
+                    onDocChange={onDocChange}
+                  />
+                </div>
+              )}
+              {node.type === "question" && (
+                <>
+                  <div
+                    style={{
+                      borderTop: "1px solid var(--qz-rule)",
+                      paddingTop: 12,
+                    }}
+                  >
+                    <div className="qz-label qz-mt-8" style={{ marginBottom: 6 }}>
+                      Answer logic
+                    </div>
+                    <LogicTab
+                      node={node}
+                      collections={collections}
+                      catalogTags={catalogTags}
+                      onChange={onChange}
+                    />
+                  </div>
+                  <div
+                    style={{
+                      borderTop: "1px solid var(--qz-rule)",
+                      paddingTop: 12,
+                    }}
+                  >
+                    <div className="qz-label qz-mt-8" style={{ marginBottom: 6 }}>
+                      AI regenerate
+                    </div>
+                    <AiTab
+                      steeringPrompt={steeringPrompt}
+                      onSteeringPromptChange={setSteeringPrompt}
+                      onRegenerate={() => onRegenerate(steeringPrompt)}
+                      regenState={regenState}
+                      regenError={regenError}
+                    />
+                  </div>
+                </>
+              )}
+            </div>
           )}
-          {validTab === "ai" && isQuestion && (
-            <AiTab
-              steeringPrompt={steeringPrompt}
-              onSteeringPromptChange={setSteeringPrompt}
-              onRegenerate={() => onRegenerate(steeringPrompt)}
-              regenState={regenState}
-              regenError={regenError}
-            />
+          {tabId === "design" && (
+            <div className="qz-col qz-gap-12">
+              {breakpoint !== "synced" && (
+                <QzBanner tone="default">
+                  Editing <strong>{breakpoint}</strong> overrides. Synced
+                  changes don&apos;t apply here.
+                </QzBanner>
+              )}
+              <DesignTab
+                nodeType={node.type}
+                override={activeOverride}
+                onChange={handleDesignChange}
+                onApplyToAll={onApplyDesignToAll}
+              />
+            </div>
           )}
         </div>
       </div>
     </QzCard>
   );
+}
+
+function BreakpointToggle({
+  value,
+  onChange,
+}: {
+  value: Breakpoint;
+  onChange: (b: Breakpoint) => void;
+}) {
+  const items: Array<{ id: Breakpoint; label: string }> = [
+    { id: "synced", label: "Synced" },
+    { id: "desktop", label: "Desktop" },
+    { id: "mobile", label: "Mobile" },
+  ];
+  return (
+    <div
+      className="qz-row"
+      style={{
+        gap: 2,
+        background: "var(--qz-rule-2)",
+        padding: 2,
+        borderRadius: "var(--qz-radius)",
+        width: "fit-content",
+      }}
+    >
+      {items.map((item) => {
+        const on = item.id === value;
+        return (
+          <button
+            key={item.id}
+            type="button"
+            onClick={() => onChange(item.id)}
+            style={{
+              background: on ? "var(--qz-paper)" : "transparent",
+              border: "none",
+              padding: "5px 12px",
+              borderRadius: "var(--qz-radius)",
+              fontSize: 12,
+              fontFamily: "var(--qz-font-mono)",
+              fontWeight: on ? 600 : 500,
+              color: on ? "var(--qz-ink)" : "var(--qz-ink-3)",
+              cursor: "pointer",
+              boxShadow: on ? "0 1px 2px rgba(0,0,0,0.08)" : "none",
+            }}
+          >
+            {item.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+function NodePreviewTab({
+  node,
+  doc,
+  productIndex,
+  tokens,
+  width,
+}: {
+  node: QuizNodeDoc;
+  doc: QuizDoc;
+  productIndex: IndexedProduct[];
+  tokens: DesignTokensT;
+  width: number;
+}) {
+  return (
+    <div className="qz-col qz-gap-8">
+      <p className="qz-muted" style={{ fontSize: 12, margin: 0 }}>
+        Live preview at {width}px wide — reflects the design tokens for the
+        current breakpoint.
+      </p>
+      <div
+        style={{
+          background: "var(--qz-cream-2)",
+          padding: 16,
+          borderRadius: "var(--qz-radius)",
+          border: "1px solid var(--qz-rule)",
+          display: "flex",
+          justifyContent: "center",
+        }}
+      >
+        <div style={{ width: `min(${width}px, 100%)` }}>
+          <NodePreview node={node} doc={doc} productIndex={productIndex} tokens={tokens} />
+        </div>
+      </div>
+      {node.type === "result" && (
+        <div
+          className="qz-mt-16"
+          style={{
+            borderTop: "1px solid var(--qz-rule)",
+            paddingTop: 12,
+          }}
+        >
+          <div className="qz-label" style={{ marginBottom: 8 }}>
+            Simulate answers
+          </div>
+          <ResultPreviewTab
+            node={node}
+            doc={doc}
+            productIndex={productIndex}
+          />
+        </div>
+      )}
+    </div>
+  );
+}
+
+function NodePreview({
+  node,
+  doc,
+  productIndex,
+  tokens,
+}: {
+  node: QuizNodeDoc;
+  doc: QuizDoc;
+  productIndex: IndexedProduct[];
+  tokens: DesignTokensT;
+}) {
+  const vars = tokensToCssVars(tokens) as React.CSSProperties;
+  const cardStyle: React.CSSProperties = {
+    background: "var(--qz-color-bg)",
+    color: "var(--qz-color-text)",
+    padding: "var(--qz-pad)",
+    borderRadius: "var(--qz-radius)",
+    fontFamily: "var(--qz-font-body)",
+    fontSize: "var(--qz-base-size)",
+    boxShadow: "0 4px 24px rgba(0,0,0,0.06)",
+  };
+  const headingStyle: React.CSSProperties = {
+    fontFamily: "var(--qz-font-heading)",
+    fontSize: "var(--qz-h1-size)",
+    margin: 0,
+    color: "var(--qz-color-text)",
+    fontWeight: 600,
+    lineHeight: 1.15,
+  };
+  const subStyle: React.CSSProperties = {
+    color: "var(--qz-color-muted)",
+    marginTop: 8,
+  };
+  const btnStyle: React.CSSProperties = {
+    ...buttonStyle(tokens),
+    marginTop: 18,
+    borderRadius: "var(--qz-radius)",
+    padding: "10px 22px",
+    fontFamily: "var(--qz-font-body)",
+    fontSize: "var(--qz-base-size)",
+    cursor: "default",
+    border: "none",
+    fontWeight: 600,
+  };
+
+  if (node.type === "intro") {
+    return (
+      <div style={vars}>
+        <div style={cardStyle}>
+          <h1 style={headingStyle}>{node.data.headline || "Headline"}</h1>
+          {node.data.subtext && <p style={subStyle}>{node.data.subtext}</p>}
+          <button style={btnStyle}>{node.data.button_label || "Start"}</button>
+        </div>
+      </div>
+    );
+  }
+
+  if (node.type === "question") {
+    return (
+      <div style={vars}>
+        <div style={cardStyle}>
+          <h2
+            style={{
+              ...headingStyle,
+              fontSize: "var(--qz-h2-size)",
+            }}
+          >
+            {node.data.text || "Question"}
+          </h2>
+          <div
+            style={{
+              marginTop: 16,
+              display: "grid",
+              gap: 10,
+            }}
+          >
+            {node.data.answers.map((a) => (
+              <div
+                key={a.id}
+                style={{
+                  padding: "var(--qz-pad)",
+                  borderRadius: "var(--qz-radius)",
+                  border: "2px solid #00000022",
+                  color: "var(--qz-color-text)",
+                  fontSize: "var(--qz-base-size)",
+                }}
+              >
+                {a.text || "(answer)"}
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (node.type === "email_gate") {
+    return (
+      <div style={vars}>
+        <div style={cardStyle}>
+          <h2 style={{ ...headingStyle, fontSize: "var(--qz-h2-size)" }}>
+            {node.data.headline}
+          </h2>
+          {node.data.subtext && <p style={subStyle}>{node.data.subtext}</p>}
+          <div style={{ marginTop: 14, display: "grid", gap: 10 }}>
+            <div
+              style={{
+                padding: "12px 14px",
+                borderRadius: "var(--qz-radius)",
+                border: "1px solid #00000022",
+                color: "var(--qz-color-muted)",
+                fontSize: "var(--qz-base-size)",
+              }}
+            >
+              Email
+            </div>
+            {node.data.name_optional && (
+              <div
+                style={{
+                  padding: "12px 14px",
+                  borderRadius: "var(--qz-radius)",
+                  border: "1px solid #00000022",
+                  color: "var(--qz-color-muted)",
+                  fontSize: "var(--qz-base-size)",
+                }}
+              >
+                First name (optional)
+              </div>
+            )}
+          </div>
+          <button style={btnStyle}>Continue</button>
+        </div>
+      </div>
+    );
+  }
+
+  if (node.type === "result") {
+    const sample = productIndex.slice(0, node.data.slot_count);
+    return (
+      <div style={vars}>
+        <div style={cardStyle}>
+          <h2 style={{ ...headingStyle, fontSize: "var(--qz-h2-size)" }}>
+            {node.data.headline}
+          </h2>
+          {node.data.subtext && <p style={subStyle}>{node.data.subtext}</p>}
+          <div style={{ marginTop: 16, display: "grid", gap: 10 }}>
+            {sample.length === 0 ? (
+              <p style={{ color: "var(--qz-color-muted)" }}>
+                (Live products appear here at runtime.)
+              </p>
+            ) : (
+              sample.map((p) => (
+                <div
+                  key={p.product_id}
+                  style={{
+                    display: "flex",
+                    gap: 12,
+                    alignItems: "center",
+                    padding: 10,
+                    borderRadius: "var(--qz-radius)",
+                    border: "1px solid #00000010",
+                  }}
+                >
+                  <div
+                    style={{
+                      width: 48,
+                      height: 48,
+                      background: "#00000010",
+                      borderRadius: "var(--qz-radius)",
+                    }}
+                  />
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontWeight: 500, fontSize: 14 }}>{p.title}</div>
+                    {p.price && (
+                      <div
+                        style={{
+                          color: "var(--qz-color-muted)",
+                          fontSize: 12,
+                          marginTop: 2,
+                        }}
+                      >
+                        ${p.price}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+          <button style={btnStyle}>{node.data.cta_label}</button>
+        </div>
+      </div>
+    );
+  }
+
+  if (node.type === "message") {
+    return (
+      <div style={vars}>
+        <div style={cardStyle}>
+          <p
+            style={{
+              color: "var(--qz-color-text)",
+              fontSize: "var(--qz-base-size)",
+              margin: 0,
+              whiteSpace: "pre-wrap",
+            }}
+          >
+            {node.data.text}
+          </p>
+          <button style={btnStyle}>Continue</button>
+        </div>
+      </div>
+    );
+  }
+
+  // end
+  if (node.type === "end") {
+    return (
+      <div style={vars}>
+        <div style={cardStyle}>
+          <h2 style={{ ...headingStyle, fontSize: "var(--qz-h2-size)" }}>
+            {node.data.headline}
+          </h2>
+          {node.data.subtext && <p style={subStyle}>{node.data.subtext}</p>}
+          {node.data.cta_label && <button style={btnStyle}>{node.data.cta_label}</button>}
+        </div>
+      </div>
+    );
+  }
+
+  // ask_ai: simulated chat preview — opener bubble + suggested-question
+  // chips. No real network call from the editor; full conversational flow
+  // only exists in the storefront.
+  if (node.type === "ask_ai") {
+    return (
+      <div style={vars}>
+        <div style={cardStyle}>
+          <div style={{ ...subStyle, fontSize: 12, marginBottom: 8 }}>
+            {node.data.persona_name}
+          </div>
+          <div
+            style={{
+              background: "#00000010",
+              color: "var(--qz-color-text)",
+              padding: "10px 14px",
+              borderRadius: "var(--qz-radius)",
+              fontSize: "var(--qz-base-size)",
+              lineHeight: 1.4,
+              whiteSpace: "pre-wrap",
+            }}
+          >
+            {node.data.opening_message}
+          </div>
+          {node.data.suggested_questions.length > 0 && (
+            <div
+              style={{
+                display: "flex",
+                flexWrap: "wrap",
+                gap: 6,
+                marginTop: 10,
+              }}
+            >
+              {node.data.suggested_questions.map((q, i) => (
+                <span
+                  key={i}
+                  style={{
+                    border: "1px solid #00000020",
+                    borderRadius: "var(--qz-radius)",
+                    padding: "5px 10px",
+                    fontSize: 12,
+                    color: "var(--qz-color-text)",
+                  }}
+                >
+                  {q}
+                </span>
+              ))}
+            </div>
+          )}
+          <div
+            style={{
+              marginTop: 12,
+              padding: "8px 12px",
+              border: "1px solid #00000022",
+              borderRadius: "var(--qz-radius)",
+              color: "var(--qz-color-muted)",
+              fontSize: 13,
+            }}
+          >
+            Type a question…
+          </div>
+          <button style={{ ...btnStyle, marginTop: 12 }}>
+            {node.data.continue_label}
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // branch: shoppers never see a branch directly — runtime auto-advances.
+  // Surface this fact in the drawer Preview so authors aren't confused.
+  if (node.type === "branch") {
+    return (
+      <div style={vars}>
+        <div style={{ ...cardStyle, textAlign: "center" }}>
+          <div
+            className="qz-label"
+            style={{ color: "var(--qz-color-muted)", marginBottom: 6 }}
+          >
+            Branch · {node.data.mode}
+          </div>
+          <h2 style={{ ...headingStyle, fontSize: "var(--qz-h2-size)" }}>
+            {node.data.label}
+          </h2>
+          <p style={{ ...subStyle, fontSize: 13 }}>
+            Shoppers never see a branch step — the runtime auto-advances to
+            one of its {node.data.slots.length} targets based on{" "}
+            {node.data.mode === "ab_split"
+              ? "weighted random A/B selection (sticky per session)"
+              : "the first matching rule"}
+            .
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  return null;
+  // mark unused props so eslint doesn't complain
+  void doc;
 }
 
 function TabBar({
@@ -1206,13 +2109,21 @@ function TabBar({
 function nodeLabel(node: QuizNodeDoc): string {
   switch (node.type) {
     case "intro":
-      return `Intro · ${node.data.headline}`;
+      return `Welcome · ${node.data.headline}`;
     case "question":
       return `Question · ${node.data.text.slice(0, 30)}`;
+    case "message":
+      return `Message · ${node.data.text.slice(0, 30)}`;
+    case "end":
+      return `End · ${node.data.headline}`;
     case "email_gate":
       return `Email gate`;
     case "result":
       return `Result · ${node.data.headline}`;
+    case "branch":
+      return `Branch · ${node.data.label}`;
+    case "ask_ai":
+      return `Ask AI · ${node.data.persona_name}`;
   }
 }
 
@@ -1393,7 +2304,245 @@ function ContentTab({
     );
   }
 
+  if (node.type === "message") {
+    return (
+      <div className="qz-col qz-gap-12">
+        <QzField
+          label="Message"
+          hint="Merge tags: @name, @email, @answer.<questionNodeId>"
+        >
+          <QzTextarea
+            rows={5}
+            value={node.data.text}
+            onChange={(e) =>
+              onChange({
+                ...node,
+                data: { ...node.data, text: e.target.value } as never,
+              })
+            }
+          />
+        </QzField>
+      </div>
+    );
+  }
+
+  if (node.type === "end") {
+    return (
+      <div className="qz-col qz-gap-12">
+        <QzField label="Headline">
+          <QzInput
+            value={node.data.headline}
+            onChange={(e) =>
+              onChange({
+                ...node,
+                data: { ...node.data, headline: e.target.value } as never,
+              })
+            }
+          />
+        </QzField>
+        <QzField label="Subtext">
+          <QzTextarea
+            rows={3}
+            value={node.data.subtext}
+            onChange={(e) =>
+              onChange({
+                ...node,
+                data: { ...node.data, subtext: e.target.value } as never,
+              })
+            }
+          />
+        </QzField>
+        <QzField label="CTA label (optional)">
+          <QzInput
+            value={node.data.cta_label ?? ""}
+            placeholder="Shop the collection"
+            onChange={(e) =>
+              onChange({
+                ...node,
+                data: {
+                  ...node.data,
+                  cta_label: e.target.value || undefined,
+                } as never,
+              })
+            }
+          />
+        </QzField>
+        <QzField label="CTA URL (optional)" hint="Opens in a new tab">
+          <QzInput
+            value={node.data.cta_url ?? ""}
+            placeholder="https://shop.example.com/collection/..."
+            onChange={(e) =>
+              onChange({
+                ...node,
+                data: {
+                  ...node.data,
+                  cta_url: e.target.value || undefined,
+                } as never,
+              })
+            }
+          />
+        </QzField>
+        <QzField
+          label="Redirect URL (optional)"
+          hint="Auto-navigates after a short delay"
+        >
+          <QzInput
+            value={node.data.redirect_url ?? ""}
+            placeholder="https://shop.example.com/..."
+            onChange={(e) =>
+              onChange({
+                ...node,
+                data: {
+                  ...node.data,
+                  redirect_url: e.target.value || undefined,
+                } as never,
+              })
+            }
+          />
+        </QzField>
+      </div>
+    );
+  }
+
+  if (node.type === "ask_ai") {
+    return (
+      <div className="qz-col qz-gap-12">
+        <QzField label="Persona name">
+          <QzInput
+            value={node.data.persona_name}
+            placeholder="Assistant"
+            onChange={(e) =>
+              onChange({
+                ...node,
+                data: { ...node.data, persona_name: e.target.value } as never,
+              })
+            }
+          />
+        </QzField>
+        <QzField
+          label="System prompt"
+          hint="Sets persona, tone, do/don'ts. Sent to Claude as the system message."
+        >
+          <QzTextarea
+            rows={6}
+            value={node.data.system_prompt}
+            onChange={(e) =>
+              onChange({
+                ...node,
+                data: { ...node.data, system_prompt: e.target.value } as never,
+              })
+            }
+          />
+        </QzField>
+        <QzField
+          label="Opening message"
+          hint="Shown to the shopper before they type anything."
+        >
+          <QzTextarea
+            rows={2}
+            value={node.data.opening_message}
+            onChange={(e) =>
+              onChange({
+                ...node,
+                data: { ...node.data, opening_message: e.target.value } as never,
+              })
+            }
+          />
+        </QzField>
+        <QzField
+          label="Suggested questions"
+          hint="One per line. Shown as quick-reply chips before the first user turn."
+        >
+          <QzTextarea
+            rows={4}
+            value={node.data.suggested_questions.join("\n")}
+            onChange={(e) => {
+              const next = e.target.value
+                .split("\n")
+                .map((line) => line.trim())
+                .filter(Boolean);
+              onChange({
+                ...node,
+                data: {
+                  ...node.data,
+                  suggested_questions: next,
+                } as never,
+              });
+            }}
+          />
+        </QzField>
+        <QzField label="Max turns" hint="1–20. Caps assistant replies per session.">
+          <QzInput
+            type="number"
+            value={String(node.data.max_turns)}
+            onChange={(e) =>
+              onChange({
+                ...node,
+                data: {
+                  ...node.data,
+                  max_turns: Math.max(
+                    1,
+                    Math.min(20, Number(e.target.value) || 1),
+                  ),
+                } as never,
+              })
+            }
+          />
+        </QzField>
+        <QzField label="Continue button label">
+          <QzInput
+            value={node.data.continue_label}
+            placeholder="Continue"
+            onChange={(e) =>
+              onChange({
+                ...node,
+                data: { ...node.data, continue_label: e.target.value } as never,
+              })
+            }
+          />
+        </QzField>
+      </div>
+    );
+  }
+
+  if (node.type === "branch") {
+    return (
+      <div className="qz-col qz-gap-12">
+        <QzField label="Label">
+          <QzInput
+            value={node.data.label}
+            placeholder="Internal name for this branch"
+            onChange={(e) =>
+              onChange({
+                ...node,
+                data: { ...node.data, label: e.target.value } as never,
+              })
+            }
+          />
+        </QzField>
+        <QzField label="Mode" hint="Rules: first matching slot wins. A/B split: weighted random, sticky per session.">
+          <QzSelect
+            value={node.data.mode}
+            onChange={(e) =>
+              onChange({
+                ...node,
+                data: {
+                  ...node.data,
+                  mode: e.target.value as "rules" | "ab_split",
+                } as never,
+              })
+            }
+          >
+            <option value="rules">Rules</option>
+            <option value="ab_split">A/B split</option>
+          </QzSelect>
+        </QzField>
+      </div>
+    );
+  }
+
   // result
+  if (node.type !== "result") return null;
   return (
     <div className="qz-col qz-gap-12">
       <QzField label="Headline">
@@ -1448,6 +2597,238 @@ function ContentTab({
           }
         />
       </QzField>
+    </div>
+  );
+}
+
+// Per-slot rule editor for branch nodes. Rules mode: each slot's outbound
+// edge gets a condition (answer_id / tag / ab_slot). A/B split mode: each
+// slot gets a weight knob. Slot add/remove buttons live here too.
+function BranchEditor({
+  node,
+  doc,
+  catalogTags,
+  onChange,
+  onDocChange,
+}: {
+  node: Extract<QuizNodeDoc, { type: "branch" }>;
+  doc: QuizDoc;
+  catalogTags: string[];
+  onChange: (next: QuizNodeDoc) => void;
+  onDocChange: (next: QuizDoc) => void;
+}) {
+  const allAnswers = useMemo(() => {
+    const out: Array<{
+      questionId: string;
+      questionText: string;
+      answerId: string;
+      answerText: string;
+    }> = [];
+    for (const n of doc.nodes) {
+      if (n.type !== "question") continue;
+      for (const a of n.data.answers) {
+        out.push({
+          questionId: n.id,
+          questionText: n.data.text.slice(0, 30),
+          answerId: a.id,
+          answerText: a.text,
+        });
+      }
+    }
+    return out;
+  }, [doc.nodes]);
+
+  return (
+    <div className="qz-col qz-gap-12">
+      {node.data.slots.map((slot, idx) => {
+        const edge = doc.edges.find(
+          (e) => e.source === node.id && e.source_handle === slot.id,
+        );
+        return (
+          <div
+            key={slot.id}
+            style={{
+              padding: 10,
+              border: "1px solid var(--qz-rule)",
+              borderRadius: "var(--qz-radius)",
+              background: "var(--qz-paper)",
+            }}
+          >
+            <div
+              className="qz-row qz-row-between"
+              style={{ alignItems: "center", marginBottom: 8 }}
+            >
+              <QzField label={`Slot ${idx + 1} label`}>
+                <QzInput
+                  value={slot.label}
+                  onChange={(e) =>
+                    onChange({
+                      ...node,
+                      data: {
+                        ...node.data,
+                        slots: node.data.slots.map((s) =>
+                          s.id === slot.id
+                            ? { ...s, label: e.target.value }
+                            : s,
+                        ),
+                      } as never,
+                    })
+                  }
+                />
+              </QzField>
+              {node.data.slots.length > 2 && (
+                <button
+                  type="button"
+                  onClick={() =>
+                    onDocChange(removeBranchSlot(doc, node.id, slot.id))
+                  }
+                  style={{
+                    background: "transparent",
+                    border: "none",
+                    color: "var(--qz-crit)",
+                    cursor: "pointer",
+                    fontSize: 12,
+                    fontFamily: "var(--qz-font-mono)",
+                  }}
+                >
+                  remove
+                </button>
+              )}
+            </div>
+
+            {node.data.mode === "ab_split" ? (
+              <QzField label="Weight" hint="Higher weight = larger share">
+                <QzInput
+                  type="number"
+                  value={String(slot.weight)}
+                  onChange={(e) =>
+                    onChange({
+                      ...node,
+                      data: {
+                        ...node.data,
+                        slots: node.data.slots.map((s) =>
+                          s.id === slot.id
+                            ? {
+                                ...s,
+                                weight: Math.max(0, Number(e.target.value) || 0),
+                              }
+                            : s,
+                        ),
+                      } as never,
+                    })
+                  }
+                />
+              </QzField>
+            ) : (
+              <BranchSlotRuleEditor
+                edge={edge}
+                allAnswers={allAnswers}
+                catalogTags={catalogTags}
+                onChange={(cond) => {
+                  if (!edge) return;
+                  onDocChange(setEdgeCondition(doc, edge.id, cond));
+                }}
+              />
+            )}
+          </div>
+        );
+      })}
+      <QzButton
+        size="sm"
+        onClick={() => onDocChange(addBranchSlot(doc, node.id))}
+      >
+        + Add slot
+      </QzButton>
+    </div>
+  );
+}
+
+// Sub-editor for one branch slot in rules mode. The author picks the
+// condition kind (answer/tag/none) and the value. Sends `undefined` to
+// clear back to unconditional.
+function BranchSlotRuleEditor({
+  edge,
+  allAnswers,
+  catalogTags,
+  onChange,
+}: {
+  edge: QuizDoc["edges"][number] | undefined;
+  allAnswers: Array<{
+    questionId: string;
+    questionText: string;
+    answerId: string;
+    answerText: string;
+  }>;
+  catalogTags: string[];
+  onChange: (
+    cond: { answer_id?: string; tag?: string; ab_slot?: string } | undefined,
+  ) => void;
+}) {
+  if (!edge) {
+    return (
+      <p className="qz-muted" style={{ fontSize: 11, margin: 0 }}>
+        Connect this slot to a node before adding a rule.
+      </p>
+    );
+  }
+  const kind: "none" | "answer" | "tag" = edge.condition?.answer_id
+    ? "answer"
+    : edge.condition?.tag
+      ? "tag"
+      : "none";
+
+  return (
+    <div className="qz-col qz-gap-8">
+      <QzField label="When" hint="Pick when this slot's edge fires">
+        <QzSelect
+          value={kind}
+          onChange={(e) => {
+            const v = e.target.value as "none" | "answer" | "tag";
+            if (v === "none") onChange(undefined);
+            else if (v === "answer")
+              onChange({ answer_id: allAnswers[0]?.answerId ?? "" });
+            else onChange({ tag: catalogTags[0] ?? "" });
+          }}
+        >
+          <option value="none">Always (no rule)</option>
+          <option value="answer">Shopper picked answer…</option>
+          <option value="tag">Accumulated tag includes…</option>
+        </QzSelect>
+      </QzField>
+      {kind === "answer" && (
+        <QzField label="Answer">
+          <QzSelect
+            value={edge.condition?.answer_id ?? ""}
+            onChange={(e) => onChange({ answer_id: e.target.value })}
+          >
+            {allAnswers.length === 0 && (
+              <option value="">(no questions yet)</option>
+            )}
+            {allAnswers.map((a) => (
+              <option key={a.answerId} value={a.answerId}>
+                {a.questionText} → {a.answerText}
+              </option>
+            ))}
+          </QzSelect>
+        </QzField>
+      )}
+      {kind === "tag" && (
+        <QzField label="Tag">
+          <QzSelect
+            value={edge.condition?.tag ?? ""}
+            onChange={(e) => onChange({ tag: e.target.value })}
+          >
+            {catalogTags.length === 0 && (
+              <option value="">(no catalog tags)</option>
+            )}
+            {catalogTags.map((t) => (
+              <option key={t} value={t}>
+                {t}
+              </option>
+            ))}
+          </QzSelect>
+        </QzField>
+      )}
     </div>
   );
 }
@@ -1953,6 +3334,114 @@ function ResultPreviewTab({
             ))}
           </div>
         )}
+      </div>
+    </div>
+  );
+}
+
+// Modal-style picker for the output-handle `+` flow. Lists the five module
+// types a merchant can drop after any source handle. Sits on top of the same
+// dimmed overlay used by QuizSettingsModal / AllPathsModal for consistency.
+function ModulePickerPopover({
+  onPick,
+  onClose,
+}: {
+  onPick: (
+    kind:
+      | "question"
+      | "result"
+      | "email_gate"
+      | "message"
+      | "end"
+      | "branch"
+      | "ask_ai",
+  ) => void;
+  onClose: () => void;
+}) {
+  const items: Array<{
+    kind:
+      | "question"
+      | "result"
+      | "email_gate"
+      | "message"
+      | "end"
+      | "branch"
+      | "ask_ai";
+    label: string;
+    hint: string;
+  }> = [
+    { kind: "question", label: "Question", hint: "Single/multi-select or image tiles" },
+    { kind: "message", label: "Message", hint: "A chat-style copy block" },
+    { kind: "ask_ai", label: "Ask AI", hint: "Multi-turn AI chat grounded in the quiz path + catalog" },
+    { kind: "branch", label: "Branch", hint: "Rules-based routing or A/B variant split" },
+    { kind: "email_gate", label: "Email gate", hint: "Capture email before results" },
+    { kind: "result", label: "Result", hint: "Show recommended products" },
+    { kind: "end", label: "End", hint: "Final screen with optional CTA" },
+  ];
+  return (
+    <div
+      role="dialog"
+      aria-modal="true"
+      onClick={onClose}
+      style={{
+        position: "fixed",
+        inset: 0,
+        background: "rgba(27, 26, 23, 0.4)",
+        display: "grid",
+        placeItems: "center",
+        zIndex: 100,
+        backdropFilter: "blur(4px)",
+        padding: 24,
+      }}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className="qz-card"
+        style={{ maxWidth: 420, width: "100%", padding: 20 }}
+      >
+        <div className="qz-label">Add module</div>
+        <h2 className="qz-h2 qz-mt-8" style={{ margin: 0 }}>
+          Pick what comes next
+        </h2>
+        <div className="qz-col qz-gap-8 qz-mt-16">
+          {items.map((item) => (
+            <button
+              key={item.kind}
+              type="button"
+              onClick={() => onPick(item.kind)}
+              style={{
+                textAlign: "left",
+                background: "var(--qz-paper)",
+                border: "1px solid var(--qz-rule)",
+                borderRadius: "var(--qz-radius)",
+                padding: "10px 12px",
+                cursor: "pointer",
+                fontFamily: "var(--qz-font-body)",
+                color: "var(--qz-ink)",
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = "var(--qz-cream-2)";
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = "var(--qz-paper)";
+              }}
+            >
+              <div style={{ fontWeight: 600, fontSize: 14 }}>{item.label}</div>
+              <div
+                className="qz-muted"
+                style={{ fontSize: 12, marginTop: 2 }}
+              >
+                {item.hint}
+              </div>
+            </button>
+          ))}
+        </div>
+        <div
+          className="qz-row qz-gap-8 qz-mt-16"
+          style={{ justifyContent: "flex-end" }}
+        >
+          <QzButton onClick={onClose}>Cancel</QzButton>
+        </div>
       </div>
     </div>
   );

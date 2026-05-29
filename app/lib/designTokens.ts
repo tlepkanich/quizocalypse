@@ -61,6 +61,18 @@ export function resolveDesignTokens(
   return out;
 }
 
+// Convenience wrapper for per-breakpoint resolution at render time. Layers the
+// node's default override (applies to both breakpoints) then the breakpoint-
+// specific override on top. Either layer may be undefined / null.
+export function resolveForBreakpoint(
+  shopTokens: DesignTokensT | null | undefined,
+  quizTokens: DesignTokensT | null | undefined,
+  nodeDefault: DesignTokensT | null | undefined,
+  nodeBreakpoint: DesignTokensT | null | undefined,
+): DesignTokensT {
+  return resolveDesignTokens(shopTokens, quizTokens, nodeDefault, nodeBreakpoint);
+}
+
 // Translate a resolved token set into CSS variable values for the storefront.
 // The runtime sets these on the root element and all child styles read via
 // var(--token-name).

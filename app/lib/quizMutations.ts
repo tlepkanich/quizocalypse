@@ -21,7 +21,11 @@ function nextPosition(doc: QuizDoc, anchor: string | null) {
   return { x: maxX + NEW_NODE_OFFSET, y: avgY };
 }
 
-export function addQuestionNode(doc: QuizDoc, anchorId: string | null): QuizDoc {
+export function addQuestionNode(
+  doc: QuizDoc,
+  anchorId: string | null,
+  anchorHandle?: string,
+): QuizDoc {
   const id = uid("q");
   const node: QuizNodeDoc = {
     id,
@@ -49,7 +53,15 @@ export function addQuestionNode(doc: QuizDoc, anchorId: string | null): QuizDoc 
     },
   };
   const edges = anchorId
-    ? [...doc.edges, { id: uid("e"), source: anchorId, target: id }]
+    ? [
+        ...doc.edges,
+        {
+          id: uid("e"),
+          source: anchorId,
+          target: id,
+          ...(anchorHandle ? { source_handle: anchorHandle } : {}),
+        },
+      ]
     : doc.edges;
   return { ...doc, nodes: [...doc.nodes, node], edges };
 }
@@ -58,6 +70,7 @@ export function addResultNode(
   doc: QuizDoc,
   anchorId: string | null,
   fallbackCollectionId: string,
+  anchorHandle?: string,
 ): QuizDoc {
   const id = uid("r");
   const node: QuizNodeDoc = {
@@ -73,7 +86,15 @@ export function addResultNode(
     },
   };
   const edges = anchorId
-    ? [...doc.edges, { id: uid("e"), source: anchorId, target: id }]
+    ? [
+        ...doc.edges,
+        {
+          id: uid("e"),
+          source: anchorId,
+          target: id,
+          ...(anchorHandle ? { source_handle: anchorHandle } : {}),
+        },
+      ]
     : doc.edges;
   return {
     ...doc,
@@ -89,6 +110,7 @@ export function addResultNode(
 export function addEmailGateNode(
   doc: QuizDoc,
   anchorId: string | null,
+  anchorHandle?: string,
 ): QuizDoc {
   const id = uid("eg");
   const node: QuizNodeDoc = {
@@ -104,12 +126,215 @@ export function addEmailGateNode(
     },
   };
   const edges = anchorId
-    ? [...doc.edges, { id: uid("e"), source: anchorId, target: id }]
+    ? [
+        ...doc.edges,
+        {
+          id: uid("e"),
+          source: anchorId,
+          target: id,
+          ...(anchorHandle ? { source_handle: anchorHandle } : {}),
+        },
+      ]
     : doc.edges;
   return { ...doc, nodes: [...doc.nodes, node], edges };
 }
 
+export function addMessageNode(
+  doc: QuizDoc,
+  anchorId: string | null,
+  anchorHandle?: string,
+): QuizDoc {
+  const id = uid("m");
+  const node: QuizNodeDoc = {
+    id,
+    type: "message",
+    position: nextPosition(doc, anchorId),
+    data: {
+      text: "Thanks — your answers are in.",
+      supports_merge_tags: true,
+    },
+  };
+  const edges = anchorId
+    ? [
+        ...doc.edges,
+        {
+          id: uid("e"),
+          source: anchorId,
+          target: id,
+          ...(anchorHandle ? { source_handle: anchorHandle } : {}),
+        },
+      ]
+    : doc.edges;
+  return { ...doc, nodes: [...doc.nodes, node], edges };
+}
+
+export function addEndNode(
+  doc: QuizDoc,
+  anchorId: string | null,
+  anchorHandle?: string,
+): QuizDoc {
+  const id = uid("end");
+  const node: QuizNodeDoc = {
+    id,
+    type: "end",
+    position: nextPosition(doc, anchorId),
+    data: {
+      headline: "All done",
+      subtext: "Thanks for taking the quiz.",
+    },
+  };
+  const edges = anchorId
+    ? [
+        ...doc.edges,
+        {
+          id: uid("e"),
+          source: anchorId,
+          target: id,
+          ...(anchorHandle ? { source_handle: anchorHandle } : {}),
+        },
+      ]
+    : doc.edges;
+  return { ...doc, nodes: [...doc.nodes, node], edges };
+}
+
+export function addAskAINode(
+  doc: QuizDoc,
+  anchorId: string | null,
+  anchorHandle?: string,
+): QuizDoc {
+  const id = uid("ai");
+  const node: QuizNodeDoc = {
+    id,
+    type: "ask_ai",
+    position: nextPosition(doc, anchorId),
+    data: {
+      system_prompt:
+        "You are a friendly shopping assistant. Help the shopper based on the quiz context. " +
+        "Recommend products only if relevant; otherwise answer clearly and briefly.",
+      persona_name: "Assistant",
+      opening_message: "Hi! Anything you'd like to ask before we wrap up?",
+      suggested_questions: [
+        "How should I use this?",
+        "What's the best one for sensitive skin?",
+      ],
+      max_turns: 6,
+      continue_label: "Continue",
+    },
+  };
+  const edges = anchorId
+    ? [
+        ...doc.edges,
+        {
+          id: uid("e"),
+          source: anchorId,
+          target: id,
+          ...(anchorHandle ? { source_handle: anchorHandle } : {}),
+        },
+      ]
+    : doc.edges;
+  return { ...doc, nodes: [...doc.nodes, node], edges };
+}
+
+export function addBranchNode(
+  doc: QuizDoc,
+  anchorId: string | null,
+  anchorHandle?: string,
+): QuizDoc {
+  const id = uid("br");
+  const node: QuizNodeDoc = {
+    id,
+    type: "branch",
+    position: nextPosition(doc, anchorId),
+    data: {
+      label: "Branch",
+      mode: "rules",
+      slots: [
+        { id: uid("sl"), label: "A", weight: 1 },
+        { id: uid("sl"), label: "B", weight: 1 },
+      ],
+    },
+  };
+  const edges = anchorId
+    ? [
+        ...doc.edges,
+        {
+          id: uid("e"),
+          source: anchorId,
+          target: id,
+          ...(anchorHandle ? { source_handle: anchorHandle } : {}),
+        },
+      ]
+    : doc.edges;
+  return { ...doc, nodes: [...doc.nodes, node], edges };
+}
+
+// Add a new output slot to a branch node. The new slot has a unique id used
+// as source_handle on its outgoing edge.
+export function addBranchSlot(doc: QuizDoc, branchNodeId: string): QuizDoc {
+  return {
+    ...doc,
+    nodes: doc.nodes.map((n) => {
+      if (n.id !== branchNodeId || n.type !== "branch") return n;
+      const nextLetter = String.fromCharCode(65 + n.data.slots.length);
+      return {
+        ...n,
+        data: {
+          ...n.data,
+          slots: [
+            ...n.data.slots,
+            { id: uid("sl"), label: nextLetter, weight: 1 },
+          ],
+        },
+      };
+    }),
+  };
+}
+
+// Remove a slot from a branch node, also pruning any edges that source from
+// that slot. Refuses to drop below 2 slots since the schema requires it.
+export function removeBranchSlot(
+  doc: QuizDoc,
+  branchNodeId: string,
+  slotId: string,
+): QuizDoc {
+  return {
+    ...doc,
+    nodes: doc.nodes.map((n) => {
+      if (n.id !== branchNodeId || n.type !== "branch") return n;
+      const remaining = n.data.slots.filter((s) => s.id !== slotId);
+      if (remaining.length < 2) return n;
+      return { ...n, data: { ...n.data, slots: remaining } };
+    }),
+    edges: doc.edges.filter(
+      (e) => !(e.source === branchNodeId && e.source_handle === slotId),
+    ),
+  };
+}
+
+// Set the edge's condition (used by the per-slot Rule editor on Branch
+// nodes). Pass `undefined` to clear it back to unconditional.
+export function setEdgeCondition(
+  doc: QuizDoc,
+  edgeId: string,
+  condition: { answer_id?: string; tag?: string; ab_slot?: string } | undefined,
+): QuizDoc {
+  return {
+    ...doc,
+    edges: doc.edges.map((e) => {
+      if (e.id !== edgeId) return e;
+      if (!condition) {
+        const { condition: _drop, ...rest } = e;
+        void _drop;
+        return rest;
+      }
+      return { ...e, condition };
+    }),
+  };
+}
+
 export function deleteNode(doc: QuizDoc, nodeId: string): QuizDoc {
+  const { [nodeId]: _droppedBp, ...remainingBp } = doc.breakpoint_overrides;
+  void _droppedBp;
   return {
     ...doc,
     nodes: doc.nodes.filter((n) => n.id !== nodeId),
@@ -118,6 +343,7 @@ export function deleteNode(doc: QuizDoc, nodeId: string): QuizDoc {
     recommendation_logic: doc.recommendation_logic.filter(
       (r) => r.question_id !== nodeId,
     ),
+    breakpoint_overrides: remainingBp,
   };
 }
 

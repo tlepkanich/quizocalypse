@@ -54,11 +54,14 @@ export function validateQuiz(doc: QuizDoc): NodeIssue[] {
         message: "Not reachable from intro.",
       });
     }
-    if (node.type !== "result" && !outgoing.has(node.id)) {
+    // Result and End are terminal — they aren't expected to have outbound edges.
+    // Everything else should advance somewhere.
+    const isTerminal = node.type === "result" || node.type === "end";
+    if (!isTerminal && !outgoing.has(node.id)) {
       issues.push({
         nodeId: node.id,
         kind: "dead_end",
-        message: "No outbound edge — dead-end before result.",
+        message: "No outbound edge — flow would dead-end here.",
       });
     }
     if (node.type === "result" && !node.data.fallback_collection_id) {
@@ -67,6 +70,22 @@ export function validateQuiz(doc: QuizDoc): NodeIssue[] {
         kind: "missing_fallback",
         message: "Result is missing a fallback collection.",
       });
+    }
+    // Branch-specific: every slot should have an outbound edge, otherwise
+    // the runtime can land in a dead-end branch path.
+    if (node.type === "branch") {
+      for (const slot of node.data.slots) {
+        const wired = doc.edges.some(
+          (e) => e.source === node.id && e.source_handle === slot.id,
+        );
+        if (!wired) {
+          issues.push({
+            nodeId: node.id,
+            kind: "dead_end",
+            message: `Branch slot "${slot.label}" has no outbound edge.`,
+          });
+        }
+      }
     }
   }
 

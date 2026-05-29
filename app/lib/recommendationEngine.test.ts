@@ -1,8 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
+  pickBranchSlot,
   recommendForResult,
   recommendPreview,
+  resolveNextStep,
   nextNodeFor,
+  type BranchContext,
   type IndexedProduct,
 } from "./recommendationEngine";
 import { Quiz } from "./quizSchema";
@@ -310,5 +313,173 @@ describe("nextNodeFor", () => {
 
   it("returns null when no outbound edges exist", () => {
     expect(nextNodeFor(quizDoc, "r1", null)).toBeNull();
+  });
+});
+
+// ---------- Branch routing (Phase 2) ----------
+
+// Builds a quiz with a question, a branch, and two terminal results.
+// Intro -> q1 -> branch -> (slot A -> r1) / (slot B -> r2).
+function branchQuiz(opts: {
+  mode: "rules" | "ab_split";
+  weightA?: number;
+  weightB?: number;
+  condA?: { answer_id?: string; tag?: string };
+  condB?: { answer_id?: string; tag?: string };
+}) {
+  return Quiz.parse({
+    quiz_id: "bq",
+    scope: { collection_ids: [] },
+    nodes: [
+      {
+        id: "intro",
+        type: "intro",
+        position: { x: 0, y: 0 },
+        data: { headline: "Hi" },
+      },
+      {
+        id: "q1",
+        type: "question",
+        position: { x: 100, y: 0 },
+        data: {
+          text: "?",
+          question_type: "single_select",
+          answers: [
+            { id: "ans-oily", text: "Oily", tags: ["oily"], edge_handle_id: "ho" },
+            { id: "ans-dry", text: "Dry", tags: ["dry"], edge_handle_id: "hd" },
+          ],
+        },
+      },
+      {
+        id: "br1",
+        type: "branch",
+        position: { x: 200, y: 0 },
+        data: {
+          label: "Skin route",
+          mode: opts.mode,
+          slots: [
+            { id: "slot-a", label: "A", weight: opts.weightA ?? 1 },
+            { id: "slot-b", label: "B", weight: opts.weightB ?? 1 },
+          ],
+        },
+      },
+      {
+        id: "r1",
+        type: "result",
+        position: { x: 300, y: 0 },
+        data: { headline: "Oily kit", fallback_collection_id: "c1" },
+      },
+      {
+        id: "r2",
+        type: "result",
+        position: { x: 300, y: 100 },
+        data: { headline: "Dry kit", fallback_collection_id: "c1" },
+      },
+    ],
+    edges: [
+      { id: "e1", source: "intro", target: "q1" },
+      { id: "e2", source: "q1", target: "br1" },
+      {
+        id: "e3",
+        source: "br1",
+        target: "r1",
+        source_handle: "slot-a",
+        ...(opts.condA ? { condition: opts.condA } : {}),
+      },
+      {
+        id: "e4",
+        source: "br1",
+        target: "r2",
+        source_handle: "slot-b",
+        ...(opts.condB ? { condition: opts.condB } : {}),
+      },
+    ],
+    results_pages: [],
+  });
+}
+
+function emptyCtx(): BranchContext {
+  return {
+    selectedAnswerIds: new Set(),
+    accumulatedTags: new Set(),
+    abAssignments: {},
+  };
+}
+
+describe("Branch routing", () => {
+  it("rules mode: picks the slot whose answer_id condition matches", () => {
+    const q = branchQuiz({
+      mode: "rules",
+      condA: { answer_id: "ans-oily" },
+      condB: { answer_id: "ans-dry" },
+    });
+    const ctx = emptyCtx();
+    ctx.selectedAnswerIds.add("ans-oily");
+    expect(pickBranchSlot(q, "br1", ctx)).toBe("slot-a");
+    ctx.selectedAnswerIds.clear();
+    ctx.selectedAnswerIds.add("ans-dry");
+    expect(pickBranchSlot(q, "br1", ctx)).toBe("slot-b");
+  });
+
+  it("rules mode: picks the slot whose tag condition matches", () => {
+    const q = branchQuiz({
+      mode: "rules",
+      condA: { tag: "oily" },
+      condB: { tag: "dry" },
+    });
+    const ctx = emptyCtx();
+    ctx.accumulatedTags.add("dry");
+    expect(pickBranchSlot(q, "br1", ctx)).toBe("slot-b");
+  });
+
+  it("rules mode: falls back to first unconditional slot when nothing matches", () => {
+    const q = branchQuiz({
+      mode: "rules",
+      condA: { tag: "missing" },
+      // condB undefined → unconditional fallback
+    });
+    expect(pickBranchSlot(q, "br1", emptyCtx())).toBe("slot-b");
+  });
+
+  it("ab_split: stable across re-rolls thanks to sticky assignments", () => {
+    const q = branchQuiz({ mode: "ab_split", weightA: 1, weightB: 1 });
+    const ctx = emptyCtx();
+    ctx.rand = () => 0.1; // would roll A on first call
+    const first = pickBranchSlot(q, "br1", ctx);
+    expect(first).toBe("slot-a");
+    expect(ctx.abAssignments.br1).toBe("slot-a");
+    // Even if a later call would roll B, the sticky assignment holds.
+    ctx.rand = () => 0.99;
+    const second = pickBranchSlot(q, "br1", ctx);
+    expect(second).toBe("slot-a");
+  });
+
+  it("ab_split: weights skew the roll", () => {
+    const q = branchQuiz({ mode: "ab_split", weightA: 9, weightB: 1 });
+    // 0.85 * 10 = 8.5 → still inside slot A range (0..9)
+    const ctxA = emptyCtx();
+    ctxA.rand = () => 0.85;
+    expect(pickBranchSlot(q, "br1", ctxA)).toBe("slot-a");
+    // 0.95 * 10 = 9.5 → slot B
+    const ctxB = emptyCtx();
+    ctxB.rand = () => 0.95;
+    expect(pickBranchSlot(q, "br1", ctxB)).toBe("slot-b");
+  });
+
+  it("resolveNextStep auto-advances through a branch to the target", () => {
+    const q = branchQuiz({
+      mode: "rules",
+      condA: { tag: "oily" },
+      condB: { tag: "dry" },
+    });
+    const ctx = emptyCtx();
+    ctx.accumulatedTags.add("oily");
+    // After q1, the next renderable step should skip the branch and land on r1.
+    expect(resolveNextStep(q, "q1", null, ctx)).toBe("r1");
+  });
+
+  it("resolveNextStep returns the target directly when no branch in the way", () => {
+    const q = branchQuiz({ mode: "rules" });
+    expect(resolveNextStep(q, "intro", null, emptyCtx())).toBe("q1");
   });
 });

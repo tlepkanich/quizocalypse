@@ -1,23 +1,29 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import type { LoaderFunctionArgs } from "@remix-run/node";
 import { json } from "@remix-run/node";
 import { useLoaderData } from "@remix-run/react";
 import prisma from "../db.server";
 import { Quiz } from "../lib/quizSchema";
 import {
-  nextNodeFor,
+  resolveNextStep,
   recommendForResult,
   recommendPreview,
+  type BranchContext,
   type IndexedProduct,
   type RecommendedProduct,
 } from "../lib/recommendationEngine";
 import {
-  resolveDesignTokens,
+  resolveForBreakpoint,
   tokensToCssVars,
   buttonStyle,
   type DesignTokensT,
 } from "../lib/designTokens";
 import { createAnalyticsClient, newSessionId } from "../lib/analytics";
+import {
+  buildMergeContext,
+  resolveMergeTags,
+  type PathStep,
+} from "../lib/mergeTags";
 import type { z } from "zod";
 
 type QuizDoc = z.infer<typeof Quiz>;
@@ -81,9 +87,25 @@ export const loader = async ({ params }: LoaderFunctionArgs) => {
     productIndex: publishedRaw.product_index ?? [],
     designTokens: parsed.data.design_tokens ?? null,
     designOverrides: parsed.data.design_overrides ?? {},
+    breakpointOverrides: parsed.data.breakpoint_overrides ?? {},
     shopDomain: publishedRaw.shop_domain ?? "",
   });
 };
+
+// Resize-aware breakpoint hook. SSR-safe: returns "desktop" on the server,
+// then re-subscribes to window resize events once mounted. Threshold mirrors
+// the runtime layout breakpoint used in the page CSS (900px).
+function useBreakpoint(): "desktop" | "mobile" {
+  return useSyncExternalStore(
+    (cb) => {
+      if (typeof window === "undefined") return () => {};
+      window.addEventListener("resize", cb);
+      return () => window.removeEventListener("resize", cb);
+    },
+    () => (window.innerWidth < 900 ? "mobile" : "desktop"),
+    () => "desktop",
+  );
+}
 
 const stylesFor = (t: DesignTokensT) => ({
   page: {
@@ -159,14 +181,16 @@ const stylesFor = (t: DesignTokensT) => ({
   } satisfies React.CSSProperties,
 });
 
-interface PathStep {
-  questionNodeId: string;
-  answerIds: string[];
-}
-
 export default function StorefrontRuntime() {
-  const { doc, productIndex, designTokens, designOverrides, quizId, shopDomain } =
-    useLoaderData<typeof loader>();
+  const {
+    doc,
+    productIndex,
+    designTokens,
+    designOverrides,
+    breakpointOverrides,
+    quizId,
+    shopDomain,
+  } = useLoaderData<typeof loader>();
   const introNode = useMemo(
     () => doc.nodes.find((n) => n.type === "intro") ?? doc.nodes[0],
     [doc.nodes],
@@ -175,16 +199,26 @@ export default function StorefrontRuntime() {
     introNode ? introNode.id : null,
   );
   const [path, setPath] = useState<PathStep[]>([]);
+  const breakpoint = useBreakpoint();
 
   // Resolve baked tokens + the current node's override on every render — this
-  // is what implements the design cascade at the storefront layer.
+  // is what implements the design cascade at the storefront layer. The
+  // breakpoint layer is picked from breakpoint_overrides[nodeId][bp] and only
+  // applied if the viewport matches.
   const resolved = useMemo(() => {
     const baked = designTokens as DesignTokensT | null;
     const nodeOverride = currentNodeId
       ? ((designOverrides as Record<string, DesignTokensT>)[currentNodeId] ?? null)
       : null;
-    return resolveDesignTokens(baked, nodeOverride);
-  }, [designTokens, designOverrides, currentNodeId]);
+    const bpRecord = currentNodeId
+      ? (breakpointOverrides as Record<
+          string,
+          { desktop?: DesignTokensT; mobile?: DesignTokensT }
+        >)[currentNodeId]
+      : undefined;
+    const bpLayer = bpRecord?.[breakpoint] ?? null;
+    return resolveForBreakpoint(null, baked, nodeOverride, bpLayer);
+  }, [designTokens, designOverrides, breakpointOverrides, currentNodeId, breakpoint]);
 
   const styles = useMemo(() => stylesFor(resolved), [resolved]);
   const cssVars = useMemo(
@@ -273,10 +307,57 @@ export default function StorefrontRuntime() {
     setCurrentNodeId(introNode ? introNode.id : null);
     setPath([]);
     previewViewedRef.current = false;
+    // Note: we deliberately do NOT clear ab assignments on reset — the spec
+    // wants stickiness across retakes within a session for honest A/B
+    // attribution. Closing the tab clears sessionStorage and re-rolls.
+  }
+
+  // Sticky A/B assignments: persisted to sessionStorage keyed by quizId so
+  // refreshes inside the same tab don't re-roll. Lives in a ref so writes
+  // don't trigger re-renders.
+  const abKey = `qz-ab-${quizId}`;
+  const abRef = useRef<Record<string, string>>({});
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      const raw = window.sessionStorage.getItem(abKey);
+      if (raw) abRef.current = JSON.parse(raw) as Record<string, string>;
+    } catch {
+      // sessionStorage may be unavailable (private mode, embed sandbox); just
+      // fall through to in-memory assignments.
+    }
+  }, [abKey]);
+
+  function buildBranchContext(): BranchContext {
+    const selectedAnswerIds = new Set<string>();
+    const accumulatedTags = new Set<string>();
+    for (const step of path) {
+      const node = doc.nodes.find((n) => n.id === step.questionNodeId);
+      if (!node || node.type !== "question") continue;
+      for (const ansId of step.answerIds) {
+        selectedAnswerIds.add(ansId);
+        const ans = node.data.answers.find((a) => a.id === ansId);
+        if (ans) for (const t of ans.tags) accumulatedTags.add(t);
+      }
+    }
+    return {
+      selectedAnswerIds,
+      accumulatedTags,
+      abAssignments: abRef.current,
+    };
   }
 
   function gotoNextFrom(nodeId: string, handle: string | null) {
-    const next = nextNodeFor(doc, nodeId, handle);
+    const ctx = buildBranchContext();
+    const next = resolveNextStep(doc, nodeId, handle, ctx);
+    // Persist any A/B assignments mutated while traversing branches.
+    if (typeof window !== "undefined") {
+      try {
+        window.sessionStorage.setItem(abKey, JSON.stringify(ctx.abAssignments));
+      } catch {
+        // Same as above — ignore storage failures.
+      }
+    }
     if (!next) return;
     setCurrentNodeId(next);
   }
@@ -343,8 +424,59 @@ export default function StorefrontRuntime() {
           onSubmit={() => gotoNextFrom(currentNode.id, null)}
         />
       );
-    } else {
-      // result
+    } else if (currentNode.type === "message") {
+      // v2: Message step. Renders the merge-tag-resolved text and advances on click.
+      const ctx = buildMergeContext(path, doc);
+      const rendered = resolveMergeTags(currentNode.data.text, ctx);
+      content = (
+        <div style={styles.card}>
+          <p style={{ ...styles.muted, whiteSpace: "pre-wrap", margin: 0 }}>
+            {rendered}
+          </p>
+          <button
+            style={styles.primaryBtn}
+            onClick={() => gotoNextFrom(currentNode.id, null)}
+          >
+            Continue
+          </button>
+        </div>
+      );
+    } else if (currentNode.type === "end") {
+      const node = currentNode;
+      content = (
+        <div style={styles.card}>
+          <h2 style={styles.h2}>{node.data.headline}</h2>
+          {node.data.subtext && (
+            <p style={{ ...styles.muted, marginTop: 8 }}>{node.data.subtext}</p>
+          )}
+          {node.data.cta_url && (
+            <a
+              href={node.data.cta_url}
+              target="_blank"
+              rel="noreferrer"
+              style={{
+                ...styles.primaryBtn,
+                display: "inline-block",
+                textAlign: "center",
+                textDecoration: "none",
+              }}
+            >
+              {node.data.cta_label ?? "Continue"}
+            </a>
+          )}
+        </div>
+      );
+    } else if (currentNode.type === "ask_ai") {
+      content = (
+        <AskAIView
+          node={currentNode}
+          quizId={quizId}
+          path={path}
+          styles={styles}
+          onContinue={() => gotoNextFrom(currentNode.id, null)}
+        />
+      );
+    } else if (currentNode.type === "result") {
       const selectedAnswerIds = path.flatMap((p) => p.answerIds);
       const recs = recommendForResult({
         quiz: doc,
@@ -877,6 +1009,241 @@ function EmailGateView({
           Skip
         </button>
       )}
+    </div>
+  );
+}
+
+// Conversational chat step. Renders an opening assistant turn, optional
+// suggested-question quick-reply chips, the running transcript, and a text
+// input. Each user send posts to /q/:id/ai-chat and appends the reply.
+// "Continue" advances to the next quiz node. max_turns capped client-side
+// to mirror the server-side enforcement.
+function AskAIView({
+  node,
+  quizId,
+  path,
+  styles,
+  onContinue,
+}: {
+  node: Extract<
+    z.infer<typeof Quiz>["nodes"][number],
+    { type: "ask_ai" }
+  >;
+  quizId: string;
+  path: PathStep[];
+  styles: ReturnType<typeof stylesFor>;
+  onContinue: () => void;
+}) {
+  type Turn = { role: "user" | "assistant"; content: string };
+  const [transcript, setTranscript] = useState<Turn[]>([
+    { role: "assistant", content: node.data.opening_message },
+  ]);
+  const [draft, setDraft] = useState("");
+  const [sending, setSending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const scrollRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (scrollRef.current) {
+      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    }
+  }, [transcript, sending]);
+
+  const assistantTurns = transcript.filter((t) => t.role === "assistant").length;
+  // Opening message counts as turn 1, so cap allows max_turns total replies.
+  const turnsRemaining = Math.max(0, node.data.max_turns - assistantTurns);
+  const canSend = !sending && draft.trim().length > 0 && turnsRemaining > 0;
+
+  async function send(message: string) {
+    if (!message.trim()) return;
+    if (turnsRemaining <= 0) return;
+    setSending(true);
+    setError(null);
+    const nextTurn: Turn = { role: "user", content: message };
+    // Build the history we forward — strip the synthetic opening message so
+    // Claude doesn't re-see it; the system prompt already names the persona.
+    const history = transcript
+      .slice(1)
+      .map((t) => ({ role: t.role, content: t.content }));
+    setTranscript((prev) => [...prev, nextTurn]);
+    setDraft("");
+    try {
+      const res = await fetch(`/q/${quizId}/ai-chat`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          nodeId: node.id,
+          path,
+          history,
+          userMessage: message,
+        }),
+      });
+      const body = (await res.json()) as { reply?: string; error?: string };
+      if (!res.ok || !body.reply) {
+        setError(body.error ?? "Something went wrong.");
+        setTranscript((prev) => prev.slice(0, -1)); // roll back user turn
+        return;
+      }
+      setTranscript((prev) => [
+        ...prev,
+        { role: "assistant", content: body.reply! },
+      ]);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Network error.");
+      setTranscript((prev) => prev.slice(0, -1));
+    } finally {
+      setSending(false);
+    }
+  }
+
+  const bubble = (turn: Turn): React.CSSProperties => ({
+    maxWidth: "85%",
+    padding: "10px 14px",
+    borderRadius: "var(--qz-radius)",
+    background:
+      turn.role === "user" ? "var(--qz-color-primary)" : "#00000010",
+    color: turn.role === "user" ? "#FFF" : "var(--qz-color-text)",
+    alignSelf: turn.role === "user" ? "flex-end" : "flex-start",
+    whiteSpace: "pre-wrap",
+    fontSize: "var(--qz-base-size)",
+    lineHeight: 1.4,
+  });
+
+  return (
+    <div style={{ ...styles.card, display: "flex", flexDirection: "column", gap: 12 }}>
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "baseline",
+          gap: 12,
+        }}
+      >
+        <h2 style={{ ...styles.h2, margin: 0 }}>{node.data.persona_name}</h2>
+        <span
+          style={{
+            fontSize: 11,
+            color: "var(--qz-color-muted)",
+            fontFamily: "monospace",
+          }}
+        >
+          {turnsRemaining > 0
+            ? `${turnsRemaining} turn${turnsRemaining === 1 ? "" : "s"} left`
+            : "Chat ended"}
+        </span>
+      </div>
+      <div
+        ref={scrollRef}
+        style={{
+          display: "flex",
+          flexDirection: "column",
+          gap: 8,
+          maxHeight: 360,
+          overflowY: "auto",
+          paddingRight: 4,
+        }}
+      >
+        {transcript.map((turn, i) => (
+          <div key={i} style={bubble(turn)}>
+            {turn.content}
+          </div>
+        ))}
+        {sending && (
+          <div
+            style={{
+              ...bubble({ role: "assistant", content: "" }),
+              opacity: 0.6,
+              fontStyle: "italic",
+            }}
+          >
+            Thinking…
+          </div>
+        )}
+      </div>
+      {transcript.length === 1 && node.data.suggested_questions.length > 0 && (
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+          {node.data.suggested_questions.map((q) => (
+            <button
+              key={q}
+              type="button"
+              onClick={() => send(q)}
+              disabled={!canSend && sending}
+              style={{
+                background: "transparent",
+                border: "1px solid #00000020",
+                borderRadius: "var(--qz-radius)",
+                padding: "6px 10px",
+                cursor: "pointer",
+                fontSize: 12,
+                color: "var(--qz-color-text)",
+                fontFamily: "var(--qz-font-body)",
+              }}
+            >
+              {q}
+            </button>
+          ))}
+        </div>
+      )}
+      {error && (
+        <div
+          style={{
+            background: "#C2410C20",
+            color: "#C2410C",
+            padding: 8,
+            borderRadius: "var(--qz-radius)",
+            fontSize: 12,
+          }}
+        >
+          {error}
+        </div>
+      )}
+      <form
+        onSubmit={(e) => {
+          e.preventDefault();
+          if (canSend) send(draft);
+        }}
+        style={{ display: "flex", gap: 8 }}
+      >
+        <input
+          type="text"
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          disabled={sending || turnsRemaining <= 0}
+          placeholder={turnsRemaining > 0 ? "Type a question…" : "Chat ended"}
+          style={{
+            flex: 1,
+            padding: "10px 12px",
+            border: "1px solid #00000022",
+            borderRadius: "var(--qz-radius)",
+            fontSize: "var(--qz-base-size)",
+            fontFamily: "var(--qz-font-body)",
+          }}
+        />
+        <button
+          type="submit"
+          disabled={!canSend}
+          style={{
+            ...styles.primaryBtn,
+            marginTop: 0,
+            opacity: canSend ? 1 : 0.5,
+          }}
+        >
+          Send
+        </button>
+      </form>
+      <button
+        type="button"
+        onClick={onContinue}
+        style={{
+          ...styles.primaryBtn,
+          marginTop: 0,
+          background: "transparent",
+          color: "var(--qz-color-primary)",
+          border: "2px solid var(--qz-color-primary)",
+        }}
+      >
+        {node.data.continue_label}
+      </button>
     </div>
   );
 }

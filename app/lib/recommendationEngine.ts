@@ -159,3 +159,119 @@ export function nextNodeFor(
   const fallback = outbound.find((e) => !e.source_handle) ?? outbound[0];
   return fallback ? fallback.target : null;
 }
+
+// ---------- Branch routing (Phase 2) ----------
+
+export interface BranchContext {
+  // All tags accumulated across the visited path so far. Used by tag rules.
+  accumulatedTags: Set<string>;
+  // All answer ids the shopper has picked. Used by answer_id rules.
+  selectedAnswerIds: Set<string>;
+  // Sticky per-session A/B assignments: branchId → chosen slot id. Mutated
+  // when an unassigned branch is hit so subsequent visits hold.
+  abAssignments: Record<string, string>;
+  // Injected so tests can stub deterministic rolls. Real runtime uses
+  // Math.random.
+  rand?: () => number;
+}
+
+// Pick the next slot id for a branch based on its configured mode. Returns
+// the slot id (used as the source_handle on outgoing edges). Mutates
+// ctx.abAssignments when ab_split mode assigns a fresh slot.
+export function pickBranchSlot(
+  quiz: QuizDoc,
+  branchNodeId: string,
+  ctx: BranchContext,
+): string | null {
+  const node = quiz.nodes.find((n) => n.id === branchNodeId);
+  if (!node || node.type !== "branch") return null;
+  const data = node.data;
+
+  if (data.mode === "ab_split") {
+    // Sticky assignment — reuse if present.
+    const existing = ctx.abAssignments[branchNodeId];
+    if (existing && data.slots.some((s) => s.id === existing)) return existing;
+    const totalWeight = data.slots.reduce((s, slot) => s + slot.weight, 0);
+    if (totalWeight <= 0) return data.slots[0]?.id ?? null;
+    const roll = (ctx.rand ?? Math.random)() * totalWeight;
+    let acc = 0;
+    for (const slot of data.slots) {
+      acc += slot.weight;
+      if (roll < acc) {
+        ctx.abAssignments[branchNodeId] = slot.id;
+        return slot.id;
+      }
+    }
+    const last = data.slots[data.slots.length - 1]!;
+    ctx.abAssignments[branchNodeId] = last.id;
+    return last.id;
+  }
+
+  // Rules mode: find the first outbound edge whose condition matches.
+  // Edges from a branch are expected to carry source_handle = slot id, so
+  // we iterate slot order to give the author deterministic priority.
+  for (const slot of data.slots) {
+    const edge = quiz.edges.find(
+      (e) => e.source === branchNodeId && e.source_handle === slot.id,
+    );
+    if (!edge) continue;
+    if (edgeConditionMatches(edge.condition, ctx)) return slot.id;
+  }
+  // Fallback: first slot with an outbound edge but no condition.
+  for (const slot of data.slots) {
+    const edge = quiz.edges.find(
+      (e) =>
+        e.source === branchNodeId &&
+        e.source_handle === slot.id &&
+        !e.condition,
+    );
+    if (edge) return slot.id;
+  }
+  return data.slots[0]?.id ?? null;
+}
+
+// True if the edge's condition matches the current context. An undefined
+// condition always matches (unconditional edge).
+function edgeConditionMatches(
+  condition: { answer_id?: string; tag?: string; ab_slot?: string } | undefined,
+  ctx: BranchContext,
+): boolean {
+  if (!condition) return true;
+  if (condition.answer_id && !ctx.selectedAnswerIds.has(condition.answer_id)) {
+    return false;
+  }
+  if (condition.tag && !ctx.accumulatedTags.has(condition.tag)) {
+    return false;
+  }
+  // ab_slot conditions are matched by source_handle pick in pickBranchSlot,
+  // not here — but if explicitly set, require it to be the active assignment.
+  // (This lets authors write conditions like "ab_slot=A" on a downstream edge
+  // for analytics segmentation.)
+  return true;
+}
+
+// Walk forward from a node, transparently skipping branch nodes by picking
+// their slot and following the matching edge. Returns the first non-branch
+// node id reached (the actual UI step to render), or null if the flow ends.
+// Mutates ctx.abAssignments when branches assign new variants.
+export function resolveNextStep(
+  quiz: QuizDoc,
+  fromNodeId: string,
+  selectedAnswerHandle: string | null,
+  ctx: BranchContext,
+): string | null {
+  let next = nextNodeFor(quiz, fromNodeId, selectedAnswerHandle);
+  // Guard against pathological cycles in misauthored branch graphs.
+  const seen = new Set<string>();
+  while (next) {
+    const current: string = next;
+    if (seen.has(current)) return null;
+    seen.add(current);
+    const node = quiz.nodes.find((n) => n.id === current);
+    if (!node || node.type !== "branch") return current;
+    const slot = pickBranchSlot(quiz, current, ctx);
+    if (!slot) return null;
+    next = nextNodeFor(quiz, current, slot);
+  }
+  return null;
+}
