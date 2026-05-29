@@ -197,6 +197,76 @@ export function addEndNode(
   return { ...doc, nodes: [...doc.nodes, node], edges };
 }
 
+export function addIntegrationNode(
+  doc: QuizDoc,
+  anchorId: string | null,
+  anchorHandle?: string,
+): QuizDoc {
+  const id = uid("int");
+  const node: QuizNodeDoc = {
+    id,
+    type: "integration",
+    position: nextPosition(doc, anchorId),
+    data: {
+      label: "Integration",
+      continue_on_error: true,
+      actions: [
+        {
+          kind: "webhook",
+          url: "https://example.com/webhook",
+          label: "Outbound webhook",
+        },
+      ],
+    },
+  };
+  const edges = anchorId
+    ? [
+        ...doc.edges,
+        {
+          id: uid("e"),
+          source: anchorId,
+          target: id,
+          ...(anchorHandle ? { source_handle: anchorHandle } : {}),
+        },
+      ]
+    : doc.edges;
+  return { ...doc, nodes: [...doc.nodes, node], edges };
+}
+
+export function addProductCardsNode(
+  doc: QuizDoc,
+  anchorId: string | null,
+  anchorHandle?: string,
+): QuizDoc {
+  const id = uid("pc");
+  const node: QuizNodeDoc = {
+    id,
+    type: "product_cards",
+    position: nextPosition(doc, anchorId),
+    data: {
+      headline: "You might like these",
+      subtext: "",
+      // Seed with one empty placeholder ID so the schema validates; merchant
+      // edits in the drawer. Tests will replace with real IDs.
+      product_ids: ["placeholder"],
+      cta_label: "Shop",
+      continue_label: "Continue",
+    },
+  };
+  const edges = anchorId
+    ? [
+        ...doc.edges,
+        {
+          id: uid("e"),
+          source: anchorId,
+          target: id,
+          ...(anchorHandle ? { source_handle: anchorHandle } : {}),
+        },
+      ]
+    : doc.edges;
+  return { ...doc, nodes: [...doc.nodes, node], edges };
+}
+
 export function addAskAINode(
   doc: QuizDoc,
   anchorId: string | null,
@@ -414,8 +484,12 @@ export function removeAnswer(
     nodes: doc.nodes.map((n) => {
       if (n.id !== questionNodeId || n.type !== "question") return n;
       const remaining = n.data.answers.filter((a) => a.id !== answerId);
-      // Zod schema requires ≥2 answers per question; refuse if it would drop below.
-      if (remaining.length < 2) return n;
+      // Card-style types need ≥2 answers per the Zod refine; freeform
+      // types only need ≥1 (the seed). Refuse if it would drop below.
+      const isFreeform =
+        n.data.question_type === "text" || n.data.question_type === "email";
+      const minAnswers = isFreeform ? 1 : 2;
+      if (remaining.length < minAnswers) return n;
       return { ...n, data: { ...n.data, answers: remaining } };
     }),
     edges: handleId

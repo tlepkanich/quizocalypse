@@ -4,7 +4,28 @@ import { z } from "zod";
 // This is the single source of truth: the AI generator's Claude tool definition
 // (see jsonSchema below) and the validator both derive from it.
 
-export const QuestionType = z.enum(["single_select", "multi_select", "image_tile"]);
+export const QuestionType = z.enum([
+  "single_select",
+  "multi_select",
+  "image_tile",
+  // Phase 4: free-form inputs. The shopper types a value rather than
+  // picking from a card list. We still keep an answers[] in storage with a
+  // single "default" answer (so existing edge routing + tag-accumulation
+  // logic stays untouched), but the runtime renders an input field instead
+  // of answer cards. The typed string is captured into the path as the
+  // answer's text. Email type also runs HTML5 email validation client-side.
+  "text",
+  "email",
+  // Phase 6 conversational types:
+  // - searchable: vertical answer list with a search box on top that
+  //   substring-filters as the shopper types. Good for long lists like
+  //   brand / country / style pickers.
+  // - image_picker: dense thumbnail grid (vs image_tile's tall cards).
+  //   Same per-answer fields (image_url, text) but rendered as a
+  //   2–3 column grid where image dominates and text is a small caption.
+  "searchable",
+  "image_picker",
+]);
 export type QuestionType = z.infer<typeof QuestionType>;
 
 export const NodeType = z.enum([
@@ -16,6 +37,8 @@ export const NodeType = z.enum([
   "end",
   "branch",
   "ask_ai",
+  "integration",
+  "product_cards",
 ]);
 export type NodeType = z.infer<typeof NodeType>;
 
@@ -47,17 +70,53 @@ export const IntroData = z.object({
   hero_image_url: z.string().url().optional(),
 });
 
-export const QuestionData = z.object({
+// Optional config for the freeform input rendering (text / email types).
+// For card-based types this is ignored.
+export const QuestionInputConfig = z.object({
+  placeholder: z.string().default(""),
+  // Hard cap on input length so a stuck client can't dump arbitrary data.
+  // Defaults sized for typical inputs (name, short answer).
+  max_length: z.number().int().min(1).max(500).default(120),
+});
+export type QuestionInputConfig = z.infer<typeof QuestionInputConfig>;
+
+// Base z.object shape — exposed for tools that need `.shape` / `.pick` /
+// `.extend` (e.g. the AI regeneration tool schema in claude.ts). The
+// public `QuestionData` below adds the cross-field refine on top.
+export const QuestionDataObject = z.object({
   text: z.string().min(1),
   question_type: QuestionType,
   required: z.boolean().default(true),
   max_selections: z.number().int().positive().optional(),
-  answers: z.array(Answer).min(2),
+  // Card types need ≥2 answers; freeform types (text/email) only need a
+  // single seed answer so tag accumulation + edge routing keep working.
+  // The refine below enforces the per-type minimum.
+  answers: z.array(Answer).min(1),
+  // Only meaningful for text/email types.
+  input_config: QuestionInputConfig.optional(),
   // Mid-quiz product preview: when true, after this question is answered the
   // storefront opens a refining product list. Defaults off — only the
   // questions a merchant explicitly flags start the preview.
   show_preview_after: z.boolean().default(false),
 });
+
+export const QuestionData = QuestionDataObject.refine(
+  (q) => {
+    const cardTypes = [
+      "single_select",
+      "multi_select",
+      "image_tile",
+      "searchable",
+      "image_picker",
+    ];
+    if (cardTypes.includes(q.question_type)) return q.answers.length >= 2;
+    return true;
+  },
+  {
+    message: "Card-style question types require at least 2 answers.",
+    path: ["answers"],
+  },
+);
 
 export const EmailGateData = z.object({
   headline: z.string().min(1),
@@ -116,6 +175,71 @@ export const BranchData = z.object({
   slots: z.array(BranchSlot).min(2),
 });
 export type BranchData = z.infer<typeof BranchData>;
+
+// Outbound webhook action — fired server-side when the runtime reaches an
+// integration node. The secret is sent as a custom header so receivers can
+// verify the request actually came from this app (HMAC validation is the
+// receiver's responsibility — we don't currently sign the body, just pass
+// the secret verbatim for the receiver to match).
+export const IntegrationWebhookAction = z.object({
+  kind: z.literal("webhook"),
+  url: z.string().url(),
+  // Sent as the `X-Quizocalypse-Secret` header. Optional. Stored server-side
+  // only — never echoed back to the storefront client.
+  secret: z.string().optional(),
+  // Friendly label so the merchant can tell webhooks apart in the canvas.
+  label: z.string().default("Outbound webhook"),
+});
+
+// Klaviyo profile-sync action. Fires a Klaviyo Profile API upsert with the
+// shopper's email + answers as custom properties so the merchant's email
+// flows can segment on quiz responses. Requires a Klaviyo private API key
+// scoped to Profile:Write; list_id optional (omit to just create/update the
+// profile without list subscription).
+export const IntegrationKlaviyoAction = z.object({
+  kind: z.literal("klaviyo"),
+  // Klaviyo private API key (pk_xxxxx). Stored server-side only.
+  api_key: z.string().min(1),
+  // Optional list ID — if set, the profile is subscribed to this list as
+  // well as upserted. Klaviyo list IDs are 6-character codes.
+  list_id: z.string().optional(),
+  label: z.string().default("Klaviyo profile sync"),
+});
+
+export const IntegrationAction = z.discriminatedUnion("kind", [
+  IntegrationWebhookAction,
+  IntegrationKlaviyoAction,
+]);
+export type IntegrationAction = z.infer<typeof IntegrationAction>;
+
+// Integration node — invisible to shoppers (like branch). When the runtime
+// reaches one, the storefront POSTs to /q/:id/integration with the session
+// payload; the server fires every configured action and the runtime
+// auto-advances to the next node.
+export const IntegrationData = z.object({
+  label: z.string().default("Integration"),
+  actions: z.array(IntegrationAction).min(1),
+  // If true, runtime advances even if every action errored. Default: yes —
+  // we don't want a broken Zapier endpoint to dead-end the shopper.
+  continue_on_error: z.boolean().default(true),
+});
+export type IntegrationData = z.infer<typeof IntegrationData>;
+
+// ProductCards — a visible step that showcases merchant-picked products.
+// Distinct from result (which uses the recommendation engine on the path
+// answers) and from the mid-quiz preview rail (which refines as answers
+// accumulate). Useful for "before we move on, check these out" moments and
+// for nudging upsells partway through.
+export const ProductCardsData = z.object({
+  headline: z.string().min(1),
+  subtext: z.string().default(""),
+  // Storefront product IDs to render as cards. Min 1, max 6 (UI gets
+  // unwieldy beyond that).
+  product_ids: z.array(z.string().min(1)).min(1).max(6),
+  cta_label: z.string().default("Shop"),
+  continue_label: z.string().default("Continue"),
+});
+export type ProductCardsData = z.infer<typeof ProductCardsData>;
 
 // AskAI — multi-turn conversational layer. Renders a chat panel where the
 // shopper can ask follow-up questions in natural language; Claude responds
@@ -188,6 +312,18 @@ export const QuizNode = z.discriminatedUnion("type", [
     type: z.literal("ask_ai"),
     position: Position,
     data: AskAIData,
+  }),
+  z.object({
+    id: z.string().min(1),
+    type: z.literal("integration"),
+    position: Position,
+    data: IntegrationData,
+  }),
+  z.object({
+    id: z.string().min(1),
+    type: z.literal("product_cards"),
+    position: Position,
+    data: ProductCardsData,
   }),
 ]);
 export type QuizNode = z.infer<typeof QuizNode>;
@@ -269,6 +405,29 @@ export const DesignTokens = z
   .partial();
 export type DesignTokens = z.infer<typeof DesignTokens>;
 
+// Floating launcher config: when set + `enabled: true`, the storefront can
+// embed /q/:id/launcher.js to render a floating button anywhere on the
+// merchant's site. Clicking the button opens the quiz inside a modal iframe.
+// Existing inline embedding via the Theme App Extension keeps working —
+// this is an *additional* embed mode, not a replacement.
+export const LauncherConfig = z.object({
+  enabled: z.boolean().default(false),
+  // The visible affordance the shopper clicks. Sparkle is the spec default;
+  // star/chat are alternatives for stores that already use sparkle for AI.
+  icon: z.enum(["sparkle", "star", "chat"]).default("sparkle"),
+  // Pin corner. We keep this restricted — full positional control invites
+  // overlap with merchant chrome.
+  corner: z
+    .enum(["bottom-right", "bottom-left", "top-right", "top-left"])
+    .default("bottom-right"),
+  // Button background color. Falls back to the quiz primary token when
+  // unset so the launcher matches brand without extra config.
+  color: z.string().optional(),
+  // Optional pre-click pill label that draws attention. Empty hides it.
+  label: z.string().default(""),
+});
+export type LauncherConfig = z.infer<typeof LauncherConfig>;
+
 export const Quiz = z.object({
   quiz_id: z.string().min(1),
   status: QuizStatus.default("draft"),
@@ -296,6 +455,14 @@ export const Quiz = z.object({
       }),
     )
     .default({}),
+  // Phase 6: floating launcher embed mode. Disabled by default so existing
+  // inline-embed quizzes don't suddenly grow a floating button.
+  launcher_config: LauncherConfig.default({
+    enabled: false,
+    icon: "sparkle",
+    corner: "bottom-right",
+    label: "",
+  }),
 });
 export type Quiz = z.infer<typeof Quiz>;
 
@@ -342,6 +509,8 @@ export const quizToolJsonSchema = {
               "end",
               "branch",
               "ask_ai",
+              "integration",
+              "product_cards",
             ],
           },
           position: {
@@ -356,13 +525,15 @@ export const quizToolJsonSchema = {
             type: "object",
             description:
               "Node-type-specific payload. For type=intro: { headline, subtext?, button_label?, hero_image_url? }. " +
-              "For type=question: { text, question_type ('single_select'|'multi_select'|'image_tile'), required?, max_selections?, show_preview_after? (boolean, default false), answers: [{id, text, image_url?, tags[], collection_filter?, edge_handle_id}] (≥2 answers) }. " +
+              "For type=question: { text, question_type ('single_select'|'multi_select'|'image_tile'|'text'|'email'|'searchable'|'image_picker'), required?, max_selections?, show_preview_after? (boolean, default false), input_config? ({ placeholder?, max_length? }) — used only for text/email types, answers: [{id, text, image_url?, tags[], collection_filter?, edge_handle_id}]. Card types (single_select/multi_select/image_tile/searchable/image_picker) require ≥2 answers; freeform types (text/email) need ≥1 seed answer for tag accumulation. }. " +
               "For type=email_gate: { headline, subtext?, email_required?, name_optional?, skip_allowed? }. " +
               "For type=result: { headline, subtext?, slot_count? (1..6), cta_label?, fallback_collection_id }. " +
               "For type=message: { text, supports_merge_tags? }. " +
               "For type=end: { headline, subtext?, redirect_url?, cta_label?, cta_url? }. " +
               "For type=branch: { label?, mode ('rules'|'ab_split'), slots: [{id, label, weight?}] (≥2 slots) }. Branch nodes auto-advance; outgoing edges must carry source_handle = slot id and an EdgeCondition (answer_id|tag|ab_slot). " +
-              "For type=ask_ai: { system_prompt, persona_name?, opening_message, suggested_questions[]?, max_turns? (1..20, default 6), continue_label? }. Renders a chat panel; backend calls Claude with the path-derived context.",
+              "For type=ask_ai: { system_prompt, persona_name?, opening_message, suggested_questions[]?, max_turns? (1..20, default 6), continue_label? }. Renders a chat panel; backend calls Claude with the path-derived context. " +
+              "For type=integration: { label?, actions: [{kind:'webhook', url, secret?, label?}] (≥1), continue_on_error? (default true) }. Invisible node — runtime fires actions server-side then auto-advances. " +
+              "For type=product_cards: { headline, subtext?, product_ids[] (1..6 storefront product IDs), cta_label?, continue_label? }. Visible step showcasing merchant-picked products.",
           },
         },
       },

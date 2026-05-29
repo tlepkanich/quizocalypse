@@ -2,9 +2,68 @@
 // Persistent in-iframe sidebar nav for the admin. Three sections grouped
 // per the Grid Notebook redesign. Counts come from the app-route loader so
 // they stay live across screens.
+//
+// Mobile: under 900px the sidebar collapses to a horizontally-scrolling top
+// strip and the layout switches from row to column. The styles use
+// !important because the markup carries inline `style={...}` props inherited
+// from when this was desktop-only — easier than re-plumbing every callsite.
 
 import { Link, useLocation } from "@remix-run/react";
 import type { ReactNode } from "react";
+
+const SIDEBAR_MOBILE_CSS = `
+@media (max-width: 899px) {
+  .qz-sidebar-layout {
+    flex-direction: column !important;
+  }
+  .qz-sidebar {
+    width: 100% !important;
+    height: auto !important;
+    position: static !important;
+    padding: 12px 16px !important;
+    border-right: none !important;
+    border-bottom: 1px solid var(--qz-rule);
+    overflow-x: auto;
+  }
+  .qz-sidebar > div:first-child {
+    padding: 0 0 8px !important;
+    border-bottom: none !important;
+  }
+  .qz-sidebar nav {
+    display: flex !important;
+    flex-direction: row;
+    gap: 4px;
+    padding: 4px 0 !important;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  .qz-sidebar nav > .qz-sidebar-section {
+    padding: 0 !important;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    flex-shrink: 0;
+  }
+  .qz-sidebar nav > .qz-sidebar-section .qz-label {
+    display: none;
+  }
+  .qz-sidebar nav a {
+    padding: 6px 10px !important;
+    border-left: none !important;
+    border-radius: 6px;
+    white-space: nowrap;
+    font-size: 13px !important;
+  }
+  /* Generic page content needs to flex/scroll vs being constrained */
+  .qz-main {
+    padding: 16px !important;
+  }
+  /* Two-column dashboard / page grids fall to single column */
+  .qz-responsive-grid {
+    grid-template-columns: 1fr !important;
+  }
+}
+`;
 
 interface NavItem {
   label: string;
@@ -50,6 +109,7 @@ export function Sidebar({
 
   return (
     <aside
+      className="qz-sidebar"
       style={{
         width: 240,
         flexShrink: 0,
@@ -94,7 +154,10 @@ function SidebarSection({
   first: boolean;
 }) {
   return (
-    <div style={{ padding: first ? "0 0 12px" : "12px 0" }}>
+    <div
+      className="qz-sidebar-section"
+      style={{ padding: first ? "0 0 12px" : "12px 0" }}
+    >
       <div
         className="qz-label"
         style={{ padding: "8px 24px", color: "var(--qz-ink-4)" }}
@@ -156,8 +219,14 @@ function SidebarItem({ item }: { item: NavItem }) {
 
 export function SidebarLayout({ children }: { children: ReactNode }) {
   return (
-    <div style={{ display: "flex", minHeight: "100vh" }}>
-      {children}
-    </div>
+    <>
+      <style>{SIDEBAR_MOBILE_CSS}</style>
+      <div
+        className="qz-sidebar-layout"
+        style={{ display: "flex", minHeight: "100vh" }}
+      >
+        {children}
+      </div>
+    </>
   );
 }

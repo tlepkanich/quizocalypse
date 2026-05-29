@@ -2,9 +2,13 @@ import { describe, expect, it } from "vitest";
 import {
   AskAIData,
   EndData,
+  IntegrationData,
   MessageData,
+  ProductCardsData,
   Quiz,
   QuizNode,
+  QuestionData,
+  QuestionInputConfig,
 } from "./quizSchema";
 
 const validQuiz = {
@@ -233,6 +237,67 @@ describe("AskAIData", () => {
   });
 });
 
+describe("Freeform question types (text / email)", () => {
+  const baseAnswer = {
+    id: "a1",
+    text: "Your input",
+    tags: ["user-provided"],
+    edge_handle_id: "h1",
+  };
+
+  it("accepts a text question with a single seed answer", () => {
+    const parsed = QuestionData.parse({
+      text: "What's your favorite color?",
+      question_type: "text",
+      answers: [baseAnswer],
+    });
+    expect(parsed.question_type).toBe("text");
+    expect(parsed.answers).toHaveLength(1);
+  });
+
+  it("accepts an email question with a single seed answer", () => {
+    const parsed = QuestionData.parse({
+      text: "Where should we send your results?",
+      question_type: "email",
+      answers: [baseAnswer],
+    });
+    expect(parsed.question_type).toBe("email");
+  });
+
+  it("still rejects single_select with only one answer", () => {
+    expect(() =>
+      QuestionData.parse({
+        text: "Pick one",
+        question_type: "single_select",
+        answers: [baseAnswer],
+      }),
+    ).toThrow(/at least 2 answers/);
+  });
+
+  it("allows input_config for freeform types", () => {
+    const parsed = QuestionData.parse({
+      text: "Tell us more",
+      question_type: "text",
+      answers: [baseAnswer],
+      input_config: { placeholder: "Type here…", max_length: 200 },
+    });
+    expect(parsed.input_config?.placeholder).toBe("Type here…");
+    expect(parsed.input_config?.max_length).toBe(200);
+  });
+
+  it("input_config caps max_length at 500", () => {
+    expect(() =>
+      QuestionInputConfig.parse({ max_length: 501 }),
+    ).toThrow();
+  });
+
+  it("input_config defaults max_length to 120", () => {
+    const parsed = QuestionInputConfig.parse({});
+    expect(parsed.max_length).toBe(120);
+    expect(parsed.placeholder).toBe("");
+  });
+});
+
 describe("ask_ai node integration", () => {
   it("parses inside a Quiz as a discriminated node", () => {
     const node = QuizNode.parse({
@@ -249,5 +314,262 @@ describe("ask_ai node integration", () => {
       expect(node.data.persona_name).toBe("Assistant");
       expect(node.data.max_turns).toBe(6);
     }
+  });
+});
+
+describe("IntegrationData", () => {
+  it("requires at least one action", () => {
+    expect(() => IntegrationData.parse({ actions: [] })).toThrow();
+  });
+
+  it("defaults continue_on_error to true", () => {
+    const parsed = IntegrationData.parse({
+      actions: [{ kind: "webhook", url: "https://x.example.com/h" }],
+    });
+    expect(parsed.continue_on_error).toBe(true);
+    expect(parsed.label).toBe("Integration");
+  });
+
+  it("rejects non-URL webhook targets", () => {
+    expect(() =>
+      IntegrationData.parse({
+        actions: [{ kind: "webhook", url: "not-a-url" }],
+      }),
+    ).toThrow();
+  });
+
+  it("accepts a webhook with secret + label", () => {
+    const parsed = IntegrationData.parse({
+      label: "Klaviyo sync",
+      actions: [
+        {
+          kind: "webhook",
+          url: "https://hooks.example.com/in",
+          secret: "topsecret",
+          label: "Klaviyo profile update",
+        },
+      ],
+      continue_on_error: false,
+    });
+    const first = parsed.actions[0];
+    if (first?.kind === "webhook") {
+      expect(first.secret).toBe("topsecret");
+    }
+    expect(parsed.continue_on_error).toBe(false);
+  });
+
+  it("accepts a klaviyo action with list_id", () => {
+    const parsed = IntegrationData.parse({
+      actions: [
+        {
+          kind: "klaviyo",
+          api_key: "pk_test",
+          list_id: "UPxyz1",
+        },
+      ],
+    });
+    const first = parsed.actions[0];
+    expect(first?.kind).toBe("klaviyo");
+    if (first?.kind === "klaviyo") {
+      expect(first.api_key).toBe("pk_test");
+      expect(first.list_id).toBe("UPxyz1");
+      expect(first.label).toBe("Klaviyo profile sync");
+    }
+  });
+
+  it("rejects a klaviyo action without api_key", () => {
+    expect(() =>
+      IntegrationData.parse({
+        actions: [{ kind: "klaviyo", api_key: "" }],
+      }),
+    ).toThrow();
+  });
+});
+
+describe("ProductCardsData", () => {
+  it("requires headline + ≥1 product id", () => {
+    expect(() =>
+      ProductCardsData.parse({ headline: "", product_ids: ["gid://x/1"] }),
+    ).toThrow();
+    expect(() =>
+      ProductCardsData.parse({ headline: "Picks", product_ids: [] }),
+    ).toThrow();
+  });
+
+  it("caps product_ids at 6", () => {
+    expect(() =>
+      ProductCardsData.parse({
+        headline: "Picks",
+        product_ids: Array.from({ length: 7 }, (_, i) => `gid://x/${i}`),
+      }),
+    ).toThrow();
+  });
+
+  it("applies cta_label and continue_label defaults", () => {
+    const parsed = ProductCardsData.parse({
+      headline: "Have a look",
+      product_ids: ["gid://x/1"],
+    });
+    expect(parsed.cta_label).toBe("Shop");
+    expect(parsed.continue_label).toBe("Continue");
+    expect(parsed.subtext).toBe("");
+  });
+});
+
+describe("integration + product_cards node integration", () => {
+  it("parses both new node types under the discriminated union", () => {
+    const intNode = QuizNode.parse({
+      id: "int1",
+      type: "integration",
+      position: { x: 0, y: 0 },
+      data: {
+        actions: [{ kind: "webhook", url: "https://x.example.com/h" }],
+      },
+    });
+    expect(intNode.type).toBe("integration");
+
+    const pcNode = QuizNode.parse({
+      id: "pc1",
+      type: "product_cards",
+      position: { x: 0, y: 0 },
+      data: {
+        headline: "Picks for you",
+        product_ids: ["gid://shopify/Product/1"],
+      },
+    });
+    expect(pcNode.type).toBe("product_cards");
+  });
+});
+
+describe("Phase 6 question types", () => {
+  it("accepts question_type=searchable with ≥2 answers", () => {
+    expect(() =>
+      QuestionData.parse({
+        text: "Pick a brand",
+        question_type: "searchable",
+        answers: [
+          { id: "a1", text: "Nike", tags: ["nike"], edge_handle_id: "h1" },
+          { id: "a2", text: "Adidas", tags: ["adidas"], edge_handle_id: "h2" },
+        ],
+      }),
+    ).not.toThrow();
+  });
+
+  it("rejects searchable with only 1 answer", () => {
+    expect(() =>
+      QuestionData.parse({
+        text: "Pick a brand",
+        question_type: "searchable",
+        answers: [{ id: "a1", text: "Nike", tags: [], edge_handle_id: "h1" }],
+      }),
+    ).toThrow(/at least 2 answers/);
+  });
+
+  it("accepts image_picker with ≥2 answers", () => {
+    expect(() =>
+      QuestionData.parse({
+        text: "Pick a style",
+        question_type: "image_picker",
+        answers: [
+          {
+            id: "a1",
+            text: "Casual",
+            tags: ["casual"],
+            edge_handle_id: "h1",
+            image_url: "https://example.com/casual.jpg",
+          },
+          {
+            id: "a2",
+            text: "Formal",
+            tags: ["formal"],
+            edge_handle_id: "h2",
+            image_url: "https://example.com/formal.jpg",
+          },
+        ],
+      }),
+    ).not.toThrow();
+  });
+});
+
+describe("LauncherConfig", () => {
+  it("defaults to disabled with sparkle/bottom-right", () => {
+    const parsed = Quiz.parse({
+      quiz_id: "test",
+      scope: { collection_ids: [] },
+      nodes: [
+        {
+          id: "intro",
+          type: "intro",
+          position: { x: 0, y: 0 },
+          data: { headline: "Hi" },
+        },
+        {
+          id: "end",
+          type: "end",
+          position: { x: 100, y: 0 },
+          data: { headline: "Bye" },
+        },
+      ],
+    });
+    expect(parsed.launcher_config.enabled).toBe(false);
+    expect(parsed.launcher_config.icon).toBe("sparkle");
+    expect(parsed.launcher_config.corner).toBe("bottom-right");
+    expect(parsed.launcher_config.label).toBe("");
+  });
+
+  it("accepts custom icon + color + label", () => {
+    const parsed = Quiz.parse({
+      quiz_id: "test",
+      scope: { collection_ids: [] },
+      launcher_config: {
+        enabled: true,
+        icon: "star",
+        corner: "top-left",
+        color: "#FF3D00",
+        label: "Take the quiz",
+      },
+      nodes: [
+        {
+          id: "intro",
+          type: "intro",
+          position: { x: 0, y: 0 },
+          data: { headline: "Hi" },
+        },
+        {
+          id: "end",
+          type: "end",
+          position: { x: 100, y: 0 },
+          data: { headline: "Bye" },
+        },
+      ],
+    });
+    expect(parsed.launcher_config.enabled).toBe(true);
+    expect(parsed.launcher_config.icon).toBe("star");
+    expect(parsed.launcher_config.color).toBe("#FF3D00");
+    expect(parsed.launcher_config.label).toBe("Take the quiz");
+  });
+
+  it("rejects unknown icon values", () => {
+    expect(() =>
+      Quiz.parse({
+        quiz_id: "test",
+        scope: { collection_ids: [] },
+        launcher_config: { enabled: true, icon: "rocket" },
+        nodes: [
+          {
+            id: "intro",
+            type: "intro",
+            position: { x: 0, y: 0 },
+            data: { headline: "Hi" },
+          },
+          {
+            id: "end",
+            type: "end",
+            position: { x: 100, y: 0 },
+            data: { headline: "Bye" },
+          },
+        ],
+      }),
+    ).toThrow();
   });
 });

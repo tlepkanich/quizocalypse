@@ -79,6 +79,17 @@ export async function publishQuiz(
     )
     .filter((x): x is string => !!x);
 
+  // Hand-picked products from product_cards nodes must be available even if
+  // they're not in any scoped collection — otherwise a curated showcase
+  // step would render empty. Collect those IDs and include them unconditionally.
+  const explicitProductIds = new Set<string>(
+    doc.nodes
+      .filter((n) => n.type === "product_cards")
+      .flatMap((n) =>
+        n.type === "product_cards" ? n.data.product_ids : [],
+      ),
+  );
+
   const scopeIds = new Set<string>([
     ...doc.scope.collection_ids,
     ...fallbackCollectionIds,
@@ -91,9 +102,11 @@ export async function publishQuiz(
 
   const productIndex: IndexedProduct[] = products
     .filter((p) =>
-      scopeIds.size === 0
+      explicitProductIds.has(p.productId)
         ? true
-        : p.collectionIds.some((c) => scopeIds.has(c)),
+        : scopeIds.size === 0
+          ? true
+          : p.collectionIds.some((c) => scopeIds.has(c)),
     )
     .map((p) => {
       const variants = (p.variants ?? []) as Array<{ inventoryQuantity?: number | null }>;

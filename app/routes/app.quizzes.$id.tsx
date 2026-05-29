@@ -57,7 +57,9 @@ import {
   addEdge as addQuizEdge,
   addEmailGateNode,
   addEndNode,
+  addIntegrationNode,
   addMessageNode,
+  addProductCardsNode,
   addQuestionNode,
   addResultNode,
   deleteEdge as deleteQuizEdge,
@@ -384,6 +386,8 @@ function QuestionNodeView({ data }: NodeProps) {
   const d = data as NodeData;
   if (d.doc.type !== "question") return null;
   const answers = d.doc.data.answers;
+  const isFreeform =
+    d.doc.data.question_type === "text" || d.doc.data.question_type === "email";
   return (
     <NodeShell accent="#2C7A4B" label={`question · ${d.doc.data.question_type}`} issues={d.issues} hasDrift={d.hasDrift}>
       <Handle type="target" position={Position.Left} />
@@ -395,7 +399,9 @@ function QuestionNodeView({ data }: NodeProps) {
         }
         multiline
       />
-      <div style={{ marginTop: 8, fontSize: 11, color: "var(--qz-ink-3)" }}>Answers</div>
+      <div style={{ marginTop: 8, fontSize: 11, color: "var(--qz-ink-3)" }}>
+        {isFreeform ? "Seed answer (drives tags + routing)" : "Answers"}
+      </div>
       {answers.map((answer, idx) => (
         <div key={answer.id} style={{ position: "relative" }}>
           <InlineNoDrag>
@@ -412,7 +418,7 @@ function QuestionNodeView({ data }: NodeProps) {
                 });
               }}
             />
-            {answers.length > 2 && (
+            {answers.length > (isFreeform ? 1 : 2) && (
               <button
                 type="button"
                 onClick={() => d.onRemoveAnswer(d.doc.id, answer.id)}
@@ -441,15 +447,17 @@ function QuestionNodeView({ data }: NodeProps) {
           />
         </div>
       ))}
-      <InlineNoDrag>
-        <button
-          type="button"
-          onClick={() => d.onAddAnswer(d.doc.id)}
-          style={btnGhost}
-        >
-          + Add answer
-        </button>
-      </InlineNoDrag>
+      {!isFreeform && (
+        <InlineNoDrag>
+          <button
+            type="button"
+            onClick={() => d.onAddAnswer(d.doc.id)}
+            style={btnGhost}
+          >
+            + Add answer
+          </button>
+        </InlineNoDrag>
+      )}
     </NodeShell>
   );
 }
@@ -693,6 +701,82 @@ function AskAINodeView({ data }: NodeProps) {
   );
 }
 
+function IntegrationNodeView({ data }: NodeProps) {
+  const d = data as NodeData;
+  if (d.doc.type !== "integration") return null;
+  const intData = d.doc.data;
+  return (
+    <NodeShell
+      accent="#A855F7"
+      label="integration · auto"
+      handles="both"
+      issues={d.issues}
+      hasDrift={d.hasDrift}
+      onPlus={() => d.onHandlePlus(d.doc.id)}
+    >
+      <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 6 }}>
+        {intData.label}
+      </div>
+      <div style={{ fontSize: 10, color: "var(--qz-ink-3)", marginBottom: 4 }}>
+        {intData.actions.length} action{intData.actions.length === 1 ? "" : "s"}
+      </div>
+      {intData.actions.map((a, i) => (
+        <div
+          key={i}
+          style={{
+            fontSize: 10,
+            color: "var(--qz-ink-2)",
+            fontFamily: "var(--qz-font-mono)",
+            padding: "2px 6px",
+            background: "var(--qz-cream-2)",
+            borderRadius: 3,
+            marginBottom: 3,
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            whiteSpace: "nowrap",
+          }}
+        >
+          {a.kind === "webhook"
+            ? `webhook: ${a.url.replace(/^https?:\/\//, "")}`
+            : `klaviyo${a.list_id ? `: list ${a.list_id}` : ""}`}
+        </div>
+      ))}
+      <div style={{ fontSize: 10, color: "var(--qz-ink-4)", marginTop: 4 }}>
+        {intData.continue_on_error ? "continues on error" : "stops on error"}
+      </div>
+    </NodeShell>
+  );
+}
+
+function ProductCardsNodeView({ data }: NodeProps) {
+  const d = data as NodeData;
+  if (d.doc.type !== "product_cards") return null;
+  const pcData = d.doc.data;
+  return (
+    <NodeShell
+      accent="#16A085"
+      label={`product cards · ${pcData.product_ids.length}`}
+      handles="both"
+      issues={d.issues}
+      hasDrift={d.hasDrift}
+      onPlus={() => d.onHandlePlus(d.doc.id)}
+    >
+      <NodeField
+        label="Headline"
+        value={pcData.headline}
+        onChange={(v) =>
+          d.onChange({ ...d.doc, data: { ...d.doc.data, headline: v } as never })
+        }
+      />
+      <div style={{ fontSize: 10, color: "var(--qz-ink-3)", marginTop: 6 }}>
+        {pcData.product_ids.length} product{pcData.product_ids.length === 1 ? "" : "s"}
+        {" · "}
+        CTA: {pcData.cta_label}
+      </div>
+    </NodeShell>
+  );
+}
+
 const nodeTypes = {
   intro: IntroNodeView,
   question: QuestionNodeView,
@@ -702,6 +786,8 @@ const nodeTypes = {
   end: EndNodeView,
   branch: BranchNodeView,
   ask_ai: AskAINodeView,
+  integration: IntegrationNodeView,
+  product_cards: ProductCardsNodeView,
 };
 
 // Small "+" button that floats off the right edge of a source handle. Opens
@@ -1129,7 +1215,9 @@ function FlowBuilder({
         | "message"
         | "end"
         | "branch"
-        | "ask_ai",
+        | "ask_ai"
+        | "integration"
+        | "product_cards",
     ) => {
       setAddMenuOpen(false);
       const anchor = selectedId;
@@ -1139,6 +1227,9 @@ function FlowBuilder({
       else if (kind === "end") commit(addEndNode(doc, anchor));
       else if (kind === "branch") commit(addBranchNode(doc, anchor));
       else if (kind === "ask_ai") commit(addAskAINode(doc, anchor));
+      else if (kind === "integration") commit(addIntegrationNode(doc, anchor));
+      else if (kind === "product_cards")
+        commit(addProductCardsNode(doc, anchor));
       else {
         const fallback = collections[0]?.collectionId ?? "";
         commit(addResultNode(doc, anchor, fallback));
@@ -1159,7 +1250,9 @@ function FlowBuilder({
         | "message"
         | "end"
         | "branch"
-        | "ask_ai",
+        | "ask_ai"
+        | "integration"
+        | "product_cards",
     ) => {
       if (!pickerSource) return;
       const anchor = pickerSource.nodeId;
@@ -1172,6 +1265,10 @@ function FlowBuilder({
       else if (kind === "end") next = addEndNode(doc, anchor, handle);
       else if (kind === "branch") next = addBranchNode(doc, anchor, handle);
       else if (kind === "ask_ai") next = addAskAINode(doc, anchor, handle);
+      else if (kind === "integration")
+        next = addIntegrationNode(doc, anchor, handle);
+      else if (kind === "product_cards")
+        next = addProductCardsNode(doc, anchor, handle);
       else {
         const fallback = collections[0]?.collectionId ?? "";
         next = addResultNode(doc, anchor, fallback, handle);
@@ -1335,7 +1432,9 @@ function FlowBuilder({
                         ["Add question", "question"],
                         ["Add message", "message"],
                         ["Add Ask AI", "ask_ai"],
+                        ["Add product cards", "product_cards"],
                         ["Add branch", "branch"],
+                        ["Add integration", "integration"],
                         ["Add email gate", "email_gate"],
                         ["Add result", "result"],
                         ["Add end", "end"],
@@ -1785,6 +1884,8 @@ function NodePreview({
   }
 
   if (node.type === "question") {
+    const isFreeform =
+      node.data.question_type === "text" || node.data.question_type === "email";
     return (
       <div style={vars}>
         <div style={cardStyle}>
@@ -1796,28 +1897,48 @@ function NodePreview({
           >
             {node.data.text || "Question"}
           </h2>
-          <div
-            style={{
-              marginTop: 16,
-              display: "grid",
-              gap: 10,
-            }}
-          >
-            {node.data.answers.map((a) => (
+          {isFreeform ? (
+            <div style={{ marginTop: 16, display: "grid", gap: 10 }}>
               <div
-                key={a.id}
                 style={{
-                  padding: "var(--qz-pad)",
+                  padding: "12px 14px",
                   borderRadius: "var(--qz-radius)",
-                  border: "2px solid #00000022",
-                  color: "var(--qz-color-text)",
+                  border: "1px solid #00000022",
+                  color: "var(--qz-color-muted)",
                   fontSize: "var(--qz-base-size)",
                 }}
               >
-                {a.text || "(answer)"}
+                {node.data.input_config?.placeholder ||
+                  (node.data.question_type === "email"
+                    ? "you@example.com"
+                    : "Type here…")}
               </div>
-            ))}
-          </div>
+              <button style={btnStyle}>Continue</button>
+            </div>
+          ) : (
+            <div
+              style={{
+                marginTop: 16,
+                display: "grid",
+                gap: 10,
+              }}
+            >
+              {node.data.answers.map((a) => (
+                <div
+                  key={a.id}
+                  style={{
+                    padding: "var(--qz-pad)",
+                    borderRadius: "var(--qz-radius)",
+                    border: "2px solid #00000022",
+                    color: "var(--qz-color-text)",
+                    fontSize: "var(--qz-base-size)",
+                  }}
+                >
+                  {a.text || "(answer)"}
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
     );
@@ -2025,6 +2146,108 @@ function NodePreview({
     );
   }
 
+  // integration: invisible to shoppers — only flashes briefly. Surface the
+  // configured action count + URLs so authors can verify what'll fire.
+  if (node.type === "integration") {
+    return (
+      <div style={vars}>
+        <div style={{ ...cardStyle, textAlign: "center" }}>
+          <div
+            className="qz-label"
+            style={{ color: "var(--qz-color-muted)", marginBottom: 6 }}
+          >
+            Integration · auto-fires
+          </div>
+          <h2 style={{ ...headingStyle, fontSize: "var(--qz-h2-size)" }}>
+            {node.data.label}
+          </h2>
+          <p style={{ ...subStyle, fontSize: 13 }}>
+            Shoppers don&apos;t see this — they&apos;ll see a brief
+            &quot;Saving…&quot; while {node.data.actions.length} action
+            {node.data.actions.length === 1 ? "" : "s"} fire server-side.
+          </p>
+          <div
+            style={{
+              marginTop: 10,
+              textAlign: "left",
+              fontSize: 11,
+              fontFamily: "monospace",
+            }}
+          >
+            {node.data.actions.map((a, i) => (
+              <div
+                key={i}
+                style={{
+                  padding: "4px 8px",
+                  background: "#00000010",
+                  borderRadius: 4,
+                  marginBottom: 4,
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                {a.kind === "webhook"
+                  ? `POST ${a.url}`
+                  : `Klaviyo upsert${a.list_id ? ` → list ${a.list_id}` : ""}`}
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // product_cards: shoppers see a row/grid of cards. Render dimmed
+  // placeholders since the editor doesn't have product_index handy here.
+  if (node.type === "product_cards") {
+    return (
+      <div style={vars}>
+        <div style={cardStyle}>
+          <h2 style={{ ...headingStyle, fontSize: "var(--qz-h2-size)" }}>
+            {node.data.headline}
+          </h2>
+          {node.data.subtext && (
+            <p style={subStyle}>{node.data.subtext}</p>
+          )}
+          <div
+            style={{
+              marginTop: 12,
+              display: "grid",
+              gridTemplateColumns: `repeat(${Math.min(node.data.product_ids.length, 3)}, 1fr)`,
+              gap: 8,
+            }}
+          >
+            {node.data.product_ids.map((pid, i) => (
+              <div
+                key={i}
+                style={{
+                  background: "#00000010",
+                  borderRadius: "var(--qz-radius)",
+                  padding: 8,
+                  fontSize: 11,
+                  color: "var(--qz-color-muted)",
+                  textAlign: "center",
+                  minHeight: 80,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                }}
+              >
+                {pid.length > 24 ? `${pid.slice(0, 14)}…` : pid}
+              </div>
+            ))}
+          </div>
+          <button style={{ ...btnStyle, marginTop: 12 }}>
+            {node.data.continue_label}
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   // branch: shoppers never see a branch directly — runtime auto-advances.
   // Surface this fact in the drawer Preview so authors aren't confused.
   if (node.type === "branch") {
@@ -2124,6 +2347,10 @@ function nodeLabel(node: QuizNodeDoc): string {
       return `Branch · ${node.data.label}`;
     case "ask_ai":
       return `Ask AI · ${node.data.persona_name}`;
+    case "integration":
+      return `Integration · ${node.data.label}`;
+    case "product_cards":
+      return `Product cards · ${node.data.headline}`;
   }
 }
 
@@ -2166,8 +2393,68 @@ function ContentTab({
             <option value="single_select">Single select</option>
             <option value="multi_select">Multi select</option>
             <option value="image_tile">Image tile</option>
+            <option value="image_picker">Image picker (grid)</option>
+            <option value="searchable">Searchable</option>
+            <option value="text">Text input</option>
+            <option value="email">Email input</option>
           </QzSelect>
         </QzField>
+        {(node.data.question_type === "text" ||
+          node.data.question_type === "email") && (
+          <>
+            <QzField
+              label="Input placeholder"
+              hint="Shown in the empty field — e.g. 'Your favorite colour'."
+            >
+              <QzInput
+                value={node.data.input_config?.placeholder ?? ""}
+                onChange={(e) =>
+                  onChange({
+                    ...node,
+                    data: {
+                      ...node.data,
+                      input_config: {
+                        ...(node.data.input_config ?? {
+                          placeholder: "",
+                          max_length: 120,
+                        }),
+                        placeholder: e.target.value,
+                      },
+                    } as never,
+                  })
+                }
+              />
+            </QzField>
+            <QzField label="Max length" hint="1–500 characters">
+              <QzInput
+                type="number"
+                value={String(node.data.input_config?.max_length ?? 120)}
+                onChange={(e) =>
+                  onChange({
+                    ...node,
+                    data: {
+                      ...node.data,
+                      input_config: {
+                        placeholder: node.data.input_config?.placeholder ?? "",
+                        max_length: Math.max(
+                          1,
+                          Math.min(500, Number(e.target.value) || 1),
+                        ),
+                      },
+                    } as never,
+                  })
+                }
+              />
+            </QzField>
+            <p
+              className="qz-muted"
+              style={{ fontSize: 12, margin: 0 }}
+            >
+              The shopper&apos;s typed value becomes the answer text. Edit the
+              seeded answer below to control which tags get accumulated.
+            </p>
+          </>
+        )}
         {node.data.question_type === "multi_select" && (
           <QzField label="Max selections (optional)">
             <QzInput
@@ -2536,6 +2823,347 @@ function ContentTab({
             <option value="rules">Rules</option>
             <option value="ab_split">A/B split</option>
           </QzSelect>
+        </QzField>
+      </div>
+    );
+  }
+
+  if (node.type === "integration") {
+    return (
+      <div className="qz-col qz-gap-12">
+        <QzField label="Label">
+          <QzInput
+            value={node.data.label}
+            placeholder="Internal name for this integration"
+            onChange={(e) =>
+              onChange({
+                ...node,
+                data: { ...node.data, label: e.target.value } as never,
+              })
+            }
+          />
+        </QzField>
+        <label
+          style={{
+            display: "flex",
+            gap: 10,
+            alignItems: "center",
+            cursor: "pointer",
+            paddingTop: 4,
+          }}
+        >
+          <input
+            type="checkbox"
+            checked={node.data.continue_on_error}
+            onChange={(e) =>
+              onChange({
+                ...node,
+                data: {
+                  ...node.data,
+                  continue_on_error: e.target.checked,
+                } as never,
+              })
+            }
+          />
+          <span style={{ fontSize: 13 }}>
+            Continue to the next step even if an action fails
+          </span>
+        </label>
+        <div className="qz-label qz-mt-8" style={{ marginBottom: 4 }}>
+          Actions
+        </div>
+        {node.data.actions.map((act, idx) => (
+          <div
+            key={idx}
+            style={{
+              padding: 10,
+              border: "1px solid var(--qz-rule)",
+              borderRadius: "var(--qz-radius)",
+              background: "var(--qz-paper)",
+            }}
+            className="qz-col qz-gap-8"
+          >
+            <div
+              className="qz-row qz-row-between"
+              style={{ alignItems: "center" }}
+            >
+              <span style={{ fontWeight: 600, fontSize: 12 }}>
+                #{idx + 1} · {act.kind === "klaviyo" ? "Klaviyo" : "Webhook"}
+              </span>
+              {node.data.actions.length > 1 && (
+                <button
+                  type="button"
+                  onClick={() =>
+                    onChange({
+                      ...node,
+                      data: {
+                        ...node.data,
+                        actions: node.data.actions.filter((_, i) => i !== idx),
+                      } as never,
+                    })
+                  }
+                  style={{
+                    background: "transparent",
+                    border: "none",
+                    color: "var(--qz-crit)",
+                    cursor: "pointer",
+                    fontSize: 12,
+                    fontFamily: "var(--qz-font-mono)",
+                  }}
+                >
+                  remove
+                </button>
+              )}
+            </div>
+            <QzField label="Label">
+              <QzInput
+                value={act.label}
+                onChange={(e) =>
+                  onChange({
+                    ...node,
+                    data: {
+                      ...node.data,
+                      actions: node.data.actions.map((a, i) =>
+                        i === idx ? { ...a, label: e.target.value } : a,
+                      ),
+                    } as never,
+                  })
+                }
+              />
+            </QzField>
+            {act.kind === "webhook" && (
+              <>
+                <QzField label="POST URL">
+                  <QzInput
+                    value={act.url}
+                    placeholder="https://hooks.zapier.com/…"
+                    onChange={(e) =>
+                      onChange({
+                        ...node,
+                        data: {
+                          ...node.data,
+                          actions: node.data.actions.map((a, i) =>
+                            i === idx && a.kind === "webhook"
+                              ? { ...a, url: e.target.value }
+                              : a,
+                          ),
+                        } as never,
+                      })
+                    }
+                  />
+                </QzField>
+                <QzField
+                  label="Secret (optional)"
+                  hint="Sent as the X-Quizocalypse-Secret request header so your receiver can verify the call."
+                >
+                  <QzInput
+                    value={act.secret ?? ""}
+                    placeholder="(none)"
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      onChange({
+                        ...node,
+                        data: {
+                          ...node.data,
+                          actions: node.data.actions.map((a, i) =>
+                            i === idx && a.kind === "webhook"
+                              ? {
+                                  ...a,
+                                  ...(v
+                                    ? { secret: v }
+                                    : { secret: undefined }),
+                                }
+                              : a,
+                          ),
+                        } as never,
+                      });
+                    }}
+                  />
+                </QzField>
+              </>
+            )}
+            {act.kind === "klaviyo" && (
+              <>
+                <QzField
+                  label="Klaviyo API key"
+                  hint="Private key (pk_…). Stored server-side only."
+                >
+                  <QzInput
+                    type="password"
+                    value={act.api_key}
+                    placeholder="pk_…"
+                    onChange={(e) =>
+                      onChange({
+                        ...node,
+                        data: {
+                          ...node.data,
+                          actions: node.data.actions.map((a, i) =>
+                            i === idx && a.kind === "klaviyo"
+                              ? { ...a, api_key: e.target.value }
+                              : a,
+                          ),
+                        } as never,
+                      })
+                    }
+                  />
+                </QzField>
+                <QzField
+                  label="List ID (optional)"
+                  hint="Subscribe the profile to this list after upsert."
+                >
+                  <QzInput
+                    value={act.list_id ?? ""}
+                    placeholder="UPXxxx"
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      onChange({
+                        ...node,
+                        data: {
+                          ...node.data,
+                          actions: node.data.actions.map((a, i) =>
+                            i === idx && a.kind === "klaviyo"
+                              ? {
+                                  ...a,
+                                  ...(v
+                                    ? { list_id: v }
+                                    : { list_id: undefined }),
+                                }
+                              : a,
+                          ),
+                        } as never,
+                      });
+                    }}
+                  />
+                </QzField>
+                <p
+                  className="qz-muted"
+                  style={{ fontSize: 11, margin: 0 }}
+                >
+                  Requires the shopper to hit an email_gate before this node
+                  so we have an email to upsert.
+                </p>
+              </>
+            )}
+          </div>
+        ))}
+        <div className="qz-row qz-gap-8">
+          <QzButton
+            size="sm"
+            onClick={() =>
+              onChange({
+                ...node,
+                data: {
+                  ...node.data,
+                  actions: [
+                    ...node.data.actions,
+                    {
+                      kind: "webhook" as const,
+                      url: "https://example.com/webhook",
+                      label: `Outbound webhook ${node.data.actions.length + 1}`,
+                    },
+                  ],
+                } as never,
+              })
+            }
+          >
+            + Webhook
+          </QzButton>
+          <QzButton
+            size="sm"
+            onClick={() =>
+              onChange({
+                ...node,
+                data: {
+                  ...node.data,
+                  actions: [
+                    ...node.data.actions,
+                    {
+                      kind: "klaviyo" as const,
+                      api_key: "",
+                      label: `Klaviyo profile sync ${node.data.actions.length + 1}`,
+                    },
+                  ],
+                } as never,
+              })
+            }
+          >
+            + Klaviyo
+          </QzButton>
+        </div>
+      </div>
+    );
+  }
+
+  if (node.type === "product_cards") {
+    return (
+      <div className="qz-col qz-gap-12">
+        <QzField label="Headline">
+          <QzInput
+            value={node.data.headline}
+            onChange={(e) =>
+              onChange({
+                ...node,
+                data: { ...node.data, headline: e.target.value } as never,
+              })
+            }
+          />
+        </QzField>
+        <QzField label="Subtext">
+          <QzTextarea
+            rows={2}
+            value={node.data.subtext}
+            onChange={(e) =>
+              onChange({
+                ...node,
+                data: { ...node.data, subtext: e.target.value } as never,
+              })
+            }
+          />
+        </QzField>
+        <QzField
+          label="Product IDs"
+          hint="One Shopify product ID per line. 1–6 products. Use the storefront ID (gid://shopify/Product/…)."
+        >
+          <QzTextarea
+            rows={4}
+            value={node.data.product_ids.join("\n")}
+            onChange={(e) => {
+              const next = e.target.value
+                .split("\n")
+                .map((line) => line.trim())
+                .filter(Boolean)
+                .slice(0, 6);
+              if (next.length === 0) return; // schema requires ≥1
+              onChange({
+                ...node,
+                data: { ...node.data, product_ids: next } as never,
+              });
+            }}
+          />
+        </QzField>
+        <QzField label="Per-card CTA label">
+          <QzInput
+            value={node.data.cta_label}
+            placeholder="Shop"
+            onChange={(e) =>
+              onChange({
+                ...node,
+                data: { ...node.data, cta_label: e.target.value } as never,
+              })
+            }
+          />
+        </QzField>
+        <QzField label="Continue button label">
+          <QzInput
+            value={node.data.continue_label}
+            placeholder="Continue"
+            onChange={(e) =>
+              onChange({
+                ...node,
+                data: { ...node.data, continue_label: e.target.value } as never,
+              })
+            }
+          />
         </QzField>
       </div>
     );
@@ -3354,7 +3982,9 @@ function ModulePickerPopover({
       | "message"
       | "end"
       | "branch"
-      | "ask_ai",
+      | "ask_ai"
+      | "integration"
+      | "product_cards",
   ) => void;
   onClose: () => void;
 }) {
@@ -3366,14 +3996,18 @@ function ModulePickerPopover({
       | "message"
       | "end"
       | "branch"
-      | "ask_ai";
+      | "ask_ai"
+      | "integration"
+      | "product_cards";
     label: string;
     hint: string;
   }> = [
-    { kind: "question", label: "Question", hint: "Single/multi-select or image tiles" },
+    { kind: "question", label: "Question", hint: "Single/multi-select, image tiles, or text/email input" },
     { kind: "message", label: "Message", hint: "A chat-style copy block" },
     { kind: "ask_ai", label: "Ask AI", hint: "Multi-turn AI chat grounded in the quiz path + catalog" },
+    { kind: "product_cards", label: "Product cards", hint: "Hand-pick products to showcase mid-flow" },
     { kind: "branch", label: "Branch", hint: "Rules-based routing or A/B variant split" },
+    { kind: "integration", label: "Integration", hint: "Fire outbound webhooks server-side then auto-advance" },
     { kind: "email_gate", label: "Email gate", hint: "Capture email before results" },
     { kind: "result", label: "Result", hint: "Show recommended products" },
     { kind: "end", label: "End", hint: "Final screen with optional CTA" },
@@ -3511,6 +4145,145 @@ function QuizSettingsModal({
               ))}
             </QzSelect>
           </QzField>
+
+          <div
+            style={{
+              borderTop: "1px solid var(--qz-rule)",
+              paddingTop: 16,
+            }}
+          >
+            <div className="qz-label">Floating launcher</div>
+            <p className="qz-muted" style={{ fontSize: 13, marginTop: 8 }}>
+              Drop the snippet below on any storefront page to render a
+              floating button that opens the quiz in a modal.
+            </p>
+            <label
+              style={{
+                display: "flex",
+                gap: 10,
+                alignItems: "center",
+                cursor: "pointer",
+                marginTop: 12,
+              }}
+            >
+              <input
+                type="checkbox"
+                checked={doc.launcher_config.enabled}
+                onChange={(e) =>
+                  onSave({
+                    ...doc,
+                    launcher_config: {
+                      ...doc.launcher_config,
+                      enabled: e.target.checked,
+                    },
+                  })
+                }
+              />
+              <span style={{ fontSize: 14 }}>Enable floating launcher</span>
+            </label>
+            {doc.launcher_config.enabled && (
+              <div className="qz-col qz-gap-12 qz-mt-16">
+                <QzField label="Icon">
+                  <QzSelect
+                    value={doc.launcher_config.icon}
+                    onChange={(e) =>
+                      onSave({
+                        ...doc,
+                        launcher_config: {
+                          ...doc.launcher_config,
+                          icon: e.target.value as
+                            | "sparkle"
+                            | "star"
+                            | "chat",
+                        },
+                      })
+                    }
+                  >
+                    <option value="sparkle">Sparkle</option>
+                    <option value="star">Star</option>
+                    <option value="chat">Chat bubble</option>
+                  </QzSelect>
+                </QzField>
+                <QzField label="Corner">
+                  <QzSelect
+                    value={doc.launcher_config.corner}
+                    onChange={(e) =>
+                      onSave({
+                        ...doc,
+                        launcher_config: {
+                          ...doc.launcher_config,
+                          corner: e.target.value as
+                            | "bottom-right"
+                            | "bottom-left"
+                            | "top-right"
+                            | "top-left",
+                        },
+                      })
+                    }
+                  >
+                    <option value="bottom-right">Bottom right</option>
+                    <option value="bottom-left">Bottom left</option>
+                    <option value="top-right">Top right</option>
+                    <option value="top-left">Top left</option>
+                  </QzSelect>
+                </QzField>
+                <QzField
+                  label="Pill label (optional)"
+                  hint="Shown alongside the icon. Leave empty for icon-only."
+                >
+                  <QzInput
+                    value={doc.launcher_config.label}
+                    placeholder="Take the quiz"
+                    onChange={(e) =>
+                      onSave({
+                        ...doc,
+                        launcher_config: {
+                          ...doc.launcher_config,
+                          label: e.target.value,
+                        },
+                      })
+                    }
+                  />
+                </QzField>
+                <QzField
+                  label="Button color (optional)"
+                  hint="Hex — defaults to your primary brand color."
+                >
+                  <QzInput
+                    value={doc.launcher_config.color ?? ""}
+                    placeholder="#5563DE"
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      onSave({
+                        ...doc,
+                        launcher_config: {
+                          ...doc.launcher_config,
+                          ...(v
+                            ? { color: v }
+                            : { color: undefined }),
+                        },
+                      });
+                    }}
+                  />
+                </QzField>
+                <QzField label="Snippet to embed (publish first)">
+                  <pre
+                    style={{
+                      background: "var(--qz-cream-2)",
+                      padding: 10,
+                      borderRadius: "var(--qz-radius)",
+                      fontSize: 11,
+                      fontFamily: "var(--qz-font-mono)",
+                      overflowX: "auto",
+                      margin: 0,
+                    }}
+                  >
+                    {`<script async src="/q/${doc.quiz_id}/launcher.js"></script>`}
+                  </pre>
+                </QzField>
+              </div>
+            )}
+          </div>
         </div>
 
         <div

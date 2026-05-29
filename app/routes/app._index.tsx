@@ -157,7 +157,7 @@ export default function Index() {
       </QzStatGrid>
 
       <section
-        className="qz-mt-48"
+        className="qz-mt-48 qz-responsive-grid"
         style={{
           display: "grid",
           gridTemplateColumns: "minmax(0, 1.6fr) minmax(0, 1fr)",

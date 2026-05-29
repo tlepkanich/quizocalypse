@@ -41,7 +41,10 @@ export default function App() {
     <AppProvider isEmbeddedApp apiKey={apiKey}>
       <SidebarLayout>
         <Sidebar counts={counts} />
-        <div style={{ flex: 1, minWidth: 0, overflow: "auto" }}>
+        <div
+          className="qz-main"
+          style={{ flex: 1, minWidth: 0, overflow: "auto" }}
+        >
           <Outlet />
         </div>
       </SidebarLayout>

@@ -24,6 +24,7 @@ import {
   QzInput,
   QzSelect,
 } from "../components/qz";
+import { THEME_PRESETS, type ThemePreset } from "../lib/themePresets";
 
 const COLOR_ROLES = [
   { key: "primary", label: "Primary" },
@@ -212,6 +213,7 @@ export default function DesignSettings() {
       )}
 
       <section
+        className="qz-responsive-grid"
         style={{
           display: "grid",
           gridTemplateColumns: "minmax(0, 1.5fr) minmax(0, 1fr)",
@@ -219,6 +221,35 @@ export default function DesignSettings() {
         }}
       >
         <div className="qz-col qz-gap-24">
+          <QzCard>
+            <div className="qz-col qz-gap-16">
+              <div>
+                <div className="qz-label">Presets</div>
+                <h2 className="qz-h1 qz-mt-8">Start from a theme</h2>
+                <p className="qz-muted qz-mt-8" style={{ maxWidth: "52ch" }}>
+                  One-click apply a curated token pack. Replaces colors,
+                  fonts, radius, button style, and spacing — palette below
+                  reflects the change immediately. Tweak any value after.
+                </p>
+              </div>
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "repeat(auto-fill, minmax(180px, 1fr))",
+                  gap: 12,
+                }}
+              >
+                {THEME_PRESETS.map((preset) => (
+                  <PresetCard
+                    key={preset.id}
+                    preset={preset}
+                    onApply={() => save(preset.tokens)}
+                  />
+                ))}
+              </div>
+            </div>
+          </QzCard>
+
           <QzCard>
             <div className="qz-col qz-gap-16">
               <div>
@@ -377,6 +408,69 @@ export default function DesignSettings() {
         </div>
       </section>
     </QzPage>
+  );
+}
+
+// Tile in the presets grid. Renders a compact swatch row + name + apply
+// button. Clicking the tile body or the button both trigger apply for
+// forgiving target size.
+function PresetCard({
+  preset,
+  onApply,
+}: {
+  preset: ThemePreset;
+  onApply: () => void;
+}) {
+  const c = preset.tokens.colors ?? {};
+  const swatches = [c.primary, c.secondary, c.accent, c.background, c.text].filter(
+    (s): s is string => typeof s === "string",
+  );
+  return (
+    <button
+      type="button"
+      onClick={onApply}
+      style={{
+        textAlign: "left",
+        background: "var(--qz-paper)",
+        border: "1px solid var(--qz-rule)",
+        borderRadius: "var(--qz-radius)",
+        padding: 12,
+        cursor: "pointer",
+        fontFamily: "var(--qz-font-body)",
+        color: "var(--qz-ink)",
+        display: "flex",
+        flexDirection: "column",
+        gap: 8,
+      }}
+      onMouseEnter={(e) => {
+        e.currentTarget.style.borderColor = "var(--qz-ink-3)";
+      }}
+      onMouseLeave={(e) => {
+        e.currentTarget.style.borderColor = "var(--qz-rule)";
+      }}
+    >
+      <div style={{ display: "flex", gap: 4 }}>
+        {swatches.map((hex, i) => (
+          <span
+            key={i}
+            style={{
+              width: 22,
+              height: 22,
+              borderRadius: 4,
+              background: hex,
+              border: "1px solid rgba(0,0,0,0.08)",
+            }}
+          />
+        ))}
+      </div>
+      <div style={{ fontWeight: 600, fontSize: 14 }}>{preset.name}</div>
+      <div
+        className="qz-muted"
+        style={{ fontSize: 11, lineHeight: 1.3 }}
+      >
+        {preset.description}
+      </div>
+    </button>
   );
 }
 

@@ -1,5 +1,10 @@
 import Anthropic from "@anthropic-ai/sdk";
-import { Quiz, quizToolJsonSchema, QuestionData } from "./quizSchema";
+import {
+  Quiz,
+  quizToolJsonSchema,
+  QuestionDataObject,
+} from "./quizSchema";
+import type { QuestionData } from "./quizSchema";
 import type { z } from "zod";
 
 const REGEN_SYSTEM_PROMPT =
@@ -37,13 +42,15 @@ const regenQuestionToolJsonSchema = {
   },
 } as const;
 
-const RegenInput = QuestionData.pick({
+// Use the raw object (not the refined QuestionData) for .pick/.shape —
+// refine wraps the schema in ZodEffects which doesn't expose those APIs.
+const RegenInput = QuestionDataObject.pick({
   text: true,
   question_type: true,
   required: true,
   max_selections: true,
 }).extend({
-  answers: QuestionData.shape.answers.element
+  answers: QuestionDataObject.shape.answers.element
     .pick({ text: true, tags: true, collection_filter: true, image_url: true })
     .array()
     .min(2),
@@ -167,7 +174,7 @@ function buildUserMessage(input: GenerateQuizInput): string {
 
 export interface RegeneratedQuestion {
   text: string;
-  question_type: z.infer<typeof QuestionData.shape.question_type>;
+  question_type: z.infer<typeof QuestionDataObject.shape.question_type>;
   required: boolean;
   max_selections?: number;
   answers: Array<{

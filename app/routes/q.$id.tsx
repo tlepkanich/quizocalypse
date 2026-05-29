@@ -476,6 +476,28 @@ export default function StorefrontRuntime() {
           onContinue={() => gotoNextFrom(currentNode.id, null)}
         />
       );
+    } else if (currentNode.type === "integration") {
+      // Transient — IntegrationView fires the configured actions server-side
+      // and then advances. UI shows a brief "Saving…" state.
+      content = (
+        <IntegrationView
+          node={currentNode}
+          quizId={quizId}
+          path={path}
+          styles={styles}
+          onDone={() => gotoNextFrom(currentNode.id, null)}
+        />
+      );
+    } else if (currentNode.type === "product_cards") {
+      content = (
+        <ProductCardsView
+          node={currentNode}
+          productIndex={productIndex}
+          shopDomain={shopDomain}
+          styles={styles}
+          onContinue={() => gotoNextFrom(currentNode.id, null)}
+        />
+      );
     } else if (currentNode.type === "result") {
       const selectedAnswerIds = path.flatMap((p) => p.answerIds);
       const recs = recommendForResult({
@@ -822,7 +844,71 @@ function QuestionView({
   tokens: DesignTokensT;
 }) {
   const [checked, setChecked] = useState<Record<string, boolean>>({});
+  const [freeform, setFreeform] = useState("");
   const isMulti = node.data.question_type === "multi_select";
+  const isFreeform =
+    node.data.question_type === "text" || node.data.question_type === "email";
+
+  if (isFreeform) {
+    // Freeform input: the typed value becomes the answer text. We piggy-back
+    // on the question's seed answer (answers[0]) so tag accumulation +
+    // outbound edge routing stay identical to card questions.
+    const seed = node.data.answers[0];
+    const cfg = node.data.input_config;
+    const placeholder = cfg?.placeholder ?? "";
+    const maxLength = cfg?.max_length ?? 120;
+    const inputType = node.data.question_type === "email" ? "email" : "text";
+    const required = node.data.required;
+    const value = freeform.trim();
+    const canSubmit =
+      !required ||
+      (value.length > 0 &&
+        (inputType !== "email" || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)));
+    return (
+      <div style={styles.card}>
+        <h2 style={styles.h2}>{node.data.text}</h2>
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (!canSubmit || !seed) return;
+            // Capture the typed value as the picked answer so it shows up in
+            // merge tags and the path. The runtime persists step.answerIds
+            // by id; here we use the seed answer's id.
+            onAdvance([seed.id], seed.edge_handle_id);
+            // (We don't yet persist the typed string — that lands in the
+            // path-derived merge context via the seed answer's text. Future
+            // phase: dedicated freeform_responses[] in the path.)
+          }}
+          style={{ marginTop: 20, display: "flex", flexDirection: "column", gap: 12 }}
+        >
+          <input
+            type={inputType}
+            value={freeform}
+            onChange={(e) => setFreeform(e.target.value.slice(0, maxLength))}
+            placeholder={placeholder}
+            maxLength={maxLength}
+            autoFocus
+            style={{
+              ...styles.answerBtn,
+              padding: "var(--qz-pad)",
+              textAlign: "left",
+              cursor: "text",
+            }}
+          />
+          <button
+            type="submit"
+            style={{
+              ...styles.primaryBtn,
+              opacity: canSubmit ? 1 : 0.5,
+            }}
+            disabled={!canSubmit}
+          >
+            Continue
+          </button>
+        </form>
+      </div>
+    );
+  }
 
   if (isMulti) {
     const selectedIds = Object.entries(checked)
@@ -876,7 +962,78 @@ function QuestionView({
     );
   }
 
-  // single_select / image_tile
+  // Searchable: same single-select semantics, but with a top search input
+  // that substring-filters the answer list. Useful for long pickers (brand,
+  // country, etc.) where scrolling 50+ buttons would be annoying.
+  if (node.data.question_type === "searchable") {
+    return <SearchableQuestion node={node} onAdvance={onAdvance} styles={styles} />;
+  }
+
+  // ImagePicker: dense thumbnail grid. Each answer's image dominates with a
+  // small caption underneath. Visual-first picking — like "which of these
+  // styles feels right?".
+  if (node.data.question_type === "image_picker") {
+    return (
+      <div style={styles.card}>
+        <h2 style={styles.h2}>{node.data.text}</h2>
+        <div
+          style={{
+            marginTop: 20,
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fill, minmax(120px, 1fr))",
+            gap: 10,
+          }}
+        >
+          {node.data.answers.map((a) => (
+            <button
+              key={a.id}
+              style={{
+                ...styles.answerBtn,
+                padding: 6,
+                textAlign: "center",
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "stretch",
+                gap: 6,
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.borderColor = "var(--qz-color-primary)";
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.borderColor = "#00000022";
+              }}
+              onClick={() => onAdvance([a.id], a.edge_handle_id)}
+            >
+              {a.image_url ? (
+                <img
+                  src={a.image_url}
+                  alt=""
+                  style={{
+                    width: "100%",
+                    aspectRatio: "1 / 1",
+                    objectFit: "cover",
+                    borderRadius: "var(--qz-radius)",
+                  }}
+                />
+              ) : (
+                <div
+                  style={{
+                    width: "100%",
+                    aspectRatio: "1 / 1",
+                    background: "#00000010",
+                    borderRadius: "var(--qz-radius)",
+                  }}
+                />
+              )}
+              <span style={{ fontSize: 12 }}>{a.text}</span>
+            </button>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  // single_select / image_tile (default fall-through)
   return (
     <div style={styles.card}>
       <h2 style={styles.h2}>{node.data.text}</h2>
@@ -914,6 +1071,86 @@ function QuestionView({
   );
   // (typescript exhaustiveness assist — unused but satisfies the tokens prop)
   void tokens;
+}
+
+// Substring-filtered single-select. Hoisted to its own component so the
+// search state doesn't churn the parent.
+function SearchableQuestion({
+  node,
+  onAdvance,
+  styles,
+}: {
+  node: Extract<QuizDoc["nodes"][number], { type: "question" }>;
+  onAdvance: (answerIds: string[], handle: string | null) => void;
+  styles: ReturnType<typeof stylesFor>;
+}) {
+  const [query, setQuery] = useState("");
+  const needle = query.trim().toLowerCase();
+  const filtered = needle
+    ? node.data.answers.filter((a) => a.text.toLowerCase().includes(needle))
+    : node.data.answers;
+  return (
+    <div style={styles.card}>
+      <h2 style={styles.h2}>{node.data.text}</h2>
+      <input
+        type="text"
+        value={query}
+        onChange={(e) => setQuery(e.target.value)}
+        placeholder="Search…"
+        autoFocus
+        style={{
+          ...styles.answerBtn,
+          marginTop: 16,
+          padding: "12px 14px",
+          textAlign: "left",
+          cursor: "text",
+          fontSize: "var(--qz-base-size)",
+        }}
+      />
+      <div
+        style={{
+          marginTop: 12,
+          display: "grid",
+          gap: 8,
+          maxHeight: 360,
+          overflowY: "auto",
+          paddingRight: 4,
+        }}
+      >
+        {filtered.length === 0 ? (
+          <div
+            style={{
+              padding: 16,
+              color: "var(--qz-color-muted)",
+              fontSize: 13,
+              textAlign: "center",
+            }}
+          >
+            No matches for &ldquo;{query}&rdquo;.
+          </div>
+        ) : (
+          filtered.map((a) => (
+            <button
+              key={a.id}
+              style={{
+                ...styles.answerBtn,
+                padding: "10px 14px",
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.borderColor = "var(--qz-color-primary)";
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.borderColor = "#00000022";
+              }}
+              onClick={() => onAdvance([a.id], a.edge_handle_id)}
+            >
+              {a.text}
+            </button>
+          ))
+        )}
+      </div>
+    </div>
+  );
 }
 
 function EmailGateView({
@@ -1242,6 +1479,192 @@ function AskAIView({
           border: "2px solid var(--qz-color-primary)",
         }}
       >
+        {node.data.continue_label}
+      </button>
+    </div>
+  );
+}
+
+// Transient step. Fires the integration node's configured actions
+// server-side, then advances. The shopper sees a brief "Saving…" while the
+// fetch runs. continue_on_error (true by default) lets the runtime move on
+// even if every webhook failed — better than dead-ending on a broken Zap.
+function IntegrationView({
+  node,
+  quizId,
+  path,
+  styles,
+  onDone,
+}: {
+  node: Extract<
+    z.infer<typeof Quiz>["nodes"][number],
+    { type: "integration" }
+  >;
+  quizId: string;
+  path: PathStep[];
+  styles: ReturnType<typeof stylesFor>;
+  onDone: () => void;
+}) {
+  const fired = useRef(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (fired.current) return;
+    fired.current = true;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(`/q/${quizId}/integration`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ nodeId: node.id, path }),
+        });
+        const body = (await res.json()) as { ok?: boolean; error?: string };
+        if (cancelled) return;
+        if (!res.ok || !body.ok) {
+          if (!node.data.continue_on_error) {
+            setError(body.error ?? "Integration failed.");
+            return;
+          }
+        }
+        onDone();
+      } catch (err) {
+        if (cancelled) return;
+        if (!node.data.continue_on_error) {
+          setError(err instanceof Error ? err.message : "Network error.");
+          return;
+        }
+        onDone();
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [node.id, node.data.continue_on_error, quizId, path, onDone]);
+
+  return (
+    <div style={styles.card}>
+      <h2 style={styles.h2}>{error ? "Something went wrong" : "Saving…"}</h2>
+      {error ? (
+        <>
+          <p style={styles.muted}>{error}</p>
+          <button style={styles.primaryBtn} onClick={onDone}>
+            Continue anyway
+          </button>
+        </>
+      ) : (
+        <p style={styles.muted}>One moment — sending your answers along.</p>
+      )}
+    </div>
+  );
+}
+
+// Visible step that shows merchant-picked products as cards. Distinct from
+// Result (scored recommendations on the path) and the mid-quiz preview rail
+// (refining list). Products that aren't in product_index render a graceful
+// fallback so a deleted SKU doesn't break the step.
+function ProductCardsView({
+  node,
+  productIndex,
+  shopDomain,
+  styles,
+  onContinue,
+}: {
+  node: Extract<
+    z.infer<typeof Quiz>["nodes"][number],
+    { type: "product_cards" }
+  >;
+  productIndex: IndexedProduct[];
+  shopDomain: string;
+  styles: ReturnType<typeof stylesFor>;
+  onContinue: () => void;
+}) {
+  const products = node.data.product_ids
+    .map((id) => productIndex.find((p) => p.product_id === id))
+    .filter((p): p is IndexedProduct => !!p);
+
+  return (
+    <div style={styles.card}>
+      <h2 style={styles.h2}>{node.data.headline}</h2>
+      {node.data.subtext && (
+        <p style={{ ...styles.muted, marginTop: 8 }}>{node.data.subtext}</p>
+      )}
+      <div
+        style={{
+          marginTop: 16,
+          display: "grid",
+          gridTemplateColumns: `repeat(auto-fill, minmax(${products.length > 2 ? 180 : 240}px, 1fr))`,
+          gap: 12,
+        }}
+      >
+        {products.map((p) => (
+          <a
+            key={p.product_id}
+            href={
+              shopDomain
+                ? `https://${shopDomain}/products/${p.handle}`
+                : `#${p.handle}`
+            }
+            target="_blank"
+            rel="noreferrer"
+            style={{
+              ...styles.productCard,
+              flexDirection: "column",
+              alignItems: "stretch",
+              gap: 8,
+            }}
+          >
+            {p.image_url && (
+              <img
+                src={p.image_url}
+                alt=""
+                style={{
+                  width: "100%",
+                  aspectRatio: "1 / 1",
+                  objectFit: "cover",
+                  borderRadius: "var(--qz-radius)",
+                }}
+              />
+            )}
+            <div style={{ fontWeight: 600, fontSize: 14 }}>{p.title}</div>
+            {p.price && (
+              <div
+                style={{
+                  color: "var(--qz-color-muted)",
+                  fontSize: 12,
+                }}
+              >
+                ${p.price}
+              </div>
+            )}
+            <span
+              style={{
+                marginTop: 4,
+                fontSize: 12,
+                color: "var(--qz-color-primary)",
+                fontWeight: 600,
+              }}
+            >
+              {node.data.cta_label} →
+            </span>
+          </a>
+        ))}
+        {products.length === 0 && (
+          <div
+            style={{
+              padding: 16,
+              border: "1px dashed #00000022",
+              borderRadius: "var(--qz-radius)",
+              color: "var(--qz-color-muted)",
+              fontSize: 13,
+              textAlign: "center",
+            }}
+          >
+            None of the configured products are available right now.
+          </div>
+        )}
+      </div>
+      <button style={{ ...styles.primaryBtn, marginTop: 16 }} onClick={onContinue}>
         {node.data.continue_label}
       </button>
     </div>
