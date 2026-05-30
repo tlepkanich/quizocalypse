@@ -78,4 +78,32 @@ describe("BRAND_VOICE_PRESETS", () => {
     const p = getPreset("minimalist-precision");
     expect(p?.label).toBe("Minimalist precision");
   });
+
+  it("every preset carries a full theme in visual_suggestions.tokens", () => {
+    // Catch drive-by edits that strip the theme off a preset — picking a
+    // voice should always also switch the visual surface.
+    for (const preset of BRAND_VOICE_PRESETS) {
+      const tokens = preset.guidelines.visual_suggestions.tokens;
+      expect(
+        tokens,
+        `${preset.id} has no visual_suggestions.tokens`,
+      ).toBeDefined();
+      expect(
+        tokens?.colors?.primary,
+        `${preset.id} missing colors.primary`,
+      ).toBeTruthy();
+      expect(
+        tokens?.colors?.background,
+        `${preset.id} missing colors.background`,
+      ).toBeTruthy();
+      expect(
+        tokens?.colors?.text,
+        `${preset.id} missing colors.text`,
+      ).toBeTruthy();
+      expect(
+        tokens?.typography?.body?.family,
+        `${preset.id} missing typography.body.family`,
+      ).toBeTruthy();
+    }
+  });
 });

@@ -18,6 +18,11 @@ import {
 } from "../lib/brandExtract";
 import { getPreset, BRAND_VOICE_PRESETS } from "../lib/brandVoicePresets";
 import type { BrandGuidelines } from "../lib/brandGuidelines";
+import {
+  BrandTokens,
+  resolveDesignTokens,
+  type DesignTokensT,
+} from "../lib/designTokens";
 
 // 10MB cap on uploaded files — generous enough for a brand book PDF but
 // keeps the server-side base64 + Claude payload bounded.
@@ -31,7 +36,9 @@ export async function action({ request }: ActionFunctionArgs) {
   if (!shop) return json({ ok: false, error: "Shop not found" }, { status: 400 });
 
   // DELETE clears guidelines back to null. The wizard pill disappears,
-  // and future AI generations fall back to default tone.
+  // and future AI generations fall back to default tone. We deliberately
+  // leave shop.brandTokens untouched — removing the voice shouldn't ambush
+  // the merchant's visual setup. They can reset the palette themselves.
   if (request.method === "DELETE") {
     await prisma.shop.update({
       where: { id: shop.id },
@@ -40,17 +47,50 @@ export async function action({ request }: ActionFunctionArgs) {
     return json({ ok: true, guidelines: null });
   }
 
+  // Reusable: every persistence path merges the existing brand tokens with
+  // the guidelines' visual_suggestions.tokens (if present) so picking a
+  // preset / uploading a brand book also flips the theme to match. Read
+  // the existing tokens once so a partial preset (e.g. colors only)
+  // doesn't clobber a hand-tuned font.
+  const existingTokensParse = BrandTokens.safeParse(shop.brandTokens ?? {});
+  const existingTokens: DesignTokensT = existingTokensParse.success
+    ? existingTokensParse.data
+    : {};
+
   const contentType = request.headers.get("content-type") ?? "";
 
   // Branch: multipart upload → extraction. URL-encoded form (or plain JSON)
   // with presetId → preset persistence.
   if (contentType.includes("multipart/form-data")) {
-    return handleUpload(request, shop.id);
+    return handleUpload(request, shop.id, existingTokens);
   }
-  return handlePreset(request, shop.id);
+  return handlePreset(request, shop.id, existingTokens);
 }
 
-async function handleUpload(request: Request, shopId: string) {
+// Compose the Prisma update payload — always writes brandGuidelines; also
+// writes brandTokens when the guidelines carry a visual suggestion. The
+// merge uses resolveDesignTokens so partial overrides layer cleanly onto
+// the existing brand setup.
+function buildShopUpdate(
+  guidelines: BrandGuidelines,
+  existingTokens: DesignTokensT,
+): {
+  brandGuidelines: BrandGuidelines;
+  brandTokens?: DesignTokensT;
+} {
+  const sug = guidelines.visual_suggestions.tokens;
+  if (!sug) return { brandGuidelines: guidelines };
+  return {
+    brandGuidelines: guidelines,
+    brandTokens: resolveDesignTokens(existingTokens, sug),
+  };
+}
+
+async function handleUpload(
+  request: Request,
+  shopId: string,
+  existingTokens: DesignTokensT,
+) {
   let form: FormData;
   try {
     form = await unstable_parseMultipartFormData(
@@ -82,11 +122,16 @@ async function handleUpload(request: Request, shopId: string) {
       mediaType: file.type || "text/plain",
       fileName: file.name || "upload",
     });
+    const updateData = buildShopUpdate(guidelines, existingTokens);
     await prisma.shop.update({
       where: { id: shopId },
-      data: { brandGuidelines: guidelines as never },
+      data: updateData as never,
     });
-    return json({ ok: true, guidelines });
+    return json({
+      ok: true,
+      guidelines,
+      brandTokens: updateData.brandTokens ?? existingTokens,
+    });
   } catch (err) {
     if (err instanceof BrandExtractionError) {
       return json(
@@ -102,7 +147,11 @@ async function handleUpload(request: Request, shopId: string) {
   }
 }
 
-async function handlePreset(request: Request, shopId: string) {
+async function handlePreset(
+  request: Request,
+  shopId: string,
+  existingTokens: DesignTokensT,
+) {
   let presetId: string | null = null;
   try {
     const form = await request.formData();
@@ -144,9 +193,14 @@ async function handlePreset(request: Request, shopId: string) {
       uploaded_at: new Date().toISOString(),
     },
   };
+  const updateData = buildShopUpdate(stamped, existingTokens);
   await prisma.shop.update({
     where: { id: shopId },
-    data: { brandGuidelines: stamped as never },
+    data: updateData as never,
   });
-  return json({ ok: true, guidelines: stamped });
+  return json({
+    ok: true,
+    guidelines: stamped,
+    brandTokens: updateData.brandTokens ?? existingTokens,
+  });
 }

@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "@remix-run/node";
 import { json } from "@remix-run/node";
 import { useFetcher, useLoaderData } from "@remix-run/react";
@@ -232,7 +232,6 @@ export default function DesignSettings() {
           <BrandGuidelinesCard
             initialGuidelines={initialGuidelines}
             onApplyTokens={save}
-            currentTokens={tokens}
           />
 
           <QzCard>
@@ -606,15 +605,14 @@ function Preview({ resolved }: { resolved: DesignTokensT }) {
 function BrandGuidelinesCard({
   initialGuidelines,
   onApplyTokens,
-  currentTokens,
 }: {
   initialGuidelines: BrandGuidelines | null;
   onApplyTokens: (next: DesignTokensT) => void;
-  currentTokens: DesignTokensT;
 }) {
   const fetcher = useFetcher<{
     ok: boolean;
     guidelines?: BrandGuidelines | null;
+    brandTokens?: DesignTokensT;
     error?: string;
   }>();
   const [tab, setTab] = useState<"preset" | "upload">("preset");
@@ -623,6 +621,24 @@ function BrandGuidelinesCard({
   // UI immediately on the next render cycle.
   const guidelines = fetcher.data?.guidelines ?? initialGuidelines;
   const isWorking = fetcher.state !== "idle";
+
+  // When the server returns updated brand tokens (because the new voice
+  // carried a theme), sync them into the parent's state so the Palette
+  // and Type cards below re-render with the new theme immediately.
+  // useRef tracks the last applied response so we don't infinite-loop on
+  // every render — we only push when the response changes.
+  const lastAppliedRef = useRef<DesignTokensT | null>(null);
+  useEffect(() => {
+    const tokens = fetcher.data?.brandTokens;
+    if (
+      fetcher.data?.ok &&
+      tokens &&
+      tokens !== lastAppliedRef.current
+    ) {
+      lastAppliedRef.current = tokens;
+      onApplyTokens(tokens);
+    }
+  }, [fetcher.data, onApplyTokens]);
 
   const pickPreset = (presetId: string) => {
     const form = new FormData();
@@ -786,35 +802,15 @@ function BrandGuidelinesCard({
     );
   }
 
-  // Loaded state — render the voice summary + visual suggestions.
-  const sug = guidelines.visual_suggestions.tokens;
-  const hasSugColors = !!sug?.colors && Object.keys(sug.colors).length > 0;
-  const hasSugTypography =
-    !!sug?.typography &&
-    (sug.typography.heading?.family || sug.typography.body?.family);
-
-  const applyColors = () => {
-    if (!sug?.colors) return;
-    onApplyTokens({
-      ...currentTokens,
-      colors: { ...(currentTokens.colors ?? {}), ...sug.colors },
-    });
-  };
-  const applyFonts = () => {
-    if (!sug?.typography) return;
-    onApplyTokens({
-      ...currentTokens,
-      typography: {
-        ...(currentTokens.typography ?? {}),
-        ...(sug.typography.heading
-          ? { heading: { ...(currentTokens.typography?.heading ?? {}), ...sug.typography.heading } }
-          : {}),
-        ...(sug.typography.body
-          ? { body: { ...(currentTokens.typography?.body ?? {}), ...sug.typography.body } }
-          : {}),
-      },
-    });
-  };
+  // Loaded state — the theme (colors + typography) has already been
+  // applied server-side by the upload route, so we just summarize the
+  // voice + note the theme switch. The Palette + Type cards below show
+  // the live tokens.
+  const hasThemeApplied =
+    !!guidelines.visual_suggestions.tokens &&
+    (Object.keys(guidelines.visual_suggestions.tokens.colors ?? {}).length > 0 ||
+      !!guidelines.visual_suggestions.tokens.typography?.heading?.family ||
+      !!guidelines.visual_suggestions.tokens.typography?.body?.family);
 
   return (
     <QzCard>
@@ -861,60 +857,20 @@ function BrandGuidelinesCard({
           <ListBlock label="Don't" items={guidelines.voice.dont_list} />
         )}
 
-        {(hasSugColors || hasSugTypography) && (
+        {hasThemeApplied && (
           <div
             style={{
               borderTop: "1px solid var(--qz-rule)",
-              paddingTop: 16,
+              paddingTop: 12,
             }}
-            className="qz-col qz-gap-12"
           >
-            <div className="qz-label">Visual suggestions</div>
-            <p className="qz-muted" style={{ fontSize: 12, margin: 0 }}>
-              Extracted from your guidelines. Review before applying — we
-              never overwrite your colors silently.
+            <p
+              className="qz-muted"
+              style={{ fontSize: 12, margin: 0 }}
+            >
+              Voice <em>and theme</em> are both applied. Tweak colors or fonts
+              in the cards below — your edits sit on top of the preset.
             </p>
-            {hasSugColors && (
-              <div className="qz-row qz-gap-8" style={{ flexWrap: "wrap" }}>
-                {Object.entries(sug!.colors!).map(([key, hex]) =>
-                  hex ? (
-                    <div
-                      key={key}
-                      className="qz-row qz-gap-8"
-                      style={{ alignItems: "center" }}
-                    >
-                      <span
-                        style={{
-                          width: 18,
-                          height: 18,
-                          borderRadius: 4,
-                          background: hex,
-                          border: "1px solid rgba(0,0,0,0.08)",
-                        }}
-                      />
-                      <span
-                        className="qz-mono qz-dim"
-                        style={{ fontSize: 10 }}
-                      >
-                        {key} · {hex}
-                      </span>
-                    </div>
-                  ) : null,
-                )}
-              </div>
-            )}
-            <div className="qz-row qz-gap-8">
-              {hasSugColors && (
-                <QzButton size="sm" onClick={applyColors}>
-                  Apply colors
-                </QzButton>
-              )}
-              {hasSugTypography && (
-                <QzButton size="sm" onClick={applyFonts}>
-                  Apply fonts
-                </QzButton>
-              )}
-            </div>
           </div>
         )}
 

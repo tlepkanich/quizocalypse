@@ -226,27 +226,6 @@ export default function Index() {
         </div>
 
         <div className="qz-col qz-gap-24">
-          <div className="qz-section-head">
-            <div>
-              <div className="qz-label">Activity</div>
-              <h2 className="qz-h1 qz-mt-8">What changed</h2>
-            </div>
-          </div>
-
-          <QzCard flush>
-            <ActivityRow
-              when={lastSyncRelative}
-              who="Catalog sync"
-              what={`${data.productCount} products / ${data.collectionCount} collections`}
-            />
-            <ActivityRow
-              when="—"
-              who="Webhooks"
-              what="Listening for product / collection / inventory deltas"
-              last
-            />
-          </QzCard>
-
           <WhatsNewCard releases={LATEST_RELEASES} />
         </div>
       </section>
@@ -260,36 +239,6 @@ export default function Index() {
         </div>
       )}
     </QzPage>
-  );
-}
-
-function ActivityRow({
-  when,
-  who,
-  what,
-  last,
-}: {
-  when: string;
-  who: string;
-  what: string;
-  last?: boolean;
-}) {
-  return (
-    <div
-      style={{
-        padding: "16px 22px",
-        borderBottom: last ? 0 : "1px solid var(--qz-rule)",
-      }}
-    >
-      <div className="qz-label" style={{ color: "var(--qz-ink-4)" }}>
-        {when}
-      </div>
-      <div style={{ marginTop: 4, color: "var(--qz-ink-2)" }}>
-        <span style={{ fontWeight: 500, color: "var(--qz-ink)" }}>{who}</span>
-        {" — "}
-        {what}
-      </div>
-    </div>
   );
 }
 
