@@ -17,6 +17,26 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    "version": "#73b31c6",
+    "name": "Tag enrichment + auto-discovered categories with archetype quiz results",
+    "date": "2026-05-31",
+    "summary": "Two features that give the quiz generator richer signal: per-product tag",
+    "features": [
+      {
+        "title": "Dashboard \"Enrich tags\" button with auto-loop",
+        "description": "a single click chews through the whole catalog one batch at a time, showing live progress \"Enriching 30 / 87…\" and a summary banner with per-category error counts at the end"
+      },
+      {
+        "title": "/app/categories admin page with grid of category cards…",
+        "description": "(name, description, tag chips, product count, rationale tooltip) and a Discover / Re-discover button. Sidebar entry under Workspace"
+      },
+      {
+        "title": "Recommendation engine archetype branch",
+        "description": "when a result page has match_strategy=\"archetype\" and category_product_ids (inlined by the publisher), the engine returns the bucket ranked by in-stock + price. Falls through to existing top_n behavior otherwise so legacy quizzes are byte-identical"
+      }
+    ]
+  },
+  {
     "version": "#879c7cf",
     "name": "New Quiz Customize panel, releases UI, brand voice cascade",
     "date": "2026-05-30",
@@ -53,6 +73,18 @@ export const RELEASES: Release[] = [
       {
         "title": "Bold & disruptive → Space Grotesk 700, yellow-on-black, pill",
         "description": "Bold & disruptive → Space Grotesk 700, yellow-on-black, pill"
+      }
+    ]
+  },
+  {
+    "version": "#bf61654",
+    "name": "Filter releases generator to UI-only features",
+    "date": "2026-05-30",
+    "summary": "way too noisy. Merchants care about visual surface changes, not the AI",
+    "features": [
+      {
+        "title": "New looksLikeUI() regex weighs UI surface keywords (card,…",
+        "description": "drawer, tab, page, panel, sidebar, modal, popover, tooltip, banner, badge, pill, chip, menu, picker, wizard, canvas, button, icon, theme, color, font, layout, route, mobile, admin, storefront, etc.) against backend signals (SDK, endpoint, Prisma, migration, Zod, schema, system prompt, tool- use, server-side, lib helpers, retries). A bullet is kept only when UI hits ≥ backend hits."
       }
     ]
   },
