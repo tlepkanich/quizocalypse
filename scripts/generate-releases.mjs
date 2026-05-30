@@ -24,6 +24,60 @@ const OUTPUT_FILE = join(REPO_ROOT, "app", "lib", "releases.ts");
 const SKIP_SUBJECT_RE =
   /^(fix|chore|docs|refactor|test|wip|style|build|ci|perf|merge)[:!(]/i;
 
+// The "What's new" card is for merchants — they care about visual /
+// surface changes, not the AI prompt pipeline or schema cascade. We
+// hard-filter each parsed feature against these two regex lists. UI hits
+// must equal or outnumber backend hits.
+const UI_KEYWORDS =
+  /\b(card|drawer|tab|page|panel|sidebar|modal|popover|tooltip|banner|badge|pill|chip|menu|dropdown|picker|wizard|dashboard|canvas|button|icon|toggle|switch|slider|header|footer|preview|launcher|optgroup|node|edge|handle|view|screen|step|flow|preset|theme|palette|color|font|typography|spacing|radius|layout|click|tap|hover|hovers?|visible|shows|displays|renders|reveal|chevron|tile|grid|row|column|swatch|input|placeholder|page|route|mobile|admin|storefront)\b/i;
+
+const BACKEND_KEYWORDS =
+  /\b(SDK|endpoint|Prisma|migration|Zod|schema|tool-use|server-side|HMAC|webhook signature|payload|JSON blob|interface|type alias|TypeScript|byte-identical|MAX_ATTEMPTS|SYSTEM_PROMPT|generateQuiz|regenerateQuestion|extractBrandGuidelines|runAskAIChat|buildPromptAdditions|buildBrandVoiceAddition|parseBrandGuidelinesSafe|resolveDesignTokens|content block|Anthropic SDK|cascade|loader|action route|attempts|retries|defensively re-parse|fetch|spawn|fixture|assert|mock|test|library|helper function|utility|parser)\b/i;
+
+// Hard cap on features surfaced per release. 3 reads cleanly inside the
+// dashboard card; the dedicated /app/releases page also benefits from a
+// short, focused list. Maintainers who want more granularity can edit
+// their commit messages to lead with the user-visible bullets.
+const MAX_FEATURES_PER_RELEASE = 3;
+
+// Catches feature titles that are clearly code: file paths, dotted
+// member expressions, arrow functions, percent-encoded names. These are
+// internal implementation references the merchant doesn't care about.
+function looksLikeCode(title) {
+  if (/\.(ts|tsx|js|mjs|css|prisma|sql|json)\b/.test(title)) return true;
+  if (/\bapp\/(routes|lib|components|styles)\//.test(title)) return true;
+  if (/=>|=\s|\+\+|::/.test(title)) return true;
+  if (/\([a-z]+:[^)]+\)/i.test(title)) return true; // foo(arg: type)
+  if (/`[^`]*=[^`]*`/.test(title)) return true; // backtick contains assignment
+  // Backtick-leading identifier with member access or property dump:
+  // \`QuestionData.show_preview_after, \`IndexedProduct\` gains \`handle, etc.
+  if (/^`[A-Z][A-Za-z0-9_]*\.[a-z_]/.test(title)) return true;
+  if (/`[A-Z][A-Za-z0-9_]+`\s+(gains?|has|exposes?|adds?)\s+`/.test(title)) {
+    return true;
+  }
+  // Title is dominated by backtick-quoted identifiers — 2+ backticked
+  // spans and they cover most of the visible text.
+  const tickedSpans = (title.match(/`[^`]+`/g) ?? []).join("");
+  if (tickedSpans.length > 0 && tickedSpans.length / title.length > 0.4) {
+    const tickCount = (title.match(/`/g) ?? []).length;
+    if (tickCount >= 4) return true;
+  }
+  // Long camelCase / snake_case sequence with no spaces — likely an
+  // identifier dump like "buildAskAISystem" or "MAX_ATTEMPTS"
+  if (/^[A-Za-z_][A-Za-z0-9_]{14,}$/.test(title.trim())) return true;
+  return false;
+}
+
+function looksLikeUI(text) {
+  const uiHits = (text.match(new RegExp(UI_KEYWORDS, "gi")) ?? []).length;
+  const backendHits = (text.match(new RegExp(BACKEND_KEYWORDS, "gi")) ?? [])
+    .length;
+  if (uiHits === 0) return false;
+  // Backend mentions are fine as long as the bullet is still primarily
+  // about a visible surface. Equal counts default to "show it".
+  return uiHits >= backendHits;
+}
+
 // Sentinel strings that delimit fields in the git log output. Using
 // unlikely Unicode glyphs so commit content can never collide with them
 // even if the body contains quotes, newlines, or backticks.
@@ -158,15 +212,31 @@ function pickSummary(body) {
 
 function commitToRelease(commit) {
   if (SKIP_SUBJECT_RE.test(commit.subject)) return null;
-  const features = parseFeatures(commit.body);
-  if (features.length === 0) return null; // body-less commits don't earn a release entry
+  const allFeatures = parseFeatures(commit.body);
+
+  // Keep only user-visible changes, dedupe near-identical titles, then cap
+  // to the per-release maximum. Releases with no UI-shaped bullets are
+  // dropped entirely — backend-only commits don't earn a card.
+  const seenTitles = new Set();
+  const uiFeatures = [];
+  for (const f of allFeatures) {
+    if (looksLikeCode(f.title)) continue;
+    if (!looksLikeUI(`${f.title} ${f.description}`)) continue;
+    const titleKey = f.title.toLowerCase().replace(/\s+/g, " ").trim();
+    if (seenTitles.has(titleKey)) continue;
+    seenTitles.add(titleKey);
+    uiFeatures.push(f);
+    if (uiFeatures.length >= MAX_FEATURES_PER_RELEASE) break;
+  }
+  if (uiFeatures.length === 0) return null;
+
   const date = commit.isoDate.split("T")[0];
   return {
     version: `#${commit.hash.slice(0, 7)}`,
     name: commit.subject,
     date,
     summary: pickSummary(commit.body),
-    features,
+    features: uiFeatures,
   };
 }
 

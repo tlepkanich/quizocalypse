@@ -33,58 +33,26 @@ export const RELEASES: Release[] = [
       {
         "title": "New `QzTooltip` primitive (hover on desktop, tap-toggle on…",
         "description": "touch, Escape + outside-click to dismiss) in app/components/qz.tsx"
+      }
+    ]
+  },
+  {
+    "version": "#55dda7a",
+    "name": "Dashboard cleanup, auto-generated releases, brand voice changes theme",
+    "date": "2026-05-30",
+    "summary": "Remove redundant Activity / What changed card",
+    "features": [
+      {
+        "title": "Dashboard right column now contains only the WhatsNewCard",
+        "description": "The page-header sync banner above already covers sync state, so the Activity rows duplicated what's in the releases card"
       },
       {
-        "title": "`app/lib/releases.ts` — 13 hand-curated entries from MVP…",
-        "description": "through the brand-guidelines work. Latest 4 surface in a \"What's new\" card that replaces the dashboard \"Tip\" card; full history at /app/releases"
+        "title": "Every entry in BRAND_VOICE_PRESETS gains a full…",
+        "description": "visual_suggestions.tokens (colors, typography, radius, button_style, spacing) hand-tuned to match the archetype:"
       },
       {
-        "title": "Sidebar gains a \"What's new\" entry under Workspace",
-        "description": "Sidebar gains a \"What's new\" entry under Workspace"
-      },
-      {
-        "title": "New `Shop.brandGuidelines Json?` column (migration…",
-        "description": "add_brand_guidelines)"
-      },
-      {
-        "title": "`app/lib/brandGuidelines.ts` schema +…",
-        "description": "`buildBrandVoiceAddition` helper that appends a BRAND VOICE section to any system prompt (returns \"\" when null so legacy prompts stay byte-identical)"
-      },
-      {
-        "title": "`app/lib/brandExtract.ts` — Claude beta messages API with…",
-        "description": "PDF document blocks, image blocks (PNG/JPEG/WebP/GIF), or text blocks; forced tool-use; provenance stamped server-side"
-      },
-      {
-        "title": "`app/routes/app.design.guidelines.tsx` — action route…",
-        "description": "branches on multipart upload (extract via Claude), FormData with presetId (instant — no Claude call), or DELETE (clear back to null)"
-      },
-      {
-        "title": "`app/lib/brandVoicePresets.ts` — 8 archetypal presets…",
-        "description": "(Minimalist precision, Warm & knowing, Confident & cheeky, Editorial & considered, Premium & restrained, Energetic & playful, Authoritative & trusted, Bold & disruptive). Archetype labels with named brand inspirations in descriptions; sample phrases hand-authored, never verbatim from any source brand"
-      },
-      {
-        "title": "Voice reaches every AI surface",
-        "description": "GenerateQuizInput, RegenerateQuestionInput, and AskAIChatInput all accept an optional brandGuidelines. All three loaders (api.quizzes.new.generate, app.quizzes.$id action, q.$id.ai-chat) fetch shop.brandGuidelines, defensively re-parse, and forward"
-      },
-      {
-        "title": "Design page gets a new Brand voice card at the top of the…",
-        "description": "left column with Pick a preset / Upload your own tabs and a loaded state showing tone + Do/Don't lists + visual-suggestions sub-card with Apply colors / Apply fonts buttons (never auto-applied)"
-      },
-      {
-        "title": "New Quiz wizard renders a \"Brand voice",
-        "description": "<name> active · edit →\" pill at the top of the Customize panel and adds a \"Brand presets\" optgroup to the Tone dropdown that persists to shop.brandGuidelines"
-      },
-      {
-        "title": "127/127 unit tests passing; 26 new across releases (6),…",
-        "description": "quizGenSettings (15), brandGuidelines (11), brandVoicePresets (9)"
-      },
-      {
-        "title": "Typecheck, lint, and production build all clean",
-        "description": "Typecheck, lint, and production build all clean"
-      },
-      {
-        "title": "Prisma migration applied",
-        "description": "Prisma migration applied"
+        "title": "Bold & disruptive → Space Grotesk 700, yellow-on-black, pill",
+        "description": "Bold & disruptive → Space Grotesk 700, yellow-on-black, pill"
       }
     ]
   },
@@ -105,74 +73,6 @@ export const RELEASES: Release[] = [
       {
         "title": "Drawer collapsed 5 tabs → 3 (Preview / Content / Design)",
         "description": "Drawer collapsed 5 tabs → 3 (Preview / Content / Design)"
-      },
-      {
-        "title": "Drawer header Desktop/Mobile/Synced toggle; preview renders…",
-        "description": "the storefront step at the matching width and routes design edits to the right layer"
-      },
-      {
-        "title": "HandlePlus + ModulePickerPopover",
-        "description": "every source handle gets a click- driven \"+\" to add the next module (drag-to-connect preserved)"
-      },
-      {
-        "title": "Canvas",
-        "description": "◐ drift badge when desktop/mobile overrides diverge"
-      },
-      {
-        "title": "Runtime",
-        "description": "resolveForBreakpoint + useSyncExternalStore window-width hook"
-      },
-      {
-        "title": "Merge tags (@name, @email, @answer.<id>) extracted to…",
-        "description": "lib/mergeTags"
-      },
-      {
-        "title": "New branch node",
-        "description": "invisible, auto-advances; modes: rules | ab_split"
-      },
-      {
-        "title": "Multi-slot output handles (labeled, each with its own \"+\")",
-        "description": "Multi-slot output handles (labeled, each with its own \"+\")"
-      },
-      {
-        "title": "Edge condition extended",
-        "description": "{answer_id?, tag?, ab_slot?} (v1 shape kept working — no migration)"
-      },
-      {
-        "title": "pickBranchSlot + resolveNextStep",
-        "description": "cycle-guarded traversal through any branches between two renderable steps"
-      },
-      {
-        "title": "A/B sticky session via sessionStorage (qz-ab-<quizId>)",
-        "description": "A/B sticky session via sessionStorage (qz-ab-<quizId>)"
-      },
-      {
-        "title": "Drawer BranchEditor",
-        "description": "per-slot rule editor or weight knob; add/remove slots; canvas BranchNodeView with slot rows"
-      },
-      {
-        "title": "New ask_ai node",
-        "description": "system_prompt, persona_name, opening_message, suggested_questions, max_turns (1–20), continue_label"
-      },
-      {
-        "title": "/q/:id/ai-chat endpoint",
-        "description": "builds quiz-path + catalog context, calls Claude with safety rails (brevity, no instruction leak, on-topic redirect), enforces max_turns server-side, 1200-char user cap"
-      },
-      {
-        "title": "Runtime AskAIView",
-        "description": "opener bubble, suggested-question chips, scrollable transcript, autoscroll, error rollback, Continue button"
-      },
-      {
-        "title": "Drawer ContentTab + simulated chat Preview",
-        "description": "Drawer ContentTab + simulated chat Preview"
-      },
-      {
-        "title": "59/59 unit tests passing across schema, validation,…",
-        "description": "recommendation/ branch routing, merge-tag substitution, and AskAI system-prompt build"
-      },
-      {
-        "title": "Typecheck, lint, and production build all clean",
-        "description": "Typecheck, lint, and production build all clean"
       }
     ]
   },
@@ -191,48 +91,8 @@ export const RELEASES: Release[] = [
         "description": "input_config (placeholder, max_length); freeform types use a single seed answer for tag accumulation + edge routing"
       },
       {
-        "title": "Split QuestionData into raw object + refined wrapper so…",
-        "description": ".pick/.shape still work in the AI regenerate tool"
-      },
-      {
-        "title": "Invisible \"integration\" node",
-        "description": "server-side webhook firing via new /q/:id/integration endpoint, 5-second AbortController timeout per action, continue_on_error gate, transient \"Saving…\" UI in the runtime"
-      },
-      {
         "title": "Visible \"product_cards\" node",
         "description": "1–6 merchant-picked products rendered as themed cards with PDP links"
-      },
-      {
-        "title": "publishQuiz now unconditionally includes product_ids…",
-        "description": "referenced by product_cards nodes so curated showcases work outside the scope"
-      },
-      {
-        "title": "Klaviyo integration kind alongside webhook",
-        "description": "discriminated union with api_key + optional list_id; calls Klaviyo Profile Import API and best- effort list subscription"
-      },
-      {
-        "title": "Question.Searchable",
-        "description": "substring-filtered single-select with autofocused search box + 360px scrollable list"
-      },
-      {
-        "title": "Question.ImagePicker",
-        "description": "dense responsive thumbnail grid distinct from image_tile's tall single-column cards"
-      },
-      {
-        "title": "Floating launcher",
-        "description": "quiz-level LauncherConfig + a /q/:id/launcher.js endpoint serving a self-contained JS bundle that injects a floating button (sparkle/star/chat icons, 4 corner positions, optional pill label) and opens the quiz in a modal iframe; configurable from the Quiz Settings modal"
-      },
-      {
-        "title": "Admin mobile responsiveness",
-        "description": "sidebar collapses to a horizontal scroll strip under 900px, multi-column grids fall to single column"
-      },
-      {
-        "title": "86/86 unit tests passing across schema (incl",
-        "description": "Klaviyo, searchable, image_picker, LauncherConfig), theme presets contrast, recommendation/ branch routing, merge tags, AskAI prompt build"
-      },
-      {
-        "title": "Typecheck, lint, and production build all clean",
-        "description": "Typecheck, lint, and production build all clean"
       }
     ]
   },
@@ -242,18 +102,6 @@ export const RELEASES: Release[] = [
     "date": "2026-05-27",
     "summary": "webhook handlers for products/collections/inventory/uninstall, auto-resync",
     "features": [
-      {
-        "title": "M1 Shopify Connect",
-        "description": "OAuth, bulk catalog sync via GraphQL bulk operations, webhook handlers for products/collections/inventory/uninstall, auto-resync when last sync is stale (>5min)."
-      },
-      {
-        "title": "M2 AI Quiz Generator",
-        "description": "Claude Sonnet with forced tool-use, Zod-validated output, ≤2x retry, autosave (debounced), per-question regenerate."
-      },
-      {
-        "title": "M3 Question Type Library",
-        "description": "single_select, multi_select, image_tile."
-      },
       {
         "title": "M4 Visual Flow Builder",
         "description": "React Flow canvas, per-answer source handles, drag-to-connect, add/remove answers + nodes, dagre auto-layout, validation overlay, right-side drawer with Content/Logic/Preview/Design/AI tabs."
@@ -265,114 +113,6 @@ export const RELEASES: Release[] = [
       {
         "title": "M6 Recommendation Engine",
         "description": "pure tag-overlap scoring with in-stock + price tie-breaks, fallback collection on score=0; \"View all paths\" debugger modal; live preview tab in result drawer."
-      },
-      {
-        "title": "M7 Publish + Storefront Runtime",
-        "description": "validated snapshot to publishedJson with baked product_index, 10-version archive cap, public /q/:id runtime that applies design tokens + emits analytics + respects prefers-reduced-motion; Theme App Extension (extensions/quizocalypse-block) iframes /q/:id into merchant storefronts."
-      },
-      {
-        "title": "M8 Analytics + Email Capture",
-        "description": "Event + EmailCapture tables, public POST /events and /captures endpoints with CORS, 5 event types tracked by the runtime, per-quiz funnel dashboard with distinct-session counts."
-      },
-      {
-        "title": "Prisma + Postgres, migrations for…",
-        "description": "Shop/Product/Collection/Quiz/QuizVersion /Event/EmailCapture + brandTokens column."
-      },
-      {
-        "title": "App Bridge nav (Dashboard / Quizzes / Brand design)",
-        "description": "App Bridge nav (Dashboard / Quizzes / Brand design)"
-      },
-      {
-        "title": "Quiz list + delete, version history + revert",
-        "description": "Quiz list + delete, version history + revert"
-      },
-      {
-        "title": "scripts/sync-tunnel.sh auto-deploys the live cloudflared…",
-        "description": "URL."
-      }
-    ]
-  },
-  {
-    "version": "#02b433a",
-    "name": "Port Grid Notebook redesign to dashboard + quiz list",
-    "date": "2026-05-27",
-    "summary": "Drops the Polaris look on the two most-used admin screens in favor of a",
-    "features": [
-      {
-        "title": "`app/styles/quizocalypse.css`",
-        "description": "tokens (cream/paper/ink/persimmon palette, Spectral/Geist/JetBrains Mono via Google Fonts, 24px grid backdrop) plus scoped components: `.qz-btn`, `.qz-card`, `.qz-badge`, `.qz-banner`, `.qz-stat-grid`/`.qz-stat`, `.qz-table`, `.qz-field`, `.qz-input`/ `.qz-textarea`/`.qz-select`, layout helpers."
-      },
-      {
-        "title": "`app/components/qz.tsx`",
-        "description": "typed primitives (~150 LOC) — `QzPage`, `QzPageHeader`, `QzButton`, `QzCard`, `QzBadge`, `QzBanner`, `QzStat`/ `QzStatGrid`, `QzField`, `QzInput`, `QzTextarea`, `QzSelect`. Each wraps the right CSS classes; no logic, no third-party deps. `QzButton` `Omit`s `variant` from `ButtonHTMLAttributes` to avoid collision with App Bridge's `variant: \"primary\" | \"breadcrumb\"` button augmentation."
-      },
-      {
-        "title": "`app/root.tsx`",
-        "description": "wires `quizocalypse.css` via `links` export and adds `data-qz=\"1\"` to `<body>` to activate the styles. Drops the Inter CDN link (the new design ships Spectral + Geist + JetBrains Mono)."
-      },
-      {
-        "title": "`app/routes/app._index.tsx`",
-        "description": "dashboard rebuilt with the editorial layout (eyebrow + Spectral display title + paragraph subtitle, stat grid, 2-column section for recent quizzes + activity/tip)."
-      },
-      {
-        "title": "`app/routes/app.quizzes._index.tsx`",
-        "description": "quizzes list rebuilt with a plain `<table>` styled by `.qz-table`, status filter tabs, custom `ConfirmModal` replacing the Polaris modal."
-      }
-    ]
-  },
-  {
-    "version": "#df0a7bf",
-    "name": "Port redesign to remaining admin screens (5 routes)",
-    "date": "2026-05-27",
-    "summary": "Completes the Grid Notebook port across all admin pages: the New AI",
-    "features": [
-      {
-        "title": "`app/routes/app.quizzes.new.tsx`",
-        "description": "chip-style collection scope picker (replaces Polaris ChoiceList), native range slider with marker scale, serif eyebrow + subtitle, accent CTA. Generate-success/failure surfaces in QzBanner."
-      },
-      {
-        "title": "`app/routes/app.quizzes.$id.tsx`",
-        "description": "full rewrite of the editor (page chrome, action toolbar, FlowBuilder toolbar, \"+\" node-add menu, NodeDrawer with custom TabBar, ContentTab, LogicTab with TagAutocomplete chip+popover combobox, ResultPreviewTab, DesignTab with bulk-apply, AiTab, AllPathsModal with qz-table inside a custom overlay, EmbedSnippet card). React Flow node renderers now use --qz-* CSS variables for surface + borders + monospace labels; per-node accent colors preserved for graph readability."
-      },
-      {
-        "title": "`app/routes/app.quizzes.$id_.versions.tsx`",
-        "description": "qz-table layout with active-version badge, custom ConfirmModal for revert."
-      },
-      {
-        "title": "`app/routes/app.quizzes.$id_.analytics.tsx`",
-        "description": "stat-grid hero (completion rate, CTR, captures) over a 2-column funnel + captures layout."
-      },
-      {
-        "title": "`app/routes/app.design.tsx`",
-        "description": "editorial header, 3-card form column, sticky live preview column, WCAG AA contrast warning surfaced via QzBanner."
-      }
-    ]
-  },
-  {
-    "version": "#52d4210",
-    "name": "Add persistent sidebar nav + 3 top-level routes",
-    "date": "2026-05-27",
-    "summary": "Adds a 240px in-iframe sidebar that wraps every admin page. Three",
-    "features": [
-      {
-        "title": "`app/components/sidebar.tsx`",
-        "description": "sidebar + SidebarLayout. Each item is active-aware (border-left accent + paper background + bold weight) via useLocation. Count badges are tabular-num mono."
-      },
-      {
-        "title": "`app/routes/app.tsx`",
-        "description": "loader now fetches quiz + capture counts on every page render via `_count` + emailCapture.count. Renders Sidebar alongside the Outlet in a flex layout."
-      },
-      {
-        "title": "`app/routes/app.analytics.tsx`",
-        "description": "cross-quiz aggregate funnel (started / completed / clicked + completion rate + CTR) with a per-quiz breakdown table that links into each quiz's detail page."
-      },
-      {
-        "title": "`app/routes/app.captures.tsx`",
-        "description": "paginated list of every email capture across all quizzes (100/page), with the source quiz linked per row."
-      },
-      {
-        "title": "`app/routes/app.settings.tsx`",
-        "description": "read-only shop info (domain, install date, scopes, last sync), a stubbed Klaviyo webhook URL field (delivery not enabled yet), and a note on the deferred token encryption wrapper."
       }
     ]
   },
@@ -383,60 +123,8 @@ export const RELEASES: Release[] = [
     "summary": "Adds a sticky right rail (desktop) / collapsible chip (mobile) that",
     "features": [
       {
-        "title": "`QuestionData.show_preview_after",
-        "description": "boolean` (defaults false) — per- question toggle in the editor."
-      },
-      {
-        "title": "`Quiz.featured_collection_id?",
-        "description": "string` — quiz-level cold-start fallback used when accumulated tags score zero."
-      },
-      {
-        "title": "Extracted scoring + ranking into `scoreAndRank` shared…",
-        "description": "between the existing `recommendForResult` and a new `recommendPreview`."
-      },
-      {
-        "title": "`recommendPreview` fallback ladder",
-        "description": "featured collection → scope collections → all in-scope products, all in-stock first + price asc."
-      },
-      {
-        "title": "`IndexedProduct` gains `handle",
-        "description": "string` so the runtime can build PDP URLs."
-      },
-      {
-        "title": "4 new unit tests cover featured fallback, scope fallback,…",
-        "description": "tag ranking, slot cap (28 tests total)."
-      },
-      {
-        "title": "`publishQuiz` includes `featured_collection_id` in the…",
-        "description": "product-index scope set so featured products are in the published JSON."
-      },
-      {
-        "title": "`PublishedQuiz` interface gains `shop_domain",
-        "description": "string`, baked from `shop.shopDomain` so the runtime can build product URLs without an extra DB lookup."
-      },
-      {
-        "title": "Loader returns `shopDomain`",
-        "description": "Loader returns `shopDomain`"
-      },
-      {
-        "title": "`previewActive = path.some(step =>…",
-        "description": "question[step.id].show_preview_after)`."
-      },
-      {
-        "title": "`previewRecs` computed via `recommendPreview` from…",
-        "description": "accumulated answer ids."
-      },
-      {
-        "title": "New `<PreviewRail>` for desktop, `<PreviewChip>` +…",
-        "description": "bottom-sheet for mobile. Both render the same `<PreviewList>` of product cards."
-      },
-      {
         "title": "Layout switches via inline media-query styles",
         "description": "≥900px → flex-row with sticky 320px rail; <900px → centered column + fixed-position chip."
-      },
-      {
-        "title": "Each card is an `<a target=\"_blank\">` to…",
-        "description": "`https://<shopDomain>/products/<handle>`. Fires `recommendation_clicked` with `payload.stage: \"preview\"` and position. Single `recommendation_viewed` event with `stage: \"preview\"` fires once when the preview first activates."
       },
       {
         "title": "Preview hides on the result page (the result has its own…",
@@ -445,10 +133,6 @@ export const RELEASES: Release[] = [
       {
         "title": "`ContentTab` for question nodes gains a styled checkbox",
         "description": "\"Show product preview after this question\" with descriptive helper text."
-      },
-      {
-        "title": "New `QuizSettingsModal` opened from a `Settings` button on…",
-        "description": "the canvas toolbar. Renders a `QzSelect` of the merchant's collections for Featured collection. Saves via the existing `commit(doc)` path, so autosave runs."
       }
     ]
   }
