@@ -44,6 +44,29 @@ export function recommendForResult(input: RecommendationInput): RecommendedProdu
   const slotCount = resultNode.data.slot_count;
   const fallbackCollectionId = resultNode.data.fallback_collection_id;
 
+  // Archetype mode: the result page is bound to a discovered category at
+  // publish time, and the category's product list was inlined onto the
+  // result page as category_product_ids. We return that bucket directly,
+  // skipping per-answer tag scoring. Tie-break (in-stock + price asc)
+  // still applies for ranking. Falls back to top_n if the bucket is
+  // empty or somehow missing.
+  const resultPage = quiz.results_pages.find((r) => r.id === resultNodeId);
+  if (
+    resultPage?.match_strategy === "archetype" &&
+    resultPage.category_product_ids &&
+    resultPage.category_product_ids.length > 0
+  ) {
+    const bucketIds = new Set(resultPage.category_product_ids);
+    const bucket = productIndex
+      .filter((p) => bucketIds.has(p.product_id))
+      .map((p) => ({ ...p, score: 1 }));
+    if (bucket.length > 0) {
+      return rank(bucket).slice(0, slotCount);
+    }
+    // Bucket exists but no products from it survived productIndex
+    // filtering (e.g. all out of scope). Fall through to top_n / fallback.
+  }
+
   const matches = scoreAndRank(quiz, productIndex, selectedAnswerIds);
   if (matches.length > 0) return matches.slice(0, slotCount);
 

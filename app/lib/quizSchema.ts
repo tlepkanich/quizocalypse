@@ -363,6 +363,14 @@ export const ResultPage = z.object({
   subtext: z.string().default(""),
   product_ids: z.array(z.string()).default([]),
   match_strategy: MatchStrategy.default("top_n"),
+  // When match_strategy === "archetype", the runtime returns products
+  // from this category instead of running tag-overlap scoring. The
+  // publisher resolves this id to an inlined product list so the
+  // storefront doesn't need a DB lookup.
+  category_id: z.string().min(1).optional(),
+  // Baked at publish time from prisma.category.findUnique(category_id).
+  // Storefront-facing — not authored by the merchant.
+  category_product_ids: z.array(z.string()).optional(),
 });
 
 // Design tokens — see Spec §3.5.

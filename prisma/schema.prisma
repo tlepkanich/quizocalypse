@@ -45,6 +45,7 @@ model Shop {
 
   products    Product[]
   collections Collection[]
+  categories  Category[]
   quizzes     Quiz[]
 }
 
@@ -63,6 +64,14 @@ model Product {
   imageUrl      String?
   priceMin      Decimal? @db.Decimal(10, 2)
   priceMax      Decimal? @db.Decimal(10, 2)
+  // Raw HTML body from Shopify (descriptionHtml). Source of truth.
+  descriptionHtml String?
+  // Stripped plain-text version of descriptionHtml — used as input to the
+  // Claude tag enrichment so we don't pay tokens on markup.
+  descriptionText String?
+  // Last time Claude enriched this product's tags. Null = never. The
+  // enrichment batch skips products refreshed in the last 30 days.
+  lastEnrichedAt DateTime?
   updatedAt     DateTime @default(now()) @updatedAt
 
   shop Shop @relation(fields: [shopId], references: [id], onDelete: Cascade)
@@ -78,6 +87,35 @@ model Collection {
   handle       String?
   productIds   String[]
   updatedAt    DateTime @default(now()) @updatedAt
+
+  shop Shop @relation(fields: [shopId], references: [id], onDelete: Cascade)
+
+  @@index([shopId])
+}
+
+// Auto-discovered shopper archetypes. Distinct from Shopify Collections
+// (which mirror live store data) — Categories are admin-internal and
+// regenerated on demand by Claude reading the catalog. They power the
+// archetype branch of the quiz recommendation engine: a ResultPage with
+// match_strategy="archetype" + category_id pulls products from here.
+model Category {
+  id             String   @id @default(cuid())
+  shopId         String
+  name           String
+  description    String
+  // Embodying tags Claude picked from the catalog vocabulary. Used by
+  // categoryAssign to score every product's overlap and bucket it.
+  tags           String[]
+  // Shopify product IDs (gids) bucketed into this category by the
+  // deterministic tag-overlap pass. Refreshed every discovery run.
+  productIds     String[]
+  // One-sentence rationale Claude wrote — surfaced in the admin tooltip.
+  rationale      String?
+  // Groups every Category created in a single discovery invocation so
+  // we can tell when a set was generated.
+  discoveryRunId String
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @default(now()) @updatedAt
 
   shop Shop @relation(fields: [shopId], references: [id], onDelete: Cascade)
 

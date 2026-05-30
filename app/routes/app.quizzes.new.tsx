@@ -38,10 +38,16 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   // Surface the shop's active brand voice name (if any) so the Customize
   // panel can render a "Brand voice: <name> active" pill at the top.
   const brandGuidelines = parseBrandGuidelinesSafe(shop?.brandGuidelines);
+  // Count discovered categories so the "Use archetype results" checkbox
+  // can disable itself with a hint when there's nothing to bind to.
+  const categoryCount = shop
+    ? await prisma.category.count({ where: { shopId: shop.id } })
+    : 0;
   return json({
     collections,
     shopId: shop?.id ?? null,
     brandVoiceName: brandGuidelines?.name ?? null,
+    categoryCount,
   });
 };
 
@@ -54,7 +60,8 @@ interface GenerateResponse {
 }
 
 export default function NewQuiz() {
-  const { collections, brandVoiceName } = useLoaderData<typeof loader>();
+  const { collections, brandVoiceName, categoryCount } =
+    useLoaderData<typeof loader>();
   const fetcher = useFetcher<GenerateResponse>();
   const navigate = useNavigate();
   const isGenerating =
@@ -249,6 +256,7 @@ export default function NewQuiz() {
                 onChange={setSettings}
                 onReset={() => setSettings(DEFAULT_GEN_SETTINGS)}
                 brandVoiceName={brandVoiceName}
+                categoryCount={categoryCount}
               />
             )}
 
@@ -295,10 +303,12 @@ function CustomizePanel({
   onChange,
   onReset,
   brandVoiceName,
+  categoryCount,
 }: {
   settings: QuizGenSettings;
   onChange: (next: QuizGenSettings) => void;
   onReset: () => void;
+  categoryCount: number;
   brandVoiceName: string | null;
 }) {
   const presetFetcher = useFetcher<{ ok: boolean; error?: string }>();
@@ -477,6 +487,17 @@ function CustomizePanel({
             title="Mix in visual / searchable inputs"
             hint="Uses image_picker + searchable in addition to multi-select."
           />
+          <SettingCheckbox
+            checked={settings.flow.use_archetype_results}
+            onChange={(v) => setFlow("use_archetype_results", v)}
+            title="Use my discovered categories as result archetypes"
+            hint={
+              categoryCount > 0
+                ? `Each result page returns the products bucketed into a matching category instead of running per-product tag scoring. ${categoryCount} categories available.`
+                : "Discover categories first to enable this option."
+            }
+            disabled={categoryCount === 0}
+          />
         </div>
       </QzCard>
 
@@ -574,11 +595,13 @@ function SettingCheckbox({
   onChange,
   title,
   hint,
+  disabled,
 }: {
   checked: boolean;
   onChange: (v: boolean) => void;
   title: string;
   hint?: string;
+  disabled?: boolean;
 }) {
   return (
     <label
@@ -586,14 +609,16 @@ function SettingCheckbox({
         display: "flex",
         gap: 10,
         alignItems: "flex-start",
-        cursor: "pointer",
+        cursor: disabled ? "not-allowed" : "pointer",
         padding: 4,
+        opacity: disabled ? 0.55 : 1,
       }}
     >
       <input
         type="checkbox"
         checked={checked}
         onChange={(e) => onChange(e.target.checked)}
+        disabled={disabled}
         style={{ marginTop: 3, accentColor: "var(--qz-accent)" }}
       />
       <span>

@@ -89,6 +89,7 @@ export function Sidebar({
         { label: "Dashboard", to: "/app", exact: true },
         { label: "Quizzes", to: "/app/quizzes", count: counts.quizzes },
         { label: "New quiz", to: "/app/quizzes/new", exact: true },
+        { label: "Categories", to: "/app/categories" },
         { label: "What's new", to: "/app/releases" },
       ],
     },

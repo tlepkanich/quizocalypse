@@ -2,7 +2,7 @@
 // Quizocalypse dashboard, redesigned in Grid Notebook style.
 // Same loader/action behavior as the original — only the JSX is rebuilt.
 
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "@remix-run/node";
 import { json } from "@remix-run/node";
 import { useFetcher, useLoaderData, Link } from "@remix-run/react";
@@ -78,6 +78,67 @@ export default function Index() {
   const isResyncing =
     fetcher.state !== "idle" && fetcher.formMethod === "POST";
 
+  // Tag enrichment: separate fetcher so it doesn't interfere with the
+  // resync button's state. Auto-loops while `remaining > 0` so one
+  // click enriches the whole catalog without the merchant babysitting.
+  const enrichFetcher = useFetcher<{
+    ok: boolean;
+    processed?: number;
+    remaining?: number;
+    shopifyErrors?: Array<{ productId: string; error: string }>;
+    enrichmentErrors?: Array<{ productId: string; error: string }>;
+    error?: string;
+  }>();
+  const isEnriching =
+    enrichFetcher.state !== "idle" && enrichFetcher.formMethod === "POST";
+  const enrichRunningRef = useRef(false);
+  const enrichTotalRef = useRef(0);
+  const enrichDoneRef = useRef(0);
+
+  const triggerEnrichBatch = () => {
+    enrichFetcher.submit(
+      {},
+      { method: "POST", action: "/api/products/enrich" },
+    );
+  };
+
+  const startEnrichment = () => {
+    if (enrichRunningRef.current) return;
+    enrichRunningRef.current = true;
+    enrichDoneRef.current = 0;
+    enrichTotalRef.current = 0;
+    triggerEnrichBatch();
+  };
+
+  // Auto-loop: when a batch finishes with `remaining > 0`, fire the next
+  // one. The ref guard prevents re-entry mid-flight.
+  useEffect(() => {
+    if (!enrichRunningRef.current) return;
+    const d = enrichFetcher.data;
+    if (!d || enrichFetcher.state !== "idle") return;
+    const processed = d.processed ?? 0;
+    const remaining = d.remaining ?? 0;
+    enrichDoneRef.current += processed;
+    enrichTotalRef.current = Math.max(
+      enrichTotalRef.current,
+      enrichDoneRef.current + remaining,
+    );
+    if (remaining > 0 && d.ok) {
+      triggerEnrichBatch();
+    } else {
+      enrichRunningRef.current = false;
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [enrichFetcher.data, enrichFetcher.state]);
+
+  const enrichLabel = (() => {
+    if (!isEnriching && !enrichRunningRef.current) return "Enrich tags";
+    if (enrichTotalRef.current > 0) {
+      return `Enriching ${enrichDoneRef.current} / ${enrichTotalRef.current}…`;
+    }
+    return "Enriching…";
+  })();
+
   const lastSyncMs = data.lastSyncAt
     ? Date.now() - new Date(data.lastSyncAt).getTime()
     : Infinity;
@@ -134,6 +195,12 @@ export default function Index() {
               disabled={isResyncing}
             >
               {isResyncing ? "Syncing…" : "Resync catalog"}
+            </QzButton>
+            <QzButton
+              onClick={startEnrichment}
+              disabled={isEnriching || data.productCount === 0}
+            >
+              {enrichLabel}
             </QzButton>
             <Link to="/app/quizzes/new">
               <QzButton variant="accent" disabled={data.productCount === 0}>
@@ -238,6 +305,31 @@ export default function Index() {
           </QzBanner>
         </div>
       )}
+
+      {/* Enrichment summary: shows once a run finishes with no further
+          batches queued. Reports total processed + any per-product errors
+          so the merchant can spot Shopify push failures vs Claude failures. */}
+      {enrichFetcher.data?.ok &&
+        !enrichRunningRef.current &&
+        enrichDoneRef.current > 0 && (
+          <div className="qz-mt-24">
+            <QzBanner
+              tone={
+                (enrichFetcher.data.shopifyErrors?.length ?? 0) +
+                  (enrichFetcher.data.enrichmentErrors?.length ?? 0) >
+                0
+                  ? "warn"
+                  : "ok"
+              }
+              title={`Enriched ${enrichDoneRef.current} product${enrichDoneRef.current === 1 ? "" : "s"}`}
+            >
+              {(enrichFetcher.data.shopifyErrors?.length ?? 0) === 0 &&
+              (enrichFetcher.data.enrichmentErrors?.length ?? 0) === 0
+                ? "Tags merged into Prisma and pushed back to Shopify."
+                : `${enrichFetcher.data.enrichmentErrors?.length ?? 0} enrichment failures, ${enrichFetcher.data.shopifyErrors?.length ?? 0} Shopify push failures. The local catalog still has the enriched tags.`}
+            </QzBanner>
+          </div>
+        )}
     </QzPage>
   );
 }

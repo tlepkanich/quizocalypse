@@ -4,6 +4,28 @@ import prisma from "../db.server";
 // Shopify bulk operation runner: kicks off a bulk products query, polls until
 // done, streams the JSONL result, normalizes into our DB. Spec §3.1.
 
+// Strip HTML tags and decode common entities to give Claude clean text
+// input for tag enrichment. Hoisted to the top so it's unambiguously
+// available to ingestJsonl below — function declarations hoist either
+// way, but Vite HMR occasionally fails to re-bind freshly-added
+// declarations that sit after their first call site.
+function stripHtml(html: string): string {
+  return html
+    .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, " ")
+    .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, " ")
+    .replace(/<\/?(p|br|li|ul|ol|h[1-6]|div)[^>]*>/gi, "\n")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&nbsp;/gi, " ")
+    .replace(/&amp;/gi, "&")
+    .replace(/&lt;/gi, "<")
+    .replace(/&gt;/gi, ">")
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;/gi, "'")
+    .replace(/\n{3,}/g, "\n\n")
+    .replace(/[ \t]+/g, " ")
+    .trim();
+}
+
 const BULK_QUERY = `#graphql
 {
   products {
@@ -16,6 +38,7 @@ const BULK_QUERY = `#graphql
         productType
         status
         tags
+        descriptionHtml
         updatedAt
         featuredImage { url }
         priceRangeV2 {
@@ -71,6 +94,7 @@ interface BulkRecord {
   productType?: string;
   status?: string;
   tags?: string[];
+  descriptionHtml?: string;
   featuredImage?: { url: string } | null;
   priceRangeV2?: {
     minVariantPrice?: { amount: string };
@@ -101,6 +125,8 @@ interface NormalizedProduct {
   imageUrl: string | null;
   priceMin: string | null;
   priceMax: string | null;
+  descriptionHtml: string | null;
+  descriptionText: string | null;
 }
 
 interface SyncResult {
@@ -284,6 +310,7 @@ async function ingestJsonl(url: string, shopId: string): Promise<number> {
 
     if (!rec.__parentId) {
       // top-level product
+      const descHtml = rec.descriptionHtml ?? null;
       products.set(rec.id, {
         productId: rec.id,
         title: rec.title ?? "",
@@ -298,6 +325,8 @@ async function ingestJsonl(url: string, shopId: string): Promise<number> {
         imageUrl: rec.featuredImage?.url ?? null,
         priceMin: rec.priceRangeV2?.minVariantPrice?.amount ?? null,
         priceMax: rec.priceRangeV2?.maxVariantPrice?.amount ?? null,
+        descriptionHtml: descHtml,
+        descriptionText: descHtml ? stripHtml(descHtml) : null,
       });
       continue;
     }
@@ -344,6 +373,8 @@ async function ingestJsonl(url: string, shopId: string): Promise<number> {
         imageUrl: p.imageUrl,
         priceMin: p.priceMin,
         priceMax: p.priceMax,
+        descriptionHtml: p.descriptionHtml,
+        descriptionText: p.descriptionText,
       },
       create: {
         productId: p.productId,
@@ -360,6 +391,8 @@ async function ingestJsonl(url: string, shopId: string): Promise<number> {
         imageUrl: p.imageUrl,
         priceMin: p.priceMin,
         priceMax: p.priceMax,
+        descriptionHtml: p.descriptionHtml,
+        descriptionText: p.descriptionText,
       },
     });
   }

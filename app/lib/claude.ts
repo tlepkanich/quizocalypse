@@ -106,6 +106,16 @@ export interface GenerateQuizInput {
   // brand voice into the system prompt so generated copy is on-brand.
   // Layered on top of settings.tone (brand voice is more specific).
   brandGuidelines?: BrandGuidelines | null;
+  // Optional discovered category list. When present + settings.flow.
+  // use_archetype_results is true, the AI is asked to name result pages
+  // to match these category names. The categories themselves are surfaced
+  // in the user message so the AI can see what's available.
+  categoryList?: Array<{
+    id: string;
+    name: string;
+    description: string;
+    tags: string[];
+  }>;
 }
 
 export class QuizGenerationError extends Error {
@@ -186,7 +196,7 @@ export async function generateQuiz(
 }
 
 function buildUserMessage(input: GenerateQuizInput): string {
-  return [
+  const parts: string[] = [
     `Quiz id: ${input.quizId}`,
     `Question count: ${input.questionCount}`,
     `Collections in scope (collection IDs): ${input.collectionIds.join(", ") || "(none — use full catalog)"}`,
@@ -196,7 +206,22 @@ function buildUserMessage(input: GenerateQuizInput): string {
     "",
     "Catalog summary (real tags, types, price bands, sample products from the scoped catalog):",
     input.catalogSummary,
-  ].join("\n");
+  ];
+  // When the wizard's archetype flag is on, surface the merchant's
+  // discovered categories so the AI can use them as the result-page
+  // backbone. The post-process step binds matching headlines back to
+  // category IDs — for that to work the AI has to name result pages
+  // using the listed names verbatim.
+  if (input.categoryList && input.categoryList.length > 0) {
+    parts.push("");
+    parts.push(
+      "Discovered shopper categories (use these names verbatim for result page headlines if instructed):",
+    );
+    for (const c of input.categoryList) {
+      parts.push(`- ${c.name}: ${c.description} [tags: ${c.tags.join(", ")}]`);
+    }
+  }
+  return parts.join("\n");
 }
 
 export interface RegeneratedQuestion {

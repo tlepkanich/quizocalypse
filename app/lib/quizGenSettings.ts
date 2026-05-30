@@ -30,6 +30,11 @@ export const QuizGenSettings = z.object({
       ask_ai_followup: z.boolean().default(false),
       end_screen: z.boolean().default(false),
       mixed_input_types: z.boolean().default(false),
+      // Bind result pages to discovered categories instead of running
+      // per-product tag scoring. The AI generator gets the category list
+      // as context; applyPostGeneration matches each result page's name
+      // back to a category id and flips match_strategy to "archetype".
+      use_archetype_results: z.boolean().default(false),
     })
     .default({
       welcome_message: false,
@@ -38,6 +43,7 @@ export const QuizGenSettings = z.object({
       ask_ai_followup: false,
       end_screen: false,
       mixed_input_types: false,
+      use_archetype_results: false,
     }),
   launcher: z
     .object({
@@ -111,6 +117,11 @@ export function buildPromptAdditions(s: QuizGenSettings): string {
       "Use a mix of question_type values: include at least one `image_picker` (each answer carries an image_url placeholder URL like https://placehold.co/600x600?text=Style+A) AND at least one `searchable` or `single_select` in addition to multi-select where appropriate.",
     );
   }
+  if (s.flow.use_archetype_results) {
+    flowAdds.push(
+      "Result pages must align with the merchant's discovered categories provided in the user message. Each result_page.headline should EXACTLY match one of the listed category names. Set each result page's match_strategy to 'archetype'. The runtime will inline the category's product list at publish time.",
+    );
+  }
   if (flowAdds.length > 0) {
     lines.push("");
     lines.push("Flow extensions (the merchant ticked these — honor them):");
@@ -130,9 +141,18 @@ export function buildPromptAdditions(s: QuizGenSettings): string {
 // integration stub gets wired. The function is defensive — if the AI
 // produced a sparse doc (e.g. no result node), we skip the affected
 // transforms rather than throwing.
+export interface PostGenerationContext {
+  // Discovered categories available for binding. When present + the
+  // archetype flag is on, applyPostGeneration matches each result page's
+  // headline (case-insensitive) against a category name and flips
+  // match_strategy + category_id.
+  categories?: Array<{ id: string; name: string }>;
+}
+
 export function applyPostGeneration(
   doc: QuizDoc,
   s: QuizGenSettings,
+  ctx: PostGenerationContext = {},
 ): QuizDoc {
   let next = doc;
 
@@ -164,6 +184,40 @@ export function applyPostGeneration(
     next = spliceIntegrationStub(next);
   }
 
+  // Archetype binding: for each generated result page, find the
+  // discovered category whose name matches (case-insensitive, normalized
+  // whitespace). When a match is found, set match_strategy=archetype +
+  // category_id. Unmatched result pages stay top_n. The publisher will
+  // inline the category's product list at publish time.
+  if (
+    s.flow.use_archetype_results &&
+    ctx.categories &&
+    ctx.categories.length > 0
+  ) {
+    const byNormName = new Map(
+      ctx.categories.map((c) => [normName(c.name), c]),
+    );
+    next = {
+      ...next,
+      results_pages: next.results_pages.map((rp) => {
+        const match =
+          byNormName.get(normName(rp.headline)) ??
+          // Fallback: AI may have named after one of the listed
+          // categories but with different casing/punctuation. Try
+          // looking up by category name appearing inside the headline.
+          ctx.categories!.find((c) =>
+            normName(rp.headline).includes(normName(c.name)),
+          );
+        if (!match) return rp;
+        return {
+          ...rp,
+          match_strategy: "archetype" as const,
+          category_id: match.id,
+        };
+      }),
+    };
+  }
+
   // If the merchant asked for mid-flow product previews but the AI didn't
   // flag any question, flip the flag on the middle question as a safety
   // net. The instruction in buildPromptAdditions usually handles this —
@@ -188,6 +242,12 @@ export function applyPostGeneration(
   }
 
   return next;
+}
+
+// Lowercase + collapse whitespace + strip non-letters so the archetype
+// binder finds matches even when the AI altered casing or punctuation.
+function normName(s: string): string {
+  return s.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
 }
 
 // Splice an integration node onto every edge that targets the first result

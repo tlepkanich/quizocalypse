@@ -94,6 +94,21 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   // generator's system prompt so generated copy stays on-brand.
   const brandGuidelines = parseBrandGuidelinesSafe(shop.brandGuidelines);
 
+  // When the wizard's archetype flag is on, surface the discovered
+  // categories so the AI names result pages to match them and the post-
+  // process step can bind category_id onto each result page.
+  const wantsArchetype =
+    input.settings?.flow.use_archetype_results === true;
+  const categoryList = wantsArchetype
+    ? (
+        await prisma.category.findMany({
+          where: { shopId: shop.id },
+          select: { id: true, name: true, description: true, tags: true },
+          orderBy: { createdAt: "asc" },
+        })
+      )
+    : [];
+
   try {
     const aiDraft = await generateQuiz({
       quizId: quiz.id,
@@ -103,14 +118,17 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       catalogSummary: index.summary,
       ...(input.settings ? { settings: input.settings } : {}),
       ...(brandGuidelines ? { brandGuidelines } : {}),
+      ...(categoryList.length > 0 ? { categoryList } : {}),
     });
 
     // Deterministic post-process: applies theme preset, launcher_config,
-    // integration stub, and the mid-flow-preview safety net. No-op when
-    // settings are absent so the legacy flow keeps producing identical
-    // output.
+    // integration stub, mid-flow-preview safety net, and the archetype
+    // binding when categories were threaded through. No-op when settings
+    // are absent so the legacy flow keeps producing identical output.
     const draftJson = input.settings
-      ? applyPostGeneration(aiDraft, input.settings)
+      ? applyPostGeneration(aiDraft, input.settings, {
+          categories: categoryList.map((c) => ({ id: c.id, name: c.name })),
+        })
       : aiDraft;
 
     await prisma.quiz.update({

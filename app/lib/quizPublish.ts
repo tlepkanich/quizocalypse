@@ -138,9 +138,36 @@ export async function publishQuiz(
     : null;
   const resolvedTokens = resolveDesignTokens(shopTokens, doc.design_tokens);
 
+  // For any result page bound to a discovered category (match_strategy
+  // === "archetype" + category_id), inline the category's product list
+  // onto the page so the storefront runtime doesn't need a DB lookup.
+  // Top-N pages (no category_id) are untouched.
+  const archetypeCategoryIds = doc.results_pages
+    .filter((r) => r.match_strategy === "archetype" && r.category_id)
+    .map((r) => r.category_id!);
+  const categoryRows =
+    archetypeCategoryIds.length > 0
+      ? await prisma.category.findMany({
+          where: { id: { in: archetypeCategoryIds } },
+          select: { id: true, productIds: true },
+        })
+      : [];
+  const categoryProductIdsById = new Map(
+    categoryRows.map((c) => [c.id, c.productIds]),
+  );
+  const bakedResultsPages = doc.results_pages.map((r) =>
+    r.match_strategy === "archetype" && r.category_id
+      ? {
+          ...r,
+          category_product_ids: categoryProductIdsById.get(r.category_id) ?? [],
+        }
+      : r,
+  );
+
   const nextVersion = quiz.version + 1;
   const publishedJson: PublishedQuiz = {
     ...doc,
+    results_pages: bakedResultsPages,
     status: "published",
     design_tokens: resolvedTokens,
     product_index: productIndex,
