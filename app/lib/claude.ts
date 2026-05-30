@@ -5,6 +5,11 @@ import {
   QuestionDataObject,
 } from "./quizSchema";
 import type { QuestionData } from "./quizSchema";
+import { buildPromptAdditions, type QuizGenSettings } from "./quizGenSettings";
+import {
+  buildBrandVoiceAddition,
+  type BrandGuidelines,
+} from "./brandGuidelines";
 import type { z } from "zod";
 
 const REGEN_SYSTEM_PROMPT =
@@ -60,6 +65,9 @@ export interface RegenerateQuestionInput {
   catalogSummary: string;
   existingQuestion: z.infer<typeof QuestionData>;
   steeringPrompt: string;
+  // Optional brand guidelines — folded onto REGEN_SYSTEM_PROMPT so a
+  // regenerated question matches the same voice as freshly generated ones.
+  brandGuidelines?: BrandGuidelines | null;
 }
 
 const MODEL = "claude-sonnet-4-6";
@@ -89,6 +97,15 @@ export interface GenerateQuizInput {
   collectionIds: string[];
   catalogSummary: string;
   quizId: string;
+  // Optional wizard settings — when present, their tone + flow flags are
+  // appended to the system prompt to bias structure. Deterministic things
+  // (theme tokens, launcher, integration stub) are applied separately
+  // *after* generation via applyPostGeneration in quizGenSettings.ts.
+  settings?: QuizGenSettings;
+  // Optional brand guidelines (from shop.brandGuidelines) — folds the
+  // brand voice into the system prompt so generated copy is on-brand.
+  // Layered on top of settings.tone (brand voice is more specific).
+  brandGuidelines?: BrandGuidelines | null;
 }
 
 export class QuizGenerationError extends Error {
@@ -115,12 +132,22 @@ export async function generateQuiz(
     input_schema: quizToolJsonSchema as unknown as Anthropic.Tool.InputSchema,
   } satisfies Anthropic.Tool;
 
+  // Wizard settings (optional) append tone + flow instructions to the
+  // system prompt. When absent the prompt is byte-identical to before the
+  // wizard upgrade, so the existing minimal-input flow stays unaffected.
+  // Brand guidelines (also optional) layer on top — they're more specific
+  // than the wizard's tone axis so they take precedence in the prompt.
+  const systemPrompt =
+    SYSTEM_PROMPT +
+    (input.settings ? buildPromptAdditions(input.settings) : "") +
+    buildBrandVoiceAddition(input.brandGuidelines);
+
   let lastIssue: string | undefined;
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
     const response = await client().messages.create({
       model: MODEL,
       max_tokens: MAX_TOKENS,
-      system: SYSTEM_PROMPT,
+      system: systemPrompt,
       tools: [tool],
       tool_choice: { type: "tool", name: "emit_quiz" },
       messages: [
@@ -210,12 +237,17 @@ export async function regenerateQuestion(
     input.steeringPrompt || "(none)",
   ].join("\n");
 
+  // Brand voice (optional) takes precedence over the generic regen
+  // instructions so a tuned brand always wins over the default tone.
+  const regenSystem =
+    REGEN_SYSTEM_PROMPT + buildBrandVoiceAddition(input.brandGuidelines);
+
   let lastIssue: string | undefined;
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
     const response = await client().messages.create({
       model: MODEL,
       max_tokens: 2048,
-      system: REGEN_SYSTEM_PROMPT,
+      system: regenSystem,
       tools: [tool],
       tool_choice: { type: "tool", name: "emit_question" },
       messages: [
@@ -291,6 +323,10 @@ export interface AskAIChatInput {
   // message — pass that as `userMessage` so the caller can pre-check it.
   history: AskAIMessage[];
   userMessage: string;
+  // Optional brand guidelines — folded into the system prompt between the
+  // merchant instructions and the safety rails. Brand voice steers tone;
+  // safety rails still win on conflict.
+  brandGuidelines?: BrandGuidelines | null;
 }
 
 // Hard cap on history we forward to Claude per turn — protects against
@@ -335,12 +371,17 @@ export interface AskAIChatResult {
 export async function runAskAIChat(
   input: AskAIChatInput,
 ): Promise<AskAIChatResult> {
-  const system = buildAskAISystem({
-    systemPrompt: input.systemPrompt,
-    personaName: input.personaName,
-    quizContext: input.quizContext,
-    catalogSummary: input.catalogSummary,
-  });
+  // Build the base AskAI system prompt then layer the shop's brand voice
+  // between the merchant instructions and the safety rails. The voice
+  // addition embeds itself with its own header so it reads as a distinct
+  // section in the final prompt.
+  const system =
+    buildAskAISystem({
+      systemPrompt: input.systemPrompt,
+      personaName: input.personaName,
+      quizContext: input.quizContext,
+      catalogSummary: input.catalogSummary,
+    }) + buildBrandVoiceAddition(input.brandGuidelines);
 
   // Trim to the most recent ASK_AI_HISTORY_CAP turns. Pair the new user
   // message at the end.

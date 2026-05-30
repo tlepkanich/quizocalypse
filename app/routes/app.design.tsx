@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "@remix-run/node";
 import { json } from "@remix-run/node";
 import { useFetcher, useLoaderData } from "@remix-run/react";
@@ -23,8 +23,14 @@ import {
   QzField,
   QzInput,
   QzSelect,
+  QzTooltip,
 } from "../components/qz";
 import { THEME_PRESETS, type ThemePreset } from "../lib/themePresets";
+import {
+  parseBrandGuidelinesSafe,
+  type BrandGuidelines,
+} from "../lib/brandGuidelines";
+import { BRAND_VOICE_PRESETS } from "../lib/brandVoicePresets";
 
 const COLOR_ROLES = [
   { key: "primary", label: "Primary" },
@@ -42,7 +48,8 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   });
   const parsed = BrandTokens.safeParse(shop?.brandTokens ?? {});
   const tokens = parsed.success ? parsed.data : {};
-  return json({ tokens });
+  const guidelines = parseBrandGuidelinesSafe(shop?.brandGuidelines ?? null);
+  return json({ tokens, guidelines });
 };
 
 export const action = async ({ request }: ActionFunctionArgs) => {
@@ -72,7 +79,8 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 };
 
 export default function DesignSettings() {
-  const { tokens: initialTokens } = useLoaderData<typeof loader>();
+  const { tokens: initialTokens, guidelines: initialGuidelines } =
+    useLoaderData<typeof loader>();
   const fetcher = useFetcher<{ ok: boolean; savedAt?: string; error?: string }>();
   const [tokens, setTokens] = useState<DesignTokensT>(initialTokens);
   const resolved = resolveDesignTokens(tokens);
@@ -221,6 +229,12 @@ export default function DesignSettings() {
         }}
       >
         <div className="qz-col qz-gap-24">
+          <BrandGuidelinesCard
+            initialGuidelines={initialGuidelines}
+            onApplyTokens={save}
+            currentTokens={tokens}
+          />
+
           <QzCard>
             <div className="qz-col qz-gap-16">
               <div>
@@ -579,6 +593,396 @@ function Preview({ resolved }: { resolved: DesignTokensT }) {
           <button style={btn}>Start</button>
         </div>
       </div>
+    </div>
+  );
+}
+
+// Brand voice card. Two states:
+//   - Empty: tabs for "Pick a preset" (8 archetype tiles) and "Upload your
+//     own" (file picker for PDF / image / text). Both POST to
+//     /app/design/guidelines and re-render via fetcher.data.
+//   - Loaded: tone summary + suggested-token review sub-card with Apply
+//     buttons + Remove/Change links.
+function BrandGuidelinesCard({
+  initialGuidelines,
+  onApplyTokens,
+  currentTokens,
+}: {
+  initialGuidelines: BrandGuidelines | null;
+  onApplyTokens: (next: DesignTokensT) => void;
+  currentTokens: DesignTokensT;
+}) {
+  const fetcher = useFetcher<{
+    ok: boolean;
+    guidelines?: BrandGuidelines | null;
+    error?: string;
+  }>();
+  const [tab, setTab] = useState<"preset" | "upload">("preset");
+  // The card mirrors the most recent fetcher.data when present, falling
+  // back to loader data on first render. So clicking a preset updates the
+  // UI immediately on the next render cycle.
+  const guidelines = fetcher.data?.guidelines ?? initialGuidelines;
+  const isWorking = fetcher.state !== "idle";
+
+  const pickPreset = (presetId: string) => {
+    const form = new FormData();
+    form.set("presetId", presetId);
+    fetcher.submit(form, {
+      method: "POST",
+      action: "/app/design/guidelines",
+    });
+  };
+
+  const uploadFile = (file: File) => {
+    const form = new FormData();
+    form.set("file", file);
+    fetcher.submit(form, {
+      method: "POST",
+      action: "/app/design/guidelines",
+      encType: "multipart/form-data",
+    });
+  };
+
+  const remove = () => {
+    fetcher.submit(null, {
+      method: "DELETE",
+      action: "/app/design/guidelines",
+    });
+  };
+
+  // Empty state — show tabs.
+  if (!guidelines) {
+    return (
+      <QzCard>
+        <div className="qz-col qz-gap-16">
+          <div>
+            <div className="qz-label">Brand voice</div>
+            <h2 className="qz-h1 qz-mt-8">Set your voice</h2>
+            <p className="qz-muted qz-mt-8" style={{ maxWidth: "52ch" }}>
+              Pick an archetype or upload your brand book. The voice gets
+              folded into every AI surface — new quiz generation,
+              regenerate, and the in-quiz AI chat.
+            </p>
+          </div>
+
+          {/* Tabs */}
+          <div
+            className="qz-row qz-gap-8"
+            style={{ borderBottom: "1px solid var(--qz-rule)", paddingBottom: 8 }}
+          >
+            <TabBtn active={tab === "preset"} onClick={() => setTab("preset")}>
+              Pick a preset
+            </TabBtn>
+            <TabBtn active={tab === "upload"} onClick={() => setTab("upload")}>
+              Upload your own
+            </TabBtn>
+          </div>
+
+          {tab === "preset" && (
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns:
+                  "repeat(auto-fill, minmax(220px, 1fr))",
+                gap: 12,
+              }}
+            >
+              {BRAND_VOICE_PRESETS.map((preset) => (
+                <QzTooltip
+                  key={preset.id}
+                  content={
+                    <span>
+                      <strong style={{ display: "block", marginBottom: 4 }}>
+                        Tone
+                      </strong>
+                      {preset.guidelines.voice.tone_description}
+                    </span>
+                  }
+                >
+                  <button
+                    type="button"
+                    onClick={() => pickPreset(preset.id)}
+                    disabled={isWorking}
+                    style={{
+                      textAlign: "left",
+                      background: "var(--qz-paper)",
+                      border: "1px solid var(--qz-rule)",
+                      borderRadius: "var(--qz-radius)",
+                      padding: 12,
+                      cursor: isWorking ? "wait" : "pointer",
+                      fontFamily: "var(--qz-font-body)",
+                      color: "var(--qz-ink)",
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: 4,
+                      opacity: isWorking ? 0.6 : 1,
+                      width: "100%",
+                    }}
+                  >
+                    <span style={{ fontWeight: 600, fontSize: 14 }}>
+                      {preset.label}
+                    </span>
+                    <span
+                      className="qz-muted"
+                      style={{ fontSize: 11, lineHeight: 1.3 }}
+                    >
+                      {preset.inspiration}
+                    </span>
+                  </button>
+                </QzTooltip>
+              ))}
+            </div>
+          )}
+
+          {tab === "upload" && (
+            <div
+              style={{
+                border: "1px dashed var(--qz-rule)",
+                borderRadius: "var(--qz-radius)",
+                padding: 24,
+                textAlign: "center",
+              }}
+            >
+              <label
+                style={{
+                  display: "inline-block",
+                  cursor: isWorking ? "wait" : "pointer",
+                  background: "var(--qz-ink)",
+                  color: "var(--qz-paper)",
+                  padding: "10px 16px",
+                  borderRadius: "var(--qz-radius)",
+                  fontSize: 14,
+                  fontWeight: 500,
+                }}
+              >
+                {isWorking ? "Reading…" : "Choose a file"}
+                <input
+                  type="file"
+                  accept=".pdf,.png,.jpg,.jpeg,.webp,.gif,.txt,.md,application/pdf,image/png,image/jpeg,image/webp,image/gif,text/plain,text/markdown"
+                  style={{ display: "none" }}
+                  disabled={isWorking}
+                  onChange={(e) => {
+                    const f = e.target.files?.[0];
+                    if (f) uploadFile(f);
+                  }}
+                />
+              </label>
+              <p
+                className="qz-muted"
+                style={{ fontSize: 12, marginTop: 12, marginBottom: 0 }}
+              >
+                PDF, image (PNG/JPEG/WebP), or text/markdown. Up to 10MB.
+              </p>
+            </div>
+          )}
+
+          {fetcher.data?.ok === false && (
+            <QzBanner tone="crit" title="Couldn't process that">
+              {fetcher.data.error ?? "Unknown error"}
+            </QzBanner>
+          )}
+        </div>
+      </QzCard>
+    );
+  }
+
+  // Loaded state — render the voice summary + visual suggestions.
+  const sug = guidelines.visual_suggestions.tokens;
+  const hasSugColors = !!sug?.colors && Object.keys(sug.colors).length > 0;
+  const hasSugTypography =
+    !!sug?.typography &&
+    (sug.typography.heading?.family || sug.typography.body?.family);
+
+  const applyColors = () => {
+    if (!sug?.colors) return;
+    onApplyTokens({
+      ...currentTokens,
+      colors: { ...(currentTokens.colors ?? {}), ...sug.colors },
+    });
+  };
+  const applyFonts = () => {
+    if (!sug?.typography) return;
+    onApplyTokens({
+      ...currentTokens,
+      typography: {
+        ...(currentTokens.typography ?? {}),
+        ...(sug.typography.heading
+          ? { heading: { ...(currentTokens.typography?.heading ?? {}), ...sug.typography.heading } }
+          : {}),
+        ...(sug.typography.body
+          ? { body: { ...(currentTokens.typography?.body ?? {}), ...sug.typography.body } }
+          : {}),
+      },
+    });
+  };
+
+  return (
+    <QzCard>
+      <div className="qz-col qz-gap-16">
+        <div className="qz-row qz-row-between" style={{ alignItems: "baseline" }}>
+          <div>
+            <div className="qz-label">Brand voice</div>
+            <h2 className="qz-h1 qz-mt-8">{guidelines.name}</h2>
+          </div>
+          <div className="qz-row qz-gap-8">
+            <button
+              type="button"
+              onClick={() => {
+                // Soft "change voice" — clear the local data so the empty
+                // tabs reappear without forcing the merchant to confirm a
+                // destructive remove.
+                fetcher.submit(null, {
+                  method: "DELETE",
+                  action: "/app/design/guidelines",
+                });
+              }}
+              style={{
+                background: "transparent",
+                border: "none",
+                color: "var(--qz-ink-3)",
+                cursor: "pointer",
+                fontSize: 12,
+                fontFamily: "var(--qz-font-mono)",
+              }}
+            >
+              change voice
+            </button>
+          </div>
+        </div>
+
+        <p style={{ margin: 0, lineHeight: 1.5 }}>
+          {guidelines.voice.tone_description}
+        </p>
+
+        {guidelines.voice.do_list.length > 0 && (
+          <ListBlock label="Do" items={guidelines.voice.do_list} />
+        )}
+        {guidelines.voice.dont_list.length > 0 && (
+          <ListBlock label="Don't" items={guidelines.voice.dont_list} />
+        )}
+
+        {(hasSugColors || hasSugTypography) && (
+          <div
+            style={{
+              borderTop: "1px solid var(--qz-rule)",
+              paddingTop: 16,
+            }}
+            className="qz-col qz-gap-12"
+          >
+            <div className="qz-label">Visual suggestions</div>
+            <p className="qz-muted" style={{ fontSize: 12, margin: 0 }}>
+              Extracted from your guidelines. Review before applying — we
+              never overwrite your colors silently.
+            </p>
+            {hasSugColors && (
+              <div className="qz-row qz-gap-8" style={{ flexWrap: "wrap" }}>
+                {Object.entries(sug!.colors!).map(([key, hex]) =>
+                  hex ? (
+                    <div
+                      key={key}
+                      className="qz-row qz-gap-8"
+                      style={{ alignItems: "center" }}
+                    >
+                      <span
+                        style={{
+                          width: 18,
+                          height: 18,
+                          borderRadius: 4,
+                          background: hex,
+                          border: "1px solid rgba(0,0,0,0.08)",
+                        }}
+                      />
+                      <span
+                        className="qz-mono qz-dim"
+                        style={{ fontSize: 10 }}
+                      >
+                        {key} · {hex}
+                      </span>
+                    </div>
+                  ) : null,
+                )}
+              </div>
+            )}
+            <div className="qz-row qz-gap-8">
+              {hasSugColors && (
+                <QzButton size="sm" onClick={applyColors}>
+                  Apply colors
+                </QzButton>
+              )}
+              {hasSugTypography && (
+                <QzButton size="sm" onClick={applyFonts}>
+                  Apply fonts
+                </QzButton>
+              )}
+            </div>
+          </div>
+        )}
+
+        <div className="qz-row qz-gap-8" style={{ justifyContent: "flex-end" }}>
+          <button
+            type="button"
+            onClick={remove}
+            style={{
+              background: "transparent",
+              border: "none",
+              color: "var(--qz-crit)",
+              cursor: "pointer",
+              fontSize: 12,
+              fontFamily: "var(--qz-font-mono)",
+            }}
+          >
+            remove guidelines
+          </button>
+        </div>
+      </div>
+    </QzCard>
+  );
+}
+
+function TabBtn({
+  active,
+  onClick,
+  children,
+}: {
+  active: boolean;
+  onClick: () => void;
+  children: ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      style={{
+        background: "transparent",
+        border: "none",
+        padding: "6px 4px",
+        cursor: "pointer",
+        fontFamily: "var(--qz-font-body)",
+        fontSize: 13,
+        fontWeight: active ? 600 : 500,
+        color: active ? "var(--qz-ink)" : "var(--qz-ink-3)",
+        borderBottom: active
+          ? "2px solid var(--qz-accent)"
+          : "2px solid transparent",
+        marginBottom: -8,
+      }}
+    >
+      {children}
+    </button>
+  );
+}
+
+function ListBlock({ label, items }: { label: string; items: string[] }) {
+  return (
+    <div>
+      <div className="qz-label" style={{ marginBottom: 6 }}>
+        {label}
+      </div>
+      <ul style={{ margin: 0, paddingLeft: 18, fontSize: 13, lineHeight: 1.5 }}>
+        {items.map((item, i) => (
+          <li key={i}>{item}</li>
+        ))}
+      </ul>
     </div>
   );
 }

@@ -38,6 +38,7 @@ import prisma from "../db.server";
 import { Quiz } from "../lib/quizSchema";
 import { publishQuiz, PublishError } from "../lib/quizPublish";
 import { regenerateQuestion } from "../lib/claude";
+import { parseBrandGuidelinesSafe } from "../lib/brandGuidelines";
 import { buildScopedIndex } from "../lib/catalogIndex";
 import {
   recommendForResult,
@@ -232,12 +233,15 @@ export const action = async ({ params, request }: ActionFunctionArgs) => {
       doc.scope.collection_ids,
     );
 
+    const brandGuidelines = parseBrandGuidelinesSafe(shop.brandGuidelines);
+
     let regen;
     try {
       regen = await regenerateQuestion({
         catalogSummary: indexed.summary,
         existingQuestion: target.data,
         steeringPrompt,
+        ...(brandGuidelines ? { brandGuidelines } : {}),
       });
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);

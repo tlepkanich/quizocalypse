@@ -3,6 +3,7 @@ import { json } from "@remix-run/node";
 import prisma from "../db.server";
 import { Quiz } from "../lib/quizSchema";
 import { runAskAIChat, type AskAIMessage } from "../lib/claude";
+import { parseBrandGuidelinesSafe } from "../lib/brandGuidelines";
 import type { IndexedProduct } from "../lib/recommendationEngine";
 
 // AskAI chat endpoint. The runtime POSTs the current AskAI node id, the
@@ -38,11 +39,19 @@ export async function action({ params, request }: ActionFunctionArgs) {
 
   const quiz = await prisma.quiz.findFirst({
     where: { id },
-    select: { publishedJson: true },
+    // Include the parent shop's brand guidelines so we can apply the
+    // brand voice to the assistant's reply.
+    select: {
+      publishedJson: true,
+      shop: { select: { brandGuidelines: true } },
+    },
   });
   if (!quiz?.publishedJson) {
     return json({ error: "Quiz not published" }, { status: 404 });
   }
+  const brandGuidelines = parseBrandGuidelinesSafe(
+    quiz.shop?.brandGuidelines,
+  );
 
   const parsed = Quiz.safeParse(quiz.publishedJson);
   if (!parsed.success) {
@@ -97,6 +106,7 @@ export async function action({ params, request }: ActionFunctionArgs) {
       catalogSummary,
       history: body.history,
       userMessage: body.userMessage,
+      ...(brandGuidelines ? { brandGuidelines } : {}),
     });
     return json({ reply: result.reply });
   } catch (err) {

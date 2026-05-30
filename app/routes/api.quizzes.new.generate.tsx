@@ -5,6 +5,11 @@ import { authenticate } from "../shopify.server";
 import prisma from "../db.server";
 import { buildScopedIndex } from "../lib/catalogIndex";
 import { generateQuiz, QuizGenerationError } from "../lib/claude";
+import {
+  QuizGenSettings,
+  applyPostGeneration,
+} from "../lib/quizGenSettings";
+import { parseBrandGuidelinesSafe } from "../lib/brandGuidelines";
 
 // Spec §3.2: AI Quiz Generator. Input validated with Zod, then catalog summary
 // + prompt go to Claude with forced tool-use. Output re-validated against the
@@ -18,14 +23,20 @@ const FormSchema = z.object({
   collection_ids: z.array(z.string()).default([]),
   goal_prompt: z.string().trim().min(1).max(500),
   question_count: z.number().int().min(3).max(8),
+  // Optional wizard-customize settings. Absent => no biasing + no post-process.
+  settings: QuizGenSettings.optional(),
 });
 
 function parseForm(form: FormData): z.infer<typeof FormSchema> | null {
   try {
+    const rawSettings = form.get("settings");
     const raw = {
       collection_ids: JSON.parse(String(form.get("collection_ids") ?? "[]")),
       goal_prompt: String(form.get("goal_prompt") ?? ""),
       question_count: Number(form.get("question_count")),
+      ...(rawSettings
+        ? { settings: JSON.parse(String(rawSettings)) }
+        : {}),
     };
     const parsed = FormSchema.safeParse(raw);
     return parsed.success ? parsed.data : null;
@@ -79,14 +90,28 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     },
   });
 
+  // Fold the shop's brand voice (if uploaded or preset-picked) into the
+  // generator's system prompt so generated copy stays on-brand.
+  const brandGuidelines = parseBrandGuidelinesSafe(shop.brandGuidelines);
+
   try {
-    const draftJson = await generateQuiz({
+    const aiDraft = await generateQuiz({
       quizId: quiz.id,
       goalPrompt: input.goal_prompt,
       questionCount: input.question_count,
       collectionIds: input.collection_ids,
       catalogSummary: index.summary,
+      ...(input.settings ? { settings: input.settings } : {}),
+      ...(brandGuidelines ? { brandGuidelines } : {}),
     });
+
+    // Deterministic post-process: applies theme preset, launcher_config,
+    // integration stub, and the mid-flow-preview safety net. No-op when
+    // settings are absent so the legacy flow keeps producing identical
+    // output.
+    const draftJson = input.settings
+      ? applyPostGeneration(aiDraft, input.settings)
+      : aiDraft;
 
     await prisma.quiz.update({
       where: { id: quiz.id },

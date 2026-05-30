@@ -19,7 +19,13 @@ import {
   QzBanner,
   QzStat,
   QzStatGrid,
+  QzTooltip,
 } from "../components/qz";
+import {
+  LATEST_RELEASES,
+  type Release,
+  type ReleaseFeature,
+} from "../lib/releases";
 
 const AUTO_RESYNC_THRESHOLD_MS = 5 * 60 * 1000;
 
@@ -241,13 +247,7 @@ export default function Index() {
             />
           </QzCard>
 
-          <QzCard dashed>
-            <div className="qz-label">Tip</div>
-            <p className="qz-h3 qz-mt-8" style={{ lineHeight: 1.4 }}>
-              Quizzes with an <span className="qz-serif-italic">email step</span>{" "}
-              capture ~3× more leads — and the AI will skip it if you ask.
-            </p>
-          </QzCard>
+          <WhatsNewCard releases={LATEST_RELEASES} />
         </div>
       </section>
 
@@ -295,4 +295,106 @@ function ActivityRow({
 
 function shortDomain(d: string) {
   return d.replace(/\.myshopify\.com$/, "");
+}
+
+// Compact "What's new" card for the dashboard right column. Lists the
+// latest N releases as compressed rows — each with a version chip, the
+// release name, and a flex-wrap of feature pills. Hovering or tapping a
+// pill reveals the feature description via QzTooltip.
+function WhatsNewCard({ releases }: { releases: Release[] }) {
+  return (
+    <QzCard>
+      <div
+        className="qz-row qz-row-between"
+        style={{ alignItems: "baseline", marginBottom: 12 }}
+      >
+        <div className="qz-label">What&apos;s new</div>
+        <Link
+          to="/app/releases"
+          prefetch="intent"
+          style={{
+            fontSize: 11,
+            fontFamily: "var(--qz-font-mono)",
+            color: "var(--qz-ink-3)",
+            textDecoration: "none",
+          }}
+        >
+          View all →
+        </Link>
+      </div>
+      <div className="qz-col qz-gap-16">
+        {releases.map((r, idx) => (
+          <div
+            key={r.version}
+            style={{
+              paddingBottom: idx === releases.length - 1 ? 0 : 12,
+              borderBottom:
+                idx === releases.length - 1
+                  ? "none"
+                  : "1px solid var(--qz-rule)",
+            }}
+          >
+            <div
+              className="qz-row qz-gap-8"
+              style={{ alignItems: "baseline" }}
+            >
+              <QzBadge tone="ok">{r.version}</QzBadge>
+              <span
+                style={{
+                  fontWeight: 600,
+                  fontSize: 14,
+                  color: "var(--qz-ink)",
+                }}
+              >
+                {r.name}
+              </span>
+            </div>
+            <p
+              className="qz-muted"
+              style={{ fontSize: 12, margin: "6px 0 8px", lineHeight: 1.4 }}
+            >
+              {r.summary}
+            </p>
+            <ReleaseFeatures features={r.features} />
+          </div>
+        ))}
+      </div>
+    </QzCard>
+  );
+}
+
+// Shared pill+tooltip rendering used on both the dashboard card and the
+// dedicated /app/releases page. Extracted so we don't duplicate the
+// styling logic.
+export function ReleaseFeatures({ features }: { features: ReleaseFeature[] }) {
+  return (
+    <div
+      style={{
+        display: "flex",
+        flexWrap: "wrap",
+        gap: 6,
+      }}
+    >
+      {features.map((f) => (
+        <QzTooltip key={f.title} content={f.description}>
+          <button
+            type="button"
+            style={{
+              background: "var(--qz-cream-2)",
+              border: "1px solid var(--qz-rule)",
+              borderRadius: 999,
+              padding: "4px 10px",
+              fontSize: 11,
+              fontFamily: "var(--qz-font-body)",
+              color: "var(--qz-ink-2)",
+              cursor: "help",
+              lineHeight: 1.3,
+            }}
+          >
+            {f.title}
+          </button>
+        </QzTooltip>
+      ))}
+    </div>
+  );
 }

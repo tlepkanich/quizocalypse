@@ -4,6 +4,7 @@
 //
 // Usage: import { QzButton, QzCard, QzStat, ... } from "~/components/qz";
 
+import { useEffect, useRef, useState } from "react";
 import type {
   ButtonHTMLAttributes,
   HTMLAttributes,
@@ -173,5 +174,80 @@ export function QzPageHeader({
         {actions && <div className="qz-actions">{actions}</div>}
       </div>
     </header>
+  );
+}
+
+// Hover-or-tap tooltip. Desktop: mouse over the trigger to show, away to
+// hide. Touch: tap toggles open; tapping outside or pressing Escape closes
+// it. The body is an absolutely-positioned card sized to ~280px wide so
+// short feature blurbs read comfortably without dominating the viewport.
+export function QzTooltip({
+  children,
+  content,
+}: {
+  children: ReactNode;
+  content: ReactNode;
+}) {
+  const [open, setOpen] = useState(false);
+  const wrapRef = useRef<HTMLSpanElement | null>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const onDocClick = (e: MouseEvent) => {
+      if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpen(false);
+    };
+    document.addEventListener("click", onDocClick);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("click", onDocClick);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
+
+  return (
+    <span
+      ref={wrapRef}
+      style={{ position: "relative", display: "inline-flex" }}
+      onMouseEnter={() => setOpen(true)}
+      onMouseLeave={() => setOpen(false)}
+      onClick={(e) => {
+        // Tap-toggle for touch devices. stopPropagation so the
+        // document-click listener doesn't immediately close us.
+        e.stopPropagation();
+        setOpen((o) => !o);
+      }}
+    >
+      {children}
+      {open && (
+        <span
+          role="tooltip"
+          style={{
+            position: "absolute",
+            top: "calc(100% + 6px)",
+            left: 0,
+            zIndex: 50,
+            background: "var(--qz-ink)",
+            color: "var(--qz-paper)",
+            padding: "10px 12px",
+            borderRadius: "var(--qz-radius)",
+            fontSize: 12,
+            lineHeight: 1.4,
+            maxWidth: 280,
+            minWidth: 200,
+            boxShadow: "0 4px 16px rgba(0,0,0,0.18)",
+            // Render the tooltip below the trigger so it doesn't get clipped
+            // by parent cards. left:0 keeps it left-aligned with the chip.
+            pointerEvents: "auto",
+          }}
+        >
+          {content}
+        </span>
+      )}
+    </span>
   );
 }

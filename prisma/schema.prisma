@@ -38,6 +38,10 @@ model Shop {
   lastSyncStatus String?
   lastSyncError  String?
   brandTokens    Json?
+  // Phase 7: structured brand voice guidelines distilled from a brand
+  // book / image / text upload, or selected from the curated preset
+  // library. See app/lib/brandGuidelines.ts for the schema.
+  brandGuidelines Json?
 
   products    Product[]
   collections Collection[]
