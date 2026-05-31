@@ -61,6 +61,34 @@ export async function loadQuizEditorData(request: Request, id: string) {
   );
 
   const parsed = Quiz.safeParse(quiz.draftJson);
+
+  // Step-1 buckets: this quiz's own Category rows, plus any legacy shop-global
+  // (quizId = null) rows referenced by the draft's result nodes (so existing
+  // AI-bound quizzes show their groups). Mapped to a lean, client-safe shape.
+  const referencedCategoryIds = parsed.success
+    ? parsed.data.nodes
+        .filter((n) => n.type === "result" && n.data.category_id)
+        .map((n) => (n.type === "result" ? (n.data.category_id as string) : ""))
+        .filter(Boolean)
+    : [];
+  const categoryRows = await prisma.category.findMany({
+    where: {
+      shopId: shop.id,
+      OR: [{ quizId: quiz.id }, { id: { in: referencedCategoryIds } }],
+    },
+    orderBy: { name: "asc" },
+  });
+  const categories = categoryRows.map((c) => ({
+    id: c.id,
+    name: c.name,
+    description: c.description,
+    tags: c.tags,
+    productIds: c.productIds,
+    source: c.source,
+    sourceRef: c.sourceRef,
+    quizId: c.quizId,
+  }));
+
   const origin = new URL(request.url).origin;
   return {
     quizId: quiz.id,
@@ -79,6 +107,7 @@ export async function loadQuizEditorData(request: Request, id: string) {
     collections,
     catalogTags,
     productIndex,
+    categories,
     previewUrl: `${origin}/q/${quiz.id}`,
   };
 }

@@ -1,8 +1,15 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "@remix-run/node";
 import { json } from "@remix-run/node";
-import { Link, useFetcher, useLoaderData } from "@remix-run/react";
+import { Link, useFetcher, useLoaderData, useSearchParams } from "@remix-run/react";
 import { TitleBar } from "@shopify/app-bridge-react";
+import { BuilderStepper, type StepState } from "../components/builder/BuilderStepper";
+import { Step1Products } from "../components/builder/Step1Products";
+import { Step2PageModel } from "../components/builder/Step2PageModel";
+import { Step3PageGallery } from "../components/builder/Step3PageGallery";
+import { Step5Preview } from "../components/builder/Step5Preview";
+import type { StepProps } from "../components/builder/stepProps";
+import { reconcileBucketsToResultNodes } from "../lib/bucketReconcile";
 import {
   QzPage,
   QzPageHeader,
@@ -119,16 +126,36 @@ export default function StudioRoute() {
       </QzPage>
     );
   }
-  return <Studio key={data.quizId} data={data} />;
+  return <BuilderShell key={data.quizId} data={data} />;
 }
 
 type LoaderData = ReturnType<typeof useLoaderData<typeof loader>>;
 
-function Studio({ data }: { data: LoaderData }) {
+function BuilderShell({ data }: { data: LoaderData }) {
   const [doc, setDoc] = useState<QuizDoc>(data.doc as QuizDoc);
   const [zoomId, setZoomId] = useState<string | null>(null);
   const collections = data.collections;
   const productIndex = data.productIndex;
+  const categories = data.categories;
+
+  const [params, setParams] = useSearchParams();
+  const stepParam = Number(params.get("step"));
+  const step = stepParam >= 1 && stepParam <= 5 ? stepParam : 1;
+  const goToStep = useCallback(
+    (n: number) => {
+      const clamped = Math.min(5, Math.max(1, n));
+      setParams(
+        (prev) => {
+          const nextParams = new URLSearchParams(prev);
+          nextParams.set("step", String(clamped));
+          return nextParams;
+        },
+        { replace: false },
+      );
+      setZoomId(null);
+    },
+    [setParams],
+  );
 
   const saveFetcher = useFetcher<{ ok: boolean; savedAt?: string; error?: string }>();
   const publishFetcher = useFetcher<{ ok: boolean; version?: number; error?: string }>();
@@ -205,14 +232,54 @@ function Studio({ data }: { data: LoaderData }) {
 
   const zoomNode = zoomId ? doc.nodes.find((n) => n.id === zoomId) ?? null : null;
 
+  const resultCount = doc.nodes.filter((n) => n.type === "result").length;
+  const canContinue: Record<number, boolean> = {
+    1: categories.length >= 1 || resultCount >= 1,
+    2: true,
+    3: true,
+    4: true,
+    5: true,
+  };
+  const stepStates: Record<number, StepState> = {};
+  for (let n = 1; n <= 5; n++) {
+    stepStates[n] = n === step ? "current" : n < step ? "done" : "upcoming";
+  }
+
+  const onNext = () => {
+    if (step === 1) {
+      const buckets = categories.map((c) => ({ id: c.id, name: c.name }));
+      if (buckets.length) {
+        commit(reconcileBucketsToResultNodes(doc, buckets, fallbackCollection));
+      }
+    }
+    goToStep(step + 1);
+  };
+
+  const stepProps: StepProps = {
+    quizId: data.quizId,
+    doc,
+    onCommit: commit,
+    productIndex,
+    collections,
+    categories,
+    fallbackCollection,
+    allIssues,
+    issuesByNode,
+    ordered,
+    previewUrl: data.previewUrl,
+    goToStep,
+  };
+
   return (
     <QzPage>
-      <TitleBar title={`Studio · ${data.name}`} />
-      <QzPageHeader
-        eyebrow="Studio builder"
-        title={data.name}
-        subtitle="Compose each step visually, drag in layout blocks, and ship."
-        actions={
+      <TitleBar title={`Build · ${data.name}`} />
+      <QzPageHeader eyebrow="Quiz builder" title={data.name} />
+
+      <BuilderStepper
+        current={step}
+        states={stepStates}
+        onJump={goToStep}
+        right={
           <div className="qz-row" style={{ gap: 8, alignItems: "center" }}>
             <span className="qz-dim" style={{ fontSize: 12 }}>
               {isSaving ? "Saving…" : savedAt ? "Saved" : ""}
@@ -220,14 +287,6 @@ function Studio({ data }: { data: LoaderData }) {
             <Link to={`/app/quizzes/${data.quizId}`} className="qz-btn qz-btn-ghost qz-btn-sm">
               Canvas
             </Link>
-            <a
-              href={data.previewUrl}
-              target="_blank"
-              rel="noreferrer"
-              className="qz-btn qz-btn-ghost qz-btn-sm"
-            >
-              Preview
-            </a>
             <QzButton
               variant="primary"
               size="sm"
@@ -251,29 +310,69 @@ function Studio({ data }: { data: LoaderData }) {
         </QzBanner>
       ) : null}
 
-      <CompletenessBar issues={allIssues} total={doc.nodes.length} />
-
-      {zoomNode ? (
-        <StepEditor
-          key={zoomNode.id}
-          doc={doc}
-          node={zoomNode}
-          productIndex={productIndex}
-          issues={issuesByNode.get(zoomNode.id) ?? []}
-          onBack={() => setZoomId(null)}
-          onCommit={commit}
-          onDelete={() => handleDelete(zoomNode.id)}
-        />
+      {step === 1 ? (
+        <Step1Products {...stepProps} />
+      ) : step === 2 ? (
+        <Step2PageModel {...stepProps} />
+      ) : step === 3 ? (
+        <Step3PageGallery {...stepProps} />
+      ) : step === 5 ? (
+        <Step5Preview {...stepProps} />
       ) : (
-        <FlowView
-          doc={doc}
-          ordered={ordered}
-          productIndex={productIndex}
-          issuesByNode={issuesByNode}
-          onZoom={setZoomId}
-          onInsert={handleInsert}
-        />
+        <>
+          <CompletenessBar issues={allIssues} total={doc.nodes.length} />
+          {zoomNode ? (
+            <StepEditor
+              key={zoomNode.id}
+              doc={doc}
+              node={zoomNode}
+              productIndex={productIndex}
+              issues={issuesByNode.get(zoomNode.id) ?? []}
+              onBack={() => setZoomId(null)}
+              onCommit={commit}
+              onDelete={() => handleDelete(zoomNode.id)}
+            />
+          ) : (
+            <FlowView
+              doc={doc}
+              ordered={ordered}
+              productIndex={productIndex}
+              issuesByNode={issuesByNode}
+              onZoom={setZoomId}
+              onInsert={handleInsert}
+            />
+          )}
+        </>
       )}
+
+      <div
+        className="qz-row qz-row-between"
+        style={{ marginTop: 24, paddingTop: 16, borderTop: "1px solid #00000012" }}
+      >
+        <QzButton size="sm" variant="ghost" disabled={step === 1} onClick={() => goToStep(step - 1)}>
+          ← Back
+        </QzButton>
+        {step < 5 ? (
+          <QzButton
+            size="sm"
+            variant="primary"
+            disabled={!canContinue[step]}
+            onClick={onNext}
+            title={!canContinue[step] ? "Group your products to continue" : undefined}
+          >
+            Next →
+          </QzButton>
+        ) : (
+          <QzButton
+            size="sm"
+            variant="primary"
+            disabled={!canPublish || isPublishing}
+            onClick={publish}
+          >
+            {isPublishing ? "Publishing…" : "Publish quiz"}
+          </QzButton>
+        )}
+      </div>
     </QzPage>
   );
 }

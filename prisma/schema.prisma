@@ -101,6 +101,10 @@ model Collection {
 model Category {
   id             String   @id @default(cuid())
   shopId         String
+  // Phase 2 builder: when a bucket is created inside a quiz's Step-1 product
+  // grouping, it's scoped to that quiz. Null = legacy shop-global bucket
+  // (the standalone /app/categories page), kept for back-compat.
+  quizId         String?
   name           String
   description    String
   // Embodying tags Claude picked from the catalog vocabulary. Used by
@@ -131,6 +135,7 @@ model Category {
   shop Shop @relation(fields: [shopId], references: [id], onDelete: Cascade)
 
   @@index([shopId])
+  @@index([shopId, quizId])
 }
 
 model Quiz {
