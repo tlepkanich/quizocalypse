@@ -30,9 +30,24 @@ import {
   googleFontsUrl,
   useBreakpoint,
 } from "../components/runtime/runtimeStyles";
+import { BlockRenderer, type BlockRenderCtx } from "../components/runtime/BlockRenderer";
 import type { z } from "zod";
 
 type QuizDoc = z.infer<typeof Quiz>;
+
+// Content-block types the storefront renders directly. Literal blocks render via
+// BlockRenderer; `recommendations` delegates to the (bare) result view. Layouts
+// containing the harder interactive regions (answers/email_input/ai_chat/
+// product_grid) fall back to the node's fixed template — safe + byte-identical.
+const RUNTIME_BLOCK_TYPES = new Set([
+  "heading",
+  "text",
+  "image",
+  "button",
+  "spacer",
+  "divider",
+  "recommendations",
+]);
 
 // Public shopper-facing runtime. No Polaris, no Shopify auth — this is what
 // a real customer sees when the merchant shares the quiz link. Spec §3.6.
@@ -338,6 +353,58 @@ export default function StorefrontRuntime() {
     setCurrentNodeId(next);
   }
 
+  // Live recommendations region for a `recommendations` content-block (bare —
+  // no card/heading; those are separate blocks). Reuses the exact engine + view.
+  function renderRecommendations(
+    node: Extract<QuizDoc["nodes"][number], { type: "result" }>,
+  ): React.ReactNode {
+    const selectedAnswerIds = path.flatMap((p) => p.answerIds);
+    const stages = node.data.stages;
+    if (stages.length === 0) {
+      const recs = recommendForResult({
+        quiz: doc,
+        productIndex,
+        selectedAnswerIds,
+        resultNodeId: node.id,
+      });
+      return (
+        <ResultView
+          headline=""
+          subtext=""
+          ctaLabel={node.data.cta_label}
+          recs={recs}
+          resultNodeId={node.id}
+          styles={styles}
+          startedAt={startedAtRef.current}
+          completed={completedRef}
+          analytics={analyticsRef.current}
+          onReset={reset}
+          bare
+        />
+      );
+    }
+    const sections = stages.map((stage) => ({
+      stage,
+      recs: recommendForStage(doc, productIndex, selectedAnswerIds, node.id, stage),
+    }));
+    return (
+      <MultiStageResultView
+        headline=""
+        subtext=""
+        ctaLabel={node.data.cta_label}
+        sections={sections}
+        resultNodeId={node.id}
+        shopDomain={shopDomain}
+        styles={styles}
+        startedAt={startedAtRef.current}
+        completed={completedRef}
+        analytics={analyticsRef.current}
+        onReset={reset}
+        bare
+      />
+    );
+  }
+
   let content: React.ReactNode;
 
   if (!currentNodeId) {
@@ -349,6 +416,12 @@ export default function StorefrontRuntime() {
     );
   } else {
     const currentNode = doc.nodes.find((n) => n.id === currentNodeId);
+    const layout = currentNode ? doc.node_layouts[currentNode.id] : undefined;
+    const canBlockRender =
+      !!currentNode &&
+      !!layout &&
+      layout.length > 0 &&
+      layout.every((b) => RUNTIME_BLOCK_TYPES.has(b.type));
     if (!currentNode) {
       content = (
         <div style={styles.card}>
@@ -356,6 +429,20 @@ export default function StorefrontRuntime() {
           <p>Reached an unknown node — the quiz may have a missing edge.</p>
         </div>
       );
+    } else if (canBlockRender && layout) {
+      const node = currentNode;
+      const blockCtx: BlockRenderCtx = {
+        styles,
+        nodeCss: doc.node_css[node.id] ?? null,
+        resolveText: (t, merge) =>
+          merge ? resolveMergeTags(t, buildMergeContext(path, doc)) : t,
+        onPrimary: () => gotoNextFrom(node.id, null),
+        renderSmart: (block, n) =>
+          block.type === "recommendations" && n.type === "result"
+            ? renderRecommendations(n)
+            : null,
+      };
+      content = <BlockRenderer node={node} blocks={layout} ctx={blockCtx} />;
     } else if (currentNode.type === "intro") {
       content = (
         <div style={styles.card}>
@@ -1754,6 +1841,7 @@ function ResultView({
   completed,
   analytics,
   onReset,
+  bare,
 }: {
   headline: string;
   subtext: string;
@@ -1765,6 +1853,9 @@ function ResultView({
   completed: React.MutableRefObject<boolean>;
   analytics: ReturnType<typeof createAnalyticsClient> | null;
   onReset: () => void;
+  // When true, render just the products + "Start over" (no card / heading) so a
+  // `recommendations` content-block can place it inside a custom layout.
+  bare?: boolean;
 }) {
   // Fire completion + view events once when the result first renders.
   useEffect(() => {
@@ -1779,13 +1870,9 @@ function ResultView({
     });
   }, [analytics, completed, resultNodeId, startedAt, recs]);
 
-  return (
-    <div style={styles.card}>
-      <h2 style={styles.h2}>{headline}</h2>
-      {subtext && (
-        <p style={{ ...styles.muted, marginTop: 8 }}>{subtext}</p>
-      )}
-      <div style={{ marginTop: 20, display: "grid", gap: 12 }}>
+  const inner = (
+    <>
+      <div style={{ marginTop: bare ? 0 : 20, display: "grid", gap: 12 }}>
         {recs.length === 0 && (
           <p style={{ color: "var(--qz-color-muted)" }}>
             No products to show. Add a fallback collection in the editor.
@@ -1819,6 +1906,15 @@ function ResultView({
       >
         Start over
       </button>
+    </>
+  );
+
+  if (bare) return inner;
+  return (
+    <div style={styles.card}>
+      <h2 style={styles.h2}>{headline}</h2>
+      {subtext && <p style={{ ...styles.muted, marginTop: 8 }}>{subtext}</p>}
+      {inner}
     </div>
   );
 }
@@ -1840,6 +1936,7 @@ function MultiStageResultView({
   completed,
   analytics,
   onReset,
+  bare,
 }: {
   headline: string;
   subtext: string;
@@ -1852,6 +1949,7 @@ function MultiStageResultView({
   completed: React.MutableRefObject<boolean>;
   analytics: ReturnType<typeof createAnalyticsClient> | null;
   onReset: () => void;
+  bare?: boolean;
 }) {
   useEffect(() => {
     if (completed.current || !analytics) return;
@@ -1865,11 +1963,9 @@ function MultiStageResultView({
     });
   }, [analytics, completed, resultNodeId, startedAt, sections]);
 
-  return (
-    <div style={styles.card}>
-      <h2 style={styles.h2}>{headline}</h2>
-      {subtext && <p style={{ ...styles.muted, marginTop: 8 }}>{subtext}</p>}
-      <div style={{ marginTop: 20, display: "grid", gap: 28 }}>
+  const inner = (
+    <>
+      <div style={{ marginTop: bare ? 0 : 20, display: "grid", gap: 28 }}>
         {sections.map(({ stage, recs }) => (
           <StageSection
             key={stage.id}
@@ -1894,6 +1990,15 @@ function MultiStageResultView({
       >
         Start over
       </button>
+    </>
+  );
+
+  if (bare) return inner;
+  return (
+    <div style={styles.card}>
+      <h2 style={styles.h2}>{headline}</h2>
+      {subtext && <p style={{ ...styles.muted, marginTop: 8 }}>{subtext}</p>}
+      {inner}
     </div>
   );
 }
