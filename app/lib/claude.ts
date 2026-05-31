@@ -10,7 +10,8 @@ import {
   buildBrandVoiceAddition,
   type BrandGuidelines,
 } from "./brandGuidelines";
-import type { z } from "zod";
+import type { GeneratedQuestionFlow } from "./smartBuild";
+import { z } from "zod";
 
 const REGEN_SYSTEM_PROMPT =
   "You are regenerating ONE question in an existing Shopify product quiz. " +
@@ -320,6 +321,207 @@ export async function regenerateQuestion(
 
   throw new QuizGenerationError(
     "Question regeneration failed validation after retries.",
+    MAX_ATTEMPTS,
+    lastIssue,
+  );
+}
+
+// ---------- Smart Build: generate a question flow for existing buckets ----------
+
+const QUESTION_FLOW_SYSTEM_PROMPT =
+  "You design ONLY the question flow for an existing Shopify product-finder quiz. " +
+  "The intro page and the result pages (one per outcome bucket) already exist — " +
+  "do NOT emit intro, result, branch, email, or end nodes; output only questions " +
+  "(plus optional welcome/email-gate copy if requested). Every answer's tags[] must " +
+  "reference tags that exist in the supplied catalog summary — never invent tags. " +
+  "Across the whole quiz every bucket must be reachable: each answer should lean " +
+  "toward exactly one bucket by including at least one of that bucket's routing tags, " +
+  "and together the answers must cover every bucket's tags. Keep questions concise and " +
+  "useful for narrowing products. Never write commentary or anything outside the tool call.";
+
+const questionFlowToolJsonSchema = {
+  type: "object",
+  required: ["questions"],
+  properties: {
+    questions: {
+      type: "array",
+      minItems: 1,
+      items: {
+        type: "object",
+        required: ["text", "question_type", "answers"],
+        properties: {
+          text: { type: "string" },
+          question_type: {
+            type: "string",
+            enum: ["single_select", "multi_select", "image_tile", "searchable", "image_picker"],
+          },
+          required: { type: "boolean" },
+          max_selections: { type: "number" },
+          answers: {
+            type: "array",
+            minItems: 2,
+            items: {
+              type: "object",
+              required: ["text", "tags"],
+              properties: {
+                text: { type: "string" },
+                tags: { type: "array", items: { type: "string" } },
+                collection_filter: { type: "string" },
+                image_url: { type: "string" },
+              },
+            },
+          },
+        },
+      },
+    },
+    welcome_message: {
+      type: "object",
+      required: ["text"],
+      properties: { text: { type: "string" } },
+    },
+    email_gate: {
+      type: "object",
+      required: ["headline"],
+      properties: { headline: { type: "string" }, subtext: { type: "string" } },
+    },
+  },
+} as const;
+
+const QuestionFlowSchema = z.object({
+  questions: z
+    .array(
+      z.object({
+        text: z.string().min(1),
+        question_type: QuestionDataObject.shape.question_type,
+        required: z.boolean().optional(),
+        max_selections: z.number().int().positive().optional(),
+        answers: z
+          .array(
+            z.object({
+              text: z.string().min(1),
+              tags: z.array(z.string()).default([]),
+              collection_filter: z.string().optional(),
+              image_url: z.string().optional(),
+            }),
+          )
+          .min(2),
+      }),
+    )
+    .min(1),
+  welcome_message: z.object({ text: z.string().min(1) }).optional(),
+  email_gate: z
+    .object({ headline: z.string().min(1), subtext: z.string().default("") })
+    .optional(),
+});
+
+export interface GenerateQuestionFlowInput {
+  goalPrompt: string;
+  questionCount: number;
+  catalogSummary: string;
+  buckets: Array<{ id: string; name: string; tags: string[] }>;
+  flow: { welcome_message: boolean; email_gate: boolean; mixed_input_types: boolean };
+  tone: QuizGenSettings["tone"];
+  brandGuidelines?: BrandGuidelines | null;
+}
+
+// Generate the question flow (questions only — no nodes/edges/ids) for a quiz
+// whose intro + bucket result pages already exist. The deterministic merge in
+// app/lib/smartBuild.ts wires the nodes/edges/branch.
+export async function generateQuestionFlow(
+  input: GenerateQuestionFlowInput,
+): Promise<GeneratedQuestionFlow> {
+  const tool = {
+    name: "emit_question_flow",
+    description:
+      "Emit the quiz's questions (and optional welcome/email copy). No intro/result/branch nodes.",
+    input_schema: questionFlowToolJsonSchema as unknown as Anthropic.Tool.InputSchema,
+  } satisfies Anthropic.Tool;
+
+  const toneLine = `Tone: ${input.tone}.`;
+  const flowLines: string[] = [];
+  if (input.flow.welcome_message)
+    flowLines.push("Include a short, on-brand welcome_message (chat-style) shown before the first question.");
+  if (input.flow.email_gate)
+    flowLines.push("Include email_gate copy (headline + subtext) for an email capture shown before results.");
+  if (input.flow.mixed_input_types)
+    flowLines.push("Use a mix of input styles — include at least one image_picker or searchable question alongside single/multi-select.");
+
+  const userMessage = [
+    toneLine,
+    `Target question count: ${input.questionCount}.`,
+    "Merchant's quiz goal (verbatim):",
+    input.goalPrompt || "(none — infer from the catalog + buckets)",
+    "",
+    "Outcome buckets the shopper must be routed to (use these tags so answers map to them):",
+    ...input.buckets.map((b) => `- ${b.name} [routing tags: ${b.tags.join(", ") || "(none)"}]`),
+    "",
+    "Catalog summary (only use tags that appear here):",
+    input.catalogSummary,
+    "",
+    flowLines.length ? "Flow requirements:" : "",
+    ...flowLines,
+  ]
+    .filter((l) => l !== "")
+    .join("\n");
+
+  const system =
+    QUESTION_FLOW_SYSTEM_PROMPT + buildBrandVoiceAddition(input.brandGuidelines);
+
+  let lastIssue: string | undefined;
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+    const response = await client().messages.create({
+      model: MODEL,
+      max_tokens: MAX_TOKENS,
+      system,
+      tools: [tool],
+      tool_choice: { type: "tool", name: "emit_question_flow" },
+      messages: [
+        {
+          role: "user",
+          content:
+            attempt === 1
+              ? userMessage
+              : `${userMessage}\n\nPrevious attempt failed validation: ${lastIssue}. Regenerate strictly matching the schema.`,
+        },
+      ],
+    });
+
+    const toolUse = response.content.find(
+      (block): block is Anthropic.ToolUseBlock => block.type === "tool_use",
+    );
+    if (!toolUse) {
+      lastIssue = "No tool_use block in response.";
+      continue;
+    }
+
+    const parsed = QuestionFlowSchema.safeParse(toolUse.input);
+    if (parsed.success) {
+      return {
+        questions: parsed.data.questions.map((q) => ({
+          text: q.text,
+          question_type: q.question_type,
+          ...(q.required !== undefined ? { required: q.required } : {}),
+          ...(q.max_selections !== undefined ? { max_selections: q.max_selections } : {}),
+          answers: q.answers.map((a) => ({
+            text: a.text,
+            tags: a.tags,
+            ...(a.collection_filter ? { collection_filter: a.collection_filter } : {}),
+            ...(a.image_url ? { image_url: a.image_url } : {}),
+          })),
+        })),
+        ...(parsed.data.welcome_message ? { welcome_message: parsed.data.welcome_message } : {}),
+        ...(parsed.data.email_gate ? { email_gate: parsed.data.email_gate } : {}),
+      };
+    }
+
+    lastIssue = parsed.error.issues
+      .slice(0, 5)
+      .map((i) => `${i.path.join(".")}: ${i.message}`)
+      .join("; ");
+  }
+
+  throw new QuizGenerationError(
+    "Question flow generation failed validation after retries.",
     MAX_ATTEMPTS,
     lastIssue,
   );

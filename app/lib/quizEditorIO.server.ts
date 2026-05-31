@@ -3,7 +3,8 @@ import { authenticate } from "../shopify.server";
 import prisma from "../db.server";
 import { Quiz } from "./quizSchema";
 import { publishQuiz, PublishError } from "./quizPublish";
-import { regenerateQuestion } from "./claude";
+import { regenerateQuestion, generateQuestionFlow } from "./claude";
+import { applyQuestionFlow, type SmartBuildBucket } from "./smartBuild";
 import { parseBrandGuidelinesSafe } from "./brandGuidelines";
 import { buildScopedIndex } from "./catalogIndex";
 import type { IndexedProduct } from "./recommendationEngine";
@@ -89,6 +90,8 @@ export async function loadQuizEditorData(request: Request, id: string) {
     quizId: c.quizId,
   }));
 
+  const brandVoiceName = parseBrandGuidelinesSafe(shop.brandGuidelines)?.name ?? null;
+
   const origin = new URL(request.url).origin;
   return {
     quizId: quiz.id,
@@ -108,6 +111,7 @@ export async function loadQuizEditorData(request: Request, id: string) {
     catalogTags,
     productIndex,
     categories,
+    brandVoiceName,
     previewUrl: `${origin}/q/${quiz.id}`,
   };
 }
@@ -281,6 +285,122 @@ export async function handleQuizEditorAction(request: Request, id: string) {
       action: "regenerate-node" as const,
       doc: reparsed.data,
     });
+  }
+
+  if (intent === "rename") {
+    const name = String(form.get("name") ?? "").trim().slice(0, 120);
+    if (!name) return json({ ok: false, error: "Name is required" }, { status: 400 });
+    await prisma.quiz.update({ where: { id }, data: { name } });
+    return json({ ok: true, action: "rename" as const, name });
+  }
+
+  if (intent === "generate-questions") {
+    const goalPrompt = String(form.get("goalPrompt") ?? "").slice(0, 500);
+    const qcRaw = Number(form.get("questionCount"));
+    const questionCount = Number.isFinite(qcRaw)
+      ? Math.min(8, Math.max(3, Math.round(qcRaw)))
+      : 5;
+    const toneRaw = String(form.get("tone") ?? "friendly");
+    const tone = (
+      ["friendly", "editorial", "playful", "professional"].includes(toneRaw)
+        ? toneRaw
+        : "friendly"
+    ) as "friendly" | "editorial" | "playful" | "professional";
+    let flow = { welcome_message: false, email_gate: false, mixed_input_types: false };
+    try {
+      const raw = form.get("flow");
+      if (typeof raw === "string" && raw) {
+        const p = JSON.parse(raw) as Partial<typeof flow>;
+        flow = {
+          welcome_message: Boolean(p.welcome_message),
+          email_gate: Boolean(p.email_gate),
+          mixed_input_types: Boolean(p.mixed_input_types),
+        };
+      }
+    } catch {
+      // malformed flow JSON → keep defaults
+    }
+
+    const quiz = await prisma.quiz.findFirst({ where: { id, shopId: shop.id } });
+    if (!quiz) return json({ ok: false, error: "Quiz not found" }, { status: 404 });
+    const parsedDoc = Quiz.safeParse(quiz.draftJson);
+    if (!parsedDoc.success) {
+      return json({ ok: false, error: "Invalid quiz JSON" }, { status: 400 });
+    }
+    const doc = parsedDoc.data;
+
+    // Buckets = each result node's bound Category (quiz-scoped, or legacy
+    // referenced by category_id). Smart Build routes the questions to these.
+    const resultNodes = doc.nodes.filter((n) => n.type === "result");
+    const referencedCategoryIds = resultNodes
+      .map((n) => (n.type === "result" ? n.data.category_id : undefined))
+      .filter((v): v is string => Boolean(v));
+    const categoryRows = await prisma.category.findMany({
+      where: {
+        shopId: shop.id,
+        OR: [{ quizId: id }, { id: { in: referencedCategoryIds } }],
+      },
+    });
+    const catById = new Map(categoryRows.map((c) => [c.id, c]));
+    const buckets: SmartBuildBucket[] = [];
+    for (const n of resultNodes) {
+      if (n.type !== "result" || !n.data.category_id) continue;
+      const cat = catById.get(n.data.category_id);
+      if (!cat) continue;
+      buckets.push({ id: cat.id, name: cat.name, tags: cat.tags, resultNodeId: n.id });
+    }
+    if (buckets.length === 0) {
+      return json(
+        {
+          ok: false,
+          error:
+            "Group products into at least one outcome bucket (Step 1) before generating questions.",
+        },
+        { status: 400 },
+      );
+    }
+
+    const [allProducts, allCollections] = await Promise.all([
+      prisma.product.findMany({ where: { shopId: shop.id } }),
+      prisma.collection.findMany({ where: { shopId: shop.id } }),
+    ]);
+    const indexed = buildScopedIndex(allProducts, allCollections, doc.scope.collection_ids);
+    const brandGuidelines = parseBrandGuidelinesSafe(shop.brandGuidelines);
+
+    let generated;
+    try {
+      generated = await generateQuestionFlow({
+        goalPrompt,
+        questionCount,
+        catalogSummary: indexed.summary,
+        buckets: buckets.map((b) => ({ id: b.id, name: b.name, tags: b.tags })),
+        flow,
+        tone,
+        ...(brandGuidelines ? { brandGuidelines } : {}),
+      });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      return json({ ok: false, error: message }, { status: 502 });
+    }
+
+    const updatedDoc = applyQuestionFlow(doc, generated, buckets);
+    const reparsed = Quiz.safeParse(updatedDoc);
+    if (!reparsed.success) {
+      return json(
+        {
+          ok: false,
+          error:
+            "Generated flow failed schema validation: " +
+            reparsed.error.issues
+              .slice(0, 3)
+              .map((i) => `${i.path.join(".")}: ${i.message}`)
+              .join("; "),
+        },
+        { status: 500 },
+      );
+    }
+    await prisma.quiz.update({ where: { id }, data: { draftJson: reparsed.data as never } });
+    return json({ ok: true, action: "generate-questions" as const, doc: reparsed.data });
   }
 
   return json({ ok: false, error: "Unknown intent" }, { status: 400 });

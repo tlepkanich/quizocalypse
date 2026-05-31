@@ -1,4 +1,6 @@
 import { SHARED_RESULT_KEY } from "../../lib/resultLayout";
+import { THEME_PRESETS } from "../../lib/themePresets";
+import { resolveDesignTokens } from "../../lib/designTokens";
 import { StepPreview } from "../runtime/StepPreview";
 import { QzBadge } from "../qz";
 import type { StepProps } from "./stepProps";
@@ -28,6 +30,15 @@ export function Step2PageModel({ doc, onCommit, productIndex }: StepProps) {
     onCommit(nextDoc);
   };
 
+  const applyTheme = (presetId: string) => {
+    const preset = THEME_PRESETS.find((p) => p.id === presetId);
+    if (!preset) return;
+    onCommit({
+      ...doc,
+      design_tokens: resolveDesignTokens(preset.tokens) as typeof doc.design_tokens,
+    });
+  };
+
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
       <div>
@@ -55,6 +66,27 @@ export function Step2PageModel({ doc, onCommit, productIndex }: StepProps) {
           body="Everyone starts from one template, but each page is independently editable. Most flexible."
           onClick={() => choose("custom")}
         />
+      </div>
+
+      <div>
+        <div className="qz-label" style={{ marginBottom: 8 }}>
+          Starting theme
+        </div>
+        <div className="qz-row" style={{ gap: 8, flexWrap: "wrap" }}>
+          {THEME_PRESETS.map((p) => (
+            <button
+              key={p.id}
+              onClick={() => applyTheme(p.id)}
+              className="qz-btn qz-btn-ghost qz-btn-sm"
+              title={p.description}
+            >
+              {p.name}
+            </button>
+          ))}
+        </div>
+        <p className="qz-dim" style={{ fontSize: 12, marginTop: 6 }}>
+          Sets the quiz's base colors + type. Fine-tune per step in the Page builder.
+        </p>
       </div>
 
       <div>

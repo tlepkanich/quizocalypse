@@ -5,6 +5,45 @@ import { getPreset } from "./themePresets";
 import { resolveDesignTokens } from "./designTokens";
 
 type QuizDoc = z.infer<typeof Quiz>;
+type QuizNode = QuizDoc["nodes"][number];
+
+// Seed per-answer category points by tag overlap: for each question answer,
+// records points[categoryId] = count of the answer's tags found in that
+// category's tags (only overlaps ≥1; answers with no tags / no overlap are
+// left untouched). Pure. Shared by the wizard post-process (below) and Smart
+// Build (app/lib/smartBuild.ts).
+export function seedPointsFromCategories(
+  nodes: QuizNode[],
+  categories: Array<{ id: string; tags?: string[] }>,
+): QuizNode[] {
+  const categoryTagSets = categories.map((c) => ({
+    id: c.id,
+    tags: new Set((c.tags ?? []).map((t) => t.toLowerCase())),
+  }));
+  return nodes.map((n) => {
+    if (n.type !== "question") return n;
+    return {
+      ...n,
+      data: {
+        ...n.data,
+        answers: n.data.answers.map((answer) => {
+          const answerTags = answer.tags.map((t) => t.toLowerCase());
+          if (answerTags.length === 0) return answer;
+          const points: Record<string, number> = {};
+          for (const cat of categoryTagSets) {
+            let overlap = 0;
+            for (const tag of answerTags) {
+              if (cat.tags.has(tag)) overlap += 1;
+            }
+            if (overlap >= 1) points[cat.id] = overlap;
+          }
+          if (Object.keys(points).length === 0) return answer;
+          return { ...answer, points };
+        }),
+      },
+    } as QuizNode;
+  });
+}
 
 // Settings the merchant picks in the "Customize" panel of the New Quiz
 // wizard. Two distinct jobs: (a) bias the AI's SYSTEM_PROMPT so generated
@@ -251,41 +290,14 @@ export function applyPostGeneration(
     ctx.categories &&
     ctx.categories.length > 0
   ) {
-    const categoryTagSets = ctx.categories.map((c) => ({
-      id: c.id,
-      tags: new Set((c.tags ?? []).map((t) => t.toLowerCase())),
-    }));
+    const seeded = seedPointsFromCategories(next.nodes, ctx.categories);
     next = {
       ...next,
-      nodes: next.nodes.map((n) => {
-        if (n.type === "result") {
-          return {
-            ...n,
-            data: { ...n.data, match_ladder: ["points" as const] },
-          };
-        }
-        if (n.type !== "question") return n;
-        return {
-          ...n,
-          data: {
-            ...n.data,
-            answers: n.data.answers.map((answer) => {
-              const answerTags = answer.tags.map((t) => t.toLowerCase());
-              if (answerTags.length === 0) return answer;
-              const points: Record<string, number> = {};
-              for (const cat of categoryTagSets) {
-                let overlap = 0;
-                for (const tag of answerTags) {
-                  if (cat.tags.has(tag)) overlap += 1;
-                }
-                if (overlap >= 1) points[cat.id] = overlap;
-              }
-              if (Object.keys(points).length === 0) return answer;
-              return { ...answer, points };
-            }),
-          },
-        };
-      }),
+      nodes: seeded.map((n) =>
+        n.type === "result"
+          ? { ...n, data: { ...n.data, match_ladder: ["points" as const] } }
+          : n,
+      ),
     };
   }
 

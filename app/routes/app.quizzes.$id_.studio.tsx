@@ -8,6 +8,7 @@ import { Step1Products } from "../components/builder/Step1Products";
 import { Step2PageModel } from "../components/builder/Step2PageModel";
 import { Step3PageGallery } from "../components/builder/Step3PageGallery";
 import { Step5Preview } from "../components/builder/Step5Preview";
+import { SmartBuildPanel, type SmartBuildParams } from "../components/builder/SmartBuildPanel";
 import type { StepProps } from "../components/builder/stepProps";
 import { reconcileBucketsToResultNodes } from "../lib/bucketReconcile";
 import {
@@ -159,6 +160,8 @@ function BuilderShell({ data }: { data: LoaderData }) {
 
   const saveFetcher = useFetcher<{ ok: boolean; savedAt?: string; error?: string }>();
   const publishFetcher = useFetcher<{ ok: boolean; version?: number; error?: string }>();
+  const generateFetcher = useFetcher<{ ok: boolean; doc?: QuizDoc; error?: string }>();
+  const renameFetcher = useFetcher<{ ok: boolean; name?: string }>();
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const triggerSave = useCallback(
@@ -181,6 +184,43 @@ function BuilderShell({ data }: { data: LoaderData }) {
     },
     [triggerSave],
   );
+
+  // Smart Build: POST the generate-questions intent; on success swap the doc.
+  const runSmartBuild = useCallback(
+    (p: SmartBuildParams) => {
+      const form = new FormData();
+      form.set("intent", "generate-questions");
+      form.set("goalPrompt", p.goalPrompt);
+      form.set("questionCount", String(p.questionCount));
+      form.set("tone", p.tone);
+      form.set("flow", JSON.stringify(p.flow));
+      generateFetcher.submit(form, { method: "POST" });
+    },
+    [generateFetcher],
+  );
+  const appliedGenRef = useRef<unknown>(null);
+  useEffect(() => {
+    const d = generateFetcher.data;
+    if (generateFetcher.state === "idle" && d?.ok && d.doc && appliedGenRef.current !== d) {
+      appliedGenRef.current = d;
+      commit(d.doc as QuizDoc);
+    }
+  }, [generateFetcher.state, generateFetcher.data, commit]);
+
+  const renameQuiz = useCallback(
+    (name: string) => {
+      const form = new FormData();
+      form.set("intent", "rename");
+      form.set("name", name);
+      renameFetcher.submit(form, { method: "POST" });
+    },
+    [renameFetcher],
+  );
+  const isGenerating = generateFetcher.state !== "idle";
+  const generateError =
+    generateFetcher.data && generateFetcher.data.ok === false
+      ? generateFetcher.data.error
+      : null;
 
   const fallbackCollection = collections[0]?.collectionId ?? "";
   const allIssues = useMemo(() => validateQuiz(doc), [doc]);
@@ -273,7 +313,10 @@ function BuilderShell({ data }: { data: LoaderData }) {
   return (
     <QzPage>
       <TitleBar title={`Build · ${data.name}`} />
-      <QzPageHeader eyebrow="Quiz builder" title={data.name} />
+      <QzPageHeader
+        eyebrow="Quiz builder"
+        title={<EditableTitle name={data.name} onRename={renameQuiz} />}
+      />
 
       <BuilderStepper
         current={step}
@@ -321,6 +364,17 @@ function BuilderShell({ data }: { data: LoaderData }) {
       ) : (
         <>
           <CompletenessBar issues={allIssues} total={doc.nodes.length} />
+          {!zoomNode ? (
+            <SmartBuildPanel
+              onGenerate={runSmartBuild}
+              generating={isGenerating}
+              error={generateError}
+              brandVoiceName={data.brandVoiceName}
+              hasBuckets={doc.nodes.some((n) => n.type === "result" && n.data.category_id)}
+              bucketCount={resultCount}
+              defaultOpen={doc.nodes.filter((n) => n.type === "question").length <= 1}
+            />
+          ) : null}
           {zoomNode ? (
             <StepEditor
               key={zoomNode.id}
@@ -374,6 +428,59 @@ function BuilderShell({ data }: { data: LoaderData }) {
         )}
       </div>
     </QzPage>
+  );
+}
+
+// Inline-editable quiz title (header). Click to rename; Enter/blur saves via
+// the rename intent, Escape cancels.
+function EditableTitle({ name, onRename }: { name: string; onRename: (name: string) => void }) {
+  const [editing, setEditing] = useState(false);
+  const [value, setValue] = useState(name);
+  useEffect(() => {
+    setValue(name);
+  }, [name]);
+
+  if (!editing) {
+    return (
+      <span
+        onClick={() => setEditing(true)}
+        title="Click to rename"
+        style={{ cursor: "text" }}
+      >
+        {value || "Untitled quiz"}
+      </span>
+    );
+  }
+  const save = () => {
+    const trimmed = value.trim();
+    setEditing(false);
+    if (trimmed && trimmed !== name) onRename(trimmed);
+    else setValue(name);
+  };
+  return (
+    <input
+      autoFocus
+      value={value}
+      onChange={(e) => setValue(e.target.value)}
+      onBlur={save}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") save();
+        if (e.key === "Escape") {
+          setValue(name);
+          setEditing(false);
+        }
+      }}
+      style={{
+        font: "inherit",
+        color: "inherit",
+        background: "transparent",
+        border: "none",
+        borderBottom: "2px solid var(--qz-ink, #222)",
+        outline: "none",
+        width: "100%",
+        maxWidth: 520,
+      }}
+    />
   );
 }
 
