@@ -179,13 +179,24 @@ export default function StorefrontRuntime() {
       if (!s || s.version !== version) return; // republished → stale, ignore
       if (typeof s.sessionId === "string") sessionIdRef.current = s.sessionId;
       if (s.ab) abRef.current = s.ab;
-      resumedRef.current = true;
-      if (s.currentNodeId) setCurrentNodeId(s.currentNodeId);
-      if (Array.isArray(s.path)) setPath(s.path);
+      const savedPath = Array.isArray(s.path) ? s.path : [];
+      const savedNodeId = s.currentNodeId ?? null;
+      const introId = introNode ? introNode.id : null;
+      // Only treat it as a "resume" (suppress a duplicate quiz_started) if
+      // there's real progress — a reset-then-reload sits at the intro.
+      if (savedPath.length > 0 || (savedNodeId !== null && savedNodeId !== introId)) {
+        resumedRef.current = true;
+      }
+      // Resuming onto a result page means the quiz was already completed — don't
+      // re-fire quiz_completed.
+      const savedNode = savedNodeId ? doc.nodes.find((n) => n.id === savedNodeId) : null;
+      if (savedNode?.type === "result") completedRef.current = true;
+      if (savedNodeId) setCurrentNodeId(savedNodeId);
+      setPath(savedPath);
     } catch {
       // disabled / malformed storage → start fresh
     }
-  }, [stateKey, version]);
+  }, [stateKey, version, doc, introNode]);
 
   useEffect(() => {
     const client = createAnalyticsClient({

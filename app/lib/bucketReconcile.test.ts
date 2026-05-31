@@ -110,6 +110,23 @@ describe("reconcileBucketsToResultNodes", () => {
     expect(next.edges.some((e) => e.target === r.id)).toBe(true);
   });
 
+  it("rebinds (does not orphan) result nodes when the bucket set is replaced", () => {
+    const once = reconcileBucketsToResultNodes(baseDoc(), TWO, FB); // cat_dry, cat_oily
+    const replaced: BucketRow[] = [
+      { id: "cat_combo", name: "Combination" },
+      { id: "cat_normal", name: "Normal" },
+    ];
+    const next = reconcileBucketsToResultNodes(once, replaced, FB);
+    expect(results(next)).toHaveLength(2); // reused, not 4
+    const ids = results(next)
+      .map((r) => (r.type === "result" ? r.data.category_id : ""))
+      .sort();
+    expect(ids).toEqual(["cat_combo", "cat_normal"]);
+    const headlines = results(next).map((r) => (r.type === "result" ? r.data.headline : ""));
+    expect(headlines).toContain("Combination");
+    expect(headlines).toContain("Normal");
+  });
+
   it("re-parses cleanly against the Quiz schema", () => {
     const next = reconcileBucketsToResultNodes(baseDoc(), TWO, FB);
     expect(() => Quiz.parse(next)).not.toThrow();

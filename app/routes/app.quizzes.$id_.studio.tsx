@@ -135,6 +135,7 @@ type LoaderData = ReturnType<typeof useLoaderData<typeof loader>>;
 function BuilderShell({ data }: { data: LoaderData }) {
   const [doc, setDoc] = useState<QuizDoc>(data.doc as QuizDoc);
   const [zoomId, setZoomId] = useState<string | null>(null);
+  const [reconcileError, setReconcileError] = useState<string | null>(null);
   const collections = data.collections;
   const productIndex = data.productIndex;
   const categories = data.categories;
@@ -289,9 +290,19 @@ function BuilderShell({ data }: { data: LoaderData }) {
     if (step === 1) {
       const buckets = categories.map((c) => ({ id: c.id, name: c.name }));
       if (buckets.length) {
-        commit(reconcileBucketsToResultNodes(doc, buckets, fallbackCollection));
+        try {
+          commit(reconcileBucketsToResultNodes(doc, buckets, fallbackCollection));
+        } catch {
+          // Result pages need a fallback collection (ResultData requires one).
+          // A shop with no synced collections can't create them yet.
+          setReconcileError(
+            "Couldn't turn your buckets into result pages — sync at least one Shopify collection first (result pages need a fallback collection).",
+          );
+          return;
+        }
       }
     }
+    setReconcileError(null);
     goToStep(step + 1);
   };
 
@@ -346,6 +357,11 @@ function BuilderShell({ data }: { data: LoaderData }) {
         }
       />
 
+      {reconcileError ? (
+        <QzBanner tone="crit" title="Can't continue yet">
+          {reconcileError}
+        </QzBanner>
+      ) : null}
       {publishFetcher.data?.ok === false && publishFetcher.data.error ? (
         <QzBanner tone="crit" title="Publish failed">
           {publishFetcher.data.error}

@@ -69,7 +69,20 @@ export function reconcileBucketsToResultNodes(
   buckets: BucketRow[],
   fallbackCollectionId: string,
 ): QuizDoc {
-  let next = doc;
+  const bucketIds = new Set(buckets.map((b) => b.id));
+
+  // Unbind result nodes whose bound bucket no longer exists (re-grouping in
+  // Step 1 replaces the Category rows with fresh ids). Resetting the headline to
+  // a default lets the reuse pass below rebind + rename them to a live bucket
+  // instead of leaving stale, orphaned result pages.
+  let next: QuizDoc = {
+    ...doc,
+    nodes: doc.nodes.map((n) =>
+      n.type === "result" && n.data.category_id && !bucketIds.has(n.data.category_id)
+        ? { ...n, data: { ...n.data, category_id: undefined, headline: "Your match" } }
+        : n,
+    ),
+  };
 
   const boundCategoryIds = new Set<string>();
   for (const n of next.nodes) {
