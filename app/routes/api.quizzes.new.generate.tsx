@@ -138,6 +138,17 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
     return json({ ok: true, quizId: quiz.id, draftJson });
   } catch (err) {
+    // Cleanup: drop the placeholder quiz row so the merchant doesn't end
+    // up with an "incomplete" entry whose draftJson is {} (which fails
+    // the Quiz Zod schema and shows the merchant a wall of validation
+    // errors). Best-effort — if the delete itself fails we still want to
+    // surface the original generation error.
+    try {
+      await prisma.quiz.delete({ where: { id: quiz.id } });
+    } catch {
+      // Swallow — return the original error below.
+    }
+
     if (err instanceof QuizGenerationError) {
       return json(
         {

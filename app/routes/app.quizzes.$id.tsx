@@ -4652,6 +4652,33 @@ export default function QuizEditor() {
               {JSON.stringify(data.rawJson, null, 2)}
             </pre>
           </details>
+          {/* Almost always this is an orphan row left behind by a failed
+              generation attempt. The list page (/app/quizzes) accepts a
+              POST { intent: "delete", id } so we surface that action
+              right here as a "Delete and start over" affordance. */}
+          <form
+            method="POST"
+            action="/app/quizzes"
+            style={{ marginTop: 16, display: "flex", gap: 12 }}
+            onSubmit={(e) => {
+              if (
+                !confirm(
+                  "Delete this incomplete quiz? You can generate a new one from /app/quizzes/new.",
+                )
+              ) {
+                e.preventDefault();
+              }
+            }}
+          >
+            <input type="hidden" name="intent" value="delete" />
+            <input type="hidden" name="id" value={data.quizId} />
+            <QzButton type="submit" variant="primary">
+              Delete this quiz
+            </QzButton>
+            <Link to="/app/quizzes/new" style={{ textDecoration: "none" }}>
+              <QzButton>Generate a new one</QzButton>
+            </Link>
+          </form>
         </QzBanner>
       </QzPage>
     );
