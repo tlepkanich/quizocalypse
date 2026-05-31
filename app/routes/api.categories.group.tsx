@@ -147,6 +147,22 @@ export async function action({ request }: ActionFunctionArgs) {
     );
   }
 
+  // Optional quiz scope. When present, the created rows are bound to this
+  // quiz and the destructive deleteMany only clears THIS quiz's buckets,
+  // so re-grouping one quiz never touches another quiz's set or the
+  // shop-global buckets. When absent, behavior is unchanged (legacy
+  // /app/categories page).
+  const quizId = body.quizId?.trim() || null;
+  if (quizId !== null) {
+    const ownedQuiz = await prisma.quiz.findFirst({
+      where: { id: quizId, shopId: shop.id },
+      select: { id: true },
+    });
+    if (!ownedQuiz) {
+      return json({ ok: false, error: "Quiz not found" }, { status: 404 });
+    }
+  }
+
   const [allProducts, allCollections] = await Promise.all([
     prisma.product.findMany({ where: { shopId: shop.id } }),
     prisma.collection.findMany({ where: { shopId: shop.id } }),
@@ -242,6 +258,7 @@ export async function action({ request }: ActionFunctionArgs) {
 
   const rowsData = proposed.map((group) => ({
     shopId: shop.id,
+    quizId,
     name: group.name,
     description: "",
     tags: group.tags,
@@ -254,7 +271,9 @@ export async function action({ request }: ActionFunctionArgs) {
 
   try {
     await prisma.$transaction([
-      prisma.category.deleteMany({ where: { shopId: shop.id } }),
+      // Scope the wipe to the same quiz (or the shop-global set when quizId
+      // is null) so other quizzes' buckets survive a re-group.
+      prisma.category.deleteMany({ where: { shopId: shop.id, quizId } }),
       prisma.category.createMany({ data: rowsData }),
     ]);
   } catch (err) {

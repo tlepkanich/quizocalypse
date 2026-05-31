@@ -20,6 +20,26 @@ import { assignProducts } from "../lib/categoryAssign";
 // a Claude call.
 const MIN_PRODUCTS = 5;
 
+// Pull an optional `quizId` from either a JSON or urlencoded/multipart body.
+// Returns a trimmed non-empty quiz id, or null when the caller didn't scope
+// the request (legacy whole-shop discovery). Tolerant of a missing/invalid
+// body so the no-arg legacy call still works.
+async function readQuizId(request: Request): Promise<string | null> {
+  const contentType = request.headers.get("content-type") ?? "";
+  try {
+    if (contentType.includes("application/json")) {
+      const data = (await request.json()) as Record<string, unknown>;
+      const raw = data.quizId;
+      return typeof raw === "string" && raw.trim() !== "" ? raw.trim() : null;
+    }
+    const form = await request.formData();
+    const raw = form.get("quizId");
+    return typeof raw === "string" && raw.trim() !== "" ? raw.trim() : null;
+  } catch {
+    return null;
+  }
+}
+
 export async function action({ request }: ActionFunctionArgs) {
   const { session } = await authenticate.admin(request);
   if (request.method !== "POST") {
@@ -31,6 +51,21 @@ export async function action({ request }: ActionFunctionArgs) {
   });
   if (!shop) {
     return json({ ok: false, error: "Shop not found" }, { status: 400 });
+  }
+
+  // Optional quiz scope (mirrors /api/categories/group). When present the
+  // discovered buckets are bound to this quiz and the destructive wipe only
+  // clears this quiz's set; when absent, behavior is unchanged (legacy
+  // /app/categories page wipes the shop-global set).
+  const quizId = await readQuizId(request);
+  if (quizId !== null) {
+    const ownedQuiz = await prisma.quiz.findFirst({
+      where: { id: quizId, shopId: shop.id },
+      select: { id: true },
+    });
+    if (!ownedQuiz) {
+      return json({ ok: false, error: "Quiz not found" }, { status: 404 });
+    }
   }
 
   const [allProducts, allCollections] = await Promise.all([
@@ -88,10 +123,13 @@ export async function action({ request }: ActionFunctionArgs) {
     .slice(2, 8)}`;
 
   await prisma.$transaction([
-    prisma.category.deleteMany({ where: { shopId: shop.id } }),
+    // Scope the wipe to this quiz (or the shop-global set when quizId is
+    // null) so re-discovering one quiz never wipes another's buckets.
+    prisma.category.deleteMany({ where: { shopId: shop.id, quizId } }),
     prisma.category.createMany({
       data: discovered.map((d) => ({
         shopId: shop.id,
+        quizId,
         name: d.name,
         description: d.description,
         tags: d.tags,
