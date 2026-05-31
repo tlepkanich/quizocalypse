@@ -339,6 +339,30 @@ function BuilderShell({ data }: { data: LoaderData }) {
     goToStep(step + 1);
   };
 
+  // Free step navigation from the stepper pills — jump in/out of any step at any
+  // time. Unlike Next, a jump never blocks: if we're leaving Step 1 we still try
+  // to turn buckets into result pages (so a forward jump doesn't skip page
+  // creation), but a failure (e.g. no fallback collection yet) just navigates
+  // anyway — the target step renders its own empty state.
+  const jumpToStep = useCallback(
+    (n: number) => {
+      if (step === 1 && n !== 1) {
+        const buckets = categories.map((c) => ({ id: c.id, name: c.name }));
+        if (buckets.length) {
+          try {
+            commit(reconcileBucketsToResultNodes(doc, buckets, fallbackCollection));
+          } catch {
+            // Can't create result pages yet (no fallback collection) — navigate
+            // without them; the target step shows its own empty/warn state.
+          }
+        }
+      }
+      setReconcileError(null);
+      goToStep(n);
+    },
+    [step, categories, doc, commit, fallbackCollection, goToStep],
+  );
+
   const stepProps: StepProps = {
     quizId: data.quizId,
     doc,
@@ -403,7 +427,7 @@ function BuilderShell({ data }: { data: LoaderData }) {
         <BuilderStepper
           current={step}
           states={stepStates}
-          onJump={goToStep}
+          onJump={jumpToStep}
           right={controls}
         />
       ) : (

@@ -47,7 +47,10 @@ export function BuilderStepper({
     >
       {BUILDER_STEPS.map((s, i) => {
         const state = states[s.n] ?? "upcoming";
-        const clickable = state !== "upcoming";
+        // Every step is a free jump target — you can move in and out of any step
+        // at any time (e.g. on an already-built or published quiz), not just the
+        // ones already completed. The visual state stays as a progress cue.
+        const clickable = true;
         const isCurrent = s.n === current;
         return (
           <div key={s.n} style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -74,9 +77,9 @@ export function BuilderStepper({
                 background: isCurrent ? "var(--qz-cream-2, #f3f0ea)" : "transparent",
                 borderRadius: 999,
                 padding: "6px 12px 6px 6px",
-                cursor: clickable ? "pointer" : "default",
+                cursor: "pointer",
                 whiteSpace: "nowrap",
-                opacity: state === "upcoming" ? 0.55 : 1,
+                opacity: state === "upcoming" ? 0.75 : 1,
               }}
             >
               <span
