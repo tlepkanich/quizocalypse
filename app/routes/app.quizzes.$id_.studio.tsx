@@ -1166,6 +1166,14 @@ function ContentTab({
         <>
           {text("headline", "Headline")}
           {text("subtext", "Subtext", true)}
+          <label style={{ display: "inline-flex", gap: 8, alignItems: "center", fontSize: 13 }}>
+            <input
+              type="checkbox"
+              checked={Boolean(d.collect_phone)}
+              onChange={(e) => set({ collect_phone: e.target.checked })}
+            />
+            Also collect phone (SMS)
+          </label>
         </>
       );
     case "result":
@@ -1232,16 +1240,54 @@ function QuestionContent({
   onCommit: (doc: QuizDoc) => void;
 }) {
   const setText = (text: string) => onCommit(updateNodeData(doc, node.id, { text }));
+  const setData = (patch: Record<string, unknown>) =>
+    onCommit(updateNodeData(doc, node.id, patch));
   const setAnswer = (answerId: string, text: string) => {
     const answers = node.data.answers.map((a) => (a.id === answerId ? { ...a, text } : a));
     onCommit(updateNodeData(doc, node.id, { answers }));
   };
   const isCard = !["text", "email"].includes(node.data.question_type);
+  const num = (v: string) => (v.trim() ? Math.max(1, Math.round(Number(v) || 1)) : undefined);
   return (
     <>
       <QzField label="Question">
         <QzTextarea value={node.data.text} onChange={(e) => setText(e.target.value)} rows={2} />
       </QzField>
+      <QzField label="Type">
+        <QzSelect
+          value={node.data.question_type}
+          onChange={(e) => setData({ question_type: e.target.value })}
+        >
+          <option value="single_select">Single select</option>
+          <option value="multi_select">Multi select</option>
+          <option value="dropdown">Dropdown</option>
+          <option value="image_tile">Image tiles</option>
+          <option value="image_picker">Image picker</option>
+          <option value="searchable">Searchable</option>
+          <option value="text">Text input</option>
+          <option value="email">Email input</option>
+        </QzSelect>
+      </QzField>
+      {node.data.question_type === "multi_select" ? (
+        <div className="qz-row" style={{ gap: 12 }}>
+          <QzField label="Min picks">
+            <QzInput
+              type="number"
+              min={1}
+              value={node.data.min_selections ? String(node.data.min_selections) : ""}
+              onChange={(e) => setData({ min_selections: num(e.target.value) })}
+            />
+          </QzField>
+          <QzField label="Max picks">
+            <QzInput
+              type="number"
+              min={1}
+              value={node.data.max_selections ? String(node.data.max_selections) : ""}
+              onChange={(e) => setData({ max_selections: num(e.target.value) })}
+            />
+          </QzField>
+        </div>
+      ) : null}
       <QzField label="Answers">
         <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
           {node.data.answers.map((a) => (

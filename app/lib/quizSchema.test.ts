@@ -638,3 +638,57 @@ describe("node_layouts / node_css (Phase 2)", () => {
     expect(parsed.node_css.intro).toBe(".x { color: #222 }");
   });
 });
+
+describe("Phase 5 — discount, phone, question types", () => {
+  const base = {
+    quiz_id: "q1",
+    scope: { collection_ids: [] },
+    nodes: [
+      { id: "intro", type: "intro", position: { x: 0, y: 0 }, data: { headline: "Hi" } },
+      {
+        id: "q1",
+        type: "question",
+        position: { x: 1, y: 0 },
+        data: {
+          text: "Pick",
+          question_type: "dropdown",
+          min_selections: 2,
+          answers: [
+            { id: "a1", text: "A", edge_handle_id: "h1", video_url: "https://x.test/v.mp4" },
+            { id: "a2", text: "B", edge_handle_id: "h2" },
+          ],
+        },
+      },
+    ],
+    edges: [{ id: "e1", source: "intro", target: "q1" }],
+  };
+
+  it("discount_config defaults to disabled", () => {
+    expect(Quiz.parse(base).discount_config).toMatchObject({ enabled: false, kind: "percentage" });
+  });
+
+  it("parses dropdown type + min_selections + answer video_url", () => {
+    const parsed = Quiz.parse(base);
+    const q = parsed.nodes.find((n) => n.id === "q1")!;
+    expect(q.type === "question" && q.data.question_type).toBe("dropdown");
+    expect(q.type === "question" && q.data.min_selections).toBe(2);
+    expect(q.type === "question" && q.data.answers[0]!.video_url).toBe("https://x.test/v.mp4");
+  });
+
+  it("email_gate collect_phone defaults to false", () => {
+    const parsed = Quiz.parse({
+      ...base,
+      nodes: [
+        ...base.nodes,
+        {
+          id: "eg",
+          type: "email_gate",
+          position: { x: 2, y: 0 },
+          data: { headline: "Email" },
+        },
+      ],
+    });
+    const eg = parsed.nodes.find((n) => n.id === "eg")!;
+    expect(eg.type === "email_gate" && eg.data.collect_phone).toBe(false);
+  });
+});

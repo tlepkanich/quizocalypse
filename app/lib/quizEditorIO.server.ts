@@ -3,6 +3,7 @@ import { authenticate } from "../shopify.server";
 import prisma from "../db.server";
 import { Quiz } from "./quizSchema";
 import { publishQuiz, PublishError } from "./quizPublish";
+import { ensureQuizDiscount } from "./discount.server";
 import { regenerateQuestion, generateQuestionFlow } from "./claude";
 import { applyQuestionFlow, type SmartBuildBucket } from "./smartBuild";
 import { parseBrandGuidelinesSafe } from "./brandGuidelines";
@@ -120,7 +121,7 @@ export async function loadQuizEditorData(request: Request, id: string) {
 // regenerate-node. Returns the json() Response directly (the route just
 // forwards it), preserving the precise action-data union for useFetcher.
 export async function handleQuizEditorAction(request: Request, id: string) {
-  const { session } = await authenticate.admin(request);
+  const { session, admin } = await authenticate.admin(request);
 
   const shop = await prisma.shop.findUnique({
     where: { shopDomain: session.shop },
@@ -154,12 +155,37 @@ export async function handleQuizEditorAction(request: Request, id: string) {
 
   if (intent === "publish") {
     try {
+      // Create the recommendation discount (if enabled + not yet created) and
+      // persist its code to the draft so publishQuiz bakes it into
+      // publishedJson. Discount failures don't block publishing.
+      let discountWarning: string | undefined;
+      const draft = await prisma.quiz.findFirst({
+        where: { id, shopId: shop.id },
+        select: { draftJson: true },
+      });
+      const parsedDraft = draft ? Quiz.safeParse(draft.draftJson) : null;
+      if (
+        parsedDraft?.success &&
+        parsedDraft.data.discount_config.enabled &&
+        !parsedDraft.data.discount_config.code
+      ) {
+        const ensured = await ensureQuizDiscount(admin, parsedDraft.data);
+        discountWarning = ensured.warning;
+        if (ensured.code) {
+          await prisma.quiz.update({
+            where: { id },
+            data: { draftJson: ensured.doc as never },
+          });
+        }
+      }
+
       const result = await publishQuiz(prisma, { quizId: id, shopId: shop.id });
       return json({
         ok: true,
         action: "publish" as const,
         version: result.version,
         productCount: result.productCount,
+        ...(discountWarning ? { warning: discountWarning } : {}),
       });
     } catch (err) {
       if (err instanceof PublishError) {

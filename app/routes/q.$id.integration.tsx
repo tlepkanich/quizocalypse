@@ -1,7 +1,13 @@
 import type { ActionFunctionArgs } from "@remix-run/node";
 import { json } from "@remix-run/node";
 import prisma from "../db.server";
-import { Quiz } from "../lib/quizSchema";
+import { Quiz, type Quiz as QuizDoc } from "../lib/quizSchema";
+import {
+  resolveNextStep,
+  recommendForResult,
+  type BranchContext,
+  type IndexedProduct,
+} from "../lib/recommendationEngine";
 
 // Integration node executor. When the storefront runtime reaches an
 // integration node it POSTs here with the session payload; we fire every
@@ -13,6 +19,50 @@ interface IntegrationRequestBody {
   path: Array<{ questionNodeId: string; answerIds: string[] }>;
   email?: string;
   name?: string;
+  phone?: string;
+}
+
+// Resolve the products the shopper is about to be recommended, by walking the
+// flow forward from the integration node to the first result page (best-effort:
+// no A/B context, so branch routing is by accumulated tags only). Lets us send
+// the recommendations to Klaviyo as profile attributes.
+function resolveRecommendedProducts(
+  doc: QuizDoc,
+  productIndex: IndexedProduct[],
+  path: Array<{ questionNodeId: string; answerIds: string[] }>,
+  fromNodeId: string,
+): { ids: string[]; titles: string[] } {
+  const selectedAnswerIds = new Set<string>();
+  const accumulatedTags = new Set<string>();
+  for (const step of path) {
+    const q = doc.nodes.find((n) => n.id === step.questionNodeId);
+    if (!q || q.type !== "question") continue;
+    for (const aid of step.answerIds) {
+      selectedAnswerIds.add(aid);
+      const a = q.data.answers.find((x) => x.id === aid);
+      if (a) for (const t of a.tags) accumulatedTags.add(t);
+    }
+  }
+  const ctx: BranchContext = { accumulatedTags, selectedAnswerIds, abAssignments: {} };
+  let cursor: string | null = fromNodeId;
+  for (let i = 0; i < 30 && cursor; i++) {
+    const nextId: string | null = resolveNextStep(doc, cursor, null, ctx);
+    if (!nextId) break;
+    const n = doc.nodes.find((x) => x.id === nextId);
+    if (!n) break;
+    if (n.type === "result") {
+      const recs = recommendForResult({
+        quiz: doc,
+        productIndex,
+        selectedAnswerIds: [...selectedAnswerIds],
+        resultNodeId: nextId,
+      });
+      return { ids: recs.map((r) => r.product_id), titles: recs.map((r) => r.title) };
+    }
+    if (n.type === "question") break; // more answers still needed
+    cursor = nextId;
+  }
+  return { ids: [], titles: [] };
 }
 
 // Hard cap on the outbound webhook timeout so a stuck receiver can't hang
@@ -50,6 +100,11 @@ export async function action({ params, request }: ActionFunctionArgs) {
     return json({ error: "Node is not an integration node" }, { status: 400 });
   }
 
+  // The shopper's recommended products (best-effort) for marketing payloads.
+  const productIndex =
+    (quiz.publishedJson as { product_index?: IndexedProduct[] }).product_index ?? [];
+  const recommended = resolveRecommendedProducts(doc, productIndex, body.path, node.id);
+
   // Build the outbound payload from the path: question text → picked answer
   // text(s) + accumulated tags. Receivers get a flat readable shape.
   const answers: Array<{
@@ -82,8 +137,11 @@ export async function action({ params, request }: ActionFunctionArgs) {
     timestamp: new Date().toISOString(),
     email: body.email ?? null,
     name: body.name ?? null,
+    phone: body.phone ?? null,
     answers,
     accumulated_tags: Array.from(allTags),
+    recommended_product_ids: recommended.ids,
+    recommended_product_titles: recommended.titles,
   };
 
   // Fire every action with bounded timeout. We collect per-action results
@@ -135,11 +193,15 @@ export async function action({ params, request }: ActionFunctionArgs) {
             attributes: {
               email: body.email,
               ...(body.name ? { first_name: body.name } : {}),
+              ...(body.phone ? { phone_number: body.phone } : {}),
               properties: {
                 quiz_id: id,
                 quiz_name: quiz.name,
                 quiz_completed_at: outboundPayload.timestamp,
                 quiz_tags: outboundPayload.accumulated_tags,
+                quiz_recommended_products: recommended.titles,
+                quiz_recommended_product_ids: recommended.ids,
+                quiz_top_product: recommended.titles[0] ?? null,
                 ...Object.fromEntries(
                   outboundPayload.answers.map((a) => [
                     `quiz_q_${a.question_id}`,
@@ -189,6 +251,47 @@ export async function action({ params, request }: ActionFunctionArgs) {
             clearTimeout(subT);
           } catch {
             // Swallow — list sub is best-effort.
+          }
+        }
+        // Fire a "Completed Quiz" event (carrying tags + recommendations) so
+        // merchants can trigger Klaviyo flows on quiz completion. Best-effort.
+        if (res.ok) {
+          try {
+            const evController = new AbortController();
+            const evT = setTimeout(() => evController.abort(), WEBHOOK_TIMEOUT_MS);
+            await fetch("https://a.klaviyo.com/api/events/", {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                Authorization: `Klaviyo-API-Key ${act.api_key}`,
+                revision: "2024-02-15",
+              },
+              body: JSON.stringify({
+                data: {
+                  type: "event",
+                  attributes: {
+                    metric: {
+                      data: { type: "metric", attributes: { name: "Completed Quiz" } },
+                    },
+                    profile: {
+                      data: { type: "profile", attributes: { email: body.email } },
+                    },
+                    properties: {
+                      quiz_id: id,
+                      quiz_name: quiz.name,
+                      quiz_tags: outboundPayload.accumulated_tags,
+                      recommended_products: recommended.titles,
+                      recommended_product_ids: recommended.ids,
+                    },
+                    time: outboundPayload.timestamp,
+                  },
+                },
+              }),
+              signal: evController.signal,
+            });
+            clearTimeout(evT);
+          } catch {
+            // Swallow — event is best-effort.
           }
         }
       } catch (err) {

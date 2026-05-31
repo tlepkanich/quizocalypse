@@ -191,6 +191,7 @@ model EmailCapture {
   sessionId  String
   email      String
   firstName  String?
+  phone      String?
   capturedAt DateTime @default(now())
 
   quiz Quiz @relation(fields: [quizId], references: [id], onDelete: Cascade)

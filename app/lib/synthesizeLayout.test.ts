@@ -137,6 +137,7 @@ const emailGate = (subtext = ""): QuizNode => ({
     email_required: true,
     name_optional: true,
     skip_allowed: false,
+    collect_phone: false,
   },
 });
 

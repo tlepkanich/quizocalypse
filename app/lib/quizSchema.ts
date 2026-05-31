@@ -25,6 +25,8 @@ export const QuestionType = z.enum([
   //   2–3 column grid where image dominates and text is a small caption.
   "searchable",
   "image_picker",
+  // Phase 5: a compact dropdown (<select>) — good for long single-choice lists.
+  "dropdown",
 ]);
 export type QuestionType = z.infer<typeof QuestionType>;
 
@@ -77,6 +79,8 @@ export const Answer = z.object({
   image_url: z.string().url().optional(),
   tags: z.array(z.string()).default([]),
   collection_filter: z.string().optional(),
+  // Phase 5: an optional short video shown in the answer card (mp4/embed URL).
+  video_url: z.string().url().optional(),
   edge_handle_id: z.string().min(1),
   // v3 points scoring: weights this answer contributes toward category ids
   // when a result page uses the "points" ladder strategy. categoryId →
@@ -115,6 +119,9 @@ export const QuestionDataObject = z.object({
   question_type: QuestionType,
   required: z.boolean().default(true),
   max_selections: z.number().int().positive().optional(),
+  // Phase 5: minimum picks for multi_select (the shopper must choose at least
+  // this many before continuing). Optional — defaults to "at least one".
+  min_selections: z.number().int().positive().optional(),
   // Card types need ≥2 answers; freeform types (text/email) only need a
   // single seed answer so tag accumulation + edge routing keep working.
   // The refine below enforces the per-type minimum.
@@ -135,6 +142,7 @@ export const QuestionData = QuestionDataObject.refine(
       "image_tile",
       "searchable",
       "image_picker",
+      "dropdown",
     ];
     if (cardTypes.includes(q.question_type)) return q.answers.length >= 2;
     return true;
@@ -151,6 +159,8 @@ export const EmailGateData = z.object({
   email_required: z.boolean().default(true),
   name_optional: z.boolean().default(true),
   skip_allowed: z.boolean().default(false),
+  // Phase 5 — also collect a phone number for SMS marketing (optional input).
+  collect_phone: z.boolean().default(false),
 });
 
 // One conditional product rule: "if the shopper picked all of these answers
@@ -681,6 +691,25 @@ export const ContentBlock = z.discriminatedUnion("type", [
 export type ContentBlock = z.infer<typeof ContentBlock>;
 export type ContentBlockType = ContentBlock["type"];
 
+// Phase 5 — quiz-level discount on recommended products. Disabled by default
+// (byte-identical back-compat). When enabled, the publisher creates a Shopify
+// code discount and stores the generated `code` here; result pages opt into
+// showing/applying it via the per-result `include_discount` flag.
+export const DiscountConfig = z.object({
+  enabled: z.boolean().default(false),
+  kind: z.enum(["percentage", "amount"]).default("percentage"),
+  // percent (clamped to 1–100 at discount-build time) when kind="percentage";
+  // a fixed amount in the shop currency when kind="amount" (no upper bound).
+  value: z.number().min(0).default(10),
+  // Approximates "first purchase only" — Shopify caps the code at one use per
+  // customer.
+  once_per_customer: z.boolean().default(true),
+  title: z.string().default("Quiz reward"),
+  // Generated at publish (e.g. "QUIZ-AB12CD"); present once created.
+  code: z.string().optional(),
+});
+export type DiscountConfig = z.infer<typeof DiscountConfig>;
+
 export const Quiz = z.object({
   quiz_id: z.string().min(1),
   status: QuizStatus.default("draft"),
@@ -730,6 +759,8 @@ export const Quiz = z.object({
     corner: "bottom-right",
     label: "",
   }),
+  // Phase 5 — quiz-level discount on recommended products. Defaults to disabled.
+  discount_config: DiscountConfig.default({}),
 });
 export type Quiz = z.infer<typeof Quiz>;
 

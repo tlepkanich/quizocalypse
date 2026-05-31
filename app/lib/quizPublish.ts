@@ -213,10 +213,19 @@ export async function publishQuiz(
           : p.collectionIds.some((c) => scopeIds.has(c)),
     )
     .map((p) => {
-      const variants = (p.variants ?? []) as Array<{ inventoryQuantity?: number | null }>;
+      const variants = (p.variants ?? []) as Array<{
+        id?: string;
+        inventoryQuantity?: number | null;
+      }>;
       const inStock = variants.some(
         (v) => typeof v.inventoryQuantity === "number" && v.inventoryQuantity > 0,
       );
+      // Prefer the first in-stock variant for the cart permalink; else the
+      // first variant. Used by add-to-cart on the storefront.
+      const defaultVariant =
+        variants.find(
+          (v) => typeof v.inventoryQuantity === "number" && v.inventoryQuantity > 0,
+        ) ?? variants[0];
       // Flatten metafields into a simple key→string map for v3 ranking +
       // the metafield match strategy. Source shape is { "ns.key": { value,
       // type } } from catalog sync.
@@ -243,6 +252,7 @@ export async function publishQuiz(
         inventory_in_stock: inStock,
         updated_at: p.updatedAt ? p.updatedAt.toISOString() : undefined,
         ...(Object.keys(metafields).length > 0 ? { metafields } : {}),
+        ...(defaultVariant?.id ? { default_variant_id: defaultVariant.id } : {}),
       };
     });
 

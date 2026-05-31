@@ -16,6 +16,48 @@
       allow="clipboard-write"
       style="display:block;width:100%;border:0;min-height:{{ block.settings.min_height | default: 720 }}px;background:transparent;"
     ></iframe>
+    <script>
+      // In-Quiz Add-On: the quiz iframe (cross-origin) can't call the AJAX cart
+      // itself, so it posts a "qz:add-to-cart" message; we add same-origin via
+      // /cart/add.js, ack back so the quiz stays put, and toast. If we don't ack
+      // (e.g. add failed), the quiz falls back to a cart permalink.
+      (function () {
+        var APP = {{ clean_url | json }};
+        var appOrigin = null;
+        try { appOrigin = new URL(APP).origin; } catch (e) {}
+        function toast(msg) {
+          var t = document.createElement("div");
+          t.textContent = msg;
+          t.setAttribute("role", "status");
+          t.style.cssText =
+            "position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:#111;color:#fff;padding:10px 16px;border-radius:8px;font:14px system-ui,sans-serif;z-index:2147483647;box-shadow:0 4px 16px rgba(0,0,0,.25);";
+          document.body.appendChild(t);
+          setTimeout(function () { t.remove(); }, 2500);
+        }
+        window.addEventListener("message", function (e) {
+          if (appOrigin && e.origin !== appOrigin) return;
+          var d = e.data;
+          if (!d || d.type !== "qz:add-to-cart" || !d.variantId) return;
+          // Ack on RECEIPT so the quiz cancels its permalink fallback (avoids a
+          // double-add if the cart write is slow). Post :fail only if it errors.
+          function reply(type) {
+            try { e.source && e.source.postMessage({ type: type }, appOrigin || "*"); } catch (_) {}
+          }
+          reply("qz:add-to-cart:ok");
+          fetch("/cart/add.js", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ items: [{ id: Number(d.variantId), quantity: d.quantity || 1 }] }),
+          })
+            .then(function (r) { if (!r.ok) throw new Error("add failed"); return r.json(); })
+            .then(function () {
+              try { document.dispatchEvent(new CustomEvent("cart:refresh")); } catch (_) {}
+              toast("Added to cart");
+            })
+            .catch(function () { reply("qz:add-to-cart:fail"); });
+        });
+      })();
+    </script>
   {%- else -%}
     <div style="padding:24px;border:1px dashed #aaa;border-radius:8px;color:#666;font-family:system-ui,sans-serif;text-align:center;">
       <strong>Quizocalypse block</strong><br/>

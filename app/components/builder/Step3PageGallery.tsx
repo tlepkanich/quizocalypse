@@ -3,6 +3,7 @@ import { StepPreview } from "../runtime/StepPreview";
 import { QzBadge, QzBanner, QzButton } from "../qz";
 import { SHARED_RESULT_KEY } from "../../lib/resultLayout";
 import { ResultSettingsPanel } from "./ResultSettingsPanel";
+import { DiscountCard } from "./DiscountCard";
 import type { StepProps } from "./stepProps";
 
 // Step 3 — "Recommendations page logic SETTINGS". A two-pane workspace: a
@@ -73,6 +74,8 @@ export function Step3PageGallery({
           Skip — use best-practice logic →
         </QzButton>
       </div>
+
+      <DiscountCard doc={doc} onCommit={onCommit} />
 
       {resultNodes.length === 0 ? (
         <QzBanner tone="warn" title="No result pages yet">

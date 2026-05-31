@@ -14,6 +14,8 @@ import {
   type RecommendedProduct,
 } from "../lib/recommendationEngine";
 import { resolveNodeOverride } from "../lib/resultLayout";
+import { cartPermalink, numericId } from "../lib/cartLink";
+import { progressPct, reachableQuestionCount } from "../lib/progress";
 import {
   resolveForBreakpoint,
   tokensToCssVars,
@@ -175,6 +177,9 @@ export default function StorefrontRuntime() {
   // quiz resumes instead of restarting. Sticky A/B assignments ride along.
   const stateKey = `qz-state-${quizId}`;
   const abRef = useRef<Record<string, string>>({});
+  // Captured contact (email/name/phone) from an email_gate, so a downstream
+  // integration node can forward it to Klaviyo.
+  const contactRef = useRef<{ email?: string; name?: string; phone?: string }>({});
   const resumedRef = useRef(false);
 
   // Restore BEFORE the analytics effect (effect order = declaration order) so a
@@ -314,6 +319,15 @@ export default function StorefrontRuntime() {
     });
   };
 
+  // In-Quiz Add-On: add a mid-quiz preview product to cart (then continue).
+  const handlePreviewAdd = (product: RecommendedProduct, position: number) => {
+    analyticsRef.current?.track("add_to_cart", {
+      stage: "preview",
+      product_id: product.product_id,
+      position,
+    });
+  };
+
   function reset() {
     setCurrentNodeId(introNode ? introNode.id : null);
     setPath([]);
@@ -370,6 +384,14 @@ export default function StorefrontRuntime() {
     node: Extract<QuizDoc["nodes"][number], { type: "result" }>,
   ): React.ReactNode {
     const selectedAnswerIds = path.flatMap((p) => p.answerIds);
+    const dc = doc.discount_config;
+    const showDiscount = node.data.include_discount && dc.enabled && Boolean(dc.code);
+    const discountCode = showDiscount ? dc.code : undefined;
+    const discountLabel = showDiscount
+      ? dc.kind === "percentage"
+        ? `Save ${dc.value}%`
+        : `$${dc.value} off`
+      : undefined;
     const stages = node.data.stages;
     if (stages.length === 0) {
       const recs = recommendForResult({
@@ -385,6 +407,9 @@ export default function StorefrontRuntime() {
           ctaLabel={node.data.cta_label}
           recs={recs}
           resultNodeId={node.id}
+          shopDomain={shopDomain}
+          discountCode={discountCode}
+          discountLabel={discountLabel}
           styles={styles}
           startedAt={startedAtRef.current}
           completed={completedRef}
@@ -406,6 +431,8 @@ export default function StorefrontRuntime() {
         sections={sections}
         resultNodeId={node.id}
         shopDomain={shopDomain}
+        discountCode={discountCode}
+        discountLabel={discountLabel}
         styles={styles}
         startedAt={startedAtRef.current}
         completed={completedRef}
@@ -495,7 +522,10 @@ export default function StorefrontRuntime() {
           styles={styles}
           quizId={quizId}
           sessionId={sessionIdRef.current}
-          onSubmit={() => gotoNextFrom(currentNode.id, null)}
+          onSubmit={(contact) => {
+            if (contact?.email) contactRef.current = contact;
+            gotoNextFrom(currentNode.id, null);
+          }}
         />
       );
     } else if (currentNode.type === "message") {
@@ -558,6 +588,7 @@ export default function StorefrontRuntime() {
           node={currentNode}
           quizId={quizId}
           path={path}
+          contact={contactRef.current}
           styles={styles}
           onDone={() => gotoNextFrom(currentNode.id, null)}
         />
@@ -574,6 +605,17 @@ export default function StorefrontRuntime() {
       );
     } else if (currentNode.type === "result") {
       const selectedAnswerIds = path.flatMap((p) => p.answerIds);
+      // Phase 5: a result page shows + applies the quiz discount only when it
+      // opts in (include_discount) and the discount is enabled + created.
+      const dc = doc.discount_config;
+      const showDiscount =
+        currentNode.data.include_discount && dc.enabled && Boolean(dc.code);
+      const discountCode = showDiscount ? dc.code : undefined;
+      const discountLabel = showDiscount
+        ? dc.kind === "percentage"
+          ? `Save ${dc.value}%`
+          : `$${dc.value} off`
+        : undefined;
       const stages = currentNode.data.stages;
       if (stages.length === 0) {
         const recs = recommendForResult({
@@ -589,6 +631,9 @@ export default function StorefrontRuntime() {
             ctaLabel={currentNode.data.cta_label}
             recs={recs}
             resultNodeId={currentNode.id}
+            shopDomain={shopDomain}
+            discountCode={discountCode}
+            discountLabel={discountLabel}
             styles={styles}
             startedAt={startedAtRef.current}
             completed={completedRef}
@@ -615,6 +660,8 @@ export default function StorefrontRuntime() {
             sections={stageSections}
             resultNodeId={currentNode.id}
             shopDomain={shopDomain}
+            discountCode={discountCode}
+            discountLabel={discountLabel}
             styles={styles}
             startedAt={startedAtRef.current}
             completed={completedRef}
@@ -676,6 +723,7 @@ export default function StorefrontRuntime() {
       <div className="qz-runtime-page" style={styles.page}>
         <div className="qz-runtime-shell">
           <div className="qz-runtime-content">
+            <ProgressBar doc={doc} path={path} currentNodeId={currentNodeId} />
             <ProgressTrail
               doc={doc}
               path={path}
@@ -690,6 +738,7 @@ export default function StorefrontRuntime() {
                 recs={previewRecs}
                 shopDomain={shopDomain}
                 onClick={handlePreviewClick}
+                onAdd={handlePreviewAdd}
               />
             </div>
           )}
@@ -699,6 +748,7 @@ export default function StorefrontRuntime() {
             recs={previewRecs}
             shopDomain={shopDomain}
             onClick={handlePreviewClick}
+            onAdd={handlePreviewAdd}
           />
         )}
       </div>
@@ -708,6 +758,47 @@ export default function StorefrontRuntime() {
 
 // Clickable progress trail — one pill per answered question (jump back to
 // re-answer) + the current question. Lets the shopper move around the quiz
+// Thin percent-complete bar above the step trail (Phase 5). Denominator =
+// reachable question steps; numerator = answered + the one in progress.
+function ProgressBar({
+  doc,
+  path,
+  currentNodeId,
+}: {
+  doc: QuizDoc;
+  path: PathStep[];
+  currentNodeId: string | null;
+}) {
+  const total = useMemo(() => reachableQuestionCount(doc), [doc]);
+  if (total <= 0) return null;
+  const node = currentNodeId ? doc.nodes.find((n) => n.id === currentNodeId) : null;
+  const onResult = node?.type === "result" || node?.type === "end";
+  const onQuestion = node?.type === "question";
+  const answered = path.length + (onQuestion ? 1 : 0);
+  const pct = onResult ? 100 : progressPct(total, answered);
+  return (
+    <div
+      style={{
+        height: 6,
+        borderRadius: 999,
+        background: "#00000010",
+        overflow: "hidden",
+        marginBottom: 12,
+      }}
+      aria-hidden
+    >
+      <div
+        style={{
+          width: `${pct}%`,
+          height: "100%",
+          background: "var(--qz-color-primary)",
+          transition: "width .3s ease",
+        }}
+      />
+    </div>
+  );
+}
+
 // instead of only going forward; resume restores it on re-open.
 function ProgressTrail({
   doc,
@@ -769,10 +860,12 @@ function PreviewRail({
   recs,
   shopDomain,
   onClick,
+  onAdd,
 }: {
   recs: RecommendedProduct[];
   shopDomain: string;
   onClick: (product: RecommendedProduct, position: number) => void;
+  onAdd?: (product: RecommendedProduct, position: number) => void;
 }) {
   return (
     <aside
@@ -805,7 +898,7 @@ function PreviewRail({
       >
         Updating as you answer
       </div>
-      <PreviewList recs={recs} shopDomain={shopDomain} onClick={onClick} />
+      <PreviewList recs={recs} shopDomain={shopDomain} onClick={onClick} onAdd={onAdd} />
     </aside>
   );
 }
@@ -814,10 +907,12 @@ function PreviewChip({
   recs,
   shopDomain,
   onClick,
+  onAdd,
 }: {
   recs: RecommendedProduct[];
   shopDomain: string;
   onClick: (product: RecommendedProduct, position: number) => void;
+  onAdd?: (product: RecommendedProduct, position: number) => void;
 }) {
   const [open, setOpen] = useState(false);
   return (
@@ -882,7 +977,7 @@ function PreviewChip({
             >
               Picks for you
             </div>
-            <PreviewList recs={recs} shopDomain={shopDomain} onClick={onClick} />
+            <PreviewList recs={recs} shopDomain={shopDomain} onClick={onClick} onAdd={onAdd} />
           </div>
         </>
       )}
@@ -894,10 +989,12 @@ function PreviewList({
   recs,
   shopDomain,
   onClick,
+  onAdd,
 }: {
   recs: RecommendedProduct[];
   shopDomain: string;
   onClick: (product: RecommendedProduct, position: number) => void;
+  onAdd?: (product: RecommendedProduct, position: number) => void;
 }) {
   if (recs.length === 0) {
     return (
@@ -981,23 +1078,90 @@ function PreviewList({
           color: "inherit",
           background: "var(--qz-color-bg)",
         };
-        return href ? (
-          <a
-            key={r.product_id}
-            href={href}
-            target="_blank"
-            rel="noreferrer"
-            onClick={() => onClick(r, idx)}
-            style={cardStyle}
-          >
-            {inner}
-          </a>
-        ) : (
+        const cartUrl = cartPermalink(shopDomain, r.default_variant_id, 1);
+        const infoFlex: React.CSSProperties = {
+          display: "flex",
+          gap: 10,
+          alignItems: "center",
+          flex: 1,
+          minWidth: 0,
+          textDecoration: "none",
+          color: "inherit",
+        };
+        return (
           <div key={r.product_id} style={cardStyle}>
-            {inner}
+            {href ? (
+              <a href={href} target="_blank" rel="noreferrer" onClick={() => onClick(r, idx)} style={infoFlex}>
+                {inner}
+              </a>
+            ) : (
+              <div style={infoFlex}>{inner}</div>
+            )}
+            {cartUrl && onAdd ? (
+              <button
+                type="button"
+                onClick={() => {
+                  onAdd(r, idx);
+                  addToCartFromQuiz(cartUrl, numericId(r.default_variant_id), false);
+                }}
+                style={{
+                  flexShrink: 0,
+                  border: "1px solid var(--qz-color-primary)",
+                  color: "var(--qz-color-primary)",
+                  background: "transparent",
+                  borderRadius: "var(--qz-radius)",
+                  padding: "4px 10px",
+                  fontSize: 12,
+                  fontWeight: 600,
+                  cursor: "pointer",
+                  font: "inherit",
+                }}
+              >
+                Add
+              </button>
+            ) : null}
           </div>
         );
       })}
+    </div>
+  );
+}
+
+function DropdownQuestion({
+  node,
+  onAdvance,
+  styles,
+}: {
+  node: Extract<QuizDoc["nodes"][number], { type: "question" }>;
+  onAdvance: (answerIds: string[], handle: string | null) => void;
+  styles: ReturnType<typeof stylesFor>;
+}) {
+  const [sel, setSel] = useState("");
+  const answer = node.data.answers.find((a) => a.id === sel);
+  return (
+    <div style={styles.card}>
+      <h2 style={styles.h2}>{node.data.text}</h2>
+      <div style={{ marginTop: 20, display: "flex", flexDirection: "column", gap: 12 }}>
+        <select
+          value={sel}
+          onChange={(e) => setSel(e.target.value)}
+          style={{ ...styles.answerBtn, cursor: "pointer", padding: "var(--qz-pad)" }}
+        >
+          <option value="">Choose…</option>
+          {node.data.answers.map((a) => (
+            <option key={a.id} value={a.id}>
+              {a.text}
+            </option>
+          ))}
+        </select>
+        <button
+          style={{ ...styles.primaryBtn, opacity: answer ? 1 : 0.5 }}
+          disabled={!answer}
+          onClick={() => answer && onAdvance([answer.id], answer.edge_handle_id)}
+        >
+          Continue
+        </button>
+      </div>
     </div>
   );
 }
@@ -1085,7 +1249,9 @@ function QuestionView({
       .filter(([, v]) => v)
       .map(([k]) => k);
     const max = node.data.max_selections;
+    const min = node.data.min_selections;
     const tooMany = typeof max === "number" && selectedIds.length > max;
+    const tooFew = typeof min === "number" && selectedIds.length < min;
     return (
       <div style={styles.card}>
         <h2 style={styles.h2}>{node.data.text}</h2>
@@ -1117,16 +1283,16 @@ function QuestionView({
         <button
           style={{
             ...styles.primaryBtn,
-            opacity: selectedIds.length === 0 || tooMany ? 0.5 : 1,
+            opacity: selectedIds.length === 0 || tooMany || tooFew ? 0.5 : 1,
           }}
-          disabled={selectedIds.length === 0 || tooMany}
+          disabled={selectedIds.length === 0 || tooMany || tooFew}
           onClick={() => {
             const first = node.data.answers.find((a) => checked[a.id]);
             onAdvance(selectedIds, first ? first.edge_handle_id : null);
           }}
         >
           Next
-          {tooMany ? ` (max ${max})` : ""}
+          {tooMany ? ` (max ${max})` : tooFew ? ` (choose ${min}+)` : ""}
         </button>
       </div>
     );
@@ -1203,6 +1369,11 @@ function QuestionView({
     );
   }
 
+  // Dropdown: a compact <select> for long single-choice lists.
+  if (node.data.question_type === "dropdown") {
+    return <DropdownQuestion node={node} onAdvance={onAdvance} styles={styles} />;
+  }
+
   // single_select / image_tile (default fall-through)
   return (
     <div style={styles.card}>
@@ -1220,6 +1391,20 @@ function QuestionView({
             }}
             onClick={() => onAdvance([a.id], a.edge_handle_id)}
           >
+            {a.video_url && (
+              <video
+                src={a.video_url}
+                controls
+                playsInline
+                style={{
+                  width: "100%",
+                  maxHeight: 200,
+                  borderRadius: "var(--qz-radius)",
+                  marginBottom: 8,
+                  display: "block",
+                }}
+              />
+            )}
             {node.data.question_type === "image_tile" && a.image_url && (
               <img
                 src={a.image_url}
@@ -1334,10 +1519,11 @@ function EmailGateView({
   styles: ReturnType<typeof stylesFor>;
   quizId: string;
   sessionId: string;
-  onSubmit: () => void;
+  onSubmit: (contact?: { email?: string; name?: string; phone?: string }) => void;
 }) {
   const [email, setEmail] = useState("");
   const [name, setName] = useState("");
+  const [phone, setPhone] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const valid = /^\S+@\S+\.\S+$/.test(email);
 
@@ -1353,13 +1539,18 @@ function EmailGateView({
           session_id: sessionId,
           email,
           ...(name ? { first_name: name } : {}),
+          ...(phone.trim() ? { phone: phone.trim() } : {}),
         }),
         keepalive: true,
       });
     } catch {
       // Don't block the quiz on capture failure.
     } finally {
-      onSubmit();
+      onSubmit({
+        email,
+        name: name.trim() || undefined,
+        phone: phone.trim() || undefined,
+      });
     }
   }
   const inputStyle: React.CSSProperties = {
@@ -1392,6 +1583,15 @@ function EmailGateView({
             style={inputStyle}
           />
         )}
+        {node.data.collect_phone && (
+          <input
+            type="tel"
+            placeholder="Phone (optional)"
+            value={phone}
+            onChange={(e) => setPhone(e.target.value)}
+            style={inputStyle}
+          />
+        )}
       </div>
       <button
         style={{ ...styles.primaryBtn, opacity: valid && !submitting ? 1 : 0.5 }}
@@ -1402,7 +1602,7 @@ function EmailGateView({
       </button>
       {node.data.skip_allowed && (
         <button
-          onClick={onSubmit}
+          onClick={() => onSubmit()}
           style={{
             background: "none",
             border: "none",
@@ -1663,6 +1863,7 @@ function IntegrationView({
   node,
   quizId,
   path,
+  contact,
   styles,
   onDone,
 }: {
@@ -1672,6 +1873,7 @@ function IntegrationView({
   >;
   quizId: string;
   path: PathStep[];
+  contact?: { email?: string; name?: string; phone?: string };
   styles: ReturnType<typeof stylesFor>;
   onDone: () => void;
 }) {
@@ -1687,7 +1889,13 @@ function IntegrationView({
         const res = await fetch(`/q/${quizId}/integration`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ nodeId: node.id, path }),
+          body: JSON.stringify({
+            nodeId: node.id,
+            path,
+            ...(contact?.email ? { email: contact.email } : {}),
+            ...(contact?.name ? { name: contact.name } : {}),
+            ...(contact?.phone ? { phone: contact.phone } : {}),
+          }),
         });
         const body = (await res.json()) as { ok?: boolean; error?: string };
         if (cancelled) return;
@@ -1710,6 +1918,9 @@ function IntegrationView({
     return () => {
       cancelled = true;
     };
+    // `contact` is read but intentionally not a dep — the effect fires once
+    // (guarded by fired.current) with whatever contact was captured by then.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [node.id, node.data.continue_on_error, quizId, path, onDone]);
 
   return (
@@ -1847,6 +2058,9 @@ function ResultView({
   ctaLabel,
   recs,
   resultNodeId,
+  shopDomain,
+  discountCode,
+  discountLabel,
   styles,
   startedAt,
   completed,
@@ -1859,6 +2073,9 @@ function ResultView({
   ctaLabel: string;
   recs: RecommendedProduct[];
   resultNodeId: string;
+  shopDomain?: string;
+  discountCode?: string;
+  discountLabel?: string;
   styles: ReturnType<typeof stylesFor>;
   startedAt: number;
   completed: React.MutableRefObject<boolean>;
@@ -1883,7 +2100,22 @@ function ResultView({
 
   const inner = (
     <>
-      <div style={{ marginTop: bare ? 0 : 20, display: "grid", gap: 12 }}>
+      {discountLabel ? (
+        <div
+          style={{
+            marginTop: bare ? 0 : 16,
+            padding: "10px 14px",
+            borderRadius: "var(--qz-radius)",
+            background: "color-mix(in srgb, var(--qz-color-primary) 12%, transparent)",
+            color: "var(--qz-color-text)",
+            fontSize: 13,
+            fontWeight: 600,
+          }}
+        >
+          🎁 {discountLabel} on these picks — applied automatically at checkout.
+        </div>
+      ) : null}
+      <div style={{ marginTop: bare && !discountLabel ? 0 : 20, display: "grid", gap: 12 }}>
         {recs.length === 0 && (
           <p style={{ color: "var(--qz-color-muted)" }}>
             No products to show. Add a fallback collection in the editor.
@@ -1895,9 +2127,19 @@ function ResultView({
             product={r}
             position={idx}
             ctaLabel={ctaLabel}
+            href={shopDomain ? `https://${shopDomain}/products/${r.handle}` : undefined}
+            shopDomain={shopDomain}
+            discountCode={discountCode}
+            discountLabel={discountLabel}
             styles={styles}
             onClick={() =>
               analytics?.track("recommendation_clicked", {
+                product_id: r.product_id,
+                position: idx,
+              })
+            }
+            onAdd={() =>
+              analytics?.track("add_to_cart", {
                 product_id: r.product_id,
                 position: idx,
               })
@@ -1942,6 +2184,8 @@ function MultiStageResultView({
   sections,
   resultNodeId,
   shopDomain,
+  discountCode,
+  discountLabel,
   styles,
   startedAt,
   completed,
@@ -1955,6 +2199,8 @@ function MultiStageResultView({
   sections: { stage: ResultStageT; recs: RecommendedProduct[] }[];
   resultNodeId: string;
   shopDomain: string;
+  discountCode?: string;
+  discountLabel?: string;
   styles: ReturnType<typeof stylesFor>;
   startedAt: number;
   completed: React.MutableRefObject<boolean>;
@@ -1984,6 +2230,8 @@ function MultiStageResultView({
             recs={recs}
             ctaLabel={ctaLabel}
             shopDomain={shopDomain}
+            discountCode={discountCode}
+            discountLabel={discountLabel}
             styles={styles}
             analytics={analytics}
           />
@@ -2019,6 +2267,8 @@ function StageSection({
   recs,
   ctaLabel,
   shopDomain,
+  discountCode,
+  discountLabel,
   styles,
   analytics,
 }: {
@@ -2026,6 +2276,8 @@ function StageSection({
   recs: RecommendedProduct[];
   ctaLabel: string;
   shopDomain: string;
+  discountCode?: string;
+  discountLabel?: string;
   styles: ReturnType<typeof stylesFor>;
   analytics: ReturnType<typeof createAnalyticsClient> | null;
 }) {
@@ -2056,9 +2308,19 @@ function StageSection({
               position={idx}
               ctaLabel={ctaLabel}
               href={href}
+              shopDomain={shopDomain}
+              discountCode={discountCode}
+              discountLabel={discountLabel}
               styles={styles}
               onClick={() =>
                 analytics?.track("recommendation_clicked", {
+                  result_stage_id: stage.id,
+                  product_id: r.product_id,
+                  position: idx,
+                })
+              }
+              onAdd={() =>
+                analytics?.track("add_to_cart", {
                   result_stage_id: stage.id,
                   product_id: r.product_id,
                   position: idx,
@@ -2072,6 +2334,63 @@ function StageSection({
   );
 }
 
+// Add-to-cart from the quiz (Phase 5). The quiz runs in a cross-origin iframe,
+// so we first ask the parent storefront (the Theme App Extension listener) to
+// add via the same-origin AJAX cart and ack — that's the In-Quiz Add-On
+// (add then continue, no navigation). If no ack arrives quickly (not embedded /
+// no listener), fall back to navigating the top window to the cart permalink,
+// which adds the item + auto-applies the discount.
+function addToCartFromQuiz(cartUrl: string, variantId: string | null, hasDiscount: boolean) {
+  if (typeof window === "undefined") return;
+  const goToCart = () => {
+    try {
+      (window.top ?? window).location.href = cartUrl;
+    } catch {
+      window.open(cartUrl, "_blank");
+    }
+  };
+  // A discount can only be applied via the cart permalink (the AJAX cart can't
+  // carry a code), so go straight there. Also when not embedded / no variant.
+  if (hasDiscount || !variantId || window.parent === window) {
+    goToCart();
+    return;
+  }
+  // In-Quiz Add-On: ask the parent storefront (the Theme App Extension) to add
+  // same-origin so the shopper stays in the quiz. The listener acks on RECEIPT
+  // (so we cancel the fallback regardless of fetch timing → no double-add) and
+  // posts :fail if the add fails (→ permalink fallback).
+  let settled = false;
+  const cleanup = () => window.removeEventListener("message", onMsg);
+  const onMsg = (e: MessageEvent) => {
+    if (e.source !== window.parent) return;
+    const d = e.data as { type?: string } | null;
+    if (!d || typeof d !== "object") return;
+    if (d.type === "qz:add-to-cart:ok") {
+      settled = true;
+      cleanup();
+    } else if (d.type === "qz:add-to-cart:fail") {
+      settled = true;
+      cleanup();
+      goToCart();
+    }
+  };
+  window.addEventListener("message", onMsg);
+  try {
+    window.parent.postMessage({ type: "qz:add-to-cart", variantId, quantity: 1 }, "*");
+  } catch {
+    cleanup();
+    goToCart();
+    return;
+  }
+  // No listener present (no ack of any kind) → permalink fallback.
+  window.setTimeout(() => {
+    if (!settled) {
+      cleanup();
+      goToCart();
+    }
+  }, 1200);
+}
+
 function ProductCard({
   product,
   position,
@@ -2079,100 +2398,110 @@ function ProductCard({
   href,
   styles,
   onClick,
+  shopDomain,
+  discountCode,
+  discountLabel,
+  onAdd,
 }: {
   product: RecommendedProduct;
   position: number;
   ctaLabel: string;
-  // When set, the card renders as a PDP link (multi-stage result sections).
-  // When omitted, it stays the click-tracked button (single-result view).
+  // When set, the info region links to the PDP (new tab). When omitted, it's a
+  // click-tracked button.
   href?: string;
   styles: ReturnType<typeof stylesFor>;
   onClick?: () => void;
+  // Phase 5 add-to-cart: a cart permalink is built when a shop domain + variant
+  // are available; the CTA then becomes "Add to cart".
+  shopDomain?: string;
+  discountCode?: string;
+  discountLabel?: string;
+  onAdd?: () => void;
 }) {
   void position;
-  const inner = (
+  const cartUrl = cartPermalink(shopDomain, product.default_variant_id, 1, discountCode);
+
+  const infoStyle: React.CSSProperties = {
+    display: "flex",
+    gap: 12,
+    alignItems: "center",
+    flex: 1,
+    minWidth: 0,
+    color: "inherit",
+    textDecoration: "none",
+    background: "none",
+    border: "none",
+    textAlign: "left",
+    cursor: "pointer",
+    padding: 0,
+    font: "inherit",
+  };
+  const ctaStyle: React.CSSProperties = {
+    background: "var(--qz-color-text)",
+    color: "var(--qz-color-bg)",
+    border: "none",
+    borderRadius: "var(--qz-radius)",
+    padding: "8px 16px",
+    fontSize: 14,
+    flexShrink: 0,
+    font: "inherit",
+  };
+
+  const info = (
     <>
       {product.image_url ? (
         <img
           src={product.image_url}
           alt=""
-          style={{
-            width: 80,
-            height: 80,
-            objectFit: "cover",
-            borderRadius: "var(--qz-radius)",
-            flexShrink: 0,
-          }}
+          style={{ width: 80, height: 80, objectFit: "cover", borderRadius: "var(--qz-radius)", flexShrink: 0 }}
         />
       ) : (
-        <div
-          style={{
-            width: 80,
-            height: 80,
-            background: "#00000010",
-            borderRadius: "var(--qz-radius)",
-            flexShrink: 0,
-          }}
-        />
+        <div style={{ width: 80, height: 80, background: "#00000010", borderRadius: "var(--qz-radius)", flexShrink: 0 }} />
       )}
-      <div style={{ flex: 1 }}>
+      <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ fontWeight: 600 }}>{product.title}</div>
         {product.price && (
-          <div style={{ color: "var(--qz-color-muted)", marginTop: 4 }}>
-            ${product.price}
+          <div style={{ color: "var(--qz-color-muted)", marginTop: 4, display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+            <span>${product.price}</span>
+            {discountLabel ? (
+              <span style={{ background: "var(--qz-color-primary)", color: "#fff", borderRadius: 999, padding: "1px 8px", fontSize: 11, fontWeight: 600 }}>
+                {discountLabel}
+              </span>
+            ) : null}
           </div>
         )}
         {!product.inventory_in_stock && (
-          <div style={{ color: "#D72C0D", marginTop: 4, fontSize: 12 }}>
-            Out of stock
-          </div>
+          <div style={{ color: "#D72C0D", marginTop: 4, fontSize: 12 }}>Out of stock</div>
         )}
       </div>
-      <span
-        style={{
-          background: "var(--qz-color-text)",
-          color: "var(--qz-color-bg)",
-          border: "none",
-          borderRadius: "var(--qz-radius)",
-          padding: "8px 16px",
-          fontSize: 14,
-        }}
-      >
-        {ctaLabel}
-      </span>
     </>
   );
 
-  if (href) {
-    return (
-      <a
-        href={href}
-        target="_blank"
-        rel="noreferrer"
-        onClick={onClick}
-        style={{
-          ...styles.productCard,
-          cursor: "pointer",
-          textAlign: "left",
-        }}
-      >
-        {inner}
-      </a>
-    );
-  }
-
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      style={{
-        ...styles.productCard,
-        cursor: "pointer",
-        textAlign: "left",
-        font: "inherit",
-      }}
-    >
-      {inner}
-    </button>
+    <div style={{ ...styles.productCard, display: "flex", gap: 12, alignItems: "center" }}>
+      {href ? (
+        <a href={href} target="_blank" rel="noreferrer" onClick={onClick} style={infoStyle}>
+          {info}
+        </a>
+      ) : (
+        <button type="button" onClick={onClick} style={infoStyle}>
+          {info}
+        </button>
+      )}
+      {cartUrl ? (
+        <button
+          type="button"
+          onClick={() => {
+            onAdd?.();
+            addToCartFromQuiz(cartUrl, numericId(product.default_variant_id), Boolean(discountCode));
+          }}
+          style={{ ...ctaStyle, cursor: "pointer" }}
+        >
+          Add to cart
+        </button>
+      ) : (
+        <span style={{ ...ctaStyle, cursor: "default" }}>{ctaLabel}</span>
+      )}
+    </div>
   );
 }

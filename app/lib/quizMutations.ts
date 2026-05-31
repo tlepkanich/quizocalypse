@@ -126,6 +126,7 @@ export function addEmailGateNode(
       email_required: true,
       name_optional: true,
       skip_allowed: false,
+      collect_phone: false,
     },
   };
   const edges = anchorId

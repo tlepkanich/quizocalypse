@@ -19,6 +19,9 @@ export interface IndexedProduct {
   // v3 ranking inputs (optional — baked when available).
   updated_at?: string; // ISO; used by ranking="newest"
   metafields?: Record<string, string>; // used by ranking + metafield strategy
+  // First in-stock (else first) variant gid, baked at publish — powers
+  // add-to-cart cart permalinks. Absent when the product has no variants.
+  default_variant_id?: string;
 }
 
 export interface RecommendedProduct extends IndexedProduct {

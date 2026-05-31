@@ -53,6 +53,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       sessionId: parsed.data.session_id,
       email: parsed.data.email,
       firstName: parsed.data.first_name ?? null,
+      phone: parsed.data.phone ?? null,
     },
   });
 

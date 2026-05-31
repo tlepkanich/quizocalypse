@@ -71,6 +71,29 @@ export function validateQuiz(doc: QuizDoc): NodeIssue[] {
         message: "Result is missing a fallback collection.",
       });
     }
+    // Question-specific: a multi_select min/max that can never be satisfied
+    // (min > max, or min > the number of answers) would permanently disable the
+    // Next button — a hard dead-end for the shopper.
+    if (node.type === "question") {
+      const min = node.data.min_selections;
+      if (typeof min === "number") {
+        const max = node.data.max_selections;
+        if (typeof max === "number" && min > max) {
+          issues.push({
+            nodeId: node.id,
+            kind: "dead_end",
+            message: `Min picks (${min}) is greater than max picks (${max}).`,
+          });
+        }
+        if (min > node.data.answers.length) {
+          issues.push({
+            nodeId: node.id,
+            kind: "dead_end",
+            message: `Min picks (${min}) exceeds the number of answers (${node.data.answers.length}).`,
+          });
+        }
+      }
+    }
     // Branch-specific: every slot should have an outbound edge, otherwise
     // the runtime can land in a dead-end branch path.
     if (node.type === "branch") {

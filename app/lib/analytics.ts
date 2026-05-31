@@ -10,6 +10,7 @@ export const EVENT_TYPES = [
   "quiz_completed",
   "recommendation_viewed",
   "recommendation_clicked",
+  "add_to_cart",
 ] as const;
 export const EventType = z.enum(EVENT_TYPES);
 export type EventType = z.infer<typeof EventType>;
@@ -31,6 +32,7 @@ export const CapturePayload = z.object({
   session_id: z.string().min(1),
   email: z.string().email().max(254),
   first_name: z.string().max(100).optional(),
+  phone: z.string().max(40).optional(),
 });
 
 // ---- Client-side helpers (browser-only) ----
