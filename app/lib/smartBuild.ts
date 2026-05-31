@@ -1,5 +1,5 @@
 import type { Quiz as QuizDoc, QuestionType, MatchLadderStrategy } from "./quizSchema";
-import { seedPointsFromCategories } from "./quizGenSettings";
+import { seedPointsFromCategories } from "./categoryScoring";
 
 // ───────────────────────────────────────────────────────────────────────────
 // Smart Build merge (product-first AI question generation, Studio Step 4).

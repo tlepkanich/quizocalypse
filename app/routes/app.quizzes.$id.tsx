@@ -1085,9 +1085,6 @@ function FlowBuilder({
           <QzButton size="sm" onClick={() => setAllPathsOpen(true)}>
             View all paths
           </QzButton>
-          <Link to="pages" prefetch="intent" style={{ textDecoration: "none" }}>
-            <QzButton size="sm">Result pages</QzButton>
-          </Link>
           <QzButton size="sm" onClick={() => setSettingsOpen(true)}>
             Settings
           </QzButton>

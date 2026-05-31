@@ -327,8 +327,12 @@ function BuilderShell({ data }: { data: LoaderData }) {
             <span className="qz-dim" style={{ fontSize: 12 }}>
               {isSaving ? "Saving…" : savedAt ? "Saved" : ""}
             </span>
-            <Link to={`/app/quizzes/${data.quizId}`} className="qz-btn qz-btn-ghost qz-btn-sm">
-              Canvas
+            <Link
+              to={`/app/quizzes/${data.quizId}`}
+              className="qz-btn qz-btn-ghost qz-btn-sm"
+              title="Advanced node editor (power users)"
+            >
+              Advanced
             </Link>
             <QzButton
               variant="primary"

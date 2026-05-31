@@ -1,11 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
-import {
-  Quiz,
-  quizToolJsonSchema,
-  QuestionDataObject,
-} from "./quizSchema";
+import { QuestionDataObject } from "./quizSchema";
 import type { QuestionData } from "./quizSchema";
-import { buildPromptAdditions, type QuizGenSettings } from "./quizGenSettings";
 import {
   buildBrandVoiceAddition,
   type BrandGuidelines,
@@ -73,14 +68,8 @@ export interface RegenerateQuestionInput {
 
 const MODEL = "claude-sonnet-4-6";
 const MAX_TOKENS = 8192;
-const SYSTEM_PROMPT =
-  "You are an expert DTC merchandiser building a product finder quiz for a Shopify storefront. " +
-  "Generate a quiz that helps a shopper land on the right product. Every answer must contribute " +
-  "to product targeting via tag overlap or collection filter. Every question must have at least " +
-  "two answers. Every answer's tags[] must reference tags that actually exist in the supplied " +
-  "catalog summary — never invent tags. Always include an intro node first and at least one " +
-  "result node last, connected by edges in order. Lay nodes out roughly left-to-right starting " +
-  "at x=0, spacing ~300 between columns. Never write commentary or anything outside the tool call.";
+
+export type QuizTone = "friendly" | "editorial" | "playful" | "professional";
 
 let cachedClient: Anthropic | null = null;
 function client(): Anthropic {
@@ -90,33 +79,6 @@ function client(): Anthropic {
     cachedClient = new Anthropic({ apiKey });
   }
   return cachedClient;
-}
-
-export interface GenerateQuizInput {
-  goalPrompt: string;
-  questionCount: number;
-  collectionIds: string[];
-  catalogSummary: string;
-  quizId: string;
-  // Optional wizard settings — when present, their tone + flow flags are
-  // appended to the system prompt to bias structure. Deterministic things
-  // (theme tokens, launcher, integration stub) are applied separately
-  // *after* generation via applyPostGeneration in quizGenSettings.ts.
-  settings?: QuizGenSettings;
-  // Optional brand guidelines (from shop.brandGuidelines) — folds the
-  // brand voice into the system prompt so generated copy is on-brand.
-  // Layered on top of settings.tone (brand voice is more specific).
-  brandGuidelines?: BrandGuidelines | null;
-  // Optional discovered category list. When present + settings.flow.
-  // use_archetype_results is true, the AI is asked to name result pages
-  // to match these category names. The categories themselves are surfaced
-  // in the user message so the AI can see what's available.
-  categoryList?: Array<{
-    id: string;
-    name: string;
-    description: string;
-    tags: string[];
-  }>;
 }
 
 export class QuizGenerationError extends Error {
@@ -132,98 +94,8 @@ export class QuizGenerationError extends Error {
 
 const MAX_ATTEMPTS = 3; // initial + 2 retries per spec.
 
-export async function generateQuiz(
-  input: GenerateQuizInput,
-): Promise<z.infer<typeof Quiz>> {
-  const userMessage = buildUserMessage(input);
-  const tool = {
-    name: "emit_quiz",
-    description:
-      "Emit the structured quiz JSON. This is the only allowed response — do not write free text.",
-    input_schema: quizToolJsonSchema as unknown as Anthropic.Tool.InputSchema,
-  } satisfies Anthropic.Tool;
-
-  // Wizard settings (optional) append tone + flow instructions to the
-  // system prompt. When absent the prompt is byte-identical to before the
-  // wizard upgrade, so the existing minimal-input flow stays unaffected.
-  // Brand guidelines (also optional) layer on top — they're more specific
-  // than the wizard's tone axis so they take precedence in the prompt.
-  const systemPrompt =
-    SYSTEM_PROMPT +
-    (input.settings ? buildPromptAdditions(input.settings) : "") +
-    buildBrandVoiceAddition(input.brandGuidelines);
-
-  let lastIssue: string | undefined;
-  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
-    const response = await client().messages.create({
-      model: MODEL,
-      max_tokens: MAX_TOKENS,
-      system: systemPrompt,
-      tools: [tool],
-      tool_choice: { type: "tool", name: "emit_quiz" },
-      messages: [
-        {
-          role: "user",
-          content:
-            attempt === 1
-              ? userMessage
-              : `${userMessage}\n\nPrevious attempt failed validation: ${lastIssue}. Regenerate strictly matching the schema.`,
-        },
-      ],
-    });
-
-    const toolUse = response.content.find(
-      (block): block is Anthropic.ToolUseBlock => block.type === "tool_use",
-    );
-    if (!toolUse) {
-      lastIssue = "No tool_use block in response.";
-      continue;
-    }
-
-    const parsed = Quiz.safeParse(toolUse.input);
-    if (parsed.success) return parsed.data;
-
-    lastIssue = parsed.error.issues
-      .slice(0, 5)
-      .map((i) => `${i.path.join(".")}: ${i.message}`)
-      .join("; ");
-  }
-
-  throw new QuizGenerationError(
-    "Quiz generation failed validation after retries.",
-    MAX_ATTEMPTS,
-    lastIssue,
-  );
-}
-
-function buildUserMessage(input: GenerateQuizInput): string {
-  const parts: string[] = [
-    `Quiz id: ${input.quizId}`,
-    `Question count: ${input.questionCount}`,
-    `Collections in scope (collection IDs): ${input.collectionIds.join(", ") || "(none — use full catalog)"}`,
-    "",
-    "Merchant's quiz goal (verbatim):",
-    input.goalPrompt,
-    "",
-    "Catalog summary (real tags, types, price bands, sample products from the scoped catalog):",
-    input.catalogSummary,
-  ];
-  // When the wizard's archetype flag is on, surface the merchant's
-  // discovered categories so the AI can use them as the result-page
-  // backbone. The post-process step binds matching headlines back to
-  // category IDs — for that to work the AI has to name result pages
-  // using the listed names verbatim.
-  if (input.categoryList && input.categoryList.length > 0) {
-    parts.push("");
-    parts.push(
-      "Discovered shopper categories (use these names verbatim for result page headlines if instructed):",
-    );
-    for (const c of input.categoryList) {
-      parts.push(`- ${c.name}: ${c.description} [tags: ${c.tags.join(", ")}]`);
-    }
-  }
-  return parts.join("\n");
-}
+// (generateQuiz / buildUserMessage removed — whole-quiz generation was retired
+// when the New Quiz wizard was replaced by minimal create + Smart Build.)
 
 export interface RegeneratedQuestion {
   text: string;
@@ -420,7 +292,7 @@ export interface GenerateQuestionFlowInput {
   catalogSummary: string;
   buckets: Array<{ id: string; name: string; tags: string[] }>;
   flow: { welcome_message: boolean; email_gate: boolean; mixed_input_types: boolean };
-  tone: QuizGenSettings["tone"];
+  tone: QuizTone;
   brandGuidelines?: BrandGuidelines | null;
 }
 
