@@ -160,14 +160,17 @@ export default function QuizList() {
       {quizzes.length === 0 ? (
         <QzCard dashed>
           <div className="qz-label">No quizzes yet</div>
-          <h2 className="qz-h1 qz-mt-8">Generate your first AI quiz</h2>
+          <h2 className="qz-h1 qz-mt-8">Build your first quiz</h2>
           <p className="qz-muted qz-mt-8" style={{ maxWidth: "44ch" }}>
-            Describe a goal and the AI will draft a quiz from your real catalog
-            in a few seconds.
+            Start from a vertical template, or let AI draft a quiz from your real
+            catalog in a couple of minutes.
           </p>
-          <div className="qz-mt-24">
+          <div className="qz-row qz-mt-24" style={{ gap: 10, flexWrap: "wrap" }}>
+            <Link to="/app/onboarding">
+              <QzButton variant="accent">Guided setup →</QzButton>
+            </Link>
             <Link to="/app/quizzes/new">
-              <QzButton variant="accent">Generate one</QzButton>
+              <QzButton variant="ghost">Blank quiz</QzButton>
             </Link>
           </div>
         </QzCard>

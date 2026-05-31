@@ -87,6 +87,7 @@ export function Sidebar({
       label: "Workspace",
       items: [
         { label: "Dashboard", to: "/app", exact: true },
+        { label: "Get started", to: "/app/onboarding", exact: true },
         { label: "Quizzes", to: "/app/quizzes", count: counts.quizzes },
         { label: "New quiz", to: "/app/quizzes/new", exact: true },
         { label: "Categories", to: "/app/categories" },

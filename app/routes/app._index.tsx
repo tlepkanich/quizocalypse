@@ -252,11 +252,16 @@ export default function Index() {
             <QzCard dashed>
               <div className="qz-label">No quizzes yet</div>
               <p className="qz-h2 qz-mt-8">
-                Generate one from a goal prompt to get started.
+                Start with a template or let AI build one from your catalog.
               </p>
-              <Link to="/app/quizzes/new" className="qz-mt-16" style={{ display: "inline-block" }}>
-                <QzButton variant="accent">New AI quiz</QzButton>
-              </Link>
+              <div className="qz-row qz-mt-16" style={{ gap: 10, flexWrap: "wrap" }}>
+                <Link to="/app/onboarding" style={{ display: "inline-block" }}>
+                  <QzButton variant="accent">Guided setup →</QzButton>
+                </Link>
+                <Link to="/app/quizzes/new" style={{ display: "inline-block" }}>
+                  <QzButton variant="ghost">Blank quiz</QzButton>
+                </Link>
+              </div>
             </QzCard>
           ) : (
             <div className="qz-col qz-gap-16">

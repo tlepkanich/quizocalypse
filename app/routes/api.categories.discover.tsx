@@ -1,24 +1,19 @@
 // app/routes/api.categories.discover.tsx
-// Discovers shopper-archetype categories for the active shop. Reads the
-// whole catalog, calls Claude to propose 5–9 categories, runs the
-// deterministic tag-overlap assignment, atomically overwrites existing
-// categories with the fresh set.
+// Discovers shopper-archetype categories for the active shop: reads the whole
+// catalog, calls Claude to propose 5–9 categories, runs the deterministic
+// tag-overlap assignment, and atomically overwrites the existing set. The
+// discover → assign → persist core lives in lib/bucketDiscovery.server.ts so the
+// onboarding orchestrator reuses the identical logic.
 
 import type { ActionFunctionArgs } from "@remix-run/node";
 import { json } from "@remix-run/node";
 import { authenticate } from "../shopify.server";
 import prisma from "../db.server";
-import { buildScopedIndex } from "../lib/catalogIndex";
+import { CategoryDiscoveryError } from "../lib/categoryDiscover";
 import {
-  CategoryDiscoveryError,
-  discoverCategories,
-} from "../lib/categoryDiscover";
-import { assignProducts } from "../lib/categoryAssign";
-
-// A catalog with fewer than this many products doesn't produce useful
-// archetypes — the variance isn't there. Return a 400 rather than burning
-// a Claude call.
-const MIN_PRODUCTS = 5;
+  discoverAndPersistBuckets,
+  BucketDiscoveryError,
+} from "../lib/bucketDiscovery.server";
 
 // Pull an optional `quizId` from either a JSON or urlencoded/multipart body.
 // Returns a trimmed non-empty quiz id, or null when the caller didn't scope
@@ -68,30 +63,24 @@ export async function action({ request }: ActionFunctionArgs) {
     }
   }
 
-  const [allProducts, allCollections] = await Promise.all([
-    prisma.product.findMany({ where: { shopId: shop.id } }),
-    prisma.collection.findMany({ where: { shopId: shop.id } }),
-  ]);
-
-  if (allProducts.length < MIN_PRODUCTS) {
-    return json(
-      {
-        ok: false,
-        error: `Need at least ${MIN_PRODUCTS} synced products to discover categories.`,
-      },
-      { status: 400 },
-    );
-  }
-
-  // Empty scope = whole catalog. buildScopedIndex already produces a
-  // prompt-shaped summary (top tags + sample products) we can hand
-  // straight to Claude.
-  const indexed = buildScopedIndex(allProducts, allCollections, []);
-
-  let discovered;
   try {
-    discovered = await discoverCategories({ catalogSummary: indexed.summary });
+    const { runId, buckets } = await discoverAndPersistBuckets(shop.id, quizId);
+    return json({
+      ok: true,
+      runId,
+      categories: buckets.map((b) => ({
+        id: b.id,
+        name: b.name,
+        description: b.description,
+        tags: b.tags,
+        productCount: b.productCount,
+        rationale: b.rationale,
+      })),
+    });
   } catch (err) {
+    if (err instanceof BucketDiscoveryError) {
+      return json({ ok: false, error: err.message }, { status: err.status });
+    }
     if (err instanceof CategoryDiscoveryError) {
       return json(
         {
@@ -104,58 +93,4 @@ export async function action({ request }: ActionFunctionArgs) {
     const msg = err instanceof Error ? err.message : String(err);
     return json({ ok: false, error: msg }, { status: 500 });
   }
-
-  // Assign products via tag overlap. Use the category name as the
-  // assignment key, then re-key once we have real db ids after insert.
-  const assignments = assignProducts(
-    discovered.map((d) => ({ key: d.name, tags: d.tags })),
-    allProducts.map((p) => ({
-      productId: p.productId,
-      tags: p.tags,
-      title: p.title,
-    })),
-  );
-
-  // One discovery run id ties together every Category row we're about to
-  // insert. Lets the merchant tell at a glance when a set was generated.
-  const discoveryRunId = `run_${Date.now().toString(36)}_${Math.random()
-    .toString(36)
-    .slice(2, 8)}`;
-
-  await prisma.$transaction([
-    // Scope the wipe to this quiz (or the shop-global set when quizId is
-    // null) so re-discovering one quiz never wipes another's buckets.
-    prisma.category.deleteMany({ where: { shopId: shop.id, quizId } }),
-    prisma.category.createMany({
-      data: discovered.map((d) => ({
-        shopId: shop.id,
-        quizId,
-        name: d.name,
-        description: d.description,
-        tags: d.tags,
-        productIds: assignments.get(d.name) ?? [],
-        rationale: d.rationale,
-        discoveryRunId,
-      })),
-    }),
-  ]);
-
-  // Re-read so we get the auto-generated cuids for the response.
-  const rows = await prisma.category.findMany({
-    where: { shopId: shop.id, discoveryRunId },
-    orderBy: { createdAt: "asc" },
-  });
-
-  return json({
-    ok: true,
-    runId: discoveryRunId,
-    categories: rows.map((r) => ({
-      id: r.id,
-      name: r.name,
-      description: r.description,
-      tags: r.tags,
-      productCount: r.productIds.length,
-      rationale: r.rationale,
-    })),
-  });
 }

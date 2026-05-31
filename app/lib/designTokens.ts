@@ -30,6 +30,38 @@ export const DEFAULT_TOKENS: DesignTokensT = {
   spacing: "normal",
 };
 
+// A #RGB or #RRGGBB hex string (with or without the leading #).
+const HEX_RE = /^#?([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/;
+
+/**
+ * Normalize a user-entered hex to "#rrggbb", or null if invalid.
+ */
+export function normalizeHex(input: string): string | null {
+  const v = input.trim();
+  if (!HEX_RE.test(v)) return null;
+  const body = v.startsWith("#") ? v.slice(1) : v;
+  const full =
+    body.length === 3
+      ? body.split("").map((c) => c + c).join("")
+      : body;
+  return `#${full.toLowerCase()}`;
+}
+
+/**
+ * Merge a single merchant-picked brand color into a DesignTokens object as the
+ * primary color (used by onboarding's "design from a hex" path). Invalid hex is
+ * ignored (returns the tokens unchanged). Pure — returns a new object.
+ */
+export function mergeHexIntoTokens(
+  tokens: DesignTokensT | null | undefined,
+  hex: string,
+): DesignTokensT {
+  const base: DesignTokensT = tokens ? { ...tokens } : {};
+  const normalized = normalizeHex(hex);
+  if (!normalized) return base;
+  return { ...base, colors: { ...(base.colors ?? {}), primary: normalized } };
+}
+
 export function resolveDesignTokens(
   ...layers: Array<DesignTokensT | null | undefined>
 ): DesignTokensT {

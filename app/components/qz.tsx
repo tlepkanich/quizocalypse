@@ -251,3 +251,69 @@ export function QzTooltip({
     </span>
   );
 }
+
+// Responsive 16:9 video embed (YouTube/Vimeo/mp4 iframe). When `url` is null it
+// renders a tidy placeholder, so onboarding steps can ship the structure now and
+// have real walkthrough videos dropped in later.
+export function QzEmbed({
+  url,
+  title,
+  caption,
+}: {
+  url: string | null;
+  title: string;
+  caption?: ReactNode;
+}) {
+  return (
+    <div
+      style={{
+        position: "relative",
+        width: "100%",
+        paddingBottom: "56.25%",
+        borderRadius: "var(--qz-radius)",
+        overflow: "hidden",
+        background: url ? "#000" : "var(--qz-cream-2, #f3f0ea)",
+        border: "1px solid var(--qz-rule, #00000014)",
+      }}
+    >
+      {url ? (
+        <iframe
+          src={url}
+          title={title}
+          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+          allowFullScreen
+          style={{ position: "absolute", inset: 0, width: "100%", height: "100%", border: "none" }}
+        />
+      ) : (
+        <div
+          style={{
+            position: "absolute",
+            inset: 0,
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: 6,
+            textAlign: "center",
+            padding: 16,
+          }}
+        >
+          <span aria-hidden style={{ fontSize: 26, opacity: 0.45 }}>
+            ▶
+          </span>
+          <span className="qz-dim" style={{ fontSize: 13, fontWeight: 600 }}>
+            {title}
+          </span>
+          <span className="qz-dim" style={{ fontSize: 11.5 }}>
+            Walkthrough video coming soon
+          </span>
+          {caption ? (
+            <span className="qz-dim" style={{ fontSize: 11.5, maxWidth: 360 }}>
+              {caption}
+            </span>
+          ) : null}
+        </div>
+      )}
+    </div>
+  );
+}
