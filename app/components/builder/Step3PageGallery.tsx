@@ -129,7 +129,7 @@ export function Step3PageGallery({
                         pointerEvents: "none",
                       }}
                     >
-                      <StepPreview doc={doc} node={node} productIndex={productIndex} />
+                      <StepPreview doc={doc} node={node} productIndex={productIndex} categories={categories} />
                     </div>
                   </div>
                   <div
@@ -253,6 +253,7 @@ export function Step3PageGallery({
                         doc={doc}
                         node={selectedNode}
                         productIndex={productIndex}
+                        categories={categories}
                       />
                     </div>
                   </div>

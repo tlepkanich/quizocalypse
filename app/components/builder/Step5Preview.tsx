@@ -8,7 +8,7 @@ import type { StepProps } from "./stepProps";
 // current (unsaved) draft. A link to the live storefront preview is offered for
 // the published version.
 
-export function Step5Preview({ doc, productIndex, ordered, previewUrl }: StepProps) {
+export function Step5Preview({ doc, productIndex, categories, ordered, previewUrl }: StepProps) {
   const steps = ordered.steps;
   const [idx, setIdx] = useState(0);
   const [bp, setBp] = useState<"desktop" | "mobile">("desktop");
@@ -54,7 +54,7 @@ export function Step5Preview({ doc, productIndex, ordered, previewUrl }: StepPro
         <div style={{ display: "flex", justifyContent: "center" }}>
           <div style={{ width, maxWidth: "100%" }}>
             {node ? (
-              <StepPreview doc={doc} node={node} productIndex={productIndex} breakpoint={bp} />
+              <StepPreview doc={doc} node={node} productIndex={productIndex} categories={categories} breakpoint={bp} />
             ) : (
               <p className="qz-dim">No reachable steps to preview.</p>
             )}

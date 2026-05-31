@@ -62,11 +62,49 @@ function ProductRow({
 }
 
 // Static previews of the interactive ("smart") regions. Recognizable, not live.
+export interface PreviewCategory {
+  id: string;
+  productIds: string[];
+}
+
+// Which products a result page actually resolves to, in ladder-ish order: its
+// bound bucket (category_id → that category's productIds), else a bound
+// collection, else an explicit conditional rule, else the whole catalog. Pure +
+// exported so the preview is deterministic and unit-testable. (The live runtime
+// uses the full recommendationEngine; this mirrors its common cases for preview.)
+export function resolvePreviewProducts(
+  node: QuizNode,
+  productIndex: IndexedProduct[],
+  categories: PreviewCategory[] | undefined,
+): IndexedProduct[] {
+  if (node.type !== "result") return productIndex;
+  const d = node.data;
+  const cat =
+    d.category_id && categories ? categories.find((c) => c.id === d.category_id) : undefined;
+  if (cat) {
+    const set = new Set(cat.productIds);
+    const pool = productIndex.filter((p) => set.has(p.product_id));
+    if (pool.length) return pool;
+  }
+  if (d.collection_id) {
+    const pool = productIndex.filter((p) => p.collection_ids.includes(d.collection_id as string));
+    if (pool.length) return pool;
+  }
+  const rule = d.conditional_rules.find((r) => r.product_ids.length > 0);
+  if (rule) {
+    const set = new Set(rule.product_ids);
+    const pool = productIndex.filter((p) => set.has(p.product_id));
+    if (pool.length) return pool;
+  }
+  return productIndex;
+}
+
 function previewRenderSmart(
   block: ContentBlock,
   node: QuizNode,
   styles: RuntimeStyles,
   productIndex: IndexedProduct[],
+  categories: PreviewCategory[] | undefined,
 ): ReactNode {
   switch (block.type) {
     case "answers": {
@@ -111,7 +149,11 @@ function previewRenderSmart(
     }
     case "recommendations": {
       const count = node.type === "result" ? (node.data.max_products ?? node.data.slot_count) : 3;
-      const sample = productIndex.slice(0, Math.max(1, Math.min(count, 4)));
+      const pool =
+        node.type === "result"
+          ? resolvePreviewProducts(node, productIndex, categories)
+          : productIndex;
+      const sample = pool.slice(0, Math.max(1, Math.min(count, 4)));
       return (
         <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
           {sample.length > 0
@@ -205,6 +247,7 @@ export function StepPreview({
   doc,
   node,
   productIndex,
+  categories,
   breakpoint = "desktop",
   className,
   style,
@@ -212,6 +255,7 @@ export function StepPreview({
   doc: QuizDoc;
   node: QuizNode;
   productIndex: IndexedProduct[];
+  categories?: PreviewCategory[];
   breakpoint?: "desktop" | "mobile";
   className?: string;
   style?: CSSProperties;
@@ -252,7 +296,7 @@ export function StepPreview({
     nodeCss: doc.node_css[node.id] ?? null,
     resolveText: (t) => t,
     onPrimary: () => {},
-    renderSmart: (block, n) => previewRenderSmart(block, n, styles, productIndex),
+    renderSmart: (block, n) => previewRenderSmart(block, n, styles, productIndex, categories),
   };
 
   return (

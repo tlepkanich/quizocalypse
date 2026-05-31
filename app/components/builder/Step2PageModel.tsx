@@ -10,7 +10,7 @@ import type { StepProps } from "./stepProps";
 // not a lock. Choosing "shared" cascades one design across every bucket's
 // result page; the thumbnail strip shows it live.
 
-export function Step2PageModel({ doc, onCommit, productIndex }: StepProps) {
+export function Step2PageModel({ doc, onCommit, productIndex, categories }: StepProps) {
   const mode = doc.result_layout_mode;
   const resultNodes = doc.nodes.filter((n) => n.type === "result");
 
@@ -119,7 +119,7 @@ export function Step2PageModel({ doc, onCommit, productIndex }: StepProps) {
                       pointerEvents: "none",
                     }}
                   >
-                    <StepPreview doc={doc} node={node} productIndex={productIndex} />
+                    <StepPreview doc={doc} node={node} productIndex={productIndex} categories={categories} />
                   </div>
                 </div>
                 <div style={{ fontSize: 12, fontWeight: 600, marginTop: 6 }}>

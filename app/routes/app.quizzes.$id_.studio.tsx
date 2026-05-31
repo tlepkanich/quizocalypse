@@ -381,6 +381,7 @@ function BuilderShell({ data }: { data: LoaderData }) {
               doc={doc}
               node={zoomNode}
               productIndex={productIndex}
+              categories={categories}
               issues={issuesByNode.get(zoomNode.id) ?? []}
               onBack={() => setZoomId(null)}
               onCommit={commit}
@@ -391,6 +392,7 @@ function BuilderShell({ data }: { data: LoaderData }) {
               doc={doc}
               ordered={ordered}
               productIndex={productIndex}
+              categories={categories}
               issuesByNode={issuesByNode}
               onZoom={setZoomId}
               onInsert={handleInsert}
@@ -513,6 +515,7 @@ function FlowView({
   doc,
   ordered,
   productIndex,
+  categories,
   issuesByNode,
   onZoom,
   onInsert,
@@ -520,6 +523,7 @@ function FlowView({
   doc: QuizDoc;
   ordered: ReturnType<typeof orderFlow>;
   productIndex: LoaderData["productIndex"];
+  categories: LoaderData["categories"];
   issuesByNode: Map<string, NodeIssue[]>;
   onZoom: (id: string) => void;
   onInsert: (kind: InsertKind, anchorId: string | null, anchorHandle?: string) => void;
@@ -554,6 +558,7 @@ function FlowView({
                 node={node}
                 doc={doc}
                 productIndex={productIndex}
+                categories={categories}
                 issues={issuesByNode.get(step.nodeId) ?? []}
                 lanes={lanes}
                 nodeById={nodeById}
@@ -576,6 +581,7 @@ function FlowView({
           nodeById={nodeById}
           doc={doc}
           productIndex={productIndex}
+          categories={categories}
           issuesByNode={issuesByNode}
           onZoom={onZoom}
         />
@@ -594,6 +600,7 @@ function StepColumn({
   node,
   doc,
   productIndex,
+  categories,
   issues,
   lanes,
   nodeById,
@@ -604,6 +611,7 @@ function StepColumn({
   node: QuizNode;
   doc: QuizDoc;
   productIndex: LoaderData["productIndex"];
+  categories: LoaderData["categories"];
   issues: NodeIssue[];
   lanes: ReturnType<typeof orderFlow>["branches"];
   nodeById: Map<string, QuizNode>;
@@ -617,6 +625,7 @@ function StepColumn({
         node={node}
         doc={doc}
         productIndex={productIndex}
+        categories={categories}
         issues={issues}
         onZoom={() => onZoom(node.id)}
       />
@@ -667,12 +676,14 @@ function StepCard({
   node,
   doc,
   productIndex,
+  categories,
   issues,
   onZoom,
 }: {
   node: QuizNode;
   doc: QuizDoc;
   productIndex: LoaderData["productIndex"];
+  categories: LoaderData["categories"];
   issues: NodeIssue[];
   onZoom: () => void;
 }) {
@@ -715,7 +726,7 @@ function StepCard({
             padding: 16,
           }}
         >
-          <StepPreview doc={doc} node={node} productIndex={productIndex} />
+          <StepPreview doc={doc} node={node} productIndex={productIndex} categories={categories} />
         </div>
       </div>
     </button>
@@ -846,6 +857,7 @@ function OrphanTray({
   nodeById,
   doc,
   productIndex,
+  categories,
   issuesByNode,
   onZoom,
 }: {
@@ -853,6 +865,7 @@ function OrphanTray({
   nodeById: Map<string, QuizNode>;
   doc: QuizDoc;
   productIndex: LoaderData["productIndex"];
+  categories: LoaderData["categories"];
   issuesByNode: Map<string, NodeIssue[]>;
   onZoom: (id: string) => void;
 }) {
@@ -871,6 +884,7 @@ function OrphanTray({
               node={node}
               doc={doc}
               productIndex={productIndex}
+              categories={categories}
               issues={issuesByNode.get(id) ?? []}
               onZoom={() => onZoom(id)}
             />
@@ -890,6 +904,7 @@ function StepEditor({
   doc,
   node,
   productIndex,
+  categories,
   issues,
   onBack,
   onCommit,
@@ -898,6 +913,7 @@ function StepEditor({
   doc: QuizDoc;
   node: QuizNode;
   productIndex: LoaderData["productIndex"];
+  categories: LoaderData["categories"];
   issues: NodeIssue[];
   onBack: () => void;
   onCommit: (doc: QuizDoc) => void;
@@ -948,7 +964,7 @@ function StepEditor({
           </div>
           <div style={{ display: "flex", justifyContent: "center" }}>
             <div style={{ width: previewWidth, maxWidth: "100%" }}>
-              <StepPreview doc={doc} node={node} productIndex={productIndex} breakpoint={previewBp} />
+              <StepPreview doc={doc} node={node} productIndex={productIndex} categories={categories} breakpoint={previewBp} />
             </div>
           </div>
         </div>
