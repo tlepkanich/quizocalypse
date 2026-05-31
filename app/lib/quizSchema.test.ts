@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   AskAIData,
+  BlockStyle,
+  ContentBlock,
   EndData,
   IntegrationData,
   MessageData,
@@ -564,5 +566,75 @@ describe("LauncherConfig", () => {
         ],
       }),
     ).toThrow();
+  });
+});
+
+describe("ContentBlock (Phase 2 visual builder)", () => {
+  it("parses each block type from just { id, type } with defaults", () => {
+    expect(ContentBlock.parse({ id: "b1", type: "heading" })).toMatchObject({
+      level: "h2",
+      bind: "none",
+      text: "",
+      style: {},
+    });
+    expect(ContentBlock.parse({ id: "b2", type: "text" })).toMatchObject({
+      bind: "none",
+      supports_merge_tags: false,
+    });
+    expect(ContentBlock.parse({ id: "b3", type: "image" })).toMatchObject({
+      bind: "none",
+      fit: "cover",
+      aspect: "auto",
+    });
+    expect(ContentBlock.parse({ id: "b4", type: "spacer" })).toMatchObject({ size: 24 });
+    expect(ContentBlock.parse({ id: "b5", type: "divider" })).toMatchObject({ thickness: 1 });
+    expect(ContentBlock.parse({ id: "b6", type: "button" })).toMatchObject({
+      bind: "none",
+      variant: "primary",
+    });
+    expect(ContentBlock.parse({ id: "b7", type: "answers" })).toMatchObject({
+      layout: "auto",
+    });
+    expect(ContentBlock.parse({ id: "b8", type: "recommendations" })).toMatchObject({
+      stage: "all",
+    });
+    for (const type of ["email_input", "ai_chat", "product_grid"]) {
+      expect(ContentBlock.parse({ id: "x", type })).toMatchObject({ type, style: {} });
+    }
+  });
+
+  it("rejects unknown block types and missing id", () => {
+    expect(() => ContentBlock.parse({ id: "b", type: "carousel" })).toThrow();
+    expect(() => ContentBlock.parse({ type: "heading" })).toThrow();
+  });
+
+  it("BlockStyle clamps ranges and is fully optional", () => {
+    expect(BlockStyle.parse({})).toEqual({});
+    expect(() => BlockStyle.parse({ margin_top: 9999 })).toThrow();
+    expect(() => BlockStyle.parse({ font_weight: 50 })).toThrow();
+    expect(BlockStyle.parse({ align: "center", padding: 8 })).toEqual({
+      align: "center",
+      padding: 8,
+    });
+  });
+});
+
+describe("node_layouts / node_css (Phase 2)", () => {
+  it("default to empty maps when omitted (byte-identical back-compat)", () => {
+    const parsed = Quiz.parse(validQuiz);
+    expect(parsed.node_layouts).toEqual({});
+    expect(parsed.node_css).toEqual({});
+  });
+
+  it("round-trips a populated node_layouts + node_css", () => {
+    const parsed = Quiz.parse({
+      ...validQuiz,
+      node_layouts: {
+        intro: [{ id: "h", type: "heading", bind: "headline" }],
+      },
+      node_css: { intro: ".x { color: #222 }" },
+    });
+    expect(parsed.node_layouts.intro?.[0]).toMatchObject({ type: "heading", level: "h2" });
+    expect(parsed.node_css.intro).toBe(".x { color: #222 }");
   });
 });

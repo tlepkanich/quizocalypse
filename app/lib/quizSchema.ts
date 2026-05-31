@@ -538,6 +538,149 @@ export const LauncherConfig = z.object({
 });
 export type LauncherConfig = z.infer<typeof LauncherConfig>;
 
+// ───────────────────────────────────────────────────────────────────────────
+// Phase 2 — Content blocks (the visual builder's "Layout Library").
+//
+// Blocks are a PRESENTATION overlay, never a store of record. They live in a
+// per-node map on the Quiz (`node_layouts`, below) keyed by node id, exactly
+// like `design_overrides` / `breakpoint_overrides`. A node ABSENT from the map
+// renders its fixed template exactly as before (byte-identical back-compat); a
+// node PRESENT renders its block stack. The discriminated node union and every
+// existing parser stay untouched.
+//
+// "Smart" blocks (answers / recommendations / email_input / ai_chat /
+// product_grid) carry no data — they read the node's existing `data` and
+// delegate to the same render + recommendation paths as the fixed template, so
+// output is identical. "Literal" blocks (heading / text / image / button) can
+// `bind` to a node data field (falling back to their own literal when absent).
+// ───────────────────────────────────────────────────────────────────────────
+
+// Per-block style overlay. Deliberately small + explicit (not the full
+// DesignTokens) so it can't collide with the token cascade. Colors are kept as
+// loose strings here and sanitized to hex at render time (blockStyle.ts).
+export const BlockStyle = z
+  .object({
+    align: z.enum(["left", "center", "right"]),
+    margin_top: z.number().int().min(0).max(160),
+    margin_bottom: z.number().int().min(0).max(160),
+    padding: z.number().int().min(0).max(160),
+    max_width: z.number().int().min(80).max(1200),
+    text_color: z.string(),
+    background: z.string(),
+    font_size: z.number().int().min(8).max(96),
+    font_weight: z.number().int().min(100).max(900),
+    radius: z.enum(["square", "rounded", "pill"]),
+  })
+  .partial();
+export type BlockStyle = z.infer<typeof BlockStyle>;
+
+// Closed bind enums keep the renderer total and the surface bounded. A bound
+// block reads node.data[<bind>]; "none" (or a missing field) uses the literal.
+export const HeadingBind = z.enum(["none", "headline", "text", "persona_name"]);
+export const TextBind = z.enum(["none", "subtext", "text", "opening_message"]);
+export const ButtonBind = z.enum([
+  "none",
+  "button_label", // intro
+  "cta_label", // result / end / product_cards
+  "continue_label", // product_cards / ask_ai
+]);
+export const ImageBind = z.enum(["none", "hero_image_url"]);
+
+// Fields shared by every block. `id` is a layout-local stable id (React key +
+// CSS-editor target via data-qz-block). `class_name` lets node_css target a
+// block by a human name.
+const blockBase = {
+  id: z.string().min(1),
+  class_name: z.string().max(64).optional(),
+  style: BlockStyle.default({}),
+};
+
+// ── Literal blocks ─────────────────────────────────────────────────────────
+export const HeadingBlock = z.object({
+  ...blockBase,
+  type: z.literal("heading"),
+  level: z.enum(["h1", "h2"]).default("h2"),
+  bind: HeadingBind.default("none"),
+  text: z.string().default(""),
+});
+export const TextBlock = z.object({
+  ...blockBase,
+  type: z.literal("text"),
+  bind: TextBind.default("none"),
+  text: z.string().default(""),
+  // Mirrors MessageData so a message-style block can resolve @name/@answer.<id>.
+  supports_merge_tags: z.boolean().default(false),
+});
+export const ImageBlock = z.object({
+  ...blockBase,
+  type: z.literal("image"),
+  bind: ImageBind.default("none"),
+  url: z.string().url().optional(),
+  alt: z.string().default(""),
+  fit: z.enum(["cover", "contain"]).default("cover"),
+  aspect: z.enum(["auto", "1/1", "4/3", "16/9"]).default("auto"),
+});
+export const SpacerBlock = z.object({
+  ...blockBase,
+  type: z.literal("spacer"),
+  size: z.number().int().min(0).max(200).default(24),
+});
+export const DividerBlock = z.object({
+  ...blockBase,
+  type: z.literal("divider"),
+  thickness: z.number().int().min(1).max(8).default(1),
+  color: z.string().optional(),
+});
+export const ButtonBlock = z.object({
+  ...blockBase,
+  type: z.literal("button"),
+  bind: ButtonBind.default("none"),
+  label: z.string().default("Continue"),
+  variant: z.enum(["primary", "outline", "ghost"]).default("primary"),
+});
+
+// ── Smart blocks (delegate to node data + the existing render/recs path) ─────
+export const AnswersBlock = z.object({
+  ...blockBase,
+  type: z.literal("answers"),
+  // "auto" reproduces the fixed template's layout for the node's question_type.
+  layout: z.enum(["auto", "list", "grid"]).default("auto"),
+});
+export const RecommendationsBlock = z.object({
+  ...blockBase,
+  type: z.literal("recommendations"),
+  // "all" = the full result / multi-stage stack; a stage id = just that stage.
+  stage: z.string().default("all"),
+});
+export const EmailInputBlock = z.object({
+  ...blockBase,
+  type: z.literal("email_input"),
+});
+export const AiChatBlock = z.object({
+  ...blockBase,
+  type: z.literal("ai_chat"),
+});
+export const ProductGridBlock = z.object({
+  ...blockBase,
+  type: z.literal("product_grid"),
+});
+
+export const ContentBlock = z.discriminatedUnion("type", [
+  HeadingBlock,
+  TextBlock,
+  ImageBlock,
+  SpacerBlock,
+  DividerBlock,
+  ButtonBlock,
+  AnswersBlock,
+  RecommendationsBlock,
+  EmailInputBlock,
+  AiChatBlock,
+  ProductGridBlock,
+]);
+export type ContentBlock = z.infer<typeof ContentBlock>;
+export type ContentBlockType = ContentBlock["type"];
+
 export const Quiz = z.object({
   quiz_id: z.string().min(1),
   status: QuizStatus.default("draft"),
@@ -569,6 +712,16 @@ export const Quiz = z.object({
       }),
     )
     .default({}),
+  // Phase 2 — visual builder. Per-node block stack. A node id PRESENT here is
+  // rendered as a block stack; ABSENT renders its fixed template exactly as
+  // before. Mirrors design_overrides/breakpoint_overrides (keyed by node id,
+  // defaulted to {}), so the node union + every existing parser stay untouched
+  // and existing quizzes are byte-identical (empty map = no behavior change).
+  node_layouts: z.record(z.string(), z.array(ContentBlock)).default({}),
+  // Phase 2 (paid) — per-node merchant CSS. Raw declaration/selector text,
+  // scoped to the node root at render time (see app/components/runtime/
+  // blockStyle.ts scopeNodeCss). Empty default = no CSS injected.
+  node_css: z.record(z.string(), z.string()).default({}),
   // Phase 6: floating launcher embed mode. Disabled by default so existing
   // inline-embed quizzes don't suddenly grow a floating button.
   launcher_config: LauncherConfig.default({
