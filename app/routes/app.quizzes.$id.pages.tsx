@@ -221,7 +221,7 @@ export default function QuizPagesGallery() {
         }
         subtitle="Every result screen in this quiz. On a shared template, pages inherit one design so a single edit cascades everywhere. Break a page out to style it on its own, or re-sync it to snap back to the template."
         actions={
-          <Link to={`/app/quizzes/${quizId}`} className="qz-link">
+          <Link to={`/app/quizzes/${quizId}/studio`} className="qz-link">
             <QzButton size="sm">← Back to builder</QzButton>
           </Link>
         }
@@ -257,7 +257,7 @@ export default function QuizPagesGallery() {
               here as a page you can keep on-template or customize.
             </p>
             <div className="qz-mt-16">
-              <Link to={`/app/quizzes/${quizId}`} className="qz-link">
+              <Link to={`/app/quizzes/${quizId}/studio`} className="qz-link">
                 <QzButton variant="accent" size="sm">
                   Open the builder
                 </QzButton>

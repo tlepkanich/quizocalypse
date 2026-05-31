@@ -4962,6 +4962,11 @@ export default function QuizEditor() {
         subtitle="Edit the flow visually. Click any node to open its drawer. Autosave is on — publish to push to the storefront."
         actions={
           <>
+            <Link to={`/app/quizzes/${data.quizId}/studio`}>
+              <QzButton size="sm" variant="primary">
+                Studio
+              </QzButton>
+            </Link>
             <Link to={`/app/quizzes/${data.quizId}/versions`}>
               <QzButton size="sm">Versions</QzButton>
             </Link>

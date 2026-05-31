@@ -188,11 +188,11 @@ export default function QuizList() {
                 <tr
                   key={q.id}
                   className="qz-clickable"
-                  onClick={() => navigate(`/app/quizzes/${q.id}`)}
+                  onClick={() => navigate(`/app/quizzes/${q.id}/studio`)}
                 >
                   <td>
                     <Link
-                      to={`/app/quizzes/${q.id}`}
+                      to={`/app/quizzes/${q.id}/studio`}
                       prefetch="intent"
                       style={{ textDecoration: "none", color: "inherit" }}
                     >
@@ -213,7 +213,7 @@ export default function QuizList() {
                   </td>
                   <td className="qz-cell-actions" onClick={(e) => e.stopPropagation()}>
                     <div className="qz-row qz-gap-4" style={{ justifyContent: "flex-end" }}>
-                      <Link to={`/app/quizzes/${q.id}`}>
+                      <Link to={`/app/quizzes/${q.id}/studio`}>
                         <QzButton variant="ghost" size="sm">Open</QzButton>
                       </Link>
                       <QzButton

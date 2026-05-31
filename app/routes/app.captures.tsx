@@ -91,7 +91,7 @@ export default function AllCaptures() {
                     <td className="qz-muted">{c.firstName ?? "—"}</td>
                     <td>
                       <Link
-                        to={`/app/quizzes/${c.quizId}`}
+                        to={`/app/quizzes/${c.quizId}/studio`}
                         prefetch="intent"
                         style={{ color: "inherit", textDecoration: "none" }}
                       >

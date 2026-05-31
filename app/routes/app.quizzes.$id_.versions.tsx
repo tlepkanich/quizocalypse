@@ -120,7 +120,7 @@ export default function QuizVersions() {
         eyebrow={
           <>
             <Link
-              to={`/app/quizzes/${quiz.id}`}
+              to={`/app/quizzes/${quiz.id}/studio`}
               style={{ color: "inherit", textDecoration: "none" }}
             >
               ← {quiz.name}
@@ -145,7 +145,7 @@ export default function QuizVersions() {
             last ten and prune older ones automatically.
           </p>
           <div className="qz-mt-24">
-            <Link to={`/app/quizzes/${quiz.id}`}>
+            <Link to={`/app/quizzes/${quiz.id}/studio`}>
               <QzButton variant="accent">Back to editor</QzButton>
             </Link>
           </div>
@@ -196,7 +196,7 @@ export default function QuizVersions() {
       )}
 
       <div className="qz-mt-24">
-        <Link to={`/app/quizzes/${quiz.id}`}>
+        <Link to={`/app/quizzes/${quiz.id}/studio`}>
           <QzButton variant="ghost" size="sm">← Back to editor</QzButton>
         </Link>
       </div>

@@ -87,7 +87,7 @@ export default function QuizAnalytics() {
       <QzPageHeader
         eyebrow={
           <Link
-            to={`/app/quizzes/${data.quiz.id}`}
+            to={`/app/quizzes/${data.quiz.id}/studio`}
             style={{ color: "inherit", textDecoration: "none" }}
           >
             ← {data.quiz.name}

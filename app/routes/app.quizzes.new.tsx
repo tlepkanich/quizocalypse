@@ -84,7 +84,7 @@ export default function NewQuiz() {
 
   useEffect(() => {
     if (fetcher.data?.ok && fetcher.data.quizId) {
-      navigate(`/app/quizzes/${fetcher.data.quizId}`);
+      navigate(`/app/quizzes/${fetcher.data.quizId}/studio`);
     }
   }, [fetcher.data, navigate]);
 

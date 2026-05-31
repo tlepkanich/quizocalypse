@@ -263,7 +263,7 @@ export default function Index() {
               {data.recent.map((q) => (
                 <Link
                   key={q.id}
-                  to={`/app/quizzes/${q.id}`}
+                  to={`/app/quizzes/${q.id}/studio`}
                   style={{ textDecoration: "none", color: "inherit" }}
                 >
                   <QzCard style={{ cursor: "pointer" }}>
