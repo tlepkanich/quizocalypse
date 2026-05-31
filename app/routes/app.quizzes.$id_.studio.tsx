@@ -47,6 +47,9 @@ import {
   updateNodeData,
   type InsertKind,
 } from "../components/studio/studioDoc";
+import prisma from "../db.server";
+import { aggregateAllAbFunnels, type FunnelCounts } from "../lib/abAnalytics";
+import { LogicView } from "../components/logic/LogicView";
 
 type QuizDoc = Quiz;
 type Breakpoint = "synced" | "desktop" | "mobile";
@@ -54,7 +57,18 @@ type Breakpoint = "synced" | "desktop" | "mobile";
 export const loader = async ({ params, request }: LoaderFunctionArgs) => {
   const { id } = params;
   if (!id) throw new Response("Missing quiz id", { status: 400 });
-  return json(await loadQuizEditorData(request, id));
+  const data = await loadQuizEditorData(request, id);
+  // Per-variant funnels for every ab_split branch, used by the Logic tab's
+  // A/B cards. Events carry the assigned slot in payload.ab (set by q.$id.tsx).
+  let abAnalytics: Record<string, Record<string, FunnelCounts>> = {};
+  if (data.valid && data.doc) {
+    const events = await prisma.event.findMany({
+      where: { quizId: id },
+      select: { sessionId: true, eventType: true, payload: true },
+    });
+    abAnalytics = aggregateAllAbFunnels(data.doc, events);
+  }
+  return json({ ...data, abAnalytics });
 };
 
 export const action = async ({ params, request }: ActionFunctionArgs) => {
@@ -151,6 +165,25 @@ function BuilderShell({ data }: { data: LoaderData }) {
           const nextParams = new URLSearchParams(prev);
           nextParams.set("step", String(clamped));
           return nextParams;
+        },
+        { replace: false },
+      );
+      setZoomId(null);
+    },
+    [setParams],
+  );
+
+  // Top-level workspace: the guided 5-step "Build" flow, or the FOCUS #2
+  // "Logic" dual-view. Synced to ?view= so reload/links persist.
+  const view: "build" | "logic" = params.get("view") === "logic" ? "logic" : "build";
+  const setView = useCallback(
+    (v: "build" | "logic") => {
+      setParams(
+        (prev) => {
+          const next = new URLSearchParams(prev);
+          if (v === "logic") next.set("view", "logic");
+          else next.delete("view");
+          return next;
         },
         { replace: false },
       );
@@ -321,6 +354,43 @@ function BuilderShell({ data }: { data: LoaderData }) {
     goToStep,
   };
 
+  const viewToggle = (
+    <div className="qz-row" style={{ gap: 4 }}>
+      {(["build", "logic"] as const).map((v) => (
+        <button
+          key={v}
+          onClick={() => setView(v)}
+          className={`qz-btn qz-btn-sm${view === v ? " qz-btn-primary" : " qz-btn-ghost"}`}
+        >
+          {v === "build" ? "Build" : "Logic"}
+        </button>
+      ))}
+    </div>
+  );
+  const controls = (
+    <div className="qz-row" style={{ gap: 8, alignItems: "center" }}>
+      {viewToggle}
+      <span className="qz-dim" style={{ fontSize: 12 }}>
+        {isSaving ? "Saving…" : savedAt ? "Saved" : ""}
+      </span>
+      <Link
+        to={`/app/quizzes/${data.quizId}`}
+        className="qz-btn qz-btn-ghost qz-btn-sm"
+        title="Advanced node editor (power users)"
+      >
+        Advanced
+      </Link>
+      <QzButton
+        variant="primary"
+        size="sm"
+        disabled={!canPublish || isPublishing}
+        onClick={publish}
+      >
+        {isPublishing ? "Publishing…" : "Publish"}
+      </QzButton>
+    </div>
+  );
+
   return (
     <QzPage>
       <TitleBar title={`Build · ${data.name}`} />
@@ -329,33 +399,22 @@ function BuilderShell({ data }: { data: LoaderData }) {
         title={<EditableTitle name={data.name} onRename={renameQuiz} />}
       />
 
-      <BuilderStepper
-        current={step}
-        states={stepStates}
-        onJump={goToStep}
-        right={
-          <div className="qz-row" style={{ gap: 8, alignItems: "center" }}>
-            <span className="qz-dim" style={{ fontSize: 12 }}>
-              {isSaving ? "Saving…" : savedAt ? "Saved" : ""}
-            </span>
-            <Link
-              to={`/app/quizzes/${data.quizId}`}
-              className="qz-btn qz-btn-ghost qz-btn-sm"
-              title="Advanced node editor (power users)"
-            >
-              Advanced
-            </Link>
-            <QzButton
-              variant="primary"
-              size="sm"
-              disabled={!canPublish || isPublishing}
-              onClick={publish}
-            >
-              {isPublishing ? "Publishing…" : "Publish"}
-            </QzButton>
-          </div>
-        }
-      />
+      {view === "build" ? (
+        <BuilderStepper
+          current={step}
+          states={stepStates}
+          onJump={goToStep}
+          right={controls}
+        />
+      ) : (
+        <div
+          className="qz-row qz-row-between"
+          style={{ alignItems: "center", marginBottom: 16, gap: 12, flexWrap: "wrap" }}
+        >
+          <div className="qz-label">Logic &amp; recommendations</div>
+          {controls}
+        </div>
+      )}
 
       {reconcileError ? (
         <QzBanner tone="crit" title="Can't continue yet">
@@ -373,6 +432,17 @@ function BuilderShell({ data }: { data: LoaderData }) {
         </QzBanner>
       ) : null}
 
+      {view === "logic" ? (
+        <LogicView
+          quizId={data.quizId}
+          doc={doc}
+          onCommit={commit}
+          productIndex={productIndex}
+          categories={categories}
+          abAnalytics={data.abAnalytics}
+        />
+      ) : (
+        <>
       {step === 1 ? (
         <Step1Products {...stepProps} />
       ) : step === 2 ? (
@@ -449,6 +519,8 @@ function BuilderShell({ data }: { data: LoaderData }) {
           </QzButton>
         )}
       </div>
+        </>
+      )}
     </QzPage>
   );
 }

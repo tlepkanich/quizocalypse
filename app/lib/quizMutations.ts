@@ -384,6 +384,48 @@ export function removeBranchSlot(
   };
 }
 
+// Set a branch slot's weighted-random share (ab_split mode). Clamped to a
+// non-negative integer to satisfy BranchSlot.weight (z.number().int().min(0)).
+export function setSlotWeight(
+  doc: QuizDoc,
+  branchNodeId: string,
+  slotId: string,
+  weight: number,
+): QuizDoc {
+  const w = Math.max(0, Math.round(Number.isFinite(weight) ? weight : 0));
+  return {
+    ...doc,
+    nodes: doc.nodes.map((n) => {
+      if (n.id !== branchNodeId || n.type !== "branch") return n;
+      return {
+        ...n,
+        data: {
+          ...n.data,
+          slots: n.data.slots.map((s) =>
+            s.id === slotId ? { ...s, weight: w } : s,
+          ),
+        },
+      };
+    }),
+  };
+}
+
+// Switch a branch between rules-based routing and A/B weighted split. Slots are
+// preserved (weights only matter in ab_split mode; conditions only in rules).
+export function setBranchMode(
+  doc: QuizDoc,
+  branchNodeId: string,
+  mode: "rules" | "ab_split",
+): QuizDoc {
+  return {
+    ...doc,
+    nodes: doc.nodes.map((n) => {
+      if (n.id !== branchNodeId || n.type !== "branch") return n;
+      return { ...n, data: { ...n.data, mode } };
+    }),
+  };
+}
+
 // Set the edge's condition (used by the per-slot Rule editor on Branch
 // nodes). Pass `undefined` to clear it back to unconditional.
 export function setEdgeCondition(

@@ -4,6 +4,8 @@ import { Link, useLoaderData } from "@remix-run/react";
 import { TitleBar } from "@shopify/app-bridge-react";
 import { authenticate } from "../shopify.server";
 import prisma from "../db.server";
+import { Quiz } from "../lib/quizSchema";
+import { findAbBranches, aggregateVariantFunnel } from "../lib/abAnalytics";
 import {
   QzPage,
   QzPageHeader,
@@ -26,14 +28,42 @@ export const loader = async ({ params, request }: LoaderFunctionArgs) => {
 
   const quiz = await prisma.quiz.findFirst({
     where: { id, shopId: shop.id },
-    select: { id: true, name: true, status: true },
+    select: { id: true, name: true, status: true, publishedJson: true, draftJson: true },
   });
   if (!quiz) throw new Response("Quiz not found", { status: 404 });
 
   const eventRows = await prisma.event.findMany({
     where: { quizId: quiz.id },
-    select: { sessionId: true, eventType: true, ts: true },
+    select: { sessionId: true, eventType: true, ts: true, payload: true },
   });
+
+  // A/B tests: segment the funnel by the variant each session was assigned at
+  // an ab_split branch (payload.ab carries the assignment). Prefer the live
+  // (published) doc; fall back to the draft so unpublished tests still show.
+  const parsedDoc = Quiz.safeParse(quiz.publishedJson ?? quiz.draftJson);
+  const abTests = parsedDoc.success
+    ? findAbBranches(parsedDoc.data).map((br) => {
+        const funnels = aggregateVariantFunnel(eventRows, br.id, br.data.slots);
+        const totalWeight = br.data.slots.reduce((s, sl) => s + sl.weight, 0);
+        return {
+          id: br.id,
+          label: br.data.label || "A/B test",
+          slots: br.data.slots.map((sl) => ({
+            id: sl.id,
+            label: sl.label,
+            share: totalWeight > 0 ? Math.round((sl.weight / totalWeight) * 100) : 0,
+            funnel: funnels[sl.id] ?? {
+              entered: 0,
+              started: 0,
+              answered: 0,
+              completed: 0,
+              viewed: 0,
+              clicked: 0,
+            },
+          })),
+        };
+      })
+    : [];
 
   const sessionsByStage = new Map<string, Set<string>>();
   let earliest: Date | null = null;
@@ -60,7 +90,8 @@ export const loader = async ({ params, request }: LoaderFunctionArgs) => {
   });
 
   return json({
-    quiz,
+    quiz: { id: quiz.id, name: quiz.name, status: quiz.status },
+    abTests,
     funnel: { started, answered, completed, viewed, clicked },
     earliest: earliest ? earliest.toISOString() : null,
     latest: latest ? latest.toISOString() : null,
@@ -204,6 +235,57 @@ export default function QuizAnalytics() {
           </p>
         </div>
       </section>
+
+      {data.abTests.length > 0 ? (
+        <section className="qz-mt-48 qz-col qz-gap-16">
+          <div className="qz-section-head">
+            <div>
+              <div className="qz-label">A/B tests</div>
+              <h2 className="qz-h1 qz-mt-8">Variant performance</h2>
+            </div>
+          </div>
+          {data.abTests.map((t) => (
+            <QzCard key={t.id} flush>
+              <div
+                style={{
+                  padding: "14px 22px",
+                  borderBottom: "1px solid var(--qz-rule)",
+                  fontWeight: 600,
+                }}
+              >
+                {t.label}
+              </div>
+              <table className="qz-table">
+                <thead>
+                  <tr>
+                    <th>Variant</th>
+                    <th>Split</th>
+                    <th>Entered</th>
+                    <th>Completed</th>
+                    <th>Clicked</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {t.slots.map((s) => (
+                    <tr key={s.id}>
+                      <td className="qz-cell-name">{s.label}</td>
+                      <td className="qz-mono qz-dim">{s.share}%</td>
+                      <td className="qz-mono qz-tnum">{s.funnel.entered}</td>
+                      <td className="qz-mono qz-tnum">
+                        {s.funnel.completed}
+                        {s.funnel.entered > 0
+                          ? ` · ${Math.round((s.funnel.completed / s.funnel.entered) * 100)}%`
+                          : ""}
+                      </td>
+                      <td className="qz-mono qz-tnum">{s.funnel.clicked}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </QzCard>
+          ))}
+        </section>
+      ) : null}
     </QzPage>
   );
 }

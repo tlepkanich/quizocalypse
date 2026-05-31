@@ -218,16 +218,27 @@ export default function StorefrontRuntime() {
       quizId,
       sessionId: sessionIdRef.current,
     });
-    analyticsRef.current = client;
-    client.start();
+    // Stamp every event with the shopper's sticky A/B assignments so the
+    // builder can segment the funnel per variant. abRef holds
+    // { [branchId]: slotId }, populated as the runtime traverses ab_split
+    // branches (and restored from localStorage on resume). Wrapping `track`
+    // once tags ALL call sites — including child components that receive
+    // `analytics={analyticsRef.current}` — without touching each one.
+    const wrapped: typeof client = {
+      ...client,
+      track: (type, payload = {}) =>
+        client.track(type, { ...payload, ab: { ...abRef.current } }),
+    };
+    analyticsRef.current = wrapped;
+    wrapped.start();
     const source =
       typeof window !== "undefined" && window.self !== window.top
         ? "embed"
         : "direct";
     startedAtRef.current = Date.now();
-    if (!resumedRef.current) client.track("quiz_started", { source });
+    if (!resumedRef.current) wrapped.track("quiz_started", { source });
     return () => {
-      client.stop();
+      wrapped.stop();
     };
   }, [quizId]);
 
