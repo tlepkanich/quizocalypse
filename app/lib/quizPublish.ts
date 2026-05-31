@@ -37,6 +37,110 @@ export class PublishError extends Error {
   }
 }
 
+type ResultPageT = QuizDoc["results_pages"][number];
+
+// Every category id the recommendation logic references, across BOTH the legacy
+// results_pages array AND the v3 result NODES (data.category_id, stages, and the
+// points strategy → every category any answer awards points to). The publisher
+// fetches these once and bakes their product ids onto the published pages.
+export function collectReferencedCategoryIds(doc: QuizDoc): Set<string> {
+  const pointsCategoryIds = new Set<string>();
+  for (const node of doc.nodes) {
+    if (node.type !== "question") continue;
+    for (const a of node.data.answers) {
+      if (a.points) for (const cid of Object.keys(a.points)) pointsCategoryIds.add(cid);
+    }
+  }
+
+  const ids = new Set<string>();
+  for (const r of doc.results_pages) {
+    if (r.match_strategy === "archetype" && r.category_id) ids.add(r.category_id);
+  }
+  for (const node of doc.nodes) {
+    if (node.type !== "result") continue;
+    if (node.data.category_id) ids.add(node.data.category_id);
+    for (const st of node.data.stages) if (st.category_id) ids.add(st.category_id);
+    const ladder = [
+      ...node.data.match_ladder,
+      ...node.data.stages.flatMap((s) => s.match_ladder),
+    ];
+    if (ladder.includes("points")) {
+      for (const cid of pointsCategoryIds) ids.add(cid);
+    }
+  }
+  return ids;
+}
+
+// Bake the runtime-facing results_pages: keep/enrich any legacy entries AND
+// synthesize one entry per v3 result NODE (keyed by node id) carrying the baked
+// category→productIds map. The storefront engine reads the map off the result
+// page matching the result node id (recommendationEngine.categoryMapFor), so
+// WITHOUT these node-derived entries the v3 "category"/"points" strategies
+// resolve to nothing and fall through to the fallback collection. Pure +
+// testable (the category rows are fetched by the caller).
+export function bakeResultPages(
+  doc: QuizDoc,
+  categoryProductIdsById: Map<string, string[]>,
+): ResultPageT[] {
+  const fullMap: Record<string, string[]> = {};
+  for (const [id, pids] of categoryProductIdsById) fullMap[id] = pids;
+
+  const resultNodeById = new Map(
+    doc.nodes.filter((n) => n.type === "result").map((n) => [n.id, n]),
+  );
+
+  const ladderFor = (nodeId: string): string[] => {
+    const node = resultNodeById.get(nodeId);
+    return node && node.type === "result"
+      ? [...node.data.match_ladder, ...node.data.stages.flatMap((s) => s.match_ladder)]
+      : [];
+  };
+
+  // Legacy results_pages (kept + enriched).
+  const legacy = doc.results_pages.map((r) => {
+    const ladder = ladderFor(r.id);
+    const needsMap =
+      ladder.includes("category") ||
+      ladder.includes("points") ||
+      r.match_strategy === "archetype" ||
+      r.match_strategy === "points";
+    const out: ResultPageT = { ...r };
+    if (r.match_strategy === "archetype" && r.category_id) {
+      out.category_product_ids = categoryProductIdsById.get(r.category_id) ?? [];
+    }
+    if (needsMap) out.category_product_ids_map = fullMap;
+    return out;
+  });
+
+  // v3 result NODES not already represented in results_pages.
+  const legacyIds = new Set(doc.results_pages.map((r) => r.id));
+  const fromNodes: ResultPageT[] = [];
+  for (const node of doc.nodes) {
+    if (node.type !== "result" || legacyIds.has(node.id)) continue;
+    const ladder = [
+      ...node.data.match_ladder,
+      ...node.data.stages.flatMap((s) => s.match_ladder),
+    ];
+    const needsMap = ladder.includes("category") || ladder.includes("points");
+    fromNodes.push({
+      id: node.id,
+      headline: node.data.headline,
+      subtext: node.data.subtext,
+      product_ids: [],
+      match_strategy: node.data.category_id ? "archetype" : "top_n",
+      ...(node.data.category_id
+        ? {
+            category_id: node.data.category_id,
+            category_product_ids: categoryProductIdsById.get(node.data.category_id) ?? [],
+          }
+        : {}),
+      ...(needsMap ? { category_product_ids_map: fullMap } : {}),
+    });
+  }
+
+  return [...legacy, ...fromNodes];
+}
+
 export async function publishQuiz(
   prisma: PrismaClient,
   args: { quizId: string; shopId: string },
@@ -156,40 +260,13 @@ export async function publishQuiz(
   const resolvedTokens = resolveDesignTokens(shopTokens, doc.design_tokens);
 
   // Inline category → productIds for every category referenced by the
-  // recommendation logic so the storefront runtime needs no DB lookup:
-  //  - legacy archetype: resultPage.category_id
-  //  - v3 "category" strategy: result node data.category_id (+ stages)
-  //  - v3 "points" strategy: every category referenced by any answer.points
-  // We collect a global id set, fetch once, and attach the relevant slice
-  // to each result page.
-  const resultNodeById = new Map(
-    doc.nodes.filter((n) => n.type === "result").map((n) => [n.id, n]),
-  );
-  const pointsCategoryIds = new Set<string>();
-  for (const node of doc.nodes) {
-    if (node.type !== "question") continue;
-    for (const a of node.data.answers) {
-      if (a.points) for (const cid of Object.keys(a.points)) pointsCategoryIds.add(cid);
-    }
-  }
-  const allCategoryIds = new Set<string>();
-  for (const r of doc.results_pages) {
-    if (r.match_strategy === "archetype" && r.category_id) allCategoryIds.add(r.category_id);
-    const node = resultNodeById.get(r.id);
-    if (node && node.type === "result") {
-      if (node.data.category_id) allCategoryIds.add(node.data.category_id);
-      for (const st of node.data.stages) {
-        if (st.category_id) allCategoryIds.add(st.category_id);
-      }
-      const ladder = [
-        ...node.data.match_ladder,
-        ...node.data.stages.flatMap((s) => s.match_ladder),
-      ];
-      if (ladder.includes("points")) {
-        for (const cid of pointsCategoryIds) allCategoryIds.add(cid);
-      }
-    }
-  }
+  // recommendation logic so the storefront runtime needs no DB lookup. The
+  // category ids are collected from result NODES (the v3 model) as well as the
+  // legacy results_pages array, then fetched once and baked onto a result page
+  // per node (see bakeResultPages). This is what lets the runtime "category"
+  // and "points" strategies resolve real products instead of falling through to
+  // the fallback collection.
+  const allCategoryIds = collectReferencedCategoryIds(doc);
   const categoryRows =
     allCategoryIds.size > 0
       ? await prisma.category.findMany({
@@ -200,27 +277,8 @@ export async function publishQuiz(
   const categoryProductIdsById = new Map(
     categoryRows.map((c) => [c.id, c.productIds]),
   );
-  const fullMap: Record<string, string[]> = {};
-  for (const [id, ids] of categoryProductIdsById) fullMap[id] = ids;
 
-  const bakedResultsPages = doc.results_pages.map((r) => {
-    const node = resultNodeById.get(r.id);
-    const ladder =
-      node && node.type === "result"
-        ? [...node.data.match_ladder, ...node.data.stages.flatMap((s) => s.match_ladder)]
-        : [];
-    const needsMap =
-      ladder.includes("category") ||
-      ladder.includes("points") ||
-      r.match_strategy === "archetype" ||
-      r.match_strategy === "points";
-    const out: typeof r = { ...r };
-    if (r.match_strategy === "archetype" && r.category_id) {
-      out.category_product_ids = categoryProductIdsById.get(r.category_id) ?? [];
-    }
-    if (needsMap) out.category_product_ids_map = fullMap;
-    return out;
-  });
+  const bakedResultsPages = bakeResultPages(doc, categoryProductIdsById);
 
   const nextVersion = quiz.version + 1;
   const publishedJson: PublishedQuiz = {
