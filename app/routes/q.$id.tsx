@@ -3,15 +3,17 @@ import type { LoaderFunctionArgs } from "@remix-run/node";
 import { json } from "@remix-run/node";
 import { useLoaderData } from "@remix-run/react";
 import prisma from "../db.server";
-import { Quiz } from "../lib/quizSchema";
+import { Quiz, type ResultStage as ResultStageT } from "../lib/quizSchema";
 import {
   resolveNextStep,
   recommendForResult,
+  recommendForStage,
   recommendPreview,
   type BranchContext,
   type IndexedProduct,
   type RecommendedProduct,
 } from "../lib/recommendationEngine";
+import { resolveNodeOverride } from "../lib/resultLayout";
 import {
   resolveForBreakpoint,
   tokensToCssVars,
@@ -88,6 +90,7 @@ export const loader = async ({ params }: LoaderFunctionArgs) => {
     designTokens: parsed.data.design_tokens ?? null,
     designOverrides: parsed.data.design_overrides ?? {},
     breakpointOverrides: parsed.data.breakpoint_overrides ?? {},
+    resultLayoutMode: parsed.data.result_layout_mode,
     shopDomain: publishedRaw.shop_domain ?? "",
   });
 };
@@ -188,6 +191,7 @@ export default function StorefrontRuntime() {
     designTokens,
     designOverrides,
     breakpointOverrides,
+    resultLayoutMode,
     quizId,
     shopDomain,
   } = useLoaderData<typeof loader>();
@@ -207,8 +211,16 @@ export default function StorefrontRuntime() {
   // applied if the viewport matches.
   const resolved = useMemo(() => {
     const baked = designTokens as DesignTokensT | null;
+    const currentNodeType = currentNodeId
+      ? (doc.nodes.find((n) => n.id === currentNodeId)?.type ?? "")
+      : "";
     const nodeOverride = currentNodeId
-      ? ((designOverrides as Record<string, DesignTokensT>)[currentNodeId] ?? null)
+      ? resolveNodeOverride(
+          currentNodeId,
+          currentNodeType,
+          resultLayoutMode,
+          designOverrides as Record<string, DesignTokensT>,
+        )
       : null;
     const bpRecord = currentNodeId
       ? (breakpointOverrides as Record<
@@ -218,7 +230,15 @@ export default function StorefrontRuntime() {
       : undefined;
     const bpLayer = bpRecord?.[breakpoint] ?? null;
     return resolveForBreakpoint(null, baked, nodeOverride, bpLayer);
-  }, [designTokens, designOverrides, breakpointOverrides, currentNodeId, breakpoint]);
+  }, [
+    designTokens,
+    designOverrides,
+    breakpointOverrides,
+    resultLayoutMode,
+    currentNodeId,
+    breakpoint,
+    doc.nodes,
+  ]);
 
   const styles = useMemo(() => stylesFor(resolved), [resolved]);
   const cssVars = useMemo(
@@ -500,26 +520,55 @@ export default function StorefrontRuntime() {
       );
     } else if (currentNode.type === "result") {
       const selectedAnswerIds = path.flatMap((p) => p.answerIds);
-      const recs = recommendForResult({
-        quiz: doc,
-        productIndex,
-        selectedAnswerIds,
-        resultNodeId: currentNode.id,
-      });
-      content = (
-        <ResultView
-          headline={currentNode.data.headline}
-          subtext={currentNode.data.subtext}
-          ctaLabel={currentNode.data.cta_label}
-          recs={recs}
-          resultNodeId={currentNode.id}
-          styles={styles}
-          startedAt={startedAtRef.current}
-          completed={completedRef}
-          analytics={analyticsRef.current}
-          onReset={reset}
-        />
-      );
+      const stages = currentNode.data.stages;
+      if (stages.length === 0) {
+        const recs = recommendForResult({
+          quiz: doc,
+          productIndex,
+          selectedAnswerIds,
+          resultNodeId: currentNode.id,
+        });
+        content = (
+          <ResultView
+            headline={currentNode.data.headline}
+            subtext={currentNode.data.subtext}
+            ctaLabel={currentNode.data.cta_label}
+            recs={recs}
+            resultNodeId={currentNode.id}
+            styles={styles}
+            startedAt={startedAtRef.current}
+            completed={completedRef}
+            analytics={analyticsRef.current}
+            onReset={reset}
+          />
+        );
+      } else {
+        const stageSections = stages.map((stage) => ({
+          stage,
+          recs: recommendForStage(
+            doc,
+            productIndex,
+            selectedAnswerIds,
+            currentNode.id,
+            stage,
+          ),
+        }));
+        content = (
+          <MultiStageResultView
+            headline={currentNode.data.headline}
+            subtext={currentNode.data.subtext}
+            ctaLabel={currentNode.data.cta_label}
+            sections={stageSections}
+            resultNodeId={currentNode.id}
+            shopDomain={shopDomain}
+            styles={styles}
+            startedAt={startedAtRef.current}
+            completed={completedRef}
+            analytics={analyticsRef.current}
+            onReset={reset}
+          />
+        );
+      }
     }
   }
 
@@ -1751,31 +1800,159 @@ function ResultView({
   );
 }
 
+// Multi-stage (Advanced) result page. Renders the page headline/subtext, then
+// each stage as its own section (stage headline/subtext + its product cards),
+// reusing the same ProductCard markup as the single-result view. Fires the
+// same result analytics events once on first render, using the union of all
+// stages' product ids for recommendation_viewed.
+function MultiStageResultView({
+  headline,
+  subtext,
+  ctaLabel,
+  sections,
+  resultNodeId,
+  shopDomain,
+  styles,
+  startedAt,
+  completed,
+  analytics,
+  onReset,
+}: {
+  headline: string;
+  subtext: string;
+  ctaLabel: string;
+  sections: { stage: ResultStageT; recs: RecommendedProduct[] }[];
+  resultNodeId: string;
+  shopDomain: string;
+  styles: ReturnType<typeof stylesFor>;
+  startedAt: number;
+  completed: React.MutableRefObject<boolean>;
+  analytics: ReturnType<typeof createAnalyticsClient> | null;
+  onReset: () => void;
+}) {
+  useEffect(() => {
+    if (completed.current || !analytics) return;
+    completed.current = true;
+    analytics.track("quiz_completed", {
+      duration_ms: Date.now() - (startedAt || Date.now()),
+    });
+    analytics.track("recommendation_viewed", {
+      result_node_id: resultNodeId,
+      product_ids: sections.flatMap((s) => s.recs.map((r) => r.product_id)),
+    });
+  }, [analytics, completed, resultNodeId, startedAt, sections]);
+
+  return (
+    <div style={styles.card}>
+      <h2 style={styles.h2}>{headline}</h2>
+      {subtext && <p style={{ ...styles.muted, marginTop: 8 }}>{subtext}</p>}
+      <div style={{ marginTop: 20, display: "grid", gap: 28 }}>
+        {sections.map(({ stage, recs }) => (
+          <StageSection
+            key={stage.id}
+            stage={stage}
+            recs={recs}
+            ctaLabel={ctaLabel}
+            shopDomain={shopDomain}
+            styles={styles}
+            analytics={analytics}
+          />
+        ))}
+      </div>
+      <button
+        onClick={onReset}
+        style={{
+          ...styles.primaryBtn,
+          background: "transparent",
+          color: "var(--qz-color-primary)",
+          border: "2px solid var(--qz-color-primary)",
+          marginTop: 24,
+        }}
+      >
+        Start over
+      </button>
+    </div>
+  );
+}
+
+function StageSection({
+  stage,
+  recs,
+  ctaLabel,
+  shopDomain,
+  styles,
+  analytics,
+}: {
+  stage: ResultStageT;
+  recs: RecommendedProduct[];
+  ctaLabel: string;
+  shopDomain: string;
+  styles: ReturnType<typeof stylesFor>;
+  analytics: ReturnType<typeof createAnalyticsClient> | null;
+}) {
+  return (
+    <section>
+      {stage.headline && (
+        <h2 style={{ ...styles.h2, fontSize: "var(--qz-h2-size)" }}>
+          {stage.headline}
+        </h2>
+      )}
+      {stage.subtext && (
+        <p style={{ ...styles.muted, marginTop: 6 }}>{stage.subtext}</p>
+      )}
+      <div style={{ marginTop: 12, display: "grid", gap: 12 }}>
+        {recs.length === 0 && (
+          <p style={{ color: "var(--qz-color-muted)" }}>
+            No products to show for this section.
+          </p>
+        )}
+        {recs.map((r, idx) => {
+          const href = shopDomain
+            ? `https://${shopDomain}/products/${r.handle}`
+            : undefined;
+          return (
+            <ProductCard
+              key={r.product_id}
+              product={r}
+              position={idx}
+              ctaLabel={ctaLabel}
+              href={href}
+              styles={styles}
+              onClick={() =>
+                analytics?.track("recommendation_clicked", {
+                  result_stage_id: stage.id,
+                  product_id: r.product_id,
+                  position: idx,
+                })
+              }
+            />
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
 function ProductCard({
   product,
   position,
   ctaLabel,
+  href,
   styles,
   onClick,
 }: {
   product: RecommendedProduct;
   position: number;
   ctaLabel: string;
+  // When set, the card renders as a PDP link (multi-stage result sections).
+  // When omitted, it stays the click-tracked button (single-result view).
+  href?: string;
   styles: ReturnType<typeof stylesFor>;
   onClick?: () => void;
 }) {
   void position;
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      style={{
-        ...styles.productCard,
-        cursor: "pointer",
-        textAlign: "left",
-        font: "inherit",
-      }}
-    >
+  const inner = (
+    <>
       {product.image_url ? (
         <img
           src={product.image_url}
@@ -1824,6 +2001,39 @@ function ProductCard({
       >
         {ctaLabel}
       </span>
+    </>
+  );
+
+  if (href) {
+    return (
+      <a
+        href={href}
+        target="_blank"
+        rel="noreferrer"
+        onClick={onClick}
+        style={{
+          ...styles.productCard,
+          cursor: "pointer",
+          textAlign: "left",
+        }}
+      >
+        {inner}
+      </a>
+    );
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      style={{
+        ...styles.productCard,
+        cursor: "pointer",
+        textAlign: "left",
+        font: "inherit",
+      }}
+    >
+      {inner}
     </button>
   );
 }

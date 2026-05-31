@@ -50,6 +50,7 @@ import {
   tokensToCssVars,
   type DesignTokensT,
 } from "../lib/designTokens";
+import { resolveNodeOverride } from "../lib/resultLayout";
 import {
   addAnswer,
   addAskAINode,
@@ -1589,15 +1590,34 @@ function NodeDrawer({
         ? mobileOverride
         : nodeOverride;
 
+  // For the Preview tab, resolve a result node's override through the
+  // shared-template posture: a result page in "shared" mode with no own
+  // override previews with design_overrides["__shared_result__"]. Other node
+  // types (and the design editor's activeOverride above) keep using the
+  // node's own override verbatim.
+  const previewNodeOverride = useMemo(() => {
+    if (node.type === "result") {
+      return (
+        resolveNodeOverride(
+          node.id,
+          node.type,
+          doc.result_layout_mode,
+          doc.design_overrides,
+        ) ?? {}
+      );
+    }
+    return nodeOverride;
+  }, [node.id, node.type, doc.result_layout_mode, doc.design_overrides, nodeOverride]);
+
   const previewTokens = useMemo(
     () =>
       resolveDesignTokens(
         doc.design_tokens ?? null,
-        nodeOverride,
+        previewNodeOverride,
         breakpoint === "desktop" ? desktopOverride : null,
         breakpoint === "mobile" ? mobileOverride : null,
       ),
-    [doc.design_tokens, nodeOverride, desktopOverride, mobileOverride, breakpoint],
+    [doc.design_tokens, previewNodeOverride, desktopOverride, mobileOverride, breakpoint],
   );
 
   const previewWidth = breakpoint === "mobile" ? 375 : 760;
@@ -3875,8 +3895,145 @@ function LogicTab({
               />
             </QzField>
           )}
+          <AnswerPointsEditor
+            points={answer.points}
+            onChange={(points) => updateAnswer(idx, { points })}
+          />
         </div>
       ))}
+    </div>
+  );
+}
+
+// Compact per-answer points editor for the "points" match strategy. Lets a
+// merchant map categoryId → weight by hand (the live category list isn't
+// loaded in the builder, so category ids are free-text). Gated behind a
+// disclosure so quizzes that don't use points scoring stay uncluttered.
+function AnswerPointsEditor({
+  points,
+  onChange,
+}: {
+  points: Record<string, number> | undefined;
+  onChange: (points: Record<string, number> | undefined) => void;
+}) {
+  const entries = Object.entries(points ?? {});
+  const hasPoints = entries.length > 0;
+  const [open, setOpen] = useState(hasPoints);
+  const [newCategoryId, setNewCategoryId] = useState("");
+  const [newWeight, setNewWeight] = useState("");
+
+  // Merge/replace a category's weight; a cleared or zero weight removes the
+  // key, and an empty map normalizes back to undefined so we don't persist
+  // `points: {}`.
+  const setWeight = (categoryId: string, weight: number | null) => {
+    const next: Record<string, number> = { ...(points ?? {}) };
+    if (weight === null || weight === 0 || Number.isNaN(weight)) {
+      delete next[categoryId];
+    } else {
+      next[categoryId] = weight;
+    }
+    onChange(Object.keys(next).length > 0 ? next : undefined);
+  };
+
+  const addCategory = () => {
+    const id = newCategoryId.trim();
+    const weight = Number(newWeight);
+    if (!id || !newWeight.trim() || Number.isNaN(weight) || weight === 0) return;
+    setWeight(id, weight);
+    setNewCategoryId("");
+    setNewWeight("");
+  };
+
+  return (
+    <div className="qz-col qz-gap-8">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        style={{
+          alignSelf: "flex-start",
+          background: "transparent",
+          border: "none",
+          padding: 0,
+          color: "var(--qz-ink-3)",
+          cursor: "pointer",
+          fontSize: 12,
+          fontFamily: "var(--qz-font-mono)",
+        }}
+      >
+        {open ? "▾" : "▸"} Points{hasPoints ? ` (${entries.length})` : ""}
+      </button>
+      {open && (
+        <div className="qz-col qz-gap-8" style={{ paddingLeft: 12 }}>
+          <p className="qz-muted" style={{ fontSize: 12, margin: 0 }}>
+            Weights this answer contributes per category id, used by the
+            &quot;points&quot; result strategy.
+          </p>
+          {entries.length === 0 && (
+            <span className="qz-dim" style={{ fontSize: 12 }}>
+              No category weights yet
+            </span>
+          )}
+          {entries.map(([categoryId, weight]) => (
+            <div
+              key={categoryId}
+              className="qz-row qz-gap-8"
+              style={{ alignItems: "center" }}
+            >
+              <QzInput
+                value={categoryId}
+                readOnly
+                style={{ flex: 1, minWidth: 0 }}
+              />
+              <QzInput
+                type="number"
+                value={String(weight)}
+                onChange={(e) => {
+                  const raw = e.target.value;
+                  setWeight(categoryId, raw === "" ? null : Number(raw));
+                }}
+                style={{ width: 80 }}
+              />
+              <QzButton
+                variant="ghost"
+                size="sm"
+                onClick={() => setWeight(categoryId, null)}
+              >
+                remove
+              </QzButton>
+            </div>
+          ))}
+          <div className="qz-row qz-gap-8" style={{ alignItems: "center" }}>
+            <QzInput
+              placeholder="category id"
+              value={newCategoryId}
+              onChange={(e) => setNewCategoryId(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  addCategory();
+                }
+              }}
+              style={{ flex: 1, minWidth: 0 }}
+            />
+            <QzInput
+              type="number"
+              placeholder="weight"
+              value={newWeight}
+              onChange={(e) => setNewWeight(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  addCategory();
+                }
+              }}
+              style={{ width: 80 }}
+            />
+            <QzButton variant="ghost" size="sm" onClick={addCategory}>
+              + add
+            </QzButton>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -3,6 +3,7 @@ import {
   pickBranchSlot,
   pickPointsWinner,
   recommendForResult,
+  recommendForStage,
   recommendPreview,
   resolveNextStep,
   nextNodeFor,
@@ -659,5 +660,69 @@ describe("Branch routing", () => {
   it("resolveNextStep returns the target directly when no branch in the way", () => {
     const q = branchQuiz({ mode: "rules" });
     expect(resolveNextStep(q, "intro", null, emptyCtx())).toBe("q1");
+  });
+});
+
+describe("recommendForStage — multi-stage results", () => {
+  function stageQuiz(stages: Array<Record<string, unknown>>) {
+    return Quiz.parse({
+      quiz_id: "sq",
+      scope: { collection_ids: ["c-cleansers"] },
+      nodes: [
+        { id: "intro", type: "intro", position: { x: 0, y: 0 }, data: { headline: "Hi" } },
+        {
+          id: "q1",
+          type: "question",
+          position: { x: 200, y: 0 },
+          data: {
+            text: "?",
+            question_type: "single_select",
+            answers: [
+              { id: "a-oily", text: "Oily", tags: ["oily"], edge_handle_id: "h1" },
+              { id: "a-dry", text: "Dry", tags: ["dry"], edge_handle_id: "h2" },
+            ],
+          },
+        },
+        {
+          id: "r1",
+          type: "result",
+          position: { x: 400, y: 0 },
+          data: { headline: "Match", fallback_collection_id: "c-cleansers", stages },
+        },
+      ],
+      edges: [
+        { id: "e1", source: "intro", target: "q1" },
+        { id: "e2", source: "q1", target: "r1" },
+      ],
+      results_pages: [{ id: "r1", headline: "Match", product_ids: [] }],
+    });
+  }
+
+  it("resolves a stage's own ladder independently of the page", () => {
+    const quiz = stageQuiz([
+      { id: "s1", headline: "Cleansers", match_ladder: ["tag"], min_products: 1, max_products: 2 },
+    ]);
+    const stage = quiz.nodes.find((n) => n.id === "r1")!;
+    const stageData = stage.type === "result" ? stage.data.stages[0]! : undefined;
+    const out = recommendForStage(
+      quiz,
+      baseProducts,
+      ["a-oily"],
+      "r1",
+      stageData!,
+    );
+    // tag "oily" → p1/p4/p5; capped at 2.
+    expect(out.length).toBe(2);
+    expect(out.every((p) => p.tags.includes("oily"))).toBe(true);
+  });
+
+  it("returns empty for a stage with no matches and no fallback", () => {
+    const quiz = stageQuiz([
+      { id: "s1", headline: "X", match_ladder: ["collection"], collection_id: "c-none", min_products: 1, max_products: 3 },
+    ]);
+    const stage = quiz.nodes.find((n) => n.id === "r1")!;
+    const stageData = stage.type === "result" ? stage.data.stages[0]! : undefined;
+    const out = recommendForStage(quiz, baseProducts, [], "r1", stageData!);
+    expect(out).toEqual([]);
   });
 });

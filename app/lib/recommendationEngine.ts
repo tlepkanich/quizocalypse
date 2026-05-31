@@ -43,37 +43,31 @@ export interface RecommendationInput {
 // Final fallback is the result's fallback_collection_id. The legacy
 // match_strategy field is mapped onto a one-element ladder so pre-v3 quizzes
 // behave identically.
-export function recommendForResult(input: RecommendationInput): RecommendedProduct[] {
-  const { quiz, productIndex, selectedAnswerIds, resultNodeId } = input;
+// Normalized per-resolution config — shared by the whole result page and
+// by each multi-stage section. Lets one ladder walk serve both.
+interface LadderConfig {
+  match_ladder: LadderStrategy[];
+  conditional_rules: { all_of: string[]; any_of: string[]; product_ids: string[] }[];
+  category_id?: string;
+  collection_id?: string;
+  metafield_key?: string;
+  metafield_value?: string;
+  ranking: ResultDataT["ranking"];
+  cap: number;
+  minProducts: number;
+  oos_behavior: ResultDataT["oos_behavior"];
+  oos_fallback_collection_id?: string;
+  fallback_collection_id?: string; // final fallback (result page only)
+}
 
-  const resultNode = quiz.nodes.find(
-    (n) => n.id === resultNodeId && n.type === "result",
-  );
-  if (!resultNode || resultNode.type !== "result") return [];
-
-  const data = resultNode.data;
-  const resultPage = quiz.results_pages.find((r) => r.id === resultNodeId);
-  const cap = data.max_products ?? data.slot_count;
-  const minProducts = data.min_products;
+function walkLadder(
+  config: LadderConfig,
+  quiz: QuizDoc,
+  productIndex: IndexedProduct[],
+  selectedAnswerIds: string[],
+  categoryMap: Record<string, string[]>,
+): RecommendedProduct[] {
   const selectedSet = new Set(selectedAnswerIds);
-
-  // Effective ladder. If the editor left the default ["tag"] but the legacy
-  // match_strategy says archetype/points, honor the legacy intent.
-  let ladder: LadderStrategy[] = data.match_ladder as LadderStrategy[];
-  const isDefaultLadder =
-    ladder.length === 1 && ladder[0] === "tag";
-  if (isDefaultLadder && resultPage?.match_strategy === "archetype") {
-    ladder = ["category"];
-  } else if (isDefaultLadder && resultPage?.match_strategy === "points") {
-    ladder = ["points"];
-  }
-
-  const categoryMap =
-    resultPage?.category_product_ids_map ??
-    (resultPage?.category_id && resultPage.category_product_ids
-      ? { [resultPage.category_id]: resultPage.category_product_ids }
-      : {});
-
   const byId = (ids: string[]): RecommendedProduct[] => {
     const want = new Set(ids);
     return productIndex
@@ -84,7 +78,7 @@ export function recommendForResult(input: RecommendationInput): RecommendedProdu
   const resolve = (strategy: LadderStrategy): RecommendedProduct[] => {
     switch (strategy) {
       case "conditional": {
-        for (const rule of data.conditional_rules) {
+        for (const rule of config.conditional_rules) {
           const allOk = rule.all_of.every((a) => selectedSet.has(a));
           const anyOk =
             rule.any_of.length === 0 ||
@@ -98,11 +92,10 @@ export function recommendForResult(input: RecommendationInput): RecommendedProdu
         return winner ? byId(categoryMap[winner] ?? []) : [];
       }
       case "category": {
-        const cid = data.category_id ?? resultPage?.category_id;
-        return cid ? byId(categoryMap[cid] ?? []) : [];
+        return config.category_id ? byId(categoryMap[config.category_id] ?? []) : [];
       }
       case "collection": {
-        const col = data.collection_id;
+        const col = config.collection_id;
         return col
           ? productIndex
               .filter((p) => p.collection_ids.includes(col))
@@ -110,8 +103,8 @@ export function recommendForResult(input: RecommendationInput): RecommendedProdu
           : [];
       }
       case "metafield": {
-        const k = data.metafield_key;
-        const v = data.metafield_value;
+        const k = config.metafield_key;
+        const v = config.metafield_value;
         return k && v
           ? productIndex
               .filter((p) => p.metafields?.[k] === v)
@@ -124,20 +117,109 @@ export function recommendForResult(input: RecommendationInput): RecommendedProdu
     }
   };
 
-  for (const strategy of ladder) {
+  for (const strategy of config.match_ladder) {
     const pool = applyOos(
-      applyRanking(resolve(strategy), data.ranking),
-      data,
+      applyRanking(resolve(strategy), config.ranking),
+      { oos_behavior: config.oos_behavior, oos_fallback_collection_id: config.oos_fallback_collection_id },
       productIndex,
     );
-    if (pool.length >= minProducts) return pool.slice(0, cap);
+    if (pool.length >= config.minProducts) return pool.slice(0, config.cap);
   }
 
-  // Final fallback: the result's fallback collection.
-  const fallbackPool = productIndex
-    .filter((p) => p.collection_ids.includes(data.fallback_collection_id))
-    .map((p) => ({ ...p, score: 0 }));
-  return applyRanking(rank(fallbackPool), data.ranking).slice(0, cap);
+  if (config.fallback_collection_id) {
+    const fallbackPool = productIndex
+      .filter((p) => p.collection_ids.includes(config.fallback_collection_id!))
+      .map((p) => ({ ...p, score: 0 }));
+    return applyRanking(rank(fallbackPool), config.ranking).slice(0, config.cap);
+  }
+  return [];
+}
+
+// Build the runtime category map from the published result page.
+function categoryMapFor(
+  resultPage:
+    | { category_id?: string; category_product_ids?: string[]; category_product_ids_map?: Record<string, string[]> }
+    | undefined,
+): Record<string, string[]> {
+  return (
+    resultPage?.category_product_ids_map ??
+    (resultPage?.category_id && resultPage.category_product_ids
+      ? { [resultPage.category_id]: resultPage.category_product_ids }
+      : {})
+  );
+}
+
+export function recommendForResult(input: RecommendationInput): RecommendedProduct[] {
+  const { quiz, productIndex, selectedAnswerIds, resultNodeId } = input;
+
+  const resultNode = quiz.nodes.find(
+    (n) => n.id === resultNodeId && n.type === "result",
+  );
+  if (!resultNode || resultNode.type !== "result") return [];
+
+  const data = resultNode.data;
+  const resultPage = quiz.results_pages.find((r) => r.id === resultNodeId);
+
+  // Effective ladder. If the editor left the default ["tag"] but the legacy
+  // match_strategy says archetype/points, honor the legacy intent.
+  let ladder: LadderStrategy[] = data.match_ladder as LadderStrategy[];
+  const isDefaultLadder = ladder.length === 1 && ladder[0] === "tag";
+  if (isDefaultLadder && resultPage?.match_strategy === "archetype") {
+    ladder = ["category"];
+  } else if (isDefaultLadder && resultPage?.match_strategy === "points") {
+    ladder = ["points"];
+  }
+
+  return walkLadder(
+    {
+      match_ladder: ladder,
+      conditional_rules: data.conditional_rules,
+      category_id: data.category_id ?? resultPage?.category_id,
+      collection_id: data.collection_id,
+      metafield_key: data.metafield_key,
+      metafield_value: data.metafield_value,
+      ranking: data.ranking,
+      cap: data.max_products ?? data.slot_count,
+      minProducts: data.min_products,
+      oos_behavior: data.oos_behavior,
+      oos_fallback_collection_id: data.oos_fallback_collection_id,
+      fallback_collection_id: data.fallback_collection_id,
+    },
+    quiz,
+    productIndex,
+    selectedAnswerIds,
+    categoryMapFor(resultPage),
+  );
+}
+
+// Resolve one multi-stage section's products. Stages don't carry the
+// node's final fallback collection — an empty stage simply renders empty.
+export function recommendForStage(
+  quiz: QuizDoc,
+  productIndex: IndexedProduct[],
+  selectedAnswerIds: string[],
+  resultNodeId: string,
+  stage: ResultDataT["stages"][number],
+): RecommendedProduct[] {
+  const resultPage = quiz.results_pages.find((r) => r.id === resultNodeId);
+  return walkLadder(
+    {
+      match_ladder: stage.match_ladder as LadderStrategy[],
+      conditional_rules: stage.conditional_rules,
+      category_id: stage.category_id,
+      collection_id: stage.collection_id,
+      metafield_key: stage.metafield_key,
+      metafield_value: stage.metafield_value,
+      ranking: stage.ranking,
+      cap: stage.max_products,
+      minProducts: stage.min_products,
+      oos_behavior: "show_with_badge",
+    },
+    quiz,
+    productIndex,
+    selectedAnswerIds,
+    categoryMapFor(resultPage),
+  );
 }
 
 // Tally each answer's point weights toward category ids across the visited
@@ -207,19 +289,19 @@ function applyRanking(
 // in the OOS fallback collection.
 function applyOos(
   products: RecommendedProduct[],
-  data: ResultDataT,
+  cfg: { oos_behavior: ResultDataT["oos_behavior"]; oos_fallback_collection_id?: string },
   productIndex: IndexedProduct[],
 ): RecommendedProduct[] {
-  if (data.oos_behavior === "show_with_badge") return products;
+  if (cfg.oos_behavior === "show_with_badge") return products;
   const inStock = products.filter((p) => p.inventory_in_stock);
-  if (data.oos_behavior === "hide") return inStock;
+  if (cfg.oos_behavior === "hide") return inStock;
   // fallback
   if (inStock.length > 0) return inStock;
-  if (data.oos_fallback_collection_id) {
+  if (cfg.oos_fallback_collection_id) {
     return rank(
       productIndex
         .filter((p) =>
-          p.collection_ids.includes(data.oos_fallback_collection_id!),
+          p.collection_ids.includes(cfg.oos_fallback_collection_id!),
         )
         .map((p) => ({ ...p, score: 0 })),
     );
