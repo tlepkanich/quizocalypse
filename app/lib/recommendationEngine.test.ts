@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   pickBranchSlot,
+  pickPointsWinner,
   recommendForResult,
   recommendPreview,
   resolveNextStep,
@@ -104,7 +105,6 @@ const quizDoc = Quiz.parse({
     { id: "e1", source: "intro", target: "q1" },
     { id: "e2", source: "q1", target: "r1" },
   ],
-  recommendation_logic: [],
   results_pages: [
     { id: "r1", headline: "Your match", product_ids: [] },
   ],
@@ -207,6 +207,184 @@ describe("recommendForResult", () => {
     });
     // p99 has higher tag score but is filtered out by collection.
     expect(result.find((p) => p.product_id === "p99")).toBeUndefined();
+  });
+});
+
+describe("recommendForResult — v3 match ladder", () => {
+  // Helper: build a quiz whose result node uses a custom ladder + config.
+  function ladderQuiz(resultData: Record<string, unknown>) {
+    return Quiz.parse({
+      quiz_id: "lq",
+      scope: { collection_ids: ["c-cleansers"] },
+      nodes: [
+        { id: "intro", type: "intro", position: { x: 0, y: 0 }, data: { headline: "Hi" } },
+        {
+          id: "q1",
+          type: "question",
+          position: { x: 200, y: 0 },
+          data: {
+            text: "?",
+            question_type: "single_select",
+            answers: [
+              { id: "a-oily", text: "Oily", tags: ["oily"], edge_handle_id: "h1", points: { "cat-oily": 2 } },
+              { id: "a-dry", text: "Dry", tags: ["dry"], edge_handle_id: "h2", points: { "cat-dry": 3 } },
+            ],
+          },
+        },
+        {
+          id: "r1",
+          type: "result",
+          position: { x: 400, y: 0 },
+          data: { headline: "Match", fallback_collection_id: "c-cleansers", ...resultData },
+        },
+      ],
+      edges: [
+        { id: "e1", source: "intro", target: "q1" },
+        { id: "e2", source: "q1", target: "r1" },
+      ],
+      results_pages: resultData.__page
+        ? [resultData.__page as Record<string, unknown>]
+        : [{ id: "r1", headline: "Match", product_ids: [] }],
+    });
+  }
+
+  it("conditional strategy: if-all-of-answers returns the mapped products", () => {
+    const quiz = ladderQuiz({
+      match_ladder: ["conditional", "tag"],
+      conditional_rules: [{ all_of: ["a-oily"], any_of: [], product_ids: ["p2"] }],
+    });
+    const out = recommendForResult({
+      quiz,
+      productIndex: baseProducts,
+      selectedAnswerIds: ["a-oily"],
+      resultNodeId: "r1",
+    });
+    expect(out.map((p) => p.product_id)).toEqual(["p2"]);
+  });
+
+  it("falls through to the next strategy when conditional has no match", () => {
+    const quiz = ladderQuiz({
+      match_ladder: ["conditional", "tag"],
+      conditional_rules: [{ all_of: ["a-dry"], any_of: [], product_ids: ["p2"] }],
+    });
+    const out = recommendForResult({
+      quiz,
+      productIndex: baseProducts,
+      selectedAnswerIds: ["a-oily"], // a-dry not picked → conditional misses → tag wins
+      resultNodeId: "r1",
+    });
+    // tag "oily" matches p1/p4/p5 equally (score 1); cheapest in-stock wins.
+    expect(out[0]!.product_id).toBe("p5");
+    expect(out.some((p) => p.product_id === "p1")).toBe(true);
+  });
+
+  it("points strategy: returns the winning category's baked bucket", () => {
+    const quiz = ladderQuiz({
+      match_ladder: ["points"],
+      __page: {
+        id: "r1",
+        headline: "Match",
+        product_ids: [],
+        category_product_ids_map: { "cat-oily": ["p1"], "cat-dry": ["p2"] },
+      },
+    });
+    // a-dry contributes 3 to cat-dry; a-oily contributes 2 to cat-oily → dry wins.
+    const out = recommendForResult({
+      quiz,
+      productIndex: baseProducts,
+      selectedAnswerIds: ["a-oily", "a-dry"],
+      resultNodeId: "r1",
+    });
+    expect(out.map((p) => p.product_id)).toEqual(["p2"]);
+  });
+
+  it("collection strategy returns products in the bound collection", () => {
+    const withCol: IndexedProduct[] = [
+      ...baseProducts,
+      { product_id: "px", title: "X", handle: "x", price: "9", image_url: null, tags: [], collection_ids: ["c-special"], inventory_in_stock: true },
+    ];
+    const quiz = ladderQuiz({ match_ladder: ["collection"], collection_id: "c-special" });
+    const out = recommendForResult({
+      quiz,
+      productIndex: withCol,
+      selectedAnswerIds: ["a-oily"],
+      resultNodeId: "r1",
+    });
+    expect(out.map((p) => p.product_id)).toEqual(["px"]);
+  });
+
+  it("ranking=newest orders by updated_at desc", () => {
+    const dated: IndexedProduct[] = baseProducts.map((p, i) => ({
+      ...p,
+      updated_at: `2026-01-0${i + 1}T00:00:00Z`,
+    }));
+    const quiz = ladderQuiz({ match_ladder: ["collection"], collection_id: "c-cleansers", ranking: "newest" });
+    const out = recommendForResult({
+      quiz,
+      productIndex: dated,
+      selectedAnswerIds: [],
+      resultNodeId: "r1",
+    });
+    // p5 has the latest updated_at (index 4) → first.
+    expect(out[0]!.product_id).toBe("p5");
+  });
+
+  it("oos_behavior=hide drops out-of-stock products", () => {
+    const quiz = ladderQuiz({ match_ladder: ["tag"], oos_behavior: "hide" });
+    const out = recommendForResult({
+      quiz,
+      productIndex: baseProducts,
+      selectedAnswerIds: ["a-oily"],
+      resultNodeId: "r1",
+    });
+    expect(out.find((p) => p.product_id === "p4")).toBeUndefined(); // p4 is OOS
+  });
+
+  it("max_products caps the result count; falls back to slot_count when unset", () => {
+    const capped = ladderQuiz({ match_ladder: ["collection"], collection_id: "c-cleansers", max_products: 2 });
+    const out = recommendForResult({
+      quiz: capped,
+      productIndex: baseProducts,
+      selectedAnswerIds: [],
+      resultNodeId: "r1",
+    });
+    expect(out.length).toBe(2);
+  });
+});
+
+describe("pickPointsWinner", () => {
+  function pointsQuiz() {
+    return Quiz.parse({
+      quiz_id: "pq",
+      scope: { collection_ids: [] },
+      nodes: [
+        { id: "intro", type: "intro", position: { x: 0, y: 0 }, data: { headline: "Hi" } },
+        {
+          id: "q1",
+          type: "question",
+          position: { x: 100, y: 0 },
+          data: {
+            text: "?",
+            question_type: "single_select",
+            answers: [
+              { id: "a1", text: "A", tags: [], edge_handle_id: "h1", points: { x: 1, y: 5 } },
+              { id: "a2", text: "B", tags: [], edge_handle_id: "h2", points: { x: 4 } },
+            ],
+          },
+        },
+        { id: "end", type: "end", position: { x: 200, y: 0 }, data: { headline: "Bye" } },
+      ],
+      edges: [{ id: "e1", source: "intro", target: "q1" }],
+    });
+  }
+
+  it("returns the highest-tally category across picked answers", () => {
+    // a1: x+1, y+5; a2: x+4 → x total 5, y total 5; tie broken by first-seen (x).
+    expect(pickPointsWinner(pointsQuiz(), ["a1", "a2"])).toBe("x");
+  });
+
+  it("returns null when no picked answer carries points", () => {
+    expect(pickPointsWinner(pointsQuiz(), [])).toBeNull();
   });
 });
 

@@ -1,3 +1,4 @@
+import { ResultData } from "./quizSchema";
 import type { Quiz } from "./quizSchema";
 import type { z } from "zod";
 
@@ -77,13 +78,15 @@ export function addResultNode(
     id,
     type: "result",
     position: nextPosition(doc, anchorId),
-    data: {
+    // Parse through ResultData so all the v3 defaults (match_ladder,
+    // ranking, min/max, oos_behavior, stages, …) are filled in.
+    data: ResultData.parse({
       headline: "Your match",
       subtext: "",
       slot_count: 3,
       cta_label: "Shop now",
       fallback_collection_id: fallbackCollectionId,
-    },
+    }),
   };
   const edges = anchorId
     ? [
@@ -410,9 +413,6 @@ export function deleteNode(doc: QuizDoc, nodeId: string): QuizDoc {
     nodes: doc.nodes.filter((n) => n.id !== nodeId),
     edges: doc.edges.filter((e) => e.source !== nodeId && e.target !== nodeId),
     results_pages: doc.results_pages.filter((r) => r.id !== nodeId),
-    recommendation_logic: doc.recommendation_logic.filter(
-      (r) => r.question_id !== nodeId,
-    ),
     breakpoint_overrides: remainingBp,
   };
 }
@@ -495,9 +495,6 @@ export function removeAnswer(
     edges: handleId
       ? doc.edges.filter((e) => e.source_handle !== handleId)
       : doc.edges,
-    recommendation_logic: doc.recommendation_logic.filter(
-      (r) => !(r.question_id === questionNodeId && r.answer_id === answerId),
-    ),
   };
 }
 

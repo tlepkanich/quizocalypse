@@ -22,6 +22,12 @@ export const QuizGenSettings = z.object({
   tone: z
     .enum(["friendly", "editorial", "playful", "professional"])
     .default("friendly"),
+  // v3 page-model posture. "shared" = all result nodes inherit one design
+  // template; "custom" = each result node is independently editable (the
+  // pre-v3 behavior). applyPostGeneration stamps this onto the generated
+  // doc's top-level result_layout_mode. Default "custom" so existing flows
+  // are unchanged.
+  result_layout_mode: z.enum(["shared", "custom"]).default("custom"),
   flow: z
     .object({
       welcome_message: z.boolean().default(false),
@@ -35,6 +41,11 @@ export const QuizGenSettings = z.object({
       // as context; applyPostGeneration matches each result page's name
       // back to a category id and flips match_strategy to "archetype".
       use_archetype_results: z.boolean().default(false),
+      // v3 points scoring. When on, each result node's match_ladder is set
+      // to ["points"] and every answer gets seeded with point weights
+      // toward the discovered categories (computed deterministically from
+      // tag overlap in applyPostGeneration). Requires categories to exist.
+      use_points_results: z.boolean().default(false),
     })
     .default({
       welcome_message: false,
@@ -44,6 +55,7 @@ export const QuizGenSettings = z.object({
       end_screen: false,
       mixed_input_types: false,
       use_archetype_results: false,
+      use_points_results: false,
     }),
   launcher: z
     .object({
@@ -122,6 +134,11 @@ export function buildPromptAdditions(s: QuizGenSettings): string {
       "Result pages must align with the merchant's discovered categories provided in the user message. Each result_page.headline should EXACTLY match one of the listed category names. Set each result page's match_strategy to 'archetype'. The runtime will inline the category's product list at publish time.",
     );
   }
+  if (s.flow.use_points_results) {
+    flowAdds.push(
+      "Use points-based scoring: each answer should carry point weights toward the merchant's discovered categories (provided in the user message), and result pages should resolve via points-based matching rather than per-product tag overlap. The deterministic point weights are seeded after generation from answer/category tag overlap — focus on writing answers whose tags align with the category tags.",
+    );
+  }
   if (flowAdds.length > 0) {
     lines.push("");
     lines.push("Flow extensions (the merchant ticked these — honor them):");
@@ -145,8 +162,9 @@ export interface PostGenerationContext {
   // Discovered categories available for binding. When present + the
   // archetype flag is on, applyPostGeneration matches each result page's
   // headline (case-insensitive) against a category name and flips
-  // match_strategy + category_id.
-  categories?: Array<{ id: string; name: string }>;
+  // match_strategy + category_id. When the points flag is on, the
+  // optional `tags` are used to seed Answer.points by tag overlap.
+  categories?: Array<{ id: string; name: string; tags?: string[] }>;
 }
 
 export function applyPostGeneration(
@@ -155,6 +173,10 @@ export function applyPostGeneration(
   ctx: PostGenerationContext = {},
 ): QuizDoc {
   let next = doc;
+
+  // Stamp the page-model posture onto the doc. Independent of any flow flag
+  // — the picker always reflects the merchant's choice (default "custom").
+  next = { ...next, result_layout_mode: s.result_layout_mode };
 
   if (s.theme_preset_id) {
     const preset = getPreset(s.theme_preset_id);
@@ -213,6 +235,55 @@ export function applyPostGeneration(
           ...rp,
           match_strategy: "archetype" as const,
           category_id: match.id,
+        };
+      }),
+    };
+  }
+
+  // Points seeding: deterministically wire points-based scoring. For every
+  // result node, set match_ladder=["points"]; for every question answer,
+  // compute tag overlap against each category's tags and store the overlap
+  // count as that category's point weight. Only categories with ≥1 overlap
+  // are recorded, and only answers that have tags + at least one overlap
+  // get a points map. Mirrors the archetype binding's category-driven shape.
+  if (
+    s.flow.use_points_results &&
+    ctx.categories &&
+    ctx.categories.length > 0
+  ) {
+    const categoryTagSets = ctx.categories.map((c) => ({
+      id: c.id,
+      tags: new Set((c.tags ?? []).map((t) => t.toLowerCase())),
+    }));
+    next = {
+      ...next,
+      nodes: next.nodes.map((n) => {
+        if (n.type === "result") {
+          return {
+            ...n,
+            data: { ...n.data, match_ladder: ["points" as const] },
+          };
+        }
+        if (n.type !== "question") return n;
+        return {
+          ...n,
+          data: {
+            ...n.data,
+            answers: n.data.answers.map((answer) => {
+              const answerTags = answer.tags.map((t) => t.toLowerCase());
+              if (answerTags.length === 0) return answer;
+              const points: Record<string, number> = {};
+              for (const cat of categoryTagSets) {
+                let overlap = 0;
+                for (const tag of answerTags) {
+                  if (cat.tags.has(tag)) overlap += 1;
+                }
+                if (overlap >= 1) points[cat.id] = overlap;
+              }
+              if (Object.keys(points).length === 0) return answer;
+              return { ...answer, points };
+            }),
+          },
         };
       }),
     };

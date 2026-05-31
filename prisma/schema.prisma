@@ -107,8 +107,19 @@ model Category {
   // categoryAssign to score every product's overlap and bucket it.
   tags           String[]
   // Shopify product IDs (gids) bucketed into this category by the
-  // deterministic tag-overlap pass. Refreshed every discovery run.
+  // deterministic tag-overlap pass OR a non-AI grouping source. Refreshed
+  // every grouping/discovery run.
   productIds     String[]
+  // v3 grouping on-ramp: how this group was created.
+  // "ai" | "manual" | "collection" | "smart_collection" | "tag" |
+  // "product_type" | "metafield". Defaults "ai" for existing rows.
+  source         String   @default("ai")
+  // The dimension value this group came from (collection id / tag /
+  // product type / metafield value). Null for manual + ai.
+  sourceRef      String?
+  // Explicitly pinned product ids in manual mode (productIds is the
+  // resolved set; this is the merchant's hand-picked subset).
+  manualProductIds String[]
   // One-sentence rationale Claude wrote — surfaced in the admin tooltip.
   rationale      String?
   // Groups every Category created in a single discovery invocation so

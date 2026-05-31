@@ -94,20 +94,22 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   // generator's system prompt so generated copy stays on-brand.
   const brandGuidelines = parseBrandGuidelinesSafe(shop.brandGuidelines);
 
-  // When the wizard's archetype flag is on, surface the discovered
-  // categories so the AI names result pages to match them and the post-
-  // process step can bind category_id onto each result page.
+  // When the wizard's archetype OR points flag is on, surface the
+  // discovered categories so the AI names result pages to match them (and
+  // can weight answers); the post-process step then binds category_id onto
+  // each result page (archetype) and/or seeds answer point weights from
+  // category tag overlap (points).
   const wantsArchetype =
     input.settings?.flow.use_archetype_results === true;
-  const categoryList = wantsArchetype
-    ? (
-        await prisma.category.findMany({
+  const wantsPoints = input.settings?.flow.use_points_results === true;
+  const categoryList =
+    wantsArchetype || wantsPoints
+      ? await prisma.category.findMany({
           where: { shopId: shop.id },
           select: { id: true, name: true, description: true, tags: true },
           orderBy: { createdAt: "asc" },
         })
-      )
-    : [];
+      : [];
 
   try {
     const aiDraft = await generateQuiz({
@@ -127,7 +129,11 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     // are absent so the legacy flow keeps producing identical output.
     const draftJson = input.settings
       ? applyPostGeneration(aiDraft, input.settings, {
-          categories: categoryList.map((c) => ({ id: c.id, name: c.name })),
+          categories: categoryList.map((c) => ({
+            id: c.id,
+            name: c.name,
+            tags: c.tags,
+          })),
         })
       : aiDraft;
 

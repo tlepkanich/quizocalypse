@@ -42,8 +42,31 @@ export const NodeType = z.enum([
 ]);
 export type NodeType = z.infer<typeof NodeType>;
 
-export const MatchStrategy = z.enum(["top_n", "archetype"]);
+// Legacy single-strategy field on ResultPage. Kept for back-compat: the
+// engine maps it onto a one-element match_ladder. "points" added in v3.
+export const MatchStrategy = z.enum(["top_n", "archetype", "points"]);
 export type MatchStrategy = z.infer<typeof MatchStrategy>;
+
+// v3 recommendation source-priority ladder. A result page resolves products
+// by walking these strategies top-to-bottom until one yields ≥ min_products,
+// then falling back to fallback_collection_id. This is the doc's explicit
+// revenue mechanism ("conditional OR collection OR tags OR metafield, in
+// order of importance").
+//  - conditional: explicit "if these answers → these products" rules
+//  - points:      winning category by per-answer point tally
+//  - category:    a bound archetype category's products (existing behavior)
+//  - collection:  products in a chosen Shopify (smart) collection
+//  - tag:         tag-overlap scoring (the existing top_n behavior)
+//  - metafield:   products whose metafield matches a value
+export const MatchLadderStrategy = z.enum([
+  "conditional",
+  "points",
+  "category",
+  "collection",
+  "tag",
+  "metafield",
+]);
+export type MatchLadderStrategy = z.infer<typeof MatchLadderStrategy>;
 
 export const QuizStatus = z.enum(["draft", "published"]);
 export type QuizStatus = z.infer<typeof QuizStatus>;
@@ -55,6 +78,10 @@ export const Answer = z.object({
   tags: z.array(z.string()).default([]),
   collection_filter: z.string().optional(),
   edge_handle_id: z.string().min(1),
+  // v3 points scoring: weights this answer contributes toward category ids
+  // when a result page uses the "points" ladder strategy. categoryId →
+  // weight. Optional — only present on quizzes that use points logic.
+  points: z.record(z.string(), z.number()).optional(),
 });
 export type Answer = z.infer<typeof Answer>;
 
@@ -126,12 +153,90 @@ export const EmailGateData = z.object({
   skip_allowed: z.boolean().default(false),
 });
 
+// One conditional product rule: "if the shopper picked all of these answers
+// (and optionally any of these), show these product ids." Evaluated against
+// the visited path's selected answer ids at runtime.
+export const ConditionalRule = z.object({
+  all_of: z.array(z.string()).default([]),
+  any_of: z.array(z.string()).default([]),
+  product_ids: z.array(z.string()).default([]),
+});
+export type ConditionalRule = z.infer<typeof ConditionalRule>;
+
+// Product ranking within a resolved pool. relevance = current tag-overlap
+// score; newest = Product.updatedAt desc; best_seller / highest_rated read
+// a merchant-mapped metafield, falling back to relevance when unmapped.
+export const ResultRanking = z.enum([
+  "relevance",
+  "newest",
+  "best_seller",
+  "highest_rated",
+]);
+export type ResultRanking = z.infer<typeof ResultRanking>;
+
+// Out-of-stock handling for the resolved products.
+export const OosBehavior = z.enum(["hide", "show_with_badge", "fallback"]);
+export type OosBehavior = z.infer<typeof OosBehavior>;
+
+// One stage of a multi-stage (Advanced) result page. Each stage is a
+// section with its own headline + ladder, rendered sequentially. Simple
+// result pages have no stages and use the top-level ResultData config.
+export const ResultStage = z.object({
+  id: z.string().min(1),
+  headline: z.string().default(""),
+  subtext: z.string().default(""),
+  match_ladder: z.array(MatchLadderStrategy).default(["tag"]),
+  conditional_rules: z.array(ConditionalRule).default([]),
+  category_id: z.string().optional(),
+  collection_id: z.string().optional(),
+  metafield_key: z.string().optional(),
+  metafield_value: z.string().optional(),
+  ranking: ResultRanking.default("relevance"),
+  min_products: z.number().int().min(1).max(12).default(3),
+  max_products: z.number().int().min(1).max(12).default(3),
+});
+export type ResultStage = z.infer<typeof ResultStage>;
+
 export const ResultData = z.object({
   headline: z.string().min(1),
   subtext: z.string().default(""),
   slot_count: z.number().int().min(1).max(6).default(3),
   cta_label: z.string().default("Shop now"),
   fallback_collection_id: z.string().min(1),
+
+  // ---- v3 recommendation logic ----
+  // Source-priority ladder. Default ["tag"] reproduces the legacy top_n
+  // behavior exactly, so existing quizzes are byte-identical.
+  match_ladder: z.array(MatchLadderStrategy).default(["tag"]),
+  // Explicit conditional product rules (used when the ladder includes
+  // "conditional"). First matching rule wins.
+  conditional_rules: z.array(ConditionalRule).default([]),
+  // Bound archetype category (used by the "category" strategy). Mirrors the
+  // existing ResultPage.category_id but lives on the node data too.
+  category_id: z.string().optional(),
+  // Collection / metafield targets for those strategies.
+  collection_id: z.string().optional(),
+  metafield_key: z.string().optional(),
+  metafield_value: z.string().optional(),
+
+  // ---- v3 result-page settings depth ----
+  ranking: ResultRanking.default("relevance"),
+  // Ladder threshold: a strategy must yield ≥ this many products to win,
+  // else the ladder falls through. Default 1 = "first non-empty wins".
+  min_products: z.number().int().min(1).max(12).default(1),
+  // Display cap. Optional — when unset the engine uses slot_count, so
+  // existing quizzes that set slot_count keep their cap exactly.
+  max_products: z.number().int().min(1).max(12).optional(),
+  // Default keeps out-of-stock products in the list (ranked last) — the
+  // pre-v3 behavior. Merchants opt into "hide" / "fallback" explicitly.
+  oos_behavior: OosBehavior.default("show_with_badge"),
+  oos_fallback_collection_id: z.string().optional(),
+  include_discount: z.boolean().default(false),
+  subscription_eligible: z.boolean().default(false),
+
+  // ---- v3 multi-stage (Advanced) ----
+  // Empty = Simple (one page). Non-empty = Advanced ordered sections.
+  stages: z.array(ResultStage).default([]),
 });
 
 // Chat-style copy block. Supports lightweight merge tags resolved at render
@@ -350,13 +455,6 @@ export const QuizEdge = z.object({
   condition: EdgeCondition.optional(),
 });
 
-export const RecommendationRule = z.object({
-  question_id: z.string().min(1),
-  answer_id: z.string().min(1),
-  tags: z.array(z.string()).default([]),
-  collection_filter: z.string().optional(),
-});
-
 export const ResultPage = z.object({
   id: z.string().min(1),
   headline: z.string().min(1),
@@ -371,6 +469,10 @@ export const ResultPage = z.object({
   // Baked at publish time from prisma.category.findUnique(category_id).
   // Storefront-facing — not authored by the merchant.
   category_product_ids: z.array(z.string()).optional(),
+  // v3: baked category → productIds map for every category referenced by
+  // the result node's ladder (category + points strategies). Lets the
+  // points winner be resolved at runtime with no DB lookup.
+  category_product_ids_map: z.record(z.string(), z.array(z.string())).optional(),
 });
 
 // Design tokens — see Spec §3.5.
@@ -447,8 +549,12 @@ export const Quiz = z.object({
   featured_collection_id: z.string().optional(),
   nodes: z.array(QuizNode).min(2),
   edges: z.array(QuizEdge).default([]),
-  recommendation_logic: z.array(RecommendationRule).default([]),
   results_pages: z.array(ResultPage).default([]),
+  // v3 page-model posture. "shared" = all result nodes inherit one design
+  // template (design_overrides["__shared_result__"]); "custom" = each
+  // result node is independently editable (the pre-v3 behavior). Default
+  // "custom" so existing quizzes are unchanged.
+  result_layout_mode: z.enum(["shared", "custom"]).default("custom"),
   design_tokens: DesignTokens.default({}),
   design_overrides: z.record(z.string(), DesignTokens).default({}),
   // Per-breakpoint overrides on top of design_overrides. Synced edits write
@@ -479,14 +585,7 @@ export type Quiz = z.infer<typeof Quiz>;
 // zod-to-json-schema for one tool definition). Keep in sync with the Zod above.
 export const quizToolJsonSchema = {
   type: "object",
-  required: [
-    "quiz_id",
-    "scope",
-    "nodes",
-    "edges",
-    "recommendation_logic",
-    "results_pages",
-  ],
+  required: ["quiz_id", "scope", "nodes", "edges", "results_pages"],
   properties: {
     quiz_id: { type: "string" },
     status: { type: "string", enum: ["draft", "published"] },
@@ -567,19 +666,6 @@ export const quizToolJsonSchema = {
         },
       },
     },
-    recommendation_logic: {
-      type: "array",
-      items: {
-        type: "object",
-        required: ["question_id", "answer_id", "tags"],
-        properties: {
-          question_id: { type: "string" },
-          answer_id: { type: "string" },
-          tags: { type: "array", items: { type: "string" } },
-          collection_filter: { type: "string" },
-        },
-      },
-    },
     results_pages: {
       type: "array",
       items: {
@@ -590,7 +676,10 @@ export const quizToolJsonSchema = {
           headline: { type: "string" },
           subtext: { type: "string" },
           product_ids: { type: "array", items: { type: "string" } },
-          match_strategy: { type: "string", enum: ["top_n", "archetype"] },
+          match_strategy: {
+            type: "string",
+            enum: ["top_n", "archetype", "points"],
+          },
         },
       },
     },

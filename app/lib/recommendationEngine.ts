@@ -1,7 +1,9 @@
-import type { Quiz } from "./quizSchema";
+import type { Quiz, ResultData, MatchLadderStrategy } from "./quizSchema";
 import type { z } from "zod";
 
 type QuizDoc = z.infer<typeof Quiz>;
+type ResultDataT = z.infer<typeof ResultData>;
+type LadderStrategy = z.infer<typeof MatchLadderStrategy>;
 
 // Slim product representation baked into the published quiz JSON.
 // See Tech Spec §4.2.
@@ -14,6 +16,9 @@ export interface IndexedProduct {
   tags: string[];
   collection_ids: string[];
   inventory_in_stock: boolean;
+  // v3 ranking inputs (optional — baked when available).
+  updated_at?: string; // ISO; used by ranking="newest"
+  metafields?: Record<string, string>; // used by ranking + metafield strategy
 }
 
 export interface RecommendedProduct extends IndexedProduct {
@@ -33,6 +38,11 @@ export interface RecommendationInput {
 // Layer 2: collection filter. Per-answer filters narrow the candidate pool.
 // Tie-break: in-stock first, then price ascending.
 // Fallback: if all candidates score 0, return result's fallback_collection_id pool.
+// v3: walk the result page's match_ladder top-to-bottom. The first strategy
+// whose resolved+ranked pool has ≥ min_products wins; otherwise fall through.
+// Final fallback is the result's fallback_collection_id. The legacy
+// match_strategy field is mapped onto a one-element ladder so pre-v3 quizzes
+// behave identically.
 export function recommendForResult(input: RecommendationInput): RecommendedProduct[] {
   const { quiz, productIndex, selectedAnswerIds, resultNodeId } = input;
 
@@ -41,40 +51,180 @@ export function recommendForResult(input: RecommendationInput): RecommendedProdu
   );
   if (!resultNode || resultNode.type !== "result") return [];
 
-  const slotCount = resultNode.data.slot_count;
-  const fallbackCollectionId = resultNode.data.fallback_collection_id;
-
-  // Archetype mode: the result page is bound to a discovered category at
-  // publish time, and the category's product list was inlined onto the
-  // result page as category_product_ids. We return that bucket directly,
-  // skipping per-answer tag scoring. Tie-break (in-stock + price asc)
-  // still applies for ranking. Falls back to top_n if the bucket is
-  // empty or somehow missing.
+  const data = resultNode.data;
   const resultPage = quiz.results_pages.find((r) => r.id === resultNodeId);
-  if (
-    resultPage?.match_strategy === "archetype" &&
-    resultPage.category_product_ids &&
-    resultPage.category_product_ids.length > 0
-  ) {
-    const bucketIds = new Set(resultPage.category_product_ids);
-    const bucket = productIndex
-      .filter((p) => bucketIds.has(p.product_id))
-      .map((p) => ({ ...p, score: 1 }));
-    if (bucket.length > 0) {
-      return rank(bucket).slice(0, slotCount);
-    }
-    // Bucket exists but no products from it survived productIndex
-    // filtering (e.g. all out of scope). Fall through to top_n / fallback.
+  const cap = data.max_products ?? data.slot_count;
+  const minProducts = data.min_products;
+  const selectedSet = new Set(selectedAnswerIds);
+
+  // Effective ladder. If the editor left the default ["tag"] but the legacy
+  // match_strategy says archetype/points, honor the legacy intent.
+  let ladder: LadderStrategy[] = data.match_ladder as LadderStrategy[];
+  const isDefaultLadder =
+    ladder.length === 1 && ladder[0] === "tag";
+  if (isDefaultLadder && resultPage?.match_strategy === "archetype") {
+    ladder = ["category"];
+  } else if (isDefaultLadder && resultPage?.match_strategy === "points") {
+    ladder = ["points"];
   }
 
-  const matches = scoreAndRank(quiz, productIndex, selectedAnswerIds);
-  if (matches.length > 0) return matches.slice(0, slotCount);
+  const categoryMap =
+    resultPage?.category_product_ids_map ??
+    (resultPage?.category_id && resultPage.category_product_ids
+      ? { [resultPage.category_id]: resultPage.category_product_ids }
+      : {});
 
-  // Fallback: nothing scored. Serve fallback collection products.
-  const pool = productIndex.filter((p) =>
-    p.collection_ids.includes(fallbackCollectionId),
-  );
-  return rank(pool.map((p) => ({ ...p, score: 0 }))).slice(0, slotCount);
+  const byId = (ids: string[]): RecommendedProduct[] => {
+    const want = new Set(ids);
+    return productIndex
+      .filter((p) => want.has(p.product_id))
+      .map((p) => ({ ...p, score: 1 }));
+  };
+
+  const resolve = (strategy: LadderStrategy): RecommendedProduct[] => {
+    switch (strategy) {
+      case "conditional": {
+        for (const rule of data.conditional_rules) {
+          const allOk = rule.all_of.every((a) => selectedSet.has(a));
+          const anyOk =
+            rule.any_of.length === 0 ||
+            rule.any_of.some((a) => selectedSet.has(a));
+          if (allOk && anyOk) return byId(rule.product_ids);
+        }
+        return [];
+      }
+      case "points": {
+        const winner = pickPointsWinner(quiz, selectedAnswerIds);
+        return winner ? byId(categoryMap[winner] ?? []) : [];
+      }
+      case "category": {
+        const cid = data.category_id ?? resultPage?.category_id;
+        return cid ? byId(categoryMap[cid] ?? []) : [];
+      }
+      case "collection": {
+        const col = data.collection_id;
+        return col
+          ? productIndex
+              .filter((p) => p.collection_ids.includes(col))
+              .map((p) => ({ ...p, score: 1 }))
+          : [];
+      }
+      case "metafield": {
+        const k = data.metafield_key;
+        const v = data.metafield_value;
+        return k && v
+          ? productIndex
+              .filter((p) => p.metafields?.[k] === v)
+              .map((p) => ({ ...p, score: 1 }))
+          : [];
+      }
+      case "tag":
+      default:
+        return scoreAndRank(quiz, productIndex, selectedAnswerIds);
+    }
+  };
+
+  for (const strategy of ladder) {
+    const pool = applyOos(
+      applyRanking(resolve(strategy), data.ranking),
+      data,
+      productIndex,
+    );
+    if (pool.length >= minProducts) return pool.slice(0, cap);
+  }
+
+  // Final fallback: the result's fallback collection.
+  const fallbackPool = productIndex
+    .filter((p) => p.collection_ids.includes(data.fallback_collection_id))
+    .map((p) => ({ ...p, score: 0 }));
+  return applyRanking(rank(fallbackPool), data.ranking).slice(0, cap);
+}
+
+// Tally each answer's point weights toward category ids across the visited
+// path, return the top category id (or null when nothing scored). Ties
+// broken by first-declared category order in the answers.
+export function pickPointsWinner(
+  quiz: QuizDoc,
+  selectedAnswerIds: string[],
+): string | null {
+  const selected = new Set(selectedAnswerIds);
+  const totals = new Map<string, number>();
+  const order: string[] = [];
+  for (const node of quiz.nodes) {
+    if (node.type !== "question") continue;
+    for (const answer of node.data.answers) {
+      if (!selected.has(answer.id) || !answer.points) continue;
+      for (const [cid, weight] of Object.entries(answer.points)) {
+        if (!totals.has(cid)) order.push(cid);
+        totals.set(cid, (totals.get(cid) ?? 0) + weight);
+      }
+    }
+  }
+  let best: string | null = null;
+  let bestScore = -Infinity;
+  for (const cid of order) {
+    const s = totals.get(cid)!;
+    if (s > bestScore) {
+      bestScore = s;
+      best = cid;
+    }
+  }
+  return best;
+}
+
+// Apply the result page's ranking preference on top of the base rank()
+// (which already does score → in-stock → price). For non-relevance modes
+// we re-sort by the requested key, keeping rank() as the stable tie-break.
+function applyRanking(
+  products: RecommendedProduct[],
+  ranking: ResultDataT["ranking"],
+): RecommendedProduct[] {
+  const base = rank(products);
+  if (ranking === "relevance") return base;
+  if (ranking === "newest") {
+    return [...base].sort((a, b) => {
+      const ta = a.updated_at ? Date.parse(a.updated_at) : 0;
+      const tb = b.updated_at ? Date.parse(b.updated_at) : 0;
+      return tb - ta;
+    });
+  }
+  // best_seller / highest_rated read a merchant-mapped metafield numeric.
+  // The mapping key convention: metafields["__rank_bestseller"] /
+  // ["__rank_rating"]. Unmapped → fall back to base relevance ordering.
+  const key =
+    ranking === "best_seller" ? "__rank_bestseller" : "__rank_rating";
+  const hasData = products.some((p) => p.metafields?.[key] !== undefined);
+  if (!hasData) return base;
+  return [...base].sort((a, b) => {
+    const va = Number(a.metafields?.[key] ?? 0);
+    const vb = Number(b.metafields?.[key] ?? 0);
+    return vb - va;
+  });
+}
+
+// Apply out-of-stock behavior. hide = drop OOS; show_with_badge = keep
+// (the storefront renders the badge); fallback = if everything's OOS, swap
+// in the OOS fallback collection.
+function applyOos(
+  products: RecommendedProduct[],
+  data: ResultDataT,
+  productIndex: IndexedProduct[],
+): RecommendedProduct[] {
+  if (data.oos_behavior === "show_with_badge") return products;
+  const inStock = products.filter((p) => p.inventory_in_stock);
+  if (data.oos_behavior === "hide") return inStock;
+  // fallback
+  if (inStock.length > 0) return inStock;
+  if (data.oos_fallback_collection_id) {
+    return rank(
+      productIndex
+        .filter((p) =>
+          p.collection_ids.includes(data.oos_fallback_collection_id!),
+        )
+        .map((p) => ({ ...p, score: 0 })),
+    );
+  }
+  return inStock;
 }
 
 export interface PreviewRecommendationInput {

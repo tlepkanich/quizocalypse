@@ -440,6 +440,38 @@ function CustomizePanel({
               </optgroup>
             </QzSelect>
           </QzField>
+          <QzField
+            label="Result layout"
+            hint="Shared = all result pages share one design template. Custom = edit each result page independently."
+          >
+            <div className="qz-row" style={{ gap: 8 }}>
+              {(
+                [
+                  ["shared", "Shared template"],
+                  ["custom", "Custom per page"],
+                ] as const
+              ).map(([value, label]) => {
+                const on = settings.result_layout_mode === value;
+                return (
+                  <button
+                    key={value}
+                    type="button"
+                    onClick={() =>
+                      onChange({ ...settings, result_layout_mode: value })
+                    }
+                    className="qz-btn qz-btn-sm"
+                    style={{
+                      background: on ? "var(--qz-ink)" : "var(--qz-paper)",
+                      color: on ? "var(--qz-paper)" : "var(--qz-ink-2)",
+                      borderColor: on ? "var(--qz-ink)" : "var(--qz-rule)",
+                    }}
+                  >
+                    {label}
+                  </button>
+                );
+              })}
+            </div>
+          </QzField>
         </div>
       </QzCard>
 
@@ -494,6 +526,17 @@ function CustomizePanel({
             hint={
               categoryCount > 0
                 ? `Each result page returns the products bucketed into a matching category instead of running per-product tag scoring. ${categoryCount} categories available.`
+                : "Discover categories first to enable this option."
+            }
+            disabled={categoryCount === 0}
+          />
+          <SettingCheckbox
+            checked={settings.flow.use_points_results}
+            onChange={(v) => setFlow("use_points_results", v)}
+            title="Use points-based scoring"
+            hint={
+              categoryCount > 0
+                ? `Each answer scores points toward your discovered categories (seeded from tag overlap), and result pages pick the winning category. ${categoryCount} categories available.`
                 : "Discover categories first to enable this option."
             }
             disabled={categoryCount === 0}

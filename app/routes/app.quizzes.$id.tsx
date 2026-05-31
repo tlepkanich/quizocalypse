@@ -1320,6 +1320,9 @@ function FlowBuilder({
           <QzButton size="sm" onClick={() => setAllPathsOpen(true)}>
             View all paths
           </QzButton>
+          <Link to="pages" prefetch="intent" style={{ textDecoration: "none" }}>
+            <QzButton size="sm">Result pages</QzButton>
+          </Link>
           <QzButton size="sm" onClick={() => setSettingsOpen(true)}>
             Settings
           </QzButton>
@@ -3229,6 +3232,324 @@ function ContentTab({
           }
         />
       </QzField>
+
+      <ResultLogicEditor node={node} onChange={onChange} />
+    </div>
+  );
+}
+
+// v3 recommendation-logic editor for result nodes. Surfaces the match
+// ladder (reorderable strategy list), the conditional-rule builder, the
+// ranking + OOS settings, and the bound targets (category/collection/
+// metafield) the ladder strategies need. Writes straight to ResultData.
+const ALL_STRATEGIES = [
+  "conditional",
+  "points",
+  "category",
+  "collection",
+  "tag",
+  "metafield",
+] as const;
+
+const STRATEGY_LABEL: Record<string, string> = {
+  conditional: "Conditional rules",
+  points: "Points winner",
+  category: "Bound category",
+  collection: "Collection",
+  tag: "Tag overlap",
+  metafield: "Metafield match",
+};
+
+function ResultLogicEditor({
+  node,
+  onChange,
+}: {
+  node: Extract<QuizNodeDoc, { type: "result" }>;
+  onChange: (next: QuizNodeDoc) => void;
+}) {
+  const data = node.data;
+  const set = (patch: Record<string, unknown>) =>
+    onChange({ ...node, data: { ...data, ...patch } as never });
+
+  const ladder = data.match_ladder;
+  const moveStrategy = (idx: number, dir: -1 | 1) => {
+    const next = [...ladder];
+    const j = idx + dir;
+    if (j < 0 || j >= next.length) return;
+    [next[idx], next[j]] = [next[j]!, next[idx]!];
+    set({ match_ladder: next });
+  };
+  const toggleStrategy = (s: (typeof ALL_STRATEGIES)[number]) => {
+    set({
+      match_ladder: ladder.includes(s)
+        ? ladder.filter((x) => x !== s)
+        : [...ladder, s],
+    });
+  };
+
+  return (
+    <div
+      style={{ borderTop: "1px solid var(--qz-rule)", paddingTop: 12 }}
+      className="qz-col qz-gap-12"
+    >
+      <div className="qz-label">Recommendation logic</div>
+      <p className="qz-muted" style={{ fontSize: 12, margin: 0 }}>
+        Products are resolved by trying each enabled strategy top-to-bottom
+        until one returns enough products. Reorder to set priority.
+      </p>
+
+      {/* Ladder: enabled strategies in order with up/down + remove */}
+      <div className="qz-col qz-gap-4">
+        {ladder.map((s, i) => (
+          <div
+            key={s}
+            className="qz-row qz-gap-8"
+            style={{
+              alignItems: "center",
+              padding: "6px 8px",
+              border: "1px solid var(--qz-rule)",
+              borderRadius: "var(--qz-radius)",
+              background: "var(--qz-paper)",
+            }}
+          >
+            <span className="qz-mono qz-dim" style={{ fontSize: 11, width: 16 }}>
+              {i + 1}
+            </span>
+            <span style={{ flex: 1, fontSize: 13 }}>
+              {STRATEGY_LABEL[s] ?? s}
+            </span>
+            <button type="button" onClick={() => moveStrategy(i, -1)} style={ladderBtn} title="Up">
+              ↑
+            </button>
+            <button type="button" onClick={() => moveStrategy(i, 1)} style={ladderBtn} title="Down">
+              ↓
+            </button>
+            <button
+              type="button"
+              onClick={() => toggleStrategy(s)}
+              style={{ ...ladderBtn, color: "var(--qz-crit)" }}
+              title="Remove"
+            >
+              ×
+            </button>
+          </div>
+        ))}
+      </div>
+      <div className="qz-row qz-gap-4" style={{ flexWrap: "wrap" }}>
+        {ALL_STRATEGIES.filter((s) => !ladder.includes(s)).map((s) => (
+          <button
+            key={s}
+            type="button"
+            onClick={() => toggleStrategy(s)}
+            style={{
+              background: "var(--qz-cream-2)",
+              border: "1px solid var(--qz-rule)",
+              borderRadius: 999,
+              padding: "3px 10px",
+              fontSize: 11,
+              cursor: "pointer",
+              color: "var(--qz-ink-2)",
+            }}
+          >
+            + {STRATEGY_LABEL[s] ?? s}
+          </button>
+        ))}
+      </div>
+
+      {/* Per-strategy config that's needed by the enabled strategies */}
+      {ladder.includes("collection") && (
+        <QzField label="Collection ID" hint="For the Collection strategy.">
+          <QzInput
+            value={data.collection_id ?? ""}
+            placeholder="gid://shopify/Collection/…"
+            onChange={(e) =>
+              set({ collection_id: e.target.value || undefined })
+            }
+          />
+        </QzField>
+      )}
+      {ladder.includes("metafield") && (
+        <div className="qz-row qz-gap-8">
+          <QzField label="Metafield key">
+            <QzInput
+              value={data.metafield_key ?? ""}
+              placeholder="custom.skin_type"
+              onChange={(e) =>
+                set({ metafield_key: e.target.value || undefined })
+              }
+            />
+          </QzField>
+          <QzField label="Value">
+            <QzInput
+              value={data.metafield_value ?? ""}
+              placeholder="oily"
+              onChange={(e) =>
+                set({ metafield_value: e.target.value || undefined })
+              }
+            />
+          </QzField>
+        </div>
+      )}
+      {ladder.includes("conditional") && (
+        <ConditionalRulesEditor data={data} onSet={set} />
+      )}
+
+      {/* Ranking + OOS */}
+      <div className="qz-row qz-gap-8">
+        <QzField label="Ranking">
+          <QzSelect
+            value={data.ranking}
+            onChange={(e) => set({ ranking: e.target.value })}
+          >
+            <option value="relevance">Relevance</option>
+            <option value="newest">Newest</option>
+            <option value="best_seller">Best seller</option>
+            <option value="highest_rated">Highest rated</option>
+          </QzSelect>
+        </QzField>
+        <QzField label="Out of stock">
+          <QzSelect
+            value={data.oos_behavior}
+            onChange={(e) => set({ oos_behavior: e.target.value })}
+          >
+            <option value="show_with_badge">Show with badge</option>
+            <option value="hide">Hide</option>
+            <option value="fallback">Fallback collection</option>
+          </QzSelect>
+        </QzField>
+      </div>
+      {data.oos_behavior === "fallback" && (
+        <QzField label="OOS fallback collection ID">
+          <QzInput
+            value={data.oos_fallback_collection_id ?? ""}
+            placeholder="gid://shopify/Collection/…"
+            onChange={(e) =>
+              set({ oos_fallback_collection_id: e.target.value || undefined })
+            }
+          />
+        </QzField>
+      )}
+      <div className="qz-row qz-gap-8">
+        <label
+          className="qz-row qz-gap-8"
+          style={{ alignItems: "center", fontSize: 12, cursor: "pointer" }}
+        >
+          <input
+            type="checkbox"
+            checked={data.include_discount}
+            onChange={(e) => set({ include_discount: e.target.checked })}
+          />
+          Include discount
+        </label>
+        <label
+          className="qz-row qz-gap-8"
+          style={{ alignItems: "center", fontSize: 12, cursor: "pointer" }}
+        >
+          <input
+            type="checkbox"
+            checked={data.subscription_eligible}
+            onChange={(e) => set({ subscription_eligible: e.target.checked })}
+          />
+          Subscription
+        </label>
+      </div>
+    </div>
+  );
+}
+
+const ladderBtn: React.CSSProperties = {
+  background: "transparent",
+  border: "1px solid var(--qz-rule)",
+  borderRadius: 4,
+  width: 22,
+  height: 22,
+  cursor: "pointer",
+  fontSize: 12,
+  lineHeight: 1,
+  color: "var(--qz-ink-2)",
+};
+
+function ConditionalRulesEditor({
+  data,
+  onSet,
+}: {
+  data: Extract<QuizNodeDoc, { type: "result" }>["data"];
+  onSet: (patch: Record<string, unknown>) => void;
+}) {
+  const rules = data.conditional_rules;
+  const update = (i: number, patch: Record<string, unknown>) =>
+    onSet({
+      conditional_rules: rules.map((r, idx) =>
+        idx === i ? { ...r, ...patch } : r,
+      ),
+    });
+  const csv = (s: string) =>
+    s.split(",").map((x) => x.trim()).filter(Boolean);
+  return (
+    <div className="qz-col qz-gap-8">
+      <div className="qz-label" style={{ fontSize: 11 }}>
+        Conditional rules — first match wins
+      </div>
+      {rules.map((r, i) => (
+        <div
+          key={i}
+          style={{
+            padding: 8,
+            border: "1px solid var(--qz-rule)",
+            borderRadius: "var(--qz-radius)",
+          }}
+          className="qz-col qz-gap-4"
+        >
+          <QzField label="If ALL of these answer ids (comma-sep)">
+            <QzInput
+              value={r.all_of.join(", ")}
+              onChange={(e) => update(i, { all_of: csv(e.target.value) })}
+            />
+          </QzField>
+          <QzField label="…and ANY of (optional)">
+            <QzInput
+              value={r.any_of.join(", ")}
+              onChange={(e) => update(i, { any_of: csv(e.target.value) })}
+            />
+          </QzField>
+          <QzField label="→ show product ids (comma-sep)">
+            <QzInput
+              value={r.product_ids.join(", ")}
+              onChange={(e) => update(i, { product_ids: csv(e.target.value) })}
+            />
+          </QzField>
+          <button
+            type="button"
+            onClick={() =>
+              onSet({ conditional_rules: rules.filter((_, idx) => idx !== i) })
+            }
+            style={{
+              alignSelf: "flex-end",
+              background: "transparent",
+              border: "none",
+              color: "var(--qz-crit)",
+              cursor: "pointer",
+              fontSize: 11,
+              fontFamily: "var(--qz-font-mono)",
+            }}
+          >
+            remove rule
+          </button>
+        </div>
+      ))}
+      <QzButton
+        size="sm"
+        onClick={() =>
+          onSet({
+            conditional_rules: [
+              ...rules,
+              { all_of: [], any_of: [], product_ids: [] },
+            ],
+          })
+        }
+      >
+        + Add rule
+      </QzButton>
     </div>
   );
 }

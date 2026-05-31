@@ -113,6 +113,21 @@ export async function publishQuiz(
       const inStock = variants.some(
         (v) => typeof v.inventoryQuantity === "number" && v.inventoryQuantity > 0,
       );
+      // Flatten metafields into a simple key→string map for v3 ranking +
+      // the metafield match strategy. Source shape is { "ns.key": { value,
+      // type } } from catalog sync.
+      const rawMeta = (p.metafields ?? {}) as Record<
+        string,
+        { value?: unknown } | unknown
+      >;
+      const metafields: Record<string, string> = {};
+      for (const [k, v] of Object.entries(rawMeta)) {
+        const val =
+          v && typeof v === "object" && "value" in v
+            ? (v as { value?: unknown }).value
+            : v;
+        if (val != null) metafields[k] = String(val);
+      }
       return {
         product_id: p.productId,
         title: p.title,
@@ -122,6 +137,8 @@ export async function publishQuiz(
         tags: p.tags,
         collection_ids: p.collectionIds,
         inventory_in_stock: inStock,
+        updated_at: p.updatedAt ? p.updatedAt.toISOString() : undefined,
+        ...(Object.keys(metafields).length > 0 ? { metafields } : {}),
       };
     });
 
@@ -138,31 +155,72 @@ export async function publishQuiz(
     : null;
   const resolvedTokens = resolveDesignTokens(shopTokens, doc.design_tokens);
 
-  // For any result page bound to a discovered category (match_strategy
-  // === "archetype" + category_id), inline the category's product list
-  // onto the page so the storefront runtime doesn't need a DB lookup.
-  // Top-N pages (no category_id) are untouched.
-  const archetypeCategoryIds = doc.results_pages
-    .filter((r) => r.match_strategy === "archetype" && r.category_id)
-    .map((r) => r.category_id!);
+  // Inline category → productIds for every category referenced by the
+  // recommendation logic so the storefront runtime needs no DB lookup:
+  //  - legacy archetype: resultPage.category_id
+  //  - v3 "category" strategy: result node data.category_id (+ stages)
+  //  - v3 "points" strategy: every category referenced by any answer.points
+  // We collect a global id set, fetch once, and attach the relevant slice
+  // to each result page.
+  const resultNodeById = new Map(
+    doc.nodes.filter((n) => n.type === "result").map((n) => [n.id, n]),
+  );
+  const pointsCategoryIds = new Set<string>();
+  for (const node of doc.nodes) {
+    if (node.type !== "question") continue;
+    for (const a of node.data.answers) {
+      if (a.points) for (const cid of Object.keys(a.points)) pointsCategoryIds.add(cid);
+    }
+  }
+  const allCategoryIds = new Set<string>();
+  for (const r of doc.results_pages) {
+    if (r.match_strategy === "archetype" && r.category_id) allCategoryIds.add(r.category_id);
+    const node = resultNodeById.get(r.id);
+    if (node && node.type === "result") {
+      if (node.data.category_id) allCategoryIds.add(node.data.category_id);
+      for (const st of node.data.stages) {
+        if (st.category_id) allCategoryIds.add(st.category_id);
+      }
+      const ladder = [
+        ...node.data.match_ladder,
+        ...node.data.stages.flatMap((s) => s.match_ladder),
+      ];
+      if (ladder.includes("points")) {
+        for (const cid of pointsCategoryIds) allCategoryIds.add(cid);
+      }
+    }
+  }
   const categoryRows =
-    archetypeCategoryIds.length > 0
+    allCategoryIds.size > 0
       ? await prisma.category.findMany({
-          where: { id: { in: archetypeCategoryIds } },
+          where: { id: { in: [...allCategoryIds] } },
           select: { id: true, productIds: true },
         })
       : [];
   const categoryProductIdsById = new Map(
     categoryRows.map((c) => [c.id, c.productIds]),
   );
-  const bakedResultsPages = doc.results_pages.map((r) =>
-    r.match_strategy === "archetype" && r.category_id
-      ? {
-          ...r,
-          category_product_ids: categoryProductIdsById.get(r.category_id) ?? [],
-        }
-      : r,
-  );
+  const fullMap: Record<string, string[]> = {};
+  for (const [id, ids] of categoryProductIdsById) fullMap[id] = ids;
+
+  const bakedResultsPages = doc.results_pages.map((r) => {
+    const node = resultNodeById.get(r.id);
+    const ladder =
+      node && node.type === "result"
+        ? [...node.data.match_ladder, ...node.data.stages.flatMap((s) => s.match_ladder)]
+        : [];
+    const needsMap =
+      ladder.includes("category") ||
+      ladder.includes("points") ||
+      r.match_strategy === "archetype" ||
+      r.match_strategy === "points";
+    const out: typeof r = { ...r };
+    if (r.match_strategy === "archetype" && r.category_id) {
+      out.category_product_ids = categoryProductIdsById.get(r.category_id) ?? [];
+    }
+    if (needsMap) out.category_product_ids_map = fullMap;
+    return out;
+  });
 
   const nextVersion = quiz.version + 1;
   const publishedJson: PublishedQuiz = {

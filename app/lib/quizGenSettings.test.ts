@@ -211,6 +211,80 @@ describe("applyPostGeneration — integration stub", () => {
   });
 });
 
+describe("applyPostGeneration — result_layout_mode", () => {
+  it("stamps the chosen layout mode onto the doc", () => {
+    const out = applyPostGeneration(minimalAIDraft(), {
+      ...DEFAULT_GEN_SETTINGS,
+      result_layout_mode: "shared",
+    });
+    expect(out.result_layout_mode).toBe("shared");
+  });
+
+  it("defaults to custom and produces a doc that still parses", () => {
+    const out = applyPostGeneration(minimalAIDraft(), DEFAULT_GEN_SETTINGS);
+    expect(out.result_layout_mode).toBe("custom");
+    expect(() => Quiz.parse(out)).not.toThrow();
+  });
+});
+
+describe("applyPostGeneration — points seeding", () => {
+  it("sets match_ladder=['points'] on result nodes and seeds answer points by tag overlap", () => {
+    const out = applyPostGeneration(
+      minimalAIDraft(),
+      {
+        ...DEFAULT_GEN_SETTINGS,
+        flow: { ...DEFAULT_GEN_SETTINGS.flow, use_points_results: true },
+      },
+      {
+        categories: [
+          { id: "cat-a", name: "Alpha", tags: ["a", "shared"] },
+          { id: "cat-c", name: "Charlie", tags: ["c"] },
+        ],
+      },
+    );
+    // Result node now resolves via points.
+    const resultNode = out.nodes.find((n) => n.type === "result")!;
+    expect(resultNode.type === "result" && resultNode.data.match_ladder).toEqual(
+      ["points"],
+    );
+    // a1 has tag "a" (overlaps cat-a only) → points { cat-a: 1 }.
+    const q1 = out.nodes.find((n) => n.id === "q1")!;
+    if (q1.type !== "question") throw new Error("expected question node");
+    const a1 = q1.data.answers.find((a) => a.id === "a1")!;
+    expect(a1.points).toEqual({ "cat-a": 1 });
+    // a2 has tag "b" (no overlap) → no points map seeded.
+    const a2 = q1.data.answers.find((a) => a.id === "a2")!;
+    expect(a2.points).toBeUndefined();
+    // The seeded doc still parses against the schema.
+    expect(() => Quiz.parse(out)).not.toThrow();
+  });
+
+  it("no-ops points seeding when categories are absent", () => {
+    const out = applyPostGeneration(minimalAIDraft(), {
+      ...DEFAULT_GEN_SETTINGS,
+      flow: { ...DEFAULT_GEN_SETTINGS.flow, use_points_results: true },
+    });
+    const resultNode = out.nodes.find((n) => n.type === "result")!;
+    // match_ladder keeps its schema default (["tag"]) — no points wiring.
+    expect(resultNode.type === "result" && resultNode.data.match_ladder).toEqual(
+      ["tag"],
+    );
+    const q1 = out.nodes.find((n) => n.id === "q1")!;
+    if (q1.type !== "question") throw new Error("expected question node");
+    expect(q1.data.answers.every((a) => a.points === undefined)).toBe(true);
+  });
+});
+
+describe("buildPromptAdditions — points results", () => {
+  it("includes the points-based scoring instruction when toggled", () => {
+    const out = buildPromptAdditions({
+      ...DEFAULT_GEN_SETTINGS,
+      flow: { ...DEFAULT_GEN_SETTINGS.flow, use_points_results: true },
+    });
+    expect(out).toContain("points-based scoring");
+  });
+});
+
 describe("applyPostGeneration — mid_flow_preview safety net", () => {
   it("flips show_preview_after on the middle question when none was flagged", () => {
     const out = applyPostGeneration(minimalAIDraft(), {

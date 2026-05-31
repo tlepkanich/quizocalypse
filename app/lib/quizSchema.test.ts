@@ -49,13 +49,6 @@ const validQuiz = {
     { id: "e1", source: "intro", target: "q1" },
     { id: "e2", source: "q1", target: "r1" },
   ],
-  recommendation_logic: [
-    {
-      question_id: "q1",
-      answer_id: "a1",
-      tags: ["oily"],
-    },
-  ],
   results_pages: [
     {
       id: "r1",
