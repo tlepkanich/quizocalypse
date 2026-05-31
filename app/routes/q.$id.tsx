@@ -47,6 +47,7 @@ export const loader = async ({ params }: LoaderFunctionArgs) => {
       id: true,
       name: true,
       status: true,
+      version: true,
       publishedJson: true,
     },
   });
@@ -68,6 +69,7 @@ export const loader = async ({ params }: LoaderFunctionArgs) => {
   return json({
     quizId: quiz.id,
     name: quiz.name,
+    version: quiz.version,
     doc: parsed.data,
     productIndex: publishedRaw.product_index ?? [],
     designTokens: parsed.data.design_tokens ?? null,
@@ -88,6 +90,7 @@ export default function StorefrontRuntime() {
     breakpointOverrides,
     resultLayoutMode,
     quizId,
+    version,
     shopDomain,
   } = useLoaderData<typeof loader>();
   const introNode = useMemo(
@@ -153,6 +156,37 @@ export default function StorefrontRuntime() {
   const startedAtRef = useRef<number>(0);
   const completedRef = useRef(false);
 
+  // Save/resume: persist progress to localStorage so closing/re-opening the
+  // quiz resumes instead of restarting. Sticky A/B assignments ride along.
+  const stateKey = `qz-state-${quizId}`;
+  const abRef = useRef<Record<string, string>>({});
+  const resumedRef = useRef(false);
+
+  // Restore BEFORE the analytics effect (effect order = declaration order) so a
+  // resumed visit reuses the saved sessionId and doesn't re-fire quiz_started.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      const raw = window.localStorage.getItem(stateKey);
+      if (!raw) return;
+      const s = JSON.parse(raw) as {
+        version?: number;
+        sessionId?: string;
+        currentNodeId?: string | null;
+        path?: PathStep[];
+        ab?: Record<string, string>;
+      };
+      if (!s || s.version !== version) return; // republished → stale, ignore
+      if (typeof s.sessionId === "string") sessionIdRef.current = s.sessionId;
+      if (s.ab) abRef.current = s.ab;
+      resumedRef.current = true;
+      if (s.currentNodeId) setCurrentNodeId(s.currentNodeId);
+      if (Array.isArray(s.path)) setPath(s.path);
+    } catch {
+      // disabled / malformed storage → start fresh
+    }
+  }, [stateKey, version]);
+
   useEffect(() => {
     const client = createAnalyticsClient({
       quizId,
@@ -165,11 +199,36 @@ export default function StorefrontRuntime() {
         ? "embed"
         : "direct";
     startedAtRef.current = Date.now();
-    client.track("quiz_started", { source });
+    if (!resumedRef.current) client.track("quiz_started", { source });
     return () => {
       client.stop();
     };
   }, [quizId]);
+
+  // Persist progress whenever the step/path changes (ab is read at write time).
+  // Skip the very first run so the restore effect's read is never clobbered.
+  const skipFirstSaveRef = useRef(true);
+  useEffect(() => {
+    if (skipFirstSaveRef.current) {
+      skipFirstSaveRef.current = false;
+      return;
+    }
+    if (typeof window === "undefined") return;
+    try {
+      window.localStorage.setItem(
+        stateKey,
+        JSON.stringify({
+          version,
+          sessionId: sessionIdRef.current,
+          currentNodeId,
+          path,
+          ab: abRef.current,
+        }),
+      );
+    } catch {
+      // ignore storage failures
+    }
+  }, [stateKey, version, currentNodeId, path]);
 
   // Apply CSS vars at the very root so all children resolve var(--qz-*).
   const rootStyle: React.CSSProperties = { ...cssVars };
@@ -222,26 +281,23 @@ export default function StorefrontRuntime() {
     setCurrentNodeId(introNode ? introNode.id : null);
     setPath([]);
     previewViewedRef.current = false;
-    // Note: we deliberately do NOT clear ab assignments on reset — the spec
-    // wants stickiness across retakes within a session for honest A/B
-    // attribution. Closing the tab clears sessionStorage and re-rolls.
+    completedRef.current = false;
+    // A/B assignments deliberately persist across "Start over" (sticky variant
+    // for honest attribution). The save effect rewrites the cleared progress.
   }
 
-  // Sticky A/B assignments: persisted to sessionStorage keyed by quizId so
-  // refreshes inside the same tab don't re-roll. Lives in a ref so writes
-  // don't trigger re-renders.
-  const abKey = `qz-ab-${quizId}`;
-  const abRef = useRef<Record<string, string>>({});
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    try {
-      const raw = window.sessionStorage.getItem(abKey);
-      if (raw) abRef.current = JSON.parse(raw) as Record<string, string>;
-    } catch {
-      // sessionStorage may be unavailable (private mode, embed sandbox); just
-      // fall through to in-memory assignments.
-    }
-  }, [abKey]);
+  // Jump back to a previously answered step (clickable progress trail). Truncate
+  // the path to that point and re-enter that question; downstream answers/tags
+  // are discarded and rebuilt as the shopper re-answers.
+  function gotoStep(stepIndex: number) {
+    if (stepIndex < 0 || stepIndex >= path.length) return;
+    const target = path[stepIndex];
+    if (!target) return;
+    setPath(path.slice(0, stepIndex));
+    setCurrentNodeId(target.questionNodeId);
+    previewViewedRef.current = false;
+    completedRef.current = false;
+  }
 
   function buildBranchContext(): BranchContext {
     const selectedAnswerIds = new Set<string>();
@@ -265,14 +321,8 @@ export default function StorefrontRuntime() {
   function gotoNextFrom(nodeId: string, handle: string | null) {
     const ctx = buildBranchContext();
     const next = resolveNextStep(doc, nodeId, handle, ctx);
-    // Persist any A/B assignments mutated while traversing branches.
-    if (typeof window !== "undefined") {
-      try {
-        window.sessionStorage.setItem(abKey, JSON.stringify(ctx.abAssignments));
-      } catch {
-        // Same as above — ignore storage failures.
-      }
-    }
+    // A/B assignments mutated during branch traversal live in abRef and are
+    // persisted by the save effect along with the path + current node.
     if (!next) return;
     setCurrentNodeId(next);
   }
@@ -516,7 +566,15 @@ export default function StorefrontRuntime() {
       `}</style>
       <div className="qz-runtime-page" style={styles.page}>
         <div className="qz-runtime-shell">
-          <div className="qz-runtime-content">{content}</div>
+          <div className="qz-runtime-content">
+            <ProgressTrail
+              doc={doc}
+              path={path}
+              currentNodeId={currentNodeId}
+              onJump={gotoStep}
+            />
+            {content}
+          </div>
           {showPreview && (
             <div className="qz-preview-rail">
               <PreviewRail
@@ -535,6 +593,65 @@ export default function StorefrontRuntime() {
           />
         )}
       </div>
+    </div>
+  );
+}
+
+// Clickable progress trail — one pill per answered question (jump back to
+// re-answer) + the current question. Lets the shopper move around the quiz
+// instead of only going forward; resume restores it on re-open.
+function ProgressTrail({
+  doc,
+  path,
+  currentNodeId,
+  onJump,
+}: {
+  doc: QuizDoc;
+  path: PathStep[];
+  currentNodeId: string | null;
+  onJump: (i: number) => void;
+}) {
+  const current = currentNodeId ? doc.nodes.find((n) => n.id === currentNodeId) : null;
+  const currentIsQuestion = current?.type === "question";
+  if (path.length === 0 && !currentIsQuestion) return null;
+
+  const label = (qid: string, i: number): string => {
+    const node = doc.nodes.find((n) => n.id === qid);
+    const text = node && node.type === "question" ? node.data.text : `Step ${i + 1}`;
+    return text.length > 22 ? `${text.slice(0, 21)}…` : text;
+  };
+  const pill = (active: boolean, clickable: boolean): React.CSSProperties => ({
+    border: "1px solid var(--qz-color-muted, #aaa)",
+    background: active ? "var(--qz-color-text)" : "transparent",
+    color: active ? "var(--qz-color-bg)" : "var(--qz-color-text)",
+    borderRadius: 999,
+    padding: "4px 10px",
+    fontSize: "0.8em",
+    fontFamily: "var(--qz-font-body)",
+    cursor: clickable ? "pointer" : "default",
+    whiteSpace: "nowrap",
+  });
+
+  return (
+    <div
+      aria-label="Quiz progress"
+      style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 16, maxWidth: 560, width: "100%" }}
+    >
+      {path.map((s, i) => (
+        <button
+          key={`${s.questionNodeId}-${i}`}
+          onClick={() => onJump(i)}
+          title="Jump back to this question"
+          style={pill(false, true)}
+        >
+          {i + 1}. {label(s.questionNodeId, i)}
+        </button>
+      ))}
+      {currentIsQuestion && current ? (
+        <span style={pill(true, false)}>
+          {path.length + 1}. {label(current.id, path.length)}
+        </span>
+      ) : null}
     </div>
   );
 }
