@@ -292,6 +292,18 @@ function BuilderShell({ data }: { data: LoaderData }) {
     [doc, commit],
   );
 
+  // Remove every unreachable step in one click (Studio fix for stray nodes,
+  // no Advanced canvas needed).
+  const handleCleanupOrphans = useCallback(
+    (ids: string[]) => {
+      let next = doc;
+      for (const id of ids) next = deleteNode(next, id);
+      commit(next);
+      setZoomId((z) => (z && ids.includes(z) ? null : z));
+    },
+    [doc, commit],
+  );
+
   const isSaving = saveFetcher.state !== "idle";
   const savedAt =
     saveFetcher.data?.ok && saveFetcher.data.savedAt ? saveFetcher.data.savedAt : null;
@@ -510,6 +522,8 @@ function BuilderShell({ data }: { data: LoaderData }) {
               issuesByNode={issuesByNode}
               onZoom={setZoomId}
               onInsert={handleInsert}
+              onDelete={handleDelete}
+              onCleanupOrphans={handleCleanupOrphans}
             />
           )}
         </>
@@ -635,6 +649,8 @@ function FlowView({
   issuesByNode,
   onZoom,
   onInsert,
+  onDelete,
+  onCleanupOrphans,
 }: {
   doc: QuizDoc;
   ordered: ReturnType<typeof orderFlow>;
@@ -643,6 +659,8 @@ function FlowView({
   issuesByNode: Map<string, NodeIssue[]>;
   onZoom: (id: string) => void;
   onInsert: (kind: InsertKind, anchorId: string | null, anchorHandle?: string) => void;
+  onDelete: (id: string) => void;
+  onCleanupOrphans: (ids: string[]) => void;
 }) {
   const nodeById = useMemo(() => {
     const m = new Map<string, QuizNode>();
@@ -700,6 +718,8 @@ function FlowView({
           categories={categories}
           issuesByNode={issuesByNode}
           onZoom={onZoom}
+          onDelete={onDelete}
+          onCleanupOrphans={onCleanupOrphans}
         />
       ) : null}
 
@@ -976,6 +996,8 @@ function OrphanTray({
   categories,
   issuesByNode,
   onZoom,
+  onDelete,
+  onCleanupOrphans,
 }: {
   ids: string[];
   nodeById: Map<string, QuizNode>;
@@ -984,26 +1006,47 @@ function OrphanTray({
   categories: LoaderData["categories"];
   issuesByNode: Map<string, NodeIssue[]>;
   onZoom: (id: string) => void;
+  onDelete: (id: string) => void;
+  onCleanupOrphans: (ids: string[]) => void;
 }) {
   return (
-    <div>
-      <div className="qz-label" style={{ marginBottom: 8 }}>
-        Unreachable steps
+    <div className="qz-card" style={{ padding: 14, border: "1px solid #f0c0c0", background: "#fff8f8" }}>
+      <div className="qz-row qz-row-between" style={{ alignItems: "center", marginBottom: 10 }}>
+        <div>
+          <div className="qz-label" style={{ marginBottom: 2 }}>
+            Unreachable steps ({ids.length})
+          </div>
+          <div className="qz-dim" style={{ fontSize: 12 }}>
+            These aren’t reachable from the intro. Remove them, or open one to edit. No Advanced
+            builder needed.
+          </div>
+        </div>
+        <QzButton size="sm" variant="ghost" onClick={() => onCleanupOrphans(ids)}>
+          Remove all
+        </QzButton>
       </div>
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
         {ids.map((id) => {
           const node = nodeById.get(id);
           if (!node) return null;
           return (
-            <StepCard
-              key={id}
-              node={node}
-              doc={doc}
-              productIndex={productIndex}
-              categories={categories}
-              issues={issuesByNode.get(id) ?? []}
-              onZoom={() => onZoom(id)}
-            />
+            <div key={id} style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+              <StepCard
+                node={node}
+                doc={doc}
+                productIndex={productIndex}
+                categories={categories}
+                issues={issuesByNode.get(id) ?? []}
+                onZoom={() => onZoom(id)}
+              />
+              <button
+                onClick={() => onDelete(id)}
+                className="qz-btn qz-btn-ghost qz-btn-sm"
+                style={{ color: "#b42318" }}
+              >
+                ✕ Delete
+              </button>
+            </div>
           );
         })}
       </div>

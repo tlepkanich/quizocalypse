@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { Quiz } from "./quizSchema";
 import { resolveNextStep, pickPointsWinner, type BranchContext } from "./recommendationEngine";
+import { orderFlow } from "./flowOrder";
 import {
   applyQuestionFlow,
   type GeneratedQuestionFlow,
@@ -138,7 +139,7 @@ describe("applyQuestionFlow", () => {
     expect(br && br.type === "branch" && br.data.slots).toHaveLength(4); // 3 buckets + default
   });
 
-  it("leaves manual (non-sb_) nodes in place", () => {
+  it("replaces manual/template question nodes (Smart Build owns the flow)", () => {
     const docM = baseDoc(
       [
         {
@@ -158,6 +159,45 @@ describe("applyQuestionFlow", () => {
       [{ id: "e_m", source: "intro", target: "q_manual" }],
     );
     const next = applyQuestionFlow(docM, gen, buckets);
-    expect(next.nodes.some((n) => n.id === "q_manual")).toBe(true);
+    expect(next.nodes.some((n) => n.id === "q_manual")).toBe(false);
+  });
+
+  it("keeps manual CONTENT steps (e.g. a message) reachable", () => {
+    const docM = baseDoc(
+      [
+        {
+          id: "m_manual",
+          type: "message",
+          position: { x: 320, y: 300 },
+          data: { text: "Welcome!", supports_merge_tags: true },
+        },
+      ],
+      [{ id: "e_m", source: "intro", target: "m_manual" }],
+    );
+    const next = applyQuestionFlow(docM, gen, buckets);
+    expect(next.nodes.some((n) => n.id === "m_manual")).toBe(true);
+    expect(orderFlow(next).orphans).not.toContain("m_manual");
+  });
+
+  it("leaves NO unreachable steps — even with an unbound extra result page", () => {
+    const docExtra = baseDoc([
+      {
+        id: "r_extra",
+        type: "result",
+        position: { x: 900, y: 600 },
+        data: { headline: "Spare", fallback_collection_id: FB }, // no category_id → not a bucket
+      },
+      {
+        id: "ai_manual",
+        type: "ask_ai",
+        position: { x: 320, y: 500 },
+        data: { persona_name: "Aria", opening_message: "Hi", system_prompt: "Be helpful" },
+      },
+    ]);
+    const next = applyQuestionFlow(docExtra, gen, buckets);
+    expect(orderFlow(next).orphans).toEqual([]);
+    // the spare result is reachable but inert (never-matching condition)
+    const extraEdge = next.edges.find((e) => e.source === "sb_br" && e.target === "r_extra");
+    expect(extraEdge?.condition?.tag).toBe("__sb_unrouted__");
   });
 });

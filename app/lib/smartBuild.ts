@@ -57,16 +57,21 @@ export function applyQuestionFlow(
     doc.nodes.filter((n) => n.type === "result").map((n) => n.id),
   );
 
-  // 1. Strip prior Smart Build nodes. 2. Drop edges touching stripped nodes,
-  // intro's outbound, and any inbound-to-result (we re-wire the whole chain
-  // through the branch). Manual middle-node edges survive.
-  const nodes: QuizNode[] = doc.nodes.filter((n) => !isSb(n.id));
-  const edges: QuizEdge[] = doc.edges.filter((e) => {
-    if (isSb(e.source) || isSb(e.target)) return false;
-    if (introId && e.source === introId) return false;
-    if (resultIds.has(e.target)) return false;
-    return true;
-  });
+  // Smart Build OWNS the question flow + routing, so rebuild the whole thing.
+  // Strip every question + branch node (any prefix) and all prior Smart Build
+  // output (sb_). Keep the intro, every result page, and any manual CONTENT
+  // steps (message / email_gate / ask_ai / end / integration / product_cards),
+  // re-threading them so nothing is stranded. Re-running is idempotent and
+  // never leaves old/template questions as unreachable steps.
+  const removedIds = new Set<string>();
+  for (const n of doc.nodes) {
+    if (n.type === "question" || n.type === "branch" || isSb(n.id)) removedIds.add(n.id);
+  }
+  const nodes: QuizNode[] = doc.nodes.filter((n) => !removedIds.has(n.id));
+  // The entire flow is regenerated, so start from no edges and re-wire below.
+  const edges: QuizEdge[] = [];
+  // Manual content steps to keep reachable (intro/results are anchored below).
+  const keptContent = nodes.filter((n) => n.type !== "intro" && n.type !== "result");
 
   const baseX = intro?.position.x ?? 0;
   const y = intro?.position.y ?? 0;
@@ -79,7 +84,10 @@ export function applyQuestionFlow(
     prevId = targetId;
   };
 
-  // 3. Linear chain: intro → [welcome] → q1…qN → [email] → branch
+  // Re-thread surviving manual content steps right after the intro.
+  for (const c of keptContent) connect(c.id);
+
+  // 3. Linear chain: intro → [content] → [welcome] → q1…qN → [email] → branch
   if (generated.welcome_message) {
     const id = rid("m");
     nodes.push({
@@ -147,12 +155,22 @@ export function applyQuestionFlow(
     return b.tags[0] ?? null;
   };
 
+  // Result pages not tied to a question bucket (the merchant made more pages
+  // than buckets) are wired off inert slots: a never-matching tag keeps them
+  // graph-reachable (no orphan / publish block) while routing still falls
+  // through to the real buckets + default. The merchant can bind or delete them.
+  const bucketResultIds = new Set(buckets.map((b) => b.resultNodeId));
+  const unbucketedResultIds = [...resultIds].filter((id) => !bucketResultIds.has(id));
+
   const branchId = "sb_br";
   const slots = buckets.map((b, i) => ({
     id: `sb_sl_${i + 1}`,
     label: b.name || `Bucket ${i + 1}`,
     weight: 1,
   }));
+  unbucketedResultIds.forEach((_, i) =>
+    slots.push({ id: `sb_sl_extra_${i + 1}`, label: "Unbound page", weight: 1 }),
+  );
   slots.push({ id: "sb_sl_default", label: "Other", weight: 1 });
   nodes.push({
     id: branchId,
@@ -170,6 +188,15 @@ export function applyQuestionFlow(
       target: b.resultNodeId,
       source_handle: `sb_sl_${i + 1}`,
       ...(tag ? { condition: { tag } } : {}),
+    });
+  });
+  unbucketedResultIds.forEach((rId, i) => {
+    edges.push({
+      id: rid("e"),
+      source: branchId,
+      target: rId,
+      source_handle: `sb_sl_extra_${i + 1}`,
+      condition: { tag: "__sb_unrouted__" },
     });
   });
   const defaultTarget = buckets[0]?.resultNodeId;

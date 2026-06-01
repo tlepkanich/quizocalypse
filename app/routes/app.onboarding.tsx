@@ -17,6 +17,7 @@ import {
   TEMPLATE_LIST,
 } from "../lib/quizTemplates";
 import { runAiOnboardingBuild } from "../lib/onboardingBuild.server";
+import { buildDemoQuiz, DEMO_QUIZ_NAME } from "../lib/demoQuiz";
 import { extractBrandGuidelines } from "../lib/brandExtract";
 import { parseBrandGuidelinesSafe } from "../lib/brandGuidelines";
 import { DesignTokens } from "../lib/quizSchema";
@@ -128,6 +129,25 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       data: { shopId: shop.id, name, status: "draft", draftJson: doc as never },
     });
     return redirect(`/app/quizzes/${quiz.id}/studio?step=1`);
+  }
+
+  // ── intent=demo (one-click feature showcase) ─────────────────────────────
+  if (intent === "demo") {
+    const firstCollection = await prisma.collection.findFirst({
+      where: { shopId: shop.id },
+      select: { collectionId: true },
+    });
+    const quiz = await prisma.quiz.create({
+      data: {
+        shopId: shop.id,
+        name: DEMO_QUIZ_NAME,
+        status: "draft",
+        draftJson: buildDemoQuiz(firstCollection?.collectionId ?? "") as never,
+      },
+    });
+    // Land on the Page builder so the whole flow — questions, the A/B branch,
+    // and both result variants — is visible; Publish is one click away.
+    return redirect(`/app/quizzes/${quiz.id}/studio?step=4`);
   }
 
   // ── intent=blank ─────────────────────────────────────────────────────────
@@ -385,12 +405,20 @@ function StartStep({ onAi }: { onAi: () => void }) {
         </div>
       </div>
 
-      <Form method="post">
-        <input type="hidden" name="intent" value="blank" />
-        <button type="submit" className="qz-btn qz-btn-ghost qz-btn-sm">
-          Start from a blank quiz instead
-        </button>
-      </Form>
+      <div className="qz-row" style={{ gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+        <Form method="post">
+          <input type="hidden" name="intent" value="demo" />
+          <button type="submit" className="qz-btn qz-btn-ghost qz-btn-sm">
+            🎬 Create a demo quiz (showcases everything)
+          </button>
+        </Form>
+        <Form method="post">
+          <input type="hidden" name="intent" value="blank" />
+          <button type="submit" className="qz-btn qz-btn-ghost qz-btn-sm">
+            Start from a blank quiz instead
+          </button>
+        </Form>
+      </div>
     </div>
   );
 }
