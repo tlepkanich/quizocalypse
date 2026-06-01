@@ -82,6 +82,10 @@ export function ProductMappingTable({
           <div className="qz-dim" style={{ fontSize: 12 }}>
             {matrix.rows.length} products · {unmapped.size} unmapped · {multiMapped.size} on multiple pages
           </div>
+          <div className="qz-dim" style={{ fontSize: 11.5, marginTop: 2 }}>
+            Toggling a cell edits the <strong>same buckets as Step&nbsp;1 — Products</strong> (one source
+            of truth). Changes go live on the next publish.
+          </div>
         </div>
         <div className="qz-row" style={{ gap: 8, alignItems: "center" }}>
           {dirty || saveState === "saving" ? (

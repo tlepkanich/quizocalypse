@@ -145,9 +145,9 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         draftJson: buildDemoQuiz(firstCollection?.collectionId ?? "") as never,
       },
     });
-    // Land on the Page builder so the whole flow — questions, the A/B branch,
-    // and both result variants — is visible; Publish is one click away.
-    return redirect(`/app/quizzes/${quiz.id}/studio?step=4`);
+    // Land on Step 2 (Questions) so the whole flow — questions, the A/B branch,
+    // and both result variants — is visible in the builder; Publish is a step away.
+    return redirect(`/app/quizzes/${quiz.id}/studio?step=2`);
   }
 
   // ── intent=blank ─────────────────────────────────────────────────────────
@@ -611,7 +611,7 @@ function BuildStep(props: {
           </p>
         )}
         <div>
-          <a className="qz-btn qz-btn-primary" href={`/app/quizzes/${props.built.quizId}/studio?step=5`}>
+          <a className="qz-btn qz-btn-primary" href={`/app/quizzes/${props.built.quizId}/studio?step=4`}>
             Open in Studio →
           </a>
         </div>

@@ -203,6 +203,11 @@ export default function Index() {
               {enrichLabel}
             </QzButton>
             <Link to="/app/quizzes/new">
+              <QzButton variant="ghost" disabled={data.productCount === 0}>
+                Blank quiz
+              </QzButton>
+            </Link>
+            <Link to="/app/onboarding">
               <QzButton variant="accent" disabled={data.productCount === 0}>
                 New AI quiz
               </QzButton>

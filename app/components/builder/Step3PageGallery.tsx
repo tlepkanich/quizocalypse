@@ -6,10 +6,11 @@ import { ResultSettingsPanel } from "./ResultSettingsPanel";
 import { DiscountCard } from "./DiscountCard";
 import type { StepProps } from "./stepProps";
 
-// Step 3 — "Recommendations page logic SETTINGS". A two-pane workspace: a
-// gallery of result pages (one card per bucket) on the left, and the selected
-// page's per-page recommendation settings + a live StepPreview on the right.
-// "Skip — use best-practice logic" jumps to Step 4; defaults are already
+// Result-page logic SETTINGS (the body of Step 3 — Results, rendered inside
+// Step3Results below the layout/theme header). A two-pane workspace: a gallery
+// of result pages (one card per bucket) on the left, and the selected page's
+// per-page recommendation settings + a live StepPreview on the right.
+// "Edit the question flow" jumps to Step 2 (the builder); defaults are already
 // best-practice. On-template vs Customized badges are preserved.
 
 function isCustomized(
@@ -70,8 +71,8 @@ export function Step3PageGallery({
             defaults are already applied.
           </p>
         </div>
-        <QzButton size="sm" variant="ghost" onClick={() => goToStep(4)}>
-          Skip — use best-practice logic →
+        <QzButton size="sm" variant="ghost" onClick={() => goToStep(2)}>
+          Edit the question flow →
         </QzButton>
       </div>
 
@@ -209,7 +210,7 @@ export function Step3PageGallery({
                         Snap to template
                       </QzButton>
                     ) : null}
-                    <QzButton size="sm" variant="ghost" onClick={() => goToStep(4)}>
+                    <QzButton size="sm" variant="ghost" onClick={() => goToStep(2)}>
                       Open in builder →
                     </QzButton>
                   </div>

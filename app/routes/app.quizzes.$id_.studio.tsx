@@ -5,8 +5,7 @@ import { Link, useFetcher, useLoaderData, useSearchParams } from "@remix-run/rea
 import { TitleBar } from "@shopify/app-bridge-react";
 import { BuilderStepper, type StepState } from "../components/builder/BuilderStepper";
 import { Step1Products } from "../components/builder/Step1Products";
-import { Step2PageModel } from "../components/builder/Step2PageModel";
-import { Step3PageGallery } from "../components/builder/Step3PageGallery";
+import { Step3Results } from "../components/builder/Step3Results";
 import { Step5Preview } from "../components/builder/Step5Preview";
 import { SmartBuildPanel, type SmartBuildParams } from "../components/builder/SmartBuildPanel";
 import type { StepProps } from "../components/builder/stepProps";
@@ -156,10 +155,10 @@ function BuilderShell({ data }: { data: LoaderData }) {
 
   const [params, setParams] = useSearchParams();
   const stepParam = Number(params.get("step"));
-  const step = stepParam >= 1 && stepParam <= 5 ? stepParam : 1;
+  const step = stepParam >= 1 && stepParam <= 4 ? stepParam : 1;
   const goToStep = useCallback(
     (n: number) => {
-      const clamped = Math.min(5, Math.max(1, n));
+      const clamped = Math.min(4, Math.max(1, n));
       setParams(
         (prev) => {
           const nextParams = new URLSearchParams(prev);
@@ -173,7 +172,7 @@ function BuilderShell({ data }: { data: LoaderData }) {
     [setParams],
   );
 
-  // Top-level workspace: the guided 5-step "Build" flow, or the FOCUS #2
+  // Top-level workspace: the guided 4-step "Build" flow, or the FOCUS #2
   // "Logic" dual-view. Synced to ?view= so reload/links persist.
   const view: "build" | "logic" = params.get("view") === "logic" ? "logic" : "build";
   const setView = useCallback(
@@ -319,15 +318,17 @@ function BuilderShell({ data }: { data: LoaderData }) {
   const zoomNode = zoomId ? doc.nodes.find((n) => n.id === zoomId) ?? null : null;
 
   const resultCount = doc.nodes.filter((n) => n.type === "result").length;
+  // Step 1 (Products) is the only gated step — you need at least one bucket or
+  // result page before the rest of the flow has anything to wire to. Steps 2–4
+  // are always continuable.
   const canContinue: Record<number, boolean> = {
     1: categories.length >= 1 || resultCount >= 1,
     2: true,
     3: true,
     4: true,
-    5: true,
   };
   const stepStates: Record<number, StepState> = {};
-  for (let n = 1; n <= 5; n++) {
+  for (let n = 1; n <= 4; n++) {
     stepStates[n] = n === step ? "current" : n < step ? "done" : "upcoming";
   }
 
@@ -337,17 +338,22 @@ function BuilderShell({ data }: { data: LoaderData }) {
       if (buckets.length) {
         try {
           commit(reconcileBucketsToResultNodes(doc, buckets, fallbackCollection));
+          setReconcileError(null);
         } catch {
           // Result pages need a fallback collection (ResultData requires one).
-          // A shop with no synced collections can't create them yet.
+          // A shop with no synced collections can't create them yet — but don't
+          // dead-end the merchant. Proceed to the next step and surface a
+          // non-blocking banner with a "sync your catalog" link instead.
           setReconcileError(
-            "Couldn't turn your buckets into result pages — sync at least one Shopify collection first (result pages need a fallback collection).",
+            "We couldn't turn your buckets into result pages yet — sync at least one Shopify collection (result pages need a fallback collection). You can keep building; pages will appear once a collection is synced.",
           );
-          return;
         }
+      } else {
+        setReconcileError(null);
       }
+    } else {
+      setReconcileError(null);
     }
-    setReconcileError(null);
     goToStep(step + 1);
   };
 
@@ -397,8 +403,13 @@ function BuilderShell({ data }: { data: LoaderData }) {
           key={v}
           onClick={() => setView(v)}
           className={`qz-btn qz-btn-sm${view === v ? " qz-btn-primary" : " qz-btn-ghost"}`}
+          title={
+            v === "build"
+              ? "Build the quiz — products, questions, results, preview"
+              : "Optimize after launch — A/B splits, analytics, the recommendation map, and product mapping"
+          }
         >
-          {v === "build" ? "Build" : "Logic"}
+          {v === "build" ? "Build" : "Optimize"}
         </button>
       ))}
     </div>
@@ -447,14 +458,22 @@ function BuilderShell({ data }: { data: LoaderData }) {
           className="qz-row qz-row-between"
           style={{ alignItems: "center", marginBottom: 16, gap: 12, flexWrap: "wrap" }}
         >
-          <div className="qz-label">Logic &amp; recommendations</div>
+          <div>
+            <div className="qz-label">Optimize</div>
+            <div className="qz-dim" style={{ fontSize: 12 }}>
+              A/B splits, analytics, the recommendation map &amp; product mapping
+            </div>
+          </div>
           {controls}
         </div>
       )}
 
       {reconcileError ? (
-        <QzBanner tone="crit" title="Can't continue yet">
-          {reconcileError}
+        <QzBanner tone="warn" title="Result pages need a synced collection">
+          {reconcileError}{" "}
+          <Link to="/app" style={{ textDecoration: "underline" }}>
+            Sync your catalog →
+          </Link>
         </QzBanner>
       ) : null}
       {publishFetcher.data?.ok === false && publishFetcher.data.error ? (
@@ -481,13 +500,14 @@ function BuilderShell({ data }: { data: LoaderData }) {
         <>
       {step === 1 ? (
         <Step1Products {...stepProps} />
-      ) : step === 2 ? (
-        <Step2PageModel {...stepProps} />
       ) : step === 3 ? (
-        <Step3PageGallery {...stepProps} />
-      ) : step === 5 ? (
+        <Step3Results {...stepProps} />
+      ) : step === 4 ? (
         <Step5Preview {...stepProps} />
       ) : (
+        // Step 2 — Questions: the visual question/flow builder (Smart Build +
+        // FlowView + zoom StepEditor). Promoted to be the second thing a
+        // merchant touches, right after grouping products.
         <>
           <CompletenessBar issues={allIssues} total={doc.nodes.length} />
           {!zoomNode ? (
@@ -536,7 +556,7 @@ function BuilderShell({ data }: { data: LoaderData }) {
         <QzButton size="sm" variant="ghost" disabled={step === 1} onClick={() => goToStep(step - 1)}>
           ← Back
         </QzButton>
-        {step < 5 ? (
+        {step < 4 ? (
           <QzButton
             size="sm"
             variant="primary"

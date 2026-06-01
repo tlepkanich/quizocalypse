@@ -74,7 +74,10 @@ export function Step1Products(props: StepProps) {
   const revalidator = useRevalidator();
   const isWorking = fetcher.state !== "idle" && fetcher.formMethod === "POST";
 
-  const [mode, setMode] = useState<GroupMode>("manual");
+  // Default to AI-assisted grouping on a fresh quiz (delivers the product-first
+  // "pull your catalog in one click" promise), but land returning merchants who
+  // already grouped products on Manual so we don't hide their existing buckets.
+  const [mode, setMode] = useState<GroupMode>(categories.length === 0 ? "ai" : "manual");
 
   // Optional narrowing inputs per non-manual source.
   const [collectionRef, setCollectionRef] = useState("");

@@ -1,9 +1,9 @@
 import type { ReactNode } from "react";
 
 // ───────────────────────────────────────────────────────────────────────────
-// BuilderStepper — the top stepper for the 5-step guided quiz builder, matching
-// the product spec verbatim. Pure presentational; the shell computes `states`
-// from per-step canContinue() and owns navigation via onJump.
+// BuilderStepper — the top stepper for the 4-step guided quiz builder
+// (Products → Questions → Results → Preview). Pure presentational; the shell
+// computes `states` from per-step canContinue() and owns navigation via onJump.
 // ───────────────────────────────────────────────────────────────────────────
 
 export type StepState = "done" | "current" | "upcoming";
@@ -15,11 +15,10 @@ export interface StepDef {
 }
 
 export const BUILDER_STEPS: StepDef[] = [
-  { n: 1, title: "Products", subtitle: "Add recommendation buckets" },
-  { n: 2, title: "Page model", subtitle: "Shared vs per-page" },
-  { n: 3, title: "Page gallery", subtitle: "Snap or fully build" },
-  { n: 4, title: "Page builder", subtitle: "Visual editor" },
-  { n: 5, title: "Preview", subtitle: "Quick walkthrough" },
+  { n: 1, title: "Products", subtitle: "Group into buckets" },
+  { n: 2, title: "Questions", subtitle: "Build & wire steps" },
+  { n: 3, title: "Results", subtitle: "Logic, design & discount" },
+  { n: 4, title: "Preview", subtitle: "Walk through & publish" },
 ];
 
 export function BuilderStepper({
