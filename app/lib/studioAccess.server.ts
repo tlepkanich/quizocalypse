@@ -21,14 +21,23 @@ export function safeEqual(a: string, b: string): boolean {
   return timingSafeEqual(bufA, bufB);
 }
 
+// True when the request is (effectively) HTTPS — directly, or behind a
+// proxy/tunnel that sets X-Forwarded-Proto. Drives the cookie's Secure flag so
+// it's Secure in production (https) but still settable over http://localhost.
+function isSecureRequest(request: Request): boolean {
+  const fwd = request.headers.get("x-forwarded-proto");
+  if (fwd) return fwd.split(",")[0]!.trim() === "https";
+  return new URL(request.url).protocol === "https:";
+}
+
 // Signed cookie bound to the current token — built lazily so it reads the env
-// at request time (not module load).
-function accessCookie(token: string) {
+// at request time (not module load). `secure` is request-derived (above).
+function accessCookie(token: string, secure: boolean) {
   return createCookie("qz_studio", {
     httpOnly: true,
     sameSite: "lax",
     path: "/",
-    secure: process.env.NODE_ENV === "production",
+    secure,
     maxAge: 60 * 60 * 24 * 30, // 30 days
     secrets: [token],
   });
@@ -48,7 +57,7 @@ export async function requireStudioAccess(request: Request): Promise<void> {
     );
   }
 
-  const cookie = accessCookie(token);
+  const cookie = accessCookie(token, isSecureRequest(request));
   const granted = await cookie.parse(request.headers.get("Cookie"));
   if (granted === "granted") return;
 
