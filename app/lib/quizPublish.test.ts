@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { Quiz } from "./quizSchema";
-import { collectReferencedCategoryIds, bakeResultPages } from "./quizPublish";
+import {
+  collectReferencedCategoryIds,
+  bakeResultPages,
+  collectRecommendableProductIds,
+} from "./quizPublish";
 import { recommendForResult, type IndexedProduct } from "./recommendationEngine";
 
 // A v3 quiz: result data lives on result NODES, results_pages is empty. This is
@@ -86,6 +90,41 @@ describe("collectReferencedCategoryIds", () => {
     });
     const ids = collectReferencedCategoryIds(doc);
     expect(ids.has("cat_points")).toBe(true);
+  });
+});
+
+describe("collectRecommendableProductIds (product_index must contain bucket products)", () => {
+  it("unions bucket members so the index isn't starved (the snowboards root cause)", () => {
+    // A quiz scoped to nothing, with a bucket pointing at skincare products that
+    // are NOT in any scoped collection. Pre-fix, these never entered the index.
+    const map = new Map([["cat_dry", ["p_cream", "p_serum"]]]);
+    const ids = collectRecommendableProductIds(v3Doc(["category"]), map);
+    expect(ids.has("p_cream")).toBe(true);
+    expect(ids.has("p_serum")).toBe(true);
+  });
+
+  it("includes explicit conditional-rule product ids", () => {
+    const base = v3Doc(["conditional"]);
+    const doc = Quiz.parse({
+      ...base,
+      nodes: base.nodes.map((n) =>
+        n.id === "r_dry" && n.type === "result"
+          ? {
+              ...n,
+              data: {
+                ...n.data,
+                conditional_rules: [{ all_of: ["a1"], any_of: [], product_ids: ["p_special"] }],
+              },
+            }
+          : n,
+      ),
+    });
+    const ids = collectRecommendableProductIds(doc, new Map());
+    expect(ids.has("p_special")).toBe(true);
+  });
+
+  it("is empty when nothing is bound", () => {
+    expect(collectRecommendableProductIds(v3Doc(["tag"]), new Map()).size).toBe(0);
   });
 });
 

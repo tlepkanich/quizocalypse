@@ -1,6 +1,6 @@
 import prisma from "../db.server";
 import { buildScopedIndex } from "./catalogIndex";
-import { discoverCategories } from "./categoryDiscover";
+import { discoverCategories, assignProductsAI } from "./categoryDiscover";
 import { assignProducts } from "./categoryAssign";
 
 // ───────────────────────────────────────────────────────────────────────────
@@ -59,10 +59,29 @@ export async function discoverAndPersistBuckets(
   const indexed = buildScopedIndex(allProducts, allCollections, []);
   const discovered = await discoverCategories({ catalogSummary: indexed.summary });
 
-  const assignments = assignProducts(
-    discovered.map((d) => ({ key: d.name, tags: d.tags })),
-    allProducts.map((p) => ({ productId: p.productId, tags: p.tags, title: p.title })),
-  );
+  // Assign with AI when available (semantic placement by title/type/description),
+  // falling back to the deterministic multi-signal + balance assignment on any
+  // failure. Both pass the bucket NAME + product type/title so a tag-poor
+  // catalog still distributes instead of dumping into one bucket.
+  const assignableCategories = discovered.map((d) => ({
+    key: d.name,
+    name: d.name,
+    description: d.description,
+    tags: d.tags,
+  }));
+  const assignableProducts = allProducts.map((p) => ({
+    productId: p.productId,
+    tags: p.tags,
+    title: p.title,
+    productType: p.productType ?? undefined,
+  }));
+
+  let assignments: Map<string, string[]>;
+  try {
+    assignments = await assignProductsAI(assignableCategories, assignableProducts);
+  } catch {
+    assignments = assignProducts(assignableCategories, assignableProducts);
+  }
 
   const discoveryRunId = `run_${Date.now().toString(36)}_${Math.random()
     .toString(36)

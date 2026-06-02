@@ -99,6 +99,7 @@ export function applyQuestionFlow(
     connect(id);
   }
 
+  const questionAnswerIds: string[][] = [];
   generated.questions.forEach((q, i) => {
     const id = `sb_q_${i + 1}`;
     const answers = q.answers.map((a) => ({
@@ -109,6 +110,7 @@ export function applyQuestionFlow(
       ...(a.collection_filter ? { collection_filter: a.collection_filter } : {}),
       ...(a.image_url ? { image_url: a.image_url } : {}),
     }));
+    questionAnswerIds.push(answers.map((a) => a.id));
     nodes.push({
       id,
       type: "question",
@@ -180,14 +182,27 @@ export function applyQuestionFlow(
   } as QuizNode);
   connect(branchId);
 
+  // Per-bucket routing condition: prefer a tag the answers actually carry;
+  // otherwise (tag-poor catalog → dominantTag null) route by the position-
+  // matched answer of the first question. That keeps routing tag-INDEPENDENT,
+  // so different first answers reach different result pages instead of every
+  // shopper falling through to the default slot (the "same page every time"
+  // half of the snowboards bug).
+  const routingAnswerIds = questionAnswerIds[0] ?? [];
   buckets.forEach((b, i) => {
     const tag = dominantTag(b);
+    const answerId = routingAnswerIds[i];
+    const condition = tag
+      ? { tag }
+      : answerId
+        ? { answer_id: answerId }
+        : undefined;
     edges.push({
       id: rid("e"),
       source: branchId,
       target: b.resultNodeId,
       source_handle: `sb_sl_${i + 1}`,
-      ...(tag ? { condition: { tag } } : {}),
+      ...(condition ? { condition } : {}),
     });
   });
   unbucketedResultIds.forEach((rId, i) => {
@@ -215,8 +230,26 @@ export function applyQuestionFlow(
     buckets.map((b) => ({ id: b.id, tags: b.tags })),
   );
 
+  // 5b. Deterministic points FLOOR for a tag-poor catalog: if tag overlap seeded
+  // nothing on an answer, give it points toward a bucket by position. This makes
+  // the `points` strategy discriminate by answer even with empty tags, so the
+  // resolved products differ per path instead of being identical every time.
+  // Tag-seeded points are left untouched.
+  const flooredNodes =
+    buckets.length > 0
+      ? seededNodes.map((n) => {
+          if (n.type !== "question") return n;
+          const answers = n.data.answers.map((a, j) => {
+            if (a.points && Object.keys(a.points).length > 0) return a;
+            const bid = buckets[j % buckets.length]!.id;
+            return { ...a, points: { [bid]: 1 } };
+          });
+          return { ...n, data: { ...n.data, answers } };
+        })
+      : seededNodes;
+
   // 6. Each bucket result resolves products by category, then points fallback.
-  const finalNodes = seededNodes.map((n) => {
+  const finalNodes = flooredNodes.map((n) => {
     if (n.type !== "result") return n;
     const ladder: MatchLadderStrategy[] = [...n.data.match_ladder];
     if (!ladder.includes("category")) ladder.unshift("category");

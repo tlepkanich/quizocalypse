@@ -61,16 +61,42 @@ describe("assignProducts", () => {
     expect(buckets.get("yoga")).toEqual([]);
   });
 
-  it("falls back to the first category when even title tokens don't match", () => {
+  it("matches product type / title against the bucket NAME when tags are empty", () => {
+    // The live bug: AI buckets have names but tags:[]. Assignment must still
+    // route by product_type/title vs the bucket name (prefix-tolerant, so
+    // 'snowboard' → 'Snowboards', 'serum' → 'Serums').
     const buckets = assignProducts(
       [
-        { key: "a", tags: ["alpha"] },
-        { key: "b", tags: ["beta"] },
+        { key: "boards", name: "Snowboards", tags: [] },
+        { key: "skin", name: "Serums", tags: [] },
       ],
-      [{ productId: "p1", tags: ["gamma"], title: "Mystery Object" }],
+      [
+        { productId: "b1", tags: [], title: "The Minimal Snowboard", productType: "snowboard" },
+        { productId: "s1", tags: [], title: "Vitamin C Serum", productType: "Serum" },
+      ],
     );
-    expect(buckets.get("a")).toEqual(["p1"]);
-    expect(buckets.get("b")).toEqual([]);
+    expect(buckets.get("boards")).toEqual(["b1"]);
+    expect(buckets.get("skin")).toEqual(["s1"]);
+  });
+
+  it("balances pure-noise products across buckets (no catch-all dump)", () => {
+    // 30 products with zero tag/name/title signal must NOT all land in bucket[0]
+    // (the old behavior, which produced the 97-in-one-bucket snowboard bug).
+    const categories = [
+      { key: "a", name: "Alpha", tags: ["alpha"] },
+      { key: "b", name: "Beta", tags: ["beta"] },
+      { key: "c", name: "Gamma", tags: ["gamma"] },
+    ];
+    const products = Array.from({ length: 30 }, (_, i) => ({
+      productId: `n${i}`,
+      tags: ["zzz"], // matches nothing
+      title: "Mystery Object",
+    }));
+    const buckets = assignProducts(categories, products);
+    const sizes = [...buckets.values()].map((b) => b.length);
+    // round-robin least-full → perfectly balanced (10/10/10), certainly no catch-all
+    expect(Math.max(...sizes) - Math.min(...sizes)).toBeLessThanOrEqual(1);
+    expect(Math.max(...sizes)).toBeLessThan(products.length); // not all in one
   });
 
   it("normalizes tags case-insensitively", () => {

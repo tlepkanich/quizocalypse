@@ -201,3 +201,50 @@ describe("applyQuestionFlow", () => {
     expect(extraEdge?.condition?.tag).toBe("__sb_unrouted__");
   });
 });
+
+describe("tag-independent routing (tag-poor catalog → no more 'same products every path')", () => {
+  // Buckets + answers with EMPTY tags — exactly the live failure mode.
+  const noTagBuckets: SmartBuildBucket[] = [
+    { id: "cat_dry", name: "Dry", tags: [], resultNodeId: "r_dry" },
+    { id: "cat_oily", name: "Oily", tags: [], resultNodeId: "r_oily" },
+  ];
+  const noTagGen: GeneratedQuestionFlow = {
+    questions: [
+      {
+        text: "How does your skin feel?",
+        question_type: "single_select",
+        answers: [{ text: "Tight" }, { text: "Shiny" }].map((a) => ({ ...a, tags: [] })),
+      },
+    ],
+  };
+
+  it("routes by answer_id when there are no tags, and seeds a points floor", () => {
+    const next = applyQuestionFlow(baseDoc(), noTagGen, noTagBuckets);
+
+    // The first question's answers, in order, map to the bucket slots.
+    const q1 = next.nodes.find((n) => n.id === "sb_q_1");
+    if (!q1 || q1.type !== "question") throw new Error("no sb_q_1");
+    const [a0, a1] = q1.data.answers;
+
+    const dryEdge = next.edges.find((e) => e.source === "sb_br" && e.target === "r_dry");
+    const oilyEdge = next.edges.find((e) => e.source === "sb_br" && e.target === "r_oily");
+    // Tag-independent: routing rides on the selected answer, not a tag.
+    expect(dryEdge?.condition?.answer_id).toBe(a0!.id);
+    expect(oilyEdge?.condition?.answer_id).toBe(a1!.id);
+    expect(dryEdge?.condition?.tag).toBeUndefined();
+
+    // Points floor: each answer now carries points toward a distinct bucket, so
+    // `pickPointsWinner` discriminates by answer even with empty tags.
+    expect(Object.keys(a0!.points ?? {})).toEqual(["cat_dry"]);
+    expect(Object.keys(a1!.points ?? {})).toEqual(["cat_oily"]);
+    expect(pickPointsWinner(next, [a0!.id])).toBe("cat_dry");
+    expect(pickPointsWinner(next, [a1!.id])).toBe("cat_oily");
+  });
+
+  it("still prefers a real tag condition when the answers carry one", () => {
+    const next = applyQuestionFlow(baseDoc(), gen, buckets); // gen + buckets HAVE tags
+    const dryEdge = next.edges.find((e) => e.source === "sb_br" && e.target === "r_dry");
+    expect(dryEdge?.condition?.tag).toBe("dry");
+    expect(dryEdge?.condition?.answer_id).toBeUndefined();
+  });
+});

@@ -71,6 +71,27 @@ export function collectReferencedCategoryIds(doc: QuizDoc): Set<string> {
   return ids;
 }
 
+// Every product id the recommendation engine can surface for this doc: bucket
+// members (from the baked category map) + explicit conditional-rule products.
+// The publisher unions these INTO product_index so the runtime's category /
+// points / conditional strategies (which intersect productIndex with these ids)
+// actually find them instead of falling through to the fallback collection.
+// Pure + testable.
+export function collectRecommendableProductIds(
+  doc: QuizDoc,
+  categoryProductIdsById: Map<string, string[]>,
+): Set<string> {
+  const ids = new Set<string>();
+  for (const pids of categoryProductIdsById.values())
+    for (const pid of pids) ids.add(pid);
+  for (const node of doc.nodes) {
+    if (node.type !== "result") continue;
+    for (const rule of node.data.conditional_rules)
+      for (const pid of rule.product_ids) ids.add(pid);
+  }
+  return ids;
+}
+
 // Bake the runtime-facing results_pages: keep/enrich any legacy entries AND
 // synthesize one entry per v3 result NODE (keyed by node id) carrying the baked
 // category→productIds map. The storefront engine reads the map off the result
@@ -200,13 +221,35 @@ export async function publishQuiz(
     ...(doc.featured_collection_id ? [doc.featured_collection_id] : []),
   ]);
 
+  // Categories referenced by the recommendation logic (v3 result nodes' bound
+  // buckets + the points strategy). Fetched BEFORE the product index so their
+  // member products are guaranteed INTO the index — otherwise the runtime's
+  // `category`/`points` strategies (productIndex ∩ bucket ids) collapse to
+  // nothing and fall through to the fallback collection (the "only snowboards"
+  // bug: a quiz scoped to a 13-product collection baked buckets referencing the
+  // whole catalog, so the intersection was ~empty).
+  const allCategoryIds = collectReferencedCategoryIds(doc);
+  const categoryRows =
+    allCategoryIds.size > 0
+      ? await prisma.category.findMany({
+          where: { id: { in: [...allCategoryIds] } },
+          select: { id: true, productIds: true },
+        })
+      : [];
+  const categoryProductIdsById = new Map(
+    categoryRows.map((c) => [c.id, c.productIds]),
+  );
+
+  // Every product the recommendation engine can surface MUST be in the index.
+  const includeProductIds = collectRecommendableProductIds(doc, categoryProductIdsById);
+
   const products = await prisma.product.findMany({
     where: { shopId: args.shopId },
   });
 
   const productIndex: IndexedProduct[] = products
     .filter((p) =>
-      explicitProductIds.has(p.productId)
+      explicitProductIds.has(p.productId) || includeProductIds.has(p.productId)
         ? true
         : scopeIds.size === 0
           ? true
@@ -269,25 +312,9 @@ export async function publishQuiz(
     : null;
   const resolvedTokens = resolveDesignTokens(shopTokens, doc.design_tokens);
 
-  // Inline category → productIds for every category referenced by the
-  // recommendation logic so the storefront runtime needs no DB lookup. The
-  // category ids are collected from result NODES (the v3 model) as well as the
-  // legacy results_pages array, then fetched once and baked onto a result page
-  // per node (see bakeResultPages). This is what lets the runtime "category"
-  // and "points" strategies resolve real products instead of falling through to
-  // the fallback collection.
-  const allCategoryIds = collectReferencedCategoryIds(doc);
-  const categoryRows =
-    allCategoryIds.size > 0
-      ? await prisma.category.findMany({
-          where: { id: { in: [...allCategoryIds] } },
-          select: { id: true, productIds: true },
-        })
-      : [];
-  const categoryProductIdsById = new Map(
-    categoryRows.map((c) => [c.id, c.productIds]),
-  );
-
+  // Bake category → productIds onto each result page so the storefront needs no
+  // DB lookup. `categoryProductIdsById` was fetched above (before the product
+  // index) so the index is guaranteed to contain these products.
   const bakedResultsPages = bakeResultPages(doc, categoryProductIdsById);
 
   const nextVersion = quiz.version + 1;
