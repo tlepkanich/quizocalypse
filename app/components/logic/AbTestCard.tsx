@@ -49,8 +49,8 @@ export function AbTestCard({
             <div
               key={slot.id}
               style={{
-                border: "1px solid #00000012",
-                borderRadius: 10,
+                border: "1px solid var(--qz-rule)",
+                borderRadius: "var(--qz-radius)",
                 padding: 10,
                 display: "flex",
                 flexDirection: "column",

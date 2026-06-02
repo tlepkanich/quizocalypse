@@ -45,7 +45,7 @@ export function SmartBuildPanel({
   const toggle = (k: keyof typeof flow) => setFlow((f) => ({ ...f, [k]: !f[k] }));
 
   return (
-    <QzCard style={{ padding: 0, marginBottom: 16, border: "1px solid #00000014" }}>
+    <QzCard flush style={{ marginBottom: 16, overflow: "hidden" }}>
       <button
         onClick={() => setOpen((o) => !o)}
         style={{

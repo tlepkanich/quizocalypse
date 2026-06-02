@@ -112,8 +112,9 @@ export function Step3PageGallery({
                     textAlign: "left",
                     cursor: "pointer",
                     border: active
-                      ? "2px solid var(--qz-accent, #2a6df4)"
-                      : "1px solid #00000014",
+                      ? "2px solid var(--qz-accent)"
+                      : "1px solid var(--qz-rule)",
+                    boxShadow: active ? "var(--qz-shadow-md)" : "var(--qz-shadow-sm)",
                   }}
                 >
                   <div
@@ -121,7 +122,7 @@ export function Step3PageGallery({
                       height: 120,
                       overflow: "hidden",
                       background: "#FAFAFA",
-                      borderBottom: "1px solid #00000010",
+                      borderBottom: "1px solid var(--qz-rule)",
                     }}
                   >
                     <div
@@ -247,7 +248,7 @@ export function Step3PageGallery({
                       className="qz-label"
                       style={{
                         padding: "10px 12px",
-                        borderBottom: "1px solid #00000010",
+                        borderBottom: "1px solid var(--qz-rule)",
                       }}
                     >
                       Live preview

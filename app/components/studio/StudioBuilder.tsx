@@ -564,7 +564,7 @@ function BuilderShell({ data, chrome }: { data: LoaderData; chrome: Chrome }) {
 
       <div
         className="qz-row qz-row-between"
-        style={{ marginTop: 24, paddingTop: 16, borderTop: "1px solid #00000012" }}
+        style={{ marginTop: 24, paddingTop: 16, borderTop: "1px solid var(--qz-rule)" }}
       >
         <QzButton size="sm" variant="ghost" disabled={step === 1} onClick={() => goToStep(step - 1)}>
           ← Back
@@ -802,7 +802,7 @@ function StepColumn({
         <div
           key={lane.laneId}
           style={{
-            borderLeft: "2px solid #00000012",
+            borderLeft: "2px solid var(--qz-rule)",
             paddingLeft: 8,
             display: "flex",
             flexDirection: "column",
@@ -883,7 +883,7 @@ function StepCard({
           height: 150,
           overflow: "hidden",
           background: "#FAFAFA",
-          borderTop: "1px solid #00000010",
+          borderTop: "1px solid var(--qz-rule)",
         }}
       >
         <div
@@ -961,7 +961,9 @@ function InsertSlot({
           height: 30,
           padding: label ? "0 12px" : 0,
           borderRadius: 999,
-          border: warn ? "1px dashed #c0392b" : "1px dashed #00000033",
+          border: warn
+            ? "1px dashed var(--qz-crit)"
+            : "1px dashed color-mix(in srgb, var(--qz-ink) 20%, transparent)",
           background: "#fff",
           cursor: "pointer",
           color: warn ? "#c0392b" : "inherit",
@@ -983,7 +985,7 @@ function InsertSlot({
             padding: 6,
             display: "grid",
             gap: 2,
-            boxShadow: "0 8px 28px rgba(0,0,0,0.16)",
+            boxShadow: "var(--qz-shadow-lg)",
           }}
         >
           {INSERTABLE_MODULES.map((m) => (
@@ -1163,7 +1165,7 @@ function StepEditor({
 
         {/* Rail */}
         <div className="qz-card" style={{ padding: 0, alignSelf: "start" }}>
-          <div className="qz-row" style={{ borderBottom: "1px solid #00000010" }}>
+          <div className="qz-row" style={{ borderBottom: "1px solid var(--qz-rule)" }}>
             {(["content", "layout", "style", "css"] as Tab[]).map((t) => (
               <button
                 key={t}

@@ -197,7 +197,7 @@ export function ProductMappingTable({
                           height: 28,
                           borderRadius: 6,
                           flex: "0 0 auto",
-                          background: row.imageUrl ? `center/cover url(${row.imageUrl})` : "#0000000d",
+                          background: row.imageUrl ? `center/cover url(${row.imageUrl})` : "var(--qz-cream-2)",
                         }}
                       />
                       <span

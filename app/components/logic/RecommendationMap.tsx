@@ -142,7 +142,8 @@ export function RecommendationMap({
                     overflow: "hidden",
                     textAlign: "left",
                     cursor: "pointer",
-                    border: active ? "2px solid var(--qz-accent, #2a6df4)" : "1px solid #00000014",
+                    border: active ? "2px solid var(--qz-accent)" : "1px solid var(--qz-rule)",
+                    boxShadow: active ? "var(--qz-shadow-md)" : "var(--qz-shadow-sm)",
                   }}
                 >
                   <div
@@ -150,7 +151,7 @@ export function RecommendationMap({
                       height: 116,
                       overflow: "hidden",
                       background: "#FAFAFA",
-                      borderBottom: "1px solid #00000010",
+                      borderBottom: "1px solid var(--qz-rule)",
                     }}
                   >
                     <div
@@ -177,7 +178,7 @@ export function RecommendationMap({
                           className="qz-mono"
                           style={{
                             fontSize: 10.5,
-                            border: "1px solid #00000018",
+                            border: "1px solid var(--qz-rule)",
                             borderRadius: 999,
                             padding: "1px 7px",
                           }}

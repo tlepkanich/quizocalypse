@@ -217,7 +217,7 @@ export function LogicView({
               justifyContent: "center",
             }}
           >
-            <div style={{ width: 3, height: 48, borderRadius: 3, background: "#0000001f" }} />
+            <div style={{ width: 3, height: 48, borderRadius: 3, background: "color-mix(in srgb, var(--qz-ink) 20%, transparent)" }} />
           </div>
           <div style={{ width: `${100 - splitPct}%`, minWidth: 0, paddingLeft: 14 }}>{table}</div>
         </div>

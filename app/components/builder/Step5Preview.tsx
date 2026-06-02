@@ -88,7 +88,7 @@ export function Step5Preview({
                 width: 8,
                 height: 8,
                 borderRadius: "50%",
-                background: i === idx ? "var(--qz-ink, #222)" : "#00000022",
+                background: i === idx ? "var(--qz-ink)" : "var(--qz-rule)",
               }}
             />
           ))}
