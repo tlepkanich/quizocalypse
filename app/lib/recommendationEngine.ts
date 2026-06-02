@@ -63,13 +63,25 @@ interface LadderConfig {
   fallback_collection_id?: string; // final fallback (result page only)
 }
 
+// A product is sellable if it's in stock OR carries a real price. This drops
+// ONLY products that are both out of stock AND have no usable price (≤ 0) —
+// i.e. placeholder / test fixtures like "$0, out of stock" — so they never get
+// recommended. Real out-of-stock items (with a price) stay and are governed by
+// oos_behavior; in-stock free items stay too.
+export function isSellable(p: { inventory_in_stock: boolean; price: string | null }): boolean {
+  return p.inventory_in_stock || (p.price != null && Number(p.price) > 0);
+}
+
 function walkLadder(
   config: LadderConfig,
   quiz: QuizDoc,
-  productIndex: IndexedProduct[],
+  allProducts: IndexedProduct[],
   selectedAnswerIds: string[],
   categoryMap: Record<string, string[]>,
 ): RecommendedProduct[] {
+  // Never surface non-sellable junk, regardless of which strategy (category /
+  // tag / points / conditional / collection / fallback) resolves it.
+  const productIndex = allProducts.filter(isSellable);
   const selectedSet = new Set(selectedAnswerIds);
   const byId = (ids: string[]): RecommendedProduct[] => {
     const want = new Set(ids);

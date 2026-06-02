@@ -7,6 +7,7 @@ import {
   recommendPreview,
   resolveNextStep,
   nextNodeFor,
+  isSellable,
   type BranchContext,
   type IndexedProduct,
 } from "./recommendationEngine";
@@ -261,6 +262,47 @@ describe("recommendForResult — v3 match ladder", () => {
       resultNodeId: "r1",
     });
     expect(out.map((p) => p.product_id)).toEqual(["p2"]);
+  });
+
+  it("never recommends a non-sellable junk product ($0 + out of stock)", () => {
+    const junk: IndexedProduct = {
+      product_id: "p_junk",
+      title: "Points Logic (Tags)",
+      handle: "points-logic-tags",
+      price: "0.00",
+      image_url: null,
+      tags: ["oily"],
+      collection_ids: ["c-cleansers"],
+      inventory_in_stock: false,
+    };
+    const quiz = ladderQuiz({
+      match_ladder: ["category"],
+      category_id: "cat-junk",
+      oos_behavior: "show_with_badge", // even when the page would SHOW oos items
+      __page: {
+        id: "r1",
+        headline: "Match",
+        product_ids: [],
+        match_strategy: "archetype",
+        category_id: "cat-junk",
+        category_product_ids_map: { "cat-junk": ["p_junk", "p2"] },
+      },
+    });
+    const out = recommendForResult({
+      quiz,
+      productIndex: [...baseProducts, junk],
+      selectedAnswerIds: [],
+      resultNodeId: "r1",
+    });
+    expect(out.some((p) => p.product_id === "p_junk")).toBe(false);
+    expect(out.map((p) => p.product_id)).toContain("p2");
+  });
+
+  it("isSellable drops $0 + OOS, keeps real OOS-with-price and in-stock free items", () => {
+    expect(isSellable({ inventory_in_stock: false, price: "0.00" })).toBe(false);
+    expect(isSellable({ inventory_in_stock: false, price: null })).toBe(false);
+    expect(isSellable({ inventory_in_stock: false, price: "24.00" })).toBe(true);
+    expect(isSellable({ inventory_in_stock: true, price: "0.00" })).toBe(true);
   });
 
   it("falls through to the next strategy when conditional has no match", () => {
