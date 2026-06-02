@@ -451,10 +451,42 @@ export function setEdgeCondition(
 export function deleteNode(doc: QuizDoc, nodeId: string): QuizDoc {
   const { [nodeId]: _droppedBp, ...remainingBp } = doc.breakpoint_overrides;
   void _droppedBp;
+
+  // Re-stitch a straight-through node (prev → node → next ⇒ prev → next) so
+  // deleting a middle step never strands its successor. Only when the node has
+  // exactly one inbound + one outbound edge (a fan-out/branch is ambiguous, so
+  // leave it). The inbound edge's handle/condition is preserved, so a branch
+  // slot keeps routing to `next`.
+  const inbound = doc.edges.filter((e) => e.target === nodeId);
+  const outbound = doc.edges.filter((e) => e.source === nodeId);
+  const stitched: QuizDoc["edges"] = [];
+  if (inbound.length === 1 && outbound.length === 1) {
+    const inE = inbound[0]!;
+    const outE = outbound[0]!;
+    const dup = doc.edges.some(
+      (e) =>
+        e.source === inE.source &&
+        e.target === outE.target &&
+        e.source_handle === inE.source_handle,
+    );
+    if (inE.source !== outE.target && !dup) {
+      stitched.push({
+        id: uid("e"),
+        source: inE.source,
+        target: outE.target,
+        ...(inE.source_handle ? { source_handle: inE.source_handle } : {}),
+        ...(inE.condition ? { condition: inE.condition } : {}),
+      });
+    }
+  }
+
   return {
     ...doc,
     nodes: doc.nodes.filter((n) => n.id !== nodeId),
-    edges: doc.edges.filter((e) => e.source !== nodeId && e.target !== nodeId),
+    edges: [
+      ...doc.edges.filter((e) => e.source !== nodeId && e.target !== nodeId),
+      ...stitched,
+    ],
     results_pages: doc.results_pages.filter((r) => r.id !== nodeId),
     breakpoint_overrides: remainingBp,
   };

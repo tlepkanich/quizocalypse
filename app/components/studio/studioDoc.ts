@@ -60,6 +60,19 @@ export function insertModule(
   anchorHandle: string | undefined,
   fallbackCollectionId: string,
 ): { doc: QuizDoc; newNodeId: string | null } {
+  // SPLICE, don't dead-end: capture the anchor's existing successor edge so we
+  // can re-route it through the new node (anchor → new → next) instead of
+  // leaving the new node a dead-end and orphaning the old successor. Match the
+  // specific handle when inserting off a branch slot; otherwise the anchor's
+  // default (handle-less) outgoing edge.
+  const successorEdge =
+    anchorId != null
+      ? doc.edges.find((e) =>
+          e.source === anchorId &&
+          (anchorHandle ? e.source_handle === anchorHandle : !e.source_handle),
+        )
+      : undefined;
+
   let next: QuizDoc;
   switch (kind) {
     case "question":
@@ -91,6 +104,22 @@ export function insertModule(
       break;
   }
   const newNodeId = next.nodes[next.nodes.length - 1]?.id ?? null;
+
+  // Re-route the captured successor edge to start from the new node, so the
+  // chain becomes anchor → new → next (no dead-end, no orphan). The handle
+  // belonged to the anchor's slot, so it's dropped on the new node's default
+  // outgoing edge.
+  if (newNodeId && successorEdge) {
+    next = {
+      ...next,
+      edges: next.edges.map((e) =>
+        e.id === successorEdge.id
+          ? { id: e.id, source: newNodeId, target: e.target }
+          : e,
+      ),
+    };
+  }
+
   return { doc: next, newNodeId };
 }
 

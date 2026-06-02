@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { Quiz } from "./quizSchema";
-import { setSlotWeight, setBranchMode } from "./quizMutations";
+import { setSlotWeight, setBranchMode, deleteNode } from "./quizMutations";
+import { insertModule } from "../components/studio/studioDoc";
+import { orderFlow } from "./flowOrder";
 
 function docWithBranch() {
   return Quiz.parse({
@@ -66,6 +68,61 @@ describe("setBranchMode", () => {
     const b = branch(next);
     expect(b.type === "branch" && b.data.mode).toBe("ab_split");
     expect(b.type === "branch" && b.data.slots).toHaveLength(2);
+    expect(() => Quiz.parse(next)).not.toThrow();
+  });
+});
+
+// A simple connected chain: intro → result.
+function linearDoc() {
+  return Quiz.parse({
+    quiz_id: "q1",
+    scope: { collection_ids: [] },
+    nodes: [
+      { id: "intro", type: "intro", position: { x: 0, y: 0 }, data: { headline: "Hi" } },
+      {
+        id: "r1",
+        type: "result",
+        position: { x: 1, y: 0 },
+        data: { headline: "Done", fallback_collection_id: "gid://c/fb" },
+      },
+    ],
+    edges: [{ id: "e1", source: "intro", target: "r1" }],
+  });
+}
+
+describe("insertModule splices (no dead-end)", () => {
+  it("inserts BETWEEN the anchor and its successor: intro → new → result", () => {
+    const { doc, newNodeId } = insertModule(linearDoc(), "question", "intro", undefined, "gid://c/fb");
+    expect(newNodeId).toBeTruthy();
+    const fromIntro = doc.edges.filter((e) => e.source === "intro");
+    // intro now points ONLY at the new node (not the old result).
+    expect(fromIntro).toHaveLength(1);
+    expect(fromIntro[0]!.target).toBe(newNodeId);
+    // the new node points onward to the old successor.
+    expect(doc.edges.some((e) => e.source === newNodeId && e.target === "r1")).toBe(true);
+    // no orphans / dead-ends.
+    expect(orderFlow(doc).orphans).toEqual([]);
+    expect(() => Quiz.parse(doc)).not.toThrow();
+  });
+
+  it("appends (no splice) when the anchor is a leaf with no successor", () => {
+    const base = linearDoc();
+    // anchor on the result (a leaf) — nothing to re-route.
+    const { doc, newNodeId } = insertModule(base, "end", "r1", undefined, "gid://c/fb");
+    expect(doc.edges.some((e) => e.source === "r1" && e.target === newNodeId)).toBe(true);
+  });
+});
+
+describe("deleteNode re-stitches", () => {
+  it("reconnects prev → next when deleting a straight-through node", () => {
+    // intro → q → result, then delete q ⇒ intro → result.
+    const withQ = insertModule(linearDoc(), "question", "intro", undefined, "gid://c/fb");
+    const qId = withQ.newNodeId!;
+    const next = deleteNode(withQ.doc, qId);
+    expect(next.nodes.some((n) => n.id === qId)).toBe(false);
+    expect(next.edges.some((e) => e.source === "intro" && e.target === "r1")).toBe(true);
+    expect(next.edges.some((e) => e.source === qId || e.target === qId)).toBe(false);
+    expect(orderFlow(next).orphans).toEqual([]);
     expect(() => Quiz.parse(next)).not.toThrow();
   });
 });
