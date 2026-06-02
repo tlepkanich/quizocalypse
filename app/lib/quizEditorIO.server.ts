@@ -1,4 +1,5 @@
 import { json } from "@remix-run/node";
+import type { Shop } from "@prisma/client";
 import { authenticate } from "../shopify.server";
 import prisma from "../db.server";
 import { Quiz } from "./quizSchema";
@@ -21,12 +22,17 @@ import type { IndexedProduct } from "./recommendationEngine";
 // it in json() so `useLoaderData<typeof loader>` stays precisely typed.
 export async function loadQuizEditorData(request: Request, id: string) {
   const { session } = await authenticate.admin(request);
-
   const shop = await prisma.shop.findUnique({
     where: { shopDomain: session.shop },
   });
   if (!shop) throw new Response("Shop not found", { status: 404 });
+  return loadQuizEditorDataForShop(shop, id, new URL(request.url).origin);
+}
 
+// Shop-resolved core of the loader — NO Shopify auth. The embedded route gets
+// `shop` from authenticate.admin; the standalone /studio surface resolves it
+// from the configured dev shop. Identical return shape either way.
+export async function loadQuizEditorDataForShop(shop: Shop, id: string, origin: string) {
   const quiz = await prisma.quiz.findFirst({
     where: { id, shopId: shop.id },
   });
@@ -93,7 +99,6 @@ export async function loadQuizEditorData(request: Request, id: string) {
 
   const brandVoiceName = parseBrandGuidelinesSafe(shop.brandGuidelines)?.name ?? null;
 
-  const origin = new URL(request.url).origin;
   return {
     quizId: quiz.id,
     name: quiz.name,
@@ -122,12 +127,23 @@ export async function loadQuizEditorData(request: Request, id: string) {
 // forwards it), preserving the precise action-data union for useFetcher.
 export async function handleQuizEditorAction(request: Request, id: string) {
   const { session, admin } = await authenticate.admin(request);
-
   const shop = await prisma.shop.findUnique({
     where: { shopDomain: session.shop },
   });
   if (!shop) return json({ ok: false, error: "Shop not found" }, { status: 404 });
+  return handleQuizEditorActionForShop(shop, id, request, () => Promise.resolve(admin));
+}
 
+// Shop-resolved core of the action — NO Shopify auth. `getAdmin` is a lazy
+// Admin API client used ONLY by the publish intent's discount creation; the
+// embedded route passes its live admin, the standalone surface an offline one
+// (via unauthenticated.admin). Everything else is shop-scoped Prisma + pure.
+export async function handleQuizEditorActionForShop(
+  shop: Shop,
+  id: string,
+  request: Request,
+  getAdmin: () => Promise<Parameters<typeof ensureQuizDiscount>[0]>,
+) {
   const contentType = request.headers.get("content-type") ?? "";
 
   if (contentType.includes("application/json")) {
@@ -169,13 +185,21 @@ export async function handleQuizEditorAction(request: Request, id: string) {
         parsedDraft.data.discount_config.enabled &&
         !parsedDraft.data.discount_config.code
       ) {
-        const ensured = await ensureQuizDiscount(admin, parsedDraft.data);
-        discountWarning = ensured.warning;
-        if (ensured.code) {
-          await prisma.quiz.update({
-            where: { id },
-            data: { draftJson: ensured.doc as never },
-          });
+        try {
+          const ensured = await ensureQuizDiscount(await getAdmin(), parsedDraft.data);
+          discountWarning = ensured.warning;
+          if (ensured.code) {
+            await prisma.quiz.update({
+              where: { id },
+              data: { draftJson: ensured.doc as never },
+            });
+          }
+        } catch {
+          // getAdmin() can fail on the standalone surface if no offline session
+          // is stored for the shop. Never block publish on it — degrade to a
+          // warning and ship without the discount code.
+          discountWarning =
+            "Couldn't create the discount code (Shopify admin unavailable). Published without it — re-publish from the embedded app to add it.";
         }
       }
 
