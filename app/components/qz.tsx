@@ -165,8 +165,8 @@ export function QzPageHeader({
 }) {
   return (
     <header className="qz-page-header">
-      <div className="qz-row qz-row-between" style={{ alignItems: "flex-end" }}>
-        <div style={{ maxWidth: 720 }}>
+      <div className="qz-row qz-row-between" style={{ alignItems: "flex-end", gap: 24 }}>
+        <div style={{ maxWidth: 880, minWidth: 0 }}>
           {eyebrow && <div className="qz-label qz-eyebrow">{eyebrow}</div>}
           <h1 className="qz-display qz-mt-8">{title}</h1>
           {subtitle && <p className="qz-subtitle">{subtitle}</p>}
@@ -174,6 +174,36 @@ export function QzPageHeader({
         {actions && <div className="qz-actions">{actions}</div>}
       </div>
     </header>
+  );
+}
+
+// Pill-style segmented toggle (e.g. Build / Optimize). Single-select; the
+// active option is marked aria-pressed and styled via .qz-segmented in CSS.
+export function QzSegmented<T extends string>({
+  options,
+  value,
+  onChange,
+  ariaLabel,
+}: {
+  options: { value: T; label: ReactNode; title?: string }[];
+  value: T;
+  onChange: (value: T) => void;
+  ariaLabel?: string;
+}) {
+  return (
+    <div className="qz-segmented" role="group" aria-label={ariaLabel}>
+      {options.map((o) => (
+        <button
+          key={o.value}
+          type="button"
+          aria-pressed={value === o.value}
+          title={o.title}
+          onClick={() => onChange(o.value)}
+        >
+          {o.label}
+        </button>
+      ))}
+    </div>
   );
 }
 
@@ -230,16 +260,16 @@ export function QzTooltip({
             position: "absolute",
             top: "calc(100% + 6px)",
             left: 0,
-            zIndex: 50,
+            zIndex: 40, // --qz-z-dropdown
             background: "var(--qz-ink)",
             color: "var(--qz-paper)",
             padding: "10px 12px",
-            borderRadius: "var(--qz-radius)",
+            borderRadius: "var(--qz-radius-sm)",
             fontSize: 12,
             lineHeight: 1.4,
             maxWidth: 280,
             minWidth: 200,
-            boxShadow: "0 4px 16px rgba(0,0,0,0.18)",
+            boxShadow: "var(--qz-shadow-lg)",
             // Render the tooltip below the trigger so it doesn't get clipped
             // by parent cards. left:0 keeps it left-aligned with the chip.
             pointerEvents: "auto",

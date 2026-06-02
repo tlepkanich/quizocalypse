@@ -1,5 +1,6 @@
 import { Quiz } from "./quizSchema";
 import type { Quiz as QuizDoc } from "./quizSchema";
+import { ATELIER_TOKENS } from "./themePresets";
 
 // ───────────────────────────────────────────────────────────────────────────
 // One-click DEMO quiz — a complete, publishable showcase that exercises the
@@ -199,15 +200,6 @@ export function buildDemoQuiz(fallbackCollectionId: string): QuizDoc {
       once_per_customer: true,
       title: "Quiz reward",
     },
-    design_tokens: {
-      colors: { primary: "#5b3df5", accent: "#f59e0b", background: "#ffffff", text: "#15151b" },
-      typography: {
-        heading: { family: "Fraunces", source: "google" },
-        body: { family: "Inter", source: "system" },
-      },
-      radius: "rounded",
-      button_style: "filled",
-      spacing: "spacious",
-    },
+    design_tokens: ATELIER_TOKENS,
   });
 }

@@ -17,7 +17,35 @@ export interface ThemePreset {
   tokens: DesignTokensT;
 }
 
+// The "elevated editorial" house theme — warm cream/ink/persimmon with Spectral
+// headlines (mirrors the admin design system). Exported so new + demo quizzes
+// can start on it (see seedQuiz.ts / demoQuiz.ts).
+export const ATELIER_TOKENS: DesignTokensT = {
+  colors: {
+    primary: "#1B1A17", // ink — elegant black CTAs
+    secondary: "#7E6B57", // warm taupe
+    accent: "#E8623C", // persimmon highlights
+    background: "#F8F6F1", // cream paper
+    text: "#1B1A17",
+    muted: "#8B8377",
+  },
+  typography: {
+    heading: { family: "Spectral", source: "google", weight: 500 },
+    body: { family: "Geist", source: "google", base_size: 17, scale_ratio: 1.3 },
+  },
+  radius: "rounded",
+  button_style: "filled",
+  spacing: "spacious",
+};
+
 export const THEME_PRESETS: ThemePreset[] = [
+  {
+    id: "atelier",
+    name: "Atelier",
+    description:
+      "Warm editorial — cream paper, ink text, persimmon highlights, Spectral serif. Premium DTC feel.",
+    tokens: ATELIER_TOKENS,
+  },
   {
     id: "minimal",
     name: "Minimal",

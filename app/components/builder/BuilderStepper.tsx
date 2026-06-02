@@ -38,47 +38,47 @@ export function BuilderStepper({
       style={{
         display: "flex",
         alignItems: "center",
-        gap: 8,
-        padding: "10px 14px",
-        marginBottom: 16,
+        gap: 6,
+        padding: "12px 16px",
+        marginBottom: 20,
         overflowX: "auto",
       }}
     >
       {BUILDER_STEPS.map((s, i) => {
         const state = states[s.n] ?? "upcoming";
-        // Every step is a free jump target — you can move in and out of any step
-        // at any time (e.g. on an already-built or published quiz), not just the
-        // ones already completed. The visual state stays as a progress cue.
-        const clickable = true;
+        // Every step is a free jump target — move in/out of any step at any time
+        // (e.g. an already-built or published quiz). State is just a progress cue.
         const isCurrent = s.n === current;
+        const reached = state === "done" || isCurrent;
         return (
-          <div key={s.n} style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <div key={s.n} style={{ display: "flex", alignItems: "center", gap: 6 }}>
             {i > 0 ? (
               <div
                 aria-hidden
                 style={{
-                  width: 28,
+                  width: 32,
                   height: 2,
-                  background: state === "upcoming" ? "#00000014" : "var(--qz-accent, #2a6df4)",
+                  borderRadius: 2,
+                  background: state === "upcoming" ? "var(--qz-rule)" : "var(--qz-accent)",
                   flex: "0 0 auto",
+                  transition: "background var(--qz-dur) var(--qz-ease)",
                 }}
               />
             ) : null}
             <button
-              onClick={() => clickable && onJump(s.n)}
-              disabled={!clickable}
+              onClick={() => onJump(s.n)}
               title={`${s.title} — ${s.subtitle}`}
               style={{
                 display: "flex",
                 alignItems: "center",
                 gap: 10,
                 border: "none",
-                background: isCurrent ? "var(--qz-cream-2, #f3f0ea)" : "transparent",
-                borderRadius: 999,
-                padding: "6px 12px 6px 6px",
+                background: isCurrent ? "var(--qz-cream-2)" : "transparent",
+                borderRadius: "var(--qz-radius-pill)",
+                padding: "7px 14px 7px 7px",
                 cursor: "pointer",
                 whiteSpace: "nowrap",
-                opacity: state === "upcoming" ? 0.75 : 1,
+                transition: "background var(--qz-dur) var(--qz-ease)",
               }}
             >
               <span
@@ -88,23 +88,33 @@ export function BuilderStepper({
                   borderRadius: "50%",
                   display: "grid",
                   placeItems: "center",
-                  fontSize: 13,
+                  fontSize: 12.5,
                   fontWeight: 700,
+                  fontVariantNumeric: "tabular-nums",
                   flex: "0 0 auto",
-                  color: state === "done" ? "#fff" : isCurrent ? "#fff" : "var(--qz-ink, #222)",
+                  color: reached ? "#fff" : "var(--qz-ink-4)",
                   background:
                     state === "done"
-                      ? "var(--qz-accent, #2a6df4)"
+                      ? "var(--qz-accent)"
                       : isCurrent
-                        ? "var(--qz-ink, #222)"
-                        : "#00000010",
-                  border: state === "upcoming" ? "1px solid #00000022" : "none",
+                        ? "var(--qz-ink)"
+                        : "transparent",
+                  border: state === "upcoming" ? "1px solid var(--qz-rule)" : "none",
+                  transition: "background var(--qz-dur) var(--qz-ease), color var(--qz-dur) var(--qz-ease)",
                 }}
               >
                 {state === "done" ? "✓" : s.n}
               </span>
-              <span style={{ display: "flex", flexDirection: "column", lineHeight: 1.15 }}>
-                <span style={{ fontWeight: 600, fontSize: 13 }}>{s.title}</span>
+              <span style={{ display: "flex", flexDirection: "column", lineHeight: 1.2 }}>
+                <span
+                  style={{
+                    fontWeight: 600,
+                    fontSize: 13,
+                    color: reached ? "var(--qz-ink)" : "var(--qz-ink-3)",
+                  }}
+                >
+                  {s.title}
+                </span>
                 <span className="qz-dim" style={{ fontSize: 11 }}>
                   {s.subtitle}
                 </span>

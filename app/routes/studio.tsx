@@ -20,23 +20,28 @@ export default function StudioLayout() {
         className="qz-row qz-row-between"
         style={{
           alignItems: "center",
-          padding: "10px 22px",
-          borderBottom: "1px solid #00000012",
+          padding: "14px 28px",
+          borderBottom: "1px solid var(--qz-rule)",
           position: "sticky",
           top: 0,
-          background: "var(--qz-paper, #fff)",
+          background: "color-mix(in srgb, var(--qz-paper) 86%, transparent)",
+          backdropFilter: "blur(10px)",
+          WebkitBackdropFilter: "blur(10px)",
           zIndex: 20,
         }}
       >
         <Link
           to="/studio"
-          style={{ fontWeight: 800, textDecoration: "none", color: "inherit", letterSpacing: "-0.01em" }}
+          style={{ display: "inline-flex", alignItems: "baseline", gap: 9, textDecoration: "none", color: "inherit" }}
         >
-          Quizocalypse <span className="qz-dim" style={{ fontWeight: 600 }}>Studio</span>
+          <span style={{ fontFamily: "var(--qz-font-display)", fontSize: 21, letterSpacing: "-0.02em" }}>
+            Quizocalypse
+          </span>
+          <span className="qz-label">Studio</span>
         </Link>
-        <span className="qz-dim" style={{ fontSize: 12 }}>standalone preview</span>
+        <span className="qz-label">standalone preview</span>
       </header>
-      <main style={{ flex: 1, minWidth: 0, width: "100%", padding: "20px 24px 64px" }}>
+      <main style={{ flex: 1, minWidth: 0, width: "100%" }}>
         <Outlet />
       </main>
     </div>

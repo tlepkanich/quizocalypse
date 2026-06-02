@@ -46,15 +46,28 @@ export default function StudioIndex() {
           }}
         >
           {quizzes.map((q) => (
-            <QzCard key={q.id} style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-              <div className="qz-row qz-row-between" style={{ alignItems: "center", gap: 8 }}>
-                <strong style={{ fontSize: 15 }}>{q.name}</strong>
+            <QzCard
+              key={q.id}
+              className="qz-interactive"
+              style={{ display: "flex", flexDirection: "column", gap: 14 }}
+            >
+              <div className="qz-row qz-row-between" style={{ alignItems: "flex-start", gap: 10 }}>
+                <span
+                  style={{
+                    fontFamily: "var(--qz-font-display)",
+                    fontSize: 19,
+                    lineHeight: 1.2,
+                    letterSpacing: "-0.01em",
+                  }}
+                >
+                  {q.name}
+                </span>
                 <QzBadge tone={q.status === "published" ? "ok" : "draft"}>{q.status}</QzBadge>
               </div>
               <div className="qz-dim" style={{ fontSize: 12 }}>
                 v{q.version} · updated {new Date(q.updatedAt).toLocaleDateString()}
               </div>
-              <div className="qz-row" style={{ gap: 10, marginTop: 4 }}>
+              <div className="qz-row" style={{ gap: 8, marginTop: "auto" }}>
                 <Link to={`/studio/${q.id}`} className="qz-btn qz-btn-primary qz-btn-sm">
                   Open builder →
                 </Link>

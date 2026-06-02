@@ -22,6 +22,7 @@ import {
   QzInput,
   QzTextarea,
   QzSelect,
+  QzSegmented,
 } from "../qz";
 import type { ContentBlock, DesignTokens, Quiz, QuizNode } from "../../lib/quizSchema";
 import { validateQuiz, type NodeIssue } from "../../lib/quizValidation";
@@ -401,22 +402,24 @@ function BuilderShell({ data, chrome }: { data: LoaderData; chrome: Chrome }) {
   };
 
   const viewToggle = (
-    <div className="qz-row" style={{ gap: 4 }}>
-      {(["build", "logic"] as const).map((v) => (
-        <button
-          key={v}
-          onClick={() => setView(v)}
-          className={`qz-btn qz-btn-sm${view === v ? " qz-btn-primary" : " qz-btn-ghost"}`}
-          title={
-            v === "build"
-              ? "Build the quiz — products, questions, results, preview"
-              : "Optimize after launch — A/B splits, analytics, the recommendation map, and product mapping"
-          }
-        >
-          {v === "build" ? "Build" : "Optimize"}
-        </button>
-      ))}
-    </div>
+    <QzSegmented
+      ariaLabel="Build or optimize"
+      value={view}
+      onChange={setView}
+      options={[
+        {
+          value: "build",
+          label: "Build",
+          title: "Build the quiz — products, questions, results, preview",
+        },
+        {
+          value: "logic",
+          label: "Optimize",
+          title:
+            "Optimize after launch — A/B splits, analytics, the recommendation map, and product mapping",
+        },
+      ]}
+    />
   );
   const controls = (
     <div className="qz-row" style={{ gap: 8, alignItems: "center" }}>

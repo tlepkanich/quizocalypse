@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { THEME_PRESETS, getPreset } from "./themePresets";
+import { THEME_PRESETS, getPreset, ATELIER_TOKENS } from "./themePresets";
 import { findContrastIssues } from "./designTokens";
 
 describe("Theme presets", () => {
@@ -16,6 +16,17 @@ describe("Theme presets", () => {
   it("getPreset returns the named preset", () => {
     const p = getPreset("dark");
     expect(p?.name).toBe("Dark");
+  });
+
+  it("leads with the Atelier house theme (warm editorial)", () => {
+    expect(THEME_PRESETS[0]?.id).toBe("atelier");
+    const p = getPreset("atelier");
+    expect(p?.name).toBe("Atelier");
+    expect(p?.tokens).toBe(ATELIER_TOKENS);
+    expect(p?.tokens.colors?.background).toBe("#F8F6F1"); // cream
+    expect(p?.tokens.colors?.accent).toBe("#E8623C"); // persimmon
+    expect(p?.tokens.typography?.heading?.family).toBe("Spectral");
+    expect(p?.tokens.typography?.body?.family).toBe("Geist");
   });
 
   it("getPreset returns undefined for unknown ids", () => {

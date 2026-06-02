@@ -1,15 +1,15 @@
 /* =====================================================================
-   Quizocalypse — Grid Notebook design system (Direction B)
-   Drop into app/styles/quizocalypse.css and import from app/root.tsx.
-
-   Loads via Remix's `links` export; see implementation/README.md.
+   Quizocalypse — "Elevated Editorial" design system
+   Warm Grid-Notebook DNA (cream / ink / persimmon, Spectral + Geist),
+   tuned airier + premium: real spacing/shadow/motion/z scales, softer
+   radius, focus rings. Loaded globally via app/root.tsx `links`.
    ===================================================================== */
 
 /* — Fonts (free, Google Fonts) — */
 @import url("https://fonts.googleapis.com/css2?family=Spectral:ital,wght@0,300..600;1,400&family=Geist:wght@300..700&family=JetBrains+Mono:wght@400;500;600&display=swap");
 
 :root {
-  /* Palette */
+  /* Palette (unchanged DNA) */
   --qz-cream:    #F8F6F1;
   --qz-cream-2:  #F2EFE7;
   --qz-paper:    #FFFEFA;
@@ -25,29 +25,69 @@
   --qz-warn:     #B45A1A;
   --qz-crit:     #B22A22;
 
+  /* Semantic tints — derived from the colors above (one source of truth) */
+  --qz-ok-tint:     color-mix(in srgb, var(--qz-ok)     9%,  var(--qz-paper));
+  --qz-warn-tint:   color-mix(in srgb, var(--qz-warn)   9%,  var(--qz-paper));
+  --qz-crit-tint:   color-mix(in srgb, var(--qz-crit)   9%,  var(--qz-paper));
+  --qz-accent-tint: color-mix(in srgb, var(--qz-accent) 10%, var(--qz-paper));
+  --qz-ok-edge:     color-mix(in srgb, var(--qz-ok)     28%, transparent);
+  --qz-warn-edge:   color-mix(in srgb, var(--qz-warn)   28%, transparent);
+  --qz-crit-edge:   color-mix(in srgb, var(--qz-crit)   28%, transparent);
+
   /* Type */
   --qz-font-display: "Spectral", Georgia, serif;
   --qz-font-body:    "Geist", -apple-system, "Helvetica Neue", sans-serif;
   --qz-font-mono:    "JetBrains Mono", ui-monospace, monospace;
 
-  /* Sizes — Grid Notebook (tighter than Editorial) */
-  --qz-t-display: 42px;
-  --qz-t-h1: 24px;
-  --qz-t-h2: 17px;
-  --qz-t-h3: 14px;
-  --qz-t-body: 14px;
-  --qz-t-small: 12.5px;
+  /* Sizes — elevated editorial (airier than the old Grid Notebook) */
+  --qz-t-display: 52px;
+  --qz-t-h1: 30px;
+  --qz-t-h2: 20px;
+  --qz-t-h3: 15px;
+  --qz-t-body: 15px;
+  --qz-t-small: 13px;
   --qz-t-mono: 11.5px;
+  --qz-lh-tight: 1.15;
+  --qz-lh: 1.6;
 
-  /* Layout */
-  --qz-radius: 2px;
-  --qz-radius-lg: 4px;
-  --qz-pad-card: 22px;
-  --qz-pad-gap: 18px;
+  /* Spacing scale */
+  --qz-space-1: 4px;
+  --qz-space-2: 8px;
+  --qz-space-3: 12px;
+  --qz-space-4: 16px;
+  --qz-space-5: 24px;
+  --qz-space-6: 32px;
+  --qz-space-7: 48px;
+  --qz-pad-card: 28px;
+  --qz-pad-gap: 20px;
+
+  /* Radius — softened for a premium feel */
+  --qz-radius:    10px;   /* cards / containers */
+  --qz-radius-sm: 7px;    /* inputs / buttons */
+  --qz-radius-lg: 14px;   /* large surfaces */
+  --qz-radius-pill: 999px;
+
+  /* Elevation — warm-tinted, soft */
+  --qz-shadow-sm: 0 1px 2px rgba(27, 26, 23, 0.05), 0 1px 1px rgba(27, 26, 23, 0.03);
+  --qz-shadow-md: 0 4px 16px rgba(27, 26, 23, 0.07), 0 1px 3px rgba(27, 26, 23, 0.05);
+  --qz-shadow-lg: 0 14px 44px rgba(27, 26, 23, 0.10), 0 4px 12px rgba(27, 26, 23, 0.06);
+  --qz-shadow-focus: 0 0 0 3px color-mix(in srgb, var(--qz-accent) 30%, transparent);
+
+  /* Motion */
+  --qz-ease: cubic-bezier(0.2, 0, 0, 1);
+  --qz-dur-fast: 110ms;
+  --qz-dur: 170ms;
+
+  /* Z-index layers */
+  --qz-z-sticky: 20;
+  --qz-z-dropdown: 40;
+  --qz-z-modal: 60;
+  --qz-z-toast: 80;
 }
 
 /* — Scope: wrap your admin app in <body data-qz="1"> to opt in
-     without breaking unrelated routes (auth.login, etc.) — */
+     without breaking unrelated routes (auth.login, etc.). The storefront
+     runtime overrides these vars on its own subtree, so it's unaffected. — */
 body[data-qz] {
   margin: 0;
   font-family: var(--qz-font-body);
@@ -57,18 +97,25 @@ body[data-qz] {
   background-image:
     linear-gradient(to right, var(--qz-rule-2) 1px, transparent 1px),
     linear-gradient(to bottom, var(--qz-rule-2) 1px, transparent 1px);
-  background-size: 24px 24px;
+  background-size: 28px 28px;
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
-  line-height: 1.5;
+  line-height: var(--qz-lh);
 }
 body[data-qz] *, body[data-qz] *::before, body[data-qz] *::after { box-sizing: border-box; }
 
+/* Global focus-visible: a warm ring on any keyboard-focused control. */
+body[data-qz] :focus-visible {
+  outline: none;
+  box-shadow: var(--qz-shadow-focus);
+  border-radius: var(--qz-radius-sm);
+}
+
 /* — Typography helpers — */
-.qz-display { font-family: var(--qz-font-display); font-weight: 400; font-size: var(--qz-t-display); line-height: 1.06; letter-spacing: -0.02em; margin: 0; }
-.qz-h1 { font-family: var(--qz-font-display); font-weight: 400; font-size: var(--qz-t-h1); line-height: 1.2; letter-spacing: -0.01em; margin: 0; }
+.qz-display { font-family: var(--qz-font-display); font-weight: 400; font-size: var(--qz-t-display); line-height: 1.04; letter-spacing: -0.02em; margin: 0; }
+.qz-h1 { font-family: var(--qz-font-display); font-weight: 400; font-size: var(--qz-t-h1); line-height: var(--qz-lh-tight); letter-spacing: -0.015em; margin: 0; }
 .qz-h2 { font-family: var(--qz-font-display); font-weight: 400; font-size: var(--qz-t-h2); line-height: 1.25; margin: 0; }
-.qz-h3 { font-family: var(--qz-font-body); font-weight: 600; font-size: var(--qz-t-h3); margin: 0; }
+.qz-h3 { font-family: var(--qz-font-body); font-weight: 600; font-size: var(--qz-t-h3); letter-spacing: -0.005em; margin: 0; }
 .qz-label { font-family: var(--qz-font-mono); font-size: 11px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.12em; color: var(--qz-ink-4); }
 .qz-mono { font-family: var(--qz-font-mono); font-size: var(--qz-t-mono); }
 .qz-muted { color: var(--qz-ink-3); }
@@ -82,70 +129,95 @@ body[data-qz] *, body[data-qz] *::before, body[data-qz] *::after { box-sizing: b
   border: 1px solid var(--qz-rule);
   border-radius: var(--qz-radius);
   padding: var(--qz-pad-card);
+  box-shadow: var(--qz-shadow-sm);
 }
 .qz-card.qz-flush { padding: 0; }
-.qz-card.qz-dash { border-style: dashed; background: transparent; }
+.qz-card.qz-dash { border-style: dashed; background: transparent; box-shadow: none; }
+/* Opt-in lift for clickable cards (gallery tiles, etc.) */
+.qz-card.qz-interactive {
+  cursor: pointer;
+  transition: box-shadow var(--qz-dur) var(--qz-ease), transform var(--qz-dur) var(--qz-ease), border-color var(--qz-dur) var(--qz-ease);
+}
+.qz-card.qz-interactive:hover { box-shadow: var(--qz-shadow-md); transform: translateY(-2px); border-color: color-mix(in srgb, var(--qz-ink) 12%, transparent); }
 
 /* — Button — */
 .qz-btn {
   display: inline-flex; align-items: center; gap: 8px;
-  height: 34px; padding: 0 14px;
+  height: 36px; padding: 0 16px;
   background: var(--qz-paper); color: var(--qz-ink);
-  border: 1px solid var(--qz-rule); border-radius: var(--qz-radius);
+  border: 1px solid var(--qz-rule); border-radius: var(--qz-radius-sm);
   font-size: 13.5px; font-weight: 500;
   font-family: var(--qz-font-body);
-  cursor: pointer; transition: background 120ms, border-color 120ms, color 120ms;
+  cursor: pointer;
+  transition: background var(--qz-dur) var(--qz-ease), border-color var(--qz-dur) var(--qz-ease), color var(--qz-dur) var(--qz-ease), box-shadow var(--qz-dur) var(--qz-ease), transform var(--qz-dur) var(--qz-ease);
   white-space: nowrap;
 }
-.qz-btn:hover { border-color: var(--qz-ink-3); }
-.qz-btn:focus-visible { outline: 2px solid var(--qz-accent); outline-offset: 2px; }
-.qz-btn[disabled], .qz-btn[aria-disabled="true"] { opacity: 0.5; cursor: not-allowed; }
+.qz-btn:hover { border-color: var(--qz-ink-3); box-shadow: var(--qz-shadow-sm); }
+.qz-btn:active { transform: translateY(0.5px); }
+.qz-btn[disabled], .qz-btn[aria-disabled="true"] { opacity: 0.45; cursor: not-allowed; box-shadow: none; transform: none; }
 .qz-btn-primary {
   background: var(--qz-ink); color: var(--qz-paper); border-color: var(--qz-ink);
 }
-.qz-btn-primary:hover { background: var(--qz-ink-2); border-color: var(--qz-ink-2); }
+.qz-btn-primary:hover { background: var(--qz-ink-2); border-color: var(--qz-ink-2); box-shadow: var(--qz-shadow-md); transform: translateY(-1px); }
 .qz-btn-accent {
-  background: var(--qz-accent); color: var(--qz-paper); border-color: var(--qz-accent);
+  background: var(--qz-accent); color: #fff; border-color: var(--qz-accent);
 }
-.qz-btn-accent:hover { background: var(--qz-accent-2); border-color: var(--qz-accent-2); }
-.qz-btn-ghost { background: transparent; border-color: transparent; }
-.qz-btn-ghost:hover { background: var(--qz-rule-2); border-color: var(--qz-rule); }
-.qz-btn-sm { height: 28px; padding: 0 10px; font-size: 12.5px; }
-.qz-btn-lg { height: 44px; padding: 0 22px; font-size: 14.5px; }
+.qz-btn-accent:hover { background: var(--qz-accent-2); border-color: var(--qz-accent-2); box-shadow: var(--qz-shadow-md); transform: translateY(-1px); }
+.qz-btn-ghost { background: transparent; border-color: transparent; box-shadow: none; }
+.qz-btn-ghost:hover { background: var(--qz-rule-2); border-color: var(--qz-rule); box-shadow: none; }
+.qz-btn-sm { height: 30px; padding: 0 12px; font-size: 12.5px; }
+.qz-btn-lg { height: 46px; padding: 0 24px; font-size: 15px; }
+
+/* — Segmented control (e.g. Build / Optimize) — */
+.qz-segmented {
+  display: inline-flex; align-items: center; gap: 2px;
+  padding: 3px; background: var(--qz-cream-2);
+  border: 1px solid var(--qz-rule); border-radius: var(--qz-radius-pill);
+}
+.qz-segmented button {
+  border: none; background: transparent;
+  height: 28px; padding: 0 14px; border-radius: var(--qz-radius-pill);
+  font-family: var(--qz-font-body); font-size: 13px; font-weight: 500;
+  color: var(--qz-ink-3); cursor: pointer;
+  transition: background var(--qz-dur) var(--qz-ease), color var(--qz-dur) var(--qz-ease), box-shadow var(--qz-dur) var(--qz-ease);
+}
+.qz-segmented button:hover { color: var(--qz-ink); }
+.qz-segmented button[aria-pressed="true"] { background: var(--qz-paper); color: var(--qz-ink); box-shadow: var(--qz-shadow-sm); }
 
 /* — Badge — */
 .qz-badge {
   display: inline-flex; align-items: center; gap: 6px;
-  height: 22px; padding: 0 8px;
+  height: 22px; padding: 0 9px;
   font-family: var(--qz-font-mono); font-size: 11px; font-weight: 500;
   letter-spacing: 0.06em; text-transform: uppercase;
-  border-radius: 100px; background: var(--qz-rule-2);
+  border-radius: var(--qz-radius-pill); background: var(--qz-rule-2);
   color: var(--qz-ink-2);
 }
 .qz-badge::before {
   content: ""; width: 6px; height: 6px; border-radius: 50%;
   background: var(--qz-ink-3);
 }
-.qz-badge.qz-ok    { color: var(--qz-ok);   background: #2E7A5C14; }
+.qz-badge.qz-ok    { color: var(--qz-ok);   background: var(--qz-ok-tint); }
 .qz-badge.qz-ok::before    { background: var(--qz-ok); }
 .qz-badge.qz-draft { color: var(--qz-ink-3); background: var(--qz-rule-2); }
 .qz-badge.qz-draft::before { background: var(--qz-ink-4); }
-.qz-badge.qz-warn  { color: var(--qz-warn); background: #B45A1A14; }
+.qz-badge.qz-warn  { color: var(--qz-warn); background: var(--qz-warn-tint); }
 .qz-badge.qz-warn::before  { background: var(--qz-warn); }
-.qz-badge.qz-crit  { color: var(--qz-crit); background: #B22A2214; }
+.qz-badge.qz-crit  { color: var(--qz-crit); background: var(--qz-crit-tint); }
 .qz-badge.qz-crit::before  { background: var(--qz-crit); }
 
 /* — Banner — */
 .qz-banner {
   display: flex; gap: 14px;
-  padding: 14px 16px;
+  padding: 16px 18px;
   border: 1px solid var(--qz-rule);
   border-radius: var(--qz-radius);
   background: var(--qz-paper);
+  box-shadow: var(--qz-shadow-sm);
 }
-.qz-banner-ok    { background: #2E7A5C0F; border-color: #2E7A5C40; color: #1F5740; }
-.qz-banner-warn  { background: #B45A1A0F; border-color: #B45A1A40; color: #7C3F11; }
-.qz-banner-crit  { background: #B22A220F; border-color: #B22A2240; color: #7C1D17; }
+.qz-banner-ok    { background: var(--qz-ok-tint);   border-color: var(--qz-ok-edge);   color: #1F5740; }
+.qz-banner-warn  { background: var(--qz-warn-tint); border-color: var(--qz-warn-edge); color: #7C3F11; }
+.qz-banner-crit  { background: var(--qz-crit-tint); border-color: var(--qz-crit-edge); color: #7C1D17; }
 .qz-banner-title { font-weight: 600; margin-bottom: 2px; }
 .qz-banner-body  { font-size: 13.5px; opacity: 0.85; }
 
@@ -154,15 +226,16 @@ body[data-qz] *, body[data-qz] *::before, body[data-qz] *::after { box-sizing: b
   display: grid; grid-template-columns: repeat(3, 1fr);
   gap: 1px; background: var(--qz-rule);
   border: 1px solid var(--qz-rule); border-radius: var(--qz-radius); overflow: hidden;
+  box-shadow: var(--qz-shadow-sm);
 }
 .qz-stat {
   background: var(--qz-paper);
-  padding: 20px 24px 22px;
+  padding: 22px 26px 24px;
   display: flex; flex-direction: column; gap: 10px;
 }
 .qz-stat .qz-label { color: var(--qz-ink-3); }
 .qz-stat-value {
-  font-family: var(--qz-font-display); font-size: 36px; line-height: 1;
+  font-family: var(--qz-font-display); font-size: 40px; line-height: 1;
   letter-spacing: -0.02em; font-variant-numeric: tabular-nums;
 }
 .qz-stat-delta { font-family: var(--qz-font-mono); font-size: 11.5px; color: var(--qz-ink-3); }
@@ -181,11 +254,11 @@ body[data-qz] *, body[data-qz] *::before, body[data-qz] *::after { box-sizing: b
 .qz-table tbody td {
   padding: 16px;
   border-bottom: 1px solid var(--qz-rule);
-  font-size: 14px;
+  font-size: 14.5px;
   vertical-align: middle;
 }
 .qz-table tbody tr:last-child td { border-bottom: 0; }
-.qz-table tbody tr { transition: background 80ms; }
+.qz-table tbody tr { transition: background var(--qz-dur-fast) var(--qz-ease); }
 .qz-table tbody tr.qz-clickable { cursor: pointer; }
 .qz-table tbody tr.qz-clickable:hover { background: var(--qz-rule-2); }
 .qz-table .qz-cell-name { font-weight: 500; }
@@ -201,22 +274,22 @@ body[data-qz] *, body[data-qz] *::before, body[data-qz] *::after { box-sizing: b
 .qz-field-hint { font-size: 12.5px; color: var(--qz-ink-3); }
 .qz-input, .qz-textarea, .qz-select {
   background: var(--qz-paper); color: var(--qz-ink);
-  border: 1px solid var(--qz-rule); border-radius: var(--qz-radius);
-  padding: 10px 12px; font-size: 14px; line-height: 1.4;
+  border: 1px solid var(--qz-rule); border-radius: var(--qz-radius-sm);
+  padding: 11px 13px; font-size: 14.5px; line-height: 1.4;
   width: 100%; outline: none;
   font-family: inherit;
-  transition: border-color 120ms, box-shadow 120ms;
+  transition: border-color var(--qz-dur) var(--qz-ease), box-shadow var(--qz-dur) var(--qz-ease);
 }
 .qz-input:focus, .qz-textarea:focus, .qz-select:focus {
-  border-color: var(--qz-ink); box-shadow: 0 0 0 3px var(--qz-rule);
+  border-color: var(--qz-accent); box-shadow: var(--qz-shadow-focus);
 }
 .qz-textarea { resize: vertical; min-height: 96px; }
 
 /* — Page layout — */
-.qz-page { padding: 36px 48px 96px; max-width: 1240px; margin: 0 auto; }
-.qz-page-header { margin-bottom: 32px; }
-.qz-page-header .qz-eyebrow { color: var(--qz-ink-3); margin-bottom: 12px; }
-.qz-page-header .qz-subtitle { color: var(--qz-ink-3); margin-top: 12px; max-width: 56ch; line-height: 1.55; font-size: 15px; }
+.qz-page { padding: 40px 48px 96px; max-width: 1280px; margin: 0 auto; }
+.qz-page-header { margin-bottom: 36px; }
+.qz-page-header .qz-eyebrow { color: var(--qz-ink-3); margin-bottom: 14px; }
+.qz-page-header .qz-subtitle { color: var(--qz-ink-3); margin-top: 14px; max-width: 60ch; line-height: 1.55; font-size: 15px; }
 
 /* — Page actions row (the row of buttons under a title) — */
 .qz-actions { display: flex; gap: 10px; flex-wrap: wrap; }
@@ -235,8 +308,10 @@ body[data-qz] *, body[data-qz] *::before, body[data-qz] *::after { box-sizing: b
 .qz-gap-8  { gap: 8px; }
 .qz-gap-12 { gap: 12px; }
 .qz-gap-16 { gap: 16px; }
+.qz-gap-20 { gap: 20px; }
 .qz-gap-24 { gap: 24px; }
 .qz-mt-8   { margin-top: 8px; }
+.qz-mt-12  { margin-top: 12px; }
 .qz-mt-16  { margin-top: 16px; }
 .qz-mt-24  { margin-top: 24px; }
 .qz-mt-32  { margin-top: 32px; }
@@ -244,6 +319,16 @@ body[data-qz] *, body[data-qz] *::before, body[data-qz] *::after { box-sizing: b
 
 /* — Selection — */
 body[data-qz] ::selection { background: var(--qz-ink); color: var(--qz-cream); }
+
+/* — Respect reduced-motion: drop lifts + transitions — */
+@media (prefers-reduced-motion: reduce) {
+  body[data-qz] *, body[data-qz] *::before, body[data-qz] *::after {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+  }
+  .qz-card.qz-interactive:hover,
+  .qz-btn-primary:hover, .qz-btn-accent:hover { transform: none; }
+}
 
 /* — Quiet Polaris reset for the screens we hand-build —
      If you have a route that still uses Polaris, just don't put `data-qz`
