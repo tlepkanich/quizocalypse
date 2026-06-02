@@ -153,6 +153,9 @@ type LoaderData = StudioBuilderData;
 function BuilderShell({ data, chrome }: { data: LoaderData; chrome: Chrome }) {
   const [doc, setDoc] = useState<QuizDoc>(data.doc as QuizDoc);
   const [zoomId, setZoomId] = useState<string | null>(null);
+  // Inline editing target in the flow (distinct from zoomId, the full-page
+  // advanced editor). Clicking a step or inserting one opens it inline.
+  const [editId, setEditId] = useState<string | null>(null);
   const [reconcileError, setReconcileError] = useState<string | null>(null);
   const collections = data.collections;
   const productIndex = data.productIndex;
@@ -283,7 +286,8 @@ function BuilderShell({ data, chrome }: { data: LoaderData; chrome: Chrome }) {
         fallbackCollection,
       );
       commit(next);
-      if (newNodeId) setZoomId(newNodeId);
+      // Open the new step inline in the flow (no full-page jump).
+      if (newNodeId) setEditId(newNodeId);
     },
     [doc, commit, fallbackCollection],
   );
@@ -292,6 +296,7 @@ function BuilderShell({ data, chrome }: { data: LoaderData; chrome: Chrome }) {
     (nodeId: string) => {
       commit(deleteNode(doc, nodeId));
       setZoomId((z) => (z === nodeId ? null : z));
+      setEditId((e) => (e === nodeId ? null : e));
     },
     [doc, commit],
   );
@@ -553,7 +558,10 @@ function BuilderShell({ data, chrome }: { data: LoaderData; chrome: Chrome }) {
               productIndex={productIndex}
               categories={categories}
               issuesByNode={issuesByNode}
-              onZoom={setZoomId}
+              editId={editId}
+              onEdit={setEditId}
+              onAdvanced={setZoomId}
+              onCommit={commit}
               onInsert={handleInsert}
               onDelete={handleDelete}
               onCleanupOrphans={handleCleanupOrphans}
@@ -680,7 +688,10 @@ function FlowView({
   productIndex,
   categories,
   issuesByNode,
-  onZoom,
+  editId,
+  onEdit,
+  onAdvanced,
+  onCommit,
   onInsert,
   onDelete,
   onCleanupOrphans,
@@ -690,7 +701,10 @@ function FlowView({
   productIndex: LoaderData["productIndex"];
   categories: LoaderData["categories"];
   issuesByNode: Map<string, NodeIssue[]>;
-  onZoom: (id: string) => void;
+  editId: string | null;
+  onEdit: (id: string | null) => void;
+  onAdvanced: (id: string) => void;
+  onCommit: (doc: QuizDoc) => void;
   onInsert: (kind: InsertKind, anchorId: string | null, anchorHandle?: string) => void;
   onDelete: (id: string) => void;
   onCleanupOrphans: (ids: string[]) => void;
@@ -730,7 +744,11 @@ function FlowView({
                 lanes={lanes}
                 nodeById={nodeById}
                 issuesByNode={issuesByNode}
-                onZoom={onZoom}
+                editId={editId}
+                onEdit={onEdit}
+                onAdvanced={onAdvanced}
+                onCommit={onCommit}
+                onDelete={onDelete}
                 onInsert={onInsert}
               />
               {/* Insert after this step (templated). Branch handles their own. */}
@@ -750,7 +768,7 @@ function FlowView({
           productIndex={productIndex}
           categories={categories}
           issuesByNode={issuesByNode}
-          onZoom={onZoom}
+          onZoom={onAdvanced}
           onDelete={onDelete}
           onCleanupOrphans={onCleanupOrphans}
         />
@@ -774,7 +792,11 @@ function StepColumn({
   lanes,
   nodeById,
   issuesByNode,
-  onZoom,
+  editId,
+  onEdit,
+  onAdvanced,
+  onCommit,
+  onDelete,
   onInsert,
 }: {
   node: QuizNode;
@@ -785,7 +807,11 @@ function StepColumn({
   lanes: ReturnType<typeof orderFlow>["branches"];
   nodeById: Map<string, QuizNode>;
   issuesByNode: Map<string, NodeIssue[]>;
-  onZoom: (id: string) => void;
+  editId: string | null;
+  onEdit: (id: string | null) => void;
+  onAdvanced: (id: string) => void;
+  onCommit: (doc: QuizDoc) => void;
+  onDelete: (id: string) => void;
   onInsert: (kind: InsertKind, anchorId: string | null, anchorHandle?: string) => void;
 }) {
   return (
@@ -796,7 +822,12 @@ function StepColumn({
         productIndex={productIndex}
         categories={categories}
         issues={issues}
-        onZoom={() => onZoom(node.id)}
+        editing={editId === node.id}
+        onOpen={() => onEdit(node.id)}
+        onClose={() => onEdit(null)}
+        onAdvanced={() => onAdvanced(node.id)}
+        onCommit={onCommit}
+        onDelete={() => onDelete(node.id)}
       />
       {lanes.map((lane) => (
         <div
@@ -827,7 +858,7 @@ function StepColumn({
                   key={s.nodeId}
                   node={ln}
                   issues={issuesByNode.get(s.nodeId) ?? []}
-                  onZoom={() => onZoom(s.nodeId)}
+                  onZoom={() => onAdvanced(s.nodeId)}
                 />
               );
             })
@@ -847,19 +878,81 @@ function StepCard({
   productIndex,
   categories,
   issues,
-  onZoom,
+  editing,
+  onOpen,
+  onClose,
+  onAdvanced,
+  onCommit,
+  onDelete,
 }: {
   node: QuizNode;
   doc: QuizDoc;
   productIndex: LoaderData["productIndex"];
   categories: LoaderData["categories"];
   issues: NodeIssue[];
-  onZoom: () => void;
+  editing: boolean;
+  onOpen: () => void;
+  onClose: () => void;
+  onAdvanced: () => void;
+  onCommit: (doc: QuizDoc) => void;
+  onDelete: () => void;
 }) {
   const bad = issues.length > 0;
+
+  // Inline editor — the card expands in place to the node's Content fields, so
+  // editing happens IN the flow (no full-page jump). Advanced (Layout/Style/CSS)
+  // is one click away. The rest of the flow stays visible alongside.
+  if (editing) {
+    return (
+      <div
+        className="qz-card"
+        style={{
+          width: 360,
+          padding: 14,
+          alignSelf: "stretch",
+          display: "flex",
+          flexDirection: "column",
+          gap: 12,
+          border: "2px solid var(--qz-accent)",
+          boxShadow: "var(--qz-shadow-md)",
+        }}
+      >
+        <div className="qz-row qz-row-between" style={{ alignItems: "center" }}>
+          <span style={{ fontWeight: 600, fontSize: 13 }}>{NODE_LABEL[node.type]}</span>
+          <div className="qz-row" style={{ gap: 6, alignItems: "center" }}>
+            {bad ? <QzBadge tone="crit">{issues.length}</QzBadge> : <QzBadge tone="ok">OK</QzBadge>}
+            <button onClick={onClose} className="qz-btn qz-btn-primary qz-btn-sm">
+              Done
+            </button>
+          </div>
+        </div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          <ContentTab doc={doc} node={node} onCommit={onCommit} />
+        </div>
+        <div
+          className="qz-row qz-row-between"
+          style={{ borderTop: "1px solid var(--qz-rule)", paddingTop: 10, alignItems: "center" }}
+        >
+          <button
+            onClick={onAdvanced}
+            className="qz-btn qz-btn-ghost qz-btn-sm"
+            title="Layout, design & CSS"
+          >
+            Advanced →
+          </button>
+          {node.type !== "intro" ? (
+            <button onClick={onDelete} className="qz-btn qz-btn-ghost qz-btn-sm">
+              Delete
+            </button>
+          ) : null}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <button
-      onClick={onZoom}
+      onClick={onOpen}
       className="qz-card"
       style={{
         width: THUMB_W,
@@ -867,7 +960,7 @@ function StepCard({
         overflow: "hidden",
         textAlign: "left",
         cursor: "pointer",
-        border: bad ? "2px solid var(--qz-crit, #c0392b)" : undefined,
+        border: bad ? "2px solid var(--qz-crit)" : undefined,
         position: "relative",
       }}
     >
@@ -1072,7 +1165,12 @@ function OrphanTray({
                 productIndex={productIndex}
                 categories={categories}
                 issues={issuesByNode.get(id) ?? []}
-                onZoom={() => onZoom(id)}
+                editing={false}
+                onOpen={() => onZoom(id)}
+                onClose={() => {}}
+                onAdvanced={() => onZoom(id)}
+                onCommit={() => {}}
+                onDelete={() => onDelete(id)}
               />
               <button
                 onClick={() => onDelete(id)}
