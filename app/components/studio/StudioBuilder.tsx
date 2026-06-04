@@ -1135,8 +1135,10 @@ function StepColumn({
   );
 }
 
-const THUMB_W = 248;
-const THUMB_SCALE = 0.42;
+// Cascade cards match the inline editor's width (360) so a card doesn't jump
+// size when opened; the preview is scaled to fill that width.
+const THUMB_W = 360;
+const THUMB_SCALE = 0.5;
 
 function StepCard({
   node,
@@ -1239,7 +1241,7 @@ function StepCard({
       </div>
       <div
         style={{
-          height: 150,
+          height: 200,
           overflow: "hidden",
           background: "#FAFAFA",
           borderTop: "1px solid var(--qz-rule)",

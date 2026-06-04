@@ -341,11 +341,15 @@ body[data-qz] ::selection { background: var(--qz-ink); color: var(--qz-cream); }
      builder stays usable on tablet/mobile widths.
    ============================================================ */
 .qz-cascade-grid {
-  grid-template-columns: 168px minmax(0, 1fr);
+  /* Palette + a capped flow column, centered as one group so the cards don't
+     float off to one side of a wide canvas. */
+  grid-template-columns: 168px minmax(0, 430px);
+  justify-content: center;
 }
 @media (max-width: 760px) {
   .qz-cascade-grid {
     grid-template-columns: 1fr;
+    justify-content: stretch;
   }
   /* Stacked: let the palette flow inline instead of sticking to the side. */
   .qz-cascade-palette {
