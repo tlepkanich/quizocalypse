@@ -79,6 +79,11 @@ export function Step1Products(props: StepProps) {
   // already grouped products on Manual so we don't hide their existing buckets.
   const [mode, setMode] = useState<GroupMode>(categories.length === 0 ? "ai" : "manual");
 
+  // Once groupings exist, the step leads with a read-only summary of them; the
+  // setup editor (source controls / manual builder) is revealed via "Edit
+  // groupings". A fresh quiz with no groups opens straight in the editor.
+  const [editing, setEditing] = useState(categories.length === 0);
+
   // Optional narrowing inputs per non-manual source.
   const [collectionRef, setCollectionRef] = useState("");
   const [tagRef, setTagRef] = useState("");
@@ -134,6 +139,9 @@ export function Step1Products(props: StepProps) {
     if (!runId || revalidatedRunId.current === runId) return;
     revalidatedRunId.current = runId;
     revalidator.revalidate();
+    // Saving completes the edit — drop back to the groupings summary so the
+    // merchant sees what they just created.
+    setEditing(false);
   }, [fetcher.state, fetcher.data, revalidator]);
 
   // ---- manual bucket mutations -------------------------------------------
@@ -224,50 +232,36 @@ export function Step1Products(props: StepProps) {
   );
   const tooFewProducts = productIndex.length < 5;
 
+  // Once groups exist we lead with the read-only summary; the setup editor is
+  // only shown while actively editing (or on a fresh, ungrouped quiz).
+  const hasGroups = categories.length > 0;
+  const showEditor = editing || !hasGroups;
+
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-      <div>
-        <h2 className="qz-h1" style={{ margin: 0 }}>
-          Group your products into outcome buckets
-        </h2>
-        <p className="qz-dim" style={{ marginTop: 6 }}>
-          Drag products from the left into a group, or click a product then
-          click a group. Each group becomes a quiz result.
-        </p>
+      <div
+        className="qz-row qz-row-between"
+        style={{ alignItems: "flex-start", gap: 12, flexWrap: "wrap" }}
+      >
+        <div>
+          <h2 className="qz-h1" style={{ margin: 0 }}>
+            {showEditor ? "Group your products into outcome buckets" : "Your product groupings"}
+          </h2>
+          <p className="qz-dim" style={{ marginTop: 6 }}>
+            {showEditor
+              ? "Drag products from the left into a group, or click a product then click a group. Each group becomes a quiz result."
+              : "These groups power your quiz results — each becomes its own recommendation page. Edit them anytime."}
+          </p>
+        </div>
+        {hasGroups ? (
+          <QzButton
+            variant={showEditor ? "ghost" : "primary"}
+            onClick={() => setEditing((e) => !e)}
+          >
+            {showEditor ? "Done editing" : "Edit groupings →"}
+          </QzButton>
+        ) : null}
       </div>
-
-      {/* Group-by segmented control */}
-      <div className="qz-row" style={{ gap: 6, flexWrap: "wrap" }}>
-        {MODE_OPTIONS.map((opt) => {
-          const active = opt.value === mode;
-          return (
-            <button
-              key={opt.value}
-              type="button"
-              onClick={() => setMode(opt.value)}
-              className="qz-badge"
-              aria-pressed={active}
-              style={{
-                cursor: "pointer",
-                fontSize: 12,
-                border: "1px solid",
-                borderColor: active ? "var(--qz-ink)" : "var(--qz-rule)",
-                background: active ? "var(--qz-ink)" : "transparent",
-                color: active ? "var(--qz-paper)" : "var(--qz-ink-2)",
-              }}
-            >
-              {opt.label}
-            </button>
-          );
-        })}
-      </div>
-
-      {tooFewProducts && (
-        <QzBanner tone="warn" title="Sync products first">
-          We need at least 5 synced products to build meaningful groups. Run a
-          catalog sync, then come back.
-        </QzBanner>
-      )}
 
       {fetcher.data?.ok === false && (
         <QzBanner tone="crit" title="Couldn’t save groups">
@@ -275,59 +269,98 @@ export function Step1Products(props: StepProps) {
         </QzBanner>
       )}
 
-      {/* Non-manual source controls */}
-      {mode !== "manual" && (
-        <QzCard>
-          <SourceControls
-            mode={mode}
-            collections={collections}
-            collectionRef={collectionRef}
-            tagRef={tagRef}
-            typeRef={typeRef}
-            metafieldKey={metafieldKey}
-            isWorking={isWorking}
-            tooFewProducts={tooFewProducts}
-            hasCategories={categories.length > 0}
-            onCollectionRef={setCollectionRef}
-            onTagRef={setTagRef}
-            onTypeRef={setTypeRef}
-            onMetafieldKey={setMetafieldKey}
-            onGenerate={generateGroups}
-            onDiscover={discover}
-          />
-        </QzCard>
-      )}
+      {showEditor ? (
+        <>
+          {/* Group-by segmented control */}
+          <div className="qz-row" style={{ gap: 6, flexWrap: "wrap" }}>
+            {MODE_OPTIONS.map((opt) => {
+              const active = opt.value === mode;
+              return (
+                <button
+                  key={opt.value}
+                  type="button"
+                  onClick={() => setMode(opt.value)}
+                  className="qz-badge"
+                  aria-pressed={active}
+                  style={{
+                    cursor: "pointer",
+                    fontSize: 12,
+                    border: "1px solid",
+                    borderColor: active ? "var(--qz-ink)" : "var(--qz-rule)",
+                    background: active ? "var(--qz-ink)" : "transparent",
+                    color: active ? "var(--qz-paper)" : "var(--qz-ink-2)",
+                  }}
+                >
+                  {opt.label}
+                </button>
+              );
+            })}
+          </div>
 
-      {/* Manual two-pane builder */}
-      {mode === "manual" && (
-        <ManualBuilder
-          unassignedProducts={unassignedProducts}
-          buckets={buckets}
-          productById={productById}
-          selectedProductId={selectedProductId}
-          tagChips={tagChips}
-          tagFilter={tagFilter}
-          isWorking={isWorking}
-          canSave={manualCanSave}
-          onSetTagFilter={setTagFilter}
-          onSelectProduct={(id) =>
-            setSelectedProductId((cur) => (cur === id ? null : id))
-          }
-          onAddBucket={addBucket}
-          onRenameBucket={renameBucket}
-          onRemoveBucket={removeBucket}
-          onAssignSelected={assignSelectedToBucket}
-          onDropProduct={addProductToBucket}
-          onUnassignProduct={unassignProduct}
-          onSave={saveManual}
-        />
-      )}
+          {tooFewProducts && (
+            <QzBanner tone="warn" title="Sync products first">
+              We need at least 5 synced products to build meaningful groups. Run a
+              catalog sync, then come back.
+            </QzBanner>
+          )}
 
-      {/* Saved buckets summary — always reflects props.categories. */}
-      <SavedBucketsSummary categories={categories} />
+          {/* Non-manual source controls */}
+          {mode !== "manual" && (
+            <QzCard>
+              <SourceControls
+                mode={mode}
+                collections={collections}
+                collectionRef={collectionRef}
+                tagRef={tagRef}
+                typeRef={typeRef}
+                metafieldKey={metafieldKey}
+                isWorking={isWorking}
+                tooFewProducts={tooFewProducts}
+                hasCategories={categories.length > 0}
+                onCollectionRef={setCollectionRef}
+                onTagRef={setTagRef}
+                onTypeRef={setTypeRef}
+                onMetafieldKey={setMetafieldKey}
+                onGenerate={generateGroups}
+                onDiscover={discover}
+              />
+            </QzCard>
+          )}
+
+          {/* Manual two-pane builder */}
+          {mode === "manual" && (
+            <ManualBuilder
+              unassignedProducts={unassignedProducts}
+              buckets={buckets}
+              productById={productById}
+              selectedProductId={selectedProductId}
+              tagChips={tagChips}
+              tagFilter={tagFilter}
+              isWorking={isWorking}
+              canSave={manualCanSave}
+              onSetTagFilter={setTagFilter}
+              onSelectProduct={(id) =>
+                setSelectedProductId((cur) => (cur === id ? null : id))
+              }
+              onAddBucket={addBucket}
+              onRenameBucket={renameBucket}
+              onRemoveBucket={removeBucket}
+              onAssignSelected={assignSelectedToBucket}
+              onDropProduct={addProductToBucket}
+              onUnassignProduct={unassignProduct}
+              onSave={saveManual}
+            />
+          )}
+        </>
+      ) : (
+        // Read view — the active groupings, shown once setup is done.
+        <ActiveGroupings categories={categories} productById={productById} />
+      )}
 
       <p className="qz-dim" style={{ fontSize: 12 }}>
-        Group your products to continue · Step 1 of 5
+        {hasGroups
+          ? `${categories.length} group${categories.length === 1 ? "" : "s"} ready · Step 1 of 4`
+          : "Group your products to continue · Step 1 of 4"}
       </p>
     </div>
   );
@@ -994,47 +1027,93 @@ function BucketCard({
 
 // ---- Saved buckets summary ------------------------------------------------
 
-function SavedBucketsSummary({ categories }: { categories: BuilderCategory[] }) {
+// Read-only view of the active groupings, shown once setup is done. Each card
+// is a group: name, product count, where it came from, and a few sample product
+// titles so the merchant can sanity-check membership at a glance.
+function ActiveGroupings({
+  categories,
+  productById,
+}: {
+  categories: BuilderCategory[];
+  productById: Map<string, IndexedProduct>;
+}) {
   if (categories.length === 0) {
     return (
-      <QzBanner tone="warn" title="No saved buckets yet">
-        Assemble and save at least one group to continue. Each saved group
-        becomes a quiz result page.
+      <QzBanner tone="warn" title="No groups yet">
+        Assemble and save at least one group to continue. Each group becomes a
+        quiz result page.
       </QzBanner>
     );
   }
   return (
-    <div className="qz-col qz-gap-8">
-      <div className="qz-label">
-        Saved buckets ({categories.length}) — these become your quiz results
-      </div>
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))",
-          gap: 12,
-        }}
-      >
-        {categories.map((c) => (
-          <div key={c.id} className="qz-card" style={{ padding: 14 }}>
+    <div
+      style={{
+        display: "grid",
+        gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))",
+        gap: 12,
+      }}
+    >
+      {categories.map((c) => {
+        const sample = c.productIds
+          .map((id) => productById.get(id)?.title)
+          .filter((t): t is string => Boolean(t))
+          .slice(0, 3);
+        const remainder = c.productIds.length - sample.length;
+        const empty = c.productIds.length === 0;
+        return (
+          <div
+            key={c.id}
+            className="qz-card"
+            style={{ padding: 14, display: "flex", flexDirection: "column", gap: 8 }}
+          >
             <div
               className="qz-row qz-row-between"
               style={{ alignItems: "center", gap: 8 }}
             >
               <strong style={{ fontSize: 14 }}>{c.name || "Untitled"}</strong>
-              <QzBadge tone="ok">
-                {c.productIds.length} product
-                {c.productIds.length === 1 ? "" : "s"}
+              <QzBadge tone={empty ? "warn" : "ok"}>
+                {c.productIds.length} product{c.productIds.length === 1 ? "" : "s"}
               </QzBadge>
             </div>
             {c.source && c.source !== "manual" ? (
-              <div className="qz-dim" style={{ fontSize: 11, marginTop: 6 }}>
+              <div className="qz-dim" style={{ fontSize: 11 }}>
                 from {c.source.replace(/_/g, " ")}
               </div>
             ) : null}
+            {empty ? (
+              <div className="qz-dim" style={{ fontSize: 12 }}>
+                No products yet — edit to add some.
+              </div>
+            ) : (
+              <ul
+                style={{
+                  margin: 0,
+                  paddingLeft: 16,
+                  fontSize: 12,
+                  color: "var(--qz-ink-2)",
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 2,
+                }}
+              >
+                {sample.map((t, i) => (
+                  <li
+                    key={i}
+                    style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
+                  >
+                    {t}
+                  </li>
+                ))}
+                {remainder > 0 ? (
+                  <li style={{ listStyle: "none", marginLeft: -16 }} className="qz-dim">
+                    +{remainder} more
+                  </li>
+                ) : null}
+              </ul>
+            )}
           </div>
-        ))}
-      </div>
+        );
+      })}
     </div>
   );
 }
