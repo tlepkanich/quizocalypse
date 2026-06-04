@@ -55,11 +55,10 @@ export interface QuizRuntimeProps {
   version: number;
   shopDomain: string;
   mode?: QuizRuntimeMode;
-  // Preview-only (ignored when mode==="live"):
-  categories?: Array<{ id: string; productIds: string[] }>;
+  // Preview-only (ignored when mode==="live"). Preview always starts fresh at
+  // the intro because the localStorage restore effect early-returns on isPreview.
   tokensOverride?: DesignTokensT | null;
   breakpoint?: "desktop" | "mobile";
-  startAtIntro?: boolean;
 }
 
 // Content-block types the storefront renders directly. Literal blocks render via

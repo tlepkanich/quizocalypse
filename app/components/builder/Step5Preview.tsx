@@ -134,7 +134,6 @@ export function Step5Preview({
           shopDomain=""
           tokensOverride={tryOnTokens}
           breakpoint={breakpoint}
-          startAtIntro
         />
       </DeviceFrame>
 
