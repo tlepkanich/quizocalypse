@@ -3,6 +3,7 @@ import { QuizRuntime } from "../runtime/QuizRuntime";
 import { QzBadge, QzButton, QzCard, QzField, QzInput, QzSegmented, QzSelect } from "../qz";
 import { getPreset } from "../../lib/themePresets";
 import { resolveDesignTokens, type DesignTokensT } from "../../lib/designTokens";
+import { bakeResultPages } from "../../lib/quizPublish";
 import type { StepProps } from "./stepProps";
 import { DeviceFrame } from "./preview/DeviceFrame";
 import { ReskinSwitcher } from "./preview/ReskinSwitcher";
@@ -24,6 +25,7 @@ export function Step5Preview({
   doc,
   onCommit,
   productIndex,
+  categories,
   ordered,
   previewUrl,
   quizId,
@@ -31,6 +33,17 @@ export function Step5Preview({
   const [frameW, setFrameW] = useState<number>(DEVICE_PRESETS.desktop);
   const [tryOnId, setTryOnId] = useState<string | null>(null);
   const [restartKey, setRestartKey] = useState(0);
+
+  // Live draft recommendations: the runtime resolves result pages from the
+  // baked `category_product_ids_map` (a publish-time field a draft lacks). Bake
+  // it here from the builder's live buckets (StepProps.categories) using the
+  // SAME publish logic, so preview result pages show real products without a
+  // re-publish. The builder's productIndex is the full catalog, so the engine's
+  // category-intersection resolves cleanly.
+  const previewDoc = useMemo(() => {
+    const byId = new Map(categories.map((c) => [c.id, c.productIds]));
+    return { ...doc, results_pages: bakeResultPages(doc, byId) };
+  }, [doc, categories]);
 
   // Tried-on theme tokens layered over the saved doc (live, not yet saved).
   const tryOnTokens = useMemo<DesignTokensT | null>(() => {
@@ -123,12 +136,12 @@ export function Step5Preview({
         <QuizRuntime
           key={restartKey}
           mode="preview"
-          doc={doc}
+          doc={previewDoc}
           productIndex={productIndex}
-          designTokens={doc.design_tokens ?? null}
-          designOverrides={doc.design_overrides}
-          breakpointOverrides={doc.breakpoint_overrides}
-          resultLayoutMode={doc.result_layout_mode}
+          designTokens={previewDoc.design_tokens ?? null}
+          designOverrides={previewDoc.design_overrides}
+          breakpointOverrides={previewDoc.breakpoint_overrides}
+          resultLayoutMode={previewDoc.result_layout_mode}
           quizId={quizId}
           version={0}
           shopDomain=""
@@ -144,8 +157,8 @@ export function Step5Preview({
       ) : null}
 
       <p className="qz-dim" style={{ fontSize: 11.5, margin: 0 }}>
-        Recommendations reflect your last published catalog data — re-publish after editing
-        product groups to refresh them here.
+        Recommendations here resolve from your current product groups — the same products
+        shoppers will see once you publish.
       </p>
 
       {/* Floating launcher config (unchanged) */}
