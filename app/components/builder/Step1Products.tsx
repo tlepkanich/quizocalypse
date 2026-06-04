@@ -9,6 +9,7 @@ import {
   QzInput,
   QzSelect,
 } from "../qz";
+import { analyzeBucketBalance, bucketBalanceMessage } from "../../lib/bucketBalance";
 import type { IndexedProduct } from "../../lib/recommendationEngine";
 import type { BuilderCategory, StepProps } from "./stepProps";
 
@@ -237,6 +238,17 @@ export function Step1Products(props: StepProps) {
   const hasGroups = categories.length > 0;
   const showEditor = editing || !hasGroups;
 
+  // Imbalance signal — one bucket swallowing the catalog (or an empty bucket)
+  // skews recommendations. Surfaced as a banner + per-card badges so it's
+  // visible right where the groups are shown, not just in the Optimize tab.
+  const balanceMessage = hasGroups
+    ? bucketBalanceMessage(categories.map((c) => ({ name: c.name, count: c.productIds.length })))
+    : null;
+  const oversizedIds = useMemo(() => {
+    const counts = categories.map((c) => c.productIds.length);
+    return new Set(analyzeBucketBalance(counts).oversized.map((i) => categories[i]!.id));
+  }, [categories]);
+
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
       <div
@@ -268,6 +280,12 @@ export function Step1Products(props: StepProps) {
           {fetcher.data.error ?? "Unknown error"}
         </QzBanner>
       )}
+
+      {balanceMessage ? (
+        <QzBanner tone="warn" title="Groups are unbalanced">
+          {balanceMessage}
+        </QzBanner>
+      ) : null}
 
       {showEditor ? (
         <>
@@ -354,7 +372,11 @@ export function Step1Products(props: StepProps) {
         </>
       ) : (
         // Read view — the active groupings, shown once setup is done.
-        <ActiveGroupings categories={categories} productById={productById} />
+        <ActiveGroupings
+          categories={categories}
+          productById={productById}
+          oversizedIds={oversizedIds}
+        />
       )}
 
       <p className="qz-dim" style={{ fontSize: 12 }}>
@@ -1033,9 +1055,11 @@ function BucketCard({
 function ActiveGroupings({
   categories,
   productById,
+  oversizedIds,
 }: {
   categories: BuilderCategory[];
   productById: Map<string, IndexedProduct>;
+  oversizedIds: Set<string>;
 }) {
   if (categories.length === 0) {
     return (
@@ -1060,21 +1084,33 @@ function ActiveGroupings({
           .slice(0, 3);
         const remainder = c.productIds.length - sample.length;
         const empty = c.productIds.length === 0;
+        const oversized = oversizedIds.has(c.id);
         return (
           <div
             key={c.id}
             className="qz-card"
-            style={{ padding: 14, display: "flex", flexDirection: "column", gap: 8 }}
+            style={{
+              padding: 14,
+              display: "flex",
+              flexDirection: "column",
+              gap: 8,
+              border: oversized ? "1px solid var(--qz-warn, #c98a00)" : undefined,
+            }}
           >
             <div
               className="qz-row qz-row-between"
               style={{ alignItems: "center", gap: 8 }}
             >
               <strong style={{ fontSize: 14 }}>{c.name || "Untitled"}</strong>
-              <QzBadge tone={empty ? "warn" : "ok"}>
+              <QzBadge tone={empty || oversized ? "warn" : "ok"}>
                 {c.productIds.length} product{c.productIds.length === 1 ? "" : "s"}
               </QzBadge>
             </div>
+            {oversized ? (
+              <div className="qz-dim" style={{ fontSize: 11, color: "var(--qz-warn, #a8730a)" }}>
+                Large group — may dominate recommendations.
+              </div>
+            ) : null}
             {c.source && c.source !== "manual" ? (
               <div className="qz-dim" style={{ fontSize: 11 }}>
                 from {c.source.replace(/_/g, " ")}

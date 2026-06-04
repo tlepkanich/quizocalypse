@@ -4,6 +4,7 @@ import type { Quiz as QuizDoc } from "../../lib/quizSchema";
 import type { IndexedProduct } from "../../lib/recommendationEngine";
 import type { BuilderCategory } from "../builder/stepProps";
 import { buildMappingMatrix } from "../../lib/productMapping";
+import { bucketBalanceMessage } from "../../lib/bucketBalance";
 
 // FOCUS #2, HALF 2 — the Product Mapping table. Rows = catalog products,
 // columns = result pages bound to a bucket. A cell toggles whether the product
@@ -51,27 +52,15 @@ export function ProductMappingTable({
   );
 
   // Surface lopsided bucketing so "one bucket swallowed the catalog" (the cause
-  // of "every result is the same products") is visible, not silent.
-  const balanceWarning = useMemo(() => {
-    const cols = matrix.columns;
-    if (cols.length < 2) return null;
-    const empties = cols.filter((c) => c.productCount === 0);
-    if (empties.length > 0) {
-      const names = empties.map((c) => `"${c.label}"`).join(", ");
-      return `${empties.length === 1 ? "Bucket" : "Buckets"} ${names} ${
-        empties.length === 1 ? "has" : "have"
-      } no products — ${
-        empties.length === 1 ? "that page" : "those pages"
-      } will fall back to the default collection. Map products in below, or re-group in Step 1.`;
-    }
-    const total = cols.reduce((s, c) => s + c.productCount, 0);
-    const top = cols.reduce((m, c) => (c.productCount > m.productCount ? c : m), cols[0]!);
-    if (total > 0 && top.productCount / total > 0.6) {
-      const pct = Math.round((top.productCount / total) * 100);
-      return `"${top.label}" holds ${pct}% of mapped products — recommendations will skew toward it. Rebalance below or re-group in Step 1 for more variety per answer.`;
-    }
-    return null;
-  }, [matrix.columns]);
+  // of "every result is the same products") is visible, not silent. Shares the
+  // detection with the Step-1 Products summary so both surfaces agree.
+  const balanceWarning = useMemo(
+    () =>
+      bucketBalanceMessage(
+        matrix.columns.map((c) => ({ name: c.label, count: c.productCount })),
+      ),
+    [matrix.columns],
+  );
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
