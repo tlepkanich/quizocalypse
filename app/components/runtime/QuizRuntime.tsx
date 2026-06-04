@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
 import type { Quiz, ResultStage as ResultStageT } from "../../lib/quizSchema";
 import {
   resolveNextStep,
@@ -75,6 +75,11 @@ const RUNTIME_BLOCK_TYPES = new Set([
   "divider",
   "recommendations",
 ]);
+
+// Preview mode flag shared with the deep leaf views (cart / email-capture /
+// integration / ai-chat) so they can no-op their side-effects without threading
+// a prop through every intermediate component. Default false = live.
+const RuntimePreviewContext = createContext(false);
 
 export function QuizRuntime(props: QuizRuntimeProps) {
   const {
@@ -680,7 +685,11 @@ export function QuizRuntime(props: QuizRuntimeProps) {
   const showPreview = previewActive && currentNode?.type !== "result";
 
   return (
-    <div style={rootStyle}>
+    <RuntimePreviewContext.Provider value={isPreview}>
+    <div
+      className={isPreview ? (breakpoint === "desktop" ? "qz-bp-desktop" : "qz-bp-mobile") : undefined}
+      style={rootStyle}
+    >
       {fontUrl && <link rel="stylesheet" href={fontUrl} />}
       <style>{`
         @media (prefers-reduced-motion: reduce) {
@@ -692,6 +701,19 @@ export function QuizRuntime(props: QuizRuntimeProps) {
           }
         }
         .qz-runtime-shell { width: 100%; display: flex; flex-direction: column; align-items: center; gap: 24px; }
+        ${
+          isPreview
+            ? `
+        /* Preview: the two-column layout follows the resizable FRAME width via a
+           breakpoint class on the root, NOT the window. */
+        .qz-bp-desktop .qz-runtime-page { align-items: flex-start !important; justify-content: center !important; padding-top: 64px !important; }
+        .qz-bp-desktop .qz-runtime-shell { flex-direction: row; align-items: flex-start; max-width: 1100px; gap: 40px; }
+        .qz-bp-desktop .qz-runtime-content { flex: 1; min-width: 0; display: flex; justify-content: center; }
+        .qz-bp-desktop .qz-preview-rail { flex: 0 0 320px; position: sticky; top: 64px; }
+        .qz-bp-desktop .qz-preview-chip { display: none !important; }
+        .qz-bp-mobile .qz-preview-rail { display: none; }
+        `
+            : `
         @media (min-width: 900px) {
           .qz-runtime-page {
             align-items: flex-start !important;
@@ -719,6 +741,8 @@ export function QuizRuntime(props: QuizRuntimeProps) {
         }
         @media (max-width: 899px) {
           .qz-preview-rail { display: none; }
+        }
+        `
         }
       `}</style>
       <div className="qz-runtime-page" style={styles.page}>
@@ -754,6 +778,7 @@ export function QuizRuntime(props: QuizRuntimeProps) {
         )}
       </div>
     </div>
+    </RuntimePreviewContext.Provider>
   );
 }
 
@@ -997,6 +1022,7 @@ function PreviewList({
   onClick: (product: RecommendedProduct, position: number) => void;
   onAdd?: (product: RecommendedProduct, position: number) => void;
 }) {
+  const isPreviewMode = useContext(RuntimePreviewContext);
   if (recs.length === 0) {
     return (
       <p
@@ -1103,6 +1129,7 @@ function PreviewList({
                 type="button"
                 onClick={() => {
                   onAdd(r, idx);
+                  if (isPreviewMode) return; // preview: no cart navigation
                   addToCartFromQuiz(cartUrl, numericId(r.default_variant_id), false);
                 }}
                 style={{
@@ -1522,6 +1549,7 @@ function EmailGateView({
   sessionId: string;
   onSubmit: (contact?: { email?: string; name?: string; phone?: string }) => void;
 }) {
+  const isPreviewMode = useContext(RuntimePreviewContext);
   const [email, setEmail] = useState("");
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
@@ -1532,6 +1560,7 @@ function EmailGateView({
     if (!valid || submitting) return;
     setSubmitting(true);
     try {
+      if (isPreviewMode) return; // preview: no /captures POST (finally still advances)
       await fetch("/captures", {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -1642,6 +1671,7 @@ function AskAIView({
   styles: ReturnType<typeof stylesFor>;
   onContinue: () => void;
 }) {
+  const isPreviewMode = useContext(RuntimePreviewContext);
   type Turn = { role: "user" | "assistant"; content: string };
   const [transcript, setTranscript] = useState<Turn[]>([
     { role: "assistant", content: node.data.opening_message },
@@ -1675,6 +1705,18 @@ function AskAIView({
       .map((t) => ({ role: t.role, content: t.content }));
     setTranscript((prev) => [...prev, nextTurn]);
     setDraft("");
+    if (isPreviewMode) {
+      // Preview: stub a canned reply (no live Claude call).
+      setTranscript((prev) => [
+        ...prev,
+        {
+          role: "assistant",
+          content: "This is a preview — the AI assistant replies for real in your published quiz.",
+        },
+      ]);
+      setSending(false);
+      return;
+    }
     try {
       const res = await fetch(`/q/${quizId}/ai-chat`, {
         method: "POST",
@@ -1878,12 +1920,17 @@ function IntegrationView({
   styles: ReturnType<typeof stylesFor>;
   onDone: () => void;
 }) {
+  const isPreviewMode = useContext(RuntimePreviewContext);
   const fired = useRef(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (fired.current) return;
     fired.current = true;
+    if (isPreviewMode) {
+      onDone(); // preview: skip the webhook/Klaviyo POST, just advance
+      return;
+    }
     let cancelled = false;
     (async () => {
       try {
@@ -2419,6 +2466,7 @@ function ProductCard({
   discountLabel?: string;
   onAdd?: () => void;
 }) {
+  const isPreviewMode = useContext(RuntimePreviewContext);
   void position;
   const cartUrl = cartPermalink(shopDomain, product.default_variant_id, 1, discountCode);
 
@@ -2494,6 +2542,7 @@ function ProductCard({
           type="button"
           onClick={() => {
             onAdd?.();
+            if (isPreviewMode) return; // preview: no cart navigation / postMessage
             addToCartFromQuiz(cartUrl, numericId(product.default_variant_id), Boolean(discountCode));
           }}
           style={{ ...ctaStyle, cursor: "pointer" }}
