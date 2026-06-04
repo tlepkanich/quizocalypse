@@ -1,112 +1,155 @@
-import { useState } from "react";
-import { StepPreview } from "../runtime/StepPreview";
-import { QzBadge, QzBanner, QzButton, QzCard, QzField, QzInput, QzSelect } from "../qz";
+import { useMemo, useState } from "react";
+import { QuizRuntime } from "../runtime/QuizRuntime";
+import { QzBadge, QzButton, QzCard, QzField, QzInput, QzSegmented, QzSelect } from "../qz";
+import { getPreset } from "../../lib/themePresets";
+import { resolveDesignTokens, type DesignTokensT } from "../../lib/designTokens";
 import type { StepProps } from "./stepProps";
+import { DeviceFrame } from "./preview/DeviceFrame";
+import { ReskinSwitcher } from "./preview/ReskinSwitcher";
+import {
+  DEVICE_PRESETS,
+  breakpointForWidth,
+  presetForWidth,
+  type DevicePreset,
+} from "./preview/previewWidth";
 
 type Launcher = StepProps["doc"]["launcher_config"];
 
-// Step 5 — "Quick walkthrough". Steps through the ordered flow rendering each
-// node via the SAME StepPreview the builder uses, so it always reflects the
-// current (unsaved) draft. A link to the live storefront preview is offered for
-// the published version.
+// Step 4 — "Preview & publish". A LIVE, interactive preview: the real quiz
+// runtime (mode="preview", no side-effects) runs inside a resizable device
+// frame, with instant theme reskins. The "Open live" link still tests the
+// published version on the storefront.
 
 export function Step5Preview({
   doc,
   onCommit,
   productIndex,
-  categories,
   ordered,
   previewUrl,
+  quizId,
 }: StepProps) {
-  const steps = ordered.steps;
-  const [idx, setIdx] = useState(0);
-  const [bp, setBp] = useState<"desktop" | "mobile">("desktop");
-  const width = bp === "mobile" ? 375 : 600;
+  const [frameW, setFrameW] = useState<number>(DEVICE_PRESETS.desktop);
+  const [tryOnId, setTryOnId] = useState<string | null>(null);
+  const [restartKey, setRestartKey] = useState(0);
+
+  // Tried-on theme tokens layered over the saved doc (live, not yet saved).
+  const tryOnTokens = useMemo<DesignTokensT | null>(() => {
+    const preset = tryOnId ? getPreset(tryOnId) : undefined;
+    return preset ? (resolveDesignTokens(preset.tokens) as DesignTokensT) : null;
+  }, [tryOnId]);
+
+  const activePreset = presetForWidth(frameW);
+  const breakpoint = breakpointForWidth(frameW);
+
+  const applyTheme = () => {
+    const preset = tryOnId ? getPreset(tryOnId) : undefined;
+    if (!preset) return;
+    onCommit({
+      ...doc,
+      design_tokens: resolveDesignTokens(preset.tokens) as typeof doc.design_tokens,
+    });
+    setTryOnId(null);
+  };
 
   const lc = doc.launcher_config;
   const setLauncher = (patch: Partial<Launcher>) =>
     onCommit({ ...doc, launcher_config: { ...lc, ...patch } });
 
-  const current = steps[Math.min(idx, steps.length - 1)];
-  const node = current ? doc.nodes.find((n) => n.id === current.nodeId) ?? null : null;
-
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-      <div className="qz-row qz-row-between" style={{ alignItems: "center" }}>
+      <div className="qz-row qz-row-between" style={{ alignItems: "flex-end", gap: 12, flexWrap: "wrap" }}>
         <div>
           <h2 className="qz-h1" style={{ margin: 0 }}>
-            Quick walkthrough
+            Preview &amp; publish
           </h2>
           <p className="qz-dim" style={{ marginTop: 4 }}>
-            Step {steps.length ? idx + 1 : 0} of {steps.length} ·{" "}
-            {node ? node.type.replace("_", " ") : "—"}
+            Your live quiz — click through it, resize the device, try a theme. Changes here are
+            your draft; <strong>Publish</strong> pushes them live.
           </p>
         </div>
-        <div className="qz-row" style={{ gap: 6, alignItems: "center" }}>
-          {(["desktop", "mobile"] as const).map((m) => (
-            <button
-              key={m}
-              onClick={() => setBp(m)}
-              className={`qz-btn qz-btn-sm${bp === m ? " qz-btn-primary" : " qz-btn-ghost"}`}
-            >
-              {m === "desktop" ? "Desktop" : "Mobile"}
-            </button>
-          ))}
-          <a href={previewUrl} target="_blank" rel="noreferrer" className="qz-btn qz-btn-ghost qz-btn-sm">
-            Open live ↗
-          </a>
-        </div>
+        <a href={previewUrl} target="_blank" rel="noreferrer" className="qz-btn qz-btn-ghost qz-btn-sm">
+          Open live ↗
+        </a>
       </div>
 
-      <QzBanner tone="default" title="This walkthrough reflects your current draft">
-        The live link above shows the last <strong>published</strong> version. Publish to push these
-        changes live.
-      </QzBanner>
+      {/* Toolbar: device size · width · restart */}
+      <div className="qz-row qz-row-between" style={{ alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+        <div className="qz-row" style={{ gap: 10, alignItems: "center" }}>
+          <QzSegmented<DevicePreset>
+            ariaLabel="Device size"
+            value={activePreset ?? "desktop"}
+            onChange={(d) => setFrameW(DEVICE_PRESETS[d])}
+            options={[
+              { value: "mobile", label: "Mobile" },
+              { value: "tablet", label: "Tablet" },
+              { value: "desktop", label: "Desktop" },
+            ]}
+          />
+          <span className="qz-dim" style={{ fontSize: 12, fontVariantNumeric: "tabular-nums" }}>
+            {activePreset ? `${activePreset} · ` : "Custom · "}
+            {frameW}px · {breakpoint}
+          </span>
+        </div>
+        <QzButton size="sm" variant="ghost" onClick={() => setRestartKey((k) => k + 1)}>
+          ↺ Restart
+        </QzButton>
+      </div>
 
-      <div className="qz-card" style={{ padding: 16, background: "#FAFAFA" }}>
-        <div style={{ display: "flex", justifyContent: "center" }}>
-          <div style={{ width, maxWidth: "100%" }}>
-            {node ? (
-              <StepPreview doc={doc} node={node} productIndex={productIndex} categories={categories} breakpoint={bp} />
-            ) : (
-              <p className="qz-dim">No reachable steps to preview.</p>
-            )}
+      {/* Reskin row */}
+      <div className="qz-row qz-row-between" style={{ alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+        <div className="qz-row" style={{ gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+          <span className="qz-label" style={{ fontSize: 10 }}>
+            Reskin
+          </span>
+          <ReskinSwitcher value={tryOnId} onSelect={setTryOnId} />
+        </div>
+        {tryOnId ? (
+          <div className="qz-row" style={{ gap: 8, alignItems: "center" }}>
+            <span className="qz-dim" style={{ fontSize: 12 }}>
+              Trying on a theme — not saved
+            </span>
+            <QzButton size="sm" variant="ghost" onClick={() => setTryOnId(null)}>
+              Reset
+            </QzButton>
+            <QzButton size="sm" variant="accent" onClick={applyTheme}>
+              Apply theme
+            </QzButton>
           </div>
-        </div>
+        ) : null}
       </div>
 
-      <div className="qz-row qz-row-between" style={{ alignItems: "center" }}>
-        <QzButton size="sm" variant="ghost" disabled={idx === 0} onClick={() => setIdx((i) => i - 1)}>
-          ← Previous
-        </QzButton>
-        <div className="qz-row" style={{ gap: 4 }}>
-          {steps.map((s, i) => (
-            <span
-              key={s.nodeId}
-              title={s.type}
-              style={{
-                width: 8,
-                height: 8,
-                borderRadius: "50%",
-                background: i === idx ? "var(--qz-ink)" : "var(--qz-rule)",
-              }}
-            />
-          ))}
-        </div>
-        <QzButton
-          size="sm"
-          variant="ghost"
-          disabled={idx >= steps.length - 1}
-          onClick={() => setIdx((i) => i + 1)}
-        >
-          Next →
-        </QzButton>
-      </div>
+      {/* The live device frame */}
+      <DeviceFrame width={frameW} onWidthChange={setFrameW}>
+        <QuizRuntime
+          key={restartKey}
+          mode="preview"
+          doc={doc}
+          productIndex={productIndex}
+          designTokens={doc.design_tokens ?? null}
+          designOverrides={doc.design_overrides}
+          breakpointOverrides={doc.breakpoint_overrides}
+          resultLayoutMode={doc.result_layout_mode}
+          quizId={quizId}
+          version={0}
+          shopDomain=""
+          tokensOverride={tryOnTokens}
+          breakpoint={breakpoint}
+          startAtIntro
+        />
+      </DeviceFrame>
 
       {ordered.orphans.length > 0 ? (
-        <QzBadge tone="warn">{ordered.orphans.length} unreachable step(s) — fix in Page builder</QzBadge>
+        <QzBadge tone="warn">
+          {ordered.orphans.length} unreachable step(s) — fix in the Questions step
+        </QzBadge>
       ) : null}
 
+      <p className="qz-dim" style={{ fontSize: 11.5, margin: 0 }}>
+        Recommendations reflect your last published catalog data — re-publish after editing
+        product groups to refresh them here.
+      </p>
+
+      {/* Floating launcher config (unchanged) */}
       <QzCard style={{ padding: 16 }}>
         <div
           className="qz-row qz-row-between"
