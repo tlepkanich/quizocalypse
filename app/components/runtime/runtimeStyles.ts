@@ -69,6 +69,24 @@ export const stylesFor = (t: DesignTokensT) => ({
     transition: "border-color 150ms",
     width: "100%",
   } satisfies React.CSSProperties,
+  // A native <select> for the "dropdown" question type. Theme-matched (same
+  // border/radius/font/colors as answerBtn) but INPUT-sized: the answer-card's
+  // full var(--qz-pad) padding inflates a <select> to ~88px tall with a
+  // crammed OS arrow — a "badly formatted shape". Compact padding keeps it a
+  // normal control that shows the chosen option cleanly.
+  selectInput: {
+    textAlign: "left" as const,
+    background: "var(--qz-color-bg)",
+    border: "2px solid #00000022",
+    borderRadius: "var(--qz-radius)",
+    padding: "calc(var(--qz-pad) / 2.8) calc(var(--qz-pad) / 1.8)",
+    fontSize: "var(--qz-base-size)",
+    fontFamily: "var(--qz-font-body)",
+    color: "var(--qz-color-text)",
+    cursor: "pointer",
+    width: "100%",
+    maxWidth: "100%",
+  } satisfies React.CSSProperties,
   productCard: {
     display: "flex",
     gap: 16,

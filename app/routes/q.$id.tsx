@@ -1145,7 +1145,7 @@ function DropdownQuestion({
         <select
           value={sel}
           onChange={(e) => setSel(e.target.value)}
-          style={{ ...styles.answerBtn, cursor: "pointer", padding: "var(--qz-pad)" }}
+          style={styles.selectInput}
         >
           <option value="">Choose…</option>
           {node.data.answers.map((a) => (
