@@ -40,15 +40,27 @@ function ProductRow({
   const img = product?.image_url;
   return (
     <div style={{ ...styles.productCard, marginTop: 0 }}>
-      <div
-        style={{
-          width: 56,
-          height: 56,
-          borderRadius: 8,
-          background: img ? `center/cover url(${img})` : "#0000000d",
-          flex: "0 0 auto",
-        }}
-      />
+      {/* Real <img> mirrors the runtime (q.$id.tsx). A CSS background-image with
+          an UNQUOTED url() silently fails on Shopify CDN URLs (which carry
+          ?/&/commas), so the tile would paint blank in the builder preview. */}
+      {img ? (
+        <img
+          src={img}
+          alt=""
+          style={{
+            width: 56,
+            height: 56,
+            borderRadius: 8,
+            objectFit: "cover",
+            flex: "0 0 auto",
+            display: "block",
+          }}
+        />
+      ) : (
+        <div
+          style={{ width: 56, height: 56, borderRadius: 8, background: "#0000000d", flex: "0 0 auto" }}
+        />
+      )}
       <div style={{ minWidth: 0 }}>
         <div style={{ fontWeight: 600, fontSize: "calc(var(--qz-base-size) * 0.95)" }}>
           {label}
@@ -131,13 +143,35 @@ function previewRenderSmart(
         >
           {node.data.answers.map((a) => (
             <div key={a.id} style={{ ...styles.answerBtn, cursor: "default" }}>
+              {/* Real <img>/<video> mirror the runtime (q.$id.tsx:1344/1395). An
+                  unquoted CSS background url() silently fails on Shopify CDN
+                  URLs (?/&/commas), which is why answer images were blank in
+                  the preview while rendering fine in the live quiz. */}
               {a.image_url ? (
-                <div
+                <img
+                  src={a.image_url}
+                  alt=""
                   style={{
+                    width: "100%",
                     height: 64,
+                    objectFit: "cover",
                     borderRadius: 8,
                     marginBottom: 8,
-                    background: `center/cover url(${a.image_url})`,
+                    display: "block",
+                  }}
+                />
+              ) : a.video_url ? (
+                <video
+                  src={a.video_url}
+                  muted
+                  playsInline
+                  style={{
+                    width: "100%",
+                    height: 64,
+                    objectFit: "cover",
+                    borderRadius: 8,
+                    marginBottom: 8,
+                    display: "block",
                   }}
                 />
               ) : null}
