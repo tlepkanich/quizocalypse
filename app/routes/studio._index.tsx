@@ -29,13 +29,25 @@ export default function StudioIndex() {
   const { shopDomain, quizzes } = useLoaderData<typeof loader>();
   return (
     <QzPage>
-      <QzPageHeader eyebrow="Standalone builder" title="Your quizzes" subtitle={shopDomain} />
+      <QzPageHeader
+        eyebrow="Standalone builder"
+        title="Your quizzes"
+        subtitle={shopDomain}
+        actions={
+          <Link to="/studio/new" className="qz-btn qz-btn-accent">
+            New quiz →
+          </Link>
+        }
+      />
       {quizzes.length === 0 ? (
-        <QzCard dashed>
+        <QzCard dashed style={{ display: "flex", flexDirection: "column", gap: 10, alignItems: "flex-start" }}>
           <div className="qz-label">No quizzes yet</div>
-          <p className="qz-dim" style={{ marginTop: 6 }}>
-            Create one from the embedded Shopify app, then it'll appear here to build full-screen.
+          <p className="qz-dim" style={{ margin: 0 }}>
+            Create your first quiz — start blank, from a template, or with the full demo.
           </p>
+          <Link to="/studio/new" className="qz-btn qz-btn-accent qz-btn-sm">
+            New quiz →
+          </Link>
         </QzCard>
       ) : (
         <div

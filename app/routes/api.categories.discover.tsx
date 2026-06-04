@@ -7,7 +7,7 @@
 
 import type { ActionFunctionArgs } from "@remix-run/node";
 import { json } from "@remix-run/node";
-import { authenticate } from "../shopify.server";
+import { resolveApiShop } from "../lib/studioAccess.server";
 import prisma from "../db.server";
 import { CategoryDiscoveryError } from "../lib/categoryDiscover";
 import {
@@ -36,17 +36,11 @@ async function readQuizId(request: Request): Promise<string | null> {
 }
 
 export async function action({ request }: ActionFunctionArgs) {
-  const { session } = await authenticate.admin(request);
   if (request.method !== "POST") {
     return json({ ok: false, error: "Method not allowed" }, { status: 405 });
   }
-
-  const shop = await prisma.shop.findUnique({
-    where: { shopDomain: session.shop },
-  });
-  if (!shop) {
-    return json({ ok: false, error: "Shop not found" }, { status: 400 });
-  }
+  // Dual-auth: works from the embedded admin AND the standalone /studio surface.
+  const shop = await resolveApiShop(request);
 
   // Optional quiz scope (mirrors /api/categories/group). When present the
   // discovered buckets are bound to this quiz and the destructive wipe only

@@ -39,7 +39,12 @@ export default function StudioLayout() {
           </span>
           <span className="qz-label">Studio</span>
         </Link>
-        <span className="qz-label">standalone preview</span>
+        <div className="qz-row" style={{ gap: 14, alignItems: "center" }}>
+          <Link to="/studio/new" className="qz-btn qz-btn-ghost qz-btn-sm">
+            New quiz →
+          </Link>
+          <span className="qz-label">standalone preview</span>
+        </div>
       </header>
       <main style={{ flex: 1, minWidth: 0, width: "100%" }}>
         <Outlet />

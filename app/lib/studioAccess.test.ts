@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { safeEqual } from "./studioAccess.server";
+import { createCookie } from "@remix-run/node";
+import { safeEqual, hasStudioAccess } from "./studioAccess.server";
 
 // The constant-time compare backs the standalone /studio access gate's ?key=
 // check. We can't unit-test the cookie/redirect flow without a live Request,
@@ -24,5 +25,47 @@ describe("safeEqual", () => {
   it("handles unicode without throwing", () => {
     expect(safeEqual("kéy-✓", "kéy-✓")).toBe(true);
     expect(safeEqual("kéy-✓", "key-x")).toBe(false);
+  });
+});
+
+// hasStudioAccess is the non-throwing cookie check that dual-auths the shared
+// /api/categories/* endpoints (studio-cookie path vs. embedded Shopify session).
+// The signed cookie is HMAC-bound to STUDIO_ACCESS_TOKEN, so we forge a valid
+// one with Remix's own createCookie + matching secret. Only the value + secret
+// drive the signature (not the Secure/SameSite attrs), so a localhost-style
+// cookie verifies fine.
+describe("hasStudioAccess", () => {
+  const TOKEN = "studio-token-under-test";
+
+  async function grantedCookieHeader(signingToken: string): Promise<string> {
+    const cookie = createCookie("qz_studio", { secrets: [signingToken], path: "/" });
+    return cookie.serialize("granted");
+  }
+
+  function requestWith(header?: string): Request {
+    return new Request("http://localhost/api/categories/group", {
+      headers: header ? { Cookie: header } : {},
+    });
+  }
+
+  it("returns false when STUDIO_ACCESS_TOKEN is unset", async () => {
+    delete process.env.STUDIO_ACCESS_TOKEN;
+    expect(await hasStudioAccess(requestWith(await grantedCookieHeader(TOKEN)))).toBe(false);
+  });
+
+  it("returns false with no cookie present", async () => {
+    process.env.STUDIO_ACCESS_TOKEN = TOKEN;
+    expect(await hasStudioAccess(requestWith())).toBe(false);
+  });
+
+  it("returns true for a cookie signed with the current token", async () => {
+    process.env.STUDIO_ACCESS_TOKEN = TOKEN;
+    expect(await hasStudioAccess(requestWith(await grantedCookieHeader(TOKEN)))).toBe(true);
+  });
+
+  it("returns false once the token has rotated (old cookie no longer verifies)", async () => {
+    const stale = await grantedCookieHeader("previous-token");
+    process.env.STUDIO_ACCESS_TOKEN = "rotated-token";
+    expect(await hasStudioAccess(requestWith(stale))).toBe(false);
   });
 });

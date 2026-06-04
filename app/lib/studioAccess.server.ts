@@ -101,6 +101,37 @@ export async function resolveStudioShop(): Promise<Shop> {
   return shop;
 }
 
+// Non-throwing variant of the gate: true when the request carries a valid
+// signed studio cookie. Used to dual-auth shared API endpoints (the builder's
+// same-origin fetches carry the cookie). Exported for tests.
+export async function hasStudioAccess(request: Request): Promise<boolean> {
+  const token = process.env.STUDIO_ACCESS_TOKEN;
+  if (!token) return false;
+  const granted = await accessCookie(token, isSecureRequest(request)).parse(
+    request.headers.get("Cookie"),
+  );
+  return granted === "granted";
+}
+
+// Resolve the shop for a shared API endpoint that must serve BOTH the embedded
+// Shopify admin and the standalone /studio surface. Studio cookie first (the
+// standalone path), else fall back to the embedded session. One helper lets the
+// grouping endpoints work on both surfaces with no change to their callers.
+export async function resolveApiShop(request: Request): Promise<Shop> {
+  if (await hasStudioAccess(request)) {
+    return resolveStudioShop();
+  }
+  // Lazy import: keeps shopify.server (which constructs shopifyApp() at module
+  // load, validating SHOPIFY_APP_URL) out of the import graph for callers that
+  // only need the studio-cookie path — notably the unit tests for
+  // hasStudioAccess/safeEqual, which run without Shopify env configured.
+  const { authenticate } = await import("../shopify.server");
+  const { session } = await authenticate.admin(request);
+  const shop = await prisma.shop.findUnique({ where: { shopDomain: session.shop } });
+  if (!shop) throw new Response("Shop not found", { status: 404 });
+  return shop;
+}
+
 // Minimal standalone "enter access key" page (rendered as a raw Response, so it
 // carries its own inline styles rather than going through root.tsx). The form
 // has no `action`, so it GETs back to the current URL — nothing user-controlled

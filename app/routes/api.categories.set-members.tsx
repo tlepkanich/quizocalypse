@@ -13,7 +13,7 @@
 
 import type { ActionFunctionArgs } from "@remix-run/node";
 import { json } from "@remix-run/node";
-import { authenticate } from "../shopify.server";
+import { resolveApiShop } from "../lib/studioAccess.server";
 import prisma from "../db.server";
 
 // Coerce the posted `members` field into { [categoryId]: string[] }. Accepts a
@@ -57,13 +57,8 @@ export async function action({ request }: ActionFunctionArgs) {
     return json({ ok: false, error: "Method not allowed" }, { status: 405 });
   }
 
-  const { session } = await authenticate.admin(request);
-  const shop = await prisma.shop.findUnique({
-    where: { shopDomain: session.shop },
-  });
-  if (!shop) {
-    return json({ ok: false, error: "Shop not found" }, { status: 400 });
-  }
+  // Dual-auth: works from the embedded admin AND the standalone /studio surface.
+  const shop = await resolveApiShop(request);
 
   let body: Record<string, unknown>;
   try {
