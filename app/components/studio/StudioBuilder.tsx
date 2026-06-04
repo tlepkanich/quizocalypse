@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useFetcher, useSearchParams } from "@remix-run/react";
 import { TitleBar } from "@shopify/app-bridge-react";
 import { BuilderStepper, type StepState } from "../builder/BuilderStepper";
@@ -29,7 +29,13 @@ import { validateQuiz, type NodeIssue } from "../../lib/quizValidation";
 import { orderFlow } from "../../lib/flowOrder";
 import { synthesizeLayout } from "../../lib/synthesizeLayout";
 import { StepPreview } from "../runtime/StepPreview";
-import { addAnswer, deleteNode, removeAnswer } from "../../lib/quizMutations";
+import {
+  addAnswer,
+  deleteNode,
+  removeAnswer,
+  moveStep,
+  straightThroughRun,
+} from "../../lib/quizMutations";
 import {
   INSERTABLE_MODULES,
   PALETTE_BLOCKS,
@@ -301,6 +307,16 @@ function BuilderShell({ data, chrome }: { data: LoaderData; chrome: Chrome }) {
     [doc, commit],
   );
 
+  // Drag-reorder / move-up-down: re-stitch the linear run so `movingId` sits
+  // before `beforeId` (or at the end when null). moveStep no-ops on non-run
+  // nodes, so this is safe to call from any gap.
+  const handleMove = useCallback(
+    (movingId: string, beforeId: string | null) => {
+      commit(moveStep(doc, movingId, beforeId));
+    },
+    [doc, commit],
+  );
+
   // Remove every unreachable step in one click (Studio fix for stray nodes,
   // no Advanced canvas needed).
   const handleCleanupOrphans = useCallback(
@@ -563,6 +579,7 @@ function BuilderShell({ data, chrome }: { data: LoaderData; chrome: Chrome }) {
               onAdvanced={setZoomId}
               onCommit={commit}
               onInsert={handleInsert}
+              onMove={handleMove}
               onDelete={handleDelete}
               onCleanupOrphans={handleCleanupOrphans}
             />
@@ -680,8 +697,18 @@ function CompletenessBar({ issues, total }: { issues: NodeIssue[]; total: number
 }
 
 // ════════════════════════════════════════════════════════════════════════════
-// Flow view — ordered step cards + templated insertion + branch lanes
+// Flow view — a vertical CASCADE of step cards (top → down, the order the
+// shopper experiences) with connectors, drag-to-reorder, a drag-in palette, and
+// nested/indented branch lanes. (Replaces the old left-to-right scrolling row.)
 // ════════════════════════════════════════════════════════════════════════════
+
+// What's currently being dragged: an existing step (reorder) or a palette module
+// (insert). Held in FlowView state because dataTransfer can't be read on dragover.
+type DragState =
+  | { mode: "move"; id: string }
+  | { mode: "insert"; kind: InsertKind }
+  | null;
+
 function FlowView({
   doc,
   ordered,
@@ -693,6 +720,7 @@ function FlowView({
   onAdvanced,
   onCommit,
   onInsert,
+  onMove,
   onDelete,
   onCleanupOrphans,
 }: {
@@ -706,6 +734,7 @@ function FlowView({
   onAdvanced: (id: string) => void;
   onCommit: (doc: QuizDoc) => void;
   onInsert: (kind: InsertKind, anchorId: string | null, anchorHandle?: string) => void;
+  onMove: (movingId: string, beforeId: string | null) => void;
   onDelete: (id: string) => void;
   onCleanupOrphans: (ids: string[]) => void;
 }) {
@@ -716,48 +745,109 @@ function FlowView({
   }, [doc.nodes]);
 
   const spine = ordered.steps;
-  const lastSpine = spine[spine.length - 1];
+  // The linear, drag-reorderable run (questions/messages/gates between intro and
+  // the first branch/result). Drives which cards get a grip + move buttons.
+  const runList = useMemo(() => straightThroughRun(doc).run, [doc]);
+  const runSet = useMemo(() => new Set(runList), [runList]);
+
+  const [drag, setDrag] = useState<DragState>(null);
+  const [overGap, setOverGap] = useState<number | null>(null);
+  const clearDrag = useCallback(() => {
+    setDrag(null);
+    setOverGap(null);
+  }, []);
+
+  // Resolve a drop in the gap above `beforeId` (anchored after `afterId`).
+  const dropInGap = (afterId: string | null, beforeId: string | null) => {
+    if (!drag) return;
+    if (drag.mode === "move") onMove(drag.id, beforeId);
+    else onInsert(drag.kind, afterId, undefined);
+    clearDrag();
+  };
+
+  if (!spine.length) {
+    return (
+      <QzBanner tone="warn" title="No steps yet">
+        This quiz has no reachable steps from the intro.
+      </QzBanner>
+    );
+  }
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
       <div
-        style={{
-          display: "flex",
-          gap: 8,
-          alignItems: "stretch",
-          overflowX: "auto",
-          paddingBottom: 12,
-        }}
+        style={{ display: "grid", gap: 20, alignItems: "start" }}
+        className="qz-cascade-grid"
       >
-        {spine.map((step) => {
-          const node = nodeById.get(step.nodeId);
-          if (!node) return null;
-          const lanes = ordered.branches.filter((l) => l.branchNodeId === step.nodeId);
-          return (
-            <div key={step.nodeId} style={{ display: "flex", alignItems: "stretch", gap: 8 }}>
-              <StepColumn
-                node={node}
-                doc={doc}
-                productIndex={productIndex}
-                categories={categories}
-                issues={issuesByNode.get(step.nodeId) ?? []}
-                lanes={lanes}
-                nodeById={nodeById}
-                issuesByNode={issuesByNode}
-                editId={editId}
-                onEdit={onEdit}
-                onAdvanced={onAdvanced}
-                onCommit={onCommit}
-                onDelete={onDelete}
-                onInsert={onInsert}
-              />
-              {/* Insert after this step (templated). Branch handles their own. */}
-              {node.type !== "branch" && node.type !== "result" && node.type !== "end" ? (
-                <InsertSlot onPick={(kind) => onInsert(kind, step.nodeId, undefined)} />
-              ) : null}
-            </div>
-          );
-        })}
+        <StepPalette setDrag={setDrag} clearDrag={clearDrag} />
+
+        {/* The cascade — centered vertical column of cards + connectors. */}
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", width: "100%" }}>
+          <div style={{ width: "100%", maxWidth: 540, display: "flex", flexDirection: "column" }}>
+            {spine.map((step, i) => {
+              const node = nodeById.get(step.nodeId);
+              if (!node) return null;
+              const lanes = ordered.branches.filter((l) => l.branchNodeId === step.nodeId);
+              const movable = runSet.has(step.nodeId);
+              const runIdx = runList.indexOf(step.nodeId);
+              const prevId = i > 0 ? spine[i - 1]!.nodeId : null;
+              return (
+                <Fragment key={step.nodeId}>
+                  {/* Gap + connector between the previous card and this one. Never
+                      above the intro (always first). Doubles as a drop target. */}
+                  {i > 0 ? (
+                    <DropGap
+                      active={drag != null}
+                      over={overGap === i}
+                      onOver={() => setOverGap(i)}
+                      onLeave={() => setOverGap((g) => (g === i ? null : g))}
+                      onDrop={() => dropInGap(prevId, step.nodeId)}
+                      onInsert={(kind) => onInsert(kind, prevId, undefined)}
+                    />
+                  ) : null}
+                  <CascadeRow
+                    movable={movable}
+                    onDragStart={() => setDrag({ mode: "move", id: step.nodeId })}
+                    onDragEnd={clearDrag}
+                    onUp={runIdx > 0 ? () => onMove(step.nodeId, runList[runIdx - 1]!) : undefined}
+                    onDown={
+                      runIdx >= 0 && runIdx < runList.length - 1
+                        ? () => onMove(step.nodeId, runList[runIdx + 2] ?? null)
+                        : undefined
+                    }
+                  >
+                    <StepColumn
+                      node={node}
+                      doc={doc}
+                      productIndex={productIndex}
+                      categories={categories}
+                      issues={issuesByNode.get(step.nodeId) ?? []}
+                      lanes={lanes}
+                      nodeById={nodeById}
+                      issuesByNode={issuesByNode}
+                      editId={editId}
+                      onEdit={onEdit}
+                      onAdvanced={onAdvanced}
+                      onCommit={onCommit}
+                      onDelete={onDelete}
+                      onInsert={onInsert}
+                    />
+                  </CascadeRow>
+                </Fragment>
+              );
+            })}
+
+            {/* Final gap — drop here to append a step / move to the end. */}
+            <DropGap
+              active={drag != null}
+              over={overGap === spine.length}
+              onOver={() => setOverGap(spine.length)}
+              onLeave={() => setOverGap((g) => (g === spine.length ? null : g))}
+              onDrop={() => dropInGap(spine[spine.length - 1]!.nodeId, null)}
+              onInsert={(kind) => onInsert(kind, spine[spine.length - 1]!.nodeId, undefined)}
+            />
+          </div>
+        </div>
       </div>
 
       {ordered.orphans.length > 0 ? (
@@ -773,12 +863,188 @@ function FlowView({
           onCleanupOrphans={onCleanupOrphans}
         />
       ) : null}
+    </div>
+  );
+}
 
-      {!lastSpine ? (
-        <QzBanner tone="warn" title="No steps yet">
-          This quiz has no reachable steps from the intro.
-        </QzBanner>
+// Left rail of draggable step types. Drag a chip onto a gap in the flow to
+// insert that step there; the existing "+" between steps still click-inserts.
+function StepPalette({
+  setDrag,
+  clearDrag,
+}: {
+  setDrag: (d: DragState) => void;
+  clearDrag: () => void;
+}) {
+  return (
+    <div
+      className="qz-cascade-palette"
+      style={{ position: "sticky", top: 8, display: "flex", flexDirection: "column", gap: 8, alignSelf: "start" }}
+    >
+      <div className="qz-label" style={{ fontSize: 10 }}>
+        Add a step
+      </div>
+      <p className="qz-dim" style={{ fontSize: 11, lineHeight: 1.4, margin: 0 }}>
+        Drag a block into the flow, or use the + between steps.
+      </p>
+      <div style={{ display: "flex", flexDirection: "column", gap: 6, marginTop: 2 }}>
+        {INSERTABLE_MODULES.map((m) => (
+          <div
+            key={m.kind}
+            draggable
+            onDragStart={(e) => {
+              setDrag({ mode: "insert", kind: m.kind });
+              e.dataTransfer.effectAllowed = "copy";
+              try {
+                e.dataTransfer.setData("text/plain", m.kind);
+              } catch {
+                /* some browsers throw on synthetic events; state already set */
+              }
+            }}
+            onDragEnd={clearDrag}
+            className="qz-card"
+            title={m.hint}
+            style={{
+              display: "flex",
+              gap: 8,
+              alignItems: "center",
+              padding: "8px 10px",
+              cursor: "grab",
+              fontSize: 13,
+              userSelect: "none",
+            }}
+          >
+            <span style={{ width: 18, textAlign: "center", flex: "0 0 auto" }}>{m.glyph}</span>
+            <span style={{ fontWeight: 600 }}>{m.label}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// A connector + drop target between two cascade cards. Shows the vertical flow
+// line with a click-"+" on it; highlights into an accent bar when a drag hovers.
+function DropGap({
+  active,
+  over,
+  onOver,
+  onLeave,
+  onDrop,
+  onInsert,
+}: {
+  active: boolean;
+  over: boolean;
+  onOver: () => void;
+  onLeave: () => void;
+  onDrop: () => void;
+  onInsert: (kind: InsertKind) => void;
+}) {
+  return (
+    <div
+      onDragOver={(e) => {
+        if (active) {
+          e.preventDefault();
+          onOver();
+        }
+      }}
+      onDragLeave={onLeave}
+      onDrop={(e) => {
+        e.preventDefault();
+        onDrop();
+      }}
+      style={{
+        position: "relative",
+        display: "flex",
+        justifyContent: "center",
+        alignItems: "center",
+        minHeight: 36,
+        width: "100%",
+      }}
+    >
+      {/* the flow line */}
+      <div style={{ position: "absolute", top: 0, bottom: 0, width: 2, background: "var(--qz-rule)" }} />
+      {/* drop highlight bar */}
+      {over ? (
+        <div
+          style={{
+            position: "absolute",
+            left: "10%",
+            right: "10%",
+            height: 4,
+            borderRadius: 999,
+            background: "var(--qz-accent)",
+          }}
+        />
       ) : null}
+      <div style={{ position: "relative", zIndex: 1 }}>
+        <InsertSlot onPick={onInsert} />
+      </div>
+    </div>
+  );
+}
+
+// Wraps a cascade card with a left gutter holding the drag grip + move-up/down
+// buttons (only for reorderable steps). The grip lives OUTSIDE the card button
+// so dragging it never triggers the card's click-to-edit.
+function CascadeRow({
+  children,
+  movable,
+  onDragStart,
+  onDragEnd,
+  onUp,
+  onDown,
+}: {
+  children: React.ReactNode;
+  movable: boolean;
+  onDragStart: () => void;
+  onDragEnd: () => void;
+  onUp?: () => void;
+  onDown?: () => void;
+}) {
+  const tiny: React.CSSProperties = {
+    width: 22,
+    height: 18,
+    padding: 0,
+    fontSize: 11,
+    lineHeight: 1,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+  };
+  return (
+    <div style={{ display: "flex", gap: 6, alignItems: "flex-start", justifyContent: "center", width: "100%" }}>
+      <div style={{ width: 24, display: "flex", flexDirection: "column", alignItems: "center", gap: 4, paddingTop: 8, flex: "0 0 auto" }}>
+        {movable ? (
+          <>
+            <span
+              draggable
+              onDragStart={(e) => {
+                onDragStart();
+                e.dataTransfer.effectAllowed = "move";
+                try {
+                  e.dataTransfer.setData("text/plain", "move");
+                } catch {
+                  /* state already set */
+                }
+              }}
+              onDragEnd={onDragEnd}
+              title="Drag to reorder"
+              aria-label="Drag to reorder"
+              style={{ cursor: "grab", userSelect: "none", fontSize: 15, lineHeight: 1, color: "var(--qz-dim, #999)" }}
+            >
+              ⠿
+            </span>
+            <button type="button" className="qz-btn qz-btn-ghost" style={tiny} onClick={onUp} disabled={!onUp} title="Move up" aria-label="Move up">
+              ↑
+            </button>
+            <button type="button" className="qz-btn qz-btn-ghost" style={tiny} onClick={onDown} disabled={!onDown} title="Move down" aria-label="Move down">
+              ↓
+            </button>
+          </>
+        ) : null}
+      </div>
+      <div style={{ flex: "0 1 auto", minWidth: 0 }}>{children}</div>
     </div>
   );
 }

@@ -1,8 +1,116 @@
 import { describe, expect, it } from "vitest";
 import { Quiz } from "./quizSchema";
-import { setSlotWeight, setBranchMode, deleteNode } from "./quizMutations";
+import {
+  setSlotWeight,
+  setBranchMode,
+  deleteNode,
+  moveStep,
+  straightThroughRun,
+} from "./quizMutations";
 import { insertModule } from "../components/studio/studioDoc";
 import { orderFlow } from "./flowOrder";
+
+// Linear quiz: intro → q1 → q2 → q3 → result. The drag-reorder happy path.
+function linearQuestionsDoc() {
+  const q = (id: string) => ({
+    id,
+    type: "question" as const,
+    position: { x: 0, y: 0 },
+    data: {
+      text: id,
+      question_type: "single_select" as const,
+      required: true,
+      show_preview_after: false,
+      answers: [
+        { id: `${id}_a1`, text: "o1", tags: [], edge_handle_id: `${id}_h1` },
+        { id: `${id}_a2`, text: "o2", tags: [], edge_handle_id: `${id}_h2` },
+      ],
+    },
+  });
+  return Quiz.parse({
+    quiz_id: "q1",
+    scope: { collection_ids: [] },
+    nodes: [
+      { id: "intro", type: "intro", position: { x: 0, y: 0 }, data: { headline: "Hi" } },
+      q("q1"),
+      q("q2"),
+      q("q3"),
+      {
+        id: "r1",
+        type: "result",
+        position: { x: 0, y: 0 },
+        data: { headline: "Done", fallback_collection_id: "gid://c/fb" },
+      },
+    ],
+    edges: [
+      { id: "e0", source: "intro", target: "q1" },
+      { id: "e1", source: "q1", target: "q2" },
+      { id: "e2", source: "q2", target: "q3" },
+      { id: "e3", source: "q3", target: "r1" },
+    ],
+  });
+}
+
+const spineIds = (doc: ReturnType<typeof linearQuestionsDoc>) =>
+  orderFlow(doc).steps.map((s) => s.nodeId);
+
+describe("straightThroughRun", () => {
+  it("returns the linear movable run with head=intro and tail=result", () => {
+    const { head, run, tail } = straightThroughRun(linearQuestionsDoc());
+    expect(head).toBe("intro");
+    expect(run).toEqual(["q1", "q2", "q3"]);
+    expect(tail).toBe("r1");
+  });
+
+  it("stops the run at a branch (branch is the tail, not a run member)", () => {
+    const doc = insertModule(linearQuestionsDoc(), "branch", "q3", undefined, "gid://c/fb").doc;
+    // intro → q1 → q2 → q3 → branch (spliced between q3 and r1)
+    const { run, tail } = straightThroughRun(doc);
+    expect(run).toEqual(["q1", "q2", "q3"]);
+    const tailNode = doc.nodes.find((n) => n.id === tail);
+    expect(tailNode?.type).toBe("branch");
+  });
+});
+
+describe("moveStep", () => {
+  it("moves a step to the front and rewires the chain", () => {
+    const next = moveStep(linearQuestionsDoc(), "q3", "q1");
+    expect(spineIds(next)).toEqual(["intro", "q3", "q1", "q2", "r1"]);
+    expect(() => Quiz.parse(next)).not.toThrow();
+    expect(orderFlow(next).orphans).toEqual([]); // nothing stranded
+  });
+
+  it("moves a step to the end when beforeId is null", () => {
+    const next = moveStep(linearQuestionsDoc(), "q1", null);
+    expect(spineIds(next)).toEqual(["intro", "q2", "q3", "q1", "r1"]);
+    expect(orderFlow(next).orphans).toEqual([]);
+  });
+
+  it("is a no-op when the order would not change", () => {
+    const doc = linearQuestionsDoc();
+    expect(moveStep(doc, "q1", "q2")).toBe(doc); // q1 already before q2
+  });
+
+  it("ignores non-run nodes (intro / result / unknown)", () => {
+    const doc = linearQuestionsDoc();
+    expect(moveStep(doc, "r1", "q1")).toBe(doc);
+    expect(moveStep(doc, "intro", null)).toBe(doc);
+    expect(moveStep(doc, "nope", "q1")).toBe(doc);
+  });
+
+  it("leaves branch/lane edges untouched when reordering the spine", () => {
+    const doc = insertModule(linearQuestionsDoc(), "branch", "q3", undefined, "gid://c/fb").doc;
+    const before = doc.edges.filter((e) => e.source_handle).length;
+    const orphansBefore = orderFlow(doc).orphans;
+    const next = moveStep(doc, "q1", "q3"); // reorder q1 to just before q3
+    expect(spineIds(next).slice(0, 3)).toEqual(["intro", "q2", "q1"]);
+    // Handle-bearing (branch slot / lane) edges are never rebuilt by a spine move.
+    expect(next.edges.filter((e) => e.source_handle).length).toBe(before);
+    expect(() => Quiz.parse(next)).not.toThrow();
+    // Reordering the spine doesn't strand anything that wasn't already off-flow.
+    expect(orderFlow(next).orphans).toEqual(orphansBefore);
+  });
+});
 
 function docWithBranch() {
   return Quiz.parse({

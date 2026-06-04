@@ -583,3 +583,111 @@ export function setNodePosition(
     nodes: doc.nodes.map((n) => (n.id === nodeId ? { ...n, position: pos } : n)),
   };
 }
+
+// Node types that form the linear, drag-reorderable "spine" of a quiz. intro is
+// always first (the entry), branch fans out, and result/end are terminals — none
+// of those reorder, so they bound the run rather than belong to it.
+const MOVABLE_STEP_TYPES = new Set<QuizNodeDoc["type"]>([
+  "question",
+  "message",
+  "email_gate",
+  "ask_ai",
+  "product_cards",
+  "integration",
+]);
+
+/**
+ * The contiguous linear run of drag-reorderable steps after the intro: a chain
+ * of single-inbound / single-outbound "movable" nodes (questions, messages,
+ * gates, …). The walk stops at the first node that branches, merges, fans out,
+ * or terminates — that node becomes the `tail`. `head` is the node before the
+ * run (normally the intro). These three pieces are exactly what `moveStep` needs
+ * to re-stitch the chain, and what the cascade UI needs to know which cards can
+ * be dragged. Pure; relies on edges, never on `position`.
+ */
+export function straightThroughRun(doc: QuizDoc): {
+  head: string | null;
+  run: string[];
+  tail: string | null;
+} {
+  const intro = doc.nodes.find((n) => n.type === "intro");
+  if (!intro) return { head: null, run: [], tail: null };
+
+  const typeById = new Map(doc.nodes.map((n) => [n.id, n.type] as const));
+  const outOf = (id: string) => doc.edges.filter((e) => e.source === id);
+  const inTo = (id: string) => doc.edges.filter((e) => e.target === id);
+
+  const introOut = outOf(intro.id);
+  // Intro must lead to exactly one next step for a simple linear run to exist.
+  if (introOut.length !== 1) {
+    return { head: intro.id, run: [], tail: introOut[0]?.target ?? null };
+  }
+
+  const run: string[] = [];
+  let cur = introOut[0]!.target;
+  // Walk while each node is movable AND a clean single-in/single-out link.
+  while (true) {
+    const t = typeById.get(cur);
+    if (!t || !MOVABLE_STEP_TYPES.has(t)) break; // terminal / branch boundary
+    if (inTo(cur).length !== 1) break; // a merge target — not simply reorderable
+    const o = outOf(cur);
+    if (o.length !== 1) break; // fan-out (e.g. per-answer routing) — boundary
+    run.push(cur);
+    cur = o[0]!.target;
+    if (run.includes(cur)) break; // cycle guard
+  }
+  return { head: intro.id, run, tail: cur };
+}
+
+/**
+ * Reorder a step within the linear run (drag-and-drop / move up/down). Moves
+ * `movingId` to sit immediately before `beforeId` (or to the end of the run when
+ * `beforeId` is null), then rebuilds the straight-through chain edges so the flow
+ * stays intro → … → tail with the new order. Edges OUTSIDE the chain (branch
+ * slots, lanes, per-answer routing) are untouched. A no-op (move to same spot,
+ * or `movingId` not in the run) returns the doc unchanged.
+ */
+export function moveStep(
+  doc: QuizDoc,
+  movingId: string,
+  beforeId: string | null,
+): QuizDoc {
+  const { head, run, tail } = straightThroughRun(doc);
+  if (!run.includes(movingId)) return doc; // only run members reorder
+
+  const without = run.filter((id) => id !== movingId);
+  let at = beforeId == null ? without.length : without.indexOf(beforeId);
+  if (at < 0) at = without.length; // beforeId not in run → append
+  const newRun = [...without.slice(0, at), movingId, ...without.slice(at)];
+
+  if (newRun.length === run.length && newRun.every((id, i) => id === run[i])) {
+    return doc; // order unchanged
+  }
+
+  // Identify the existing chain edges (head→run[0]→…→run[n]→tail) by their
+  // (source,target) pairs — all are plain, handle-less links by construction —
+  // drop them, and re-link the new sequence.
+  const seqEdgeIds = (seq: string[]): Set<string> => {
+    const ids = new Set<string>();
+    for (let i = 0; i + 1 < seq.length; i++) {
+      const e = doc.edges.find(
+        (e) => e.source === seq[i] && e.target === seq[i + 1] && !e.source_handle,
+      );
+      if (e) ids.add(e.id);
+    }
+    return ids;
+  };
+  const oldSeq = [head, ...run, tail].filter((x): x is string => Boolean(x));
+  const drop = seqEdgeIds(oldSeq);
+
+  const newSeq = [head, ...newRun, tail].filter((x): x is string => Boolean(x));
+  const relinked: QuizDoc["edges"] = [];
+  for (let i = 0; i + 1 < newSeq.length; i++) {
+    relinked.push({ id: uid("e"), source: newSeq[i]!, target: newSeq[i + 1]! });
+  }
+
+  return {
+    ...doc,
+    edges: [...doc.edges.filter((e) => !drop.has(e.id)), ...relinked],
+  };
+}

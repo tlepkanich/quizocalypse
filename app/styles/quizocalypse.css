@@ -334,3 +334,21 @@ body[data-qz] ::selection { background: var(--qz-ink); color: var(--qz-cream); }
      If you have a route that still uses Polaris, just don't put `data-qz`
      on its body and Polaris keeps working untouched.
    ============================================================ */
+
+/* — Questions cascade (Studio Step 2) —
+     A draggable step palette on the left, the vertical flow on the right.
+     Collapses to a single column (palette on top) on narrow screens so the
+     builder stays usable on tablet/mobile widths.
+   ============================================================ */
+.qz-cascade-grid {
+  grid-template-columns: 168px minmax(0, 1fr);
+}
+@media (max-width: 760px) {
+  .qz-cascade-grid {
+    grid-template-columns: 1fr;
+  }
+  /* Stacked: let the palette flow inline instead of sticking to the side. */
+  .qz-cascade-palette {
+    position: static !important;
+  }
+}
