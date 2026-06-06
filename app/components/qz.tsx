@@ -282,6 +282,42 @@ export function QzTooltip({
   );
 }
 
+// Collapsible section built on native <details> semantics but controlled, so
+// the open state survives parent re-renders (autosave). Used to fold long
+// settings panels into scannable groups. Keyboard-accessible (summary is
+// focusable; Enter/Space toggles).
+export function QzCollapse({
+  title,
+  meta,
+  defaultOpen = false,
+  children,
+}: {
+  title: ReactNode;
+  meta?: ReactNode;
+  defaultOpen?: boolean;
+  children: ReactNode;
+}) {
+  const [open, setOpen] = useState(defaultOpen);
+  return (
+    <details className="qz-collapse" open={open}>
+      <summary
+        className="qz-collapse-summary"
+        onClick={(e) => {
+          e.preventDefault();
+          setOpen((o) => !o);
+        }}
+      >
+        <span className="qz-collapse-chevron" aria-hidden>
+          ›
+        </span>
+        <span className="qz-collapse-title">{title}</span>
+        {meta ? <span className="qz-collapse-meta qz-mono qz-dim">{meta}</span> : null}
+      </summary>
+      <div className="qz-collapse-body">{children}</div>
+    </details>
+  );
+}
+
 // Responsive 16:9 video embed (YouTube/Vimeo/mp4 iframe). When `url` is null it
 // renders a tidy placeholder, so onboarding steps can ship the structure now and
 // have real walkthrough videos dropped in later.

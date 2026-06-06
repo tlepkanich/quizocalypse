@@ -1,5 +1,5 @@
-import { StepPreview } from "../runtime/StepPreview";
 import { QzBadge, QzButton } from "../qz";
+import { ResultPageCard } from "../builder/results/ResultPageCard";
 import type { Quiz as QuizDoc } from "../../lib/quizSchema";
 import type { IndexedProduct } from "../../lib/recommendationEngine";
 import type { BuilderCategory } from "../builder/stepProps";
@@ -65,7 +65,6 @@ export function RecommendationMap({
   onSetWeight: (branchId: string, slotId: string, weight: number) => void;
   onConvertToAb: (branchId: string) => void;
 }) {
-  const catById = new Map(categories.map((c) => [c.id, c]));
   const resultNodes = doc.nodes.filter((n): n is ResultNode => n.type === "result");
   const abBranches = findAbBranches(doc);
   const rulesBranches = doc.nodes.filter(
@@ -127,95 +126,21 @@ export function RecommendationMap({
               gap: 14,
             }}
           >
-            {resultNodes.map((node) => {
-              const cat = node.data.category_id ? catById.get(node.data.category_id) : undefined;
-              const active = node.id === selectedNodeId;
-              const stages = node.data.stages ?? [];
-              return (
-                <button
-                  key={node.id}
-                  type="button"
-                  onClick={() => onSelectNode(node.id)}
-                  className="qz-card"
-                  style={{
-                    padding: 0,
-                    overflow: "hidden",
-                    textAlign: "left",
-                    cursor: "pointer",
-                    border: active ? "2px solid var(--qz-accent)" : "1px solid var(--qz-rule)",
-                    boxShadow: active ? "var(--qz-shadow-md)" : "var(--qz-shadow-sm)",
-                  }}
-                >
-                  <div
-                    style={{
-                      height: 116,
-                      overflow: "hidden",
-                      background: "#FAFAFA",
-                      borderBottom: "1px solid var(--qz-rule)",
-                    }}
-                  >
-                    <div
-                      style={{
-                        width: 260 / 0.42,
-                        transform: "scale(0.42)",
-                        transformOrigin: "top left",
-                        padding: 14,
-                        pointerEvents: "none",
-                      }}
-                    >
-                      <StepPreview doc={doc} node={node} productIndex={productIndex} categories={categories} />
-                    </div>
-                  </div>
-                  <div style={{ padding: 12, display: "flex", flexDirection: "column", gap: 6 }}>
-                    <strong style={{ fontSize: 14 }}>{node.data.headline}</strong>
-                    <div className="qz-dim" style={{ fontSize: 12 }}>
-                      {cat ? `${cat.name} · ${cat.productIds.length} products` : "Tag / collection based"}
-                    </div>
-                    <div className="qz-row" style={{ gap: 4, flexWrap: "wrap" }}>
-                      {node.data.match_ladder.map((s) => (
-                        <span
-                          key={s}
-                          className="qz-mono"
-                          style={{
-                            fontSize: 10.5,
-                            border: "1px solid var(--qz-rule)",
-                            borderRadius: 999,
-                            padding: "1px 7px",
-                          }}
-                        >
-                          {s}
-                        </span>
-                      ))}
-                    </div>
-                    {stages.length > 0 ? (
-                      <div style={{ display: "flex", flexDirection: "column", gap: 4, marginTop: 2 }}>
-                        <span className="qz-label" style={{ fontSize: 10 }}>
-                          {stages.length} stages
-                        </span>
-                        {stages.map((st, i) => (
-                          <div
-                            key={st.id}
-                            className="qz-dim"
-                            style={{
-                              fontSize: 11,
-                              display: "flex",
-                              gap: 6,
-                              alignItems: "baseline",
-                            }}
-                          >
-                            <span className="qz-mono" style={{ opacity: 0.6 }}>{i + 1}.</span>
-                            <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                              {st.headline || "Section"} · {st.match_ladder.join(" → ")}
-                            </span>
-                          </div>
-                        ))}
-                      </div>
-                    ) : null}
-                    {active ? <QzBadge tone="ok">Mapped in table →</QzBadge> : null}
-                  </div>
-                </button>
-              );
-            })}
+            {resultNodes.map((node) => (
+              <ResultPageCard
+                key={node.id}
+                node={node}
+                doc={doc}
+                productIndex={productIndex}
+                categories={categories}
+                active={node.id === selectedNodeId}
+                onClick={() => onSelectNode(node.id)}
+                layout="grid"
+                footerBadge={
+                  node.id === selectedNodeId ? <QzBadge tone="ok">Mapped in table →</QzBadge> : undefined
+                }
+              />
+            ))}
           </div>
         )}
       </section>

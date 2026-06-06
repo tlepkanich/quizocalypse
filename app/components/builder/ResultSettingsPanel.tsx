@@ -1,6 +1,6 @@
 import type { CSSProperties } from "react";
 import { updateNodeData } from "../studio/studioDoc";
-import { QzBadge, QzField, QzInput, QzSelect } from "../qz";
+import { QzBadge, QzCollapse, QzField, QzInput, QzSelect } from "../qz";
 import type {
   MatchLadderStrategy,
   OosBehavior,
@@ -12,11 +12,14 @@ import type { BuilderCategory, BuilderCollection } from "./stepProps";
 
 // ───────────────────────────────────────────────────────────────────────────
 // ResultSettingsPanel — the per-page recommendation SETTINGS editor used by
-// Step 3 (Page gallery). Self-contained (does NOT import the canvas route's
-// ResultLogicEditor) but mirrors its field semantics. The key new control is
-// the SOURCE/MATCH "bucket" binding: a category_id dropdown populated from the
+// Step 3 (Results). Self-contained (does NOT import the canvas route's
+// ResultLogicEditor) but mirrors its field semantics. The key control is the
+// SOURCE/MATCH "bucket" binding: a category_id dropdown populated from the
 // quiz-scoped categories, which ties a result page to a bucket. All edits go
-// through updateNodeData(doc, nodeId, patch) and bubble up via onChange.
+// through updateNodeData(doc, nodeId, patch) and bubble up via onCommit.
+//
+// Sections are wrapped in QzCollapse so a long config folds into scannable
+// groups (Source open by default); no editor logic changed.
 // ───────────────────────────────────────────────────────────────────────────
 
 type ResultNode = Extract<QuizNode, { type: "result" }>;
@@ -84,8 +87,6 @@ const addChip: CSSProperties = {
   color: "var(--qz-ink-2)",
 };
 
-const sectionLabel = "qz-label";
-
 // Bounds match the Zod schema (min_products 1..12, max_products 1..12).
 function clampProductCount(raw: number): number {
   if (Number.isNaN(raw)) return 1;
@@ -142,214 +143,116 @@ export function ResultSettingsPanel({
   const maxProducts = data.max_products ?? data.slot_count;
 
   return (
-    <div className="qz-col qz-gap-16">
+    <div className="qz-col qz-gap-8">
       {/* ── SOURCE: the match ladder ──────────────────────────────────── */}
-      <section className="qz-col qz-gap-8">
-        <div className="qz-row qz-row-between" style={{ alignItems: "baseline" }}>
-          <span className={sectionLabel}>Source — match ladder</span>
-          <span className="qz-mono qz-dim" style={{ fontSize: 11 }}>
-            {ladder.length} active
-          </span>
-        </div>
-        <p className="qz-dim" style={{ fontSize: 12, margin: 0 }}>
-          Products are resolved by trying each strategy top-to-bottom until one
-          returns enough. Reorder to set priority.
-        </p>
+      <QzCollapse title="Source — match ladder" meta={`${ladder.length} active`} defaultOpen>
+        <div className="qz-col qz-gap-8">
+          <p className="qz-dim" style={{ fontSize: 12, margin: 0 }}>
+            Products are resolved by trying each strategy top-to-bottom until one
+            returns enough. Reorder to set priority.
+          </p>
 
-        <div className="qz-col qz-gap-4">
-          {ladder.map((s, i) => (
-            <div
-              key={s}
-              className="qz-row qz-gap-8"
-              style={{
-                alignItems: "center",
-                padding: "6px 8px",
-                border: "1px solid var(--qz-rule)",
-                borderRadius: "var(--qz-radius)",
-                background: "var(--qz-paper)",
-              }}
-            >
-              <span className="qz-mono qz-dim" style={{ fontSize: 11, width: 16 }}>
-                {i + 1}
-              </span>
-              <span style={{ flex: 1, minWidth: 0 }}>
-                <span style={{ fontSize: 13 }}>{STRATEGY_LABEL[s]}</span>
-                <span
-                  className="qz-dim"
-                  style={{ display: "block", fontSize: 11, lineHeight: 1.3 }}
-                >
-                  {STRATEGY_HINT[s]}
+          <div className="qz-col qz-gap-4">
+            {ladder.map((s, i) => (
+              <div
+                key={s}
+                className="qz-row qz-gap-8"
+                style={{
+                  alignItems: "center",
+                  padding: "6px 8px",
+                  border: "1px solid var(--qz-rule)",
+                  borderRadius: "var(--qz-radius)",
+                  background: "var(--qz-paper)",
+                }}
+              >
+                <span className="qz-mono qz-dim" style={{ fontSize: 11, width: 16 }}>
+                  {i + 1}
                 </span>
-              </span>
-              <button
-                type="button"
-                onClick={() => moveStrategy(i, -1)}
-                style={ladderBtn}
-                disabled={i === 0}
-                title="Move up"
-              >
-                ↑
-              </button>
-              <button
-                type="button"
-                onClick={() => moveStrategy(i, 1)}
-                style={ladderBtn}
-                disabled={i === ladder.length - 1}
-                title="Move down"
-              >
-                ↓
-              </button>
-              <button
-                type="button"
-                onClick={() => removeStrategy(s)}
-                style={{ ...ladderBtn, color: "var(--qz-crit)" }}
-                disabled={ladder.length <= 1}
-                title="Remove"
-              >
-                ×
-              </button>
-            </div>
-          ))}
-        </div>
+                <span style={{ flex: 1, minWidth: 0 }}>
+                  <span style={{ fontSize: 13 }}>{STRATEGY_LABEL[s]}</span>
+                  <span
+                    className="qz-dim"
+                    style={{ display: "block", fontSize: 11, lineHeight: 1.3 }}
+                  >
+                    {STRATEGY_HINT[s]}
+                  </span>
+                </span>
+                <button
+                  type="button"
+                  onClick={() => moveStrategy(i, -1)}
+                  style={ladderBtn}
+                  disabled={i === 0}
+                  title="Move up"
+                >
+                  ↑
+                </button>
+                <button
+                  type="button"
+                  onClick={() => moveStrategy(i, 1)}
+                  style={ladderBtn}
+                  disabled={i === ladder.length - 1}
+                  title="Move down"
+                >
+                  ↓
+                </button>
+                <button
+                  type="button"
+                  onClick={() => removeStrategy(s)}
+                  style={{ ...ladderBtn, color: "var(--qz-crit)" }}
+                  disabled={ladder.length <= 1}
+                  title="Remove"
+                >
+                  ×
+                </button>
+              </div>
+            ))}
+          </div>
 
-        <div className="qz-row qz-gap-4" style={{ flexWrap: "wrap" }}>
-          {ALL_STRATEGIES.filter((s) => !ladder.includes(s)).map((s) => (
-            <button key={s} type="button" onClick={() => addStrategy(s)} style={addChip}>
-              + {STRATEGY_LABEL[s]}
-            </button>
-          ))}
+          <div className="qz-row qz-gap-4" style={{ flexWrap: "wrap" }}>
+            {ALL_STRATEGIES.filter((s) => !ladder.includes(s)).map((s) => (
+              <button key={s} type="button" onClick={() => addStrategy(s)} style={addChip}>
+                + {STRATEGY_LABEL[s]}
+              </button>
+            ))}
+          </div>
         </div>
-      </section>
+      </QzCollapse>
 
       {/* ── MATCH: bind a bucket and/or a collection ──────────────────── */}
-      <section className="qz-col qz-gap-8">
-        <span className={sectionLabel}>Match — what this page draws from</span>
-
-        <QzField
-          label="Bound bucket"
-          hint={
-            boundCategory
-              ? `${boundCategory.productIds.length} product(s) in this bucket.`
-              : "Tie this result page to a bucket so the “Bound bucket” strategy can pull its products."
-          }
-          meta={ladder.includes("category") ? "used by ladder" : undefined}
-        >
-          <QzSelect
-            value={data.category_id ?? ""}
-            onChange={(e) => set({ category_id: e.target.value || undefined })}
+      <QzCollapse title="Match — bucket & collection">
+        <div className="qz-col qz-gap-8">
+          <QzField
+            label="Bound bucket"
+            hint={
+              boundCategory
+                ? `${boundCategory.productIds.length} product(s) in this bucket.`
+                : "Tie this result page to a bucket so the “Bound bucket” strategy can pull its products."
+            }
+            meta={ladder.includes("category") ? "used by ladder" : undefined}
           >
-            <option value="">No bucket</option>
-            {categories.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.name} ({c.productIds.length})
-              </option>
-            ))}
-          </QzSelect>
-        </QzField>
-
-        <QzField
-          label="Collection"
-          hint="Used by the “Collection” strategy."
-          meta={ladder.includes("collection") ? "used by ladder" : undefined}
-        >
-          <QzSelect
-            value={data.collection_id ?? ""}
-            onChange={(e) => set({ collection_id: e.target.value || undefined })}
-          >
-            <option value="">No collection</option>
-            {collections.map((c) => (
-              <option key={c.collectionId} value={c.collectionId}>
-                {c.title}
-              </option>
-            ))}
-          </QzSelect>
-        </QzField>
-
-        {ladder.includes("metafield") ? (
-          <div className="qz-row qz-gap-8">
-            <QzField label="Metafield key">
-              <QzInput
-                value={data.metafield_key ?? ""}
-                placeholder="custom.skin_type"
-                onChange={(e) => set({ metafield_key: e.target.value || undefined })}
-              />
-            </QzField>
-            <QzField label="Value">
-              <QzInput
-                value={data.metafield_value ?? ""}
-                placeholder="oily"
-                onChange={(e) => set({ metafield_value: e.target.value || undefined })}
-              />
-            </QzField>
-          </div>
-        ) : null}
-      </section>
-
-      {/* ── RANKING + product counts ──────────────────────────────────── */}
-      <section className="qz-col qz-gap-8">
-        <span className={sectionLabel}>Ranking &amp; count</span>
-        <div className="qz-row qz-gap-8">
-          <QzField label="Ranking">
             <QzSelect
-              value={data.ranking}
-              onChange={(e) => set({ ranking: e.target.value as ResultRanking })}
+              value={data.category_id ?? ""}
+              onChange={(e) => set({ category_id: e.target.value || undefined })}
             >
-              {RANKING_OPTIONS.map((o) => (
-                <option key={o.value} value={o.value}>
-                  {o.label}
+              <option value="">No bucket</option>
+              {categories.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name} ({c.productIds.length})
                 </option>
               ))}
             </QzSelect>
           </QzField>
-          <QzField label="Min products" hint="Ladder threshold to win.">
-            <QzInput
-              type="number"
-              min={1}
-              max={12}
-              value={data.min_products}
-              onChange={(e) =>
-                set({ min_products: clampProductCount(e.target.valueAsNumber) })
-              }
-            />
-          </QzField>
-          <QzField label="Max products" hint="Display cap.">
-            <QzInput
-              type="number"
-              min={1}
-              max={12}
-              value={maxProducts}
-              onChange={(e) =>
-                set({ max_products: clampProductCount(e.target.valueAsNumber) })
-              }
-            />
-          </QzField>
-        </div>
-      </section>
 
-      {/* ── OUT-OF-STOCK behavior ─────────────────────────────────────── */}
-      <section className="qz-col qz-gap-8">
-        <span className={sectionLabel}>Out of stock</span>
-        <QzField label="When a product is out of stock">
-          <QzSelect
-            value={data.oos_behavior}
-            onChange={(e) => set({ oos_behavior: e.target.value as OosBehavior })}
+          <QzField
+            label="Collection"
+            hint="Used by the “Collection” strategy."
+            meta={ladder.includes("collection") ? "used by ladder" : undefined}
           >
-            {OOS_OPTIONS.map((o) => (
-              <option key={o.value} value={o.value}>
-                {o.label}
-              </option>
-            ))}
-          </QzSelect>
-        </QzField>
-        {data.oos_behavior === "fallback" ? (
-          <QzField label="Fallback collection">
             <QzSelect
-              value={data.oos_fallback_collection_id ?? ""}
-              onChange={(e) =>
-                set({ oos_fallback_collection_id: e.target.value || undefined })
-              }
+              value={data.collection_id ?? ""}
+              onChange={(e) => set({ collection_id: e.target.value || undefined })}
             >
-              <option value="">No fallback</option>
+              <option value="">No collection</option>
               {collections.map((c) => (
                 <option key={c.collectionId} value={c.collectionId}>
                   {c.title}
@@ -357,40 +260,129 @@ export function ResultSettingsPanel({
               ))}
             </QzSelect>
           </QzField>
-        ) : null}
-      </section>
+
+          {ladder.includes("metafield") ? (
+            <div className="qz-row qz-gap-8">
+              <QzField label="Metafield key">
+                <QzInput
+                  value={data.metafield_key ?? ""}
+                  placeholder="custom.skin_type"
+                  onChange={(e) => set({ metafield_key: e.target.value || undefined })}
+                />
+              </QzField>
+              <QzField label="Value">
+                <QzInput
+                  value={data.metafield_value ?? ""}
+                  placeholder="oily"
+                  onChange={(e) => set({ metafield_value: e.target.value || undefined })}
+                />
+              </QzField>
+            </div>
+          ) : null}
+        </div>
+      </QzCollapse>
+
+      {/* ── RANKING + product counts ──────────────────────────────────── */}
+      <QzCollapse title="Ranking & count">
+        <div className="qz-col qz-gap-8">
+          <div className="qz-row qz-gap-8">
+            <QzField label="Ranking">
+              <QzSelect
+                value={data.ranking}
+                onChange={(e) => set({ ranking: e.target.value as ResultRanking })}
+              >
+                {RANKING_OPTIONS.map((o) => (
+                  <option key={o.value} value={o.value}>
+                    {o.label}
+                  </option>
+                ))}
+              </QzSelect>
+            </QzField>
+            <QzField label="Min products" hint="Ladder threshold to win.">
+              <QzInput
+                type="number"
+                min={1}
+                max={12}
+                value={data.min_products}
+                onChange={(e) => set({ min_products: clampProductCount(e.target.valueAsNumber) })}
+              />
+            </QzField>
+            <QzField label="Max products" hint="Display cap.">
+              <QzInput
+                type="number"
+                min={1}
+                max={12}
+                value={maxProducts}
+                onChange={(e) => set({ max_products: clampProductCount(e.target.valueAsNumber) })}
+              />
+            </QzField>
+          </div>
+        </div>
+      </QzCollapse>
+
+      {/* ── OUT-OF-STOCK behavior ─────────────────────────────────────── */}
+      <QzCollapse title="Out of stock">
+        <div className="qz-col qz-gap-8">
+          <QzField label="When a product is out of stock">
+            <QzSelect
+              value={data.oos_behavior}
+              onChange={(e) => set({ oos_behavior: e.target.value as OosBehavior })}
+            >
+              {OOS_OPTIONS.map((o) => (
+                <option key={o.value} value={o.value}>
+                  {o.label}
+                </option>
+              ))}
+            </QzSelect>
+          </QzField>
+          {data.oos_behavior === "fallback" ? (
+            <QzField label="Fallback collection">
+              <QzSelect
+                value={data.oos_fallback_collection_id ?? ""}
+                onChange={(e) => set({ oos_fallback_collection_id: e.target.value || undefined })}
+              >
+                <option value="">No fallback</option>
+                {collections.map((c) => (
+                  <option key={c.collectionId} value={c.collectionId}>
+                    {c.title}
+                  </option>
+                ))}
+              </QzSelect>
+            </QzField>
+          ) : null}
+        </div>
+      </QzCollapse>
 
       {/* ── PRICING toggles ───────────────────────────────────────────── */}
-      <section className="qz-col qz-gap-8">
-        <span className={sectionLabel}>Pricing</span>
-        <div className="qz-row qz-gap-16" style={{ flexWrap: "wrap" }}>
-          <label
-            className="qz-row qz-gap-8"
-            style={{ alignItems: "center", fontSize: 13, cursor: "pointer" }}
-          >
-            <input
-              type="checkbox"
-              checked={data.include_discount}
-              onChange={(e) => set({ include_discount: e.target.checked })}
-            />
-            Include discount
-          </label>
-          <label
-            className="qz-row qz-gap-8"
-            style={{ alignItems: "center", fontSize: 13, cursor: "pointer" }}
-          >
-            <input
-              type="checkbox"
-              checked={data.subscription_eligible}
-              onChange={(e) => set({ subscription_eligible: e.target.checked })}
-            />
-            Subscription eligible
-          </label>
+      <QzCollapse title="Pricing">
+        <div className="qz-col qz-gap-8">
+          <div className="qz-row qz-gap-16" style={{ flexWrap: "wrap" }}>
+            <label
+              className="qz-row qz-gap-8"
+              style={{ alignItems: "center", fontSize: 13, cursor: "pointer" }}
+            >
+              <input
+                type="checkbox"
+                checked={data.include_discount}
+                onChange={(e) => set({ include_discount: e.target.checked })}
+              />
+              Include discount
+            </label>
+            <label
+              className="qz-row qz-gap-8"
+              style={{ alignItems: "center", fontSize: 13, cursor: "pointer" }}
+            >
+              <input
+                type="checkbox"
+                checked={data.subscription_eligible}
+                onChange={(e) => set({ subscription_eligible: e.target.checked })}
+              />
+              Subscription eligible
+            </label>
+          </div>
+          {boundCategory ? <QzBadge tone="ok">Bound to “{boundCategory.name}”</QzBadge> : null}
         </div>
-        {boundCategory ? (
-          <QzBadge tone="ok">Bound to “{boundCategory.name}”</QzBadge>
-        ) : null}
-      </section>
+      </QzCollapse>
     </div>
   );
 }

@@ -356,3 +356,75 @@ body[data-qz] ::selection { background: var(--qz-ink); color: var(--qz-cream); }
     position: static !important;
   }
 }
+
+/* ============================================================
+   Step 3 (Results) — master-detail workspace
+   A sticky page rail (independent scroll) beside the detail editor.
+   Collapses to a single column on narrow screens.
+   ============================================================ */
+.qz-results-grid {
+  display: grid;
+  grid-template-columns: minmax(260px, 320px) minmax(0, 1fr);
+  gap: var(--qz-space-5);
+  align-items: start;
+}
+.qz-results-rail {
+  position: sticky;
+  top: 12px;
+  max-height: calc(100vh - 140px);
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--qz-space-3);
+  padding-right: 4px;
+}
+@media (max-width: 900px) {
+  .qz-results-grid {
+    grid-template-columns: 1fr;
+  }
+  .qz-results-rail {
+    position: static;
+    max-height: none;
+    overflow: visible;
+  }
+}
+
+/* Collapsible section (QzCollapse) */
+.qz-collapse {
+  border: 1px solid var(--qz-rule);
+  border-radius: var(--qz-radius);
+  background: var(--qz-paper);
+  overflow: hidden;
+}
+.qz-collapse-summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
+}
+.qz-collapse-summary::-webkit-details-marker {
+  display: none;
+}
+.qz-collapse-chevron {
+  font-size: 15px;
+  line-height: 1;
+  color: var(--qz-ink-3);
+  transition: transform var(--qz-dur) var(--qz-ease);
+}
+.qz-collapse[open] .qz-collapse-chevron {
+  transform: rotate(90deg);
+}
+.qz-collapse-title {
+  flex: 1 1 auto;
+  font-weight: 600;
+  font-size: 13px;
+}
+.qz-collapse-meta {
+  font-size: 11px;
+}
+.qz-collapse-body {
+  padding: 0 12px 12px;
+}
