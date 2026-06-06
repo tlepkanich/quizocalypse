@@ -1,3 +1,20 @@
+# Build artifacts / deps (rebuilt inside the image)
 .cache
 build
 node_modules
+
+# Secrets — NEVER bake these into the image (set via `fly secrets` instead)
+.env
+.env.*
+!.env.example
+
+# VCS + local tooling (not needed at runtime, and may hold local config)
+.git
+.gitignore
+.claude
+
+# OS / editor cruft
+.DS_Store
+*.log
+npm-debug.log*
+.vscode

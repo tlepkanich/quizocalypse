@@ -1,0 +1,21 @@
+# Fly.io config for the standalone Quizocalypse studio.
+# Hand-authored (not via `fly launch`) for full control. The app is built from
+# the multi-stage Dockerfile; secrets are set via `fly secrets` (never here).
+app = 'quizocalypse-studio'
+primary_region = 'iad'
+
+[http_service]
+  internal_port = 3000
+  force_https = true
+  # Always-on: keep exactly one machine warm 24/7 so the shared URL never
+  # cold-starts (boot runs prisma generate + migrate ~25-40s, which 502s the
+  # first hit after idle). min_machines_running only takes effect with
+  # auto_stop = 'stop' — so we pair them: Fly stops any EXTRA machines but is
+  # bound to keep the last one running (~$2-3/mo).
+  auto_stop_machines = 'stop'
+  auto_start_machines = true
+  min_machines_running = 1
+
+[[vm]]
+  size = 'shared-cpu-1x'
+  memory = '512mb'
