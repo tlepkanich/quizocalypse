@@ -27,6 +27,10 @@ export const QuestionType = z.enum([
   "image_picker",
   // Phase 5: a compact dropdown (<select>) — good for long single-choice lists.
   "dropdown",
+  // Phase F: a horizontal rating/Likert scale — a single-select rendered as a
+  // compact row of buttons (1–N or labeled). Surfaces without a dedicated
+  // renderer fall through to the default single-select render (still functional).
+  "rating",
 ]);
 export type QuestionType = z.infer<typeof QuestionType>;
 
@@ -150,6 +154,7 @@ export const QuestionData = QuestionDataObject.refine(
       "searchable",
       "image_picker",
       "dropdown",
+      "rating",
     ];
     if (cardTypes.includes(q.question_type)) return q.answers.length >= 2;
     return true;

@@ -1479,6 +1479,32 @@ function QuestionView({
     return <DropdownQuestion node={node} onAdvance={onAdvance} styles={styles} />;
   }
 
+  // Rating / Likert scale: a single-select rendered as a compact horizontal row.
+  if (node.data.question_type === "rating") {
+    return (
+      <div style={styles.card}>
+        <h2 style={styles.h2}>{node.data.text}</h2>
+        <div style={{ marginTop: 20, display: "flex", gap: 8, flexWrap: "wrap" }}>
+          {node.data.answers.map((a) => (
+            <button
+              key={a.id}
+              style={{ ...styles.answerBtn, flex: "1 1 auto", minWidth: 56, textAlign: "center" }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.borderColor = "var(--qz-color-primary)";
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.borderColor = "#00000022";
+              }}
+              onClick={() => onAdvance([a.id], a.edge_handle_id)}
+            >
+              <AnswerLabel text={a.text} tooltip={a.tooltip_text} />
+            </button>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
   // single_select / image_tile (default fall-through)
   return (
     <div style={styles.card}>

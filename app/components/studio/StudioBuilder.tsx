@@ -1710,6 +1710,7 @@ function QuestionContent({
           <option value="dropdown">Dropdown</option>
           <option value="image_tile">Image tiles</option>
           <option value="image_picker">Image picker</option>
+          <option value="rating">Rating scale</option>
           <option value="searchable">Searchable</option>
           <option value="text">Text input</option>
           <option value="email">Email input</option>
