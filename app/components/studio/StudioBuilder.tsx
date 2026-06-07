@@ -1715,6 +1715,7 @@ function QuestionContent({
           <option value="swatch">Swatch picker</option>
           <option value="numeric">Number input</option>
           <option value="date">Date input</option>
+          <option value="slider">Slider (0–100)</option>
           <option value="searchable">Searchable</option>
           <option value="text">Text input</option>
           <option value="email">Email input</option>

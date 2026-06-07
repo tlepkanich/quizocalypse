@@ -1284,7 +1284,10 @@ function QuestionView({
   tokens: DesignTokensT;
 }) {
   const [checked, setChecked] = useState<Record<string, boolean>>({});
-  const [freeform, setFreeform] = useState("");
+  // Slider defaults to its midpoint so it's immediately submittable + shows a value.
+  const [freeform, setFreeform] = useState(
+    node.data.question_type === "slider" ? "50" : "",
+  );
   const isMulti = node.data.question_type === "multi_select";
   const isFreeform = isFreeformType(node.data.question_type);
 
@@ -1327,20 +1330,36 @@ function QuestionView({
           }}
           style={{ marginTop: 20, display: "flex", flexDirection: "column", gap: 12 }}
         >
-          <input
-            type={inputType}
-            value={freeform}
-            onChange={(e) => setFreeform(e.target.value.slice(0, maxLength))}
-            placeholder={placeholder}
-            maxLength={maxLength}
-            autoFocus
-            style={{
-              ...styles.answerBtn,
-              padding: "var(--qz-pad)",
-              textAlign: "left",
-              cursor: "text",
-            }}
-          />
+          {node.data.question_type === "slider" ? (
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              <input
+                type="range"
+                min={0}
+                max={100}
+                value={freeform || "50"}
+                onChange={(e) => setFreeform(e.target.value)}
+                style={{ width: "100%", cursor: "pointer", accentColor: "var(--qz-color-primary)" }}
+              />
+              <div style={{ textAlign: "center", fontWeight: 600, fontSize: 18 }}>
+                {freeform || "50"}
+              </div>
+            </div>
+          ) : (
+            <input
+              type={inputType}
+              value={freeform}
+              onChange={(e) => setFreeform(e.target.value.slice(0, maxLength))}
+              placeholder={placeholder}
+              maxLength={maxLength}
+              autoFocus
+              style={{
+                ...styles.answerBtn,
+                padding: "var(--qz-pad)",
+                textAlign: "left",
+                cursor: "text",
+              }}
+            />
+          )}
           <button
             type="submit"
             style={{

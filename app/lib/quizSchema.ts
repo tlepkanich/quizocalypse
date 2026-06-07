@@ -39,6 +39,8 @@ export const QuestionType = z.enum([
   // below so every freeform check picks them up from one source.
   "numeric",
   "date",
+  // Phase F: a 0–100 slider — the slider position is a freeform value → seed answer.
+  "slider",
 ]);
 export type QuestionType = z.infer<typeof QuestionType>;
 
@@ -46,7 +48,7 @@ export type QuestionType = z.infer<typeof QuestionType>;
 // typed input (piggybacking on answers[0]) rather than a card/answer list.
 // Every freeform check across runtime/builder/mutations imports this, so adding
 // a freeform type is a one-line change here instead of N scattered edits.
-export const FREEFORM_QUESTION_TYPES = ["text", "email", "numeric", "date"] as const;
+export const FREEFORM_QUESTION_TYPES = ["text", "email", "numeric", "date", "slider"] as const;
 export function isFreeformType(qt: string): boolean {
   return (FREEFORM_QUESTION_TYPES as readonly string[]).includes(qt);
 }
