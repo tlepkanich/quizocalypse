@@ -2,6 +2,9 @@ import type { PrismaClient } from "@prisma/client";
 import { Quiz } from "./quizSchema";
 import { validateQuiz } from "./quizValidation";
 import type { IndexedProduct } from "./recommendationEngine";
+import { translateFeaturesToBenefits, generateAnswerTooltips } from "./claude";
+import { toneSampleFromCatalog } from "./catalogIndex";
+import { parseBrandGuidelinesSafe } from "./brandGuidelines";
 import {
   BrandTokens,
   resolveDesignTokens,
@@ -304,22 +307,81 @@ export async function publishQuiz(
   // render time by the storefront against this baked baseline.
   const shop = await prisma.shop.findUnique({
     where: { id: args.shopId },
-    select: { brandTokens: true, shopDomain: true },
+    select: { brandTokens: true, shopDomain: true, brandGuidelines: true },
   });
   const shopParsed = BrandTokens.safeParse(shop?.brandTokens ?? {});
   const shopTokens: DesignTokensT | null = shopParsed.success
     ? shopParsed.data
     : null;
   const resolvedTokens = resolveDesignTokens(shopTokens, doc.design_tokens);
+  const brandGuidelines = parseBrandGuidelinesSafe(shop?.brandGuidelines);
 
   // Bake category → productIds onto each result page so the storefront needs no
   // DB lookup. `categoryProductIdsById` was fetched above (before the product
   // index) so the index is guaranteed to contain these products.
   const bakedResultsPages = bakeResultPages(doc, categoryProductIdsById);
 
+  // Bake "why this product" benefit bullets onto each result node (Dev Spec §5).
+  // Best-effort + parallel: each translateFeaturesToBenefits call falls back to
+  // [] on failure (and the function is non-throwing), so publish never breaks.
+  // Skips nodes that already carry bullets (merchant/AI-authored). Features come
+  // from the bound bucket's top products' titles + descriptions.
+  const productById = new Map(products.map((p) => [p.productId, p]));
+  const toneSample = toneSampleFromCatalog(products);
+  const bakedNodes = await Promise.all(
+    doc.nodes.map(async (node) => {
+      // Result nodes → "why this product" benefit bullets (Call 3).
+      if (node.type === "result") {
+        if (node.data.why_bullets.length > 0) return node;
+        const catId = node.data.category_id;
+        const pids = (catId ? categoryProductIdsById.get(catId) ?? [] : []).slice(0, 3);
+        const features = pids
+          .map((pid) => productById.get(pid))
+          .filter((p): p is NonNullable<typeof p> => Boolean(p))
+          .flatMap((p) => [
+            p.title,
+            ...(p.descriptionText
+              ? [p.descriptionText.replace(/\s+/g, " ").trim().slice(0, 300)]
+              : []),
+          ]);
+        if (features.length === 0) return node;
+        const bullets = await translateFeaturesToBenefits({
+          features: features.slice(0, 6),
+          ...(toneSample ? { brandVoiceSample: toneSample } : {}),
+          ...(brandGuidelines ? { brandGuidelines } : {}),
+        }).catch(() => [] as string[]);
+        return bullets.length > 0
+          ? { ...node, data: { ...node.data, why_bullets: bullets } }
+          : node;
+      }
+      // Question nodes → one tooltip per answer (Call 4). Fills only empty ones,
+      // so merchant/AI-authored tooltips are preserved.
+      if (node.type === "question") {
+        if (node.data.answers.every((a) => a.tooltip_text)) return node;
+        const tips = await generateAnswerTooltips({
+          answers: node.data.answers.map((a) => ({ id: a.id, text: a.text })),
+          context: node.data.text,
+          ...(brandGuidelines ? { brandGuidelines } : {}),
+        }).catch(() => ({}) as Record<string, string>);
+        if (Object.keys(tips).length === 0) return node;
+        return {
+          ...node,
+          data: {
+            ...node.data,
+            answers: node.data.answers.map((a) =>
+              !a.tooltip_text && tips[a.id] ? { ...a, tooltip_text: tips[a.id] } : a,
+            ),
+          },
+        };
+      }
+      return node;
+    }),
+  );
+
   const nextVersion = quiz.version + 1;
   const publishedJson: PublishedQuiz = {
     ...doc,
+    nodes: bakedNodes,
     results_pages: bakedResultsPages,
     status: "published",
     design_tokens: resolvedTokens,
