@@ -164,7 +164,13 @@ function categoryMapFor(
   );
 }
 
-export function recommendForResult(input: RecommendationInput): RecommendedProduct[] {
+export function recommendForResult(
+  input: RecommendationInput,
+  // Optional cap override. Pass a larger value to fetch a deeper ranked pool
+  // (primary recs + extra candidates) for deriving secondary "you might also
+  // like" picks from a single coherent ladder pass.
+  capOverride?: number,
+): RecommendedProduct[] {
   const { quiz, productIndex, selectedAnswerIds, resultNodeId } = input;
 
   const resultNode = quiz.nodes.find(
@@ -194,7 +200,7 @@ export function recommendForResult(input: RecommendationInput): RecommendedProdu
       metafield_key: data.metafield_key,
       metafield_value: data.metafield_value,
       ranking: data.ranking,
-      cap: data.max_products ?? data.slot_count,
+      cap: capOverride ?? data.max_products ?? data.slot_count,
       minProducts: data.min_products,
       oos_behavior: data.oos_behavior,
       oos_fallback_collection_id: data.oos_fallback_collection_id,
@@ -205,6 +211,37 @@ export function recommendForResult(input: RecommendationInput): RecommendedProdu
     selectedAnswerIds,
     categoryMapFor(resultPage),
   );
+}
+
+// "You might also like" — up to `max` secondary products shown beneath the
+// primary recommendations on the result page (Dev Spec §5). Pure + testable.
+//
+// `pool` is the SAME ladder-ranked list as the primary recs, fetched with a
+// larger cap — so it contains the primary items first, then the next-best
+// matches. This picks which ≤max products become secondaries.
+//
+// Diversity-aware (chosen): among the ranked pool, exclude items already shown
+// and out-of-stock, then prefer GENUINE ALTERNATIVES — candidates whose tags
+// overlap the primary set least come first. JS array sort is stable, so
+// equal-overlap candidates keep the pool's best→worst rank as the tiebreak.
+// The result leans toward a different style/price than the primary picks,
+// rather than near-duplicates. Pure + testable.
+export function selectSecondaryRecs(
+  primary: RecommendedProduct[],
+  pool: RecommendedProduct[],
+  max = 2,
+): RecommendedProduct[] {
+  const shown = new Set(primary.map((p) => p.product_id));
+  const primaryTags = new Set(primary.flatMap((p) => p.tags));
+  const overlapRatio = (p: RecommendedProduct) =>
+    p.tags.length === 0
+      ? 0
+      : p.tags.filter((t) => primaryTags.has(t)).length / p.tags.length;
+  // `.filter` returns a fresh array, so sorting it never mutates the caller's pool.
+  return pool
+    .filter((p) => !shown.has(p.product_id) && p.inventory_in_stock !== false)
+    .sort((a, b) => overlapRatio(a) - overlapRatio(b))
+    .slice(0, max);
 }
 
 // Resolve one multi-stage section's products. Stages don't carry the

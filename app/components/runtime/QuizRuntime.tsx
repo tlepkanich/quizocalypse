@@ -5,6 +5,7 @@ import {
   recommendForResult,
   recommendForStage,
   recommendPreview,
+  selectSecondaryRecs,
   type BranchContext,
   type IndexedProduct,
   type RecommendedProduct,
@@ -648,6 +649,16 @@ export function QuizRuntime(props: QuizRuntimeProps) {
           selectedAnswerIds,
           resultNodeId: currentNode.id,
         });
+        // Secondary "you might also like": the same ladder fetched deeper (cap 12),
+        // then diversity-filtered against the primary picks.
+        const secondary = selectSecondaryRecs(
+          recs,
+          recommendForResult(
+            { quiz: doc, productIndex, selectedAnswerIds, resultNodeId: currentNode.id },
+            12,
+          ),
+          2,
+        );
         content = (
           <ResultView
             headline={currentNode.data.headline}
@@ -655,6 +666,7 @@ export function QuizRuntime(props: QuizRuntimeProps) {
             whyBullets={currentNode.data.why_bullets}
             ctaLabel={currentNode.data.cta_label}
             recs={recs}
+            secondary={secondary}
             resultNodeId={currentNode.id}
             shopDomain={shopDomain}
             discountCode={discountCode}
@@ -2146,6 +2158,7 @@ function ResultView({
   subtext,
   ctaLabel,
   recs,
+  secondary,
   resultNodeId,
   shopDomain,
   discountCode,
@@ -2162,6 +2175,7 @@ function ResultView({
   subtext: string;
   ctaLabel: string;
   recs: RecommendedProduct[];
+  secondary?: RecommendedProduct[];
   resultNodeId: string;
   shopDomain?: string;
   discountCode?: string;
@@ -2186,8 +2200,9 @@ function ResultView({
     analytics.track("recommendation_viewed", {
       result_node_id: resultNodeId,
       product_ids: recs.map((r) => r.product_id),
+      secondary_product_ids: (secondary ?? []).map((r) => r.product_id),
     });
-  }, [analytics, completed, resultNodeId, startedAt, recs]);
+  }, [analytics, completed, resultNodeId, startedAt, recs, secondary]);
 
   const inner = (
     <>
@@ -2238,6 +2253,39 @@ function ResultView({
           />
         ))}
       </div>
+      {secondary && secondary.length > 0 && (
+        <div style={{ marginTop: 28 }}>
+          <h3 style={{ ...styles.h2, fontSize: "0.8em", margin: "0 0 12px" }}>
+            You might also like
+          </h3>
+          <div style={{ display: "grid", gap: 12 }}>
+            {secondary.map((r, idx) => (
+              <ProductCard
+                key={r.product_id}
+                product={r}
+                position={recs.length + idx}
+                ctaLabel={ctaLabel}
+                href={shopDomain ? `https://${shopDomain}/products/${r.handle}` : undefined}
+                shopDomain={shopDomain}
+                styles={styles}
+                onClick={() =>
+                  analytics?.track("recommendation_clicked", {
+                    product_id: r.product_id,
+                    position: recs.length + idx,
+                    secondary: true,
+                  })
+                }
+                onAdd={() =>
+                  analytics?.track("add_to_cart", {
+                    product_id: r.product_id,
+                    position: recs.length + idx,
+                  })
+                }
+              />
+            ))}
+          </div>
+        </div>
+      )}
       <button
         onClick={onReset}
         style={{

@@ -8,8 +8,10 @@ import {
   resolveNextStep,
   nextNodeFor,
   isSellable,
+  selectSecondaryRecs,
   type BranchContext,
   type IndexedProduct,
+  type RecommendedProduct,
 } from "./recommendationEngine";
 import { Quiz } from "./quizSchema";
 
@@ -766,5 +768,69 @@ describe("recommendForStage — multi-stage results", () => {
     const stageData = stage.type === "result" ? stage.data.stages[0]! : undefined;
     const out = recommendForStage(quiz, baseProducts, [], "r1", stageData!);
     expect(out).toEqual([]);
+  });
+});
+
+describe("selectSecondaryRecs (diversity-aware)", () => {
+  const mk = (
+    id: string,
+    tags: string[],
+    extra: Partial<RecommendedProduct> = {},
+  ): RecommendedProduct => ({
+    product_id: id,
+    title: id,
+    handle: id,
+    price: "10.00",
+    image_url: null,
+    tags,
+    collection_ids: [],
+    inventory_in_stock: true,
+    score: 0,
+    ...extra,
+  });
+
+  it("excludes products already shown in primary", () => {
+    const primary = [mk("p1", ["a"])];
+    const pool = [mk("p1", ["a"]), mk("p2", ["b"]), mk("p3", ["c"])];
+    const ids = selectSecondaryRecs(primary, pool, 2).map((p) => p.product_id);
+    expect(ids).not.toContain("p1");
+    expect(ids).toHaveLength(2);
+  });
+
+  it("prefers low tag-overlap with the primary set (genuine alternatives)", () => {
+    const primary = [mk("p1", ["sporty", "blue"])];
+    const pool = [
+      mk("hi", ["sporty", "blue"]), // overlap 1.0
+      mk("lo", ["formal", "black"]), // overlap 0.0
+      mk("mid", ["sporty", "red"]), // overlap 0.5
+    ];
+    expect(selectSecondaryRecs(primary, pool, 2).map((p) => p.product_id)).toEqual([
+      "lo",
+      "mid",
+    ]);
+  });
+
+  it("breaks overlap ties by incoming pool rank (stable sort)", () => {
+    const primary = [mk("p1", ["x"])];
+    // all zero-overlap → keep the pre-ranked best→worst order
+    const pool = [mk("first", ["a"]), mk("second", ["b"]), mk("third", ["c"])];
+    expect(selectSecondaryRecs(primary, pool, 2).map((p) => p.product_id)).toEqual([
+      "first",
+      "second",
+    ]);
+  });
+
+  it("skips out-of-stock candidates and respects max", () => {
+    const primary = [mk("p1", ["a"])];
+    const pool = [mk("oos", ["z"], { inventory_in_stock: false }), mk("ok", ["y"])];
+    expect(selectSecondaryRecs(primary, pool, 2).map((p) => p.product_id)).toEqual(["ok"]);
+  });
+
+  it("does not mutate the input pool", () => {
+    const primary = [mk("p1", ["a"])];
+    const pool = [mk("b", ["sporty", "blue"]), mk("a", ["formal"])];
+    const before = pool.map((p) => p.product_id);
+    selectSecondaryRecs(primary, pool, 2);
+    expect(pool.map((p) => p.product_id)).toEqual(before);
   });
 });
