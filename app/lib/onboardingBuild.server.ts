@@ -3,7 +3,7 @@ import { Quiz } from "./quizSchema";
 import type { Quiz as QuizDoc } from "./quizSchema";
 import type { DesignTokensT } from "./designTokens";
 import { buildSeedQuiz } from "./seedQuiz";
-import { buildScopedIndex, toneSampleFromCatalog } from "./catalogIndex";
+import { buildScopedIndex, toneSampleFromCatalog, suggestPlacement } from "./catalogIndex";
 import { ingestWebsite } from "./websiteIngest.server";
 import {
   discoverAndPersistBuckets,
@@ -155,7 +155,10 @@ export async function runAiOnboardingBuild(
     return { quizId, degraded: "AI built a draft but it needs a tweak in the builder." };
   }
 
-  await prisma.quiz.update({ where: { id: quizId }, data: { draftJson: parsed.data as never } });
+  // AI placement pre-selection (Dev Spec §2 Phase 4) — smart default by catalog
+  // size; the merchant overrides via the editor's placement picker.
+  const withPlacement = { ...parsed.data, placement: suggestPlacement(allProducts.length) };
+  await prisma.quiz.update({ where: { id: quizId }, data: { draftJson: withPlacement as never } });
   return { quizId };
 }
 

@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import type { Product } from "@prisma/client";
-import { scoreCatalogCompleteness, toneSampleFromCatalog } from "./catalogIndex";
+import { scoreCatalogCompleteness, toneSampleFromCatalog, suggestPlacement } from "./catalogIndex";
 
 // Minimal Product factory — the catalog-intelligence helpers only read tags,
 // descriptionText, and variants, but we build a full row so the cast is honest.
@@ -88,5 +88,20 @@ describe("toneSampleFromCatalog", () => {
 
   it("returns empty string when nothing usable", () => {
     expect(toneSampleFromCatalog([mk({ descriptionText: null }), mk({ descriptionText: "x" })])).toBe("");
+  });
+});
+
+describe("suggestPlacement", () => {
+  it("single hero / tiny catalog → product_widget", () => {
+    expect(suggestPlacement(1)).toBe("product_widget");
+    expect(suggestPlacement(3)).toBe("product_widget");
+  });
+  it("mid-size catalog (4–9) → dedicated page", () => {
+    expect(suggestPlacement(4)).toBe("page");
+    expect(suggestPlacement(9)).toBe("page");
+  });
+  it("broad catalog (10+) → homepage popup", () => {
+    expect(suggestPlacement(10)).toBe("popup");
+    expect(suggestPlacement(250)).toBe("popup");
   });
 });

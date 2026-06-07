@@ -190,3 +190,13 @@ export function toneSampleFromCatalog(
     .map((d) => (d.length > maxCharsEach ? `${d.slice(0, maxCharsEach)}…` : d))
     .join("\n---\n");
 }
+
+// Dev Spec §2 Phase 4 — AI pre-selects the storefront placement by catalog
+// shape. Applied as the smart default on a freshly-built quiz; the merchant can
+// override it in the editor's placement picker. Pure + testable.
+export type QuizPlacement = "page" | "popup" | "inline" | "product_widget";
+export function suggestPlacement(productCount: number): QuizPlacement {
+  if (productCount <= 3) return "product_widget"; // single hero / tiny catalog
+  if (productCount >= 10) return "popup"; // broad catalog → homepage popup
+  return "page"; // mid-size → dedicated quiz page
+}
