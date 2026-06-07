@@ -731,6 +731,11 @@ export const Quiz = z.object({
   // Optional collection ID for the mid-quiz preview cold-start. Used when
   // accumulated answer tags score zero against the candidate pool.
   featured_collection_id: z.string().optional(),
+  // Dev Spec Phase 4 — how the published quiz appears on the storefront. The
+  // standalone /q/:id is always a full page; this drives the Theme App Extension
+  // embed mode + the publish embed hint. Optional (absent = "page") to stay
+  // additive without forcing the field onto every existing Quiz literal.
+  placement: z.enum(["page", "popup", "inline", "product_widget"]).optional(),
   nodes: z.array(QuizNode).min(2),
   edges: z.array(QuizEdge).default([]),
   results_pages: z.array(ResultPage).default([]),

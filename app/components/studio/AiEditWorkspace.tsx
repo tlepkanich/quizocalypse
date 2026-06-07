@@ -11,6 +11,16 @@ import type { StudioBuilderData } from "./StudioBuilder";
 import { useQuizDraft } from "./useQuizDraft";
 import { AiChatPanel } from "./AiChatPanel";
 
+// Dev Spec Phase 4 placement options. The standalone /q/:id is always a full
+// page; popup/inline/product_widget are honored by the Theme App Extension.
+type Placement = NonNullable<Quiz["placement"]>;
+const PLACEMENTS: Array<{ value: Placement; label: string; hint: string }> = [
+  { value: "page", label: "Dedicated page", hint: "share the link above, or add the App Block to any page." },
+  { value: "popup", label: "Popup", hint: "add the Quizocalypse App Block and set it to open as a modal." },
+  { value: "inline", label: "Inline embed", hint: "drop the App Block into a page section to embed it in-flow." },
+  { value: "product_widget", label: "Product page widget", hint: "add the App Block to your product template as a compact launcher." },
+];
+
 // ════════════════════════════════════════════════════════════════════════════
 // AiEditWorkspace — the AI-FIRST default editing surface (Dev Spec): a live,
 // interactive quiz preview beside an inline AI chat. It reuses the exact same
@@ -57,6 +67,8 @@ function AiWorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: C
   const fallbackCollection = data.collections[0]?.collectionId ?? "";
   const canPublish = allIssues.length === 0;
   const isPublishing = publishFetcher.state !== "idle";
+  const placement: Placement = doc.placement ?? "page";
+  const currentPlacement = PLACEMENTS.find((p) => p.value === placement) ?? PLACEMENTS[0]!;
 
   const publish = () => {
     const form = new FormData();
@@ -94,6 +106,27 @@ function AiWorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: C
           {isSaving ? "Saving…" : savedAt ? "Saved" : ""}
         </span>
         <div className="qz-row" style={{ gap: 8, alignItems: "center" }}>
+          <label className="qz-row" style={{ gap: 6, alignItems: "center", fontSize: 12 }}>
+            <span className="qz-dim">Placement</span>
+            <select
+              value={placement}
+              onChange={(e) => commit({ ...doc, placement: e.target.value as Placement })}
+              title="How this quiz appears on your storefront"
+              style={{
+                font: "inherit",
+                fontSize: 12,
+                padding: "4px 6px",
+                borderRadius: "var(--qz-radius)",
+                border: "1px solid #00000022",
+              }}
+            >
+              {PLACEMENTS.map((p) => (
+                <option key={p.value} value={p.value}>
+                  {p.label}
+                </option>
+              ))}
+            </select>
+          </label>
           <Link
             to="?mode=advanced"
             className="qz-btn qz-btn-ghost qz-btn-sm"
@@ -118,6 +151,9 @@ function AiWorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: C
           <a href={data.previewUrl} target="_blank" rel="noreferrer">
             {data.previewUrl}
           </a>
+          <div style={{ marginTop: 6, fontSize: 12 }} className="qz-dim">
+            Embed mode: <strong>{currentPlacement.label}</strong> — {currentPlacement.hint}
+          </div>
         </QzBanner>
       ) : null}
       {!canPublish ? (
