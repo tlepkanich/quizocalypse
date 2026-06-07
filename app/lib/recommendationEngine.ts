@@ -22,6 +22,9 @@ export interface IndexedProduct {
   // First in-stock (else first) variant gid, baked at publish — powers
   // add-to-cart cart permalinks. Absent when the product has no variants.
   default_variant_id?: string;
+  // Variant list (id + label + availability), baked ONLY when a product has >1
+  // variant — powers the result-card variant selector (Dev Spec §5).
+  variants?: Array<{ id: string; title: string; available: boolean }>;
 }
 
 export interface RecommendedProduct extends IndexedProduct {

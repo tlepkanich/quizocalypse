@@ -2580,7 +2580,12 @@ function ProductCard({
 }) {
   const isPreviewMode = useContext(RuntimePreviewContext);
   void position;
-  const cartUrl = cartPermalink(shopDomain, product.default_variant_id, 1, discountCode);
+  // Selectable variant (Dev Spec §5). Defaults to the baked default variant;
+  // the shopper can switch before adding to cart.
+  const [selectedVariantId, setSelectedVariantId] = useState(
+    product.default_variant_id ?? product.variants?.[0]?.id,
+  );
+  const cartUrl = cartPermalink(shopDomain, selectedVariantId, 1, discountCode);
 
   const infoStyle: React.CSSProperties = {
     display: "flex",
@@ -2649,21 +2654,45 @@ function ProductCard({
           {info}
         </button>
       )}
-      {cartUrl ? (
-        <button
-          type="button"
-          onClick={() => {
-            onAdd?.();
-            if (isPreviewMode) return; // preview: no cart navigation / postMessage
-            addToCartFromQuiz(cartUrl, numericId(product.default_variant_id), Boolean(discountCode));
-          }}
-          style={{ ...ctaStyle, cursor: "pointer" }}
-        >
-          Add to cart
-        </button>
-      ) : (
-        <span style={{ ...ctaStyle, cursor: "default" }}>{ctaLabel}</span>
-      )}
+      <div style={{ display: "flex", flexDirection: "column", gap: 6, alignItems: "stretch", flexShrink: 0 }}>
+        {product.variants && product.variants.length > 1 ? (
+          <select
+            aria-label="Choose a variant"
+            value={selectedVariantId ?? ""}
+            onChange={(e) => setSelectedVariantId(e.target.value)}
+            style={{
+              font: "inherit",
+              fontSize: 13,
+              padding: "6px 8px",
+              borderRadius: "var(--qz-radius)",
+              border: "1px solid #00000022",
+              maxWidth: 180,
+            }}
+          >
+            {product.variants.map((v) => (
+              <option key={v.id} value={v.id} disabled={!v.available}>
+                {v.title}
+                {v.available ? "" : " — sold out"}
+              </option>
+            ))}
+          </select>
+        ) : null}
+        {cartUrl ? (
+          <button
+            type="button"
+            onClick={() => {
+              onAdd?.();
+              if (isPreviewMode) return; // preview: no cart navigation / postMessage
+              addToCartFromQuiz(cartUrl, numericId(selectedVariantId), Boolean(discountCode));
+            }}
+            style={{ ...ctaStyle, cursor: "pointer" }}
+          >
+            Add to cart
+          </button>
+        ) : (
+          <span style={{ ...ctaStyle, cursor: "default" }}>{ctaLabel}</span>
+        )}
+      </div>
     </div>
   );
 }

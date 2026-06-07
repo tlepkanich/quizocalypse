@@ -261,6 +261,7 @@ export async function publishQuiz(
     .map((p) => {
       const variants = (p.variants ?? []) as Array<{
         id?: string;
+        title?: string;
         inventoryQuantity?: number | null;
       }>;
       const inStock = variants.some(
@@ -287,6 +288,16 @@ export async function publishQuiz(
             : v;
         if (val != null) metafields[k] = String(val);
       }
+      // Variant list for the result-card selector — title is the Shopify
+      // variant title ("Small / Red"); availability from inventory.
+      const variantList = variants
+        .filter((v) => typeof v.id === "string")
+        .map((v) => ({
+          id: v.id as string,
+          title: typeof v.title === "string" && v.title ? v.title : "Default",
+          available:
+            typeof v.inventoryQuantity === "number" ? v.inventoryQuantity > 0 : true,
+        }));
       return {
         product_id: p.productId,
         title: p.title,
@@ -299,6 +310,7 @@ export async function publishQuiz(
         updated_at: p.updatedAt ? p.updatedAt.toISOString() : undefined,
         ...(Object.keys(metafields).length > 0 ? { metafields } : {}),
         ...(defaultVariant?.id ? { default_variant_id: defaultVariant.id } : {}),
+        ...(variantList.length > 1 ? { variants: variantList } : {}),
       };
     });
 
