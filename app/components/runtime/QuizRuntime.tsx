@@ -251,6 +251,22 @@ export function QuizRuntime(props: QuizRuntimeProps) {
     };
   }, [quizId, isPreview]);
 
+  // Fire quiz_abandoned when the shopper leaves before reaching a result.
+  // We listen on `pagehide` (not React unmount) so tab-close / navigation is
+  // caught, and re-register per step so the event always reports the last node
+  // seen. completedRef flips true on the result view, so a finished quiz is
+  // never counted as abandoned.
+  useEffect(() => {
+    if (isPreview || typeof window === "undefined") return;
+    const onHide = () => {
+      if (!completedRef.current) {
+        analyticsRef.current?.track("quiz_abandoned", { last_node_id: currentNodeId });
+      }
+    };
+    window.addEventListener("pagehide", onHide);
+    return () => window.removeEventListener("pagehide", onHide);
+  }, [currentNodeId, isPreview]);
+
   // Persist progress whenever the step/path changes (ab is read at write time).
   // Skip the very first run so the restore effect's read is never clobbered.
   const skipFirstSaveRef = useRef(true);
@@ -528,7 +544,10 @@ export function QuizRuntime(props: QuizRuntimeProps) {
           quizId={quizId}
           sessionId={sessionIdRef.current}
           onSubmit={(contact) => {
-            if (contact?.email) contactRef.current = contact;
+            if (contact?.email) {
+              contactRef.current = contact;
+              analyticsRef.current?.track("email_captured", {});
+            }
             gotoNextFrom(currentNode.id, null);
           }}
         />
@@ -633,6 +652,7 @@ export function QuizRuntime(props: QuizRuntimeProps) {
           <ResultView
             headline={currentNode.data.headline}
             subtext={currentNode.data.subtext}
+            whyBullets={currentNode.data.why_bullets}
             ctaLabel={currentNode.data.cta_label}
             recs={recs}
             resultNodeId={currentNode.id}
@@ -661,6 +681,7 @@ export function QuizRuntime(props: QuizRuntimeProps) {
           <MultiStageResultView
             headline={currentNode.data.headline}
             subtext={currentNode.data.subtext}
+            whyBullets={currentNode.data.why_bullets}
             ctaLabel={currentNode.data.cta_label}
             sections={stageSections}
             resultNodeId={currentNode.id}
@@ -2099,6 +2120,27 @@ function ProductCardsView({
   );
 }
 
+// "Why this product" benefit bullets (Dev Spec §5) — baked at publish, rendered
+// under the result headline. Shared by the single + multi-stage result views.
+function WhyBullets({
+  bullets,
+  styles,
+}: {
+  bullets?: string[];
+  styles: ReturnType<typeof stylesFor>;
+}) {
+  if (!bullets || bullets.length === 0) return null;
+  return (
+    <ul style={{ margin: "12px 0 0", paddingLeft: 18, display: "grid", gap: 6 }}>
+      {bullets.map((b, i) => (
+        <li key={i} style={{ ...styles.muted, fontSize: 14, lineHeight: 1.45 }}>
+          {b}
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 function ResultView({
   headline,
   subtext,
@@ -2114,6 +2156,7 @@ function ResultView({
   analytics,
   onReset,
   bare,
+  whyBullets,
 }: {
   headline: string;
   subtext: string;
@@ -2131,6 +2174,7 @@ function ResultView({
   // When true, render just the products + "Start over" (no card / heading) so a
   // `recommendations` content-block can place it inside a custom layout.
   bare?: boolean;
+  whyBullets?: string[];
 }) {
   // Fire completion + view events once when the result first renders.
   useEffect(() => {
@@ -2214,6 +2258,7 @@ function ResultView({
     <div style={styles.card}>
       <h2 style={styles.h2}>{headline}</h2>
       {subtext && <p style={{ ...styles.muted, marginTop: 8 }}>{subtext}</p>}
+      <WhyBullets bullets={whyBullets} styles={styles} />
       {inner}
     </div>
   );
@@ -2239,6 +2284,7 @@ function MultiStageResultView({
   analytics,
   onReset,
   bare,
+  whyBullets,
 }: {
   headline: string;
   subtext: string;
@@ -2254,6 +2300,7 @@ function MultiStageResultView({
   analytics: ReturnType<typeof createAnalyticsClient> | null;
   onReset: () => void;
   bare?: boolean;
+  whyBullets?: string[];
 }) {
   useEffect(() => {
     if (completed.current || !analytics) return;
@@ -2304,6 +2351,7 @@ function MultiStageResultView({
     <div style={styles.card}>
       <h2 style={styles.h2}>{headline}</h2>
       {subtext && <p style={{ ...styles.muted, marginTop: 8 }}>{subtext}</p>}
+      <WhyBullets bullets={whyBullets} styles={styles} />
       {inner}
     </div>
   );

@@ -7,10 +7,13 @@ import { z } from "zod";
 export const EVENT_TYPES = [
   "quiz_started",
   "question_answered",
+  "quiz_abandoned",
   "quiz_completed",
   "recommendation_viewed",
   "recommendation_clicked",
   "add_to_cart",
+  "email_captured",
+  "tooltip_viewed",
 ] as const;
 export const EventType = z.enum(EVENT_TYPES);
 export type EventType = z.infer<typeof EventType>;
