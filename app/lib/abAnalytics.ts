@@ -135,4 +135,37 @@ export function aggregateAllAbFunnels(
   return out;
 }
 
+// A/B auto-promote (Phase F) — pick the winning variant by conversion rate.
+// Pure. Returns null unless ≥2 variants clear the minimum sample AND there is a
+// strict leader, so a winner is never declared on noise or a tie. `metric`
+// defaults to recommendation clicks (the closest conversion signal in the
+// funnel); pass "completed" to optimize for completion instead.
+export interface AbWinner {
+  slotId: string;
+  rate: number;
+  entered: number;
+  metric: "clicked" | "completed";
+}
+
+export function pickAbWinner(
+  funnels: Record<string, FunnelCounts>,
+  opts: { minSample?: number; metric?: "clicked" | "completed" } = {},
+): AbWinner | null {
+  const minSample = opts.minSample ?? 30;
+  const metric = opts.metric ?? "clicked";
+  const qualified = Object.entries(funnels)
+    .filter(([, f]) => f.entered >= minSample)
+    .map(([slotId, f]) => ({
+      slotId,
+      rate: f.entered > 0 ? f[metric] / f.entered : 0,
+      entered: f.entered,
+      metric,
+    }));
+  if (qualified.length < 2) return null; // need ≥2 tested variants to compare
+  qualified.sort((a, b) => b.rate - a.rate);
+  const [top, second] = qualified;
+  if (!top || !second || top.rate <= second.rate) return null; // tie → no winner
+  return top;
+}
+
 export { EMPTY_FUNNEL };

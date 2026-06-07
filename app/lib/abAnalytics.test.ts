@@ -5,7 +5,9 @@ import {
   aggregateVariantFunnel,
   aggregateAllAbFunnels,
   readAssignment,
+  pickAbWinner,
   type VariantEvent,
+  type FunnelCounts,
 } from "./abAnalytics";
 
 function docWithBranch(mode: "rules" | "ab_split") {
@@ -116,5 +118,39 @@ describe("aggregateAllAbFunnels", () => {
 
   it("is empty for a quiz with no ab_split branch", () => {
     expect(aggregateAllAbFunnels(docWithBranch("rules"), [])).toEqual({});
+  });
+});
+
+describe("pickAbWinner", () => {
+  const mk = (entered: number, clicked: number): FunnelCounts => ({
+    entered,
+    started: entered,
+    answered: entered,
+    completed: clicked,
+    viewed: entered,
+    clicked,
+  });
+
+  it("returns the strict leader once ≥2 variants clear the min sample", () => {
+    const w = pickAbWinner({ a: mk(100, 40), b: mk(100, 25) }, { minSample: 30 });
+    expect(w?.slotId).toBe("a");
+    expect(w?.rate).toBeCloseTo(0.4, 5);
+  });
+
+  it("returns null when fewer than 2 variants have enough samples", () => {
+    expect(pickAbWinner({ a: mk(100, 40), b: mk(5, 4) }, { minSample: 30 })).toBeNull();
+  });
+
+  it("returns null on a tie (no clear winner)", () => {
+    expect(pickAbWinner({ a: mk(100, 30), b: mk(100, 30) }, { minSample: 30 })).toBeNull();
+  });
+
+  it("can optimize for completion instead of clicks", () => {
+    const w = pickAbWinner(
+      { a: mk(100, 10), b: mk(100, 50) },
+      { minSample: 30, metric: "completed" },
+    );
+    expect(w?.slotId).toBe("b");
+    expect(w?.metric).toBe("completed");
   });
 });
