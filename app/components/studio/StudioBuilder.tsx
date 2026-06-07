@@ -444,6 +444,9 @@ function BuilderShell({ data, chrome }: { data: LoaderData; chrome: Chrome }) {
   );
   const controls = (
     <div className="qz-row" style={{ gap: 8, alignItems: "center" }}>
+      <Link to="?mode=ai" className="qz-btn qz-btn-ghost qz-btn-sm" title="Back to the AI editor">
+        ← AI
+      </Link>
       {viewToggle}
       <span className="qz-dim" style={{ fontSize: 12 }}>
         {isSaving ? "Saving…" : savedAt ? "Saved" : ""}

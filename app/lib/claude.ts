@@ -6,6 +6,7 @@ import {
   type BrandGuidelines,
 } from "./brandGuidelines";
 import type { GeneratedQuestionFlow } from "./smartBuild";
+import { EditOp } from "./quizEdit";
 import { z } from "zod";
 
 const REGEN_SYSTEM_PROMPT =
@@ -394,6 +395,183 @@ export async function generateQuestionFlow(
 
   throw new QuizGenerationError(
     "Question flow generation failed validation after retries.",
+    MAX_ATTEMPTS,
+    lastIssue,
+  );
+}
+
+// ---------- Inline AI chat edit (Dev Spec "Call 2") ----------
+
+const EDIT_QUIZ_SYSTEM_PROMPT =
+  "You edit an existing Shopify product-recommendation quiz by emitting a SMALL list of structured edit OPERATIONS — never the whole quiz, never raw graph JSON. " +
+  "Translate the merchant's request into the minimal set of ops. Reference ONLY node ids and answer ids that appear in the QUIZ OUTLINE. " +
+  "Use ONLY tags that appear in the CATALOG SUMMARY — never invent tags. Preserve everything the merchant did not ask to change. " +
+  "Use edit_question or set_text for wording; add_question / remove_node / reorder_question for structure; add_answer / remove_answer for options. " +
+  "Always include a one-sentence, friendly assistant_message describing what you changed. Output nothing outside the tool call.";
+
+// Loose JSON Schema (the discriminated-union strictness is enforced by the Zod
+// EditOp validator + retry, mirroring the other tool definitions here).
+const editQuizToolJsonSchema = {
+  type: "object",
+  required: ["ops"],
+  properties: {
+    assistant_message: {
+      type: "string",
+      description: "One short, friendly sentence telling the merchant what you changed.",
+    },
+    ops: {
+      type: "array",
+      description:
+        "Edit operations applied in order. Reference only ids from the outline. " +
+        "Variants: set_text {node_id, field(headline|subtext|text|button_label|cta_label), value}; " +
+        "edit_question {node_id, text?, answers?:[{text, tags[]}]}; " +
+        "add_question {after_node_id?, text, question_type(single_select|multi_select), answers:[{text, tags[]}]}; " +
+        "remove_node {node_id}; add_answer {node_id, text, tags[]}; remove_answer {node_id, answer_id}; " +
+        "reorder_question {node_id, before_node_id|null}.",
+      items: {
+        type: "object",
+        required: ["op"],
+        properties: {
+          op: {
+            type: "string",
+            enum: [
+              "set_text",
+              "edit_question",
+              "add_question",
+              "remove_node",
+              "add_answer",
+              "remove_answer",
+              "reorder_question",
+            ],
+          },
+          node_id: { type: "string" },
+          field: {
+            type: "string",
+            enum: ["headline", "subtext", "text", "button_label", "cta_label"],
+          },
+          value: { type: "string" },
+          text: { type: "string" },
+          question_type: { type: "string", enum: ["single_select", "multi_select"] },
+          after_node_id: { type: "string" },
+          before_node_id: { type: ["string", "null"] },
+          answer_id: { type: "string" },
+          tags: { type: "array", items: { type: "string" } },
+          answers: {
+            type: "array",
+            items: {
+              type: "object",
+              required: ["text"],
+              properties: {
+                text: { type: "string" },
+                tags: { type: "array", items: { type: "string" } },
+              },
+            },
+          },
+        },
+      },
+    },
+  },
+} as const;
+
+const EditQuizSchema = z.object({
+  ops: z.array(EditOp),
+  assistant_message: z.string().default(""),
+});
+
+export interface EditQuizInput {
+  // Compact id-bearing outline of the current quiz (from quizEdit.outlineQuiz).
+  outline: string;
+  // Catalog tag whitelist (same shape as the generator's catalogSummary).
+  catalogSummary: string;
+  // The merchant's free-text edit request.
+  message: string;
+  // Prior chat turns (oldest first), plain text — NOT tool blocks.
+  history?: Array<{ role: "user" | "assistant"; content: string }>;
+  brandGuidelines?: BrandGuidelines | null;
+}
+
+export interface EditQuizResult {
+  ops: z.infer<typeof EditOp>[];
+  assistant_message: string;
+}
+
+// Ask Claude to turn a merchant's free-text edit into a validated list of edit
+// operations. The caller applies them with applyEditOps + Quiz.parse (the ops
+// never carry ids/edges, so the graph stays sound). Throws QuizGenerationError
+// after retries — the caller keeps the prior draft intact on failure.
+export async function editQuiz(input: EditQuizInput): Promise<EditQuizResult> {
+  const tool = {
+    name: "emit_quiz_edits",
+    description:
+      "Emit the edit operations (and a one-sentence summary) to apply to the quiz. Reference only ids from the outline.",
+    input_schema: editQuizToolJsonSchema as unknown as Anthropic.Tool.InputSchema,
+  } satisfies Anthropic.Tool;
+
+  const userMessage = [
+    "QUIZ OUTLINE (reference these node/answer ids exactly):",
+    input.outline,
+    "",
+    "CATALOG SUMMARY (only use tags that appear here):",
+    input.catalogSummary,
+    "",
+    "MERCHANT REQUEST:",
+    input.message,
+  ].join("\n");
+
+  const system =
+    EDIT_QUIZ_SYSTEM_PROMPT + buildBrandVoiceAddition(input.brandGuidelines);
+
+  // Plain-text prior turns for conversational context (no tool blocks, so the
+  // forced tool_choice has no dangling tool_use to satisfy). Capped.
+  const historyMsgs: Anthropic.MessageParam[] = (input.history ?? [])
+    .slice(-10)
+    .map((m) => ({ role: m.role, content: m.content }));
+
+  let lastIssue: string | undefined;
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+    const response = await client().messages.create({
+      model: MODEL,
+      max_tokens: MAX_TOKENS,
+      system,
+      tools: [tool],
+      tool_choice: { type: "tool", name: "emit_quiz_edits" },
+      messages: [
+        ...historyMsgs,
+        {
+          role: "user",
+          content:
+            attempt === 1
+              ? userMessage
+              : `${userMessage}\n\nPrevious attempt failed validation: ${lastIssue}. Re-emit strictly matching the schema.`,
+        },
+      ],
+    });
+
+    const toolUse = response.content.find(
+      (block): block is Anthropic.ToolUseBlock => block.type === "tool_use",
+    );
+    if (!toolUse) {
+      lastIssue = "No tool_use block in response.";
+      continue;
+    }
+
+    const parsed = EditQuizSchema.safeParse(toolUse.input);
+    if (parsed.success) {
+      return {
+        ops: parsed.data.ops,
+        assistant_message:
+          parsed.data.assistant_message || "Done — I updated your quiz.",
+      };
+    }
+
+    lastIssue = parsed.error.issues
+      .slice(0, 5)
+      .map((i) => `${i.path.join(".")}: ${i.message}`)
+      .join("; ");
+  }
+
+  throw new QuizGenerationError(
+    "Quiz edit failed validation after retries.",
     MAX_ATTEMPTS,
     lastIssue,
   );

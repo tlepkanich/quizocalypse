@@ -389,6 +389,26 @@ body[data-qz] ::selection { background: var(--qz-ink); color: var(--qz-cream); }
   }
 }
 
+/* ============================================================
+   AI-first workspace — live preview beside the inline AI chat.
+   Collapses to a single column (preview on top, chat below) on narrow screens.
+   ============================================================ */
+.qz-ai-workspace {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 360px;
+  gap: var(--qz-space-4);
+  align-items: start;
+}
+@media (max-width: 900px) {
+  .qz-ai-workspace {
+    grid-template-columns: 1fr;
+  }
+  /* Stacked: unstick the chat so it flows under the preview. */
+  .qz-ai-workspace > div:last-child {
+    position: static !important;
+  }
+}
+
 /* Collapsible section (QzCollapse) */
 .qz-collapse {
   border: 1px solid var(--qz-rule);

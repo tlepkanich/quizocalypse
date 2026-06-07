@@ -1,7 +1,8 @@
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "@remix-run/node";
 import { json } from "@remix-run/node";
-import { useLoaderData } from "@remix-run/react";
+import { useLoaderData, useSearchParams } from "@remix-run/react";
 import { StudioBuilder } from "../components/studio/StudioBuilder";
+import { AiEditWorkspace } from "../components/studio/AiEditWorkspace";
 import { requireStudioAccess, resolveStudioShop } from "../lib/studioAccess.server";
 import {
   loadQuizEditorDataForShop,
@@ -49,5 +50,11 @@ export const action = async ({ params, request }: ActionFunctionArgs) => {
 
 export default function StandaloneStudio() {
   const data = useLoaderData<typeof loader>();
-  return <StudioBuilder data={data} chrome="standalone" />;
+  const [params] = useSearchParams();
+  // AI-first is the default surface; ?mode=advanced opens the full builder.
+  return params.get("mode") === "advanced" ? (
+    <StudioBuilder data={data} chrome="standalone" />
+  ) : (
+    <AiEditWorkspace data={data} chrome="standalone" />
+  );
 }

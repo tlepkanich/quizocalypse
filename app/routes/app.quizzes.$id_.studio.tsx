@@ -1,7 +1,8 @@
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "@remix-run/node";
 import { json } from "@remix-run/node";
-import { useLoaderData } from "@remix-run/react";
+import { useLoaderData, useSearchParams } from "@remix-run/react";
 import { StudioBuilder } from "../components/studio/StudioBuilder";
+import { AiEditWorkspace } from "../components/studio/AiEditWorkspace";
 import {
   loadQuizEditorData,
   handleQuizEditorAction,
@@ -38,5 +39,11 @@ export const action = async ({ params, request }: ActionFunctionArgs) => {
 
 export default function StudioRoute() {
   const data = useLoaderData<typeof loader>();
-  return <StudioBuilder data={data} chrome="embedded" />;
+  const [params] = useSearchParams();
+  // AI-first is the default surface; ?mode=advanced opens the full builder.
+  return params.get("mode") === "advanced" ? (
+    <StudioBuilder data={data} chrome="embedded" />
+  ) : (
+    <AiEditWorkspace data={data} chrome="embedded" />
+  );
 }

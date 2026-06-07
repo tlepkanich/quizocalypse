@@ -5,7 +5,8 @@ import prisma from "../db.server";
 import { Quiz } from "./quizSchema";
 import { publishQuiz, PublishError } from "./quizPublish";
 import { ensureQuizDiscount } from "./discount.server";
-import { regenerateQuestion, generateQuestionFlow } from "./claude";
+import { regenerateQuestion, generateQuestionFlow, editQuiz } from "./claude";
+import { applyEditOps, outlineQuiz } from "./quizEdit";
 import { applyQuestionFlow, type SmartBuildBucket } from "./smartBuild";
 import { parseBrandGuidelinesSafe } from "./brandGuidelines";
 import { buildScopedIndex } from "./catalogIndex";
@@ -451,6 +452,96 @@ export async function handleQuizEditorActionForShop(
     }
     await prisma.quiz.update({ where: { id }, data: { draftJson: reparsed.data as never } });
     return json({ ok: true, action: "generate-questions" as const, doc: reparsed.data });
+  }
+
+  if (intent === "ai-edit") {
+    const message = String(form.get("message") ?? "").trim().slice(0, 1200);
+    if (!message) {
+      return json({ ok: false, error: "Tell the assistant what to change." }, { status: 400 });
+    }
+
+    // Prior chat turns (plain text), for conversational context. Tolerant of
+    // malformed input — bad history is ignored, never fatal.
+    let history: Array<{ role: "user" | "assistant"; content: string }> = [];
+    const rawHist = form.get("history");
+    if (typeof rawHist === "string" && rawHist) {
+      try {
+        const p: unknown = JSON.parse(rawHist);
+        if (Array.isArray(p)) {
+          history = p
+            .flatMap((m) => {
+              if (m && typeof m === "object") {
+                const role = (m as { role?: unknown }).role;
+                const content = (m as { content?: unknown }).content;
+                if ((role === "user" || role === "assistant") && typeof content === "string") {
+                  return [{ role: role as "user" | "assistant", content }];
+                }
+              }
+              return [];
+            })
+            .slice(-10);
+        }
+      } catch {
+        // malformed history → ignore
+      }
+    }
+
+    const quiz = await prisma.quiz.findFirst({ where: { id, shopId: shop.id } });
+    if (!quiz) return json({ ok: false, error: "Quiz not found" }, { status: 404 });
+    const parsedDoc = Quiz.safeParse(quiz.draftJson);
+    if (!parsedDoc.success) {
+      return json({ ok: false, error: "Invalid quiz JSON" }, { status: 400 });
+    }
+    const doc = parsedDoc.data;
+
+    const [allProducts, allCollections] = await Promise.all([
+      prisma.product.findMany({ where: { shopId: shop.id } }),
+      prisma.collection.findMany({ where: { shopId: shop.id } }),
+    ]);
+    const indexed = buildScopedIndex(allProducts, allCollections, doc.scope.collection_ids);
+    const brandGuidelines = parseBrandGuidelinesSafe(shop.brandGuidelines);
+
+    let edit;
+    try {
+      edit = await editQuiz({
+        outline: outlineQuiz(doc),
+        catalogSummary: indexed.summary,
+        message,
+        history,
+        ...(brandGuidelines ? { brandGuidelines } : {}),
+      });
+    } catch (err) {
+      const m = err instanceof Error ? err.message : String(err);
+      return json({ ok: false, error: m }, { status: 502 });
+    }
+
+    // Apply the ops deterministically, then gate on Quiz.parse. On failure we
+    // return the error and DO NOT write — the stored draft is never corrupted.
+    const { doc: edited, warnings } = applyEditOps(doc, edit.ops);
+    const reparsed = Quiz.safeParse(edited);
+    if (!reparsed.success) {
+      return json(
+        {
+          ok: false,
+          error:
+            "That edit would have produced an invalid quiz, so it wasn't applied. Try rephrasing.",
+          issues: reparsed.error.issues.slice(0, 3).map((i) => ({
+            path: i.path.join("."),
+            message: i.message,
+          })),
+        },
+        { status: 422 },
+      );
+    }
+
+    await prisma.quiz.update({ where: { id }, data: { draftJson: reparsed.data as never } });
+    return json({
+      ok: true,
+      action: "ai-edit" as const,
+      doc: reparsed.data,
+      assistant_message: edit.assistant_message,
+      warnings,
+    });
   }
 
   return json({ ok: false, error: "Unknown intent" }, { status: 400 });
