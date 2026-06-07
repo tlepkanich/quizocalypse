@@ -295,6 +295,10 @@ export interface GenerateQuestionFlowInput {
   flow: { welcome_message: boolean; email_gate: boolean; mixed_input_types: boolean };
   tone: QuizTone;
   brandGuidelines?: BrandGuidelines | null;
+  // Dev Spec §3.1 — first ~5 product descriptions as a writing-style reference.
+  toneSample?: string;
+  // Dev Spec §3.2 — extracted brand-website text (mission/FAQ/voice). Pre-capped.
+  websiteText?: string;
 }
 
 // Generate the question flow (questions only — no nodes/edges/ids) for a quiz
@@ -330,6 +334,12 @@ export async function generateQuestionFlow(
     "",
     "Catalog summary (only use tags that appear here):",
     input.catalogSummary,
+    ...(input.toneSample
+      ? ["", "Brand voice sample — match this writing style:", input.toneSample]
+      : []),
+    ...(input.websiteText
+      ? ["", "Brand website content (use for on-brand language, mission, FAQ patterns):", input.websiteText]
+      : []),
     "",
     flowLines.length ? "Flow requirements:" : "",
     ...flowLines,
@@ -488,6 +498,8 @@ export interface EditQuizInput {
   // Prior chat turns (oldest first), plain text — NOT tool blocks.
   history?: Array<{ role: "user" | "assistant"; content: string }>;
   brandGuidelines?: BrandGuidelines | null;
+  // Dev Spec §3.1 — catalog tone sample, so rewritten copy stays on-brand.
+  toneSample?: string;
 }
 
 export interface EditQuizResult {
@@ -513,6 +525,9 @@ export async function editQuiz(input: EditQuizInput): Promise<EditQuizResult> {
     "",
     "CATALOG SUMMARY (only use tags that appear here):",
     input.catalogSummary,
+    ...(input.toneSample
+      ? ["", "BRAND VOICE SAMPLE (match this writing style when you change copy):", input.toneSample]
+      : []),
     "",
     "MERCHANT REQUEST:",
     input.message,

@@ -9,7 +9,7 @@ import { regenerateQuestion, generateQuestionFlow, editQuiz } from "./claude";
 import { applyEditOps, outlineQuiz } from "./quizEdit";
 import { applyQuestionFlow, type SmartBuildBucket } from "./smartBuild";
 import { parseBrandGuidelinesSafe } from "./brandGuidelines";
-import { buildScopedIndex } from "./catalogIndex";
+import { buildScopedIndex, toneSampleFromCatalog } from "./catalogIndex";
 import type { IndexedProduct } from "./recommendationEngine";
 
 // ───────────────────────────────────────────────────────────────────────────
@@ -427,6 +427,7 @@ export async function handleQuizEditorActionForShop(
         buckets: buckets.map((b) => ({ id: b.id, name: b.name, tags: b.tags })),
         flow,
         tone,
+        toneSample: toneSampleFromCatalog(allProducts),
         ...(brandGuidelines ? { brandGuidelines } : {}),
       });
     } catch (err) {
@@ -508,6 +509,7 @@ export async function handleQuizEditorActionForShop(
         catalogSummary: indexed.summary,
         message,
         history,
+        toneSample: toneSampleFromCatalog(allProducts),
         ...(brandGuidelines ? { brandGuidelines } : {}),
       });
     } catch (err) {
