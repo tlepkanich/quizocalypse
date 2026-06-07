@@ -2680,6 +2680,10 @@ function ProductCard({
         <img
           src={product.image_url}
           alt=""
+          loading="lazy"
+          decoding="async"
+          width={80}
+          height={80}
           style={{ width: 80, height: 80, objectFit: "cover", borderRadius: "var(--qz-radius)", flexShrink: 0 }}
         />
       ) : (
