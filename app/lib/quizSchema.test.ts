@@ -11,6 +11,7 @@ import {
   QuizNode,
   QuestionData,
   QuestionInputConfig,
+  isFreeformType,
 } from "./quizSchema";
 
 const validQuiz = {
@@ -690,5 +691,38 @@ describe("Phase 5 — discount, phone, question types", () => {
     });
     const eg = parsed.nodes.find((n) => n.id === "eg")!;
     expect(eg.type === "email_gate" && eg.data.collect_phone).toBe(false);
+  });
+});
+
+describe("isFreeformType + numeric/date question types", () => {
+  it("classifies freeform vs card types from one source", () => {
+    for (const t of ["text", "email", "numeric", "date"]) {
+      expect(isFreeformType(t)).toBe(true);
+    }
+    for (const t of ["single_select", "multi_select", "image_tile", "dropdown", "rating"]) {
+      expect(isFreeformType(t)).toBe(false);
+    }
+  });
+
+  it("numeric/date questions are valid with a single seed answer", () => {
+    for (const question_type of ["numeric", "date"] as const) {
+      const q = QuestionData.parse({
+        text: question_type === "numeric" ? "What's your budget?" : "When's the event?",
+        question_type,
+        answers: [{ id: "a1", text: "seed", edge_handle_id: "h1" }],
+      });
+      expect(q.question_type).toBe(question_type);
+      expect(q.answers).toHaveLength(1);
+    }
+  });
+
+  it("rating (card type) still requires ≥2 answers", () => {
+    expect(() =>
+      QuestionData.parse({
+        text: "Rate it",
+        question_type: "rating",
+        answers: [{ id: "a1", text: "1", edge_handle_id: "h1" }],
+      }),
+    ).toThrow();
   });
 });

@@ -25,6 +25,7 @@ import {
   QzSegmented,
 } from "../qz";
 import type { ContentBlock, DesignTokens, Quiz, QuizNode } from "../../lib/quizSchema";
+import { isFreeformType } from "../../lib/quizSchema";
 import { validateQuiz, type NodeIssue } from "../../lib/quizValidation";
 import { orderFlow } from "../../lib/flowOrder";
 import { synthesizeLayout } from "../../lib/synthesizeLayout";
@@ -1693,7 +1694,7 @@ function QuestionContent({
     const answers = node.data.answers.map((a) => (a.id === answerId ? { ...a, text } : a));
     onCommit(updateNodeData(doc, node.id, { answers }));
   };
-  const isCard = !["text", "email"].includes(node.data.question_type);
+  const isCard = !isFreeformType(node.data.question_type);
   const num = (v: string) => (v.trim() ? Math.max(1, Math.round(Number(v) || 1)) : undefined);
   return (
     <>
@@ -1711,6 +1712,8 @@ function QuestionContent({
           <option value="image_tile">Image tiles</option>
           <option value="image_picker">Image picker</option>
           <option value="rating">Rating scale</option>
+          <option value="numeric">Number input</option>
+          <option value="date">Date input</option>
           <option value="searchable">Searchable</option>
           <option value="text">Text input</option>
           <option value="email">Email input</option>

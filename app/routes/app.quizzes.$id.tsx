@@ -34,6 +34,7 @@ import {
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import type { Quiz } from "../lib/quizSchema";
+import { isFreeformType } from "../lib/quizSchema";
 import {
   loadQuizEditorData,
   handleQuizEditorAction,
@@ -155,8 +156,7 @@ function QuestionNodeView({ data }: NodeProps) {
   const d = data as NodeData;
   if (d.doc.type !== "question") return null;
   const answers = d.doc.data.answers;
-  const isFreeform =
-    d.doc.data.question_type === "text" || d.doc.data.question_type === "email";
+  const isFreeform = isFreeformType(d.doc.data.question_type);
   return (
     <NodeShell accent="#2C7A4B" label={`question · ${d.doc.data.question_type}`} issues={d.issues} hasDrift={d.hasDrift}>
       <Handle type="target" position={Position.Left} />

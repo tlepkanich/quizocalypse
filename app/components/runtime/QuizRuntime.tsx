@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
 import type { Quiz, ResultStage as ResultStageT } from "../../lib/quizSchema";
+import { isFreeformType } from "../../lib/quizSchema";
 import {
   resolveNextStep,
   recommendForResult,
@@ -1285,8 +1286,7 @@ function QuestionView({
   const [checked, setChecked] = useState<Record<string, boolean>>({});
   const [freeform, setFreeform] = useState("");
   const isMulti = node.data.question_type === "multi_select";
-  const isFreeform =
-    node.data.question_type === "text" || node.data.question_type === "email";
+  const isFreeform = isFreeformType(node.data.question_type);
 
   if (isFreeform) {
     // Freeform input: the typed value becomes the answer text. We piggy-back
@@ -1296,7 +1296,14 @@ function QuestionView({
     const cfg = node.data.input_config;
     const placeholder = cfg?.placeholder ?? "";
     const maxLength = cfg?.max_length ?? 120;
-    const inputType = node.data.question_type === "email" ? "email" : "text";
+    const inputType =
+      node.data.question_type === "email"
+        ? "email"
+        : node.data.question_type === "numeric"
+          ? "number"
+          : node.data.question_type === "date"
+            ? "date"
+            : "text";
     const required = node.data.required;
     const value = freeform.trim();
     const canSubmit =

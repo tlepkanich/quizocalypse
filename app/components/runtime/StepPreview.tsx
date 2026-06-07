@@ -1,5 +1,6 @@
 import { useMemo, type CSSProperties, type ReactNode } from "react";
 import type { ContentBlock, Quiz, QuizNode } from "../../lib/quizSchema";
+import { isFreeformType } from "../../lib/quizSchema";
 import { resolveForBreakpoint, tokensToCssVars } from "../../lib/designTokens";
 import { resolveNodeOverride } from "../../lib/resultLayout";
 import type { IndexedProduct } from "../../lib/recommendationEngine";
@@ -122,7 +123,7 @@ function previewRenderSmart(
     case "answers": {
       if (node.type !== "question") return null;
       const qt = node.data.question_type;
-      if (qt === "text" || qt === "email") {
+      if (isFreeformType(qt)) {
         return (
           <input
             disabled

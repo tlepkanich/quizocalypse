@@ -31,8 +31,22 @@ export const QuestionType = z.enum([
   // compact row of buttons (1–N or labeled). Surfaces without a dedicated
   // renderer fall through to the default single-select render (still functional).
   "rating",
+  // Phase F: freeform numeric + date inputs — a typed value piggybacks on
+  // answers[0], exactly like text/email. Registered in FREEFORM_QUESTION_TYPES
+  // below so every freeform check picks them up from one source.
+  "numeric",
+  "date",
 ]);
 export type QuestionType = z.infer<typeof QuestionType>;
+
+// Single source of truth for "freeform" question types — those that render a
+// typed input (piggybacking on answers[0]) rather than a card/answer list.
+// Every freeform check across runtime/builder/mutations imports this, so adding
+// a freeform type is a one-line change here instead of N scattered edits.
+export const FREEFORM_QUESTION_TYPES = ["text", "email", "numeric", "date"] as const;
+export function isFreeformType(qt: string): boolean {
+  return (FREEFORM_QUESTION_TYPES as readonly string[]).includes(qt);
+}
 
 export const NodeType = z.enum([
   "intro",

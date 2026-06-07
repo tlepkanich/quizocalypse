@@ -1,4 +1,4 @@
-import { ResultData } from "./quizSchema";
+import { ResultData, isFreeformType } from "./quizSchema";
 import type { Quiz } from "./quizSchema";
 import type { z } from "zod";
 
@@ -561,8 +561,7 @@ export function removeAnswer(
       const remaining = n.data.answers.filter((a) => a.id !== answerId);
       // Card-style types need ≥2 answers per the Zod refine; freeform
       // types only need ≥1 (the seed). Refuse if it would drop below.
-      const isFreeform =
-        n.data.question_type === "text" || n.data.question_type === "email";
+      const isFreeform = isFreeformType(n.data.question_type);
       const minAnswers = isFreeform ? 1 : 2;
       if (remaining.length < minAnswers) return n;
       return { ...n, data: { ...n.data, answers: remaining } };
