@@ -68,6 +68,31 @@ describe("applyEditOps", () => {
     expectValid(doc);
   });
 
+  it("set_education_card sets (trimmed) then clears the card on a question", () => {
+    const set = applyEditOps(base(), [
+      EditOp.parse({ op: "set_education_card", node_id: "q1", value: "  Quick note: these differ.  " }),
+    ]);
+    const q1 = set.doc.nodes.find((n) => n.id === "q1")!;
+    expect((q1.data as { education_card_before?: string }).education_card_before).toBe(
+      "Quick note: these differ.",
+    );
+    expect(set.warnings).toHaveLength(0);
+    expectValid(set.doc);
+    const cleared = applyEditOps(set.doc, [
+      EditOp.parse({ op: "set_education_card", node_id: "q1", value: "" }),
+    ]);
+    const q1b = cleared.doc.nodes.find((n) => n.id === "q1")!;
+    expect((q1b.data as { education_card_before?: string }).education_card_before).toBeUndefined();
+  });
+
+  it("set_education_card on a non-question is skipped with a warning", () => {
+    const { doc, warnings } = applyEditOps(base(), [
+      EditOp.parse({ op: "set_education_card", node_id: "intro", value: "x" }),
+    ]);
+    expect(warnings.join()).toMatch(/not a question/);
+    expectValid(doc);
+  });
+
   it("edit_question re-merges answers preserving the first id + edge handle", () => {
     const { doc } = applyEditOps(base(), [
       EditOp.parse({

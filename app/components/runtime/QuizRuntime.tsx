@@ -520,7 +520,11 @@ export function QuizRuntime(props: QuizRuntimeProps) {
       );
     } else if (currentNode.type === "question") {
       content = (
-        <QuestionView
+        <>
+          {currentNode.data.education_card_before ? (
+            <EducationCard text={currentNode.data.education_card_before} styles={styles} />
+          ) : null}
+          <QuestionView
           node={currentNode}
           styles={styles}
           tokens={resolved}
@@ -536,6 +540,7 @@ export function QuizRuntime(props: QuizRuntimeProps) {
             gotoNextFrom(currentNode.id, handle);
           }}
         />
+        </>
       );
     } else if (currentNode.type === "email_gate") {
       content = (
@@ -1222,6 +1227,29 @@ function DropdownQuestion({
           Continue
         </button>
       </div>
+    </div>
+  );
+}
+
+// Micro-education card (Dev Spec §4.1) — a one-line teaching callout shown
+// before a question (Continue-only, no CTA; set by the AI/merchant via the
+// editor's set_education_card edit-op). Renders only when the field is present.
+function EducationCard({
+  text,
+  styles,
+}: {
+  text: string;
+  styles: ReturnType<typeof stylesFor>;
+}) {
+  return (
+    <div
+      style={{
+        ...styles.card,
+        borderLeft: "4px solid var(--qz-color-primary)",
+        marginBottom: 12,
+      }}
+    >
+      <div className="qz-dim" style={{ fontSize: 13, lineHeight: 1.5 }}>💡 {text}</div>
     </div>
   );
 }

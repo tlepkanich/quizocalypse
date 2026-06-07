@@ -441,7 +441,8 @@ const editQuizToolJsonSchema = {
         "edit_question {node_id, text?, answers?:[{text, tags[]}]}; " +
         "add_question {after_node_id?, text, question_type(single_select|multi_select), answers:[{text, tags[]}]}; " +
         "remove_node {node_id}; add_answer {node_id, text, tags[]}; remove_answer {node_id, answer_id}; " +
-        "reorder_question {node_id, before_node_id|null}.",
+        "reorder_question {node_id, before_node_id|null}; " +
+        "set_education_card {node_id, value} (a one-line teaching card shown before a question; empty value clears it; max 1 per quiz).",
       items: {
         type: "object",
         required: ["op"],
@@ -456,6 +457,7 @@ const editQuizToolJsonSchema = {
               "add_answer",
               "remove_answer",
               "reorder_question",
+              "set_education_card",
             ],
           },
           node_id: { type: "string" },

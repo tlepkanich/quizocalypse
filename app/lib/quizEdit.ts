@@ -101,6 +101,13 @@ export const EditOp = z.discriminatedUnion("op", [
     node_id: z.string().min(1),
     before_node_id: z.string().min(1).nullable().default(null),
   }),
+  // Set/clear the micro-education card shown before a question (Dev Spec §4.1).
+  // An empty value clears the card.
+  z.object({
+    op: z.literal("set_education_card"),
+    node_id: z.string().min(1),
+    value: z.string(),
+  }),
 ]);
 export type EditOp = z.infer<typeof EditOp>;
 
@@ -253,6 +260,29 @@ export function applyEditOps(doc: QuizDoc, ops: EditOp[]): ApplyEditResult {
           };
         }
         if (op.answers) working = mergeQuestionAnswers(working, op.node_id, op.answers);
+        break;
+      }
+      case "set_education_card": {
+        const node = findNode(working, op.node_id);
+        if (!node || node.type !== "question") {
+          warnings.push(`set_education_card: ${op.node_id} is not a question`);
+          break;
+        }
+        const card = op.value.trim();
+        working = {
+          ...working,
+          nodes: working.nodes.map((n) =>
+            n.id === op.node_id && n.type === "question"
+              ? {
+                  ...n,
+                  data: {
+                    ...n.data,
+                    education_card_before: card.length > 0 ? card : undefined,
+                  },
+                }
+              : n,
+          ),
+        };
         break;
       }
       case "add_question": {
