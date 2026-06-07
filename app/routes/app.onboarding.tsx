@@ -197,6 +197,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     } catch {
       // ignore malformed tokens
     }
+    const websiteUrl = String(form.get("websiteUrl") ?? "").slice(0, 300);
 
     try {
       const result = await runAiOnboardingBuild({
@@ -207,6 +208,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         tone,
         flow,
         designTokens,
+        ...(websiteUrl ? { websiteUrl } : {}),
       });
       return json({
         ok: true,
@@ -236,6 +238,7 @@ export default function Onboarding() {
   const [questionCount, setQuestionCount] = useState(6);
   const [tone, setTone] = useState<QuizTone>("friendly");
   const [emailGate, setEmailGate] = useState(false);
+  const [websiteUrl, setWebsiteUrl] = useState("");
   const [baseTokens, setBaseTokens] = useState<DesignTokensT | null>(null);
   const [hex, setHex] = useState("");
 
@@ -268,6 +271,7 @@ export default function Onboarding() {
     fd.set("tone", tone);
     fd.set("flow", JSON.stringify({ email_gate: emailGate, welcome_message: false, mixed_input_types: false }));
     if (effectiveTokens) fd.set("designTokens", JSON.stringify(effectiveTokens));
+    if (websiteUrl.trim()) fd.set("websiteUrl", websiteUrl.trim());
     buildFetcher.submit(fd, { method: "POST" });
   };
 
@@ -301,7 +305,8 @@ export default function Onboarding() {
             <StartStep onAi={() => goto(2)} />
           ) : step === 2 ? (
             <AboutStep
-              {...{ name, setName, goalPrompt, setGoalPrompt, questionCount, setQuestionCount, tone, setTone, emailGate, setEmailGate }}
+              {...{ name, setName, goalPrompt, setGoalPrompt, questionCount, setQuestionCount, tone, setTone, emailGate, setEmailGate, websiteUrl, setWebsiteUrl }}
+              productCount={data.productCount}
               brandVoiceName={data.brandVoiceName}
               onNext={() => goto(3)}
               onBack={() => goto(1)}
@@ -435,6 +440,9 @@ function AboutStep(props: {
   setTone: (v: QuizTone) => void;
   emailGate: boolean;
   setEmailGate: (v: boolean) => void;
+  websiteUrl: string;
+  setWebsiteUrl: (v: string) => void;
+  productCount: number;
   brandVoiceName: string | null;
   onNext: () => void;
   onBack: () => void;
@@ -443,6 +451,10 @@ function AboutStep(props: {
   return (
     <QzCard style={{ padding: 20, display: "flex", flexDirection: "column", gap: 16 }}>
       <h2 className="qz-h1" style={{ margin: 0 }}>Tell us about your quiz</h2>
+      <p className="qz-dim" style={{ margin: "-6px 0 0", fontSize: 13 }}>
+        We&rsquo;ve scanned your {props.productCount}{" "}
+        {props.productCount === 1 ? "product" : "products"} — one sentence of context is all the AI needs.
+      </p>
       {props.brandVoiceName ? (
         <QzBadge tone="ok">Brand voice: {props.brandVoiceName}</QzBadge>
       ) : null}
@@ -455,6 +467,13 @@ function AboutStep(props: {
           onChange={(e) => props.setGoalPrompt(e.target.value)}
           placeholder="e.g. Help shoppers find the right moisturizer for their skin type and concerns."
           rows={3}
+        />
+      </QzField>
+      <QzField label="Your website (optional)" hint="AI reads your homepage / About page for on-brand language — richer, less generic quiz copy.">
+        <QzInput
+          value={props.websiteUrl}
+          onChange={(e) => props.setWebsiteUrl(e.target.value)}
+          placeholder="https://yourstore.com"
         />
       </QzField>
       <QzField label={`How many questions? (${props.questionCount})`} hint="5–8 works best for completion.">

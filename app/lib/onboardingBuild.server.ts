@@ -3,7 +3,8 @@ import { Quiz } from "./quizSchema";
 import type { Quiz as QuizDoc } from "./quizSchema";
 import type { DesignTokensT } from "./designTokens";
 import { buildSeedQuiz } from "./seedQuiz";
-import { buildScopedIndex } from "./catalogIndex";
+import { buildScopedIndex, toneSampleFromCatalog } from "./catalogIndex";
+import { ingestWebsite } from "./websiteIngest.server";
 import {
   discoverAndPersistBuckets,
   BucketDiscoveryError,
@@ -32,6 +33,9 @@ export interface OnboardingBuildInput {
   tone: QuizTone;
   flow: { welcome_message: boolean; email_gate: boolean; mixed_input_types: boolean };
   designTokens?: DesignTokensT | null;
+  // Optional brand-website URL (Dev Spec §3.2). Ingested for richer, on-brand
+  // generated copy. Failures are swallowed — enrichment never blocks the build.
+  websiteUrl?: string;
 }
 
 export interface OnboardingBuildResult {
@@ -110,6 +114,10 @@ export async function runAiOnboardingBuild(
   // 5. Generate the question flow + wire it. On failure, keep the bound pages.
   const indexed = buildScopedIndex(allProducts, allCollections, doc.scope.collection_ids);
   const brandGuidelines = parseBrandGuidelinesSafe(shop?.brandGuidelines);
+  // Optional enrichment: catalog tone sample + merchant website text. Both are
+  // best-effort — ingestWebsite returns "" on any failure, never throwing.
+  const toneSample = toneSampleFromCatalog(allProducts);
+  const websiteText = input.websiteUrl ? await ingestWebsite(input.websiteUrl) : "";
 
   let generated;
   try {
@@ -120,6 +128,8 @@ export async function runAiOnboardingBuild(
       buckets: smartBuckets.map((b) => ({ id: b.id, name: b.name, tags: b.tags })),
       flow: input.flow,
       tone: input.tone,
+      ...(toneSample ? { toneSample } : {}),
+      ...(websiteText ? { websiteText } : {}),
       ...(brandGuidelines ? { brandGuidelines } : {}),
     });
   } catch (err) {
