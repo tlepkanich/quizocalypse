@@ -54,6 +54,7 @@ const result = (subtext = ""): QuizNode => ({
     include_discount: false,
     subscription_eligible: false,
     stages: [],
+    why_bullets: [],
   },
 });
 

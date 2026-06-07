@@ -68,6 +68,10 @@ export interface RegenerateQuestionInput {
 }
 
 const MODEL = "claude-sonnet-4-6";
+// Cheap/fast path for simple, bounded transformations (answer tooltips,
+// feature→benefit bullets). Kept on the same known-good family for now; this is
+// the single seam to swap in a Haiku id once confirmed, to cut cost per the spec.
+const MODEL_FAST = MODEL;
 const MAX_TOKENS = 8192;
 
 export type QuizTone = "friendly" | "editorial" | "playful" | "professional";
@@ -590,6 +594,149 @@ export async function editQuiz(input: EditQuizInput): Promise<EditQuizResult> {
     MAX_ATTEMPTS,
     lastIssue,
   );
+}
+
+// ---------- Feature→benefit translation (Dev Spec "Call 3") ----------
+
+const BENEFIT_SYSTEM_PROMPT =
+  "You are a conversion copywriter. Translate each product FEATURE into a customer BENEFIT. " +
+  'Rules: start each bullet with the OUTCOME for the customer, not the attribute; max 15 words each; ' +
+  'plain English, no jargon; do NOT use the words "just", "simply", or "easy". Return 2–3 bullets. ' +
+  "Output only the tool call.";
+
+const benefitsToolJsonSchema = {
+  type: "object",
+  required: ["bullets"],
+  properties: {
+    bullets: { type: "array", items: { type: "string" }, minItems: 1, maxItems: 3 },
+  },
+} as const;
+
+const BenefitsSchema = z.object({ bullets: z.array(z.string().min(1)).min(1).max(3) });
+
+export interface BenefitInput {
+  features: string[];
+  // A brand-voice style cue (e.g. catalog tone sample). Optional.
+  brandVoiceSample?: string;
+  brandGuidelines?: BrandGuidelines | null;
+}
+
+// Turn product features into 2–3 benefit-first bullets for the result page's
+// "Why this product". Enhancement only — returns [] on any failure (never
+// throws, so a publish bake is never blocked).
+export async function translateFeaturesToBenefits(input: BenefitInput): Promise<string[]> {
+  if (input.features.length === 0) return [];
+  const tool = {
+    name: "emit_benefits",
+    description: "Emit 2–3 benefit bullets translated from the given features.",
+    input_schema: benefitsToolJsonSchema as unknown as Anthropic.Tool.InputSchema,
+  } satisfies Anthropic.Tool;
+
+  const userMessage = [
+    "Features to translate:",
+    ...input.features.map((f) => `- ${f}`),
+    ...(input.brandVoiceSample
+      ? ["", "Brand voice sample (match this writing style):", input.brandVoiceSample]
+      : []),
+  ].join("\n");
+  const system = BENEFIT_SYSTEM_PROMPT + buildBrandVoiceAddition(input.brandGuidelines);
+
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+    const response = await client().messages.create({
+      model: MODEL_FAST,
+      max_tokens: 512,
+      system,
+      tools: [tool],
+      tool_choice: { type: "tool", name: "emit_benefits" },
+      messages: [{ role: "user", content: userMessage }],
+    });
+    const toolUse = response.content.find(
+      (b): b is Anthropic.ToolUseBlock => b.type === "tool_use",
+    );
+    if (!toolUse) continue;
+    const parsed = BenefitsSchema.safeParse(toolUse.input);
+    if (parsed.success) return parsed.data.bullets;
+  }
+  return [];
+}
+
+// ---------- Answer-option tooltips (Dev Spec "Call 4") ----------
+
+const TOOLTIP_SYSTEM_PROMPT =
+  "You write ONE short tooltip per quiz answer option, explaining the tradeoff in plain English. " +
+  'Each tooltip ≤ 30 words, concrete, no jargon, no "just/simply/easy". Return exactly one tooltip ' +
+  "per provided answer id. Output only the tool call.";
+
+const tooltipsToolJsonSchema = {
+  type: "object",
+  required: ["tooltips"],
+  properties: {
+    tooltips: {
+      type: "array",
+      items: {
+        type: "object",
+        required: ["id", "tooltip"],
+        properties: { id: { type: "string" }, tooltip: { type: "string" } },
+      },
+    },
+  },
+} as const;
+
+const TooltipsSchema = z.object({
+  tooltips: z.array(z.object({ id: z.string().min(1), tooltip: z.string().min(1) })),
+});
+
+export interface TooltipInput {
+  answers: Array<{ id: string; text: string }>;
+  // Question text + a short note about what the answers map to, for grounding.
+  context: string;
+  brandGuidelines?: BrandGuidelines | null;
+}
+
+// Generate a tooltip per answer in ONE batched call. Enhancement only — returns
+// {} on any failure (never throws). Output keyed by the answer id, filtered to
+// the ids we actually asked about.
+export async function generateAnswerTooltips(
+  input: TooltipInput,
+): Promise<Record<string, string>> {
+  if (input.answers.length === 0) return {};
+  const tool = {
+    name: "emit_tooltips",
+    description: "Emit one tooltip per answer id.",
+    input_schema: tooltipsToolJsonSchema as unknown as Anthropic.Tool.InputSchema,
+  } satisfies Anthropic.Tool;
+
+  const userMessage = [
+    "Context:",
+    input.context,
+    "",
+    "Answer options (write one tooltip per id):",
+    ...input.answers.map((a) => `- id=${a.id}: ${a.text}`),
+  ].join("\n");
+  const system = TOOLTIP_SYSTEM_PROMPT + buildBrandVoiceAddition(input.brandGuidelines);
+
+  const known = new Set(input.answers.map((a) => a.id));
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+    const response = await client().messages.create({
+      model: MODEL_FAST,
+      max_tokens: 1024,
+      system,
+      tools: [tool],
+      tool_choice: { type: "tool", name: "emit_tooltips" },
+      messages: [{ role: "user", content: userMessage }],
+    });
+    const toolUse = response.content.find(
+      (b): b is Anthropic.ToolUseBlock => b.type === "tool_use",
+    );
+    if (!toolUse) continue;
+    const parsed = TooltipsSchema.safeParse(toolUse.input);
+    if (parsed.success) {
+      const out: Record<string, string> = {};
+      for (const t of parsed.data.tooltips) if (known.has(t.id)) out[t.id] = t.tooltip;
+      return out;
+    }
+  }
+  return {};
 }
 
 // ---------- AskAI chat (Phase 3) ----------

@@ -76,6 +76,9 @@ export type QuizStatus = z.infer<typeof QuizStatus>;
 export const Answer = z.object({
   id: z.string().min(1),
   text: z.string().min(1),
+  // Dev Spec §4.1 — a short plain-English tradeoff explainer shown on the answer
+  // option (AI-generated via the tooltip call). Optional + additive.
+  tooltip_text: z.string().optional(),
   image_url: z.string().url().optional(),
   tags: z.array(z.string()).default([]),
   collection_filter: z.string().optional(),
@@ -132,6 +135,10 @@ export const QuestionDataObject = z.object({
   // storefront opens a refining product list. Defaults off — only the
   // questions a merchant explicitly flags start the preview.
   show_preview_after: z.boolean().default(false),
+  // Dev Spec §4.1 — optional one-line "micro-education card" shown BEFORE this
+  // question (a non-question, Continue-only informational screen). The AI places
+  // at most one per quiz. Additive — absent means no card.
+  education_card_before: z.string().optional(),
 });
 
 export const QuestionData = QuestionDataObject.refine(
@@ -204,6 +211,8 @@ export const ResultStage = z.object({
   ranking: ResultRanking.default("relevance"),
   min_products: z.number().int().min(1).max(12).default(3),
   max_products: z.number().int().min(1).max(12).default(3),
+  // Dev Spec §5 — feature→benefit "why this" bullets for the stage. Baked at publish.
+  why_bullets: z.array(z.string()).default([]),
 });
 export type ResultStage = z.infer<typeof ResultStage>;
 
@@ -247,6 +256,9 @@ export const ResultData = z.object({
   // ---- v3 multi-stage (Advanced) ----
   // Empty = Simple (one page). Non-empty = Advanced ordered sections.
   stages: z.array(ResultStage).default([]),
+  // Dev Spec §5 — "Why this product" benefit bullets (feature→benefit), baked at
+  // publish time. Empty by default (back-compat).
+  why_bullets: z.array(z.string()).default([]),
 });
 
 // Chat-style copy block. Supports lightweight merge tags resolved at render
