@@ -34,9 +34,14 @@ export default function StudioIndex() {
         title="Your quizzes"
         subtitle={shopDomain}
         actions={
-          <Link to="/studio/new" className="qz-btn qz-btn-accent">
-            New quiz →
-          </Link>
+          <div className="qz-row" style={{ gap: 8 }}>
+            <Link to="/studio/new" className="qz-btn qz-btn-ghost qz-btn-sm">
+              New quiz
+            </Link>
+            <Link to="/studio/onboarding" className="qz-btn qz-btn-accent">
+              ✨ Build with AI →
+            </Link>
+          </div>
         }
       />
       {quizzes.length === 0 ? (
@@ -45,9 +50,14 @@ export default function StudioIndex() {
           <p className="qz-dim" style={{ margin: 0 }}>
             Create your first quiz — start blank, from a template, or with the full demo.
           </p>
-          <Link to="/studio/new" className="qz-btn qz-btn-accent qz-btn-sm">
-            New quiz →
-          </Link>
+          <div className="qz-row" style={{ gap: 8 }}>
+            <Link to="/studio/onboarding" className="qz-btn qz-btn-accent qz-btn-sm">
+              ✨ Build with AI →
+            </Link>
+            <Link to="/studio/new" className="qz-btn qz-btn-ghost qz-btn-sm">
+              Start blank / template
+            </Link>
+          </div>
         </QzCard>
       ) : (
         <div
