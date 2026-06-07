@@ -106,3 +106,87 @@ function buildSummary(products: Product[], collections: Collection[]): string {
 
   return lines.join("\n");
 }
+
+// ───────────────────────────────────────────────────────────────────────────
+// Catalog intelligence (Dev Spec §2–3) — pure, no IO.
+// ───────────────────────────────────────────────────────────────────────────
+
+export interface CatalogCompleteness {
+  // Overall 0–100 readiness score (weighted: tags 50%, descriptions 30%, variants 20%).
+  score: number;
+  tagCoverage: number; // fraction of products with ≥1 tag (0–1)
+  avgDescriptionChars: number;
+  avgVariants: number;
+  productCount: number;
+  // Human-readable gaps to surface in onboarding ("only 40% tagged", …).
+  flags: string[];
+}
+
+// Score how "quiz-ready" a catalog is — tag coverage drives recommendation
+// quality, description length drives AI copy quality, variant depth drives the
+// result-page selector. Surfaced in onboarding so a merchant sees what to fix.
+export function scoreCatalogCompleteness(products: Product[]): CatalogCompleteness {
+  const n = products.length;
+  if (n === 0) {
+    return {
+      score: 0,
+      tagCoverage: 0,
+      avgDescriptionChars: 0,
+      avgVariants: 0,
+      productCount: 0,
+      flags: ["No products synced yet — connect your store to begin."],
+    };
+  }
+
+  let tagged = 0;
+  let descChars = 0;
+  let variantTotal = 0;
+  for (const p of products) {
+    if (p.tags.length > 0) tagged++;
+    descChars += (p.descriptionText ?? "").trim().length;
+    variantTotal += Array.isArray(p.variants) ? p.variants.length : 0;
+  }
+
+  const tagCoverage = tagged / n;
+  const avgDescriptionChars = Math.round(descChars / n);
+  const avgVariants = variantTotal / n;
+
+  // Sub-scores normalized to 0–1 against "healthy" thresholds.
+  const tagScore = tagCoverage;
+  const descScore = Math.min(1, avgDescriptionChars / 200); // ~200 chars = healthy
+  const variantScore = Math.min(1, avgVariants / 2); // ≥2 variants = good depth
+  const score = Math.round((tagScore * 0.5 + descScore * 0.3 + variantScore * 0.2) * 100);
+
+  const flags: string[] = [];
+  if (tagCoverage < 0.6) {
+    flags.push(
+      `Only ${Math.round(tagCoverage * 100)}% of products are tagged — tags drive recommendations.`,
+    );
+  }
+  if (avgDescriptionChars < 80) {
+    flags.push("Product descriptions are short — richer copy improves AI quiz content.");
+  }
+  if (avgVariants < 1) {
+    flags.push("Few product variants detected — variant pickers will be limited.");
+  }
+
+  return { score, tagCoverage, avgDescriptionChars, avgVariants, productCount: n, flags };
+}
+
+// First ~n non-trivial product descriptions, whitespace-normalized + capped, as
+// a brand-voice STYLE REFERENCE for the AI (Dev Spec §3.1 "tone sample: first 5
+// product descriptions fed as style reference"). This is NOT a Claude call —
+// the sample is injected into generation/edit prompts as a tone cue. Returns ""
+// when no usable descriptions exist (caller simply omits the cue).
+export function toneSampleFromCatalog(
+  products: Product[],
+  n = 5,
+  maxCharsEach = 400,
+): string {
+  return products
+    .map((p) => (p.descriptionText ?? "").replace(/\s+/g, " ").trim())
+    .filter((d) => d.length >= 20)
+    .slice(0, n)
+    .map((d) => (d.length > maxCharsEach ? `${d.slice(0, maxCharsEach)}…` : d))
+    .join("\n---\n");
+}
