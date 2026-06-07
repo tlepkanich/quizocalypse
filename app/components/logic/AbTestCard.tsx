@@ -1,5 +1,6 @@
 import { QzBadge, QzInput } from "../qz";
 import type { BranchNode, FunnelCounts } from "../../lib/abAnalytics";
+import { pickAbWinner } from "../../lib/abAnalytics";
 
 // One A/B test (an ab_split branch) on the Logic tab: editable per-variant
 // weights (e.g. 30/70), each variant's downstream page, and a per-variant
@@ -32,6 +33,13 @@ export function AbTestCard({
 }) {
   const slots = branch.data.slots;
   const totalWeight = slots.reduce((s, sl) => s + sl.weight, 0);
+  // Read-only A/B auto-promote suggestion (Phase F) — surfaces the pure
+  // pickAbWinner; the merchant still applies it (a promote action is a later,
+  // attended step). Null until ≥2 variants clear the min sample with a clear lead.
+  const winner = funnel ? pickAbWinner(funnel) : null;
+  const winnerLabel = winner
+    ? slots.find((s) => s.id === winner.slotId)?.label ?? winner.slotId
+    : null;
 
   return (
     <div className="qz-card" style={{ padding: 14, display: "flex", flexDirection: "column", gap: 12 }}>
@@ -111,6 +119,19 @@ export function AbTestCard({
           );
         })}
       </div>
+
+      {winner ? (
+        <div className="qz-row" style={{ gap: 8, alignItems: "center", fontSize: 12 }}>
+          <QzBadge tone="ok">Suggested winner</QzBadge>
+          <span>
+            Variant <strong>{winnerLabel}</strong> — {Math.round(winner.rate * 100)}% {winner.metric}
+          </span>
+        </div>
+      ) : (
+        <div className="qz-dim" style={{ fontSize: 11 }}>
+          No clear winner yet — needs ≥2 variants with ~30+ entries each and a clear lead.
+        </div>
+      )}
 
       <div className="qz-dim" style={{ fontSize: 11 }}>
         Weights are whole numbers; shares are normalized. Re-publish to apply weight changes to live traffic.
