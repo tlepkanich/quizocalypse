@@ -1712,6 +1712,7 @@ function QuestionContent({
           <option value="image_tile">Image tiles</option>
           <option value="image_picker">Image picker</option>
           <option value="rating">Rating scale</option>
+          <option value="swatch">Swatch picker</option>
           <option value="numeric">Number input</option>
           <option value="date">Date input</option>
           <option value="searchable">Searchable</option>

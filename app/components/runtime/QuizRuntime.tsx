@@ -1512,6 +1512,53 @@ function QuestionView({
     );
   }
 
+  // Swatch picker: single-select rendered as circular colour / material swatches.
+  if (node.data.question_type === "swatch") {
+    return (
+      <div style={styles.card}>
+        <h2 style={styles.h2}>{node.data.text}</h2>
+        <div style={{ marginTop: 20, display: "flex", gap: 14, flexWrap: "wrap" }}>
+          {node.data.answers.map((a) => (
+            <button
+              key={a.id}
+              title={a.tooltip_text ?? a.text}
+              style={{
+                ...styles.answerBtn,
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                gap: 6,
+                width: 92,
+                padding: 8,
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.borderColor = "var(--qz-color-primary)";
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.borderColor = "#00000022";
+              }}
+              onClick={() => onAdvance([a.id], a.edge_handle_id)}
+            >
+              <span
+                style={{
+                  width: 48,
+                  height: 48,
+                  borderRadius: "50%",
+                  border: "1px solid #00000022",
+                  backgroundColor: "#00000010",
+                  backgroundImage: a.image_url ? `url(${a.image_url})` : undefined,
+                  backgroundSize: "cover",
+                  backgroundPosition: "center",
+                }}
+              />
+              <span style={{ fontSize: 12, textAlign: "center" }}>{a.text}</span>
+            </button>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
   // single_select / image_tile (default fall-through)
   return (
     <div style={styles.card}>

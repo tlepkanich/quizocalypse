@@ -31,6 +31,9 @@ export const QuestionType = z.enum([
   // compact row of buttons (1–N or labeled). Surfaces without a dedicated
   // renderer fall through to the default single-select render (still functional).
   "rating",
+  // Phase F: swatch picker — single-select rendered as colour/material swatches
+  // (card variant; uses each answer's image_url, else a neutral chip + label).
+  "swatch",
   // Phase F: freeform numeric + date inputs — a typed value piggybacks on
   // answers[0], exactly like text/email. Registered in FREEFORM_QUESTION_TYPES
   // below so every freeform check picks them up from one source.
@@ -169,6 +172,7 @@ export const QuestionData = QuestionDataObject.refine(
       "image_picker",
       "dropdown",
       "rating",
+      "swatch",
     ];
     if (cardTypes.includes(q.question_type)) return q.answers.length >= 2;
     return true;
