@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { Link, useFetcher } from "@remix-run/react";
 import { TitleBar } from "@shopify/app-bridge-react";
 import { Step5Preview } from "../builder/Step5Preview";
@@ -20,6 +20,28 @@ const PLACEMENTS: Array<{ value: Placement; label: string; hint: string }> = [
   { value: "inline", label: "Inline embed", hint: "drop the App Block into a page section to embed it in-flow." },
   { value: "product_widget", label: "Product page widget", hint: "add the App Block to your product template as a compact launcher." },
 ];
+
+// Copy-to-clipboard for the published quiz link (Phase E shareable surface).
+function CopyLinkButton({ url }: { url: string }) {
+  const [copied, setCopied] = useState(false);
+  return (
+    <button
+      type="button"
+      className="qz-btn qz-btn-ghost qz-btn-sm"
+      onClick={async () => {
+        try {
+          await navigator.clipboard.writeText(url);
+          setCopied(true);
+          window.setTimeout(() => setCopied(false), 1500);
+        } catch {
+          // clipboard blocked — the link above is still selectable
+        }
+      }}
+    >
+      {copied ? "Copied ✓" : "Copy link"}
+    </button>
+  );
+}
 
 // ════════════════════════════════════════════════════════════════════════════
 // AiEditWorkspace — the AI-FIRST default editing surface (Dev Spec): a live,
@@ -153,6 +175,17 @@ function AiWorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: C
           </a>
           <div style={{ marginTop: 6, fontSize: 12 }} className="qz-dim">
             Embed mode: <strong>{currentPlacement.label}</strong> — {currentPlacement.hint}
+          </div>
+          <div className="qz-row" style={{ gap: 8, marginTop: 10 }}>
+            <CopyLinkButton url={data.previewUrl} />
+            <a
+              href={data.previewUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="qz-btn qz-btn-ghost qz-btn-sm"
+            >
+              Open quiz ↗
+            </a>
           </div>
         </QzBanner>
       ) : null}
