@@ -1226,6 +1226,23 @@ function DropdownQuestion({
   );
 }
 
+// An answer's label plus an optional always-visible helper caption
+// (Answer.tooltip_text, baked at publish — Dev Spec §4.1) that explains the
+// option's tradeoff in plain English. Always-visible rather than a hover/click
+// popover because answer options are themselves <button>/<label> elements: a
+// nested interactive tooltip would be invalid markup and unreliable on touch.
+function AnswerLabel({ text, tooltip }: { text: string; tooltip?: string }) {
+  if (!tooltip) return <>{text}</>;
+  return (
+    <span style={{ display: "grid", gap: 2, textAlign: "left" }}>
+      <span>{text}</span>
+      <span style={{ fontSize: 12, opacity: 0.7, fontWeight: 400, lineHeight: 1.35 }}>
+        {tooltip}
+      </span>
+    </span>
+  );
+}
+
 function QuestionView({
   node,
   onAdvance,
@@ -1336,7 +1353,7 @@ function QuestionView({
                   setChecked({ ...checked, [a.id]: e.target.checked })
                 }
               />
-              {a.text}
+              <AnswerLabel text={a.text} tooltip={a.tooltip_text} />
             </label>
           ))}
         </div>
@@ -1478,7 +1495,7 @@ function QuestionView({
                 }}
               />
             )}
-            {a.text}
+            <AnswerLabel text={a.text} tooltip={a.tooltip_text} />
           </button>
         ))}
       </div>
