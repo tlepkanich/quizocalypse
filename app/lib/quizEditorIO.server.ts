@@ -4,6 +4,7 @@ import { authenticate } from "../shopify.server";
 import prisma from "../db.server";
 import { Quiz } from "./quizSchema";
 import { publishQuiz, PublishError } from "./quizPublish";
+import { qrDataUrl } from "./qrCode.server";
 import { ensureQuizDiscount } from "./discount.server";
 import { regenerateQuestion, generateQuestionFlow, editQuiz } from "./claude";
 import { applyEditOps, outlineQuiz } from "./quizEdit";
@@ -38,6 +39,12 @@ export async function loadQuizEditorDataForShop(shop: Shop, id: string, origin: 
     where: { id, shopId: shop.id },
   });
   if (!quiz) throw new Response("Quiz not found", { status: 404 });
+
+  // Shareable QR for the hosted quiz link (Phase E). Generated server-side so
+  // `qrcode` stays out of the client bundle; the /q/<id> URL is stable pre- and
+  // post-publish, so it's always ready for the publish banner.
+  const previewUrl = `${origin}/q/${quiz.id}`;
+  const qrCode = await qrDataUrl(previewUrl);
 
   const collections = await prisma.collection.findMany({
     where: { shopId: shop.id },
@@ -119,7 +126,8 @@ export async function loadQuizEditorDataForShop(shop: Shop, id: string, origin: 
     productIndex,
     categories,
     brandVoiceName,
-    previewUrl: `${origin}/q/${quiz.id}`,
+    previewUrl,
+    qrCode,
   };
 }
 

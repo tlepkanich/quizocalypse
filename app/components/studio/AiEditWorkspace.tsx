@@ -187,6 +187,28 @@ function AiWorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: C
               Open quiz ↗
             </a>
           </div>
+          {data.qrCode ? (
+            <div style={{ marginTop: 12, display: "flex", gap: 12, alignItems: "center" }}>
+              <img
+                src={data.qrCode}
+                alt="QR code linking to the quiz"
+                width={88}
+                height={88}
+                style={{ borderRadius: 8, border: "1px solid var(--qz-rule)", background: "#fff" }}
+              />
+              <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                <div style={{ fontSize: 12, fontWeight: 600 }}>Scan to open on a phone</div>
+                <a
+                  href={data.qrCode}
+                  download={`quiz-${data.quizId}-qr.png`}
+                  className="qz-btn qz-btn-ghost qz-btn-sm"
+                  style={{ alignSelf: "flex-start" }}
+                >
+                  Download QR ↓
+                </a>
+              </div>
+            </div>
+          ) : null}
         </QzBanner>
       ) : null}
       {!canPublish ? (

@@ -82,6 +82,9 @@ export interface StudioBuilderData {
   categories: BuilderCategory[];
   brandVoiceName: string | null;
   previewUrl: string;
+  // PNG data URL of a QR code for previewUrl (Phase E shareable surface).
+  // Optional — generated server-side; absent on surfaces that don't supply it.
+  qrCode?: string | null;
   abAnalytics: Record<string, Record<string, FunnelCounts>>;
 }
 
