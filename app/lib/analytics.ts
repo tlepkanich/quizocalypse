@@ -38,6 +38,16 @@ export const CapturePayload = z.object({
   phone: z.string().max(40).optional(),
 });
 
+// Server-side session write (Dev Spec §7.2). Posted from the runtime on quiz
+// completion: the shopper's answers, the products matched, and the outcome page.
+export const SessionPayload = z.object({
+  quiz_id: z.string().min(1),
+  session_id: z.string().min(1),
+  outcome_id: z.string().max(200).optional(),
+  answer_ids: z.array(z.string().max(200)).max(200).default([]),
+  matched_product_ids: z.array(z.string().max(200)).max(200).default([]),
+});
+
 // ---- Client-side helpers (browser-only) ----
 
 interface ClientEvent {

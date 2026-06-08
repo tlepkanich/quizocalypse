@@ -158,6 +158,7 @@ model Quiz {
   versions QuizVersion[]
   events   Event[]
   captures EmailCapture[]
+  sessions QuizSession[]
 
   @@index([shopId])
 }
@@ -203,4 +204,26 @@ model EmailCapture {
 
   @@index([quizId, capturedAt])
   @@index([email])
+}
+
+// Server-side quiz session (Dev Spec §7.2). One row per (quizId, sessionId):
+// the shopper's answers, the products we matched them to, and the outcome page,
+// plus a `converted` flag set later by the order webhook. Powers cross-device
+// resume + "My Results" + conversion attribution (follow-on slices).
+model QuizSession {
+  id                String    @id @default(cuid())
+  shopId            String?
+  quizId            String
+  sessionId         String
+  outcomeId         String?
+  answerIds         String[]
+  matchedProductIds String[]
+  converted         Boolean   @default(false)
+  startedAt         DateTime  @default(now())
+  completedAt       DateTime?
+
+  quiz Quiz @relation(fields: [quizId], references: [id], onDelete: Cascade)
+
+  @@unique([quizId, sessionId])
+  @@index([quizId, completedAt])
 }

@@ -676,6 +676,7 @@ export function QuizRuntime(props: QuizRuntimeProps) {
             quizId={quizId}
             sessionId={sessionIdRef.current}
             collectEmail={doc.collect_email_on_result}
+            answerIds={selectedAnswerIds}
             resultNodeId={currentNode.id}
             shopDomain={shopDomain}
             discountCode={discountCode}
@@ -2303,6 +2304,30 @@ function WhyBullets({
   );
 }
 
+// Persist a server-side QuizSession on completion (Dev Spec §7.2). Fire-and-
+// forget; a failure never affects the shopper. The caller preview-gates this.
+function postQuizSession(args: {
+  quizId?: string;
+  sessionId?: string;
+  outcomeId: string;
+  answerIds: string[];
+  productIds: string[];
+}) {
+  if (!args.quizId || !args.sessionId) return;
+  void fetch("/sessions", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      quiz_id: args.quizId,
+      session_id: args.sessionId,
+      outcome_id: args.outcomeId,
+      answer_ids: args.answerIds,
+      matched_product_ids: args.productIds,
+    }),
+    keepalive: true,
+  }).catch(() => {});
+}
+
 // Inline email capture on the result page (Dev Spec §5), gated by
 // Quiz.collect_email_on_result. Mirrors EmailGateView: preview mode does not
 // POST; a real capture persists via /captures + fires email_captured.
@@ -2404,6 +2429,7 @@ function ResultView({
   quizId,
   sessionId,
   collectEmail,
+  answerIds,
   resultNodeId,
   shopDomain,
   discountCode,
@@ -2424,6 +2450,7 @@ function ResultView({
   quizId?: string;
   sessionId?: string;
   collectEmail?: boolean;
+  answerIds?: string[];
   resultNodeId: string;
   shopDomain?: string;
   discountCode?: string;
@@ -2438,7 +2465,9 @@ function ResultView({
   bare?: boolean;
   whyBullets?: string[];
 }) {
-  // Fire completion + view events once when the result first renders.
+  const isPreviewMode = useContext(RuntimePreviewContext);
+  // Fire completion + view events once when the result first renders, and
+  // persist the server-side session (Dev Spec §7.2) — but never in preview.
   useEffect(() => {
     if (completed.current || !analytics) return;
     completed.current = true;
@@ -2450,7 +2479,27 @@ function ResultView({
       product_ids: recs.map((r) => r.product_id),
       secondary_product_ids: (secondary ?? []).map((r) => r.product_id),
     });
-  }, [analytics, completed, resultNodeId, startedAt, recs, secondary]);
+    if (!isPreviewMode) {
+      postQuizSession({
+        quizId,
+        sessionId,
+        outcomeId: resultNodeId,
+        answerIds: answerIds ?? [],
+        productIds: [...recs, ...(secondary ?? [])].map((r) => r.product_id),
+      });
+    }
+  }, [
+    analytics,
+    completed,
+    resultNodeId,
+    startedAt,
+    recs,
+    secondary,
+    isPreviewMode,
+    quizId,
+    sessionId,
+    answerIds,
+  ]);
 
   const inner = (
     <>
