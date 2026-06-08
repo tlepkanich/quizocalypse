@@ -673,6 +673,9 @@ export function QuizRuntime(props: QuizRuntimeProps) {
             ctaLabel={currentNode.data.cta_label}
             recs={recs}
             secondary={secondary}
+            quizId={quizId}
+            sessionId={sessionIdRef.current}
+            collectEmail={doc.collect_email_on_result}
             resultNodeId={currentNode.id}
             shopDomain={shopDomain}
             discountCode={discountCode}
@@ -702,6 +705,9 @@ export function QuizRuntime(props: QuizRuntimeProps) {
             whyBullets={currentNode.data.why_bullets}
             ctaLabel={currentNode.data.cta_label}
             sections={stageSections}
+            quizId={quizId}
+            sessionId={sessionIdRef.current}
+            collectEmail={doc.collect_email_on_result}
             resultNodeId={currentNode.id}
             shopDomain={shopDomain}
             discountCode={discountCode}
@@ -2297,12 +2303,107 @@ function WhyBullets({
   );
 }
 
+// Inline email capture on the result page (Dev Spec §5), gated by
+// Quiz.collect_email_on_result. Mirrors EmailGateView: preview mode does not
+// POST; a real capture persists via /captures + fires email_captured.
+function ResultEmailCapture({
+  quizId,
+  sessionId,
+  styles,
+  analytics,
+}: {
+  quizId: string;
+  sessionId: string;
+  styles: ReturnType<typeof stylesFor>;
+  analytics: ReturnType<typeof createAnalyticsClient> | null;
+}) {
+  const isPreviewMode = useContext(RuntimePreviewContext);
+  const [email, setEmail] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [done, setDone] = useState(false);
+  const valid = /^\S+@\S+\.\S+$/.test(email);
+
+  async function submit() {
+    if (!valid || submitting) return;
+    setSubmitting(true);
+    try {
+      if (!isPreviewMode) {
+        await fetch("/captures", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ quiz_id: quizId, session_id: sessionId, email }),
+          keepalive: true,
+        });
+      }
+      analytics?.track("email_captured", { source: "result" });
+      setDone(true);
+    } catch {
+      setDone(true); // never trap the shopper on a capture failure
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  if (done) {
+    return (
+      <div
+        style={{
+          marginTop: 24,
+          padding: 14,
+          borderRadius: "var(--qz-radius)",
+          background: "#00000008",
+          textAlign: "center",
+        }}
+      >
+        ✓ Thanks — we&rsquo;ll email your results.
+      </div>
+    );
+  }
+  return (
+    <form
+      onSubmit={(e) => {
+        e.preventDefault();
+        void submit();
+      }}
+      style={{ marginTop: 24, paddingTop: 18, borderTop: "1px solid #00000014" }}
+    >
+      <div style={{ fontWeight: 600, marginBottom: 10 }}>Want your results emailed to you?</div>
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+        <input
+          type="email"
+          placeholder="you@example.com"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          style={{
+            flex: "1 1 200px",
+            padding: "12px 14px",
+            borderRadius: "var(--qz-radius)",
+            border: "1px solid #00000022",
+            fontSize: "var(--qz-base-size)",
+            fontFamily: "var(--qz-font-body)",
+          }}
+        />
+        <button
+          type="submit"
+          disabled={!valid || submitting}
+          style={{ ...styles.primaryBtn, opacity: valid && !submitting ? 1 : 0.5 }}
+        >
+          {submitting ? "Sending…" : "Email me"}
+        </button>
+      </div>
+    </form>
+  );
+}
+
 function ResultView({
   headline,
   subtext,
   ctaLabel,
   recs,
   secondary,
+  quizId,
+  sessionId,
+  collectEmail,
   resultNodeId,
   shopDomain,
   discountCode,
@@ -2320,6 +2421,9 @@ function ResultView({
   ctaLabel: string;
   recs: RecommendedProduct[];
   secondary?: RecommendedProduct[];
+  quizId?: string;
+  sessionId?: string;
+  collectEmail?: boolean;
   resultNodeId: string;
   shopDomain?: string;
   discountCode?: string;
@@ -2452,6 +2556,14 @@ function ResultView({
       {subtext && <p style={{ ...styles.muted, marginTop: 8 }}>{subtext}</p>}
       <WhyBullets bullets={whyBullets} styles={styles} />
       {inner}
+      {collectEmail && quizId && sessionId ? (
+        <ResultEmailCapture
+          quizId={quizId}
+          sessionId={sessionId}
+          styles={styles}
+          analytics={analytics}
+        />
+      ) : null}
     </div>
   );
 }
@@ -2466,6 +2578,9 @@ function MultiStageResultView({
   subtext,
   ctaLabel,
   sections,
+  quizId,
+  sessionId,
+  collectEmail,
   resultNodeId,
   shopDomain,
   discountCode,
@@ -2482,6 +2597,9 @@ function MultiStageResultView({
   subtext: string;
   ctaLabel: string;
   sections: { stage: ResultStageT; recs: RecommendedProduct[] }[];
+  quizId?: string;
+  sessionId?: string;
+  collectEmail?: boolean;
   resultNodeId: string;
   shopDomain: string;
   discountCode?: string;
@@ -2545,6 +2663,14 @@ function MultiStageResultView({
       {subtext && <p style={{ ...styles.muted, marginTop: 8 }}>{subtext}</p>}
       <WhyBullets bullets={whyBullets} styles={styles} />
       {inner}
+      {collectEmail && quizId && sessionId ? (
+        <ResultEmailCapture
+          quizId={quizId}
+          sessionId={sessionId}
+          styles={styles}
+          analytics={analytics}
+        />
+      ) : null}
     </div>
   );
 }

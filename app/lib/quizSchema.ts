@@ -761,6 +761,9 @@ export const Quiz = z.object({
   // embed mode + the publish embed hint. Optional (absent = "page") to stay
   // additive without forcing the field onto every existing Quiz literal.
   placement: z.enum(["page", "popup", "inline", "product_widget"]).optional(),
+  // When true, the result page shows an inline email-capture block (Dev Spec
+  // §5) that posts to /captures + fires email_captured. Additive/optional.
+  collect_email_on_result: z.boolean().optional(),
   nodes: z.array(QuizNode).min(2),
   edges: z.array(QuizEdge).default([]),
   results_pages: z.array(ResultPage).default([]),

@@ -149,6 +149,18 @@ function AiWorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: C
               ))}
             </select>
           </label>
+          <label
+            className="qz-row"
+            style={{ gap: 6, alignItems: "center", fontSize: 12 }}
+            title="Show an inline email-capture block on the result page"
+          >
+            <input
+              type="checkbox"
+              checked={doc.collect_email_on_result ?? false}
+              onChange={(e) => commit({ ...doc, collect_email_on_result: e.target.checked })}
+            />
+            <span className="qz-dim">Email on result</span>
+          </label>
           <Link
             to="?mode=advanced"
             className="qz-btn qz-btn-ghost qz-btn-sm"
