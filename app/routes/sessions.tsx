@@ -1,4 +1,4 @@
-import type { ActionFunctionArgs } from "@remix-run/node";
+import type { ActionFunctionArgs, LoaderFunctionArgs } from "@remix-run/node";
 import prisma from "../db.server";
 import { SessionPayload } from "../lib/analytics";
 
@@ -8,13 +8,43 @@ import { SessionPayload } from "../lib/analytics";
 // client for shopId — it's resolved from the quiz row.
 const CORS = {
   "access-control-allow-origin": "*",
-  "access-control-allow-methods": "POST, OPTIONS",
+  "access-control-allow-methods": "GET, POST, OPTIONS",
   "access-control-allow-headers": "content-type",
   "access-control-max-age": "86400",
 };
 
-export const loader = async () =>
-  new Response(null, { status: 204, headers: CORS });
+// GET ?quiz_id=&session_id= → the shopper's saved session (cross-device "My
+// Results" read). session_id is an unguessable capability token, so no other
+// auth; only non-PII fields are returned. With no params it's the POST's CORS
+// preflight no-op.
+export const loader = async ({ request }: LoaderFunctionArgs) => {
+  const url = new URL(request.url);
+  const quizId = url.searchParams.get("quiz_id");
+  const sessionId = url.searchParams.get("session_id");
+  if (!quizId || !sessionId) {
+    return new Response(null, { status: 204, headers: CORS });
+  }
+  const session = await prisma.quizSession.findUnique({
+    where: { quizId_sessionId: { quizId, sessionId } },
+    select: {
+      outcomeId: true,
+      answerIds: true,
+      matchedProductIds: true,
+      converted: true,
+      completedAt: true,
+    },
+  });
+  if (!session) {
+    return new Response(JSON.stringify({ error: "not found" }), {
+      status: 404,
+      headers: { ...CORS, "content-type": "application/json" },
+    });
+  }
+  return new Response(JSON.stringify({ ok: true, session }), {
+    status: 200,
+    headers: { ...CORS, "content-type": "application/json" },
+  });
+};
 
 export const action = async ({ request }: ActionFunctionArgs) => {
   if (request.method === "OPTIONS") {
