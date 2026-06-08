@@ -33,6 +33,9 @@ export interface GeneratedQuestionSpec {
   required?: boolean;
   max_selections?: number;
   answers: GeneratedAnswerSpec[];
+  // Optional one-line teaching card shown before this question (Dev Spec §6).
+  // At most ONE across the quiz is honored — applyQuestionFlow enforces it.
+  education_card_before?: string;
 }
 export interface GeneratedQuestionFlow {
   questions: GeneratedQuestionSpec[];
@@ -100,6 +103,11 @@ export function applyQuestionFlow(
   }
 
   const questionAnswerIds: string[][] = [];
+  // Honor at most ONE AI-placed education card across the quiz (Dev Spec §6):
+  // the first question carrying a non-empty card wins; the rest are ignored.
+  const eduIdx = generated.questions.findIndex(
+    (q) => typeof q.education_card_before === "string" && q.education_card_before.trim().length > 0,
+  );
   generated.questions.forEach((q, i) => {
     const id = `sb_q_${i + 1}`;
     const answers = q.answers.map((a) => ({
@@ -119,6 +127,9 @@ export function applyQuestionFlow(
         text: q.text,
         question_type: q.question_type,
         required: q.required ?? true,
+        ...(i === eduIdx && q.education_card_before
+          ? { education_card_before: q.education_card_before.trim() }
+          : {}),
         ...(q.max_selections !== undefined ? { max_selections: q.max_selections } : {}),
         answers,
         show_preview_after: false,

@@ -234,6 +234,7 @@ const questionFlowToolJsonSchema = {
           },
           required: { type: "boolean" },
           max_selections: { type: "number" },
+          education_card_before: { type: "string" },
           answers: {
             type: "array",
             minItems: 2,
@@ -272,6 +273,7 @@ const QuestionFlowSchema = z.object({
         question_type: QuestionDataObject.shape.question_type,
         required: z.boolean().optional(),
         max_selections: z.number().int().positive().optional(),
+        education_card_before: z.string().optional(),
         answers: z
           .array(
             z.object({
@@ -338,6 +340,8 @@ export async function generateQuestionFlow(
     "",
     "Catalog summary (only use tags that appear here):",
     input.catalogSummary,
+    "",
+    "Optionally add ONE education_card_before (at most one across the ENTIRE quiz) to a single question where shoppers need a concept explained before they can answer well — e.g. an unfamiliar material, spec, fit, or term. One short, plain-language sentence. Omit it entirely if nothing genuinely needs explaining.",
     ...(input.toneSample
       ? ["", "Brand voice sample — match this writing style:", input.toneSample]
       : []),
@@ -389,6 +393,7 @@ export async function generateQuestionFlow(
           question_type: q.question_type,
           ...(q.required !== undefined ? { required: q.required } : {}),
           ...(q.max_selections !== undefined ? { max_selections: q.max_selections } : {}),
+          ...(q.education_card_before ? { education_card_before: q.education_card_before } : {}),
           answers: q.answers.map((a) => ({
             text: a.text,
             tags: a.tags,

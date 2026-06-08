@@ -77,6 +77,33 @@ describe("applyQuestionFlow", () => {
     expect(() => Quiz.parse(next)).not.toThrow();
   });
 
+  it("places at most one AI education card (Dev Spec §6) — first non-empty wins, trimmed", () => {
+    const genCards: GeneratedQuestionFlow = {
+      questions: [
+        { ...gen.questions[0]!, education_card_before: "  Retinol is a vitamin-A derivative.  " },
+        { ...gen.questions[1]!, education_card_before: "This second card must be ignored." },
+      ],
+    };
+    const next = applyQuestionFlow(baseDoc(), genCards, buckets);
+    const q1 = next.nodes.find((n) => n.id === "sb_q_1");
+    const q2 = next.nodes.find((n) => n.id === "sb_q_2");
+    expect(
+      q1?.type === "question" && (q1.data as { education_card_before?: string }).education_card_before,
+    ).toBe("Retinol is a vitamin-A derivative.");
+    expect(
+      q2?.type === "question" && (q2.data as { education_card_before?: string }).education_card_before,
+    ).toBeUndefined();
+    expect(() => Quiz.parse(next)).not.toThrow();
+  });
+
+  it("places no education card when none is supplied", () => {
+    const next = applyQuestionFlow(baseDoc(), gen, buckets);
+    const q1 = next.nodes.find((n) => n.id === "sb_q_1");
+    expect(
+      q1?.type === "question" && (q1.data as { education_card_before?: string }).education_card_before,
+    ).toBeUndefined();
+  });
+
   it("routes shoppers to the right bucket page via the real engine", () => {
     const next = applyQuestionFlow(baseDoc(), gen, buckets);
     expect(resolveNextStep(next, "sb_q_2", null, ctx(["dry"]))).toBe("r_dry");
