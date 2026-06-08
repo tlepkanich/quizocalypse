@@ -36,6 +36,11 @@ export interface OnboardingBuildInput {
   // Optional brand-website URL (Dev Spec §3.2). Ingested for richer, on-brand
   // generated copy. Failures are swallowed — enrichment never blocks the build.
   websiteUrl?: string;
+  // Wizard Step-4 choices baked into the built quiz. When placement is absent,
+  // suggestPlacement() picks a smart default; collectEmailOnResult sets the
+  // result-page email-capture toggle when provided.
+  placement?: "page" | "popup" | "inline" | "product_widget";
+  collectEmailOnResult?: boolean;
   // When set, build into this EXISTING quiz row instead of creating one — used
   // by startAiOnboardingBuild for the detached/async path (the row is
   // pre-created so the request can redirect immediately). Omitted = legacy
@@ -165,10 +170,16 @@ export async function runAiOnboardingBuild(
     return { quizId, degraded: "AI built a draft but it needs a tweak in the builder." };
   }
 
-  // AI placement pre-selection (Dev Spec §2 Phase 4) — smart default by catalog
-  // size; the merchant overrides via the editor's placement picker.
-  const withPlacement = { ...parsed.data, placement: suggestPlacement(allProducts.length) };
-  await prisma.quiz.update({ where: { id: quizId }, data: { draftJson: withPlacement as never } });
+  // Placement: the wizard's explicit choice wins; otherwise AI pre-selects by
+  // catalog size (Dev Spec §2 Phase 4). collectEmailOnResult is baked when set.
+  const withFinalFields: QuizDoc = {
+    ...parsed.data,
+    placement: input.placement ?? suggestPlacement(allProducts.length),
+    ...(input.collectEmailOnResult !== undefined
+      ? { collect_email_on_result: input.collectEmailOnResult }
+      : {}),
+  };
+  await prisma.quiz.update({ where: { id: quizId }, data: { draftJson: withFinalFields as never } });
   return { quizId };
 }
 

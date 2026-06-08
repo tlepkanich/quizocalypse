@@ -1,80 +1,141 @@
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "@remix-run/node";
-import { json, redirect } from "@remix-run/node";
-import { Form, Link, useLoaderData, useNavigation } from "@remix-run/react";
-import { useState } from "react";
+import {
+  json,
+  redirect,
+  unstable_createMemoryUploadHandler,
+  unstable_parseMultipartFormData,
+} from "@remix-run/node";
+import {
+  Form,
+  Link,
+  useActionData,
+  useFetcher,
+  useLoaderData,
+  useNavigation,
+} from "@remix-run/react";
+import { useEffect, useMemo, useState } from "react";
 import { requireStudioAccess, resolveStudioShop } from "../lib/studioAccess.server";
 import prisma from "../db.server";
 import { parseBrandGuidelinesSafe } from "../lib/brandGuidelines";
 import { startAiOnboardingBuild } from "../lib/onboardingBuild.server";
+import { extractBrandGuidelines } from "../lib/brandExtract";
+import { scoreCatalogCompleteness } from "../lib/catalogIndex";
+import { DesignTokens } from "../lib/quizSchema";
 import type { QuizTone } from "../lib/claude";
+import { QzPage, QzPageHeader, QzCard, QzBanner } from "../components/qz";
+import { WizardStepper } from "../components/onboarding/OnboardingStepper";
 import {
-  QzPage,
-  QzPageHeader,
-  QzCard,
-  QzButton,
-  QzField,
-  QzInput,
-  QzTextarea,
-  QzSelect,
-  QzBanner,
-  QzBadge,
-} from "../components/qz";
+  CatalogStep,
+  BrandStep,
+  GoalStep,
+  IncentiveStep,
+  ReviewStep,
+  mergeHexIntoTokens,
+  type Placement,
+  type ExtractResp,
+  type DesignTokensT,
+} from "../components/onboarding/OnboardingWizardSteps";
 
-// Standalone AI-first onboarding — the Dev-Spec "one prompt → AI builds the
-// quiz" flow, ported off the embedded admin (/app/onboarding, which needs
-// Shopify OAuth) so it runs on the always-on /studio deployment. Build →
-// redirect straight into the AI editor (?mode=ai). The action self-gates
-// (Remix doesn't run the parent layout loader before an action).
+// Standalone AI-first onboarding — the Miro "AI-Guided Quiz Builder" setup flow,
+// streamlined to a 5-step wizard (Catalog → Brand → Goal → Incentives → Review),
+// ported off the embedded admin so it runs on the always-on /studio deployment.
+// Client-side stepper (one Form submit on the last step + a useFetcher multipart
+// sub-action for logo→tokens); the build runs DETACHED and redirects into the AI
+// editor (?mode=ai), whose polling overlay handles the "Building…" state.
 
-const EXAMPLE_PROMPTS = [
-  "Help shoppers find the right moisturizer for their skin type and concerns.",
-  "Match customers to the perfect coffee roast based on taste and brew method.",
-  "Recommend a starter skincare routine by skin goal and budget.",
-  "Find the ideal running shoe for a runner's distance, terrain, and gait.",
-];
+const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   await requireStudioAccess(request);
   const shop = await resolveStudioShop();
-  const [productCount, firstCollection, shopRow] = await Promise.all([
+  const [productCount, sampleProducts, firstCollection, shopRow] = await Promise.all([
     prisma.product.count({ where: { shopId: shop.id } }),
-    prisma.collection.findFirst({
-      where: { shopId: shop.id },
-      select: { collectionId: true },
-    }),
+    // Sample (capped) feeds the statistical completeness score; the true count
+    // is the separate count() above for the "scanned N" headline.
+    prisma.product.findMany({ where: { shopId: shop.id }, take: 1000 }),
+    prisma.collection.findFirst({ where: { shopId: shop.id }, select: { collectionId: true } }),
     prisma.shop.findUnique({ where: { id: shop.id }, select: { brandGuidelines: true } }),
   ]);
   return json({
     productCount,
     hasCollection: Boolean(firstCollection),
     brandVoiceName: parseBrandGuidelinesSafe(shopRow?.brandGuidelines)?.name ?? null,
+    completeness: scoreCatalogCompleteness(sampleProducts),
   });
 };
 
 export const action = async ({ request }: ActionFunctionArgs) => {
   await requireStudioAccess(request);
   const shop = await resolveStudioShop();
-  const form = await request.formData();
 
+  // intent=extract-design (multipart logo → AI palette) — mirrors app.onboarding.
+  const contentType = request.headers.get("content-type") ?? "";
+  if (contentType.includes("multipart/form-data")) {
+    let mform: FormData;
+    try {
+      mform = await unstable_parseMultipartFormData(
+        request,
+        unstable_createMemoryUploadHandler({ maxPartSize: MAX_UPLOAD_BYTES }),
+      );
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Upload failed";
+      return json({ ok: false, intent: "extract-design", error: msg }, { status: 400 });
+    }
+    const file = mform.get("file");
+    if (!(file instanceof File) || file.size === 0) {
+      return json(
+        { ok: false, intent: "extract-design", error: "Attach a logo image (PNG/JPG)." },
+        { status: 400 },
+      );
+    }
+    try {
+      const buf = Buffer.from(await file.arrayBuffer());
+      const guidelines = await extractBrandGuidelines({
+        file: buf,
+        mediaType: file.type || "image/png",
+        fileName: file.name || "logo",
+      });
+      return json({
+        ok: true,
+        intent: "extract-design" as const,
+        tokens: guidelines.visual_suggestions.tokens ?? null,
+        brandName: guidelines.name,
+      });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Couldn't read that image";
+      return json({ ok: false, intent: "extract-design", error: msg }, { status: 502 });
+    }
+  }
+
+  const form = await request.formData();
   const name = String(form.get("name") ?? "").trim().slice(0, 120) || "My quiz";
   const goalPrompt = String(form.get("goalPrompt") ?? "").slice(0, 500);
   const qcRaw = Number(form.get("questionCount"));
-  const questionCount = Number.isFinite(qcRaw)
-    ? Math.min(8, Math.max(3, Math.round(qcRaw)))
-    : 6;
+  const questionCount = Number.isFinite(qcRaw) ? Math.min(8, Math.max(3, Math.round(qcRaw))) : 6;
   const toneRaw = String(form.get("tone") ?? "friendly");
   const tone = (
-    ["friendly", "editorial", "playful", "professional"].includes(toneRaw)
-      ? toneRaw
-      : "friendly"
+    ["friendly", "editorial", "playful", "professional"].includes(toneRaw) ? toneRaw : "friendly"
   ) as QuizTone;
   const emailGate = form.get("emailGate") === "on";
+  const collectEmailOnResult = form.get("collectEmailOnResult") === "on";
   const websiteUrl = String(form.get("websiteUrl") ?? "").slice(0, 300);
+  const placementRaw = String(form.get("placement") ?? "page");
+  const placement = (
+    ["page", "popup", "inline", "product_widget"].includes(placementRaw) ? placementRaw : "page"
+  ) as Placement;
+
+  let designTokens: DesignTokensT | null = null;
+  try {
+    const raw = form.get("designTokens");
+    if (typeof raw === "string" && raw) {
+      const parsed = DesignTokens.safeParse(JSON.parse(raw));
+      if (parsed.success) designTokens = parsed.data;
+    }
+  } catch {
+    // ignore malformed tokens
+  }
 
   try {
-    // Kick the build off DETACHED and redirect immediately — the full AI build
-    // (~75s) outruns the edge proxy's ~60s timeout, so it can't run inline. The
-    // editor shows a polling overlay until the row's buildState clears.
     const { quizId } = await startAiOnboardingBuild({
       shopId: shop.id,
       name,
@@ -83,6 +144,9 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       tone,
       flow: { welcome_message: false, email_gate: emailGate, mixed_input_types: false },
       ...(websiteUrl ? { websiteUrl } : {}),
+      ...(designTokens ? { designTokens } : {}),
+      placement,
+      collectEmailOnResult,
     });
     return redirect(`/studio/${quizId}?mode=ai`);
   } catch (err) {
@@ -92,11 +156,43 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 };
 
 export default function StudioOnboarding() {
-  const { productCount, hasCollection, brandVoiceName } = useLoaderData<typeof loader>();
+  const { productCount, hasCollection, brandVoiceName, completeness } =
+    useLoaderData<typeof loader>();
+  const actionData = useActionData<typeof action>();
   const nav = useNavigation();
   const building = nav.state !== "idle" && nav.formMethod === "POST";
-  const [goal, setGoal] = useState("");
-  const [count, setCount] = useState(6);
+
+  // Step state
+  const [step, setStep] = useState(1);
+  const [maxReached, setMaxReached] = useState(1);
+  const goto = (n: number) => {
+    setStep(n);
+    setMaxReached((m) => Math.max(m, n));
+  };
+
+  // Accumulated wizard input
+  const [name, setName] = useState("");
+  const [goalPrompt, setGoalPrompt] = useState("");
+  const [questionCount, setQuestionCount] = useState(6);
+  const [tone, setTone] = useState<QuizTone>("friendly");
+  const [emailGate, setEmailGate] = useState(false);
+  const [collectEmailOnResult, setCollectEmailOnResult] = useState(false);
+  const [placement, setPlacement] = useState<Placement>("page");
+  const [websiteUrl, setWebsiteUrl] = useState("");
+  const [baseTokens, setBaseTokens] = useState<DesignTokensT | null>(null);
+  const [hex, setHex] = useState("");
+  const effectiveTokens = useMemo(
+    () => (hex.trim() ? mergeHexIntoTokens(baseTokens, hex) : baseTokens),
+    [baseTokens, hex],
+  );
+
+  // Logo → tokens sub-action (multipart), kept off the main wizard Form.
+  const designFetcher = useFetcher<ExtractResp>();
+  useEffect(() => {
+    if (designFetcher.state === "idle" && designFetcher.data?.ok && designFetcher.data.tokens) {
+      setBaseTokens(designFetcher.data.tokens);
+    }
+  }, [designFetcher.state, designFetcher.data]);
 
   if (building) {
     return (
@@ -115,8 +211,8 @@ export default function StudioOnboarding() {
           <div style={{ fontSize: 40 }}>✨</div>
           <h2 className="qz-h1" style={{ margin: 0 }}>Building your quiz…</h2>
           <p className="qz-dim" style={{ margin: 0, maxWidth: 440 }}>
-            Reading your catalog → grouping products into outcomes → writing
-            on-brand questions and result pages. This takes ~20–30 seconds.
+            Reading your catalog → grouping products into outcomes → writing on-brand
+            questions and result pages. This usually takes about a minute.
           </p>
           <div className="qz-dim" style={{ fontSize: 13 }}>
             You&rsquo;ll land in the AI editor when it&rsquo;s ready.
@@ -126,12 +222,15 @@ export default function StudioOnboarding() {
     );
   }
 
+  const buildError =
+    actionData && "error" in actionData ? (actionData.error as string) : null;
+
   return (
     <QzPage>
       <QzPageHeader
         eyebrow="AI-first setup"
         title="Build a quiz from one prompt"
-        subtitle="Describe what shoppers should find. AI reads your catalog, groups products into outcomes, and writes the whole quiz — then you refine it by chat."
+        subtitle="AI reads your catalog, groups products into outcomes, and writes the whole quiz — you point it at a goal and refine by chat."
         actions={
           <Link to="/studio" className="qz-btn qz-btn-ghost qz-btn-sm">
             ← All quizzes
@@ -139,107 +238,107 @@ export default function StudioOnboarding() {
         }
       />
 
-      {!hasCollection ? (
-        <QzBanner tone="warn" title="No Shopify collections synced yet">
-          AI builds best with at least one collection (it powers result-page fallbacks and
-          product mapping). You can still build — sync your catalog from the Shopify app to improve it.
-        </QzBanner>
+      <WizardStepper current={step} maxReached={maxReached} onJump={goto} />
+
+      {step === 1 ? (
+        <CatalogStep
+          productCount={productCount}
+          completeness={completeness}
+          hasCollection={hasCollection}
+          onNext={() => goto(2)}
+        />
       ) : null}
 
-      <QzCard style={{ marginTop: 16, display: "flex", flexDirection: "column", gap: 16 }}>
-        <div className="qz-row qz-row-between" style={{ alignItems: "center" }}>
-          <p className="qz-dim" style={{ margin: 0, fontSize: 13 }}>
-            We&rsquo;ve scanned your <strong>{productCount}</strong>{" "}
-            {productCount === 1 ? "product" : "products"} — one sentence of context is all the AI needs.
-          </p>
-          {brandVoiceName ? <QzBadge tone="ok">Brand voice: {brandVoiceName}</QzBadge> : null}
-        </div>
+      {step === 2 ? (
+        <BrandStep
+          websiteUrl={websiteUrl}
+          setWebsiteUrl={setWebsiteUrl}
+          baseTokens={baseTokens}
+          setBaseTokens={setBaseTokens}
+          hex={hex}
+          setHex={setHex}
+          effectiveTokens={effectiveTokens}
+          designFetcher={designFetcher}
+          onNext={() => goto(3)}
+          onBack={() => goto(1)}
+        />
+      ) : null}
 
-        <Form method="post" style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-          <QzField label="Quiz name">
-            <QzInput name="name" placeholder="e.g. Find your skincare routine" />
-          </QzField>
+      {step === 3 ? (
+        <GoalStep
+          name={name}
+          setName={setName}
+          goalPrompt={goalPrompt}
+          setGoalPrompt={setGoalPrompt}
+          questionCount={questionCount}
+          setQuestionCount={setQuestionCount}
+          tone={tone}
+          setTone={setTone}
+          brandVoiceName={brandVoiceName}
+          onNext={() => goto(4)}
+          onBack={() => goto(2)}
+        />
+      ) : null}
 
-          <QzField
-            label="What should this quiz help shoppers do?"
-            hint="The clearer the goal, the better the questions AI writes."
-          >
-            <QzTextarea
-              name="goalPrompt"
-              value={goal}
-              onChange={(e) => setGoal(e.target.value)}
-              placeholder="e.g. Help shoppers find the right moisturizer for their skin type and concerns."
-              rows={3}
-            />
-          </QzField>
+      {step === 4 ? (
+        <IncentiveStep
+          emailGate={emailGate}
+          setEmailGate={setEmailGate}
+          collectEmailOnResult={collectEmailOnResult}
+          setCollectEmailOnResult={setCollectEmailOnResult}
+          placement={placement}
+          setPlacement={setPlacement}
+          onNext={() => goto(5)}
+          onBack={() => goto(3)}
+        />
+      ) : null}
 
-          <div className="qz-row" style={{ gap: 8, flexWrap: "wrap" }}>
-            {EXAMPLE_PROMPTS.map((ex) => (
-              <button
-                key={ex}
-                type="button"
-                className="qz-btn qz-btn-ghost qz-btn-sm"
-                style={{ fontSize: 12 }}
-                onClick={() => setGoal(ex)}
-              >
-                {ex.length > 48 ? `${ex.slice(0, 48)}…` : ex}
-              </button>
-            ))}
-          </div>
+      {step === 5 ? (
+        <Form method="post" style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+          <input type="hidden" name="name" value={name} />
+          <input type="hidden" name="goalPrompt" value={goalPrompt} />
+          <input type="hidden" name="questionCount" value={questionCount} />
+          <input type="hidden" name="tone" value={tone} />
+          {emailGate ? <input type="hidden" name="emailGate" value="on" /> : null}
+          {collectEmailOnResult ? (
+            <input type="hidden" name="collectEmailOnResult" value="on" />
+          ) : null}
+          <input type="hidden" name="placement" value={placement} />
+          {websiteUrl.trim() ? <input type="hidden" name="websiteUrl" value={websiteUrl} /> : null}
+          {effectiveTokens ? (
+            <input type="hidden" name="designTokens" value={JSON.stringify(effectiveTokens)} />
+          ) : null}
 
-          <QzField
-            label="Your website (optional)"
-            hint="AI reads your homepage / About page for on-brand language — richer, less generic copy."
-          >
-            <QzInput name="websiteUrl" placeholder="https://yourstore.com" />
-          </QzField>
+          {buildError ? (
+            <QzBanner tone="crit" title="Build failed">
+              {buildError}
+            </QzBanner>
+          ) : null}
 
-          <div className="qz-row" style={{ gap: 24, flexWrap: "wrap", alignItems: "flex-end" }}>
-            <QzField label={`How many questions? (${count})`} hint="5–8 works best for completion.">
-              <input
-                type="range"
-                name="questionCount"
-                min={3}
-                max={8}
-                value={count}
-                onChange={(e) => setCount(Number(e.target.value))}
-                style={{ width: 200 }}
-              />
-            </QzField>
-            <QzField label="Tone">
-              <QzSelect name="tone" defaultValue="friendly">
-                <option value="friendly">Friendly</option>
-                <option value="editorial">Editorial</option>
-                <option value="playful">Playful</option>
-                <option value="professional">Professional</option>
-              </QzSelect>
-            </QzField>
-          </div>
-
-          <label style={{ display: "inline-flex", gap: 8, alignItems: "center", fontSize: 13 }}>
-            <input type="checkbox" name="emailGate" />
-            Capture emails before showing results (grow your list)
-          </label>
-
-          <div>
-            <QzButton
-              type="submit"
-              variant="accent"
-              disabled={goal.trim().length === 0}
-              title={goal.trim().length === 0 ? "Add a goal to continue" : undefined}
-            >
-              ✨ Build my quiz
-            </QzButton>
-          </div>
+          <ReviewStep
+            name={name}
+            goalPrompt={goalPrompt}
+            questionCount={questionCount}
+            tone={tone}
+            emailGate={emailGate}
+            collectEmailOnResult={collectEmailOnResult}
+            placement={placement}
+            websiteUrl={websiteUrl}
+            productCount={productCount}
+            building={building}
+            onBack={() => goto(4)}
+          />
         </Form>
-      </QzCard>
+      ) : null}
 
-      <p className="qz-dim" style={{ marginTop: 14, fontSize: 12.5 }}>
-        Prefer to start from a blank quiz or a template?{" "}
-        <Link to="/studio/new" className="qz-link">
-          Use the classic builder →
-        </Link>
-      </p>
+      {step === 1 ? (
+        <p className="qz-dim" style={{ marginTop: 14, fontSize: 12.5 }}>
+          Prefer to start from a blank quiz or a template?{" "}
+          <Link to="/studio/new" className="qz-link">
+            Use the classic builder →
+          </Link>
+        </p>
+      ) : null}
     </QzPage>
   );
 }

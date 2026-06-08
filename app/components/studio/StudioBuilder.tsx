@@ -1770,6 +1770,20 @@ function QuestionContent({
           + Add answer
         </QzButton>
       ) : null}
+      <QzField
+        label="Education card (optional)"
+        hint="A short explainer shown before this question — use it for unfamiliar terms. Leave empty for none."
+      >
+        <QzTextarea
+          value={node.data.education_card_before ?? ""}
+          onChange={(e) => {
+            const v = e.target.value.trim();
+            setData({ education_card_before: v.length > 0 ? v : undefined });
+          }}
+          rows={2}
+          placeholder="e.g. SPF measures how long a sunscreen protects against UVB rays."
+        />
+      </QzField>
     </>
   );
 }

@@ -15,11 +15,23 @@ export const ONBOARDING_STEPS: OnboardingStepDef[] = [
   { n: 4, title: "Build", subtitle: "Generate" },
 ];
 
-export function OnboardingStepper({
+// Standalone AI wizard (Catalog · Brand · Goal · Incentives · Build), aligned to
+// the Miro "AI-Guided Quiz Builder" setup flow.
+export const WIZARD_STEPS: OnboardingStepDef[] = [
+  { n: 1, title: "Catalog", subtitle: "Readiness" },
+  { n: 2, title: "Brand", subtitle: "Look & feel" },
+  { n: 3, title: "Goal", subtitle: "Quiz shape" },
+  { n: 4, title: "Incentives", subtitle: "Email & placement" },
+  { n: 5, title: "Build", subtitle: "Review & go" },
+];
+
+function StepperShell({
+  steps,
   current,
   maxReached,
   onJump,
 }: {
+  steps: OnboardingStepDef[];
   current: number;
   maxReached: number;
   onJump: (n: number) => void;
@@ -36,7 +48,7 @@ export function OnboardingStepper({
         overflowX: "auto",
       }}
     >
-      {ONBOARDING_STEPS.map((s, i) => {
+      {steps.map((s, i) => {
         const done = s.n < current;
         const isCurrent = s.n === current;
         const clickable = s.n <= maxReached;
@@ -101,4 +113,21 @@ export function OnboardingStepper({
       })}
     </div>
   );
+}
+
+// Thin wrappers so callers keep a stable API while sharing one render shell.
+export function OnboardingStepper(props: {
+  current: number;
+  maxReached: number;
+  onJump: (n: number) => void;
+}) {
+  return <StepperShell steps={ONBOARDING_STEPS} {...props} />;
+}
+
+export function WizardStepper(props: {
+  current: number;
+  maxReached: number;
+  onJump: (n: number) => void;
+}) {
+  return <StepperShell steps={WIZARD_STEPS} {...props} />;
 }
