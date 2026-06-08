@@ -54,6 +54,7 @@ export function RecommendationMap({
   selectedNodeId,
   onSelectNode,
   onSetWeight,
+  onPromote,
   onConvertToAb,
 }: {
   doc: QuizDoc;
@@ -63,6 +64,7 @@ export function RecommendationMap({
   selectedNodeId: string | null;
   onSelectNode: (nodeId: string) => void;
   onSetWeight: (branchId: string, slotId: string, weight: number) => void;
+  onPromote?: (branchId: string, slotId: string) => void;
   onConvertToAb: (branchId: string) => void;
 }) {
   const resultNodes = doc.nodes.filter((n): n is ResultNode => n.type === "result");
@@ -88,6 +90,7 @@ export function RecommendationMap({
             funnel={abAnalytics[branch.id]}
             slotTargets={slotTargetsFor(doc, branch)}
             onSetWeight={(slotId, weight) => onSetWeight(branch.id, slotId, weight)}
+            onPromote={(slotId) => onPromote?.(branch.id, slotId)}
           />
         ))}
         {rulesBranches.map((branch) => (

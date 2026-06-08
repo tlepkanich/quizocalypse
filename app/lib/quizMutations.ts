@@ -411,6 +411,33 @@ export function setSlotWeight(
   };
 }
 
+// Promote one A/B variant to 100% of traffic (Phase F auto-promote): the winning
+// slot takes weight 100, the rest go to 0. Immutable + reversible (re-weight to
+// undo); preserves slots + edges. The winner is decided upstream by pickAbWinner
+// — this only applies the chosen slot's weights.
+export function promoteAbWinner(
+  doc: QuizDoc,
+  branchNodeId: string,
+  winnerSlotId: string,
+): QuizDoc {
+  return {
+    ...doc,
+    nodes: doc.nodes.map((n) => {
+      if (n.id !== branchNodeId || n.type !== "branch") return n;
+      return {
+        ...n,
+        data: {
+          ...n.data,
+          slots: n.data.slots.map((s) => ({
+            ...s,
+            weight: s.id === winnerSlotId ? 100 : 0,
+          })),
+        },
+      };
+    }),
+  };
+}
+
 // Switch a branch between rules-based routing and A/B weighted split. Slots are
 // preserved (weights only matter in ab_split mode; conditions only in rules).
 export function setBranchMode(

@@ -25,11 +25,13 @@ export function AbTestCard({
   funnel,
   slotTargets,
   onSetWeight,
+  onPromote,
 }: {
   branch: BranchNode;
   funnel: Record<string, FunnelCounts> | undefined;
   slotTargets: Record<string, SlotTarget>;
   onSetWeight: (slotId: string, weight: number) => void;
+  onPromote?: (slotId: string) => void;
 }) {
   const slots = branch.data.slots;
   const totalWeight = slots.reduce((s, sl) => s + sl.weight, 0);
@@ -126,6 +128,17 @@ export function AbTestCard({
           <span>
             Variant <strong>{winnerLabel}</strong> — {Math.round(winner.rate * 100)}% {winner.metric}
           </span>
+          {onPromote ? (
+            <button
+              type="button"
+              className="qz-btn qz-btn-sm"
+              onClick={() => onPromote(winner.slotId)}
+              title={`Send 100% of traffic to Variant ${winnerLabel} (reversible — re-weight any time)`}
+              style={{ marginLeft: "auto" }}
+            >
+              Promote to 100%
+            </button>
+          ) : null}
         </div>
       ) : (
         <div className="qz-dim" style={{ fontSize: 11 }}>

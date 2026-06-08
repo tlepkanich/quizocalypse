@@ -3,6 +3,7 @@ import { Quiz } from "./quizSchema";
 import {
   setSlotWeight,
   setBranchMode,
+  promoteAbWinner,
   deleteNode,
   moveStep,
   straightThroughRun,
@@ -231,6 +232,31 @@ describe("deleteNode re-stitches", () => {
     expect(next.edges.some((e) => e.source === "intro" && e.target === "r1")).toBe(true);
     expect(next.edges.some((e) => e.source === qId || e.target === qId)).toBe(false);
     expect(orderFlow(next).orphans).toEqual([]);
+    expect(() => Quiz.parse(next)).not.toThrow();
+  });
+});
+
+describe("promoteAbWinner", () => {
+  it("sends 100% to the winning slot, 0 to the rest; result re-parses", () => {
+    const next = promoteAbWinner(docWithBranch(), "br1", "sl_b");
+    const b = branch(next);
+    const byId =
+      b.type === "branch"
+        ? Object.fromEntries(b.data.slots.map((s) => [s.id, s.weight]))
+        : {};
+    expect(byId).toEqual({ sl_a: 0, sl_b: 100 });
+    expect(() => Quiz.parse(next)).not.toThrow();
+  });
+
+  it("is pure — the input doc is not mutated", () => {
+    const input = docWithBranch();
+    const snap = JSON.stringify(input);
+    promoteAbWinner(input, "br1", "sl_a");
+    expect(JSON.stringify(input)).toBe(snap);
+  });
+
+  it("ignores an unknown branch id (no-op, still valid)", () => {
+    const next = promoteAbWinner(docWithBranch(), "nope", "sl_a");
     expect(() => Quiz.parse(next)).not.toThrow();
   });
 });

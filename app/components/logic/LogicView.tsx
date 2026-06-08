@@ -4,7 +4,7 @@ import { QzBanner } from "../qz";
 import type { Quiz as QuizDoc } from "../../lib/quizSchema";
 import type { IndexedProduct } from "../../lib/recommendationEngine";
 import type { BuilderCategory } from "../builder/stepProps";
-import { setSlotWeight, setBranchMode } from "../../lib/quizMutations";
+import { setSlotWeight, setBranchMode, promoteAbWinner } from "../../lib/quizMutations";
 import {
   membersFromCategories,
   toggleMembership,
@@ -150,6 +150,9 @@ export function LogicView({
       onSelectNode={(id) => setSelectedNodeId((cur) => (cur === id ? null : id))}
       onSetWeight={(branchId, slotId, weight) =>
         onCommit(setSlotWeight(doc, branchId, slotId, weight))
+      }
+      onPromote={(branchId, slotId) =>
+        onCommit(promoteAbWinner(doc, branchId, slotId))
       }
       onConvertToAb={(branchId) => onCommit(setBranchMode(doc, branchId, "ab_split"))}
     />
