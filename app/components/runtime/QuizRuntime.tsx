@@ -709,6 +709,7 @@ export function QuizRuntime(props: QuizRuntimeProps) {
             quizId={quizId}
             sessionId={sessionIdRef.current}
             collectEmail={doc.collect_email_on_result}
+            answerIds={selectedAnswerIds}
             resultNodeId={currentNode.id}
             shopDomain={shopDomain}
             discountCode={discountCode}
@@ -2630,6 +2631,7 @@ function MultiStageResultView({
   quizId,
   sessionId,
   collectEmail,
+  answerIds,
   resultNodeId,
   shopDomain,
   discountCode,
@@ -2649,6 +2651,7 @@ function MultiStageResultView({
   quizId?: string;
   sessionId?: string;
   collectEmail?: boolean;
+  answerIds?: string[];
   resultNodeId: string;
   shopDomain: string;
   discountCode?: string;
@@ -2661,17 +2664,38 @@ function MultiStageResultView({
   bare?: boolean;
   whyBullets?: string[];
 }) {
+  const isPreviewMode = useContext(RuntimePreviewContext);
   useEffect(() => {
     if (completed.current || !analytics) return;
     completed.current = true;
     analytics.track("quiz_completed", {
       duration_ms: Date.now() - (startedAt || Date.now()),
     });
+    const productIds = sections.flatMap((s) => s.recs.map((r) => r.product_id));
     analytics.track("recommendation_viewed", {
       result_node_id: resultNodeId,
-      product_ids: sections.flatMap((s) => s.recs.map((r) => r.product_id)),
+      product_ids: productIds,
     });
-  }, [analytics, completed, resultNodeId, startedAt, sections]);
+    if (!isPreviewMode) {
+      postQuizSession({
+        quizId,
+        sessionId,
+        outcomeId: resultNodeId,
+        answerIds: answerIds ?? [],
+        productIds,
+      });
+    }
+  }, [
+    analytics,
+    completed,
+    resultNodeId,
+    startedAt,
+    sections,
+    isPreviewMode,
+    quizId,
+    sessionId,
+    answerIds,
+  ]);
 
   const inner = (
     <>
