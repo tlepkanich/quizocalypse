@@ -1,7 +1,7 @@
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "@remix-run/node";
 import { json } from "@remix-run/node";
 import { Link, useLoaderData, useRevalidator, useSearchParams } from "@remix-run/react";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { StudioBuilder } from "../components/studio/StudioBuilder";
 import { AiEditWorkspace } from "../components/studio/AiEditWorkspace";
 import { QzPage, QzCard, QzBanner } from "../components/qz";
@@ -90,7 +90,22 @@ export default function StandaloneStudio() {
 
 // Live "Building…" overlay shown while the detached AI onboarding build runs.
 // The route polls (above), so this resolves itself the moment buildState clears.
+const BUILD_STAGES = [
+  "Reading your catalog…",
+  "Mapping your products…",
+  "Writing your quiz…",
+];
+
 function BuildingOverlay() {
+  // Staged progress copy (Dev Spec §2 Step 4): advance through the stages, then
+  // hold on the long-tail "Writing…" (AI generation dominates the wait). The
+  // spinner keeps it animated so it never reads as frozen.
+  const [stage, setStage] = useState(0);
+  useEffect(() => {
+    if (stage >= BUILD_STAGES.length - 1) return;
+    const t = setTimeout(() => setStage((s) => s + 1), 3500);
+    return () => clearTimeout(t);
+  }, [stage]);
   return (
     <QzPage>
       <style>{`@keyframes qzspin{to{transform:rotate(360deg)}}`}</style>
@@ -117,9 +132,14 @@ function BuildingOverlay() {
           }}
         />
         <h2 className="qz-h1" style={{ margin: 0 }}>Building your quiz…</h2>
-        <p className="qz-dim" style={{ margin: 0, maxWidth: 460 }}>
-          Reading your catalog → grouping products into outcomes → writing
-          on-brand questions and result pages. This usually takes about a minute.
+        <p
+          className="qz-h2"
+          style={{ margin: 0, maxWidth: 460, minHeight: 24, fontWeight: 600 }}
+        >
+          {BUILD_STAGES[stage]}
+        </p>
+        <p className="qz-dim" style={{ margin: 0, fontSize: 13, maxWidth: 460 }}>
+          This usually takes about a minute.
         </p>
         <div className="qz-dim" style={{ fontSize: 13 }}>
           This page refreshes itself — no need to reload.{" "}

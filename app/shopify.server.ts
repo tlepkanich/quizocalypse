@@ -7,6 +7,7 @@ import {
 import { PrismaSessionStorage } from "@shopify/shopify-app-session-storage-prisma";
 import prisma from "./db.server";
 import { syncCatalog, ensureShop } from "./jobs/catalogSync";
+import { syncThemeTokens } from "./lib/themeSync.server";
 
 // TECH DEBT: Spec §3.1 requires OAuth tokens encrypted at rest. The
 // EncryptedSessionStorage wrapper is implemented at app/lib/encryptedSessionStorage.ts
@@ -36,6 +37,13 @@ const shopify = shopifyApp({
         await syncCatalog(admin, session.shop);
       } catch (err) {
         console.error("[afterAuth] catalog sync failed:", err);
+      }
+      // Seed brand color tokens from Shopify Branding (Dev Spec §3.1 / Step 2).
+      // Best-effort, non-destructive — never blocks install.
+      try {
+        await syncThemeTokens(admin, session.shop);
+      } catch (err) {
+        console.error("[afterAuth] theme token sync failed:", err);
       }
     },
   },

@@ -48,6 +48,23 @@ export function normalizeHex(input: string): string | null {
 }
 
 /**
+ * Map a shop's Shopify Branding colors (primary/secondary backgrounds) to our
+ * color tokens, normalizing hex and dropping invalid/empty values. Pure and
+ * Shopify-agnostic so it's unit-testable without the Admin API.
+ */
+export function brandColorsToTokens(input: {
+  primary?: string | null;
+  secondary?: string | null;
+}): Record<string, string> {
+  const out: Record<string, string> = {};
+  const p = input.primary ? normalizeHex(input.primary) : null;
+  const s = input.secondary ? normalizeHex(input.secondary) : null;
+  if (p) out.primary = p;
+  if (s) out.secondary = s;
+  return out;
+}
+
+/**
  * Merge a single merchant-picked brand color into a DesignTokens object as the
  * primary color (used by onboarding's "design from a hex" path). Invalid hex is
  * ignored (returns the tokens unchanged). Pure — returns a new object.

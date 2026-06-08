@@ -128,27 +128,6 @@ function AiWorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: C
           {isSaving ? "Saving…" : savedAt ? "Saved" : ""}
         </span>
         <div className="qz-row" style={{ gap: 8, alignItems: "center" }}>
-          <label className="qz-row" style={{ gap: 6, alignItems: "center", fontSize: 12 }}>
-            <span className="qz-dim">Placement</span>
-            <select
-              value={placement}
-              onChange={(e) => commit({ ...doc, placement: e.target.value as Placement })}
-              title="How this quiz appears on your storefront"
-              style={{
-                font: "inherit",
-                fontSize: 12,
-                padding: "4px 6px",
-                borderRadius: "var(--qz-radius)",
-                border: "1px solid #00000022",
-              }}
-            >
-              {PLACEMENTS.map((p) => (
-                <option key={p.value} value={p.value}>
-                  {p.label}
-                </option>
-              ))}
-            </select>
-          </label>
           <label
             className="qz-row"
             style={{ gap: 6, alignItems: "center", fontSize: 12 }}
@@ -171,6 +150,48 @@ function AiWorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: C
           <QzButton variant="primary" size="sm" disabled={!canPublish || isPublishing} onClick={publish}>
             {isPublishing ? "Publishing…" : "Publish"}
           </QzButton>
+        </div>
+      </div>
+
+      {/* Placement as visual cards at the publish step (Dev Spec §2 Step 7). The
+          current value is AI pre-selected at build time; the merchant overrides
+          with one click. */}
+      <div style={{ marginBottom: 16 }}>
+        <div className="qz-label" style={{ marginBottom: 8, fontSize: 12 }}>
+          Where should it appear?
+        </div>
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))",
+            gap: 8,
+          }}
+        >
+          {PLACEMENTS.map((p) => {
+            const sel = p.value === placement;
+            return (
+              <button
+                key={p.value}
+                type="button"
+                onClick={() => commit({ ...doc, placement: p.value })}
+                style={{
+                  textAlign: "left",
+                  padding: "8px 10px",
+                  borderRadius: "var(--qz-radius)",
+                  cursor: "pointer",
+                  border: sel ? "2px solid var(--qz-accent, #2a6df4)" : "1px solid #00000022",
+                  background: sel
+                    ? "color-mix(in srgb, var(--qz-accent, #2a6df4) 8%, transparent)"
+                    : "#fff",
+                }}
+              >
+                <div style={{ fontWeight: 600, fontSize: 12.5 }}>{p.label}</div>
+                <div className="qz-dim" style={{ fontSize: 11, marginTop: 2 }}>
+                  {p.hint}
+                </div>
+              </button>
+            );
+          })}
         </div>
       </div>
 
