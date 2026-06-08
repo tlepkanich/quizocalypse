@@ -36,6 +36,11 @@ export interface OnboardingBuildInput {
   // Optional brand-website URL (Dev Spec §3.2). Ingested for richer, on-brand
   // generated copy. Failures are swallowed — enrichment never blocks the build.
   websiteUrl?: string;
+  // When set, build into this EXISTING quiz row instead of creating one — used
+  // by startAiOnboardingBuild for the detached/async path (the row is
+  // pre-created so the request can redirect immediately). Omitted = legacy
+  // synchronous path (the function creates the row itself).
+  quizId?: string;
 }
 
 export interface OnboardingBuildResult {
@@ -52,15 +57,20 @@ export async function runAiOnboardingBuild(
 ): Promise<OnboardingBuildResult> {
   const { shopId, name } = input;
 
-  // 1. Seed the quiz, applying the merchant's picked design tokens, and create.
+  // 1. Seed the quiz, applying the merchant's picked design tokens. Reuse a
+  // pre-created row when quizId is supplied (async path); otherwise create one
+  // (legacy synchronous path). seedDoc is the in-memory working copy either way.
   const seed = buildSeedQuiz(name);
   const seedDoc: QuizDoc = input.designTokens
     ? Quiz.parse({ ...seed, design_tokens: input.designTokens })
     : seed;
-  const created = await prisma.quiz.create({
-    data: { shopId, name, status: "draft", draftJson: seedDoc as never },
-  });
-  const quizId = created.id;
+  const quizId =
+    input.quizId ??
+    (
+      await prisma.quiz.create({
+        data: { shopId, name, status: "draft", draftJson: seedDoc as never },
+      })
+    ).id;
 
   // 2. Catalog: a fallback collection is REQUIRED to create result pages.
   const [allProducts, allCollections, shop] = await Promise.all([
@@ -165,4 +175,52 @@ export async function runAiOnboardingBuild(
 async function persist(quizId: string, doc: QuizDoc): Promise<void> {
   const parsed = Quiz.parse(doc);
   await prisma.quiz.update({ where: { id: quizId }, data: { draftJson: parsed as never } });
+}
+
+/**
+ * Start an AI onboarding build WITHOUT blocking the request. Creates the quiz
+ * row immediately (status draft, buildState "building", seeded draft) so the
+ * caller can redirect straight into the editor, then runs the real build
+ * DETACHED. The editor polls `buildState`: it clears to null on completion
+ * (success OR a graceful degraded result) or becomes "error:<msg>" on an
+ * unexpected throw.
+ *
+ * Safe on Fly because the app runs an always-on machine (min_machines_running=1),
+ * so the floating promise survives after the response is sent. This decoupling
+ * is REQUIRED: the full build (~75s of sequential AI calls) outruns the edge
+ * proxy's ~60s connection timeout, so it cannot complete inline.
+ */
+export async function startAiOnboardingBuild(
+  input: Omit<OnboardingBuildInput, "quizId">,
+): Promise<{ quizId: string }> {
+  const seed = buildSeedQuiz(input.name);
+  const seedDoc: QuizDoc = input.designTokens
+    ? Quiz.parse({ ...seed, design_tokens: input.designTokens })
+    : seed;
+  const created = await prisma.quiz.create({
+    data: {
+      shopId: input.shopId,
+      name: input.name,
+      status: "draft",
+      buildState: "building",
+      draftJson: seedDoc as never,
+    },
+  });
+  const quizId = created.id;
+
+  // Detached — intentionally NOT awaited. runAiOnboardingBuild swallows its own
+  // failures (returns a degraded draft), so .then handles the normal path;
+  // .catch only fires on an unexpected throw.
+  void runAiOnboardingBuild({ ...input, quizId })
+    .then(() =>
+      prisma.quiz.update({ where: { id: quizId }, data: { buildState: null } }),
+    )
+    .catch(async (err) => {
+      const msg = err instanceof Error ? err.message : String(err);
+      await prisma.quiz
+        .update({ where: { id: quizId }, data: { buildState: `error:${msg.slice(0, 300)}` } })
+        .catch(() => {});
+    });
+
+  return { quizId };
 }

@@ -1,8 +1,10 @@
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "@remix-run/node";
 import { json } from "@remix-run/node";
-import { useLoaderData, useSearchParams } from "@remix-run/react";
+import { Link, useLoaderData, useRevalidator, useSearchParams } from "@remix-run/react";
+import { useEffect } from "react";
 import { StudioBuilder } from "../components/studio/StudioBuilder";
 import { AiEditWorkspace } from "../components/studio/AiEditWorkspace";
+import { QzPage, QzCard, QzBanner } from "../components/qz";
 import { requireStudioAccess, resolveStudioShop } from "../lib/studioAccess.server";
 import {
   loadQuizEditorDataForShop,
@@ -34,7 +36,13 @@ export const loader = async ({ params, request }: LoaderFunctionArgs) => {
     });
     abAnalytics = aggregateAllAbFunnels(data.doc, events);
   }
-  return json({ ...data, abAnalytics });
+  // Async-onboarding marker (separate tiny read — the shared editor loader
+  // doesn't surface it). Drives the polling "Building…" overlay below.
+  const buildRow = await prisma.quiz.findUnique({
+    where: { id },
+    select: { buildState: true },
+  });
+  return json({ ...data, abAnalytics, buildState: buildRow?.buildState ?? null });
 };
 
 export const action = async ({ params, request }: ActionFunctionArgs) => {
@@ -51,10 +59,94 @@ export const action = async ({ params, request }: ActionFunctionArgs) => {
 export default function StandaloneStudio() {
   const data = useLoaderData<typeof loader>();
   const [params] = useSearchParams();
+  const revalidator = useRevalidator();
+  const buildState = data.buildState;
+  // Escape hatch: ?force=1 bypasses the overlay (open the draft anyway, e.g. if
+  // a build stalled). The detached build keeps writing in the background.
+  const force = params.get("force") === "1";
+
+  // While the detached AI build runs, poll until buildState clears (→ editor)
+  // or flips to "error:". Re-validates the loader, which re-reads buildState.
+  useEffect(() => {
+    if (force || buildState !== "building") return;
+    const t = setInterval(() => {
+      if (revalidator.state === "idle") revalidator.revalidate();
+    }, 3000);
+    return () => clearInterval(t);
+  }, [force, buildState, revalidator]);
+
+  if (!force && buildState === "building") return <BuildingOverlay />;
+  if (!force && buildState?.startsWith("error:")) {
+    return <BuildError message={buildState.slice("error:".length)} />;
+  }
+
   // AI-first is the default surface; ?mode=advanced opens the full builder.
   return params.get("mode") === "advanced" ? (
     <StudioBuilder data={data} chrome="standalone" />
   ) : (
     <AiEditWorkspace data={data} chrome="standalone" />
+  );
+}
+
+// Live "Building…" overlay shown while the detached AI onboarding build runs.
+// The route polls (above), so this resolves itself the moment buildState clears.
+function BuildingOverlay() {
+  return (
+    <QzPage>
+      <style>{`@keyframes qzspin{to{transform:rotate(360deg)}}`}</style>
+      <QzCard
+        style={{
+          marginTop: 40,
+          padding: 40,
+          textAlign: "center",
+          display: "flex",
+          flexDirection: "column",
+          gap: 16,
+          alignItems: "center",
+        }}
+      >
+        <div
+          aria-hidden
+          style={{
+            width: 34,
+            height: 34,
+            borderRadius: "50%",
+            border: "3px solid var(--qz-rule, #e5e5e5)",
+            borderTopColor: "var(--qz-accent, #2a6df4)",
+            animation: "qzspin 0.8s linear infinite",
+          }}
+        />
+        <h2 className="qz-h1" style={{ margin: 0 }}>Building your quiz…</h2>
+        <p className="qz-dim" style={{ margin: 0, maxWidth: 460 }}>
+          Reading your catalog → grouping products into outcomes → writing
+          on-brand questions and result pages. This usually takes about a minute.
+        </p>
+        <div className="qz-dim" style={{ fontSize: 13 }}>
+          This page refreshes itself — no need to reload.{" "}
+          <Link to="?force=1" className="qz-link">
+            Taking too long? Open the builder →
+          </Link>
+        </div>
+      </QzCard>
+    </QzPage>
+  );
+}
+
+// Shown when the detached build threw. The seed/degraded draft still exists, so
+// the merchant can open it and finish manually, or start over.
+function BuildError({ message }: { message: string }) {
+  return (
+    <QzPage>
+      <QzCard style={{ marginTop: 40, padding: 32, display: "flex", flexDirection: "column", gap: 14 }}>
+        <h2 className="qz-h1" style={{ margin: 0 }}>The build hit a snag</h2>
+        <QzBanner tone="warn" title="AI couldn’t finish building this quiz">
+          {message || "Something went wrong while generating. You can open the builder and finish manually, or start over."}
+        </QzBanner>
+        <div className="qz-row" style={{ gap: 8 }}>
+          <Link to="/studio/onboarding" className="qz-btn qz-btn-accent">Try again</Link>
+          <Link to="?force=1" className="qz-btn qz-btn-ghost">Open the builder anyway</Link>
+        </div>
+      </QzCard>
+    </QzPage>
   );
 }

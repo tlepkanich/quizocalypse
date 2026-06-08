@@ -143,6 +143,11 @@ model Quiz {
   shopId        String
   name          String
   status        String   @default("draft")
+  // Transient async-build marker for AI onboarding: "building" while the
+  // detached build runs, "error:<msg>" on failure, null when done/normal.
+  // Lets the editor poll an overlay instead of blocking the request (the full
+  // AI build outruns the edge proxy's ~60s timeout).
+  buildState    String?
   draftJson     Json
   publishedJson Json?
   version       Int      @default(0)

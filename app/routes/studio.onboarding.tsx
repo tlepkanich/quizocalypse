@@ -5,7 +5,7 @@ import { useState } from "react";
 import { requireStudioAccess, resolveStudioShop } from "../lib/studioAccess.server";
 import prisma from "../db.server";
 import { parseBrandGuidelinesSafe } from "../lib/brandGuidelines";
-import { runAiOnboardingBuild } from "../lib/onboardingBuild.server";
+import { startAiOnboardingBuild } from "../lib/onboardingBuild.server";
 import type { QuizTone } from "../lib/claude";
 import {
   QzPage,
@@ -72,7 +72,10 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   const websiteUrl = String(form.get("websiteUrl") ?? "").slice(0, 300);
 
   try {
-    const result = await runAiOnboardingBuild({
+    // Kick the build off DETACHED and redirect immediately — the full AI build
+    // (~75s) outruns the edge proxy's ~60s timeout, so it can't run inline. The
+    // editor shows a polling overlay until the row's buildState clears.
+    const { quizId } = await startAiOnboardingBuild({
       shopId: shop.id,
       name,
       goalPrompt,
@@ -81,9 +84,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       flow: { welcome_message: false, email_gate: emailGate, mixed_input_types: false },
       ...(websiteUrl ? { websiteUrl } : {}),
     });
-    // Land straight in the AI editor; ?built carries the degraded hint (if any).
-    const q = result.degraded ? `?mode=ai&built=degraded` : `?mode=ai&built=1`;
-    return redirect(`/studio/${result.quizId}${q}`);
+    return redirect(`/studio/${quizId}?mode=ai`);
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     return json({ error: msg }, { status: 500 });
