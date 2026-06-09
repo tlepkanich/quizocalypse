@@ -93,6 +93,9 @@ export default function StudioIndex() {
                 <Link to={`/studio/${q.id}`} className="qz-btn qz-btn-primary qz-btn-sm">
                   Open builder →
                 </Link>
+                <Link to={`/studio/${q.id}/analytics`} className="qz-btn qz-btn-ghost qz-btn-sm">
+                  Analytics
+                </Link>
                 <a
                   href={`/q/${q.id}`}
                   target="_blank"

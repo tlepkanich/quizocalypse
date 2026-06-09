@@ -6,6 +6,7 @@ import { authenticate } from "../shopify.server";
 import prisma from "../db.server";
 import { Quiz } from "../lib/quizSchema";
 import { findAbBranches, aggregateVariantFunnel } from "../lib/abAnalytics";
+import { perQuestionDropoff, conversionSummary } from "../lib/funnelAggregation";
 import {
   QzPage,
   QzPageHeader,
@@ -89,10 +90,26 @@ export const loader = async ({ params, request }: LoaderFunctionArgs) => {
     take: 25,
   });
 
+  // Server-side sessions → conversion rate (QuizSession.converted is set by the
+  // orders/create webhook). Per-question drop-off from question_answered events.
+  const sessionRows = await prisma.quizSession.findMany({
+    where: { quizId: quiz.id },
+    select: { completedAt: true, converted: true },
+  });
+  const conversion = conversionSummary(sessionRows);
+  const questions = parsedDoc.success
+    ? parsedDoc.data.nodes.flatMap((n) =>
+        n.type === "question" ? [{ id: n.id, text: n.data.text }] : [],
+      )
+    : [];
+  const dropoff = perQuestionDropoff(eventRows, questions, started);
+
   return json({
     quiz: { id: quiz.id, name: quiz.name, status: quiz.status },
     abTests,
     funnel: { started, answered, completed, viewed, clicked },
+    conversion,
+    dropoff,
     earliest: earliest ? earliest.toISOString() : null,
     latest: latest ? latest.toISOString() : null,
     captureCount: captures.length,
@@ -166,6 +183,11 @@ export default function QuizAnalytics() {
               : "—"
           }
         />
+        <QzStat
+          label="Conversion rate"
+          value={`${(data.conversion.rate * 100).toFixed(1)}%`}
+          delta={`${data.conversion.converted} of ${data.conversion.completed} completed → bought`}
+        />
       </QzStatGrid>
 
       <section
@@ -190,6 +212,27 @@ export default function QuizAnalytics() {
             <FunnelRow label="Saw recommendations" value={funnel.viewed} />
             <FunnelRow label="Clicked a product" value={funnel.clicked} last />
           </QzCard>
+
+          {data.dropoff.length > 0 && (
+            <>
+              <div className="qz-section-head">
+                <div>
+                  <div className="qz-label">Per question</div>
+                  <h2 className="qz-h1 qz-mt-8">Drop-off by question</h2>
+                </div>
+              </div>
+              <QzCard flush>
+                {data.dropoff.map((q, i) => (
+                  <FunnelRow
+                    key={q.questionId}
+                    label={`${i + 1}. ${q.text.length > 44 ? `${q.text.slice(0, 43)}…` : q.text} · ${Math.round(q.pctOfStarted * 100)}%`}
+                    value={q.answered}
+                    last={i === data.dropoff.length - 1}
+                  />
+                ))}
+              </QzCard>
+            </>
+          )}
         </div>
 
         <div className="qz-col qz-gap-16">
