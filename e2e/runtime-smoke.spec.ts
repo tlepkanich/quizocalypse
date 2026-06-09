@@ -70,19 +70,38 @@ for (const q of QUIZZES) {
       await shot("1-intro");
       await checkSanity("intro");
 
-      // Walk forward: click the first non-trail action button each step until
-      // the result page (which shows a "Start over" button).
-      for (let i = 0; i < 10; i++) {
-        const startOver = page.getByRole("button", { name: /start over/i });
-        if (await startOver.count()) {
+      // Walk forward to the result, handling each input shape: single-select &
+      // tiles advance on click; multi-select needs a tick then an enabled
+      // "Next"; text / email / number inputs get filled so a gated submit opens.
+      for (let i = 0; i < 12; i++) {
+        if (await page.getByRole("button", { name: /start over/i }).count()) {
           await shot("9-result");
           await checkSanity("result");
           return;
         }
+        // Fill any free-text inputs (text/email/number) to unblock a gated Next.
+        const inputs = page.locator(
+          '.qz-runtime-content input:not([type="checkbox"]):not([type="radio"]):not([type="color"]):not([type="range"])',
+        );
+        for (let k = 0; k < (await inputs.count()); k++) {
+          const type = await inputs.nth(k).getAttribute("type");
+          await inputs
+            .nth(k)
+            .fill(type === "email" ? "a@b.co" : type === "number" ? "3" : "test")
+            .catch(() => {});
+        }
+        // Multi-select / multi-choice: tick the first option to enable submit.
+        const choice = page
+          .locator(
+            '.qz-runtime-content input[type="checkbox"], .qz-runtime-content input[type="radio"]',
+          )
+          .first();
+        if (await choice.count()) await choice.click().catch(() => {});
+
         const action = page
           .locator('.qz-runtime-content button:not([title="Jump back to this question"])')
           .first();
-        if (!(await action.count())) break;
+        if (!(await action.count()) || !(await action.isEnabled().catch(() => false))) break;
         await action.click();
         await page.waitForTimeout(450);
         await shot(`${i + 2}-step`);
