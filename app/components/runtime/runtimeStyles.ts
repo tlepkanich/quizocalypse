@@ -26,7 +26,10 @@ export function googleFontsUrl(families: string[]): string | null {
   return `https://fonts.googleapis.com/css2?${params.join("&")}&display=swap`;
 }
 
-export const stylesFor = (t: DesignTokensT) => ({
+export const stylesFor = (
+  t: DesignTokensT,
+  breakpoint: "desktop" | "mobile" = "mobile",
+) => ({
   page: {
     minHeight: "100vh",
     background: "#FAFAFA",
@@ -41,9 +44,13 @@ export const stylesFor = (t: DesignTokensT) => ({
   card: {
     background: "var(--qz-color-bg)",
     borderRadius: "var(--qz-radius)",
-    padding: "calc(var(--qz-pad) * 1.6)",
-    boxShadow: "0 4px 24px rgba(0,0,0,0.06)",
-    maxWidth: 560,
+    padding:
+      breakpoint === "desktop"
+        ? "calc(var(--qz-pad) * 2)"
+        : "calc(var(--qz-pad) * 1.6)",
+    boxShadow: "var(--qz-shadow)",
+    // Desktop widens the surface; mobile stays a comfortable reading column.
+    maxWidth: breakpoint === "desktop" ? 720 : 560,
     width: "100%",
   } satisfies React.CSSProperties,
   primaryBtn: {
@@ -97,6 +104,19 @@ export const stylesFor = (t: DesignTokensT) => ({
     alignItems: "center" as const,
     textDecoration: "none",
     color: "var(--qz-color-text)",
+  } satisfies React.CSSProperties,
+  // Answer cards and result products go 2-up on desktop, 1-up on mobile — so a
+  // wide viewport fills with content instead of a narrow column + whitespace.
+  answerGrid: {
+    marginTop: 20,
+    display: "grid",
+    gap: 12,
+    gridTemplateColumns: breakpoint === "desktop" ? "repeat(2, minmax(0, 1fr))" : "1fr",
+  } satisfies React.CSSProperties,
+  productGrid: {
+    display: "grid",
+    gap: 12,
+    gridTemplateColumns: breakpoint === "desktop" ? "repeat(2, minmax(0, 1fr))" : "1fr",
   } satisfies React.CSSProperties,
   h1: {
     margin: 0,

@@ -28,6 +28,7 @@ export const DEFAULT_TOKENS: DesignTokensT = {
   radius: "rounded",
   button_style: "filled",
   spacing: "normal",
+  shadow: "soft",
 };
 
 // A #RGB or #RRGGBB hex string (with or without the leading #).
@@ -106,6 +107,7 @@ export function resolveDesignTokens(
     if (layer.radius) out.radius = layer.radius;
     if (layer.button_style) out.button_style = layer.button_style;
     if (layer.spacing) out.spacing = layer.spacing;
+    if (layer.shadow) out.shadow = layer.shadow;
   }
   return out;
 }
@@ -133,6 +135,13 @@ export function tokensToCssVars(t: DesignTokensT): Record<string, string> {
     spacing === "compact" ? "12px" : spacing === "spacious" ? "32px" : "20px";
   const baseSize = t.typography?.body?.base_size ?? 16;
   const scale = t.typography?.body?.scale_ratio ?? 1.25;
+  const shadow = t.shadow ?? "soft";
+  const shadowCss =
+    shadow === "none"
+      ? "none"
+      : shadow === "elevated"
+        ? "0 14px 44px rgba(0,0,0,0.13)"
+        : "0 4px 24px rgba(0,0,0,0.06)";
   return {
     "--qz-color-primary": t.colors?.primary ?? "#5563DE",
     "--qz-color-secondary": t.colors?.secondary ?? "#2C7A4B",
@@ -147,6 +156,7 @@ export function tokensToCssVars(t: DesignTokensT): Record<string, string> {
     "--qz-h2-size": `${baseSize * scale * scale}px`,
     "--qz-radius": radiusPx,
     "--qz-pad": pad,
+    "--qz-shadow": shadowCss,
   };
 }
 

@@ -1,5 +1,5 @@
 import { Quiz } from "./quizSchema";
-import { ATELIER_TOKENS } from "./themePresets";
+import { HOUSE_TOKENS } from "./themePresets";
 
 // Minimal valid quiz a fresh "New quiz" creates — an intro + one starter
 // question, wired. The merchant then groups products into buckets (Step 1),
@@ -15,7 +15,7 @@ export function buildSeedQuiz(name: string): Quiz {
     quiz_id: `quiz_${Math.random().toString(36).slice(2, 10)}`,
     status: "draft",
     scope: { collection_ids: [] },
-    design_tokens: ATELIER_TOKENS,
+    design_tokens: HOUSE_TOKENS,
     nodes: [
       {
         id: "intro",

@@ -1,6 +1,6 @@
 import { Quiz } from "./quizSchema";
 import type { Quiz as QuizDoc } from "./quizSchema";
-import { ATELIER_TOKENS } from "./themePresets";
+import { HOUSE_TOKENS } from "./themePresets";
 
 // ───────────────────────────────────────────────────────────────────────────
 // One-click DEMO quiz — a complete, publishable showcase that exercises the
@@ -200,6 +200,6 @@ export function buildDemoQuiz(fallbackCollectionId: string): QuizDoc {
       once_per_customer: true,
       title: "Quiz reward",
     },
-    design_tokens: ATELIER_TOKENS,
+    design_tokens: HOUSE_TOKENS,
   });
 }

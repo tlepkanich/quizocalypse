@@ -149,7 +149,7 @@ export function QuizRuntime(props: QuizRuntimeProps) {
     doc.nodes,
   ]);
 
-  const styles = useMemo(() => stylesFor(resolved), [resolved]);
+  const styles = useMemo(() => stylesFor(resolved, breakpoint), [resolved, breakpoint]);
   const cssVars = useMemo(
     () => tokensToCssVars(resolved) as React.CSSProperties,
     [resolved],
@@ -1394,7 +1394,7 @@ function QuestionView({
     return (
       <div style={styles.card}>
         <h2 style={styles.h2}>{node.data.text}</h2>
-        <div style={{ marginTop: 20, display: "grid", gap: 12 }}>
+        <div style={styles.answerGrid}>
           {node.data.answers.map((a) => (
             <label
               key={a.id}
@@ -1590,7 +1590,7 @@ function QuestionView({
   return (
     <div style={styles.card}>
       <h2 style={styles.h2}>{node.data.text}</h2>
-      <div style={{ marginTop: 20, display: "grid", gap: 12 }}>
+      <div style={styles.answerGrid}>
         {node.data.answers.map((a) => (
           <button
             key={a.id}
@@ -2519,7 +2519,7 @@ function ResultView({
           🎁 {discountLabel} on these picks — applied automatically at checkout.
         </div>
       ) : null}
-      <div style={{ marginTop: bare && !discountLabel ? 0 : 20, display: "grid", gap: 12 }}>
+      <div style={{ marginTop: bare && !discountLabel ? 0 : 20, ...styles.productGrid }}>
         {recs.length === 0 && (
           <p style={{ color: "var(--qz-color-muted)" }}>
             No products to show. Add a fallback collection in the editor.
@@ -2556,7 +2556,7 @@ function ResultView({
           <h3 style={{ ...styles.h2, fontSize: "0.8em", margin: "0 0 12px" }}>
             You might also like
           </h3>
-          <div style={{ display: "grid", gap: 12 }}>
+          <div style={styles.productGrid}>
             {secondary.map((r, idx) => (
               <ProductCard
                 key={r.product_id}
@@ -2777,7 +2777,7 @@ function StageSection({
       {stage.subtext && (
         <p style={{ ...styles.muted, marginTop: 6 }}>{stage.subtext}</p>
       )}
-      <div style={{ marginTop: 12, display: "grid", gap: 12 }}>
+      <div style={{ marginTop: 12, ...styles.productGrid }}>
         {recs.length === 0 && (
           <p style={{ color: "var(--qz-color-muted)" }}>
             No products to show for this section.

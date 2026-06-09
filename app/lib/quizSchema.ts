@@ -558,6 +558,8 @@ export const DesignTokens = z
     radius: z.enum(["square", "rounded", "pill"]).optional(),
     button_style: z.enum(["filled", "outline", "ghost"]).optional(),
     spacing: z.enum(["compact", "normal", "spacious"]).optional(),
+    // Card elevation — distinguishes flat editorial from lifted/glowing themes.
+    shadow: z.enum(["none", "soft", "elevated"]).optional(),
   })
   .partial();
 export type DesignTokens = z.infer<typeof DesignTokens>;
