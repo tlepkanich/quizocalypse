@@ -89,21 +89,32 @@ export default function StudioIndex() {
               <div className="qz-dim" style={{ fontSize: 12 }}>
                 v{q.version} · updated {new Date(q.updatedAt).toLocaleDateString()}
               </div>
-              <div className="qz-row" style={{ gap: 8, marginTop: "auto" }}>
-                <Link to={`/studio/${q.id}`} className="qz-btn qz-btn-primary qz-btn-sm">
+              <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: "auto" }}>
+                <Link
+                  to={`/studio/${q.id}`}
+                  className="qz-btn qz-btn-primary qz-btn-sm"
+                  style={{ width: "100%", justifyContent: "center" }}
+                >
                   Open builder →
                 </Link>
-                <Link to={`/studio/${q.id}/analytics`} className="qz-btn qz-btn-ghost qz-btn-sm">
-                  Analytics
-                </Link>
-                <a
-                  href={`/q/${q.id}`}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="qz-btn qz-btn-ghost qz-btn-sm"
-                >
-                  Preview
-                </a>
+                <div className="qz-row" style={{ gap: 8 }}>
+                  <Link
+                    to={`/studio/${q.id}/analytics`}
+                    className="qz-btn qz-btn-ghost qz-btn-sm"
+                    style={{ flex: 1, justifyContent: "center" }}
+                  >
+                    Analytics
+                  </Link>
+                  <a
+                    href={`/q/${q.id}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="qz-btn qz-btn-ghost qz-btn-sm"
+                    style={{ flex: 1, justifyContent: "center" }}
+                  >
+                    Preview
+                  </a>
+                </div>
               </div>
             </QzCard>
           ))}
