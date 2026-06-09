@@ -426,6 +426,7 @@ const EDIT_QUIZ_SYSTEM_PROMPT =
   "Translate the merchant's request into the minimal set of ops. Reference ONLY node ids and answer ids that appear in the QUIZ OUTLINE. " +
   "Use ONLY tags that appear in the CATALOG SUMMARY — never invent tags. Preserve everything the merchant did not ask to change. " +
   "Use edit_question or set_text for wording; add_question / remove_node / reorder_question for structure; add_answer / remove_answer for options. " +
+  "Use set_theme to restyle the WHOLE quiz when the merchant asks for a different look or vibe (preset is one of: linen, minimal, editorial, bold, pastel, dark). " +
   "Always include a one-sentence, friendly assistant_message describing what you changed. Output nothing outside the tool call.";
 
 // Loose JSON Schema (the discriminated-union strictness is enforced by the Zod
@@ -447,7 +448,8 @@ const editQuizToolJsonSchema = {
         "add_question {after_node_id?, text, question_type(single_select|multi_select), answers:[{text, tags[]}]}; " +
         "remove_node {node_id}; add_answer {node_id, text, tags[]}; remove_answer {node_id, answer_id}; " +
         "reorder_question {node_id, before_node_id|null}; " +
-        "set_education_card {node_id, value} (a one-line teaching card shown before a question; empty value clears it; max 1 per quiz).",
+        "set_education_card {node_id, value} (a one-line teaching card shown before a question; empty value clears it; max 1 per quiz); " +
+        "set_theme {preset} (restyle the whole quiz; preset is one of linen|minimal|editorial|bold|pastel|dark).",
       items: {
         type: "object",
         required: ["op"],
@@ -463,6 +465,7 @@ const editQuizToolJsonSchema = {
               "remove_answer",
               "reorder_question",
               "set_education_card",
+              "set_theme",
             ],
           },
           node_id: { type: "string" },
@@ -471,6 +474,11 @@ const editQuizToolJsonSchema = {
             enum: ["headline", "subtext", "text", "button_label", "cta_label"],
           },
           value: { type: "string" },
+          // keep in sync with THEME_PRESETS ids in themePresets.ts
+          preset: {
+            type: "string",
+            enum: ["linen", "minimal", "editorial", "bold", "pastel", "dark"],
+          },
           text: { type: "string" },
           question_type: { type: "string", enum: ["single_select", "multi_select"] },
           after_node_id: { type: "string" },

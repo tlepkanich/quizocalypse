@@ -8,6 +8,8 @@ import {
   moveStep,
   straightThroughRun,
 } from "./quizMutations";
+import { getPreset } from "./themePresets";
+import { resolveDesignTokens } from "./designTokens";
 
 // ───────────────────────────────────────────────────────────────────────────
 // Inline AI chat edit — the deterministic OPS engine (the Dev Spec's "Call 2").
@@ -107,6 +109,13 @@ export const EditOp = z.discriminatedUnion("op", [
     op: z.literal("set_education_card"),
     node_id: z.string().min(1),
     value: z.string(),
+  }),
+  // Restyle the WHOLE quiz with a vetted theme preset ("make it dark", "use the
+  // editorial look"). The AI picks from a closed preset set by id — it never
+  // authors raw tokens; applyEditOps resolves the preset's curated token pack.
+  z.object({
+    op: z.literal("set_theme"),
+    preset: z.string().min(1),
   }),
 ]);
 export type EditOp = z.infer<typeof EditOp>;
@@ -240,6 +249,18 @@ export function applyEditOps(doc: QuizDoc, ops: EditOp[]): ApplyEditResult {
               ? ({ ...n, data: { ...n.data, [op.field]: op.value } } as typeof n)
               : n,
           ),
+        };
+        break;
+      }
+      case "set_theme": {
+        const preset = getPreset(op.preset);
+        if (!preset) {
+          warnings.push(`set_theme: unknown theme "${op.preset}"`);
+          break;
+        }
+        working = {
+          ...working,
+          design_tokens: resolveDesignTokens(preset.tokens) as typeof working.design_tokens,
         };
         break;
       }

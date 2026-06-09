@@ -505,14 +505,54 @@ export function QuizRuntime(props: QuizRuntimeProps) {
       };
       content = <BlockRenderer node={node} blocks={layout} ctx={blockCtx} />;
     } else if (currentNode.type === "intro") {
+      // Desktop renders the intro as a spacious, centered hero (bigger headline,
+      // airier padding) rather than a small card — a stronger first impression.
+      const introDesktop = breakpoint === "desktop";
       content = (
-        <div style={styles.card}>
-          <h1 style={styles.h1}>{currentNode.data.headline}</h1>
+        <div
+          style={
+            introDesktop
+              ? { ...styles.card, maxWidth: 760, textAlign: "center", padding: "56px 44px" }
+              : styles.card
+          }
+        >
+          <h1
+            style={
+              introDesktop
+                ? { ...styles.h1, fontSize: "calc(var(--qz-h1-size) * 1.35)", lineHeight: 1.1 }
+                : styles.h1
+            }
+          >
+            {currentNode.data.headline}
+          </h1>
           {currentNode.data.subtext && (
-            <p style={styles.muted}>{currentNode.data.subtext}</p>
+            <p
+              style={
+                introDesktop
+                  ? {
+                      ...styles.muted,
+                      fontSize: "calc(var(--qz-base-size) * 1.2)",
+                      marginTop: 16,
+                      maxWidth: 540,
+                      marginLeft: "auto",
+                      marginRight: "auto",
+                    }
+                  : styles.muted
+              }
+            >
+              {currentNode.data.subtext}
+            </p>
           )}
           <button
-            style={styles.primaryBtn}
+            style={
+              introDesktop
+                ? {
+                    ...styles.primaryBtn,
+                    fontSize: "calc(var(--qz-base-size) * 1.05)",
+                    padding: "calc(var(--qz-pad) / 1.5) calc(var(--qz-pad) * 1.6)",
+                  }
+                : styles.primaryBtn
+            }
             onClick={() => gotoNextFrom(currentNode.id, null)}
           >
             {currentNode.data.button_label}
@@ -2602,7 +2642,7 @@ function ResultView({
   if (bare) return inner;
   return (
     <div style={styles.card}>
-      <h2 style={styles.h2}>{headline}</h2>
+      <h2 style={styles.resultHeadline}>{headline}</h2>
       {subtext && <p style={{ ...styles.muted, marginTop: 8 }}>{subtext}</p>}
       <WhyBullets bullets={whyBullets} styles={styles} />
       {inner}
@@ -2732,7 +2772,7 @@ function MultiStageResultView({
   if (bare) return inner;
   return (
     <div style={styles.card}>
-      <h2 style={styles.h2}>{headline}</h2>
+      <h2 style={styles.resultHeadline}>{headline}</h2>
       {subtext && <p style={{ ...styles.muted, marginTop: 8 }}>{subtext}</p>}
       <WhyBullets bullets={whyBullets} styles={styles} />
       {inner}

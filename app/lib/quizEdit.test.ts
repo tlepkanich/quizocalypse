@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { Quiz } from "./quizSchema";
 import { applyEditOps, outlineQuiz, EditOp } from "./quizEdit";
+import { getPreset } from "./themePresets";
 
 // Minimal valid quiz: intro → q1 → q2 → result. Parsed fresh each call so the
 // purity test can compare against an untouched baseline.
@@ -90,6 +91,24 @@ describe("applyEditOps", () => {
       EditOp.parse({ op: "set_education_card", node_id: "intro", value: "x" }),
     ]);
     expect(warnings.join()).toMatch(/not a question/);
+    expectValid(doc);
+  });
+
+  it("set_theme applies a vetted preset's design tokens and stays valid", () => {
+    const darkBg = getPreset("dark")?.tokens.colors?.background;
+    const { doc, warnings } = applyEditOps(base(), [
+      EditOp.parse({ op: "set_theme", preset: "dark" }),
+    ]);
+    expect(warnings).toEqual([]);
+    expect(doc.design_tokens?.colors?.background).toBe(darkBg);
+    expectValid(doc);
+  });
+
+  it("set_theme with an unknown preset is skipped with a warning", () => {
+    const { doc, warnings } = applyEditOps(base(), [
+      EditOp.parse({ op: "set_theme", preset: "nope" }),
+    ]);
+    expect(warnings.join()).toMatch(/unknown theme/);
     expectValid(doc);
   });
 

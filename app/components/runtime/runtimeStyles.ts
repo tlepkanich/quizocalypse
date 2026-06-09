@@ -118,6 +118,14 @@ export const stylesFor = (
     gap: 12,
     gridTemplateColumns: breakpoint === "desktop" ? "repeat(2, minmax(0, 1fr))" : "1fr",
   } satisfies React.CSSProperties,
+  // The result headline gets hero scale on desktop — the climax of the quiz.
+  resultHeadline: {
+    margin: 0,
+    fontSize: breakpoint === "desktop" ? "calc(var(--qz-h2-size) * 1.3)" : "var(--qz-h2-size)",
+    fontFamily: "var(--qz-font-heading)",
+    lineHeight: 1.15,
+    color: "var(--qz-color-text)",
+  } satisfies React.CSSProperties,
   h1: {
     margin: 0,
     fontSize: "var(--qz-h1-size)",
