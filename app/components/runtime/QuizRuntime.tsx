@@ -794,7 +794,7 @@ export function QuizRuntime(props: QuizRuntimeProps) {
            breakpoint class on the root, NOT the window. */
         .qz-bp-desktop .qz-runtime-page { align-items: flex-start !important; justify-content: center !important; padding-top: 64px !important; }
         .qz-bp-desktop .qz-runtime-shell { flex-direction: row; align-items: flex-start; max-width: 1100px; gap: 40px; }
-        .qz-bp-desktop .qz-runtime-content { flex: 1; min-width: 0; display: flex; justify-content: center; }
+        .qz-bp-desktop .qz-runtime-content { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: center; }
         .qz-bp-desktop .qz-preview-rail { flex: 0 0 320px; position: sticky; top: 64px; }
         .qz-bp-desktop .qz-preview-chip { display: none !important; }
         .qz-bp-mobile .qz-preview-rail { display: none; }
@@ -816,7 +816,8 @@ export function QuizRuntime(props: QuizRuntimeProps) {
             flex: 1;
             min-width: 0;
             display: flex;
-            justify-content: center;
+            flex-direction: column;
+            align-items: center;
           }
           .qz-preview-rail {
             flex: 0 0 320px;
@@ -947,7 +948,17 @@ function ProgressTrail({
   return (
     <div
       aria-label="Quiz progress"
-      style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 16, maxWidth: 560, width: "100%" }}
+      style={{
+        display: "flex",
+        gap: 6,
+        flexWrap: "wrap",
+        // Pin wrapped rows to the top so a pill can never stretch vertically
+        // (which, in a stretched flex parent, turned them into tall ovals).
+        alignContent: "flex-start",
+        marginBottom: 16,
+        maxWidth: 560,
+        width: "100%",
+      }}
     >
       {path.map((s, i) => (
         <button
