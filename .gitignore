@@ -25,3 +25,8 @@ pnpm-lock.yaml
 
 # Claude Code session state
 .claude/
+
+# Playwright e2e smoke-test artifacts (screenshots + reports)
+/e2e/shots/
+/test-results/
+/playwright-report/
