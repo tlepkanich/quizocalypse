@@ -129,7 +129,11 @@ export function resolveForBreakpoint(
 // var(--token-name).
 export function tokensToCssVars(t: DesignTokensT): Record<string, string> {
   const radius = t.radius ?? "rounded";
-  const radiusPx = radius === "square" ? "0px" : radius === "pill" ? "999px" : "10px";
+  // "pill" caps at 24px (not 999px): a ≤48px-tall button still renders as a full
+  // pill (radius ≥ half its height), but a tall card/answer/product surface stays
+  // nicely rounded instead of ballooning into an oval/stadium. 999px on a big
+  // container is the "big oval" bug.
+  const radiusPx = radius === "square" ? "0px" : radius === "pill" ? "24px" : "10px";
   const spacing = t.spacing ?? "normal";
   const pad =
     spacing === "compact" ? "12px" : spacing === "spacious" ? "32px" : "20px";

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { normalizeHex, mergeHexIntoTokens } from "./designTokens";
+import { normalizeHex, mergeHexIntoTokens, tokensToCssVars } from "./designTokens";
 
 describe("normalizeHex", () => {
   it("accepts #rrggbb and #rgb (with/without #), lowercased + expanded", () => {
@@ -32,5 +32,15 @@ describe("mergeHexIntoTokens", () => {
   it("returns tokens unchanged for invalid hex", () => {
     const t = { colors: { primary: "#123456" } };
     expect(mergeHexIntoTokens(t, "not-a-color").colors).toEqual({ primary: "#123456" });
+  });
+});
+
+describe("tokensToCssVars radius (the 'big oval' fix)", () => {
+  it("caps the pill radius at 24px so tall cards/answers don't balloon into ovals", () => {
+    expect(tokensToCssVars({ radius: "pill" })["--qz-radius"]).toBe("24px");
+  });
+  it("keeps square at 0 and rounded (default) at 10px", () => {
+    expect(tokensToCssVars({ radius: "square" })["--qz-radius"]).toBe("0px");
+    expect(tokensToCssVars({})["--qz-radius"]).toBe("10px");
   });
 });
