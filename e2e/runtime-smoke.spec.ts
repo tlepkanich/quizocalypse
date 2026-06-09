@@ -99,7 +99,9 @@ for (const q of QUIZZES) {
         if (await choice.count()) await choice.click().catch(() => {});
 
         const action = page
-          .locator('.qz-runtime-content button:not([title="Jump back to this question"])')
+          .locator(
+            '.qz-runtime-content button:not([title="Jump back to this question"]):not([aria-label="More info"])',
+          )
           .first();
         if (!(await action.count()) || !(await action.isEnabled().catch(() => false))) break;
         await action.click();

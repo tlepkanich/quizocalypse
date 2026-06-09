@@ -569,6 +569,12 @@ export function QuizRuntime(props: QuizRuntimeProps) {
           node={currentNode}
           styles={styles}
           tokens={resolved}
+          onTooltipView={(answerId) =>
+            analyticsRef.current?.track("tooltip_viewed", {
+              question_id: currentNode.id,
+              answer_id: answerId,
+            })
+          }
           onAdvance={(answerIds, handle) => {
             analyticsRef.current?.track("question_answered", {
               question_id: currentNode.id,
@@ -1319,14 +1325,75 @@ function EducationCard({
 // option's tradeoff in plain English. Always-visible rather than a hover/click
 // popover because answer options are themselves <button>/<label> elements: a
 // nested interactive tooltip would be invalid markup and unreliable on touch.
-function AnswerLabel({ text, tooltip }: { text: string; tooltip?: string }) {
-  if (!tooltip) return <>{text}</>;
+// A revealable info tooltip for an answer option (Answer.tooltip_text, baked at
+// publish — Dev Spec §4.1/§8). The ⓘ chip is a SIBLING of the answer control,
+// never nested inside the <button>/<label> (which would be invalid markup and
+// unreliable on touch); it's absolutely positioned in the card corner, and its
+// onClick stops propagation so revealing the tooltip never selects the answer.
+// Fires tooltip_viewed once, on first reveal.
+function TooltipChip({ text, onReveal }: { text: string; onReveal: () => void }) {
+  const [open, setOpen] = useState(false);
+  const seenRef = useRef(false);
   return (
-    <span style={{ display: "grid", gap: 2, textAlign: "left" }}>
-      <span>{text}</span>
-      <span style={{ fontSize: 12, opacity: 0.7, fontWeight: 400, lineHeight: 1.35 }}>
-        {tooltip}
-      </span>
+    <span style={{ position: "absolute", top: 8, right: 8, zIndex: 2 }}>
+      <button
+        type="button"
+        aria-label="More info"
+        aria-expanded={open}
+        onClick={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          setOpen((o) => {
+            if (!o && !seenRef.current) {
+              seenRef.current = true;
+              onReveal();
+            }
+            return !o;
+          });
+        }}
+        style={{
+          width: 22,
+          height: 22,
+          borderRadius: "50%",
+          border: "1px solid #00000033",
+          background: "var(--qz-color-bg, #fff)",
+          color: "var(--qz-color-muted, #777)",
+          fontFamily: "Georgia, 'Times New Roman', serif",
+          fontStyle: "italic",
+          fontSize: 13,
+          lineHeight: 1,
+          cursor: "pointer",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+        }}
+      >
+        i
+      </button>
+      {open ? (
+        <span
+          role="tooltip"
+          style={{
+            position: "absolute",
+            top: 27,
+            right: 0,
+            width: 220,
+            maxWidth: "70vw",
+            zIndex: 5,
+            background: "var(--qz-color-text, #1b1a17)",
+            color: "var(--qz-color-bg, #fff)",
+            fontSize: 12.5,
+            fontWeight: 400,
+            lineHeight: 1.4,
+            padding: "8px 11px",
+            borderRadius: 8,
+            boxShadow: "0 6px 20px rgba(0,0,0,0.18)",
+            textAlign: "left",
+          }}
+        >
+          {text}
+        </span>
+      ) : null}
     </span>
   );
 }
@@ -1336,11 +1403,13 @@ function QuestionView({
   onAdvance,
   styles,
   tokens,
+  onTooltipView,
 }: {
   node: Extract<QuizDoc["nodes"][number], { type: "question" }>;
   onAdvance: (answerIds: string[], handle: string | null) => void;
   styles: ReturnType<typeof stylesFor>;
   tokens: DesignTokensT;
+  onTooltipView?: (answerId: string) => void;
 }) {
   const [checked, setChecked] = useState<Record<string, boolean>>({});
   // Slider defaults to its midpoint so it's immediately submittable + shows a value.
@@ -1447,27 +1516,31 @@ function QuestionView({
         <h2 style={styles.h2}>{node.data.text}</h2>
         <div style={styles.answerGrid}>
           {node.data.answers.map((a) => (
-            <label
-              key={a.id}
-              style={{
-                ...styles.answerBtn,
-                display: "flex",
-                gap: 12,
-                alignItems: "center",
-                borderColor: checked[a.id]
-                  ? "var(--qz-color-primary)"
-                  : "#00000022",
-              }}
-            >
-              <input
-                type="checkbox"
-                checked={!!checked[a.id]}
-                onChange={(e) =>
-                  setChecked({ ...checked, [a.id]: e.target.checked })
-                }
-              />
-              <AnswerLabel text={a.text} tooltip={a.tooltip_text} />
-            </label>
+            <div key={a.id} style={{ position: "relative" }}>
+              <label
+                style={{
+                  ...styles.answerBtn,
+                  display: "flex",
+                  gap: 12,
+                  alignItems: "center",
+                  borderColor: checked[a.id]
+                    ? "var(--qz-color-primary)"
+                    : "#00000022",
+                }}
+              >
+                <input
+                  type="checkbox"
+                  checked={!!checked[a.id]}
+                  onChange={(e) =>
+                    setChecked({ ...checked, [a.id]: e.target.checked })
+                  }
+                />
+                {a.text}
+              </label>
+              {a.tooltip_text ? (
+                <TooltipChip text={a.tooltip_text} onReveal={() => onTooltipView?.(a.id)} />
+              ) : null}
+            </div>
           ))}
         </div>
         <button
@@ -1573,6 +1646,7 @@ function QuestionView({
           {node.data.answers.map((a) => (
             <button
               key={a.id}
+              title={a.tooltip_text ?? a.text}
               style={{ ...styles.answerBtn, flex: "1 1 auto", minWidth: 56, textAlign: "center" }}
               onMouseEnter={(e) => {
                 e.currentTarget.style.borderColor = "var(--qz-color-primary)";
@@ -1582,7 +1656,7 @@ function QuestionView({
               }}
               onClick={() => onAdvance([a.id], a.edge_handle_id)}
             >
-              <AnswerLabel text={a.text} tooltip={a.tooltip_text} />
+              {a.text}
             </button>
           ))}
         </div>
@@ -1643,8 +1717,8 @@ function QuestionView({
       <h2 style={styles.h2}>{node.data.text}</h2>
       <div style={styles.answerGrid}>
         {node.data.answers.map((a) => (
+          <div key={a.id} style={{ position: "relative" }}>
           <button
-            key={a.id}
             style={styles.answerBtn}
             onMouseEnter={(e) => {
               e.currentTarget.style.borderColor = "var(--qz-color-primary)";
@@ -1681,8 +1755,12 @@ function QuestionView({
                 }}
               />
             )}
-            <AnswerLabel text={a.text} tooltip={a.tooltip_text} />
+            {a.text}
           </button>
+          {a.tooltip_text ? (
+            <TooltipChip text={a.tooltip_text} onReveal={() => onTooltipView?.(a.id)} />
+          ) : null}
+          </div>
         ))}
       </div>
     </div>
