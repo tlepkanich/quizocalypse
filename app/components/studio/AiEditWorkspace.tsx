@@ -10,6 +10,7 @@ import type { Quiz } from "../../lib/quizSchema";
 import type { StudioBuilderData } from "./StudioBuilder";
 import { useQuizDraft } from "./useQuizDraft";
 import { AiChatPanel } from "./AiChatPanel";
+import { ReviewEnrichPanel } from "./ReviewEnrichPanel";
 
 // Dev Spec Phase 4 placement options. The standalone /q/:id is always a full
 // page; popup/inline/product_widget are honored by the Theme App Extension.
@@ -255,6 +256,7 @@ function AiWorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: C
           <Step5Preview {...stepProps} />
         </div>
         <div style={{ position: "sticky", top: 8 }}>
+          <ReviewEnrichPanel onApply={commit} />
           <AiChatPanel onApply={commit} />
         </div>
       </div>

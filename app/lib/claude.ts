@@ -7,6 +7,7 @@ import {
 } from "./brandGuidelines";
 import type { GeneratedQuestionFlow } from "./smartBuild";
 import { EditOp } from "./quizEdit";
+import { ReviewEnrichment } from "./reviewEnrichment";
 import { z } from "zod";
 
 const REGEN_SYSTEM_PROMPT =
@@ -606,6 +607,134 @@ export async function editQuiz(input: EditQuizInput): Promise<EditQuizResult> {
 
   throw new QuizGenerationError(
     "Quiz edit failed validation after retries.",
+    MAX_ATTEMPTS,
+    lastIssue,
+  );
+}
+
+// ---------- Reviews/FAQ enrichment (Dev Spec §3.2) ----------
+
+const ENRICH_SYSTEM_PROMPT =
+  "You improve an existing product-recommendation quiz using REAL customer language from reviews/FAQs. " +
+  "Rewrite answer-option wording so it matches how customers actually describe themselves and their needs (not marketing speak); " +
+  "add a one-line tooltip per answer that addresses a real objection or point of confusion surfaced in the reviews; " +
+  "rewrite each result's why-bullets (2–3, benefit-first, under 15 words each) to reflect what customers actually praise. " +
+  "Reference ONLY node ids and answer ids that appear in the QUIZ OUTLINE — never invent ids, products, questions, or answers. " +
+  "Only emit fields you are genuinely improving from the reviews; omit anything the reviews don't inform. Output only the tool call.";
+
+const enrichToolJsonSchema = {
+  type: "object",
+  required: ["questions", "results"],
+  properties: {
+    summary: { type: "string", description: "One short sentence on what you changed." },
+    questions: {
+      type: "array",
+      items: {
+        type: "object",
+        required: ["id", "answers"],
+        properties: {
+          id: { type: "string" },
+          answers: {
+            type: "array",
+            items: {
+              type: "object",
+              required: ["id"],
+              properties: {
+                id: { type: "string" },
+                text: { type: "string" },
+                tooltip_text: { type: "string" },
+              },
+            },
+          },
+        },
+      },
+    },
+    results: {
+      type: "array",
+      items: {
+        type: "object",
+        required: ["id", "why_bullets"],
+        properties: {
+          id: { type: "string" },
+          why_bullets: { type: "array", items: { type: "string" }, maxItems: 3 },
+        },
+      },
+    },
+  },
+} as const;
+
+export interface EnrichFromReviewsInput {
+  // Compact id-bearing outline of the current quiz (from quizEdit.outlineQuiz).
+  outline: string;
+  // The merchant's pasted review/FAQ text (clamped by clampReviewText).
+  reviewText: string;
+  brandGuidelines?: BrandGuidelines | null;
+  toneSample?: string;
+}
+
+// Ask Claude to rewrite answer wording/tooltips + result why-bullets in the
+// customers' own language from review/FAQ text. The caller applies it with
+// applyReviewEnrichment + Quiz.parse (the AI emits no graph/ids it wasn't given).
+// Throws QuizGenerationError after retries — the caller keeps the prior draft.
+export async function enrichFromReviews(
+  input: EnrichFromReviewsInput,
+): Promise<ReviewEnrichment> {
+  const tool = {
+    name: "emit_enrichment",
+    description:
+      "Emit answer rewrites/tooltips and result why-bullets drawn from the customer reviews. Reference only ids from the outline.",
+    input_schema: enrichToolJsonSchema as unknown as Anthropic.Tool.InputSchema,
+  } satisfies Anthropic.Tool;
+
+  const userMessage = [
+    "QUIZ OUTLINE (reference these node/answer ids exactly):",
+    input.outline,
+    ...(input.toneSample
+      ? ["", "BRAND VOICE SAMPLE (match this writing style):", input.toneSample]
+      : []),
+    "",
+    "CUSTOMER REVIEWS / FAQ (the source of real language — use this, do not invent):",
+    input.reviewText,
+  ].join("\n");
+
+  const system = ENRICH_SYSTEM_PROMPT + buildBrandVoiceAddition(input.brandGuidelines);
+
+  let lastIssue: string | undefined;
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+    const response = await client().messages.create({
+      model: MODEL,
+      max_tokens: MAX_TOKENS,
+      system,
+      tools: [tool],
+      tool_choice: { type: "tool", name: "emit_enrichment" },
+      messages: [
+        {
+          role: "user",
+          content:
+            attempt === 1
+              ? userMessage
+              : `${userMessage}\n\nPrevious attempt failed validation: ${lastIssue}. Re-emit strictly matching the schema.`,
+        },
+      ],
+    });
+
+    const toolUse = response.content.find(
+      (block): block is Anthropic.ToolUseBlock => block.type === "tool_use",
+    );
+    if (!toolUse) {
+      lastIssue = "No tool_use block in response.";
+      continue;
+    }
+    const parsed = ReviewEnrichment.safeParse(toolUse.input);
+    if (parsed.success) return parsed.data;
+    lastIssue = parsed.error.issues
+      .slice(0, 5)
+      .map((i) => `${i.path.join(".")}: ${i.message}`)
+      .join("; ");
+  }
+
+  throw new QuizGenerationError(
+    "Review enrichment failed validation after retries.",
     MAX_ATTEMPTS,
     lastIssue,
   );

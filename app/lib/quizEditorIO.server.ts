@@ -6,8 +6,10 @@ import { Quiz } from "./quizSchema";
 import { publishQuiz, PublishError } from "./quizPublish";
 import { qrDataUrl } from "./qrCode.server";
 import { ensureQuizDiscount } from "./discount.server";
-import { regenerateQuestion, generateQuestionFlow, editQuiz } from "./claude";
+import { regenerateQuestion, generateQuestionFlow, editQuiz, enrichFromReviews } from "./claude";
 import { applyEditOps, outlineQuiz } from "./quizEdit";
+import { applyReviewEnrichment, clampReviewText } from "./reviewEnrichment";
+import { ingestWebsite } from "./websiteIngest.server";
 import { applyQuestionFlow, type SmartBuildBucket } from "./smartBuild";
 import { parseBrandGuidelinesSafe } from "./brandGuidelines";
 import { buildScopedIndex, toneSampleFromCatalog } from "./catalogIndex";
@@ -551,6 +553,72 @@ export async function handleQuizEditorActionForShop(
       doc: reparsed.data,
       assistant_message: edit.assistant_message,
       warnings,
+    });
+  }
+
+  if (intent === "enrich-reviews") {
+    // Reviews/FAQ ingestion (Dev Spec §3.2): rewrite answer wording + tooltips +
+    // result why-bullets in the customers' own language. Accepts pasted text
+    // and/or a URL (ingested server-side). Same safe seam as ai-edit — the AI
+    // emits a structured enrichment over existing ids; we Quiz.parse-gate before
+    // writing, so a bad enrichment never corrupts the stored draft.
+    const pasted = String(form.get("reviews") ?? "");
+    const reviewsUrl = String(form.get("reviewsUrl") ?? "").trim();
+    let reviewText = clampReviewText(pasted);
+    if (reviewsUrl) {
+      const fetched = await ingestWebsite(reviewsUrl);
+      reviewText = clampReviewText(`${pasted}\n${fetched}`);
+    }
+    if (reviewText.length < 20) {
+      return json(
+        { ok: false, error: "Paste some review or FAQ text (or a URL) to enrich from." },
+        { status: 400 },
+      );
+    }
+
+    const quiz = await prisma.quiz.findFirst({ where: { id, shopId: shop.id } });
+    if (!quiz) return json({ ok: false, error: "Quiz not found" }, { status: 404 });
+    const parsedDoc = Quiz.safeParse(quiz.draftJson);
+    if (!parsedDoc.success) {
+      return json({ ok: false, error: "Invalid quiz JSON" }, { status: 400 });
+    }
+    const doc = parsedDoc.data;
+
+    const allProducts = await prisma.product.findMany({ where: { shopId: shop.id } });
+    const brandGuidelines = parseBrandGuidelinesSafe(shop.brandGuidelines);
+
+    let enrichment;
+    try {
+      enrichment = await enrichFromReviews({
+        outline: outlineQuiz(doc),
+        reviewText,
+        toneSample: toneSampleFromCatalog(allProducts),
+        ...(brandGuidelines ? { brandGuidelines } : {}),
+      });
+    } catch (err) {
+      const m = err instanceof Error ? err.message : String(err);
+      return json({ ok: false, error: m }, { status: 502 });
+    }
+
+    const { doc: enriched, changed } = applyReviewEnrichment(doc, enrichment);
+    const reparsed = Quiz.safeParse(enriched);
+    if (!reparsed.success) {
+      return json(
+        {
+          ok: false,
+          error: "That enrichment would have produced an invalid quiz, so it wasn't applied.",
+        },
+        { status: 422 },
+      );
+    }
+    await prisma.quiz.update({ where: { id }, data: { draftJson: reparsed.data as never } });
+    return json({
+      ok: true,
+      action: "enrich-reviews" as const,
+      doc: reparsed.data,
+      assistant_message:
+        enrichment.summary || `Updated ${changed} item(s) using your reviews.`,
+      changed,
     });
   }
 
