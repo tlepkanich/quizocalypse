@@ -108,28 +108,35 @@ export function Step5Preview({
         </QzButton>
       </div>
 
-      {/* Reskin row */}
-      <div className="qz-row qz-row-between" style={{ alignItems: "center", gap: 12, flexWrap: "wrap" }}>
-        <div className="qz-row" style={{ gap: 10, alignItems: "center", flexWrap: "wrap" }}>
-          <span className="qz-label" style={{ fontSize: 10 }}>
-            Reskin
-          </span>
-          <ReskinSwitcher value={tryOnId} onSelect={setTryOnId} />
-        </div>
-        {tryOnId ? (
-          <div className="qz-row" style={{ gap: 8, alignItems: "center" }}>
-            <span className="qz-dim" style={{ fontSize: 12 }}>
-              Trying on a theme — not saved
-            </span>
-            <QzButton size="sm" variant="ghost" onClick={() => setTryOnId(null)}>
-              Reset
-            </QzButton>
-            <QzButton size="sm" variant="accent" onClick={applyTheme}>
-              Apply theme
-            </QzButton>
+      {/* Theme gallery — premium reskin picker with live mini-previews */}
+      <QzCard style={{ padding: 16 }}>
+        <div
+          className="qz-row qz-row-between"
+          style={{ alignItems: "center", marginBottom: 12, gap: 12, flexWrap: "wrap" }}
+        >
+          <div>
+            <strong style={{ fontSize: 14 }}>Theme</strong>
+            <div className="qz-dim" style={{ fontSize: 12 }}>
+              Tap a theme to try it on the live preview below — nothing saves until you hit
+              Apply.
+            </div>
           </div>
-        ) : null}
-      </div>
+          {tryOnId ? (
+            <div className="qz-row" style={{ gap: 8, alignItems: "center" }}>
+              <span className="qz-dim" style={{ fontSize: 12 }}>
+                Trying on — not saved
+              </span>
+              <QzButton size="sm" variant="ghost" onClick={() => setTryOnId(null)}>
+                Reset
+              </QzButton>
+              <QzButton size="sm" variant="accent" onClick={applyTheme}>
+                Apply theme
+              </QzButton>
+            </div>
+          ) : null}
+        </div>
+        <ReskinSwitcher value={tryOnId} onSelect={setTryOnId} />
+      </QzCard>
 
       {/* The live device frame */}
       <DeviceFrame width={frameW} onWidthChange={setFrameW}>
