@@ -1644,20 +1644,27 @@ function QuestionView({
         <h2 style={styles.h2}>{node.data.text}</h2>
         <div style={{ marginTop: 20, display: "flex", gap: 8, flexWrap: "wrap" }}>
           {node.data.answers.map((a) => (
-            <button
+            <div
               key={a.id}
-              title={a.tooltip_text ?? a.text}
-              style={{ ...styles.answerBtn, flex: "1 1 auto", minWidth: 56, textAlign: "center" }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.borderColor = "var(--qz-color-primary)";
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.borderColor = "#00000022";
-              }}
-              onClick={() => onAdvance([a.id], a.edge_handle_id)}
+              style={{ position: "relative", flex: "1 1 auto", minWidth: 56, display: "flex" }}
             >
-              {a.text}
-            </button>
+              <button
+                title={a.tooltip_text ?? a.text}
+                style={{ ...styles.answerBtn, flex: 1, minWidth: 0, textAlign: "center" }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.borderColor = "var(--qz-color-primary)";
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.borderColor = "#00000022";
+                }}
+                onClick={() => onAdvance([a.id], a.edge_handle_id)}
+              >
+                {a.text}
+              </button>
+              {a.tooltip_text ? (
+                <TooltipChip text={a.tooltip_text} onReveal={() => onTooltipView?.(a.id)} />
+              ) : null}
+            </div>
           ))}
         </div>
       </div>
@@ -1671,40 +1678,44 @@ function QuestionView({
         <h2 style={styles.h2}>{node.data.text}</h2>
         <div style={{ marginTop: 20, display: "flex", gap: 14, flexWrap: "wrap" }}>
           {node.data.answers.map((a) => (
-            <button
-              key={a.id}
-              title={a.tooltip_text ?? a.text}
-              style={{
-                ...styles.answerBtn,
-                display: "flex",
-                flexDirection: "column",
-                alignItems: "center",
-                gap: 6,
-                width: 92,
-                padding: 8,
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.borderColor = "var(--qz-color-primary)";
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.borderColor = "#00000022";
-              }}
-              onClick={() => onAdvance([a.id], a.edge_handle_id)}
-            >
-              <span
+            <div key={a.id} style={{ position: "relative" }}>
+              <button
+                title={a.tooltip_text ?? a.text}
                 style={{
-                  width: 48,
-                  height: 48,
-                  borderRadius: "50%",
-                  border: "1px solid #00000022",
-                  backgroundColor: "#00000010",
-                  backgroundImage: a.image_url ? `url(${a.image_url})` : undefined,
-                  backgroundSize: "cover",
-                  backgroundPosition: "center",
+                  ...styles.answerBtn,
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "center",
+                  gap: 6,
+                  width: 92,
+                  padding: 8,
                 }}
-              />
-              <span style={{ fontSize: 12, textAlign: "center" }}>{a.text}</span>
-            </button>
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.borderColor = "var(--qz-color-primary)";
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.borderColor = "#00000022";
+                }}
+                onClick={() => onAdvance([a.id], a.edge_handle_id)}
+              >
+                <span
+                  style={{
+                    width: 48,
+                    height: 48,
+                    borderRadius: "50%",
+                    border: "1px solid #00000022",
+                    backgroundColor: "#00000010",
+                    backgroundImage: a.image_url ? `url(${a.image_url})` : undefined,
+                    backgroundSize: "cover",
+                    backgroundPosition: "center",
+                  }}
+                />
+                <span style={{ fontSize: 12, textAlign: "center" }}>{a.text}</span>
+              </button>
+              {a.tooltip_text ? (
+                <TooltipChip text={a.tooltip_text} onReveal={() => onTooltipView?.(a.id)} />
+              ) : null}
+            </div>
           ))}
         </div>
       </div>
