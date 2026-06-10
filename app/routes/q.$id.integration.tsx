@@ -17,6 +17,9 @@ import {
 interface IntegrationRequestBody {
   nodeId: string;
   path: Array<{ questionNodeId: string; answerIds: string[] }>;
+  // BIC P6: the runtime's session token, so outbound payloads (esp. Klaviyo)
+  // can carry a results_url that links back to the saved My Results page.
+  session_id?: string;
   email?: string;
   name?: string;
   phone?: string;
@@ -130,6 +133,15 @@ export async function action({ params, request }: ActionFunctionArgs) {
     });
   }
 
+  // BIC P6: a durable link back to the shopper's saved results. The session
+  // row may not exist yet when the integration fires (it writes on result
+  // render) — the results route redirects to the quiz in that case, so the
+  // emailed link degrades to "retake" rather than an error page.
+  const sessionId = typeof body.session_id === "string" ? body.session_id.slice(0, 128) : "";
+  const resultsUrl = sessionId
+    ? `${new URL(request.url).origin}/q/${id}/results?session_id=${encodeURIComponent(sessionId)}`
+    : null;
+
   const outboundPayload = {
     quiz_id: id,
     quiz_name: quiz.name,
@@ -138,6 +150,7 @@ export async function action({ params, request }: ActionFunctionArgs) {
     email: body.email ?? null,
     name: body.name ?? null,
     phone: body.phone ?? null,
+    results_url: resultsUrl,
     answers,
     accumulated_tags: Array.from(allTags),
     recommended_product_ids: recommended.ids,
@@ -202,6 +215,9 @@ export async function action({ params, request }: ActionFunctionArgs) {
                 quiz_recommended_products: recommended.titles,
                 quiz_recommended_product_ids: recommended.ids,
                 quiz_top_product: recommended.titles[0] ?? null,
+                // BIC P6 — flow emails can link straight back to the shopper's
+                // saved results ({{ person|lookup:'quiz_results_url' }}).
+                ...(resultsUrl ? { quiz_results_url: resultsUrl } : {}),
                 ...Object.fromEntries(
                   outboundPayload.answers.map((a) => [
                     `quiz_q_${a.question_id}`,

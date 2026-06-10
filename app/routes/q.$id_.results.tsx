@@ -1,5 +1,5 @@
 import type { LoaderFunctionArgs } from "@remix-run/node";
-import { json } from "@remix-run/node";
+import { json, redirect } from "@remix-run/node";
 import { useLoaderData } from "@remix-run/react";
 import prisma from "../db.server";
 import { Quiz, type QuizNode } from "../lib/quizSchema";
@@ -34,7 +34,10 @@ export const loader = async ({ params, request }: LoaderFunctionArgs) => {
     where: { quizId_sessionId: { quizId: quiz.id, sessionId } },
     select: { outcomeId: true, answerIds: true, completedAt: true },
   });
-  if (!session) throw new Response("Session not found", { status: 404 });
+  // BIC P6: soften unknown sessions into "retake the quiz" instead of an error
+  // page — Klaviyo emails can fire BEFORE the result render writes the session
+  // row, and old sessions may be pruned. The link should never dead-end.
+  if (!session) throw redirect(`/q/${quiz.id}`);
 
   const publishedRaw = quiz.publishedJson as {
     product_index?: IndexedProduct[];

@@ -750,6 +750,7 @@ export function QuizRuntime(props: QuizRuntimeProps) {
         <IntegrationView
           node={currentNode}
           quizId={quizId}
+          sessionId={sessionIdRef.current}
           path={path}
           contact={contactRef.current}
           styles={styles}
@@ -1447,6 +1448,29 @@ function EducationCard({
     >
       <div className="qz-dim" style={{ fontSize: 13, lineHeight: 1.5 }}>💡 {text}</div>
     </div>
+  );
+}
+
+// "Save my results" (BIC P6): links to the public My Results page keyed by the
+// unguessable session token — cross-device, survives the tab closing. Live
+// only: preview sessions never write a QuizSession row, so the page would 404.
+function SaveResultsLink({ quizId, sessionId }: { quizId?: string; sessionId?: string }) {
+  const isPreviewMode = useContext(RuntimePreviewContext);
+  if (isPreviewMode || !quizId || !sessionId) return null;
+  return (
+    <a
+      href={`/q/${quizId}/results?session_id=${encodeURIComponent(sessionId)}`}
+      style={{
+        display: "inline-block",
+        marginTop: 14,
+        fontSize: 13,
+        color: "var(--qz-color-muted)",
+        textDecorationLine: "underline",
+        textUnderlineOffset: 3,
+      }}
+    >
+      🔖 Save my results — view them anytime, on any device
+    </a>
   );
 }
 
@@ -2422,6 +2446,7 @@ function AskAIView({
 function IntegrationView({
   node,
   quizId,
+  sessionId,
   path,
   contact,
   styles,
@@ -2432,6 +2457,7 @@ function IntegrationView({
     { type: "integration" }
   >;
   quizId: string;
+  sessionId?: string;
   path: PathStep[];
   contact?: { email?: string; name?: string; phone?: string };
   styles: ReturnType<typeof stylesFor>;
@@ -2457,6 +2483,7 @@ function IntegrationView({
           body: JSON.stringify({
             nodeId: node.id,
             path,
+            ...(sessionId ? { session_id: sessionId } : {}),
             ...(contact?.email ? { email: contact.email } : {}),
             ...(contact?.name ? { name: contact.name } : {}),
             ...(contact?.phone ? { phone: contact.phone } : {}),
@@ -2931,6 +2958,7 @@ function ResultView({
       >
         Start over
       </button>
+      <SaveResultsLink quizId={quizId} sessionId={sessionId} />
     </>
   );
 
@@ -3067,6 +3095,7 @@ function MultiStageResultView({
       >
         Start over
       </button>
+      <SaveResultsLink quizId={quizId} sessionId={sessionId} />
     </>
   );
 
