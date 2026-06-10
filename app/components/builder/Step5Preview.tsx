@@ -34,6 +34,8 @@ export function Step5Preview({
   inspectedTarget,
   frameW: frameWProp,
   onFrameWChange,
+  focusNodeId,
+  onNodeShown,
 }: StepProps & {
   // Editor revamp P2: click-to-inspect pass-through (AI editor only — the
   // 4-step builder doesn't pass these, so its preview behaves as before).

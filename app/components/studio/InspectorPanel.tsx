@@ -28,6 +28,16 @@ const PART_LABEL: Record<InspectTarget["part"], string> = {
   education_card: "Education card",
   result_headline: "Result page",
   result_subtext: "Result page",
+  // Unified P3 parts — this panel punts on these node types ("use the
+  // Advanced builder"); the unified ContextPanel handles them fully.
+  message_text: "Message",
+  end_headline: "End screen",
+  end_subtext: "End screen",
+  email_headline: "Email gate",
+  email_subtext: "Email gate",
+  askai_persona: "AI persona",
+  pc_headline: "Products step",
+  pc_subtext: "Products step",
 };
 
 const inputStyle: React.CSSProperties = {

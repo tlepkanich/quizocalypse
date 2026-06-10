@@ -176,7 +176,7 @@ function HeroImageField({
             products={products ?? []}
             value={value || undefined}
             onPick={(url) => {
-              onChange(url);
+              onChange(url ?? "");
               setOpen(false);
             }}
           />
