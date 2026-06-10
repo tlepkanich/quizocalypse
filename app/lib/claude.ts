@@ -428,6 +428,7 @@ const EDIT_QUIZ_SYSTEM_PROMPT =
   "Use ONLY tags that appear in the CATALOG SUMMARY — never invent tags. Preserve everything the merchant did not ask to change. " +
   "Use edit_question or set_text for wording; add_question / remove_node / reorder_question for structure; add_answer / remove_answer for options. " +
   "Use set_theme to restyle the WHOLE quiz when the merchant asks for a different look or vibe (preset is one of: linen, minimal, editorial, bold, pastel, dark). " +
+  "Use set_answer_icon to give answers emoji icons (icon is the emoji itself; empty string removes it); set_answer_image (https URLs only) for answer photos on image-style questions; set_answer_columns (1 or 2; 0 = automatic) to change a question's answer-grid layout. " +
   "Always include a one-sentence, friendly assistant_message describing what you changed. Output nothing outside the tool call.";
 
 // Loose JSON Schema (the discriminated-union strictness is enforced by the Zod
@@ -467,6 +468,9 @@ const editQuizToolJsonSchema = {
               "reorder_question",
               "set_education_card",
               "set_theme",
+              "set_answer_icon",
+              "set_answer_image",
+              "set_answer_columns",
             ],
           },
           node_id: { type: "string" },

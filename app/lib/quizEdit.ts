@@ -117,6 +117,29 @@ export const EditOp = z.discriminatedUnion("op", [
     op: z.literal("set_theme"),
     preset: z.string().min(1),
   }),
+  // Editor revamp P6 — AI parity with the InspectorPanel's flexible-widget
+  // controls. Set/clear an answer's emoji icon ("give every answer a fitting
+  // emoji"). Empty icon clears it.
+  z.object({
+    op: z.literal("set_answer_icon"),
+    node_id: z.string().min(1),
+    answer_id: z.string().min(1),
+    icon: z.string().max(16),
+  }),
+  // Set/clear an answer's image (renders on image_tile/image_picker/swatch).
+  // https-only — enforced at apply so a bad URL becomes a warning, not a write.
+  z.object({
+    op: z.literal("set_answer_image"),
+    node_id: z.string().min(1),
+    answer_id: z.string().min(1),
+    image_url: z.string(),
+  }),
+  // Explicit answer-grid columns (1 or 2; 0 restores the responsive default).
+  z.object({
+    op: z.literal("set_answer_columns"),
+    node_id: z.string().min(1),
+    columns: z.number().int().min(0).max(2),
+  }),
 ]);
 export type EditOp = z.infer<typeof EditOp>;
 
@@ -261,6 +284,68 @@ export function applyEditOps(doc: QuizDoc, ops: EditOp[]): ApplyEditResult {
         working = {
           ...working,
           design_tokens: resolveDesignTokens(preset.tokens) as typeof working.design_tokens,
+        };
+        break;
+      }
+      case "set_answer_icon":
+      case "set_answer_image": {
+        const node = findNode(working, op.node_id);
+        if (!node || node.type !== "question") {
+          warnings.push(`${op.op}: ${op.node_id} is not a question`);
+          break;
+        }
+        if (!node.data.answers.some((a) => a.id === op.answer_id)) {
+          warnings.push(`${op.op}: answer ${op.answer_id} not found on ${op.node_id}`);
+          break;
+        }
+        let patch: { icon?: string | undefined } | { image_url?: string | undefined };
+        if (op.op === "set_answer_icon") {
+          patch = { icon: op.icon.trim() || undefined };
+        } else {
+          const url = op.image_url.trim();
+          if (url && !/^https:\/\//.test(url)) {
+            warnings.push(`set_answer_image: only https URLs are allowed`);
+            break;
+          }
+          patch = { image_url: url || undefined };
+        }
+        working = {
+          ...working,
+          nodes: working.nodes.map((n) =>
+            n.id === op.node_id && n.type === "question"
+              ? {
+                  ...n,
+                  data: {
+                    ...n.data,
+                    answers: n.data.answers.map((a) =>
+                      a.id === op.answer_id ? { ...a, ...patch } : a,
+                    ),
+                  },
+                }
+              : n,
+          ),
+        };
+        break;
+      }
+      case "set_answer_columns": {
+        const node = findNode(working, op.node_id);
+        if (!node || node.type !== "question") {
+          warnings.push(`set_answer_columns: ${op.node_id} is not a question`);
+          break;
+        }
+        working = {
+          ...working,
+          nodes: working.nodes.map((n) =>
+            n.id === op.node_id && n.type === "question"
+              ? {
+                  ...n,
+                  data: {
+                    ...n.data,
+                    answer_columns: op.columns === 0 ? undefined : (op.columns as 1 | 2),
+                  },
+                }
+              : n,
+          ),
         };
         break;
       }

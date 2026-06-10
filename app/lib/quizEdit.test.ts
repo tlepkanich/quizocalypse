@@ -260,3 +260,51 @@ describe("applyEditOps", () => {
     expect(outline.indexOf("id=q1")).toBeLessThan(outline.indexOf("id=q2"));
   });
 });
+
+describe("editor revamp P6 — set_answer_icon / set_answer_image / set_answer_columns", () => {
+  const q1 = (doc: ReturnType<typeof base>) => {
+    const n = doc.nodes.find((x) => x.id === "q1");
+    if (n?.type !== "question") throw new Error("q1 missing");
+    return n;
+  };
+
+  it("sets and clears an answer icon", () => {
+    const set = applyEditOps(base(), [
+      { op: "set_answer_icon", node_id: "q1", answer_id: "a1", icon: "🏔️" },
+    ]);
+    expect(q1(set.doc).data.answers[0]!.icon).toBe("🏔️");
+    expect(set.warnings).toEqual([]);
+    const cleared = applyEditOps(set.doc, [
+      { op: "set_answer_icon", node_id: "q1", answer_id: "a1", icon: "" },
+    ]);
+    expect(q1(cleared.doc).data.answers[0]!.icon).toBeUndefined();
+    expect(Quiz.safeParse(cleared.doc).success).toBe(true);
+  });
+
+  it("sets an https answer image and rejects http with a warning (no write)", () => {
+    const ok = applyEditOps(base(), [
+      { op: "set_answer_image", node_id: "q1", answer_id: "a2", image_url: "https://cdn.x/y.png" },
+    ]);
+    expect(q1(ok.doc).data.answers[1]!.image_url).toBe("https://cdn.x/y.png");
+    const bad = applyEditOps(base(), [
+      { op: "set_answer_image", node_id: "q1", answer_id: "a2", image_url: "http://cdn.x/y.png" },
+    ]);
+    expect(q1(bad.doc).data.answers[1]!.image_url).toBeUndefined();
+    expect(bad.warnings.some((w) => w.includes("https"))).toBe(true);
+  });
+
+  it("sets answer columns and 0 restores auto; unknown answer warns", () => {
+    const two = applyEditOps(base(), [
+      { op: "set_answer_columns", node_id: "q1", columns: 2 },
+    ]);
+    expect(q1(two.doc).data.answer_columns).toBe(2);
+    const auto = applyEditOps(two.doc, [
+      { op: "set_answer_columns", node_id: "q1", columns: 0 },
+    ]);
+    expect(q1(auto.doc).data.answer_columns).toBeUndefined();
+    const missing = applyEditOps(base(), [
+      { op: "set_answer_icon", node_id: "q1", answer_id: "nope", icon: "✨" },
+    ]);
+    expect(missing.warnings.length).toBe(1);
+  });
+});
