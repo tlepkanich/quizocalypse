@@ -13,6 +13,8 @@ import type {
 } from "../builder/stepProps";
 import { reconcileBucketsToResultNodes } from "../../lib/bucketReconcile";
 import { answerRoutes } from "../../lib/routeTrace";
+import { InspectorPanel } from "./InspectorPanel";
+import type { InspectTarget } from "../runtime/QuizRuntime";
 import {
   QzPage,
   QzPageHeader,
@@ -168,6 +170,11 @@ function BuilderShell({ data, chrome }: { data: LoaderData; chrome: Chrome }) {
   // advanced editor). Clicking a step or inserting one opens it inline.
   const [editId, setEditId] = useState<string | null>(null);
   const [reconcileError, setReconcileError] = useState<string | null>(null);
+  // Editor revamp P5: click-to-inspect on the Step-4 preview (same brain as the
+  // AI editor's InspectorPanel, floating here). Defaults OFF — Step 4 is the
+  // test-drive step, so walking stays the primary interaction.
+  const [inspect4, setInspect4] = useState<InspectTarget | null>(null);
+  const [editMode4, setEditMode4] = useState(false);
   const collections = data.collections;
   const productIndex = data.productIndex;
   const categories = data.categories;
@@ -545,7 +552,57 @@ function BuilderShell({ data, chrome }: { data: LoaderData; chrome: Chrome }) {
       ) : step === 3 ? (
         <Step3Results {...stepProps} />
       ) : step === 4 ? (
-        <Step5Preview {...stepProps} />
+        <>
+          <div className="qz-row" style={{ gap: 8, alignItems: "center", marginBottom: 10 }}>
+            <div className="qz-segmented" role="group" aria-label="Preview mode">
+              <button
+                type="button"
+                aria-pressed={!editMode4}
+                onClick={() => {
+                  setEditMode4(false);
+                  setInspect4(null);
+                }}
+              >
+                ▶ Interact
+              </button>
+              <button type="button" aria-pressed={editMode4} onClick={() => setEditMode4(true)}>
+                ✎ Edit elements
+              </button>
+            </div>
+            {editMode4 ? (
+              <span className="qz-dim" style={{ fontSize: 12 }}>
+                Click anything in the preview to edit it.
+              </span>
+            ) : null}
+          </div>
+          <Step5Preview
+            {...stepProps}
+            onInspect={editMode4 ? setInspect4 : undefined}
+            inspectedTarget={inspect4}
+          />
+          {inspect4 ? (
+            <div
+              style={{
+                position: "fixed",
+                right: 24,
+                top: 96,
+                width: 380,
+                maxWidth: "calc(100vw - 48px)",
+                maxHeight: "78vh",
+                overflowY: "auto",
+                zIndex: 60,
+              }}
+            >
+              <InspectorPanel
+                doc={doc}
+                target={inspect4}
+                onCommit={commit}
+                onClose={() => setInspect4(null)}
+                products={productIndex}
+              />
+            </div>
+          ) : null}
+        </>
       ) : (
         // Step 2 — Questions: the visual question/flow builder (Smart Build +
         // FlowView + zoom StepEditor). Promoted to be the second thing a
@@ -1180,11 +1237,17 @@ function StepCard({
   // editing happens IN the flow (no full-page jump). Advanced (Layout/Style/CSS)
   // is one click away. The rest of the flow stays visible alongside.
   if (editing) {
+    // Editor revamp P5: the editing card is now a dual pane — Content fields on
+    // the left, a LIVE scaled preview of this node on the right. The preview
+    // renders from the same live `doc` every keystroke commits to, so the
+    // merchant sees the change land as they type (no more editing blind
+    // against a stale thumbnail, no jump to Step 4).
     return (
       <div
         className="qz-card"
         style={{
-          width: 360,
+          width: 760,
+          maxWidth: "100%",
           padding: 14,
           alignSelf: "stretch",
           display: "flex",
@@ -1203,8 +1266,48 @@ function StepCard({
             </button>
           </div>
         </div>
-        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-          <ContentTab doc={doc} node={node} onCommit={onCommit} />
+        <div className="qz-row" style={{ gap: 14, alignItems: "stretch", flexWrap: "wrap" }}>
+          <div
+            style={{
+              flex: "1 1 320px",
+              minWidth: 280,
+              display: "flex",
+              flexDirection: "column",
+              gap: 10,
+            }}
+          >
+            <ContentTab doc={doc} node={node} onCommit={onCommit} />
+          </div>
+          <div
+            style={{
+              flex: "1 1 340px",
+              minWidth: 300,
+              overflow: "hidden",
+              borderRadius: 10,
+              border: "1px solid var(--qz-rule)",
+              background: "#fff",
+              maxHeight: 460,
+              position: "relative",
+            }}
+          >
+            <span
+              className="qz-label"
+              style={{ position: "absolute", top: 6, right: 8, fontSize: 9.5, zIndex: 1 }}
+            >
+              live
+            </span>
+            <div
+              style={{
+                width: 700,
+                transform: "scale(0.5)",
+                transformOrigin: "top left",
+                pointerEvents: "none",
+                padding: 16,
+              }}
+            >
+              <StepPreview doc={doc} node={node} productIndex={productIndex} categories={categories} />
+            </div>
+          </div>
         </div>
         <div
           className="qz-row qz-row-between"
@@ -1868,6 +1971,32 @@ function LayoutTab({
         >
           Break into blocks
         </QzButton>
+        {/* Editor revamp P5 — "show picture on a page in different areas":
+            one-click image placement (synthesize + insert in a single commit). */}
+        <div className="qz-row" style={{ gap: 6 }}>
+          <QzButton
+            size="sm"
+            variant="ghost"
+            onClick={() => {
+              const blocks = synthesizeLayout(node);
+              if (!blocks) return;
+              onCommit(setNodeLayout(doc, node.id, [makeBlock("image"), ...blocks]));
+            }}
+          >
+            + Image above
+          </QzButton>
+          <QzButton
+            size="sm"
+            variant="ghost"
+            onClick={() => {
+              const blocks = synthesizeLayout(node);
+              if (!blocks) return;
+              onCommit(setNodeLayout(doc, node.id, [...blocks, makeBlock("image")]));
+            }}
+          >
+            + Image below
+          </QzButton>
+        </div>
       </div>
     );
   }
@@ -2052,6 +2181,93 @@ function BlockFields({
           <option value="right">Right</option>
         </QzSelect>
       </QzField>
+      {/* Editor revamp P5 — the BlockStyle sizing/color fields existed in the
+          schema since 2A but were never exposed. A compact grid: blank = theme
+          default (undefined strips the override). */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+        <QzField label="Font size (px)">
+          <QzInput
+            type="number"
+            value={block.style.font_size ?? ""}
+            placeholder="auto"
+            onChange={(e) =>
+              onChange({
+                style: {
+                  ...block.style,
+                  font_size: e.target.value ? Number(e.target.value) : undefined,
+                },
+              } as Partial<ContentBlock>)
+            }
+          />
+        </QzField>
+        <QzField label="Padding (px)">
+          <QzInput
+            type="number"
+            value={block.style.padding ?? ""}
+            placeholder="auto"
+            onChange={(e) =>
+              onChange({
+                style: {
+                  ...block.style,
+                  padding: e.target.value ? Number(e.target.value) : undefined,
+                },
+              } as Partial<ContentBlock>)
+            }
+          />
+        </QzField>
+        <QzField label="Max width (px)">
+          <QzInput
+            type="number"
+            value={block.style.max_width ?? ""}
+            placeholder="auto"
+            onChange={(e) =>
+              onChange({
+                style: {
+                  ...block.style,
+                  max_width: e.target.value ? Number(e.target.value) : undefined,
+                },
+              } as Partial<ContentBlock>)
+            }
+          />
+        </QzField>
+        <QzField label="Corners">
+          <QzSelect
+            value={block.style.radius ?? ""}
+            onChange={(e) =>
+              onChange({
+                style: { ...block.style, radius: (e.target.value || undefined) as never },
+              } as Partial<ContentBlock>)
+            }
+          >
+            <option value="">Default</option>
+            <option value="square">Square</option>
+            <option value="rounded">Rounded</option>
+            <option value="pill">Pill</option>
+          </QzSelect>
+        </QzField>
+        <QzField label="Text color">
+          <QzInput
+            value={block.style.text_color ?? ""}
+            placeholder="#1b1a17"
+            onChange={(e) =>
+              onChange({
+                style: { ...block.style, text_color: e.target.value || undefined },
+              } as Partial<ContentBlock>)
+            }
+          />
+        </QzField>
+        <QzField label="Background">
+          <QzInput
+            value={block.style.background ?? ""}
+            placeholder="transparent"
+            onChange={(e) =>
+              onChange({
+                style: { ...block.style, background: e.target.value || undefined },
+              } as Partial<ContentBlock>)
+            }
+          />
+        </QzField>
+      </div>
     </div>
   );
 }
