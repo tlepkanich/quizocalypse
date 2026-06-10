@@ -125,6 +125,9 @@ export interface QuizRuntimeProps {
   // so the rail can highlight it. Both are ignored entirely in live mode.
   focusNodeId?: string | null;
   onNodeShown?: (nodeId: string) => void;
+  // Phase J — baked conversion weights from publishedJson.answer_weights
+  // (absent on drafts/previews → neutral scoring).
+  answerWeights?: Record<string, number> | null;
 }
 
 // Content-block types the storefront renders directly. Literal blocks render via
@@ -164,6 +167,7 @@ export function QuizRuntime(props: QuizRuntimeProps) {
     inspectedTarget = null,
     focusNodeId = null,
     onNodeShown,
+    answerWeights = null,
   } = props;
   const isPreview = mode === "preview";
   // Inspect mode is preview-only by construction (the storefront never passes
@@ -551,6 +555,7 @@ export function QuizRuntime(props: QuizRuntimeProps) {
         productIndex,
         selectedAnswerIds,
         resultNodeId: node.id,
+        ...(answerWeights ? { answerWeights } : {}),
       });
       return (
         <ResultView

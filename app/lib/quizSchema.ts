@@ -776,6 +776,12 @@ export const Quiz = z.object({
   // When true, the result page shows an inline email-capture block (Dev Spec
   // §5) that posts to /captures + fires email_captured. Additive/optional.
   collect_email_on_result: z.boolean().optional(),
+  // Phase J — opt-in conversion-weighted scoring. When true, publish computes
+  // per-answer conversion lift from QuizSession history and bakes it into
+  // publishedJson.answer_weights (a publish-time field, like product_index);
+  // the engine then lets converting answers count more in tag scoring.
+  // Additive/optional, default off — existing quizzes are untouched.
+  data_weighting: z.boolean().optional(),
   // BIC P7 — the review/FAQ source last used by the enrich-reviews intent, so
   // the merchant's paste survives reload and can be re-run. EDITOR-ONLY: the
   // public /q loader strips this before serving (review text must never ship

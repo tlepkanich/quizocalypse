@@ -5,6 +5,7 @@ import type { IndexedProduct } from "./recommendationEngine";
 import { translateFeaturesToBenefits, generateAnswerTooltips } from "./claude";
 import { toneSampleFromCatalog } from "./catalogIndex";
 import { parseBrandGuidelinesSafe } from "./brandGuidelines";
+import { computeAnswerWeights } from "./answerPerformance";
 import {
   BrandTokens,
   resolveDesignTokens,
@@ -22,6 +23,9 @@ export interface PublishedQuiz extends QuizDoc {
   // construct PDP URLs (https://<shop>/products/<handle>) without an
   // extra DB lookup.
   shop_domain: string;
+  // Phase J — per-answer conversion weights (only when data_weighting is on
+  // AND the session history clears the data gates). Privacy-safe aggregates.
+  answer_weights?: Record<string, number>;
 }
 
 export interface PublishResult {
@@ -390,6 +394,27 @@ export async function publishQuiz(
     }),
   );
 
+  // Phase J: bake conversion-informed answer weights when the merchant opted
+  // in AND the session history clears the data gates (≥30 completed, ≥5
+  // conversions). Failure to compute must never block publishing.
+  let answerWeights: Record<string, number> | undefined;
+  if (doc.data_weighting) {
+    try {
+      const sessions = await prisma.quizSession.findMany({
+        where: { quizId: quiz.id, completedAt: { not: null } },
+        select: { answerIds: true, converted: true, completedAt: true },
+        orderBy: { startedAt: "desc" },
+        take: 5000,
+      });
+      const result = computeAnswerWeights(sessions);
+      if (result.eligible && Object.keys(result.weights).length > 0) {
+        answerWeights = result.weights;
+      }
+    } catch {
+      // weights are an enhancement — publish proceeds unweighted
+    }
+  }
+
   const nextVersion = quiz.version + 1;
   const publishedJson: PublishedQuiz = {
     ...doc,
@@ -401,6 +426,7 @@ export async function publishQuiz(
     published_at: new Date().toISOString(),
     version: nextVersion,
     shop_domain: shop?.shopDomain ?? "",
+    ...(answerWeights ? { answer_weights: answerWeights } : {}),
   };
 
   await prisma.$transaction([

@@ -36,6 +36,9 @@ export interface RecommendationInput {
   productIndex: IndexedProduct[];
   selectedAnswerIds: string[];
   resultNodeId: string;
+  // Phase J: baked per-answer conversion weights (publishedJson.answer_weights).
+  // Absent/empty → classic flat tag scoring, bit-for-bit.
+  answerWeights?: Record<string, number>;
 }
 
 // Deterministic recommendation engine. Spec §3.4.
@@ -81,6 +84,7 @@ function walkLadder(
   allProducts: IndexedProduct[],
   selectedAnswerIds: string[],
   categoryMap: Record<string, string[]>,
+  answerWeights?: Record<string, number>,
 ): RecommendedProduct[] {
   // Never surface non-sellable junk, regardless of which strategy (category /
   // tag / points / conditional / collection / fallback) resolves it.
@@ -131,7 +135,7 @@ function walkLadder(
       }
       case "tag":
       default:
-        return scoreAndRank(quiz, productIndex, selectedAnswerIds);
+        return scoreAndRank(quiz, productIndex, selectedAnswerIds, answerWeights);
     }
   };
 
@@ -174,7 +178,7 @@ export function recommendForResult(
   // like" picks from a single coherent ladder pass.
   capOverride?: number,
 ): RecommendedProduct[] {
-  const { quiz, productIndex, selectedAnswerIds, resultNodeId } = input;
+  const { quiz, productIndex, selectedAnswerIds, resultNodeId, answerWeights } = input;
 
   const resultNode = quiz.nodes.find(
     (n) => n.id === resultNodeId && n.type === "result",
@@ -213,6 +217,7 @@ export function recommendForResult(
     productIndex,
     selectedAnswerIds,
     categoryMapFor(resultPage),
+    answerWeights,
   );
 }
 
@@ -407,19 +412,28 @@ export function recommendPreview(
 
 // Shared scoring + ranking used by both result and preview engines. Returns
 // only products with score > 0 — fallback handling is up to the caller.
+//
+// Phase J: when answerWeights is provided (baked at publish from conversion
+// history), each tag contributes its best contributing answer's weight instead
+// of a flat 1 — answers that historically convert count more. Absent/empty
+// weights reproduce the classic integer overlap EXACTLY (every tag weighs 1).
 function scoreAndRank(
   quiz: QuizDoc,
   productIndex: IndexedProduct[],
   selectedAnswerIds: string[],
+  answerWeights?: Record<string, number>,
 ): RecommendedProduct[] {
   const selectedAnswerSet = new Set(selectedAnswerIds);
-  const tagBag = new Set<string>();
+  const tagWeight = new Map<string, number>();
   const collectionFilters = new Set<string>();
   for (const node of quiz.nodes) {
     if (node.type !== "question") continue;
     for (const answer of node.data.answers) {
       if (!selectedAnswerSet.has(answer.id)) continue;
-      for (const tag of answer.tags) tagBag.add(tag);
+      const w = answerWeights?.[answer.id] ?? 1;
+      for (const tag of answer.tags) {
+        tagWeight.set(tag, Math.max(tagWeight.get(tag) ?? 0, w));
+      }
       if (answer.collection_filter) collectionFilters.add(answer.collection_filter);
     }
   }
@@ -433,7 +447,7 @@ function scoreAndRank(
 
   const scored: RecommendedProduct[] = eligible.map((p) => ({
     ...p,
-    score: p.tags.reduce((acc, t) => acc + (tagBag.has(t) ? 1 : 0), 0),
+    score: p.tags.reduce((acc, t) => acc + (tagWeight.get(t) ?? 0), 0),
   }));
 
   return rank(scored.filter((p) => p.score > 0));

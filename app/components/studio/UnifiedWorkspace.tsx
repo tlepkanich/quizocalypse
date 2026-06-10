@@ -271,7 +271,7 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
                 />
                 <span>Email capture on the result page</span>
               </label>
-              <label className="qz-row" style={{ gap: 6, alignItems: "center", fontSize: 12 }}>
+              <label className="qz-row" style={{ gap: 6, alignItems: "center", fontSize: 12, marginBottom: 6 }}>
                 <input
                   type="checkbox"
                   checked={doc.design_tokens?.result_split ?? false}
@@ -283,6 +283,24 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
                   }
                 />
                 <span>2-column desktop result</span>
+              </label>
+              <label
+                className="qz-row"
+                style={{ gap: 6, alignItems: "flex-start", fontSize: 12 }}
+                title="Phase J: at publish, answers that historically lead to purchases get more weight in product scoring. Needs 30+ completed sessions and 5+ attributed orders; below that, scoring stays unchanged."
+              >
+                <input
+                  type="checkbox"
+                  style={{ marginTop: 2 }}
+                  checked={doc.data_weighting ?? false}
+                  onChange={(e) => commit({ ...doc, data_weighting: e.target.checked })}
+                />
+                <span>
+                  Data-weighted recommendations
+                  <span className="qz-dim" style={{ display: "block", fontSize: 10.5 }}>
+                    Boost answers that convert (activates at publish once 30 sessions + 5 orders exist)
+                  </span>
+                </span>
               </label>
             </div>
           </details>

@@ -834,3 +834,64 @@ describe("selectSecondaryRecs (diversity-aware)", () => {
     expect(pool.map((p) => p.product_id)).toEqual(before);
   });
 });
+
+describe("answer weights (Phase J)", () => {
+  it("absent/empty weights reproduce classic flat scoring exactly", () => {
+    const classic = recommendForResult({
+      quiz: quizDoc,
+      productIndex: baseProducts,
+      selectedAnswerIds: ["a-oily"],
+      resultNodeId: "r1",
+    });
+    const neutral = recommendForResult({
+      quiz: quizDoc,
+      productIndex: baseProducts,
+      selectedAnswerIds: ["a-oily"],
+      resultNodeId: "r1",
+      answerWeights: {},
+    });
+    expect(neutral.map((r) => [r.product_id, r.score])).toEqual(
+      classic.map((r) => [r.product_id, r.score]),
+    );
+  });
+
+  it("a converting answer's weight scales its tags' contribution", () => {
+    const weighted = recommendForResult({
+      quiz: quizDoc,
+      productIndex: baseProducts,
+      selectedAnswerIds: ["a-oily"],
+      resultNodeId: "r1",
+      answerWeights: { "a-oily": 2 },
+    });
+    const classic = recommendForResult({
+      quiz: quizDoc,
+      productIndex: baseProducts,
+      selectedAnswerIds: ["a-oily"],
+      resultNodeId: "r1",
+    });
+    // Same single answer selected → ORDER unchanged, but every tag now counts
+    // double (p1's 2 matches → 4).
+    expect(weighted.map((r) => r.product_id)).toEqual(classic.map((r) => r.product_id));
+    expect(weighted[0]!.score).toBe(classic[0]!.score * 2);
+  });
+
+  it("weights can flip the ranking between two answers' product affinities", () => {
+    // Select BOTH answers: p1 matches a-oily's tags, p2 matches a-dry's.
+    const neutral = recommendForResult({
+      quiz: quizDoc,
+      productIndex: baseProducts,
+      selectedAnswerIds: ["a-oily", "a-dry"],
+      resultNodeId: "r1",
+    });
+    const boosted = recommendForResult({
+      quiz: quizDoc,
+      productIndex: baseProducts,
+      selectedAnswerIds: ["a-oily", "a-dry"],
+      resultNodeId: "r1",
+      answerWeights: { "a-dry": 2, "a-oily": 0.5 },
+    });
+    // With a-dry's tags doubled and a-oily's halved, the dry-skin product must
+    // outrank whatever led neutrally (or at minimum the scores must diverge).
+    expect(boosted.map((r) => r.product_id)).not.toEqual(neutral.map((r) => r.product_id));
+  });
+});

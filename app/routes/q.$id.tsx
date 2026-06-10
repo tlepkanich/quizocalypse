@@ -46,10 +46,12 @@ export const loader = async ({ params }: LoaderFunctionArgs) => {
   if (!parsed.success) {
     throw new Response("Published JSON failed validation", { status: 500 });
   }
-  // product_index + shop_domain aren't in the Zod schema (added at publish time).
+  // product_index + shop_domain + answer_weights aren't in the Zod schema
+  // (added at publish time).
   const publishedRaw = quiz.publishedJson as {
     product_index?: IndexedProduct[];
     shop_domain?: string;
+    answer_weights?: Record<string, number>;
   };
 
   // BIC P7: publish copies the draft, so the merchant's pasted review/FAQ
@@ -70,6 +72,7 @@ export const loader = async ({ params }: LoaderFunctionArgs) => {
       breakpointOverrides: parsed.data.breakpoint_overrides ?? {},
       resultLayoutMode: parsed.data.result_layout_mode,
       shopDomain: publishedRaw.shop_domain ?? "",
+      answerWeights: publishedRaw.answer_weights ?? null,
     },
     {
       // Same 60s convention as the JSON + launcher endpoints: a re-publish
@@ -93,6 +96,7 @@ export default function StorefrontRuntime() {
       quizId={data.quizId}
       version={data.version}
       shopDomain={data.shopDomain}
+      answerWeights={data.answerWeights}
     />
   );
 }
