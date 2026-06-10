@@ -1131,6 +1131,7 @@ function StepColumn({
                 <MiniStepCard
                   key={s.nodeId}
                   node={ln}
+                  doc={doc}
                   issues={issuesByNode.get(s.nodeId) ?? []}
                   onZoom={() => onAdvanced(s.nodeId)}
                 />
@@ -1309,10 +1310,12 @@ function RouteBadges({ doc, nodeId }: { doc: QuizDoc; nodeId: string }) {
 
 function MiniStepCard({
   node,
+  doc,
   issues,
   onZoom,
 }: {
   node: QuizNode;
+  doc?: QuizDoc;
   issues: NodeIssue[];
   onZoom: () => void;
 }) {
@@ -1333,6 +1336,10 @@ function MiniStepCard({
         <span style={{ fontWeight: 600, fontSize: 12 }}>{NODE_LABEL[node.type]}</span>
         {bad ? <QzBadge tone="crit">{issues.length}</QzBadge> : null}
       </div>
+      {/* Branch-section questions are exactly where answers diverge (a
+          diverging question terminates the linear run by definition), so the
+          routing badges matter most here. */}
+      {doc ? <RouteBadges doc={doc} nodeId={node.id} /> : null}
     </button>
   );
 }
