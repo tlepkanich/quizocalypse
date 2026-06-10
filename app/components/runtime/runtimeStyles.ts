@@ -1,4 +1,4 @@
-import { useSyncExternalStore } from "react";
+import { useEffect, useLayoutEffect, useState } from "react";
 import { buttonStyle, type DesignTokensT } from "../../lib/designTokens";
 
 // Shared storefront style primitives — extracted from q.$id.tsx so the live
@@ -148,17 +148,50 @@ export const stylesFor = (
 
 export type RuntimeStyles = ReturnType<typeof stylesFor>;
 
-// Resize-aware breakpoint hook. SSR-safe: "desktop" on the server, then
-// re-subscribes to window resize once mounted. 900px threshold mirrors the
-// runtime layout CSS.
-export function useBreakpoint(): "desktop" | "mobile" {
-  return useSyncExternalStore(
-    (cb) => {
-      if (typeof window === "undefined") return () => {};
-      window.addEventListener("resize", cb);
-      return () => window.removeEventListener("resize", cb);
-    },
-    () => (window.innerWidth < 900 ? "mobile" : "desktop"),
-    () => "desktop",
-  );
+// The wide/narrow layout threshold — ONE constant shared by the live runtime
+// (container-measured below) and the builder preview (previewWidth.ts), so
+// the two can never drift.
+export const BREAKPOINT_PX = 900;
+// Flip up at ≥900 but back down only below 884: a classic-scrollbar appearing
+// when the mobile layout grows taller would otherwise narrow the container
+// ~15px and oscillate the breakpoint right at the boundary.
+const HYSTERESIS_PX = 16;
+
+// useLayoutEffect warns when invoked during SSR; the server branch is a no-op
+// either way, so alias it to useEffect there.
+const useIsoLayoutEffect = typeof window === "undefined" ? useEffect : useLayoutEffect;
+
+// Container-measured breakpoint (Unified P1 — the autoscale core). Measures
+// the RUNTIME ROOT's own width via ResizeObserver instead of the window, so
+// the quiz formats to wherever it actually lives: a full page, a narrow theme
+// section's iframe, the launcher popup (which mounts inside display:none and
+// only gets a real width when shown — the observer catches the flip), or any
+// future inline embed. Returns null until first measure (callers fall back to
+// the SSR default); first paint corrects pre-render via useLayoutEffect.
+export function useContainerBreakpoint(
+  ref: React.RefObject<HTMLElement | null>,
+): "desktop" | "mobile" | null {
+  const [bp, setBp] = useState<"desktop" | "mobile" | null>(null);
+  useIsoLayoutEffect(() => {
+    const el = ref.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    const apply = (w: number) => {
+      // display:none containers measure 0 — keep the previous value (or the
+      // SSR fallback) rather than asserting "mobile" from a meaningless width.
+      if (w <= 0) return;
+      setBp((cur) => {
+        if (w >= BREAKPOINT_PX) return "desktop";
+        if (w < BREAKPOINT_PX - HYSTERESIS_PX) return "mobile";
+        return cur ?? "mobile"; // inside the hysteresis band: hold steady
+      });
+    };
+    apply(el.clientWidth);
+    const ro = new ResizeObserver((entries) => {
+      const w = entries[0]?.contentRect.width;
+      if (typeof w === "number") apply(w);
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [ref]);
+  return bp;
 }

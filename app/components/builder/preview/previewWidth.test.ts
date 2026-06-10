@@ -9,7 +9,7 @@ import {
 } from "./previewWidth";
 
 describe("breakpointForWidth", () => {
-  it("crosses to mobile below 900 (matching the runtime's useBreakpoint)", () => {
+  it("crosses to mobile below 900 (matching the runtime's container breakpoint)", () => {
     expect(breakpointForWidth(320)).toBe("mobile");
     expect(breakpointForWidth(899)).toBe("mobile");
     expect(breakpointForWidth(900)).toBe("desktop");

@@ -25,7 +25,7 @@ import {
   resolveMergeTags,
   type PathStep,
 } from "../../lib/mergeTags";
-import { stylesFor, googleFontsUrl, useBreakpoint } from "./runtimeStyles";
+import { stylesFor, googleFontsUrl, useContainerBreakpoint } from "./runtimeStyles";
 import { BlockRenderer, type BlockRenderCtx } from "./BlockRenderer";
 
 type QuizDoc = Quiz;
@@ -161,10 +161,19 @@ export function QuizRuntime(props: QuizRuntimeProps) {
     introNode ? introNode.id : null,
   );
   const [path, setPath] = useState<PathStep[]>([]);
-  const liveBreakpoint = useBreakpoint();
-  // In preview the breakpoint follows the resizable device-frame width (the
-  // `breakpoint` prop); live follows the real window via useBreakpoint().
-  const breakpoint = isPreview ? (breakpointProp ?? "desktop") : liveBreakpoint;
+  // Unified P1 (autoscale core): live mode measures the runtime root's OWN
+  // container width — never the window — so the quiz formats correctly in a
+  // full page, a narrow theme-section iframe, or the launcher popup alike.
+  // Preview stays prop-driven: the DeviceFrame width is the merchant's
+  // INTENTIONAL breakpoint while editing (a side panel opening must not flip
+  // the layer they're styling). SSR default is mobile — most shopper traffic
+  // and embeds are narrow, and a brief narrow-column paint on a wide desktop
+  // beats 720px cards crammed into a phone.
+  const rootRef = useRef<HTMLDivElement | null>(null);
+  const measuredBreakpoint = useContainerBreakpoint(rootRef);
+  const breakpoint = isPreview
+    ? (breakpointProp ?? "desktop")
+    : (measuredBreakpoint ?? "mobile");
 
   // Resolve baked tokens + the current node's override on every render — this
   // is what implements the design cascade at the storefront layer. The
@@ -869,7 +878,8 @@ export function QuizRuntime(props: QuizRuntimeProps) {
   return (
     <RuntimePreviewContext.Provider value={isPreview}>
     <div
-      className={isPreview ? (breakpoint === "desktop" ? "qz-bp-desktop" : "qz-bp-mobile") : undefined}
+      ref={rootRef}
+      className={breakpoint === "desktop" ? "qz-bp-desktop" : "qz-bp-mobile"}
       style={rootStyle}
     >
       {fontUrl && <link rel="stylesheet" href={fontUrl} />}
@@ -890,50 +900,16 @@ export function QuizRuntime(props: QuizRuntimeProps) {
           }
         }
         .qz-runtime-shell { width: 100%; display: flex; flex-direction: column; align-items: center; gap: 24px; }
-        ${
-          isPreview
-            ? `
-        /* Preview: the two-column layout follows the resizable FRAME width via a
-           breakpoint class on the root, NOT the window. */
+        /* Unified P1: ONE layout mechanism for preview AND live — the qz-bp-*
+           class on the root. Preview sets it from the DeviceFrame width prop;
+           live sets it from the container-measured breakpoint. The old live
+           @media(900px) fork carried these exact rules keyed to the WINDOW. */
         .qz-bp-desktop .qz-runtime-page { align-items: flex-start !important; justify-content: center !important; padding-top: 64px !important; }
         .qz-bp-desktop .qz-runtime-shell { flex-direction: row; align-items: flex-start; max-width: 1100px; gap: 40px; }
         .qz-bp-desktop .qz-runtime-content { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: center; }
         .qz-bp-desktop .qz-preview-rail { flex: 0 0 320px; position: sticky; top: 64px; }
         .qz-bp-desktop .qz-preview-chip { display: none !important; }
         .qz-bp-mobile .qz-preview-rail { display: none; }
-        `
-            : `
-        @media (min-width: 900px) {
-          .qz-runtime-page {
-            align-items: flex-start !important;
-            justify-content: center !important;
-            padding-top: 64px !important;
-          }
-          .qz-runtime-shell {
-            flex-direction: row;
-            align-items: flex-start;
-            max-width: 1100px;
-            gap: 40px;
-          }
-          .qz-runtime-content {
-            flex: 1;
-            min-width: 0;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-          }
-          .qz-preview-rail {
-            flex: 0 0 320px;
-            position: sticky;
-            top: 64px;
-          }
-          .qz-preview-chip { display: none !important; }
-        }
-        @media (max-width: 899px) {
-          .qz-preview-rail { display: none; }
-        }
-        `
-        }
       `}</style>
       <div className="qz-runtime-page" style={styles.page}>
         <div className="qz-runtime-shell">

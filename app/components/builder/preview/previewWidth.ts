@@ -1,5 +1,6 @@
 // Device presets + width→breakpoint mapping for the resizable preview frame.
-// Pure (no React/DOM) so it's unit-testable.
+// Pure (no DOM access) so it's unit-testable.
+import { BREAKPOINT_PX } from "../../runtime/runtimeStyles";
 
 export type DevicePreset = "mobile" | "tablet" | "desktop";
 
@@ -14,11 +15,11 @@ export const DEVICE_PRESETS: Record<DevicePreset, number> = {
 export const MIN_FRAME_W = 320;
 export const MAX_FRAME_W = 1440;
 
-// Mirror the runtime's useBreakpoint threshold (window.innerWidth < 900 ⇒
-// mobile) so the in-builder frame crosses to mobile tokens at the EXACT same
-// width the live quiz does.
+// Same constant the live runtime measures its container against (Unified P1),
+// so the in-builder frame crosses to mobile tokens at the EXACT same width
+// the live quiz does.
 export function breakpointForWidth(w: number): "desktop" | "mobile" {
-  return w < 900 ? "mobile" : "desktop";
+  return w < BREAKPOINT_PX ? "mobile" : "desktop";
 }
 
 export function clampFrameWidth(w: number, max: number = MAX_FRAME_W): number {
