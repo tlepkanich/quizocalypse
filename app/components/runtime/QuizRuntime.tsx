@@ -373,6 +373,17 @@ export function QuizRuntime(props: QuizRuntimeProps) {
     });
   }, [previewActive, path, doc, productIndex]);
 
+  // A11y (BIC P5): after a real navigation (Start/answer/jump), move focus to
+  // the content wrapper so keyboard + screen-reader users land on the new step.
+  // hasNavigatedRef gates it to USER navigation — page load and resume-restore
+  // (which also set currentNodeId) never steal focus.
+  const contentRef = useRef<HTMLDivElement | null>(null);
+  const hasNavigatedRef = useRef(false);
+  useEffect(() => {
+    if (!hasNavigatedRef.current) return;
+    contentRef.current?.focus();
+  }, [currentNodeId]);
+
   // Fire recommendation_viewed once when the preview first activates.
   const previewViewedRef = useRef(false);
   useEffect(() => {
@@ -422,6 +433,7 @@ export function QuizRuntime(props: QuizRuntimeProps) {
     if (stepIndex < 0 || stepIndex >= path.length) return;
     const target = path[stepIndex];
     if (!target) return;
+    hasNavigatedRef.current = true;
     setPath(path.slice(0, stepIndex));
     setCurrentNodeId(target.questionNodeId);
     previewViewedRef.current = false;
@@ -462,6 +474,7 @@ export function QuizRuntime(props: QuizRuntimeProps) {
     // A/B assignments mutated during branch traversal live in abRef and are
     // persisted by the save effect along with the path + current node.
     if (!next) return;
+    hasNavigatedRef.current = true;
     setCurrentNodeId(next);
   }
 
@@ -922,7 +935,28 @@ export function QuizRuntime(props: QuizRuntimeProps) {
       `}</style>
       <div className="qz-runtime-page" style={styles.page}>
         <div className="qz-runtime-shell">
-          <div className="qz-runtime-content">
+          <div className="qz-runtime-content" ref={contentRef} tabIndex={-1} style={{ outline: "none" }}>
+            {/* Polite announcement of the current step for screen readers. */}
+            <div
+              aria-live="polite"
+              style={{
+                position: "absolute",
+                width: 1,
+                height: 1,
+                overflow: "hidden",
+                clipPath: "inset(50%)",
+                whiteSpace: "nowrap",
+              }}
+            >
+              {(() => {
+                const n = doc.nodes.find((x) => x.id === currentNodeId);
+                if (!n) return "";
+                if (n.type === "question") return n.data.text;
+                if (n.type === "intro") return n.data.headline;
+                if (n.type === "result") return n.data.headline || "Your results";
+                return "";
+              })()}
+            </div>
             <ProgressBar doc={doc} path={path} currentNodeId={currentNodeId} />
             <ProgressTrail
               doc={doc}
@@ -1053,13 +1087,14 @@ function ProgressTrail({
           key={`${s.questionNodeId}-${i}`}
           onClick={() => onJump(i)}
           title="Jump back to this question"
+          aria-label={`Go back to question ${i + 1}: ${label(s.questionNodeId, i)}`}
           style={pill(false, true)}
         >
           {i + 1}. {label(s.questionNodeId, i)}
         </button>
       ))}
       {currentIsQuestion && current ? (
-        <span style={pill(true, false)}>
+        <span style={pill(true, false)} aria-current="step">
           {path.length + 1}. {label(current.id, path.length)}
         </span>
       ) : null}
@@ -1442,6 +1477,13 @@ function TooltipChip({ text, onReveal }: { text: string; onReveal: () => void })
         type="button"
         aria-label="More info"
         aria-expanded={open}
+        onKeyDown={(e) => {
+          // WAI-ARIA tooltip pattern: Escape dismisses (focus stays on the chip).
+          if (e.key === "Escape" && open) {
+            e.stopPropagation();
+            setOpen(false);
+          }
+        }}
         onClick={(e) => {
           e.preventDefault();
           e.stopPropagation();
