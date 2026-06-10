@@ -2,8 +2,6 @@ import type { ActionFunctionArgs, LoaderFunctionArgs } from "@remix-run/node";
 import { json } from "@remix-run/node";
 import { Link, useLoaderData, useRevalidator, useSearchParams } from "@remix-run/react";
 import { useEffect, useState } from "react";
-import { StudioBuilder } from "../components/studio/StudioBuilder";
-import { AiEditWorkspace } from "../components/studio/AiEditWorkspace";
 import { UnifiedWorkspace } from "../components/studio/UnifiedWorkspace";
 import { QzPage, QzCard, QzBanner } from "../components/qz";
 import { requireStudioAccess, resolveStudioShop } from "../lib/studioAccess.server";
@@ -81,16 +79,9 @@ export default function StandaloneStudio() {
     return <BuildError message={buildState.slice("error:".length)} />;
   }
 
-  // AI-first is the default surface; ?mode=advanced opens the full builder;
-  // ?mode=next opens the unified workspace (Unified P2 — becomes the default
-  // at the P8 flip once it has baked).
-  return params.get("mode") === "next" ? (
-    <UnifiedWorkspace data={data} chrome="standalone" />
-  ) : params.get("mode") === "advanced" ? (
-    <StudioBuilder data={data} chrome="standalone" />
-  ) : (
-    <AiEditWorkspace data={data} chrome="standalone" />
-  );
+  // Unified P8: ONE workspace. Legacy ?mode=ai / ?mode=advanced / ?mode=next
+  // URLs all land here (the param is simply ignored — bookmarks keep working).
+  return <UnifiedWorkspace data={data} chrome="standalone" />;
 }
 
 // Live "Building…" overlay shown while the detached AI onboarding build runs.

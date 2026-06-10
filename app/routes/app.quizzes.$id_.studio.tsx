@@ -1,8 +1,6 @@
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "@remix-run/node";
 import { json } from "@remix-run/node";
-import { useLoaderData, useSearchParams } from "@remix-run/react";
-import { StudioBuilder } from "../components/studio/StudioBuilder";
-import { AiEditWorkspace } from "../components/studio/AiEditWorkspace";
+import { useLoaderData } from "@remix-run/react";
 import { UnifiedWorkspace } from "../components/studio/UnifiedWorkspace";
 import {
   loadQuizEditorData,
@@ -40,15 +38,7 @@ export const action = async ({ params, request }: ActionFunctionArgs) => {
 
 export default function StudioRoute() {
   const data = useLoaderData<typeof loader>();
-  const [params] = useSearchParams();
-  // AI-first is the default surface; ?mode=advanced opens the full builder;
-  // ?mode=next opens the unified workspace (Unified P2 — becomes the default
-  // at the P8 flip once it has baked).
-  return params.get("mode") === "next" ? (
-    <UnifiedWorkspace data={data} chrome="embedded" />
-  ) : params.get("mode") === "advanced" ? (
-    <StudioBuilder data={data} chrome="embedded" />
-  ) : (
-    <AiEditWorkspace data={data} chrome="embedded" />
-  );
+  // Unified P8: ONE workspace. Legacy ?mode=ai / ?mode=advanced / ?mode=next
+  // URLs all land here (the param is simply ignored — bookmarks keep working).
+  return <UnifiedWorkspace data={data} chrome="embedded" />;
 }

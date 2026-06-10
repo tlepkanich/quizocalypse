@@ -17,8 +17,8 @@ import { FlowRail, type WorkspaceView } from "./FlowRail";
 import { ContextPanel } from "./ContextPanel";
 import { AiChatPanel } from "./AiChatPanel";
 import { ReviewEnrichPanel } from "./ReviewEnrichPanel";
-import { EditableTitle, type StudioBuilderData } from "./StudioBuilder";
-import { PLACEMENTS } from "./AiEditWorkspace";
+import { EditableTitle, PLACEMENTS, type StudioBuilderData } from "./studioShared";
+import { Step3Results } from "../builder/Step3Results";
 
 // ════════════════════════════════════════════════════════════════════════════
 // UnifiedWorkspace (Unified P2) — ONE editing surface replacing the AI/Advanced
@@ -95,7 +95,13 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
   const [params, setParams] = useSearchParams();
   const viewParam = params.get("view");
   const view: WorkspaceView =
-    viewParam === "products" ? "products" : viewParam === "logic" ? "logic" : "build";
+    viewParam === "products"
+      ? "products"
+      : viewParam === "results"
+        ? "results"
+        : viewParam === "logic"
+          ? "logic"
+          : "build";
   const setView = useCallback(
     (v: WorkspaceView) => {
       // Leaving Products: turn buckets into result pages (the 4-step builder
@@ -280,13 +286,15 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
               </label>
             </div>
           </details>
-          <Link
-            to="?mode=ai"
-            className="qz-btn qz-btn-ghost qz-btn-sm"
-            title="The previous editors are still available while the unified studio bakes"
-          >
-            Classic editor
-          </Link>
+          {chrome === "embedded" ? (
+            <Link
+              to={`/app/quizzes/${data.quizId}`}
+              className="qz-btn qz-btn-ghost qz-btn-sm"
+              title="The full node-graph canvas (branch rules, integrations, A/B wiring)"
+            >
+              Canvas →
+            </Link>
+          ) : null}
           <QzButton variant="primary" size="sm" disabled={!canPublish || isPublishing} onClick={publish}>
             {isPublishing ? "Publishing…" : "Publish"}
           </QzButton>
@@ -404,6 +412,11 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
           <div style={{ minWidth: 0, gridColumn: "2 / -1" }}>
             {view === "products" ? (
               <Step1Products {...stepProps} />
+            ) : view === "results" ? (
+              <Step3Results
+                {...stepProps}
+                goToStep={(n) => setView(n === 1 ? "products" : "build")}
+              />
             ) : (
               <LogicView
                 quizId={data.quizId}

@@ -1,11 +1,46 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import type { Quiz, QuizNode } from "../../lib/quizSchema";
 import type { NodeIssue } from "../../lib/quizValidation";
 import type { OrderedFlow } from "../../lib/flowOrder";
+import { answerRoutes } from "../../lib/routeTrace";
 import { deleteNode, moveStep, straightThroughRun } from "../../lib/quizMutations";
 import { INSERTABLE_MODULES, insertModule, type InsertKind } from "./studioDoc";
 import { NODE_LABEL } from "./panels/nodeMeta";
-import { RouteBadges } from "./StudioBuilder";
+
+// Per-answer divergence chips ("answer → destination") — shown under question
+// rows whenever a question's answers route to different places. Moved here
+// from the retired StudioBuilder (Unified P8); FlowRail is the sole consumer.
+function RouteBadges({ doc, nodeId }: { doc: QuizDoc; nodeId: string }) {
+  const routes = useMemo(() => answerRoutes(doc, nodeId), [doc, nodeId]);
+  if (routes.length === 0) return null;
+  return (
+    <div
+      className="qz-row"
+      style={{ gap: 6, flexWrap: "wrap", padding: "8px 12px 10px", justifyContent: "center" }}
+    >
+      {routes.map((r) => (
+        <span
+          key={r.answerId}
+          className="qz-dim"
+          style={{
+            fontSize: 10.5,
+            border: "1px solid var(--qz-rule, #e5e5e5)",
+            borderRadius: 999,
+            padding: "2px 8px",
+            background: "var(--qz-paper, #faf8f3)",
+            whiteSpace: "nowrap",
+            maxWidth: 200,
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+          }}
+          title={`“${r.answerText}” routes to: ${r.targetLabel}`}
+        >
+          “{r.answerText.length > 16 ? `${r.answerText.slice(0, 15)}…` : r.answerText}” → {r.targetLabel}
+        </span>
+      ))}
+    </div>
+  );
+}
 
 // ════════════════════════════════════════════════════════════════════════════
 // FlowRail (Unified P2) — the left-hand flow hierarchy of the unified
@@ -17,7 +52,7 @@ import { RouteBadges } from "./StudioBuilder";
 
 type QuizDoc = Quiz;
 
-export type WorkspaceView = "build" | "products" | "logic";
+export type WorkspaceView = "build" | "products" | "results" | "logic";
 
 const GLYPH: Record<QuizNode["type"], string> = {
   intro: "▶",
@@ -214,6 +249,9 @@ export function FlowRail({
         <button type="button" aria-pressed={view === "products"} onClick={() => onView("products")}>
           Products
         </button>
+        <button type="button" aria-pressed={view === "results"} onClick={() => onView("results")}>
+          Results
+        </button>
         <button type="button" aria-pressed={view === "logic"} onClick={() => onView("logic")}>
           Logic
         </button>
@@ -290,7 +328,9 @@ export function FlowRail({
         <p className="qz-dim" style={{ fontSize: 12, margin: "4px 2px" }}>
           {view === "products"
             ? "Group your catalog into buckets — they become the result pages answers route to."
-            : "Recommendation mapping, path testing, and A/B splits."}
+            : view === "results"
+              ? "Design the result pages: layout model, ranking rules, and discounts."
+              : "Recommendation mapping, path testing, and A/B splits."}
         </p>
       )}
     </div>
