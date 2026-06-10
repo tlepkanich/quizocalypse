@@ -45,6 +45,7 @@ export const loader = async ({ params, request }: LoaderFunctionArgs) => {
   const publishedRaw = quiz.publishedJson as {
     product_index?: IndexedProduct[];
     shop_domain?: string;
+    answer_weights?: Record<string, number>;
   };
   // Phase K2 — localize BEFORE share/recs compute so the whole page (and its
   // unfurl) follows the locale. Strip the raw maps from what we serve.
@@ -71,6 +72,7 @@ export const loader = async ({ params, request }: LoaderFunctionArgs) => {
           productIndex,
           selectedAnswerIds: session.answerIds,
           resultNodeId: outcomeNode.id,
+          ...(publishedRaw.answer_weights ? { answerWeights: publishedRaw.answer_weights } : {}),
         })
       : [];
   const share = {
@@ -91,6 +93,7 @@ export const loader = async ({ params, request }: LoaderFunctionArgs) => {
     doc: (({ translations: _t, review_enrichment_sources: _r, ...rest }) => (void _t, void _r, rest))(parsed.data),
     productIndex,
     shopDomain: publishedRaw.shop_domain ?? "",
+    answerWeights: publishedRaw.answer_weights ?? null,
     share,
     locale: locale ?? "en",
     chrome,
@@ -122,7 +125,7 @@ export const meta: MetaFunction<typeof loader> = ({ data }) => {
 };
 
 export default function MyResults() {
-  const { quizId, doc, productIndex, shopDomain, share, session, locale, chrome } =
+  const { quizId, doc, productIndex, shopDomain, answerWeights, share, session, locale, chrome } =
     useLoaderData<typeof loader>();
   const tc = (token: ChromeToken, vars?: Record<string, string | number>) =>
     t(chrome as Record<ChromeToken, string>, token, vars);
@@ -154,6 +157,7 @@ export default function MyResults() {
     productIndex,
     selectedAnswerIds: session.answerIds,
     resultNodeId: resultNode.id,
+    ...(answerWeights ? { answerWeights } : {}),
   });
   const completedDate = session.completedAt
     ? new Date(session.completedAt).toLocaleDateString()

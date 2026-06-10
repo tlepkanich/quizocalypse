@@ -4,6 +4,8 @@ import {
   pickPointsWinner,
   recommendForResult,
   recommendForStage,
+  recommendForResultExplained,
+  recommendForStageExplained,
   recommendPreview,
   resolveNextStep,
   nextNodeFor,
@@ -13,7 +15,7 @@ import {
   type IndexedProduct,
   type RecommendedProduct,
 } from "./recommendationEngine";
-import { Quiz } from "./quizSchema";
+import { Quiz, type QuizNode } from "./quizSchema";
 
 const baseProducts: IndexedProduct[] = [
   {
@@ -893,5 +895,156 @@ describe("answer weights (Phase J)", () => {
     // With a-dry's tags doubled and a-oily's halved, the dry-skin product must
     // outrank whatever led neutrally (or at minimum the scores must diverge).
     expect(boosted.map((r) => r.product_id)).not.toEqual(neutral.map((r) => r.product_id));
+  });
+});
+
+// ─── Design refinement D1: answers order EVERY rung ─────────────────────────
+// Eligibility (which products are candidates) stays with the rung; ordering
+// belongs to the path's answers. Under max_products caps that changes which
+// top-N render — "the logic actually changes results".
+describe("answer-ordered rungs + explained API (D1)", () => {
+  const P = (
+    id: string,
+    tags: string[],
+    price: string,
+    extra: Partial<IndexedProduct> = {},
+  ): IndexedProduct => ({
+    product_id: id,
+    title: id,
+    handle: id,
+    price,
+    image_url: null,
+    tags,
+    collection_ids: ["c-all"],
+    inventory_in_stock: true,
+    ...extra,
+  });
+  // One bucket of four: two oily, one dry, one both, one untagged.
+  const bucket = [
+    P("pA", ["oily"], "30.00"),
+    P("pB", ["dry"], "10.00"),
+    P("pC", ["oily", "dry"], "20.00"),
+    P("pD", [], "5.00"),
+  ];
+  const catQuiz = (resultData: Record<string, unknown> = {}) =>
+    Quiz.parse({
+      quiz_id: "d1",
+      scope: { collection_ids: ["c-all"] },
+      nodes: [
+        { id: "intro", type: "intro", position: { x: 0, y: 0 }, data: { headline: "Hi" } },
+        {
+          id: "q1",
+          type: "question",
+          position: { x: 200, y: 0 },
+          data: {
+            text: "?",
+            question_type: "single_select",
+            answers: [
+              { id: "a-oily", text: "Oily", tags: ["oily"], edge_handle_id: "h1" },
+              { id: "a-dry", text: "Dry", tags: ["dry"], edge_handle_id: "h2" },
+            ],
+          },
+        },
+        {
+          id: "r1",
+          type: "result",
+          position: { x: 400, y: 0 },
+          data: {
+            headline: "Match",
+            match_ladder: ["category"],
+            category_id: "cat-x",
+            max_products: 2,
+            fallback_collection_id: "c-none",
+            ...resultData,
+          },
+        },
+      ],
+      edges: [
+        { id: "e1", source: "intro", target: "q1" },
+        { id: "e2", source: "q1", target: "r1" },
+      ],
+      results_pages: [
+        {
+          id: "r1",
+          headline: "Match",
+          product_ids: [],
+          category_id: "cat-x",
+          category_product_ids_map: { "cat-x": ["pA", "pB", "pC", "pD"] },
+        },
+      ],
+    });
+
+  it("(a) same node + category ladder: two paths → DIFFERENT top-N", () => {
+    const quiz = catQuiz();
+    const oily = recommendForResult({ quiz, productIndex: bucket, selectedAnswerIds: ["a-oily"], resultNodeId: "r1" });
+    const dry = recommendForResult({ quiz, productIndex: bucket, selectedAnswerIds: ["a-dry"], resultNodeId: "r1" });
+    // oily path: pA/pC score 1 (price tie-break: pC $20 < pA $30) → [pC, pA]
+    expect(oily.map((p) => p.product_id)).toEqual(["pC", "pA"]);
+    // dry path: pB/pC score 1 → [pB, pC] — the user's complaint, fixed.
+    expect(dry.map((p) => p.product_id)).toEqual(["pB", "pC"]);
+  });
+
+  it("(b) explicit ranking still wins within the pool", () => {
+    const dated = bucket.map((p) =>
+      p.product_id === "pB" ? { ...p, updated_at: "2026-06-01T00:00:00Z" } : { ...p, updated_at: "2025-01-01T00:00:00Z" },
+    );
+    const quiz = catQuiz({ ranking: "newest" });
+    const out = recommendForResult({ quiz, productIndex: dated, selectedAnswerIds: ["a-oily"], resultNodeId: "r1" });
+    expect(out[0]!.product_id).toBe("pB"); // newest first despite score 0
+  });
+
+  it("(c+e) zero-overlap pool: nothing dropped, order = in-stock → price asc (pre-D1 byte-identical)", () => {
+    const quiz = catQuiz({ max_products: 10 });
+    const out = recommendForResult({ quiz, productIndex: bucket, selectedAnswerIds: [], resultNodeId: "r1" });
+    expect(out.map((p) => p.product_id)).toEqual(["pD", "pB", "pC", "pA"]); // price asc
+    expect(out).toHaveLength(4); // score-0 items retained — membership invariant
+  });
+
+  it("(d) answerWeights reorder within a category pool (Phase J alive on fixed rungs)", () => {
+    const quiz = catQuiz({ max_products: 10 });
+    const both = { quiz, productIndex: bucket, selectedAnswerIds: ["a-oily", "a-dry"], resultNodeId: "r1" };
+    const flat = recommendForResult(both);
+    const weighted = recommendForResult({ ...both, answerWeights: { "a-oily": 2 } });
+    // flat: pC(2) → pB(1,$10) → pA(1,$30); weighted: oily=2 → pC(3) → pA(2) → pB(1)
+    expect(flat.map((p) => p.product_id).indexOf("pB")).toBeLessThan(flat.map((p) => p.product_id).indexOf("pA"));
+    expect(weighted.map((p) => p.product_id).indexOf("pA")).toBeLessThan(weighted.map((p) => p.product_id).indexOf("pB"));
+  });
+
+  it("(f) explained shape + delegation invariant + fallback rung", () => {
+    const quiz = catQuiz();
+    const explained = recommendForResultExplained({ quiz, productIndex: bucket, selectedAnswerIds: ["a-oily"], resultNodeId: "r1" });
+    expect(explained.rungUsed).toBe("category");
+    expect(explained.poolSize).toBe(4); // pre-cap
+    expect(explained.products[0]!.matched_tags).toEqual(["oily"]);
+    expect(explained.tagBag).toEqual({ oily: 1 });
+    expect(
+      recommendForResult({ quiz, productIndex: bucket, selectedAnswerIds: ["a-oily"], resultNodeId: "r1" }),
+    ).toEqual(explained.products);
+
+    // Fallback rung label: a ladder that resolves nothing + a fallback collection.
+    const fbQuiz = catQuiz({ match_ladder: ["conditional"], conditional_rules: [], fallback_collection_id: "c-all" });
+    const fb = recommendForResultExplained({ quiz: fbQuiz, productIndex: bucket, selectedAnswerIds: ["a-oily"], resultNodeId: "r1" });
+    expect(fb.rungUsed).toBe("fallback");
+    expect(fb.products.length).toBeGreaterThan(0);
+  });
+
+  it("(g) recommendForStageExplained honors weights", () => {
+    const quiz = catQuiz({
+      stages: [
+        {
+          id: "st1",
+          headline: "Stage",
+          match_ladder: ["category"],
+          category_id: "cat-x",
+          max_products: 10,
+        },
+      ],
+    });
+    const stage = (quiz.nodes.find((n) => n.id === "r1") as Extract<QuizNode, { type: "result" }>).data.stages[0]!;
+    const flat = recommendForStageExplained(quiz, bucket, ["a-oily", "a-dry"], "r1", stage);
+    const weighted = recommendForStageExplained(quiz, bucket, ["a-oily", "a-dry"], "r1", stage, { "a-oily": 2 });
+    expect(weighted.products[1]!.product_id).toBe("pA"); // oily ×2 outranks dry
+    expect(flat.products[1]!.product_id).toBe("pB");
+    expect(weighted.rungUsed).toBe("category");
   });
 });

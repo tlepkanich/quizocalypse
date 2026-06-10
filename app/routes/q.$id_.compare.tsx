@@ -46,7 +46,7 @@ export const loader = async ({ params, request }: LoaderFunctionArgs) => {
     ? applyTranslations(parsed.data, parsed.data.translations![locale]!.strings)
     : parsed.data;
 
-  const publishedRaw = quiz.publishedJson as { product_index?: IndexedProduct[]; shop_domain?: string };
+  const publishedRaw = quiz.publishedJson as { product_index?: IndexedProduct[]; shop_domain?: string; answer_weights?: Record<string, number> };
   const productIndex = publishedRaw.product_index ?? [];
 
   const resolve = (outcomeId: string | null, answerIds: string[]) => {
@@ -54,7 +54,7 @@ export const loader = async ({ params, request }: LoaderFunctionArgs) => {
       doc.nodes.find((n): n is ResultNode => n.type === "result" && n.id === outcomeId) ??
       doc.nodes.find((n): n is ResultNode => n.type === "result");
     const recs = node
-      ? recommendForResult({ quiz: doc, productIndex, selectedAnswerIds: answerIds, resultNodeId: node.id })
+      ? recommendForResult({ quiz: doc, productIndex, selectedAnswerIds: answerIds, resultNodeId: node.id, ...(publishedRaw.answer_weights ? { answerWeights: publishedRaw.answer_weights } : {}) })
       : [];
     return { headline: node?.data.headline ?? "", recs };
   };

@@ -78,6 +78,72 @@ export function isSellable(p: { inventory_in_stock: boolean; price: string | nul
   return p.inventory_in_stock || (p.price != null && Number(p.price) > 0);
 }
 
+// ── Explained output (design-refinement D1) ─────────────────────────────────
+// The engine's public answer to "WHY these products": every rung's pool is
+// ordered by the shopper's answers, and the explained shape carries the
+// evidence. recommendForResult delegates to the explained variant — ONE code
+// path, so the Logic UI's trace can never drift from what shoppers see.
+
+export interface ExplainedProduct extends RecommendedProduct {
+  /** Product tags hit by this path's tag bag (may be empty on fixed rungs). */
+  matched_tags: string[];
+}
+
+export type ResolvedRung = LadderStrategy | "fallback";
+
+export interface ExplainedRecommendation {
+  /** Final capped order — exactly what recommendForResult returns. */
+  products: ExplainedProduct[];
+  rungUsed: ResolvedRung | null;
+  /** Winning pool size after OOS handling, BEFORE the cap slice. */
+  poolSize: number;
+  /** applyOos "fallback" swapped the rung's pool for the OOS collection. */
+  oosSwapped: boolean;
+  /** tag → effective weight from the selected answers (Phase J aware). */
+  tagBag: Record<string, number>;
+}
+
+// The shopper's tag bag: tag → best contributing answer's weight (Phase J),
+// plus any per-answer collection filters. Extracted from the old scoreAndRank
+// so EVERY rung can use it.
+function buildTagBag(
+  quiz: QuizDoc,
+  selectedAnswerIds: string[],
+  answerWeights?: Record<string, number>,
+): { tagWeight: Map<string, number>; collectionFilters: Set<string> } {
+  const selectedAnswerSet = new Set(selectedAnswerIds);
+  const tagWeight = new Map<string, number>();
+  const collectionFilters = new Set<string>();
+  for (const node of quiz.nodes) {
+    if (node.type !== "question") continue;
+    for (const answer of node.data.answers) {
+      if (!selectedAnswerSet.has(answer.id)) continue;
+      const w = answerWeights?.[answer.id] ?? 1;
+      for (const tag of answer.tags) {
+        tagWeight.set(tag, Math.max(tagWeight.get(tag) ?? 0, w));
+      }
+      if (answer.collection_filter) collectionFilters.add(answer.collection_filter);
+    }
+  }
+  return { tagWeight, collectionFilters };
+}
+
+// Score a rung's candidate pool by the path's tag bag. CRUCIALLY keeps
+// score-0 items — for fixed rungs (category/points/conditional/collection/
+// metafield) the pool IS the eligibility; answers decide ORDER, never
+// membership. Zero-overlap pools fall through to rank()'s in-stock → price
+// tie-break, which is byte-identical to the pre-D1 uniform-score order.
+function scorePool(
+  pool: IndexedProduct[],
+  tagWeight: Map<string, number>,
+): ExplainedProduct[] {
+  return pool.map((p) => ({
+    ...p,
+    score: p.tags.reduce((acc, t) => acc + (tagWeight.get(t) ?? 0), 0),
+    matched_tags: p.tags.filter((t) => tagWeight.has(t)),
+  }));
+}
+
 function walkLadder(
   config: LadderConfig,
   quiz: QuizDoc,
@@ -85,19 +151,26 @@ function walkLadder(
   selectedAnswerIds: string[],
   categoryMap: Record<string, string[]>,
   answerWeights?: Record<string, number>,
-): RecommendedProduct[] {
+): ExplainedRecommendation {
   // Never surface non-sellable junk, regardless of which strategy (category /
   // tag / points / conditional / collection / fallback) resolves it.
   const productIndex = allProducts.filter(isSellable);
   const selectedSet = new Set(selectedAnswerIds);
-  const byId = (ids: string[]): RecommendedProduct[] => {
+  const { tagWeight, collectionFilters } = buildTagBag(
+    quiz,
+    selectedAnswerIds,
+    answerWeights,
+  );
+  const tagBag = Object.fromEntries(tagWeight);
+
+  const byId = (ids: string[]): IndexedProduct[] => {
     const want = new Set(ids);
-    return productIndex
-      .filter((p) => want.has(p.product_id))
-      .map((p) => ({ ...p, score: 1 }));
+    return productIndex.filter((p) => want.has(p.product_id));
   };
 
-  const resolve = (strategy: LadderStrategy): RecommendedProduct[] => {
+  // Rungs resolve ELIGIBILITY (raw candidate pools). Ordering happens once,
+  // below, for every rung alike.
+  const resolve = (strategy: LadderStrategy): IndexedProduct[] => {
     switch (strategy) {
       case "conditional": {
         for (const rule of config.conditional_rules) {
@@ -118,43 +191,76 @@ function walkLadder(
       }
       case "collection": {
         const col = config.collection_id;
-        return col
-          ? productIndex
-              .filter((p) => p.collection_ids.includes(col))
-              .map((p) => ({ ...p, score: 1 }))
-          : [];
+        return col ? productIndex.filter((p) => p.collection_ids.includes(col)) : [];
       }
       case "metafield": {
         const k = config.metafield_key;
         const v = config.metafield_value;
-        return k && v
-          ? productIndex
-              .filter((p) => p.metafields?.[k] === v)
-              .map((p) => ({ ...p, score: 1 }))
-          : [];
+        return k && v ? productIndex.filter((p) => p.metafields?.[k] === v) : [];
       }
       case "tag":
-      default:
-        return scoreAndRank(quiz, productIndex, selectedAnswerIds, answerWeights);
+      default: {
+        // The tag rung's >0 filter IS its eligibility semantics: only
+        // products the path's answers point at qualify at all.
+        const eligible =
+          collectionFilters.size === 0
+            ? productIndex
+            : productIndex.filter((p) =>
+                p.collection_ids.some((c) => collectionFilters.has(c)),
+              );
+        return eligible.filter((p) => p.tags.some((t) => tagWeight.has(t)));
+      }
     }
   };
 
+  const empty: ExplainedRecommendation = {
+    products: [],
+    rungUsed: null,
+    poolSize: 0,
+    oosSwapped: false,
+    tagBag,
+  };
+
   for (const strategy of config.match_ladder) {
-    const pool = applyOos(
-      applyRanking(resolve(strategy), config.ranking),
+    const scored = scorePool(resolve(strategy), tagWeight);
+    const { products: pool, swapped } = applyOos(
+      applyRanking(scored, config.ranking),
       { oos_behavior: config.oos_behavior, oos_fallback_collection_id: config.oos_fallback_collection_id },
       productIndex,
+      tagWeight,
     );
-    if (pool.length >= config.minProducts) return pool.slice(0, config.cap);
+    if (pool.length >= config.minProducts) {
+      return {
+        products: pool.slice(0, config.cap),
+        rungUsed: strategy,
+        poolSize: pool.length,
+        oosSwapped: swapped,
+        tagBag,
+      };
+    }
   }
 
   if (config.fallback_collection_id) {
-    const fallbackPool = productIndex
-      .filter((p) => p.collection_ids.includes(config.fallback_collection_id!))
-      .map((p) => ({ ...p, score: 0 }));
-    return applyRanking(rank(fallbackPool), config.ranking).slice(0, config.cap);
+    // Even the final fallback orders by the path's answers — zero-overlap
+    // paths keep today's in-stock → price order.
+    const fallbackPool = scorePool(
+      productIndex.filter((p) =>
+        p.collection_ids.includes(config.fallback_collection_id!),
+      ),
+      tagWeight,
+    );
+    const ordered = applyRanking(fallbackPool, config.ranking);
+    if (ordered.length > 0) {
+      return {
+        products: ordered.slice(0, config.cap),
+        rungUsed: "fallback",
+        poolSize: ordered.length,
+        oosSwapped: false,
+        tagBag,
+      };
+    }
   }
-  return [];
+  return empty;
 }
 
 // Build the runtime category map from the published result page.
@@ -171,19 +277,24 @@ function categoryMapFor(
   );
 }
 
-export function recommendForResult(
+// The rich variant: products + WHY (rung used, matched tags, the path's tag
+// bag). Powers the Logic view's trace; recommendForResult delegates so the
+// two can never disagree.
+export function recommendForResultExplained(
   input: RecommendationInput,
   // Optional cap override. Pass a larger value to fetch a deeper ranked pool
   // (primary recs + extra candidates) for deriving secondary "you might also
   // like" picks from a single coherent ladder pass.
   capOverride?: number,
-): RecommendedProduct[] {
+): ExplainedRecommendation {
   const { quiz, productIndex, selectedAnswerIds, resultNodeId, answerWeights } = input;
 
   const resultNode = quiz.nodes.find(
     (n) => n.id === resultNodeId && n.type === "result",
   );
-  if (!resultNode || resultNode.type !== "result") return [];
+  if (!resultNode || resultNode.type !== "result") {
+    return { products: [], rungUsed: null, poolSize: 0, oosSwapped: false, tagBag: {} };
+  }
 
   const data = resultNode.data;
   const resultPage = quiz.results_pages.find((r) => r.id === resultNodeId);
@@ -221,6 +332,13 @@ export function recommendForResult(
   );
 }
 
+export function recommendForResult(
+  input: RecommendationInput,
+  capOverride?: number,
+): RecommendedProduct[] {
+  return recommendForResultExplained(input, capOverride).products;
+}
+
 // "You might also like" — up to `max` secondary products shown beneath the
 // primary recommendations on the result page (Dev Spec §5). Pure + testable.
 //
@@ -254,13 +372,14 @@ export function selectSecondaryRecs(
 
 // Resolve one multi-stage section's products. Stages don't carry the
 // node's final fallback collection — an empty stage simply renders empty.
-export function recommendForStage(
+export function recommendForStageExplained(
   quiz: QuizDoc,
   productIndex: IndexedProduct[],
   selectedAnswerIds: string[],
   resultNodeId: string,
   stage: ResultDataT["stages"][number],
-): RecommendedProduct[] {
+  answerWeights?: Record<string, number>,
+): ExplainedRecommendation {
   const resultPage = quiz.results_pages.find((r) => r.id === resultNodeId);
   return walkLadder(
     {
@@ -279,7 +398,26 @@ export function recommendForStage(
     productIndex,
     selectedAnswerIds,
     categoryMapFor(resultPage),
+    answerWeights,
   );
+}
+
+export function recommendForStage(
+  quiz: QuizDoc,
+  productIndex: IndexedProduct[],
+  selectedAnswerIds: string[],
+  resultNodeId: string,
+  stage: ResultDataT["stages"][number],
+  answerWeights?: Record<string, number>,
+): RecommendedProduct[] {
+  return recommendForStageExplained(
+    quiz,
+    productIndex,
+    selectedAnswerIds,
+    resultNodeId,
+    stage,
+    answerWeights,
+  ).products;
 }
 
 // Tally each answer's point weights toward category ids across the visited
@@ -316,11 +454,13 @@ export function pickPointsWinner(
 
 // Apply the result page's ranking preference on top of the base rank()
 // (which already does score → in-stock → price). For non-relevance modes
-// we re-sort by the requested key, keeping rank() as the stable tie-break.
-function applyRanking(
-  products: RecommendedProduct[],
+// we re-sort by the requested key; JS sort is stable, so the answer-scored
+// base order survives as the tie-break — explicit merchant ranking wins,
+// answer-scoring is the default. Generic so ExplainedProduct flows through.
+function applyRanking<T extends RecommendedProduct>(
+  products: T[],
   ranking: ResultDataT["ranking"],
-): RecommendedProduct[] {
+): T[] {
   const base = rank(products);
   if (ranking === "relevance") return base;
   if (ranking === "newest") {
@@ -346,27 +486,33 @@ function applyRanking(
 
 // Apply out-of-stock behavior. hide = drop OOS; show_with_badge = keep
 // (the storefront renders the badge); fallback = if everything's OOS, swap
-// in the OOS fallback collection.
+// in the OOS fallback collection (scored by the path's tag bag, like every
+// other pool). Reports the swap so the explained API can surface it.
 function applyOos(
-  products: RecommendedProduct[],
+  products: ExplainedProduct[],
   cfg: { oos_behavior: ResultDataT["oos_behavior"]; oos_fallback_collection_id?: string },
   productIndex: IndexedProduct[],
-): RecommendedProduct[] {
-  if (cfg.oos_behavior === "show_with_badge") return products;
+  tagWeight: Map<string, number>,
+): { products: ExplainedProduct[]; swapped: boolean } {
+  if (cfg.oos_behavior === "show_with_badge") return { products, swapped: false };
   const inStock = products.filter((p) => p.inventory_in_stock);
-  if (cfg.oos_behavior === "hide") return inStock;
+  if (cfg.oos_behavior === "hide") return { products: inStock, swapped: false };
   // fallback
-  if (inStock.length > 0) return inStock;
+  if (inStock.length > 0) return { products: inStock, swapped: false };
   if (cfg.oos_fallback_collection_id) {
-    return rank(
-      productIndex
-        .filter((p) =>
-          p.collection_ids.includes(cfg.oos_fallback_collection_id!),
-        )
-        .map((p) => ({ ...p, score: 0 })),
-    );
+    return {
+      products: rank(
+        scorePool(
+          productIndex.filter((p) =>
+            p.collection_ids.includes(cfg.oos_fallback_collection_id!),
+          ),
+          tagWeight,
+        ),
+      ),
+      swapped: true,
+    };
   }
-  return inStock;
+  return { products: inStock, swapped: false };
 }
 
 export interface PreviewRecommendationInput {
@@ -423,37 +569,21 @@ function scoreAndRank(
   selectedAnswerIds: string[],
   answerWeights?: Record<string, number>,
 ): RecommendedProduct[] {
-  const selectedAnswerSet = new Set(selectedAnswerIds);
-  const tagWeight = new Map<string, number>();
-  const collectionFilters = new Set<string>();
-  for (const node of quiz.nodes) {
-    if (node.type !== "question") continue;
-    for (const answer of node.data.answers) {
-      if (!selectedAnswerSet.has(answer.id)) continue;
-      const w = answerWeights?.[answer.id] ?? 1;
-      for (const tag of answer.tags) {
-        tagWeight.set(tag, Math.max(tagWeight.get(tag) ?? 0, w));
-      }
-      if (answer.collection_filter) collectionFilters.add(answer.collection_filter);
-    }
-  }
-
+  const { tagWeight, collectionFilters } = buildTagBag(
+    quiz,
+    selectedAnswerIds,
+    answerWeights,
+  );
   const eligible =
     collectionFilters.size === 0
       ? productIndex
       : productIndex.filter((p) =>
           p.collection_ids.some((c) => collectionFilters.has(c)),
         );
-
-  const scored: RecommendedProduct[] = eligible.map((p) => ({
-    ...p,
-    score: p.tags.reduce((acc, t) => acc + (tagWeight.get(t) ?? 0), 0),
-  }));
-
-  return rank(scored.filter((p) => p.score > 0));
+  return rank(scorePool(eligible, tagWeight).filter((p) => p.score > 0));
 }
 
-function rank(products: RecommendedProduct[]): RecommendedProduct[] {
+function rank<T extends RecommendedProduct>(products: T[]): T[] {
   return [...products].sort((a, b) => {
     if (b.score !== a.score) return b.score - a.score;
     if (a.inventory_in_stock !== b.inventory_in_stock) {

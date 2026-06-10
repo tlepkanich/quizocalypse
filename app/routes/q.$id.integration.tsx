@@ -34,6 +34,7 @@ function resolveRecommendedProducts(
   productIndex: IndexedProduct[],
   path: Array<{ questionNodeId: string; answerIds: string[] }>,
   fromNodeId: string,
+  answerWeights?: Record<string, number> | null,
 ): { ids: string[]; titles: string[] } {
   const selectedAnswerIds = new Set<string>();
   const accumulatedTags = new Set<string>();
@@ -59,6 +60,7 @@ function resolveRecommendedProducts(
         productIndex,
         selectedAnswerIds: [...selectedAnswerIds],
         resultNodeId: nextId,
+        ...(answerWeights ? { answerWeights } : {}),
       });
       return { ids: recs.map((r) => r.product_id), titles: recs.map((r) => r.title) };
     }
@@ -106,7 +108,9 @@ export async function action({ params, request }: ActionFunctionArgs) {
   // The shopper's recommended products (best-effort) for marketing payloads.
   const productIndex =
     (quiz.publishedJson as { product_index?: IndexedProduct[] }).product_index ?? [];
-  const recommended = resolveRecommendedProducts(doc, productIndex, body.path, node.id);
+  const answerWeights =
+    (quiz.publishedJson as { answer_weights?: Record<string, number> }).answer_weights ?? null;
+  const recommended = resolveRecommendedProducts(doc, productIndex, body.path, node.id, answerWeights);
 
   // Build the outbound payload from the path: question text → picked answer
   // text(s) + accumulated tags. Receivers get a flat readable shape.

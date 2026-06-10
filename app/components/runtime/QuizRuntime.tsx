@@ -598,7 +598,7 @@ export function QuizRuntime(props: QuizRuntimeProps) {
     }
     const sections = stages.map((stage) => ({
       stage,
-      recs: recommendForStage(doc, productIndex, selectedAnswerIds, node.id, stage),
+      recs: recommendForStage(doc, productIndex, selectedAnswerIds, node.id, stage, answerWeights ?? undefined),
     }));
     return (
       <MultiStageResultView
@@ -878,13 +878,20 @@ export function QuizRuntime(props: QuizRuntimeProps) {
           productIndex,
           selectedAnswerIds,
           resultNodeId: currentNode.id,
+          ...(answerWeights ? { answerWeights } : {}),
         });
         // Secondary "you might also like": the same ladder fetched deeper (cap 12),
         // then diversity-filtered against the primary picks.
         const secondary = selectSecondaryRecs(
           recs,
           recommendForResult(
-            { quiz: doc, productIndex, selectedAnswerIds, resultNodeId: currentNode.id },
+            {
+              quiz: doc,
+              productIndex,
+              selectedAnswerIds,
+              resultNodeId: currentNode.id,
+              ...(answerWeights ? { answerWeights } : {}),
+            },
             12,
           ),
           2,
@@ -924,6 +931,7 @@ export function QuizRuntime(props: QuizRuntimeProps) {
             selectedAnswerIds,
             currentNode.id,
             stage,
+            answerWeights ?? undefined,
           ),
         }));
         content = (
