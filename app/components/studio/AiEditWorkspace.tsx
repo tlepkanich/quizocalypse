@@ -21,7 +21,7 @@ import type { InspectTarget } from "../runtime/QuizRuntime";
 // Dev Spec Phase 4 placement options. The standalone /q/:id is always a full
 // page; popup/inline/product_widget are honored by the Theme App Extension.
 type Placement = NonNullable<Quiz["placement"]>;
-const PLACEMENTS: Array<{ value: Placement; label: string; hint: string }> = [
+export const PLACEMENTS: Array<{ value: Placement; label: string; hint: string }> = [
   { value: "page", label: "Dedicated page", hint: "share the link above, or add the App Block to any page." },
   { value: "popup", label: "Popup", hint: "add the Quizocalypse App Block and set it to open as a modal." },
   { value: "inline", label: "Inline embed", hint: "drop the App Block into a page section to embed it in-flow." },

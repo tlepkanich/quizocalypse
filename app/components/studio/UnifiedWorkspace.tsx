@@ -1,0 +1,413 @@
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { Link, useFetcher, useSearchParams } from "@remix-run/react";
+import { TitleBar } from "@shopify/app-bridge-react";
+import { QzPage, QzPageHeader, QzButton, QzBanner } from "../qz";
+import type { Quiz } from "../../lib/quizSchema";
+import { validateQuiz, validateQuizWarnings, type NodeIssue } from "../../lib/quizValidation";
+import { orderFlow } from "../../lib/flowOrder";
+import { reconcileBucketsToResultNodes } from "../../lib/bucketReconcile";
+import type { StepProps } from "../builder/stepProps";
+import { Step5Preview } from "../builder/Step5Preview";
+import { Step1Products } from "../builder/Step1Products";
+import { LogicView } from "../logic/LogicView";
+import { DEVICE_PRESETS, breakpointForWidth } from "../builder/preview/previewWidth";
+import type { InspectTarget } from "../runtime/QuizRuntime";
+import { useQuizDraft } from "./useQuizDraft";
+import { FlowRail, type WorkspaceView } from "./FlowRail";
+import { ContextPanel } from "./ContextPanel";
+import { AiChatPanel } from "./AiChatPanel";
+import { ReviewEnrichPanel } from "./ReviewEnrichPanel";
+import { EditableTitle, type StudioBuilderData } from "./StudioBuilder";
+import { PLACEMENTS } from "./AiEditWorkspace";
+
+// ════════════════════════════════════════════════════════════════════════════
+// UnifiedWorkspace (Unified P2) — ONE editing surface replacing the AI/Advanced
+// split: left FlowRail (hierarchy + views) · center live preview (click any
+// element to edit it) · right ContextPanel (Content/Design for every node
+// type) with the AI chat docked below. Ships behind ?mode=next; the old modes
+// stay untouched until the P8 flip. Server-free, renders in both the embedded
+// and standalone surfaces.
+// ════════════════════════════════════════════════════════════════════════════
+
+type Chrome = "embedded" | "standalone";
+type QuizDoc = Quiz;
+
+export function UnifiedWorkspace({ data, chrome }: { data: StudioBuilderData; chrome: Chrome }) {
+  if (!data.valid || !data.doc) {
+    return (
+      <QzPage>
+        {chrome === "embedded" ? <TitleBar title="Studio" /> : null}
+        <QzPageHeader eyebrow="Quiz studio" title={data.name} />
+        <QzBanner tone="crit" title="This quiz's draft JSON failed validation">
+          The studio needs a valid draft.{" "}
+          {chrome === "embedded" ? (
+            <Link to={`/app/quizzes/${data.quizId}`}>Open the canvas builder</Link>
+          ) : (
+            <Link to="/studio">Back to all quizzes</Link>
+          )}{" "}
+          to repair or delete it.
+        </QzBanner>
+      </QzPage>
+    );
+  }
+  return <WorkspaceShell key={data.quizId} data={data} chrome={chrome} />;
+}
+
+function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chrome }) {
+  const { doc, commit, isSaving, savedAt } = useQuizDraft(data.doc as QuizDoc);
+  const publishFetcher = useFetcher<{ ok: boolean; version?: number; error?: string }>();
+  const renameFetcher = useFetcher<{ ok: boolean; name?: string }>();
+
+  // Selection drives the ContextPanel; the optional inspect target carries the
+  // exact element clicked in the preview (for its outline highlight).
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [inspectTarget, setInspectTarget] = useState<InspectTarget | null>(null);
+  const [editMode, setEditMode] = useState(true);
+  // Device-frame width lifted from Step5Preview so the Design tab's layer
+  // selector can follow it ("edit what you see").
+  const [frameW, setFrameW] = useState<number>(DEVICE_PRESETS.desktop);
+  const [reconcileError, setReconcileError] = useState<string | null>(null);
+
+  const select = useCallback((nodeId: string | null) => {
+    setSelectedId(nodeId);
+    setInspectTarget(null);
+  }, []);
+  const onInspect = useCallback((t: InspectTarget) => {
+    setSelectedId(t.nodeId);
+    setInspectTarget(t);
+  }, []);
+
+  // Esc clears the selection from anywhere (same affordance the old
+  // InspectorPanel had).
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") select(null);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [select]);
+
+  // View (Build / Products / Logic) synced to ?view=.
+  const [params, setParams] = useSearchParams();
+  const viewParam = params.get("view");
+  const view: WorkspaceView =
+    viewParam === "products" ? "products" : viewParam === "logic" ? "logic" : "build";
+  const setView = useCallback(
+    (v: WorkspaceView) => {
+      // Leaving Products: turn buckets into result pages (the 4-step builder
+      // ran this on the Step-1 → Step-2 transition; same guarantee here).
+      if (view === "products" && v !== "products") {
+        const buckets = data.categories.map((c) => ({ id: c.id, name: c.name }));
+        if (buckets.length) {
+          try {
+            commit(reconcileBucketsToResultNodes(doc, buckets, fallbackCollection));
+            setReconcileError(null);
+          } catch {
+            setReconcileError(
+              "We couldn't turn your buckets into result pages yet — sync at least one Shopify collection (result pages need a fallback collection). You can keep building; pages will appear once a collection is synced.",
+            );
+          }
+        }
+      }
+      setParams(
+        (prev) => {
+          const next = new URLSearchParams(prev);
+          if (v === "build") next.delete("view");
+          else next.set("view", v);
+          return next;
+        },
+        { replace: false },
+      );
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [view, doc, commit, data.categories, setParams],
+  );
+
+  const allIssues = useMemo<NodeIssue[]>(() => validateQuiz(doc), [doc]);
+  const suggestions = useMemo(() => validateQuizWarnings(doc), [doc]);
+  const issuesByNode = useMemo(() => {
+    const m = new Map<string, NodeIssue[]>();
+    for (const i of allIssues) {
+      const arr = m.get(i.nodeId) ?? [];
+      arr.push(i);
+      m.set(i.nodeId, arr);
+    }
+    return m;
+  }, [allIssues]);
+  const ordered = useMemo(() => orderFlow(doc), [doc]);
+  const fallbackCollection = data.collections[0]?.collectionId ?? "";
+  const canPublish = allIssues.length === 0;
+  const isPublishing = publishFetcher.state !== "idle";
+  const placement = doc.placement ?? "page";
+  const currentPlacement = PLACEMENTS.find((p) => p.value === placement) ?? PLACEMENTS[0]!;
+
+  const publish = () => {
+    const form = new FormData();
+    form.set("intent", "publish");
+    publishFetcher.submit(form, { method: "POST" });
+  };
+  const renameQuiz = (name: string) => {
+    const form = new FormData();
+    form.set("intent", "rename");
+    form.set("name", name);
+    renameFetcher.submit(form, { method: "POST" });
+  };
+
+  const stepProps: StepProps = {
+    quizId: data.quizId,
+    doc,
+    onCommit: commit,
+    productIndex: data.productIndex,
+    collections: data.collections,
+    categories: data.categories,
+    fallbackCollection,
+    allIssues,
+    issuesByNode,
+    ordered,
+    previewUrl: data.previewUrl,
+    goToStep: () => {},
+  };
+
+  return (
+    <QzPage>
+      {chrome === "embedded" ? <TitleBar title={`Studio · ${data.name}`} /> : null}
+      <QzPageHeader
+        eyebrow="Quiz studio"
+        title={<EditableTitle name={data.name} onRename={renameQuiz} />}
+      />
+
+      <div
+        className="qz-row qz-row-between"
+        style={{ alignItems: "center", marginBottom: 12, gap: 12, flexWrap: "wrap" }}
+      >
+        <span className="qz-dim" style={{ fontSize: 12 }}>
+          {isSaving ? "Saving…" : savedAt ? "Saved" : ""}
+        </span>
+        <div className="qz-row" style={{ gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+          <div
+            className="qz-segmented"
+            role="group"
+            aria-label="Preview mode"
+            title="Edit: click any element in the preview to edit it · Interact: walk through the quiz normally"
+          >
+            <button type="button" aria-pressed={editMode} onClick={() => setEditMode(true)}>
+              ✎ Edit
+            </button>
+            <button
+              type="button"
+              aria-pressed={!editMode}
+              onClick={() => {
+                setEditMode(false);
+                setInspectTarget(null);
+              }}
+            >
+              ▶ Interact
+            </button>
+          </div>
+          <details style={{ position: "relative" }}>
+            <summary
+              className="qz-btn qz-btn-ghost qz-btn-sm"
+              style={{ listStyle: "none", cursor: "pointer" }}
+            >
+              ⚙ Settings
+            </summary>
+            <div
+              className="qz-card"
+              style={{
+                position: "absolute",
+                right: 0,
+                top: "calc(100% + 6px)",
+                width: 380,
+                padding: 12,
+                zIndex: 50,
+                boxShadow: "var(--qz-shadow-md, 0 8px 30px rgba(0,0,0,.12))",
+              }}
+            >
+              <div className="qz-label" style={{ marginBottom: 6, fontSize: 11 }}>
+                Where should it appear?
+              </div>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6, marginBottom: 10 }}>
+                {PLACEMENTS.map((p) => {
+                  const sel = p.value === placement;
+                  return (
+                    <button
+                      key={p.value}
+                      type="button"
+                      onClick={() => commit({ ...doc, placement: p.value })}
+                      title={p.hint}
+                      style={{
+                        textAlign: "left",
+                        padding: "6px 8px",
+                        borderRadius: "var(--qz-radius)",
+                        cursor: "pointer",
+                        fontSize: 12,
+                        fontWeight: sel ? 600 : 400,
+                        border: sel ? "2px solid var(--qz-accent, #2a6df4)" : "1px solid #00000022",
+                        background: sel
+                          ? "color-mix(in srgb, var(--qz-accent, #2a6df4) 8%, transparent)"
+                          : "#fff",
+                      }}
+                    >
+                      {p.label}
+                    </button>
+                  );
+                })}
+              </div>
+              <label className="qz-row" style={{ gap: 6, alignItems: "center", fontSize: 12, marginBottom: 6 }}>
+                <input
+                  type="checkbox"
+                  checked={doc.collect_email_on_result ?? false}
+                  onChange={(e) => commit({ ...doc, collect_email_on_result: e.target.checked })}
+                />
+                <span>Email capture on the result page</span>
+              </label>
+              <label className="qz-row" style={{ gap: 6, alignItems: "center", fontSize: 12 }}>
+                <input
+                  type="checkbox"
+                  checked={doc.design_tokens?.result_split ?? false}
+                  onChange={(e) =>
+                    commit({
+                      ...doc,
+                      design_tokens: { ...doc.design_tokens, result_split: e.target.checked },
+                    })
+                  }
+                />
+                <span>2-column desktop result</span>
+              </label>
+            </div>
+          </details>
+          <Link
+            to="?mode=ai"
+            className="qz-btn qz-btn-ghost qz-btn-sm"
+            title="The previous editors are still available while the unified studio bakes"
+          >
+            Classic editor
+          </Link>
+          <QzButton variant="primary" size="sm" disabled={!canPublish || isPublishing} onClick={publish}>
+            {isPublishing ? "Publishing…" : "Publish"}
+          </QzButton>
+        </div>
+      </div>
+
+      {suggestions.length > 0 ? (
+        <div
+          className="qz-card"
+          style={{
+            padding: "10px 14px",
+            marginBottom: 12,
+            background: "color-mix(in srgb, var(--qz-warn, #b58a2a) 7%, var(--qz-surface, #fff))",
+            fontSize: 12.5,
+          }}
+        >
+          <strong style={{ fontSize: 12.5 }}>💡 Suggestions</strong>
+          <span className="qz-dim"> (won&rsquo;t block publishing)</span>
+          <ul style={{ margin: "6px 0 0", paddingLeft: 18 }}>
+            {suggestions.slice(0, 3).map((s, i) => (
+              <li key={`${s.nodeId}-${s.kind}-${i}`}>{s.message}</li>
+            ))}
+            {suggestions.length > 3 ? <li className="qz-dim">+{suggestions.length - 3} more</li> : null}
+          </ul>
+        </div>
+      ) : null}
+      {reconcileError ? (
+        <QzBanner tone="warn" title="Result pages pending">
+          {reconcileError}
+        </QzBanner>
+      ) : null}
+      {publishFetcher.data?.ok === false && publishFetcher.data.error ? (
+        <QzBanner tone="crit" title="Publish failed">
+          {publishFetcher.data.error}
+        </QzBanner>
+      ) : null}
+      {publishFetcher.data?.ok && publishFetcher.data.version ? (
+        <QzBanner tone="ok" title={`Published v${publishFetcher.data.version}`}>
+          Live at{" "}
+          <a href={data.previewUrl} target="_blank" rel="noreferrer">
+            {data.previewUrl}
+          </a>{" "}
+          — embed mode: <strong>{currentPlacement.label}</strong>.
+        </QzBanner>
+      ) : null}
+      {!canPublish ? (
+        <QzBanner tone="warn" title={`${allIssues.length} to fix before publishing`}>
+          Steps with a red dot in the rail need attention — select one to edit it.
+        </QzBanner>
+      ) : null}
+
+      {view === "build" ? (
+        <div className="qz-unified">
+          <FlowRail
+            doc={doc}
+            ordered={ordered}
+            issuesByNode={issuesByNode}
+            selectedId={selectedId}
+            onSelect={select}
+            onCommit={commit}
+            fallbackCollection={fallbackCollection}
+            view={view}
+            onView={setView}
+          />
+          <div style={{ minWidth: 0 }}>
+            <Step5Preview
+              {...stepProps}
+              onInspect={editMode ? onInspect : undefined}
+              inspectedTarget={inspectTarget}
+              frameW={frameW}
+              onFrameWChange={setFrameW}
+            />
+          </div>
+          <div style={{ position: "sticky", top: 8 }}>
+            {selectedId ? (
+              <ContextPanel
+                doc={doc}
+                nodeId={selectedId}
+                onCommit={commit}
+                onClose={() => select(null)}
+                products={data.productIndex}
+                productIndex={data.productIndex}
+                frameBreakpoint={breakpointForWidth(frameW)}
+              />
+            ) : (
+              <div className="qz-card" style={{ padding: 12, marginBottom: 16 }}>
+                <p className="qz-dim" style={{ fontSize: 12.5, margin: 0 }}>
+                  Select a step in the rail — or click any element in the preview — to edit its
+                  content, design, and layout here.
+                </p>
+              </div>
+            )}
+            <ReviewEnrichPanel onApply={commit} sources={doc.review_enrichment_sources} />
+            <AiChatPanel onApply={commit} />
+          </div>
+        </div>
+      ) : (
+        <div className="qz-unified qz-unified-wide">
+          <FlowRail
+            doc={doc}
+            ordered={ordered}
+            issuesByNode={issuesByNode}
+            selectedId={selectedId}
+            onSelect={select}
+            onCommit={commit}
+            fallbackCollection={fallbackCollection}
+            view={view}
+            onView={setView}
+          />
+          <div style={{ minWidth: 0, gridColumn: "2 / -1" }}>
+            {view === "products" ? (
+              <Step1Products {...stepProps} />
+            ) : (
+              <LogicView
+                quizId={data.quizId}
+                doc={doc}
+                onCommit={commit}
+                productIndex={data.productIndex}
+                categories={data.categories}
+                abAnalytics={data.abAnalytics}
+              />
+            )}
+          </div>
+        </div>
+      )}
+    </QzPage>
+  );
+}

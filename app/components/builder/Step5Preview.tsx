@@ -32,13 +32,22 @@ export function Step5Preview({
   quizId,
   onInspect,
   inspectedTarget,
+  frameW: frameWProp,
+  onFrameWChange,
 }: StepProps & {
   // Editor revamp P2: click-to-inspect pass-through (AI editor only — the
   // 4-step builder doesn't pass these, so its preview behaves as before).
   onInspect?: (target: InspectTarget) => void;
   inspectedTarget?: InspectTarget | null;
+  // Unified P2: optional CONTROLLED frame width — the UnifiedWorkspace lifts it
+  // so the ContextPanel's design-layer selector can follow the device frame
+  // ("edit what you see"). Omit both for the classic uncontrolled behavior.
+  frameW?: number;
+  onFrameWChange?: (w: number) => void;
 }) {
-  const [frameW, setFrameW] = useState<number>(DEVICE_PRESETS.desktop);
+  const [frameWState, setFrameWState] = useState<number>(DEVICE_PRESETS.desktop);
+  const frameW = frameWProp ?? frameWState;
+  const setFrameW = onFrameWChange ?? setFrameWState;
   const [tryOnId, setTryOnId] = useState<string | null>(null);
   const [restartKey, setRestartKey] = useState(0);
 

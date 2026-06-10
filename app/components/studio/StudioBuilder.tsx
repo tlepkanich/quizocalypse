@@ -654,7 +654,7 @@ function BuilderShell({ data, chrome }: { data: LoaderData; chrome: Chrome }) {
 
 // Inline-editable quiz title (header). Click to rename; Enter/blur saves via
 // the rename intent, Escape cancels.
-function EditableTitle({ name, onRename }: { name: string; onRename: (name: string) => void }) {
+export function EditableTitle({ name, onRename }: { name: string; onRename: (name: string) => void }) {
   const [editing, setEditing] = useState(false);
   const [value, setValue] = useState(name);
   useEffect(() => {
@@ -1345,7 +1345,7 @@ function StepCard({
 // Per-answer routing badges (editor revamp P4): shown only when a question's
 // answers DIVERGE (answerRoutes returns [] for linear questions), so branching
 // is visible right in the cascade instead of only on the advanced canvas.
-function RouteBadges({ doc, nodeId }: { doc: QuizDoc; nodeId: string }) {
+export function RouteBadges({ doc, nodeId }: { doc: QuizDoc; nodeId: string }) {
   const routes = useMemo(() => answerRoutes(doc, nodeId), [doc, nodeId]);
   if (routes.length === 0) return null;
   return (

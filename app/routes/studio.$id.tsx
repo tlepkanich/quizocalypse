@@ -4,6 +4,7 @@ import { Link, useLoaderData, useRevalidator, useSearchParams } from "@remix-run
 import { useEffect, useState } from "react";
 import { StudioBuilder } from "../components/studio/StudioBuilder";
 import { AiEditWorkspace } from "../components/studio/AiEditWorkspace";
+import { UnifiedWorkspace } from "../components/studio/UnifiedWorkspace";
 import { QzPage, QzCard, QzBanner } from "../components/qz";
 import { requireStudioAccess, resolveStudioShop } from "../lib/studioAccess.server";
 import {
@@ -80,8 +81,12 @@ export default function StandaloneStudio() {
     return <BuildError message={buildState.slice("error:".length)} />;
   }
 
-  // AI-first is the default surface; ?mode=advanced opens the full builder.
-  return params.get("mode") === "advanced" ? (
+  // AI-first is the default surface; ?mode=advanced opens the full builder;
+  // ?mode=next opens the unified workspace (Unified P2 — becomes the default
+  // at the P8 flip once it has baked).
+  return params.get("mode") === "next" ? (
+    <UnifiedWorkspace data={data} chrome="standalone" />
+  ) : params.get("mode") === "advanced" ? (
     <StudioBuilder data={data} chrome="standalone" />
   ) : (
     <AiEditWorkspace data={data} chrome="standalone" />

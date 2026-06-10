@@ -448,3 +448,29 @@ body[data-qz] ::selection { background: var(--qz-ink); color: var(--qz-cream); }
 .qz-collapse-body {
   padding: 0 12px 12px;
 }
+
+/* Unified P2 — the three-pane unified workspace: rail / preview / panel. */
+.qz-unified {
+  display: grid;
+  grid-template-columns: 250px minmax(0, 1fr) 400px;
+  gap: var(--qz-space-4);
+  align-items: start;
+}
+@media (max-width: 1100px) {
+  .qz-unified {
+    grid-template-columns: 220px minmax(0, 1fr);
+  }
+  /* Panel column flows underneath on narrow editors. */
+  .qz-unified > div:last-child {
+    grid-column: 1 / -1;
+    position: static !important;
+  }
+}
+@media (max-width: 760px) {
+  .qz-unified {
+    grid-template-columns: 1fr;
+  }
+  .qz-unified > .qz-card:first-child {
+    position: static !important;
+  }
+}
