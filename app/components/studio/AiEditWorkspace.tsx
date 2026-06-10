@@ -11,6 +11,8 @@ import type { StudioBuilderData } from "./StudioBuilder";
 import { useQuizDraft } from "./useQuizDraft";
 import { AiChatPanel } from "./AiChatPanel";
 import { ReviewEnrichPanel } from "./ReviewEnrichPanel";
+import { InspectorPanel } from "./InspectorPanel";
+import type { InspectTarget } from "../runtime/QuizRuntime";
 
 // Dev Spec Phase 4 placement options. The standalone /q/:id is always a full
 // page; popup/inline/product_widget are honored by the Theme App Extension.
@@ -75,6 +77,11 @@ export function AiEditWorkspace({ data, chrome }: { data: StudioBuilderData; chr
 function AiWorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chrome }) {
   const { doc, commit, isSaving, savedAt } = useQuizDraft(data.doc as Quiz);
   const publishFetcher = useFetcher<{ ok: boolean; version?: number; error?: string }>();
+  // Click-to-edit (editor revamp P2): in Edit mode, clicking an element in the
+  // live preview opens the InspectorPanel for that exact node/field. Interact
+  // mode restores the normal walkthrough (answers advance the quiz).
+  const [editMode, setEditMode] = useState(true);
+  const [inspect, setInspect] = useState<InspectTarget | null>(null);
 
   const allIssues = useMemo<NodeIssue[]>(() => validateQuiz(doc), [doc]);
   const issuesByNode = useMemo(() => {
@@ -129,6 +136,30 @@ function AiWorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: C
           {isSaving ? "Saving…" : savedAt ? "Saved" : ""}
         </span>
         <div className="qz-row" style={{ gap: 8, alignItems: "center" }}>
+          <div
+            className="qz-segmented"
+            role="group"
+            aria-label="Preview mode"
+            title="Edit: click any element in the preview to edit it · Interact: walk through the quiz normally"
+          >
+            <button
+              type="button"
+              aria-pressed={editMode}
+              onClick={() => setEditMode(true)}
+            >
+              ✎ Edit
+            </button>
+            <button
+              type="button"
+              aria-pressed={!editMode}
+              onClick={() => {
+                setEditMode(false);
+                setInspect(null);
+              }}
+            >
+              ▶ Interact
+            </button>
+          </div>
           <label
             className="qz-row"
             style={{ gap: 6, alignItems: "center", fontSize: 12 }}
@@ -253,9 +284,21 @@ function AiWorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: C
 
       <div className="qz-ai-workspace">
         <div style={{ minWidth: 0 }}>
-          <Step5Preview {...stepProps} />
+          <Step5Preview
+            {...stepProps}
+            onInspect={editMode ? setInspect : undefined}
+            inspectedTarget={inspect}
+          />
         </div>
         <div style={{ position: "sticky", top: 8 }}>
+          {inspect ? (
+            <InspectorPanel
+              doc={doc}
+              target={inspect}
+              onCommit={commit}
+              onClose={() => setInspect(null)}
+            />
+          ) : null}
           <ReviewEnrichPanel onApply={commit} />
           <AiChatPanel onApply={commit} />
         </div>

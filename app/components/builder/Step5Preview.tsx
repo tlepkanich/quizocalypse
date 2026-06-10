@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { QuizRuntime } from "../runtime/QuizRuntime";
+import type { InspectTarget } from "../runtime/QuizRuntime";
 import { QzBadge, QzButton, QzCard, QzField, QzInput, QzSegmented, QzSelect } from "../qz";
 import { getPreset } from "../../lib/themePresets";
 import { resolveDesignTokens, type DesignTokensT } from "../../lib/designTokens";
@@ -29,7 +30,14 @@ export function Step5Preview({
   ordered,
   previewUrl,
   quizId,
-}: StepProps) {
+  onInspect,
+  inspectedTarget,
+}: StepProps & {
+  // Editor revamp P2: click-to-inspect pass-through (AI editor only — the
+  // 4-step builder doesn't pass these, so its preview behaves as before).
+  onInspect?: (target: InspectTarget) => void;
+  inspectedTarget?: InspectTarget | null;
+}) {
   const [frameW, setFrameW] = useState<number>(DEVICE_PRESETS.desktop);
   const [tryOnId, setTryOnId] = useState<string | null>(null);
   const [restartKey, setRestartKey] = useState(0);
@@ -154,6 +162,8 @@ export function Step5Preview({
           shopDomain=""
           tokensOverride={tryOnTokens}
           breakpoint={breakpoint}
+          onInspect={onInspect}
+          inspectedTarget={inspectedTarget}
         />
       </DeviceFrame>
 
