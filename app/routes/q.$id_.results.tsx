@@ -5,6 +5,8 @@ import { useState } from "react";
 import prisma from "../db.server";
 import { Quiz, type QuizNode } from "../lib/quizSchema";
 import { recommendForResult, type IndexedProduct } from "../lib/recommendationEngine";
+import { applyTranslations, resolveLocale } from "../lib/quizTranslate";
+import { chromeFor, t, type ChromeToken } from "../components/runtime/chromeStrings";
 
 // Public "My Results" page (Miro "Save State & Resume → persistent recommendation
 // page; return via email link"). A shopper returns via a link carrying
@@ -44,6 +46,17 @@ export const loader = async ({ params, request }: LoaderFunctionArgs) => {
     product_index?: IndexedProduct[];
     shop_domain?: string;
   };
+  // Phase K2 — localize BEFORE share/recs compute so the whole page (and its
+  // unfurl) follows the locale. Strip the raw maps from what we serve.
+  const requestedLocale = new URL(request.url).searchParams.get("locale");
+  const availableLocales = Object.keys(parsed.data.translations ?? {});
+  const locale = resolveLocale(requestedLocale, availableLocales);
+  const localizedDoc = locale
+    ? applyTranslations(parsed.data, parsed.data.translations![locale]!.strings)
+    : parsed.data;
+  const chrome = chromeFor(locale ? parsed.data.translations![locale]!.strings : null);
+  parsed.data = localizedDoc;
+
   // Phase L1 — share metadata, computed server-side so the meta export can
   // build a rich unfurl (crawlers never run JS). Top recommendation's image
   // doubles as the og:image — real product photography, zero image pipeline.
@@ -75,10 +88,12 @@ export const loader = async ({ params, request }: LoaderFunctionArgs) => {
 
   return json({
     quizId: quiz.id,
-    doc: parsed.data,
+    doc: (({ translations: _t, review_enrichment_sources: _r, ...rest }) => (void _t, void _r, rest))(parsed.data),
     productIndex,
     shopDomain: publishedRaw.shop_domain ?? "",
     share,
+    locale: locale ?? "en",
+    chrome,
     session: {
       outcomeId: session.outcomeId,
       answerIds: session.answerIds,
@@ -107,7 +122,11 @@ export const meta: MetaFunction<typeof loader> = ({ data }) => {
 };
 
 export default function MyResults() {
-  const { quizId, doc, productIndex, shopDomain, share, session } = useLoaderData<typeof loader>();
+  const { quizId, doc, productIndex, shopDomain, share, session, locale, chrome } =
+    useLoaderData<typeof loader>();
+  const tc = (token: ChromeToken, vars?: Record<string, string | number>) =>
+    t(chrome as Record<ChromeToken, string>, token, vars);
+  const localeSuffix = locale !== "en" ? `?locale=${encodeURIComponent(locale)}` : "";
 
   // The saved outcome node, falling back to the first result if it was removed
   // in a later re-publish.
@@ -119,11 +138,11 @@ export default function MyResults() {
 
   if (!resultNode) {
     return (
-      <div style={shellStyle}>
+      <div style={shellStyle} lang={locale}>
         <p>
-          Your results are no longer available.{" "}
-          <a href={`/q/${quizId}`} style={{ color: "#2a6df4" }}>
-            Take the quiz again →
+          {tc("results_gone")}{" "}
+          <a href={`/q/${quizId}${localeSuffix}`} style={{ color: "#2a6df4" }}>
+            {tc("take_again")}
           </a>
         </p>
       </div>
@@ -141,10 +160,12 @@ export default function MyResults() {
     : null;
 
   return (
-    <div style={shellStyle}>
+    <div style={shellStyle} lang={locale}>
       <div style={{ marginBottom: 24 }}>
         <p style={{ color: "#666", fontSize: 13, margin: "0 0 4px" }}>
-          Your saved results{completedDate ? ` from ${completedDate}` : ""}
+          {completedDate
+            ? tc("saved_results_from", { date: completedDate })
+            : tc("saved_results")}
         </p>
         <h1 style={{ margin: "0 0 4px", fontSize: 26 }}>{resultNode.data.headline}</h1>
         {resultNode.data.subtext ? (

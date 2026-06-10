@@ -9,6 +9,8 @@
 // templates keep their parameter slots.
 // ════════════════════════════════════════════════════════════════════════════
 
+import { createContext, useContext } from "react";
+
 export const CHROME_TOKENS = {
   continue: "Continue",
   start_over: "Start over",
@@ -54,6 +56,12 @@ export const CHROME_TOKENS = {
   // Launcher (served via the script route, resolved from the same map).
   launcher_open: "Open quiz",
   launcher_close: "Close quiz",
+  // My Results page (server-rendered; added at K2 — locales generated before
+  // this fall back to English here until regenerated).
+  saved_results: "Your saved results",
+  saved_results_from: "Your saved results from {date}",
+  results_gone: "Your results are no longer available.",
+  take_again: "Take the quiz again →",
 } as const;
 
 export type ChromeToken = keyof typeof CHROME_TOKENS;
@@ -83,4 +91,16 @@ export function t(
     for (const [k, v] of Object.entries(vars)) s = s.split(`{${k}}`).join(String(v));
   }
   return s;
+}
+
+// K2 — the runtime consumes the table via context (the RuntimePreviewContext
+// precedent: one provider at the root beats threading a prop through every
+// sub-component). Default = the English table, so a component rendered
+// outside the provider — or a missing translation — shows today's copy.
+export const ChromeContext = createContext<Record<ChromeToken, string>>(CHROME_TOKENS);
+
+/** `const tc = useChrome();` → `tc("continue")`, `tc("aria_go_back_to", {n: 2, label})`. */
+export function useChrome(): (token: ChromeToken, vars?: Record<string, string | number>) => string {
+  const table = useContext(ChromeContext);
+  return (token, vars) => t(table, token, vars);
 }

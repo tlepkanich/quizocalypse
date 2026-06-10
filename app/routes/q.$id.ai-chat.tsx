@@ -17,6 +17,7 @@ interface ChatRequestBody {
   path: Array<{ questionNodeId: string; answerIds: string[] }>;
   history: AskAIMessage[];
   userMessage: string;
+  locale?: string;
 }
 
 // Hard cap on user message length so a stuck client can't spam massive
@@ -110,7 +111,12 @@ export async function action({ params, request }: ActionFunctionArgs) {
 
   try {
     const result = await runAskAIChat({
-      systemPrompt: node.data.system_prompt,
+      // K2: when the quiz is served in a locale, ask the assistant to reply in
+      // it (the persona/opening are already translated doc copy).
+      systemPrompt:
+        typeof body.locale === "string" && /^[a-z]{2}(-[a-z]{2,4})?$/i.test(body.locale) && body.locale !== "en"
+          ? `${node.data.system_prompt}\n\nRespond in the language with ISO code "${body.locale}".`
+          : node.data.system_prompt,
       personaName: node.data.persona_name,
       quizContext,
       catalogSummary,

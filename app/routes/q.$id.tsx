@@ -145,6 +145,8 @@ export default function StorefrontRuntime() {
       version={data.version}
       shopDomain={data.shopDomain}
       answerWeights={data.answerWeights}
+      chrome={data.chrome}
+      locale={data.locale}
     />
   );
 }

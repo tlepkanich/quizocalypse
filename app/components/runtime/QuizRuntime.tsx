@@ -1,4 +1,5 @@
 import { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
+import { ChromeContext, CHROME_TOKENS, useChrome, type ChromeToken } from "./chromeStrings";
 import type { Quiz, ResultStage as ResultStageT } from "../../lib/quizSchema";
 import { isFreeformType } from "../../lib/quizSchema";
 import {
@@ -128,6 +129,10 @@ export interface QuizRuntimeProps {
   // Phase J — baked conversion weights from publishedJson.answer_weights
   // (absent on drafts/previews → neutral scoring).
   answerWeights?: Record<string, number> | null;
+  // Phase K2 — the locale's chrome table (chromeFor output) + the resolved
+  // locale code. Absent → English table via the context default.
+  chrome?: Record<string, string> | null;
+  locale?: string;
 }
 
 // Content-block types the storefront renders directly. Literal blocks render via
@@ -148,8 +153,12 @@ const RUNTIME_BLOCK_TYPES = new Set([
 // integration / ai-chat) so they can no-op their side-effects without threading
 // a prop through every intermediate component. Default false = live.
 const RuntimePreviewContext = createContext(false);
+// K2 — the resolved serving locale ("en" default). Consumed by the
+// save-results link (locale-sticky URLs) and the AskAI POST (reply language).
+const RuntimeLocaleContext = createContext("en");
 
 export function QuizRuntime(props: QuizRuntimeProps) {
+  const tc = useChrome();
   const {
     doc,
     productIndex,
@@ -168,6 +177,8 @@ export function QuizRuntime(props: QuizRuntimeProps) {
     focusNodeId = null,
     onNodeShown,
     answerWeights = null,
+    chrome = null,
+    locale = "en",
   } = props;
   const isPreview = mode === "preview";
   // Inspect mode is preview-only by construction (the storefront never passes
@@ -408,6 +419,11 @@ export function QuizRuntime(props: QuizRuntimeProps) {
   // Unified P6: the root is also the size container — @container rules below
   // and the fluid type's cqw units both measure against it.
   const rootStyle: React.CSSProperties = { ...cssVars, containerType: "inline-size" };
+  // K2: prop entries win over English defaults; identity-stable per locale.
+  const chromeTable = useMemo(
+    () => ({ ...CHROME_TOKENS, ...(chrome ?? {}) }) as Record<ChromeToken, string>,
+    [chrome],
+  );
 
   // Mid-quiz product preview: active once any answered question is flagged.
   const previewActive = useMemo(
@@ -605,8 +621,8 @@ export function QuizRuntime(props: QuizRuntimeProps) {
   if (!currentNodeId) {
     content = (
       <div style={styles.card}>
-        <h1 style={styles.h1}>Quiz unavailable</h1>
-        <p>This quiz has no nodes defined.</p>
+        <h1 style={styles.h1}>{tc("quiz_unavailable")}</h1>
+        <p>{tc("quiz_no_nodes")}</p>
       </div>
     );
   } else {
@@ -620,8 +636,8 @@ export function QuizRuntime(props: QuizRuntimeProps) {
     if (!currentNode) {
       content = (
         <div style={styles.card}>
-          <h1 style={styles.h1}>Lost the thread</h1>
-          <p>Reached an unknown node — the quiz may have a missing edge.</p>
+          <h1 style={styles.h1}>{tc("lost_the_thread")}</h1>
+          <p>{tc("unknown_node")}</p>
         </div>
       );
     } else if (canBlockRender && layout) {
@@ -796,7 +812,7 @@ export function QuizRuntime(props: QuizRuntimeProps) {
                 textDecoration: "none",
               }}
             >
-              {node.data.cta_label ?? "Continue"}
+              {node.data.cta_label ?? tc("continue")}
             </a>
           )}
         </div>
@@ -938,8 +954,11 @@ export function QuizRuntime(props: QuizRuntimeProps) {
 
   return (
     <RuntimePreviewContext.Provider value={isPreview}>
+    <ChromeContext.Provider value={chromeTable}>
+    <RuntimeLocaleContext.Provider value={locale}>
     <div
       ref={rootRef}
+      lang={locale}
       className={`${breakpoint === "desktop" ? "qz-bp-desktop" : "qz-bp-mobile"}${
         !isPreview && measuredBreakpoint === null ? " qz-unmeasured" : ""
       }`}
@@ -1008,7 +1027,7 @@ export function QuizRuntime(props: QuizRuntimeProps) {
                 if (!n) return "";
                 if (n.type === "question") return n.data.text;
                 if (n.type === "intro") return n.data.headline;
-                if (n.type === "result") return n.data.headline || "Your results";
+                if (n.type === "result") return n.data.headline || tc("your_results");
                 return "";
               })()}
             </div>
@@ -1042,6 +1061,8 @@ export function QuizRuntime(props: QuizRuntimeProps) {
         )}
       </div>
     </div>
+    </RuntimeLocaleContext.Provider>
+    </ChromeContext.Provider>
     </RuntimePreviewContext.Provider>
   );
 }
@@ -1101,6 +1122,7 @@ function ProgressTrail({
   currentNodeId: string | null;
   onJump: (i: number) => void;
 }) {
+  const tc = useChrome();
   const current = currentNodeId ? doc.nodes.find((n) => n.id === currentNodeId) : null;
   const currentIsQuestion = current?.type === "question";
   if (path.length === 0 && !currentIsQuestion) return null;
@@ -1124,7 +1146,7 @@ function ProgressTrail({
 
   return (
     <div
-      aria-label="Quiz progress"
+      aria-label={tc("aria_quiz_progress")}
       style={{
         display: "flex",
         gap: 6,
@@ -1142,7 +1164,7 @@ function ProgressTrail({
           key={`${s.questionNodeId}-${i}`}
           onClick={() => onJump(i)}
           title="Jump back to this question"
-          aria-label={`Go back to question ${i + 1}: ${label(s.questionNodeId, i)}`}
+          aria-label={tc("aria_go_back_to", { n: i + 1, label: label(s.questionNodeId, i) })}
           style={pill(false, true)}
         >
           {i + 1}. {label(s.questionNodeId, i)}
@@ -1297,6 +1319,7 @@ function PreviewList({
   onClick: (product: RecommendedProduct, position: number) => void;
   onAdd?: (product: RecommendedProduct, position: number) => void;
 }) {
+  const tc = useChrome();
   const isPreviewMode = useContext(RuntimePreviewContext);
   if (recs.length === 0) {
     return (
@@ -1307,7 +1330,7 @@ function PreviewList({
           margin: 0,
         }}
       >
-        Pick more answers to see refined picks.
+        {tc("pick_more_answers")}
       </p>
     );
   }
@@ -1443,6 +1466,7 @@ function DropdownQuestion({
   onInspect?: (target: InspectTarget) => void;
   inspectedTarget?: InspectTarget | null;
 }) {
+  const tc = useChrome();
   const insp = (part: InspectPart, answerId?: string) =>
     inspectAttrs(onInspect, inspectedTarget, {
       nodeId: node.id,
@@ -1460,7 +1484,7 @@ function DropdownQuestion({
           onChange={(e) => setSel(e.target.value)}
           style={styles.selectInput}
         >
-          <option value="">Choose…</option>
+          <option value="">{tc("choose")}</option>
           {node.data.answers.map((a) => (
             <option key={a.id} value={a.id}>
               {answerLabel(a)}
@@ -1509,11 +1533,13 @@ function EducationCard({
 // unguessable session token — cross-device, survives the tab closing. Live
 // only: preview sessions never write a QuizSession row, so the page would 404.
 function SaveResultsLink({ quizId, sessionId }: { quizId?: string; sessionId?: string }) {
+  const tc = useChrome();
+  const locale = useContext(RuntimeLocaleContext);
   const isPreviewMode = useContext(RuntimePreviewContext);
   if (isPreviewMode || !quizId || !sessionId) return null;
   return (
     <a
-      href={`/q/${quizId}/results?session_id=${encodeURIComponent(sessionId)}`}
+      href={`/q/${quizId}/results?session_id=${encodeURIComponent(sessionId)}${locale !== "en" ? `&locale=${encodeURIComponent(locale)}` : ""}`}
       style={{
         display: "inline-block",
         marginTop: 14,
@@ -1523,7 +1549,7 @@ function SaveResultsLink({ quizId, sessionId }: { quizId?: string; sessionId?: s
         textUnderlineOffset: 3,
       }}
     >
-      🔖 Save my results — view them anytime, on any device
+      {tc("save_results_link")}
     </a>
   );
 }
@@ -1547,13 +1573,14 @@ function answerLabel(a: { icon?: string; text: string }): string {
 // onClick stops propagation so revealing the tooltip never selects the answer.
 // Fires tooltip_viewed once, on first reveal.
 function TooltipChip({ text, onReveal }: { text: string; onReveal: () => void }) {
+  const tc = useChrome();
   const [open, setOpen] = useState(false);
   const seenRef = useRef(false);
   return (
     <span style={{ position: "absolute", top: 8, right: 8, zIndex: 2 }}>
       <button
         type="button"
-        aria-label="More info"
+        aria-label={tc("aria_more_info")}
         aria-expanded={open}
         onKeyDown={(e) => {
           // WAI-ARIA tooltip pattern: Escape dismisses (focus stays on the chip).
@@ -2056,6 +2083,7 @@ function SearchableQuestion({
   onInspect?: (target: InspectTarget) => void;
   inspectedTarget?: InspectTarget | null;
 }) {
+  const tc = useChrome();
   const insp = (part: InspectPart, answerId?: string) =>
     inspectAttrs(onInspect, inspectedTarget, {
       nodeId: node.id,
@@ -2074,7 +2102,7 @@ function SearchableQuestion({
         type="text"
         value={query}
         onChange={(e) => setQuery(e.target.value)}
-        placeholder="Search…"
+        placeholder={tc("search_placeholder")}
         autoFocus
         style={{
           ...styles.answerBtn,
@@ -2146,6 +2174,7 @@ function EmailGateView({
   onSubmit: (contact?: { email?: string; name?: string; phone?: string }) => void;
   inspect?: (part: InspectPart) => React.HTMLAttributes<HTMLElement>;
 }) {
+  const tc = useChrome();
   const isPreviewMode = useContext(RuntimePreviewContext);
   const [email, setEmail] = useState("");
   const [name, setName] = useState("");
@@ -2198,7 +2227,7 @@ function EmailGateView({
       <div style={{ marginTop: 20, display: "grid", gap: 12 }}>
         <input
           type="email"
-          placeholder="Email"
+          placeholder={tc("gate_email_placeholder")}
           value={email}
           onChange={(e) => setEmail(e.target.value)}
           style={inputStyle}
@@ -2206,7 +2235,7 @@ function EmailGateView({
         {node.data.name_optional && (
           <input
             type="text"
-            placeholder="First name (optional)"
+            placeholder={tc("gate_name_placeholder")}
             value={name}
             onChange={(e) => setName(e.target.value)}
             style={inputStyle}
@@ -2215,7 +2244,7 @@ function EmailGateView({
         {node.data.collect_phone && (
           <input
             type="tel"
-            placeholder="Phone (optional)"
+            placeholder={tc("gate_phone_placeholder")}
             value={phone}
             onChange={(e) => setPhone(e.target.value)}
             style={inputStyle}
@@ -2227,7 +2256,7 @@ function EmailGateView({
         disabled={!valid || submitting}
         onClick={handleSubmit}
       >
-        {submitting ? "…" : "Continue"}
+        {submitting ? "…" : tc("continue")}
       </button>
       {node.data.skip_allowed && (
         <button
@@ -2242,7 +2271,7 @@ function EmailGateView({
             padding: 0,
           }}
         >
-          Skip
+          {tc("skip")}
         </button>
       )}
     </div>
@@ -2272,6 +2301,8 @@ function AskAIView({
   onContinue: () => void;
   inspect?: (part: InspectPart) => React.HTMLAttributes<HTMLElement>;
 }) {
+  const tc = useChrome();
+  const chatLocale = useContext(RuntimeLocaleContext);
   const isPreviewMode = useContext(RuntimePreviewContext);
   type Turn = { role: "user" | "assistant"; content: string };
   const [transcript, setTranscript] = useState<Turn[]>([
@@ -2312,7 +2343,7 @@ function AskAIView({
         ...prev,
         {
           role: "assistant",
-          content: "This is a preview — the AI assistant replies for real in your published quiz.",
+          content: tc("chat_preview_stub"),
         },
       ]);
       setSending(false);
@@ -2327,6 +2358,7 @@ function AskAIView({
           path,
           history,
           userMessage: message,
+          locale: chatLocale,
         }),
       });
       const body = (await res.json()) as { reply?: string; error?: string };
@@ -2340,7 +2372,7 @@ function AskAIView({
         { role: "assistant", content: body.reply! },
       ]);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Network error.");
+      setError(err instanceof Error ? err.message : tc("network_error"));
       setTranscript((prev) => prev.slice(0, -1));
     } finally {
       setSending(false);
@@ -2382,7 +2414,7 @@ function AskAIView({
         >
           {turnsRemaining > 0
             ? `${turnsRemaining} turn${turnsRemaining === 1 ? "" : "s"} left`
-            : "Chat ended"}
+            : tc("chat_ended")}
         </span>
       </div>
       <div
@@ -2462,7 +2494,7 @@ function AskAIView({
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
           disabled={sending || turnsRemaining <= 0}
-          placeholder={turnsRemaining > 0 ? "Type a question…" : "Chat ended"}
+          placeholder={turnsRemaining > 0 ? tc("chat_placeholder") : tc("chat_ended")}
           style={{
             flex: 1,
             padding: "10px 12px",
@@ -2481,7 +2513,7 @@ function AskAIView({
             opacity: canSend ? 1 : 0.5,
           }}
         >
-          Send
+          {tc("send")}
         </button>
       </form>
       <button
@@ -2525,6 +2557,7 @@ function IntegrationView({
   styles: ReturnType<typeof stylesFor>;
   onDone: () => void;
 }) {
+  const tc = useChrome();
   const isPreviewMode = useContext(RuntimePreviewContext);
   const fired = useRef(false);
   const [error, setError] = useState<string | null>(null);
@@ -2555,7 +2588,7 @@ function IntegrationView({
         if (cancelled) return;
         if (!res.ok || !body.ok) {
           if (!node.data.continue_on_error) {
-            setError(body.error ?? "Integration failed.");
+            setError(body.error ?? tc("integration_failed"));
             return;
           }
         }
@@ -2563,7 +2596,7 @@ function IntegrationView({
       } catch (err) {
         if (cancelled) return;
         if (!node.data.continue_on_error) {
-          setError(err instanceof Error ? err.message : "Network error.");
+          setError(err instanceof Error ? err.message : tc("network_error"));
           return;
         }
         onDone();
@@ -2579,7 +2612,7 @@ function IntegrationView({
 
   return (
     <div style={styles.card}>
-      <h2 style={styles.h2}>{error ? "Something went wrong" : "Saving…"}</h2>
+      <h2 style={styles.h2}>{error ? tc("something_went_wrong") : tc("saving")}</h2>
       {error ? (
         <>
           <p style={styles.muted}>{error}</p>
@@ -2588,7 +2621,7 @@ function IntegrationView({
           </button>
         </>
       ) : (
-        <p style={styles.muted}>One moment — sending your answers along.</p>
+        <p style={styles.muted}>{tc("sending_answers")}</p>
       )}
     </div>
   );
@@ -2616,6 +2649,7 @@ function ProductCardsView({
   onContinue: () => void;
   inspect?: (part: InspectPart) => React.HTMLAttributes<HTMLElement>;
 }) {
+  const tc = useChrome();
   const products = node.data.product_ids
     .map((id) => productIndex.find((p) => p.product_id === id))
     .filter((p): p is IndexedProduct => !!p);
@@ -2699,7 +2733,7 @@ function ProductCardsView({
               textAlign: "center",
             }}
           >
-            None of the configured products are available right now.
+            {tc("no_products_configured")}
           </div>
         )}
       </div>
@@ -2769,6 +2803,7 @@ function ResultEmailCapture({
   styles: ReturnType<typeof stylesFor>;
   analytics: ReturnType<typeof createAnalyticsClient> | null;
 }) {
+  const tc = useChrome();
   const isPreviewMode = useContext(RuntimePreviewContext);
   const [email, setEmail] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -2807,7 +2842,7 @@ function ResultEmailCapture({
           textAlign: "center",
         }}
       >
-        ✓ Thanks — we&rsquo;ll email your results.
+        {tc("email_capture_thanks")}
       </div>
     );
   }
@@ -2819,11 +2854,11 @@ function ResultEmailCapture({
       }}
       style={{ marginTop: 24, paddingTop: 18, borderTop: "1px solid #00000014" }}
     >
-      <div style={{ fontWeight: 600, marginBottom: 10 }}>Want your results emailed to you?</div>
+      <div style={{ fontWeight: 600, marginBottom: 10 }}>{tc("email_capture_heading")}</div>
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
         <input
           type="email"
-          placeholder="you@example.com"
+          placeholder={tc("email_placeholder")}
           value={email}
           onChange={(e) => setEmail(e.target.value)}
           style={{
@@ -2840,7 +2875,7 @@ function ResultEmailCapture({
           disabled={!valid || submitting}
           style={{ ...styles.primaryBtn, opacity: valid && !submitting ? 1 : 0.5 }}
         >
-          {submitting ? "Sending…" : "Email me"}
+          {submitting ? tc("email_capture_sending") : tc("email_capture_button")}
         </button>
       </div>
     </form>
@@ -2898,6 +2933,7 @@ function ResultView({
   bare?: boolean;
   whyBullets?: string[];
 }) {
+  const tc = useChrome();
   const isPreviewMode = useContext(RuntimePreviewContext);
   // Fire completion + view events once when the result first renders, and
   // persist the server-side session (Dev Spec §7.2) — but never in preview.
@@ -2994,7 +3030,7 @@ function ResultView({
       {secondary && secondary.length > 0 && (
         <div style={{ marginTop: 28 }}>
           <h3 style={{ ...styles.h2, fontSize: "0.8em", margin: "0 0 12px" }}>
-            You might also like
+            {tc("you_might_also_like")}
           </h3>
           <div style={styles.productGrid}>
             {secondary.map((r, idx) => (
@@ -3034,7 +3070,7 @@ function ResultView({
           marginTop: 24,
         }}
       >
-        Start over
+        {tc("start_over")}
       </button>
       <SaveResultsLink quizId={quizId} sessionId={sessionId} />
     </>
@@ -3143,6 +3179,7 @@ function MultiStageResultView({
   bare?: boolean;
   whyBullets?: string[];
 }) {
+  const tc = useChrome();
   const isPreviewMode = useContext(RuntimePreviewContext);
   useEffect(() => {
     if (completed.current || !analytics) return;
@@ -3203,7 +3240,7 @@ function MultiStageResultView({
           marginTop: 24,
         }}
       >
-        Start over
+        {tc("start_over")}
       </button>
       <SaveResultsLink quizId={quizId} sessionId={sessionId} />
     </>
@@ -3393,6 +3430,7 @@ function ProductCard({
   // else, so nothing changes unless the split layout asks for it.
   vertical?: boolean;
 }) {
+  const tc = useChrome();
   const isPreviewMode = useContext(RuntimePreviewContext);
   void position;
   // Selectable variant (Dev Spec §5). Defaults to the baked default variant;
@@ -3467,7 +3505,7 @@ function ProductCard({
           </div>
         )}
         {!product.inventory_in_stock && (
-          <div style={{ color: "#D72C0D", marginTop: 4, fontSize: 12 }}>Out of stock</div>
+          <div style={{ color: "#D72C0D", marginTop: 4, fontSize: 12 }}>{tc("out_of_stock")}</div>
         )}
       </div>
     </>
@@ -3495,7 +3533,7 @@ function ProductCard({
       <div style={{ display: "flex", flexDirection: "column", gap: 6, alignItems: "stretch", flexShrink: 0 }}>
         {product.variants && product.variants.length > 1 ? (
           <select
-            aria-label="Choose a variant"
+            aria-label={tc("aria_choose_variant")}
             value={selectedVariantId ?? ""}
             onChange={(e) => setSelectedVariantId(e.target.value)}
             style={{
@@ -3525,7 +3563,7 @@ function ProductCard({
             }}
             style={{ ...ctaStyle, cursor: "pointer" }}
           >
-            Add to cart
+            {tc("add_to_cart")}
           </button>
         ) : (
           <span style={{ ...ctaStyle, cursor: "default" }}>{ctaLabel}</span>

@@ -10,7 +10,7 @@
 <div class="quizocalypse-block" {{ block.shopify_attributes }}>
   {%- if quiz_id != blank and clean_url != blank -%}
     <iframe
-      src="{{ clean_url }}/q/{{ quiz_id }}"
+      src="{{ clean_url }}/q/{{ quiz_id }}?locale={{ request.locale.iso_code }}"
       title="{{ block.settings.iframe_title | default: 'Product finder quiz' }}"
       loading="lazy"
       allow="clipboard-write"

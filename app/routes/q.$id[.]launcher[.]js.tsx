@@ -1,6 +1,7 @@
 import type { LoaderFunctionArgs } from "@remix-run/node";
 import prisma from "../db.server";
 import { Quiz } from "../lib/quizSchema";
+import { resolveLocale } from "../lib/quizTranslate";
 
 // Serves a tiny JS snippet that merchants drop on their storefront via a
 // theme code injection or the Theme App Extension. When loaded it injects
@@ -63,7 +64,16 @@ export async function loader({ params, request }: LoaderFunctionArgs) {
   // identically in dev (tunnel) and prod without configuration.
   const reqUrl = new URL(request.url);
   const origin = `${reqUrl.protocol}//${reqUrl.host}`;
-  const quizUrl = `${origin}/q/${id}`;
+  // K2: the script tag may carry ?locale= (the TAE passes the storefront
+  // language). Resolve it against the quiz's translations; the iframe URL and
+  // the launcher's own strings follow.
+  const requestedLocale = new URL(request.url).searchParams.get("locale");
+  const available = Object.keys(parsed.data.translations ?? {});
+  const locale = resolveLocale(requestedLocale, available);
+  const trStrings = locale ? parsed.data.translations![locale]!.strings : null;
+  const quizUrl = `${origin}/q/${id}${locale ? `?locale=${encodeURIComponent(locale)}` : ""}`;
+  const openLabel = (trStrings?.["chrome.launcher_open"] ?? "Open quiz").replace(/[<>&"']/g, "");
+  const closeLabel = (trStrings?.["chrome.launcher_close"] ?? "Close quiz").replace(/[<>&"']/g, "");
 
   const icon = ICON_SVGS[cfg.icon] ?? ICON_SVGS.sparkle;
   const cornerCss = CORNER_STYLES[cfg.corner] ?? CORNER_STYLES["bottom-right"];
@@ -71,7 +81,7 @@ export async function loader({ params, request }: LoaderFunctionArgs) {
   // the launcher matches without an extra config field.
   const bgColor =
     cfg.color ?? parsed.data.design_tokens.colors?.primary ?? "#5563DE";
-  const label = cfg.label.replace(/[<>&"']/g, "");
+  const label = (trStrings?.["launcher.label"] ?? cfg.label).replace(/[<>&"']/g, "");
 
   const script = `(function(){
   if (window.__qzLauncher_${id.replace(/[^a-z0-9]/gi, "")}) return;
@@ -124,7 +134,7 @@ export async function loader({ params, request }: LoaderFunctionArgs) {
 
   var btn = document.createElement("button");
   btn.className = "qz-launcher-btn";
-  btn.setAttribute("aria-label", "Open quiz");
+  btn.setAttribute("aria-label", ${JSON.stringify(openLabel)});
   btn.innerHTML = ${JSON.stringify(icon)}${
     label ? ` + ${JSON.stringify(`<span>${label}</span>`)}` : ""
   };
@@ -133,7 +143,7 @@ export async function loader({ params, request }: LoaderFunctionArgs) {
   modal.className = "qz-launcher-modal";
   modal.innerHTML = ${JSON.stringify(`
     <iframe class="qz-launcher-frame" src="${quizUrl}" title="Quiz" allow="clipboard-write"></iframe>
-    <button class="qz-launcher-close" aria-label="Close quiz">×</button>
+    <button class="qz-launcher-close" aria-label="${closeLabel}">×</button>
   `)};
 
   btn.addEventListener("click", function(){ modal.classList.add("open"); });

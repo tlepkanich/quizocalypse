@@ -112,3 +112,17 @@ for (const q of QUIZZES) {
     });
   }
 }
+
+// Phase K2 — locale serving contract. Fixture "a" (the demo quiz) carries a
+// French translation map; ?locale=fr must serve lang="fr" with non-empty copy,
+// and an unknown locale must fall back to English (lang="en"). Structural
+// only — no assertions on specific translated words (regeneration may rephrase).
+test("locale: fr serves lang=fr, unknown falls back to en", async ({ page }) => {
+  const demo = QUIZZES.find((q) => q.label === "a")!;
+  await page.goto(`/q/${demo.id}?locale=fr`, { waitUntil: "networkidle" });
+  await expect(page.locator('[lang="fr"]').first()).toBeAttached();
+  expect((await page.locator("h1").first().textContent())?.trim().length).toBeGreaterThan(0);
+
+  await page.goto(`/q/${demo.id}?locale=zz`, { waitUntil: "networkidle" });
+  await expect(page.locator('[lang="en"]').first()).toBeAttached();
+});
