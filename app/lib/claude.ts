@@ -1085,15 +1085,17 @@ const TRANSLATE_CHUNK = 60;
 
 /**
  * Translate the extracted string list into the target locale, chunked so a
- * large quiz never overruns the output budget. Per-chunk zod gate + retry
- * (the enrichFromReviews pattern); keys not present in the chunk's input are
- * dropped, missing keys are tolerated (callers fall back to English
- * per-string). Returns a flat key→text map.
+ * large quiz never overruns the output budget. Chunks run IN PARALLEL — a
+ * real quiz (~150 strings = 3 chunks) must finish inside the Fly edge
+ * proxy's ~60s request window, and sequential chunks blew it (verified live:
+ * the proxy closed the socket mid-request and nothing persisted). Each chunk
+ * keeps its own zod gate + retry (the enrichFromReviews pattern); keys not
+ * present in the chunk's input are dropped, missing keys are tolerated
+ * (callers fall back to English per-string). Returns a flat key→text map.
  */
 export async function translateQuiz(
   input: TranslateQuizInput,
 ): Promise<Record<string, string>> {
-  const out: Record<string, string> = {};
   const system = TRANSLATE_SYSTEM_PROMPT + buildBrandVoiceAddition(input.brandGuidelines);
   const tool = {
     name: "emit_translations",
@@ -1101,8 +1103,15 @@ export async function translateQuiz(
     input_schema: translateToolJsonSchema as unknown as Anthropic.Tool.InputSchema,
   } satisfies Anthropic.Tool;
 
+  const chunks: Array<Array<{ key: string; text: string }>> = [];
   for (let start = 0; start < input.strings.length; start += TRANSLATE_CHUNK) {
-    const chunk = input.strings.slice(start, start + TRANSLATE_CHUNK);
+    chunks.push(input.strings.slice(start, start + TRANSLATE_CHUNK));
+  }
+
+  const translateChunk = async (
+    chunk: Array<{ key: string; text: string }>,
+    index: number,
+  ): Promise<Record<string, string>> => {
     const allowed = new Set(chunk.map((s) => s.key));
     const userMessage = [
       `TARGET LOCALE: ${input.targetLocale}`,
@@ -1115,8 +1124,7 @@ export async function translateQuiz(
     ].join("\n");
 
     let lastIssue: string | undefined;
-    let done = false;
-    for (let attempt = 1; attempt <= MAX_ATTEMPTS && !done; attempt++) {
+    for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
       const response = await client().messages.create({
         model: MODEL,
         max_tokens: MAX_TOKENS,
@@ -1148,18 +1156,19 @@ export async function translateQuiz(
           .join("; ");
         continue;
       }
+      const out: Record<string, string> = {};
       for (const t of parsed.data.translations) {
         if (allowed.has(t.key) && t.text.trim()) out[t.key] = t.text;
       }
-      done = true;
+      return out;
     }
-    if (!done) {
-      throw new QuizGenerationError(
-        `Translation chunk ${start / TRANSLATE_CHUNK + 1} failed validation after retries.`,
-        MAX_ATTEMPTS,
-        lastIssue,
-      );
-    }
-  }
-  return out;
+    throw new QuizGenerationError(
+      `Translation chunk ${index + 1} failed validation after retries.`,
+      MAX_ATTEMPTS,
+      lastIssue,
+    );
+  };
+
+  const results = await Promise.all(chunks.map((c, i) => translateChunk(c, i)));
+  return Object.assign({}, ...results) as Record<string, string>;
 }
