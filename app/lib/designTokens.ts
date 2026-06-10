@@ -129,7 +129,46 @@ export function resolveForBreakpoint(
 // Translate a resolved token set into CSS variable values for the storefront.
 // The runtime sets these on the root element and all child styles read via
 // var(--token-name).
-export function tokensToCssVars(t: DesignTokensT): Record<string, string> {
+// Unified P7 — fluid typography. When both breakpoint resolutions are given,
+// the three type-scale vars interpolate linearly with the CONTAINER width
+// (cqw — requires container-type: inline-size on the runtime root) between
+// the mobile endpoint (≤390px container) and the desktop endpoint (≥1100px).
+// AT 390 and 1100 the values equal the fixed per-bucket sizes, so standard
+// phone/desktop renders are pixel-identical to the non-fluid output — only
+// in-between widths scale smoothly. Merchant per-breakpoint base_size
+// overrides ARE the endpoints.
+export interface FluidTypeSource {
+  mobile: DesignTokensT;
+  desktop: DesignTokensT;
+}
+
+const FLUID_MIN_W = 390;
+const FLUID_MAX_W = 1100;
+
+function round2(n: number): number {
+  return Math.round(n * 100) / 100;
+}
+
+function fluidPx(mobilePx: number, desktopPx: number): string {
+  if (Math.abs(desktopPx - mobilePx) < 0.05) return `${round2(desktopPx)}px`;
+  const lo = Math.min(mobilePx, desktopPx);
+  const hi = Math.max(mobilePx, desktopPx);
+  const slope = (desktopPx - mobilePx) / (FLUID_MAX_W - FLUID_MIN_W); // px per container px
+  const intercept = mobilePx - slope * FLUID_MIN_W;
+  // 100cqw = the container's full inline size in px, so slope·w ≡ (slope·100)cqw.
+  return `clamp(${round2(lo)}px, calc(${round2(intercept)}px + ${round2(slope * 100)}cqw), ${round2(hi)}px)`;
+}
+
+function typeScale(t: DesignTokensT): { base: number; h1: number; h2: number } {
+  const base = t.typography?.body?.base_size ?? 16;
+  const scale = t.typography?.body?.scale_ratio ?? 1.25;
+  return { base, h1: base * scale * scale * 1.4, h2: base * scale * scale };
+}
+
+export function tokensToCssVars(
+  t: DesignTokensT,
+  fluid?: FluidTypeSource,
+): Record<string, string> {
   const radius = t.radius ?? "rounded";
   // "pill" caps at 24px (not 999px): a ≤48px-tall button still renders as a full
   // pill (radius ≥ half its height), but a tall card/answer/product surface stays
@@ -139,8 +178,19 @@ export function tokensToCssVars(t: DesignTokensT): Record<string, string> {
   const spacing = t.spacing ?? "normal";
   const pad =
     spacing === "compact" ? "12px" : spacing === "spacious" ? "32px" : "20px";
-  const baseSize = t.typography?.body?.base_size ?? 16;
-  const scale = t.typography?.body?.scale_ratio ?? 1.25;
+  const { base: baseSize, h1: h1Size, h2: h2Size } = typeScale(t);
+  // Fluid mode: each size var interpolates between the two buckets' values.
+  const sizes = fluid
+    ? (() => {
+        const m = typeScale(fluid.mobile);
+        const d = typeScale(fluid.desktop);
+        return {
+          base: fluidPx(m.base, d.base),
+          h1: fluidPx(m.h1, d.h1),
+          h2: fluidPx(m.h2, d.h2),
+        };
+      })()
+    : { base: `${baseSize}px`, h1: `${h1Size}px`, h2: `${h2Size}px` };
   const shadow = t.shadow ?? "soft";
   const shadowCss =
     shadow === "none"
@@ -157,9 +207,9 @@ export function tokensToCssVars(t: DesignTokensT): Record<string, string> {
     "--qz-color-muted": t.colors?.muted ?? "#666666",
     "--qz-font-heading": t.typography?.heading?.family ?? "Inter",
     "--qz-font-body": t.typography?.body?.family ?? "Inter",
-    "--qz-base-size": `${baseSize}px`,
-    "--qz-h1-size": `${baseSize * scale * scale * 1.4}px`,
-    "--qz-h2-size": `${baseSize * scale * scale}px`,
+    "--qz-base-size": sizes.base,
+    "--qz-h1-size": sizes.h1,
+    "--qz-h2-size": sizes.h2,
     "--qz-radius": radiusPx,
     "--qz-pad": pad,
     "--qz-shadow": shadowCss,

@@ -212,7 +212,7 @@ export function QuizRuntime(props: QuizRuntimeProps) {
   // is what implements the design cascade at the storefront layer. The
   // breakpoint layer is picked from breakpoint_overrides[nodeId][bp] and only
   // applied if the viewport matches.
-  const resolved = useMemo(() => {
+  const { resolved, fluidSource } = useMemo(() => {
     // Preview reskin: a live `tokensOverride` replaces the quiz layer so theme
     // swatches restyle instantly (no save). undefined in live → unchanged.
     const baked = (tokensOverride ?? designTokens) as DesignTokensT | null;
@@ -234,7 +234,15 @@ export function QuizRuntime(props: QuizRuntimeProps) {
         >)[currentNodeId]
       : undefined;
     const bpLayer = bpRecord?.[breakpoint] ?? null;
-    return resolveForBreakpoint(null, baked, nodeOverride, bpLayer);
+    // Unified P7: resolve BOTH buckets too — they are the fluid-typography
+    // endpoints (per-breakpoint base_size overrides included by construction).
+    return {
+      resolved: resolveForBreakpoint(null, baked, nodeOverride, bpLayer),
+      fluidSource: {
+        mobile: resolveForBreakpoint(null, baked, nodeOverride, bpRecord?.mobile ?? null),
+        desktop: resolveForBreakpoint(null, baked, nodeOverride, bpRecord?.desktop ?? null),
+      },
+    };
   }, [
     designTokens,
     tokensOverride,
@@ -248,8 +256,8 @@ export function QuizRuntime(props: QuizRuntimeProps) {
 
   const styles = useMemo(() => stylesFor(resolved, breakpoint), [resolved, breakpoint]);
   const cssVars = useMemo(
-    () => tokensToCssVars(resolved) as React.CSSProperties,
-    [resolved],
+    () => tokensToCssVars(resolved, fluidSource) as React.CSSProperties,
+    [resolved, fluidSource],
   );
   const fontUrl = useMemo(() => {
     const heading = resolved.typography?.heading?.family;
@@ -393,7 +401,9 @@ export function QuizRuntime(props: QuizRuntimeProps) {
   }, [stateKey, version, currentNodeId, path, isPreview]);
 
   // Apply CSS vars at the very root so all children resolve var(--qz-*).
-  const rootStyle: React.CSSProperties = { ...cssVars };
+  // Unified P6: the root is also the size container — @container rules below
+  // and the fluid type's cqw units both measure against it.
+  const rootStyle: React.CSSProperties = { ...cssVars, containerType: "inline-size" };
 
   // Mid-quiz product preview: active once any answered question is flagged.
   const previewActive = useMemo(
@@ -925,7 +935,9 @@ export function QuizRuntime(props: QuizRuntimeProps) {
     <RuntimePreviewContext.Provider value={isPreview}>
     <div
       ref={rootRef}
-      className={breakpoint === "desktop" ? "qz-bp-desktop" : "qz-bp-mobile"}
+      className={`${breakpoint === "desktop" ? "qz-bp-desktop" : "qz-bp-mobile"}${
+        !isPreview && measuredBreakpoint === null ? " qz-unmeasured" : ""
+      }`}
       style={rootStyle}
     >
       {fontUrl && <link rel="stylesheet" href={fontUrl} />}
@@ -956,6 +968,20 @@ export function QuizRuntime(props: QuizRuntimeProps) {
         .qz-bp-desktop .qz-preview-rail { flex: 0 0 320px; position: sticky; top: 64px; }
         .qz-bp-desktop .qz-preview-chip { display: none !important; }
         .qz-bp-mobile .qz-preview-rail { display: none; }
+        /* Unified P6 — pre-hydration container correctness. Before JS measures
+           (the SSR'd qz-unmeasured class), container queries pick the desktop
+           shell layout on wide containers, so the no-JS / pre-hydration first
+           paint is already right. Scoped to qz-unmeasured so the MEASURED
+           system owns everything after hydration (no dual-source conflicts —
+           including the 16px hysteresis band). Browsers without @container
+           keep the coherent mobile-first default. */
+        @container (min-width: 900px) {
+          .qz-unmeasured .qz-runtime-page { align-items: flex-start !important; justify-content: center !important; padding-top: 64px !important; }
+          .qz-unmeasured .qz-runtime-shell { flex-direction: row; align-items: flex-start; max-width: 1100px; gap: 40px; }
+          .qz-unmeasured .qz-runtime-content { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: center; }
+          .qz-unmeasured .qz-preview-rail { flex: 0 0 320px; position: sticky; top: 64px; }
+          .qz-unmeasured .qz-preview-chip { display: none !important; }
+        }
       `}</style>
       <div className="qz-runtime-page" style={styles.page}>
         <div className="qz-runtime-shell">

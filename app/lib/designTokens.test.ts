@@ -44,3 +44,25 @@ describe("tokensToCssVars radius (the 'big oval' fix)", () => {
     expect(tokensToCssVars({})["--qz-radius"]).toBe("10px");
   });
 });
+
+describe("fluid typography (Unified P7)", () => {
+  const tok = (base: number) => ({ typography: { body: { family: "Inter", base_size: base, scale_ratio: 1.25 } } });
+
+  it("equal endpoints stay fixed px (no clamp noise)", () => {
+    const vars = tokensToCssVars(tok(16), { mobile: tok(16), desktop: tok(16) });
+    expect(vars["--qz-base-size"]).toBe("16px");
+  });
+
+  it("different endpoints emit a clamp whose bounds ARE the bucket sizes", () => {
+    const vars = tokensToCssVars(tok(16), { mobile: tok(14), desktop: tok(18) });
+    expect(vars["--qz-base-size"]).toMatch(/^clamp\(14px, calc\(.+cqw\), 18px\)$/);
+    // h1 = base * 1.25² * 1.4 — compute bounds with the same rounding.
+    const r2 = (n: number) => Math.round(n * 100) / 100;
+    expect(vars["--qz-h1-size"]).toContain(`clamp(${r2(14 * 1.25 * 1.25 * 1.4)}px`);
+    expect(vars["--qz-h1-size"]).toContain(`${r2(18 * 1.25 * 1.25 * 1.4)}px)`);
+  });
+
+  it("no fluid arg → unchanged fixed emission (StepPreview path)", () => {
+    expect(tokensToCssVars(tok(16))["--qz-base-size"]).toBe("16px");
+  });
+});
