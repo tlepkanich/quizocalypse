@@ -10,6 +10,10 @@ export interface PickerProduct {
   image_url: string | null;
 }
 
+// Question types whose answers render an image (Unified P0 — shared by the
+// InspectorPanel and the panels' QuestionContent so the two can't drift).
+export const IMAGE_ANSWER_TYPES = new Set(["image_tile", "image_picker", "swatch"]);
+
 export function ImagePicker({
   products,
   value,

@@ -1,0 +1,335 @@
+import { useState } from "react";
+import { QzButton, QzField, QzInput, QzSelect, QzTextarea } from "../../qz";
+import type { Quiz, QuizNode } from "../../../lib/quizSchema";
+import { isFreeformType } from "../../../lib/quizSchema";
+import { addAnswer, removeAnswer } from "../../../lib/quizMutations";
+import { updateNodeData } from "../studioDoc";
+import { EmojiIconPicker } from "../EmojiIconPicker";
+import { ImagePicker, IMAGE_ANSWER_TYPES, type PickerProduct } from "../ImagePicker";
+
+// ════════════════════════════════════════════════════════════════════════════
+// Content panel — focused field editors per node type (Unified P0: extracted
+// from StudioBuilder verbatim; QuestionContent additionally gains the
+// icon/image/columns affordances that previously lived only in the AI-mode
+// InspectorPanel, so there is ONE canonical question editor).
+// ════════════════════════════════════════════════════════════════════════════
+
+type QuizDoc = Quiz;
+
+export function ContentTab({
+  doc,
+  node,
+  onCommit,
+  products,
+}: {
+  doc: QuizDoc;
+  node: QuizNode;
+  onCommit: (doc: QuizDoc) => void;
+  // Optional product catalog for the image picker's "Your products" tab.
+  // Call sites without it still get the URL tab.
+  products?: PickerProduct[];
+}) {
+  const set = (patch: Record<string, unknown>) => onCommit(updateNodeData(doc, node.id, patch));
+  const d = node.data as Record<string, unknown>;
+  const str = (k: string) => (typeof d[k] === "string" ? (d[k] as string) : "");
+
+  const text = (k: string, label: string, area = false) => (
+    <QzField label={label} key={k}>
+      {area ? (
+        <QzTextarea value={str(k)} onChange={(e) => set({ [k]: e.target.value })} rows={3} />
+      ) : (
+        <QzInput value={str(k)} onChange={(e) => set({ [k]: e.target.value })} />
+      )}
+    </QzField>
+  );
+
+  switch (node.type) {
+    case "intro":
+      return (
+        <>
+          {text("headline", "Headline")}
+          {text("subtext", "Subtext", true)}
+          {text("button_label", "Button label")}
+          {text("hero_image_url", "Hero image URL")}
+        </>
+      );
+    case "question":
+      return <QuestionContent doc={doc} node={node} onCommit={onCommit} products={products} />;
+    case "email_gate":
+      return (
+        <>
+          {text("headline", "Headline")}
+          {text("subtext", "Subtext", true)}
+          <label style={{ display: "inline-flex", gap: 8, alignItems: "center", fontSize: 13 }}>
+            <input
+              type="checkbox"
+              checked={Boolean(d.collect_phone)}
+              onChange={(e) => set({ collect_phone: e.target.checked })}
+            />
+            Also collect phone (SMS)
+          </label>
+        </>
+      );
+    case "result":
+      return (
+        <>
+          {text("headline", "Headline")}
+          {text("subtext", "Subtext", true)}
+          {text("cta_label", "CTA label")}
+          <p className="qz-dim" style={{ fontSize: 12 }}>
+            Recommendation logic lives in the canvas builder’s Logic tab.
+          </p>
+        </>
+      );
+    case "message":
+      return text("text", "Message", true);
+    case "end":
+      return (
+        <>
+          {text("headline", "Headline")}
+          {text("subtext", "Subtext", true)}
+          {text("cta_label", "CTA label")}
+          {text("cta_url", "CTA URL")}
+        </>
+      );
+    case "ask_ai":
+      return (
+        <>
+          {text("persona_name", "Persona name")}
+          {text("opening_message", "Opening message", true)}
+          {text("system_prompt", "System prompt", true)}
+        </>
+      );
+    case "product_cards":
+      return (
+        <>
+          {text("headline", "Headline")}
+          {text("subtext", "Subtext", true)}
+          {text("cta_label", "CTA label")}
+        </>
+      );
+    case "branch":
+      return text("label", "Label");
+    case "integration":
+      return (
+        <>
+          {text("label", "Label")}
+          <p className="qz-dim" style={{ fontSize: 12 }}>
+            Configure webhook / Klaviyo actions in the canvas builder.
+          </p>
+        </>
+      );
+    default:
+      return null;
+  }
+}
+
+export function QuestionContent({
+  doc,
+  node,
+  onCommit,
+  products,
+}: {
+  doc: QuizDoc;
+  node: Extract<QuizNode, { type: "question" }>;
+  onCommit: (doc: QuizDoc) => void;
+  products?: PickerProduct[];
+}) {
+  const setText = (text: string) => onCommit(updateNodeData(doc, node.id, { text }));
+  const setData = (patch: Record<string, unknown>) =>
+    onCommit(updateNodeData(doc, node.id, patch));
+  const setAnswer = (answerId: string, patch: Record<string, unknown>) => {
+    const answers = node.data.answers.map((a) => (a.id === answerId ? { ...a, ...patch } : a));
+    onCommit(updateNodeData(doc, node.id, { answers }));
+  };
+  // Which answer row has its icon/image picker expanded (one at a time).
+  const [picker, setPicker] = useState<{ answerId: string; kind: "icon" | "image" } | null>(null);
+  const isCard = !isFreeformType(node.data.question_type);
+  const supportsImages = IMAGE_ANSWER_TYPES.has(node.data.question_type);
+  const columns = node.data.answer_columns;
+  const num = (v: string) => (v.trim() ? Math.max(1, Math.round(Number(v) || 1)) : undefined);
+  const chipStyle = (active: boolean): React.CSSProperties => ({
+    border: active ? "1px solid var(--qz-accent, #2a6df4)" : "1px solid #00000022",
+    background: "#fff",
+    borderRadius: 6,
+    width: 26,
+    height: 26,
+    cursor: "pointer",
+    flex: "0 0 auto",
+    fontSize: 13,
+    lineHeight: 1,
+  });
+  return (
+    <>
+      <QzField label="Question">
+        <QzTextarea value={node.data.text} onChange={(e) => setText(e.target.value)} rows={2} />
+      </QzField>
+      <QzField label="Type">
+        <QzSelect
+          value={node.data.question_type}
+          onChange={(e) => setData({ question_type: e.target.value })}
+        >
+          <option value="single_select">Single select</option>
+          <option value="multi_select">Multi select</option>
+          <option value="dropdown">Dropdown</option>
+          <option value="image_tile">Image tiles</option>
+          <option value="image_picker">Image picker</option>
+          <option value="rating">Rating scale</option>
+          <option value="swatch">Swatch picker</option>
+          <option value="numeric">Number input</option>
+          <option value="date">Date input</option>
+          <option value="slider">Slider (0–100)</option>
+          <option value="searchable">Searchable</option>
+          <option value="text">Text input</option>
+          <option value="email">Email input</option>
+        </QzSelect>
+      </QzField>
+      {node.data.question_type === "multi_select" ? (
+        <div className="qz-row" style={{ gap: 12 }}>
+          <QzField label="Min picks">
+            <QzInput
+              type="number"
+              min={1}
+              value={node.data.min_selections ? String(node.data.min_selections) : ""}
+              onChange={(e) => setData({ min_selections: num(e.target.value) })}
+            />
+          </QzField>
+          <QzField label="Max picks">
+            <QzInput
+              type="number"
+              min={1}
+              value={node.data.max_selections ? String(node.data.max_selections) : ""}
+              onChange={(e) => setData({ max_selections: num(e.target.value) })}
+            />
+          </QzField>
+        </div>
+      ) : null}
+      <QzField label="Answers">
+        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+          {node.data.answers.map((a) => (
+            <div key={a.id} style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+              <div className="qz-row" style={{ gap: 6, alignItems: "center" }}>
+                <QzInput
+                  value={a.text}
+                  onChange={(e) => setAnswer(a.id, { text: e.target.value })}
+                  style={{ flex: 1 }}
+                />
+                <button
+                  type="button"
+                  title={a.icon ? `Icon: ${a.icon} — change` : "Add an emoji icon"}
+                  aria-label={`Icon for answer: ${a.text}`}
+                  onClick={() =>
+                    setPicker((p) =>
+                      p?.answerId === a.id && p.kind === "icon"
+                        ? null
+                        : { answerId: a.id, kind: "icon" },
+                    )
+                  }
+                  style={chipStyle(picker?.answerId === a.id && picker.kind === "icon")}
+                >
+                  {a.icon ?? "☺"}
+                </button>
+                {supportsImages ? (
+                  <button
+                    type="button"
+                    title={a.image_url ? "Change image" : "Pick an image"}
+                    aria-label={`Image for answer: ${a.text}`}
+                    onClick={() =>
+                      setPicker((p) =>
+                        p?.answerId === a.id && p.kind === "image"
+                          ? null
+                          : { answerId: a.id, kind: "image" },
+                      )
+                    }
+                    style={{
+                      ...chipStyle(picker?.answerId === a.id && picker.kind === "image"),
+                      background: a.image_url ? `center/cover url(${a.image_url})` : "#fff",
+                      color: a.image_url ? "transparent" : undefined,
+                      fontSize: 12,
+                    }}
+                  >
+                    🖼
+                  </button>
+                ) : null}
+                {node.data.answers.length > (isCard ? 2 : 1) ? (
+                  <button
+                    onClick={() => onCommit(removeAnswer(doc, node.id, a.id))}
+                    className="qz-btn qz-btn-ghost qz-btn-sm"
+                    title="Remove answer"
+                    aria-label={`Remove answer: ${a.text}`}
+                  >
+                    ✕
+                  </button>
+                ) : null}
+              </div>
+              {picker?.answerId === a.id && picker.kind === "icon" ? (
+                <EmojiIconPicker
+                  value={a.icon}
+                  onPick={(icon) => {
+                    setAnswer(a.id, { icon });
+                    setPicker(null);
+                  }}
+                />
+              ) : null}
+              {picker?.answerId === a.id && picker.kind === "image" ? (
+                <ImagePicker
+                  products={products ?? []}
+                  value={a.image_url}
+                  onPick={(image_url) => {
+                    setAnswer(a.id, { image_url });
+                    setPicker(null);
+                  }}
+                />
+              ) : null}
+            </div>
+          ))}
+        </div>
+      </QzField>
+      {isCard ? (
+        <div className="qz-row" style={{ gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+          <QzButton size="sm" variant="ghost" onClick={() => onCommit(addAnswer(doc, node.id))}>
+            + Add answer
+          </QzButton>
+          <span className="qz-dim" style={{ fontSize: 11 }}>Columns:</span>
+          <div className="qz-segmented" role="group" aria-label="Answer columns">
+            <button
+              type="button"
+              aria-pressed={columns === undefined}
+              onClick={() => setData({ answer_columns: undefined })}
+            >
+              Auto
+            </button>
+            <button
+              type="button"
+              aria-pressed={columns === 1}
+              onClick={() => setData({ answer_columns: 1 })}
+            >
+              1
+            </button>
+            <button
+              type="button"
+              aria-pressed={columns === 2}
+              onClick={() => setData({ answer_columns: 2 })}
+            >
+              2
+            </button>
+          </div>
+        </div>
+      ) : null}
+      <QzField
+        label="Education card (optional)"
+        hint="A short explainer shown before this question — use it for unfamiliar terms. Leave empty for none."
+      >
+        <QzTextarea
+          value={node.data.education_card_before ?? ""}
+          onChange={(e) => {
+            const v = e.target.value.trim();
+            setData({ education_card_before: v.length > 0 ? v : undefined });
+          }}
+          rows={2}
+          placeholder="e.g. SPF measures how long a sunscreen protects against UVB rays."
+        />
+      </QzField>
+    </>
+  );
+}

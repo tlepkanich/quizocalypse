@@ -4,11 +4,10 @@ import type { InspectTarget } from "../runtime/QuizRuntime";
 import { addAnswer, removeAnswer } from "../../lib/quizMutations";
 import { QzButton } from "../qz";
 import { EmojiIconPicker } from "./EmojiIconPicker";
-import { ImagePicker, type PickerProduct } from "./ImagePicker";
+import { ImagePicker, IMAGE_ANSWER_TYPES, type PickerProduct } from "./ImagePicker";
 
-// Question types whose answers render an image — only these get the image
-// affordance (an image on e.g. a plain single_select would never render).
-const IMAGE_ANSWER_TYPES = new Set(["image_tile", "image_picker", "swatch"]);
+// IMAGE_ANSWER_TYPES moved to ImagePicker.tsx (Unified P0 — shared with the
+// panels' QuestionContent so the two editors can't drift).
 
 // Contextual editor for a click-to-inspect target (editor revamp P2). The
 // merchant clicks an element in the live preview; this panel edits exactly that
