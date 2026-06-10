@@ -14,6 +14,14 @@ export const EVENT_TYPES = [
   "add_to_cart",
   "email_captured",
   "tooltip_viewed",
+  // BIC P2 — fired when the shopper LEAVES the intro (clicked Start).
+  // quiz_started fires on render, so started=view and engaged=interaction.
+  "quiz_engaged",
+  // BIC P2 — written SERVER-SIDE by the orders/create webhook per attributed
+  // session: payload { order_id, total_price, currency }. Dashboards sum it
+  // (deduped by order_id) into the Revenue stat. Never sent by the client,
+  // but accepted by the enum so the shared Event table schema stays one list.
+  "order_attributed",
 ] as const;
 export const EventType = z.enum(EVENT_TYPES);
 export type EventType = z.infer<typeof EventType>;

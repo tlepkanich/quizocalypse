@@ -4,7 +4,12 @@ import { Link, useLoaderData } from "@remix-run/react";
 import { requireStudioAccess, resolveStudioShop } from "../lib/studioAccess.server";
 import prisma from "../db.server";
 import { Quiz } from "../lib/quizSchema";
-import { perQuestionDropoff, conversionSummary } from "../lib/funnelAggregation";
+import {
+  perQuestionDropoff,
+  conversionSummary,
+  totalRevenue,
+  formatRevenue,
+} from "../lib/funnelAggregation";
 import { QzPage, QzPageHeader, QzCard, QzStat, QzStatGrid, QzBanner } from "../components/qz";
 
 // Standalone funnel dashboard for the /studio surface (Fly-reachable; the
@@ -22,16 +27,31 @@ export const loader = async ({ params, request }: LoaderFunctionArgs) => {
   });
   if (!quiz) throw new Response("Quiz not found", { status: 404 });
 
+  // Optional ?from=YYYY-MM-DD&to=YYYY-MM-DD window (BIC P2). Invalid dates are
+  // ignored; `to` is inclusive (end of that day).
+  const url = new URL(request.url);
+  const fromParam = url.searchParams.get("from");
+  const toParam = url.searchParams.get("to");
+  const from = fromParam ? new Date(fromParam) : null;
+  const to = toParam ? new Date(`${toParam}T23:59:59.999Z`) : null;
+  const tsRange = {
+    ...(from && !Number.isNaN(+from) ? { gte: from } : {}),
+    ...(to && !Number.isNaN(+to) ? { lte: to } : {}),
+  };
+  const hasRange = Object.keys(tsRange).length > 0;
+
   const [eventRows, sessionRows, captureCount] = await Promise.all([
     prisma.event.findMany({
-      where: { quizId: quiz.id },
+      where: { quizId: quiz.id, ...(hasRange ? { ts: tsRange } : {}) },
       select: { sessionId: true, eventType: true, payload: true },
     }),
     prisma.quizSession.findMany({
-      where: { quizId: quiz.id },
+      where: { quizId: quiz.id, ...(hasRange ? { startedAt: tsRange } : {}) },
       select: { completedAt: true, converted: true },
     }),
-    prisma.emailCapture.count({ where: { quizId: quiz.id } }),
+    prisma.emailCapture.count({
+      where: { quizId: quiz.id, ...(hasRange ? { capturedAt: tsRange } : {}) },
+    }),
   ]);
 
   const byStage = new Map<string, Set<string>>();
@@ -46,12 +66,14 @@ export const loader = async ({ params, request }: LoaderFunctionArgs) => {
   const count = (k: string) => byStage.get(k)?.size ?? 0;
   const funnel = {
     started: count("quiz_started"),
+    engaged: count("quiz_engaged"),
     answered: count("question_answered"),
     completed: count("quiz_completed"),
     viewed: count("recommendation_viewed"),
     addToCart: count("add_to_cart"),
     clicked: count("recommendation_clicked"),
   };
+  const revenue = totalRevenue(eventRows);
 
   const parsed = Quiz.safeParse(quiz.publishedJson ?? quiz.draftJson);
   const questions = parsed.success
@@ -64,6 +86,8 @@ export const loader = async ({ params, request }: LoaderFunctionArgs) => {
     dropoff: perQuestionDropoff(eventRows, questions, funnel.started),
     conversion: conversionSummary(sessionRows),
     captureCount,
+    revenue: { formatted: formatRevenue(revenue), orders: revenue.orders },
+    range: { from: fromParam ?? "", to: toParam ?? "" },
   });
 };
 
@@ -108,12 +132,33 @@ export default function StudioAnalytics() {
           value={`${(conversion.rate * 100).toFixed(1)}%`}
           delta={`${conversion.converted} of ${conversion.completed} completed → bought`}
         />
+        <QzStat
+          label="Revenue"
+          value={data.revenue.formatted}
+          delta={data.revenue.orders > 0 ? `${data.revenue.orders} attributed order(s)` : "no attributed orders yet"}
+        />
       </QzStatGrid>
+
+      <form
+        method="get"
+        className="qz-row"
+        style={{ gap: 8, alignItems: "center", marginTop: 16, fontSize: 12 }}
+      >
+        <span className="qz-dim">From</span>
+        <input type="date" name="from" defaultValue={data.range.from} style={{ font: "inherit", padding: "4px 6px", borderRadius: 6, border: "1px solid #00000022" }} />
+        <span className="qz-dim">to</span>
+        <input type="date" name="to" defaultValue={data.range.to} style={{ font: "inherit", padding: "4px 6px", borderRadius: 6, border: "1px solid #00000022" }} />
+        <button type="submit" className="qz-btn qz-btn-ghost qz-btn-sm">Apply</button>
+        {data.range.from || data.range.to ? (
+          <Link to="?" className="qz-btn qz-btn-ghost qz-btn-sm">Clear</Link>
+        ) : null}
+      </form>
 
       <div className="qz-col qz-gap-16" style={{ marginTop: 32 }}>
         <h2 className="qz-h1">Stage-by-stage</h2>
         <QzCard flush>
-          <Row label="Started" value={funnel.started} />
+          <Row label="Viewed (loaded the quiz)" value={funnel.started} />
+          <Row label="Started (clicked Start)" value={funnel.engaged} />
           <Row label="Answered ≥1 question" value={funnel.answered} />
           <Row label="Completed" value={funnel.completed} />
           <Row label="Saw recommendations" value={funnel.viewed} />

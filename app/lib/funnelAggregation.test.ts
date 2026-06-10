@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { perQuestionDropoff, conversionSummary } from "./funnelAggregation";
+import { perQuestionDropoff, conversionSummary, totalRevenue, formatRevenue } from "./funnelAggregation";
 
 const ev = (sessionId: string, question_id: string) => ({
   sessionId,
@@ -53,5 +53,42 @@ describe("conversionSummary", () => {
       converted: 0,
       rate: 0,
     });
+  });
+});
+
+describe("totalRevenue (BIC P2)", () => {
+  const rev = (order_id: string, total_price: string, currency = "USD", sessionId = "s") => ({
+    sessionId,
+    eventType: "order_attributed",
+    payload: { order_id, total_price, currency },
+  });
+
+  it("dedupes multi-winner orders and groups by currency", () => {
+    const out = totalRevenue([
+      rev("o1", "50.00", "USD", "s1"),
+      rev("o1", "50.00", "USD", "s2"), // same order, second winning session
+      rev("o2", "25.50", "USD"),
+      rev("o3", "10.00", "EUR"),
+      { sessionId: "x", eventType: "quiz_started", payload: {} }, // ignored
+    ]);
+    expect(out.orders).toBe(3);
+    expect(out.totalsByCurrency).toEqual({ USD: 75.5, EUR: 10 });
+  });
+
+  it("skips malformed payloads", () => {
+    const out = totalRevenue([
+      { sessionId: "a", eventType: "order_attributed", payload: { order_id: "", total_price: "x" } },
+      { sessionId: "b", eventType: "order_attributed", payload: null },
+      rev("ok", "5.00"),
+    ]);
+    expect(out.orders).toBe(1);
+    expect(out.totalsByCurrency).toEqual({ USD: 5 });
+  });
+
+  it("formats for the stat card", () => {
+    expect(formatRevenue({ orders: 0, totalsByCurrency: {} })).toBe("—");
+    expect(formatRevenue({ orders: 2, totalsByCurrency: { USD: 75.5, EUR: 10 } })).toBe(
+      "75.50 USD · 10.00 EUR",
+    );
   });
 });

@@ -448,6 +448,15 @@ export function QuizRuntime(props: QuizRuntimeProps) {
   }
 
   function gotoNextFrom(nodeId: string, handle: string | null) {
+    // Funnel stage "engaged" (BIC P2): fires the moment the shopper LEAVES the
+    // intro — i.e. they clicked Start. quiz_started fires on render (a view),
+    // so engaged is the first true interaction. Click-driven → no double-fire;
+    // preview no-ops via the mock analytics client; resume restores past the
+    // intro so it never re-enters here.
+    const sourceNode = doc.nodes.find((n) => n.id === nodeId);
+    if (sourceNode?.type === "intro") {
+      analyticsRef.current?.track("quiz_engaged", {});
+    }
     const ctx = buildBranchContext();
     const next = resolveNextStep(doc, nodeId, handle, ctx);
     // A/B assignments mutated during branch traversal live in abRef and are

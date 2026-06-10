@@ -72,3 +72,50 @@ export function conversionSummary(
   }
   return { completed, converted, rate: completed > 0 ? converted / completed : 0 };
 }
+
+export interface RevenueSummary {
+  /** Distinct orders attributed to this quiz. */
+  orders: number;
+  /** Sum of order totals per currency code ("" when the webhook had none). */
+  totalsByCurrency: Record<string, number>;
+}
+
+/**
+ * Sum attributed revenue from order_attributed Event rows (written server-side
+ * by the orders/create webhook). One order can win MULTIPLE sessions → one row
+ * each — dedupe by payload.order_id so an order is counted once. Malformed
+ * payloads are skipped.
+ */
+export function totalRevenue(events: FunnelEvent[]): RevenueSummary {
+  const seen = new Map<string, { total: number; currency: string }>();
+  for (const e of events) {
+    if (e.eventType !== "order_attributed") continue;
+    const p = e.payload as {
+      order_id?: unknown;
+      total_price?: unknown;
+      currency?: unknown;
+    } | null;
+    const orderId = typeof p?.order_id === "string" ? p.order_id : null;
+    const total = typeof p?.total_price === "string" ? Number(p.total_price) : NaN;
+    if (!orderId || !Number.isFinite(total)) continue;
+    if (seen.has(orderId)) continue;
+    seen.set(orderId, {
+      total,
+      currency: typeof p?.currency === "string" ? p.currency : "",
+    });
+  }
+  const totalsByCurrency: Record<string, number> = {};
+  for (const { total, currency } of seen.values()) {
+    totalsByCurrency[currency] = (totalsByCurrency[currency] ?? 0) + total;
+  }
+  return { orders: seen.size, totalsByCurrency };
+}
+
+/** "1,234.50 USD · 99.00 EUR" (or "—" with no orders) for the Revenue stat. */
+export function formatRevenue(rev: RevenueSummary): string {
+  const parts = Object.entries(rev.totalsByCurrency).map(
+    ([cur, amt]) =>
+      `${amt.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}${cur ? ` ${cur}` : ""}`,
+  );
+  return parts.length > 0 ? parts.join(" · ") : "—";
+}

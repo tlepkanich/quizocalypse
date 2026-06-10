@@ -6,7 +6,12 @@ import { authenticate } from "../shopify.server";
 import prisma from "../db.server";
 import { Quiz } from "../lib/quizSchema";
 import { findAbBranches, aggregateVariantFunnel } from "../lib/abAnalytics";
-import { perQuestionDropoff, conversionSummary } from "../lib/funnelAggregation";
+import {
+  perQuestionDropoff,
+  conversionSummary,
+  totalRevenue,
+  formatRevenue,
+} from "../lib/funnelAggregation";
 import {
   QzPage,
   QzPageHeader,
@@ -33,8 +38,20 @@ export const loader = async ({ params, request }: LoaderFunctionArgs) => {
   });
   if (!quiz) throw new Response("Quiz not found", { status: 404 });
 
+  // Optional ?from/?to date window (BIC P2); invalid dates ignored, `to` inclusive.
+  const url = new URL(request.url);
+  const fromParam = url.searchParams.get("from");
+  const toParam = url.searchParams.get("to");
+  const fromD = fromParam ? new Date(fromParam) : null;
+  const toD = toParam ? new Date(`${toParam}T23:59:59.999Z`) : null;
+  const tsRange = {
+    ...(fromD && !Number.isNaN(+fromD) ? { gte: fromD } : {}),
+    ...(toD && !Number.isNaN(+toD) ? { lte: toD } : {}),
+  };
+  const hasRange = Object.keys(tsRange).length > 0;
+
   const eventRows = await prisma.event.findMany({
-    where: { quizId: quiz.id },
+    where: { quizId: quiz.id, ...(hasRange ? { ts: tsRange } : {}) },
     select: { sessionId: true, eventType: true, ts: true, payload: true },
   });
 
@@ -79,10 +96,12 @@ export const loader = async ({ params, request }: LoaderFunctionArgs) => {
   const count = (k: string) => sessionsByStage.get(k)?.size ?? 0;
 
   const started = count("quiz_started");
+  const engaged = count("quiz_engaged");
   const answered = count("question_answered");
   const completed = count("quiz_completed");
   const viewed = count("recommendation_viewed");
   const clicked = count("recommendation_clicked");
+  const revenue = totalRevenue(eventRows);
 
   const captures = await prisma.emailCapture.findMany({
     where: { quizId: quiz.id },
@@ -93,7 +112,7 @@ export const loader = async ({ params, request }: LoaderFunctionArgs) => {
   // Server-side sessions → conversion rate (QuizSession.converted is set by the
   // orders/create webhook). Per-question drop-off from question_answered events.
   const sessionRows = await prisma.quizSession.findMany({
-    where: { quizId: quiz.id },
+    where: { quizId: quiz.id, ...(hasRange ? { startedAt: tsRange } : {}) },
     select: { completedAt: true, converted: true },
   });
   const conversion = conversionSummary(sessionRows);
@@ -107,8 +126,10 @@ export const loader = async ({ params, request }: LoaderFunctionArgs) => {
   return json({
     quiz: { id: quiz.id, name: quiz.name, status: quiz.status },
     abTests,
-    funnel: { started, answered, completed, viewed, clicked },
+    funnel: { started, engaged, answered, completed, viewed, clicked },
     conversion,
+    revenue: { formatted: formatRevenue(revenue), orders: revenue.orders },
+    range: { from: fromParam ?? "", to: toParam ?? "" },
     dropoff,
     earliest: earliest ? earliest.toISOString() : null,
     latest: latest ? latest.toISOString() : null,
@@ -188,6 +209,15 @@ export default function QuizAnalytics() {
           value={`${(data.conversion.rate * 100).toFixed(1)}%`}
           delta={`${data.conversion.converted} of ${data.conversion.completed} completed → bought`}
         />
+        <QzStat
+          label="Revenue"
+          value={data.revenue.formatted}
+          delta={
+            data.revenue.orders > 0
+              ? `${data.revenue.orders} attributed order(s)`
+              : "no attributed orders yet"
+          }
+        />
       </QzStatGrid>
 
       <section
@@ -206,7 +236,8 @@ export default function QuizAnalytics() {
             </div>
           </div>
           <QzCard flush>
-            <FunnelRow label="Started" value={funnel.started} />
+            <FunnelRow label="Viewed (loaded the quiz)" value={funnel.started} />
+            <FunnelRow label="Started (clicked Start)" value={funnel.engaged} />
             <FunnelRow label="Answered ≥1 question" value={funnel.answered} />
             <FunnelRow label="Completed" value={funnel.completed} />
             <FunnelRow label="Saw recommendations" value={funnel.viewed} />

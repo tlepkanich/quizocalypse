@@ -18,8 +18,11 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   if (!shopRecord) return new Response();
 
   const order = payload as {
+    id?: number | string | null;
     email?: string | null;
     created_at?: string | null;
+    total_price?: string | null;
+    currency?: string | null;
     line_items?: Array<{ product_id?: number | string | null }>;
   };
   const productIds = (order.line_items ?? [])
@@ -65,6 +68,28 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       where: { id: { in: winnerIds } },
       data: { converted: true },
     });
+    // Revenue attribution (BIC P2, migration-free): one order_attributed Event
+    // row per winning session carrying the order total. Dashboards sum these
+    // DEDUPED BY order_id (one order can win multiple sessions), grouped by
+    // currency. Best-effort — an Event failure must never break attribution.
+    try {
+      const winners = sessions.filter((s) => winnerIds.includes(s.id));
+      await prisma.event.createMany({
+        data: winners.map((s) => ({
+          quizId: s.quizId,
+          shopId: shopRecord.id,
+          sessionId: s.sessionId,
+          eventType: "order_attributed",
+          payload: {
+            order_id: String(order.id ?? ""),
+            total_price: order.total_price ?? null,
+            currency: order.currency ?? null,
+          } as never,
+        })),
+      });
+    } catch (err) {
+      console.error("[webhook] order_attributed event write failed:", err);
+    }
   }
   console.log(`[webhook] ${topic} ${shop}: converted ${winnerIds.length} session(s)`);
   return new Response();
