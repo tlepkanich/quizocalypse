@@ -385,7 +385,7 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
               </div>
             )}
             <ReviewEnrichPanel onApply={commit} sources={doc.review_enrichment_sources} />
-            <AiChatPanel onApply={commit} />
+            <AiChatPanel onApply={commit} selectedNodeId={selectedId} />
           </div>
         </div>
       ) : (

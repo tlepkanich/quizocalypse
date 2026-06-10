@@ -26,7 +26,15 @@ const SUGGESTIONS = [
 // success it applies the returned doc via onApply (which re-renders the live
 // preview, no reload) and shows the assistant's one-line summary. On failure the
 // stored draft is untouched — the server gates every edit on Quiz.parse.
-export function AiChatPanel({ onApply }: { onApply: (doc: Quiz) => void }) {
+export function AiChatPanel({
+  onApply,
+  selectedNodeId,
+}: {
+  onApply: (doc: Quiz) => void;
+  // Unified P5 — the workspace's current selection, so "this question" in
+  // chat resolves to the step the merchant is looking at.
+  selectedNodeId?: string | null;
+}) {
   const fetcher = useFetcher<AiEditResponse>();
   const [transcript, setTranscript] = useState<ChatTurn[]>([]);
   const [input, setInput] = useState("");
@@ -70,9 +78,10 @@ export function AiChatPanel({ onApply }: { onApply: (doc: Quiz) => void }) {
       form.set("intent", "ai-edit");
       form.set("message", msg);
       form.set("history", JSON.stringify(history));
+      if (selectedNodeId) form.set("selected_node_id", selectedNodeId);
       fetcher.submit(form, { method: "POST" });
     },
-    [busy, transcript, fetcher],
+    [busy, transcript, fetcher, selectedNodeId],
   );
 
   return (

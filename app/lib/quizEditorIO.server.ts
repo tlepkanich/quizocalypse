@@ -505,6 +505,14 @@ export async function handleQuizEditorActionForShop(
     }
     const doc = parsedDoc.data;
 
+    // Unified P5 — node-scoped chat: the workspace sends the merchant's
+    // current selection so "this question / this step" resolves to it.
+    const selectedNodeId = String(form.get("selected_node_id") ?? "").slice(0, 64);
+    const selectedNote =
+      selectedNodeId && doc.nodes.some((n) => n.id === selectedNodeId)
+        ? `SELECTED NODE: ${selectedNodeId} — "this question/step" refers to it.\n`
+        : "";
+
     const [allProducts, allCollections] = await Promise.all([
       prisma.product.findMany({ where: { shopId: shop.id } }),
       prisma.collection.findMany({ where: { shopId: shop.id } }),
@@ -515,7 +523,7 @@ export async function handleQuizEditorActionForShop(
     let edit;
     try {
       edit = await editQuiz({
-        outline: outlineQuiz(doc),
+        outline: selectedNote + outlineQuiz(doc),
         catalogSummary: indexed.summary,
         message,
         history,

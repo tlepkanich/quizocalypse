@@ -1,5 +1,5 @@
 import { z } from "zod";
-import type { Quiz } from "./quizSchema";
+import { ImageBlock, isFreeformType, type Quiz } from "./quizSchema";
 import {
   addQuestionNode,
   deleteNode,
@@ -10,6 +10,8 @@ import {
 } from "./quizMutations";
 import { getPreset } from "./themePresets";
 import { resolveDesignTokens } from "./designTokens";
+import { setDesignLayer } from "./designLayers";
+import { synthesizeLayout } from "./synthesizeLayout";
 
 // ───────────────────────────────────────────────────────────────────────────
 // Inline AI chat edit — the deterministic OPS engine (the Dev Spec's "Call 2").
@@ -51,6 +53,56 @@ const AnswerSpec = z.object({
   text: z.string().min(1),
   tags: z.array(z.string()).default([]),
 });
+
+// ── Unified P5 vocabulary ────────────────────────────────────────────────────
+// Every question type the panel's Type select offers.
+const QUESTION_TYPES = [
+  "single_select",
+  "multi_select",
+  "dropdown",
+  "image_tile",
+  "image_picker",
+  "rating",
+  "swatch",
+  "numeric",
+  "date",
+  "slider",
+  "searchable",
+  "text",
+  "email",
+] as const;
+
+// Per-node-type writable content fields — mirrors the ContentTab panel. An op
+// naming a field outside its node's list is skipped with a warning.
+const NODE_FIELDS: Record<string, readonly string[]> = {
+  intro: ["headline", "subtext", "button_label", "hero_image_url"],
+  question: ["text"],
+  email_gate: ["headline", "subtext"],
+  result: ["headline", "subtext", "cta_label"],
+  message: ["text"],
+  end: ["headline", "subtext", "cta_label", "cta_url"],
+  ask_ai: ["persona_name", "opening_message", "system_prompt"],
+  product_cards: ["headline", "subtext", "cta_label"],
+  branch: ["label"],
+  integration: ["label"],
+};
+const NODE_FIELD_NAMES = [
+  "headline",
+  "subtext",
+  "button_label",
+  "hero_image_url",
+  "text",
+  "cta_label",
+  "cta_url",
+  "persona_name",
+  "opening_message",
+  "system_prompt",
+  "label",
+] as const;
+// Fields that must be https URLs (empty clears).
+const URL_FIELDS = new Set(["hero_image_url", "cta_url"]);
+
+const HEX_COLOR = z.string().regex(/^#[0-9a-fA-F]{3,8}$/, "hex color");
 
 // The op vocabulary. Each variant maps to a safe mutation (or an inline,
 // edge-preserving patch). Kept deliberately small + content-only — no ids,
@@ -139,6 +191,68 @@ export const EditOp = z.discriminatedUnion("op", [
     op: z.literal("set_answer_columns"),
     node_id: z.string().min(1),
     columns: z.number().int().min(0).max(2),
+  }),
+  // ── Unified P5 — full panel parity ────────────────────────────────────────
+  // Switch a question's type. Freeform→card switches are guarded at apply
+  // (cards need ≥2 answers).
+  z.object({
+    op: z.literal("set_question_type"),
+    node_id: z.string().min(1),
+    question_type: z.enum(QUESTION_TYPES),
+  }),
+  // Multi-select pick constraints (omit a bound to clear it).
+  z.object({
+    op: z.literal("set_selections"),
+    node_id: z.string().min(1),
+    min: z.number().int().min(1).optional(),
+    max: z.number().int().min(1).optional(),
+  }),
+  // Set any whitelisted content field on any node type (the superset of
+  // set_text — per-type validity enforced at apply; URL fields https-only).
+  z.object({
+    op: z.literal("set_node_field"),
+    node_id: z.string().min(1),
+    field: z.enum(NODE_FIELD_NAMES),
+    value: z.string(),
+  }),
+  // Quiz/node feature flags. collect_phone needs node_id (an email_gate).
+  z.object({
+    op: z.literal("set_flag"),
+    flag: z.enum(["collect_email_on_result", "result_split", "collect_phone"]),
+    value: z.boolean(),
+    node_id: z.string().min(1).optional(),
+  }),
+  // Insert a non-question step into the chain (questions go via add_question).
+  z.object({
+    op: z.literal("add_node"),
+    type: z.enum(["message", "email_gate", "end"]),
+    after_node_id: z.string().min(1).optional(),
+    headline: z.string().optional(),
+    text: z.string().optional(),
+  }),
+  // Per-node design within a tight whitelist (hex colors / radius / button
+  // style on a layer) — the AI still never authors raw token packs.
+  z.object({
+    op: z.literal("set_node_design"),
+    node_id: z.string().min(1),
+    layer: z.enum(["synced", "desktop", "mobile"]).default("synced"),
+    colors: z
+      .object({
+        primary: HEX_COLOR.optional(),
+        background: HEX_COLOR.optional(),
+        text: HEX_COLOR.optional(),
+      })
+      .optional(),
+    radius: z.enum(["square", "rounded", "pill"]).optional(),
+    button_style: z.enum(["filled", "outline", "ghost"]).optional(),
+  }),
+  // "Show a picture on this page" — place an image block above/below the
+  // step's content (breaks the step into blocks if it's still on-template).
+  z.object({
+    op: z.literal("add_image_block"),
+    node_id: z.string().min(1),
+    placement: z.enum(["above", "below"]),
+    image_url: z.string().optional(),
   }),
 ]);
 export type EditOp = z.infer<typeof EditOp>;
@@ -481,10 +595,233 @@ export function applyEditOps(doc: QuizDoc, ops: EditOp[]): ApplyEditResult {
         working = next;
         break;
       }
+      // ── Unified P5 cases ────────────────────────────────────────────────
+      case "set_question_type": {
+        const node = findNode(working, op.node_id);
+        if (!node || node.type !== "question") {
+          warnings.push(`set_question_type: ${op.node_id} is not a question`);
+          break;
+        }
+        // Card-style types render answer choices; switching INTO one needs
+        // at least 2 answers to render anything selectable.
+        if (!isFreeformType(op.question_type) && node.data.answers.length < 2) {
+          warnings.push(
+            `set_question_type: "${op.question_type}" needs at least 2 answers — add answers first`,
+          );
+          break;
+        }
+        working = {
+          ...working,
+          nodes: working.nodes.map((n) =>
+            n.id === op.node_id && n.type === "question"
+              ? { ...n, data: { ...n.data, question_type: op.question_type } }
+              : n,
+          ),
+        };
+        break;
+      }
+      case "set_selections": {
+        const node = findNode(working, op.node_id);
+        if (!node || node.type !== "question") {
+          warnings.push(`set_selections: ${op.node_id} is not a question`);
+          break;
+        }
+        if (node.data.question_type !== "multi_select") {
+          warnings.push(`set_selections: ${op.node_id} is not multi_select`);
+          break;
+        }
+        if (op.min !== undefined && op.max !== undefined && op.min > op.max) {
+          warnings.push(`set_selections: min ${op.min} > max ${op.max} — skipped`);
+          break;
+        }
+        working = {
+          ...working,
+          nodes: working.nodes.map((n) =>
+            n.id === op.node_id && n.type === "question"
+              ? { ...n, data: { ...n.data, min_selections: op.min, max_selections: op.max } }
+              : n,
+          ),
+        };
+        break;
+      }
+      case "set_node_field": {
+        const node = findNode(working, op.node_id);
+        if (!node) {
+          warnings.push(`set_node_field: node ${op.node_id} not found`);
+          break;
+        }
+        const allowed = NODE_FIELDS[node.type] ?? [];
+        if (!allowed.includes(op.field)) {
+          warnings.push(`set_node_field: ${node.type} has no editable "${op.field}"`);
+          break;
+        }
+        let value: string | undefined = op.value;
+        if (URL_FIELDS.has(op.field)) {
+          const url = op.value.trim();
+          if (url && !/^https:\/\//.test(url)) {
+            warnings.push(`set_node_field: ${op.field} must be an https URL`);
+            break;
+          }
+          value = url || undefined;
+        }
+        working = {
+          ...working,
+          nodes: working.nodes.map((n) =>
+            n.id === op.node_id
+              ? ({ ...n, data: { ...n.data, [op.field]: value } } as typeof n)
+              : n,
+          ),
+        };
+        break;
+      }
+      case "set_flag": {
+        if (op.flag === "collect_email_on_result") {
+          working = { ...working, collect_email_on_result: op.value };
+        } else if (op.flag === "result_split") {
+          working = {
+            ...working,
+            design_tokens: { ...working.design_tokens, result_split: op.value },
+          };
+        } else {
+          // collect_phone lives on an email_gate node.
+          const node = op.node_id ? findNode(working, op.node_id) : null;
+          const gate =
+            node?.type === "email_gate"
+              ? node
+              : working.nodes.find((n) => n.type === "email_gate");
+          if (!gate) {
+            warnings.push("set_flag: collect_phone needs an email gate step");
+            break;
+          }
+          working = {
+            ...working,
+            nodes: working.nodes.map((n) =>
+              n.id === gate.id && n.type === "email_gate"
+                ? { ...n, data: { ...n.data, collect_phone: op.value } }
+                : n,
+            ),
+          };
+        }
+        break;
+      }
+      case "add_node": {
+        const run = straightThroughRun(working);
+        const runTail = run.run.length ? run.run[run.run.length - 1]! : run.head;
+        const anchor =
+          op.after_node_id && findNode(working, op.after_node_id)
+            ? op.after_node_id
+            : runTail;
+        if (op.after_node_id && !findNode(working, op.after_node_id)) {
+          warnings.push(`add_node: anchor ${op.after_node_id} not found — appended instead`);
+        }
+        const data =
+          op.type === "message"
+            ? { text: op.text || op.headline || "A quick note before we continue." }
+            : op.type === "email_gate"
+              ? {
+                  headline: op.headline || "Where should we send your results?",
+                  subtext: op.text || "",
+                }
+              : {
+                  headline: op.headline || "Thanks for taking the quiz!",
+                  subtext: op.text || "",
+                };
+        working = insertStep(working, anchor, op.type, data);
+        break;
+      }
+      case "set_node_design": {
+        const node = findNode(working, op.node_id);
+        if (!node) {
+          warnings.push(`set_node_design: node ${op.node_id} not found`);
+          break;
+        }
+        const patch = {
+          ...(op.colors ? { colors: op.colors } : {}),
+          ...(op.radius ? { radius: op.radius } : {}),
+          ...(op.button_style ? { button_style: op.button_style } : {}),
+        };
+        if (Object.keys(patch).length === 0) {
+          warnings.push("set_node_design: empty patch — nothing to apply");
+          break;
+        }
+        working = setDesignLayer(working, op.node_id, op.layer, patch);
+        break;
+      }
+      case "add_image_block": {
+        const node = findNode(working, op.node_id);
+        if (!node) {
+          warnings.push(`add_image_block: node ${op.node_id} not found`);
+          break;
+        }
+        if (node.type === "branch" || node.type === "integration") {
+          warnings.push(`add_image_block: ${node.type} steps are invisible to shoppers`);
+          break;
+        }
+        const url = op.image_url?.trim();
+        if (url && !/^https:\/\//.test(url)) {
+          warnings.push("add_image_block: only https image URLs are allowed");
+          break;
+        }
+        // Existing custom layout, or synthesize from the template (the same
+        // "break into blocks" path the panel's Layout tab uses).
+        const blocks = working.node_layouts[op.node_id] ?? synthesizeLayout(node);
+        if (!blocks) {
+          warnings.push(`add_image_block: ${node.type} has no composable layout`);
+          break;
+        }
+        const img = ImageBlock.parse({
+          id: uid("blk"),
+          type: "image",
+          ...(url ? { url } : {}),
+        });
+        working = {
+          ...working,
+          node_layouts: {
+            ...working.node_layouts,
+            [op.node_id]: op.placement === "above" ? [img, ...blocks] : [...blocks, img],
+          },
+        };
+        break;
+      }
     }
   }
 
   return { doc: working, warnings };
+}
+
+// Insert a non-question step after `anchorId` with the chain spliced through
+// it (anchor → new → anchor's old successor) — the insertQuestion pattern,
+// generalized for the add_node op.
+function insertStep(
+  doc: QuizDoc,
+  anchorId: string | null,
+  type: "message" | "email_gate" | "end",
+  data: Record<string, unknown>,
+): QuizDoc {
+  const newId = uid("n");
+  const anchor = anchorId ? doc.nodes.find((n) => n.id === anchorId) : null;
+  const position = anchor
+    ? { x: anchor.position.x + 220, y: anchor.position.y }
+    : { x: 0, y: 0 };
+  let next: QuizDoc = {
+    ...doc,
+    nodes: [
+      ...doc.nodes,
+      { id: newId, type, position, data } as QuizDoc["nodes"][number],
+    ],
+  };
+  if (anchorId) {
+    const succ = doc.edges.find((e) => e.source === anchorId && !e.source_handle);
+    next = {
+      ...next,
+      edges: [
+        ...next.edges.filter((e) => e.id !== succ?.id),
+        { id: uid("e"), source: anchorId, target: newId },
+        ...(succ ? [{ id: uid("e"), source: newId, target: succ.target }] : []),
+      ],
+    };
+  }
+  return next;
 }
 
 // Compact, id-bearing outline of the quiz handed to the AI so its ops can
@@ -509,7 +846,15 @@ export function outlineQuiz(doc: QuizDoc): string {
       (typeof d.headline === "string" && d.headline) ||
       (typeof d.label === "string" && d.label) ||
       "";
-    lines.push(`- [${node.type}] id=${node.id}${label ? ` — "${label}"` : ""}`);
+    // Unified P5: surface the question type + pick bounds so the AI can use
+    // set_question_type / set_selections accurately.
+    const meta =
+      node.type === "question"
+        ? ` (type=${node.data.question_type}${
+            node.data.min_selections ? ` min=${node.data.min_selections}` : ""
+          }${node.data.max_selections ? ` max=${node.data.max_selections}` : ""})`
+        : "";
+    lines.push(`- [${node.type}] id=${node.id}${meta}${label ? ` — "${label}"` : ""}`);
     if (node.type === "question") {
       for (const a of node.data.answers) {
         lines.push(
@@ -518,5 +863,9 @@ export function outlineQuiz(doc: QuizDoc): string {
       }
     }
   }
+  // Quiz-level flags the set_flag op can toggle.
+  lines.push(
+    `- flags: collect_email_on_result=${doc.collect_email_on_result ?? false}, result_split=${doc.design_tokens?.result_split ?? false}`,
+  );
   return lines.join("\n");
 }

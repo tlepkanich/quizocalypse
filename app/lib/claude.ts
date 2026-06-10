@@ -429,6 +429,11 @@ const EDIT_QUIZ_SYSTEM_PROMPT =
   "Use edit_question or set_text for wording; add_question / remove_node / reorder_question for structure; add_answer / remove_answer for options. " +
   "Use set_theme to restyle the WHOLE quiz when the merchant asks for a different look or vibe (preset is one of: linen, minimal, editorial, bold, pastel, dark). " +
   "Use set_answer_icon to give answers emoji icons (icon is the emoji itself; empty string removes it); set_answer_image (https URLs only) for answer photos on image-style questions; set_answer_columns (1 or 2; 0 = automatic) to change a question's answer-grid layout. " +
+  "Use set_question_type to change how a question renders (single_select, multi_select, dropdown, image_tile, image_picker, rating, swatch, numeric, date, slider, searchable, text, email — card types need at least 2 answers); set_selections {min?, max?} for multi-select pick bounds. " +
+  "Use set_node_field for any step's content fields (intro: headline/subtext/button_label/hero_image_url; email_gate: headline/subtext; result: headline/subtext/cta_label; message: text; end: headline/subtext/cta_label/cta_url; ask_ai: persona_name/opening_message/system_prompt; product_cards: headline/subtext/cta_label; URL fields must be https). " +
+  "Use set_flag for collect_email_on_result / result_split (quiz-level) or collect_phone (on an email gate). Use add_node {type: message|email_gate|end, headline?, text?, after_node_id?} to insert non-question steps. " +
+  "Use set_node_design {node_id, layer(synced|desktop|mobile), colors{primary?/background?/text? as hex}, radius?, button_style?} to restyle ONE step, and add_image_block {node_id, placement(above|below), image_url?} to place a picture on a step. " +
+  "If a SELECTED NODE is provided in context, phrases like 'this question' or 'this step' refer to it. " +
   "Always include a one-sentence, friendly assistant_message describing what you changed. Output nothing outside the tool call.";
 
 // Loose JSON Schema (the discriminated-union strictness is enforced by the Zod
@@ -471,21 +476,63 @@ const editQuizToolJsonSchema = {
               "set_answer_icon",
               "set_answer_image",
               "set_answer_columns",
+              "set_question_type",
+              "set_selections",
+              "set_node_field",
+              "set_flag",
+              "add_node",
+              "set_node_design",
+              "add_image_block",
             ],
           },
           node_id: { type: "string" },
           field: {
             type: "string",
-            enum: ["headline", "subtext", "text", "button_label", "cta_label"],
+            enum: [
+              "headline",
+              "subtext",
+              "text",
+              "button_label",
+              "cta_label",
+              "hero_image_url",
+              "cta_url",
+              "persona_name",
+              "opening_message",
+              "system_prompt",
+              "label",
+            ],
           },
           value: { type: "string" },
+          // Unified P5 op fields (loose — Zod enforces the per-op shapes).
+          min: { type: "integer" },
+          max: { type: "integer" },
+          flag: {
+            type: "string",
+            enum: ["collect_email_on_result", "result_split", "collect_phone"],
+          },
+          type: { type: "string", enum: ["message", "email_gate", "end"] },
+          headline: { type: "string" },
+          layer: { type: "string", enum: ["synced", "desktop", "mobile"] },
+          colors: {
+            type: "object",
+            properties: {
+              primary: { type: "string" },
+              background: { type: "string" },
+              text: { type: "string" },
+            },
+          },
+          radius: { type: "string", enum: ["square", "rounded", "pill"] },
+          button_style: { type: "string", enum: ["filled", "outline", "ghost"] },
+          placement: { type: "string", enum: ["above", "below"] },
           // keep in sync with THEME_PRESETS ids in themePresets.ts
           preset: {
             type: "string",
             enum: ["linen", "minimal", "editorial", "bold", "pastel", "dark"],
           },
           text: { type: "string" },
-          question_type: { type: "string", enum: ["single_select", "multi_select"] },
+          // add_question allows single/multi; set_question_type allows all 13 —
+          // loose here, the Zod EditOp union enforces per-op.
+          question_type: { type: "string" },
           after_node_id: { type: "string" },
           before_node_id: { type: ["string", "null"] },
           answer_id: { type: "string" },

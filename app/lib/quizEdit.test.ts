@@ -308,3 +308,114 @@ describe("editor revamp P6 — set_answer_icon / set_answer_image / set_answer_c
     expect(missing.warnings.length).toBe(1);
   });
 });
+
+describe("Unified P5 ops — full panel parity", () => {
+  it("set_question_type switches with the freeform→card guard", () => {
+    const doc = base();
+    const q = doc.nodes.find((n) => n.type === "question")!;
+    const { doc: out } = applyEditOps(doc, [
+      { op: "set_question_type", node_id: q.id, question_type: "dropdown" },
+    ]);
+    const node = out.nodes.find((n) => n.id === q.id);
+    expect(node?.type === "question" && node.data.question_type).toBe("dropdown");
+    expect(() => Quiz.parse(out)).not.toThrow();
+
+    // Strip answers → switching to a card type warns + skips.
+    const oneAnswer = {
+      ...doc,
+      nodes: doc.nodes.map((n) =>
+        n.id === q.id && n.type === "question"
+          ? { ...n, data: { ...n.data, question_type: "text" as const, answers: [n.data.answers[0]!] } }
+          : n,
+      ),
+    };
+    const res = applyEditOps(oneAnswer, [
+      { op: "set_question_type", node_id: q.id, question_type: "single_select" },
+    ]);
+    expect(res.warnings.some((w) => w.includes("at least 2 answers"))).toBe(true);
+  });
+
+  it("set_selections writes bounds on multi_select only and validates min<=max", () => {
+    const doc = base();
+    const q = doc.nodes.find((n) => n.type === "question")!;
+    const multi = applyEditOps(doc, [
+      { op: "set_question_type", node_id: q.id, question_type: "multi_select" },
+      { op: "set_selections", node_id: q.id, min: 1, max: 2 },
+    ]);
+    const node = multi.doc.nodes.find((n) => n.id === q.id);
+    expect(node?.type === "question" && node.data.max_selections).toBe(2);
+    const bad = applyEditOps(multi.doc, [
+      { op: "set_selections", node_id: q.id, min: 3, max: 1 },
+    ]);
+    expect(bad.warnings.some((w) => w.includes("min 3 > max 1"))).toBe(true);
+  });
+
+  it("set_node_field honors the per-type whitelist + https URL fields", () => {
+    const doc = base();
+    const intro = doc.nodes.find((n) => n.type === "intro")!;
+    const ok = applyEditOps(doc, [
+      { op: "set_node_field", node_id: intro.id, field: "hero_image_url", value: "https://x.com/a.png" },
+    ]);
+    const node = ok.doc.nodes.find((n) => n.id === intro.id);
+    expect(node?.type === "intro" && node.data.hero_image_url).toBe("https://x.com/a.png");
+    const badUrl = applyEditOps(doc, [
+      { op: "set_node_field", node_id: intro.id, field: "hero_image_url", value: "http://x.com/a.png" },
+    ]);
+    expect(badUrl.warnings.some((w) => w.includes("https"))).toBe(true);
+    const wrongField = applyEditOps(doc, [
+      { op: "set_node_field", node_id: intro.id, field: "cta_url", value: "https://x.com" },
+    ]);
+    expect(wrongField.warnings.some((w) => w.includes('no editable "cta_url"'))).toBe(true);
+  });
+
+  it("set_flag toggles quiz flags and add_node splices a message into the chain", () => {
+    const doc = base();
+    const { doc: out } = applyEditOps(doc, [
+      { op: "set_flag", flag: "collect_email_on_result", value: true },
+      { op: "set_flag", flag: "result_split", value: true },
+      { op: "add_node", type: "message", text: "Hang tight!" },
+    ]);
+    expect(out.collect_email_on_result).toBe(true);
+    expect(out.design_tokens?.result_split).toBe(true);
+    const msg = out.nodes.find((n) => n.type === "message");
+    expect(msg?.type === "message" && msg.data.text).toBe("Hang tight!");
+    // Spliced, not orphaned: something points at it and it points onward.
+    expect(out.edges.some((e) => e.target === msg!.id)).toBe(true);
+    expect(out.edges.some((e) => e.source === msg!.id)).toBe(true);
+    expect(() => Quiz.parse(out)).not.toThrow();
+  });
+
+  it("set_node_design writes the chosen layer via setDesignLayer", () => {
+    const doc = base();
+    const q = doc.nodes.find((n) => n.type === "question")!;
+    const { doc: out } = applyEditOps(doc, [
+      {
+        op: "set_node_design",
+        node_id: q.id,
+        layer: "mobile",
+        colors: { primary: "#ff0000" },
+        radius: "pill",
+      },
+    ]);
+    expect(out.breakpoint_overrides[q.id]?.mobile?.colors?.primary).toBe("#ff0000");
+    expect(out.breakpoint_overrides[q.id]?.mobile?.radius).toBe("pill");
+    expect(() => Quiz.parse(out)).not.toThrow();
+  });
+
+  it("add_image_block synthesizes the template then places the image", () => {
+    const doc = base();
+    const intro = doc.nodes.find((n) => n.type === "intro")!;
+    const { doc: out } = applyEditOps(doc, [
+      {
+        op: "add_image_block",
+        node_id: intro.id,
+        placement: "above",
+        image_url: "https://x.com/hero.jpg",
+      },
+    ]);
+    const blocks = out.node_layouts[intro.id];
+    expect(blocks?.[0]?.type).toBe("image");
+    expect(blocks?.[0]?.type === "image" && blocks[0].url).toBe("https://x.com/hero.jpg");
+    expect(() => Quiz.parse(out)).not.toThrow();
+  });
+});
