@@ -297,6 +297,7 @@ function AiWorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: C
               target={inspect}
               onCommit={commit}
               onClose={() => setInspect(null)}
+              products={data.productIndex}
             />
           ) : null}
           <ReviewEnrichPanel onApply={commit} />

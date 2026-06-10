@@ -1364,7 +1364,7 @@ function DropdownQuestion({
           <option value="">Choose…</option>
           {node.data.answers.map((a) => (
             <option key={a.id} value={a.id}>
-              {a.text}
+              {answerLabel(a)}
             </option>
           ))}
         </select>
@@ -1404,6 +1404,13 @@ function EducationCard({
       <div className="qz-dim" style={{ fontSize: 13, lineHeight: 1.5 }}>💡 {text}</div>
     </div>
   );
+}
+
+// Answer label with the optional emoji icon prefix (editor revamp P3 —
+// Answer.icon, set via the InspectorPanel's icon picker or the AI's
+// set_answer_icon op). Absent icon → just the text, unchanged.
+function answerLabel(a: { icon?: string; text: string }): string {
+  return a.icon ? `${a.icon} ${a.text}` : a.text;
 }
 
 // An answer's label plus an optional always-visible helper caption
@@ -1507,6 +1514,14 @@ function QuestionView({
       part,
       ...(answerId ? { answerId } : {}),
     });
+  // Explicit answer-column override (editor revamp P3). Unset keeps the
+  // responsive default from stylesFor (2-up desktop, 1-up mobile).
+  const answerGrid = node.data.answer_columns
+    ? {
+        ...styles.answerGrid,
+        gridTemplateColumns: `repeat(${node.data.answer_columns}, minmax(0, 1fr))`,
+      }
+    : styles.answerGrid;
   const [checked, setChecked] = useState<Record<string, boolean>>({});
   // Slider defaults to its midpoint so it's immediately submittable + shows a value.
   const [freeform, setFreeform] = useState(
@@ -1610,7 +1625,7 @@ function QuestionView({
     return (
       <div style={styles.card}>
         <h2 style={styles.h2} {...insp("question_text")}>{node.data.text}</h2>
-        <div style={styles.answerGrid}>
+        <div style={answerGrid}>
           {node.data.answers.map((a) => (
             <div key={a.id} style={{ position: "relative" }}>
               <label
@@ -1632,7 +1647,7 @@ function QuestionView({
                     setChecked({ ...checked, [a.id]: e.target.checked })
                   }
                 />
-                {a.text}
+                {answerLabel(a)}
               </label>
               {a.tooltip_text ? (
                 <TooltipChip text={a.tooltip_text} onReveal={() => onTooltipView?.(a.id)} />
@@ -1730,7 +1745,7 @@ function QuestionView({
                   }}
                 />
               )}
-              <span style={{ fontSize: 12 }}>{a.text}</span>
+              <span style={{ fontSize: 12 }}>{answerLabel(a)}</span>
             </button>
           ))}
         </div>
@@ -1774,7 +1789,7 @@ function QuestionView({
                 }}
                 onClick={() => onAdvance([a.id], a.edge_handle_id)}
               >
-                {a.text}
+                {answerLabel(a)}
               </button>
               {a.tooltip_text ? (
                 <TooltipChip text={a.tooltip_text} onReveal={() => onTooltipView?.(a.id)} />
@@ -1826,7 +1841,7 @@ function QuestionView({
                     backgroundPosition: "center",
                   }}
                 />
-                <span style={{ fontSize: 12, textAlign: "center" }}>{a.text}</span>
+                <span style={{ fontSize: 12, textAlign: "center" }}>{answerLabel(a)}</span>
               </button>
               {a.tooltip_text ? (
                 <TooltipChip text={a.tooltip_text} onReveal={() => onTooltipView?.(a.id)} />
@@ -1842,7 +1857,7 @@ function QuestionView({
   return (
     <div style={styles.card}>
       <h2 style={styles.h2} {...insp("question_text")}>{node.data.text}</h2>
-      <div style={styles.answerGrid}>
+      <div style={answerGrid}>
         {node.data.answers.map((a) => (
           <div key={a.id} style={{ position: "relative" }}>
           <button
@@ -1883,7 +1898,7 @@ function QuestionView({
                 }}
               />
             )}
-            {a.text}
+            {answerLabel(a)}
           </button>
           {a.tooltip_text ? (
             <TooltipChip text={a.tooltip_text} onReveal={() => onTooltipView?.(a.id)} />
@@ -1978,7 +1993,7 @@ function SearchableQuestion({
               }}
               onClick={() => onAdvance([a.id], a.edge_handle_id)}
             >
-              {a.text}
+              {answerLabel(a)}
             </button>
           ))
         )}

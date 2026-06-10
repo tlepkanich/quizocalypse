@@ -102,6 +102,9 @@ export const Answer = z.object({
   // Dev Spec §4.1 — a short plain-English tradeoff explainer shown on the answer
   // option (AI-generated via the tooltip call). Optional + additive.
   tooltip_text: z.string().optional(),
+  // Editor revamp P3 — an optional emoji icon rendered before the answer label
+  // (all question types). 16 chars allows multi-codepoint emoji. Additive.
+  icon: z.string().max(16).optional(),
   image_url: z.string().url().optional(),
   tags: z.array(z.string()).default([]),
   collection_filter: z.string().optional(),
@@ -162,6 +165,9 @@ export const QuestionDataObject = z.object({
   // question (a non-question, Continue-only informational screen). The AI places
   // at most one per quiz. Additive — absent means no card.
   education_card_before: z.string().optional(),
+  // Editor revamp P3 — explicit answer-grid column count (1 or 2). Unset keeps
+  // the responsive default (2-up desktop, 1-up mobile). Additive.
+  answer_columns: z.number().int().min(1).max(2).optional(),
 });
 
 export const QuestionData = QuestionDataObject.refine(

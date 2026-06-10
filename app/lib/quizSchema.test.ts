@@ -726,3 +726,46 @@ describe("isFreeformType + numeric/date question types", () => {
     ).toThrow();
   });
 });
+
+describe("editor revamp P3 — answer icons + answer_columns (additive)", () => {
+  const base = {
+    text: "Pick one",
+    question_type: "single_select",
+    answers: [
+      { id: "a1", text: "A", edge_handle_id: "h1" },
+      { id: "a2", text: "B", edge_handle_id: "h2" },
+    ],
+  };
+
+  it("docs without the new fields still parse (additive)", () => {
+    const q = QuestionData.parse(base);
+    expect(q.answers[0]!.icon).toBeUndefined();
+    expect(q.answer_columns).toBeUndefined();
+  });
+
+  it("accepts an emoji icon and an explicit column count", () => {
+    const q = QuestionData.parse({
+      ...base,
+      answer_columns: 2,
+      answers: [
+        { id: "a1", text: "A", edge_handle_id: "h1", icon: "🏔️" },
+        { id: "a2", text: "B", edge_handle_id: "h2" },
+      ],
+    });
+    expect(q.answers[0]!.icon).toBe("🏔️");
+    expect(q.answer_columns).toBe(2);
+  });
+
+  it("rejects over-long icons and out-of-range columns", () => {
+    expect(() =>
+      QuestionData.parse({
+        ...base,
+        answers: [
+          { id: "a1", text: "A", edge_handle_id: "h1", icon: "x".repeat(17) },
+          { id: "a2", text: "B", edge_handle_id: "h2" },
+        ],
+      }),
+    ).toThrow();
+    expect(() => QuestionData.parse({ ...base, answer_columns: 3 })).toThrow();
+  });
+});

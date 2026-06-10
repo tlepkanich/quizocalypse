@@ -1,8 +1,14 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { Quiz } from "../../lib/quizSchema";
 import type { InspectTarget } from "../runtime/QuizRuntime";
 import { addAnswer, removeAnswer } from "../../lib/quizMutations";
 import { QzButton } from "../qz";
+import { EmojiIconPicker } from "./EmojiIconPicker";
+import { ImagePicker, type PickerProduct } from "./ImagePicker";
+
+// Question types whose answers render an image — only these get the image
+// affordance (an image on e.g. a plain single_select would never render).
+const IMAGE_ANSWER_TYPES = new Set(["image_tile", "image_picker", "swatch"]);
 
 // Contextual editor for a click-to-inspect target (editor revamp P2). The
 // merchant clicks an element in the live preview; this panel edits exactly that
@@ -49,14 +55,17 @@ export function InspectorPanel({
   target,
   onCommit,
   onClose,
+  products = [],
 }: {
   doc: QuizDoc;
   target: InspectTarget;
   onCommit: (doc: QuizDoc) => void;
   onClose: () => void;
+  products?: PickerProduct[];
 }) {
   const node = doc.nodes.find((n) => n.id === target.nodeId);
   const focusRef = useRef<HTMLInputElement | HTMLTextAreaElement | null>(null);
+  const [picker, setPicker] = useState<{ answerId: string; kind: "icon" | "image" } | null>(null);
 
   // Esc closes; if the node vanishes (e.g. the AI chat removed it), auto-close.
   useEffect(() => {
@@ -120,10 +129,13 @@ export function InspectorPanel({
       </>
     );
   } else if (node.type === "question") {
-    const setAnswerText = (answerId: string, text: string) =>
+    const patchAnswer = (answerId: string, patch: Record<string, unknown>) =>
       patchData({
-        answers: node.data.answers.map((a) => (a.id === answerId ? { ...a, text } : a)),
+        answers: node.data.answers.map((a) => (a.id === answerId ? { ...a, ...patch } : a)),
       });
+    const setAnswerText = (answerId: string, text: string) => patchAnswer(answerId, { text });
+    const supportsImages = IMAGE_ANSWER_TYPES.has(node.data.question_type);
+    const columns = node.data.answer_columns;
     body = (
       <>
         <Field label="Question">
@@ -142,46 +154,149 @@ export function InspectorPanel({
         <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
           <span className="qz-label" style={{ fontSize: 11 }}>Answers</span>
           {node.data.answers.map((a) => (
-            <div key={a.id} className="qz-row" style={{ gap: 6, alignItems: "center" }}>
-              <input
-                ref={
-                  target.part === "answer" && target.answerId === a.id
-                    ? (focusRef as React.Ref<HTMLInputElement>)
-                    : undefined
-                }
-                style={{ ...inputStyle, flex: 1 }}
-                value={a.text}
-                onChange={(e) => setAnswerText(a.id, e.target.value)}
-              />
-              <button
-                type="button"
-                title="Remove answer"
-                aria-label={`Remove answer: ${a.text}`}
-                onClick={() => onCommit(removeAnswer(doc, node.id, a.id))}
-                disabled={node.data.answers.length <= 2}
-                style={{
-                  border: "1px solid #00000022",
-                  background: "#fff",
-                  borderRadius: 6,
-                  width: 26,
-                  height: 26,
-                  cursor: node.data.answers.length <= 2 ? "not-allowed" : "pointer",
-                  opacity: node.data.answers.length <= 2 ? 0.4 : 1,
-                  flex: "0 0 auto",
-                }}
-              >
-                ✕
-              </button>
+            <div key={a.id} style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+              <div className="qz-row" style={{ gap: 6, alignItems: "center" }}>
+                <input
+                  ref={
+                    target.part === "answer" && target.answerId === a.id
+                      ? (focusRef as React.Ref<HTMLInputElement>)
+                      : undefined
+                  }
+                  style={{ ...inputStyle, flex: 1 }}
+                  value={a.text}
+                  onChange={(e) => setAnswerText(a.id, e.target.value)}
+                />
+                <button
+                  type="button"
+                  title={a.icon ? `Icon: ${a.icon} — change` : "Add an emoji icon"}
+                  aria-label={`Icon for answer: ${a.text}`}
+                  onClick={() =>
+                    setPicker((p) =>
+                      p?.answerId === a.id && p.kind === "icon" ? null : { answerId: a.id, kind: "icon" },
+                    )
+                  }
+                  style={{
+                    border:
+                      picker?.answerId === a.id && picker.kind === "icon"
+                        ? "1px solid var(--qz-accent, #2a6df4)"
+                        : "1px solid #00000022",
+                    background: "#fff",
+                    borderRadius: 6,
+                    width: 26,
+                    height: 26,
+                    cursor: "pointer",
+                    flex: "0 0 auto",
+                    fontSize: 13,
+                    lineHeight: 1,
+                  }}
+                >
+                  {a.icon ?? "☺"}
+                </button>
+                {supportsImages ? (
+                  <button
+                    type="button"
+                    title={a.image_url ? "Change image" : "Pick an image"}
+                    aria-label={`Image for answer: ${a.text}`}
+                    onClick={() =>
+                      setPicker((p) =>
+                        p?.answerId === a.id && p.kind === "image"
+                          ? null
+                          : { answerId: a.id, kind: "image" },
+                      )
+                    }
+                    style={{
+                      border:
+                        picker?.answerId === a.id && picker.kind === "image"
+                          ? "1px solid var(--qz-accent, #2a6df4)"
+                          : "1px solid #00000022",
+                      background: a.image_url ? `center/cover url(${a.image_url})` : "#fff",
+                      color: a.image_url ? "transparent" : undefined,
+                      borderRadius: 6,
+                      width: 26,
+                      height: 26,
+                      cursor: "pointer",
+                      flex: "0 0 auto",
+                      fontSize: 12,
+                      lineHeight: 1,
+                    }}
+                  >
+                    🖼
+                  </button>
+                ) : null}
+                <button
+                  type="button"
+                  title="Remove answer"
+                  aria-label={`Remove answer: ${a.text}`}
+                  onClick={() => onCommit(removeAnswer(doc, node.id, a.id))}
+                  disabled={node.data.answers.length <= 2}
+                  style={{
+                    border: "1px solid #00000022",
+                    background: "#fff",
+                    borderRadius: 6,
+                    width: 26,
+                    height: 26,
+                    cursor: node.data.answers.length <= 2 ? "not-allowed" : "pointer",
+                    opacity: node.data.answers.length <= 2 ? 0.4 : 1,
+                    flex: "0 0 auto",
+                  }}
+                >
+                  ✕
+                </button>
+              </div>
+              {picker?.answerId === a.id && picker.kind === "icon" ? (
+                <EmojiIconPicker
+                  value={a.icon}
+                  onPick={(icon) => {
+                    patchAnswer(a.id, { icon });
+                    setPicker(null);
+                  }}
+                />
+              ) : null}
+              {picker?.answerId === a.id && picker.kind === "image" ? (
+                <ImagePicker
+                  products={products}
+                  value={a.image_url}
+                  onPick={(image_url) => {
+                    patchAnswer(a.id, { image_url });
+                    setPicker(null);
+                  }}
+                />
+              ) : null}
             </div>
           ))}
-          <button
-            type="button"
-            className="qz-btn qz-btn-ghost qz-btn-sm"
-            onClick={() => onCommit(addAnswer(doc, node.id))}
-            style={{ alignSelf: "flex-start" }}
-          >
-            + Add answer
-          </button>
+          <div className="qz-row" style={{ gap: 8, alignItems: "center" }}>
+            <button
+              type="button"
+              className="qz-btn qz-btn-ghost qz-btn-sm"
+              onClick={() => onCommit(addAnswer(doc, node.id))}
+            >
+              + Add answer
+            </button>
+            <span className="qz-dim" style={{ fontSize: 11 }}>Columns:</span>
+            <div className="qz-segmented" role="group" aria-label="Answer columns">
+              <button
+                type="button"
+                aria-pressed={columns === undefined}
+                onClick={() => patchData({ answer_columns: undefined })}
+              >
+                Auto
+              </button>
+              <button
+                type="button"
+                aria-pressed={columns === 1}
+                onClick={() => patchData({ answer_columns: 1 })}
+              >
+                1
+              </button>
+              <button
+                type="button"
+                aria-pressed={columns === 2}
+                onClick={() => patchData({ answer_columns: 2 })}
+              >
+                2
+              </button>
+            </div>
+          </div>
         </div>
         <Field label="Education card (optional, shown before the question)">
           <textarea
