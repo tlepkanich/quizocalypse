@@ -4,6 +4,11 @@ import { Link, useLoaderData } from "@remix-run/react";
 import { requireStudioAccess, resolveStudioShop } from "../lib/studioAccess.server";
 import prisma from "../db.server";
 import { QzPage, QzPageHeader, QzCard, QzBadge } from "../components/qz";
+import {
+  computeBenchmarks,
+  MIN_SESSIONS_FOR_COMPARE,
+  type QuizBenchmark,
+} from "../lib/quizBenchmarks";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   await requireStudioAccess(request);
@@ -13,20 +18,58 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     select: { id: true, name: true, status: true, version: true, updatedAt: true },
     orderBy: { updatedAt: "desc" },
   });
+  // Benchmarks: distinct (quiz, event, session) triples → pure aggregation.
+  // Fine at current scale; revisit with a grouped raw query in Phase M.
+  const eventRows = await prisma.event.findMany({
+    where: {
+      quizId: { in: quizzes.map((q) => q.id) },
+      eventType: { in: ["quiz_engaged", "quiz_completed"] },
+    },
+    select: { quizId: true, eventType: true, sessionId: true },
+    distinct: ["quizId", "eventType", "sessionId"],
+  });
+  const benchmarks = computeBenchmarks(eventRows);
   return json({
     shopDomain: shop.shopDomain,
+    averageRate: benchmarks.averageRate,
     quizzes: quizzes.map((q) => ({
       id: q.id,
       name: q.name,
       status: q.status,
       version: q.version,
       updatedAt: q.updatedAt.toISOString(),
+      bench: benchmarks.byQuiz[q.id] ?? null,
     })),
   });
 };
 
+// One dim line of truth per card: the quiz's completion rate, with a
+// vs-account-average comparison once the sample clears the floor.
+function BenchLine({
+  bench,
+  averageRate,
+}: {
+  bench: QuizBenchmark | null;
+  averageRate: number | null;
+}) {
+  if (!bench || bench.rate === null) return null;
+  const compare =
+    averageRate !== null && bench.started >= MIN_SESSIONS_FOR_COMPARE
+      ? bench.rate > averageRate
+        ? ` · ▲ above your ${averageRate}% avg`
+        : bench.rate < averageRate
+          ? ` · ▼ below your ${averageRate}% avg`
+          : ` · ≈ your ${averageRate}% avg`
+      : "";
+  return (
+    <div className="qz-dim" style={{ fontSize: 12 }}>
+      {bench.rate}% completion ({bench.completed}/{bench.started}){compare}
+    </div>
+  );
+}
+
 export default function StudioIndex() {
-  const { shopDomain, quizzes } = useLoaderData<typeof loader>();
+  const { shopDomain, quizzes, averageRate } = useLoaderData<typeof loader>();
   return (
     <QzPage>
       <QzPageHeader
@@ -89,6 +132,7 @@ export default function StudioIndex() {
               <div className="qz-dim" style={{ fontSize: 12 }}>
                 v{q.version} · updated {new Date(q.updatedAt).toLocaleDateString()}
               </div>
+              <BenchLine bench={q.bench} averageRate={averageRate} />
               <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: "auto" }}>
                 <Link
                   to={`/studio/${q.id}`}
