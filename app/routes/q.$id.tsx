@@ -5,6 +5,8 @@ import prisma from "../db.server";
 import { Quiz } from "../lib/quizSchema";
 import type { IndexedProduct } from "../lib/recommendationEngine";
 import { QuizRuntime } from "../components/runtime/QuizRuntime";
+import { applyTranslations, resolveLocale } from "../lib/quizTranslate";
+import { chromeFor } from "../components/runtime/chromeStrings";
 
 // Public shopper-facing runtime. No Polaris, no Shopify auth — this is what a
 // real customer sees when the merchant shares the quiz link. Spec §3.6. The
@@ -51,7 +53,7 @@ export const meta: MetaFunction<typeof loader> = ({ data }) => {
   ];
 };
 
-export const loader = async ({ params }: LoaderFunctionArgs) => {
+export const loader = async ({ params, request }: LoaderFunctionArgs) => {
   const { id } = params;
   if (!id) throw new Response("Missing id", { status: 400 });
 
@@ -82,11 +84,27 @@ export const loader = async ({ params }: LoaderFunctionArgs) => {
     answer_weights?: Record<string, number>;
   };
 
-  // BIC P7: publish copies the draft, so the merchant's pasted review/FAQ
-  // source would otherwise ship to every shopper page load — strip it. The
-  // omitted-optional shape still satisfies the runtime's QuizDoc.
-  const { review_enrichment_sources: _editorOnly, ...publicDoc } = parsed.data;
+  // Phase K: resolve the requested locale against the quiz's translations and
+  // apply the overlay SERVER-SIDE — the shopper (and every crawler reading
+  // the og tags below via `meta`) gets translated copy in the document
+  // itself. Explicit ?locale= only (cache-safe: query params are distinct
+  // HTTP cache keys); exact match → language-prefix → default English.
+  const requestedLocale = new URL(request.url).searchParams.get("locale");
+  const available = Object.keys(parsed.data.translations ?? {});
+  const locale = resolveLocale(requestedLocale, available);
+  const localized = locale
+    ? applyTranslations(parsed.data, parsed.data.translations![locale]!.strings)
+    : parsed.data;
+  const chrome = chromeFor(locale ? parsed.data.translations![locale]!.strings : null);
+
+  // BIC P7 + Phase K: publish copies the draft, so the merchant's pasted
+  // review/FAQ source AND the full multi-locale translation maps would
+  // otherwise ship to every shopper page load — strip both (the locale is
+  // already applied above; the client never needs the raw maps).
+  const { review_enrichment_sources: _editorOnly, translations: _allLocales, ...publicDoc } =
+    localized;
   void _editorOnly;
+  void _allLocales;
 
   return json(
     {
@@ -101,6 +119,8 @@ export const loader = async ({ params }: LoaderFunctionArgs) => {
       resultLayoutMode: parsed.data.result_layout_mode,
       shopDomain: publishedRaw.shop_domain ?? "",
       answerWeights: publishedRaw.answer_weights ?? null,
+      locale: locale ?? "en",
+      chrome,
     },
     {
       // Same 60s convention as the JSON + launcher endpoints: a re-publish

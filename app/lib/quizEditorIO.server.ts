@@ -6,8 +6,13 @@ import { Quiz } from "./quizSchema";
 import { publishQuiz, PublishError } from "./quizPublish";
 import { qrDataUrl } from "./qrCode.server";
 import { ensureQuizDiscount } from "./discount.server";
-import { regenerateQuestion, generateQuestionFlow, editQuiz, enrichFromReviews } from "./claude";
+import { regenerateQuestion, generateQuestionFlow, editQuiz, enrichFromReviews, translateQuiz } from "./claude";
 import { applyEditOps, outlineQuiz } from "./quizEdit";
+import {
+  extractTranslatableStrings,
+  sourceHashOf,
+  LOCALE_RE,
+} from "./quizTranslate";
 import { applyReviewEnrichment, clampReviewText } from "./reviewEnrichment";
 import { ingestWebsite } from "./websiteIngest.server";
 import { applyQuestionFlow, type SmartBuildBucket } from "./smartBuild";
@@ -639,6 +644,113 @@ export async function handleQuizEditorActionForShop(
         enrichment.summary || `Updated ${changed} item(s) using your reviews.`,
       changed,
     });
+  }
+
+  if (intent === "translate-quiz") {
+    // Phase K: generate (or regenerate) one locale's translation overlay.
+    // Extraction UNIONS draft + published strings — publish bakes AI-written
+    // English bullets/tooltips into publishedJson ONLY, and those must be
+    // translatable too. After the (long) AI round-trip we RE-READ the draft
+    // fresh before writing: translate never edits English copy, so merging
+    // onto the fresh doc eliminates the long-call clobber race entirely.
+    const rawLocale = String(form.get("locale") ?? "").trim().toLowerCase();
+    if (!LOCALE_RE.test(rawLocale)) {
+      return json(
+        { ok: false, error: "Enter a locale code like fr, de, or pt-br." },
+        { status: 400 },
+      );
+    }
+
+    const quiz = await prisma.quiz.findFirst({ where: { id, shopId: shop.id } });
+    if (!quiz) return json({ ok: false, error: "Quiz not found" }, { status: 404 });
+    const parsedDoc = Quiz.safeParse(quiz.draftJson);
+    if (!parsedDoc.success) {
+      return json({ ok: false, error: "Invalid quiz JSON" }, { status: 400 });
+    }
+
+    const draftStrings = extractTranslatableStrings(parsedDoc.data);
+    const byKey = new Map(draftStrings.map((s) => [s.key, s]));
+    if (quiz.publishedJson) {
+      const pub = Quiz.safeParse(quiz.publishedJson);
+      if (pub.success) {
+        for (const s of extractTranslatableStrings(pub.data)) {
+          if (!byKey.has(s.key)) byKey.set(s.key, s);
+        }
+      }
+    }
+    const strings = [...byKey.values()];
+
+    const allProducts = await prisma.product.findMany({ where: { shopId: shop.id } });
+    const brandGuidelines = parseBrandGuidelinesSafe(shop.brandGuidelines);
+
+    let translated: Record<string, string>;
+    try {
+      translated = await translateQuiz({
+        strings,
+        targetLocale: rawLocale,
+        toneSample: toneSampleFromCatalog(allProducts),
+        ...(brandGuidelines ? { brandGuidelines } : {}),
+      });
+    } catch (err) {
+      const m = err instanceof Error ? err.message : String(err);
+      return json({ ok: false, error: m }, { status: 502 });
+    }
+
+    // Fresh re-read (see above) — merge the new locale onto whatever the
+    // draft is NOW, then gate.
+    const fresh = await prisma.quiz.findFirst({ where: { id, shopId: shop.id } });
+    const freshParsed = fresh ? Quiz.safeParse(fresh.draftJson) : null;
+    if (!freshParsed?.success) {
+      return json({ ok: false, error: "Quiz changed mid-translation — try again." }, { status: 409 });
+    }
+    const next = {
+      ...freshParsed.data,
+      translations: {
+        ...freshParsed.data.translations,
+        [rawLocale]: {
+          generated_at: new Date().toISOString(),
+          source_hash: sourceHashOf(strings),
+          strings: translated,
+        },
+      },
+    };
+    const reparsed = Quiz.safeParse(next);
+    if (!reparsed.success) {
+      return json(
+        { ok: false, error: "Translation produced an invalid quiz, so it wasn't saved." },
+        { status: 422 },
+      );
+    }
+    await prisma.quiz.update({ where: { id }, data: { draftJson: reparsed.data as never } });
+    return json({
+      ok: true,
+      action: "translate-quiz" as const,
+      doc: reparsed.data,
+      locale: rawLocale,
+      translated: Object.keys(translated).length,
+    });
+  }
+
+  if (intent === "remove-locale") {
+    const rawLocale = String(form.get("locale") ?? "").trim().toLowerCase();
+    const quiz = await prisma.quiz.findFirst({ where: { id, shopId: shop.id } });
+    if (!quiz) return json({ ok: false, error: "Quiz not found" }, { status: 404 });
+    const parsedDoc = Quiz.safeParse(quiz.draftJson);
+    if (!parsedDoc.success) {
+      return json({ ok: false, error: "Invalid quiz JSON" }, { status: 400 });
+    }
+    const { [rawLocale]: _gone, ...rest } = parsedDoc.data.translations ?? {};
+    void _gone;
+    const next = {
+      ...parsedDoc.data,
+      translations: Object.keys(rest).length > 0 ? rest : undefined,
+    };
+    const reparsed = Quiz.safeParse(next);
+    if (!reparsed.success) {
+      return json({ ok: false, error: "Could not update translations." }, { status: 422 });
+    }
+    await prisma.quiz.update({ where: { id }, data: { draftJson: reparsed.data as never } });
+    return json({ ok: true, action: "remove-locale" as const, doc: reparsed.data, locale: rawLocale });
   }
 
   return json({ ok: false, error: "Unknown intent" }, { status: 400 });

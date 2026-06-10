@@ -776,6 +776,25 @@ export const Quiz = z.object({
   // When true, the result page shows an inline email-capture block (Dev Spec
   // §5) that posts to /captures + fires email_captured. Additive/optional.
   collect_email_on_result: z.boolean().optional(),
+  // Phase K — per-locale translation overlays. Keyed by normalized locale
+  // ("fr", "pt-br"); `strings` is a FLAT map over the stable key grammar
+  // (node.<id>.<field>, answer.<nodeId>.<answerId>.<field>, stage/bullets/
+  // suggested/placeholder/block keys, chrome.<token>, launcher.label — see
+  // quizTranslate.ts). `source_hash` fingerprints the extracted English at
+  // generation time so the editor can flag stale locales after copy edits.
+  // Additive/optional (NEVER default {} — that would inject the field into
+  // every doc on the next parse→write). The /q loader APPLIES the requested
+  // locale server-side and STRIPS this field from the served payload.
+  translations: z
+    .record(
+      z.string(),
+      z.object({
+        generated_at: z.string(),
+        source_hash: z.string().optional(),
+        strings: z.record(z.string(), z.string()),
+      }),
+    )
+    .optional(),
   // Phase J — opt-in conversion-weighted scoring. When true, publish computes
   // per-answer conversion lift from QuizSession history and bakes it into
   // publishedJson.answer_weights (a publish-time field, like product_index);

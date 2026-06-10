@@ -19,6 +19,7 @@ import { AiChatPanel } from "./AiChatPanel";
 import { ReviewEnrichPanel } from "./ReviewEnrichPanel";
 import { EditableTitle, PLACEMENTS, type StudioBuilderData } from "./studioShared";
 import { Step3Results } from "../builder/Step3Results";
+import { TranslationsPanel } from "./TranslationsPanel";
 
 // ════════════════════════════════════════════════════════════════════════════
 // UnifiedWorkspace (Unified P2) — ONE editing surface replacing the AI/Advanced
@@ -411,6 +412,7 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
               </div>
             )}
             <ReviewEnrichPanel onApply={commit} sources={doc.review_enrichment_sources} />
+            <TranslationsPanel doc={doc} onApply={commit} previewUrl={data.previewUrl} />
             <AiChatPanel onApply={commit} selectedNodeId={selectedId} />
           </div>
         </div>

@@ -1,0 +1,86 @@
+// ════════════════════════════════════════════════════════════════════════════
+// Phase K — the runtime's CHROME strings: every hardcoded shopper-visible
+// interface string, as a token table. English is the source of truth here;
+// translations store `chrome.<token>` keys in the quiz's locale map, and the
+// runtime resolves through ChromeContext (K2) with these defaults — so a
+// missed call site or missing translation always falls back to today's copy.
+//
+// `{n}`-style placeholders are substituted by t() AFTER lookup, so translated
+// templates keep their parameter slots.
+// ════════════════════════════════════════════════════════════════════════════
+
+export const CHROME_TOKENS = {
+  continue: "Continue",
+  start_over: "Start over",
+  add_to_cart: "Add to cart",
+  out_of_stock: "Out of stock",
+  you_might_also_like: "You might also like",
+  email_capture_heading: "Want your results emailed to you?",
+  email_capture_button: "Email me",
+  email_capture_sending: "Sending…",
+  email_capture_thanks: "✓ Thanks — we'll email your results.",
+  email_placeholder: "you@example.com",
+  save_results_link: "🔖 Save my results — view them anytime, on any device",
+  share_results: "↗ Share my results",
+  copied: "Copied ✓",
+  skip: "Skip",
+  send: "Send",
+  choose: "Choose…",
+  search_placeholder: "Search…",
+  gate_email_placeholder: "Email",
+  gate_name_placeholder: "First name (optional)",
+  gate_phone_placeholder: "Phone (optional)",
+  chat_placeholder: "Type a question…",
+  chat_ended: "Chat ended",
+  chat_preview_stub: "This is a preview — the AI assistant replies for real in your published quiz.",
+  saving: "Saving…",
+  sending_answers: "One moment — sending your answers along.",
+  something_went_wrong: "Something went wrong",
+  network_error: "Network error.",
+  integration_failed: "Integration failed.",
+  continue_anyway: "Continue anyway",
+  pick_more_answers: "Pick more answers to see refined picks.",
+  no_products_configured: "None of the configured products are available right now.",
+  quiz_unavailable: "Quiz unavailable",
+  quiz_no_nodes: "This quiz has no nodes defined.",
+  lost_the_thread: "Lost the thread",
+  unknown_node: "Reached an unknown node — the quiz may have a missing edge.",
+  your_results: "Your results",
+  // Aria-only (still localized — screen readers speak them).
+  aria_quiz_progress: "Quiz progress",
+  aria_go_back_to: "Go back to question {n}: {label}",
+  aria_more_info: "More info",
+  aria_choose_variant: "Choose a variant",
+  // Launcher (served via the script route, resolved from the same map).
+  launcher_open: "Open quiz",
+  launcher_close: "Close quiz",
+} as const;
+
+export type ChromeToken = keyof typeof CHROME_TOKENS;
+
+/** The full chrome table for a locale: translated where available, English otherwise. */
+export function chromeFor(
+  strings?: Record<string, string> | null,
+): Record<ChromeToken, string> {
+  const out = { ...CHROME_TOKENS } as Record<ChromeToken, string>;
+  if (strings) {
+    for (const token of Object.keys(CHROME_TOKENS) as ChromeToken[]) {
+      const v = strings[`chrome.${token}`];
+      if (typeof v === "string" && v.trim()) out[token] = v;
+    }
+  }
+  return out;
+}
+
+/** Lookup + `{n}` substitution. */
+export function t(
+  table: Record<ChromeToken, string>,
+  token: ChromeToken,
+  vars?: Record<string, string | number>,
+): string {
+  let s = table[token] ?? CHROME_TOKENS[token];
+  if (vars) {
+    for (const [k, v] of Object.entries(vars)) s = s.split(`{${k}}`).join(String(v));
+  }
+  return s;
+}
