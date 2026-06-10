@@ -2,29 +2,43 @@ import { useMemo, useState } from "react";
 import type { Quiz } from "../../lib/quizSchema";
 import { tracePath } from "../../lib/routeTrace";
 import {
-  recommendForResult,
+  recommendForResultExplained,
   type IndexedProduct,
+  type ResolvedRung,
 } from "../../lib/recommendationEngine";
 import { bakeResultPages } from "../../lib/quizPublish";
 import type { BuilderCategory } from "../builder/stepProps";
 
-// "Try a path" (editor revamp P4) — the missing end-to-end routing answer:
-// pick an answer per question and SEE which result page lands and which
-// products it recommends, computed by the same resolveNextStep +
-// recommendForResult the storefront uses. The question list adapts to the
-// traced path (branch-skipped questions disappear), so what you see is exactly
-// one shopper journey.
+// "Try a path — and see why" (design refinement D2). Pick an answer per
+// question and SEE which result page lands, which products it recommends,
+// and WHY — the ladder rung that matched, each product's matched tags, and
+// the path's tag bag. Computed by recommendForResultExplained, the SAME code
+// path the storefront uses (recommendForResult delegates to it), so this
+// trace can never lie. Octane's only tool here is a blind replay preview.
 
 type QuizDoc = Quiz;
+
+const RUNG_LABEL: Record<ResolvedRung, string> = {
+  category: "this page's product bucket",
+  tag: "your answers' tags",
+  points: "the points winner's bucket",
+  conditional: "a conditional rule",
+  collection: "a collection filter",
+  metafield: "a metafield match",
+  fallback: "the fallback collection",
+};
 
 export function PathTester({
   doc,
   productIndex,
   categories,
+  compact = false,
 }: {
   doc: QuizDoc;
   productIndex: IndexedProduct[];
   categories: BuilderCategory[];
+  /** Compact = the ContextPanel embed: hides the tag-bag line. */
+  compact?: boolean;
 }) {
   const [selections, setSelections] = useState<Record<string, string>>({});
 
@@ -41,13 +55,13 @@ export function PathTester({
     ? previewDoc.nodes.find((n) => n.id === trace.resultNodeId)
     : null;
 
-  const recs = useMemo(() => {
-    if (!trace.resultNodeId) return [];
+  const explained = useMemo(() => {
+    if (!trace.resultNodeId) return null;
     const selectedAnswerIds = trace.steps
       .map((s) => s.pickedAnswerId)
       .filter((x): x is string => !!x);
     try {
-      return recommendForResult(
+      return recommendForResultExplained(
         {
           quiz: previewDoc,
           productIndex,
@@ -57,19 +71,22 @@ export function PathTester({
         4,
       );
     } catch {
-      return [];
+      return null;
     }
   }, [previewDoc, productIndex, trace]);
+
+  const recs = explained?.products ?? [];
+  const bagEntries = Object.entries(explained?.tagBag ?? {});
 
   return (
     <section
       className="qz-card"
-      style={{ padding: 14, display: "flex", flexDirection: "column", gap: 10 }}
+      style={{ padding: 14, display: "flex", flexDirection: "column", gap: 10, minWidth: 0 }}
     >
       <div>
         <div className="qz-label">Try a path</div>
         <p className="qz-dim" style={{ fontSize: 12, margin: "4px 0 0" }}>
-          Pick answers to see exactly where a shopper lands and what gets recommended.
+          Pick answers to see where a shopper lands, what gets recommended — and why.
         </p>
       </div>
 
@@ -131,41 +148,59 @@ export function PathTester({
             <div style={{ fontSize: 13 }}>
               <span className="qz-dim">Lands on:</span>{" "}
               <strong>{landing.data.headline || "Result"}</strong>
+              {explained?.rungUsed ? (
+                <span className="qz-dim" style={{ fontSize: 11.5 }}>
+                  {" "}
+                  · matched via {RUNG_LABEL[explained.rungUsed]} · ordered by this path&rsquo;s answers
+                </span>
+              ) : null}
             </div>
             {recs.length > 0 ? (
               <div className="qz-row" style={{ gap: 8, flexWrap: "wrap" }}>
                 {recs.map((r) => (
                   <div
                     key={r.product_id}
-                    className="qz-row"
                     style={{
-                      gap: 6,
-                      alignItems: "center",
                       border: "1px solid #00000014",
                       borderRadius: 8,
-                      padding: "4px 8px 4px 4px",
+                      padding: "4px 8px 5px",
                       background: "#fff",
-                      maxWidth: 220,
+                      maxWidth: 230,
                     }}
                     title={r.title}
                   >
-                    {r.image_url ? (
-                      <img
-                        src={r.image_url}
-                        alt=""
-                        style={{ width: 26, height: 26, objectFit: "cover", borderRadius: 5 }}
-                      />
+                    <div className="qz-row" style={{ gap: 6, alignItems: "center" }}>
+                      {r.image_url ? (
+                        <img
+                          src={r.image_url}
+                          alt=""
+                          style={{ width: 26, height: 26, objectFit: "cover", borderRadius: 5 }}
+                        />
+                      ) : null}
+                      <span
+                        style={{ fontSize: 11.5, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
+                      >
+                        {r.title}
+                      </span>
+                    </div>
+                    {r.matched_tags.length > 0 ? (
+                      <div className="qz-row" style={{ gap: 4, flexWrap: "wrap", marginTop: 4 }}>
+                        {r.matched_tags.slice(0, 4).map((t) => (
+                          <span
+                            key={t}
+                            style={{
+                              fontSize: 10,
+                              padding: "1px 6px",
+                              borderRadius: 999,
+                              background: "color-mix(in srgb, var(--qz-accent, #2a6df4) 12%, transparent)",
+                              whiteSpace: "nowrap",
+                            }}
+                          >
+                            {t}
+                          </span>
+                        ))}
+                      </div>
                     ) : null}
-                    <span
-                      style={{
-                        fontSize: 11.5,
-                        overflow: "hidden",
-                        textOverflow: "ellipsis",
-                        whiteSpace: "nowrap",
-                      }}
-                    >
-                      {r.title}
-                    </span>
                   </div>
                 ))}
               </div>
@@ -174,6 +209,15 @@ export function PathTester({
                 No products resolve for this path yet — check the page&rsquo;s bucket mapping.
               </p>
             )}
+            {!compact && bagEntries.length > 0 ? (
+              <p className="qz-dim" style={{ fontSize: 11.5, margin: 0 }}>
+                This path&rsquo;s answers contribute:{" "}
+                {bagEntries
+                  .slice(0, 8)
+                  .map(([tag, w]) => (w !== 1 ? `${tag} ×${w}` : tag))
+                  .join(" · ")}
+              </p>
+            ) : null}
           </>
         ) : (
           <p className="qz-dim" style={{ fontSize: 12, margin: 0 }}>

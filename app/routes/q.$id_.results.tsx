@@ -90,7 +90,11 @@ export const loader = async ({ params, request }: LoaderFunctionArgs) => {
 
   return json({
     quizId: quiz.id,
-    doc: (({ translations: _t, review_enrichment_sources: _r, ...rest }) => (void _t, void _r, rest))(parsed.data),
+    doc: (({ translations: _t, review_enrichment_sources: _r, ...rest }) => {
+      void _t;
+      void _r;
+      return rest;
+    })(parsed.data),
     productIndex,
     shopDomain: publishedRaw.shop_domain ?? "",
     answerWeights: publishedRaw.answer_weights ?? null,

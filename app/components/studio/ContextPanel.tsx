@@ -248,7 +248,7 @@ function RoutingBody({
           Try a path
         </summary>
         <div style={{ marginTop: 8 }}>
-          <PathTester doc={doc} productIndex={productIndex} categories={categories} />
+          <PathTester doc={doc} productIndex={productIndex} categories={categories} compact />
         </div>
       </details>
     </>

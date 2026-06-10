@@ -184,6 +184,15 @@ body[data-qz] :focus-visible {
 .qz-segmented button:hover { color: var(--qz-ink); }
 .qz-segmented button[aria-pressed="true"] { background: var(--qz-paper); color: var(--qz-ink); box-shadow: var(--qz-shadow-sm); }
 
+/* Fill variant for narrow containers (the FlowRail view switcher): buttons
+   share the row equally and compress instead of overflowing. */
+.qz-segmented--fill { display: flex; width: 100%; }
+.qz-segmented--fill button {
+  flex: 1 1 0; min-width: 0;
+  padding: 0 4px; font-size: 12px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+
 /* — Badge — */
 .qz-badge {
   display: inline-flex; align-items: center; gap: 6px;
@@ -452,7 +461,7 @@ body[data-qz] ::selection { background: var(--qz-ink); color: var(--qz-cream); }
 /* Unified P2 — the three-pane unified workspace: rail / preview / panel. */
 .qz-unified {
   display: grid;
-  grid-template-columns: 250px minmax(0, 1fr) 400px;
+  grid-template-columns: 264px minmax(0, 1fr) 400px;
   gap: var(--qz-space-4);
   align-items: start;
 }

@@ -242,7 +242,7 @@ export function FlowRail({
 
   return (
     <div className="qz-card" style={{ padding: 10, position: "sticky", top: 8 }}>
-      <div className="qz-segmented" role="group" aria-label="Workspace view" style={{ width: "100%", marginBottom: 10 }}>
+      <div className="qz-segmented qz-segmented--fill" role="group" aria-label="Workspace view" style={{ width: "100%", marginBottom: 10 }}>
         <button type="button" aria-pressed={view === "build"} onClick={() => onView("build")}>
           Build
         </button>
