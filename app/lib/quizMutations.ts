@@ -717,3 +717,30 @@ export function moveStep(
     edges: [...doc.edges.filter((e) => !drop.has(e.id)), ...relinked],
   };
 }
+
+// ── Unified P4 — per-answer routing ──────────────────────────────────────────
+// Point ONE answer at a specific step, or back to the question's default.
+// Routing model (matched by resolveNextStep): an answer routes via the edge
+// keyed on its edge_handle_id; when that edge is absent, the question's
+// default edge (no source_handle) applies. Passing target=null removes the
+// per-answer edge — "follow the next step like everyone else".
+export function setAnswerRoute(
+  doc: QuizDoc,
+  questionNodeId: string,
+  answerId: string,
+  targetNodeId: string | null,
+): QuizDoc {
+  const node = doc.nodes.find((n) => n.id === questionNodeId);
+  if (!node || node.type !== "question") return doc;
+  const answer = node.data.answers.find((a) => a.id === answerId);
+  if (!answer) return doc;
+  const handle = answer.edge_handle_id;
+  const existing = doc.edges.find(
+    (e) => e.source === questionNodeId && e.source_handle === handle,
+  );
+  let next = existing ? deleteEdge(doc, existing.id) : doc;
+  if (targetNodeId && targetNodeId !== questionNodeId) {
+    next = addEdge(next, questionNodeId, targetNodeId, handle);
+  }
+  return next;
+}

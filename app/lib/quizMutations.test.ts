@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { Quiz } from "./quizSchema";
 import {
+  setAnswerRoute,
   setSlotWeight,
   setBranchMode,
   promoteAbWinner,
@@ -258,5 +259,40 @@ describe("promoteAbWinner", () => {
   it("ignores an unknown branch id (no-op, still valid)", () => {
     const next = promoteAbWinner(docWithBranch(), "nope", "sl_a");
     expect(() => Quiz.parse(next)).not.toThrow();
+  });
+});
+
+describe("setAnswerRoute (Unified P4)", () => {
+  it("retargets an answer, clears back to default, and guards bad ids", () => {
+    let doc = linearQuestionsDoc();
+    const q = doc.nodes.find((n) => n.type === "question");
+    if (!q || q.type !== "question") throw new Error("fixture");
+    const a = q.data.answers[0]!;
+    const result = doc.nodes.find((n) => n.type === "result")!;
+
+    // Retarget: a per-answer edge appears on the answer's handle.
+    doc = setAnswerRoute(doc, q.id, a.id, result.id);
+    const edge = doc.edges.find(
+      (e) => e.source === q.id && e.source_handle === a.edge_handle_id,
+    );
+    expect(edge?.target).toBe(result.id);
+
+    // Retarget again replaces (no duplicate handles).
+    doc = setAnswerRoute(doc, q.id, a.id, result.id);
+    expect(
+      doc.edges.filter((e) => e.source === q.id && e.source_handle === a.edge_handle_id),
+    ).toHaveLength(1);
+
+    // Clear: the per-answer edge is removed (default edge applies again).
+    doc = setAnswerRoute(doc, q.id, a.id, null);
+    expect(
+      doc.edges.some((e) => e.source === q.id && e.source_handle === a.edge_handle_id),
+    ).toBe(false);
+
+    // Guards: unknown node/answer and self-target are no-ops.
+    expect(setAnswerRoute(doc, "nope", a.id, result.id)).toBe(doc);
+    expect(setAnswerRoute(doc, q.id, "nope", result.id)).toBe(doc);
+    const self = setAnswerRoute(doc, q.id, a.id, q.id);
+    expect(self.edges.some((e) => e.source_handle === a.edge_handle_id)).toBe(false);
   });
 });

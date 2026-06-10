@@ -372,7 +372,9 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
                 onClose={() => select(null)}
                 products={data.productIndex}
                 productIndex={data.productIndex}
+                categories={data.categories}
                 frameBreakpoint={breakpointForWidth(frameW)}
+                onOpenLogic={() => setView("logic")}
               />
             ) : (
               <div className="qz-card" style={{ padding: 12, marginBottom: 16 }}>
