@@ -58,6 +58,11 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   await prisma.event.createMany({
     data: parsed.data.events
       .filter((e) => shopByQuiz.has(e.quiz_id))
+      // order_attributed is SERVER-ONLY (written by the orders/create webhook
+      // straight through Prisma). It shares the EventType enum so the Event
+      // table stays one list, but the public boundary drops it — otherwise a
+      // hostile client could spoof revenue into the dashboard.
+      .filter((e) => e.event_type !== "order_attributed")
       .map((e) => ({
         quizId: e.quiz_id,
         shopId: shopByQuiz.get(e.quiz_id) ?? null,
