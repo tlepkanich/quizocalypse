@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { validateQuiz } from "./quizValidation";
+import { validateQuiz, validateQuizWarnings } from "./quizValidation";
 import { Quiz } from "./quizSchema";
 
 function makeQuiz(extra: Partial<Parameters<typeof Quiz.parse>[0]> = {}) {
@@ -98,5 +98,76 @@ describe("validateQuiz", () => {
     expect(
       issues.some((i) => i.nodeId === "r1" && i.kind === "dead_end"),
     ).toBe(false);
+  });
+});
+
+describe("validateQuizWarnings (BIC P3) — suggestions never block publishing", () => {
+  const warnDoc = () =>
+    Quiz.parse({
+      quiz_id: "qz_warn",
+      scope: { collection_ids: [] },
+      nodes: [
+        { id: "intro", type: "intro", position: { x: 0, y: 0 }, data: { headline: "Hi" } },
+        {
+          id: "q1",
+          type: "question",
+          position: { x: 1, y: 0 },
+          data: {
+            text: "What's your budget?",
+            question_type: "rating", // mismatch: categorical money answers
+            answers: [
+              { id: "a1", text: "$0–25", tags: [], edge_handle_id: "h1" },
+              { id: "a2", text: "$25–50", tags: [], edge_handle_id: "h2" },
+            ],
+          },
+        },
+        {
+          id: "q2",
+          type: "question",
+          position: { x: 2, y: 0 },
+          data: {
+            text: "What's your budget?", // duplicate text
+            question_type: "single_select",
+            answers: [
+              { id: "a3", text: "Low", tags: [], edge_handle_id: "h3" },
+              { id: "a4", text: "High", tags: [], edge_handle_id: "h4" },
+            ],
+          },
+        },
+        {
+          id: "r1",
+          type: "result",
+          position: { x: 3, y: 0 },
+          data: { headline: "Done", fallback_collection_id: "gid://c/1" },
+        },
+      ],
+      edges: [
+        { id: "e1", source: "intro", target: "q1" },
+        { id: "e2", source: "q1", target: "q2" },
+        { id: "e3", source: "q2", target: "r1" },
+      ],
+    });
+
+  it("flags duplicate question text and rating/content mismatch", () => {
+    const s = validateQuizWarnings(warnDoc());
+    expect(s.some((x) => x.kind === "duplicate_question_text")).toBe(true);
+    expect(s.some((x) => x.kind === "type_content_mismatch")).toBe(true);
+  });
+
+  it("a genuine rating scale produces no mismatch", () => {
+    const doc = warnDoc();
+    const q1 = doc.nodes.find((n) => n.id === "q1");
+    if (q1?.type === "question") {
+      q1.data.answers = [
+        { id: "a1", text: "Poor", tags: [], edge_handle_id: "h1" },
+        { id: "a2", text: "Excellent", tags: [], edge_handle_id: "h2" },
+      ];
+    }
+    expect(validateQuizWarnings(doc).some((x) => x.kind === "type_content_mismatch")).toBe(false);
+  });
+
+  it("THE PUBLISH-GATE CONTRACT: validateQuiz output is unchanged by warnings", () => {
+    // warnDoc has suggestions but a clean graph — validateQuiz must stay [].
+    expect(validateQuiz(warnDoc())).toEqual([]);
   });
 });

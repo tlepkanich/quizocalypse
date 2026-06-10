@@ -1,3 +1,4 @@
+import { looksLikeRatingScale } from "./smartBuild";
 import type { Quiz } from "./quizSchema";
 import type { z } from "zod";
 
@@ -113,4 +114,60 @@ export function validateQuiz(doc: QuizDoc): NodeIssue[] {
   }
 
   return issues;
+}
+
+// ---------- Suggestions (BIC P3) — NEVER block publishing ----------
+// quizPublish.ts throws on ANY validateQuiz issue, so quality hints live in a
+// SEPARATE export the publish gate never calls. Surfaced as a soft
+// "Suggestions" banner in the editors.
+
+export interface QuizSuggestion {
+  nodeId: string;
+  kind: "duplicate_question_text" | "type_content_mismatch";
+  message: string;
+}
+
+export function validateQuizWarnings(doc: QuizDoc): QuizSuggestion[] {
+  const suggestions: QuizSuggestion[] = [];
+
+  // Duplicate question text — confusing for shoppers and for funnel analytics
+  // (per-branch duplicates may be intentional, hence a suggestion, not an error).
+  const byText = new Map<string, string[]>();
+  for (const n of doc.nodes) {
+    if (n.type !== "question") continue;
+    const key = n.data.text.trim().toLowerCase();
+    byText.set(key, [...(byText.get(key) ?? []), n.id]);
+  }
+  for (const [, ids] of byText) {
+    if (ids.length > 1) {
+      const first = doc.nodes.find((n) => n.id === ids[0]);
+      suggestions.push({
+        nodeId: ids[0]!,
+        kind: "duplicate_question_text",
+        message: `“${first?.type === "question" ? first.data.text.slice(0, 48) : "Question"}” appears ${ids.length} times — shoppers on some paths may see what looks like a repeat.`,
+      });
+    }
+  }
+
+  // Type/content mismatch — same heuristics the Smart Build normalizer applies
+  // to NEW generations, surfaced for existing docs (demo/template/manual paths).
+  for (const n of doc.nodes) {
+    if (n.type !== "question") continue;
+    if (n.data.question_type === "rating" && !looksLikeRatingScale(n.data.answers)) {
+      suggestions.push({
+        nodeId: n.id,
+        kind: "type_content_mismatch",
+        message: `“${n.data.text.slice(0, 48)}” is a rating scale but its answers read like categories — single select would render better.`,
+      });
+    }
+    if (n.data.question_type === "swatch" && n.data.answers.some((a) => !a.image_url)) {
+      suggestions.push({
+        nodeId: n.id,
+        kind: "type_content_mismatch",
+        message: `“${n.data.text.slice(0, 48)}” is a swatch picker but some answers have no image — they render as empty circles.`,
+      });
+    }
+  }
+
+  return suggestions;
 }

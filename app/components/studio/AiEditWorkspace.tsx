@@ -4,7 +4,11 @@ import { TitleBar } from "@shopify/app-bridge-react";
 import { Step5Preview } from "../builder/Step5Preview";
 import type { StepProps } from "../builder/stepProps";
 import { QzPage, QzPageHeader, QzButton, QzBanner } from "../qz";
-import { validateQuiz, type NodeIssue } from "../../lib/quizValidation";
+import {
+  validateQuiz,
+  validateQuizWarnings,
+  type NodeIssue,
+} from "../../lib/quizValidation";
 import { orderFlow } from "../../lib/flowOrder";
 import type { Quiz } from "../../lib/quizSchema";
 import type { StudioBuilderData } from "./StudioBuilder";
@@ -84,6 +88,9 @@ function AiWorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: C
   const [inspect, setInspect] = useState<InspectTarget | null>(null);
 
   const allIssues = useMemo<NodeIssue[]>(() => validateQuiz(doc), [doc]);
+  // Soft quality suggestions (BIC P3) — SEPARATE from allIssues, which gates
+  // publishing. These never block anything.
+  const suggestions = useMemo(() => validateQuizWarnings(doc), [doc]);
   const issuesByNode = useMemo(() => {
     const m = new Map<string, NodeIssue[]>();
     for (const i of allIssues) {
@@ -184,6 +191,29 @@ function AiWorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: C
           </QzButton>
         </div>
       </div>
+
+      {suggestions.length > 0 ? (
+        <div
+          className="qz-card"
+          style={{
+            padding: "10px 14px",
+            marginBottom: 16,
+            background: "color-mix(in srgb, var(--qz-warn, #b58a2a) 7%, var(--qz-surface, #fff))",
+            fontSize: 12.5,
+          }}
+        >
+          <strong style={{ fontSize: 12.5 }}>💡 Suggestions</strong>
+          <span className="qz-dim"> (won&rsquo;t block publishing)</span>
+          <ul style={{ margin: "6px 0 0", paddingLeft: 18 }}>
+            {suggestions.slice(0, 3).map((s, i) => (
+              <li key={`${s.nodeId}-${s.kind}-${i}`}>{s.message}</li>
+            ))}
+            {suggestions.length > 3 ? (
+              <li className="qz-dim">+{suggestions.length - 3} more</li>
+            ) : null}
+          </ul>
+        </div>
+      ) : null}
 
       {/* Placement as visual cards at the publish step (Dev Spec §2 Step 7). The
           current value is AI pre-selected at build time; the merchant overrides

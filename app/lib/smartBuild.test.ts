@@ -4,6 +4,7 @@ import { resolveNextStep, pickPointsWinner, type BranchContext } from "./recomme
 import { orderFlow } from "./flowOrder";
 import {
   applyQuestionFlow,
+  normalizeQuestionSpec,
   type GeneratedQuestionFlow,
   type SmartBuildBucket,
 } from "./smartBuild";
@@ -273,5 +274,53 @@ describe("tag-independent routing (tag-poor catalog → no more 'same products e
     const dryEdge = next.edges.find((e) => e.source === "sb_br" && e.target === "r_dry");
     expect(dryEdge?.condition?.tag).toBe("dry");
     expect(dryEdge?.condition?.answer_id).toBeUndefined();
+  });
+});
+
+describe("normalizeQuestionSpec (BIC P3)", () => {
+  it("downgrades rating-with-categorical/money answers to single_select", () => {
+    const out = normalizeQuestionSpec({
+      text: "What are you shopping for today?",
+      question_type: "rating",
+      answers: [
+        { text: "Snow sports gear", tags: [] },
+        { text: "Beauty & skincare", tags: [] },
+      ],
+    });
+    expect(out.question_type).toBe("single_select");
+    const money = normalizeQuestionSpec({
+      text: "Budget?",
+      question_type: "rating",
+      answers: [
+        { text: "$0–25", tags: [] },
+        { text: "$25–50", tags: [] },
+      ],
+    });
+    expect(money.question_type).toBe("single_select");
+  });
+
+  it("keeps a genuine Likert scale as rating", () => {
+    const out = normalizeQuestionSpec({
+      text: "How experienced are you?",
+      question_type: "rating",
+      answers: [
+        { text: "1", tags: [] },
+        { text: "2", tags: [] },
+        { text: "3", tags: [] },
+      ],
+    });
+    expect(out.question_type).toBe("rating");
+  });
+
+  it("downgrades swatch when any answer lacks an image", () => {
+    const out = normalizeQuestionSpec({
+      text: "Pick a shade",
+      question_type: "swatch",
+      answers: [
+        { text: "Rose", tags: [], image_url: "https://x/r.png" },
+        { text: "Sand", tags: [] },
+      ],
+    });
+    expect(out.question_type).toBe("single_select");
   });
 });

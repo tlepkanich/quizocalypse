@@ -29,7 +29,7 @@ import {
 } from "../qz";
 import type { ContentBlock, DesignTokens, Quiz, QuizNode } from "../../lib/quizSchema";
 import { isFreeformType } from "../../lib/quizSchema";
-import { validateQuiz, type NodeIssue } from "../../lib/quizValidation";
+import { validateQuiz, validateQuizWarnings, type NodeIssue } from "../../lib/quizValidation";
 import { orderFlow } from "../../lib/flowOrder";
 import { synthesizeLayout } from "../../lib/synthesizeLayout";
 import { StepPreview } from "../runtime/StepPreview";
@@ -283,6 +283,8 @@ function BuilderShell({ data, chrome }: { data: LoaderData; chrome: Chrome }) {
 
   const fallbackCollection = collections[0]?.collectionId ?? "";
   const allIssues = useMemo(() => validateQuiz(doc), [doc]);
+  // Soft quality suggestions (BIC P3) — separate from allIssues (the publish gate).
+  const suggestions = useMemo(() => validateQuizWarnings(doc), [doc]);
   const issuesByNode = useMemo(() => {
     const map = new Map<string, NodeIssue[]>();
     for (const issue of allIssues) {
@@ -609,6 +611,29 @@ function BuilderShell({ data, chrome }: { data: LoaderData; chrome: Chrome }) {
         // merchant touches, right after grouping products.
         <>
           <CompletenessBar issues={allIssues} total={doc.nodes.length} />
+          {suggestions.length > 0 ? (
+            <div
+              className="qz-card"
+              style={{
+                padding: "10px 14px",
+                marginBottom: 12,
+                background:
+                  "color-mix(in srgb, var(--qz-warn, #b58a2a) 7%, var(--qz-surface, #fff))",
+                fontSize: 12.5,
+              }}
+            >
+              <strong style={{ fontSize: 12.5 }}>💡 Suggestions</strong>
+              <span className="qz-dim"> (won&rsquo;t block publishing)</span>
+              <ul style={{ margin: "6px 0 0", paddingLeft: 18 }}>
+                {suggestions.slice(0, 3).map((s, i) => (
+                  <li key={`${s.nodeId}-${s.kind}-${i}`}>{s.message}</li>
+                ))}
+                {suggestions.length > 3 ? (
+                  <li className="qz-dim">+{suggestions.length - 3} more</li>
+                ) : null}
+              </ul>
+            </div>
+          ) : null}
           {!zoomNode ? (
             <SmartBuildPanel
               onGenerate={runSmartBuild}

@@ -49,6 +49,38 @@ export interface SmartBuildBucket {
   resultNodeId: string;
 }
 
+// ---------- Generation-quality guards (BIC P3) ----------
+// A category question mislabeled `rating` renders as a scale row — wrong layout
+// for content like "Snow sports gear / Beauty & skincare" (seen live). Ratings
+// are short ordinal scales; anything else (and anything money-ish) is a
+// categorical choice. Pure + exported so validateQuizWarnings can reuse it.
+
+const RATING_ANSWER =
+  /^(\d{1,2}|[1-5]\s*stars?|⭐+|poor|fair|good|great|excellent|amazing|terrible|never|rarely|sometimes|often|always|daily|weekly|monthly|strongly disagree|disagree|neutral|agree|strongly agree|not at all|a little|somewhat|very|extremely)$/i;
+
+export function looksLikeRatingScale(answers: Array<{ text: string }>): boolean {
+  return answers.length >= 2 && answers.every((a) => RATING_ANSWER.test(a.text.trim()));
+}
+
+const MONEYISH = /[$€£]|\bbudget\b|\bprice\b|\bcost\b/i;
+
+/**
+ * Post-generation type sanity: `rating` whose answers aren't a scale (or are
+ * money ranges) → `single_select`; `swatch` where any answer lacks an image →
+ * `single_select` (swatches render image circles). Everything else untouched.
+ */
+export function normalizeQuestionSpec(q: GeneratedQuestionSpec): GeneratedQuestionSpec {
+  if (q.question_type === "rating") {
+    const scale = looksLikeRatingScale(q.answers);
+    const moneyish = q.answers.some((a) => MONEYISH.test(a.text));
+    if (!scale || moneyish) return { ...q, question_type: "single_select" };
+  }
+  if (q.question_type === "swatch" && q.answers.some((a) => !a.image_url)) {
+    return { ...q, question_type: "single_select" };
+  }
+  return q;
+}
+
 export function applyQuestionFlow(
   doc: QuizDoc,
   generated: GeneratedQuestionFlow,
@@ -103,12 +135,15 @@ export function applyQuestionFlow(
   }
 
   const questionAnswerIds: string[][] = [];
+  // Type sanity first (BIC P3) — covers the Smart Build path; existing docs
+  // are covered by validateQuizWarnings.
+  const questions = generated.questions.map(normalizeQuestionSpec);
   // Honor at most ONE AI-placed education card across the quiz (Dev Spec §6):
   // the first question carrying a non-empty card wins; the rest are ignored.
-  const eduIdx = generated.questions.findIndex(
+  const eduIdx = questions.findIndex(
     (q) => typeof q.education_card_before === "string" && q.education_card_before.trim().length > 0,
   );
-  generated.questions.forEach((q, i) => {
+  questions.forEach((q, i) => {
     const id = `sb_q_${i + 1}`;
     const answers = q.answers.map((a) => ({
       id: rid("a"),
