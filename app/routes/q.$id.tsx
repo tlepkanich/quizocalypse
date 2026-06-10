@@ -52,12 +52,18 @@ export const loader = async ({ params }: LoaderFunctionArgs) => {
     shop_domain?: string;
   };
 
+  // BIC P7: publish copies the draft, so the merchant's pasted review/FAQ
+  // source would otherwise ship to every shopper page load — strip it. The
+  // omitted-optional shape still satisfies the runtime's QuizDoc.
+  const { review_enrichment_sources: _editorOnly, ...publicDoc } = parsed.data;
+  void _editorOnly;
+
   return json(
     {
       quizId: quiz.id,
       name: quiz.name,
       version: quiz.version,
-      doc: parsed.data,
+      doc: publicDoc,
       productIndex: publishedRaw.product_index ?? [],
       designTokens: parsed.data.design_tokens ?? null,
       designOverrides: parsed.data.design_overrides ?? {},

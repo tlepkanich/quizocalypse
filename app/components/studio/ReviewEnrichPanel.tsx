@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+// (useEffect also drives the localStorage-backed hint dismissal below.)
 import { useFetcher } from "@remix-run/react";
 import type { Quiz } from "../../lib/quizSchema";
 import { QzButton } from "../qz";
@@ -11,11 +12,24 @@ type EnrichResponse =
   | { ok: true; action: "enrich-reviews"; doc: Quiz; assistant_message?: string; changed?: number }
   | { ok: false; error?: string };
 
-export function ReviewEnrichPanel({ onApply }: { onApply: (doc: Quiz) => void }) {
+export function ReviewEnrichPanel({
+  onApply,
+  sources,
+}: {
+  onApply: (doc: Quiz) => void;
+  // BIC P7: the last-used source persisted on the draft — pre-fills the form
+  // so a paste survives reload and can be re-run after catalog/copy changes.
+  sources?: { text: string; url?: string; enriched_at: string };
+}) {
   const fetcher = useFetcher<EnrichResponse>();
   const [open, setOpen] = useState(false);
-  const [reviews, setReviews] = useState("");
-  const [url, setUrl] = useState("");
+  const [reviews, setReviews] = useState(sources?.text ?? "");
+  const [url, setUrl] = useState(sources?.url ?? "");
+  // One-time nudge for never-enriched quizzes; dismissal sticks per browser.
+  const [hintDismissed, setHintDismissed] = useState(true);
+  useEffect(() => {
+    setHintDismissed(localStorage.getItem("qz-enrich-hint") === "off");
+  }, []);
   const busy = fetcher.state !== "idle";
   const result = fetcher.data;
 
@@ -49,8 +63,28 @@ export function ReviewEnrichPanel({ onApply }: { onApply: (doc: Quiz) => void })
         style={{ width: "100%", background: "none", border: "none", cursor: "pointer", padding: 0 }}
       >
         <strong style={{ fontSize: 14 }}>✨ Enrich from reviews</strong>
-        <span className="qz-dim" style={{ fontSize: 12 }}>{open ? "▲" : "▼"}</span>
+        <span className="qz-dim" style={{ fontSize: 12 }}>
+          {sources ? `last run ${new Date(sources.enriched_at).toLocaleDateString()} · ` : ""}
+          {open ? "▲" : "▼"}
+        </span>
       </button>
+      {!sources && !hintDismissed && !open ? (
+        <div className="qz-row qz-row-between" style={{ marginTop: 8, alignItems: "center", gap: 8 }}>
+          <span className="qz-dim" style={{ fontSize: 12 }}>
+            Paste a few customer reviews — the AI rewrites answers and tooltips in their words.
+          </span>
+          <button
+            type="button"
+            className="qz-btn qz-btn-ghost qz-btn-sm"
+            onClick={() => {
+              localStorage.setItem("qz-enrich-hint", "off");
+              setHintDismissed(true);
+            }}
+          >
+            Dismiss
+          </button>
+        </div>
+      ) : null}
 
       {open ? (
         <div style={{ marginTop: 12, display: "flex", flexDirection: "column", gap: 10 }}>

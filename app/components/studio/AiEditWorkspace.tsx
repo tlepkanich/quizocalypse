@@ -330,7 +330,7 @@ function AiWorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: C
               products={data.productIndex}
             />
           ) : null}
-          <ReviewEnrichPanel onApply={commit} />
+          <ReviewEnrichPanel onApply={commit} sources={doc.review_enrichment_sources} />
           <AiChatPanel onApply={commit} />
         </div>
       </div>

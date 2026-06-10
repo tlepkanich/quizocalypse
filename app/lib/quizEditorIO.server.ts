@@ -601,7 +601,18 @@ export async function handleQuizEditorActionForShop(
     }
 
     const { doc: enriched, changed } = applyReviewEnrichment(doc, enrichment);
-    const reparsed = Quiz.safeParse(enriched);
+    // BIC P7: persist the source alongside the enrichment so the merchant's
+    // paste survives reload and can be re-run. Editor-only — the public /q
+    // loader strips this field before serving.
+    const withSources = {
+      ...enriched,
+      review_enrichment_sources: {
+        text: reviewText,
+        ...(reviewsUrl ? { url: reviewsUrl } : {}),
+        enriched_at: new Date().toISOString(),
+      },
+    };
+    const reparsed = Quiz.safeParse(withSources);
     if (!reparsed.success) {
       return json(
         {

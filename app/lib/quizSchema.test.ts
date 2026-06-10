@@ -769,3 +769,33 @@ describe("editor revamp P3 — answer icons + answer_columns (additive)", () => 
     expect(() => QuestionData.parse({ ...base, answer_columns: 3 })).toThrow();
   });
 });
+
+describe("BIC P7 — review_enrichment_sources (additive, editor-only)", () => {
+  const base = {
+    quiz_id: "qz_src",
+    scope: { collection_ids: [] },
+    nodes: [
+      { id: "intro", type: "intro", position: { x: 0, y: 0 }, data: { headline: "Hi" } },
+      {
+        id: "r1",
+        type: "result",
+        position: { x: 1, y: 0 },
+        data: { headline: "Done", fallback_collection_id: "gid://c/1" },
+      },
+    ],
+    edges: [{ id: "e1", source: "intro", target: "r1" }],
+  };
+
+  it("absent on old docs; round-trips when present", () => {
+    expect(Quiz.parse(base).review_enrichment_sources).toBeUndefined();
+    const withSrc = Quiz.parse({
+      ...base,
+      review_enrichment_sources: {
+        text: "Loved it, never caught an edge.",
+        url: "https://example.com/reviews",
+        enriched_at: "2026-06-10T00:00:00.000Z",
+      },
+    });
+    expect(withSrc.review_enrichment_sources?.text).toContain("never caught an edge");
+  });
+});
