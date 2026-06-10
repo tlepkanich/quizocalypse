@@ -62,6 +62,10 @@ export const CHROME_TOKENS = {
   saved_results_from: "Your saved results from {date}",
   results_gone: "Your results are no longer available.",
   take_again: "Take the quiz again →",
+  // Buddy mode (Phase L2).
+  invite_friend: "🤝 Compare with a friend",
+  invite_copied: "Link copied — send it to a friend ✓",
+  see_comparison: "See how you compare →",
 } as const;
 
 export type ChromeToken = keyof typeof CHROME_TOKENS;

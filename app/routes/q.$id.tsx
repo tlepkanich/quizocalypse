@@ -92,6 +92,13 @@ export const loader = async ({ params, request }: LoaderFunctionArgs) => {
   const requestedLocale = new URL(request.url).searchParams.get("locale");
   const available = Object.keys(parsed.data.translations ?? {});
   const locale = resolveLocale(requestedLocale, available);
+
+  // Phase L2 — a buddy invite carries the inviter's session id; the runtime
+  // shows "see how you compare" once this shopper completes. Format-gated
+  // only (it's an unguessable capability token, same as My Results).
+  const buddyParam = new URL(request.url).searchParams.get("buddy");
+  const buddySessionId =
+    buddyParam && /^[A-Za-z0-9_-]{8,64}$/.test(buddyParam) ? buddyParam : null;
   const localized = locale
     ? applyTranslations(parsed.data, parsed.data.translations![locale]!.strings)
     : parsed.data;
@@ -121,6 +128,7 @@ export const loader = async ({ params, request }: LoaderFunctionArgs) => {
       answerWeights: publishedRaw.answer_weights ?? null,
       locale: locale ?? "en",
       chrome,
+      buddySessionId,
     },
     {
       // Same 60s convention as the JSON + launcher endpoints: a re-publish
@@ -147,6 +155,7 @@ export default function StorefrontRuntime() {
       answerWeights={data.answerWeights}
       chrome={data.chrome}
       locale={data.locale}
+      buddySessionId={data.buddySessionId}
     />
   );
 }

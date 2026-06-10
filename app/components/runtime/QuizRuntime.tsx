@@ -133,6 +133,8 @@ export interface QuizRuntimeProps {
   // locale code. Absent → English table via the context default.
   chrome?: Record<string, string> | null;
   locale?: string;
+  // Phase L2 — the inviter's session id when this visit came from a buddy link.
+  buddySessionId?: string | null;
 }
 
 // Content-block types the storefront renders directly. Literal blocks render via
@@ -179,6 +181,7 @@ export function QuizRuntime(props: QuizRuntimeProps) {
     answerWeights = null,
     chrome = null,
     locale = "en",
+    buddySessionId = null,
   } = props;
   const isPreview = mode === "preview";
   // Inspect mode is preview-only by construction (the storefront never passes
@@ -587,6 +590,7 @@ export function QuizRuntime(props: QuizRuntimeProps) {
           startedAt={startedAtRef.current}
           completed={completedRef}
           analytics={analyticsRef.current}
+          buddySessionId={buddySessionId}
           onReset={reset}
           bare
         />
@@ -610,6 +614,7 @@ export function QuizRuntime(props: QuizRuntimeProps) {
         startedAt={startedAtRef.current}
         completed={completedRef}
         analytics={analyticsRef.current}
+          buddySessionId={buddySessionId}
         onReset={reset}
         bare
       />
@@ -904,6 +909,7 @@ export function QuizRuntime(props: QuizRuntimeProps) {
             startedAt={startedAtRef.current}
             completed={completedRef}
             analytics={analyticsRef.current}
+          buddySessionId={buddySessionId}
             onReset={reset}
             inspect={(part) => insp({ nodeId: currentNode.id, part })}
             splitLayout={resolved.result_split === true && breakpoint === "desktop"}
@@ -939,6 +945,7 @@ export function QuizRuntime(props: QuizRuntimeProps) {
             startedAt={startedAtRef.current}
             completed={completedRef}
             analytics={analyticsRef.current}
+          buddySessionId={buddySessionId}
             onReset={reset}
             inspect={(part) => insp({ nodeId: currentNode.id, part })}
           />
@@ -1557,6 +1564,83 @@ function SaveResultsLink({ quizId, sessionId }: { quizId?: string; sessionId?: s
 // Answer label with the optional emoji icon prefix (editor revamp P3 —
 // Answer.icon, set via the InspectorPanel's icon picker or the AI's
 // set_answer_icon op). Absent icon → just the text, unchanged.
+// Buddy mode (Phase L2): invite a friend (share/copy a ?buddy= link carrying
+// MY session) and, when I arrived via someone's link, the comparison CTA.
+// Live-only, like SaveResultsLink. buddy_completed fires once on render of
+// the compare link (the friend finished an invited run).
+function BuddyRow({
+  quizId,
+  sessionId,
+  buddySessionId,
+  analytics,
+}: {
+  quizId?: string;
+  sessionId?: string;
+  buddySessionId?: string | null;
+  analytics: ReturnType<typeof createAnalyticsClient> | null;
+}) {
+  const tc = useChrome();
+  const locale = useContext(RuntimeLocaleContext);
+  const isPreviewMode = useContext(RuntimePreviewContext);
+  const [copied, setCopied] = useState(false);
+  const completedFired = useRef(false);
+  useEffect(() => {
+    if (buddySessionId && sessionId && !isPreviewMode && !completedFired.current) {
+      completedFired.current = true;
+      analytics?.track("buddy_completed", { inviter_session: buddySessionId });
+    }
+  }, [buddySessionId, sessionId, isPreviewMode, analytics]);
+  if (isPreviewMode || !quizId || !sessionId) return null;
+  const localeQ = locale !== "en" ? `&locale=${encodeURIComponent(locale)}` : "";
+  const inviteUrl = `${window.location.origin}/q/${quizId}?buddy=${encodeURIComponent(sessionId)}${localeQ.replace("&", "&")}`;
+  return (
+    <div style={{ marginTop: 10, display: "flex", flexDirection: "column", gap: 6, alignItems: "center" }}>
+      {buddySessionId ? (
+        <a
+          href={`/q/${quizId}/compare?a=${encodeURIComponent(buddySessionId)}&b=${encodeURIComponent(sessionId)}${localeQ}`}
+          style={{ fontSize: 14, fontWeight: 600, color: "inherit" }}
+        >
+          {tc("see_comparison")}
+        </a>
+      ) : null}
+      <button
+        type="button"
+        onClick={async () => {
+          analytics?.track("buddy_invited", {});
+          if (navigator.share) {
+            try {
+              await navigator.share({ url: inviteUrl });
+              return;
+            } catch {
+              // dismissed — fall through to copy
+            }
+          }
+          try {
+            await navigator.clipboard.writeText(inviteUrl);
+            setCopied(true);
+            window.setTimeout(() => setCopied(false), 2000);
+          } catch {
+            // clipboard blocked — nothing else to do
+          }
+        }}
+        style={{
+          font: "inherit",
+          fontSize: 13,
+          padding: "6px 12px",
+          borderRadius: 8,
+          border: "1px solid currentColor",
+          background: "transparent",
+          color: "inherit",
+          cursor: "pointer",
+          opacity: 0.85,
+        }}
+      >
+        {copied ? tc("invite_copied") : tc("invite_friend")}
+      </button>
+    </div>
+  );
+}
+
 function answerLabel(a: { icon?: string; text: string }): string {
   return a.icon ? `${a.icon} ${a.text}` : a.text;
 }
@@ -2900,6 +2984,7 @@ function ResultView({
   startedAt,
   completed,
   analytics,
+  buddySessionId,
   onReset,
   bare,
   whyBullets,
@@ -2927,6 +3012,7 @@ function ResultView({
   startedAt: number;
   completed: React.MutableRefObject<boolean>;
   analytics: ReturnType<typeof createAnalyticsClient> | null;
+  buddySessionId?: string | null;
   onReset: () => void;
   // When true, render just the products + "Start over" (no card / heading) so a
   // `recommendations` content-block can place it inside a custom layout.
@@ -3073,6 +3159,7 @@ function ResultView({
         {tc("start_over")}
       </button>
       <SaveResultsLink quizId={quizId} sessionId={sessionId} />
+      <BuddyRow quizId={quizId} sessionId={sessionId} buddySessionId={buddySessionId} analytics={analytics} />
     </>
   );
 
@@ -3153,6 +3240,7 @@ function MultiStageResultView({
   startedAt,
   completed,
   analytics,
+  buddySessionId,
   onReset,
   bare,
   whyBullets,
@@ -3175,6 +3263,7 @@ function MultiStageResultView({
   startedAt: number;
   completed: React.MutableRefObject<boolean>;
   analytics: ReturnType<typeof createAnalyticsClient> | null;
+  buddySessionId?: string | null;
   onReset: () => void;
   bare?: boolean;
   whyBullets?: string[];
@@ -3243,6 +3332,7 @@ function MultiStageResultView({
         {tc("start_over")}
       </button>
       <SaveResultsLink quizId={quizId} sessionId={sessionId} />
+      <BuddyRow quizId={quizId} sessionId={sessionId} buddySessionId={buddySessionId} analytics={analytics} />
     </>
   );
 

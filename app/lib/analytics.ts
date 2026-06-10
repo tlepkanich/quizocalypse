@@ -22,6 +22,10 @@ export const EVENT_TYPES = [
   // (deduped by order_id) into the Revenue stat. Never sent by the client,
   // but accepted by the enum so the shared Event table schema stays one list.
   "order_attributed",
+  // Buddy mode (Phase L2): invited = clicked "compare with a friend";
+  // completed = a shopper finished a quiz they opened via a ?buddy= link.
+  "buddy_invited",
+  "buddy_completed",
 ] as const;
 export const EventType = z.enum(EVENT_TYPES);
 export type EventType = z.infer<typeof EventType>;
