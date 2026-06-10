@@ -12,6 +12,7 @@ import type {
   BuilderCategory,
 } from "../builder/stepProps";
 import { reconcileBucketsToResultNodes } from "../../lib/bucketReconcile";
+import { answerRoutes } from "../../lib/routeTrace";
 import {
   QzPage,
   QzPageHeader,
@@ -1266,7 +1267,43 @@ function StepCard({
           <StepPreview doc={doc} node={node} productIndex={productIndex} categories={categories} />
         </div>
       </div>
+      <RouteBadges doc={doc} nodeId={node.id} />
     </button>
+  );
+}
+
+// Per-answer routing badges (editor revamp P4): shown only when a question's
+// answers DIVERGE (answerRoutes returns [] for linear questions), so branching
+// is visible right in the cascade instead of only on the advanced canvas.
+function RouteBadges({ doc, nodeId }: { doc: QuizDoc; nodeId: string }) {
+  const routes = useMemo(() => answerRoutes(doc, nodeId), [doc, nodeId]);
+  if (routes.length === 0) return null;
+  return (
+    <div
+      className="qz-row"
+      style={{ gap: 6, flexWrap: "wrap", padding: "8px 12px 10px", justifyContent: "center" }}
+    >
+      {routes.map((r) => (
+        <span
+          key={r.answerId}
+          className="qz-dim"
+          style={{
+            fontSize: 10.5,
+            border: "1px solid var(--qz-rule, #e5e5e5)",
+            borderRadius: 999,
+            padding: "2px 8px",
+            background: "var(--qz-paper, #faf8f3)",
+            whiteSpace: "nowrap",
+            maxWidth: 200,
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+          }}
+          title={`“${r.answerText}” routes to: ${r.targetLabel}`}
+        >
+          “{r.answerText.length > 16 ? `${r.answerText.slice(0, 15)}…` : r.answerText}” → {r.targetLabel}
+        </span>
+      ))}
+    </div>
   );
 }
 

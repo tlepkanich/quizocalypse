@@ -5,6 +5,8 @@ import type { IndexedProduct } from "../../lib/recommendationEngine";
 import type { BuilderCategory } from "../builder/stepProps";
 import { findAbBranches, type FunnelCounts } from "../../lib/abAnalytics";
 import { AbTestCard, type SlotTarget } from "./AbTestCard";
+import { PathTester } from "./PathTester";
+import { reachedBy } from "../../lib/routeTrace";
 
 // FOCUS #2, HALF 1 — a Klaviyo-style visualization of the recommendation pages
 // and their variations: a scaled live preview per result page (showing its
@@ -114,6 +116,9 @@ export function RecommendationMap({
         ))}
       </section>
 
+      {/* ── Try a path (editor revamp P4) ─────────────────────────────── */}
+      <PathTester doc={doc} productIndex={productIndex} categories={categories} />
+
       {/* ── Recommendation pages ──────────────────────────────────────── */}
       <section style={{ display: "flex", flexDirection: "column", gap: 10 }}>
         <div className="qz-label">Recommendation pages</div>
@@ -129,21 +134,37 @@ export function RecommendationMap({
               gap: 14,
             }}
           >
-            {resultNodes.map((node) => (
-              <ResultPageCard
-                key={node.id}
-                node={node}
-                doc={doc}
-                productIndex={productIndex}
-                categories={categories}
-                active={node.id === selectedNodeId}
-                onClick={() => onSelectNode(node.id)}
-                layout="grid"
-                footerBadge={
-                  node.id === selectedNodeId ? <QzBadge tone="ok">Mapped in table →</QzBadge> : undefined
-                }
-              />
-            ))}
+            {resultNodes.map((node) => {
+              const arrivals = reachedBy(doc, node.id);
+              return (
+                <div key={node.id} style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                  <ResultPageCard
+                    node={node}
+                    doc={doc}
+                    productIndex={productIndex}
+                    categories={categories}
+                    active={node.id === selectedNodeId}
+                    onClick={() => onSelectNode(node.id)}
+                    layout="grid"
+                    footerBadge={
+                      node.id === selectedNodeId ? (
+                        <QzBadge tone="ok">Mapped in table →</QzBadge>
+                      ) : undefined
+                    }
+                  />
+                  {arrivals.length > 0 ? (
+                    <div className="qz-dim" style={{ fontSize: 11, lineHeight: 1.45 }}>
+                      Reached by:{" "}
+                      {arrivals
+                        .slice(0, 3)
+                        .map((a) => a.label)
+                        .join(" · ")}
+                      {arrivals.length > 3 ? ` · +${arrivals.length - 3} more` : ""}
+                    </div>
+                  ) : null}
+                </div>
+              );
+            })}
           </div>
         )}
       </section>
