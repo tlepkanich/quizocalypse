@@ -43,6 +43,51 @@ type QuizDoc = Quiz;
 
 export type QuizRuntimeMode = "live" | "preview";
 
+// Editor inspect mode (Dev plan "editor revamp"): in the builder preview, the
+// content elements a merchant would edit (headlines, question text, answers,
+// education cards, result copy) become click-to-inspect — hover outline + click
+// reports WHICH element was clicked instead of performing its normal action.
+// The storefront never passes `onInspect`, in which case `inspectAttrs` returns
+// {} and the rendered DOM/behavior is unchanged.
+export type InspectPart =
+  | "headline"
+  | "subtext"
+  | "cta"
+  | "question_text"
+  | "answer"
+  | "education_card"
+  | "result_headline"
+  | "result_subtext";
+
+export interface InspectTarget {
+  nodeId: string;
+  part: InspectPart;
+  answerId?: string;
+}
+
+function inspectAttrs(
+  onInspect: ((t: InspectTarget) => void) | undefined,
+  selected: InspectTarget | null | undefined,
+  target: InspectTarget,
+): React.HTMLAttributes<HTMLElement> {
+  if (!onInspect) return {};
+  const isSelected =
+    !!selected &&
+    selected.nodeId === target.nodeId &&
+    selected.part === target.part &&
+    (selected.answerId ?? null) === (target.answerId ?? null);
+  return {
+    onClickCapture: (e) => {
+      // Capture phase: beat the element's own handler (advance/select/toggle)
+      // so inspecting never mutates quiz state.
+      e.preventDefault();
+      e.stopPropagation();
+      onInspect(target);
+    },
+    className: isSelected ? "qz-insp qz-insp-sel" : "qz-insp",
+  };
+}
+
 export interface QuizRuntimeProps {
   doc: QuizDoc;
   productIndex: IndexedProduct[];
@@ -61,6 +106,10 @@ export interface QuizRuntimeProps {
   // the intro because the localStorage restore effect early-returns on isPreview.
   tokensOverride?: DesignTokensT | null;
   breakpoint?: "desktop" | "mobile";
+  // Editor-only (preview): click-to-inspect editable elements. Never set on the
+  // storefront — absent, the DOM and behavior are unchanged.
+  onInspect?: (target: InspectTarget) => void;
+  inspectedTarget?: InspectTarget | null;
 }
 
 // Content-block types the storefront renders directly. Literal blocks render via
@@ -96,8 +145,14 @@ export function QuizRuntime(props: QuizRuntimeProps) {
     mode = "live",
     tokensOverride = null,
     breakpoint: breakpointProp,
+    onInspect,
+    inspectedTarget = null,
   } = props;
   const isPreview = mode === "preview";
+  // Inspect mode is preview-only by construction (the storefront never passes
+  // onInspect); the extra guard keeps a stray prop from ever hijacking live taps.
+  const inspectFn = isPreview ? onInspect : undefined;
+  const insp = (target: InspectTarget) => inspectAttrs(inspectFn, inspectedTarget, target);
   const introNode = useMemo(
     () => doc.nodes.find((n) => n.type === "intro") ?? doc.nodes[0],
     [doc.nodes],
@@ -522,6 +577,7 @@ export function QuizRuntime(props: QuizRuntimeProps) {
                 ? { ...styles.h1, fontSize: "calc(var(--qz-h1-size) * 1.35)", lineHeight: 1.1 }
                 : styles.h1
             }
+            {...insp({ nodeId: currentNode.id, part: "headline" })}
           >
             {currentNode.data.headline}
           </h1>
@@ -539,6 +595,7 @@ export function QuizRuntime(props: QuizRuntimeProps) {
                     }
                   : styles.muted
               }
+              {...insp({ nodeId: currentNode.id, part: "subtext" })}
             >
               {currentNode.data.subtext}
             </p>
@@ -554,6 +611,7 @@ export function QuizRuntime(props: QuizRuntimeProps) {
                 : styles.primaryBtn
             }
             onClick={() => gotoNextFrom(currentNode.id, null)}
+            {...insp({ nodeId: currentNode.id, part: "cta" })}
           >
             {currentNode.data.button_label}
           </button>
@@ -563,7 +621,11 @@ export function QuizRuntime(props: QuizRuntimeProps) {
       content = (
         <>
           {currentNode.data.education_card_before ? (
-            <EducationCard text={currentNode.data.education_card_before} styles={styles} />
+            <EducationCard
+              text={currentNode.data.education_card_before}
+              styles={styles}
+              inspectProps={insp({ nodeId: currentNode.id, part: "education_card" })}
+            />
           ) : null}
           <QuestionView
           node={currentNode}
@@ -575,6 +637,8 @@ export function QuizRuntime(props: QuizRuntimeProps) {
               answer_id: answerId,
             })
           }
+          onInspect={inspectFn}
+          inspectedTarget={inspectedTarget}
           onAdvance={(answerIds, handle) => {
             analyticsRef.current?.track("question_answered", {
               question_id: currentNode.id,
@@ -732,6 +796,7 @@ export function QuizRuntime(props: QuizRuntimeProps) {
             completed={completedRef}
             analytics={analyticsRef.current}
             onReset={reset}
+            inspect={(part) => insp({ nodeId: currentNode.id, part })}
           />
         );
       } else {
@@ -765,6 +830,7 @@ export function QuizRuntime(props: QuizRuntimeProps) {
             completed={completedRef}
             analytics={analyticsRef.current}
             onReset={reset}
+            inspect={(part) => insp({ nodeId: currentNode.id, part })}
           />
         );
       }
@@ -783,6 +849,13 @@ export function QuizRuntime(props: QuizRuntimeProps) {
       style={rootStyle}
     >
       {fontUrl && <link rel="stylesheet" href={fontUrl} />}
+      {inspectFn ? (
+        <style>{`
+          .qz-insp { cursor: pointer; }
+          .qz-insp:hover { outline: 2px dashed var(--qz-color-accent, #999); outline-offset: 3px; border-radius: 4px; }
+          .qz-insp-sel { outline: 2px solid var(--qz-color-accent, #999); outline-offset: 3px; border-radius: 4px; }
+        `}</style>
+      ) : null}
       <style>{`
         @media (prefers-reduced-motion: reduce) {
           *, *::before, *::after {
@@ -1262,16 +1335,26 @@ function DropdownQuestion({
   node,
   onAdvance,
   styles,
+  onInspect,
+  inspectedTarget,
 }: {
   node: Extract<QuizDoc["nodes"][number], { type: "question" }>;
   onAdvance: (answerIds: string[], handle: string | null) => void;
   styles: ReturnType<typeof stylesFor>;
+  onInspect?: (target: InspectTarget) => void;
+  inspectedTarget?: InspectTarget | null;
 }) {
+  const insp = (part: InspectPart, answerId?: string) =>
+    inspectAttrs(onInspect, inspectedTarget, {
+      nodeId: node.id,
+      part,
+      ...(answerId ? { answerId } : {}),
+    });
   const [sel, setSel] = useState("");
   const answer = node.data.answers.find((a) => a.id === sel);
   return (
     <div style={styles.card}>
-      <h2 style={styles.h2}>{node.data.text}</h2>
+      <h2 style={styles.h2} {...insp("question_text")}>{node.data.text}</h2>
       <div style={{ marginTop: 20, display: "flex", flexDirection: "column", gap: 12 }}>
         <select
           value={sel}
@@ -1303,9 +1386,11 @@ function DropdownQuestion({
 function EducationCard({
   text,
   styles,
+  inspectProps,
 }: {
   text: string;
   styles: ReturnType<typeof stylesFor>;
+  inspectProps?: React.HTMLAttributes<HTMLElement>;
 }) {
   return (
     <div
@@ -1314,6 +1399,7 @@ function EducationCard({
         borderLeft: "4px solid var(--qz-color-primary)",
         marginBottom: 12,
       }}
+      {...(inspectProps ?? {})}
     >
       <div className="qz-dim" style={{ fontSize: 13, lineHeight: 1.5 }}>💡 {text}</div>
     </div>
@@ -1404,13 +1490,23 @@ function QuestionView({
   styles,
   tokens,
   onTooltipView,
+  onInspect,
+  inspectedTarget,
 }: {
   node: Extract<QuizDoc["nodes"][number], { type: "question" }>;
   onAdvance: (answerIds: string[], handle: string | null) => void;
   styles: ReturnType<typeof stylesFor>;
   tokens: DesignTokensT;
   onTooltipView?: (answerId: string) => void;
+  onInspect?: (target: InspectTarget) => void;
+  inspectedTarget?: InspectTarget | null;
 }) {
+  const insp = (part: InspectPart, answerId?: string) =>
+    inspectAttrs(onInspect, inspectedTarget, {
+      nodeId: node.id,
+      part,
+      ...(answerId ? { answerId } : {}),
+    });
   const [checked, setChecked] = useState<Record<string, boolean>>({});
   // Slider defaults to its midpoint so it's immediately submittable + shows a value.
   const [freeform, setFreeform] = useState(
@@ -1443,7 +1539,7 @@ function QuestionView({
         (inputType !== "email" || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)));
     return (
       <div style={styles.card}>
-        <h2 style={styles.h2}>{node.data.text}</h2>
+        <h2 style={styles.h2} {...insp("question_text")}>{node.data.text}</h2>
         <form
           onSubmit={(e) => {
             e.preventDefault();
@@ -1513,7 +1609,7 @@ function QuestionView({
     const tooFew = typeof min === "number" && selectedIds.length < min;
     return (
       <div style={styles.card}>
-        <h2 style={styles.h2}>{node.data.text}</h2>
+        <h2 style={styles.h2} {...insp("question_text")}>{node.data.text}</h2>
         <div style={styles.answerGrid}>
           {node.data.answers.map((a) => (
             <div key={a.id} style={{ position: "relative" }}>
@@ -1527,6 +1623,7 @@ function QuestionView({
                     ? "var(--qz-color-primary)"
                     : "#00000022",
                 }}
+                {...insp("answer", a.id)}
               >
                 <input
                   type="checkbox"
@@ -1565,7 +1662,15 @@ function QuestionView({
   // that substring-filters the answer list. Useful for long pickers (brand,
   // country, etc.) where scrolling 50+ buttons would be annoying.
   if (node.data.question_type === "searchable") {
-    return <SearchableQuestion node={node} onAdvance={onAdvance} styles={styles} />;
+    return (
+      <SearchableQuestion
+        node={node}
+        onAdvance={onAdvance}
+        styles={styles}
+        onInspect={onInspect}
+        inspectedTarget={inspectedTarget}
+      />
+    );
   }
 
   // ImagePicker: dense thumbnail grid. Each answer's image dominates with a
@@ -1574,7 +1679,7 @@ function QuestionView({
   if (node.data.question_type === "image_picker") {
     return (
       <div style={styles.card}>
-        <h2 style={styles.h2}>{node.data.text}</h2>
+        <h2 style={styles.h2} {...insp("question_text")}>{node.data.text}</h2>
         <div
           style={{
             marginTop: 20,
@@ -1595,6 +1700,7 @@ function QuestionView({
                 alignItems: "stretch",
                 gap: 6,
               }}
+              {...insp("answer", a.id)}
               onMouseEnter={(e) => {
                 e.currentTarget.style.borderColor = "var(--qz-color-primary)";
               }}
@@ -1634,14 +1740,22 @@ function QuestionView({
 
   // Dropdown: a compact <select> for long single-choice lists.
   if (node.data.question_type === "dropdown") {
-    return <DropdownQuestion node={node} onAdvance={onAdvance} styles={styles} />;
+    return (
+      <DropdownQuestion
+        node={node}
+        onAdvance={onAdvance}
+        styles={styles}
+        onInspect={onInspect}
+        inspectedTarget={inspectedTarget}
+      />
+    );
   }
 
   // Rating / Likert scale: a single-select rendered as a compact horizontal row.
   if (node.data.question_type === "rating") {
     return (
       <div style={styles.card}>
-        <h2 style={styles.h2}>{node.data.text}</h2>
+        <h2 style={styles.h2} {...insp("question_text")}>{node.data.text}</h2>
         <div style={{ marginTop: 20, display: "flex", gap: 8, flexWrap: "wrap" }}>
           {node.data.answers.map((a) => (
             <div
@@ -1651,6 +1765,7 @@ function QuestionView({
               <button
                 title={a.tooltip_text ?? a.text}
                 style={{ ...styles.answerBtn, flex: 1, minWidth: 0, textAlign: "center" }}
+                {...insp("answer", a.id)}
                 onMouseEnter={(e) => {
                   e.currentTarget.style.borderColor = "var(--qz-color-primary)";
                 }}
@@ -1675,7 +1790,7 @@ function QuestionView({
   if (node.data.question_type === "swatch") {
     return (
       <div style={styles.card}>
-        <h2 style={styles.h2}>{node.data.text}</h2>
+        <h2 style={styles.h2} {...insp("question_text")}>{node.data.text}</h2>
         <div style={{ marginTop: 20, display: "flex", gap: 14, flexWrap: "wrap" }}>
           {node.data.answers.map((a) => (
             <div key={a.id} style={{ position: "relative" }}>
@@ -1690,6 +1805,7 @@ function QuestionView({
                   width: 92,
                   padding: 8,
                 }}
+                {...insp("answer", a.id)}
                 onMouseEnter={(e) => {
                   e.currentTarget.style.borderColor = "var(--qz-color-primary)";
                 }}
@@ -1725,12 +1841,13 @@ function QuestionView({
   // single_select / image_tile (default fall-through)
   return (
     <div style={styles.card}>
-      <h2 style={styles.h2}>{node.data.text}</h2>
+      <h2 style={styles.h2} {...insp("question_text")}>{node.data.text}</h2>
       <div style={styles.answerGrid}>
         {node.data.answers.map((a) => (
           <div key={a.id} style={{ position: "relative" }}>
           <button
             style={styles.answerBtn}
+            {...insp("answer", a.id)}
             onMouseEnter={(e) => {
               e.currentTarget.style.borderColor = "var(--qz-color-primary)";
             }}
@@ -1786,11 +1903,21 @@ function SearchableQuestion({
   node,
   onAdvance,
   styles,
+  onInspect,
+  inspectedTarget,
 }: {
   node: Extract<QuizDoc["nodes"][number], { type: "question" }>;
   onAdvance: (answerIds: string[], handle: string | null) => void;
   styles: ReturnType<typeof stylesFor>;
+  onInspect?: (target: InspectTarget) => void;
+  inspectedTarget?: InspectTarget | null;
 }) {
+  const insp = (part: InspectPart, answerId?: string) =>
+    inspectAttrs(onInspect, inspectedTarget, {
+      nodeId: node.id,
+      part,
+      ...(answerId ? { answerId } : {}),
+    });
   const [query, setQuery] = useState("");
   const needle = query.trim().toLowerCase();
   const filtered = needle
@@ -1798,7 +1925,7 @@ function SearchableQuestion({
     : node.data.answers;
   return (
     <div style={styles.card}>
-      <h2 style={styles.h2}>{node.data.text}</h2>
+      <h2 style={styles.h2} {...insp("question_text")}>{node.data.text}</h2>
       <input
         type="text"
         value={query}
@@ -2582,10 +2709,12 @@ function ResultView({
   onReset,
   bare,
   whyBullets,
+  inspect,
 }: {
   headline: string;
   subtext: string;
   ctaLabel: string;
+  inspect?: (part: "result_headline" | "result_subtext") => React.HTMLAttributes<HTMLElement>;
   recs: RecommendedProduct[];
   secondary?: RecommendedProduct[];
   quizId?: string;
@@ -2742,8 +2871,12 @@ function ResultView({
   if (bare) return inner;
   return (
     <div style={styles.card}>
-      <h2 style={styles.resultHeadline}>{headline}</h2>
-      {subtext && <p style={{ ...styles.muted, marginTop: 8 }}>{subtext}</p>}
+      <h2 style={styles.resultHeadline} {...(inspect?.("result_headline") ?? {})}>{headline}</h2>
+      {subtext && (
+        <p style={{ ...styles.muted, marginTop: 8 }} {...(inspect?.("result_subtext") ?? {})}>
+          {subtext}
+        </p>
+      )}
       <WhyBullets bullets={whyBullets} styles={styles} />
       {inner}
       {collectEmail && quizId && sessionId ? (
@@ -2783,10 +2916,12 @@ function MultiStageResultView({
   onReset,
   bare,
   whyBullets,
+  inspect,
 }: {
   headline: string;
   subtext: string;
   ctaLabel: string;
+  inspect?: (part: "result_headline" | "result_subtext") => React.HTMLAttributes<HTMLElement>;
   sections: { stage: ResultStageT; recs: RecommendedProduct[] }[];
   quizId?: string;
   sessionId?: string;
@@ -2872,8 +3007,12 @@ function MultiStageResultView({
   if (bare) return inner;
   return (
     <div style={styles.card}>
-      <h2 style={styles.resultHeadline}>{headline}</h2>
-      {subtext && <p style={{ ...styles.muted, marginTop: 8 }}>{subtext}</p>}
+      <h2 style={styles.resultHeadline} {...(inspect?.("result_headline") ?? {})}>{headline}</h2>
+      {subtext && (
+        <p style={{ ...styles.muted, marginTop: 8 }} {...(inspect?.("result_subtext") ?? {})}>
+          {subtext}
+        </p>
+      )}
       <WhyBullets bullets={whyBullets} styles={styles} />
       {inner}
       {collectEmail && quizId && sessionId ? (
