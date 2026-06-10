@@ -1,4 +1,4 @@
-import type { LoaderFunctionArgs } from "@remix-run/node";
+import type { HeadersFunction, LinksFunction, LoaderFunctionArgs } from "@remix-run/node";
 import { json } from "@remix-run/node";
 import { useLoaderData } from "@remix-run/react";
 import prisma from "../db.server";
@@ -11,6 +11,17 @@ import { QuizRuntime } from "../components/runtime/QuizRuntime";
 // interactive runtime itself is the shared <QuizRuntime> component (also used by
 // the builder's Preview step in mode="preview"); this route owns only the loader
 // (publishedJson) and the thin live wrapper.
+
+// Warm up the font origins before the runtime's in-tree Google Fonts <link>
+// resolves — saves the DNS/TLS round-trips on first paint (best-in-class P1).
+export const links: LinksFunction = () => [
+  { rel: "preconnect", href: "https://fonts.googleapis.com" },
+  { rel: "preconnect", href: "https://fonts.gstatic.com", crossOrigin: "anonymous" },
+];
+
+// Pass the loader's Cache-Control through to the document response. Loader-set
+// (not static) so thrown 404s ("not published") are never publicly cached.
+export const headers: HeadersFunction = ({ loaderHeaders }) => loaderHeaders;
 
 export const loader = async ({ params }: LoaderFunctionArgs) => {
   const { id } = params;
@@ -41,18 +52,25 @@ export const loader = async ({ params }: LoaderFunctionArgs) => {
     shop_domain?: string;
   };
 
-  return json({
-    quizId: quiz.id,
-    name: quiz.name,
-    version: quiz.version,
-    doc: parsed.data,
-    productIndex: publishedRaw.product_index ?? [],
-    designTokens: parsed.data.design_tokens ?? null,
-    designOverrides: parsed.data.design_overrides ?? {},
-    breakpointOverrides: parsed.data.breakpoint_overrides ?? {},
-    resultLayoutMode: parsed.data.result_layout_mode,
-    shopDomain: publishedRaw.shop_domain ?? "",
-  });
+  return json(
+    {
+      quizId: quiz.id,
+      name: quiz.name,
+      version: quiz.version,
+      doc: parsed.data,
+      productIndex: publishedRaw.product_index ?? [],
+      designTokens: parsed.data.design_tokens ?? null,
+      designOverrides: parsed.data.design_overrides ?? {},
+      breakpointOverrides: parsed.data.breakpoint_overrides ?? {},
+      resultLayoutMode: parsed.data.result_layout_mode,
+      shopDomain: publishedRaw.shop_domain ?? "",
+    },
+    {
+      // Same 60s convention as the JSON + launcher endpoints: a re-publish
+      // propagates within a minute; SWR keeps repeat visits instant.
+      headers: { "Cache-Control": "public, max-age=60, stale-while-revalidate=300" },
+    },
+  );
 };
 
 export default function StorefrontRuntime() {

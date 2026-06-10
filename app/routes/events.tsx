@@ -1,6 +1,7 @@
 import type { ActionFunctionArgs } from "@remix-run/node";
 import prisma from "../db.server";
 import { EventsBatch } from "../lib/analytics";
+import { rateLimit } from "../lib/rateLimiters";
 
 const CORS = {
   "access-control-allow-origin": "*",
@@ -19,6 +20,15 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   }
   if (request.method !== "POST") {
     return new Response("method not allowed", { status: 405, headers: CORS });
+  }
+  // 300 req/min/IP — counts REQUESTS (zod caps 50 events each; a real shopper
+  // sends ≤12 req/min), so ~25 concurrent shoppers behind one NAT stay clear.
+  const rl = rateLimit(request, "events", 300);
+  if (!rl.ok) {
+    return new Response("rate limited", {
+      status: 429,
+      headers: { ...CORS, "retry-after": String(rl.retryAfterS) },
+    });
   }
 
   let raw: unknown;

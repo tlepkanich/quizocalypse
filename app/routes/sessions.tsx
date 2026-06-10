@@ -1,6 +1,7 @@
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "@remix-run/node";
 import prisma from "../db.server";
 import { SessionPayload } from "../lib/analytics";
+import { rateLimit } from "../lib/rateLimiters";
 
 // Server-side quiz session write (Dev Spec §7.2). Storefront-origin POST, so it
 // carries the same permissive CORS as /captures. Upserts one row per
@@ -52,6 +53,14 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   }
   if (request.method !== "POST") {
     return new Response("method not allowed", { status: 405, headers: CORS });
+  }
+  // 30 upserts/min/IP — a session writes once on completion (+ resume rewrites).
+  const rl = rateLimit(request, "sessions", 30);
+  if (!rl.ok) {
+    return new Response("rate limited", {
+      status: 429,
+      headers: { ...CORS, "retry-after": String(rl.retryAfterS) },
+    });
   }
 
   let raw: unknown;

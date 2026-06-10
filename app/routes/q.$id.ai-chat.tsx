@@ -4,6 +4,7 @@ import prisma from "../db.server";
 import { Quiz } from "../lib/quizSchema";
 import { runAskAIChat, type AskAIMessage } from "../lib/claude";
 import { parseBrandGuidelinesSafe } from "../lib/brandGuidelines";
+import { rateLimit } from "../lib/rateLimiters";
 import type { IndexedProduct } from "../lib/recommendationEngine";
 
 // AskAI chat endpoint. The runtime POSTs the current AskAI node id, the
@@ -27,6 +28,15 @@ export async function action({ params, request }: ActionFunctionArgs) {
   if (!id) return json({ error: "Missing quiz id" }, { status: 400 });
   if (request.method !== "POST") {
     return json({ error: "Method not allowed" }, { status: 405 });
+  }
+  // 10/min/IP — the only public endpoint where abuse costs real money (one
+  // Claude call per request). Same-origin POSTs from the runtime, no CORS.
+  const rl = rateLimit(request, "ai-chat", 10);
+  if (!rl.ok) {
+    return json(
+      { error: "Too many messages — give it a moment." },
+      { status: 429, headers: { "retry-after": String(rl.retryAfterS) } },
+    );
   }
 
   const body = (await request.json()) as ChatRequestBody;
