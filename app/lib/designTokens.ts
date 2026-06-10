@@ -108,6 +108,8 @@ export function resolveDesignTokens(
     if (layer.button_style) out.button_style = layer.button_style;
     if (layer.spacing) out.spacing = layer.spacing;
     if (layer.shadow) out.shadow = layer.shadow;
+    // Boolean — checked explicitly so a layer can also turn the split OFF.
+    if (layer.result_split !== undefined) out.result_split = layer.result_split;
   }
   return out;
 }

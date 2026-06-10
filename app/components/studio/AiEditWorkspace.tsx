@@ -179,6 +179,23 @@ function AiWorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: C
             />
             <span className="qz-dim">Email on result</span>
           </label>
+          <label
+            className="qz-row"
+            style={{ gap: 6, alignItems: "center", fontSize: 12 }}
+            title="2-column desktop result: pitch on the left, vertical product cards on the right (BIC P8 — mobile always stacks)"
+          >
+            <input
+              type="checkbox"
+              checked={doc.design_tokens?.result_split ?? false}
+              onChange={(e) =>
+                commit({
+                  ...doc,
+                  design_tokens: { ...doc.design_tokens, result_split: e.target.checked },
+                })
+              }
+            />
+            <span className="qz-dim">2-col results</span>
+          </label>
           <Link
             to="?mode=advanced"
             className="qz-btn qz-btn-ghost qz-btn-sm"

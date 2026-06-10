@@ -566,6 +566,10 @@ export const DesignTokens = z
     spacing: z.enum(["compact", "normal", "spacious"]).optional(),
     // Card elevation — distinguishes flat editorial from lifted/glowing themes.
     shadow: z.enum(["none", "soft", "elevated"]).optional(),
+    // BIC P8 (user opt-in): 2-column desktop result — pitch/headline/why left,
+    // vertical product cards right. Absent/false = today's stacked layout, so
+    // every existing quiz is unchanged. Mobile always stacks.
+    result_split: z.boolean().optional(),
   })
   .partial();
 export type DesignTokens = z.infer<typeof DesignTokens>;

@@ -820,6 +820,7 @@ export function QuizRuntime(props: QuizRuntimeProps) {
             analytics={analyticsRef.current}
             onReset={reset}
             inspect={(part) => insp({ nodeId: currentNode.id, part })}
+            splitLayout={resolved.result_split === true && breakpoint === "desktop"}
           />
         );
       } else {
@@ -2803,11 +2804,15 @@ function ResultView({
   bare,
   whyBullets,
   inspect,
+  splitLayout,
 }: {
   headline: string;
   subtext: string;
   ctaLabel: string;
   inspect?: (part: "result_headline" | "result_subtext") => React.HTMLAttributes<HTMLElement>;
+  // BIC P8: 2-column desktop layout (pitch left, vertical cards right). The
+  // call site gates it on tokens.result_split && desktop; absent = stacked.
+  splitLayout?: boolean;
   recs: RecommendedProduct[];
   secondary?: RecommendedProduct[];
   quizId?: string;
@@ -2881,7 +2886,14 @@ function ResultView({
           🎁 {discountLabel} on these picks — applied automatically at checkout.
         </div>
       ) : null}
-      <div style={{ marginTop: bare && !discountLabel ? 0 : 20, ...styles.productGrid }}>
+      <div
+        style={{
+          marginTop: bare && !discountLabel ? 0 : 20,
+          ...(splitLayout
+            ? { display: "flex", flexDirection: "column", gap: 14 }
+            : styles.productGrid),
+        }}
+      >
         {recs.length === 0 && (
           <p style={{ color: "var(--qz-color-muted)" }}>
             No products to show. Add a fallback collection in the editor.
@@ -2892,6 +2904,7 @@ function ResultView({
             key={r.product_id}
             product={r}
             position={idx}
+            vertical={splitLayout}
             ctaLabel={ctaLabel}
             href={shopDomain ? `https://${shopDomain}/products/${r.handle}` : undefined}
             shopDomain={shopDomain}
@@ -2963,8 +2976,9 @@ function ResultView({
   );
 
   if (bare) return inner;
-  return (
-    <div style={styles.card}>
+
+  const pitch = (
+    <>
       <h2 style={styles.resultHeadline} {...(inspect?.("result_headline") ?? {})}>{headline}</h2>
       {subtext && (
         <p style={{ ...styles.muted, marginTop: 8 }} {...(inspect?.("result_subtext") ?? {})}>
@@ -2972,15 +2986,46 @@ function ResultView({
         </p>
       )}
       <WhyBullets bullets={whyBullets} styles={styles} />
+    </>
+  );
+  const email =
+    collectEmail && quizId && sessionId ? (
+      <ResultEmailCapture
+        quizId={quizId}
+        sessionId={sessionId}
+        styles={styles}
+        analytics={analytics}
+      />
+    ) : null;
+
+  // BIC P8 (opt-in via tokens.result_split, desktop only): editorial split —
+  // the pitch reads like a sticky magazine column while vertical cards scroll.
+  if (splitLayout) {
+    return (
+      <div style={{ ...styles.card, maxWidth: 1020, width: "100%" }}>
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "minmax(0, 0.85fr) minmax(0, 1.15fr)",
+            gap: 40,
+            alignItems: "start",
+          }}
+        >
+          <div style={{ position: "sticky", top: 24 }}>
+            {pitch}
+            {email}
+          </div>
+          <div>{inner}</div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div style={styles.card}>
+      {pitch}
       {inner}
-      {collectEmail && quizId && sessionId ? (
-        <ResultEmailCapture
-          quizId={quizId}
-          sessionId={sessionId}
-          styles={styles}
-          analytics={analytics}
-        />
-      ) : null}
+      {email}
     </div>
   );
 }
@@ -3262,6 +3307,7 @@ function ProductCard({
   discountCode,
   discountLabel,
   onAdd,
+  vertical = false,
 }: {
   product: RecommendedProduct;
   position: number;
@@ -3277,6 +3323,10 @@ function ProductCard({
   discountCode?: string;
   discountLabel?: string;
   onAdd?: () => void;
+  // BIC P8: vertical card for the 2-column result's right rail — full-width
+  // square image, text below, CTA at the bottom. Default horizontal everywhere
+  // else, so nothing changes unless the split layout asks for it.
+  vertical?: boolean;
 }) {
   const isPreviewMode = useContext(RuntimePreviewContext);
   void position;
@@ -3289,8 +3339,9 @@ function ProductCard({
 
   const infoStyle: React.CSSProperties = {
     display: "flex",
+    flexDirection: vertical ? "column" : "row",
     gap: 12,
-    alignItems: "center",
+    alignItems: vertical ? "stretch" : "center",
     flex: 1,
     minWidth: 0,
     color: "inherit",
@@ -3323,10 +3374,20 @@ function ProductCard({
           decoding="async"
           width={80}
           height={80}
-          style={{ width: 80, height: 80, objectFit: "cover", borderRadius: "var(--qz-radius)", flexShrink: 0 }}
+          style={
+            vertical
+              ? { width: "100%", height: "auto", aspectRatio: "1 / 1", objectFit: "cover", borderRadius: "var(--qz-radius)" }
+              : { width: 80, height: 80, objectFit: "cover", borderRadius: "var(--qz-radius)", flexShrink: 0 }
+          }
         />
       ) : (
-        <div style={{ width: 80, height: 80, background: "#00000010", borderRadius: "var(--qz-radius)", flexShrink: 0 }} />
+        <div
+          style={
+            vertical
+              ? { width: "100%", aspectRatio: "1 / 1", background: "#00000010", borderRadius: "var(--qz-radius)" }
+              : { width: 80, height: 80, background: "#00000010", borderRadius: "var(--qz-radius)", flexShrink: 0 }
+          }
+        />
       )}
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ fontWeight: 600 }}>{product.title}</div>
@@ -3348,7 +3409,15 @@ function ProductCard({
   );
 
   return (
-    <div style={{ ...styles.productCard, display: "flex", gap: 12, alignItems: "center" }}>
+    <div
+      style={{
+        ...styles.productCard,
+        display: "flex",
+        flexDirection: vertical ? "column" : "row",
+        gap: 12,
+        alignItems: vertical ? "stretch" : "center",
+      }}
+    >
       {href ? (
         <a href={href} target="_blank" rel="noreferrer" onClick={onClick} style={infoStyle}>
           {info}
