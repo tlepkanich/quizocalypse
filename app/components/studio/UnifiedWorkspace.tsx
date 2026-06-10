@@ -62,6 +62,10 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
   // exact element clicked in the preview (for its outline highlight).
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [inspectTarget, setInspectTarget] = useState<InspectTarget | null>(null);
+  // The step the live preview is currently SHOWING (reported by the runtime) —
+  // drives the rail's ▸ marker so walking the quiz in Interact mode keeps you
+  // oriented without opening the editing panel.
+  const [liveNodeId, setLiveNodeId] = useState<string | null>(null);
   const [editMode, setEditMode] = useState(true);
   // Device-frame width lifted from Step5Preview so the Design tab's layer
   // selector can follow it ("edit what you see").
@@ -341,6 +345,7 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
             ordered={ordered}
             issuesByNode={issuesByNode}
             selectedId={selectedId}
+            currentId={liveNodeId}
             onSelect={select}
             onCommit={commit}
             fallbackCollection={fallbackCollection}
@@ -354,6 +359,8 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
               inspectedTarget={inspectTarget}
               frameW={frameW}
               onFrameWChange={setFrameW}
+              focusNodeId={selectedId}
+              onNodeShown={setLiveNodeId}
             />
           </div>
           <div style={{ position: "sticky", top: 8 }}>

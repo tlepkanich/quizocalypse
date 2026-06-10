@@ -50,7 +50,11 @@ export function ContentTab({
           {text("headline", "Headline")}
           {text("subtext", "Subtext", true)}
           {text("button_label", "Button label")}
-          {text("hero_image_url", "Hero image URL")}
+          <HeroImageField
+            value={str("hero_image_url")}
+            onChange={(url) => set({ hero_image_url: url || undefined })}
+            products={products}
+          />
         </>
       );
     case "question":
@@ -122,6 +126,64 @@ export function ContentTab({
     default:
       return null;
   }
+}
+
+// Unified P3 — the intro hero image gets the same picker as answer images
+// (your products | URL) instead of a bare URL field.
+function HeroImageField({
+  value,
+  onChange,
+  products,
+}: {
+  value: string;
+  onChange: (url: string) => void;
+  products?: PickerProduct[];
+}) {
+  const [open, setOpen] = useState(false);
+  return (
+    <QzField label="Hero image">
+      <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+        <div className="qz-row" style={{ gap: 6, alignItems: "center" }}>
+          <QzInput
+            value={value}
+            placeholder="https://… (or pick →)"
+            onChange={(e) => onChange(e.target.value)}
+            style={{ flex: 1 }}
+          />
+          <button
+            type="button"
+            title={value ? "Change image" : "Pick an image"}
+            aria-label="Pick a hero image"
+            onClick={() => setOpen((o) => !o)}
+            style={{
+              border: open ? "1px solid var(--qz-accent, #2a6df4)" : "1px solid #00000022",
+              background: value ? `center/cover url(${value})` : "#fff",
+              color: value ? "transparent" : undefined,
+              borderRadius: 6,
+              width: 26,
+              height: 26,
+              cursor: "pointer",
+              flex: "0 0 auto",
+              fontSize: 12,
+              lineHeight: 1,
+            }}
+          >
+            🖼
+          </button>
+        </div>
+        {open ? (
+          <ImagePicker
+            products={products ?? []}
+            value={value || undefined}
+            onPick={(url) => {
+              onChange(url);
+              setOpen(false);
+            }}
+          />
+        ) : null}
+      </div>
+    </QzField>
+  );
 }
 
 export function QuestionContent({

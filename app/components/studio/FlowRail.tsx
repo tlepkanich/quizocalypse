@@ -56,6 +56,7 @@ export function FlowRail({
   ordered,
   issuesByNode,
   selectedId,
+  currentId,
   onSelect,
   onCommit,
   fallbackCollection,
@@ -66,6 +67,9 @@ export function FlowRail({
   ordered: OrderedFlow;
   issuesByNode: Map<string, NodeIssue[]>;
   selectedId: string | null;
+  // The step the live preview is showing right now (Unified P3) — gets a ▸
+  // marker so walking the quiz keeps the rail oriented.
+  currentId?: string | null;
   onSelect: (nodeId: string | null) => void;
   onCommit: (doc: QuizDoc) => void;
   fallbackCollection: string;
@@ -132,7 +136,7 @@ export function FlowRail({
           }}
         >
           <span aria-hidden style={{ width: 16, textAlign: "center", fontSize: 11, opacity: 0.7 }}>
-            {GLYPH[node.type]}
+            {currentId === nodeId ? "▸" : GLYPH[node.type]}
           </span>
           <span
             style={{

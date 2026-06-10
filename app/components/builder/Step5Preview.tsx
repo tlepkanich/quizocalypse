@@ -44,6 +44,9 @@ export function Step5Preview({
   // ("edit what you see"). Omit both for the classic uncontrolled behavior.
   frameW?: number;
   onFrameWChange?: (w: number) => void;
+  // Unified P3: preview-only selection sync (rail ↔ runtime) pass-through.
+  focusNodeId?: string | null;
+  onNodeShown?: (nodeId: string) => void;
 }) {
   const [frameWState, setFrameWState] = useState<number>(DEVICE_PRESETS.desktop);
   const frameW = frameWProp ?? frameWState;
@@ -173,6 +176,8 @@ export function Step5Preview({
           breakpoint={breakpoint}
           onInspect={onInspect}
           inspectedTarget={inspectedTarget}
+          focusNodeId={focusNodeId}
+          onNodeShown={onNodeShown}
         />
       </DeviceFrame>
 

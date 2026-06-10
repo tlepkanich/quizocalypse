@@ -57,7 +57,16 @@ export type InspectPart =
   | "answer"
   | "education_card"
   | "result_headline"
-  | "result_subtext";
+  | "result_subtext"
+  // Unified P3 — click-to-edit covers every visible node type.
+  | "message_text"
+  | "end_headline"
+  | "end_subtext"
+  | "email_headline"
+  | "email_subtext"
+  | "askai_persona"
+  | "pc_headline"
+  | "pc_subtext";
 
 export interface InspectTarget {
   nodeId: string;
@@ -110,6 +119,12 @@ export interface QuizRuntimeProps {
   // storefront — absent, the DOM and behavior are unchanged.
   onInspect?: (target: InspectTarget) => void;
   inspectedTarget?: InspectTarget | null;
+  // Unified P3 — PREVIEW-ONLY selection sync with the workspace rail. Setting
+  // focusNodeId jumps the preview to that step (path resets — a clean jump);
+  // onNodeShown reports every step the runtime lands on (walkthrough advance)
+  // so the rail can highlight it. Both are ignored entirely in live mode.
+  focusNodeId?: string | null;
+  onNodeShown?: (nodeId: string) => void;
 }
 
 // Content-block types the storefront renders directly. Literal blocks render via
@@ -147,6 +162,8 @@ export function QuizRuntime(props: QuizRuntimeProps) {
     breakpoint: breakpointProp,
     onInspect,
     inspectedTarget = null,
+    focusNodeId = null,
+    onNodeShown,
   } = props;
   const isPreview = mode === "preview";
   // Inspect mode is preview-only by construction (the storefront never passes
@@ -161,6 +178,22 @@ export function QuizRuntime(props: QuizRuntimeProps) {
     introNode ? introNode.id : null,
   );
   const [path, setPath] = useState<PathStep[]>([]);
+
+  // Unified P3 — preview-only selection sync (both effects no-op in live mode
+  // by construction AND by guard). Jump: when the workspace selects a step that
+  // isn't the one on screen, show it with a clean path. Report: every step the
+  // runtime lands on (jump OR walkthrough advance) is surfaced so the rail can
+  // follow. No loop: after a jump, focusNodeId === currentNodeId.
+  useEffect(() => {
+    if (!isPreview || !focusNodeId || focusNodeId === currentNodeId) return;
+    if (!doc.nodes.some((n) => n.id === focusNodeId)) return;
+    setPath([]);
+    setCurrentNodeId(focusNodeId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focusNodeId, isPreview]);
+  useEffect(() => {
+    if (isPreview && onNodeShown && currentNodeId) onNodeShown(currentNodeId);
+  }, [isPreview, onNodeShown, currentNodeId]);
   // Unified P1 (autoscale core): live mode measures the runtime root's OWN
   // container width — never the window — so the quiz formats correctly in a
   // full page, a narrow theme-section iframe, or the launcher popup alike.
@@ -690,6 +723,7 @@ export function QuizRuntime(props: QuizRuntimeProps) {
           node={currentNode}
           styles={styles}
           quizId={quizId}
+          inspect={(part) => insp({ nodeId: currentNode.id, part })}
           sessionId={sessionIdRef.current}
           onSubmit={(contact) => {
             if (contact?.email) {
@@ -706,7 +740,10 @@ export function QuizRuntime(props: QuizRuntimeProps) {
       const rendered = resolveMergeTags(currentNode.data.text, ctx);
       content = (
         <div style={styles.card}>
-          <p style={{ ...styles.muted, whiteSpace: "pre-wrap", margin: 0 }}>
+          <p
+            style={{ ...styles.muted, whiteSpace: "pre-wrap", margin: 0 }}
+            {...insp({ nodeId: currentNode.id, part: "message_text" })}
+          >
             {rendered}
           </p>
           <button
@@ -721,9 +758,16 @@ export function QuizRuntime(props: QuizRuntimeProps) {
       const node = currentNode;
       content = (
         <div style={styles.card}>
-          <h2 style={styles.h2}>{node.data.headline}</h2>
+          <h2 style={styles.h2} {...insp({ nodeId: node.id, part: "end_headline" })}>
+            {node.data.headline}
+          </h2>
           {node.data.subtext && (
-            <p style={{ ...styles.muted, marginTop: 8 }}>{node.data.subtext}</p>
+            <p
+              style={{ ...styles.muted, marginTop: 8 }}
+              {...insp({ nodeId: node.id, part: "end_subtext" })}
+            >
+              {node.data.subtext}
+            </p>
           )}
           {node.data.cta_url && (
             <a
@@ -749,6 +793,7 @@ export function QuizRuntime(props: QuizRuntimeProps) {
           quizId={quizId}
           path={path}
           styles={styles}
+          inspect={(part) => insp({ nodeId: currentNode.id, part })}
           onContinue={() => gotoNextFrom(currentNode.id, null)}
         />
       );
@@ -773,6 +818,7 @@ export function QuizRuntime(props: QuizRuntimeProps) {
           productIndex={productIndex}
           shopDomain={shopDomain}
           styles={styles}
+          inspect={(part) => insp({ nodeId: currentNode.id, part })}
           onContinue={() => gotoNextFrom(currentNode.id, null)}
         />
       );
@@ -2060,12 +2106,14 @@ function EmailGateView({
   quizId,
   sessionId,
   onSubmit,
+  inspect,
 }: {
   node: Extract<QuizDoc["nodes"][number], { type: "email_gate" }>;
   styles: ReturnType<typeof stylesFor>;
   quizId: string;
   sessionId: string;
   onSubmit: (contact?: { email?: string; name?: string; phone?: string }) => void;
+  inspect?: (part: InspectPart) => React.HTMLAttributes<HTMLElement>;
 }) {
   const isPreviewMode = useContext(RuntimePreviewContext);
   const [email, setEmail] = useState("");
@@ -2110,9 +2158,11 @@ function EmailGateView({
   };
   return (
     <div style={styles.card}>
-      <h2 style={styles.h2}>{node.data.headline}</h2>
+      <h2 style={styles.h2} {...(inspect?.("email_headline") ?? {})}>{node.data.headline}</h2>
       {node.data.subtext && (
-        <p style={{ ...styles.muted, marginTop: 8 }}>{node.data.subtext}</p>
+        <p style={{ ...styles.muted, marginTop: 8 }} {...(inspect?.("email_subtext") ?? {})}>
+          {node.data.subtext}
+        </p>
       )}
       <div style={{ marginTop: 20, display: "grid", gap: 12 }}>
         <input
@@ -2179,6 +2229,7 @@ function AskAIView({
   path,
   styles,
   onContinue,
+  inspect,
 }: {
   node: Extract<
     QuizDoc["nodes"][number],
@@ -2188,6 +2239,7 @@ function AskAIView({
   path: PathStep[];
   styles: ReturnType<typeof stylesFor>;
   onContinue: () => void;
+  inspect?: (part: InspectPart) => React.HTMLAttributes<HTMLElement>;
 }) {
   const isPreviewMode = useContext(RuntimePreviewContext);
   type Turn = { role: "user" | "assistant"; content: string };
@@ -2287,7 +2339,9 @@ function AskAIView({
           gap: 12,
         }}
       >
-        <h2 style={{ ...styles.h2, margin: 0 }}>{node.data.persona_name}</h2>
+        <h2 style={{ ...styles.h2, margin: 0 }} {...(inspect?.("askai_persona") ?? {})}>
+          {node.data.persona_name}
+        </h2>
         <span
           style={{
             fontSize: 11,
@@ -2519,6 +2573,7 @@ function ProductCardsView({
   shopDomain,
   styles,
   onContinue,
+  inspect,
 }: {
   node: Extract<
     QuizDoc["nodes"][number],
@@ -2528,6 +2583,7 @@ function ProductCardsView({
   shopDomain: string;
   styles: ReturnType<typeof stylesFor>;
   onContinue: () => void;
+  inspect?: (part: InspectPart) => React.HTMLAttributes<HTMLElement>;
 }) {
   const products = node.data.product_ids
     .map((id) => productIndex.find((p) => p.product_id === id))
@@ -2535,9 +2591,11 @@ function ProductCardsView({
 
   return (
     <div style={styles.card}>
-      <h2 style={styles.h2}>{node.data.headline}</h2>
+      <h2 style={styles.h2} {...(inspect?.("pc_headline") ?? {})}>{node.data.headline}</h2>
       {node.data.subtext && (
-        <p style={{ ...styles.muted, marginTop: 8 }}>{node.data.subtext}</p>
+        <p style={{ ...styles.muted, marginTop: 8 }} {...(inspect?.("pc_subtext") ?? {})}>
+          {node.data.subtext}
+        </p>
       )}
       <div
         style={{
