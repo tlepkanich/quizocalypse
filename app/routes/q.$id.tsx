@@ -1,4 +1,4 @@
-import type { HeadersFunction, LinksFunction, LoaderFunctionArgs } from "@remix-run/node";
+import type { HeadersFunction, LinksFunction, LoaderFunctionArgs, MetaFunction } from "@remix-run/node";
 import { json } from "@remix-run/node";
 import { useLoaderData } from "@remix-run/react";
 import prisma from "../db.server";
@@ -22,6 +22,34 @@ export const links: LinksFunction = () => [
 // Pass the loader's Cache-Control through to the document response. Loader-set
 // (not static) so thrown 404s ("not published") are never publicly cached.
 export const headers: HeadersFunction = ({ loaderHeaders }) => loaderHeaders;
+
+// Phase L1 — rich unfurls when the merchant shares the quiz link (socials,
+// QR landings, DMs). Title/description come from the intro; the image is the
+// intro hero if set, else the first product photo in the index.
+export const meta: MetaFunction<typeof loader> = ({ data }) => {
+  if (!data) return [{ title: "Product quiz" }];
+  const intro = data.doc.nodes.find((n) => n.type === "intro");
+  const title = data.name || "Find your match";
+  const description =
+    (intro?.type === "intro" && (intro.data.subtext || intro.data.headline)) ||
+    "Answer a few questions and get personalized product recommendations.";
+  const image =
+    (intro?.type === "intro" && intro.data.hero_image_url) ||
+    data.productIndex.find((p) => p.image_url)?.image_url ||
+    null;
+  return [
+    { title },
+    { name: "description", content: description },
+    { property: "og:title", content: title },
+    { property: "og:description", content: description },
+    { property: "og:type", content: "website" },
+    ...(image ? [{ property: "og:image", content: image }] : []),
+    { name: "twitter:card", content: image ? "summary_large_image" : "summary" },
+    { name: "twitter:title", content: title },
+    { name: "twitter:description", content: description },
+    ...(image ? [{ name: "twitter:image", content: image }] : []),
+  ];
+};
 
 export const loader = async ({ params }: LoaderFunctionArgs) => {
   const { id } = params;
