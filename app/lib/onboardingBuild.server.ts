@@ -260,7 +260,7 @@ async function persist(quizId: string, doc: QuizDoc): Promise<void> {
 export async function startAiOnboardingBuild(
   input: Omit<OnboardingBuildInput, "quizId">,
 ): Promise<{ quizId: string }> {
-  const seed = buildSeedQuiz(input.name);
+  const seed = buildSeedQuiz(input.name, input.experienceType);
   const seedDoc: QuizDoc = input.designTokens
     ? Quiz.parse({ ...seed, design_tokens: input.designTokens })
     : seed;
