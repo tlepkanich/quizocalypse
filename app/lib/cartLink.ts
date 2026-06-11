@@ -38,3 +38,26 @@ export function cartPermalink(
   const code = discountCode?.trim();
   return code ? `${base}?discount=${encodeURIComponent(code)}` : base;
 }
+
+/**
+ * Experiences E5 — a MULTI-item cart permalink for "add the full routine":
+ * Shopify natively supports comma-separated variant:qty pairs
+ * (https://{shop}/cart/v1:1,v2:1?discount=CODE). Unresolvable variants are
+ * skipped; returns null when nothing resolves. The single-item
+ * cartPermalink above is untouched.
+ */
+export function cartPermalinkMulti(
+  shopDomain: string | null | undefined,
+  variantGids: Array<string | null | undefined>,
+  discountCode?: string | null,
+): string | null {
+  if (!shopDomain) return null;
+  const pairs = variantGids
+    .map((gid) => numericId(gid))
+    .filter((vid): vid is string => Boolean(vid))
+    .map((vid) => `${vid}:1`);
+  if (pairs.length === 0) return null;
+  const base = `https://${shopDomain}/cart/${pairs.join(",")}`;
+  const code = discountCode?.trim();
+  return code ? `${base}?discount=${encodeURIComponent(code)}` : base;
+}

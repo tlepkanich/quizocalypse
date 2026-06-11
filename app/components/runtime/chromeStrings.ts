@@ -71,6 +71,7 @@ export const CHROME_TOKENS = {
   reveal_factors: "What's counting: {factors}",
   reveal_matching: "Matching against {n} products…",
   because_you_chose: "Because you chose:",
+  add_routine: "Add the full routine ({n} items)",
   // Buddy mode (Phase L2).
   invite_friend: "🤝 Compare with a friend",
   invite_copied: "Link copied — send it to a friend ✓",

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { numericId, cartPermalink } from "./cartLink";
+import { numericId, cartPermalink , cartPermalinkMulti } from "./cartLink";
 
 describe("numericId", () => {
   it("extracts the numeric id from a variant gid", () => {
@@ -49,5 +49,19 @@ describe("cartPermalink", () => {
     expect(cartPermalink(null, "gid://shopify/ProductVariant/1")).toBeNull();
     expect(cartPermalink(SHOP, null)).toBeNull();
     expect(cartPermalink(SHOP, "no-id")).toBeNull();
+  });
+});
+
+describe("cartPermalinkMulti (E5)", () => {
+  it("joins variant:qty pairs, skips unresolvable, carries the discount", () => {
+    expect(
+      cartPermalinkMulti("shop.example.com", [
+        "gid://shopify/ProductVariant/11",
+        "not-a-gid",
+        "22",
+      ], "SAVE10"),
+    ).toBe("https://shop.example.com/cart/11:1,22:1?discount=SAVE10");
+    expect(cartPermalinkMulti("shop.example.com", [null, "junk"])).toBeNull();
+    expect(cartPermalinkMulti(null, ["11"])).toBeNull();
   });
 });

@@ -15,7 +15,7 @@ import {
   type RecommendedProduct,
 } from "../../lib/recommendationEngine";
 import { resolveNodeOverride } from "../../lib/resultLayout";
-import { cartPermalink, numericId } from "../../lib/cartLink";
+import { cartPermalink, numericId, cartPermalinkMulti } from "../../lib/cartLink";
 import { progressPct, reachableQuestionCount } from "../../lib/progress";
 import {
   resolveForBreakpoint,
@@ -3617,6 +3617,32 @@ function MultiStageResultView({
           />
         ))}
       </div>
+      {(() => {
+        // E5 — "Add the full routine": each section's TOP pick, one tap.
+        // Hosted: a single multi-pair cart permalink. Embedded (TAE iframe):
+        // a sequential single-item postMessage loop for back-compat, falling
+        // back to the permalink if the parent doesn't answer.
+        const topVariants = sections
+          .map(({ recs }) => recs[0]?.default_variant_id)
+          .filter((v): v is string => Boolean(v));
+        if (topVariants.length < 2 || isPreviewMode) return null;
+        const multiUrl = cartPermalinkMulti(shopDomain, topVariants, discountCode);
+        if (!multiUrl) return null;
+        return (
+          <button
+            onClick={() => {
+              analytics?.track("add_to_cart", {
+                routine: true,
+                item_count: topVariants.length,
+              });
+              window.open(multiUrl, "_top");
+            }}
+            style={{ ...styles.primaryBtn, marginTop: 24 }}
+          >
+            {tc("add_routine", { n: topVariants.length })}
+          </button>
+        );
+      })()}
       <button
         onClick={onReset}
         style={{
@@ -3679,7 +3705,15 @@ function StageSection({
   return (
     <section>
       {stage.headline && (
-        <h2 style={{ ...styles.h2, fontSize: "var(--qz-h2-size)" }}>
+        <h2
+          style={{
+            ...styles.h2,
+            // E5 editorial: a quiet eyebrow rule above each routine section.
+            fontSize: "calc(var(--qz-h2-size) * 1.08)",
+            paddingTop: 14,
+            borderTop: "1px solid color-mix(in srgb, var(--qz-color-muted, #aaa) 28%, transparent)",
+          }}
+        >
           {stage.headline}
         </h2>
       )}
