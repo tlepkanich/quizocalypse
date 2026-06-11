@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import { Quiz } from "./quizSchema";
 import { resolveNextStep, pickPointsWinner, type BranchContext } from "./recommendationEngine";
 import { orderFlow } from "./flowOrder";
+import { buildSeedQuiz } from "./seedQuiz";
+import { validateQuiz } from "./quizValidation";
 import {
   applyQuestionFlow,
   normalizeQuestionSpec,
@@ -322,5 +324,31 @@ describe("normalizeQuestionSpec (BIC P3)", () => {
       ],
     });
     expect(out.question_type).toBe("single_select");
+  });
+});
+
+// Experiences E2 — bucket-less wiring (survey / lead-capture builds).
+describe("applyQuestionFlow with no buckets (E2)", () => {
+  it("skips the branch and terminates at an end node", () => {
+    const seed = buildSeedQuiz("Survey", "survey");
+    const generated = {
+      questions: [
+        {
+          text: "How did we do?",
+          question_type: "single_select" as const,
+          answers: [
+            { text: "Great", tags: [] },
+            { text: "Fine", tags: [] },
+          ],
+        },
+      ],
+    };
+    const out = applyQuestionFlow(seed, generated as never, []);
+    expect(out.nodes.some((n) => n.type === "branch")).toBe(false);
+    expect(out.nodes.some((n) => n.type === "result")).toBe(false);
+    const end = out.nodes.find((n) => n.type === "end");
+    expect(end).toBeTruthy();
+    // The chain reaches the end node (validateQuiz finds no dead ends).
+    expect(validateQuiz(out)).toEqual([]);
   });
 });

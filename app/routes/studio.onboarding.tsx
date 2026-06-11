@@ -28,6 +28,8 @@ import {
   CatalogStep,
   BrandStep,
   GoalStep,
+  type WizardGoalId,
+  type WizardExperienceType,
   IncentiveStep,
   ReviewStep,
   mergeHexIntoTokens,
@@ -123,6 +125,14 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   const placement = (
     ["page", "popup", "inline", "product_widget"].includes(placementRaw) ? placementRaw : "page"
   ) as Placement;
+  const xtypeRaw = String(form.get("experienceType") ?? "product_match");
+  const experienceType = (
+    ["product_match", "personality", "lead_capture", "survey"].includes(xtypeRaw)
+      ? xtypeRaw
+      : "product_match"
+  ) as "product_match" | "personality" | "lead_capture" | "survey";
+  const goalsRaw = String(form.get("goals") ?? "");
+  const goalLabels = goalsRaw ? goalsRaw.split(",").filter(Boolean) : [];
 
   let designTokens: DesignTokensT | null = null;
   try {
@@ -142,7 +152,14 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       goalPrompt,
       questionCount,
       tone,
-      flow: { welcome_message: false, email_gate: emailGate, mixed_input_types: false },
+      experienceType,
+      goalLabels,
+      // Lead capture without a gate captures nothing — the type implies it.
+      flow: {
+        welcome_message: false,
+        email_gate: emailGate || experienceType === "lead_capture",
+        mixed_input_types: false,
+      },
       ...(websiteUrl ? { websiteUrl } : {}),
       ...(designTokens ? { designTokens } : {}),
       placement,
@@ -179,6 +196,8 @@ export default function StudioOnboarding() {
   const [collectEmailOnResult, setCollectEmailOnResult] = useState(false);
   const [placement, setPlacement] = useState<Placement>("page");
   const [websiteUrl, setWebsiteUrl] = useState("");
+  const [goals, setGoals] = useState<WizardGoalId[]>([]);
+  const [experienceType, setExperienceType] = useState<WizardExperienceType>("product_match");
   const [baseTokens, setBaseTokens] = useState<DesignTokensT | null>(null);
   const [hex, setHex] = useState("");
   const effectiveTokens = useMemo(
@@ -274,6 +293,10 @@ export default function StudioOnboarding() {
           setQuestionCount={setQuestionCount}
           tone={tone}
           setTone={setTone}
+          goals={goals}
+          setGoals={setGoals}
+          experienceType={experienceType}
+          setExperienceType={setExperienceType}
           brandVoiceName={brandVoiceName}
           onNext={() => goto(4)}
           onBack={() => goto(2)}
@@ -297,6 +320,8 @@ export default function StudioOnboarding() {
         <Form method="post" style={{ display: "flex", flexDirection: "column", gap: 12 }}>
           <input type="hidden" name="name" value={name} />
           <input type="hidden" name="goalPrompt" value={goalPrompt} />
+          <input type="hidden" name="experienceType" value={experienceType} />
+          <input type="hidden" name="goals" value={goals.join(",")} />
           <input type="hidden" name="questionCount" value={questionCount} />
           <input type="hidden" name="tone" value={tone} />
           {emailGate ? <input type="hidden" name="emailGate" value="on" /> : null}

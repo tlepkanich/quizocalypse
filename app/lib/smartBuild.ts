@@ -190,6 +190,30 @@ export function applyQuestionFlow(
     connect(id);
   }
 
+  // Experiences E2 — no buckets (survey / lead-capture): there is nothing to
+  // route TO. Skip the branch and terminate the chain at an end node — reuse
+  // an existing manual end node if the doc has one, else create a Smart-Build
+  // owned one (sb_ prefix keeps it idempotent across regenerations).
+  if (buckets.length === 0) {
+    const existingEnd = nodes.find((n) => n.type === "end");
+    if (existingEnd) {
+      connect(existingEnd.id);
+    } else {
+      const endId = "sb_end";
+      nodes.push({
+        id: endId,
+        type: "end",
+        position: { x: xAt(col++), y },
+        data: {
+          headline: "Thank you 🙏",
+          subtext: "We read every response — it genuinely shapes what we do next.",
+        },
+      } as QuizNode);
+      connect(endId);
+    }
+    return { ...doc, nodes, edges };
+  }
+
   // 4. Routing branch: one slot per bucket (conditioned on a dominant tag) +
   // an unconditioned default catch-all (last, so conditioned slots win).
   // Collect the EXACT answer-tag strings (runtime accumulatedTags are the

@@ -9,9 +9,13 @@ import { HOUSE_TOKENS } from "./themePresets";
 // when the merchant generates a flow (the `sb_` prefix is the Smart Build
 // marker; see app/lib/smartBuild.ts). To a manual builder the prefix is just
 // an opaque id.
-export function buildSeedQuiz(name: string): Quiz {
+export function buildSeedQuiz(
+  name: string,
+  experienceType?: "product_match" | "personality" | "lead_capture" | "survey",
+): Quiz {
   const title = name.trim() || "Find your match";
   return Quiz.parse({
+    ...(experienceType ? { experience_type: experienceType } : {}),
     quiz_id: `quiz_${Math.random().toString(36).slice(2, 10)}`,
     status: "draft",
     scope: { collection_ids: [] },

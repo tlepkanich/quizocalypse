@@ -41,6 +41,12 @@ export interface OnboardingBuildInput {
   // result-page email-capture toggle when provided.
   placement?: "page" | "popup" | "inline" | "product_widget";
   collectEmailOnResult?: boolean;
+  // Experiences E2 — shapes the whole build: survey/lead_capture skip the
+  // catalog phases entirely; personality keeps the product path with persona
+  // framing. Absent = product_match.
+  experienceType?: "product_match" | "personality" | "lead_capture" | "survey";
+  // The wizard's picked goals (labels) — extra context for the AI prompt.
+  goalLabels?: string[];
   // When set, build into this EXISTING quiz row instead of creating one — used
   // by startAiOnboardingBuild for the detached/async path (the row is
   // pre-created so the request can redirect immediately). Omitted = legacy
@@ -65,7 +71,12 @@ export async function runAiOnboardingBuild(
   // 1. Seed the quiz, applying the merchant's picked design tokens. Reuse a
   // pre-created row when quizId is supplied (async path); otherwise create one
   // (legacy synchronous path). seedDoc is the in-memory working copy either way.
-  const seed = buildSeedQuiz(name);
+  const xtype = input.experienceType ?? "product_match";
+  const goalContext =
+    input.goalLabels && input.goalLabels.length > 0
+      ? `${input.goalPrompt}\n\nMerchant goals: ${input.goalLabels.join(", ")}.`
+      : input.goalPrompt;
+  const seed = buildSeedQuiz(name, xtype);
   const seedDoc: QuizDoc = input.designTokens
     ? Quiz.parse({ ...seed, design_tokens: input.designTokens })
     : seed;
@@ -76,6 +87,50 @@ export async function runAiOnboardingBuild(
         data: { shopId, name, status: "draft", draftJson: seedDoc as never },
       })
     ).id;
+
+  // Experiences E2 — survey/lead_capture don't need the catalog at all:
+  // generate questions straight onto the seed (no buckets, no result pages;
+  // applyQuestionFlow wires questions → end when no results exist).
+  if (xtype === "survey" || xtype === "lead_capture") {
+    const shopRow = await prisma.shop.findUnique({
+      where: { id: shopId },
+      select: { brandGuidelines: true },
+    });
+    const bg = parseBrandGuidelinesSafe(shopRow?.brandGuidelines);
+    const siteText = input.websiteUrl ? await ingestWebsite(input.websiteUrl) : "";
+    try {
+      const generated = await generateQuestionFlow({
+        goalPrompt: goalContext,
+        questionCount: input.questionCount,
+        catalogSummary: "",
+        buckets: [],
+        flow: input.flow,
+        tone: input.tone,
+        experienceType: xtype,
+        ...(siteText ? { websiteText: siteText } : {}),
+        ...(bg ? { brandGuidelines: bg } : {}),
+      });
+      const wired = applyQuestionFlow(seedDoc, generated, []);
+      const ok = Quiz.safeParse(wired);
+      if (ok.success) {
+        const finalDoc: QuizDoc = {
+          ...ok.data,
+          placement: input.placement ?? "page",
+          ...(input.collectEmailOnResult !== undefined
+            ? { collect_email_on_result: input.collectEmailOnResult }
+            : {}),
+        };
+        await persist(quizId, finalDoc);
+        return { quizId };
+      }
+      await persist(quizId, seedDoc);
+      return { quizId, degraded: "AI built a draft but it needs a tweak in the builder." };
+    } catch (err) {
+      await persist(quizId, seedDoc);
+      const msg = err instanceof Error ? err.message : String(err);
+      return { quizId, degraded: `AI couldn't write questions (${msg}) — add them in the builder.` };
+    }
+  }
 
   // 2. Catalog: a fallback collection is REQUIRED to create result pages.
   const [allProducts, allCollections, shop] = await Promise.all([
@@ -137,7 +192,8 @@ export async function runAiOnboardingBuild(
   let generated;
   try {
     generated = await generateQuestionFlow({
-      goalPrompt: input.goalPrompt,
+      goalPrompt: goalContext,
+      experienceType: xtype,
       questionCount: input.questionCount,
       catalogSummary: indexed.summary,
       buckets: smartBuckets.map((b) => ({ id: b.id, name: b.name, tags: b.tags })),

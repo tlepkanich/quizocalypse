@@ -249,6 +249,25 @@ export function BrandStep({
 }
 
 // ── Step 3 · Goal (objective + length + tone) ───────────────────────────────
+// Experiences E2 — goal-first creation (the Jebbit pattern): merchants pick
+// WHAT THEY WANT, we infer the experience type (overridable). The goals also
+// flow into the AI prompt as context.
+export const WIZARD_GOALS = [
+  { id: "revenue", label: "Increase revenue", infers: "product_match" },
+  { id: "leads", label: "Generate leads", infers: "lead_capture" },
+  { id: "engagement", label: "Boost engagement", infers: "personality" },
+  { id: "insights", label: "Capture insights", infers: "survey" },
+] as const;
+export type WizardGoalId = (typeof WIZARD_GOALS)[number]["id"];
+export type WizardExperienceType = "product_match" | "personality" | "lead_capture" | "survey";
+
+export function inferExperienceType(goals: WizardGoalId[]): WizardExperienceType {
+  // Revenue dominates (products pay the bills); otherwise first-picked wins.
+  if (goals.includes("revenue")) return "product_match";
+  const first = WIZARD_GOALS.find((g) => goals.includes(g.id));
+  return (first?.infers ?? "product_match") as WizardExperienceType;
+}
+
 export function GoalStep({
   name,
   setName,
@@ -258,6 +277,10 @@ export function GoalStep({
   setQuestionCount,
   tone,
   setTone,
+  goals,
+  setGoals,
+  experienceType,
+  setExperienceType,
   brandVoiceName,
   onNext,
   onBack,
@@ -270,6 +293,10 @@ export function GoalStep({
   setQuestionCount: (n: number) => void;
   tone: QuizTone;
   setTone: (t: QuizTone) => void;
+  goals: WizardGoalId[];
+  setGoals: (g: WizardGoalId[]) => void;
+  experienceType: WizardExperienceType;
+  setExperienceType: (t: WizardExperienceType) => void;
   brandVoiceName: string | null;
   onNext: () => void;
   onBack: () => void;
@@ -288,6 +315,45 @@ export function GoalStep({
           onChange={(e) => setName(e.target.value)}
           placeholder="e.g. Find your skincare routine"
         />
+      </QzField>
+
+      <QzField label="What do you want to accomplish?" hint="Pick any that apply — we'll shape the experience around them.">
+        <div className="qz-row" style={{ gap: 8, flexWrap: "wrap" }}>
+          {WIZARD_GOALS.map((g) => {
+            const on = goals.includes(g.id);
+            return (
+              <button
+                key={g.id}
+                type="button"
+                aria-pressed={on}
+                className="qz-btn qz-btn-sm"
+                style={{
+                  border: on ? "2px solid var(--qz-accent, #2a6df4)" : "1px solid var(--qz-rule, #e3ddd2)",
+                  background: on ? "color-mix(in srgb, var(--qz-accent, #2a6df4) 8%, transparent)" : "var(--qz-paper, #fff)",
+                }}
+                onClick={() => {
+                  const next = on ? goals.filter((x) => x !== g.id) : [...goals, g.id];
+                  setGoals(next);
+                  if (next.length > 0) setExperienceType(inferExperienceType(next));
+                }}
+              >
+                {g.label}
+              </button>
+            );
+          })}
+        </div>
+      </QzField>
+
+      <QzField label="Experience type" hint="Inferred from your goals — override anytime. Sets the guard rails and what gets built.">
+        <QzSelect
+          value={experienceType}
+          onChange={(e) => setExperienceType(e.target.value as WizardExperienceType)}
+        >
+          <option value="product_match">Product match — recommend from your catalog</option>
+          <option value="personality">Personality — persona reveal + products</option>
+          <option value="lead_capture">Lead capture — qualify, then collect the email</option>
+          <option value="survey">Survey — learn from your audience, no products</option>
+        </QzSelect>
       </QzField>
 
       <QzField

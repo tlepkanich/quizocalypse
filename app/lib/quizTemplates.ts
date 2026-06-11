@@ -15,7 +15,13 @@ import type { Quiz as QuizDoc, DesignTokens } from "./quizSchema";
 // from the shop's first synced collection.
 // ───────────────────────────────────────────────────────────────────────────
 
-export type TemplateId = "skincare" | "gifting" | "clothing" | "vitamins";
+export type TemplateId =
+  | "skincare"
+  | "gifting"
+  | "clothing"
+  | "vitamins"
+  | "survey_feedback"
+  | "lead_qualify";
 
 interface TemplateAnswer {
   text: string;
@@ -156,10 +162,183 @@ export function buildTemplate(spec: TemplateSpec, fallbackCollectionId: string):
     quiz_id: `quiz_${Math.random().toString(36).slice(2, 10)}`,
     status: "draft",
     scope: { collection_ids: [] },
+    // E2: the archetype templates ARE personality experiences (persona reveal
+    // + product recs) — typed so their guard rails and analytics fit.
+    experience_type: "personality",
     nodes,
     edges,
     design_tokens: spec.tokens,
   });
+}
+
+// ── Experiences E2: non-product templates ────────────────────────────────────
+// Survey and lead-capture flows have a different SHAPE (no archetypes, no
+// branch, an end terminal; the lead template adds a required gate), so they
+// get dedicated builders instead of contorting TemplateSpec.
+
+export function buildSurveyTemplate(): { doc: QuizDoc; name: string } {
+  const q1 = tuid("q");
+  const q2 = tuid("q");
+  const q3 = tuid("q");
+  const end = tuid("end");
+  const doc = Quiz.parse({
+    quiz_id: `quiz_${Math.random().toString(36).slice(2, 10)}`,
+    status: "draft",
+    scope: { collection_ids: [] },
+    experience_type: "survey",
+    nodes: [
+      {
+        id: "intro",
+        type: "intro",
+        position: { x: 0, y: 0 },
+        data: {
+          headline: "Help us get better",
+          subtext: "Two minutes, three questions — your honest take shapes what we do next.",
+          button_label: "Share my thoughts",
+        },
+      },
+      {
+        id: q1,
+        type: "question",
+        position: { x: 320, y: 0 },
+        data: {
+          text: "How satisfied are you with your latest order?",
+          question_type: "rating",
+          answers: ["1", "2", "3", "4", "5"].map((n) => ({
+            id: tuid("a"),
+            text: n,
+            tags: [],
+            edge_handle_id: tuid("h"),
+          })),
+        },
+      },
+      {
+        id: q2,
+        type: "question",
+        position: { x: 640, y: 0 },
+        data: {
+          text: "What matters most when you shop with us?",
+          question_type: "single_select",
+          answers: ["Quality", "Price", "Speed of delivery", "Customer service"].map((t) => ({
+            id: tuid("a"),
+            text: t,
+            tags: [],
+            edge_handle_id: tuid("h"),
+          })),
+        },
+      },
+      {
+        id: q3,
+        type: "question",
+        position: { x: 960, y: 0 },
+        data: {
+          text: "Anything we could do better?",
+          question_type: "text",
+          required: false,
+          answers: [{ id: tuid("a"), text: "Open feedback", tags: [], edge_handle_id: tuid("h") }],
+          input_config: { placeholder: "Tell us anything…" },
+        },
+      },
+      {
+        id: end,
+        type: "end",
+        position: { x: 1280, y: 0 },
+        data: {
+          headline: "Thank you 🙏",
+          subtext: "We read every response — it genuinely shapes what we build next.",
+        },
+      },
+    ],
+    edges: [
+      { id: tuid("e"), source: "intro", target: q1 },
+      { id: tuid("e"), source: q1, target: q2 },
+      { id: tuid("e"), source: q2, target: q3 },
+      { id: tuid("e"), source: q3, target: end },
+    ],
+  });
+  return { doc, name: "Customer feedback survey" };
+}
+
+export function buildLeadCaptureTemplate(): { doc: QuizDoc; name: string } {
+  const q1 = tuid("q");
+  const q2 = tuid("q");
+  const gate = tuid("g");
+  const end = tuid("end");
+  const doc = Quiz.parse({
+    quiz_id: `quiz_${Math.random().toString(36).slice(2, 10)}`,
+    status: "draft",
+    scope: { collection_ids: [] },
+    experience_type: "lead_capture",
+    nodes: [
+      {
+        id: "intro",
+        type: "intro",
+        position: { x: 0, y: 0 },
+        data: {
+          headline: "Get your personalized guide",
+          subtext: "Answer two quick questions and we'll send the right starting point to your inbox.",
+          button_label: "Get started",
+        },
+      },
+      {
+        id: q1,
+        type: "question",
+        position: { x: 320, y: 0 },
+        data: {
+          text: "What best describes you?",
+          question_type: "single_select",
+          answers: ["Just exploring", "Comparing options", "Ready to buy"].map((t) => ({
+            id: tuid("a"),
+            text: t,
+            tags: [],
+            edge_handle_id: tuid("h"),
+          })),
+        },
+      },
+      {
+        id: q2,
+        type: "question",
+        position: { x: 640, y: 0 },
+        data: {
+          text: "What's your biggest priority right now?",
+          question_type: "single_select",
+          answers: ["Saving time", "Saving money", "Getting expert help"].map((t) => ({
+            id: tuid("a"),
+            text: t,
+            tags: [],
+            edge_handle_id: tuid("h"),
+          })),
+        },
+      },
+      {
+        id: gate,
+        type: "email_gate",
+        position: { x: 960, y: 0 },
+        data: {
+          headline: "Where should we send it?",
+          subtext: "Your guide, tailored to your answers — straight to your inbox.",
+          email_required: true,
+          skip_allowed: false,
+        },
+      },
+      {
+        id: end,
+        type: "end",
+        position: { x: 1280, y: 0 },
+        data: {
+          headline: "You're all set ✉️",
+          subtext: "Check your inbox in the next few minutes. We'll take it from there.",
+        },
+      },
+    ],
+    edges: [
+      { id: tuid("e"), source: "intro", target: q1 },
+      { id: tuid("e"), source: q1, target: q2 },
+      { id: tuid("e"), source: q2, target: gate },
+      { id: tuid("e"), source: gate, target: end },
+    ],
+  });
+  return { doc, name: "Lead capture flow" };
 }
 
 // ── The four template specs ──────────────────────────────────────────────────
@@ -451,7 +630,8 @@ const VITAMINS: TemplateSpec = {
   },
 };
 
-export const TEMPLATES: Record<TemplateId, TemplateSpec> = {
+export type SpecTemplateId = "skincare" | "gifting" | "clothing" | "vitamins";
+export const TEMPLATES: Record<SpecTemplateId, TemplateSpec> = {
   skincare: SKINCARE,
   gifting: GIFTING,
   clothing: CLOTHING,
@@ -465,16 +645,36 @@ export const TEMPLATE_LIST: Array<{
   description: string;
   accent: string;
   defaultName: string;
-}> = (Object.values(TEMPLATES) as TemplateSpec[]).map((t) => ({
-  id: t.id,
-  label: t.label,
-  description: t.description,
-  accent: t.accent,
-  defaultName: t.defaultName,
-}));
+  experience: "personality" | "survey" | "lead_capture";
+}> = [
+  ...(Object.values(TEMPLATES) as TemplateSpec[]).map((t) => ({
+    id: t.id,
+    label: t.label,
+    description: t.description,
+    accent: t.accent,
+    defaultName: t.defaultName,
+    experience: "personality" as const,
+  })),
+  {
+    id: "survey_feedback",
+    label: "Customer feedback",
+    description: "Three quick questions — satisfaction, priorities, open feedback. No products needed.",
+    accent: "#5B8DEF",
+    defaultName: "Customer feedback survey",
+    experience: "survey",
+  },
+  {
+    id: "lead_qualify",
+    label: "Lead capture",
+    description: "Qualify with two questions, then capture the email. Built to feed your list.",
+    accent: "#D9822B",
+    defaultName: "Lead capture flow",
+    experience: "lead_capture",
+  },
+];
 
 export function isTemplateId(id: string): id is TemplateId {
-  return id in TEMPLATES;
+  return id in TEMPLATES || id === "survey_feedback" || id === "lead_qualify";
 }
 
 /**
@@ -484,6 +684,8 @@ export function buildTemplateQuiz(
   templateId: TemplateId,
   fallbackCollectionId: string,
 ): { doc: QuizDoc; name: string } {
-  const spec = TEMPLATES[templateId];
+  if (templateId === "survey_feedback") return buildSurveyTemplate();
+  if (templateId === "lead_qualify") return buildLeadCaptureTemplate();
+  const spec = TEMPLATES[templateId as SpecTemplateId];
   return { doc: buildTemplate(spec, fallbackCollectionId), name: spec.defaultName };
 }

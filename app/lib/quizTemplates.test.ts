@@ -1,21 +1,46 @@
 import { describe, expect, it } from "vitest";
 import { Quiz } from "./quizSchema";
+import { validateQuiz, validateQuizWarnings } from "./quizValidation";
 import {
   TEMPLATES,
   TEMPLATE_LIST,
   buildTemplate,
   buildTemplateQuiz,
   isTemplateId,
-  type TemplateId,
 } from "./quizTemplates";
 
-const IDS = Object.keys(TEMPLATES) as TemplateId[];
+const IDS = Object.keys(TEMPLATES) as Array<keyof typeof TEMPLATES>;
 const FB = "gid://shopify/Collection/123";
 
 describe("quiz templates", () => {
-  it("exposes the four vertical templates", () => {
+  it("exposes the four vertical templates + the two E2 experience templates", () => {
     expect(IDS.sort()).toEqual(["clothing", "gifting", "skincare", "vitamins"]);
-    expect(TEMPLATE_LIST).toHaveLength(4);
+    expect(TEMPLATE_LIST).toHaveLength(6);
+    expect(TEMPLATE_LIST.map((t) => t.experience).sort()).toEqual([
+      "lead_capture",
+      "personality",
+      "personality",
+      "personality",
+      "personality",
+      "survey",
+    ]);
+  });
+
+  it("survey template: valid, typed, no results, ends at an end node", () => {
+    const { doc } = buildTemplateQuiz("survey_feedback", FB);
+    expect(doc.experience_type).toBe("survey");
+    expect(doc.nodes.some((n) => n.type === "result")).toBe(false);
+    expect(doc.nodes.some((n) => n.type === "end")).toBe(true);
+    expect(validateQuiz(doc)).toEqual([]);
+  });
+
+  it("lead template: valid, typed, gate required, capture suggestion clear", () => {
+    const { doc } = buildTemplateQuiz("lead_qualify", FB);
+    expect(doc.experience_type).toBe("lead_capture");
+    const gate = doc.nodes.find((n) => n.type === "email_gate");
+    expect(gate && gate.type === "email_gate" && gate.data.email_required).toBe(true);
+    expect(validateQuiz(doc)).toEqual([]);
+    expect(validateQuizWarnings(doc).some((w) => w.kind === "missing_capture")).toBe(false);
   });
 
   for (const id of IDS) {

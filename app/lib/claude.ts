@@ -306,6 +306,39 @@ export interface GenerateQuestionFlowInput {
   toneSample?: string;
   // Dev Spec §3.2 — extracted brand-website text (mission/FAQ/voice). Pre-capped.
   websiteText?: string;
+  // Experiences E2 — shapes the question style per experience type.
+  experienceType?: "product_match" | "personality" | "lead_capture" | "survey";
+}
+
+// Per-type prompt addendum (E2). Empty for the historical product_match.
+function experienceAddendum(t?: string): string {
+  switch (t) {
+    case "survey":
+      return (
+        "\nEXPERIENCE TYPE: SURVEY. Write questions that gather honest feedback/insight " +
+        "from existing customers (satisfaction, priorities, open feedback). Answers must " +
+        "use EMPTY tags [] — there is no product routing. Do NOT reference products or " +
+        "recommendations anywhere. Vary input types (rating scales, single selects, one " +
+        "optional open text)."
+      );
+    case "lead_capture":
+      return (
+        "\nEXPERIENCE TYPE: LEAD CAPTURE. Write 2-3 short QUALIFICATION questions " +
+        "(who they are, what they need, how ready they are) that make the follow-up " +
+        "email more relevant. Answers use EMPTY tags [] unless buckets are provided. " +
+        "The email gate is the point — write a gate headline that frames the capture " +
+        "as a service (\"Where should we send it?\"), never as a toll."
+      );
+    case "personality":
+      return (
+        "\nEXPERIENCE TYPE: PERSONALITY. Frame questions in second person about the " +
+        "SHOPPER's identity/preferences (not product attributes) — the payoff is a " +
+        "persona reveal. Answers still carry routing tags toward the buckets, but the " +
+        "voice is \"which one are you\", warm and identity-affirming."
+      );
+    default:
+      return "";
+  }
 }
 
 // Generate the question flow (questions only — no nodes/edges/ids) for a quiz
@@ -357,7 +390,9 @@ export async function generateQuestionFlow(
     .join("\n");
 
   const system =
-    QUESTION_FLOW_SYSTEM_PROMPT + buildBrandVoiceAddition(input.brandGuidelines);
+    QUESTION_FLOW_SYSTEM_PROMPT +
+    experienceAddendum(input.experienceType) +
+    buildBrandVoiceAddition(input.brandGuidelines);
 
   let lastIssue: string | undefined;
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
