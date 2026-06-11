@@ -1,6 +1,8 @@
 import { QzField, QzInput, QzSelect } from "../../qz";
 import type { Quiz, QuizNode } from "../../../lib/quizSchema";
 import { setDesignLayer, type DesignLayerMode } from "../../../lib/designLayers";
+import { mergeTokens } from "../../../lib/designLayers";
+import { findContrastIssues } from "../../../lib/designTokens";
 
 // ════════════════════════════════════════════════════════════════════════════
 // Style panel — node design tokens, synced or per-breakpoint (Unified P0:
@@ -25,6 +27,12 @@ export function StyleTab({
       ? doc.design_overrides[node.id]
       : doc.breakpoint_overrides[node.id]?.[mode];
   const colors = layer?.colors ?? {};
+
+  // Phase H — WCAG check on the EFFECTIVE tokens for this node (quiz tokens
+  // merged with this layer's overrides). Warn-only; merchants can override.
+  const contrastIssues = findContrastIssues(
+    mergeTokens(doc.design_tokens ?? {}, layer ?? {}),
+  );
 
   const color = (key: "primary" | "background" | "text", label: string) => (
     <QzField label={label} key={key}>
@@ -52,6 +60,26 @@ export function StyleTab({
       {color("primary", "Primary")}
       {color("background", "Background")}
       {color("text", "Text")}
+      {contrastIssues.length > 0 ? (
+        <div
+          role="status"
+          style={{
+            fontSize: 11.5,
+            padding: "8px 10px",
+            borderRadius: 8,
+            background: "color-mix(in srgb, #d9822b 12%, transparent)",
+            display: "flex",
+            flexDirection: "column",
+            gap: 3,
+          }}
+        >
+          {contrastIssues.map((i) => (
+            <span key={i.pair}>
+              ⚠ {i.pair}: {i.ratio.toFixed(1)}:1 — below WCAG AA
+            </span>
+          ))}
+        </div>
+      ) : null}
       <QzField label="Corner radius">
         <QzSelect
           value={layer?.radius ?? ""}

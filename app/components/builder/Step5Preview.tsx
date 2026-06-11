@@ -8,6 +8,7 @@ import { bakeResultPages } from "../../lib/quizPublish";
 import type { StepProps } from "./stepProps";
 import { DeviceFrame } from "./preview/DeviceFrame";
 import { ReskinSwitcher } from "./preview/ReskinSwitcher";
+import { LAYOUT_VARIANTS, applyLayoutVariant, detectLayoutVariant } from "../../lib/layoutVariants";
 import {
   DEVICE_PRESETS,
   breakpointForWidth,
@@ -158,6 +159,42 @@ export function Step5Preview({
           ) : null}
         </div>
         <ReskinSwitcher value={tryOnId} onSelect={setTryOnId} />
+
+        {/* Phase H — layout variants: structural presets orthogonal to the
+            color themes (density / type scale / result layout). Applied
+            immediately (autosave); the frame below reflects it live. */}
+        <div style={{ marginTop: 14, borderTop: "1px solid var(--qz-rule, #eee)", paddingTop: 12 }}>
+          <strong style={{ fontSize: 13 }}>Layout</strong>
+          <div className="qz-row" style={{ gap: 8, marginTop: 8, flexWrap: "wrap" }}>
+            {LAYOUT_VARIANTS.map((v) => {
+              const active = detectLayoutVariant(doc) === v.id;
+              return (
+                <button
+                  key={v.id}
+                  type="button"
+                  aria-pressed={active}
+                  title={v.description}
+                  onClick={() => onCommit(applyLayoutVariant(doc, v.id))}
+                  className="qz-card qz-interactive"
+                  style={{
+                    font: "inherit",
+                    textAlign: "left",
+                    cursor: "pointer",
+                    padding: "8px 12px",
+                    minWidth: 150,
+                    border: active
+                      ? "2px solid var(--qz-accent, #2a6df4)"
+                      : "1px solid var(--qz-rule, #e3ddd2)",
+                    background: "var(--qz-paper, #fff)",
+                  }}
+                >
+                  <div style={{ fontSize: 13, fontWeight: 600 }}>{v.name}</div>
+                  <div className="qz-dim" style={{ fontSize: 11, marginTop: 2 }}>{v.description}</div>
+                </button>
+              );
+            })}
+          </div>
+        </div>
       </QzCard>
 
       {/* The live device frame */}
