@@ -20,6 +20,7 @@ import { ReviewEnrichPanel } from "./ReviewEnrichPanel";
 import { EditableTitle, PLACEMENTS, type StudioBuilderData } from "./studioShared";
 import { Step3Results } from "../builder/Step3Results";
 import { TranslationsPanel } from "./TranslationsPanel";
+import { ExperiencePanel } from "./ExperiencePanel";
 
 // ════════════════════════════════════════════════════════════════════════════
 // UnifiedWorkspace (Unified P2) — ONE editing surface replacing the AI/Advanced
@@ -278,86 +279,6 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
                   );
                 })}
               </div>
-              <label className="qz-row" style={{ gap: 6, alignItems: "center", fontSize: 12, marginBottom: 6 }}>
-                <input
-                  type="checkbox"
-                  checked={doc.collect_email_on_result ?? false}
-                  onChange={(e) => commit({ ...doc, collect_email_on_result: e.target.checked })}
-                />
-                <span>Email capture on the result page</span>
-              </label>
-              <label className="qz-row" style={{ gap: 6, alignItems: "center", fontSize: 12, marginBottom: 6 }}>
-                <input
-                  type="checkbox"
-                  checked={doc.design_tokens?.result_split ?? false}
-                  onChange={(e) =>
-                    commit({
-                      ...doc,
-                      design_tokens: { ...doc.design_tokens, result_split: e.target.checked },
-                    })
-                  }
-                />
-                <span>2-column desktop result</span>
-              </label>
-              <label
-                className="qz-row"
-                style={{ gap: 6, alignItems: "flex-start", fontSize: 12 }}
-                title="Phase J: at publish, answers that historically lead to purchases get more weight in product scoring. Needs 30+ completed sessions and 5+ attributed orders; below that, scoring stays unchanged."
-              >
-                <input
-                  type="checkbox"
-                  style={{ marginTop: 2 }}
-                  checked={doc.data_weighting ?? false}
-                  onChange={(e) => commit({ ...doc, data_weighting: e.target.checked })}
-                />
-                <span>
-                  Data-weighted recommendations
-                  <span className="qz-dim" style={{ display: "block", fontSize: 10.5 }}>
-                    Boost answers that convert (activates at publish once 30 sessions + 5 orders exist)
-                  </span>
-                </span>
-              </label>
-              <label className="qz-row" style={{ gap: 8, alignItems: "flex-start", fontSize: 12.5, cursor: "pointer" }}>
-                <input
-                  type="checkbox"
-                  checked={doc.show_recap ?? false}
-                  onChange={(e) => commit({ ...doc, show_recap: e.target.checked })}
-                />
-                <span>
-                  Answer recap before results
-                  <span className="qz-dim" style={{ display: "block", fontSize: 10.5 }}>
-                    "Just making sure we're on track" — review + edit answers before the reveal
-                  </span>
-                </span>
-              </label>
-              <label className="qz-row" style={{ gap: 8, alignItems: "flex-start", fontSize: 12.5, cursor: "pointer" }}>
-                <input
-                  type="checkbox"
-                  checked={doc.results_reveal === "computing"}
-                  onChange={(e) =>
-                    commit({ ...doc, results_reveal: e.target.checked ? "computing" : undefined })
-                  }
-                />
-                <span>
-                  Computing reveal
-                  <span className="qz-dim" style={{ display: "block", fontSize: 10.5 }}>
-                    A ~4s "weighing your answers" beat showing the REAL factors before results
-                  </span>
-                </span>
-              </label>
-              <label className="qz-row" style={{ gap: 8, alignItems: "flex-start", fontSize: 12.5, cursor: "pointer" }}>
-                <input
-                  type="checkbox"
-                  checked={doc.show_match_reasons ?? false}
-                  onChange={(e) => commit({ ...doc, show_match_reasons: e.target.checked })}
-                />
-                <span>
-                  "Because you chose" chips
-                  <span className="qz-dim" style={{ display: "block", fontSize: 10.5 }}>
-                    Each product names the answers that earned it its spot
-                  </span>
-                </span>
-              </label>
             </div>
           </details>
           {chrome === "embedded" ? (
@@ -467,6 +388,7 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
               </div>
             )}
             <ReviewEnrichPanel onApply={commit} sources={doc.review_enrichment_sources} />
+            <ExperiencePanel doc={doc} onCommit={commit} onSelectNode={select} />
             <TranslationsPanel doc={doc} onApply={commit} previewUrl={data.previewUrl} />
             <AiChatPanel onApply={commit} selectedNodeId={selectedId} />
           </div>

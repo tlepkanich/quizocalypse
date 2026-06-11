@@ -3440,7 +3440,7 @@ function ResultView({
       </button>
       <SaveResultsLink quizId={quizId} sessionId={sessionId} />
       <BuddyRow quizId={quizId} sessionId={sessionId} buddySessionId={buddySessionId} analytics={analytics} />
-      {escapeHatch ? (
+      {escapeHatch && escapeHatch.label && escapeHatch.url ? (
         <a
           href={escapeHatch.url}
           target="_blank"

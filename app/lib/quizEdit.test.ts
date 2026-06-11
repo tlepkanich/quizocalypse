@@ -419,3 +419,43 @@ describe("Unified P5 ops — full panel parity", () => {
     expect(() => Quiz.parse(out)).not.toThrow();
   });
 });
+
+// Experiences E7 — theater flags + chapter/reassurance/escape-hatch fields.
+describe("E7 ops", () => {
+  it("set_flag toggles the theater flags incl. computing_reveal mapping", () => {
+    const doc = base();
+    const { doc: out } = applyEditOps(doc, [
+      { op: "set_flag", flag: "show_recap", value: true },
+      { op: "set_flag", flag: "show_match_reasons", value: true },
+      { op: "set_flag", flag: "computing_reveal", value: true },
+    ]);
+    expect(out.show_recap).toBe(true);
+    expect(out.show_match_reasons).toBe(true);
+    expect(out.results_reveal).toBe("computing");
+    const { doc: off } = applyEditOps(out, [
+      { op: "set_flag", flag: "computing_reveal", value: false },
+    ]);
+    expect(off.results_reveal).toBeUndefined();
+  });
+
+  it("set_node_field writes section_label/helper_text on questions and the escape hatch pair on results", () => {
+    const doc = base();
+    const q = doc.nodes.find((n) => n.type === "question")!;
+    const r = doc.nodes.find((n) => n.type === "result")!;
+    const { doc: out, warnings } = applyEditOps(doc, [
+      { op: "set_node_field", node_id: q.id, field: "section_label", value: "Skin profile" },
+      { op: "set_node_field", node_id: q.id, field: "helper_text", value: "No wrong answers." },
+      { op: "set_node_field", node_id: r.id, field: "escape_hatch_label", value: "Talk to an expert" },
+      { op: "set_node_field", node_id: r.id, field: "escape_hatch_url", value: "https://example.com/help" },
+    ]);
+    expect(warnings).toEqual([]);
+    const q2 = out.nodes.find((n) => n.id === q.id)!;
+    expect(q2.type === "question" && q2.data.section_label).toBe("Skin profile");
+    expect(q2.type === "question" && q2.data.helper_text).toBe("No wrong answers.");
+    const r2 = out.nodes.find((n) => n.id === r.id)!;
+    expect(r2.type === "result" && r2.data.escape_hatch).toEqual({
+      label: "Talk to an expert",
+      url: "https://example.com/help",
+    });
+  });
+});

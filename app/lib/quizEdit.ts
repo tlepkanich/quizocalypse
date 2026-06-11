@@ -76,9 +76,9 @@ const QUESTION_TYPES = [
 // naming a field outside its node's list is skipped with a warning.
 const NODE_FIELDS: Record<string, readonly string[]> = {
   intro: ["headline", "subtext", "button_label", "hero_image_url"],
-  question: ["text"],
+  question: ["text", "section_label", "helper_text"],
   email_gate: ["headline", "subtext"],
-  result: ["headline", "subtext", "cta_label"],
+  result: ["headline", "subtext", "cta_label", "escape_hatch_label", "escape_hatch_url"],
   message: ["text"],
   end: ["headline", "subtext", "cta_label", "cta_url"],
   ask_ai: ["persona_name", "opening_message", "system_prompt"],
@@ -98,9 +98,14 @@ const NODE_FIELD_NAMES = [
   "opening_message",
   "system_prompt",
   "label",
+  // Experiences E7.
+  "section_label",
+  "helper_text",
+  "escape_hatch_label",
+  "escape_hatch_url",
 ] as const;
 // Fields that must be https URLs (empty clears).
-const URL_FIELDS = new Set(["hero_image_url", "cta_url"]);
+const URL_FIELDS = new Set(["hero_image_url", "cta_url", "escape_hatch_url"]);
 
 const HEX_COLOR = z.string().regex(/^#[0-9a-fA-F]{3,8}$/, "hex color");
 
@@ -218,7 +223,15 @@ export const EditOp = z.discriminatedUnion("op", [
   // Quiz/node feature flags. collect_phone needs node_id (an email_gate).
   z.object({
     op: z.literal("set_flag"),
-    flag: z.enum(["collect_email_on_result", "result_split", "collect_phone"]),
+    flag: z.enum([
+      "collect_email_on_result",
+      "result_split",
+      "collect_phone",
+      // Experiences E7 — the shopper-theater flags.
+      "show_recap",
+      "show_match_reasons",
+      "computing_reveal",
+    ]),
     value: z.boolean(),
     node_id: z.string().min(1).optional(),
   }),
@@ -664,6 +677,28 @@ export function applyEditOps(doc: QuizDoc, ops: EditOp[]): ApplyEditResult {
           }
           value = url || undefined;
         }
+        // E7: the escape-hatch pair writes into result.data.escape_hatch
+        // (both parts required for the link to render; clearing the URL
+        // clears the hatch).
+        if (op.field === "escape_hatch_label" || op.field === "escape_hatch_url") {
+          working = {
+            ...working,
+            nodes: working.nodes.map((n) => {
+              if (n.id !== op.node_id || n.type !== "result") return n;
+              const cur = n.data.escape_hatch ?? { label: "Talk to a human", url: "" };
+              const next =
+                op.field === "escape_hatch_label"
+                  ? { ...cur, label: value ?? "" }
+                  : { ...cur, url: value ?? "" };
+              const cleared = !next.label && !next.url;
+              return {
+                ...n,
+                data: { ...n.data, escape_hatch: cleared ? undefined : next },
+              } as typeof n;
+            }),
+          };
+          break;
+        }
         working = {
           ...working,
           nodes: working.nodes.map((n) =>
@@ -677,6 +712,12 @@ export function applyEditOps(doc: QuizDoc, ops: EditOp[]): ApplyEditResult {
       case "set_flag": {
         if (op.flag === "collect_email_on_result") {
           working = { ...working, collect_email_on_result: op.value };
+        } else if (op.flag === "show_recap") {
+          working = { ...working, show_recap: op.value };
+        } else if (op.flag === "show_match_reasons") {
+          working = { ...working, show_match_reasons: op.value };
+        } else if (op.flag === "computing_reveal") {
+          working = { ...working, results_reveal: op.value ? "computing" : undefined };
         } else if (op.flag === "result_split") {
           working = {
             ...working,

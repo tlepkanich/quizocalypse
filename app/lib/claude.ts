@@ -470,8 +470,8 @@ const EDIT_QUIZ_SYSTEM_PROMPT =
   "Use set_theme to restyle the WHOLE quiz when the merchant asks for a different look or vibe (preset is one of: linen, minimal, editorial, bold, pastel, dark). " +
   "Use set_answer_icon to give answers emoji icons (icon is the emoji itself; empty string removes it); set_answer_image (https URLs only) for answer photos on image-style questions; set_answer_columns (1 or 2; 0 = automatic) to change a question's answer-grid layout. " +
   "Use set_question_type to change how a question renders (single_select, multi_select, dropdown, image_tile, image_picker, rating, swatch, numeric, date, slider, searchable, text, email — card types need at least 2 answers); set_selections {min?, max?} for multi-select pick bounds. " +
-  "Use set_node_field for any step's content fields (intro: headline/subtext/button_label/hero_image_url; email_gate: headline/subtext; result: headline/subtext/cta_label; message: text; end: headline/subtext/cta_label/cta_url; ask_ai: persona_name/opening_message/system_prompt; product_cards: headline/subtext/cta_label; URL fields must be https). " +
-  "Use set_flag for collect_email_on_result / result_split (quiz-level) or collect_phone (on an email gate). Use add_node {type: message|email_gate|end, headline?, text?, after_node_id?} to insert non-question steps. " +
+  "Use set_node_field for any step's content fields (intro: headline/subtext/button_label/hero_image_url; email_gate: headline/subtext; result: headline/subtext/cta_label/escape_hatch_label/escape_hatch_url ('talk to a human' link — both parts needed); question: text/section_label (chapter, ≤40 chars)/helper_text (reassurance line); message: text; end: headline/subtext/cta_label/cta_url; ask_ai: persona_name/opening_message/system_prompt; product_cards: headline/subtext/cta_label; URL fields must be https). " +
+  "Use set_flag for collect_email_on_result / result_split / show_recap (answer review before results) / show_match_reasons (because-you-chose chips) / computing_reveal (the weighing-your-answers beat) — all quiz-level — or collect_phone (on an email gate). Use add_node {type: message|email_gate|end, headline?, text?, after_node_id?} to insert non-question steps. " +
   "Use set_node_design {node_id, layer(synced|desktop|mobile), colors{primary?/background?/text? as hex}, radius?, button_style?} to restyle ONE step, and add_image_block {node_id, placement(above|below), image_url?} to place a picture on a step. " +
   "If a SELECTED NODE is provided in context, phrases like 'this question' or 'this step' refer to it. " +
   "Always include a one-sentence, friendly assistant_message describing what you changed. Output nothing outside the tool call.";
@@ -548,7 +548,7 @@ const editQuizToolJsonSchema = {
           max: { type: "integer" },
           flag: {
             type: "string",
-            enum: ["collect_email_on_result", "result_split", "collect_phone"],
+            enum: ["collect_email_on_result", "result_split", "collect_phone", "show_recap", "show_match_reasons", "computing_reveal"],
           },
           type: { type: "string", enum: ["message", "email_gate", "end"] },
           headline: { type: "string" },

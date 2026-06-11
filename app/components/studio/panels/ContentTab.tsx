@@ -74,17 +74,44 @@ export function ContentTab({
           </label>
         </>
       );
-    case "result":
+    case "result": {
+      const hatch = (d as { escape_hatch?: { label?: string; url?: string } }).escape_hatch;
       return (
         <>
           {text("headline", "Headline")}
           {text("subtext", "Subtext", true)}
           {text("cta_label", "CTA label")}
+          <QzField
+            label="Escape hatch (optional)"
+            hint='A quiet "talk to a human" link under the result — label + https URL, both required to show.'
+          >
+            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              <QzInput
+                value={hatch?.label ?? ""}
+                placeholder="Not sure? Talk to an expert"
+                onChange={(e) => {
+                  const label = e.target.value;
+                  const url = hatch?.url ?? "";
+                  set({ escape_hatch: label || url ? { label, url } : undefined });
+                }}
+              />
+              <QzInput
+                value={hatch?.url ?? ""}
+                placeholder="https://your-store.com/pages/contact"
+                onChange={(e) => {
+                  const url = e.target.value;
+                  const label = hatch?.label ?? "";
+                  set({ escape_hatch: label || url ? { label, url } : undefined });
+                }}
+              />
+            </div>
+          </QzField>
           <p className="qz-dim" style={{ fontSize: 12 }}>
             Recommendation logic lives in the canvas builder’s Logic tab.
           </p>
         </>
       );
+    }
     case "message":
       return text("text", "Message", true);
     case "end":

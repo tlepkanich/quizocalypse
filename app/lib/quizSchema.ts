@@ -251,9 +251,10 @@ export const ResultStage = z.object({
   max_products: z.number().int().min(1).max(12).default(3),
   // Dev Spec §5 — feature→benefit "why this" bullets for the stage. Baked at publish.
   why_bullets: z.array(z.string()).default([]),
-  // Experiences E4 — a quiet "talk to a human" link under the result.
+  // Experiences E4 — a quiet "talk to a human" link under the result. Partial
+  // pairs are storable (two-field editing); rendering requires BOTH parts.
   escape_hatch: z
-    .object({ label: z.string().min(1), url: z.string().url() })
+    .object({ label: z.string(), url: z.string() })
     .optional(),
 });
 export type ResultStage = z.infer<typeof ResultStage>;
@@ -301,9 +302,10 @@ export const ResultData = z.object({
   // Dev Spec §5 — "Why this product" benefit bullets (feature→benefit), baked at
   // publish time. Empty by default (back-compat).
   why_bullets: z.array(z.string()).default([]),
-  // Experiences E4 — a quiet "talk to a human" link under the result.
+  // Experiences E4 — a quiet "talk to a human" link under the result. Partial
+  // pairs are storable (two-field editing); rendering requires BOTH parts.
   escape_hatch: z
-    .object({ label: z.string().min(1), url: z.string().url() })
+    .object({ label: z.string(), url: z.string() })
     .optional(),
 });
 
