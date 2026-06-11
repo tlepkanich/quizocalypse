@@ -62,6 +62,15 @@ export const CHROME_TOKENS = {
   saved_results_from: "Your saved results from {date}",
   results_gone: "Your results are no longer available.",
   take_again: "Take the quiz again →",
+  // Experiences E4 — recap + reveal + match reasons.
+  recap_heading: "Just making sure we're on the right track",
+  recap_subtext: "Here's what you told us — tap any answer to change it.",
+  recap_confirm: "Looks good →",
+  recap_edit: "Change",
+  reveal_weighing: "Weighing your answers…",
+  reveal_factors: "What's counting: {factors}",
+  reveal_matching: "Matching against {n} products…",
+  because_you_chose: "Because you chose:",
   // Buddy mode (Phase L2).
   invite_friend: "🤝 Compare with a friend",
   invite_copied: "Link copied — send it to a friend ✓",

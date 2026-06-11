@@ -1,10 +1,12 @@
 import { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { ChromeContext, CHROME_TOKENS, useChrome, type ChromeToken } from "./chromeStrings";
+import { tagToAnswerText, reasonsForProduct } from "../../lib/matchReasons";
 import type { Quiz, ResultStage as ResultStageT } from "../../lib/quizSchema";
 import { isFreeformType } from "../../lib/quizSchema";
 import {
   resolveNextStep,
   recommendForResult,
+  recommendForResultExplained,
   recommendForStage,
   recommendPreview,
   selectSecondaryRecs,
@@ -196,6 +198,14 @@ export function QuizRuntime(props: QuizRuntimeProps) {
     introNode ? introNode.id : null,
   );
   const [path, setPath] = useState<PathStep[]>([]);
+  // Experiences E4 — theater gates before the result render. Reset on every
+  // node change so a jump-back + new path replays them.
+  const [recapConfirmed, setRecapConfirmed] = useState(false);
+  const [revealDone, setRevealDone] = useState(false);
+  useEffect(() => {
+    setRecapConfirmed(false);
+    setRevealDone(false);
+  }, [currentNodeId]);
 
   // Unified P3 — preview-only selection sync (both effects no-op in live mode
   // by construction AND by guard). Jump: when the workspace selects a step that
@@ -868,6 +878,12 @@ export function QuizRuntime(props: QuizRuntimeProps) {
       );
     } else if (currentNode.type === "result") {
       const selectedAnswerIds = path.flatMap((p) => p.answerIds);
+      const wantRecap = Boolean(doc.show_recap) && !recapConfirmed && path.length > 0;
+      const wantReveal =
+        doc.results_reveal === "computing" &&
+        !revealDone &&
+        !(typeof window !== "undefined" &&
+          window.matchMedia?.("(prefers-reduced-motion: reduce)").matches);
       // Phase 5: a result page shows + applies the quiz discount only when it
       // opts in (include_discount) and the discount is enabled + created.
       const dc = doc.discount_config;
@@ -881,13 +897,26 @@ export function QuizRuntime(props: QuizRuntimeProps) {
         : undefined;
       const stages = currentNode.data.stages;
       if (stages.length === 0) {
-        const recs = recommendForResult({
+        const explained = recommendForResultExplained({
           quiz: doc,
           productIndex,
           selectedAnswerIds,
           resultNodeId: currentNode.id,
           ...(answerWeights ? { answerWeights } : {}),
         });
+        const recs = explained.products;
+        // E4 — "Because you chose:" per-product reasons (≤2 answer texts).
+        const tagAnswers = doc.show_match_reasons
+          ? tagToAnswerText(doc, selectedAnswerIds)
+          : null;
+        const reasonsByProduct = tagAnswers
+          ? new Map(
+              explained.products.map((p) => [
+                p.product_id,
+                reasonsForProduct(p.matched_tags, tagAnswers),
+              ]),
+            )
+          : null;
         // Secondary "you might also like": the same ladder fetched deeper (cap 12),
         // then diversity-filtered against the primary picks.
         const secondary = selectSecondaryRecs(
@@ -918,6 +947,8 @@ export function QuizRuntime(props: QuizRuntimeProps) {
             answerIds={selectedAnswerIds}
             resultNodeId={currentNode.id}
             shopDomain={shopDomain}
+            reasonsByProduct={reasonsByProduct}
+            escapeHatch={currentNode.data.escape_hatch ?? null}
             discountCode={discountCode}
             discountLabel={discountLabel}
             styles={styles}
@@ -964,6 +995,36 @@ export function QuizRuntime(props: QuizRuntimeProps) {
           buddySessionId={buddySessionId}
             onReset={reset}
             inspect={(part) => insp({ nodeId: currentNode.id, part })}
+          />
+        );
+      }
+      // Experiences E4 — theater gates: the result content above stays
+      // computed (cheap, pure); recap/reveal simply render INSTEAD until
+      // confirmed/done. Recap wins over reveal.
+      if (wantReveal) {
+        const revealData = recommendForResultExplained({
+          quiz: doc,
+          productIndex,
+          selectedAnswerIds,
+          resultNodeId: currentNode.id,
+          ...(answerWeights ? { answerWeights } : {}),
+        });
+        content = (
+          <RevealView
+            tagBag={revealData.tagBag}
+            poolSize={revealData.poolSize}
+            onDone={() => setRevealDone(true)}
+          />
+        );
+      }
+      if (wantRecap) {
+        content = (
+          <RecapView
+            doc={doc}
+            path={path}
+            styles={styles}
+            onJump={gotoStep}
+            onConfirm={() => setRecapConfirmed(true)}
           />
         );
       }
@@ -1233,6 +1294,145 @@ function ProgressTrail({
       ) : null}
     </div>
     </>
+  );
+}
+
+// Experiences E4 — "Just making sure we're on the right track": the answer
+// recap before the first result render. Edit buttons reuse the trail's jump
+// (which resets the path from that point, so the theater replays after).
+function RecapView({
+  doc,
+  path,
+  styles,
+  onJump,
+  onConfirm,
+}: {
+  doc: QuizDoc;
+  path: PathStep[];
+  styles: ReturnType<typeof stylesFor>;
+  onJump: (i: number) => void;
+  onConfirm: () => void;
+}) {
+  const tc = useChrome();
+  const answerText = (step: PathStep): string => {
+    const q = doc.nodes.find((n) => n.id === step.questionNodeId);
+    if (!q || q.type !== "question") return "";
+    return step.answerIds
+      .map((id) => q.data.answers.find((a) => a.id === id)?.text ?? "")
+      .filter(Boolean)
+      .join(", ");
+  };
+  const questionText = (step: PathStep): string => {
+    const q = doc.nodes.find((n) => n.id === step.questionNodeId);
+    return q && q.type === "question" ? q.data.text : "";
+  };
+  return (
+    <div style={styles.card}>
+      <h2 style={styles.h2}>{tc("recap_heading")}</h2>
+      <p style={{ ...styles.muted, marginTop: 4 }}>{tc("recap_subtext")}</p>
+      <div style={{ display: "flex", flexDirection: "column", gap: 10, margin: "18px 0" }}>
+        {path.map((step, i) => (
+          <div
+            key={`${step.questionNodeId}-${i}`}
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "baseline",
+              gap: 12,
+              borderBottom: "1px solid color-mix(in srgb, var(--qz-color-muted, #aaa) 30%, transparent)",
+              paddingBottom: 8,
+            }}
+          >
+            <div style={{ minWidth: 0 }}>
+              <div style={{ ...styles.muted, fontSize: "0.78em" }}>{questionText(step)}</div>
+              <div style={{ fontFamily: "var(--qz-font-body)", fontWeight: 600 }}>{answerText(step)}</div>
+            </div>
+            <button
+              type="button"
+              onClick={() => onJump(i)}
+              style={{
+                font: "inherit",
+                fontSize: "0.8em",
+                background: "transparent",
+                border: "none",
+                color: "var(--qz-color-accent, var(--qz-color-primary))",
+                cursor: "pointer",
+                whiteSpace: "nowrap",
+              }}
+            >
+              {tc("recap_edit")}
+            </button>
+          </div>
+        ))}
+      </div>
+      <button type="button" style={styles.primaryBtn} onClick={onConfirm}>
+        {tc("recap_confirm")}
+      </button>
+    </div>
+  );
+}
+
+// Experiences E4 — the visible-computation reveal: three timed beats fed by
+// the REAL explained-engine output (the path's tag bag + candidate pool size),
+// not theater copy. Reduced-motion paths skip this entirely (gated upstream).
+function RevealView({
+  tagBag,
+  poolSize,
+  onDone,
+}: {
+  tagBag: Record<string, number>;
+  poolSize: number;
+  onDone: () => void;
+}) {
+  const tc = useChrome();
+  const [beat, setBeat] = useState(0);
+  useEffect(() => {
+    const beats = [1100, 1500, 1100];
+    if (beat >= beats.length) {
+      onDone();
+      return;
+    }
+    const t = setTimeout(() => setBeat((b) => b + 1), beats[beat]);
+    return () => clearTimeout(t);
+  }, [beat, onDone]);
+  const factors = Object.entries(tagBag)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 3)
+    .map(([tag, w]) => (w !== 1 ? `${tag} ×${w}` : tag))
+    .join(" · ");
+  const lines = [
+    tc("reveal_weighing"),
+    factors ? tc("reveal_factors", { factors }) : tc("reveal_weighing"),
+    tc("reveal_matching", { n: poolSize }),
+  ];
+  return (
+    <div
+      role="status"
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        gap: 14,
+        padding: "56px 24px",
+        fontFamily: "var(--qz-font-body)",
+        color: "var(--qz-color-text)",
+        textAlign: "center",
+      }}
+    >
+      <div
+        aria-hidden
+        style={{
+          width: 34,
+          height: 34,
+          borderRadius: 999,
+          border: "3px solid color-mix(in srgb, var(--qz-color-primary) 25%, transparent)",
+          borderTopColor: "var(--qz-color-primary)",
+          animation: "qz-spin 0.9s linear infinite",
+        }}
+      />
+      <div style={{ fontSize: "1.05em", fontWeight: 600 }}>{lines[Math.min(beat, lines.length - 1)]}</div>
+      <style>{`@keyframes qz-spin { to { transform: rotate(360deg); } }`}</style>
+    </div>
   );
 }
 
@@ -3064,6 +3264,8 @@ function ResultView({
   whyBullets,
   inspect,
   splitLayout,
+  reasonsByProduct,
+  escapeHatch,
 }: {
   headline: string;
   subtext: string;
@@ -3092,6 +3294,8 @@ function ResultView({
   // `recommendations` content-block can place it inside a custom layout.
   bare?: boolean;
   whyBullets?: string[];
+  reasonsByProduct?: Map<string, string[]> | null;
+  escapeHatch?: { label: string; url: string } | null;
 }) {
   const tc = useChrome();
   const isPreviewMode = useContext(RuntimePreviewContext);
@@ -3162,6 +3366,7 @@ function ResultView({
         )}
         {recs.map((r, idx) => (
           <ProductCard
+            reasons={reasonsByProduct?.get(r.product_id) ?? undefined}
             key={r.product_id}
             product={r}
             position={idx}
@@ -3195,6 +3400,7 @@ function ResultView({
           <div style={styles.productGrid}>
             {secondary.map((r, idx) => (
               <ProductCard
+            reasons={reasonsByProduct?.get(r.product_id) ?? undefined}
                 key={r.product_id}
                 product={r}
                 position={recs.length + idx}
@@ -3234,6 +3440,24 @@ function ResultView({
       </button>
       <SaveResultsLink quizId={quizId} sessionId={sessionId} />
       <BuddyRow quizId={quizId} sessionId={sessionId} buddySessionId={buddySessionId} analytics={analytics} />
+      {escapeHatch ? (
+        <a
+          href={escapeHatch.url}
+          target="_blank"
+          rel="noreferrer"
+          style={{
+            display: "block",
+            textAlign: "center",
+            marginTop: 10,
+            fontSize: "0.85em",
+            fontFamily: "var(--qz-font-body)",
+            color: "var(--qz-color-muted, #888)",
+            textDecoration: "underline",
+          }}
+        >
+          {escapeHatch.label}
+        </a>
+      ) : null}
     </>
   );
 
@@ -3574,6 +3798,7 @@ function ProductCard({
   discountLabel,
   onAdd,
   vertical = false,
+  reasons,
 }: {
   product: RecommendedProduct;
   position: number;
@@ -3593,6 +3818,7 @@ function ProductCard({
   // square image, text below, CTA at the bottom. Default horizontal everywhere
   // else, so nothing changes unless the split layout asks for it.
   vertical?: boolean;
+  reasons?: string[];
 }) {
   const tc = useChrome();
   const isPreviewMode = useContext(RuntimePreviewContext);
@@ -3658,6 +3884,28 @@ function ProductCard({
       )}
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ fontWeight: 600 }}>{product.title}</div>
+        {reasons && reasons.length > 0 ? (
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginTop: 4 }}>
+            <span style={{ fontSize: "0.7em", color: "var(--qz-color-muted, #888)", fontFamily: "var(--qz-font-body)" }}>
+              {tc("because_you_chose")}
+            </span>
+            {reasons.map((r) => (
+              <span
+                key={r}
+                style={{
+                  fontSize: "0.7em",
+                  fontFamily: "var(--qz-font-body)",
+                  padding: "1px 8px",
+                  borderRadius: 999,
+                  background: "color-mix(in srgb, var(--qz-color-primary) 10%, transparent)",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                {r}
+              </span>
+            ))}
+          </div>
+        ) : null}
         {product.price && (
           <div style={{ color: "var(--qz-color-muted)", marginTop: 4, display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
             <span>${product.price}</span>

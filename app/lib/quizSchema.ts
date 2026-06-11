@@ -251,6 +251,10 @@ export const ResultStage = z.object({
   max_products: z.number().int().min(1).max(12).default(3),
   // Dev Spec §5 — feature→benefit "why this" bullets for the stage. Baked at publish.
   why_bullets: z.array(z.string()).default([]),
+  // Experiences E4 — a quiet "talk to a human" link under the result.
+  escape_hatch: z
+    .object({ label: z.string().min(1), url: z.string().url() })
+    .optional(),
 });
 export type ResultStage = z.infer<typeof ResultStage>;
 
@@ -297,6 +301,10 @@ export const ResultData = z.object({
   // Dev Spec §5 — "Why this product" benefit bullets (feature→benefit), baked at
   // publish time. Empty by default (back-compat).
   why_bullets: z.array(z.string()).default([]),
+  // Experiences E4 — a quiet "talk to a human" link under the result.
+  escape_hatch: z
+    .object({ label: z.string().min(1), url: z.string().url() })
+    .optional(),
 });
 
 // Chat-style copy block. Supports lightweight merge tags resolved at render
@@ -783,6 +791,16 @@ export const Quiz = z.object({
   // When true, the result page shows an inline email-capture block (Dev Spec
   // §5) that posts to /captures + fires email_captured. Additive/optional.
   collect_email_on_result: z.boolean().optional(),
+  // Experiences E4 — shopper theater flags (all additive, default off):
+  // show_recap: an answer-review screen before the first result render
+  // ("Just making sure we're on the right track" + per-answer edit).
+  show_recap: z.boolean().optional(),
+  // results_reveal "computing": a ~4s staged reveal fed by the REAL explained
+  // engine output (top tag-bag entries, pool size) — visible computation.
+  results_reveal: z.enum(["instant", "computing"]).optional(),
+  // show_match_reasons: ≤2 "Because you chose: <answer>" chips per product
+  // card, mapped from each product's matched_tags back to the answer text.
+  show_match_reasons: z.boolean().optional(),
   // Experiences E1 — what this quiz IS FOR. Drives type-aware guard rails
   // (validation), the creation flow, KPI emphasis, and (later) build shaping.
   // Absent = product_match, so every existing quiz keeps today's behavior.

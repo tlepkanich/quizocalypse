@@ -317,6 +317,47 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
                   </span>
                 </span>
               </label>
+              <label className="qz-row" style={{ gap: 8, alignItems: "flex-start", fontSize: 12.5, cursor: "pointer" }}>
+                <input
+                  type="checkbox"
+                  checked={doc.show_recap ?? false}
+                  onChange={(e) => commit({ ...doc, show_recap: e.target.checked })}
+                />
+                <span>
+                  Answer recap before results
+                  <span className="qz-dim" style={{ display: "block", fontSize: 10.5 }}>
+                    "Just making sure we're on track" — review + edit answers before the reveal
+                  </span>
+                </span>
+              </label>
+              <label className="qz-row" style={{ gap: 8, alignItems: "flex-start", fontSize: 12.5, cursor: "pointer" }}>
+                <input
+                  type="checkbox"
+                  checked={doc.results_reveal === "computing"}
+                  onChange={(e) =>
+                    commit({ ...doc, results_reveal: e.target.checked ? "computing" : undefined })
+                  }
+                />
+                <span>
+                  Computing reveal
+                  <span className="qz-dim" style={{ display: "block", fontSize: 10.5 }}>
+                    A ~4s "weighing your answers" beat showing the REAL factors before results
+                  </span>
+                </span>
+              </label>
+              <label className="qz-row" style={{ gap: 8, alignItems: "flex-start", fontSize: 12.5, cursor: "pointer" }}>
+                <input
+                  type="checkbox"
+                  checked={doc.show_match_reasons ?? false}
+                  onChange={(e) => commit({ ...doc, show_match_reasons: e.target.checked })}
+                />
+                <span>
+                  "Because you chose" chips
+                  <span className="qz-dim" style={{ display: "block", fontSize: 10.5 }}>
+                    Each product names the answers that earned it its spot
+                  </span>
+                </span>
+              </label>
             </div>
           </details>
           {chrome === "embedded" ? (

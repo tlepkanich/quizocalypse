@@ -188,6 +188,10 @@ export function buildDemoQuiz(fallbackCollectionId: string): QuizDoc {
   ];
 
   return Quiz.parse({
+    // Experiences E4 — the demo showcases the full theater.
+    show_recap: true,
+    results_reveal: "computing",
+    show_match_reasons: true,
     quiz_id: `quiz_${Math.random().toString(36).slice(2, 10)}`,
     status: "draft",
     scope: { collection_ids: [] },
