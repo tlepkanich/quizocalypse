@@ -379,6 +379,32 @@ export function QuestionContent({
         </div>
       ) : null}
       <QzField
+        label="Chapter label (optional)"
+        hint="Groups questions in the progress trail — consecutive questions sharing a label read as one chapter (e.g. SKIN PROFILE)."
+      >
+        <QzInput
+          value={node.data.section_label ?? ""}
+          onChange={(e) => {
+            const v = e.target.value.slice(0, 40);
+            setData({ section_label: v.trim().length > 0 ? v : undefined });
+          }}
+          placeholder="e.g. Skin profile"
+        />
+      </QzField>
+      <QzField
+        label="Reassurance line (optional)"
+        hint="One quiet line under the question — lowers decision anxiety."
+      >
+        <QzInput
+          value={node.data.helper_text ?? ""}
+          onChange={(e) => {
+            const v = e.target.value.slice(0, 160);
+            setData({ helper_text: v.trim().length > 0 ? v : undefined });
+          }}
+          placeholder="There's no wrong answer — pick what feels like you."
+        />
+      </QzField>
+      <QzField
         label="Education card (optional)"
         hint="A short explainer shown before this question — use it for unfamiliar terms. Leave empty for none."
       >

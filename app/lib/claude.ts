@@ -236,6 +236,8 @@ const questionFlowToolJsonSchema = {
           required: { type: "boolean" },
           max_selections: { type: "number" },
           education_card_before: { type: "string" },
+          section_label: { type: "string", description: "Optional chapter label (≤40 chars). Group consecutive questions into ≤3 chapters." },
+          helper_text: { type: "string", description: "Optional one-line reassurance under the question (≤160 chars)." },
           answers: {
             type: "array",
             minItems: 2,
@@ -275,6 +277,8 @@ const QuestionFlowSchema = z.object({
         required: z.boolean().optional(),
         max_selections: z.number().int().positive().optional(),
         education_card_before: z.string().optional(),
+        section_label: z.string().max(40).optional(),
+        helper_text: z.string().max(160).optional(),
         answers: z
           .array(
             z.object({
@@ -376,6 +380,7 @@ export async function generateQuestionFlow(
     input.catalogSummary,
     "",
     "Optionally add ONE education_card_before (at most one across the ENTIRE quiz) to a single question where shoppers need a concept explained before they can answer well — e.g. an unfamiliar material, spec, fit, or term. One short, plain-language sentence. Omit it entirely if nothing genuinely needs explaining.",
+    "Optionally group questions into chapters via section_label (≤3 distinct labels across the quiz, consecutive questions share one — e.g. \"Skin profile\", \"Your preferences\") and add a one-line helper_text reassurance to questions where shoppers might overthink (\"There's no wrong answer…\"). Both optional — use them where they genuinely lower friction.",
     ...(input.toneSample
       ? ["", "Brand voice sample — match this writing style:", input.toneSample]
       : []),

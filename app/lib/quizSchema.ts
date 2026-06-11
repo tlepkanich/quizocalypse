@@ -165,6 +165,13 @@ export const QuestionDataObject = z.object({
   // question (a non-question, Continue-only informational screen). The AI places
   // at most one per quiz. Additive — absent means no card.
   education_card_before: z.string().optional(),
+  // Experiences E3 — named-chapter progress (the Jones Road "21 steps feel
+  // like 3" pattern): consecutive questions sharing a section_label group
+  // under one chapter header in the progress trail. Absent = classic pills.
+  section_label: z.string().max(40).optional(),
+  // Experiences E3 — one line of reassurance under the question text
+  // ("There's no wrong answer — pick what feels like you."). Additive.
+  helper_text: z.string().max(160).optional(),
   // Editor revamp P3 — explicit answer-grid column count (1 or 2). Unset keeps
   // the responsive default (2-up desktop, 1-up mobile). Additive.
   answer_columns: z.number().int().min(1).max(2).optional(),

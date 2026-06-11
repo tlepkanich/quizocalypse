@@ -421,7 +421,15 @@ export function QuizRuntime(props: QuizRuntimeProps) {
   // Apply CSS vars at the very root so all children resolve var(--qz-*).
   // Unified P6: the root is also the size container — @container rules below
   // and the fluid type's cqw units both measure against it.
-  const rootStyle: React.CSSProperties = { ...cssVars, containerType: "inline-size" };
+  const rootStyle: React.CSSProperties = {
+    ...cssVars,
+    containerType: "inline-size",
+    // E3 takeover: hosted /q fills the viewport in the theme background so
+    // the quiz IS the page (preview keeps its frame-sized box).
+    ...(!isPreview
+      ? { background: "var(--qz-color-bg)", minHeight: "100vh" }
+      : {}),
+  };
   // K2: prop entries win over English defaults; identity-stable per locale.
   const chromeTable = useMemo(
     () => ({ ...CHROME_TOKENS, ...(chrome ?? {}) }) as Record<ChromeToken, string>,
@@ -997,6 +1005,13 @@ export function QuizRuntime(props: QuizRuntimeProps) {
           }
         }
         .qz-runtime-shell { width: 100%; display: flex; flex-direction: column; align-items: center; gap: 24px; }
+        /* Experiences E3 — step enter: a quiet fade + 6px lift, replayed per
+           node via the content key. The reduced-motion strip above zeroes it. */
+        .qz-runtime-content { animation: qz-node-enter var(--qz-dur, 170ms) var(--qz-ease, ease) both; }
+        @keyframes qz-node-enter {
+          from { opacity: 0; transform: translateY(6px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
         /* Unified P1: ONE layout mechanism for preview AND live — the qz-bp-*
            class on the root. Preview sets it from the DeviceFrame width prop;
            live sets it from the container-measured breakpoint. The old live
@@ -1024,7 +1039,7 @@ export function QuizRuntime(props: QuizRuntimeProps) {
       `}</style>
       <div className="qz-runtime-page" style={styles.page}>
         <div className="qz-runtime-shell">
-          <div className="qz-runtime-content" ref={contentRef} tabIndex={-1} style={{ outline: "none" }}>
+          <div key={currentNodeId ?? "none"} className="qz-runtime-content" ref={contentRef} tabIndex={-1} style={{ outline: "none" }}>
             {/* Polite announcement of the current step for screen readers. */}
             <div
               aria-live="polite"
@@ -1118,7 +1133,7 @@ function ProgressBar({
           width: `${pct}%`,
           height: "100%",
           background: "var(--qz-color-primary)",
-          transition: "width .3s ease",
+          transition: "width var(--qz-dur, 170ms) var(--qz-ease, ease)",
         }}
       />
     </div>
@@ -1147,6 +1162,15 @@ function ProgressTrail({
     const text = node && node.type === "question" ? node.data.text : `Step ${i + 1}`;
     return text.length > 22 ? `${text.slice(0, 21)}…` : text;
   };
+  // E3 chapters: the CURRENT question's section_label renders as a chapter
+  // eyebrow over the trail ("SKIN PROFILE · step 4 of 9" feel). Pills keep
+  // their exact DOM (e2e contract); absent labels = no eyebrow.
+  const sectionOf = (qid: string | null): string | null => {
+    if (!qid) return null;
+    const node = doc.nodes.find((n) => n.id === qid);
+    return node && node.type === "question" ? (node.data.section_label ?? null) : null;
+  };
+  const currentSection = sectionOf(currentNodeId);
   const pill = (active: boolean, clickable: boolean): React.CSSProperties => ({
     border: "1px solid var(--qz-color-muted, #aaa)",
     background: active ? "var(--qz-color-text)" : "transparent",
@@ -1160,6 +1184,23 @@ function ProgressTrail({
   });
 
   return (
+    <>
+    {currentSection ? (
+      <div
+        style={{
+          fontSize: "0.7em",
+          letterSpacing: "0.08em",
+          textTransform: "uppercase",
+          color: "var(--qz-color-muted, #888)",
+          fontFamily: "var(--qz-font-body)",
+          marginBottom: 6,
+          maxWidth: 560,
+          width: "100%",
+        }}
+      >
+        {currentSection}
+      </div>
+    ) : null}
     <div
       aria-label={tc("aria_quiz_progress")}
       style={{
@@ -1191,6 +1232,7 @@ function ProgressTrail({
         </span>
       ) : null}
     </div>
+    </>
   );
 }
 
@@ -1493,6 +1535,9 @@ function DropdownQuestion({
   return (
     <div style={styles.card}>
       <h2 style={styles.h2} {...insp("question_text")}>{node.data.text}</h2>
+      {node.data.helper_text ? (
+        <p style={{ ...styles.muted, fontSize: "0.85em", marginTop: -6 }}>{node.data.helper_text}</p>
+      ) : null}
       <div style={{ marginTop: 20, display: "flex", flexDirection: "column", gap: 12 }}>
         <select
           value={sel}
@@ -1803,6 +1848,9 @@ function QuestionView({
     return (
       <div style={styles.card}>
         <h2 style={styles.h2} {...insp("question_text")}>{node.data.text}</h2>
+      {node.data.helper_text ? (
+        <p style={{ ...styles.muted, fontSize: "0.85em", marginTop: -6 }}>{node.data.helper_text}</p>
+      ) : null}
         <form
           onSubmit={(e) => {
             e.preventDefault();
@@ -1873,6 +1921,9 @@ function QuestionView({
     return (
       <div style={styles.card}>
         <h2 style={styles.h2} {...insp("question_text")}>{node.data.text}</h2>
+      {node.data.helper_text ? (
+        <p style={{ ...styles.muted, fontSize: "0.85em", marginTop: -6 }}>{node.data.helper_text}</p>
+      ) : null}
         <div style={answerGrid}>
           {node.data.answers.map((a) => (
             <div key={a.id} style={{ position: "relative" }}>
@@ -1943,6 +1994,9 @@ function QuestionView({
     return (
       <div style={styles.card}>
         <h2 style={styles.h2} {...insp("question_text")}>{node.data.text}</h2>
+      {node.data.helper_text ? (
+        <p style={{ ...styles.muted, fontSize: "0.85em", marginTop: -6 }}>{node.data.helper_text}</p>
+      ) : null}
         <div
           style={{
             marginTop: 20,
@@ -2019,6 +2073,9 @@ function QuestionView({
     return (
       <div style={styles.card}>
         <h2 style={styles.h2} {...insp("question_text")}>{node.data.text}</h2>
+      {node.data.helper_text ? (
+        <p style={{ ...styles.muted, fontSize: "0.85em", marginTop: -6 }}>{node.data.helper_text}</p>
+      ) : null}
         <div style={{ marginTop: 20, display: "flex", gap: 8, flexWrap: "wrap" }}>
           {node.data.answers.map((a) => (
             <div
@@ -2054,6 +2111,9 @@ function QuestionView({
     return (
       <div style={styles.card}>
         <h2 style={styles.h2} {...insp("question_text")}>{node.data.text}</h2>
+      {node.data.helper_text ? (
+        <p style={{ ...styles.muted, fontSize: "0.85em", marginTop: -6 }}>{node.data.helper_text}</p>
+      ) : null}
         <div style={{ marginTop: 20, display: "flex", gap: 14, flexWrap: "wrap" }}>
           {node.data.answers.map((a) => (
             <div key={a.id} style={{ position: "relative" }}>
@@ -2105,6 +2165,9 @@ function QuestionView({
   return (
     <div style={styles.card}>
       <h2 style={styles.h2} {...insp("question_text")}>{node.data.text}</h2>
+      {node.data.helper_text ? (
+        <p style={{ ...styles.muted, fontSize: "0.85em", marginTop: -6 }}>{node.data.helper_text}</p>
+      ) : null}
       <div style={answerGrid}>
         {node.data.answers.map((a) => (
           <div key={a.id} style={{ position: "relative" }}>
@@ -2190,6 +2253,9 @@ function SearchableQuestion({
   return (
     <div style={styles.card}>
       <h2 style={styles.h2} {...insp("question_text")}>{node.data.text}</h2>
+      {node.data.helper_text ? (
+        <p style={{ ...styles.muted, fontSize: "0.85em", marginTop: -6 }}>{node.data.helper_text}</p>
+      ) : null}
       <input
         type="text"
         value={query}

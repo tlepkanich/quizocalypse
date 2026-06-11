@@ -36,6 +36,9 @@ export interface GeneratedQuestionSpec {
   // Optional one-line teaching card shown before this question (Dev Spec §6).
   // At most ONE across the quiz is honored — applyQuestionFlow enforces it.
   education_card_before?: string;
+  // Experiences E3 — chapter label + reassurance line (both optional).
+  section_label?: string;
+  helper_text?: string;
 }
 export interface GeneratedQuestionFlow {
   questions: GeneratedQuestionSpec[];
@@ -165,6 +168,8 @@ export function applyQuestionFlow(
         ...(i === eduIdx && q.education_card_before
           ? { education_card_before: q.education_card_before.trim() }
           : {}),
+        ...(q.section_label?.trim() ? { section_label: q.section_label.trim().slice(0, 40) } : {}),
+        ...(q.helper_text?.trim() ? { helper_text: q.helper_text.trim().slice(0, 160) } : {}),
         ...(q.max_selections !== undefined ? { max_selections: q.max_selections } : {}),
         answers,
         show_preview_after: false,
