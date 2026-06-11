@@ -776,6 +776,12 @@ export const Quiz = z.object({
   // When true, the result page shows an inline email-capture block (Dev Spec
   // §5) that posts to /captures + fires email_captured. Additive/optional.
   collect_email_on_result: z.boolean().optional(),
+  // Experiences E1 — what this quiz IS FOR. Drives type-aware guard rails
+  // (validation), the creation flow, KPI emphasis, and (later) build shaping.
+  // Absent = product_match, so every existing quiz keeps today's behavior.
+  experience_type: z
+    .enum(["product_match", "personality", "lead_capture", "survey"])
+    .optional(),
   // Phase K — per-locale translation overlays. Keyed by normalized locale
   // ("fr", "pt-br"); `strings` is a FLAT map over the stable key grammar
   // (node.<id>.<field>, answer.<nodeId>.<answerId>.<field>, stage/bullets/
@@ -964,3 +970,10 @@ export const quizToolJsonSchema = {
     design_overrides: { type: "object" },
   },
 } as const;
+
+// Experiences E1 — the effective experience type (absent = product_match,
+// the historical default every pre-E1 quiz was implicitly built as).
+export type ExperienceType = NonNullable<Quiz["experience_type"]>;
+export function experienceTypeOf(doc: Pick<Quiz, "experience_type">): ExperienceType {
+  return doc.experience_type ?? "product_match";
+}

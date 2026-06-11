@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useFetcher, useSearchParams } from "@remix-run/react";
 import { TitleBar } from "@shopify/app-bridge-react";
 import { QzPage, QzPageHeader, QzButton, QzBanner } from "../qz";
-import type { Quiz } from "../../lib/quizSchema";
+import { experienceTypeOf, type Quiz } from "../../lib/quizSchema";
 import { validateQuiz, validateQuizWarnings, type NodeIssue } from "../../lib/quizValidation";
 import { orderFlow } from "../../lib/flowOrder";
 import { reconcileBucketsToResultNodes } from "../../lib/bucketReconcile";
@@ -29,6 +29,13 @@ import { TranslationsPanel } from "./TranslationsPanel";
 // stay untouched until the P8 flip. Server-free, renders in both the embedded
 // and standalone surfaces.
 // ════════════════════════════════════════════════════════════════════════════
+
+const XTYPE_LABEL: Record<string, string> = {
+  product_match: "Product match",
+  personality: "Personality",
+  lead_capture: "Lead capture",
+  survey: "Survey",
+};
 
 type Chrome = "embedded" | "standalone";
 type QuizDoc = Quiz;
@@ -184,7 +191,14 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
       {chrome === "embedded" ? <TitleBar title={`Studio · ${data.name}`} /> : null}
       <QzPageHeader
         eyebrow="Quiz studio"
-        title={<EditableTitle name={data.name} onRename={renameQuiz} />}
+        title={
+          <span className="qz-row" style={{ gap: 10, alignItems: "center" }}>
+            <EditableTitle name={data.name} onRename={renameQuiz} />
+            <span className="qz-badge" title="Experience type" style={{ fontSize: 10, textTransform: "uppercase", letterSpacing: "0.05em" }}>
+              {XTYPE_LABEL[experienceTypeOf(doc)]}
+            </span>
+          </span>
+        }
       />
 
       <div

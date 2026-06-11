@@ -170,3 +170,21 @@ describe("recommendation actually listens to the rules (regression for 'always s
     expect(recs.every((r) => r.product_id.startsWith("snowboard"))).toBe(true);
   });
 });
+
+// Experiences E1 — a SURVEY (no result nodes, no products) must sail through
+// the pure publish layers: result-page baking yields [] and never throws.
+describe("survey publish tolerance (E1)", () => {
+  it("bakeResultPages on a result-less doc returns [] cleanly", () => {
+    const doc = Quiz.parse({
+      quiz_id: "survey",
+      scope: { collection_ids: [] },
+      experience_type: "survey",
+      nodes: [
+        { id: "intro", type: "intro", position: { x: 0, y: 0 }, data: { headline: "Hi" } },
+        { id: "end", type: "end", position: { x: 200, y: 0 }, data: { headline: "Thanks" } },
+      ],
+      edges: [{ id: "e1", source: "intro", target: "end" }],
+    });
+    expect(bakeResultPages(doc, new Map())).toEqual([]);
+  });
+});

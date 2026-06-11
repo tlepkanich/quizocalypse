@@ -3,7 +3,7 @@ import { json } from "@remix-run/node";
 import { Link, useLoaderData } from "@remix-run/react";
 import { requireStudioAccess, resolveStudioShop } from "../lib/studioAccess.server";
 import prisma from "../db.server";
-import { Quiz } from "../lib/quizSchema";
+import { Quiz, experienceTypeOf } from "../lib/quizSchema";
 import {
   perQuestionDropoff,
   conversionSummary,
@@ -80,6 +80,25 @@ export const loader = async ({ params, request }: LoaderFunctionArgs) => {
     ? parsed.data.nodes.flatMap((n) => (n.type === "question" ? [{ id: n.id, text: n.data.text }] : []))
     : [];
 
+  // Experiences E1 — the headline KPI depends on what this quiz is FOR.
+  const xtype = parsed.success ? experienceTypeOf(parsed.data) : "product_match";
+  // Personality: which persona shoppers land on (outcome distribution).
+  let outcomes: Array<{ label: string; count: number }> = [];
+  if (xtype === "personality" && parsed.success) {
+    const grouped = await prisma.quizSession.groupBy({
+      by: ["outcomeId"],
+      where: { quizId: quiz.id, completedAt: { not: null } },
+      _count: { _all: true },
+    });
+    const headlineOf = (nid: string | null) => {
+      const n = nid ? parsed.data.nodes.find((x) => x.id === nid) : undefined;
+      return n && n.type === "result" ? n.data.headline || nid! : (nid ?? "unknown");
+    };
+    outcomes = grouped
+      .map((g) => ({ label: headlineOf(g.outcomeId), count: g._count._all }))
+      .sort((a, b) => b.count - a.count);
+  }
+
   return json({
     quiz: { id: quiz.id, name: quiz.name, status: quiz.status },
     funnel,
@@ -88,6 +107,8 @@ export const loader = async ({ params, request }: LoaderFunctionArgs) => {
     captureCount,
     revenue: { formatted: formatRevenue(revenue), orders: revenue.orders },
     range: { from: fromParam ?? "", to: toParam ?? "" },
+    xtype,
+    outcomes,
   });
 };
 
@@ -96,6 +117,7 @@ export default function StudioAnalytics() {
   const { funnel, conversion } = data;
   const completionRate = funnel.started > 0 ? funnel.completed / funnel.started : 0;
   const ctr = funnel.viewed > 0 ? funnel.clicked / funnel.viewed : 0;
+  const hasProducts = data.xtype === "product_match" || data.xtype === "personality";
 
   return (
     <QzPage>
@@ -116,28 +138,68 @@ export default function StudioAnalytics() {
       ) : null}
 
       <QzStatGrid>
-        <QzStat
-          label="Completion rate"
-          value={`${(completionRate * 100).toFixed(1)}%`}
-          delta={`${funnel.completed} of ${funnel.started} started`}
-        />
-        <QzStat
-          label="Click-through"
-          value={`${(ctr * 100).toFixed(1)}%`}
-          delta={`${funnel.clicked} of ${funnel.viewed} viewed`}
-        />
+        {data.xtype === "lead_capture" ? (
+          <QzStat
+            label="Capture rate"
+            value={`${funnel.started > 0 ? ((data.captureCount / funnel.started) * 100).toFixed(1) : "0.0"}%`}
+            delta={`${data.captureCount} captured of ${funnel.started} started`}
+          />
+        ) : (
+          <QzStat
+            label="Completion rate"
+            value={`${(completionRate * 100).toFixed(1)}%`}
+            delta={`${funnel.completed} of ${funnel.started} started`}
+          />
+        )}
+        {hasProducts ? (
+          <QzStat
+            label="Click-through"
+            value={`${(ctr * 100).toFixed(1)}%`}
+            delta={`${funnel.clicked} of ${funnel.viewed} viewed`}
+          />
+        ) : null}
         <QzStat label="Email captures" value={data.captureCount} delta="" />
-        <QzStat
-          label="Conversion rate"
-          value={`${(conversion.rate * 100).toFixed(1)}%`}
-          delta={`${conversion.converted} of ${conversion.completed} completed → bought`}
-        />
-        <QzStat
-          label="Revenue"
-          value={data.revenue.formatted}
-          delta={data.revenue.orders > 0 ? `${data.revenue.orders} attributed order(s)` : "no attributed orders yet"}
-        />
+        {hasProducts ? (
+          <QzStat
+            label="Conversion rate"
+            value={`${(conversion.rate * 100).toFixed(1)}%`}
+            delta={`${conversion.converted} of ${conversion.completed} completed → bought`}
+          />
+        ) : null}
+        {hasProducts ? (
+          <QzStat
+            label="Revenue"
+            value={data.revenue.formatted}
+            delta={data.revenue.orders > 0 ? `${data.revenue.orders} attributed order(s)` : "no attributed orders yet"}
+          />
+        ) : null}
+        {data.xtype === "survey" ? (
+          <QzStat label="Completions" value={funnel.completed} delta="responses collected" />
+        ) : null}
       </QzStatGrid>
+
+      {data.xtype === "personality" && data.outcomes.length > 0 ? (
+        <div className="qz-col qz-gap-16" style={{ marginTop: 24 }}>
+          <h2 className="qz-h1">Outcome distribution</h2>
+          <QzCard flush>
+            {data.outcomes.map((o, i) => {
+              const total = data.outcomes.reduce((acc, x) => acc + x.count, 0);
+              const pct = total > 0 ? Math.round((o.count / total) * 100) : 0;
+              return (
+                <div key={o.label} style={{ padding: "12px 20px", borderBottom: i < data.outcomes.length - 1 ? "1px solid var(--qz-rule, #eee)" : 0 }}>
+                  <div className="qz-row qz-row-between" style={{ fontSize: 13, marginBottom: 6 }}>
+                    <span>{o.label}</span>
+                    <span className="qz-mono qz-tnum">{o.count} · {pct}%</span>
+                  </div>
+                  <div style={{ height: 6, borderRadius: 3, background: "var(--qz-cream-2, #f3efe6)" }}>
+                    <div style={{ width: `${pct}%`, height: "100%", borderRadius: 3, background: "var(--qz-accent, #2a6df4)" }} />
+                  </div>
+                </div>
+              );
+            })}
+          </QzCard>
+        </div>
+      ) : null}
 
       <form
         method="get"
@@ -160,10 +222,10 @@ export default function StudioAnalytics() {
           <Row label="Viewed (loaded the quiz)" value={funnel.started} />
           <Row label="Started (clicked Start)" value={funnel.engaged} />
           <Row label="Answered ≥1 question" value={funnel.answered} />
-          <Row label="Completed" value={funnel.completed} />
-          <Row label="Saw recommendations" value={funnel.viewed} />
-          <Row label="Added to cart" value={funnel.addToCart} />
-          <Row label="Clicked a product" value={funnel.clicked} last />
+          <Row label="Completed" value={funnel.completed} last={!hasProducts} />
+          {hasProducts ? <Row label="Saw recommendations" value={funnel.viewed} /> : null}
+          {hasProducts ? <Row label="Added to cart" value={funnel.addToCart} /> : null}
+          {hasProducts ? <Row label="Clicked a product" value={funnel.clicked} last /> : null}
         </QzCard>
 
         {data.dropoff.length > 0 ? (

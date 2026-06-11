@@ -1,4 +1,5 @@
 import { looksLikeRatingScale } from "./smartBuild";
+import { experienceTypeOf } from "./quizSchema";
 import type { Quiz } from "./quizSchema";
 import type { z } from "zod";
 
@@ -6,7 +7,14 @@ type QuizDoc = z.infer<typeof Quiz>;
 
 export interface NodeIssue {
   nodeId: string;
-  kind: "orphan" | "dead_end" | "missing_fallback" | "intro_missing_outbound";
+  kind:
+    | "orphan"
+    | "dead_end"
+    | "missing_fallback"
+    | "intro_missing_outbound"
+    // Experiences E1 — type-aware structure rules (quiz-level, pinned to intro):
+    | "missing_result"
+    | "missing_terminal";
   message: string;
 }
 
@@ -16,6 +24,35 @@ export function validateQuiz(doc: QuizDoc): NodeIssue[] {
   const issues: NodeIssue[] = [];
 
   const intro = doc.nodes.find((n) => n.type === "intro");
+
+  // Experiences E1 — the guard rails depend on what the quiz IS FOR.
+  // product_match / personality are pointless without a result page; a
+  // survey / lead-capture flow just needs SOME terminal (end or result) so
+  // shoppers aren't dead-ended. Quiz-level issues pin to the intro node so
+  // the rail can badge them.
+  const xtype = experienceTypeOf(doc);
+  const resultCount = doc.nodes.filter((n) => n.type === "result").length;
+  const terminalCount = doc.nodes.filter(
+    (n) => n.type === "result" || n.type === "end",
+  ).length;
+  const pinId = intro?.id ?? doc.nodes[0]?.id ?? "quiz";
+  if ((xtype === "product_match" || xtype === "personality") && resultCount === 0) {
+    issues.push({
+      nodeId: pinId,
+      kind: "missing_result",
+      message:
+        xtype === "personality"
+          ? "A personality quiz needs at least one result page (the persona reveal)."
+          : "A product-match quiz needs at least one result page to recommend from.",
+    });
+  }
+  if ((xtype === "survey" || xtype === "lead_capture") && terminalCount === 0) {
+    issues.push({
+      nodeId: pinId,
+      kind: "missing_terminal",
+      message: "Add an end screen so the flow has somewhere to finish.",
+    });
+  }
   const incoming = new Set<string>();
   const outgoing = new Set<string>();
   for (const e of doc.edges) {
@@ -123,12 +160,30 @@ export function validateQuiz(doc: QuizDoc): NodeIssue[] {
 
 export interface QuizSuggestion {
   nodeId: string;
-  kind: "duplicate_question_text" | "type_content_mismatch";
+  kind: "duplicate_question_text" | "type_content_mismatch" | "missing_capture";
   message: string;
 }
 
 export function validateQuizWarnings(doc: QuizDoc): QuizSuggestion[] {
   const suggestions: QuizSuggestion[] = [];
+
+  // Experiences E1 — a lead-capture quiz that never captures anything is a
+  // funnel to nowhere. Suggestion (not blocking): merchants may capture via
+  // an integration webhook instead of the gate.
+  if (experienceTypeOf(doc) === "lead_capture") {
+    const captures = doc.nodes.some(
+      (n) => n.type === "email_gate" || n.type === "integration",
+    );
+    if (!captures) {
+      const pin = doc.nodes.find((n) => n.type === "intro") ?? doc.nodes[0];
+      suggestions.push({
+        nodeId: pin?.id ?? "quiz",
+        kind: "missing_capture",
+        message:
+          "This lead-capture experience has no email gate or integration step — nothing is being captured.",
+      });
+    }
+  }
 
   // Duplicate question text — confusing for shoppers and for funnel analytics
   // (per-branch duplicates may be intentional, hence a suggestion, not an error).

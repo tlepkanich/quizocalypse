@@ -171,3 +171,64 @@ describe("validateQuizWarnings (BIC P3) — suggestions never block publishing",
     expect(validateQuiz(warnDoc())).toEqual([]);
   });
 });
+
+// ─── Experiences E1: type-aware guard rails ─────────────────────────────────
+describe("experience-type guard rails (E1)", () => {
+  const surveyDoc = (extra: Record<string, unknown> = {}) =>
+    Quiz.parse({
+      quiz_id: "xp",
+      scope: { collection_ids: [] },
+      experience_type: "survey",
+      nodes: [
+        { id: "intro", type: "intro", position: { x: 0, y: 0 }, data: { headline: "Hi" } },
+        {
+          id: "q1",
+          type: "question",
+          position: { x: 200, y: 0 },
+          data: {
+            text: "How did we do?",
+            question_type: "single_select",
+            answers: [
+              { id: "a1", text: "Great", tags: [], edge_handle_id: "h1" },
+              { id: "a2", text: "Fine", tags: [], edge_handle_id: "h2" },
+            ],
+          },
+        },
+        { id: "end", type: "end", position: { x: 400, y: 0 }, data: { headline: "Thanks!" } },
+      ],
+      edges: [
+        { id: "e1", source: "intro", target: "q1" },
+        { id: "e2", source: "q1", target: "end" },
+      ],
+      ...extra,
+    });
+
+  it("a survey with NO result pages is VALID (questions → end)", () => {
+    expect(validateQuiz(surveyDoc())).toEqual([]);
+  });
+
+  it("absent experience_type = product_match: zero results now BLOCKS", () => {
+    const doc = surveyDoc({ experience_type: undefined });
+    const issues = validateQuiz(doc);
+    expect(issues.some((i) => i.kind === "missing_result")).toBe(true);
+  });
+
+  it("personality with zero results blocks; survey missing ALL terminals blocks", () => {
+    const p = surveyDoc({ experience_type: "personality" });
+    expect(validateQuiz(p).some((i) => i.kind === "missing_result")).toBe(true);
+
+    const noEnd = Quiz.parse({
+      ...surveyDoc(),
+      nodes: surveyDoc().nodes.filter((n) => n.id !== "end"),
+      edges: [{ id: "e1", source: "intro", target: "q1" }],
+    });
+    const issues = validateQuiz(noEnd);
+    expect(issues.some((i) => i.kind === "missing_terminal")).toBe(true);
+  });
+
+  it("lead_capture without a gate/integration gets a SUGGESTION, never a blocker", () => {
+    const lc = surveyDoc({ experience_type: "lead_capture" });
+    expect(validateQuiz(lc)).toEqual([]); // publishes fine
+    expect(validateQuizWarnings(lc).some((s) => s.kind === "missing_capture")).toBe(true);
+  });
+});
