@@ -288,15 +288,21 @@ export async function buildBrandIdentity(
 // ── The offline-capable runner — powers afterAuth AND the studio endpoint ────
 type Admin = AdminApiContext;
 
-async function resolveOfflineAdmin(shopDomain: string): Promise<Admin> {
+// Soft-resolve an offline admin client. Returns null (never throws) when no
+// usable offline session exists — the admin signals are ENHANCEMENTS, so the
+// build proceeds from the catalog alone. The real error is logged for diagnosis
+// (it was previously swallowed behind a generic message).
+async function resolveOfflineAdmin(shopDomain: string): Promise<Admin | null> {
   // Lazy import keeps shopify.server (which builds shopifyApp() at module load)
   // out of the import graph for the pure-seam unit tests.
   const { unauthenticated } = await import("../shopify.server");
   try {
     const { admin } = await unauthenticated.admin(shopDomain);
     return admin as Admin;
-  } catch {
-    throw new Error("no admin session — open the embedded app once to establish it");
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.warn(`[brandIdentity] no offline admin for ${shopDomain}: ${msg}`);
+    return null;
   }
 }
 
@@ -316,6 +322,9 @@ export async function runBrandIdentityBuild(
     const shop = await prisma.shop.findUnique({ where: { id: shopId } });
     if (!shop) throw new Error("shop not found");
 
+    // Admin is an ENHANCEMENT, not a dependency: with it we add the maximal
+    // pull (shop meta / brand / theme / best-sellers); without it the digest is
+    // built from the catalog alone (which is already in our DB). Never throws.
     const adminClient = admin ?? (await resolveOfflineAdmin(shop.shopDomain));
 
     const [products, collections] = await Promise.all([
@@ -327,16 +336,18 @@ export async function runBrandIdentityBuild(
     }
 
     // Best-sellers first (they drive the corpus ranking), then the corpus, then
-    // the rest of the signals in parallel. Every reader is best-effort.
-    const bestSellers = await readBestSellers(adminClient);
+    // the rest of the signals in parallel. All admin-gated + best-effort.
+    const bestSellers = adminClient ? await readBestSellers(adminClient) : [];
     const bestSellerIds = bestSellers.map((b) => b.productId);
     const corpus = selectIdentityCorpus(products, bestSellerIds);
 
-    const [shopMeta, shopBrand, theme] = await Promise.all([
-      readShopMeta(adminClient),
-      readShopBrand(adminClient),
-      readThemeSettings(adminClient),
-    ]);
+    const [shopMeta, shopBrand, theme] = adminClient
+      ? await Promise.all([
+          readShopMeta(adminClient),
+          readShopBrand(adminClient),
+          readThemeSettings(adminClient),
+        ])
+      : [null, null, null];
 
     const indexed = buildScopedIndex(corpus.products, collections, []);
     const now = new Date().toISOString();
