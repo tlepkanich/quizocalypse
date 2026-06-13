@@ -3,7 +3,7 @@ import { json } from "@remix-run/node";
 import { Link, useLoaderData, useRevalidator, useSearchParams } from "@remix-run/react";
 import { useEffect, useState } from "react";
 import { UnifiedWorkspace } from "../components/studio/UnifiedWorkspace";
-import { QzPage, QzCard, QzBanner } from "../components/qz";
+import { QzPage, QzCard, QzBanner, StagedProgress } from "../components/qz";
 import { requireStudioAccess, resolveStudioShop } from "../lib/studioAccess.server";
 import {
   loadQuizEditorDataForShop,
@@ -86,22 +86,26 @@ export default function StandaloneStudio() {
 
 // Live "Building…" overlay shown while the detached AI onboarding build runs.
 // The route polls (above), so this resolves itself the moment buildState clears.
+// The four beats mirror the Step-1 funnel's generation copy (Dev Spec §2 Step 4),
+// rendered through the SHARED StagedProgress so the funnel hand-off reads as one
+// continuous build rather than two different loaders.
 const BUILD_STAGES = [
-  "Reading your catalog…",
-  "Mapping your products…",
-  "Writing your quiz…",
+  "Reading your catalog",
+  "Mapping your products",
+  "Writing your questions",
+  "Building your results page",
 ];
 
 function BuildingOverlay() {
-  // Staged progress copy (Dev Spec §2 Step 4): advance through the stages, then
-  // hold on the long-tail "Writing…" (AI generation dominates the wait). The
-  // spinner keeps it animated so it never reads as frozen.
-  const [stage, setStage] = useState(0);
+  // Advance the beats on a slow clock (the ~75s build dwarfs any single beat);
+  // hold on the last until the poll clears. The spinner keeps it animated so it
+  // never reads as frozen even while a beat lingers.
+  const [active, setActive] = useState(0);
   useEffect(() => {
-    if (stage >= BUILD_STAGES.length - 1) return;
-    const t = setTimeout(() => setStage((s) => s + 1), 3500);
+    if (active >= BUILD_STAGES.length - 1) return;
+    const t = setTimeout(() => setActive((s) => s + 1), 15000);
     return () => clearTimeout(t);
-  }, [stage]);
+  }, [active]);
   return (
     <QzPage>
       <style>{`@keyframes qzspin{to{transform:rotate(360deg)}}`}</style>
@@ -109,10 +113,9 @@ function BuildingOverlay() {
         style={{
           marginTop: 40,
           padding: 40,
-          textAlign: "center",
           display: "flex",
           flexDirection: "column",
-          gap: 16,
+          gap: 20,
           alignItems: "center",
         }}
       >
@@ -128,21 +131,15 @@ function BuildingOverlay() {
           }}
         />
         <h2 className="qz-h1" style={{ margin: 0 }}>Building your quiz…</h2>
-        <p
-          className="qz-h2"
-          style={{ margin: 0, maxWidth: 460, minHeight: 24, fontWeight: 600 }}
-        >
-          {BUILD_STAGES[stage]}
-        </p>
-        <p className="qz-dim" style={{ margin: 0, fontSize: 13, maxWidth: 460 }}>
-          This usually takes about a minute.
-        </p>
-        <div className="qz-dim" style={{ fontSize: 13 }}>
-          This page refreshes itself — no need to reload.{" "}
+        <div style={{ width: "100%", maxWidth: 320 }}>
+          <StagedProgress stages={BUILD_STAGES} active={active} />
+        </div>
+        <p className="qz-dim" style={{ margin: 0, fontSize: 13, maxWidth: 460, textAlign: "center" }}>
+          This usually takes about a minute. This page refreshes itself — no need to reload.{" "}
           <Link to="?force=1" className="qz-link">
             Taking too long? Open the builder →
           </Link>
-        </div>
+        </p>
       </QzCard>
     </QzPage>
   );

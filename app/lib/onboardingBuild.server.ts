@@ -64,6 +64,15 @@ export interface OnboardingBuildInput {
   // pre-created so the request can redirect immediately). Omitted = legacy
   // synchronous path (the function creates the row itself).
   quizId?: string;
+  // Step 1 funnel — the merchant already CONFIRMED the grouping (Category rows
+  // persisted), so skip the AI bucket-discovery phase and reconcile these
+  // straight into result pages. Absent = the wizard path (discover buckets).
+  preResolvedBuckets?: Array<{ id: string; name: string; tags: string[] }>;
+  // Step 1 funnel — the picked direction's angle + its sample questions, woven
+  // into the goal context so the full build honors the direction the merchant
+  // saw on the card (expand-and-refine, not copy).
+  directionAngle?: string;
+  sampleQuestionSeeds?: string[];
 }
 
 export interface OnboardingBuildResult {
@@ -84,10 +93,20 @@ export async function runAiOnboardingBuild(
   // pre-created row when quizId is supplied (async path); otherwise create one
   // (legacy synchronous path). seedDoc is the in-memory working copy either way.
   const xtype = input.experienceType ?? "product_match";
-  const goalContext =
+  let goalContext =
     input.goalLabels && input.goalLabels.length > 0
       ? `${input.goalPrompt}\n\nMerchant goals: ${input.goalLabels.join(", ")}.`
       : input.goalPrompt;
+  // Step 1 funnel — weave the picked direction into the goal so the full build
+  // honors the card the merchant chose (expand-and-refine, never copy verbatim).
+  if (input.directionAngle) {
+    goalContext += `\n\nQuiz direction: ${input.directionAngle}`;
+  }
+  if (input.sampleQuestionSeeds && input.sampleQuestionSeeds.length > 0) {
+    goalContext += `\n\nThe merchant picked a direction with these example questions — build in the same spirit, expanding and refining (don't copy them verbatim):\n${input.sampleQuestionSeeds
+      .map((q) => `- ${q}`)
+      .join("\n")}`;
+  }
   const seed = buildSeedQuiz(name, xtype);
   const seedDoc: QuizDoc = input.designTokens
     ? Quiz.parse({ ...seed, design_tokens: input.designTokens })
@@ -161,17 +180,23 @@ export async function runAiOnboardingBuild(
     };
   }
 
-  // 3. Discover buckets (quiz-scoped). On any failure, keep the blank seed.
-  let buckets;
-  try {
-    const res = await discoverAndPersistBuckets(shopId, quizId);
-    buckets = res.buckets;
-  } catch (err) {
-    const msg =
-      err instanceof BucketDiscoveryError || err instanceof CategoryDiscoveryError
-        ? err.message
-        : "AI couldn't analyze your catalog";
-    return { quizId, degraded: `${msg} — ${STARTED_BLANK}.` };
+  // 3. Buckets. The Step-1 funnel already confirmed + persisted the grouping, so
+  // use those rows directly (skip the AI discovery phase entirely); the wizard
+  // path discovers them. On any failure, keep the blank seed.
+  let buckets: Array<{ id: string; name: string; tags: string[] }>;
+  if (input.preResolvedBuckets) {
+    buckets = input.preResolvedBuckets;
+  } else {
+    try {
+      const res = await discoverAndPersistBuckets(shopId, quizId);
+      buckets = res.buckets;
+    } catch (err) {
+      const msg =
+        err instanceof BucketDiscoveryError || err instanceof CategoryDiscoveryError
+          ? err.message
+          : "AI couldn't analyze your catalog";
+      return { quizId, degraded: `${msg} — ${STARTED_BLANK}.` };
+    }
   }
   if (buckets.length === 0) {
     return { quizId, degraded: `AI didn't find product groups — ${STARTED_BLANK}.` };

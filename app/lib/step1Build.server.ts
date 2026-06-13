@@ -3,9 +3,10 @@ import { buildScopedIndex } from "./catalogIndex";
 import { detectGroupingDimension, type GroupingDimension } from "./groupingDetect";
 import { parseBrandIdentitySafe } from "./brandIdentity";
 import { generateTemplateOptions } from "./claude";
+import { runAiOnboardingBuild } from "./onboardingBuild.server";
 import { syncCatalog } from "../jobs/catalogSync";
 import type { GroupingProduct, ProposedGroup } from "./categoryGrouping";
-import type { TemplateOption } from "./quizSchema";
+import type { TemplateOption, BuildSession } from "./quizSchema";
 
 // ════════════════════════════════════════════════════════════════════════════
 // Step 1 funnel — server orchestration for the "generating" stage. Digests the
@@ -121,6 +122,67 @@ export async function loadConfirmedBuckets(
     select: { name: true, tags: true },
   });
   return rows.map((r) => ({ name: r.name, tags: r.tags }));
+}
+
+// ── Pick → the detached full build (the funnel's terminal step) ──────────────
+
+// Kick the full quiz build for a picked direction WITHOUT blocking the request,
+// reusing the detached-build muscle of startAiOnboardingBuild. The quiz row
+// already exists (the funnel draft), so we just rename it to the chosen
+// direction, flip buildState → "building", and run the real build detached. The
+// editor (studio.$id) polls buildState and swaps the overlay for the built quiz
+// when it clears. The build consumes the merchant's CONFIRMED grouping (the
+// quiz's Category rows) — no AI re-discovery — and the picked direction's angle
+// + sample questions as generation context.
+export async function startStep1Build(
+  shopId: string,
+  quizId: string,
+  picked: TemplateOption,
+  session: BuildSession,
+): Promise<void> {
+  // The confirmed buckets (with ids — reconcileBucketsToResultNodes binds result
+  // pages via category_id). Empty when the merchant chose "all products"; in that
+  // case omit preResolvedBuckets so the build discovers buckets rather than
+  // produce a single undifferentiated page (a better quiz than the literal read).
+  const cats = await prisma.category.findMany({
+    where: { shopId, quizId },
+    select: { id: true, name: true, tags: true },
+    orderBy: { createdAt: "asc" },
+  });
+
+  const goal = session.goal?.goal_text?.trim() || picked.angle;
+  const struggle = session.goal?.struggle_text?.trim();
+  const goalPrompt = struggle ? `${goal}\n\nShoppers struggle with: ${struggle}` : goal;
+
+  await prisma.quiz.update({
+    where: { id: quizId },
+    data: { name: picked.title, buildState: "building" },
+  });
+
+  void runAiOnboardingBuild({
+    shopId,
+    quizId,
+    name: picked.title,
+    goalPrompt,
+    questionCount: 6,
+    tone: "friendly",
+    flow: {
+      welcome_message: false,
+      email_gate: picked.experience_type === "lead_capture",
+      mixed_input_types: false,
+    },
+    experienceType: picked.experience_type,
+    ...(cats.length ? { preResolvedBuckets: cats } : {}),
+    directionAngle: picked.angle,
+    sampleQuestionSeeds: picked.sample_questions,
+  })
+    .then(() => prisma.quiz.update({ where: { id: quizId }, data: { buildState: null } }))
+    .catch(async (err) => {
+      const msg = err instanceof Error ? err.message : String(err);
+      await prisma.quiz
+        .update({ where: { id: quizId }, data: { buildState: `error:${msg.slice(0, 300)}` } })
+        .catch(() => {});
+    });
 }
 
 // The grouping stage's "Refresh catalog" affordance — resolves the offline Admin

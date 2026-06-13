@@ -1,5 +1,5 @@
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "@remix-run/node";
-import { json } from "@remix-run/node";
+import { json, redirect } from "@remix-run/node";
 import { useLoaderData } from "@remix-run/react";
 import { requireStudioAccess, resolveStudioShop } from "../lib/studioAccess.server";
 import prisma from "../db.server";
@@ -12,6 +12,7 @@ import {
   loadConfirmedBuckets,
   resyncCatalogForShop,
   generateStep1TemplateOptions,
+  startStep1Build,
 } from "../lib/step1Build.server";
 import type { GroupingProduct } from "../lib/categoryGrouping";
 import { Step1Funnel } from "../components/onboarding/Step1Funnel";
@@ -201,11 +202,15 @@ export const action = async ({ request, params }: ActionFunctionArgs) => {
     if (!chosen) {
       return json({ intent, ok: false, error: "That direction is no longer available." }, { status: 400 });
     }
-    // S4 records the pick + marks the funnel done; S5 wires pick → the detached
-    // full build (flip buildState, redirect to the editor overlay).
-    const next: BuildSession = { ...session, stage: "done", picked_option_id: optionId };
-    await writeDoc(quiz.id, { ...doc, build_session: next });
-    return json({ intent, ok: true });
+    if (!session.goal?.goal_text) {
+      return json({ intent, ok: false, error: "Add a goal before building." }, { status: 400 });
+    }
+    // Kick the detached full build (renames the draft, flips buildState →
+    // "building", consumes the confirmed buckets + the picked direction) and hand
+    // off to the editor, whose polling overlay swaps in the built quiz. The
+    // build overwrites draftJson (dropping build_session) when it completes.
+    await startStep1Build(shop.id, quiz.id, chosen, session);
+    return redirect(`/studio/${quiz.id}?mode=ai`);
   }
 
   if (intent === "back-to-grouping" || intent === "back-to-goal") {

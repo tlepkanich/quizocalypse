@@ -440,31 +440,24 @@ function TemplatesStage({
       </QzCard>
 
       <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-        {data.templateOptions.map((opt) => {
-          const selected = data.pickedOptionId === opt.id;
+        {data.templateOptions.map((opt, i) => {
           return (
             <QzExpandCard
               key={opt.id}
               title={opt.title}
               angle={opt.angle}
-              defaultOpen={data.templateOptions.length <= 2 || selected}
-              selected={selected}
+              defaultOpen={i === 0}
               badge={<QzBadge tone="draft">{XTYPE_LABEL[opt.experience_type] ?? opt.experience_type}</QzBadge>}
               footer={
                 <div className="qz-row" style={{ gap: 10, flexWrap: "wrap", marginTop: 4 }}>
                   <button
                     type="button"
                     className="qz-btn qz-btn-accent qz-btn-sm"
-                    disabled={picking || selected}
+                    disabled={picking}
                     onClick={() => fetcher.submit({ intent: "pick", optionId: opt.id }, { method: "post" })}
                   >
-                    {selected ? "✓ Selected" : picking ? "Selecting…" : "Build this quiz →"}
+                    {picking ? "Building…" : "Build this quiz →"}
                   </button>
-                  {selected ? (
-                    <span className="qz-dim" style={{ fontSize: 12 }}>
-                      The full build wires up in the next step.
-                    </span>
-                  ) : null}
                 </div>
               }
             >
