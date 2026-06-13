@@ -483,3 +483,122 @@ body[data-qz] ::selection { background: var(--qz-ink); color: var(--qz-cream); }
     position: static !important;
   }
 }
+
+/* Step 1 S4 — the creation funnel primitives. */
+
+/* QzProgress — the goal-stage min-character fill bar. */
+.qz-progress {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.qz-progress-track {
+  height: 6px;
+  border-radius: var(--qz-radius-pill);
+  background: color-mix(in srgb, var(--qz-ink) 8%, transparent);
+  overflow: hidden;
+}
+.qz-progress-fill {
+  height: 100%;
+  border-radius: var(--qz-radius-pill);
+  background: var(--qz-accent);
+  transition: width var(--qz-dur) var(--qz-ease), background var(--qz-dur) var(--qz-ease);
+}
+.qz-progress-fill.is-met {
+  background: var(--qz-ok);
+}
+
+/* QzExpandCard — the template-direction cards (controlled details, card-shaped). */
+.qz-expand {
+  border: 1px solid var(--qz-rule);
+  border-radius: var(--qz-radius);
+  background: var(--qz-paper);
+  overflow: hidden;
+  transition: border-color var(--qz-dur) var(--qz-ease), box-shadow var(--qz-dur) var(--qz-ease);
+}
+.qz-expand.is-selected {
+  border-color: var(--qz-accent);
+  box-shadow: var(--qz-shadow-focus);
+}
+.qz-expand-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 14px 16px;
+  cursor: pointer;
+  background: none;
+  border: none;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+}
+.qz-expand-head:hover {
+  background: color-mix(in srgb, var(--qz-ink) 3%, transparent);
+}
+.qz-expand-titles {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.qz-expand-title {
+  font-family: var(--qz-font-display);
+  font-size: 16px;
+  line-height: 1.25;
+  letter-spacing: -0.01em;
+}
+.qz-expand-angle {
+  font-size: 12.5px;
+  color: var(--qz-ink-3);
+}
+.qz-expand-chevron {
+  font-size: 15px;
+  line-height: 1;
+  color: var(--qz-ink-3);
+  transition: transform var(--qz-dur) var(--qz-ease);
+}
+.qz-expand.is-open .qz-expand-chevron {
+  transform: rotate(90deg);
+}
+.qz-expand-body {
+  padding: 0 16px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* StagedProgress — the "Reading your catalog → …" generation beats. */
+.qz-staged {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.qz-staged-beat {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  font-size: 14px;
+  color: var(--qz-ink-4);
+  transition: color var(--qz-dur) var(--qz-ease), opacity var(--qz-dur) var(--qz-ease);
+  opacity: 0.5;
+}
+.qz-staged-beat.is-active {
+  color: var(--qz-ink);
+  opacity: 1;
+  font-weight: 600;
+}
+.qz-staged-beat.is-done {
+  color: var(--qz-ink-3);
+  opacity: 1;
+}
+.qz-staged-glyph {
+  flex: none;
+  width: 18px;
+  text-align: center;
+  color: var(--qz-accent);
+}
+.qz-staged-beat.is-done .qz-staged-glyph {
+  color: var(--qz-ok);
+}

@@ -318,6 +318,124 @@ export function QzCollapse({
   );
 }
 
+// ── Step 1 S4 — creation-funnel primitives ──────────────────────────────────
+
+// A labeled min-threshold fill bar — the goal stage's character-count gate. The
+// fill turns from accent → ok once `value` clears `max`, so "enough detail" reads
+// at a glance. `aria-valuenow` is clamped so screen readers report 100% at the
+// threshold rather than overshooting.
+export function QzProgress({
+  value,
+  max,
+  label,
+}: {
+  value: number;
+  max: number;
+  label?: ReactNode;
+}) {
+  const met = value >= max;
+  const pct = max <= 0 ? 100 : Math.min(100, Math.round((value / max) * 100));
+  return (
+    <div className="qz-progress">
+      <div
+        className="qz-progress-track"
+        role="progressbar"
+        aria-valuemin={0}
+        aria-valuemax={max}
+        aria-valuenow={Math.min(value, max)}
+      >
+        <div
+          className={met ? "qz-progress-fill is-met" : "qz-progress-fill"}
+          style={{ width: `${pct}%` }}
+        />
+      </div>
+      {label != null ? <div className="qz-dim" style={{ fontSize: 12 }}>{label}</div> : null}
+    </div>
+  );
+}
+
+// A card-shaped controlled `<details>` (same open/close discipline as QzCollapse)
+// for the template-direction picks: a head with title + one-line angle + a badge,
+// an expandable body, and an optional footer (the pick CTA). `selected` rings the
+// card in accent so the merchant's choice reads even when collapsed.
+export function QzExpandCard({
+  title,
+  angle,
+  badge,
+  defaultOpen = false,
+  selected = false,
+  children,
+  footer,
+}: {
+  title: ReactNode;
+  angle?: ReactNode;
+  badge?: ReactNode;
+  defaultOpen?: boolean;
+  selected?: boolean;
+  children: ReactNode;
+  footer?: ReactNode;
+}) {
+  const [open, setOpen] = useState(defaultOpen);
+  const cls = ["qz-expand", open ? "is-open" : "", selected ? "is-selected" : ""]
+    .filter(Boolean)
+    .join(" ");
+  return (
+    <div className={cls}>
+      <button
+        type="button"
+        className="qz-expand-head"
+        aria-expanded={open}
+        onClick={() => setOpen((o) => !o)}
+      >
+        <span className="qz-expand-chevron" aria-hidden>›</span>
+        <span className="qz-expand-titles">
+          <span className="qz-expand-title">{title}</span>
+          {angle != null ? <span className="qz-expand-angle">{angle}</span> : null}
+        </span>
+        {badge != null ? badge : null}
+      </button>
+      {open ? (
+        <div className="qz-expand-body">
+          {children}
+          {footer != null ? footer : null}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+// The staged "Reading your catalog → Mapping your products → …" generation beats.
+// Shows progress through a known sequence (not a spinner): beats before `active`
+// read done (✓), `active` is in-flight (◐), the rest wait (○). Pure render — the
+// caller advances `active` on its own clock; reduced-motion-safe (no animation).
+export function StagedProgress({
+  stages,
+  active,
+}: {
+  stages: string[];
+  active: number;
+}) {
+  return (
+    <div className="qz-staged">
+      {stages.map((stage, i) => {
+        const done = i < active;
+        const isActive = i === active;
+        const cls = ["qz-staged-beat", done ? "is-done" : "", isActive ? "is-active" : ""]
+          .filter(Boolean)
+          .join(" ");
+        return (
+          <div key={stage} className={cls}>
+            <span className="qz-staged-glyph" aria-hidden>
+              {done ? "✓" : isActive ? "◐" : "○"}
+            </span>
+            <span>{stage}</span>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 // Responsive 16:9 video embed (YouTube/Vimeo/mp4 iframe). When `url` is null it
 // renders a tidy placeholder, so onboarding steps can ship the structure now and
 // have real walkthrough videos dropped in later.

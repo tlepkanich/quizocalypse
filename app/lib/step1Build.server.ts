@@ -1,9 +1,10 @@
 import prisma from "../db.server";
 import { buildScopedIndex } from "./catalogIndex";
-import { detectGroupingDimension } from "./groupingDetect";
+import { detectGroupingDimension, type GroupingDimension } from "./groupingDetect";
 import { parseBrandIdentitySafe } from "./brandIdentity";
 import { generateTemplateOptions } from "./claude";
-import type { GroupingProduct } from "./categoryGrouping";
+import { syncCatalog } from "../jobs/catalogSync";
+import type { GroupingProduct, ProposedGroup } from "./categoryGrouping";
 import type { TemplateOption } from "./quizSchema";
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -65,4 +66,78 @@ export async function generateStep1TemplateOptions(
     buckets,
     catalogSummary: indexed.summary,
   });
+}
+
+// ── Grouping-stage persistence (the funnel's "confirm" action) ───────────────
+
+// Atomically replace THIS quiz's Category rows with the confirmed groups. The
+// groups are already-resolved ProposedGroups (from detectGroupingDimension), so
+// productIds never come from the client — only WHICH groups to keep does. Mirrors
+// api.categories.group.tsx's quiz-scoped delete+create transaction. Returns the
+// created category ids (cached in build_session.grouping.confirmed_category_ids).
+// An empty `groups` (the "all products" dimension) just clears the quiz's set.
+export async function persistConfirmedGroups(
+  shopId: string,
+  quizId: string,
+  dimension: GroupingDimension,
+  groups: ProposedGroup[],
+): Promise<string[]> {
+  const runId = `s1_${quizId.slice(-6)}`;
+  const rows = groups.map((g) => ({
+    shopId,
+    quizId,
+    name: g.name,
+    description: "",
+    tags: g.tags,
+    productIds: g.productIds,
+    source: dimension === "all" ? "tag" : dimension,
+    sourceRef: g.sourceRef ?? null,
+    manualProductIds: [] as string[],
+    discoveryRunId: runId,
+  }));
+  await prisma.$transaction([
+    prisma.category.deleteMany({ where: { shopId, quizId } }),
+    ...(rows.length ? [prisma.category.createMany({ data: rows })] : []),
+  ]);
+  if (!rows.length) return [];
+  const created = await prisma.category.findMany({
+    where: { shopId, quizId, discoveryRunId: runId },
+    orderBy: { createdAt: "asc" },
+    select: { id: true },
+  });
+  return created.map((c) => c.id);
+}
+
+// The confirmed buckets for the generation stage: the quiz's persisted Category
+// rows as {name, tags}. Empty when the merchant chose "all products" — the
+// generator then works from the catalog summary alone.
+export async function loadConfirmedBuckets(
+  shopId: string,
+  quizId: string,
+): Promise<Array<{ name: string; tags: string[] }>> {
+  const rows = await prisma.category.findMany({
+    where: { shopId, quizId },
+    orderBy: { createdAt: "asc" },
+    select: { name: true, tags: true },
+  });
+  return rows.map((r) => ({ name: r.name, tags: r.tags }));
+}
+
+// The grouping stage's "Refresh catalog" affordance — resolves the offline Admin
+// client and re-runs the catalog sync so Product.collectionIds (and collection
+// membership) reflect the live store. Best-effort: when no offline session is
+// resolvable (the studio dev path) it returns {ok:false} and the funnel degrades
+// to the always-fresh tag/product_type detection. The install-time afterAuth sync
+// already keeps production stores fresh; this is the manual top-up.
+export async function resyncCatalogForShop(
+  shopDomain: string,
+): Promise<{ ok: boolean; error?: string }> {
+  try {
+    const { unauthenticated } = await import("../shopify.server");
+    const { admin } = await unauthenticated.admin(shopDomain);
+    await syncCatalog(admin, shopDomain);
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : String(err) };
+  }
 }

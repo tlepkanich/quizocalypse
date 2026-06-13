@@ -14,7 +14,13 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   await requireStudioAccess(request);
   const shop = await resolveStudioShop();
   const quizzes = await prisma.quiz.findMany({
-    where: { shopId: shop.id },
+    // Hide in-flight Step-1 funnel drafts (buildState:"step1") — they aren't real
+    // quizzes yet. `not` includes NULL rows in Prisma, but the OR makes that
+    // explicit so a normal quiz can never drop off the gallery.
+    where: {
+      shopId: shop.id,
+      OR: [{ buildState: null }, { buildState: { not: "step1" } }],
+    },
     select: { id: true, name: true, status: true, version: true, updatedAt: true },
     orderBy: { updatedAt: "desc" },
   });
