@@ -8,6 +8,7 @@ import { PrismaSessionStorage } from "@shopify/shopify-app-session-storage-prism
 import prisma from "./db.server";
 import { syncCatalog, ensureShop } from "./jobs/catalogSync";
 import { syncThemeTokens } from "./lib/themeSync.server";
+import { startBrandIdentityBuild } from "./lib/brandIdentityBuild.server";
 
 // TECH DEBT: Spec §3.1 requires OAuth tokens encrypted at rest. The
 // EncryptedSessionStorage wrapper is implemented at app/lib/encryptedSessionStorage.ts
@@ -30,7 +31,7 @@ const shopify = shopifyApp({
   },
   hooks: {
     afterAuth: async ({ session, admin }) => {
-      await ensureShop(session.shop);
+      const shop = await ensureShop(session.shop);
       // PoC: synchronous catalog sync inside the install callback. Acceptable
       // up to ~5k SKUs per spec §3.1. Replace with BullMQ job before launch.
       try {
@@ -45,6 +46,10 @@ const shopify = shopifyApp({
       } catch (err) {
         console.error("[afterAuth] theme token sync failed:", err);
       }
+      // Builder Step 0: digest the just-synced catalog (+ the maximal pull via
+      // this LIVE admin) into the merchant Brand Identity. Detached + best-effort
+      // — never blocks install; the confirm screen polls brandIdentityState.
+      startBrandIdentityBuild(shop.id, admin);
     },
   },
   ...(process.env.SHOP_CUSTOM_DOMAIN

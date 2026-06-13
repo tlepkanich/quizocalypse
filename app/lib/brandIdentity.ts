@@ -172,7 +172,7 @@ export function identityToBrandGuidelines(
 // ── Lock-preserving merge — the single chokepoint refine + rebuild route through.
 // For every dot-path the merchant locked on `prior`, copy that value over `fresh`
 // and union the lock lists, so a hand edit survives every future re-sync/refine.
-function getByPath(obj: unknown, path: string): unknown {
+export function getByPath(obj: unknown, path: string): unknown {
   return path.split(".").reduce<unknown>((acc, key) => {
     if (acc && typeof acc === "object" && key in (acc as Record<string, unknown>)) {
       return (acc as Record<string, unknown>)[key];
@@ -205,4 +205,32 @@ export function applyLocks(fresh: BrandIdentity, prior: BrandIdentity): BrandIde
   setByPath(merged, "locked_fields", lockUnion);
   // Re-parse so the result is a guaranteed-valid BrandIdentity (defaults filled).
   return BrandIdentity.parse(merged);
+}
+
+// The dot-paths the merchant may hand-edit on the confirm screen. Editing any of
+// them locks it (P4): a later re-sync/refine then preserves the edit via applyLocks.
+export const EDITABLE_IDENTITY_PATHS = [
+  "summary",
+  "tags",
+  "descriptions",
+  "positioning.industry",
+  "positioning.vertical",
+  "positioning.target_demographic",
+  "positioning.price_tier",
+  "positioning.category_trends",
+  "design.suggested_theme_preset_id",
+  "design.suggested_layout_variant_id",
+] as const;
+
+// Which editable paths differ between an edited identity and the stored one —
+// those become locks (unioned with any existing locks). Pure; the single place
+// "a merchant edit locks the field" is decided.
+export function lockEditedFields(edited: BrandIdentity, stored: BrandIdentity): string[] {
+  const locks = new Set(stored.locked_fields);
+  for (const path of EDITABLE_IDENTITY_PATHS) {
+    if (JSON.stringify(getByPath(edited, path)) !== JSON.stringify(getByPath(stored, path))) {
+      locks.add(path);
+    }
+  }
+  return [...locks];
 }

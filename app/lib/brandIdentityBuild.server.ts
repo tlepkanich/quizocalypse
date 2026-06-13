@@ -3,6 +3,7 @@ import type { AdminApiContext } from "@shopify/shopify-app-remix/server";
 import prisma from "../db.server";
 import {
   BrandIdentity,
+  lockEditedFields,
   type BrandIdentity as BrandIdentityT,
   type IdentitySource,
 } from "./brandIdentity";
@@ -10,6 +11,7 @@ import {
   BrandIdentityDraft,
   assembleBrandIdentity,
   refineBrandIdentity,
+  reconcileDesignTokens,
 } from "./brandIdentityAssemble";
 import { buildScopedIndex, selectIdentityCorpus } from "./catalogIndex";
 import {
@@ -395,4 +397,56 @@ export async function runBrandIdentityBuild(
 // always-on machine, like startAiOnboardingBuild. The state column is the poll.
 export function startBrandIdentityBuild(shopId: string, admin?: Admin): void {
   void runBrandIdentityBuild(shopId, admin).catch(() => {});
+}
+
+// ── Merchant edits (P4) — no AI ──────────────────────────────────────────────
+export type SaveIdentityResult =
+  | { ok: true; identity: BrandIdentityT }
+  | { ok: false; error: string };
+
+// Persist the merchant's edited identity: validate it, LOCK every editable field
+// that changed (so a later Refresh preserves it), re-reconcile derived_tokens if
+// the template changed, bump the version. No AI call.
+export async function saveBrandIdentityEdits(
+  shopId: string,
+  editedRaw: unknown,
+): Promise<SaveIdentityResult> {
+  const shop = await prisma.shop.findUnique({ where: { id: shopId } });
+  const stored = BrandIdentity.safeParse(shop?.brandIdentity);
+  if (!stored.success) return { ok: false, error: "no stored identity to edit" };
+  const edited = BrandIdentity.safeParse(editedRaw);
+  if (!edited.success) return { ok: false, error: "edited identity failed validation" };
+
+  const locked = lockEditedFields(edited.data, stored.data);
+  const presetChanged =
+    edited.data.design.suggested_theme_preset_id !==
+    stored.data.design.suggested_theme_preset_id;
+  const derived_tokens = presetChanged
+    ? reconcileDesignTokens(edited.data.design.suggested_theme_preset_id)
+    : edited.data.design.derived_tokens;
+
+  const next = BrandIdentity.parse({
+    ...edited.data,
+    design: { ...edited.data.design, ...(derived_tokens ? { derived_tokens } : {}) },
+    version: stored.data.version + 1,
+    updated_at: new Date().toISOString(),
+    locked_fields: locked,
+  });
+  await prisma.shop.update({ where: { id: shopId }, data: { brandIdentity: next as never } });
+  return { ok: true, identity: next };
+}
+
+// Sign-off: mark confirmed, bump version. No AI call.
+export async function confirmBrandIdentity(shopId: string): Promise<SaveIdentityResult> {
+  const shop = await prisma.shop.findUnique({ where: { id: shopId } });
+  const stored = BrandIdentity.safeParse(shop?.brandIdentity);
+  if (!stored.success) return { ok: false, error: "no stored identity to confirm" };
+  const next = BrandIdentity.parse({
+    ...stored.data,
+    merchant_confirmed: true,
+    version: stored.data.version + 1,
+    updated_at: new Date().toISOString(),
+  });
+  await prisma.shop.update({ where: { id: shopId }, data: { brandIdentity: next as never } });
+  return { ok: true, identity: next };
 }

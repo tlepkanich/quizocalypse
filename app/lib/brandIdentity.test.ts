@@ -4,6 +4,7 @@ import {
   parseBrandIdentitySafe,
   identityToBrandGuidelines,
   applyLocks,
+  lockEditedFields,
   type BrandIdentity as BrandIdentityT,
 } from "./brandIdentity";
 import { buildBrandVoiceAddition } from "./brandGuidelines";
@@ -132,5 +133,23 @@ describe("applyLocks (lock-preserving merge)", () => {
     const fresh = base();
     const merged = applyLocks(fresh, prior);
     expect(merged.voice?.tone_description).toBe("Warm and knowing, never preachy.");
+  });
+});
+
+describe("lockEditedFields (merchant edit → lock, P4)", () => {
+  it("locks only the editable paths that changed, unioned with existing locks", () => {
+    const stored = base({ locked_fields: ["summary"] });
+    const edited = base({
+      tags: ["clean", "minimalist", "NEW-TAG"], // changed
+      positioning: { ...base().positioning, price_tier: "luxury" }, // changed (was premium)
+      locked_fields: ["summary"],
+    });
+    const locks = lockEditedFields(edited, stored).sort();
+    expect(locks).toEqual(["positioning.price_tier", "summary", "tags"]);
+  });
+
+  it("returns just the existing locks when nothing editable changed", () => {
+    const stored = base({ locked_fields: ["summary"] });
+    expect(lockEditedFields(base({ locked_fields: ["summary"] }), stored)).toEqual(["summary"]);
   });
 });
