@@ -1,6 +1,6 @@
 import prisma from "../db.server";
 import { Quiz } from "./quizSchema";
-import type { Quiz as QuizDoc } from "./quizSchema";
+import type { Quiz as QuizDoc, OosBehavior } from "./quizSchema";
 import type { DesignTokensT } from "./designTokens";
 import { buildSeedQuiz } from "./seedQuiz";
 import { buildScopedIndex, toneSampleFromCatalog, suggestPlacement } from "./catalogIndex";
@@ -73,6 +73,13 @@ export interface OnboardingBuildInput {
   // saw on the card (expand-and-refine, not copy).
   directionAngle?: string;
   sampleQuestionSeeds?: string[];
+  // Step 2 battle-card overrides. `tokenPatch` overlays the seed design tokens
+  // (radius/spacing from the Lines/Graphics dials); `dialDirectives` append to the
+  // generation goal context (imagery/word-forward/graphics steering); `recOverride`
+  // is applied to every built result node's ResultData.
+  tokenPatch?: Partial<DesignTokensT>;
+  dialDirectives?: string;
+  recOverride?: { max_products: number; oos_behavior: OosBehavior; fallback_collection_id: string };
 }
 
 export interface OnboardingBuildResult {
@@ -107,10 +114,19 @@ export async function runAiOnboardingBuild(
       .map((q) => `- ${q}`)
       .join("\n")}`;
   }
+  // Step 2 — the design dials' generation directives (imagery/word-forward/graphics).
+  if (input.dialDirectives) {
+    goalContext += `\n\n${input.dialDirectives}`;
+  }
   const seed = buildSeedQuiz(name, xtype);
-  const seedDoc: QuizDoc = input.designTokens
-    ? Quiz.parse({ ...seed, design_tokens: input.designTokens })
-    : seed;
+  // Step 2 — overlay the dials' tokenPatch (radius/spacing) onto the base tokens
+  // (the merchant's designTokens if any, else the seed's house tokens).
+  const baseTokens = input.designTokens ?? seed.design_tokens;
+  const finalTokens = input.tokenPatch ? { ...baseTokens, ...input.tokenPatch } : baseTokens;
+  const seedDoc: QuizDoc =
+    input.designTokens || input.tokenPatch
+      ? Quiz.parse({ ...seed, design_tokens: finalTokens })
+      : seed;
   const quizId =
     input.quizId ??
     (
@@ -275,8 +291,37 @@ export async function runAiOnboardingBuild(
       ? { collect_email_on_result: input.collectEmailOnResult }
       : {}),
   };
-  await prisma.quiz.update({ where: { id: quizId }, data: { draftJson: withFinalFields as never } });
+  // Step 2 — bake the battle-card recommendation settings onto every result node.
+  const finalDoc = input.recOverride
+    ? applyRecOverride(withFinalFields, input.recOverride)
+    : withFinalFields;
+  await prisma.quiz.update({ where: { id: quizId }, data: { draftJson: finalDoc as never } });
   return { quizId };
+}
+
+// Step 2 — apply the merchant's rec_defaults to every result node's ResultData
+// (max_products + oos_behavior always; fallback only when the merchant set one,
+// else the build's required firstCollection fallback stands).
+function applyRecOverride(
+  doc: QuizDoc,
+  rec: NonNullable<OnboardingBuildInput["recOverride"]>,
+): QuizDoc {
+  const nodes = doc.nodes.map((n) =>
+    n.type === "result"
+      ? {
+          ...n,
+          data: {
+            ...n.data,
+            max_products: rec.max_products,
+            oos_behavior: rec.oos_behavior,
+            ...(rec.fallback_collection_id
+              ? { fallback_collection_id: rec.fallback_collection_id }
+              : {}),
+          },
+        }
+      : n,
+  );
+  return { ...doc, nodes };
 }
 
 async function persist(quizId: string, doc: QuizDoc): Promise<void> {

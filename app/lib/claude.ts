@@ -1,6 +1,11 @@
 import Anthropic from "@anthropic-ai/sdk";
-import { QuestionDataObject, TemplateOption } from "./quizSchema";
-import type { QuestionData, TemplateOption as TemplateOptionT } from "./quizSchema";
+import { QuestionDataObject, TemplateOption, QuizType, RichTemplateOption } from "./quizSchema";
+import type {
+  QuestionData,
+  TemplateOption as TemplateOptionT,
+  QuizType as QuizTypeT,
+  RichTemplateOption as RichTemplateOptionT,
+} from "./quizSchema";
 import {
   buildBrandVoiceAddition,
   type BrandGuidelines,
@@ -596,6 +601,389 @@ export async function generateTemplateOptions(
 
   throw new QuizGenerationError(
     "Template options generation failed validation after retries.",
+    MAX_ATTEMPTS,
+    lastIssue,
+  );
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// Step 2 — enhanced template creation. Two AI passes: (1) brand-tailored quiz
+// TYPE cards (optionally grounded in live web research), (2) rich battle-card
+// TEMPLATES for the chosen type. Both clone the forced-tool + retry skeleton.
+// ════════════════════════════════════════════════════════════════════════════
+
+// Concat every TextBlock in a response (skips tool_use / server_tool_use blocks).
+function extractTextFromResponse(response: Anthropic.Message): string {
+  return response.content
+    .filter((b): b is Anthropic.TextBlock => b.type === "text")
+    .map((b) => b.text)
+    .join("\n")
+    .trim();
+}
+
+const WEB_RESEARCH_SYSTEM =
+  "You are a quiz-strategy researcher. Search for current best practices for " +
+  "product-recommendation quizzes in the given industry. Return a CONCISE summary " +
+  "(≤400 words) covering: typical question counts by quiz type, proven quiz formats " +
+  "(gift finder, routine builder, type/needs matcher, educational explainer, etc.), " +
+  "and conversion-driving patterns. Be specific and cite real examples where you can. " +
+  "If you are unable to search, briefly say so and give your best general guidance.";
+
+// The SEPARATE preparatory call. Anthropic's web_search server tool CANNOT be
+// combined with a forced tool_choice, so research runs first and its TEXT feeds
+// generateQuizTypes. Best-effort: any failure (web search not enabled on the key,
+// timeout, error) degrades to "" and generateQuizTypes falls back to model
+// knowledge. Runs inside the detached typing job (no edge-window pressure).
+export async function runWebResearchForQuizTypes(input: {
+  industry: string;
+  vertical: string;
+  priceTier: string;
+  demographic: string[];
+}): Promise<string> {
+  try {
+    const audience = input.demographic.join(", ") || "general shoppers";
+    const query =
+      `Research best practices for ${input.industry} ${input.vertical} product-recommendation quizzes. ` +
+      `Focus on: typical question counts, proven quiz types/formats, and what drives conversion for ` +
+      `${input.priceTier} brands targeting ${audience}.`;
+    const res = await client().messages.create({
+      model: MODEL,
+      max_tokens: 1536,
+      system: WEB_RESEARCH_SYSTEM,
+      // Server-side web search tool — typed loosely so it survives SDK-version drift;
+      // the whole call is best-effort behind try/catch.
+      tools: [{ type: "web_search_20250305", name: "web_search", max_uses: 3 }] as never,
+      messages: [{ role: "user", content: query }],
+    });
+    return extractTextFromResponse(res).slice(0, 4000);
+  } catch (err) {
+    console.warn(
+      "[step2] web research unavailable, degrading to model knowledge:",
+      err instanceof Error ? err.message : err,
+    );
+    return "";
+  }
+}
+
+// ── Tier 1: brand-tailored quiz TYPE cards ──────────────────────────────────
+const QuizTypesResult = z.object({ types: z.array(QuizType).min(3).max(4) });
+
+const QUIZ_TYPES_TOOL_SCHEMA = {
+  type: "object",
+  required: ["types"],
+  properties: {
+    types: {
+      type: "array",
+      minItems: 3,
+      maxItems: 4,
+      items: {
+        type: "object",
+        required: ["id", "experience_type", "name", "achieves", "question_range"],
+        properties: {
+          id: { type: "string", description: "stable slug, e.g. vitamin-educator" },
+          experience_type: {
+            type: "string",
+            enum: ["product_match", "personality", "lead_capture", "survey"],
+          },
+          name: { type: "string", description: "display name shown on the card" },
+          achieves: { type: "string", description: "one line: what this quiz type achieves" },
+          question_range: {
+            type: "object",
+            required: ["min", "max"],
+            properties: { min: { type: "integer" }, max: { type: "integer" } },
+          },
+          best_practice_note: {
+            type: "string",
+            description: "a real best-practice note for this category/type",
+          },
+          rationale: { type: "string", description: "why it fits THIS brand + catalog + goal" },
+          web_research_excerpt: {
+            type: "string",
+            description: "a short supporting snippet from the research (or empty)",
+          },
+        },
+      },
+    },
+  },
+} as const;
+
+const QUIZ_TYPES_SYSTEM_PROMPT =
+  "You propose 3-4 DISTINCT quiz TYPES for a Shopify brand, each tailored to the " +
+  "brand's positioning AND real-world best practices for the category. Rules:\n" +
+  "- Each type names a concrete format (e.g. Educational Explainer, Gift Finder, " +
+  "Routine Builder, Type/Needs Matcher), a one-line 'what it achieves', a question-" +
+  "count RANGE informed by the category (educational/wellness run longer, 8-12; " +
+  "gifting/style run 4-7), a best-practice note that references a real pattern, a " +
+  "rationale tied to THIS brand's catalog + goal, and a short supporting excerpt " +
+  "from the web research (empty string if no research was provided).\n" +
+  "- Make the types genuinely DIFFERENT strategic choices, not variations of one.\n" +
+  "- If no web research is provided, draw on your own knowledge of quiz best " +
+  "practices for the industry.\n" +
+  "- Respond ONLY via the tool call.";
+
+export interface GenerateQuizTypesInput {
+  brandSummary: string;
+  brandVoiceSample?: string;
+  positioning: { industry: string; vertical: string; price_tier: string; demographic: string[] };
+  goalPrompt: string;
+  struggle?: string;
+  buckets: Array<{ name: string; tags: string[] }>;
+  catalogSummary: string;
+  webResearchText: string;
+}
+
+export async function generateQuizTypes(input: GenerateQuizTypesInput): Promise<QuizTypeT[]> {
+  const tool = {
+    name: "emit_quiz_types",
+    description: "Emit 3-4 distinct, brand-tailored quiz types. The only allowed response.",
+    input_schema: QUIZ_TYPES_TOOL_SCHEMA as unknown as Anthropic.Tool.InputSchema,
+  } satisfies Anthropic.Tool;
+
+  const userMessage = [
+    "Experience types you may choose from:\n  " + EXPERIENCE_MENU,
+    "",
+    "Brand summary:",
+    input.brandSummary || "(no brand digest — infer from the catalog)",
+    ...(input.brandVoiceSample ? ["", "Brand voice:", input.brandVoiceSample] : []),
+    "",
+    "Positioning:",
+    `industry: ${input.positioning.industry || "(unknown)"} · vertical: ${input.positioning.vertical || "(unknown)"} · price tier: ${input.positioning.price_tier || "(unknown)"} · audience: ${input.positioning.demographic.join(", ") || "(unknown)"}`,
+    "",
+    "Merchant's quiz goal:",
+    input.goalPrompt || "(none stated)",
+    ...(input.struggle ? ["", "What customers struggle with:", input.struggle] : []),
+    "",
+    "Outcome buckets the quiz routes to:",
+    input.buckets.length
+      ? input.buckets.map((b) => `- ${b.name}`).join("\n")
+      : "- (no buckets — recommend from the whole catalog)",
+    "",
+    "Catalog summary:",
+    input.catalogSummary,
+    "",
+    "Web research (best practices for this category):",
+    input.webResearchText || "(no research available — use your own knowledge)",
+    "",
+    "Propose 3-4 distinct, tailored quiz types. Emit via the tool call.",
+  ].join("\n");
+
+  let lastIssue: string | undefined;
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+    const response = await client().messages.create({
+      model: MODEL,
+      max_tokens: 2048,
+      system: QUIZ_TYPES_SYSTEM_PROMPT,
+      tools: [tool],
+      tool_choice: { type: "tool", name: "emit_quiz_types" },
+      messages: [
+        {
+          role: "user",
+          content:
+            attempt === 1
+              ? userMessage
+              : `${userMessage}\n\nPrevious attempt failed validation: ${lastIssue}. Regenerate strictly matching the schema.`,
+        },
+      ],
+    });
+
+    const toolUse = response.content.find(
+      (b): b is Anthropic.ToolUseBlock => b.type === "tool_use",
+    );
+    if (!toolUse) {
+      lastIssue = "No tool_use block in response.";
+      continue;
+    }
+    const parsed = QuizTypesResult.safeParse(toolUse.input);
+    if (parsed.success) return parsed.data.types;
+    lastIssue = parsed.error.issues
+      .slice(0, 5)
+      .map((i) => `${i.path.join(".")}: ${i.message}`)
+      .join("; ");
+  }
+
+  throw new QuizGenerationError(
+    "Quiz types generation failed validation after retries.",
+    MAX_ATTEMPTS,
+    lastIssue,
+  );
+}
+
+// ── Tier 2: rich battle-card TEMPLATES for the chosen type ───────────────────
+const RichTemplatesResult = z.object({ templates: z.array(RichTemplateOption).min(2).max(3) });
+
+const RICH_TEMPLATES_TOOL_SCHEMA = {
+  type: "object",
+  required: ["templates"],
+  properties: {
+    templates: {
+      type: "array",
+      minItems: 2,
+      maxItems: 3,
+      items: {
+        type: "object",
+        required: [
+          "id",
+          "experience_type",
+          "title",
+          "angle",
+          "sample_questions",
+          "feature_notes",
+          "dials",
+          "rec_defaults",
+          "question_count",
+        ],
+        properties: {
+          id: { type: "string", description: "stable slug" },
+          experience_type: {
+            type: "string",
+            enum: ["product_match", "personality", "lead_capture", "survey"],
+          },
+          title: { type: "string", description: "the template name on the battle card" },
+          angle: { type: "string", description: "one line: how this template frames the journey" },
+          rationale: { type: "string" },
+          sample_questions: {
+            type: "array",
+            minItems: 2,
+            maxItems: 3,
+            items: { type: "string" },
+          },
+          feature_notes: {
+            type: "array",
+            minItems: 1,
+            maxItems: 3,
+            items: { type: "string" },
+            description: "the 3 unique feature notes shown on the battle card",
+          },
+          dials: {
+            type: "object",
+            required: ["imagery", "graphics", "word_forward", "lines"],
+            properties: {
+              imagery: { type: "string", enum: ["high", "medium", "low"] },
+              graphics: { type: "string", enum: ["high", "medium", "low"] },
+              word_forward: { type: "string", enum: ["high", "medium", "low"] },
+              lines: { type: "string", enum: ["soft", "sharp", "rounded"] },
+            },
+          },
+          rec_defaults: {
+            type: "object",
+            required: ["max_products", "oos_behavior"],
+            properties: {
+              max_products: { type: "integer", minimum: 1, maximum: 12 },
+              oos_behavior: { type: "string", enum: ["hide", "show_with_badge", "fallback"] },
+            },
+          },
+          recommended_bucket_ids: { type: "array", items: { type: "string" } },
+          question_count: { type: "integer", minimum: 3, maximum: 20 },
+        },
+      },
+    },
+  },
+} as const;
+
+const RICH_TEMPLATES_SYSTEM_PROMPT =
+  "You generate 2-3 DISTINCT template configurations for a chosen quiz type — each " +
+  "a full 'battle card'. Rules:\n" +
+  "- Each template: a title, a one-line angle, a rationale, 2-3 sample question " +
+  "texts, exactly 3 feature_notes that distinguish THIS template (e.g. 'Opens with " +
+  "a visual mood question'), design dials (imagery/graphics/word_forward high|medium|" +
+  "low and lines soft|sharp|rounded) that genuinely match the template's style, a " +
+  "recommended max_products + oos_behavior, optional recommended_bucket_ids (the " +
+  "most relevant bucket ids), and a question_count within the type's range.\n" +
+  "- Make the templates genuinely different implementations of the SAME type — vary " +
+  "the opening, the dial settings, and the emphasis.\n" +
+  "- Set the dials to match the brand: an educational brand leans word_forward high; " +
+  "a visual brand leans imagery high; a refined brand leans lines sharp.\n" +
+  "- Respond ONLY via the tool call.";
+
+export interface GenerateQuizTemplatesInput {
+  chosenType: QuizTypeT;
+  brandSummary: string;
+  brandVoiceSample?: string;
+  positioning: { industry: string; vertical: string; price_tier: string };
+  goalPrompt: string;
+  struggle?: string;
+  buckets: Array<{ id: string; name: string; tags: string[] }>;
+  catalogSummary: string;
+  brandGuidelines?: BrandGuidelines | null;
+}
+
+export async function generateQuizTemplates(
+  input: GenerateQuizTemplatesInput,
+): Promise<RichTemplateOptionT[]> {
+  const tool = {
+    name: "emit_quiz_templates",
+    description: "Emit 2-3 distinct battle-card templates for the chosen type. The only allowed response.",
+    input_schema: RICH_TEMPLATES_TOOL_SCHEMA as unknown as Anthropic.Tool.InputSchema,
+  } satisfies Anthropic.Tool;
+
+  const system = input.brandGuidelines
+    ? RICH_TEMPLATES_SYSTEM_PROMPT + buildBrandVoiceAddition(input.brandGuidelines)
+    : RICH_TEMPLATES_SYSTEM_PROMPT;
+
+  const t = input.chosenType;
+  const userMessage = [
+    "Chosen quiz type:",
+    `${t.name} (${t.experience_type}) — ${t.achieves}`,
+    `question range: ${t.question_range.min}-${t.question_range.max}${t.best_practice_note ? ` · best practice: ${t.best_practice_note}` : ""}`,
+    "",
+    "Brand summary:",
+    input.brandSummary || "(no brand digest — infer from the catalog)",
+    ...(input.brandVoiceSample ? ["", "Brand voice:", input.brandVoiceSample] : []),
+    "",
+    "Positioning:",
+    `industry: ${input.positioning.industry || "(unknown)"} · vertical: ${input.positioning.vertical || "(unknown)"} · price tier: ${input.positioning.price_tier || "(unknown)"}`,
+    "",
+    "Merchant's quiz goal:",
+    input.goalPrompt || "(none stated)",
+    ...(input.struggle ? ["", "What customers struggle with:", input.struggle] : []),
+    "",
+    "Outcome buckets (id — name):",
+    input.buckets.length
+      ? input.buckets.map((b) => `- ${b.id} — ${b.name}`).join("\n")
+      : "- (no buckets — recommend from the whole catalog)",
+    "",
+    "Catalog summary:",
+    input.catalogSummary,
+    "",
+    `Generate 2-3 distinct templates for the "${t.name}" type. Emit via the tool call.`,
+  ].join("\n");
+
+  let lastIssue: string | undefined;
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+    const response = await client().messages.create({
+      model: MODEL,
+      max_tokens: 3072,
+      system,
+      tools: [tool],
+      tool_choice: { type: "tool", name: "emit_quiz_templates" },
+      messages: [
+        {
+          role: "user",
+          content:
+            attempt === 1
+              ? userMessage
+              : `${userMessage}\n\nPrevious attempt failed validation: ${lastIssue}. Regenerate strictly matching the schema.`,
+        },
+      ],
+    });
+
+    const toolUse = response.content.find(
+      (b): b is Anthropic.ToolUseBlock => b.type === "tool_use",
+    );
+    if (!toolUse) {
+      lastIssue = "No tool_use block in response.";
+      continue;
+    }
+    const parsed = RichTemplatesResult.safeParse(toolUse.input);
+    if (parsed.success) return parsed.data.templates;
+    lastIssue = parsed.error.issues
+      .slice(0, 5)
+      .map((i) => `${i.path.join(".")}: ${i.message}`)
+      .join("; ");
+  }
+
+  throw new QuizGenerationError(
+    "Quiz templates generation failed validation after retries.",
     MAX_ATTEMPTS,
     lastIssue,
   );
