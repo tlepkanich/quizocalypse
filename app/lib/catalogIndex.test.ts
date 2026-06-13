@@ -1,6 +1,12 @@
 import { describe, it, expect } from "vitest";
 import type { Product } from "@prisma/client";
-import { scoreCatalogCompleteness, toneSampleFromCatalog, suggestPlacement } from "./catalogIndex";
+import {
+  scoreCatalogCompleteness,
+  toneSampleFromCatalog,
+  suggestPlacement,
+  selectIdentityCorpus,
+  IDENTITY_MAX_CORPUS,
+} from "./catalogIndex";
 
 // Minimal Product factory — the catalog-intelligence helpers only read tags,
 // descriptionText, and variants, but we build a full row so the cast is honest.
@@ -103,5 +109,63 @@ describe("suggestPlacement", () => {
   it("broad catalog (10+) → homepage popup", () => {
     expect(suggestPlacement(10)).toBe("popup");
     expect(suggestPlacement(250)).toBe("popup");
+  });
+});
+
+// Brand Identity corpus selection — the two merchant rules at their boundaries.
+describe("selectIdentityCorpus (Brand Identity Step 0)", () => {
+  const many = (count: number, over: (i: number) => Partial<Product> = () => ({})) =>
+    Array.from({ length: count }, (_, i) =>
+      mk({ productId: `gid://p/${i}`, descriptionText: "x".repeat(30), ...over(i) }),
+    );
+
+  it("<5 products → widen + educational hint, reads everything", () => {
+    const c = selectIdentityCorpus(many(4));
+    expect(c.products).toHaveLength(4);
+    expect(c.lowVolumeEducationalHint).toBe(true);
+    expect(c.note).toContain("widened");
+  });
+
+  it("exactly 5 → passthrough, no hint (boundary)", () => {
+    const c = selectIdentityCorpus(many(5));
+    expect(c.products).toHaveLength(5);
+    expect(c.lowVolumeEducationalHint).toBe(false);
+    expect(c.note).toBe("5 products");
+  });
+
+  it("exactly 100 → passthrough (boundary)", () => {
+    const c = selectIdentityCorpus(many(100));
+    expect(c.products).toHaveLength(100);
+    expect(c.note).toBe("100 products");
+  });
+
+  it("101 → caps at top 100 (boundary)", () => {
+    const c = selectIdentityCorpus(many(101, (i) => ({ status: "ACTIVE" })));
+    expect(c.products).toHaveLength(IDENTITY_MAX_CORPUS);
+    expect(c.note).toContain("top 100 of 101");
+  });
+
+  it(">100 with a revenue ranking → ordered by revenue, ranked-first", () => {
+    const products = many(120, () => ({ status: "ACTIVE" }));
+    // Rank the LAST three highest — they must surface to the front.
+    const bestSellerIds = ["gid://p/119", "gid://p/118", "gid://p/117"];
+    const c = selectIdentityCorpus(products, bestSellerIds);
+    expect(c.products.slice(0, 3).map((p) => p.productId)).toEqual(bestSellerIds);
+    expect(c.note).toContain("by revenue");
+  });
+
+  it(">100 all-inactive status → never filters to empty (falls back to all)", () => {
+    const c = selectIdentityCorpus(many(150, () => ({ status: "DRAFT" })));
+    expect(c.products).toHaveLength(IDENTITY_MAX_CORPUS);
+  });
+
+  it(">100, no ranking → deterministic proxy (image beats description length)", () => {
+    const products = many(105, (i) => ({
+      descriptionText: "y".repeat(i), // ascending richness
+      imageUrl: i === 0 ? "https://img/0.png" : null, // only p/0 has an image
+    }));
+    const c = selectIdentityCorpus(products);
+    // The single imaged product wins the top slot despite the shortest description.
+    expect(c.products[0]!.productId).toBe("gid://p/0");
   });
 });

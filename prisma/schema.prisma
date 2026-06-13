@@ -42,6 +42,12 @@ model Shop {
   // book / image / text upload, or selected from the curated preset
   // library. See app/lib/brandGuidelines.ts for the schema.
   brandGuidelines Json?
+  // Builder Re-work Step 0: the persistent Merchant Brand Identity digest
+  // (summary + design lens + positioning lens + voice + provenance). See
+  // app/lib/brandIdentity.ts. brandIdentityState is the build poll marker
+  // ("building" | "error:<msg>" | null), mirroring Quiz.buildState.
+  brandIdentity      Json?
+  brandIdentityState String?
 
   products    Product[]
   collections Collection[]

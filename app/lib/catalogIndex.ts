@@ -191,6 +191,93 @@ export function toneSampleFromCatalog(
     .join("\n---\n");
 }
 
+// ───────────────────────────────────────────────────────────────────────────
+// Brand Identity corpus selection (Builder Re-work Step 0). Picks WHICH products
+// the identity digest reads, honoring the two merchant rules:
+//   · <5 products  → WIDEN: read every description (longer cap) and flag the
+//                     catalog as low-volume/educational (positioning biases to
+//                     "explainer" — tiny catalogs rarely mean a product-finder).
+//   · >100 products → read only the top 100 ACTIVE by revenue (the "cheat code":
+//                     digest the products that matter, not the long tail). When
+//                     no revenue ranking is available yet, fall back to a cheap
+//                     deterministic proxy (has-image, then description richness).
+//   · 5–100        → the whole catalog as-is.
+// Pure + no IO — the build (P3) feeds `products` into buildScopedIndex for the
+// summary and stamps `note` onto an IdentitySource.
+// ───────────────────────────────────────────────────────────────────────────
+
+export const IDENTITY_LOW_VOLUME = 5;
+export const IDENTITY_MAX_CORPUS = 100;
+
+export interface IdentityCorpus {
+  products: Product[];
+  toneSample: string;
+  lowVolumeEducationalHint: boolean;
+  note: string; // human detail for IdentitySource: "top 100 of 1,240 by revenue"
+}
+
+const isActive = (p: Product): boolean => (p.status ?? "").toUpperCase() === "ACTIVE";
+
+// Deterministic richness proxy when revenue ranking is absent: an image is the
+// strongest "this is a real, merchandised product" signal, then description depth.
+const proxyScore = (p: Product): number =>
+  (p.imageUrl ? 1_000_000 : 0) + (p.descriptionText ?? "").trim().length;
+
+export function selectIdentityCorpus(
+  allProducts: Product[],
+  bestSellerIds?: string[],
+): IdentityCorpus {
+  const n = allProducts.length;
+
+  if (n < IDENTITY_LOW_VOLUME) {
+    return {
+      products: allProducts,
+      // Widen: every description, longer per-item cap.
+      toneSample: toneSampleFromCatalog(allProducts, allProducts.length, 600),
+      lowVolumeEducationalHint: true,
+      note: `${n} product${n === 1 ? "" : "s"} — widened (low-volume, likely educational)`,
+    };
+  }
+
+  if (n <= IDENTITY_MAX_CORPUS) {
+    return {
+      products: allProducts,
+      toneSample: toneSampleFromCatalog(allProducts),
+      lowVolumeEducationalHint: false,
+      note: `${n} products`,
+    };
+  }
+
+  // >100 — rank and take the top 100. Prefer active products, but never let an
+  // empty/unknown-status catalog filter everything out (fall back to all).
+  const active = allProducts.filter(isActive);
+  const pool = active.length >= IDENTITY_MAX_CORPUS ? active : allProducts;
+
+  let ranked: Product[];
+  let basis: string;
+  if (bestSellerIds && bestSellerIds.length > 0) {
+    const rank = new Map(bestSellerIds.map((id, i) => [id, i]));
+    ranked = [...pool].sort((a, b) => {
+      const ra = rank.get(a.productId) ?? Number.POSITIVE_INFINITY;
+      const rb = rank.get(b.productId) ?? Number.POSITIVE_INFINITY;
+      if (ra !== rb) return ra - rb; // lower rank index = higher revenue
+      return proxyScore(b) - proxyScore(a); // tie-break: unranked by proxy
+    });
+    basis = "revenue";
+  } else {
+    ranked = [...pool].sort((a, b) => proxyScore(b) - proxyScore(a));
+    basis = "image + description richness";
+  }
+
+  const top = ranked.slice(0, IDENTITY_MAX_CORPUS);
+  return {
+    products: top,
+    toneSample: toneSampleFromCatalog(top),
+    lowVolumeEducationalHint: false,
+    note: `top ${IDENTITY_MAX_CORPUS} of ${n} by ${basis}`,
+  };
+}
+
 // Dev Spec §2 Phase 4 — AI pre-selects the storefront placement by catalog
 // shape. Applied as the smart default on a freshly-built quiz; the merchant can
 // override it in the editor's placement picker. Pure + testable.
