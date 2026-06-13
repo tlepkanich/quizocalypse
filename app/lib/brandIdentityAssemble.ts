@@ -95,3 +95,22 @@ export function refineBrandIdentity(
 ): BrandIdentityT {
   return applyLocks(fresh, current);
 }
+
+// Step 1 — fold a "what customers struggle with" answer into the identity:
+// append (deduped) to pain_points, LOCK it (so a re-sync preserves it via
+// applyLocks), stamp a merchant_input source, bump version. Pure.
+export function foldPainPoint(
+  stored: BrandIdentityT,
+  struggle: string,
+  now: string,
+): BrandIdentityT {
+  const trimmed = struggle.trim();
+  return BrandIdentity.parse({
+    ...stored,
+    pain_points: Array.from(new Set([...stored.pain_points, trimmed])),
+    locked_fields: Array.from(new Set([...stored.locked_fields, "pain_points"])),
+    sources: [...stored.sources, { kind: "merchant_input", detail: "step-1 struggle", at: now }],
+    version: stored.version + 1,
+    updated_at: now,
+  });
+}

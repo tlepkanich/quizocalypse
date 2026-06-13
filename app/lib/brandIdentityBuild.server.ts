@@ -12,6 +12,7 @@ import {
   assembleBrandIdentity,
   refineBrandIdentity,
   reconcileDesignTokens,
+  foldPainPoint,
 } from "./brandIdentityAssemble";
 import { buildScopedIndex, selectIdentityCorpus } from "./catalogIndex";
 import {
@@ -447,6 +448,26 @@ export async function confirmBrandIdentity(shopId: string): Promise<SaveIdentity
     version: stored.data.version + 1,
     updated_at: new Date().toISOString(),
   });
+  await prisma.shop.update({ where: { id: shopId }, data: { brandIdentity: next as never } });
+  return { ok: true, identity: next };
+}
+
+// Step 1 — fold the funnel's "what customers struggle with" answer into the
+// identity: append (deduped) to pain_points, LOCK it (merchant_input survives
+// future re-syncs via applyLocks), stamp a merchant_input source, bump version.
+// No AI call. Best-effort — never blocks the funnel; returns ok:false on no
+// identity, the caller ignores it.
+export async function recordIdentitySignals(
+  shopId: string,
+  signals: { struggle?: string; goal?: string },
+): Promise<SaveIdentityResult> {
+  const struggle = signals.struggle?.trim();
+  if (!struggle) return { ok: false, error: "no struggle signal" };
+  const shop = await prisma.shop.findUnique({ where: { id: shopId } });
+  const stored = BrandIdentity.safeParse(shop?.brandIdentity);
+  if (!stored.success) return { ok: false, error: "no stored identity" };
+
+  const next = foldPainPoint(stored.data, struggle, new Date().toISOString());
   await prisma.shop.update({ where: { id: shopId }, data: { brandIdentity: next as never } });
   return { ok: true, identity: next };
 }

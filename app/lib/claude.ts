@@ -1,6 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
-import { QuestionDataObject } from "./quizSchema";
-import type { QuestionData } from "./quizSchema";
+import { QuestionDataObject, TemplateOption } from "./quizSchema";
+import type { QuestionData, TemplateOption as TemplateOptionT } from "./quizSchema";
 import {
   buildBrandVoiceAddition,
   type BrandGuidelines,
@@ -455,6 +455,147 @@ export async function generateQuestionFlow(
 
   throw new QuizGenerationError(
     "Question flow generation failed validation after retries.",
+    MAX_ATTEMPTS,
+    lastIssue,
+  );
+}
+
+// ── Step 1 — lightweight quiz "directions" (the cheap one-pass options) ──────
+// Propose 2–3 distinct quiz DIRECTIONS the merchant picks from at the end of the
+// Step-1 funnel. Each = experience type + angle + 2–3 sample question texts (no
+// tags/answers — tag-correctness is the full build's job). One cheap pass, so it
+// fits the awaited studio window. Clones the forced-tool + retry skeleton.
+
+const TemplateOptionsResult = z.object({
+  options: z.array(TemplateOption).min(2).max(3),
+});
+
+const TEMPLATE_OPTIONS_TOOL_SCHEMA = {
+  type: "object",
+  required: ["options"],
+  properties: {
+    options: {
+      type: "array",
+      minItems: 2,
+      maxItems: 3,
+      items: {
+        type: "object",
+        required: ["id", "experience_type", "title", "angle", "sample_questions"],
+        properties: {
+          id: { type: "string", description: "stable slug, e.g. skin-goals-match" },
+          experience_type: {
+            type: "string",
+            enum: ["product_match", "personality", "lead_capture", "survey"],
+          },
+          title: { type: "string", description: "the direction name shown on the card" },
+          angle: { type: "string", description: "one line: how this quiz frames the journey" },
+          rationale: { type: "string", description: "why it fits this brand + goal" },
+          sample_questions: {
+            type: "array",
+            minItems: 2,
+            maxItems: 3,
+            items: { type: "string" },
+          },
+        },
+      },
+    },
+  },
+} as const;
+
+const TEMPLATE_OPTIONS_SYSTEM_PROMPT =
+  "You propose 2-3 DISTINCT quiz directions for a Shopify product-finder, grounded " +
+  "in the brand and the merchant's goal. Rules:\n" +
+  "- Each direction picks an experience type from the menu and frames the shopper's " +
+  "journey differently — make them genuinely DIFFERENT angles, not variations of one.\n" +
+  "- Each has a short title, a one-line angle, a one-sentence rationale (why it fits " +
+  "THIS brand + goal + what customers struggle with), and 2-3 sample question texts.\n" +
+  "- Sample questions must be answerable given the outcome buckets; NO answers, NO tags.\n" +
+  "- Lean on the brand summary + voice so copy sounds on-brand from the first read.\n" +
+  "- Respond ONLY via the tool call.";
+
+const EXPERIENCE_MENU = [
+  "product_match — recommend the right products from the catalog (results required)",
+  "personality — a persona reveal + matching products",
+  "lead_capture — qualify shoppers, then capture the email (gate is the point)",
+  "survey — learn from the audience, no products (answers are the outcome)",
+].join("\n  ");
+
+export interface GenerateTemplateOptionsInput {
+  brandSummary: string;
+  brandVoiceSample?: string;
+  goalPrompt: string;
+  struggle?: string;
+  buckets: Array<{ name: string; tags: string[] }>;
+  catalogSummary: string;
+}
+
+export async function generateTemplateOptions(
+  input: GenerateTemplateOptionsInput,
+): Promise<TemplateOptionT[]> {
+  const tool = {
+    name: "emit_template_options",
+    description: "Emit 2-3 distinct quiz directions. The only allowed response.",
+    input_schema: TEMPLATE_OPTIONS_TOOL_SCHEMA as unknown as Anthropic.Tool.InputSchema,
+  } satisfies Anthropic.Tool;
+
+  const userMessage = [
+    "Experience types you may choose from:\n  " + EXPERIENCE_MENU,
+    "",
+    "Brand summary:",
+    input.brandSummary || "(no brand digest — infer from the catalog)",
+    ...(input.brandVoiceSample ? ["", "Brand voice:", input.brandVoiceSample] : []),
+    "",
+    "Merchant's quiz goal:",
+    input.goalPrompt || "(none stated)",
+    ...(input.struggle ? ["", "What customers struggle with:", input.struggle] : []),
+    "",
+    "Outcome buckets the quiz routes to:",
+    input.buckets.length
+      ? input.buckets.map((b) => `- ${b.name}`).join("\n")
+      : "- (no buckets — recommend from the whole catalog)",
+    "",
+    "Catalog summary:",
+    input.catalogSummary,
+    "",
+    "Propose 2-3 distinct directions. Emit via the tool call.",
+  ].join("\n");
+
+  let lastIssue: string | undefined;
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+    const response = await client().messages.create({
+      model: MODEL,
+      max_tokens: 2048,
+      system: TEMPLATE_OPTIONS_SYSTEM_PROMPT,
+      tools: [tool],
+      tool_choice: { type: "tool", name: "emit_template_options" },
+      messages: [
+        {
+          role: "user",
+          content:
+            attempt === 1
+              ? userMessage
+              : `${userMessage}\n\nPrevious attempt failed validation: ${lastIssue}. Regenerate strictly matching the schema.`,
+        },
+      ],
+    });
+
+    const toolUse = response.content.find(
+      (b): b is Anthropic.ToolUseBlock => b.type === "tool_use",
+    );
+    if (!toolUse) {
+      lastIssue = "No tool_use block in response.";
+      continue;
+    }
+    const parsed = TemplateOptionsResult.safeParse(toolUse.input);
+    if (parsed.success) return parsed.data.options;
+    lastIssue = parsed.error.issues
+      .slice(0, 5)
+      .map((i) => `${i.path.join(".")}: ${i.message}`)
+      .join("; ");
+  }
+
+  throw new QuizGenerationError(
+    "Template options generation failed validation after retries.",
     MAX_ATTEMPTS,
     lastIssue,
   );

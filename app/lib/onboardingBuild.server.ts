@@ -13,7 +13,19 @@ import { CategoryDiscoveryError } from "./categoryDiscover";
 import { reconcileBucketsToResultNodes } from "./bucketReconcile";
 import { generateQuestionFlow, type QuizTone } from "./claude";
 import { applyQuestionFlow, type SmartBuildBucket } from "./smartBuild";
-import { parseBrandGuidelinesSafe } from "./brandGuidelines";
+import { parseBrandGuidelinesSafe, type BrandGuidelines } from "./brandGuidelines";
+import { identityToBrandGuidelines, parseBrandIdentitySafe } from "./brandIdentity";
+
+// Step 1 — generation reads the BRAND IDENTITY first (its voice, via the
+// dormant adapter, activated here as the first real consumer), falling back to
+// any uploaded brand guidelines. The identity is the on-brand seed for every
+// AI build now.
+function effectiveBrandGuidelines(
+  shopRow: { brandGuidelines: unknown; brandIdentity: unknown } | null | undefined,
+): BrandGuidelines | null {
+  const fromIdentity = identityToBrandGuidelines(parseBrandIdentitySafe(shopRow?.brandIdentity));
+  return fromIdentity ?? parseBrandGuidelinesSafe(shopRow?.brandGuidelines);
+}
 
 // ───────────────────────────────────────────────────────────────────────────
 // AI onboarding orchestrator (Phase 4). Chains the EXISTING building blocks
@@ -94,9 +106,9 @@ export async function runAiOnboardingBuild(
   if (xtype === "survey" || xtype === "lead_capture") {
     const shopRow = await prisma.shop.findUnique({
       where: { id: shopId },
-      select: { brandGuidelines: true },
+      select: { brandGuidelines: true, brandIdentity: true },
     });
-    const bg = parseBrandGuidelinesSafe(shopRow?.brandGuidelines);
+    const bg = effectiveBrandGuidelines(shopRow);
     const siteText = input.websiteUrl ? await ingestWebsite(input.websiteUrl) : "";
     try {
       const generated = await generateQuestionFlow({
@@ -136,7 +148,10 @@ export async function runAiOnboardingBuild(
   const [allProducts, allCollections, shop] = await Promise.all([
     prisma.product.findMany({ where: { shopId } }),
     prisma.collection.findMany({ where: { shopId } }),
-    prisma.shop.findUnique({ where: { id: shopId }, select: { brandGuidelines: true } }),
+    prisma.shop.findUnique({
+      where: { id: shopId },
+      select: { brandGuidelines: true, brandIdentity: true },
+    }),
   ]);
   const firstCollection = allCollections[0]?.collectionId ?? "";
   if (!firstCollection) {
@@ -183,7 +198,7 @@ export async function runAiOnboardingBuild(
 
   // 5. Generate the question flow + wire it. On failure, keep the bound pages.
   const indexed = buildScopedIndex(allProducts, allCollections, doc.scope.collection_ids);
-  const brandGuidelines = parseBrandGuidelinesSafe(shop?.brandGuidelines);
+  const brandGuidelines = effectiveBrandGuidelines(shop);
   // Optional enrichment: catalog tone sample + merchant website text. Both are
   // best-effort — ingestWebsite returns "" on any failure, never throwing.
   const toneSample = toneSampleFromCatalog(allProducts);

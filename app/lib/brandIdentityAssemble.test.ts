@@ -5,6 +5,7 @@ import {
   rollupConfidence,
   assembleBrandIdentity,
   refineBrandIdentity,
+  foldPainPoint,
 } from "./brandIdentityAssemble";
 import { BrandIdentity, type BrandIdentity as BrandIdentityT } from "./brandIdentity";
 
@@ -127,5 +128,30 @@ describe("refineBrandIdentity (rebuild + lock preservation)", () => {
     const fresh = { ...base, summary: "AI re-digest" };
     const current = { ...base, summary: "MERCHANT EDIT", locked_fields: ["summary"] };
     expect(refineBrandIdentity(fresh, current).summary).toBe("MERCHANT EDIT");
+  });
+});
+
+describe("foldPainPoint (Step 1 — struggle → identity)", () => {
+  const stored = () =>
+    BrandIdentity.parse({
+      summary: "x",
+      design: { suggested_theme_preset_id: "linen", suggested_layout_variant_id: "classic" },
+      positioning: {},
+      updated_at: "2026-06-13T00:00:00.000Z",
+      pain_points: ["too many specs"],
+      sources: [{ kind: "catalog", detail: "", at: "2026-06-13T00:00:00.000Z" }],
+    });
+
+  it("appends + dedupes, locks pain_points, stamps merchant_input, bumps version", () => {
+    const next = foldPainPoint(stored(), "hard to compare boards", "2026-06-14T00:00:00.000Z");
+    expect(next.pain_points).toEqual(["too many specs", "hard to compare boards"]);
+    expect(next.locked_fields).toContain("pain_points");
+    expect(next.sources.some((s) => s.kind === "merchant_input")).toBe(true);
+    expect(next.version).toBe(2);
+  });
+
+  it("dedupes a repeat struggle (no duplicate pain point)", () => {
+    const next = foldPainPoint(stored(), "too many specs", "2026-06-14T00:00:00.000Z");
+    expect(next.pain_points).toEqual(["too many specs"]);
   });
 });
