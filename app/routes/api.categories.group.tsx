@@ -15,6 +15,7 @@ import { resolveApiShop } from "../lib/studioAccess.server";
 import prisma from "../db.server";
 import {
   resolveGroupsBySource,
+  hydrateCollectionProducts,
   type GroupingCollection,
   type GroupingProduct,
   type GroupingSource,
@@ -207,12 +208,12 @@ export async function action({ request }: ActionFunctionArgs) {
       collectionIds: p.collectionIds,
       metafields: flattenMetafields(p.metafields),
     }));
-    const groupingCollections: GroupingCollection[] = allCollections.map(
-      (c) => ({
-        collectionId: c.collectionId,
-        title: c.title,
-        productIds: c.productIds,
-      }),
+    // Collection.productIds is empty post-sync — hydrate membership from the
+    // products' own collection GIDs so group-by-collection partitions against
+    // real pools (Step 1 S1 fix).
+    const groupingCollections: GroupingCollection[] = hydrateCollectionProducts(
+      allCollections.map((c) => ({ collectionId: c.collectionId, title: c.title })),
+      groupingProducts,
     );
 
     const metafieldKey = body.metafieldKey?.trim() || undefined;

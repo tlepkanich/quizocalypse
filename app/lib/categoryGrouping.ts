@@ -43,6 +43,40 @@ export interface ProposedGroup {
 // into hundreds of categories.
 const TOP_TAG_LIMIT = 12;
 
+// ── Collection.productIds fix (Step 1 S1) ────────────────────────────────────
+// Collection.productIds is initialized [] at sync and never backfilled, but
+// products DO carry the live collection GIDs (Product.collectionIds). So build
+// the collection→products membership from the INVERSE direction, on demand —
+// no migration, recomputed free on every sync. Pure.
+export function inverseCollectionIndex(
+  products: GroupingProduct[],
+): Map<string, string[]> {
+  const idx = new Map<string, string[]>();
+  for (const p of products) {
+    for (const cid of p.collectionIds) {
+      const arr = idx.get(cid);
+      if (arr) arr.push(p.productId);
+      else idx.set(cid, [p.productId]);
+    }
+  }
+  return idx;
+}
+
+// Hydrate synced collections (title only — productIds are empty post-sync) with
+// their real members via the inverse index, so `resolveByCollection` partitions
+// against actual product pools instead of empty sets.
+export function hydrateCollectionProducts(
+  collections: Array<{ collectionId: string; title: string }>,
+  products: GroupingProduct[],
+): GroupingCollection[] {
+  const idx = inverseCollectionIndex(products);
+  return collections.map((c) => ({
+    collectionId: c.collectionId,
+    title: c.title,
+    productIds: idx.get(c.collectionId) ?? [],
+  }));
+}
+
 export function resolveGroupsBySource(
   source: GroupingSource,
   products: GroupingProduct[],
