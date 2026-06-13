@@ -1,6 +1,6 @@
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "@remix-run/node";
 import { json } from "@remix-run/node";
-import { Link, useLoaderData } from "@remix-run/react";
+import { Form, Link, useLoaderData } from "@remix-run/react";
 import type { AdminApiContext } from "@shopify/shopify-app-remix/server";
 import { authenticate } from "../shopify.server";
 import prisma from "../db.server";
@@ -73,6 +73,21 @@ export default function AppOnboardingBrand() {
         }
       />
       <BrandIdentityReview identity={identity} state={state} />
+      <div
+        className="qz-row qz-row-between"
+        style={{ marginTop: 20, gap: 12, flexWrap: "wrap", alignItems: "center" }}
+      >
+        <span className="qz-dim" style={{ fontSize: 13 }}>
+          Looks right? Next we&rsquo;ll group your products and shape the quiz.
+        </span>
+        {/* POST to the create hub's ai-funnel intent → the resumable funnel. */}
+        <Form method="post" action="/app/onboarding">
+          <input type="hidden" name="intent" value="ai-funnel" />
+          <button type="submit" className="qz-btn qz-btn-accent">
+            Continue to quiz setup →
+          </button>
+        </Form>
+      </div>
     </QzPage>
   );
 }

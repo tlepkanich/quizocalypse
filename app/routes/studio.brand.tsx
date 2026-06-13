@@ -70,6 +70,17 @@ export default function StudioBrand() {
         }
       />
       <BrandIdentityReview identity={identity} state={state} />
+      <div
+        className="qz-row qz-row-between"
+        style={{ marginTop: 20, gap: 12, flexWrap: "wrap", alignItems: "center" }}
+      >
+        <span className="qz-dim" style={{ fontSize: 13 }}>
+          Looks right? Next we&rsquo;ll group your products and shape the quiz.
+        </span>
+        <Link to="/studio/onboarding" className="qz-btn qz-btn-accent">
+          Continue to quiz setup →
+        </Link>
+      </div>
     </QzPage>
   );
 }

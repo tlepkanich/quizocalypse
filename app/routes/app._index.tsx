@@ -207,7 +207,7 @@ export default function Index() {
                 Blank quiz
               </QzButton>
             </Link>
-            <Link to="/app/onboarding">
+            <Link to="/app/onboarding/brand">
               <QzButton variant="accent" disabled={data.productCount === 0}>
                 New AI quiz
               </QzButton>
@@ -260,7 +260,7 @@ export default function Index() {
                 Start with a template or let AI build one from your catalog.
               </p>
               <div className="qz-row qz-mt-16" style={{ gap: 10, flexWrap: "wrap" }}>
-                <Link to="/app/onboarding" style={{ display: "inline-block" }}>
+                <Link to="/app/onboarding/brand" style={{ display: "inline-block" }}>
                   <QzButton variant="accent">Guided setup →</QzButton>
                 </Link>
                 <Link to="/app/quizzes/new" style={{ display: "inline-block" }}>
