@@ -60,21 +60,45 @@ async function loadStep2Context(shopId: string) {
   return { products, collections, indexed, brandSummary, brandVoiceSample, positioning, detect };
 }
 
-// Tier 1: brand-tailored quiz types (with best-effort live web research).
-export async function generateStep2Types(
-  shopId: string,
-  input: { goal: string; struggle?: string; buckets?: Array<{ name: string; tags: string[] }> },
-): Promise<{ types: QuizType[]; webResearchSummary: string }> {
+// Best-effort live web research for the shop's positioning (the slow ~40s pass;
+// in the funnel it runs inside the detached typing job, never synchronously).
+export async function runStep2WebResearch(shopId: string): Promise<string> {
   const ctx = await loadStep2Context(shopId);
-  const buckets =
-    input.buckets ?? ctx.detect.proposed.map((g) => ({ name: g.name, tags: g.tags }));
-
-  const webResearchText = await runWebResearchForQuizTypes({
+  return runWebResearchForQuizTypes({
     industry: ctx.positioning.industry,
     vertical: ctx.positioning.vertical,
     priceTier: ctx.positioning.price_tier,
     demographic: ctx.positioning.demographic,
   });
+}
+
+// Tier 1: brand-tailored quiz types. `webResearchText` is passed in (the caller
+// runs runStep2WebResearch first, detached); `skipWebResearch` runs the fast
+// degraded path (model knowledge only).
+export async function generateStep2Types(
+  shopId: string,
+  input: {
+    goal: string;
+    struggle?: string;
+    buckets?: Array<{ name: string; tags: string[] }>;
+    webResearchText?: string;
+    skipWebResearch?: boolean;
+  },
+): Promise<{ types: QuizType[]; webResearchSummary: string }> {
+  const ctx = await loadStep2Context(shopId);
+  const buckets =
+    input.buckets ?? ctx.detect.proposed.map((g) => ({ name: g.name, tags: g.tags }));
+
+  const webResearchText =
+    input.webResearchText ??
+    (input.skipWebResearch
+      ? ""
+      : await runWebResearchForQuizTypes({
+          industry: ctx.positioning.industry,
+          vertical: ctx.positioning.vertical,
+          priceTier: ctx.positioning.price_tier,
+          demographic: ctx.positioning.demographic,
+        }));
 
   const types = await generateQuizTypes({
     brandSummary: ctx.brandSummary,
