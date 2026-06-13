@@ -7,6 +7,9 @@ import {
   generateQuizTypes,
   generateQuizTemplates,
 } from "./claude";
+import { Quiz, BuildSession, PickedTemplate } from "./quizSchema";
+import { dialsToBuildDirectives, autoQuizName } from "./dialDirectives";
+import { runAiOnboardingBuild } from "./onboardingBuild.server";
 import type { GroupingProduct } from "./categoryGrouping";
 import type { QuizType, RichTemplateOption } from "./quizSchema";
 
@@ -139,4 +142,175 @@ export async function generateStep2Templates(
     buckets,
     catalogSummary: ctx.indexed.summary,
   });
+}
+
+// ── Detached generation + build (the funnel's typing/templating/build steps) ──
+
+// Re-read the quiz fresh, mutate build_session, write back. The fresh re-read is
+// the no-clobber discipline for the long detached jobs (the merchant only polls
+// during them, so this end-of-job write is safe).
+async function patchBuildSession(
+  quizId: string,
+  mutate: (s: BuildSession) => BuildSession,
+): Promise<void> {
+  const quiz = await prisma.quiz.findUnique({ where: { id: quizId }, select: { draftJson: true } });
+  if (!quiz) return;
+  const parsed = Quiz.safeParse(quiz.draftJson);
+  if (!parsed.success) return;
+  const session = parsed.data.build_session ?? BuildSession.parse({});
+  const next = mutate(session);
+  await prisma.quiz.update({
+    where: { id: quizId },
+    data: { draftJson: Quiz.parse({ ...parsed.data, build_session: next }) as never },
+  });
+}
+
+// The funnel's "typing" job — web research + quiz types, DETACHED (research ~40s +
+// types ~31s outruns the edge window; measured at T2). On success → stage "types"
+// with the cards; on failure → back to "goal" so the merchant can retry.
+export function startStep2Types(
+  shopId: string,
+  quizId: string,
+  input: { goal: string; struggle?: string; buckets?: Array<{ name: string; tags: string[] }> },
+): void {
+  void (async () => {
+    try {
+      const webResearchText = await runStep2WebResearch(shopId);
+      const { types } = await generateStep2Types(shopId, { ...input, webResearchText });
+      await patchBuildSession(quizId, (s) =>
+        BuildSession.parse({
+          ...s,
+          stage: "types",
+          quiz_types: types,
+          web_research_summary: webResearchText.slice(0, 600),
+        }),
+      );
+    } catch (err) {
+      console.error("[step2] type generation failed:", err instanceof Error ? err.message : err);
+      await patchBuildSession(quizId, (s) => BuildSession.parse({ ...s, stage: "goal" }));
+    }
+  })();
+}
+
+// The funnel's "templating" job — rich battle-card templates for the chosen type,
+// DETACHED. On success → stage "configuring" (rich_templates ready, none picked
+// yet); on failure → back to "types".
+export function startStep2Templates(
+  shopId: string,
+  quizId: string,
+  chosenType: QuizType,
+  input: { goal: string; struggle?: string; buckets?: Array<{ id: string; name: string; tags: string[] }> },
+): void {
+  void (async () => {
+    try {
+      const templates = await generateStep2Templates(shopId, chosenType, input);
+      await patchBuildSession(quizId, (s) =>
+        BuildSession.parse({
+          ...s,
+          stage: "configuring",
+          rich_templates: templates,
+          picked_template: undefined,
+        }),
+      );
+    } catch (err) {
+      console.error("[step2] template generation failed:", err instanceof Error ? err.message : err);
+      await patchBuildSession(quizId, (s) => BuildSession.parse({ ...s, stage: "types" }));
+    }
+  })();
+}
+
+// Build the merchant's editable working copy from a chosen rich template + the
+// confirmed buckets. Recommended groups default to all the confirmed buckets
+// (or only the AI-flagged ones when it named any).
+export function initPickedTemplate(
+  rich: RichTemplateOption,
+  productGroups: Array<{ id: string; name: string; product_ids: string[] }>,
+  now: Date,
+): PickedTemplate {
+  const flagged = new Set(rich.recommended_bucket_ids);
+  return PickedTemplate.parse({
+    template_id: rich.id,
+    quiz_name: autoQuizName(rich.title, now),
+    design_dials: rich.dials,
+    rec_defaults: rich.rec_defaults,
+    recommended_groups: productGroups.map((g) => ({
+      group_id: g.id,
+      group_name: g.name,
+      product_ids: g.product_ids,
+      enabled: flagged.size === 0 || flagged.has(g.id),
+    })),
+    feature_notes: rich.feature_notes,
+    question_count: rich.question_count,
+    goal_line: rich.angle,
+    saved_as_template: false,
+  });
+}
+
+// Pick → the detached full build. Applies the battle-card edits to the quiz's
+// Category rows (prune disabled groups, narrow enabled groups to the merchant's
+// product subset), threads dials → tokenPatch + directives and rec_defaults →
+// recOverride, then runs the existing detached build (buildState "building").
+export async function startStep2Build(
+  shopId: string,
+  quizId: string,
+  rich: RichTemplateOption,
+  picked: PickedTemplate,
+  goal: string,
+  struggle: string,
+): Promise<void> {
+  const cats = await prisma.category.findMany({
+    where: { shopId, quizId },
+    select: { id: true, name: true, tags: true },
+  });
+  const overrideById = new Map(picked.recommended_groups.map((g) => [g.group_id, g]));
+  const enabledBuckets: Array<{ id: string; name: string; tags: string[] }> = [];
+  for (const c of cats) {
+    const o = overrideById.get(c.id);
+    if (o && !o.enabled) continue; // disabled group → no result page for it
+    if (o && o.enabled) {
+      // narrow the bucket to the merchant's kept products
+      await prisma.category.update({ where: { id: c.id }, data: { productIds: o.product_ids } });
+    }
+    enabledBuckets.push({ id: c.id, name: c.name, tags: c.tags });
+  }
+
+  const goalPrompt = struggle ? `${goal}\n\nShoppers struggle with: ${struggle}` : goal;
+  const { tokenPatch, promptDirectives } = dialsToBuildDirectives(picked.design_dials);
+
+  await prisma.quiz.update({
+    where: { id: quizId },
+    data: { name: picked.quiz_name, buildState: "building" },
+  });
+
+  void runAiOnboardingBuild({
+    shopId,
+    quizId,
+    name: picked.quiz_name,
+    goalPrompt,
+    questionCount: picked.question_count,
+    tone: "friendly",
+    flow: {
+      welcome_message: false,
+      email_gate: rich.experience_type === "lead_capture",
+      mixed_input_types: false,
+    },
+    experienceType: rich.experience_type,
+    ...(enabledBuckets.length ? { preResolvedBuckets: enabledBuckets } : {}),
+    directionAngle: rich.angle,
+    sampleQuestionSeeds: rich.sample_questions,
+    tokenPatch,
+    dialDirectives: promptDirectives,
+    recOverride: {
+      max_products: picked.rec_defaults.max_products,
+      oos_behavior: picked.rec_defaults.oos_behavior,
+      fallback_collection_id: picked.rec_defaults.fallback_collection_id,
+    },
+  })
+    .then(() => prisma.quiz.update({ where: { id: quizId }, data: { buildState: null } }))
+    .catch(async (err) => {
+      const msg = err instanceof Error ? err.message : String(err);
+      await prisma.quiz
+        .update({ where: { id: quizId }, data: { buildState: `error:${msg.slice(0, 300)}` } })
+        .catch(() => {});
+    });
 }

@@ -1,7 +1,7 @@
 import { json, redirect } from "@remix-run/node";
 import type { Shop } from "@prisma/client";
 import prisma from "../db.server";
-import { Quiz, BuildSession } from "./quizSchema";
+import { Quiz, BuildSession, DesignDials, RecDefaults } from "./quizSchema";
 import { buildSeedQuiz } from "./seedQuiz";
 import { parseBrandIdentitySafe } from "./brandIdentity";
 import { detectGroupingDimension } from "./groupingDetect";
@@ -10,9 +10,15 @@ import {
   persistConfirmedGroups,
   loadConfirmedBuckets,
   resyncCatalogForShop,
-  generateStep1TemplateOptions,
   startStep1Build,
 } from "./step1Build.server";
+import {
+  startStep2Types,
+  startStep2Templates,
+  initPickedTemplate,
+  startStep2Build,
+} from "./step2Build.server";
+import { saveTemplate, listSavedTemplates } from "./savedTemplates.server";
 import type { GroupingProduct } from "./categoryGrouping";
 
 // Builder Re-work Step 1 — the funnel's loader + action, lifted out of the route
@@ -96,10 +102,16 @@ async function writeDoc(quizId: string, doc: Quiz) {
 export async function loadStep1FunnelData(shop: FunnelShop, quizId: string | undefined) {
   const { quiz, session } = await loadFunnelDraft(shop.id, quizId);
 
-  const [products, collections, shopRow] = await Promise.all([
+  const [products, collections, shopRow, categories, savedTemplates] = await Promise.all([
     prisma.product.findMany({ where: { shopId: shop.id } }),
     prisma.collection.findMany({ where: { shopId: shop.id } }),
     prisma.shop.findUnique({ where: { id: shop.id }, select: { brandIdentity: true } }),
+    prisma.category.findMany({
+      where: { shopId: shop.id, quizId: quiz.id },
+      select: { id: true, name: true, productIds: true },
+      orderBy: { createdAt: "asc" },
+    }),
+    listSavedTemplates(shop.id),
   ]);
 
   const detect = detectGroupingDimension(
@@ -127,6 +139,15 @@ export async function loadStep1FunnelData(shop: FunnelShop, quizId: string | und
     goal: session.goal ?? null,
     templateOptions: session.template_options,
     pickedOptionId: session.picked_option_id ?? null,
+    // ── Step 2 ──
+    quizTypes: session.quiz_types,
+    pickedTypeId: session.picked_type_id ?? null,
+    richTemplates: session.rich_templates,
+    pickedTemplate: session.picked_template ?? null,
+    webResearchSummary: session.web_research_summary ?? null,
+    productGroups: categories.map((c) => ({ id: c.id, name: c.name, product_ids: c.productIds })),
+    collections: collections.map((c) => ({ collectionId: c.collectionId, title: c.title })),
+    savedTemplates: savedTemplates.map((t) => ({ id: t.id, name: t.name, template: t.template })),
   };
 }
 
@@ -197,26 +218,21 @@ export async function runStep1FunnelAction(
     // future re-syncs) — an enhancement, never a blocker: ignore its result.
     if (struggle) await recordIdentitySignals(shop.id, { struggle, goal });
 
-    let options;
-    try {
-      const buckets = await loadConfirmedBuckets(shop.id, quiz.id);
-      options = await generateStep1TemplateOptions(shop.id, {
-        goal,
-        ...(struggle ? { struggle } : {}),
-        ...(buckets.length ? { buckets } : {}),
-      });
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      return json({ intent, ok: false, error: `Couldn't draft directions: ${msg}` }, { status: 502 });
-    }
-
+    // Step 2 — enter the transient "typing" stage and kick the DETACHED tier-1
+    // job (web research + quiz types; ~70s, outruns the edge window). The funnel
+    // polls until the job writes stage:"types".
+    const buckets = await loadConfirmedBuckets(shop.id, quiz.id);
     const next: BuildSession = {
       ...session,
-      stage: "templates",
+      stage: "typing",
       goal: { goal_text: goal, struggle_text: struggle },
-      template_options: options,
     };
     await writeDoc(quiz.id, { ...doc, build_session: next });
+    startStep2Types(shop.id, quiz.id, {
+      goal,
+      ...(struggle ? { struggle } : {}),
+      ...(buckets.length ? { buckets } : {}),
+    });
     return json({ intent, ok: true });
   }
 
@@ -236,14 +252,156 @@ export async function runStep1FunnelAction(
     return redirect(opts.builderPath(quiz.id));
   }
 
-  if (intent === "back-to-grouping" || intent === "back-to-goal") {
-    const next: BuildSession = {
-      ...session,
-      stage: intent === "back-to-grouping" ? "grouping" : "goal",
-    };
+  // ── Step 2 intents ──────────────────────────────────────────────────────
+  if (intent === "pick-type") {
+    const typeId = String(form.get("typeId") ?? "");
+    const chosen = session.quiz_types.find((t) => t.id === typeId);
+    if (!chosen) return json({ intent, ok: false, error: "That type is no longer available." }, { status: 400 });
+    const goal = session.goal?.goal_text ?? "";
+    const struggle = session.goal?.struggle_text ?? "";
+    const cats = await prisma.category.findMany({
+      where: { shopId: shop.id, quizId: quiz.id },
+      select: { id: true, name: true, tags: true },
+    });
+    const next: BuildSession = { ...session, stage: "templating", picked_type_id: typeId };
+    await writeDoc(quiz.id, { ...doc, build_session: next });
+    startStep2Templates(shop.id, quiz.id, chosen, {
+      goal,
+      ...(struggle ? { struggle } : {}),
+      ...(cats.length ? { buckets: cats } : {}),
+    });
+    return json({ intent, ok: true });
+  }
+
+  if (intent === "pick-template") {
+    const templateId = String(form.get("templateId") ?? "");
+    const rich = session.rich_templates.find((t) => t.id === templateId);
+    if (!rich) return json({ intent, ok: false, error: "That template is no longer available." }, { status: 400 });
+    const cats = await prisma.category.findMany({
+      where: { shopId: shop.id, quizId: quiz.id },
+      select: { id: true, name: true, productIds: true },
+      orderBy: { createdAt: "asc" },
+    });
+    const picked = initPickedTemplate(
+      rich,
+      cats.map((c) => ({ id: c.id, name: c.name, product_ids: c.productIds })),
+      new Date(),
+    );
+    await writeDoc(quiz.id, { ...doc, build_session: { ...session, picked_template: picked } });
+    return json({ intent, ok: true });
+  }
+
+  // Autosave setters — all require a picked template.
+  if (
+    intent === "set-dials" ||
+    intent === "set-rec" ||
+    intent === "set-name" ||
+    intent === "toggle-group" ||
+    intent === "toggle-product"
+  ) {
+    const picked = session.picked_template;
+    if (!picked) return json({ intent, ok: false, error: "No template selected." }, { status: 400 });
+    let nextPicked = picked;
+
+    if (intent === "set-dials") {
+      const parsed = DesignDials.safeParse(safeJson(form.get("dials")));
+      if (!parsed.success) return json({ intent, ok: false, error: "bad dials" }, { status: 400 });
+      nextPicked = { ...picked, design_dials: parsed.data };
+    } else if (intent === "set-rec") {
+      const parsed = RecDefaults.safeParse(safeJson(form.get("rec")));
+      if (!parsed.success) return json({ intent, ok: false, error: "bad rec" }, { status: 400 });
+      nextPicked = { ...picked, rec_defaults: parsed.data };
+    } else if (intent === "set-name") {
+      const name = String(form.get("name") ?? "").trim().slice(0, 120);
+      if (!name) return json({ intent, ok: false, error: "Name can't be empty." }, { status: 400 });
+      nextPicked = { ...picked, quiz_name: name };
+    } else if (intent === "toggle-group") {
+      const groupId = String(form.get("groupId") ?? "");
+      const enabled = String(form.get("enabled") ?? "") === "true";
+      nextPicked = {
+        ...picked,
+        recommended_groups: picked.recommended_groups.map((g) =>
+          g.group_id === groupId ? { ...g, enabled } : g,
+        ),
+      };
+    } else {
+      // toggle-product
+      const groupId = String(form.get("groupId") ?? "");
+      const productId = String(form.get("productId") ?? "");
+      const enabled = String(form.get("enabled") ?? "") === "true";
+      nextPicked = {
+        ...picked,
+        recommended_groups: picked.recommended_groups.map((g) => {
+          if (g.group_id !== groupId) return g;
+          const set = new Set(g.product_ids);
+          if (enabled) set.add(productId);
+          else set.delete(productId);
+          return { ...g, product_ids: Array.from(set) };
+        }),
+      };
+    }
+
+    await writeDoc(quiz.id, { ...doc, build_session: { ...session, picked_template: nextPicked } });
+    return json({ intent, ok: true });
+  }
+
+  if (intent === "save-template") {
+    const picked = session.picked_template;
+    if (!picked) return json({ intent, ok: false, error: "No template selected." }, { status: 400 });
+    const rich = session.rich_templates.find((t) => t.id === picked.template_id);
+    if (!rich) return json({ intent, ok: false, error: "Template not found." }, { status: 400 });
+    // Persist the merchant's edited template for reuse.
+    await saveTemplate(shop.id, picked.quiz_name, {
+      ...rich,
+      dials: picked.design_dials,
+      rec_defaults: picked.rec_defaults,
+      question_count: picked.question_count,
+    });
+    await writeDoc(quiz.id, {
+      ...doc,
+      build_session: { ...session, picked_template: { ...picked, saved_as_template: true } },
+    });
+    return json({ intent, ok: true });
+  }
+
+  if (intent === "generate-build") {
+    const picked = session.picked_template;
+    if (!picked) return json({ intent, ok: false, error: "No template selected." }, { status: 400 });
+    const rich = session.rich_templates.find((t) => t.id === picked.template_id);
+    if (!rich) return json({ intent, ok: false, error: "Template not found." }, { status: 400 });
+    if (!session.goal?.goal_text) return json({ intent, ok: false, error: "Add a goal before building." }, { status: 400 });
+    await startStep2Build(
+      shop.id,
+      quiz.id,
+      rich,
+      picked,
+      session.goal.goal_text,
+      session.goal.struggle_text ?? "",
+    );
+    return redirect(opts.builderPath(quiz.id));
+  }
+
+  if (
+    intent === "back-to-grouping" ||
+    intent === "back-to-goal" ||
+    intent === "back-to-types"
+  ) {
+    const stage =
+      intent === "back-to-grouping" ? "grouping" : intent === "back-to-goal" ? "goal" : "types";
+    const next: BuildSession = { ...session, stage };
     await writeDoc(quiz.id, { ...doc, build_session: next });
     return json({ intent, ok: true });
   }
 
   return json({ intent, ok: false, error: "Unknown action" }, { status: 400 });
+}
+
+// Parse a form value as JSON, returning null on any failure (the Zod safeParse
+// downstream rejects nulls cleanly).
+function safeJson(v: FormDataEntryValue | null): unknown {
+  try {
+    return JSON.parse(String(v ?? "null"));
+  } catch {
+    return null;
+  }
 }
