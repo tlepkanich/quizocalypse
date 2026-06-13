@@ -789,11 +789,101 @@ export const TemplateOption = z.object({
 });
 export type TemplateOption = z.infer<typeof TemplateOption>;
 
+// ── Builder Re-work Step 2 — enhanced template creation (the "battle card") ──
+// Tier-1: an AI-surfaced quiz TYPE tailored to the brand (catalog + identity +
+// optional web research). The merchant picks one before tier-2 templates generate.
+export const QuizType = z.object({
+  id: z.string().min(1), // stable slug, e.g. "vitamin-educator"
+  experience_type: z.enum(["product_match", "personality", "lead_capture", "survey"]),
+  name: z.string().min(1), // display name, e.g. "Educate Customers on Vitamins"
+  achieves: z.string().min(1), // one-line "what it achieves"
+  question_range: z.object({
+    min: z.number().int().min(1).max(20),
+    max: z.number().int().min(1).max(20),
+  }),
+  best_practice_note: z.string().default(""), // a real-pattern note for this category
+  rationale: z.string().default(""), // why it fits THIS brand
+  web_research_excerpt: z.string().default(""), // supporting snippet ("" when web research degraded)
+});
+export type QuizType = z.infer<typeof QuizType>;
+
+// The four high-level design dials the merchant sets on a battle card. `lines`
+// maps 1:1 to DesignTokens.radius (soft=pill, sharp=square, rounded=rounded);
+// the other three become build-time generation directives (dialDirectives.ts).
+export const DesignDials = z.object({
+  imagery: z.enum(["high", "medium", "low"]).default("medium"),
+  graphics: z.enum(["high", "medium", "low"]).default("medium"),
+  word_forward: z.enum(["high", "medium", "low"]).default("medium"),
+  lines: z.enum(["soft", "sharp", "rounded"]).default("rounded"),
+});
+export type DesignDials = z.infer<typeof DesignDials>;
+
+// The battle card's recommendation-page settings (a subset of ResultData, applied
+// to every built result node). The match-ladder is set by the build from the
+// confirmed buckets — the merchant only tunes count / OOS / fallback here.
+export const RecDefaults = z.object({
+  max_products: z.number().int().min(1).max(12).default(3),
+  oos_behavior: OosBehavior.default("show_with_badge"),
+  fallback_collection_id: z.string().default(""),
+});
+export type RecDefaults = z.infer<typeof RecDefaults>;
+
+// A recommended product group on the battle card — the confirmed buckets, with
+// per-template enable toggles + product de-selection (template-scoped overrides
+// applied to Category.productIds at build time, never mutating other quizzes).
+export const RecommendedGroup = z.object({
+  group_id: z.string(), // category id, or "manual"
+  group_name: z.string().default(""),
+  product_ids: z.array(z.string()).default([]),
+  enabled: z.boolean().default(true),
+});
+export type RecommendedGroup = z.infer<typeof RecommendedGroup>;
+
+// Tier-2: a rich AI-proposed template for the chosen type — TemplateOption plus
+// the battle-card data (3 feature notes, design dials, rec defaults, count).
+export const RichTemplateOption = TemplateOption.extend({
+  feature_notes: z.array(z.string().min(1)).min(1).max(3),
+  dials: DesignDials,
+  rec_defaults: RecDefaults,
+  recommended_bucket_ids: z.array(z.string()).default([]),
+  question_count: z.number().int().min(3).max(20).default(6),
+});
+export type RichTemplateOption = z.infer<typeof RichTemplateOption>;
+
+// The merchant's editable working copy of the chosen template (autosaved). Holds
+// every battle-card edit; the build consumes THIS, not the AI's pristine option.
+export const PickedTemplate = z.object({
+  template_id: z.string().min(1),
+  quiz_name: z.string().min(1), // auto-named, editable, never blank
+  design_dials: DesignDials,
+  rec_defaults: RecDefaults,
+  recommended_groups: z.array(RecommendedGroup).default([]),
+  feature_notes: z.array(z.string()).default([]),
+  question_count: z.number().int().min(3).max(20).default(6),
+  goal_line: z.string().default(""),
+  saved_as_template: z.boolean().default(false),
+});
+export type PickedTemplate = z.infer<typeof PickedTemplate>;
+
 // Transient multi-stage session state for the Step-1 funnel, parked on the DRAFT
 // doc (resumes on refresh, quiz-scoped, discardable). NEVER published — stripped
 // at publish (quizPublish.ts) since publishedJson spreads ...doc.
 export const BuildSession = z.object({
-  stage: z.enum(["grouping", "goal", "generating", "templates", "done"]).default("grouping"),
+  stage: z
+    .enum([
+      "grouping",
+      "goal",
+      // Step-1 legacy stages — kept so any in-flight Step-1 draft still renders.
+      "generating",
+      "templates",
+      // Step-2 stages: typing/templating are transient "AI in flight" (polled).
+      "typing",
+      "types",
+      "templating",
+      "configuring",
+      "done",
+    ])
+    .default("grouping"),
   grouping: z
     .object({
       dimension: z.enum(["collection", "tag", "product_type", "metafield", "all"]),
@@ -807,8 +897,16 @@ export const BuildSession = z.object({
       struggle_text: z.string().default(""), // feeds the identity's pain_points
     })
     .optional(),
+  // Step-1 lightweight directions (superseded by Step 2's two-tier flow; retained
+  // for back-compat of drafts mid-flight when Step 2 ships).
   template_options: z.array(TemplateOption).default([]),
   picked_option_id: z.string().optional(),
+  // ── Step 2 — enhanced template creation ──
+  quiz_types: z.array(QuizType).default([]), // tier-1 cards
+  picked_type_id: z.string().optional(),
+  rich_templates: z.array(RichTemplateOption).default([]), // tier-2 battle cards (pristine)
+  picked_template: PickedTemplate.optional(), // the merchant's editable working copy
+  web_research_summary: z.string().optional(),
 });
 export type BuildSession = z.infer<typeof BuildSession>;
 

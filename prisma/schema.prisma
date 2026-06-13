@@ -49,10 +49,26 @@ model Shop {
   brandIdentity      Json?
   brandIdentityState String?
 
-  products    Product[]
-  collections Collection[]
-  categories  Category[]
-  quizzes     Quiz[]
+  products       Product[]
+  collections    Collection[]
+  categories     Category[]
+  quizzes        Quiz[]
+  savedTemplates SavedTemplate[]
+}
+
+// Builder Re-work Step 2: a merchant-saved "battle card" template (a serialized
+// RichTemplateOption — design dials, rec defaults, feature notes) reusable on a
+// future quiz. See app/lib/savedTemplates.server.ts + app/lib/quizSchema.ts.
+model SavedTemplate {
+  id        String   @id @default(cuid())
+  shopId    String
+  name      String
+  payload   Json
+  createdAt DateTime @default(now())
+
+  shop Shop @relation(fields: [shopId], references: [id], onDelete: Cascade)
+
+  @@index([shopId])
 }
 
 model Product {

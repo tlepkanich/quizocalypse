@@ -12,7 +12,7 @@ import {
   QzExpandCard,
   StagedProgress,
 } from "../qz";
-import type { TemplateOption } from "../../lib/quizSchema";
+import type { TemplateOption, BuildSession } from "../../lib/quizSchema";
 
 // Builder Re-work Step 1 — the shared, server-free creation funnel. Renders one
 // of four stages off the draft's build_session and drives every transition
@@ -24,7 +24,7 @@ import type { TemplateOption } from "../../lib/quizSchema";
 export interface FunnelData {
   quizId: string;
   name: string;
-  stage: "grouping" | "goal" | "generating" | "templates" | "done";
+  stage: BuildSession["stage"]; // sourced from the schema so it can't drift
   minGoalChars: number;
   productCount: number;
   identitySummary: string | null;

@@ -1,7 +1,7 @@
 import { json, redirect } from "@remix-run/node";
 import type { Shop } from "@prisma/client";
 import prisma from "../db.server";
-import { Quiz, type BuildSession } from "./quizSchema";
+import { Quiz, BuildSession } from "./quizSchema";
 import { buildSeedQuiz } from "./seedQuiz";
 import { parseBrandIdentitySafe } from "./brandIdentity";
 import { detectGroupingDimension } from "./groupingDetect";
@@ -76,10 +76,9 @@ async function loadFunnelDraft(shopId: string, quizId: string | undefined) {
   if (!quiz) throw new Response("Quiz not found", { status: 404 });
   const parsed = Quiz.safeParse(quiz.draftJson);
   if (!parsed.success) throw new Response("Draft is not readable", { status: 422 });
-  const session: BuildSession = parsed.data.build_session ?? {
-    stage: "grouping",
-    template_options: [],
-  };
+  // BuildSession.parse({}) fills every default (stage:"grouping" + all arrays),
+  // so this stays correct as Step-2 fields accrete.
+  const session: BuildSession = parsed.data.build_session ?? BuildSession.parse({});
   return { quiz, doc: parsed.data, session };
 }
 
