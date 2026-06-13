@@ -7,7 +7,11 @@ import {
   QzBanner,
   QzBadge,
   QzField,
+  QzInput,
+  QzSelect,
   QzTextarea,
+  QzSegmented,
+  QzTooltip,
   QzProgress,
   QzExpandCard,
   StagedProgress,
@@ -18,6 +22,8 @@ import type {
   QuizType,
   RichTemplateOption,
   PickedTemplate,
+  DesignDials,
+  RecDefaults,
 } from "../../lib/quizSchema";
 
 // Builder Re-work Step 1 — the shared, server-free creation funnel. Renders one
@@ -139,7 +145,7 @@ export function Step1Funnel({ data }: { data: FunnelData }) {
       {data.stage === "templating" ? <GeneratingScreen kind="templating" /> : null}
 
       {data.stage === "configuring" ? (
-        <ConfiguringPlaceholder data={data} fetcher={fetcher} />
+        <BattleCardStage data={data} fetcher={fetcher} pendingIntent={pendingIntent} />
       ) : null}
 
       {/* Legacy Step-1 directions — in-flight drafts from before Step 2. */}
@@ -663,33 +669,137 @@ function TypesStage({
   );
 }
 
-// ── Stage: Configuring (tier-2) — T4 placeholder; T5 replaces with the battle
-// card editor. Lists the generated templates so the stage is never blank.
-function ConfiguringPlaceholder({
+// ── Stage: Configuring (tier-2) — the BATTLE CARD: pick a template, fine-tune
+// the high-level design dials + recommendation settings, then generate. Edits
+// autosave (optimistic + debounce) to the picked_template working copy.
+const LEVEL_OPTS: { value: "low" | "medium" | "high"; label: string }[] = [
+  { value: "low", label: "Low" },
+  { value: "medium", label: "Med" },
+  { value: "high", label: "High" },
+];
+const LINE_OPTS: { value: "soft" | "sharp" | "rounded"; label: string }[] = [
+  { value: "soft", label: "Soft" },
+  { value: "rounded", label: "Rounded" },
+  { value: "sharp", label: "Sharp" },
+];
+const LEVEL_LABEL: Record<"low" | "medium" | "high", string> = {
+  low: "Low",
+  medium: "Medium",
+  high: "High",
+};
+const LINE_LABEL: Record<"soft" | "sharp" | "rounded", string> = {
+  soft: "Soft",
+  rounded: "Rounded",
+  sharp: "Sharp",
+};
+const OOS_LABEL: Record<RecDefaults["oos_behavior"], string> = {
+  show_with_badge: "Show + badge",
+  hide: "Hide",
+  fallback: "Fallback",
+};
+
+function BattleCardStage({
   data,
   fetcher,
+  pendingIntent,
 }: {
   data: FunnelData;
   fetcher: ReturnType<typeof useFetcher<ActionResult>>;
+  pendingIntent: string | null;
 }) {
+  const picked = data.pickedTemplate;
+  const templates = data.richTemplates;
+  const [expandedId, setExpandedId] = useState<string>(picked?.template_id ?? templates[0]?.id ?? "");
+  const [optDials, setOptDials] = useState<DesignDials | null>(null);
+  const [optRec, setOptRec] = useState<RecDefaults | null>(null);
+  const [optName, setOptName] = useState<string | null>(null);
+  const dialTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const recTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const nameTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Clear the optimistic overlays once the autosave write lands (server canonical).
+  useEffect(() => {
+    if (fetcher.state === "idle") {
+      setOptDials(null);
+      setOptRec(null);
+      setOptName(null);
+    }
+  }, [fetcher.state]);
+
+  const expanded = templates.find((t) => t.id === expandedId) ?? templates[0];
+  const isPicked = Boolean(picked && expanded && picked.template_id === expanded.id);
+  const dials: DesignDials | undefined = isPicked && picked ? optDials ?? picked.design_dials : expanded?.dials;
+  const rec: RecDefaults | undefined = isPicked && picked ? optRec ?? picked.rec_defaults : expanded?.rec_defaults;
+  const name = isPicked && picked ? optName ?? picked.quiz_name : "";
+
+  const saveDials = (next: DesignDials) => {
+    setOptDials(next);
+    if (dialTimer.current) clearTimeout(dialTimer.current);
+    dialTimer.current = setTimeout(
+      () => fetcher.submit({ intent: "set-dials", dials: JSON.stringify(next) }, { method: "post" }),
+      600,
+    );
+  };
+  const saveRec = (next: RecDefaults) => {
+    setOptRec(next);
+    if (recTimer.current) clearTimeout(recTimer.current);
+    recTimer.current = setTimeout(
+      () => fetcher.submit({ intent: "set-rec", rec: JSON.stringify(next) }, { method: "post" }),
+      600,
+    );
+  };
+  const saveName = (v: string) => {
+    setOptName(v);
+    if (nameTimer.current) clearTimeout(nameTimer.current);
+    nameTimer.current = setTimeout(() => {
+      if (v.trim()) fetcher.submit({ intent: "set-name", name: v }, { method: "post" });
+    }, 600);
+  };
+
+  if (!expanded || !dials || !rec) return null;
+
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
       <QzCard style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-        <div className="qz-label">Step 3 of 3 · Templates</div>
-        <h2 className="qz-h2" style={{ margin: 0 }}>Your templates are ready</h2>
+        <div className="qz-label">Step 3 of 3 · Template</div>
+        <h2 className="qz-h2" style={{ margin: 0 }}>Pick a template and fine-tune it</h2>
         <p className="qz-dim" style={{ margin: 0 }}>
-          {data.richTemplates.length} template{data.richTemplates.length === 1 ? "" : "s"} for your
-          chosen type. The battle-card editor lands next.
+          Each is a different way to run your quiz. Select one, adjust the high-level dials, then
+          generate the full thing.
         </p>
       </QzCard>
-      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-        {data.richTemplates.map((t) => (
-          <QzCard key={t.id} style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-            <strong>{t.title}</strong>
-            <span className="qz-dim" style={{ fontSize: 13 }}>{t.angle}</span>
-          </QzCard>
-        ))}
-      </div>
+
+      {isPicked && picked ? (
+        <QuizNameBar
+          name={name}
+          saving={fetcher.state !== "idle"}
+          saved={picked.saved_as_template}
+          onName={saveName}
+          onSaveTemplate={() => fetcher.submit({ intent: "save-template" }, { method: "post" })}
+        />
+      ) : null}
+
+      <TemplateRail
+        templates={templates}
+        expandedId={expanded.id}
+        pickedId={picked?.template_id ?? null}
+        onExpand={setExpandedId}
+      />
+
+      <BattleCard
+        template={expanded}
+        isPicked={isPicked}
+        dials={dials}
+        rec={rec}
+        collections={data.collections}
+        onDials={saveDials}
+        onRec={(patch) => saveRec({ ...rec, ...patch })}
+        onPick={() => fetcher.submit({ intent: "pick-template", templateId: expanded.id }, { method: "post" })}
+        onGenerate={() => fetcher.submit({ intent: "generate-build", templateId: expanded.id }, { method: "post" })}
+        picking={pendingIntent === "pick-template"}
+        generating={pendingIntent === "generate-build"}
+      />
+
       <div className="qz-row" style={{ gap: 10 }}>
         <button
           type="button"
@@ -700,5 +810,244 @@ function ConfiguringPlaceholder({
         </button>
       </div>
     </div>
+  );
+}
+
+function QuizNameBar({
+  name,
+  saving,
+  saved,
+  onName,
+  onSaveTemplate,
+}: {
+  name: string;
+  saving: boolean;
+  saved: boolean;
+  onName: (v: string) => void;
+  onSaveTemplate: () => void;
+}) {
+  return (
+    <QzCard style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+      <div className="qz-row qz-row-between" style={{ gap: 12, alignItems: "flex-end", flexWrap: "wrap" }}>
+        <div style={{ flex: "1 1 240px" }}>
+          <QzField label="Quiz name" hint="Auto-named from your template — edit it, but you never start blank.">
+            <QzInput value={name} onChange={(e) => onName(e.target.value)} />
+          </QzField>
+        </div>
+        <div className="qz-row" style={{ gap: 8, alignItems: "center" }}>
+          {saving ? <span className="qz-mono qz-dim" style={{ fontSize: 11 }}>Saving…</span> : null}
+          {saved ? (
+            <QzBadge tone="ok">Saved as template</QzBadge>
+          ) : (
+            <button type="button" className="qz-btn qz-btn-sm" onClick={onSaveTemplate}>
+              Save as template
+            </button>
+          )}
+        </div>
+      </div>
+    </QzCard>
+  );
+}
+
+function TemplateRail({
+  templates,
+  expandedId,
+  pickedId,
+  onExpand,
+}: {
+  templates: RichTemplateOption[];
+  expandedId: string;
+  pickedId: string | null;
+  onExpand: (id: string) => void;
+}) {
+  return (
+    <div className="qz-template-rail">
+      {templates.map((t) => (
+        <QzTooltip key={t.id} content={t.angle}>
+          <button
+            type="button"
+            className={t.id === expandedId ? "qz-template-pill is-active" : "qz-template-pill"}
+            onClick={() => onExpand(t.id)}
+          >
+            {pickedId === t.id ? <span aria-hidden>✓ </span> : null}
+            {t.title}
+          </button>
+        </QzTooltip>
+      ))}
+    </div>
+  );
+}
+
+function DialRow<T extends string>({
+  label,
+  options,
+  value,
+  displayLabel,
+  isPicked,
+  onChange,
+}: {
+  label: string;
+  options: { value: T; label: string }[];
+  value: T;
+  displayLabel: string;
+  isPicked: boolean;
+  onChange: (v: T) => void;
+}) {
+  return (
+    <div className="qz-dial-row">
+      <span className="qz-dial-row-label">{label}</span>
+      {isPicked ? (
+        <QzSegmented options={options} value={value} onChange={onChange} ariaLabel={label} />
+      ) : (
+        <QzBadge tone="draft">{displayLabel}</QzBadge>
+      )}
+    </div>
+  );
+}
+
+function BattleCard({
+  template,
+  isPicked,
+  dials,
+  rec,
+  collections,
+  onDials,
+  onRec,
+  onPick,
+  onGenerate,
+  picking,
+  generating,
+}: {
+  template: RichTemplateOption;
+  isPicked: boolean;
+  dials: DesignDials;
+  rec: RecDefaults;
+  collections: Array<{ collectionId: string; title: string }>;
+  onDials: (next: DesignDials) => void;
+  onRec: (patch: Partial<RecDefaults>) => void;
+  onPick: () => void;
+  onGenerate: () => void;
+  picking: boolean;
+  generating: boolean;
+}) {
+  return (
+    <QzCard className="qz-battle-card">
+      <div className="qz-battle-section qz-row qz-row-between" style={{ alignItems: "flex-start", gap: 12 }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+          <span className="qz-label">{template.question_count} questions</span>
+          <h3 className="qz-h2" style={{ margin: 0 }}>{template.title}</h3>
+          <p className="qz-muted" style={{ margin: 0, fontSize: 13.5 }}>{template.angle}</p>
+        </div>
+        <QzBadge tone="draft">{XTYPE_LABEL[template.experience_type] ?? template.experience_type}</QzBadge>
+      </div>
+
+      <div className="qz-battle-section">
+        <div className="qz-label" style={{ marginBottom: 6 }}>What makes this template</div>
+        <ul style={{ margin: 0, paddingLeft: 18, display: "flex", flexDirection: "column", gap: 4 }}>
+          {template.feature_notes.map((n, i) => (
+            <li key={i} style={{ fontSize: 13.5 }}>{n}</li>
+          ))}
+        </ul>
+      </div>
+
+      <div className="qz-battle-section">
+        <div className="qz-label" style={{ marginBottom: 8 }}>Design dials</div>
+        <DialRow
+          label="Imagery"
+          options={LEVEL_OPTS}
+          value={dials.imagery}
+          displayLabel={LEVEL_LABEL[dials.imagery]}
+          isPicked={isPicked}
+          onChange={(v) => onDials({ ...dials, imagery: v })}
+        />
+        <DialRow
+          label="Graphics"
+          options={LEVEL_OPTS}
+          value={dials.graphics}
+          displayLabel={LEVEL_LABEL[dials.graphics]}
+          isPicked={isPicked}
+          onChange={(v) => onDials({ ...dials, graphics: v })}
+        />
+        <DialRow
+          label="Word-forward"
+          options={LEVEL_OPTS}
+          value={dials.word_forward}
+          displayLabel={LEVEL_LABEL[dials.word_forward]}
+          isPicked={isPicked}
+          onChange={(v) => onDials({ ...dials, word_forward: v })}
+        />
+        <DialRow
+          label="Lines"
+          options={LINE_OPTS}
+          value={dials.lines}
+          displayLabel={LINE_LABEL[dials.lines]}
+          isPicked={isPicked}
+          onChange={(v) => onDials({ ...dials, lines: v })}
+        />
+      </div>
+
+      <div className="qz-battle-section">
+        <div className="qz-label" style={{ marginBottom: 8 }}>Recommendation page</div>
+        {isPicked ? (
+          <div className="qz-row" style={{ gap: 14, flexWrap: "wrap", alignItems: "flex-end" }}>
+            <QzField label="Max products">
+              <QzInput
+                type="number"
+                min={1}
+                max={12}
+                value={rec.max_products}
+                onChange={(e) =>
+                  onRec({ max_products: Math.max(1, Math.min(12, Number(e.target.valueAsNumber) || 3)) })
+                }
+                style={{ width: 90 }}
+              />
+            </QzField>
+            <QzField label="Out of stock">
+              <QzSelect
+                value={rec.oos_behavior}
+                onChange={(e) => onRec({ oos_behavior: e.target.value as RecDefaults["oos_behavior"] })}
+              >
+                <option value="show_with_badge">Show + badge</option>
+                <option value="hide">Hide</option>
+                <option value="fallback">Fallback collection</option>
+              </QzSelect>
+            </QzField>
+            {rec.oos_behavior === "fallback" ? (
+              <QzField label="Fallback collection">
+                <QzSelect
+                  value={rec.fallback_collection_id}
+                  onChange={(e) => onRec({ fallback_collection_id: e.target.value })}
+                >
+                  <option value="">Best sellers (default)</option>
+                  {collections.map((c) => (
+                    <option key={c.collectionId} value={c.collectionId}>{c.title}</option>
+                  ))}
+                </QzSelect>
+              </QzField>
+            ) : null}
+          </div>
+        ) : (
+          <div className="qz-row" style={{ gap: 8, flexWrap: "wrap" }}>
+            <QzBadge tone="draft">Max {rec.max_products}</QzBadge>
+            <QzBadge tone="draft">OOS: {OOS_LABEL[rec.oos_behavior]}</QzBadge>
+          </div>
+        )}
+      </div>
+
+      <div
+        className="qz-battle-section qz-row"
+        style={{ gap: 10, flexWrap: "wrap", justifyContent: "flex-end" }}
+      >
+        {isPicked ? (
+          <button type="button" className="qz-btn qz-btn-accent" disabled={generating} onClick={onGenerate}>
+            {generating ? "Building…" : "Generate quiz →"}
+          </button>
+        ) : (
+          <button type="button" className="qz-btn qz-btn-primary" disabled={picking} onClick={onPick}>
+            {picking ? "Selecting…" : "Select this template"}
+          </button>
+        )}
+      </div>
+    </QzCard>
   );
 }

@@ -609,3 +609,27 @@ body[data-qz] ::selection { background: var(--qz-ink); color: var(--qz-cream); }
   grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
   gap: 14px;
 }
+
+/* Step 2 T5 — the battle card (ruled sections, template rail, dial rows). */
+.qz-battle-card { display: flex; flex-direction: column; padding: 0; }
+.qz-battle-section { padding: 16px 18px; }
+.qz-battle-section + .qz-battle-section { border-top: 1px solid var(--qz-rule); }
+
+.qz-template-rail { display: flex; gap: 8px; flex-wrap: wrap; }
+.qz-template-pill {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 8px 14px;
+  background: var(--qz-paper); color: var(--qz-ink);
+  border: 1px solid var(--qz-rule); border-radius: var(--qz-radius-pill);
+  font: inherit; font-size: 13px; cursor: pointer;
+  transition: border-color var(--qz-dur) var(--qz-ease), background var(--qz-dur) var(--qz-ease);
+}
+.qz-template-pill:hover { border-color: var(--qz-ink-3); }
+.qz-template-pill.is-active { border-color: var(--qz-accent); background: var(--qz-accent-tint); }
+
+.qz-dial-row {
+  display: flex; align-items: center; gap: 12px;
+  padding: 8px 0;
+}
+.qz-dial-row + .qz-dial-row { border-top: 1px solid var(--qz-rule-2); }
+.qz-dial-row-label { flex: 1 1 auto; font-size: 13.5px; font-weight: 500; }
