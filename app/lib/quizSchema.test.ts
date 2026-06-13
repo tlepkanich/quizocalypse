@@ -799,3 +799,48 @@ describe("BIC P7 — review_enrichment_sources (additive, editor-only)", () => {
     expect(withSrc.review_enrichment_sources?.text).toContain("never caught an edge");
   });
 });
+
+// Step 1 S2 — build_session + TemplateOption seams (additive, draft-only).
+describe("build_session (Step 1 funnel scratch state)", () => {
+  it("is optional — an existing quiz parses without it", () => {
+    const parsed = Quiz.parse(validQuiz);
+    expect(parsed.build_session).toBeUndefined();
+  });
+
+  it("preserves a build_session through parse (survives autosave)", () => {
+    const parsed = Quiz.parse({
+      ...validQuiz,
+      build_session: {
+        stage: "goal",
+        grouping: { dimension: "collection", confirmed_category_ids: ["c1", "c2"] },
+        goal: { goal_text: "Help shoppers find the right board", struggle_text: "too many specs" },
+        template_options: [
+          {
+            id: "match-1",
+            experience_type: "product_match",
+            title: "Find your board",
+            angle: "Match by terrain + skill",
+            sample_questions: ["Where do you ride?", "What's your level?"],
+          },
+        ],
+      },
+    });
+    expect(parsed.build_session?.stage).toBe("goal");
+    expect(parsed.build_session?.grouping?.dimension).toBe("collection");
+    expect(parsed.build_session?.template_options).toHaveLength(1);
+    expect(parsed.build_session?.template_options[0]!.sample_questions).toHaveLength(2);
+  });
+
+  it("rejects a TemplateOption with fewer than 2 sample questions", () => {
+    expect(() =>
+      Quiz.parse({
+        ...validQuiz,
+        build_session: {
+          template_options: [
+            { id: "x", experience_type: "survey", title: "t", angle: "a", sample_questions: ["only one"] },
+          ],
+        },
+      }),
+    ).toThrow();
+  });
+});

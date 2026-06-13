@@ -116,6 +116,10 @@ export const BrandIdentity = z.object({
   tags: z.array(z.string()).default([]),
   // 2–6 one-line claims / themes / differentiators.
   descriptions: z.array(z.string()).default([]),
+  // Builder Re-work Step 1 — what customers STRUGGLE with in product selection,
+  // captured in the funnel's goal stage (merchant_input source). The quiz builder
+  // can speak directly to these. Additive/optional (older blobs default []).
+  pain_points: z.array(z.string()).default([]),
 
   design: DesignProfile,
   positioning: PositioningProfile,
@@ -213,6 +217,7 @@ export const EDITABLE_IDENTITY_PATHS = [
   "summary",
   "tags",
   "descriptions",
+  "pain_points",
   "positioning.industry",
   "positioning.vertical",
   "positioning.target_demographic",

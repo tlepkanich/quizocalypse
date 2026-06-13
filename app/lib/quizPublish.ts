@@ -416,8 +416,11 @@ export async function publishQuiz(
   }
 
   const nextVersion = quiz.version + 1;
+  // Strip the Step-1 funnel scratch state — it's draft-only and must never reach
+  // publishedJson (which spreads ...doc) or the served runtime payload.
+  const { build_session: _build_session, ...docWithoutSession } = doc;
   const publishedJson: PublishedQuiz = {
-    ...doc,
+    ...docWithoutSession,
     nodes: bakedNodes,
     results_pages: bakedResultsPages,
     status: "published",

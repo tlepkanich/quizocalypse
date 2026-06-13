@@ -153,3 +153,16 @@ describe("lockEditedFields (merchant edit → lock, P4)", () => {
     expect(lockEditedFields(base({ locked_fields: ["summary"] }), stored)).toEqual(["summary"]);
   });
 });
+
+describe("pain_points (Step 1 — struggle → identity)", () => {
+  it("defaults to [] on an older blob without it", () => {
+    const id = base();
+    expect(id.pain_points).toEqual([]);
+  });
+
+  it("is an editable+lockable path", () => {
+    const stored = base();
+    const edited = base({ pain_points: ["too many specs to compare"] });
+    expect(lockEditedFields(edited, stored)).toContain("pain_points");
+  });
+});

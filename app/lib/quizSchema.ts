@@ -776,6 +776,42 @@ export const DiscountConfig = z.object({
 });
 export type DiscountConfig = z.infer<typeof DiscountConfig>;
 
+// ── Builder Re-work Step 1 — the creation funnel's scratch state ─────────────
+// A lightweight AI-proposed quiz "direction" the merchant picks from at the end
+// of Step 1 (no tags/answers — tag-correctness is the full build's job).
+export const TemplateOption = z.object({
+  id: z.string().min(1), // stable slug, e.g. "skin-goals-match"
+  experience_type: z.enum(["product_match", "personality", "lead_capture", "survey"]),
+  title: z.string().min(1), // the direction name on the card
+  angle: z.string().min(1), // one-line pitch — how this quiz frames the journey
+  rationale: z.string().default(""), // why it fits (shown on expand)
+  sample_questions: z.array(z.string().min(1)).min(2).max(3),
+});
+export type TemplateOption = z.infer<typeof TemplateOption>;
+
+// Transient multi-stage session state for the Step-1 funnel, parked on the DRAFT
+// doc (resumes on refresh, quiz-scoped, discardable). NEVER published — stripped
+// at publish (quizPublish.ts) since publishedJson spreads ...doc.
+export const BuildSession = z.object({
+  stage: z.enum(["grouping", "goal", "generating", "templates", "done"]).default("grouping"),
+  grouping: z
+    .object({
+      dimension: z.enum(["collection", "tag", "product_type", "metafield", "all"]),
+      confirmed_category_ids: z.array(z.string()).default([]),
+      detected_rationale: z.string().default(""),
+    })
+    .optional(),
+  goal: z
+    .object({
+      goal_text: z.string().default(""),
+      struggle_text: z.string().default(""), // feeds the identity's pain_points
+    })
+    .optional(),
+  template_options: z.array(TemplateOption).default([]),
+  picked_option_id: z.string().optional(),
+});
+export type BuildSession = z.infer<typeof BuildSession>;
+
 export const Quiz = z.object({
   quiz_id: z.string().min(1),
   status: QuizStatus.default("draft"),
@@ -809,6 +845,10 @@ export const Quiz = z.object({
   experience_type: z
     .enum(["product_match", "personality", "lead_capture", "survey"])
     .optional(),
+  // Builder Re-work Step 1 — the creation funnel's transient scratch state
+  // (grouping/goal/template-options). Additive/optional, lives only on DRAFTs,
+  // and is STRIPPED at publish (see quizPublish.ts).
+  build_session: BuildSession.optional(),
   // Phase K — per-locale translation overlays. Keyed by normalized locale
   // ("fr", "pt-br"); `strings` is a FLAT map over the stable key grammar
   // (node.<id>.<field>, answer.<nodeId>.<answerId>.<field>, stage/bullets/
