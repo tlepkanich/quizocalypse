@@ -633,3 +633,61 @@ body[data-qz] ::selection { background: var(--qz-ink); color: var(--qz-cream); }
 }
 .qz-dial-row + .qz-dial-row { border-top: 1px solid var(--qz-rule-2); }
 .qz-dial-row-label { flex: 1 1 auto; font-size: 13.5px; font-weight: 500; }
+
+/* Step 2 T7 — the 3-module deep-dive: ⓘ trigger, module cards, live galleries. */
+.qz-dial-info {
+  flex: 0 0 auto;
+  width: 24px; height: 24px; padding: 0;
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: 13px; line-height: 1;
+  border-radius: var(--qz-radius-pill);
+}
+.qz-link-btn {
+  appearance: none; border: none; background: none; padding: 0;
+  font: inherit; font-size: 13px; font-weight: 600;
+  color: var(--qz-accent); cursor: pointer;
+  text-decoration: underline; text-underline-offset: 2px;
+}
+.qz-link-btn:hover { color: var(--qz-accent-2); }
+
+.qz-module-card { margin-top: 12px; border-color: var(--qz-accent); background: var(--qz-accent-tint); }
+.qz-module-card--deep { background: var(--qz-paper); }
+
+.qz-example-gallery {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 12px;
+}
+.qz-example-tile {
+  display: flex; flex-direction: column; gap: 8px;
+  padding: 10px;
+  border: 1px solid var(--qz-rule); border-radius: var(--qz-radius);
+  background: var(--qz-paper);
+}
+.qz-example-tile.is-active { border-color: var(--qz-accent); box-shadow: 0 0 0 1px var(--qz-accent) inset; }
+
+/* The mini quiz-card mock — driven by --tile-* overrides per dial value. */
+.qz-tile-render {
+  --tile-radius: var(--qz-radius-sm);
+  --tile-pad: 10px;
+  --tile-hero-h: 40px;
+  display: flex; flex-direction: column; gap: 6px;
+  padding: var(--tile-pad);
+  border: 1px solid var(--qz-rule-2); border-radius: var(--tile-radius);
+  background: var(--qz-cream);
+  min-height: 84px;
+}
+.qz-tile-hero {
+  height: var(--tile-hero-h);
+  border-radius: calc(var(--tile-radius) * 0.6);
+  background: linear-gradient(120deg, var(--qz-accent-tint), var(--qz-cream-2));
+}
+.qz-tile-q { font-size: 11.5px; font-weight: 600; line-height: 1.3; color: var(--qz-ink); }
+.qz-tile-answers { display: flex; flex-wrap: wrap; gap: 4px; }
+.qz-tile-chip {
+  font-size: 10.5px; line-height: 1.2;
+  padding: 4px 8px;
+  border: 1px solid var(--qz-rule); border-radius: var(--tile-radius);
+  background: var(--qz-paper); color: var(--qz-ink-2);
+}
+.qz-tile-cap { display: flex; justify-content: center; }

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import type { CSSProperties } from "react";
 import { Link, useFetcher, useRevalidator } from "@remix-run/react";
 import {
   QzPage,
@@ -716,6 +717,9 @@ function BattleCardStage({
   const dialTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const recTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const nameTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // The 3-module deep-dive target: which dial + which disclosure level (2=educate,
+  // 3=examples). null = closed (Module 1, the battle card, is always visible).
+  const [moduleTarget, setModuleTarget] = useState<{ dial: keyof DesignDials; module: 2 | 3 } | null>(null);
 
   // Clear the optimistic overlays once the autosave write lands (server canonical).
   useEffect(() => {
@@ -796,9 +800,21 @@ function BattleCardStage({
         onRec={(patch) => saveRec({ ...rec, ...patch })}
         onPick={() => fetcher.submit({ intent: "pick-template", templateId: expanded.id }, { method: "post" })}
         onGenerate={() => fetcher.submit({ intent: "generate-build", templateId: expanded.id }, { method: "post" })}
+        onDeepDive={(dial) => setModuleTarget({ dial, module: 2 })}
         picking={pendingIntent === "pick-template"}
         generating={pendingIntent === "generate-build"}
       />
+
+      {moduleTarget ? (
+        <DialModule
+          dial={moduleTarget.dial}
+          module={moduleTarget.module}
+          currentValue={dials[moduleTarget.dial]}
+          onSeeExamples={() => setModuleTarget({ dial: moduleTarget.dial, module: 3 })}
+          onApply={(v) => saveDials({ ...dials, [moduleTarget.dial]: v } as DesignDials)}
+          onClose={() => setModuleTarget(null)}
+        />
+      ) : null}
 
       <div className="qz-row" style={{ gap: 10 }}>
         <button
@@ -885,6 +901,7 @@ function DialRow<T extends string>({
   displayLabel,
   isPicked,
   onChange,
+  onDeepDive,
 }: {
   label: string;
   options: { value: T; label: string }[];
@@ -892,6 +909,7 @@ function DialRow<T extends string>({
   displayLabel: string;
   isPicked: boolean;
   onChange: (v: T) => void;
+  onDeepDive?: () => void;
 }) {
   return (
     <div className="qz-dial-row">
@@ -901,6 +919,16 @@ function DialRow<T extends string>({
       ) : (
         <QzBadge tone="draft">{displayLabel}</QzBadge>
       )}
+      {onDeepDive ? (
+        <button
+          type="button"
+          className="qz-btn qz-btn-ghost qz-btn-sm qz-dial-info"
+          aria-label={`What does ${label} mean?`}
+          onClick={onDeepDive}
+        >
+          ⓘ
+        </button>
+      ) : null}
     </div>
   );
 }
@@ -915,6 +943,7 @@ function BattleCard({
   onRec,
   onPick,
   onGenerate,
+  onDeepDive,
   picking,
   generating,
 }: {
@@ -927,6 +956,7 @@ function BattleCard({
   onRec: (patch: Partial<RecDefaults>) => void;
   onPick: () => void;
   onGenerate: () => void;
+  onDeepDive: (dial: keyof DesignDials) => void;
   picking: boolean;
   generating: boolean;
 }) {
@@ -951,7 +981,10 @@ function BattleCard({
       </div>
 
       <div className="qz-battle-section">
-        <div className="qz-label" style={{ marginBottom: 8 }}>Design dials</div>
+        <div className="qz-row qz-row-between" style={{ marginBottom: 8, alignItems: "center" }}>
+          <span className="qz-label">Design dials</span>
+          {isPicked ? <span className="qz-dim" style={{ fontSize: 11.5 }}>Tap ⓘ to see what each does</span> : null}
+        </div>
         <DialRow
           label="Imagery"
           options={LEVEL_OPTS}
@@ -959,6 +992,7 @@ function BattleCard({
           displayLabel={LEVEL_LABEL[dials.imagery]}
           isPicked={isPicked}
           onChange={(v) => onDials({ ...dials, imagery: v })}
+          onDeepDive={isPicked ? () => onDeepDive("imagery") : undefined}
         />
         <DialRow
           label="Graphics"
@@ -967,6 +1001,7 @@ function BattleCard({
           displayLabel={LEVEL_LABEL[dials.graphics]}
           isPicked={isPicked}
           onChange={(v) => onDials({ ...dials, graphics: v })}
+          onDeepDive={isPicked ? () => onDeepDive("graphics") : undefined}
         />
         <DialRow
           label="Word-forward"
@@ -975,6 +1010,7 @@ function BattleCard({
           displayLabel={LEVEL_LABEL[dials.word_forward]}
           isPicked={isPicked}
           onChange={(v) => onDials({ ...dials, word_forward: v })}
+          onDeepDive={isPicked ? () => onDeepDive("word_forward") : undefined}
         />
         <DialRow
           label="Lines"
@@ -983,6 +1019,7 @@ function BattleCard({
           displayLabel={LINE_LABEL[dials.lines]}
           isPicked={isPicked}
           onChange={(v) => onDials({ ...dials, lines: v })}
+          onDeepDive={isPicked ? () => onDeepDive("lines") : undefined}
         />
       </div>
 
@@ -1049,5 +1086,165 @@ function BattleCard({
         )}
       </div>
     </QzCard>
+  );
+}
+
+// ── The 3-module progressive disclosure ──────────────────────────────────────
+// Module 1 is the battle card itself (always visible). Module 2 ("educate")
+// explains what a dial does in plain language; Module 3 ("deep-dive") shows the
+// live before/after gallery and lets the merchant apply a level inline. Both are
+// rendered by DialModule below, keyed off the BattleCardStage's moduleTarget.
+
+const DIAL_EDU: Record<keyof DesignDials, { label: string; what: string; deep: string }> = {
+  imagery: {
+    label: "Imagery",
+    what: "How often product and lifestyle photos appear inside the question flow. High leans on image-led questions (photo answer tiles, a hero up top); Low keeps questions clean and text-only.",
+    deep: "Higher imagery suits visual, browse-driven catalogs where shoppers pick by look. Lower imagery suits spec- or needs-driven shopping where photos distract from the decision. Compare a few questions below, then apply the level that fits.",
+  },
+  graphics: {
+    label: "Graphics",
+    what: "Decorative weight — answer icons/emoji, section chapters, and overall spacing. High feels chaptered, icon-rich, and airy; Low is compact and unadorned.",
+    deep: "More graphics make a longer quiz feel friendly and guided; fewer keep a short quiz fast and serious. This also nudges the layout's breathing room.",
+  },
+  word_forward: {
+    label: "Word-forward",
+    what: "How much text each question carries. High adds explainer copy and reassuring helper text (great for considered, educational categories); Low keeps every question short and punchy.",
+    deep: "Educational categories (supplements, skincare, gear) convert better when the quiz teaches as it asks. Impulse and visual categories do better with minimal copy that gets out of the way.",
+  },
+  lines: {
+    label: "Lines",
+    what: "The edge style used throughout the quiz — Soft (fully rounded), Rounded (gentle corners), or Sharp (square, precise).",
+    deep: "Soft reads playful and approachable; Sharp reads precise and premium/clinical; Rounded sits in between. This maps to the corner radius on every card, button, and answer tile.",
+  },
+};
+
+interface ExampleTile {
+  value: string;
+  label: string;
+  q: string;
+  answers: string[];
+  hero: boolean;
+  overrides: CSSProperties;
+}
+
+const SAMPLE_Q = "What's your skill level?";
+const SAMPLE_A = ["Beginner", "Intermediate"];
+
+// Each tile is a tiny quiz-card mock rendered from the live --qz-* tokens with a
+// per-dial CSS-custom-property override — no screenshots, no AI, rebrands for free.
+const DIAL_EXAMPLES: Record<keyof DesignDials, ExampleTile[]> = {
+  imagery: [
+    { value: "high", label: "High", q: SAMPLE_Q, answers: SAMPLE_A, hero: true, overrides: {} },
+    { value: "medium", label: "Med", q: SAMPLE_Q, answers: SAMPLE_A, hero: true, overrides: { "--tile-hero-h": "20px" } as CSSProperties },
+    { value: "low", label: "Low", q: SAMPLE_Q, answers: SAMPLE_A, hero: false, overrides: {} },
+  ],
+  graphics: [
+    { value: "high", label: "High", q: "🏔️ " + SAMPLE_Q, answers: ["🟢 Beginner", "🔵 Intermediate"], hero: false, overrides: { "--tile-pad": "13px" } as CSSProperties },
+    { value: "medium", label: "Med", q: SAMPLE_Q, answers: SAMPLE_A, hero: false, overrides: {} },
+    { value: "low", label: "Low", q: SAMPLE_Q, answers: SAMPLE_A, hero: false, overrides: { "--tile-pad": "7px" } as CSSProperties },
+  ],
+  word_forward: [
+    { value: "high", label: "High", q: "Tell us about your experience so we can tailor every pick", answers: ["I'm just starting out and want guidance", "I know my way around"], hero: false, overrides: {} },
+    { value: "medium", label: "Med", q: SAMPLE_Q, answers: SAMPLE_A, hero: false, overrides: {} },
+    { value: "low", label: "Low", q: "Your level?", answers: ["New", "Pro"], hero: false, overrides: {} },
+  ],
+  lines: [
+    { value: "soft", label: "Soft", q: SAMPLE_Q, answers: SAMPLE_A, hero: false, overrides: { "--tile-radius": "999px" } as CSSProperties },
+    { value: "rounded", label: "Rounded", q: SAMPLE_Q, answers: SAMPLE_A, hero: false, overrides: { "--tile-radius": "12px" } as CSSProperties },
+    { value: "sharp", label: "Sharp", q: SAMPLE_Q, answers: SAMPLE_A, hero: false, overrides: { "--tile-radius": "0px" } as CSSProperties },
+  ],
+};
+
+// Values are level/edge words ("low"/"soft"/…) — capitalize for display.
+const dialDisplay = (value: string): string => (value ? value.charAt(0).toUpperCase() + value.slice(1) : value);
+
+function DialModule({
+  dial,
+  module,
+  currentValue,
+  onSeeExamples,
+  onApply,
+  onClose,
+}: {
+  dial: keyof DesignDials;
+  module: 2 | 3;
+  currentValue: string;
+  onSeeExamples: () => void;
+  onApply: (value: string) => void;
+  onClose: () => void;
+}) {
+  const edu = DIAL_EDU[dial];
+  return (
+    <QzCard className={module === 3 ? "qz-module-card qz-module-card--deep" : "qz-module-card"}>
+      <div className="qz-row qz-row-between" style={{ alignItems: "flex-start", gap: 10 }}>
+        <div>
+          <div className="qz-label">
+            {edu.label} · {module === 2 ? "What this does" : "See the difference"}
+          </div>
+          <p className="qz-muted" style={{ margin: "4px 0 0", fontSize: 13.5, lineHeight: 1.45 }}>
+            {module === 2 ? edu.what : edu.deep}
+          </p>
+        </div>
+        <button type="button" className="qz-btn qz-btn-ghost qz-btn-sm" aria-label="Close" onClick={onClose}>
+          ✕
+        </button>
+      </div>
+
+      {module === 2 ? (
+        <div className="qz-row" style={{ gap: 12, marginTop: 10, alignItems: "center", flexWrap: "wrap" }}>
+          <span className="qz-dim" style={{ fontSize: 12.5 }}>
+            Currently: <strong>{dialDisplay(currentValue)}</strong>
+          </span>
+          <button type="button" className="qz-link-btn" onClick={onSeeExamples}>
+            See examples →
+          </button>
+        </div>
+      ) : (
+        <DialExampleGallery dial={dial} currentValue={currentValue} onApply={onApply} />
+      )}
+    </QzCard>
+  );
+}
+
+function DialExampleGallery({
+  dial,
+  currentValue,
+  onApply,
+}: {
+  dial: keyof DesignDials;
+  currentValue: string;
+  onApply: (value: string) => void;
+}) {
+  const tiles = DIAL_EXAMPLES[dial];
+  return (
+    <div className="qz-example-gallery" style={{ marginTop: 12 }}>
+      {tiles.map((t) => {
+        const active = t.value === currentValue;
+        return (
+          <div key={t.value} className={active ? "qz-example-tile is-active" : "qz-example-tile"}>
+            <div className="qz-tile-render" style={t.overrides}>
+              {t.hero ? <div className="qz-tile-hero" aria-hidden="true" /> : null}
+              <div className="qz-tile-q">{t.q}</div>
+              <div className="qz-tile-answers">
+                {t.answers.map((a, i) => (
+                  <span key={i} className="qz-tile-chip">
+                    {a}
+                  </span>
+                ))}
+              </div>
+            </div>
+            <div className="qz-tile-cap">
+              {active ? (
+                <QzBadge tone="ok">Current · {t.label}</QzBadge>
+              ) : (
+                <button type="button" className="qz-link-btn" onClick={() => onApply(t.value)}>
+                  Update to {t.label}
+                </button>
+              )}
+            </div>
+          </div>
+        );
+      })}
+    </div>
   );
 }
