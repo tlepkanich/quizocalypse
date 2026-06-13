@@ -691,3 +691,33 @@ body[data-qz] ::selection { background: var(--qz-ink); color: var(--qz-cream); }
   background: var(--qz-paper); color: var(--qz-ink-2);
 }
 .qz-tile-cap { display: flex; justify-content: center; }
+
+/* Step 2 T8 — recommended-products editor (group + per-product toggle chips). */
+.qz-rec-group {
+  border: 1px solid var(--qz-rule); border-radius: var(--qz-radius);
+  padding: 10px 12px; background: var(--qz-paper);
+}
+.qz-rec-group.is-off { opacity: 0.6; background: var(--qz-cream); }
+.qz-rec-group-head {
+  display: flex; align-items: center; gap: 8px; cursor: pointer;
+}
+.qz-rec-group-head input { cursor: pointer; }
+.qz-rec-group-name { flex: 1 1 auto; font-size: 13.5px; font-weight: 600; }
+.qz-rec-chips {
+  display: flex; flex-wrap: wrap; gap: 6px;
+  margin-top: 10px; max-height: 168px; overflow-y: auto;
+}
+.qz-chip-toggle {
+  appearance: none; font: inherit; cursor: pointer;
+  font-size: 12px; line-height: 1.2;
+  padding: 5px 10px;
+  border: 1px solid var(--qz-rule); border-radius: var(--qz-radius-pill);
+  background: var(--qz-cream); color: var(--qz-ink-3);
+  transition: border-color var(--qz-dur) var(--qz-ease), background var(--qz-dur) var(--qz-ease), color var(--qz-dur) var(--qz-ease);
+}
+.qz-chip-toggle:hover { border-color: var(--qz-ink-3); }
+.qz-chip-toggle.is-on {
+  border-color: var(--qz-accent); background: var(--qz-accent-tint); color: var(--qz-ink);
+  font-weight: 500;
+}
+.qz-chip-toggle.is-on::before { content: "✓ "; }

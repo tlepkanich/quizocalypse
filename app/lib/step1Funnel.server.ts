@@ -114,6 +114,8 @@ export async function loadStep1FunnelData(shop: FunnelShop, quizId: string | und
     listSavedTemplates(shop.id),
   ]);
 
+  const titleById = new Map(products.map((p) => [p.productId, p.title]));
+
   const detect = detectGroupingDimension(
     products.map(toGroupingProduct),
     collections.map((c) => ({ collectionId: c.collectionId, title: c.title })),
@@ -145,7 +147,13 @@ export async function loadStep1FunnelData(shop: FunnelShop, quizId: string | und
     richTemplates: session.rich_templates,
     pickedTemplate: session.picked_template ?? null,
     webResearchSummary: session.web_research_summary ?? null,
-    productGroups: categories.map((c) => ({ id: c.id, name: c.name, product_ids: c.productIds })),
+    productGroups: categories.map((c) => ({
+      id: c.id,
+      name: c.name,
+      // Resolve each bucket member to a readable {id,title} so the T8 editor can
+      // render product toggle chips (the working copy stores GIDs only).
+      products: c.productIds.map((pid) => ({ id: pid, title: titleById.get(pid) ?? pid })),
+    })),
     collections: collections.map((c) => ({ collectionId: c.collectionId, title: c.title })),
     savedTemplates: savedTemplates.map((t) => ({ id: t.id, name: t.name, template: t.template })),
   };

@@ -25,6 +25,7 @@ import type {
   PickedTemplate,
   DesignDials,
   RecDefaults,
+  RecommendedGroup,
 } from "../../lib/quizSchema";
 
 // Builder Re-work Step 1 — the shared, server-free creation funnel. Renders one
@@ -60,7 +61,7 @@ export interface FunnelData {
   richTemplates: RichTemplateOption[];
   pickedTemplate: PickedTemplate | null;
   webResearchSummary: string | null;
-  productGroups: Array<{ id: string; name: string; product_ids: string[] }>;
+  productGroups: Array<{ id: string; name: string; products: Array<{ id: string; title: string }> }>;
   collections: Array<{ collectionId: string; title: string }>;
   savedTemplates: Array<{ id: string; name: string; template: RichTemplateOption }>;
 }
@@ -714,6 +715,7 @@ function BattleCardStage({
   const [optDials, setOptDials] = useState<DesignDials | null>(null);
   const [optRec, setOptRec] = useState<RecDefaults | null>(null);
   const [optName, setOptName] = useState<string | null>(null);
+  const [optGroups, setOptGroups] = useState<RecommendedGroup[] | null>(null);
   const dialTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const recTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const nameTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -727,6 +729,7 @@ function BattleCardStage({
       setOptDials(null);
       setOptRec(null);
       setOptName(null);
+      setOptGroups(null);
     }
   }, [fetcher.state]);
 
@@ -735,6 +738,7 @@ function BattleCardStage({
   const dials: DesignDials | undefined = isPicked && picked ? optDials ?? picked.design_dials : expanded?.dials;
   const rec: RecDefaults | undefined = isPicked && picked ? optRec ?? picked.rec_defaults : expanded?.rec_defaults;
   const name = isPicked && picked ? optName ?? picked.quiz_name : "";
+  const groups: RecommendedGroup[] = isPicked && picked ? optGroups ?? picked.recommended_groups : [];
 
   const saveDials = (next: DesignDials) => {
     setOptDials(next);
@@ -758,6 +762,26 @@ function BattleCardStage({
     nameTimer.current = setTimeout(() => {
       if (v.trim()) fetcher.submit({ intent: "set-name", name: v }, { method: "post" });
     }, 600);
+  };
+  // Toggles are discrete (no debounce) — fire immediately, reflect optimistically.
+  const toggleGroup = (groupId: string, enabled: boolean) => {
+    setOptGroups(groups.map((g) => (g.group_id === groupId ? { ...g, enabled } : g)));
+    fetcher.submit({ intent: "toggle-group", groupId, enabled: String(enabled) }, { method: "post" });
+  };
+  const toggleProduct = (groupId: string, productId: string, enabled: boolean) => {
+    setOptGroups(
+      groups.map((g) => {
+        if (g.group_id !== groupId) return g;
+        const set = new Set(g.product_ids);
+        if (enabled) set.add(productId);
+        else set.delete(productId);
+        return { ...g, product_ids: Array.from(set) };
+      }),
+    );
+    fetcher.submit(
+      { intent: "toggle-product", groupId, productId, enabled: String(enabled) },
+      { method: "post" },
+    );
   };
 
   if (!expanded || !dials || !rec) return null;
@@ -796,8 +820,12 @@ function BattleCardStage({
         dials={dials}
         rec={rec}
         collections={data.collections}
+        recommendedGroups={groups}
+        productGroups={data.productGroups}
         onDials={saveDials}
         onRec={(patch) => saveRec({ ...rec, ...patch })}
+        onToggleGroup={toggleGroup}
+        onToggleProduct={toggleProduct}
         onPick={() => fetcher.submit({ intent: "pick-template", templateId: expanded.id }, { method: "post" })}
         onGenerate={() => fetcher.submit({ intent: "generate-build", templateId: expanded.id }, { method: "post" })}
         onDeepDive={(dial) => setModuleTarget({ dial, module: 2 })}
@@ -939,8 +967,12 @@ function BattleCard({
   dials,
   rec,
   collections,
+  recommendedGroups,
+  productGroups,
   onDials,
   onRec,
+  onToggleGroup,
+  onToggleProduct,
   onPick,
   onGenerate,
   onDeepDive,
@@ -952,8 +984,12 @@ function BattleCard({
   dials: DesignDials;
   rec: RecDefaults;
   collections: Array<{ collectionId: string; title: string }>;
+  recommendedGroups: RecommendedGroup[];
+  productGroups: FunnelData["productGroups"];
   onDials: (next: DesignDials) => void;
   onRec: (patch: Partial<RecDefaults>) => void;
+  onToggleGroup: (groupId: string, enabled: boolean) => void;
+  onToggleProduct: (groupId: string, productId: string, enabled: boolean) => void;
   onPick: () => void;
   onGenerate: () => void;
   onDeepDive: (dial: keyof DesignDials) => void;
@@ -1071,6 +1107,15 @@ function BattleCard({
         )}
       </div>
 
+      {isPicked ? (
+        <RecProductsEditor
+          groups={recommendedGroups}
+          catalog={productGroups}
+          onToggleGroup={onToggleGroup}
+          onToggleProduct={onToggleProduct}
+        />
+      ) : null}
+
       <div
         className="qz-battle-section qz-row"
         style={{ gap: 10, flexWrap: "wrap", justifyContent: "flex-end" }}
@@ -1086,6 +1131,82 @@ function BattleCard({
         )}
       </div>
     </QzCard>
+  );
+}
+
+// ── Recommended products (the battle card's "N Recommended Products" editor) ──
+// The confirmed buckets render as toggle-chip groups; de-selections are template-
+// scoped overrides on picked_template.recommended_groups (applied to the quiz's
+// Category.productIds at build time, never mutating other quizzes). A disabled
+// group gets no result page; a de-selected product drops from its bucket.
+function RecProductsEditor({
+  groups,
+  catalog,
+  onToggleGroup,
+  onToggleProduct,
+}: {
+  groups: RecommendedGroup[];
+  catalog: FunnelData["productGroups"];
+  onToggleGroup: (groupId: string, enabled: boolean) => void;
+  onToggleProduct: (groupId: string, productId: string, enabled: boolean) => void;
+}) {
+  const catalogById = useMemo(() => new Map(catalog.map((c) => [c.id, c])), [catalog]);
+  if (groups.length === 0) return null;
+  const enabledCount = groups.filter((g) => g.enabled).length;
+  return (
+    <div className="qz-battle-section">
+      <div className="qz-row qz-row-between" style={{ alignItems: "baseline", marginBottom: 4 }}>
+        <span className="qz-label">Recommended products</span>
+        <span className="qz-dim" style={{ fontSize: 11.5 }}>
+          {enabledCount} of {groups.length} group{groups.length === 1 ? "" : "s"} on
+        </span>
+      </div>
+      <p className="qz-muted" style={{ margin: "0 0 10px", fontSize: 13 }}>
+        Which product groups this quiz can recommend — and which items inside them. A group that's off
+        won't get a result page.
+      </p>
+      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+        {groups.map((g) => {
+          const all = catalogById.get(g.group_id)?.products ?? [];
+          const selected = new Set(g.product_ids);
+          const onCount = all.length ? all.filter((p) => selected.has(p.id)).length : selected.size;
+          return (
+            <div key={g.group_id} className={g.enabled ? "qz-rec-group" : "qz-rec-group is-off"}>
+              <label className="qz-rec-group-head">
+                <input
+                  type="checkbox"
+                  checked={g.enabled}
+                  onChange={(e) => onToggleGroup(g.group_id, e.target.checked)}
+                />
+                <span className="qz-rec-group-name">{g.group_name || "Group"}</span>
+                <span className="qz-dim" style={{ fontSize: 11.5 }}>
+                  {g.enabled ? (all.length ? `${onCount}/${all.length} products` : "on") : "off"}
+                </span>
+              </label>
+              {g.enabled && all.length > 0 ? (
+                <div className="qz-rec-chips">
+                  {all.map((p) => {
+                    const on = selected.has(p.id);
+                    return (
+                      <button
+                        key={p.id}
+                        type="button"
+                        className={on ? "qz-chip-toggle is-on" : "qz-chip-toggle"}
+                        aria-pressed={on}
+                        title={on ? `Remove ${p.title}` : `Add ${p.title}`}
+                        onClick={() => onToggleProduct(g.group_id, p.id, !on)}
+                      >
+                        {p.title}
+                      </button>
+                    );
+                  })}
+                </div>
+              ) : null}
+            </div>
+          );
+        })}
+      </div>
+    </div>
   );
 }
 
