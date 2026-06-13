@@ -658,6 +658,8 @@ function TypesStage({
         ))}
       </div>
 
+      <SavedTemplatesRow templates={data.savedTemplates} fetcher={fetcher} pendingIntent={pendingIntent} />
+
       <div className="qz-row" style={{ gap: 10 }}>
         <button
           type="button"
@@ -668,6 +670,48 @@ function TypesStage({
         </button>
       </div>
     </div>
+  );
+}
+
+// Saved templates (shop-scoped) surface as an alternative to the AI tiers — pick
+// one to skip straight to a pre-filled battle card (the use-saved-template intent
+// seeds it as the sole tier-2 option + an auto-named working copy → configuring).
+function SavedTemplatesRow({
+  templates,
+  fetcher,
+  pendingIntent,
+}: {
+  templates: FunnelData["savedTemplates"];
+  fetcher: ReturnType<typeof useFetcher<ActionResult>>;
+  pendingIntent: string | null;
+}) {
+  if (templates.length === 0) return null;
+  const using = pendingIntent === "use-saved-template";
+  return (
+    <QzCard style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+        <span className="qz-label">Or reuse a saved template</span>
+        <span className="qz-dim" style={{ fontSize: 12 }}>
+          Start from one you saved before — its design dials and recommendation settings come along.
+        </span>
+      </div>
+      <div className="qz-template-rail">
+        {templates.map((s) => (
+          <button
+            key={s.id}
+            type="button"
+            className="qz-template-pill"
+            disabled={using}
+            title={s.template.angle}
+            onClick={() =>
+              fetcher.submit({ intent: "use-saved-template", templateId: s.id }, { method: "post" })
+            }
+          >
+            ♻ {s.name}
+          </button>
+        ))}
+      </div>
+    </QzCard>
   );
 }
 

@@ -18,7 +18,7 @@ import {
   initPickedTemplate,
   startStep2Build,
 } from "./step2Build.server";
-import { saveTemplate, listSavedTemplates } from "./savedTemplates.server";
+import { saveTemplate, listSavedTemplates, loadSavedTemplate } from "./savedTemplates.server";
 import type { GroupingProduct } from "./categoryGrouping";
 
 // Builder Re-work Step 1 — the funnel's loader + action, lifted out of the route
@@ -296,6 +296,30 @@ export async function runStep1FunnelAction(
       new Date(),
     );
     await writeDoc(quiz.id, { ...doc, build_session: { ...session, picked_template: picked } });
+    return json({ intent, ok: true });
+  }
+
+  // Reuse a saved template — skip the AI tiers entirely. Loads the stored
+  // RichTemplateOption, seeds it as the sole tier-2 option + an auto-named working
+  // copy, and jumps straight to the battle card (stage "configuring").
+  if (intent === "use-saved-template") {
+    const templateId = String(form.get("templateId") ?? "");
+    const rich = await loadSavedTemplate(shop.id, templateId);
+    if (!rich) return json({ intent, ok: false, error: "That saved template is no longer available." }, { status: 400 });
+    const cats = await prisma.category.findMany({
+      where: { shopId: shop.id, quizId: quiz.id },
+      select: { id: true, name: true, productIds: true },
+      orderBy: { createdAt: "asc" },
+    });
+    const picked = initPickedTemplate(
+      rich,
+      cats.map((c) => ({ id: c.id, name: c.name, product_ids: c.productIds })),
+      new Date(),
+    );
+    await writeDoc(quiz.id, {
+      ...doc,
+      build_session: { ...session, stage: "configuring", rich_templates: [rich], picked_template: picked },
+    });
     return json({ intent, ok: true });
   }
 
