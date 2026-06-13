@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Link, useFetcher } from "@remix-run/react";
+import { Link, useFetcher, useRevalidator } from "@remix-run/react";
 import {
   QzPage,
   QzPageHeader,
@@ -12,7 +12,13 @@ import {
   QzExpandCard,
   StagedProgress,
 } from "../qz";
-import type { TemplateOption, BuildSession } from "../../lib/quizSchema";
+import type {
+  TemplateOption,
+  BuildSession,
+  QuizType,
+  RichTemplateOption,
+  PickedTemplate,
+} from "../../lib/quizSchema";
 
 // Builder Re-work Step 1 — the shared, server-free creation funnel. Renders one
 // of four stages off the draft's build_session and drives every transition
@@ -41,6 +47,15 @@ export interface FunnelData {
   goal: { goal_text: string; struggle_text: string } | null;
   templateOptions: TemplateOption[];
   pickedOptionId: string | null;
+  // ── Step 2 ──
+  quizTypes: QuizType[];
+  pickedTypeId: string | null;
+  richTemplates: RichTemplateOption[];
+  pickedTemplate: PickedTemplate | null;
+  webResearchSummary: string | null;
+  productGroups: Array<{ id: string; name: string; product_ids: string[] }>;
+  collections: Array<{ collectionId: string; title: string }>;
+  savedTemplates: Array<{ id: string; name: string; template: RichTemplateOption }>;
 }
 
 type ActionResult =
@@ -65,10 +80,22 @@ const XTYPE_LABEL: Record<string, string> = {
 
 export function Step1Funnel({ data }: { data: FunnelData }) {
   const fetcher = useFetcher<ActionResult>();
+  const revalidator = useRevalidator();
   const pendingIntent =
     fetcher.state !== "idle" ? String(fetcher.formData?.get("intent") ?? "") : null;
   const result = fetcher.state === "idle" ? fetcher.data ?? null : null;
   const errorMsg = result && result.ok === false ? result.error : null;
+
+  // Poll the loader while a detached generation job runs (typing/templating);
+  // the job writes the next stage, the revalidate picks it up, the poll stops.
+  const isGenerating = data.stage === "typing" || data.stage === "templating";
+  useEffect(() => {
+    if (!isGenerating) return;
+    const t = setInterval(() => {
+      if (revalidator.state === "idle") revalidator.revalidate();
+    }, 3000);
+    return () => clearInterval(t);
+  }, [isGenerating, revalidator]);
 
   return (
     <QzPage>
@@ -103,6 +130,19 @@ export function Step1Funnel({ data }: { data: FunnelData }) {
         <GoalStage data={data} fetcher={fetcher} pendingIntent={pendingIntent} />
       ) : null}
 
+      {data.stage === "typing" ? <GeneratingScreen kind="typing" /> : null}
+
+      {data.stage === "types" ? (
+        <TypesStage data={data} fetcher={fetcher} pendingIntent={pendingIntent} />
+      ) : null}
+
+      {data.stage === "templating" ? <GeneratingScreen kind="templating" /> : null}
+
+      {data.stage === "configuring" ? (
+        <ConfiguringPlaceholder data={data} fetcher={fetcher} />
+      ) : null}
+
+      {/* Legacy Step-1 directions — in-flight drafts from before Step 2. */}
       {data.stage === "templates" || data.stage === "done" ? (
         <TemplatesStage data={data} fetcher={fetcher} pendingIntent={pendingIntent} />
       ) : null}
@@ -112,13 +152,20 @@ export function Step1Funnel({ data }: { data: FunnelData }) {
 
 // A slim three-dot stage indicator across the funnel.
 function FunnelProgress({ stage }: { stage: FunnelData["stage"] }) {
-  const order = ["grouping", "goal", "templates"];
+  const order = ["grouping", "goal", "types", "configuring"];
   const labels: Record<string, string> = {
     grouping: "Group",
     goal: "Goal",
-    templates: "Directions",
+    types: "Type",
+    configuring: "Template",
   };
-  const activeKey = stage === "done" ? "templates" : stage;
+  // Map transient/legacy stages onto the visible step.
+  const activeKey =
+    stage === "typing" || stage === "templates"
+      ? "types"
+      : stage === "templating" || stage === "done"
+        ? "configuring"
+        : stage;
   const activeIdx = order.indexOf(activeKey);
   return (
     <div className="qz-row" style={{ gap: 8, margin: "2px 0 18px", flexWrap: "wrap" }}>
@@ -488,6 +535,168 @@ function TemplatesStage({
           onClick={() => fetcher.submit({ intent: "back-to-goal" }, { method: "post" })}
         >
           ← Revise the goal
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ══ Step 2 ══════════════════════════════════════════════════════════════════
+
+const TYPING_BEATS = ["Researching quiz strategies", "Reading your catalog", "Drafting tailored quiz types"];
+const TEMPLATING_BEATS = ["Reading your brand identity", "Designing template variations", "Tuning the design dials"];
+
+// The "AI in flight" screen for the detached typing/templating jobs. The parent
+// polls the loader; this just animates the staged beats while we wait.
+function GeneratingScreen({ kind }: { kind: "typing" | "templating" }) {
+  const beats = kind === "typing" ? TYPING_BEATS : TEMPLATING_BEATS;
+  const [active, setActive] = useState(0);
+  useEffect(() => {
+    if (active >= beats.length - 1) return;
+    const t = setTimeout(() => setActive((b) => b + 1), kind === "typing" ? 18000 : 12000);
+    return () => clearTimeout(t);
+  }, [active, beats.length, kind]);
+  const title =
+    kind === "typing"
+      ? "Researching the best quiz types for your brand…"
+      : "Designing your templates…";
+  const sub =
+    kind === "typing"
+      ? "Pulling real best-practices for your category, then tailoring a few quiz types to your catalog. About a minute."
+      : "Drafting a few distinct template directions for the type you picked. About 30 seconds.";
+  return (
+    <QzCard style={{ padding: 28, display: "flex", flexDirection: "column", gap: 18 }}>
+      <style>{`@keyframes qzspin{to{transform:rotate(360deg)}}`}</style>
+      <div className="qz-row" style={{ gap: 12, alignItems: "center" }}>
+        <div
+          aria-hidden
+          style={{
+            width: 26,
+            height: 26,
+            flex: "none",
+            borderRadius: "50%",
+            border: "3px solid var(--qz-rule, #e5e5e5)",
+            borderTopColor: "var(--qz-accent)",
+            animation: "qzspin .8s linear infinite",
+          }}
+        />
+        <div style={{ display: "flex", flexDirection: "column" }}>
+          <strong>{title}</strong>
+          <span className="qz-dim" style={{ fontSize: 13 }}>{sub}</span>
+        </div>
+      </div>
+      <div style={{ maxWidth: 340 }}>
+        <StagedProgress stages={beats} active={active} />
+      </div>
+      <div className="qz-dim" style={{ fontSize: 12 }}>This page refreshes itself — no need to reload.</div>
+    </QzCard>
+  );
+}
+
+// ── Stage: Type (tier-1) — pick a brand-tailored quiz type ───────────────────
+function TypesStage({
+  data,
+  fetcher,
+  pendingIntent,
+}: {
+  data: FunnelData;
+  fetcher: ReturnType<typeof useFetcher<ActionResult>>;
+  pendingIntent: string | null;
+}) {
+  const picking = pendingIntent === "pick-type";
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+      <QzCard style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+        <div className="qz-label">Step 2 of 3 · Quiz type</div>
+        <h2 className="qz-h2" style={{ margin: 0 }}>Pick a quiz type for your brand</h2>
+        <p className="qz-dim" style={{ margin: 0 }}>
+          Tailored to your catalog and category. Pick the one that fits your goal — next we&rsquo;ll
+          draft a few templates for it.
+        </p>
+      </QzCard>
+
+      <div className="qz-type-grid">
+        {data.quizTypes.map((t) => (
+          <button
+            key={t.id}
+            type="button"
+            className="qz-card qz-interactive"
+            disabled={picking}
+            onClick={() => fetcher.submit({ intent: "pick-type", typeId: t.id }, { method: "post" })}
+            style={{
+              textAlign: "left",
+              display: "flex",
+              flexDirection: "column",
+              gap: 8,
+              cursor: picking ? "default" : "pointer",
+              borderColor: data.pickedTypeId === t.id ? "var(--qz-accent)" : undefined,
+            }}
+          >
+            <div className="qz-row qz-row-between" style={{ gap: 8, alignItems: "flex-start" }}>
+              <span style={{ fontFamily: "var(--qz-font-display)", fontSize: 17, lineHeight: 1.2 }}>
+                {t.name}
+              </span>
+              <QzBadge tone="draft">{XTYPE_LABEL[t.experience_type] ?? t.experience_type}</QzBadge>
+            </div>
+            <span className="qz-muted" style={{ fontSize: 13.5 }}>{t.achieves}</span>
+            <span className="qz-label">{t.question_range.min}–{t.question_range.max} questions</span>
+            {t.best_practice_note ? (
+              <span className="qz-dim" style={{ fontSize: 12 }}>💡 {t.best_practice_note}</span>
+            ) : null}
+            <span style={{ fontSize: 12, color: "var(--qz-accent)", fontWeight: 600, marginTop: 2 }}>
+              {picking ? "…" : "Use this type →"}
+            </span>
+          </button>
+        ))}
+      </div>
+
+      <div className="qz-row" style={{ gap: 10 }}>
+        <button
+          type="button"
+          className="qz-btn qz-btn-ghost qz-btn-sm"
+          onClick={() => fetcher.submit({ intent: "back-to-goal" }, { method: "post" })}
+        >
+          ← Revise the goal
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ── Stage: Configuring (tier-2) — T4 placeholder; T5 replaces with the battle
+// card editor. Lists the generated templates so the stage is never blank.
+function ConfiguringPlaceholder({
+  data,
+  fetcher,
+}: {
+  data: FunnelData;
+  fetcher: ReturnType<typeof useFetcher<ActionResult>>;
+}) {
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+      <QzCard style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+        <div className="qz-label">Step 3 of 3 · Templates</div>
+        <h2 className="qz-h2" style={{ margin: 0 }}>Your templates are ready</h2>
+        <p className="qz-dim" style={{ margin: 0 }}>
+          {data.richTemplates.length} template{data.richTemplates.length === 1 ? "" : "s"} for your
+          chosen type. The battle-card editor lands next.
+        </p>
+      </QzCard>
+      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+        {data.richTemplates.map((t) => (
+          <QzCard key={t.id} style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+            <strong>{t.title}</strong>
+            <span className="qz-dim" style={{ fontSize: 13 }}>{t.angle}</span>
+          </QzCard>
+        ))}
+      </div>
+      <div className="qz-row" style={{ gap: 10 }}>
+        <button
+          type="button"
+          className="qz-btn qz-btn-ghost qz-btn-sm"
+          onClick={() => fetcher.submit({ intent: "back-to-types" }, { method: "post" })}
+        >
+          ← Back to types
         </button>
       </div>
     </div>

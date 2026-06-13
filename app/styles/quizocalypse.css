@@ -602,3 +602,10 @@ body[data-qz] ::selection { background: var(--qz-ink); color: var(--qz-cream); }
 .qz-staged-beat.is-done .qz-staged-glyph {
   color: var(--qz-ok);
 }
+
+/* Step 2 T4 — the tier-1 quiz-type card grid. */
+.qz-type-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 14px;
+}
