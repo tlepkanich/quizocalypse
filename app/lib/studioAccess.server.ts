@@ -78,12 +78,41 @@ export async function requireStudioAccess(request: Request): Promise<void> {
   });
 }
 
+// Spin-off: the synthetic, non-myshopify domain that keys the single standalone
+// workspace. Deliberately NOT a *.myshopify.com value, so any code path that
+// slips a Shopify guard breaks visibly rather than hitting a real store.
+export const STANDALONE_DOMAIN = "studio.local";
+
+// True for a non-Shopify workspace. Gates the Shopify-only paths (catalog sync,
+// discount creation, brand/theme signal reads, the funnel "resync" intent).
+export function isStandalone(shop: Pick<Shop, "source">): boolean {
+  return shop.source === "standalone";
+}
+
 /**
- * Resolve the single shop the standalone surface manages, from DEV_SHOP_DOMAIN.
- * The standalone surface is a private feedback tool for one dev store, so it
- * never trusts client input for shop identity.
+ * Resolve-or-create the single standalone workspace (source="standalone"),
+ * keyed on STANDALONE_DOMAIN. Mirrors the catalogSync `ensureShop` upsert. No
+ * Shopify session, no admin client — a pure local row.
+ */
+export async function resolveStandaloneShop(): Promise<Shop> {
+  return prisma.shop.upsert({
+    where: { shopDomain: STANDALONE_DOMAIN },
+    update: {},
+    create: { shopDomain: STANDALONE_DOMAIN, source: "standalone" },
+  });
+}
+
+/**
+ * Resolve the single shop the standalone /studio surface manages. With
+ * STUDIO_MODE=standalone it's the non-Shopify workspace (no DEV_SHOP_DOMAIN, no
+ * Shopify calls); otherwise it's the DEV_SHOP_DOMAIN dev store (the Shopify
+ * live-verify path). Every /studio route + resolveApiShop calls this, so the
+ * mode switch needs no route changes. Never trusts client input for identity.
  */
 export async function resolveStudioShop(): Promise<Shop> {
+  if (process.env.STUDIO_MODE === "standalone") {
+    return resolveStandaloneShop();
+  }
   const domain = process.env.DEV_SHOP_DOMAIN;
   if (!domain) {
     throw new Response(

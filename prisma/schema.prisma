@@ -48,6 +48,11 @@ model Shop {
   // ("building" | "error:<msg>" | null), mirroring Quiz.buildState.
   brandIdentity      Json?
   brandIdentityState String?
+  // Spin-off: "shopify" (installed via OAuth) | "standalone" (a non-Shopify
+  // workspace, keyed on a synthetic domain like studio.local). Drives whether
+  // Shopify-only paths (sync, discounts, brand signals) run. See
+  // app/lib/studioAccess.server.ts isStandalone().
+  source         String    @default("shopify")
 
   products       Product[]
   collections    Collection[]
@@ -84,6 +89,13 @@ model Product {
   variants      Json
   metafields    Json
   imageUrl      String?
+  // Spin-off: the merchant's own product URL ("Shop now" click-through for
+  // standalone shops, where there's no Shopify cart permalink). Null for synced
+  // Shopify products (which build a cart permalink from the variant GID).
+  url           String?
+  // "shopify" (synced) | "manual" (added by hand / CSV import). Manual rows use
+  // platform-neutral man_<cuid> productIds + one synthetic variant.
+  source        String   @default("shopify")
   priceMin      Decimal? @db.Decimal(10, 2)
   priceMax      Decimal? @db.Decimal(10, 2)
   // Raw HTML body from Shopify (descriptionHtml). Source of truth.
