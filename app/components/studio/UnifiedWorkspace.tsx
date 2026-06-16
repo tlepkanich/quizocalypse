@@ -18,6 +18,7 @@ import { ContextPanel } from "./ContextPanel";
 import { AiChatPanel } from "./AiChatPanel";
 import { ReviewEnrichPanel } from "./ReviewEnrichPanel";
 import { EditableTitle, PLACEMENTS, type StudioBuilderData } from "./studioShared";
+import { BuilderRail, BuilderFilmstrip } from "./BuilderChrome";
 import { Step3Results } from "../builder/Step3Results";
 import { TranslationsPanel } from "./TranslationsPanel";
 import { ExperiencePanel } from "./ExperiencePanel";
@@ -79,6 +80,8 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
   // Device-frame width lifted from Step5Preview so the Design tab's layer
   // selector can follow it ("edit what you see").
   const [frameW, setFrameW] = useState<number>(DEVICE_PRESETS.desktop);
+  // QD-6: which Quizell builder rail tool is focused (standalone chrome only).
+  const [tool, setTool] = useState<"editor" | "ai" | "theme" | "code">("editor");
   const [reconcileError, setReconcileError] = useState<string | null>(null);
 
   const select = useCallback((nodeId: string | null) => {
@@ -187,115 +190,88 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
     goToStep: () => {},
   };
 
-  return (
-    <QzPage>
-      {chrome === "embedded" ? <TitleBar title={`Studio · ${data.name}`} /> : null}
-      <QzPageHeader
-        eyebrow="Quiz studio"
-        title={
-          <span className="qz-row" style={{ gap: 10, alignItems: "center" }}>
-            <EditableTitle name={data.name} onRename={renameQuiz} />
-            <span className="qz-badge" title="Experience type" style={{ fontSize: 10, textTransform: "uppercase", letterSpacing: "0.05em" }}>
-              {XTYPE_LABEL[experienceTypeOf(doc)]}
-            </span>
-          </span>
-        }
-      />
+  const savingLabel = isSaving ? "Saving…" : savedAt ? "Saved" : "";
 
-      <div
-        className="qz-row qz-row-between"
-        style={{ alignItems: "center", marginBottom: 12, gap: 12, flexWrap: "wrap" }}
+  const editInteractToggle = (
+    <div
+      className="qz-segmented"
+      role="group"
+      aria-label="Preview mode"
+      title="Edit: click any element in the preview to edit it · Interact: walk through the quiz normally"
+    >
+      <button type="button" aria-pressed={editMode} onClick={() => setEditMode(true)}>
+        ✎ Edit
+      </button>
+      <button
+        type="button"
+        aria-pressed={!editMode}
+        onClick={() => {
+          setEditMode(false);
+          setInspectTarget(null);
+        }}
       >
-        <span className="qz-dim" style={{ fontSize: 12 }}>
-          {isSaving ? "Saving…" : savedAt ? "Saved" : ""}
-        </span>
-        <div className="qz-row" style={{ gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-          <div
-            className="qz-segmented"
-            role="group"
-            aria-label="Preview mode"
-            title="Edit: click any element in the preview to edit it · Interact: walk through the quiz normally"
-          >
-            <button type="button" aria-pressed={editMode} onClick={() => setEditMode(true)}>
-              ✎ Edit
-            </button>
-            <button
-              type="button"
-              aria-pressed={!editMode}
-              onClick={() => {
-                setEditMode(false);
-                setInspectTarget(null);
-              }}
-            >
-              ▶ Interact
-            </button>
-          </div>
-          <details style={{ position: "relative" }}>
-            <summary
-              className="qz-btn qz-btn-ghost qz-btn-sm"
-              style={{ listStyle: "none", cursor: "pointer" }}
-            >
-              ⚙ Settings
-            </summary>
-            <div
-              className="qz-card"
-              style={{
-                position: "absolute",
-                right: 0,
-                top: "calc(100% + 6px)",
-                width: 380,
-                padding: 12,
-                zIndex: 50,
-                boxShadow: "var(--qz-shadow-md, 0 8px 30px rgba(0,0,0,.12))",
-              }}
-            >
-              <div className="qz-label" style={{ marginBottom: 6, fontSize: 11 }}>
-                Where should it appear?
-              </div>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6, marginBottom: 10 }}>
-                {PLACEMENTS.map((p) => {
-                  const sel = p.value === placement;
-                  return (
-                    <button
-                      key={p.value}
-                      type="button"
-                      onClick={() => commit({ ...doc, placement: p.value })}
-                      title={p.hint}
-                      style={{
-                        textAlign: "left",
-                        padding: "6px 8px",
-                        borderRadius: "var(--qz-radius)",
-                        cursor: "pointer",
-                        fontSize: 12,
-                        fontWeight: sel ? 600 : 400,
-                        border: sel ? "2px solid var(--qz-accent, #2a6df4)" : "1px solid #00000022",
-                        background: sel
-                          ? "color-mix(in srgb, var(--qz-accent, #2a6df4) 8%, transparent)"
-                          : "#fff",
-                      }}
-                    >
-                      {p.label}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          </details>
-          {chrome === "embedded" ? (
-            <Link
-              to={`/app/quizzes/${data.quizId}`}
-              className="qz-btn qz-btn-ghost qz-btn-sm"
-              title="The full node-graph canvas (branch rules, integrations, A/B wiring)"
-            >
-              Canvas →
-            </Link>
-          ) : null}
-          <QzButton variant="primary" size="sm" disabled={!canPublish || isPublishing} onClick={publish}>
-            {isPublishing ? "Publishing…" : "Publish"}
-          </QzButton>
+        ▶ Interact
+      </button>
+    </div>
+  );
+
+  const settingsPopover = (
+    <details style={{ position: "relative" }}>
+      <summary className="qz-btn qz-btn-ghost qz-btn-sm" style={{ listStyle: "none", cursor: "pointer" }}>
+        ⚙ Settings
+      </summary>
+      <div
+        className="qz-card"
+        style={{
+          position: "absolute",
+          right: 0,
+          top: "calc(100% + 6px)",
+          width: 380,
+          padding: 12,
+          zIndex: 50,
+          boxShadow: "var(--qz-shadow-md)",
+        }}
+      >
+        <div className="qz-label" style={{ marginBottom: 6, fontSize: 11 }}>
+          Where should it appear?
+        </div>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6, marginBottom: 10 }}>
+          {PLACEMENTS.map((p) => {
+            const sel = p.value === placement;
+            return (
+              <button
+                key={p.value}
+                type="button"
+                onClick={() => commit({ ...doc, placement: p.value })}
+                title={p.hint}
+                style={{
+                  textAlign: "left",
+                  padding: "6px 8px",
+                  borderRadius: "var(--qz-radius)",
+                  cursor: "pointer",
+                  fontSize: 12,
+                  fontWeight: sel ? 600 : 400,
+                  border: sel ? "2px solid var(--qz-accent)" : "1px solid var(--qz-rule)",
+                  background: sel ? "var(--qz-accent-tint)" : "var(--qz-paper)",
+                }}
+              >
+                {p.label}
+              </button>
+            );
+          })}
         </div>
       </div>
+    </details>
+  );
 
+  const publishBtn = (
+    <QzButton variant="primary" size="sm" disabled={!canPublish || isPublishing} onClick={publish}>
+      {isPublishing ? "Publishing…" : "Publish"}
+    </QzButton>
+  );
+
+  const banners = (
+    <>
       {suggestions.length > 0 ? (
         <div
           className="qz-card"
@@ -340,8 +316,11 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
           Steps with a red dot in the rail need attention — select one to edit it.
         </QzBanner>
       ) : null}
+    </>
+  );
 
-      {view === "build" ? (
+  const body =
+    view === "build" ? (
         <div className="qz-unified">
           <FlowRail
             doc={doc}
@@ -426,7 +405,98 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
             )}
           </div>
         </div>
-      )}
+      );
+
+  // QD-6 — standalone gets the Quizell builder chrome (icon-rail + top bar +
+  // step filmstrip). The embedded /app surface keeps the Polaris-framed layout.
+  if (chrome === "standalone") {
+    const activeTool = view === "build" ? tool : "settings";
+    return (
+      <div className="qz-builder">
+        <BuilderRail
+          active={activeTool}
+          onSelect={(key) => {
+            if (key === "settings") {
+              setView("logic");
+            } else {
+              setTool(key as "editor" | "ai" | "theme" | "code");
+              setView("build");
+            }
+          }}
+        />
+        <div className="qz-builder-main">
+          <header className="qz-builder-topbar">
+            <div className="qz-row" style={{ gap: 8, minWidth: 0, alignItems: "center" }}>
+              <Link to="/studio" className="qz-dim" style={{ textDecoration: "none", fontSize: 13 }}>
+                Dashboard
+              </Link>
+              <span className="qz-dim" aria-hidden="true">›</span>
+              <EditableTitle name={data.name} onRename={renameQuiz} />
+              <span className="qz-badge" style={{ fontSize: 10 }}>
+                {XTYPE_LABEL[experienceTypeOf(doc)]}
+              </span>
+            </div>
+            <div className="qz-row" style={{ gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+              <span className="qz-dim" style={{ fontSize: 12 }}>{savingLabel}</span>
+              {editInteractToggle}
+              {settingsPopover}
+              <a
+                href={data.previewUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="qz-btn qz-btn-ghost qz-btn-sm"
+              >
+                Preview
+              </a>
+              {publishBtn}
+            </div>
+          </header>
+          <div className="qz-builder-canvas">
+            {banners}
+            {body}
+          </div>
+          <BuilderFilmstrip steps={ordered.steps} selectedId={selectedId} onSelect={select} />
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <QzPage>
+      {chrome === "embedded" ? <TitleBar title={`Studio · ${data.name}`} /> : null}
+      <QzPageHeader
+        eyebrow="Quiz studio"
+        title={
+          <span className="qz-row" style={{ gap: 10, alignItems: "center" }}>
+            <EditableTitle name={data.name} onRename={renameQuiz} />
+            <span className="qz-badge" title="Experience type" style={{ fontSize: 10, textTransform: "uppercase", letterSpacing: "0.05em" }}>
+              {XTYPE_LABEL[experienceTypeOf(doc)]}
+            </span>
+          </span>
+        }
+      />
+      <div
+        className="qz-row qz-row-between"
+        style={{ alignItems: "center", marginBottom: 12, gap: 12, flexWrap: "wrap" }}
+      >
+        <span className="qz-dim" style={{ fontSize: 12 }}>{savingLabel}</span>
+        <div className="qz-row" style={{ gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+          {editInteractToggle}
+          {settingsPopover}
+          {chrome === "embedded" ? (
+            <Link
+              to={`/app/quizzes/${data.quizId}`}
+              className="qz-btn qz-btn-ghost qz-btn-sm"
+              title="The full node-graph canvas (branch rules, integrations, A/B wiring)"
+            >
+              Canvas →
+            </Link>
+          ) : null}
+          {publishBtn}
+        </div>
+      </div>
+      {banners}
+      {body}
     </QzPage>
   );
 }
