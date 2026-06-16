@@ -1,175 +1,118 @@
 import type { LoaderFunctionArgs } from "@remix-run/node";
 import { json } from "@remix-run/node";
 import { Link, useLoaderData } from "@remix-run/react";
+import type { ReactNode } from "react";
 import { requireStudioAccess, resolveStudioShop } from "../lib/studioAccess.server";
 import prisma from "../db.server";
-import { QzPage, QzPageHeader, QzCard, QzBadge } from "../components/qz";
-import {
-  computeBenchmarks,
-  MIN_SESSIONS_FOR_COMPARE,
-  type QuizBenchmark,
-} from "../lib/quizBenchmarks";
+import { QzPage, QzBadge } from "../components/qz";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   await requireStudioAccess(request);
   const shop = await resolveStudioShop();
-  const quizzes = await prisma.quiz.findMany({
-    // Hide in-flight Step-1 funnel drafts (buildState:"step1") — they aren't real
-    // quizzes yet. `not` includes NULL rows in Prisma, but the OR makes that
-    // explicit so a normal quiz can never drop off the gallery.
-    where: {
-      shopId: shop.id,
-      OR: [{ buildState: null }, { buildState: { not: "step1" } }],
-    },
-    select: { id: true, name: true, status: true, version: true, updatedAt: true },
+  const recent = await prisma.quiz.findMany({
+    where: { shopId: shop.id, OR: [{ buildState: null }, { buildState: { not: "step1" } }] },
+    select: { id: true, name: true, status: true, updatedAt: true },
     orderBy: { updatedAt: "desc" },
+    take: 4,
   });
-  // Benchmarks: distinct (quiz, event, session) triples → pure aggregation.
-  // Fine at current scale; revisit with a grouped raw query in Phase M.
-  const eventRows = await prisma.event.findMany({
-    where: {
-      quizId: { in: quizzes.map((q) => q.id) },
-      eventType: { in: ["quiz_engaged", "quiz_completed"] },
-    },
-    select: { quizId: true, eventType: true, sessionId: true },
-    distinct: ["quizId", "eventType", "sessionId"],
-  });
-  const benchmarks = computeBenchmarks(eventRows);
   return json({
-    shopDomain: shop.shopDomain,
-    averageRate: benchmarks.averageRate,
-    quizzes: quizzes.map((q) => ({
-      id: q.id,
-      name: q.name,
-      status: q.status,
-      version: q.version,
-      updatedAt: q.updatedAt.toISOString(),
-      bench: benchmarks.byQuiz[q.id] ?? null,
-    })),
+    recent: recent.map((q) => ({ ...q, updatedAt: q.updatedAt.toISOString() })),
   });
 };
 
-// One dim line of truth per card: the quiz's completion rate, with a
-// vs-account-average comparison once the sample clears the floor.
-function BenchLine({
-  bench,
-  averageRate,
-}: {
-  bench: QuizBenchmark | null;
-  averageRate: number | null;
-}) {
-  if (!bench || bench.rate === null) return null;
-  const compare =
-    averageRate !== null && bench.started >= MIN_SESSIONS_FOR_COMPARE
-      ? bench.rate > averageRate
-        ? ` · ▲ above your ${averageRate}% avg`
-        : bench.rate < averageRate
-          ? ` · ▼ below your ${averageRate}% avg`
-          : ` · ≈ your ${averageRate}% avg`
-      : "";
+// Big "what do you want to do" action cards (Quizell Home front door).
+const ACTION_ICON: Record<string, ReactNode> = {
+  ai: <path d="M12 3l1.7 4.5L18 9l-4.3 1.5L12 15l-1.7-4.5L6 9l4.3-1.5L12 3ZM18.5 14l.8 2 2 .8-2 .8-.8 2-.8-2-2-.8 2-.8.8-2Z" />,
+  import: <><path d="M12 3v12m0 0 4-4m-4 4-4-4" /><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2" /></>,
+  scratch: <><path d="M12 20h9" /><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5Z" /></>,
+};
+
+const ACTIONS = [
+  { to: "/studio/brand", icon: "ai", title: "Create with AI", blurb: "Let our AI build your quiz for you — perfect if you don't have questions yet." },
+  { to: "/studio/new", icon: "import", title: "Import Questions", blurb: "Upload or paste your existing questions to instantly turn them into a quiz." },
+  { to: "/studio/new", icon: "scratch", title: "Start from Scratch", blurb: "Start with a blank quiz and add your questions manually." },
+];
+
+const INSPIRATION = [
+  { label: "Product Recommendation Quiz", hue: 205 },
+  { label: "Service Recommendation Quiz", hue: 250 },
+  { label: "Lead Generation Funnel", hue: 30 },
+  { label: "Lead Collection Form", hue: 145 },
+  { label: "Customer Survey", hue: 330 },
+];
+
+function BigIcon({ name }: { name: keyof typeof ACTION_ICON }) {
   return (
-    <div className="qz-dim" style={{ fontSize: 12 }}>
-      {bench.rate}% completion ({bench.completed}/{bench.started}){compare}
-    </div>
+    <span className="qz-action-icon" aria-hidden="true">
+      <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+        {ACTION_ICON[name]}
+      </svg>
+    </span>
   );
 }
 
-export default function StudioIndex() {
-  const { shopDomain, quizzes, averageRate } = useLoaderData<typeof loader>();
+export default function StudioHome() {
+  const { recent } = useLoaderData<typeof loader>();
   return (
     <QzPage>
-      <QzPageHeader
-        eyebrow="Standalone builder"
-        title="Your quizzes"
-        subtitle={shopDomain}
-        actions={
-          <div className="qz-row" style={{ gap: 8 }}>
-            <Link to="/studio/new" className="qz-btn qz-btn-ghost qz-btn-sm">
-              New quiz
-            </Link>
-            <Link to="/studio/brand" className="qz-btn qz-btn-accent">
-              ✨ Build with AI →
-            </Link>
+      <h1 className="qz-display" style={{ fontSize: 34, marginBottom: 28 }}>Hello 👋</h1>
+
+      <div className="qz-action-grid">
+        {ACTIONS.map((a) => (
+          <Link key={a.title} to={a.to} className="qz-card qz-interactive qz-action-card">
+            <BigIcon name={a.icon as keyof typeof ACTION_ICON} />
+            <div style={{ fontSize: 17, fontWeight: 600, letterSpacing: "-0.01em" }}>{a.title}</div>
+            <p className="qz-muted" style={{ margin: 0, fontSize: 13.5, lineHeight: 1.5 }}>{a.blurb}</p>
+          </Link>
+        ))}
+      </div>
+
+      <section style={{ marginTop: 40 }}>
+        <div className="qz-section-head">
+          <div>
+            <h2 className="qz-h2" style={{ marginBottom: 4 }}>Inspiration</h2>
+            <p className="qz-muted" style={{ margin: 0, fontSize: 13.5 }}>
+              Browse ready-to-use quiz examples you can preview and reuse as templates.
+            </p>
           </div>
-        }
-      />
-      {quizzes.length === 0 ? (
-        <QzCard dashed style={{ display: "flex", flexDirection: "column", gap: 10, alignItems: "flex-start" }}>
-          <div className="qz-label">No quizzes yet</div>
-          <p className="qz-dim" style={{ margin: 0 }}>
-            Create your first quiz — start blank, from a template, or with the full demo.
-          </p>
-          <div className="qz-row" style={{ gap: 8 }}>
-            <Link to="/studio/brand" className="qz-btn qz-btn-accent qz-btn-sm">
-              ✨ Build with AI →
+        </div>
+        <div className="qz-inspo-row">
+          {INSPIRATION.map((t) => (
+            <Link key={t.label} to="/studio/new" className="qz-card qz-interactive qz-inspo-card">
+              <span
+                className="qz-inspo-thumb"
+                aria-hidden="true"
+                style={{ background: `linear-gradient(135deg, hsl(${t.hue} 70% 92%), hsl(${t.hue} 60% 82%))` }}
+              />
+              <span style={{ fontSize: 13.5, fontWeight: 600 }}>{t.label}</span>
             </Link>
-            <Link to="/studio/new" className="qz-btn qz-btn-ghost qz-btn-sm">
-              Start blank / template
-            </Link>
-          </div>
-        </QzCard>
-      ) : (
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))",
-            gap: 14,
-          }}
-        >
-          {quizzes.map((q) => (
-            <QzCard
-              key={q.id}
-              className="qz-interactive"
-              style={{ display: "flex", flexDirection: "column", gap: 14 }}
-            >
-              <div className="qz-row qz-row-between" style={{ alignItems: "flex-start", gap: 10 }}>
-                <span
-                  style={{
-                    fontFamily: "var(--qz-font-display)",
-                    fontSize: 19,
-                    lineHeight: 1.2,
-                    letterSpacing: "-0.01em",
-                  }}
-                >
-                  {q.name}
-                </span>
-                <QzBadge tone={q.status === "published" ? "ok" : "draft"}>{q.status}</QzBadge>
-              </div>
-              <div className="qz-dim" style={{ fontSize: 12 }}>
-                v{q.version} · updated {new Date(q.updatedAt).toLocaleDateString()}
-              </div>
-              <BenchLine bench={q.bench} averageRate={averageRate} />
-              <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: "auto" }}>
-                <Link
-                  to={`/studio/${q.id}`}
-                  className="qz-btn qz-btn-primary qz-btn-sm"
-                  style={{ width: "100%", justifyContent: "center" }}
-                >
-                  Open builder →
-                </Link>
-                <div className="qz-row" style={{ gap: 8 }}>
-                  <Link
-                    to={`/studio/${q.id}/analytics`}
-                    className="qz-btn qz-btn-ghost qz-btn-sm"
-                    style={{ flex: 1, justifyContent: "center" }}
-                  >
-                    Analytics
-                  </Link>
-                  <a
-                    href={`/q/${q.id}`}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="qz-btn qz-btn-ghost qz-btn-sm"
-                    style={{ flex: 1, justifyContent: "center" }}
-                  >
-                    Preview
-                  </a>
-                </div>
-              </div>
-            </QzCard>
           ))}
         </div>
-      )}
+      </section>
+
+      {recent.length > 0 ? (
+        <section style={{ marginTop: 40 }}>
+          <div className="qz-section-head">
+            <h2 className="qz-h2">Recent quizzes</h2>
+            <Link to="/studio/quizzes" className="qz-btn qz-btn-ghost qz-btn-sm">View all →</Link>
+          </div>
+          <div
+            style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))", gap: 14 }}
+          >
+            {recent.map((q) => (
+              <Link key={q.id} to={`/studio/${q.id}`} className="qz-card qz-interactive" style={{ display: "flex", flexDirection: "column", gap: 8, textDecoration: "none", color: "inherit" }}>
+                <div className="qz-row qz-row-between" style={{ alignItems: "flex-start", gap: 10 }}>
+                  <span style={{ fontSize: 15.5, fontWeight: 600, letterSpacing: "-0.01em" }}>{q.name}</span>
+                  <QzBadge tone={q.status === "published" ? "ok" : "draft"}>{q.status}</QzBadge>
+                </div>
+                <div className="qz-dim" style={{ fontSize: 12 }}>
+                  updated {new Date(q.updatedAt).toLocaleDateString()}
+                </div>
+              </Link>
+            ))}
+          </div>
+        </section>
+      ) : null}
     </QzPage>
   );
 }

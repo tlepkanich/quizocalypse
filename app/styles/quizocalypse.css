@@ -789,3 +789,19 @@ body[data-qz] ::selection { background: var(--qz-ink); color: var(--qz-cream); }
   width: 26px; height: 26px; flex: 0 0 auto; border-radius: 50%;
   background: linear-gradient(135deg, var(--qz-accent), var(--qz-accent-2));
 }
+
+/* ── QD-3 — Home front door: big action cards + inspiration gallery ────────── */
+.qz-action-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+@media (max-width: 900px) { .qz-action-grid { grid-template-columns: 1fr; } }
+.qz-action-card {
+  display: flex; flex-direction: column; gap: 11px;
+  padding: 26px; text-decoration: none; color: inherit; min-height: 172px;
+}
+.qz-action-icon {
+  width: 52px; height: 52px; border-radius: 14px; margin-bottom: 2px;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: var(--qz-accent-tint); color: var(--qz-accent);
+}
+.qz-inspo-row { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 14px; }
+.qz-inspo-card { display: flex; flex-direction: column; gap: 10px; padding: 12px; text-decoration: none; color: inherit; }
+.qz-inspo-thumb { display: block; height: 116px; border-radius: 9px; border: 1px solid var(--qz-rule); }
