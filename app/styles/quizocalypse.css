@@ -747,3 +747,45 @@ body[data-qz] ::selection { background: var(--qz-ink); color: var(--qz-cream); }
   font-weight: 500;
 }
 .qz-chip-toggle.is-on::before { content: "✓ "; }
+
+/* ── QD-1 — the Quizell-style app shell: persistent left sidebar ───────────── */
+.qz-shell { display: flex; min-height: 100vh; align-items: stretch; }
+.qz-shell-main { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; }
+
+.qz-sidebar {
+  flex: 0 0 244px; width: 244px;
+  position: sticky; top: 0; align-self: flex-start;
+  height: 100vh;
+  display: flex; flex-direction: column;
+  background: var(--qz-paper);
+  border-right: 1px solid var(--qz-rule);
+  padding: 14px 12px;
+}
+.qz-sidebar-brand { padding: 6px 8px 14px; }
+.qz-brand-link { display: inline-flex; align-items: center; gap: 10px; text-decoration: none; color: var(--qz-ink); }
+.qz-brand-badge {
+  width: 30px; height: 30px; flex: 0 0 auto;
+  display: inline-flex; align-items: center; justify-content: center;
+  border-radius: 9px; background: var(--qz-accent); color: #fff;
+  font-weight: 700; font-size: 17px; line-height: 1;
+}
+.qz-brand-word { font-size: 17px; font-weight: 650; letter-spacing: -0.01em; }
+
+.qz-sidebar-nav { display: flex; flex-direction: column; gap: 2px; margin-top: 4px; flex: 1 1 auto; overflow-y: auto; }
+.qz-sidenav-item {
+  display: flex; align-items: center; gap: 11px;
+  padding: 9px 11px; border-radius: 9px;
+  color: var(--qz-ink-3); text-decoration: none;
+  font-size: 13.5px; font-weight: 500; line-height: 1;
+  transition: background var(--qz-dur-fast) var(--qz-ease), color var(--qz-dur-fast) var(--qz-ease);
+}
+.qz-sidenav-item:hover { background: var(--qz-rule-2); color: var(--qz-ink); }
+.qz-sidenav-item[aria-current="page"] {
+  background: var(--qz-accent-tint); color: var(--qz-accent); font-weight: 600;
+}
+
+.qz-sidebar-foot { border-top: 1px solid var(--qz-rule); padding: 12px 6px 4px; margin-top: 8px; }
+.qz-acct-avatar {
+  width: 26px; height: 26px; flex: 0 0 auto; border-radius: 50%;
+  background: linear-gradient(135deg, var(--qz-accent), var(--qz-accent-2));
+}
