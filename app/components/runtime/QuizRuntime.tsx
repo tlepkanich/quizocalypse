@@ -16,6 +16,7 @@ import {
 } from "../../lib/recommendationEngine";
 import { resolveNodeOverride } from "../../lib/resultLayout";
 import { cartPermalink, numericId, cartPermalinkMulti } from "../../lib/cartLink";
+import { productHref, type QuizPlatform } from "../../lib/productHref";
 import { progressPct, reachableQuestionCount } from "../../lib/progress";
 import {
   resolveForBreakpoint,
@@ -113,6 +114,11 @@ export interface QuizRuntimeProps {
   quizId: string;
   version: number;
   shopDomain: string;
+  // QD-7 — which commerce platform this published quiz belongs to. "shopify"
+  // (the default for every pre-existing quiz) keeps add-to-cart + /products/
+  // permalinks; "standalone" gates the Shopify cart off and links product
+  // cards to the merchant's own `IndexedProduct.url` via a "Shop now" CTA.
+  platform?: "shopify" | "standalone";
   mode?: QuizRuntimeMode;
   // Preview-only (ignored when mode==="live"). Preview always starts fresh at
   // the intro because the localStorage restore effect early-returns on isPreview.
@@ -160,6 +166,12 @@ const RuntimePreviewContext = createContext(false);
 // K2 — the resolved serving locale ("en" default). Consumed by the
 // save-results link (locale-sticky URLs) and the AskAI POST (reply language).
 const RuntimeLocaleContext = createContext("en");
+// QD-7 — the commerce platform ("shopify" default). The deep product-card
+// leaves read this (same pattern as the preview/locale contexts) to decide
+// PDP href + cart vs "Shop now", without threading a prop through every
+// intermediate result/preview component. `productHref` (pure, lib) centralizes
+// the link rule both platforms share.
+const RuntimePlatformContext = createContext<QuizPlatform>("shopify");
 
 export function QuizRuntime(props: QuizRuntimeProps) {
   const tc = useChrome();
@@ -173,6 +185,7 @@ export function QuizRuntime(props: QuizRuntimeProps) {
     quizId,
     version,
     shopDomain,
+    platform = "shopify",
     mode = "live",
     tokensOverride = null,
     breakpoint: breakpointProp,
@@ -1038,6 +1051,7 @@ export function QuizRuntime(props: QuizRuntimeProps) {
 
   return (
     <RuntimePreviewContext.Provider value={isPreview}>
+    <RuntimePlatformContext.Provider value={platform}>
     <ChromeContext.Provider value={chromeTable}>
     <RuntimeLocaleContext.Provider value={locale}>
     <div
@@ -1154,6 +1168,7 @@ export function QuizRuntime(props: QuizRuntimeProps) {
     </div>
     </RuntimeLocaleContext.Provider>
     </ChromeContext.Provider>
+    </RuntimePlatformContext.Provider>
     </RuntimePreviewContext.Provider>
   );
 }
@@ -1578,6 +1593,7 @@ function PreviewList({
 }) {
   const tc = useChrome();
   const isPreviewMode = useContext(RuntimePreviewContext);
+  const platform = useContext(RuntimePlatformContext);
   if (recs.length === 0) {
     return (
       <p
@@ -1594,9 +1610,7 @@ function PreviewList({
   return (
     <div style={{ display: "grid", gap: 10 }}>
       {recs.map((r, idx) => {
-        const href = shopDomain
-          ? `https://${shopDomain}/products/${r.handle}`
-          : undefined;
+        const href = productHref(r, shopDomain, platform);
         const inner = (
           <>
             {r.image_url ? (
@@ -1660,7 +1674,10 @@ function PreviewList({
           color: "inherit",
           background: "var(--qz-color-bg)",
         };
-        const cartUrl = cartPermalink(shopDomain, r.default_variant_id, 1);
+        // QD-7 — standalone has no Shopify cart; the mid-quiz "Add" chip is
+        // gated off (the card still links to the merchant PDP via `href`).
+        const cartUrl =
+          platform === "standalone" ? null : cartPermalink(shopDomain, r.default_variant_id, 1);
         const infoFlex: React.CSSProperties = {
           display: "flex",
           gap: 10,
@@ -3008,6 +3025,7 @@ function ProductCardsView({
   inspect?: (part: InspectPart) => React.HTMLAttributes<HTMLElement>;
 }) {
   const tc = useChrome();
+  const platform = useContext(RuntimePlatformContext);
   const products = node.data.product_ids
     .map((id) => productIndex.find((p) => p.product_id === id))
     .filter((p): p is IndexedProduct => !!p);
@@ -3031,11 +3049,7 @@ function ProductCardsView({
         {products.map((p) => (
           <a
             key={p.product_id}
-            href={
-              shopDomain
-                ? `https://${shopDomain}/products/${p.handle}`
-                : `#${p.handle}`
-            }
+            href={productHref(p, shopDomain, platform) ?? `#${p.handle}`}
             target="_blank"
             rel="noreferrer"
             style={{
@@ -3299,6 +3313,7 @@ function ResultView({
 }) {
   const tc = useChrome();
   const isPreviewMode = useContext(RuntimePreviewContext);
+  const platform = useContext(RuntimePlatformContext);
   // Fire completion + view events once when the result first renders, and
   // persist the server-side session (Dev Spec §7.2) — but never in preview.
   useEffect(() => {
@@ -3372,7 +3387,7 @@ function ResultView({
             position={idx}
             vertical={splitLayout}
             ctaLabel={ctaLabel}
-            href={shopDomain ? `https://${shopDomain}/products/${r.handle}` : undefined}
+            href={productHref(r, shopDomain, platform)}
             shopDomain={shopDomain}
             discountCode={discountCode}
             discountLabel={discountLabel}
@@ -3405,7 +3420,7 @@ function ResultView({
                 product={r}
                 position={recs.length + idx}
                 ctaLabel={ctaLabel}
-                href={shopDomain ? `https://${shopDomain}/products/${r.handle}` : undefined}
+                href={productHref(r, shopDomain, platform)}
                 shopDomain={shopDomain}
                 styles={styles}
                 onClick={() =>
@@ -3702,6 +3717,7 @@ function StageSection({
   styles: ReturnType<typeof stylesFor>;
   analytics: ReturnType<typeof createAnalyticsClient> | null;
 }) {
+  const platform = useContext(RuntimePlatformContext);
   return (
     <section>
       {stage.headline && (
@@ -3727,9 +3743,7 @@ function StageSection({
           </p>
         )}
         {recs.map((r, idx) => {
-          const href = shopDomain
-            ? `https://${shopDomain}/products/${r.handle}`
-            : undefined;
+          const href = productHref(r, shopDomain, platform);
           return (
             <ProductCard
               key={r.product_id}
@@ -3856,13 +3870,19 @@ function ProductCard({
 }) {
   const tc = useChrome();
   const isPreviewMode = useContext(RuntimePreviewContext);
+  const platform = useContext(RuntimePlatformContext);
   void position;
   // Selectable variant (Dev Spec §5). Defaults to the baked default variant;
   // the shopper can switch before adding to cart.
   const [selectedVariantId, setSelectedVariantId] = useState(
     product.default_variant_id ?? product.variants?.[0]?.id,
   );
-  const cartUrl = cartPermalink(shopDomain, selectedVariantId, 1, discountCode);
+  // QD-7 — standalone quizzes have no Shopify cart; gate the permalink off so
+  // the CTA below becomes "Shop now" → the merchant's own product URL (`href`).
+  const cartUrl =
+    platform === "standalone"
+      ? null
+      : cartPermalink(shopDomain, selectedVariantId, 1, discountCode);
 
   const infoStyle: React.CSSProperties = {
     display: "flex",
@@ -4011,6 +4031,21 @@ function ProductCard({
           >
             {tc("add_to_cart")}
           </button>
+        ) : platform === "standalone" && href ? (
+          // QD-7 — standalone: a real "Shop now" link to the merchant's PDP
+          // (the index `url`). Preview no-ops navigation like add-to-cart does.
+          <a
+            href={href}
+            target="_blank"
+            rel="noreferrer"
+            onClick={(e) => {
+              if (isPreviewMode) e.preventDefault();
+              else onAdd?.();
+            }}
+            style={{ ...ctaStyle, cursor: "pointer", textDecoration: "none", textAlign: "center" }}
+          >
+            {tc("shop_now")}
+          </a>
         ) : (
           <span style={{ ...ctaStyle, cursor: "default" }}>{ctaLabel}</span>
         )}

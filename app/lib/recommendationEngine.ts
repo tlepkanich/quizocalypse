@@ -11,6 +11,9 @@ export interface IndexedProduct {
   product_id: string;
   title: string;
   handle: string;
+  // Spin-off: the merchant's own product URL ("Shop now" click-through) for
+  // standalone shops, where there's no Shopify PDP/cart. Baked from Product.url.
+  url?: string;
   price: string | null;
   image_url: string | null;
   tags: string[];

@@ -152,6 +152,13 @@ export default function StudioQuizzes() {
                   >
                     Analytics
                   </Link>
+                  <Link
+                    to={`/studio/${q.id}/embed`}
+                    className="qz-btn qz-btn-ghost qz-btn-sm"
+                    style={{ flex: 1, justifyContent: "center" }}
+                  >
+                    Share
+                  </Link>
                   <a
                     href={`/q/${q.id}`}
                     target="_blank"

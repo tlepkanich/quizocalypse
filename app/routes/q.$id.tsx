@@ -82,6 +82,7 @@ export const loader = async ({ params, request }: LoaderFunctionArgs) => {
     product_index?: IndexedProduct[];
     shop_domain?: string;
     answer_weights?: Record<string, number>;
+    platform?: "shopify" | "standalone";
   };
 
   // Phase K: resolve the requested locale against the quiz's translations and
@@ -125,6 +126,9 @@ export const loader = async ({ params, request }: LoaderFunctionArgs) => {
       breakpointOverrides: parsed.data.breakpoint_overrides ?? {},
       resultLayoutMode: parsed.data.result_layout_mode,
       shopDomain: publishedRaw.shop_domain ?? "",
+      // QD-7 — pre-existing quizzes have no `platform` baked → "shopify", so the
+      // shopper runtime keeps add-to-cart with zero re-publish (back-compat).
+      platform: publishedRaw.platform ?? "shopify",
       answerWeights: publishedRaw.answer_weights ?? null,
       locale: locale ?? "en",
       chrome,
@@ -152,6 +156,7 @@ export default function StorefrontRuntime() {
       quizId={data.quizId}
       version={data.version}
       shopDomain={data.shopDomain}
+      platform={data.platform}
       answerWeights={data.answerWeights}
       chrome={data.chrome}
       locale={data.locale}

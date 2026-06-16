@@ -23,6 +23,10 @@ export interface PublishedQuiz extends QuizDoc {
   // construct PDP URLs (https://<shop>/products/<handle>) without an
   // extra DB lookup.
   shop_domain: string;
+  // Spin-off: "shopify" (Shopify cart + PDP) | "standalone" (the merchant's own
+  // product URLs, "Shop now"). Absent on pre-existing quizzes → runtime reads it
+  // as "shopify", so nothing changes for installed Shopify shops.
+  platform?: "shopify" | "standalone";
   // Phase J — per-answer conversion weights (only when data_weighting is on
   // AND the session history clears the data gates). Privacy-safe aggregates.
   answer_weights?: Record<string, number>;
@@ -312,6 +316,7 @@ export async function publishQuiz(
         collection_ids: p.collectionIds,
         inventory_in_stock: inStock,
         updated_at: p.updatedAt ? p.updatedAt.toISOString() : undefined,
+        ...(p.url ? { url: p.url } : {}),
         ...(Object.keys(metafields).length > 0 ? { metafields } : {}),
         ...(defaultVariant?.id ? { default_variant_id: defaultVariant.id } : {}),
         ...(variantList.length > 1 ? { variants: variantList } : {}),
@@ -323,7 +328,7 @@ export async function publishQuiz(
   // render time by the storefront against this baked baseline.
   const shop = await prisma.shop.findUnique({
     where: { id: args.shopId },
-    select: { brandTokens: true, shopDomain: true, brandGuidelines: true },
+    select: { brandTokens: true, shopDomain: true, brandGuidelines: true, source: true },
   });
   const shopParsed = BrandTokens.safeParse(shop?.brandTokens ?? {});
   const shopTokens: DesignTokensT | null = shopParsed.success
@@ -429,6 +434,7 @@ export async function publishQuiz(
     published_at: new Date().toISOString(),
     version: nextVersion,
     shop_domain: shop?.shopDomain ?? "",
+    platform: shop?.source === "standalone" ? "standalone" : "shopify",
     ...(answerWeights ? { answer_weights: answerWeights } : {}),
   };
 

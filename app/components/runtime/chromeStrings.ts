@@ -15,6 +15,7 @@ export const CHROME_TOKENS = {
   continue: "Continue",
   start_over: "Start over",
   add_to_cart: "Add to cart",
+  shop_now: "Shop now",
   out_of_stock: "Out of stock",
   you_might_also_like: "You might also like",
   email_capture_heading: "Want your results emailed to you?",
