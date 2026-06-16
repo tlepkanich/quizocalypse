@@ -2,6 +2,7 @@ import type { LoaderFunctionArgs } from "@remix-run/node";
 import { json } from "@remix-run/node";
 import { Link, Outlet } from "@remix-run/react";
 import { requireStudioAccess } from "../lib/studioAccess.server";
+import { ThemeToggle } from "../components/studio/ThemeToggle";
 
 // Standalone /studio layout — the full-screen, non-embedded home for the quiz
 // builder. Unlike the embedded /app/* tree (App Bridge + Shopify auth), this
@@ -34,16 +35,16 @@ export default function StudioLayout() {
           to="/studio"
           style={{ display: "inline-flex", alignItems: "baseline", gap: 9, textDecoration: "none", color: "inherit" }}
         >
-          <span style={{ fontFamily: "var(--qz-font-display)", fontSize: 21, letterSpacing: "-0.02em" }}>
+          <span style={{ fontFamily: "var(--qz-font-display)", fontWeight: 600, fontSize: 21, letterSpacing: "-0.02em" }}>
             Quizocalypse
           </span>
           <span className="qz-label">Studio</span>
         </Link>
-        <div className="qz-row" style={{ gap: 14, alignItems: "center" }}>
+        <div className="qz-row" style={{ gap: 12, alignItems: "center" }}>
           <Link to="/studio/new" className="qz-btn qz-btn-ghost qz-btn-sm">
             New quiz →
           </Link>
-          <span className="qz-label">standalone preview</span>
+          <ThemeToggle />
         </div>
       </header>
       <main style={{ flex: 1, minWidth: 0, width: "100%" }}>

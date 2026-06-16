@@ -1,29 +1,31 @@
 /* =====================================================================
-   Quizocalypse — "Elevated Editorial" design system
-   Warm Grid-Notebook DNA (cream / ink / persimmon, Spectral + Geist),
-   tuned airier + premium: real spacing/shadow/motion/z scales, softer
-   radius, focus rings. Loaded globally via app/root.tsx `links`.
+   Quizocalypse — "Quizell-style" admin design system
+   Cool zinc neutrals + an azure (#0B6BCB) brand accent, near-black
+   primary buttons, soft cards, a clean geometric sans. Light + dark.
+   Admin chrome ONLY — gated by body[data-qz]; the shopper runtime
+   (/q) overrides its own --qz-color-* on its subtree, so it's
+   unaffected. Loaded globally via app/root.tsx `links`.
    ===================================================================== */
 
-/* — Fonts (free, Google Fonts) — */
-@import url("https://fonts.googleapis.com/css2?family=Spectral:ital,wght@0,300..600;1,400&family=Geist:wght@300..700&family=JetBrains+Mono:wght@400;500;600&display=swap");
+/* — Fonts (free, Google Fonts) — Geist (sans, display + body) + JetBrains Mono — */
+@import url("https://fonts.googleapis.com/css2?family=Geist:wght@300..700&family=JetBrains+Mono:wght@400;500;600&display=swap");
 
 :root {
-  /* Palette (unchanged DNA) */
-  --qz-cream:    #F8F6F1;
-  --qz-cream-2:  #F2EFE7;
-  --qz-paper:    #FFFEFA;
-  --qz-ink:      #1B1A17;
-  --qz-ink-2:    #2E2B25;
-  --qz-ink-3:    #5C564B;
-  --qz-ink-4:    #8B8377;
-  --qz-rule:     #1B1A1714;
-  --qz-rule-2:   #1B1A170A;
-  --qz-accent:   #E8623C;     /* persimmon — change to rebrand */
-  --qz-accent-2: #C04F2D;
-  --qz-ok:       #2E7A5C;
-  --qz-warn:     #B45A1A;
-  --qz-crit:     #B22A22;
+  /* Palette — zinc neutrals + azure brand */
+  --qz-cream:    #F4F4F5;   /* app background (zinc-100) */
+  --qz-cream-2:  #E9E9EC;   /* strips / segmented track / hovers */
+  --qz-paper:    #FFFFFF;   /* cards */
+  --qz-ink:      #18181B;   /* primary text / near-black buttons (zinc-900) */
+  --qz-ink-2:    #27272A;   /* zinc-800 */
+  --qz-ink-3:    #52525B;   /* secondary text (zinc-600) */
+  --qz-ink-4:    #A1A1AA;   /* muted / mono labels (zinc-400) */
+  --qz-rule:     #18181B17;  /* hairline border */
+  --qz-rule-2:   #18181B0A;
+  --qz-accent:   #0B6BCB;     /* azure — brand (links, active nav, focus) */
+  --qz-accent-2: #095AAB;
+  --qz-ok:       #15803D;
+  --qz-warn:     #B45309;
+  --qz-crit:     #B91C1C;
 
   /* Semantic tints — derived from the colors above (one source of truth) */
   --qz-ok-tint:     color-mix(in srgb, var(--qz-ok)     9%,  var(--qz-paper));
@@ -34,9 +36,9 @@
   --qz-warn-edge:   color-mix(in srgb, var(--qz-warn)   28%, transparent);
   --qz-crit-edge:   color-mix(in srgb, var(--qz-crit)   28%, transparent);
 
-  /* Type */
-  --qz-font-display: "Spectral", Georgia, serif;
-  --qz-font-body:    "Geist", -apple-system, "Helvetica Neue", sans-serif;
+  /* Type — geometric sans for everything (display + body) */
+  --qz-font-display: "Geist", -apple-system, "Segoe UI", "Helvetica Neue", sans-serif;
+  --qz-font-body:    "Geist", -apple-system, "Segoe UI", "Helvetica Neue", sans-serif;
   --qz-font-mono:    "JetBrains Mono", ui-monospace, monospace;
 
   /* Sizes — elevated editorial (airier than the old Grid Notebook) */
@@ -61,17 +63,17 @@
   --qz-pad-card: 28px;
   --qz-pad-gap: 20px;
 
-  /* Radius — softened for a premium feel */
-  --qz-radius:    10px;   /* cards / containers */
-  --qz-radius-sm: 7px;    /* inputs / buttons */
-  --qz-radius-lg: 14px;   /* large surfaces */
+  /* Radius — soft, Quizell-style rounding */
+  --qz-radius:    12px;   /* cards / containers */
+  --qz-radius-sm: 8px;    /* inputs / buttons */
+  --qz-radius-lg: 16px;   /* large surfaces */
   --qz-radius-pill: 999px;
 
-  /* Elevation — warm-tinted, soft */
-  --qz-shadow-sm: 0 1px 2px rgba(27, 26, 23, 0.05), 0 1px 1px rgba(27, 26, 23, 0.03);
-  --qz-shadow-md: 0 4px 16px rgba(27, 26, 23, 0.07), 0 1px 3px rgba(27, 26, 23, 0.05);
-  --qz-shadow-lg: 0 14px 44px rgba(27, 26, 23, 0.10), 0 4px 12px rgba(27, 26, 23, 0.06);
-  --qz-shadow-focus: 0 0 0 3px color-mix(in srgb, var(--qz-accent) 30%, transparent);
+  /* Elevation — cool neutral, soft */
+  --qz-shadow-sm: 0 1px 2px rgba(24, 24, 27, 0.06), 0 1px 1px rgba(24, 24, 27, 0.04);
+  --qz-shadow-md: 0 4px 16px rgba(24, 24, 27, 0.08), 0 1px 3px rgba(24, 24, 27, 0.05);
+  --qz-shadow-lg: 0 16px 48px rgba(24, 24, 27, 0.12), 0 4px 12px rgba(24, 24, 27, 0.06);
+  --qz-shadow-focus: 0 0 0 3px color-mix(in srgb, var(--qz-accent) 28%, transparent);
 
   /* Motion */
   --qz-ease: cubic-bezier(0.2, 0, 0, 1);
@@ -94,15 +96,39 @@ body[data-qz] {
   font-size: var(--qz-t-body);
   color: var(--qz-ink);
   background: var(--qz-cream);
-  background-image:
-    linear-gradient(to right, var(--qz-rule-2) 1px, transparent 1px),
-    linear-gradient(to bottom, var(--qz-rule-2) 1px, transparent 1px);
-  background-size: 28px 28px;
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
   line-height: var(--qz-lh);
 }
 body[data-qz] *, body[data-qz] *::before, body[data-qz] *::after { box-sizing: border-box; }
+
+/* — Dark mode — admin chrome only. The FOUC-safe inline script in root.tsx
+     sets html[data-theme="dark"] from localStorage before paint; the toggle
+     (ThemeToggle) flips it + persists. Only re-declares token VALUES on the
+     admin body, so /q (its own --qz-color-* subtree) is untouched. — */
+html[data-theme="dark"] body[data-qz] {
+  --qz-cream:    #18181B;   /* app background (zinc-900) */
+  --qz-cream-2:  #27272A;
+  --qz-paper:    #1F1F23;   /* cards */
+  --qz-ink:      #FAFAFA;   /* primary text */
+  --qz-ink-2:    #E4E4E7;
+  --qz-ink-3:    #A1A1AA;
+  --qz-ink-4:    #71717A;
+  --qz-rule:     #FFFFFF1F;
+  --qz-rule-2:   #FFFFFF12;
+  --qz-accent:   #3B92E8;   /* lighter azure for contrast on dark */
+  --qz-accent-2: #5BA6F0;
+  --qz-ok:       #34D399;
+  --qz-warn:     #FBBF24;
+  --qz-crit:     #F87171;
+  --qz-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.40), 0 1px 1px rgba(0, 0, 0, 0.30);
+  --qz-shadow-md: 0 4px 16px rgba(0, 0, 0, 0.50), 0 1px 3px rgba(0, 0, 0, 0.35);
+  --qz-shadow-lg: 0 16px 48px rgba(0, 0, 0, 0.60), 0 4px 12px rgba(0, 0, 0, 0.40);
+}
+/* The banner text colors were hardcoded for light tints — re-tint for dark. */
+html[data-theme="dark"] body[data-qz] .qz-banner-ok   { color: #6EE7B7; }
+html[data-theme="dark"] body[data-qz] .qz-banner-warn { color: #FCD34D; }
+html[data-theme="dark"] body[data-qz] .qz-banner-crit { color: #FCA5A5; }
 
 /* Global focus-visible: a warm ring on any keyboard-focused control. */
 body[data-qz] :focus-visible {
@@ -112,9 +138,9 @@ body[data-qz] :focus-visible {
 }
 
 /* — Typography helpers — */
-.qz-display { font-family: var(--qz-font-display); font-weight: 400; font-size: var(--qz-t-display); line-height: 1.04; letter-spacing: -0.02em; margin: 0; }
-.qz-h1 { font-family: var(--qz-font-display); font-weight: 400; font-size: var(--qz-t-h1); line-height: var(--qz-lh-tight); letter-spacing: -0.015em; margin: 0; }
-.qz-h2 { font-family: var(--qz-font-display); font-weight: 400; font-size: var(--qz-t-h2); line-height: 1.25; margin: 0; }
+.qz-display { font-family: var(--qz-font-display); font-weight: 600; font-size: var(--qz-t-display); line-height: 1.04; letter-spacing: -0.025em; margin: 0; }
+.qz-h1 { font-family: var(--qz-font-display); font-weight: 600; font-size: var(--qz-t-h1); line-height: var(--qz-lh-tight); letter-spacing: -0.02em; margin: 0; }
+.qz-h2 { font-family: var(--qz-font-display); font-weight: 600; font-size: var(--qz-t-h2); line-height: 1.25; letter-spacing: -0.01em; margin: 0; }
 .qz-h3 { font-family: var(--qz-font-body); font-weight: 600; font-size: var(--qz-t-h3); letter-spacing: -0.005em; margin: 0; }
 .qz-label { font-family: var(--qz-font-mono); font-size: 11px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.12em; color: var(--qz-ink-4); }
 .qz-mono { font-family: var(--qz-font-mono); font-size: var(--qz-t-mono); }
@@ -244,7 +270,7 @@ body[data-qz] :focus-visible {
 }
 .qz-stat .qz-label { color: var(--qz-ink-3); }
 .qz-stat-value {
-  font-family: var(--qz-font-display); font-size: 40px; line-height: 1;
+  font-family: var(--qz-font-display); font-weight: 600; font-size: 40px; line-height: 1;
   letter-spacing: -0.02em; font-variant-numeric: tabular-nums;
 }
 .qz-stat-delta { font-family: var(--qz-font-mono); font-size: 11.5px; color: var(--qz-ink-3); }
