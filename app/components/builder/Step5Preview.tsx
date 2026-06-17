@@ -216,7 +216,7 @@ export function Step5Preview({
       )}
 
       {/* The live device frame */}
-      <DeviceFrame width={frameW} onWidthChange={setFrameW}>
+      <DeviceFrame width={frameW} onWidthChange={setFrameW} bare={chromeless}>
         <QuizRuntime
           key={restartKey}
           mode="preview"

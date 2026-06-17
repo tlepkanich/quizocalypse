@@ -9,10 +9,15 @@ export function DeviceFrame({
   width,
   onWidthChange,
   children,
+  bare = false,
 }: {
   width: number;
   onWidthChange: (w: number) => void;
   children: ReactNode;
+  // QB-7 — the standalone Quizell builder renders the preview as a large, clean
+  // card (no faux-browser bar, no grey box, no fixed-height scroll window): the
+  // device toggle lives in the top bar, so the canvas just shows the quiz big.
+  bare?: boolean;
 }) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const dragRef = useRef<{ startX: number; startW: number } | null>(null);
@@ -51,6 +56,27 @@ export function DeviceFrame({
       onWidthChange(clampFrameWidth(width + 10));
     }
   };
+
+  // QB-7 — bare mode: a big clean preview card, no browser chrome / scroll window.
+  if (bare) {
+    return (
+      <div style={{ width: "100%", display: "flex", justifyContent: "center" }}>
+        <div
+          style={{
+            width,
+            maxWidth: "100%",
+            flex: "0 0 auto",
+            borderRadius: 16,
+            overflow: "hidden",
+            background: "#fff",
+            boxShadow: "var(--qz-shadow-lg, 0 14px 44px rgba(27,26,23,.10))",
+          }}
+        >
+          {children}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div
