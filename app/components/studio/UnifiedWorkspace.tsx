@@ -22,6 +22,7 @@ import { BuilderRail, BuilderFilmstrip } from "./BuilderChrome";
 import { Step3Results } from "../builder/Step3Results";
 import { TranslationsPanel } from "./TranslationsPanel";
 import { ExperiencePanel } from "./ExperiencePanel";
+import { CssTab } from "./panels/CssTab";
 
 // ════════════════════════════════════════════════════════════════════════════
 // UnifiedWorkspace (Unified P2) — ONE editing surface replacing the AI/Advanced
@@ -407,55 +408,167 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
         </div>
       );
 
-  // QD-6 — standalone gets the Quizell builder chrome (icon-rail + top bar +
-  // step filmstrip). The embedded /app surface keeps the Polaris-framed layout.
+  // QD-6 / QB-1 — standalone gets the Quizell builder: a full-width top bar over a
+  // body row of icon-rail · tool-switched left panel · centered stage (preview +
+  // filmstrip). Clicking a rail tool now actually SWAPS the left panel (the QD-6
+  // gap). Settings takes over the body full-width. The embedded /app surface
+  // keeps the shared `body` 3-pane layout below (untouched).
   if (chrome === "standalone") {
     const activeTool = view === "build" ? tool : "settings";
+    const selectedNode = selectedId ? doc.nodes.find((n) => n.id === selectedId) ?? null : null;
+
+    // The left panel content for the focused tool (build view only).
+    const toolPanel =
+      tool === "ai" ? (
+        <>
+          <AiChatPanel onApply={commit} selectedNodeId={selectedId} />
+          <ReviewEnrichPanel onApply={commit} sources={doc.review_enrichment_sources} />
+        </>
+      ) : tool === "theme" ? (
+        <div className="qz-card" style={{ padding: 14 }}>
+          <div className="qz-label" style={{ marginBottom: 6 }}>Theme</div>
+          <p className="qz-dim" style={{ fontSize: 12.5, margin: 0 }}>
+            A full theme gallery is coming to this panel. For now, switch presets from the
+            preview&rsquo;s theme controls.
+          </p>
+        </div>
+      ) : tool === "code" ? (
+        selectedNode ? (
+          <CssTab doc={doc} node={selectedNode} onCommit={commit} />
+        ) : (
+          <div className="qz-card" style={{ padding: 14 }}>
+            <p className="qz-dim" style={{ fontSize: 12.5, margin: 0 }}>
+              Select a step below to add custom CSS scoped to it.
+            </p>
+          </div>
+        )
+      ) : (
+        <>
+          <FlowRail
+            doc={doc}
+            ordered={ordered}
+            issuesByNode={issuesByNode}
+            selectedId={selectedId}
+            currentId={liveNodeId}
+            onSelect={select}
+            onCommit={commit}
+            fallbackCollection={fallbackCollection}
+            view={view}
+            onView={setView}
+          />
+          {selectedId ? (
+            <ContextPanel
+              doc={doc}
+              nodeId={selectedId}
+              onCommit={commit}
+              onClose={() => select(null)}
+              products={data.productIndex}
+              productIndex={data.productIndex}
+              categories={data.categories}
+              frameBreakpoint={breakpointForWidth(frameW)}
+              onOpenLogic={() => setView("logic")}
+            />
+          ) : (
+            <div className="qz-card" style={{ padding: 12 }}>
+              <p className="qz-dim" style={{ fontSize: 12.5, margin: 0 }}>
+                Select a step to edit its content, design, and layout.
+              </p>
+            </div>
+          )}
+        </>
+      );
+
     return (
       <div className="qz-builder">
-        <BuilderRail
-          active={activeTool}
-          onSelect={(key) => {
-            if (key === "settings") {
-              setView("logic");
-            } else {
-              setTool(key as "editor" | "ai" | "theme" | "code");
-              setView("build");
-            }
-          }}
-        />
-        <div className="qz-builder-main">
-          <header className="qz-builder-topbar">
-            <div className="qz-row" style={{ gap: 8, minWidth: 0, alignItems: "center" }}>
-              <Link to="/studio" className="qz-dim" style={{ textDecoration: "none", fontSize: 13 }}>
-                Dashboard
-              </Link>
-              <span className="qz-dim" aria-hidden="true">›</span>
-              <EditableTitle name={data.name} onRename={renameQuiz} />
-              <span className="qz-badge" style={{ fontSize: 10 }}>
-                {XTYPE_LABEL[experienceTypeOf(doc)]}
-              </span>
-            </div>
-            <div className="qz-row" style={{ gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-              <span className="qz-dim" style={{ fontSize: 12 }}>{savingLabel}</span>
-              {editInteractToggle}
-              {settingsPopover}
-              <a
-                href={data.previewUrl}
-                target="_blank"
-                rel="noreferrer"
-                className="qz-btn qz-btn-ghost qz-btn-sm"
-              >
-                Preview
-              </a>
-              {publishBtn}
-            </div>
-          </header>
-          <div className="qz-builder-canvas">
-            {banners}
-            {body}
+        <header className="qz-builder-topbar">
+          <div className="qz-row" style={{ gap: 8, minWidth: 0, alignItems: "center" }}>
+            <Link to="/studio" className="qz-dim" style={{ textDecoration: "none", fontSize: 13 }}>
+              Dashboard
+            </Link>
+            <span className="qz-dim" aria-hidden="true">›</span>
+            <EditableTitle name={data.name} onRename={renameQuiz} />
+            <span className="qz-badge" style={{ fontSize: 10 }}>
+              {XTYPE_LABEL[experienceTypeOf(doc)]}
+            </span>
           </div>
-          <BuilderFilmstrip steps={ordered.steps} selectedId={selectedId} onSelect={select} />
+          <div className="qz-row" style={{ gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+            <span className="qz-dim" style={{ fontSize: 12 }}>{savingLabel}</span>
+            {editInteractToggle}
+            {settingsPopover}
+            <a
+              href={data.previewUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="qz-btn qz-btn-ghost qz-btn-sm"
+            >
+              Preview
+            </a>
+            {publishBtn}
+          </div>
+        </header>
+        <div className="qz-builder-body">
+          <BuilderRail
+            active={activeTool}
+            onSelect={(key) => {
+              if (key === "settings") {
+                setView("logic");
+              } else {
+                setTool(key as "editor" | "ai" | "theme" | "code");
+                setView("build");
+              }
+            }}
+          />
+          {view === "build" ? (
+            <>
+              <aside className="qz-builder-panel">{toolPanel}</aside>
+              <div className="qz-builder-stage">
+                <div className="qz-builder-canvas">
+                  <div style={{ width: "100%", maxWidth: 1180 }}>
+                    {banners}
+                    <Step5Preview
+                      {...stepProps}
+                      onInspect={editMode ? onInspect : undefined}
+                      inspectedTarget={inspectTarget}
+                      frameW={frameW}
+                      onFrameWChange={setFrameW}
+                      focusNodeId={selectedId}
+                      onNodeShown={setLiveNodeId}
+                    />
+                  </div>
+                </div>
+                <BuilderFilmstrip steps={ordered.steps} selectedId={selectedId} onSelect={select} />
+              </div>
+            </>
+          ) : (
+            <div className="qz-builder-settings">
+              <div style={{ padding: "18px 22px", maxWidth: 1200, margin: "0 auto" }}>
+                {banners}
+                {view === "products" ? (
+                  <Step1Products {...stepProps} />
+                ) : view === "results" ? (
+                  <Step3Results
+                    {...stepProps}
+                    goToStep={(n) => setView(n === 1 ? "products" : "build")}
+                  />
+                ) : (
+                  <>
+                    <LogicView
+                      quizId={data.quizId}
+                      doc={doc}
+                      onCommit={commit}
+                      productIndex={data.productIndex}
+                      categories={data.categories}
+                      abAnalytics={data.abAnalytics}
+                    />
+                    <div style={{ marginTop: 18, display: "grid", gap: 14 }}>
+                      <ExperiencePanel doc={doc} onCommit={commit} onSelectNode={select} />
+                      <TranslationsPanel doc={doc} onApply={commit} previewUrl={data.previewUrl} />
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
+          )}
         </div>
       </div>
     );

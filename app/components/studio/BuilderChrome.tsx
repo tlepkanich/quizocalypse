@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import type { OrderedStep } from "../../lib/flowOrder";
 import { NODE_LABEL } from "./panels/nodeMeta";
+import { ThemeToggle } from "./ThemeToggle";
 
 // QD-6 — Quizell-style builder chrome for the STANDALONE surface: a left
 // icon-rail (Editor / AI / Theme / Settings / Code) + a bottom step filmstrip.
@@ -40,6 +41,10 @@ export function BuilderRail({ active, onSelect }: { active: string; onSelect: (k
           <span>{r.label}</span>
         </button>
       ))}
+      {/* QB-1 — the full-screen builder has no app sidebar, so the dark-mode
+          toggle lives at the foot of the rail (matches Quizell's 🌙). */}
+      <div className="qz-builder-rail-spacer" />
+      <ThemeToggle />
     </nav>
   );
 }
