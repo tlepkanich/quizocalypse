@@ -149,6 +149,21 @@ export async function generateStep2Templates(
 // Re-read the quiz fresh, mutate build_session, write back. The fresh re-read is
 // the no-clobber discipline for the long detached jobs (the merchant only polls
 // during them, so this end-of-job write is safe).
+// Map a detached-job AI error to an honest, non-technical funnel banner. Anthropic
+// surfaces billing/rate problems as 4xx with a recognizable message; everything else
+// gets a generic retry nudge. Never leaks raw account/billing detail to a merchant —
+// the full error stays in the operator's server logs.
+function friendlyGenError(err: unknown): string {
+  const msg = err instanceof Error ? err.message : String(err);
+  if (/credit balance|billing|quota|insufficient|payment/i.test(msg)) {
+    return "AI quiz generation is temporarily unavailable. Start from a ready-made template below, or try again shortly.";
+  }
+  if (/rate.?limit|429|overloaded|529/i.test(msg)) {
+    return "The AI is busy right now. Give it a moment and try again, or start from a ready-made template below.";
+  }
+  return "We couldn't generate that with AI. Try again, or start from a ready-made template below.";
+}
+
 async function patchBuildSession(
   quizId: string,
   mutate: (s: BuildSession) => BuildSession,
@@ -183,11 +198,14 @@ export function startStep2Types(
           stage: "types",
           quiz_types: types,
           web_research_summary: webResearchText.slice(0, 600),
+          gen_error: undefined,
         }),
       );
     } catch (err) {
       console.error("[step2] type generation failed:", err instanceof Error ? err.message : err);
-      await patchBuildSession(quizId, (s) => BuildSession.parse({ ...s, stage: "goal" }));
+      await patchBuildSession(quizId, (s) =>
+        BuildSession.parse({ ...s, stage: "goal", gen_error: friendlyGenError(err) }),
+      );
     }
   })();
 }
@@ -210,11 +228,14 @@ export function startStep2Templates(
           stage: "configuring",
           rich_templates: templates,
           picked_template: undefined,
+          gen_error: undefined,
         }),
       );
     } catch (err) {
       console.error("[step2] template generation failed:", err instanceof Error ? err.message : err);
-      await patchBuildSession(quizId, (s) => BuildSession.parse({ ...s, stage: "types" }));
+      await patchBuildSession(quizId, (s) =>
+        BuildSession.parse({ ...s, stage: "types", gen_error: friendlyGenError(err) }),
+      );
     }
   })();
 }

@@ -1,6 +1,6 @@
 import type { LoaderFunctionArgs } from "@remix-run/node";
 import { json } from "@remix-run/node";
-import { Link, useLoaderData } from "@remix-run/react";
+import { Form, Link, useLoaderData } from "@remix-run/react";
 import type { ReactNode } from "react";
 import { requireStudioAccess, resolveStudioShop } from "../lib/studioAccess.server";
 import prisma from "../db.server";
@@ -33,12 +33,16 @@ const ACTIONS = [
   { to: "/studio/new", icon: "scratch", title: "Start from Scratch", blurb: "Start with a blank quiz and add your questions manually." },
 ];
 
-const INSPIRATION = [
-  { label: "Product Recommendation Quiz", hue: 205 },
-  { label: "Service Recommendation Quiz", hue: 250 },
-  { label: "Lead Generation Funnel", hue: 30 },
-  { label: "Lead Collection Form", hue: 145 },
-  { label: "Customer Survey", hue: 330 },
+// Each Inspiration card instantiates a REAL template (with questions wired) via
+// the proven /studio/new `template` action — clicking one lands the merchant in
+// the builder with a complete starter quiz, not a blank seed. templateId maps to
+// quizTemplates.ts; the action 400s on an unknown id, so these must stay in sync.
+const INSPIRATION: Array<{ label: string; templateId: string; blurb: string; hue: number }> = [
+  { label: "Skincare Routine Finder", templateId: "skincare", blurb: "Match shoppers to a routine by skin type & concern", hue: 205 },
+  { label: "Gift Finder", templateId: "gifting", blurb: "Guide shoppers to the perfect gift by recipient & budget", hue: 30 },
+  { label: "Style & Fit Finder", templateId: "clothing", blurb: "Style shoppers into the right pieces by taste & fit", hue: 250 },
+  { label: "Customer Survey", templateId: "survey_feedback", blurb: "Three quick questions — no products needed", hue: 330 },
+  { label: "Lead Capture Funnel", templateId: "lead_qualify", blurb: "Qualify, then capture the email to feed your list", hue: 145 },
 ];
 
 function BigIcon({ name }: { name: keyof typeof ACTION_ICON }) {
@@ -72,20 +76,30 @@ export default function StudioHome() {
           <div>
             <h2 className="qz-h2" style={{ marginBottom: 4 }}>Inspiration</h2>
             <p className="qz-muted" style={{ margin: 0, fontSize: 13.5 }}>
-              Browse ready-to-use quiz examples you can preview and reuse as templates.
+              Pick a ready-made template — it opens in the builder as a complete quiz you can customize.
             </p>
           </div>
         </div>
         <div className="qz-inspo-row">
           {INSPIRATION.map((t) => (
-            <Link key={t.label} to="/studio/new" className="qz-card qz-interactive qz-inspo-card">
-              <span
-                className="qz-inspo-thumb"
-                aria-hidden="true"
-                style={{ background: `linear-gradient(135deg, hsl(${t.hue} 70% 92%), hsl(${t.hue} 60% 82%))` }}
-              />
-              <span style={{ fontSize: 13.5, fontWeight: 600 }}>{t.label}</span>
-            </Link>
+            <Form method="post" action="/studio/new" key={t.label}>
+              <input type="hidden" name="intent" value="template" />
+              <input type="hidden" name="templateId" value={t.templateId} />
+              <button
+                type="submit"
+                title={t.blurb}
+                className="qz-card qz-interactive qz-inspo-card"
+                style={{ width: "100%", font: "inherit", border: 0, background: "var(--qz-paper, #fff)", cursor: "pointer", textAlign: "left" }}
+              >
+                <span
+                  className="qz-inspo-thumb"
+                  aria-hidden="true"
+                  style={{ background: `linear-gradient(135deg, hsl(${t.hue} 70% 92%), hsl(${t.hue} 60% 82%))` }}
+                />
+                <span style={{ fontSize: 13.5, fontWeight: 600 }}>{t.label}</span>
+                <span className="qz-muted" style={{ fontSize: 12, lineHeight: 1.4 }}>{t.blurb}</span>
+              </button>
+            </Form>
           ))}
         </div>
       </section>

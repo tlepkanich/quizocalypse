@@ -61,6 +61,7 @@ export interface FunnelData {
   richTemplates: RichTemplateOption[];
   pickedTemplate: PickedTemplate | null;
   webResearchSummary: string | null;
+  genError: string | null;
   productGroups: Array<{ id: string; name: string; products: Array<{ id: string; title: string }> }>;
   collections: Array<{ collectionId: string; title: string }>;
   savedTemplates: Array<{ id: string; name: string; template: RichTemplateOption }>;
@@ -127,6 +128,20 @@ export function Step1Funnel({ data }: { data: FunnelData }) {
       {errorMsg ? (
         <QzBanner tone="crit" title="That didn't go through">
           {errorMsg}
+        </QzBanner>
+      ) : null}
+
+      {/* An AI generation job failed (e.g. the AI is unavailable). Surface it
+          honestly with a template fallback instead of silently stranding the
+          merchant on a stage that won't advance. */}
+      {data.genError ? (
+        <QzBanner tone="warn" title="AI generation didn't finish">
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            <span>{data.genError}</span>
+            <Link to="/studio/new" className="qz-btn qz-btn-accent qz-btn-sm" style={{ alignSelf: "flex-start" }}>
+              Start from a template →
+            </Link>
+          </div>
         </QzBanner>
       ) : null}
 

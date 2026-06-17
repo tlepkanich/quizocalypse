@@ -907,6 +907,10 @@ export const BuildSession = z.object({
   rich_templates: z.array(RichTemplateOption).default([]), // tier-2 battle cards (pristine)
   picked_template: PickedTemplate.optional(), // the merchant's editable working copy
   web_research_summary: z.string().optional(),
+  // Set when a detached AI generation job (types/templates) fails, so the funnel
+  // can surface an honest banner + template fallback instead of silently reverting
+  // the stage. Cleared on the next successful generation.
+  gen_error: z.string().optional(),
 });
 export type BuildSession = z.infer<typeof BuildSession>;
 

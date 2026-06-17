@@ -147,6 +147,7 @@ export async function loadStep1FunnelData(shop: FunnelShop, quizId: string | und
     richTemplates: session.rich_templates,
     pickedTemplate: session.picked_template ?? null,
     webResearchSummary: session.web_research_summary ?? null,
+    genError: session.gen_error ?? null,
     productGroups: categories.map((c) => ({
       id: c.id,
       name: c.name,
@@ -234,6 +235,7 @@ export async function runStep1FunnelAction(
       ...session,
       stage: "typing",
       goal: { goal_text: goal, struggle_text: struggle },
+      gen_error: undefined, // clear any prior failure — this is a fresh attempt
     };
     await writeDoc(quiz.id, { ...doc, build_session: next });
     startStep2Types(shop.id, quiz.id, {
@@ -271,7 +273,7 @@ export async function runStep1FunnelAction(
       where: { shopId: shop.id, quizId: quiz.id },
       select: { id: true, name: true, tags: true },
     });
-    const next: BuildSession = { ...session, stage: "templating", picked_type_id: typeId };
+    const next: BuildSession = { ...session, stage: "templating", picked_type_id: typeId, gen_error: undefined };
     await writeDoc(quiz.id, { ...doc, build_session: next });
     startStep2Templates(shop.id, quiz.id, chosen, {
       goal,
