@@ -700,10 +700,104 @@ export function QuizRuntime(props: QuizRuntimeProps) {
       };
       content = <BlockRenderer node={node} blocks={layout} ctx={blockCtx} />;
     } else if (currentNode.type === "intro") {
-      // Desktop renders the intro as a spacious, centered hero (bigger headline,
-      // airier padding) rather than a small card — a stronger first impression.
+      // QB-9 — Quizell-style intro. With a hero image on desktop it's a
+      // side-image 2-column card (copy left, image right); otherwise a spacious
+      // centered hero. Mobile stacks the image on top. (Regression-safe: no
+      // existing published quiz sets hero_image_url, so image-less intros render
+      // exactly as before.)
       const introDesktop = breakpoint === "desktop";
-      content = (
+      const heroImg = currentNode.data.hero_image_url;
+      const sideImage = introDesktop && !!heroImg;
+      const headlineEl = (
+        <h1
+          style={
+            introDesktop
+              ? {
+                  ...styles.h1,
+                  fontSize: "calc(var(--qz-h1-size) * 1.35)",
+                  lineHeight: 1.1,
+                  ...(sideImage ? { textAlign: "left" as const } : {}),
+                }
+              : styles.h1
+          }
+          {...insp({ nodeId: currentNode.id, part: "headline" })}
+        >
+          {currentNode.data.headline}
+        </h1>
+      );
+      const subtextEl = currentNode.data.subtext ? (
+        <p
+          style={
+            introDesktop
+              ? {
+                  ...styles.muted,
+                  fontSize: "calc(var(--qz-base-size) * 1.2)",
+                  marginTop: 16,
+                  ...(sideImage
+                    ? { textAlign: "left" as const, maxWidth: 480 }
+                    : { maxWidth: 540, marginLeft: "auto", marginRight: "auto" }),
+                }
+              : styles.muted
+          }
+          {...insp({ nodeId: currentNode.id, part: "subtext" })}
+        >
+          {currentNode.data.subtext}
+        </p>
+      ) : null;
+      const ctaEl = (
+        <button
+          style={
+            introDesktop
+              ? {
+                  ...styles.primaryBtn,
+                  fontSize: "calc(var(--qz-base-size) * 1.05)",
+                  padding: "calc(var(--qz-pad) / 1.5) calc(var(--qz-pad) * 1.6)",
+                  ...(sideImage ? { marginTop: 26, alignSelf: "flex-start" as const } : {}),
+                }
+              : styles.primaryBtn
+          }
+          onClick={() => gotoNextFrom(currentNode.id, null)}
+          {...insp({ nodeId: currentNode.id, part: "cta" })}
+        >
+          {currentNode.data.button_label}
+        </button>
+      );
+
+      content = sideImage ? (
+        <div
+          style={{
+            ...styles.card,
+            padding: 0,
+            overflow: "hidden",
+            maxWidth: 940,
+            display: "flex",
+            alignItems: "stretch",
+            minHeight: 440,
+          }}
+        >
+          <div
+            style={{
+              flex: "1 1 0",
+              minWidth: 0,
+              padding: "48px 44px",
+              display: "flex",
+              flexDirection: "column",
+              justifyContent: "center",
+            }}
+          >
+            {headlineEl}
+            {subtextEl}
+            {ctaEl}
+          </div>
+          <div style={{ flex: "1 1 0", minWidth: 0, position: "relative" }}>
+            <img
+              src={heroImg}
+              alt=""
+              style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }}
+            />
+          </div>
+        </div>
+      ) : (
         <div
           style={
             introDesktop
@@ -711,50 +805,23 @@ export function QuizRuntime(props: QuizRuntimeProps) {
               : styles.card
           }
         >
-          <h1
-            style={
-              introDesktop
-                ? { ...styles.h1, fontSize: "calc(var(--qz-h1-size) * 1.35)", lineHeight: 1.1 }
-                : styles.h1
-            }
-            {...insp({ nodeId: currentNode.id, part: "headline" })}
-          >
-            {currentNode.data.headline}
-          </h1>
-          {currentNode.data.subtext && (
-            <p
-              style={
-                introDesktop
-                  ? {
-                      ...styles.muted,
-                      fontSize: "calc(var(--qz-base-size) * 1.2)",
-                      marginTop: 16,
-                      maxWidth: 540,
-                      marginLeft: "auto",
-                      marginRight: "auto",
-                    }
-                  : styles.muted
-              }
-              {...insp({ nodeId: currentNode.id, part: "subtext" })}
-            >
-              {currentNode.data.subtext}
-            </p>
-          )}
-          <button
-            style={
-              introDesktop
-                ? {
-                    ...styles.primaryBtn,
-                    fontSize: "calc(var(--qz-base-size) * 1.05)",
-                    padding: "calc(var(--qz-pad) / 1.5) calc(var(--qz-pad) * 1.6)",
-                  }
-                : styles.primaryBtn
-            }
-            onClick={() => gotoNextFrom(currentNode.id, null)}
-            {...insp({ nodeId: currentNode.id, part: "cta" })}
-          >
-            {currentNode.data.button_label}
-          </button>
+          {heroImg && !introDesktop ? (
+            <img
+              src={heroImg}
+              alt=""
+              style={{
+                width: "100%",
+                maxHeight: 220,
+                objectFit: "cover",
+                borderRadius: "var(--qz-radius)",
+                marginBottom: 18,
+                display: "block",
+              }}
+            />
+          ) : null}
+          {headlineEl}
+          {subtextEl}
+          {ctaEl}
         </div>
       );
     } else if (currentNode.type === "question") {
