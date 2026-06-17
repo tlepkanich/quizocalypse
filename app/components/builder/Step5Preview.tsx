@@ -37,6 +37,7 @@ export function Step5Preview({
   onFrameWChange,
   focusNodeId,
   onNodeShown,
+  chromeless = false,
 }: StepProps & {
   // Editor revamp P2: click-to-inspect pass-through (AI editor only — the
   // 4-step builder doesn't pass these, so its preview behaves as before).
@@ -50,6 +51,10 @@ export function Step5Preview({
   // Unified P3: preview-only selection sync (rail ↔ runtime) pass-through.
   focusNodeId?: string | null;
   onNodeShown?: (nodeId: string) => void;
+  // QB-1: the standalone Quizell builder owns its own chrome (top bar + Theme
+  // tool), so it hides this component's header + Theme/Layout card and renders
+  // just the device toolbar + the live frame in the centered canvas.
+  chromeless?: boolean;
 }) {
   const [frameWState, setFrameWState] = useState<number>(DEVICE_PRESETS.desktop);
   const frameW = frameWProp ?? frameWState;
@@ -93,20 +98,22 @@ export function Step5Preview({
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-      <div className="qz-row qz-row-between" style={{ alignItems: "flex-end", gap: 12, flexWrap: "wrap" }}>
-        <div>
-          <h2 className="qz-h1" style={{ margin: 0 }}>
-            Preview &amp; publish
-          </h2>
-          <p className="qz-dim" style={{ marginTop: 4 }}>
-            Your live quiz — click through it, resize the device, try a theme. Changes here are
-            your draft; <strong>Publish</strong> pushes them live.
-          </p>
+      {!chromeless && (
+        <div className="qz-row qz-row-between" style={{ alignItems: "flex-end", gap: 12, flexWrap: "wrap" }}>
+          <div>
+            <h2 className="qz-h1" style={{ margin: 0 }}>
+              Preview &amp; publish
+            </h2>
+            <p className="qz-dim" style={{ marginTop: 4 }}>
+              Your live quiz — click through it, resize the device, try a theme. Changes here are
+              your draft; <strong>Publish</strong> pushes them live.
+            </p>
+          </div>
+          <a href={previewUrl} target="_blank" rel="noreferrer" className="qz-btn qz-btn-ghost qz-btn-sm">
+            Open live ↗
+          </a>
         </div>
-        <a href={previewUrl} target="_blank" rel="noreferrer" className="qz-btn qz-btn-ghost qz-btn-sm">
-          Open live ↗
-        </a>
-      </div>
+      )}
 
       {/* Toolbar: device size · width · restart */}
       <div className="qz-row qz-row-between" style={{ alignItems: "center", gap: 12, flexWrap: "wrap" }}>
@@ -131,7 +138,10 @@ export function Step5Preview({
         </QzButton>
       </div>
 
-      {/* Theme gallery — premium reskin picker with live mini-previews */}
+      {/* Theme gallery — premium reskin picker with live mini-previews.
+          Hidden in the standalone builder (chromeless): it lives in the Theme
+          tool there, so the canvas stays a clean centered preview. */}
+      {!chromeless && (
       <QzCard style={{ padding: 16 }}>
         <div
           className="qz-row qz-row-between"
@@ -196,6 +206,7 @@ export function Step5Preview({
           </div>
         </div>
       </QzCard>
+      )}
 
       {/* The live device frame */}
       <DeviceFrame width={frameW} onWidthChange={setFrameW}>

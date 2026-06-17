@@ -533,6 +533,7 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
                       onFrameWChange={setFrameW}
                       focusNodeId={selectedId}
                       onNodeShown={setLiveNodeId}
+                      chromeless
                     />
                   </div>
                 </div>
