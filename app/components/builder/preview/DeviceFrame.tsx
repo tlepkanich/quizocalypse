@@ -57,23 +57,13 @@ export function DeviceFrame({
     }
   };
 
-  // QB-7 — bare mode: a big clean preview card, no browser chrome / scroll window.
+  // QB-8 — bare mode: render the quiz itself, full-bleed, no framing card. The
+  // quiz paints its own background (fillBackground), so the canvas just shows
+  // the live quiz at the chosen device width — "no canvas, just the quiz".
   if (bare) {
     return (
       <div style={{ width: "100%", display: "flex", justifyContent: "center" }}>
-        <div
-          style={{
-            width,
-            maxWidth: "100%",
-            flex: "0 0 auto",
-            borderRadius: 16,
-            overflow: "hidden",
-            background: "#fff",
-            boxShadow: "var(--qz-shadow-lg, 0 14px 44px rgba(27,26,23,.10))",
-          }}
-        >
-          {children}
-        </div>
+        <div style={{ width, maxWidth: "100%", flex: "0 0 auto" }}>{children}</div>
       </div>
     );
   }

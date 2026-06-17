@@ -119,6 +119,9 @@ export interface QuizRuntimeProps {
   // permalinks; "standalone" gates the Shopify cart off and links product
   // cards to the merchant's own `IndexedProduct.url` via a "Shop now" CTA.
   platform?: "shopify" | "standalone";
+  // QB-8 — preview-only: paint the quiz's theme background + fill the frame, so
+  // the standalone builder canvas shows the quiz full-bleed (no framing card).
+  fillBackground?: boolean;
   mode?: QuizRuntimeMode;
   // Preview-only (ignored when mode==="live"). Preview always starts fresh at
   // the intro because the localStorage restore effect early-returns on isPreview.
@@ -186,6 +189,7 @@ export function QuizRuntime(props: QuizRuntimeProps) {
     version,
     shopDomain,
     platform = "shopify",
+    fillBackground = false,
     mode = "live",
     tokensOverride = null,
     breakpoint: breakpointProp,
@@ -449,10 +453,14 @@ export function QuizRuntime(props: QuizRuntimeProps) {
     containerType: "inline-size",
     position: "relative", // anchor the QB-5 "Build with" badge (standalone only)
     // E3 takeover: hosted /q fills the viewport in the theme background so
-    // the quiz IS the page (preview keeps its frame-sized box).
+    // the quiz IS the page. QB-8: the standalone builder asks the preview to
+    // paint that same background (fillBackground) so the canvas shows the quiz
+    // full-bleed — "just the quiz", no framing card.
     ...(!isPreview
       ? { background: "var(--qz-color-bg)", minHeight: "100vh" }
-      : {}),
+      : fillBackground
+        ? { background: "var(--qz-color-bg)", minHeight: 480 }
+        : {}),
   };
   // K2: prop entries win over English defaults; identity-stable per locale.
   const chromeTable = useMemo(

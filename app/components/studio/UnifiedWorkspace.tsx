@@ -655,27 +655,28 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
             <>
               <aside className="qz-builder-panel">{toolPanel}</aside>
               <div className="qz-builder-stage">
+                {/* QB-8 — slim notices strip (validation/publish); empty = 0 height,
+                    so a clean quiz shows the canvas as just the live quiz. */}
+                <div className="qz-builder-notices">{banners}</div>
                 <div className="qz-builder-canvas">
-                  <div style={{ width: "100%", maxWidth: 1180 }}>
-                    {banners}
-                    <div
-                      style={{
-                        transform: zoom !== 100 ? `scale(${zoom / 100})` : undefined,
-                        transformOrigin: "top center",
-                      }}
-                    >
-                      <Step5Preview
-                        {...stepProps}
-                        onInspect={editMode ? onInspect : undefined}
-                        inspectedTarget={inspectTarget}
-                        frameW={frameW}
-                        onFrameWChange={setFrameW}
-                        focusNodeId={selectedId}
-                        onNodeShown={setLiveNodeId}
-                        chromeless
-                        platform="standalone"
-                      />
-                    </div>
+                  <div
+                    style={{
+                      width: "100%",
+                      transform: zoom !== 100 ? `scale(${zoom / 100})` : undefined,
+                      transformOrigin: "top center",
+                    }}
+                  >
+                    <Step5Preview
+                      {...stepProps}
+                      onInspect={editMode ? onInspect : undefined}
+                      inspectedTarget={inspectTarget}
+                      frameW={frameW}
+                      onFrameWChange={setFrameW}
+                      focusNodeId={selectedId}
+                      onNodeShown={setLiveNodeId}
+                      chromeless
+                      platform="standalone"
+                    />
                   </div>
                 </div>
                 <BuilderFilmstrip doc={doc} steps={ordered.steps} selectedId={selectedId} onSelect={select} onAdd={addStep} />
