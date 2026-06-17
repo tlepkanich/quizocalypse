@@ -25,6 +25,7 @@ import { ExperiencePanel } from "./ExperiencePanel";
 import { CssTab } from "./panels/CssTab";
 import { BuilderSettings } from "./BuilderSettings";
 import { BuilderThemePanel } from "./BuilderThemePanel";
+import { insertModule } from "./studioDoc";
 
 // ════════════════════════════════════════════════════════════════════════════
 // UnifiedWorkspace (Unified P2) — ONE editing surface replacing the AI/Advanced
@@ -206,6 +207,19 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
     form.set("intent", "rename");
     form.set("name", name);
     renameFetcher.submit(form, { method: "POST" });
+  };
+
+  // QB-5 — the filmstrip "+" inserts a question after the last step, then opens
+  // it in the Editor (undoable via the top bar).
+  const addStep = () => {
+    const anchor = ordered.steps[ordered.steps.length - 1]?.nodeId ?? null;
+    const { doc: next, newNodeId } = insertModule(doc, "question", anchor, undefined, fallbackCollection);
+    commit(next);
+    if (newNodeId) {
+      setTool("editor");
+      setView("build");
+      select(newNodeId);
+    }
   };
 
   const stepProps: StepProps = {
@@ -641,11 +655,12 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
                         focusNodeId={selectedId}
                         onNodeShown={setLiveNodeId}
                         chromeless
+                        platform="standalone"
                       />
                     </div>
                   </div>
                 </div>
-                <BuilderFilmstrip steps={ordered.steps} selectedId={selectedId} onSelect={select} />
+                <BuilderFilmstrip doc={doc} steps={ordered.steps} selectedId={selectedId} onSelect={select} onAdd={addStep} />
               </div>
             </>
           ) : (

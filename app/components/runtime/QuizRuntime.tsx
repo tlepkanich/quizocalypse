@@ -447,6 +447,7 @@ export function QuizRuntime(props: QuizRuntimeProps) {
   const rootStyle: React.CSSProperties = {
     ...cssVars,
     containerType: "inline-size",
+    position: "relative", // anchor the QB-5 "Build with" badge (standalone only)
     // E3 takeover: hosted /q fills the viewport in the theme background so
     // the quiz IS the page (preview keeps its frame-sized box).
     ...(!isPreview
@@ -1165,6 +1166,58 @@ export function QuizRuntime(props: QuizRuntimeProps) {
           />
         )}
       </div>
+      {/* QB-5 — "Build with Quizocalypse" badge. Standalone quizzes only, so the
+          embedded /app preview + every published Shopify /q stay pixel-identical
+          (the regression guarantee). Preview: anchored to the runtime box; live:
+          fixed bottom-right of the viewport, like Quizell's badge. */}
+      {platform === "standalone" ? (
+        <a
+          href="https://quizocalypse-studio.fly.dev"
+          target="_blank"
+          rel="noreferrer noopener"
+          onClick={(e) => {
+            if (isPreview) e.preventDefault();
+          }}
+          style={{
+            position: isPreview ? "absolute" : "fixed",
+            bottom: 14,
+            right: 14,
+            zIndex: 20,
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 6,
+            padding: "5px 10px",
+            borderRadius: 8,
+            background: "rgba(17,17,19,0.88)",
+            color: "#fff",
+            fontFamily: "ui-sans-serif, system-ui, -apple-system, sans-serif",
+            fontSize: 12,
+            fontWeight: 500,
+            textDecoration: "none",
+            boxShadow: "0 2px 8px rgba(0,0,0,0.25)",
+          }}
+        >
+          Build with
+          <span
+            aria-hidden="true"
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              justifyContent: "center",
+              width: 16,
+              height: 16,
+              borderRadius: 4,
+              background: "#0B6BCB",
+              color: "#fff",
+              fontWeight: 700,
+              fontSize: 11,
+            }}
+          >
+            Q
+          </span>
+          Quizocalypse
+        </a>
+      ) : null}
     </div>
     </RuntimeLocaleContext.Provider>
     </ChromeContext.Provider>

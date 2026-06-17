@@ -38,6 +38,7 @@ export function Step5Preview({
   focusNodeId,
   onNodeShown,
   chromeless = false,
+  platform = "shopify",
 }: StepProps & {
   // Editor revamp P2: click-to-inspect pass-through (AI editor only — the
   // 4-step builder doesn't pass these, so its preview behaves as before).
@@ -55,6 +56,9 @@ export function Step5Preview({
   // tool), so it hides this component's header + Theme/Layout card and renders
   // just the device toolbar + the live frame in the centered canvas.
   chromeless?: boolean;
+  // QB-5: the standalone builder passes "standalone" so the preview shows the
+  // "Build with Quizocalypse" badge (matching the published quiz).
+  platform?: "shopify" | "standalone";
 }) {
   const [frameWState, setFrameWState] = useState<number>(DEVICE_PRESETS.desktop);
   const frameW = frameWProp ?? frameWState;
@@ -225,6 +229,7 @@ export function Step5Preview({
           quizId={quizId}
           version={0}
           shopDomain=""
+          platform={platform}
           tokensOverride={tryOnTokens}
           breakpoint={breakpoint}
           onInspect={onInspect}

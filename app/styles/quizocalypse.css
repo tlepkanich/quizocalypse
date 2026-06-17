@@ -887,5 +887,16 @@ body[data-qz] ::selection { background: var(--qz-ink); color: var(--qz-cream); }
 }
 .qz-film-card:hover { border-color: var(--qz-ink-3); color: var(--qz-ink); }
 .qz-film-card.is-active { border-color: var(--qz-accent); box-shadow: 0 0 0 1px var(--qz-accent) inset; color: var(--qz-ink); }
-.qz-film-num { font-size: 11px; font-weight: 700; font-variant-numeric: tabular-nums; }
-.qz-film-label { font-size: 11px; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.qz-film-num { font-size: 10px; font-weight: 700; font-variant-numeric: tabular-nums; color: var(--qz-ink-4); }
+.qz-film-label { font-size: 11.5px; font-weight: 600; line-height: 1.25; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--qz-ink); }
+.qz-film-type { font-size: 9.5px; font-weight: 500; text-transform: uppercase; letter-spacing: .04em; color: var(--qz-ink-4); }
+/* QB-5 — the "+" add-step card at the end of the filmstrip. */
+.qz-film-add {
+  appearance: none; cursor: pointer; font: inherit;
+  flex: 0 0 auto; width: 48px; height: 62px;
+  display: flex; align-items: center; justify-content: center;
+  border: 1px dashed var(--qz-rule); border-radius: 10px;
+  background: var(--qz-cream); color: var(--qz-ink-3); font-size: 22px; font-weight: 300;
+  transition: border-color var(--qz-dur-fast) var(--qz-ease), color var(--qz-dur-fast) var(--qz-ease);
+}
+.qz-film-add:hover { border-color: var(--qz-accent); color: var(--qz-accent); }

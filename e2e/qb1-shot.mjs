@@ -51,6 +51,13 @@ const run = async () => {
       );
       console.log("SETTINGS_TABS:", JSON.stringify(tabs));
     }
+    if (label === "Theme") {
+      const theme = await page.evaluate(() => ({
+        hasGallery: !!document.querySelector(".qz-builder-panel button"),
+        text: document.querySelector(".qz-builder-panel")?.textContent?.slice(0, 120) ?? "",
+      }));
+      console.log("THEME_PANEL:", JSON.stringify(theme));
+    }
     await shot(page, name);
   }
 

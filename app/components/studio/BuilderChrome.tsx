@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import type { OrderedStep } from "../../lib/flowOrder";
+import type { Quiz, QuizNode } from "../../lib/quizSchema";
 import { NODE_LABEL } from "./panels/nodeMeta";
 import { ThemeToggle } from "./ThemeToggle";
 
@@ -49,30 +50,63 @@ export function BuilderRail({ active, onSelect }: { active: string; onSelect: (k
   );
 }
 
+// The step's own copy (headline / question text) for the filmstrip card, so it
+// reads like Quizell's thumbnails ("What's your skin type?") not "Question".
+function stepTitle(node: QuizNode | undefined): string {
+  if (!node) return "";
+  const d = node.data as Record<string, unknown>;
+  const s = (k: string) => (typeof d[k] === "string" ? (d[k] as string) : "");
+  switch (node.type) {
+    case "question":
+      return s("text");
+    case "message":
+      return s("text");
+    case "ask_ai":
+      return s("persona_name");
+    default:
+      return s("headline");
+  }
+}
+
 export function BuilderFilmstrip({
+  doc,
   steps,
   selectedId,
   onSelect,
+  onAdd,
 }: {
+  doc: Quiz;
   steps: OrderedStep[];
   selectedId: string | null;
   onSelect: (id: string) => void;
+  onAdd?: () => void;
 }) {
-  if (steps.length === 0) return null;
+  if (steps.length === 0 && !onAdd) return null;
+  const byId = new Map(doc.nodes.map((n) => [n.id, n]));
   return (
     <div className="qz-builder-filmstrip" aria-label="Quiz steps">
-      {steps.map((s, i) => (
-        <button
-          key={s.nodeId}
-          type="button"
-          className={`qz-film-card${selectedId === s.nodeId ? " is-active" : ""}`}
-          onClick={() => onSelect(s.nodeId)}
-          title={NODE_LABEL[s.type] ?? s.type}
-        >
-          <span className="qz-film-num">{i + 1}</span>
-          <span className="qz-film-label">{NODE_LABEL[s.type] ?? s.type}</span>
+      {steps.map((s, i) => {
+        const type = NODE_LABEL[s.type] ?? s.type;
+        const title = stepTitle(byId.get(s.nodeId)) || type;
+        return (
+          <button
+            key={s.nodeId}
+            type="button"
+            className={`qz-film-card${selectedId === s.nodeId ? " is-active" : ""}`}
+            onClick={() => onSelect(s.nodeId)}
+            title={`${i + 1}. ${title}`}
+          >
+            <span className="qz-film-num">{i + 1}</span>
+            <span className="qz-film-label">{title}</span>
+            <span className="qz-film-type">{type}</span>
+          </button>
+        );
+      })}
+      {onAdd ? (
+        <button type="button" className="qz-film-add" onClick={onAdd} title="Add a step" aria-label="Add a step">
+          +
         </button>
-      ))}
+      ) : null}
     </div>
   );
 }
