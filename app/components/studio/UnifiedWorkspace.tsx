@@ -65,7 +65,37 @@ export function UnifiedWorkspace({ data, chrome }: { data: StudioBuilderData; ch
 }
 
 function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chrome }) {
-  const { doc, commit, isSaving, savedAt } = useQuizDraft(data.doc as QuizDoc);
+  const { doc, commit: rawCommit, isSaving, savedAt } = useQuizDraft(data.doc as QuizDoc);
+  // QB-2 — snapshot undo/redo. Every panel edit replaces the whole doc, so a
+  // stack of prior docs IS the history; undo/redo replay a snapshot through the
+  // same autosave seam (an undo persists). Capped at 50 snapshots to bound memory.
+  const [history, setHistory] = useState<{ past: QuizDoc[]; future: QuizDoc[] }>({
+    past: [],
+    future: [],
+  });
+  const commit = useCallback(
+    (next: QuizDoc) => {
+      setHistory((h) => ({ past: [...h.past, doc].slice(-50), future: [] }));
+      rawCommit(next);
+    },
+    [doc, rawCommit],
+  );
+  const undo = useCallback(() => {
+    if (history.past.length === 0) return;
+    const prev = history.past[history.past.length - 1]!;
+    setHistory({ past: history.past.slice(0, -1), future: [doc, ...history.future].slice(0, 50) });
+    rawCommit(prev);
+  }, [history, doc, rawCommit]);
+  const redo = useCallback(() => {
+    if (history.future.length === 0) return;
+    const next = history.future[0]!;
+    setHistory({ past: [...history.past, doc].slice(-50), future: history.future.slice(1) });
+    rawCommit(next);
+  }, [history, doc, rawCommit]);
+  const canUndo = history.past.length > 0;
+  const canRedo = history.future.length > 0;
+  // QB-2 — preview zoom (a CSS scale on the canvas frame), 50–100%.
+  const [zoom, setZoom] = useState(100);
   const publishFetcher = useFetcher<{ ok: boolean; version?: number; error?: string }>();
   const renameFetcher = useFetcher<{ ok: boolean; name?: string }>();
 
@@ -214,6 +244,65 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
         ▶ Interact
       </button>
     </div>
+  );
+
+  // QB-2 — Quizell top-bar controls (standalone builder).
+  const deviceToggle = (
+    <div className="qz-segmented" role="group" aria-label="Device size">
+      {([
+        {
+          bp: "desktop" as const,
+          w: DEVICE_PRESETS.desktop,
+          label: "Desktop",
+          icon: <><rect x="2" y="3" width="20" height="14" rx="2" /><path d="M8 21h8M12 17v4" /></>,
+        },
+        {
+          bp: "mobile" as const,
+          w: DEVICE_PRESETS.mobile,
+          label: "Mobile",
+          icon: <><rect x="7" y="2" width="10" height="20" rx="2" /><path d="M11 18h2" /></>,
+        },
+      ]).map((d) => (
+        <button
+          key={d.bp}
+          type="button"
+          aria-pressed={breakpointForWidth(frameW) === d.bp}
+          title={d.label}
+          aria-label={d.label}
+          onClick={() => setFrameW(d.w)}
+          style={{ display: "inline-flex", alignItems: "center", padding: "5px 12px" }}
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            {d.icon}
+          </svg>
+        </button>
+      ))}
+    </div>
+  );
+
+  const zoomStepper = (
+    <div className="qz-row" style={{ gap: 2, alignItems: "center" }}>
+      <button type="button" className="qz-icon-btn" aria-label="Zoom out" onClick={() => setZoom((z) => Math.max(50, z - 10))}>−</button>
+      <span className="qz-dim" style={{ fontSize: 12.5, minWidth: 38, textAlign: "center", fontVariantNumeric: "tabular-nums" }}>{zoom}%</span>
+      <button type="button" className="qz-icon-btn" aria-label="Zoom in" onClick={() => setZoom((z) => Math.min(100, z + 10))}>+</button>
+    </div>
+  );
+
+  const undoRedo = (
+    <div className="qz-row" style={{ gap: 2, alignItems: "center" }}>
+      <button type="button" className="qz-icon-btn" aria-label="Undo" title="Undo" disabled={!canUndo} onClick={undo}>
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M9 14 4 9l5-5" /><path d="M4 9h11a5 5 0 0 1 0 10h-1" /></svg>
+      </button>
+      <button type="button" className="qz-icon-btn" aria-label="Redo" title="Redo" disabled={!canRedo} onClick={redo}>
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m15 14 5-5-5-5" /><path d="M20 9H9a5 5 0 0 0 0 10h1" /></svg>
+      </button>
+    </div>
+  );
+
+  const shareBtn = (
+    <Link to={`/studio/${data.quizId}/embed`} className="qz-btn qz-btn-ghost qz-btn-sm" style={{ textDecoration: "none" }}>
+      🔗 Share
+    </Link>
   );
 
   const settingsPopover = (
@@ -481,7 +570,11 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
     return (
       <div className="qz-builder">
         <header className="qz-builder-topbar">
-          <div className="qz-row" style={{ gap: 8, minWidth: 0, alignItems: "center" }}>
+          {/* Left: Q logo + breadcrumb + experience-type badge */}
+          <div className="qz-row" style={{ gap: 9, minWidth: 0, alignItems: "center", flex: "1 1 0" }}>
+            <Link to="/studio" className="qz-brand-badge" aria-label="All quizzes" style={{ textDecoration: "none", flex: "0 0 auto" }}>
+              Q
+            </Link>
             <Link to="/studio" className="qz-dim" style={{ textDecoration: "none", fontSize: 13 }}>
               Dashboard
             </Link>
@@ -491,10 +584,22 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
               {XTYPE_LABEL[experienceTypeOf(doc)]}
             </span>
           </div>
-          <div className="qz-row" style={{ gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-            <span className="qz-dim" style={{ fontSize: 12 }}>{savingLabel}</span>
-            {editInteractToggle}
+          {/* Center: device toggle + zoom (build view only) */}
+          {view === "build" ? (
+            <div className="qz-row" style={{ gap: 14, alignItems: "center", flex: "0 0 auto" }}>
+              {deviceToggle}
+              {zoomStepper}
+            </div>
+          ) : null}
+          {/* Right: edit/interact · undo/redo · settings · share · preview · save · publish */}
+          <div className="qz-row" style={{ gap: 8, alignItems: "center", justifyContent: "flex-end", flex: "1 1 0", flexWrap: "wrap" }}>
+            {view === "build" ? editInteractToggle : null}
+            {undoRedo}
             {settingsPopover}
+            <span className="qz-dim" style={{ fontSize: 12, minWidth: 44, textAlign: "right" }}>
+              {savingLabel === "Saved" ? "Saved ✓" : savingLabel}
+            </span>
+            {shareBtn}
             <a
               href={data.previewUrl}
               target="_blank"
@@ -525,16 +630,23 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
                 <div className="qz-builder-canvas">
                   <div style={{ width: "100%", maxWidth: 1180 }}>
                     {banners}
-                    <Step5Preview
-                      {...stepProps}
-                      onInspect={editMode ? onInspect : undefined}
-                      inspectedTarget={inspectTarget}
-                      frameW={frameW}
-                      onFrameWChange={setFrameW}
-                      focusNodeId={selectedId}
-                      onNodeShown={setLiveNodeId}
-                      chromeless
-                    />
+                    <div
+                      style={{
+                        transform: zoom !== 100 ? `scale(${zoom / 100})` : undefined,
+                        transformOrigin: "top center",
+                      }}
+                    >
+                      <Step5Preview
+                        {...stepProps}
+                        onInspect={editMode ? onInspect : undefined}
+                        inspectedTarget={inspectTarget}
+                        frameW={frameW}
+                        onFrameWChange={setFrameW}
+                        focusNodeId={selectedId}
+                        onNodeShown={setLiveNodeId}
+                        chromeless
+                      />
+                    </div>
                   </div>
                 </div>
                 <BuilderFilmstrip steps={ordered.steps} selectedId={selectedId} onSelect={select} />

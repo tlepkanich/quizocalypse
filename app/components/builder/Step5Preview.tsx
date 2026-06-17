@@ -115,7 +115,9 @@ export function Step5Preview({
         </div>
       )}
 
-      {/* Toolbar: device size · width · restart */}
+      {/* Toolbar: device size · width · restart. Hidden in the standalone builder
+          (chromeless) — the device toggle + zoom live in the Quizell top bar. */}
+      {!chromeless && (
       <div className="qz-row qz-row-between" style={{ alignItems: "center", gap: 12, flexWrap: "wrap" }}>
         <div className="qz-row" style={{ gap: 10, alignItems: "center" }}>
           <QzSegmented<DevicePreset>
@@ -137,6 +139,7 @@ export function Step5Preview({
           ↺ Restart
         </QzButton>
       </div>
+      )}
 
       {/* Theme gallery — premium reskin picker with live mini-previews.
           Hidden in the standalone builder (chromeless): it lives in the Theme

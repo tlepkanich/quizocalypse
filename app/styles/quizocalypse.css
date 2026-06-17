@@ -829,6 +829,16 @@ body[data-qz] ::selection { background: var(--qz-ink); color: var(--qz-cream); }
   flex: 0 0 auto; display: flex; align-items: center; justify-content: space-between;
   gap: 12px; padding: 10px 18px; background: var(--qz-paper); border-bottom: 1px solid var(--qz-rule);
 }
+/* QB-2 — small square icon buttons in the top bar (zoom, undo/redo). */
+.qz-icon-btn {
+  appearance: none; border: 1px solid transparent; background: none; cursor: pointer;
+  font: inherit; color: var(--qz-ink-2); border-radius: 8px;
+  width: 28px; height: 28px; display: inline-flex; align-items: center; justify-content: center;
+  font-size: 16px; line-height: 1;
+  transition: background var(--qz-dur-fast) var(--qz-ease), color var(--qz-dur-fast) var(--qz-ease);
+}
+.qz-icon-btn:hover:not(:disabled) { background: var(--qz-rule-2); color: var(--qz-ink); }
+.qz-icon-btn:disabled { opacity: .35; cursor: default; }
 /* The row under the top bar: rail · tool panel · stage (or full-width settings). */
 .qz-builder-body { flex: 1 1 auto; min-height: 0; display: flex; align-items: stretch; }
 .qz-builder-panel {
