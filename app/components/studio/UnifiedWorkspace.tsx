@@ -24,6 +24,7 @@ import { TranslationsPanel } from "./TranslationsPanel";
 import { ExperiencePanel } from "./ExperiencePanel";
 import { CssTab } from "./panels/CssTab";
 import { BuilderSettings } from "./BuilderSettings";
+import { BuilderThemePanel } from "./BuilderThemePanel";
 
 // ════════════════════════════════════════════════════════════════════════════
 // UnifiedWorkspace (Unified P2) — ONE editing surface replacing the AI/Advanced
@@ -515,13 +516,7 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
           <ReviewEnrichPanel onApply={commit} sources={doc.review_enrichment_sources} />
         </>
       ) : tool === "theme" ? (
-        <div className="qz-card" style={{ padding: 14 }}>
-          <div className="qz-label" style={{ marginBottom: 6 }}>Theme</div>
-          <p className="qz-dim" style={{ fontSize: 12.5, margin: 0 }}>
-            A full theme gallery is coming to this panel. For now, switch presets from the
-            preview&rsquo;s theme controls.
-          </p>
-        </div>
+        <BuilderThemePanel doc={doc} commit={commit} />
       ) : tool === "code" ? (
         selectedNode ? (
           <CssTab doc={doc} node={selectedNode} onCommit={commit} />

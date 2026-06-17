@@ -45,6 +45,12 @@ const run = async () => {
     const btn = page.locator(".qz-builder-rail-item", { hasText: new RegExp(`^${label}$`) });
     await btn.click();
     await page.waitForTimeout(600);
+    if (label === "Settings") {
+      const tabs = await page.evaluate(() =>
+        [...document.querySelectorAll(".qz-settings-tab")].map((t) => t.textContent),
+      );
+      console.log("SETTINGS_TABS:", JSON.stringify(tabs));
+    }
     await shot(page, name);
   }
 
