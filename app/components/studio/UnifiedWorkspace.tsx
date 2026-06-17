@@ -23,6 +23,7 @@ import { Step3Results } from "../builder/Step3Results";
 import { TranslationsPanel } from "./TranslationsPanel";
 import { ExperiencePanel } from "./ExperiencePanel";
 import { CssTab } from "./panels/CssTab";
+import { BuilderSettings } from "./BuilderSettings";
 
 // ════════════════════════════════════════════════════════════════════════════
 // UnifiedWorkspace (Unified P2) — ONE editing surface replacing the AI/Advanced
@@ -664,20 +665,8 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
                     goToStep={(n) => setView(n === 1 ? "products" : "build")}
                   />
                 ) : (
-                  <>
-                    <LogicView
-                      quizId={data.quizId}
-                      doc={doc}
-                      onCommit={commit}
-                      productIndex={data.productIndex}
-                      categories={data.categories}
-                      abAnalytics={data.abAnalytics}
-                    />
-                    <div style={{ marginTop: 18, display: "grid", gap: 14 }}>
-                      <ExperiencePanel doc={doc} onCommit={commit} onSelectNode={select} />
-                      <TranslationsPanel doc={doc} onApply={commit} previewUrl={data.previewUrl} />
-                    </div>
-                  </>
+                  // QB-3 — the Settings rail tool: Quizell's 8 top-tabs.
+                  <BuilderSettings data={data} doc={doc} commit={commit} onSelectNode={select} />
                 )}
               </div>
             </div>
