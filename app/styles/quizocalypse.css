@@ -891,6 +891,14 @@ body[data-qz] ::selection { background: var(--qz-ink); color: var(--qz-cream); }
   flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: 0;
   display: flex; justify-content: center; align-items: flex-start;
 }
+/* QB-10 — the standalone preview shows JUST the quiz. The runtime page wrapper
+   hardcodes a #FAFAFA backdrop + 100vh (an inline style → needs !important),
+   which read as a "white box" around the quiz card. Strip it here only (scoped
+   to the builder canvas; published /q + embedded /app keep their backdrop). */
+.qz-builder-canvas .qz-runtime-page {
+  background: transparent !important;
+  min-height: 0 !important;
+}
 
 .qz-builder-filmstrip {
   flex: 0 0 auto; display: flex; gap: 10px; align-items: stretch;

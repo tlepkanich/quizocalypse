@@ -230,7 +230,6 @@ export function Step5Preview({
           version={0}
           shopDomain=""
           platform={platform}
-          fillBackground={chromeless}
           tokensOverride={tryOnTokens}
           breakpoint={breakpoint}
           onInspect={onInspect}
