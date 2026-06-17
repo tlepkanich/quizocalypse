@@ -839,6 +839,22 @@ body[data-qz] ::selection { background: var(--qz-ink); color: var(--qz-cream); }
 }
 .qz-icon-btn:hover:not(:disabled) { background: var(--qz-rule-2); color: var(--qz-ink); }
 .qz-icon-btn:disabled { opacity: .35; cursor: default; }
+/* QB-4b — the Editor "Blocks" palette tiles. */
+.qz-block-tile {
+  appearance: none; cursor: pointer; font: inherit; width: 100%;
+  display: flex; align-items: center; gap: 10px;
+  padding: 9px 11px; border-radius: 9px;
+  border: 1px solid var(--qz-rule); background: var(--qz-paper); color: var(--qz-ink);
+  font-size: 13px; text-align: left;
+  transition: border-color var(--qz-dur-fast) var(--qz-ease), background var(--qz-dur-fast) var(--qz-ease);
+}
+.qz-block-tile:hover:not(:disabled) { border-color: var(--qz-accent); background: var(--qz-accent-tint); }
+.qz-block-tile:disabled { opacity: .5; cursor: default; }
+.qz-block-glyph {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 24px; height: 24px; border-radius: 6px; flex: 0 0 auto;
+  background: var(--qz-cream-2, #eee); color: var(--qz-ink-3); font-size: 13px;
+}
 /* The row under the top bar: rail · tool panel · stage (or full-width settings). */
 .qz-builder-body { flex: 1 1 auto; min-height: 0; display: flex; align-items: stretch; }
 .qz-builder-panel {

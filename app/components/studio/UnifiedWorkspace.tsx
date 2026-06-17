@@ -25,6 +25,7 @@ import { ExperiencePanel } from "./ExperiencePanel";
 import { CssTab } from "./panels/CssTab";
 import { BuilderSettings } from "./BuilderSettings";
 import { BuilderThemePanel } from "./BuilderThemePanel";
+import { BuilderBlocksPalette } from "./BuilderBlocksPalette";
 import { insertModule } from "./studioDoc";
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -116,6 +117,8 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
   const [frameW, setFrameW] = useState<number>(DEVICE_PRESETS.desktop);
   // QD-6: which Quizell builder rail tool is focused (standalone chrome only).
   const [tool, setTool] = useState<"editor" | "ai" | "theme" | "code">("editor");
+  // QB-4b: the Editor tool's Blocks ‖ Settings sub-tab.
+  const [editorSubtab, setEditorSubtab] = useState<"settings" | "blocks">("settings");
   const [reconcileError, setReconcileError] = useState<string | null>(null);
 
   const select = useCallback((nodeId: string | null) => {
@@ -543,36 +546,51 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
         )
       ) : (
         <>
-          <FlowRail
-            doc={doc}
-            ordered={ordered}
-            issuesByNode={issuesByNode}
-            selectedId={selectedId}
-            currentId={liveNodeId}
-            onSelect={select}
-            onCommit={commit}
-            fallbackCollection={fallbackCollection}
-            view={view}
-            onView={setView}
-          />
-          {selectedId ? (
-            <ContextPanel
-              doc={doc}
-              nodeId={selectedId}
-              onCommit={commit}
-              onClose={() => select(null)}
-              products={data.productIndex}
-              productIndex={data.productIndex}
-              categories={data.categories}
-              frameBreakpoint={breakpointForWidth(frameW)}
-              onOpenLogic={() => setView("logic")}
-            />
+          {/* QB-4b — Quizell's Editor "Blocks ‖ Settings" sub-tabs. */}
+          <div className="qz-segmented" role="group" aria-label="Editor mode">
+            <button type="button" aria-pressed={editorSubtab === "blocks"} onClick={() => setEditorSubtab("blocks")}>
+              Blocks
+            </button>
+            <button type="button" aria-pressed={editorSubtab === "settings"} onClick={() => setEditorSubtab("settings")}>
+              Settings
+            </button>
+          </div>
+          {editorSubtab === "blocks" ? (
+            <BuilderBlocksPalette doc={doc} node={selectedNode} commit={commit} />
           ) : (
-            <div className="qz-card" style={{ padding: 12 }}>
-              <p className="qz-dim" style={{ fontSize: 12.5, margin: 0 }}>
-                Select a step to edit its content, design, and layout.
-              </p>
-            </div>
+            <>
+              <FlowRail
+                doc={doc}
+                ordered={ordered}
+                issuesByNode={issuesByNode}
+                selectedId={selectedId}
+                currentId={liveNodeId}
+                onSelect={select}
+                onCommit={commit}
+                fallbackCollection={fallbackCollection}
+                view={view}
+                onView={setView}
+              />
+              {selectedId ? (
+                <ContextPanel
+                  doc={doc}
+                  nodeId={selectedId}
+                  onCommit={commit}
+                  onClose={() => select(null)}
+                  products={data.productIndex}
+                  productIndex={data.productIndex}
+                  categories={data.categories}
+                  frameBreakpoint={breakpointForWidth(frameW)}
+                  onOpenLogic={() => setView("logic")}
+                />
+              ) : (
+                <div className="qz-card" style={{ padding: 12 }}>
+                  <p className="qz-dim" style={{ fontSize: 12.5, margin: 0 }}>
+                    Select a step to edit its content, design, and layout.
+                  </p>
+                </div>
+              )}
+            </>
           )}
         </>
       );

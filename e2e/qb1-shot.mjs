@@ -35,6 +35,10 @@ const run = async () => {
     // The app sidebar must NOT be present (full-screen builder).
     hasAppSidebar: !!document.querySelector(".qz-sidebar"),
     railItems: [...document.querySelectorAll(".qz-builder-rail-item span")].map((s) => s.textContent),
+    // QB-5
+    hasBuildBadge: [...document.querySelectorAll("a")].some((a) => /Build with/.test(a.textContent || "")),
+    hasFilmAdd: !!document.querySelector(".qz-film-add"),
+    filmLabels: [...document.querySelectorAll(".qz-film-label")].map((s) => s.textContent),
   }));
   console.log("STRUCT:", JSON.stringify(facts));
 
