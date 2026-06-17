@@ -140,37 +140,38 @@ export async function syncCatalog(
   admin: AdminApiContext,
   shopDomain: string,
 ): Promise<SyncResult> {
-  const startedAt = new Date();
   const shop = await ensureShop(shopDomain);
+  return syncCatalogForShopId(admin, shop.id);
+}
 
+// Sync a Shopify catalog into a SPECIFIC shop row (by id), independent of that
+// shop's own domain. The embedded install path (syncCatalog) ensures a
+// domain-keyed shop then delegates here; the standalone Shopify connector
+// (app/lib/shopifyConnect.server.ts) calls this directly with a token-backed
+// admin client to pull a connected store's catalog into the studio.local shop.
+// `storefrontDomain` (set by the connector) writes each product's storefront URL
+// so the standalone "Shop now" click-through resolves to the real store.
+export async function syncCatalogForShopId(
+  admin: AdminApiContext,
+  shopId: string,
+  opts?: { storefrontDomain?: string },
+): Promise<SyncResult> {
+  const startedAt = new Date();
   try {
-    const collectionCount = await syncCollections(admin, shop.id);
-    const productCount = await syncProducts(admin, shop.id);
+    const collectionCount = await syncCollections(admin, shopId);
+    const productCount = await syncProducts(admin, shopId, opts?.storefrontDomain);
 
     await prisma.shop.update({
-      where: { id: shop.id },
-      data: {
-        lastSyncAt: new Date(),
-        lastSyncStatus: "ok",
-        lastSyncError: null,
-      },
+      where: { id: shopId },
+      data: { lastSyncAt: new Date(), lastSyncStatus: "ok", lastSyncError: null },
     });
 
-    return {
-      productCount,
-      collectionCount,
-      startedAt,
-      finishedAt: new Date(),
-    };
+    return { productCount, collectionCount, startedAt, finishedAt: new Date() };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     await prisma.shop.update({
-      where: { id: shop.id },
-      data: {
-        lastSyncAt: new Date(),
-        lastSyncStatus: "error",
-        lastSyncError: message.slice(0, 500),
-      },
+      where: { id: shopId },
+      data: { lastSyncAt: new Date(), lastSyncStatus: "error", lastSyncError: message.slice(0, 500) },
     });
     throw err;
   }
@@ -221,6 +222,7 @@ async function syncCollections(
 async function syncProducts(
   admin: AdminApiContext,
   shopId: string,
+  storefrontDomain?: string,
 ): Promise<number> {
   const bulkOp = await startBulk(admin, BULK_QUERY);
   const url = await waitForBulk(admin, bulkOp.id);
@@ -228,7 +230,7 @@ async function syncProducts(
     // Empty catalog — Shopify returns null url when no data was produced.
     return 0;
   }
-  return ingestJsonl(url, shopId);
+  return ingestJsonl(url, shopId, storefrontDomain);
 }
 
 interface BulkOperationStatus {
@@ -295,7 +297,11 @@ async function waitForBulk(
   throw new Error("Bulk op timed out after 5 minutes.");
 }
 
-async function ingestJsonl(url: string, shopId: string): Promise<number> {
+async function ingestJsonl(
+  url: string,
+  shopId: string,
+  storefrontDomain?: string,
+): Promise<number> {
   const res = await fetch(url);
   if (!res.ok) throw new Error(`Failed to fetch JSONL: ${res.status}`);
   const text = await res.text();
@@ -357,6 +363,12 @@ async function ingestJsonl(url: string, shopId: string): Promise<number> {
   }
 
   for (const p of products.values()) {
+    // Standalone connector: write the real storefront URL so the "Shop now"
+    // click-through resolves (the standalone runtime has no Shopify cart
+    // permalink). Embedded sync passes no domain → url stays null (embedded
+    // products build a cart permalink from the variant GID instead).
+    const storefrontUrl =
+      storefrontDomain && p.handle ? `https://${storefrontDomain}/products/${p.handle}` : null;
     await prisma.product.upsert({
       where: { productId: p.productId },
       update: {
@@ -375,6 +387,7 @@ async function ingestJsonl(url: string, shopId: string): Promise<number> {
         priceMax: p.priceMax,
         descriptionHtml: p.descriptionHtml,
         descriptionText: p.descriptionText,
+        url: storefrontUrl,
       },
       create: {
         productId: p.productId,
@@ -393,6 +406,7 @@ async function ingestJsonl(url: string, shopId: string): Promise<number> {
         priceMax: p.priceMax,
         descriptionHtml: p.descriptionHtml,
         descriptionText: p.descriptionText,
+        url: storefrontUrl,
       },
     });
   }

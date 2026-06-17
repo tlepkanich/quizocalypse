@@ -1,8 +1,10 @@
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "@remix-run/node";
 import { json } from "@remix-run/node";
-import { Form, useActionData, useLoaderData, useNavigation } from "@remix-run/react";
+import { Form, useActionData, useLoaderData, useNavigation, useRevalidator } from "@remix-run/react";
+import { useEffect } from "react";
 import { z } from "zod";
 import { requireStudioAccess, resolveStudioShop } from "../lib/studioAccess.server";
+import prisma from "../db.server";
 import {
   listCatalog,
   createManualProduct,
@@ -10,22 +12,49 @@ import {
   importCsv,
   isManualId,
 } from "../lib/catalog.server";
+import {
+  connectShopify,
+  resyncConnected,
+  disconnectShopify,
+} from "../lib/shopifyConnect.server";
 import { QzPage, QzPageHeader, QzCard, QzField, QzInput, QzTextarea, QzBadge } from "../components/qz";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   await requireStudioAccess(request);
   const shop = await resolveStudioShop();
-  const products = await listCatalog(shop.id);
+  const [products, conn] = await Promise.all([
+    listCatalog(shop.id),
+    prisma.shop.findUnique({
+      where: { id: shop.id },
+      // NEVER select shopifyConnectToken — the token never reaches the browser.
+      select: {
+        shopifyConnectDomain: true,
+        shopifyConnectedAt: true,
+        lastSyncStatus: true,
+        lastSyncAt: true,
+      },
+    }),
+  ]);
+  const mapped = products.map((p) => ({
+    productId: p.productId,
+    title: p.title,
+    imageUrl: p.imageUrl,
+    url: p.url,
+    price: p.priceMin ? Number(p.priceMin) : null,
+    tags: p.tags,
+    manual: isManualId(p.productId),
+  }));
   return json({
-    products: products.map((p) => ({
-      productId: p.productId,
-      title: p.title,
-      imageUrl: p.imageUrl,
-      url: p.url,
-      price: p.priceMin ? Number(p.priceMin) : null,
-      tags: p.tags,
-      manual: isManualId(p.productId),
-    })),
+    products: mapped,
+    syncedCount: mapped.filter((p) => !p.manual).length,
+    connection: conn?.shopifyConnectDomain
+      ? {
+          domain: conn.shopifyConnectDomain,
+          connectedAt: conn.shopifyConnectedAt?.toISOString() ?? null,
+          lastSyncStatus: conn.lastSyncStatus,
+          lastSyncAt: conn.lastSyncAt?.toISOString() ?? null,
+        }
+      : null,
   });
 };
 
@@ -74,21 +103,159 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     return json({ ok: true, intent, message: `Imported ${res.created} product(s).${errNote}` });
   }
 
+  if (intent === "connect-shopify") {
+    const res = await connectShopify(
+      shop.id,
+      String(form.get("domain") ?? ""),
+      String(form.get("token") ?? ""),
+    );
+    return json(
+      {
+        ok: res.ok,
+        intent,
+        message: res.ok
+          ? `Connected to ${res.shopName ?? "your store"} — syncing products now…`
+          : res.error ?? "Couldn't connect.",
+      },
+      { status: res.ok ? 200 : 400 },
+    );
+  }
+
+  if (intent === "sync-shopify") {
+    const res = await resyncConnected(shop.id);
+    return json(
+      { ok: res.ok, intent, message: res.ok ? "Re-syncing your Shopify catalog…" : res.error ?? "Sync failed." },
+      { status: res.ok ? 200 : 400 },
+    );
+  }
+
+  if (intent === "disconnect-shopify") {
+    await disconnectShopify(shop.id);
+    return json({ ok: true, intent, message: "Disconnected from Shopify. Synced products were kept." });
+  }
+
   return json({ ok: false, intent, message: "Unknown action." }, { status: 400 });
 };
 
+type Connection = {
+  domain: string;
+  connectedAt: string | null;
+  lastSyncStatus: string | null;
+  lastSyncAt: string | null;
+};
+
+const SYNC_STATUS: Record<string, { tone: "ok" | "draft" | "crit"; label: string }> = {
+  syncing: { tone: "draft", label: "Syncing…" },
+  ok: { tone: "ok", label: "Synced" },
+  error: { tone: "crit", label: "Sync failed" },
+};
+
+function ConnectShopifyCard({
+  connection,
+  syncedCount,
+  busy,
+}: {
+  connection: Connection | null;
+  syncedCount: number;
+  busy: boolean;
+}) {
+  if (!connection) {
+    return (
+      <QzCard style={{ marginBottom: 18, display: "flex", flexDirection: "column", gap: 12 }}>
+        <div>
+          <div className="qz-label">Connect Shopify</div>
+          <p className="qz-muted" style={{ margin: "2px 0 0", fontSize: 13, lineHeight: 1.5 }}>
+            Sync your whole Shopify catalog automatically. In your Shopify admin go to{" "}
+            <strong>Settings → Apps and sales channels → Develop apps → Create an app</strong>, enable the{" "}
+            <code>read_products</code> and <code>read_inventory</code> Admin API scopes, <strong>Install</strong>{" "}
+            the app, then copy its <strong>Admin API access token</strong> and paste it below. Your token is stored
+            encrypted and never leaves the server.
+          </p>
+        </div>
+        <Form
+          method="post"
+          replace
+          style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) minmax(0,1.4fr) auto", gap: 10, alignItems: "flex-end" }}
+        >
+          <input type="hidden" name="intent" value="connect-shopify" />
+          <QzField label="Store domain">
+            <QzInput name="domain" required placeholder="your-store.myshopify.com" autoComplete="off" />
+          </QzField>
+          <QzField label="Admin API access token">
+            <QzInput name="token" type="password" required placeholder="shpat_…" autoComplete="off" />
+          </QzField>
+          <button type="submit" className="qz-btn qz-btn-primary" disabled={busy} style={{ whiteSpace: "nowrap" }}>
+            {busy ? "Connecting…" : "Connect & sync"}
+          </button>
+        </Form>
+      </QzCard>
+    );
+  }
+
+  const status = connection.lastSyncStatus ? SYNC_STATUS[connection.lastSyncStatus] : undefined;
+  const syncing = connection.lastSyncStatus === "syncing";
+  return (
+    <QzCard style={{ marginBottom: 18, display: "flex", flexDirection: "column", gap: 10 }}>
+      <div className="qz-row qz-row-between" style={{ alignItems: "center", flexWrap: "wrap", gap: 12 }}>
+        <div>
+          <div className="qz-row" style={{ gap: 8, alignItems: "center" }}>
+            <span className="qz-label" style={{ margin: 0 }}>Shopify connected</span>
+            {status ? <QzBadge tone={status.tone}>{status.label}</QzBadge> : null}
+          </div>
+          <p className="qz-muted" style={{ margin: "3px 0 0", fontSize: 13 }}>
+            <strong>{connection.domain}</strong> · {syncedCount} product{syncedCount === 1 ? "" : "s"} synced
+            {connection.lastSyncAt && !syncing
+              ? ` · last sync ${new Date(connection.lastSyncAt).toLocaleString()}`
+              : ""}
+          </p>
+          {connection.lastSyncStatus === "error" ? (
+            <p className="qz-muted" style={{ margin: "3px 0 0", fontSize: 12.5, color: "var(--qz-crit, #c0392b)" }}>
+              Last sync failed — check the token + that the custom app has <code>read_products</code>, then re-sync.
+            </p>
+          ) : null}
+        </div>
+        <div className="qz-row" style={{ gap: 8 }}>
+          <Form method="post" replace style={{ display: "inline" }}>
+            <input type="hidden" name="intent" value="sync-shopify" />
+            <button type="submit" className="qz-btn qz-btn-accent qz-btn-sm" disabled={busy || syncing}>
+              {syncing ? "Syncing…" : "Re-sync"}
+            </button>
+          </Form>
+          <Form method="post" replace style={{ display: "inline" }}>
+            <input type="hidden" name="intent" value="disconnect-shopify" />
+            <button type="submit" className="qz-btn qz-btn-ghost qz-btn-sm" disabled={busy}>
+              Disconnect
+            </button>
+          </Form>
+        </div>
+      </div>
+    </QzCard>
+  );
+}
+
 export default function StudioProducts() {
-  const { products } = useLoaderData<typeof loader>();
+  const { products, connection, syncedCount } = useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
   const nav = useNavigation();
+  const revalidator = useRevalidator();
   const busy = nav.state !== "idle";
+
+  // Poll while a detached sync runs so the status + product list update live.
+  const syncing = connection?.lastSyncStatus === "syncing";
+  useEffect(() => {
+    if (!syncing) return;
+    const t = setInterval(() => {
+      if (revalidator.state === "idle") revalidator.revalidate();
+    }, 3000);
+    return () => clearInterval(t);
+  }, [syncing, revalidator]);
 
   return (
     <QzPage>
       <QzPageHeader
         eyebrow="Catalog"
         title="Products"
-        subtitle="Add products by hand or import a CSV — the catalog your quizzes recommend from."
+        subtitle="Connect Shopify to auto-sync your catalog, or add products by hand / import a CSV — the catalog your quizzes recommend from."
       />
 
       {actionData?.message ? (
@@ -100,6 +267,8 @@ export default function StudioProducts() {
           <div className="qz-banner-body">{actionData.message}</div>
         </div>
       ) : null}
+
+      <ConnectShopifyCard connection={connection} syncedCount={syncedCount} busy={busy} />
 
       <div style={{ display: "grid", gridTemplateColumns: "minmax(0,1.3fr) minmax(0,1fr)", gap: 16, alignItems: "start" }}>
         <QzCard style={{ display: "flex", flexDirection: "column", gap: 12 }}>
@@ -150,7 +319,7 @@ export default function StudioProducts() {
         </div>
         {products.length === 0 ? (
           <QzCard dashed style={{ textAlign: "center", padding: "44px 28px" }}>
-            <p className="qz-muted" style={{ margin: 0 }}>No products yet — add one above or import a CSV.</p>
+            <p className="qz-muted" style={{ margin: 0 }}>No products yet — connect Shopify above, add one by hand, or import a CSV.</p>
           </QzCard>
         ) : (
           <QzCard flush>

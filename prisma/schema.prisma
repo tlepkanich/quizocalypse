@@ -54,6 +54,15 @@ model Shop {
   // app/lib/studioAccess.server.ts isStandalone().
   source         String    @default("shopify")
 
+  // Standalone Shopify connector: a non-Shopify (source="standalone") workspace
+  // can connect a Shopify store via a custom-app Admin API token to sync its
+  // catalog. The token is AES-256-GCM encrypted at rest (app/lib/crypto.ts);
+  // the domain is the connected <store>.myshopify.com. Both null when not
+  // connected. lastSync* (above) double as the connector's sync status.
+  shopifyConnectDomain String?
+  shopifyConnectToken  String?
+  shopifyConnectedAt   DateTime?
+
   products       Product[]
   collections    Collection[]
   categories     Category[]
