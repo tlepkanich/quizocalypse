@@ -222,12 +222,17 @@ export function tokensToCssVars(
     "--qz-pad": pad,
     "--qz-shadow": shadowCss,
   };
-  // QP-2 — page padding (Quizell's "Page Paddings"). Only emitted when explicitly
-  // set, so existing quizzes never carry the var and the runtime's `var(…, 24px)`
-  // fallback keeps them byte-identical.
+  // QP-2 — page padding (Quizell's "Page Paddings"), per-side so each can override
+  // its own fallback — including the desktop-shell's `padding-top: 64px !important`
+  // (a shorthand var can't reach an !important rule). Only emitted when explicitly
+  // set, so existing quizzes never carry the vars and every fallback (24px sides,
+  // 64px desktop top) stays byte-identical.
   if (t.page_padding) {
     const p = t.page_padding;
-    vars["--qz-page-pad"] = `${p.top}px ${p.right}px ${p.bottom}px ${p.left}px`;
+    vars["--qz-pp-top"] = `${p.top}px`;
+    vars["--qz-pp-right"] = `${p.right}px`;
+    vars["--qz-pp-bottom"] = `${p.bottom}px`;
+    vars["--qz-pp-left"] = `${p.left}px`;
   }
   return vars;
 }

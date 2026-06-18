@@ -1193,7 +1193,7 @@ export function QuizRuntime(props: QuizRuntimeProps) {
            class on the root. Preview sets it from the DeviceFrame width prop;
            live sets it from the container-measured breakpoint. The old live
            @media(900px) fork carried these exact rules keyed to the WINDOW. */
-        .qz-bp-desktop .qz-runtime-page { align-items: flex-start !important; justify-content: center !important; padding-top: 64px !important; }
+        .qz-bp-desktop .qz-runtime-page { align-items: flex-start !important; justify-content: center !important; padding-top: var(--qz-pp-top, 64px) !important; }
         .qz-bp-desktop .qz-runtime-shell { flex-direction: row; align-items: flex-start; max-width: 1100px; gap: 40px; }
         .qz-bp-desktop .qz-runtime-content { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: center; }
         .qz-bp-desktop .qz-preview-rail { flex: 0 0 320px; position: sticky; top: 64px; }
@@ -1207,7 +1207,7 @@ export function QuizRuntime(props: QuizRuntimeProps) {
            including the 16px hysteresis band). Browsers without @container
            keep the coherent mobile-first default. */
         @container (min-width: 900px) {
-          .qz-unmeasured .qz-runtime-page { align-items: flex-start !important; justify-content: center !important; padding-top: 64px !important; }
+          .qz-unmeasured .qz-runtime-page { align-items: flex-start !important; justify-content: center !important; padding-top: var(--qz-pp-top, 64px) !important; }
           .qz-unmeasured .qz-runtime-shell { flex-direction: row; align-items: flex-start; max-width: 1100px; gap: 40px; }
           .qz-unmeasured .qz-runtime-content { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: center; }
           .qz-unmeasured .qz-preview-rail { flex: 0 0 320px; position: sticky; top: 64px; }

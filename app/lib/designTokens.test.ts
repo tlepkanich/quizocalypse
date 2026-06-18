@@ -59,12 +59,17 @@ describe("tokensToCssVars surface (MQ minimal chrome answer chips)", () => {
 });
 
 describe("tokensToCssVars page padding (QP-2)", () => {
-  it("does NOT emit --qz-page-pad when absent (existing quizzes byte-identical)", () => {
-    expect("--qz-page-pad" in tokensToCssVars({})).toBe(false);
+  it("does NOT emit page-pad vars when absent (existing quizzes byte-identical)", () => {
+    const vars = tokensToCssVars({});
+    expect("--qz-pp-top" in vars).toBe(false);
+    expect("--qz-pp-left" in vars).toBe(false);
   });
-  it("emits a top/right/bottom/left shorthand when set", () => {
-    const vars = tokensToCssVars({ page_padding: { top: 0, right: 32, bottom: 32, left: 32 } });
-    expect(vars["--qz-page-pad"]).toBe("0px 32px 32px 32px");
+  it("emits per-side vars (so each overrides its own fallback, incl. the !important desktop top)", () => {
+    const vars = tokensToCssVars({ page_padding: { top: 0, right: 32, bottom: 32, left: 16 } });
+    expect(vars["--qz-pp-top"]).toBe("0px");
+    expect(vars["--qz-pp-right"]).toBe("32px");
+    expect(vars["--qz-pp-bottom"]).toBe("32px");
+    expect(vars["--qz-pp-left"]).toBe("16px");
   });
 });
 

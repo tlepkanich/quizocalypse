@@ -44,9 +44,13 @@ export const stylesFor = (
     flexDirection: "column" as const,
     alignItems: "center",
     justifyContent: "center",
-    // QP-2 — Quizell "Page Paddings". The var is only present when a merchant sets
-    // page_padding (tokensToCssVars); absent → 24px, byte-identical to before.
-    padding: "var(--qz-page-pad, 24px)",
+    // QP-2 — Quizell "Page Paddings", per-side. The vars are only present when a
+    // merchant sets page_padding (tokensToCssVars); absent → 24px, byte-identical.
+    // The desktop-shell rule overrides padding-top with its own var(--qz-pp-top,64px).
+    paddingTop: "var(--qz-pp-top, 24px)",
+    paddingRight: "var(--qz-pp-right, 24px)",
+    paddingBottom: "var(--qz-pp-bottom, 24px)",
+    paddingLeft: "var(--qz-pp-left, 24px)",
     fontFamily: "var(--qz-font-body)",
     color: "var(--qz-color-text)",
   } satisfies React.CSSProperties,
