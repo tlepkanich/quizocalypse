@@ -888,8 +888,17 @@ body[data-qz] ::selection { background: var(--qz-ink); color: var(--qz-cream); }
   font-size: 12.5px; color: var(--qz-ink-3); background: var(--qz-paper);
 }
 .qz-builder-canvas {
-  flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: 0;
+  flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: 28px;
   display: flex; justify-content: center; align-items: flex-start;
+}
+/* QP-3 — Quizell's centered preview card: the quiz framed as a rounded,
+   soft-shadowed card on the grey canvas (the quiz paints its own bg inside, so
+   the card surface matches the content — no mismatched "white box"). */
+.qz-canvas-card {
+  border-radius: 16px;
+  overflow: hidden;
+  box-shadow: 0 1px 2px rgba(17, 17, 17, .04), 0 10px 34px rgba(17, 17, 17, .09);
+  border: 1px solid rgba(17, 17, 17, .05);
 }
 /* QB-10 — the standalone preview shows JUST the quiz. The runtime page wrapper
    hardcodes a #FAFAFA backdrop + 100vh (an inline style → needs !important),
