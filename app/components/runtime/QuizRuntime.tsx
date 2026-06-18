@@ -175,6 +175,13 @@ const RuntimeLocaleContext = createContext("en");
 // intermediate result/preview component. `productHref` (pure, lib) centralizes
 // the link rule both platforms share.
 const RuntimePlatformContext = createContext<QuizPlatform>("shopify");
+// MQ — the resolved shopper-runtime CHROME. "classic" = today's card + pill-trail
+// + auto-advance; "minimal" = the Quizell-style top bar + card-less grey-chip
+// question + Back/Next + vertical result. Resolved once at the root from the
+// quiz's `chrome` token, defaulting by platform (standalone → minimal). Deep views
+// read it via context (same seam as platform/preview/locale) — no prop drilling.
+type ChromeVariant = "classic" | "minimal";
+const RuntimeChromeContext = createContext<ChromeVariant>("classic");
 
 export function QuizRuntime(props: QuizRuntimeProps) {
   const tc = useChrome();
@@ -303,6 +310,13 @@ export function QuizRuntime(props: QuizRuntimeProps) {
   const cssVars = useMemo(
     () => tokensToCssVars(resolved, fluidSource) as React.CSSProperties,
     [resolved, fluidSource],
+  );
+  // MQ — resolve the runtime chrome once: explicit `chrome` token wins, else the
+  // platform default (standalone → minimal Quizell look, shopify → classic). Deep
+  // views read it via RuntimeChromeContext.
+  const chromeVariant: ChromeVariant = useMemo(
+    () => resolved.chrome ?? (platform === "standalone" ? "minimal" : "classic"),
+    [resolved.chrome, platform],
   );
   const fontUrl = useMemo(() => {
     const heading = resolved.typography?.heading?.family;
@@ -1128,6 +1142,7 @@ export function QuizRuntime(props: QuizRuntimeProps) {
   return (
     <RuntimePreviewContext.Provider value={isPreview}>
     <RuntimePlatformContext.Provider value={platform}>
+    <RuntimeChromeContext.Provider value={chromeVariant}>
     <ChromeContext.Provider value={chromeTable}>
     <RuntimeLocaleContext.Provider value={locale}>
     <div
@@ -1296,6 +1311,7 @@ export function QuizRuntime(props: QuizRuntimeProps) {
     </div>
     </RuntimeLocaleContext.Provider>
     </ChromeContext.Provider>
+    </RuntimeChromeContext.Provider>
     </RuntimePlatformContext.Provider>
     </RuntimePreviewContext.Provider>
   );

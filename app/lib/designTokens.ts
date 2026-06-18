@@ -198,13 +198,21 @@ export function tokensToCssVars(
       : shadow === "elevated"
         ? "0 14px 44px rgba(0,0,0,0.13)"
         : "0 4px 24px rgba(0,0,0,0.06)";
+  const bg = t.colors?.background ?? "#FFFFFF";
+  const text = t.colors?.text ?? "#1F1F1F";
+  // Filled surface for answer chips / soft panels (the minimal chrome). Explicit
+  // token wins; else a subtle tint of the text into the bg so it reads as a clean
+  // light-grey on light themes AND a soft raised panel on dark ones. Inert for the
+  // classic chrome, which never consumes --qz-color-surface.
+  const surface = t.colors?.surface ?? `color-mix(in srgb, ${text} 6%, ${bg})`;
   return {
     "--qz-color-primary": t.colors?.primary ?? "#5563DE",
     "--qz-color-secondary": t.colors?.secondary ?? "#2C7A4B",
     "--qz-color-accent": t.colors?.accent ?? "#BB6622",
-    "--qz-color-bg": t.colors?.background ?? "#FFFFFF",
-    "--qz-color-text": t.colors?.text ?? "#1F1F1F",
+    "--qz-color-bg": bg,
+    "--qz-color-text": text,
     "--qz-color-muted": t.colors?.muted ?? "#666666",
+    "--qz-color-surface": surface,
     "--qz-font-heading": t.typography?.heading?.family ?? "Inter",
     "--qz-font-body": t.typography?.body?.family ?? "Inter",
     "--qz-base-size": sizes.base,

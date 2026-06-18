@@ -556,6 +556,9 @@ export const DesignTokens = z
         background: z.string(),
         text: z.string(),
         muted: z.string(),
+        // Filled surface for answer chips / soft panels (the minimal chrome's grey
+        // cards). Absent → derived from `text` at low alpha so it adapts to any theme.
+        surface: z.string(),
       })
       .partial(),
     typography: z
@@ -587,6 +590,12 @@ export const DesignTokens = z
     // vertical product cards right. Absent/false = today's stacked layout, so
     // every existing quiz is unchanged. Mobile always stacks.
     result_split: z.boolean().optional(),
+    // MQ program — shopper-runtime CHROME (structure, not colors): "classic" =
+    // today's card + pill-trail + auto-advance; "minimal" = Quizell-style top
+    // progress bar + "Question # N" + card-less grey-chip question + explicit
+    // Back/Next + vertical product row. Absent → the runtime defaults by platform
+    // (standalone → minimal, shopify → classic), so Shopify /q is untouched.
+    chrome: z.enum(["classic", "minimal"]).optional(),
   })
   .partial();
 export type DesignTokens = z.infer<typeof DesignTokens>;

@@ -45,6 +45,19 @@ describe("tokensToCssVars radius (the 'big oval' fix)", () => {
   });
 });
 
+describe("tokensToCssVars surface (MQ minimal chrome answer chips)", () => {
+  it("uses an explicit colors.surface token when set", () => {
+    const vars = tokensToCssVars({ colors: { surface: "#f4f4f4" } });
+    expect(vars["--qz-color-surface"]).toBe("#f4f4f4");
+  });
+  it("derives a theme-adaptive surface from text+bg when absent", () => {
+    const light = tokensToCssVars({ colors: { text: "#000000", background: "#ffffff" } });
+    expect(light["--qz-color-surface"]).toBe("color-mix(in srgb, #000000 6%, #ffffff)");
+    const dark = tokensToCssVars({ colors: { text: "#E9EEF7", background: "#0C1018" } });
+    expect(dark["--qz-color-surface"]).toBe("color-mix(in srgb, #E9EEF7 6%, #0C1018)");
+  });
+});
+
 describe("fluid typography (Unified P7)", () => {
   const tok = (base: number) => ({ typography: { body: { family: "Inter", base_size: base, scale_ratio: 1.25 } } });
 
