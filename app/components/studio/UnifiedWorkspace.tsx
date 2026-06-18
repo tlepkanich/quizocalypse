@@ -679,7 +679,7 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
                     />
                   </div>
                 </div>
-                <BuilderFilmstrip doc={doc} steps={ordered.steps} selectedId={selectedId} onSelect={select} onAdd={addStep} />
+                <BuilderFilmstrip doc={doc} steps={ordered.steps} selectedId={selectedId} onSelect={select} onAdd={addStep} productIndex={data.productIndex} categories={data.categories} />
               </div>
             </>
           ) : (

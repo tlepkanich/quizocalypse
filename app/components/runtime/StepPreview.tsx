@@ -284,6 +284,7 @@ export function StepPreview({
   productIndex,
   categories,
   breakpoint = "desktop",
+  chrome,
   className,
   style,
 }: {
@@ -292,6 +293,10 @@ export function StepPreview({
   productIndex: IndexedProduct[];
   categories?: PreviewCategory[];
   breakpoint?: "desktop" | "mobile";
+  // MQ chrome variant for the rendered styles. Omitted → "classic" (the 3
+  // existing consumers stay byte-identical). The standalone filmstrip passes
+  // "minimal" so its thumbnails read like the Quizell quiz they preview.
+  chrome?: "classic" | "minimal";
   className?: string;
   style?: CSSProperties;
 }): ReactNode {
@@ -307,7 +312,7 @@ export function StepPreview({
     return resolveForBreakpoint(null, baked, nodeOverride, bpLayer);
   }, [doc, node, breakpoint]);
 
-  const styles = useMemo(() => stylesFor(resolved), [resolved]);
+  const styles = useMemo(() => stylesFor(resolved, undefined, chrome), [resolved, chrome]);
   const cssVars = useMemo(
     () => tokensToCssVars(resolved) as CSSProperties,
     [resolved],

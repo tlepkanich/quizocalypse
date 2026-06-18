@@ -1,6 +1,8 @@
-import type { ReactNode } from "react";
+import type { CSSProperties, ReactNode } from "react";
 import type { OrderedStep } from "../../lib/flowOrder";
 import type { Quiz, QuizNode } from "../../lib/quizSchema";
+import type { IndexedProduct } from "../../lib/recommendationEngine";
+import { StepPreview, type PreviewCategory } from "../runtime/StepPreview";
 import { NODE_LABEL } from "./panels/nodeMeta";
 import { ThemeToggle } from "./ThemeToggle";
 
@@ -68,26 +70,51 @@ function stepTitle(node: QuizNode | undefined): string {
   }
 }
 
+// QP-1 — filmstrip thumbnail geometry. Each card is a clipped viewport showing a
+// real StepPreview laid out at FILM_NATURAL_W, scaled to fit — so the strip reads
+// like Quizell's rendered step thumbnails (the intro image, the question chips,
+// the product row) instead of a text label. The render is the label.
+const FILM_THUMB_W = 156;
+const FILM_THUMB_H = 104;
+const FILM_NATURAL_W = 460;
+const FILM_SCALE = FILM_THUMB_W / FILM_NATURAL_W;
+// Painted on the StepPreview root (the var is set on that same element by
+// tokensToCssVars), so a dark-themed quiz's thumbnail gets its own backdrop.
+const FILM_RENDER_STYLE: CSSProperties = {
+  width: FILM_NATURAL_W,
+  minHeight: FILM_THUMB_H / FILM_SCALE,
+  padding: 18,
+  background: "var(--qz-color-bg)",
+};
+
 export function BuilderFilmstrip({
   doc,
   steps,
   selectedId,
   onSelect,
   onAdd,
+  productIndex,
+  categories,
 }: {
   doc: Quiz;
   steps: OrderedStep[];
   selectedId: string | null;
   onSelect: (id: string) => void;
   onAdd?: () => void;
+  productIndex: IndexedProduct[];
+  categories?: PreviewCategory[];
 }) {
   if (steps.length === 0 && !onAdd) return null;
   const byId = new Map(doc.nodes.map((n) => [n.id, n]));
+  // Standalone quizzes default to the minimal Quizell chrome (the filmstrip only
+  // renders in the standalone builder), so the thumbnail matches the live quiz.
+  const chrome = doc.design_tokens?.chrome ?? "minimal";
   return (
     <div className="qz-builder-filmstrip" aria-label="Quiz steps">
       {steps.map((s, i) => {
+        const node = byId.get(s.nodeId);
         const type = NODE_LABEL[s.type] ?? s.type;
-        const title = stepTitle(byId.get(s.nodeId)) || type;
+        const title = stepTitle(node) || type;
         return (
           <button
             key={s.nodeId}
@@ -95,10 +122,26 @@ export function BuilderFilmstrip({
             className={`qz-film-card${selectedId === s.nodeId ? " is-active" : ""}`}
             onClick={() => onSelect(s.nodeId)}
             title={`${i + 1}. ${title}`}
+            aria-label={`Step ${i + 1}: ${title}`}
           >
+            <span className="qz-film-thumb" aria-hidden="true">
+              {node ? (
+                <span
+                  className="qz-film-thumb-scale"
+                  style={{ width: FILM_NATURAL_W, transform: `scale(${FILM_SCALE})` }}
+                >
+                  <StepPreview
+                    doc={doc}
+                    node={node}
+                    productIndex={productIndex}
+                    categories={categories}
+                    chrome={chrome}
+                    style={FILM_RENDER_STYLE}
+                  />
+                </span>
+              ) : null}
+            </span>
             <span className="qz-film-num">{i + 1}</span>
-            <span className="qz-film-label">{title}</span>
-            <span className="qz-film-type">{type}</span>
           </button>
         );
       })}
