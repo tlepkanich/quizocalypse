@@ -473,9 +473,13 @@ export function QuizRuntime(props: QuizRuntimeProps) {
     // the quiz IS the page. QB-8: the standalone builder asks the preview to
     // paint that same background (fillBackground) so the canvas shows the quiz
     // full-bleed — "just the quiz", no framing card.
+    // MQ — the minimal chrome is CARD-LESS, so the theme background must be
+    // painted on the root or the content floats with no backdrop (a light-text
+    // theme then vanishes on the builder's grey canvas). Paint it whenever the
+    // chrome is minimal, in preview too — not only when fillBackground is asked.
     ...(!isPreview
       ? { background: "var(--qz-color-bg)", minHeight: "100vh" }
-      : fillBackground
+      : fillBackground || chromeVariant === "minimal"
         ? { background: "var(--qz-color-bg)", minHeight: 480 }
         : {}),
   };
