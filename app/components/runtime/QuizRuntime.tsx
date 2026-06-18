@@ -306,17 +306,20 @@ export function QuizRuntime(props: QuizRuntimeProps) {
     doc.nodes,
   ]);
 
-  const styles = useMemo(() => stylesFor(resolved, breakpoint), [resolved, breakpoint]);
-  const cssVars = useMemo(
-    () => tokensToCssVars(resolved, fluidSource) as React.CSSProperties,
-    [resolved, fluidSource],
-  );
   // MQ — resolve the runtime chrome once: explicit `chrome` token wins, else the
   // platform default (standalone → minimal Quizell look, shopify → classic). Deep
-  // views read it via RuntimeChromeContext.
+  // views read it via RuntimeChromeContext; styles read it directly below.
   const chromeVariant: ChromeVariant = useMemo(
     () => resolved.chrome ?? (platform === "standalone" ? "minimal" : "classic"),
     [resolved.chrome, platform],
+  );
+  const styles = useMemo(
+    () => stylesFor(resolved, breakpoint, chromeVariant),
+    [resolved, breakpoint, chromeVariant],
+  );
+  const cssVars = useMemo(
+    () => tokensToCssVars(resolved, fluidSource) as React.CSSProperties,
+    [resolved, fluidSource],
   );
   const fontUrl = useMemo(() => {
     const heading = resolved.typography?.heading?.family;
@@ -852,6 +855,8 @@ export function QuizRuntime(props: QuizRuntimeProps) {
           node={currentNode}
           styles={styles}
           tokens={resolved}
+          onBack={() => gotoStep(path.length - 1)}
+          canBack={path.length > 0}
           onTooltipView={(answerId) =>
             analyticsRef.current?.track("tooltip_viewed", {
               question_id: currentNode.id,
@@ -1228,12 +1233,16 @@ export function QuizRuntime(props: QuizRuntimeProps) {
               })()}
             </div>
             <ProgressBar doc={doc} path={path} currentNodeId={currentNodeId} />
-            <ProgressTrail
-              doc={doc}
-              path={path}
-              currentNodeId={currentNodeId}
-              onJump={gotoStep}
-            />
+            {chromeVariant === "minimal" ? (
+              <MinimalQuestionLabel doc={doc} path={path} currentNodeId={currentNodeId} />
+            ) : (
+              <ProgressTrail
+                doc={doc}
+                path={path}
+                currentNodeId={currentNodeId}
+                onJump={gotoStep}
+              />
+            )}
             {content}
           </div>
           {showPreview && (
@@ -1330,6 +1339,7 @@ function ProgressBar({
   path: PathStep[];
   currentNodeId: string | null;
 }) {
+  const minimal = useContext(RuntimeChromeContext) === "minimal";
   const total = useMemo(() => reachableQuestionCount(doc), [doc]);
   if (total <= 0) return null;
   const node = currentNodeId ? doc.nodes.find((n) => n.id === currentNodeId) : null;
@@ -1339,23 +1349,69 @@ function ProgressBar({
   const pct = onResult ? 100 : progressPct(total, answered);
   return (
     <div
-      style={{
-        height: 6,
-        borderRadius: 999,
-        background: "#00000010",
-        overflow: "hidden",
-        marginBottom: 12,
-      }}
+      style={
+        minimal
+          ? {
+              // Quizell: a thick black bar pinned across the top of the quiz.
+              height: 9,
+              borderRadius: 999,
+              background: "var(--qz-color-surface)",
+              overflow: "hidden",
+              marginBottom: 26,
+              width: "100%",
+            }
+          : {
+              height: 6,
+              borderRadius: 999,
+              background: "#00000010",
+              overflow: "hidden",
+              marginBottom: 12,
+            }
+      }
       aria-hidden
     >
       <div
         style={{
           width: `${pct}%`,
           height: "100%",
-          background: "var(--qz-color-primary)",
+          ...(minimal ? { borderRadius: 999 } : {}),
+          background: minimal ? "var(--qz-color-text)" : "var(--qz-color-primary)",
           transition: "width var(--qz-dur, 170ms) var(--qz-ease, ease)",
         }}
       />
+    </div>
+  );
+}
+
+// MQ — the Quizell "Question # N" eyebrow shown above the question under the
+// minimal chrome (replaces the classic pill trail). N = 1-indexed position among
+// the answered questions + the current one.
+function MinimalQuestionLabel({
+  doc,
+  path,
+  currentNodeId,
+}: {
+  doc: QuizDoc;
+  path: PathStep[];
+  currentNodeId: string | null;
+}) {
+  const tc = useChrome();
+  const node = currentNodeId ? doc.nodes.find((n) => n.id === currentNodeId) : null;
+  if (node?.type !== "question") return null;
+  return (
+    <div
+      style={{
+        width: "100%",
+        maxWidth: 640,
+        textAlign: "left",
+        fontSize: "1em",
+        fontWeight: 500,
+        color: "var(--qz-color-text)",
+        marginBottom: 22,
+        fontFamily: "var(--qz-font-body)",
+      }}
+    >
+      {tc("question_counter", { n: path.length + 1 })}
     </div>
   );
 }
@@ -2145,9 +2201,78 @@ function TooltipChip({ text, onReveal }: { text: string; onReveal: () => void })
   );
 }
 
+// MQ — the minimal chrome's bottom Back/Next nav row (Quizell). Back is an
+// outline pill (hidden, not removed, on the first question so layout is stable);
+// Next is a solid pill that commits the pending selection.
+function MinimalNav({
+  onBack,
+  canBack,
+  onNext,
+  nextEnabled,
+}: {
+  onBack?: () => void;
+  canBack?: boolean;
+  onNext: () => void;
+  nextEnabled: boolean;
+}) {
+  const tc = useChrome();
+  return (
+    <div
+      style={{
+        marginTop: 34,
+        display: "flex",
+        justifyContent: "space-between",
+        alignItems: "center",
+        gap: 12,
+      }}
+    >
+      <button
+        type="button"
+        onClick={onBack}
+        disabled={!canBack}
+        style={{
+          visibility: canBack ? "visible" : "hidden",
+          background: "transparent",
+          border: "1.5px solid var(--qz-color-text)",
+          color: "var(--qz-color-text)",
+          borderRadius: "var(--qz-radius)",
+          padding: "calc(var(--qz-pad) * 0.5) calc(var(--qz-pad) * 1.1)",
+          fontFamily: "var(--qz-font-body)",
+          fontSize: "var(--qz-base-size)",
+          fontWeight: 600,
+          cursor: canBack ? "pointer" : "default",
+        }}
+      >
+        {tc("back")}
+      </button>
+      <button
+        type="button"
+        onClick={onNext}
+        disabled={!nextEnabled}
+        style={{
+          background: "var(--qz-color-text)",
+          color: "var(--qz-color-bg)",
+          border: "1.5px solid var(--qz-color-text)",
+          borderRadius: "var(--qz-radius)",
+          padding: "calc(var(--qz-pad) * 0.5) calc(var(--qz-pad) * 1.5)",
+          fontFamily: "var(--qz-font-body)",
+          fontSize: "var(--qz-base-size)",
+          fontWeight: 600,
+          cursor: nextEnabled ? "pointer" : "default",
+          opacity: nextEnabled ? 1 : 0.45,
+        }}
+      >
+        {tc("next")}
+      </button>
+    </div>
+  );
+}
+
 function QuestionView({
   node,
   onAdvance,
+  onBack,
+  canBack,
   styles,
   tokens,
   onTooltipView,
@@ -2156,12 +2281,19 @@ function QuestionView({
 }: {
   node: Extract<QuizDoc["nodes"][number], { type: "question" }>;
   onAdvance: (answerIds: string[], handle: string | null) => void;
+  onBack?: () => void;
+  canBack?: boolean;
   styles: ReturnType<typeof stylesFor>;
   tokens: DesignTokensT;
   onTooltipView?: (answerId: string) => void;
   onInspect?: (target: InspectTarget) => void;
   inspectedTarget?: InspectTarget | null;
 }) {
+  // MQ — minimal chrome turns single-select into select-then-Next (a pending
+  // pick highlights; an explicit Next commits) + a Back/Next nav row. Classic
+  // keeps tap-to-advance. `minimal` gates every branch below.
+  const minimal = useContext(RuntimeChromeContext) === "minimal";
+  const [picked, setPicked] = useState<string | null>(null);
   const insp = (part: InspectPart, answerId?: string) =>
     inspectAttrs(onInspect, inspectedTarget, {
       nodeId: node.id,
@@ -2315,20 +2447,32 @@ function QuestionView({
             </div>
           ))}
         </div>
-        <button
-          style={{
-            ...styles.primaryBtn,
-            opacity: selectedIds.length === 0 || tooMany || tooFew ? 0.5 : 1,
-          }}
-          disabled={selectedIds.length === 0 || tooMany || tooFew}
-          onClick={() => {
-            const first = node.data.answers.find((a) => checked[a.id]);
-            onAdvance(selectedIds, first ? first.edge_handle_id : null);
-          }}
-        >
-          Next
-          {tooMany ? ` (max ${max})` : tooFew ? ` (choose ${min}+)` : ""}
-        </button>
+        {minimal ? (
+          <MinimalNav
+            onBack={onBack}
+            canBack={canBack}
+            onNext={() => {
+              const first = node.data.answers.find((a) => checked[a.id]);
+              onAdvance(selectedIds, first ? first.edge_handle_id : null);
+            }}
+            nextEnabled={selectedIds.length > 0 && !tooMany && !tooFew}
+          />
+        ) : (
+          <button
+            style={{
+              ...styles.primaryBtn,
+              opacity: selectedIds.length === 0 || tooMany || tooFew ? 0.5 : 1,
+            }}
+            disabled={selectedIds.length === 0 || tooMany || tooFew}
+            onClick={() => {
+              const first = node.data.answers.find((a) => checked[a.id]);
+              onAdvance(selectedIds, first ? first.edge_handle_id : null);
+            }}
+          >
+            Next
+            {tooMany ? ` (max ${max})` : tooFew ? ` (choose ${min}+)` : ""}
+          </button>
+        )}
       </div>
     );
   }
@@ -2523,6 +2667,10 @@ function QuestionView({
   }
 
   // single_select / image_tile (default fall-through)
+  const commitPicked = () => {
+    const a = node.data.answers.find((x) => x.id === picked);
+    if (a) onAdvance([a.id], a.edge_handle_id);
+  };
   return (
     <div style={styles.card}>
       <h2 style={styles.h2} {...insp("question_text")}>{node.data.text}</h2>
@@ -2530,18 +2678,33 @@ function QuestionView({
         <p style={{ ...styles.muted, fontSize: "0.85em", marginTop: -6 }}>{node.data.helper_text}</p>
       ) : null}
       <div style={answerGrid}>
-        {node.data.answers.map((a) => (
+        {node.data.answers.map((a) => {
+          const isPicked = minimal && picked === a.id;
+          return (
           <div key={a.id} style={{ position: "relative" }}>
           <button
-            style={styles.answerBtn}
+            style={
+              isPicked
+                ? { ...styles.answerBtn, boxShadow: "inset 0 0 0 2px var(--qz-color-text)" }
+                : styles.answerBtn
+            }
             {...insp("answer", a.id)}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.borderColor = "var(--qz-color-primary)";
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.borderColor = "#00000022";
-            }}
-            onClick={() => onAdvance([a.id], a.edge_handle_id)}
+            onMouseEnter={
+              minimal
+                ? undefined
+                : (e) => {
+                    e.currentTarget.style.borderColor = "var(--qz-color-primary)";
+                  }
+            }
+            onMouseLeave={
+              minimal
+                ? undefined
+                : (e) => {
+                    e.currentTarget.style.borderColor = "#00000022";
+                  }
+            }
+            // Minimal: tap selects (pending) then Next commits; classic auto-advances.
+            onClick={() => (minimal ? setPicked(a.id) : onAdvance([a.id], a.edge_handle_id))}
           >
             {a.video_url && (
               <video
@@ -2576,8 +2739,17 @@ function QuestionView({
             <TooltipChip text={a.tooltip_text} onReveal={() => onTooltipView?.(a.id)} />
           ) : null}
           </div>
-        ))}
+          );
+        })}
       </div>
+      {minimal ? (
+        <MinimalNav
+          onBack={onBack}
+          canBack={canBack}
+          onNext={commitPicked}
+          nextEnabled={picked !== null}
+        />
+      ) : null}
     </div>
   );
   // (typescript exhaustiveness assist — unused but satisfies the tokens prop)

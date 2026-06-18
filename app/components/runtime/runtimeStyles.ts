@@ -29,7 +29,14 @@ export function googleFontsUrl(families: string[]): string | null {
 export const stylesFor = (
   t: DesignTokensT,
   breakpoint: "desktop" | "mobile" = "mobile",
-) => ({
+  // MQ — runtime chrome. "classic" (default) returns today's card-on-grey styles
+  // byte-for-byte (Shopify regression guard). "minimal" returns the Quizell look:
+  // card-less centered content, big bold headline, grey answer chips (single
+  // column), no card shadow/border.
+  chrome: "classic" | "minimal" = "classic",
+) => {
+  const minimal = chrome === "minimal";
+  return ({
   page: {
     minHeight: "100vh",
     background: "#FAFAFA",
@@ -41,18 +48,30 @@ export const stylesFor = (
     fontFamily: "var(--qz-font-body)",
     color: "var(--qz-color-text)",
   } satisfies React.CSSProperties,
-  card: {
-    background: "var(--qz-color-bg)",
-    borderRadius: "var(--qz-radius)",
-    padding:
-      breakpoint === "desktop"
-        ? "calc(var(--qz-pad) * 2)"
-        : "calc(var(--qz-pad) * 1.6)",
-    boxShadow: "var(--qz-shadow)",
-    // Desktop widens the surface; mobile stays a comfortable reading column.
-    maxWidth: breakpoint === "desktop" ? 720 : 560,
-    width: "100%",
-  } satisfies React.CSSProperties,
+  card: minimal
+    ? ({
+        // Card-less: the question/result content sits directly on the quiz bg,
+        // vertically centered by .qz-runtime-page. Centered, comfortable column.
+        background: "transparent",
+        borderRadius: 0,
+        padding: breakpoint === "desktop" ? "8px 0" : "8px 0",
+        boxShadow: "none",
+        maxWidth: breakpoint === "desktop" ? 640 : 560,
+        width: "100%",
+        textAlign: "center" as const,
+      } satisfies React.CSSProperties)
+    : ({
+        background: "var(--qz-color-bg)",
+        borderRadius: "var(--qz-radius)",
+        padding:
+          breakpoint === "desktop"
+            ? "calc(var(--qz-pad) * 2)"
+            : "calc(var(--qz-pad) * 1.6)",
+        boxShadow: "var(--qz-shadow)",
+        // Desktop widens the surface; mobile stays a comfortable reading column.
+        maxWidth: breakpoint === "desktop" ? 720 : 560,
+        width: "100%",
+      } satisfies React.CSSProperties),
   primaryBtn: {
     ...buttonStyle(t),
     marginTop: 24,
@@ -63,19 +82,35 @@ export const stylesFor = (
     fontWeight: 600,
     cursor: "pointer",
   } satisfies React.CSSProperties,
-  answerBtn: {
-    textAlign: "left" as const,
-    background: "var(--qz-color-bg)",
-    border: "2px solid #00000022",
-    borderRadius: "var(--qz-radius)",
-    padding: "var(--qz-pad)",
-    fontSize: "var(--qz-base-size)",
-    fontFamily: "var(--qz-font-body)",
-    color: "var(--qz-color-text)",
-    cursor: "pointer",
-    transition: "border-color 150ms",
-    width: "100%",
-  } satisfies React.CSSProperties,
+  answerBtn: minimal
+    ? ({
+        // Quizell grey chip: filled surface, centered text, no visible border.
+        textAlign: "center" as const,
+        background: "var(--qz-color-surface)",
+        border: "1px solid transparent",
+        borderRadius: "var(--qz-radius)",
+        padding: "calc(var(--qz-pad) * 0.95) var(--qz-pad)",
+        fontSize: "var(--qz-base-size)",
+        fontFamily: "var(--qz-font-body)",
+        fontWeight: 500,
+        color: "var(--qz-color-text)",
+        cursor: "pointer",
+        transition: "background 150ms, box-shadow 150ms",
+        width: "100%",
+      } satisfies React.CSSProperties)
+    : ({
+        textAlign: "left" as const,
+        background: "var(--qz-color-bg)",
+        border: "2px solid #00000022",
+        borderRadius: "var(--qz-radius)",
+        padding: "var(--qz-pad)",
+        fontSize: "var(--qz-base-size)",
+        fontFamily: "var(--qz-font-body)",
+        color: "var(--qz-color-text)",
+        cursor: "pointer",
+        transition: "border-color 150ms",
+        width: "100%",
+      } satisfies React.CSSProperties),
   // A native <select> for the "dropdown" question type. Theme-matched (same
   // border/radius/font/colors as answerBtn) but INPUT-sized: the answer-card's
   // full var(--qz-pad) padding inflates a <select> to ~88px tall with a
@@ -108,10 +143,16 @@ export const stylesFor = (
   // Answer cards and result products go 2-up on desktop, 1-up on mobile — so a
   // wide viewport fills with content instead of a narrow column + whitespace.
   answerGrid: {
-    marginTop: 20,
+    marginTop: minimal ? 28 : 20,
     display: "grid",
-    gap: 12,
-    gridTemplateColumns: breakpoint === "desktop" ? "repeat(2, minmax(0, 1fr))" : "1fr",
+    gap: minimal ? 14 : 12,
+    // Minimal stacks answers in a single centered column (Quizell); classic goes
+    // 2-up on desktop.
+    gridTemplateColumns: minimal
+      ? "1fr"
+      : breakpoint === "desktop"
+        ? "repeat(2, minmax(0, 1fr))"
+        : "1fr",
   } satisfies React.CSSProperties,
   productGrid: {
     display: "grid",
@@ -133,18 +174,33 @@ export const stylesFor = (
     lineHeight: 1.2,
     color: "var(--qz-color-text)",
   } satisfies React.CSSProperties,
-  h2: {
-    margin: 0,
-    fontSize: "var(--qz-h2-size)",
-    fontFamily: "var(--qz-font-heading)",
-    color: "var(--qz-color-text)",
-  } satisfies React.CSSProperties,
+  h2: minimal
+    ? ({
+        // The big bold centered question headline — the Quizell focal point.
+        margin: 0,
+        fontSize:
+          breakpoint === "desktop"
+            ? "calc(var(--qz-h2-size) * 1.3)"
+            : "calc(var(--qz-h2-size) * 1.12)",
+        fontFamily: "var(--qz-font-heading)",
+        fontWeight: 700,
+        lineHeight: 1.15,
+        color: "var(--qz-color-text)",
+        textAlign: "center" as const,
+      } satisfies React.CSSProperties)
+    : ({
+        margin: 0,
+        fontSize: "var(--qz-h2-size)",
+        fontFamily: "var(--qz-font-heading)",
+        color: "var(--qz-color-text)",
+      } satisfies React.CSSProperties),
   muted: {
     marginTop: 12,
     color: "var(--qz-color-muted)",
     fontSize: "calc(var(--qz-base-size) * 1.05)",
   } satisfies React.CSSProperties,
-});
+  });
+};
 
 export type RuntimeStyles = ReturnType<typeof stylesFor>;
 

@@ -77,6 +77,10 @@ export const CHROME_TOKENS = {
   invite_friend: "🤝 Compare with a friend",
   invite_copied: "Link copied — send it to a friend ✓",
   see_comparison: "See how you compare →",
+  // MQ — minimal "Quizell" chrome: explicit Back/Next nav + the question counter.
+  back: "Back",
+  next: "Next",
+  question_counter: "Question # {n}",
 } as const;
 
 export type ChromeToken = keyof typeof CHROME_TOKENS;
