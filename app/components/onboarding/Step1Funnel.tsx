@@ -42,6 +42,7 @@ export interface FunnelData {
   minGoalChars: number;
   productCount: number;
   identitySummary: string | null;
+  suggestedGoal: string;
   detection: {
     dimension: string;
     rationale: string;
@@ -384,8 +385,13 @@ function GoalStage({
   fetcher: ReturnType<typeof useFetcher<ActionResult>>;
   pendingIntent: string | null;
 }) {
-  const [goal, setGoal] = useState(data.goal?.goal_text ?? "");
+  // Pre-fill the goal with the store-derived suggestion (built-in templates +
+  // brand identity) so this stage is an approval, not a blank box. A previously
+  // saved goal always wins over the suggestion.
+  const [goal, setGoal] = useState(data.goal?.goal_text || data.suggestedGoal || "");
   const [struggle, setStruggle] = useState(data.goal?.struggle_text ?? "");
+  const showingSuggestion =
+    !data.goal?.goal_text && goal.length > 0 && goal.trim() === data.suggestedGoal.trim();
   const goalLen = goal.trim().length;
   const met = goalLen >= data.minGoalChars;
   const generating = pendingIntent === "save-goal";
@@ -454,6 +460,15 @@ function GoalStage({
               : `${goalLen}/${data.minGoalChars} characters — a sentence or two helps the AI.`
           }
         />
+        {showingSuggestion ? (
+          <div
+            className="qz-dim"
+            style={{ fontSize: 12, marginTop: -4, display: "flex", alignItems: "center", gap: 6 }}
+          >
+            <span aria-hidden>✨</span>
+            <span>Pre-filled from your store — edit it or keep it as-is.</span>
+          </div>
+        ) : null}
 
         <QzField
           label="What do customers struggle with when choosing? (optional)"

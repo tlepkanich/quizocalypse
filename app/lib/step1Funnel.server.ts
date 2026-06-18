@@ -4,6 +4,7 @@ import prisma from "../db.server";
 import { Quiz, BuildSession, DesignDials, RecDefaults } from "./quizSchema";
 import { buildSeedQuiz } from "./seedQuiz";
 import { parseBrandIdentitySafe } from "./brandIdentity";
+import { suggestQuizGoal } from "./goalSuggest";
 import { detectGroupingDimension } from "./groupingDetect";
 import { recordIdentitySignals } from "./brandIdentityBuild.server";
 import {
@@ -121,13 +122,25 @@ export async function loadStep1FunnelData(shop: FunnelShop, quizId: string | und
     collections.map((c) => ({ collectionId: c.collectionId, title: c.title })),
   );
 
+  // Pre-computed goal suggestion so the goal stage is an approval, not a blank
+  // box — derived from the brand identity + confirmed (else detected) groups,
+  // mapped to the built-in templates' intent. Deterministic, no AI call.
+  const identitySummary = parseBrandIdentitySafe(shopRow?.brandIdentity)?.summary ?? null;
+  const suggestedGoal = suggestQuizGoal({
+    identitySummary,
+    groupNames: categories.length
+      ? categories.map((c) => c.name)
+      : detect.proposed.map((g) => g.name),
+  });
+
   return {
     quizId: quiz.id,
     name: quiz.name,
     stage: session.stage,
     minGoalChars: MIN_GOAL_CHARS,
     productCount: products.length,
-    identitySummary: parseBrandIdentitySafe(shopRow?.brandIdentity)?.summary ?? null,
+    identitySummary,
+    suggestedGoal,
     detection: {
       dimension: detect.dimension,
       rationale: detect.rationale,
