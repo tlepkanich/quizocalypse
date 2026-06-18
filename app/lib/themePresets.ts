@@ -164,3 +164,27 @@ export const THEME_PRESETS: ThemePreset[] = [
 export function getPreset(id: string): ThemePreset | undefined {
   return THEME_PRESETS.find((p) => p.id === id);
 }
+
+// MQ — the default theme for standalone "Quizell"-style quizzes: clean B&W, bold
+// Inter, flat (no card shadow — the minimal chrome is card-less anyway), one
+// cobalt accent for prices/links. New standalone quizzes seed with this so the
+// minimal chrome reads as the Quizell reference (white bg, black text/chips)
+// rather than the warm Linen house theme. Merchants can re-theme per quiz.
+export const STANDALONE_MINIMAL_TOKENS: DesignTokensT = {
+  colors: {
+    primary: "#111111",
+    secondary: "#4B5563",
+    accent: "#2563EB",
+    background: "#FFFFFF",
+    text: "#0F1115",
+    muted: "#6B7280",
+  },
+  typography: {
+    heading: { family: "Inter", source: "google", weight: 700 },
+    body: { family: "Inter", source: "google", base_size: 16, scale_ratio: 1.2 },
+  },
+  radius: "rounded",
+  button_style: "filled",
+  spacing: "normal",
+  shadow: "none",
+};

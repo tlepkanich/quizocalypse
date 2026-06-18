@@ -887,6 +887,8 @@ export function QuizRuntime(props: QuizRuntimeProps) {
           quizId={quizId}
           inspect={(part) => insp({ nodeId: currentNode.id, part })}
           sessionId={sessionIdRef.current}
+          onBack={() => gotoStep(path.length - 1)}
+          canBack={path.length > 0}
           onSubmit={(contact) => {
             if (contact?.email) {
               contactRef.current = contact;
@@ -2856,6 +2858,8 @@ function EmailGateView({
   quizId,
   sessionId,
   onSubmit,
+  onBack,
+  canBack,
   inspect,
 }: {
   node: Extract<QuizDoc["nodes"][number], { type: "email_gate" }>;
@@ -2863,9 +2867,12 @@ function EmailGateView({
   quizId: string;
   sessionId: string;
   onSubmit: (contact?: { email?: string; name?: string; phone?: string }) => void;
+  onBack?: () => void;
+  canBack?: boolean;
   inspect?: (part: InspectPart) => React.HTMLAttributes<HTMLElement>;
 }) {
   const tc = useChrome();
+  const minimal = useContext(RuntimeChromeContext) === "minimal";
   const isPreviewMode = useContext(RuntimePreviewContext);
   const [email, setEmail] = useState("");
   const [name, setName] = useState("");
@@ -2901,11 +2908,14 @@ function EmailGateView({
     }
   }
   const inputStyle: React.CSSProperties = {
-    padding: "12px 14px",
+    padding: minimal ? "15px 16px" : "12px 14px",
     borderRadius: "var(--qz-radius)",
-    border: "1px solid #00000022",
+    border: minimal
+      ? "1.5px solid color-mix(in srgb, var(--qz-color-text) 22%, transparent)"
+      : "1px solid #00000022",
     fontSize: "var(--qz-base-size)",
     fontFamily: "var(--qz-font-body)",
+    ...(minimal ? { textAlign: "left" as const, background: "var(--qz-color-bg)" } : {}),
   };
   return (
     <div style={styles.card}>
@@ -2942,28 +2952,61 @@ function EmailGateView({
           />
         )}
       </div>
-      <button
-        style={{ ...styles.primaryBtn, opacity: valid && !submitting ? 1 : 0.5 }}
-        disabled={!valid || submitting}
-        onClick={handleSubmit}
-      >
-        {submitting ? "…" : tc("continue")}
-      </button>
-      {node.data.skip_allowed && (
-        <button
-          onClick={() => onSubmit()}
-          style={{
-            background: "none",
-            border: "none",
-            color: "var(--qz-color-muted)",
-            fontSize: 14,
-            cursor: "pointer",
-            marginTop: 12,
-            padding: 0,
-          }}
-        >
-          {tc("skip")}
-        </button>
+      {minimal ? (
+        <>
+          {node.data.skip_allowed && (
+            <div style={{ textAlign: "center", marginTop: 24 }}>
+              <button
+                onClick={() => onSubmit()}
+                style={{
+                  background: "none",
+                  border: "none",
+                  color: "var(--qz-color-text)",
+                  fontWeight: 700,
+                  fontSize: "var(--qz-base-size)",
+                  textDecoration: "underline",
+                  cursor: "pointer",
+                  padding: 0,
+                  fontFamily: "var(--qz-font-body)",
+                }}
+              >
+                {tc("skip")}
+              </button>
+            </div>
+          )}
+          <MinimalNav
+            onBack={onBack}
+            canBack={canBack}
+            onNext={handleSubmit}
+            nextEnabled={valid && !submitting}
+          />
+        </>
+      ) : (
+        <>
+          <button
+            style={{ ...styles.primaryBtn, opacity: valid && !submitting ? 1 : 0.5 }}
+            disabled={!valid || submitting}
+            onClick={handleSubmit}
+          >
+            {submitting ? "…" : tc("continue")}
+          </button>
+          {node.data.skip_allowed && (
+            <button
+              onClick={() => onSubmit()}
+              style={{
+                background: "none",
+                border: "none",
+                color: "var(--qz-color-muted)",
+                fontSize: 14,
+                cursor: "pointer",
+                marginTop: 12,
+                padding: 0,
+              }}
+            >
+              {tc("skip")}
+            </button>
+          )}
+        </>
       )}
     </div>
   );
@@ -3630,6 +3673,9 @@ function ResultView({
   const tc = useChrome();
   const isPreviewMode = useContext(RuntimePreviewContext);
   const platform = useContext(RuntimePlatformContext);
+  // MQ — minimal chrome shows recommendations as a row of vertical cards
+  // (Quizell): auto-fit fills 1–3 columns by available width.
+  const minimal = useContext(RuntimeChromeContext) === "minimal";
   // Fire completion + view events once when the result first renders, and
   // persist the server-side session (Dev Spec §7.2) — but never in preview.
   useEffect(() => {
@@ -3687,7 +3733,13 @@ function ResultView({
           marginTop: bare && !discountLabel ? 0 : 20,
           ...(splitLayout
             ? { display: "flex", flexDirection: "column", gap: 14 }
-            : styles.productGrid),
+            : minimal
+              ? {
+                  display: "grid",
+                  gap: 16,
+                  gridTemplateColumns: "repeat(auto-fit, minmax(190px, 1fr))",
+                }
+              : styles.productGrid),
         }}
       >
         {recs.length === 0 && (
@@ -3701,7 +3753,7 @@ function ResultView({
             key={r.product_id}
             product={r}
             position={idx}
-            vertical={splitLayout}
+            vertical={splitLayout || minimal}
             ctaLabel={ctaLabel}
             href={productHref(r, shopDomain, platform)}
             shopDomain={shopDomain}

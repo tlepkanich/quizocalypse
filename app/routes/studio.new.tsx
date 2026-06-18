@@ -7,6 +7,7 @@ import prisma from "../db.server";
 import { buildSeedQuiz } from "../lib/seedQuiz";
 import { buildDemoQuiz, DEMO_QUIZ_NAME } from "../lib/demoQuiz";
 import { buildTemplateQuiz, TEMPLATE_LIST, isTemplateId } from "../lib/quizTemplates";
+import { STANDALONE_MINIMAL_TOKENS } from "../lib/themePresets";
 import { QzPage, QzPageHeader, QzCard, QzButton, QzField, QzInput, QzBanner } from "../components/qz";
 
 // Standalone "New quiz" — Experiences E2: the experience TYPE comes first
@@ -86,7 +87,9 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         shopId: shop.id,
         name: name || BLANK_NAME_PLACEHOLDER[xtype],
         status: "draft",
-        draftJson: buildSeedQuiz(name, xtype) as never,
+        // Standalone quizzes default to the minimal "Quizell" theme (the minimal
+        // chrome reads B&W); merchants can re-theme per quiz in the Theme panel.
+        draftJson: { ...buildSeedQuiz(name, xtype), design_tokens: STANDALONE_MINIMAL_TOKENS } as never,
       },
     });
     return redirect(`/studio/${quiz.id}?step=1`);
@@ -99,7 +102,14 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     }
     const { doc, name } = buildTemplateQuiz(templateId, fb);
     const quiz = await prisma.quiz.create({
-      data: { shopId: shop.id, name, status: "draft", draftJson: doc as never },
+      // Minimal "Quizell" theme over the template's structure (questions/results
+      // stay; only the palette/typography flips to clean B&W).
+      data: {
+        shopId: shop.id,
+        name,
+        status: "draft",
+        draftJson: { ...doc, design_tokens: STANDALONE_MINIMAL_TOKENS } as never,
+      },
     });
     return redirect(`/studio/${quiz.id}?step=1`);
   }
