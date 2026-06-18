@@ -205,7 +205,7 @@ export function tokensToCssVars(
   // light-grey on light themes AND a soft raised panel on dark ones. Inert for the
   // classic chrome, which never consumes --qz-color-surface.
   const surface = t.colors?.surface ?? `color-mix(in srgb, ${text} 6%, ${bg})`;
-  return {
+  const vars: Record<string, string> = {
     "--qz-color-primary": t.colors?.primary ?? "#5563DE",
     "--qz-color-secondary": t.colors?.secondary ?? "#2C7A4B",
     "--qz-color-accent": t.colors?.accent ?? "#BB6622",
@@ -222,6 +222,14 @@ export function tokensToCssVars(
     "--qz-pad": pad,
     "--qz-shadow": shadowCss,
   };
+  // QP-2 — page padding (Quizell's "Page Paddings"). Only emitted when explicitly
+  // set, so existing quizzes never carry the var and the runtime's `var(…, 24px)`
+  // fallback keeps them byte-identical.
+  if (t.page_padding) {
+    const p = t.page_padding;
+    vars["--qz-page-pad"] = `${p.top}px ${p.right}px ${p.bottom}px ${p.left}px`;
+  }
+  return vars;
 }
 
 // WCAG 2.x contrast ratio. Returns a value between 1 and 21.

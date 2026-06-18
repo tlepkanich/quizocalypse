@@ -44,7 +44,9 @@ export const stylesFor = (
     flexDirection: "column" as const,
     alignItems: "center",
     justifyContent: "center",
-    padding: 24,
+    // QP-2 — Quizell "Page Paddings". The var is only present when a merchant sets
+    // page_padding (tokensToCssVars); absent → 24px, byte-identical to before.
+    padding: "var(--qz-page-pad, 24px)",
     fontFamily: "var(--qz-font-body)",
     color: "var(--qz-color-text)",
   } satisfies React.CSSProperties,

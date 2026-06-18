@@ -26,6 +26,7 @@ import { CssTab } from "./panels/CssTab";
 import { BuilderSettings } from "./BuilderSettings";
 import { BuilderThemePanel } from "./BuilderThemePanel";
 import { BuilderBlocksPalette } from "./BuilderBlocksPalette";
+import { BuilderPageSettings } from "./BuilderPageSettings";
 import { insertModule } from "./studioDoc";
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -559,6 +560,9 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
             <BuilderBlocksPalette doc={doc} node={selectedNode} commit={commit} />
           ) : (
             <>
+              {/* QP-2 — Quizell's Page Settings (background color + page paddings),
+                  quiz-level, above the step list. */}
+              <BuilderPageSettings doc={doc} commit={commit} />
               <FlowRail
                 doc={doc}
                 ordered={ordered}

@@ -596,6 +596,18 @@ export const DesignTokens = z
     // Back/Next + vertical product row. Absent → the runtime defaults by platform
     // (standalone → minimal, shopify → classic), so Shopify /q is untouched.
     chrome: z.enum(["classic", "minimal"]).optional(),
+    // QP-2 — per-quiz page padding (Quizell's "Page Paddings"): the inset in px
+    // from the viewport edge to the centered quiz content. Absent → the runtime's
+    // default 24px (every existing quiz byte-identical via the var fallback); set →
+    // emits `--qz-page-pad` on the runtime root, consumed by `.qz-runtime-page`.
+    page_padding: z
+      .object({
+        top: z.number().min(0).max(240),
+        right: z.number().min(0).max(240),
+        bottom: z.number().min(0).max(240),
+        left: z.number().min(0).max(240),
+      })
+      .optional(),
   })
   .partial();
 export type DesignTokens = z.infer<typeof DesignTokens>;

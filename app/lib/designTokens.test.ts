@@ -58,6 +58,16 @@ describe("tokensToCssVars surface (MQ minimal chrome answer chips)", () => {
   });
 });
 
+describe("tokensToCssVars page padding (QP-2)", () => {
+  it("does NOT emit --qz-page-pad when absent (existing quizzes byte-identical)", () => {
+    expect("--qz-page-pad" in tokensToCssVars({})).toBe(false);
+  });
+  it("emits a top/right/bottom/left shorthand when set", () => {
+    const vars = tokensToCssVars({ page_padding: { top: 0, right: 32, bottom: 32, left: 32 } });
+    expect(vars["--qz-page-pad"]).toBe("0px 32px 32px 32px");
+  });
+});
+
 describe("fluid typography (Unified P7)", () => {
   const tok = (base: number) => ({ typography: { body: { family: "Inter", base_size: base, scale_ratio: 1.25 } } });
 

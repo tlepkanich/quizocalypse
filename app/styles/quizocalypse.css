@@ -935,3 +935,42 @@ body[data-qz] ::selection { background: var(--qz-ink); color: var(--qz-cream); }
   transition: border-color var(--qz-dur-fast) var(--qz-ease), color var(--qz-dur-fast) var(--qz-ease);
 }
 .qz-film-add:hover { border-color: var(--qz-accent); color: var(--qz-accent); }
+
+/* QP-2 — Page Settings panel (Editor → Settings sub-tab): background color + the
+   Quizell page-paddings cross. */
+.qz-page-settings { display: flex; flex-direction: column; gap: 14px; padding: 14px; }
+.qz-ps-title { font-size: 13px; font-weight: 700; color: var(--qz-ink); }
+.qz-ps-field { display: flex; flex-direction: column; gap: 7px; }
+.qz-ps-label { font-size: 12px; font-weight: 600; color: var(--qz-ink); }
+.qz-ps-label-row { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.qz-ps-note { font-size: 11px; color: var(--qz-ink-4); }
+.qz-ps-color {
+  display: flex; align-items: center; gap: 8px;
+  border: 1px solid var(--qz-rule); border-radius: 9px; padding: 5px 8px; background: var(--qz-paper);
+}
+.qz-ps-color input[type="color"] {
+  width: 28px; height: 28px; padding: 0; flex: 0 0 auto; cursor: pointer;
+  border: 1px solid var(--qz-rule); border-radius: 6px; background: none;
+}
+.qz-ps-color input[type="text"] {
+  flex: 1 1 auto; min-width: 0; border: none; background: none; outline: none;
+  font: inherit; font-size: 13px; color: var(--qz-ink); font-variant-numeric: tabular-nums;
+}
+.qz-ps-pad {
+  display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px;
+  align-items: center; justify-items: center;
+  padding: 12px; background: var(--qz-cream); border: 1px solid var(--qz-rule); border-radius: 10px;
+}
+.qz-ps-pad-input {
+  width: 54px; height: 30px; text-align: center; font: inherit; font-size: 12.5px;
+  border: 1px solid var(--qz-rule); border-radius: 7px; background: var(--qz-paper); color: var(--qz-ink);
+  font-variant-numeric: tabular-nums; -moz-appearance: textfield;
+}
+.qz-ps-pad-input::-webkit-outer-spin-button,
+.qz-ps-pad-input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+.qz-ps-pad-input:focus { border-color: var(--qz-accent); outline: none; }
+.qz-ps-pad-top { grid-column: 2; grid-row: 1; }
+.qz-ps-pad-left { grid-column: 1; grid-row: 2; }
+.qz-ps-pad-mid { grid-column: 2; grid-row: 2; width: 100%; height: 30px; border: 1px dashed var(--qz-rule); border-radius: 6px; }
+.qz-ps-pad-right { grid-column: 3; grid-row: 2; }
+.qz-ps-pad-bottom { grid-column: 2; grid-row: 3; }
