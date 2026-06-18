@@ -865,8 +865,14 @@ body[data-qz] ::selection { background: var(--qz-ink); color: var(--qz-cream); }
 .qz-builder-stage { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; background: var(--qz-cream-2); }
 /* QB-8 — slim validation/publish notices above the canvas; collapses to nothing
    when there's nothing to show, so the canvas is just the live quiz. */
-.qz-builder-notices { flex: 0 0 auto; padding: 12px 16px 0; }
+.qz-builder-notices { flex: 0 0 auto; padding: 14px 18px 0; display: flex; flex-direction: column; gap: 10px; }
 .qz-builder-notices:empty { display: none; }
+/* QP-4 — compact, flat validation/suggestion strips so the canvas reads clean
+   and the preview card sits high (the shared .qz-banner stays heavier elsewhere,
+   e.g. the brand-identity screens). */
+.qz-builder-notices .qz-banner { padding: 10px 13px; gap: 11px; border-radius: 11px; box-shadow: none; }
+.qz-builder-notices .qz-banner-title { font-size: 13px; }
+.qz-builder-notices .qz-banner-body { font-size: 12.5px; }
 .qz-builder-settings { flex: 1 1 auto; min-width: 0; overflow-y: auto; background: var(--qz-cream); }
 /* QB-3 — full-width Settings: a top-tab bar (Product Match · Jump Logic · …). */
 .qz-settings-head {
@@ -971,15 +977,17 @@ body[data-qz] ::selection { background: var(--qz-ink); color: var(--qz-cream); }
   padding: 12px; background: var(--qz-cream); border: 1px solid var(--qz-rule); border-radius: 10px;
 }
 .qz-ps-pad-input {
-  width: 54px; height: 30px; text-align: center; font: inherit; font-size: 12.5px;
-  border: 1px solid var(--qz-rule); border-radius: 7px; background: var(--qz-paper); color: var(--qz-ink);
+  width: 56px; height: 34px; text-align: center; font: inherit; font-size: 13px; font-weight: 500;
+  border: 1px solid var(--qz-rule); border-radius: 8px; background: var(--qz-paper); color: var(--qz-ink);
   font-variant-numeric: tabular-nums; -moz-appearance: textfield;
+  transition: border-color var(--qz-dur-fast) var(--qz-ease);
 }
 .qz-ps-pad-input::-webkit-outer-spin-button,
 .qz-ps-pad-input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
-.qz-ps-pad-input:focus { border-color: var(--qz-accent); outline: none; }
+.qz-ps-pad-input:hover { border-color: var(--qz-ink-3); }
+.qz-ps-pad-input:focus { border-color: var(--qz-accent); outline: none; box-shadow: 0 0 0 3px var(--qz-accent-tint); }
 .qz-ps-pad-top { grid-column: 2; grid-row: 1; }
 .qz-ps-pad-left { grid-column: 1; grid-row: 2; }
-.qz-ps-pad-mid { grid-column: 2; grid-row: 2; width: 100%; height: 30px; border: 1px dashed var(--qz-rule); border-radius: 6px; }
+.qz-ps-pad-mid { grid-column: 2; grid-row: 2; width: 100%; height: 34px; border: 1px dashed var(--qz-rule); border-radius: 7px; }
 .qz-ps-pad-right { grid-column: 3; grid-row: 2; }
 .qz-ps-pad-bottom { grid-column: 2; grid-row: 3; }
