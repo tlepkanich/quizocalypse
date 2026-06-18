@@ -104,7 +104,26 @@ for (const q of QUIZZES) {
           )
           .first();
         if (!(await action.count()) || !(await action.isEnabled().catch(() => false))) break;
+        const headlineSel = ".qz-runtime-content h1, .qz-runtime-content h2";
+        // Short timeout: a step may legitimately have no h1/h2 (e.g. an empty
+        // intro headline) — without it, textContent() blocks the whole action
+        // timeout waiting for an element that never appears.
+        const readHeadline = () =>
+          page.locator(headlineSel).first().textContent({ timeout: 800 }).catch(() => null);
+        const before = await readHeadline();
         await action.click();
+        await page.waitForTimeout(300);
+        // MQ minimal chrome: single-select is select-then-Next — clicking an
+        // answer only marks a pending pick. If the step didn't change, commit it
+        // with the explicit Next pill. (Classic auto-advances, so the headline
+        // already changed and this is skipped.)
+        const after = await readHeadline();
+        if (after === before) {
+          const next = page.getByRole("button", { name: /^next$/i }).first();
+          if ((await next.count()) && (await next.isEnabled().catch(() => false))) {
+            await next.click();
+          }
+        }
         await page.waitForTimeout(450);
         await shot(`${i + 2}-step`);
         await checkSanity(`step${i + 1}`);
