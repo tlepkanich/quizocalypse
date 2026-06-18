@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { normalizeHex, mergeHexIntoTokens, tokensToCssVars } from "./designTokens";
+import { normalizeHex, mergeHexIntoTokens, tokensToCssVars, resolveDesignTokens } from "./designTokens";
 
 describe("normalizeHex", () => {
   it("accepts #rrggbb and #rgb (with/without #), lowercased + expanded", () => {
@@ -70,6 +70,12 @@ describe("tokensToCssVars page padding (QP-2)", () => {
     expect(vars["--qz-pp-right"]).toBe("32px");
     expect(vars["--qz-pp-bottom"]).toBe("32px");
     expect(vars["--qz-pp-left"]).toBe("16px");
+  });
+  it("resolveDesignTokens CARRIES page_padding through (the per-field-merge trap)", () => {
+    const resolved = resolveDesignTokens(null, { page_padding: { top: 96, right: 48, bottom: 48, left: 48 } });
+    expect(resolved.page_padding).toEqual({ top: 96, right: 48, bottom: 48, left: 48 });
+    // …and it reaches the CSS vars after resolution (the full runtime chain).
+    expect(tokensToCssVars(resolved)["--qz-pp-top"]).toBe("96px");
   });
 });
 

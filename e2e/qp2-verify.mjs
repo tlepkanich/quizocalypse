@@ -19,46 +19,64 @@ const ids = await page.evaluate(() =>
 const quizId = Array.from(new Set(ids))[0];
 console.log("QUIZ:", quizId);
 
+// Load the builder; pull the draft doc out of the Remix loader data.
 await page.goto(`${BASE}/studio/${quizId}`, { waitUntil: "networkidle", timeout: 30000 });
-await page.waitForTimeout(1200);
+await page.waitForTimeout(800);
+const doc = await page.evaluate(() => {
+  const ld = window.__remixContext?.state?.loaderData ?? {};
+  for (const k of Object.keys(ld)) {
+    const v = ld[k];
+    if (v && typeof v === "object") {
+      if (Array.isArray(v.nodes)) return v;
+      if (v.doc && Array.isArray(v.doc.nodes)) return v.doc;
+      if (v.data?.doc && Array.isArray(v.data.doc.nodes)) return v.data.doc;
+    }
+  }
+  return null;
+});
+if (!doc) {
+  console.log("COULD NOT EXTRACT DOC from loaderData keys:", await page.evaluate(() => Object.keys(window.__remixContext?.state?.loaderData ?? {})));
+  await browser.close();
+  process.exit(1);
+}
+const origPad = doc.design_tokens?.page_padding ?? null;
+console.log("DOC ok — nodes:", doc.nodes.length, "| original page_padding:", JSON.stringify(origPad));
 
-// Ensure Editor tool + Settings sub-tab are active so Page Settings is visible.
-await page.getByRole("button", { name: /^Settings$/ }).first().click().catch(() => {});
-await page.waitForSelector(".qz-page-settings", { timeout: 8000 }).catch(() => {});
+// Set a distinctive page_padding and PUT it through the autosave contract.
+const PP = { top: 96, right: 48, bottom: 48, left: 48 };
+const patched = { ...doc, design_tokens: { ...(doc.design_tokens ?? {}), page_padding: PP } };
+const put = await page.request.put(`${BASE}/studio/${quizId}`, {
+  data: { doc: patched },
+  headers: { "content-type": "application/json" },
+});
+console.log("PUT page_padding:", put.status());
 
-const struct = await page.evaluate(() => {
-  const ps = document.querySelector(".qz-page-settings");
+// Reload and measure the live runtime page wrapper in the canvas.
+await page.goto(`${BASE}/studio/${quizId}`, { waitUntil: "networkidle", timeout: 30000 });
+await page.waitForSelector(".qz-runtime-page", { timeout: 12000 }).catch(() => {});
+await page.waitForTimeout(800);
+const measured = await page.evaluate(() => {
+  const el = document.querySelector(".qz-runtime-page");
+  const root = document.querySelector(".qz-runtime-root, [class*='qz-bp-']") || el?.closest("[style*='--qz']");
+  const cs = el ? getComputedStyle(el) : null;
   return {
-    panel: !!ps,
-    padInputs: document.querySelectorAll(".qz-ps-pad-input").length,
-    colorInput: !!document.querySelector('.qz-ps-color input[type="color"]'),
-    hexInput: !!document.querySelector("#qz-ps-bg"),
-    title: document.querySelector(".qz-ps-title")?.textContent,
-    pagePadTopBefore: (() => {
-      const el = document.querySelector(".qz-runtime-page");
-      return el ? getComputedStyle(el).paddingTop : null;
-    })(),
+    found: !!el,
+    paddingTop: cs?.paddingTop,
+    paddingLeft: cs?.paddingLeft,
+    paddingRight: cs?.paddingRight,
+    ppTopVar: root ? getComputedStyle(root).getPropertyValue("--qz-pp-top").trim() : "(no root)",
   };
 });
-console.log("STRUCTURE:", JSON.stringify(struct));
+console.log("MEASURED:", JSON.stringify(measured), "(expect paddingTop 96px, paddingLeft 48px)");
 
-const psEl = await page.$(".qz-page-settings");
-if (psEl) await psEl.screenshot({ path: "/tmp/qp2-panel.png" });
-
-// Functional: set the TOP padding to 80 and confirm the live preview's
-// .qz-runtime-page paddingTop follows (input → commit → --qz-page-pad → runtime).
-const topInput = await page.$(".qz-ps-pad-top");
-if (topInput) {
-  await topInput.fill("80");
-  await topInput.dispatchEvent("change");
-  await page.waitForTimeout(900);
-}
-const after = await page.evaluate(() => {
-  const el = document.querySelector(".qz-runtime-page");
-  return el ? getComputedStyle(el).paddingTop : null;
+// Restore the original padding (clean the test quiz).
+const restored = { ...doc, design_tokens: { ...(doc.design_tokens ?? {}) } };
+if (origPad) restored.design_tokens.page_padding = origPad;
+else delete restored.design_tokens.page_padding;
+const back = await page.request.put(`${BASE}/studio/${quizId}`, {
+  data: { doc: restored },
+  headers: { "content-type": "application/json" },
 });
-console.log("PAGE-PAD paddingTop AFTER set-top-80:", after, "(expect 80px)");
+console.log("RESTORE page_padding:", back.status());
 
-await page.screenshot({ path: "/tmp/qp2-builder.png" });
-console.log("WROTE /tmp/qp2-panel.png + /tmp/qp2-builder.png");
 await browser.close();

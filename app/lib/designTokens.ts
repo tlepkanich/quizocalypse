@@ -110,6 +110,9 @@ export function resolveDesignTokens(
     if (layer.shadow) out.shadow = layer.shadow;
     // Boolean — checked explicitly so a layer can also turn the split OFF.
     if (layer.result_split !== undefined) out.result_split = layer.result_split;
+    // QP-2 — carry page_padding through resolution (a per-field merge drops any
+    // field not listed here, the same trap result_split hit). Last layer wins.
+    if (layer.page_padding) out.page_padding = layer.page_padding;
   }
   return out;
 }
