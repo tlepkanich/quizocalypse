@@ -839,6 +839,22 @@ body[data-qz] ::selection { background: var(--qz-ink); color: var(--qz-cream); }
 }
 .qz-icon-btn:hover:not(:disabled) { background: var(--qz-rule-2); color: var(--qz-ink); }
 .qz-icon-btn:disabled { opacity: .35; cursor: default; }
+/* Polish — a fast, on-brand tooltip for the builder's icon-only controls (replaces
+   the slow, unstyled native title). Drops below the control; the top bar is
+   overflow:visible so it never clips. Shows on hover AND keyboard focus. */
+.qz-tip { position: relative; }
+.qz-tip::after {
+  content: attr(data-tip);
+  position: absolute; top: calc(100% + 7px); left: 50%;
+  transform: translateX(-50%) translateY(-3px);
+  padding: 4px 8px; border-radius: 6px;
+  background: var(--qz-ink); color: var(--qz-paper);
+  font-size: 11.5px; font-weight: 500; line-height: 1.2; white-space: nowrap; letter-spacing: .01em;
+  pointer-events: none; opacity: 0; z-index: 60;
+  transition: opacity var(--qz-dur-fast) var(--qz-ease), transform var(--qz-dur-fast) var(--qz-ease);
+}
+.qz-tip:hover::after,
+.qz-tip:focus-visible::after { opacity: 1; transform: translateX(-50%) translateY(0); }
 /* QB-4b — the Editor "Blocks" palette tiles. */
 .qz-block-tile {
   appearance: none; cursor: pointer; font: inherit; width: 100%;

@@ -286,8 +286,9 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
         <button
           key={d.bp}
           type="button"
+          className="qz-tip"
           aria-pressed={breakpointForWidth(frameW) === d.bp}
-          title={d.label}
+          data-tip={`${d.label} preview`}
           aria-label={d.label}
           onClick={() => setFrameW(d.w)}
           style={{ display: "inline-flex", alignItems: "center", padding: "5px 12px" }}
@@ -302,18 +303,18 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
 
   const zoomStepper = (
     <div className="qz-row" style={{ gap: 2, alignItems: "center" }}>
-      <button type="button" className="qz-icon-btn" aria-label="Zoom out" onClick={() => setZoom((z) => Math.max(50, z - 10))}>−</button>
+      <button type="button" className="qz-icon-btn qz-tip" data-tip="Zoom out" aria-label="Zoom out" onClick={() => setZoom((z) => Math.max(50, z - 10))}>−</button>
       <span className="qz-dim" style={{ fontSize: 12.5, minWidth: 38, textAlign: "center", fontVariantNumeric: "tabular-nums" }}>{zoom}%</span>
-      <button type="button" className="qz-icon-btn" aria-label="Zoom in" onClick={() => setZoom((z) => Math.min(100, z + 10))}>+</button>
+      <button type="button" className="qz-icon-btn qz-tip" data-tip="Zoom in" aria-label="Zoom in" onClick={() => setZoom((z) => Math.min(100, z + 10))}>+</button>
     </div>
   );
 
   const undoRedo = (
     <div className="qz-row" style={{ gap: 2, alignItems: "center" }}>
-      <button type="button" className="qz-icon-btn" aria-label="Undo" title="Undo" disabled={!canUndo} onClick={undo}>
+      <button type="button" className="qz-icon-btn qz-tip" aria-label="Undo" data-tip="Undo" disabled={!canUndo} onClick={undo}>
         <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M9 14 4 9l5-5" /><path d="M4 9h11a5 5 0 0 1 0 10h-1" /></svg>
       </button>
-      <button type="button" className="qz-icon-btn" aria-label="Redo" title="Redo" disabled={!canRedo} onClick={redo}>
+      <button type="button" className="qz-icon-btn qz-tip" aria-label="Redo" data-tip="Redo" disabled={!canRedo} onClick={redo}>
         <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m15 14 5-5-5-5" /><path d="M20 9H9a5 5 0 0 0 0 10h1" /></svg>
       </button>
     </div>
