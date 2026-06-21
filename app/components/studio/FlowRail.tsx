@@ -4,7 +4,7 @@ import type { NodeIssue } from "../../lib/quizValidation";
 import type { OrderedFlow } from "../../lib/flowOrder";
 import { answerRoutes } from "../../lib/routeTrace";
 import { deleteNode, moveStep, straightThroughRun } from "../../lib/quizMutations";
-import { INSERTABLE_MODULES, insertModule, type InsertKind } from "./studioDoc";
+import { INSERTABLE_MODULES, insertModule, updateNodeData, type InsertKind } from "./studioDoc";
 import { NODE_LABEL } from "./panels/nodeMeta";
 
 // Per-answer divergence chips ("answer → destination") — shown under question
@@ -86,6 +86,23 @@ function nodeTitle(node: QuizNode): string {
   }
 }
 
+// The data field nodeTitle reads for each node type — i.e. what an inline rename
+// writes back. Mirror of nodeTitle so the displayed name round-trips.
+function titleField(type: QuizNode["type"]): string {
+  switch (type) {
+    case "question":
+    case "message":
+      return "text";
+    case "ask_ai":
+      return "persona_name";
+    case "branch":
+    case "integration":
+      return "label";
+    default:
+      return "headline";
+  }
+}
+
 export function FlowRail({
   doc,
   ordered,
@@ -114,6 +131,9 @@ export function FlowRail({
   const [adding, setAdding] = useState(false);
   // The node whose delete is armed (two-step confirm before the destructive op).
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
+  // Inline rename: the node being renamed + the working value (double-click a row).
+  const [renaming, setRenaming] = useState<string | null>(null);
+  const [renameVal, setRenameVal] = useState("");
   const byId = new Map(doc.nodes.map((n) => [n.id, n]));
   const run = straightThroughRun(doc).run;
   const runIndex = new Map(run.map((id, i) => [id, i]));
@@ -142,6 +162,19 @@ export function FlowRail({
     if (selectedId === nodeId) onSelect(null);
   };
 
+  const startRename = (node: QuizNode) => {
+    setConfirmDelete(null);
+    setRenameVal(nodeTitle(node));
+    setRenaming(node.id);
+  };
+  const commitRename = (node: QuizNode) => {
+    const v = renameVal.trim();
+    if (v && v !== nodeTitle(node)) {
+      onCommit(updateNodeData(doc, node.id, { [titleField(node.type)]: v }));
+    }
+    setRenaming(null);
+  };
+
   const row = (nodeId: string, indent = 0) => {
     const node = byId.get(nodeId);
     if (!node) return null;
@@ -165,6 +198,7 @@ export function FlowRail({
             setConfirmDelete(null); // navigating away disarms a pending delete
             onSelect(sel ? null : nodeId);
           }}
+          onDoubleClick={() => startRename(node)}
           role="button"
           aria-pressed={sel}
           tabIndex={0}
@@ -179,20 +213,37 @@ export function FlowRail({
           <span aria-hidden style={{ width: 16, textAlign: "center", fontSize: 11, opacity: 0.7 }}>
             {currentId === nodeId ? "▸" : GLYPH[node.type]}
           </span>
-          <span
-            style={{
-              flex: 1,
-              minWidth: 0,
-              fontSize: 12.5,
-              whiteSpace: "nowrap",
-              overflow: "hidden",
-              textOverflow: "ellipsis",
-              fontWeight: sel ? 600 : 400,
-            }}
-            title={nodeTitle(node)}
-          >
-            {nodeTitle(node)}
-          </span>
+          {renaming === nodeId ? (
+            <input
+              className="qz-input"
+              autoFocus
+              value={renameVal}
+              onChange={(e) => setRenameVal(e.target.value)}
+              onClick={(e) => e.stopPropagation()}
+              onKeyDown={(e) => {
+                e.stopPropagation();
+                if (e.key === "Enter") commitRename(node);
+                else if (e.key === "Escape") setRenaming(null);
+              }}
+              onBlur={() => commitRename(node)}
+              style={{ flex: 1, minWidth: 0, fontSize: 12.5, height: 26, padding: "0 6px" }}
+            />
+          ) : (
+            <span
+              style={{
+                flex: 1,
+                minWidth: 0,
+                fontSize: 12.5,
+                whiteSpace: "nowrap",
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                fontWeight: sel ? 600 : 400,
+              }}
+              title={`${nodeTitle(node)} — double-click to rename`}
+            >
+              {nodeTitle(node)}
+            </span>
+          )}
           {issues > 0 ? (
             <span
               title={`${issues} issue${issues > 1 ? "s" : ""} to fix`}
