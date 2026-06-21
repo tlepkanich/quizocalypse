@@ -24,7 +24,9 @@ async function embeddedShop(request: Request) {
 
 export const loader = async ({ request, params }: LoaderFunctionArgs) => {
   const shop = await embeddedShop(request);
-  return json(await loadStep1FunnelData(shop, params.quizId));
+  // Back from the Recommendation Buckets step → the embedded quizzes list
+  // (the studio twin defaults to /studio/quizzes).
+  return json(await loadStep1FunnelData(shop, params.quizId, { backHref: "/app/quizzes" }));
 };
 
 export const action = async ({ request, params }: ActionFunctionArgs) => {
