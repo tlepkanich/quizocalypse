@@ -975,6 +975,13 @@ body[data-qz] ::selection { background: var(--qz-ink); color: var(--qz-cream); }
 .qz-ps-label { font-size: 12px; font-weight: 600; color: var(--qz-ink); }
 .qz-ps-label-row { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
 .qz-ps-note { font-size: 11px; color: var(--qz-ink-4); }
+.qz-ps-link {
+  border: 1px solid var(--qz-rule); background: var(--qz-paper); cursor: pointer;
+  font: inherit; font-size: 11px; font-weight: 600; color: var(--qz-ink-3);
+  padding: 1px 8px; border-radius: 999px; line-height: 1.5;
+}
+.qz-ps-link:hover { color: var(--qz-ink); }
+.qz-ps-link.is-on { color: var(--qz-accent); border-color: var(--qz-accent); background: var(--qz-accent-tint); }
 .qz-ps-color {
   display: flex; align-items: center; gap: 8px;
   border: 1px solid var(--qz-rule); border-radius: 9px; padding: 5px 8px; background: var(--qz-paper);

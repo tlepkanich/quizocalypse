@@ -1,3 +1,4 @@
+import { useState } from "react";
 import type { Quiz } from "../../lib/quizSchema";
 
 // QP-2 — Quizell's "Page Settings" panel for the standalone Editor → Settings
@@ -47,11 +48,22 @@ export function BuilderPageSettings({
   const bg = dt.colors?.background ?? "#FFFFFF";
   const swatch = HEX_RE.test(bg) ? bg : "#FFFFFF";
   const pad = dt.page_padding ?? PAD_DEFAULT;
+  // "Link all sides" — when on, editing one padding sets all four (Quizell's
+  // chain icon). Local UI state; the linked write itself is one undoable commit.
+  const [linked, setLinked] = useState(false);
 
   const setBg = (hex: string) =>
     commit({ ...doc, design_tokens: { ...dt, colors: { ...(dt.colors ?? {}), background: hex } } });
   const setPad = (side: Side, value: number) =>
-    commit({ ...doc, design_tokens: { ...dt, page_padding: { ...PAD_DEFAULT, ...pad, [side]: value } } });
+    commit({
+      ...doc,
+      design_tokens: {
+        ...dt,
+        page_padding: linked
+          ? { top: value, right: value, bottom: value, left: value }
+          : { ...PAD_DEFAULT, ...pad, [side]: value },
+      },
+    });
 
   return (
     <div className="qz-card qz-page-settings">
@@ -80,7 +92,18 @@ export function BuilderPageSettings({
 
       <div className="qz-ps-field">
         <div className="qz-ps-label-row">
-          <span className="qz-ps-label">Page Paddings</span>
+          <span className="qz-row" style={{ gap: 8, alignItems: "center" }}>
+            <span className="qz-ps-label">Page Paddings</span>
+            <button
+              type="button"
+              className={`qz-ps-link${linked ? " is-on" : ""}`}
+              aria-pressed={linked}
+              title={linked ? "Sides linked — editing one sets all four" : "Link all sides"}
+              onClick={() => setLinked((v) => !v)}
+            >
+              🔗 {linked ? "Linked" : "Link"}
+            </button>
+          </span>
           <span className="qz-ps-note">Applies to every page</span>
         </div>
         <div className="qz-ps-pad">
