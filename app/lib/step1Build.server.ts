@@ -3,7 +3,17 @@ import type { GroupingDimension } from "./groupingDetect";
 import { runAiOnboardingBuild } from "./onboardingBuild.server";
 import { syncCatalog } from "../jobs/catalogSync";
 import type { ProposedGroup } from "./categoryGrouping";
+import {
+  bucketRowFor,
+  bucketRowsFor,
+  type BucketType,
+  type BucketRow,
+} from "./bucketPersist";
 import type { TemplateOption, BuildSession } from "./quizSchema";
+
+// Re-export the pure bucket resolver so callers can import the whole bucket
+// API (pure resolve + IO persist) from one place.
+export { bucketRowFor, bucketRowsFor, type BucketType, type BucketRow };
 
 // ════════════════════════════════════════════════════════════════════════════
 // Step 1 funnel — grouping persistence + the legacy "pick a direction" build.
@@ -51,6 +61,70 @@ export async function persistConfirmedGroups(
     select: { id: true },
   });
   return created.map((c) => c.id);
+}
+
+// ── Recommendation-bucket persistence (RB Step 1 — the bucket browser, IO) ───
+// Each selected bucket is ONE Category row keyed on (shopId, quizId, source,
+// sourceRef), so add/remove is idempotent: toggling on deletes any matching row
+// then creates one; toggling off just deletes the match. The pure {type,key} →
+// row resolution lives in bucketPersist.ts (re-exported above); this half is the
+// Prisma writes. The three browser tabs only ever produce product/tag/collection
+// sources; legacy product_type/metafield/ai rows are ignored by the shelf.
+
+// Discovery-run marker stamped on browser-created bucket rows (purely so a set
+// is identifiable; matching is always on source+sourceRef).
+const BUCKET_RUN = "rb_buckets";
+
+function bucketToData(shopId: string, quizId: string, row: BucketRow) {
+  return {
+    shopId,
+    quizId,
+    name: row.name,
+    description: "",
+    tags: row.tags,
+    productIds: row.productIds,
+    source: row.source,
+    sourceRef: row.sourceRef,
+    manualProductIds: [] as string[],
+    discoveryRunId: BUCKET_RUN,
+  };
+}
+
+// Add (or replace) bucket rows idempotently — delete any existing row for each
+// (source,sourceRef) then create, all in one transaction. Covers single toggle-on
+// (one row) and Select-All (many).
+export async function addBuckets(
+  shopId: string,
+  quizId: string,
+  rows: BucketRow[],
+): Promise<void> {
+  if (!rows.length) return;
+  await prisma.$transaction(
+    rows.flatMap((row) => [
+      prisma.category.deleteMany({
+        where: { shopId, quizId, source: row.source, sourceRef: row.sourceRef },
+      }),
+      prisma.category.create({ data: bucketToData(shopId, quizId, row) }),
+    ]),
+  );
+}
+
+// Remove bucket rows by key (single toggle-off or Clear-Visible).
+export async function removeBuckets(
+  shopId: string,
+  quizId: string,
+  type: BucketType,
+  sourceRefs: string[],
+): Promise<void> {
+  if (!sourceRefs.length) return;
+  await prisma.category.deleteMany({
+    where: { shopId, quizId, source: type, sourceRef: { in: sourceRefs } },
+  });
+}
+
+// Clear the quiz's entire bucket set (tab-lock confirm → switch dimensions).
+export async function clearBuckets(shopId: string, quizId: string): Promise<void> {
+  await prisma.category.deleteMany({ where: { shopId, quizId } });
 }
 
 // The confirmed buckets for the generation stage: the quiz's persisted Category

@@ -6,12 +6,19 @@ import { buildSeedQuiz } from "./seedQuiz";
 import { parseBrandIdentitySafe } from "./brandIdentity";
 import { suggestQuizGoal } from "./goalSuggest";
 import { detectGroupingDimension } from "./groupingDetect";
+import { suggestBucketStrategy } from "./bucketDetect";
 import { recordIdentitySignals } from "./brandIdentityBuild.server";
 import {
   persistConfirmedGroups,
   loadConfirmedBuckets,
   resyncCatalogForShop,
   startStep1Build,
+  bucketRowFor,
+  bucketRowsFor,
+  addBuckets,
+  removeBuckets,
+  clearBuckets,
+  type BucketType,
 } from "./step1Build.server";
 import {
   startStep2Types,
@@ -20,7 +27,13 @@ import {
   startStep2Build,
 } from "./step2Build.server";
 import { saveTemplate, listSavedTemplates, loadSavedTemplate } from "./savedTemplates.server";
-import type { GroupingProduct } from "./categoryGrouping";
+import { normalizeTags } from "./enrichTags";
+import {
+  inverseCollectionIndex,
+  hydrateCollectionProducts,
+  type GroupingProduct,
+  type GroupingCollection,
+} from "./categoryGrouping";
 
 // Builder Re-work Step 1 — the funnel's loader + action, lifted out of the route
 // so the studio (cookie) and embedded (Shopify admin) routes are thin wrappers
@@ -46,6 +59,28 @@ const toGroupingProduct = (p: {
   productType: p.productType,
   collectionIds: p.collectionIds,
 });
+
+// Load the catalog as bucket-resolution inputs (products + hydrated collections
+// + title lookups). Used by the continuous-save bucket intents to re-resolve
+// membership server-side — the client never sends product ids.
+async function loadBucketInputs(shopId: string): Promise<{
+  products: GroupingProduct[];
+  collections: GroupingCollection[];
+  productTitleById: Map<string, string>;
+  collectionTitleById: Map<string, string>;
+}> {
+  const [productRows, collectionRows] = await Promise.all([
+    prisma.product.findMany({ where: { shopId } }),
+    prisma.collection.findMany({ where: { shopId }, select: { collectionId: true, title: true } }),
+  ]);
+  const products = productRows.map(toGroupingProduct);
+  return {
+    products,
+    collections: hydrateCollectionProducts(collectionRows, products),
+    productTitleById: new Map(productRows.map((p) => [p.productId, p.title])),
+    collectionTitleById: new Map(collectionRows.map((c) => [c.collectionId, c.title])),
+  };
+}
 
 // The funnel's front door: resume the most-recent in-flight Step-1 draft for this
 // shop, or seed a fresh one. Returns the quiz id; each entry route redirects to
@@ -100,7 +135,11 @@ async function writeDoc(quizId: string, doc: Quiz) {
 
 // The loader payload (serialized to FunnelData on the client). Pure data — the
 // route wraps it in json().
-export async function loadStep1FunnelData(shop: FunnelShop, quizId: string | undefined) {
+export async function loadStep1FunnelData(
+  shop: FunnelShop,
+  quizId: string | undefined,
+  opts?: { backHref?: string },
+) {
   const { quiz, session } = await loadFunnelDraft(shop.id, quizId);
 
   const [products, collections, shopRow, categories, savedTemplates] = await Promise.all([
@@ -109,7 +148,7 @@ export async function loadStep1FunnelData(shop: FunnelShop, quizId: string | und
     prisma.shop.findUnique({ where: { id: shop.id }, select: { brandIdentity: true } }),
     prisma.category.findMany({
       where: { shopId: shop.id, quizId: quiz.id },
-      select: { id: true, name: true, productIds: true },
+      select: { id: true, name: true, productIds: true, source: true, sourceRef: true },
       orderBy: { createdAt: "asc" },
     }),
     listSavedTemplates(shop.id),
@@ -132,6 +171,73 @@ export async function loadStep1FunnelData(shop: FunnelShop, quizId: string | und
       ? categories.map((c) => c.name)
       : detect.proposed.map((g) => g.name),
   });
+
+  // ── Recommendation-buckets page (RB Step 1) ──────────────────────────────
+  // The catalog browser, the AI bucket-strategy suggestion, and the current
+  // selections — all derived from the data already in hand (no extra queries).
+  const groupingProducts = products.map(toGroupingProduct);
+  const groupingCollections = collections.map((c) => ({
+    collectionId: c.collectionId,
+    title: c.title,
+  }));
+  const suggestion = suggestBucketStrategy(groupingProducts, groupingCollections);
+
+  // Tags tallied by NORMALIZED identity (so a key round-trips through
+  // resolveByTag) but shown with the first raw label seen.
+  const tagTally = new Map<string, { label: string; count: number }>();
+  for (const p of products) {
+    const seenForProduct = new Set<string>();
+    for (const raw of p.tags) {
+      const [norm] = normalizeTags([raw], new Set());
+      if (!norm || seenForProduct.has(norm)) continue;
+      seenForProduct.add(norm);
+      const entry = tagTally.get(norm);
+      if (entry) entry.count += 1;
+      else tagTally.set(norm, { label: raw.trim() || norm, count: 1 });
+    }
+  }
+  const catalogTags = [...tagTally.entries()]
+    .map(([key, v]) => ({ key, label: v.label, count: v.count }))
+    .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label));
+
+  const invIdx = inverseCollectionIndex(groupingProducts);
+  const catalogCollections = collections
+    .map((c) => ({
+      key: c.collectionId,
+      label: c.title,
+      count: (invIdx.get(c.collectionId) ?? []).length,
+    }))
+    .filter((c) => c.count > 0)
+    .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label));
+
+  const catalogProducts = products.map((p) => ({
+    id: p.productId,
+    title: p.title,
+    imageUrl: p.imageUrl ?? null,
+    price: p.priceMin != null ? Number(p.priceMin) : null,
+    tags: p.tags,
+  }));
+
+  // Current selections from the quiz's Category rows. The browser only manages
+  // product/tag/collection sources; legacy product_type/metafield/ai rows (from
+  // a pre-RB confirm-grouping draft) are simply not shown as shelf buckets.
+  const imageByProductId = new Map(products.map((p) => [p.productId, p.imageUrl ?? null]));
+  const BROWSER_SOURCES = new Set(["product", "tag", "collection", "smart_collection"]);
+  const buckets = categories
+    .filter((c) => c.sourceRef && BROWSER_SOURCES.has(c.source))
+    .map((c) => ({
+      key: c.sourceRef as string,
+      type: (c.source === "smart_collection" ? "collection" : c.source) as BucketType,
+      name: c.name,
+      count: c.productIds.length,
+      thumbnailUrl:
+        c.productIds.map((pid) => imageByProductId.get(pid)).find((u): u is string => Boolean(u)) ??
+        null,
+    }));
+
+  const browser = session.bucket_browser;
+  const activeTab: BucketType = browser?.active_tab ?? suggestion.suggestedType;
+  const bannerDismissed = browser?.banner_dismissed ?? false;
 
   return {
     quizId: quiz.id,
@@ -170,6 +276,13 @@ export async function loadStep1FunnelData(shop: FunnelShop, quizId: string | und
     })),
     collections: collections.map((c) => ({ collectionId: c.collectionId, title: c.title })),
     savedTemplates: savedTemplates.map((t) => ({ id: t.id, name: t.name, template: t.template })),
+    // ── Recommendation Buckets (RB Step 1) ──
+    catalog: { products: catalogProducts, tags: catalogTags, collections: catalogCollections },
+    suggestion,
+    buckets,
+    activeTab,
+    bannerDismissed,
+    backHref: opts?.backHref ?? "/studio/quizzes",
   };
 }
 
@@ -220,6 +333,121 @@ export async function runStep1FunnelAction(
         dimension,
         confirmed_category_ids: ids,
         detected_rationale: detect.rationale,
+      },
+    };
+    await writeDoc(quiz.id, { ...doc, build_session: next });
+    return json({ intent, ok: true });
+  }
+
+  // ── Recommendation Buckets (RB Step 1) — continuous-save bucket browser ───
+  // Membership is always re-resolved server-side; the client only sends WHICH
+  // key(s) were toggled (the persistConfirmedGroups trust boundary).
+  if (intent === "toggle-bucket" || intent === "select-all" || intent === "clear-visible") {
+    const rawType = String(form.get("type") ?? "");
+    if (rawType !== "product" && rawType !== "tag" && rawType !== "collection") {
+      return json({ intent, ok: false, error: "Unknown bucket type." }, { status: 400 });
+    }
+    const type: BucketType = rawType;
+
+    if (intent === "toggle-bucket") {
+      const key = String(form.get("key") ?? "").trim();
+      const on = String(form.get("on") ?? "") === "true";
+      if (!key) return json({ intent, ok: false, error: "Missing bucket key." }, { status: 400 });
+      if (!on) {
+        await removeBuckets(shop.id, quiz.id, type, [key]);
+        return json({ intent, ok: true });
+      }
+      const inputs = await loadBucketInputs(shop.id);
+      const row = bucketRowFor(
+        type,
+        key,
+        inputs.products,
+        inputs.collections,
+        inputs.productTitleById,
+        inputs.collectionTitleById,
+      );
+      if (!row) {
+        return json({ intent, ok: false, error: "That item is no longer available." }, { status: 400 });
+      }
+      await addBuckets(shop.id, quiz.id, [row]);
+      return json({ intent, ok: true });
+    }
+
+    // select-all / clear-visible — the client sends the visible (filtered) keys.
+    const keys = String(form.get("keys") ?? "")
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean);
+    if (intent === "clear-visible") {
+      await removeBuckets(shop.id, quiz.id, type, keys);
+      return json({ intent, ok: true });
+    }
+    const inputs = await loadBucketInputs(shop.id);
+    const rows = bucketRowsFor(
+      keys.map((key) => ({ type, key })),
+      inputs.products,
+      inputs.collections,
+      inputs.productTitleById,
+      inputs.collectionTitleById,
+    );
+    await addBuckets(shop.id, quiz.id, rows);
+    return json({ intent, ok: true });
+  }
+
+  if (intent === "switch-tab") {
+    const rawType = String(form.get("type") ?? "");
+    if (rawType !== "product" && rawType !== "tag" && rawType !== "collection") {
+      return json({ intent, ok: false, error: "Unknown bucket type." }, { status: 400 });
+    }
+    // A type change with existing buckets clears them (the client only sends
+    // clear=true after the TabLockModal confirm).
+    if (String(form.get("clear") ?? "") === "true") await clearBuckets(shop.id, quiz.id);
+    const browser = session.bucket_browser;
+    const next: BuildSession = {
+      ...session,
+      bucket_browser: {
+        ...(browser ?? {}),
+        active_tab: rawType,
+        banner_dismissed: browser?.banner_dismissed ?? false,
+      },
+    };
+    await writeDoc(quiz.id, { ...doc, build_session: next });
+    return json({ intent, ok: true });
+  }
+
+  if (intent === "dismiss-banner") {
+    const browser = session.bucket_browser;
+    const next: BuildSession = {
+      ...session,
+      bucket_browser: { ...(browser ?? {}), banner_dismissed: true },
+    };
+    await writeDoc(quiz.id, { ...doc, build_session: next });
+    return json({ intent, ok: true });
+  }
+
+  // Continue → advance to the goal stage (relabeled "Step 2" in the UI). The
+  // bucket rows ARE the confirmed grouping; dimension reflects the active tab.
+  if (intent === "continue-buckets") {
+    const cats = await prisma.category.findMany({
+      where: { shopId: shop.id, quizId: quiz.id },
+      select: { id: true },
+      orderBy: { createdAt: "asc" },
+    });
+    if (cats.length === 0) {
+      return json(
+        { intent, ok: false, error: "Add at least one recommendation bucket to continue." },
+        { status: 400 },
+      );
+    }
+    const tab = session.bucket_browser?.active_tab;
+    const dimension = tab === "tag" ? "tag" : tab === "collection" ? "collection" : "all";
+    const next: BuildSession = {
+      ...session,
+      stage: "goal",
+      grouping: {
+        dimension,
+        confirmed_category_ids: cats.map((c) => c.id),
+        detected_rationale: "Selected in the recommendation buckets browser.",
       },
     };
     await writeDoc(quiz.id, { ...doc, build_session: next });

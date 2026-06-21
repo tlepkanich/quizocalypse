@@ -27,6 +27,10 @@ import type {
   RecDefaults,
   RecommendedGroup,
 } from "../../lib/quizSchema";
+import type { BucketSuggestion } from "../../lib/bucketDetect";
+
+// Recommendation Buckets (RB Step 1) — the three browser tabs / bucket kinds.
+type BucketType = "product" | "tag" | "collection";
 
 // Builder Re-work Step 1 — the shared, server-free creation funnel. Renders one
 // of four stages off the draft's build_session and drives every transition
@@ -66,6 +70,29 @@ export interface FunnelData {
   productGroups: Array<{ id: string; name: string; products: Array<{ id: string; title: string }> }>;
   collections: Array<{ collectionId: string; title: string }>;
   savedTemplates: Array<{ id: string; name: string; template: RichTemplateOption }>;
+  // ── Recommendation Buckets (RB Step 1) ──
+  catalog: {
+    products: Array<{
+      id: string;
+      title: string;
+      imageUrl: string | null;
+      price: number | null;
+      tags: string[];
+    }>;
+    tags: Array<{ key: string; label: string; count: number }>;
+    collections: Array<{ key: string; label: string; count: number }>;
+  };
+  suggestion: BucketSuggestion;
+  buckets: Array<{
+    key: string;
+    type: BucketType;
+    name: string;
+    count: number;
+    thumbnailUrl: string | null;
+  }>;
+  activeTab: BucketType;
+  bannerDismissed: boolean;
+  backHref: string;
 }
 
 type ActionResult =
