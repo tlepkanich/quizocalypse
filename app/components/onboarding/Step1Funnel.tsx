@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties } from "react";
 import { Link, useFetcher, useRevalidator } from "@remix-run/react";
 import {
@@ -174,7 +174,12 @@ export function Step1Funnel({ data }: { data: FunnelData }) {
       ) : null}
 
       {data.stage === "grouping" ? (
-        <GroupingStage data={data} fetcher={fetcher} pendingIntent={pendingIntent} result={result} />
+        <RecommendationBucketsStage
+          data={data}
+          fetcher={fetcher}
+          pendingIntent={pendingIntent}
+          result={result}
+        />
       ) : null}
 
       {data.stage === "goal" ? (
@@ -201,28 +206,30 @@ export function Step1Funnel({ data }: { data: FunnelData }) {
   );
 }
 
-// A slim three-dot stage indicator across the funnel.
+// The funnel's visible step order — shared by FunnelProgress AND the Step-N-of-M
+// stepper inside each stage, so the "of N" count can't drift from the dots.
+const FUNNEL_STAGES: Array<{ key: string; label: string }> = [
+  { key: "grouping", label: "Buckets" },
+  { key: "goal", label: "Goal" },
+  { key: "types", label: "Type" },
+  { key: "configuring", label: "Template" },
+];
+
+// Map transient/legacy stages onto the visible step.
+function visibleStageKey(stage: FunnelData["stage"]): string {
+  if (stage === "typing" || stage === "templates") return "types";
+  if (stage === "templating" || stage === "done") return "configuring";
+  return stage;
+}
+
+// A slim stage indicator across the funnel.
 function FunnelProgress({ stage }: { stage: FunnelData["stage"] }) {
-  const order = ["grouping", "goal", "types", "configuring"];
-  const labels: Record<string, string> = {
-    grouping: "Group",
-    goal: "Goal",
-    types: "Type",
-    configuring: "Template",
-  };
-  // Map transient/legacy stages onto the visible step.
-  const activeKey =
-    stage === "typing" || stage === "templates"
-      ? "types"
-      : stage === "templating" || stage === "done"
-        ? "configuring"
-        : stage;
-  const activeIdx = order.indexOf(activeKey);
+  const activeIdx = FUNNEL_STAGES.findIndex((s) => s.key === visibleStageKey(stage));
   return (
     <div className="qz-row" style={{ gap: 8, margin: "2px 0 18px", flexWrap: "wrap" }}>
-      {order.map((k, i) => (
+      {FUNNEL_STAGES.map((s, i) => (
         <span
-          key={k}
+          key={s.key}
           className="qz-row"
           style={{ gap: 6, fontSize: 12.5, color: i <= activeIdx ? "var(--qz-ink)" : "var(--qz-ink-4)" }}
         >
@@ -236,16 +243,45 @@ function FunnelProgress({ stage }: { stage: FunnelData["stage"] }) {
               opacity: i <= activeIdx ? 1 : 0.4,
             }}
           />
-          {labels[k]}
-          {i < order.length - 1 ? <span className="qz-dim" style={{ marginLeft: 2 }}>·</span> : null}
+          {s.label}
+          {i < FUNNEL_STAGES.length - 1 ? <span className="qz-dim" style={{ marginLeft: 2 }}>·</span> : null}
         </span>
       ))}
     </div>
   );
 }
 
-// ── Stage 1 — confirm how products group into recommendation buckets ─────────
-function GroupingStage({
+// ── Stage 1 — Recommendation Buckets (the quiz's possible OUTCOMES) ───────────
+// The brand defines what the quiz can recommend: each bucket is an individual
+// product, a tag, or a collection. An AI pre-analysis (bucketDetect) suggests
+// the best bucketing strategy; selections continuously auto-save (each toggle is
+// one server write, optimistically reflected). Desktop-first; Shopify data is
+// read-only.
+type BucketCard = {
+  key: string;
+  type: BucketType;
+  name: string;
+  count: number;
+  thumbnailUrl: string | null;
+};
+
+const idOf = (type: BucketType, key: string) => `${type}:${key}`;
+
+const TAB_META: Array<{ type: BucketType; label: string }> = [
+  { type: "product", label: "Individual Products" },
+  { type: "tag", label: "Tags" },
+  { type: "collection", label: "Collections" },
+];
+
+const TYPE_BADGE: Record<BucketType, "draft" | "ok" | "warn"> = {
+  product: "draft",
+  tag: "ok",
+  collection: "warn",
+};
+
+const TYPE_GLYPH: Record<BucketType, string> = { product: "📦", tag: "🏷️", collection: "🗂️" };
+
+function RecommendationBucketsStage({
   data,
   fetcher,
   pendingIntent,
@@ -256,148 +292,360 @@ function GroupingStage({
   pendingIntent: string | null;
   result: ActionResult | null;
 }) {
-  const allKeys = useMemo(() => data.detection.groups.map((g) => g.key), [data.detection.groups]);
-  const [selected, setSelected] = useState<Set<string>>(() => new Set(allKeys));
-  const [useAll, setUseAll] = useState(data.detection.dimension === "all");
+  const [activeTab, setActiveTab] = useState<BucketType>(data.activeTab);
+  const [dismissed, setDismissed] = useState(data.bannerDismissed);
+  const [search, setSearch] = useState("");
+  const q = useDeferredValue(search).trim().toLowerCase();
 
-  const isAllOnly = data.detection.dimension === "all" || data.detection.groups.length === 0;
-  const confirming = pendingIntent === "confirm-grouping";
-  const resyncing = pendingIntent === "resync";
-  const resyncResult = result && result.intent === "resync" ? result : null;
+  // Optimistic overlay over the server's selection: id → card (added) | null
+  // (removed). Cleared once the fetcher settles (the loader is then fresh).
+  const [overlay, setOverlay] = useState<Map<string, BucketCard | null>>(() => new Map());
+  useEffect(() => {
+    if (fetcher.state === "idle") setOverlay(new Map());
+  }, [fetcher.state, data.buckets]);
 
-  const toggle = (key: string) =>
-    setSelected((prev) => {
-      const next = new Set(prev);
-      if (next.has(key)) next.delete(key);
-      else next.add(key);
-      return next;
-    });
+  const selected = useMemo(() => {
+    const m = new Map<string, BucketCard>();
+    for (const b of data.buckets) m.set(idOf(b.type, b.key), b);
+    for (const [id, card] of overlay) {
+      if (card === null) m.delete(id);
+      else m.set(id, card);
+    }
+    return m;
+  }, [data.buckets, overlay]);
 
-  const submitConfirm = () => {
-    const mode = isAllOnly || useAll ? "all" : "detected";
+  const isOn = (type: BucketType, key: string) => selected.has(idOf(type, key));
+  const overlaySet = (id: string, val: BucketCard | null) =>
+    setOverlay((prev) => new Map(prev).set(id, val));
+
+  // One toggle = one optimistic overlay write + one server write. The grid card
+  // and the shelf chip share this, so removing in either place is the same op.
+  const toggle = (card: BucketCard) => {
+    const on = !isOn(card.type, card.key);
+    overlaySet(idOf(card.type, card.key), on ? card : null);
     fetcher.submit(
-      { intent: "confirm-grouping", mode, selected: Array.from(selected).join(",") },
+      { intent: "toggle-bucket", type: card.type, key: card.key, on: String(on) },
       { method: "post" },
     );
   };
 
-  const submitResync = () => fetcher.submit({ intent: "resync" }, { method: "post" });
+  // Tab switch persists active_tab; a non-suggested tab click also dismisses the
+  // AI banner (folded into the one submit so a single fetcher does both).
+  const switchTab = (type: BucketType) => {
+    if (type === activeTab) return;
+    const dismiss = !dismissed && type !== data.suggestion.suggestedType;
+    setActiveTab(type);
+    setSearch("");
+    if (dismiss) setDismissed(true);
+    fetcher.submit(
+      { intent: "switch-tab", type, ...(dismiss ? { dismiss: "true" } : {}) },
+      { method: "post" },
+    );
+  };
+
+  const dismissBanner = () => {
+    setDismissed(true);
+    fetcher.submit({ intent: "dismiss-banner" }, { method: "post" });
+  };
+
+  const priceById = useMemo(
+    () => new Map(data.catalog.products.map((p) => [p.id, p.price])),
+    [data.catalog.products],
+  );
+
+  const cardsForTab = (type: BucketType): BucketCard[] => {
+    if (type === "product")
+      return data.catalog.products.map((p) => ({
+        key: p.id,
+        type,
+        name: p.title,
+        count: 1,
+        thumbnailUrl: p.imageUrl,
+      }));
+    const src = type === "tag" ? data.catalog.tags : data.catalog.collections;
+    return src.map((t) => ({ key: t.key, type, name: t.label, count: t.count, thumbnailUrl: null }));
+  };
+
+  const visible = useMemo(() => {
+    const all = cardsForTab(activeTab);
+    return q ? all.filter((c) => c.name.toLowerCase().includes(q)) : all;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab, q, data.catalog]);
+
+  const visibleKeys = visible.map((c) => c.key);
+  const allVisibleOn = visibleKeys.length > 0 && visibleKeys.every((k) => isOn(activeTab, k));
+
+  const selectAllVisible = () => {
+    setOverlay((prev) => {
+      const next = new Map(prev);
+      for (const c of visible) next.set(idOf(c.type, c.key), c);
+      return next;
+    });
+    fetcher.submit(
+      { intent: "select-all", type: activeTab, keys: visibleKeys.join(",") },
+      { method: "post" },
+    );
+  };
+
+  const clearVisible = () => {
+    setOverlay((prev) => {
+      const next = new Map(prev);
+      for (const k of visibleKeys) next.set(idOf(activeTab, k), null);
+      return next;
+    });
+    fetcher.submit(
+      { intent: "clear-visible", type: activeTab, keys: visibleKeys.join(",") },
+      { method: "post" },
+    );
+  };
+
+  const selectedList = [...selected.values()];
+  const count = selectedList.length;
+  const continuing = pendingIntent === "continue-buckets";
+  const resyncing = pendingIntent === "resync";
+  const resyncResult = result && result.intent === "resync" ? result : null;
+  const stepCount = FUNNEL_STAGES.length;
+  const tabCounts: Record<BucketType, number> = {
+    product: data.catalog.products.length,
+    tag: data.catalog.tags.length,
+    collection: data.catalog.collections.length,
+  };
+  const activeLabel = TAB_META.find((t) => t.type === activeTab)?.label ?? "";
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-      <QzCard style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-        <div className="qz-label">Step 1 of 3 · Grouping</div>
+    <div className="qz-rb">
+      <div className="qz-rb-head">
+        <div className="qz-label">
+          Step 1 of {stepCount} · Recommendation Buckets
+        </div>
         <h2 className="qz-h2" style={{ margin: 0 }}>
-          Here&rsquo;s how we&rsquo;d group your {data.productCount} products
+          What can your quiz recommend?
         </h2>
         <p className="qz-dim" style={{ margin: 0 }}>
-          {data.detection.rationale}
+          Pick the outcomes shoppers can land on — individual products, tags, or whole
+          collections. We&rsquo;ll route the quiz toward whichever fits each shopper.
         </p>
-      </QzCard>
+      </div>
 
-      {isAllOnly ? (
-        <QzCard
-          style={{
-            display: "flex",
-            flexDirection: "column",
-            gap: 8,
-            borderColor: "var(--qz-accent)",
-          }}
-        >
-          <div className="qz-row" style={{ gap: 8 }}>
-            <span aria-hidden>🛍️</span>
-            <strong>Recommend from all products</strong>
+      {/* 1 — AI suggestion banner */}
+      {!dismissed ? <RbBanner suggestion={data.suggestion} onDismiss={dismissBanner} /> : null}
+
+      {/* 2 — Catalog browser */}
+      <QzCard flush className="qz-rb-browser">
+        <div className="qz-rb-tabs" role="tablist" aria-label="Bucket source">
+          {TAB_META.map((t) => {
+            const n = tabCounts[t.type];
+            const on = t.type === activeTab;
+            return (
+              <button
+                key={t.type}
+                type="button"
+                role="tab"
+                aria-selected={on}
+                className={`qz-rb-tab${on ? " is-active" : ""}`}
+                disabled={n === 0 && t.type !== "product"}
+                onClick={() => switchTab(t.type)}
+              >
+                {t.label}
+                <span className="qz-rb-tab-n">{n}</span>
+              </button>
+            );
+          })}
+        </div>
+
+        <div className="qz-rb-toolbar">
+          <QzInput
+            type="search"
+            placeholder={`Search ${activeLabel.toLowerCase()}…`}
+            value={search}
+            onChange={(e) => setSearch(e.currentTarget.value)}
+            aria-label="Search the catalog"
+          />
+          <button
+            type="button"
+            className="qz-btn qz-btn-ghost qz-btn-sm"
+            onClick={allVisibleOn ? clearVisible : selectAllVisible}
+            disabled={visible.length === 0}
+          >
+            {allVisibleOn ? "Clear visible" : `Select all (${visible.length})`}
+          </button>
+        </div>
+
+        {visible.length === 0 ? (
+          <div className="qz-rb-empty qz-dim">
+            {q ? "No matches." : "Nothing here yet — sync your catalog to populate this tab."}
           </div>
-          <p className="qz-dim" style={{ margin: 0, fontSize: 13 }}>
-            We&rsquo;ll match shoppers across your whole catalog rather than into fixed
-            buckets — the right call for a focused or still-growing range.
-          </p>
-        </QzCard>
-      ) : (
-        <>
-          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-            {data.detection.groups.map((g) => {
-              const on = !useAll && selected.has(g.key);
+        ) : (
+          <div className={`qz-rb-grid${activeTab === "product" ? " is-products" : ""}`}>
+            {visible.map((c) => {
+              const on = isOn(c.type, c.key);
+              const price = activeTab === "product" ? priceById.get(c.key) ?? null : null;
               return (
                 <button
-                  key={g.key}
+                  key={c.key}
                   type="button"
-                  className="qz-card qz-interactive"
-                  onClick={() => !useAll && toggle(g.key)}
-                  disabled={useAll}
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 12,
-                    textAlign: "left",
-                    cursor: useAll ? "default" : "pointer",
-                    opacity: useAll ? 0.5 : 1,
-                    borderColor: on ? "var(--qz-accent)" : undefined,
-                  }}
+                  className={`qz-rb-card${on ? " is-on" : ""}`}
+                  aria-pressed={on}
+                  onClick={() => toggle(c)}
                 >
-                  <span
-                    aria-hidden
-                    style={{
-                      width: 20,
-                      height: 20,
-                      flex: "none",
-                      borderRadius: 6,
-                      border: `1.5px solid ${on ? "var(--qz-accent)" : "var(--qz-ink-4)"}`,
-                      background: on ? "var(--qz-accent)" : "transparent",
-                      color: "#fff",
-                      display: "grid",
-                      placeItems: "center",
-                      fontSize: 13,
-                    }}
-                  >
-                    {on ? "✓" : ""}
+                  {activeTab === "product" ? (
+                    <span className="qz-rb-thumb">
+                      {c.thumbnailUrl ? (
+                        <img src={c.thumbnailUrl} alt="" loading="lazy" />
+                      ) : (
+                        <span aria-hidden>{TYPE_GLYPH.product}</span>
+                      )}
+                    </span>
+                  ) : null}
+                  <span className="qz-rb-card-body">
+                    <span className="qz-rb-card-name">{c.name}</span>
+                    <span className="qz-rb-card-meta qz-dim">
+                      {activeTab === "product"
+                        ? price != null
+                          ? `$${price.toFixed(2)}`
+                          : "—"
+                        : `${c.count} product${c.count === 1 ? "" : "s"}`}
+                    </span>
                   </span>
-                  <span style={{ flex: "1 1 auto", fontWeight: 600 }}>{g.name}</span>
-                  <span className="qz-dim" style={{ fontSize: 12 }}>
-                    {g.count} product{g.count === 1 ? "" : "s"}
+                  <span className={`qz-rb-check${on ? " is-on" : ""}`} aria-hidden>
+                    {on ? "✓" : ""}
                   </span>
                 </button>
               );
             })}
           </div>
+        )}
+      </QzCard>
 
-          <label
-            className="qz-row"
-            style={{ gap: 8, fontSize: 13, cursor: "pointer", color: "var(--qz-ink-3)" }}
-          >
-            <input type="checkbox" checked={useAll} onChange={(e) => setUseAll(e.target.checked)} />
-            Skip grouping — recommend from all {data.productCount} products instead
-          </label>
-        </>
-      )}
+      {/* 3 — Bucket shelf */}
+      <div className="qz-rb-shelf">
+        <div className="qz-row qz-row-between" style={{ flexWrap: "wrap", gap: 8 }}>
+          <strong>Recommendation buckets</strong>
+          <span className="qz-dim" style={{ fontSize: 13 }}>
+            {count} selected
+          </span>
+        </div>
+        {count === 0 ? (
+          <div className="qz-rb-empty qz-dim">
+            No buckets yet — pick products, tags, or collections above. These become the
+            outcomes your quiz can recommend.
+          </div>
+        ) : (
+          <div className="qz-rb-chips">
+            {selectedList.map((c) => (
+              <span key={idOf(c.type, c.key)} className="qz-rb-chip">
+                <span className="qz-rb-chip-thumb">
+                  {c.thumbnailUrl ? (
+                    <img src={c.thumbnailUrl} alt="" loading="lazy" />
+                  ) : (
+                    <span aria-hidden>{TYPE_GLYPH[c.type]}</span>
+                  )}
+                </span>
+                <span className="qz-rb-chip-body">
+                  <span className="qz-rb-chip-name">{c.name}</span>
+                  <QzBadge tone={TYPE_BADGE[c.type]}>{c.type}</QzBadge>
+                </span>
+                <button
+                  type="button"
+                  className="qz-rb-chip-x"
+                  aria-label={`Remove ${c.name}`}
+                  onClick={() => toggle(c)}
+                >
+                  ✕
+                </button>
+              </span>
+            ))}
+          </div>
+        )}
+        {count === 1 ? (
+          <p className="qz-rb-warn">
+            One bucket means every shopper sees the same products. Add a few more so the quiz
+            can actually differentiate.
+          </p>
+        ) : null}
+      </div>
 
-      <div className="qz-row qz-row-between" style={{ gap: 10, flexWrap: "wrap" }}>
-        <div className="qz-row" style={{ gap: 10, flexWrap: "wrap" }}>
+      {/* 4 — Stepper */}
+      <div className="qz-rb-stepper">
+        <Link to={data.backHref} className="qz-btn qz-btn-ghost">
+          ← Back
+        </Link>
+        <div className="qz-row" style={{ gap: 12, flexWrap: "wrap", justifyContent: "flex-end" }}>
           <button
             type="button"
             className="qz-btn qz-btn-ghost qz-btn-sm"
-            onClick={submitResync}
+            onClick={() => fetcher.submit({ intent: "resync" }, { method: "post" })}
             disabled={resyncing}
           >
             {resyncing ? "Refreshing…" : "↻ Refresh catalog"}
           </button>
           {resyncResult ? (
             <span className="qz-dim" style={{ fontSize: 12 }}>
-              {resyncResult.ok
-                ? "Catalog refreshed — grouping updated."
-                : "Couldn't refresh from here — open the embedded app once to reconnect."}
+              {resyncResult.ok ? "Catalog refreshed." : "Couldn't refresh from here."}
             </span>
           ) : null}
+          {count === 0 ? (
+            <QzTooltip content="Add at least one recommendation bucket to continue.">
+              <button type="button" className="qz-btn qz-btn-accent" disabled>
+                Continue →
+              </button>
+            </QzTooltip>
+          ) : (
+            <button
+              type="button"
+              className="qz-btn qz-btn-accent"
+              onClick={() => fetcher.submit({ intent: "continue-buckets" }, { method: "post" })}
+              disabled={continuing}
+            >
+              {continuing ? "Saving…" : "Continue →"}
+            </button>
+          )}
         </div>
-        <button
-          type="button"
-          className="qz-btn qz-btn-accent"
-          onClick={submitConfirm}
-          disabled={confirming || (!isAllOnly && !useAll && selected.size === 0)}
-        >
-          {confirming ? "Saving…" : "Looks right — continue →"}
-        </button>
       </div>
+    </div>
+  );
+}
+
+// The AI suggestion banner — strong/weak signal + the data-backed reason.
+function RbBanner({
+  suggestion,
+  onDismiss,
+}: {
+  suggestion: BucketSuggestion;
+  onDismiss: () => void;
+}) {
+  const headline =
+    suggestion.strength === "strong"
+      ? "We found a clean way to bucket your catalog"
+      : suggestion.strength === "weak"
+        ? "A couple of ways could work"
+        : "Pick the products to recommend";
+  return (
+    <div className={`qz-rb-banner is-${suggestion.strength ?? "none"}`}>
+      <span className="qz-rb-banner-icon" aria-hidden>
+        ✨
+      </span>
+      <div className="qz-rb-banner-body">
+        <div className="qz-rb-banner-head">
+          <strong>{headline}</strong>
+          {suggestion.strength ? (
+            <QzBadge tone={suggestion.strength === "strong" ? "ok" : "warn"}>
+              {suggestion.strength === "strong" ? "Strong signal" : "Worth a look"}
+            </QzBadge>
+          ) : null}
+        </div>
+        <p className="qz-dim" style={{ margin: 0, fontSize: 13 }}>
+          {suggestion.reason}
+        </p>
+      </div>
+      <button
+        type="button"
+        className="qz-rb-banner-x"
+        aria-label="Dismiss suggestion"
+        onClick={onDismiss}
+      >
+        ✕
+      </button>
     </div>
   );
 }

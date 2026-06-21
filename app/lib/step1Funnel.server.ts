@@ -402,13 +402,16 @@ export async function runStep1FunnelAction(
     // A type change with existing buckets clears them (the client only sends
     // clear=true after the TabLockModal confirm).
     if (String(form.get("clear") ?? "") === "true") await clearBuckets(shop.id, quiz.id);
+    // A non-suggested tab click also dismisses the AI banner — folded in here so
+    // one submit does both (a single fetcher can't fire two intents).
+    const dismiss = String(form.get("dismiss") ?? "") === "true";
     const browser = session.bucket_browser;
     const next: BuildSession = {
       ...session,
       bucket_browser: {
         ...(browser ?? {}),
         active_tab: rawType,
-        banner_dismissed: browser?.banner_dismissed ?? false,
+        banner_dismissed: dismiss || (browser?.banner_dismissed ?? false),
       },
     };
     await writeDoc(quiz.id, { ...doc, build_session: next });
