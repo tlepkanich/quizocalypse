@@ -1165,3 +1165,25 @@ body[data-qz] ::selection { background: var(--qz-ink); color: var(--qz-cream); }
   border: 1px solid var(--qz-rule); border-radius: var(--qz-radius-sm); background: var(--qz-cream);
   content-visibility: auto; contain-intrinsic-size: 0 60px;
 }
+
+/* ── Autosave status chip (builder top bar) ──────────────────────────────── */
+.qz-save-status { display: inline-flex; align-items: center; min-width: 70px; justify-content: flex-end; }
+.qz-save-chip {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 2px 9px; border-radius: 999px; font-size: 12px; font-weight: 600; line-height: 1.4;
+}
+.qz-save-chip.is-saving { color: var(--qz-ink-3); background: var(--qz-cream-2); }
+.qz-save-chip.is-saved {
+  color: #2DA44E; background: color-mix(in srgb, #2DA44E 14%, transparent);
+  animation: qz-save-pop 0.9s ease;
+}
+.qz-save-dot {
+  width: 7px; height: 7px; border-radius: 999px; background: #C99A2E;
+  animation: qz-save-blink 1s ease-in-out infinite;
+}
+@keyframes qz-save-pop {
+  0% { transform: scale(0.92); opacity: 0.5; }
+  45% { transform: scale(1.07); }
+  100% { transform: scale(1); opacity: 1; }
+}
+@keyframes qz-save-blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }

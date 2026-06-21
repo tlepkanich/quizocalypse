@@ -270,7 +270,21 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
     goToStep: () => {},
   };
 
-  const savingLabel = isSaving ? "Saving…" : savedAt ? "Saved" : "";
+  // Autosave status chip — a legible "Saving…" (pulsing dot) / "Saved" (green
+  // check, success pulse keyed on savedAt). Shared by both top-bar variants.
+  const saveStatus = (
+    <span className="qz-save-status" aria-live="polite">
+      {isSaving ? (
+        <span className="qz-save-chip is-saving">
+          <span className="qz-save-dot" aria-hidden /> Saving…
+        </span>
+      ) : savedAt ? (
+        <span key={savedAt} className="qz-save-chip is-saved">
+          <span aria-hidden>✓</span> Saved
+        </span>
+      ) : null}
+    </span>
+  );
 
   const editInteractToggle = (
     <div
@@ -658,9 +672,7 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
             {view === "build" ? editInteractToggle : null}
             {undoRedo}
             {settingsPopover}
-            <span className="qz-dim" style={{ fontSize: 12, minWidth: 44, textAlign: "right" }}>
-              {savingLabel === "Saved" ? "Saved ✓" : savingLabel}
-            </span>
+            {saveStatus}
             {shareBtn}
             <a
               href={data.previewUrl}
@@ -757,7 +769,7 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
         className="qz-row qz-row-between"
         style={{ alignItems: "center", marginBottom: 12, gap: 12, flexWrap: "wrap" }}
       >
-        <span className="qz-dim" style={{ fontSize: 12 }}>{savingLabel}</span>
+        {saveStatus}
         <div className="qz-row" style={{ gap: 8, alignItems: "center", flexWrap: "wrap" }}>
           {editInteractToggle}
           {settingsPopover}
