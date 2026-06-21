@@ -1119,3 +1119,49 @@ body[data-qz] ::selection { background: var(--qz-ink); color: var(--qz-cream); }
   display: flex; align-items: center; justify-content: space-between;
   gap: 12px; flex-wrap: wrap; padding-top: 4px;
 }
+
+/* ── RB-P3: card wrap (View affordance) + 100+ scroll + overlays ──────────── */
+.qz-rb-cardwrap {
+  position: relative; display: flex;
+  /* Skip rendering off-screen cards so a 100+ catalog scrolls smoothly. */
+  content-visibility: auto; contain-intrinsic-size: 0 66px;
+}
+.qz-rb-cardwrap > .qz-rb-card { width: 100%; }
+.qz-rb-view {
+  position: absolute; top: 8px; right: 8px;
+  border: 1px solid var(--qz-rule); background: var(--qz-paper); cursor: pointer;
+  font: inherit; font-size: 11.5px; font-weight: 600; color: var(--qz-ink-3);
+  padding: 3px 8px; border-radius: 999px; opacity: 0; transition: opacity .12s, color .12s;
+}
+.qz-rb-cardwrap:hover .qz-rb-view, .qz-rb-view:focus-visible { opacity: 1; }
+.qz-rb-view:hover { color: var(--qz-accent); border-color: var(--qz-accent); }
+
+/* Overlay scrim shared by the modal + drawer */
+.qz-rb-scrim {
+  position: fixed; inset: 0; z-index: 60;
+  background: color-mix(in srgb, var(--qz-ink) 38%, transparent);
+  display: flex; align-items: stretch; justify-content: flex-end;
+}
+
+/* Tab-lock confirm modal (centered) */
+.qz-rb-modal {
+  margin: auto; width: min(420px, 92vw);
+  display: flex; flex-direction: column; gap: 12px;
+  padding: 22px; background: var(--qz-paper);
+  border: 1px solid var(--qz-rule); border-radius: var(--qz-radius); box-shadow: var(--qz-shadow-lg);
+}
+
+/* Product preview drawer (right-side) */
+.qz-rb-drawer {
+  width: min(420px, 94vw); height: 100%; overflow-y: auto;
+  display: flex; flex-direction: column; gap: 8px;
+  padding: 18px; background: var(--qz-paper);
+  border-left: 1px solid var(--qz-rule); box-shadow: var(--qz-shadow-lg);
+}
+.qz-rb-drawer-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
+.qz-rb-drawer-list { display: flex; flex-direction: column; gap: 6px; }
+.qz-rb-drawer-row {
+  display: flex; align-items: center; gap: 10px; padding: 8px;
+  border: 1px solid var(--qz-rule); border-radius: var(--qz-radius-sm); background: var(--qz-cream);
+  content-visibility: auto; contain-intrinsic-size: 0 60px;
+}

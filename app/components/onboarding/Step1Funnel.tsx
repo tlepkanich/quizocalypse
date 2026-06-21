@@ -77,7 +77,8 @@ export interface FunnelData {
       title: string;
       imageUrl: string | null;
       price: number | null;
-      tags: string[];
+      tagKeys: string[];
+      collectionIds: string[];
     }>;
     tags: Array<{ key: string; label: string; count: number }>;
     collections: Array<{ key: string; label: string; count: number }>;
@@ -296,6 +297,10 @@ function RecommendationBucketsStage({
   const [dismissed, setDismissed] = useState(data.bannerDismissed);
   const [search, setSearch] = useState("");
   const q = useDeferredValue(search).trim().toLowerCase();
+  // P3 overlays: the tab-lock confirm (a type change with buckets) + the
+  // read-only "View products" drawer.
+  const [lockTarget, setLockTarget] = useState<BucketType | null>(null);
+  const [drawerGroup, setDrawerGroup] = useState<BucketCard | null>(null);
 
   // Optimistic overlay over the server's selection: id → card (added) | null
   // (removed). Cleared once the fetcher settles (the loader is then fresh).
@@ -330,17 +335,40 @@ function RecommendationBucketsStage({
   };
 
   // Tab switch persists active_tab; a non-suggested tab click also dismisses the
-  // AI banner (folded into the one submit so a single fetcher does both).
-  const switchTab = (type: BucketType) => {
-    if (type === activeTab) return;
+  // AI banner (folded into the one submit so a single fetcher does both). Buckets
+  // are homogeneous to the active source, so switching with ≥1 bucket prompts the
+  // TabLockModal first (confirm → clear all, then switch).
+  const doSwitchTab = (type: BucketType, clear: boolean) => {
     const dismiss = !dismissed && type !== data.suggestion.suggestedType;
     setActiveTab(type);
     setSearch("");
     if (dismiss) setDismissed(true);
+    if (clear) {
+      // Optimistically empty the selection (mark every current id removed).
+      setOverlay(() => {
+        const next = new Map<string, BucketCard | null>();
+        for (const c of selected.values()) next.set(idOf(c.type, c.key), null);
+        return next;
+      });
+    }
     fetcher.submit(
-      { intent: "switch-tab", type, ...(dismiss ? { dismiss: "true" } : {}) },
+      {
+        intent: "switch-tab",
+        type,
+        ...(clear ? { clear: "true" } : {}),
+        ...(dismiss ? { dismiss: "true" } : {}),
+      },
       { method: "post" },
     );
+  };
+
+  const switchTab = (type: BucketType) => {
+    if (type === activeTab) return;
+    if (selected.size > 0) {
+      setLockTarget(type); // confirm via the modal
+      return;
+    }
+    doSwitchTab(type, false);
   };
 
   const dismissBanner = () => {
@@ -481,36 +509,47 @@ function RecommendationBucketsStage({
               const on = isOn(c.type, c.key);
               const price = activeTab === "product" ? priceById.get(c.key) ?? null : null;
               return (
-                <button
-                  key={c.key}
-                  type="button"
-                  className={`qz-rb-card${on ? " is-on" : ""}`}
-                  aria-pressed={on}
-                  onClick={() => toggle(c)}
-                >
-                  {activeTab === "product" ? (
-                    <span className="qz-rb-thumb">
-                      {c.thumbnailUrl ? (
-                        <img src={c.thumbnailUrl} alt="" loading="lazy" />
-                      ) : (
-                        <span aria-hidden>{TYPE_GLYPH.product}</span>
-                      )}
+                <div key={c.key} className="qz-rb-cardwrap">
+                  <button
+                    type="button"
+                    className={`qz-rb-card${on ? " is-on" : ""}`}
+                    aria-pressed={on}
+                    onClick={() => toggle(c)}
+                  >
+                    {activeTab === "product" ? (
+                      <span className="qz-rb-thumb">
+                        {c.thumbnailUrl ? (
+                          <img src={c.thumbnailUrl} alt="" loading="lazy" />
+                        ) : (
+                          <span aria-hidden>{TYPE_GLYPH.product}</span>
+                        )}
+                      </span>
+                    ) : null}
+                    <span className="qz-rb-card-body">
+                      <span className="qz-rb-card-name">{c.name}</span>
+                      <span className="qz-rb-card-meta qz-dim">
+                        {activeTab === "product"
+                          ? price != null
+                            ? `$${price.toFixed(2)}`
+                            : "—"
+                          : `${c.count} product${c.count === 1 ? "" : "s"}`}
+                      </span>
                     </span>
+                    <span className={`qz-rb-check${on ? " is-on" : ""}`} aria-hidden>
+                      {on ? "✓" : ""}
+                    </span>
+                  </button>
+                  {activeTab !== "product" ? (
+                    <button
+                      type="button"
+                      className="qz-rb-view"
+                      aria-label={`View products in ${c.name}`}
+                      onClick={() => setDrawerGroup(c)}
+                    >
+                      View ↗
+                    </button>
                   ) : null}
-                  <span className="qz-rb-card-body">
-                    <span className="qz-rb-card-name">{c.name}</span>
-                    <span className="qz-rb-card-meta qz-dim">
-                      {activeTab === "product"
-                        ? price != null
-                          ? `$${price.toFixed(2)}`
-                          : "—"
-                        : `${c.count} product${c.count === 1 ? "" : "s"}`}
-                    </span>
-                  </span>
-                  <span className={`qz-rb-check${on ? " is-on" : ""}`} aria-hidden>
-                    {on ? "✓" : ""}
-                  </span>
-                </button>
+                </div>
               );
             })}
           </div>
@@ -602,6 +641,143 @@ function RecommendationBucketsStage({
           )}
         </div>
       </div>
+
+      {/* P3 overlays */}
+      {lockTarget ? (
+        <TabLockModal
+          targetLabel={TAB_META.find((t) => t.type === lockTarget)?.label ?? ""}
+          count={count}
+          onConfirm={() => {
+            doSwitchTab(lockTarget, true);
+            setLockTarget(null);
+          }}
+          onCancel={() => setLockTarget(null)}
+        />
+      ) : null}
+      {drawerGroup ? (
+        <ProductPreviewDrawer
+          group={drawerGroup}
+          products={data.catalog.products}
+          onClose={() => setDrawerGroup(null)}
+        />
+      ) : null}
+    </div>
+  );
+}
+
+// Close an overlay on Escape (the QzTooltip pattern, listener-scoped to mount).
+function useEscClose(onClose: () => void) {
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [onClose]);
+}
+
+// Confirm switching the bucket source when buckets already exist (they're tied to
+// the current source, so switching clears them).
+function TabLockModal({
+  targetLabel,
+  count,
+  onConfirm,
+  onCancel,
+}: {
+  targetLabel: string;
+  count: number;
+  onConfirm: () => void;
+  onCancel: () => void;
+}) {
+  useEscClose(onCancel);
+  return (
+    <div className="qz-rb-scrim" onClick={onCancel}>
+      <div
+        className="qz-rb-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-label="Switch bucket source"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <strong style={{ fontSize: 16 }}>Switch to {targetLabel}?</strong>
+        <p className="qz-dim" style={{ margin: 0, fontSize: 13.5 }}>
+          Your {count} current bucket{count === 1 ? "" : "s"} {count === 1 ? "is" : "are"} tied to
+          this source. Switching clears {count === 1 ? "it" : "them"} so you can start fresh.
+        </p>
+        <div className="qz-row" style={{ gap: 10, justifyContent: "flex-end" }}>
+          <button type="button" className="qz-btn qz-btn-ghost" onClick={onCancel}>
+            Cancel
+          </button>
+          <button type="button" className="qz-btn qz-btn-accent" onClick={onConfirm}>
+            Switch &amp; clear
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Read-only right-side drawer: the products inside a tag/collection bucket,
+// resolved client-side from the catalog (no server round-trip).
+function ProductPreviewDrawer({
+  group,
+  products,
+  onClose,
+}: {
+  group: BucketCard;
+  products: FunnelData["catalog"]["products"];
+  onClose: () => void;
+}) {
+  useEscClose(onClose);
+  const members = useMemo(() => {
+    if (group.type === "tag") return products.filter((p) => p.tagKeys.includes(group.key));
+    if (group.type === "collection")
+      return products.filter((p) => p.collectionIds.includes(group.key));
+    return products.filter((p) => p.id === group.key);
+  }, [group, products]);
+  return (
+    <div className="qz-rb-scrim" onClick={onClose}>
+      <aside
+        className="qz-rb-drawer"
+        role="dialog"
+        aria-modal="true"
+        aria-label={`Products in ${group.name}`}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="qz-rb-drawer-head">
+          <div style={{ minWidth: 0 }}>
+            <div className="qz-label">{group.type}</div>
+            <strong className="qz-rb-card-name" style={{ display: "block" }}>
+              {group.name}
+            </strong>
+          </div>
+          <button type="button" className="qz-rb-banner-x" aria-label="Close" onClick={onClose}>
+            ✕
+          </button>
+        </div>
+        <p className="qz-dim" style={{ margin: "0 0 6px", fontSize: 12.5 }}>
+          {members.length} product{members.length === 1 ? "" : "s"} · read-only preview
+        </p>
+        <div className="qz-rb-drawer-list">
+          {members.map((p) => (
+            <div key={p.id} className="qz-rb-drawer-row">
+              <span className="qz-rb-thumb">
+                {p.imageUrl ? (
+                  <img src={p.imageUrl} alt="" loading="lazy" />
+                ) : (
+                  <span aria-hidden>📦</span>
+                )}
+              </span>
+              <span className="qz-rb-card-body">
+                <span className="qz-rb-card-name">{p.title}</span>
+                <span className="qz-rb-card-meta qz-dim">
+                  {p.price != null ? `$${p.price.toFixed(2)}` : "—"}
+                </span>
+              </span>
+            </div>
+          ))}
+        </div>
+      </aside>
     </div>
   );
 }

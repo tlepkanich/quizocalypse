@@ -215,7 +215,10 @@ export async function loadStep1FunnelData(
     title: p.title,
     imageUrl: p.imageUrl ?? null,
     price: p.priceMin != null ? Number(p.priceMin) : null,
-    tags: p.tags,
+    // Normalized tag keys + collection ids so the ProductPreviewDrawer can list a
+    // tag/collection's members client-side (these match the bucket key identities).
+    tagKeys: normalizeTags(p.tags, new Set()),
+    collectionIds: p.collectionIds,
   }));
 
   // Current selections from the quiz's Category rows. The browser only manages
