@@ -932,6 +932,16 @@ export const BuildSession = z.object({
   // can surface an honest banner + template fallback instead of silently reverting
   // the stage. Cleared on the next successful generation.
   gen_error: z.string().optional(),
+  // Recommendation Buckets (Step 1 rework) — the 3-tab catalog browser's UI state
+  // that must survive a reload: which tab is active (the bucket type the quiz is
+  // locked to) and whether the AI-suggestion banner has been dismissed this draft.
+  // The actual buckets live as Category rows, not here.
+  bucket_browser: z
+    .object({
+      active_tab: z.enum(["product", "tag", "collection"]).optional(),
+      banner_dismissed: z.boolean().default(false),
+    })
+    .optional(),
 });
 export type BuildSession = z.infer<typeof BuildSession>;
 
