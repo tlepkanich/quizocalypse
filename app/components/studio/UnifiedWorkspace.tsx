@@ -99,6 +99,35 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
   }, [history, doc, rawCommit]);
   const canUndo = history.past.length > 0;
   const canRedo = history.future.length > 0;
+  // Keyboard shortcuts for undo/redo (⌘Z / ⌘⇧Z, plus Ctrl+Y for Windows redo).
+  // Guarded so typing in a field keeps NATIVE text undo — only the builder canvas
+  // gets these. undo()/redo() self-noop when the stack is empty, so no extra gate.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (!(e.metaKey || e.ctrlKey)) return;
+      const ae = document.activeElement as HTMLElement | null;
+      if (
+        ae &&
+        (ae.tagName === "INPUT" ||
+          ae.tagName === "TEXTAREA" ||
+          ae.tagName === "SELECT" ||
+          ae.isContentEditable)
+      ) {
+        return;
+      }
+      const key = e.key.toLowerCase();
+      if (key === "z") {
+        e.preventDefault();
+        if (e.shiftKey) redo();
+        else undo();
+      } else if (key === "y") {
+        e.preventDefault();
+        redo();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [undo, redo]);
   // QB-2 — preview zoom (a CSS scale on the canvas frame), 50–100%.
   const [zoom, setZoom] = useState(100);
   const publishFetcher = useFetcher<{ ok: boolean; version?: number; error?: string }>();
