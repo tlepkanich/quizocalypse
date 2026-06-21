@@ -112,6 +112,8 @@ export function FlowRail({
   onView: (v: WorkspaceView) => void;
 }) {
   const [adding, setAdding] = useState(false);
+  // The node whose delete is armed (two-step confirm before the destructive op).
+  const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
   const byId = new Map(doc.nodes.map((n) => [n.id, n]));
   const run = straightThroughRun(doc).run;
   const runIndex = new Map(run.map((id, i) => [id, i]));
@@ -159,13 +161,17 @@ export function FlowRail({
             background: sel ? "color-mix(in srgb, var(--qz-accent, #2a6df4) 10%, transparent)" : undefined,
             border: sel ? "1px solid var(--qz-accent, #2a6df4)" : "1px solid transparent",
           }}
-          onClick={() => onSelect(sel ? null : nodeId)}
+          onClick={() => {
+            setConfirmDelete(null); // navigating away disarms a pending delete
+            onSelect(sel ? null : nodeId);
+          }}
           role="button"
           aria-pressed={sel}
           tabIndex={0}
           onKeyDown={(e) => {
             if (e.key === "Enter" || e.key === " ") {
               e.preventDefault();
+              setConfirmDelete(null);
               onSelect(sel ? null : nodeId);
             }
           }}
@@ -218,15 +224,46 @@ export function FlowRail({
                 </>
               ) : null}
               {node.type !== "intro" ? (
-                <button
-                  className="qz-btn qz-btn-ghost qz-btn-sm"
-                  title="Delete step"
-                  aria-label={`Delete ${nodeTitle(node)}`}
-                  onClick={() => remove(nodeId)}
-                  style={{ padding: "0 4px" }}
-                >
-                  ✕
-                </button>
+                confirmDelete === nodeId ? (
+                  <>
+                    <button
+                      className="qz-btn qz-btn-sm"
+                      title="Confirm delete"
+                      aria-label={`Confirm delete ${nodeTitle(node)}`}
+                      onClick={() => {
+                        remove(nodeId);
+                        setConfirmDelete(null);
+                      }}
+                      style={{
+                        padding: "0 7px",
+                        color: "#fff",
+                        background: "#D72C0D",
+                        borderColor: "#D72C0D",
+                      }}
+                    >
+                      Delete
+                    </button>
+                    <button
+                      className="qz-btn qz-btn-ghost qz-btn-sm"
+                      title="Cancel"
+                      aria-label={`Cancel deleting ${nodeTitle(node)}`}
+                      onClick={() => setConfirmDelete(null)}
+                      style={{ padding: "0 4px" }}
+                    >
+                      ↩
+                    </button>
+                  </>
+                ) : (
+                  <button
+                    className="qz-btn qz-btn-ghost qz-btn-sm"
+                    title="Delete step"
+                    aria-label={`Delete ${nodeTitle(node)}`}
+                    onClick={() => setConfirmDelete(nodeId)}
+                    style={{ padding: "0 4px" }}
+                  >
+                    ✕
+                  </button>
+                )
               ) : null}
             </span>
           ) : null}
