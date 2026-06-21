@@ -14,6 +14,7 @@ import {
 } from "../lib/catalog.server";
 import {
   connectShopify,
+  connectShopifyViaApp,
   resyncConnected,
   disconnectShopify,
 } from "../lib/shopifyConnect.server";
@@ -103,6 +104,20 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     return json({ ok: true, intent, message: `Imported ${res.created} product(s).${errNote}` });
   }
 
+  if (intent === "connect-shopify-app") {
+    const res = await connectShopifyViaApp(shop.id, String(form.get("domain") ?? ""));
+    return json(
+      {
+        ok: res.ok,
+        intent,
+        message: res.ok
+          ? `Connected to ${res.shopName ?? "your store"} via your installed app — syncing products now…`
+          : res.error ?? "Couldn't connect.",
+      },
+      { status: res.ok ? 200 : 400 },
+    );
+  }
+
   if (intent === "connect-shopify") {
     const res = await connectShopify(
       shop.id,
@@ -161,33 +176,59 @@ function ConnectShopifyCard({
 }) {
   if (!connection) {
     return (
-      <QzCard style={{ marginBottom: 18, display: "flex", flexDirection: "column", gap: 12 }}>
+      <QzCard style={{ marginBottom: 18, display: "flex", flexDirection: "column", gap: 14 }}>
         <div>
           <div className="qz-label">Connect Shopify</div>
           <p className="qz-muted" style={{ margin: "2px 0 0", fontSize: 13, lineHeight: 1.5 }}>
-            Sync your whole Shopify catalog automatically. In your Shopify admin go to{" "}
-            <strong>Settings → Apps and sales channels → Develop apps → Create an app</strong>, enable the{" "}
-            <code>read_products</code> and <code>read_inventory</code> Admin API scopes, <strong>Install</strong>{" "}
-            the app, then copy its <strong>Admin API access token</strong> and paste it below. Your token is stored
-            encrypted and never leaves the server.
+            Sync your whole Shopify catalog automatically. If you’ve installed the Quizocalypse app on your store,
+            just enter your store domain — we’ll reuse that connection, no token needed.
           </p>
         </div>
+
+        {/* Primary — reuse the embedded app's OAuth session (no secret to paste). */}
         <Form
           method="post"
           replace
-          style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) minmax(0,1.4fr) auto", gap: 10, alignItems: "flex-end" }}
+          style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) auto", gap: 10, alignItems: "flex-end" }}
         >
-          <input type="hidden" name="intent" value="connect-shopify" />
+          <input type="hidden" name="intent" value="connect-shopify-app" />
           <QzField label="Store domain">
             <QzInput name="domain" required placeholder="your-store.myshopify.com" autoComplete="off" />
           </QzField>
-          <QzField label="Admin API access token">
-            <QzInput name="token" type="password" required placeholder="shpat_…" autoComplete="off" />
-          </QzField>
           <button type="submit" className="qz-btn qz-btn-primary" disabled={busy} style={{ whiteSpace: "nowrap" }}>
-            {busy ? "Connecting…" : "Connect & sync"}
+            {busy ? "Connecting…" : "Use my installed app"}
           </button>
         </Form>
+
+        {/* Fallback — custom-app Admin API token, for stores without the app installed. */}
+        <details>
+          <summary style={{ cursor: "pointer", fontSize: 12.5, color: "var(--qz-ink-3)" }}>
+            Haven’t installed the app? Connect with an Admin API token instead
+          </summary>
+          <p className="qz-muted" style={{ margin: "8px 0 10px", fontSize: 12.5, lineHeight: 1.5 }}>
+            In your Shopify admin go to{" "}
+            <strong>Settings → Apps and sales channels → Develop apps → Create an app</strong>, enable the{" "}
+            <code>read_products</code> and <code>read_inventory</code> Admin API scopes, <strong>Install</strong>{" "}
+            the app, then copy its <strong>Admin API access token</strong>. It’s stored encrypted and never leaves
+            the server.
+          </p>
+          <Form
+            method="post"
+            replace
+            style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) minmax(0,1.4fr) auto", gap: 10, alignItems: "flex-end" }}
+          >
+            <input type="hidden" name="intent" value="connect-shopify" />
+            <QzField label="Store domain">
+              <QzInput name="domain" required placeholder="your-store.myshopify.com" autoComplete="off" />
+            </QzField>
+            <QzField label="Admin API access token">
+              <QzInput name="token" type="password" required placeholder="shpat_…" autoComplete="off" />
+            </QzField>
+            <button type="submit" className="qz-btn qz-btn-ghost" disabled={busy} style={{ whiteSpace: "nowrap" }}>
+              {busy ? "Connecting…" : "Connect with token"}
+            </button>
+          </Form>
+        </details>
       </QzCard>
     );
   }

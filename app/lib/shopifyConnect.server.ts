@@ -3,6 +3,14 @@ import prisma from "../db.server";
 import { encrypt, decrypt } from "./crypto";
 import { syncCatalogForShopId } from "../jobs/catalogSync";
 
+// shopify.server is dynamically imported (not a top-level import) so this module
+// stays loadable in contexts that haven't configured the Shopify app — the pure
+// helpers (normalizeShopDomain, adminClientFromToken) are unit-tested without it.
+// At runtime shopify.server is already loaded, so the dynamic import is cached.
+async function shopifyUnauthenticated() {
+  return (await import("../shopify.server")).unauthenticated;
+}
+
 // ────────────────────────────────────────────────────────────────────────────
 // Standalone Shopify connector. A non-Shopify workspace (source="standalone")
 // connects a Shopify store with a CUSTOM-APP Admin API access token (the
@@ -87,6 +95,37 @@ export async function testShopifyConnection(domain: string, token: string): Prom
   }
 }
 
+/**
+ * Resolve a live Admin client from the EMBEDDED app's stored offline OAuth
+ * session for `domain` — the "Use my installed Shopify app" path (no token to
+ * paste). Returns the admin + store name, or a clear error if the app isn't
+ * installed on that store / the session can't be resolved. Never throws.
+ */
+export async function resolveAppAdmin(
+  domain: string,
+): Promise<{ ok: true; admin: AdminApiContext; shopName: string } | { ok: false; error: string }> {
+  try {
+    const unauthenticated = await shopifyUnauthenticated();
+    const { admin } = await unauthenticated.admin(domain);
+    const res = await admin.graphql(`{ shop { name } }`);
+    if (!res.ok) {
+      return {
+        ok: false,
+        error: `Your installed app's session for ${domain} isn't usable (HTTP ${res.status}). Open the Shopify app once to refresh it, or connect with a token instead.`,
+      };
+    }
+    const body = (await res.json()) as { data?: { shop?: { name?: string } } };
+    const name = body.data?.shop?.name;
+    if (!name) return { ok: false, error: "Couldn't read the store through the installed app." };
+    return { ok: true, admin: admin as AdminApiContext, shopName: name };
+  } catch {
+    return {
+      ok: false,
+      error: `No installed Quizocalypse app was found for ${domain}. Install the app on that store first, or connect with an Admin API token instead.`,
+    };
+  }
+}
+
 export interface ConnectResult {
   ok: boolean;
   shopName?: string;
@@ -126,9 +165,48 @@ export async function connectShopify(
 }
 
 /**
- * Detached catalog sync for a connected standalone shop. Decrypts the stored
- * token, builds the admin shim, and pulls the catalog into this shop with the
- * storefront domain so product "Shop now" URLs resolve. Sets lastSyncStatus.
+ * Connect via the EMBEDDED app's OAuth session instead of a pasted token — the
+ * "Use my installed Shopify app" path. No secret is stored: a null
+ * `shopifyConnectToken` with a set domain marks an app-session connection, and
+ * sync resolves `unauthenticated.admin(domain)` at run time.
+ */
+export async function connectShopifyViaApp(shopId: string, rawDomain: string): Promise<ConnectResult> {
+  const domain = normalizeShopDomain(rawDomain);
+  if (!domain) return { ok: false, error: "Enter a valid .myshopify.com store domain." };
+
+  const probe = await resolveAppAdmin(domain);
+  if (!probe.ok) return { ok: false, error: probe.error };
+
+  await prisma.shop.update({
+    where: { id: shopId },
+    data: {
+      shopifyConnectDomain: domain,
+      shopifyConnectToken: null, // app-session connection — no stored secret
+      shopifyConnectedAt: new Date(),
+      lastSyncStatus: "syncing",
+      lastSyncError: null,
+    },
+  });
+
+  startConnectedSync(shopId);
+  return { ok: true, shopName: probe.shopName };
+}
+
+/**
+ * The Admin client for a connected shop: the stored custom-app token shim when
+ * a token is present, else the embedded app's offline OAuth session.
+ */
+async function adminForConnectedShop(domain: string, encToken: string | null): Promise<AdminApiContext> {
+  if (encToken) return adminClientFromToken(domain, decrypt(encToken));
+  const unauthenticated = await shopifyUnauthenticated();
+  const { admin } = await unauthenticated.admin(domain);
+  return admin as AdminApiContext;
+}
+
+/**
+ * Detached catalog sync for a connected standalone shop. Builds the admin (token
+ * shim OR the installed app's OAuth session) and pulls the catalog into this shop
+ * with the storefront domain so product "Shop now" URLs resolve. Sets lastSyncStatus.
  */
 export function startConnectedSync(shopId: string): void {
   void (async () => {
@@ -137,14 +215,14 @@ export function startConnectedSync(shopId: string): void {
         where: { id: shopId },
         select: { shopifyConnectDomain: true, shopifyConnectToken: true },
       });
-      if (!shop?.shopifyConnectDomain || !shop.shopifyConnectToken) {
+      if (!shop?.shopifyConnectDomain) {
         await prisma.shop.update({
           where: { id: shopId },
           data: { lastSyncStatus: "error", lastSyncError: "Not connected to Shopify." },
         });
         return;
       }
-      const admin = adminClientFromToken(shop.shopifyConnectDomain, decrypt(shop.shopifyConnectToken));
+      const admin = await adminForConnectedShop(shop.shopifyConnectDomain, shop.shopifyConnectToken);
       // syncCatalogForShopId writes lastSyncStatus ok/error itself.
       await syncCatalogForShopId(admin, shopId, { storefrontDomain: shop.shopifyConnectDomain });
     } catch (err) {
@@ -164,9 +242,9 @@ export function startConnectedSync(shopId: string): void {
 export async function resyncConnected(shopId: string): Promise<{ ok: boolean; error?: string }> {
   const shop = await prisma.shop.findUnique({
     where: { id: shopId },
-    select: { shopifyConnectDomain: true, shopifyConnectToken: true },
+    select: { shopifyConnectDomain: true },
   });
-  if (!shop?.shopifyConnectDomain || !shop.shopifyConnectToken) {
+  if (!shop?.shopifyConnectDomain) {
     return { ok: false, error: "No Shopify store is connected." };
   }
   await prisma.shop.update({
