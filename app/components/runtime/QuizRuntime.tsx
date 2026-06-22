@@ -1172,6 +1172,11 @@ export function QuizRuntime(props: QuizRuntimeProps) {
           .qz-insp-sel { outline: 2px solid var(--qz-color-accent, #999); outline-offset: 3px; border-radius: 4px; }
         `}</style>
       ) : null}
+      {/* CSS must stay free of ' " < > & — React HTML-escapes text children of
+          <style>, turning e.g. an apostrophe in a comment into &#x27; on the
+          server (but ' on the client) → a #425 hydration mismatch that cascades
+          into #418 on every quiz. Keep apostrophe-prone prose in JSX comments
+          like this one, never in the CSS string below. */}
       <style>{`
         @media (prefers-reduced-motion: reduce) {
           *, *::before, *::after {
@@ -1200,7 +1205,7 @@ export function QuizRuntime(props: QuizRuntimeProps) {
         .qz-bp-desktop .qz-preview-chip { display: none !important; }
         .qz-bp-mobile .qz-preview-rail { display: none; }
         /* Unified P6 — pre-hydration container correctness. Before JS measures
-           (the SSR'd qz-unmeasured class), container queries pick the desktop
+           (the server-rendered qz-unmeasured class), container queries pick the desktop
            shell layout on wide containers, so the no-JS / pre-hydration first
            paint is already right. Scoped to qz-unmeasured so the MEASURED
            system owns everything after hydration (no dual-source conflicts —
