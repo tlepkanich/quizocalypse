@@ -12,6 +12,14 @@ type EnrichResponse =
   | { ok: true; action: "enrich-reviews"; doc: Quiz; assistant_message?: string; changed?: number }
   | { ok: false; error?: string };
 
+// SSR-safe date: format the ISO date parts deterministically. toLocaleDateString
+// differs by the rendering environment's timezone/locale, so server vs client
+// disagree → a React #425 "text content mismatch" hydration error.
+function fmtEnrichedDate(iso: string): string {
+  const [y, m, d] = iso.slice(0, 10).split("-");
+  return y && m && d ? `${Number(m)}/${Number(d)}/${y}` : iso.slice(0, 10);
+}
+
 export function ReviewEnrichPanel({
   onApply,
   sources,
@@ -64,7 +72,7 @@ export function ReviewEnrichPanel({
       >
         <strong style={{ fontSize: 14 }}>✨ Enrich from reviews</strong>
         <span className="qz-dim" style={{ fontSize: 12 }}>
-          {sources ? `last run ${new Date(sources.enriched_at).toLocaleDateString()} · ` : ""}
+          {sources ? `last run ${fmtEnrichedDate(sources.enriched_at)} · ` : ""}
           {open ? "▲" : "▼"}
         </span>
       </button>
