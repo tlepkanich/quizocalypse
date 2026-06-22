@@ -138,10 +138,14 @@ for (const q of QUIZZES) {
 // only — no assertions on specific translated words (regeneration may rephrase).
 test("locale: fr serves lang=fr, unknown falls back to en", async ({ page }) => {
   const demo = QUIZZES.find((q) => q.label === "a")!;
-  await page.goto(`/q/${demo.id}?locale=fr`, { waitUntil: "networkidle" });
+  // domcontentloaded, not networkidle: these only assert the SSR lang attr + h1
+  // (both in the initial HTML). The runtime keeps firing analytics events so the
+  // page never truly idles — networkidle here flaked with net::ERR_TIMED_OUT,
+  // even though /q?locale=fr serves 200 in ~560ms (verified directly).
+  await page.goto(`/q/${demo.id}?locale=fr`, { waitUntil: "domcontentloaded" });
   await expect(page.locator('[lang="fr"]').first()).toBeAttached();
   expect((await page.locator("h1").first().textContent())?.trim().length).toBeGreaterThan(0);
 
-  await page.goto(`/q/${demo.id}?locale=zz`, { waitUntil: "networkidle" });
+  await page.goto(`/q/${demo.id}?locale=zz`, { waitUntil: "domcontentloaded" });
   await expect(page.locator('[lang="en"]').first()).toBeAttached();
 });

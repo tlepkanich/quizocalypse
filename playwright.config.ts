@@ -7,7 +7,11 @@ export default defineConfig({
   testDir: "./e2e",
   timeout: 90_000,
   expect: { timeout: 10_000 },
-  retries: 0,
+  // This suite runs against the LIVE Fly deploy, so a single transient network
+  // blip (e.g. net::ERR_TIMED_OUT from the single machine momentarily stalling)
+  // shouldn't red the whole run — retry transient failures. The locale page,
+  // for instance, serves 200 in ~560ms yet occasionally times out the nav.
+  retries: 2,
   reporter: [["list"]],
   use: {
     headless: true,
