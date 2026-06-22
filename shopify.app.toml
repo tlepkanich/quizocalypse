@@ -1,7 +1,7 @@
 # Learn more about configuring your app at https://shopify.dev/docs/apps/tools/cli/configuration
 
 client_id = "f3734ef453742fe039d91aed5cbc4da3"
-application_url = "https://address-fwd-drugs-engine.trycloudflare.com"
+application_url = "https://quizocalypse-studio.fly.dev"
 embedded = true
 name = "quizocalypse"
 
@@ -11,9 +11,9 @@ scopes = "read_inventory,read_orders,read_products,read_themes,write_discounts"
 
 [auth]
 redirect_urls = [
-  "https://address-fwd-drugs-engine.trycloudflare.com/auth/callback",
-  "https://address-fwd-drugs-engine.trycloudflare.com/auth/shopify/callback",
-  "https://address-fwd-drugs-engine.trycloudflare.com/api/auth/callback"
+  "https://quizocalypse-studio.fly.dev/auth/callback",
+  "https://quizocalypse-studio.fly.dev/auth/shopify/callback",
+  "https://quizocalypse-studio.fly.dev/api/auth/callback"
 ]
 
 [webhooks]
@@ -26,4 +26,8 @@ api_version = "2026-07"
   uri = "/webhooks/orders/create"
 
 [build]
-automatically_update_urls_on_dev = true
+# Pinned to the stable Fly URL above. Keep false so `shopify app dev` can't
+# overwrite application_url with an ephemeral tunnel — that is exactly what
+# left the standalone connector pointing at a dead tunnel. Flip back to true
+# only if you resume local embedded dev.
+automatically_update_urls_on_dev = false
