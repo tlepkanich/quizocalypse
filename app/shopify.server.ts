@@ -27,7 +27,11 @@ const shopify = shopifyApp({
   distribution: AppDistribution.AppStore,
   future: {
     unstable_newEmbeddedAuthStrategy: true,
-    expiringOfflineAccessTokens: true,
+    // Long-lived offline tokens. The standalone connector ("Use my installed
+    // Shopify app") reuses the embedded app's stored OFFLINE token to run
+    // background catalog sync, so it must not expire between merchant visits.
+    // (After deploying this, re-open the app once to mint a fresh durable token.)
+    expiringOfflineAccessTokens: false,
   },
   hooks: {
     afterAuth: async ({ session, admin }) => {
