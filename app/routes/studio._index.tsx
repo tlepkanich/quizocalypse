@@ -5,6 +5,7 @@ import type { ReactNode } from "react";
 import { requireStudioAccess, resolveStudioShop } from "../lib/studioAccess.server";
 import prisma from "../db.server";
 import { QzPage, QzBadge } from "../components/qz";
+import { formatDate } from "../lib/formatDate";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   await requireStudioAccess(request);
@@ -120,7 +121,7 @@ export default function StudioHome() {
                   <QzBadge tone={q.status === "published" ? "ok" : "draft"}>{q.status}</QzBadge>
                 </div>
                 <div className="qz-dim" style={{ fontSize: 12 }}>
-                  updated {new Date(q.updatedAt).toLocaleDateString()}
+                  updated {formatDate(q.updatedAt)}
                 </div>
               </Link>
             ))}

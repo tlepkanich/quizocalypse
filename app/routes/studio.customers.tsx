@@ -4,6 +4,7 @@ import { Link, useLoaderData } from "@remix-run/react";
 import { requireStudioAccess, resolveStudioShop } from "../lib/studioAccess.server";
 import prisma from "../db.server";
 import { QzPage, QzPageHeader, QzCard, QzStat, QzStatGrid } from "../components/qz";
+import { formatDate } from "../lib/formatDate";
 
 // QD-8 — Customers: every email/phone a quiz captured, newest first. The
 // standalone twin of the embedded /app/captures, reusing the EmailCapture
@@ -111,7 +112,7 @@ export default function StudioCustomers() {
                       </Link>
                     </td>
                     <td style={{ ...cellStyle, whiteSpace: "nowrap", color: "var(--qz-ink-3)" }}>
-                      {new Date(r.capturedAt).toLocaleDateString()}
+                      {formatDate(r.capturedAt)}
                     </td>
                   </tr>
                 ))}

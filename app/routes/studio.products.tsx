@@ -12,6 +12,7 @@ import {
   importCsv,
   isManualId,
 } from "../lib/catalog.server";
+import { formatDate } from "../lib/formatDate";
 import {
   connectShopify,
   connectShopifyViaApp,
@@ -246,7 +247,7 @@ function ConnectShopifyCard({
           <p className="qz-muted" style={{ margin: "3px 0 0", fontSize: 13 }}>
             <strong>{connection.domain}</strong> · {syncedCount} product{syncedCount === 1 ? "" : "s"} synced
             {connection.lastSyncAt && !syncing
-              ? ` · last sync ${new Date(connection.lastSyncAt).toLocaleString()}`
+              ? ` · last sync ${formatDate(connection.lastSyncAt)}`
               : ""}
           </p>
           {connection.lastSyncStatus === "error" ? (

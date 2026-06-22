@@ -9,6 +9,7 @@ import {
   MIN_SESSIONS_FOR_COMPARE,
   type QuizBenchmark,
 } from "../lib/quizBenchmarks";
+import { formatDate } from "../lib/formatDate";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   await requireStudioAccess(request);
@@ -133,7 +134,7 @@ export default function StudioQuizzes() {
                 <QzBadge tone={q.status === "published" ? "ok" : "draft"}>{q.status}</QzBadge>
               </div>
               <div className="qz-dim" style={{ fontSize: 12 }}>
-                v{q.version} · updated {new Date(q.updatedAt).toLocaleDateString()}
+                v{q.version} · updated {formatDate(q.updatedAt)}
               </div>
               <BenchLine bench={q.bench} averageRate={averageRate} />
               <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: "auto" }}>
