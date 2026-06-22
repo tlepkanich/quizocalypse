@@ -7,6 +7,7 @@ import { Quiz, type QuizNode } from "../lib/quizSchema";
 import { recommendForResult, type IndexedProduct } from "../lib/recommendationEngine";
 import { applyTranslations, resolveLocale } from "../lib/quizTranslate";
 import { chromeFor, t, type ChromeToken } from "../components/runtime/chromeStrings";
+import { formatDate } from "../lib/formatDate";
 
 // Public "My Results" page (Miro "Save State & Resume → persistent recommendation
 // page; return via email link"). A shopper returns via a link carrying
@@ -163,9 +164,7 @@ export default function MyResults() {
     resultNodeId: resultNode.id,
     ...(answerWeights ? { answerWeights } : {}),
   });
-  const completedDate = session.completedAt
-    ? new Date(session.completedAt).toLocaleDateString()
-    : null;
+  const completedDate = session.completedAt ? formatDate(session.completedAt) : null;
 
   return (
     <div style={shellStyle} lang={locale}>
