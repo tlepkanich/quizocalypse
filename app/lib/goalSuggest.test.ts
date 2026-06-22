@@ -57,4 +57,24 @@ describe("suggestQuizGoal", () => {
     expect(goal).toContain("One, Two and Three");
     expect(goal).not.toContain("Four");
   });
+
+  it("lets the SELECTED buckets win over a broad 'beauty' brand summary (makeup ≠ skincare)", () => {
+    // The reported bug: a makeup catalog's brand summary mentions "beauty/
+    // cosmetics" (both in the skincare seed), so the goal defaulted to skincare
+    // and ignored the buckets the merchant actually chose.
+    const goal = suggestQuizGoal({
+      identitySummary: "A bold beauty and cosmetics brand.",
+      groupNames: ["Lipstick", "Foundation", "Mascara"],
+    });
+    expect(goal).not.toContain("skincare routine");
+    expect(goal).toContain("Lipstick, Foundation and Mascara");
+  });
+
+  it("still uses the brand summary when there are NO buckets (all-products quiz)", () => {
+    const goal = suggestQuizGoal({
+      identitySummary: "A clean beauty brand selling serums for dry skin.",
+      groupNames: [],
+    });
+    expect(goal).toContain("skincare routine");
+  });
 });

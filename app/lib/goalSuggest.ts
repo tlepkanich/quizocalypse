@@ -58,14 +58,25 @@ export function suggestQuizGoal(input: {
   identitySummary?: string | null;
   groupNames?: string[];
 }): string {
-  const summary = (input.identitySummary ?? "").toLowerCase();
+  const groupNames = input.groupNames ?? [];
 
-  // Score each template seed by how many keyword hits the identity mentions; the
+  // The merchant's EXPLICITLY chosen recommendation buckets ARE the quiz's
+  // subject, so they drive the vertical match; the store-wide brand-identity
+  // summary is only a fallback for all-products quizzes (no buckets chosen).
+  // Without this, a broad "beauty/cosmetics" summary always trips the skincare
+  // seed and overrides the buckets the merchant just picked (e.g. a lipstick
+  // bucket → a "skin" goal — the reported bug on a real makeup catalog).
+  const signal = (groupNames.length
+    ? groupNames.join(" ")
+    : input.identitySummary ?? ""
+  ).toLowerCase();
+
+  // Score each template seed by how many keyword hits the signal mentions; the
   // best-matching vertical wins. Ties resolve to declaration order (skincare → …).
   let best: TemplateGoalSeed | null = null;
   let bestScore = 0;
   for (const seed of TEMPLATE_GOAL_SEEDS) {
-    const hits = summary.match(new RegExp(seed.pattern, "gi"));
+    const hits = signal.match(new RegExp(seed.pattern, "gi"));
     const score = hits ? hits.length : 0;
     if (score > bestScore) {
       best = seed;
@@ -75,7 +86,7 @@ export function suggestQuizGoal(input: {
   if (best) return best.goal;
 
   // No vertical signal — generic product match, tailored to the groups when known.
-  const groups = joinGroups(input.groupNames ?? []);
+  const groups = joinGroups(groupNames);
   const generic = groups
     ? `Help shoppers find the right product for their needs by matching their answers to the best fit across your ${groups} collections.`
     : "Help shoppers find the right product for their needs by matching their answers to the best option in your catalog.";
