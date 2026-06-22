@@ -872,6 +872,22 @@ body[data-qz] ::selection { background: var(--qz-ink); color: var(--qz-cream); }
   background: var(--qz-cream-2, #eee); color: var(--qz-ink-3); font-size: 13px;
 }
 /* The row under the top bar: rail · tool panel · stage (or full-width settings). */
+/* Persistent Build/Products/Results/Logic nav — a thin strip under the top bar,
+   always visible so switching views never hides the switcher (the fix for the
+   buried/vanishing FlowRail switcher). */
+.qz-builder-views {
+  flex: 0 0 auto; display: flex; gap: 2px; align-items: center;
+  padding: 5px 12px; background: var(--qz-paper);
+  border-bottom: 1px solid var(--qz-rule);
+}
+.qz-builder-views button {
+  border: none; background: none; cursor: pointer; font: inherit;
+  font-size: 13px; font-weight: 600; color: var(--qz-ink-3);
+  padding: 6px 13px; border-radius: 8px; line-height: 1.4;
+  transition: background var(--qz-dur-fast) var(--qz-ease), color var(--qz-dur-fast) var(--qz-ease);
+}
+.qz-builder-views button:hover { color: var(--qz-ink); background: var(--qz-cream); }
+.qz-builder-views button.is-active { color: var(--qz-accent); background: var(--qz-accent-tint); }
 .qz-builder-body { flex: 1 1 auto; min-height: 0; display: flex; align-items: stretch; }
 .qz-builder-panel {
   flex: 0 0 320px; width: 320px; min-width: 0; overflow-y: auto;

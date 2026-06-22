@@ -658,6 +658,7 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
                 onView={setView}
                 confirmDeleteId={confirmDeleteId}
                 onConfirmDelete={setConfirmDeleteId}
+                hideViewSwitcher
               />
               {selectedId ? (
                 <ContextPanel
@@ -725,6 +726,29 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
             {publishBtn}
           </div>
         </header>
+        {/* Persistent workspace-view nav — Build/Products/Results/Logic. Lives
+            here (not buried in the Editor→Settings FlowRail) so it's reachable
+            and visible from EVERY view; switching no longer hides the switcher. */}
+        <nav className="qz-builder-views" role="group" aria-label="Workspace view">
+          {(
+            [
+              ["build", "Build"],
+              ["products", "Products"],
+              ["results", "Results"],
+              ["logic", "Logic"],
+            ] as [WorkspaceView, string][]
+          ).map(([v, label]) => (
+            <button
+              key={v}
+              type="button"
+              className={view === v ? "is-active" : ""}
+              aria-pressed={view === v}
+              onClick={() => setView(v)}
+            >
+              {label}
+            </button>
+          ))}
+        </nav>
         <div className="qz-builder-body">
           <BuilderRail
             active={activeTool}

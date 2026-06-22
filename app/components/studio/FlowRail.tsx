@@ -116,6 +116,7 @@ export function FlowRail({
   onView,
   confirmDeleteId,
   onConfirmDelete,
+  hideViewSwitcher,
 }: {
   doc: QuizDoc;
   ordered: OrderedFlow;
@@ -133,6 +134,10 @@ export function FlowRail({
   // the selected step can arm the same two-step confirm (UnifiedWorkspace owns it).
   confirmDeleteId: string | null;
   onConfirmDelete: (nodeId: string | null) => void;
+  // Standalone hides FlowRail's own view switcher — the Quizell chrome renders a
+  // persistent Build/Products/Results/Logic strip in the top bar instead. The
+  // embedded `body` layout (no top bar) keeps it as the primary view nav.
+  hideViewSwitcher?: boolean;
 }) {
   const [adding, setAdding] = useState(false);
   // Inline rename: the node being renamed + the working value (double-click a row).
@@ -334,20 +339,22 @@ export function FlowRail({
 
   return (
     <div className="qz-card" style={{ padding: 10, position: "sticky", top: 8 }}>
-      <div className="qz-segmented qz-segmented--fill" role="group" aria-label="Workspace view" style={{ width: "100%", marginBottom: 10 }}>
-        <button type="button" aria-pressed={view === "build"} onClick={() => onView("build")}>
-          Build
-        </button>
-        <button type="button" aria-pressed={view === "products"} onClick={() => onView("products")}>
-          Products
-        </button>
-        <button type="button" aria-pressed={view === "results"} onClick={() => onView("results")}>
-          Results
-        </button>
-        <button type="button" aria-pressed={view === "logic"} onClick={() => onView("logic")}>
-          Logic
-        </button>
-      </div>
+      {!hideViewSwitcher && (
+        <div className="qz-segmented qz-segmented--fill" role="group" aria-label="Workspace view" style={{ width: "100%", marginBottom: 10 }}>
+          <button type="button" aria-pressed={view === "build"} onClick={() => onView("build")}>
+            Build
+          </button>
+          <button type="button" aria-pressed={view === "products"} onClick={() => onView("products")}>
+            Products
+          </button>
+          <button type="button" aria-pressed={view === "results"} onClick={() => onView("results")}>
+            Results
+          </button>
+          <button type="button" aria-pressed={view === "logic"} onClick={() => onView("logic")}>
+            Logic
+          </button>
+        </div>
+      )}
 
       {view === "build" ? (
         <>
