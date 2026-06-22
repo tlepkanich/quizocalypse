@@ -11,6 +11,17 @@ const SIDES = ["top", "right", "bottom", "left"] as const;
 type Side = (typeof SIDES)[number];
 const PAD_DEFAULT: Record<Side, number> = { top: 24, right: 24, bottom: 24, left: 24 };
 const HEX_RE = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i;
+// Quick-pick page backgrounds (light → warm → cool → dark), aligned to the
+// house/dark theme surfaces. Clicking one writes design_tokens.colors.background
+// through the same undoable commit as the hex field.
+const BG_PRESETS: { hex: string; name: string }[] = [
+  { hex: "#FFFFFF", name: "White" },
+  { hex: "#FAF7F2", name: "Linen" },
+  { hex: "#F4F4F5", name: "Mist" },
+  { hex: "#111111", name: "Black" },
+  { hex: "#0C1018", name: "Ink" },
+  { hex: "#14110E", name: "Espresso" },
+];
 const clampPad = (n: number) => Math.max(0, Math.min(240, Math.round(n) || 0));
 
 function PadInput({
@@ -87,6 +98,23 @@ export function BuilderPageSettings({
             value={bg}
             onChange={(e) => setBg(e.target.value)}
           />
+        </div>
+        <div className="qz-ps-swatches" role="group" aria-label="Background presets">
+          {BG_PRESETS.map((p) => {
+            const active = bg.trim().toLowerCase() === p.hex.toLowerCase();
+            return (
+              <button
+                key={p.hex}
+                type="button"
+                className={`qz-ps-swatch${active ? " is-on" : ""}`}
+                style={{ background: p.hex }}
+                title={`${p.name} · ${p.hex}`}
+                aria-label={`Set background to ${p.name}`}
+                aria-pressed={active}
+                onClick={() => setBg(p.hex)}
+              />
+            );
+          })}
         </div>
       </div>
 

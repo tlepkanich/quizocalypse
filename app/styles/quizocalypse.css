@@ -1014,6 +1014,14 @@ body[data-qz] ::selection { background: var(--qz-ink); color: var(--qz-cream); }
 .qz-ps-pad-mid { grid-column: 2; grid-row: 2; width: 100%; height: 34px; border: 1px dashed var(--qz-rule); border-radius: 7px; }
 .qz-ps-pad-right { grid-column: 3; grid-row: 2; }
 .qz-ps-pad-bottom { grid-column: 2; grid-row: 3; }
+.qz-ps-swatches { display: flex; flex-wrap: wrap; gap: 6px; }
+.qz-ps-swatch {
+  width: 24px; height: 24px; flex: 0 0 auto; cursor: pointer; padding: 0;
+  border: 1px solid var(--qz-rule); border-radius: 6px;
+  transition: transform var(--qz-dur-fast) var(--qz-ease), box-shadow var(--qz-dur-fast) var(--qz-ease);
+}
+.qz-ps-swatch:hover { transform: scale(1.08); }
+.qz-ps-swatch.is-on { box-shadow: 0 0 0 2px var(--qz-paper), 0 0 0 4px var(--qz-accent); }
 
 /* ── Recommendation Buckets (RB Step 1) ──────────────────────────────────── */
 .qz-rb { display: flex; flex-direction: column; gap: 16px; }
