@@ -165,31 +165,81 @@ export async function connectShopify(
 }
 
 /**
- * Connect via the EMBEDDED app's OAuth session instead of a pasted token — the
- * "Use my installed Shopify app" path. No secret is stored: a null
- * `shopifyConnectToken` with a set domain marks an app-session connection, and
- * sync resolves `unauthenticated.admin(domain)` at run time.
+ * The access token the EMBEDDED Shopify app already stored for `domain`, read
+ * straight from the Prisma Session table (what PrismaSessionStorage writes on
+ * install / token exchange). Prefers an offline, unexpired session; falls back to
+ * the latest with any token. Returns null when this database has no session for
+ * the shop — e.g. the app was installed against a different deployment/DB.
+ * Reusing this token directly sidesteps `unauthenticated.admin()`, which can't
+ * refresh token-exchange offline tokens outside the embedded iframe.
+ */
+async function embeddedSessionToken(domain: string): Promise<string | null> {
+  const sessions = await prisma.session.findMany({ where: { shop: domain } });
+  if (!sessions.length) return null;
+  const now = Date.now();
+  const ranked = [...sessions].sort(
+    (a, b) =>
+      Number(a.isOnline) - Number(b.isOnline) || // offline (false) first
+      (b.expires?.getTime() ?? Infinity) - (a.expires?.getTime() ?? Infinity), // later-expiring first
+  );
+  const pick = ranked.find((s) => !s.expires || s.expires.getTime() > now) ?? ranked[0];
+  return pick?.accessToken ?? null;
+}
+
+/**
+ * Connect via the EMBEDDED app instead of a pasted token — the "Use my installed
+ * Shopify app" path. Reuses the access token the embedded app already stored in
+ * the Session table (no re-paste); persists it encrypted so sync uses the proven
+ * token shim. Falls back to live OAuth-session resolution, then a clear error.
  */
 export async function connectShopifyViaApp(shopId: string, rawDomain: string): Promise<ConnectResult> {
   const domain = normalizeShopDomain(rawDomain);
   if (!domain) return { ok: false, error: "Enter a valid .myshopify.com store domain." };
 
+  // 1) Reuse the embedded app's already-stored token directly.
+  const sessionToken = await embeddedSessionToken(domain);
+  if (sessionToken) {
+    const test = await testShopifyConnection(domain, sessionToken);
+    if (test.ok) {
+      await prisma.shop.update({
+        where: { id: shopId },
+        data: {
+          shopifyConnectDomain: domain,
+          shopifyConnectToken: encrypt(sessionToken),
+          shopifyConnectedAt: new Date(),
+          lastSyncStatus: "syncing",
+          lastSyncError: null,
+        },
+      });
+      startConnectedSync(shopId);
+      return { ok: true, shopName: test.shopName };
+    }
+  }
+
+  // 2) Fall back to the library's live offline-session resolution.
   const probe = await resolveAppAdmin(domain);
-  if (!probe.ok) return { ok: false, error: probe.error };
+  if (probe.ok) {
+    await prisma.shop.update({
+      where: { id: shopId },
+      data: {
+        shopifyConnectDomain: domain,
+        shopifyConnectToken: null, // app-session connection — resolved at sync time
+        shopifyConnectedAt: new Date(),
+        lastSyncStatus: "syncing",
+        lastSyncError: null,
+      },
+    });
+    startConnectedSync(shopId);
+    return { ok: true, shopName: probe.shopName };
+  }
 
-  await prisma.shop.update({
-    where: { id: shopId },
-    data: {
-      shopifyConnectDomain: domain,
-      shopifyConnectToken: null, // app-session connection — no stored secret
-      shopifyConnectedAt: new Date(),
-      lastSyncStatus: "syncing",
-      lastSyncError: null,
-    },
-  });
-
-  startConnectedSync(shopId);
-  return { ok: true, shopName: probe.shopName };
+  // 3) Nothing to reuse — explain precisely (token expiry vs. wrong database).
+  return {
+    ok: false,
+    error: sessionToken
+      ? `Found the installed app's session for ${domain}, but Shopify rejected its token — token-exchange offline tokens are short-lived. Re-open the Quizocalypse app in your Shopify admin to refresh it, then try again, or connect with an Admin API token.`
+      : `No installed-app session for ${domain} exists in this workspace's database. If the app is installed on a different server or a local dev build, its token lives in that database — connect with an Admin API token instead.`,
+  };
 }
 
 /**
