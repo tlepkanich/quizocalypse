@@ -114,6 +114,8 @@ export function FlowRail({
   fallbackCollection,
   view,
   onView,
+  confirmDeleteId,
+  onConfirmDelete,
 }: {
   doc: QuizDoc;
   ordered: OrderedFlow;
@@ -127,10 +129,12 @@ export function FlowRail({
   fallbackCollection: string;
   view: WorkspaceView;
   onView: (v: WorkspaceView) => void;
+  // Armed-delete state lifted to the workspace so a Delete/Backspace keystroke on
+  // the selected step can arm the same two-step confirm (UnifiedWorkspace owns it).
+  confirmDeleteId: string | null;
+  onConfirmDelete: (nodeId: string | null) => void;
 }) {
   const [adding, setAdding] = useState(false);
-  // The node whose delete is armed (two-step confirm before the destructive op).
-  const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
   // Inline rename: the node being renamed + the working value (double-click a row).
   const [renaming, setRenaming] = useState<string | null>(null);
   const [renameVal, setRenameVal] = useState("");
@@ -163,7 +167,7 @@ export function FlowRail({
   };
 
   const startRename = (node: QuizNode) => {
-    setConfirmDelete(null);
+    onConfirmDelete(null);
     setRenameVal(nodeTitle(node));
     setRenaming(node.id);
   };
@@ -195,7 +199,7 @@ export function FlowRail({
             border: sel ? "1px solid var(--qz-accent, #2a6df4)" : "1px solid transparent",
           }}
           onClick={() => {
-            setConfirmDelete(null); // navigating away disarms a pending delete
+            onConfirmDelete(null); // navigating away disarms a pending delete
             onSelect(sel ? null : nodeId);
           }}
           onDoubleClick={() => startRename(node)}
@@ -205,7 +209,7 @@ export function FlowRail({
           onKeyDown={(e) => {
             if (e.key === "Enter" || e.key === " ") {
               e.preventDefault();
-              setConfirmDelete(null);
+              onConfirmDelete(null);
               onSelect(sel ? null : nodeId);
             }
           }}
@@ -275,7 +279,7 @@ export function FlowRail({
                 </>
               ) : null}
               {node.type !== "intro" ? (
-                confirmDelete === nodeId ? (
+                confirmDeleteId === nodeId ? (
                   <>
                     <button
                       className="qz-btn qz-btn-sm"
@@ -283,7 +287,7 @@ export function FlowRail({
                       aria-label={`Confirm delete ${nodeTitle(node)}`}
                       onClick={() => {
                         remove(nodeId);
-                        setConfirmDelete(null);
+                        onConfirmDelete(null);
                       }}
                       style={{
                         padding: "0 7px",
@@ -298,7 +302,7 @@ export function FlowRail({
                       className="qz-btn qz-btn-ghost qz-btn-sm"
                       title="Cancel"
                       aria-label={`Cancel deleting ${nodeTitle(node)}`}
-                      onClick={() => setConfirmDelete(null)}
+                      onClick={() => onConfirmDelete(null)}
                       style={{ padding: "0 4px" }}
                     >
                       ↩
@@ -309,7 +313,7 @@ export function FlowRail({
                     className="qz-btn qz-btn-ghost qz-btn-sm"
                     title="Delete step"
                     aria-label={`Delete ${nodeTitle(node)}`}
-                    onClick={() => setConfirmDelete(nodeId)}
+                    onClick={() => onConfirmDelete(nodeId)}
                     style={{ padding: "0 4px" }}
                   >
                     ✕

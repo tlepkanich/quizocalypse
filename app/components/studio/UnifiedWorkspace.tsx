@@ -136,6 +136,10 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
   // Selection drives the ContextPanel; the optional inspect target carries the
   // exact element clicked in the preview (for its outline highlight).
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  // Armed-delete (two-step confirm) lifted from FlowRail so a Delete/Backspace
+  // keystroke on the selected step arms it (the rail renders the confirm + owns
+  // the destructive op). Never deletes outright.
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [inspectTarget, setInspectTarget] = useState<InspectTarget | null>(null);
   // The step the live preview is currently SHOWING (reported by the runtime) —
   // drives the rail's ▸ marker so walking the quiz in Interact mode keeps you
@@ -154,21 +158,51 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
   const select = useCallback((nodeId: string | null) => {
     setSelectedId(nodeId);
     setInspectTarget(null);
+    setConfirmDeleteId(null); // navigating away disarms a pending delete
   }, []);
   const onInspect = useCallback((t: InspectTarget) => {
     setSelectedId(t.nodeId);
     setInspectTarget(t);
+    setConfirmDeleteId(null);
   }, []);
 
-  // Esc clears the selection from anywhere (same affordance the old
-  // InspectorPanel had).
+  // Esc backs out one level: disarm a pending delete first, else clear selection.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") select(null);
+      if (e.key !== "Escape") return;
+      if (confirmDeleteId) setConfirmDeleteId(null);
+      else select(null);
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [select]);
+  }, [select, confirmDeleteId]);
+
+  // Delete / Backspace on the selected step ARMS its two-step delete confirm in
+  // the rail (never deletes outright — the actual delete is a second explicit
+  // click). Guarded so it never fires while typing in a field; intro is not
+  // deletable, so the rail renders no confirm for it (arming one is a no-op).
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Delete" && e.key !== "Backspace") return;
+      if (!selectedId) return;
+      const ae = document.activeElement as HTMLElement | null;
+      if (
+        ae &&
+        (ae.tagName === "INPUT" ||
+          ae.tagName === "TEXTAREA" ||
+          ae.tagName === "SELECT" ||
+          ae.isContentEditable)
+      ) {
+        return;
+      }
+      const node = doc.nodes.find((n) => n.id === selectedId);
+      if (!node || node.type === "intro") return;
+      e.preventDefault();
+      setConfirmDeleteId(selectedId);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [selectedId, doc]);
 
   // View (Build / Products / Logic) synced to ?view=.
   const [params, setParams] = useSearchParams();
@@ -487,6 +521,8 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
             fallbackCollection={fallbackCollection}
             view={view}
             onView={setView}
+            confirmDeleteId={confirmDeleteId}
+            onConfirmDelete={setConfirmDeleteId}
           />
           <div style={{ minWidth: 0 }}>
             <Step5Preview
@@ -538,6 +574,8 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
             fallbackCollection={fallbackCollection}
             view={view}
             onView={setView}
+            confirmDeleteId={confirmDeleteId}
+            onConfirmDelete={setConfirmDeleteId}
           />
           <div style={{ minWidth: 0, gridColumn: "2 / -1" }}>
             {view === "products" ? (
@@ -618,6 +656,8 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
                 fallbackCollection={fallbackCollection}
                 view={view}
                 onView={setView}
+                confirmDeleteId={confirmDeleteId}
+                onConfirmDelete={setConfirmDeleteId}
               />
               {selectedId ? (
                 <ContextPanel
