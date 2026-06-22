@@ -204,17 +204,17 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
     return () => window.removeEventListener("keydown", onKey);
   }, [selectedId, doc]);
 
-  // View (Build / Products / Logic) synced to ?view=.
+  // View (Build / Products / Results / Logic). State is the source of truth — a
+  // plain useState so a tab click ALWAYS switches, even when client-side routing
+  // is flaky (the builder throws hydration #418/#425 on load, which was aborting
+  // the setParams navigation → dead tabs: the reported "selecting products/
+  // results/logic does nothing"). ?view= is read once on mount for deep-linking
+  // and best-effort-synced; the view no longer DEPENDS on the URL round-trip.
   const [params, setParams] = useSearchParams();
-  const viewParam = params.get("view");
-  const view: WorkspaceView =
-    viewParam === "products"
-      ? "products"
-      : viewParam === "results"
-        ? "results"
-        : viewParam === "logic"
-          ? "logic"
-          : "build";
+  const [view, setViewState] = useState<WorkspaceView>(() => {
+    const p = params.get("view");
+    return p === "products" || p === "results" || p === "logic" ? p : "build";
+  });
   const setView = useCallback(
     (v: WorkspaceView) => {
       // Leaving Products: turn buckets into result pages (the 4-step builder
@@ -232,6 +232,7 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
           }
         }
       }
+      setViewState(v);
       setParams(
         (prev) => {
           const next = new URLSearchParams(prev);
