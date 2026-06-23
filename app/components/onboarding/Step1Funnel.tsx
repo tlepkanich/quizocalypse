@@ -313,6 +313,9 @@ const TYPE_BADGE: Record<BucketType, "draft" | "ok" | "warn"> = {
 
 const TYPE_GLYPH: Record<BucketType, string> = { product: "📦", tag: "🏷️", collection: "🗂️" };
 
+// Plural item labels used in search empty-state messages.
+const ITEM_LABEL: Record<BucketType, string> = { product: "products", tag: "tags", collection: "collections" };
+
 function RecommendationBucketsStage({
   data,
   fetcher,
@@ -495,6 +498,26 @@ function RecommendationBucketsStage({
           {TAB_META.map((t) => {
             const n = tabCounts[t.type];
             const on = t.type === activeTab;
+            const isDisabled = n === 0 && t.type !== "product";
+            if (isDisabled) {
+              return (
+                <QzTooltip
+                  key={t.type}
+                  content={`No ${ITEM_LABEL[t.type]} found in your Shopify catalog.`}
+                >
+                  <button
+                    type="button"
+                    role="tab"
+                    aria-selected={false}
+                    className="qz-rb-tab"
+                    disabled
+                  >
+                    {t.label}
+                    <span className="qz-rb-tab-n">{n}</span>
+                  </button>
+                </QzTooltip>
+              );
+            }
             return (
               <button
                 key={t.type}
@@ -502,7 +525,6 @@ function RecommendationBucketsStage({
                 role="tab"
                 aria-selected={on}
                 className={`qz-rb-tab${on ? " is-active" : ""}`}
-                disabled={n === 0 && t.type !== "product"}
                 onClick={() => switchTab(t.type)}
               >
                 {t.label}
@@ -532,7 +554,9 @@ function RecommendationBucketsStage({
 
         {visible.length === 0 ? (
           <div className="qz-rb-empty qz-dim">
-            {q ? "No matches." : "Nothing here yet — sync your catalog to populate this tab."}
+            {q
+              ? `No ${ITEM_LABEL[activeTab]} match "${search.trim()}".`
+              : "Nothing here yet — sync your catalog to populate this tab."}
           </div>
         ) : (
           <div className={`qz-rb-grid${activeTab === "product" ? " is-products" : ""}`}>
