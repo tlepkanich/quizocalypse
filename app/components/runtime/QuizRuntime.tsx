@@ -4392,7 +4392,11 @@ function ProductCard({
         </button>
       )}
       <div style={{ display: "flex", flexDirection: "column", gap: 6, alignItems: "stretch", flexShrink: 0 }}>
-        {product.variants && product.variants.length > 1 ? (
+        {/* Only show the variant picker on the cart path: selectedVariantId is
+            consumed by add-to-cart (cartUrl) only. On standalone there's no
+            cart and "Shop now" links to the variant-agnostic PDP, so the picker
+            would be a dead, misleading control. */}
+        {cartUrl && product.variants && product.variants.length > 1 ? (
           <select
             aria-label={tc("aria_choose_variant")}
             value={selectedVariantId ?? ""}
