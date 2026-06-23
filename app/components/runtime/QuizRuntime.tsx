@@ -3761,7 +3761,7 @@ function ResultView({
       >
         {recs.length === 0 && (
           <p style={{ color: "var(--qz-color-muted)" }}>
-            No products to show. Add a fallback collection in the editor.
+            {tc("no_results_match")}
           </p>
         )}
         {recs.map((r, idx) => (
@@ -4103,6 +4103,7 @@ function StageSection({
   analytics: ReturnType<typeof createAnalyticsClient> | null;
 }) {
   const platform = useContext(RuntimePlatformContext);
+  const tc = useChrome();
   return (
     <section>
       {stage.headline && (
@@ -4124,7 +4125,7 @@ function StageSection({
       <div style={{ marginTop: 12, ...styles.productGrid }}>
         {recs.length === 0 && (
           <p style={{ color: "var(--qz-color-muted)" }}>
-            No products to show for this section.
+            {tc("no_results_match")}
           </p>
         )}
         {recs.map((r, idx) => {

@@ -44,6 +44,7 @@ export const CHROME_TOKENS = {
   continue_anyway: "Continue anyway",
   pick_more_answers: "Pick more answers to see refined picks.",
   no_products_configured: "None of the configured products are available right now.",
+  no_results_match: "We couldn't find a perfect match for your answers. Try retaking the quiz with different choices.",
   quiz_unavailable: "Quiz unavailable",
   quiz_no_nodes: "This quiz has no nodes defined.",
   lost_the_thread: "Lost the thread",

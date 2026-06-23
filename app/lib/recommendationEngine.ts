@@ -49,12 +49,12 @@ export interface RecommendationInput {
 // selected answers' tag bag and each candidate product's tags.
 // Layer 2: collection filter. Per-answer filters narrow the candidate pool.
 // Tie-break: in-stock first, then price ascending.
-// Fallback: if all candidates score 0, return result's fallback_collection_id pool.
+// No generic fallback: if no rung resolves a real bucket, the result shows NO
+// products (operator goal — never pad with an unrelated fallback collection).
 // v3: walk the result page's match_ladder top-to-bottom. The first strategy
-// whose resolved+ranked pool has ≥ min_products wins; otherwise fall through.
-// Final fallback is the result's fallback_collection_id. The legacy
-// match_strategy field is mapped onto a one-element ladder so pre-v3 quizzes
-// behave identically.
+// whose resolved+ranked pool has ≥ min_products wins; otherwise the result is
+// empty. The legacy match_strategy field is mapped onto a one-element ladder so
+// pre-v3 quizzes behave identically (minus the removed generic fallback).
 // Normalized per-resolution config — shared by the whole result page and
 // by each multi-stage section. Lets one ladder walk serve both.
 interface LadderConfig {
@@ -224,6 +224,10 @@ function walkLadder(
     tagBag,
   };
 
+  // D1 contract (unchanged): each rung resolves ELIGIBILITY (membership); the
+  // shopper's answers decide ORDER. A bound bucket the answers routed to IS the
+  // match for that outcome, so we keep score-0 members and let ranking surface
+  // the best-fit first (caps then trim the off-fit tail).
   for (const strategy of config.match_ladder) {
     const scored = scorePool(resolve(strategy), tagWeight);
     const { products: pool, swapped } = applyOos(
@@ -243,26 +247,11 @@ function walkLadder(
     }
   }
 
-  if (config.fallback_collection_id) {
-    // Even the final fallback orders by the path's answers — zero-overlap
-    // paths keep today's in-stock → price order.
-    const fallbackPool = scorePool(
-      productIndex.filter((p) =>
-        p.collection_ids.includes(config.fallback_collection_id!),
-      ),
-      tagWeight,
-    );
-    const ordered = applyRanking(fallbackPool, config.ranking);
-    if (ordered.length > 0) {
-      return {
-        products: ordered.slice(0, config.cap),
-        rungUsed: "fallback",
-        poolSize: ordered.length,
-        oosSwapped: false,
-        tagBag,
-      };
-    }
-  }
+  // No generic fallback collection. If no ladder rung resolves a real bucket,
+  // show NO products rather than padding the result with an unrelated fallback
+  // collection — operator goal: "if there are no products that fit the answers,
+  // then no results should be given." The result page renders a graceful "no
+  // match" state instead. (config.fallback_collection_id is intentionally ignored.)
   return empty;
 }
 
@@ -500,20 +489,17 @@ function applyOos(
   if (cfg.oos_behavior === "show_with_badge") return { products, swapped: false };
   const inStock = products.filter((p) => p.inventory_in_stock);
   if (cfg.oos_behavior === "hide") return { products: inStock, swapped: false };
-  // fallback
+  // fallback: everything's OOS → swap in the merchant's OOS fallback collection
+  // (a deliberate binding), scored by the path's tag bag like every other pool.
   if (inStock.length > 0) return { products: inStock, swapped: false };
   if (cfg.oos_fallback_collection_id) {
-    return {
-      products: rank(
-        scorePool(
-          productIndex.filter((p) =>
-            p.collection_ids.includes(cfg.oos_fallback_collection_id!),
-          ),
-          tagWeight,
-        ),
+    const swap = scorePool(
+      productIndex.filter((p) =>
+        p.collection_ids.includes(cfg.oos_fallback_collection_id!),
       ),
-      swapped: true,
-    };
+      tagWeight,
+    );
+    return { products: rank(swap), swapped: swap.length > 0 };
   }
   return { products: inStock, swapped: false };
 }

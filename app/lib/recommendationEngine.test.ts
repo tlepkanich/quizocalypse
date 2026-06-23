@@ -140,16 +140,69 @@ describe("recommendForResult", () => {
     expect(result.map((r) => r.product_id)).toEqual(["p1", "p5", "p4"]);
   });
 
-  it("falls back to the fallback collection when no tags match", () => {
+  it("shows NO products when nothing fits the answers (no generic fallback)", () => {
     const result = recommendForResult({
       quiz: quizDoc,
       productIndex: baseProducts,
-      selectedAnswerIds: [], // no answers → no tags → all products score 0
+      selectedAnswerIds: [], // no answers → no tags → the tag rung resolves nothing
       resultNodeId: "r1",
     });
-    // Falls back to c-cleansers collection (all 5 products), sorted by in-stock + price.
-    expect(result.length).toBeGreaterThan(0);
-    expect(result[0]!.inventory_in_stock).toBe(true);
+    // Operator goal: if no rung resolves a real bucket, give NO results — never
+    // pad the page with an unrelated fallback collection.
+    expect(result).toHaveLength(0);
+  });
+
+  it("a matching path returns ONLY the products that fit (not the whole fallback collection)", () => {
+    // Picking "Dry" must surface the dry product alone — never flood the page
+    // with the rest of c-cleansers just because a fallback collection is set.
+    const result = recommendForResult({
+      quiz: quizDoc,
+      productIndex: baseProducts,
+      selectedAnswerIds: ["a-dry"],
+      resultNodeId: "r1",
+    });
+    expect(result.map((r) => r.product_id)).toEqual(["p2"]);
+  });
+
+  it("an answer whose tags match no product → empty, even with a fallback collection set", () => {
+    const products: IndexedProduct[] = [
+      { product_id: "px", title: "Powder Board", handle: "px", price: "100", image_url: null, tags: ["powder"], collection_ids: ["all"], inventory_in_stock: true },
+      { product_id: "py", title: "Park Board", handle: "py", price: "100", image_url: null, tags: ["park"], collection_ids: ["all"], inventory_in_stock: true },
+    ];
+    const quiz = Quiz.parse({
+      quiz_id: "qt",
+      status: "draft",
+      scope: { collection_ids: ["all"] },
+      nodes: [
+        { id: "intro", type: "intro", position: { x: 0, y: 0 }, data: { headline: "Hi" } },
+        {
+          id: "q1",
+          type: "question",
+          position: { x: 1, y: 0 },
+          data: {
+            text: "Where do you ride?",
+            question_type: "single_select",
+            answers: [
+              { id: "a-powder", text: "Powder", tags: ["powder"], edge_handle_id: "h1" },
+              { id: "a-race", text: "Racing", tags: ["race"], edge_handle_id: "h2" }, // no product carries "race"
+            ],
+          },
+        },
+        { id: "r1", type: "result", position: { x: 2, y: 0 }, data: { headline: "Match", fallback_collection_id: "all" } },
+      ],
+      edges: [
+        { id: "e0", source: "intro", target: "q1" },
+        { id: "e1", source: "q1", target: "r1" },
+      ],
+    });
+    // A fitting answer → only the fitting product.
+    expect(
+      recommendForResult({ quiz, productIndex: products, selectedAnswerIds: ["a-powder"], resultNodeId: "r1" }).map((p) => p.product_id),
+    ).toEqual(["px"]);
+    // A non-fitting answer → nothing, despite fallback_collection_id "all".
+    expect(
+      recommendForResult({ quiz, productIndex: products, selectedAnswerIds: ["a-race"], resultNodeId: "r1" }),
+    ).toHaveLength(0);
   });
 
   it("caps results at the result node's slot_count", () => {
@@ -1010,22 +1063,24 @@ describe("answer-ordered rungs + explained API (D1)", () => {
     expect(weighted.map((p) => p.product_id).indexOf("pA")).toBeLessThan(weighted.map((p) => p.product_id).indexOf("pB"));
   });
 
-  it("(f) explained shape + delegation invariant + fallback rung", () => {
+  it("(f) explained shape + delegation invariant + no generic fallback", () => {
     const quiz = catQuiz();
     const explained = recommendForResultExplained({ quiz, productIndex: bucket, selectedAnswerIds: ["a-oily"], resultNodeId: "r1" });
     expect(explained.rungUsed).toBe("category");
-    expect(explained.poolSize).toBe(4); // pre-cap
+    expect(explained.poolSize).toBe(4); // pre-cap — fixed-rung membership keeps score-0 members
     expect(explained.products[0]!.matched_tags).toEqual(["oily"]);
     expect(explained.tagBag).toEqual({ oily: 1 });
     expect(
       recommendForResult({ quiz, productIndex: bucket, selectedAnswerIds: ["a-oily"], resultNodeId: "r1" }),
     ).toEqual(explained.products);
 
-    // Fallback rung label: a ladder that resolves nothing + a fallback collection.
+    // A ladder that resolves nothing + a configured fallback collection now
+    // returns EMPTY — the generic fallback_collection_id is intentionally ignored
+    // (operator goal: no fit → no results).
     const fbQuiz = catQuiz({ match_ladder: ["conditional"], conditional_rules: [], fallback_collection_id: "c-all" });
     const fb = recommendForResultExplained({ quiz: fbQuiz, productIndex: bucket, selectedAnswerIds: ["a-oily"], resultNodeId: "r1" });
-    expect(fb.rungUsed).toBe("fallback");
-    expect(fb.products.length).toBeGreaterThan(0);
+    expect(fb.rungUsed).toBeNull();
+    expect(fb.products).toHaveLength(0);
   });
 
   it("(g) recommendForStageExplained honors weights", () => {
