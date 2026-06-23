@@ -67,6 +67,7 @@ export interface FunnelData {
   pickedTemplate: PickedTemplate | null;
   webResearchSummary: string | null;
   genError: string | null;
+  genStalled: boolean;
   productGroups: Array<{ id: string; name: string; products: Array<{ id: string; title: string }> }>;
   collections: Array<{ collectionId: string; title: string }>;
   savedTemplates: Array<{ id: string; name: string; template: RichTemplateOption }>;
@@ -170,6 +171,36 @@ export function Step1Funnel({ data }: { data: FunnelData }) {
             <Link to="/studio/new" className="qz-btn qz-btn-accent qz-btn-sm" style={{ alignSelf: "flex-start" }}>
               Start from a template →
             </Link>
+          </div>
+        </QzBanner>
+      ) : null}
+
+      {/* The detached AI job stopped writing without throwing — almost always a
+          server restart that KILLED the job mid-run, which no try/catch can
+          catch. The poll would otherwise spin forever on the spinner below, so
+          offer an honest re-run (re-kicks the same job from the saved session)
+          plus the reliable template escape. */}
+      {data.genStalled && !data.genError ? (
+        <QzBanner tone="warn" title="This is taking longer than it should">
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            <span>
+              The generation step seems to have stalled — the server may have
+              restarted while it was working. Re-run it, or start from a
+              ready-made template.
+            </span>
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+              <button
+                type="button"
+                className="qz-btn qz-btn-accent qz-btn-sm"
+                disabled={pendingIntent === "retry-gen"}
+                onClick={() => fetcher.submit({ intent: "retry-gen" }, { method: "post" })}
+              >
+                {pendingIntent === "retry-gen" ? "Restarting…" : "Try again"}
+              </button>
+              <Link to="/studio/new" className="qz-btn qz-btn-ghost qz-btn-sm">
+                Start from a template →
+              </Link>
+            </div>
           </div>
         </QzBanner>
       ) : null}

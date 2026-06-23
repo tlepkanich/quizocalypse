@@ -113,7 +113,7 @@ async function loadFunnelDraft(shopId: string, quizId: string | undefined) {
   if (!quizId) throw new Response("Not found", { status: 404 });
   const quiz = await prisma.quiz.findFirst({
     where: { id: quizId, shopId },
-    select: { id: true, name: true, draftJson: true, buildState: true },
+    select: { id: true, name: true, draftJson: true, buildState: true, updatedAt: true },
   });
   if (!quiz) throw new Response("Quiz not found", { status: 404 });
   const parsed = Quiz.safeParse(quiz.draftJson);
@@ -242,6 +242,15 @@ export async function loadStep1FunnelData(
   const activeTab: BucketType = browser?.active_tab ?? suggestion.suggestedType;
   const bannerDismissed = browser?.banner_dismissed ?? false;
 
+  // A detached generation job (typing/templating) that dies mid-run — e.g. the
+  // Fly machine restarts on a deploy — strands the stage forever, since the
+  // in-process try/catch can't fire. Detect it: still "in flight" but the draft
+  // hasn't been written in well past the ~70-110s a real run takes. The funnel
+  // then offers a re-run / template escape instead of polling indefinitely.
+  const genInFlight = session.stage === "typing" || session.stage === "templating";
+  const genStalled =
+    genInFlight && Date.now() - new Date(quiz.updatedAt).getTime() > 150_000;
+
   return {
     quizId: quiz.id,
     name: quiz.name,
@@ -270,6 +279,7 @@ export async function loadStep1FunnelData(
     pickedTemplate: session.picked_template ?? null,
     webResearchSummary: session.web_research_summary ?? null,
     genError: session.gen_error ?? null,
+    genStalled,
     productGroups: categories.map((c) => ({
       id: c.id,
       name: c.name,
@@ -528,6 +538,42 @@ export async function runStep1FunnelAction(
       ...(cats.length ? { buckets: cats } : {}),
     });
     return json({ intent, ok: true });
+  }
+
+  if (intent === "retry-gen") {
+    // Re-kick a stalled generation: the prior detached job died (e.g. a server
+    // restart mid-run) leaving the stage stuck with no error to catch. Rebuild
+    // the inputs from the persisted build_session and re-run the SAME detached
+    // job; writeDoc resets updatedAt so the stall clears. If the AI genuinely
+    // fails this time, the job's own catch sets gen_error (the honest "didn't
+    // finish" banner + template escape).
+    if (session.stage === "typing") {
+      const retryBuckets = await loadConfirmedBuckets(shop.id, quiz.id);
+      await writeDoc(quiz.id, { ...doc, build_session: { ...session, gen_error: undefined } });
+      startStep2Types(shop.id, quiz.id, {
+        goal: session.goal?.goal_text ?? "",
+        ...(session.goal?.struggle_text ? { struggle: session.goal.struggle_text } : {}),
+        ...(retryBuckets.length ? { buckets: retryBuckets } : {}),
+      });
+      return json({ intent, ok: true });
+    }
+    if (session.stage === "templating") {
+      const retryType = session.quiz_types.find((t) => t.id === session.picked_type_id);
+      if (retryType) {
+        const retryCats = await prisma.category.findMany({
+          where: { shopId: shop.id, quizId: quiz.id },
+          select: { id: true, name: true, tags: true },
+        });
+        await writeDoc(quiz.id, { ...doc, build_session: { ...session, gen_error: undefined } });
+        startStep2Templates(shop.id, quiz.id, retryType, {
+          goal: session.goal?.goal_text ?? "",
+          ...(session.goal?.struggle_text ? { struggle: session.goal.struggle_text } : {}),
+          ...(retryCats.length ? { buckets: retryCats } : {}),
+        });
+        return json({ intent, ok: true });
+      }
+    }
+    return json({ intent, ok: false, error: "Nothing to retry — start over from the quiz list." }, { status: 400 });
   }
 
   if (intent === "pick-template") {
