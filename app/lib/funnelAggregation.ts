@@ -52,25 +52,33 @@ export function perQuestionDropoff(
 }
 
 export interface ConversionSummary {
-  /** Sessions with a completedAt (finished the quiz). */
+  /** Completed sessions — the SAME event-based `quiz_completed` count the funnel
+   *  uses (passed in by the caller), so this denominator agrees with the funnel. */
   completed: number;
   /** Sessions attributed to an order (QuizSession.converted). */
   converted: number;
-  /** converted / completed (0 when none completed). */
+  /** converted / completed, clamped to [0,1] (0 when none completed). */
   rate: number;
 }
 
-/** Conversion rate from server-side QuizSession rows. */
+/**
+ * Conversion rate. `converted` comes from the authoritative server-side
+ * `QuizSession.converted` flag (set by the orders/create webhook); `completed` is
+ * the canonical funnel completion count (distinct `quiz_completed` events) passed
+ * in by the caller, so the denominator matches the funnel + completion-rate card
+ * on the same page rather than diverging on `QuizSession.completedAt`. The rate is
+ * clamped because a converted session can, rarely, lack a client-fired
+ * quiz_completed event.
+ */
 export function conversionSummary(
-  sessions: Array<{ completedAt: Date | null; converted: boolean }>,
+  sessions: Array<{ converted: boolean }>,
+  completed: number,
 ): ConversionSummary {
-  let completed = 0;
   let converted = 0;
   for (const s of sessions) {
-    if (s.completedAt != null) completed += 1;
     if (s.converted) converted += 1;
   }
-  return { completed, converted, rate: completed > 0 ? converted / completed : 0 };
+  return { completed, converted, rate: completed > 0 ? Math.min(converted / completed, 1) : 0 };
 }
 
 export interface RevenueSummary {

@@ -114,9 +114,9 @@ export const loader = async ({ params, request }: LoaderFunctionArgs) => {
   // orders/create webhook). Per-question drop-off from question_answered events.
   const sessionRows = await prisma.quizSession.findMany({
     where: { quizId: quiz.id, ...(hasRange ? { startedAt: tsRange } : {}) },
-    select: { completedAt: true, converted: true },
+    select: { converted: true },
   });
-  const conversion = conversionSummary(sessionRows);
+  const conversion = conversionSummary(sessionRows, completed);
   const questions = parsedDoc.success
     ? parsedDoc.data.nodes.flatMap((n) =>
         n.type === "question" ? [{ id: n.id, text: n.data.text }] : [],

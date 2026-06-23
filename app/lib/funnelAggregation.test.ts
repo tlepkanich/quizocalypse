@@ -37,21 +37,27 @@ describe("perQuestionDropoff", () => {
 });
 
 describe("conversionSummary", () => {
-  it("computes completed, converted, and rate", () => {
-    const s = conversionSummary([
-      { completedAt: new Date(), converted: true },
-      { completedAt: new Date(), converted: false },
-      { completedAt: new Date(), converted: true },
-      { completedAt: null, converted: false }, // not completed
-    ]);
+  it("counts converted against the caller's canonical completed count", () => {
+    const s = conversionSummary(
+      [{ converted: true }, { converted: false }, { converted: true }],
+      3, // distinct quiz_completed sessions (the funnel's count)
+    );
     expect(s).toEqual({ completed: 3, converted: 2, rate: 2 / 3 });
   });
 
   it("rate is 0 when nothing completed", () => {
-    expect(conversionSummary([{ completedAt: null, converted: false }])).toEqual({
+    expect(conversionSummary([{ converted: false }], 0)).toEqual({
       completed: 0,
       converted: 0,
       rate: 0,
+    });
+  });
+
+  it("clamps rate to 1 when a converted session lacks a completion event", () => {
+    expect(conversionSummary([{ converted: true }, { converted: true }], 1)).toEqual({
+      completed: 1,
+      converted: 2,
+      rate: 1,
     });
   });
 });

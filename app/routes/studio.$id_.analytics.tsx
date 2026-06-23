@@ -47,7 +47,7 @@ export const loader = async ({ params, request }: LoaderFunctionArgs) => {
     }),
     prisma.quizSession.findMany({
       where: { quizId: quiz.id, ...(hasRange ? { startedAt: tsRange } : {}) },
-      select: { completedAt: true, converted: true },
+      select: { converted: true },
     }),
     prisma.emailCapture.count({
       where: { quizId: quiz.id, ...(hasRange ? { capturedAt: tsRange } : {}) },
@@ -103,7 +103,7 @@ export const loader = async ({ params, request }: LoaderFunctionArgs) => {
     quiz: { id: quiz.id, name: quiz.name, status: quiz.status },
     funnel,
     dropoff: perQuestionDropoff(eventRows, questions, funnel.started),
-    conversion: conversionSummary(sessionRows),
+    conversion: conversionSummary(sessionRows, funnel.completed),
     captureCount,
     revenue: { formatted: formatRevenue(revenue), orders: revenue.orders },
     range: { from: fromParam ?? "", to: toParam ?? "" },
