@@ -98,10 +98,15 @@ for (const q of QUIZZES) {
           .first();
         if (await choice.count()) await choice.click().catch(() => {});
 
+        // Exclude the minimal-chrome "Back" pill: on a multi-select step the
+        // answers are checkboxes, so the only content buttons are Back + Next
+        // (Back first in the DOM). Without this filter `.first()` clicks Back and
+        // the walker oscillates, never completing any multi-select quiz.
         const action = page
           .locator(
             '.qz-runtime-content button:not([title="Jump back to this question"]):not([aria-label="More info"])',
           )
+          .filter({ hasNotText: /^\s*back\s*$/i })
           .first();
         if (!(await action.count()) || !(await action.isEnabled().catch(() => false))) break;
         const headlineSel = ".qz-runtime-content h1, .qz-runtime-content h2";
