@@ -98,6 +98,18 @@ for (const q of QUIZZES) {
           .first();
         if (await choice.count()) await choice.click().catch(() => {});
 
+        // Dropdown question: a <select> isn't a checkbox/radio, so pick its
+        // first real <option> to enable the Continue button — without this the
+        // walker hits the disabled Continue and breaks (zero dropdown coverage).
+        const dropdown = page.locator(".qz-runtime-content select").first();
+        if (await dropdown.count()) {
+          const opts = await dropdown
+            .locator("option")
+            .evaluateAll((os) => os.map((o) => o.getAttribute("value") || "").filter(Boolean));
+          const [firstOpt] = opts;
+          if (firstOpt) await dropdown.selectOption(firstOpt).catch(() => {});
+        }
+
         // Exclude the minimal-chrome "Back" pill: on a multi-select step the
         // answers are checkboxes, so the only content buttons are Back + Next
         // (Back first in the DOM). Without this filter `.first()` clicks Back and
