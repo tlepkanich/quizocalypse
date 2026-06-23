@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { THEME_PRESETS, getPreset, HOUSE_TOKENS } from "./themePresets";
+import { THEME_PRESETS, getPreset, HOUSE_TOKENS, STANDALONE_MINIMAL_TOKENS } from "./themePresets";
 import { findContrastIssues } from "./designTokens";
 
 describe("Theme presets", () => {
@@ -49,12 +49,29 @@ describe("Theme presets", () => {
     for (const preset of THEME_PRESETS) {
       const issues = findContrastIssues(preset.tokens);
       // "Text on background" is the most important axis — fail loudly if a
-      // preset would land a shopper on unreadable copy. Other warnings
-      // (muted on bg, etc.) are advisory.
+      // preset would land a shopper on unreadable copy. (Muted-on-background
+      // is enforced separately below.)
       const textIssue = issues.find((i) => i.pair === "Text on background");
       expect(
         textIssue,
         `Preset "${preset.id}" fails AA text contrast: ${textIssue?.ratio.toFixed(2)}:1`,
+      ).toBeUndefined();
+    }
+  });
+
+  it("muted-on-background contrast passes AA on every preset", () => {
+    // Muted/secondary copy (subtext, captions, helper text) is content a shopper
+    // reads — an axe scan caught the Linen + Pastel presets shipping muted colors
+    // below 4.5:1. Enforce AA so a preset can never land unreadable secondary text.
+    const all = [
+      ...THEME_PRESETS.map((p) => ({ id: p.id, tokens: p.tokens })),
+      { id: "standalone-minimal", tokens: STANDALONE_MINIMAL_TOKENS },
+    ];
+    for (const { id, tokens } of all) {
+      const muted = findContrastIssues(tokens).find((i) => i.pair === "Muted on background");
+      expect(
+        muted,
+        `Preset "${id}" fails AA muted contrast: ${muted?.ratio.toFixed(2)}:1 (need 4.5)`,
       ).toBeUndefined();
     }
   });

@@ -24,7 +24,7 @@ export const HOUSE_TOKENS: DesignTokensT = {
     accent: "#E8623C", // persimmon highlights
     background: "#F8F6F1", // cream paper
     text: "#1B1A17",
-    muted: "#8B8377",
+    muted: "#756E64", // WCAG AA: 4.66:1 on the cream bg (was #8B8377 = 3.47, failing)
   },
   typography: {
     heading: { family: "Spectral", source: "google", weight: 500 },
@@ -124,7 +124,7 @@ export const THEME_PRESETS: ThemePreset[] = [
         accent: "#F4B740",
         background: "#FDF6F8",
         text: "#3A2A35",
-        muted: "#8B7280",
+        muted: "#806976", // WCAG AA: 4.69:1 on the rose-white bg (was #8B7280 = 4.09, failing)
       },
       typography: {
         heading: { family: "Fraunces", source: "google", weight: 500 },
