@@ -22,4 +22,10 @@ describe("buildSeedQuiz", () => {
     const intro = doc.nodes.find((n) => n.type === "intro");
     expect(intro && intro.type === "intro" && intro.data.headline).toBe("Find your match");
   });
+
+  it("strips an auto-name date so the shopper headline reads clean (name keeps it)", () => {
+    const doc = buildSeedQuiz("The Skin Science Diagnostic 6/22/26");
+    const intro = doc.nodes.find((n) => n.type === "intro");
+    expect(intro && intro.type === "intro" && intro.data.headline).toBe("The Skin Science Diagnostic");
+  });
 });

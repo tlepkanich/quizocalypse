@@ -1,5 +1,6 @@
 import { Quiz } from "./quizSchema";
 import { HOUSE_TOKENS } from "./themePresets";
+import { stripAutoQuizDate } from "./dialDirectives";
 
 // Minimal valid quiz a fresh "New quiz" creates — an intro + one starter
 // question, wired. The merchant then groups products into buckets (Step 1),
@@ -26,7 +27,9 @@ export function buildSeedQuiz(
         type: "intro",
         position: { x: 0, y: 0 },
         data: {
-          headline: title,
+          // Shopper-facing: a dated auto-name ("… 6/22/26") must not leak into
+          // the headline — strip the date here; the quiz NAME keeps it.
+          headline: stripAutoQuizDate(title) || "Find your match",
           subtext: "Answer a few quick questions and we'll point you to the right products.",
           button_label: "Start",
         },

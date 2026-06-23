@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { dialsToBuildDirectives, autoQuizName } from "./dialDirectives";
+import { dialsToBuildDirectives, autoQuizName, stripAutoQuizDate } from "./dialDirectives";
 import { BuildSession, type DesignDials } from "./quizSchema";
 
 const DIALS = (over: Partial<DesignDials> = {}): DesignDials => ({
@@ -48,6 +48,20 @@ describe("autoQuizName", () => {
 
   it("falls back to 'New quiz' on an empty/blank label", () => {
     expect(autoQuizName("   ", new Date(2026, 0, 5))).toBe("New quiz 1/5/26");
+  });
+});
+
+describe("stripAutoQuizDate", () => {
+  it("strips a trailing auto-name M/D/YY date", () => {
+    expect(stripAutoQuizDate("Skin Routine 6/11/26")).toBe("Skin Routine");
+    expect(stripAutoQuizDate("Vitamins 12/1/26")).toBe("Vitamins");
+  });
+  it("is idempotent on a name with no date suffix", () => {
+    expect(stripAutoQuizDate("The Skin Science Diagnostic")).toBe("The Skin Science Diagnostic");
+  });
+  it("inverts autoQuizName so the shopper headline never carries the date", () => {
+    const label = "Find Your Board";
+    expect(stripAutoQuizDate(autoQuizName(label, new Date(2026, 5, 22)))).toBe(label);
   });
 });
 

@@ -79,3 +79,12 @@ export function autoQuizName(label: string, now: Date): string {
   const yy = String(now.getFullYear()).slice(2);
   return `${clean} ${month}/${day}/${yy}`;
 }
+
+// The inverse of autoQuizName for shopper-facing copy: strip a trailing
+// " M/D/YY" auto-name date so the intro headline reads clean ("Skin Routine")
+// while the merchant's quiz NAME keeps the dated disambiguator. Idempotent on a
+// name with no suffix. Kept next to autoQuizName so the pattern can't drift from
+// the format that produces it.
+export function stripAutoQuizDate(name: string): string {
+  return name.replace(/\s+\d{1,2}\/\d{1,2}\/\d{2,4}$/, "").trim();
+}
