@@ -4,17 +4,19 @@ Turns new/changed product specs in the Drive specs folder into shipped code on
 `quizocalypse-studio.fly.dev`, with **no human PR review** — deliberately, while
 the app is pre-production. The safety net is automated, not a reviewer:
 
-- The strict gate chain (`typecheck && test && build && lint`) is a **hard stop**
-  in [`scripts/ship.sh`](../../scripts/ship.sh) — a failing gate aborts *before*
-  anything reaches prod.
+- **Deploy lives in CI** ([`.github/workflows/ci.yml`](../../.github/workflows/ci.yml)).
+  The routine just implements + pushes to `main`; the workflow runs the gate
+  chain (`typecheck && test && build && lint`), and only if all four pass does it
+  deploy to Fly.
 - A **post-deploy e2e smoke** runs against the live deploy; if it fails, the
-  script **rolls back** to the previous Fly image automatically.
+  workflow **auto-rolls-back** to the previous Fly image.
 - A few irreversible changes (destructive migrations, auth/secrets/billing)
   **always pause** for a human, regardless of PR policy.
 
 > **Flip to PR-gated later:** when the app hits production-readiness, change step 4
-> of the prompt to "open a PR and stop" instead of running `scripts/ship.sh`.
-> Nothing else changes.
+> of the prompt to "open a PR and stop" instead of pushing to `main`. The `check`
+> job already runs on PRs, and the `deploy` job only runs on push to `main`, so a
+> PR will gate-check but won't deploy until you review + merge. Nothing else changes.
 
 ---
 
@@ -26,7 +28,8 @@ Paste this into the cloud routine's instructions.
 You maintain the quizocalypse app (repo: github.com/tlepkanich/quizocalypse,
 deployed at quizocalypse-studio.fly.dev). Each run, turn new or changed product
 specs into shipped code. PR review is intentionally skipped right now — the
-automated gates in scripts/ship.sh are the safety net, not a human.
+gates + post-deploy smoke + auto-rollback in the GitHub Actions workflow
+(.github/workflows/ci.yml) are the safety net, not a human.
 
 1. INTAKE. List the Google Drive specs folder (ID
    1SGz6sN_Xw9OU-_MLbrdBaWG6Oy2WIZZP). A spec is in scope if its modifiedTime is
@@ -45,13 +48,15 @@ automated gates in scripts/ship.sh are the safety net, not a human.
    ADDITIVE Prisma migration (never destructive — see CARVE-OUTS). Commit with a
    clear message.
 
-4. SHIP. Run: bash scripts/ship.sh
-   It runs the strict gate chain (typecheck && test && build && lint) as a HARD
-   stop, captures the current live image, pushes, deploys to Fly, waits for
-   health, runs the post-deploy e2e smoke, and auto-rolls-back if the smoke
-   fails. If ship.sh aborts on a gate, FIX the root cause and re-run — never
-   bypass a gate. If it rolls back, report the failure and STOP; do not retry
-   blindly.
+4. SHIP. Run the gate chain locally first, so a red build never lands on main:
+     npm run typecheck && npm test && npm run build && npm run lint
+   If any gate fails, FIX the root cause — never push a failing build. When all
+   four pass, push to main:
+     git push origin main
+   The "CI / Deploy" workflow then re-runs the gates and, only if green, deploys
+   to Fly, waits for health, runs the post-deploy e2e smoke, and auto-rolls-back
+   on smoke failure. Watch that run: if the deploy job fails or rolls back,
+   report it and STOP — do not retry blindly.
 
 5. CARVE-OUTS — stop and report instead of proceeding if a spec requires any of:
    - a destructive DB migration (dropping/renaming columns or tables, or a
@@ -61,42 +66,50 @@ automated gates in scripts/ship.sh are the safety net, not a human.
    - anything you are not confident you fully understood.
    These pause regardless of PR policy because they are hard to reverse.
 
-6. REPORT. Summarize: which specs shipped (with the deployed commit SHA), which
-   were already implemented, which were skipped and why. If nothing was in
-   scope, say so briefly.
+6. REPORT. Summarize: which specs shipped (with the pushed commit SHA + the CI
+   run result), which were already implemented, which were skipped and why. If
+   nothing was in scope, say so briefly.
 ```
 
 ---
 
-## One-time setup (in the cloud routine's environment)
+## One-time setup
 
-| Need | How |
-| --- | --- |
-| **Repo write access** | The GitHub integration the routine already uses. |
-| **`FLY_API_TOKEN`** | Add as a routine secret. `fly tokens create deploy -a quizocalypse-studio` generates a deploy-scoped token. This is the **only** new credential — runtime secrets (DB, Anthropic, Shopify, encryption key) already live on Fly. |
-| **Node deps** | `npm ci` at the start of each run. |
-| **Playwright browser** | `npx playwright install --with-deps chromium` (needed for the post-deploy smoke). |
-| **`jq`** | For rollback-image capture. If absent, deploy still works but auto-rollback is disabled (the script warns). |
+| Where | Need | How |
+| --- | --- | --- |
+| **GitHub repo → Settings → Secrets → Actions** | `FLY_API_TOKEN` | `fly tokens create deploy -a quizocalypse-studio` → paste as a new repository secret named exactly `FLY_API_TOKEN`. This is the **only** new credential; until it exists the `deploy` job stays *skipped*, not failed. |
+| **Cloud routine env** | Repo + Google Drive connectors | The routine reads the specs folder (Drive) and pushes code (repo). |
+| **Cloud routine env** | Node + deps | `npm ci` so it can run the gate chain locally before pushing. (No Playwright needed in the routine — the smoke runs in CI.) |
 
-The gates (`typecheck`/`test`/`build`/`lint`) need **no secrets** — the tests are
-deterministic and don't hit the network — so a missing key can't silently green a
+Runtime secrets (DB, Anthropic, Shopify, encryption key) already live on Fly, so
+the deploy needs nothing beyond `FLY_API_TOKEN`. The gates need **no** secrets —
+the tests are deterministic and offline — so a missing key can't silently green a
 broken build.
 
-## What `scripts/ship.sh` guarantees
+## What the CI workflow guarantees
 
-1. On `main`, clean tree, something new to ship — else it no-ops.
-2. **Destructive migration → abort** (grep tripwire on the migration diff).
-3. **Gates are a hard stop** — no deploy unless all four pass.
-4. Captures the live image, pushes, deploys via Fly's remote builder.
-5. Polls the deploy for HTTP 200, then runs `npm run e2e` (one retry to absorb
-   transient live flakiness).
-6. Smoke fails → **rollback to the captured image**; if the image couldn't be
-   captured or rollback fails, it dies loudly so a human steps in (it never
-   leaves prod silently broken).
+1. Gates run on every push to `main` **and** every PR; `deploy` runs only on push
+   to `main`, only after gates pass, and only once `FLY_API_TOKEN` exists.
+2. **Gates are a hard stop** — `deploy` `needs: [check]`, so a red gate means no
+   deploy.
+3. Captures the live image (best-effort), deploys via Fly's remote builder, polls
+   for HTTP 200, then runs the e2e smoke (one retry for transient flakiness).
+4. **Smoke fails on a release that actually went live → rollback** to the captured
+   image. If the deploy step itself failed, the prior release is still serving, so
+   it does *not* roll back.
+5. The Fly token is scoped to only the three `flyctl` steps — it's never in the
+   environment of `npm ci` / playwright / the smoke (untrusted third-party code).
+
+## Manual / local alternative — `scripts/ship.sh`
+
+[`scripts/ship.sh`](../../scripts/ship.sh) does the same gate→deploy→smoke→rollback
+from a laptop (it also gates **before** pushing, and refuses destructive
+migrations). Use it for a manual deploy outside CI; the autonomous routine relies
+on the CI workflow instead.
 
 ## Notes / gotchas
-- The Fly app is a **single always-on machine**; `fly deploy` restarts it, so
-  every ship has a brief (~25–40s) boot window — the smoke waits for it.
+- The Fly app is a **single always-on machine**; deploy restarts it, so every ship
+  has a brief (~25–40s) boot window — the smoke waits for it.
 - Migrations apply **on boot** (`prisma migrate deploy`), so additive schema
-  changes ship with the code automatically. Destructive ones are the carve-out.
-- `--remote-only` is used so the routine needs **no local Docker**.
+  changes ship with the code. Destructive ones are the carve-out.
+- The deploy uses `--remote-only` (Fly's builder), so CI needs no Docker.

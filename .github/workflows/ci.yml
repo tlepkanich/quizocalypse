@@ -1,4 +1,10 @@
-name: CI
+name: CI / Deploy
+
+# Gates run on every push to main AND every PR (so review still works when you
+# re-enable it). Deploy runs ONLY on push to main, ONLY after the gates pass,
+# and ONLY once the FLY_API_TOKEN secret exists — PR review is intentionally
+# skipped pre-production, so these gates + the post-deploy smoke + auto-rollback
+# are the safety net, not a human.
 
 on:
   push:
@@ -6,28 +12,125 @@ on:
   pull_request:
     branches: [main]
 
+permissions:
+  contents: read
+
 jobs:
   check:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
       - uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "20.19" # pinned ≥ engines floor (.npmrc engine-strict=true)
           cache: "npm"
-
-      - name: Install dependencies
-        run: npm ci
-
+      - run: npm ci
       - name: Generate Prisma client
         run: npm run prisma -- generate
-
       - name: Typecheck
         run: npm run typecheck
-
+      - name: Test
+        run: npm test
+      - name: Build
+        run: npm run build
       - name: Lint
         run: npm run lint
 
-      - name: Test
-        run: npm test
+  # Until FLY_API_TOKEN is added (Settings → Secrets → Actions), `deploy` is
+  # SKIPPED rather than failing red. `secrets` can't be read in a job `if:`, so
+  # we surface its presence as an output here (the value is never printed).
+  guard:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    outputs:
+      has_token: ${{ steps.check.outputs.has_token }}
+    env:
+      FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+    steps:
+      - id: check
+        run: |
+          if [ -n "$FLY_API_TOKEN" ]; then
+            echo "has_token=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_token=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::FLY_API_TOKEN not set — skipping deploy. Add it in Settings → Secrets → Actions."
+          fi
+
+  deploy:
+    needs: [check, guard]
+    if: needs.guard.outputs.has_token == 'true'
+    runs-on: ubuntu-latest
+    concurrency:
+      group: deploy-quizocalypse-studio
+      cancel-in-progress: false
+    # Token is NOT job-level: it is scoped to ONLY the three flyctl steps below,
+    # so it is never in the environment of `npm ci` / playwright install / the
+    # e2e smoke (which run untrusted third-party code).
+    env:
+      APP: quizocalypse-studio
+      BASE_URL: https://quizocalypse-studio.fly.dev
+    steps:
+      - uses: actions/checkout@v4
+
+      # Pinned to a SHA (master @ 2026-04-08) — a moving @master ref on a
+      # third-party action that runs in a job touching the deploy token is a
+      # supply-chain risk. Bump deliberately.
+      - uses: superfly/flyctl-actions/setup-flyctl@ed8efb33836e8b2096c7fd3ba1c8afe303ebbff1
+
+      # Capture the currently-live image so a failed smoke can roll back to it.
+      # Genuinely best-effort: `2>/dev/null … || true` guarantees the step exits
+      # 0 and the output is written even if flyctl/jq hiccup, so a transient Fly
+      # API blip disables rollback for this run WITHOUT blocking the deploy.
+      - name: Capture current image (rollback target)
+        id: prev
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+        run: |
+          IMG=$(flyctl releases --app "$APP" --image --json 2>/dev/null \
+            | jq -r 'map(select(.Status=="complete"))[0].ImageRef // .[0].ImageRef // empty' 2>/dev/null || true)
+          echo "image=$IMG" >> "$GITHUB_OUTPUT"
+          echo "Rollback target: ${IMG:-<none captured — automatic rollback unavailable this run>}"
+
+      - name: Deploy (remote builder)
+        id: deploy
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+        run: flyctl deploy --remote-only --app "$APP"
+
+      # Boot runs `prisma migrate deploy` (~25-40s); wait for the app to answer.
+      - name: Wait for health
+        run: |
+          for i in $(seq 1 40); do
+            code=$(curl -s -o /dev/null -w '%{http_code}' "$BASE_URL" || true)
+            if [ "$code" = "200" ]; then echo "live ($code)"; exit 0; fi
+            sleep 3
+          done
+          echo "::error::deploy never returned 200 after ~2min"; exit 1
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20.19"
+          cache: "npm"
+
+      - name: Install deps + chromium for the smoke
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+
+      # Post-deploy smoke = the automated substitute for PR review. One retry
+      # absorbs transient live flakiness before we decide to roll back.
+      - name: Post-deploy smoke (e2e against the live deploy)
+        run: npm run e2e || npm run e2e
+
+      # Roll back ONLY if a NEW image actually went live (deploy succeeded) and
+      # a later step failed — if `Deploy` itself failed, the prior release is
+      # still serving, so there is nothing to roll back. Image passed via env
+      # (never interpolate ${{ }} into a run: shell — injection-safety).
+      - name: Rollback on failure
+        if: failure() && steps.deploy.outcome == 'success' && steps.prev.outputs.image != ''
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+          ROLLBACK_IMAGE: ${{ steps.prev.outputs.image }}
+        run: |
+          echo "::error::smoke failed on the new release — rolling back to $ROLLBACK_IMAGE"
+          flyctl deploy --image "$ROLLBACK_IMAGE" --remote-only --app "$APP"
