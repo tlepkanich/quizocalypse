@@ -29,7 +29,7 @@ const ACTION_ICON: Record<string, ReactNode> = {
 };
 
 const ACTIONS = [
-  { to: "/studio/brand", icon: "ai", title: "Create with AI", blurb: "Let our AI build your quiz for you — perfect if you don't have questions yet." },
+  { to: "/studio/onboarding", icon: "ai", title: "Create with AI", blurb: "Let our AI build your quiz for you — perfect if you don't have questions yet." },
   { to: "/studio/new", icon: "import", title: "Import Questions", blurb: "Upload or paste your existing questions to instantly turn them into a quiz." },
   { to: "/studio/new", icon: "scratch", title: "Start from Scratch", blurb: "Start with a blank quiz and add your questions manually." },
 ];

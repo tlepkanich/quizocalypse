@@ -16,6 +16,7 @@ const ICON: Record<string, ReactNode> = {
   email: <><rect x="3" y="5" width="18" height="14" rx="2" /><path d="m3.5 7 8.5 6 8.5-6" /></>,
   ab: <><path d="M4 7h5l2 10M4 17h6M15 7h5M15 7l2 10h-4l-.7-3.5M17 7l-1 5" /></>,
   ai: <path d="M12 3l1.8 4.6L18 9l-4.2 1.4L12 15l-1.8-4.6L6 9l4.2-1.4L12 3ZM18 14l.8 2 2 .8-2 .8-.8 2-.8-2-2-.8 2-.8.8-2Z" />,
+  brand: <><path d="M6 3h12l3 6-9 12L3 9l3-6Z" /><path d="M3 9h18M9 3 6 9l6 12M15 3l3 6-6 12" /></>,
 };
 
 interface NavItem {
@@ -30,6 +31,7 @@ const NAV: NavItem[] = [
   { to: "/studio/quizzes", label: "Quizzes", icon: "quizzes" },
   { to: "/studio/analytics", label: "Analytics", icon: "analytics" },
   { to: "/studio/products", label: "Products", icon: "products" },
+  { to: "/studio/brand", label: "Brand Identity", icon: "brand" },
   { to: "/studio/customers", label: "Customers", icon: "customers" },
   { to: "/studio/integrations", label: "Integrations", icon: "integrations" },
   { to: "/studio/email", label: "Email Automation", icon: "email" },

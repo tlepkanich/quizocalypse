@@ -37,7 +37,7 @@ export default function StudioAiAgent() {
         title="Build and refine with AI"
         subtitle="Describe what you want and the AI assembles the quiz — questions, logic, recommendations, and copy in your brand voice."
         actions={
-          <Link to="/studio/brand" className="qz-btn qz-btn-accent">
+          <Link to="/studio/onboarding" className="qz-btn qz-btn-accent">
             ✨ Create with AI
           </Link>
         }

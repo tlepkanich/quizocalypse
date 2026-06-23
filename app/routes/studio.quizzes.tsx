@@ -84,7 +84,7 @@ export default function StudioQuizzes() {
             <Link to="/studio/new" className="qz-btn qz-btn-ghost qz-btn-sm">
               New quiz
             </Link>
-            <Link to="/studio/brand" className="qz-btn qz-btn-accent">
+            <Link to="/studio/onboarding" className="qz-btn qz-btn-accent">
               ✨ Build with AI →
             </Link>
           </div>
@@ -97,7 +97,7 @@ export default function StudioQuizzes() {
             Create your first quiz — start blank, from a template, or with the full demo.
           </p>
           <div className="qz-row" style={{ gap: 8 }}>
-            <Link to="/studio/brand" className="qz-btn qz-btn-accent qz-btn-sm">
+            <Link to="/studio/onboarding" className="qz-btn qz-btn-accent qz-btn-sm">
               ✨ Build with AI →
             </Link>
             <Link to="/studio/new" className="qz-btn qz-btn-ghost qz-btn-sm">

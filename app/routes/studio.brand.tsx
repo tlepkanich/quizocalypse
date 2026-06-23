@@ -75,10 +75,10 @@ export default function StudioBrand() {
         style={{ marginTop: 20, gap: 12, flexWrap: "wrap", alignItems: "center" }}
       >
         <span className="qz-dim" style={{ fontSize: 13 }}>
-          Looks right? Next we&rsquo;ll group your products and shape the quiz.
+          This identity is applied automatically whenever the AI builds a quiz — no need to revisit it each time.
         </span>
-        <Link to="/studio/onboarding" className="qz-btn qz-btn-accent">
-          Continue to quiz setup →
+        <Link to="/studio/onboarding" className="qz-btn qz-btn-ghost qz-btn-sm">
+          Create a quiz →
         </Link>
       </div>
     </QzPage>
