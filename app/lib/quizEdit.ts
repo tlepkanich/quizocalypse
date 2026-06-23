@@ -107,6 +107,14 @@ const NODE_FIELD_NAMES = [
 // Fields that must be https URLs (empty clears).
 const URL_FIELDS = new Set(["hero_image_url", "cta_url", "escape_hatch_url"]);
 
+// Op-level URL guard that MATCHES the schema's z.string().url() so a malformed
+// value (e.g. a bare "https://" with no host) is dropped as a per-op warning
+// instead of slipping through to fail the whole-quiz Quiz.parse gate — which
+// would discard EVERY other valid op in the same AI edit.
+function isValidHttpsUrl(url: string): boolean {
+  return /^https:\/\//i.test(url) && z.string().url().safeParse(url).success;
+}
+
 const HEX_COLOR = z.string().regex(/^#[0-9a-fA-F]{3,8}$/, "hex color");
 
 // The op vocabulary. Each variant maps to a safe mutation (or an inline,
@@ -430,8 +438,8 @@ export function applyEditOps(doc: QuizDoc, ops: EditOp[]): ApplyEditResult {
           patch = { icon: op.icon.trim() || undefined };
         } else {
           const url = op.image_url.trim();
-          if (url && !/^https:\/\//.test(url)) {
-            warnings.push(`set_answer_image: only https URLs are allowed`);
+          if (url && !isValidHttpsUrl(url)) {
+            warnings.push(`set_answer_image: only valid https URLs are allowed`);
             break;
           }
           patch = { image_url: url || undefined };
@@ -671,8 +679,8 @@ export function applyEditOps(doc: QuizDoc, ops: EditOp[]): ApplyEditResult {
         let value: string | undefined = op.value;
         if (URL_FIELDS.has(op.field)) {
           const url = op.value.trim();
-          if (url && !/^https:\/\//.test(url)) {
-            warnings.push(`set_node_field: ${op.field} must be an https URL`);
+          if (url && !isValidHttpsUrl(url)) {
+            warnings.push(`set_node_field: ${op.field} must be a valid https URL`);
             break;
           }
           value = url || undefined;
@@ -799,8 +807,8 @@ export function applyEditOps(doc: QuizDoc, ops: EditOp[]): ApplyEditResult {
           break;
         }
         const url = op.image_url?.trim();
-        if (url && !/^https:\/\//.test(url)) {
-          warnings.push("add_image_block: only https image URLs are allowed");
+        if (url && !isValidHttpsUrl(url)) {
+          warnings.push("add_image_block: only valid https image URLs are allowed");
           break;
         }
         // Existing custom layout, or synthesize from the template (the same

@@ -368,6 +368,26 @@ describe("Unified P5 ops — full panel parity", () => {
     expect(wrongField.warnings.some((w) => w.includes('no editable "cta_url"'))).toBe(true);
   });
 
+  it("set_node_field drops a malformed https URL (bare 'https://') per-op without poisoning the whole edit", () => {
+    const doc = base();
+    const intro = doc.nodes.find((n) => n.type === "intro")!;
+    const out = applyEditOps(doc, [
+      // A bare "https://" passes a naive `startsWith` check but fails the
+      // schema's z.string().url(). It must be dropped as a per-op warning, NOT
+      // written through and left to fail the caller's whole-quiz Quiz.parse
+      // (which would discard the valid co-op below too).
+      { op: "set_node_field", node_id: intro.id, field: "hero_image_url", value: "https://" },
+      { op: "set_flag", flag: "collect_email_on_result", value: true },
+    ]);
+    expect(out.warnings.some((w) => w.includes("valid https URL"))).toBe(true);
+    const node = out.doc.nodes.find((n) => n.id === intro.id);
+    expect(node?.type === "intro" && node.data.hero_image_url).toBeUndefined();
+    // The co-submitted valid op still applied, and the returned doc Quiz.parses
+    // (pre-fix it carried hero_image_url:"https://" and the parse threw).
+    expect(out.doc.collect_email_on_result).toBe(true);
+    expect(() => Quiz.parse(out.doc)).not.toThrow();
+  });
+
   it("set_flag toggles quiz flags and add_node splices a message into the chain", () => {
     const doc = base();
     const { doc: out } = applyEditOps(doc, [
