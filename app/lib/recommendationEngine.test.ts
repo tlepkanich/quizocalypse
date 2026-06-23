@@ -205,6 +205,47 @@ describe("recommendForResult", () => {
     ).toHaveLength(0);
   });
 
+  it("matches tags case-insensitively (answer 'acne' fits a product tagged 'Acne')", () => {
+    // Shopify product tags are authored with inconsistent case; an answer tag
+    // must still match or it silently scores nothing.
+    const products: IndexedProduct[] = [
+      { product_id: "pc", title: "Clarifying Serum", handle: "pc", price: "40", image_url: null, tags: ["Acne", "Oil-Control"], collection_ids: ["c"], inventory_in_stock: true },
+      { product_id: "pd", title: "Rich Cream", handle: "pd", price: "40", image_url: null, tags: ["Dry"], collection_ids: ["c"], inventory_in_stock: true },
+    ];
+    const quiz = Quiz.parse({
+      quiz_id: "qc",
+      status: "draft",
+      scope: { collection_ids: ["c"] },
+      nodes: [
+        { id: "intro", type: "intro", position: { x: 0, y: 0 }, data: { headline: "Hi" } },
+        {
+          id: "q1",
+          type: "question",
+          position: { x: 1, y: 0 },
+          data: {
+            text: "Main concern?",
+            question_type: "single_select",
+            answers: [
+              { id: "a-acne", text: "Breakouts", tags: ["acne"], edge_handle_id: "h1" }, // lowercase
+              { id: "a-dry", text: "Dryness", tags: ["dry"], edge_handle_id: "h2" },
+            ],
+          },
+        },
+        { id: "r1", type: "result", position: { x: 2, y: 0 }, data: { headline: "Match", fallback_collection_id: "c" } },
+      ],
+      edges: [
+        { id: "e0", source: "intro", target: "q1" },
+        { id: "e1", source: "q1", target: "r1" },
+      ],
+    });
+    const exp = recommendForResultExplained({ quiz, productIndex: products, selectedAnswerIds: ["a-acne"], resultNodeId: "r1" });
+    // The "Acne"-tagged product matches the lowercase "acne" answer tag.
+    expect(exp.products.map((p) => p.product_id)).toEqual(["pc"]);
+    expect(exp.products[0]!.score).toBeGreaterThan(0);
+    // matched_tags preserves the product's ORIGINAL case for display.
+    expect(exp.products[0]!.matched_tags).toContain("Acne");
+  });
+
   it("caps results at the result node's slot_count", () => {
     const result = recommendForResult({
       quiz: quizDoc,

@@ -26,7 +26,10 @@ export function tagToAnswerText(
     const a = byId.get(id);
     if (!a) continue;
     for (const tag of a.tags) {
-      if (!out.has(tag)) out.set(tag, a.text);
+      // Lowercased keys to match the engine's case-insensitive tag matching
+      // (a product tagged "Acne" must map back to the "acne" answer's text).
+      const key = tag.toLowerCase();
+      if (!out.has(key)) out.set(key, a.text);
     }
   }
   return out;
@@ -45,7 +48,7 @@ export function reasonsForProduct(
   const seen = new Set<string>();
   const out: string[] = [];
   for (const tag of matchedTags) {
-    const text = tagAnswers.get(tag);
+    const text = tagAnswers.get(tag.toLowerCase());
     if (!text || seen.has(text)) continue;
     seen.add(text);
     out.push(text);

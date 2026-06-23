@@ -123,7 +123,12 @@ function buildTagBag(
       if (!selectedAnswerSet.has(answer.id)) continue;
       const w = answerWeights?.[answer.id] ?? 1;
       for (const tag of answer.tags) {
-        tagWeight.set(tag, Math.max(tagWeight.get(tag) ?? 0, w));
+        // Case-insensitive: Shopify product tags are authored with inconsistent
+        // case ("Acne" vs "acne"), so an answer tag must match regardless of
+        // case or it silently scores nothing. Keys are lowercased here and at
+        // every lookup; the product's original-case tag is preserved for display.
+        const key = tag.toLowerCase();
+        tagWeight.set(key, Math.max(tagWeight.get(key) ?? 0, w));
       }
       if (answer.collection_filter) collectionFilters.add(answer.collection_filter);
     }
@@ -142,8 +147,10 @@ function scorePool(
 ): ExplainedProduct[] {
   return pool.map((p) => ({
     ...p,
-    score: p.tags.reduce((acc, t) => acc + (tagWeight.get(t) ?? 0), 0),
-    matched_tags: p.tags.filter((t) => tagWeight.has(t)),
+    // Case-insensitive lookup (tagWeight keys are lowercased in buildTagBag);
+    // matched_tags keeps the product's original-case tag for display.
+    score: p.tags.reduce((acc, t) => acc + (tagWeight.get(t.toLowerCase()) ?? 0), 0),
+    matched_tags: p.tags.filter((t) => tagWeight.has(t.toLowerCase())),
   }));
 }
 
@@ -211,7 +218,7 @@ function walkLadder(
             : productIndex.filter((p) =>
                 p.collection_ids.some((c) => collectionFilters.has(c)),
               );
-        return eligible.filter((p) => p.tags.some((t) => tagWeight.has(t)));
+        return eligible.filter((p) => p.tags.some((t) => tagWeight.has(t.toLowerCase())));
       }
     }
   };
