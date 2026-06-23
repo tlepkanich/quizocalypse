@@ -1896,8 +1896,12 @@ function PreviewList({
         };
         // QD-7 — standalone has no Shopify cart; the mid-quiz "Add" chip is
         // gated off (the card still links to the merchant PDP via `href`).
+        // Also gate off when sold out: a /cart permalink for an OOS variant adds
+        // nothing under Shopify's default continue-selling=off.
         const cartUrl =
-          platform === "standalone" ? null : cartPermalink(shopDomain, r.default_variant_id, 1);
+          platform === "standalone" || r.inventory_in_stock === false
+            ? null
+            : cartPermalink(shopDomain, r.default_variant_id, 1);
         const infoFlex: React.CSSProperties = {
           display: "flex",
           gap: 10,
@@ -4032,7 +4036,9 @@ function MultiStageResultView({
         // a sequential single-item postMessage loop for back-compat, falling
         // back to the permalink if the parent doesn't answer.
         const topVariants = sections
-          .map(({ recs }) => recs[0]?.default_variant_id)
+          // Each section's first IN-STOCK pick — never add a sold-out variant to
+          // the multi-pair cart permalink (it would add nothing on Shopify).
+          .map(({ recs }) => recs.find((r) => r.inventory_in_stock !== false)?.default_variant_id)
           .filter((v): v is string => Boolean(v));
         if (topVariants.length < 2 || isPreviewMode) return null;
         const multiUrl = cartPermalinkMulti(shopDomain, topVariants, discountCode);
@@ -4272,10 +4278,19 @@ function ProductCard({
   const [selectedVariantId, setSelectedVariantId] = useState(
     product.default_variant_id ?? product.variants?.[0]?.id,
   );
+  // Sold-out gate for the CURRENTLY-selected variant (recomputed per render so it
+  // tracks the variant <select>). A priced OOS product stays VISIBLE under
+  // oos_behavior=show_with_badge, but its cart CTA must not fire: a /cart
+  // permalink for a sold-out variant adds nothing under Shopify's default
+  // continue-selling=off. Per-variant when known, else product-level.
+  const selectedVariant = product.variants?.find((v) => v.id === selectedVariantId);
+  const soldOut = selectedVariant
+    ? selectedVariant.available === false
+    : product.inventory_in_stock === false;
   // QD-7 — standalone quizzes have no Shopify cart; gate the permalink off so
   // the CTA below becomes "Shop now" → the merchant's own product URL (`href`).
   const cartUrl =
-    platform === "standalone"
+    platform === "standalone" || soldOut
       ? null
       : cartPermalink(shopDomain, selectedVariantId, 1, discountCode);
 
@@ -4429,6 +4444,16 @@ function ProductCard({
             style={{ ...ctaStyle, cursor: "pointer" }}
           >
             {tc("add_to_cart")}
+          </button>
+        ) : soldOut && platform !== "standalone" ? (
+          // Shopify + sold out: the add-to-cart would build a doomed permalink,
+          // so show a disabled state instead (the OOS note above already explains).
+          <button
+            type="button"
+            disabled
+            style={{ ...ctaStyle, cursor: "not-allowed", opacity: 0.55 }}
+          >
+            {tc("out_of_stock")}
           </button>
         ) : platform === "standalone" && href ? (
           // QD-7 — standalone: a real "Shop now" link to the merchant's PDP
