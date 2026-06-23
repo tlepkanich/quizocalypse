@@ -34,3 +34,4 @@ pnpm-lock.yaml
 scripts/audit/
 wf-audit-*.mjs
 wf-*.png
+wf-*.mjs
