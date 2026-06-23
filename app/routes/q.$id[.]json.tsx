@@ -1,5 +1,6 @@
 import type { LoaderFunctionArgs } from "@remix-run/node";
 import prisma from "../db.server";
+import { stripPublicJsonPayload } from "../lib/quizPublish";
 
 // Public quiz JSON for the storefront runtime.
 // CDN-cacheable; CORS-open so the same payload can be loaded from any storefront.
@@ -15,7 +16,11 @@ export const loader = async ({ params }: LoaderFunctionArgs) => {
     return new Response("not found", { status: 404 });
   }
 
-  return new Response(JSON.stringify(quiz.publishedJson), {
+  // Strip editor-only maps (review/FAQ source text, multi-locale translations)
+  // before this CORS-open, cacheable payload leaves the server.
+  const publicJson = stripPublicJsonPayload(quiz.publishedJson);
+
+  return new Response(JSON.stringify(publicJson), {
     headers: {
       "content-type": "application/json; charset=utf-8",
       "cache-control": "public, max-age=60, stale-while-revalidate=300",

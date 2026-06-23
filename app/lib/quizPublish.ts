@@ -15,6 +15,28 @@ import type { z } from "zod";
 
 type QuizDoc = z.infer<typeof Quiz>;
 
+// The public `/q/:id.json` embed endpoint serves publishedJson raw (it never
+// applies a locale, unlike the HTML routes). Strip the editor-only maps that
+// must never egress a public, CORS-open, CDN-cacheable payload:
+//  - review_enrichment_sources: merchant's raw pasted review/FAQ text (also
+//    dropped at bake — belt-and-suspenders).
+//  - translations: the full multi-locale string maps (no .json consumer reads
+//    them; the HTML/launcher/results/compare routes read translations from their
+//    own DB load and apply the locale server-side).
+export function stripPublicJsonPayload(
+  payload: unknown,
+): Record<string, unknown> {
+  if (!payload || typeof payload !== "object") return {};
+  const {
+    review_enrichment_sources: _r,
+    translations: _t,
+    ...rest
+  } = payload as Record<string, unknown>;
+  void _r;
+  void _t;
+  return rest;
+}
+
 export interface PublishedQuiz extends QuizDoc {
   product_index: IndexedProduct[];
   published_at: string;
@@ -421,9 +443,18 @@ export async function publishQuiz(
   }
 
   const nextVersion = quiz.version + 1;
-  // Strip the Step-1 funnel scratch state — it's draft-only and must never reach
-  // publishedJson (which spreads ...doc) or the served runtime payload.
-  const { build_session: _build_session, ...docWithoutSession } = doc;
+  // Strip draft/editor-only state that must never reach publishedJson (which
+  // spreads ...doc) or the served runtime payload:
+  //  - build_session: Step-1 funnel scratch.
+  //  - review_enrichment_sources: the merchant's pasted review/FAQ source text.
+  //    No serve route consumes it (the builder reads it from the DRAFT), so drop
+  //    it at the root here — otherwise every public serve route that doesn't
+  //    explicitly strip it (the .json embed + compare) egresses it verbatim.
+  const {
+    build_session: _build_session,
+    review_enrichment_sources: _review_sources,
+    ...docWithoutSession
+  } = doc;
   const publishedJson: PublishedQuiz = {
     ...docWithoutSession,
     nodes: bakedNodes,

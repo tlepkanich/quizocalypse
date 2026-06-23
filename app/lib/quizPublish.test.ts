@@ -4,8 +4,37 @@ import {
   collectReferencedCategoryIds,
   bakeResultPages,
   collectRecommendableProductIds,
+  stripPublicJsonPayload,
 } from "./quizPublish";
 import { recommendForResult, type IndexedProduct } from "./recommendationEngine";
+
+describe("stripPublicJsonPayload", () => {
+  it("drops editor-only maps but preserves the public doc", () => {
+    const payload = {
+      quiz_id: "q1",
+      nodes: [{ id: "intro" }],
+      product_index: [{ product_id: "p1" }],
+      review_enrichment_sources: { text: "secret pasted reviews", url: "x" },
+      translations: { fr: { strings: { a: "Bonjour" } } },
+    };
+    const out = stripPublicJsonPayload(payload);
+    expect(out).not.toHaveProperty("review_enrichment_sources");
+    expect(out).not.toHaveProperty("translations");
+    expect(out.quiz_id).toBe("q1");
+    expect(out.nodes).toEqual([{ id: "intro" }]);
+    expect(out.product_index).toEqual([{ product_id: "p1" }]);
+  });
+
+  it("is a no-op shape for a doc without the editor-only fields", () => {
+    const out = stripPublicJsonPayload({ quiz_id: "q2", nodes: [] });
+    expect(out).toEqual({ quiz_id: "q2", nodes: [] });
+  });
+
+  it("returns an empty object for non-object input", () => {
+    expect(stripPublicJsonPayload(null)).toEqual({});
+    expect(stripPublicJsonPayload("nope")).toEqual({});
+  });
+});
 
 // A v3 quiz: result data lives on result NODES, results_pages is empty. This is
 // what reconcile / Smart Build / templates / AI onboarding all produce.
