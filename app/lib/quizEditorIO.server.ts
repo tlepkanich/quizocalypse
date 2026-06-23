@@ -187,6 +187,25 @@ export async function handleQuizEditorActionForShop(
 
   if (intent === "publish") {
     try {
+      // Persist the client's live doc FIRST so a publish that races a pending
+      // autosave (the 700ms debounce) still bakes the merchant's latest edit.
+      // The client is the source of truth that drives the preview; mirror the
+      // autosave PUT's Quiz validation. Absent/invalid doc → publish the stored
+      // draft as before (back-compat).
+      const docField = form.get("doc");
+      if (typeof docField === "string" && docField) {
+        try {
+          const parsedDoc = Quiz.safeParse(JSON.parse(docField));
+          if (parsedDoc.success) {
+            await prisma.quiz.update({
+              where: { id },
+              data: { draftJson: parsedDoc.data as never },
+            });
+          }
+        } catch {
+          // malformed client doc — fall back to the stored draft
+        }
+      }
       // Create the recommendation discount (if enabled + not yet created) and
       // persist its code to the draft so publishQuiz bakes it into
       // publishedJson. Discount failures don't block publishing.

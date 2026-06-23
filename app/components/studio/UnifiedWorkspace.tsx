@@ -268,6 +268,10 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
   const publish = () => {
     const form = new FormData();
     form.set("intent", "publish");
+    // Send the LIVE doc so a publish that races a pending autosave (the 700ms
+    // debounce) still ships the merchant's latest edit — the server persists it
+    // before baking, eliminating the missed-final-edit race.
+    form.set("doc", JSON.stringify(doc));
     publishFetcher.submit(form, { method: "POST" });
   };
   const renameQuiz = (name: string) => {
