@@ -740,6 +740,24 @@ describe("Branch routing", () => {
     expect(pickBranchSlot(q, "br1", ctx)).toBe("slot-b");
   });
 
+  it("the just-selected answer must be in the context to route the branch (runtime threads it)", () => {
+    // Contract behind the QuizRuntime fix: when a shopper answers a question
+    // whose NEXT node is a conditional branch, the branch must see the answer
+    // they JUST picked. resolveNextStep walks q1 → branch → result.
+    const q = branchQuiz({
+      mode: "rules",
+      condA: { answer_id: "ans-oily" },
+      condB: { answer_id: "ans-dry" },
+    });
+    // Fresh context (the picked answer IS recorded) → routes to the Dry result.
+    const fresh = emptyCtx();
+    fresh.selectedAnswerIds.add("ans-dry");
+    expect(resolveNextStep(q, "q1", "hd", fresh)).toBe("r2");
+    // Stale context (the bug: setPath is async, so the answer isn't in `path`
+    // yet) cannot match either conditional slot → it never reaches "r2".
+    expect(resolveNextStep(q, "q1", "hd", emptyCtx())).not.toBe("r2");
+  });
+
   it("rules mode: picks the slot whose tag condition matches", () => {
     const q = branchQuiz({
       mode: "rules",

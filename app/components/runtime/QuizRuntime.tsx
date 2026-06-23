@@ -576,10 +576,15 @@ export function QuizRuntime(props: QuizRuntimeProps) {
     completedRef.current = false;
   }
 
-  function buildBranchContext(): BranchContext {
+  // `extraStep` is the answer the shopper JUST picked. setPath() is async, so a
+  // branch that conditions on the current question would otherwise resolve
+  // against the stale `path` (missing this answer) and mis-route. Append it here
+  // so the context matches routeTrace's "add the answer, then resolve" order.
+  function buildBranchContext(extraStep?: PathStep): BranchContext {
+    const steps = extraStep ? [...path, extraStep] : path;
     const selectedAnswerIds = new Set<string>();
     const accumulatedTags = new Set<string>();
-    for (const step of path) {
+    for (const step of steps) {
       const node = doc.nodes.find((n) => n.id === step.questionNodeId);
       if (!node || node.type !== "question") continue;
       for (const ansId of step.answerIds) {
@@ -595,7 +600,11 @@ export function QuizRuntime(props: QuizRuntimeProps) {
     };
   }
 
-  function gotoNextFrom(nodeId: string, handle: string | null) {
+  function gotoNextFrom(
+    nodeId: string,
+    handle: string | null,
+    extraStep?: PathStep,
+  ) {
     // Funnel stage "engaged" (BIC P2): fires the moment the shopper LEAVES the
     // intro — i.e. they clicked Start. quiz_started fires on render (a view),
     // so engaged is the first true interaction. Click-driven → no double-fire;
@@ -874,11 +883,11 @@ export function QuizRuntime(props: QuizRuntimeProps) {
               question_id: currentNode.id,
               answer_ids: answerIds,
             });
-            setPath((prev) => [
-              ...prev,
-              { questionNodeId: currentNode.id, answerIds },
-            ]);
-            gotoNextFrom(currentNode.id, handle);
+            const step = { questionNodeId: currentNode.id, answerIds };
+            setPath((prev) => [...prev, step]);
+            // Pass the just-picked step so a branch conditioning on THIS question
+            // routes against the up-to-date answers (setPath is async).
+            gotoNextFrom(currentNode.id, handle, step);
           }}
         />
         </>
