@@ -643,9 +643,10 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
             <BuilderBlocksPalette doc={doc} node={selectedNode} commit={commit} />
           ) : (
             <>
-              {/* QP-2 — Quizell's Page Settings (background color + page paddings),
-                  quiz-level, above the step list. */}
-              <BuilderPageSettings doc={doc} commit={commit} />
+              {/* Step list first (navigation), then the selected step's editor
+                  right below it — select a step, edit it there (Quizell-style).
+                  The quiz-global Page Settings live in the no-selection state so
+                  they never bury the node editor. */}
               <FlowRail
                 doc={doc}
                 ordered={ordered}
@@ -674,11 +675,15 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
                   onOpenLogic={() => setView("logic")}
                 />
               ) : (
-                <div className="qz-card" style={{ padding: 12 }}>
-                  <p className="qz-dim" style={{ fontSize: 12.5, margin: 0 }}>
-                    Select a step to edit its content, design, and layout.
-                  </p>
-                </div>
+                <>
+                  {/* QP-2 — quiz-global Page Settings (background + page paddings). */}
+                  <BuilderPageSettings doc={doc} commit={commit} />
+                  <div className="qz-card" style={{ padding: 12 }}>
+                    <p className="qz-dim" style={{ fontSize: 12.5, margin: 0 }}>
+                      Select a step to edit its content, design, and layout.
+                    </p>
+                  </div>
+                </>
               )}
             </>
           )}
