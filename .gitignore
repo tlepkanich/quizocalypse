@@ -31,3 +31,6 @@ pnpm-lock.yaml
 /test-results/
 /playwright-report/
 /e2e/shots-baseline/
+scripts/audit/
+wf-audit-*.mjs
+wf-*.png
