@@ -2,6 +2,7 @@ import type { ActionFunctionArgs, LoaderFunctionArgs } from "@remix-run/node";
 import { json } from "@remix-run/node";
 import { useLoaderData } from "@remix-run/react";
 import { UnifiedWorkspace } from "../components/studio/UnifiedWorkspace";
+import { ClientOnly, BuilderSkeleton } from "../components/studio/ClientOnly";
 import {
   loadQuizEditorData,
   handleQuizEditorAction,
@@ -40,5 +41,11 @@ export default function StudioRoute() {
   const data = useLoaderData<typeof loader>();
   // Unified P8: ONE workspace. Legacy ?mode=ai / ?mode=advanced / ?mode=next
   // URLs all land here (the param is simply ignored — bookmarks keep working).
-  return <UnifiedWorkspace data={data} chrome="embedded" />;
+  // Client-only (see ClientOnly): the admin builder skips SSR to avoid the
+  // recoverable React #418 hydration mismatches it would otherwise throw.
+  return (
+    <ClientOnly fallback={<BuilderSkeleton />}>
+      {() => <UnifiedWorkspace data={data} chrome="embedded" />}
+    </ClientOnly>
+  );
 }

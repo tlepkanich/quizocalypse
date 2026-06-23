@@ -88,7 +88,11 @@ export function BuilderPageSettings({
           <input
             type="color"
             aria-label="Background color swatch"
-            value={swatch}
+            // Browsers normalize a color input's value to lowercase, so an
+            // uppercase hex here ("#F8F6F1") mismatches the hydrated DOM value
+            // ("#f8f6f1") → a React #418 on every builder load. Emit lowercase
+            // to match. (The text field beside it keeps the original casing.)
+            value={swatch.toLowerCase()}
             onChange={(e) => setBg(e.target.value)}
           />
           <input

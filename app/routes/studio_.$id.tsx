@@ -3,6 +3,7 @@ import { json } from "@remix-run/node";
 import { Link, useLoaderData, useRevalidator, useSearchParams } from "@remix-run/react";
 import { useEffect, useState } from "react";
 import { UnifiedWorkspace } from "../components/studio/UnifiedWorkspace";
+import { ClientOnly, BuilderSkeleton } from "../components/studio/ClientOnly";
 import { QzPage, QzCard, QzBanner, StagedProgress } from "../components/qz";
 import { requireStudioAccess, resolveStudioShop } from "../lib/studioAccess.server";
 import {
@@ -85,7 +86,14 @@ export default function StandaloneStudio() {
 
   // Unified P8: ONE workspace. Legacy ?mode=ai / ?mode=advanced / ?mode=next
   // URLs all land here (the param is simply ignored — bookmarks keep working).
-  return <UnifiedWorkspace data={data} chrome="standalone" />;
+  // Client-only: this admin builder gains nothing from SSR, and rendering it
+  // client-only eliminates the recoverable React #418 hydration mismatches it
+  // would otherwise throw on every load. (The shopper runtime is untouched.)
+  return (
+    <ClientOnly fallback={<BuilderSkeleton />}>
+      {() => <UnifiedWorkspace data={data} chrome="standalone" />}
+    </ClientOnly>
+  );
 }
 
 // Live "Building…" overlay shown while the detached AI onboarding build runs.
