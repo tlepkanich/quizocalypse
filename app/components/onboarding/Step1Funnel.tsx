@@ -125,6 +125,10 @@ export function Step1Funnel({ data }: { data: FunnelData }) {
   const result = fetcher.state === "idle" ? fetcher.data ?? null : null;
   const errorMsg = result && result.ok === false ? result.error : null;
 
+  // The brand identity is a tap-to-open overlay (kept out of the header so the
+  // page leads with the actual task, not a paragraph of summary).
+  const [showIdentity, setShowIdentity] = useState(false);
+
   // Poll the loader while a detached generation job runs (typing/templating);
   // the job writes the next stage, the revalidate picks it up, the poll stops.
   const isGenerating = data.stage === "typing" || data.stage === "templating";
@@ -141,17 +145,28 @@ export function Step1Funnel({ data }: { data: FunnelData }) {
       <QzPageHeader
         eyebrow="AI-first setup · Step 1"
         title="Shape your quiz"
-        subtitle={
-          data.identitySummary
-            ? data.identitySummary
-            : "We read your catalog, group your products, and draft a few quiz directions to pick from."
-        }
+        subtitle="We read your catalog, group your products, and draft a few quiz directions to pick from."
         actions={
-          <Link to="/studio" className="qz-btn qz-btn-ghost qz-btn-sm">
-            ← All quizzes
-          </Link>
+          <div className="qz-row" style={{ gap: 8 }}>
+            {data.identitySummary ? (
+              <button
+                type="button"
+                className="qz-btn qz-btn-ghost qz-btn-sm"
+                onClick={() => setShowIdentity(true)}
+              >
+                ✦ Current brand identity
+              </button>
+            ) : null}
+            <Link to="/studio" className="qz-btn qz-btn-ghost qz-btn-sm">
+              ← All quizzes
+            </Link>
+          </div>
         }
       />
+
+      {showIdentity && data.identitySummary ? (
+        <BrandIdentityModal summary={data.identitySummary} onClose={() => setShowIdentity(false)} />
+      ) : null}
 
       <FunnelProgress stage={data.stage} />
 
@@ -709,6 +724,46 @@ function useEscClose(onClose: () => void) {
 
 // Confirm switching the bucket source when buckets already exist (they're tied to
 // the current source, so switching clears them).
+// The brand identity summary, opened on demand from the funnel header so the page
+// leads with the task instead of a paragraph of summary. Read-only here — the full
+// view/edit lives on the Brand Identity tab.
+function BrandIdentityModal({ summary, onClose }: { summary: string; onClose: () => void }) {
+  useEscClose(onClose);
+  return (
+    <div className="qz-rb-scrim" onClick={onClose}>
+      <div
+        className="qz-rb-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-label="Current brand identity"
+        style={{ width: "min(540px, 92vw)" }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="qz-row qz-row-between" style={{ alignItems: "flex-start", gap: 10 }}>
+          <strong style={{ fontSize: 16 }}>Current brand identity</strong>
+          <button
+            type="button"
+            className="qz-btn qz-btn-ghost qz-btn-sm"
+            onClick={onClose}
+            aria-label="Close"
+          >
+            ✕
+          </button>
+        </div>
+        <p style={{ margin: 0, fontSize: 13.5, lineHeight: 1.6 }}>{summary}</p>
+        <p className="qz-dim" style={{ margin: 0, fontSize: 12 }}>
+          The AI uses this to tailor every quiz it builds.
+        </p>
+        <div className="qz-row" style={{ justifyContent: "flex-end" }}>
+          <Link to="/studio/brand" className="qz-btn qz-btn-ghost qz-btn-sm">
+            View &amp; edit full identity →
+          </Link>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function TabLockModal({
   targetLabel,
   count,
