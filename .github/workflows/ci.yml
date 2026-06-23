@@ -9,6 +9,12 @@ name: CI / Deploy
 on:
   push:
     branches: [main]
+    # Docs-only / audit-script changes don't affect the running app — skip the
+    # whole build+deploy for them (saves a prod redeploy on a README edit).
+    paths-ignore:
+      - "**.md"
+      - "docs/**"
+      - "scripts/audit/**"
   pull_request:
     branches: [main]
 

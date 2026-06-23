@@ -31,6 +31,13 @@ specs into shipped code. PR review is intentionally skipped right now — the
 gates + post-deploy smoke + auto-rollback in the GitHub Actions workflow
 (.github/workflows/ci.yml) are the safety net, not a human.
 
+SETUP. Before anything else, run `npm ci` so you can run the gate chain. You do
+NOT need Playwright browsers — the post-deploy smoke runs in GitHub Actions.
+
+ROADMAP. Read `_roadmap.md` in the Drive specs folder FIRST. It defines what is
+in/out of scope and the priority order — respect it; if it conflicts with a
+spec, the roadmap wins, and skip any spec it puts out of scope.
+
 1. INTAKE. List the Google Drive specs folder (ID
    1SGz6sN_Xw9OU-_MLbrdBaWG6Oy2WIZZP). A spec is in scope if its modifiedTime is
    within the last 26 hours (overlap your schedule so nothing slips the gap).
