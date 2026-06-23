@@ -18,12 +18,12 @@
   --qz-ink:      #18181B;   /* primary text / near-black buttons (zinc-900) */
   --qz-ink-2:    #27272A;   /* zinc-800 */
   --qz-ink-3:    #52525B;   /* secondary text (zinc-600) */
-  --qz-ink-4:    #A1A1AA;   /* muted / mono labels (zinc-400) */
+  --qz-ink-4:    #6B6B73;   /* muted / mono labels; darkened from zinc-400 #A1A1AA (2.56:1) to pass WCAG AA on white AND the cream card/app bg (--qz-cream #F4F4F5, where #71717A was still 4.4) */
   --qz-rule:     #18181B17;  /* hairline border */
   --qz-rule-2:   #18181B0A;
   --qz-accent:   #0B6BCB;     /* azure — brand (links, active nav, focus) */
   --qz-accent-2: #095AAB;
-  --qz-ok:       #15803D;
+  --qz-ok:       #157D3C;   /* green; darkened for WCAG AA on the ok-tint badge (was #15803D = 4.46:1) */
   --qz-warn:     #B45309;
   --qz-crit:     #B91C1C;
 
