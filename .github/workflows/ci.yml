@@ -101,11 +101,13 @@ jobs:
       - name: Wait for health
         run: |
           for i in $(seq 1 40); do
-            code=$(curl -s -o /dev/null -w '%{http_code}' "$BASE_URL" || true)
-            if [ "$code" = "200" ]; then echo "live ($code)"; exit 0; fi
+            code=$(curl -s -o /dev/null -w '%{http_code}' "$BASE_URL" || echo 000)
+            # Root 302→/studio; any 2xx/3xx means the server booted and is routing
+            # (it only starts serving after `prisma migrate deploy` finishes).
+            if [ "$code" -ge 200 ] && [ "$code" -lt 400 ]; then echo "live ($code)"; exit 0; fi
             sleep 3
           done
-          echo "::error::deploy never returned 200 after ~2min"; exit 1
+          echo "::error::deploy never came up (last: $code) after ~2min"; exit 1
 
       - uses: actions/setup-node@v4
         with:

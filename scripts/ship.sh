@@ -98,9 +98,10 @@ fly deploy --remote-only --app "$APP" \
 # ---------------------------------------------------------------------------
 log "Waiting for the deploy to answer (boot runs migrate deploy ~25-40s)"
 for i in $(seq 1 40); do
-  code="$(curl -s -o /dev/null -w '%{http_code}' "$BASE_URL" || true)"
-  [ "$code" = "200" ] && { log "Live ($code)"; break; }
-  [ "$i" = "40" ] && die "deploy never returned 200 (last: $code) after ~2min"
+  code="$(curl -s -o /dev/null -w '%{http_code}' "$BASE_URL" || echo 000)"
+  # Root 302→/studio; any 2xx/3xx means the server booted and is routing.
+  if [ "$code" -ge 200 ] && [ "$code" -lt 400 ]; then log "Live ($code)"; break; fi
+  [ "$i" = "40" ] && die "deploy never came up (last: $code) after ~2min"
   sleep 3
 done
 
