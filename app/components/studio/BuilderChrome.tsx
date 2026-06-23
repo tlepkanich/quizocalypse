@@ -124,7 +124,18 @@ export function BuilderFilmstrip({
             title={`${i + 1}. ${title}`}
             aria-label={`Step ${i + 1}: ${title}`}
           >
-            <span className="qz-film-thumb" aria-hidden="true">
+            <span
+              className="qz-film-thumb"
+              aria-hidden="true"
+              ref={(el) => {
+                // The thumb renders a scaled live StepPreview whose real
+                // buttons/inputs are purely decorative — mark the subtree inert
+                // so they're not focusable or interactive. Fixes axe
+                // aria-hidden-focus (focusable content inside aria-hidden) AND
+                // nested-interactive (a control nested inside the step button).
+                if (el) el.inert = true;
+              }}
+            >
               {node ? (
                 <span
                   className="qz-film-thumb-scale"
