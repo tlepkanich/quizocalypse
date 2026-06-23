@@ -1,4 +1,4 @@
-import type { LoaderFunctionArgs } from "@remix-run/node";
+import type { LoaderFunctionArgs, MetaFunction } from "@remix-run/node";
 import { json } from "@remix-run/node";
 import { Outlet } from "@remix-run/react";
 import { requireStudioAccess } from "../lib/studioAccess.server";
@@ -8,6 +8,12 @@ import { StudioSidebar } from "../components/studio/StudioSidebar";
 // sidebar (StudioSidebar) wraps every /studio child route. Renders straight
 // through root.tsx with a shared-token gate (no App Bridge / Shopify auth).
 // Same DB as the embedded /app admin, so edits sync both ways.
+
+// Default <title> for every nested /studio screen (Remix applies a parent
+// route's meta to children that don't export their own). Without it, axe flags
+// a serious "document-title" violation on every admin page. Individual screens
+// may override with a more specific title later.
+export const meta: MetaFunction = () => [{ title: "Quizocalypse Studio" }];
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   await requireStudioAccess(request);

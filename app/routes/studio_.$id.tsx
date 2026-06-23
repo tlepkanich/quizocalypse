@@ -1,4 +1,4 @@
-import type { ActionFunctionArgs, LoaderFunctionArgs } from "@remix-run/node";
+import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "@remix-run/node";
 import { json } from "@remix-run/node";
 import { Link, useLoaderData, useRevalidator, useSearchParams } from "@remix-run/react";
 import { useEffect, useState } from "react";
@@ -19,6 +19,10 @@ import { aggregateAllAbFunnels, type FunnelCounts } from "../lib/abAnalytics";
 // (where: { id, shopId: shop.id }), so a quiz from any other shop 404s — no
 // cross-shop access. The action uses an OFFLINE admin client only for the one
 // publish-time Shopify call (discount creation, which degrades gracefully).
+
+// The de-nested builder route isn't under studio.tsx, so it needs its own
+// <title> (else axe flags "document-title").
+export const meta: MetaFunction = () => [{ title: "Builder · Quizocalypse Studio" }];
 
 export const loader = async ({ params, request }: LoaderFunctionArgs) => {
   const { id } = params;
