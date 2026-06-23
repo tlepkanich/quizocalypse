@@ -9,6 +9,7 @@ import { useFetcher, useLoaderData, Link } from "@remix-run/react";
 import { TitleBar } from "@shopify/app-bridge-react";
 import { authenticate } from "../shopify.server";
 import prisma from "../db.server";
+import { formatDate } from "../lib/formatDate";
 import { syncCatalog } from "../jobs/catalogSync";
 import {
   QzPage,
@@ -144,7 +145,7 @@ export default function Index() {
     : Infinity;
   const isStale = lastSyncMs > 48 * 60 * 60 * 1000;
   const lastSyncRelative = data.lastSyncAt
-    ? new Date(data.lastSyncAt).toLocaleString()
+    ? formatDate(data.lastSyncAt)
     : "never";
 
   useEffect(() => {
@@ -290,7 +291,7 @@ export default function Index() {
                         </div>
                         <h3 className="qz-h2 qz-mt-8">{q.name}</h3>
                         <p className="qz-mono qz-dim qz-mt-8" style={{ margin: 0 }}>
-                          Updated {new Date(q.updatedAt).toLocaleString()}
+                          Updated {formatDate(q.updatedAt)}
                         </p>
                       </div>
                       <QzButton variant="ghost" size="sm">Open →</QzButton>

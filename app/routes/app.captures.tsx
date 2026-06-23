@@ -4,6 +4,7 @@ import { Link, useLoaderData } from "@remix-run/react";
 import { TitleBar } from "@shopify/app-bridge-react";
 import { authenticate } from "../shopify.server";
 import prisma from "../db.server";
+import { formatDate } from "../lib/formatDate";
 import { QzPage, QzPageHeader, QzCard } from "../components/qz";
 
 const PAGE_SIZE = 100;
@@ -102,7 +103,7 @@ export default function AllCaptures() {
                       </Link>
                     </td>
                     <td className="qz-mono qz-dim" style={{ fontSize: 12 }}>
-                      {new Date(c.capturedAt).toLocaleString()}
+                      {formatDate(c.capturedAt)}
                     </td>
                   </tr>
                 ))}

@@ -4,6 +4,7 @@ import { useLoaderData } from "@remix-run/react";
 import { TitleBar } from "@shopify/app-bridge-react";
 import { authenticate } from "../shopify.server";
 import prisma from "../db.server";
+import { formatDate } from "../lib/formatDate";
 import {
   QzPage,
   QzPageHeader,
@@ -61,7 +62,7 @@ export default function Settings() {
                 <ReadOnly label="Domain" value={shop.shopDomain} />
                 <ReadOnly
                   label="Installed"
-                  value={new Date(shop.installedAt).toLocaleString()}
+                  value={formatDate(shop.installedAt)}
                 />
                 <ReadOnly
                   label="Granted scopes"
@@ -71,7 +72,7 @@ export default function Settings() {
                   label="Last catalog sync"
                   value={
                     shop.lastSyncAt
-                      ? new Date(shop.lastSyncAt).toLocaleString()
+                      ? formatDate(shop.lastSyncAt)
                       : "Never"
                   }
                 />

@@ -15,6 +15,7 @@ import {
 import { TitleBar } from "@shopify/app-bridge-react";
 import { authenticate } from "../shopify.server";
 import prisma from "../db.server";
+import { formatDate } from "../lib/formatDate";
 import {
   QzPage,
   QzPageHeader,
@@ -212,7 +213,7 @@ export default function QuizList() {
                   </td>
                   <td className="qz-mono qz-tnum">v{q.version}</td>
                   <td className="qz-mono qz-dim">
-                    {new Date(q.updatedAt).toLocaleString()}
+                    {formatDate(q.updatedAt)}
                   </td>
                   <td className="qz-cell-actions" onClick={(e) => e.stopPropagation()}>
                     <div className="qz-row qz-gap-4" style={{ justifyContent: "flex-end" }}>

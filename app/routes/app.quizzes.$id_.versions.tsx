@@ -10,6 +10,7 @@ import {
 import { TitleBar } from "@shopify/app-bridge-react";
 import { authenticate } from "../shopify.server";
 import prisma from "../db.server";
+import { formatDate } from "../lib/formatDate";
 import { Quiz } from "../lib/quizSchema";
 import {
   QzPage,
@@ -174,7 +175,7 @@ export default function QuizVersions() {
                     </div>
                   </td>
                   <td className="qz-mono qz-dim">
-                    {new Date(v.publishedAt).toLocaleString()}
+                    {formatDate(v.publishedAt)}
                   </td>
                   <td className="qz-cell-actions">
                     <QzButton

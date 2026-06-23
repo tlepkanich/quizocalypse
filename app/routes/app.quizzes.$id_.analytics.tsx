@@ -4,6 +4,7 @@ import { Link, useLoaderData } from "@remix-run/react";
 import { TitleBar } from "@shopify/app-bridge-react";
 import { authenticate } from "../shopify.server";
 import prisma from "../db.server";
+import { formatDate } from "../lib/formatDate";
 import { Quiz } from "../lib/quizSchema";
 import { findAbBranches, aggregateVariantFunnel } from "../lib/abAnalytics";
 import {
@@ -165,7 +166,7 @@ export default function QuizAnalytics() {
         title="Analytics"
         subtitle={
           data.earliest
-            ? `Distinct shopper sessions reaching each stage. Earliest event ${new Date(data.earliest).toLocaleString()}.`
+            ? `Distinct shopper sessions reaching each stage. Earliest event ${formatDate(data.earliest)}.`
             : "Distinct shopper sessions reaching each stage. No events yet — counts will populate as shoppers take the quiz."
         }
         actions={
@@ -200,7 +201,7 @@ export default function QuizAnalytics() {
           value={data.captureCount}
           delta={
             data.latest
-              ? `Latest event ${new Date(data.latest).toLocaleString()}`
+              ? `Latest event ${formatDate(data.latest)}`
               : "—"
           }
         />
@@ -295,7 +296,7 @@ export default function QuizAnalytics() {
                       <td className="qz-cell-name">{c.email}</td>
                       <td className="qz-muted">{c.firstName ?? "—"}</td>
                       <td className="qz-mono qz-dim" style={{ fontSize: 12 }}>
-                        {new Date(c.capturedAt).toLocaleString()}
+                        {formatDate(c.capturedAt)}
                       </td>
                     </tr>
                   ))}
