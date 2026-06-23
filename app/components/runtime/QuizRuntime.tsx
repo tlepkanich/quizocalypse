@@ -2373,6 +2373,7 @@ function QuestionView({
             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
               <input
                 type="range"
+                aria-label={node.data.text}
                 min={0}
                 max={100}
                 value={freeform || "50"}
@@ -2386,6 +2387,7 @@ function QuestionView({
           ) : (
             <input
               type={inputType}
+              aria-label={node.data.text}
               value={freeform}
               onChange={(e) => setFreeform(e.target.value.slice(0, maxLength))}
               placeholder={placeholder}
@@ -2802,6 +2804,7 @@ function SearchableQuestion({
       ) : null}
       <input
         type="text"
+        aria-label={node.data.text}
         value={query}
         onChange={(e) => setQuery(e.target.value)}
         placeholder={tc("search_placeholder")}
@@ -2937,6 +2940,7 @@ function EmailGateView({
       <div style={{ marginTop: 20, display: "grid", gap: 12 }}>
         <input
           type="email"
+          aria-label={tc("gate_email_placeholder")}
           placeholder={tc("gate_email_placeholder")}
           value={email}
           onChange={(e) => setEmail(e.target.value)}
@@ -2945,6 +2949,7 @@ function EmailGateView({
         {node.data.name_optional && (
           <input
             type="text"
+            aria-label={tc("gate_name_placeholder")}
             placeholder={tc("gate_name_placeholder")}
             value={name}
             onChange={(e) => setName(e.target.value)}
@@ -2954,6 +2959,7 @@ function EmailGateView({
         {node.data.collect_phone && (
           <input
             type="tel"
+            aria-label={tc("gate_phone_placeholder")}
             placeholder={tc("gate_phone_placeholder")}
             value={phone}
             onChange={(e) => setPhone(e.target.value)}
@@ -3234,6 +3240,7 @@ function AskAIView({
       >
         <input
           type="text"
+          aria-label={tc("chat_placeholder")}
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
           disabled={sending || turnsRemaining <= 0}
@@ -3598,6 +3605,7 @@ function ResultEmailCapture({
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
         <input
           type="email"
+          aria-label={tc("email_placeholder")}
           placeholder={tc("email_placeholder")}
           value={email}
           onChange={(e) => setEmail(e.target.value)}
