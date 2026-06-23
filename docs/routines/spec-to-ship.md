@@ -39,9 +39,11 @@ in/out of scope and the priority order — respect it; if it conflicts with a
 spec, the roadmap wins, and skip any spec it puts out of scope.
 
 1. INTAKE. List the Google Drive specs folder (ID
-   1SGz6sN_Xw9OU-_MLbrdBaWG6Oy2WIZZP). A spec is in scope if its modifiedTime is
-   within the last 26 hours (overlap your schedule so nothing slips the gap).
-   Read each in-scope spec in full.
+   1SGz6sN_Xw9OU-_MLbrdBaWG6Oy2WIZZP). Drive is READ-ONLY for you — read the
+   specs, never create/modify/delete any Drive file. Files whose name starts with
+   `_` (e.g. `_roadmap.md`) are control/meta docs, NOT specs. A spec is in scope
+   if its modifiedTime is within the last 26 hours (overlap your schedule so
+   nothing slips the gap). Read each in-scope spec in full.
 
 2. TRIAGE. For each spec, determine the delta vs the current code: what it asks
    for, and what is already implemented. If a spec is fully implemented, record
@@ -73,7 +75,17 @@ spec, the roadmap wins, and skip any spec it puts out of scope.
    - anything you are not confident you fully understood.
    These pause regardless of PR policy because they are hard to reverse.
 
-6. REPORT. Summarize: which specs shipped (with the pushed commit SHA + the CI
+6. LOG (in the REPO — these files are docs, so they never trigger a deploy).
+   Since Drive is read-only, the living roadmap + changelog live in the repo.
+   Update and commit them (in the same commit as your code change, or as a
+   follow-up docs-only commit):
+   - `docs/spec-status.md` — REWRITE the table to mirror EVERY spec currently in
+     the Drive folder and its status (queued / in progress / implemented / out of
+     scope per _roadmap.md / needs decision). This is the auto-maintained roadmap.
+   - `CHANGELOG.md` — PREPEND a dated entry below the marker comment: what you
+     shipped this run (spec → commit SHA → CI result) and what you skipped + why.
+
+7. REPORT. Summarize: which specs shipped (with the pushed commit SHA + the CI
    run result), which were already implemented, which were skipped and why. If
    nothing was in scope, say so briefly.
 ```
