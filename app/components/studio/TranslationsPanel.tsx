@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useFetcher } from "@remix-run/react";
 import type { Quiz } from "../../lib/quizSchema";
 import {
@@ -25,10 +25,16 @@ const COMMON_LOCALES = ["fr", "de", "es", "it", "nl", "pt", "pt-br", "ja", "sv",
 export function TranslationsPanel({
   doc,
   onApply,
+  onAiStart,
+  onAiError,
   previewUrl,
 }: {
   doc: Quiz;
   onApply: (doc: Quiz) => void;
+  // Single-flight seam (see useQuizDraft) — only the long translate-quiz call
+  // brackets it; remove-locale is a fast non-AI op that adopts the server doc.
+  onAiStart?: () => Quiz;
+  onAiError?: () => void;
   previewUrl: string;
 }) {
   const fetcher = useFetcher<TranslateResponse>();
@@ -37,18 +43,29 @@ export function TranslationsPanel({
   const busy = fetcher.state !== "idle";
   const result = fetcher.data;
 
+  // Settle once on busy→idle so a paused autosave always resumes.
+  const wasBusyRef = useRef(false);
   useEffect(() => {
-    if (fetcher.state === "idle" && result?.ok && result.doc) onApply(result.doc);
-  }, [fetcher.state, result, onApply]);
+    const busyNow = fetcher.state !== "idle";
+    if (wasBusyRef.current && !busyNow) {
+      if (result?.ok && result.doc) onApply(result.doc);
+      else onAiError?.();
+    }
+    wasBusyRef.current = busyNow;
+  }, [fetcher.state, result, onApply, onAiError]);
 
   // Current English fingerprint — compared against each locale's source_hash.
   const currentHash = useMemo(() => sourceHashOf(extractTranslatableStrings(doc)), [doc]);
   const locales = Object.entries(doc.translations ?? {});
 
   const submit = (intent: "translate-quiz" | "remove-locale", loc: string) => {
+    // Pause autosave + capture the doc the AI translates onto only for the long
+    // LLM call; remove-locale is instant and needs no rebase guard.
+    const base = intent === "translate-quiz" ? onAiStart?.() : undefined;
     const form = new FormData();
     form.set("intent", intent);
     form.set("locale", loc);
+    if (base) form.set("baseDoc", JSON.stringify(base));
     fetcher.submit(form, { method: "POST" });
   };
 
