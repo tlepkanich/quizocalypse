@@ -3,6 +3,7 @@ import type { Shop } from "@prisma/client";
 import { authenticate } from "../shopify.server";
 import prisma from "../db.server";
 import { Quiz } from "./quizSchema";
+import type { Quiz as QuizDoc } from "./quizSchema";
 import { publishQuiz, PublishError } from "./quizPublish";
 import { qrDataUrl } from "./qrCode.server";
 import { ensureQuizDiscount } from "./discount.server";
@@ -136,6 +137,33 @@ export async function loadQuizEditorDataForShop(shop: Shop, id: string, origin: 
     previewUrl,
     qrCode,
   };
+}
+
+// The doc the studio posted with an AI intent (`baseDoc`) — the doc the merchant
+// is currently looking at — if present and valid; null otherwise. The builder
+// pauses autosave for the duration of a multi-second AI call (single-flight, see
+// useQuizDraft) and sends exactly what it shows, Quiz.safeParse-gated like the
+// autosave PUT. Callers decide the fallback when it's absent/malformed.
+function parseClientBaseDoc(form: FormData): QuizDoc | null {
+  const raw = form.get("baseDoc");
+  if (typeof raw !== "string" || !raw) return null;
+  try {
+    const parsed = Quiz.safeParse(JSON.parse(raw));
+    return parsed.success ? parsed.data : null;
+  } catch {
+    return null;
+  }
+}
+
+// Resolve the doc an AI intent should edit: the client's current doc when sent,
+// else the stored draft. Applying the AI's ops onto the client doc means they
+// land on exactly what the merchant saw — no clobber of an edit built on a base
+// the server never saw (the long-LLM-call race).
+function resolveAiBaseDoc(form: FormData, storedDraftJson: unknown): QuizDoc | null {
+  const fromClient = parseClientBaseDoc(form);
+  if (fromClient) return fromClient;
+  const stored = Quiz.safeParse(storedDraftJson);
+  return stored.success ? stored.data : null;
 }
 
 // Handles the editor's three intents: JSON PUT autosave, publish, and
@@ -523,11 +551,12 @@ export async function handleQuizEditorActionForShop(
 
     const quiz = await prisma.quiz.findFirst({ where: { id, shopId: shop.id } });
     if (!quiz) return json({ ok: false, error: "Quiz not found" }, { status: 404 });
-    const parsedDoc = Quiz.safeParse(quiz.draftJson);
-    if (!parsedDoc.success) {
+    // Edit the doc the merchant is looking at (single-flight `baseDoc`) rather
+    // than a stale stored draft, so an edit typed during the LLM call isn't lost.
+    const doc = resolveAiBaseDoc(form, quiz.draftJson);
+    if (!doc) {
       return json({ ok: false, error: "Invalid quiz JSON" }, { status: 400 });
     }
-    const doc = parsedDoc.data;
 
     // Unified P5 — node-scoped chat: the workspace sends the merchant's
     // current selection so "this question / this step" resolves to it.
@@ -610,11 +639,12 @@ export async function handleQuizEditorActionForShop(
 
     const quiz = await prisma.quiz.findFirst({ where: { id, shopId: shop.id } });
     if (!quiz) return json({ ok: false, error: "Quiz not found" }, { status: 404 });
-    const parsedDoc = Quiz.safeParse(quiz.draftJson);
-    if (!parsedDoc.success) {
+    // Enrich the doc the merchant is looking at (single-flight `baseDoc`), not a
+    // stale stored draft — same non-clobbering base as ai-edit/translate.
+    const doc = resolveAiBaseDoc(form, quiz.draftJson);
+    if (!doc) {
       return json({ ok: false, error: "Invalid quiz JSON" }, { status: 400 });
     }
-    const doc = parsedDoc.data;
 
     const allProducts = await prisma.product.findMany({ where: { shopId: shop.id } });
     const brandGuidelines = parseBrandGuidelinesSafe(shop.brandGuidelines);
@@ -686,8 +716,14 @@ export async function handleQuizEditorActionForShop(
     if (!parsedDoc.success) {
       return json({ ok: false, error: "Invalid quiz JSON" }, { status: 400 });
     }
+    // Single-flight: when the studio sends the doc the merchant is looking at
+    // (`baseDoc`, autosave paused for the call), translate against it and merge
+    // the overlay back onto it. Absent a baseDoc we keep the original guard — a
+    // FRESH re-read before the merge (translate never edits English copy, so the
+    // overlay is safe on either base).
+    const clientBase = parseClientBaseDoc(form);
 
-    const draftStrings = extractTranslatableStrings(parsedDoc.data);
+    const draftStrings = extractTranslatableStrings(clientBase ?? parsedDoc.data);
     const byKey = new Map(draftStrings.map((s) => [s.key, s]));
     if (quiz.publishedJson) {
       const pub = Quiz.safeParse(quiz.publishedJson);
@@ -715,17 +751,24 @@ export async function handleQuizEditorActionForShop(
       return json({ ok: false, error: m }, { status: 502 });
     }
 
-    // Fresh re-read (see above) — merge the new locale onto whatever the
-    // draft is NOW, then gate.
-    const fresh = await prisma.quiz.findFirst({ where: { id, shopId: shop.id } });
-    const freshParsed = fresh ? Quiz.safeParse(fresh.draftJson) : null;
-    if (!freshParsed?.success) {
-      return json({ ok: false, error: "Quiz changed mid-translation — try again." }, { status: 409 });
+    // Merge target: the merchant's current doc when the studio sent it (autosave
+    // is paused during the call, so it's authoritative); otherwise a FRESH
+    // re-read — the long-call clobber guard for callers that don't send one.
+    let mergeBase: QuizDoc;
+    if (clientBase) {
+      mergeBase = clientBase;
+    } else {
+      const fresh = await prisma.quiz.findFirst({ where: { id, shopId: shop.id } });
+      const freshParsed = fresh ? Quiz.safeParse(fresh.draftJson) : null;
+      if (!freshParsed?.success) {
+        return json({ ok: false, error: "Quiz changed mid-translation — try again." }, { status: 409 });
+      }
+      mergeBase = freshParsed.data;
     }
     const next = {
-      ...freshParsed.data,
+      ...mergeBase,
       translations: {
-        ...freshParsed.data.translations,
+        ...mergeBase.translations,
         [rawLocale]: {
           generated_at: new Date().toISOString(),
           source_hash: sourceHashOf(strings),

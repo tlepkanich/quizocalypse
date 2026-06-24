@@ -28,9 +28,16 @@ const SUGGESTIONS = [
 // stored draft is untouched — the server gates every edit on Quiz.parse.
 export function AiChatPanel({
   onApply,
+  onAiStart,
+  onAiError,
   selectedNodeId,
 }: {
   onApply: (doc: Quiz) => void;
+  // Single-flight seam (see useQuizDraft): onAiStart pauses autosave and returns
+  // the doc the AI should edit (sent as `baseDoc`); onAiError resumes it when a
+  // request fails. Both optional so the panel still works standalone.
+  onAiStart?: () => Quiz;
+  onAiError?: () => void;
   // Unified P5 — the workspace's current selection, so "this question" in
   // chat resolves to the step the merchant is looking at.
   selectedNodeId?: string | null;
@@ -38,27 +45,34 @@ export function AiChatPanel({
   const fetcher = useFetcher<AiEditResponse>();
   const [transcript, setTranscript] = useState<ChatTurn[]>([]);
   const [input, setInput] = useState("");
-  const appliedRef = useRef<AiEditResponse | null>(null);
+  const wasBusyRef = useRef(false);
   const scrollRef = useRef<HTMLDivElement | null>(null);
 
-  // Apply each response exactly once (the fetcher.data identity changes per call).
+  // Settle each request exactly once, on the busy→idle transition — this pairs
+  // with the beginAiEdit() in send() so autosave is always resumed (success via
+  // onApply, every failure — including a no-payload network error — via onAiError).
   useEffect(() => {
-    const d = fetcher.data;
-    if (fetcher.state !== "idle" || !d || appliedRef.current === d) return;
-    appliedRef.current = d;
-    if (d.ok && d.doc) {
-      onApply(d.doc);
-      setTranscript((t) => [
-        ...t,
-        { role: "assistant", content: d.assistant_message || "Done — I updated your quiz." },
-      ]);
-    } else if (d.ok === false) {
-      setTranscript((t) => [
-        ...t,
-        { role: "assistant", content: `⚠ ${d.error || "I couldn't apply that — try rephrasing."}` },
-      ]);
+    const busy = fetcher.state !== "idle";
+    if (wasBusyRef.current && !busy) {
+      const d = fetcher.data;
+      if (d && d.ok && d.doc) {
+        onApply(d.doc);
+        setTranscript((t) => [
+          ...t,
+          { role: "assistant", content: d.assistant_message || "Done — I updated your quiz." },
+        ]);
+      } else {
+        if (d && d.ok === false) {
+          setTranscript((t) => [
+            ...t,
+            { role: "assistant", content: `⚠ ${d.error || "I couldn't apply that — try rephrasing."}` },
+          ]);
+        }
+        onAiError?.();
+      }
     }
-  }, [fetcher.state, fetcher.data, onApply]);
+    wasBusyRef.current = busy;
+  }, [fetcher.state, fetcher.data, onApply, onAiError]);
 
   // Keep the transcript scrolled to the latest turn.
   useEffect(() => {
@@ -74,14 +88,18 @@ export function AiChatPanel({
       const history = transcript.slice(-10);
       setTranscript((t) => [...t, { role: "user", content: msg }]);
       setInput("");
+      // Flush + pause autosave and grab the doc the AI should edit, so the LLM
+      // applies its ops onto exactly what the merchant sees (not a stale draft).
+      const base = onAiStart?.();
       const form = new FormData();
       form.set("intent", "ai-edit");
       form.set("message", msg);
       form.set("history", JSON.stringify(history));
       if (selectedNodeId) form.set("selected_node_id", selectedNodeId);
+      if (base) form.set("baseDoc", JSON.stringify(base));
       fetcher.submit(form, { method: "POST" });
     },
-    [busy, transcript, fetcher, selectedNodeId],
+    [busy, transcript, fetcher, selectedNodeId, onAiStart],
   );
 
   return (

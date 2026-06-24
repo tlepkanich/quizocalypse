@@ -70,7 +70,8 @@ export function UnifiedWorkspace({ data, chrome }: { data: StudioBuilderData; ch
 }
 
 function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chrome }) {
-  const { doc, commit: rawCommit, isSaving, savedAt } = useQuizDraft(data.doc as QuizDoc);
+  const { doc, commit: rawCommit, isSaving, savedAt, beginAiEdit, applyAiResult, endAiEdit } =
+    useQuizDraft(data.doc as QuizDoc);
   // QB-2 — snapshot undo/redo. Every panel edit replaces the whole doc, so a
   // stack of prior docs IS the history; undo/redo replay a snapshot through the
   // same autosave seam (an undo persists). Capped at 50 snapshots to bound memory.
@@ -84,6 +85,17 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
       rawCommit(next);
     },
     [doc, rawCommit],
+  );
+  // Apply path for the AI panels: record the pre-AI doc for undo (as commit
+  // does), then hand the AI doc to the draft hook, which 3-way merges any edit
+  // typed DURING the LLM call back on top of it before adopting — so a headline
+  // the merchant changes mid-call survives the AI doc landing.
+  const applyAi = useCallback(
+    (aiDoc: QuizDoc) => {
+      setHistory((h) => ({ past: [...h.past, doc].slice(-50), future: [] }));
+      applyAiResult(aiDoc);
+    },
+    [doc, applyAiResult],
   );
   const undo = useCallback(() => {
     if (history.past.length === 0) return;
@@ -561,10 +573,26 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
                 </p>
               </div>
             )}
-            <ReviewEnrichPanel onApply={commit} sources={doc.review_enrichment_sources} />
+            <ReviewEnrichPanel
+              onApply={applyAi}
+              onAiStart={beginAiEdit}
+              onAiError={endAiEdit}
+              sources={doc.review_enrichment_sources}
+            />
             <ExperiencePanel doc={doc} onCommit={commit} onSelectNode={select} />
-            <TranslationsPanel doc={doc} onApply={commit} previewUrl={data.previewUrl} />
-            <AiChatPanel onApply={commit} selectedNodeId={selectedId} />
+            <TranslationsPanel
+              doc={doc}
+              onApply={applyAi}
+              onAiStart={beginAiEdit}
+              onAiError={endAiEdit}
+              previewUrl={data.previewUrl}
+            />
+            <AiChatPanel
+              onApply={applyAi}
+              onAiStart={beginAiEdit}
+              onAiError={endAiEdit}
+              selectedNodeId={selectedId}
+            />
           </div>
         </div>
       ) : (
@@ -617,8 +645,18 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
     const toolPanel =
       tool === "ai" ? (
         <>
-          <AiChatPanel onApply={commit} selectedNodeId={selectedId} />
-          <ReviewEnrichPanel onApply={commit} sources={doc.review_enrichment_sources} />
+          <AiChatPanel
+            onApply={applyAi}
+            onAiStart={beginAiEdit}
+            onAiError={endAiEdit}
+            selectedNodeId={selectedId}
+          />
+          <ReviewEnrichPanel
+            onApply={applyAi}
+            onAiStart={beginAiEdit}
+            onAiError={endAiEdit}
+            sources={doc.review_enrichment_sources}
+          />
         </>
       ) : tool === "theme" ? (
         <BuilderThemePanel doc={doc} commit={commit} />

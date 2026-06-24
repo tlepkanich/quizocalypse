@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 // (useEffect also drives the localStorage-backed hint dismissal below.)
 import { useFetcher } from "@remix-run/react";
 import type { Quiz } from "../../lib/quizSchema";
@@ -22,9 +22,15 @@ function fmtEnrichedDate(iso: string): string {
 
 export function ReviewEnrichPanel({
   onApply,
+  onAiStart,
+  onAiError,
   sources,
 }: {
   onApply: (doc: Quiz) => void;
+  // Single-flight seam (see useQuizDraft) — paused autosave + the doc the AI
+  // edits, so an enrich that races the merchant's typing can't clobber it.
+  onAiStart?: () => Quiz;
+  onAiError?: () => void;
   // BIC P7: the last-used source persisted on the draft — pre-fills the form
   // so a paste survives reload and can be re-run after catalog/copy changes.
   sources?: { text: string; url?: string; enriched_at: string };
@@ -41,15 +47,25 @@ export function ReviewEnrichPanel({
   const busy = fetcher.state !== "idle";
   const result = fetcher.data;
 
+  // Settle once on busy→idle so autosave always resumes (success via onApply,
+  // failure via onAiError) — pairs with the beginAiEdit() in submit().
+  const wasBusyRef = useRef(false);
   useEffect(() => {
-    if (fetcher.state === "idle" && result?.ok && result.doc) onApply(result.doc);
-  }, [fetcher.state, result, onApply]);
+    const busyNow = fetcher.state !== "idle";
+    if (wasBusyRef.current && !busyNow) {
+      if (result?.ok && result.doc) onApply(result.doc);
+      else onAiError?.();
+    }
+    wasBusyRef.current = busyNow;
+  }, [fetcher.state, result, onApply, onAiError]);
 
   const submit = () => {
+    const base = onAiStart?.();
     const form = new FormData();
     form.set("intent", "enrich-reviews");
     form.set("reviews", reviews);
     if (url.trim()) form.set("reviewsUrl", url.trim());
+    if (base) form.set("baseDoc", JSON.stringify(base));
     fetcher.submit(form, { method: "POST" });
   };
 
