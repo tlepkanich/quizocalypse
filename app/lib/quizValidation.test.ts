@@ -232,3 +232,140 @@ describe("experience-type guard rails (E1)", () => {
     expect(validateQuizWarnings(lc).some((s) => s.kind === "missing_capture")).toBe(true);
   });
 });
+
+// ─── Routing: the "Your Skin Concern Report" dead-branch defect ──────────────
+// A question authored to branch per-answer to result pages, but the answer
+// destinations were never written onto the outbound edges as source_handle. The
+// runtime (nextNodeFor) matches no answer handle and collapses every pick onto
+// its unconditional fallback; when that fallback reaches no result, 100% of
+// shoppers exit with ZERO recommendations and every wired result is dead.
+describe("validateQuiz — dead per-answer result routing", () => {
+  // Shared node set: a final question fanning out to an email gate + two result
+  // pages, plus a gate→end tail. Only the EDGES vary per test — which is exactly
+  // what the live defect came down to (handles never written onto the edges).
+  const skinReportDoc = (edges: Array<Record<string, unknown>>) =>
+    Quiz.parse({
+      quiz_id: "qz_skin",
+      scope: { collection_ids: ["c1"] },
+      nodes: [
+        { id: "intro", type: "intro", position: { x: 0, y: 0 }, data: { headline: "Skin quiz" } },
+        {
+          id: "q7",
+          type: "question",
+          position: { x: 200, y: 0 },
+          data: {
+            text: "What's your main skin concern?",
+            question_type: "single_select",
+            answers: [
+              { id: "a1", text: "Acne", tags: [], edge_handle_id: "h1" },
+              { id: "a2", text: "Aging", tags: [], edge_handle_id: "h2" },
+              { id: "a3", text: "Dryness", tags: [], edge_handle_id: "h3" },
+              { id: "a4", text: "Dullness", tags: [], edge_handle_id: "h4" },
+            ],
+          },
+        },
+        { id: "gate", type: "email_gate", position: { x: 400, y: 0 }, data: { headline: "Get your report" } },
+        { id: "r1", type: "result", position: { x: 600, y: -50 }, data: { headline: "Acne plan", fallback_collection_id: "c1" } },
+        { id: "r2", type: "result", position: { x: 600, y: 50 }, data: { headline: "Aging plan", fallback_collection_id: "c1" } },
+        { id: "end", type: "end", position: { x: 800, y: 0 }, data: { headline: "Thanks!" } },
+      ],
+      edges,
+    });
+
+  it("BLOCKS publish: no answer handle is wired and the fallback reaches no result", () => {
+    // The exact shipped shape — every outbound edge from q7 is unconditional, so
+    // nextNodeFor sends all four answers to the gate → end and r1/r2 are dead.
+    const issues = validateQuiz(
+      skinReportDoc([
+        { id: "e0", source: "intro", target: "q7" },
+        { id: "e1", source: "q7", target: "gate" }, // first unconditional → the fallback
+        { id: "e2", source: "q7", target: "r1" },
+        { id: "e3", source: "q7", target: "r2" },
+        { id: "e4", source: "gate", target: "end" },
+      ]),
+    );
+    expect(
+      issues.some((i) => i.nodeId === "q7" && i.kind === "dead_answer_routing"),
+    ).toBe(true);
+    // The intro-reachability check can't catch this (the result edges exist, so
+    // r1/r2 look "reachable") — prove THIS rule is the one that fires, and that
+    // it blocks publish (quizPublish throws on any validateQuiz issue).
+    expect(issues.length).toBeGreaterThan(0);
+    expect(issues.every((i) => i.kind === "dead_answer_routing")).toBe(true);
+  });
+
+  it("PASSES once each answer's handle is wired onto an edge (the data fix)", () => {
+    const issues = validateQuiz(
+      skinReportDoc([
+        { id: "e0", source: "intro", target: "q7" },
+        { id: "e1", source: "q7", target: "r1", source_handle: "h1" },
+        { id: "e2", source: "q7", target: "r2", source_handle: "h2" },
+        { id: "e3", source: "q7", target: "gate", source_handle: "h3" },
+        { id: "e4", source: "q7", target: "gate", source_handle: "h4" },
+        { id: "e5", source: "gate", target: "end" },
+      ]),
+    );
+    expect(issues.some((i) => i.kind === "dead_answer_routing")).toBe(false);
+  });
+
+  it("does NOT flag when the unconditional fallback still lands on a result", () => {
+    // q7's first unconditional edge goes to a result, so no shopper ends
+    // result-less. Sloppy per-answer routing, but not the zero-recs catastrophe.
+    const issues = validateQuiz(
+      skinReportDoc([
+        { id: "e0", source: "intro", target: "q7" },
+        { id: "e1", source: "q7", target: "r1" }, // first unconditional → a result
+        { id: "e2", source: "q7", target: "r2" },
+        { id: "e3", source: "q7", target: "gate" },
+        { id: "e4", source: "gate", target: "end" },
+      ]),
+    );
+    expect(issues.some((i) => i.kind === "dead_answer_routing")).toBe(false);
+  });
+
+  it("does NOT flag a plain linear quiz (single unconditional edge to the result)", () => {
+    expect(
+      validateQuiz(makeQuiz()).some((i) => i.kind === "dead_answer_routing"),
+    ).toBe(false);
+  });
+
+  it("does NOT flag a question that routes through a branch node", () => {
+    const doc = Quiz.parse({
+      quiz_id: "qz_branch",
+      scope: { collection_ids: ["c1"] },
+      nodes: [
+        { id: "intro", type: "intro", position: { x: 0, y: 0 }, data: { headline: "Hi" } },
+        {
+          id: "q1",
+          type: "question",
+          position: { x: 200, y: 0 },
+          data: {
+            text: "Pick one",
+            question_type: "single_select",
+            answers: [
+              { id: "a1", text: "A", tags: [], edge_handle_id: "h1" },
+              { id: "a2", text: "B", tags: [], edge_handle_id: "h2" },
+            ],
+          },
+        },
+        {
+          id: "br",
+          type: "branch",
+          position: { x: 400, y: 0 },
+          data: { mode: "rules", slots: [{ id: "s1", label: "A" }, { id: "s2", label: "B" }] },
+        },
+        { id: "r1", type: "result", position: { x: 600, y: -50 }, data: { headline: "RA", fallback_collection_id: "c1" } },
+        { id: "r2", type: "result", position: { x: 600, y: 50 }, data: { headline: "RB", fallback_collection_id: "c1" } },
+      ],
+      edges: [
+        { id: "e0", source: "intro", target: "q1" },
+        { id: "e1", source: "q1", target: "br" }, // routes to the branch, not a result
+        { id: "e2", source: "br", target: "r1", source_handle: "s1", condition: { answer_id: "a1" } },
+        { id: "e3", source: "br", target: "r2", source_handle: "s2", condition: { answer_id: "a2" } },
+      ],
+    });
+    expect(
+      validateQuiz(doc).some((i) => i.kind === "dead_answer_routing"),
+    ).toBe(false);
+  });
+});
