@@ -954,6 +954,12 @@ export const Quiz = z.object({
   // Optional collection ID for the mid-quiz preview cold-start. Used when
   // accumulated answer tags score zero against the candidate pool.
   featured_collection_id: z.string().optional(),
+  // ISO 4217 currency code (e.g. "USD", "JPY") baked into publishedJson at
+  // publish time from the synced catalog (see quizPublish.ts). The shopper
+  // runtime formats every price/discount amount with it. Additive/optional:
+  // pre-existing quizzes published before this field existed have no currency,
+  // so the runtime falls back to USD until they are re-published.
+  currency: z.string().optional(),
   // Dev Spec Phase 4 — how the published quiz appears on the storefront. The
   // standalone /q/:id is always a full page; this drives the Theme App Extension
   // embed mode + the publish embed hint. Optional (absent = "page") to stay

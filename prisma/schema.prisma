@@ -107,6 +107,12 @@ model Product {
   source        String   @default("shopify")
   priceMin      Decimal? @db.Decimal(10, 2)
   priceMax      Decimal? @db.Decimal(10, 2)
+  // ISO 4217 currency code of the prices above (the shop's Shopify
+  // currencyCode, read from priceRangeV2.minVariantPrice during sync). All
+  // variants of a Shopify shop share one currency. Null for manually-added
+  // products and rows synced before this column existed → the runtime falls
+  // back to USD formatting.
+  currency      String?
   // Raw HTML body from Shopify (descriptionHtml). Source of truth.
   descriptionHtml String?
   // Stripped plain-text version of descriptionHtml — used as input to the

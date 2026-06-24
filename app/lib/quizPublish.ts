@@ -442,6 +442,13 @@ export async function publishQuiz(
     }
   }
 
+  // Bake the shop's currency (ISO 4217) so the runtime formats prices/discounts
+  // with the right symbol + decimal rules (e.g. ¥886, not "$886"). A Shopify
+  // shop has ONE currency, captured per-product at sync time; take the first
+  // product that carries one. Absent (e.g. an all-manual catalog) → omit the
+  // field so the runtime falls back to USD.
+  const bakedCurrency = products.find((p) => p.currency)?.currency ?? undefined;
+
   const nextVersion = quiz.version + 1;
   // Strip draft/editor-only state that must never reach publishedJson (which
   // spreads ...doc) or the served runtime payload:
@@ -466,6 +473,7 @@ export async function publishQuiz(
     version: nextVersion,
     shop_domain: shop?.shopDomain ?? "",
     platform: shop?.source === "standalone" ? "standalone" : "shopify",
+    ...(bakedCurrency ? { currency: bakedCurrency } : {}),
     ...(answerWeights ? { answer_weights: answerWeights } : {}),
   };
 

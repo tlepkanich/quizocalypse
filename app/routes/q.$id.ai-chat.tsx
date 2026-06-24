@@ -6,6 +6,7 @@ import { runAskAIChat, type AskAIMessage } from "../lib/claude";
 import { parseBrandGuidelinesSafe } from "../lib/brandGuidelines";
 import { rateLimit } from "../lib/rateLimiters";
 import type { IndexedProduct } from "../lib/recommendationEngine";
+import { formatMoney } from "../lib/formatMoney";
 
 // AskAI chat endpoint. The runtime POSTs the current AskAI node id, the
 // path so far, and the new user message; we respond with the assistant's
@@ -98,13 +99,20 @@ export async function action({ params, request }: ActionFunctionArgs) {
 
   // Catalog summary from the baked product_index. Trim each product to a
   // single line — title, handle, top tags, price — to keep tokens bounded.
-  const publishedRaw = quiz.publishedJson as { product_index?: IndexedProduct[] };
+  const publishedRaw = quiz.publishedJson as {
+    product_index?: IndexedProduct[];
+    currency?: string;
+  };
   const products = publishedRaw.product_index ?? [];
+  // Quote prices in the shop's baked currency (USD fallback) so the assistant
+  // says "¥886", not "$886", to the shopper.
+  const currency = publishedRaw.currency ?? "USD";
+  const promptLocale = typeof body.locale === "string" ? body.locale : undefined;
   const catalogSummary = products
     .slice(0, 40) // cap so the prompt stays manageable
     .map((p) => {
       const tagPart = p.tags.slice(0, 6).join(", ");
-      const pricePart = p.price ? `$${p.price}` : "n/a";
+      const pricePart = p.price ? formatMoney(p.price, currency, promptLocale) : "n/a";
       return `- ${p.title} (handle: ${p.handle}) — tags: [${tagPart}] — price: ${pricePart}`;
     })
     .join("\n");

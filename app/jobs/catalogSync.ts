@@ -42,8 +42,8 @@ const BULK_QUERY = `#graphql
         updatedAt
         featuredImage { url }
         priceRangeV2 {
-          minVariantPrice { amount }
-          maxVariantPrice { amount }
+          minVariantPrice { amount currencyCode }
+          maxVariantPrice { amount currencyCode }
         }
         collections {
           edges { node { id } }
@@ -97,8 +97,10 @@ interface BulkRecord {
   descriptionHtml?: string;
   featuredImage?: { url: string } | null;
   priceRangeV2?: {
-    minVariantPrice?: { amount: string };
-    maxVariantPrice?: { amount: string };
+    // MoneyV2 — `currencyCode` is the shop's ISO 4217 code (the same for every
+    // product; variant `price` below is a bare `Money` scalar with no code).
+    minVariantPrice?: { amount: string; currencyCode?: string };
+    maxVariantPrice?: { amount: string; currencyCode?: string };
   };
   // variant or collection or metafield fields (when __parentId present)
   price?: string;
@@ -125,6 +127,7 @@ interface NormalizedProduct {
   imageUrl: string | null;
   priceMin: string | null;
   priceMax: string | null;
+  currency: string | null;
   descriptionHtml: string | null;
   descriptionText: string | null;
 }
@@ -331,6 +334,7 @@ async function ingestJsonl(
         imageUrl: rec.featuredImage?.url ?? null,
         priceMin: rec.priceRangeV2?.minVariantPrice?.amount ?? null,
         priceMax: rec.priceRangeV2?.maxVariantPrice?.amount ?? null,
+        currency: rec.priceRangeV2?.minVariantPrice?.currencyCode ?? null,
         descriptionHtml: descHtml,
         descriptionText: descHtml ? stripHtml(descHtml) : null,
       });
@@ -385,6 +389,7 @@ async function ingestJsonl(
         imageUrl: p.imageUrl,
         priceMin: p.priceMin,
         priceMax: p.priceMax,
+        currency: p.currency,
         descriptionHtml: p.descriptionHtml,
         descriptionText: p.descriptionText,
         url: storefrontUrl,
@@ -404,6 +409,7 @@ async function ingestJsonl(
         imageUrl: p.imageUrl,
         priceMin: p.priceMin,
         priceMax: p.priceMax,
+        currency: p.currency,
         descriptionHtml: p.descriptionHtml,
         descriptionText: p.descriptionText,
         url: storefrontUrl,

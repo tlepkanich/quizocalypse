@@ -18,6 +18,7 @@ import { resolveNodeOverride } from "../../lib/resultLayout";
 import { cartPermalink, numericId, cartPermalinkMulti } from "../../lib/cartLink";
 import { productHref, type QuizPlatform } from "../../lib/productHref";
 import { progressPct, reachableQuestionCount } from "../../lib/progress";
+import { formatMoney } from "../../lib/formatMoney";
 import {
   resolveForBreakpoint,
   tokensToCssVars,
@@ -169,6 +170,11 @@ const RuntimePreviewContext = createContext(false);
 // K2 — the resolved serving locale ("en" default). Consumed by the
 // save-results link (locale-sticky URLs) and the AskAI POST (reply language).
 const RuntimeLocaleContext = createContext("en");
+// The shop's ISO 4217 currency (baked into the published doc at publish time;
+// "USD" default for pre-existing quizzes). Deep product-card leaves read it via
+// context (same seam as locale) to format prices with the right symbol +
+// decimals (¥886, not "$886") without threading a prop through every component.
+const RuntimeCurrencyContext = createContext("USD");
 // QD-7 — the commerce platform ("shopify" default). The deep product-card
 // leaves read this (same pattern as the preview/locale contexts) to decide
 // PDP href + cart vs "Shop now", without threading a prop through every
@@ -210,6 +216,10 @@ export function QuizRuntime(props: QuizRuntimeProps) {
     buddySessionId = null,
   } = props;
   const isPreview = mode === "preview";
+  // Shop currency baked into the published doc (USD fallback for quizzes
+  // published before the field existed). Shared with the deep price/discount
+  // formatters via RuntimeCurrencyContext, and used inline for discount labels.
+  const currency = doc.currency ?? "USD";
   // Inspect mode is preview-only by construction (the storefront never passes
   // onInspect); the extra guard keeps a stray prop from ever hijacking live taps.
   const inspectFn = isPreview ? onInspect : undefined;
@@ -635,7 +645,7 @@ export function QuizRuntime(props: QuizRuntimeProps) {
     const discountLabel = showDiscount
       ? dc.kind === "percentage"
         ? `Save ${dc.value}%`
-        : `$${dc.value} off`
+        : `${formatMoney(dc.value, currency, locale)} off`
       : undefined;
     const stages = node.data.stages;
     if (stages.length === 0) {
@@ -1016,7 +1026,7 @@ export function QuizRuntime(props: QuizRuntimeProps) {
       const discountLabel = showDiscount
         ? dc.kind === "percentage"
           ? `Save ${dc.value}%`
-          : `$${dc.value} off`
+          : `${formatMoney(dc.value, currency, locale)} off`
         : undefined;
       const stages = currentNode.data.stages;
       if (stages.length === 0) {
@@ -1165,6 +1175,7 @@ export function QuizRuntime(props: QuizRuntimeProps) {
     <RuntimeChromeContext.Provider value={chromeVariant}>
     <ChromeContext.Provider value={chromeTable}>
     <RuntimeLocaleContext.Provider value={locale}>
+    <RuntimeCurrencyContext.Provider value={currency}>
     <div
       ref={rootRef}
       lang={locale}
@@ -1338,6 +1349,7 @@ export function QuizRuntime(props: QuizRuntimeProps) {
         </a>
       ) : null}
     </div>
+    </RuntimeCurrencyContext.Provider>
     </RuntimeLocaleContext.Provider>
     </ChromeContext.Provider>
     </RuntimeChromeContext.Provider>
@@ -1814,6 +1826,8 @@ function PreviewList({
   const tc = useChrome();
   const isPreviewMode = useContext(RuntimePreviewContext);
   const platform = useContext(RuntimePlatformContext);
+  const currency = useContext(RuntimeCurrencyContext);
+  const locale = useContext(RuntimeLocaleContext);
   if (recs.length === 0) {
     return (
       <p
@@ -1877,7 +1891,7 @@ function PreviewList({
                     marginTop: 2,
                   }}
                 >
-                  ${r.price}
+                  {formatMoney(r.price, currency, locale)}
                 </div>
               )}
             </div>
@@ -3414,6 +3428,8 @@ function ProductCardsView({
 }) {
   const tc = useChrome();
   const platform = useContext(RuntimePlatformContext);
+  const currency = useContext(RuntimeCurrencyContext);
+  const locale = useContext(RuntimeLocaleContext);
   const products = node.data.product_ids
     .map((id) => productIndex.find((p) => p.product_id === id))
     .filter((p): p is IndexedProduct => !!p);
@@ -3467,7 +3483,7 @@ function ProductCardsView({
                   fontSize: 12,
                 }}
               >
-                ${p.price}
+                {formatMoney(p.price, currency, locale)}
               </div>
             )}
             <span
@@ -4272,6 +4288,8 @@ function ProductCard({
   const tc = useChrome();
   const isPreviewMode = useContext(RuntimePreviewContext);
   const platform = useContext(RuntimePlatformContext);
+  const currency = useContext(RuntimeCurrencyContext);
+  const locale = useContext(RuntimeLocaleContext);
   void position;
   // Selectable variant (Dev Spec §5). Defaults to the baked default variant;
   // the shopper can switch before adding to cart.
@@ -4372,7 +4390,7 @@ function ProductCard({
         ) : null}
         {product.price && (
           <div style={{ color: "var(--qz-color-muted)", marginTop: 4, display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-            <span>${product.price}</span>
+            <span>{formatMoney(product.price, currency, locale)}</span>
             {discountLabel ? (
               <span style={{ background: "var(--qz-color-primary)", color: "#fff", borderRadius: 999, padding: "1px 8px", fontSize: 11, fontWeight: 600 }}>
                 {discountLabel}
