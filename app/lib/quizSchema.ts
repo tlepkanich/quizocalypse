@@ -343,10 +343,18 @@ export type BranchSlot = z.infer<typeof BranchSlot>;
 // Branch node — invisible to shoppers. The runtime auto-advances through it
 // by picking an outgoing edge based on the configured mode. Used for
 // rules-based steering (e.g. "if shopper picked the Oily answer, go to slot
-// A; else B") and for A/B variant testing.
+// A; else B"), for A/B variant testing, and for points-winner steering.
+//   - rules:    first slot whose edge condition matches (author priority order).
+//   - ab_split: weighted-random slot, sticky for the session.
+//   - points:   the slot whose `condition.points_category` is the winning
+//               category of the per-answer points tally (argmax). This routes
+//               by PLURALITY across the whole path instead of first-match over
+//               the accumulated-tag union, so every outcome stays reachable in
+//               proportion to how often the shopper picked it. Falls back to the
+//               first unconditioned slot when nothing scored.
 export const BranchData = z.object({
   label: z.string().default("Branch"),
-  mode: z.enum(["rules", "ab_split"]).default("rules"),
+  mode: z.enum(["rules", "ab_split", "points"]).default("rules"),
   slots: z.array(BranchSlot).min(2),
 });
 export type BranchData = z.infer<typeof BranchData>;
@@ -510,10 +518,14 @@ export type QuizNode = z.infer<typeof QuizNode>;
 //    question. Legacy v1 shape, still supported.
 //  - tag: matches when the accumulated path tags include this tag.
 //  - ab_slot: matches when the Branch in ab_split mode rolled this slot.
+//  - points_category: matches when this category id WINS the per-answer points
+//    tally (pickPointsWinner). Only honored by a Branch in `points` mode; in
+//    other modes it is inert (treated as no constraint).
 export const EdgeCondition = z.object({
   answer_id: z.string().min(1).optional(),
   tag: z.string().min(1).optional(),
   ab_slot: z.string().min(1).optional(),
+  points_category: z.string().min(1).optional(),
 });
 export type EdgeCondition = z.infer<typeof EdgeCondition>;
 
@@ -1126,7 +1138,7 @@ export const quizToolJsonSchema = {
               "For type=result: { headline, subtext?, slot_count? (1..6), cta_label?, fallback_collection_id }. " +
               "For type=message: { text, supports_merge_tags? }. " +
               "For type=end: { headline, subtext?, redirect_url?, cta_label?, cta_url? }. " +
-              "For type=branch: { label?, mode ('rules'|'ab_split'), slots: [{id, label, weight?}] (≥2 slots) }. Branch nodes auto-advance; outgoing edges must carry source_handle = slot id and an EdgeCondition (answer_id|tag|ab_slot). " +
+              "For type=branch: { label?, mode ('rules'|'ab_split'|'points'), slots: [{id, label, weight?}] (≥2 slots) }. Branch nodes auto-advance; outgoing edges must carry source_handle = slot id and an EdgeCondition (answer_id|tag|ab_slot|points_category). In 'points' mode the slot whose points_category wins the per-answer points tally fires (plurality routing). " +
               "For type=ask_ai: { system_prompt, persona_name?, opening_message, suggested_questions[]?, max_turns? (1..20, default 6), continue_label? }. Renders a chat panel; backend calls Claude with the path-derived context. " +
               "For type=integration: { label?, actions: [{kind:'webhook', url, secret?, label?}] (≥1), continue_on_error? (default true) }. Invisible node — runtime fires actions server-side then auto-advances. " +
               "For type=product_cards: { headline, subtext?, product_ids[] (1..6 storefront product IDs), cta_label?, continue_label? }. Visible step showcasing merchant-picked products.",

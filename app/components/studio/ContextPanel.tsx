@@ -192,7 +192,13 @@ function RoutingBody({
       {node.type === "branch" ? (
         <div>
           <div className="qz-label" style={{ marginBottom: 4, fontSize: 11 }}>
-            Branch slots ({node.data.mode === "ab_split" ? "A/B split" : "rules"})
+            Branch slots (
+            {node.data.mode === "ab_split"
+              ? "A/B split"
+              : node.data.mode === "points"
+                ? "best match"
+                : "rules"}
+            )
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
             {node.data.slots.map((s) => {

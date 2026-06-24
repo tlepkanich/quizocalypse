@@ -18,7 +18,7 @@ import type { OrderedFlow } from "../../../lib/flowOrder";
 // DECISION node (question or branch) and describe that hop.
 // ───────────────────────────────────────────────────────────────────────────
 
-export type ReachedKind = "answer" | "tag" | "default" | "linear";
+export type ReachedKind = "answer" | "tag" | "points" | "default" | "linear";
 
 export interface ReachedFrom {
   // The decision source: a question's text, a branch label, or `Tagged "dry"`.
@@ -118,6 +118,14 @@ function reachedFromRulesBranch(doc: QuizDoc, branch: BranchNode, edge: Edge): R
       questionLabel: `Tagged “${cond.tag}”`,
       answerLabels: answersForTag(doc, cond.tag),
       kind: "tag",
+    };
+  }
+  if (cond?.points_category) {
+    // `points` branch: this page wins when its bucket is the top-scoring match.
+    return {
+      questionLabel: slot ? `Top match · ${slot.label}` : "Top match",
+      answerLabels: [],
+      kind: "points",
     };
   }
   // Unconditioned slot = the catch-all / default path.

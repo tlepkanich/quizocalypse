@@ -624,7 +624,10 @@ export function QuizRuntime(props: QuizRuntimeProps) {
     if (sourceNode?.type === "intro") {
       analyticsRef.current?.track("quiz_engaged", {});
     }
-    const ctx = buildBranchContext();
+    // Forward the just-picked answer so a branch conditioning on THIS question
+    // (rules tag/answer_id, or points-winner plurality) resolves against the
+    // up-to-date selections — setPath() is async, so `path` is still stale here.
+    const ctx = buildBranchContext(extraStep);
     const next = resolveNextStep(doc, nodeId, handle, ctx);
     // A/B assignments mutated during branch traversal live in abRef and are
     // persisted by the save effect along with the path + current node.

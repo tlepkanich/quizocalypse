@@ -821,6 +821,102 @@ describe("Branch routing", () => {
   });
 });
 
+// A points-mode branch: two questions seed per-answer category points, the
+// branch routes to the slot whose `points_category` wins the tally (argmax),
+// with an unconditioned default catch-all when nothing scored.
+function pointsBranchQuiz() {
+  return Quiz.parse({
+    quiz_id: "pbq",
+    scope: { collection_ids: [] },
+    nodes: [
+      { id: "intro", type: "intro", position: { x: 0, y: 0 }, data: { headline: "Hi" } },
+      {
+        id: "q1",
+        type: "question",
+        position: { x: 100, y: 0 },
+        data: {
+          text: "?",
+          question_type: "single_select",
+          answers: [
+            { id: "a-x", text: "X", tags: [], edge_handle_id: "hx", points: { "cat-x": 1 } },
+            { id: "a-y", text: "Y", tags: [], edge_handle_id: "hy", points: { "cat-y": 1 } },
+          ],
+        },
+      },
+      {
+        id: "q2",
+        type: "question",
+        position: { x: 150, y: 0 },
+        data: {
+          text: "??",
+          question_type: "single_select",
+          answers: [
+            { id: "b-x", text: "X", tags: [], edge_handle_id: "hbx", points: { "cat-x": 1 } },
+            { id: "b-y", text: "Y", tags: [], edge_handle_id: "hby", points: { "cat-y": 1 } },
+          ],
+        },
+      },
+      {
+        id: "br1",
+        type: "branch",
+        position: { x: 200, y: 0 },
+        data: {
+          label: "Best match",
+          mode: "points",
+          slots: [
+            { id: "slot-x", label: "X", weight: 1 },
+            { id: "slot-y", label: "Y", weight: 1 },
+            { id: "slot-def", label: "Other", weight: 1 },
+          ],
+        },
+      },
+      { id: "rx", type: "result", position: { x: 300, y: 0 }, data: { headline: "X kit", fallback_collection_id: "c1" } },
+      { id: "ry", type: "result", position: { x: 300, y: 100 }, data: { headline: "Y kit", fallback_collection_id: "c1" } },
+    ],
+    edges: [
+      { id: "e1", source: "intro", target: "q1" },
+      { id: "e2", source: "q1", target: "q2" },
+      { id: "e3", source: "q2", target: "br1" },
+      { id: "e4", source: "br1", target: "rx", source_handle: "slot-x", condition: { points_category: "cat-x" } },
+      { id: "e5", source: "br1", target: "ry", source_handle: "slot-y", condition: { points_category: "cat-y" } },
+      { id: "e6", source: "br1", target: "rx", source_handle: "slot-def" },
+    ],
+    results_pages: [],
+  });
+}
+
+describe("Branch routing — points mode (plurality)", () => {
+  it("routes to the slot whose points_category wins the tally", () => {
+    const q = pointsBranchQuiz();
+    const ctxX = emptyCtx();
+    ctxX.selectedAnswerIds = new Set(["a-x", "b-x"]); // cat-x: 2, cat-y: 0
+    expect(pickBranchSlot(q, "br1", ctxX)).toBe("slot-x");
+
+    const ctxY = emptyCtx();
+    ctxY.selectedAnswerIds = new Set(["a-y", "b-y"]); // cat-y: 2
+    expect(pickBranchSlot(q, "br1", ctxY)).toBe("slot-y");
+  });
+
+  it("ties resolve by the engine's first-seen winner (earliest-picked)", () => {
+    const q = pointsBranchQuiz();
+    const ctx = emptyCtx();
+    ctx.selectedAnswerIds = new Set(["a-x", "b-y"]); // 1–1 tie; a-x seen first → cat-x
+    expect(pickBranchSlot(q, "br1", ctx)).toBe("slot-x");
+  });
+
+  it("falls back to the unconditioned default slot when nothing scored", () => {
+    const q = pointsBranchQuiz();
+    expect(pickBranchSlot(q, "br1", emptyCtx())).toBe("slot-def");
+  });
+
+  it("resolveNextStep auto-advances a points branch to the winner's page", () => {
+    const q = pointsBranchQuiz();
+    const ctx = emptyCtx();
+    ctx.selectedAnswerIds = new Set(["a-y", "b-y"]);
+    expect(resolveNextStep(q, "q2", null, ctx)).toBe("ry");
+  });
+});
+
 describe("recommendForStage — multi-stage results", () => {
   function stageQuiz(stages: Array<Record<string, unknown>>) {
     return Quiz.parse({

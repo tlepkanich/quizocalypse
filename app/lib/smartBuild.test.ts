@@ -63,11 +63,26 @@ const gen: GeneratedQuestionFlow = {
   ],
 };
 
-const ctx = (tags: string[]): BranchContext => ({
-  accumulatedTags: new Set(tags),
-  selectedAnswerIds: new Set<string>(),
+// Points routing keys off the SELECTED answers (the points tally), not the
+// accumulated-tag union — so build the context from picked answer ids.
+const ctx = (selectedIds: string[]): BranchContext => ({
+  accumulatedTags: new Set<string>(),
+  selectedAnswerIds: new Set(selectedIds),
   abAssignments: {},
 });
+
+// The answer id on question `qid` whose tags include `tag`.
+const answerIdByTag = (
+  doc: ReturnType<typeof baseDoc>,
+  qid: string,
+  tag: string,
+): string => {
+  const q = doc.nodes.find((n) => n.id === qid);
+  if (!q || q.type !== "question") throw new Error(`no question ${qid}`);
+  const a = q.data.answers.find((x) => x.tags.includes(tag));
+  if (!a) throw new Error(`no "${tag}" answer on ${qid}`);
+  return a.id;
+};
 
 const sbNodes = (doc: ReturnType<typeof baseDoc>) =>
   doc.nodes.filter((n) => n.id.startsWith("sb_"));
@@ -107,20 +122,29 @@ describe("applyQuestionFlow", () => {
     ).toBeUndefined();
   });
 
-  it("routes shoppers to the right bucket page via the real engine", () => {
+  it("routes shoppers to the winning bucket page via the real engine (plurality)", () => {
     const next = applyQuestionFlow(baseDoc(), gen, buckets);
-    expect(resolveNextStep(next, "sb_q_2", null, ctx(["dry"]))).toBe("r_dry");
-    expect(resolveNextStep(next, "sb_q_2", null, ctx(["oily"]))).toBe("r_oily");
-    // no tags accumulated → unconditioned default slot → first bucket
+    const dry = answerIdByTag(next, "sb_q_1", "dry");
+    const oily = answerIdByTag(next, "sb_q_1", "oily");
+    // The picked answer makes its bucket the points winner → that bucket's page.
+    expect(resolveNextStep(next, "sb_q_2", null, ctx([dry]))).toBe("r_dry");
+    expect(resolveNextStep(next, "sb_q_2", null, ctx([oily]))).toBe("r_oily");
+    // nothing picked → no points winner → unconditioned default slot → first bucket
     expect(resolveNextStep(next, "sb_q_2", null, ctx([]))).toBe("r_dry");
   });
 
-  it("builds one conditioned edge per bucket + an unconditioned default", () => {
+  it("builds a points branch: one points-conditioned edge per bucket + an unconditioned default", () => {
     const next = applyQuestionFlow(baseDoc(), gen, buckets);
+    const branch = next.nodes.find((n) => n.id === "sb_br");
+    expect(branch?.type === "branch" && branch.data.mode).toBe("points");
     const branchEdges = next.edges.filter((e) => e.source === "sb_br");
     expect(branchEdges).toHaveLength(3); // 2 buckets + default
-    expect(branchEdges.find((e) => e.target === "r_dry" && e.condition?.tag === "dry")).toBeDefined();
-    expect(branchEdges.find((e) => e.target === "r_oily" && e.condition?.tag === "oily")).toBeDefined();
+    expect(
+      branchEdges.find((e) => e.target === "r_dry" && e.condition?.points_category === "cat_dry"),
+    ).toBeDefined();
+    expect(
+      branchEdges.find((e) => e.target === "r_oily" && e.condition?.points_category === "cat_oily"),
+    ).toBeDefined();
     const def = branchEdges.find((e) => e.source_handle === "sb_sl_default");
     expect(def?.condition).toBeUndefined();
   });
@@ -248,7 +272,7 @@ describe("tag-independent routing (tag-poor catalog → no more 'same products e
     ],
   };
 
-  it("routes by answer_id when there are no tags, and seeds a points floor", () => {
+  it("routes by the points floor when answers carry no tags", () => {
     const next = applyQuestionFlow(baseDoc(), noTagGen, noTagBuckets);
 
     // The first question's answers, in order, map to the bucket slots.
@@ -256,26 +280,135 @@ describe("tag-independent routing (tag-poor catalog → no more 'same products e
     if (!q1 || q1.type !== "question") throw new Error("no sb_q_1");
     const [a0, a1] = q1.data.answers;
 
+    // The branch routes by points-winner plurality, not a tag union or answer_id.
+    const branch = next.nodes.find((n) => n.id === "sb_br");
+    expect(branch?.type === "branch" && branch.data.mode).toBe("points");
     const dryEdge = next.edges.find((e) => e.source === "sb_br" && e.target === "r_dry");
     const oilyEdge = next.edges.find((e) => e.source === "sb_br" && e.target === "r_oily");
-    // Tag-independent: routing rides on the selected answer, not a tag.
-    expect(dryEdge?.condition?.answer_id).toBe(a0!.id);
-    expect(oilyEdge?.condition?.answer_id).toBe(a1!.id);
+    expect(dryEdge?.condition?.points_category).toBe("cat_dry");
+    expect(oilyEdge?.condition?.points_category).toBe("cat_oily");
     expect(dryEdge?.condition?.tag).toBeUndefined();
+    expect(dryEdge?.condition?.answer_id).toBeUndefined();
 
-    // Points floor: each answer now carries points toward a distinct bucket, so
-    // `pickPointsWinner` discriminates by answer even with empty tags.
+    // Points floor: each answer carries points toward a distinct bucket, so
+    // `pickPointsWinner` (and therefore the route + products) discriminates by
+    // answer even with empty tags.
     expect(Object.keys(a0!.points ?? {})).toEqual(["cat_dry"]);
     expect(Object.keys(a1!.points ?? {})).toEqual(["cat_oily"]);
     expect(pickPointsWinner(next, [a0!.id])).toBe("cat_dry");
     expect(pickPointsWinner(next, [a1!.id])).toBe("cat_oily");
+
+    // End-to-end: the engine routes the picked answer to its bucket page.
+    expect(resolveNextStep(next, "sb_q_1", null, ctx([a0!.id]))).toBe("r_dry");
+    expect(resolveNextStep(next, "sb_q_1", null, ctx([a1!.id]))).toBe("r_oily");
   });
 
-  it("still prefers a real tag condition when the answers carry one", () => {
+  it("seeds points from tags when the answers carry them (tag-rich → argmax)", () => {
     const next = applyQuestionFlow(baseDoc(), gen, buckets); // gen + buckets HAVE tags
     const dryEdge = next.edges.find((e) => e.source === "sb_br" && e.target === "r_dry");
-    expect(dryEdge?.condition?.tag).toBe("dry");
-    expect(dryEdge?.condition?.answer_id).toBeUndefined();
+    // Routing condition is still the bucket's points category…
+    expect(dryEdge?.condition?.points_category).toBe("cat_dry");
+    expect(dryEdge?.condition?.tag).toBeUndefined();
+    // …but the dry answer's points come from tag overlap, not the floor.
+    const q1 = next.nodes.find((n) => n.id === "sb_q_1");
+    if (!q1 || q1.type !== "question") throw new Error("no sb_q_1");
+    const dryAns = q1.data.answers.find((a) => a.tags.includes("dry"))!;
+    expect(dryAns.points?.cat_dry).toBeGreaterThanOrEqual(1);
+    expect(pickPointsWinner(next, [dryAns.id])).toBe("cat_dry");
+  });
+});
+
+// Regression for the archetype-reachability collapse: a 6-question quiz where
+// every question offers one answer per archetype used to route a first-match
+// rules branch over the accumulated-tag UNION, so slot 1 won ~73.8% of the
+// 5^6 paths and slot 5 won 1 path (0.006%). `points` plurality routing makes
+// every archetype page reachable in rough proportion. See app/lib/smartBuild.ts.
+describe("archetype reachability — 5^6 landing-page distribution", () => {
+  const ARCH = ["beauty", "acne", "blush", "dry-skin", "foundation"];
+  function archetypeDoc() {
+    const doc = Quiz.parse({
+      quiz_id: "skin",
+      scope: { collection_ids: [] },
+      nodes: [
+        { id: "intro", type: "intro", position: { x: 0, y: 0 }, data: { headline: "Hi" } },
+        ...ARCH.map((a, i) => ({
+          id: `r_${a}`,
+          type: "result" as const,
+          position: { x: 900, y: i * 100 },
+          data: { headline: a, fallback_collection_id: FB, category_id: `cat_${a}`, match_ladder: ["category"] },
+        })),
+      ],
+      edges: [],
+    });
+    const archBuckets: SmartBuildBucket[] = ARCH.map((a) => ({
+      id: `cat_${a}`,
+      name: a,
+      tags: [a],
+      resultNodeId: `r_${a}`,
+    }));
+    const archGen: GeneratedQuestionFlow = {
+      questions: Array.from({ length: 6 }, (_, qi) => ({
+        text: `Q${qi + 1}`,
+        question_type: "single_select",
+        answers: ARCH.map((a) => ({ text: a, tags: [a] })),
+      })),
+    };
+    return applyQuestionFlow(doc, archGen, archBuckets);
+  }
+
+  it("reaches every archetype page in rough proportion (≈ even, none dead)", () => {
+    const doc = archetypeDoc();
+    const qNodes = doc.nodes
+      .filter((n) => n.id.startsWith("sb_q_"))
+      .sort((a, b) => a.id.localeCompare(b.id));
+    const answersPerQ = qNodes.map((n) => (n.type === "question" ? n.data.answers : []));
+    const N = ARCH.length; // 5
+    const Q = qNodes.length; // 6
+    const total = N ** Q; // 15625
+    const tally = new Map<string, number>();
+    for (let combo = 0; combo < total; combo++) {
+      const c: BranchContext = {
+        accumulatedTags: new Set<string>(),
+        selectedAnswerIds: new Set<string>(),
+        abAssignments: {},
+      };
+      let rest = combo;
+      let current: string | null = qNodes[0]!.id;
+      let qi = 0;
+      while (current) {
+        const cur: string = current;
+        const node = doc.nodes.find((n) => n.id === cur);
+        if (!node) break;
+        if (node.type === "question") {
+          const ans = answersPerQ[qi]![rest % N]!;
+          rest = Math.floor(rest / N);
+          c.selectedAnswerIds.add(ans.id);
+          for (const t of ans.tags) c.accumulatedTags.add(t);
+          current = resolveNextStep(doc, node.id, ans.edge_handle_id ?? null, c);
+          qi++;
+          continue;
+        }
+        if (node.type === "result") {
+          tally.set(cur, (tally.get(cur) ?? 0) + 1);
+          break;
+        }
+        current = resolveNextStep(doc, node.id, null, c);
+      }
+    }
+
+    // Every archetype page is reached…
+    for (const a of ARCH) expect(tally.get(`r_${a}`) ?? 0).toBeGreaterThan(0);
+    const counts = ARCH.map((a) => tally.get(`r_${a}`) ?? 0);
+    expect(counts.reduce((s, n) => s + n, 0)).toBe(total);
+    // …in a tight, near-even band (the old branch was 73.8% vs 0.006%).
+    const lo = total * 0.15;
+    const hi = total * 0.25;
+    for (const n of counts) {
+      expect(n).toBeGreaterThanOrEqual(lo);
+      expect(n).toBeLessThanOrEqual(hi);
+    }
+    // The formerly-dead slot-5 page (foundation) is now fully reachable.
+    expect(tally.get("r_foundation") ?? 0).toBeGreaterThan(total * 0.15);
   });
 });
 

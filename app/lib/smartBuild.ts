@@ -137,7 +137,6 @@ export function applyQuestionFlow(
     connect(id);
   }
 
-  const questionAnswerIds: string[][] = [];
   // Type sanity first (BIC P3) — covers the Smart Build path; existing docs
   // are covered by validateQuizWarnings.
   const questions = generated.questions.map(normalizeQuestionSpec);
@@ -156,7 +155,6 @@ export function applyQuestionFlow(
       ...(a.collection_filter ? { collection_filter: a.collection_filter } : {}),
       ...(a.image_url ? { image_url: a.image_url } : {}),
     }));
-    questionAnswerIds.push(answers.map((a) => a.id));
     nodes.push({
       id,
       type: "question",
@@ -219,23 +217,18 @@ export function applyQuestionFlow(
     return { ...doc, nodes, edges };
   }
 
-  // 4. Routing branch: one slot per bucket (conditioned on a dominant tag) +
-  // an unconditioned default catch-all (last, so conditioned slots win).
-  // Collect the EXACT answer-tag strings (runtime accumulatedTags are the
-  // answers' original-case tags), so a slot condition is guaranteed to match.
-  const answerTagList: string[] = [];
-  for (const q of generated.questions)
-    for (const a of q.answers) for (const t of a.tags) answerTagList.push(t);
-  const dominantTag = (b: SmartBuildBucket): string | null => {
-    const lc = new Set(b.tags.map((t) => t.toLowerCase()));
-    for (const at of answerTagList) if (lc.has(at.toLowerCase())) return at;
-    return b.tags[0] ?? null;
-  };
-
-  // Result pages not tied to a question bucket (the merchant made more pages
-  // than buckets) are wired off inert slots: a never-matching tag keeps them
-  // graph-reachable (no orphan / publish block) while routing still falls
-  // through to the real buckets + default. The merchant can bind or delete them.
+  // 4. Routing branch: ONE slot per bucket, fired by PLURALITY — the shopper
+  // lands on the page for whichever bucket wins the per-answer points tally
+  // (argmax over the whole path), plus an unconditioned default catch-all.
+  //
+  // Why not the old first-match-over-accumulated-tags rules branch: when every
+  // question offers one answer per archetype, the accumulated-tag SET ends up
+  // holding nearly every bucket's tag, so first-match priority collapses to
+  // whatever bucket sits in slot 1 — the other archetype pages become almost
+  // unreachable (exhaustively: 73.8% slot-1 vs 0.006% slot-5 on a 6-question,
+  // 5-bucket quiz). `points` mode instead routes by HOW OFTEN each archetype
+  // was picked, so all buckets are reachable in rough proportion (≈ even), and
+  // the landing page matches the points-resolved products on it.
   const bucketResultIds = new Set(buckets.map((b) => b.resultNodeId));
   const unbucketedResultIds = [...resultIds].filter((id) => !bucketResultIds.has(id));
 
@@ -253,33 +246,28 @@ export function applyQuestionFlow(
     id: branchId,
     type: "branch",
     position: { x: xAt(col++), y },
-    data: { label: "Route to result", mode: "rules", slots },
+    data: { label: "Route to best match", mode: "points", slots },
   } as QuizNode);
   connect(branchId);
 
-  // Per-bucket routing condition: prefer a tag the answers actually carry;
-  // otherwise (tag-poor catalog → dominantTag null) route by the position-
-  // matched answer of the first question. That keeps routing tag-INDEPENDENT,
-  // so different first answers reach different result pages instead of every
-  // shopper falling through to the default slot (the "same page every time"
-  // half of the snowboards bug).
-  const routingAnswerIds = questionAnswerIds[0] ?? [];
+  // One conditioned edge per bucket: its slot fires when that bucket's category
+  // id is the points winner. The points are seeded below (tag overlap + a
+  // deterministic floor), so EVERY answer contributes toward a bucket — a
+  // tag-poor catalog still routes by argmax instead of collapsing to the
+  // default (the "same page every path" half of the snowboards bug).
   buckets.forEach((b, i) => {
-    const tag = dominantTag(b);
-    const answerId = routingAnswerIds[i];
-    const condition = tag
-      ? { tag }
-      : answerId
-        ? { answer_id: answerId }
-        : undefined;
     edges.push({
       id: rid("e"),
       source: branchId,
       target: b.resultNodeId,
       source_handle: `sb_sl_${i + 1}`,
-      ...(condition ? { condition } : {}),
+      condition: { points_category: b.id },
     });
   });
+  // Result pages not tied to a question bucket (the merchant made more pages
+  // than buckets) are wired off inert slots: a never-matching tag keeps them
+  // graph-reachable (no orphan / publish block) while routing still falls
+  // through to the real buckets + default. The merchant can bind or delete them.
   unbucketedResultIds.forEach((rId, i) => {
     edges.push({
       id: rid("e"),
@@ -289,6 +277,9 @@ export function applyQuestionFlow(
       condition: { tag: "__sb_unrouted__" },
     });
   });
+  // Unconditioned default (kept LAST): the points-matched slots win; this only
+  // fires if nothing scored (e.g. an all-skipped path), routing to the first
+  // bucket so the shopper never dead-ends.
   const defaultTarget = buckets[0]?.resultNodeId;
   if (defaultTarget) {
     edges.push({
