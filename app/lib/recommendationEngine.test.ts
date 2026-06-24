@@ -1030,10 +1030,17 @@ describe("selectSecondaryRecs (diversity-aware)", () => {
     ]);
   });
 
-  it("skips out-of-stock candidates and respects max", () => {
+  it("keeps OOS candidates the pool already includes (pool reflects oos_behavior)", () => {
+    // The pool is OOS-treated upstream by applyOos: under `hide` it has no OOS;
+    // under `show_with_badge` it keeps them. An OOS product reaching here means
+    // the result wants it shown (with a badge), so secondary must NOT re-drop it
+    // — else the "you might also like" row empties while primary shows the item.
     const primary = [mk("p1", ["a"])];
     const pool = [mk("oos", ["z"], { inventory_in_stock: false }), mk("ok", ["y"])];
-    expect(selectSecondaryRecs(primary, pool, 2).map((p) => p.product_id)).toEqual(["ok"]);
+    expect(selectSecondaryRecs(primary, pool, 2).map((p) => p.product_id)).toEqual([
+      "oos",
+      "ok",
+    ]);
   });
 
   it("does not mutate the input pool", () => {

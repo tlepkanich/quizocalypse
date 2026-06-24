@@ -363,8 +363,12 @@ export function selectSecondaryRecs(
       ? 0
       : p.tags.filter((t) => primaryTags.has(t)).length / p.tags.length;
   // `.filter` returns a fresh array, so sorting it never mutates the caller's pool.
+  // No inventory guard here: the pool already reflects the result's oos_behavior
+  // (applyOos drops OOS under `hide`, keeps them under `show_with_badge`). Filtering
+  // OOS out again would empty the "you might also like" row even though the primary
+  // list shows the same badge-eligible OOS products.
   return pool
-    .filter((p) => !shown.has(p.product_id) && p.inventory_in_stock !== false)
+    .filter((p) => !shown.has(p.product_id))
     .sort((a, b) => overlapRatio(a) - overlapRatio(b))
     .slice(0, max);
 }
