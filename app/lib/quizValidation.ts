@@ -14,8 +14,29 @@ export interface NodeIssue {
     | "intro_missing_outbound"
     // Experiences E1 — type-aware structure rules (quiz-level, pinned to intro):
     | "missing_result"
-    | "missing_terminal";
+    | "missing_terminal"
+    // Routing — per-answer result branching authored on the node but never
+    // wired onto the edges (every answer falls through to a result-less path):
+    | "dead_answer_routing";
   message: string;
+}
+
+// Static "can the runtime ever land here" walk from a start node. Follows every
+// outbound edge regardless of source_handle — same shape as the intro
+// reachability below, but rooted anywhere. Used to ask "does the fallback path
+// reach a result page at all?".
+function reachableFrom(doc: QuizDoc, startId: string): Set<string> {
+  const seen = new Set<string>();
+  const queue: string[] = [startId];
+  while (queue.length) {
+    const id = queue.shift()!;
+    if (seen.has(id)) continue;
+    seen.add(id);
+    for (const e of doc.edges) {
+      if (e.source === id) queue.push(e.target);
+    }
+  }
+  return seen;
 }
 
 // Compute soft validation issues. The Zod schema enforces hard contract;
@@ -32,6 +53,9 @@ export function validateQuiz(doc: QuizDoc): NodeIssue[] {
   // the rail can badge them.
   const xtype = experienceTypeOf(doc);
   const resultCount = doc.nodes.filter((n) => n.type === "result").length;
+  const resultIds = new Set(
+    doc.nodes.filter((n) => n.type === "result").map((n) => n.id),
+  );
   const terminalCount = doc.nodes.filter(
     (n) => n.type === "result" || n.type === "end",
   ).length;
@@ -128,6 +152,44 @@ export function validateQuiz(doc: QuizDoc): NodeIssue[] {
             nodeId: node.id,
             kind: "dead_end",
             message: `Min picks (${min}) exceeds the number of answers (${node.data.answers.length}).`,
+          });
+        }
+      }
+
+      // Routing — the "Your Skin Concern Report" defect class. The merchant
+      // authored per-answer result branching (answers carry edge_handle_ids and
+      // the node fans out to result pages), but the destinations were never
+      // written onto the edges as source_handle. nextNodeFor (the runtime)
+      // therefore matches NO answer handle and collapses every pick onto its
+      // unconditional fallback. When that fallback reaches no result page at
+      // all, 100% of shoppers exit with ZERO recommendations and every wired
+      // result is runtime-dead. The intro-reachability check above can't catch
+      // it — those result edges exist, so the results look "reachable" — so we
+      // model the runtime's actual choice here.
+      const outbound = doc.edges.filter((e) => e.source === node.id);
+      const handles = new Set(
+        outbound
+          .map((e) => e.source_handle)
+          .filter((h): h is string => !!h),
+      );
+      const someAnswerRoutes = node.data.answers.some((a) =>
+        handles.has(a.edge_handle_id),
+      );
+      const pointsToResult = outbound.some((e) => resultIds.has(e.target));
+      if (!someAnswerRoutes && pointsToResult) {
+        // Mirror nextNodeFor exactly: first unconditional edge, else first edge.
+        const fallback = outbound.find((e) => !e.source_handle) ?? outbound[0];
+        const reachesResult =
+          !!fallback &&
+          [...reachableFrom(doc, fallback.target)].some((id) =>
+            resultIds.has(id),
+          );
+        if (!reachesResult) {
+          issues.push({
+            nodeId: node.id,
+            kind: "dead_answer_routing",
+            message:
+              "Answers branch to result pages, but no outbound edge carries an answer's handle — every shopper falls through to a path with no result, so the per-answer routing is dead. Connect each answer to its result (or route through a branch node).",
           });
         }
       }
