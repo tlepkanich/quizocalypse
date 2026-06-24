@@ -657,6 +657,38 @@ export function pickBranchSlot(
     return last.id;
   }
 
+  if (data.mode === "points") {
+    // Plurality routing: send the shopper to the slot bound to the category
+    // that WINS the per-answer points tally (argmax over the whole path). This
+    // is the counterpart to a result page's `points` ladder, so the page the
+    // shopper lands on always matches the products that page resolves — and,
+    // unlike a first-match-priority tag union, every outcome stays reachable in
+    // proportion to how often it was picked (a tag offered on every question no
+    // longer wins by mere presence). Ties resolve via pickPointsWinner's own
+    // first-seen rule (earliest-picked among the tied leaders).
+    const winner = pickPointsWinner(quiz, [...ctx.selectedAnswerIds]);
+    if (winner) {
+      for (const slot of data.slots) {
+        const edge = quiz.edges.find(
+          (e) => e.source === branchNodeId && e.source_handle === slot.id,
+        );
+        if (edge?.condition?.points_category === winner) return slot.id;
+      }
+    }
+    // Nothing scored (or the winner has no slot) → first unconditioned slot
+    // (the author's catch-all), else the first slot.
+    for (const slot of data.slots) {
+      const edge = quiz.edges.find(
+        (e) =>
+          e.source === branchNodeId &&
+          e.source_handle === slot.id &&
+          !e.condition,
+      );
+      if (edge) return slot.id;
+    }
+    return data.slots[0]?.id ?? null;
+  }
+
   // Rules mode: find the first outbound edge whose condition matches.
   // Edges from a branch are expected to carry source_handle = slot id, so
   // we iterate slot order to give the author deterministic priority.
