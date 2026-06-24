@@ -44,19 +44,24 @@ const STRATEGY_LABEL: Record<MatchLadderStrategy, string> = {
 };
 
 const STRATEGY_HINT: Record<MatchLadderStrategy, string> = {
-  conditional: "Explicit “if these answers → these products” rules.",
+  conditional: 'Explicit "if these answers -> these products" rules.',
   points: "Winning bucket by per-answer point tally.",
   category: "Products from the bound bucket below.",
   collection: "Products in the chosen Shopify collection.",
-  tag: "Tag-overlap scoring against the shopper’s answers.",
+  tag: "Tag-overlap scoring against the shopper's answers.",
   metafield: "Products whose metafield matches a value.",
 };
 
 const RANKING_OPTIONS: { value: ResultRanking; label: string }[] = [
   { value: "relevance", label: "Relevance" },
   { value: "newest", label: "Newest" },
-  { value: "best_seller", label: "Best seller" },
+  { value: "best_seller", label: "Best selling" },
   { value: "highest_rated", label: "Highest rated" },
+  { value: "price_asc", label: "Price: Low to High" },
+  { value: "price_desc", label: "Price: High to Low" },
+  { value: "title_asc", label: "Title: A to Z" },
+  { value: "title_desc", label: "Title: Z to A" },
+  { value: "manually_curated", label: "Manually curated (collection order)" },
 ];
 
 const OOS_OPTIONS: { value: OosBehavior; label: string }[] = [
@@ -144,7 +149,7 @@ export function ResultSettingsPanel({
 
   return (
     <div className="qz-col qz-gap-8">
-      {/* ── SOURCE: the match ladder ──────────────────────────────────── */}
+      {/* SOURCE: the match ladder */}
       <QzCollapse title="Source — match ladder" meta={`${ladder.length} active`} defaultOpen>
         <div className="qz-col qz-gap-8">
           <p className="qz-dim" style={{ fontSize: 12, margin: 0 }}>
@@ -184,7 +189,7 @@ export function ResultSettingsPanel({
                   disabled={i === 0}
                   title="Move up"
                 >
-                  ↑
+                  &#8593;
                 </button>
                 <button
                   type="button"
@@ -193,7 +198,7 @@ export function ResultSettingsPanel({
                   disabled={i === ladder.length - 1}
                   title="Move down"
                 >
-                  ↓
+                  &#8595;
                 </button>
                 <button
                   type="button"
@@ -202,7 +207,7 @@ export function ResultSettingsPanel({
                   disabled={ladder.length <= 1}
                   title="Remove"
                 >
-                  ×
+                  &times;
                 </button>
               </div>
             ))}
@@ -218,7 +223,7 @@ export function ResultSettingsPanel({
         </div>
       </QzCollapse>
 
-      {/* ── MATCH: bind a bucket and/or a collection ──────────────────── */}
+      {/* MATCH: bind a bucket and/or a collection */}
       <QzCollapse title="Match — bucket & collection">
         <div className="qz-col qz-gap-8">
           <QzField
@@ -226,7 +231,7 @@ export function ResultSettingsPanel({
             hint={
               boundCategory
                 ? `${boundCategory.productIds.length} product(s) in this bucket.`
-                : "Tie this result page to a bucket so the “Bound bucket” strategy can pull its products."
+                : 'Tie this result page to a bucket so the "Bound bucket" strategy can pull its products.'
             }
             meta={ladder.includes("category") ? "used by ladder" : undefined}
           >
@@ -245,7 +250,7 @@ export function ResultSettingsPanel({
 
           <QzField
             label="Collection"
-            hint="Used by the “Collection” strategy."
+            hint='Used by the "Collection" strategy.'
             meta={ladder.includes("collection") ? "used by ladder" : undefined}
           >
             <QzSelect
@@ -282,7 +287,7 @@ export function ResultSettingsPanel({
         </div>
       </QzCollapse>
 
-      {/* ── RANKING + product counts ──────────────────────────────────── */}
+      {/* RANKING + product counts */}
       <QzCollapse title="Ranking & count">
         <div className="qz-col qz-gap-8">
           <div className="qz-row qz-gap-8">
@@ -320,7 +325,7 @@ export function ResultSettingsPanel({
         </div>
       </QzCollapse>
 
-      {/* ── OUT-OF-STOCK behavior ─────────────────────────────────────── */}
+      {/* OUT-OF-STOCK behavior */}
       <QzCollapse title="Out of stock">
         <div className="qz-col qz-gap-8">
           <QzField label="When a product is out of stock">
@@ -353,7 +358,78 @@ export function ResultSettingsPanel({
         </div>
       </QzCollapse>
 
-      {/* ── PRICING toggles ───────────────────────────────────────────── */}
+      {/* PRODUCT DISPLAY toggles */}
+      <QzCollapse title="Product display">
+        <div className="qz-col qz-gap-8">
+          <div className="qz-row qz-gap-16" style={{ flexWrap: "wrap" }}>
+            <label
+              className="qz-row qz-gap-8"
+              style={{ alignItems: "center", fontSize: 13, cursor: "pointer" }}
+            >
+              <input
+                type="checkbox"
+                checked={data.show_variants !== false}
+                onChange={(e) => set({ show_variants: e.target.checked })}
+              />
+              Show variants
+            </label>
+            <label
+              className="qz-row qz-gap-8"
+              style={{ alignItems: "center", fontSize: 13, cursor: "pointer" }}
+            >
+              <input
+                type="checkbox"
+                checked={Boolean(data.show_product_descriptions)}
+                onChange={(e) => set({ show_product_descriptions: e.target.checked })}
+              />
+              Show product descriptions
+            </label>
+            <label
+              className="qz-row qz-gap-8"
+              style={{ alignItems: "center", fontSize: 13, cursor: "pointer", opacity: 0.45 }}
+              title="Connect your reviews app to enable star ratings"
+            >
+              <input type="checkbox" disabled />
+              Star ratings — coming soon
+            </label>
+          </div>
+        </div>
+      </QzCollapse>
+
+      {/* PAGE STRUCTURE */}
+      <QzCollapse title="Page structure">
+        <div className="qz-col qz-gap-8">
+          <div className="qz-row qz-gap-16" style={{ flexWrap: "wrap" }}>
+            <label
+              className="qz-row qz-gap-8"
+              style={{ alignItems: "center", fontSize: 13, cursor: "pointer" }}
+            >
+              <input
+                type="checkbox"
+                checked={Boolean(data.show_results_summary)}
+                onChange={(e) => set({ show_results_summary: e.target.checked })}
+              />
+              Results summary bar
+            </label>
+            <label
+              className="qz-row qz-gap-8"
+              style={{ alignItems: "center", fontSize: 13, cursor: "pointer" }}
+            >
+              <input
+                type="checkbox"
+                checked={Boolean(data.show_retake_link)}
+                onChange={(e) => set({ show_retake_link: e.target.checked })}
+              />
+              Retake quiz link
+            </label>
+          </div>
+          <p className="qz-dim" style={{ fontSize: 11, margin: 0 }}>
+            Results summary shows shopper answers above product sections. Retake link lets shoppers restart the quiz from the results page.
+          </p>
+        </div>
+      </QzCollapse>
+
+      {/* PRICING toggles */}
       <QzCollapse title="Pricing">
         <div className="qz-col qz-gap-8">
           <div className="qz-row qz-gap-16" style={{ flexWrap: "wrap" }}>
@@ -380,7 +456,7 @@ export function ResultSettingsPanel({
               Subscription eligible
             </label>
           </div>
-          {boundCategory ? <QzBadge tone="ok">Bound to “{boundCategory.name}”</QzBadge> : null}
+          {boundCategory ? <QzBadge tone="ok">Bound to &quot;{boundCategory.name}&quot;</QzBadge> : null}
         </div>
       </QzCollapse>
     </div>

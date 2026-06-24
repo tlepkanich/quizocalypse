@@ -221,11 +221,19 @@ export type ConditionalRule = z.infer<typeof ConditionalRule>;
 // Product ranking within a resolved pool. relevance = current tag-overlap
 // score; newest = Product.updatedAt desc; best_seller / highest_rated read
 // a merchant-mapped metafield, falling back to relevance when unmapped.
+// price_asc/desc and title_asc/desc sort by Shopify product fields at
+// recommendation-page render time. manually_curated respects the Shopify
+// collection sort order and is only meaningful when a collection sub-filter is active.
 export const ResultRanking = z.enum([
   "relevance",
   "newest",
   "best_seller",
   "highest_rated",
+  "price_asc",
+  "price_desc",
+  "title_asc",
+  "title_desc",
+  "manually_curated",
 ]);
 export type ResultRanking = z.infer<typeof ResultRanking>;
 
@@ -295,6 +303,18 @@ export const ResultData = z.object({
   oos_fallback_collection_id: z.string().optional(),
   include_discount: z.boolean().default(false),
   subscription_eligible: z.boolean().default(false),
+
+  // ---- Step 2: product display settings ----
+  // Show variant selector inline on product cards (size, color, etc.).
+  show_variants: z.boolean().default(true),
+  // Show short product description below the product title on cards.
+  show_product_descriptions: z.boolean().default(false),
+
+  // ---- Step 2: page structure settings ----
+  // Show a bar summarising the shopper's quiz answers above the product sections.
+  show_results_summary: z.boolean().default(false),
+  // Show a "Retake the quiz" link at the bottom of the recommendation page.
+  show_retake_link: z.boolean().default(false),
 
   // ---- v3 multi-stage (Advanced) ----
   // Empty = Simple (one page). Non-empty = Advanced ordered sections.

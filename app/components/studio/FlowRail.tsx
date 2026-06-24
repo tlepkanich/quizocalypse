@@ -3,7 +3,7 @@ import type { Quiz, QuizNode } from "../../lib/quizSchema";
 import type { NodeIssue } from "../../lib/quizValidation";
 import type { OrderedFlow } from "../../lib/flowOrder";
 import { answerRoutes } from "../../lib/routeTrace";
-import { deleteNode, moveStep, straightThroughRun } from "../../lib/quizMutations";
+import { deleteNode, duplicateQuestion, moveStep, straightThroughRun } from "../../lib/quizMutations";
 import { INSERTABLE_MODULES, insertModule, updateNodeData, type InsertKind } from "./studioDoc";
 import { NODE_LABEL } from "./panels/nodeMeta";
 
@@ -283,6 +283,20 @@ export function FlowRail({
                   </button>
                 </>
               ) : null}
+              {node.type === "question" ? (
+                <button
+                  className="qz-btn qz-btn-ghost qz-btn-sm"
+                  title="Duplicate question"
+                  aria-label={`Duplicate ${nodeTitle(node)}`}
+                  onClick={() => {
+                    const next = duplicateQuestion(doc, nodeId);
+                    onCommit(next);
+                  }}
+                  style={{ padding: "0 4px" }}
+                >
+                  ⧉
+                </button>
+              ) : null}
               {node.type !== "intro" ? (
                 confirmDeleteId === nodeId ? (
                   <>
@@ -337,6 +351,8 @@ export function FlowRail({
     );
   };
 
+  const questionCount = doc.nodes.filter((n) => n.type === "question").length;
+
   return (
     <div className="qz-card" style={{ padding: 10, position: "sticky", top: 8 }}>
       {!hideViewSwitcher && (
@@ -371,6 +387,22 @@ export function FlowRail({
               ) : null,
             )}
           </div>
+
+          {questionCount > 0 && (questionCount < 4 || questionCount > 8) ? (
+            <div
+              className="qz-dim"
+              style={{
+                fontSize: 11,
+                marginTop: 6,
+                padding: "4px 8px",
+                background: "var(--qz-cream-2, #f5f3ee)",
+                borderRadius: 6,
+                lineHeight: 1.4,
+              }}
+            >
+              {questionCount} question{questionCount !== 1 ? "s" : ""} · Most quizzes perform best at 4–8
+            </div>
+          ) : null}
 
           {ordered.orphans.length > 0 ? (
             <div style={{ marginTop: 10, paddingTop: 8, borderTop: "1px solid var(--qz-rule, #00000014)" }}>

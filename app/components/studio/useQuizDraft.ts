@@ -13,6 +13,10 @@ export function useQuizDraft(initial: QuizDoc) {
   const [doc, setDoc] = useState<QuizDoc>(initial);
   const saveFetcher = useFetcher<{ ok: boolean; savedAt?: string; error?: string }>();
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Keep a stable ref to the current doc so `retry` can resend without a
+  // stale closure.
+  const docRef = useRef(doc);
+  docRef.current = doc;
 
   const triggerSave = useCallback(
     (next: QuizDoc) => {
@@ -35,9 +39,17 @@ export function useQuizDraft(initial: QuizDoc) {
     [triggerSave],
   );
 
+  const retry = useCallback(() => {
+    triggerSave(docRef.current);
+  }, [triggerSave]);
+
   const isSaving = saveFetcher.state !== "idle";
   const savedAt =
     saveFetcher.data?.ok && saveFetcher.data.savedAt ? saveFetcher.data.savedAt : null;
+  const saveError =
+    saveFetcher.state === "idle" && saveFetcher.data != null && !saveFetcher.data.ok
+      ? (saveFetcher.data.error ?? "Save failed")
+      : null;
 
-  return { doc, setDoc, commit, isSaving, savedAt };
+  return { doc, setDoc, commit, isSaving, savedAt, saveError, retry };
 }

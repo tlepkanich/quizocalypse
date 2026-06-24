@@ -546,6 +546,47 @@ export function addEdge(
   return { ...doc, edges: [...doc.edges, edge] };
 }
 
+export function duplicateQuestion(doc: QuizDoc, questionNodeId: string): QuizDoc {
+  const node = doc.nodes.find((n) => n.id === questionNodeId);
+  if (!node || node.type !== "question") return doc;
+
+  const newNodeId = uid("q");
+  // Fresh IDs for answers and handles so edges remain independent.
+  const newAnswers = node.data.answers.map((a) => ({
+    ...a,
+    id: uid("a"),
+    edge_handle_id: uid("h"),
+  }));
+
+  const newNode: QuizNodeDoc = {
+    ...node,
+    id: newNodeId,
+    position: { x: node.position.x + 20, y: node.position.y + 20 },
+    data: { ...node.data, answers: newAnswers },
+  };
+
+  // Re-stitch: original → clone → original's old default successor.
+  const defaultOut = doc.edges.find(
+    (e) => e.source === questionNodeId && !e.source_handle,
+  );
+  const withoutDefault = doc.edges.filter(
+    (e) => !(e.source === questionNodeId && !e.source_handle),
+  );
+
+  const stitched: QuizDoc["edges"] = [
+    { id: uid("e"), source: questionNodeId, target: newNodeId },
+  ];
+  if (defaultOut) {
+    stitched.push({ id: uid("e"), source: newNodeId, target: defaultOut.target });
+  }
+
+  return {
+    ...doc,
+    nodes: [...doc.nodes, newNode],
+    edges: [...withoutDefault, ...stitched],
+  };
+}
+
 export function addAnswer(doc: QuizDoc, questionNodeId: string): QuizDoc {
   return {
     ...doc,

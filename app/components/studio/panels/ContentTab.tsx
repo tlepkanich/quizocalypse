@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { useFetcher } from "@remix-run/react";
 import { QzButton, QzField, QzInput, QzSelect, QzTextarea } from "../../qz";
 import type { Quiz, QuizNode } from "../../../lib/quizSchema";
 import { isFreeformType } from "../../../lib/quizSchema";
@@ -15,6 +16,24 @@ import { ImagePicker, IMAGE_ANSWER_TYPES, type PickerProduct } from "../ImagePic
 // ════════════════════════════════════════════════════════════════════════════
 
 type QuizDoc = Quiz;
+
+// Inline character counter shown in QzField's `meta` slot. Turns amber at 80%
+// and red at 95% so merchants notice before hitting the hard cap.
+function CharCount({ value, max }: { value: string; max: number }) {
+  const n = value.length;
+  const pct = n / max;
+  const color =
+    pct >= 0.95
+      ? "#D72C0D"
+      : pct >= 0.8
+        ? "#8A6116"
+        : "var(--qz-ink-3, #999)";
+  return (
+    <span style={{ fontSize: 10.5, color, fontVariantNumeric: "tabular-nums" }}>
+      {n}/{max}
+    </span>
+  );
+}
 
 export function ContentTab({
   doc,
@@ -107,7 +126,7 @@ export function ContentTab({
             </div>
           </QzField>
           <p className="qz-dim" style={{ fontSize: 12 }}>
-            Recommendation logic lives in the canvas builder’s Logic tab.
+            Recommendation logic lives in the canvas builder's Logic tab.
           </p>
         </>
       );
@@ -248,11 +267,117 @@ export function QuestionContent({
     fontSize: 13,
     lineHeight: 1,
   });
+
+  // AI regenerate — submits to the current route (intent=regenerate-node) and
+  // replaces the whole doc when the server returns the updated version.
+  // An undo snapshot is offered for 10 seconds after each regeneration.
+  const regenFetcher = useFetcher<{ ok: boolean; doc?: Quiz; error?: string }>();
+  const isRegenerating = regenFetcher.state !== "idle";
+  const [undoDoc, setUndoDoc] = useState<QuizDoc | null>(null);
+  const undoTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const preRegenDocRef = useRef<QuizDoc | null>(null);
+  const processedRegenRef = useRef<unknown>(null);
+
+  useEffect(() => {
+    if (
+      regenFetcher.state === "idle" &&
+      regenFetcher.data?.ok &&
+      regenFetcher.data.doc &&
+      regenFetcher.data !== processedRegenRef.current
+    ) {
+      processedRegenRef.current = regenFetcher.data;
+      if (preRegenDocRef.current) {
+        setUndoDoc(preRegenDocRef.current);
+        preRegenDocRef.current = null;
+      }
+      onCommit(regenFetcher.data.doc as QuizDoc);
+      if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
+      undoTimerRef.current = setTimeout(() => setUndoDoc(null), 10_000);
+    }
+  }, [regenFetcher.state, regenFetcher.data, onCommit]);
+
+  useEffect(() => {
+    return () => {
+      if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
+    };
+  }, []);
+
   return (
     <>
-      <QzField label="Question">
-        <QzTextarea value={node.data.text} onChange={(e) => setText(e.target.value)} rows={2} />
+      <QzField
+        label="Question"
+        meta={<CharCount value={node.data.text} max={150} />}
+      >
+        <QzTextarea
+          value={node.data.text}
+          maxLength={150}
+          onChange={(e) => setText(e.target.value)}
+          rows={2}
+        />
       </QzField>
+
+      {/* Required / Optional toggle */}
+      <div className="qz-row" style={{ gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+        <div className="qz-segmented" role="group" aria-label="Question requirement">
+          <button
+            type="button"
+            aria-pressed={node.data.required !== false}
+            onClick={() => setData({ required: true })}
+          >
+            Required
+          </button>
+          <button
+            type="button"
+            aria-pressed={node.data.required === false}
+            onClick={() => setData({ required: false })}
+          >
+            Optional
+          </button>
+        </div>
+        {node.data.required === false ? (
+          <span className="qz-dim" style={{ fontSize: 11 }}>
+            Adds "Skip this question" — skipped questions score zero
+          </span>
+        ) : null}
+      </div>
+
+      {/* AI regenerate */}
+      <div className="qz-row" style={{ gap: 6, alignItems: "center" }}>
+        <button
+          type="button"
+          className="qz-btn qz-btn-ghost qz-btn-sm"
+          disabled={isRegenerating}
+          title="Replace this question with a new AI-generated version"
+          onClick={() => {
+            preRegenDocRef.current = doc;
+            const form = new FormData();
+            form.set("intent", "regenerate-node");
+            form.set("nodeId", node.id);
+            regenFetcher.submit(form, { method: "POST" });
+          }}
+        >
+          {isRegenerating ? "Generating…" : "↻ Regenerate"}
+        </button>
+        {undoDoc ? (
+          <button
+            type="button"
+            className="qz-btn qz-btn-ghost qz-btn-sm"
+            onClick={() => {
+              onCommit(undoDoc);
+              setUndoDoc(null);
+              if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
+            }}
+          >
+            ↺ Undo
+          </button>
+        ) : null}
+        {regenFetcher.data && !regenFetcher.data.ok ? (
+          <span className="qz-dim" style={{ fontSize: 11, color: "#D72C0D" }}>
+            {regenFetcher.data.error ?? "Regeneration failed"}
+          </span>
+        ) : null}
+      </div>
+
       <QzField label="Type">
         <QzSelect
           value={node.data.question_type}
@@ -298,11 +423,18 @@ export function QuestionContent({
           {node.data.answers.map((a) => (
             <div key={a.id} style={{ display: "flex", flexDirection: "column", gap: 4 }}>
               <div className="qz-row" style={{ gap: 6, alignItems: "center" }}>
-                <QzInput
-                  value={a.text}
-                  onChange={(e) => setAnswer(a.id, { text: e.target.value })}
-                  style={{ flex: 1 }}
-                />
+                <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 2 }}>
+                  <QzInput
+                    value={a.text}
+                    maxLength={60}
+                    onChange={(e) => setAnswer(a.id, { text: e.target.value })}
+                  />
+                  {a.text.length > 45 ? (
+                    <div style={{ textAlign: "right" }}>
+                      <CharCount value={a.text} max={60} />
+                    </div>
+                  ) : null}
+                </div>
                 <button
                   type="button"
                   title={a.icon ? `Icon: ${a.icon} — change` : "Add an emoji icon"}

@@ -70,7 +70,7 @@ export function UnifiedWorkspace({ data, chrome }: { data: StudioBuilderData; ch
 }
 
 function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chrome }) {
-  const { doc, commit: rawCommit, isSaving, savedAt } = useQuizDraft(data.doc as QuizDoc);
+  const { doc, commit: rawCommit, isSaving, savedAt, saveError, retry } = useQuizDraft(data.doc as QuizDoc);
   // QB-2 — snapshot undo/redo. Every panel edit replaces the whole doc, so a
   // stack of prior docs IS the history; undo/redo replay a snapshot through the
   // same autosave seam (an undo persists). Capped at 50 snapshots to bound memory.
@@ -309,17 +309,39 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
     goToStep: () => {},
   };
 
-  // Autosave status chip — a legible "Saving…" (pulsing dot) / "Saved" (green
-  // check, success pulse keyed on savedAt). Shared by both top-bar variants.
+  // Autosave status chip — "Saving…" (pulsing dot) / "Saved HH:MM" (green check,
+  // keyed on savedAt for the success pulse) / "Unable to save — Retry" on error.
+  const savedAtLabel = savedAt
+    ? new Date(savedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+    : null;
   const saveStatus = (
     <span className="qz-save-status" aria-live="polite">
       {isSaving ? (
         <span className="qz-save-chip is-saving">
           <span className="qz-save-dot" aria-hidden /> Saving…
         </span>
-      ) : savedAt ? (
-        <span key={savedAt} className="qz-save-chip is-saved">
-          <span aria-hidden>✓</span> Saved
+      ) : saveError ? (
+        <span className="qz-save-chip is-error" style={{ gap: 6 }}>
+          <span aria-hidden>⚠</span> Unable to save —{" "}
+          <button
+            type="button"
+            onClick={retry}
+            style={{
+              background: "none",
+              border: "none",
+              padding: 0,
+              cursor: "pointer",
+              color: "inherit",
+              textDecoration: "underline",
+              fontSize: "inherit",
+            }}
+          >
+            Retry
+          </button>
+        </span>
+      ) : savedAtLabel ? (
+        <span key={savedAt!} className="qz-save-chip is-saved">
+          <span aria-hidden>✓</span> Saved {savedAtLabel}
         </span>
       ) : null}
     </span>
