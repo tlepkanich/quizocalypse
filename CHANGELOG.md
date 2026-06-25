@@ -6,6 +6,31 @@ notes are welcome above the auto entries.
 
 <!-- routine: insert each run's entry directly below this line, newest first -->
 
+## 2026-06-25 — Step 4 + Step 2 queued items (spec routine)
+
+Implemented queued items from `_roadmap.md` across the question-builder (Step 4) and recommendation-page (Step 2) specs. All gates passed locally (typecheck no new errors, 627 tests pass, build, lint). Pushed to `claude/laughing-thompson-nji3kc`. (`73fbfe1`)
+
+**Step 4 — Question Builder**
+- Character counters on question (150) and answer (60) fields with colour-coded warnings.
+- Required / Optional toggle on each question node.
+- Duplicate question (⎘) and Add-above (↑+) actions in the left-rail.
+- 4–8 question-count nudge in the workspace header.
+- Save-error chip with Retry button (`useQuizDraft` `saveError` / `retrySave`).
+- `duplicateNode()` mutation with spine-edge re-wiring; 4 new unit tests.
+
+**Step 2 — Recommendation Page**
+- `ResultRanking` enum extended: `price_asc`, `price_desc`, `title_asc`, `title_desc`, `manually_curated`.
+- `sub_filter` field added to `ResultStage` (schema only; no DB migration — stored in JSON).
+- Product display toggles: show variants, show descriptions, urgency "Only X left" + threshold, star-ratings placeholder.
+- Page structure toggles: results summary bar, retake-quiz link.
+- `ResultSettingsPanel` gains "Product display" and "Page structure" `QzCollapse` sections.
+
+**Skipped / deferred** (not fully understood or too large)
+- Read-only Flow View toggle (needs a separate DAG renderer component).
+- Bucket Coverage indicator pills (needs cross-node coverage data).
+- Structured Skip-Logic rule builder (scope too large; deferred).
+- Studio-side per-question AI Regenerate surface (needs design clarification).
+
 ## 2026-06-24 — recommendation / runtime / builder hardening (audit loop + chips)
 
 Shipped via the in-session audit loop and the spawned background-task chips (not
