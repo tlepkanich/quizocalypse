@@ -1090,6 +1090,16 @@ export const Quiz = z.object({
   experience_type: z
     .enum(["product_match", "personality", "lead_capture", "survey"])
     .optional(),
+  // Step 3 "Shape Your Quiz" — the scoring model the merchant picks for this
+  // quiz. Both map onto the existing per-answer `points` engine:
+  //   direct   — each answer awards points to exactly ONE bucket (weight 1);
+  //              the winning bucket is the per-answer plurality (argmax).
+  //   weighted — answers award points across MULTIPLE buckets with weights;
+  //              same argmax tally, but overlapping attributes accumulate.
+  // Absent = legacy/unset: the runtime keeps today's match-ladder behavior, so
+  // every in-flight draft is unchanged until a merchant chooses on the Shape
+  // step (the spec requires a conscious choice — no default is pre-selected).
+  scoring_model: z.enum(["direct", "weighted"]).optional(),
   // Builder Re-work Step 1 — the creation funnel's transient scratch state
   // (grouping/goal/template-options). Additive/optional, lives only on DRAFTs,
   // and is STRIPPED at publish (see quizPublish.ts).

@@ -10,6 +10,8 @@ import {
   insertQuestionRelative,
   moveStep,
   routeAnswerToEnd,
+  setAnswerBucketDirect,
+  setAnswerBucketWeight,
   straightThroughRun,
 } from "./quizMutations";
 import { insertModule } from "../components/studio/studioDoc";
@@ -123,6 +125,36 @@ describe("duplicateQuestionNode / insertQuestionRelative (Question-Builder spec)
   it("duplicate is a no-op on a non-question id", () => {
     const doc = linearQuestionsDoc();
     expect(duplicateQuestionNode(doc, "r1")).toBe(doc);
+  });
+
+  it("setAnswerBucketDirect maps an answer to exactly one bucket (weight 1), and null clears it", () => {
+    const q = (d: ReturnType<typeof linearQuestionsDoc>, id: string) =>
+      d.nodes.find((n) => n.id === id) as Extract<(typeof d.nodes)[number], { type: "question" }>;
+    const mapped = setAnswerBucketDirect(linearQuestionsDoc(), "q1", "q1_a1", "cat-oily");
+    expect(q(mapped, "q1").data.answers.find((a) => a.id === "q1_a1")!.points).toEqual({
+      "cat-oily": 1,
+    });
+    // re-mapping replaces (still exactly one bucket)
+    const remapped = setAnswerBucketDirect(mapped, "q1", "q1_a1", "cat-dry");
+    expect(q(remapped, "q1").data.answers.find((a) => a.id === "q1_a1")!.points).toEqual({
+      "cat-dry": 1,
+    });
+    // null clears the map entirely
+    const cleared = setAnswerBucketDirect(remapped, "q1", "q1_a1", null);
+    expect(q(cleared, "q1").data.answers.find((a) => a.id === "q1_a1")!.points).toBeUndefined();
+  });
+
+  it("setAnswerBucketWeight sets/updates one bucket's weight, preserving others; ≤0 removes it", () => {
+    const q = (d: ReturnType<typeof linearQuestionsDoc>, id: string) =>
+      d.nodes.find((n) => n.id === id) as Extract<(typeof d.nodes)[number], { type: "question" }>;
+    let d = setAnswerBucketWeight(linearQuestionsDoc(), "q1", "q1_a1", "cat-oily", 3);
+    d = setAnswerBucketWeight(d, "q1", "q1_a1", "cat-dry", 1);
+    expect(q(d, "q1").data.answers.find((a) => a.id === "q1_a1")!.points).toEqual({
+      "cat-oily": 3,
+      "cat-dry": 1,
+    });
+    d = setAnswerBucketWeight(d, "q1", "q1_a1", "cat-oily", 0); // remove just oily
+    expect(q(d, "q1").data.answers.find((a) => a.id === "q1_a1")!.points).toEqual({ "cat-dry": 1 });
   });
 
   it("routeAnswerToEnd creates an end node and routes the answer to it, reusing it next time", () => {
