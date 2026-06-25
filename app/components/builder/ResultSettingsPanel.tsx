@@ -9,6 +9,7 @@ import type {
   ResultRanking,
 } from "../../lib/quizSchema";
 import type { BuilderCategory, BuilderCollection } from "./stepProps";
+import type { IndexedProduct } from "../../lib/recommendationEngine";
 
 // ───────────────────────────────────────────────────────────────────────────
 // ResultSettingsPanel — the per-page recommendation SETTINGS editor used by
@@ -52,16 +53,26 @@ const STRATEGY_HINT: Record<MatchLadderStrategy, string> = {
   metafield: "Products whose metafield matches a value.",
 };
 
+// Sort-Order set (Rec-Page spec §1). "manual" (Manually curated) respects a
+// collection's own Shopify sort and is only meaningful when a collection scopes
+// the section — it's disabled below unless a collection / collection sub-filter
+// is set. Relevance + Highest rated are kept for back-compat with existing quizzes.
 const RANKING_OPTIONS: { value: ResultRanking; label: string }[] = [
-  { value: "relevance", label: "Relevance" },
+  { value: "relevance", label: "Relevance (answer fit)" },
+  { value: "best_seller", label: "Best selling" },
   { value: "newest", label: "Newest" },
-  { value: "best_seller", label: "Best seller" },
+  { value: "price_asc", label: "Price: Low → High" },
+  { value: "price_desc", label: "Price: High → Low" },
+  { value: "title_az", label: "Title: A → Z" },
+  { value: "title_za", label: "Title: Z → A" },
   { value: "highest_rated", label: "Highest rated" },
+  { value: "manual", label: "Manually curated" },
 ];
 
 const OOS_OPTIONS: { value: OosBehavior; label: string }[] = [
   { value: "show_with_badge", label: "Show with badge" },
   { value: "hide", label: "Hide" },
+  { value: "notify_me", label: "Show “Notify Me” button" },
   { value: "fallback", label: "Fallback collection" },
 ];
 
@@ -98,12 +109,14 @@ export function ResultSettingsPanel({
   node,
   categories,
   collections,
+  productIndex,
   onCommit,
 }: {
   doc: Quiz;
   node: ResultNode;
   categories: BuilderCategory[];
   collections: BuilderCollection[];
+  productIndex?: IndexedProduct[];
   onCommit: (doc: Quiz) => void;
 }) {
   const data: ResultData = node.data;
@@ -111,6 +124,13 @@ export function ResultSettingsPanel({
   // Single immutable write path for every control in the panel.
   const set = (patch: Partial<ResultData>) => {
     onCommit(updateNodeData(doc, node.id, patch as Record<string, unknown>));
+  };
+
+  // The global fallback is QUIZ-level (spec §7), not per-node — write it to the
+  // doc root rather than through updateNodeData.
+  const fallback = doc.global_fallback;
+  const setFallback = (patch: Partial<typeof fallback>) => {
+    onCommit({ ...doc, global_fallback: { ...doc.global_fallback, ...patch } });
   };
 
   const ladder = data.match_ladder;
@@ -141,6 +161,28 @@ export function ResultSettingsPanel({
     : undefined;
 
   const maxProducts = data.max_products ?? data.slot_count;
+
+  // "Manually curated" sort respects a collection's Shopify order, so it only
+  // applies when a collection scopes the section (a collection sub-filter, the
+  // bound collection, or the collection rung).
+  const hasCollectionScope = Boolean(
+    data.sub_filter_collection_id || data.collection_id,
+  );
+
+  // Mode B per-product blurbs (spec §3) — list the bucket's products: the bound
+  // bucket's members intersected with the baked index, else the whole index
+  // (capped so the editor stays manageable).
+  const idx = productIndex ?? [];
+  const bucketIds = boundCategory ? new Set(boundCategory.productIds) : null;
+  const blurbProducts = (
+    bucketIds ? idx.filter((p) => bucketIds.has(p.product_id)) : idx
+  ).slice(0, 24);
+  const setBlurb = (pid: string, text: string) => {
+    const next = { ...data.product_blurbs };
+    if (text) next[pid] = text;
+    else delete next[pid];
+    set({ product_blurbs: next });
+  };
 
   return (
     <div className="qz-col qz-gap-8">
@@ -286,14 +328,20 @@ export function ResultSettingsPanel({
       <QzCollapse title="Ranking & count">
         <div className="qz-col qz-gap-8">
           <div className="qz-row qz-gap-8">
-            <QzField label="Ranking">
+            <QzField label="Sort order">
               <QzSelect
                 value={data.ranking}
                 onChange={(e) => set({ ranking: e.target.value as ResultRanking })}
               >
                 {RANKING_OPTIONS.map((o) => (
-                  <option key={o.value} value={o.value}>
-                    {o.label}
+                  <option
+                    key={o.value}
+                    value={o.value}
+                    disabled={o.value === "manual" && !hasCollectionScope}
+                  >
+                    {o.value === "manual" && !hasCollectionScope
+                      ? `${o.label} (needs a collection)`
+                      : o.label}
                   </option>
                 ))}
               </QzSelect>
@@ -317,6 +365,288 @@ export function ResultSettingsPanel({
               />
             </QzField>
           </div>
+
+          {/* Sub-filter — narrow within the bucket's OWN pool (spec §1). */}
+          <div className="qz-row qz-gap-8">
+            <QzField
+              label="Sub-filter tag"
+              hint="Optional. Narrows this section to products that also carry this tag."
+            >
+              <QzInput
+                value={data.sub_filter_tag ?? ""}
+                placeholder="e.g. toners"
+                onChange={(e) => set({ sub_filter_tag: e.target.value || undefined })}
+              />
+            </QzField>
+            <QzField label="Sub-filter collection" hint="Optional. Within the bucket pool.">
+              <QzSelect
+                value={data.sub_filter_collection_id ?? ""}
+                onChange={(e) =>
+                  set({ sub_filter_collection_id: e.target.value || undefined })
+                }
+              >
+                <option value="">No collection</option>
+                {collections.map((c) => (
+                  <option key={c.collectionId} value={c.collectionId}>
+                    {c.title}
+                  </option>
+                ))}
+              </QzSelect>
+            </QzField>
+          </div>
+        </div>
+      </QzCollapse>
+
+      {/* ── PRODUCT DISPLAY (spec §2) ─────────────────────────────────── */}
+      <QzCollapse title="Product display">
+        <div className="qz-col qz-gap-8">
+          <label
+            className="qz-row qz-gap-8"
+            style={{ alignItems: "center", fontSize: 13, cursor: "pointer" }}
+          >
+            <input
+              type="checkbox"
+              checked={data.show_variants}
+              onChange={(e) => set({ show_variants: e.target.checked })}
+            />
+            Show variant selector on cards
+          </label>
+          <label
+            className="qz-row qz-gap-8"
+            style={{ alignItems: "center", fontSize: 13, cursor: "pointer" }}
+          >
+            <input
+              type="checkbox"
+              checked={data.show_descriptions}
+              onChange={(e) => set({ show_descriptions: e.target.checked })}
+            />
+            Show product descriptions
+          </label>
+          <label
+            className="qz-row qz-gap-8"
+            style={{ alignItems: "center", fontSize: 13, cursor: "pointer" }}
+          >
+            <input
+              type="checkbox"
+              checked={data.urgency_enabled}
+              onChange={(e) => set({ urgency_enabled: e.target.checked })}
+            />
+            Show “Only X left” urgency signal
+          </label>
+          {data.urgency_enabled ? (
+            <QzField
+              label="Urgency threshold"
+              hint="Only show at or below this stock level. Hidden when inventory tracking is off."
+            >
+              <QzInput
+                type="number"
+                min={1}
+                max={99}
+                value={data.urgency_threshold}
+                onChange={(e) =>
+                  set({
+                    urgency_threshold: Number.isNaN(e.target.valueAsNumber)
+                      ? 5
+                      : Math.max(1, Math.min(99, Math.round(e.target.valueAsNumber))),
+                  })
+                }
+              />
+            </QzField>
+          ) : null}
+          <label
+            className="qz-row qz-gap-8"
+            style={{ alignItems: "center", fontSize: 13, cursor: "not-allowed", opacity: 0.55 }}
+            title="Coming soon — connect your reviews app"
+          >
+            <input type="checkbox" disabled checked={false} readOnly />
+            Show star ratings
+            <QzBadge tone="draft">Coming soon</QzBadge>
+          </label>
+        </div>
+      </QzCollapse>
+
+      {/* ── WHY WE RECOMMEND THIS (spec §3) ───────────────────────────── */}
+      <QzCollapse title="Why we recommend this">
+        <div className="qz-col qz-gap-8">
+          <p className="qz-dim" style={{ fontSize: 12, margin: 0 }}>
+            Use variables like <code>{"{{name}}"}</code>, <code>{"{{answers}}"}</code>,
+            or <code>{"{{answer.<questionId>}}"}</code> — they resolve to the
+            shopper’s answers at quiz time.
+          </p>
+          {/* Mode A — page intro */}
+          <label
+            className="qz-row qz-gap-8"
+            style={{ alignItems: "center", fontSize: 13, cursor: "pointer" }}
+          >
+            <input
+              type="checkbox"
+              checked={data.why_intro_enabled}
+              onChange={(e) =>
+                set({
+                  why_intro_enabled: e.target.checked,
+                  // Seed a starting draft the merchant can edit (spec: AI drafts
+                  // one; this is a sensible offline default until regenerated).
+                  ...(e.target.checked && !data.why_intro
+                    ? { why_intro: "Based on your answers ({{answers}}), here's what we recommend." }
+                    : {}),
+                })
+              }
+            />
+            Page intro copy (Mode A)
+          </label>
+          {data.why_intro_enabled ? (
+            <textarea
+              value={data.why_intro}
+              onChange={(e) => set({ why_intro: e.target.value })}
+              rows={3}
+              placeholder="Based on your answers, here's what your skin needs."
+              style={{
+                font: "inherit",
+                fontSize: 13,
+                padding: "8px 10px",
+                borderRadius: "var(--qz-radius)",
+                border: "1px solid var(--qz-rule)",
+                resize: "vertical",
+              }}
+            />
+          ) : null}
+          {/* Mode B — per-product blurbs */}
+          <label
+            className="qz-row qz-gap-8"
+            style={{ alignItems: "center", fontSize: 13, cursor: "pointer" }}
+          >
+            <input
+              type="checkbox"
+              checked={data.why_blurbs_enabled}
+              onChange={(e) => set({ why_blurbs_enabled: e.target.checked })}
+            />
+            Per-product blurbs (Mode B)
+          </label>
+          {data.why_blurbs_enabled ? (
+            blurbProducts.length > 0 ? (
+              <div className="qz-col qz-gap-4">
+                {blurbProducts.map((p) => (
+                  <QzField key={p.product_id} label={p.title}>
+                    <QzInput
+                      value={data.product_blurbs[p.product_id] ?? ""}
+                      placeholder="Short reason this product fits…"
+                      onChange={(e) => setBlurb(p.product_id, e.target.value)}
+                    />
+                  </QzField>
+                ))}
+              </div>
+            ) : (
+              <p className="qz-dim" style={{ fontSize: 12, margin: 0 }}>
+                Bind a bucket (or publish so products are indexed) to edit
+                per-product blurbs here.
+              </p>
+            )
+          ) : null}
+        </div>
+      </QzCollapse>
+
+      {/* ── PAGE STRUCTURE (spec §6) ──────────────────────────────────── */}
+      <QzCollapse title="Page structure">
+        <div className="qz-col qz-gap-8">
+          <label
+            className="qz-row qz-gap-8"
+            style={{ alignItems: "center", fontSize: 13, cursor: "pointer" }}
+          >
+            <input
+              type="checkbox"
+              checked={data.results_summary_bar}
+              onChange={(e) => set({ results_summary_bar: e.target.checked })}
+            />
+            Results summary bar (shopper’s answers)
+          </label>
+          <label
+            className="qz-row qz-gap-8"
+            style={{ alignItems: "center", fontSize: 13, cursor: "pointer" }}
+          >
+            <input
+              type="checkbox"
+              checked={data.retake_link}
+              onChange={(e) => set({ retake_link: e.target.checked })}
+            />
+            Retake-quiz link
+          </label>
+          <label
+            className="qz-row qz-gap-8"
+            style={{ alignItems: "center", fontSize: 13, cursor: "pointer" }}
+          >
+            <input
+              type="checkbox"
+              checked={data.share_results}
+              onChange={(e) => set({ share_results: e.target.checked })}
+            />
+            Share-results button
+          </label>
+        </div>
+      </QzCollapse>
+
+      {/* ── GLOBAL FALLBACK — quiz-level, no bucket match (spec §7) ─────── */}
+      <QzCollapse title="Global fallback (no match)">
+        <div className="qz-col qz-gap-8">
+          <p className="qz-dim" style={{ fontSize: 12, margin: 0 }}>
+            Shown only when a result page resolves no products. Off by default —
+            otherwise the page shows a graceful “no match” state.
+          </p>
+          <label
+            className="qz-row qz-gap-8"
+            style={{ alignItems: "center", fontSize: 13, cursor: "pointer" }}
+          >
+            <input
+              type="checkbox"
+              checked={fallback.enabled}
+              onChange={(e) => setFallback({ enabled: e.target.checked })}
+            />
+            Enable global fallback
+          </label>
+          {fallback.enabled ? (
+            <>
+              <QzField label="Heading">
+                <QzInput
+                  value={fallback.heading}
+                  onChange={(e) => setFallback({ heading: e.target.value })}
+                />
+              </QzField>
+              <QzField label="Fallback collection">
+                <QzSelect
+                  value={fallback.collection_id ?? ""}
+                  onChange={(e) =>
+                    setFallback({ collection_id: e.target.value || undefined })
+                  }
+                >
+                  <option value="">No collection</option>
+                  {collections.map((c) => (
+                    <option key={c.collectionId} value={c.collectionId}>
+                      {c.title}
+                    </option>
+                  ))}
+                </QzSelect>
+              </QzField>
+              <div className="qz-row qz-gap-8">
+                <QzField label="Or fallback tag" hint="Optional.">
+                  <QzInput
+                    value={fallback.tag ?? ""}
+                    placeholder="e.g. bestseller"
+                    onChange={(e) => setFallback({ tag: e.target.value || undefined })}
+                  />
+                </QzField>
+                <QzField label="Products to show">
+                  <QzInput
+                    type="number"
+                    min={1}
+                    max={12}
+                    value={fallback.count}
+                    onChange={(e) =>
+                      setFallback({ count: clampProductCount(e.target.valueAsNumber) })
+                    }
+                  />
+                </QzField>
+              </div>
+            </>
+          ) : null}
         </div>
       </QzCollapse>
 
@@ -348,6 +678,23 @@ export function ResultSettingsPanel({
                   </option>
                 ))}
               </QzSelect>
+            </QzField>
+          ) : null}
+          {data.oos_behavior === "notify_me" ? (
+            <QzField
+              label="Back-in-stock webhook (optional)"
+              hint="“Notify Me” captures are always stored. Add a URL to also forward them to your back-in-stock tool."
+            >
+              <QzInput
+                value={doc.back_in_stock_webhook_url ?? ""}
+                placeholder="https://…"
+                onChange={(e) =>
+                  onCommit({
+                    ...doc,
+                    back_in_stock_webhook_url: e.target.value || undefined,
+                  })
+                }
+              />
             </QzField>
           ) : null}
         </div>

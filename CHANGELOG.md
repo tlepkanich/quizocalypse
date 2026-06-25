@@ -6,6 +6,37 @@ notes are welcome above the auto entries.
 
 <!-- routine: insert each run's entry directly below this line, newest first -->
 
+## 2026-06-25 — Step 2 Recommendation Page: FULL spec (Now-cluster + all deferred)
+
+Implemented the entire `recommendation-page-spec.md` on branch
+`claude/recommendation-page-spec-or43yx` (owner greenlit the whole cluster plus
+every deferred item). Not yet on `main` — full gate chain (typecheck, 665 tests,
+build, lint) is green locally; merge the branch to ship.
+
+Now-cluster (§1/§2/§6)
+- Full per-section **Sort Order** (Best Selling, Newest, Price ↑/↓, Title
+  A→Z/Z→A, Manually Curated) + per-section **Sub-Filter** (tag/collection).
+  (`62ff770`, `15fa479`)
+- Product-display toggles — **Show Variants**, **Product Descriptions** (new
+  baked `IndexedProduct.description`), **Urgency "Only X left"** via a live
+  `/q/:id/inventory` fetch (read at page load, never baked), disabled
+  **Star-Ratings** placeholder. Page-structure: **Results-summary bar** +
+  **Retake** link. (`bfda717`)
+
+Deferred items — all shipped
+- §3 **Why we recommend** — Mode A page-intro copy + Mode B per-product blurbs
+  with `{{token}}` resolution ({{name}}/{{answers}}/{{answer.<id>}}). (`HEAD`)
+- §4 **Discount depth** — free-shipping kind, applies-to (collections/products),
+  usage cap, expiry date, minimum order; Shopify basic + free-shipping create. (`ac90a0a`)
+- §5 **Notify-Me / back-in-stock** — `notify_me` OOS behavior, `/q/:id/notify`,
+  new `BackInStockRequest` table (additive migration), optional webhook forward. (`HEAD~1`)
+- §6 **Share-results** button (persistent results URL) + §7 quiz-level
+  **global no-match fallback** (opt-in; truly-match default preserved). (`748e5ba`)
+
+Note: the spec's "Fixed price" discount and "X days after completion" expiry are
+intentionally omitted (Shopify code discounts express neither); the schematic
+right-pane preview stays a full-fidelity live preview per `_roadmap.md`.
+
 ## 2026-06-24 — recommendation / runtime / builder hardening (audit loop + chips)
 
 Shipped via the in-session audit loop and the spawned background-task chips (not

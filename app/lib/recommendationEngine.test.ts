@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   pickBranchSlot,
   pickPointsWinner,
+  resolveGlobalFallback,
   recommendForResult,
   recommendForStage,
   recommendForResultExplained,
@@ -1263,5 +1264,170 @@ describe("answer-ordered rungs + explained API (D1)", () => {
     expect(weighted.products[1]!.product_id).toBe("pA"); // oily ×2 outranks dry
     expect(flat.products[1]!.product_id).toBe("pB");
     expect(weighted.rungUsed).toBe("category");
+  });
+});
+
+describe("resolveGlobalFallback (Rec-Page spec §7)", () => {
+  it("returns nothing when disabled", () => {
+    expect(
+      resolveGlobalFallback(baseProducts, {
+        enabled: false,
+        product_ids: ["p1"],
+        count: 4,
+      }),
+    ).toEqual([]);
+  });
+
+  it("unions collection, tag, and explicit ids; caps at count; in-stock first", () => {
+    const out = resolveGlobalFallback(baseProducts, {
+      enabled: true,
+      tag: "oily",
+      count: 4,
+    });
+    // p1, p4(OOS), p5 carry "oily"; OOS p4 ranks after the in-stock ones.
+    expect(out.map((p) => p.product_id)).toEqual(["p5", "p1", "p4"]);
+  });
+
+  it("respects the count cap", () => {
+    const out = resolveGlobalFallback(baseProducts, {
+      enabled: true,
+      collection_id: "c-cleansers",
+      count: 2,
+    });
+    expect(out).toHaveLength(2);
+  });
+
+  it("matches explicit product ids even outside any collection/tag", () => {
+    const out = resolveGlobalFallback(baseProducts, {
+      enabled: true,
+      product_ids: ["p2"],
+      count: 4,
+    });
+    expect(out.map((p) => p.product_id)).toEqual(["p2"]);
+  });
+});
+
+// Rec-Page spec §1 — full sort-order set + per-section sub-filter. These sit on
+// top of a fixed collection rung (membership is the collection), so the sort /
+// sub-filter is exercised independently of tag relevance.
+describe("recommendForResult — sort order + sub-filter (Rec-Page spec §1)", () => {
+  const sortProducts: IndexedProduct[] = [
+    {
+      product_id: "s1",
+      title: "Zebra",
+      handle: "zebra",
+      price: "30.00",
+      image_url: null,
+      tags: ["toner"],
+      collection_ids: ["c-sort", "c-toner"],
+      inventory_in_stock: true,
+      updated_at: "2024-01-03T00:00:00Z",
+    },
+    {
+      product_id: "s2",
+      title: "Apple",
+      handle: "apple",
+      price: "10.00",
+      image_url: null,
+      tags: ["moist"],
+      collection_ids: ["c-sort", "c-moist"],
+      inventory_in_stock: true,
+      updated_at: "2024-01-01T00:00:00Z",
+    },
+    {
+      product_id: "s3",
+      title: "Mango",
+      handle: "mango",
+      price: "20.00",
+      image_url: null,
+      tags: ["toner"],
+      collection_ids: ["c-sort", "c-toner"],
+      inventory_in_stock: true,
+      updated_at: "2024-01-02T00:00:00Z",
+    },
+  ];
+
+  function sortQuiz(resultData: Record<string, unknown>) {
+    return Quiz.parse({
+      quiz_id: "sq",
+      scope: { collection_ids: ["c-sort"] },
+      nodes: [
+        { id: "intro", type: "intro", position: { x: 0, y: 0 }, data: { headline: "Hi" } },
+        {
+          id: "q1",
+          type: "question",
+          position: { x: 200, y: 0 },
+          data: {
+            text: "?",
+            question_type: "single_select",
+            answers: [
+              { id: "a1", text: "A", tags: [], edge_handle_id: "h1" },
+              { id: "a2", text: "B", tags: [], edge_handle_id: "h2" },
+            ],
+          },
+        },
+        {
+          id: "r1",
+          type: "result",
+          position: { x: 400, y: 0 },
+          data: {
+            headline: "Match",
+            fallback_collection_id: "c-sort",
+            match_ladder: ["collection"],
+            collection_id: "c-sort",
+            max_products: 10,
+            ...resultData,
+          },
+        },
+      ],
+      edges: [
+        { id: "e1", source: "intro", target: "q1" },
+        { id: "e2", source: "q1", target: "r1" },
+      ],
+      results_pages: [{ id: "r1", headline: "Match", product_ids: [] }],
+    });
+  }
+
+  const idsFor = (resultData: Record<string, unknown>) =>
+    recommendForResult({
+      quiz: sortQuiz(resultData),
+      productIndex: sortProducts,
+      selectedAnswerIds: ["a1"],
+      resultNodeId: "r1",
+    }).map((p) => p.product_id);
+
+  it("price_asc sorts cheapest first", () => {
+    expect(idsFor({ ranking: "price_asc" })).toEqual(["s2", "s3", "s1"]);
+  });
+
+  it("price_desc sorts priciest first", () => {
+    expect(idsFor({ ranking: "price_desc" })).toEqual(["s1", "s3", "s2"]);
+  });
+
+  it("title_az / title_za sort alphabetically", () => {
+    expect(idsFor({ ranking: "title_az" })).toEqual(["s2", "s3", "s1"]);
+    expect(idsFor({ ranking: "title_za" })).toEqual(["s1", "s3", "s2"]);
+  });
+
+  it("manual keeps the resolved pool order untouched", () => {
+    expect(idsFor({ ranking: "manual" })).toEqual(["s1", "s2", "s3"]);
+  });
+
+  it("sub_filter_tag narrows the section to products that also carry the tag", () => {
+    // Only the two "toner" products survive; price_asc orders them.
+    expect(idsFor({ ranking: "price_asc", sub_filter_tag: "toner" })).toEqual(["s3", "s1"]);
+  });
+
+  it("sub_filter_collection_id narrows to that collection within the bucket", () => {
+    expect(idsFor({ sub_filter_collection_id: "c-moist" })).toEqual(["s2"]);
+  });
+
+  it("sub_filter_tag is case-insensitive", () => {
+    expect(idsFor({ sub_filter_tag: "TONER", ranking: "title_az" })).toEqual(["s3", "s1"]);
+  });
+
+  it("both sub-filters set require the intersection", () => {
+    // tag=toner AND collection=c-moist → no product satisfies both.
+    expect(idsFor({ sub_filter_tag: "toner", sub_filter_collection_id: "c-moist" })).toEqual([]);
   });
 });

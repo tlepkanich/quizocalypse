@@ -218,19 +218,34 @@ export const ConditionalRule = z.object({
 });
 export type ConditionalRule = z.infer<typeof ConditionalRule>;
 
-// Product ranking within a resolved pool. relevance = current tag-overlap
-// score; newest = Product.updatedAt desc; best_seller / highest_rated read
-// a merchant-mapped metafield, falling back to relevance when unmapped.
+// Product ranking / sort order within a resolved pool. relevance = current
+// tag-overlap score; newest = Product.updatedAt desc; best_seller /
+// highest_rated read a merchant-mapped metafield, falling back to relevance
+// when unmapped. The price_* / title_* modes sort on the baked price/title;
+// "manual" keeps the resolved pool order (a collection's own Shopify sort)
+// untouched. The Rec-Page spec's "Sort Order" dropdown maps onto this set:
+//   Best Selling → best_seller, Newest → newest, Price ↑/↓ → price_asc/desc,
+//   Title A→Z/Z→A → title_az/title_za, Manually Curated → manual.
 export const ResultRanking = z.enum([
   "relevance",
   "newest",
   "best_seller",
   "highest_rated",
+  "price_asc",
+  "price_desc",
+  "title_az",
+  "title_za",
+  "manual",
 ]);
 export type ResultRanking = z.infer<typeof ResultRanking>;
 
 // Out-of-stock handling for the resolved products.
-export const OosBehavior = z.enum(["hide", "show_with_badge", "fallback"]);
+//   hide            — drop OOS products from the list.
+//   show_with_badge — keep them, muted, with an "Out of stock" badge.
+//   notify_me       — keep them; the card's CTA becomes a "Notify Me" email
+//                     capture (Rec-Page spec §5 per-product behavior).
+//   fallback        — when ALL are OOS, swap in the OOS fallback collection.
+export const OosBehavior = z.enum(["hide", "show_with_badge", "notify_me", "fallback"]);
 export type OosBehavior = z.infer<typeof OosBehavior>;
 
 // One stage of a multi-stage (Advanced) result page. Each stage is a
@@ -247,6 +262,11 @@ export const ResultStage = z.object({
   metafield_key: z.string().optional(),
   metafield_value: z.string().optional(),
   ranking: ResultRanking.default("relevance"),
+  // Rec-Page spec §1 sub-filter — narrows the resolved pool to products that
+  // ALSO carry this tag / sit in this collection. Drawn from the bucket's own
+  // pool, not the full catalog. Both empty = use the full resolved pool.
+  sub_filter_tag: z.string().optional(),
+  sub_filter_collection_id: z.string().optional(),
   min_products: z.number().int().min(1).max(12).default(3),
   max_products: z.number().int().min(1).max(12).default(3),
   // Dev Spec §5 — feature→benefit "why this" bullets for the stage. Baked at publish.
@@ -283,6 +303,43 @@ export const ResultData = z.object({
 
   // ---- v3 result-page settings depth ----
   ranking: ResultRanking.default("relevance"),
+  // Rec-Page spec §1 sub-filter for the single-section (Simple) page — narrows
+  // the resolved pool to products that ALSO match this tag / collection.
+  sub_filter_tag: z.string().optional(),
+  sub_filter_collection_id: z.string().optional(),
+
+  // ---- Rec-Page spec §2 product-display toggles (apply to all cards) ----
+  // Inline variant selector on the card before Add to Cart. Off = the CTA
+  // links to the PDP / opens the picker. Star ratings are a UI-only "coming
+  // soon" placeholder (no field — the toggle is always disabled in the builder).
+  show_variants: z.boolean().default(false),
+  // Short Shopify product description beneath the title on each card.
+  show_descriptions: z.boolean().default(false),
+  // §2 Urgency: "Only X left in stock" beneath the title. Quantity is fetched
+  // LIVE at results-page load (never baked) so it reflects real-time stock; the
+  // badge only shows at/below the threshold and never when tracking is off.
+  urgency_enabled: z.boolean().default(false),
+  urgency_threshold: z.number().int().min(1).max(99).default(5),
+
+  // ---- Rec-Page spec §6 page-structure toggles ----
+  // Answer-summary chips above the sections ("Oily skin · Sensitive").
+  results_summary_bar: z.boolean().default(false),
+  // "Not what you were looking for? Retake the quiz" link.
+  retake_link: z.boolean().default(false),
+  // Share button that copies/native-shares the shopper's persistent results URL
+  // (reconstructed server-side from the saved session — see /q/:id/results).
+  share_results: z.boolean().default(false),
+
+  // ---- Rec-Page spec §3 "Why we recommend this" copy ----
+  // Mode A — one intro copy block above all sections (per bucket). Supports
+  // {{token}} variables resolved at quiz-time ({{name}}, {{email}}, {{answers}},
+  // {{answer.<questionNodeId>}}). AI/merchant authors a starting draft.
+  why_intro_enabled: z.boolean().default(false),
+  why_intro: z.string().default(""),
+  // Mode B — short blurb beneath each product title. Map of product_id → blurb
+  // (also supports {{token}} variables). Both modes can be active at once.
+  why_blurbs_enabled: z.boolean().default(false),
+  product_blurbs: z.record(z.string()).default({}),
   // Ladder threshold: a strategy must yield ≥ this many products to win,
   // else the ladder falls through. Default 1 = "first non-empty wins".
   min_products: z.number().int().min(1).max(12).default(1),
@@ -796,18 +853,55 @@ export type ContentBlockType = ContentBlock["type"];
 // showing/applying it via the per-result `include_discount` flag.
 export const DiscountConfig = z.object({
   enabled: z.boolean().default(false),
-  kind: z.enum(["percentage", "amount"]).default("percentage"),
+  // percentage / amount (fixed amount off) → discountCodeBasicCreate;
+  // free_shipping → discountCodeFreeShippingCreate. (Shopify code discounts have
+  // no "fixed price" type, so the spec's Fixed-price option is not offered.)
+  kind: z.enum(["percentage", "amount", "free_shipping"]).default("percentage"),
   // percent (clamped to 1–100 at discount-build time) when kind="percentage";
   // a fixed amount in the shop currency when kind="amount" (no upper bound).
+  // Ignored for free_shipping.
   value: z.number().min(0).default(10),
+  // Rec-Page spec §4 "Applies to". For products/collections, the matching id
+  // list scopes customerGets.items; "all" applies to the whole cart.
+  applies_to: z.enum(["all", "collections", "products"]).default("all"),
+  applies_collection_ids: z.array(z.string()).default([]),
+  applies_product_ids: z.array(z.string()).default([]),
   // Approximates "first purchase only" — Shopify caps the code at one use per
   // customer.
   once_per_customer: z.boolean().default(true),
+  // Spec §4 "Usage limits" → total redemption cap across all customers.
+  // Undefined = unlimited.
+  usage_limit: z.number().int().min(1).optional(),
+  // Spec §4 "Expiry" → fixed end date (ISO). Undefined = no expiry. (A single
+  // shared code can't express "X days after each shopper completes", so only a
+  // fixed date is offered.)
+  ends_at: z.string().optional(),
+  // Spec §4 "Minimum order" → subtotal (shop currency) OR quantity. At most one
+  // is meaningful; subtotal wins if both are set.
+  minimum_subtotal: z.number().min(0).optional(),
+  minimum_quantity: z.number().int().min(1).optional(),
   title: z.string().default("Quiz reward"),
   // Generated at publish (e.g. "QUIZ-AB12CD"); present once created.
   code: z.string().optional(),
 });
 export type DiscountConfig = z.infer<typeof DiscountConfig>;
+
+// Rec-Page spec §7 — Global Fallback (No Bucket Match). Rendered when a result
+// page resolves ZERO products. OPT-IN (enabled=false by default): the
+// "truly-match → show nothing" behavior stays the default, so this never
+// resurrects the removed generic per-result padding. A merchant turns it on
+// only if they'd rather show evergreen picks than an empty state. The pool is
+// drawn from a collection, a tag, and/or explicit product ids (union), capped
+// at `count` and ordered best-effort by the page's own ranking.
+export const GlobalFallback = z.object({
+  enabled: z.boolean().default(false),
+  heading: z.string().default("Our most-loved products"),
+  collection_id: z.string().optional(),
+  tag: z.string().optional(),
+  product_ids: z.array(z.string()).default([]),
+  count: z.number().int().min(1).max(12).default(4),
+});
+export type GlobalFallback = z.infer<typeof GlobalFallback>;
 
 // ── Builder Re-work Step 1 — the creation funnel's scratch state ─────────────
 // A lightweight AI-proposed quiz "direction" the merchant picks from at the end
@@ -1078,6 +1172,11 @@ export const Quiz = z.object({
   }),
   // Phase 5 — quiz-level discount on recommended products. Defaults to disabled.
   discount_config: DiscountConfig.default({}),
+  // Rec-Page spec §7 — quiz-level no-bucket-match fallback. Defaults to disabled.
+  global_fallback: GlobalFallback.default({}),
+  // Rec-Page spec §5 — optional custom back-in-stock webhook. When set, "Notify
+  // Me" captures are POSTed here in addition to being stored. Absent = store only.
+  back_in_stock_webhook_url: z.string().url().optional(),
 });
 export type Quiz = z.infer<typeof Quiz>;
 

@@ -1,15 +1,15 @@
 import { describe, expect, it } from "vitest";
-import { buildDiscountInput } from "./discount.server";
-import type { DiscountConfig } from "./quizSchema";
+import { buildDiscountInput, buildFreeShippingInput } from "./discount.server";
+import { DiscountConfig } from "./quizSchema";
 
 const ISO = "2026-06-01T00:00:00.000Z";
-const base: DiscountConfig = {
+const base = DiscountConfig.parse({
   enabled: true,
   kind: "percentage",
   value: 10,
   once_per_customer: true,
   title: "Quiz reward",
-};
+});
 
 describe("buildDiscountInput", () => {
   it("builds a percentage discount as a 0–1 fraction on all items", () => {
@@ -44,5 +44,53 @@ describe("buildDiscountInput", () => {
     ) as any;
     expect(input.appliesOncePerCustomer).toBe(false);
     expect(input.title).toBe("VIP");
+  });
+
+  it("scopes items to specific collections / products (spec §4 applies-to)", () => {
+    const coll = buildDiscountInput(
+      { ...base, applies_to: "collections", applies_collection_ids: ["gid://c/1"] },
+      "C",
+      ISO,
+    ) as any;
+    expect(coll.customerGets.items).toEqual({ collections: { add: ["gid://c/1"] } });
+    const prod = buildDiscountInput(
+      { ...base, applies_to: "products", applies_product_ids: ["gid://p/9"] },
+      "C",
+      ISO,
+    ) as any;
+    expect(prod.customerGets.items).toEqual({ products: { productsToAdd: ["gid://p/9"] } });
+  });
+
+  it("carries usage cap, end date, and minimum requirement (spec §4)", () => {
+    const subtotal = buildDiscountInput(
+      { ...base, usage_limit: 100, ends_at: ISO, minimum_subtotal: 50 },
+      "C",
+      ISO,
+    ) as any;
+    expect(subtotal.usageLimit).toBe(100);
+    expect(subtotal.endsAt).toBe(ISO);
+    expect(subtotal.minimumRequirement).toEqual({
+      subtotal: { greaterThanOrEqualToSubtotal: "50" },
+    });
+    const qty = buildDiscountInput({ ...base, minimum_quantity: 3 }, "C", ISO) as any;
+    expect(qty.minimumRequirement).toEqual({
+      quantity: { greaterThanOrEqualToQuantity: "3" },
+    });
+  });
+});
+
+describe("buildFreeShippingInput", () => {
+  it("builds a free-shipping discount to all destinations with shared terms", () => {
+    const input = buildFreeShippingInput(
+      { ...base, kind: "free_shipping", usage_limit: 10 },
+      "FREESHIP",
+      ISO,
+    ) as any;
+    expect(input.code).toBe("FREESHIP");
+    expect(input.destination).toEqual({ all: true });
+    expect(input.customerSelection).toEqual({ all: true });
+    expect(input.usageLimit).toBe(10);
+    // free shipping has no customerGets.value/items
+    expect(input.customerGets).toBeUndefined();
   });
 });

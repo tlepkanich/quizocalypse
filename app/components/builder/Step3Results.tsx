@@ -126,7 +126,7 @@ export function Step3Results(props: StepProps) {
         </div>
       </QzCard>
 
-      <DiscountCard doc={doc} onCommit={onCommit} />
+      <DiscountCard doc={doc} onCommit={onCommit} collections={collections} />
 
       {resultNodes.length === 0 ? (
         <QzBanner tone="warn" title="No result pages yet">

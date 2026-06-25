@@ -24,11 +24,49 @@ const DISCOUNT_CODE_BASIC_CREATE = `#graphql
     }
   }`;
 
+const DISCOUNT_CODE_FREE_SHIPPING_CREATE = `#graphql
+  mutation quizFreeShippingCreate($freeShippingCodeDiscount: DiscountCodeFreeShippingInput!) {
+    discountCodeFreeShippingCreate(freeShippingCodeDiscount: $freeShippingCodeDiscount) {
+      codeDiscountNode { id }
+      userErrors { field message }
+    }
+  }`;
+
+// Shared minimum-requirement / usage-limit / end-date fields (spec §4). Pure.
+function commonDiscountFields(cfg: DiscountConfig): Record<string, unknown> {
+  const fields: Record<string, unknown> = {
+    appliesOncePerCustomer: cfg.once_per_customer,
+  };
+  if (cfg.usage_limit != null) fields.usageLimit = cfg.usage_limit;
+  if (cfg.ends_at) fields.endsAt = cfg.ends_at;
+  if (cfg.minimum_subtotal != null) {
+    fields.minimumRequirement = {
+      subtotal: { greaterThanOrEqualToSubtotal: String(cfg.minimum_subtotal) },
+    };
+  } else if (cfg.minimum_quantity != null) {
+    fields.minimumRequirement = {
+      quantity: { greaterThanOrEqualToQuantity: String(cfg.minimum_quantity) },
+    };
+  }
+  return fields;
+}
+
+// customerGets.items scope (spec §4 "Applies to"). Defaults to the whole cart.
+function itemsScope(cfg: DiscountConfig): Record<string, unknown> {
+  if (cfg.applies_to === "collections" && cfg.applies_collection_ids.length > 0) {
+    return { collections: { add: cfg.applies_collection_ids } };
+  }
+  if (cfg.applies_to === "products" && cfg.applies_product_ids.length > 0) {
+    return { products: { productsToAdd: cfg.applies_product_ids } };
+  }
+  return { all: true };
+}
+
 /**
- * Build the DiscountCodeBasicInput for a quiz discount. Pure + testable.
+ * Build the DiscountCodeBasicInput for a quiz % / amount discount. Pure + testable.
  * - percentage → customerGets.value.percentage as a 0–1 fraction
  * - amount     → customerGets.value.discountAmount.amount (shop currency)
- * Applies to all items; one use per customer ≈ first-purchase gate.
+ * Honors applies-to scope, usage cap, end date, and minimum requirement (spec §4).
  */
 export function buildDiscountInput(
   cfg: DiscountConfig,
@@ -44,8 +82,27 @@ export function buildDiscountInput(
     code,
     startsAt: startsAtISO,
     customerSelection: { all: true },
-    customerGets: { value, items: { all: true } },
-    appliesOncePerCustomer: cfg.once_per_customer,
+    customerGets: { value, items: itemsScope(cfg) },
+    ...commonDiscountFields(cfg),
+  };
+}
+
+/**
+ * Build the DiscountCodeFreeShippingInput for a free-shipping quiz discount.
+ * Pure + testable. Applies to all shipping destinations.
+ */
+export function buildFreeShippingInput(
+  cfg: DiscountConfig,
+  code: string,
+  startsAtISO: string,
+): Record<string, unknown> {
+  return {
+    title: cfg.title || "Quiz reward",
+    code,
+    startsAt: startsAtISO,
+    customerSelection: { all: true },
+    destination: { all: true },
+    ...commonDiscountFields(cfg),
   };
 }
 
@@ -79,21 +136,32 @@ export async function ensureQuizDiscount(
   if (cfg.code) return { doc, code: cfg.code }; // already created — reuse
 
   const code = generateCode();
-  const input = buildDiscountInput(cfg, code, new Date().toISOString());
+  const startsAt = new Date().toISOString();
+  const isFreeShipping = cfg.kind === "free_shipping";
 
   try {
-    const res = await admin.graphql(DISCOUNT_CODE_BASIC_CREATE, {
-      variables: { basicCodeDiscount: input },
-    });
+    const res = isFreeShipping
+      ? await admin.graphql(DISCOUNT_CODE_FREE_SHIPPING_CREATE, {
+          variables: { freeShippingCodeDiscount: buildFreeShippingInput(cfg, code, startsAt) },
+        })
+      : await admin.graphql(DISCOUNT_CODE_BASIC_CREATE, {
+          variables: { basicCodeDiscount: buildDiscountInput(cfg, code, startsAt) },
+        });
     const body = (await res.json()) as {
       data?: {
         discountCodeBasicCreate?: {
           codeDiscountNode?: { id?: string } | null;
           userErrors?: Array<{ message: string }>;
         };
+        discountCodeFreeShippingCreate?: {
+          codeDiscountNode?: { id?: string } | null;
+          userErrors?: Array<{ message: string }>;
+        };
       };
     };
-    const result = body.data?.discountCodeBasicCreate;
+    const result = isFreeShipping
+      ? body.data?.discountCodeFreeShippingCreate
+      : body.data?.discountCodeBasicCreate;
     const errors = result?.userErrors ?? [];
     if (errors.length > 0) {
       return { doc, code: null, warning: `Discount not created: ${errors.map((e) => e.message).join("; ")}` };

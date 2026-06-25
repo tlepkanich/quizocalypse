@@ -104,6 +104,17 @@ export function collectReferencedCategoryIds(doc: QuizDoc): Set<string> {
   return ids;
 }
 
+// Cap a plain-text product description for the result card (spec §2). Collapses
+// whitespace and trims to a sentence-ish length so cards stay scannable.
+export function shortDescription(text: string, maxChars = 200): string {
+  const clean = text.replace(/\s+/g, " ").trim();
+  if (clean.length <= maxChars) return clean;
+  // Cut at the last word boundary before the cap, then ellipsize.
+  const slice = clean.slice(0, maxChars);
+  const lastSpace = slice.lastIndexOf(" ");
+  return `${(lastSpace > 40 ? slice.slice(0, lastSpace) : slice).trimEnd()}…`;
+}
+
 // Every product id the recommendation engine can surface for this doc: bucket
 // members (from the baked category map) + explicit conditional-rule products.
 // The publisher unions these INTO product_index so the runtime's category /
@@ -240,18 +251,20 @@ export async function publishQuiz(
   // Hand-picked products from product_cards nodes must be available even if
   // they're not in any scoped collection — otherwise a curated showcase
   // step would render empty. Collect those IDs and include them unconditionally.
-  const explicitProductIds = new Set<string>(
-    doc.nodes
+  // The global fallback's explicit product ids (spec §7) join them — its pool
+  // is often deliberately OUTSIDE the quiz scope ("our bestsellers").
+  const explicitProductIds = new Set<string>([
+    ...doc.nodes
       .filter((n) => n.type === "product_cards")
-      .flatMap((n) =>
-        n.type === "product_cards" ? n.data.product_ids : [],
-      ),
-  );
+      .flatMap((n) => (n.type === "product_cards" ? n.data.product_ids : [])),
+    ...doc.global_fallback.product_ids,
+  ]);
 
   const scopeIds = new Set<string>([
     ...doc.scope.collection_ids,
     ...fallbackCollectionIds,
     ...(doc.featured_collection_id ? [doc.featured_collection_id] : []),
+    ...(doc.global_fallback.collection_id ? [doc.global_fallback.collection_id] : []),
   ]);
 
   // Categories referenced by the recommendation logic (v3 result nodes' bound
@@ -334,6 +347,9 @@ export async function publishQuiz(
         handle: p.handle,
         price: p.priceMin ? String(p.priceMin) : null,
         image_url: p.imageUrl,
+        ...(p.descriptionText && p.descriptionText.trim()
+          ? { description: shortDescription(p.descriptionText) }
+          : {}),
         tags: p.tags,
         collection_ids: p.collectionIds,
         inventory_in_stock: inStock,
