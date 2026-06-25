@@ -693,9 +693,11 @@ export function QuizRuntime(props: QuizRuntimeProps) {
     const showDiscount = node.data.include_discount && dc.enabled && Boolean(dc.code);
     const discountCode = showDiscount ? dc.code : undefined;
     const discountLabel = showDiscount
-      ? dc.kind === "percentage"
-        ? `Save ${dc.value}%`
-        : `${formatMoney(dc.value, currency, locale)} off`
+      ? dc.kind === "free_shipping"
+        ? tc("free_shipping")
+        : dc.kind === "percentage"
+          ? `Save ${dc.value}%`
+          : `${formatMoney(dc.value, currency, locale)} off`
       : undefined;
     const stages = node.data.stages;
     if (stages.length === 0) {
@@ -1089,9 +1091,11 @@ export function QuizRuntime(props: QuizRuntimeProps) {
         currentNode.data.include_discount && dc.enabled && Boolean(dc.code);
       const discountCode = showDiscount ? dc.code : undefined;
       const discountLabel = showDiscount
-        ? dc.kind === "percentage"
-          ? `Save ${dc.value}%`
-          : `${formatMoney(dc.value, currency, locale)} off`
+        ? dc.kind === "free_shipping"
+          ? tc("free_shipping")
+          : dc.kind === "percentage"
+            ? `Save ${dc.value}%`
+            : `${formatMoney(dc.value, currency, locale)} off`
         : undefined;
       const stages = currentNode.data.stages;
       if (stages.length === 0) {

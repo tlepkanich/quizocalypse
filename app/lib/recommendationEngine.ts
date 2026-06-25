@@ -585,13 +585,13 @@ export function resolveGlobalFallback(
     enabled: boolean;
     collection_id?: string;
     tag?: string;
-    product_ids: string[];
+    product_ids?: string[];
     count: number;
   },
 ): RecommendedProduct[] {
   if (!fallback.enabled) return [];
   const tag = fallback.tag?.toLowerCase();
-  const wantIds = new Set(fallback.product_ids);
+  const wantIds = new Set(fallback.product_ids ?? []);
   const pool = productIndex.filter(isSellable).filter((p) => {
     const byCollection = fallback.collection_id
       ? p.collection_ids.includes(fallback.collection_id)

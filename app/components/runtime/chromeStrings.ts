@@ -88,6 +88,7 @@ export const CHROME_TOKENS = {
   retake_quiz: "Not what you were looking for? Retake the quiz",
   share_results_cta: "↗ Share my results",
   share_copied: "Copied ✓",
+  free_shipping: "Free shipping",
 } as const;
 
 export type ChromeToken = keyof typeof CHROME_TOKENS;

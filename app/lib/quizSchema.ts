@@ -837,13 +837,33 @@ export type ContentBlockType = ContentBlock["type"];
 // showing/applying it via the per-result `include_discount` flag.
 export const DiscountConfig = z.object({
   enabled: z.boolean().default(false),
-  kind: z.enum(["percentage", "amount"]).default("percentage"),
+  // percentage / amount (fixed amount off) → discountCodeBasicCreate;
+  // free_shipping → discountCodeFreeShippingCreate. (Shopify code discounts have
+  // no "fixed price" type, so the spec's Fixed-price option is not offered.)
+  kind: z.enum(["percentage", "amount", "free_shipping"]).default("percentage"),
   // percent (clamped to 1–100 at discount-build time) when kind="percentage";
   // a fixed amount in the shop currency when kind="amount" (no upper bound).
+  // Ignored for free_shipping.
   value: z.number().min(0).default(10),
+  // Rec-Page spec §4 "Applies to". For products/collections, the matching id
+  // list scopes customerGets.items; "all" applies to the whole cart.
+  applies_to: z.enum(["all", "collections", "products"]).default("all"),
+  applies_collection_ids: z.array(z.string()).default([]),
+  applies_product_ids: z.array(z.string()).default([]),
   // Approximates "first purchase only" — Shopify caps the code at one use per
   // customer.
   once_per_customer: z.boolean().default(true),
+  // Spec §4 "Usage limits" → total redemption cap across all customers.
+  // Undefined = unlimited.
+  usage_limit: z.number().int().min(1).optional(),
+  // Spec §4 "Expiry" → fixed end date (ISO). Undefined = no expiry. (A single
+  // shared code can't express "X days after each shopper completes", so only a
+  // fixed date is offered.)
+  ends_at: z.string().optional(),
+  // Spec §4 "Minimum order" → subtotal (shop currency) OR quantity. At most one
+  // is meaningful; subtotal wins if both are set.
+  minimum_subtotal: z.number().min(0).optional(),
+  minimum_quantity: z.number().int().min(1).optional(),
   title: z.string().default("Quiz reward"),
   // Generated at publish (e.g. "QUIZ-AB12CD"); present once created.
   code: z.string().optional(),
