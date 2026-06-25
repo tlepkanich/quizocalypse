@@ -1183,6 +1183,9 @@ export const Quiz = z.object({
   // Phase 5 — quiz-level discount on recommended products. Defaults to disabled.
   discount_config: DiscountConfig.default({}),
   // Rec-Page spec §7 — quiz-level no-bucket-match fallback. Defaults to disabled.
+  // Parsed for back-compat only. The product goal is "no fit → no products", so
+  // this is intentionally never resolved or rendered — no builder control and no
+  // runtime fallback grid. See recommendationEngine.ts / QuizRuntime.tsx.
   global_fallback: GlobalFallback.default({}),
   // Rec-Page spec §5 — optional custom back-in-stock webhook. When set, "Notify
   // Me" captures are POSTed here in addition to being stored. Absent = store only.

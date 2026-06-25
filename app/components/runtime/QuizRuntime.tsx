@@ -9,7 +9,6 @@ import {
   recommendForResultExplained,
   recommendForStage,
   recommendPreview,
-  resolveGlobalFallback,
   selectSecondaryRecs,
   type BranchContext,
   type IndexedProduct,
@@ -734,14 +733,6 @@ export function QuizRuntime(props: QuizRuntimeProps) {
           shareResults={node.data.share_results}
           oosNotify={node.data.oos_behavior === "notify_me"}
           {...buildWhyCopy(node, doc, path, selectedAnswerIds, contactRef.current)}
-          globalFallback={
-            recs.length === 0 && doc.global_fallback.enabled
-              ? {
-                  heading: doc.global_fallback.heading,
-                  products: resolveGlobalFallback(productIndex, doc.global_fallback),
-                }
-              : null
-          }
           bare
         />
       );
@@ -1165,14 +1156,6 @@ export function QuizRuntime(props: QuizRuntimeProps) {
             shareResults={currentNode.data.share_results}
             oosNotify={currentNode.data.oos_behavior === "notify_me"}
             {...buildWhyCopy(currentNode, doc, path, selectedAnswerIds, contactRef.current)}
-            globalFallback={
-              recs.length === 0 && doc.global_fallback.enabled
-                ? {
-                    heading: doc.global_fallback.heading,
-                    products: resolveGlobalFallback(productIndex, doc.global_fallback),
-                  }
-                : null
-            }
             styles={styles}
             startedAt={startedAtRef.current}
             completed={completedRef}
@@ -3991,7 +3974,6 @@ function ResultView({
   answerSummary,
   retakeLink = false,
   shareResults = false,
-  globalFallback,
   oosNotify = false,
   whyIntro,
   blurbByProduct,
@@ -4017,8 +3999,6 @@ function ResultView({
   retakeLink?: boolean;
   // Spec §6 share button (uses the persistent results URL).
   shareResults?: boolean;
-  // Spec §7 — heading + products to show when the page resolved nothing.
-  globalFallback?: { heading: string; products: RecommendedProduct[] } | null;
   inspect?: (part: "result_headline" | "result_subtext") => React.HTMLAttributes<HTMLElement>;
   // BIC P8: 2-column desktop layout (pitch left, vertical cards right). The
   // call site gates it on tokens.result_split && desktop; absent = stacked.
@@ -4174,41 +4154,13 @@ function ResultView({
               : styles.productGrid),
         }}
       >
-        {recs.length === 0 &&
-          (globalFallback && globalFallback.products.length > 0 ? (
-            <div style={{ gridColumn: "1 / -1" }}>
-              <h3 style={{ ...styles.h2, fontSize: "0.9em", margin: "0 0 12px" }}>
-                {globalFallback.heading}
-              </h3>
-              <div style={styles.productGrid}>
-                {globalFallback.products.map((r, idx) => (
-                  <ProductCard
-                    key={r.product_id}
-                    product={r}
-                    position={idx}
-                    ctaLabel={ctaLabel}
-                    href={productHref(r, shopDomain, platform)}
-                    shopDomain={shopDomain}
-                    showVariants={showVariants}
-                    showDescriptions={showDescriptions}
-                    styles={styles}
-                    onClick={() =>
-                      analytics?.track("recommendation_clicked", {
-                        product_id: r.product_id,
-                        position: idx,
-                        fallback: true,
-                      })
-                    }
-                    onAdd={() =>
-                      analytics?.track("add_to_cart", { product_id: r.product_id, position: idx })
-                    }
-                  />
-                ))}
-              </div>
-            </div>
-          ) : (
-            <p style={{ color: "var(--qz-color-muted)" }}>{tc("no_results_match")}</p>
-          ))}
+        {/* Goal (non-negotiable): if the answers fit NO bucket, show NO products.
+            There is intentionally no global "fallback" product grid here — a
+            no-match renders only the bare no-results message. See quizSchema's
+            global_fallback (parsed for back-compat but never rendered). */}
+        {recs.length === 0 && (
+          <p style={{ color: "var(--qz-color-muted)" }}>{tc("no_results_match")}</p>
+        )}
         {recs.map((r, idx) => (
           <ProductCard
             reasons={reasonsByProduct?.get(r.product_id) ?? undefined}

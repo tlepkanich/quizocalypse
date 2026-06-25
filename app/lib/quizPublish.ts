@@ -251,20 +251,16 @@ export async function publishQuiz(
   // Hand-picked products from product_cards nodes must be available even if
   // they're not in any scoped collection — otherwise a curated showcase
   // step would render empty. Collect those IDs and include them unconditionally.
-  // The global fallback's explicit product ids (spec §7) join them — its pool
-  // is often deliberately OUTSIDE the quiz scope ("our bestsellers").
   const explicitProductIds = new Set<string>([
     ...doc.nodes
       .filter((n) => n.type === "product_cards")
       .flatMap((n) => (n.type === "product_cards" ? n.data.product_ids : [])),
-    ...doc.global_fallback.product_ids,
   ]);
 
   const scopeIds = new Set<string>([
     ...doc.scope.collection_ids,
     ...fallbackCollectionIds,
     ...(doc.featured_collection_id ? [doc.featured_collection_id] : []),
-    ...(doc.global_fallback.collection_id ? [doc.global_fallback.collection_id] : []),
   ]);
 
   // Categories referenced by the recommendation logic (v3 result nodes' bound
