@@ -87,6 +87,7 @@ export function ResultPageEditor({
             node={node}
             categories={categories}
             collections={collections}
+            productIndex={productIndex}
             onCommit={onCommit}
           />
         </QzCard>

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { Quiz } from "./quizSchema";
-import { buildMergeContext, resolveMergeTags } from "./mergeTags";
+import { buildMergeContext, resolveMergeTags, resolveCopyTokens } from "./mergeTags";
 
 const docFixture = Quiz.parse({
   quiz_id: "q_merge",
@@ -95,5 +95,29 @@ describe("resolveMergeTags", () => {
     expect(resolveMergeTags(msg.data.text, ctx)).toBe(
       "Hi Sam — skin is Dry",
     );
+  });
+});
+
+describe("resolveCopyTokens ({{ }} for Why-we-recommend copy)", () => {
+  it("substitutes {{name}} / {{answer.<id>}} and tolerates spaces", () => {
+    const out = resolveCopyTokens("Hi {{name}}, skin is {{ answer.q1 }}", {
+      name: "Anna",
+      "answer.q1": "Oily",
+    });
+    expect(out).toBe("Hi Anna, skin is Oily");
+  });
+
+  it("resolves the {{answers}} alias to the joined picked answers", () => {
+    const out = resolveCopyTokens("For {{answers}}.", {}, ["Oily", "Sensitive"]);
+    expect(out).toBe("For Oily, Sensitive.");
+  });
+
+  it("leaves unknown tokens and empty answers untouched", () => {
+    expect(resolveCopyTokens("Hi {{missing}}", { name: "A" })).toBe("Hi {{missing}}");
+    expect(resolveCopyTokens("For {{answers}}.", {}, [])).toBe("For {{answers}}.");
+  });
+
+  it("does not touch @-style tags (different syntax)", () => {
+    expect(resolveCopyTokens("Hi @name", { name: "Anna" })).toBe("Hi @name");
   });
 });

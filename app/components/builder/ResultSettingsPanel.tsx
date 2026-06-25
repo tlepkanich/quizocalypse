@@ -9,6 +9,7 @@ import type {
   ResultRanking,
 } from "../../lib/quizSchema";
 import type { BuilderCategory, BuilderCollection } from "./stepProps";
+import type { IndexedProduct } from "../../lib/recommendationEngine";
 
 // ───────────────────────────────────────────────────────────────────────────
 // ResultSettingsPanel — the per-page recommendation SETTINGS editor used by
@@ -108,12 +109,14 @@ export function ResultSettingsPanel({
   node,
   categories,
   collections,
+  productIndex,
   onCommit,
 }: {
   doc: Quiz;
   node: ResultNode;
   categories: BuilderCategory[];
   collections: BuilderCollection[];
+  productIndex?: IndexedProduct[];
   onCommit: (doc: Quiz) => void;
 }) {
   const data: ResultData = node.data;
@@ -165,6 +168,21 @@ export function ResultSettingsPanel({
   const hasCollectionScope = Boolean(
     data.sub_filter_collection_id || data.collection_id,
   );
+
+  // Mode B per-product blurbs (spec §3) — list the bucket's products: the bound
+  // bucket's members intersected with the baked index, else the whole index
+  // (capped so the editor stays manageable).
+  const idx = productIndex ?? [];
+  const bucketIds = boundCategory ? new Set(boundCategory.productIds) : null;
+  const blurbProducts = (
+    bucketIds ? idx.filter((p) => bucketIds.has(p.product_id)) : idx
+  ).slice(0, 24);
+  const setBlurb = (pid: string, text: string) => {
+    const next = { ...data.product_blurbs };
+    if (text) next[pid] = text;
+    else delete next[pid];
+    set({ product_blurbs: next });
+  };
 
   return (
     <div className="qz-col qz-gap-8">
@@ -444,6 +462,86 @@ export function ResultSettingsPanel({
             Show star ratings
             <QzBadge tone="draft">Coming soon</QzBadge>
           </label>
+        </div>
+      </QzCollapse>
+
+      {/* ── WHY WE RECOMMEND THIS (spec §3) ───────────────────────────── */}
+      <QzCollapse title="Why we recommend this">
+        <div className="qz-col qz-gap-8">
+          <p className="qz-dim" style={{ fontSize: 12, margin: 0 }}>
+            Use variables like <code>{"{{name}}"}</code>, <code>{"{{answers}}"}</code>,
+            or <code>{"{{answer.<questionId>}}"}</code> — they resolve to the
+            shopper’s answers at quiz time.
+          </p>
+          {/* Mode A — page intro */}
+          <label
+            className="qz-row qz-gap-8"
+            style={{ alignItems: "center", fontSize: 13, cursor: "pointer" }}
+          >
+            <input
+              type="checkbox"
+              checked={data.why_intro_enabled}
+              onChange={(e) =>
+                set({
+                  why_intro_enabled: e.target.checked,
+                  // Seed a starting draft the merchant can edit (spec: AI drafts
+                  // one; this is a sensible offline default until regenerated).
+                  ...(e.target.checked && !data.why_intro
+                    ? { why_intro: "Based on your answers ({{answers}}), here's what we recommend." }
+                    : {}),
+                })
+              }
+            />
+            Page intro copy (Mode A)
+          </label>
+          {data.why_intro_enabled ? (
+            <textarea
+              value={data.why_intro}
+              onChange={(e) => set({ why_intro: e.target.value })}
+              rows={3}
+              placeholder="Based on your answers, here's what your skin needs."
+              style={{
+                font: "inherit",
+                fontSize: 13,
+                padding: "8px 10px",
+                borderRadius: "var(--qz-radius)",
+                border: "1px solid var(--qz-rule)",
+                resize: "vertical",
+              }}
+            />
+          ) : null}
+          {/* Mode B — per-product blurbs */}
+          <label
+            className="qz-row qz-gap-8"
+            style={{ alignItems: "center", fontSize: 13, cursor: "pointer" }}
+          >
+            <input
+              type="checkbox"
+              checked={data.why_blurbs_enabled}
+              onChange={(e) => set({ why_blurbs_enabled: e.target.checked })}
+            />
+            Per-product blurbs (Mode B)
+          </label>
+          {data.why_blurbs_enabled ? (
+            blurbProducts.length > 0 ? (
+              <div className="qz-col qz-gap-4">
+                {blurbProducts.map((p) => (
+                  <QzField key={p.product_id} label={p.title}>
+                    <QzInput
+                      value={data.product_blurbs[p.product_id] ?? ""}
+                      placeholder="Short reason this product fits…"
+                      onChange={(e) => setBlurb(p.product_id, e.target.value)}
+                    />
+                  </QzField>
+                ))}
+              </div>
+            ) : (
+              <p className="qz-dim" style={{ fontSize: 12, margin: 0 }}>
+                Bind a bucket (or publish so products are indexed) to edit
+                per-product blurbs here.
+              </p>
+            )
+          ) : null}
         </div>
       </QzCollapse>
 

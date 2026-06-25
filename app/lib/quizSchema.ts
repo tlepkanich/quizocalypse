@@ -329,6 +329,17 @@ export const ResultData = z.object({
   // Share button that copies/native-shares the shopper's persistent results URL
   // (reconstructed server-side from the saved session — see /q/:id/results).
   share_results: z.boolean().default(false),
+
+  // ---- Rec-Page spec §3 "Why we recommend this" copy ----
+  // Mode A — one intro copy block above all sections (per bucket). Supports
+  // {{token}} variables resolved at quiz-time ({{name}}, {{email}}, {{answers}},
+  // {{answer.<questionNodeId>}}). AI/merchant authors a starting draft.
+  why_intro_enabled: z.boolean().default(false),
+  why_intro: z.string().default(""),
+  // Mode B — short blurb beneath each product title. Map of product_id → blurb
+  // (also supports {{token}} variables). Both modes can be active at once.
+  why_blurbs_enabled: z.boolean().default(false),
+  product_blurbs: z.record(z.string()).default({}),
   // Ladder threshold: a strategy must yield ≥ this many products to win,
   // else the ladder falls through. Default 1 = "first non-empty wins".
   min_products: z.number().int().min(1).max(12).default(1),

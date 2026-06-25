@@ -29,6 +29,7 @@ import { createAnalyticsClient, newSessionId } from "../../lib/analytics";
 import {
   buildMergeContext,
   resolveMergeTags,
+  resolveCopyTokens,
   type PathStep,
 } from "../../lib/mergeTags";
 import { stylesFor, googleFontsUrl, useContainerBreakpoint } from "./runtimeStyles";
@@ -732,6 +733,7 @@ export function QuizRuntime(props: QuizRuntimeProps) {
           retakeLink={node.data.retake_link}
           shareResults={node.data.share_results}
           oosNotify={node.data.oos_behavior === "notify_me"}
+          {...buildWhyCopy(node, doc, path, selectedAnswerIds, contactRef.current)}
           globalFallback={
             recs.length === 0 && doc.global_fallback.enabled
               ? {
@@ -1162,6 +1164,7 @@ export function QuizRuntime(props: QuizRuntimeProps) {
             retakeLink={currentNode.data.retake_link}
             shareResults={currentNode.data.share_results}
             oosNotify={currentNode.data.oos_behavior === "notify_me"}
+            {...buildWhyCopy(currentNode, doc, path, selectedAnswerIds, contactRef.current)}
             globalFallback={
               recs.length === 0 && doc.global_fallback.enabled
                 ? {
@@ -3925,6 +3928,36 @@ function pickedAnswerLabels(
   return out;
 }
 
+// Spec §3 — resolve the result node's "Why we recommend" copy (Mode A intro +
+// Mode B per-product blurbs) against the shopper's path. Returns undefined/null
+// when each mode is off so ResultView simply skips it.
+function buildWhyCopy(
+  node: Extract<QuizDoc["nodes"][number], { type: "result" }>,
+  doc: QuizDoc,
+  path: PathStep[],
+  selectedAnswerIds: string[],
+  ambient: { name?: string; email?: string },
+): { whyIntro?: string; blurbByProduct: Map<string, string> | null } {
+  const data = node.data;
+  if (!data.why_intro_enabled && !data.why_blurbs_enabled) {
+    return { whyIntro: undefined, blurbByProduct: null };
+  }
+  const ctx = buildMergeContext(path, doc, ambient);
+  const allAnswers = pickedAnswerLabels(doc, selectedAnswerIds);
+  const whyIntro = data.why_intro_enabled
+    ? resolveCopyTokens(data.why_intro, ctx, allAnswers)
+    : undefined;
+  const blurbByProduct = data.why_blurbs_enabled
+    ? new Map(
+        Object.entries(data.product_blurbs).map(([pid, txt]) => [
+          pid,
+          resolveCopyTokens(txt, ctx, allAnswers),
+        ]),
+      )
+    : null;
+  return { whyIntro, blurbByProduct };
+}
+
 function ResultView({
   headline,
   subtext,
@@ -3960,6 +3993,8 @@ function ResultView({
   shareResults = false,
   globalFallback,
   oosNotify = false,
+  whyIntro,
+  blurbByProduct,
 }: {
   headline: string;
   subtext: string;
@@ -3967,6 +4002,10 @@ function ResultView({
   // Spec §5 — result page's OOS behavior is "notify_me": sold-out cards get a
   // back-in-stock capture, and a section prompt shows when ALL recs are OOS.
   oosNotify?: boolean;
+  // Spec §3 Mode A — token-resolved page-intro copy, rendered above sections.
+  whyIntro?: string;
+  // Spec §3 Mode B — product_id → token-resolved per-product blurb.
+  blurbByProduct?: Map<string, string> | null;
   // Rec-Page spec §2/§6 display + structure toggles, threaded from the result node.
   showVariants?: boolean;
   showDescriptions?: boolean;
@@ -4093,6 +4132,21 @@ function ResultView({
           🎁 {discountLabel} on these picks — applied automatically at checkout.
         </div>
       ) : null}
+      {whyIntro && whyIntro.trim() ? (
+        <div
+          style={{
+            marginTop: bare ? 0 : 16,
+            padding: "12px 14px",
+            borderRadius: "var(--qz-radius)",
+            background: "color-mix(in srgb, var(--qz-color-primary) 6%, transparent)",
+            fontSize: 14,
+            lineHeight: 1.5,
+            whiteSpace: "pre-wrap",
+          }}
+        >
+          {whyIntro}
+        </div>
+      ) : null}
       {oosNotify && recs.length > 0 && recs.every((r) => !r.inventory_in_stock) ? (
         <div
           style={{
@@ -4173,6 +4227,7 @@ function ResultView({
             oosNotify={oosNotify}
             quizId={quizId}
             sessionId={sessionId}
+            blurb={blurbByProduct?.get(r.product_id)}
             styles={styles}
             onClick={() =>
               analytics?.track("recommendation_clicked", {
@@ -4662,10 +4717,13 @@ function ProductCard({
   oosNotify = false,
   quizId,
   sessionId,
+  blurb,
 }: {
   product: RecommendedProduct;
   position: number;
   ctaLabel: string;
+  // Spec §3 Mode B — token-resolved "why we recommend this" blurb.
+  blurb?: string;
   // Spec §2 product-display toggles. showVariants gates the inline variant
   // picker; showDescriptions renders the baked description; lowStockQty (when a
   // number) renders the live "Only X left" urgency line.
@@ -4775,6 +4833,11 @@ function ProductCard({
       )}
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ fontWeight: 600 }}>{product.title}</div>
+        {blurb && blurb.trim() ? (
+          <div style={{ fontSize: 13, color: "var(--qz-color-muted)", marginTop: 3, lineHeight: 1.4 }}>
+            {blurb}
+          </div>
+        ) : null}
         {reasons && reasons.length > 0 ? (
           <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginTop: 4 }}>
             <span style={{ fontSize: "0.7em", color: "var(--qz-color-muted, #888)", fontFamily: "var(--qz-font-body)" }}>
