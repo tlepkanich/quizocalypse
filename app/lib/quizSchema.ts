@@ -218,14 +218,24 @@ export const ConditionalRule = z.object({
 });
 export type ConditionalRule = z.infer<typeof ConditionalRule>;
 
-// Product ranking within a resolved pool. relevance = current tag-overlap
-// score; newest = Product.updatedAt desc; best_seller / highest_rated read
-// a merchant-mapped metafield, falling back to relevance when unmapped.
+// Product ranking / sort order within a resolved pool. relevance = current
+// tag-overlap score; newest = Product.updatedAt desc; best_seller /
+// highest_rated read a merchant-mapped metafield, falling back to relevance
+// when unmapped. The price_* / title_* modes sort on the baked price/title;
+// "manual" keeps the resolved pool order (a collection's own Shopify sort)
+// untouched. The Rec-Page spec's "Sort Order" dropdown maps onto this set:
+//   Best Selling → best_seller, Newest → newest, Price ↑/↓ → price_asc/desc,
+//   Title A→Z/Z→A → title_az/title_za, Manually Curated → manual.
 export const ResultRanking = z.enum([
   "relevance",
   "newest",
   "best_seller",
   "highest_rated",
+  "price_asc",
+  "price_desc",
+  "title_az",
+  "title_za",
+  "manual",
 ]);
 export type ResultRanking = z.infer<typeof ResultRanking>;
 
@@ -247,6 +257,11 @@ export const ResultStage = z.object({
   metafield_key: z.string().optional(),
   metafield_value: z.string().optional(),
   ranking: ResultRanking.default("relevance"),
+  // Rec-Page spec §1 sub-filter — narrows the resolved pool to products that
+  // ALSO carry this tag / sit in this collection. Drawn from the bucket's own
+  // pool, not the full catalog. Both empty = use the full resolved pool.
+  sub_filter_tag: z.string().optional(),
+  sub_filter_collection_id: z.string().optional(),
   min_products: z.number().int().min(1).max(12).default(3),
   max_products: z.number().int().min(1).max(12).default(3),
   // Dev Spec §5 — feature→benefit "why this" bullets for the stage. Baked at publish.
@@ -283,6 +298,29 @@ export const ResultData = z.object({
 
   // ---- v3 result-page settings depth ----
   ranking: ResultRanking.default("relevance"),
+  // Rec-Page spec §1 sub-filter for the single-section (Simple) page — narrows
+  // the resolved pool to products that ALSO match this tag / collection.
+  sub_filter_tag: z.string().optional(),
+  sub_filter_collection_id: z.string().optional(),
+
+  // ---- Rec-Page spec §2 product-display toggles (apply to all cards) ----
+  // Inline variant selector on the card before Add to Cart. Off = the CTA
+  // links to the PDP / opens the picker. Star ratings are a UI-only "coming
+  // soon" placeholder (no field — the toggle is always disabled in the builder).
+  show_variants: z.boolean().default(false),
+  // Short Shopify product description beneath the title on each card.
+  show_descriptions: z.boolean().default(false),
+  // §2 Urgency: "Only X left in stock" beneath the title. Quantity is fetched
+  // LIVE at results-page load (never baked) so it reflects real-time stock; the
+  // badge only shows at/below the threshold and never when tracking is off.
+  urgency_enabled: z.boolean().default(false),
+  urgency_threshold: z.number().int().min(1).max(99).default(5),
+
+  // ---- Rec-Page spec §6 page-structure toggles ----
+  // Answer-summary chips above the sections ("Oily skin · Sensitive").
+  results_summary_bar: z.boolean().default(false),
+  // "Not what you were looking for? Retake the quiz" link.
+  retake_link: z.boolean().default(false),
   // Ladder threshold: a strategy must yield ≥ this many products to win,
   // else the ladder falls through. Default 1 = "first non-empty wins".
   min_products: z.number().int().min(1).max(12).default(1),
