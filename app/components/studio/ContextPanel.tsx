@@ -8,7 +8,7 @@ import { setAnswerRoute, routeAnswerToEnd, straightThroughRun } from "../../lib/
 import { computeBucketCoverage, type CoverageLevel } from "../../lib/bucketCoverage";
 import { StepPreview } from "../runtime/StepPreview";
 import { PathTester } from "../logic/PathTester";
-import { ContentTab } from "./panels/ContentTab";
+import { ContentTab, type RegenApi } from "./panels/ContentTab";
 import { LayoutTab } from "./panels/LayoutTab";
 import { StyleTab } from "./panels/StyleTab";
 import { CssTab } from "./panels/CssTab";
@@ -36,6 +36,7 @@ export function ContextPanel({
   categories,
   frameBreakpoint,
   onOpenLogic,
+  regen,
 }: {
   doc: QuizDoc;
   nodeId: string;
@@ -49,6 +50,8 @@ export function ContextPanel({
   frameBreakpoint: "desktop" | "mobile";
   // Jump to the Logic view (full recommendation mapping lives there).
   onOpenLogic?: () => void;
+  // Optional per-question AI regenerate plumbing (studio only).
+  regen?: RegenApi;
 }) {
   const [tab, setTab] = useState<Tab>("content");
   // null = follow the frame ("edit what you see"); explicit pick overrides.
@@ -74,6 +77,7 @@ export function ContextPanel({
       categories={categories}
       frameBreakpoint={frameBreakpoint}
       onOpenLogic={onOpenLogic}
+      regen={regen}
     />
   );
 }
@@ -453,6 +457,7 @@ function ContextPanelBody({
   categories,
   frameBreakpoint,
   onOpenLogic,
+  regen,
 }: {
   doc: QuizDoc;
   node: QuizNode;
@@ -468,6 +473,7 @@ function ContextPanelBody({
   categories: BuilderCategory[];
   frameBreakpoint: "desktop" | "mobile";
   onOpenLogic?: () => void;
+  regen?: RegenApi;
 }) {
 
   return (
@@ -512,7 +518,7 @@ function ContextPanelBody({
 
       <div style={{ display: "flex", flexDirection: "column", gap: 10, maxHeight: "48vh", overflowY: "auto", paddingRight: 2 }}>
         {tab === "content" ? (
-          <ContentTab doc={doc} node={node} onCommit={onCommit} products={products} />
+          <ContentTab doc={doc} node={node} onCommit={onCommit} products={products} regen={regen} />
         ) : tab === "routing" ? (
           <RoutingBody
             doc={doc}
