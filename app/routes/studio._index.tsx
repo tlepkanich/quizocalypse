@@ -6,6 +6,7 @@ import { requireStudioAccess, resolveStudioShop } from "../lib/studioAccess.serv
 import prisma from "../db.server";
 import { QzPage, QzBadge } from "../components/qz";
 import { formatDate } from "../lib/formatDate";
+import { SHOW_OTHER_BUILD_PATHS } from "../lib/studioFlags";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   await requireStudioAccess(request);
@@ -63,7 +64,7 @@ export default function StudioHome() {
       <h1 className="qz-display" style={{ fontSize: 34, marginBottom: 28 }}>Hello 👋</h1>
 
       <div className="qz-action-grid">
-        {ACTIONS.map((a) => (
+        {ACTIONS.filter((a) => SHOW_OTHER_BUILD_PATHS || a.icon === "ai").map((a) => (
           <Link key={a.title} to={a.to} className="qz-card qz-interactive qz-action-card">
             <BigIcon name={a.icon as keyof typeof ACTION_ICON} />
             <div style={{ fontSize: 17, fontWeight: 600, letterSpacing: "-0.01em" }}>{a.title}</div>
@@ -72,6 +73,7 @@ export default function StudioHome() {
         ))}
       </div>
 
+      {SHOW_OTHER_BUILD_PATHS && (
       <section style={{ marginTop: 40 }}>
         <div className="qz-section-head">
           <div>
@@ -104,6 +106,7 @@ export default function StudioHome() {
           ))}
         </div>
       </section>
+      )}
 
       {recent.length > 0 ? (
         <section style={{ marginTop: 40 }}>

@@ -10,6 +10,7 @@ import {
   type QuizBenchmark,
 } from "../lib/quizBenchmarks";
 import { formatDate } from "../lib/formatDate";
+import { SHOW_OTHER_BUILD_PATHS } from "../lib/studioFlags";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   await requireStudioAccess(request);
@@ -81,9 +82,11 @@ export default function StudioQuizzes() {
         title="Quizzes"
         actions={
           <div className="qz-row" style={{ gap: 8 }}>
-            <Link to="/studio/new" className="qz-btn qz-btn-ghost qz-btn-sm">
-              New quiz
-            </Link>
+            {SHOW_OTHER_BUILD_PATHS && (
+              <Link to="/studio/new" className="qz-btn qz-btn-ghost qz-btn-sm">
+                New quiz
+              </Link>
+            )}
             <Link to="/studio/onboarding" className="qz-btn qz-btn-accent">
               ✨ Build with AI →
             </Link>
@@ -94,15 +97,17 @@ export default function StudioQuizzes() {
         <QzCard dashed style={{ display: "flex", flexDirection: "column", gap: 10, alignItems: "flex-start" }}>
           <div className="qz-label">No quizzes yet</div>
           <p className="qz-dim" style={{ margin: 0 }}>
-            Create your first quiz — start blank, from a template, or with the full demo.
+            Create your first quiz — our AI builds it for you from your products.
           </p>
           <div className="qz-row" style={{ gap: 8 }}>
             <Link to="/studio/onboarding" className="qz-btn qz-btn-accent qz-btn-sm">
               ✨ Build with AI →
             </Link>
-            <Link to="/studio/new" className="qz-btn qz-btn-ghost qz-btn-sm">
-              Start blank / template
-            </Link>
+            {SHOW_OTHER_BUILD_PATHS && (
+              <Link to="/studio/new" className="qz-btn qz-btn-ghost qz-btn-sm">
+                Start blank / template
+              </Link>
+            )}
           </div>
         </QzCard>
       ) : (

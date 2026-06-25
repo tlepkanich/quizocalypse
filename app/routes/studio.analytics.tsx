@@ -96,7 +96,7 @@ export default function StudioAnalytics() {
       {data.rows.length === 0 ? (
         <QzCard>
           <p className="qz-muted" style={{ margin: 0 }}>
-            No quizzes yet. <Link to="/studio/new" className="qz-link">Create one</Link> to start
+            No quizzes yet. <Link to="/studio/onboarding" className="qz-link">Create one</Link> to start
             collecting data.
           </p>
         </QzCard>

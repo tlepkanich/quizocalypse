@@ -9,6 +9,7 @@ import { buildDemoQuiz, DEMO_QUIZ_NAME } from "../lib/demoQuiz";
 import { buildTemplateQuiz, TEMPLATE_LIST, isTemplateId } from "../lib/quizTemplates";
 import { STANDALONE_MINIMAL_TOKENS } from "../lib/themePresets";
 import { QzPage, QzPageHeader, QzCard, QzButton, QzField, QzInput, QzBanner } from "../components/qz";
+import { SHOW_OTHER_BUILD_PATHS } from "../lib/studioFlags";
 
 // Standalone "New quiz" — Experiences E2: the experience TYPE comes first
 // (what is this FOR?), then blank/template within it. Each type carries its
@@ -56,6 +57,10 @@ const BLANK_NAME_PLACEHOLDER: Record<ExperienceCardType, string> = {
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   await requireStudioAccess(request);
+  // Single front door: "Create with AI" is the only quiz builder for now. The
+  // blank/template/demo create route is hidden — send any direct visit (stale
+  // links, bookmarks) into the AI funnel. Flip SHOW_OTHER_BUILD_PATHS to restore.
+  if (!SHOW_OTHER_BUILD_PATHS) return redirect("/studio/onboarding");
   const shop = await resolveStudioShop();
   const firstCollection = await prisma.collection.findFirst({
     where: { shopId: shop.id },
@@ -66,6 +71,8 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 
 export const action = async ({ request }: ActionFunctionArgs) => {
   await requireStudioAccess(request);
+  // Blank/template/demo creation is hidden behind the single AI front door.
+  if (!SHOW_OTHER_BUILD_PATHS) return redirect("/studio/onboarding");
   const shop = await resolveStudioShop();
   const form = await request.formData();
   const intent = String(form.get("intent") ?? "");
