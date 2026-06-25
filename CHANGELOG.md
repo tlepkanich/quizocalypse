@@ -6,6 +6,32 @@ notes are welcome above the auto entries.
 
 <!-- routine: insert each run's entry directly below this line, newest first -->
 
+## 2026-06-25 — Step 4 Question Builder: roadmap "Now" cluster
+
+Implemented the `question-builder-spec.md` "Now" items on branch
+`claude/question-builder-spec` (off `main`, separate from the Step-2 PR). Full
+gate chain green locally (typecheck, 656 tests, build, lint). Merge to ship.
+
+- Char counters + soft limits (question 150 / answer 60), Required/Optional
+  toggle (surfaces `required`; runtime already renders Skip → zero score), and
+  an informational 4–8 question-count nudge.
+- Question row actions — Duplicate, Add above/below, and a flow-order number
+  badge — via new pure spine-splice mutations (duplicateQuestionNode /
+  insertQuestionRelative), unit-tested.
+- Bucket Coverage Indicator (right panel): green/yellow/red pills per bucket
+  (weak = under 50% of the best-covered), hover shows the answer count
+  (computeBucketCoverage, unit-tested).
+- Structured Skip-Logic: each answer reads as a rule with an "End the quiz"
+  target (routeAnswerToEnd) and inline conflict warnings (routingConflicts —
+  dead/self/loop/multi-select), plus a read-only Flow View toggle.
+- Per-question AI Regenerate surfaced in the studio editor (the regenerate-node
+  intent already existed server-side), routed through the autosave/AI-edit guard
+  with a ~10s undo.
+
+Gated (human) and intentionally untouched: the Direct-vs-Weighted scoring-model
+concept and open-text customer-metafield creation on publish.
+
+
 ## 2026-06-24 — recommendation / runtime / builder hardening (audit loop + chips)
 
 Shipped via the in-session audit loop and the spawned background-task chips (not
