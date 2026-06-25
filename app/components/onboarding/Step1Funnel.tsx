@@ -236,7 +236,7 @@ export function Step1Funnel({ data }: { data: FunnelData }) {
       {data.stage === "typing" ? <GeneratingScreen kind="typing" /> : null}
 
       {data.stage === "types" ? (
-        <TypesStage data={data} fetcher={fetcher} pendingIntent={pendingIntent} />
+        <ShapeStage data={data} fetcher={fetcher} pendingIntent={pendingIntent} />
       ) : null}
 
       {data.stage === "templating" ? <GeneratingScreen kind="templating" /> : null}
@@ -1169,7 +1169,12 @@ function GeneratingScreen({ kind }: { kind: "typing" | "templating" }) {
 }
 
 // ── Stage: Type (tier-1) — pick a brand-tailored quiz type ───────────────────
-function TypesStage({
+// Shape-Your-Quiz spec — the four-card "Shape your quiz" page that replaces the
+// linear Types → Templates → BattleCard selection. Two AI quiz-type cards
+// (generated to differ), a Write-Your-Goal card, and a Manual-Create card.
+// Selecting an AI card expands it in place (siblings mute) and REQUIRES a
+// scoring-model choice (no default) before Continue → the build.
+function ShapeStage({
   data,
   fetcher,
   pendingIntent,
@@ -1178,59 +1183,222 @@ function TypesStage({
   fetcher: ReturnType<typeof useFetcher<ActionResult>>;
   pendingIntent: string | null;
 }) {
-  const picking = pendingIntent === "pick-type";
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [scoring, setScoring] = useState<"direct" | "weighted" | null>(null);
+  const [writingGoal, setWritingGoal] = useState(false);
+  const [goalDraft, setGoalDraft] = useState(data.goal?.goal_text ?? "");
+  // The spec shows exactly two AI suggestions, intentionally different in type.
+  const aiTypes = data.quizTypes.slice(0, 2);
+  const busy =
+    pendingIntent === "shape-continue" ||
+    pendingIntent === "shape-manual" ||
+    pendingIntent === "shape-regenerate" ||
+    pendingIntent === "save-goal";
+  // When one card is expanded (or the goal card is open), the others mute so the
+  // merchant can still compare without losing focus.
+  const somethingOpen = expandedId !== null || writingGoal;
+  const muted = (mine: boolean): React.CSSProperties =>
+    somethingOpen && !mine ? { opacity: 0.5, pointerEvents: "none" } : {};
+
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
       <QzCard style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-        <div className="qz-label">Step 2 of 3 · Quiz type</div>
-        <h2 className="qz-h2" style={{ margin: 0 }}>Pick a quiz type for your brand</h2>
+        <div className="qz-row qz-row-between" style={{ alignItems: "center", gap: 8 }}>
+          <h2 className="qz-h2" style={{ margin: 0 }}>Shape your quiz</h2>
+          <QzBadge tone="draft">Brand ✦</QzBadge>
+        </div>
         <p className="qz-dim" style={{ margin: 0 }}>
-          Tailored to your catalog and category. Pick the one that fits your goal — next we&rsquo;ll
-          draft a few templates for it.
+          We read your catalog, grouped your products, and drafted a few quiz directions to pick from.
         </p>
       </QzCard>
 
       <div className="qz-type-grid">
-        {data.quizTypes.map((t) => (
-          <button
-            key={t.id}
-            type="button"
-            className="qz-card qz-interactive"
-            disabled={picking}
-            onClick={() => fetcher.submit({ intent: "pick-type", typeId: t.id }, { method: "post" })}
-            style={{
-              textAlign: "left",
-              display: "flex",
-              flexDirection: "column",
-              gap: 8,
-              cursor: picking ? "default" : "pointer",
-              borderColor: data.pickedTypeId === t.id ? "var(--qz-accent)" : undefined,
-            }}
-          >
-            <div className="qz-row qz-row-between" style={{ gap: 8, alignItems: "flex-start" }}>
-              <span style={{ fontFamily: "var(--qz-font-display)", fontSize: 17, lineHeight: 1.2 }}>
-                {t.name}
-              </span>
-              <QzBadge tone="draft">{XTYPE_LABEL[t.experience_type] ?? t.experience_type}</QzBadge>
+        {/* Cards 1 & 2 — AI-suggested quiz types */}
+        {aiTypes.map((t) => {
+          const expanded = expandedId === t.id;
+          return (
+            <div
+              key={t.id}
+              className="qz-card"
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                gap: 8,
+                borderColor: expanded ? "var(--qz-accent)" : undefined,
+                ...muted(expanded),
+              }}
+            >
+              <div className="qz-row qz-row-between" style={{ gap: 8, alignItems: "flex-start" }}>
+                <span style={{ fontFamily: "var(--qz-font-display)", fontSize: 17, lineHeight: 1.2 }}>
+                  {expanded ? `✓ ${t.name}` : t.name}
+                </span>
+                <QzBadge tone="draft">{XTYPE_LABEL[t.experience_type] ?? t.experience_type}</QzBadge>
+              </div>
+              <span className="qz-muted" style={{ fontSize: 13.5 }}>{t.achieves}</span>
+              <span className="qz-label">{t.question_range.min}–{t.question_range.max} questions</span>
+              {t.best_practice_note ? (
+                <span className="qz-dim" style={{ fontSize: 12 }}>💡 {t.best_practice_note}</span>
+              ) : null}
+
+              {expanded ? (
+                <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 4 }}>
+                  <div className="qz-label">How should we score this quiz?</div>
+                  {(
+                    [
+                      ["direct", "Direct mapping", "Each answer maps to one bucket. Simple, fast to configure."],
+                      ["weighted", "Weighted scoring", "Answers contribute points to multiple buckets. Better for overlapping attributes."],
+                    ] as const
+                  ).map(([val, label, desc]) => (
+                    <label
+                      key={val}
+                      className="qz-row"
+                      style={{ gap: 8, alignItems: "flex-start", fontSize: 13, cursor: "pointer" }}
+                    >
+                      <input
+                        type="radio"
+                        name={`scoring-${t.id}`}
+                        checked={scoring === val}
+                        onChange={() => setScoring(val)}
+                        style={{ marginTop: 2 }}
+                      />
+                      <span>
+                        <strong>{label}</strong>
+                        <span className="qz-dim" style={{ display: "block", fontSize: 12 }}>{desc}</span>
+                      </span>
+                    </label>
+                  ))}
+                  <div className="qz-row" style={{ gap: 10, alignItems: "center" }}>
+                    <button
+                      type="button"
+                      className="qz-btn qz-btn-primary qz-btn-sm"
+                      disabled={!scoring || busy}
+                      onClick={() =>
+                        scoring &&
+                        fetcher.submit(
+                          { intent: "shape-continue", typeId: t.id, scoring },
+                          { method: "post" },
+                        )
+                      }
+                    >
+                      {pendingIntent === "shape-continue" ? "Building…" : "Continue →"}
+                    </button>
+                    <button
+                      type="button"
+                      className="qz-btn qz-btn-ghost qz-btn-sm"
+                      disabled={busy}
+                      onClick={() => {
+                        setExpandedId(null);
+                        setScoring(null);
+                      }}
+                    >
+                      ← Change selection
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  className="qz-btn qz-btn-ghost qz-btn-sm"
+                  style={{ alignSelf: "flex-start", color: "var(--qz-accent)", fontWeight: 600 }}
+                  onClick={() => {
+                    setWritingGoal(false);
+                    setExpandedId(t.id);
+                    setScoring(null);
+                  }}
+                >
+                  Use this type →
+                </button>
+              )}
             </div>
-            <span className="qz-muted" style={{ fontSize: 13.5 }}>{t.achieves}</span>
-            <span className="qz-label">{t.question_range.min}–{t.question_range.max} questions</span>
-            {t.best_practice_note ? (
-              <span className="qz-dim" style={{ fontSize: 12 }}>💡 {t.best_practice_note}</span>
-            ) : null}
-            <span style={{ fontSize: 12, color: "var(--qz-accent)", fontWeight: 600, marginTop: 2 }}>
-              {picking ? "…" : "Use this type →"}
-            </span>
+          );
+        })}
+
+        {/* Card 3 — Write your goal */}
+        <div className="qz-card" style={{ display: "flex", flexDirection: "column", gap: 8, ...muted(writingGoal) }}>
+          <span style={{ fontFamily: "var(--qz-font-display)", fontSize: 17 }}>✏ Write your goal</span>
+          {writingGoal ? (
+            <>
+              <textarea
+                className="qz-input"
+                rows={3}
+                autoFocus
+                value={goalDraft}
+                onChange={(e) => setGoalDraft(e.target.value)}
+                placeholder={'e.g. "Help shoppers find the right supplement stack for their fitness goals"'}
+                style={{ resize: "vertical", fontSize: 13 }}
+              />
+              <div className="qz-row" style={{ gap: 10 }}>
+                <button
+                  type="button"
+                  className="qz-btn qz-btn-primary qz-btn-sm"
+                  disabled={goalDraft.trim().length < 12 || busy}
+                  onClick={() => fetcher.submit({ intent: "save-goal", goal: goalDraft }, { method: "post" })}
+                >
+                  {pendingIntent === "save-goal" ? "Generating…" : "Generate direction →"}
+                </button>
+                <button
+                  type="button"
+                  className="qz-btn qz-btn-ghost qz-btn-sm"
+                  disabled={busy}
+                  onClick={() => setWritingGoal(false)}
+                >
+                  ← Cancel
+                </button>
+              </div>
+            </>
+          ) : (
+            <>
+              <span className="qz-muted" style={{ fontSize: 13.5 }}>
+                Describe what you want your quiz to do — we&rsquo;ll generate a custom direction from it.
+              </span>
+              <button
+                type="button"
+                className="qz-btn qz-btn-ghost qz-btn-sm"
+                style={{ alignSelf: "flex-start", color: "var(--qz-accent)", fontWeight: 600 }}
+                onClick={() => {
+                  setExpandedId(null);
+                  setWritingGoal(true);
+                }}
+              >
+                Write a goal →
+              </button>
+            </>
+          )}
+        </div>
+
+        {/* Card 4 — Manual create */}
+        <div className="qz-card" style={{ display: "flex", flexDirection: "column", gap: 8, ...muted(false) }}>
+          <span style={{ fontFamily: "var(--qz-font-display)", fontSize: 17 }}>⚒ Manual create</span>
+          <span className="qz-muted" style={{ fontSize: 13.5 }}>
+            Start from a blank quiz and build every question yourself. You&rsquo;ll choose the scoring model in the builder.
+          </span>
+          <button
+            type="button"
+            className="qz-btn qz-btn-ghost qz-btn-sm"
+            style={{ alignSelf: "flex-start", color: "var(--qz-accent)", fontWeight: 600 }}
+            disabled={busy}
+            onClick={() => fetcher.submit({ intent: "shape-manual" }, { method: "post" })}
+          >
+            {pendingIntent === "shape-manual" ? "Opening…" : "Build manually →"}
           </button>
-        ))}
+        </div>
       </div>
 
       <SavedTemplatesRow templates={data.savedTemplates} fetcher={fetcher} pendingIntent={pendingIntent} />
 
-      <div className="qz-row" style={{ gap: 10 }}>
+      <div className="qz-row" style={{ gap: 10, alignItems: "center" }}>
         <button
           type="button"
           className="qz-btn qz-btn-ghost qz-btn-sm"
+          disabled={busy}
+          onClick={() => fetcher.submit({ intent: "shape-regenerate" }, { method: "post" })}
+        >
+          {pendingIntent === "shape-regenerate" ? "Regenerating…" : "↻ Regenerate suggestions"}
+        </button>
+        <button
+          type="button"
+          className="qz-btn qz-btn-ghost qz-btn-sm"
+          disabled={busy}
           onClick={() => fetcher.submit({ intent: "back-to-goal" }, { method: "post" })}
         >
           ← Revise the goal
