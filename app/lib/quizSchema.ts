@@ -221,11 +221,19 @@ export type ConditionalRule = z.infer<typeof ConditionalRule>;
 // Product ranking within a resolved pool. relevance = current tag-overlap
 // score; newest = Product.updatedAt desc; best_seller / highest_rated read
 // a merchant-mapped metafield, falling back to relevance when unmapped.
+// price_asc / price_desc sort by priceMin; title_asc / title_desc sort
+// alphabetically. manually_curated respects the Shopify collection order and
+// is only valid when the section's sub_filter is a collection.
 export const ResultRanking = z.enum([
   "relevance",
   "newest",
   "best_seller",
   "highest_rated",
+  "price_asc",
+  "price_desc",
+  "title_asc",
+  "title_desc",
+  "manually_curated",
 ]);
 export type ResultRanking = z.infer<typeof ResultRanking>;
 
@@ -249,6 +257,9 @@ export const ResultStage = z.object({
   ranking: ResultRanking.default("relevance"),
   min_products: z.number().int().min(1).max(12).default(3),
   max_products: z.number().int().min(1).max(12).default(3),
+  // Rec Page Step 2 — narrows the bucket's product pool for this section to a
+  // specific tag or collection id (drawn from the bucket's existing pool). Optional.
+  sub_filter: z.string().optional(),
   // Dev Spec §5 — feature→benefit "why this" bullets for the stage. Baked at publish.
   why_bullets: z.array(z.string()).default([]),
   // Experiences E4 — a quiet "talk to a human" link under the result. Partial
@@ -295,6 +306,22 @@ export const ResultData = z.object({
   oos_fallback_collection_id: z.string().optional(),
   include_discount: z.boolean().default(false),
   subscription_eligible: z.boolean().default(false),
+
+  // ---- Rec Page Step 2 — product-display toggles ----
+  // Show variant selector inline on product cards (size, color, etc.).
+  show_variants: z.boolean().default(false),
+  // Show short product description below the product title on the card.
+  show_descriptions: z.boolean().default(false),
+  // Show "Only X left in stock" when inventory ≤ urgency_threshold. Only
+  // renders if the product has inventory tracking enabled.
+  show_urgency_signal: z.boolean().default(false),
+  urgency_threshold: z.number().int().min(1).max(100).default(5),
+
+  // ---- Rec Page Step 2 — page-structure toggles ----
+  // Show a summary bar of the shopper's answers above sections.
+  show_results_summary: z.boolean().default(false),
+  // Show a "Not what you were looking for? Retake the quiz" link.
+  show_retake_quiz: z.boolean().default(false),
 
   // ---- v3 multi-stage (Advanced) ----
   // Empty = Simple (one page). Non-empty = Advanced ordered sections.

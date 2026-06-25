@@ -114,6 +114,15 @@ export function useQuizDraft(initial: QuizDoc) {
   const isSaving = saveFetcher.state !== "idle";
   const savedAt =
     saveFetcher.data?.ok && saveFetcher.data.savedAt ? saveFetcher.data.savedAt : null;
+  // True when the last save attempt returned an error (network or server). Not
+  // set while a re-save is in flight (isSaving covers that).
+  const saveError =
+    saveFetcher.state === "idle" && saveFetcher.data != null && !saveFetcher.data.ok;
 
-  return { doc, setDoc, commit, isSaving, savedAt, beginAiEdit, applyAiResult, endAiEdit };
+  // Re-submit the current doc — used by the "Retry" button on save error.
+  const retrySave = useCallback(() => {
+    submitSave(docRef.current);
+  }, [submitSave]);
+
+  return { doc, setDoc, commit, isSaving, savedAt, saveError, retrySave, beginAiEdit, applyAiResult, endAiEdit };
 }

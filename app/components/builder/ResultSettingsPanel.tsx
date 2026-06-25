@@ -1,4 +1,4 @@
-import type { CSSProperties } from "react";
+import type { CSSProperties, ReactNode } from "react";
 import { updateNodeData } from "../studio/studioDoc";
 import { QzBadge, QzCollapse, QzField, QzInput, QzSelect } from "../qz";
 import type {
@@ -44,7 +44,7 @@ const STRATEGY_LABEL: Record<MatchLadderStrategy, string> = {
 };
 
 const STRATEGY_HINT: Record<MatchLadderStrategy, string> = {
-  conditional: "Explicit “if these answers → these products” rules.",
+  conditional: 'Explicit "if these answers -> these products" rules.',
   points: "Winning bucket by per-answer point tally.",
   category: "Products from the bound bucket below.",
   collection: "Products in the chosen Shopify collection.",
@@ -57,6 +57,11 @@ const RANKING_OPTIONS: { value: ResultRanking; label: string }[] = [
   { value: "newest", label: "Newest" },
   { value: "best_seller", label: "Best seller" },
   { value: "highest_rated", label: "Highest rated" },
+  { value: "price_asc", label: "Price: Low -> High" },
+  { value: "price_desc", label: "Price: High -> Low" },
+  { value: "title_asc", label: "Title: A -> Z" },
+  { value: "title_desc", label: "Title: Z -> A" },
+  { value: "manually_curated", label: "Manually curated (collection order)" },
 ];
 
 const OOS_OPTIONS: { value: OosBehavior; label: string }[] = [
@@ -226,7 +231,7 @@ export function ResultSettingsPanel({
             hint={
               boundCategory
                 ? `${boundCategory.productIds.length} product(s) in this bucket.`
-                : "Tie this result page to a bucket so the “Bound bucket” strategy can pull its products."
+                : "Tie this result page to a bucket so the 'Bound bucket' strategy can pull its products."
             }
             meta={ladder.includes("category") ? "used by ladder" : undefined}
           >
@@ -245,7 +250,7 @@ export function ResultSettingsPanel({
 
           <QzField
             label="Collection"
-            hint="Used by the “Collection” strategy."
+            hint="Used by the 'Collection' strategy."
             meta={ladder.includes("collection") ? "used by ladder" : undefined}
           >
             <QzSelect
@@ -380,9 +385,106 @@ export function ResultSettingsPanel({
               Subscription eligible
             </label>
           </div>
-          {boundCategory ? <QzBadge tone="ok">Bound to “{boundCategory.name}”</QzBadge> : null}
+          {boundCategory ? <QzBadge tone="ok">Bound to "{boundCategory.name}"</QzBadge> : null}
+        </div>
+      </QzCollapse>
+
+      {/* ── PRODUCT DISPLAY toggles ───────────────────────────────────── */}
+      <QzCollapse title="Product display">
+        <div className="qz-col qz-gap-8">
+          <Toggle
+            label="Show variants"
+            hint="Display size/color selectors on product cards."
+            checked={data.show_variants ?? false}
+            onChange={(v) => set({ show_variants: v })}
+          />
+          <Toggle
+            label="Product descriptions"
+            hint="Show a short description below each product title."
+            checked={data.show_descriptions ?? false}
+            onChange={(v) => set({ show_descriptions: v })}
+          />
+          <Toggle
+            label={<><span>Urgency signal</span> <span className="qz-dim" style={{ fontSize: 11 }}>("Only X left")</span></>}
+            hint="Show low-stock indicator when inventory <= threshold. Hidden if tracking is off."
+            checked={data.show_urgency_signal ?? false}
+            onChange={(v) => set({ show_urgency_signal: v })}
+          />
+          {data.show_urgency_signal ? (
+            <QzField label="Low-stock threshold" hint="Show indicator when inventory at or below this number.">
+              <QzInput
+                type="number"
+                min={1}
+                max={100}
+                value={data.urgency_threshold ?? 5}
+                onChange={(e) => {
+                  const v = Math.max(1, Math.min(100, Math.round(Number(e.target.value) || 5)));
+                  set({ urgency_threshold: v });
+                }}
+                style={{ width: 80 }}
+              />
+            </QzField>
+          ) : null}
+          <label
+            className="qz-row qz-gap-8"
+            style={{ alignItems: "center", fontSize: 13, opacity: 0.5, cursor: "not-allowed" }}
+            title="Coming soon — connect your reviews app"
+          >
+            <input type="checkbox" disabled />
+            Star ratings — coming soon
+          </label>
+        </div>
+      </QzCollapse>
+
+      {/* ── PAGE STRUCTURE toggles ────────────────────────────────────── */}
+      <QzCollapse title="Page structure">
+        <div className="qz-col qz-gap-8">
+          <Toggle
+            label="Results summary bar"
+            hint="Show a bar of the shopper's answers above the product sections."
+            checked={data.show_results_summary ?? false}
+            onChange={(v) => set({ show_results_summary: v })}
+          />
+          <Toggle
+            label="Retake quiz link"
+            hint='"Not what you were looking for? Retake the quiz"'
+            checked={data.show_retake_quiz ?? false}
+            onChange={(v) => set({ show_retake_quiz: v })}
+          />
         </div>
       </QzCollapse>
     </div>
+  );
+}
+
+// Small inline toggle row with label + optional hint.
+function Toggle({
+  label,
+  hint,
+  checked,
+  onChange,
+}: {
+  label: ReactNode;
+  hint?: string;
+  checked: boolean;
+  onChange: (v: boolean) => void;
+}) {
+  return (
+    <label className="qz-row qz-gap-8" style={{ alignItems: "flex-start", cursor: "pointer" }}>
+      <input
+        type="checkbox"
+        checked={checked}
+        onChange={(e) => onChange(e.target.checked)}
+        style={{ marginTop: 2, flex: "0 0 auto" }}
+      />
+      <span style={{ fontSize: 13 }}>
+        {label}
+        {hint ? (
+          <span className="qz-dim" style={{ display: "block", fontSize: 11, lineHeight: 1.4 }}>
+            {hint}
+          </span>
+        ) : null}
+      </span>
+    </label>
   );
 }

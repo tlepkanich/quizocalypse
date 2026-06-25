@@ -523,6 +523,55 @@ export function deleteEdge(doc: QuizDoc, edgeId: string): QuizDoc {
   return { ...doc, edges: doc.edges.filter((e) => e.id !== edgeId) };
 }
 
+// Duplicate a node, inserting the copy immediately after the original in the
+// straight-through run. The copy gets fresh IDs (node, answers, edges) so
+// routing is independent. Only nodes on the main run can be duplicated (branch
+// lanes are ambiguous — their slot structure would need manual re-wiring).
+export function duplicateNode(doc: QuizDoc, nodeId: string): { doc: QuizDoc; newNodeId: string } {
+  const node = doc.nodes.find((n) => n.id === nodeId);
+  if (!node) return { doc, newNodeId: nodeId };
+
+  const newId = uid(node.type === "question" ? "q" : node.type === "result" ? "r" : "n");
+
+  // Deep-clone data, giving each answer a fresh id + edge_handle_id so the
+  // duplicate's per-answer routing won't alias the original's.
+  let newData: Record<string, unknown> = JSON.parse(JSON.stringify(node.data));
+  if (node.type === "question") {
+    const d = newData as { answers?: Array<{ id: string; edge_handle_id: string }> };
+    if (Array.isArray(d.answers)) {
+      d.answers = d.answers.map((a) => ({
+        ...a,
+        id: uid("a"),
+        edge_handle_id: uid("h"),
+      }));
+    }
+  }
+
+  const newNode = {
+    ...node,
+    id: newId,
+    position: { x: node.position.x + NEW_NODE_OFFSET, y: node.position.y },
+    data: newData,
+  };
+
+  // Insert copy after the original in the run: replace the original's outbound
+  // spine edge (no source_handle) with original→copy + copy→original-target.
+  const spineOut = doc.edges.find((e) => e.source === nodeId && !e.source_handle);
+  let newEdges = [...doc.edges];
+  if (spineOut) {
+    newEdges = newEdges.filter((e) => e.id !== spineOut.id);
+    newEdges.push({ id: uid("e"), source: nodeId, target: newId });
+    newEdges.push({ id: uid("e"), source: newId, target: spineOut.target });
+  } else {
+    newEdges.push({ id: uid("e"), source: nodeId, target: newId });
+  }
+
+  return {
+    doc: { ...doc, nodes: [...doc.nodes, newNode], edges: newEdges },
+    newNodeId: newId,
+  };
+}
+
 export function addEdge(
   doc: QuizDoc,
   source: string,

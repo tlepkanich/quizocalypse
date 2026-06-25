@@ -3,7 +3,7 @@ import type { Quiz, QuizNode } from "../../lib/quizSchema";
 import type { NodeIssue } from "../../lib/quizValidation";
 import type { OrderedFlow } from "../../lib/flowOrder";
 import { answerRoutes } from "../../lib/routeTrace";
-import { deleteNode, moveStep, straightThroughRun } from "../../lib/quizMutations";
+import { deleteNode, duplicateNode, moveStep, straightThroughRun } from "../../lib/quizMutations";
 import { INSERTABLE_MODULES, insertModule, updateNodeData, type InsertKind } from "./studioDoc";
 import { NODE_LABEL } from "./panels/nodeMeta";
 
@@ -157,6 +157,22 @@ export function FlowRail({
     if (newNodeId) onSelect(newNodeId);
   };
 
+  // Insert a question immediately before `nodeId` in the run.
+  const insertBefore = (nodeId: string) => {
+    const i = runIndex.get(nodeId);
+    if (i === undefined) return;
+    const anchor = i === 0 ? null : run[i - 1] ?? null;
+    const { doc: next, newNodeId } = insertModule(doc, "question", anchor, undefined, fallbackCollection);
+    onCommit(next);
+    if (newNodeId) onSelect(newNodeId);
+  };
+
+  const duplicate = (nodeId: string) => {
+    const { doc: next, newNodeId } = duplicateNode(doc, nodeId);
+    onCommit(next);
+    onSelect(newNodeId);
+  };
+
   const move = (nodeId: string, dir: -1 | 1) => {
     const i = runIndex.get(nodeId);
     if (i === undefined) return;
@@ -280,6 +296,28 @@ export function FlowRail({
                     style={{ padding: "0 4px" }}
                   >
                     ↓
+                  </button>
+                </>
+              ) : null}
+              {movable && node.type === "question" ? (
+                <>
+                  <button
+                    className="qz-btn qz-btn-ghost qz-btn-sm"
+                    title="Add question above"
+                    aria-label={`Add question above ${nodeTitle(node)}`}
+                    onClick={() => insertBefore(nodeId)}
+                    style={{ padding: "0 4px" }}
+                  >
+                    ↑+
+                  </button>
+                  <button
+                    className="qz-btn qz-btn-ghost qz-btn-sm"
+                    title="Duplicate question"
+                    aria-label={`Duplicate ${nodeTitle(node)}`}
+                    onClick={() => duplicate(nodeId)}
+                    style={{ padding: "0 4px" }}
+                  >
+                    ⎘
                   </button>
                 </>
               ) : null}

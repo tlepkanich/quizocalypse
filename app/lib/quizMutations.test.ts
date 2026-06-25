@@ -8,6 +8,7 @@ import {
   deleteNode,
   moveStep,
   straightThroughRun,
+  duplicateNode,
 } from "./quizMutations";
 import { insertModule } from "../components/studio/studioDoc";
 import { orderFlow } from "./flowOrder";
@@ -294,5 +295,65 @@ describe("setAnswerRoute (Unified P4)", () => {
     expect(setAnswerRoute(doc, q.id, "nope", result.id)).toBe(doc);
     const self = setAnswerRoute(doc, q.id, a.id, q.id);
     expect(self.edges.some((e) => e.source_handle === a.edge_handle_id)).toBe(false);
+  });
+});
+
+describe("duplicateNode", () => {
+  it("produces a new node with a unique id and fresh answer ids", () => {
+    const base = linearQuestionsDoc();
+    const { doc: next, newNodeId } = duplicateNode(base, "q1");
+
+    // New node exists with a different id.
+    expect(newNodeId).not.toBe("q1");
+    const copy = next.nodes.find((n) => n.id === newNodeId);
+    expect(copy).toBeDefined();
+    expect(copy!.type).toBe("question");
+
+    // Answer ids and edge_handle_ids are fresh (not equal to the originals).
+    const orig = base.nodes.find((n) => n.id === "q1")!;
+    const origIds = (orig.data as { answers: Array<{ id: string; edge_handle_id: string }> }).answers.map(
+      (a) => a.id,
+    );
+    const copyIds = (copy!.data as { answers: Array<{ id: string; edge_handle_id: string }> }).answers.map(
+      (a) => a.id,
+    );
+    origIds.forEach((id, i) => expect(copyIds[i]).not.toBe(id));
+
+    // Original node is still present.
+    expect(next.nodes.find((n) => n.id === "q1")).toBeDefined();
+  });
+
+  it("re-wires spine edges: original→copy + copy→original-target", () => {
+    const base = linearQuestionsDoc();
+    // base has spine: q1→q2. After duplicating q1: q1→copy, copy→q2.
+    const { doc: next, newNodeId } = duplicateNode(base, "q1");
+
+    const q1ToNew = next.edges.find((e) => e.source === "q1" && e.target === newNodeId && !e.source_handle);
+    expect(q1ToNew).toBeDefined();
+
+    const newToQ2 = next.edges.find((e) => e.source === newNodeId && e.target === "q2" && !e.source_handle);
+    expect(newToQ2).toBeDefined();
+
+    // The old q1→q2 spine edge is gone.
+    expect(next.edges.find((e) => e.source === "q1" && e.target === "q2" && !e.source_handle)).toBeUndefined();
+  });
+
+  it("appends a spine edge from original to copy when original has no outgoing spine", () => {
+    const base = linearQuestionsDoc();
+    // r1 is the result node — it has no outgoing spine edge.
+    const { doc: next, newNodeId } = duplicateNode(base, "r1");
+
+    const r1ToNew = next.edges.find((e) => e.source === "r1" && e.target === newNodeId && !e.source_handle);
+    expect(r1ToNew).toBeDefined();
+    // No extra outgoing spine from the copy (nothing to re-target).
+    const newOut = next.edges.filter((e) => e.source === newNodeId && !e.source_handle);
+    expect(newOut).toHaveLength(0);
+  });
+
+  it("is a no-op for an unknown node id", () => {
+    const base = linearQuestionsDoc();
+    const { doc: next, newNodeId } = duplicateNode(base, "nonexistent");
+    expect(next).toBe(base);
+    expect(newNodeId).toBe("nonexistent");
   });
 });

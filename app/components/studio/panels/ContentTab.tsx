@@ -248,11 +248,26 @@ export function QuestionContent({
     fontSize: 13,
     lineHeight: 1,
   });
+  const QUESTION_LIMIT = 150;
+  const ANSWER_LIMIT = 60;
   return (
     <>
       <QzField label="Question">
-        <QzTextarea value={node.data.text} onChange={(e) => setText(e.target.value)} rows={2} />
+        <QzTextarea value={node.data.text} onChange={(e) => setText(e.target.value)} rows={2} maxLength={QUESTION_LIMIT} />
+        <CharCount current={node.data.text.length} limit={QUESTION_LIMIT} />
       </QzField>
+      <div className="qz-row" style={{ gap: 16, alignItems: "center", flexWrap: "wrap" }}>
+        <QzField label="Required">
+          <label className="qz-row" style={{ gap: 8, alignItems: "center", fontSize: 13, cursor: "pointer" }}>
+            <input
+              type="checkbox"
+              checked={node.data.required !== false}
+              onChange={(e) => setData({ required: e.target.checked })}
+            />
+            {node.data.required !== false ? "Required" : 'Optional — adds "Skip" option'}
+          </label>
+        </QzField>
+      </div>
       <QzField label="Type">
         <QzSelect
           value={node.data.question_type}
@@ -298,11 +313,14 @@ export function QuestionContent({
           {node.data.answers.map((a) => (
             <div key={a.id} style={{ display: "flex", flexDirection: "column", gap: 4 }}>
               <div className="qz-row" style={{ gap: 6, alignItems: "center" }}>
-                <QzInput
-                  value={a.text}
-                  onChange={(e) => setAnswer(a.id, { text: e.target.value })}
-                  style={{ flex: 1 }}
-                />
+                <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 2 }}>
+                  <QzInput
+                    value={a.text}
+                    onChange={(e) => setAnswer(a.id, { text: e.target.value })}
+                    maxLength={ANSWER_LIMIT}
+                  />
+                  <CharCount current={a.text.length} limit={ANSWER_LIMIT} />
+                </div>
                 <button
                   type="button"
                   title={a.icon ? `Icon: ${a.icon} — change` : "Add an emoji icon"}
@@ -446,5 +464,26 @@ export function QuestionContent({
         />
       </QzField>
     </>
+  );
+}
+
+// Live character counter shown below a text input/textarea.
+function CharCount({ current, limit }: { current: number; limit: number }) {
+  const remaining = limit - current;
+  const warn = remaining < Math.ceil(limit * 0.15);
+  const over = remaining < 0;
+  return (
+    <span
+      style={{
+        fontSize: 10.5,
+        color: over ? "var(--qz-crit, #D72C0D)" : warn ? "var(--qz-warn, #B98900)" : "var(--qz-ink-3, #888)",
+        alignSelf: "flex-end",
+        lineHeight: 1,
+        fontVariantNumeric: "tabular-nums",
+      }}
+      aria-live="polite"
+    >
+      {over ? `${Math.abs(remaining)} over limit` : `${remaining} left`}
+    </span>
   );
 }

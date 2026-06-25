@@ -70,7 +70,7 @@ export function UnifiedWorkspace({ data, chrome }: { data: StudioBuilderData; ch
 }
 
 function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chrome }) {
-  const { doc, commit: rawCommit, isSaving, savedAt, beginAiEdit, applyAiResult, endAiEdit } =
+  const { doc, commit: rawCommit, isSaving, savedAt, saveError, retrySave, beginAiEdit, applyAiResult, endAiEdit } =
     useQuizDraft(data.doc as QuizDoc);
   // QB-2 — snapshot undo/redo. Every panel edit replaces the whole doc, so a
   // stack of prior docs IS the history; undo/redo replay a snapshot through the
@@ -321,13 +321,37 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
     goToStep: () => {},
   };
 
-  // Autosave status chip — a legible "Saving…" (pulsing dot) / "Saved" (green
-  // check, success pulse keyed on savedAt). Shared by both top-bar variants.
+  // Soft question-count nudge: informational, never blocks. Counts only
+  // question nodes so result/branch/end nodes don't inflate the number.
+  const questionCount = doc.nodes.filter((n) => n.type === "question").length;
+  const countNudge = questionCount > 0 ? (
+    <span className="qz-dim" style={{ fontSize: 11.5, whiteSpace: "nowrap" }}>
+      {questionCount} question{questionCount !== 1 ? "s" : ""}
+      {questionCount < 4 || questionCount > 8 ? (
+        <span style={{ marginLeft: 4, color: "var(--qz-ink-3, #888)" }}>
+          · Most quizzes perform best at 4–8
+        </span>
+      ) : null}
+    </span>
+  ) : null;
+
+  // Autosave status chip — "Saving…" / "Saved [ts]" / "Unable to save — Retry".
   const saveStatus = (
     <span className="qz-save-status" aria-live="polite">
       {isSaving ? (
         <span className="qz-save-chip is-saving">
           <span className="qz-save-dot" aria-hidden /> Saving…
+        </span>
+      ) : saveError ? (
+        <span className="qz-save-chip is-error">
+          Unable to save —{" "}
+          <button
+            type="button"
+            onClick={retrySave}
+            style={{ background: "none", border: "none", cursor: "pointer", padding: 0, fontSize: "inherit", color: "inherit", textDecoration: "underline" }}
+          >
+            Retry
+          </button>
         </span>
       ) : savedAt ? (
         <span key={savedAt} className="qz-save-chip is-saved">
@@ -749,9 +773,10 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
               {XTYPE_LABEL[experienceTypeOf(doc)]}
             </span>
           </div>
-          {/* Center: device toggle + zoom (build view only) */}
+          {/* Center: question count nudge + device toggle + zoom (build view only) */}
           {view === "build" ? (
             <div className="qz-row" style={{ gap: 14, alignItems: "center", flex: "0 0 auto" }}>
+              {countNudge}
               {deviceToggle}
               {zoomStepper}
             </div>
