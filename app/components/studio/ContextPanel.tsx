@@ -5,6 +5,7 @@ import type { BuilderCategory } from "../builder/stepProps";
 import type { DesignLayerMode } from "../../lib/designLayers";
 import { reachedBy } from "../../lib/routeTrace";
 import { setAnswerRoute } from "../../lib/quizMutations";
+import { computeBucketCoverage, type CoverageLevel } from "../../lib/bucketCoverage";
 import { StepPreview } from "../runtime/StepPreview";
 import { PathTester } from "../logic/PathTester";
 import { ContentTab } from "./panels/ContentTab";
@@ -77,6 +78,68 @@ export function ContextPanel({
   );
 }
 
+// Question-Builder spec — Bucket Coverage Indicator. A quiz-level read-out of
+// how well each bucket is reachable from the answers authored so far: green =
+// well covered, yellow = weak (< 50% of the best bucket), red = no answers
+// point at it. Hover a pill for the exact answer count.
+const COVERAGE_STYLE: Record<CoverageLevel, { bg: string; fg: string; dot: string }> = {
+  strong: { bg: "color-mix(in srgb, #28c840 16%, transparent)", fg: "#1c7c2c", dot: "#28c840" },
+  weak: { bg: "color-mix(in srgb, #febc2e 22%, transparent)", fg: "#8a5b00", dot: "#e0a116" },
+  none: { bg: "color-mix(in srgb, #ff5f57 16%, transparent)", fg: "#b3241a", dot: "#ff5f57" },
+};
+
+function BucketCoveragePills({
+  doc,
+  categories,
+}: {
+  doc: QuizDoc;
+  categories: BuilderCategory[];
+}) {
+  if (categories.length === 0) return null;
+  const coverage = computeBucketCoverage(
+    doc,
+    categories.map((c) => ({ id: c.id, name: c.name, tags: c.tags })),
+  );
+  return (
+    <div>
+      <div className="qz-label" style={{ marginBottom: 4, fontSize: 11 }}>
+        Bucket coverage
+      </div>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
+        {coverage.map((c) => {
+          const s = COVERAGE_STYLE[c.level];
+          return (
+            <span
+              key={c.id}
+              title={`${c.count} answer${c.count === 1 ? "" : "s"} point at “${c.name}”${
+                c.level === "none"
+                  ? " — no answers reach this bucket yet"
+                  : c.level === "weak"
+                    ? " — weak (under half of the best-covered bucket)"
+                    : ""
+              }`}
+              className="qz-row"
+              style={{
+                gap: 5,
+                alignItems: "center",
+                fontSize: 11,
+                borderRadius: 999,
+                padding: "2px 9px",
+                background: s.bg,
+                color: s.fg,
+              }}
+            >
+              <span aria-hidden style={{ width: 7, height: 7, borderRadius: 999, background: s.dot }} />
+              {c.name}
+              <span style={{ opacity: 0.7, fontVariantNumeric: "tabular-nums" }}>{c.count}</span>
+            </span>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 // ── Routing tab (Unified P4) — "how does this step route, and what reaches it" ─
 function RoutingBody({
   doc,
@@ -105,6 +168,7 @@ function RoutingBody({
 
   return (
     <>
+      <BucketCoveragePills doc={doc} categories={categories} />
       {arrivals.length > 0 ? (
         <div>
           <div className="qz-label" style={{ marginBottom: 4, fontSize: 11 }}>
