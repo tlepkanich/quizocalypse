@@ -16,6 +16,9 @@ export interface IndexedProduct {
   url?: string;
   price: string | null;
   image_url: string | null;
+  // Short plain-text product description, baked at publish (capped) — rendered
+  // on result cards when the page's show_descriptions toggle is on.
+  description?: string;
   tags: string[];
   collection_ids: string[];
   inventory_in_stock: boolean;
@@ -64,6 +67,10 @@ interface LadderConfig {
   collection_id?: string;
   metafield_key?: string;
   metafield_value?: string;
+  // Rec-Page spec §1 sub-filter — narrows the resolved pool to products that
+  // ALSO carry this tag / sit in this collection (drawn from the bucket pool).
+  sub_filter_tag?: string;
+  sub_filter_collection_id?: string;
   ranking: ResultDataT["ranking"];
   cap: number;
   minProducts: number;
@@ -223,6 +230,21 @@ function walkLadder(
     }
   };
 
+  // Rec-Page spec §1 sub-filter: narrow a resolved pool to products that ALSO
+  // match the section's tag / collection. Tag match is case-insensitive (like
+  // the scoring lookups). Both empty → pool unchanged. When both are set, a
+  // product must satisfy BOTH (intersection).
+  const subFilter = (pool: IndexedProduct[]): IndexedProduct[] => {
+    const tag = config.sub_filter_tag?.toLowerCase();
+    const col = config.sub_filter_collection_id;
+    if (!tag && !col) return pool;
+    return pool.filter((p) => {
+      const tagOk = !tag || p.tags.some((t) => t.toLowerCase() === tag);
+      const colOk = !col || p.collection_ids.includes(col);
+      return tagOk && colOk;
+    });
+  };
+
   const empty: ExplainedRecommendation = {
     products: [],
     rungUsed: null,
@@ -236,7 +258,7 @@ function walkLadder(
   // match for that outcome, so we keep score-0 members and let ranking surface
   // the best-fit first (caps then trim the off-fit tail).
   for (const strategy of config.match_ladder) {
-    const scored = scorePool(resolve(strategy), tagWeight);
+    const scored = scorePool(subFilter(resolve(strategy)), tagWeight);
     const { products: pool, swapped } = applyOos(
       applyRanking(scored, config.ranking),
       { oos_behavior: config.oos_behavior, oos_fallback_collection_id: config.oos_fallback_collection_id },
@@ -316,6 +338,8 @@ export function recommendForResultExplained(
       collection_id: data.collection_id,
       metafield_key: data.metafield_key,
       metafield_value: data.metafield_value,
+      sub_filter_tag: data.sub_filter_tag,
+      sub_filter_collection_id: data.sub_filter_collection_id,
       ranking: data.ranking,
       cap: capOverride ?? data.max_products ?? data.slot_count,
       minProducts: data.min_products,
@@ -392,6 +416,8 @@ export function recommendForStageExplained(
       collection_id: stage.collection_id,
       metafield_key: stage.metafield_key,
       metafield_value: stage.metafield_value,
+      sub_filter_tag: stage.sub_filter_tag,
+      sub_filter_collection_id: stage.sub_filter_collection_id,
       ranking: stage.ranking,
       cap: stage.max_products,
       minProducts: stage.min_products,
@@ -466,12 +492,39 @@ function applyRanking<T extends RecommendedProduct>(
 ): T[] {
   const base = rank(products);
   if (ranking === "relevance") return base;
+  // "manual" respects the resolved pool's own order (a collection's Shopify
+  // sort, or catalog order otherwise). We re-rank on top of `base` only by the
+  // in-stock → price tie-break that every mode shares, but keep score order
+  // out of it — there is no merchant order baked per-collection today, so the
+  // resolved pool order IS the manual order. (Data gap flagged in the spec
+  // pass: per-collection position isn't baked yet.)
+  if (ranking === "manual") return [...products];
   if (ranking === "newest") {
     return [...base].sort((a, b) => {
       const ta = a.updated_at ? Date.parse(a.updated_at) : 0;
       const tb = b.updated_at ? Date.parse(b.updated_at) : 0;
       return tb - ta;
     });
+  }
+  // Price / title sorts read the baked price/title. JS sort is stable, so the
+  // answer-scored base order survives as the tie-break (e.g. equal-price items
+  // keep best-fit-first). Null/empty prices sort last.
+  if (ranking === "price_asc" || ranking === "price_desc") {
+    const dir = ranking === "price_asc" ? 1 : -1;
+    return [...base].sort((a, b) => {
+      const pa = a.price != null && a.price !== "" ? Number(a.price) : null;
+      const pb = b.price != null && b.price !== "" ? Number(b.price) : null;
+      if (pa == null && pb == null) return 0;
+      if (pa == null) return 1;
+      if (pb == null) return -1;
+      return (pa - pb) * dir;
+    });
+  }
+  if (ranking === "title_az" || ranking === "title_za") {
+    const dir = ranking === "title_az" ? 1 : -1;
+    return [...base].sort(
+      (a, b) => a.title.localeCompare(b.title, undefined, { sensitivity: "base" }) * dir,
+    );
   }
   // best_seller / highest_rated read a merchant-mapped metafield numeric.
   // The mapping key convention: metafields["__rank_bestseller"] /
@@ -497,7 +550,11 @@ function applyOos(
   productIndex: IndexedProduct[],
   tagWeight: Map<string, number>,
 ): { products: ExplainedProduct[]; swapped: boolean } {
-  if (cfg.oos_behavior === "show_with_badge") return { products, swapped: false };
+  // show_with_badge + notify_me both KEEP out-of-stock products visible; the
+  // storefront card decides how to render them (badge vs "Notify Me" capture).
+  if (cfg.oos_behavior === "show_with_badge" || cfg.oos_behavior === "notify_me") {
+    return { products, swapped: false };
+  }
   const inStock = products.filter((p) => p.inventory_in_stock);
   if (cfg.oos_behavior === "hide") return { products: inStock, swapped: false };
   // fallback: everything's OOS → swap in the merchant's OOS fallback collection
@@ -520,6 +577,34 @@ export interface PreviewRecommendationInput {
   productIndex: IndexedProduct[];
   selectedAnswerIds: string[];
   slotCount?: number;
+}
+
+// Rec-Page spec §7 — resolve the quiz-level Global Fallback pool, shown only
+// when a result page resolved ZERO products AND the merchant opted in. Union of
+// the configured collection, tag, and explicit product ids; sellable only;
+// in-stock first then price asc; capped at `count`. Pure + testable.
+export function resolveGlobalFallback(
+  productIndex: IndexedProduct[],
+  fallback: {
+    enabled: boolean;
+    collection_id?: string;
+    tag?: string;
+    product_ids?: string[];
+    count: number;
+  },
+): RecommendedProduct[] {
+  if (!fallback.enabled) return [];
+  const tag = fallback.tag?.toLowerCase();
+  const wantIds = new Set(fallback.product_ids ?? []);
+  const pool = productIndex.filter(isSellable).filter((p) => {
+    const byCollection = fallback.collection_id
+      ? p.collection_ids.includes(fallback.collection_id)
+      : false;
+    const byTag = tag ? p.tags.some((t) => t.toLowerCase() === tag) : false;
+    const byId = wantIds.has(p.product_id);
+    return byCollection || byTag || byId;
+  });
+  return rank(pool.map((p) => ({ ...p, score: 0 }))).slice(0, fallback.count);
 }
 
 // Mid-quiz preview. Same scoring as the result-page engine, but with a different

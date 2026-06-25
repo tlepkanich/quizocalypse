@@ -43,3 +43,20 @@ export function resolveMergeTags(
     return typeof value === "string" ? value : match;
   });
 }
+
+// Rec-Page spec §3 — resolve "{{token}}" variables inside the "Why we recommend"
+// copy (Mode A intro + Mode B per-product blurbs). Reuses the same context as
+// the @-tag system, plus a friendly {{answers}} alias for the comma-joined list
+// of all picked answer texts. Unknown tokens pass through untouched.
+export function resolveCopyTokens(
+  text: string,
+  ctx: Record<string, string>,
+  allAnswers: string[] = [],
+): string {
+  if (!text) return text;
+  return text.replace(/\{\{\s*([a-zA-Z0-9_.]+)\s*\}\}/g, (match, key: string) => {
+    if (key === "answers") return allAnswers.length > 0 ? allAnswers.join(", ") : match;
+    const value = ctx[key];
+    return typeof value === "string" ? value : match;
+  });
+}

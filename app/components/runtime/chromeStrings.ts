@@ -82,6 +82,18 @@ export const CHROME_TOKENS = {
   back: "Back",
   next: "Next",
   question_counter: "Question # {n}",
+  // Rec-Page spec §2/§6.
+  only_x_left: "Only {count} left in stock",
+  your_answers: "Your answers",
+  retake_quiz: "Not what you were looking for? Retake the quiz",
+  share_results_cta: "↗ Share my results",
+  share_copied: "Copied ✓",
+  free_shipping: "Free shipping",
+  notify_me: "Notify me",
+  notify_done: "You're on the list — we'll email you when it's back.",
+  notify_email_placeholder: "Email me when available",
+  notify_section_prompt:
+    "These picks are currently out of stock. Notify me when they're back.",
 } as const;
 
 export type ChromeToken = keyof typeof CHROME_TOKENS;

@@ -9,6 +9,7 @@ import {
   recommendForResultExplained,
   recommendForStage,
   recommendPreview,
+  resolveGlobalFallback,
   selectSecondaryRecs,
   type BranchContext,
   type IndexedProduct,
@@ -28,6 +29,7 @@ import { createAnalyticsClient, newSessionId } from "../../lib/analytics";
 import {
   buildMergeContext,
   resolveMergeTags,
+  resolveCopyTokens,
   type PathStep,
 } from "../../lib/mergeTags";
 import { stylesFor, googleFontsUrl, useContainerBreakpoint } from "./runtimeStyles";
@@ -236,10 +238,56 @@ export function QuizRuntime(props: QuizRuntimeProps) {
   // node change so a jump-back + new path replays them.
   const [recapConfirmed, setRecapConfirmed] = useState(false);
   const [revealDone, setRevealDone] = useState(false);
+  // Spec §2 urgency — product_id → live stock qty (only entries at/below the
+  // result's threshold). Fetched fresh when a result page renders (never baked,
+  // never cached) so "Only X left" reflects real-time Shopify inventory.
+  const [lowStockByProduct, setLowStockByProduct] = useState<Map<string, number> | null>(null);
   useEffect(() => {
     setRecapConfirmed(false);
     setRevealDone(false);
   }, [currentNodeId]);
+
+  // Spec §2 urgency — when a result page with the urgency toggle renders, fetch
+  // current stock for its products and keep only those at/below the threshold.
+  // Skipped in preview (no live inventory there). Re-runs per result node.
+  useEffect(() => {
+    const node = doc.nodes.find((n) => n.id === currentNodeId);
+    if (!node || node.type !== "result" || !node.data.urgency_enabled || isPreview || !quizId) {
+      setLowStockByProduct(null);
+      return;
+    }
+    const selectedAnswerIds = path.flatMap((p) => p.answerIds);
+    // Cover both the primary recs and the "you might also like" row (cap 12).
+    const recs = recommendForResult(
+      {
+        quiz: doc,
+        productIndex,
+        selectedAnswerIds,
+        resultNodeId: node.id,
+        ...(answerWeights ? { answerWeights } : {}),
+      },
+      12,
+    );
+    const ids = recs.map((r) => r.product_id);
+    if (ids.length === 0) {
+      setLowStockByProduct(null);
+      return;
+    }
+    const threshold = node.data.urgency_threshold;
+    let cancelled = false;
+    void fetchLiveInventory(quizId, ids).then((qtyById) => {
+      if (cancelled) return;
+      const m = new Map<string, number>();
+      for (const [pid, qty] of Object.entries(qtyById)) {
+        if (typeof qty === "number" && qty > 0 && qty <= threshold) m.set(pid, qty);
+      }
+      setLowStockByProduct(m);
+    });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentNodeId, quizId, isPreview]);
 
   // Unified P3 — preview-only selection sync (both effects no-op in live mode
   // by construction AND by guard). Jump: when the workspace selects a step that
@@ -646,9 +694,11 @@ export function QuizRuntime(props: QuizRuntimeProps) {
     const showDiscount = node.data.include_discount && dc.enabled && Boolean(dc.code);
     const discountCode = showDiscount ? dc.code : undefined;
     const discountLabel = showDiscount
-      ? dc.kind === "percentage"
-        ? `Save ${dc.value}%`
-        : `${formatMoney(dc.value, currency, locale)} off`
+      ? dc.kind === "free_shipping"
+        ? tc("free_shipping")
+        : dc.kind === "percentage"
+          ? `Save ${dc.value}%`
+          : `${formatMoney(dc.value, currency, locale)} off`
       : undefined;
     const stages = node.data.stages;
     if (stages.length === 0) {
@@ -675,6 +725,23 @@ export function QuizRuntime(props: QuizRuntimeProps) {
           analytics={analyticsRef.current}
           buddySessionId={buddySessionId}
           onReset={reset}
+          showVariants={node.data.show_variants}
+          showDescriptions={node.data.show_descriptions}
+          lowStockByProduct={lowStockByProduct}
+          resultsSummaryBar={node.data.results_summary_bar}
+          answerSummary={pickedAnswerLabels(doc, selectedAnswerIds)}
+          retakeLink={node.data.retake_link}
+          shareResults={node.data.share_results}
+          oosNotify={node.data.oos_behavior === "notify_me"}
+          {...buildWhyCopy(node, doc, path, selectedAnswerIds, contactRef.current)}
+          globalFallback={
+            recs.length === 0 && doc.global_fallback.enabled
+              ? {
+                  heading: doc.global_fallback.heading,
+                  products: resolveGlobalFallback(productIndex, doc.global_fallback),
+                }
+              : null
+          }
           bare
         />
       );
@@ -1027,9 +1094,11 @@ export function QuizRuntime(props: QuizRuntimeProps) {
         currentNode.data.include_discount && dc.enabled && Boolean(dc.code);
       const discountCode = showDiscount ? dc.code : undefined;
       const discountLabel = showDiscount
-        ? dc.kind === "percentage"
-          ? `Save ${dc.value}%`
-          : `${formatMoney(dc.value, currency, locale)} off`
+        ? dc.kind === "free_shipping"
+          ? tc("free_shipping")
+          : dc.kind === "percentage"
+            ? `Save ${dc.value}%`
+            : `${formatMoney(dc.value, currency, locale)} off`
         : undefined;
       const stages = currentNode.data.stages;
       if (stages.length === 0) {
@@ -1087,6 +1156,23 @@ export function QuizRuntime(props: QuizRuntimeProps) {
             escapeHatch={currentNode.data.escape_hatch ?? null}
             discountCode={discountCode}
             discountLabel={discountLabel}
+            showVariants={currentNode.data.show_variants}
+            showDescriptions={currentNode.data.show_descriptions}
+            lowStockByProduct={lowStockByProduct}
+            resultsSummaryBar={currentNode.data.results_summary_bar}
+            answerSummary={pickedAnswerLabels(doc, selectedAnswerIds)}
+            retakeLink={currentNode.data.retake_link}
+            shareResults={currentNode.data.share_results}
+            oosNotify={currentNode.data.oos_behavior === "notify_me"}
+            {...buildWhyCopy(currentNode, doc, path, selectedAnswerIds, contactRef.current)}
+            globalFallback={
+              recs.length === 0 && doc.global_fallback.enabled
+                ? {
+                    heading: doc.global_fallback.heading,
+                    products: resolveGlobalFallback(productIndex, doc.global_fallback),
+                  }
+                : null
+            }
             styles={styles}
             startedAt={startedAtRef.current}
             completed={completedRef}
@@ -2069,6 +2155,140 @@ function SaveResultsLink({ quizId, sessionId }: { quizId?: string; sessionId?: s
     >
       {tc("save_results_link")}
     </a>
+  );
+}
+
+// Spec §6 "Share results button" — native share where available, copy-link
+// everywhere else, of the shopper's persistent results URL (reconstructed
+// server-side from the saved session). Live-only, like SaveResultsLink.
+function ShareResultsButton({ quizId, sessionId }: { quizId?: string; sessionId?: string }) {
+  const tc = useChrome();
+  const locale = useContext(RuntimeLocaleContext);
+  const isPreviewMode = useContext(RuntimePreviewContext);
+  const [copied, setCopied] = useState(false);
+  if (isPreviewMode || !quizId || !sessionId) return null;
+  const url = `${typeof window !== "undefined" ? window.location.origin : ""}/q/${quizId}/results?session_id=${encodeURIComponent(sessionId)}${locale !== "en" ? `&locale=${encodeURIComponent(locale)}` : ""}`;
+  return (
+    <button
+      type="button"
+      onClick={async () => {
+        if (navigator.share) {
+          try {
+            await navigator.share({ url });
+            return;
+          } catch {
+            // dismissed — fall through to copy
+          }
+        }
+        try {
+          await navigator.clipboard.writeText(url);
+          setCopied(true);
+          window.setTimeout(() => setCopied(false), 1500);
+        } catch {
+          // clipboard blocked — no-op
+        }
+      }}
+      style={{
+        display: "block",
+        margin: "12px auto 0",
+        font: "inherit",
+        fontSize: 13,
+        padding: "6px 14px",
+        borderRadius: "var(--qz-radius)",
+        border: "1px solid var(--qz-color-primary)",
+        background: "transparent",
+        color: "var(--qz-color-primary)",
+        cursor: "pointer",
+      }}
+    >
+      {copied ? tc("share_copied") : tc("share_results_cta")}
+    </button>
+  );
+}
+
+const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
+
+// Spec §5 "Notify Me" — inline back-in-stock email capture shown in place of
+// the add-to-cart CTA on an out-of-stock card (and as a section-level prompt
+// when everything is sold out). Posts to /q/:id/notify. Preview = no POST.
+function NotifyMeForm({
+  quizId,
+  sessionId,
+  productId,
+  compact = false,
+}: {
+  quizId?: string;
+  sessionId?: string;
+  productId?: string | null;
+  compact?: boolean;
+}) {
+  const tc = useChrome();
+  const isPreviewMode = useContext(RuntimePreviewContext);
+  const [email, setEmail] = useState("");
+  const [state, setState] = useState<"idle" | "sending" | "done">("idle");
+  if (state === "done") {
+    return (
+      <div style={{ fontSize: 13, color: "var(--qz-color-muted)" }}>{tc("notify_done")}</div>
+    );
+  }
+  return (
+    <form
+      onSubmit={async (e) => {
+        e.preventDefault();
+        if (!EMAIL_RE.test(email)) return;
+        setState("sending");
+        if (isPreviewMode || !quizId) {
+          setState("done");
+          return;
+        }
+        try {
+          await fetch(`/q/${quizId}/notify`, {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ email, product_id: productId ?? null, session_id: sessionId ?? null }),
+          });
+        } catch {
+          // best-effort — still confirm so the shopper isn't stuck
+        }
+        setState("done");
+      }}
+      style={{ display: "flex", gap: 6, flexDirection: compact ? "column" : "row", alignItems: "stretch" }}
+    >
+      <input
+        type="email"
+        required
+        value={email}
+        onChange={(ev) => setEmail(ev.target.value)}
+        placeholder={tc("notify_email_placeholder")}
+        aria-label={tc("notify_email_placeholder")}
+        style={{
+          font: "inherit",
+          fontSize: 13,
+          padding: "6px 10px",
+          borderRadius: "var(--qz-radius)",
+          border: "1px solid #00000022",
+          minWidth: 0,
+          flex: 1,
+        }}
+      />
+      <button
+        type="submit"
+        disabled={state === "sending"}
+        style={{
+          font: "inherit",
+          fontSize: 13,
+          padding: "6px 14px",
+          borderRadius: "var(--qz-radius)",
+          border: "1px solid var(--qz-color-primary)",
+          background: "var(--qz-color-primary)",
+          color: "#fff",
+          cursor: "pointer",
+          whiteSpace: "nowrap",
+        }}
+      >
+        {tc("notify_me")}
+      </button>
+    </form>
   );
 }
 
@@ -3568,6 +3788,29 @@ function postQuizSession(args: {
   }).catch(() => {});
 }
 
+// Spec §2 urgency — fetch current stock for the given products at result-page
+// load. Returns product_id → available quantity (only tracked products). Best
+// effort: any failure resolves to an empty map so the page renders without the
+// urgency line rather than erroring.
+async function fetchLiveInventory(
+  quizId: string,
+  productIds: string[],
+): Promise<Record<string, number>> {
+  if (!quizId || productIds.length === 0) return {};
+  try {
+    const res = await fetch(`/q/${quizId}/inventory`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ product_ids: productIds }),
+    });
+    if (!res.ok) return {};
+    const data = (await res.json()) as { quantities?: Record<string, number> };
+    return data.quantities ?? {};
+  } catch {
+    return {};
+  }
+}
+
 // Inline email capture on the result page (Dev Spec §5), gated by
 // Quiz.collect_email_on_result. Mirrors EmailGateView: preview mode does not
 // POST; a real capture persists via /captures + fires email_captured.
@@ -3662,6 +3905,59 @@ function ResultEmailCapture({
   );
 }
 
+// Spec §6 results-summary bar — the shopper's picked answer texts, in the order
+// they were chosen. Pure; deduped so a tag selected twice doesn't repeat.
+function pickedAnswerLabels(
+  quiz: QuizDoc,
+  selectedAnswerIds: string[],
+): string[] {
+  const labelById = new Map<string, string>();
+  for (const node of quiz.nodes) {
+    if (node.type !== "question") continue;
+    for (const a of node.data.answers) labelById.set(a.id, a.text);
+  }
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const id of selectedAnswerIds) {
+    const label = labelById.get(id);
+    if (label && !seen.has(label)) {
+      seen.add(label);
+      out.push(label);
+    }
+  }
+  return out;
+}
+
+// Spec §3 — resolve the result node's "Why we recommend" copy (Mode A intro +
+// Mode B per-product blurbs) against the shopper's path. Returns undefined/null
+// when each mode is off so ResultView simply skips it.
+function buildWhyCopy(
+  node: Extract<QuizDoc["nodes"][number], { type: "result" }>,
+  doc: QuizDoc,
+  path: PathStep[],
+  selectedAnswerIds: string[],
+  ambient: { name?: string; email?: string },
+): { whyIntro?: string; blurbByProduct: Map<string, string> | null } {
+  const data = node.data;
+  if (!data.why_intro_enabled && !data.why_blurbs_enabled) {
+    return { whyIntro: undefined, blurbByProduct: null };
+  }
+  const ctx = buildMergeContext(path, doc, ambient);
+  const allAnswers = pickedAnswerLabels(doc, selectedAnswerIds);
+  const whyIntro = data.why_intro_enabled
+    ? resolveCopyTokens(data.why_intro, ctx, allAnswers)
+    : undefined;
+  const blurbByProduct = data.why_blurbs_enabled
+    ? new Map(
+        Object.entries(data.product_blurbs).map(([pid, txt]) => [
+          pid,
+          resolveCopyTokens(txt, ctx, allAnswers),
+        ]),
+      )
+    : null;
+  return { whyIntro, blurbByProduct };
+}
+
 function ResultView({
   headline,
   subtext,
@@ -3688,10 +3984,41 @@ function ResultView({
   splitLayout,
   reasonsByProduct,
   escapeHatch,
+  showVariants = false,
+  showDescriptions = false,
+  lowStockByProduct,
+  resultsSummaryBar = false,
+  answerSummary,
+  retakeLink = false,
+  shareResults = false,
+  globalFallback,
+  oosNotify = false,
+  whyIntro,
+  blurbByProduct,
 }: {
   headline: string;
   subtext: string;
   ctaLabel: string;
+  // Spec §5 — result page's OOS behavior is "notify_me": sold-out cards get a
+  // back-in-stock capture, and a section prompt shows when ALL recs are OOS.
+  oosNotify?: boolean;
+  // Spec §3 Mode A — token-resolved page-intro copy, rendered above sections.
+  whyIntro?: string;
+  // Spec §3 Mode B — product_id → token-resolved per-product blurb.
+  blurbByProduct?: Map<string, string> | null;
+  // Rec-Page spec §2/§6 display + structure toggles, threaded from the result node.
+  showVariants?: boolean;
+  showDescriptions?: boolean;
+  // product_id → live stock qty (≤ threshold), populated by the urgency fetch.
+  lowStockByProduct?: Map<string, number> | null;
+  resultsSummaryBar?: boolean;
+  // Shopper's picked answer labels for the summary bar ("Oily skin · Sensitive").
+  answerSummary?: string[];
+  retakeLink?: boolean;
+  // Spec §6 share button (uses the persistent results URL).
+  shareResults?: boolean;
+  // Spec §7 — heading + products to show when the page resolved nothing.
+  globalFallback?: { heading: string; products: RecommendedProduct[] } | null;
   inspect?: (part: "result_headline" | "result_subtext") => React.HTMLAttributes<HTMLElement>;
   // BIC P8: 2-column desktop layout (pitch left, vertical cards right). The
   // call site gates it on tokens.result_split && desktop; absent = stacked.
@@ -3762,6 +4089,34 @@ function ResultView({
 
   const inner = (
     <>
+      {resultsSummaryBar && answerSummary && answerSummary.length > 0 ? (
+        <div
+          style={{
+            marginTop: bare ? 0 : 16,
+            display: "flex",
+            flexWrap: "wrap",
+            alignItems: "center",
+            gap: 6,
+          }}
+        >
+          <span style={{ fontSize: 12, color: "var(--qz-color-muted, #888)" }}>
+            {tc("your_answers")}:
+          </span>
+          {answerSummary.map((label, i) => (
+            <span
+              key={`${label}-${i}`}
+              style={{
+                fontSize: 12,
+                padding: "2px 10px",
+                borderRadius: 999,
+                background: "color-mix(in srgb, var(--qz-color-primary) 10%, transparent)",
+              }}
+            >
+              {label}
+            </span>
+          ))}
+        </div>
+      ) : null}
       {discountLabel ? (
         <div
           style={{
@@ -3775,6 +4130,34 @@ function ResultView({
           }}
         >
           🎁 {discountLabel} on these picks — applied automatically at checkout.
+        </div>
+      ) : null}
+      {whyIntro && whyIntro.trim() ? (
+        <div
+          style={{
+            marginTop: bare ? 0 : 16,
+            padding: "12px 14px",
+            borderRadius: "var(--qz-radius)",
+            background: "color-mix(in srgb, var(--qz-color-primary) 6%, transparent)",
+            fontSize: 14,
+            lineHeight: 1.5,
+            whiteSpace: "pre-wrap",
+          }}
+        >
+          {whyIntro}
+        </div>
+      ) : null}
+      {oosNotify && recs.length > 0 && recs.every((r) => !r.inventory_in_stock) ? (
+        <div
+          style={{
+            marginTop: bare ? 0 : 16,
+            padding: "12px 14px",
+            borderRadius: "var(--qz-radius)",
+            background: "color-mix(in srgb, var(--qz-color-primary) 8%, transparent)",
+          }}
+        >
+          <div style={{ fontSize: 13, marginBottom: 8 }}>{tc("notify_section_prompt")}</div>
+          <NotifyMeForm quizId={quizId} sessionId={sessionId} productId={null} />
         </div>
       ) : null}
       <div
@@ -3791,11 +4174,41 @@ function ResultView({
               : styles.productGrid),
         }}
       >
-        {recs.length === 0 && (
-          <p style={{ color: "var(--qz-color-muted)" }}>
-            {tc("no_results_match")}
-          </p>
-        )}
+        {recs.length === 0 &&
+          (globalFallback && globalFallback.products.length > 0 ? (
+            <div style={{ gridColumn: "1 / -1" }}>
+              <h3 style={{ ...styles.h2, fontSize: "0.9em", margin: "0 0 12px" }}>
+                {globalFallback.heading}
+              </h3>
+              <div style={styles.productGrid}>
+                {globalFallback.products.map((r, idx) => (
+                  <ProductCard
+                    key={r.product_id}
+                    product={r}
+                    position={idx}
+                    ctaLabel={ctaLabel}
+                    href={productHref(r, shopDomain, platform)}
+                    shopDomain={shopDomain}
+                    showVariants={showVariants}
+                    showDescriptions={showDescriptions}
+                    styles={styles}
+                    onClick={() =>
+                      analytics?.track("recommendation_clicked", {
+                        product_id: r.product_id,
+                        position: idx,
+                        fallback: true,
+                      })
+                    }
+                    onAdd={() =>
+                      analytics?.track("add_to_cart", { product_id: r.product_id, position: idx })
+                    }
+                  />
+                ))}
+              </div>
+            </div>
+          ) : (
+            <p style={{ color: "var(--qz-color-muted)" }}>{tc("no_results_match")}</p>
+          ))}
         {recs.map((r, idx) => (
           <ProductCard
             reasons={reasonsByProduct?.get(r.product_id) ?? undefined}
@@ -3808,6 +4221,13 @@ function ResultView({
             shopDomain={shopDomain}
             discountCode={discountCode}
             discountLabel={discountLabel}
+            showVariants={showVariants}
+            showDescriptions={showDescriptions}
+            lowStockQty={lowStockByProduct?.get(r.product_id) ?? null}
+            oosNotify={oosNotify}
+            quizId={quizId}
+            sessionId={sessionId}
+            blurb={blurbByProduct?.get(r.product_id)}
             styles={styles}
             onClick={() =>
               analytics?.track("recommendation_clicked", {
@@ -3839,6 +4259,9 @@ function ResultView({
                 ctaLabel={ctaLabel}
                 href={productHref(r, shopDomain, platform)}
                 shopDomain={shopDomain}
+                showVariants={showVariants}
+                showDescriptions={showDescriptions}
+                lowStockQty={lowStockByProduct?.get(r.product_id) ?? null}
                 styles={styles}
                 onClick={() =>
                   analytics?.track("recommendation_clicked", {
@@ -3870,6 +4293,27 @@ function ResultView({
       >
         {tc("start_over")}
       </button>
+      {retakeLink ? (
+        <button
+          type="button"
+          onClick={onReset}
+          style={{
+            display: "block",
+            margin: "10px auto 0",
+            background: "none",
+            border: "none",
+            font: "inherit",
+            fontSize: "0.85em",
+            fontFamily: "var(--qz-font-body)",
+            color: "var(--qz-color-muted, #888)",
+            textDecoration: "underline",
+            cursor: "pointer",
+          }}
+        >
+          {tc("retake_quiz")}
+        </button>
+      ) : null}
+      {shareResults ? <ShareResultsButton quizId={quizId} sessionId={sessionId} /> : null}
       <SaveResultsLink quizId={quizId} sessionId={sessionId} />
       <BuddyRow quizId={quizId} sessionId={sessionId} buddySessionId={buddySessionId} analytics={analytics} />
       {escapeHatch && escapeHatch.label && escapeHatch.url ? (
@@ -4267,10 +4711,30 @@ function ProductCard({
   onAdd,
   vertical = false,
   reasons,
+  showVariants = false,
+  showDescriptions = false,
+  lowStockQty,
+  oosNotify = false,
+  quizId,
+  sessionId,
+  blurb,
 }: {
   product: RecommendedProduct;
   position: number;
   ctaLabel: string;
+  // Spec §3 Mode B — token-resolved "why we recommend this" blurb.
+  blurb?: string;
+  // Spec §2 product-display toggles. showVariants gates the inline variant
+  // picker; showDescriptions renders the baked description; lowStockQty (when a
+  // number) renders the live "Only X left" urgency line.
+  showVariants?: boolean;
+  showDescriptions?: boolean;
+  lowStockQty?: number | null;
+  // Spec §5 — when this card is sold out and the page's OOS behavior is
+  // "notify_me", the CTA becomes an inline back-in-stock email capture.
+  oosNotify?: boolean;
+  quizId?: string;
+  sessionId?: string;
   // When set, the info region links to the PDP (new tab). When omitted, it's a
   // click-tracked button.
   href?: string;
@@ -4369,6 +4833,11 @@ function ProductCard({
       )}
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ fontWeight: 600 }}>{product.title}</div>
+        {blurb && blurb.trim() ? (
+          <div style={{ fontSize: 13, color: "var(--qz-color-muted)", marginTop: 3, lineHeight: 1.4 }}>
+            {blurb}
+          </div>
+        ) : null}
         {reasons && reasons.length > 0 ? (
           <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginTop: 4 }}>
             <span style={{ fontSize: "0.7em", color: "var(--qz-color-muted, #888)", fontFamily: "var(--qz-font-body)" }}>
@@ -4401,6 +4870,27 @@ function ProductCard({
             ) : null}
           </div>
         )}
+        {typeof lowStockQty === "number" && lowStockQty > 0 && product.inventory_in_stock ? (
+          <div style={{ color: "#B25E00", marginTop: 4, fontSize: 12, fontWeight: 600 }}>
+            {tc("only_x_left", { count: lowStockQty })}
+          </div>
+        ) : null}
+        {showDescriptions && product.description ? (
+          <div
+            style={{
+              color: "var(--qz-color-muted)",
+              marginTop: 6,
+              fontSize: 13,
+              lineHeight: 1.4,
+              display: "-webkit-box",
+              WebkitLineClamp: 3,
+              WebkitBoxOrient: "vertical",
+              overflow: "hidden",
+            }}
+          >
+            {product.description}
+          </div>
+        ) : null}
         {!product.inventory_in_stock && (
           <div style={{ color: "#D72C0D", marginTop: 4, fontSize: 12 }}>{tc("out_of_stock")}</div>
         )}
@@ -4432,7 +4922,7 @@ function ProductCard({
             consumed by add-to-cart (cartUrl) only. On standalone there's no
             cart and "Shop now" links to the variant-agnostic PDP, so the picker
             would be a dead, misleading control. */}
-        {cartUrl && product.variants && product.variants.length > 1 ? (
+        {showVariants && cartUrl && product.variants && product.variants.length > 1 ? (
           <select
             aria-label={tc("aria_choose_variant")}
             value={selectedVariantId ?? ""}
@@ -4466,6 +4956,10 @@ function ProductCard({
           >
             {tc("add_to_cart")}
           </button>
+        ) : soldOut && oosNotify ? (
+          // Spec §5 — sold out + notify_me: capture an email for back-in-stock
+          // instead of a dead add-to-cart.
+          <NotifyMeForm quizId={quizId} sessionId={sessionId} productId={product.product_id} compact />
         ) : soldOut && platform !== "standalone" ? (
           // Shopify + sold out: the add-to-cart would build a doomed permalink,
           // so show a disabled state instead (the OOS note above already explains).
