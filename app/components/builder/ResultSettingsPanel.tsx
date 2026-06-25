@@ -52,11 +52,20 @@ const STRATEGY_HINT: Record<MatchLadderStrategy, string> = {
   metafield: "Products whose metafield matches a value.",
 };
 
+// Sort-Order set (Rec-Page spec §1). "manual" (Manually curated) respects a
+// collection's own Shopify sort and is only meaningful when a collection scopes
+// the section — it's disabled below unless a collection / collection sub-filter
+// is set. Relevance + Highest rated are kept for back-compat with existing quizzes.
 const RANKING_OPTIONS: { value: ResultRanking; label: string }[] = [
-  { value: "relevance", label: "Relevance" },
+  { value: "relevance", label: "Relevance (answer fit)" },
+  { value: "best_seller", label: "Best selling" },
   { value: "newest", label: "Newest" },
-  { value: "best_seller", label: "Best seller" },
+  { value: "price_asc", label: "Price: Low → High" },
+  { value: "price_desc", label: "Price: High → Low" },
+  { value: "title_az", label: "Title: A → Z" },
+  { value: "title_za", label: "Title: Z → A" },
   { value: "highest_rated", label: "Highest rated" },
+  { value: "manual", label: "Manually curated" },
 ];
 
 const OOS_OPTIONS: { value: OosBehavior; label: string }[] = [
@@ -141,6 +150,13 @@ export function ResultSettingsPanel({
     : undefined;
 
   const maxProducts = data.max_products ?? data.slot_count;
+
+  // "Manually curated" sort respects a collection's Shopify order, so it only
+  // applies when a collection scopes the section (a collection sub-filter, the
+  // bound collection, or the collection rung).
+  const hasCollectionScope = Boolean(
+    data.sub_filter_collection_id || data.collection_id,
+  );
 
   return (
     <div className="qz-col qz-gap-8">
@@ -286,14 +302,20 @@ export function ResultSettingsPanel({
       <QzCollapse title="Ranking & count">
         <div className="qz-col qz-gap-8">
           <div className="qz-row qz-gap-8">
-            <QzField label="Ranking">
+            <QzField label="Sort order">
               <QzSelect
                 value={data.ranking}
                 onChange={(e) => set({ ranking: e.target.value as ResultRanking })}
               >
                 {RANKING_OPTIONS.map((o) => (
-                  <option key={o.value} value={o.value}>
-                    {o.label}
+                  <option
+                    key={o.value}
+                    value={o.value}
+                    disabled={o.value === "manual" && !hasCollectionScope}
+                  >
+                    {o.value === "manual" && !hasCollectionScope
+                      ? `${o.label} (needs a collection)`
+                      : o.label}
                   </option>
                 ))}
               </QzSelect>
@@ -317,6 +339,131 @@ export function ResultSettingsPanel({
               />
             </QzField>
           </div>
+
+          {/* Sub-filter — narrow within the bucket's OWN pool (spec §1). */}
+          <div className="qz-row qz-gap-8">
+            <QzField
+              label="Sub-filter tag"
+              hint="Optional. Narrows this section to products that also carry this tag."
+            >
+              <QzInput
+                value={data.sub_filter_tag ?? ""}
+                placeholder="e.g. toners"
+                onChange={(e) => set({ sub_filter_tag: e.target.value || undefined })}
+              />
+            </QzField>
+            <QzField label="Sub-filter collection" hint="Optional. Within the bucket pool.">
+              <QzSelect
+                value={data.sub_filter_collection_id ?? ""}
+                onChange={(e) =>
+                  set({ sub_filter_collection_id: e.target.value || undefined })
+                }
+              >
+                <option value="">No collection</option>
+                {collections.map((c) => (
+                  <option key={c.collectionId} value={c.collectionId}>
+                    {c.title}
+                  </option>
+                ))}
+              </QzSelect>
+            </QzField>
+          </div>
+        </div>
+      </QzCollapse>
+
+      {/* ── PRODUCT DISPLAY (spec §2) ─────────────────────────────────── */}
+      <QzCollapse title="Product display">
+        <div className="qz-col qz-gap-8">
+          <label
+            className="qz-row qz-gap-8"
+            style={{ alignItems: "center", fontSize: 13, cursor: "pointer" }}
+          >
+            <input
+              type="checkbox"
+              checked={data.show_variants}
+              onChange={(e) => set({ show_variants: e.target.checked })}
+            />
+            Show variant selector on cards
+          </label>
+          <label
+            className="qz-row qz-gap-8"
+            style={{ alignItems: "center", fontSize: 13, cursor: "pointer" }}
+          >
+            <input
+              type="checkbox"
+              checked={data.show_descriptions}
+              onChange={(e) => set({ show_descriptions: e.target.checked })}
+            />
+            Show product descriptions
+          </label>
+          <label
+            className="qz-row qz-gap-8"
+            style={{ alignItems: "center", fontSize: 13, cursor: "pointer" }}
+          >
+            <input
+              type="checkbox"
+              checked={data.urgency_enabled}
+              onChange={(e) => set({ urgency_enabled: e.target.checked })}
+            />
+            Show “Only X left” urgency signal
+          </label>
+          {data.urgency_enabled ? (
+            <QzField
+              label="Urgency threshold"
+              hint="Only show at or below this stock level. Hidden when inventory tracking is off."
+            >
+              <QzInput
+                type="number"
+                min={1}
+                max={99}
+                value={data.urgency_threshold}
+                onChange={(e) =>
+                  set({
+                    urgency_threshold: Number.isNaN(e.target.valueAsNumber)
+                      ? 5
+                      : Math.max(1, Math.min(99, Math.round(e.target.valueAsNumber))),
+                  })
+                }
+              />
+            </QzField>
+          ) : null}
+          <label
+            className="qz-row qz-gap-8"
+            style={{ alignItems: "center", fontSize: 13, cursor: "not-allowed", opacity: 0.55 }}
+            title="Coming soon — connect your reviews app"
+          >
+            <input type="checkbox" disabled checked={false} readOnly />
+            Show star ratings
+            <QzBadge tone="draft">Coming soon</QzBadge>
+          </label>
+        </div>
+      </QzCollapse>
+
+      {/* ── PAGE STRUCTURE (spec §6) ──────────────────────────────────── */}
+      <QzCollapse title="Page structure">
+        <div className="qz-col qz-gap-8">
+          <label
+            className="qz-row qz-gap-8"
+            style={{ alignItems: "center", fontSize: 13, cursor: "pointer" }}
+          >
+            <input
+              type="checkbox"
+              checked={data.results_summary_bar}
+              onChange={(e) => set({ results_summary_bar: e.target.checked })}
+            />
+            Results summary bar (shopper’s answers)
+          </label>
+          <label
+            className="qz-row qz-gap-8"
+            style={{ alignItems: "center", fontSize: 13, cursor: "pointer" }}
+          >
+            <input
+              type="checkbox"
+              checked={data.retake_link}
+              onChange={(e) => set({ retake_link: e.target.checked })}
+            />
+            Retake-quiz link
+          </label>
         </div>
       </QzCollapse>
 
