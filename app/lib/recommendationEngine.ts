@@ -16,6 +16,9 @@ export interface IndexedProduct {
   url?: string;
   price: string | null;
   image_url: string | null;
+  // Short plain-text product description, baked at publish (capped) — rendered
+  // on result cards when the page's show_descriptions toggle is on.
+  description?: string;
   tags: string[];
   collection_ids: string[];
   inventory_in_stock: boolean;

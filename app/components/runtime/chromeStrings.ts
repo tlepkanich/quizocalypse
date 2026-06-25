@@ -82,6 +82,10 @@ export const CHROME_TOKENS = {
   back: "Back",
   next: "Next",
   question_counter: "Question # {n}",
+  // Rec-Page spec §2/§6.
+  only_x_left: "Only {count} left in stock",
+  your_answers: "Your answers",
+  retake_quiz: "Not what you were looking for? Retake the quiz",
 } as const;
 
 export type ChromeToken = keyof typeof CHROME_TOKENS;

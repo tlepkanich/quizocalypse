@@ -236,10 +236,56 @@ export function QuizRuntime(props: QuizRuntimeProps) {
   // node change so a jump-back + new path replays them.
   const [recapConfirmed, setRecapConfirmed] = useState(false);
   const [revealDone, setRevealDone] = useState(false);
+  // Spec §2 urgency — product_id → live stock qty (only entries at/below the
+  // result's threshold). Fetched fresh when a result page renders (never baked,
+  // never cached) so "Only X left" reflects real-time Shopify inventory.
+  const [lowStockByProduct, setLowStockByProduct] = useState<Map<string, number> | null>(null);
   useEffect(() => {
     setRecapConfirmed(false);
     setRevealDone(false);
   }, [currentNodeId]);
+
+  // Spec §2 urgency — when a result page with the urgency toggle renders, fetch
+  // current stock for its products and keep only those at/below the threshold.
+  // Skipped in preview (no live inventory there). Re-runs per result node.
+  useEffect(() => {
+    const node = doc.nodes.find((n) => n.id === currentNodeId);
+    if (!node || node.type !== "result" || !node.data.urgency_enabled || isPreview || !quizId) {
+      setLowStockByProduct(null);
+      return;
+    }
+    const selectedAnswerIds = path.flatMap((p) => p.answerIds);
+    // Cover both the primary recs and the "you might also like" row (cap 12).
+    const recs = recommendForResult(
+      {
+        quiz: doc,
+        productIndex,
+        selectedAnswerIds,
+        resultNodeId: node.id,
+        ...(answerWeights ? { answerWeights } : {}),
+      },
+      12,
+    );
+    const ids = recs.map((r) => r.product_id);
+    if (ids.length === 0) {
+      setLowStockByProduct(null);
+      return;
+    }
+    const threshold = node.data.urgency_threshold;
+    let cancelled = false;
+    void fetchLiveInventory(quizId, ids).then((qtyById) => {
+      if (cancelled) return;
+      const m = new Map<string, number>();
+      for (const [pid, qty] of Object.entries(qtyById)) {
+        if (typeof qty === "number" && qty > 0 && qty <= threshold) m.set(pid, qty);
+      }
+      setLowStockByProduct(m);
+    });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentNodeId, quizId, isPreview]);
 
   // Unified P3 — preview-only selection sync (both effects no-op in live mode
   // by construction AND by guard). Jump: when the workspace selects a step that
@@ -675,6 +721,12 @@ export function QuizRuntime(props: QuizRuntimeProps) {
           analytics={analyticsRef.current}
           buddySessionId={buddySessionId}
           onReset={reset}
+          showVariants={node.data.show_variants}
+          showDescriptions={node.data.show_descriptions}
+          lowStockByProduct={lowStockByProduct}
+          resultsSummaryBar={node.data.results_summary_bar}
+          answerSummary={pickedAnswerLabels(doc, selectedAnswerIds)}
+          retakeLink={node.data.retake_link}
           bare
         />
       );
@@ -1087,6 +1139,12 @@ export function QuizRuntime(props: QuizRuntimeProps) {
             escapeHatch={currentNode.data.escape_hatch ?? null}
             discountCode={discountCode}
             discountLabel={discountLabel}
+            showVariants={currentNode.data.show_variants}
+            showDescriptions={currentNode.data.show_descriptions}
+            lowStockByProduct={lowStockByProduct}
+            resultsSummaryBar={currentNode.data.results_summary_bar}
+            answerSummary={pickedAnswerLabels(doc, selectedAnswerIds)}
+            retakeLink={currentNode.data.retake_link}
             styles={styles}
             startedAt={startedAtRef.current}
             completed={completedRef}
@@ -3568,6 +3626,29 @@ function postQuizSession(args: {
   }).catch(() => {});
 }
 
+// Spec §2 urgency — fetch current stock for the given products at result-page
+// load. Returns product_id → available quantity (only tracked products). Best
+// effort: any failure resolves to an empty map so the page renders without the
+// urgency line rather than erroring.
+async function fetchLiveInventory(
+  quizId: string,
+  productIds: string[],
+): Promise<Record<string, number>> {
+  if (!quizId || productIds.length === 0) return {};
+  try {
+    const res = await fetch(`/q/${quizId}/inventory`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ product_ids: productIds }),
+    });
+    if (!res.ok) return {};
+    const data = (await res.json()) as { quantities?: Record<string, number> };
+    return data.quantities ?? {};
+  } catch {
+    return {};
+  }
+}
+
 // Inline email capture on the result page (Dev Spec §5), gated by
 // Quiz.collect_email_on_result. Mirrors EmailGateView: preview mode does not
 // POST; a real capture persists via /captures + fires email_captured.
@@ -3662,6 +3743,29 @@ function ResultEmailCapture({
   );
 }
 
+// Spec §6 results-summary bar — the shopper's picked answer texts, in the order
+// they were chosen. Pure; deduped so a tag selected twice doesn't repeat.
+function pickedAnswerLabels(
+  quiz: QuizDoc,
+  selectedAnswerIds: string[],
+): string[] {
+  const labelById = new Map<string, string>();
+  for (const node of quiz.nodes) {
+    if (node.type !== "question") continue;
+    for (const a of node.data.answers) labelById.set(a.id, a.text);
+  }
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const id of selectedAnswerIds) {
+    const label = labelById.get(id);
+    if (label && !seen.has(label)) {
+      seen.add(label);
+      out.push(label);
+    }
+  }
+  return out;
+}
+
 function ResultView({
   headline,
   subtext,
@@ -3688,10 +3792,25 @@ function ResultView({
   splitLayout,
   reasonsByProduct,
   escapeHatch,
+  showVariants = false,
+  showDescriptions = false,
+  lowStockByProduct,
+  resultsSummaryBar = false,
+  answerSummary,
+  retakeLink = false,
 }: {
   headline: string;
   subtext: string;
   ctaLabel: string;
+  // Rec-Page spec §2/§6 display + structure toggles, threaded from the result node.
+  showVariants?: boolean;
+  showDescriptions?: boolean;
+  // product_id → live stock qty (≤ threshold), populated by the urgency fetch.
+  lowStockByProduct?: Map<string, number> | null;
+  resultsSummaryBar?: boolean;
+  // Shopper's picked answer labels for the summary bar ("Oily skin · Sensitive").
+  answerSummary?: string[];
+  retakeLink?: boolean;
   inspect?: (part: "result_headline" | "result_subtext") => React.HTMLAttributes<HTMLElement>;
   // BIC P8: 2-column desktop layout (pitch left, vertical cards right). The
   // call site gates it on tokens.result_split && desktop; absent = stacked.
@@ -3762,6 +3881,34 @@ function ResultView({
 
   const inner = (
     <>
+      {resultsSummaryBar && answerSummary && answerSummary.length > 0 ? (
+        <div
+          style={{
+            marginTop: bare ? 0 : 16,
+            display: "flex",
+            flexWrap: "wrap",
+            alignItems: "center",
+            gap: 6,
+          }}
+        >
+          <span style={{ fontSize: 12, color: "var(--qz-color-muted, #888)" }}>
+            {tc("your_answers")}:
+          </span>
+          {answerSummary.map((label, i) => (
+            <span
+              key={`${label}-${i}`}
+              style={{
+                fontSize: 12,
+                padding: "2px 10px",
+                borderRadius: 999,
+                background: "color-mix(in srgb, var(--qz-color-primary) 10%, transparent)",
+              }}
+            >
+              {label}
+            </span>
+          ))}
+        </div>
+      ) : null}
       {discountLabel ? (
         <div
           style={{
@@ -3808,6 +3955,9 @@ function ResultView({
             shopDomain={shopDomain}
             discountCode={discountCode}
             discountLabel={discountLabel}
+            showVariants={showVariants}
+            showDescriptions={showDescriptions}
+            lowStockQty={lowStockByProduct?.get(r.product_id) ?? null}
             styles={styles}
             onClick={() =>
               analytics?.track("recommendation_clicked", {
@@ -3839,6 +3989,9 @@ function ResultView({
                 ctaLabel={ctaLabel}
                 href={productHref(r, shopDomain, platform)}
                 shopDomain={shopDomain}
+                showVariants={showVariants}
+                showDescriptions={showDescriptions}
+                lowStockQty={lowStockByProduct?.get(r.product_id) ?? null}
                 styles={styles}
                 onClick={() =>
                   analytics?.track("recommendation_clicked", {
@@ -3870,6 +4023,26 @@ function ResultView({
       >
         {tc("start_over")}
       </button>
+      {retakeLink ? (
+        <button
+          type="button"
+          onClick={onReset}
+          style={{
+            display: "block",
+            margin: "10px auto 0",
+            background: "none",
+            border: "none",
+            font: "inherit",
+            fontSize: "0.85em",
+            fontFamily: "var(--qz-font-body)",
+            color: "var(--qz-color-muted, #888)",
+            textDecoration: "underline",
+            cursor: "pointer",
+          }}
+        >
+          {tc("retake_quiz")}
+        </button>
+      ) : null}
       <SaveResultsLink quizId={quizId} sessionId={sessionId} />
       <BuddyRow quizId={quizId} sessionId={sessionId} buddySessionId={buddySessionId} analytics={analytics} />
       {escapeHatch && escapeHatch.label && escapeHatch.url ? (
@@ -4267,10 +4440,19 @@ function ProductCard({
   onAdd,
   vertical = false,
   reasons,
+  showVariants = false,
+  showDescriptions = false,
+  lowStockQty,
 }: {
   product: RecommendedProduct;
   position: number;
   ctaLabel: string;
+  // Spec §2 product-display toggles. showVariants gates the inline variant
+  // picker; showDescriptions renders the baked description; lowStockQty (when a
+  // number) renders the live "Only X left" urgency line.
+  showVariants?: boolean;
+  showDescriptions?: boolean;
+  lowStockQty?: number | null;
   // When set, the info region links to the PDP (new tab). When omitted, it's a
   // click-tracked button.
   href?: string;
@@ -4401,6 +4583,27 @@ function ProductCard({
             ) : null}
           </div>
         )}
+        {typeof lowStockQty === "number" && lowStockQty > 0 && product.inventory_in_stock ? (
+          <div style={{ color: "#B25E00", marginTop: 4, fontSize: 12, fontWeight: 600 }}>
+            {tc("only_x_left", { count: lowStockQty })}
+          </div>
+        ) : null}
+        {showDescriptions && product.description ? (
+          <div
+            style={{
+              color: "var(--qz-color-muted)",
+              marginTop: 6,
+              fontSize: 13,
+              lineHeight: 1.4,
+              display: "-webkit-box",
+              WebkitLineClamp: 3,
+              WebkitBoxOrient: "vertical",
+              overflow: "hidden",
+            }}
+          >
+            {product.description}
+          </div>
+        ) : null}
         {!product.inventory_in_stock && (
           <div style={{ color: "#D72C0D", marginTop: 4, fontSize: 12 }}>{tc("out_of_stock")}</div>
         )}
@@ -4432,7 +4635,7 @@ function ProductCard({
             consumed by add-to-cart (cartUrl) only. On standalone there's no
             cart and "Shop now" links to the variant-agnostic PDP, so the picker
             would be a dead, misleading control. */}
-        {cartUrl && product.variants && product.variants.length > 1 ? (
+        {showVariants && cartUrl && product.variants && product.variants.length > 1 ? (
           <select
             aria-label={tc("aria_choose_variant")}
             value={selectedVariantId ?? ""}

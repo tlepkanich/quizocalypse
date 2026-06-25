@@ -4,6 +4,7 @@ import {
   collectReferencedCategoryIds,
   bakeResultPages,
   collectRecommendableProductIds,
+  shortDescription,
   stripPublicJsonPayload,
 } from "./quizPublish";
 import { recommendForResult, type IndexedProduct } from "./recommendationEngine";
@@ -94,6 +95,23 @@ const INDEX: IndexedProduct[] = [
   product("snowboard_1", "gid://shopify/Collection/fallback"),
   product("snowboard_2", "gid://shopify/Collection/fallback"),
 ];
+
+describe("shortDescription (result-card description bake)", () => {
+  it("collapses whitespace and leaves short text intact", () => {
+    expect(shortDescription("  Gentle   daily\n cleanser  ")).toBe("Gentle daily cleanser");
+  });
+  it("truncates at a word boundary with an ellipsis", () => {
+    const long = "word ".repeat(80).trim(); // 400 chars
+    const out = shortDescription(long, 50);
+    expect(out.length).toBeLessThanOrEqual(51); // ≤ cap + ellipsis
+    expect(out.endsWith("…")).toBe(true);
+    expect(out).not.toContain("  ");
+  });
+  it("does not add an ellipsis when exactly at the cap", () => {
+    const exact = "a".repeat(20);
+    expect(shortDescription(exact, 20)).toBe(exact);
+  });
+});
 
 describe("collectReferencedCategoryIds", () => {
   it("collects category ids from v3 result NODES (not just results_pages)", () => {
