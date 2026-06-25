@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { Quiz } from "./quizSchema";
-import { reachedBy, tracePath, answerRoutes } from "./routeTrace";
+import { reachedBy, tracePath, answerRoutes, routingConflicts } from "./routeTrace";
 
 // Branched fixture: intro → q1; q1.a1 → q2 → r1; q1.a2 → r2 (direct).
 const RAW = {
@@ -98,5 +98,34 @@ describe("answerRoutes", () => {
 
   it("returns [] when every answer goes to the same place (no badge noise)", () => {
     expect(answerRoutes(doc(), "q2")).toEqual([]);
+  });
+});
+
+describe("routingConflicts (Question-Builder spec)", () => {
+  it("flags none on a clean forward-routing question", () => {
+    expect(routingConflicts(doc(), "q1")).toEqual([]);
+  });
+
+  it("warns when an answer routes back to an earlier step (loop)", () => {
+    const d = doc();
+    // q2's answer a3 (handle h3) routes back to q1 — q1 is an ancestor of q2.
+    d.edges.push({ id: "loop", source: "q2", target: "q1", source_handle: "h3" });
+    const conflicts = routingConflicts(d, "q2");
+    expect(conflicts.some((c) => c.severity === "warn" && /loop/i.test(c.message))).toBe(true);
+  });
+
+  it("errors when an answer routes to a step that no longer exists", () => {
+    const d = doc();
+    d.edges.push({ id: "dead", source: "q2", target: "ghost", source_handle: "h4" });
+    const conflicts = routingConflicts(d, "q2");
+    expect(conflicts.some((c) => c.severity === "error")).toBe(true);
+  });
+
+  it("warns about per-answer routing on a multi-select", () => {
+    const d = doc();
+    const q1 = d.nodes.find((n) => n.id === "q1")!;
+    if (q1.type === "question") q1.data.question_type = "multi_select";
+    const conflicts = routingConflicts(d, "q1");
+    expect(conflicts.some((c) => /multi-select/i.test(c.message))).toBe(true);
   });
 });

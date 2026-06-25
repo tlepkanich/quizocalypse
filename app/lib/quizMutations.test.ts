@@ -6,7 +6,10 @@ import {
   setBranchMode,
   promoteAbWinner,
   deleteNode,
+  duplicateQuestionNode,
+  insertQuestionRelative,
   moveStep,
+  routeAnswerToEnd,
   straightThroughRun,
 } from "./quizMutations";
 import { insertModule } from "../components/studio/studioDoc";
@@ -71,6 +74,68 @@ describe("straightThroughRun", () => {
     expect(run).toEqual(["q1", "q2", "q3"]);
     const tailNode = doc.nodes.find((n) => n.id === tail);
     expect(tailNode?.type).toBe("branch");
+  });
+});
+
+describe("duplicateQuestionNode / insertQuestionRelative (Question-Builder spec)", () => {
+  const runOf = (doc: ReturnType<typeof linearQuestionsDoc>) => straightThroughRun(doc).run;
+
+  it("duplicate splices the clone right after the original on the spine", () => {
+    const before = runOf(linearQuestionsDoc()); // [q1,q2,q3]
+    const next = duplicateQuestionNode(linearQuestionsDoc(), "q2");
+    const run = runOf(next);
+    expect(run.length).toBe(before.length + 1);
+    const cloneId = run[run.indexOf("q2") + 1]!;
+    expect(["q1", "q2", "q3"]).not.toContain(cloneId); // fresh id
+    expect(run).toEqual(["q1", "q2", cloneId, "q3"]);
+  });
+
+  it("the clone gets fresh answer ids (independent routing)", () => {
+    const next = duplicateQuestionNode(linearQuestionsDoc(), "q2");
+    const run = runOf(next);
+    const cloneId = run[run.indexOf("q2") + 1]!;
+    const clone = next.nodes.find((n) => n.id === cloneId);
+    const orig = next.nodes.find((n) => n.id === "q2");
+    if (clone?.type !== "question" || orig?.type !== "question") throw new Error("bad fixture");
+    expect(clone.data.text).toBe(orig.data.text);
+    const cloneAnswerIds = clone.data.answers.map((a) => a.id);
+    const origAnswerIds = orig.data.answers.map((a) => a.id);
+    expect(cloneAnswerIds.some((id) => origAnswerIds.includes(id))).toBe(false);
+  });
+
+  it("insert above places a new question before the reference", () => {
+    const next = insertQuestionRelative(linearQuestionsDoc(), "q2", "above");
+    const run = runOf(next);
+    const newId = run[run.indexOf("q2") - 1]!;
+    expect(["q1", "q2", "q3"]).not.toContain(newId);
+    expect(run).toEqual(["q1", newId, "q2", "q3"]);
+  });
+
+  it("insert below places a new question after the reference", () => {
+    const next = insertQuestionRelative(linearQuestionsDoc(), "q3", "below");
+    const run = runOf(next);
+    const newId = run[run.indexOf("q3") + 1]!;
+    expect(run).toEqual(["q1", "q2", "q3", newId]);
+    // the result page still terminates the spine
+    expect(straightThroughRun(next).tail).toBe("r1");
+  });
+
+  it("duplicate is a no-op on a non-question id", () => {
+    const doc = linearQuestionsDoc();
+    expect(duplicateQuestionNode(doc, "r1")).toBe(doc);
+  });
+
+  it("routeAnswerToEnd creates an end node and routes the answer to it, reusing it next time", () => {
+    const first = routeAnswerToEnd(linearQuestionsDoc(), "q1", "q1_a1");
+    const ends = first.nodes.filter((n) => n.type === "end");
+    expect(ends).toHaveLength(1);
+    const edge = first.edges.find((e) => e.source === "q1" && e.source_handle === "q1_h1");
+    expect(edge?.target).toBe(ends[0]!.id);
+    // A second answer routed to "End" reuses the same end node (no duplicates).
+    const second = routeAnswerToEnd(first, "q2", "q2_a1");
+    expect(second.nodes.filter((n) => n.type === "end")).toHaveLength(1);
+    const edge2 = second.edges.find((e) => e.source === "q2" && e.source_handle === "q2_h1");
+    expect(edge2?.target).toBe(ends[0]!.id);
   });
 });
 

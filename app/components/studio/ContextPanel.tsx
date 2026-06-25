@@ -3,11 +3,12 @@ import type { Quiz, QuizNode } from "../../lib/quizSchema";
 import type { IndexedProduct } from "../../lib/recommendationEngine";
 import type { BuilderCategory } from "../builder/stepProps";
 import type { DesignLayerMode } from "../../lib/designLayers";
-import { reachedBy } from "../../lib/routeTrace";
-import { setAnswerRoute } from "../../lib/quizMutations";
+import { reachedBy, routingConflicts } from "../../lib/routeTrace";
+import { setAnswerRoute, routeAnswerToEnd, straightThroughRun } from "../../lib/quizMutations";
+import { computeBucketCoverage, type CoverageLevel } from "../../lib/bucketCoverage";
 import { StepPreview } from "../runtime/StepPreview";
 import { PathTester } from "../logic/PathTester";
-import { ContentTab } from "./panels/ContentTab";
+import { ContentTab, type RegenApi } from "./panels/ContentTab";
 import { LayoutTab } from "./panels/LayoutTab";
 import { StyleTab } from "./panels/StyleTab";
 import { CssTab } from "./panels/CssTab";
@@ -35,6 +36,7 @@ export function ContextPanel({
   categories,
   frameBreakpoint,
   onOpenLogic,
+  regen,
 }: {
   doc: QuizDoc;
   nodeId: string;
@@ -48,6 +50,8 @@ export function ContextPanel({
   frameBreakpoint: "desktop" | "mobile";
   // Jump to the Logic view (full recommendation mapping lives there).
   onOpenLogic?: () => void;
+  // Optional per-question AI regenerate plumbing (studio only).
+  regen?: RegenApi;
 }) {
   const [tab, setTab] = useState<Tab>("content");
   // null = follow the frame ("edit what you see"); explicit pick overrides.
@@ -73,7 +77,129 @@ export function ContextPanel({
       categories={categories}
       frameBreakpoint={frameBreakpoint}
       onOpenLogic={onOpenLogic}
+      regen={regen}
     />
+  );
+}
+
+// Question-Builder spec — Bucket Coverage Indicator. A quiz-level read-out of
+// how well each bucket is reachable from the answers authored so far: green =
+// well covered, yellow = weak (< 50% of the best bucket), red = no answers
+// point at it. Hover a pill for the exact answer count.
+const COVERAGE_STYLE: Record<CoverageLevel, { bg: string; fg: string; dot: string }> = {
+  strong: { bg: "color-mix(in srgb, #28c840 16%, transparent)", fg: "#1c7c2c", dot: "#28c840" },
+  weak: { bg: "color-mix(in srgb, #febc2e 22%, transparent)", fg: "#8a5b00", dot: "#e0a116" },
+  none: { bg: "color-mix(in srgb, #ff5f57 16%, transparent)", fg: "#b3241a", dot: "#ff5f57" },
+};
+
+function BucketCoveragePills({
+  doc,
+  categories,
+}: {
+  doc: QuizDoc;
+  categories: BuilderCategory[];
+}) {
+  if (categories.length === 0) return null;
+  const coverage = computeBucketCoverage(
+    doc,
+    categories.map((c) => ({ id: c.id, name: c.name, tags: c.tags })),
+  );
+  return (
+    <div>
+      <div className="qz-label" style={{ marginBottom: 4, fontSize: 11 }}>
+        Bucket coverage
+      </div>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
+        {coverage.map((c) => {
+          const s = COVERAGE_STYLE[c.level];
+          return (
+            <span
+              key={c.id}
+              title={`${c.count} answer${c.count === 1 ? "" : "s"} point at “${c.name}”${
+                c.level === "none"
+                  ? " — no answers reach this bucket yet"
+                  : c.level === "weak"
+                    ? " — weak (under half of the best-covered bucket)"
+                    : ""
+              }`}
+              className="qz-row"
+              style={{
+                gap: 5,
+                alignItems: "center",
+                fontSize: 11,
+                borderRadius: 999,
+                padding: "2px 9px",
+                background: s.bg,
+                color: s.fg,
+              }}
+            >
+              <span aria-hidden style={{ width: 7, height: 7, borderRadius: 999, background: s.dot }} />
+              {c.name}
+              <span style={{ opacity: 0.7, fontVariantNumeric: "tabular-nums" }}>{c.count}</span>
+            </span>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// Question-Builder spec — read-only Flow View. Questions in flow order, each
+// with its explicit skip-rules drawn as arrows (default "next" routing is
+// implied by the order). Visualization only — no editing here.
+function QuizFlowView({ doc }: { doc: QuizDoc }) {
+  const { run, tail } = straightThroughRun(doc);
+  const byId = new Map(doc.nodes.map((n) => [n.id, n]));
+  const labelFor = (id: string | null): string => {
+    if (!id) return "—";
+    const n = byId.get(id);
+    if (!n) return "(missing)";
+    const d = n.data as Record<string, unknown>;
+    const txt = (typeof d.text === "string" && d.text) || (typeof d.headline === "string" && d.headline) || NODE_LABEL[n.type];
+    return `${NODE_LABEL[n.type]}: ${String(txt).slice(0, 28)}`;
+  };
+  const questions = run
+    .map((id) => byId.get(id))
+    .filter((n): n is Extract<QuizNode, { type: "question" }> => n?.type === "question");
+  return (
+    <div
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        gap: 8,
+        padding: "8px 10px",
+        borderRadius: 8,
+        background: "var(--qz-cream-2, #00000008)",
+      }}
+    >
+      {questions.map((q, i) => {
+        const explicit = q.data.answers
+          .map((a) => {
+            const edge = doc.edges.find(
+              (e) => e.source === q.id && e.source_handle === a.edge_handle_id,
+            );
+            return edge ? { a, targetId: edge.target } : null;
+          })
+          .filter((x): x is { a: (typeof q.data.answers)[number]; targetId: string } => x !== null);
+        return (
+          <div key={q.id} style={{ fontSize: 11.5 }}>
+            <div style={{ fontWeight: 600 }}>
+              <span style={{ opacity: 0.6 }}>{i + 1}.</span> {q.data.text.slice(0, 40) || "Untitled"}
+            </div>
+            {explicit.length > 0 ? (
+              <div style={{ marginLeft: 12, marginTop: 2, color: "var(--qz-ink-2, #555)" }}>
+                {explicit.map(({ a, targetId }) => (
+                  <div key={a.id} style={{ whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                    ↳ &ldquo;{a.text.slice(0, 18)}&rdquo; → {labelFor(targetId)}
+                  </div>
+                ))}
+              </div>
+            ) : null}
+          </div>
+        );
+      })}
+      <div style={{ fontSize: 11.5, fontWeight: 600, opacity: 0.85 }}>↦ {labelFor(tail)}</div>
+    </div>
   );
 }
 
@@ -94,8 +220,13 @@ function RoutingBody({
   onOpenLogic?: () => void;
 }) {
   const arrivals = reachedBy(doc, node.id);
-  // Destination options: any shopper-visible step except intro and the node itself.
-  const targets = doc.nodes.filter((n) => n.type !== "intro" && n.id !== node.id);
+  // Destination options: any shopper-visible step except intro, end (offered via
+  // the dedicated "End the quiz" option), and the node itself.
+  const targets = doc.nodes.filter(
+    (n) => n.type !== "intro" && n.type !== "end" && n.id !== node.id,
+  );
+  const conflicts = node.type === "question" ? routingConflicts(doc, node.id) : [];
+  const [showFlow, setShowFlow] = useState(false);
   const targetLabel = (n: QuizNode) => {
     const d = n.data as Record<string, unknown>;
     const s = (k: string) => (typeof d[k] === "string" ? (d[k] as string) : "");
@@ -105,6 +236,23 @@ function RoutingBody({
 
   return (
     <>
+      <BucketCoveragePills doc={doc} categories={categories} />
+      <div>
+        <button
+          type="button"
+          className="qz-btn qz-btn-ghost qz-btn-sm"
+          aria-pressed={showFlow}
+          onClick={() => setShowFlow((v) => !v)}
+          style={{ fontSize: 11 }}
+        >
+          {showFlow ? "▾ Flow view" : "▸ Flow view"}
+        </button>
+        {showFlow ? (
+          <div style={{ marginTop: 6 }}>
+            <QuizFlowView doc={doc} />
+          </div>
+        ) : null}
+      </div>
       {arrivals.length > 0 ? (
         <div>
           <div className="qz-label" style={{ marginBottom: 4, fontSize: 11 }}>
@@ -142,6 +290,9 @@ function RoutingBody({
               const edge = doc.edges.find(
                 (e) => e.source === node.id && e.source_handle === a.edge_handle_id,
               );
+              const targetNode = edge ? doc.nodes.find((n) => n.id === edge.target) : undefined;
+              const selectValue =
+                targetNode?.type === "end" ? "__end__" : edge?.target ?? "";
               return (
                 <label key={a.id} className="qz-row" style={{ gap: 8, alignItems: "center", fontSize: 12 }}>
                   <span
@@ -156,10 +307,12 @@ function RoutingBody({
                     {a.icon ? `${a.icon} ` : ""}{a.text}
                   </span>
                   <select
-                    value={edge?.target ?? ""}
-                    onChange={(e) =>
-                      onCommit(setAnswerRoute(doc, node.id, a.id, e.target.value || null))
-                    }
+                    value={selectValue}
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      if (v === "__end__") onCommit(routeAnswerToEnd(doc, node.id, a.id));
+                      else onCommit(setAnswerRoute(doc, node.id, a.id, v || null));
+                    }}
                     style={{
                       flex: 1,
                       minWidth: 0,
@@ -177,14 +330,42 @@ function RoutingBody({
                         → {targetLabel(t)}
                       </option>
                     ))}
+                    <option value="__end__">⊗ End the quiz</option>
                   </select>
                 </label>
               );
             })}
           </div>
+          {conflicts.length > 0 ? (
+            <div
+              style={{
+                marginTop: 8,
+                display: "flex",
+                flexDirection: "column",
+                gap: 4,
+              }}
+            >
+              {conflicts.map((c, i) => (
+                <div
+                  key={i}
+                  className="qz-row"
+                  style={{
+                    gap: 6,
+                    alignItems: "flex-start",
+                    fontSize: 11,
+                    color: c.severity === "error" ? "#b3241a" : "#8a5b00",
+                  }}
+                >
+                  <span aria-hidden>{c.severity === "error" ? "⚠" : "⚑"}</span>
+                  <span>{c.message}</span>
+                </div>
+              ))}
+            </div>
+          ) : null}
           <p className="qz-dim" style={{ fontSize: 11, marginTop: 6 }}>
-            &ldquo;Next step&rdquo; follows the flow order; picking a destination sends ONLY that
-            answer there. Unreachable steps appear in the rail for cleanup.
+            Each answer is a skip-logic rule. &ldquo;Next step&rdquo; follows the flow order;
+            picking a destination sends ONLY that answer there. &ldquo;End the quiz&rdquo; skips
+            straight to the finish.
           </p>
         </div>
       ) : null}
@@ -276,6 +457,7 @@ function ContextPanelBody({
   categories,
   frameBreakpoint,
   onOpenLogic,
+  regen,
 }: {
   doc: QuizDoc;
   node: QuizNode;
@@ -291,6 +473,7 @@ function ContextPanelBody({
   categories: BuilderCategory[];
   frameBreakpoint: "desktop" | "mobile";
   onOpenLogic?: () => void;
+  regen?: RegenApi;
 }) {
 
   return (
@@ -335,7 +518,7 @@ function ContextPanelBody({
 
       <div style={{ display: "flex", flexDirection: "column", gap: 10, maxHeight: "48vh", overflowY: "auto", paddingRight: 2 }}>
         {tab === "content" ? (
-          <ContentTab doc={doc} node={node} onCommit={onCommit} products={products} />
+          <ContentTab doc={doc} node={node} onCommit={onCommit} products={products} regen={regen} />
         ) : tab === "routing" ? (
           <RoutingBody
             doc={doc}

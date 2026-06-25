@@ -15,6 +15,7 @@ import type { InspectTarget } from "../runtime/QuizRuntime";
 import { useQuizDraft } from "./useQuizDraft";
 import { FlowRail, type WorkspaceView } from "./FlowRail";
 import { ContextPanel } from "./ContextPanel";
+import type { RegenApi } from "./panels/ContentTab";
 import { AiChatPanel } from "./AiChatPanel";
 import { ReviewEnrichPanel } from "./ReviewEnrichPanel";
 import { EditableTitle, PLACEMENTS, type StudioBuilderData } from "./studioShared";
@@ -111,6 +112,21 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
   }, [history, doc, rawCommit]);
   const canUndo = history.past.length > 0;
   const canRedo = history.future.length > 0;
+  // Question-Builder spec — per-question AI Regenerate plumbing handed to the
+  // ContextPanel's content editor: pause autosave during the LLM call, apply the
+  // regenerated doc through the 3-way merge (recording a snapshot for undo), and
+  // resume on error. The ~10s undo button reuses the snapshot stack.
+  const regenApi = useMemo<RegenApi>(
+    () => ({
+      start: () => {
+        beginAiEdit();
+      },
+      apply: applyAi,
+      error: endAiEdit,
+      undo,
+    }),
+    [beginAiEdit, applyAi, endAiEdit, undo],
+  );
   // Keyboard shortcuts for undo/redo (⌘Z / ⌘⇧Z, plus Ctrl+Y for Windows redo).
   // Guarded so typing in a field keeps NATIVE text undo — only the builder canvas
   // gets these. undo()/redo() self-noop when the stack is empty, so no extra gate.
@@ -564,6 +580,7 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
                 categories={data.categories}
                 frameBreakpoint={breakpointForWidth(frameW)}
                 onOpenLogic={() => setView("logic")}
+                regen={regenApi}
               />
             ) : (
               <div className="qz-card" style={{ padding: 12, marginBottom: 16 }}>
@@ -715,6 +732,7 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
                   categories={data.categories}
                   frameBreakpoint={breakpointForWidth(frameW)}
                   onOpenLogic={() => setView("logic")}
+                regen={regenApi}
                 />
               ) : (
                 <>

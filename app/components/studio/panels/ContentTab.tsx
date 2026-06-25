@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { useFetcher } from "@remix-run/react";
 import { QzButton, QzField, QzInput, QzSelect, QzTextarea } from "../../qz";
 import type { Quiz, QuizNode } from "../../../lib/quizSchema";
 import { isFreeformType } from "../../../lib/quizSchema";
@@ -16,11 +17,127 @@ import { ImagePicker, IMAGE_ANSWER_TYPES, type PickerProduct } from "../ImagePic
 
 type QuizDoc = Quiz;
 
+// Rec-Page / Question-Builder spec — soft character limits (live counters, not
+// hard server validation). Question text 150, answer/option label 60.
+const QUESTION_MAX = 150;
+const ANSWER_MAX = 60;
+// Soft "4–8 questions" guidance (informational only — never blocks).
+const QUESTION_COUNT_MIN = 4;
+const QUESTION_COUNT_MAX = 8;
+
+// Small live character counter. Dim until within 10 of the cap, then warns.
+function CharCount({ value, max }: { value: number; max: number }) {
+  const near = value >= max - 10;
+  return (
+    <span
+      className="qz-dim"
+      style={{
+        fontSize: 10.5,
+        color: near ? "var(--qz-warn, #b25e00)" : undefined,
+        fontVariantNumeric: "tabular-nums",
+      }}
+    >
+      {value}/{max}
+    </span>
+  );
+}
+
+// Question-Builder spec — surface the existing per-question AI "Regenerate"
+// (previously only in the old canvas route) inside the studio editor, with a
+// ~10s undo. The host wires these to the draft hook's AI-edit guard so autosave
+// can't clobber the regenerated doc, and to the snapshot undo stack.
+export interface RegenApi {
+  // beginAiEdit — flush + pause autosave before the LLM call.
+  start: () => void;
+  // applyAi — 3-way merge the AI doc back on top of in-flight edits + record undo.
+  apply: (doc: QuizDoc) => void;
+  // endAiEdit — resume autosave on failure.
+  error: () => void;
+  // pop the snapshot undo stack (reverts the regenerate).
+  undo: () => void;
+}
+
+interface RegenResponse {
+  ok: boolean;
+  action?: string;
+  doc?: QuizDoc;
+  error?: string;
+}
+
+const REGEN_UNDO_SECONDS = 10;
+
+function RegenerateQuestion({ nodeId, regen }: { nodeId: string; regen: RegenApi }) {
+  const fetcher = useFetcher<RegenResponse>();
+  const wasBusy = useRef(false);
+  const [undoLeft, setUndoLeft] = useState(0);
+  const [err, setErr] = useState<string | null>(null);
+  const busy = fetcher.state !== "idle";
+
+  // Settle once on the busy→idle edge (mirrors AiChatPanel): success applies +
+  // opens the undo window; any failure resumes autosave via regen.error().
+  useEffect(() => {
+    if (wasBusy.current && !busy) {
+      const d = fetcher.data;
+      if (d?.ok && d.doc) {
+        regen.apply(d.doc);
+        setErr(null);
+        setUndoLeft(REGEN_UNDO_SECONDS);
+      } else {
+        regen.error();
+        setErr(d?.error ?? "Couldn’t regenerate — try again.");
+      }
+    }
+    wasBusy.current = busy;
+  }, [busy, fetcher.data, regen]);
+
+  // Tick the undo countdown down to zero.
+  useEffect(() => {
+    if (undoLeft <= 0) return;
+    const t = window.setTimeout(() => setUndoLeft((s) => s - 1), 1000);
+    return () => window.clearTimeout(t);
+  }, [undoLeft]);
+
+  const send = () => {
+    if (busy) return;
+    setErr(null);
+    setUndoLeft(0);
+    regen.start();
+    const form = new FormData();
+    form.set("intent", "regenerate-node");
+    form.set("nodeId", nodeId);
+    fetcher.submit(form, { method: "POST" });
+  };
+
+  return (
+    <div className="qz-col qz-gap-4">
+      <div className="qz-row qz-gap-8" style={{ alignItems: "center", flexWrap: "wrap" }}>
+        <QzButton size="sm" variant="ghost" onClick={send} disabled={busy}>
+          {busy ? "Regenerating…" : "✨ Regenerate with AI"}
+        </QzButton>
+        {undoLeft > 0 ? (
+          <button
+            type="button"
+            className="qz-btn qz-btn-ghost qz-btn-sm"
+            onClick={() => {
+              regen.undo();
+              setUndoLeft(0);
+            }}
+          >
+            Undo ({undoLeft}s)
+          </button>
+        ) : null}
+      </div>
+      {err ? <div style={{ fontSize: 11, color: "#b3241a" }}>{err}</div> : null}
+    </div>
+  );
+}
+
 export function ContentTab({
   doc,
   node,
   onCommit,
   products,
+  regen,
 }: {
   doc: QuizDoc;
   node: QuizNode;
@@ -28,6 +145,8 @@ export function ContentTab({
   // Optional product catalog for the image picker's "Your products" tab.
   // Call sites without it still get the URL tab.
   products?: PickerProduct[];
+  // Optional AI-regenerate plumbing (studio only). Absent → no Regenerate button.
+  regen?: RegenApi;
 }) {
   const set = (patch: Record<string, unknown>) => onCommit(updateNodeData(doc, node.id, patch));
   const d = node.data as Record<string, unknown>;
@@ -58,7 +177,9 @@ export function ContentTab({
         </>
       );
     case "question":
-      return <QuestionContent doc={doc} node={node} onCommit={onCommit} products={products} />;
+      return (
+        <QuestionContent doc={doc} node={node} onCommit={onCommit} products={products} regen={regen} />
+      );
     case "email_gate":
       return (
         <>
@@ -218,11 +339,13 @@ export function QuestionContent({
   node,
   onCommit,
   products,
+  regen,
 }: {
   doc: QuizDoc;
   node: Extract<QuizNode, { type: "question" }>;
   onCommit: (doc: QuizDoc) => void;
   products?: PickerProduct[];
+  regen?: RegenApi;
 }) {
   const setText = (text: string) => onCommit(updateNodeData(doc, node.id, { text }));
   const setData = (patch: Record<string, unknown>) =>
@@ -248,11 +371,62 @@ export function QuestionContent({
     fontSize: 13,
     lineHeight: 1,
   });
+  const questionCount = doc.nodes.filter((n) => n.type === "question").length;
+  const countNudge =
+    questionCount < QUESTION_COUNT_MIN
+      ? `${questionCount} question${questionCount === 1 ? "" : "s"} — most quizzes feel best with ${QUESTION_COUNT_MIN}–${QUESTION_COUNT_MAX}.`
+      : questionCount > QUESTION_COUNT_MAX
+        ? `${questionCount} questions — consider trimming toward ${QUESTION_COUNT_MIN}–${QUESTION_COUNT_MAX} to keep shoppers engaged.`
+        : null;
   return (
     <>
-      <QzField label="Question">
-        <QzTextarea value={node.data.text} onChange={(e) => setText(e.target.value)} rows={2} />
+      {countNudge ? (
+        <div
+          className="qz-dim"
+          style={{
+            fontSize: 11.5,
+            padding: "6px 8px",
+            borderRadius: 6,
+            background: "color-mix(in srgb, var(--qz-warn, #b25e00) 8%, transparent)",
+          }}
+        >
+          {countNudge}
+        </div>
+      ) : null}
+      <QzField
+        label={
+          <span className="qz-row" style={{ justifyContent: "space-between", alignItems: "baseline" }}>
+            <span>Question</span>
+            <CharCount value={node.data.text.length} max={QUESTION_MAX} />
+          </span>
+        }
+      >
+        <QzTextarea
+          value={node.data.text}
+          onChange={(e) => setText(e.target.value.slice(0, QUESTION_MAX))}
+          maxLength={QUESTION_MAX}
+          rows={2}
+        />
       </QzField>
+      <QzField label="Answering">
+        <div className="qz-segmented" role="group" aria-label="Required or optional">
+          <button
+            type="button"
+            aria-pressed={node.data.required !== false}
+            onClick={() => setData({ required: true })}
+          >
+            Required
+          </button>
+          <button
+            type="button"
+            aria-pressed={node.data.required === false}
+            onClick={() => setData({ required: false })}
+          >
+            Optional (can skip)
+          </button>
+        </div>
+      </QzField>
+      {regen ? <RegenerateQuestion nodeId={node.id} regen={regen} /> : null}
       <QzField label="Type">
         <QzSelect
           value={node.data.question_type}
@@ -300,7 +474,8 @@ export function QuestionContent({
               <div className="qz-row" style={{ gap: 6, alignItems: "center" }}>
                 <QzInput
                   value={a.text}
-                  onChange={(e) => setAnswer(a.id, { text: e.target.value })}
+                  onChange={(e) => setAnswer(a.id, { text: e.target.value.slice(0, ANSWER_MAX) })}
+                  maxLength={ANSWER_MAX}
                   style={{ flex: 1 }}
                 />
                 <button
@@ -351,6 +526,11 @@ export function QuestionContent({
                   </button>
                 ) : null}
               </div>
+              {a.text.length >= ANSWER_MAX - 10 ? (
+                <div style={{ textAlign: "right" }}>
+                  <CharCount value={a.text.length} max={ANSWER_MAX} />
+                </div>
+              ) : null}
               {picker?.answerId === a.id && picker.kind === "icon" ? (
                 <EmojiIconPicker
                   value={a.icon}

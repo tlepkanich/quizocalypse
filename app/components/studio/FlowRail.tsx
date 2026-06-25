@@ -3,7 +3,13 @@ import type { Quiz, QuizNode } from "../../lib/quizSchema";
 import type { NodeIssue } from "../../lib/quizValidation";
 import type { OrderedFlow } from "../../lib/flowOrder";
 import { answerRoutes } from "../../lib/routeTrace";
-import { deleteNode, moveStep, straightThroughRun } from "../../lib/quizMutations";
+import {
+  deleteNode,
+  duplicateQuestionNode,
+  insertQuestionRelative,
+  moveStep,
+  straightThroughRun,
+} from "../../lib/quizMutations";
 import { INSERTABLE_MODULES, insertModule, updateNodeData, type InsertKind } from "./studioDoc";
 import { NODE_LABEL } from "./panels/nodeMeta";
 
@@ -146,6 +152,21 @@ export function FlowRail({
   const byId = new Map(doc.nodes.map((n) => [n.id, n]));
   const run = straightThroughRun(doc).run;
   const runIndex = new Map(run.map((id, i) => [id, i]));
+  // Question-Builder spec — 1-based question number in flow order (for the
+  // row's number badge). Only question nodes are counted.
+  const questionNumber = new Map<string, number>();
+  let qn = 0;
+  for (const id of run) {
+    if (byId.get(id)?.type === "question") questionNumber.set(id, ++qn);
+  }
+
+  const duplicate = (nodeId: string) => {
+    const next = duplicateQuestionNode(doc, nodeId);
+    onCommit(next);
+  };
+  const insertRelative = (refId: string, where: "above" | "below") => {
+    onCommit(insertQuestionRelative(doc, refId, where));
+  };
 
   const insert = (kind: InsertKind) => {
     // Insert after the selected step when it's on the spine; else at the end.
@@ -219,8 +240,22 @@ export function FlowRail({
             }
           }}
         >
-          <span aria-hidden style={{ width: 16, textAlign: "center", fontSize: 11, opacity: 0.7 }}>
-            {currentId === nodeId ? "▸" : GLYPH[node.type]}
+          <span
+            aria-hidden
+            title={questionNumber.has(nodeId) ? `Question ${questionNumber.get(nodeId)}` : undefined}
+            style={{
+              width: 18,
+              textAlign: "center",
+              fontSize: questionNumber.has(nodeId) && currentId !== nodeId ? 10.5 : 11,
+              opacity: 0.7,
+              fontVariantNumeric: "tabular-nums",
+            }}
+          >
+            {currentId === nodeId
+              ? "▸"
+              : questionNumber.has(nodeId)
+                ? questionNumber.get(nodeId)
+                : GLYPH[node.type]}
           </span>
           {renaming === nodeId ? (
             <input
@@ -280,6 +315,37 @@ export function FlowRail({
                     style={{ padding: "0 4px" }}
                   >
                     ↓
+                  </button>
+                </>
+              ) : null}
+              {node.type === "question" ? (
+                <>
+                  <button
+                    className="qz-btn qz-btn-ghost qz-btn-sm"
+                    title="Add question above"
+                    aria-label={`Add a question above ${nodeTitle(node)}`}
+                    onClick={() => insertRelative(nodeId, "above")}
+                    style={{ padding: "0 4px" }}
+                  >
+                    ＋↑
+                  </button>
+                  <button
+                    className="qz-btn qz-btn-ghost qz-btn-sm"
+                    title="Add question below"
+                    aria-label={`Add a question below ${nodeTitle(node)}`}
+                    onClick={() => insertRelative(nodeId, "below")}
+                    style={{ padding: "0 4px" }}
+                  >
+                    ＋↓
+                  </button>
+                  <button
+                    className="qz-btn qz-btn-ghost qz-btn-sm"
+                    title="Duplicate question"
+                    aria-label={`Duplicate ${nodeTitle(node)}`}
+                    onClick={() => duplicate(nodeId)}
+                    style={{ padding: "0 4px" }}
+                  >
+                    ⧉
                   </button>
                 </>
               ) : null}
