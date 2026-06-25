@@ -858,3 +858,60 @@ export function setAnswerRoute(
   }
   return next;
 }
+
+// Shape-Your-Quiz spec — materialize a scoring choice onto an answer's `points`
+// map (the one engine that serves both Direct and Weighted; the runtime tallies
+// it via pickPointsWinner). Pure. Internal: replace an answer's whole points map.
+function updateAnswerPoints(
+  doc: QuizDoc,
+  questionNodeId: string,
+  answerId: string,
+  points: Record<string, number> | undefined,
+): QuizDoc {
+  const node = doc.nodes.find((n) => n.id === questionNodeId);
+  if (!node || node.type !== "question") return doc;
+  if (!node.data.answers.some((a) => a.id === answerId)) return doc;
+  const answers = node.data.answers.map((a) =>
+    a.id === answerId
+      ? points && Object.keys(points).length > 0
+        ? { ...a, points }
+        : (({ points: _drop, ...rest }) => rest)(a) // clear the map entirely
+      : a,
+  );
+  return { ...doc, nodes: doc.nodes.map((n) => (n.id === questionNodeId ? { ...node, data: { ...node.data, answers } } : n)) };
+}
+
+// Direct mapping: an answer awards points to EXACTLY ONE bucket (weight 1).
+// Passing null clears the answer's mapping. Replaces any prior weights.
+export function setAnswerBucketDirect(
+  doc: QuizDoc,
+  questionNodeId: string,
+  answerId: string,
+  categoryId: string | null,
+): QuizDoc {
+  return updateAnswerPoints(
+    doc,
+    questionNodeId,
+    answerId,
+    categoryId ? { [categoryId]: 1 } : undefined,
+  );
+}
+
+// Weighted scoring: set ONE bucket's weight in the answer's points map,
+// preserving the others. A weight ≤ 0 removes just that bucket. Pure.
+export function setAnswerBucketWeight(
+  doc: QuizDoc,
+  questionNodeId: string,
+  answerId: string,
+  categoryId: string,
+  weight: number,
+): QuizDoc {
+  const node = doc.nodes.find((n) => n.id === questionNodeId);
+  if (!node || node.type !== "question") return doc;
+  const answer = node.data.answers.find((a) => a.id === answerId);
+  if (!answer) return doc;
+  const nextPoints: Record<string, number> = { ...(answer.points ?? {}) };
+  if (weight > 0) nextPoints[categoryId] = Math.round(weight);
+  else delete nextPoints[categoryId];
+  return updateAnswerPoints(doc, questionNodeId, answerId, nextPoints);
+}

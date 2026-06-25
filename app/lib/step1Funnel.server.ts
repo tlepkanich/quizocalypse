@@ -540,6 +540,61 @@ export async function runStep1FunnelAction(
     return json({ intent, ok: true });
   }
 
+  // Shape-Your-Quiz spec — the four-card page's AI-card "Continue": capture the
+  // required scoring model + the card's experience type onto the doc, then run
+  // the SAME type→templates build as pick-type. Scoring is required (the spec
+  // pre-selects nothing).
+  if (intent === "shape-continue") {
+    const typeId = String(form.get("typeId") ?? "");
+    const scoring = String(form.get("scoring") ?? "");
+    if (scoring !== "direct" && scoring !== "weighted") {
+      return json({ intent, ok: false, error: "Pick how to score this quiz first." }, { status: 400 });
+    }
+    const chosen = session.quiz_types.find((t) => t.id === typeId);
+    if (!chosen) return json({ intent, ok: false, error: "That type is no longer available." }, { status: 400 });
+    const goal = session.goal?.goal_text ?? "";
+    const struggle = session.goal?.struggle_text ?? "";
+    const cats = await prisma.category.findMany({
+      where: { shopId: shop.id, quizId: quiz.id },
+      select: { id: true, name: true, tags: true },
+    });
+    const next: BuildSession = { ...session, stage: "templating", picked_type_id: typeId, gen_error: undefined };
+    await writeDoc(quiz.id, {
+      ...doc,
+      scoring_model: scoring,
+      experience_type: chosen.experience_type,
+      build_session: next,
+    });
+    startStep2Templates(shop.id, quiz.id, chosen, {
+      goal,
+      ...(struggle ? { struggle } : {}),
+      ...(cats.length ? { buckets: cats } : {}),
+    });
+    return json({ intent, ok: true });
+  }
+
+  // Shape spec — "↻ Regenerate suggestions": re-run the tier-1 type generation
+  // for a fresh pair of directions (mirrors save-goal's typing kick).
+  if (intent === "shape-regenerate") {
+    const buckets = await loadConfirmedBuckets(shop.id, quiz.id);
+    const next: BuildSession = { ...session, stage: "typing", quiz_types: [], gen_error: undefined };
+    await writeDoc(quiz.id, { ...doc, build_session: next });
+    startStep2Types(shop.id, quiz.id, {
+      goal: session.goal?.goal_text ?? "",
+      ...(session.goal?.struggle_text ? { struggle: session.goal.struggle_text } : {}),
+      ...(buckets.length ? { buckets } : {}),
+    });
+    return json({ intent, ok: true });
+  }
+
+  // Shape spec — Card 4 "Manual Create": skip AI generation and go straight to
+  // the Question Builder with the seed quiz. Scoring stays UNSET so the builder
+  // prompts for it (per the question-builder spec's manual-create flow).
+  if (intent === "shape-manual") {
+    await writeDoc(quiz.id, { ...doc, build_session: { ...session, stage: "done" } });
+    return redirect(opts.builderPath(quiz.id));
+  }
+
   if (intent === "retry-gen") {
     // Re-kick a stalled generation: the prior detached job died (e.g. a server
     // restart mid-run) leaving the stage stuck with no error to catch. Rebuild
