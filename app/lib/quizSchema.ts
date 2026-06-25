@@ -321,6 +321,9 @@ export const ResultData = z.object({
   results_summary_bar: z.boolean().default(false),
   // "Not what you were looking for? Retake the quiz" link.
   retake_link: z.boolean().default(false),
+  // Share button that copies/native-shares the shopper's persistent results URL
+  // (reconstructed server-side from the saved session — see /q/:id/results).
+  share_results: z.boolean().default(false),
   // Ladder threshold: a strategy must yield ≥ this many products to win,
   // else the ladder falls through. Default 1 = "first non-empty wins".
   min_products: z.number().int().min(1).max(12).default(1),
@@ -847,6 +850,23 @@ export const DiscountConfig = z.object({
 });
 export type DiscountConfig = z.infer<typeof DiscountConfig>;
 
+// Rec-Page spec §7 — Global Fallback (No Bucket Match). Rendered when a result
+// page resolves ZERO products. OPT-IN (enabled=false by default): the
+// "truly-match → show nothing" behavior stays the default, so this never
+// resurrects the removed generic per-result padding. A merchant turns it on
+// only if they'd rather show evergreen picks than an empty state. The pool is
+// drawn from a collection, a tag, and/or explicit product ids (union), capped
+// at `count` and ordered best-effort by the page's own ranking.
+export const GlobalFallback = z.object({
+  enabled: z.boolean().default(false),
+  heading: z.string().default("Our most-loved products"),
+  collection_id: z.string().optional(),
+  tag: z.string().optional(),
+  product_ids: z.array(z.string()).default([]),
+  count: z.number().int().min(1).max(12).default(4),
+});
+export type GlobalFallback = z.infer<typeof GlobalFallback>;
+
 // ── Builder Re-work Step 1 — the creation funnel's scratch state ─────────────
 // A lightweight AI-proposed quiz "direction" the merchant picks from at the end
 // of Step 1 (no tags/answers — tag-correctness is the full build's job).
@@ -1116,6 +1136,8 @@ export const Quiz = z.object({
   }),
   // Phase 5 — quiz-level discount on recommended products. Defaults to disabled.
   discount_config: DiscountConfig.default({}),
+  // Rec-Page spec §7 — quiz-level no-bucket-match fallback. Defaults to disabled.
+  global_fallback: GlobalFallback.default({}),
 });
 export type Quiz = z.infer<typeof Quiz>;
 

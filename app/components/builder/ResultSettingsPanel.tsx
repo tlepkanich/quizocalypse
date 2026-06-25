@@ -122,6 +122,13 @@ export function ResultSettingsPanel({
     onCommit(updateNodeData(doc, node.id, patch as Record<string, unknown>));
   };
 
+  // The global fallback is QUIZ-level (spec §7), not per-node — write it to the
+  // doc root rather than through updateNodeData.
+  const fallback = doc.global_fallback;
+  const setFallback = (patch: Partial<typeof fallback>) => {
+    onCommit({ ...doc, global_fallback: { ...doc.global_fallback, ...patch } });
+  };
+
   const ladder = data.match_ladder;
 
   const moveStrategy = (idx: number, dir: -1 | 1) => {
@@ -464,6 +471,83 @@ export function ResultSettingsPanel({
             />
             Retake-quiz link
           </label>
+          <label
+            className="qz-row qz-gap-8"
+            style={{ alignItems: "center", fontSize: 13, cursor: "pointer" }}
+          >
+            <input
+              type="checkbox"
+              checked={data.share_results}
+              onChange={(e) => set({ share_results: e.target.checked })}
+            />
+            Share-results button
+          </label>
+        </div>
+      </QzCollapse>
+
+      {/* ── GLOBAL FALLBACK — quiz-level, no bucket match (spec §7) ─────── */}
+      <QzCollapse title="Global fallback (no match)">
+        <div className="qz-col qz-gap-8">
+          <p className="qz-dim" style={{ fontSize: 12, margin: 0 }}>
+            Shown only when a result page resolves no products. Off by default —
+            otherwise the page shows a graceful “no match” state.
+          </p>
+          <label
+            className="qz-row qz-gap-8"
+            style={{ alignItems: "center", fontSize: 13, cursor: "pointer" }}
+          >
+            <input
+              type="checkbox"
+              checked={fallback.enabled}
+              onChange={(e) => setFallback({ enabled: e.target.checked })}
+            />
+            Enable global fallback
+          </label>
+          {fallback.enabled ? (
+            <>
+              <QzField label="Heading">
+                <QzInput
+                  value={fallback.heading}
+                  onChange={(e) => setFallback({ heading: e.target.value })}
+                />
+              </QzField>
+              <QzField label="Fallback collection">
+                <QzSelect
+                  value={fallback.collection_id ?? ""}
+                  onChange={(e) =>
+                    setFallback({ collection_id: e.target.value || undefined })
+                  }
+                >
+                  <option value="">No collection</option>
+                  {collections.map((c) => (
+                    <option key={c.collectionId} value={c.collectionId}>
+                      {c.title}
+                    </option>
+                  ))}
+                </QzSelect>
+              </QzField>
+              <div className="qz-row qz-gap-8">
+                <QzField label="Or fallback tag" hint="Optional.">
+                  <QzInput
+                    value={fallback.tag ?? ""}
+                    placeholder="e.g. bestseller"
+                    onChange={(e) => setFallback({ tag: e.target.value || undefined })}
+                  />
+                </QzField>
+                <QzField label="Products to show">
+                  <QzInput
+                    type="number"
+                    min={1}
+                    max={12}
+                    value={fallback.count}
+                    onChange={(e) =>
+                      setFallback({ count: clampProductCount(e.target.valueAsNumber) })
+                    }
+                  />
+                </QzField>
+              </div>
+            </>
+          ) : null}
         </div>
       </QzCollapse>
 

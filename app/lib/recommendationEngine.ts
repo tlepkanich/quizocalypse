@@ -575,6 +575,34 @@ export interface PreviewRecommendationInput {
   slotCount?: number;
 }
 
+// Rec-Page spec §7 — resolve the quiz-level Global Fallback pool, shown only
+// when a result page resolved ZERO products AND the merchant opted in. Union of
+// the configured collection, tag, and explicit product ids; sellable only;
+// in-stock first then price asc; capped at `count`. Pure + testable.
+export function resolveGlobalFallback(
+  productIndex: IndexedProduct[],
+  fallback: {
+    enabled: boolean;
+    collection_id?: string;
+    tag?: string;
+    product_ids: string[];
+    count: number;
+  },
+): RecommendedProduct[] {
+  if (!fallback.enabled) return [];
+  const tag = fallback.tag?.toLowerCase();
+  const wantIds = new Set(fallback.product_ids);
+  const pool = productIndex.filter(isSellable).filter((p) => {
+    const byCollection = fallback.collection_id
+      ? p.collection_ids.includes(fallback.collection_id)
+      : false;
+    const byTag = tag ? p.tags.some((t) => t.toLowerCase() === tag) : false;
+    const byId = wantIds.has(p.product_id);
+    return byCollection || byTag || byId;
+  });
+  return rank(pool.map((p) => ({ ...p, score: 0 }))).slice(0, fallback.count);
+}
+
 // Mid-quiz preview. Same scoring as the result-page engine, but with a different
 // fallback ladder since there's no result node context yet:
 //   1. featured_collection_id (if set on the quiz)

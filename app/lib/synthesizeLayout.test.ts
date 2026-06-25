@@ -59,6 +59,7 @@ const result = (subtext = ""): QuizNode => ({
     urgency_threshold: 5,
     results_summary_bar: false,
     retake_link: false,
+    share_results: false,
     stages: [],
     why_bullets: [],
   },

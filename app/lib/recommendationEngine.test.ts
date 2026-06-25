@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   pickBranchSlot,
   pickPointsWinner,
+  resolveGlobalFallback,
   recommendForResult,
   recommendForStage,
   recommendForResultExplained,
@@ -1263,6 +1264,46 @@ describe("answer-ordered rungs + explained API (D1)", () => {
     expect(weighted.products[1]!.product_id).toBe("pA"); // oily ×2 outranks dry
     expect(flat.products[1]!.product_id).toBe("pB");
     expect(weighted.rungUsed).toBe("category");
+  });
+});
+
+describe("resolveGlobalFallback (Rec-Page spec §7)", () => {
+  it("returns nothing when disabled", () => {
+    expect(
+      resolveGlobalFallback(baseProducts, {
+        enabled: false,
+        product_ids: ["p1"],
+        count: 4,
+      }),
+    ).toEqual([]);
+  });
+
+  it("unions collection, tag, and explicit ids; caps at count; in-stock first", () => {
+    const out = resolveGlobalFallback(baseProducts, {
+      enabled: true,
+      tag: "oily",
+      count: 4,
+    });
+    // p1, p4(OOS), p5 carry "oily"; OOS p4 ranks after the in-stock ones.
+    expect(out.map((p) => p.product_id)).toEqual(["p5", "p1", "p4"]);
+  });
+
+  it("respects the count cap", () => {
+    const out = resolveGlobalFallback(baseProducts, {
+      enabled: true,
+      collection_id: "c-cleansers",
+      count: 2,
+    });
+    expect(out).toHaveLength(2);
+  });
+
+  it("matches explicit product ids even outside any collection/tag", () => {
+    const out = resolveGlobalFallback(baseProducts, {
+      enabled: true,
+      product_ids: ["p2"],
+      count: 4,
+    });
+    expect(out.map((p) => p.product_id)).toEqual(["p2"]);
   });
 });
 

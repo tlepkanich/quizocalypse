@@ -9,6 +9,7 @@ import {
   recommendForResultExplained,
   recommendForStage,
   recommendPreview,
+  resolveGlobalFallback,
   selectSecondaryRecs,
   type BranchContext,
   type IndexedProduct,
@@ -727,6 +728,15 @@ export function QuizRuntime(props: QuizRuntimeProps) {
           resultsSummaryBar={node.data.results_summary_bar}
           answerSummary={pickedAnswerLabels(doc, selectedAnswerIds)}
           retakeLink={node.data.retake_link}
+          shareResults={node.data.share_results}
+          globalFallback={
+            recs.length === 0 && doc.global_fallback.enabled
+              ? {
+                  heading: doc.global_fallback.heading,
+                  products: resolveGlobalFallback(productIndex, doc.global_fallback),
+                }
+              : null
+          }
           bare
         />
       );
@@ -1145,6 +1155,15 @@ export function QuizRuntime(props: QuizRuntimeProps) {
             resultsSummaryBar={currentNode.data.results_summary_bar}
             answerSummary={pickedAnswerLabels(doc, selectedAnswerIds)}
             retakeLink={currentNode.data.retake_link}
+            shareResults={currentNode.data.share_results}
+            globalFallback={
+              recs.length === 0 && doc.global_fallback.enabled
+                ? {
+                    heading: doc.global_fallback.heading,
+                    products: resolveGlobalFallback(productIndex, doc.global_fallback),
+                  }
+                : null
+            }
             styles={styles}
             startedAt={startedAtRef.current}
             completed={completedRef}
@@ -2127,6 +2146,54 @@ function SaveResultsLink({ quizId, sessionId }: { quizId?: string; sessionId?: s
     >
       {tc("save_results_link")}
     </a>
+  );
+}
+
+// Spec §6 "Share results button" — native share where available, copy-link
+// everywhere else, of the shopper's persistent results URL (reconstructed
+// server-side from the saved session). Live-only, like SaveResultsLink.
+function ShareResultsButton({ quizId, sessionId }: { quizId?: string; sessionId?: string }) {
+  const tc = useChrome();
+  const locale = useContext(RuntimeLocaleContext);
+  const isPreviewMode = useContext(RuntimePreviewContext);
+  const [copied, setCopied] = useState(false);
+  if (isPreviewMode || !quizId || !sessionId) return null;
+  const url = `${typeof window !== "undefined" ? window.location.origin : ""}/q/${quizId}/results?session_id=${encodeURIComponent(sessionId)}${locale !== "en" ? `&locale=${encodeURIComponent(locale)}` : ""}`;
+  return (
+    <button
+      type="button"
+      onClick={async () => {
+        if (navigator.share) {
+          try {
+            await navigator.share({ url });
+            return;
+          } catch {
+            // dismissed — fall through to copy
+          }
+        }
+        try {
+          await navigator.clipboard.writeText(url);
+          setCopied(true);
+          window.setTimeout(() => setCopied(false), 1500);
+        } catch {
+          // clipboard blocked — no-op
+        }
+      }}
+      style={{
+        display: "block",
+        margin: "12px auto 0",
+        font: "inherit",
+        fontSize: 13,
+        padding: "6px 14px",
+        borderRadius: "var(--qz-radius)",
+        border: "1px solid var(--qz-color-primary)",
+        background: "transparent",
+        color: "var(--qz-color-primary)",
+        cursor: "pointer",
+      }}
+    >
+      {copied ? tc("share_copied") : tc("share_results_cta")}
+    </button>
   );
 }
 
@@ -3798,6 +3865,8 @@ function ResultView({
   resultsSummaryBar = false,
   answerSummary,
   retakeLink = false,
+  shareResults = false,
+  globalFallback,
 }: {
   headline: string;
   subtext: string;
@@ -3811,6 +3880,10 @@ function ResultView({
   // Shopper's picked answer labels for the summary bar ("Oily skin · Sensitive").
   answerSummary?: string[];
   retakeLink?: boolean;
+  // Spec §6 share button (uses the persistent results URL).
+  shareResults?: boolean;
+  // Spec §7 — heading + products to show when the page resolved nothing.
+  globalFallback?: { heading: string; products: RecommendedProduct[] } | null;
   inspect?: (part: "result_headline" | "result_subtext") => React.HTMLAttributes<HTMLElement>;
   // BIC P8: 2-column desktop layout (pitch left, vertical cards right). The
   // call site gates it on tokens.result_split && desktop; absent = stacked.
@@ -3938,11 +4011,41 @@ function ResultView({
               : styles.productGrid),
         }}
       >
-        {recs.length === 0 && (
-          <p style={{ color: "var(--qz-color-muted)" }}>
-            {tc("no_results_match")}
-          </p>
-        )}
+        {recs.length === 0 &&
+          (globalFallback && globalFallback.products.length > 0 ? (
+            <div style={{ gridColumn: "1 / -1" }}>
+              <h3 style={{ ...styles.h2, fontSize: "0.9em", margin: "0 0 12px" }}>
+                {globalFallback.heading}
+              </h3>
+              <div style={styles.productGrid}>
+                {globalFallback.products.map((r, idx) => (
+                  <ProductCard
+                    key={r.product_id}
+                    product={r}
+                    position={idx}
+                    ctaLabel={ctaLabel}
+                    href={productHref(r, shopDomain, platform)}
+                    shopDomain={shopDomain}
+                    showVariants={showVariants}
+                    showDescriptions={showDescriptions}
+                    styles={styles}
+                    onClick={() =>
+                      analytics?.track("recommendation_clicked", {
+                        product_id: r.product_id,
+                        position: idx,
+                        fallback: true,
+                      })
+                    }
+                    onAdd={() =>
+                      analytics?.track("add_to_cart", { product_id: r.product_id, position: idx })
+                    }
+                  />
+                ))}
+              </div>
+            </div>
+          ) : (
+            <p style={{ color: "var(--qz-color-muted)" }}>{tc("no_results_match")}</p>
+          ))}
         {recs.map((r, idx) => (
           <ProductCard
             reasons={reasonsByProduct?.get(r.product_id) ?? undefined}
@@ -4043,6 +4146,7 @@ function ResultView({
           {tc("retake_quiz")}
         </button>
       ) : null}
+      {shareResults ? <ShareResultsButton quizId={quizId} sessionId={sessionId} /> : null}
       <SaveResultsLink quizId={quizId} sessionId={sessionId} />
       <BuddyRow quizId={quizId} sessionId={sessionId} buddySessionId={buddySessionId} analytics={analytics} />
       {escapeHatch && escapeHatch.label && escapeHatch.url ? (
