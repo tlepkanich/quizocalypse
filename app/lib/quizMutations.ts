@@ -22,6 +22,102 @@ function nextPosition(doc: QuizDoc, anchor: string | null) {
   return { x: maxX + NEW_NODE_OFFSET, y: avgY };
 }
 
+// Question-Builder spec — splice `newNode` onto the linear spine relative to
+// `refId` ("above" = before it, "below" = after it). Only plain (handle-less)
+// spine edges are rewired, so per-answer routing edges are left intact. Pure.
+function spliceQuestion(
+  doc: QuizDoc,
+  newNode: QuizNodeDoc,
+  refId: string,
+  where: "above" | "below",
+): QuizDoc {
+  const nodes = [...doc.nodes, newNode];
+  if (where === "below") {
+    const out = doc.edges.find((e) => e.source === refId && !e.source_handle);
+    if (out) {
+      const edges = [
+        ...doc.edges.filter((e) => e.id !== out.id),
+        { id: uid("e"), source: refId, target: newNode.id },
+        { id: uid("e"), source: newNode.id, target: out.target },
+      ];
+      return { ...doc, nodes, edges };
+    }
+    return {
+      ...doc,
+      nodes,
+      edges: [...doc.edges, { id: uid("e"), source: refId, target: newNode.id }],
+    };
+  }
+  // above
+  const inc = doc.edges.find((e) => e.target === refId && !e.source_handle);
+  if (inc) {
+    const edges = [
+      ...doc.edges.filter((e) => e.id !== inc.id),
+      { id: uid("e"), source: inc.source, target: newNode.id },
+      { id: uid("e"), source: newNode.id, target: refId },
+    ];
+    return { ...doc, nodes, edges };
+  }
+  return {
+    ...doc,
+    nodes,
+    edges: [...doc.edges, { id: uid("e"), source: newNode.id, target: refId }],
+  };
+}
+
+// Deep-clone a question node's data with fresh answer ids + edge handles, so the
+// duplicate routes independently of the original. Pure.
+function cloneQuestionData(
+  data: Extract<QuizNodeDoc, { type: "question" }>["data"],
+): Extract<QuizNodeDoc, { type: "question" }>["data"] {
+  const copy = JSON.parse(JSON.stringify(data)) as typeof data;
+  copy.answers = copy.answers.map((a) => ({
+    ...a,
+    id: uid("a"),
+    edge_handle_id: uid("h"),
+  }));
+  return copy;
+}
+
+// Question-Builder spec — duplicate a question, spliced in right after the
+// original on the spine (fresh ids, no inherited per-answer routing). Pure.
+export function duplicateQuestionNode(doc: QuizDoc, nodeId: string): QuizDoc {
+  const orig = doc.nodes.find((n) => n.id === nodeId);
+  if (!orig || orig.type !== "question") return doc;
+  const clone: QuizNodeDoc = {
+    id: uid("q"),
+    type: "question",
+    position: nextPosition(doc, nodeId),
+    data: cloneQuestionData(orig.data),
+  };
+  return spliceQuestion(doc, clone, nodeId, "below");
+}
+
+// Question-Builder spec — insert a fresh blank question above/below a reference
+// question, spliced into the spine. Pure.
+export function insertQuestionRelative(
+  doc: QuizDoc,
+  refId: string,
+  where: "above" | "below",
+): QuizDoc {
+  const blank: QuizNodeDoc = {
+    id: uid("q"),
+    type: "question",
+    position: nextPosition(doc, refId),
+    data: {
+      text: "New question",
+      question_type: "single_select",
+      required: true,
+      show_preview_after: false,
+      answers: [
+        { id: uid("a"), text: "Option 1", tags: [], edge_handle_id: uid("h") },
+        { id: uid("a"), text: "Option 2", tags: [], edge_handle_id: uid("h") },
+      ],
+    },
+  };
+  return spliceQuestion(doc, blank, refId, where);
+}
+
 export function addQuestionNode(
   doc: QuizDoc,
   anchorId: string | null,
