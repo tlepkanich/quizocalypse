@@ -6,6 +6,26 @@ notes are welcome above the auto entries.
 
 <!-- routine: insert each run's entry directly below this line, newest first -->
 
+## 2026-06-25 — Step 2 Recommendation Page: sort, sub-filter & display toggles (in progress)
+
+Implementing the `recommendation-page-spec.md` "Now" cluster (per `_roadmap.md`).
+On branch `claude/recommendation-page-spec-or43yx`, not yet on `main`.
+
+Shipped (live end-to-end)
+- Full per-section **Sort Order** set — Best Selling, Newest, Price ↑/↓,
+  Title A→Z/Z→A, Manually Curated (collection order). Engine honors all modes;
+  builder dropdown offers them (Manual gated on a collection scope). (`62ff770`, `15fa479`)
+- Per-section **Sub-Filter** (tag and/or collection) narrowing within the
+  bucket's own pool — engine + builder, with 8 new engine tests. (`62ff770`, `15fa479`)
+
+Builder-set, runtime rendering still pending
+- Product-display toggles (Show Variants, Product Descriptions, Urgency
+  "Only X left", disabled "Star ratings — coming soon") and page-structure
+  toggles (Results-summary bar, Retake link) — schema + builder controls landed;
+  runtime rendering, the product-description publish bake, and the live
+  inventory fetch for urgency (per the merchant's chosen live-fetch approach)
+  are the remaining slices.
+
 ## 2026-06-24 — recommendation / runtime / builder hardening (audit loop + chips)
 
 Shipped via the in-session audit loop and the spawned background-task chips (not
