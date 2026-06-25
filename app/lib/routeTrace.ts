@@ -144,6 +144,75 @@ export interface AnswerRoute {
   targetLabel: string;
 }
 
+// Question-Builder spec — skip-logic conflict warnings for one question. Pure.
+// Inspects each answer's EXPLICIT route edge (source_handle = answer handle):
+//   • dead   — routes to a step that no longer exists;
+//   • self   — routes to its own question;
+//   • loop   — routes to an ancestor step (something that can reach this one);
+//   • multi  — a multi-select with any explicit per-answer route (ambiguous
+//              when the shopper picks several answers).
+export interface RoutingConflict {
+  answerId?: string;
+  message: string;
+  severity: "warn" | "error";
+}
+
+// Transitive ancestors of a node: everything that can reach it by following
+// edges forward (computed by walking in-edges backward). Used for loop warnings.
+function ancestorsOf(doc: QuizDoc, nodeId: string): Set<string> {
+  const ancestors = new Set<string>();
+  const stack = [nodeId];
+  while (stack.length) {
+    const cur = stack.pop()!;
+    for (const e of doc.edges) {
+      if (e.target === cur && !ancestors.has(e.source)) {
+        ancestors.add(e.source);
+        stack.push(e.source);
+      }
+    }
+  }
+  return ancestors;
+}
+
+export function routingConflicts(doc: QuizDoc, questionNodeId: string): RoutingConflict[] {
+  const node = doc.nodes.find((n) => n.id === questionNodeId);
+  if (!node || node.type !== "question") return [];
+  const conflicts: RoutingConflict[] = [];
+  const ancestors = ancestorsOf(doc, questionNodeId);
+  let explicitCount = 0;
+  for (const a of node.data.answers) {
+    const edge = doc.edges.find(
+      (e) => e.source === questionNodeId && e.source_handle === a.edge_handle_id,
+    );
+    if (!edge) continue;
+    explicitCount++;
+    const target = doc.nodes.find((n) => n.id === edge.target);
+    const label = truncate(a.text, 26);
+    if (!target) {
+      conflicts.push({
+        answerId: a.id,
+        message: `“${label}” routes to a step that no longer exists.`,
+        severity: "error",
+      });
+    } else if (target.id === questionNodeId) {
+      conflicts.push({ answerId: a.id, message: `“${label}” routes to itself.`, severity: "error" });
+    } else if (ancestors.has(target.id)) {
+      conflicts.push({
+        answerId: a.id,
+        message: `“${label}” routes back to an earlier step — this can loop.`,
+        severity: "warn",
+      });
+    }
+  }
+  if (node.data.question_type === "multi_select" && explicitCount > 0) {
+    conflicts.push({
+      message: "Per-answer routing on a multi-select is ambiguous when several answers are picked.",
+      severity: "warn",
+    });
+  }
+  return conflicts;
+}
+
 export function answerRoutes(doc: QuizDoc, questionNodeId: string): AnswerRoute[] {
   const node = doc.nodes.find((n) => n.id === questionNodeId);
   if (!node || node.type !== "question") return [];

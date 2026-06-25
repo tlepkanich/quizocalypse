@@ -820,6 +820,24 @@ export function moveStep(
 // keyed on its edge_handle_id; when that edge is absent, the question's
 // default edge (no source_handle) applies. Passing target=null removes the
 // per-answer edge — "follow the next step like everyone else".
+// Question-Builder spec — route an answer to "End the quiz": send it to an end
+// node, reusing an existing one or creating a fresh (unconnected) one. Pure.
+export function routeAnswerToEnd(
+  doc: QuizDoc,
+  questionNodeId: string,
+  answerId: string,
+): QuizDoc {
+  const node = doc.nodes.find((n) => n.id === questionNodeId);
+  if (!node || node.type !== "question") return doc;
+  if (!node.data.answers.some((a) => a.id === answerId)) return doc;
+  const existingEnd = doc.nodes.find((n) => n.type === "end");
+  if (existingEnd) return setAnswerRoute(doc, questionNodeId, answerId, existingEnd.id);
+  const created = addEndNode(doc, null);
+  const endNode = created.nodes[created.nodes.length - 1];
+  if (!endNode) return doc;
+  return setAnswerRoute(created, questionNodeId, answerId, endNode.id);
+}
+
 export function setAnswerRoute(
   doc: QuizDoc,
   questionNodeId: string,

@@ -9,6 +9,7 @@ import {
   duplicateQuestionNode,
   insertQuestionRelative,
   moveStep,
+  routeAnswerToEnd,
   straightThroughRun,
 } from "./quizMutations";
 import { insertModule } from "../components/studio/studioDoc";
@@ -122,6 +123,19 @@ describe("duplicateQuestionNode / insertQuestionRelative (Question-Builder spec)
   it("duplicate is a no-op on a non-question id", () => {
     const doc = linearQuestionsDoc();
     expect(duplicateQuestionNode(doc, "r1")).toBe(doc);
+  });
+
+  it("routeAnswerToEnd creates an end node and routes the answer to it, reusing it next time", () => {
+    const first = routeAnswerToEnd(linearQuestionsDoc(), "q1", "q1_a1");
+    const ends = first.nodes.filter((n) => n.type === "end");
+    expect(ends).toHaveLength(1);
+    const edge = first.edges.find((e) => e.source === "q1" && e.source_handle === "q1_h1");
+    expect(edge?.target).toBe(ends[0]!.id);
+    // A second answer routed to "End" reuses the same end node (no duplicates).
+    const second = routeAnswerToEnd(first, "q2", "q2_a1");
+    expect(second.nodes.filter((n) => n.type === "end")).toHaveLength(1);
+    const edge2 = second.edges.find((e) => e.source === "q2" && e.source_handle === "q2_h1");
+    expect(edge2?.target).toBe(ends[0]!.id);
   });
 });
 
