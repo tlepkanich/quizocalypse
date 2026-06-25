@@ -3,6 +3,7 @@ import { json } from "@remix-run/node";
 import prisma from "../db.server";
 import type { IndexedProduct } from "../lib/recommendationEngine";
 import { rateLimit } from "../lib/rateLimiters";
+import { assertPublicHttpsUrl } from "../lib/ssrfGuard.server";
 
 // Rec-Page spec §5 — "Notify Me" / back-in-stock capture. The storefront posts
 // here when a shopper asks to be notified about an out-of-stock product (or a
@@ -83,23 +84,30 @@ export async function action({ params, request }: ActionFunctionArgs) {
   const webhookUrl = (quiz.publishedJson as { back_in_stock_webhook_url?: string } | null)
     ?.back_in_stock_webhook_url;
   if (webhookUrl) {
-    try {
-      const controller = new AbortController();
-      const t = setTimeout(() => controller.abort(), 5000);
-      await fetch(webhookUrl, {
-        method: "POST",
-        headers: { "content-type": "application/json", "user-agent": "Quizocalypse/1.0" },
-        body: JSON.stringify({
-          quiz_id: quiz.id,
-          email,
-          product_id: productId,
-          requested_at: new Date().toISOString(),
-        }),
-        signal: controller.signal,
-      });
-      clearTimeout(t);
-    } catch {
-      // The request is already stored — a webhook hiccup must not fail the capture.
+    // SSRF guard: a merchant could point this at an internal / cloud-metadata
+    // address. Screen before POSTing shopper PII; never log the URL or email.
+    const safe = await assertPublicHttpsUrl(webhookUrl);
+    if (!safe.ok) {
+      console.warn(`[notify] back-in-stock webhook blocked: ${safe.reason}`);
+    } else {
+      try {
+        const controller = new AbortController();
+        const t = setTimeout(() => controller.abort(), 5000);
+        await fetch(webhookUrl, {
+          method: "POST",
+          headers: { "content-type": "application/json", "user-agent": "Quizocalypse/1.0" },
+          body: JSON.stringify({
+            quiz_id: quiz.id,
+            email,
+            product_id: productId,
+            requested_at: new Date().toISOString(),
+          }),
+          signal: controller.signal,
+        });
+        clearTimeout(t);
+      } catch {
+        // The request is already stored — a webhook hiccup must not fail the capture.
+      }
     }
   }
 

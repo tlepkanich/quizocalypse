@@ -8,6 +8,7 @@ import {
   type BranchContext,
   type IndexedProduct,
 } from "../lib/recommendationEngine";
+import { assertPublicHttpsUrl } from "../lib/ssrfGuard.server";
 
 // Integration node executor. When the storefront runtime reaches an
 // integration node it POSTs here with the session payload; we fire every
@@ -167,6 +168,12 @@ export async function action({ params, request }: ActionFunctionArgs) {
   const results: Array<{ kind: string; ok: boolean; status?: number; error?: string }> = [];
   for (const act of node.data.actions) {
     if (act.kind === "webhook") {
+      // SSRF guard before POSTing the shopper payload to a merchant-set URL.
+      const safe = await assertPublicHttpsUrl(act.url);
+      if (!safe.ok) {
+        results.push({ kind: "webhook", ok: false, error: `blocked: ${safe.reason}` });
+        continue;
+      }
       try {
         const controller = new AbortController();
         const t = setTimeout(() => controller.abort(), WEBHOOK_TIMEOUT_MS);

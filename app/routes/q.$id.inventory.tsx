@@ -2,6 +2,7 @@ import type { ActionFunctionArgs } from "@remix-run/node";
 import { json } from "@remix-run/node";
 import prisma from "../db.server";
 import type { IndexedProduct } from "../lib/recommendationEngine";
+import { rateLimit } from "../lib/rateLimiters";
 
 // Live inventory endpoint (Rec-Page spec §2 "Urgency Signal"). The storefront
 // runtime POSTs the product ids it's about to show on a result page; we reply
@@ -27,6 +28,15 @@ export async function action({ params, request }: ActionFunctionArgs) {
   if (!id) return json({ error: "Missing quiz id" }, { status: 400 });
   if (request.method !== "POST") {
     return json({ error: "Method not allowed" }, { status: 405 });
+  }
+
+  // 60 inventory reads/min/IP — called on result-page loads; throttle scraping.
+  const rl = rateLimit(request, "inventory", 60);
+  if (!rl.ok) {
+    return json(
+      { error: "rate limited" },
+      { status: 429, headers: { "retry-after": String(rl.retryAfterS) } },
+    );
   }
 
   let body: InventoryRequestBody;
