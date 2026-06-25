@@ -208,6 +208,7 @@ model Quiz {
   events   Event[]
   captures EmailCapture[]
   sessions QuizSession[]
+  backInStockRequests BackInStockRequest[]
 
   @@index([shopId])
 }
@@ -252,6 +253,25 @@ model EmailCapture {
   quiz Quiz @relation(fields: [quizId], references: [id], onDelete: Cascade)
 
   @@index([quizId, capturedAt])
+  @@index([email])
+}
+
+// Rec-Page spec §5 — back-in-stock / "Notify Me" requests captured on the
+// result page when a recommended product (or a whole section) is out of stock.
+// One row per (shopper email, product). The merchant exports / syncs these to
+// their back-in-stock tool; we just durably capture the intent.
+model BackInStockRequest {
+  id          String   @id @default(cuid())
+  shopId      String?
+  quizId      String
+  sessionId   String?
+  productId   String?
+  email       String
+  requestedAt DateTime @default(now())
+
+  quiz Quiz @relation(fields: [quizId], references: [id], onDelete: Cascade)
+
+  @@index([quizId, requestedAt])
   @@index([email])
 }
 

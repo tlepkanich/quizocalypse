@@ -71,6 +71,7 @@ const RANKING_OPTIONS: { value: ResultRanking; label: string }[] = [
 const OOS_OPTIONS: { value: OosBehavior; label: string }[] = [
   { value: "show_with_badge", label: "Show with badge" },
   { value: "hide", label: "Hide" },
+  { value: "notify_me", label: "Show “Notify Me” button" },
   { value: "fallback", label: "Fallback collection" },
 ];
 
@@ -579,6 +580,23 @@ export function ResultSettingsPanel({
                   </option>
                 ))}
               </QzSelect>
+            </QzField>
+          ) : null}
+          {data.oos_behavior === "notify_me" ? (
+            <QzField
+              label="Back-in-stock webhook (optional)"
+              hint="“Notify Me” captures are always stored. Add a URL to also forward them to your back-in-stock tool."
+            >
+              <QzInput
+                value={doc.back_in_stock_webhook_url ?? ""}
+                placeholder="https://…"
+                onChange={(e) =>
+                  onCommit({
+                    ...doc,
+                    back_in_stock_webhook_url: e.target.value || undefined,
+                  })
+                }
+              />
             </QzField>
           ) : null}
         </div>

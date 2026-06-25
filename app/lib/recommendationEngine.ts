@@ -550,7 +550,11 @@ function applyOos(
   productIndex: IndexedProduct[],
   tagWeight: Map<string, number>,
 ): { products: ExplainedProduct[]; swapped: boolean } {
-  if (cfg.oos_behavior === "show_with_badge") return { products, swapped: false };
+  // show_with_badge + notify_me both KEEP out-of-stock products visible; the
+  // storefront card decides how to render them (badge vs "Notify Me" capture).
+  if (cfg.oos_behavior === "show_with_badge" || cfg.oos_behavior === "notify_me") {
+    return { products, swapped: false };
+  }
   const inStock = products.filter((p) => p.inventory_in_stock);
   if (cfg.oos_behavior === "hide") return { products: inStock, swapped: false };
   // fallback: everything's OOS → swap in the merchant's OOS fallback collection

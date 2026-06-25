@@ -240,7 +240,12 @@ export const ResultRanking = z.enum([
 export type ResultRanking = z.infer<typeof ResultRanking>;
 
 // Out-of-stock handling for the resolved products.
-export const OosBehavior = z.enum(["hide", "show_with_badge", "fallback"]);
+//   hide            — drop OOS products from the list.
+//   show_with_badge — keep them, muted, with an "Out of stock" badge.
+//   notify_me       — keep them; the card's CTA becomes a "Notify Me" email
+//                     capture (Rec-Page spec §5 per-product behavior).
+//   fallback        — when ALL are OOS, swap in the OOS fallback collection.
+export const OosBehavior = z.enum(["hide", "show_with_badge", "notify_me", "fallback"]);
 export type OosBehavior = z.infer<typeof OosBehavior>;
 
 // One stage of a multi-stage (Advanced) result page. Each stage is a
@@ -1158,6 +1163,9 @@ export const Quiz = z.object({
   discount_config: DiscountConfig.default({}),
   // Rec-Page spec §7 — quiz-level no-bucket-match fallback. Defaults to disabled.
   global_fallback: GlobalFallback.default({}),
+  // Rec-Page spec §5 — optional custom back-in-stock webhook. When set, "Notify
+  // Me" captures are POSTed here in addition to being stored. Absent = store only.
+  back_in_stock_webhook_url: z.string().url().optional(),
 });
 export type Quiz = z.infer<typeof Quiz>;
 

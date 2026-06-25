@@ -1308,6 +1308,7 @@ const LINE_LABEL: Record<"soft" | "sharp" | "rounded", string> = {
 const OOS_LABEL: Record<RecDefaults["oos_behavior"], string> = {
   show_with_badge: "Show + badge",
   hide: "Hide",
+  notify_me: "Notify me",
   fallback: "Fallback",
 };
 

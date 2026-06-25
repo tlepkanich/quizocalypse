@@ -731,6 +731,7 @@ export function QuizRuntime(props: QuizRuntimeProps) {
           answerSummary={pickedAnswerLabels(doc, selectedAnswerIds)}
           retakeLink={node.data.retake_link}
           shareResults={node.data.share_results}
+          oosNotify={node.data.oos_behavior === "notify_me"}
           globalFallback={
             recs.length === 0 && doc.global_fallback.enabled
               ? {
@@ -1160,6 +1161,7 @@ export function QuizRuntime(props: QuizRuntimeProps) {
             answerSummary={pickedAnswerLabels(doc, selectedAnswerIds)}
             retakeLink={currentNode.data.retake_link}
             shareResults={currentNode.data.share_results}
+            oosNotify={currentNode.data.oos_behavior === "notify_me"}
             globalFallback={
               recs.length === 0 && doc.global_fallback.enabled
                 ? {
@@ -2198,6 +2200,92 @@ function ShareResultsButton({ quizId, sessionId }: { quizId?: string; sessionId?
     >
       {copied ? tc("share_copied") : tc("share_results_cta")}
     </button>
+  );
+}
+
+const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
+
+// Spec §5 "Notify Me" — inline back-in-stock email capture shown in place of
+// the add-to-cart CTA on an out-of-stock card (and as a section-level prompt
+// when everything is sold out). Posts to /q/:id/notify. Preview = no POST.
+function NotifyMeForm({
+  quizId,
+  sessionId,
+  productId,
+  compact = false,
+}: {
+  quizId?: string;
+  sessionId?: string;
+  productId?: string | null;
+  compact?: boolean;
+}) {
+  const tc = useChrome();
+  const isPreviewMode = useContext(RuntimePreviewContext);
+  const [email, setEmail] = useState("");
+  const [state, setState] = useState<"idle" | "sending" | "done">("idle");
+  if (state === "done") {
+    return (
+      <div style={{ fontSize: 13, color: "var(--qz-color-muted)" }}>{tc("notify_done")}</div>
+    );
+  }
+  return (
+    <form
+      onSubmit={async (e) => {
+        e.preventDefault();
+        if (!EMAIL_RE.test(email)) return;
+        setState("sending");
+        if (isPreviewMode || !quizId) {
+          setState("done");
+          return;
+        }
+        try {
+          await fetch(`/q/${quizId}/notify`, {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ email, product_id: productId ?? null, session_id: sessionId ?? null }),
+          });
+        } catch {
+          // best-effort — still confirm so the shopper isn't stuck
+        }
+        setState("done");
+      }}
+      style={{ display: "flex", gap: 6, flexDirection: compact ? "column" : "row", alignItems: "stretch" }}
+    >
+      <input
+        type="email"
+        required
+        value={email}
+        onChange={(ev) => setEmail(ev.target.value)}
+        placeholder={tc("notify_email_placeholder")}
+        aria-label={tc("notify_email_placeholder")}
+        style={{
+          font: "inherit",
+          fontSize: 13,
+          padding: "6px 10px",
+          borderRadius: "var(--qz-radius)",
+          border: "1px solid #00000022",
+          minWidth: 0,
+          flex: 1,
+        }}
+      />
+      <button
+        type="submit"
+        disabled={state === "sending"}
+        style={{
+          font: "inherit",
+          fontSize: 13,
+          padding: "6px 14px",
+          borderRadius: "var(--qz-radius)",
+          border: "1px solid var(--qz-color-primary)",
+          background: "var(--qz-color-primary)",
+          color: "#fff",
+          cursor: "pointer",
+          whiteSpace: "nowrap",
+        }}
+      >
+        {tc("notify_me")}
+      </button>
+    </form>
   );
 }
 
@@ -3871,10 +3959,14 @@ function ResultView({
   retakeLink = false,
   shareResults = false,
   globalFallback,
+  oosNotify = false,
 }: {
   headline: string;
   subtext: string;
   ctaLabel: string;
+  // Spec §5 — result page's OOS behavior is "notify_me": sold-out cards get a
+  // back-in-stock capture, and a section prompt shows when ALL recs are OOS.
+  oosNotify?: boolean;
   // Rec-Page spec §2/§6 display + structure toggles, threaded from the result node.
   showVariants?: boolean;
   showDescriptions?: boolean;
@@ -4001,6 +4093,19 @@ function ResultView({
           🎁 {discountLabel} on these picks — applied automatically at checkout.
         </div>
       ) : null}
+      {oosNotify && recs.length > 0 && recs.every((r) => !r.inventory_in_stock) ? (
+        <div
+          style={{
+            marginTop: bare ? 0 : 16,
+            padding: "12px 14px",
+            borderRadius: "var(--qz-radius)",
+            background: "color-mix(in srgb, var(--qz-color-primary) 8%, transparent)",
+          }}
+        >
+          <div style={{ fontSize: 13, marginBottom: 8 }}>{tc("notify_section_prompt")}</div>
+          <NotifyMeForm quizId={quizId} sessionId={sessionId} productId={null} />
+        </div>
+      ) : null}
       <div
         style={{
           marginTop: bare && !discountLabel ? 0 : 20,
@@ -4065,6 +4170,9 @@ function ResultView({
             showVariants={showVariants}
             showDescriptions={showDescriptions}
             lowStockQty={lowStockByProduct?.get(r.product_id) ?? null}
+            oosNotify={oosNotify}
+            quizId={quizId}
+            sessionId={sessionId}
             styles={styles}
             onClick={() =>
               analytics?.track("recommendation_clicked", {
@@ -4551,6 +4659,9 @@ function ProductCard({
   showVariants = false,
   showDescriptions = false,
   lowStockQty,
+  oosNotify = false,
+  quizId,
+  sessionId,
 }: {
   product: RecommendedProduct;
   position: number;
@@ -4561,6 +4672,11 @@ function ProductCard({
   showVariants?: boolean;
   showDescriptions?: boolean;
   lowStockQty?: number | null;
+  // Spec §5 — when this card is sold out and the page's OOS behavior is
+  // "notify_me", the CTA becomes an inline back-in-stock email capture.
+  oosNotify?: boolean;
+  quizId?: string;
+  sessionId?: string;
   // When set, the info region links to the PDP (new tab). When omitted, it's a
   // click-tracked button.
   href?: string;
@@ -4777,6 +4893,10 @@ function ProductCard({
           >
             {tc("add_to_cart")}
           </button>
+        ) : soldOut && oosNotify ? (
+          // Spec §5 — sold out + notify_me: capture an email for back-in-stock
+          // instead of a dead add-to-cart.
+          <NotifyMeForm quizId={quizId} sessionId={sessionId} productId={product.product_id} compact />
         ) : soldOut && platform !== "standalone" ? (
           // Shopify + sold out: the add-to-cart would build a doomed permalink,
           // so show a disabled state instead (the OOS note above already explains).
