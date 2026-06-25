@@ -6,6 +6,25 @@ notes are welcome above the auto entries.
 
 <!-- routine: insert each run's entry directly below this line, newest first -->
 
+## 2026-06-25 — Step 3 Shape Your Quiz: four-card page + scoring model (core)
+
+Owner resolved the Guardrails #2 block (four-card page + weighted scoring), so
+Step 3 is unblocked. On branch `claude/shape-your-quiz-spec`:
+- New optional quiz `scoring_model` ("direct" | "weighted"); absent = legacy
+  behavior, so in-flight drafts are unchanged until a merchant chooses (the spec
+  pre-selects nothing). Both models materialize onto the existing per-answer
+  `points` engine via setAnswerBucketDirect / setAnswerBucketWeight (tested).
+- Replaced the linear Types→Templates→BattleCard selection with the spec's
+  single four-card "Shape your quiz" page: two AI quiz-type cards (inline expand,
+  mute siblings, REQUIRED Direct/Weighted choice → shape-continue stamps
+  scoring_model + experience_type and runs the existing build), a Write-Your-Goal
+  card, a Manual-Create card (→ builder, scoring deferred), and ↻ Regenerate.
+
+Remaining for full fidelity (follow-up): AI generation tuned to force two
+intentionally-different types; the Question-Builder Mapping tab (direct dropdown
+vs weighted grid) on the new helpers; the manual-create scoring prompt in the
+builder.
+
 ## 2026-06-25 — Step 4 Question Builder: roadmap "Now" cluster
 
 Implemented the `question-builder-spec.md` "Now" items on branch
