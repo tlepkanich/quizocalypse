@@ -96,20 +96,25 @@ export async function findOrCreateStep1Draft(shopId: string): Promise<string> {
     where: { shopId, buildState: "step1" },
     orderBy: { updatedAt: "desc" },
     select: { id: true, draftJson: true },
-    take: 12,
+    take: 24,
   });
+  let resumeId: string | null = null;
   for (const c of candidates) {
     const parsed = Quiz.safeParse(c.draftJson);
     const session = parsed.success ? parsed.data.build_session : undefined;
     const finished = session?.built === true || session?.stage === "done" || session?.stage === "generate";
     if (finished) {
+      // Graduate EVERY finished draft (not just the newest), so a finished quiz
+      // sitting behind a newer in-flight one still leaves the funnel + shows up in
+      // the gallery.
       await prisma.quiz
         .update({ where: { id: c.id }, data: { buildState: null } })
         .catch(() => {});
-      continue;
+    } else if (!resumeId) {
+      resumeId = c.id; // the newest genuinely mid-funnel draft → resume it
     }
-    return c.id; // genuinely mid-funnel → resume it
   }
+  if (resumeId) return resumeId;
 
   const doc = Quiz.parse({ ...buildSeedQuiz("New quiz"), build_session: { stage: "grouping" } });
   const created = await prisma.quiz.create({
