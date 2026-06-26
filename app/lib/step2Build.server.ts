@@ -183,7 +183,8 @@ async function patchBuildSession(
 
 // The funnel's "typing" job — web research + quiz types, DETACHED (research ~40s +
 // types ~31s outruns the edge window; measured at T2). On success → stage "types"
-// with the cards; on failure → back to "goal" so the merchant can retry.
+// with the cards; on failure → back to "types" (Shape) with a gen_error so the
+// merchant can retry / write a goal there (the standalone Goal step is retired).
 export function startStep2Types(
   shopId: string,
   quizId: string,
@@ -205,7 +206,7 @@ export function startStep2Types(
     } catch (err) {
       console.error("[step2] type generation failed:", err instanceof Error ? err.message : err);
       await patchBuildSession(quizId, (s) =>
-        BuildSession.parse({ ...s, stage: "goal", gen_error: friendlyGenError(err) }),
+        BuildSession.parse({ ...s, stage: "types", gen_error: friendlyGenError(err) }),
       );
     }
   })();
