@@ -10,6 +10,7 @@ import {
   straightThroughRun,
   setAnswerBucketDirect,
   setAnswerBucketWeight,
+  swapScoringModel,
 } from "../../lib/quizMutations";
 import { computeBucketCoverage, type CoverageLevel } from "../../lib/bucketCoverage";
 import { StepPreview } from "../runtime/StepPreview";
@@ -228,7 +229,9 @@ function AnswerMappingSection({
   if (node.type !== "question") return null;
   const answers = node.data.answers;
   const model = doc.scoring_model ?? "direct";
-  const setModel = (m: "direct" | "weighted") => onCommit({ ...doc, scoring_model: m });
+  // Switching preserves BOTH models' data (swap points↔points_alt), so a merchant
+  // can flip back and forth without losing their other mapping.
+  const setModel = (m: "direct" | "weighted") => onCommit(swapScoringModel(doc, m));
 
   return (
     <div>

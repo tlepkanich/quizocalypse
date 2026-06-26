@@ -915,3 +915,28 @@ export function setAnswerBucketWeight(
   else delete nextPoints[categoryId];
   return updateAnswerPoints(doc, questionNodeId, answerId, nextPoints);
 }
+
+// Question-Builder spec — switch the active scoring model, preserving BOTH models'
+// data. For every answer, swap `points` (the active store the engine + publish
+// read) ↔ `points_alt` (the dormant other model). The model you're leaving moves
+// to the sidecar; the model you're entering loads back from it. No-op if already
+// on `next`. Runtime is unchanged — the engine always reads `points`.
+export function swapScoringModel(doc: QuizDoc, next: "direct" | "weighted"): QuizDoc {
+  if ((doc.scoring_model ?? "direct") === next) return { ...doc, scoring_model: next };
+  const nodes = doc.nodes.map((n) =>
+    n.type === "question"
+      ? {
+          ...n,
+          data: {
+            ...n.data,
+            answers: n.data.answers.map((a) => ({
+              ...a,
+              points: a.points_alt,
+              points_alt: a.points,
+            })),
+          },
+        }
+      : n,
+  );
+  return { ...doc, nodes, scoring_model: next };
+}

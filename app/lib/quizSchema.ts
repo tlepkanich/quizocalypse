@@ -114,7 +114,13 @@ export const Answer = z.object({
   // v3 points scoring: weights this answer contributes toward category ids
   // when a result page uses the "points" ladder strategy. categoryId →
   // weight. Optional — only present on quizzes that use points logic.
+  // This is the ACTIVE store the engine + publish read (whichever scoring model
+  // is current). `points_alt` is the dormant other model's data (see below).
   points: z.record(z.string(), z.number()).optional(),
+  // Question-Builder spec — dual scoring storage: the INACTIVE scoring model's
+  // weights, parked here so switching Direct↔Weighted preserves both. The engine
+  // never reads this; swapScoringModel swaps points↔points_alt on a model change.
+  points_alt: z.record(z.string(), z.number()).optional(),
 });
 export type Answer = z.infer<typeof Answer>;
 

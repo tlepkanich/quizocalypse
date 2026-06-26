@@ -12,6 +12,7 @@ import {
   routeAnswerToEnd,
   setAnswerBucketDirect,
   setAnswerBucketWeight,
+  swapScoringModel,
   straightThroughRun,
 } from "./quizMutations";
 import { insertModule } from "../components/studio/studioDoc";
@@ -155,6 +156,38 @@ describe("duplicateQuestionNode / insertQuestionRelative (Question-Builder spec)
     });
     d = setAnswerBucketWeight(d, "q1", "q1_a1", "cat-oily", 0); // remove just oily
     expect(q(d, "q1").data.answers.find((a) => a.id === "q1_a1")!.points).toEqual({ "cat-dry": 1 });
+  });
+
+  it("swapScoringModel preserves BOTH models' data across a round-trip", () => {
+    const q = (d: ReturnType<typeof linearQuestionsDoc>, id: string) =>
+      d.nodes.find((n) => n.id === id) as Extract<(typeof d.nodes)[number], { type: "question" }>;
+    const ans = (d: ReturnType<typeof linearQuestionsDoc>) =>
+      q(d, "q1").data.answers.find((a) => a.id === "q1_a1")!;
+    // Start in Direct, map the answer to one bucket.
+    let d: ReturnType<typeof linearQuestionsDoc> = setAnswerBucketDirect(
+      { ...linearQuestionsDoc(), scoring_model: "direct" },
+      "q1",
+      "q1_a1",
+      "cat-oily",
+    );
+    expect(ans(d).points).toEqual({ "cat-oily": 1 });
+    // Switch to Weighted → the Direct data parks in points_alt; weighted starts empty.
+    d = swapScoringModel(d, "weighted");
+    expect(d.scoring_model).toBe("weighted");
+    expect(ans(d).points_alt).toEqual({ "cat-oily": 1 });
+    expect(ans(d).points).toBeUndefined();
+    // Assign weighted points.
+    d = setAnswerBucketWeight(d, "q1", "q1_a1", "cat-oily", 5);
+    d = setAnswerBucketWeight(d, "q1", "q1_a1", "cat-dry", 2);
+    expect(ans(d).points).toEqual({ "cat-oily": 5, "cat-dry": 2 });
+    // Switch BACK to Direct → the original Direct mapping is restored exactly,
+    // and the Weighted data is preserved (now parked in points_alt).
+    d = swapScoringModel(d, "direct");
+    expect(d.scoring_model).toBe("direct");
+    expect(ans(d).points).toEqual({ "cat-oily": 1 });
+    expect(ans(d).points_alt).toEqual({ "cat-oily": 5, "cat-dry": 2 });
+    // No-op when already on the target model.
+    expect(swapScoringModel(d, "direct")).toEqual(d);
   });
 
   it("routeAnswerToEnd creates an end node and routes the answer to it, reusing it next time", () => {

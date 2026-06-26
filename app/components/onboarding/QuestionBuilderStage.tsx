@@ -3,6 +3,8 @@ import type { useFetcher } from "@remix-run/react";
 import type { Quiz } from "../../lib/quizSchema";
 import { validateQuiz, type NodeIssue } from "../../lib/quizValidation";
 import { orderFlow } from "../../lib/flowOrder";
+import { stepNumber, TOTAL_STEPS } from "../../lib/funnelStages";
+import { swapScoringModel } from "../../lib/quizMutations";
 import type { IndexedProduct } from "../../lib/recommendationEngine";
 import type { BuilderCategory, BuilderCollection, StepProps } from "../builder/stepProps";
 import { Step5Preview } from "../builder/Step5Preview";
@@ -81,23 +83,55 @@ export function QuestionBuilderStage({
     <div className="qz-qb-stage">
       <header className="qz-row" style={{ justifyContent: "space-between", marginBottom: 12 }}>
         <div>
+          <div className="qz-label" style={{ fontSize: 11, marginBottom: 2 }}>
+            Step {stepNumber("question_builder")} of {TOTAL_STEPS} — Question Builder
+          </div>
           <h2 style={{ margin: 0, fontSize: 20 }}>Build &amp; map your questions</h2>
-          <p className="qz-dim" style={{ margin: "4px 0 0", fontSize: 13 }}>
-            Edit the AI-drafted questions, answers, and how each answer scores toward a
-            recommendation. Select a step on the left; map answers in the Routing tab.
-          </p>
+          {(() => {
+            const qCount = doc.nodes.filter((n) => n.type === "question").length;
+            const nudge =
+              qCount < 4
+                ? " · most quizzes perform best at 4–8"
+                : qCount > 8
+                  ? " · consider trimming — 4–8 performs best"
+                  : "";
+            return (
+              <p className="qz-dim" style={{ margin: "4px 0 0", fontSize: 13 }}>
+                {qCount} question{qCount === 1 ? "" : "s"}
+                {nudge}. Edit answers + map each to a bucket in the Mapping tab; set skip
+                logic in the Logic tab.
+              </p>
+            );
+          })()}
         </div>
-        <span className="qz-save-status" aria-live="polite">
-          {isSaving ? (
-            <span className="qz-save-chip is-saving">
-              <span className="qz-save-dot" aria-hidden /> Saving…
-            </span>
-          ) : savedAt ? (
-            <span key={savedAt} className="qz-save-chip is-saved">
-              <span aria-hidden>✓</span> Saved
-            </span>
-          ) : null}
-        </span>
+        <div className="qz-row" style={{ gap: 10, alignItems: "center" }}>
+          {(() => {
+            const m = doc.scoring_model ?? "direct";
+            const other = m === "direct" ? "weighted" : "direct";
+            return (
+              <button
+                type="button"
+                className="qz-btn qz-btn-ghost qz-btn-sm"
+                style={{ fontSize: 12 }}
+                title={`Scoring: ${m === "direct" ? "Direct mapping" : "Weighted scoring"} — click to switch (both models are saved)`}
+                onClick={() => commit(swapScoringModel(doc, other))}
+              >
+                {m === "direct" ? "→ Direct mapping" : "⚖ Weighted scoring"} <span aria-hidden>⚙</span>
+              </button>
+            );
+          })()}
+          <span className="qz-save-status" aria-live="polite">
+            {isSaving ? (
+              <span className="qz-save-chip is-saving">
+                <span className="qz-save-dot" aria-hidden /> Saving…
+              </span>
+            ) : savedAt ? (
+              <span key={savedAt} className="qz-save-chip is-saved">
+                <span aria-hidden>✓</span> Saved
+              </span>
+            ) : null}
+          </span>
+        </div>
       </header>
 
       <div className="qz-unified">
