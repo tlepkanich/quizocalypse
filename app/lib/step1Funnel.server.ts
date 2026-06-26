@@ -755,6 +755,15 @@ export async function runStep1FunnelAction(
     return json({ intent, ok: true });
   }
 
+  // Design "Continue →": advance to the Recommendation Page step (rec settings).
+  if (intent === "to-rec-page") {
+    if (!session.picked_template) {
+      return json({ intent, ok: false, error: "No template selected." }, { status: 400 });
+    }
+    await writeDoc(quiz.id, { ...doc, build_session: { ...session, stage: "rec_page" } });
+    return json({ intent, ok: true });
+  }
+
   // Design step — apply a theme preset's tokens to the draft. The build threads
   // doc.design_tokens as its base, so this survives generation. Validated against
   // the DesignTokens schema (the tokens come from the client).

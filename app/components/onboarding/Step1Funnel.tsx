@@ -250,6 +250,10 @@ export function Step1Funnel({ data }: { data: FunnelData }) {
         <DesignStage data={data} fetcher={fetcher} pendingIntent={pendingIntent} />
       ) : null}
 
+      {data.stage === "rec_page" ? (
+        <RecPageStage data={data} fetcher={fetcher} pendingIntent={pendingIntent} />
+      ) : null}
+
       {data.stage === "overview" ? (
         <OverviewStage data={data} fetcher={fetcher} pendingIntent={pendingIntent} />
       ) : null}
@@ -270,6 +274,7 @@ const FUNNEL_STAGES: Array<{ key: string; label: string }> = [
   { key: "types", label: "Type" },
   { key: "configuring", label: "Template" },
   { key: "design", label: "Design" },
+  { key: "rec_page", label: "Rec Page" },
   { key: "overview", label: "Review" },
 ];
 
@@ -461,6 +466,90 @@ function DesignStage({
         <button
           type="button"
           className="qz-btn qz-btn-accent"
+          onClick={() => fetcher.submit({ intent: "to-rec-page" }, { method: "post" })}
+        >
+          Continue →
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ── Recommendation Page — tune how results show (per the Rec-Page spec) ───────
+// First cut: the global rec defaults (products-per-result + OOS behavior) that the
+// BattleCard used to hold, now a discrete step. Writes picked_template.rec_defaults
+// via the existing set-rec intent; the build applies it. (Per-bucket sections,
+// sort, sub-filter, discount, etc. are later cuts.)
+function RecPageStage({
+  data,
+  fetcher,
+  pendingIntent,
+}: {
+  data: FunnelData;
+  fetcher: ReturnType<typeof useFetcher<ActionResult>>;
+  pendingIntent: string | null;
+}) {
+  const picked = data.pickedTemplate;
+  const rec = picked?.rec_defaults;
+  const saving = pendingIntent === "set-rec";
+  const setRec = (patch: Partial<RecDefaults>) => {
+    if (!rec) return;
+    fetcher.submit({ intent: "set-rec", rec: JSON.stringify({ ...rec, ...patch }) }, { method: "post" });
+  };
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+      <QzCard style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+          <div className="qz-label">Recommendation page</div>
+          <h2 className="qz-h2" style={{ margin: 0 }}>How should results show?</h2>
+          <p className="qz-dim" style={{ margin: 0, fontSize: 13 }}>
+            Set how many products to recommend and what happens when one is out of stock. Fine-tune
+            per-page details later in the builder.
+          </p>
+        </div>
+        {rec ? (
+          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+            <QzField label="Products per result">
+              <QzInput
+                type="number"
+                min={1}
+                max={12}
+                value={rec.max_products}
+                disabled={saving}
+                onChange={(e) =>
+                  setRec({ max_products: Math.max(1, Math.min(12, Number(e.target.valueAsNumber) || 3)) })
+                }
+              />
+            </QzField>
+            <QzField label="When a product is out of stock">
+              <QzSelect
+                value={rec.oos_behavior}
+                disabled={saving}
+                onChange={(e) => setRec({ oos_behavior: e.target.value as RecDefaults["oos_behavior"] })}
+              >
+                {(Object.entries(OOS_LABEL) as Array<[RecDefaults["oos_behavior"], string]>).map(
+                  ([value, label]) => (
+                    <option key={value} value={value}>{label}</option>
+                  ),
+                )}
+              </QzSelect>
+            </QzField>
+          </div>
+        ) : (
+          <p className="qz-dim" style={{ margin: 0, fontSize: 13 }}>No template selected yet.</p>
+        )}
+      </QzCard>
+      <div className="qz-row" style={{ gap: 8 }}>
+        <button
+          type="button"
+          className="qz-btn qz-btn-ghost"
+          onClick={() => fetcher.submit({ intent: "to-design" }, { method: "post" })}
+        >
+          ← Back
+        </button>
+        <button
+          type="button"
+          className="qz-btn qz-btn-accent"
           onClick={() => fetcher.submit({ intent: "to-overview" }, { method: "post" })}
         >
           Continue →
@@ -531,7 +620,7 @@ function OverviewStage({
           type="button"
           className="qz-btn qz-btn-ghost"
           disabled={building}
-          onClick={() => fetcher.submit({ intent: "to-design" }, { method: "post" })}
+          onClick={() => fetcher.submit({ intent: "to-rec-page" }, { method: "post" })}
         >
           ← Back
         </button>
