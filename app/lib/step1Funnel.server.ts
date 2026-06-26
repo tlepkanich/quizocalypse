@@ -1,7 +1,7 @@
 import { json, redirect } from "@remix-run/node";
 import type { Shop } from "@prisma/client";
 import prisma from "../db.server";
-import { Quiz, BuildSession, DesignDials, RecDefaults } from "./quizSchema";
+import { Quiz, BuildSession, DesignDials, RecDefaults, DesignTokens } from "./quizSchema";
 import { buildSeedQuiz } from "./seedQuiz";
 import { parseBrandIdentitySafe } from "./brandIdentity";
 import { suggestQuizGoal } from "./goalSuggest";
@@ -746,7 +746,28 @@ export async function runStep1FunnelAction(
     return json({ intent, ok: true });
   }
 
-  // BattleCard "Continue →": park at the Overview review step before the build.
+  // BattleCard "Continue →": advance to the Design step (theme picker).
+  if (intent === "to-design") {
+    if (!session.picked_template) {
+      return json({ intent, ok: false, error: "No template selected." }, { status: 400 });
+    }
+    await writeDoc(quiz.id, { ...doc, build_session: { ...session, stage: "design" } });
+    return json({ intent, ok: true });
+  }
+
+  // Design step — apply a theme preset's tokens to the draft. The build threads
+  // doc.design_tokens as its base, so this survives generation. Validated against
+  // the DesignTokens schema (the tokens come from the client).
+  if (intent === "set-design") {
+    const parsed = DesignTokens.safeParse(safeJson(form.get("tokens")));
+    if (!parsed.success) {
+      return json({ intent, ok: false, error: "Invalid theme." }, { status: 400 });
+    }
+    await writeDoc(quiz.id, { ...doc, design_tokens: parsed.data });
+    return json({ intent, ok: true });
+  }
+
+  // Design "Continue →": park at the Overview review step before the build.
   // The build itself still fires from Overview via generate-build (below).
   if (intent === "to-overview") {
     if (!session.picked_template) {

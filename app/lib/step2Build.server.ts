@@ -10,6 +10,7 @@ import {
 import { Quiz, BuildSession, PickedTemplate } from "./quizSchema";
 import { dialsToBuildDirectives, autoQuizName } from "./dialDirectives";
 import { runAiOnboardingBuild } from "./onboardingBuild.server";
+import type { DesignTokensT } from "./designTokens";
 import type { GroupingProduct } from "./categoryGrouping";
 import type { QuizType, RichTemplateOption } from "./quizSchema";
 
@@ -298,6 +299,16 @@ export async function startStep2Build(
   const goalPrompt = struggle ? `${goal}\n\nShoppers struggle with: ${struggle}` : goal;
   const { tokenPatch, promptDirectives } = dialsToBuildDirectives(picked.design_dials);
 
+  // The merchant's Design-step theme lives on the draft doc; thread it into the
+  // build as the base tokens (the dial tokenPatch still overlays on top). Absent
+  // (unedited draft) → null → the build falls back to the seed's house tokens.
+  const draftDoc = await prisma.quiz.findUnique({
+    where: { id: quizId },
+    select: { draftJson: true },
+  });
+  const draftTokens =
+    (draftDoc?.draftJson as { design_tokens?: DesignTokensT } | null)?.design_tokens ?? null;
+
   await prisma.quiz.update({
     where: { id: quizId },
     data: { name: picked.quiz_name, buildState: "building" },
@@ -319,6 +330,7 @@ export async function startStep2Build(
     ...(enabledBuckets.length ? { preResolvedBuckets: enabledBuckets } : {}),
     directionAngle: rich.angle,
     sampleQuestionSeeds: rich.sample_questions,
+    designTokens: draftTokens,
     tokenPatch,
     dialDirectives: promptDirectives,
     recOverride: {

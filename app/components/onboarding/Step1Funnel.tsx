@@ -28,6 +28,7 @@ import type {
   RecommendedGroup,
 } from "../../lib/quizSchema";
 import type { BucketSuggestion } from "../../lib/bucketDetect";
+import { THEME_PRESETS, type ThemePreset } from "../../lib/themePresets";
 
 // Recommendation Buckets (RB Step 1) — the three browser tabs / bucket kinds.
 type BucketType = "product" | "tag" | "collection";
@@ -245,6 +246,10 @@ export function Step1Funnel({ data }: { data: FunnelData }) {
         <BattleCardStage data={data} fetcher={fetcher} pendingIntent={pendingIntent} />
       ) : null}
 
+      {data.stage === "design" ? (
+        <DesignStage data={data} fetcher={fetcher} pendingIntent={pendingIntent} />
+      ) : null}
+
       {data.stage === "overview" ? (
         <OverviewStage data={data} fetcher={fetcher} pendingIntent={pendingIntent} />
       ) : null}
@@ -264,6 +269,7 @@ const FUNNEL_STAGES: Array<{ key: string; label: string }> = [
   { key: "goal", label: "Goal" },
   { key: "types", label: "Type" },
   { key: "configuring", label: "Template" },
+  { key: "design", label: "Design" },
   { key: "overview", label: "Review" },
 ];
 
@@ -299,6 +305,108 @@ function FunnelProgress({ stage }: { stage: FunnelData["stage"] }) {
           {i < FUNNEL_STAGES.length - 1 ? <span className="qz-dim" style={{ marginLeft: 2 }}>·</span> : null}
         </span>
       ))}
+    </div>
+  );
+}
+
+// ── Design — pick a theme (the design-settings step, first cut) ───────────────
+// Applies a theme preset's tokens to the draft doc via set-design; the build
+// threads doc.design_tokens as its base, so the choice survives generation.
+// (Logo / curated fonts / style sliders / formatting toggles are later cuts.)
+function DesignStage({
+  data,
+  fetcher,
+  pendingIntent,
+}: {
+  data: FunnelData;
+  fetcher: ReturnType<typeof useFetcher<ActionResult>>;
+  pendingIntent: string | null;
+}) {
+  const [appliedId, setAppliedId] = useState<string | null>(null);
+  const applying = pendingIntent === "set-design";
+  const apply = (preset: ThemePreset) => {
+    setAppliedId(preset.id);
+    fetcher.submit({ intent: "set-design", tokens: JSON.stringify(preset.tokens) }, { method: "post" });
+  };
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+      <QzCard style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+          <div className="qz-label">Design</div>
+          <h2 className="qz-h2" style={{ margin: 0 }}>Pick a look for your quiz</h2>
+          <p className="qz-dim" style={{ margin: 0, fontSize: 13 }}>
+            Choose a theme — colors, type, and shape. You can fine-tune everything later in the builder.
+          </p>
+        </div>
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fill, minmax(150px, 1fr))",
+            gap: 12,
+          }}
+        >
+          {THEME_PRESETS.map((p) => {
+            const active = appliedId === p.id;
+            return (
+              <button
+                key={p.id}
+                type="button"
+                onClick={() => apply(p)}
+                disabled={applying}
+                className="qz-card qz-interactive"
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 8,
+                  padding: 12,
+                  cursor: "pointer",
+                  textAlign: "left",
+                  outline: active ? "2px solid var(--qz-accent)" : "none",
+                  outlineOffset: 2,
+                }}
+              >
+                <span aria-hidden style={{ display: "flex", gap: 5 }}>
+                  {[
+                    p.tokens.colors?.background ?? "#ffffff",
+                    p.tokens.colors?.primary ?? "#111111",
+                    p.tokens.colors?.accent ?? "#888888",
+                    p.tokens.colors?.text ?? "#111111",
+                  ].map((c, i) => (
+                    <span
+                      key={i}
+                      style={{
+                        width: 18,
+                        height: 18,
+                        borderRadius: 5,
+                        background: c,
+                        border: "1px solid var(--qz-ink-4)",
+                      }}
+                    />
+                  ))}
+                </span>
+                <span style={{ fontSize: 14, fontWeight: 600 }}>{p.name}</span>
+                {active ? <span className="qz-dim" style={{ fontSize: 11.5 }}>Applied ✓</span> : null}
+              </button>
+            );
+          })}
+        </div>
+      </QzCard>
+      <div className="qz-row" style={{ gap: 8 }}>
+        <button
+          type="button"
+          className="qz-btn qz-btn-ghost"
+          onClick={() => fetcher.submit({ intent: "back-to-configuring" }, { method: "post" })}
+        >
+          ← Back
+        </button>
+        <button
+          type="button"
+          className="qz-btn qz-btn-accent"
+          onClick={() => fetcher.submit({ intent: "to-overview" }, { method: "post" })}
+        >
+          Continue →
+        </button>
+      </div>
     </div>
   );
 }
@@ -364,7 +472,7 @@ function OverviewStage({
           type="button"
           className="qz-btn qz-btn-ghost"
           disabled={building}
-          onClick={() => fetcher.submit({ intent: "back-to-configuring" }, { method: "post" })}
+          onClick={() => fetcher.submit({ intent: "to-design" }, { method: "post" })}
         >
           ← Back
         </button>
@@ -1690,10 +1798,10 @@ function BattleCardStage({
         onToggleGroup={toggleGroup}
         onToggleProduct={toggleProduct}
         onPick={() => fetcher.submit({ intent: "pick-template", templateId: expanded.id }, { method: "post" })}
-        onGenerate={() => fetcher.submit({ intent: "to-overview" }, { method: "post" })}
+        onGenerate={() => fetcher.submit({ intent: "to-design" }, { method: "post" })}
         onDeepDive={(dial) => setModuleTarget({ dial, module: 2 })}
         picking={pendingIntent === "pick-template"}
-        generating={pendingIntent === "to-overview"}
+        generating={pendingIntent === "to-design"}
       />
 
       {moduleTarget ? (
