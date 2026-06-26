@@ -1000,6 +1000,16 @@ export const BuildSession = z.object({
     .enum([
       "grouping",
       "goal",
+      // Re-sequenced funnel stages (the structured flow: Buckets → Shape →
+      // Question Builder → Rec Page → Design → Overview → Generate). Additive;
+      // the legacy stages below stay so in-flight drafts still render + resume
+      // (app/lib/funnelStages.ts maps every stage to its visible step).
+      "shape",
+      "question_builder",
+      "rec_page",
+      "design",
+      "overview",
+      "generate",
       // Step-1 legacy stages — kept so any in-flight Step-1 draft still renders.
       "generating",
       "templates",
