@@ -86,12 +86,30 @@ async function loadBucketInputs(shopId: string): Promise<{
 // shop, or seed a fresh one. Returns the quiz id; each entry route redirects to
 // its own nested funnel path (/studio/onboarding/:id or /app/onboarding/:id).
 export async function findOrCreateStep1Draft(shopId: string): Promise<string> {
-  const inFlight = await prisma.quiz.findFirst({
+  // Resume the most recent GENUINELY in-flight funnel draft. A step1 draft whose
+  // build already completed (session.built) or that reached a terminal stage is a
+  // finished quiz that didn't graduate — graduate it now (buildState → null, so it
+  // leaves the funnel + appears in the gallery) and keep looking. This both fixes
+  // the "Create new quiz drops you back in the builder" bug and self-heals any
+  // pre-existing stuck drafts.
+  const candidates = await prisma.quiz.findMany({
     where: { shopId, buildState: "step1" },
     orderBy: { updatedAt: "desc" },
-    select: { id: true },
+    select: { id: true, draftJson: true },
+    take: 12,
   });
-  if (inFlight) return inFlight.id;
+  for (const c of candidates) {
+    const parsed = Quiz.safeParse(c.draftJson);
+    const session = parsed.success ? parsed.data.build_session : undefined;
+    const finished = session?.built === true || session?.stage === "done" || session?.stage === "generate";
+    if (finished) {
+      await prisma.quiz
+        .update({ where: { id: c.id }, data: { buildState: null } })
+        .catch(() => {});
+      continue;
+    }
+    return c.id; // genuinely mid-funnel → resume it
+  }
 
   const doc = Quiz.parse({ ...buildSeedQuiz("New quiz"), build_session: { stage: "grouping" } });
   const created = await prisma.quiz.create({
@@ -758,6 +776,9 @@ export async function runStep1FunnelAction(
   // prompts for it (per the question-builder spec's manual-create flow).
   if (intent === "shape-manual") {
     await writeDoc(quiz.id, { ...doc, build_session: { ...session, stage: "done" } });
+    // Manual Create leaves the funnel for the builder — graduate it out of "step1"
+    // so it shows in the gallery and "Create new quiz" starts fresh (see above).
+    await prisma.quiz.update({ where: { id: quiz.id }, data: { buildState: null } });
     return redirect(opts.builderPath(quiz.id));
   }
 
@@ -1012,6 +1033,11 @@ export async function runStep1FunnelAction(
     // last design/rec edits already live on the draft (autosaved), so nothing else
     // to apply.
     if (session.built) {
+      // Graduate the draft out of the "step1" in-flight state: the funnel is done,
+      // so it should now appear in the gallery AND "Create new quiz" should start a
+      // FRESH draft instead of resuming this finished one (findOrCreateStep1Draft
+      // only resumes buildState:"step1" drafts).
+      await prisma.quiz.update({ where: { id: quiz.id }, data: { buildState: null } });
       return redirect(opts.builderPath(quiz.id));
     }
 
