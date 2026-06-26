@@ -245,6 +245,10 @@ export function Step1Funnel({ data }: { data: FunnelData }) {
         <BattleCardStage data={data} fetcher={fetcher} pendingIntent={pendingIntent} />
       ) : null}
 
+      {data.stage === "overview" ? (
+        <OverviewStage data={data} fetcher={fetcher} pendingIntent={pendingIntent} />
+      ) : null}
+
       {/* Legacy Step-1 directions — in-flight drafts from before Step 2. */}
       {data.stage === "templates" || data.stage === "done" ? (
         <TemplatesStage data={data} fetcher={fetcher} pendingIntent={pendingIntent} />
@@ -260,6 +264,7 @@ const FUNNEL_STAGES: Array<{ key: string; label: string }> = [
   { key: "goal", label: "Goal" },
   { key: "types", label: "Type" },
   { key: "configuring", label: "Template" },
+  { key: "overview", label: "Review" },
 ];
 
 // Map transient/legacy stages onto the visible step.
@@ -294,6 +299,84 @@ function FunnelProgress({ stage }: { stage: FunnelData["stage"] }) {
           {i < FUNNEL_STAGES.length - 1 ? <span className="qz-dim" style={{ marginLeft: 2 }}>·</span> : null}
         </span>
       ))}
+    </div>
+  );
+}
+
+// ── Overview — review everything before the build (the new flow's tail) ───────
+// A read-only summary of what we'll generate. "Generate quiz →" fires the SAME
+// detached build (generate-build) the battle card used to trigger directly, so
+// the build inputs are unchanged. In the re-sequenced flow this sits last before
+// Generate (… → Design → Overview → Generate → the builder).
+function OverviewStage({
+  data,
+  fetcher,
+  pendingIntent,
+}: {
+  data: FunnelData;
+  fetcher: ReturnType<typeof useFetcher<ActionResult>>;
+  pendingIntent: string | null;
+}) {
+  const picked = data.pickedTemplate;
+  const buckets = data.productGroups;
+  const building = pendingIntent === "generate-build";
+
+  const rows: Array<{ label: string; value: string }> = [
+    { label: "Quiz name", value: picked?.quiz_name || data.name },
+    {
+      label: "Recommendation buckets",
+      value: buckets.length
+        ? `${buckets.length} — ${buckets.map((b) => b.name).join(" · ")}`
+        : "None yet",
+    },
+  ];
+  if (picked) {
+    rows.push({ label: "Questions", value: `~${picked.question_count}` });
+    rows.push({ label: "Products per result", value: String(picked.rec_defaults.max_products) });
+    rows.push({ label: "Out of stock", value: OOS_LABEL[picked.rec_defaults.oos_behavior] });
+  }
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+      <QzCard style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+          <div className="qz-label">Review</div>
+          <h2 className="qz-h2" style={{ margin: 0 }}>Ready to build your quiz</h2>
+          <p className="qz-dim" style={{ margin: 0, fontSize: 13 }}>
+            Here’s what we’ll generate. Go back to change anything, or generate when it looks right.
+          </p>
+        </div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          {rows.map((r) => (
+            <div
+              key={r.label}
+              className="qz-row qz-row-between"
+              style={{ gap: 12, alignItems: "baseline" }}
+            >
+              <span className="qz-dim" style={{ fontSize: 12.5, minWidth: 160 }}>{r.label}</span>
+              <span style={{ fontSize: 14, fontWeight: 500, textAlign: "right" }}>{r.value}</span>
+            </div>
+          ))}
+        </div>
+      </QzCard>
+      <div className="qz-row" style={{ gap: 8 }}>
+        <button
+          type="button"
+          className="qz-btn qz-btn-ghost"
+          disabled={building}
+          onClick={() => fetcher.submit({ intent: "back-to-configuring" }, { method: "post" })}
+        >
+          ← Back
+        </button>
+        <button
+          type="button"
+          className="qz-btn qz-btn-accent"
+          disabled={building}
+          onClick={() => fetcher.submit({ intent: "generate-build" }, { method: "post" })}
+        >
+          {building ? "Building…" : "Generate quiz →"}
+        </button>
+      </div>
     </div>
   );
 }
@@ -1607,10 +1690,10 @@ function BattleCardStage({
         onToggleGroup={toggleGroup}
         onToggleProduct={toggleProduct}
         onPick={() => fetcher.submit({ intent: "pick-template", templateId: expanded.id }, { method: "post" })}
-        onGenerate={() => fetcher.submit({ intent: "generate-build", templateId: expanded.id }, { method: "post" })}
+        onGenerate={() => fetcher.submit({ intent: "to-overview" }, { method: "post" })}
         onDeepDive={(dial) => setModuleTarget({ dial, module: 2 })}
         picking={pendingIntent === "pick-template"}
-        generating={pendingIntent === "generate-build"}
+        generating={pendingIntent === "to-overview"}
       />
 
       {moduleTarget ? (
@@ -1902,7 +1985,7 @@ function BattleCard({
       >
         {isPicked ? (
           <button type="button" className="qz-btn qz-btn-accent" disabled={generating} onClick={onGenerate}>
-            {generating ? "Building…" : "Generate quiz →"}
+            {generating ? "Loading…" : "Continue →"}
           </button>
         ) : (
           <button type="button" className="qz-btn qz-btn-primary" disabled={picking} onClick={onPick}>

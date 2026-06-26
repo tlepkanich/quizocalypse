@@ -746,6 +746,16 @@ export async function runStep1FunnelAction(
     return json({ intent, ok: true });
   }
 
+  // BattleCard "Continue →": park at the Overview review step before the build.
+  // The build itself still fires from Overview via generate-build (below).
+  if (intent === "to-overview") {
+    if (!session.picked_template) {
+      return json({ intent, ok: false, error: "No template selected." }, { status: 400 });
+    }
+    await writeDoc(quiz.id, { ...doc, build_session: { ...session, stage: "overview" } });
+    return json({ intent, ok: true });
+  }
+
   if (intent === "generate-build") {
     const picked = session.picked_template;
     if (!picked) return json({ intent, ok: false, error: "No template selected." }, { status: 400 });
@@ -766,10 +776,17 @@ export async function runStep1FunnelAction(
   if (
     intent === "back-to-grouping" ||
     intent === "back-to-goal" ||
-    intent === "back-to-types"
+    intent === "back-to-types" ||
+    intent === "back-to-configuring"
   ) {
     const stage =
-      intent === "back-to-grouping" ? "grouping" : intent === "back-to-goal" ? "goal" : "types";
+      intent === "back-to-grouping"
+        ? "grouping"
+        : intent === "back-to-goal"
+          ? "goal"
+          : intent === "back-to-configuring"
+            ? "configuring"
+            : "types";
     const next: BuildSession = { ...session, stage };
     await writeDoc(quiz.id, { ...doc, build_session: next });
     return json({ intent, ok: true });
