@@ -1,5 +1,6 @@
 import { useState } from "react";
 import type { Quiz, QuizNode } from "../../lib/quizSchema";
+import { isFreeformType } from "../../lib/quizSchema";
 import type { IndexedProduct } from "../../lib/recommendationEngine";
 import type { BuilderCategory } from "../builder/stepProps";
 import type { DesignLayerMode } from "../../lib/designLayers";
@@ -227,6 +228,21 @@ function AnswerMappingSection({
   onCommit: (doc: QuizDoc) => void;
 }) {
   if (node.type !== "question") return null;
+  // Open-text / freeform questions have no answer options to map — their responses
+  // are zero-party data, not scored (Question-Builder spec §Open Text).
+  if (isFreeformType(node.data.question_type)) {
+    return (
+      <div className="qz-card" style={{ padding: 10 }}>
+        <div className="qz-label" style={{ fontSize: 11, marginBottom: 4 }}>
+          Answer scoring
+        </div>
+        <p className="qz-dim" style={{ fontSize: 12, margin: 0 }}>
+          Open-text answers aren&rsquo;t scored — responses are stored as customer data,
+          not used to pick a recommendation.
+        </p>
+      </div>
+    );
+  }
   const answers = node.data.answers;
   const model = doc.scoring_model ?? "direct";
   // Switching preserves BOTH models' data (swap points↔points_alt), so a merchant
