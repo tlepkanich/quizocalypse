@@ -309,6 +309,42 @@ function FunnelProgress({ stage }: { stage: FunnelData["stage"] }) {
   );
 }
 
+// A small segmented control row for the Design step's fine-tune options.
+function FineTuneRow({
+  label,
+  options,
+  active,
+  onPick,
+  busy,
+}: {
+  label: string;
+  options: Array<[string, string]>;
+  active: string | undefined;
+  onPick: (value: string) => void;
+  busy: boolean;
+}) {
+  return (
+    <div className="qz-row" style={{ gap: 8, alignItems: "center" }}>
+      <span className="qz-dim" style={{ fontSize: 12, flex: "0 0 64px" }}>{label}</span>
+      <div className="qz-row" style={{ gap: 4 }}>
+        {options.map(([value, lbl]) => (
+          <button
+            key={value}
+            type="button"
+            disabled={busy}
+            onClick={() => onPick(value)}
+            className={`qz-btn qz-btn-sm ${active === value ? "qz-btn-accent" : "qz-btn-ghost"}`}
+            style={{ fontSize: 11, padding: "2px 8px" }}
+            aria-pressed={active === value}
+          >
+            {lbl}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 // ── Design — pick a theme (the design-settings step, first cut) ───────────────
 // Applies a theme preset's tokens to the draft doc via set-design; the build
 // threads doc.design_tokens as its base, so the choice survives generation.
@@ -327,6 +363,12 @@ function DesignStage({
   const apply = (preset: ThemePreset) => {
     setAppliedId(preset.id);
     fetcher.submit({ intent: "set-design", tokens: JSON.stringify(preset.tokens) }, { method: "post" });
+  };
+  const [fields, setFields] = useState<Record<string, string>>({});
+  const applyingField = pendingIntent === "set-design-field";
+  const applyField = (field: string, value: string) => {
+    setFields((f) => ({ ...f, [field]: value }));
+    fetcher.submit({ intent: "set-design-field", field, value }, { method: "post" });
   };
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
@@ -389,6 +431,23 @@ function DesignStage({
               </button>
             );
           })}
+        </div>
+
+        <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 2 }}>
+          <FineTuneRow
+            label="Shape"
+            options={[["square", "Square"], ["rounded", "Rounded"], ["pill", "Pill"]]}
+            active={fields.radius}
+            onPick={(v) => applyField("radius", v)}
+            busy={applyingField}
+          />
+          <FineTuneRow
+            label="Buttons"
+            options={[["filled", "Filled"], ["outline", "Outline"], ["ghost", "Ghost"]]}
+            active={fields.button_style}
+            onPick={(v) => applyField("button_style", v)}
+            busy={applyingField}
+          />
         </div>
       </QzCard>
       <div className="qz-row" style={{ gap: 8 }}>

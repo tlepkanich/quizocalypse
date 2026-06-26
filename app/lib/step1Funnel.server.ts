@@ -767,6 +767,27 @@ export async function runStep1FunnelAction(
     return json({ intent, ok: true });
   }
 
+  // Design step — patch ONE whitelisted design-token field (shape / button style)
+  // onto the draft, merged into the current tokens (so it layers on the chosen
+  // preset). The build threads design_tokens, so these survive generation.
+  if (intent === "set-design-field") {
+    const field = String(form.get("field") ?? "");
+    const value = String(form.get("value") ?? "");
+    const ALLOWED: Record<string, readonly string[]> = {
+      radius: ["square", "rounded", "pill"],
+      button_style: ["filled", "outline", "ghost"],
+    };
+    if (!(field in ALLOWED) || !ALLOWED[field]!.includes(value)) {
+      return json({ intent, ok: false, error: "Invalid design option." }, { status: 400 });
+    }
+    const merged = DesignTokens.safeParse({ ...doc.design_tokens, [field]: value });
+    if (!merged.success) {
+      return json({ intent, ok: false, error: "Invalid theme." }, { status: 400 });
+    }
+    await writeDoc(quiz.id, { ...doc, design_tokens: merged.data });
+    return json({ intent, ok: true });
+  }
+
   // Design "Continue →": park at the Overview review step before the build.
   // The build itself still fires from Overview via generate-build (below).
   if (intent === "to-overview") {
