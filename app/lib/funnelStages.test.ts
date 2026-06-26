@@ -10,17 +10,15 @@ import {
 } from "./funnelStages";
 
 describe("funnelStages", () => {
-  it("declares the re-sequenced 7-step order", () => {
+  it("declares the re-sequenced 5-step order", () => {
     expect(FUNNEL_STEPS.map((s) => s.stage)).toEqual([
       "grouping",
       "shape",
       "question_builder",
       "rec_page",
       "design",
-      "overview",
-      "generate",
     ]);
-    expect(TOTAL_STEPS).toBe(7);
+    expect(TOTAL_STEPS).toBe(5);
   });
 
   it("maps new stages to themselves", () => {
@@ -36,8 +34,11 @@ describe("funnelStages", () => {
     expect(stepForStage("templating")).toBe("shape");
     expect(stepForStage("configuring")).toBe("shape"); // battle card
     expect(stepForStage("templates")).toBe("shape");
-    expect(stepForStage("done")).toBe("generate");
-    expect(stepForStage("generating")).toBe("generate");
+    // Overview + Generate are retired → they fold onto Design (new terminal step).
+    expect(stepForStage("overview")).toBe("design");
+    expect(stepForStage("generate")).toBe("design");
+    expect(stepForStage("done")).toBe("design");
+    expect(stepForStage("generating")).toBe("design");
   });
 
   it("defaults an unknown stage to the first step", () => {
@@ -51,20 +52,20 @@ describe("funnelStages", () => {
     expect(stepNumber("question_builder")).toBe(3);
     expect(stepNumber("rec_page")).toBe(4);
     expect(stepNumber("design")).toBe(5);
-    expect(stepNumber("overview")).toBe(6);
-    expect(stepNumber("generate")).toBe(7);
+    expect(stepNumber("overview")).toBe(5); // folds to design (last step)
+    expect(stepNumber("generate")).toBe(5);
   });
 
   it("resolves labels through the fold", () => {
     expect(labelForStage("grouping")).toBe("Product Buckets");
     expect(labelForStage("configuring")).toBe("Shape Your Quiz");
-    expect(labelForStage("done")).toBe("Generate");
+    expect(labelForStage("done")).toBe("Design");
   });
 
   it("navigates between visible steps and stops at the ends", () => {
     expect(nextStep("grouping")).toBe("shape");
     expect(nextStep("shape")).toBe("question_builder");
-    expect(nextStep("generate")).toBeNull();
+    expect(nextStep("design")).toBeNull(); // design is now the last step
     expect(nextStep("configuring")).toBe("question_builder"); // from shape
     expect(prevStep("grouping")).toBeNull();
     expect(prevStep("shape")).toBe("grouping");

@@ -255,14 +255,17 @@ export function startStep2Templates(
         );
         await startQuestionBuild(shopId, quizId, top, picked, input.goal, input.struggle ?? "");
       } else {
-        // No template generated → fall back to the legacy BattleCard surface.
+        // No template generated (degenerate) → route back to Shape with an honest
+        // error + retry, NOT the retired BattleCard. (The `configuring` stage +
+        // BattleCardStage stay only for any legacy in-flight draft already parked there.)
         await patchBuildSession(quizId, (s) =>
           BuildSession.parse({
             ...s,
-            stage: "configuring",
+            stage: "types",
             rich_templates: templates,
             picked_template: undefined,
-            gen_error: undefined,
+            gen_error:
+              "We couldn't shape a quiz from that just yet — try again, or pick one of the suggested directions.",
           }),
         );
       }

@@ -1,7 +1,7 @@
 import { json, redirect } from "@remix-run/node";
 import type { Shop } from "@prisma/client";
 import prisma from "../db.server";
-import { Quiz, BuildSession, DesignDials, RecDefaults, DesignTokens } from "./quizSchema";
+import { Quiz, BuildSession, DesignDials, RecDefaults, DesignTokens, QuizType } from "./quizSchema";
 import { buildSeedQuiz } from "./seedQuiz";
 import { parseBrandIdentitySafe } from "./brandIdentity";
 import { suggestQuizGoal } from "./goalSuggest";
@@ -545,7 +545,7 @@ export async function runStep1FunnelAction(
   if (intent === "continue-buckets") {
     const cats = await prisma.category.findMany({
       where: { shopId: shop.id, quizId: quiz.id },
-      select: { id: true },
+      select: { id: true, name: true },
       orderBy: { createdAt: "asc" },
     });
     if (cats.length === 0) {
@@ -556,16 +556,37 @@ export async function runStep1FunnelAction(
     }
     const tab = session.bucket_browser?.active_tab;
     const dimension = tab === "tag" ? "tag" : tab === "collection" ? "collection" : "all";
+
+    // Re-sequenced flow (owner): Buckets → Shape DIRECTLY (no standalone Goal step).
+    // Derive the goal automatically from the brand identity + confirmed buckets —
+    // the same deterministic suggestion the old Goal stage pre-filled — and kick the
+    // tier-1 type generation now, so Shape loads with the 2 AI template options. The
+    // merchant can still override via Shape's "write your goal" card (shape-goal-build).
+    const shopRow = await prisma.shop.findUnique({
+      where: { id: shop.id },
+      select: { brandIdentity: true },
+    });
+    const suggestedGoal = suggestQuizGoal({
+      identitySummary: parseBrandIdentitySafe(shopRow?.brandIdentity)?.summary ?? null,
+      groupNames: cats.map((c) => c.name),
+    });
     const next: BuildSession = {
       ...session,
-      stage: "goal",
+      stage: "typing",
       grouping: {
         dimension,
         confirmed_category_ids: cats.map((c) => c.id),
         detected_rationale: "Selected in the recommendation buckets browser.",
       },
+      goal: { goal_text: suggestedGoal, struggle_text: "" },
+      gen_error: undefined,
     };
     await writeDoc(quiz.id, { ...doc, build_session: next });
+    const buckets = await loadConfirmedBuckets(shop.id, quiz.id);
+    startStep2Types(shop.id, quiz.id, {
+      goal: suggestedGoal,
+      ...(buckets.length ? { buckets } : {}),
+    });
     return json({ intent, ok: true });
   }
 
@@ -665,6 +686,52 @@ export async function runStep1FunnelAction(
       build_session: next,
     });
     startStep2Templates(shop.id, quiz.id, chosen, {
+      goal,
+      ...(struggle ? { struggle } : {}),
+      ...(cats.length ? { buckets: cats } : {}),
+    });
+    return json({ intent, ok: true });
+  }
+
+  // Shape spec — the "write your goal" card's "Continue": BUILD the quiz straight
+  // from the merchant's typed goal (no chosen template). Synthesize a minimal
+  // QuizType from the goal and run the SAME templates→build chain as the AI cards,
+  // so the AI generates the questions/mapping FROM the goal. Scoring defaults to
+  // "weighted" (the merchant can switch it later in the Question Builder).
+  if (intent === "shape-goal-build") {
+    const goal = String(form.get("goal") ?? "").trim().slice(0, 500);
+    if (goal.length < MIN_GOAL_CHARS) {
+      return json(
+        { intent, ok: false, error: `Add a little more detail (at least ${MIN_GOAL_CHARS} characters).` },
+        { status: 400 },
+      );
+    }
+    const scoring = String(form.get("scoring") ?? "") === "direct" ? "direct" : "weighted";
+    const cats = await prisma.category.findMany({
+      where: { shopId: shop.id, quizId: quiz.id },
+      select: { id: true, name: true, tags: true },
+    });
+    const syntheticType = QuizType.parse({
+      id: "custom-goal",
+      experience_type: "product_match",
+      name: "Your goal",
+      achieves: goal.slice(0, 160),
+      question_range: { min: 4, max: 7 },
+    });
+    const struggle = session.goal?.struggle_text ?? "";
+    const next: BuildSession = {
+      ...session,
+      stage: "templating",
+      goal: { goal_text: goal, struggle_text: struggle },
+      gen_error: undefined,
+    };
+    await writeDoc(quiz.id, {
+      ...doc,
+      scoring_model: scoring,
+      experience_type: "product_match",
+      build_session: next,
+    });
+    startStep2Templates(shop.id, quiz.id, syntheticType, {
       goal,
       ...(struggle ? { struggle } : {}),
       ...(cats.length ? { buckets: cats } : {}),

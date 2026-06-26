@@ -1,6 +1,6 @@
 // The canonical, ordered, merchant-visible steps of the create-a-quiz funnel
-// (the re-sequenced flow: Product Buckets → Shape → Question Builder →
-// Recommendation Page → Design → Overview → Generate → the builder).
+// (the re-sequenced flow: Product Buckets → Shape Your Quiz → Question Builder →
+// Recommendation Page → Design → the builder).
 //
 // Single source of truth for the progress indicator, the "Step N of M" label,
 // and Back/Continue navigation. Transient AI-in-flight stages (typing /
@@ -8,8 +8,10 @@
 // VISIBLE step, so an in-flight draft mid-old-flow still resolves to a sensible
 // position instead of falling off the progress bar.
 //
-// NOTE: `generate` runs the detached build and then lands the merchant in the
-// main builder (UnifiedWorkspace) — the builder is NOT itself a funnel step.
+// NOTE: the merchant goal is folded INTO Shape ("write your goal"), and Design's
+// Continue opens the main builder directly — the legacy Overview + Generate steps
+// are retired from the flow (the build runs right after Shape). The builder is
+// NOT itself a funnel step.
 
 export const FUNNEL_STEPS = [
   { stage: "grouping", label: "Product Buckets", short: "Buckets" },
@@ -17,8 +19,6 @@ export const FUNNEL_STEPS = [
   { stage: "question_builder", label: "Question Builder", short: "Questions" },
   { stage: "rec_page", label: "Recommendation Page", short: "Rec Page" },
   { stage: "design", label: "Design", short: "Design" },
-  { stage: "overview", label: "Overview", short: "Overview" },
-  { stage: "generate", label: "Generate", short: "Generate" },
 ] as const;
 
 export type FunnelStep = (typeof FUNNEL_STEPS)[number]["stage"];
@@ -31,8 +31,6 @@ const STAGE_TO_STEP: Record<string, FunnelStep> = {
   question_builder: "question_builder",
   rec_page: "rec_page",
   design: "design",
-  overview: "overview",
-  generate: "generate",
   // `goal` folds into Shape (the spec's Card 3 "Write your goal").
   goal: "shape",
   // transient AI-in-flight + legacy Step-2 selection stages live under Shape.
@@ -41,9 +39,12 @@ const STAGE_TO_STEP: Record<string, FunnelStep> = {
   templating: "shape",
   configuring: "shape",
   templates: "shape",
-  // legacy terminal stages → the Generate step.
-  generating: "generate",
-  done: "generate",
+  // legacy terminal stages (Overview/Generate retired) → Design, the new last
+  // visible step, so an in-flight draft parked there still resolves on the bar.
+  overview: "design",
+  generate: "design",
+  generating: "design",
+  done: "design",
 };
 
 export const TOTAL_STEPS = FUNNEL_STEPS.length;

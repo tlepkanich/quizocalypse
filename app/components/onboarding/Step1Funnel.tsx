@@ -305,26 +305,33 @@ export function Step1Funnel({ data }: { data: FunnelData }) {
 
 // The funnel's visible step order — shared by FunnelProgress AND the Step-N-of-M
 // stepper inside each stage, so the "of N" count can't drift from the dots.
-// The re-sequenced visible order: Buckets → Goal → Shape → Questions → Rec Page →
-// Design → Review. "Shape" is the four-card type picker (the `types` stage); the
-// early question build then lands on Questions (question_builder); Rec Page now
-// precedes Design.
+// The re-sequenced visible order: Buckets → Shape → Questions → Rec Page → Design.
+// Goal is folded INTO Shape (the "write your goal" card); the early question build
+// runs right after Shape and lands on Questions; Design's Continue opens the main
+// builder directly (Overview + Generate are retired from the flow).
 const FUNNEL_STAGES: Array<{ key: string; label: string }> = [
   { key: "grouping", label: "Buckets" },
-  { key: "goal", label: "Goal" },
   { key: "types", label: "Shape" },
   { key: "question_builder", label: "Questions" },
   { key: "rec_page", label: "Rec Page" },
   { key: "design", label: "Design" },
-  { key: "overview", label: "Review" },
 ];
 
-// Map transient/legacy stages onto their owning visible step.
+// Map transient/legacy stages onto their owning visible step. `goal` is gone from
+// the flow (folded into Shape) → it maps to Shape; `overview`/`generate`/`done`
+// are retired → they map to Design (the new terminal visible step) so a legacy
+// in-flight draft parked there still shows a sensible bar position.
 function visibleStageKey(stage: FunnelData["stage"]): string {
-  if (stage === "typing" || stage === "templates" || stage === "shape") return "types";
+  if (
+    stage === "typing" ||
+    stage === "templates" ||
+    stage === "shape" ||
+    stage === "goal"
+  )
+    return "types";
   // "templating" now spans template-gen AND the early question build → Questions.
   if (stage === "templating" || stage === "configuring") return "question_builder";
-  if (stage === "done" || stage === "generate") return "overview";
+  if (stage === "overview" || stage === "done" || stage === "generate") return "design";
   return stage;
 }
 
@@ -509,9 +516,10 @@ function DesignStage({
         <button
           type="button"
           className="qz-btn qz-btn-accent"
-          onClick={() => fetcher.submit({ intent: "to-overview" }, { method: "post" })}
+          disabled={pendingIntent === "generate-build"}
+          onClick={() => fetcher.submit({ intent: "generate-build" }, { method: "post" })}
         >
-          Continue →
+          {pendingIntent === "generate-build" ? "Opening builder…" : "Open builder →"}
         </button>
       </div>
     </div>
@@ -1582,7 +1590,7 @@ function ShapeStage({
     pendingIntent === "shape-continue" ||
     pendingIntent === "shape-manual" ||
     pendingIntent === "shape-regenerate" ||
-    pendingIntent === "save-goal";
+    pendingIntent === "shape-goal-build";
   // When one card is expanded (or the goal card is open), the others mute so the
   // merchant can still compare without losing focus.
   const somethingOpen = expandedId !== null || writingGoal;
@@ -1720,10 +1728,12 @@ function ShapeStage({
                 <button
                   type="button"
                   className="qz-btn qz-btn-primary qz-btn-sm"
-                  disabled={goalDraft.trim().length < 12 || busy}
-                  onClick={() => fetcher.submit({ intent: "save-goal", goal: goalDraft }, { method: "post" })}
+                  disabled={goalDraft.trim().length < data.minGoalChars || busy}
+                  onClick={() =>
+                    fetcher.submit({ intent: "shape-goal-build", goal: goalDraft }, { method: "post" })
+                  }
                 >
-                  {pendingIntent === "save-goal" ? "Generating…" : "Generate direction →"}
+                  {pendingIntent === "shape-goal-build" ? "Building…" : "Generate quiz →"}
                 </button>
                 <button
                   type="button"
@@ -1788,9 +1798,9 @@ function ShapeStage({
           type="button"
           className="qz-btn qz-btn-ghost qz-btn-sm"
           disabled={busy}
-          onClick={() => fetcher.submit({ intent: "back-to-goal" }, { method: "post" })}
+          onClick={() => fetcher.submit({ intent: "back-to-grouping" }, { method: "post" })}
         >
-          ← Revise the goal
+          ← Back to buckets
         </button>
       </div>
     </div>
