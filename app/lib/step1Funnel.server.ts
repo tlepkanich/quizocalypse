@@ -140,7 +140,7 @@ export async function loadStep1FunnelData(
   quizId: string | undefined,
   opts?: { backHref?: string },
 ) {
-  const { quiz, session } = await loadFunnelDraft(shop.id, quizId);
+  const { quiz, doc, session } = await loadFunnelDraft(shop.id, quizId);
 
   const [products, collections, shopRow, categories, savedTemplates] = await Promise.all([
     prisma.product.findMany({ where: { shopId: shop.id } }),
@@ -148,7 +148,18 @@ export async function loadStep1FunnelData(
     prisma.shop.findUnique({ where: { id: shop.id }, select: { brandIdentity: true } }),
     prisma.category.findMany({
       where: { shopId: shop.id, quizId: quiz.id },
-      select: { id: true, name: true, productIds: true, source: true, sourceRef: true },
+      select: {
+        id: true,
+        name: true,
+        productIds: true,
+        source: true,
+        sourceRef: true,
+        // description/tags/quizId widen the row to the builder's BuilderCategory
+        // shape, consumed only by the gated question_builder payload below.
+        description: true,
+        tags: true,
+        quizId: true,
+      },
       orderBy: { createdAt: "asc" },
     }),
     listSavedTemplates(shop.id),
@@ -251,7 +262,46 @@ export async function loadStep1FunnelData(
   const genStalled =
     genInFlight && Date.now() - new Date(quiz.updatedAt).getTime() > 150_000;
 
+  // ── Question Builder (the pre-config editing step) ───────────────────────
+  // ONLY on this stage do we ship the full editable doc + the builder's
+  // category/productIndex shapes, so QuestionBuilderStage can compose FlowRail +
+  // ContextPanel over the SAME draftJson the main builder edits — via useQuizDraft
+  // PUTting back through this route's JSON autosave branch. Gated so every other
+  // stage's payload stays lean (and so this is inert until P2 sets the stage).
+  const questionBuilder =
+    session.stage === "question_builder"
+      ? {
+          doc,
+          categories: categories.map((c) => ({
+            id: c.id,
+            name: c.name,
+            description: c.description ?? "",
+            tags: c.tags ?? [],
+            productIds: c.productIds,
+            source: c.source,
+            sourceRef: c.sourceRef,
+            quizId: c.quizId,
+          })),
+          productIndex: products.map((p) => {
+            const variants = (p.variants ?? []) as Array<{ inventoryQuantity?: number | null }>;
+            return {
+              product_id: p.productId,
+              title: p.title,
+              handle: p.handle,
+              price: p.priceMin != null ? String(p.priceMin) : null,
+              image_url: p.imageUrl,
+              tags: p.tags,
+              collection_ids: p.collectionIds,
+              inventory_in_stock: variants.some(
+                (v) => typeof v.inventoryQuantity === "number" && v.inventoryQuantity > 0,
+              ),
+            };
+          }),
+        }
+      : null;
+
   return {
+    questionBuilder,
     quizId: quiz.id,
     name: quiz.name,
     stage: session.stage,
@@ -309,6 +359,30 @@ export async function runStep1FunnelAction(
   opts: { builderPath: (quizId: string) => string },
 ): Promise<Response> {
   const { quiz, doc, session } = await loadFunnelDraft(shop.id, quizId);
+
+  // JSON PUT autosave — the question_builder editing step. useQuizDraft PUTs the
+  // live doc here exactly as it does against the main editor route; mirror that
+  // seam (quizEditorIO.server.ts): Quiz-gate, write draftJson, leave the stage
+  // untouched. The doc still carries build_session (it round-trips through the
+  // client unmodified), so the stage is preserved by the write. MUST run BEFORE
+  // request.formData() — a JSON body has no form fields to read.
+  const contentType = request.headers.get("content-type") ?? "";
+  if (contentType.includes("application/json")) {
+    const body = (await request.json()) as { doc: unknown };
+    const parsed = Quiz.safeParse(body.doc);
+    if (!parsed.success) {
+      return json(
+        { ok: false, error: "Invalid quiz document", issues: parsed.error.issues.slice(0, 5) },
+        { status: 400 },
+      );
+    }
+    await prisma.quiz.update({
+      where: { id: quiz.id },
+      data: { draftJson: parsed.data as never },
+    });
+    return json({ ok: true, savedAt: new Date().toISOString() });
+  }
+
   const form = await request.formData();
   const intent = String(form.get("intent") ?? "");
 
