@@ -118,6 +118,43 @@ export function insertQuestionRelative(
   return spliceQuestion(doc, blank, refId, where);
 }
 
+// Question-Builder spec (Question Bank) — append a pre-built library question to the
+// END of the spine (after the last question, before the result), with fresh ids +
+// edge handles. Mappings start empty; the merchant maps in the right panel. Pure.
+export function appendBankQuestion(
+  doc: QuizDoc,
+  entry: {
+    text: string;
+    question_type: Extract<QuizNodeDoc, { type: "question" }>["data"]["question_type"];
+    answers: string[];
+  },
+): QuizDoc {
+  const { head, run } = straightThroughRun(doc);
+  const anchor = run.length ? run[run.length - 1]! : head;
+  const node: QuizNodeDoc = {
+    id: uid("q"),
+    type: "question",
+    position: nextPosition(doc, anchor),
+    data: {
+      text: entry.text.slice(0, 150),
+      question_type: entry.question_type,
+      required: true,
+      show_preview_after: false,
+      answers: entry.answers.slice(0, 12).map((t) => ({
+        id: uid("a"),
+        text: t.slice(0, 60),
+        tags: [],
+        edge_handle_id: uid("h"),
+      })),
+    },
+  };
+  // No spine at all (a doc without an intro) — append the node standalone; the
+  // merchant wires it in the rail. In practice every funnel/builder doc has an
+  // intro, so `anchor` is a real node and we splice after the last question.
+  if (!anchor) return { ...doc, nodes: [...doc.nodes, node] };
+  return spliceQuestion(doc, node, anchor, "below");
+}
+
 export function addQuestionNode(
   doc: QuizDoc,
   anchorId: string | null,

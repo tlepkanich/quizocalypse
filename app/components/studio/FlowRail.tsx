@@ -12,6 +12,7 @@ import {
 } from "../../lib/quizMutations";
 import { INSERTABLE_MODULES, insertModule, updateNodeData, type InsertKind } from "./studioDoc";
 import { NODE_LABEL } from "./panels/nodeMeta";
+import { QuestionBankDrawer } from "./QuestionBankDrawer";
 
 // Per-answer divergence chips ("answer → destination") — shown under question
 // rows whenever a question's answers route to different places. Moved here
@@ -146,6 +147,8 @@ export function FlowRail({
   hideViewSwitcher?: boolean;
 }) {
   const [adding, setAdding] = useState(false);
+  // Question Bank drawer (B5) — a searchable library of pre-built questions.
+  const [bankOpen, setBankOpen] = useState(false);
   // Inline rename: the node being renamed + the working value (double-click a row).
   const [renaming, setRenaming] = useState<string | null>(null);
   const [renameVal, setRenameVal] = useState("");
@@ -478,16 +481,32 @@ export function FlowRail({
                 </button>
               </div>
             ) : (
-              <button
-                className="qz-btn qz-btn-ghost qz-btn-sm"
-                style={{ width: "100%" }}
-                onClick={() => setAdding(true)}
-                title="Insert a step after the selected one"
-              >
-                + Add step
-              </button>
+              <div style={{ display: "flex", gap: 4 }}>
+                <button
+                  className="qz-btn qz-btn-ghost qz-btn-sm"
+                  style={{ flex: 1 }}
+                  onClick={() => setAdding(true)}
+                  title="Insert a step after the selected one"
+                >
+                  + Add step
+                </button>
+                <button
+                  className="qz-btn qz-btn-ghost qz-btn-sm"
+                  onClick={() => setBankOpen(true)}
+                  title="Browse a library of pre-built questions"
+                >
+                  📚 Question Bank
+                </button>
+              </div>
             )}
           </div>
+          {bankOpen ? (
+            <QuestionBankDrawer
+              doc={doc}
+              onCommit={onCommit}
+              onClose={() => setBankOpen(false)}
+            />
+          ) : null}
         </>
       ) : (
         <p className="qz-dim" style={{ fontSize: 12, margin: "4px 2px" }}>
