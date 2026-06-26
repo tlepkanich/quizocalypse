@@ -386,6 +386,9 @@ function RoutingBody({
   );
   const conflicts = node.type === "question" ? routingConflicts(doc, node.id) : [];
   const [showFlow, setShowFlow] = useState(false);
+  // The spec's right-panel tabs: Mapping (bucket assignment) | Logic (skip logic).
+  // Bucket-coverage pills sit ABOVE the tabs (persistent across both).
+  const [view, setView] = useState<"mapping" | "logic">("mapping");
   const targetLabel = (n: QuizNode) => {
     const d = n.data as Record<string, unknown>;
     const s = (k: string) => (typeof d[k] === "string" ? (d[k] as string) : "");
@@ -396,22 +399,62 @@ function RoutingBody({
   return (
     <>
       <BucketCoveragePills doc={doc} categories={categories} />
-      <div>
-        <button
-          type="button"
-          className="qz-btn qz-btn-ghost qz-btn-sm"
-          aria-pressed={showFlow}
-          onClick={() => setShowFlow((v) => !v)}
-          style={{ fontSize: 11 }}
-        >
-          {showFlow ? "▾ Flow view" : "▸ Flow view"}
+
+      <div className="qz-segmented qz-segmented--fill" role="group" aria-label="Mapping or Logic">
+        <button type="button" aria-pressed={view === "mapping"} onClick={() => setView("mapping")}>
+          Mapping
         </button>
-        {showFlow ? (
-          <div style={{ marginTop: 6 }}>
-            <QuizFlowView doc={doc} />
-          </div>
-        ) : null}
+        <button type="button" aria-pressed={view === "logic"} onClick={() => setView("logic")}>
+          Logic
+        </button>
       </div>
+
+      {/* ── MAPPING tab — per-answer bucket assignment (direct / weighted) ── */}
+      {view === "mapping" ? (
+        <>
+          {node.type === "question" ? (
+            <AnswerMappingSection doc={doc} node={node} categories={categories} onCommit={onCommit} />
+          ) : node.type === "result" ? (
+            <div>
+              <div className="qz-label" style={{ marginBottom: 4, fontSize: 11 }}>
+                Recommendations
+              </div>
+              <p className="qz-dim" style={{ fontSize: 12, margin: 0 }}>
+                {(() => {
+                  const catId = node.data.category_id;
+                  const cat = catId ? categories.find((c) => c.id === catId) : null;
+                  return cat
+                    ? `Bound to the “${cat.name}” bucket (${cat.productIds.length} products), with tag-match ranking on top.`
+                    : "Ranked by answer-tag overlap with a collection fallback (no bucket binding).";
+                })()}
+              </p>
+              {onOpenLogic ? (
+                <button
+                  className="qz-btn qz-btn-ghost qz-btn-sm"
+                  style={{ marginTop: 6 }}
+                  onClick={onOpenLogic}
+                >
+                  Full product mapping (Logic) →
+                </button>
+              ) : null}
+            </div>
+          ) : (
+            <p className="qz-dim" style={{ fontSize: 12, margin: 0 }}>
+              Select a question to map its answers to recommendation buckets.
+            </p>
+          )}
+          <details>
+            <summary style={{ cursor: "pointer", fontSize: 12.5, fontWeight: 600 }}>Try a path</summary>
+            <div style={{ marginTop: 8 }}>
+              <PathTester doc={doc} productIndex={productIndex} categories={categories} compact />
+            </div>
+          </details>
+        </>
+      ) : null}
+
+      {/* ── LOGIC tab — skip-logic rules + flow ── */}
+      {view !== "logic" ? null : (
+      <>
       {arrivals.length > 0 ? (
         <div>
           <div className="qz-label" style={{ marginBottom: 4, fontSize: 11 }}>
@@ -440,13 +483,9 @@ function RoutingBody({
       ) : null}
 
       {node.type === "question" ? (
-        <AnswerMappingSection doc={doc} node={node} categories={categories} onCommit={onCommit} />
-      ) : null}
-
-      {node.type === "question" ? (
         <div>
           <div className="qz-label" style={{ marginBottom: 4, fontSize: 11 }}>
-            Where each answer goes
+            Skip logic — where each answer goes
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
             {node.data.answers.map((a) => {
@@ -571,36 +610,24 @@ function RoutingBody({
         </div>
       ) : null}
 
-      {node.type === "result" ? (
-        <div>
-          <div className="qz-label" style={{ marginBottom: 4, fontSize: 11 }}>
-            Recommendations
+      <div>
+        <button
+          type="button"
+          className="qz-btn qz-btn-ghost qz-btn-sm"
+          aria-pressed={showFlow}
+          onClick={() => setShowFlow((v) => !v)}
+          style={{ fontSize: 11 }}
+        >
+          {showFlow ? "▾ Flow view" : "▸ Flow view"}
+        </button>
+        {showFlow ? (
+          <div style={{ marginTop: 6 }}>
+            <QuizFlowView doc={doc} />
           </div>
-          <p className="qz-dim" style={{ fontSize: 12, margin: 0 }}>
-            {(() => {
-              const catId = node.data.category_id;
-              const cat = catId ? categories.find((c) => c.id === catId) : null;
-              return cat
-                ? `Bound to the “${cat.name}” bucket (${cat.productIds.length} products), with tag-match ranking on top.`
-                : "Ranked by answer-tag overlap with a collection fallback (no bucket binding).";
-            })()}
-          </p>
-          {onOpenLogic ? (
-            <button className="qz-btn qz-btn-ghost qz-btn-sm" style={{ marginTop: 6 }} onClick={onOpenLogic}>
-              Full product mapping (Logic) →
-            </button>
-          ) : null}
-        </div>
-      ) : null}
-
-      <details>
-        <summary style={{ cursor: "pointer", fontSize: 12.5, fontWeight: 600 }}>
-          Try a path
-        </summary>
-        <div style={{ marginTop: 8 }}>
-          <PathTester doc={doc} productIndex={productIndex} categories={categories} compact />
-        </div>
-      </details>
+        ) : null}
+      </div>
+      </>
+      )}
     </>
   );
 }
