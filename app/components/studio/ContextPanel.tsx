@@ -4,7 +4,13 @@ import type { IndexedProduct } from "../../lib/recommendationEngine";
 import type { BuilderCategory } from "../builder/stepProps";
 import type { DesignLayerMode } from "../../lib/designLayers";
 import { reachedBy, routingConflicts } from "../../lib/routeTrace";
-import { setAnswerRoute, routeAnswerToEnd, straightThroughRun } from "../../lib/quizMutations";
+import {
+  setAnswerRoute,
+  routeAnswerToEnd,
+  straightThroughRun,
+  setAnswerBucketDirect,
+  setAnswerBucketWeight,
+} from "../../lib/quizMutations";
 import { computeBucketCoverage, type CoverageLevel } from "../../lib/bucketCoverage";
 import { StepPreview } from "../runtime/StepPreview";
 import { PathTester } from "../logic/PathTester";
@@ -203,6 +209,159 @@ function QuizFlowView({ doc }: { doc: QuizDoc }) {
   );
 }
 
+// ── Answer Mapping (Question-Builder spec) — assign each answer to recommendation
+// buckets. Direct mapping = one bucket dropdown per answer (weight 1); Weighted =
+// a points grid (answers × buckets, 0–10). Both materialize into answer.points,
+// which the engine's points strategy already consumes. The model is the quiz's
+// scoring_model (set on Shape Your Quiz; togglable here).
+function AnswerMappingSection({
+  doc,
+  node,
+  categories,
+  onCommit,
+}: {
+  doc: QuizDoc;
+  node: QuizNode;
+  categories: BuilderCategory[];
+  onCommit: (doc: QuizDoc) => void;
+}) {
+  if (node.type !== "question") return null;
+  const answers = node.data.answers;
+  const model = doc.scoring_model ?? "direct";
+  const setModel = (m: "direct" | "weighted") => onCommit({ ...doc, scoring_model: m });
+
+  return (
+    <div>
+      <div className="qz-row qz-row-between" style={{ alignItems: "center", marginBottom: 6 }}>
+        <div className="qz-label" style={{ fontSize: 11 }}>Answer scoring</div>
+        <div className="qz-row" style={{ gap: 4 }}>
+          {(["direct", "weighted"] as const).map((m) => (
+            <button
+              key={m}
+              type="button"
+              onClick={() => setModel(m)}
+              className={`qz-btn qz-btn-sm ${model === m ? "qz-btn-accent" : "qz-btn-ghost"}`}
+              style={{ fontSize: 11, textTransform: "capitalize", padding: "2px 8px" }}
+              aria-pressed={model === m}
+            >
+              {m}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {categories.length === 0 ? (
+        <p className="qz-dim" style={{ fontSize: 11, margin: 0 }}>
+          No buckets yet — add recommendation buckets to map answers to.
+        </p>
+      ) : model === "direct" ? (
+        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+          {answers.map((a) => {
+            const current = Object.keys(a.points ?? {})[0] ?? "";
+            return (
+              <label key={a.id} className="qz-row" style={{ gap: 8, alignItems: "center", fontSize: 12 }}>
+                <span
+                  style={{ flex: "0 0 38%", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
+                  title={a.text}
+                >
+                  {a.icon ? `${a.icon} ` : ""}
+                  {a.text}
+                </span>
+                <select
+                  value={current}
+                  onChange={(e) => onCommit(setAnswerBucketDirect(doc, node.id, a.id, e.target.value || null))}
+                  style={{
+                    flex: 1,
+                    minWidth: 0,
+                    font: "inherit",
+                    fontSize: 12,
+                    padding: "4px 6px",
+                    borderRadius: 6,
+                    border: "1px solid #00000022",
+                  }}
+                  aria-label={`Bucket for answer: ${a.text}`}
+                >
+                  <option value="">No bucket</option>
+                  {categories.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            );
+          })}
+        </div>
+      ) : (
+        <div style={{ overflowX: "auto" }}>
+          <table style={{ borderCollapse: "collapse", fontSize: 11.5 }}>
+            <thead>
+              <tr>
+                <th aria-hidden style={{ position: "sticky", left: 0, background: "var(--qz-paper, #fff)" }} />
+                {categories.map((c) => (
+                  <th
+                    key={c.id}
+                    style={{ padding: "2px 5px", fontWeight: 600, whiteSpace: "nowrap" }}
+                    title={c.name}
+                  >
+                    {c.name.length > 12 ? `${c.name.slice(0, 11)}…` : c.name}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {answers.map((a) => (
+                <tr key={a.id}>
+                  <td
+                    style={{
+                      padding: "2px 6px",
+                      maxWidth: 130,
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                      whiteSpace: "nowrap",
+                      position: "sticky",
+                      left: 0,
+                      background: "var(--qz-paper, #fff)",
+                    }}
+                    title={a.text}
+                  >
+                    {a.icon ? `${a.icon} ` : ""}
+                    {a.text}
+                  </td>
+                  {categories.map((c) => (
+                    <td key={c.id} style={{ padding: "1px 3px", textAlign: "center" }}>
+                      <input
+                        type="number"
+                        min={0}
+                        max={10}
+                        value={a.points?.[c.id] ?? 0}
+                        onChange={(e) => {
+                          const w = Math.max(0, Math.min(10, Number(e.target.valueAsNumber) || 0));
+                          onCommit(setAnswerBucketWeight(doc, node.id, a.id, c.id, w));
+                        }}
+                        style={{
+                          width: 38,
+                          font: "inherit",
+                          fontSize: 11,
+                          padding: "2px 4px",
+                          textAlign: "center",
+                          borderRadius: 5,
+                          border: "1px solid #00000022",
+                        }}
+                        aria-label={`Points ${a.text} awards toward ${c.name}`}
+                      />
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Routing tab (Unified P4) — "how does this step route, and what reaches it" ─
 function RoutingBody({
   doc,
@@ -278,6 +437,10 @@ function RoutingBody({
             ) : null}
           </div>
         </div>
+      ) : null}
+
+      {node.type === "question" ? (
+        <AnswerMappingSection doc={doc} node={node} categories={categories} onCommit={onCommit} />
       ) : null}
 
       {node.type === "question" ? (
