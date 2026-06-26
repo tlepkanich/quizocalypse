@@ -212,8 +212,8 @@ export function startStep2Types(
 }
 
 // The funnel's "templating" job — rich battle-card templates for the chosen type,
-// DETACHED. On success → stage "configuring" (rich_templates ready, none picked
-// yet); on failure → back to "types".
+// DETACHED. On success → auto-pick the AI's top template + stage "design" (the
+// BattleCard selection UI is retired from the merchant flow); on failure → "types".
 export function startStep2Templates(
   shopId: string,
   quizId: string,
@@ -223,12 +223,28 @@ export function startStep2Templates(
   void (async () => {
     try {
       const templates = await generateStep2Templates(shopId, chosenType, input);
+      // Auto-pick the AI's top template and route straight to the Design step. The
+      // four-card Shape already captured the quiz type, so the BattleCard's
+      // template-selection screen is redundant in the new flow — skip it. (The
+      // BattleCardStage component + "configuring" stage remain for legacy drafts.)
+      const cats = await prisma.category.findMany({
+        where: { shopId, quizId },
+        select: { id: true, name: true, productIds: true },
+        orderBy: { createdAt: "asc" },
+      });
+      const picked = templates[0]
+        ? initPickedTemplate(
+            templates[0],
+            cats.map((c) => ({ id: c.id, name: c.name, product_ids: c.productIds })),
+            new Date(),
+          )
+        : undefined;
       await patchBuildSession(quizId, (s) =>
         BuildSession.parse({
           ...s,
-          stage: "configuring",
+          stage: picked ? "design" : "configuring",
           rich_templates: templates,
-          picked_template: undefined,
+          picked_template: picked,
           gen_error: undefined,
         }),
       );

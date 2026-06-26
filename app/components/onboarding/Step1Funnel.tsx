@@ -454,7 +454,7 @@ function DesignStage({
         <button
           type="button"
           className="qz-btn qz-btn-ghost"
-          onClick={() => fetcher.submit({ intent: "back-to-configuring" }, { method: "post" })}
+          onClick={() => fetcher.submit({ intent: "back-to-types" }, { method: "post" })}
         >
           ← Back
         </button>
