@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 import type { Quiz } from "../../lib/quizSchema";
 import { appendBankQuestion } from "../../lib/quizMutations";
 import {
@@ -68,7 +69,7 @@ export function QuestionBankDrawer({
     rating: "Rating",
   };
 
-  return (
+  const overlay = (
     <>
       <div
         onClick={onClose}
@@ -77,7 +78,7 @@ export function QuestionBankDrawer({
           position: "fixed",
           inset: 0,
           background: "rgba(17,17,17,.32)",
-          zIndex: 60,
+          zIndex: 1000,
         }}
       />
       <aside
@@ -92,7 +93,7 @@ export function QuestionBankDrawer({
           background: "var(--qz-bg, #fff)",
           borderLeft: "1px solid var(--qz-rule, #e5e5e5)",
           boxShadow: "-12px 0 34px rgba(17,17,17,.12)",
-          zIndex: 61,
+          zIndex: 1001,
           display: "flex",
           flexDirection: "column",
         }}
@@ -186,4 +187,9 @@ export function QuestionBankDrawer({
       </aside>
     </>
   );
+
+  // Portal to <body> so the drawer escapes the builder's stacking contexts — the
+  // preview pane uses container-type/zoom-transform, which trap an in-flow
+  // position:fixed overlay and let the canvas intercept clicks on the drawer.
+  return typeof document === "undefined" ? overlay : createPortal(overlay, document.body);
 }
