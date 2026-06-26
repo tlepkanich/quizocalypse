@@ -552,6 +552,7 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
             onSelect={select}
             onCommit={commit}
             fallbackCollection={fallbackCollection}
+            categories={data.categories}
             view={view}
             onView={setView}
             confirmDeleteId={confirmDeleteId}
@@ -622,6 +623,7 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
             onSelect={select}
             onCommit={commit}
             fallbackCollection={fallbackCollection}
+            categories={data.categories}
             view={view}
             onView={setView}
             confirmDeleteId={confirmDeleteId}
@@ -715,6 +717,7 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
                 onSelect={select}
                 onCommit={commit}
                 fallbackCollection={fallbackCollection}
+                categories={data.categories}
                 view={view}
                 onView={setView}
                 confirmDeleteId={confirmDeleteId}

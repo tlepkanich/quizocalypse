@@ -13,6 +13,8 @@ import {
 import { INSERTABLE_MODULES, insertModule, updateNodeData, type InsertKind } from "./studioDoc";
 import { NODE_LABEL } from "./panels/nodeMeta";
 import { QuestionBankDrawer } from "./QuestionBankDrawer";
+import { LogicFlowMap } from "../logic/LogicFlowMap";
+import type { BuilderCategory } from "../builder/stepProps";
 
 // Per-answer divergence chips ("answer → destination") — shown under question
 // rows whenever a question's answers route to different places. Moved here
@@ -124,6 +126,7 @@ export function FlowRail({
   confirmDeleteId,
   onConfirmDelete,
   hideViewSwitcher,
+  categories = [],
 }: {
   doc: QuizDoc;
   ordered: OrderedFlow;
@@ -145,10 +148,15 @@ export function FlowRail({
   // persistent Build/Products/Results/Logic strip in the top bar instead. The
   // embedded `body` layout (no top bar) keeps it as the primary view nav.
   hideViewSwitcher?: boolean;
+  // B4 — the confirmed buckets, so the Flow View's result cards can show each
+  // page's bound bucket + size. Optional (defaults []) for any future caller.
+  categories?: BuilderCategory[];
 }) {
   const [adding, setAdding] = useState(false);
   // Question Bank drawer (B5) — a searchable library of pre-built questions.
   const [bankOpen, setBankOpen] = useState(false);
+  // B4 — swap the step list for a read-only skip-logic diagram (LogicFlowMap).
+  const [showFlowView, setShowFlowView] = useState(false);
   // Inline rename: the node being renamed + the working value (double-click a row).
   const [renaming, setRenaming] = useState<string | null>(null);
   const [renameVal, setRenameVal] = useState("");
@@ -427,6 +435,37 @@ export function FlowRail({
 
       {view === "build" ? (
         <>
+          <div className="qz-row qz-row-between" style={{ marginBottom: 8 }}>
+            <span className="qz-label" style={{ fontSize: 11 }}>
+              {showFlowView ? "Flow diagram" : "Steps"}
+            </span>
+            <button
+              type="button"
+              className="qz-btn qz-btn-ghost qz-btn-sm"
+              aria-pressed={showFlowView}
+              aria-label="Toggle between the step list and the flow diagram"
+              title="See how answers route to result pages"
+              onClick={() => setShowFlowView((v) => !v)}
+            >
+              {showFlowView ? "⟁ Edit View" : "⟁ Flow View"}
+            </button>
+          </div>
+          {showFlowView ? (
+            <div className="qz-railflow" style={{ maxHeight: "62vh", overflowY: "auto" }}>
+              <LogicFlowMap
+                doc={doc}
+                categories={categories}
+                selectedNodeId={selectedId}
+                onSelectResult={(id) => {
+                  // Read-only diagram: clicking a result page selects it and
+                  // drops back to the edit list focused on that node.
+                  onSelect(id);
+                  setShowFlowView(false);
+                }}
+              />
+            </div>
+          ) : (
+            <>
           <div style={{ display: "flex", flexDirection: "column", gap: 2, maxHeight: "62vh", overflowY: "auto" }}>
             {ordered.steps.map((s) => row(s.nodeId))}
             {ordered.branches.map((lane) =>
@@ -500,6 +539,8 @@ export function FlowRail({
               </div>
             )}
           </div>
+            </>
+          )}
           {bankOpen ? (
             <QuestionBankDrawer
               doc={doc}

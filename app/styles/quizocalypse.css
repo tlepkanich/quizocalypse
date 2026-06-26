@@ -510,6 +510,17 @@ body[data-qz] ::selection { background: var(--qz-ink); color: var(--qz-cream); }
   }
 }
 
+/* B4 — Flow View embedded in the rail: LogicFlowMap's result grid is a wide
+   auto-fill (minmax 200px) that overflows the ~264px rail, so collapse it to a
+   single column and tighten its card padding. The spine truncates + reflows on
+   its own at narrow widths. */
+.qz-railflow [style*="minmax(200px"] {
+  grid-template-columns: 1fr !important;
+}
+.qz-railflow .qz-card {
+  padding: 10px;
+}
+
 /* Step 1 S4 — the creation funnel primitives. */
 
 /* QzProgress — the goal-stage min-character fill bar. */

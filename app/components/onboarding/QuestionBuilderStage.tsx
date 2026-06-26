@@ -144,6 +144,7 @@ export function QuestionBuilderStage({
           onSelect={setSelectedId}
           onCommit={commit}
           fallbackCollection={fallbackCollection}
+          categories={categories}
           view={"build" as WorkspaceView}
           onView={() => {}}
           confirmDeleteId={confirmDeleteId}
