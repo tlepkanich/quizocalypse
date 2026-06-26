@@ -1048,6 +1048,13 @@ export const BuildSession = z.object({
   // can surface an honest banner + template fallback instead of silently reverting
   // the stage. Cleared on the next successful generation.
   gen_error: z.string().optional(),
+  // True once the question build has run (re-architected flow: build happens
+  // EARLY, at the Question Builder step). The Generate step reads this to decide
+  // whether to OPEN the already-built draft (non-AI finalize) or run a real build
+  // for a legacy in-flight draft that reached Overview the old way (no build yet).
+  // Skipping the rebuild is critical — re-running applyQuestionFlow strips the
+  // sb_ question nodes + reassigns answer ids, destroying every editing-step edit.
+  built: z.boolean().optional(),
   // Recommendation Buckets (Step 1 rework) — the 3-tab catalog browser's UI state
   // that must survive a reload: which tab is active (the bucket type the quiz is
   // locked to) and whether the AI-suggestion banner has been dismissed this draft.

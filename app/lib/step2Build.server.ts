@@ -212,8 +212,12 @@ export function startStep2Types(
 }
 
 // The funnel's "templating" job — rich battle-card templates for the chosen type,
-// DETACHED. On success → auto-pick the AI's top template + stage "design" (the
-// BattleCard selection UI is retired from the merchant flow); on failure → "types".
+// DETACHED. On success → auto-pick the AI's top template, then BUILD THE QUIZ
+// EARLY (startQuestionBuild) so the merchant lands in the Question Builder editing
+// a real draft. The stage stays on the polling "templating" screen for the build's
+// duration; the build's completion flips it to "question_builder". On template-gen
+// failure → "types" (Shape). A degenerate no-template result falls back to the
+// legacy BattleCard ("configuring").
 export function startStep2Templates(
   shopId: string,
   quizId: string,
@@ -223,31 +227,45 @@ export function startStep2Templates(
   void (async () => {
     try {
       const templates = await generateStep2Templates(shopId, chosenType, input);
-      // Auto-pick the AI's top template and route straight to the Design step. The
-      // four-card Shape already captured the quiz type, so the BattleCard's
-      // template-selection screen is redundant in the new flow — skip it. (The
-      // BattleCardStage component + "configuring" stage remain for legacy drafts.)
       const cats = await prisma.category.findMany({
         where: { shopId, quizId },
         select: { id: true, name: true, productIds: true },
         orderBy: { createdAt: "asc" },
       });
-      const picked = templates[0]
+      const top = templates[0];
+      const picked = top
         ? initPickedTemplate(
-            templates[0],
+            top,
             cats.map((c) => ({ id: c.id, name: c.name, product_ids: c.productIds })),
             new Date(),
           )
         : undefined;
-      await patchBuildSession(quizId, (s) =>
-        BuildSession.parse({
-          ...s,
-          stage: picked ? "design" : "configuring",
-          rich_templates: templates,
-          picked_template: picked,
-          gen_error: undefined,
-        }),
-      );
+
+      if (top && picked) {
+        // Persist the auto-picked template, KEEPING the stage on "templating" (the
+        // polling generating screen), then kick the question build now. The build's
+        // .then flips the stage to "question_builder".
+        await patchBuildSession(quizId, (s) =>
+          BuildSession.parse({
+            ...s,
+            rich_templates: templates,
+            picked_template: picked,
+            gen_error: undefined,
+          }),
+        );
+        await startQuestionBuild(shopId, quizId, top, picked, input.goal, input.struggle ?? "");
+      } else {
+        // No template generated → fall back to the legacy BattleCard surface.
+        await patchBuildSession(quizId, (s) =>
+          BuildSession.parse({
+            ...s,
+            stage: "configuring",
+            rich_templates: templates,
+            picked_template: undefined,
+            gen_error: undefined,
+          }),
+        );
+      }
     } catch (err) {
       console.error("[step2] template generation failed:", err instanceof Error ? err.message : err);
       await patchBuildSession(quizId, (s) =>
@@ -284,18 +302,20 @@ export function initPickedTemplate(
   });
 }
 
-// Pick → the detached full build. Applies the battle-card edits to the quiz's
-// Category rows (prune disabled groups, narrow enabled groups to the merchant's
-// product subset), threads dials → tokenPatch + directives and rec_defaults →
-// recOverride, then runs the existing detached build (buildState "building").
-export async function startStep2Build(
+// Shared build assembly. Applies the picked working copy to the quiz's Category
+// rows (prune disabled groups, narrow enabled groups to the merchant's product
+// subset), threads dials → tokenPatch + directives, the Design-step theme →
+// designTokens, and rec_defaults → recOverride, then kicks the detached AI build.
+// Returns the runAiOnboardingBuild promise so each caller attaches its OWN
+// completion handling (the legacy buildState overlay vs the funnel's stage flip).
+async function buildQuizFromPicked(
   shopId: string,
   quizId: string,
   rich: RichTemplateOption,
   picked: PickedTemplate,
   goal: string,
   struggle: string,
-): Promise<void> {
+): Promise<unknown> {
   const cats = await prisma.category.findMany({
     where: { shopId, quizId },
     select: { id: true, name: true, tags: true },
@@ -325,12 +345,7 @@ export async function startStep2Build(
   const draftTokens =
     (draftDoc?.draftJson as { design_tokens?: DesignTokensT } | null)?.design_tokens ?? null;
 
-  await prisma.quiz.update({
-    where: { id: quizId },
-    data: { name: picked.quiz_name, buildState: "building" },
-  });
-
-  void runAiOnboardingBuild({
+  return runAiOnboardingBuild({
     shopId,
     quizId,
     name: picked.quiz_name,
@@ -354,12 +369,83 @@ export async function startStep2Build(
       oos_behavior: picked.rec_defaults.oos_behavior,
       fallback_collection_id: picked.rec_defaults.fallback_collection_id,
     },
-  })
+  });
+}
+
+// LEGACY pick → detached full build that lands in the builder via the
+// buildState "building" overlay. Kept for in-flight drafts that reach the
+// Overview→Generate step the OLD way (no question nodes yet — pre-re-architecture
+// drafts). New drafts build EARLY via startQuestionBuild (below) instead.
+export async function startStep2Build(
+  shopId: string,
+  quizId: string,
+  rich: RichTemplateOption,
+  picked: PickedTemplate,
+  goal: string,
+  struggle: string,
+): Promise<void> {
+  await prisma.quiz.update({
+    where: { id: quizId },
+    data: { name: picked.quiz_name, buildState: "building" },
+  });
+
+  void buildQuizFromPicked(shopId, quizId, rich, picked, goal, struggle)
     .then(() => prisma.quiz.update({ where: { id: quizId }, data: { buildState: null } }))
     .catch(async (err) => {
       const msg = err instanceof Error ? err.message : String(err);
       await prisma.quiz
         .update({ where: { id: quizId }, data: { buildState: `error:${msg.slice(0, 300)}` } })
         .catch(() => {});
+    });
+}
+
+// Re-architecture pick → build the quiz EARLY (right after Shape) so the merchant
+// edits the real draft in the Question Builder step BEFORE Rec Page / Design.
+// Unlike startStep2Build: NO buildState flip (the funnel polls its own stage, not
+// the builder's overlay) and NO redirect. On success → stage "question_builder";
+// on failure → back to Shape ("types") with a gen_error. The funnel sits on the
+// polling "templating" generating screen for the build's duration.
+export async function startQuestionBuild(
+  shopId: string,
+  quizId: string,
+  rich: RichTemplateOption,
+  picked: PickedTemplate,
+  goal: string,
+  struggle: string,
+): Promise<void> {
+  // Capture the funnel session BEFORE the build. runAiOnboardingBuild rebuilds
+  // draftJson from a fresh seed and DROPS build_session, so we RESTORE the prior
+  // session (grouping/goal/picked_template) with the new stage on completion —
+  // not just set a stage onto the now-empty session. Without this the post-build
+  // draft has no session and the funnel resets to "grouping", wiping the merchant.
+  const before = await prisma.quiz.findUnique({
+    where: { id: quizId },
+    select: { draftJson: true },
+  });
+  const parsedBefore = before ? Quiz.safeParse(before.draftJson) : null;
+  const priorSession: BuildSession =
+    parsedBefore?.success && parsedBefore.data.build_session
+      ? parsedBefore.data.build_session
+      : BuildSession.parse({});
+
+  // Set the name now (the build reads it too); the stage flip waits for success.
+  await prisma.quiz.update({ where: { id: quizId }, data: { name: picked.quiz_name } });
+
+  void buildQuizFromPicked(shopId, quizId, rich, picked, goal, struggle)
+    .then(() =>
+      patchBuildSession(quizId, () =>
+        BuildSession.parse({
+          ...priorSession,
+          stage: "question_builder",
+          built: true,
+          gen_error: undefined,
+        }),
+      ),
+    )
+    .catch(async (err) => {
+      console.error("[step2] question build failed:", err instanceof Error ? err.message : err);
+      await patchBuildSession(quizId, () =>
+        BuildSession.parse({ ...priorSession, stage: "types", gen_error: friendlyGenError(err) }),
+      ).catch(() => {});
     });
 }

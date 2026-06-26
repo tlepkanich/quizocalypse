@@ -18,6 +18,7 @@ import {
   StagedProgress,
 } from "../qz";
 import type {
+  Quiz,
   TemplateOption,
   BuildSession,
   QuizType,
@@ -27,6 +28,10 @@ import type {
   RecDefaults,
   RecommendedGroup,
 } from "../../lib/quizSchema";
+import type { BuilderCategory } from "../builder/stepProps";
+import type { IndexedProduct } from "../../lib/recommendationEngine";
+import { QuestionBuilderStage } from "./QuestionBuilderStage";
+import { ClientOnly, BuilderSkeleton } from "../studio/ClientOnly";
 import type { BucketSuggestion } from "../../lib/bucketDetect";
 import { THEME_PRESETS, type ThemePreset } from "../../lib/themePresets";
 
@@ -96,6 +101,19 @@ export interface FunnelData {
   activeTab: BucketType;
   bannerDismissed: boolean;
   backHref: string;
+  // Question Builder (the pre-config editing step) — emitted ONLY when
+  // stage === "question_builder": the built draft + the builder's category /
+  // productIndex shapes, so QuestionBuilderStage composes FlowRail + ContextPanel
+  // over the SAME draftJson the main builder edits.
+  questionBuilder: {
+    doc: Quiz;
+    categories: BuilderCategory[];
+    productIndex: IndexedProduct[];
+  } | null;
+  // Rec Page on the BUILT draft — the current result-node rec settings. Present
+  // only at stage "rec_page" once the quiz is built; RecPageStage edits the nodes
+  // directly (via set-result-rec). Null → legacy draft → edit picked_template.
+  recNodeDefaults: { max_products: number; oos_behavior: RecDefaults["oos_behavior"] } | null;
 }
 
 type ActionResult =
@@ -242,6 +260,25 @@ export function Step1Funnel({ data }: { data: FunnelData }) {
 
       {data.stage === "templating" ? <GeneratingScreen kind="templating" /> : null}
 
+      {/* Question Builder — the pre-config editing step. Client-only: it composes
+          the heavy builder panels (FlowRail / ContextPanel / live preview) which
+          throw hydration errors when SSR'd (the admin-builder lesson). */}
+      {data.stage === "question_builder" && data.questionBuilder ? (
+        <ClientOnly fallback={<BuilderSkeleton />}>
+          {() => (
+            <QuestionBuilderStage
+              quizId={data.quizId}
+              initialDoc={data.questionBuilder!.doc}
+              categories={data.questionBuilder!.categories}
+              productIndex={data.questionBuilder!.productIndex}
+              collections={data.collections}
+              fetcher={fetcher}
+              pendingIntent={pendingIntent}
+            />
+          )}
+        </ClientOnly>
+      ) : null}
+
       {data.stage === "configuring" ? (
         <BattleCardStage data={data} fetcher={fetcher} pendingIntent={pendingIntent} />
       ) : null}
@@ -268,20 +305,26 @@ export function Step1Funnel({ data }: { data: FunnelData }) {
 
 // The funnel's visible step order — shared by FunnelProgress AND the Step-N-of-M
 // stepper inside each stage, so the "of N" count can't drift from the dots.
+// The re-sequenced visible order: Buckets → Goal → Shape → Questions → Rec Page →
+// Design → Review. "Shape" is the four-card type picker (the `types` stage); the
+// early question build then lands on Questions (question_builder); Rec Page now
+// precedes Design.
 const FUNNEL_STAGES: Array<{ key: string; label: string }> = [
   { key: "grouping", label: "Buckets" },
   { key: "goal", label: "Goal" },
-  { key: "types", label: "Type" },
-  { key: "configuring", label: "Template" },
-  { key: "design", label: "Design" },
+  { key: "types", label: "Shape" },
+  { key: "question_builder", label: "Questions" },
   { key: "rec_page", label: "Rec Page" },
+  { key: "design", label: "Design" },
   { key: "overview", label: "Review" },
 ];
 
-// Map transient/legacy stages onto the visible step.
+// Map transient/legacy stages onto their owning visible step.
 function visibleStageKey(stage: FunnelData["stage"]): string {
-  if (stage === "typing" || stage === "templates") return "types";
-  if (stage === "templating" || stage === "done") return "configuring";
+  if (stage === "typing" || stage === "templates" || stage === "shape") return "types";
+  // "templating" now spans template-gen AND the early question build → Questions.
+  if (stage === "templating" || stage === "configuring") return "question_builder";
+  if (stage === "done" || stage === "generate") return "overview";
   return stage;
 }
 
@@ -459,14 +502,14 @@ function DesignStage({
         <button
           type="button"
           className="qz-btn qz-btn-ghost"
-          onClick={() => fetcher.submit({ intent: "back-to-types" }, { method: "post" })}
+          onClick={() => fetcher.submit({ intent: "to-rec-page" }, { method: "post" })}
         >
           ← Back
         </button>
         <button
           type="button"
           className="qz-btn qz-btn-accent"
-          onClick={() => fetcher.submit({ intent: "to-rec-page" }, { method: "post" })}
+          onClick={() => fetcher.submit({ intent: "to-overview" }, { method: "post" })}
         >
           Continue →
         </button>
@@ -489,12 +532,19 @@ function RecPageStage({
   fetcher: ReturnType<typeof useFetcher<ActionResult>>;
   pendingIntent: string | null;
 }) {
+  // Built draft → edit the result NODES directly (set-result-rec); the build
+  // already baked rec_defaults onto them, so editing picked_template would no-op.
+  // Legacy in-flight draft (no build yet) → edit picked_template.rec_defaults.
+  const onNodes = data.recNodeDefaults;
   const picked = data.pickedTemplate;
-  const rec = picked?.rec_defaults;
-  const saving = pendingIntent === "set-rec";
+  const rec: RecDefaults | undefined = onNodes
+    ? { max_products: onNodes.max_products, oos_behavior: onNodes.oos_behavior, fallback_collection_id: "" }
+    : picked?.rec_defaults;
+  const saveIntent = onNodes ? "set-result-rec" : "set-rec";
+  const saving = pendingIntent === saveIntent;
   const setRec = (patch: Partial<RecDefaults>) => {
     if (!rec) return;
-    fetcher.submit({ intent: "set-rec", rec: JSON.stringify({ ...rec, ...patch }) }, { method: "post" });
+    fetcher.submit({ intent: saveIntent, rec: JSON.stringify({ ...rec, ...patch }) }, { method: "post" });
   };
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
@@ -543,14 +593,14 @@ function RecPageStage({
         <button
           type="button"
           className="qz-btn qz-btn-ghost"
-          onClick={() => fetcher.submit({ intent: "to-design" }, { method: "post" })}
+          onClick={() => fetcher.submit({ intent: "to-question-builder" }, { method: "post" })}
         >
           ← Back
         </button>
         <button
           type="button"
           className="qz-btn qz-btn-accent"
-          onClick={() => fetcher.submit({ intent: "to-overview" }, { method: "post" })}
+          onClick={() => fetcher.submit({ intent: "to-design" }, { method: "post" })}
         >
           Continue →
         </button>
@@ -620,7 +670,7 @@ function OverviewStage({
           type="button"
           className="qz-btn qz-btn-ghost"
           disabled={building}
-          onClick={() => fetcher.submit({ intent: "to-rec-page" }, { method: "post" })}
+          onClick={() => fetcher.submit({ intent: "to-design" }, { method: "post" })}
         >
           ← Back
         </button>

@@ -256,11 +256,14 @@ export async function loadStep1FunnelData(
   // A detached generation job (typing/templating) that dies mid-run — e.g. the
   // Fly machine restarts on a deploy — strands the stage forever, since the
   // in-process try/catch can't fire. Detect it: still "in flight" but the draft
-  // hasn't been written in well past the ~70-110s a real run takes. The funnel
-  // then offers a re-run / template escape instead of polling indefinitely.
+  // hasn't been written in well past a real run. The "templating" stage now spans
+  // BOTH template-gen AND the early question build (runAiOnboardingBuild only
+  // writes draftJson at the very end), so the no-write window can reach ~75-110s;
+  // 200s gives a legitimately slow build margin before we surface the re-run /
+  // template escape instead of polling indefinitely.
   const genInFlight = session.stage === "typing" || session.stage === "templating";
   const genStalled =
-    genInFlight && Date.now() - new Date(quiz.updatedAt).getTime() > 150_000;
+    genInFlight && Date.now() - new Date(quiz.updatedAt).getTime() > 200_000;
 
   // ── Question Builder (the pre-config editing step) ───────────────────────
   // ONLY on this stage do we ship the full editable doc + the builder's
@@ -300,8 +303,25 @@ export async function loadStep1FunnelData(
         }
       : null;
 
+  // ── Rec Page on the built draft ──────────────────────────────────────────
+  // When the quiz is already built (re-architected flow), the Rec Page step edits
+  // the RESULT NODES directly (the build baked rec_defaults onto them) rather than
+  // picked_template.rec_defaults, which would no-op (the build already ran). Emit
+  // the current node-level rec settings (uniform across result nodes — the build
+  // applies one recOverride to all). Null → no result nodes yet (a legacy in-flight
+  // draft) → RecPageStage falls back to editing picked_template.
+  const firstResult = doc.nodes.find((n) => n.type === "result");
+  const recNodeDefaults =
+    session.stage === "rec_page" && firstResult && firstResult.type === "result"
+      ? {
+          max_products: firstResult.data.max_products ?? 3,
+          oos_behavior: firstResult.data.oos_behavior,
+        }
+      : null;
+
   return {
     questionBuilder,
+    recNodeDefaults,
     quizId: quiz.id,
     name: quiz.name,
     stage: session.stage,
@@ -376,9 +396,14 @@ export async function runStep1FunnelAction(
         { status: 400 },
       );
     }
+    // Autosave persists DOC CONTENT only. build_session / stage is owned by the
+    // navigation intents — so we keep the SERVER's current session, never the
+    // client doc's. This makes a debounced PUT that races a stage transition
+    // safe in EITHER order: the PUT can never rewind the stage, and the merchant's
+    // last edit is preserved whichever request lands last.
     await prisma.quiz.update({
       where: { id: quiz.id },
-      data: { draftJson: parsed.data as never },
+      data: { draftJson: Quiz.parse({ ...parsed.data, build_session: session }) as never },
     });
     return json({ ok: true, savedAt: new Date().toISOString() });
   }
@@ -801,6 +826,24 @@ export async function runStep1FunnelAction(
     return json({ intent, ok: true });
   }
 
+  // Rec Page on a BUILT draft — patch products-per-result + OOS behavior onto
+  // EVERY result node (the build baked these uniformly; this is the merchant's
+  // edit on the real nodes, not picked_template.rec_defaults which would no-op
+  // post-build). Validated against RecDefaults; only max_products + oos_behavior
+  // are applied (fallback stays untouched — the no-fit-→-no-products goal).
+  if (intent === "set-result-rec") {
+    const parsed = RecDefaults.safeParse(safeJson(form.get("rec")));
+    if (!parsed.success) return json({ intent, ok: false, error: "bad rec" }, { status: 400 });
+    const { max_products, oos_behavior } = parsed.data;
+    const nodes = doc.nodes.map((n) =>
+      n.type === "result"
+        ? { ...n, data: { ...n.data, max_products, oos_behavior } }
+        : n,
+    );
+    await writeDoc(quiz.id, { ...doc, nodes });
+    return json({ intent, ok: true });
+  }
+
   if (intent === "save-template") {
     const picked = session.picked_template;
     if (!picked) return json({ intent, ok: false, error: "No template selected." }, { status: 400 });
@@ -820,12 +863,21 @@ export async function runStep1FunnelAction(
     return json({ intent, ok: true });
   }
 
-  // BattleCard "Continue →": advance to the Design step (theme picker).
+  // Advance to the Design step (theme picker). Reached from Rec Page "Continue →"
+  // (the re-architected order: Question Builder → Rec Page → Design) and Overview
+  // "← Back".
   if (intent === "to-design") {
     if (!session.picked_template) {
       return json({ intent, ok: false, error: "No template selected." }, { status: 400 });
     }
     await writeDoc(quiz.id, { ...doc, build_session: { ...session, stage: "design" } });
+    return json({ intent, ok: true });
+  }
+
+  // Rec Page "← Back": return to the Question Builder editing step. The draft is
+  // already built (question nodes present), so this is a pure stage change.
+  if (intent === "to-question-builder") {
+    await writeDoc(quiz.id, { ...doc, build_session: { ...session, stage: "question_builder" } });
     return json({ intent, ok: true });
   }
 
@@ -884,6 +936,20 @@ export async function runStep1FunnelAction(
   if (intent === "generate-build") {
     const picked = session.picked_template;
     if (!picked) return json({ intent, ok: false, error: "No template selected." }, { status: 400 });
+
+    // Re-architected flow: the quiz is ALREADY built (the question build ran at
+    // the Question Builder step). Generate is a NON-AI finalize — just open the
+    // already-built draft in the builder. Re-running startStep2Build would strip +
+    // rebuild the sb_ question nodes (fresh answer ids) and re-bake result nodes,
+    // DESTROYING every Question Builder / Rec Page / Design edit. The merchant's
+    // last design/rec edits already live on the draft (autosaved), so nothing else
+    // to apply.
+    if (session.built) {
+      return redirect(opts.builderPath(quiz.id));
+    }
+
+    // Legacy in-flight draft that reached Overview the OLD way (no build yet) →
+    // run the real detached build, landing in the builder via the buildState overlay.
     const rich = session.rich_templates.find((t) => t.id === picked.template_id);
     if (!rich) return json({ intent, ok: false, error: "Template not found." }, { status: 400 });
     if (!session.goal?.goal_text) return json({ intent, ok: false, error: "Add a goal before building." }, { status: 400 });
