@@ -1,6 +1,7 @@
 import type { CSSProperties } from "react";
 import { updateNodeData } from "../studio/studioDoc";
-import { QzBadge, QzCollapse, QzField, QzInput, QzSelect } from "../qz";
+import { setResultSectionCount, setResultStage } from "../../lib/quizMutations";
+import { QzBadge, QzCollapse, QzField, QzInput, QzSegmented, QzSelect } from "../qz";
 import type {
   MatchLadderStrategy,
   OosBehavior,
@@ -163,6 +164,12 @@ export function ResultSettingsPanel({
 
   const maxProducts = data.max_products ?? data.slot_count;
 
+  // Rec-Page spec §1 — section structure. 0 stages = a single section driven by
+  // the node's top-level Source/Ranking config; N stages = N stacked sections
+  // (the runtime renders one MultiStageResultView section per stage).
+  const stageList = data.stages;
+  const sectionCount = stageList.length === 0 ? 1 : stageList.length;
+
   // "Manually curated" sort respects a collection's Shopify order, so it only
   // applies when a collection scopes the section (a collection sub-filter, the
   // bound collection, or the collection rung).
@@ -187,6 +194,156 @@ export function ResultSettingsPanel({
 
   return (
     <div className="qz-col qz-gap-8">
+      {/* ── SECTION STRUCTURE (spec §1) — 1/2/3 stacked sections ──────── */}
+      <QzCollapse
+        title="Section structure"
+        meta={sectionCount === 1 ? "1 section" : `${sectionCount} sections`}
+        defaultOpen
+      >
+        <div className="qz-col qz-gap-8">
+          <p className="qz-dim" style={{ fontSize: 12, margin: 0 }}>
+            Split this page into up to three stacked product sections (e.g. “Your
+            match”, then “Complete the routine”). Each extra section resolves the
+            same bound bucket, then narrows by its own sub-filter and sort.
+          </p>
+          <QzSegmented
+            ariaLabel="Number of sections"
+            value={String(sectionCount)}
+            onChange={(v) => onCommit(setResultSectionCount(doc, node.id, Number(v)))}
+            options={[
+              { value: "1", label: "1 section" },
+              { value: "2", label: "2 sections" },
+              { value: "3", label: "3 sections" },
+            ]}
+          />
+
+          {sectionCount === 1 ? (
+            <p className="qz-dim" style={{ fontSize: 12, margin: 0 }}>
+              Single section — configured by the Source, Match, and Ranking
+              settings below.
+            </p>
+          ) : (
+            <div className="qz-col qz-gap-8">
+              {stageList.map((stage, i) => {
+                const stageHasCollection = Boolean(
+                  stage.sub_filter_collection_id || stage.collection_id,
+                );
+                return (
+                  <div
+                    key={stage.id}
+                    className="qz-col qz-gap-8"
+                    style={{
+                      padding: 10,
+                      border: "1px solid var(--qz-rule)",
+                      borderRadius: "var(--qz-radius)",
+                      background: "var(--qz-paper)",
+                    }}
+                  >
+                    <div className="qz-row qz-gap-8" style={{ alignItems: "center" }}>
+                      <QzBadge tone="draft">Section {i + 1}</QzBadge>
+                      <span className="qz-dim" style={{ fontSize: 11 }}>
+                        {i === 0 ? "Primary match" : "Cross-sell / routine"}
+                      </span>
+                    </div>
+                    <QzField label="Heading">
+                      <QzInput
+                        value={stage.headline}
+                        placeholder={
+                          i === 0 ? "Recommended for you" : "Complete your routine"
+                        }
+                        onChange={(e) =>
+                          onCommit(
+                            setResultStage(doc, node.id, i, { headline: e.target.value }),
+                          )
+                        }
+                      />
+                    </QzField>
+                    <div className="qz-row qz-gap-8">
+                      <QzField label="Sub-filter tag" hint="Within the bucket pool.">
+                        <QzInput
+                          value={stage.sub_filter_tag ?? ""}
+                          placeholder="e.g. toners"
+                          onChange={(e) =>
+                            onCommit(
+                              setResultStage(doc, node.id, i, {
+                                sub_filter_tag: e.target.value || undefined,
+                              }),
+                            )
+                          }
+                        />
+                      </QzField>
+                      <QzField label="Max products">
+                        <QzInput
+                          type="number"
+                          min={1}
+                          max={12}
+                          value={stage.max_products}
+                          onChange={(e) =>
+                            onCommit(
+                              setResultStage(doc, node.id, i, {
+                                max_products: clampProductCount(e.target.valueAsNumber),
+                              }),
+                            )
+                          }
+                        />
+                      </QzField>
+                    </div>
+                    <div className="qz-row qz-gap-8">
+                      <QzField
+                        label="Sub-filter collection"
+                        hint="Within the bucket pool."
+                      >
+                        <QzSelect
+                          value={stage.sub_filter_collection_id ?? ""}
+                          onChange={(e) =>
+                            onCommit(
+                              setResultStage(doc, node.id, i, {
+                                sub_filter_collection_id: e.target.value || undefined,
+                              }),
+                            )
+                          }
+                        >
+                          <option value="">No collection</option>
+                          {collections.map((c) => (
+                            <option key={c.collectionId} value={c.collectionId}>
+                              {c.title}
+                            </option>
+                          ))}
+                        </QzSelect>
+                      </QzField>
+                      <QzField label="Sort order">
+                        <QzSelect
+                          value={stage.ranking}
+                          onChange={(e) =>
+                            onCommit(
+                              setResultStage(doc, node.id, i, {
+                                ranking: e.target.value as ResultRanking,
+                              }),
+                            )
+                          }
+                        >
+                          {RANKING_OPTIONS.map((o) => (
+                            <option
+                              key={o.value}
+                              value={o.value}
+                              disabled={o.value === "manual" && !stageHasCollection}
+                            >
+                              {o.value === "manual" && !stageHasCollection
+                                ? `${o.label} (needs a collection)`
+                                : o.label}
+                            </option>
+                          ))}
+                        </QzSelect>
+                      </QzField>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </QzCollapse>
+
       {/* ── SOURCE: the match ladder ──────────────────────────────────── */}
       <QzCollapse title="Source — match ladder" meta={`${ladder.length} active`} defaultOpen>
         <div className="qz-col qz-gap-8">

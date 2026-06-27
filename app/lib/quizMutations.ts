@@ -1,4 +1,4 @@
-import { ResultData, isFreeformType } from "./quizSchema";
+import { ResultData, ResultStage, isFreeformType } from "./quizSchema";
 import type { Quiz } from "./quizSchema";
 import type { z } from "zod";
 
@@ -241,6 +241,78 @@ export function addResultNode(
       { id, headline: "Your match", subtext: "", product_ids: [], match_strategy: "top_n" as const },
     ],
   };
+}
+
+// ── Rec-Page spec §1 — multi-section (1/2/3 sections per bucket) ───────────────
+// Sections map to ResultData.stages[]: stages.length === 0 → ONE section (the
+// node's top-level config, rendered by ResultView). stages.length === N (N≥2) →
+// N sections (rendered by MultiStageResultView). Each stage carries its own
+// heading / sub-filter / sort / count and resolves the SAME bound bucket pool
+// (category_id inherited), narrowed by the section's sub-filter.
+
+function resultNodeAt(doc: QuizDoc, nodeId: string) {
+  const node = doc.nodes.find((n) => n.id === nodeId);
+  return node && node.type === "result" ? node : null;
+}
+
+// Immutable patch of a result node's data (quizMutations is studioDoc-free).
+function patchResultData(
+  doc: QuizDoc,
+  nodeId: string,
+  patch: Record<string, unknown>,
+): QuizDoc {
+  return {
+    ...doc,
+    nodes: doc.nodes.map((n) =>
+      n.id === nodeId && n.type === "result" ? { ...n, data: { ...n.data, ...patch } } : n,
+    ),
+  };
+}
+
+// Patch a single section's fields (heading, sub_filter_tag/collection, ranking,
+// min/max_products). No-op if the node or stage index is absent.
+export function setResultStage(
+  doc: QuizDoc,
+  nodeId: string,
+  index: number,
+  patch: Partial<z.infer<typeof ResultStage>>,
+): QuizDoc {
+  const node = resultNodeAt(doc, nodeId);
+  if (!node) return doc;
+  const stages = [...node.data.stages];
+  if (!stages[index]) return doc;
+  stages[index] = { ...stages[index]!, ...patch };
+  return patchResultData(doc, nodeId, { stages });
+}
+
+// Set the number of sections to n (1, 2, or 3). n<=1 clears stages (single
+// section = the node's top-level config). n>=2 ensures exactly n stages, padding
+// new ones that inherit the node's bucket binding (so each section resolves the
+// same pool, then narrows by its own sub-filter) and trimming extras.
+export function setResultSectionCount(doc: QuizDoc, nodeId: string, n: number): QuizDoc {
+  const node = resultNodeAt(doc, nodeId);
+  if (!node) return doc;
+  const data = node.data;
+  let stages = [...data.stages];
+  if (n <= 1) {
+    stages = [];
+  } else {
+    while (stages.length < n) {
+      stages.push(
+        ResultStage.parse({
+          id: uid("stage"),
+          headline: stages.length === 0 ? "Recommended for you" : "Complete your routine",
+          match_ladder: data.match_ladder,
+          category_id: data.category_id,
+          ranking: data.ranking,
+          min_products: 1,
+          max_products: 4,
+        }),
+      );
+    }
+    stages = stages.slice(0, n);
+  }
+  return patchResultData(doc, nodeId, { stages });
 }
 
 export function addEmailGateNode(

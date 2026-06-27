@@ -14,6 +14,8 @@ import {
   setAnswerBucketWeight,
   swapScoringModel,
   straightThroughRun,
+  setResultSectionCount,
+  setResultStage,
 } from "./quizMutations";
 import { insertModule } from "../components/studio/studioDoc";
 import { orderFlow } from "./flowOrder";
@@ -424,5 +426,54 @@ describe("setAnswerRoute (Unified P4)", () => {
     expect(setAnswerRoute(doc, q.id, "nope", result.id)).toBe(doc);
     const self = setAnswerRoute(doc, q.id, a.id, q.id);
     expect(self.edges.some((e) => e.source_handle === a.edge_handle_id)).toBe(false);
+  });
+});
+
+describe("Rec-Page §1 multi-section (setResultSectionCount / setResultStage)", () => {
+  const resultNode = (doc: ReturnType<typeof linearQuestionsDoc>) =>
+    doc.nodes.find((n) => n.id === "r1")!;
+
+  it("1 section = no stages (single-section ResultView)", () => {
+    const doc = setResultSectionCount(linearQuestionsDoc(), "r1", 1);
+    expect((resultNode(doc).data as { stages: unknown[] }).stages).toEqual([]);
+  });
+
+  it("2 sections = exactly 2 stages, inheriting the node's bucket binding", () => {
+    let doc = linearQuestionsDoc();
+    // bind a bucket first so new stages inherit category_id + ladder
+    doc = setResultStage(doc, "r1", 0, {}); // no-op (no stages yet)
+    doc = { ...doc, nodes: doc.nodes.map((n) =>
+      n.id === "r1" && n.type === "result" ? { ...n, data: { ...n.data, category_id: "cat-1" } } : n) };
+    doc = setResultSectionCount(doc, "r1", 2);
+    const stages = (resultNode(doc).data as { stages: { id: string; category_id?: string }[] }).stages;
+    expect(stages).toHaveLength(2);
+    expect(stages.every((s) => s.id.length > 0)).toBe(true);
+    expect(stages.every((s) => s.category_id === "cat-1")).toBe(true);
+    expect(Quiz.parse(doc)).toBeTruthy(); // round-trips
+  });
+
+  it("3 sections then back to 2 trims the extra (keeps the first two)", () => {
+    let doc = setResultSectionCount(linearQuestionsDoc(), "r1", 3);
+    expect((resultNode(doc).data as { stages: unknown[] }).stages).toHaveLength(3);
+    const firstId = (resultNode(doc).data as { stages: { id: string }[] }).stages[0]!.id;
+    doc = setResultSectionCount(doc, "r1", 2);
+    const stages = (resultNode(doc).data as { stages: { id: string }[] }).stages;
+    expect(stages).toHaveLength(2);
+    expect(stages[0]!.id).toBe(firstId); // stable: didn't recreate section 1
+  });
+
+  it("setResultStage patches a section's sub-filter + sort + count", () => {
+    let doc = setResultSectionCount(linearQuestionsDoc(), "r1", 2);
+    doc = setResultStage(doc, "r1", 1, { sub_filter_tag: "toner", ranking: "newest", max_products: 6 });
+    const s = (resultNode(doc).data as { stages: { sub_filter_tag?: string; ranking: string; max_products: number }[] }).stages[1]!;
+    expect(s.sub_filter_tag).toBe("toner");
+    expect(s.ranking).toBe("newest");
+    expect(s.max_products).toBe(6);
+  });
+
+  it("setResultStage on a missing index is a no-op", () => {
+    const doc = setResultSectionCount(linearQuestionsDoc(), "r1", 1);
+    const same = setResultStage(doc, "r1", 5, { headline: "x" });
+    expect(same).toBe(doc);
   });
 });
