@@ -354,6 +354,25 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
     </span>
   );
 
+  // B7 — scoring-model badge/toggle (parity with the funnel Question Builder
+  // header). Both models are saved; clicking swaps active↔alt. Rendered in both
+  // the standalone Quizell top bar and the embedded QzPageHeader.
+  const scoringBadge = (() => {
+    const m = doc.scoring_model ?? "direct";
+    const other = m === "direct" ? "weighted" : "direct";
+    return (
+      <button
+        type="button"
+        className="qz-btn qz-btn-ghost qz-btn-sm"
+        style={{ fontSize: 12 }}
+        title={`Scoring: ${m === "direct" ? "Direct mapping" : "Weighted scoring"} — click to switch (both models are saved)`}
+        onClick={() => commit(swapScoringModel(doc, other))}
+      >
+        {m === "direct" ? "→ Direct mapping" : "⚖ Weighted scoring"} <span aria-hidden>⚙</span>
+      </button>
+    );
+  })();
+
   const editInteractToggle = (
     <div
       className="qz-segmented"
@@ -781,6 +800,7 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
           {/* Right: edit/interact · undo/redo · settings · share · preview · save · publish */}
           <div className="qz-row" style={{ gap: 8, alignItems: "center", justifyContent: "flex-end", flex: "1 1 0", flexWrap: "wrap" }}>
             {view === "build" ? editInteractToggle : null}
+            {view === "build" ? scoringBadge : null}
             {undoRedo}
             {settingsPopover}
             {saveStatus}
@@ -905,23 +925,7 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
       >
         {saveStatus}
         <div className="qz-row" style={{ gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-          {/* B7 — scoring-model badge/toggle (parity with the funnel Question
-              Builder header). Both models are saved; switching swaps active↔alt. */}
-          {(() => {
-            const m = doc.scoring_model ?? "direct";
-            const other = m === "direct" ? "weighted" : "direct";
-            return (
-              <button
-                type="button"
-                className="qz-btn qz-btn-ghost qz-btn-sm"
-                style={{ fontSize: 12 }}
-                title={`Scoring: ${m === "direct" ? "Direct mapping" : "Weighted scoring"} — click to switch (both models are saved)`}
-                onClick={() => commit(swapScoringModel(doc, other))}
-              >
-                {m === "direct" ? "→ Direct mapping" : "⚖ Weighted scoring"} <span aria-hidden>⚙</span>
-              </button>
-            );
-          })()}
+          {scoringBadge}
           {editInteractToggle}
           {settingsPopover}
           {chrome === "embedded" ? (
