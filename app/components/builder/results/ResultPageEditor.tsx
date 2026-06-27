@@ -1,6 +1,7 @@
 import { QzButton, QzCard } from "../../qz";
 import { SHARED_RESULT_KEY } from "../../../lib/resultLayout";
 import { StepPreview } from "../../runtime/StepPreview";
+import { RecPageDiagram } from "../../studio/RecPageDiagram";
 import { ResultSettingsPanel } from "../ResultSettingsPanel";
 import type { Quiz as QuizDoc } from "../../../lib/quizSchema";
 import type { IndexedProduct } from "../../../lib/recommendationEngine";
@@ -92,7 +93,10 @@ export function ResultPageEditor({
           />
         </QzCard>
 
-        <FramedPreview doc={doc} node={node} productIndex={productIndex} categories={categories} />
+        <div className="qz-col qz-gap-12" style={{ minWidth: 0 }}>
+          <RecPageDiagram doc={doc} node={node} productIndex={productIndex} />
+          <FramedPreview doc={doc} node={node} productIndex={productIndex} categories={categories} />
+        </div>
       </div>
     </div>
   );
@@ -113,7 +117,7 @@ function FramedPreview({
   categories: BuilderCategory[];
 }) {
   return (
-    <div className="qz-card" style={{ padding: 0, overflow: "hidden", position: "sticky", top: 12 }}>
+    <div className="qz-card" style={{ padding: 0, overflow: "hidden" }}>
       <div
         className="qz-row"
         style={{
