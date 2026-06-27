@@ -100,3 +100,25 @@ describe("fluid typography (Unified P7)", () => {
     expect(tokensToCssVars(tok(16))["--qz-base-size"]).toBe("16px");
   });
 });
+
+describe("Design Settings spec (Drive 1_p1V) — D0 token carry + byte-stable", () => {
+  it("carries the new design fields through resolveDesignTokens (last layer wins)", () => {
+    const resolved = resolveDesignTokens(
+      { logo: { url: "https://x/l.png", size: "md", align: "left" } },
+      { style_bar: { lines: 80 }, answer_layout: "list" },
+      { style_bar: { spacing: 30 }, template_id: "warm_lifestyle", question_image_position: "side" },
+    );
+    expect(resolved.logo).toEqual({ url: "https://x/l.png", size: "md", align: "left" });
+    // style_bar shallow-merges across layers (lines from layer 2, spacing from layer 3)
+    expect(resolved.style_bar).toEqual({ lines: 80, spacing: 30 });
+    expect(resolved.answer_layout).toBe("list");
+    expect(resolved.template_id).toBe("warm_lifestyle");
+    expect(resolved.question_image_position).toBe("side");
+  });
+
+  it("byte-stable: unset design fields emit NO new CSS vars (every existing quiz unchanged)", () => {
+    const vars = tokensToCssVars(resolveDesignTokens({ colors: { primary: "#123456" } }));
+    // D0 is schema + cascade carry only — no CSS emission yet, so no logo/style-bar vars.
+    expect(Object.keys(vars).some((k) => k.includes("logo") || k.includes("style-bar"))).toBe(false);
+  });
+})

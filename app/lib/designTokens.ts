@@ -113,6 +113,17 @@ export function resolveDesignTokens(
     // QP-2 — carry page_padding through resolution (a per-field merge drops any
     // field not listed here, the same trap result_split hit). Last layer wins.
     if (layer.page_padding) out.page_padding = layer.page_padding;
+    // Design Settings spec (Drive 1_p1V) — carry the additive design fields so
+    // they survive the cascade for the render phases (D1–D5). Same per-field-merge
+    // discipline. style_bar / progress_bar shallow-merge so a partial override
+    // (e.g. just `enabled`) keeps the rest of a lower layer.
+    if (layer.logo) out.logo = layer.logo;
+    if (layer.style_bar) out.style_bar = { ...out.style_bar, ...layer.style_bar };
+    if (layer.template_id) out.template_id = layer.template_id;
+    if (layer.progress_bar) out.progress_bar = { ...out.progress_bar, ...layer.progress_bar };
+    if (layer.answer_layout) out.answer_layout = layer.answer_layout;
+    if (layer.answer_grid_columns) out.answer_grid_columns = layer.answer_grid_columns;
+    if (layer.question_image_position) out.question_image_position = layer.question_image_position;
   }
   return out;
 }

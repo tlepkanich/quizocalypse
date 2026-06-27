@@ -702,6 +702,44 @@ export const DesignTokens = z
         left: z.number().min(0).max(240),
       })
       .optional(),
+    // ── Design Settings spec (Drive 1_p1V) — all additive/optional (D0) ──────
+    // §1 brand logo — a slim brand header at the top of the quiz. url = uploaded
+    // or Shopify-pulled asset; size + horizontal alignment. Absent → no header
+    // (byte-stable). Cascades like any token (global on shop.brandTokens).
+    logo: z
+      .object({
+        url: z.string(),
+        size: z.enum(["sm", "md", "lg"]),
+        align: z.enum(["left", "center"]),
+      })
+      .partial()
+      .optional(),
+    // §3 style bar — 3 continuous axes (0-100) fine-tuning the template: image
+    // density (Minimal↔Rich), lines (Sharp↔Soft → radius), spacing (Compact↔Airy
+    // → padding). Resolved to CSS vars / token effects in D2.
+    style_bar: z
+      .object({
+        image_density: z.number().min(0).max(100),
+        lines: z.number().min(0).max(100),
+        spacing: z.number().min(0).max(100),
+      })
+      .partial()
+      .optional(),
+    // §2 selected vibe template id — drives the selected state + the
+    // "modified-from-preset" indicator. Cosmetic; the tokens are authoritative.
+    template_id: z.string().optional(),
+    // §4 per-quiz formatting — deltas over global; rendered in D4.
+    progress_bar: z
+      .object({
+        enabled: z.boolean(),
+        style: z.enum(["bar", "dots", "steps"]),
+        position: z.enum(["top", "bottom"]),
+      })
+      .partial()
+      .optional(),
+    answer_layout: z.enum(["grid", "list", "auto"]).optional(),
+    answer_grid_columns: z.number().int().min(2).max(3).optional(),
+    question_image_position: z.enum(["none", "top", "side"]).optional(),
   })
   .partial();
 export type DesignTokens = z.infer<typeof DesignTokens>;
@@ -1192,6 +1230,12 @@ export const Quiz = z.object({
   result_layout_mode: z.enum(["shared", "custom"]).default("custom"),
   design_tokens: DesignTokens.default({}),
   design_overrides: z.record(z.string(), DesignTokens).default({}),
+  // Design Settings spec §5 — quiz UI ↔ rec page design linking. When
+  // design_linked (default), result nodes use design_tokens. When de-linked,
+  // rec_page_design is an independent token set for the rec page. Additive;
+  // default linked + absent → every existing quiz unchanged. Resolved in D5.
+  design_linked: z.boolean().default(true),
+  rec_page_design: DesignTokens.optional(),
   // Per-breakpoint overrides on top of design_overrides. Synced edits write
   // to design_overrides; "edit Desktop" / "edit Mobile" in the drawer write
   // here. Spec §6.
