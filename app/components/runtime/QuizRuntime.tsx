@@ -20,6 +20,7 @@ import { cartPermalink, numericId, cartPermalinkMulti } from "../../lib/cartLink
 import { productHref, type QuizPlatform } from "../../lib/productHref";
 import { progressPct, reachableQuestionCount } from "../../lib/progress";
 import { formatMoney } from "../../lib/formatMoney";
+import { discountedItemPrice } from "../../lib/discountMath";
 import {
   resolveForBreakpoint,
   tokensToCssVars,
@@ -190,6 +191,14 @@ const RuntimePlatformContext = createContext<QuizPlatform>("shopify");
 // read it via context (same seam as platform/preview/locale) — no prop drilling.
 type ChromeVariant = "classic" | "minimal";
 const RuntimeChromeContext = createContext<ChromeVariant>("classic");
+// R6 (Rec-Page §2) — the quiz-level PERCENTAGE that ProductCard may render as a
+// struck original + accent discounted price. Set only for an unconditional
+// percentage discount (kind=percentage · applies_to=all · no minimums); null for
+// fixed/free-shipping/conditional discounts (those keep the badge-only display).
+// The PER-RESULT gate stays on the card's `discountLabel` prop (which is set iff
+// that node's include_discount + the live code resolve), so the strikethrough
+// only shows when BOTH the node opts in AND the discount is percentage-eligible.
+const RuntimeDiscountContext = createContext<number | null>(null);
 
 export function QuizRuntime(props: QuizRuntimeProps) {
   const tc = useChrome();
@@ -1258,8 +1267,24 @@ export function QuizRuntime(props: QuizRuntimeProps) {
     : null;
   const showPreview = previewActive && currentNode?.type !== "result";
 
+  // R6 — the percentage ProductCard may render as a strikethrough. Only an
+  // UNCONDITIONAL percentage discount maps honestly to a per-item struck price
+  // (a fixed amount / free shipping is order-level; a min-subtotal/quantity or
+  // collection/product scope means it may not apply to a given item at a given
+  // cart size). Those cases keep the badge-only display (strike percent = null).
+  const dcRoot = doc.discount_config;
+  const strikethroughPercent =
+    dcRoot.enabled &&
+    dcRoot.kind === "percentage" &&
+    dcRoot.applies_to === "all" &&
+    dcRoot.minimum_subtotal == null &&
+    dcRoot.minimum_quantity == null
+      ? dcRoot.value
+      : null;
+
   return (
     <RuntimePreviewContext.Provider value={isPreview}>
+    <RuntimeDiscountContext.Provider value={strikethroughPercent}>
     <RuntimePlatformContext.Provider value={platform}>
     <RuntimeChromeContext.Provider value={chromeVariant}>
     <ChromeContext.Provider value={chromeTable}>
@@ -1443,6 +1468,7 @@ export function QuizRuntime(props: QuizRuntimeProps) {
     </ChromeContext.Provider>
     </RuntimeChromeContext.Provider>
     </RuntimePlatformContext.Provider>
+    </RuntimeDiscountContext.Provider>
     </RuntimePreviewContext.Provider>
   );
 }
@@ -4941,6 +4967,7 @@ function ProductCard({
   const platform = useContext(RuntimePlatformContext);
   const currency = useContext(RuntimeCurrencyContext);
   const locale = useContext(RuntimeLocaleContext);
+  const strikethroughPercent = useContext(RuntimeDiscountContext);
   void position;
   // Selectable variant (Dev Spec §5). Defaults to the baked default variant;
   // the shopper can switch before adding to cart.
@@ -5044,16 +5071,38 @@ function ProductCard({
             ))}
           </div>
         ) : null}
-        {product.price && (
-          <div style={{ color: "var(--qz-color-muted)", marginTop: 4, display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-            <span>{formatMoney(product.price, currency, locale)}</span>
-            {discountLabel ? (
-              <span style={{ background: "var(--qz-color-primary)", color: "#fff", borderRadius: 999, padding: "1px 8px", fontSize: 11, fontWeight: 600 }}>
-                {discountLabel}
-              </span>
-            ) : null}
-          </div>
-        )}
+        {product.price &&
+          (() => {
+            // Per-item struck price only for an unconditional percentage discount
+            // that THIS result opts into (discountLabel set) AND that the quiz
+            // marks strikethrough-eligible (RuntimeDiscountContext). Otherwise the
+            // render is byte-identical to before: just the price + optional badge.
+            const discounted =
+              discountLabel && strikethroughPercent != null
+                ? discountedItemPrice(Number(product.price), strikethroughPercent)
+                : null;
+            return (
+              <div style={{ color: "var(--qz-color-muted)", marginTop: 4, display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                {discounted != null ? (
+                  <>
+                    <span style={{ textDecoration: "line-through", opacity: 0.65 }}>
+                      {formatMoney(product.price, currency, locale)}
+                    </span>
+                    <span style={{ color: "var(--qz-color-primary)", fontWeight: 700 }}>
+                      {formatMoney(discounted, currency, locale)}
+                    </span>
+                  </>
+                ) : (
+                  <span>{formatMoney(product.price, currency, locale)}</span>
+                )}
+                {discountLabel ? (
+                  <span style={{ background: "var(--qz-color-primary)", color: "#fff", borderRadius: 999, padding: "1px 8px", fontSize: 11, fontWeight: 600 }}>
+                    {discountLabel}
+                  </span>
+                ) : null}
+              </div>
+            );
+          })()}
         {typeof lowStockQty === "number" && lowStockQty > 0 && product.inventory_in_stock ? (
           <div style={{ color: "#B25E00", marginTop: 4, fontSize: 12, fontWeight: 600 }}>
             {tc("only_x_left", { count: lowStockQty })}
