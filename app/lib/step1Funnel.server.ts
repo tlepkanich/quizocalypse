@@ -356,6 +356,7 @@ export async function loadStep1FunnelData(
     questionBuilder,
     recNodeDefaults,
     recPage,
+    designTokens: doc.design_tokens,
     quizId: quiz.id,
     name: quiz.name,
     stage: session.stage,

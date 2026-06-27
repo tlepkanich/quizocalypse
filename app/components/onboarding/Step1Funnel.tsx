@@ -27,9 +27,11 @@ import type {
   DesignDials,
   RecDefaults,
   RecommendedGroup,
+  DesignTokens,
 } from "../../lib/quizSchema";
 import type { BuilderCategory } from "../builder/stepProps";
 import type { IndexedProduct } from "../../lib/recommendationEngine";
+import { VibeTemplateSelector } from "../studio/VibeTemplateSelector";
 import { QuestionBuilderStage } from "./QuestionBuilderStage";
 import { RecommendationStage } from "./RecommendationStage";
 import { ClientOnly, BuilderSkeleton } from "../studio/ClientOnly";
@@ -124,6 +126,9 @@ export interface FunnelData {
     categories: BuilderCategory[];
     productIndex: IndexedProduct[];
   } | null;
+  // Design step (Drive 1_p1V) — the draft's current design tokens, so the Design
+  // stage can show the selected vibe template + the "modified" indicator.
+  designTokens: DesignTokens;
 }
 
 type ActionResult =
@@ -456,12 +461,24 @@ function DesignStage({
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
       <QzCard style={{ display: "flex", flexDirection: "column", gap: 14 }}>
         <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-          <div className="qz-label">Design</div>
-          <h2 className="qz-h2" style={{ margin: 0 }}>Pick a look for your quiz</h2>
+          <div className="qz-label">Design · Template</div>
+          <h2 className="qz-h2" style={{ margin: 0 }}>Pick a template</h2>
           <p className="qz-dim" style={{ margin: 0, fontSize: 13 }}>
-            Choose a theme — colors, type, and shape. You can fine-tune everything later in the builder.
+            Start from a vibe — it sets imagery, shape, spacing, and type. Fine-tune colors, fonts,
+            and the style bar next; everything’s editable in the builder.
           </p>
         </div>
+        <VibeTemplateSelector
+          currentTokens={data.designTokens}
+          busy={applying}
+          onApply={(t) =>
+            fetcher.submit(
+              { intent: "set-design", tokens: JSON.stringify(t.tokens) },
+              { method: "post" },
+            )
+          }
+        />
+        <div className="qz-label" style={{ marginTop: 4 }}>More themes</div>
         <div
           style={{
             display: "grid",
