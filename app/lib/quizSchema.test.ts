@@ -347,6 +347,40 @@ describe("B6 scale_config (rating / slider / numeric range + labels)", () => {
   });
 });
 
+describe("B6 per-question image_url", () => {
+  const a2 = [
+    { id: "a1", text: "One", tags: [], edge_handle_id: "h1" },
+    { id: "a2", text: "Two", tags: [], edge_handle_id: "h2" },
+  ];
+
+  it("is byte-stable when unset (no key)", () => {
+    const parsed = QuestionData.parse({ text: "Q", question_type: "single_select", answers: a2 });
+    expect(parsed.image_url).toBeUndefined();
+    expect(Object.prototype.hasOwnProperty.call(parsed, "image_url")).toBe(false);
+  });
+
+  it("round-trips a valid image URL", () => {
+    const parsed = QuestionData.parse({
+      text: "Q",
+      question_type: "single_select",
+      answers: a2,
+      image_url: "https://cdn.example.com/q.png",
+    });
+    expect(parsed.image_url).toBe("https://cdn.example.com/q.png");
+  });
+
+  it("rejects a non-URL image_url", () => {
+    expect(() =>
+      QuestionData.parse({
+        text: "Q",
+        question_type: "single_select",
+        answers: a2,
+        image_url: "not a url",
+      }),
+    ).toThrow();
+  });
+});
+
 describe("ask_ai node integration", () => {
   it("parses inside a Quiz as a discriminated node", () => {
     const node = QuizNode.parse({

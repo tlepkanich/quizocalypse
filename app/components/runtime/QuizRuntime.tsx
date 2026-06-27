@@ -2061,6 +2061,20 @@ function DropdownQuestion({
   const answer = node.data.answers.find((a) => a.id === sel);
   return (
     <div style={styles.card}>
+      {node.data.image_url ? (
+        <img
+          src={node.data.image_url}
+          alt=""
+          style={{
+            width: "100%",
+            maxHeight: 280,
+            objectFit: "cover",
+            borderRadius: "var(--qz-radius)",
+            marginBottom: 16,
+            display: "block",
+          }}
+        />
+      ) : null}
       <h2 style={styles.h2} {...insp("question_text")}>{node.data.text}</h2>
       {node.data.helper_text ? (
         <p style={{ ...styles.muted, fontSize: "0.85em", marginTop: -6 }}>{node.data.helper_text}</p>
@@ -2448,6 +2462,46 @@ function TooltipChip({ text, onReveal }: { text: string; onReveal: () => void })
 // MQ — the minimal chrome's bottom Back/Next nav row (Quizell). Back is an
 // outline pill (hidden, not removed, on the first question so layout is stable);
 // Next is a solid pill that commits the pending selection.
+// B6 — a "Skip" affordance for OPTIONAL questions (node.data.required === false).
+// Mirrors the email-gate's two chrome styles; advances via the default next step
+// with no answer recorded (onAdvance([], null)), which the engine resolves to the
+// unconditional fallback edge (empty selectedAnswerIds contribute no tags).
+function SkipLink({ minimal, onSkip, label }: { minimal: boolean; onSkip: () => void; label: string }) {
+  return (
+    <div style={{ textAlign: "center", marginTop: minimal ? 20 : 0 }}>
+      <button
+        type="button"
+        onClick={onSkip}
+        style={
+          minimal
+            ? {
+                background: "none",
+                border: "none",
+                color: "var(--qz-color-text)",
+                fontWeight: 700,
+                fontSize: "var(--qz-base-size)",
+                textDecoration: "underline",
+                cursor: "pointer",
+                padding: 0,
+                fontFamily: "var(--qz-font-body)",
+              }
+            : {
+                background: "none",
+                border: "none",
+                color: "var(--qz-color-muted)",
+                fontSize: 14,
+                cursor: "pointer",
+                marginTop: 12,
+                padding: 0,
+              }
+        }
+      >
+        {label}
+      </button>
+    </div>
+  );
+}
+
 function MinimalNav({
   onBack,
   canBack,
@@ -2537,6 +2591,12 @@ function QuestionView({
   // pick highlights; an explicit Next commits) + a Back/Next nav row. Classic
   // keeps tap-to-advance. `minimal` gates every branch below.
   const minimal = useContext(RuntimeChromeContext) === "minimal";
+  const tc = useChrome();
+  // B6 — optional questions get a "Skip" affordance (advances with no answer).
+  const skipLink =
+    node.data.required === false ? (
+      <SkipLink minimal={minimal} onSkip={() => onAdvance([], null)} label={tc("skip")} />
+    ) : null;
   const [picked, setPicked] = useState<string | null>(null);
   const insp = (part: InspectPart, answerId?: string) =>
     inspectAttrs(onInspect, inspectedTarget, {
@@ -2590,7 +2650,21 @@ function QuestionView({
         (inputType !== "email" || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)));
     return (
       <div style={styles.card}>
-        <h2 style={styles.h2} {...insp("question_text")}>{node.data.text}</h2>
+        {node.data.image_url ? (
+        <img
+          src={node.data.image_url}
+          alt=""
+          style={{
+            width: "100%",
+            maxHeight: 280,
+            objectFit: "cover",
+            borderRadius: "var(--qz-radius)",
+            marginBottom: 16,
+            display: "block",
+          }}
+        />
+      ) : null}
+      <h2 style={styles.h2} {...insp("question_text")}>{node.data.text}</h2>
       {node.data.helper_text ? (
         <p style={{ ...styles.muted, fontSize: "0.85em", marginTop: -6 }}>{node.data.helper_text}</p>
       ) : null}
@@ -2675,7 +2749,21 @@ function QuestionView({
     const tooFew = typeof min === "number" && selectedIds.length < min;
     return (
       <div style={styles.card}>
-        <h2 style={styles.h2} {...insp("question_text")}>{node.data.text}</h2>
+        {node.data.image_url ? (
+        <img
+          src={node.data.image_url}
+          alt=""
+          style={{
+            width: "100%",
+            maxHeight: 280,
+            objectFit: "cover",
+            borderRadius: "var(--qz-radius)",
+            marginBottom: 16,
+            display: "block",
+          }}
+        />
+      ) : null}
+      <h2 style={styles.h2} {...insp("question_text")}>{node.data.text}</h2>
       {node.data.helper_text ? (
         <p style={{ ...styles.muted, fontSize: "0.85em", marginTop: -6 }}>{node.data.helper_text}</p>
       ) : null}
@@ -2735,6 +2823,7 @@ function QuestionView({
             {tooMany ? ` (max ${max})` : tooFew ? ` (choose ${min}+)` : ""}
           </button>
         )}
+        {skipLink}
       </div>
     );
   }
@@ -2760,7 +2849,21 @@ function QuestionView({
   if (node.data.question_type === "image_picker") {
     return (
       <div style={styles.card}>
-        <h2 style={styles.h2} {...insp("question_text")}>{node.data.text}</h2>
+        {node.data.image_url ? (
+        <img
+          src={node.data.image_url}
+          alt=""
+          style={{
+            width: "100%",
+            maxHeight: 280,
+            objectFit: "cover",
+            borderRadius: "var(--qz-radius)",
+            marginBottom: 16,
+            display: "block",
+          }}
+        />
+      ) : null}
+      <h2 style={styles.h2} {...insp("question_text")}>{node.data.text}</h2>
       {node.data.helper_text ? (
         <p style={{ ...styles.muted, fontSize: "0.85em", marginTop: -6 }}>{node.data.helper_text}</p>
       ) : null}
@@ -2839,7 +2942,21 @@ function QuestionView({
   if (node.data.question_type === "rating") {
     return (
       <div style={styles.card}>
-        <h2 style={styles.h2} {...insp("question_text")}>{node.data.text}</h2>
+        {node.data.image_url ? (
+        <img
+          src={node.data.image_url}
+          alt=""
+          style={{
+            width: "100%",
+            maxHeight: 280,
+            objectFit: "cover",
+            borderRadius: "var(--qz-radius)",
+            marginBottom: 16,
+            display: "block",
+          }}
+        />
+      ) : null}
+      <h2 style={styles.h2} {...insp("question_text")}>{node.data.text}</h2>
       {node.data.helper_text ? (
         <p style={{ ...styles.muted, fontSize: "0.85em", marginTop: -6 }}>{node.data.helper_text}</p>
       ) : null}
@@ -2882,7 +2999,21 @@ function QuestionView({
   if (node.data.question_type === "swatch") {
     return (
       <div style={styles.card}>
-        <h2 style={styles.h2} {...insp("question_text")}>{node.data.text}</h2>
+        {node.data.image_url ? (
+        <img
+          src={node.data.image_url}
+          alt=""
+          style={{
+            width: "100%",
+            maxHeight: 280,
+            objectFit: "cover",
+            borderRadius: "var(--qz-radius)",
+            marginBottom: 16,
+            display: "block",
+          }}
+        />
+      ) : null}
+      <h2 style={styles.h2} {...insp("question_text")}>{node.data.text}</h2>
       {node.data.helper_text ? (
         <p style={{ ...styles.muted, fontSize: "0.85em", marginTop: -6 }}>{node.data.helper_text}</p>
       ) : null}
@@ -2940,6 +3071,20 @@ function QuestionView({
   };
   return (
     <div style={styles.card}>
+      {node.data.image_url ? (
+        <img
+          src={node.data.image_url}
+          alt=""
+          style={{
+            width: "100%",
+            maxHeight: 280,
+            objectFit: "cover",
+            borderRadius: "var(--qz-radius)",
+            marginBottom: 16,
+            display: "block",
+          }}
+        />
+      ) : null}
       <h2 style={styles.h2} {...insp("question_text")}>{node.data.text}</h2>
       {node.data.helper_text ? (
         <p style={{ ...styles.muted, fontSize: "0.85em", marginTop: -6 }}>{node.data.helper_text}</p>
@@ -3017,6 +3162,7 @@ function QuestionView({
           nextEnabled={picked !== null}
         />
       ) : null}
+      {skipLink}
     </div>
   );
   // (typescript exhaustiveness assist — unused but satisfies the tokens prop)
@@ -3052,6 +3198,20 @@ function SearchableQuestion({
     : node.data.answers;
   return (
     <div style={styles.card}>
+      {node.data.image_url ? (
+        <img
+          src={node.data.image_url}
+          alt=""
+          style={{
+            width: "100%",
+            maxHeight: 280,
+            objectFit: "cover",
+            borderRadius: "var(--qz-radius)",
+            marginBottom: 16,
+            display: "block",
+          }}
+        />
+      ) : null}
       <h2 style={styles.h2} {...insp("question_text")}>{node.data.text}</h2>
       {node.data.helper_text ? (
         <p style={{ ...styles.muted, fontSize: "0.85em", marginTop: -6 }}>{node.data.helper_text}</p>

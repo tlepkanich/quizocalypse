@@ -282,14 +282,16 @@ function HeroImageField({
   value,
   onChange,
   products,
+  label = "Hero image",
 }: {
   value: string;
   onChange: (url: string) => void;
   products?: PickerProduct[];
+  label?: string;
 }) {
   const [open, setOpen] = useState(false);
   return (
-    <QzField label="Hero image">
+    <QzField label={label}>
       <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
         <div className="qz-row" style={{ gap: 6, alignItems: "center" }}>
           <QzInput
@@ -486,6 +488,13 @@ export function QuestionContent({
           <option value="email">Email input</option>
         </QzSelect>
       </QzField>
+      {/* B6 — an optional per-question context/education image (above the text). */}
+      <HeroImageField
+        label="Question image"
+        value={node.data.image_url ?? ""}
+        onChange={(url) => setData({ image_url: url || undefined })}
+        products={products}
+      />
       {node.data.question_type === "multi_select" ? (
         <div className="qz-row" style={{ gap: 12 }}>
           <QzField label="Min picks">

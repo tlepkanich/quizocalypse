@@ -171,6 +171,10 @@ export const QuestionDataObject = z.object({
   // question (a non-question, Continue-only informational screen). The AI places
   // at most one per quiz. Additive — absent means no card.
   education_card_before: z.string().optional(),
+  // B6 — an optional context/education image shown ABOVE the question text (any
+  // type). Distinct from Answer.image_url (per-answer visuals) and Intro
+  // hero_image_url. Additive — absent means no image, /q byte-stable.
+  image_url: z.string().url().optional(),
   // Experiences E3 — named-chapter progress (the Jones Road "21 steps feel
   // like 3" pattern): consecutive questions sharing a section_label group
   // under one chapter header in the progress trail. Absent = classic pills.
