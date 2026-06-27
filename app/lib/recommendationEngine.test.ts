@@ -11,6 +11,7 @@ import {
   nextNodeFor,
   isSellable,
   selectSecondaryRecs,
+  resolveGlobalFallbackProducts,
   type BranchContext,
   type IndexedProduct,
   type RecommendedProduct,
@@ -1388,5 +1389,47 @@ describe("recommendForResult — sort order + sub-filter (Rec-Page spec §1)", (
   it("both sub-filters set require the intersection", () => {
     // tag=toner AND collection=c-moist → no product satisfies both.
     expect(idsFor({ sub_filter_tag: "toner", sub_filter_collection_id: "c-moist" })).toEqual([]);
+  });
+});
+
+describe("Rec-Page §7 global fallback (resolveGlobalFallbackProducts)", () => {
+  const gfProducts: IndexedProduct[] = [
+    // Engine convention: best_seller sorts DESCENDING by __rank_bestseller
+    // (higher = better seller, shown first).
+    { product_id: "g1", title: "Bestseller A", handle: "g1", price: "30", image_url: null, tags: ["loved"], collection_ids: ["best"], inventory_in_stock: true, metafields: { __rank_bestseller: "3" } },
+    { product_id: "g2", title: "Bestseller B", handle: "g2", price: "20", image_url: null, tags: ["loved"], collection_ids: ["best"], inventory_in_stock: true, metafields: { __rank_bestseller: "2" } },
+    { product_id: "g3", title: "Other", handle: "g3", price: "10", image_url: null, tags: ["meh"], collection_ids: ["misc"], inventory_in_stock: true, metafields: { __rank_bestseller: "1" } },
+    { product_id: "g4", title: "Dead stock", handle: "g4", price: "0", image_url: null, tags: ["loved"], collection_ids: ["best"], inventory_in_stock: false },
+  ];
+
+  it("returns [] when disabled (default off → 'no fit → empty' holds)", () => {
+    expect(resolveGlobalFallbackProducts({ enabled: false, heading: "x", product_ids: [], count: 4 }, gfProducts)).toEqual([]);
+    expect(resolveGlobalFallbackProducts(undefined, gfProducts)).toEqual([]);
+  });
+
+  it("resolves a collection, best-seller sorted, capped, sellable-only", () => {
+    const out = resolveGlobalFallbackProducts(
+      { enabled: true, heading: "Most loved", collection_id: "best", product_ids: [], count: 4 },
+      gfProducts,
+    );
+    // g4 is $0 + out of stock → dropped (not sellable). g1/g2 by bestseller rank.
+    expect(out.map((p) => p.product_id)).toEqual(["g1", "g2"]);
+  });
+
+  it("respects the count cap", () => {
+    const out = resolveGlobalFallbackProducts(
+      { enabled: true, heading: "x", tag: "loved", product_ids: [], count: 1 },
+      gfProducts,
+    );
+    expect(out).toHaveLength(1);
+    expect(out[0]!.product_id).toBe("g1");
+  });
+
+  it("resolves an explicit product_ids list", () => {
+    const out = resolveGlobalFallbackProducts(
+      { enabled: true, heading: "x", product_ids: ["g3", "g2"], count: 4 },
+      gfProducts,
+    );
+    expect(out.map((p) => p.product_id).sort()).toEqual(["g2", "g3"]);
   });
 });

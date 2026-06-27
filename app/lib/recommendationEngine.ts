@@ -362,6 +362,37 @@ export function recommendForResult(
   return recommendForResultExplained(input, capOverride).products;
 }
 
+// Rec-Page spec §7 — the quiz-level GLOBAL FALLBACK (no-bucket-match). This is
+// SEPARATE from bucket matching: the engine still returns NO products when a
+// bucket's answers don't fit (the "no fit → empty" rule holds for the match,
+// per [[recs-binding-is-the-match]]). When the merchant OPTS IN
+// (global_fallback.enabled, default off → behavior unchanged), the runtime
+// renders these as a distinct "Our most-loved products" section beneath an
+// empty result. Best-seller sorted (spec: not configurable), capped to `count`.
+// Answer-independent — a true "everything else failed" safety net.
+export function resolveGlobalFallbackProducts(
+  gf: QuizDoc["global_fallback"] | undefined,
+  productIndex: IndexedProduct[],
+): RecommendedProduct[] {
+  if (!gf?.enabled) return [];
+  const idx = productIndex.filter(isSellable);
+  let pool: IndexedProduct[];
+  if (gf.collection_id) {
+    pool = idx.filter((p) => p.collection_ids.includes(gf.collection_id!));
+  } else if (gf.tag) {
+    const t = gf.tag.toLowerCase();
+    pool = idx.filter((p) => p.tags.some((x) => x.toLowerCase() === t));
+  } else if (gf.product_ids.length) {
+    const want = new Set(gf.product_ids);
+    pool = idx.filter((p) => want.has(p.product_id));
+  } else {
+    return [];
+  }
+  // No answer scoring — best-seller order per the spec (not configurable here).
+  const scored = scorePool(pool, new Map());
+  return applyRanking(scored, "best_seller").slice(0, gf.count);
+}
+
 // "You might also like" — up to `max` secondary products shown beneath the
 // primary recommendations on the result page (Dev Spec §5). Pure + testable.
 //
