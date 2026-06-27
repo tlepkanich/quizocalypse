@@ -6,6 +6,7 @@ import { experienceTypeOf, type Quiz } from "../../lib/quizSchema";
 import { validateQuiz, validateQuizWarnings, type NodeIssue } from "../../lib/quizValidation";
 import { orderFlow } from "../../lib/flowOrder";
 import { reconcileBucketsToResultNodes } from "../../lib/bucketReconcile";
+import { swapScoringModel } from "../../lib/quizMutations";
 import type { StepProps } from "../builder/stepProps";
 import { Step5Preview } from "../builder/Step5Preview";
 import { Step1Products } from "../builder/Step1Products";
@@ -904,6 +905,23 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
       >
         {saveStatus}
         <div className="qz-row" style={{ gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+          {/* B7 — scoring-model badge/toggle (parity with the funnel Question
+              Builder header). Both models are saved; switching swaps active↔alt. */}
+          {(() => {
+            const m = doc.scoring_model ?? "direct";
+            const other = m === "direct" ? "weighted" : "direct";
+            return (
+              <button
+                type="button"
+                className="qz-btn qz-btn-ghost qz-btn-sm"
+                style={{ fontSize: 12 }}
+                title={`Scoring: ${m === "direct" ? "Direct mapping" : "Weighted scoring"} — click to switch (both models are saved)`}
+                onClick={() => commit(swapScoringModel(doc, other))}
+              >
+                {m === "direct" ? "→ Direct mapping" : "⚖ Weighted scoring"} <span aria-hidden>⚙</span>
+              </button>
+            );
+          })()}
           {editInteractToggle}
           {settingsPopover}
           {chrome === "embedded" ? (
