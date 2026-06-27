@@ -94,7 +94,7 @@ export function ResultPageEditor({
         </QzCard>
 
         <div className="qz-col qz-gap-12" style={{ minWidth: 0 }}>
-          <RecPageDiagram doc={doc} node={node} productIndex={productIndex} />
+          <RecPageDiagram doc={doc} node={node} productIndex={productIndex} categories={categories} />
           <FramedPreview doc={doc} node={node} productIndex={productIndex} categories={categories} />
         </div>
       </div>

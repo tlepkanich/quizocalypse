@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import type { CSSProperties, ReactNode } from "react";
 import {
   recommendForResultExplained,
@@ -5,7 +6,9 @@ import {
   resolveGlobalFallbackProducts,
 } from "../../lib/recommendationEngine";
 import type { IndexedProduct } from "../../lib/recommendationEngine";
+import { bakeResultPages } from "../../lib/quizPublish";
 import type { Quiz, QuizNode, ResultRanking } from "../../lib/quizSchema";
+import type { BuilderCategory } from "../builder/stepProps";
 
 // ───────────────────────────────────────────────────────────────────────────
 // RecPageDiagram (Rec-Page spec §1 live schematic) — a compact "page anatomy"
@@ -91,44 +94,58 @@ export function RecPageDiagram({
   doc,
   node,
   productIndex,
+  categories,
 }: {
   doc: Quiz;
   node: ResultNode;
   productIndex: IndexedProduct[];
+  categories: BuilderCategory[];
 }) {
   const data = node.data;
-  const idx = productIndex ?? [];
+  const idx = useMemo(() => productIndex ?? [], [productIndex]);
   const stages = data.stages;
 
-  // Live per-section pool counts (preview: no shopper answers → eligible
-  // membership). poolSize = products that fit the section before the cap.
-  const sections =
-    stages.length === 0
-      ? [
-          {
-            key: node.id,
-            label: "Section 1",
-            sublabel: "Single section",
-            headline: data.headline || "Recommended for you",
-            poolSize: recommendForResultExplained({
-              quiz: doc,
-              productIndex: idx,
-              selectedAnswerIds: [],
-              resultNodeId: node.id,
-            }).poolSize,
-            ranking: data.ranking,
-            max: data.max_products ?? data.slot_count,
-          },
-        ]
-      : stages.map((stage, i) => ({
-          key: stage.id,
-          label: `Section ${i + 1}`,
-          sublabel: i === 0 ? "Primary match" : "Cross-sell / routine",
-          headline: stage.headline || `Section ${i + 1}`,
-          poolSize: recommendForStageExplained(doc, idx, [], node.id, stage).poolSize,
-          ranking: stage.ranking,
-          max: stage.max_products,
-        }));
+  // The category rung resolves from `category_product_ids_map`, a PUBLISH-time
+  // field a draft lacks. Bake it from the live buckets (same as Step5Preview /
+  // PathTester) so category-bound sections resolve real membership in preview.
+  const bakedDoc = useMemo(() => {
+    const byId = new Map(categories.map((c) => [c.id, c.productIds]));
+    return { ...doc, results_pages: bakeResultPages(doc, byId) };
+  }, [doc, categories]);
+
+  // Live per-section pool counts (preview: no shopper answers, so fixed rungs
+  // report membership; tag/points sections resolve at answer time → poolSize 0,
+  // shown as "ranked by answers" below).
+  const sections = useMemo(
+    () =>
+      stages.length === 0
+        ? [
+            {
+              key: node.id,
+              label: "Section 1",
+              sublabel: "Single section",
+              headline: data.headline || "Recommended for you",
+              poolSize: recommendForResultExplained({
+                quiz: bakedDoc,
+                productIndex: idx,
+                selectedAnswerIds: [],
+                resultNodeId: node.id,
+              }).poolSize,
+              ranking: data.ranking,
+              max: data.max_products ?? data.slot_count,
+            },
+          ]
+        : stages.map((stage, i) => ({
+            key: stage.id,
+            label: `Section ${i + 1}`,
+            sublabel: i === 0 ? "Primary match" : "Cross-sell / routine",
+            headline: stage.headline || `Section ${i + 1}`,
+            poolSize: recommendForStageExplained(bakedDoc, idx, [], node.id, stage).poolSize,
+            ranking: stage.ranking,
+            max: stage.max_products,
+          })),
+    [bakedDoc, node.id, stages, data.headline, data.ranking, data.max_products, data.slot_count, idx],
+  );
 
   const discountOn = data.include_discount && doc.discount_config.enabled;
   const oosFallback = data.oos_behavior === "fallback";
@@ -164,6 +181,11 @@ export function RecPageDiagram({
 
         {sections.map((s) => {
           const shown = Math.min(s.poolSize, s.max);
+          // poolSize 0 in preview = a tag/points section that resolves at answer
+          // time (fixed rungs report real membership here). Show a neutral label
+          // rather than an alarming "0 fit".
+          const countLabel =
+            s.poolSize > 0 ? `${s.poolSize} fit → show ${shown}` : `ranked by answers · up to ${s.max}`;
           return (
             <Block
               key={s.key}
@@ -173,7 +195,7 @@ export function RecPageDiagram({
             >
               <div className="qz-row qz-gap-4" style={{ flexWrap: "wrap", alignItems: "center" }}>
                 <span style={{ ...tagStyle, background: "var(--qz-paper)", fontWeight: 600 }}>
-                  {s.poolSize} fit → show {shown}
+                  {countLabel}
                 </span>
                 {discountOn ? <span style={tagStyle}>discount</span> : null}
                 {oosFallback ? <span style={tagStyle}>OOS → fallback</span> : null}
