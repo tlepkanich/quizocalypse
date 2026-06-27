@@ -262,7 +262,7 @@ export function Step1Products(props: StepProps) {
           <p className="qz-dim" style={{ marginTop: 6 }}>
             {showEditor
               ? "Drag products from the left into a group, or click a product then click a group. Each group becomes a quiz result."
-              : "These groups power your quiz results — each becomes its own recommendation page. Edit them anytime."}
+              : "These groups power your quiz results — each becomes its own recommendation. Edit them anytime."}
           </p>
         </div>
         {hasGroups ? (

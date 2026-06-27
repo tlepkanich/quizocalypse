@@ -294,36 +294,37 @@ export async function loadStep1FunnelData(
   // ContextPanel over the SAME draftJson the main builder edits — via useQuizDraft
   // PUTting back through this route's JSON autosave branch. Gated so every other
   // stage's payload stays lean (and so this is inert until P2 sets the stage).
+  // Builder-shaped catalog views, shared by the rich editing stages
+  // (Question Builder + Recommendation), so both mount the SAME panels over the
+  // SAME draft. Built once; each stage's payload is gated below.
+  const builderCategories = categories.map((c) => ({
+    id: c.id,
+    name: c.name,
+    description: c.description ?? "",
+    tags: c.tags ?? [],
+    productIds: c.productIds,
+    source: c.source,
+    sourceRef: c.sourceRef,
+    quizId: c.quizId,
+  }));
+  const builderProductIndex = products.map((p) => {
+    const variants = (p.variants ?? []) as Array<{ inventoryQuantity?: number | null }>;
+    return {
+      product_id: p.productId,
+      title: p.title,
+      handle: p.handle,
+      price: p.priceMin != null ? String(p.priceMin) : null,
+      image_url: p.imageUrl,
+      tags: p.tags,
+      collection_ids: p.collectionIds,
+      inventory_in_stock: variants.some(
+        (v) => typeof v.inventoryQuantity === "number" && v.inventoryQuantity > 0,
+      ),
+    };
+  });
   const questionBuilder =
     session.stage === "question_builder"
-      ? {
-          doc,
-          categories: categories.map((c) => ({
-            id: c.id,
-            name: c.name,
-            description: c.description ?? "",
-            tags: c.tags ?? [],
-            productIds: c.productIds,
-            source: c.source,
-            sourceRef: c.sourceRef,
-            quizId: c.quizId,
-          })),
-          productIndex: products.map((p) => {
-            const variants = (p.variants ?? []) as Array<{ inventoryQuantity?: number | null }>;
-            return {
-              product_id: p.productId,
-              title: p.title,
-              handle: p.handle,
-              price: p.priceMin != null ? String(p.priceMin) : null,
-              image_url: p.imageUrl,
-              tags: p.tags,
-              collection_ids: p.collectionIds,
-              inventory_in_stock: variants.some(
-                (v) => typeof v.inventoryQuantity === "number" && v.inventoryQuantity > 0,
-              ),
-            };
-          }),
-        }
+      ? { doc, categories: builderCategories, productIndex: builderProductIndex }
       : null;
 
   // ── Rec Page on the built draft ──────────────────────────────────────────
@@ -342,9 +343,19 @@ export async function loadStep1FunnelData(
         }
       : null;
 
+  // The Recommendation step mounts the full per-bucket config editor
+  // (ResultSettingsPanel + RecPageDiagram) over the SAME draft, so it needs the
+  // doc + catalog shapes too — emitted only when a result node exists (a built
+  // draft). Null → legacy in-flight draft → RecPageStage edits picked_template.
+  const recPage =
+    session.stage === "rec_page" && firstResult && firstResult.type === "result"
+      ? { doc, categories: builderCategories, productIndex: builderProductIndex }
+      : null;
+
   return {
     questionBuilder,
     recNodeDefaults,
+    recPage,
     quizId: quiz.id,
     name: quiz.name,
     stage: session.stage,

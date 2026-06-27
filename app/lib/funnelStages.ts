@@ -17,7 +17,7 @@ export const FUNNEL_STEPS = [
   { stage: "grouping", label: "Product Buckets", short: "Buckets" },
   { stage: "shape", label: "Shape Your Quiz", short: "Shape" },
   { stage: "question_builder", label: "Question Builder", short: "Questions" },
-  { stage: "rec_page", label: "Recommendation Page", short: "Rec Page" },
+  { stage: "rec_page", label: "Recommendation", short: "Recommendation" },
   { stage: "design", label: "Design", short: "Design" },
 ] as const;
 

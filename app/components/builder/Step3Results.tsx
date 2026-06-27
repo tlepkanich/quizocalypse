@@ -62,7 +62,7 @@ export function Step3Results(props: StepProps) {
     <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
       <QzPageHeader
         eyebrow="Results"
-        title="Recommendation pages"
+        title="Recommendations"
         subtitle="Tune what each outcome shows — source ladder, bound bucket, ranking, stock, and rewards — and see how shoppers reach each page."
         actions={
           <QzButton size="sm" variant="ghost" onClick={() => goToStep(2)}>

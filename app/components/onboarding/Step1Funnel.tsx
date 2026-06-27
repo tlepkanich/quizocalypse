@@ -31,6 +31,7 @@ import type {
 import type { BuilderCategory } from "../builder/stepProps";
 import type { IndexedProduct } from "../../lib/recommendationEngine";
 import { QuestionBuilderStage } from "./QuestionBuilderStage";
+import { RecommendationStage } from "./RecommendationStage";
 import { ClientOnly, BuilderSkeleton } from "../studio/ClientOnly";
 import type { BucketSuggestion } from "../../lib/bucketDetect";
 import { THEME_PRESETS, type ThemePreset } from "../../lib/themePresets";
@@ -114,6 +115,15 @@ export interface FunnelData {
   // only at stage "rec_page" once the quiz is built; RecPageStage edits the nodes
   // directly (via set-result-rec). Null → legacy draft → edit picked_template.
   recNodeDefaults: { max_products: number; oos_behavior: RecDefaults["oos_behavior"] } | null;
+  // Recommendation step on the BUILT draft — the full doc + catalog shapes so
+  // RecommendationStage mounts the per-bucket ResultSettingsPanel + RecPageDiagram.
+  // Present only at stage "rec_page" with ≥1 result node; null → legacy draft
+  // (RecPageStage edits picked_template instead).
+  recPage: {
+    doc: Quiz;
+    categories: BuilderCategory[];
+    productIndex: IndexedProduct[];
+  } | null;
 }
 
 type ActionResult =
@@ -287,7 +297,24 @@ export function Step1Funnel({ data }: { data: FunnelData }) {
         <DesignStage data={data} fetcher={fetcher} pendingIntent={pendingIntent} />
       ) : null}
 
-      {data.stage === "rec_page" ? (
+      {/* Recommendation — the full per-bucket config editor over the built draft.
+          Client-only (ResultSettingsPanel + RecPageDiagram + useQuizDraft). Falls
+          back to the lean RecPageStage for legacy drafts with no result nodes. */}
+      {data.stage === "rec_page" && data.recPage ? (
+        <ClientOnly fallback={<BuilderSkeleton />}>
+          {() => (
+            <RecommendationStage
+              quizId={data.quizId}
+              initialDoc={data.recPage!.doc}
+              categories={data.recPage!.categories}
+              productIndex={data.recPage!.productIndex}
+              collections={data.collections}
+              fetcher={fetcher}
+              pendingIntent={pendingIntent}
+            />
+          )}
+        </ClientOnly>
+      ) : data.stage === "rec_page" ? (
         <RecPageStage data={data} fetcher={fetcher} pendingIntent={pendingIntent} />
       ) : null}
 
@@ -313,7 +340,7 @@ const FUNNEL_STAGES: Array<{ key: string; label: string }> = [
   { key: "grouping", label: "Buckets" },
   { key: "types", label: "Shape" },
   { key: "question_builder", label: "Questions" },
-  { key: "rec_page", label: "Rec Page" },
+  { key: "rec_page", label: "Recommendation" },
   { key: "design", label: "Design" },
 ];
 
@@ -558,7 +585,7 @@ function RecPageStage({
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
       <QzCard style={{ display: "flex", flexDirection: "column", gap: 14 }}>
         <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-          <div className="qz-label">Recommendation page</div>
+          <div className="qz-label">Recommendation</div>
           <h2 className="qz-h2" style={{ margin: 0 }}>How should results show?</h2>
           <p className="qz-dim" style={{ margin: 0, fontSize: 13 }}>
             Set how many products to recommend and what happens when one is out of stock. Fine-tune
@@ -2239,7 +2266,7 @@ function BattleCard({
       </div>
 
       <div className="qz-battle-section">
-        <div className="qz-label" style={{ marginBottom: 8 }}>Recommendation page</div>
+        <div className="qz-label" style={{ marginBottom: 8 }}>Recommendation</div>
         {isPicked ? (
           <div className="qz-row" style={{ gap: 14, flexWrap: "wrap", alignItems: "flex-end" }}>
             <QzField label="Max products">
