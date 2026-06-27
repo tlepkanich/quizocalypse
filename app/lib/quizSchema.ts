@@ -181,6 +181,21 @@ export const QuestionDataObject = z.object({
   // Editor revamp P3 — explicit answer-grid column count (1 or 2). Unset keeps
   // the responsive default (2-up desktop, 1-up mobile). Additive.
   answer_columns: z.number().int().min(1).max(2).optional(),
+  // B6 — scale config for rating / slider / numeric questions: a configurable
+  // range + endpoint labels. All optional; absent = today's behavior exactly
+  // (slider 0–100 step 1, numeric unbounded, rating flanked by nothing). Per-point
+  // bucket mapping for rating is the existing answer→bucket mapping — each rating
+  // button is a real Answer, so no new scoring field is needed. Slider/numeric
+  // stay unscored (freeform seed); per-value→bucket is a deferred routing layer.
+  scale_config: z
+    .object({
+      min: z.number().optional(),
+      max: z.number().optional(),
+      step: z.number().positive().optional(),
+      endpoint_label_min: z.string().max(40).optional(),
+      endpoint_label_max: z.string().max(40).optional(),
+    })
+    .optional(),
 });
 
 export const QuestionData = QuestionDataObject.refine(

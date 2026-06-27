@@ -360,6 +360,28 @@ export function QuestionContent({
   const supportsImages = IMAGE_ANSWER_TYPES.has(node.data.question_type);
   const columns = node.data.answer_columns;
   const num = (v: string) => (v.trim() ? Math.max(1, Math.round(Number(v) || 1)) : undefined);
+  // B6 — scale config (range + endpoint labels) for rating / slider / numeric.
+  const sc = node.data.scale_config;
+  const scStr = (v: number | undefined) => (v === undefined ? "" : String(v));
+  const toNum = (v: string) => {
+    const t = v.trim();
+    if (t === "") return undefined;
+    const n = Number(t);
+    return Number.isFinite(n) ? n : undefined;
+  };
+  const toPos = (v: string) => {
+    const n = toNum(v);
+    return n !== undefined && n > 0 ? n : undefined;
+  };
+  // Merge a patch into scale_config; commit `undefined` once every field is blank
+  // so a fully-cleared config serializes to NO key (published /q stays byte-stable).
+  const setScale = (patch: Record<string, unknown>) => {
+    const merged: Record<string, unknown> = { ...(sc ?? {}), ...patch };
+    const cleaned = Object.fromEntries(
+      Object.entries(merged).filter(([, v]) => v !== undefined && v !== "" && v !== null),
+    );
+    setData({ scale_config: Object.keys(cleaned).length ? cleaned : undefined });
+  };
   const chipStyle = (active: boolean): React.CSSProperties => ({
     border: active ? "1px solid var(--qz-accent, #2a6df4)" : "1px solid #00000022",
     background: "#fff",
@@ -430,7 +452,24 @@ export function QuestionContent({
       <QzField label="Type">
         <QzSelect
           value={node.data.question_type}
-          onChange={(e) => setData({ question_type: e.target.value })}
+          onChange={(e) => {
+            const next = e.target.value;
+            // Switching a multi-answer card question to a freeform input makes the
+            // extra answers inert (freeform keeps only the first as a seed) — confirm
+            // before discarding that work. The controlled select snaps back on cancel.
+            if (
+              !isFreeformType(node.data.question_type) &&
+              isFreeformType(next) &&
+              node.data.answers.length > 1 &&
+              typeof window !== "undefined" &&
+              !window.confirm(
+                `Switching to this type ignores your ${node.data.answers.length} answers — only the first is kept. Continue?`,
+              )
+            ) {
+              return;
+            }
+            setData({ question_type: next });
+          }}
         >
           <option value="single_select">Single select</option>
           <option value="multi_select">Multi select</option>
@@ -466,6 +505,68 @@ export function QuestionContent({
             />
           </QzField>
         </div>
+      ) : null}
+      {node.data.question_type === "rating" ||
+      node.data.question_type === "slider" ||
+      node.data.question_type === "numeric" ? (
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          {node.data.question_type !== "rating" ? (
+            <div className="qz-row" style={{ gap: 12 }}>
+              <QzField label="Min">
+                <QzInput
+                  type="number"
+                  value={scStr(sc?.min)}
+                  onChange={(e) => setScale({ min: toNum(e.target.value) })}
+                />
+              </QzField>
+              <QzField label="Max">
+                <QzInput
+                  type="number"
+                  value={scStr(sc?.max)}
+                  onChange={(e) => setScale({ max: toNum(e.target.value) })}
+                />
+              </QzField>
+              <QzField label="Step">
+                <QzInput
+                  type="number"
+                  min={0}
+                  value={scStr(sc?.step)}
+                  onChange={(e) => setScale({ step: toPos(e.target.value) })}
+                />
+              </QzField>
+            </div>
+          ) : null}
+          {node.data.question_type !== "numeric" ? (
+            <div className="qz-row" style={{ gap: 12 }}>
+              <QzField label={node.data.question_type === "rating" ? "Left label" : "Min label"}>
+                <QzInput
+                  value={sc?.endpoint_label_min ?? ""}
+                  maxLength={40}
+                  placeholder="e.g. Not at all"
+                  onChange={(e) => setScale({ endpoint_label_min: e.target.value.slice(0, 40) })}
+                />
+              </QzField>
+              <QzField label={node.data.question_type === "rating" ? "Right label" : "Max label"}>
+                <QzInput
+                  value={sc?.endpoint_label_max ?? ""}
+                  maxLength={40}
+                  placeholder="e.g. Love it"
+                  onChange={(e) => setScale({ endpoint_label_max: e.target.value.slice(0, 40) })}
+                />
+              </QzField>
+            </div>
+          ) : null}
+          {node.data.question_type === "rating" ? (
+            <p className="qz-dim" style={{ fontSize: 11.5, margin: 0 }}>
+              Each rating point is an answer below — map it to a bucket in Routing → Mapping.
+            </p>
+          ) : null}
+        </div>
+      ) : null}
+      {isFreeformType(node.data.question_type) ? (
+        <p className="qz-dim" style={{ fontSize: 11.5, margin: "2px 0" }}>
+          Open responses are stored as customer data — not scored toward a recommendation.
+        </p>
       ) : null}
       <QzField label="Answers">
         <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>

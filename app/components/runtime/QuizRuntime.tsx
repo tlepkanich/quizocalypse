@@ -2552,10 +2552,16 @@ function QuestionView({
         gridTemplateColumns: `repeat(${node.data.answer_columns}, minmax(0, 1fr))`,
       }
     : styles.answerGrid;
+  // B6 — scale config (range + endpoint labels). Falls back to today's defaults
+  // so an unset quiz renders byte-identically.
+  const sc = node.data.scale_config;
+  const sliderMin = sc?.min ?? 0;
+  const sliderMax = sc?.max ?? 100;
+  const sliderMid = String(Math.round((sliderMin + sliderMax) / 2));
   const [checked, setChecked] = useState<Record<string, boolean>>({});
   // Slider defaults to its midpoint so it's immediately submittable + shows a value.
   const [freeform, setFreeform] = useState(
-    node.data.question_type === "slider" ? "50" : "",
+    node.data.question_type === "slider" ? sliderMid : "",
   );
   const isMulti = node.data.question_type === "multi_select";
   const isFreeform = isFreeformType(node.data.question_type);
@@ -2607,14 +2613,21 @@ function QuestionView({
               <input
                 type="range"
                 aria-label={node.data.text}
-                min={0}
-                max={100}
-                value={freeform || "50"}
+                min={sliderMin}
+                max={sliderMax}
+                step={sc?.step}
+                value={freeform || sliderMid}
                 onChange={(e) => setFreeform(e.target.value)}
                 style={{ width: "100%", cursor: "pointer", accentColor: "var(--qz-color-primary)" }}
               />
+              {sc?.endpoint_label_min || sc?.endpoint_label_max ? (
+                <div style={{ ...styles.muted, display: "flex", justifyContent: "space-between", fontSize: "0.8em" }}>
+                  <span>{sc?.endpoint_label_min ?? sliderMin}</span>
+                  <span>{sc?.endpoint_label_max ?? sliderMax}</span>
+                </div>
+              ) : null}
               <div style={{ textAlign: "center", fontWeight: 600, fontSize: 18 }}>
-                {freeform || "50"}
+                {freeform || sliderMid}
               </div>
             </div>
           ) : (
@@ -2625,6 +2638,9 @@ function QuestionView({
               onChange={(e) => setFreeform(e.target.value.slice(0, maxLength))}
               placeholder={placeholder}
               maxLength={maxLength}
+              {...(node.data.question_type === "numeric"
+                ? { min: sc?.min, max: sc?.max, step: sc?.step }
+                : {})}
               autoFocus
               style={{
                 ...styles.answerBtn,
@@ -2828,6 +2844,11 @@ function QuestionView({
         <p style={{ ...styles.muted, fontSize: "0.85em", marginTop: -6 }}>{node.data.helper_text}</p>
       ) : null}
         <div style={{ marginTop: 20, display: "flex", gap: 8, flexWrap: "wrap" }}>
+          {sc?.endpoint_label_min ? (
+            <span style={{ ...styles.muted, fontSize: "0.8em", alignSelf: "center", flex: "0 0 auto" }}>
+              {sc.endpoint_label_min}
+            </span>
+          ) : null}
           {node.data.answers.map((a) => (
             <div
               key={a.id}

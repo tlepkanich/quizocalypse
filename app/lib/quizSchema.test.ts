@@ -294,6 +294,59 @@ describe("Freeform question types (text / email)", () => {
   });
 });
 
+describe("B6 scale_config (rating / slider / numeric range + labels)", () => {
+  const seed = { id: "a1", text: "0", tags: [], edge_handle_id: "h1" };
+
+  it("is byte-stable when unset (no key in the parsed output)", () => {
+    const input = { text: "How active?", question_type: "slider", answers: [seed] };
+    const parsed = QuestionData.parse(input);
+    expect(parsed.scale_config).toBeUndefined();
+    // No new key introduced → JSON shape identical for legacy quizzes.
+    expect(Object.prototype.hasOwnProperty.call(parsed, "scale_config")).toBe(false);
+  });
+
+  it("round-trips a full scale_config", () => {
+    const parsed = QuestionData.parse({
+      text: "Rate your skill",
+      question_type: "slider",
+      answers: [seed],
+      scale_config: {
+        min: 1,
+        max: 10,
+        step: 0.5,
+        endpoint_label_min: "Beginner",
+        endpoint_label_max: "Expert",
+      },
+    });
+    expect(parsed.scale_config?.min).toBe(1);
+    expect(parsed.scale_config?.max).toBe(10);
+    expect(parsed.scale_config?.step).toBe(0.5);
+    expect(parsed.scale_config?.endpoint_label_min).toBe("Beginner");
+  });
+
+  it("rejects a non-positive step", () => {
+    expect(() =>
+      QuestionData.parse({
+        text: "Rate",
+        question_type: "slider",
+        answers: [seed],
+        scale_config: { step: 0 },
+      }),
+    ).toThrow();
+  });
+
+  it("rejects an over-long endpoint label", () => {
+    expect(() =>
+      QuestionData.parse({
+        text: "Rate",
+        question_type: "slider",
+        answers: [seed],
+        scale_config: { endpoint_label_min: "x".repeat(41) },
+      }),
+    ).toThrow();
+  });
+});
+
 describe("ask_ai node integration", () => {
   it("parses inside a Quiz as a discriminated node", () => {
     const node = QuizNode.parse({
