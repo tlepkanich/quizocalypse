@@ -126,6 +126,14 @@ export function ResultSettingsPanel({
     onCommit(updateNodeData(doc, node.id, patch as Record<string, unknown>));
   };
 
+  // Rec-Page spec §7 — quiz-level Global Fallback (no-bucket-match). Doc-level,
+  // not node-level (one config for the whole quiz), so it patches the doc like
+  // back_in_stock_webhook_url below.
+  const gf = doc.global_fallback;
+  const setGf = (patch: Partial<typeof gf>) => {
+    onCommit({ ...doc, global_fallback: { ...gf, ...patch } });
+  };
+
   const ladder = data.match_ladder;
 
   const moveStrategy = (idx: number, dir: -1 | 1) => {
@@ -660,6 +668,62 @@ export function ResultSettingsPanel({
             </label>
           </div>
           {boundCategory ? <QzBadge tone="ok">Bound to “{boundCategory.name}”</QzBadge> : null}
+        </div>
+      </QzCollapse>
+
+      {/* ── GLOBAL FALLBACK §7 — quiz-level no-bucket-match safety net ──────
+          Doc-level (one config for the whole quiz). Off by default → a no-match
+          shopper sees a graceful empty state (the engine still returns "no fit →
+          no products" for the bucket match). On → a curated section shows. */}
+      <QzCollapse title="Global fallback (no match)">
+        <div className="qz-col qz-gap-8">
+          <p className="qz-dim" style={{ fontSize: 12, margin: 0 }}>
+            Shown only when a shopper can’t be matched to any bucket. Off → they
+            see a graceful “no match” message (the default). Applies to the whole quiz.
+          </p>
+          <label
+            className="qz-row qz-gap-8"
+            style={{ alignItems: "center", fontSize: 13, cursor: "pointer" }}
+          >
+            <input
+              type="checkbox"
+              checked={gf.enabled}
+              onChange={(e) => setGf({ enabled: e.target.checked })}
+            />
+            Show a fallback when nothing matches
+          </label>
+          {gf.enabled ? (
+            <>
+              <QzField label="Heading">
+                <QzInput value={gf.heading} onChange={(e) => setGf({ heading: e.target.value })} />
+              </QzField>
+              <QzField label="Source collection">
+                <QzSelect
+                  value={gf.collection_id ?? ""}
+                  onChange={(e) => setGf({ collection_id: e.target.value || undefined })}
+                >
+                  <option value="">— pick a collection —</option>
+                  {collections.map((c) => (
+                    <option key={c.collectionId} value={c.collectionId}>
+                      {c.title}
+                    </option>
+                  ))}
+                </QzSelect>
+              </QzField>
+              <QzField label="…or a tag" hint="Used when no collection is set.">
+                <QzInput value={gf.tag ?? ""} onChange={(e) => setGf({ tag: e.target.value || undefined })} />
+              </QzField>
+              <QzField label="Products to show">
+                <QzInput
+                  type="number"
+                  min={1}
+                  max={12}
+                  value={String(gf.count)}
+                  onChange={(e) => setGf({ count: clampProductCount(Number(e.target.value)) })}
+                />
+              </QzField>
+            </>
+          ) : null}
         </div>
       </QzCollapse>
     </div>

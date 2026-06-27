@@ -10,6 +10,7 @@ import {
   recommendForStage,
   recommendPreview,
   selectSecondaryRecs,
+  resolveGlobalFallbackProducts,
   type BranchContext,
   type IndexedProduct,
   type RecommendedProduct,
@@ -714,6 +715,14 @@ export function QuizRuntime(props: QuizRuntimeProps) {
           subtext=""
           ctaLabel={node.data.cta_label}
           recs={recs}
+          globalFallback={
+            recs.length === 0
+              ? {
+                  heading: doc.global_fallback.heading,
+                  products: resolveGlobalFallbackProducts(doc.global_fallback, productIndex),
+                }
+              : null
+          }
           resultNodeId={node.id}
           shopDomain={shopDomain}
           discountCode={discountCode}
@@ -1136,6 +1145,14 @@ export function QuizRuntime(props: QuizRuntimeProps) {
             whyBullets={currentNode.data.why_bullets}
             ctaLabel={currentNode.data.cta_label}
             recs={recs}
+            globalFallback={
+              recs.length === 0
+                ? {
+                    heading: doc.global_fallback.heading,
+                    products: resolveGlobalFallbackProducts(doc.global_fallback, productIndex),
+                  }
+                : null
+            }
             secondary={secondary}
             quizId={quizId}
             sessionId={sessionIdRef.current}
@@ -4158,6 +4175,7 @@ function ResultView({
   oosNotify = false,
   whyIntro,
   blurbByProduct,
+  globalFallback,
 }: {
   headline: string;
   subtext: string;
@@ -4206,6 +4224,9 @@ function ResultView({
   whyBullets?: string[];
   reasonsByProduct?: Map<string, string[]> | null;
   escapeHatch?: { label: string; url: string } | null;
+  // Rec-Page spec §7 — quiz-level no-bucket-match fallback, computed at the call
+  // site (resolveGlobalFallbackProducts). Rendered ONLY when recs is empty.
+  globalFallback?: { heading: string; products: RecommendedProduct[] } | null;
 }) {
   const tc = useChrome();
   const isPreviewMode = useContext(RuntimePreviewContext);
@@ -4335,13 +4356,43 @@ function ResultView({
               : styles.productGrid),
         }}
       >
-        {/* Goal (non-negotiable): if the answers fit NO bucket, show NO products.
-            There is intentionally no global "fallback" product grid here — a
-            no-match renders only the bare no-results message. See quizSchema's
-            global_fallback (parsed for back-compat but never rendered). */}
-        {recs.length === 0 && (
-          <p style={{ color: "var(--qz-color-muted)" }}>{tc("no_results_match")}</p>
-        )}
+        {/* The bucket MATCH still returns "no fit → no products" (the rule holds).
+            Rec-Page §7 adds an OPT-IN quiz-level fallback: when the merchant
+            enabled it, an empty result shows a curated "Our most-loved products"
+            section instead of the bare no-match message. */}
+        {recs.length === 0 &&
+          (globalFallback && globalFallback.products.length > 0 ? (
+            <div style={{ display: "contents" }}>
+              <h3 style={{ ...styles.h2, gridColumn: "1 / -1", margin: "0 0 4px" }}>
+                {globalFallback.heading}
+              </h3>
+              {globalFallback.products.map((r, idx) => (
+                <ProductCard
+                  key={r.product_id}
+                  product={r}
+                  position={idx}
+                  vertical={splitLayout || minimal}
+                  ctaLabel={ctaLabel}
+                  href={productHref(r, shopDomain, platform)}
+                  shopDomain={shopDomain}
+                  showVariants={showVariants}
+                  showDescriptions={showDescriptions}
+                  quizId={quizId}
+                  sessionId={sessionId}
+                  styles={styles}
+                  onClick={() =>
+                    analytics?.track("recommendation_clicked", {
+                      product_id: r.product_id,
+                      quiz_id: quizId,
+                      source: "global_fallback",
+                    })
+                  }
+                />
+              ))}
+            </div>
+          ) : (
+            <p style={{ color: "var(--qz-color-muted)" }}>{tc("no_results_match")}</p>
+          ))}
         {recs.map((r, idx) => (
           <ProductCard
             reasons={reasonsByProduct?.get(r.product_id) ?? undefined}
