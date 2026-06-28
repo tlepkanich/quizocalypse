@@ -388,6 +388,11 @@ export function QuizRuntime(props: QuizRuntimeProps) {
     () => tokensToCssVars(resolved, fluidSource) as React.CSSProperties,
     [resolved, fluidSource],
   );
+  // §4 progress-bar config (enabled / style / position). Defaults reproduce
+  // today's render exactly (shown · bar · top) when progress_bar is unset.
+  const progressEnabled = resolved.progress_bar?.enabled !== false;
+  const progressBarStyle = resolved.progress_bar?.style ?? "bar";
+  const progressAtBottom = resolved.progress_bar?.position === "bottom";
   const fontUrl = useMemo(() => {
     const heading = resolved.typography?.heading?.family;
     const body = resolved.typography?.body?.family;
@@ -1403,18 +1408,37 @@ export function QuizRuntime(props: QuizRuntimeProps) {
                 return "";
               })()}
             </div>
-            <ProgressBar doc={doc} path={path} currentNodeId={currentNodeId} />
-            {chromeVariant === "minimal" ? (
-              <MinimalQuestionLabel doc={doc} path={path} currentNodeId={currentNodeId} />
-            ) : (
-              <ProgressTrail
+            {/* §4 progress: enabled gates ALL progress UI; position moves the
+                bar (top default / bottom). The step label/trail stays at top. */}
+            {progressEnabled && !progressAtBottom ? (
+              <ProgressBar
                 doc={doc}
                 path={path}
                 currentNodeId={currentNodeId}
-                onJump={gotoStep}
+                barStyle={progressBarStyle}
               />
-            )}
+            ) : null}
+            {progressEnabled ? (
+              chromeVariant === "minimal" ? (
+                <MinimalQuestionLabel doc={doc} path={path} currentNodeId={currentNodeId} />
+              ) : (
+                <ProgressTrail
+                  doc={doc}
+                  path={path}
+                  currentNodeId={currentNodeId}
+                  onJump={gotoStep}
+                />
+              )
+            ) : null}
             {content}
+            {progressEnabled && progressAtBottom ? (
+              <ProgressBar
+                doc={doc}
+                path={path}
+                currentNodeId={currentNodeId}
+                barStyle={progressBarStyle}
+              />
+            ) : null}
           </div>
           {showPreview && (
             <div className="qz-preview-rail">
@@ -1507,10 +1531,13 @@ function ProgressBar({
   doc,
   path,
   currentNodeId,
+  barStyle = "bar",
 }: {
   doc: QuizDoc;
   path: PathStep[];
   currentNodeId: string | null;
+  // §4 progress style. "bar" (default) is today's thin %-fill bar — byte-stable.
+  barStyle?: "bar" | "dots" | "steps";
 }) {
   const minimal = useContext(RuntimeChromeContext) === "minimal";
   const total = useMemo(() => reachableQuestionCount(doc), [doc]);
@@ -1520,6 +1547,40 @@ function ProgressBar({
   const onQuestion = node?.type === "question";
   const answered = path.length + (onQuestion ? 1 : 0);
   const pct = onResult ? 100 : progressPct(total, answered);
+
+  // §4 dots / steps — N markers, filled up to the current question. Caps at a
+  // reasonable count so a long quiz doesn't overflow (falls back to the bar).
+  if ((barStyle === "dots" || barStyle === "steps") && total <= 12) {
+    const filled = onResult ? total : Math.min(answered, total);
+    const on = minimal ? "var(--qz-color-text)" : "var(--qz-color-primary)";
+    const off = minimal ? "var(--qz-color-surface)" : "#00000010";
+    const isSteps = barStyle === "steps";
+    return (
+      <div
+        aria-hidden
+        style={{
+          display: "flex",
+          gap: isSteps ? 6 : 8,
+          width: isSteps ? "100%" : undefined,
+          justifyContent: "center",
+          marginBottom: minimal ? 26 : 12,
+        }}
+      >
+        {Array.from({ length: total }).map((_, i) => (
+          <div
+            key={i}
+            style={{
+              ...(isSteps ? { flex: 1, height: minimal ? 8 : 6 } : { width: 9, height: 9 }),
+              borderRadius: 999,
+              background: i < filled ? on : off,
+              transition: "background var(--qz-dur, 170ms) var(--qz-ease, ease)",
+            }}
+          />
+        ))}
+      </div>
+    );
+  }
+
   return (
     <div
       style={

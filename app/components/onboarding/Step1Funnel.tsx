@@ -463,6 +463,11 @@ function DesignStage({
   const applyingFormat = pendingIntent === "set-format";
   const applyFormat = (key: string, value: string) =>
     fetcher.submit({ intent: "set-format", key, value }, { method: "post" });
+  const applyProgress = (patch: Record<string, unknown>) =>
+    fetcher.submit(
+      { intent: "set-format", key: "progress_bar", value: JSON.stringify(patch) },
+      { method: "post" },
+    );
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
       <QzCard style={{ display: "flex", flexDirection: "column", gap: 14 }}>
@@ -633,6 +638,41 @@ function DesignStage({
               onPick={(v) => applyFormat("answer_grid_columns", v)}
               busy={applyingFormat}
             />
+          ) : null}
+          <FineTuneRow
+            label="Progress"
+            options={[
+              ["on", "On"],
+              ["off", "Off"],
+            ]}
+            active={data.designTokens.progress_bar?.enabled === false ? "off" : "on"}
+            onPick={(v) => applyProgress({ enabled: v === "on" })}
+            busy={applyingFormat}
+          />
+          {data.designTokens.progress_bar?.enabled !== false ? (
+            <>
+              <FineTuneRow
+                label="Style"
+                options={[
+                  ["bar", "Bar"],
+                  ["dots", "Dots"],
+                  ["steps", "Steps"],
+                ]}
+                active={data.designTokens.progress_bar?.style ?? "bar"}
+                onPick={(v) => applyProgress({ style: v })}
+                busy={applyingFormat}
+              />
+              <FineTuneRow
+                label="At"
+                options={[
+                  ["top", "Top"],
+                  ["bottom", "Bottom"],
+                ]}
+                active={data.designTokens.progress_bar?.position ?? "top"}
+                onPick={(v) => applyProgress({ position: v })}
+                busy={applyingFormat}
+              />
+            </>
           ) : null}
         </div>
       </QzCard>
