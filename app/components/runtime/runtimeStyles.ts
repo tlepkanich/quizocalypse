@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useState } from "react";
 import { buttonStyle, type DesignTokensT } from "../../lib/designTokens";
+import { answerGridColumns } from "../../lib/answerLayout";
 
 // Shared storefront style primitives — extracted from q.$id.tsx so the live
 // runtime AND the builder's faithful preview (StepPreview) read the same
@@ -152,13 +153,15 @@ export const stylesFor = (
     marginTop: minimal ? 28 : 20,
     display: "grid",
     gap: minimal ? 14 : 12,
-    // Minimal stacks answers in a single centered column (Quizell); classic goes
-    // 2-up on desktop.
-    gridTemplateColumns: minimal
-      ? "1fr"
-      : breakpoint === "desktop"
-        ? "repeat(2, minmax(0, 1fr))"
-        : "1fr",
+    // §4 per-quiz answer layout: minimal always 1-up (Quizell); else the quiz's
+    // answer_layout drives it (auto/unset = today's 2-up desktop / 1-up mobile).
+    // A per-question answer_columns override still wins (applied in QuestionView).
+    gridTemplateColumns: answerGridColumns({
+      minimal,
+      desktop: breakpoint === "desktop",
+      answerLayout: t.answer_layout,
+      gridColumns: t.answer_grid_columns,
+    }),
   } satisfies React.CSSProperties,
   productGrid: {
     display: "grid",

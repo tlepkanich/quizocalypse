@@ -459,6 +459,10 @@ function DesignStage({
     setFields((f) => ({ ...f, [field]: value }));
     fetcher.submit({ intent: "set-design-field", field, value }, { method: "post" });
   };
+  // §4 per-quiz formatting (answer layout / progress bar / question image).
+  const applyingFormat = pendingIntent === "set-format";
+  const applyFormat = (key: string, value: string) =>
+    fetcher.submit({ intent: "set-format", key, value }, { method: "post" });
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
       <QzCard style={{ display: "flex", flexDirection: "column", gap: 14 }}>
@@ -600,6 +604,36 @@ function DesignStage({
               )
             }
           />
+        </div>
+
+        <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 6 }}>
+          <div className="qz-label">Formatting</div>
+          <p className="qz-dim" style={{ margin: 0, fontSize: 12 }}>
+            Per-quiz layout. Applies on top of the theme — leave on Auto to keep the default.
+          </p>
+          <FineTuneRow
+            label="Answers"
+            options={[
+              ["auto", "Auto"],
+              ["list", "List"],
+              ["grid", "Grid"],
+            ]}
+            active={data.designTokens.answer_layout ?? "auto"}
+            onPick={(v) => applyFormat("answer_layout", v)}
+            busy={applyingFormat}
+          />
+          {data.designTokens.answer_layout === "grid" ? (
+            <FineTuneRow
+              label="Columns"
+              options={[
+                ["2", "2"],
+                ["3", "3"],
+              ]}
+              active={String(data.designTokens.answer_grid_columns ?? 2)}
+              onPick={(v) => applyFormat("answer_grid_columns", v)}
+              busy={applyingFormat}
+            />
+          ) : null}
         </div>
       </QzCard>
       <div className="qz-row" style={{ gap: 8 }}>

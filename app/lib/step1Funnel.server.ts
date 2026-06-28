@@ -1231,6 +1231,48 @@ export async function runStep1FunnelAction(
     return json({ intent, ok: true, applied });
   }
 
+  // Design step §4 — Per-Quiz Formatting. One intent for every formatting token:
+  // answer_layout / answer_grid_columns (D4a), progress_bar (D4b),
+  // question_image_position (D4c). Each merges into design_tokens; unset tokens
+  // never get written, so a quiz stays byte-stable until the merchant opts in.
+  if (intent === "set-format") {
+    const key = String(form.get("key") ?? "");
+    let patch: Record<string, unknown> | null = null;
+    if (key === "answer_layout") {
+      const v = String(form.get("value") ?? "");
+      if (!["grid", "list", "auto"].includes(v)) {
+        return json({ intent, ok: false, error: "Invalid answer layout." }, { status: 400 });
+      }
+      patch = { answer_layout: v };
+    } else if (key === "answer_grid_columns") {
+      const n = Number(form.get("value"));
+      if (n !== 2 && n !== 3) {
+        return json({ intent, ok: false, error: "Invalid column count." }, { status: 400 });
+      }
+      patch = { answer_grid_columns: n };
+    } else if (key === "question_image_position") {
+      const v = String(form.get("value") ?? "");
+      if (!["none", "top", "side"].includes(v)) {
+        return json({ intent, ok: false, error: "Invalid image position." }, { status: 400 });
+      }
+      patch = { question_image_position: v };
+    } else if (key === "progress_bar") {
+      const parsed = DesignTokens.shape.progress_bar.safeParse(safeJson(form.get("value")));
+      if (!parsed.success) {
+        return json({ intent, ok: false, error: "Invalid progress bar." }, { status: 400 });
+      }
+      patch = { progress_bar: { ...doc.design_tokens.progress_bar, ...parsed.data } };
+    } else {
+      return json({ intent, ok: false, error: "Unknown format key." }, { status: 400 });
+    }
+    const merged = DesignTokens.safeParse({ ...doc.design_tokens, ...patch });
+    if (!merged.success) {
+      return json({ intent, ok: false, error: "Invalid formatting." }, { status: 400 });
+    }
+    await writeDoc(quiz.id, { ...doc, design_tokens: merged.data });
+    return json({ intent, ok: true });
+  }
+
   // Design "Continue →": park at the Overview review step before the build.
   // The build itself still fires from Overview via generate-build (below).
   if (intent === "to-overview") {
