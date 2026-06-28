@@ -674,6 +674,17 @@ function DesignStage({
               />
             </>
           ) : null}
+          <FineTuneRow
+            label="Image"
+            options={[
+              ["top", "Top"],
+              ["side", "Side"],
+              ["none", "None"],
+            ]}
+            active={data.designTokens.question_image_position ?? "top"}
+            onPick={(v) => applyFormat("question_image_position", v)}
+            busy={applyingFormat}
+          />
         </div>
       </QzCard>
       <div className="qz-row" style={{ gap: 8 }}>

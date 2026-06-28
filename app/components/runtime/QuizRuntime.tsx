@@ -1326,6 +1326,10 @@ export function QuizRuntime(props: QuizRuntimeProps) {
           }
         }
         .qz-runtime-shell { width: 100%; display: flex; flex-direction: column; align-items: center; gap: 24px; }
+        /* §4 question image "side": full-width on mobile (= top), float-right on
+           desktop so the question text wraps beside it + the answers clear below. */
+        .qz-q-img-side { width: 100%; max-height: 280px; object-fit: cover; border-radius: var(--qz-radius); margin-bottom: 16px; display: block; }
+        .qz-bp-desktop .qz-q-img-side { float: right; width: 38%; max-width: 300px; max-height: 240px; margin: 4px 0 14px 22px; }
         /* Experiences E3 — step enter: a quiet fade + 6px lift, replayed per
            node via the content key. The reduced-motion strip above zeroes it. */
         .qz-runtime-content { animation: qz-node-enter var(--qz-dur, 170ms) var(--qz-ease, ease) both; }
@@ -1527,6 +1531,37 @@ export function QuizRuntime(props: QuizRuntimeProps) {
 // re-answer) + the current question. Lets the shopper move around the quiz
 // Thin percent-complete bar above the step trail (Phase 5). Denominator =
 // reachable question steps; numerator = answered + the one in progress.
+// §4 per-quiz question image. position none → hidden; top (default) → today's
+// full-width image above the question (BYTE-IDENTICAL to the prior inline render);
+// side → desktop float-right (content wraps left; the answer grid clears below),
+// mobile falls back to the top layout via the breakpoint CSS classes.
+function QuestionImage({
+  url,
+  position,
+}: {
+  url?: string;
+  position?: "none" | "top" | "side";
+}) {
+  if (!url || position === "none") return null;
+  if (position === "side") {
+    return <img src={url} alt="" className="qz-q-img-side" />;
+  }
+  return (
+    <img
+      src={url}
+      alt=""
+      style={{
+        width: "100%",
+        maxHeight: 280,
+        objectFit: "cover",
+        borderRadius: "var(--qz-radius)",
+        marginBottom: 16,
+        display: "block",
+      }}
+    />
+  );
+}
+
 function ProgressBar({
   doc,
   path,
@@ -2173,12 +2208,14 @@ function DropdownQuestion({
   styles,
   onInspect,
   inspectedTarget,
+  qImgPos,
 }: {
   node: Extract<QuizDoc["nodes"][number], { type: "question" }>;
   onAdvance: (answerIds: string[], handle: string | null) => void;
   styles: ReturnType<typeof stylesFor>;
   onInspect?: (target: InspectTarget) => void;
   inspectedTarget?: InspectTarget | null;
+  qImgPos?: "none" | "top" | "side";
 }) {
   const tc = useChrome();
   const insp = (part: InspectPart, answerId?: string) =>
@@ -2191,20 +2228,7 @@ function DropdownQuestion({
   const answer = node.data.answers.find((a) => a.id === sel);
   return (
     <div style={styles.card}>
-      {node.data.image_url ? (
-        <img
-          src={node.data.image_url}
-          alt=""
-          style={{
-            width: "100%",
-            maxHeight: 280,
-            objectFit: "cover",
-            borderRadius: "var(--qz-radius)",
-            marginBottom: 16,
-            display: "block",
-          }}
-        />
-      ) : null}
+      <QuestionImage url={node.data.image_url} position={qImgPos} />
       <h2 style={styles.h2} {...insp("question_text")}>{node.data.text}</h2>
       {node.data.helper_text ? (
         <p style={{ ...styles.muted, fontSize: "0.85em", marginTop: -6 }}>{node.data.helper_text}</p>
@@ -2736,12 +2760,19 @@ function QuestionView({
     });
   // Explicit answer-column override (editor revamp P3). Unset keeps the
   // responsive default from stylesFor (2-up desktop, 1-up mobile).
-  const answerGrid = node.data.answer_columns
-    ? {
-        ...styles.answerGrid,
-        gridTemplateColumns: `repeat(${node.data.answer_columns}, minmax(0, 1fr))`,
-      }
-    : styles.answerGrid;
+  // §4 question image position (top default / side / none) — drives QuestionImage.
+  const qImgPos = tokens.question_image_position ?? "top";
+  const answerGrid = {
+    ...(node.data.answer_columns
+      ? {
+          ...styles.answerGrid,
+          gridTemplateColumns: `repeat(${node.data.answer_columns}, minmax(0, 1fr))`,
+        }
+      : styles.answerGrid),
+    // §4 side image: the answer grid is a BFC, so clear the float and sit below
+    // the floated image (the question text wraps beside it). No-op otherwise.
+    ...(qImgPos === "side" ? { clear: "both" as const } : {}),
+  };
   // B6 — scale config (range + endpoint labels). Falls back to today's defaults
   // so an unset quiz renders byte-identically.
   const sc = node.data.scale_config;
@@ -2780,20 +2811,7 @@ function QuestionView({
         (inputType !== "email" || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)));
     return (
       <div style={styles.card}>
-        {node.data.image_url ? (
-        <img
-          src={node.data.image_url}
-          alt=""
-          style={{
-            width: "100%",
-            maxHeight: 280,
-            objectFit: "cover",
-            borderRadius: "var(--qz-radius)",
-            marginBottom: 16,
-            display: "block",
-          }}
-        />
-      ) : null}
+        <QuestionImage url={node.data.image_url} position={qImgPos} />
       <h2 style={styles.h2} {...insp("question_text")}>{node.data.text}</h2>
       {node.data.helper_text ? (
         <p style={{ ...styles.muted, fontSize: "0.85em", marginTop: -6 }}>{node.data.helper_text}</p>
@@ -2879,20 +2897,7 @@ function QuestionView({
     const tooFew = typeof min === "number" && selectedIds.length < min;
     return (
       <div style={styles.card}>
-        {node.data.image_url ? (
-        <img
-          src={node.data.image_url}
-          alt=""
-          style={{
-            width: "100%",
-            maxHeight: 280,
-            objectFit: "cover",
-            borderRadius: "var(--qz-radius)",
-            marginBottom: 16,
-            display: "block",
-          }}
-        />
-      ) : null}
+        <QuestionImage url={node.data.image_url} position={qImgPos} />
       <h2 style={styles.h2} {...insp("question_text")}>{node.data.text}</h2>
       {node.data.helper_text ? (
         <p style={{ ...styles.muted, fontSize: "0.85em", marginTop: -6 }}>{node.data.helper_text}</p>
@@ -2969,6 +2974,7 @@ function QuestionView({
         styles={styles}
         onInspect={onInspect}
         inspectedTarget={inspectedTarget}
+        qImgPos={qImgPos}
       />
     );
   }
@@ -2979,20 +2985,7 @@ function QuestionView({
   if (node.data.question_type === "image_picker") {
     return (
       <div style={styles.card}>
-        {node.data.image_url ? (
-        <img
-          src={node.data.image_url}
-          alt=""
-          style={{
-            width: "100%",
-            maxHeight: 280,
-            objectFit: "cover",
-            borderRadius: "var(--qz-radius)",
-            marginBottom: 16,
-            display: "block",
-          }}
-        />
-      ) : null}
+        <QuestionImage url={node.data.image_url} position={qImgPos} />
       <h2 style={styles.h2} {...insp("question_text")}>{node.data.text}</h2>
       {node.data.helper_text ? (
         <p style={{ ...styles.muted, fontSize: "0.85em", marginTop: -6 }}>{node.data.helper_text}</p>
@@ -3064,6 +3057,7 @@ function QuestionView({
         styles={styles}
         onInspect={onInspect}
         inspectedTarget={inspectedTarget}
+        qImgPos={qImgPos}
       />
     );
   }
@@ -3072,20 +3066,7 @@ function QuestionView({
   if (node.data.question_type === "rating") {
     return (
       <div style={styles.card}>
-        {node.data.image_url ? (
-        <img
-          src={node.data.image_url}
-          alt=""
-          style={{
-            width: "100%",
-            maxHeight: 280,
-            objectFit: "cover",
-            borderRadius: "var(--qz-radius)",
-            marginBottom: 16,
-            display: "block",
-          }}
-        />
-      ) : null}
+        <QuestionImage url={node.data.image_url} position={qImgPos} />
       <h2 style={styles.h2} {...insp("question_text")}>{node.data.text}</h2>
       {node.data.helper_text ? (
         <p style={{ ...styles.muted, fontSize: "0.85em", marginTop: -6 }}>{node.data.helper_text}</p>
@@ -3129,20 +3110,7 @@ function QuestionView({
   if (node.data.question_type === "swatch") {
     return (
       <div style={styles.card}>
-        {node.data.image_url ? (
-        <img
-          src={node.data.image_url}
-          alt=""
-          style={{
-            width: "100%",
-            maxHeight: 280,
-            objectFit: "cover",
-            borderRadius: "var(--qz-radius)",
-            marginBottom: 16,
-            display: "block",
-          }}
-        />
-      ) : null}
+        <QuestionImage url={node.data.image_url} position={qImgPos} />
       <h2 style={styles.h2} {...insp("question_text")}>{node.data.text}</h2>
       {node.data.helper_text ? (
         <p style={{ ...styles.muted, fontSize: "0.85em", marginTop: -6 }}>{node.data.helper_text}</p>
@@ -3201,20 +3169,7 @@ function QuestionView({
   };
   return (
     <div style={styles.card}>
-      {node.data.image_url ? (
-        <img
-          src={node.data.image_url}
-          alt=""
-          style={{
-            width: "100%",
-            maxHeight: 280,
-            objectFit: "cover",
-            borderRadius: "var(--qz-radius)",
-            marginBottom: 16,
-            display: "block",
-          }}
-        />
-      ) : null}
+      <QuestionImage url={node.data.image_url} position={qImgPos} />
       <h2 style={styles.h2} {...insp("question_text")}>{node.data.text}</h2>
       {node.data.helper_text ? (
         <p style={{ ...styles.muted, fontSize: "0.85em", marginTop: -6 }}>{node.data.helper_text}</p>
@@ -3307,12 +3262,14 @@ function SearchableQuestion({
   styles,
   onInspect,
   inspectedTarget,
+  qImgPos,
 }: {
   node: Extract<QuizDoc["nodes"][number], { type: "question" }>;
   onAdvance: (answerIds: string[], handle: string | null) => void;
   styles: ReturnType<typeof stylesFor>;
   onInspect?: (target: InspectTarget) => void;
   inspectedTarget?: InspectTarget | null;
+  qImgPos?: "none" | "top" | "side";
 }) {
   const tc = useChrome();
   const insp = (part: InspectPart, answerId?: string) =>
@@ -3328,20 +3285,7 @@ function SearchableQuestion({
     : node.data.answers;
   return (
     <div style={styles.card}>
-      {node.data.image_url ? (
-        <img
-          src={node.data.image_url}
-          alt=""
-          style={{
-            width: "100%",
-            maxHeight: 280,
-            objectFit: "cover",
-            borderRadius: "var(--qz-radius)",
-            marginBottom: 16,
-            display: "block",
-          }}
-        />
-      ) : null}
+      <QuestionImage url={node.data.image_url} position={qImgPos} />
       <h2 style={styles.h2} {...insp("question_text")}>{node.data.text}</h2>
       {node.data.helper_text ? (
         <p style={{ ...styles.muted, fontSize: "0.85em", marginTop: -6 }}>{node.data.helper_text}</p>
