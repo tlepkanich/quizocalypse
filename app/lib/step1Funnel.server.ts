@@ -1046,6 +1046,45 @@ export async function runStep1FunnelAction(
     return json({ intent, ok: true });
   }
 
+  // Design step §1 — Brand Identity color (merge one color into design_tokens.colors).
+  if (intent === "set-design-color") {
+    const key = String(form.get("key") ?? "");
+    const value = String(form.get("value") ?? "");
+    const ALLOWED = ["primary", "background", "text", "accent", "secondary", "muted"];
+    if (!ALLOWED.includes(key) || !/^#[0-9a-fA-F]{6}$/.test(value)) {
+      return json({ intent, ok: false, error: "Invalid color." }, { status: 400 });
+    }
+    const merged = DesignTokens.safeParse({
+      ...doc.design_tokens,
+      colors: { ...doc.design_tokens.colors, [key]: value },
+    });
+    if (!merged.success) {
+      return json({ intent, ok: false, error: "Invalid theme." }, { status: 400 });
+    }
+    await writeDoc(quiz.id, { ...doc, design_tokens: merged.data });
+    return json({ intent, ok: true });
+  }
+
+  // Design step §1 — Brand Identity font (merge a curated family into a typography slot).
+  if (intent === "set-design-font") {
+    const slot = String(form.get("slot") ?? "");
+    const family = String(form.get("family") ?? "").trim();
+    if (!["heading", "body"].includes(slot) || !family) {
+      return json({ intent, ok: false, error: "Invalid font." }, { status: 400 });
+    }
+    const typo = (doc.design_tokens.typography ?? {}) as Record<string, unknown>;
+    const slotTokens = (typo[slot] ?? {}) as Record<string, unknown>;
+    const merged = DesignTokens.safeParse({
+      ...doc.design_tokens,
+      typography: { ...typo, [slot]: { ...slotTokens, family, source: "google" } },
+    });
+    if (!merged.success) {
+      return json({ intent, ok: false, error: "Invalid theme." }, { status: 400 });
+    }
+    await writeDoc(quiz.id, { ...doc, design_tokens: merged.data });
+    return json({ intent, ok: true });
+  }
+
   // Design "Continue →": park at the Overview review step before the build.
   // The build itself still fires from Overview via generate-build (below).
   if (intent === "to-overview") {

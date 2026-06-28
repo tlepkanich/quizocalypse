@@ -265,6 +265,12 @@ export function contrastRatio(hexA: string, hexB: string): number {
   return (hi + 0.05) / (lo + 0.05);
 }
 
+// Design Settings §1 — suggest a contrast-safe text color for a background:
+// near-black on light bgs, near-white on dark. The merchant can override it.
+export function suggestContrastText(bg: string): string {
+  return contrastRatio("#FFFFFF", bg) >= contrastRatio("#111111", bg) ? "#FFFFFF" : "#111111";
+}
+
 function relativeLuminance(hex: string): number {
   const m = /^#?([0-9a-f]{6})$/i.exec(hex.trim());
   if (!m) return 0;

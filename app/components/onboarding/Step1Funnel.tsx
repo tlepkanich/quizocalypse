@@ -33,6 +33,7 @@ import type { BuilderCategory } from "../builder/stepProps";
 import type { IndexedProduct } from "../../lib/recommendationEngine";
 import { VibeTemplateSelector } from "../studio/VibeTemplateSelector";
 import { StyleBar } from "../studio/StyleBar";
+import { BrandIdentityPanel } from "../studio/BrandIdentityPanel";
 import { QuestionBuilderStage } from "./QuestionBuilderStage";
 import { RecommendationStage } from "./RecommendationStage";
 import { ClientOnly, BuilderSkeleton } from "../studio/ClientOnly";
@@ -461,6 +462,24 @@ function DesignStage({
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
       <QzCard style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+          <div className="qz-label">Design · Brand identity</div>
+          <h2 className="qz-h2" style={{ margin: 0 }}>Your brand</h2>
+          <p className="qz-dim" style={{ margin: 0, fontSize: 13 }}>
+            Colors and fonts apply across every quiz. The template and style bar below fine-tune
+            the rest.
+          </p>
+        </div>
+        <BrandIdentityPanel
+          tokens={data.designTokens}
+          onColor={(key, hex) =>
+            fetcher.submit({ intent: "set-design-color", key, value: hex }, { method: "post" })
+          }
+          onFont={(slot, family) =>
+            fetcher.submit({ intent: "set-design-font", slot, family }, { method: "post" })
+          }
+        />
+        <hr style={{ border: "none", borderTop: "1px solid var(--qz-rule)", margin: "2px 0" }} />
         <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
           <div className="qz-label">Design · Template</div>
           <h2 className="qz-h2" style={{ margin: 0 }}>Pick a template</h2>

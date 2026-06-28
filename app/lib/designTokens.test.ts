@@ -122,3 +122,13 @@ describe("Design Settings spec (Drive 1_p1V) — D0 token carry + byte-stable", 
     expect(Object.keys(vars).some((k) => k.includes("logo") || k.includes("style-bar"))).toBe(false);
   });
 })
+
+describe("suggestContrastText (Design Settings §1)", () => {
+  it("picks near-black on light backgrounds, near-white on dark", async () => {
+    const { suggestContrastText } = await import("./designTokens");
+    expect(suggestContrastText("#FFFFFF")).toBe("#111111");
+    expect(suggestContrastText("#F8F6F1")).toBe("#111111");
+    expect(suggestContrastText("#0C1018")).toBe("#FFFFFF");
+    expect(suggestContrastText("#111111")).toBe("#FFFFFF");
+  });
+})
