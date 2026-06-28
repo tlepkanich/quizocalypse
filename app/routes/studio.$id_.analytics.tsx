@@ -11,6 +11,7 @@ import {
   formatRevenue,
 } from "../lib/funnelAggregation";
 import { productPerformance } from "../lib/productPerformance";
+import { detectHotspots } from "../lib/abandonmentHotspots";
 import { ProductLeaderboard } from "../components/ProductLeaderboard";
 import { QzPage, QzPageHeader, QzCard, QzStat, QzStatGrid, QzBanner } from "../components/qz";
 
@@ -109,10 +110,15 @@ export const loader = async ({ params, request }: LoaderFunctionArgs) => {
       .sort((a, b) => b.count - a.count);
   }
 
+  // AH2 — per-question drop-off + the abandonment hotspots flagged from it.
+  const dropoff = perQuestionDropoff(eventRows, questions, funnel.started);
+  const hotspots = detectHotspots(dropoff, funnel.started);
+
   return json({
     quiz: { id: quiz.id, name: quiz.name, status: quiz.status },
     funnel,
-    dropoff: perQuestionDropoff(eventRows, questions, funnel.started),
+    dropoff,
+    hotspots,
     conversion: conversionSummary(sessionRows, funnel.completed),
     captureCount,
     revenue: { formatted: formatRevenue(revenue), orders: revenue.orders },
@@ -238,6 +244,20 @@ export default function StudioAnalytics() {
           {hasProducts ? <Row label="Added to cart" value={funnel.addToCart} /> : null}
           {hasProducts ? <Row label="Clicked a product" value={funnel.clicked} last /> : null}
         </QzCard>
+
+        {data.hotspots.length > 0 ? (
+          <div className="qz-col qz-gap-8" style={{ marginTop: 8 }}>
+            {data.hotspots.map((h) => (
+              <QzBanner
+                key={h.questionId}
+                tone={h.severity === "crit" ? "crit" : "warn"}
+                title={`${Math.round(h.pctLostHere * 100)}% of shoppers drop at “${h.text.length > 60 ? `${h.text.slice(0, 59)}…` : h.text}”`}
+              >
+                {h.suggestion}
+              </QzBanner>
+            ))}
+          </div>
+        ) : null}
 
         {data.dropoff.length > 0 ? (
           <>
