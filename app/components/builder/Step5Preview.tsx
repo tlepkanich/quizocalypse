@@ -226,6 +226,8 @@ export function Step5Preview({
           designOverrides={previewDoc.design_overrides}
           breakpointOverrides={previewDoc.breakpoint_overrides}
           resultLayoutMode={previewDoc.result_layout_mode}
+          designLinked={previewDoc.design_linked ?? true}
+          recPageDesign={previewDoc.rec_page_design ?? null}
           quizId={quizId}
           version={0}
           shopDomain=""

@@ -131,6 +131,8 @@ export interface FunnelData {
   // Design step (Drive 1_p1V) — the draft's current design tokens, so the Design
   // stage can show the selected vibe template + the "modified" indicator.
   designTokens: DesignTokens;
+  designLinked: boolean;
+  recPageDesign: DesignTokens | null;
 }
 
 type ActionResult =
@@ -468,6 +470,12 @@ function DesignStage({
       { intent: "set-format", key: "progress_bar", value: JSON.stringify(patch) },
       { method: "post" },
     );
+  // §5 — quiz↔rec-page design link. When de-linked, a Quiz/Rec switch routes the
+  // Brand Identity edits to whichever design (scope); the panel shows that design.
+  const [designScope, setDesignScope] = useState<"quiz" | "rec_page">("quiz");
+  const recScope = data.designLinked === false && designScope === "rec_page";
+  const brandScope = recScope ? "rec_page" : "quiz";
+  const panelTokens = recScope ? (data.recPageDesign ?? data.designTokens) : data.designTokens;
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
       <QzCard style={{ display: "flex", flexDirection: "column", gap: 14 }}>
@@ -479,31 +487,85 @@ function DesignStage({
             the rest.
           </p>
         </div>
+
+        {/* §5 — link the rec page's design to the quiz, or de-link to give it its
+            own colors/fonts/logo (the Quiz/Rec switch routes the edits below). */}
+        <div
+          className="qz-row qz-gap-12"
+          style={{ alignItems: "center", flexWrap: "wrap", fontSize: 13 }}
+        >
+          <label className="qz-row qz-gap-4" style={{ alignItems: "center", cursor: "pointer" }}>
+            <input
+              type="checkbox"
+              checked={data.designLinked !== false}
+              onChange={(e) => {
+                const linked = e.target.checked;
+                if (linked && !window.confirm("Reset the recommendation page’s design back to the quiz design?")) {
+                  return;
+                }
+                if (linked) setDesignScope("quiz");
+                fetcher.submit({ intent: "set-design-linked", linked: String(linked) }, { method: "post" });
+              }}
+            />
+            Link the recommendation page’s design to the quiz
+          </label>
+          {data.designLinked === false ? (
+            <FineTuneRow
+              label="Editing"
+              options={[
+                ["quiz", "Quiz"],
+                ["rec_page", "Rec page"],
+              ]}
+              active={designScope}
+              onPick={(v) => setDesignScope(v as "quiz" | "rec_page")}
+              busy={false}
+            />
+          ) : null}
+        </div>
+        {recScope ? (
+          <p className="qz-dim" style={{ margin: 0, fontSize: 12 }}>
+            Editing the recommendation page’s colors, fonts & logo. The template, style bar &
+            formatting below always apply to the quiz.
+          </p>
+        ) : null}
+
         <BrandIdentityPanel
-          tokens={data.designTokens}
+          tokens={panelTokens}
           onColor={(key, hex) =>
-            fetcher.submit({ intent: "set-design-color", key, value: hex }, { method: "post" })
+            fetcher.submit(
+              { intent: "set-design-color", key, value: hex, scope: brandScope },
+              { method: "post" },
+            )
           }
           onFont={(slot, family) =>
-            fetcher.submit({ intent: "set-design-font", slot, family }, { method: "post" })
+            fetcher.submit(
+              { intent: "set-design-font", slot, family, scope: brandScope },
+              { method: "post" },
+            )
           }
           onLogoFile={(file) => {
             const fd = new FormData();
             fd.append("intent", "set-design-logo");
             fd.append("logo", file);
+            fd.append("scope", brandScope);
             fetcher.submit(fd, { method: "post", encType: "multipart/form-data" });
           }}
           onLogoUrl={(url) =>
-            fetcher.submit({ intent: "set-design-logo", url }, { method: "post" })
+            fetcher.submit({ intent: "set-design-logo", url, scope: brandScope }, { method: "post" })
           }
           onLogoMeta={(field, value) =>
-            fetcher.submit({ intent: "set-design-logo", [field]: value }, { method: "post" })
+            fetcher.submit(
+              { intent: "set-design-logo", [field]: value, scope: brandScope },
+              { method: "post" },
+            )
           }
           onLogoClear={() =>
-            fetcher.submit({ intent: "set-design-logo", clear: "1" }, { method: "post" })
+            fetcher.submit({ intent: "set-design-logo", clear: "1", scope: brandScope }, { method: "post" })
           }
-          onReset={() => fetcher.submit({ intent: "reset-design" }, { method: "post" })}
-          onResync={() => fetcher.submit({ intent: "resync-design" }, { method: "post" })}
+          onReset={() => fetcher.submit({ intent: "reset-design", scope: brandScope }, { method: "post" })}
+          onResync={() =>
+            fetcher.submit({ intent: "resync-design", scope: brandScope }, { method: "post" })
+          }
         />
         <hr style={{ border: "none", borderTop: "1px solid var(--qz-rule)", margin: "2px 0" }} />
         <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>

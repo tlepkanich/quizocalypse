@@ -371,6 +371,8 @@ export async function loadStep1FunnelData(
     recNodeDefaults,
     recPage,
     designTokens: doc.design_tokens,
+    designLinked: doc.design_linked ?? true,
+    recPageDesign: doc.rec_page_design ?? null,
     quizId: quiz.id,
     name: quiz.name,
     stage: session.stage,
@@ -1076,7 +1078,8 @@ export async function runStep1FunnelAction(
     return json({ intent, ok: true });
   }
 
-  // Design step §1 — Brand Identity color (merge one color into design_tokens.colors).
+  // Design step §1 — Brand Identity color. §5: a `scope` of "rec_page" (only when
+  // de-linked) edits the rec page's own design instead of the quiz's.
   if (intent === "set-design-color") {
     const key = String(form.get("key") ?? "");
     const value = String(form.get("value") ?? "");
@@ -1084,34 +1087,50 @@ export async function runStep1FunnelAction(
     if (!ALLOWED.includes(key) || !/^#[0-9a-fA-F]{6}$/.test(value)) {
       return json({ intent, ok: false, error: "Invalid color." }, { status: 400 });
     }
-    const merged = DesignTokens.safeParse({
-      ...doc.design_tokens,
-      colors: { ...doc.design_tokens.colors, [key]: value },
-    });
+    const { base, write } = designScopeTarget(doc, form);
+    const merged = DesignTokens.safeParse({ ...base, colors: { ...base.colors, [key]: value } });
     if (!merged.success) {
       return json({ intent, ok: false, error: "Invalid theme." }, { status: 400 });
     }
-    await writeDoc(quiz.id, { ...doc, design_tokens: merged.data });
+    await writeDoc(quiz.id, write(merged.data));
     return json({ intent, ok: true });
   }
 
-  // Design step §1 — Brand Identity font (merge a curated family into a typography slot).
+  // Design step §1 — Brand Identity font (merge a curated family into a typography
+  // slot). §5: a "rec_page" scope (de-linked only) targets the rec page's design.
   if (intent === "set-design-font") {
     const slot = String(form.get("slot") ?? "");
     const family = String(form.get("family") ?? "").trim();
     if (!["heading", "body"].includes(slot) || !family) {
       return json({ intent, ok: false, error: "Invalid font." }, { status: 400 });
     }
-    const typo = (doc.design_tokens.typography ?? {}) as Record<string, unknown>;
+    const { base, write } = designScopeTarget(doc, form);
+    const typo = (base.typography ?? {}) as Record<string, unknown>;
     const slotTokens = (typo[slot] ?? {}) as Record<string, unknown>;
     const merged = DesignTokens.safeParse({
-      ...doc.design_tokens,
+      ...base,
       typography: { ...typo, [slot]: { ...slotTokens, family, source: "google" } },
     });
     if (!merged.success) {
       return json({ intent, ok: false, error: "Invalid theme." }, { status: 400 });
     }
-    await writeDoc(quiz.id, { ...doc, design_tokens: merged.data });
+    await writeDoc(quiz.id, write(merged.data));
+    return json({ intent, ok: true });
+  }
+
+  // Design step §5 — Quiz↔Rec-Page design LINK. De-link seeds rec_page_design from
+  // the quiz design (starts identical, then the rec scope diverges); re-link clears
+  // it (the UI confirms first). Result/end nodes render from rec_page_design when
+  // de-linked (QuizRuntime §5).
+  if (intent === "set-design-linked") {
+    const linked = String(form.get("linked") ?? "") === "true";
+    if (linked) {
+      const { rec_page_design: _drop, ...rest } = doc;
+      await writeDoc(quiz.id, { ...rest, design_linked: true } as Quiz);
+    } else {
+      const seeded = doc.rec_page_design ?? doc.design_tokens;
+      await writeDoc(quiz.id, { ...doc, design_linked: false, rec_page_design: seeded });
+    }
     return json({ intent, ok: true });
   }
 
@@ -1122,7 +1141,8 @@ export async function runStep1FunnelAction(
   //  • size / align only  → adjust the existing logo's header rendering
   // Stored on design_tokens.logo so it cascades + survives the build/publish.
   if (intent === "set-design-logo") {
-    const current = (doc.design_tokens.logo ?? {}) as {
+    const { base, write } = designScopeTarget(doc, form);
+    const current = (base.logo ?? {}) as {
       url?: string;
       size?: string;
       align?: string;
@@ -1130,12 +1150,12 @@ export async function runStep1FunnelAction(
 
     // Remove the logo entirely.
     if (String(form.get("clear") ?? "") === "1") {
-      const { logo: _drop, ...rest } = doc.design_tokens;
+      const { logo: _drop, ...rest } = base;
       const merged = DesignTokens.safeParse(rest);
       if (!merged.success) {
         return json({ intent, ok: false, error: "Invalid theme." }, { status: 400 });
       }
-      await writeDoc(quiz.id, { ...doc, design_tokens: merged.data });
+      await writeDoc(quiz.id, write(merged.data));
       return json({ intent, ok: true });
     }
 
@@ -1182,37 +1202,41 @@ export async function runStep1FunnelAction(
     }
 
     const merged = DesignTokens.safeParse({
-      ...doc.design_tokens,
+      ...base,
       logo: { url: nextUrl, size, align },
     });
     if (!merged.success) {
       return json({ intent, ok: false, error: "Invalid logo." }, { status: 400 });
     }
-    await writeDoc(quiz.id, { ...doc, design_tokens: merged.data });
+    await writeDoc(quiz.id, write(merged.data));
     return json({ intent, ok: true });
   }
 
   // Design step §1 — Reset to system default (the merchant confirms in the UI).
-  // Wipes ALL quiz-level brand customization back to the canonical baseline.
+  // §5: scope-aware — resets the rec page's own design when de-linked + rec scope,
+  // else the quiz design. (Must match the scoped Brand Identity panel it lives in,
+  // or Reset would silently wipe the quiz while the merchant edits the rec page.)
   if (intent === "reset-design") {
+    const { write } = designScopeTarget(doc, form);
     const merged = DesignTokens.safeParse(JSON.parse(JSON.stringify(DEFAULT_TOKENS)));
     if (!merged.success) {
       return json({ intent, ok: false, error: "Reset failed." }, { status: 400 });
     }
-    await writeDoc(quiz.id, { ...doc, design_tokens: merged.data });
+    await writeDoc(quiz.id, write(merged.data));
     return json({ intent, ok: true });
   }
 
   // Design step §1 — Re-sync from Shopify: overlay the shop's brand (colors /
-  // fonts / logo persisted in shop.brandTokens at install by themeSync) onto
-  // this quiz. Degrades gracefully when no brand has been synced.
+  // fonts / logo persisted in shop.brandTokens at install by themeSync). §5: same
+  // scope as the panel — applies to the rec page's design when editing it.
   if (intent === "resync-design") {
+    const { base, write } = designScopeTarget(doc, form);
     const shopRow = await prisma.shop.findUnique({
       where: { id: shop.id },
       select: { brandTokens: true },
     });
     const brand = DesignTokens.safeParse(shopRow?.brandTokens ?? {});
-    const { next, applied } = applyBrandToDesign(doc.design_tokens, brand.success ? brand.data : {});
+    const { next, applied } = applyBrandToDesign(base, brand.success ? brand.data : {});
     if (applied.length === 0) {
       return json(
         {
@@ -1227,7 +1251,7 @@ export async function runStep1FunnelAction(
     if (!merged.success) {
       return json({ intent, ok: false, error: "Invalid brand." }, { status: 400 });
     }
-    await writeDoc(quiz.id, { ...doc, design_tokens: merged.data });
+    await writeDoc(quiz.id, write(merged.data));
     return json({ intent, ok: true, applied });
   }
 
@@ -1349,4 +1373,19 @@ function safeJson(v: FormDataEntryValue | null): unknown {
   } catch {
     return null;
   }
+}
+
+// §5 — a design intent targets the quiz design by default, or the rec page's own
+// design when scope="rec_page" AND the quiz is de-linked. Returns the token object
+// to merge into + a writer that puts the result back on the right field.
+function designScopeTarget(doc: Quiz, form: FormData): {
+  base: Quiz["design_tokens"];
+  write: (next: Quiz["design_tokens"]) => Quiz;
+} {
+  const recScope = String(form.get("scope") ?? "") === "rec_page" && doc.design_linked === false;
+  const base = recScope ? (doc.rec_page_design ?? doc.design_tokens) : doc.design_tokens;
+  return {
+    base,
+    write: (next) => (recScope ? { ...doc, rec_page_design: next } : { ...doc, design_tokens: next }),
+  };
 }

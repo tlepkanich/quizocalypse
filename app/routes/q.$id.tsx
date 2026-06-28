@@ -125,6 +125,9 @@ export const loader = async ({ params, request }: LoaderFunctionArgs) => {
       designOverrides: parsed.data.design_overrides ?? {},
       breakpointOverrides: parsed.data.breakpoint_overrides ?? {},
       resultLayoutMode: parsed.data.result_layout_mode,
+      // §5 — de-linked rec page renders result nodes from rec_page_design.
+      designLinked: parsed.data.design_linked ?? true,
+      recPageDesign: parsed.data.rec_page_design ?? null,
       shopDomain: publishedRaw.shop_domain ?? "",
       // QD-7 — pre-existing quizzes have no `platform` baked → "shopify", so the
       // shopper runtime keeps add-to-cart with zero re-publish (back-compat).
@@ -153,6 +156,8 @@ export default function StorefrontRuntime() {
       designOverrides={data.designOverrides}
       breakpointOverrides={data.breakpointOverrides}
       resultLayoutMode={data.resultLayoutMode}
+      designLinked={data.designLinked}
+      recPageDesign={data.recPageDesign}
       quizId={data.quizId}
       version={data.version}
       shopDomain={data.shopDomain}

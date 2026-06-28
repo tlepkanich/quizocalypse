@@ -480,6 +480,11 @@ export async function publishQuiz(
     results_pages: bakedResultsPages,
     status: "published",
     design_tokens: resolvedTokens,
+    // §5 — a de-linked rec page resolves its own design against the shop brand
+    // cascade too. Absent (linked) → the field stays undefined (byte-stable).
+    ...(doc.rec_page_design
+      ? { rec_page_design: resolveDesignTokens(shopTokens, doc.rec_page_design) }
+      : {}),
     product_index: productIndex,
     published_at: new Date().toISOString(),
     version: nextVersion,

@@ -115,6 +115,10 @@ export interface QuizRuntimeProps {
     { desktop?: DesignTokensT; mobile?: DesignTokensT }
   >;
   resultLayoutMode: QuizDoc["result_layout_mode"];
+  // §5 — quiz↔rec-page design link. When designLinked is false, result/end nodes
+  // resolve from recPageDesign instead of the quiz design. Default linked → today.
+  designLinked?: boolean;
+  recPageDesign?: DesignTokensT | null;
   quizId: string;
   version: number;
   shopDomain: string;
@@ -209,6 +213,8 @@ export function QuizRuntime(props: QuizRuntimeProps) {
     designOverrides,
     breakpointOverrides,
     resultLayoutMode,
+    designLinked,
+    recPageDesign,
     quizId,
     version,
     shopDomain,
@@ -332,12 +338,18 @@ export function QuizRuntime(props: QuizRuntimeProps) {
   // breakpoint layer is picked from breakpoint_overrides[nodeId][bp] and only
   // applied if the viewport matches.
   const { resolved, fluidSource } = useMemo(() => {
-    // Preview reskin: a live `tokensOverride` replaces the quiz layer so theme
-    // swatches restyle instantly (no save). undefined in live → unchanged.
-    const baked = (tokensOverride ?? designTokens) as DesignTokensT | null;
     const currentNodeType = currentNodeId
       ? (doc.nodes.find((n) => n.id === currentNodeId)?.type ?? "")
       : "";
+    // §5 — a DE-LINKED rec page resolves its result/end nodes from rec_page_design
+    // instead of the quiz design. Linked (default) / unset → the quiz design, so
+    // every existing quiz stays byte-identical. A live theme try-on (tokensOverride)
+    // still wins everywhere, so reskin swatches restyle every node consistently.
+    const recNode = currentNodeType === "result" || currentNodeType === "end";
+    const baked = (tokensOverride ??
+      (recNode && designLinked === false && recPageDesign
+        ? recPageDesign
+        : designTokens)) as DesignTokensT | null;
     const nodeOverride = currentNodeId
       ? resolveNodeOverride(
           currentNodeId,
@@ -368,6 +380,8 @@ export function QuizRuntime(props: QuizRuntimeProps) {
     designOverrides,
     breakpointOverrides,
     resultLayoutMode,
+    designLinked,
+    recPageDesign,
     currentNodeId,
     breakpoint,
     doc.nodes,
