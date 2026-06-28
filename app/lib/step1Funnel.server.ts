@@ -39,6 +39,8 @@ import {
   LOGO_SIZES,
   LOGO_ALIGNS,
 } from "./logoUpload";
+import { DEFAULT_TOKENS } from "./designTokens";
+import { applyBrandToDesign } from "./brandSync";
 import { normalizeTags } from "./enrichTags";
 import {
   inverseCollectionIndex,
@@ -1188,6 +1190,45 @@ export async function runStep1FunnelAction(
     }
     await writeDoc(quiz.id, { ...doc, design_tokens: merged.data });
     return json({ intent, ok: true });
+  }
+
+  // Design step §1 — Reset to system default (the merchant confirms in the UI).
+  // Wipes ALL quiz-level brand customization back to the canonical baseline.
+  if (intent === "reset-design") {
+    const merged = DesignTokens.safeParse(JSON.parse(JSON.stringify(DEFAULT_TOKENS)));
+    if (!merged.success) {
+      return json({ intent, ok: false, error: "Reset failed." }, { status: 400 });
+    }
+    await writeDoc(quiz.id, { ...doc, design_tokens: merged.data });
+    return json({ intent, ok: true });
+  }
+
+  // Design step §1 — Re-sync from Shopify: overlay the shop's brand (colors /
+  // fonts / logo persisted in shop.brandTokens at install by themeSync) onto
+  // this quiz. Degrades gracefully when no brand has been synced.
+  if (intent === "resync-design") {
+    const shopRow = await prisma.shop.findUnique({
+      where: { id: shop.id },
+      select: { brandTokens: true },
+    });
+    const brand = DesignTokens.safeParse(shopRow?.brandTokens ?? {});
+    const { next, applied } = applyBrandToDesign(doc.design_tokens, brand.success ? brand.data : {});
+    if (applied.length === 0) {
+      return json(
+        {
+          intent,
+          ok: false,
+          error: "No Shopify brand found yet — connect your store or set colors above.",
+        },
+        { status: 400 },
+      );
+    }
+    const merged = DesignTokens.safeParse(next);
+    if (!merged.success) {
+      return json({ intent, ok: false, error: "Invalid brand." }, { status: 400 });
+    }
+    await writeDoc(quiz.id, { ...doc, design_tokens: merged.data });
+    return json({ intent, ok: true, applied });
   }
 
   // Design "Continue →": park at the Overview review step before the build.

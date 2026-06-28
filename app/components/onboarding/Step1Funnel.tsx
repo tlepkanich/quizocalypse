@@ -493,6 +493,8 @@ function DesignStage({
           onLogoClear={() =>
             fetcher.submit({ intent: "set-design-logo", clear: "1" }, { method: "post" })
           }
+          onReset={() => fetcher.submit({ intent: "reset-design" }, { method: "post" })}
+          onResync={() => fetcher.submit({ intent: "resync-design" }, { method: "post" })}
         />
         <hr style={{ border: "none", borderTop: "1px solid var(--qz-rule)", margin: "2px 0" }} />
         <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>

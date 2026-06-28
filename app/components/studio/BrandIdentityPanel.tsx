@@ -248,6 +248,8 @@ export function BrandIdentityPanel({
   onLogoUrl,
   onLogoMeta,
   onLogoClear,
+  onReset,
+  onResync,
 }: {
   tokens: DesignTokens;
   onColor: (key: ColorKey, hex: string) => void;
@@ -256,6 +258,8 @@ export function BrandIdentityPanel({
   onLogoUrl: (url: string) => void;
   onLogoMeta: (field: "size" | "align", value: string) => void;
   onLogoClear: () => void;
+  onReset: () => void;
+  onResync: () => void;
 }) {
   const c = tokens.colors ?? {};
   const issues = findContrastIssues(tokens);
@@ -320,6 +324,38 @@ export function BrandIdentityPanel({
         onMeta={onLogoMeta}
         onClear={onLogoClear}
       />
+
+      <div
+        className="qz-row qz-gap-8"
+        style={{ flexWrap: "wrap", paddingTop: 4, borderTop: "1px solid var(--qz-rule)", marginTop: 2 }}
+      >
+        <button
+          type="button"
+          className="qz-btn qz-btn-ghost qz-btn-sm"
+          style={{ marginTop: 8 }}
+          title="Apply your Shopify brand colors, fonts, and logo to this quiz"
+          onClick={onResync}
+        >
+          ⟳ Re-sync from Shopify
+        </button>
+        <button
+          type="button"
+          className="qz-btn qz-btn-ghost qz-btn-sm"
+          style={{ marginTop: 8, color: "#B23B3B" }}
+          onClick={() => {
+            if (
+              typeof window !== "undefined" &&
+              window.confirm(
+                "Reset all brand colors, fonts, and the logo to the system default? This can’t be undone.",
+              )
+            ) {
+              onReset();
+            }
+          }}
+        >
+          Reset to defaults
+        </button>
+      </div>
     </div>
   );
 }
