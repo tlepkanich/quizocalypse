@@ -14,6 +14,7 @@ import {
   formatRevenue,
 } from "../lib/funnelAggregation";
 import { productPerformance } from "../lib/productPerformance";
+import { detectHotspots } from "../lib/abandonmentHotspots";
 import { ProductLeaderboard } from "../components/ProductLeaderboard";
 import {
   QzPage,
@@ -125,6 +126,7 @@ export const loader = async ({ params, request }: LoaderFunctionArgs) => {
       )
     : [];
   const dropoff = perQuestionDropoff(eventRows, questions, started);
+  const hotspots = detectHotspots(dropoff, started); // AH3 — abandonment callouts
 
   // PP3 — per-product leaderboard (same pure helper + Event rows as the studio
   // dashboard, so the two surfaces report identical numbers).
@@ -145,6 +147,7 @@ export const loader = async ({ params, request }: LoaderFunctionArgs) => {
     revenue: { formatted: formatRevenue(revenue), orders: revenue.orders },
     range: { from: fromParam ?? "", to: toParam ?? "" },
     dropoff,
+    hotspots,
     earliest: earliest ? earliest.toISOString() : null,
     latest: latest ? latest.toISOString() : null,
     captureCount: captures.length,
@@ -257,6 +260,20 @@ export default function QuizAnalytics() {
             <FunnelRow label="Saw recommendations" value={funnel.viewed} />
             <FunnelRow label="Clicked a product" value={funnel.clicked} last />
           </QzCard>
+
+          {data.hotspots.length > 0 && (
+            <div className="qz-col qz-gap-8">
+              {data.hotspots.map((h) => (
+                <QzBanner
+                  key={h.questionId}
+                  tone={h.severity === "crit" ? "crit" : "warn"}
+                  title={`${Math.round(h.pctLostHere * 100)}% of shoppers drop at “${h.text.length > 60 ? `${h.text.slice(0, 59)}…` : h.text}”`}
+                >
+                  {h.suggestion}
+                </QzBanner>
+              ))}
+            </div>
+          )}
 
           {data.dropoff.length > 0 && (
             <>
