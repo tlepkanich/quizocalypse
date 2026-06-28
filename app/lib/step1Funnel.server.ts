@@ -1028,6 +1028,24 @@ export async function runStep1FunnelAction(
     return json({ intent, ok: true });
   }
 
+  // Design step §3 — the Style Bar (image density / lines / spacing, 0-100).
+  // Merged onto the chosen template's tokens so the sliders fine-tune it; the
+  // runtime applies them via the --qz-radius/--qz-pad/--qz-image-density vars.
+  if (intent === "set-style-bar") {
+    const parsed = DesignTokens.shape.style_bar.safeParse(safeJson(form.get("style_bar")));
+    if (!parsed.success) {
+      return json({ intent, ok: false, error: "Invalid style bar." }, { status: 400 });
+    }
+    await writeDoc(quiz.id, {
+      ...doc,
+      design_tokens: {
+        ...doc.design_tokens,
+        style_bar: { ...doc.design_tokens.style_bar, ...parsed.data },
+      },
+    });
+    return json({ intent, ok: true });
+  }
+
   // Design "Continue →": park at the Overview review step before the build.
   // The build itself still fires from Overview via generate-build (below).
   if (intent === "to-overview") {

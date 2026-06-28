@@ -1,5 +1,6 @@
 import type { z } from "zod";
 import { DesignTokens } from "./quizSchema";
+import { styleBarCssVars } from "./styleBar";
 
 // Brand design tokens — same shape as DesignTokens in quizSchema.ts (which
 // covers quiz-level and node-level overrides). Reusing the schema keeps the
@@ -248,6 +249,10 @@ export function tokensToCssVars(
     vars["--qz-pp-bottom"] = `${p.bottom}px`;
     vars["--qz-pp-left"] = `${p.left}px`;
   }
+  // Design Settings §3 — the Style Bar overrides the template's enum-derived radius
+  // / padding with its continuous slider values (and emits --qz-image-density).
+  // Only the set axes override, so a quiz without a style_bar is byte-identical.
+  Object.assign(vars, styleBarCssVars(t.style_bar));
   return vars;
 }
 

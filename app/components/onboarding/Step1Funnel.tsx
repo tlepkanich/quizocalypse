@@ -32,6 +32,7 @@ import type {
 import type { BuilderCategory } from "../builder/stepProps";
 import type { IndexedProduct } from "../../lib/recommendationEngine";
 import { VibeTemplateSelector } from "../studio/VibeTemplateSelector";
+import { StyleBar } from "../studio/StyleBar";
 import { QuestionBuilderStage } from "./QuestionBuilderStage";
 import { RecommendationStage } from "./RecommendationStage";
 import { ClientOnly, BuilderSkeleton } from "../studio/ClientOnly";
@@ -546,6 +547,22 @@ function DesignStage({
             active={fields.button_style}
             onPick={(v) => applyField("button_style", v)}
             busy={applyingField}
+          />
+        </div>
+
+        <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 6 }}>
+          <div className="qz-label">Style bar</div>
+          <p className="qz-dim" style={{ margin: 0, fontSize: 12 }}>
+            Fine-tune the template — slide to taste. Changes apply on top of the chosen vibe.
+          </p>
+          <StyleBar
+            value={data.designTokens.style_bar}
+            onCommit={(sb) =>
+              fetcher.submit(
+                { intent: "set-style-bar", style_bar: JSON.stringify(sb) },
+                { method: "post" },
+              )
+            }
           />
         </div>
       </QzCard>
