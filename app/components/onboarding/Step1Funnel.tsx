@@ -450,32 +450,34 @@ function DesignStage({
   pendingIntent: string | null;
 }) {
   const [appliedId, setAppliedId] = useState<string | null>(null);
-  const applying = pendingIntent === "set-design";
-  const apply = (preset: ThemePreset) => {
-    setAppliedId(preset.id);
-    fetcher.submit({ intent: "set-design", tokens: JSON.stringify(preset.tokens) }, { method: "post" });
-  };
-  const [fields, setFields] = useState<Record<string, string>>({});
-  const applyingField = pendingIntent === "set-design-field";
-  const applyField = (field: string, value: string) => {
-    setFields((f) => ({ ...f, [field]: value }));
-    fetcher.submit({ intent: "set-design-field", field, value }, { method: "post" });
-  };
-  // §4 per-quiz formatting (answer layout / progress bar / question image).
-  const applyingFormat = pendingIntent === "set-format";
-  const applyFormat = (key: string, value: string) =>
-    fetcher.submit({ intent: "set-format", key, value }, { method: "post" });
-  const applyProgress = (patch: Record<string, unknown>) =>
-    fetcher.submit(
-      { intent: "set-format", key: "progress_bar", value: JSON.stringify(patch) },
-      { method: "post" },
-    );
-  // §5 — quiz↔rec-page design link. When de-linked, a Quiz/Rec switch routes the
-  // Brand Identity edits to whichever design (scope); the panel shows that design.
+  // §5/D6 — quiz↔rec-page design link. When de-linked, a Quiz/Rec switch routes EVERY
+  // design edit below (brand identity, template, style bar, formatting) to whichever
+  // design via `scope`; the panels read that design's tokens (`panelTokens`).
   const [designScope, setDesignScope] = useState<"quiz" | "rec_page">("quiz");
   const recScope = data.designLinked === false && designScope === "rec_page";
   const brandScope = recScope ? "rec_page" : "quiz";
   const panelTokens = recScope ? (data.recPageDesign ?? data.designTokens) : data.designTokens;
+
+  const applying = pendingIntent === "set-design";
+  const apply = (preset: ThemePreset) => {
+    setAppliedId(preset.id);
+    fetcher.submit(
+      { intent: "set-design", tokens: JSON.stringify(preset.tokens), scope: brandScope },
+      { method: "post" },
+    );
+  };
+  const applyingField = pendingIntent === "set-design-field";
+  const applyField = (field: string, value: string) =>
+    fetcher.submit({ intent: "set-design-field", field, value, scope: brandScope }, { method: "post" });
+  // §4 per-quiz formatting (answer layout / progress bar / question image).
+  const applyingFormat = pendingIntent === "set-format";
+  const applyFormat = (key: string, value: string) =>
+    fetcher.submit({ intent: "set-format", key, value, scope: brandScope }, { method: "post" });
+  const applyProgress = (patch: Record<string, unknown>) =>
+    fetcher.submit(
+      { intent: "set-format", key: "progress_bar", value: JSON.stringify(patch), scope: brandScope },
+      { method: "post" },
+    );
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
       <QzCard style={{ display: "flex", flexDirection: "column", gap: 14 }}>
@@ -524,8 +526,8 @@ function DesignStage({
         </div>
         {recScope ? (
           <p className="qz-dim" style={{ margin: 0, fontSize: 12 }}>
-            Editing the recommendation page’s colors, fonts & logo. The template, style bar &
-            formatting below always apply to the quiz.
+            Editing the recommendation page’s design — colors, fonts, logo, template, style bar &
+            formatting all apply to the rec page until you re-link.
           </p>
         ) : null}
 
@@ -577,11 +579,11 @@ function DesignStage({
           </p>
         </div>
         <VibeTemplateSelector
-          currentTokens={data.designTokens}
+          currentTokens={panelTokens}
           busy={applying}
           onApply={(t) =>
             fetcher.submit(
-              { intent: "set-design", tokens: JSON.stringify(t.tokens) },
+              { intent: "set-design", tokens: JSON.stringify(t.tokens), scope: brandScope },
               { method: "post" },
             )
           }
@@ -644,14 +646,14 @@ function DesignStage({
           <FineTuneRow
             label="Shape"
             options={[["square", "Square"], ["rounded", "Rounded"], ["pill", "Pill"]]}
-            active={fields.radius}
+            active={panelTokens.radius}
             onPick={(v) => applyField("radius", v)}
             busy={applyingField}
           />
           <FineTuneRow
             label="Buttons"
             options={[["filled", "Filled"], ["outline", "Outline"], ["ghost", "Ghost"]]}
-            active={fields.button_style}
+            active={panelTokens.button_style}
             onPick={(v) => applyField("button_style", v)}
             busy={applyingField}
           />
@@ -663,10 +665,10 @@ function DesignStage({
             Fine-tune the template — slide to taste. Changes apply on top of the chosen vibe.
           </p>
           <StyleBar
-            value={data.designTokens.style_bar}
+            value={panelTokens.style_bar}
             onCommit={(sb) =>
               fetcher.submit(
-                { intent: "set-style-bar", style_bar: JSON.stringify(sb) },
+                { intent: "set-style-bar", style_bar: JSON.stringify(sb), scope: brandScope },
                 { method: "post" },
               )
             }
@@ -685,18 +687,18 @@ function DesignStage({
               ["list", "List"],
               ["grid", "Grid"],
             ]}
-            active={data.designTokens.answer_layout ?? "auto"}
+            active={panelTokens.answer_layout ?? "auto"}
             onPick={(v) => applyFormat("answer_layout", v)}
             busy={applyingFormat}
           />
-          {data.designTokens.answer_layout === "grid" ? (
+          {panelTokens.answer_layout === "grid" ? (
             <FineTuneRow
               label="Columns"
               options={[
                 ["2", "2"],
                 ["3", "3"],
               ]}
-              active={String(data.designTokens.answer_grid_columns ?? 2)}
+              active={String(panelTokens.answer_grid_columns ?? 2)}
               onPick={(v) => applyFormat("answer_grid_columns", v)}
               busy={applyingFormat}
             />
@@ -707,11 +709,11 @@ function DesignStage({
               ["on", "On"],
               ["off", "Off"],
             ]}
-            active={data.designTokens.progress_bar?.enabled === false ? "off" : "on"}
+            active={panelTokens.progress_bar?.enabled === false ? "off" : "on"}
             onPick={(v) => applyProgress({ enabled: v === "on" })}
             busy={applyingFormat}
           />
-          {data.designTokens.progress_bar?.enabled !== false ? (
+          {panelTokens.progress_bar?.enabled !== false ? (
             <>
               <FineTuneRow
                 label="Style"
@@ -720,7 +722,7 @@ function DesignStage({
                   ["dots", "Dots"],
                   ["steps", "Steps"],
                 ]}
-                active={data.designTokens.progress_bar?.style ?? "bar"}
+                active={panelTokens.progress_bar?.style ?? "bar"}
                 onPick={(v) => applyProgress({ style: v })}
                 busy={applyingFormat}
               />
@@ -730,7 +732,7 @@ function DesignStage({
                   ["top", "Top"],
                   ["bottom", "Bottom"],
                 ]}
-                active={data.designTokens.progress_bar?.position ?? "top"}
+                active={panelTokens.progress_bar?.position ?? "top"}
                 onPick={(v) => applyProgress({ position: v })}
                 busy={applyingFormat}
               />
@@ -743,7 +745,7 @@ function DesignStage({
               ["side", "Side"],
               ["none", "None"],
             ]}
-            active={data.designTokens.question_image_position ?? "top"}
+            active={panelTokens.question_image_position ?? "top"}
             onPick={(v) => applyFormat("question_image_position", v)}
             busy={applyingFormat}
           />

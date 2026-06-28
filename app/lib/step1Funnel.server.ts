@@ -1035,7 +1035,10 @@ export async function runStep1FunnelAction(
     if (!parsed.success) {
       return json({ intent, ok: false, error: "Invalid theme." }, { status: 400 });
     }
-    await writeDoc(quiz.id, { ...doc, design_tokens: parsed.data });
+    // §5/D6: a template replaces the whole token set wholesale; scope it to the rec
+    // page's design when de-linked + editing the rec page, else the quiz design.
+    const { write } = designScopeTarget(doc, form);
+    await writeDoc(quiz.id, write(parsed.data));
     return json({ intent, ok: true });
   }
 
@@ -1052,11 +1055,13 @@ export async function runStep1FunnelAction(
     if (!(field in ALLOWED) || !ALLOWED[field]!.includes(value)) {
       return json({ intent, ok: false, error: "Invalid design option." }, { status: 400 });
     }
-    const merged = DesignTokens.safeParse({ ...doc.design_tokens, [field]: value });
+    // §5/D6: merge onto — and write back to — the scoped token set (rec page vs quiz).
+    const { base, write } = designScopeTarget(doc, form);
+    const merged = DesignTokens.safeParse({ ...base, [field]: value });
     if (!merged.success) {
       return json({ intent, ok: false, error: "Invalid theme." }, { status: 400 });
     }
-    await writeDoc(quiz.id, { ...doc, design_tokens: merged.data });
+    await writeDoc(quiz.id, write(merged.data));
     return json({ intent, ok: true });
   }
 
@@ -1068,13 +1073,12 @@ export async function runStep1FunnelAction(
     if (!parsed.success) {
       return json({ intent, ok: false, error: "Invalid style bar." }, { status: 400 });
     }
-    await writeDoc(quiz.id, {
-      ...doc,
-      design_tokens: {
-        ...doc.design_tokens,
-        style_bar: { ...doc.design_tokens.style_bar, ...parsed.data },
-      },
-    });
+    // §5/D6: fine-tune the scoped token set's style bar (rec page vs quiz).
+    const { base, write } = designScopeTarget(doc, form);
+    await writeDoc(
+      quiz.id,
+      write({ ...base, style_bar: { ...base.style_bar, ...parsed.data } }),
+    );
     return json({ intent, ok: true });
   }
 
@@ -1260,6 +1264,9 @@ export async function runStep1FunnelAction(
   // question_image_position (D4c). Each merges into design_tokens; unset tokens
   // never get written, so a quiz stays byte-stable until the merchant opts in.
   if (intent === "set-format") {
+    // §5/D6: per-quiz formatting is scope-aware too — a de-linked rec page carries
+    // its own answer layout / progress bar / question image, not just colors/fonts.
+    const { base, write } = designScopeTarget(doc, form);
     const key = String(form.get("key") ?? "");
     let patch: Record<string, unknown> | null = null;
     if (key === "answer_layout") {
@@ -1285,15 +1292,15 @@ export async function runStep1FunnelAction(
       if (!parsed.success) {
         return json({ intent, ok: false, error: "Invalid progress bar." }, { status: 400 });
       }
-      patch = { progress_bar: { ...doc.design_tokens.progress_bar, ...parsed.data } };
+      patch = { progress_bar: { ...base.progress_bar, ...parsed.data } };
     } else {
       return json({ intent, ok: false, error: "Unknown format key." }, { status: 400 });
     }
-    const merged = DesignTokens.safeParse({ ...doc.design_tokens, ...patch });
+    const merged = DesignTokens.safeParse({ ...base, ...patch });
     if (!merged.success) {
       return json({ intent, ok: false, error: "Invalid formatting." }, { status: 400 });
     }
-    await writeDoc(quiz.id, { ...doc, design_tokens: merged.data });
+    await writeDoc(quiz.id, write(merged.data));
     return json({ intent, ok: true });
   }
 
