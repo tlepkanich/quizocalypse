@@ -250,6 +250,7 @@ export function BrandIdentityPanel({
   onLogoClear,
   onReset,
   onResync,
+  showResync = true,
 }: {
   tokens: DesignTokens;
   onColor: (key: ColorKey, hex: string) => void;
@@ -260,6 +261,9 @@ export function BrandIdentityPanel({
   onLogoClear: () => void;
   onReset: () => void;
   onResync: () => void;
+  // The funnel surfaces Re-sync (it loads shop.brandTokens); the builder hides it
+  // (its loader carries no brandTokens — D6b Phase-4 follow-up wires that).
+  showResync?: boolean;
 }) {
   const c = tokens.colors ?? {};
   const issues = findContrastIssues(tokens);
@@ -329,15 +333,17 @@ export function BrandIdentityPanel({
         className="qz-row qz-gap-8"
         style={{ flexWrap: "wrap", paddingTop: 4, borderTop: "1px solid var(--qz-rule)", marginTop: 2 }}
       >
-        <button
-          type="button"
-          className="qz-btn qz-btn-ghost qz-btn-sm"
-          style={{ marginTop: 8 }}
-          title="Apply your Shopify brand colors, fonts, and logo to this quiz"
-          onClick={onResync}
-        >
-          ⟳ Re-sync from Shopify
-        </button>
+        {showResync ? (
+          <button
+            type="button"
+            className="qz-btn qz-btn-ghost qz-btn-sm"
+            style={{ marginTop: 8 }}
+            title="Apply your Shopify brand colors, fonts, and logo to this quiz"
+            onClick={onResync}
+          >
+            ⟳ Re-sync from Shopify
+          </button>
+        ) : null}
         <button
           type="button"
           className="qz-btn qz-btn-ghost qz-btn-sm"

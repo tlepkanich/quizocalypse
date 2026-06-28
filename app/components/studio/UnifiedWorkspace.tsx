@@ -26,7 +26,7 @@ import { TranslationsPanel } from "./TranslationsPanel";
 import { ExperiencePanel } from "./ExperiencePanel";
 import { CssTab } from "./panels/CssTab";
 import { BuilderSettings } from "./BuilderSettings";
-import { BuilderThemePanel } from "./BuilderThemePanel";
+import { BuilderDesignPanel } from "./BuilderDesignPanel";
 import { BuilderBlocksPalette } from "./BuilderBlocksPalette";
 import { BuilderPageSettings } from "./BuilderPageSettings";
 import { insertModule } from "./studioDoc";
@@ -698,7 +698,7 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
           />
         </>
       ) : tool === "theme" ? (
-        <BuilderThemePanel doc={doc} commit={commit} />
+        <BuilderDesignPanel doc={doc} commit={commit} onSelectNode={select} />
       ) : tool === "code" ? (
         selectedNode ? (
           <CssTab doc={doc} node={selectedNode} onCommit={commit} />
