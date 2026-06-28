@@ -1,3 +1,4 @@
+import type { CSSProperties } from "react";
 import type { LoaderFunctionArgs } from "@remix-run/node";
 import { json } from "@remix-run/node";
 import { Link, useLoaderData } from "@remix-run/react";
@@ -10,6 +11,7 @@ import {
   totalRevenue,
   formatRevenue,
 } from "../lib/funnelAggregation";
+import { productPerformance } from "../lib/productPerformance";
 import { QzPage, QzPageHeader, QzCard, QzStat, QzStatGrid, QzBanner } from "../components/qz";
 
 // Standalone funnel dashboard for the /studio surface (Fly-reachable; the
@@ -40,7 +42,7 @@ export const loader = async ({ params, request }: LoaderFunctionArgs) => {
   };
   const hasRange = Object.keys(tsRange).length > 0;
 
-  const [eventRows, sessionRows, captureCount] = await Promise.all([
+  const [eventRows, sessionRows, captureCount, productMeta] = await Promise.all([
     prisma.event.findMany({
       where: { quizId: quiz.id, ...(hasRange ? { ts: tsRange } : {}) },
       select: { sessionId: true, eventType: true, payload: true },
@@ -52,7 +54,15 @@ export const loader = async ({ params, request }: LoaderFunctionArgs) => {
     prisma.emailCapture.count({
       where: { quizId: quiz.id, ...(hasRange ? { capturedAt: tsRange } : {}) },
     }),
+    // PP2 — product metadata for the per-product leaderboard (title/image join).
+    prisma.product.findMany({
+      where: { shopId: shop.id },
+      select: { productId: true, title: true, imageUrl: true, handle: true },
+    }),
   ]);
+
+  // PP2 — per-product impressions / clicks / ATC from the same event rows.
+  const topProducts = productPerformance(eventRows, productMeta);
 
   const byStage = new Map<string, Set<string>>();
   for (const r of eventRows) {
@@ -109,6 +119,7 @@ export const loader = async ({ params, request }: LoaderFunctionArgs) => {
     range: { from: fromParam ?? "", to: toParam ?? "" },
     xtype,
     outcomes,
+    topProducts,
   });
 };
 
@@ -244,9 +255,98 @@ export default function StudioAnalytics() {
           </>
         ) : null}
       </div>
+
+      {hasProducts && data.topProducts.length > 0 ? (
+        <div className="qz-col qz-gap-16" style={{ marginTop: 32 }}>
+          <h2 className="qz-h1">Top products</h2>
+          <p className="qz-dim" style={{ margin: 0, fontSize: 13 }}>
+            How each recommended product performs — distinct sessions shown, clicked, and added to
+            cart. CTR = clicks ÷ shown; Add rate = adds ÷ clicks.
+          </p>
+          <QzCard flush>
+            <ProductLeaderboard rows={data.topProducts} />
+          </QzCard>
+        </div>
+      ) : null}
     </QzPage>
   );
 }
+
+function ProductLeaderboard({
+  rows,
+}: {
+  rows: Array<{
+    productId: string;
+    title: string;
+    imageUrl: string | null;
+    impressions: number;
+    clicks: number;
+    addToCart: number;
+    ctr: number;
+    atcRate: number;
+  }>;
+}) {
+  const pct = (n: number) => `${Math.round(n * 100)}%`;
+  return (
+    <div style={{ overflowX: "auto" }}>
+      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+        <thead>
+          <tr style={{ textAlign: "left", color: "var(--qz-ink-2, #666)" }}>
+            <th style={{ padding: "10px 20px", fontWeight: 600 }}>Product</th>
+            <th style={thNum}>Shown</th>
+            <th style={thNum}>Clicks</th>
+            <th style={thNum}>CTR</th>
+            <th style={thNum}>Added</th>
+            <th style={thNum}>Add rate</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((r, i) => (
+            <tr key={r.productId} style={{ borderTop: i === 0 ? "1px solid var(--qz-rule, #eee)" : 0 }}>
+              <td style={{ padding: "10px 20px", borderTop: "1px solid var(--qz-rule, #eee)" }}>
+                <span className="qz-row qz-gap-8" style={{ alignItems: "center" }}>
+                  {r.imageUrl ? (
+                    <img
+                      src={r.imageUrl}
+                      alt={r.title}
+                      width={36}
+                      height={36}
+                      loading="lazy"
+                      style={{ borderRadius: 6, objectFit: "cover", border: "1px solid var(--qz-rule, #eee)", flexShrink: 0 }}
+                    />
+                  ) : (
+                    <span
+                      aria-hidden
+                      style={{ width: 36, height: 36, borderRadius: 6, background: "var(--qz-cream-2, #f3efe6)", flexShrink: 0 }}
+                    />
+                  )}
+                  <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: 280 }}>
+                    {r.title}
+                  </span>
+                </span>
+              </td>
+              <td style={tdNum}>{r.impressions}</td>
+              <td style={tdNum}>{r.clicks}</td>
+              <td style={tdNum}>{pct(r.ctr)}</td>
+              <td style={tdNum}>{r.addToCart}</td>
+              <td style={tdNum}>{pct(r.atcRate)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+const thNum: CSSProperties = { padding: "10px 20px", fontWeight: 600, textAlign: "right", whiteSpace: "nowrap" };
+const tdNum: CSSProperties = {
+  padding: "10px 20px",
+  textAlign: "right",
+  borderTop: "1px solid var(--qz-rule, #eee)",
+  whiteSpace: "nowrap",
+  fontVariantNumeric: "tabular-nums",
+  fontWeight: 600,
+};
 
 function Row({ label, value, last }: { label: string; value: number; last?: boolean }) {
   return (
