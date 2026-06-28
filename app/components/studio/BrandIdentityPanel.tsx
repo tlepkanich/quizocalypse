@@ -7,6 +7,7 @@ import {
   isCuratedFont,
 } from "../../lib/curatedFonts";
 import { findContrastIssues, suggestContrastText } from "../../lib/designTokens";
+import { LOGO_ACCEPT } from "../../lib/logoUpload";
 import type { DesignTokens } from "../../lib/quizSchema";
 
 // Design Settings spec §1 — Brand Identity (global): the 4 colors (primary /
@@ -123,14 +124,138 @@ function FontSelect({
   );
 }
 
+const segBtn = (active: boolean): CSSProperties => ({
+  font: "inherit",
+  fontSize: 12,
+  padding: "5px 10px",
+  border: "1px solid var(--qz-rule)",
+  borderRadius: 6,
+  background: active ? "var(--qz-ink-1, #111111)" : "var(--qz-paper)",
+  color: active ? "#FFFFFF" : "inherit",
+  cursor: "pointer",
+});
+
+function LogoControl({
+  logo,
+  onFile,
+  onUrl,
+  onMeta,
+  onClear,
+}: {
+  logo: { url?: string; size?: string; align?: string } | undefined;
+  onFile: (f: File) => void;
+  onUrl: (u: string) => void;
+  onMeta: (field: "size" | "align", value: string) => void;
+  onClear: () => void;
+}) {
+  const [url, setUrl] = useState("");
+  const hasLogo = !!logo?.url;
+  const size = logo?.size ?? "md";
+  const align = logo?.align ?? "center";
+  return (
+    <div className="qz-col qz-gap-8">
+      <span style={{ fontSize: 13, fontWeight: 600 }}>Logo</span>
+      <div className="qz-row qz-gap-8" style={{ alignItems: "center", flexWrap: "wrap" }}>
+        {hasLogo ? (
+          <span
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              justifyContent: "center",
+              height: 36,
+              padding: "0 8px",
+              border: "1px solid var(--qz-rule)",
+              borderRadius: 8,
+              background: "var(--qz-paper)",
+            }}
+          >
+            <img src={logo!.url} alt="" style={{ maxHeight: 28, maxWidth: 120, objectFit: "contain" }} />
+          </span>
+        ) : null}
+        <label className="qz-btn qz-btn-ghost qz-btn-sm" style={{ cursor: "pointer" }}>
+          {hasLogo ? "Replace" : "Upload logo"}
+          <input
+            type="file"
+            accept={LOGO_ACCEPT}
+            style={{ display: "none" }}
+            onChange={(e) => {
+              const f = e.target.files?.[0];
+              if (f) onFile(f);
+              e.target.value = "";
+            }}
+          />
+        </label>
+        {hasLogo ? (
+          <button type="button" className="qz-btn qz-btn-ghost qz-btn-sm" onClick={onClear}>
+            Remove
+          </button>
+        ) : null}
+      </div>
+      <input
+        type="text"
+        aria-label="Logo image URL"
+        placeholder="or paste an image URL (https://…)"
+        value={url}
+        onChange={(e) => setUrl(e.target.value)}
+        onBlur={() => {
+          const v = url.trim();
+          if (v) {
+            onUrl(v);
+            setUrl("");
+          }
+        }}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") {
+            e.preventDefault();
+            const v = url.trim();
+            if (v) {
+              onUrl(v);
+              setUrl("");
+            }
+          }
+        }}
+        style={{ ...selectStyle, width: "100%" }}
+      />
+      {hasLogo ? (
+        <div className="qz-row qz-gap-12" style={{ flexWrap: "wrap" }}>
+          <div className="qz-row qz-gap-4" style={{ alignItems: "center" }}>
+            <span style={{ fontSize: 12, color: "var(--qz-ink-2)" }}>Size</span>
+            {(["sm", "md", "lg"] as const).map((s) => (
+              <button key={s} type="button" style={segBtn(size === s)} onClick={() => onMeta("size", s)}>
+                {s === "sm" ? "S" : s === "md" ? "M" : "L"}
+              </button>
+            ))}
+          </div>
+          <div className="qz-row qz-gap-4" style={{ alignItems: "center" }}>
+            <span style={{ fontSize: 12, color: "var(--qz-ink-2)" }}>Align</span>
+            {(["left", "center"] as const).map((a) => (
+              <button key={a} type="button" style={segBtn(align === a)} onClick={() => onMeta("align", a)}>
+                {a === "left" ? "Left" : "Center"}
+              </button>
+            ))}
+          </div>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 export function BrandIdentityPanel({
   tokens,
   onColor,
   onFont,
+  onLogoFile,
+  onLogoUrl,
+  onLogoMeta,
+  onLogoClear,
 }: {
   tokens: DesignTokens;
   onColor: (key: ColorKey, hex: string) => void;
   onFont: (slot: "heading" | "body", family: string) => void;
+  onLogoFile: (file: File) => void;
+  onLogoUrl: (url: string) => void;
+  onLogoMeta: (field: "size" | "align", value: string) => void;
+  onLogoClear: () => void;
 }) {
   const c = tokens.colors ?? {};
   const issues = findContrastIssues(tokens);
@@ -187,6 +312,14 @@ export function BrandIdentityPanel({
           <FontSelect label="Body font" value={tokens.typography?.body?.family} onChange={(f) => onFont("body", f)} />
         </div>
       </div>
+
+      <LogoControl
+        logo={tokens.logo}
+        onFile={onLogoFile}
+        onUrl={onLogoUrl}
+        onMeta={onLogoMeta}
+        onClear={onLogoClear}
+      />
     </div>
   );
 }

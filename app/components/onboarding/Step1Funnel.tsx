@@ -478,6 +478,21 @@ function DesignStage({
           onFont={(slot, family) =>
             fetcher.submit({ intent: "set-design-font", slot, family }, { method: "post" })
           }
+          onLogoFile={(file) => {
+            const fd = new FormData();
+            fd.append("intent", "set-design-logo");
+            fd.append("logo", file);
+            fetcher.submit(fd, { method: "post", encType: "multipart/form-data" });
+          }}
+          onLogoUrl={(url) =>
+            fetcher.submit({ intent: "set-design-logo", url }, { method: "post" })
+          }
+          onLogoMeta={(field, value) =>
+            fetcher.submit({ intent: "set-design-logo", [field]: value }, { method: "post" })
+          }
+          onLogoClear={() =>
+            fetcher.submit({ intent: "set-design-logo", clear: "1" }, { method: "post" })
+          }
         />
         <hr style={{ border: "none", borderTop: "1px solid var(--qz-rule)", margin: "2px 0" }} />
         <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>

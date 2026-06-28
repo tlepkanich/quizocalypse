@@ -1356,6 +1356,32 @@ export function QuizRuntime(props: QuizRuntimeProps) {
       <div className="qz-runtime-page" style={styles.page}>
         <div className="qz-runtime-shell">
           <div key={currentNodeId ?? "none"} className="qz-runtime-content" ref={contentRef} tabIndex={-1} style={{ outline: "none" }}>
+            {/* Design §1 — brand logo header. Renders once above the step when a
+                logo is set; absent → no header (byte-stable). data: and https:
+                urls render identically via <img>. */}
+            {resolved.logo?.url ? (
+              <div
+                className="qz-brand-header"
+                style={{
+                  width: "100%",
+                  display: "flex",
+                  justifyContent: resolved.logo.align === "left" ? "flex-start" : "center",
+                  marginBottom: 16,
+                }}
+              >
+                <img
+                  src={resolved.logo.url}
+                  alt=""
+                  style={{
+                    maxHeight:
+                      resolved.logo.size === "sm" ? 24 : resolved.logo.size === "lg" ? 52 : 36,
+                    maxWidth: "60%",
+                    width: "auto",
+                    objectFit: "contain",
+                  }}
+                />
+              </div>
+            ) : null}
             {/* Polite announcement of the current step for screen readers. */}
             <div
               aria-live="polite"

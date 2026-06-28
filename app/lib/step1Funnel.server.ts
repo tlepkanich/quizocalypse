@@ -1,4 +1,9 @@
-import { json, redirect } from "@remix-run/node";
+import {
+  json,
+  redirect,
+  unstable_parseMultipartFormData,
+  unstable_createMemoryUploadHandler,
+} from "@remix-run/node";
 import type { Shop } from "@prisma/client";
 import prisma from "../db.server";
 import { Quiz, BuildSession, DesignDials, RecDefaults, DesignTokens, QuizType } from "./quizSchema";
@@ -27,6 +32,13 @@ import {
   startStep2Build,
 } from "./step2Build.server";
 import { saveTemplate, listSavedTemplates, loadSavedTemplate } from "./savedTemplates.server";
+import {
+  MAX_LOGO_BYTES,
+  isAllowedLogoType,
+  isSafeLogoUrl,
+  LOGO_SIZES,
+  LOGO_ALIGNS,
+} from "./logoUpload";
 import { normalizeTags } from "./enrichTags";
 import {
   inverseCollectionIndex,
@@ -443,7 +455,23 @@ export async function runStep1FunnelAction(
     return json({ ok: true, savedAt: new Date().toISOString() });
   }
 
-  const form = await request.formData();
+  // Logo upload is the only multipart body. Parse it with a memory handler
+  // capped per-part at MAX_LOGO_BYTES — this STREAMS and aborts past the cap
+  // regardless of the content-length header (a chunked/absent header can't
+  // bypass it), so memory is bounded before the precise size check below.
+  let form: FormData;
+  if (contentType.includes("multipart/form-data")) {
+    try {
+      form = await unstable_parseMultipartFormData(
+        request,
+        unstable_createMemoryUploadHandler({ maxPartSize: MAX_LOGO_BYTES }),
+      );
+    } catch {
+      return json({ ok: false, error: "Logo too large (max 2 MB)." }, { status: 413 });
+    }
+  } else {
+    form = await request.formData();
+  }
   const intent = String(form.get("intent") ?? "");
 
   if (intent === "resync") {
@@ -1080,6 +1108,83 @@ export async function runStep1FunnelAction(
     });
     if (!merged.success) {
       return json({ intent, ok: false, error: "Invalid theme." }, { status: 400 });
+    }
+    await writeDoc(quiz.id, { ...doc, design_tokens: merged.data });
+    return json({ intent, ok: true });
+  }
+
+  // Design step §1 — Brand Identity LOGO. Three shapes share this intent:
+  //  • clear=1            → remove the logo (no header renders)
+  //  • a `logo` File      → uploaded image, stored as a base64 data URL
+  //  • a `url` string     → pasted https asset (lightweight alternative)
+  //  • size / align only  → adjust the existing logo's header rendering
+  // Stored on design_tokens.logo so it cascades + survives the build/publish.
+  if (intent === "set-design-logo") {
+    const current = (doc.design_tokens.logo ?? {}) as {
+      url?: string;
+      size?: string;
+      align?: string;
+    };
+
+    // Remove the logo entirely.
+    if (String(form.get("clear") ?? "") === "1") {
+      const { logo: _drop, ...rest } = doc.design_tokens;
+      const merged = DesignTokens.safeParse(rest);
+      if (!merged.success) {
+        return json({ intent, ok: false, error: "Invalid theme." }, { status: 400 });
+      }
+      await writeDoc(quiz.id, { ...doc, design_tokens: merged.data });
+      return json({ intent, ok: true });
+    }
+
+    // Resolve the new URL: an uploaded file wins, else a pasted URL, else keep
+    // the existing one (a size/align-only update).
+    let nextUrl = current.url;
+    const file = form.get("logo");
+    if (file && typeof file === "object" && "arrayBuffer" in file) {
+      const f = file as File;
+      if (!isAllowedLogoType(f.type)) {
+        return json(
+          { intent, ok: false, error: "Use a PNG, JPG, SVG, WEBP or GIF image." },
+          { status: 400 },
+        );
+      }
+      if (f.size === 0 || f.size > MAX_LOGO_BYTES) {
+        return json({ intent, ok: false, error: "Logo must be 1 byte–2 MB." }, { status: 400 });
+      }
+      const b64 = Buffer.from(await f.arrayBuffer()).toString("base64");
+      nextUrl = `data:${f.type.toLowerCase()};base64,${b64}`;
+    } else {
+      const pasted = String(form.get("url") ?? "").trim();
+      if (pasted) {
+        if (!isSafeLogoUrl(pasted)) {
+          return json(
+            { intent, ok: false, error: "Logo URL must be an https or data:image link." },
+            { status: 400 },
+          );
+        }
+        nextUrl = pasted;
+      }
+    }
+
+    // size / align (optional; default the unset side when a logo first appears).
+    const sizeIn = String(form.get("size") ?? "");
+    const alignIn = String(form.get("align") ?? "");
+    const size =
+      (LOGO_SIZES as readonly string[]).includes(sizeIn) ? sizeIn : (current.size ?? "md");
+    const align =
+      (LOGO_ALIGNS as readonly string[]).includes(alignIn) ? alignIn : (current.align ?? "center");
+
+    if (!nextUrl) {
+      return json({ intent, ok: false, error: "No logo provided." }, { status: 400 });
+    }
+
+    const merged = DesignTokens.safeParse({
+      ...doc.design_tokens,
+      logo: { url: nextUrl, size, align },
+    });
+    if (!merged.success) {
+      return json({ intent, ok: false, error: "Invalid logo." }, { status: 400 });
     }
     await writeDoc(quiz.id, { ...doc, design_tokens: merged.data });
     return json({ intent, ok: true });

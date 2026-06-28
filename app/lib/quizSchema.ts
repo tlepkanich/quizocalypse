@@ -708,7 +708,15 @@ export const DesignTokens = z
     // (byte-stable). Cascades like any token (global on shop.brandTokens).
     logo: z
       .object({
-        url: z.string(),
+        // Enforce the https | data:image guarantee at the SCHEMA layer so EVERY
+        // entry point (set-design-logo AND the generic set-design tokens blob)
+        // shares it — a stored url is then renderable without re-validation.
+        url: z
+          .string()
+          .refine(
+            (u) => /^(https:\/\/|data:image\/)/i.test(u),
+            "Logo URL must be an https or data:image link.",
+          ),
         size: z.enum(["sm", "md", "lg"]),
         align: z.enum(["left", "center"]),
       })
