@@ -5,7 +5,7 @@ import { TitleBar } from "@shopify/app-bridge-react";
 import { authenticate } from "../shopify.server";
 import prisma from "../db.server";
 import { formatDate } from "../lib/formatDate";
-import { Quiz } from "../lib/quizSchema";
+import { Quiz, experienceTypeOf } from "../lib/quizSchema";
 import { findAbBranches, aggregateVariantFunnel } from "../lib/abAnalytics";
 import {
   perQuestionDropoff,
@@ -13,6 +13,8 @@ import {
   totalRevenue,
   formatRevenue,
 } from "../lib/funnelAggregation";
+import { productPerformance } from "../lib/productPerformance";
+import { ProductLeaderboard } from "../components/ProductLeaderboard";
 import {
   QzPage,
   QzPageHeader,
@@ -124,9 +126,20 @@ export const loader = async ({ params, request }: LoaderFunctionArgs) => {
     : [];
   const dropoff = perQuestionDropoff(eventRows, questions, started);
 
+  // PP3 — per-product leaderboard (same pure helper + Event rows as the studio
+  // dashboard, so the two surfaces report identical numbers).
+  const productMeta = await prisma.product.findMany({
+    where: { shopId: shop.id },
+    select: { productId: true, title: true, imageUrl: true, handle: true },
+  });
+  const topProducts = productPerformance(eventRows, productMeta);
+  const xtype = parsedDoc.success ? experienceTypeOf(parsedDoc.data) : "product_match";
+
   return json({
     quiz: { id: quiz.id, name: quiz.name, status: quiz.status },
     abTests,
+    topProducts,
+    xtype,
     funnel: { started, engaged, answered, completed, viewed, clicked },
     conversion,
     revenue: { formatted: formatRevenue(revenue), orders: revenue.orders },
@@ -359,6 +372,20 @@ export default function QuizAnalytics() {
               </table>
             </QzCard>
           ))}
+        </section>
+      ) : null}
+
+      {(data.xtype === "product_match" || data.xtype === "personality") &&
+      data.topProducts.length > 0 ? (
+        <section className="qz-col qz-gap-16" style={{ marginTop: 32 }}>
+          <h2 className="qz-h1">Top products</h2>
+          <p className="qz-dim" style={{ margin: 0, fontSize: 13 }}>
+            How each recommended product performs — distinct sessions shown, clicked, and added to
+            cart. CTR = clicks ÷ shown; Add rate = adds ÷ clicks.
+          </p>
+          <QzCard flush>
+            <ProductLeaderboard rows={data.topProducts} />
+          </QzCard>
         </section>
       ) : null}
     </QzPage>

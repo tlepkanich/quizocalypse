@@ -1,4 +1,3 @@
-import type { CSSProperties } from "react";
 import type { LoaderFunctionArgs } from "@remix-run/node";
 import { json } from "@remix-run/node";
 import { Link, useLoaderData } from "@remix-run/react";
@@ -12,6 +11,7 @@ import {
   formatRevenue,
 } from "../lib/funnelAggregation";
 import { productPerformance } from "../lib/productPerformance";
+import { ProductLeaderboard } from "../components/ProductLeaderboard";
 import { QzPage, QzPageHeader, QzCard, QzStat, QzStatGrid, QzBanner } from "../components/qz";
 
 // Standalone funnel dashboard for the /studio surface (Fly-reachable; the
@@ -271,82 +271,6 @@ export default function StudioAnalytics() {
     </QzPage>
   );
 }
-
-function ProductLeaderboard({
-  rows,
-}: {
-  rows: Array<{
-    productId: string;
-    title: string;
-    imageUrl: string | null;
-    impressions: number;
-    clicks: number;
-    addToCart: number;
-    ctr: number;
-    atcRate: number;
-  }>;
-}) {
-  const pct = (n: number) => `${Math.round(n * 100)}%`;
-  return (
-    <div style={{ overflowX: "auto" }}>
-      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
-        <thead>
-          <tr style={{ textAlign: "left", color: "var(--qz-ink-2, #666)" }}>
-            <th style={{ padding: "10px 20px", fontWeight: 600 }}>Product</th>
-            <th style={thNum}>Shown</th>
-            <th style={thNum}>Clicks</th>
-            <th style={thNum}>CTR</th>
-            <th style={thNum}>Added</th>
-            <th style={thNum}>Add rate</th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((r, i) => (
-            <tr key={r.productId} style={{ borderTop: i === 0 ? "1px solid var(--qz-rule, #eee)" : 0 }}>
-              <td style={{ padding: "10px 20px", borderTop: "1px solid var(--qz-rule, #eee)" }}>
-                <span className="qz-row qz-gap-8" style={{ alignItems: "center" }}>
-                  {r.imageUrl ? (
-                    <img
-                      src={r.imageUrl}
-                      alt={r.title}
-                      width={36}
-                      height={36}
-                      loading="lazy"
-                      style={{ borderRadius: 6, objectFit: "cover", border: "1px solid var(--qz-rule, #eee)", flexShrink: 0 }}
-                    />
-                  ) : (
-                    <span
-                      aria-hidden
-                      style={{ width: 36, height: 36, borderRadius: 6, background: "var(--qz-cream-2, #f3efe6)", flexShrink: 0 }}
-                    />
-                  )}
-                  <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: 280 }}>
-                    {r.title}
-                  </span>
-                </span>
-              </td>
-              <td style={tdNum}>{r.impressions}</td>
-              <td style={tdNum}>{r.clicks}</td>
-              <td style={tdNum}>{pct(r.ctr)}</td>
-              <td style={tdNum}>{r.addToCart}</td>
-              <td style={tdNum}>{pct(r.atcRate)}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  );
-}
-
-const thNum: CSSProperties = { padding: "10px 20px", fontWeight: 600, textAlign: "right", whiteSpace: "nowrap" };
-const tdNum: CSSProperties = {
-  padding: "10px 20px",
-  textAlign: "right",
-  borderTop: "1px solid var(--qz-rule, #eee)",
-  whiteSpace: "nowrap",
-  fontVariantNumeric: "tabular-nums",
-  fontWeight: 600,
-};
 
 function Row({ label, value, last }: { label: string; value: number; last?: boolean }) {
   return (
