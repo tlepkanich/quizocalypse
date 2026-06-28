@@ -166,3 +166,59 @@ test("locale: fr serves lang=fr, unknown falls back to en", async ({ page }) => 
   await page.goto(`/q/${demo.id}?locale=zz`, { waitUntil: "domcontentloaded" });
   await expect(page.locator('[lang="en"]').first()).toBeAttached();
 });
+
+// PP4 — product-performance leaderboard regression lock. Fire a viewed→clicked→
+// add-to-cart sequence (a FIXED session, so re-runs dedupe to 1) for a known studio
+// quiz, then read the analytics loader and assert the product's row aggregated:
+// impressions/clicks/ATC ≥ 1 and CTR in (0,1]. Guards the whole
+// events → productPerformance → loader → leaderboard chain — a dropped product_id
+// from any payload empties the row and reds the gate. Needs the studio cookie
+// (STUDIO_ACCESS_TOKEN, sourced by ship.sh); skips locally without it.
+test("product analytics: events aggregate into the Top-products leaderboard", async ({ page }) => {
+  const token = process.env.STUDIO_ACCESS_TOKEN;
+  test.skip(!token, "STUDIO_ACCESS_TOKEN not set");
+  const quizId = process.env.SMOKE_PP_QUIZ || "cmqwbjef4001gqvl1gpr2hrzx";
+  const pid = "pp-smoke-prod";
+  const session = "pp-smoke-sess";
+
+  await page.goto(`/studio?key=${token}`, { waitUntil: "domcontentloaded" });
+
+  const status = await page.evaluate(
+    async ([quiz, sess, p]) => {
+      const r = await fetch("/events", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          events: [
+            { quiz_id: quiz, session_id: sess, event_type: "recommendation_viewed", payload: { product_ids: [p] } },
+            { quiz_id: quiz, session_id: sess, event_type: "recommendation_clicked", payload: { product_id: p } },
+            { quiz_id: quiz, session_id: sess, event_type: "add_to_cart", payload: { product_id: p } },
+          ],
+        }),
+      });
+      return r.status;
+    },
+    [quizId, session, pid],
+  );
+  expect(status).toBe(202);
+
+  await page.waitForTimeout(1000); // let the writes land
+
+  const row = (await page.evaluate(async ([quiz, p]) => {
+    const u = `/studio/${quiz}/analytics?_data=routes%2Fstudio.%24id_.analytics`;
+    const d = await (await fetch(u, { headers: { accept: "application/json" } })).json();
+    return (d.topProducts ?? []).find((x: { productId: string }) => x.productId === p) ?? null;
+  }, [quizId, pid])) as {
+    impressions: number;
+    clicks: number;
+    addToCart: number;
+    ctr: number;
+  } | null;
+
+  expect(row).not.toBeNull();
+  expect(row!.impressions).toBeGreaterThanOrEqual(1);
+  expect(row!.clicks).toBeGreaterThanOrEqual(1);
+  expect(row!.addToCart).toBeGreaterThanOrEqual(1);
+  expect(row!.ctr).toBeGreaterThan(0);
+  expect(row!.ctr).toBeLessThanOrEqual(1);
+});
