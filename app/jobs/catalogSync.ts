@@ -1,5 +1,6 @@
 import type { AdminApiContext } from "@shopify/shopify-app-remix/server";
 import prisma from "../db.server";
+import { runResilientUpserts, type ResilientUpsertResult } from "../lib/resilientUpserts";
 
 // Shopify bulk operation runner: kicks off a bulk products query, polls until
 // done, streams the JSONL result, normalizes into our DB. Spec §3.1.
@@ -135,6 +136,9 @@ interface NormalizedProduct {
 interface SyncResult {
   productCount: number;
   collectionCount: number;
+  // HII-3 — rows that failed to upsert and were skipped (logged). A partial sync
+  // still completes; a SYSTEMIC failure (>20% of a meaningful sample) throws instead.
+  errorCount: number;
   startedAt: Date;
   finishedAt: Date;
 }
@@ -161,15 +165,28 @@ export async function syncCatalogForShopId(
 ): Promise<SyncResult> {
   const startedAt = new Date();
   try {
-    const collectionCount = await syncCollections(admin, shopId);
-    const productCount = await syncProducts(admin, shopId, opts?.storefrontDomain);
+    const collections = await syncCollections(admin, shopId);
+    const products = await syncProducts(admin, shopId, opts?.storefrontDomain);
+    const errorCount = collections.errors + products.errors;
+    if (errorCount > 0) {
+      console.warn(
+        `[catalogSync] shop ${shopId} synced with ${errorCount} skipped row error(s) ` +
+          `(${products.errors} product, ${collections.errors} collection)`,
+      );
+    }
 
     await prisma.shop.update({
       where: { id: shopId },
       data: { lastSyncAt: new Date(), lastSyncStatus: "ok", lastSyncError: null },
     });
 
-    return { productCount, collectionCount, startedAt, finishedAt: new Date() };
+    return {
+      productCount: products.count,
+      collectionCount: collections.count,
+      errorCount,
+      startedAt,
+      finishedAt: new Date(),
+    };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     await prisma.shop.update({
@@ -191,47 +208,48 @@ export async function ensureShop(shopDomain: string) {
 async function syncCollections(
   admin: AdminApiContext,
   shopId: string,
-): Promise<number> {
+): Promise<ResilientUpsertResult> {
   const res = await admin.graphql(COLLECTIONS_QUERY);
   const body = (await res.json()) as {
     data?: {
       collections?: { edges?: { node: { id: string; title: string; handle?: string } }[] };
     };
   };
-  const edges = body.data?.collections?.edges ?? [];
-  let count = 0;
-  for (const edge of edges) {
-    const node = edge.node;
-    await prisma.collection.upsert({
-      where: { collectionId: node.id },
-      update: {
-        title: node.title,
-        handle: node.handle ?? null,
-        shopId,
-      },
-      create: {
-        collectionId: node.id,
-        shopId,
-        title: node.title,
-        handle: node.handle ?? null,
-        productIds: [],
-      },
-    });
-    count++;
-  }
-  return count;
+  const nodes = (body.data?.collections?.edges ?? []).map((e) => e.node);
+  // HII-3 — per-row resilient upsert: one bad collection no longer aborts the sync.
+  return runResilientUpserts(
+    nodes,
+    async (node) => {
+      await prisma.collection.upsert({
+        where: { collectionId: node.id },
+        update: {
+          title: node.title,
+          handle: node.handle ?? null,
+          shopId,
+        },
+        create: {
+          collectionId: node.id,
+          shopId,
+          title: node.title,
+          handle: node.handle ?? null,
+          productIds: [],
+        },
+      });
+    },
+    { label: "collection", idOf: (n) => n.id },
+  );
 }
 
 async function syncProducts(
   admin: AdminApiContext,
   shopId: string,
   storefrontDomain?: string,
-): Promise<number> {
+): Promise<ResilientUpsertResult> {
   const bulkOp = await startBulk(admin, BULK_QUERY);
   const url = await waitForBulk(admin, bulkOp.id);
   if (!url) {
     // Empty catalog — Shopify returns null url when no data was produced.
-    return 0;
+    return { count: 0, errors: 0 };
   }
   return ingestJsonl(url, shopId, storefrontDomain);
 }
@@ -304,7 +322,7 @@ async function ingestJsonl(
   url: string,
   shopId: string,
   storefrontDomain?: string,
-): Promise<number> {
+): Promise<ResilientUpsertResult> {
   const res = await fetch(url);
   if (!res.ok) throw new Error(`Failed to fetch JSONL: ${res.status}`);
   const text = await res.text();
@@ -366,56 +384,60 @@ async function ingestJsonl(
     }
   }
 
-  for (const p of products.values()) {
-    // Standalone connector: write the real storefront URL so the "Shop now"
-    // click-through resolves (the standalone runtime has no Shopify cart
-    // permalink). Embedded sync passes no domain → url stays null (embedded
-    // products build a cart permalink from the variant GID instead).
-    const storefrontUrl =
-      storefrontDomain && p.handle ? `https://${storefrontDomain}/products/${p.handle}` : null;
-    await prisma.product.upsert({
-      where: { productId: p.productId },
-      update: {
-        shopId,
-        title: p.title,
-        handle: p.handle,
-        vendor: p.vendor,
-        productType: p.productType,
-        status: p.status,
-        tags: p.tags,
-        collectionIds: p.collectionIds,
-        variants: p.variants as never,
-        metafields: p.metafields as never,
-        imageUrl: p.imageUrl,
-        priceMin: p.priceMin,
-        priceMax: p.priceMax,
-        currency: p.currency,
-        descriptionHtml: p.descriptionHtml,
-        descriptionText: p.descriptionText,
-        url: storefrontUrl,
-      },
-      create: {
-        productId: p.productId,
-        shopId,
-        title: p.title,
-        handle: p.handle,
-        vendor: p.vendor,
-        productType: p.productType,
-        status: p.status,
-        tags: p.tags,
-        collectionIds: p.collectionIds,
-        variants: p.variants as never,
-        metafields: p.metafields as never,
-        imageUrl: p.imageUrl,
-        priceMin: p.priceMin,
-        priceMax: p.priceMax,
-        currency: p.currency,
-        descriptionHtml: p.descriptionHtml,
-        descriptionText: p.descriptionText,
-        url: storefrontUrl,
-      },
-    });
-  }
-
-  return products.size;
+  // HII-3 — per-row resilient upsert: one malformed product no longer aborts the
+  // whole detached sync; it's logged + skipped and the rest of the catalog lands.
+  return runResilientUpserts(
+    [...products.values()],
+    async (p) => {
+      // Standalone connector: write the real storefront URL so the "Shop now"
+      // click-through resolves (the standalone runtime has no Shopify cart
+      // permalink). Embedded sync passes no domain → url stays null (embedded
+      // products build a cart permalink from the variant GID instead).
+      const storefrontUrl =
+        storefrontDomain && p.handle ? `https://${storefrontDomain}/products/${p.handle}` : null;
+      await prisma.product.upsert({
+        where: { productId: p.productId },
+        update: {
+          shopId,
+          title: p.title,
+          handle: p.handle,
+          vendor: p.vendor,
+          productType: p.productType,
+          status: p.status,
+          tags: p.tags,
+          collectionIds: p.collectionIds,
+          variants: p.variants as never,
+          metafields: p.metafields as never,
+          imageUrl: p.imageUrl,
+          priceMin: p.priceMin,
+          priceMax: p.priceMax,
+          currency: p.currency,
+          descriptionHtml: p.descriptionHtml,
+          descriptionText: p.descriptionText,
+          url: storefrontUrl,
+        },
+        create: {
+          productId: p.productId,
+          shopId,
+          title: p.title,
+          handle: p.handle,
+          vendor: p.vendor,
+          productType: p.productType,
+          status: p.status,
+          tags: p.tags,
+          collectionIds: p.collectionIds,
+          variants: p.variants as never,
+          metafields: p.metafields as never,
+          imageUrl: p.imageUrl,
+          priceMin: p.priceMin,
+          priceMax: p.priceMax,
+          currency: p.currency,
+          descriptionHtml: p.descriptionHtml,
+          descriptionText: p.descriptionText,
+          url: storefrontUrl,
+        },
+      });
+    },
+    { label: "product", idOf: (p) => p.productId },
+  );
 }
