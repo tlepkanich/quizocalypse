@@ -16,6 +16,7 @@ import { QuestionCard } from "./QuestionCard";
 import { TableView } from "./TableView";
 import { ContinueGuard } from "./ContinueGuard";
 import { QuestionBankDrawer } from "../../studio/QuestionBankDrawer";
+import { LogicFlowMap } from "../../logic/LogicFlowMap";
 import type { TableFilter } from "./tableFilters";
 import type { SkipOption } from "./AnswerRow";
 
@@ -88,7 +89,7 @@ export function QuestionsLogicLayout({
     [doc, categories],
   );
 
-  const [view, setView] = useState<"builder" | "table">("builder");
+  const [view, setView] = useState<"builder" | "table" | "flow">("builder");
   const [activeId, setActiveId] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [pendingScrollId, setPendingScrollId] = useState<string | null>(null);
@@ -329,12 +330,15 @@ export function QuestionsLogicLayout({
       {/* ── Body: 260px left + scrolling main ── */}
       <div className="qz-ql-body">
         <aside className="qz-ql-left">
-          <div className="qz-ql-tabs qz-segmented qz-segmented--fill" role="group" aria-label="Builder or Table view">
+          <div className="qz-ql-tabs qz-segmented qz-segmented--fill" role="group" aria-label="Builder, Table, or Flow view">
             <button type="button" aria-pressed={view === "builder"} onClick={() => setView("builder")}>
               Builder
             </button>
             <button type="button" aria-pressed={view === "table"} onClick={() => setView("table")}>
               Table
+            </button>
+            <button type="button" aria-pressed={view === "flow"} onClick={() => setView("flow")}>
+              Flow
             </button>
           </div>
 
@@ -403,7 +407,7 @@ export function QuestionsLogicLayout({
               )}
             </div>
           </div>
-        ) : (
+        ) : view === "table" ? (
           <div className="qz-ql-main">
             <TableView
               doc={doc}
@@ -414,6 +418,15 @@ export function QuestionsLogicLayout({
               activeId={activeId}
               onActivate={setActiveId}
               onCommit={onCommit}
+            />
+          </div>
+        ) : (
+          <div className="qz-ql-main qz-ql-flowmain">
+            <LogicFlowMap
+              doc={doc}
+              categories={categories}
+              selectedNodeId={activeId}
+              onSelectResult={setActiveId}
             />
           </div>
         )}

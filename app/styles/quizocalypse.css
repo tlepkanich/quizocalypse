@@ -1478,6 +1478,10 @@ body[data-qz] ::selection { background: var(--qz-ink); color: var(--qz-cream); }
   background: var(--ql-surface);
   position: relative;
 }
+/* Flow view — the read-only LogicFlowMap card gets a gutter inside the main area. */
+.qz-ql-flowmain {
+  padding: 16px;
+}
 .qz-ql-cards {
   max-width: 720px;
   margin: 0 auto;
