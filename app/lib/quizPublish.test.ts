@@ -150,6 +150,51 @@ describe("collectReferencedCategoryIds", () => {
     const ids = collectReferencedCategoryIds(doc);
     expect(ids.has("cat_points")).toBe(true);
   });
+
+  it("unions ALL four category sources: results_pages + result-node category_id + stage category_id + points answers", () => {
+    const doc = Quiz.parse({
+      quiz_id: "q",
+      scope: { collection_ids: [] },
+      nodes: [
+        { id: "intro", type: "intro", position: { x: 0, y: 0 }, data: { headline: "Hi" } },
+        {
+          id: "q1",
+          type: "question",
+          position: { x: 1, y: 0 },
+          data: {
+            text: "?",
+            question_type: "single_select",
+            answers: [
+              { id: "a1", text: "A", tags: [], edge_handle_id: "h1", points: { cat_points: 1 } },
+              { id: "a2", text: "B", tags: [], edge_handle_id: "h2" },
+            ],
+          },
+        },
+        {
+          id: "r1",
+          type: "result",
+          position: { x: 2, y: 0 },
+          data: {
+            headline: "R",
+            fallback_collection_id: "gid://shopify/Collection/fb",
+            category_id: "cat_node",
+            match_ladder: ["points"], // makes the points-answer categories referenced
+            stages: [{ id: "s1", category_id: "cat_stage", match_ladder: ["category"] }],
+          },
+        },
+      ],
+      edges: [
+        { id: "e1", source: "intro", target: "q1" },
+        { id: "e2", source: "q1", target: "r1" },
+      ],
+      // legacy results_pages archetype entry — its category_id is also collected.
+      results_pages: [
+        { id: "legacy", headline: "L", product_ids: [], match_strategy: "archetype", category_id: "cat_legacy" },
+      ],
+    });
+    const ids = collectReferencedCategoryIds(doc);
+    expect([...ids].sort()).toEqual(["cat_legacy", "cat_node", "cat_points", "cat_stage"]);
+  });
 });
 
 describe("collectRecommendableProductIds (product_index must contain bucket products)", () => {

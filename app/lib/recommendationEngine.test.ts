@@ -471,6 +471,27 @@ describe("recommendForResult — v3 match ladder", () => {
     expect(out[0]!.product_id).toBe("p5");
   });
 
+  it("ranking=best_seller sorts DESC by the __rank_bestseller metafield", () => {
+    const ranked: IndexedProduct[] = baseProducts.map((p) => ({
+      ...p,
+      metafields: { __rank_bestseller: { p1: "10", p2: "30", p3: "20", p5: "5" }[p.product_id] ?? "0" },
+    }));
+    const quiz = ladderQuiz({ match_ladder: ["collection"], collection_id: "c-cleansers", ranking: "best_seller" });
+    const out = recommendForResult({ quiz, productIndex: ranked, selectedAnswerIds: [], resultNodeId: "r1" });
+    // p4 is OOS (dropped); the in-stock pool sorts by the metafield DESC: p2(30) p3(20) p1(10) p5(5).
+    expect(out.map((p) => p.product_id).slice(0, 3)).toEqual(["p2", "p3", "p1"]);
+  });
+
+  it("ranking=best_seller with NO mapped metafield falls back to base relevance order", () => {
+    const quiz = ladderQuiz({ match_ladder: ["collection"], collection_id: "c-cleansers", ranking: "best_seller" });
+    const base = ladderQuiz({ match_ladder: ["collection"], collection_id: "c-cleansers", ranking: "relevance" });
+    const args = { productIndex: baseProducts, selectedAnswerIds: [], resultNodeId: "r1" };
+    // baseProducts carry no __rank_bestseller → hasData false → identical to relevance.
+    expect(recommendForResult({ quiz, ...args }).map((p) => p.product_id)).toEqual(
+      recommendForResult({ quiz: base, ...args }).map((p) => p.product_id),
+    );
+  });
+
   it("oos_behavior=hide drops out-of-stock products", () => {
     const quiz = ladderQuiz({ match_ladder: ["tag"], oos_behavior: "hide" });
     const out = recommendForResult({
