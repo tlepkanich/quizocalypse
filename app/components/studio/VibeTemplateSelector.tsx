@@ -105,6 +105,10 @@ export function VibeTemplateSelector({
             onClick={() => onApply(t)}
             disabled={busy}
             aria-pressed={selected}
+            // The card's text content (name + description + feel) would otherwise
+            // form a long, verbose accessible name; a concise label names the theme
+            // and its selected state for screen-reader users (aria-pressed conveys toggle).
+            aria-label={`${t.name} theme${selected ? (modified ? ", selected, modified" : ", selected") : ""}`}
             className="qz-card qz-interactive"
             style={{
               display: "flex",

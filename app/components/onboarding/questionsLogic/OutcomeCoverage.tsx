@@ -28,6 +28,12 @@ export function OutcomeCoverage({
             tier === "orphan" ? "is-orphan" : tier === "weak" ? "is-weak" : "is-covered";
           const dotColor =
             tier === "orphan" ? "var(--ql-danger)" : tier === "weak" ? "var(--ql-warn)" : color.solid;
+          // WCAG 1.4.1 — the tier must read without relying on colour. A shape-distinct
+          // glyph (orphan ! · weak ◐ · strong ●) carries the tier visually; a
+          // visually-hidden word carries it to screen readers.
+          const glyph = tier === "orphan" ? "!" : tier === "weak" ? "◐" : "●";
+          const tierWord =
+            tier === "orphan" ? "no coverage" : tier === "weak" ? "weak coverage" : "covered";
           const title =
             tier === "orphan"
               ? `${c.name}: no answers map here yet`
@@ -45,8 +51,11 @@ export function OutcomeCoverage({
               }
               title={title}
             >
-              <span className="qz-ql-cov-dot" style={{ background: dotColor }} aria-hidden />
+              <span className="qz-ql-cov-dot" style={{ color: dotColor }} aria-hidden>
+                {glyph}
+              </span>
               {c.name}
+              <span className="qz-sr-only"> — {tierWord}</span>
             </span>
           );
         })}

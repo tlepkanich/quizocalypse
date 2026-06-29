@@ -1,5 +1,5 @@
 import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
-import type { CSSProperties } from "react";
+import type { CSSProperties, KeyboardEvent as ReactKeyboardEvent } from "react";
 import { Link, useFetcher, useRevalidator } from "@remix-run/react";
 import {
   QzPage,
@@ -380,6 +380,10 @@ function FunnelProgress({ stage }: { stage: FunnelData["stage"] }) {
         <span
           key={s.key}
           className="qz-row"
+          // H4 a11y — mark the CURRENT step for screen readers (the reached/active
+          // state was otherwise conveyed only by colour). The dot below adds a
+          // filled-vs-hollow non-colour cue (WCAG 1.4.1).
+          aria-current={i === activeIdx ? "step" : undefined}
           style={{ gap: 6, fontSize: 12.5, color: i <= activeIdx ? "var(--qz-ink)" : "var(--qz-ink-4)" }}
         >
           <span
@@ -388,8 +392,10 @@ function FunnelProgress({ stage }: { stage: FunnelData["stage"] }) {
               width: 7,
               height: 7,
               borderRadius: 999,
-              background: i <= activeIdx ? "var(--qz-accent)" : "var(--qz-ink-4)",
-              opacity: i <= activeIdx ? 1 : 0.4,
+              boxSizing: "border-box",
+              background: i <= activeIdx ? "var(--qz-accent)" : "transparent",
+              border: i <= activeIdx ? "none" : "1.5px solid var(--qz-ink-4)",
+              opacity: i <= activeIdx ? 1 : 0.6,
             }}
           />
           {s.label}
@@ -1060,6 +1066,29 @@ function RecommendationBucketsStage({
     doSwitchTab(type, false);
   };
 
+  // H4 a11y — roving-tabindex arrow-key navigation for the bucket-source tablist
+  // (the ARIA tablist keyboard pattern). MANUAL activation: ←/→/Home/End move
+  // focus only; the tab's native Enter/Space click activates — so arrowing never
+  // trips the switch-tab confirm modal.
+  const tablistRef = useRef<HTMLDivElement>(null);
+  const onTabKeyDown = (e: ReactKeyboardEvent<HTMLDivElement>) => {
+    if (!["ArrowRight", "ArrowLeft", "Home", "End"].includes(e.key)) return;
+    const tabs = Array.from(
+      tablistRef.current?.querySelectorAll<HTMLButtonElement>('[role="tab"]:not([disabled])') ?? [],
+    );
+    if (tabs.length === 0) return;
+    const currentIdx = tabs.findIndex((el) => el === document.activeElement);
+    const base = currentIdx < 0 ? 0 : currentIdx;
+    const nextIdx =
+      e.key === "Home"
+        ? 0
+        : e.key === "End"
+          ? tabs.length - 1
+          : (base + (e.key === "ArrowRight" ? 1 : -1) + tabs.length) % tabs.length;
+    e.preventDefault();
+    tabs[nextIdx]?.focus();
+  };
+
   const dismissBanner = () => {
     setDismissed(true);
     fetcher.submit({ intent: "dismiss-banner" }, { method: "post" });
@@ -1149,7 +1178,13 @@ function RecommendationBucketsStage({
 
       {/* 2 — Catalog browser */}
       <QzCard flush className="qz-rb-browser">
-        <div className="qz-rb-tabs" role="tablist" aria-label="Bucket source">
+        <div
+          className="qz-rb-tabs"
+          role="tablist"
+          aria-label="Bucket source"
+          ref={tablistRef}
+          onKeyDown={onTabKeyDown}
+        >
           {TAB_META.map((t) => {
             const n = tabCounts[t.type];
             const on = t.type === activeTab;
@@ -1159,6 +1194,9 @@ function RecommendationBucketsStage({
                 type="button"
                 role="tab"
                 aria-selected={on}
+                // Roving tabindex: only the selected tab is in the Tab order; ←/→
+                // move between tabs (onTabKeyDown focuses the others programmatically).
+                tabIndex={on ? 0 : -1}
                 className={`qz-rb-tab${on ? " is-active" : ""}`}
                 disabled={n === 0 && t.type !== "product"}
                 onClick={() => switchTab(t.type)}
