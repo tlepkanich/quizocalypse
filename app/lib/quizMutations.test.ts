@@ -148,6 +148,22 @@ describe("duplicateQuestionNode / insertQuestionRelative (Question-Builder spec)
     expect(q(cleared, "q1").data.answers.find((a) => a.id === "q1_a1")!.points).toBeUndefined();
   });
 
+  it("setAnswerBucketDirect is a no-op on a WEIGHTED quiz (never flattens a weighted map)", () => {
+    const q = (d: ReturnType<typeof linearQuestionsDoc>, id: string) =>
+      d.nodes.find((n) => n.id === id) as Extract<(typeof d.nodes)[number], { type: "question" }>;
+    // Build a weighted multi-bucket map, then mark the quiz weighted.
+    let d = setAnswerBucketWeight(linearQuestionsDoc(), "q1", "q1_a1", "cat-oily", 3);
+    d = setAnswerBucketWeight(d, "q1", "q1_a1", "cat-dry", 1);
+    d = { ...d, scoring_model: "weighted" };
+    // A stray direct call (stale UI / desync) must NOT collapse {oily:3, dry:1} → {oily:1}.
+    const after = setAnswerBucketDirect(d, "q1", "q1_a1", "cat-oily");
+    expect(q(after, "q1").data.answers.find((a) => a.id === "q1_a1")!.points).toEqual({
+      "cat-oily": 3,
+      "cat-dry": 1,
+    });
+    expect(after).toBe(d); // exact no-op, same reference
+  });
+
   it("setAnswerBucketWeight sets/updates one bucket's weight, preserving others; ≤0 removes it", () => {
     const q = (d: ReturnType<typeof linearQuestionsDoc>, id: string) =>
       d.nodes.find((n) => n.id === id) as Extract<(typeof d.nodes)[number], { type: "question" }>;

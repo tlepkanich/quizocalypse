@@ -992,12 +992,17 @@ function updateAnswerPoints(
 
 // Direct mapping: an answer awards points to EXACTLY ONE bucket (weight 1).
 // Passing null clears the answer's mapping. Replaces any prior weights.
+// Defense-in-depth: a no-op on a WEIGHTED quiz (the inline pill is direct-only,
+// and the UIs disable it in weighted mode) so it can never silently flatten a
+// weighted multi-bucket map down to {cat:1} — edit weighted maps via
+// setAnswerBucketWeight instead.
 export function setAnswerBucketDirect(
   doc: QuizDoc,
   questionNodeId: string,
   answerId: string,
   categoryId: string | null,
 ): QuizDoc {
+  if ((doc.scoring_model ?? "direct") === "weighted") return doc;
   return updateAnswerPoints(
     doc,
     questionNodeId,

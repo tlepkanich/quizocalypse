@@ -50,14 +50,18 @@ export function QuestionList({
               <span className="qz-ql-qitem-meta">
                 {TYPE_LABEL[node.data.question_type] ?? node.data.question_type}
                 {node.data.ai_generated ? (
-                  <span className="qz-ql-dot is-ai" title="AI-generated" aria-label="AI-generated" />
+                  <span className="qz-ql-dot is-ai" title="AI-generated" aria-label="AI-generated">
+                    ✦
+                  </span>
                 ) : null}
                 {unmapped ? (
                   <span
                     className="qz-ql-dot is-warn"
                     title="An answer has no bucket mapped"
                     aria-label="Has an unmapped answer"
-                  />
+                  >
+                    !
+                  </span>
                 ) : null}
               </span>
             </span>

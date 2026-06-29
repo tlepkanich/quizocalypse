@@ -1337,11 +1337,19 @@ body[data-qz] ::selection { background: var(--qz-ink); color: var(--qz-cream); }
   color: var(--ql-txt3);
 }
 .qz-ql-dot {
-  width: 7px;
-  height: 7px;
+  width: 13px;
+  height: 13px;
   border-radius: 50%;
-  display: inline-block;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 9px;
+  font-weight: 800;
+  line-height: 1;
+  color: #fff;
 }
+/* Distinct GLYPHS (not color alone) so the two indicators are distinguishable
+   without relying on hue — WCAG 1.4.1. ✦ = AI-generated, ! = unmapped answer. */
 .qz-ql-dot.is-ai { background: #7c3aed; }
 .qz-ql-dot.is-warn { background: var(--ql-warn); }
 .qz-ql-coverage {
@@ -1507,7 +1515,7 @@ body[data-qz] ::selection { background: var(--qz-ink); color: var(--qz-cream); }
 .qz-ql-ahead,
 .qz-ql-arow {
   display: grid;
-  grid-template-columns: 16px 22px minmax(0, 1fr) 180px 130px 24px;
+  grid-template-columns: 22px minmax(0, 1fr) 180px 130px 24px;
   gap: 8px;
   align-items: center;
 }
@@ -1521,9 +1529,9 @@ body[data-qz] ::selection { background: var(--qz-ink); color: var(--qz-cream); }
   letter-spacing: 0.5px;
   color: var(--ql-txt3);
 }
-.qz-ql-ahead-answer { grid-column: 3; }
-.qz-ql-ahead-bucket { grid-column: 4; }
-.qz-ql-ahead-skip { grid-column: 5; }
+.qz-ql-ahead-answer { grid-column: 2; }
+.qz-ql-ahead-bucket { grid-column: 3; }
+.qz-ql-ahead-skip { grid-column: 4; }
 .qz-ql-arows {
   display: flex;
   flex-direction: column;
@@ -1534,14 +1542,6 @@ body[data-qz] ::selection { background: var(--qz-ink); color: var(--qz-cream); }
   min-height: 44px;
   padding: 4px 0;
 }
-.qz-ql-drag {
-  color: var(--ql-txt3);
-  cursor: grab;
-  font-size: 13px;
-  opacity: 0;
-  text-align: center;
-}
-.qz-ql-arow:hover .qz-ql-drag { opacity: 0.6; }
 .qz-ql-bullet {
   width: 22px;
   height: 22px;
@@ -1578,6 +1578,18 @@ body[data-qz] ::selection { background: var(--qz-ink); color: var(--qz-cream); }
 }
 .qz-ql-bucket.is-unset { color: var(--ql-txt3); }
 .qz-ql-bucket.is-mapped { font-weight: 600; }
+/* Disabled state (bucket pill on a weighted quiz) — make it visibly inert. */
+.qz-ql-bucket:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+/* Keyboard focus parity with the rest of the form system. */
+.qz-ql-bucket:focus-visible,
+.qz-ql-skip:focus-visible {
+  outline: none;
+  border-color: var(--qz-accent);
+  box-shadow: var(--qz-shadow-focus);
+}
 .qz-ql-skip.is-active {
   color: var(--ql-warn);
   background: var(--ql-warn-bg);

@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 
 // Questions & Logic spec §8 — the orphaned-bucket soft-warning shown when the
@@ -15,6 +15,8 @@ export function ContinueGuard({
   onFix: () => void;
   onContinueAnyway: () => void;
 }) {
+  const fixRef = useRef<HTMLButtonElement>(null);
+
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") onFix();
@@ -22,6 +24,15 @@ export function ContinueGuard({
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [onFix]);
+
+  // Focus management for the modal alertdialog: move focus to the safe "Fix it"
+  // action on open, and restore it to the element that triggered the guard (the
+  // Continue button) on close — so keyboard/screen-reader users aren't stranded.
+  useEffect(() => {
+    const prev = document.activeElement as HTMLElement | null;
+    fixRef.current?.focus();
+    return () => prev?.focus?.();
+  }, []);
 
   if (typeof document === "undefined") return null;
   const n = bucketNames.length;
@@ -48,7 +59,7 @@ export function ContinueGuard({
           answer to {n === 1 ? "it" : "each"} so it can be recommended.
         </p>
         <div className="qz-ql-guard-actions">
-          <button type="button" className="qz-btn qz-btn-ghost" onClick={onFix}>
+          <button type="button" ref={fixRef} className="qz-btn qz-btn-ghost" onClick={onFix}>
             Fix it
           </button>
           <button type="button" className="qz-btn qz-btn-accent" onClick={onContinueAnyway}>

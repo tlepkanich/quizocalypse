@@ -65,9 +65,6 @@ export function AnswerRow({
 
   return (
     <div className="qz-ql-arow">
-      <span className="qz-ql-drag" aria-hidden title="Drag to reorder">
-        ⠿
-      </span>
       <span
         className="qz-ql-bullet"
         style={{ background: answerLetterColor(index) }}
