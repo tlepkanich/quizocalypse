@@ -1294,6 +1294,17 @@ body[data-qz] ::selection { background: var(--qz-ink); color: var(--qz-cream); }
   gap: 2px;
 }
 .qz-ql-qitem {
+  position: relative;
+  border-left: 3px solid transparent;
+  border-radius: 7px;
+  color: var(--ql-txt);
+}
+.qz-ql-qitem:hover { background: var(--ql-border2); }
+.qz-ql-qitem.is-active {
+  background: #eff6ff;
+  border-left-color: var(--ql-accent);
+}
+.qz-ql-qitem-select {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -1301,16 +1312,56 @@ body[data-qz] ::selection { background: var(--qz-ink); color: var(--qz-cream); }
   text-align: left;
   background: none;
   border: 0;
-  border-left: 3px solid transparent;
   border-radius: 7px;
   padding: 7px 8px;
   cursor: pointer;
+  color: inherit;
+  font: inherit;
+}
+/* Hover/focus-revealed per-question action toolbar (move ↑↓ · add above/below ·
+   duplicate). A floating white cluster so it reads cleanly over the row text. */
+.qz-ql-qitem-actions {
+  position: absolute;
+  top: 50%;
+  right: 4px;
+  transform: translateY(-50%);
+  display: flex;
+  gap: 1px;
+  padding: 2px;
+  border-radius: 6px;
+  background: #fff;
+  box-shadow: 0 1px 5px rgba(17, 17, 17, 0.12);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.12s ease;
+}
+.qz-ql-qitem:hover .qz-ql-qitem-actions,
+.qz-ql-qitem:focus-within .qz-ql-qitem-actions {
+  opacity: 1;
+  pointer-events: auto;
+}
+.qz-ql-qitem-actions button {
+  font-size: 11px;
+  line-height: 1;
+  padding: 3px 4px;
+  min-width: 20px;
+  background: none;
+  border: 0;
+  border-radius: 4px;
+  color: var(--ql-txt2);
+  cursor: pointer;
+}
+.qz-ql-qitem-actions button:hover:not(:disabled) {
+  background: var(--ql-border2);
   color: var(--ql-txt);
 }
-.qz-ql-qitem:hover { background: var(--ql-border2); }
-.qz-ql-qitem.is-active {
-  background: #eff6ff;
-  border-left-color: var(--ql-accent);
+.qz-ql-qitem-actions button:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+.qz-ql-qitem-actions button:focus-visible {
+  outline: none;
+  box-shadow: var(--qz-shadow-focus);
 }
 .qz-ql-qitem-badge {
   flex: 0 0 auto;

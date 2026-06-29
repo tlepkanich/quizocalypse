@@ -17,55 +17,109 @@ const TYPE_LABEL: Record<string, string> = {
   email: "Email",
 };
 
+export type RowAction = "up" | "down" | "above" | "below" | "duplicate";
+
 // Questions & Logic spec §2.3 — the left-panel question list. Q badge, truncated
-// text, type label + purple AI dot (AI-generated) + amber dot (an answer with no
-// bucket). Active item highlights; clicking scrolls the main area to that card.
+// text, type label + ✦ AI glyph + ! amber unmapped glyph. Active item highlights;
+// clicking the row scrolls the main area to that card. Each row reveals a compact
+// action cluster on hover/focus: move up/down (reorder), add above/below, duplicate.
 export function QuestionList({
   questions,
   activeId,
   onSelect,
+  onRowAction,
 }: {
   questions: OrderedQuestion[];
   activeId: string | null;
   onSelect: (nodeId: string) => void;
+  onRowAction: (nodeId: string, action: RowAction) => void;
 }) {
+  const last = questions.length - 1;
   return (
     <div className="qz-ql-qlist" role="list">
-      {questions.map(({ node, qIndex }) => {
+      {questions.map(({ node, qIndex }, i) => {
         const unmapped = questionHasUnmappedAnswer(node);
         return (
-          <button
+          <div
             key={node.id}
-            type="button"
             role="listitem"
             className={`qz-ql-qitem ${activeId === node.id ? "is-active" : ""}`}
-            onClick={() => onSelect(node.id)}
-            title={node.data.text}
           >
-            <span className="qz-ql-qitem-badge">Q{qIndex}</span>
-            <span className="qz-ql-qitem-main">
-              <span className="qz-ql-qitem-text">
-                {node.data.text || "Untitled question"}
+            <button
+              type="button"
+              className="qz-ql-qitem-select"
+              onClick={() => onSelect(node.id)}
+              title={node.data.text}
+            >
+              <span className="qz-ql-qitem-badge">Q{qIndex}</span>
+              <span className="qz-ql-qitem-main">
+                <span className="qz-ql-qitem-text">
+                  {node.data.text || "Untitled question"}
+                </span>
+                <span className="qz-ql-qitem-meta">
+                  {TYPE_LABEL[node.data.question_type] ?? node.data.question_type}
+                  {node.data.ai_generated ? (
+                    <span className="qz-ql-dot is-ai" title="AI-generated" aria-label="AI-generated">
+                      ✦
+                    </span>
+                  ) : null}
+                  {unmapped ? (
+                    <span
+                      className="qz-ql-dot is-warn"
+                      title="An answer has no bucket mapped"
+                      aria-label="Has an unmapped answer"
+                    >
+                      !
+                    </span>
+                  ) : null}
+                </span>
               </span>
-              <span className="qz-ql-qitem-meta">
-                {TYPE_LABEL[node.data.question_type] ?? node.data.question_type}
-                {node.data.ai_generated ? (
-                  <span className="qz-ql-dot is-ai" title="AI-generated" aria-label="AI-generated">
-                    ✦
-                  </span>
-                ) : null}
-                {unmapped ? (
-                  <span
-                    className="qz-ql-dot is-warn"
-                    title="An answer has no bucket mapped"
-                    aria-label="Has an unmapped answer"
-                  >
-                    !
-                  </span>
-                ) : null}
-              </span>
-            </span>
-          </button>
+            </button>
+            <div className="qz-ql-qitem-actions">
+              <button
+                type="button"
+                disabled={i === 0}
+                title="Move up"
+                aria-label={`Move question ${qIndex} up`}
+                onClick={() => onRowAction(node.id, "up")}
+              >
+                ↑
+              </button>
+              <button
+                type="button"
+                disabled={i === last}
+                title="Move down"
+                aria-label={`Move question ${qIndex} down`}
+                onClick={() => onRowAction(node.id, "down")}
+              >
+                ↓
+              </button>
+              <button
+                type="button"
+                title="Add a question above"
+                aria-label={`Add a question above question ${qIndex}`}
+                onClick={() => onRowAction(node.id, "above")}
+              >
+                ＋↑
+              </button>
+              <button
+                type="button"
+                title="Add a question below"
+                aria-label={`Add a question below question ${qIndex}`}
+                onClick={() => onRowAction(node.id, "below")}
+              >
+                ＋↓
+              </button>
+              <button
+                type="button"
+                title="Duplicate this question"
+                aria-label={`Duplicate question ${qIndex}`}
+                onClick={() => onRowAction(node.id, "duplicate")}
+              >
+                ⧉
+              </button>
+            </div>
+          </div>
         );
       })}
     </div>

@@ -5,10 +5,12 @@ import { stepNumber, TOTAL_STEPS } from "../../../lib/funnelStages";
 import {
   swapScoringModel,
   insertQuestionRelative,
+  duplicateQuestionNode,
+  moveStep,
   deleteNode,
 } from "../../../lib/quizMutations";
 import { orderedQuestions, bucketMappedCounts, orphanedBucketIds } from "./questionOrder";
-import { QuestionList } from "./QuestionList";
+import { QuestionList, type RowAction } from "./QuestionList";
 import { OutcomeCoverage } from "./OutcomeCoverage";
 import { QuestionCard } from "./QuestionCard";
 import { TableView } from "./TableView";
@@ -213,6 +215,37 @@ export function QuestionsLogicLayout({
     [doc, questions.length, activeId, onCommit],
   );
 
+  // Left-list per-question row actions. Duplicate/insert splice a node into the
+  // spine (fresh ids + edge handles) and scroll to it; up/down reorder via moveStep
+  // (preserves per-answer skip edges; the Q-numbers + skip labels recompute from
+  // orderFlow at render). All ride the same useQuizDraft autosave as every edit.
+  const rowAction = useCallback(
+    (id: string, action: RowAction) => {
+      const before = new Set(doc.nodes.map((n) => n.id));
+      if (action === "duplicate" || action === "above" || action === "below") {
+        const next =
+          action === "duplicate"
+            ? duplicateQuestionNode(doc, id)
+            : insertQuestionRelative(doc, id, action);
+        const newId = next.nodes.find((n) => !before.has(n.id))?.id ?? null;
+        onCommit(next);
+        if (newId) setPendingScrollId(newId);
+        return;
+      }
+      const idx = questions.findIndex((q) => q.node.id === id);
+      if (idx < 0) return;
+      if (action === "up" && idx > 0) {
+        onCommit(moveStep(doc, id, questions[idx - 1]!.node.id));
+        setActiveId(id);
+      } else if (action === "down" && idx < questions.length - 1) {
+        // Move to just before the question AFTER my next sibling (null = become last).
+        onCommit(moveStep(doc, id, questions[idx + 2]?.node.id ?? null));
+        setActiveId(id);
+      }
+    },
+    [doc, questions, onCommit],
+  );
+
   // Continue→ gate: warn if any Step-1 bucket has no answers mapped (the shared
   // orphan predicate). Snapshot the NAMES at check-time so the dialog can't drift.
   const handleContinue = useCallback(() => {
@@ -305,7 +338,12 @@ export function QuestionsLogicLayout({
             </button>
           </div>
 
-          <QuestionList questions={questions} activeId={activeId} onSelect={selectQuestion} />
+          <QuestionList
+            questions={questions}
+            activeId={activeId}
+            onSelect={selectQuestion}
+            onRowAction={rowAction}
+          />
 
           {questions.length < 4 || questions.length > 8 ? (
             <p className="qz-ql-qcount-nudge" role="note">
