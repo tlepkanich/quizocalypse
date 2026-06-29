@@ -45,6 +45,7 @@ import { normalizeTags } from "./enrichTags";
 import { regenerateQuestion } from "./claude";
 import { parseBrandGuidelinesSafe } from "./brandGuidelines";
 import { buildScopedIndex } from "./catalogIndex";
+import { mergeRegeneratedAnswers } from "./regenerateMerge";
 import {
   inverseCollectionIndex,
   hydrateCollectionProducts,
@@ -1105,39 +1106,15 @@ async function runStep1FunnelActionImpl(
       );
     }
 
-    // Carry the bucket mapping (points/points_alt) onto answers whose text the AI
-    // kept unchanged (keyed by normalized text). Reuse the old answer's id +
-    // edge_handle_id BY INDEX so aligned per-answer routing edges still resolve.
-    // NOTE (intentional, ported from the editor): id/handle reuse is positional
-    // while points follow text — so if the AI REORDERS answers, an existing
-    // per-answer skip edge stays bound to its index (may re-bind to a reordered
-    // answer) while bucket mappings correctly follow the text. The 10s undo
-    // restores the exact prior state if that's not what the merchant wanted.
-    const oldAnswers = target.data.answers;
-    const carryByText = new Map<
-      string,
-      { points?: Record<string, number>; points_alt?: Record<string, number> }
-    >();
-    for (const a of oldAnswers) {
-      carryByText.set(a.text.trim().toLowerCase(), {
-        ...(a.points ? { points: a.points } : {}),
-        ...(a.points_alt ? { points_alt: a.points_alt } : {}),
-      });
-    }
-    const mergedAnswers = regen.answers.map((newA, idx) => {
-      const oldA = oldAnswers[idx];
-      const carried = carryByText.get(newA.text.trim().toLowerCase());
-      return {
-        id: oldA?.id ?? `a_${Math.random().toString(36).slice(2, 10)}`,
-        text: newA.text,
-        tags: newA.tags,
-        ...(newA.collection_filter ? { collection_filter: newA.collection_filter } : {}),
-        ...(newA.image_url ? { image_url: newA.image_url } : {}),
-        edge_handle_id: oldA?.edge_handle_id ?? `h_${Math.random().toString(36).slice(2, 10)}`,
-        ...(carried?.points ? { points: carried.points } : {}),
-        ...(carried?.points_alt ? { points_alt: carried.points_alt } : {}),
-      };
-    });
+    // Merge the AI answers with the prior ones, preserving bucket mappings on
+    // unchanged-text answers (text-keyed) + reusing id/edge_handle_id by index so
+    // aligned per-answer routing edges resolve. Pure + unit-tested in regenerateMerge.
+    const mergedAnswers = mergeRegeneratedAnswers(
+      target.data.answers,
+      regen.answers,
+      () => `a_${Math.random().toString(36).slice(2, 10)}`,
+      () => `h_${Math.random().toString(36).slice(2, 10)}`,
+    );
 
     // Prune per-answer routing edges whose source handle no longer exists.
     const handlesNow = new Set(mergedAnswers.map((a) => a.edge_handle_id));
