@@ -432,6 +432,29 @@ export async function runStep1FunnelAction(
   request: Request,
   opts: { builderPath: (quizId: string) => string },
 ): Promise<Response> {
+  // Surface a DB-write / unexpected failure as a PARSEABLE JSON error instead of an
+  // unhandled throw (which Remix routes to the ErrorBoundary, leaving the client's
+  // useQuizDraft saveError blind → a silent "looks saved but didn't" divergence).
+  // Re-throw Responses so returned/thrown redirects survive. Only the FAILURE path
+  // changes — the happy path returns through runStep1FunnelActionImpl unchanged.
+  try {
+    return await runStep1FunnelActionImpl(shop, quizId, request, opts);
+  } catch (err) {
+    if (err instanceof Response) throw err;
+    console.error("[step1Funnel] action failed:", err instanceof Error ? err.message : err);
+    return json(
+      { ok: false, error: "Couldn't save your change — please try again." },
+      { status: 500 },
+    );
+  }
+}
+
+async function runStep1FunnelActionImpl(
+  shop: FunnelShop,
+  quizId: string | undefined,
+  request: Request,
+  opts: { builderPath: (quizId: string) => string },
+): Promise<Response> {
   const { quiz, doc, session } = await loadFunnelDraft(shop.id, quizId);
 
   // JSON PUT autosave — the question_builder editing step. useQuizDraft PUTs the

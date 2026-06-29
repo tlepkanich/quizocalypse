@@ -181,6 +181,21 @@ async function patchBuildSession(
   });
 }
 
+// Best-effort gen_error persist for the DETACHED jobs' failure paths: if writing
+// the error state itself fails (DB hiccup), LOG it but never let it throw — a throw
+// in a void async would strand the funnel on the typing/templating spinner forever.
+// The updatedAt-stall detection + retry-gen is the final backstop ([[detached-job-killed-strands-funnel]]).
+async function writeGenError(
+  quizId: string,
+  mutate: (s: BuildSession) => BuildSession,
+): Promise<void> {
+  try {
+    await patchBuildSession(quizId, mutate);
+  } catch (e) {
+    console.error("[step2] failed to persist gen_error:", e instanceof Error ? e.message : e);
+  }
+}
+
 // The funnel's "typing" job — web research + quiz types, DETACHED (research ~40s +
 // types ~31s outruns the edge window; measured at T2). On success → stage "types"
 // with the cards; on failure → back to "types" (Shape) with a gen_error so the
@@ -205,7 +220,7 @@ export function startStep2Types(
       );
     } catch (err) {
       console.error("[step2] type generation failed:", err instanceof Error ? err.message : err);
-      await patchBuildSession(quizId, (s) =>
+      await writeGenError(quizId, (s) =>
         BuildSession.parse({ ...s, stage: "types", gen_error: friendlyGenError(err) }),
       );
     }
@@ -272,7 +287,7 @@ export function startStep2Templates(
       }
     } catch (err) {
       console.error("[step2] template generation failed:", err instanceof Error ? err.message : err);
-      await patchBuildSession(quizId, (s) =>
+      await writeGenError(quizId, (s) =>
         BuildSession.parse({ ...s, stage: "types", gen_error: friendlyGenError(err) }),
       );
     }
@@ -448,8 +463,8 @@ export async function startQuestionBuild(
     )
     .catch(async (err) => {
       console.error("[step2] question build failed:", err instanceof Error ? err.message : err);
-      await patchBuildSession(quizId, () =>
+      await writeGenError(quizId, () =>
         BuildSession.parse({ ...priorSession, stage: "types", gen_error: friendlyGenError(err) }),
-      ).catch(() => {});
+      );
     });
 }

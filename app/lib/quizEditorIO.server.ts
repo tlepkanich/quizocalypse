@@ -188,6 +188,28 @@ export async function handleQuizEditorActionForShop(
   request: Request,
   getAdmin: () => Promise<Parameters<typeof ensureQuizDiscount>[0]>,
 ) {
+  // Surface a DB-write / unexpected failure as a parseable JSON error rather than
+  // an unhandled throw (ErrorBoundary), so the builder's useQuizDraft saveError can
+  // see it instead of a silent "looks saved but didn't". Re-throw Responses
+  // (redirects) so navigation is preserved; only the FAILURE path changes.
+  try {
+    return await handleQuizEditorActionImpl(shop, id, request, getAdmin);
+  } catch (err) {
+    if (err instanceof Response) throw err;
+    console.error("[quizEditorIO] action failed:", err instanceof Error ? err.message : err);
+    return json(
+      { ok: false, error: "Couldn't save your change — please try again." },
+      { status: 500 },
+    );
+  }
+}
+
+async function handleQuizEditorActionImpl(
+  shop: Shop,
+  id: string,
+  request: Request,
+  getAdmin: () => Promise<Parameters<typeof ensureQuizDiscount>[0]>,
+) {
   const contentType = request.headers.get("content-type") ?? "";
 
   if (contentType.includes("application/json")) {
