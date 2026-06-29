@@ -16,6 +16,7 @@ import {
   straightThroughRun,
   setResultSectionCount,
   setResultStage,
+  setQuestionType,
 } from "./quizMutations";
 import { insertModule } from "../components/studio/studioDoc";
 import { orderFlow } from "./flowOrder";
@@ -475,5 +476,46 @@ describe("Rec-Page §1 multi-section (setResultSectionCount / setResultStage)", 
     const doc = setResultSectionCount(linearQuestionsDoc(), "r1", 1);
     const same = setResultStage(doc, "r1", 5, { headline: "x" });
     expect(same).toBe(doc);
+  });
+});
+
+describe("setQuestionType (Questions & Logic spec §3.1)", () => {
+  it("preserves text + other fields, resets answers to ≥2 fresh, prunes per-answer edges", () => {
+    // Map q1.a1 to a bucket and route it to q3, then flip the type.
+    let doc = linearQuestionsDoc();
+    doc = setAnswerBucketDirect(doc, "q1", "q1_a1", "buk");
+    doc = setAnswerRoute(doc, "q1", "q1_a1", "q3"); // edge on handle q1_h1
+    expect(doc.edges.some((e) => e.source === "q1" && e.source_handle === "q1_h1")).toBe(true);
+
+    const next = setQuestionType(doc, "q1", "multi_select");
+    const q1 = next.nodes.find((n) => n.id === "q1");
+    expect(q1?.type).toBe("question");
+    if (q1?.type !== "question") throw new Error("q1 not a question");
+    expect(q1.data.question_type).toBe("multi_select");
+    expect(q1.data.text).toBe("q1"); // text preserved
+    expect(q1.data.answers).toHaveLength(2); // reset to ≥2
+    // Fresh answers carry no points and brand-new handles.
+    expect(q1.data.answers.every((a) => !a.points)).toBe(true);
+    expect(q1.data.answers.every((a) => a.edge_handle_id !== "q1_h1" && a.edge_handle_id !== "q1_h2")).toBe(true);
+    // The dangling per-answer route edge was pruned.
+    expect(next.edges.some((e) => e.source === "q1" && e.source_handle === "q1_h1")).toBe(false);
+    // Spine edge intro→q1→q2 intact; doc round-trips.
+    expect(next.edges.some((e) => e.source === "q1" && e.target === "q2" && !e.source_handle)).toBe(true);
+    expect(() => Quiz.parse(next)).not.toThrow();
+  });
+
+  it("freeform target resets to a single seed answer", () => {
+    const next = setQuestionType(linearQuestionsDoc(), "q1", "text");
+    const q1 = next.nodes.find((n) => n.id === "q1");
+    if (q1?.type !== "question") throw new Error("q1 not a question");
+    expect(q1.data.question_type).toBe("text");
+    expect(q1.data.answers).toHaveLength(1);
+    expect(() => Quiz.parse(next)).not.toThrow();
+  });
+
+  it("is a no-op for a non-question node and an unknown id", () => {
+    const doc = linearQuestionsDoc();
+    expect(setQuestionType(doc, "intro", "single_select")).toBe(doc);
+    expect(setQuestionType(doc, "nope", "single_select")).toBe(doc);
   });
 });

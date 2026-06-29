@@ -1,5 +1,5 @@
 import { ResultData, ResultStage, isFreeformType } from "./quizSchema";
-import type { Quiz } from "./quizSchema";
+import type { Quiz, QuestionType } from "./quizSchema";
 import type { z } from "zod";
 
 type QuizDoc = z.infer<typeof Quiz>;
@@ -1030,6 +1030,40 @@ export function setAnswerBucketWeight(
 // read) ↔ `points_alt` (the dormant other model). The model you're leaving moves
 // to the sidecar; the model you're entering loads back from it. No-op if already
 // on `next`. Runtime is unchanged — the engine always reads `points`.
+// Questions & Logic spec §3.1 — change a question's type. PRESERVES the question
+// text (and every other QuestionData field) but RESETS the answer options to
+// type-appropriate defaults (card types ≥2, freeform a single seed) with fresh
+// edge handles, and prunes any per-answer routing edges that sourced from the old
+// (now-gone) answer handles so no stale skip edge dangles. Gate behind a "this
+// resets your answers" confirm in the UI. No-op for a non-question node. Pure.
+export function setQuestionType(
+  doc: QuizDoc,
+  nodeId: string,
+  newType: QuestionType,
+): QuizDoc {
+  const node = doc.nodes.find((n) => n.id === nodeId);
+  if (!node || node.type !== "question") return doc;
+  const oldHandles = new Set(node.data.answers.map((a) => a.edge_handle_id));
+  const answers = isFreeformType(newType)
+    ? [{ id: uid("a"), text: "Response", tags: [], edge_handle_id: uid("h") }]
+    : [
+        { id: uid("a"), text: "Option 1", tags: [], edge_handle_id: uid("h") },
+        { id: uid("a"), text: "Option 2", tags: [], edge_handle_id: uid("h") },
+      ];
+  return {
+    ...doc,
+    nodes: doc.nodes.map((n) =>
+      n.id === nodeId && n.type === "question"
+        ? { ...n, data: { ...n.data, question_type: newType, answers } }
+        : n,
+    ),
+    edges: doc.edges.filter(
+      (e) =>
+        !(e.source === nodeId && e.source_handle != null && oldHandles.has(e.source_handle)),
+    ),
+  };
+}
+
 export function swapScoringModel(doc: QuizDoc, next: "direct" | "weighted"): QuizDoc {
   if ((doc.scoring_model ?? "direct") === next) return { ...doc, scoring_model: next };
   const nodes = doc.nodes.map((n) =>

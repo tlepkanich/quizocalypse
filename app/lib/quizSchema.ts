@@ -200,6 +200,12 @@ export const QuestionDataObject = z.object({
       endpoint_label_max: z.string().max(40).optional(),
     })
     .optional(),
+  // Questions & Logic spec §7 — marks a question as AI-generated (pre-populated by
+  // the early build, or replaced by per-question Regenerate). Drives the "✦ AI"
+  // badge; informational only — the engine/runtime never read it. Additive +
+  // optional → absent on manual questions, so published /q JSON is byte-identical
+  // when unset.
+  ai_generated: z.boolean().optional(),
 });
 
 export const QuestionData = QuestionDataObject.refine(
