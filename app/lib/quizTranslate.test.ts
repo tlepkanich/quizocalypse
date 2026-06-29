@@ -5,6 +5,8 @@ import {
   applyTranslations,
   sourceHashOf,
   resolveLocale,
+  parseLocaleParam,
+  LOCALE_RE,
   mergeTagsOf,
 } from "./quizTranslate";
 
@@ -142,5 +144,68 @@ describe("sourceHashOf + resolveLocale", () => {
 
   it("mergeTagsOf finds the render-time tag syntax", () => {
     expect(mergeTagsOf("Hi @name, re @answer.q1!")).toEqual(["@name", "@answer.q1"]);
+  });
+});
+
+describe("parseLocaleParam (HII-6 — public ?locale= boundary)", () => {
+  it("passes simple + single-subtag tags through UNCHANGED", () => {
+    expect(parseLocaleParam("fr")).toBe("fr");
+    expect(parseLocaleParam("pt-br")).toBe("pt-br");
+    expect(parseLocaleParam("zh-hant")).toBe("zh-hant");
+    expect(parseLocaleParam("fil")).toBe("fil"); // 3-letter primary subtag
+  });
+
+  it("passes MULTI-subtag BCP-47 storefront tags through (the adversarial-review fix)", () => {
+    // Shopify's request.locale.iso_code can carry script + region + variants;
+    // resolveLocale narrows them by language prefix, so we must NOT reject them.
+    expect(parseLocaleParam("zh-Hant-TW")).toBe("zh-Hant-TW");
+    expect(parseLocaleParam("zh-Hans-CN")).toBe("zh-Hans-CN");
+    expect(parseLocaleParam("sr-Latn-RS")).toBe("sr-Latn-RS");
+    expect(parseLocaleParam("es-419")).toBe("es-419"); // numeric (UN M49) region subtag
+    expect(parseLocaleParam("ca-ES-valencia")).toBe("ca-ES-valencia");
+  });
+
+  it("is case-insensitive (resolveLocale lowercases anyway)", () => {
+    expect(parseLocaleParam("FR")).toBe("FR");
+    expect(parseLocaleParam("en-US")).toBe("en-US");
+  });
+
+  it("rejects only true garbage (chars no locale tag can contain / oversized) to null", () => {
+    expect(parseLocaleParam("<script>")).toBeNull();
+    expect(parseLocaleParam("../../etc/passwd")).toBeNull();
+    expect(parseLocaleParam("fr; DROP TABLE")).toBeNull();
+    expect(parseLocaleParam("fr_bad@x")).toBeNull(); // underscore + @
+    expect(parseLocaleParam("english")).toBeNull(); // 7-letter primary, not a tag
+    expect(parseLocaleParam("f")).toBeNull(); // too short
+    expect(parseLocaleParam("fr-")).toBeNull(); // dangling subtag
+    expect(parseLocaleParam("a".repeat(40))).toBeNull(); // length cap
+    expect(parseLocaleParam("")).toBeNull();
+    expect(parseLocaleParam(null)).toBeNull();
+  });
+
+  it("composes with resolveLocale: BYTE-STABLE for every input class vs. raw resolveLocale", () => {
+    // THE headline regression the review caught: a multi-subtag request locale
+    // must still narrow to its stored 2-subtag key (Traditional Chinese stays
+    // Traditional Chinese, never flips to base English).
+    expect(resolveLocale(parseLocaleParam("zh-Hant-TW"), ["zh-hant"])).toBe("zh-hant");
+    expect(resolveLocale(parseLocaleParam("es-419"), ["es"])).toBe("es");
+    // Garbage resolves to base (null) — same as before, now short-circuited earlier.
+    expect(resolveLocale(parseLocaleParam("<script>"), ["fr", "de"])).toBeNull();
+    // A valid, available locale resolves identically.
+    expect(resolveLocale(parseLocaleParam("fr"), ["fr", "de"])).toBe("fr");
+    // A valid-shaped but unavailable locale → base (null), same as raw resolveLocale.
+    expect(resolveLocale(parseLocaleParam("es"), ["fr", "de"])).toBeNull();
+  });
+
+  it("is a strict SUPERSET of the stored-key gate (every LOCALE_RE key stays requestable)", () => {
+    // The broadening is byte-stable ONLY because resolveLocale only ever returns
+    // a member of `available`, and every stored key is LOCALE_RE-shaped (gated by
+    // the translate intent). So a stored locale must always pass parseLocaleParam
+    // — if someone tightened REQUEST_LOCALE_RE below LOCALE_RE, a stored locale
+    // could stop being requestable. This pins that coupling.
+    for (const k of ["fr", "de", "pt-br", "zh-hant", "en-us", "es-mx", "ar"]) {
+      expect(LOCALE_RE.test(k)).toBe(true); // representative stored-key shapes
+      expect(parseLocaleParam(k)).toBe(k); // ...are all requestable
+    }
   });
 });

@@ -258,3 +258,25 @@ export function resolveLocale(
 }
 
 export const LOCALE_RE = /^[a-z]{2}(-[a-z]{2,4})?$/i;
+
+/**
+ * Validate a raw `?locale=` query value at the public boundary before it reaches
+ * resolveLocale. The incoming value is a full BCP-47 storefront tag — Shopify's
+ * `request.locale.iso_code`, fed straight in by the theme extension — which can
+ * carry MULTIPLE subtags (fr · pt-BR · zh-Hant-TW · es-419 · sr-Latn-RS), and
+ * resolveLocale's language-prefix fallback is specifically built to narrow such
+ * a tag down to a stored 2-subtag key. So this gate must accept ANY well-formed
+ * tag (any number of subtags) and reject only characters no locale tag can
+ * contain (injection / path / quote / space) plus a length cap. BYTE-STABLE:
+ * every value resolveLocale could resolve still passes through unchanged; only
+ * true garbage — which resolveLocale already maps to base — is short-circuited.
+ * NB: deliberately BROADER than LOCALE_RE — LOCALE_RE governs the STORED key
+ * (kept strict, 2-subtag); this governs the INCOMING request param, multi-subtag
+ * by design. (HII-6; widened after an adversarial review caught zh-Hant-TW.)
+ */
+const REQUEST_LOCALE_RE = /^[a-z]{2,3}(-[a-z0-9]{1,8})*$/i;
+export function parseLocaleParam(requested: string | null): string | null {
+  return requested && requested.length <= 35 && REQUEST_LOCALE_RE.test(requested)
+    ? requested
+    : null;
+}

@@ -23,18 +23,25 @@ type QuizDoc = z.infer<typeof Quiz>;
 //  - translations: the full multi-locale string maps (no .json consumer reads
 //    them; the HTML/launcher/results/compare routes read translations from their
 //    own DB load and apply the locale server-side).
+// The single strip primitive every public egress shares (the .json endpoint
+// AND the HTML / results routes) so a future refactor can't silently diverge
+// one of them and leak the merchant's pasted reviews or the full locale maps to
+// shoppers (HII-6). Typed: preserves the doc's shape minus the two editor-only
+// keys, so the HTML routes keep their strongly-typed `doc` payload.
+export function stripPublicDoc<T extends Record<string, unknown>>(
+  doc: T,
+): Omit<T, "review_enrichment_sources" | "translations"> {
+  const { review_enrichment_sources: _r, translations: _t, ...rest } = doc;
+  void _r;
+  void _t;
+  return rest;
+}
+
 export function stripPublicJsonPayload(
   payload: unknown,
 ): Record<string, unknown> {
   if (!payload || typeof payload !== "object") return {};
-  const {
-    review_enrichment_sources: _r,
-    translations: _t,
-    ...rest
-  } = payload as Record<string, unknown>;
-  void _r;
-  void _t;
-  return rest;
+  return stripPublicDoc(payload as Record<string, unknown>);
 }
 
 export interface PublishedQuiz extends QuizDoc {

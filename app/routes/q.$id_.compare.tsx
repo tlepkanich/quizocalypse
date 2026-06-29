@@ -5,7 +5,7 @@ import prisma from "../db.server";
 import { Quiz, type QuizNode } from "../lib/quizSchema";
 import { recommendForResult, type IndexedProduct, type RecommendedProduct } from "../lib/recommendationEngine";
 import { compareBuddies } from "../lib/buddyCompare";
-import { applyTranslations, resolveLocale } from "../lib/quizTranslate";
+import { applyTranslations, parseLocaleParam, resolveLocale } from "../lib/quizTranslate";
 
 // ════════════════════════════════════════════════════════════════════════════
 // Buddy mode (Phase L2) — /q/:id/compare?a=<session>&b=<session>: two saved
@@ -41,7 +41,7 @@ export const loader = async ({ params, request }: LoaderFunctionArgs) => {
 
   // Locale overlay before anything renders or unfurls (Phase K machinery).
   const requestedLocale = url.searchParams.get("locale");
-  const locale = resolveLocale(requestedLocale, Object.keys(parsed.data.translations ?? {}));
+  const locale = resolveLocale(parseLocaleParam(requestedLocale), Object.keys(parsed.data.translations ?? {}));
   const doc = locale
     ? applyTranslations(parsed.data, parsed.data.translations![locale]!.strings)
     : parsed.data;

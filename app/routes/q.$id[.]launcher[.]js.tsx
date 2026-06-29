@@ -1,7 +1,7 @@
 import type { LoaderFunctionArgs } from "@remix-run/node";
 import prisma from "../db.server";
 import { Quiz } from "../lib/quizSchema";
-import { resolveLocale } from "../lib/quizTranslate";
+import { parseLocaleParam, resolveLocale } from "../lib/quizTranslate";
 
 // Serves a tiny JS snippet that merchants drop on their storefront via a
 // theme code injection or the Theme App Extension. When loaded it injects
@@ -69,7 +69,7 @@ export async function loader({ params, request }: LoaderFunctionArgs) {
   // the launcher's own strings follow.
   const requestedLocale = new URL(request.url).searchParams.get("locale");
   const available = Object.keys(parsed.data.translations ?? {});
-  const locale = resolveLocale(requestedLocale, available);
+  const locale = resolveLocale(parseLocaleParam(requestedLocale), available);
   const trStrings = locale ? parsed.data.translations![locale]!.strings : null;
   const quizUrl = `${origin}/q/${id}${locale ? `?locale=${encodeURIComponent(locale)}` : ""}`;
   const openLabel = (trStrings?.["chrome.launcher_open"] ?? "Open quiz").replace(/[<>&"']/g, "");

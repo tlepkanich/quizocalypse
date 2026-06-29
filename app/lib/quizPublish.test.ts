@@ -7,6 +7,7 @@ import {
   collectRecommendableProductIds,
   publishQuiz,
   shortDescription,
+  stripPublicDoc,
   stripPublicJsonPayload,
   type PublishedQuiz,
 } from "./quizPublish";
@@ -46,6 +47,34 @@ describe("stripPublicJsonPayload", () => {
   it("returns an empty object for non-object input", () => {
     expect(stripPublicJsonPayload(null)).toEqual({});
     expect(stripPublicJsonPayload("nope")).toEqual({});
+  });
+});
+
+// stripPublicDoc is the shared typed primitive the HTML / results routes use so
+// the strip can't silently diverge from the .json path (HII-6). stripPublicJsonPayload
+// delegates to it, so the cases above already cover the strip — these pin the
+// typed-input contract (key order preserved, all non-editor keys survive).
+describe("stripPublicDoc", () => {
+  it("drops exactly the two editor-only keys, preserving every other key + order", () => {
+    const doc = {
+      quiz_id: "q9",
+      review_enrichment_sources: { text: "secret" },
+      nodes: [{ id: "intro" }],
+      translations: { de: { strings: {} } },
+      design_tokens: { colors: { primary: "#111" } },
+      design_linked: true,
+    };
+    const out = stripPublicDoc(doc);
+    expect(out).not.toHaveProperty("review_enrichment_sources");
+    expect(out).not.toHaveProperty("translations");
+    expect(Object.keys(out)).toEqual(["quiz_id", "nodes", "design_tokens", "design_linked"]);
+    expect(out.design_tokens).toEqual({ colors: { primary: "#111" } });
+    expect(out.design_linked).toBe(true);
+  });
+
+  it("is a structural no-op when neither editor-only key is present", () => {
+    const doc = { quiz_id: "q10", nodes: [] };
+    expect(stripPublicDoc(doc)).toEqual({ quiz_id: "q10", nodes: [] });
   });
 });
 

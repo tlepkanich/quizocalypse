@@ -5,7 +5,8 @@ import { useState } from "react";
 import prisma from "../db.server";
 import { Quiz, type QuizNode } from "../lib/quizSchema";
 import { recommendForResult, type IndexedProduct } from "../lib/recommendationEngine";
-import { applyTranslations, resolveLocale } from "../lib/quizTranslate";
+import { applyTranslations, parseLocaleParam, resolveLocale } from "../lib/quizTranslate";
+import { stripPublicDoc } from "../lib/quizPublish";
 import { chromeFor, t, type ChromeToken } from "../components/runtime/chromeStrings";
 import { formatDate } from "../lib/formatDate";
 
@@ -52,7 +53,7 @@ export const loader = async ({ params, request }: LoaderFunctionArgs) => {
   // unfurl) follows the locale. Strip the raw maps from what we serve.
   const requestedLocale = new URL(request.url).searchParams.get("locale");
   const availableLocales = Object.keys(parsed.data.translations ?? {});
-  const locale = resolveLocale(requestedLocale, availableLocales);
+  const locale = resolveLocale(parseLocaleParam(requestedLocale), availableLocales);
   const localizedDoc = locale
     ? applyTranslations(parsed.data, parsed.data.translations![locale]!.strings)
     : parsed.data;
@@ -91,11 +92,7 @@ export const loader = async ({ params, request }: LoaderFunctionArgs) => {
 
   return json({
     quizId: quiz.id,
-    doc: (({ translations: _t, review_enrichment_sources: _r, ...rest }) => {
-      void _t;
-      void _r;
-      return rest;
-    })(parsed.data),
+    doc: stripPublicDoc(parsed.data),
     productIndex,
     shopDomain: publishedRaw.shop_domain ?? "",
     answerWeights: publishedRaw.answer_weights ?? null,

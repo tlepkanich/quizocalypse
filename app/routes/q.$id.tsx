@@ -5,7 +5,8 @@ import prisma from "../db.server";
 import { Quiz } from "../lib/quizSchema";
 import type { IndexedProduct } from "../lib/recommendationEngine";
 import { QuizRuntime } from "../components/runtime/QuizRuntime";
-import { applyTranslations, resolveLocale } from "../lib/quizTranslate";
+import { applyTranslations, parseLocaleParam, resolveLocale } from "../lib/quizTranslate";
+import { stripPublicDoc } from "../lib/quizPublish";
 import { chromeFor } from "../components/runtime/chromeStrings";
 
 // Public shopper-facing runtime. No Polaris, no Shopify auth — this is what a
@@ -92,7 +93,7 @@ export const loader = async ({ params, request }: LoaderFunctionArgs) => {
   // HTTP cache keys); exact match → language-prefix → default English.
   const requestedLocale = new URL(request.url).searchParams.get("locale");
   const available = Object.keys(parsed.data.translations ?? {});
-  const locale = resolveLocale(requestedLocale, available);
+  const locale = resolveLocale(parseLocaleParam(requestedLocale), available);
 
   // Phase L2 — a buddy invite carries the inviter's session id; the runtime
   // shows "see how you compare" once this shopper completes. Format-gated
@@ -109,10 +110,7 @@ export const loader = async ({ params, request }: LoaderFunctionArgs) => {
   // review/FAQ source AND the full multi-locale translation maps would
   // otherwise ship to every shopper page load — strip both (the locale is
   // already applied above; the client never needs the raw maps).
-  const { review_enrichment_sources: _editorOnly, translations: _allLocales, ...publicDoc } =
-    localized;
-  void _editorOnly;
-  void _allLocales;
+  const publicDoc = stripPublicDoc(localized);
 
   return json(
     {
