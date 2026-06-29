@@ -8,6 +8,7 @@ import {
   questionHasUnmappedAnswer,
   orphanedBucketIds,
   bucketMappedCounts,
+  bucketCoverageTier,
   answerSkipValue,
 } from "./questionOrder";
 import { answerPassesFilter, GAP_FILTER } from "./tableFilters";
@@ -143,5 +144,27 @@ describe("answerPassesFilter (QL2 Table filter)", () => {
     expect(answerPassesFilter(mapped, GAP_FILTER)).toBe(false);
     expect(answerPassesFilter(unmapped, GAP_FILTER)).toBe(true);
     expect(answerPassesFilter(unmapped, "cat_oily")).toBe(false);
+  });
+
+  it("bucketCoverageTier: orphan(0) · weak(<50% of top) · strong(>=50%)", () => {
+    const counts = new Map<string, number>([
+      ["a", 10], // top
+      ["b", 5], // exactly 50% → strong (the threshold is strict <)
+      ["c", 4], // < 50% → weak
+      ["d", 0], // orphan
+    ]);
+    expect(bucketCoverageTier(counts, "a")).toBe("strong");
+    expect(bucketCoverageTier(counts, "b")).toBe("strong");
+    expect(bucketCoverageTier(counts, "c")).toBe("weak");
+    expect(bucketCoverageTier(counts, "d")).toBe("orphan");
+    // a missing id is treated as 0 → orphan
+    expect(bucketCoverageTier(counts, "missing")).toBe("orphan");
+    // when every bucket is unmapped, all are orphan (max 0, never weak)
+    const allZero = new Map<string, number>([["a", 0], ["b", 0]]);
+    expect(bucketCoverageTier(allZero, "a")).toBe("orphan");
+    // a single mapped bucket is strong (it IS the top)
+    const one = new Map<string, number>([["a", 3], ["b", 0]]);
+    expect(bucketCoverageTier(one, "a")).toBe("strong");
+    expect(bucketCoverageTier(one, "b")).toBe("orphan");
   });
 });

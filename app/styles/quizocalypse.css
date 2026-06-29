@@ -1244,6 +1244,8 @@ body[data-qz] ::selection { background: var(--qz-ink); color: var(--qz-cream); }
   --ql-border2: #f3f4f6;
   --ql-warn: #d97706;
   --ql-warn-bg: #fffbeb;
+  --ql-danger: #dc2626;
+  --ql-danger-bg: #fef2f2;
   --ql-accent: #2563eb;
   display: flex;
   flex-direction: column;
@@ -1430,10 +1432,17 @@ body[data-qz] ::selection { background: var(--qz-ink); color: var(--qz-cream); }
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.qz-ql-cov-pill.is-orphan {
+/* 3-state coverage (roadmap green/yellow/red): strong is the bucket colour (inline);
+   weak = yellow/amber (under half the top bucket); orphan = red (0 answers map here). */
+.qz-ql-cov-pill.is-weak {
   color: var(--ql-warn);
   background: var(--ql-warn-bg);
   border-color: #fcd34d;
+}
+.qz-ql-cov-pill.is-orphan {
+  color: var(--ql-danger);
+  background: var(--ql-danger-bg);
+  border-color: #fca5a5;
 }
 .qz-ql-cov-dot {
   width: 7px;

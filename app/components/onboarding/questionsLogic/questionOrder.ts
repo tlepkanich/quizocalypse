@@ -97,3 +97,18 @@ export function orphanedBucketIds(doc: QuizDoc, bucketIds: string[]): string[] {
   const counts = bucketMappedCounts(doc, bucketIds);
   return bucketIds.filter((id) => (counts.get(id) ?? 0) === 0);
 }
+
+export type CoverageTier = "strong" | "weak" | "orphan";
+
+// 3-state coverage tier for the Outcome-coverage PILLS only (roadmap green/yellow/red).
+// orphan = 0 answers map here · weak = mapped to FEWER THAN HALF the top bucket's
+// count · strong = the rest. The binary `orphanedBucketIds` (count===0) still drives
+// the left amber dot, the Table "Gaps only" filter, and the Continue guard — "weak"
+// is a pills-only display refinement, so the one-shared-predicate rule is preserved
+// (everything that flags "needs attention" still means exactly count===0).
+export function bucketCoverageTier(counts: Map<string, number>, bucketId: string): CoverageTier {
+  const count = counts.get(bucketId) ?? 0;
+  if (count === 0) return "orphan";
+  const max = Math.max(0, ...counts.values());
+  return count < max * 0.5 ? "weak" : "strong";
+}
