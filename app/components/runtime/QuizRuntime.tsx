@@ -1340,8 +1340,8 @@ export function QuizRuntime(props: QuizRuntimeProps) {
           }
         }
         .qz-runtime-shell { width: 100%; display: flex; flex-direction: column; align-items: center; gap: 24px; }
-        /* §4 question image "side": full-width on mobile (= top), float-right on
-           desktop so the question text wraps beside it + the answers clear below. */
+        /* §4 the side question image: full-width on mobile (same as top), float-right
+           on desktop so the question text wraps beside it, answers clear below. */
         .qz-q-img-side { width: 100%; max-height: 280px; object-fit: cover; border-radius: var(--qz-radius); margin-bottom: 16px; display: block; }
         .qz-bp-desktop .qz-q-img-side { float: right; width: 38%; max-width: 300px; max-height: 240px; margin: 4px 0 14px 22px; }
         /* Experiences E3 — step enter: a quiet fade + 6px lift, replayed per
