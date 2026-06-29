@@ -75,6 +75,7 @@ export function QuestionCard({
 }) {
   const data = node.data;
   const freeform = isFreeformType(data.question_type);
+  const isRequired = data.required ?? true;
   const len = data.text.length;
   // Auto-grow the question textarea to fit pre-filled text (AI-built questions
   // mount with long copy that onInput alone wouldn't expand until first keystroke).
@@ -132,6 +133,20 @@ export function QuestionCard({
             ✦ AI
           </span>
         ) : null}
+        <button
+          type="button"
+          className={`qz-ql-reqtoggle ${isRequired ? "" : "is-optional"}`}
+          aria-pressed={!isRequired}
+          aria-label={`Question ${qIndex} is ${isRequired ? "required" : "optional"} — toggle`}
+          title={
+            isRequired
+              ? "Required — shoppers must answer to continue. Click to make optional."
+              : "Optional — shoppers can skip this question (a skipped answer scores zero). Click to make required."
+          }
+          onClick={() => onCommit(updateNodeData(doc, node.id, { required: !isRequired }))}
+        >
+          {isRequired ? "Required" : "Optional"}
+        </button>
         <span style={{ flex: 1 }} />
         {showUndo ? (
           <button

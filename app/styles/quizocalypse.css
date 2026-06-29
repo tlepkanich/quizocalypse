@@ -1474,6 +1474,30 @@ body[data-qz] ::selection { background: var(--qz-ink); color: var(--qz-cream); }
   border-radius: 999px;
   padding: 2px 8px;
 }
+/* Required / Optional per-question toggle. Default (Required) is muted/neutral so
+   it doesn't compete; Optional is amber to flag the non-default, skippable state. */
+.qz-ql-reqtoggle {
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+  color: var(--ql-txt3);
+  background: #fff;
+  border: 1px solid var(--ql-border);
+  border-radius: 999px;
+  padding: 2px 9px;
+  cursor: pointer;
+}
+.qz-ql-reqtoggle:hover { border-color: var(--ql-accent); color: var(--ql-txt2); }
+.qz-ql-reqtoggle:focus-visible {
+  outline: none;
+  border-color: var(--qz-accent);
+  box-shadow: var(--qz-shadow-focus);
+}
+.qz-ql-reqtoggle.is-optional {
+  color: var(--ql-warn);
+  background: var(--ql-warn-bg);
+  border-color: #fcd34d;
+}
 .qz-ql-qdel {
   background: none;
   border: 0;
