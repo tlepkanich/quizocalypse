@@ -1351,6 +1351,13 @@ export function QuizRuntime(props: QuizRuntimeProps) {
           from { opacity: 0; transform: translateY(6px); }
           to { opacity: 1; transform: translateY(0); }
         }
+        /* RP1 — a quiet heartbeat on the urgency badge (opt-in via urgency_enabled).
+           The reduced-motion strip above zeroes it automatically. */
+        @keyframes qz-urgency-pulse {
+          0%, 100% { transform: scale(1); }
+          50% { transform: scale(1.06); }
+        }
+        .qz-urgency-pulse { display: inline-block; animation: qz-urgency-pulse 1.8s var(--qz-ease, ease) infinite; }
         /* Unified P1: ONE layout mechanism for preview AND live — the qz-bp-*
            class on the root. Preview sets it from the DeviceFrame width prop;
            live sets it from the container-measured breakpoint. The old live
@@ -5150,7 +5157,7 @@ function ProductCard({
           })()}
         {typeof lowStockQty === "number" && lowStockQty > 0 && product.inventory_in_stock ? (
           <div style={{ color: "#B25E00", marginTop: 4, fontSize: 12, fontWeight: 600 }}>
-            {tc("only_x_left", { count: lowStockQty })}
+            <span className="qz-urgency-pulse">{tc("only_x_left", { count: lowStockQty })}</span>
           </div>
         ) : null}
         {showDescriptions && product.description ? (
