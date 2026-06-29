@@ -1787,3 +1787,84 @@ body[data-qz] ::selection { background: var(--qz-ink); color: var(--qz-cream); }
   justify-content: flex-end;
   gap: 8px;
 }
+
+/* ── QL4c: per-question regenerate controls ── */
+.qz-ql-regen,
+.qz-ql-regen-undo {
+  background: none;
+  border: 1px solid var(--ql-border);
+  border-radius: 7px;
+  font: inherit;
+  font-size: 11.5px;
+  font-weight: 600;
+  padding: 3px 9px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.qz-ql-regen {
+  color: #7c3aed;
+}
+.qz-ql-regen:hover:not(:disabled) {
+  background: #f5f3ff;
+  border-color: #c4b5fd;
+}
+.qz-ql-regen:disabled {
+  opacity: 0.7;
+  cursor: default;
+}
+.qz-ql-regen-undo {
+  color: var(--ql-txt2);
+}
+.qz-ql-regen-undo:hover {
+  background: var(--ql-border2);
+}
+.qz-ql-spin {
+  width: 11px;
+  height: 11px;
+  border: 2px solid #c4b5fd;
+  border-top-color: #7c3aed;
+  border-radius: 50%;
+  display: inline-block;
+  animation: qz-ql-spin 0.7s linear infinite;
+}
+@keyframes qz-ql-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .qz-ql-spin {
+    animation: none;
+  }
+}
+.qz-ql-regen-error {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 10px 18px 0;
+  padding: 7px 10px;
+  font-size: 12px;
+  color: #b45309;
+  background: var(--ql-warn-bg);
+  border: 1px solid #fcd34d;
+  border-radius: 8px;
+}
+.qz-ql-regen-error.is-credits {
+  color: #b91c1c;
+  background: #fef2f2;
+  border-color: #fca5a5;
+}
+.qz-ql-regen-dismiss {
+  margin-left: auto;
+  background: none;
+  border: 0;
+  cursor: pointer;
+  color: inherit;
+  font-size: 12px;
+  opacity: 0.6;
+}
+.qz-ql-regen-dismiss:hover {
+  opacity: 1;
+}

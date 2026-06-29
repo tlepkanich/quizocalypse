@@ -45,6 +45,13 @@ export function QuestionCard({
   onToast,
   onRef,
   onActivate,
+  regenerating,
+  showUndo,
+  regenError,
+  onRegenerate,
+  onUndoRegenerate,
+  onRetryRegenerate,
+  onDismissRegenError,
 }: {
   doc: QuizDoc;
   node: QuestionNode;
@@ -58,6 +65,13 @@ export function QuestionCard({
   onToast: (msg: string) => void;
   onRef: (el: HTMLDivElement | null) => void;
   onActivate: () => void;
+  regenerating: boolean;
+  showUndo: boolean;
+  regenError: { message: string; credits: boolean } | null;
+  onRegenerate: () => void;
+  onUndoRegenerate: () => void;
+  onRetryRegenerate: () => void;
+  onDismissRegenError: () => void;
 }) {
   const data = node.data;
   const freeform = isFreeformType(data.question_type);
@@ -119,6 +133,32 @@ export function QuestionCard({
           </span>
         ) : null}
         <span style={{ flex: 1 }} />
+        {showUndo ? (
+          <button
+            type="button"
+            className="qz-ql-regen-undo"
+            onClick={onUndoRegenerate}
+            title="Undo the regeneration"
+          >
+            ↺ Undo
+          </button>
+        ) : null}
+        <button
+          type="button"
+          className="qz-ql-regen"
+          disabled={regenerating}
+          title="Regenerate this question with AI (keeps bucket mappings on unchanged answers)"
+          aria-label={`Regenerate question ${qIndex}`}
+          onClick={onRegenerate}
+        >
+          {regenerating ? (
+            <>
+              <span className="qz-ql-spin" aria-hidden /> Regenerating…
+            </>
+          ) : (
+            "↻ Regenerate"
+          )}
+        </button>
         <button
           type="button"
           className="qz-ql-qdel"
@@ -134,6 +174,23 @@ export function QuestionCard({
           🗑
         </button>
       </div>
+
+      {regenError ? (
+        <div className={`qz-ql-regen-error ${regenError.credits ? "is-credits" : ""}`} role="alert">
+          <span aria-hidden>⚠</span> {regenError.message}{" "}
+          <button type="button" className="qz-ql-retry" onClick={onRetryRegenerate}>
+            Retry
+          </button>
+          <button
+            type="button"
+            className="qz-ql-regen-dismiss"
+            onClick={onDismissRegenError}
+            aria-label="Dismiss"
+          >
+            ✕
+          </button>
+        </div>
+      ) : null}
 
       <textarea
         ref={textRef}

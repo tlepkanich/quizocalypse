@@ -42,6 +42,9 @@ import {
 import { DEFAULT_TOKENS } from "./designTokens";
 import { applyBrandToDesign } from "./brandSync";
 import { normalizeTags } from "./enrichTags";
+import { regenerateQuestion } from "./claude";
+import { parseBrandGuidelinesSafe } from "./brandGuidelines";
+import { buildScopedIndex } from "./catalogIndex";
 import {
   inverseCollectionIndex,
   hydrateCollectionProducts,
@@ -1025,6 +1028,141 @@ export async function runStep1FunnelAction(
     }
     await writeDoc(quiz.id, { ...doc, build_session: { ...session, stage: "rec_page" } });
     return json({ intent, ok: true });
+  }
+
+  // Questions & Logic spec §3.1/§7 — per-question AI regenerate. Replaces a
+  // question's text + answers with a fresh generation, but PRESERVES the bucket
+  // mapping (answer.points / points_alt) for answers whose text the AI kept
+  // unchanged, and marks the question ai_generated. Ported from the editor's
+  // regenerate-node (quizEditorIO.server.ts) with two funnel-specific changes:
+  //  (1) persist via writeDoc({...doc, build_session: session}) — NOT
+  //      prisma.quiz.update — so a regenerate can't rewind the funnel stage
+  //      (the editor has no stage to keep; the funnel does);
+  //  (2) carry points/points_alt onto unchanged-text answers (the editor merge
+  //      drops them — and in the inline-mapping model the bucket mapping IS
+  //      answer.points). Credit depletion is surfaced distinctly so the client
+  //      shows an actionable Retry, not a silent no-op ([[standalone-ai-credits]]).
+  if (intent === "regenerate-node") {
+    const nodeId = String(form.get("nodeId") ?? "");
+    const target = doc.nodes.find((n) => n.id === nodeId && n.type === "question");
+    if (!target || target.type !== "question") {
+      return json({ intent, nodeId, ok: false, error: "Question not found" }, { status: 404 });
+    }
+
+    const [allProducts, allCollections, shopRow] = await Promise.all([
+      prisma.product.findMany({ where: { shopId: shop.id } }),
+      prisma.collection.findMany({ where: { shopId: shop.id } }),
+      prisma.shop.findUnique({ where: { id: shop.id }, select: { brandGuidelines: true } }),
+    ]);
+    const indexed = buildScopedIndex(allProducts, allCollections, doc.scope.collection_ids);
+    const brandGuidelines = parseBrandGuidelinesSafe(shopRow?.brandGuidelines);
+
+    let regen;
+    try {
+      regen = await regenerateQuestion({
+        catalogSummary: indexed.summary,
+        existingQuestion: target.data,
+        steeringPrompt: "",
+        ...(brandGuidelines ? { brandGuidelines } : {}),
+      });
+    } catch (err) {
+      const raw = err instanceof Error ? err.message : String(err);
+      const credit = /credit balance is too low|insufficient.*credit|billing/i.test(raw);
+      return json(
+        {
+          intent,
+          nodeId,
+          ok: false,
+          code: credit ? "ai_credits" : "ai_error",
+          error: credit
+            ? "AI credits are depleted — add credits and try again."
+            : "Regenerate failed — try again.",
+        },
+        { status: credit ? 402 : 502 },
+      );
+    }
+
+    // Carry the bucket mapping (points/points_alt) onto answers whose text the AI
+    // kept unchanged (keyed by normalized text). Reuse the old answer's id +
+    // edge_handle_id BY INDEX so aligned per-answer routing edges still resolve.
+    // NOTE (intentional, ported from the editor): id/handle reuse is positional
+    // while points follow text — so if the AI REORDERS answers, an existing
+    // per-answer skip edge stays bound to its index (may re-bind to a reordered
+    // answer) while bucket mappings correctly follow the text. The 10s undo
+    // restores the exact prior state if that's not what the merchant wanted.
+    const oldAnswers = target.data.answers;
+    const carryByText = new Map<
+      string,
+      { points?: Record<string, number>; points_alt?: Record<string, number> }
+    >();
+    for (const a of oldAnswers) {
+      carryByText.set(a.text.trim().toLowerCase(), {
+        ...(a.points ? { points: a.points } : {}),
+        ...(a.points_alt ? { points_alt: a.points_alt } : {}),
+      });
+    }
+    const mergedAnswers = regen.answers.map((newA, idx) => {
+      const oldA = oldAnswers[idx];
+      const carried = carryByText.get(newA.text.trim().toLowerCase());
+      return {
+        id: oldA?.id ?? `a_${Math.random().toString(36).slice(2, 10)}`,
+        text: newA.text,
+        tags: newA.tags,
+        ...(newA.collection_filter ? { collection_filter: newA.collection_filter } : {}),
+        ...(newA.image_url ? { image_url: newA.image_url } : {}),
+        edge_handle_id: oldA?.edge_handle_id ?? `h_${Math.random().toString(36).slice(2, 10)}`,
+        ...(carried?.points ? { points: carried.points } : {}),
+        ...(carried?.points_alt ? { points_alt: carried.points_alt } : {}),
+      };
+    });
+
+    // Prune per-answer routing edges whose source handle no longer exists.
+    const handlesNow = new Set(mergedAnswers.map((a) => a.edge_handle_id));
+    const prunedEdges = doc.edges.filter(
+      (e) => e.source !== nodeId || !e.source_handle || handlesNow.has(e.source_handle),
+    );
+
+    const updatedNode = {
+      ...target,
+      data: {
+        ...target.data,
+        text: regen.text,
+        question_type: regen.question_type,
+        required: regen.required,
+        ...(regen.max_selections !== undefined ? { max_selections: regen.max_selections } : {}),
+        answers: mergedAnswers,
+        ai_generated: true,
+      },
+    };
+
+    const updatedDoc = {
+      ...doc,
+      nodes: doc.nodes.map((n) => (n.id === nodeId ? updatedNode : n)),
+      edges: prunedEdges,
+      build_session: session, // preserve the server's stage — never rewind
+    };
+
+    const reparsed = Quiz.safeParse(updatedDoc);
+    if (!reparsed.success) {
+      return json(
+        {
+          intent,
+          nodeId,
+          ok: false,
+          code: "ai_error",
+          error:
+            "Regenerated question failed validation: " +
+            reparsed.error.issues
+              .slice(0, 3)
+              .map((i) => `${i.path.join(".")}: ${i.message}`)
+              .join("; "),
+        },
+        { status: 500 },
+      );
+    }
+
+    await writeDoc(quiz.id, reparsed.data);
+    return json({ intent, nodeId, ok: true, action: "regenerate-node" as const, doc: reparsed.data });
   }
 
   // Design step — apply a theme preset's tokens to the draft. The build threads

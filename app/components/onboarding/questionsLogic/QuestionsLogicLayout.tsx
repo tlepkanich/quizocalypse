@@ -44,6 +44,12 @@ export function QuestionsLogicLayout({
   navigating,
   onBack,
   onContinue,
+  regeneratingId,
+  undoNodeId,
+  regenError,
+  onRegenerate,
+  onUndoRegenerate,
+  onDismissRegenError,
 }: {
   doc: QuizDoc;
   onCommit: (doc: QuizDoc) => void;
@@ -56,6 +62,12 @@ export function QuestionsLogicLayout({
   navigating: boolean;
   onBack: () => void;
   onContinue: () => void;
+  regeneratingId: string | null;
+  undoNodeId: string | null;
+  regenError: { nodeId: string; message: string; credits: boolean } | null;
+  onRegenerate: (nodeId: string) => void;
+  onUndoRegenerate: () => void;
+  onDismissRegenError: () => void;
 }) {
   const questions = useMemo(() => orderedQuestions(doc), [doc]);
   const idsKey = questions.map((q) => q.node.id).join(",");
@@ -324,6 +336,13 @@ export function QuestionsLogicLayout({
                     onToast={showToast}
                     onRef={setCardRef(node.id)}
                     onActivate={() => setActiveId(node.id)}
+                    regenerating={regeneratingId === node.id}
+                    showUndo={undoNodeId === node.id}
+                    regenError={regenError?.nodeId === node.id ? regenError : null}
+                    onRegenerate={() => onRegenerate(node.id)}
+                    onUndoRegenerate={onUndoRegenerate}
+                    onRetryRegenerate={() => onRegenerate(node.id)}
+                    onDismissRegenError={onDismissRegenError}
                   />
                 ))
               )}
