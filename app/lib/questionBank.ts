@@ -160,6 +160,27 @@ export const QUESTION_BANK: BankQuestion[] = [
     question_type: "rating",
     answers: ["1", "2", "3", "4", "5"],
   },
+  {
+    id: "budget-band",
+    category: "Universal",
+    text: "What's your budget for this?",
+    question_type: "single_select",
+    answers: ["Keep it affordable", "Mid-range is fine", "I'll invest for the best"],
+  },
+  {
+    id: "shopping-for",
+    category: "Universal",
+    text: "Who are you shopping for?",
+    question_type: "single_select",
+    answers: ["Myself", "A gift for someone", "My household"],
+  },
+  {
+    id: "decision-driver",
+    category: "Universal",
+    text: "What would make this an easy yes?",
+    question_type: "multi_select",
+    answers: ["A great price", "Reviews I trust", "It matches my style", "It solves my problem", "It arrives fast"],
+  },
 ];
 
 // The distinct categories, in a sensible display order. "Universal" sinks to the

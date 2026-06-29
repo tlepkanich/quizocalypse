@@ -1727,3 +1727,63 @@ body[data-qz] ::selection { background: var(--qz-ink); color: var(--qz-cream); }
   color: var(--ql-txt2);
   font-style: italic;
 }
+
+/* ── QL4: save-error chip + Continue orphan dialog ── */
+.qz-save-chip.is-error {
+  color: #b91c1c;
+}
+.qz-ql-retry {
+  background: none;
+  border: 0;
+  color: #b91c1c;
+  font: inherit;
+  font-weight: 700;
+  text-decoration: underline;
+  cursor: pointer;
+  padding: 0;
+}
+.qz-ql-guard-scrim {
+  position: fixed;
+  inset: 0;
+  background: rgba(17, 24, 39, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1300;
+  padding: 20px;
+}
+.qz-ql-guard {
+  background: #fff;
+  border-radius: 14px;
+  max-width: 420px;
+  width: 100%;
+  padding: 22px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+.qz-ql-guard-title {
+  font-size: 16px;
+  font-weight: 700;
+  color: #111827;
+  margin-bottom: 10px;
+}
+.qz-ql-guard-list {
+  margin: 0 0 10px;
+  padding-left: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #d97706;
+}
+.qz-ql-guard-body {
+  font-size: 13px;
+  color: #6b7280;
+  margin: 0 0 18px;
+}
+.qz-ql-guard-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}

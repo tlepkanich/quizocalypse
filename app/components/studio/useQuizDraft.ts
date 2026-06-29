@@ -114,6 +114,25 @@ export function useQuizDraft(initial: QuizDoc) {
   const isSaving = saveFetcher.state !== "idle";
   const savedAt =
     saveFetcher.data?.ok && saveFetcher.data.savedAt ? saveFetcher.data.savedAt : null;
+  // Surface a failed autosave so the funnel can show an "Unable to save · Retry"
+  // chip (Questions & Logic spec §5). Additive — existing consumers ignore it.
+  const saveError =
+    saveFetcher.state === "idle" && saveFetcher.data && !saveFetcher.data.ok
+      ? (saveFetcher.data.error ?? "Unable to save")
+      : null;
+  // Re-PUT the current doc (the source of truth) after a save failure.
+  const retrySave = useCallback(() => submitSave(docRef.current), [submitSave]);
 
-  return { doc, setDoc, commit, isSaving, savedAt, beginAiEdit, applyAiResult, endAiEdit };
+  return {
+    doc,
+    setDoc,
+    commit,
+    isSaving,
+    savedAt,
+    saveError,
+    retrySave,
+    beginAiEdit,
+    applyAiResult,
+    endAiEdit,
+  };
 }

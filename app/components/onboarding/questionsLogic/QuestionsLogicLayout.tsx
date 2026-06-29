@@ -7,11 +7,13 @@ import {
   insertQuestionRelative,
   deleteNode,
 } from "../../../lib/quizMutations";
-import { orderedQuestions, bucketMappedCounts } from "./questionOrder";
+import { orderedQuestions, bucketMappedCounts, orphanedBucketIds } from "./questionOrder";
 import { QuestionList } from "./QuestionList";
 import { OutcomeCoverage } from "./OutcomeCoverage";
 import { QuestionCard } from "./QuestionCard";
 import { TableView } from "./TableView";
+import { ContinueGuard } from "./ContinueGuard";
+import { QuestionBankDrawer } from "../../studio/QuestionBankDrawer";
 import type { TableFilter } from "./tableFilters";
 import type { SkipOption } from "./AnswerRow";
 
@@ -35,6 +37,8 @@ export function QuestionsLogicLayout({
   onCommit,
   isSaving,
   savedAt,
+  saveError,
+  onRetry,
   categories,
   quizId,
   navigating,
@@ -45,6 +49,8 @@ export function QuestionsLogicLayout({
   onCommit: (doc: QuizDoc) => void;
   isSaving: boolean;
   savedAt: string | null;
+  saveError: string | null;
+  onRetry: () => void;
   categories: BuilderCategory[];
   quizId: string;
   navigating: boolean;
@@ -63,6 +69,8 @@ export function QuestionsLogicLayout({
   const [toast, setToast] = useState<string | null>(null);
   const [pendingScrollId, setPendingScrollId] = useState<string | null>(null);
   const [tableFilter, setTableFilter] = useState<TableFilter>("");
+  const [libraryOpen, setLibraryOpen] = useState(false);
+  const [guardNames, setGuardNames] = useState<string[] | null>(null);
 
   const mainRef = useRef<HTMLDivElement>(null);
   const cardEls = useRef(new Map<string, HTMLDivElement>());
@@ -183,6 +191,18 @@ export function QuestionsLogicLayout({
     [doc, questions.length, activeId, onCommit],
   );
 
+  // Continue→ gate: warn if any Step-1 bucket has no answers mapped (the shared
+  // orphan predicate). Snapshot the NAMES at check-time so the dialog can't drift.
+  const handleContinue = useCallback(() => {
+    const orphanIds = orphanedBucketIds(doc, categories.map((c) => c.id));
+    if (orphanIds.length === 0) {
+      onContinue();
+      return;
+    }
+    const idSet = new Set(orphanIds);
+    setGuardNames(categories.filter((c) => idSet.has(c.id)).map((c) => c.name));
+  }, [doc, categories, onContinue]);
+
   const model = doc.scoring_model ?? "direct";
   const setCardRef = (id: string) => (el: HTMLDivElement | null) => {
     if (el) cardEls.current.set(id, el);
@@ -220,6 +240,13 @@ export function QuestionsLogicLayout({
             <span className="qz-save-chip is-saving">
               <span className="qz-save-dot" aria-hidden /> Saving…
             </span>
+          ) : saveError ? (
+            <span className="qz-save-chip is-error">
+              <span aria-hidden>⚠</span> {saveError} ·{" "}
+              <button type="button" className="qz-ql-retry" onClick={onRetry}>
+                Retry
+              </button>
+            </span>
           ) : savedAt ? (
             <span key={savedAt} className="qz-save-chip is-saved">
               <span aria-hidden>✓</span> Saved
@@ -238,7 +265,7 @@ export function QuestionsLogicLayout({
           type="button"
           className="qz-btn qz-btn-accent qz-btn-sm"
           disabled={navigating}
-          onClick={onContinue}
+          onClick={handleContinue}
         >
           Continue →
         </button>
@@ -263,6 +290,13 @@ export function QuestionsLogicLayout({
           <div className="qz-ql-left-footer">
             <button type="button" className="qz-btn qz-btn-ghost qz-btn-sm qz-ql-newq" onClick={addQuestion}>
               + New Question
+            </button>
+            <button
+              type="button"
+              className="qz-btn qz-btn-ghost qz-btn-sm qz-ql-newq"
+              onClick={() => setLibraryOpen(true)}
+            >
+              ⧉ Question Library
             </button>
           </div>
         </aside>
@@ -310,6 +344,21 @@ export function QuestionsLogicLayout({
           </div>
         )}
       </div>
+
+      {libraryOpen ? (
+        <QuestionBankDrawer doc={doc} onCommit={onCommit} onClose={() => setLibraryOpen(false)} />
+      ) : null}
+
+      {guardNames ? (
+        <ContinueGuard
+          bucketNames={guardNames}
+          onFix={() => setGuardNames(null)}
+          onContinueAnyway={() => {
+            setGuardNames(null);
+            onContinue();
+          }}
+        />
+      ) : null}
 
       {toast ? (
         <div className="qz-ql-toast" role="status" aria-live="polite">

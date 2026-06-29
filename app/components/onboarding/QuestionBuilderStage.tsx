@@ -34,7 +34,7 @@ export function QuestionBuilderStage({
   fetcher: ReturnType<typeof useFetcher>;
   pendingIntent: string | null;
 }) {
-  const { doc, commit, isSaving, savedAt } = useQuizDraft(initialDoc);
+  const { doc, commit, isSaving, savedAt, saveError, retrySave } = useQuizDraft(initialDoc);
   const navigating =
     pendingIntent === "to-rec-page" || pendingIntent === "back-to-types";
 
@@ -44,6 +44,8 @@ export function QuestionBuilderStage({
       onCommit={commit}
       isSaving={isSaving}
       savedAt={savedAt}
+      saveError={saveError}
+      onRetry={retrySave}
       categories={categories}
       quizId={quizId}
       navigating={navigating}
