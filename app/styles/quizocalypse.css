@@ -24,7 +24,7 @@
   --qz-accent:   #0B6BCB;     /* azure — brand (links, active nav, focus) */
   --qz-accent-2: #095AAB;
   --qz-ok:       #157D3C;   /* green; darkened for WCAG AA on the ok-tint badge (was #15803D = 4.46:1) */
-  --qz-warn:     #B45309;
+  --qz-warn:     #A8430C;   /* burnt amber; darkened from #B45309 (4.45:1) for WCAG AA on the warn-tint badge (matches the --qz-ok precedent above) */
   --qz-crit:     #B91C1C;
 
   /* Semantic tints — derived from the colors above (one source of truth) */
@@ -1088,7 +1088,9 @@ body[data-qz] ::selection { background: var(--qz-ink); color: var(--qz-cream); }
 .qz-rb-tab.is-active { color: var(--qz-accent); border-bottom-color: var(--qz-accent); }
 .qz-rb-tab:disabled { opacity: 0.4; cursor: not-allowed; }
 .qz-rb-tab-n {
-  font-size: 11px; font-weight: 600; color: var(--qz-ink-4);
+  /* --qz-ink-3 (not --qz-ink-4) so the 11px inactive count badge clears WCAG AA
+     4.5:1 on the --qz-cream-2 track (--qz-ink-4 was 4.35:1 there); active state below. */
+  font-size: 11px; font-weight: 600; color: var(--qz-ink-3);
   background: var(--qz-cream-2); border-radius: 999px; padding: 1px 7px;
 }
 .qz-rb-tab.is-active .qz-rb-tab-n { color: var(--qz-accent); background: var(--qz-accent-tint); }

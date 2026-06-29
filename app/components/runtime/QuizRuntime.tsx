@@ -2258,6 +2258,7 @@ function DropdownQuestion({
         <select
           value={sel}
           onChange={(e) => setSel(e.target.value)}
+          aria-label={node.data.text}
           style={styles.selectInput}
         >
           <option value="">{tc("choose")}</option>
@@ -3092,7 +3093,11 @@ function QuestionView({
       {node.data.helper_text ? (
         <p style={{ ...styles.muted, fontSize: "0.85em", marginTop: -6 }}>{node.data.helper_text}</p>
       ) : null}
-        <div style={{ marginTop: 20, display: "flex", gap: 8, flexWrap: "wrap" }}>
+        <div
+          role="group"
+          aria-label={node.data.text}
+          style={{ marginTop: 20, display: "flex", gap: 8, flexWrap: "wrap" }}
+        >
           {sc?.endpoint_label_min ? (
             <span style={{ ...styles.muted, fontSize: "0.8em", alignSelf: "center", flex: "0 0 auto" }}>
               {sc.endpoint_label_min}
