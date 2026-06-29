@@ -72,14 +72,21 @@ export function AnswerRow({
       >
         {answerLetter(index)}
       </span>
-      <input
-        className="qz-ql-atext"
-        value={answer.text}
-        maxLength={ANSWER_MAX}
-        placeholder="Answer option…"
-        onChange={(e) => setText(e.target.value)}
-        aria-label={`Answer ${answerLetter(index)} text`}
-      />
+      <span className="qz-ql-atext-wrap">
+        <input
+          className="qz-ql-atext"
+          value={answer.text}
+          maxLength={ANSWER_MAX}
+          placeholder="Answer option…"
+          onChange={(e) => setText(e.target.value)}
+          aria-label={`Answer ${answerLetter(index)} text`}
+        />
+        {answer.text.length >= ANSWER_MAX - 15 ? (
+          <span className="qz-ql-acounter" aria-hidden>
+            {answer.text.length}/{ANSWER_MAX}
+          </span>
+        ) : null}
+      </span>
 
       <select
         className={`qz-ql-bucket ${color ? "is-mapped" : "is-unset"}`}

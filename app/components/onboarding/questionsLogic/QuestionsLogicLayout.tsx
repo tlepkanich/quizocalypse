@@ -27,6 +27,16 @@ const NODE_TYPE_LABEL: Record<string, string> = {
   branch: "Branch",
 };
 
+// `savedAt` is an ISO string from the CLIENT autosave fetcher — it's null on the
+// server + initial hydration (the chip never server-renders) and only set after a
+// client-side save completes, so formatting it in the merchant's LOCAL time here is
+// NOT subject to the SSR date-hydration landmine ([[ssr-unsafe-locale-dates]]).
+function savedTimeLabel(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  return d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+}
+
 // Questions & Logic spec — the two-panel page shell (260px left + scrolling main).
 // Owns the Builder/Table view toggle, the active-question highlight, and the
 // IntersectionObserver scroll-sync between the left list and the main card column.
@@ -261,7 +271,7 @@ export function QuestionsLogicLayout({
             </span>
           ) : savedAt ? (
             <span key={savedAt} className="qz-save-chip is-saved">
-              <span aria-hidden>✓</span> Saved
+              <span aria-hidden>✓</span> Saved {savedTimeLabel(savedAt)}
             </span>
           ) : null}
         </span>
@@ -296,6 +306,13 @@ export function QuestionsLogicLayout({
           </div>
 
           <QuestionList questions={questions} activeId={activeId} onSelect={selectQuestion} />
+
+          {questions.length < 4 || questions.length > 8 ? (
+            <p className="qz-ql-qcount-nudge" role="note">
+              {questions.length} {questions.length === 1 ? "question" : "questions"} · most quizzes
+              work best with 4–8
+            </p>
+          ) : null}
 
           <OutcomeCoverage categories={categories} counts={coverageCounts} />
 
