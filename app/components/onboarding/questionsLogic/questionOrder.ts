@@ -74,17 +74,26 @@ export function answerSkipValue(doc: QuizDoc, questionId: string, answer: Answer
   return target?.type === "end" ? "__end__" : edge.target;
 }
 
-// Category ids that NO answer maps to anywhere in the quiz (the spec's
-// "orphaned" buckets — amber coverage pill + Continue-dialog warning). Mapping is
-// the explicit points predicate above (not tag-overlap), matching the spec's
-// "answers mapped to it".
-export function orphanedBucketIds(doc: QuizDoc, bucketIds: string[]): string[] {
-  const mapped = new Set<string>();
+// Per-bucket count of answers that EXPLICITLY map to it (points-based — the same
+// definition as orphanedBucketIds, not tag-overlap, matching the spec's "answers
+// mapped to it"). Drives the Outcome-Coverage pills: count ≥1 = green, 0 = amber.
+export function bucketMappedCounts(doc: QuizDoc, bucketIds: string[]): Map<string, number> {
+  const counts = new Map<string, number>(bucketIds.map((id) => [id, 0]));
   for (const n of doc.nodes) {
     if (n.type !== "question") continue;
     for (const a of n.data.answers) {
-      for (const cid of Object.keys(a.points ?? {})) mapped.add(cid);
+      for (const cid of Object.keys(a.points ?? {})) {
+        if (counts.has(cid)) counts.set(cid, (counts.get(cid) ?? 0) + 1);
+      }
     }
   }
-  return bucketIds.filter((id) => !mapped.has(id));
+  return counts;
+}
+
+// Category ids that NO answer maps to anywhere in the quiz (the spec's "orphaned"
+// buckets — amber coverage pill + Continue-dialog warning). Derived from the same
+// count so the pills, the left amber dot, and the Continue guard can't disagree.
+export function orphanedBucketIds(doc: QuizDoc, bucketIds: string[]): string[] {
+  const counts = bucketMappedCounts(doc, bucketIds);
+  return bucketIds.filter((id) => (counts.get(id) ?? 0) === 0);
 }

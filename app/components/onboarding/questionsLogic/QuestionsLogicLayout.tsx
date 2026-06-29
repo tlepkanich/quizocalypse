@@ -7,8 +7,9 @@ import {
   insertQuestionRelative,
   deleteNode,
 } from "../../../lib/quizMutations";
-import { orderedQuestions } from "./questionOrder";
+import { orderedQuestions, bucketMappedCounts } from "./questionOrder";
 import { QuestionList } from "./QuestionList";
+import { OutcomeCoverage } from "./OutcomeCoverage";
 import { QuestionCard } from "./QuestionCard";
 import { TableView } from "./TableView";
 import type { TableFilter } from "./tableFilters";
@@ -52,6 +53,10 @@ export function QuestionsLogicLayout({
 }) {
   const questions = useMemo(() => orderedQuestions(doc), [doc]);
   const idsKey = questions.map((q) => q.node.id).join(",");
+  const coverageCounts = useMemo(
+    () => bucketMappedCounts(doc, categories.map((c) => c.id)),
+    [doc, categories],
+  );
 
   const [view, setView] = useState<"builder" | "table">("builder");
   const [activeId, setActiveId] = useState<string | null>(null);
@@ -252,6 +257,8 @@ export function QuestionsLogicLayout({
           </div>
 
           <QuestionList questions={questions} activeId={activeId} onSelect={selectQuestion} />
+
+          <OutcomeCoverage categories={categories} counts={coverageCounts} />
 
           <div className="qz-ql-left-footer">
             <button type="button" className="qz-btn qz-btn-ghost qz-btn-sm qz-ql-newq" onClick={addQuestion}>

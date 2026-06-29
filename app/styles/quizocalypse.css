@@ -1344,6 +1344,44 @@ body[data-qz] ::selection { background: var(--qz-ink); color: var(--qz-cream); }
 }
 .qz-ql-dot.is-ai { background: #7c3aed; }
 .qz-ql-dot.is-warn { background: var(--ql-warn); }
+.qz-ql-coverage {
+  border-top: 1px solid var(--ql-border);
+  padding: 10px 12px 6px;
+}
+.qz-ql-coverage .qz-ql-label {
+  display: block;
+  margin-bottom: 5px;
+}
+.qz-ql-coverage-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+.qz-ql-cov-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  max-width: 100%;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--ql-border);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.qz-ql-cov-pill.is-orphan {
+  color: var(--ql-warn);
+  background: var(--ql-warn-bg);
+  border-color: #fcd34d;
+}
+.qz-ql-cov-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex: 0 0 auto;
+}
 .qz-ql-left-footer {
   border-top: 1px solid var(--ql-border);
   padding: 10px 12px;

@@ -7,7 +7,11 @@ import {
   isAnswerMapped,
   questionHasUnmappedAnswer,
   orphanedBucketIds,
+  bucketMappedCounts,
+  answerSkipValue,
 } from "./questionOrder";
+import { answerPassesFilter, GAP_FILTER } from "./tableFilters";
+import { setAnswerRoute, routeAnswerToEnd } from "../../../lib/quizMutations";
 
 // intro → q1 (single_select, a1→cat_oily, a2 unmapped) → q2 (text/freeform) → result.
 function buildDoc(a2Bucket?: string): QuizDoc {
@@ -105,5 +109,39 @@ describe("orphanedBucketIds", () => {
     expect(orphanedBucketIds(buildDoc(), ["cat_oily", "cat_dry"])).toEqual(["cat_dry"]);
     // once an answer maps to cat_dry it's no longer orphaned
     expect(orphanedBucketIds(buildDoc("cat_dry"), ["cat_oily", "cat_dry"])).toEqual([]);
+  });
+});
+
+describe("bucketMappedCounts (QL3 coverage pills)", () => {
+  it("counts answers mapping to each bucket; orphans read 0", () => {
+    const counts = bucketMappedCounts(buildDoc("cat_oily"), ["cat_oily", "cat_dry"]);
+    expect(counts.get("cat_oily")).toBe(2); // a1 + a2 both map to cat_oily
+    expect(counts.get("cat_dry")).toBe(0); // orphaned
+  });
+});
+
+describe("answerSkipValue (shared Builder/Table routing read)", () => {
+  it("is '' by default, the target id when routed, and '__end__' for an end node", () => {
+    const doc = buildDoc();
+    const a1 = qNode(doc, "q1").data.answers[0]!;
+    expect(answerSkipValue(doc, "q1", a1)).toBe(""); // no per-answer edge
+    const routed = setAnswerRoute(doc, "q1", a1.id, "q2");
+    expect(answerSkipValue(routed, "q1", a1)).toBe("q2");
+    const ended = routeAnswerToEnd(doc, "q1", a1.id);
+    expect(answerSkipValue(ended, "q1", a1)).toBe("__end__");
+  });
+});
+
+describe("answerPassesFilter (QL2 Table filter)", () => {
+  it("matches all / gap / specific bucket against the shared predicate", () => {
+    const q1 = qNode(buildDoc(), "q1");
+    const mapped = q1.data.answers[0]!; // cat_oily
+    const unmapped = q1.data.answers[1]!;
+    expect(answerPassesFilter(mapped, "")).toBe(true);
+    expect(answerPassesFilter(mapped, "cat_oily")).toBe(true);
+    expect(answerPassesFilter(mapped, "cat_dry")).toBe(false);
+    expect(answerPassesFilter(mapped, GAP_FILTER)).toBe(false);
+    expect(answerPassesFilter(unmapped, GAP_FILTER)).toBe(true);
+    expect(answerPassesFilter(unmapped, "cat_oily")).toBe(false);
   });
 });
