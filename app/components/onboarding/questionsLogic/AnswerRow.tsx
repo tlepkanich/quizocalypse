@@ -7,7 +7,7 @@ import {
   removeAnswer,
 } from "../../../lib/quizMutations";
 import { updateNodeData } from "../../studio/studioDoc";
-import { answerBucketId, type QuestionNode } from "./questionOrder";
+import { answerBucketId, answerSkipValue, type QuestionNode } from "./questionOrder";
 import { bucketColor, answerLetter, answerLetterColor } from "./bucketPalette";
 
 const ANSWER_MAX = 60;
@@ -53,11 +53,7 @@ export function AnswerRow({
   const weighted = (doc.scoring_model ?? "direct") === "weighted";
 
   // ── Skip to (edge sourced from this answer's handle) ──
-  const edge = doc.edges.find(
-    (e) => e.source === node.id && e.source_handle === answer.edge_handle_id,
-  );
-  const targetNode = edge ? doc.nodes.find((n) => n.id === edge.target) : undefined;
-  const skipValue = targetNode?.type === "end" ? "__end__" : (edge?.target ?? "");
+  const skipValue = answerSkipValue(doc, node.id, answer);
   const isSkipping = skipValue !== "";
 
   const setText = (text: string) => {

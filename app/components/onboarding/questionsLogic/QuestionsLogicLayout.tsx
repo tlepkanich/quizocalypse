@@ -10,6 +10,8 @@ import {
 import { orderedQuestions } from "./questionOrder";
 import { QuestionList } from "./QuestionList";
 import { QuestionCard } from "./QuestionCard";
+import { TableView } from "./TableView";
+import type { TableFilter } from "./tableFilters";
 import type { SkipOption } from "./AnswerRow";
 
 const NODE_TYPE_LABEL: Record<string, string> = {
@@ -55,6 +57,7 @@ export function QuestionsLogicLayout({
   const [activeId, setActiveId] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [pendingScrollId, setPendingScrollId] = useState<string | null>(null);
+  const [tableFilter, setTableFilter] = useState<TableFilter>("");
 
   const mainRef = useRef<HTMLDivElement>(null);
   const cardEls = useRef(new Map<string, HTMLDivElement>());
@@ -142,11 +145,19 @@ export function QuestionsLogicLayout({
     }
   }, [pendingScrollId, idsKey]);
 
-  const selectQuestion = useCallback((id: string) => {
-    setActiveId(id);
-    const el = cardEls.current.get(id);
-    if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
-  }, []);
+  const selectQuestion = useCallback(
+    (id: string) => {
+      setActiveId(id);
+      if (view === "table") {
+        const row = typeof document !== "undefined" ? document.getElementById(`qlt-${id}`) : null;
+        if (row) row.scrollIntoView({ behavior: "smooth", block: "center" });
+        return;
+      }
+      const el = cardEls.current.get(id);
+      if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+    },
+    [view],
+  );
 
   const addQuestion = useCallback(() => {
     const ref = questions[questions.length - 1]?.node.id;
@@ -235,12 +246,7 @@ export function QuestionsLogicLayout({
             <button type="button" aria-pressed={view === "builder"} onClick={() => setView("builder")}>
               Builder
             </button>
-            <button
-              type="button"
-              aria-pressed={view === "table"}
-              disabled
-              title="Table view — coming next"
-            >
+            <button type="button" aria-pressed={view === "table"} onClick={() => setView("table")}>
               Table
             </button>
           </div>
@@ -254,33 +260,48 @@ export function QuestionsLogicLayout({
           </div>
         </aside>
 
-        <div className="qz-ql-main" ref={mainRef}>
-          <div className="qz-ql-cards">
-            {questions.length === 0 ? (
-              <p className="qz-dim" style={{ padding: 24 }}>
-                No questions yet — add one with “+ New Question”.
-              </p>
-            ) : (
-              questions.map(({ node, qIndex }) => (
-                <QuestionCard
-                  key={node.id}
-                  doc={doc}
-                  node={node}
-                  qIndex={qIndex}
-                  categories={categories}
-                  skipOptions={skipOptions}
-                  canDelete={questions.length > 1}
-                  active={activeId === node.id}
-                  onCommit={onCommit}
-                  onDelete={() => deleteQuestion(node.id)}
-                  onToast={showToast}
-                  onRef={setCardRef(node.id)}
-                  onActivate={() => setActiveId(node.id)}
-                />
-              ))
-            )}
+        {view === "builder" ? (
+          <div className="qz-ql-main" ref={mainRef}>
+            <div className="qz-ql-cards">
+              {questions.length === 0 ? (
+                <p className="qz-dim" style={{ padding: 24 }}>
+                  No questions yet — add one with “+ New Question”.
+                </p>
+              ) : (
+                questions.map(({ node, qIndex }) => (
+                  <QuestionCard
+                    key={node.id}
+                    doc={doc}
+                    node={node}
+                    qIndex={qIndex}
+                    categories={categories}
+                    skipOptions={skipOptions}
+                    canDelete={questions.length > 1}
+                    active={activeId === node.id}
+                    onCommit={onCommit}
+                    onDelete={() => deleteQuestion(node.id)}
+                    onToast={showToast}
+                    onRef={setCardRef(node.id)}
+                    onActivate={() => setActiveId(node.id)}
+                  />
+                ))
+              )}
+            </div>
           </div>
-        </div>
+        ) : (
+          <div className="qz-ql-main">
+            <TableView
+              doc={doc}
+              categories={categories}
+              skipOptions={skipOptions}
+              filter={tableFilter}
+              onFilterChange={setTableFilter}
+              activeId={activeId}
+              onActivate={setActiveId}
+              onCommit={onCommit}
+            />
+          </div>
+        )}
       </div>
 
       {toast ? (

@@ -1593,3 +1593,99 @@ body[data-qz] ::selection { background: var(--qz-ink); color: var(--qz-cream); }
   box-shadow: 0 6px 20px rgba(0, 0, 0, 0.2);
   z-index: 1200;
 }
+
+/* ── Table view (QL2) — spreadsheet over the same doc ── */
+.qz-qlt-wrap {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+.qz-qlt-filterbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--ql-border);
+  background: #fff;
+}
+.qz-ql-label {
+  font-size: 10.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--ql-txt3);
+}
+.qz-qlt-filter {
+  font: inherit;
+  font-size: 12.5px;
+  padding: 5px 8px;
+  border-radius: 7px;
+  border: 1px solid var(--ql-border);
+  background: #fff;
+  color: var(--ql-txt);
+}
+.qz-qlt-scroll {
+  flex: 1;
+  overflow: auto;
+  min-height: 0;
+}
+.qz-qlt {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.qz-qlt thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: #fff;
+  text-align: left;
+  padding: 9px 12px;
+  font-size: 10.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--ql-txt3);
+  border-bottom: 1px solid var(--ql-border);
+}
+.qz-qlt-c-q { width: 44px; }
+.qz-qlt-c-bucket { width: 210px; }
+.qz-qlt-c-skip { width: 150px; }
+.qz-qlt-qrow {
+  background: var(--ql-surface);
+  border-top: 1px solid var(--ql-border);
+  cursor: pointer;
+}
+.qz-qlt-qrow.is-active { background: #eff6ff; }
+.qz-qlt-qbadge-cell { padding: 8px 12px; }
+.qz-qlt-qtext-cell {
+  padding: 8px 12px 8px 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ql-txt);
+}
+.qz-qlt-freeform { font-weight: 400; color: var(--ql-txt3); font-style: italic; }
+.qz-qlt-arow td {
+  padding: 5px 12px;
+  border-top: 1px solid var(--ql-border2);
+  vertical-align: middle;
+}
+.qz-qlt-answercell {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.qz-qlt-answercell .qz-ql-atext { flex: 1; }
+.qz-qlt-bucketcell {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.qz-qlt-bucketcell .qz-ql-bucket { flex: 1; }
+.qz-qlt-gap { color: var(--ql-warn); font-size: 13px; }
+.qz-qlt-note {
+  font-size: 12px;
+  color: var(--ql-txt2);
+  font-style: italic;
+}

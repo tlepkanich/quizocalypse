@@ -61,6 +61,19 @@ export function questionHasUnmappedAnswer(node: QuestionNode): boolean {
   return node.data.answers.some((a) => !isAnswerMapped(a));
 }
 
+// The current "Skip to" value for an answer: "__end__" when it routes to an end
+// node, the target node id when it routes elsewhere, or "" for the default (Next
+// question). Shared by the Builder answer row + the Table view so the two can't
+// disagree about what an answer's routing is.
+export function answerSkipValue(doc: QuizDoc, questionId: string, answer: Answer): string {
+  const edge = doc.edges.find(
+    (e) => e.source === questionId && e.source_handle === answer.edge_handle_id,
+  );
+  if (!edge) return "";
+  const target = doc.nodes.find((n) => n.id === edge.target);
+  return target?.type === "end" ? "__end__" : edge.target;
+}
+
 // Category ids that NO answer maps to anywhere in the quiz (the spec's
 // "orphaned" buckets — amber coverage pill + Continue-dialog warning). Mapping is
 // the explicit points predicate above (not tag-overlap), matching the spec's
