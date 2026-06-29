@@ -28,6 +28,14 @@ for (const q of QUIZZES) {
   for (const vp of VIEWPORTS) {
     test(`runtime ${q.label} @ ${vp.name}`, async ({ page }) => {
       await page.setViewportSize({ width: vp.width, height: vp.height });
+      // Hydration-error guard: a React #425/#418 means SSR↔client divergence (e.g.
+      // an unescaped " in a <style> comment — the D4c regression that shipped past
+      // gates + screenshots because it's an inert comment). Collect from BEFORE
+      // navigation so errors thrown during initial hydration are caught.
+      const hydrationErrors: string[] = [];
+      page.on("pageerror", (e) => {
+        if (/#4[12][0-9]|Minified React error/.test(String(e))) hydrationErrors.push(String(e));
+      });
       await page.goto(`/q/${q.id}`, { waitUntil: "networkidle", timeout: 30_000 });
 
       const shot = (name: string) =>
@@ -145,6 +153,13 @@ for (const q of QUIZZES) {
         await shot(`${i + 2}-step`);
         await checkSanity(`step${i + 1}`);
       }
+      // The SSR'd runtime must hydrate cleanly — a silent #425/#418 cascades and
+      // ships otherwise (the D4c <style>-comment bug was invisible to the gates,
+      // unit tests, and these very screenshots; only a console probe catches it).
+      expect(
+        hydrationErrors,
+        `[${q.label}/${vp.name}] React hydration error(s) on /q: ${hydrationErrors[0] ?? ""}`,
+      ).toHaveLength(0);
     });
   }
 }
