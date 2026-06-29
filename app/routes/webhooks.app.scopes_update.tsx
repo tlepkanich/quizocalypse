@@ -8,14 +8,22 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
     const current = payload.current as string[];
     if (session) {
-        await db.session.update({   
-            where: {
-                id: session.id
-            },
-            data: {
-                scope: current.toString(),
-            },
-        });
+        // HII-2 — a failed scope write 500s so Shopify REDELIVERS the (idempotent)
+        // update, instead of acking 200 and leaving the session's stored scope
+        // stale. authenticate.webhook above already validated HMAC.
+        try {
+            await db.session.update({
+                where: {
+                    id: session.id
+                },
+                data: {
+                    scope: current.toString(),
+                },
+            });
+        } catch (err) {
+            console.error(`[webhook] ${topic} scope update failed:`, err instanceof Error ? err.message : err);
+            return new Response(null, { status: 500 });
+        }
     }
     return new Response();
 };
