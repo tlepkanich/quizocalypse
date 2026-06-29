@@ -90,24 +90,35 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   }
 
   const { session_id, outcome_id, answer_ids, matched_product_ids } = parsed.data;
-  await prisma.quizSession.upsert({
-    where: { quizId_sessionId: { quizId: quiz.id, sessionId: session_id } },
-    create: {
-      quizId: quiz.id,
-      shopId: quiz.shopId,
-      sessionId: session_id,
-      outcomeId: outcome_id ?? null,
-      answerIds: answer_ids,
-      matchedProductIds: matched_product_ids,
-      completedAt: new Date(),
-    },
-    update: {
-      outcomeId: outcome_id ?? null,
-      answerIds: answer_ids,
-      matchedProductIds: matched_product_ids,
-      completedAt: new Date(),
-    },
-  });
+  // HII-1 — surface a write failure as a controlled, logged, CORS+JSON 500
+  // (the runtime posts this fire-and-forget on completion, so the shopper is
+  // unaffected; this is honest server-side monitoring, not a UX change).
+  try {
+    await prisma.quizSession.upsert({
+      where: { quizId_sessionId: { quizId: quiz.id, sessionId: session_id } },
+      create: {
+        quizId: quiz.id,
+        shopId: quiz.shopId,
+        sessionId: session_id,
+        outcomeId: outcome_id ?? null,
+        answerIds: answer_ids,
+        matchedProductIds: matched_product_ids,
+        completedAt: new Date(),
+      },
+      update: {
+        outcomeId: outcome_id ?? null,
+        answerIds: answer_ids,
+        matchedProductIds: matched_product_ids,
+        completedAt: new Date(),
+      },
+    });
+  } catch (err) {
+    console.error("[sessions] write failed:", err instanceof Error ? err.message : err);
+    return new Response(JSON.stringify({ error: "session save failed" }), {
+      status: 500,
+      headers: { ...CORS, "content-type": "application/json" },
+    });
+  }
 
   return new Response(JSON.stringify({ ok: true }), {
     status: 202,

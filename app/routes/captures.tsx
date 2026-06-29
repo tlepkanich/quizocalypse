@@ -56,16 +56,29 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     });
   }
 
-  await prisma.emailCapture.create({
-    data: {
-      quizId: quiz.id,
-      shopId: quiz.shopId,
-      sessionId: parsed.data.session_id,
-      email: parsed.data.email,
-      firstName: parsed.data.first_name ?? null,
-      phone: parsed.data.phone ?? null,
-    },
-  });
+  // HII-1 — surface a write failure as a controlled, logged, CORS+JSON 500
+  // instead of letting the throw escape to Remix's generic (un-CORS'd, non-JSON)
+  // 500. The storefront callers are fire-and-forget (they never inspect the
+  // status, so the shopper is unaffected either way), but this gives honest
+  // server-side monitoring + a parseable body for the deferred retry layer.
+  try {
+    await prisma.emailCapture.create({
+      data: {
+        quizId: quiz.id,
+        shopId: quiz.shopId,
+        sessionId: parsed.data.session_id,
+        email: parsed.data.email,
+        firstName: parsed.data.first_name ?? null,
+        phone: parsed.data.phone ?? null,
+      },
+    });
+  } catch (err) {
+    console.error("[captures] write failed:", err instanceof Error ? err.message : err);
+    return new Response(JSON.stringify({ error: "capture failed" }), {
+      status: 500,
+      headers: { ...CORS, "content-type": "application/json" },
+    });
+  }
 
   // Outbound webhook delivery to Klaviyo / merchant-configured endpoints
   // deferred — write the row now, retry layer comes in a follow-up.

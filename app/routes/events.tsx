@@ -55,23 +55,35 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   });
   const shopByQuiz = new Map(quizzes.map((q) => [q.id, q.shopId]));
 
-  await prisma.event.createMany({
-    data: parsed.data.events
-      .filter((e) => shopByQuiz.has(e.quiz_id))
-      // order_attributed is SERVER-ONLY (written by the orders/create webhook
-      // straight through Prisma). It shares the EventType enum so the Event
-      // table stays one list, but the public boundary drops it — otherwise a
-      // hostile client could spoof revenue into the dashboard.
-      .filter((e) => e.event_type !== "order_attributed")
-      .map((e) => ({
-        quizId: e.quiz_id,
-        shopId: shopByQuiz.get(e.quiz_id) ?? null,
-        sessionId: e.session_id,
-        eventType: e.event_type,
-        payload: (e.payload ?? {}) as never,
-        ...(e.ts ? { ts: new Date(e.ts) } : {}),
-      })),
-  });
+  // HII-1 — surface a write failure as a controlled, logged, CORS+JSON 500
+  // (analytics is posted fire-and-forget via sendBeacon / void-fetch, so the
+  // shopper never sees this; it's honest server-side monitoring instead of an
+  // unhandled, un-CORS'd throw).
+  try {
+    await prisma.event.createMany({
+      data: parsed.data.events
+        .filter((e) => shopByQuiz.has(e.quiz_id))
+        // order_attributed is SERVER-ONLY (written by the orders/create webhook
+        // straight through Prisma). It shares the EventType enum so the Event
+        // table stays one list, but the public boundary drops it — otherwise a
+        // hostile client could spoof revenue into the dashboard.
+        .filter((e) => e.event_type !== "order_attributed")
+        .map((e) => ({
+          quizId: e.quiz_id,
+          shopId: shopByQuiz.get(e.quiz_id) ?? null,
+          sessionId: e.session_id,
+          eventType: e.event_type,
+          payload: (e.payload ?? {}) as never,
+          ...(e.ts ? { ts: new Date(e.ts) } : {}),
+        })),
+    });
+  } catch (err) {
+    console.error("[events] write failed:", err instanceof Error ? err.message : err);
+    return new Response(JSON.stringify({ error: "events not stored" }), {
+      status: 500,
+      headers: { ...CORS, "content-type": "application/json" },
+    });
+  }
 
   return new Response(JSON.stringify({ ok: true }), {
     status: 202,
