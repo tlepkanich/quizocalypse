@@ -17,6 +17,7 @@ import {
 import { applyReviewEnrichment, clampReviewText } from "./reviewEnrichment";
 import { ingestWebsite } from "./websiteIngest.server";
 import { applyQuestionFlow, type SmartBuildBucket } from "./smartBuild";
+import { mergeRegeneratedAnswers } from "./regenerateMerge";
 import { parseBrandGuidelinesSafe } from "./brandGuidelines";
 import { buildScopedIndex, toneSampleFromCatalog } from "./catalogIndex";
 import type { IndexedProduct } from "./recommendationEngine";
@@ -352,21 +353,18 @@ async function handleQuizEditorActionImpl(
       return json({ ok: false, error: message }, { status: 502 });
     }
 
-    const oldAnswers = target.data.answers;
-    const mergedAnswers = regen.answers.map((newA, idx) => {
-      const oldA = oldAnswers[idx];
-      const aid = oldA?.id ?? `a_${Math.random().toString(36).slice(2, 10)}`;
-      const handle =
-        oldA?.edge_handle_id ?? `h_${Math.random().toString(36).slice(2, 10)}`;
-      return {
-        id: aid,
-        text: newA.text,
-        tags: newA.tags,
-        ...(newA.collection_filter ? { collection_filter: newA.collection_filter } : {}),
-        ...(newA.image_url ? { image_url: newA.image_url } : {}),
-        edge_handle_id: handle,
-      };
-    });
+    // Merge the AI answers with the prior ones, preserving each answer's bucket
+    // mapping (points / points_alt) on unchanged-text answers + reusing id/handle
+    // by index so aligned per-answer routing edges resolve. The funnel's regenerate
+    // already uses this; the editor's prior inline merge dropped points/points_alt,
+    // silently wiping a question's outcome mappings on regenerate. Pure + unit-tested
+    // (regenerateMerge.test.ts); the id/handle generators match the funnel's exactly.
+    const mergedAnswers = mergeRegeneratedAnswers(
+      target.data.answers,
+      regen.answers,
+      () => `a_${Math.random().toString(36).slice(2, 10)}`,
+      () => `h_${Math.random().toString(36).slice(2, 10)}`,
+    );
 
     const handlesNow = new Set(mergedAnswers.map((a) => a.edge_handle_id));
     const prunedEdges = doc.edges.filter(
