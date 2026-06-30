@@ -25,16 +25,36 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   if (!quizId || !sessionId) {
     return new Response(null, { status: 204, headers: CORS });
   }
-  const session = await prisma.quizSession.findUnique({
-    where: { quizId_sessionId: { quizId, sessionId } },
-    select: {
-      outcomeId: true,
-      answerIds: true,
-      matchedProductIds: true,
-      converted: true,
-      completedAt: true,
-    },
-  });
+  // HII-1b — this CORS-open "My Results" GET's only DB work is a read; guard
+  // ONLY the read (the await) so a DB-down lookup returns a controlled CORS+JSON
+  // 500. The 404 (no row) + 200 (found) are normal returns OUTSIDE the try — so a
+  // successful read can never be mislabeled a read-failure (matches the other
+  // three read-guards' shape).
+  let session: {
+    outcomeId: string | null;
+    answerIds: string[];
+    matchedProductIds: string[];
+    converted: boolean;
+    completedAt: Date | null;
+  } | null;
+  try {
+    session = await prisma.quizSession.findUnique({
+      where: { quizId_sessionId: { quizId, sessionId } },
+      select: {
+        outcomeId: true,
+        answerIds: true,
+        matchedProductIds: true,
+        converted: true,
+        completedAt: true,
+      },
+    });
+  } catch (err) {
+    console.error("[sessions] session lookup failed:", err instanceof Error ? err.message : err);
+    return new Response(JSON.stringify({ error: "lookup failed" }), {
+      status: 500,
+      headers: { ...CORS, "content-type": "application/json" },
+    });
+  }
   if (!session) {
     return new Response(JSON.stringify({ error: "not found" }), {
       status: 404,
@@ -78,10 +98,21 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     );
   }
 
-  const quiz = await prisma.quiz.findUnique({
-    where: { id: parsed.data.quiz_id },
-    select: { id: true, shopId: true },
-  });
+  // HII-1b — guard the lookup READ (the upsert below is already guarded); a
+  // DB-down read otherwise escapes as Remix's generic un-CORS'd 500.
+  let quiz: { id: string; shopId: string } | null;
+  try {
+    quiz = await prisma.quiz.findUnique({
+      where: { id: parsed.data.quiz_id },
+      select: { id: true, shopId: true },
+    });
+  } catch (err) {
+    console.error("[sessions] quiz lookup failed:", err instanceof Error ? err.message : err);
+    return new Response(JSON.stringify({ error: "lookup failed" }), {
+      status: 500,
+      headers: { ...CORS, "content-type": "application/json" },
+    });
+  }
   if (!quiz) {
     return new Response(JSON.stringify({ error: "quiz not found" }), {
       status: 404,

@@ -45,10 +45,23 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     );
   }
 
-  const quiz = await prisma.quiz.findUnique({
-    where: { id: parsed.data.quiz_id },
-    select: { id: true, shopId: true },
-  });
+  // HII-1b — the lookup READ runs before the HII-1-guarded write, so a DB-down
+  // read throws FIRST and escapes as Remix's generic un-CORS'd, non-JSON 500 —
+  // the exact contract HII-1 closed. Guard it too: a read failure returns the
+  // same controlled CORS+JSON 500 (distinct log so read vs write stays legible).
+  let quiz: { id: string; shopId: string } | null;
+  try {
+    quiz = await prisma.quiz.findUnique({
+      where: { id: parsed.data.quiz_id },
+      select: { id: true, shopId: true },
+    });
+  } catch (err) {
+    console.error("[captures] quiz lookup failed:", err instanceof Error ? err.message : err);
+    return new Response(JSON.stringify({ error: "lookup failed" }), {
+      status: 500,
+      headers: { ...CORS, "content-type": "application/json" },
+    });
+  }
   if (!quiz) {
     return new Response(JSON.stringify({ error: "quiz not found" }), {
       status: 404,

@@ -1,8 +1,8 @@
-import type { ActionFunctionArgs } from "@remix-run/node";
+import type { ActionFunctionArgs, LoaderFunctionArgs } from "@remix-run/node";
 import { beforeEach, describe, expect, it, vi, type Mock } from "vitest";
 import prisma from "../db.server";
 import { action as capturesAction } from "../routes/captures";
-import { action as sessionsAction } from "../routes/sessions";
+import { action as sessionsAction, loader as sessionsLoader } from "../routes/sessions";
 import { action as eventsAction } from "../routes/events";
 
 // HII-1 — the three storefront write boundaries each guard their Prisma write so
@@ -17,7 +17,7 @@ vi.mock("../db.server", () => ({
   default: {
     quiz: { findUnique: vi.fn(), findMany: vi.fn() },
     emailCapture: { create: vi.fn() },
-    quizSession: { upsert: vi.fn() },
+    quizSession: { upsert: vi.fn(), findUnique: vi.fn() },
     event: { createMany: vi.fn() },
   },
 }));
@@ -25,7 +25,7 @@ vi.mock("../db.server", () => ({
 const p = prisma as unknown as {
   quiz: { findUnique: Mock; findMany: Mock };
   emailCapture: { create: Mock };
-  quizSession: { upsert: Mock };
+  quizSession: { upsert: Mock; findUnique: Mock };
   event: { createMany: Mock };
 };
 
@@ -36,6 +36,11 @@ function postArgs(path: string, body: unknown): ActionFunctionArgs {
     body: JSON.stringify(body),
   });
   return { request, params: {}, context: {} } as unknown as ActionFunctionArgs;
+}
+
+function getArgs(query: string): LoaderFunctionArgs {
+  const request = new Request(`https://shop.example/sessions?${query}`, { method: "GET" });
+  return { request, params: {}, context: {} } as unknown as LoaderFunctionArgs;
 }
 
 const CAPTURE = { quiz_id: "q1", session_id: "sess1", email: "a@b.co" };
@@ -108,5 +113,58 @@ describe("events.tsx write guard", () => {
     expect(res.status).toBe(500);
     expect(res.headers.get("access-control-allow-origin")).toBe("*");
     expect(((await res.json()) as { error?: string }).error).toBeTruthy();
+  });
+});
+
+// HII-1b — the quiz/session LOOKUP read runs BEFORE the now-guarded write, so a
+// DB-down read would escape as Remix's generic un-CORS'd, non-JSON 500 unless
+// it too is guarded. These pin the read-failure → CORS+JSON 500 contract AND
+// that the write is never attempted after a failed read.
+describe("HII-1b — public read guards", () => {
+  it("captures: a quiz-lookup read failure → 500 + CORS + {error}, write never attempted", async () => {
+    p.quiz.findUnique.mockRejectedValue(new Error("db down"));
+    const res = await capturesAction(postArgs("captures", CAPTURE));
+    expect(res.status).toBe(500);
+    expect(res.headers.get("access-control-allow-origin")).toBe("*");
+    expect(((await res.json()) as { error?: string }).error).toBeTruthy();
+    expect(p.emailCapture.create).not.toHaveBeenCalled();
+  });
+
+  it("sessions action: a quiz-lookup read failure → 500 + CORS, upsert never attempted", async () => {
+    p.quiz.findUnique.mockRejectedValue(new Error("db down"));
+    const res = await sessionsAction(postArgs("sessions", SESSION));
+    expect(res.status).toBe(500);
+    expect(res.headers.get("access-control-allow-origin")).toBe("*");
+    expect(p.quizSession.upsert).not.toHaveBeenCalled();
+  });
+
+  it("events: a quiz findMany read failure → 500 + CORS, createMany never attempted", async () => {
+    p.quiz.findMany.mockRejectedValue(new Error("db down"));
+    const res = await eventsAction(postArgs("events", EVENTS));
+    expect(res.status).toBe(500);
+    expect(res.headers.get("access-control-allow-origin")).toBe("*");
+    expect(p.event.createMany).not.toHaveBeenCalled();
+  });
+
+  it("sessions loader (My Results GET): read failure → 500 + CORS + {error}", async () => {
+    p.quizSession.findUnique.mockRejectedValue(new Error("db down"));
+    const res = await sessionsLoader(getArgs("quiz_id=q1&session_id=sess1"));
+    expect(res.status).toBe(500);
+    expect(res.headers.get("access-control-allow-origin")).toBe("*");
+    expect(((await res.json()) as { error?: string }).error).toBeTruthy();
+  });
+
+  it("sessions loader: happy 200 (found) + 404 (not found) stay byte-identical", async () => {
+    p.quizSession.findUnique.mockResolvedValue({
+      outcomeId: "o1", answerIds: [], matchedProductIds: [], converted: false, completedAt: new Date(),
+    });
+    const ok = await sessionsLoader(getArgs("quiz_id=q1&session_id=sess1"));
+    expect(ok.status).toBe(200);
+    expect(((await ok.json()) as { ok?: boolean }).ok).toBe(true);
+    p.quizSession.findUnique.mockResolvedValue(null);
+    const nf = await sessionsLoader(getArgs("quiz_id=q1&session_id=nope"));
+    expect(nf.status).toBe(404);
+    expect(nf.headers.get("access-control-allow-origin")).toBe("*");
+    expect(((await nf.json()) as { error?: string }).error).toBe("not found");
   });
 });

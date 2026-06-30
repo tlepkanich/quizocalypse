@@ -49,10 +49,21 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   // Resolve shopId from any quiz in the batch (events should all be from the
   // same quiz, but we don't enforce that). Skip rows for unknown quizzes.
   const quizIds = [...new Set(parsed.data.events.map((e) => e.quiz_id))];
-  const quizzes = await prisma.quiz.findMany({
-    where: { id: { in: quizIds } },
-    select: { id: true, shopId: true },
-  });
+  // HII-1b — guard the lookup READ (the createMany below is already guarded); a
+  // DB-down read otherwise escapes as Remix's generic un-CORS'd 500.
+  let quizzes: { id: string; shopId: string }[];
+  try {
+    quizzes = await prisma.quiz.findMany({
+      where: { id: { in: quizIds } },
+      select: { id: true, shopId: true },
+    });
+  } catch (err) {
+    console.error("[events] quiz lookup failed:", err instanceof Error ? err.message : err);
+    return new Response(JSON.stringify({ error: "lookup failed" }), {
+      status: 500,
+      headers: { ...CORS, "content-type": "application/json" },
+    });
+  }
   const shopByQuiz = new Map(quizzes.map((q) => [q.id, q.shopId]));
 
   // HII-1 — surface a write failure as a controlled, logged, CORS+JSON 500
