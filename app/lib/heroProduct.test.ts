@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { selectHeroAndGrid } from "./heroProduct";
 
-const P = (id: string, available?: boolean) => ({ id, ...(available === undefined ? {} : { available }) });
+const P = (id: string, inStock?: boolean) =>
+  ({ id, ...(inStock === undefined ? {} : { inventory_in_stock: inStock }) });
 
 describe("selectHeroAndGrid (step4-dev-handoff §6 hero split)", () => {
   it("empty input → no hero, empty grid", () => {

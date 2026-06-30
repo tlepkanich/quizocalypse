@@ -11,11 +11,12 @@
 
 export type HeroOos = "next" | "grid";
 
-// Anything with an optional in-stock flag. `available === false` = out of stock;
-// undefined/true = treated as available (matches the runtime IndexedProduct shape
-// where `available` is only explicitly false when inventory tracking says so).
+// Anything with the runtime's product-level in-stock flag (RecommendedProduct/
+// IndexedProduct). `inventory_in_stock === false` = out of stock; undefined/true =
+// treated as available (it's only explicitly false when inventory tracking says so,
+// matching ProductCard's `product.inventory_in_stock === false` gate).
 export interface HeroSplitItem {
-  available?: boolean;
+  inventory_in_stock?: boolean;
 }
 
 export interface HeroSplit<T> {
@@ -23,7 +24,7 @@ export interface HeroSplit<T> {
   grid: T[];
 }
 
-const inStock = (p: HeroSplitItem): boolean => p.available !== false;
+const inStock = (p: HeroSplitItem): boolean => p.inventory_in_stock !== false;
 
 export function selectHeroAndGrid<T extends HeroSplitItem>(
   ranked: readonly T[],

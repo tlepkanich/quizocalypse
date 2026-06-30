@@ -623,6 +623,78 @@ export function ResultSettingsPanel({
         </div>
       </QzCollapse>
 
+      {/* ── HERO PRODUCT (step4-dev-handoff §3.5/§6) ──────────────────── */}
+      <QzCollapse title="Hero product" meta={data.hero_logic ? "On" : "Off"}>
+        <div className="qz-col qz-gap-8">
+          <label
+            className="qz-row qz-gap-8"
+            style={{ alignItems: "center", fontSize: 13, cursor: "pointer" }}
+          >
+            <input
+              type="checkbox"
+              checked={!!data.hero_logic}
+              onChange={(e) =>
+                set(
+                  e.target.checked
+                    ? { hero_logic: "match", hero_oos: data.hero_oos ?? "next" }
+                    : { hero_logic: undefined, hero_oos: undefined },
+                )
+              }
+            />
+            Feature a hero product above the grid
+          </label>
+          {data.hero_logic ? (
+            <>
+              <QzField label="Hero ranking" hint="Which signal picks the featured product.">
+                <div className="qz-col qz-gap-8" role="radiogroup" aria-label="Hero ranking">
+                  <label
+                    className="qz-row qz-gap-8"
+                    style={{ alignItems: "center", fontSize: 13, cursor: "pointer" }}
+                  >
+                    <input
+                      type="radio"
+                      name="hero_logic"
+                      checked={data.hero_logic === "match"}
+                      onChange={() => set({ hero_logic: "match" })}
+                    />
+                    Best quiz match
+                  </label>
+                  <label
+                    className="qz-row qz-gap-8"
+                    style={{ alignItems: "center", fontSize: 13, cursor: "not-allowed", opacity: 0.55 }}
+                    title="Coming soon — connect your reviews app"
+                  >
+                    <input type="radio" name="hero_logic" disabled checked={false} readOnly />
+                    Highest rated
+                    <QzBadge tone="draft">Coming soon</QzBadge>
+                  </label>
+                  <label
+                    className="qz-row qz-gap-8"
+                    style={{ alignItems: "center", fontSize: 13, cursor: "not-allowed", opacity: 0.55 }}
+                    title="Coming soon — connect your sales data"
+                  >
+                    <input type="radio" name="hero_logic" disabled checked={false} readOnly />
+                    Top seller
+                    <QzBadge tone="draft">Coming soon</QzBadge>
+                  </label>
+                </div>
+              </QzField>
+              <QzField label="If the hero is sold out">
+                <QzSegmented
+                  ariaLabel="Hero out-of-stock behavior"
+                  value={data.hero_oos ?? "next"}
+                  onChange={(v) => set({ hero_oos: v as "next" | "grid" })}
+                  options={[
+                    { value: "next", label: "Use next best" },
+                    { value: "grid", label: "Grid only" },
+                  ]}
+                />
+              </QzField>
+            </>
+          ) : null}
+        </div>
+      </QzCollapse>
+
       {/* ── WHY WE RECOMMEND THIS (spec §3) ───────────────────────────── */}
       <QzCollapse title="Why we recommend this">
         <div className="qz-col qz-gap-8">

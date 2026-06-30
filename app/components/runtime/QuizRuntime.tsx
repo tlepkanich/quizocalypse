@@ -16,6 +16,7 @@ import {
   type RecommendedProduct,
 } from "../../lib/recommendationEngine";
 import { resolveNodeOverride } from "../../lib/resultLayout";
+import { selectHeroAndGrid } from "../../lib/heroProduct";
 import { cartPermalink, numericId, cartPermalinkMulti } from "../../lib/cartLink";
 import { productHref, type QuizPlatform } from "../../lib/productHref";
 import { progressPct, reachableQuestionCount } from "../../lib/progress";
@@ -1209,6 +1210,8 @@ export function QuizRuntime(props: QuizRuntimeProps) {
             onReset={reset}
             inspect={(part) => insp({ nodeId: currentNode.id, part })}
             splitLayout={resolved.result_split === true && breakpoint === "desktop"}
+            heroLogic={currentNode.data.hero_logic}
+            heroOos={currentNode.data.hero_oos}
           />
         );
       } else {
@@ -4259,6 +4262,8 @@ function ResultView({
   whyIntro,
   blurbByProduct,
   globalFallback,
+  heroLogic,
+  heroOos,
 }: {
   headline: string;
   subtext: string;
@@ -4310,6 +4315,11 @@ function ResultView({
   // Rec-Page spec §7 — quiz-level no-bucket-match fallback, computed at the call
   // site (resolveGlobalFallbackProducts). Rendered ONLY when recs is empty.
   globalFallback?: { heading: string; products: RecommendedProduct[] } | null;
+  // step4-dev-handoff §6 — feature the top product as a HERO card above the grid.
+  // Unset (the default) = no hero = today's grid (byte-stable). Only "match" renders
+  // for now (reviewed/seller are config-gated until review/sales data exists).
+  heroLogic?: "match" | "reviewed" | "seller";
+  heroOos?: "next" | "grid";
 }) {
   const tc = useChrome();
   const isPreviewMode = useContext(RuntimePreviewContext);
@@ -4351,6 +4361,15 @@ function ResultView({
     sessionId,
     answerIds,
   ]);
+
+  // step4-dev-handoff §6 — when hero_logic is set, feature the top product as a
+  // hero card above the grid. Scoped to the STANDARD single-section grid (not the
+  // split/minimal layouts, which own their structure) so the change is bounded;
+  // unset → heroActive false → recs renders exactly as today (byte-stable).
+  const heroActive = !!heroLogic && !splitLayout && !minimal;
+  const heroSplit = heroActive ? selectHeroAndGrid(recs, heroOos ?? "next") : null;
+  const heroProduct = heroSplit?.hero ?? null;
+  const gridRecs = heroProduct ? heroSplit!.grid : recs;
 
   const inner = (
     <>
@@ -4425,6 +4444,57 @@ function ResultView({
           <NotifyMeForm quizId={quizId} sessionId={sessionId} productId={null} />
         </div>
       ) : null}
+      {heroProduct ? (
+        <div style={{ marginTop: bare && !discountLabel ? 0 : 20 }}>
+          <div style={{ marginBottom: 8 }}>
+            <span
+              style={{
+                display: "inline-block",
+                fontSize: 12,
+                fontWeight: 600,
+                color: "var(--qz-color-primary)",
+                background: "color-mix(in srgb, var(--qz-color-primary) 12%, transparent)",
+                borderRadius: 999,
+                padding: "3px 10px",
+              }}
+            >
+              ⭐ {tc("hero_badge")}
+            </span>
+          </div>
+          <ProductCard
+            product={heroProduct}
+            position={0}
+            ctaLabel={ctaLabel}
+            href={productHref(heroProduct, shopDomain, platform)}
+            shopDomain={shopDomain}
+            discountCode={discountCode}
+            discountLabel={discountLabel}
+            showVariants={showVariants}
+            showDescriptions={showDescriptions}
+            lowStockQty={lowStockByProduct?.get(heroProduct.product_id) ?? null}
+            oosNotify={oosNotify}
+            quizId={quizId}
+            sessionId={sessionId}
+            blurb={blurbByProduct?.get(heroProduct.product_id)}
+            reasons={reasonsByProduct?.get(heroProduct.product_id) ?? undefined}
+            styles={styles}
+            onClick={() =>
+              analytics?.track("recommendation_clicked", {
+                product_id: heroProduct.product_id,
+                position: 0,
+                hero: true,
+              })
+            }
+            onAdd={() =>
+              analytics?.track("add_to_cart", {
+                product_id: heroProduct.product_id,
+                position: 0,
+                hero: true,
+              })
+            }
+          />
+        </div>
+      ) : null}
       <div
         style={{
           marginTop: bare && !discountLabel ? 0 : 20,
@@ -4476,7 +4546,7 @@ function ResultView({
           ) : (
             <p style={{ color: "var(--qz-color-muted)" }}>{tc("no_results_match")}</p>
           ))}
-        {recs.map((r, idx) => (
+        {gridRecs.map((r, idx) => (
           <ProductCard
             reasons={reasonsByProduct?.get(r.product_id) ?? undefined}
             key={r.product_id}

@@ -18,6 +18,7 @@ export const CHROME_TOKENS = {
   shop_now: "Shop now",
   out_of_stock: "Out of stock",
   you_might_also_like: "You might also like",
+  hero_badge: "Best quiz match",
   email_capture_heading: "Want your results emailed to you?",
   email_capture_button: "Email me",
   email_capture_sending: "Sending…",
