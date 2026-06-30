@@ -452,10 +452,14 @@ describe("publishQuiz — byte-stability when net-new optional fields are unset"
     // resolved tokens unless a layer set it (it didn't here).
     expect(wire.design_tokens).not.toHaveProperty("result_split");
 
-    // (4) Result-node data: the unset E4 optional stays absent.
+    // (4) Result-node data: the unset E4 optional + the RP-S4 hero optionals stay
+    // absent (hero_logic/hero_oos are .optional() not .default() — a slipped default
+    // would sprout a hero on every live quiz, which this pins against).
     const resultNode = wire.nodes.find((n) => n.type === "result");
     expect(resultNode).toBeDefined();
     expect(resultNode!.data).not.toHaveProperty("escape_hatch");
+    expect(resultNode!.data).not.toHaveProperty("hero_logic");
+    expect(resultNode!.data).not.toHaveProperty("hero_oos");
 
     // (5) Question-node data: unset Design/Experiences/QL optionals stay absent.
     const qNode = wire.nodes.find((n) => n.type === "question");

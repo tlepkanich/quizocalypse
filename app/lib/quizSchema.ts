@@ -384,6 +384,16 @@ export const ResultData = z.object({
   include_discount: z.boolean().default(false),
   subscription_eligible: z.boolean().default(false),
 
+  // ---- step4-dev-handoff §3.5/§6 — Hero product (a featured card, then the grid) ----
+  // OPTIONAL on purpose: unset = no hero = today's product grid = byte-identical /q
+  // (the result_split opt-in precedent). The spec's "default match" is the config-UI
+  // default for NEW quizzes, NOT a schema .default() — else every live quiz would
+  // sprout a hero on deploy. hero_logic=match is buildable; reviewed/seller need real
+  // review/sales data (gated). hero_oos: next = promote an OOS product as the hero
+  // with a badge; grid = skip the hero, grid only.
+  hero_logic: z.enum(["match", "reviewed", "seller"]).optional(),
+  hero_oos: z.enum(["next", "grid"]).optional(),
+
   // ---- v3 multi-stage (Advanced) ----
   // Empty = Simple (one page). Non-empty = Advanced ordered sections.
   stages: z.array(ResultStage).default([]),
