@@ -734,21 +734,36 @@ export function addEdge(
   target: string,
   sourceHandle?: string,
 ): QuizDoc {
-  // Avoid duplicates on the same handle pair.
-  const exists = doc.edges.some(
-    (e) =>
-      e.source === source &&
-      e.target === target &&
-      e.source_handle === sourceHandle,
-  );
-  if (exists) return doc;
+  // ONE edge per (source, source_handle): an answer's edge_handle_id (or a branch
+  // slot id) routes to exactly one target. Re-pointing a handle that already has an
+  // edge REPLACES it — so the canvas drag-to-connect (handleConnect, which has no
+  // pre-delete) can't leave a second, UI-invisible ghost edge on the same handle
+  // (resolveNextStep/routeTrace use find() and would silently pick one, stranding
+  // the other target). For the handle-LESS default edge, keep the exact (source,
+  // target) dup guard — don't collapse a node's distinct default-vs-handled edges.
+  let next = doc;
+  if (sourceHandle) {
+    const existing = doc.edges.find(
+      (e) => e.source === source && e.source_handle === sourceHandle,
+    );
+    if (existing) {
+      if (existing.target === target) return doc; // already correct — idempotent
+      next = deleteEdge(doc, existing.id);
+    }
+  } else if (
+    doc.edges.some(
+      (e) => e.source === source && e.target === target && !e.source_handle,
+    )
+  ) {
+    return doc; // exact handle-less duplicate
+  }
   const edge = {
     id: uid("e"),
     source,
     target,
     ...(sourceHandle ? { source_handle: sourceHandle } : {}),
   };
-  return { ...doc, edges: [...doc.edges, edge] };
+  return { ...next, edges: [...next.edges, edge] };
 }
 
 export function addAnswer(doc: QuizDoc, questionNodeId: string): QuizDoc {
@@ -958,10 +973,17 @@ export function setAnswerRoute(
   const answer = node.data.answers.find((a) => a.id === answerId);
   if (!answer) return doc;
   const handle = answer.edge_handle_id;
-  const existing = doc.edges.find(
+  // Delete EVERY edge on this answer's handle, not just the first — defense in
+  // depth so a pre-corrupted doc carrying duplicate-handle edges (e.g. a legacy
+  // canvas drag before addEdge enforced one-per-handle) self-heals on the next
+  // reroute, instead of leaving a stale ghost edge that find()-based resolution
+  // could silently follow. The clean single-edge happy path is unchanged.
+  let next = doc;
+  for (const e of doc.edges.filter(
     (e) => e.source === questionNodeId && e.source_handle === handle,
-  );
-  let next = existing ? deleteEdge(doc, existing.id) : doc;
+  )) {
+    next = deleteEdge(next, e.id);
+  }
   if (targetNodeId && targetNodeId !== questionNodeId) {
     next = addEdge(next, questionNodeId, targetNodeId, handle);
   }

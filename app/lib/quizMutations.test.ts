@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { Quiz } from "./quizSchema";
 import {
   setAnswerRoute,
+  addEdge,
   setSlotWeight,
   setBranchMode,
   promoteAbWinner,
@@ -502,6 +503,73 @@ describe("setAnswerRoute (Unified P4)", () => {
     expect(setAnswerRoute(doc, q.id, "nope", result.id)).toBe(doc);
     const self = setAnswerRoute(doc, q.id, a.id, q.id);
     expect(self.edges.some((e) => e.source_handle === a.edge_handle_id)).toBe(false);
+  });
+
+  // Defense-in-depth: if a doc already carries DUPLICATE edges on one answer handle
+  // (e.g. a legacy canvas drag from before addEdge enforced one-per-handle), a
+  // reroute must delete EVERY one, not just the first — else a find()-based resolver
+  // could silently follow the stale ghost edge and the reroute would be a no-op.
+  it("self-heals a pre-corrupted doc with duplicate-handle edges (deletes ALL, not just the first)", () => {
+    let doc = linearQuestionsDoc();
+    const q = doc.nodes.find((n) => n.type === "question");
+    if (!q || q.type !== "question") throw new Error("fixture");
+    const a = q.data.answers[0]!;
+    const handle = a.edge_handle_id;
+    // Manufacture corruption directly (bypassing addEdge): two edges on one handle.
+    doc = {
+      ...doc,
+      edges: [
+        ...doc.edges,
+        { id: "dup1", source: q.id, target: "q2", source_handle: handle },
+        { id: "dup2", source: q.id, target: "q3", source_handle: handle },
+      ],
+    };
+    expect(doc.edges.filter((e) => e.source === q.id && e.source_handle === handle)).toHaveLength(2);
+    const next = setAnswerRoute(doc, q.id, a.id, "r1");
+    const onHandle = next.edges.filter((e) => e.source === q.id && e.source_handle === handle);
+    expect(onHandle).toHaveLength(1); // collapsed to a single edge
+    expect(onHandle[0]!.target).toBe("r1");
+  });
+});
+
+describe("addEdge — one edge per (source, handle)", () => {
+  const firstQuestion = (doc: ReturnType<typeof linearQuestionsDoc>) => {
+    const q = doc.nodes.find((n) => n.type === "question");
+    if (!q || q.type !== "question") throw new Error("fixture");
+    return q;
+  };
+
+  it("re-pointing a handle REPLACES its edge — no duplicate ghost route (the canvas drag-connect bug)", () => {
+    let doc = linearQuestionsDoc();
+    const q = firstQuestion(doc);
+    const handle = q.data.answers[0]!.edge_handle_id;
+    // Two successive drags from the SAME answer handle to different targets.
+    doc = addEdge(doc, q.id, "q2", handle);
+    doc = addEdge(doc, q.id, "r1", handle);
+    const onHandle = doc.edges.filter((e) => e.source === q.id && e.source_handle === handle);
+    expect(onHandle).toHaveLength(1); // exactly one edge on the handle
+    expect(onHandle[0]!.target).toBe("r1"); // the latest target wins
+  });
+
+  it("re-adding the SAME (source, handle, target) is an idempotent no-op (edge id stable)", () => {
+    let doc = linearQuestionsDoc();
+    const q = firstQuestion(doc);
+    const handle = q.data.answers[0]!.edge_handle_id;
+    doc = addEdge(doc, q.id, "r1", handle);
+    const before = doc.edges.find((e) => e.source === q.id && e.source_handle === handle)!;
+    const after = addEdge(doc, q.id, "r1", handle);
+    expect(after).toBe(doc); // true no-op (same object)
+    expect(after.edges.find((e) => e.source === q.id && e.source_handle === handle)!.id).toBe(before.id);
+  });
+
+  it("does NOT collapse handle-LESS edges — distinct default-vs-handled edges coexist; exact default dup deduped", () => {
+    let doc = linearQuestionsDoc(); // q1 already has a handle-less default edge → q2
+    const q = firstQuestion(doc);
+    const handle = q.data.answers[0]!.edge_handle_id;
+    doc = addEdge(doc, q.id, "r1", handle); // a handled edge alongside the default
+    expect(doc.edges.some((e) => e.source === q.id && !e.source_handle && e.target === "q2")).toBe(true);
+    expect(doc.edges.some((e) => e.source === q.id && e.source_handle === handle && e.target === "r1")).toBe(true);
+    expect(addEdge(doc, q.id, "q2")).toBe(doc); // exact handle-less duplicate → no-op
   });
 });
 
