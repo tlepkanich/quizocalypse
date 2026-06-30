@@ -370,6 +370,65 @@ describe("insertModule splices (no dead-end)", () => {
     const { doc, newNodeId } = insertModule(base, "end", "r1", undefined, "gid://c/fb");
     expect(doc.edges.some((e) => e.source === "r1" && e.target === newNodeId)).toBe(true);
   });
+
+  // The filmstrip "+" (UnifiedWorkspace.addStep) anchors to the LAST MOVABLE step
+  // via straightThroughRun, exactly like FlowRail's "+ Add step" — so a manually
+  // added question always splices into the question sequence (intro → … → q → NEW
+  // → result), reachable + previewable + editable.
+  it("filmstrip add anchors to the last question and splices it BEFORE the terminal", () => {
+    const base = linearQuestionsDoc(); // intro → q1 → q2 → q3 → r1
+    const { head, run } = straightThroughRun(base);
+    const anchor = run.length ? run[run.length - 1]! : head; // the last question, q3
+    expect(anchor).toBe("q3");
+    const { doc, newNodeId } = insertModule(base, "question", anchor, undefined, "gid://c/fb");
+    expect(newNodeId).toBeTruthy();
+    // q3 → NEW → r1 (the old q3 → r1 edge was re-routed through the new node).
+    expect(doc.edges.some((e) => e.source === "q3" && e.target === newNodeId)).toBe(true);
+    expect(doc.edges.some((e) => e.source === newNodeId && e.target === "r1")).toBe(true);
+    expect(doc.edges.some((e) => e.source === "q3" && e.target === "r1")).toBe(false);
+    // In flow order the new question sits BEFORE the result, and the result stays
+    // the terminal — a shopper walking the quiz actually reaches the new question.
+    const spine = spineIds(doc);
+    expect(spine.indexOf(newNodeId!)).toBeLessThan(spine.indexOf("r1"));
+    expect(spine[spine.length - 1]).toBe("r1");
+    expect(orderFlow(doc).orphans).toEqual([]);
+    expect(() => Quiz.parse(doc)).not.toThrow();
+  });
+
+  // REGRESSION GUARD for the "manually added question gets lost in the flow" bug:
+  // anchoring a QUESTION insert to the terminal result (the pre-fix addStep used
+  // ordered.steps[last]) strands it AFTER the result — a result has no successor
+  // to re-route, so insertModule just appends result → NEW. The node is reachable
+  // in the graph but past the terminal, so the shopper walk + preview never show
+  // it. This asserts that wrong anchor produces the bug signature.
+  it("REGRESSION: a terminal anchor strands the question AFTER the result (the old bug)", () => {
+    const { doc, newNodeId } = insertModule(linearQuestionsDoc(), "question", "r1", undefined, "gid://c/fb");
+    expect(doc.edges.some((e) => e.source === "r1" && e.target === newNodeId)).toBe(true);
+    const spine = spineIds(doc);
+    expect(spine.indexOf(newNodeId!)).toBeGreaterThan(spine.indexOf("r1"));
+  });
+
+  // The filmstrip add's EMPTY-RUN fallback (intro → result, no questions yet):
+  // straightThroughRun returns an empty run, so addStep anchors to `head` (intro)
+  // — NOT null. insertModule then splices intro → NEW → result, so the very first
+  // question is reachable, not orphaned. (FlowRail's "+ Add step" falls back to
+  // null here and would orphan; the filmstrip has no orphan tray, so head-splicing
+  // is the deliberately safer choice.)
+  it("filmstrip add on an empty run anchors to the intro and splices intro → new → result", () => {
+    const base = linearDoc(); // intro → r1, no questions
+    const { head, run } = straightThroughRun(base);
+    expect(run).toEqual([]);
+    const anchor = run.length ? run[run.length - 1]! : head; // the addStep expression → "intro"
+    expect(anchor).toBe("intro");
+    const { doc, newNodeId } = insertModule(base, "question", anchor, undefined, "gid://c/fb");
+    expect(doc.edges.some((e) => e.source === "intro" && e.target === newNodeId)).toBe(true);
+    expect(doc.edges.some((e) => e.source === newNodeId && e.target === "r1")).toBe(true);
+    expect(doc.edges.some((e) => e.source === "intro" && e.target === "r1")).toBe(false);
+    const spine = orderFlow(doc).steps.map((s) => s.nodeId);
+    expect(spine.indexOf(newNodeId!)).toBeLessThan(spine.indexOf("r1"));
+    expect(orderFlow(doc).orphans).toEqual([]);
+    expect(() => Quiz.parse(doc)).not.toThrow();
+  });
 });
 
 describe("deleteNode re-stitches", () => {

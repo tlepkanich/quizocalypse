@@ -6,7 +6,7 @@ import { experienceTypeOf, type Quiz } from "../../lib/quizSchema";
 import { validateQuiz, validateQuizWarnings, type NodeIssue } from "../../lib/quizValidation";
 import { orderFlow } from "../../lib/flowOrder";
 import { reconcileBucketsToResultNodes } from "../../lib/bucketReconcile";
-import { swapScoringModel } from "../../lib/quizMutations";
+import { straightThroughRun, swapScoringModel } from "../../lib/quizMutations";
 import type { StepProps } from "../builder/stepProps";
 import { Step5Preview } from "../builder/Step5Preview";
 import { Step1Products } from "../builder/Step1Products";
@@ -310,10 +310,21 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
     renameFetcher.submit(form, { method: "POST" });
   };
 
-  // QB-5 — the filmstrip "+" inserts a question after the last step, then opens
-  // it in the Editor (undoable via the top bar).
+  // QB-5 — the filmstrip "+" inserts a question into the question sequence, then
+  // opens it in the Editor (undoable via the top bar). Anchor to the LAST MOVABLE
+  // step (the last question), NOT ordered.steps[last] — the orderFlow spine ends
+  // at the terminal result/end node, and anchoring there made insertModule append
+  // the question AFTER the result (no successor edge to re-route → a dead-end the
+  // shopper never reaches and the preview never shows → "lost in the flow"). Using
+  // straightThroughRun().run (which stops at terminals) splices it as the last
+  // question. The anchor expression is byte-identical to appendBankQuestion, and
+  // the same last-movable-step anchor as FlowRail's "+ Add step"; the empty-run
+  // `: head` fallback splices intro → new → result (vs FlowRail's null fallback,
+  // which would orphan) so a first question is never lost — the filmstrip has no
+  // orphan tray, so head-splicing is the safe choice here.
   const addStep = () => {
-    const anchor = ordered.steps[ordered.steps.length - 1]?.nodeId ?? null;
+    const { head, run } = straightThroughRun(doc);
+    const anchor = run.length ? run[run.length - 1]! : head;
     const { doc: next, newNodeId } = insertModule(doc, "question", anchor, undefined, fallbackCollection);
     commit(next);
     if (newNodeId) {
