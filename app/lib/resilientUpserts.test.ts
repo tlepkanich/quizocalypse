@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { runResilientUpserts } from "./resilientUpserts";
+import { runResilientUpserts, deriveSyncStatus } from "./resilientUpserts";
 
 const opts = { label: "row", idOf: (n: number) => `id_${n}` };
 
@@ -91,5 +91,22 @@ describe("runResilientUpserts", () => {
         { ...opts, abortRatio: 0.5, minAbortSample: 4 },
       ),
     ).rejects.toThrow(/aborted/i);
+  });
+});
+
+describe("deriveSyncStatus (HIII-2 — partial-sync observability)", () => {
+  it("errorCount===0 → the byte-identical pre-HIII-2 ok/null write", () => {
+    expect(deriveSyncStatus(0)).toEqual({ lastSyncStatus: "ok", lastSyncError: null });
+  });
+
+  it("errorCount>0 → a soft 'partial' + a count-bearing lastSyncError note", () => {
+    const out = deriveSyncStatus(8);
+    expect(out.lastSyncStatus).toBe("partial");
+    expect(out.lastSyncError).toContain("8");
+    expect(out.lastSyncError).toMatch(/skipped/i);
+  });
+
+  it("a single skipped row still flips to partial (not a falsely-green ok)", () => {
+    expect(deriveSyncStatus(1).lastSyncStatus).toBe("partial");
   });
 });

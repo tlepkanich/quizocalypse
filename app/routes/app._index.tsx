@@ -164,6 +164,12 @@ export default function Index() {
           {data.lastSyncError ?? "Unknown error"}
         </QzBanner>
       )}
+      {data.lastSyncStatus === "partial" && (
+        <QzBanner tone="warn" title="Catalog synced with skipped rows">
+          {data.lastSyncError ??
+            "Some products or collections were skipped during the last sync. Resync to retry."}
+        </QzBanner>
+      )}
       {isStale && (
         <QzBanner tone="warn" title="Catalog data is stale">
           The last successful sync was more than 48 hours ago. Resync to pull

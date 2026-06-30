@@ -33,6 +33,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
         shopifyConnectDomain: true,
         shopifyConnectedAt: true,
         lastSyncStatus: true,
+        lastSyncError: true,
         lastSyncAt: true,
       },
     }),
@@ -54,6 +55,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
           domain: conn.shopifyConnectDomain,
           connectedAt: conn.shopifyConnectedAt?.toISOString() ?? null,
           lastSyncStatus: conn.lastSyncStatus,
+          lastSyncError: conn.lastSyncError,
           lastSyncAt: conn.lastSyncAt?.toISOString() ?? null,
         }
       : null,
@@ -157,12 +159,14 @@ type Connection = {
   domain: string;
   connectedAt: string | null;
   lastSyncStatus: string | null;
+  lastSyncError: string | null;
   lastSyncAt: string | null;
 };
 
 const SYNC_STATUS: Record<string, { tone: "ok" | "draft" | "crit"; label: string }> = {
   syncing: { tone: "draft", label: "Syncing…" },
   ok: { tone: "ok", label: "Synced" },
+  partial: { tone: "draft", label: "Synced (partial)" },
   error: { tone: "crit", label: "Sync failed" },
 };
 
@@ -253,6 +257,10 @@ function ConnectShopifyCard({
           {connection.lastSyncStatus === "error" ? (
             <p className="qz-muted" style={{ margin: "3px 0 0", fontSize: 12.5, color: "var(--qz-crit, #c0392b)" }}>
               Last sync failed — check the token + that the custom app has <code>read_products</code>, then re-sync.
+            </p>
+          ) : connection.lastSyncStatus === "partial" ? (
+            <p className="qz-muted" style={{ margin: "3px 0 0", fontSize: 12.5, color: "var(--qz-warn, #b45309)" }}>
+              {connection.lastSyncError ?? "Some rows were skipped during the last sync — re-sync to retry."}
             </p>
           ) : null}
         </div>

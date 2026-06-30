@@ -75,3 +75,28 @@ export async function runResilientUpserts<T>(
 
   return { count, errors };
 }
+
+export interface SyncStatusWrite {
+  lastSyncStatus: "ok" | "partial";
+  lastSyncError: string | null;
+}
+
+/**
+ * HIII-2 — map a COMPLETED (non-throwing) catalog sync's skipped-row count to the
+ * Shop row's persisted status. errorCount===0 → the unchanged "ok"/null write
+ * (BYTE-STABLE: identical to the pre-HIII-2 write); errorCount>0 → a soft
+ * "partial" + a human note in lastSyncError, so a merchant sees their catalog
+ * landed INCOMPLETE instead of a falsely-green "ok" while N products are missing.
+ * The SYSTEMIC-abort throw path keeps writing "error" in the caller's catch —
+ * this only covers the success return where some rows were skipped but the batch
+ * still landed (the runResilientUpserts partial-success class).
+ */
+export function deriveSyncStatus(errorCount: number): SyncStatusWrite {
+  if (errorCount > 0) {
+    return {
+      lastSyncStatus: "partial",
+      lastSyncError: `${errorCount} product/collection row(s) skipped during sync — re-sync to retry`,
+    };
+  }
+  return { lastSyncStatus: "ok", lastSyncError: null };
+}

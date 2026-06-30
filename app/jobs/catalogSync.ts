@@ -1,6 +1,10 @@
 import type { AdminApiContext } from "@shopify/shopify-app-remix/server";
 import prisma from "../db.server";
-import { runResilientUpserts, type ResilientUpsertResult } from "../lib/resilientUpserts";
+import {
+  runResilientUpserts,
+  deriveSyncStatus,
+  type ResilientUpsertResult,
+} from "../lib/resilientUpserts";
 
 // Shopify bulk operation runner: kicks off a bulk products query, polls until
 // done, streams the JSONL result, normalizes into our DB. Spec §3.1.
@@ -175,9 +179,13 @@ export async function syncCatalogForShopId(
       );
     }
 
+    // HIII-2 — a non-throwing sync that skipped rows persists a soft "partial"
+    // (+ the skipped count in lastSyncError) so the merchant UI surfaces an
+    // incomplete catalog instead of a falsely-green "ok"; errorCount===0 writes
+    // the byte-identical "ok"/null as before.
     await prisma.shop.update({
       where: { id: shopId },
-      data: { lastSyncAt: new Date(), lastSyncStatus: "ok", lastSyncError: null },
+      data: { lastSyncAt: new Date(), ...deriveSyncStatus(errorCount) },
     });
 
     return {
