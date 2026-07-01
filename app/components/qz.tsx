@@ -148,8 +148,8 @@ export function QzSelect(props: React.SelectHTMLAttributes<HTMLSelectElement>) {
   return <select {...props} className={`qz-select ${props.className ?? ""}`} />;
 }
 
-export function QzPage({ children }: { children: ReactNode }) {
-  return <div className="qz-page">{children}</div>;
+export function QzPage({ children, wide = false }: { children: ReactNode; wide?: boolean }) {
+  return <div className={wide ? "qz-page is-wide" : "qz-page"}>{children}</div>;
 }
 
 export function QzPageHeader({

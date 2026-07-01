@@ -8,6 +8,7 @@ import type { BuilderCategory, BuilderCollection } from "../builder/stepProps";
 import { useQuizDraft } from "../studio/useQuizDraft";
 import { ResultSettingsPanel } from "../builder/ResultSettingsPanel";
 import { RecPageDiagram } from "../studio/RecPageDiagram";
+import { RecPagePreview } from "./RecPagePreview";
 import { QzCard } from "../qz";
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -61,6 +62,12 @@ export function RecommendationStage({
   const [selectedId, setSelectedId] = useState<string | null>(() => resultNodes[0]?.id ?? null);
   const selected = resultNodes.find((n) => n.id === selectedId) ?? resultNodes[0] ?? null;
 
+  // Right pane: live shopper preview (default, matches the published rec page)
+  // or the schematic "page map" (pool counts + feature flags). Left config panel
+  // collapses so the preview can take the full real estate.
+  const [viewMode, setViewMode] = useState<"preview" | "map">("preview");
+  const [leftOpen, setLeftOpen] = useState(true);
+
   const bucketName = (node: ResultNode) =>
     (node.data.category_id && categories.find((c) => c.id === node.data.category_id)?.name) ||
     node.data.headline ||
@@ -78,7 +85,8 @@ export function RecommendationStage({
           <h2 style={{ margin: 0, fontSize: 20 }}>Tune your recommendations</h2>
           <p className="qz-dim" style={{ margin: "4px 0 0", fontSize: 13 }}>
             For each bucket, set how results show — sections, sort, sub-filters, “why we recommend”
-            copy, discount, and out-of-stock behaviour. The page map on the right updates live.
+            copy, discount, and out-of-stock behaviour. The live preview on the right updates as you
+            edit. Collapse the settings to see the full page.
           </p>
         </div>
         <span className="qz-save-status" aria-live="polite">
@@ -124,30 +132,76 @@ export function RecommendationStage({
           ) : null}
 
           {selected ? (
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: "minmax(0, 1fr) minmax(0, 320px)",
-                gap: 16,
-                alignItems: "start",
-              }}
-            >
-              <QzCard style={{ padding: 14 }}>
-                <ResultSettingsPanel
-                  doc={doc}
-                  node={selected}
-                  categories={categories}
-                  collections={collections}
-                  productIndex={productIndex}
-                  onCommit={commit}
-                />
-              </QzCard>
-              <RecPageDiagram
-                doc={doc}
-                node={selected}
-                productIndex={productIndex}
-                categories={categories}
-              />
+            <div className={`qz-qb-split${leftOpen ? "" : " is-collapsed"}`}>
+              <div className="qz-qb-config">
+                <QzCard style={{ padding: 14 }}>
+                  <ResultSettingsPanel
+                    doc={doc}
+                    node={selected}
+                    categories={categories}
+                    collections={collections}
+                    productIndex={productIndex}
+                    onCommit={commit}
+                  />
+                </QzCard>
+              </div>
+
+              <div className="qz-qb-preview">
+                <div
+                  className="qz-row qz-row-between"
+                  style={{ alignItems: "center", gap: 8, marginBottom: 10 }}
+                >
+                  <button
+                    type="button"
+                    className="qz-btn qz-btn-ghost qz-btn-sm"
+                    aria-expanded={leftOpen}
+                    aria-label={leftOpen ? "Collapse settings" : "Show settings"}
+                    onClick={() => setLeftOpen((v) => !v)}
+                  >
+                    {leftOpen ? "◀ Hide settings" : "▶ Show settings"}
+                  </button>
+                  <div
+                    className="qz-row qz-gap-4"
+                    role="group"
+                    aria-label="Preview mode"
+                    style={{ flexWrap: "wrap" }}
+                  >
+                    <button
+                      type="button"
+                      aria-pressed={viewMode === "preview"}
+                      style={bucketPill(viewMode === "preview")}
+                      onClick={() => setViewMode("preview")}
+                    >
+                      Live preview
+                    </button>
+                    <button
+                      type="button"
+                      aria-pressed={viewMode === "map"}
+                      style={bucketPill(viewMode === "map")}
+                      onClick={() => setViewMode("map")}
+                    >
+                      Page map
+                    </button>
+                  </div>
+                </div>
+
+                {viewMode === "preview" ? (
+                  <RecPagePreview
+                    doc={doc}
+                    node={selected}
+                    productIndex={productIndex}
+                    categories={categories}
+                    quizId={quizId}
+                  />
+                ) : (
+                  <RecPageDiagram
+                    doc={doc}
+                    node={selected}
+                    productIndex={productIndex}
+                    categories={categories}
+                  />
+                )}
+              </div>
             </div>
           ) : null}
         </>

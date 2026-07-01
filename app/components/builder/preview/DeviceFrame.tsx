@@ -10,6 +10,7 @@ export function DeviceFrame({
   onWidthChange,
   children,
   bare = false,
+  urlLabel,
 }: {
   width: number;
   onWidthChange: (w: number) => void;
@@ -18,6 +19,9 @@ export function DeviceFrame({
   // card (no faux-browser bar, no grey box, no fixed-height scroll window): the
   // device toggle lives in the top bar, so the canvas just shows the quiz big.
   bare?: boolean;
+  // Optional storefront URL shown in the faux browser bar (e.g. the funnel Rec
+  // Page preview shows "yourstore.com/quiz/results"). Absent → just the width.
+  urlLabel?: string;
 }) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const dragRef = useRef<{ startX: number; startW: number } | null>(null);
@@ -111,6 +115,25 @@ export function DeviceFrame({
             <span style={DOT} />
             <span style={DOT} />
             <span style={DOT} />
+            <div style={{ flex: 1 }} />
+            {urlLabel ? (
+              <span
+                className="qz-dim"
+                style={{
+                  fontSize: 11,
+                  padding: "2px 12px",
+                  borderRadius: 999,
+                  background: "var(--qz-cream-2)",
+                  border: "1px solid var(--qz-rule)",
+                  maxWidth: "60%",
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                {urlLabel}
+              </span>
+            ) : null}
             <div style={{ flex: 1 }} />
             <span className="qz-dim" style={{ fontSize: 11, fontVariantNumeric: "tabular-nums" }}>
               {width}px

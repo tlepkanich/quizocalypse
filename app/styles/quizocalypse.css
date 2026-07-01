@@ -322,7 +322,35 @@ body[data-qz] :focus-visible {
 
 /* — Page layout — */
 .qz-page { padding: 40px 48px 96px; max-width: 1280px; margin: 0 auto; }
+/* Wide funnel shell — the create funnel opts in so the two-panel editor stages
+   (Questions, Recommendation) get real estate for a full live preview. Bounded
+   (not edge-to-edge) so single-column stages stay readable. */
+.qz-page.is-wide { max-width: 1760px; }
 .qz-page-header { margin-bottom: 36px; }
+
+/* — Funnel two-panel editor split (config left · live preview right) with a
+     collapsible left config panel. --left-width animates to 0 when collapsed so
+     the preview expands to fill. Used by RecommendationStage. — */
+.qz-qb-split {
+  display: grid;
+  grid-template-columns: var(--left-width, 420px) minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+  transition: grid-template-columns 180ms var(--qz-ease, ease);
+}
+.qz-qb-split.is-collapsed { --left-width: 0px; }
+.qz-qb-config { min-width: 0; }
+.qz-qb-split.is-collapsed > .qz-qb-config {
+  overflow: hidden;
+  opacity: 0;
+  pointer-events: none;
+}
+.qz-qb-preview { min-width: 0; }
+@media (max-width: 900px) {
+  .qz-qb-split { grid-template-columns: 1fr; }
+  .qz-qb-split.is-collapsed > .qz-qb-config { display: none; }
+}
+
 .qz-page-header .qz-eyebrow { color: var(--qz-ink-3); margin-bottom: 14px; }
 .qz-page-header .qz-subtitle { color: var(--qz-ink-3); margin-top: 14px; max-width: 60ch; line-height: 1.55; font-size: 15px; }
 

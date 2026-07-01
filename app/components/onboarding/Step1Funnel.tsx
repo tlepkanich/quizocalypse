@@ -179,7 +179,7 @@ export function Step1Funnel({ data }: { data: FunnelData }) {
   }, [isGenerating, revalidator]);
 
   return (
-    <QzPage>
+    <QzPage wide>
       <QzPageHeader
         eyebrow="AI-first setup · Step 1"
         title="Shape your quiz"
