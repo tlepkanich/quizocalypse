@@ -588,9 +588,12 @@ export async function publishQuiz(
   //    No serve route consumes it (the builder reads it from the DRAFT), so drop
   //    it at the root here — otherwise every public serve route that doesn't
   //    explicitly strip it (the .json embed + compare) egresses it verbatim.
+  //  - why_copy_meta: L2-11 config-time AI-copy provenance (staleness hashes) —
+  //    the panel reads it from the DRAFT; shoppers never need it.
   const {
     build_session: _build_session,
     review_enrichment_sources: _review_sources,
+    why_copy_meta: _why_copy_meta,
     ...docWithoutSession
   } = doc;
   const publishedJson: PublishedQuiz = {

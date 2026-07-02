@@ -1232,6 +1232,9 @@ export const RecPageGlobal = z.object({
   captureEmail: z.boolean().optional(),
   captureName: z.boolean().optional(),
   capturePhone: z.boolean().optional(),
+  // §8.2 (L2-11) — the merchant LOCKED this why-copy: config-time ✦ regenerate
+  // refuses to overwrite it, and the L2-12 runtime layer must never replace it.
+  whyCopyLocked: z.boolean().optional(),
 });
 export type RecPageGlobal = z.infer<typeof RecPageGlobal>;
 
@@ -1247,6 +1250,8 @@ export const RecPageOverride = z.object({
   incentiveCode: z.string().optional(),
   incentiveAutoApply: z.boolean().optional(),
   incentivePos: z.enum(["banner", "below-headline", "bottom"]).optional(),
+  // §8.2 (L2-11) — per-target lock, same semantics as the global one.
+  whyCopyLocked: z.boolean().optional(),
 });
 export type RecPageOverride = z.infer<typeof RecPageOverride>;
 
@@ -1325,6 +1330,13 @@ export const Quiz = z.object({
   // legacy docs keep ResultData untouched). Only read when logic_model is
   // "decider".
   rec_page_settings: RecPageSettings.optional(),
+  // §8.2 (L2-11) — config-time provenance for AI-generated why-copy, keyed
+  // "__global__" | Category id: when it was drafted + a membership hash so the
+  // panel can flag STALE copy after the bucket's products change. Draft-only
+  // scratch — STRIPPED at publish (see quizPublish.ts).
+  why_copy_meta: z
+    .record(z.string(), z.object({ at: z.string(), members: z.string() }))
+    .optional(),
   // ────────────────────────────────────────────────────────────────────────────
   // Builder Re-work Step 1 — the creation funnel's transient scratch state
   // (grouping/goal/template-options). Additive/optional, lives only on DRAFTs,

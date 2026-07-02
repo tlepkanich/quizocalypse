@@ -345,6 +345,7 @@ describe("publishQuiz — byte-stability when net-new optional fields are unset"
         text: "merchant's pasted reviews — must never ship to shoppers",
         enriched_at: "2026-01-01T00:00:00.000Z",
       },
+      why_copy_meta: { __global__: { at: "2026-01-01T00:00:00.000Z", members: "deadbeef" } },
       nodes: [
         { id: "intro", type: "intro", position: { x: 0, y: 0 }, data: { headline: "Hi" } },
         {
@@ -423,6 +424,7 @@ describe("publishQuiz — byte-stability when net-new optional fields are unset"
     // (1) Draft-only scratch is stripped — must never reach a published quiz.
     expect(wire).not.toHaveProperty("build_session");
     expect(wire).not.toHaveProperty("review_enrichment_sources");
+    expect(wire).not.toHaveProperty("why_copy_meta"); // L2-11 config-time provenance
 
     // (2) Every UNSET net-new root-level optional is absent → byte-identical /q.
     for (const key of [

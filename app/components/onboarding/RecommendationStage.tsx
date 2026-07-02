@@ -118,6 +118,7 @@ export function RecommendationStage({
             <QzCard style={{ padding: 14 }}>
               <RecPageV2Panel
                 doc={doc}
+                quizId={quizId}
                 categories={categories}
                 collections={collections}
                 onCommit={commit}

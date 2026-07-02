@@ -863,6 +863,14 @@ describe("LOGIC v2 role/target mutations (setQuestionRole / setAnswerTarget)", (
       expect(() => Quiz.parse(doc)).not.toThrow();
     });
 
+    it("§8.2 whyCopyLocked stores sparse: true kept, unlock drops the key (root-droppable)", () => {
+      let doc = setRecPageGlobal(deciderDoc(), { whyCopyLocked: true });
+      expect(doc.rec_page_settings?.global).toEqual({ whyCopyLocked: true });
+      doc = setRecPageGlobal(doc, { whyCopyLocked: undefined });
+      expect(Object.prototype.hasOwnProperty.call(doc, "rec_page_settings")).toBe(false);
+      expect(() => Quiz.parse(doc)).not.toThrow();
+    });
+
     it("setRecPageOverride keeps overrides sparse per target; emptying one removes it (inherit again)", () => {
       let doc = setRecPageOverride(deciderDoc(), "cat_a", { headline: "Just for A" });
       doc = setRecPageOverride(doc, "cat_b", { incentiveOn: true, incentiveCode: "SAVE10" });

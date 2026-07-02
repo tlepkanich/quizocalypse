@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { Quiz as QuizDoc } from "../../lib/quizSchema";
 import type { BuilderCategory, BuilderCollection } from "../builder/stepProps";
 import {
@@ -11,6 +11,12 @@ import {
   resolveRecPageGlobal,
   settingsForTarget,
 } from "../../lib/recommendDecider";
+import {
+  GLOBAL_WHY_COPY_KEY,
+  isWhyCopyStale,
+  membershipHash,
+  whyCopyMemberIds,
+} from "../../lib/whyCopyMeta";
 
 // rec-page-spec-V2 §2/§3 — the decider-doc Step-4 config surface. ONE global
 // config + sparse per-target overrides ("Give this its own page"). The
@@ -38,6 +44,7 @@ export type DiscountCheck =
 
 export function RecPageV2Panel({
   doc,
+  quizId,
   categories,
   collections,
   onCommit,
@@ -45,6 +52,8 @@ export function RecPageV2Panel({
   onSelectTarget,
 }: {
   doc: QuizDoc;
+  /** The DB quiz id (doc.quiz_id is a seed placeholder, never the row id). */
+  quizId: string;
   categories: BuilderCategory[];
   collections: BuilderCollection[];
   onCommit: (doc: QuizDoc) => void;
@@ -87,6 +96,88 @@ export function RecPageV2Panel({
   // read-time default (keeps rec_page_settings root-droppable, and the input's
   // ghosted placeholder then honestly matches what shoppers see).
   const text = (v: string) => v || undefined;
+
+  // §8.2 (L2-11) — config-time grounded why-copy. ✦ drafts from the scope's
+  // OWN product data; the merchant edits/locks before it ships at publish.
+  const [whyGen, setWhyGen] = useState<{ state: "idle" | "busy" } | { state: "error"; message: string }>({
+    state: "idle",
+  });
+  // Error messages don't follow scope switches; the BUSY state deliberately
+  // does (single-flight — a mid-flight scope switch must not re-arm ✦).
+  useEffect(
+    () => setWhyGen((s) => (s.state === "error" ? { state: "idle" } : s)),
+    [selectedTargetId, editingOverride],
+  );
+  // The autosave-vs-AI race (the useQuizDraft beginAiEdit class): the fetch
+  // takes seconds and the merchant keeps editing OTHER fields meanwhile.
+  // Composing from a click-time doc would silently revert those edits — so
+  // the response composes against the LATEST doc via this ref (the copy is a
+  // field-level sparse patch, so nothing else is touched).
+  const docRef = useRef(doc);
+  docRef.current = doc;
+  const whyMetaKey = target && editingOverride ? target.id : GLOBAL_WHY_COPY_KEY;
+  const whyMeta = doc.why_copy_meta?.[whyMetaKey];
+  const whyStale = isWhyCopyStale(
+    whyMeta,
+    membershipHash(whyCopyMemberIds(categories, target && editingOverride ? target.id : null)),
+  );
+  const generateWhy = async () => {
+    if (whyGen.state === "busy") return;
+    setWhyGen({ state: "busy" });
+    // The SCOPE is pinned at click time (a mid-flight scope switch must not
+    // redirect the copy); the DOC is read at response time (see docRef).
+    const scopeTargetId = target && editingOverride ? target.id : null;
+    const scopeKey = scopeTargetId ?? GLOBAL_WHY_COPY_KEY;
+    try {
+      const res = await fetch("/api/generate-why-copy", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ quizId, targetId: scopeTargetId }),
+      });
+      const body = (await res.json()) as {
+        ok: boolean;
+        copy?: string;
+        meta?: { at: string; members: string };
+        error?: string;
+      };
+      if (!body.ok || !body.copy || !body.meta) {
+        setWhyGen({ state: "error", message: body.error ?? "Copy generation failed — try again." });
+        return;
+      }
+      // ONE commit against the CURRENT doc: the copy through the sparse
+      // setter, the provenance on the same resulting doc.
+      const latest = docRef.current;
+      const withCopy = scopeTargetId
+        ? setRecPageOverride(latest, scopeTargetId, { whyCopy: body.copy })
+        : setRecPageGlobal(latest, { whyCopy: body.copy });
+      onCommit({
+        ...withCopy,
+        why_copy_meta: { ...(latest.why_copy_meta ?? {}), [scopeKey]: body.meta },
+      });
+      setWhyGen({ state: "idle" });
+    } catch {
+      setWhyGen({ state: "error", message: "Copy generation failed — try again." });
+    }
+  };
+  // Hand-editing the copy voids its AI provenance — the stale chip must only
+  // ever describe copy the AI actually drafted.
+  const editWhyCopy = (value: string) => {
+    const next =
+      target && editingOverride
+        ? setRecPageOverride(doc, target.id, { whyCopy: text(value) })
+        : setRecPageGlobal(doc, { whyCopy: text(value) });
+    if (doc.why_copy_meta && whyMetaKey in doc.why_copy_meta) {
+      const { [whyMetaKey]: _dropped, ...restMeta } = doc.why_copy_meta;
+      if (Object.keys(restMeta).length) {
+        onCommit({ ...next, why_copy_meta: restMeta });
+      } else {
+        const { why_copy_meta: _gone, ...docRest } = next;
+        onCommit(docRest);
+      }
+    } else {
+      onCommit(next);
+    }
+  };
 
   // §9.3/§10.2 — validate an EXISTING merchant-created discount code on blur.
   const validateCode = async (code: string) => {
@@ -215,14 +306,71 @@ export function RecPageV2Panel({
             <span>Show “why we recommend” {inheritHint("whyOn")}</span>
           </label>
           {effective.whyOn ? (
-            <label className="qz-rp2-field">
-              <span>Why-copy {inheritHint("whyCopy")}</span>
-              <textarea
-                rows={2}
-                value={effective.whyCopy}
-                onChange={(e) => patch({ whyCopy: text(e.target.value) })}
-              />
-            </label>
+            <>
+              <label className="qz-rp2-field">
+                <span>
+                  Why-copy {inheritHint("whyCopy")}
+                  {whyStale ? (
+                    <span
+                      className="qz-badge qz-warn"
+                      style={{ marginLeft: 6 }}
+                      title="The products in this result changed since this copy was AI-drafted — regenerate or reword it."
+                    >
+                      stale
+                    </span>
+                  ) : null}
+                </span>
+                <textarea
+                  rows={2}
+                  value={effective.whyCopy}
+                  onChange={(e) => editWhyCopy(e.target.value)}
+                />
+              </label>
+              {/* §8.2 — ✦ drafts grounded reasoning from the scope's OWN
+                  product data; the merchant approves/edits it here, and can
+                  LOCK it so regenerate (and the future runtime layer) never
+                  replaces it. */}
+              <div className="qz-row" style={{ gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+                <button
+                  type="button"
+                  className="qz-btn qz-btn-ghost qz-btn-sm"
+                  disabled={whyGen.state === "busy" || effective.whyCopyLocked === true}
+                  title={
+                    effective.whyCopyLocked === true
+                      ? "This copy is locked — unlock it to regenerate"
+                      : "Draft grounded copy from this result's own product data (you approve it before it ships)"
+                  }
+                  onClick={generateWhy}
+                >
+                  {whyGen.state === "busy" ? "✦ Drafting…" : "✦ AI generate"}
+                </button>
+                <label className="qz-rp2-check" style={{ fontSize: 12.5 }}>
+                  <input
+                    type="checkbox"
+                    checked={effective.whyCopyLocked === true}
+                    onChange={(e) =>
+                      // At target scope, unchecking under a LOCKED global must
+                      // store an explicit false — dropping the key would just
+                      // re-inherit the global lock and snap the box back
+                      // (review-caught dead-end). Global scope stays sparse.
+                      patch({
+                        whyCopyLocked: e.target.checked
+                          ? true
+                          : target && editingOverride && global.whyCopyLocked === true
+                            ? false
+                            : undefined,
+                      })
+                    }
+                  />
+                  <span>🔒 Lock this copy</span>
+                </label>
+                {whyGen.state === "error" ? (
+                  <span className="qz-dim" style={{ fontSize: 12, color: "var(--qz-warn, #A8430C)" }}>
+                    {whyGen.message}
+                  </span>
+                ) : null}
+              </div>
+            </>
           ) : null}
 
           {/* ── Hero & grid ── */}

@@ -1525,6 +1525,82 @@ export async function generateAnswerTooltips(
   return {};
 }
 
+// ---------- Grounded why-copy (rec-page-spec-V2 §8.2, L2-11) ----------
+
+// The spec's explicit prompt constraint, VERBATIM (§8.2 — a SAFETY
+// requirement: free-generated AI copy is an unsubstantiated-claims liability).
+// Exported so a test pins the exact wording against drift.
+export const WHY_COPY_CONSTRAINT =
+  "Reason only from the supplied product attributes. Never assert efficacy, ingredients, or " +
+  "outcomes not present in the product data. If the data doesn't support a specific reason, " +
+  "give a general benefit statement.";
+
+const WHY_COPY_SYSTEM_PROMPT =
+  'You draft the "why we recommend" paragraph a merchant shows next to quiz-recommended ' +
+  "products. ONE warm, concrete paragraph of 1–3 sentences (≤ 60 words), written to the " +
+  'shopper ("you"), no headings, no quotes, no exclamation-mark pileups, no "just/simply". ' +
+  WHY_COPY_CONSTRAINT +
+  " Output only the tool call.";
+
+const whyCopyToolJsonSchema = {
+  type: "object",
+  required: ["copy"],
+  properties: {
+    copy: { type: "string", description: "The grounded why-we-recommend paragraph." },
+  },
+} as const;
+
+const WhyCopySchema = z.object({ copy: z.string().min(1).max(600) });
+
+export interface WhyCopyInput {
+  /** Display name for the scope: a bucket's name, or the quiz name for global. */
+  targetName: string;
+  /** The scope's products — the ONLY grounding material (§8.2). */
+  products: { title: string; description: string; tags: string[] }[];
+  brandGuidelines?: BrandGuidelines | null;
+}
+
+export async function generateWhyCopy(input: WhyCopyInput): Promise<string> {
+  const tool = {
+    name: "emit_why_copy",
+    description: "Emit the grounded why-we-recommend paragraph.",
+    input_schema: whyCopyToolJsonSchema as unknown as Anthropic.Tool.InputSchema,
+  } satisfies Anthropic.Tool;
+
+  const userMessage = [
+    `Recommendation scope: ${input.targetName}`,
+    "",
+    "Product data (the ONLY facts you may reason from):",
+    ...input.products.map(
+      (p) =>
+        `- ${p.title}${p.tags.length ? ` [tags: ${p.tags.join(", ")}]` : ""}${
+          p.description ? ` — ${p.description.slice(0, 400)}` : ""
+        }`,
+    ),
+  ].join("\n");
+  const system = WHY_COPY_SYSTEM_PROMPT + buildBrandVoiceAddition(input.brandGuidelines);
+
+  let lastError = "no tool call";
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+    const response = await client().messages.create({
+      model: MODEL_FAST,
+      max_tokens: 512,
+      system,
+      tools: [tool],
+      tool_choice: { type: "tool", name: "emit_why_copy" },
+      messages: [{ role: "user", content: userMessage }],
+    });
+    const toolUse = response.content.find(
+      (b): b is Anthropic.ToolUseBlock => b.type === "tool_use",
+    );
+    if (!toolUse) continue;
+    const parsed = WhyCopySchema.safeParse(toolUse.input);
+    if (parsed.success) return parsed.data.copy.trim();
+    lastError = parsed.error.issues[0]?.message ?? "invalid tool output";
+  }
+  throw new QuizGenerationError("Why-copy generation failed", MAX_ATTEMPTS, lastError);
+}
+
 // ---------- AskAI chat (Phase 3) ----------
 
 export interface AskAIMessage {
