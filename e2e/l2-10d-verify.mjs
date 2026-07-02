@@ -176,7 +176,7 @@ ok("to-rec-page accepted", rpResp.ok());
 await page.goto(funnelUrl, { waitUntil: "domcontentloaded" });
 await page.waitForTimeout(1800);
 ok("Contact capture section renders", await page.getByText("Contact capture", { exact: false }).first().isVisible().catch(() => false));
-const phoneLabel = page.getByText("Phone", { exact: true }).first();
+const phoneLabel = page.getByText("Also ask for a phone number", { exact: false }).first();
 const phoneVisible = await phoneLabel.isVisible().catch(() => false);
 ok("Phone toggle renders", phoneVisible);
 if (phoneVisible) {
@@ -206,16 +206,21 @@ await shopper.goto(`${BASE}/q/${draftId}`, { waitUntil: "domcontentloaded" });
 await shopper.waitForTimeout(800);
 const startBtn = shopper.getByRole("button", { name: /start|begin|get started/i }).first();
 if (await startBtn.isVisible().catch(() => false)) await startBtn.click();
-// generic walker: click the first answer + Next until capture appears
+// generic walker (minimal chrome, select-then-Next): the first button whose
+// text is NOT chrome ("i" tooltip chips, Back/Next/Start) is an answer.
 let captureSeen = false;
-for (let step = 0; step < 12; step++) {
+for (let step = 0; step < 14; step++) {
   await shopper.waitForTimeout(700);
   if (await shopper.locator('input[type="email"]').first().isVisible().catch(() => false)) { captureSeen = true; break; }
-  const answer = shopper.locator('[class*="answer"], .qz-answer, button.qz-chip').first();
-  const target = (await answer.count()) ? answer : shopper.getByRole("button").nth(1);
-  await target.click({ timeout: 3000 }).catch(() => {});
-  const nextBtn = shopper.getByRole("button", { name: "Next" }).first();
-  if (await nextBtn.isVisible().catch(() => false)) await nextBtn.click().catch(() => {});
+  const freeform = shopper.locator('input[type="text"], textarea').first();
+  if (await freeform.isVisible().catch(() => false)) await freeform.fill("probe answer").catch(() => {});
+  const answer = shopper
+    .locator("button")
+    .filter({ hasNotText: /^(i|Back|Next|Start|Start over|Skip this question)$/ })
+    .first();
+  await answer.click({ timeout: 3000 }).catch(() => {});
+  const nextBtn = shopper.getByRole("button", { name: "Next", exact: true }).first();
+  if (await nextBtn.isEnabled().catch(() => false)) await nextBtn.click().catch(() => {});
 }
 ok("live walk reaches the CAPTURE screen", captureSeen);
 if (captureSeen) {
