@@ -5,6 +5,7 @@ import prisma from "../db.server";
 import { Quiz } from "./quizSchema";
 import type { Quiz as QuizDoc } from "./quizSchema";
 import { publishQuiz, PublishError } from "./quizPublish";
+import { resolveCollectionOrders } from "./collectionOrder.server";
 import { qrDataUrl } from "./qrCode.server";
 import { ensureQuizDiscount } from "./discount.server";
 import { regenerateQuestion, generateQuestionFlow, editQuiz, enrichFromReviews, translateQuiz } from "./claude";
@@ -289,7 +290,14 @@ async function handleQuizEditorActionImpl(
         }
       }
 
-      const result = await publishQuiz(prisma, { quizId: id, shopId: shop.id });
+      const result = await publishQuiz(
+        prisma,
+        { quizId: id, shopId: shop.id },
+        // LOGIC v2 — inject the collection-order fetcher (server-only module;
+        // quizPublish stays client-safe). Only consulted for decider docs with
+        // collection-sourced targets; any failure falls back to synced order.
+        { collectionOrder: (targets) => resolveCollectionOrders(shop.shopDomain, targets) },
+      );
       return json({
         ok: true,
         action: "publish" as const,

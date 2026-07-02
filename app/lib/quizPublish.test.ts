@@ -446,6 +446,9 @@ describe("publishQuiz — byte-stability when net-new optional fields are unset"
       "logic_model",
       "decision_rules",
       "rec_page_settings",
+      // LOGIC v2 (L2-3) — the publish-time target bake, decider docs only.
+      "target_product_ids_map",
+      "target_index",
     ]) {
       expect(wire, `root.${key} must be absent when unset`).not.toHaveProperty(key);
     }
@@ -503,5 +506,160 @@ describe("publishQuiz — byte-stability when net-new optional fields are unset"
         expect(a, `answer.${key} must be absent when unset`).not.toHaveProperty(key);
       }
     }
+  });
+});
+
+// ════════════════════════════════════════════════════════════════════════════
+// LOGIC v2 (L2-3) — the decider publish bake: ordered target map + target
+// index + the V4/V5 missing-bucket gate.
+// ════════════════════════════════════════════════════════════════════════════
+describe("publishQuiz — decider target bake (L2-3)", () => {
+  function deciderDraft() {
+    return {
+      quiz_id: "q_decider",
+      scope: { collection_ids: [] },
+      logic_model: "decider",
+      decision_rules: [
+        {
+          id: "rule1",
+          conditions: [{ question_id: "q1", answer_id: "a1", op: "is" }],
+          target_id: "cat_tag",
+        },
+      ],
+      nodes: [
+        { id: "intro", type: "intro", position: { x: 0, y: 0 }, data: { headline: "Hi" } },
+        {
+          id: "q1",
+          type: "question",
+          position: { x: 1, y: 0 },
+          data: {
+            text: "Pick one",
+            question_type: "single_select",
+            role: "decides",
+            answers: [
+              { id: "a1", text: "A", tags: [], edge_handle_id: "h1", target_id: "cat_col" },
+              { id: "a2", text: "B", tags: [], edge_handle_id: "h2", target_id: "cat_prod" },
+            ],
+          },
+        },
+        {
+          id: "r1",
+          type: "result",
+          position: { x: 2, y: 0 },
+          data: {
+            headline: "Your match",
+            fallback_collection_id: "gid://shopify/Collection/fallback",
+          },
+        },
+      ],
+      edges: [
+        { id: "e1", source: "intro", target: "q1" },
+        { id: "e2", source: "q1", target: "r1" },
+      ],
+    };
+  }
+
+  const CATEGORY_ROWS = [
+    {
+      id: "cat_col",
+      productIds: ["p1", "p2", "p3"],
+      source: "collection",
+      sourceRef: "gid://shopify/Collection/77",
+      name: "Snowboards",
+    },
+    { id: "cat_prod", productIds: ["p9"], source: "product", sourceRef: "p9", name: "The One Board" },
+    { id: "cat_tag", productIds: ["p4", "p5"], source: "tag", sourceRef: "powder", name: "Powder" },
+  ];
+
+  function mockDeciderPrisma(draftJson: unknown, categories: unknown[]) {
+    let captured: unknown;
+    const prisma = {
+      quiz: {
+        findFirst: async () => ({ id: "qrow", version: 1, draftJson }),
+        update: (args: { data: { publishedJson: unknown } }) => {
+          captured = args.data.publishedJson;
+          return { __op: "quiz.update" };
+        },
+      },
+      category: { findMany: async () => categories },
+      product: { findMany: async () => [] },
+      shop: {
+        findUnique: async () => ({
+          brandTokens: null,
+          shopDomain: "test.myshopify.com",
+          brandGuidelines: null,
+          source: "shopify",
+        }),
+      },
+      quizSession: { findMany: async () => [] },
+      quizVersion: { create: () => ({ __op: "v" }), findMany: async () => [] },
+      $transaction: (ops: ReadonlyArray<unknown>) => Promise.all(ops),
+    };
+    return { prisma: prisma as unknown as PrismaClient, getCaptured: () => captured };
+  }
+
+  it("bakes the ordered target map + target index (synced order when no fetcher)", async () => {
+    const { prisma, getCaptured } = mockDeciderPrisma(deciderDraft(), CATEGORY_ROWS);
+    const result = await publishQuiz(prisma, { quizId: "qrow", shopId: "s1" });
+    expect(result.ok).toBe(true);
+    const wire = JSON.parse(JSON.stringify(getCaptured())) as PublishedQuiz;
+    expect(wire.target_product_ids_map).toEqual({
+      cat_col: ["p1", "p2", "p3"],
+      cat_prod: ["p9"],
+      cat_tag: ["p4", "p5"],
+    });
+    expect(wire.target_index).toEqual({
+      cat_col: { type: "collection", name: "Snowboards" },
+      cat_prod: { type: "product", name: "The One Board" },
+      cat_tag: { type: "tag", name: "Powder" },
+    });
+    // The doc fields flow through the ...doc spread.
+    expect(wire.logic_model).toBe("decider");
+    expect(wire.decision_rules).toHaveLength(1);
+  });
+
+  it("uses the injected Shopify collection order for collection targets, intersected with synced membership", async () => {
+    const { prisma, getCaptured } = mockDeciderPrisma(deciderDraft(), CATEGORY_ROWS);
+    const result = await publishQuiz(
+      prisma,
+      { quizId: "qrow", shopId: "s1" },
+      {
+        collectionOrder: async (targets) => {
+          // Only the collection-sourced target is asked for.
+          expect(targets).toEqual([
+            { targetId: "cat_col", collectionRef: "gid://shopify/Collection/77" },
+          ]);
+          // p_gone is not synced (dropped); p1 missing from the fetch (appended).
+          return { cat_col: ["p3", "p_gone", "p2"] };
+        },
+      },
+    );
+    expect(result.ok).toBe(true);
+    const wire = JSON.parse(JSON.stringify(getCaptured())) as PublishedQuiz;
+    expect(wire.target_product_ids_map?.["cat_col"]).toEqual(["p3", "p2", "p1"]);
+    // Non-collection targets keep synced order regardless.
+    expect(wire.target_product_ids_map?.["cat_tag"]).toEqual(["p4", "p5"]);
+  });
+
+  it("a failed order fetch falls back to synced order (publish never blocked by it)", async () => {
+    const { prisma, getCaptured } = mockDeciderPrisma(deciderDraft(), CATEGORY_ROWS);
+    const result = await publishQuiz(
+      prisma,
+      { quizId: "qrow", shopId: "s1" },
+      { collectionOrder: async () => { throw new Error("no admin"); } },
+    );
+    expect(result.ok).toBe(true);
+    const wire = JSON.parse(JSON.stringify(getCaptured())) as PublishedQuiz;
+    expect(wire.target_product_ids_map?.["cat_col"]).toEqual(["p1", "p2", "p3"]);
+  });
+
+  it("BLOCKS publish when a mapped target's bucket row was deleted (V4/V5 DB half)", async () => {
+    const { prisma } = mockDeciderPrisma(
+      deciderDraft(),
+      CATEGORY_ROWS.filter((c) => c.id !== "cat_tag"), // the rule's target is gone
+    );
+    await expect(publishQuiz(prisma, { quizId: "qrow", shopId: "s1" })).rejects.toThrow(
+      /bucket no longer exists/i,
+    );
   });
 });

@@ -64,12 +64,69 @@ function bindResultNode(doc: QuizDoc, nodeId: string, bucket: BucketRow): QuizDo
   };
 }
 
+// LOGIC v2 (L2-3) — the decider-model reconcile: Step-1 re-grouping replaces
+// Category rows with fresh cuids, so v2 references dangle. Deletes dangling
+// answer.target_id (the mapping must be re-picked; V4 blocks publish until it
+// is) + dangling rec_page_settings.overrides keys (config for a gone bucket).
+// decision_rules referencing a gone target are LEFT IN PLACE — V5 flags them
+// at publish and the Rules tab shows the breakage (spec §9 prefers visible
+// breakage + confirm-with-consequences over silent deletion). Pure.
+export function reconcileDeciderTargets(doc: QuizDoc, bucketIds: Set<string>): QuizDoc {
+  let changed = false;
+  const nodes = doc.nodes.map((n) => {
+    if (n.type !== "question") return n;
+    const hasDangling = n.data.answers.some(
+      (a) => a.target_id && !bucketIds.has(a.target_id),
+    );
+    if (!hasDangling) return n;
+    changed = true;
+    return {
+      ...n,
+      data: {
+        ...n.data,
+        answers: n.data.answers.map((a) => {
+          if (!a.target_id || bucketIds.has(a.target_id)) return a;
+          const { target_id: _gone, ...rest } = a;
+          return rest;
+        }),
+      },
+    };
+  });
+
+  let recPageSettings = doc.rec_page_settings;
+  if (recPageSettings) {
+    const danglingKeys = Object.keys(recPageSettings.overrides).filter(
+      (id) => !bucketIds.has(id),
+    );
+    if (danglingKeys.length > 0) {
+      changed = true;
+      const overrides = { ...recPageSettings.overrides };
+      for (const k of danglingKeys) delete overrides[k];
+      recPageSettings = { ...recPageSettings, overrides };
+    }
+  }
+
+  if (!changed) return doc;
+  return {
+    ...doc,
+    nodes,
+    ...(recPageSettings ? { rec_page_settings: recPageSettings } : {}),
+  };
+}
+
 export function reconcileBucketsToResultNodes(
   doc: QuizDoc,
   buckets: BucketRow[],
   fallbackCollectionId: string,
 ): QuizDoc {
   const bucketIds = new Set(buckets.map((b) => b.id));
+
+  // LOGIC v2 — decider docs use ONE result node as the reveal terminus; the
+  // per-bucket result-node choreography below is the LEGACY model. For decider
+  // docs, reconcile only the v2 references (dangling targets/overrides).
+  if (doc.logic_model === "decider") {
+    return reconcileDeciderTargets(doc, bucketIds);
+  }
 
   // Unbind result nodes whose bound bucket no longer exists (re-grouping in
   // Step 1 replaces the Category rows with fresh ids). Resetting the headline to

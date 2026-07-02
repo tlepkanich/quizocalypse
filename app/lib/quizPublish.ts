@@ -59,6 +59,15 @@ export interface PublishedQuiz extends QuizDoc {
   // Phase J — per-answer conversion weights (only when data_weighting is on
   // AND the session history clears the data gates). Privacy-safe aggregates.
   answer_weights?: Record<string, number>;
+  // LOGIC v2 (L2-3) — baked ONLY for decider docs (absent on every legacy
+  // publish → byte-identical). target_product_ids_map: targetId → ORDERED
+  // member product ids (collection-sourced targets carry the merchant's
+  // Shopify collection sort when a publish-time fetch succeeds, else the
+  // synced membership order — the collection_order hero signal reads this
+  // order). target_index: targetId → shape + display name for the runtime
+  // and the Step-4 target selector.
+  target_product_ids_map?: Record<string, string[]>;
+  target_index?: Record<string, { type: "product" | "collection" | "tag"; name: string }>;
 }
 
 export interface PublishResult {
@@ -78,6 +87,22 @@ export class PublishError extends Error {
 }
 
 type ResultPageT = QuizDoc["results_pages"][number];
+
+// LOGIC v2 (L2-3) — every recommendation target a decider doc references: the
+// deciding question's answer mappings + every AND-rule's target. These are
+// Step-1 Category ids; publish fetches them, BLOCKS on missing rows (V4/V5's
+// DB half — the doc points at a deleted bucket), and bakes their ORDERED
+// membership into publishedJson.target_product_ids_map. Pure + testable.
+export function collectDeciderTargetIds(doc: QuizDoc): Set<string> {
+  const ids = new Set<string>();
+  if (doc.logic_model !== "decider") return ids;
+  for (const n of doc.nodes) {
+    if (n.type !== "question" || n.data.role !== "decides") continue;
+    for (const a of n.data.answers) if (a.target_id) ids.add(a.target_id);
+  }
+  for (const rule of doc.decision_rules ?? []) ids.add(rule.target_id);
+  return ids;
+}
 
 // Every category id the recommendation logic references, across BOTH the legacy
 // results_pages array AND the v3 result NODES (data.category_id, stages, and the
@@ -216,6 +241,17 @@ export function bakeResultPages(
 export async function publishQuiz(
   prisma: PrismaClient,
   args: { quizId: string; shopId: string },
+  // LOGIC v2 (L2-3) — optional server-side collection-order fetcher, injected
+  // by the (server-only) caller so this module stays client-safe (bakeResultPages
+  // is imported by preview components; a direct .server import would break the
+  // client bundle). Given the collection-sourced targets, returns targetId →
+  // ORDERED product ids per the merchant's Shopify collection sort, or null on
+  // any failure → the baked map falls back to the synced membership order.
+  opts?: {
+    collectionOrder?: (
+      targets: Array<{ targetId: string; collectionRef: string }>,
+    ) => Promise<Record<string, string[]> | null>;
+  },
 ): Promise<PublishResult> {
   const quiz = await prisma.quiz.findFirst({
     where: { id: args.quizId, shopId: args.shopId },
@@ -268,6 +304,15 @@ export async function publishQuiz(
     ...doc.scope.collection_ids,
     ...fallbackCollectionIds,
     ...(doc.featured_collection_id ? [doc.featured_collection_id] : []),
+    // LOGIC v2 — the two named fallback collections (§6) must have their
+    // members in product_index so the runtime can render them without a live
+    // fetch. Decider docs only; absent fields add nothing.
+    ...(doc.logic_model === "decider" && doc.rec_page_settings?.global.emptyFallbackCol
+      ? [doc.rec_page_settings.global.emptyFallbackCol]
+      : []),
+    ...(doc.logic_model === "decider" && doc.rec_page_settings?.global.safetyNetCol
+      ? [doc.rec_page_settings.global.safetyNetCol]
+      : []),
   ]);
 
   // Categories referenced by the recommendation logic (v3 result nodes' bound
@@ -278,19 +323,86 @@ export async function publishQuiz(
   // bug: a quiz scoped to a 13-product collection baked buckets referencing the
   // whole catalog, so the intersection was ~empty).
   const allCategoryIds = collectReferencedCategoryIds(doc);
+  // LOGIC v2 — decider targets are Category rows too; fetch them in the same
+  // pass (the extra select columns feed target_index and are harmless for
+  // legacy docs, whose deciderTargetIds set is always empty).
+  const deciderTargetIds = collectDeciderTargetIds(doc);
+  const fetchCategoryIds = new Set([...allCategoryIds, ...deciderTargetIds]);
   const categoryRows =
-    allCategoryIds.size > 0
+    fetchCategoryIds.size > 0
       ? await prisma.category.findMany({
-          where: { id: { in: [...allCategoryIds] } },
-          select: { id: true, productIds: true },
+          where: { id: { in: [...fetchCategoryIds] } },
+          select: { id: true, productIds: true, source: true, sourceRef: true, name: true },
         })
       : [];
   const categoryProductIdsById = new Map(
     categoryRows.map((c) => [c.id, c.productIds]),
   );
 
+  // LOGIC v2 (V4/V5's DB half) — a decider doc referencing a target whose
+  // Category row no longer exists (bucket deleted after mapping) must NOT
+  // publish: the runtime would resolve an empty target for those shoppers.
+  let targetBake: {
+    map: Record<string, string[]>;
+    index: Record<string, { type: "product" | "collection" | "tag"; name: string }>;
+  } | null = null;
+  if (doc.logic_model === "decider") {
+    const rowById = new Map(categoryRows.map((c) => [c.id, c]));
+    const missing = [...deciderTargetIds].filter((id) => !rowById.has(id));
+    if (missing.length > 0) {
+      throw new PublishError(
+        "A mapped result bucket no longer exists — re-pick the mapping before publishing.",
+        missing.map((id) => ({ path: id, message: "Referenced bucket was deleted." })),
+      );
+    }
+    // Ordered membership: collection-sourced targets try the merchant's real
+    // Shopify collection sort via the injected fetcher; anything else (or a
+    // failed fetch) keeps the synced membership order.
+    const collectionTargets = [...deciderTargetIds]
+      .map((id) => rowById.get(id)!)
+      .filter((c) => c.source === "collection" && c.sourceRef)
+      .map((c) => ({ targetId: c.id, collectionRef: c.sourceRef! }));
+    let shopifyOrder: Record<string, string[]> | null = null;
+    if (collectionTargets.length > 0 && opts?.collectionOrder) {
+      try {
+        shopifyOrder = await opts.collectionOrder(collectionTargets);
+      } catch (err) {
+        console.warn(
+          "[publish] collection-order fetch failed — using synced membership order",
+          err instanceof Error ? err.message : err,
+        );
+      }
+    }
+    const map: Record<string, string[]> = {};
+    const index: Record<string, { type: "product" | "collection" | "tag"; name: string }> = {};
+    for (const id of deciderTargetIds) {
+      const row = rowById.get(id)!;
+      const ordered = shopifyOrder?.[id];
+      // The Shopify order can drift from synced membership (deleted/added
+      // products since sync) — intersect it with the synced members so the
+      // baked map never references a product missing from product_index.
+      const synced = row.productIds;
+      map[id] = ordered
+        ? [
+            ...ordered.filter((pid) => synced.includes(pid)),
+            ...synced.filter((pid) => !ordered.includes(pid)),
+          ]
+        : [...synced];
+      const type =
+        row.source === "product" ? "product" : row.source === "tag" ? "tag" : "collection";
+      index[id] = { type, name: row.name };
+    }
+    targetBake = { map, index };
+  }
+
   // Every product the recommendation engine can surface MUST be in the index.
   const includeProductIds = collectRecommendableProductIds(doc, categoryProductIdsById);
+  // LOGIC v2 — decider target members must be in product_index too (the
+  // decider path intersects the baked map with the index).
+  if (targetBake) {
+    for (const pids of Object.values(targetBake.map))
+      for (const pid of pids) includeProductIds.add(pid);
+  }
 
   const products = await prisma.product.findMany({
     where: { shopId: args.shopId },
@@ -499,6 +611,11 @@ export async function publishQuiz(
     platform: shop?.source === "standalone" ? "standalone" : "shopify",
     ...(bakedCurrency ? { currency: bakedCurrency } : {}),
     ...(answerWeights ? { answer_weights: answerWeights } : {}),
+    // LOGIC v2 — the baked target data (decider docs only; absent on every
+    // legacy publish → byte-identical, pinned by the H3 harness).
+    ...(targetBake
+      ? { target_product_ids_map: targetBake.map, target_index: targetBake.index }
+      : {}),
   };
 
   await prisma.$transaction([

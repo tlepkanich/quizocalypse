@@ -132,3 +132,86 @@ describe("reconcileBucketsToResultNodes", () => {
     expect(() => Quiz.parse(next)).not.toThrow();
   });
 });
+
+// ════════════════════════════════════════════════════════════════════════════
+// LOGIC v2 (L2-3) — the decider reconcile: dangling target refs are nulled on
+// re-grouping (V4/V5 then block publish); rules are LEFT for V5 to flag; the
+// legacy per-bucket result-node choreography is SKIPPED for decider docs.
+// ════════════════════════════════════════════════════════════════════════════
+describe("reconcileDeciderTargets (decider docs)", () => {
+  const deciderDoc = () =>
+    Quiz.parse({
+      quiz_id: "qd",
+      scope: { collection_ids: [] },
+      logic_model: "decider",
+      decision_rules: [
+        { id: "r1", conditions: [{ question_id: "q1", answer_id: "a1", op: "is" }], target_id: "cat_gone" },
+      ],
+      rec_page_settings: {
+        global: { headline: "H" },
+        overrides: { cat_live: { headline: "Live" }, cat_gone: { headline: "Gone" } },
+      },
+      nodes: [
+        { id: "intro", type: "intro", position: { x: 0, y: 0 }, data: { headline: "Hi" } },
+        {
+          id: "q1",
+          type: "question",
+          position: { x: 1, y: 0 },
+          data: {
+            text: "?",
+            question_type: "single_select",
+            role: "decides",
+            answers: [
+              { id: "a1", text: "A", tags: [], edge_handle_id: "h1", target_id: "cat_live" },
+              { id: "a2", text: "B", tags: [], edge_handle_id: "h2", target_id: "cat_gone" },
+            ],
+          },
+        },
+        {
+          id: "r1",
+          type: "result",
+          position: { x: 2, y: 0 },
+          data: { headline: "Match", fallback_collection_id: "c_fb" },
+        },
+      ],
+      edges: [
+        { id: "e1", source: "intro", target: "q1" },
+        { id: "e2", source: "q1", target: "r1" },
+      ],
+    });
+
+  const liveBuckets: BucketRow[] = [{ id: "cat_live", name: "Live" }];
+
+  it("deletes dangling answer.target_id + dangling override keys; keeps live ones; leaves rules", () => {
+    const out = reconcileBucketsToResultNodes(deciderDoc(), liveBuckets, "c_fb");
+    const q = out.nodes.find((n) => n.id === "q1");
+    if (q?.type !== "question") throw new Error("q1 missing");
+    expect(q.data.answers[0]?.target_id).toBe("cat_live");
+    expect(q.data.answers[1]).not.toHaveProperty("target_id");
+    expect(out.rec_page_settings?.overrides).toEqual({ cat_live: { headline: "Live" } });
+    // Rules stay (V5 flags them at publish; the Rules tab shows the breakage).
+    expect(out.decision_rules?.[0]?.target_id).toBe("cat_gone");
+  });
+
+  it("SKIPS the legacy result-node choreography for decider docs (no per-bucket result nodes appended)", () => {
+    const out = reconcileBucketsToResultNodes(deciderDoc(), liveBuckets, "c_fb");
+    expect(out.nodes.filter((n) => n.type === "result")).toHaveLength(1);
+    const r = out.nodes.find((n) => n.type === "result");
+    expect(r?.type === "result" && r.data.category_id).toBeUndefined();
+  });
+
+  it("is a no-op (same reference) when nothing dangles", () => {
+    const doc = Quiz.parse({
+      ...JSON.parse(JSON.stringify(deciderDoc())),
+      decision_rules: [],
+      rec_page_settings: { global: {}, overrides: { cat_live: { headline: "L" } } },
+      nodes: deciderDoc().nodes.map((n) =>
+        n.type === "question"
+          ? { ...n, data: { ...n.data, answers: n.data.answers.map((a) => ({ ...a, target_id: "cat_live" })) } }
+          : n,
+      ),
+    });
+    const out = reconcileBucketsToResultNodes(doc, liveBuckets, "c_fb");
+    expect(out).toBe(doc);
+  });
+});

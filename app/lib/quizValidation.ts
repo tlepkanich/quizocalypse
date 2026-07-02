@@ -17,7 +17,14 @@ export interface NodeIssue {
     | "missing_terminal"
     // Routing — per-answer result branching authored on the node but never
     // wired onto the edges (every answer falls through to a result-less path):
-    | "dead_answer_routing";
+    | "dead_answer_routing"
+    // LOGIC v2 (quiz-questions-logic-spec §6) — decider-model BLOCK rules,
+    // only ever emitted for docs with logic_model === "decider":
+    | "missing_decider" // V1 — not exactly one role="decides" question
+    | "decider_bypass" // V2 — a reachable path can finish without the decider
+    | "decider_optional" // V3 — the deciding question is not Required
+    | "unmapped_decider_answer" // V4 (doc half) — a deciding answer has no target
+    | "broken_rule_reference"; // V6 (doc half) — a rule points at a missing question/answer
   message: string;
 }
 
@@ -97,6 +104,103 @@ export function validateQuiz(doc: QuizDoc): NodeIssue[] {
       }
     }
   }
+
+  // ── LOGIC v2 BLOCK rules (spec §6, L2-3) — decider docs only ──────────────
+  // Gated on a field no legacy doc possesses, so legacy validateQuiz output is
+  // byte-identical. V4/V5's DB half (targets actually exist as Category rows)
+  // is enforced at publish time in quizPublish.ts, where categories are fetched.
+  if (doc.logic_model === "decider") {
+    const deciders = doc.nodes.filter(
+      (n) => n.type === "question" && n.data.role === "decides",
+    );
+
+    // V1 — exactly one deciding question.
+    if (deciders.length !== 1) {
+      issues.push({
+        nodeId: deciders[1]?.id ?? pinId,
+        kind: "missing_decider",
+        message:
+          deciders.length === 0
+            ? "Pick the one question that decides the result — no question has the “Decides result” role."
+            : `Only one question can decide the result — ${deciders.length} are marked “Decides”.`,
+      });
+    }
+
+    const decider = deciders[0];
+    if (decider && decider.type === "question") {
+      // V3 — the deciding question must be Required (auto-enforced by the
+      // builder, re-checked here so a hand-edited doc can't slip through).
+      if (decider.data.required === false) {
+        issues.push({
+          nodeId: decider.id,
+          kind: "decider_optional",
+          message: "The deciding question must be Required — a skipped decider means no result.",
+        });
+      }
+
+      // V2 — every reachable path passes through the decider before the quiz
+      // ends. Dominator check: walk from the intro WITHOUT traversing beyond
+      // the decider; any terminal still reachable = a bypass path exists.
+      if (intro) {
+        const seen = new Set<string>();
+        const queue: string[] = [intro.id];
+        while (queue.length) {
+          const id = queue.shift()!;
+          if (seen.has(id)) continue;
+          seen.add(id);
+          if (id === decider.id) continue; // reach it, never pass beyond it
+          for (const e of doc.edges) {
+            if (e.source === id) queue.push(e.target);
+          }
+        }
+        const bypassTerminal = doc.nodes.find(
+          (n) => (n.type === "result" || n.type === "end") && seen.has(n.id),
+        );
+        if (bypassTerminal) {
+          issues.push({
+            nodeId: bypassTerminal.id,
+            kind: "decider_bypass",
+            message:
+              "A path can finish the quiz without answering the deciding question — those shoppers would get no result. Re-route it through the decider.",
+          });
+        }
+      }
+
+      // V4 (doc half) — every deciding answer maps to a target.
+      for (const a of decider.data.answers) {
+        if (!a.target_id) {
+          issues.push({
+            nodeId: decider.id,
+            kind: "unmapped_decider_answer",
+            message: `Answer “${a.text}” on the deciding question has no result mapped.`,
+          });
+        }
+      }
+    }
+
+    // V6 (doc half) — rules must reference questions/answers that still exist.
+    // (V5's bucket-existence half runs at publish, where Category rows are known.)
+    const answerIdsByQuestion = new Map<string, Set<string>>();
+    for (const n of doc.nodes) {
+      if (n.type === "question") {
+        answerIdsByQuestion.set(n.id, new Set(n.data.answers.map((a) => a.id)));
+      }
+    }
+    for (const rule of doc.decision_rules ?? []) {
+      for (const c of rule.conditions) {
+        const answers = answerIdsByQuestion.get(c.question_id);
+        if (!answers || !answers.has(c.answer_id)) {
+          issues.push({
+            nodeId: pinId,
+            kind: "broken_rule_reference",
+            message: `A rule references a ${answers ? "deleted answer" : "deleted question"} — remove or rebuild the rule.`,
+          });
+          break; // one issue per rule is enough
+        }
+      }
+    }
+  }
+  // ──────────────────────────────────────────────────────────────────────────
 
   for (const node of doc.nodes) {
     if (node.type === "intro") {

@@ -369,3 +369,139 @@ describe("validateQuiz — dead per-answer result routing", () => {
     ).toBe(false);
   });
 });
+
+// ════════════════════════════════════════════════════════════════════════════
+// LOGIC v2 (L2-3) — decider-model BLOCK rules (spec §6 V1/V2/V3 + the doc
+// halves of V4/V6). All gated on logic_model="decider" — the last test pins
+// that a legacy doc's validation output is unchanged.
+// ════════════════════════════════════════════════════════════════════════════
+describe("validateQuiz — decider-model rules (V1–V6)", () => {
+  const deciderQuiz = (patch: Record<string, unknown> = {}) =>
+    Quiz.parse({
+      quiz_id: "qd",
+      scope: { collection_ids: [] },
+      logic_model: "decider",
+      nodes: [
+        { id: "intro", type: "intro", position: { x: 0, y: 0 }, data: { headline: "Hi" } },
+        {
+          id: "q1",
+          type: "question",
+          position: { x: 1, y: 0 },
+          data: {
+            text: "Terrain?",
+            question_type: "single_select",
+            role: "decides",
+            answers: [
+              { id: "a1", text: "Park", tags: [], edge_handle_id: "h1", target_id: "cat_park" },
+              { id: "a2", text: "Powder", tags: [], edge_handle_id: "h2", target_id: "cat_powder" },
+            ],
+          },
+        },
+        {
+          id: "r1",
+          type: "result",
+          position: { x: 2, y: 0 },
+          data: { headline: "Match", fallback_collection_id: "c_fb" },
+        },
+      ],
+      edges: [
+        { id: "e1", source: "intro", target: "q1" },
+        { id: "e2", source: "q1", target: "r1" },
+      ],
+      ...patch,
+    });
+
+  const kinds = (doc: ReturnType<typeof deciderQuiz>) => validateQuiz(doc).map((i) => i.kind);
+
+  it("a healthy decider doc has zero decider issues", () => {
+    const decKinds = kinds(deciderQuiz()).filter((k) =>
+      ["missing_decider", "decider_bypass", "decider_optional", "unmapped_decider_answer", "broken_rule_reference"].includes(k),
+    );
+    expect(decKinds).toEqual([]);
+  });
+
+  it("V1 — blocks when NO question decides", () => {
+    const doc = deciderQuiz();
+    for (const n of doc.nodes) if (n.type === "question") n.data.role = "qualifier";
+    expect(kinds(doc)).toContain("missing_decider");
+  });
+
+  it("V1 — blocks when TWO questions decide", () => {
+    const doc = deciderQuiz();
+    const q2 = JSON.parse(JSON.stringify(doc.nodes.find((n) => n.id === "q1")));
+    q2.id = "q2";
+    q2.data.answers = q2.data.answers.map((a: { id: string; edge_handle_id: string }, i: number) => ({
+      ...a, id: `b${i}`, edge_handle_id: `hh${i}`,
+    }));
+    const withTwo = Quiz.parse({
+      ...JSON.parse(JSON.stringify(doc)),
+      nodes: [...doc.nodes.slice(0, 2), q2, ...doc.nodes.slice(2)],
+      edges: [
+        { id: "e1", source: "intro", target: "q1" },
+        { id: "e2", source: "q1", target: "q2" },
+        { id: "e3", source: "q2", target: "r1" },
+      ],
+    });
+    expect(kinds(withTwo)).toContain("missing_decider");
+  });
+
+  it("V2 — blocks when a path can reach a terminal without passing the decider", () => {
+    // intro routes BOTH to q1 and directly to r1 → the direct edge bypasses.
+    const doc = deciderQuiz({
+      edges: [
+        { id: "e1", source: "intro", target: "q1" },
+        { id: "e2", source: "q1", target: "r1" },
+        { id: "e3", source: "intro", target: "r1" },
+      ],
+    });
+    const issues = validateQuiz(doc);
+    expect(issues.map((i) => i.kind)).toContain("decider_bypass");
+    expect(issues.find((i) => i.kind === "decider_bypass")?.nodeId).toBe("r1");
+  });
+
+  it("V3 — blocks when the decider is Optional", () => {
+    const doc = deciderQuiz();
+    for (const n of doc.nodes) {
+      if (n.type === "question" && n.id === "q1") n.data.required = false;
+    }
+    expect(kinds(doc)).toContain("decider_optional");
+  });
+
+  it("V4 (doc half) — blocks an unmapped deciding answer", () => {
+    const doc = deciderQuiz();
+    for (const n of doc.nodes) {
+      if (n.type === "question" && n.id === "q1") {
+        delete (n.data.answers[1] as { target_id?: string }).target_id;
+      }
+    }
+    expect(kinds(doc)).toContain("unmapped_decider_answer");
+  });
+
+  it("V6 (doc half) — blocks a rule referencing a deleted question or answer", () => {
+    const missingAnswer = deciderQuiz({
+      decision_rules: [
+        { id: "r1", conditions: [{ question_id: "q1", answer_id: "gone", op: "is" }], target_id: "t" },
+      ],
+    });
+    expect(kinds(missingAnswer)).toContain("broken_rule_reference");
+    const missingQuestion = deciderQuiz({
+      decision_rules: [
+        { id: "r1", conditions: [{ question_id: "q_gone", answer_id: "a1", op: "is" }], target_id: "t" },
+      ],
+    });
+    expect(kinds(missingQuestion)).toContain("broken_rule_reference");
+  });
+
+  it("LEGACY docs (no logic_model) never emit decider issues — output unchanged", () => {
+    const legacy = deciderQuiz();
+    const stripped = Quiz.parse({
+      ...JSON.parse(JSON.stringify(legacy)),
+      logic_model: undefined,
+    });
+    // Force the exact hazard: roles/targets present but the model flag absent.
+    const decKinds = validateQuiz(stripped).filter((i) =>
+      ["missing_decider", "decider_bypass", "decider_optional", "unmapped_decider_answer", "broken_rule_reference"].includes(i.kind),
+    );
+    expect(decKinds).toEqual([]);
+  });
+});
