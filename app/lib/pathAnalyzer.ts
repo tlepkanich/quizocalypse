@@ -85,22 +85,57 @@ export function answersReachable(doc: QuizDoc): Map<string, boolean> {
   return out;
 }
 
+/** BFS from `startId` that reaches `stopId` but never traverses BEYOND it —
+ *  the dominator-walk primitive shared with the publish gate's V2 check. */
+function stopAtWalk(doc: QuizDoc, startId: string, stopId: string): Set<string> {
+  const seen = new Set<string>();
+  const queue = [startId];
+  while (queue.length) {
+    const id = queue.shift()!;
+    if (seen.has(id)) continue;
+    seen.add(id);
+    if (id === stopId) continue; // reach it, never pass beyond it
+    queue.push(...outboundTargets(doc, id));
+  }
+  return seen;
+}
+
+function isTerminalNode(doc: QuizDoc, id: string): boolean {
+  const n = doc.nodes.find((x) => x.id === id);
+  return n?.type === "result" || n?.type === "end";
+}
+
 /** answerId → does picking this answer still lead THROUGH the decider before
- *  the quiz ends? (Answers ON the decider itself trivially do.) This is V2 at
- *  answer granularity — the deep-linkable diagnostic behind decider_bypass. */
+ *  the quiz ends? This is V2 at answer granularity, with the SAME dominator
+ *  semantics as the publish gate (quizValidation V2): an answer is a BYPASS
+ *  (false) only when (a) its question sits in the PRE-decider region — the
+ *  intro's stop-at-decider walk — and (b) its own continuation, again never
+ *  traversing beyond the decider, can still hit a result/end terminal (branch
+ *  lanes included — the walk follows every outbound edge). Answers on the
+ *  decider itself, on POST-decider questions (already answered it), or on
+ *  unreachable questions (the gate's structural orphan checks own those) are
+ *  all true. The prior forward-reachability EXISTS test was wrong on both
+ *  sides of the decider — review-caught in L2-7. */
 export function answersReachDecider(doc: QuizDoc): Map<string, boolean> {
   const decider = deciderOf(doc);
+  const intro = introId(doc);
   const out = new Map<string, boolean>();
   if (!decider) return out;
+  const preRegion = intro ? stopAtWalk(doc, intro, decider.id) : new Set<string>();
   for (const n of doc.nodes) {
     if (n.type !== "question") continue;
     for (const a of n.data.answers) {
-      if (n.id === decider.id) {
+      if (n.id === decider.id || !preRegion.has(n.id)) {
         out.set(a.id, true);
         continue;
       }
       const next = answerNextNode(doc, n.id, a.edge_handle_id);
-      out.set(a.id, next !== null && reachableNodeIds(doc, next).has(decider.id));
+      if (next === null) {
+        out.set(a.id, true); // dead-end — a structural issue, not a bypass
+        continue;
+      }
+      const walk = stopAtWalk(doc, next, decider.id);
+      out.set(a.id, ![...walk].some((id) => isTerminalNode(doc, id)));
     }
   }
   return out;

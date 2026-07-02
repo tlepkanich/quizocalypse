@@ -86,7 +86,16 @@ export function LogicFlowMap({
               <div key={node.id} style={{ display: "flex", gap: 10 }}>
                 <Rail glyph={GLYPH[node.type] ?? "•"} />
                 <div style={{ flex: 1, minWidth: 0, paddingBottom: 14 }}>
-                  <div style={{ fontSize: 13.5, fontWeight: 600 }}>{node.data.text}</div>
+                  <div style={{ fontSize: 13.5, fontWeight: 600 }}>
+                    {node.data.text}
+                    {/* LOGIC v2 — gold decider marker. `role` only exists on
+                        decider docs, so legacy flow maps render unchanged. */}
+                    {node.data.role === "decides" ? (
+                      <span className="qz-lfm-decider" title="This question decides the result">
+                        ◆ Decides the result
+                      </span>
+                    ) : null}
+                  </div>
                   <div className="qz-row" style={{ gap: 5, flexWrap: "wrap", marginTop: 6 }}>
                     {routes.map((r) => (
                       <span

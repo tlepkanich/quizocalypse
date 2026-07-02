@@ -21,6 +21,7 @@ import { QuestionList, type RowAction } from "./QuestionList";
 import { OutcomeCoverage } from "./OutcomeCoverage";
 import { QuestionCard } from "./QuestionCard";
 import { RulesTab } from "./RulesTab";
+import { PathReportPanel } from "./PathReportPanel";
 import { TableView } from "./TableView";
 import { ContinueGuard } from "./ContinueGuard";
 import { QuestionBankDrawer } from "../../studio/QuestionBankDrawer";
@@ -114,6 +115,8 @@ export function QuestionsLogicLayout({
   // full width (the owner's "understand the real estate" ask; qz-qb-split twin).
   const [leftOpen, setLeftOpen] = useState(true);
   const [libraryOpen, setLibraryOpen] = useState(false);
+  const [reportOpen, setReportOpen] = useState(false);
+  const [focusRuleId, setFocusRuleId] = useState<string | null>(null);
   const [guard, setGuard] = useState<{ names: string[]; title?: string; body?: string } | null>(
     null,
   );
@@ -339,12 +342,22 @@ export function QuestionsLogicLayout({
         </button>
         <span style={{ flex: 1 }} />
         {deciderMode ? (
-          <span
-            className="qz-ql-modelbadge"
-            title="One deciding question picks the result; advanced rules can override it"
-          >
-            ◆ Decider logic
-          </span>
+          <>
+            <button
+              type="button"
+              className="qz-btn qz-btn-ghost qz-btn-sm"
+              title="Run the deterministic path tester — every check, every outcome, no AI"
+              onClick={() => setReportOpen(true)}
+            >
+              ▸ Test all paths
+            </button>
+            <span
+              className="qz-ql-modelbadge"
+              title="One deciding question picks the result; advanced rules can override it"
+            >
+              ◆ Decider logic
+            </span>
+          </>
         ) : (
           <button
             type="button"
@@ -506,7 +519,7 @@ export function QuestionsLogicLayout({
           </div>
         ) : view === "rules" && deciderMode ? (
           <div className="qz-ql-main">
-            <RulesTab doc={doc} categories={categories} onCommit={onCommit} />
+            <RulesTab doc={doc} categories={categories} onCommit={onCommit} focusRuleId={focusRuleId} />
           </div>
         ) : (
           <div className="qz-ql-main qz-ql-flowmain">
@@ -522,6 +535,32 @@ export function QuestionsLogicLayout({
 
       {libraryOpen ? (
         <QuestionBankDrawer doc={doc} onCommit={onCommit} onClose={() => setLibraryOpen(false)} />
+      ) : null}
+
+      {reportOpen && deciderMode ? (
+        <PathReportPanel
+          doc={doc}
+          categories={categories}
+          onClose={() => setReportOpen(false)}
+          onNavigate={(link) => {
+            // Deep link (§7.3): close the overlay, then land on the exact
+            // question card or the Rules tab.
+            setReportOpen(false);
+            if (link.kind === "rule") {
+              setView("rules");
+              setFocusRuleId(link.ruleId ?? null);
+              return;
+            }
+            if (link.nodeId) {
+              // Deferred scroll: when coming from the Rules tab the card only
+              // mounts with this same commit — the pendingScroll effect runs
+              // after the callback refs land, so the scroll always connects.
+              setView("builder");
+              setActiveId(link.nodeId);
+              setPendingScrollId(link.nodeId);
+            }
+          }}
+        />
       ) : null}
 
       {guard ? (

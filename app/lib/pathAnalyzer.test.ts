@@ -126,6 +126,46 @@ describe("answer-level reachability", () => {
     expect(r.get("a_adv")).toBe(false); // the bypass — answer-granular V2
     expect(r.get("a_park")).toBe(true); // decider's own answers trivially pass
   });
+
+  it("answersReachDecider: questions AFTER the decider are never bypasses (dominator semantics)", () => {
+    // intro → q2 (DECIDES) → q1 (qualifier) → r1: the review-caught false
+    // positive — the shopper already answered the decider before q1.
+    const doc = makeDoc({
+      edges: [
+        { id: "e1", source: "intro", target: "q2" },
+        { id: "e2", source: "q2", target: "q1" },
+        { id: "e3", source: "q1", target: "r1" },
+      ],
+    });
+    const r = answersReachDecider(doc);
+    expect(r.get("a_beg")).toBe(true);
+    expect(r.get("a_adv")).toBe(true);
+  });
+
+  it("answersReachDecider: a branch lane that ends without the decider flags the FEEDING answers", () => {
+    // q1's default route → a branch; lane 1 → decider, lane 2 → end (bypass).
+    const doc = makeDoc({
+      nodes: [
+        ...makeDoc().nodes,
+        {
+          id: "b1",
+          type: "branch",
+          position: { x: 1.5, y: 0 },
+          data: { label: "AB", slots: [{ id: "s1", label: "A" }, { id: "s2", label: "B" }] },
+        },
+      ],
+      edges: [
+        { id: "e1", source: "intro", target: "q1" },
+        { id: "e2", source: "q1", target: "b1" },
+        { id: "eA", source: "b1", target: "q2", source_handle: "s1" },
+        { id: "eB", source: "b1", target: "end1", source_handle: "s2" },
+        { id: "e3", source: "q2", target: "r1" },
+      ],
+    });
+    const r = answersReachDecider(doc);
+    expect(r.get("a_beg")).toBe(false); // its continuation CAN end without the decider
+    expect(r.get("a_adv")).toBe(false);
+  });
 });
 
 describe("rule diagnostics (V7/V8/V9)", () => {

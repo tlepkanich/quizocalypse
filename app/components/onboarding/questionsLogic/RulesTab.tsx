@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { Quiz as QuizDoc, DecisionRuleCondition } from "../../../lib/quizSchema";
 import { isFreeformType } from "../../../lib/quizSchema";
 import type { BuilderCategory } from "../../builder/stepProps";
@@ -32,10 +32,14 @@ export function RulesTab({
   doc,
   categories,
   onCommit,
+  focusRuleId = null,
 }: {
   doc: QuizDoc;
   categories: BuilderCategory[];
   onCommit: (doc: QuizDoc) => void;
+  /** Deep-link target from the Test-all-paths report — the row scrolls into
+   *  view and flashes so "Go to it →" lands on the exact rule, not just the tab. */
+  focusRuleId?: string | null;
 }) {
   const rules = useMemo(() => doc.decision_rules ?? [], [doc.decision_rules]);
   const questions = useMemo(() => orderedQuestions(doc), [doc]);
@@ -75,6 +79,19 @@ export function RulesTab({
   // ── drag-to-reorder (HTML5 DnD) + ↑/↓ fallback (the H3 pattern) ──
   const dragId = useRef<string | null>(null);
   const [dragOverIdx, setDragOverIdx] = useState<number | null>(null);
+
+  // Deep-link focus: scroll the targeted rule into view + flash it.
+  const [flashId, setFlashId] = useState<string | null>(null);
+  useEffect(() => {
+    if (!focusRuleId) return;
+    const el = document.getElementById(`qz-rule-${focusRuleId}`);
+    if (el) {
+      el.scrollIntoView({ behavior: "smooth", block: "center" });
+      setFlashId(focusRuleId);
+      const t = window.setTimeout(() => setFlashId(null), 2000);
+      return () => window.clearTimeout(t);
+    }
+  }, [focusRuleId]);
 
   const setConditions = (ruleId: string, conditions: DecisionRuleCondition[]) =>
     onCommit(updateDecisionRule(doc, ruleId, { conditions }));
@@ -123,7 +140,8 @@ export function RulesTab({
             return (
               <div
                 key={rule.id}
-                className={`qz-ql-rule${dragOverIdx === idx ? " is-dragover" : ""}`}
+                id={`qz-rule-${rule.id}`}
+                className={`qz-ql-rule${dragOverIdx === idx ? " is-dragover" : ""}${flashId === rule.id ? " is-flash" : ""}`}
                 draggable
                 onDragStart={() => {
                   dragId.current = rule.id;
