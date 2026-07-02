@@ -1173,7 +1173,7 @@ export function QuizRuntime(props: QuizRuntimeProps) {
       // A decider doc ALWAYS takes the single-section path (the v2 model has
       // exactly one reveal page; legacy multi-stage never applies to it).
       if (isDecider || stages.length === 0) {
-        const explained = recommendForResultExplained({
+        let explained = recommendForResultExplained({
           quiz: doc,
           productIndex,
           selectedAnswerIds,
@@ -1181,6 +1181,32 @@ export function QuizRuntime(props: QuizRuntimeProps) {
           ...(answerWeights ? { answerWeights } : {}),
           ...targetFields,
         });
+        // PREVIEW-ONLY (L2-10a): a rail jump lands on the result node with an
+        // EMPTY path, and in v2 the result is computed AT the decider — so an
+        // unanswered decider can never resolve a target and the merchant
+        // would only ever see the no-match state. Resolve the FIRST mapped
+        // answer's target instead (the v2 equivalent of what legacy previews
+        // always did: the category rung resolves without answers). Live mode
+        // is untouched — shoppers reach results only through the decider.
+        if (isPreview && isDecider && !explained.decider) {
+          const deciderNode = doc.nodes.find(
+            (n) => n.type === "question" && n.data.role === "decides",
+          );
+          const firstMapped =
+            deciderNode?.type === "question"
+              ? deciderNode.data.answers.find((a) => a.target_id)
+              : undefined;
+          if (firstMapped) {
+            explained = recommendForResultExplained({
+              quiz: doc,
+              productIndex,
+              selectedAnswerIds: [...selectedAnswerIds, firstMapped.id],
+              resultNodeId: currentNode.id,
+              ...(answerWeights ? { answerWeights } : {}),
+              ...targetFields,
+            });
+          }
+        }
         if (explained.decider) {
           // ── LOGIC v2 reveal (rec-page-spec-V2 §4–§7) ────────────────────
           const cfg = explained.decider.config;

@@ -845,6 +845,24 @@ describe("LOGIC v2 role/target mutations (setQuestionRole / setAnswerTarget)", (
       expect(() => Quiz.parse(doc)).not.toThrow();
     });
 
+    it("§7.1 capture normalization: email OFF drops name/phone keys (they require an email)", () => {
+      // Name/phone stored while email is (default) ON.
+      let doc = setRecPageGlobal(deciderDoc(), { captureName: true, capturePhone: true });
+      expect(doc.rec_page_settings?.global).toEqual({ captureName: true, capturePhone: true });
+      // Turning email OFF normalizes name/phone away — even without the
+      // panel's atomic clear (defense at the mutation seam).
+      doc = setRecPageGlobal(doc, { captureEmail: false });
+      expect(doc.rec_page_settings?.global).toEqual({ captureEmail: false });
+      // While email is off, a name/phone write is dropped by the normalizer.
+      doc = setRecPageGlobal(doc, { capturePhone: true });
+      expect(doc.rec_page_settings?.global).toEqual({ captureEmail: false });
+      // Email back ON = the key goes ABSENT (sparse: default is true), and
+      // clearing the last key drops the root (absent-when-unset).
+      doc = setRecPageGlobal(doc, { captureEmail: undefined });
+      expect(Object.prototype.hasOwnProperty.call(doc, "rec_page_settings")).toBe(false);
+      expect(() => Quiz.parse(doc)).not.toThrow();
+    });
+
     it("setRecPageOverride keeps overrides sparse per target; emptying one removes it (inherit again)", () => {
       let doc = setRecPageOverride(deciderDoc(), "cat_a", { headline: "Just for A" });
       doc = setRecPageOverride(doc, "cat_b", { incentiveOn: true, incentiveCode: "SAVE10" });

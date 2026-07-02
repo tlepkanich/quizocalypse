@@ -1217,7 +1217,19 @@ function packRecPageSettings(
 export function setRecPageGlobal(doc: QuizDoc, patch: RecPageGlobalPatch): QuizDoc {
   if (doc.logic_model !== "decider") return doc;
   const cur = doc.rec_page_settings;
-  const global = applySparse(cur?.global, patch as Record<string, unknown>);
+  const global = applySparse<NonNullable<typeof cur>["global"]>(
+    cur?.global,
+    patch as Record<string, unknown>,
+  );
+  // §7.1 — name/phone capture require email (/captures persists nothing
+  // without one, and the capture screen can't submit them alone). The
+  // read-time default of captureEmail is TRUE, so a stored `false` IS the
+  // effective off state — when email is off, drop the name/phone keys so no
+  // writer (this panel or a future one) can persist an unservable config.
+  if (global.captureEmail === false) {
+    delete global.captureName;
+    delete global.capturePhone;
+  }
   return packRecPageSettings(doc, global, { ...(cur?.overrides ?? {}) });
 }
 

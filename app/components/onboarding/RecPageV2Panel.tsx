@@ -408,22 +408,62 @@ export function RecPageV2Panel({
             </>
           ) : null}
 
-          {/* ── Capture (existing quiz-level flag — §7.1 email default-on) ── */}
+          {/* ── Contact capture (§7.1 — global-only, email default-ON) ──
+              These drive the runtime's capture screen (rec_page_settings, NOT
+              the legacy collect_email_on_result flag the v2 reveal ignores).
+              Sparse discipline: email ON = key ABSENT (the read-time default);
+              email OFF atomically clears name/phone (they require an email —
+              /captures persists nothing without one). */}
           {!target || !editingOverride ? (
             <>
-              <div className="qz-rp2-section">Capture</div>
+              <div className="qz-rp2-section">Contact capture</div>
               <label className="qz-rp2-field qz-rp2-check">
                 <input
                   type="checkbox"
-                  checked={doc.collect_email_on_result ?? false}
-                  onChange={(e) => onCommit({ ...doc, collect_email_on_result: e.target.checked })}
+                  checked={effective.captureEmail}
+                  onChange={(e) =>
+                    patchGlobal(
+                      e.target.checked
+                        ? { captureEmail: undefined }
+                        : {
+                            captureEmail: false,
+                            captureName: undefined,
+                            capturePhone: undefined,
+                          },
+                    )
+                  }
                 />
                 <span>
                   Ask for an email before the reveal
                   <span className="qz-dim" style={{ display: "block", fontSize: 11.5 }}>
-                    The capture → loading → reveal sequence ships with the new runtime.
+                    Email is required to continue when this is on. Turning every field off skips
+                    the capture screen entirely.
                   </span>
                 </span>
+              </label>
+              <label
+                className="qz-rp2-field qz-rp2-check"
+                title={!effective.captureEmail ? "Name capture requires email" : undefined}
+              >
+                <input
+                  type="checkbox"
+                  disabled={!effective.captureEmail}
+                  checked={effective.captureName}
+                  onChange={(e) => patchGlobal({ captureName: e.target.checked || undefined })}
+                />
+                <span>Also ask for a first name (optional field)</span>
+              </label>
+              <label
+                className="qz-rp2-field qz-rp2-check"
+                title={!effective.captureEmail ? "Phone capture requires email" : undefined}
+              >
+                <input
+                  type="checkbox"
+                  disabled={!effective.captureEmail}
+                  checked={effective.capturePhone}
+                  onChange={(e) => patchGlobal({ capturePhone: e.target.checked || undefined })}
+                />
+                <span>Also ask for a phone number (optional field)</span>
               </label>
             </>
           ) : null}
