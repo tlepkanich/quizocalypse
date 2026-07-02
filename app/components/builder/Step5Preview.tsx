@@ -5,6 +5,7 @@ import { QzBadge, QzButton, QzCard, QzField, QzInput, QzSegmented, QzSelect } fr
 import { getPreset } from "../../lib/themePresets";
 import { resolveDesignTokens, type DesignTokensT } from "../../lib/designTokens";
 import { bakeResultPages } from "../../lib/quizPublish";
+import { draftDeciderBake } from "../../lib/draftDeciderBake";
 import type { StepProps } from "./stepProps";
 import { DeviceFrame } from "./preview/DeviceFrame";
 import { ReskinSwitcher } from "./preview/ReskinSwitcher";
@@ -76,6 +77,15 @@ export function Step5Preview({
     const byId = new Map(categories.map((c) => [c.id, c.productIds]));
     return { ...doc, results_pages: bakeResultPages(doc, byId) };
   }, [doc, categories]);
+
+  // LOGIC v2 (L2-10a) — the decider analog of the bake above: derive the
+  // publish-time target map from the live buckets so a decider draft's reveal
+  // resolves real products pre-publish. Legacy docs derive nothing → the
+  // runtime props stay null → engine inputs byte-identical to before.
+  const deciderBake = useMemo(
+    () => (doc.logic_model === "decider" ? draftDeciderBake(categories) : null),
+    [doc, categories],
+  );
 
   // Tried-on theme tokens layered over the saved doc (live, not yet saved).
   const tryOnTokens = useMemo<DesignTokensT | null>(() => {
@@ -232,6 +242,8 @@ export function Step5Preview({
           version={0}
           shopDomain=""
           platform={platform}
+          targetProductIdsMap={deciderBake?.targetProductIdsMap ?? null}
+          targetIndex={deciderBake?.targetIndex ?? null}
           tokensOverride={tryOnTokens}
           breakpoint={breakpoint}
           onInspect={onInspect}

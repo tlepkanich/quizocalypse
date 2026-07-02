@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { QuizRuntime } from "../runtime/QuizRuntime";
 import { bakeResultPages } from "../../lib/quizPublish";
+import { draftDeciderBake } from "../../lib/draftDeciderBake";
 import type { Quiz, QuizNode } from "../../lib/quizSchema";
 import type { IndexedProduct } from "../../lib/recommendationEngine";
 import type { BuilderCategory } from "../builder/stepProps";
@@ -47,6 +48,14 @@ export function RecPagePreview({
     return { ...doc, results_pages: bakeResultPages(doc, byId) };
   }, [doc, categories]);
 
+  // LOGIC v2 (L2-10a) — the decider analog: derive the publish-time target map
+  // from the live buckets so a decider draft's reveal resolves real products.
+  // Legacy docs derive nothing → props stay null → engine inputs unchanged.
+  const deciderBake = useMemo(
+    () => (doc.logic_model === "decider" ? draftDeciderBake(categories) : null),
+    [doc, categories],
+  );
+
   const breakpoint = breakpointForWidth(frameW);
 
   return (
@@ -67,6 +76,8 @@ export function RecPagePreview({
         quizId={quizId}
         version={0}
         shopDomain=""
+        targetProductIdsMap={deciderBake?.targetProductIdsMap ?? null}
+        targetIndex={deciderBake?.targetIndex ?? null}
         breakpoint={breakpoint}
         focusNodeId={node.id}
       />
