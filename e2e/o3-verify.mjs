@@ -82,10 +82,50 @@ for (let i = 0; i < 40; i++) {
 ok("tier-1 done (stage types)", fd?.stage === "types", `stage=${fd?.stage} genError=${fd?.genError ?? ""}`);
 if (fd?.stage !== "types") { await browser.close(); process.exit(1); }
 
+// Self-seed a saved template through the REAL save-template intent (the shop
+// lost the T9-era fixture; the probe must not be fixture-dependent). The
+// recommended_bucket_ids are DELIBERATELY stale cuids — the exact condition
+// the O-3 neutralization exists for (they match nothing on this draft).
+const SEED_NAME = "O3 Probe Terrain Finder";
+if (!(fd.savedTemplates ?? []).some((s) => s.name === SEED_NAME)) {
+  const synthRich = {
+    id: "o3-probe-template",
+    experience_type: "product_match",
+    title: SEED_NAME,
+    angle: "Probe-seeded template exercising the decider saved-template path.",
+    rationale: "",
+    sample_questions: ["Where do you ride most?", "What matters most in a board?"],
+    feature_notes: ["Probe-seeded"],
+    dials: { imagery: "medium", graphics: "medium", word_forward: "medium", lines: "sharp" },
+    rec_defaults: { max_products: 4, oos_behavior: "show_with_badge", fallback_collection_id: "" },
+    recommended_bucket_ids: ["stale-cuid-1", "stale-cuid-2"],
+    question_count: 5,
+  };
+  const synthPicked = {
+    template_id: synthRich.id,
+    quiz_name: SEED_NAME,
+    design_dials: synthRich.dials,
+    rec_defaults: synthRich.rec_defaults,
+    recommended_groups: [],
+    feature_notes: synthRich.feature_notes,
+    question_count: 5,
+    goal_line: "",
+    saved_as_template: false,
+  };
+  const seedSnap = (await readBuilder(draftId)).doc;
+  await putDoc(draftId, {
+    ...seedSnap,
+    build_session: { ...(seedSnap.build_session ?? {}), rich_templates: [synthRich], picked_template: synthPicked },
+  });
+  const saveResp = await postIntent(draftId, { intent: "save-template" });
+  ok("probe seeded a saved template via the REAL save-template intent", saveResp.ok(), `${saveResp.status()}`);
+  await putDoc(draftId, seedSnap); // restore the session (drop the synthetic bits)
+  fd = await readFunnel(draftId);
+}
 const saved = fd.savedTemplates ?? [];
-ok("deploy has a saved template (the T9 fixture)", saved.length > 0, saved[0]?.name ?? "NONE — save one via the battle card first");
-if (!saved.length) { await browser.close(); process.exit(1); }
-const st = saved[0];
+const st = saved.find((s) => s.name === SEED_NAME) ?? saved[0];
+ok("saved template available", Boolean(st), st?.name ?? "NONE");
+if (!st) { await browser.close(); process.exit(1); }
 
 // ── 2. guards at types ───────────────────────────────────────────────────────
 ok("shape-manual → 400", (await postIntent(draftId, { intent: "shape-manual" })).status() === 400);
