@@ -102,7 +102,7 @@ export default function UpgradeDeciderModal({
                 you&rsquo;re ready.
               </li>
               <li>
-                {/* §7.1 disclosure — placeholder copy pending owner tone review. */}
+                {/* §7.1 disclosure — copy OWNER-APPROVED 2026-07-03 as drafted. */}
                 <strong>Email capture becomes required</strong> on the results reveal once
                 you republish
                 {surface === "funnel"

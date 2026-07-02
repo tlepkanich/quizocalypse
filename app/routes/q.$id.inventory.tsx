@@ -23,11 +23,24 @@ interface InventoryRequestBody {
 
 type VariantJson = { inventoryQuantity?: number | null };
 
+// CORS parity with every other public storefront endpoint (captures/sessions/
+// events/notify) — owner-confirmed 2026-07-03. Same-origin iframes never
+// needed it; future non-iframe embeds do, and consistency beats surprise.
+const CORS = {
+  "access-control-allow-origin": "*",
+  "access-control-allow-methods": "POST, OPTIONS",
+  "access-control-allow-headers": "content-type",
+  "access-control-max-age": "86400",
+};
+
+export const loader = async () => new Response(null, { status: 204, headers: CORS });
+
 export async function action({ params, request }: ActionFunctionArgs) {
+  if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: CORS });
   const { id } = params;
-  if (!id) return json({ error: "Missing quiz id" }, { status: 400 });
+  if (!id) return json({ error: "Missing quiz id" }, { status: 400, headers: CORS });
   if (request.method !== "POST") {
-    return json({ error: "Method not allowed" }, { status: 405 });
+    return json({ error: "Method not allowed" }, { status: 405, headers: CORS });
   }
 
   // 60 inventory reads/min/IP — called on result-page loads; throttle scraping.
@@ -35,7 +48,7 @@ export async function action({ params, request }: ActionFunctionArgs) {
   if (!rl.ok) {
     return json(
       { error: "rate limited" },
-      { status: 429, headers: { "retry-after": String(rl.retryAfterS) } },
+      { status: 429, headers: { ...CORS, "retry-after": String(rl.retryAfterS) } },
     );
   }
 
@@ -43,19 +56,26 @@ export async function action({ params, request }: ActionFunctionArgs) {
   try {
     body = (await request.json()) as InventoryRequestBody;
   } catch {
-    return json({ error: "Invalid JSON" }, { status: 400 });
+    return json({ error: "Invalid JSON" }, { status: 400, headers: CORS });
   }
   const requested = Array.isArray(body.product_ids)
     ? body.product_ids.filter((x): x is string => typeof x === "string").slice(0, 100)
     : [];
-  if (requested.length === 0) return json({ quantities: {} });
+  if (requested.length === 0) return json({ quantities: {} }, { headers: CORS });
 
-  const quiz = await prisma.quiz.findFirst({
-    where: { id },
-    select: { publishedJson: true },
-  });
+  // HII-1-class read guard: a DB failure returns the controlled CORS+JSON 500.
+  let quiz: { publishedJson: unknown } | null;
+  try {
+    quiz = await prisma.quiz.findFirst({
+      where: { id },
+      select: { publishedJson: true },
+    });
+  } catch (err) {
+    console.error("[inventory] quiz lookup failed", err instanceof Error ? err.message : err);
+    return json({ error: "lookup failed" }, { status: 500, headers: CORS });
+  }
   if (!quiz?.publishedJson) {
-    return json({ error: "Quiz not published" }, { status: 404 });
+    return json({ error: "Quiz not published" }, { status: 404, headers: CORS });
   }
 
   // Scope to the quiz's own products — never disclose anything outside it.

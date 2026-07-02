@@ -55,10 +55,19 @@ export async function action({ params, request }: ActionFunctionArgs) {
   const productId = typeof body.product_id === "string" ? body.product_id : null;
   const sessionId = typeof body.session_id === "string" ? body.session_id.slice(0, 128) : null;
 
-  const quiz = await prisma.quiz.findUnique({
-    where: { id },
-    select: { id: true, shopId: true, publishedJson: true },
-  });
+  // HII-1-class guards (owner-approved 2026-07-03 — Notify-Me's guardrail is
+  // unblocked for this specific error-path hardening): a DB failure must
+  // return the controlled CORS+JSON 500, never Remix's un-CORS'd generic one.
+  let quiz: { id: string; shopId: string | null; publishedJson: unknown } | null;
+  try {
+    quiz = await prisma.quiz.findUnique({
+      where: { id },
+      select: { id: true, shopId: true, publishedJson: true },
+    });
+  } catch (err) {
+    console.error("[notify] quiz lookup failed", err instanceof Error ? err.message : err);
+    return json({ error: "lookup failed" }, { status: 500, headers: CORS });
+  }
   if (!quiz) return json({ error: "quiz not found" }, { status: 404, headers: CORS });
 
   // If a product id is given, it must belong to this quiz's published catalog.
@@ -69,15 +78,20 @@ export async function action({ params, request }: ActionFunctionArgs) {
     if (!known) return json({ error: "unknown product" }, { status: 400, headers: CORS });
   }
 
-  await prisma.backInStockRequest.create({
-    data: {
-      shopId: quiz.shopId ?? null,
-      quizId: quiz.id,
-      sessionId,
-      productId,
-      email,
-    },
-  });
+  try {
+    await prisma.backInStockRequest.create({
+      data: {
+        shopId: quiz.shopId ?? null,
+        quizId: quiz.id,
+        sessionId,
+        productId,
+        email,
+      },
+    });
+  } catch (err) {
+    console.error("[notify] write failed", err instanceof Error ? err.message : err);
+    return json({ error: "write failed" }, { status: 500, headers: CORS });
+  }
 
   // Optional forward to a merchant-configured back-in-stock webhook (spec §5:
   // "allow custom webhook for brands using a third-party tool"). Best-effort.
