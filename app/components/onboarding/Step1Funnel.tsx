@@ -54,6 +54,10 @@ export interface FunnelData {
   quizId: string;
   name: string;
   stage: BuildSession["stage"]; // sourced from the schema so it can't drift
+  // LOGIC v2 (L2-10d) — the creation stamp. "decider" drafts get the
+  // direct-only Shape (Manual card hidden); null = legacy in-flight drafts,
+  // which render today's four-card UI byte-identically.
+  logicModel: "decider" | null;
   minGoalChars: number;
   productCount: number;
   identitySummary: string | null;
@@ -1850,11 +1854,12 @@ function GeneratingScreen({ kind }: { kind: "typing" | "templating" }) {
 }
 
 // ── Stage: Type (tier-1) — pick a brand-tailored quiz type ───────────────────
-// Shape-Your-Quiz spec — the four-card "Shape your quiz" page that replaces the
-// linear Types → Templates → BattleCard selection. Two AI quiz-type cards
-// (generated to differ), a Write-Your-Goal card, and a Manual-Create card.
-// Selecting an AI card expands it in place (siblings mute) and REQUIRES a
-// scoring-model choice (no default) before Continue → the build.
+// Shape-Your-Quiz spec — the "Shape your quiz" page that replaces the linear
+// Types → Templates → BattleCard selection. Two AI quiz-type cards (generated
+// to differ) + a Write-Your-Goal card; legacy drafts also get the
+// Manual-Create card. Selecting an AI card expands it in place (siblings
+// mute). Legacy drafts must pick a scoring model (no default) before
+// Continue → the build; decider drafts are direct-only (no picker).
 function ShapeStage({
   data,
   fetcher,
@@ -1868,6 +1873,10 @@ function ShapeStage({
   const [scoring, setScoring] = useState<"direct" | "weighted" | null>(null);
   const [writingGoal, setWritingGoal] = useState(false);
   const [goalDraft, setGoalDraft] = useState(data.goal?.goal_text ?? "");
+  // LOGIC v2 (L2-10d) — decider drafts: direct mapping is THE model (no
+  // scoring picker) and Manual Creation is out of this flow (owner diagram
+  // 2026-07-02). Legacy in-flight drafts keep the four-card UI unchanged.
+  const isDecider = data.logicModel === "decider";
   // The spec shows exactly two AI suggestions, intentionally different in type.
   const aiTypes = data.quizTypes.slice(0, 2);
   const busy =
@@ -1923,43 +1932,58 @@ function ShapeStage({
 
               {expanded ? (
                 <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 4 }}>
-                  <div className="qz-label">How should we score this quiz?</div>
-                  {(
-                    [
-                      ["direct", "Direct mapping", "Each answer maps to one bucket. Simple, fast to configure."],
-                      ["weighted", "Weighted scoring", "Answers contribute points to multiple buckets. Better for overlapping attributes."],
-                    ] as const
-                  ).map(([val, label, desc]) => (
-                    <label
-                      key={val}
-                      className="qz-row"
-                      style={{ gap: 8, alignItems: "flex-start", fontSize: 13, cursor: "pointer" }}
-                    >
-                      <input
-                        type="radio"
-                        name={`scoring-${t.id}`}
-                        checked={scoring === val}
-                        onChange={() => setScoring(val)}
-                        style={{ marginTop: 2 }}
-                      />
-                      <span>
-                        <strong>{label}</strong>
-                        <span className="qz-dim" style={{ display: "block", fontSize: 12 }}>{desc}</span>
+                  {isDecider ? (
+                    // Decider drafts: direct mapping IS the model — a fixed
+                    // descriptor replaces the retired scoring picker.
+                    <span style={{ fontSize: 13 }}>
+                      <strong>Direct mapping</strong>
+                      <span className="qz-dim" style={{ display: "block", fontSize: 12 }}>
+                        One question decides the result — each of its answers points at one
+                        of your buckets. You can refine it in the next step.
                       </span>
-                    </label>
-                  ))}
+                    </span>
+                  ) : (
+                    <>
+                      <div className="qz-label">How should we score this quiz?</div>
+                      {(
+                        [
+                          ["direct", "Direct mapping", "Each answer maps to one bucket. Simple, fast to configure."],
+                          ["weighted", "Weighted scoring", "Answers contribute points to multiple buckets. Better for overlapping attributes."],
+                        ] as const
+                      ).map(([val, label, desc]) => (
+                        <label
+                          key={val}
+                          className="qz-row"
+                          style={{ gap: 8, alignItems: "flex-start", fontSize: 13, cursor: "pointer" }}
+                        >
+                          <input
+                            type="radio"
+                            name={`scoring-${t.id}`}
+                            checked={scoring === val}
+                            onChange={() => setScoring(val)}
+                            style={{ marginTop: 2 }}
+                          />
+                          <span>
+                            <strong>{label}</strong>
+                            <span className="qz-dim" style={{ display: "block", fontSize: 12 }}>{desc}</span>
+                          </span>
+                        </label>
+                      ))}
+                    </>
+                  )}
                   <div className="qz-row" style={{ gap: 10, alignItems: "center" }}>
                     <button
                       type="button"
                       className="qz-btn qz-btn-primary qz-btn-sm"
-                      disabled={!scoring || busy}
-                      onClick={() =>
-                        scoring &&
+                      disabled={(!isDecider && !scoring) || busy}
+                      onClick={() => {
+                        const effective = isDecider ? "direct" : scoring;
+                        if (!effective) return;
                         fetcher.submit(
-                          { intent: "shape-continue", typeId: t.id, scoring },
+                          { intent: "shape-continue", typeId: t.id, scoring: effective },
                           { method: "post" },
-                        )
-                      }
+                        );
+                      }}
                     >
                       {pendingIntent === "shape-continue" ? "Building…" : "Continue →"}
                     </button>
@@ -2049,25 +2073,35 @@ function ShapeStage({
           )}
         </div>
 
-        {/* Card 4 — Manual create */}
-        <div className="qz-card" style={{ display: "flex", flexDirection: "column", gap: 8, ...muted(false) }}>
-          <span style={{ fontFamily: "var(--qz-font-display)", fontSize: 17 }}>⚒ Manual create</span>
-          <span className="qz-muted" style={{ fontSize: 13.5 }}>
-            Start from a blank quiz and build every question yourself. You&rsquo;ll choose the scoring model in the builder.
-          </span>
-          <button
-            type="button"
-            className="qz-btn qz-btn-ghost qz-btn-sm"
-            style={{ alignSelf: "flex-start", color: "var(--qz-accent)", fontWeight: 600 }}
-            disabled={busy}
-            onClick={() => fetcher.submit({ intent: "shape-manual" }, { method: "post" })}
-          >
-            {pendingIntent === "shape-manual" ? "Opening…" : "Build manually →"}
-          </button>
-        </div>
+        {/* Card 4 — Manual create. Removed from the decider flow (owner
+            diagram 2026-07-02: a separate process later); legacy in-flight
+            drafts keep the escape hatch. */}
+        {!isDecider ? (
+          <div className="qz-card" style={{ display: "flex", flexDirection: "column", gap: 8, ...muted(false) }}>
+            <span style={{ fontFamily: "var(--qz-font-display)", fontSize: 17 }}>⚒ Manual create</span>
+            <span className="qz-muted" style={{ fontSize: 13.5 }}>
+              Start from a blank quiz and build every question yourself. You&rsquo;ll choose the scoring model in the builder.
+            </span>
+            <button
+              type="button"
+              className="qz-btn qz-btn-ghost qz-btn-sm"
+              style={{ alignSelf: "flex-start", color: "var(--qz-accent)", fontWeight: 600 }}
+              disabled={busy}
+              onClick={() => fetcher.submit({ intent: "shape-manual" }, { method: "post" })}
+            >
+              {pendingIntent === "shape-manual" ? "Opening…" : "Build manually →"}
+            </button>
+          </div>
+        ) : null}
       </div>
 
-      <SavedTemplatesRow templates={data.savedTemplates} fetcher={fetcher} pendingIntent={pendingIntent} />
+      {/* Saved templates route through the retired battle-card stage, which
+          skips the decider funnel's Questions & Logic + Rec Page steps and
+          strands the merchant in a builder without decider authoring UI — so
+          they stay LEGACY-only until a decider-native template path exists. */}
+      {!isDecider ? (
+        <SavedTemplatesRow templates={data.savedTemplates} fetcher={fetcher} pendingIntent={pendingIntent} />
+      ) : null}
 
       <div className="qz-row" style={{ gap: 10, alignItems: "center" }}>
         <button

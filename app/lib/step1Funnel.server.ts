@@ -134,7 +134,15 @@ export async function findOrCreateStep1Draft(shopId: string): Promise<string> {
   }
   if (resumeId) return resumeId;
 
-  const doc = Quiz.parse({ ...buildSeedQuiz("New quiz"), build_session: { stage: "grouping" } });
+  // LOGIC v2 (L2-10d) — every NEW funnel draft is a DECIDER doc from creation
+  // (the stamp is never applied retroactively; in-flight pre-flip drafts
+  // resume as legacy with today's exact behavior — every consumer keys off
+  // the stamp, never off deploy time).
+  const doc = Quiz.parse({
+    ...buildSeedQuiz("New quiz"),
+    logic_model: "decider",
+    build_session: { stage: "grouping" },
+  });
   const created = await prisma.quiz.create({
     data: {
       shopId,
@@ -380,6 +388,9 @@ export async function loadStep1FunnelData(
     quizId: quiz.id,
     name: quiz.name,
     stage: session.stage,
+    // LOGIC v2 (L2-10d) — the creation stamp; the Shape stage branches on it
+    // (direct-only, Manual card hidden). null = a legacy in-flight draft.
+    logicModel: doc.logic_model ?? null,
     minGoalChars: MIN_GOAL_CHARS,
     productCount: products.length,
     identitySummary,
@@ -718,6 +729,14 @@ async function runStep1FunnelActionImpl(
   }
 
   if (intent === "pick") {
+    // LOGIC v2 (L2-10d) — this legacy Step-1 path builds via startStep1Build,
+    // whose re-seed does NOT thread logic_model: letting a decider draft
+    // through would silently strip the stamp. Unreachable today
+    // (template_options is never populated since the generator was retired) —
+    // this guard closes the trapdoor.
+    if (doc.logic_model === "decider") {
+      return json({ intent, ok: false, error: "This flow isn't available for this quiz." }, { status: 400 });
+    }
     const optionId = String(form.get("optionId") ?? "");
     const chosen = session.template_options.find((o) => o.id === optionId);
     if (!chosen) {
@@ -764,6 +783,14 @@ async function runStep1FunnelActionImpl(
     if (scoring !== "direct" && scoring !== "weighted") {
       return json({ intent, ok: false, error: "Pick how to score this quiz first." }, { status: 400 });
     }
+    // LOGIC v2 (L2-10d) — decider drafts are direct-only (the weighted picker
+    // is retired for them; the UI no longer offers it — this is defense).
+    if (doc.logic_model === "decider" && scoring !== "direct") {
+      return json(
+        { intent, ok: false, error: "This quiz uses direct mapping — each answer points at one result." },
+        { status: 400 },
+      );
+    }
     const chosen = session.quiz_types.find((t) => t.id === typeId);
     if (!chosen) return json({ intent, ok: false, error: "That type is no longer available." }, { status: 400 });
     const goal = session.goal?.goal_text ?? "";
@@ -800,7 +827,14 @@ async function runStep1FunnelActionImpl(
         { status: 400 },
       );
     }
-    const scoring = String(form.get("scoring") ?? "") === "direct" ? "direct" : "weighted";
+    // LOGIC v2 (L2-10d) — decider drafts are always direct; legacy keeps the
+    // weighted default (the merchant can switch later in the Question Builder).
+    const scoring =
+      doc.logic_model === "decider"
+        ? ("direct" as const)
+        : String(form.get("scoring") ?? "") === "direct"
+          ? ("direct" as const)
+          : ("weighted" as const);
     const cats = await prisma.category.findMany({
       where: { shopId: shop.id, quizId: quiz.id },
       select: { id: true, name: true, tags: true },
@@ -851,6 +885,15 @@ async function runStep1FunnelActionImpl(
   // the Question Builder with the seed quiz. Scoring stays UNSET so the builder
   // prompts for it (per the question-builder spec's manual-create flow).
   if (intent === "shape-manual") {
+    // LOGIC v2 (L2-10d, owner diagram 2026-07-02) — Manual Creation is removed
+    // from the decider flow (a separate process later); the UI hides the card,
+    // this 400 is defense. Legacy in-flight drafts keep the escape hatch.
+    if (doc.logic_model === "decider") {
+      return json(
+        { intent, ok: false, error: "Manual creation isn't part of this flow yet." },
+        { status: 400 },
+      );
+    }
     await writeDoc(quiz.id, { ...doc, build_session: { ...session, stage: "done" } });
     // Manual Create leaves the funnel for the builder — graduate it out of "step1"
     // so it shows in the gallery and "Create new quiz" starts fresh (see above).
@@ -916,6 +959,16 @@ async function runStep1FunnelActionImpl(
   // RichTemplateOption, seeds it as the sole tier-2 option + an auto-named working
   // copy, and jumps straight to the battle card (stage "configuring").
   if (intent === "use-saved-template") {
+    // LOGIC v2 (L2-10d) — the battle-card stage this jumps to bypasses the
+    // decider funnel's Questions & Logic + Rec Page steps and exits into a
+    // builder without decider authoring UI. The UI hides the row for decider
+    // drafts; this 400 is defense (stale tabs, scripted posts).
+    if (doc.logic_model === "decider") {
+      return json(
+        { intent, ok: false, error: "Saved templates aren't available for this flow yet." },
+        { status: 400 },
+      );
+    }
     const templateId = String(form.get("templateId") ?? "");
     const rich = await loadSavedTemplate(shop.id, templateId);
     if (!rich) return json({ intent, ok: false, error: "That saved template is no longer available." }, { status: 400 });
