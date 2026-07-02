@@ -30,6 +30,7 @@ import { BuilderDesignPanel } from "./BuilderDesignPanel";
 import { BuilderBlocksPalette } from "./BuilderBlocksPalette";
 import { BuilderPageSettings } from "./BuilderPageSettings";
 import { insertModule } from "./studioDoc";
+import UpgradeDeciderModal from "../onboarding/questionsLogic/UpgradeDeciderModal";
 
 // ════════════════════════════════════════════════════════════════════════════
 // UnifiedWorkspace (Unified P2) — ONE editing surface replacing the AI/Advanced
@@ -175,6 +176,8 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
   // oriented without opening the editing panel.
   const [liveNodeId, setLiveNodeId] = useState<string | null>(null);
   const [editMode, setEditMode] = useState(true);
+  // LOGIC v2 (L2-10f) — the explicit legacy→decider upgrade wizard.
+  const [upgradeOpen, setUpgradeOpen] = useState(false);
   // Device-frame width lifted from Step5Preview so the Design tab's layer
   // selector can follow it ("edit what you see").
   const [frameW, setFrameW] = useState<number>(DEVICE_PRESETS.desktop);
@@ -199,12 +202,13 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== "Escape") return;
+      if (upgradeOpen) return; // the wizard modal owns Escape while open
       if (confirmDeleteId) setConfirmDeleteId(null);
       else select(null);
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [select, confirmDeleteId]);
+  }, [select, confirmDeleteId, upgradeOpen]);
 
   // Delete / Backspace on the selected step ARMS its two-step delete confirm in
   // the rail (never deletes outright — the actual delete is a second explicit
@@ -368,21 +372,57 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
   // B7 — scoring-model badge/toggle (parity with the funnel Question Builder
   // header). Both models are saved; clicking swaps active↔alt. Rendered in both
   // the standalone Quizell top bar and the embedded QzPageHeader.
-  const scoringBadge = (() => {
-    const m = doc.scoring_model ?? "direct";
-    const other = m === "direct" ? "weighted" : "direct";
-    return (
-      <button
-        type="button"
-        className="qz-btn qz-btn-ghost qz-btn-sm"
-        style={{ fontSize: 12 }}
-        title={`Scoring: ${m === "direct" ? "Direct mapping" : "Weighted scoring"} — click to switch (both models are saved)`}
-        onClick={() => commit(swapScoringModel(doc, other))}
+  // LOGIC v2 (L2-10f): decider docs REPLACE it with the ◆ badge — the scoring
+  // swap writes scoring_model, a legacy field decider docs must not grow —
+  // and legacy docs gain the explicit per-quiz "↑ Upgrade" wizard entry.
+  const scoringBadge =
+    doc.logic_model === "decider" ? (
+      <span
+        className="qz-ql-modelbadge"
+        title="One deciding question picks the result; advanced rules can override it"
       >
-        {m === "direct" ? "→ Direct mapping" : "⚖ Weighted scoring"} <span aria-hidden>⚙</span>
-      </button>
+        ◆ Decider logic
+      </span>
+    ) : (
+      (() => {
+        const m = doc.scoring_model ?? "direct";
+        const other = m === "direct" ? "weighted" : "direct";
+        return (
+          <>
+            <button
+              type="button"
+              className="qz-btn qz-btn-ghost qz-btn-sm"
+              style={{ fontSize: 12 }}
+              title={`Scoring: ${m === "direct" ? "Direct mapping" : "Weighted scoring"} — click to switch (both models are saved)`}
+              onClick={() => commit(swapScoringModel(doc, other))}
+            >
+              {m === "direct" ? "→ Direct mapping" : "⚖ Weighted scoring"} <span aria-hidden>⚙</span>
+            </button>
+            <button
+              type="button"
+              className="qz-btn qz-btn-ghost qz-btn-sm"
+              style={{ fontSize: 12 }}
+              title="Convert this draft to Decider logic — one deciding question, rule overrides, a single configurable results page"
+              onClick={() => setUpgradeOpen(true)}
+            >
+              ↑ Upgrade to Decider logic
+            </button>
+          </>
+        );
+      })()
     );
-  })();
+
+  // Portals to document.body, so mounting position is chrome-agnostic —
+  // rendered in both the standalone builder and the embedded QzPage returns.
+  const upgradeModal = upgradeOpen ? (
+    <UpgradeDeciderModal
+      doc={doc}
+      categories={data.categories}
+      surface="builder"
+      onCommit={commit}
+      onClose={() => setUpgradeOpen(false)}
+    />
+  ) : null;
 
   const editInteractToggle = (
     <div
@@ -912,6 +952,7 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
             </div>
           )}
         </div>
+        {upgradeModal}
       </div>
     );
   }
@@ -953,6 +994,7 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
       </div>
       {banners}
       {body}
+      {upgradeModal}
     </QzPage>
   );
 }

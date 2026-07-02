@@ -133,6 +133,12 @@ describe("proposeDeciderFromLegacy", () => {
     expect(p!.answerToTargetMap.b2).toBe("cat_park");
   });
 
+  it("mergedPageNames carries the KEPT page's headline FIRST (the modal's destructure contract)", () => {
+    const p = proposeDeciderFromLegacy(legacyDoc(), CATS)!;
+    expect(p.mergedPageNames[0]).toBe("Trail Boards"); // r_trail = keptResultNodeId
+    expect(p.mergedPageNames).toHaveLength(3);
+  });
+
   it("seeds sparse settings: emptyFallbackCol from the kept node + non-generic headline overrides only", () => {
     const p = proposeDeciderFromLegacy(legacyDoc(), CATS)!;
     expect(p.recPageSettings.global).toEqual({

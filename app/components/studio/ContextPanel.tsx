@@ -228,6 +228,23 @@ function AnswerMappingSection({
   onCommit: (doc: QuizDoc) => void;
 }) {
   if (node.type !== "question") return null;
+  // LOGIC v2 (L2-10f) — decider docs resolve results via target_id + rules;
+  // the legacy points editors below would write fields the runtime ignores.
+  // Replace them with an honest pointer instead of a silent no-effect editor.
+  if (doc.logic_model === "decider") {
+    return (
+      <div className="qz-card" style={{ padding: 10 }}>
+        <div className="qz-label" style={{ fontSize: 11, marginBottom: 4 }}>
+          ◆ Decider logic
+        </div>
+        <p className="qz-dim" style={{ fontSize: 12, margin: 0 }}>
+          This quiz picks results with one deciding question (plus optional rules), not
+          answer points — edit its answer→result mapping in the create flow&rsquo;s
+          Questions &amp; Logic step.
+        </p>
+      </div>
+    );
+  }
   // Open-text / freeform questions have no answer options to map — their responses
   // are zero-party data, not scored (Question-Builder spec §Open Text).
   if (isFreeformType(node.data.question_type)) {

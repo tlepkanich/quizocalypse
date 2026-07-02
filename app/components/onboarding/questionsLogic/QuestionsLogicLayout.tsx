@@ -22,6 +22,7 @@ import { OutcomeCoverage } from "./OutcomeCoverage";
 import { QuestionCard } from "./QuestionCard";
 import { RulesTab } from "./RulesTab";
 import { PathReportPanel } from "./PathReportPanel";
+import UpgradeDeciderModal from "./UpgradeDeciderModal";
 import { TableView } from "./TableView";
 import { ContinueGuard } from "./ContinueGuard";
 import { QuestionBankDrawer } from "../../studio/QuestionBankDrawer";
@@ -116,6 +117,8 @@ export function QuestionsLogicLayout({
   const [leftOpen, setLeftOpen] = useState(true);
   const [libraryOpen, setLibraryOpen] = useState(false);
   const [reportOpen, setReportOpen] = useState(false);
+  // LOGIC v2 (L2-10f) — the explicit legacy→decider upgrade wizard.
+  const [upgradeOpen, setUpgradeOpen] = useState(false);
   const [focusRuleId, setFocusRuleId] = useState<string | null>(null);
   const [guard, setGuard] = useState<{ names: string[]; title?: string; body?: string } | null>(
     null,
@@ -359,15 +362,28 @@ export function QuestionsLogicLayout({
             </span>
           </>
         ) : (
-          <button
-            type="button"
-            className="qz-btn qz-btn-ghost qz-btn-sm"
-            style={{ fontSize: 12 }}
-            title={`Scoring: ${model === "direct" ? "Direct mapping" : "Weighted scoring"} — click to switch (both models are saved)`}
-            onClick={() => onCommit(swapScoringModel(doc, model === "direct" ? "weighted" : "direct"))}
-          >
-            {model === "direct" ? "→ Direct mapping" : "⚖ Weighted scoring"} <span aria-hidden>⚙</span>
-          </button>
+          <>
+            <button
+              type="button"
+              className="qz-btn qz-btn-ghost qz-btn-sm"
+              style={{ fontSize: 12 }}
+              title={`Scoring: ${model === "direct" ? "Direct mapping" : "Weighted scoring"} — click to switch (both models are saved)`}
+              onClick={() => onCommit(swapScoringModel(doc, model === "direct" ? "weighted" : "direct"))}
+            >
+              {model === "direct" ? "→ Direct mapping" : "⚖ Weighted scoring"} <span aria-hidden>⚙</span>
+            </button>
+            {/* LOGIC v2 (L2-10f) — the explicit per-quiz upgrade wizard for
+                legacy in-flight funnel drafts. */}
+            <button
+              type="button"
+              className="qz-btn qz-btn-ghost qz-btn-sm"
+              style={{ fontSize: 12 }}
+              title="Convert this draft to Decider logic — one deciding question, rule overrides, a single configurable results page"
+              onClick={() => setUpgradeOpen(true)}
+            >
+              ↑ Upgrade to Decider logic
+            </button>
+          </>
         )}
         <span className="qz-save-status" aria-live="polite">
           {isSaving ? (
@@ -535,6 +551,16 @@ export function QuestionsLogicLayout({
 
       {libraryOpen ? (
         <QuestionBankDrawer doc={doc} onCommit={onCommit} onClose={() => setLibraryOpen(false)} />
+      ) : null}
+
+      {upgradeOpen && !deciderMode ? (
+        <UpgradeDeciderModal
+          doc={doc}
+          categories={categories}
+          surface="funnel"
+          onCommit={onCommit}
+          onClose={() => setUpgradeOpen(false)}
+        />
       ) : null}
 
       {reportOpen && deciderMode ? (

@@ -1724,9 +1724,11 @@ body[data-qz] ::selection { background: var(--qz-ink); color: var(--qz-cream); }
   font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.3px;
-  color: var(--ql-gold);
-  background: var(--ql-gold-bg);
-  border: 1px solid var(--ql-gold-border);
+  /* Fallbacks: the badge also renders OUTSIDE the .qz-ql scope (the builder
+     top bar, L2-10f) where the --ql-gold trio is undefined. */
+  color: var(--ql-gold, #a16207);
+  background: var(--ql-gold-bg, #fefce8);
+  border: 1px solid var(--ql-gold-border, #eab308);
   border-radius: 999px;
   padding: 3px 10px;
   white-space: nowrap;
@@ -1909,6 +1911,31 @@ body[data-qz] ::selection { background: var(--qz-ink); color: var(--qz-cream); }
   justify-content: center;
   padding: 24px;
 }
+/* LOGIC v2 (L2-10f) — the legacy→decider upgrade wizard modal (portals to
+   body; shares the report scrim above). */
+.qz-upg-modal {
+  background: #fff;
+  border-radius: 14px;
+  width: min(560px, 100%);
+  max-height: min(84vh, 720px);
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 22px 24px;
+  box-shadow: 0 24px 64px rgba(17, 24, 39, 0.28);
+  color: var(--ql-txt, #111827);
+}
+.qz-upg-list {
+  margin: 0;
+  padding-left: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 13.5px;
+  line-height: 1.45;
+}
+
 .qz-ql-report {
   background: #fff;
   border-radius: 14px;
