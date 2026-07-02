@@ -94,6 +94,9 @@ export function QuestionsLogicLayout({
   const [toast, setToast] = useState<string | null>(null);
   const [pendingScrollId, setPendingScrollId] = useState<string | null>(null);
   const [tableFilter, setTableFilter] = useState<TableFilter>("");
+  // Collapsible left rail — hide the question list so the main area takes the
+  // full width (the owner's "understand the real estate" ask; qz-qb-split twin).
+  const [leftOpen, setLeftOpen] = useState(true);
   const [libraryOpen, setLibraryOpen] = useState(false);
   const [guardNames, setGuardNames] = useState<string[] | null>(null);
 
@@ -281,6 +284,15 @@ export function QuestionsLogicLayout({
         <div className="qz-ql-steplabel">
           Step {stepNumber("question_builder")} of {TOTAL_STEPS} · Questions &amp; Logic
         </div>
+        <button
+          type="button"
+          className="qz-btn qz-btn-ghost qz-btn-sm"
+          aria-expanded={leftOpen}
+          aria-label={leftOpen ? "Collapse the question list" : "Show the question list"}
+          onClick={() => setLeftOpen((v) => !v)}
+        >
+          {leftOpen ? "◀ Hide list" : "▶ Show list"}
+        </button>
         <span style={{ flex: 1 }} />
         <button
           type="button"
@@ -327,8 +339,8 @@ export function QuestionsLogicLayout({
         </button>
       </header>
 
-      {/* ── Body: 260px left + scrolling main ── */}
-      <div className="qz-ql-body">
+      {/* ── Body: collapsible 260px left + scrolling main ── */}
+      <div className={`qz-ql-body${leftOpen ? "" : " is-collapsed"}`}>
         <aside className="qz-ql-left">
           <div className="qz-ql-tabs qz-segmented qz-segmented--fill" role="group" aria-label="Builder, Table, or Flow view">
             <button type="button" aria-pressed={view === "builder"} onClick={() => setView("builder")}>

@@ -322,10 +322,10 @@ body[data-qz] :focus-visible {
 
 /* — Page layout — */
 .qz-page { padding: 40px 48px 96px; max-width: 1280px; margin: 0 auto; }
-/* Wide funnel shell — the create funnel opts in so the two-panel editor stages
-   (Questions, Recommendation) get real estate for a full live preview. Bounded
-   (not edge-to-edge) so single-column stages stay readable. */
-.qz-page.is-wide { max-width: 1760px; }
+/* Wide funnel shell — the create funnel opts in so every stage is FLUID: it
+   expands with the viewport (owner ask: "full screen / expands with the page
+   size so we can better understand the real estate"). No max-width cap. */
+.qz-page.is-wide { max-width: none; }
 .qz-page-header { margin-bottom: 36px; }
 
 /* — Funnel two-panel editor split (config left · live preview right) with a
@@ -1297,12 +1297,21 @@ body[data-qz] ::selection { background: var(--qz-ink); color: var(--qz-cream); }
 
 .qz-ql-body {
   display: grid;
-  grid-template-columns: 260px minmax(0, 1fr);
+  /* Collapsible left rail: --ql-left-width animates to 0 (the .qz-qb-split
+     pattern) so the cards/table/flow main takes the full real estate. */
+  grid-template-columns: var(--ql-left-width, 260px) minmax(0, 1fr);
   height: clamp(520px, calc(100vh - 300px), 880px);
   border: 1px solid var(--ql-border);
   border-radius: 14px;
   overflow: hidden;
   background: #fff;
+  transition: grid-template-columns 180ms var(--qz-ease, ease);
+}
+.qz-ql-body.is-collapsed { --ql-left-width: 0px; }
+.qz-ql-body.is-collapsed > .qz-ql-left {
+  opacity: 0;
+  pointer-events: none;
+  border-right: 0;
 }
 
 /* ── Left panel ── */
