@@ -20,7 +20,9 @@ export interface BucketRow {
   name: string;
 }
 
-const DEFAULT_HEADLINES = new Set(["", "Your match", "Your results", "Result", "Your pick"]);
+// Exported so the upgrade wizard (proposeDeciderConversion) shares ONE
+// definition of "a headline with no per-page identity" — a copy would drift.
+export const DEFAULT_HEADLINES = new Set(["", "Your match", "Your results", "Result", "Your pick"]);
 
 function ensureCategoryLadder(
   ladder: MatchLadderStrategy[],
