@@ -26,6 +26,9 @@ const RUNG_LABEL: Record<ResolvedRung, string> = {
   collection: "a collection filter",
   metafield: "a metafield match",
   fallback: "the fallback collection",
+  // LOGIC v2 — only ever produced for decider-model docs.
+  decider: "the deciding question's answer",
+  decider_rule: "an advanced rule override",
 };
 
 export function PathTester({

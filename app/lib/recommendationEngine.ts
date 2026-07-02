@@ -1,5 +1,6 @@
 import type { Quiz, ResultData, MatchLadderStrategy } from "./quizSchema";
 import type { z } from "zod";
+import { resolveTarget, settingsForTarget, targetProducts } from "./recommendDecider";
 
 type QuizDoc = z.infer<typeof Quiz>;
 type ResultDataT = z.infer<typeof ResultData>;
@@ -45,6 +46,13 @@ export interface RecommendationInput {
   // Phase J: baked per-answer conversion weights (publishedJson.answer_weights).
   // Absent/empty → classic flat tag scoring, bit-for-bit.
   answerWeights?: Record<string, number>;
+  // LOGIC v2 (L2-2) — the baked target data (publish-time fields, like
+  // product_index/answer_weights), consumed ONLY when quiz.logic_model is
+  // "decider". targetProductIdsMap: targetId → ORDERED member ids (the order
+  // IS the merchant's Shopify collection sort — the collection_order signal).
+  // targetIndex: targetId → shape metadata. Absent on every legacy call site.
+  targetProductIdsMap?: Record<string, string[]>;
+  targetIndex?: Record<string, { type: "product" | "collection" | "tag"; name?: string }>;
 }
 
 // Deterministic recommendation engine. Spec §3.4.
@@ -99,7 +107,9 @@ export interface ExplainedProduct extends RecommendedProduct {
   matched_tags: string[];
 }
 
-export type ResolvedRung = LadderStrategy | "fallback";
+// "decider"/"decider_rule" are the LOGIC v2 resolution mechanisms (direct
+// mapping vs an AND-rule override) — only ever produced for decider docs.
+export type ResolvedRung = LadderStrategy | "fallback" | "decider" | "decider_rule";
 
 export interface ExplainedRecommendation {
   /** Final capped order — exactly what recommendForResult returns. */
@@ -316,6 +326,38 @@ export function recommendForResultExplained(
   if (!resultNode || resultNode.type !== "result") {
     return { products: [], rungUsed: null, poolSize: 0, oosSwapped: false, tagBag: {} };
   }
+
+  // ── LOGIC v2 dispatch (L2-2) ──────────────────────────────────────────────
+  // Decider docs resolve ONE target (rules → the deciding answer's mapping)
+  // and rank WITHIN it by real signals — no tag scoring, no ladder. Gated on a
+  // field NO legacy doc possesses, so every existing quiz takes the walkLadder
+  // path below verbatim. capOverride doesn't apply (gridMax caps the grid;
+  // there is no "deeper pool" concept in the 1:1 model).
+  if (quiz.logic_model === "decider") {
+    const resolved = resolveTarget(selectedAnswerIds, quiz);
+    if (!resolved) {
+      // No rule matched + no decider answer mapping → the rec-page fallback
+      // layer owns what renders (§6). Impossible post-validation (V1/V2).
+      return { products: [], rungUsed: null, poolSize: 0, oosSwapped: false, tagBag: {} };
+    }
+    const config = settingsForTarget(quiz.rec_page_settings, resolved.targetId);
+    const split = targetProducts({
+      targetId: resolved.targetId,
+      targetShape: input.targetIndex?.[resolved.targetId]?.type,
+      config,
+      productIndex,
+      targetProductIdsMap: input.targetProductIdsMap ?? {},
+    });
+    const ordered = split.hero ? [split.hero, ...split.grid] : split.grid;
+    return {
+      products: ordered.map((p) => ({ ...p, score: 0, matched_tags: [] })),
+      rungUsed: resolved.matchedRuleId ? "decider_rule" : "decider",
+      poolSize: split.poolSize,
+      oosSwapped: false,
+      tagBag: {},
+    };
+  }
+  // ──────────────────────────────────────────────────────────────────────────
 
   const data = resultNode.data;
   const resultPage = quiz.results_pages.find((r) => r.id === resultNodeId);
