@@ -1,21 +1,25 @@
 // L2-9 live-verify — RUNTIME CUTOVER on the standalone studio deploy.
 // 1. Pins the legacy /q.json byte-baseline (dual-model invariant).
-// 2. Seeds a FRESH funnel draft via the real front door (the app graduates any
-//    finished probe drafts itself — its designed self-heal), creates two
+// 2. Converts the program's own (now-graduated) probe draft cmqwd15f… into the
+//    published decider smoke fixture: backs up its draft doc, re-groups two
 //    quiz-scoped targets via the manual grouping API, publishes a minimal
-//    decider doc through the REAL publish intent (bake + V-gates included),
-//    then WALKS /q end-to-end: intro → decider answer → §7.1 capture (email
-//    mandatory, no skip) → §7 loading interstitial → reveal (hero badge +
-//    grid + defaults headline), sniffing /captures + /sessions + /events.
+//    decider doc through the REAL publish intent (bake + V-gates), then WALKS
+//    /q end-to-end: intro → decider answer → §7.1 capture (email mandatory,
+//    no skip) → §7 loading interstitial → reveal (hero badge + grid +
+//    defaults headline), sniffing /captures + /sessions + /events.
 // 3. Re-diffs the legacy /q.json byte-baseline after the walk.
 // The published smoke quiz REMAINS on the deploy as the program's live decider
-// fixture (named "L2-9 decider smoke") — deliberate, for L2-10..12 verification.
+// fixture (renamed "L2-9 decider smoke") — deliberate, for L2-10..12. The
+// original draft doc is saved locally (see BACKUP path in the output).
 import { chromium } from "playwright";
 import { createHash } from "node:crypto";
+import { writeFileSync } from "node:fs";
 
 const BASE = "https://quizocalypse-studio.fly.dev";
 const KEY = process.env.STUDIO_ACCESS_TOKEN;
 const LEGACY = "cmqqcb0ao004mqvkwjug7t0ya"; // the byte-pinned published legacy quiz
+const QUIZ = "cmqwd15f0001aqvl19onkpwm6"; // the program's probe draft (graduated)
+const BACKUP = `${process.env.HOME}/.claude/projects/-Users-tylerlepkanich-Desktop-projects-quizocalypse/l2-9-cmqwd15f-draft-backup.json`;
 
 const out = { checks: {}, pageErrors: [], net: { captures: [], sessions: [], events: [] } };
 const ok = (name, v, extra = "") => {
@@ -35,34 +39,42 @@ await page.goto(`${BASE}/studio?key=${KEY}`, { waitUntil: "domcontentloaded" });
 // ── 1. legacy byte-baseline ─────────────────────────────────────────────────
 const legacyBefore = await (await ctx.request.get(`${BASE}/q/${LEGACY}.json`)).text();
 const shaBefore = sha(legacyBefore);
-console.log(`legacy /q.json sha (before walk): ${shaBefore} (${legacyBefore.length} bytes)`);
+console.log(`legacy /q.json sha (before walk): ${shaBefore}`);
 
-// ── 2. fresh funnel draft via the real front door ───────────────────────────
-const resp = await ctx.request.get(`${BASE}/studio/onboarding`, { maxRedirects: 5 });
-const landedUrl = resp.url();
-const quizId = (landedUrl.match(/onboarding\/([a-z0-9]+)/) ?? [])[1];
-console.log(`front door landed: ${landedUrl} → quiz ${quizId}`);
-
-const funnelData = `${BASE}/studio/onboarding/${quizId}?_data=routes%2Fstudio.onboarding_.%24quizId`;
-const funnelJson = await (await ctx.request.get(funnelData)).json();
-const isFresh = funnelJson.name === "New quiz" && funnelJson.stage === "grouping";
-ok("fresh grouping draft seeded (not a hijacked in-flight draft)", isFresh, `name=${funnelJson.name} stage=${funnelJson.stage}`);
-if (!isFresh) {
-  console.log("ABORT: front door resumed an existing mid-funnel draft — refusing to hijack it.");
+// ── 2. back up the probe draft's current doc, guard it's still unpublished ──
+const builderData = `${BASE}/studio/${QUIZ}?_data=routes%2Fstudio_.%24id`;
+const loaded = await (await ctx.request.get(builderData)).json();
+ok("probe draft loads", Boolean(loaded.quizId), `name=${loaded.name} status=${loaded.status} v${loaded.version}`);
+// Idempotent re-run: the fixture is already published as our smoke quiz →
+// skip setup, walk it. Published as anything ELSE → hard abort (never
+// overwrite a live quiz that isn't ours).
+const alreadyOurs = loaded.status === "published" && loaded.name === "L2-9 decider smoke";
+if (loaded.status === "published" && !alreadyOurs) {
+  console.log("ABORT: quiz is published under another name — refusing to overwrite.");
   await browser.close();
   process.exit(1);
 }
+if (!alreadyOurs) {
+  writeFileSync(BACKUP, JSON.stringify({ name: loaded.name, doc: loaded.rawJson ?? loaded.doc }, null, 2));
+  console.log(`draft backup written: ${BACKUP}`);
+}
 
-// product ids for targets — from the grouping stage's catalog payload.
-const products = (funnelJson.catalog?.products ?? []).map((p) => p.productId ?? p.id).filter(Boolean);
+// product ids for targets
+const products = (loaded.productIndex ?? []).map((p) => p.product_id).filter(Boolean);
 ok("catalog has products for targets", products.length >= 6, `${products.length} products`);
+// fallback_collection_id is schema-required min(1) on every result node (a
+// legacy field the decider engine ignores) — use a real synced collection.
+const fallbackCol =
+  loaded.collections?.[0]?.collectionId ?? loaded.collections?.[0]?.id ?? "";
+ok("have a collection id for the legacy fallback field", Boolean(fallbackCol), fallbackCol);
 
-// ── 3. quiz-scoped targets via the manual grouping API ─────────────────────
+// ── 3+4. targets + publish — skipped when the fixture is already published ──
+if (!alreadyOurs) {
 const groupResp = await ctx.request.post(`${BASE}/api/categories/group`, {
   headers: { "content-type": "application/json" },
   data: {
     source: "manual",
-    quizId,
+    quizId: QUIZ,
     groups: [
       { name: "L2-9 Boards", productIds: products.slice(0, 4) },
       { name: "L2-9 Accessories", productIds: products.slice(4, 6) },
@@ -70,13 +82,13 @@ const groupResp = await ctx.request.post(`${BASE}/api/categories/group`, {
   },
 });
 const groupJson = await groupResp.json();
-const cats = groupJson.categories ?? groupJson.rows ?? [];
+const cats = groupJson.categories ?? [];
 ok("manual grouping created 2 quiz-scoped targets", groupResp.ok() && cats.length === 2, JSON.stringify(cats.map((c) => c.id)));
 const [catA, catB] = cats;
 
-// ── 4. publish a minimal decider doc through the REAL publish intent ───────
+// ── 4. publish the minimal decider doc through the REAL publish intent ─────
 const doc = {
-  quiz_id: quizId,
+  quiz_id: QUIZ,
   status: "draft",
   scope: { collection_ids: [] },
   logic_model: "decider",
@@ -106,7 +118,9 @@ const doc = {
       id: "r1",
       type: "result",
       position: { x: 0, y: 240 },
-      data: { headline: "Your match" },
+      // fallback_collection_id is schema-REQUIRED min(1) (legacy field the
+      // decider engine never reads) — satisfied with a real collection id.
+      data: { headline: "Your match", fallback_collection_id: fallbackCol },
     },
   ],
   edges: [
@@ -117,12 +131,10 @@ const doc = {
   // Sparse settings → read-time defaults: captureEmail ON, gridMax 3,
   // headline "Your perfect match", heroLogic collection_order.
   rec_page_settings: { global: {}, overrides: {} },
-  // Mark the funnel session finished so the front door graduates (never
-  // resumes) this smoke quiz on the owner's next visit.
+  // Finished session → the funnel front door never resumes this fixture.
   build_session: { stage: "done", built: true },
 };
 
-const builderData = `${BASE}/studio/${quizId}?_data=routes%2Fstudio_.%24id`;
 const renameResp = await ctx.request.post(builderData, { form: { intent: "rename", name: "L2-9 decider smoke" } });
 ok("renamed to 'L2-9 decider smoke'", renameResp.ok());
 
@@ -132,10 +144,11 @@ const pubResp = await ctx.request.post(builderData, {
 let pubJson = {};
 try { pubJson = await pubResp.json(); } catch { /* html error page */ }
 ok("publish succeeded (bake + V1–V6 gates)", pubResp.ok() && pubJson.ok !== false, JSON.stringify(pubJson).slice(0, 160));
+} else {
+  console.log("fixture already published — skipping setup, walking it");
+}
 
-// confirm the decider model landed on the public wire (the target map itself
-// is loader-internal — the runtime walk below is its proof).
-const pubWireText = await (await ctx.request.get(`${BASE}/q/${quizId}.json`)).text();
+const pubWireText = await (await ctx.request.get(`${BASE}/q/${QUIZ}.json`)).text();
 ok("published wire carries logic_model=decider", pubWireText.includes('"logic_model":"decider"'));
 
 // ── 5. walk /q: intro → decider → capture → loading → reveal ────────────────
@@ -144,20 +157,18 @@ page.on("request", (r) => {
   if (r.method() !== "POST") return;
   if (u.endsWith("/captures")) out.net.captures.push(r.postData()?.slice(0, 300));
   if (u.endsWith("/sessions")) out.net.sessions.push(r.postData()?.slice(0, 400));
-  if (u.endsWith("/events")) out.net.events.push(r.postData()?.slice(0, 600));
+  if (u.endsWith("/events")) out.net.events.push(r.postData()?.slice(0, 4000));
 });
 
-await page.goto(`${BASE}/q/${quizId}`, { waitUntil: "domcontentloaded" });
+await page.goto(`${BASE}/q/${QUIZ}`, { waitUntil: "domcontentloaded" });
 await page.waitForTimeout(600);
-ok("intro renders", await page.getByText("Find your setup").isVisible());
-// Minimal chrome may relabel the intro CTA — click the named button if
-// present, else the first visible button on the intro.
+ok("intro renders", await page.getByText("Find your setup").first().isVisible());
 const startBtn = page.getByRole("button", { name: /start/i }).first();
 if (await startBtn.isVisible().catch(() => false)) await startBtn.click();
 else await page.locator("button:visible").first().click();
 await page.waitForTimeout(400);
 
-ok("decider question renders", await page.getByText("What are you shopping for?").isVisible());
+ok("decider question renders", await page.getByText("What are you shopping for?").first().isVisible());
 await page.getByText("A snowboard", { exact: false }).first().click();
 // minimal chrome = select-then-Next; classic auto-advances. Handle both.
 const nextBtn = page.getByRole("button", { name: "Next" });
@@ -165,31 +176,35 @@ if (await nextBtn.isVisible().catch(() => false)) await nextBtn.click();
 await page.waitForTimeout(600);
 
 // §7.1 capture — email mandatory, NO skip affordance
-const captureHead = await page.getByText("Your results are ready").isVisible().catch(() => false);
-ok("capture screen renders (capture_headline)", captureHead);
+ok("capture screen renders (capture_headline)", await page.getByText("Your results are ready").first().isVisible().catch(() => false));
 ok("capture has NO skip link (email mandatory)", !(await page.getByText("Skip", { exact: true }).isVisible().catch(() => false)));
 const emailInput = page.locator('input[type="email"]');
 ok("email input present", await emailInput.isVisible().catch(() => false));
-// Continue disabled until a valid email
 const contBtn = page.getByRole("button", { name: "Continue" });
 ok("Continue disabled before email", await contBtn.isDisabled().catch(() => false));
 await emailInput.fill("l2-9-smoke@example.com");
 await contBtn.click();
 
-// §7 loading interstitial (~1.6s, role=status spinner)
-const loading = await page.getByRole("status").isVisible().catch(() => false);
-ok("loading interstitial renders (role=status)", loading);
+// §7 loading interstitial (~1.6s, role=status spinner) — it mounts only AFTER
+// the capture POST resolves, so wait for it rather than sampling instantly.
+const loadingSeen = await page
+  .getByRole("status")
+  .waitFor({ state: "visible", timeout: 4000 })
+  .then(() => true)
+  .catch(() => false);
+ok("loading interstitial renders (role=status)", loadingSeen);
 await page.waitForTimeout(2200);
 
 // reveal — defaults headline + hero badge + product cards
-ok("reveal headline (spec default 'Your perfect match')", await page.getByText("Your perfect match").isVisible().catch(() => false));
+ok("reveal headline (spec default 'Your perfect match')", await page.getByText("Your perfect match").first().isVisible().catch(() => false));
 ok("hero badge renders", await page.getByText("Our top pick for you", { exact: false }).isVisible().catch(() => false));
-const cardImgsOrTitles = await page.locator("img[loading='lazy'], a:has-text('Shop now'), button:has-text('Add to cart')").count();
-ok("product card(s) render", cardImgsOrTitles > 0, `${cardImgsOrTitles} card affordances`);
+const cardAffordances = await page.locator("img[loading='lazy'], a:has-text('Shop now'), button:has-text('Add to cart')").count();
+ok("product card(s) render", cardAffordances > 0, `${cardAffordances} card affordances`);
 await page.screenshot({ path: "e2e/shots/l2-9-reveal.png", fullPage: true });
 
-// give beacons a moment, then check the network sniffs
-await page.waitForTimeout(1500);
+// The analytics client batches events and flushes every 5s — wait one full
+// flush window before asserting the /events payload.
+await page.waitForTimeout(6000);
 ok("capture POSTed to /captures", out.net.captures.length > 0, out.net.captures[0] ?? "");
 ok("session POSTed to /sessions", out.net.sessions.length > 0, out.net.sessions[0] ?? "");
 const eventsBlob = out.net.events.join(" ");
