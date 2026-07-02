@@ -83,12 +83,18 @@ export async function action({ params, request }: ActionFunctionArgs) {
     (quiz.publishedJson as { product_index?: IndexedProduct[] }).product_index ?? [];
   const allowed = new Set(productIndex.map((p) => p.product_id));
   const scopedIds = requested.filter((pid) => allowed.has(pid));
-  if (scopedIds.length === 0) return json({ quantities: {} });
+  if (scopedIds.length === 0) return json({ quantities: {} }, { headers: CORS });
 
-  const rows = await prisma.product.findMany({
-    where: { productId: { in: scopedIds } },
-    select: { productId: true, variants: true },
-  });
+  let rows: { productId: string; variants: unknown }[];
+  try {
+    rows = await prisma.product.findMany({
+      where: { productId: { in: scopedIds } },
+      select: { productId: true, variants: true },
+    });
+  } catch (err) {
+    console.error("[inventory] product lookup failed", err instanceof Error ? err.message : err);
+    return json({ error: "lookup failed" }, { status: 500, headers: CORS });
+  }
 
   // Product-level available quantity = sum of variant quantities (clamped at 0,
   // so an oversold variant can't drag a sibling's stock negative). A product
@@ -108,5 +114,5 @@ export async function action({ params, request }: ActionFunctionArgs) {
     if (tracked) quantities[row.productId] = total;
   }
 
-  return json({ quantities });
+  return json({ quantities }, { headers: CORS });
 }
