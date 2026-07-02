@@ -12,7 +12,7 @@ import { dialsToBuildDirectives, autoQuizName } from "./dialDirectives";
 import { runAiOnboardingBuild } from "./onboardingBuild.server";
 import type { DesignTokensT } from "./designTokens";
 import type { GroupingProduct } from "./categoryGrouping";
-import type { QuizType, RichTemplateOption } from "./quizSchema";
+import type { QuizType, RichTemplateOption, Quiz as QuizDocT } from "./quizSchema";
 
 // ════════════════════════════════════════════════════════════════════════════
 // Step 2 — server orchestration for the two-tier template generation. Tier 1
@@ -361,8 +361,22 @@ async function buildQuizFromPicked(
     where: { id: quizId },
     select: { draftJson: true },
   });
-  const draftTokens =
-    (draftDoc?.draftJson as { design_tokens?: DesignTokensT } | null)?.design_tokens ?? null;
+  const draftRaw = draftDoc?.draftJson as {
+    design_tokens?: DesignTokensT;
+    logic_model?: string;
+    rec_page_settings?: unknown;
+  } | null;
+  const draftTokens = draftRaw?.design_tokens ?? null;
+  // LOGIC v2 (L2-10c) — the CREATION stamp lives on the draft; thread it into
+  // the build here so every build intent (shape-continue / shape-goal-build /
+  // pick-template / use-saved-template / retry-gen) preserves it uniformly
+  // through runAiOnboardingBuild's re-seed. Legacy drafts thread nothing.
+  // The draft's Step-4 config rides along too (the design_tokens pattern) so a
+  // regenerate never wipes the merchant's capture/fallback setup.
+  const logicModel = draftRaw?.logic_model === "decider" ? ("decider" as const) : undefined;
+  const recPageSettings = logicModel
+    ? (draftRaw?.rec_page_settings as QuizDocT["rec_page_settings"] | undefined)
+    : undefined;
 
   return runAiOnboardingBuild({
     shopId,
@@ -377,6 +391,8 @@ async function buildQuizFromPicked(
       mixed_input_types: false,
     },
     experienceType: rich.experience_type,
+    ...(logicModel ? { logicModel } : {}),
+    ...(recPageSettings ? { recPageSettings } : {}),
     ...(enabledBuckets.length ? { preResolvedBuckets: enabledBuckets } : {}),
     directionAngle: rich.angle,
     sampleQuestionSeeds: rich.sample_questions,

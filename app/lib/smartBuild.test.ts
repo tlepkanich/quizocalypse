@@ -6,6 +6,7 @@ import { buildSeedQuiz } from "./seedQuiz";
 import { validateQuiz } from "./quizValidation";
 import {
   applyQuestionFlow,
+  applyDeciderQuestionFlow,
   normalizeQuestionSpec,
   type GeneratedQuestionFlow,
   type SmartBuildBucket,
@@ -483,5 +484,146 @@ describe("applyQuestionFlow with no buckets (E2)", () => {
     expect(end).toBeTruthy();
     // The chain reaches the end node (validateQuiz finds no dead ends).
     expect(validateQuiz(out)).toEqual([]);
+  });
+});
+
+// LOGIC v2 (L2-10c) — the decider sibling merge.
+describe("applyDeciderQuestionFlow", () => {
+  const deciderBuckets = [
+    { id: "cat_dry", tags: ["dry"] },
+    { id: "cat_oily", tags: ["oily"] },
+  ];
+  const generatedDecider = {
+    questions: [
+      {
+        text: "What's your skin type?",
+        question_type: "single_select" as const,
+        answers: [
+          { text: "Dry", tags: ["dry"] },
+          { text: "Oily", tags: ["oily"] },
+        ],
+      },
+      {
+        text: "How often do you moisturize?",
+        question_type: "single_select" as const,
+        answers: [
+          { text: "Daily", tags: [] },
+          { text: "Rarely", tags: [] },
+        ],
+      },
+    ],
+    email_gate: { headline: "Get your results", subtext: "Email first" },
+  };
+
+  function build() {
+    const seed = Quiz.parse({ ...buildSeedQuiz("Decider"), logic_model: "decider" });
+    return applyDeciderQuestionFlow(seed, generatedDecider as never, deciderBuckets, FB);
+  }
+
+  it("builds a valid decider doc: one decider (required + mapped), qualifiers, ONE result", () => {
+    const out = build();
+    expect(() => Quiz.parse(out)).not.toThrow();
+    expect(out.logic_model).toBe("decider");
+
+    const questions = out.nodes.filter((n) => n.type === "question");
+    const deciders = questions.filter((n) => n.type === "question" && n.data.role === "decides");
+    expect(deciders).toHaveLength(1); // V1
+    const decider = deciders[0]!;
+    if (decider.type !== "question") throw new Error("unreachable");
+    expect(decider.data.required).toBe(true); // V3
+    expect(decider.data.text).toBe("What's your skin type?"); // 2 distinct targets beats 0
+    // EVERY deciding answer carries a target (V4 by construction).
+    expect(decider.data.answers.every((a) => Boolean(a.target_id))).toBe(true);
+    expect(decider.data.answers.map((a) => a.target_id)).toEqual(["cat_dry", "cat_oily"]);
+    // Qualifiers assign nothing.
+    const qualifier = questions.find((n) => n.type === "question" && n.data.role === "qualifier");
+    expect(qualifier).toBeTruthy();
+    if (qualifier?.type === "question") {
+      expect(qualifier.data.answers.every((a) => !a.target_id)).toBe(true);
+    }
+    // NO points anywhere (decider docs are free of legacy scoring).
+    expect(
+      questions.every(
+        (n) => n.type === "question" && n.data.answers.every((a) => !a.points),
+      ),
+    ).toBe(true);
+
+    // ONE result node, seeded with the required fallback; no branch; no end.
+    const results = out.nodes.filter((n) => n.type === "result");
+    expect(results).toHaveLength(1);
+    if (results[0]!.type === "result") {
+      expect(results[0]!.data.fallback_collection_id).toBe(FB);
+    }
+    expect(out.nodes.some((n) => n.type === "branch")).toBe(false);
+
+    // The generated email gate is DROPPED (§7 capture owns contact).
+    expect(out.nodes.some((n) => n.type === "email_gate")).toBe(false);
+
+    // Sparse rec_page_settings seeded with the §6 fallback.
+    expect(out.rec_page_settings?.global).toEqual({ emptyFallbackCol: FB });
+
+    // The whole doc passes validation (V1–V4 + structure).
+    expect(validateQuiz(out)).toEqual([]);
+  });
+
+  it("is idempotent — re-running rebuilds the same shape without duplicates", () => {
+    const once = build();
+    const twice = applyDeciderQuestionFlow(once, generatedDecider as never, deciderBuckets, FB);
+    expect(twice.nodes.filter((n) => n.type === "result")).toHaveLength(1);
+    expect(twice.nodes.filter((n) => n.type === "question")).toHaveLength(2);
+    expect(validateQuiz(twice)).toEqual([]);
+  });
+});
+
+// L2-10c review fixes — the coercion + threaded-settings guarantees.
+describe("applyDeciderQuestionFlow — review-hardened edges", () => {
+  const deciderBuckets = [
+    { id: "cat_dry", tags: ["dry"] },
+    { id: "cat_oily", tags: ["oily"] },
+  ];
+
+  it("no eligible decider → COERCES the first non-freeform question to single_select", () => {
+    const seed = Quiz.parse({ ...buildSeedQuiz("Decider"), logic_model: "decider" });
+    const allMulti = {
+      questions: [
+        {
+          text: "Pick all that apply",
+          question_type: "multi_select" as const,
+          answers: [
+            { text: "Dry", tags: ["dry"] },
+            { text: "Oily", tags: ["oily"] },
+          ],
+        },
+      ],
+    };
+    const out = applyDeciderQuestionFlow(seed, allMulti as never, deciderBuckets, FB);
+    const q = out.nodes.find((n) => n.type === "question");
+    if (q?.type !== "question") throw new Error("question missing");
+    expect(q.data.question_type).toBe("single_select"); // coerced
+    expect(q.data.role).toBe("decides"); // elected
+    expect(q.data.answers.every((a) => Boolean(a.target_id))).toBe(true);
+    expect(validateQuiz(out)).toEqual([]); // V1 satisfied — never a silent publish failure
+  });
+
+  it("respects settings the caller threaded onto the seed (never overwrites merchant config)", () => {
+    const seed = Quiz.parse({
+      ...buildSeedQuiz("Decider"),
+      logic_model: "decider",
+      rec_page_settings: { global: { capturePhone: true }, overrides: {} },
+    });
+    const generated = {
+      questions: [
+        {
+          text: "Skin type?",
+          question_type: "single_select" as const,
+          answers: [
+            { text: "Dry", tags: ["dry"] },
+            { text: "Oily", tags: ["oily"] },
+          ],
+        },
+      ],
+    };
+    const out = applyDeciderQuestionFlow(seed, generated as never, deciderBuckets, FB);
+    expect(out.rec_page_settings?.global).toEqual({ capturePhone: true });
   });
 });

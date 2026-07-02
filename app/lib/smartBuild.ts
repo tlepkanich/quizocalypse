@@ -1,5 +1,7 @@
 import type { Quiz as QuizDoc, QuestionType, MatchLadderStrategy } from "./quizSchema";
+import { isFreeformType } from "./quizSchema";
 import { seedPointsFromCategories } from "./categoryScoring";
+import { mapAnswersToTargets, pickDeciderIndex, type MappingBucket } from "./deciderMapping";
 
 // ───────────────────────────────────────────────────────────────────────────
 // Smart Build merge (product-first AI question generation, Studio Step 4).
@@ -324,4 +326,154 @@ export function applyQuestionFlow(
   });
 
   return { ...doc, nodes: finalNodes, edges };
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// LOGIC v2 (L2-10c) — the DECIDER sibling of applyQuestionFlow. One-decider
+// docs have a fundamentally different shape: ONE deciding question whose
+// answers map to recommendation TARGETS (Step-1 Category ids), qualifier
+// questions that assign nothing, and ONE result node as the reveal terminus —
+// no routing branch, no points, no per-bucket result pages. Contact capture is
+// owned by the §7 reveal capture screen, so any generated/manual email gate is
+// DROPPED (a second email wall would double-gate shoppers). Pure + idempotent
+// (sb_-owned nodes rebuilt on re-run); the deterministic mapper — not the AI —
+// owns answer→target correctness (V4 by construction).
+// ════════════════════════════════════════════════════════════════════════════
+
+/** Content types the decider chain re-threads. email_gate is deliberately
+ *  excluded (the reveal capture owns contact) and end/result are excluded
+ *  (the single sb_ result node is the terminus). */
+const DECIDER_KEPT_CONTENT = new Set(["message", "ask_ai", "integration", "product_cards"]);
+
+export function applyDeciderQuestionFlow(
+  doc: QuizDoc,
+  generated: GeneratedQuestionFlow,
+  buckets: MappingBucket[],
+  fallbackCollectionId: string,
+): QuizDoc {
+  const intro = doc.nodes.find((n) => n.type === "intro");
+  const introId = intro?.id ?? null;
+
+  // The decider build OWNS questions, routing, and the reveal terminus: strip
+  // questions, branches, ALL result/end/email_gate nodes, and prior sb_ output.
+  // Keep the intro + re-threadable manual content steps.
+  const nodes: QuizNode[] = doc.nodes.filter(
+    (n) =>
+      n.id === introId || (!isSb(n.id) && n.type !== "question" && n.type !== "branch" &&
+        n.type !== "result" && n.type !== "end" && n.type !== "email_gate"),
+  );
+  const edges: QuizEdge[] = [];
+  const keptContent = nodes.filter(
+    (n) => n.id !== introId && DECIDER_KEPT_CONTENT.has(n.type),
+  );
+  // Anything kept that isn't intro or re-threadable content would strand — drop it.
+  const keepIds = new Set([...(introId ? [introId] : []), ...keptContent.map((n) => n.id)]);
+  const chainNodes: QuizNode[] = nodes.filter((n) => keepIds.has(n.id));
+
+  const baseX = intro?.position.x ?? 0;
+  const y = intro?.position.y ?? 0;
+  let col = 1;
+  const xAt = (c: number) => baseX + c * 320;
+
+  let prevId: string | null = introId;
+  const connect = (targetId: string) => {
+    if (prevId) edges.push({ id: rid("e"), source: prevId, target: targetId });
+    prevId = targetId;
+  };
+  for (const c of keptContent) connect(c.id);
+
+  if (generated.welcome_message) {
+    const id = rid("m");
+    chainNodes.push({
+      id,
+      type: "message",
+      position: { x: xAt(col++), y },
+      data: { text: generated.welcome_message.text, supports_merge_tags: true },
+    } as QuizNode);
+    connect(id);
+  }
+
+  // Type sanity (BIC P3), then the deterministic decider pick + answer→target
+  // mapping. NOTE: generated.email_gate is intentionally ignored here.
+  const questions = generated.questions.map(normalizeQuestionSpec);
+  let deciderIdx = pickDeciderIndex(questions, buckets);
+  // No eligible decider (every question multi_select/freeform — the prompt
+  // only steers, it can't guarantee): COERCE the first non-freeform question
+  // to single_select and elect it, so the built doc passes V1 instead of
+  // silently failing at publish. An all-freeform flow elects nothing — the
+  // Step-3 no-decider guard then walks the merchant through promoting one.
+  if (deciderIdx === -1) {
+    const coercible = questions.findIndex((q) => !isFreeformType(q.question_type));
+    if (coercible >= 0) {
+      questions[coercible] = { ...questions[coercible]!, question_type: "single_select" };
+      deciderIdx = coercible;
+    }
+  }
+  const eduIdx = questions.findIndex(
+    (q) => typeof q.education_card_before === "string" && q.education_card_before.trim().length > 0,
+  );
+  questions.forEach((q, i) => {
+    const isDecider = i === deciderIdx;
+    const targets = isDecider ? mapAnswersToTargets(q.answers, buckets) : [];
+    const answers = q.answers.map((a, j) => ({
+      id: rid("a"),
+      text: a.text,
+      tags: a.tags,
+      edge_handle_id: rid("h"),
+      ...(isDecider && targets[j] ? { target_id: targets[j] } : {}),
+      ...(a.collection_filter ? { collection_filter: a.collection_filter } : {}),
+      ...(a.image_url ? { image_url: a.image_url } : {}),
+    }));
+    chainNodes.push({
+      id: `sb_q_${i + 1}`,
+      type: "question",
+      position: { x: xAt(col++), y },
+      data: {
+        text: q.text,
+        question_type: q.question_type,
+        // The deciding question is REQUIRED (V3); qualifiers keep the spec's own choice.
+        required: isDecider ? true : q.required ?? true,
+        role: isDecider ? "decides" : "qualifier",
+        ...(i === eduIdx && q.education_card_before
+          ? { education_card_before: q.education_card_before.trim() }
+          : {}),
+        ...(q.section_label?.trim() ? { section_label: q.section_label.trim().slice(0, 40) } : {}),
+        ...(q.helper_text?.trim() ? { helper_text: q.helper_text.trim().slice(0, 160) } : {}),
+        ...(q.max_selections !== undefined ? { max_selections: q.max_selections } : {}),
+        answers,
+        show_preview_after: false,
+      },
+    } as QuizNode);
+    connect(`sb_q_${i + 1}`);
+  });
+
+  // The ONE reveal terminus. The v2 runtime renders headline/copy from
+  // rec_page_settings — the node's legacy fields just satisfy the schema
+  // (fallback_collection_id is required min(1), unread by the decider engine).
+  const resultId = "sb_result";
+  chainNodes.push({
+    id: resultId,
+    type: "result",
+    position: { x: xAt(col++), y },
+    data: { headline: "Your match", fallback_collection_id: fallbackCollectionId },
+  } as QuizNode);
+  connect(resultId);
+
+  return {
+    ...doc,
+    // Belt + braces against the stamp-loss risk: this flow only ever builds
+    // decider docs, so the output asserts the model even if a caller's seed
+    // lost the creation stamp on a re-seed path.
+    logic_model: "decider",
+    nodes: chainNodes,
+    edges,
+    // Seed the §6 empty-result fallback so the reveal has a safety net out of
+    // the box. The ?? keeps settings the caller threaded onto the seed (the
+    // orchestrator carries the draft's Step-4 config through its re-seed) or
+    // that survive a direct re-run — merchant config is never overwritten.
+    rec_page_settings: doc.rec_page_settings ?? {
+      global: { emptyFallbackCol: fallbackCollectionId },
+      overrides: {},
+    },
+  };
 }

@@ -317,6 +317,11 @@ export interface GenerateQuestionFlowInput {
   websiteText?: string;
   // Experiences E2 — shapes the question style per experience type.
   experienceType?: "product_match" | "personality" | "lead_capture" | "survey";
+  // LOGIC v2 (L2-10c) — steer the flow toward the one-decider shape. QUALITY
+  // only: the deterministic post-process (deciderMapping + the decider merge
+  // in smartBuild) owns correctness regardless of what the AI emits. Absent →
+  // the prompt is byte-identical to before.
+  logicModel?: "decider";
 }
 
 // Per-type prompt addendum (E2). Empty for the historical product_match.
@@ -348,6 +353,22 @@ function experienceAddendum(t?: string): string {
     default:
       return "";
   }
+}
+
+// LOGIC v2 (L2-10c) — the one-decider prompt addendum. Exported for the
+// byte-stability test (absent flag MUST return "" so the legacy system prompt
+// is character-identical). The tool schema / Zod parsing / retries are
+// untouched — this only steers content quality.
+export function deciderAddendum(m?: "decider"): string {
+  if (m !== "decider") return "";
+  return (
+    "\nLOGIC MODEL: ONE-DECIDER. Exactly ONE question (prefer an early one) should " +
+    "directly ask WHICH outcome bucket fits the shopper — single_select, roughly one " +
+    "answer per bucket, each answer's tags matching that bucket's routing tags so it " +
+    "maps 1:1 to a bucket. Every OTHER question is a qualifier that refines the " +
+    "recommendation but must NOT try to route — keep qualifier answers' tags light. " +
+    "Do NOT include email_gate copy: the results page has its own capture screen."
+  );
 }
 
 // Generate the question flow (questions only — no nodes/edges/ids) for a quiz
@@ -402,6 +423,7 @@ export async function generateQuestionFlow(
   const system =
     QUESTION_FLOW_SYSTEM_PROMPT +
     experienceAddendum(input.experienceType) +
+    deciderAddendum(input.logicModel) +
     buildBrandVoiceAddition(input.brandGuidelines);
 
   let lastIssue: string | undefined;

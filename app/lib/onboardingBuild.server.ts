@@ -12,7 +12,7 @@ import {
 import { CategoryDiscoveryError } from "./categoryDiscover";
 import { reconcileBucketsToResultNodes } from "./bucketReconcile";
 import { generateQuestionFlow, type QuizTone } from "./claude";
-import { applyQuestionFlow, type SmartBuildBucket } from "./smartBuild";
+import { applyQuestionFlow, applyDeciderQuestionFlow, type SmartBuildBucket } from "./smartBuild";
 import { parseBrandGuidelinesSafe, type BrandGuidelines } from "./brandGuidelines";
 import { identityToBrandGuidelines, parseBrandIdentitySafe } from "./brandIdentity";
 
@@ -80,6 +80,17 @@ export interface OnboardingBuildInput {
   tokenPatch?: Partial<DesignTokensT>;
   dialDirectives?: string;
   recOverride?: { max_products: number; oos_behavior: OosBehavior; fallback_collection_id: string };
+  // LOGIC v2 (L2-10c) — build a ONE-DECIDER doc: the seed is stamped
+  // logic_model="decider" (and the stamp survives every persist path, because
+  // this function re-seeds draftJson), the flow takes the bucket path
+  // unconditionally, email_gate is forced OFF (the §7 reveal capture owns
+  // contact), and applyDeciderQuestionFlow wires the flow instead of the
+  // legacy per-bucket branch choreography. Absent → byte-identical legacy build.
+  logicModel?: "decider";
+  // The draft's existing Step-4 config (capture toggles, §6 fallbacks, copy),
+  // threaded through the re-seed exactly like design_tokens — without it a
+  // Shape-step regenerate would silently wipe the merchant's rec-page setup.
+  recPageSettings?: QuizDoc["rec_page_settings"];
 }
 
 export interface OnboardingBuildResult {
@@ -123,10 +134,27 @@ export async function runAiOnboardingBuild(
   // (the merchant's designTokens if any, else the seed's house tokens).
   const baseTokens = input.designTokens ?? seed.design_tokens;
   const finalTokens = input.tokenPatch ? { ...baseTokens, ...input.tokenPatch } : baseTokens;
+  // LOGIC v2 — stamp the SEED (not just the final doc): every degraded /
+  // fallback persist path below writes seedDoc or a derivative, so the stamp
+  // can never be lost mid-build (the stamp-loss risk).
+  const decider = input.logicModel === "decider";
   const seedDoc: QuizDoc =
-    input.designTokens || input.tokenPatch
-      ? Quiz.parse({ ...seed, design_tokens: finalTokens })
+    input.designTokens || input.tokenPatch || decider
+      ? Quiz.parse({
+          ...seed,
+          design_tokens: finalTokens,
+          ...(decider ? { logic_model: "decider" as const } : {}),
+          // Carry the merchant's Step-4 config through the re-seed (the
+          // design_tokens pattern); applyDeciderQuestionFlow's ?? guard then
+          // keeps it instead of seeding fresh defaults.
+          ...(decider && input.recPageSettings
+            ? { rec_page_settings: input.recPageSettings }
+            : {}),
+        })
       : seed;
+  // §7 — the decider reveal owns contact capture; a generated email gate would
+  // double-gate shoppers, so force the flow flag off for decider builds.
+  const flow = decider ? { ...input.flow, email_gate: false } : input.flow;
   const quizId =
     input.quizId ??
     (
@@ -138,7 +166,9 @@ export async function runAiOnboardingBuild(
   // Experiences E2 — survey/lead_capture don't need the catalog at all:
   // generate questions straight onto the seed (no buckets, no result pages;
   // applyQuestionFlow wires questions → end when no results exist).
-  if (xtype === "survey" || xtype === "lead_capture") {
+  // LOGIC v2 — decider builds ALWAYS take the bucket path below (the funnel
+  // supplies preResolvedBuckets; a bucketless decider doc can't pass V1).
+  if ((xtype === "survey" || xtype === "lead_capture") && !decider) {
     const shopRow = await prisma.shop.findUnique({
       where: { id: shopId },
       select: { brandGuidelines: true, brandIdentity: true },
@@ -151,7 +181,7 @@ export async function runAiOnboardingBuild(
         questionCount: input.questionCount,
         catalogSummary: "",
         buckets: [],
-        flow: input.flow,
+        flow,
         tone: input.tone,
         experienceType: xtype,
         ...(siteText ? { websiteText: siteText } : {}),
@@ -218,23 +248,28 @@ export async function runAiOnboardingBuild(
     return { quizId, degraded: `AI didn't find product groups — ${STARTED_BLANK}.` };
   }
 
-  // 4. Reconcile buckets → result pages (bound via category_id).
-  let doc = reconcileBucketsToResultNodes(
-    seedDoc,
-    buckets.map((b) => ({ id: b.id, name: b.name })),
-    firstCollection,
-  );
-
+  // 4. Reconcile buckets → result pages (bound via category_id). LOGIC v2 —
+  // the legacy per-bucket result choreography never applies to decider docs
+  // (ONE reveal terminus, created by applyDeciderQuestionFlow below), so the
+  // reconcile + smartBuckets stage is skipped entirely for them.
+  let doc = seedDoc;
   const smartBuckets: SmartBuildBucket[] = [];
-  for (const b of buckets) {
-    const node = doc.nodes.find(
-      (n) => n.type === "result" && n.data.category_id === b.id,
+  if (!decider) {
+    doc = reconcileBucketsToResultNodes(
+      seedDoc,
+      buckets.map((b) => ({ id: b.id, name: b.name })),
+      firstCollection,
     );
-    if (node) smartBuckets.push({ id: b.id, name: b.name, tags: b.tags, resultNodeId: node.id });
-  }
-  if (smartBuckets.length === 0) {
-    await persist(quizId, doc);
-    return { quizId, degraded: "We set up your result pages — add questions in the builder." };
+    for (const b of buckets) {
+      const node = doc.nodes.find(
+        (n) => n.type === "result" && n.data.category_id === b.id,
+      );
+      if (node) smartBuckets.push({ id: b.id, name: b.name, tags: b.tags, resultNodeId: node.id });
+    }
+    if (smartBuckets.length === 0) {
+      await persist(quizId, doc);
+      return { quizId, degraded: "We set up your result pages — add questions in the builder." };
+    }
   }
 
   // 5. Generate the question flow + wire it. On failure, keep the bound pages.
@@ -252,9 +287,14 @@ export async function runAiOnboardingBuild(
       experienceType: xtype,
       questionCount: input.questionCount,
       catalogSummary: indexed.summary,
-      buckets: smartBuckets.map((b) => ({ id: b.id, name: b.name, tags: b.tags })),
-      flow: input.flow,
+      buckets: (decider ? buckets : smartBuckets).map((b) => ({
+        id: b.id,
+        name: b.name,
+        tags: b.tags,
+      })),
+      flow,
       tone: input.tone,
+      ...(decider ? { logicModel: "decider" as const } : {}),
       ...(toneSample ? { toneSample } : {}),
       ...(websiteText ? { websiteText } : {}),
       ...(brandGuidelines ? { brandGuidelines } : {}),
@@ -268,16 +308,29 @@ export async function runAiOnboardingBuild(
     };
   }
 
-  doc = applyQuestionFlow(doc, generated, smartBuckets);
+  doc = decider
+    ? applyDeciderQuestionFlow(
+        seedDoc,
+        generated,
+        buckets,
+        // The merchant's rec-defaults fallback (when set) is the fallback the
+        // engine should actually use — seed BOTH the legacy node field and the
+        // §6 emptyFallbackCol from it, so the two knobs never silently diverge.
+        input.recOverride?.fallback_collection_id || firstCollection,
+      )
+    : applyQuestionFlow(doc, generated, smartBuckets);
   const parsed = Quiz.safeParse(doc);
   if (!parsed.success) {
-    // Should not happen (applyQuestionFlow is tested), but never persist a
-    // corrupt draft — fall back to the reconciled (questions-less) doc.
-    const fallback = reconcileBucketsToResultNodes(
-      seedDoc,
-      buckets.map((b) => ({ id: b.id, name: b.name })),
-      firstCollection,
-    );
+    // Should not happen (both merges are tested), but never persist a corrupt
+    // draft. Decider fallback = the stamped seed (reconcile deliberately
+    // no-ops result creation for decider docs); legacy = the reconciled pages.
+    const fallback = decider
+      ? seedDoc
+      : reconcileBucketsToResultNodes(
+          seedDoc,
+          buckets.map((b) => ({ id: b.id, name: b.name })),
+          firstCollection,
+        );
     await persist(quizId, fallback);
     return { quizId, degraded: "AI built a draft but it needs a tweak in the builder." };
   }
@@ -346,9 +399,16 @@ export async function startAiOnboardingBuild(
   input: Omit<OnboardingBuildInput, "quizId">,
 ): Promise<{ quizId: string }> {
   const seed = buildSeedQuiz(input.name, input.experienceType);
-  const seedDoc: QuizDoc = input.designTokens
-    ? Quiz.parse({ ...seed, design_tokens: input.designTokens })
-    : seed;
+  // LOGIC v2 — stamp the immediately-visible pre-build draft too, so the row
+  // is a decider doc from the very first read (never retroactively mid-build).
+  const seedDoc: QuizDoc =
+    input.designTokens || input.logicModel === "decider"
+      ? Quiz.parse({
+          ...seed,
+          ...(input.designTokens ? { design_tokens: input.designTokens } : {}),
+          ...(input.logicModel === "decider" ? { logic_model: "decider" as const } : {}),
+        })
+      : seed;
   const created = await prisma.quiz.create({
     data: {
       shopId: input.shopId,
