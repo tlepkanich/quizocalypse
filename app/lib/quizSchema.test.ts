@@ -931,3 +931,119 @@ describe("build_session (Step 1 funnel scratch state)", () => {
     ).toThrow();
   });
 });
+
+// ════════════════════════════════════════════════════════════════════════════
+// LOGIC v2 (L2-1) — schema seams + the byte-stability harness.
+// The dual-model migration rests on ONE invariant: no legacy doc ever grows a
+// v2 field through parse→write cycles. These tests are the permanent gate.
+// ════════════════════════════════════════════════════════════════════════════
+describe("LOGIC v2 schema seams (logic_model / role / target_id / rules / rec_page_settings)", () => {
+  it("legacy docs stay byte-identical through parse→write cycles — no v2 field is ever injected", () => {
+    const wire1 = JSON.parse(JSON.stringify(Quiz.parse(validQuiz)));
+    // No v2 field materializes on a legacy doc.
+    expect(wire1).not.toHaveProperty("logic_model");
+    expect(wire1).not.toHaveProperty("decision_rules");
+    expect(wire1).not.toHaveProperty("rec_page_settings");
+    const q = wire1.nodes.find((n: { type: string }) => n.type === "question");
+    expect(q.data).not.toHaveProperty("role");
+    for (const a of q.data.answers) expect(a).not.toHaveProperty("target_id");
+    // Parse is byte-IDEMPOTENT: re-parsing the wire form reproduces it exactly.
+    const wire2 = JSON.parse(JSON.stringify(Quiz.parse(wire1)));
+    expect(JSON.stringify(wire2)).toBe(JSON.stringify(wire1));
+  });
+
+  it("a decider doc round-trips: model, roles, target mappings, rules, rec-page settings", () => {
+    const decider = {
+      ...validQuiz,
+      logic_model: "decider",
+      decision_rules: [
+        {
+          id: "rule_1",
+          conditions: [
+            { question_id: "q1", answer_id: "a1", op: "is" },
+            { question_id: "q1", answer_id: "a2", op: "is_not" },
+          ],
+          target_id: "cat_backcountry",
+        },
+      ],
+      rec_page_settings: {
+        global: {
+          headline: "Your perfect match",
+          heroLogic: "collection_order",
+          gridMax: 3,
+          gridSort: "bestseller",
+          heroOos: "next",
+          emptyFallback: "collection",
+          emptyFallbackCol: "bestsellers",
+          safetyNetCol: "all-products",
+          incentivePos: "below-headline",
+        },
+        overrides: {
+          cat_dry: { headline: "Dry-skin picks", heroLogic: "newest" },
+        },
+      },
+      nodes: validQuiz.nodes.map((n) =>
+        n.id === "q1"
+          ? {
+              ...n,
+              data: {
+                ...n.data,
+                role: "decides",
+                answers: (n.data as { answers: { id: string }[] }).answers.map((a, i) => ({
+                  ...a,
+                  target_id: i === 0 ? "cat_oily" : "cat_dry",
+                })),
+              },
+            }
+          : n,
+      ),
+    };
+    const parsed = Quiz.parse(decider);
+    expect(parsed.logic_model).toBe("decider");
+    expect(parsed.decision_rules?.[0]?.conditions).toHaveLength(2);
+    expect(parsed.decision_rules?.[0]?.conditions[1]?.op).toBe("is_not");
+    expect(parsed.decision_rules?.[0]?.target_id).toBe("cat_backcountry");
+    expect(parsed.rec_page_settings?.global.heroLogic).toBe("collection_order");
+    expect(parsed.rec_page_settings?.overrides["cat_dry"]?.heroLogic).toBe("newest");
+    const q = parsed.nodes.find((n) => n.id === "q1");
+    expect(q?.type === "question" && q.data.role).toBe("decides");
+    expect(q?.type === "question" && q.data.answers[0]?.target_id).toBe("cat_oily");
+    // Values survive a wire round-trip unchanged.
+    const rewire = Quiz.parse(JSON.parse(JSON.stringify(parsed)));
+    expect(rewire.rec_page_settings?.global.gridMax).toBe(3);
+  });
+
+  it("rejects invalid v2 values — incl. the RETIRED relevance/match signals (rec-page-spec-V2 §4)", () => {
+    const bad = (patch: Record<string, unknown>) => ({ ...validQuiz, ...patch });
+    // The v1 "match"/"relevance" signals do not exist in the v2 enums.
+    expect(() =>
+      Quiz.parse(bad({ rec_page_settings: { global: { heroLogic: "match" } } })),
+    ).toThrow();
+    expect(() =>
+      Quiz.parse(bad({ rec_page_settings: { global: { gridSort: "relevance" } } })),
+    ).toThrow();
+    // gridMax bounds 1–12.
+    expect(() =>
+      Quiz.parse(bad({ rec_page_settings: { global: { gridMax: 0 } } })),
+    ).toThrow();
+    expect(() =>
+      Quiz.parse(bad({ rec_page_settings: { global: { gridMax: 13 } } })),
+    ).toThrow();
+    // Rule conditions only support is / is_not.
+    expect(() =>
+      Quiz.parse(
+        bad({
+          decision_rules: [
+            {
+              id: "r",
+              conditions: [{ question_id: "q1", answer_id: "a1", op: "contains" }],
+              target_id: "t",
+            },
+          ],
+        }),
+      ),
+    ).toThrow();
+    // logic_model only accepts "decider".
+    expect(() => Quiz.parse(bad({ logic_model: "weighted" }))).toThrow();
+  });
+});

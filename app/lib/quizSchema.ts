@@ -121,6 +121,12 @@ export const Answer = z.object({
   // weights, parked here so switching Direct↔Weighted preserves both. The engine
   // never reads this; swapScoringModel swaps points↔points_alt on a model change.
   points_alt: z.record(z.string(), z.number()).optional(),
+  // LOGIC v2 (quiz-questions-logic-spec §2.1) — on the DECIDING question only,
+  // the recommendation target this answer direct-maps to (a Step-1 Category id:
+  // an individual product, a collection, or a tag bucket). Only read when the
+  // quiz's logic_model is "decider"; qualifiers and legacy quizzes never carry
+  // it. Additive/optional → absent on every legacy doc, /q byte-identical.
+  target_id: z.string().optional(),
 });
 export type Answer = z.infer<typeof Answer>;
 
@@ -206,6 +212,14 @@ export const QuestionDataObject = z.object({
   // optional → absent on manual questions, so published /q JSON is byte-identical
   // when unset.
   ai_generated: z.boolean().optional(),
+  // LOGIC v2 (quiz-questions-logic-spec §2.1) — the question's explicit,
+  // first-class role. "decides": exactly ONE per quiz; its answers direct-map
+  // to targets (Answer.target_id) and it is forced Required. "qualifier":
+  // assigns nothing — routing/zero-party data only (the bucket column never
+  // renders on it). Only meaningful when the quiz's logic_model is "decider";
+  // multi-select questions are auto-qualifier (§2.2). Additive/optional →
+  // absent on every legacy doc.
+  role: z.enum(["decides", "qualifier"]).optional(),
 });
 
 export const QuestionData = QuestionDataObject.refine(
@@ -1155,6 +1169,87 @@ export const BuildSession = z.object({
 });
 export type BuildSession = z.infer<typeof BuildSession>;
 
+// ════════════════════════════════════════════════════════════════════════════
+// LOGIC v2 (quiz-questions-logic-spec + quiz-recommendation-page-spec-V2) —
+// the one-decider model's quiz-level config. All of it exists ONLY on docs
+// whose logic_model is "decider"; legacy docs never carry any of these fields.
+// ════════════════════════════════════════════════════════════════════════════
+
+// §4 — an AND-rule that OVERRIDES the deciding question's direct mapping.
+// Rules evaluate top→bottom in array order (priority = position); the first
+// rule whose conditions ALL match wins and evaluation stops. Conditions are
+// dropdown-built [Question] is / is_not [Answer] — no free text. A rule with
+// zero conditions is "half-built" (V9 warns; it never fires).
+export const DecisionRuleCondition = z.object({
+  question_id: z.string().min(1),
+  answer_id: z.string().min(1),
+  op: z.enum(["is", "is_not"]),
+});
+export type DecisionRuleCondition = z.infer<typeof DecisionRuleCondition>;
+
+export const DecisionRule = z.object({
+  id: z.string().min(1),
+  conditions: z.array(DecisionRuleCondition).default([]),
+  // The recommendation target (a Category id) this rule forces.
+  target_id: z.string().min(1),
+});
+export type DecisionRule = z.infer<typeof DecisionRule>;
+
+// Rec-page-spec-V2 §3.1 — the ONE global rec-page config. Every field is
+// optional in the schema; spec defaults ("Your perfect match", heroLogic
+// collection_order, gridMax 3, …) are applied at READ time by the consumers
+// (L2-2/L2-8), so writes stay sparse and the stored doc carries only what the
+// merchant actually set.
+export const RecPageGlobal = z.object({
+  headline: z.string().optional(),
+  whyOn: z.boolean().optional(),
+  whyCopy: z.string().optional(),
+  // §4.2 — hero signal. NO "match"/relevance: no per-product quiz score exists
+  // in the 1:1 model. collection_order (the default) surfaces the merchant's
+  // own Shopify collection sort as the manual hero lever (no in-app pin).
+  heroLogic: z.enum(["collection_order", "bestseller", "reviewed", "newest"]).optional(),
+  showDesc: z.boolean().optional(),
+  heroOos: z.enum(["next", "grid"]).optional(),
+  gridMax: z.number().int().min(1).max(12).optional(),
+  gridSort: z.enum(["collection_order", "bestseller", "reviewed", "newest"]).optional(),
+  // §9.3 — the incentive VALIDATES/displays/applies an EXISTING merchant-created
+  // Shopify discount code; the app never creates discounts here.
+  incentiveOn: z.boolean().optional(),
+  incentiveCode: z.string().optional(),
+  incentiveAutoApply: z.boolean().optional(),
+  incentivePos: z.enum(["banner", "below-headline", "bottom"]).optional(),
+  // §6 — two NAMED fallbacks. emptyFallback: a resolved target with nothing
+  // showable. safetyNetCol: the global last resort when even that is empty.
+  // (The no-target-resolved case is prevented at BUILD time by Step-3 V1/V2 —
+  // deliberately no runtime handler.)
+  emptyFallback: z.enum(["collection", "hide"]).optional(),
+  emptyFallbackCol: z.string().optional(),
+  safetyNetCol: z.string().optional(),
+});
+export type RecPageGlobal = z.infer<typeof RecPageGlobal>;
+
+// §3.2 — a sparse per-target override: ONLY the §2.1 overridable subset
+// (merchandising voice + hero signal + incentive). Absent fields inherit
+// global; override-wins on later global edits (no silent re-sync).
+export const RecPageOverride = z.object({
+  headline: z.string().optional(),
+  whyOn: z.boolean().optional(),
+  whyCopy: z.string().optional(),
+  heroLogic: z.enum(["collection_order", "bestseller", "reviewed", "newest"]).optional(),
+  incentiveOn: z.boolean().optional(),
+  incentiveCode: z.string().optional(),
+  incentiveAutoApply: z.boolean().optional(),
+  incentivePos: z.enum(["banner", "below-headline", "bottom"]).optional(),
+});
+export type RecPageOverride = z.infer<typeof RecPageOverride>;
+
+// §2 — one global config + sparse overrides keyed by target (Category) id.
+export const RecPageSettings = z.object({
+  global: RecPageGlobal.default({}),
+  overrides: z.record(z.string(), RecPageOverride).default({}),
+});
+export type RecPageSettings = z.infer<typeof RecPageSettings>;
+
 export const Quiz = z.object({
   quiz_id: z.string().min(1),
   status: QuizStatus.default("draft"),
@@ -1204,6 +1299,26 @@ export const Quiz = z.object({
   // every in-flight draft is unchanged until a merchant chooses on the Shape
   // step (the spec requires a conscious choice — no default is pre-selected).
   scoring_model: z.enum(["direct", "weighted"]).optional(),
+  // ── LOGIC v2 (owner GO 2026-07-02; Guardrails #1+#2 unblocked) ──────────────
+  // logic_model — THE dual-model switch. Absent = the legacy points/ladder
+  // model: every existing published quiz + in-flight draft resolves results
+  // through today's code paths byte-identically. "decider" = the v2 one-
+  // deciding-question + AND-rules model (quiz-questions-logic-spec §2): rules
+  // top→bottom, else the decider answer's target_id, else the rec-page
+  // fallbacks. .optional() and NEVER .default() — a default would inject the
+  // field into every legacy doc on the next parse→write (the translations-
+  // field hazard). Stamped ONLY at draft creation (new funnels post-L2-10) or
+  // by the explicit per-quiz upgrade wizard.
+  logic_model: z.enum(["decider"]).optional(),
+  // §4 — the quiz's AND-rules, priority = array order. Only read when
+  // logic_model is "decider".
+  decision_rules: z.array(DecisionRule).optional(),
+  // Rec-page-spec-V2 §2/§3 — ONE global rec-page config + sparse per-target
+  // overrides (replaces per-result-node ResultData config for decider docs;
+  // legacy docs keep ResultData untouched). Only read when logic_model is
+  // "decider".
+  rec_page_settings: RecPageSettings.optional(),
+  // ────────────────────────────────────────────────────────────────────────────
   // Builder Re-work Step 1 — the creation funnel's transient scratch state
   // (grouping/goal/template-options). Additive/optional, lives only on DRAFTs,
   // and is STRIPPED at publish (see quizPublish.ts).

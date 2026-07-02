@@ -440,6 +440,12 @@ describe("publishQuiz — byte-stability when net-new optional fields are unset"
       "currency",
       "answer_weights",
       "star_ratings_enabled",
+      // LOGIC v2 (L2-1) — the dual-model switch + its config. A slipped
+      // .default() here would flip every live quiz onto the v2 resolution
+      // path (or inject config) on the next republish; this pins against it.
+      "logic_model",
+      "decision_rules",
+      "rec_page_settings",
     ]) {
       expect(wire, `root.${key} must be absent when unset`).not.toHaveProperty(key);
     }
@@ -472,6 +478,8 @@ describe("publishQuiz — byte-stability when net-new optional fields are unset"
       "scale_config",
       "ai_generated",
       "image_url",
+      // LOGIC v2 (L2-1) — role is only written by the v2 Step-3 UI.
+      "role",
     ]) {
       expect(qNode!.data, `question.data.${key} must be absent when unset`).not.toHaveProperty(key);
     }
@@ -489,6 +497,8 @@ describe("publishQuiz — byte-stability when net-new optional fields are unset"
         "video_url",
         "points",
         "points_alt",
+        // LOGIC v2 (L2-1) — target_id is only written on the decider's answers.
+        "target_id",
       ]) {
         expect(a, `answer.${key} must be absent when unset`).not.toHaveProperty(key);
       }
