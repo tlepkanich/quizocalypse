@@ -18,6 +18,8 @@ import {
   setResultSectionCount,
   setResultStage,
   setQuestionType,
+  setQuestionRole,
+  setAnswerTarget,
 } from "./quizMutations";
 import { insertModule } from "../components/studio/studioDoc";
 import { orderFlow } from "./flowOrder";
@@ -660,5 +662,105 @@ describe("setQuestionType (Questions & Logic spec §3.1)", () => {
     const doc = linearQuestionsDoc();
     expect(setQuestionType(doc, "intro", "single_select")).toBe(doc);
     expect(setQuestionType(doc, "nope", "single_select")).toBe(doc);
+  });
+});
+
+describe("LOGIC v2 role/target mutations (setQuestionRole / setAnswerTarget)", () => {
+  // A decider-model doc: q1 decides, q2/q3 qualifiers.
+  function deciderDoc() {
+    let doc = Quiz.parse({ ...linearQuestionsDoc(), logic_model: "decider" });
+    doc = setQuestionRole(doc, "q1", "decides");
+    return doc;
+  }
+  const qOf = (doc: ReturnType<typeof linearQuestionsDoc>, id: string) => {
+    const n = doc.nodes.find((x) => x.id === id);
+    if (n?.type !== "question") throw new Error(`${id} not a question`);
+    return n;
+  };
+
+  it("setQuestionRole('decides') is EXCLUSIVE — promoting q2 demotes q1 — and forces required=true", () => {
+    let doc = deciderDoc();
+    // Make q2 optional first so the forced-required is observable.
+    doc = Quiz.parse({
+      ...doc,
+      nodes: doc.nodes.map((n) =>
+        n.id === "q2" && n.type === "question" ? { ...n, data: { ...n.data, required: false } } : n,
+      ),
+    });
+    const next = setQuestionRole(doc, "q2", "decides");
+    expect(qOf(next, "q2").data.role).toBe("decides");
+    expect(qOf(next, "q2").data.required).toBe(true); // V3 auto-enforced
+    expect(qOf(next, "q1").data.role).toBe("qualifier"); // demoted — exactly one decider (V1)
+    expect(() => Quiz.parse(next)).not.toThrow();
+  });
+
+  it("setQuestionRole('decides') no-ops on a multi-select question (§2.2)", () => {
+    let doc = deciderDoc();
+    doc = setQuestionType(doc, "q2", "multi_select");
+    const next = setQuestionRole(doc, "q2", "decides");
+    expect(next).toBe(doc); // identity — nothing changed
+    expect(qOf(next, "q1").data.role).toBe("decides"); // the existing decider untouched
+  });
+
+  it("setQuestionRole('decides') no-ops on a FREEFORM question (no discrete answers to map)", () => {
+    let doc = deciderDoc();
+    doc = setQuestionType(doc, "q2", "text");
+    expect(setQuestionRole(doc, "q2", "decides")).toBe(doc);
+  });
+
+  it("setQuestionRole / setAnswerTarget no-op on a LEGACY doc (logic_model unset — byte-stability)", () => {
+    const legacy = linearQuestionsDoc();
+    expect(setQuestionRole(legacy, "q1", "decides")).toBe(legacy);
+    expect(setAnswerTarget(legacy, "q1", "q1_a1", "cat_x")).toBe(legacy);
+  });
+
+  it("setQuestionRole('qualifier') demotes without touching required, and no-ops on non-questions", () => {
+    const doc = deciderDoc();
+    const next = setQuestionRole(doc, "q1", "qualifier");
+    expect(qOf(next, "q1").data.role).toBe("qualifier");
+    expect(qOf(next, "q1").data.required).toBe(true); // left as-is, not force-cleared
+    expect(setQuestionRole(doc, "intro", "decides")).toBe(doc);
+    expect(setQuestionRole(doc, "nope", "decides")).toBe(doc);
+  });
+
+  it("setAnswerTarget maps a deciding answer to a target; null clears via key removal (absent-when-unset)", () => {
+    const doc = deciderDoc();
+    const mapped = setAnswerTarget(doc, "q1", "q1_a1", "cat_park");
+    const a1 = qOf(mapped, "q1").data.answers.find((a) => a.id === "q1_a1");
+    expect(a1?.target_id).toBe("cat_park");
+    // The sibling answer is untouched.
+    const a2 = qOf(mapped, "q1").data.answers.find((a) => a.id === "q1_a2");
+    expect(a2 && "target_id" in a2 && a2.target_id !== undefined).toBe(false);
+
+    const cleared = setAnswerTarget(mapped, "q1", "q1_a1", null);
+    const a1c = qOf(cleared, "q1").data.answers.find((a) => a.id === "q1_a1");
+    // The KEY must be gone (byte-stability: absent-when-unset on the wire).
+    expect(a1c && Object.prototype.hasOwnProperty.call(a1c, "target_id")).toBe(false);
+    expect(() => Quiz.parse(cleared)).not.toThrow();
+
+    // No-ops: unknown node / non-question.
+    expect(setAnswerTarget(doc, "nope", "q1_a1", "x")).toBe(doc);
+    expect(setAnswerTarget(doc, "intro", "q1_a1", "x")).toBe(doc);
+  });
+
+  it("setQuestionType(→multi_select) auto-demotes a DECIDING question to qualifier in the same mutation", () => {
+    const doc = deciderDoc();
+    const next = setQuestionType(doc, "q1", "multi_select");
+    expect(qOf(next, "q1").data.role).toBe("qualifier"); // §2.2 — no decides+multi_select state ever exists
+    expect(qOf(next, "q1").data.question_type).toBe("multi_select");
+    // A qualifier switching to multi_select keeps its role untouched.
+    const q2Multi = setQuestionType(setQuestionRole(doc, "q2", "qualifier"), "q2", "multi_select");
+    expect(qOf(q2Multi, "q2").data.role).toBe("qualifier");
+    expect(() => Quiz.parse(next)).not.toThrow();
+  });
+
+  it("setQuestionType(→FREEFORM) also auto-demotes the decider (the same predicate as setQuestionRole)", () => {
+    // Without this, switching the decider to Open text would strand a role="decides"
+    // freeform question — a state setQuestionRole itself refuses to create.
+    const doc = deciderDoc();
+    const next = setQuestionType(doc, "q1", "text");
+    expect(qOf(next, "q1").data.role).toBe("qualifier");
+    expect(qOf(next, "q1").data.question_type).toBe("text");
+    expect(() => Quiz.parse(next)).not.toThrow();
   });
 });

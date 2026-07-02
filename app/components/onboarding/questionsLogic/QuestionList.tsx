@@ -1,4 +1,8 @@
-import { type OrderedQuestion, questionHasUnmappedAnswer } from "./questionOrder";
+import {
+  type OrderedQuestion,
+  questionHasUnmappedAnswer,
+  questionHasUnmappedTarget,
+} from "./questionOrder";
 
 // Friendly one-word-ish labels for the left-panel meta line.
 const TYPE_LABEL: Record<string, string> = {
@@ -28,17 +32,24 @@ export function QuestionList({
   activeId,
   onSelect,
   onRowAction,
+  deciderMode = false,
 }: {
   questions: OrderedQuestion[];
   activeId: string | null;
   onSelect: (nodeId: string) => void;
   onRowAction: (nodeId: string, action: RowAction) => void;
+  /** LOGIC v2 — rows gain a gold ◆ on the decider; "!" means unmapped TARGETS
+   *  (decider only — qualifiers assign nothing, so they can never be unmapped). */
+  deciderMode?: boolean;
 }) {
   const last = questions.length - 1;
   return (
     <div className="qz-ql-qlist" role="list">
       {questions.map(({ node, qIndex }, i) => {
-        const unmapped = questionHasUnmappedAnswer(node);
+        const unmapped = deciderMode
+          ? questionHasUnmappedTarget(node)
+          : questionHasUnmappedAnswer(node);
+        const decides = deciderMode && node.data.role === "decides";
         return (
           <div
             key={node.id}
@@ -58,6 +69,15 @@ export function QuestionList({
                 </span>
                 <span className="qz-ql-qitem-meta">
                   {TYPE_LABEL[node.data.question_type] ?? node.data.question_type}
+                  {decides ? (
+                    <span
+                      className="qz-ql-dot is-decider"
+                      title="Decides the result"
+                      aria-label="Decides the result"
+                    >
+                      ◆
+                    </span>
+                  ) : null}
                   {node.data.ai_generated ? (
                     <span className="qz-ql-dot is-ai" title="AI-generated" aria-label="AI-generated">
                       ✦
@@ -66,7 +86,11 @@ export function QuestionList({
                   {unmapped ? (
                     <span
                       className="qz-ql-dot is-warn"
-                      title="An answer has no bucket mapped"
+                      title={
+                        deciderMode
+                          ? "A deciding answer doesn't point at a result yet"
+                          : "An answer has no bucket mapped"
+                      }
                       aria-label="Has an unmapped answer"
                     >
                       !

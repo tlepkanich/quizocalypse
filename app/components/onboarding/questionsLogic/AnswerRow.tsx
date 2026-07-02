@@ -2,6 +2,7 @@ import type { Quiz as QuizDoc, Answer } from "../../../lib/quizSchema";
 import type { BuilderCategory } from "../../builder/stepProps";
 import {
   setAnswerBucketDirect,
+  setAnswerTarget,
   setAnswerRoute,
   routeAnswerToEnd,
   removeAnswer,
@@ -23,6 +24,11 @@ export interface SkipOption {
 // dropdown — the spec's core move (mapping + routing live on the row, not a side
 // panel). All three write through the same reused mutations, so the Builder card
 // and the Table view stay in lock-step over one doc.
+//
+// LOGIC v2 (`parentRole` set — decider docs only): the DECIDER's rows swap the
+// bucket pill for a gold "Points to" TARGET dropdown (answer.target_id, §2.1);
+// QUALIFIER rows hide the mapping column entirely (qualifiers assign nothing);
+// the skip dropdown stays on every row (deciding ≠ ending — §2).
 export function AnswerRow({
   doc,
   node,
@@ -32,6 +38,7 @@ export function AnswerRow({
   skipOptions,
   canDelete,
   onCommit,
+  parentRole = null,
 }: {
   doc: QuizDoc;
   node: QuestionNode;
@@ -41,6 +48,8 @@ export function AnswerRow({
   skipOptions: SkipOption[];
   canDelete: boolean;
   onCommit: (doc: QuizDoc) => void;
+  /** LOGIC v2 only — the parent question's role on a decider doc. null = legacy. */
+  parentRole?: "decides" | "qualifier" | null;
 }) {
   // ── Maps to bucket (direct: first points key) ──
   const bucketId = answerBucketId(answer);
@@ -64,7 +73,7 @@ export function AnswerRow({
   };
 
   return (
-    <div className="qz-ql-arow">
+    <div className={`qz-ql-arow${parentRole === "qualifier" ? " is-qualifier" : ""}`}>
       <span
         className="qz-ql-bullet"
         style={{ background: answerLetterColor(index) }}
@@ -88,32 +97,51 @@ export function AnswerRow({
         ) : null}
       </span>
 
-      <select
-        className={`qz-ql-bucket ${color ? "is-mapped" : "is-unset"}`}
-        value={bucketId ?? ""}
-        disabled={weighted}
-        title={
-          weighted
-            ? "Weighted scoring is active — switch to Direct mapping in the top bar to edit buckets here"
-            : undefined
-        }
-        onChange={(e) =>
-          onCommit(setAnswerBucketDirect(doc, node.id, answer.id, e.target.value || null))
-        }
-        style={
-          color
-            ? { color: color.solid, background: color.bg, borderColor: color.mid }
-            : undefined
-        }
-        aria-label={`Maps ${answer.text || "answer"} to bucket`}
-      >
-        <option value="">— Map to bucket</option>
-        {categories.map((c) => (
-          <option key={c.id} value={c.id}>
-            {c.name}
-          </option>
-        ))}
-      </select>
+      {parentRole === "decides" ? (
+        <select
+          className={`qz-ql-target ${answer.target_id ? "is-mapped" : "is-unset"}`}
+          value={answer.target_id ?? ""}
+          onChange={(e) =>
+            onCommit(setAnswerTarget(doc, node.id, answer.id, e.target.value || null))
+          }
+          aria-label={`Result target for ${answer.text || "answer"}`}
+          title="This answer directly decides the shopper's result"
+        >
+          <option value="">— Pick a result</option>
+          {categories.map((c) => (
+            <option key={c.id} value={c.id}>
+              {c.name}
+            </option>
+          ))}
+        </select>
+      ) : parentRole === "qualifier" ? null : (
+        <select
+          className={`qz-ql-bucket ${color ? "is-mapped" : "is-unset"}`}
+          value={bucketId ?? ""}
+          disabled={weighted}
+          title={
+            weighted
+              ? "Weighted scoring is active — switch to Direct mapping in the top bar to edit buckets here"
+              : undefined
+          }
+          onChange={(e) =>
+            onCommit(setAnswerBucketDirect(doc, node.id, answer.id, e.target.value || null))
+          }
+          style={
+            color
+              ? { color: color.solid, background: color.bg, borderColor: color.mid }
+              : undefined
+          }
+          aria-label={`Maps ${answer.text || "answer"} to bucket`}
+        >
+          <option value="">— Map to bucket</option>
+          {categories.map((c) => (
+            <option key={c.id} value={c.id}>
+              {c.name}
+            </option>
+          ))}
+        </select>
+      )}
 
       <select
         className={`qz-ql-skip ${isSkipping ? "is-active" : ""}`}

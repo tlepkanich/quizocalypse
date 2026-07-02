@@ -98,6 +98,44 @@ export function orphanedBucketIds(doc: QuizDoc, bucketIds: string[]): string[] {
   return bucketIds.filter((id) => (counts.get(id) ?? 0) === 0);
 }
 
+// ── LOGIC v2 (decider docs) — target-based twins of the points helpers ──────
+// Gated by doc.logic_model === "decider" at the call sites; legacy docs never
+// reach these, so the points-based predicates above stay byte-identical.
+
+/** The quiz's ONE deciding question (role === "decides"), or null. */
+export function deciderQuestion(doc: QuizDoc): QuestionNode | null {
+  const n = doc.nodes.find((x) => x.type === "question" && x.data.role === "decides");
+  return n && n.type === "question" ? n : null;
+}
+
+/** Deciding answers that don't point at a target yet (V6's doc half — the
+ *  Continue-guard + left "!" glyph list for decider docs). */
+export function unmappedDeciderAnswers(node: QuestionNode): Answer[] {
+  return node.data.answers.filter((a) => !a.target_id);
+}
+
+/** Decider-doc twin of questionHasUnmappedAnswer: ONLY the decider can be
+ *  "unmapped" (qualifiers assign nothing by design — §2.1). */
+export function questionHasUnmappedTarget(node: QuestionNode): boolean {
+  if (node.data.role !== "decides") return false;
+  return unmappedDeciderAnswers(node).length > 0;
+}
+
+/** Per-target count of (deciding answers + advanced rules) that resolve to it.
+ *  Drives the decider-mode coverage pills. NOTE the §5 re-scope: 0 here is
+ *  "unused", which is FINE in v2 (a target may be rule-only later or simply
+ *  unpicked) — never a red/blocking state. */
+export function targetMappedCounts(doc: QuizDoc, bucketIds: string[]): Map<string, number> {
+  const counts = new Map<string, number>(bucketIds.map((id) => [id, 0]));
+  const bump = (id: string | undefined) => {
+    if (id && counts.has(id)) counts.set(id, (counts.get(id) ?? 0) + 1);
+  };
+  const decider = deciderQuestion(doc);
+  if (decider) for (const a of decider.data.answers) bump(a.target_id);
+  for (const r of doc.decision_rules ?? []) bump(r.target_id);
+  return counts;
+}
+
 export type CoverageTier = "strong" | "weak" | "orphan";
 
 // 3-state coverage tier for the Outcome-coverage PILLS only (roadmap green/yellow/red).

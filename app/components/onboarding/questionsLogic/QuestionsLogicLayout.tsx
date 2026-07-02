@@ -9,7 +9,14 @@ import {
   moveStep,
   deleteNode,
 } from "../../../lib/quizMutations";
-import { orderedQuestions, bucketMappedCounts, orphanedBucketIds } from "./questionOrder";
+import {
+  orderedQuestions,
+  bucketMappedCounts,
+  orphanedBucketIds,
+  targetMappedCounts,
+  deciderQuestion,
+  unmappedDeciderAnswers,
+} from "./questionOrder";
 import { QuestionList, type RowAction } from "./QuestionList";
 import { OutcomeCoverage } from "./OutcomeCoverage";
 import { QuestionCard } from "./QuestionCard";
@@ -84,12 +91,20 @@ export function QuestionsLogicLayout({
 }) {
   const questions = useMemo(() => orderedQuestions(doc), [doc]);
   const idsKey = questions.map((q) => q.node.id).join(",");
+  // LOGIC v2 — the whole page branches on the doc's logic model. Decider docs
+  // swap the Table tab for Rules (placeholder until L2-6), re-scope coverage to
+  // target mappings (§5), and gate Continue on decider integrity instead of
+  // orphaned buckets. Legacy docs (logic_model unset) render byte-identically.
+  const deciderMode = doc.logic_model === "decider";
   const coverageCounts = useMemo(
-    () => bucketMappedCounts(doc, categories.map((c) => c.id)),
-    [doc, categories],
+    () =>
+      deciderMode
+        ? targetMappedCounts(doc, categories.map((c) => c.id))
+        : bucketMappedCounts(doc, categories.map((c) => c.id)),
+    [doc, categories, deciderMode],
   );
 
-  const [view, setView] = useState<"builder" | "table" | "flow">("builder");
+  const [view, setView] = useState<"builder" | "table" | "flow" | "rules">("builder");
   const [activeId, setActiveId] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [pendingScrollId, setPendingScrollId] = useState<string | null>(null);
@@ -98,7 +113,9 @@ export function QuestionsLogicLayout({
   // full width (the owner's "understand the real estate" ask; qz-qb-split twin).
   const [leftOpen, setLeftOpen] = useState(true);
   const [libraryOpen, setLibraryOpen] = useState(false);
-  const [guardNames, setGuardNames] = useState<string[] | null>(null);
+  const [guard, setGuard] = useState<{ names: string[]; title?: string; body?: string } | null>(
+    null,
+  );
 
   const mainRef = useRef<HTMLDivElement>(null);
   const cardEls = useRef(new Map<string, HTMLDivElement>());
@@ -250,17 +267,43 @@ export function QuestionsLogicLayout({
     [doc, questions, onCommit],
   );
 
-  // Continue→ gate: warn if any Step-1 bucket has no answers mapped (the shared
-  // orphan predicate). Snapshot the NAMES at check-time so the dialog can't drift.
+  // Continue→ gate. Legacy: warn if any Step-1 bucket has no answers mapped (the
+  // shared orphan predicate). Decider docs: warn on missing decider (V1) or
+  // unmapped deciding answers (V6's doc half) — unused buckets are FINE in v2
+  // (§5). Snapshot the NAMES at check-time so the dialog can't drift.
   const handleContinue = useCallback(() => {
+    if (deciderMode) {
+      const decider = deciderQuestion(doc);
+      if (!decider) {
+        setGuard({
+          names: [],
+          title: "No deciding question yet",
+          body:
+            "Pick one question to decide the result (the ◇ Make decider toggle on a question card). Without it the quiz can't resolve a recommendation.",
+        });
+        return;
+      }
+      const unmapped = unmappedDeciderAnswers(decider);
+      if (unmapped.length > 0) {
+        setGuard({
+          names: unmapped.map((a) => a.text || "Untitled answer"),
+          title: `${unmapped.length} deciding ${unmapped.length === 1 ? "answer doesn't" : "answers don't"} point at a result`,
+          body:
+            "Shoppers who pick these answers won't get a recommendation. Give each one a result in the “Points to result” dropdown.",
+        });
+        return;
+      }
+      onContinue();
+      return;
+    }
     const orphanIds = orphanedBucketIds(doc, categories.map((c) => c.id));
     if (orphanIds.length === 0) {
       onContinue();
       return;
     }
     const idSet = new Set(orphanIds);
-    setGuardNames(categories.filter((c) => idSet.has(c.id)).map((c) => c.name));
-  }, [doc, categories, onContinue]);
+    setGuard({ names: categories.filter((c) => idSet.has(c.id)).map((c) => c.name) });
+  }, [doc, categories, onContinue, deciderMode]);
 
   const model = doc.scoring_model ?? "direct";
   const setCardRef = (id: string) => (el: HTMLDivElement | null) => {
@@ -294,15 +337,24 @@ export function QuestionsLogicLayout({
           {leftOpen ? "◀ Hide list" : "▶ Show list"}
         </button>
         <span style={{ flex: 1 }} />
-        <button
-          type="button"
-          className="qz-btn qz-btn-ghost qz-btn-sm"
-          style={{ fontSize: 12 }}
-          title={`Scoring: ${model === "direct" ? "Direct mapping" : "Weighted scoring"} — click to switch (both models are saved)`}
-          onClick={() => onCommit(swapScoringModel(doc, model === "direct" ? "weighted" : "direct"))}
-        >
-          {model === "direct" ? "→ Direct mapping" : "⚖ Weighted scoring"} <span aria-hidden>⚙</span>
-        </button>
+        {deciderMode ? (
+          <span
+            className="qz-ql-modelbadge"
+            title="One deciding question picks the result; advanced rules can override it"
+          >
+            ◆ Decider logic
+          </span>
+        ) : (
+          <button
+            type="button"
+            className="qz-btn qz-btn-ghost qz-btn-sm"
+            style={{ fontSize: 12 }}
+            title={`Scoring: ${model === "direct" ? "Direct mapping" : "Weighted scoring"} — click to switch (both models are saved)`}
+            onClick={() => onCommit(swapScoringModel(doc, model === "direct" ? "weighted" : "direct"))}
+          >
+            {model === "direct" ? "→ Direct mapping" : "⚖ Weighted scoring"} <span aria-hidden>⚙</span>
+          </button>
+        )}
         <span className="qz-save-status" aria-live="polite">
           {isSaving ? (
             <span className="qz-save-chip is-saving">
@@ -342,23 +394,40 @@ export function QuestionsLogicLayout({
       {/* ── Body: collapsible 260px left + scrolling main ── */}
       <div className={`qz-ql-body${leftOpen ? "" : " is-collapsed"}`}>
         <aside className="qz-ql-left">
-          <div className="qz-ql-tabs qz-segmented qz-segmented--fill" role="group" aria-label="Builder, Table, or Flow view">
-            <button type="button" aria-pressed={view === "builder"} onClick={() => setView("builder")}>
-              Builder
-            </button>
-            <button type="button" aria-pressed={view === "table"} onClick={() => setView("table")}>
-              Table
-            </button>
-            <button type="button" aria-pressed={view === "flow"} onClick={() => setView("flow")}>
-              Flow
-            </button>
-          </div>
+          {deciderMode ? (
+            // LOGIC v2 tabs — Table is NOT mounted (removed by spec); Rules is
+            // the L2-6 surface (placeholder until it lands).
+            <div className="qz-ql-tabs qz-segmented qz-segmented--fill" role="group" aria-label="Builder, Flow, or Rules view">
+              <button type="button" aria-pressed={view === "builder"} onClick={() => setView("builder")}>
+                Builder
+              </button>
+              <button type="button" aria-pressed={view === "flow"} onClick={() => setView("flow")}>
+                Flow
+              </button>
+              <button type="button" aria-pressed={view === "rules"} onClick={() => setView("rules")}>
+                Rules
+              </button>
+            </div>
+          ) : (
+            <div className="qz-ql-tabs qz-segmented qz-segmented--fill" role="group" aria-label="Builder, Table, or Flow view">
+              <button type="button" aria-pressed={view === "builder"} onClick={() => setView("builder")}>
+                Builder
+              </button>
+              <button type="button" aria-pressed={view === "table"} onClick={() => setView("table")}>
+                Table
+              </button>
+              <button type="button" aria-pressed={view === "flow"} onClick={() => setView("flow")}>
+                Flow
+              </button>
+            </div>
+          )}
 
           <QuestionList
             questions={questions}
             activeId={activeId}
             onSelect={selectQuestion}
             onRowAction={rowAction}
+            deciderMode={deciderMode}
           />
 
           {questions.length < 4 || questions.length > 8 ? (
@@ -368,7 +437,7 @@ export function QuestionsLogicLayout({
             </p>
           ) : null}
 
-          <OutcomeCoverage categories={categories} counts={coverageCounts} />
+          <OutcomeCoverage categories={categories} counts={coverageCounts} deciderMode={deciderMode} />
 
           <div className="qz-ql-left-footer">
             <button type="button" className="qz-btn qz-btn-ghost qz-btn-sm qz-ql-newq" onClick={addQuestion}>
@@ -414,12 +483,13 @@ export function QuestionsLogicLayout({
                     onUndoRegenerate={onUndoRegenerate}
                     onRetryRegenerate={() => onRegenerate(node.id)}
                     onDismissRegenError={onDismissRegenError}
+                    deciderMode={deciderMode}
                   />
                 ))
               )}
             </div>
           </div>
-        ) : view === "table" ? (
+        ) : view === "table" && !deciderMode ? (
           <div className="qz-ql-main">
             <TableView
               doc={doc}
@@ -431,6 +501,18 @@ export function QuestionsLogicLayout({
               onActivate={setActiveId}
               onCommit={onCommit}
             />
+          </div>
+        ) : view === "rules" && deciderMode ? (
+          <div className="qz-ql-main">
+            <div className="qz-ql-rules-placeholder">
+              <div className="qz-ql-rules-ph-title">Advanced rules</div>
+              <p>
+                Rules override the deciding question for specific answer combinations —
+                “If <em>Terrain is Park</em> AND <em>Level is Advanced</em>, recommend
+                <em> Pro Park Boards</em>.” Priority-ordered, first match wins.
+              </p>
+              <p className="qz-dim">The rule builder arrives in the next update.</p>
+            </div>
           </div>
         ) : (
           <div className="qz-ql-main qz-ql-flowmain">
@@ -448,12 +530,14 @@ export function QuestionsLogicLayout({
         <QuestionBankDrawer doc={doc} onCommit={onCommit} onClose={() => setLibraryOpen(false)} />
       ) : null}
 
-      {guardNames ? (
+      {guard ? (
         <ContinueGuard
-          bucketNames={guardNames}
-          onFix={() => setGuardNames(null)}
+          bucketNames={guard.names}
+          title={guard.title}
+          body={guard.body}
+          onFix={() => setGuard(null)}
           onContinueAnyway={() => {
-            setGuardNames(null);
+            setGuard(null);
             onContinue();
           }}
         />

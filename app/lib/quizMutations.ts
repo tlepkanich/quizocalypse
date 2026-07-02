@@ -1033,6 +1033,85 @@ export function setAnswerBucketDirect(
   );
 }
 
+// ── LOGIC v2 mutations (decider docs only) ──────────────────────────────────
+
+// §2.1 — set a question's role. "decides" is EXCLUSIVE (exactly one per quiz):
+// promoting a question demotes any other decider to qualifier, and forces
+// required=true on the new decider (V3 — auto-enforced, locked in the UI).
+// Multi-select questions can never decide (§2.2), and neither can freeform/open
+// types (no discrete answers to direct-map) — those calls no-op. Pure.
+export function setQuestionRole(
+  doc: QuizDoc,
+  nodeId: string,
+  role: "decides" | "qualifier",
+): QuizDoc {
+  // Defense-in-depth: role is a decider-doc concept. A stray call against a
+  // legacy doc would inject keys that violate legacy byte-stability — no-op.
+  if (doc.logic_model !== "decider") return doc;
+  const node = doc.nodes.find((n) => n.id === nodeId);
+  if (!node || node.type !== "question") return doc;
+  if (
+    role === "decides" &&
+    (node.data.question_type === "multi_select" || isFreeformType(node.data.question_type))
+  )
+    return doc;
+  return {
+    ...doc,
+    nodes: doc.nodes.map((n) => {
+      if (n.type !== "question") return n;
+      if (n.id === nodeId) {
+        return {
+          ...n,
+          data: {
+            ...n.data,
+            role,
+            ...(role === "decides" ? { required: true } : {}),
+          },
+        };
+      }
+      // Demote any other decider — exactly one per quiz (V1).
+      if (role === "decides" && n.data.role === "decides") {
+        return { ...n, data: { ...n.data, role: "qualifier" } };
+      }
+      return n;
+    }),
+  };
+}
+
+// §2.1 — map a deciding answer directly to a recommendation target (a Step-1
+// Category id). null clears the mapping (V4 then blocks publish until it's
+// re-picked). Only meaningful on the decider; the v2 UI only offers it there.
+export function setAnswerTarget(
+  doc: QuizDoc,
+  questionNodeId: string,
+  answerId: string,
+  targetId: string | null,
+): QuizDoc {
+  // Same defense-in-depth as setQuestionRole — target_id never touches legacy docs.
+  if (doc.logic_model !== "decider") return doc;
+  const node = doc.nodes.find((n) => n.id === questionNodeId);
+  if (!node || node.type !== "question") return doc;
+  return {
+    ...doc,
+    nodes: doc.nodes.map((n) =>
+      n.id === questionNodeId && n.type === "question"
+        ? {
+            ...n,
+            data: {
+              ...n.data,
+              answers: n.data.answers.map((a) => {
+                if (a.id !== answerId) return a;
+                if (targetId) return { ...a, target_id: targetId };
+                const { target_id: _cleared, ...rest } = a;
+                return rest;
+              }),
+            },
+          }
+        : n,
+    ),
+  };
+}
+
 // Weighted scoring: set ONE bucket's weight in the answer's points map,
 // preserving the others. A weight ≤ 0 removes just that bucket. Pure.
 export function setAnswerBucketWeight(
@@ -1081,7 +1160,24 @@ export function setQuestionType(
     ...doc,
     nodes: doc.nodes.map((n) =>
       n.id === nodeId && n.type === "question"
-        ? { ...n, data: { ...n.data, question_type: newType, answers } }
+        ? {
+            ...n,
+            data: {
+              ...n.data,
+              question_type: newType,
+              answers,
+              // LOGIC v2 §2.2 — multi-select can never decide (one answer →
+              // one target breaks with multiple picks), and neither can
+              // freeform types (no discrete answers to map) — the SAME
+              // predicate setQuestionRole refuses to promote. Switching a
+              // DECIDING question to either auto-demotes it to qualifier in
+              // the same mutation (no race with a separate role write).
+              ...((newType === "multi_select" || isFreeformType(newType)) &&
+              n.data.role === "decides"
+                ? { role: "qualifier" as const }
+                : {}),
+            },
+          }
         : n,
     ),
     edges: doc.edges.filter(

@@ -10,11 +10,12 @@ export interface RegeneratedAnswer {
 const norm = (t: string) => t.trim().toLowerCase();
 
 // Questions & Logic spec §3.1/§7 — merge AI-regenerated answers with the question's
-// PRIOR answers, preserving the bucket mapping (points / points_alt) for answers
-// whose TEXT the AI kept unchanged (text-keyed carry), while reusing the prior
-// answer's id + edge_handle_id BY INDEX so aligned per-answer routing edges still
-// resolve. Pure — the caller injects fresh id/handle generators for answers beyond
-// the prior count (so this is deterministic + unit-testable).
+// PRIOR answers, preserving the bucket mapping (points / points_alt) — and, for
+// LOGIC v2 decider docs, the answer's target_id — for answers whose TEXT the AI
+// kept unchanged (text-keyed carry), while reusing the prior answer's id +
+// edge_handle_id BY INDEX so aligned per-answer routing edges still resolve. Pure —
+// the caller injects fresh id/handle generators for answers beyond the prior count
+// (so this is deterministic + unit-testable).
 //
 // INTENTIONAL ASYMMETRY: id/handle reuse is POSITIONAL while points follow TEXT — so
 // if the AI REORDERS answers, an existing per-answer skip edge stays bound to its
@@ -26,11 +27,12 @@ export function mergeRegeneratedAnswers(
   freshId: () => string,
   freshHandle: () => string,
 ): Answer[] {
-  const carryByText = new Map<string, Pick<Answer, "points" | "points_alt">>();
+  const carryByText = new Map<string, Pick<Answer, "points" | "points_alt" | "target_id">>();
   for (const a of oldAnswers) {
     carryByText.set(norm(a.text), {
       ...(a.points ? { points: a.points } : {}),
       ...(a.points_alt ? { points_alt: a.points_alt } : {}),
+      ...(a.target_id ? { target_id: a.target_id } : {}),
     });
   }
   return newAnswers.map((newA, idx) => {
@@ -45,6 +47,7 @@ export function mergeRegeneratedAnswers(
       edge_handle_id: oldA?.edge_handle_id ?? freshHandle(),
       ...(carried?.points ? { points: carried.points } : {}),
       ...(carried?.points_alt ? { points_alt: carried.points_alt } : {}),
+      ...(carried?.target_id ? { target_id: carried.target_id } : {}),
     };
   });
 }

@@ -39,6 +39,21 @@ describe("mergeRegeneratedAnswers", () => {
     expect(merged[0]!.points).toEqual({ snow: 2 });
   });
 
+  it("LOGIC v2: carries target_id on unchanged text; drops it when reworded (absent key)", () => {
+    const old: Answer[] = [
+      ans({ id: "a1", edge_handle_id: "h1", text: "Park laps", target_id: "cat_park" }),
+      ans({ id: "a2", edge_handle_id: "h2", text: "Powder days", target_id: "cat_pow" }),
+    ];
+    const fresh: RegeneratedAnswer[] = [
+      { text: "Park laps", tags: [] }, // unchanged → carry
+      { text: "Fresh snow", tags: [] }, // reworded → drop
+    ];
+    const merged = mergeRegeneratedAnswers(old, fresh, gen("a_"), gen("h_"));
+    expect(merged[0]!.target_id).toBe("cat_park");
+    // The reworded answer must not carry the key at all (absent-when-unset on the wire).
+    expect(Object.prototype.hasOwnProperty.call(merged[1], "target_id")).toBe(false);
+  });
+
   it("uses the NEW answer's text/tags/collection_filter/image_url, not the old", () => {
     const old: Answer[] = [ans({ id: "a1", edge_handle_id: "h1", text: "Old", tags: ["old"], image_url: "old.png" })];
     const fresh: RegeneratedAnswer[] = [
