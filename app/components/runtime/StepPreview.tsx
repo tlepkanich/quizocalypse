@@ -5,6 +5,7 @@ import { resolveForBreakpoint, tokensToCssVars } from "../../lib/designTokens";
 import { resolveNodeOverride } from "../../lib/resultLayout";
 import type { IndexedProduct } from "../../lib/recommendationEngine";
 import { synthesizeLayout } from "../../lib/synthesizeLayout";
+import { hideDecorativeImagery } from "../../lib/styleBar";
 import { BlockRenderer, type BlockRenderCtx } from "./BlockRenderer";
 import { googleFontsUrl, stylesFor, type RuntimeStyles } from "./runtimeStyles";
 
@@ -328,8 +329,17 @@ export function StepPreview({
 
   const blocks: ContentBlock[] = useMemo(() => {
     const own = doc.node_layouts[node.id];
-    return own && own.length > 0 ? own : synthesizeLayout(node);
-  }, [doc.node_layouts, node]);
+    if (own && own.length > 0) return own;
+    // Image-density parity: the runtime hides the intro hero below the density
+    // threshold on its DEFAULT render, so the synthesized (non-explicit) layout
+    // must match here or the builder previews a hero /q won't show. An explicit
+    // node_layouts entry above is merchant composition and stays ungated —
+    // exactly the runtime's BlockRenderer carve-out (styleBar.ts).
+    const synth = synthesizeLayout(node);
+    return hideDecorativeImagery(resolved.style_bar?.image_density)
+      ? synth.filter((b) => !(b.type === "image" && b.bind === "hero_image_url"))
+      : synth;
+  }, [doc.node_layouts, node, resolved]);
 
   const ctx: BlockRenderCtx = {
     styles,

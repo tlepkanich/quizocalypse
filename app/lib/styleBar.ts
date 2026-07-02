@@ -31,6 +31,39 @@ export function imageDensityFactor(density: number): number {
   return Math.round((clamp01to100(density) / 100) * 100) / 100;
 }
 
+// The density RENDERER — OWNER-ACTIVATED 2026-07-03 (previously deliberately
+// inert; the owner knowingly approved the repaint of live vibe-template
+// quizzes). Below the threshold the runtime hides DECORATIVE imagery only:
+// question header images + the intro hero. NEVER functional answer images —
+// image_tile/image_picker/swatch answers need theirs to work. The threshold
+// splits the vibe templates by intent (vibeTemplates.ts bakes 5 / 15 / 50 /
+// 85): Minimal/Technical (5) and Clean/Editorial (15) go text-forward; Bold
+// (50) and Warm/Lifestyle (85) keep their imagery — a future template baked
+// near 20 must re-run this split analysis. UNSET density = show everything
+// (byte-identical for every quiz without a style_bar).
+//
+// TWO carve-outs where explicit merchant intent beats the gate:
+// (1) an explicit question_image_position token — see questionImagePosition;
+// (2) an explicit node_layouts block composition (BlockRenderer path) renders
+//     its image blocks ungated, incl. a hero_image_url bind — a hand-composed
+//     layout is explicit intent, same reasoning as answer images.
+export function hideDecorativeImagery(density: number | undefined): boolean {
+  return density != null && density < 20;
+}
+
+// Question-image position resolution under the density gate. EXPLICIT
+// merchant intent always wins — the review caught that gating an explicit
+// "top"/"side" turns the Design-panel position picker into a lying control
+// (set "side", see nothing, no feedback). Only the UNSET default goes
+// text-forward below the threshold; vibe templates never set the position,
+// so the owner-approved repaint set is unchanged.
+export function questionImagePosition(
+  density: number | undefined,
+  explicit: "none" | "top" | "side" | undefined,
+): "none" | "top" | "side" {
+  return explicit ?? (hideDecorativeImagery(density) ? "none" : "top");
+}
+
 // CSS-var overrides for a style_bar — only the axes that are set, so a partial
 // style_bar leaves the template's other tokens intact. Merged OVER the enum-derived
 // vars in tokensToCssVars, so the slider wins.

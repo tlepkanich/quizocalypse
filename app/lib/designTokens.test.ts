@@ -116,6 +116,19 @@ describe("Design Settings spec (Drive 1_p1V) — D0 token carry + byte-stable", 
     expect(resolved.question_image_position).toBe("side");
   });
 
+  it("image_density survives the cascade; a later partial style_bar layer neither clobbers nor injects it", () => {
+    // O-2 (density renderer): the four-wirings trap — an unwired carry would
+    // silently render the whole feature inert. Pin both directions:
+    const carried = resolveDesignTokens(
+      { style_bar: { image_density: 15 } },
+      { style_bar: { lines: 40 } }, // partial later layer must KEEP density 15
+    );
+    expect(carried.style_bar).toEqual({ image_density: 15, lines: 40 });
+    // ...and no layer can INJECT a density that was never authored.
+    const uninjected = resolveDesignTokens({ style_bar: { lines: 40 } }, {});
+    expect(uninjected.style_bar?.image_density).toBeUndefined();
+  });
+
   it("byte-stable: unset design fields emit NO new CSS vars (every existing quiz unchanged)", () => {
     const vars = tokensToCssVars(resolveDesignTokens({ colors: { primary: "#123456" } }));
     // D0 is schema + cascade carry only — no CSS emission yet, so no logo/style-bar vars.

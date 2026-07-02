@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import type { CSSProperties } from "react";
-import { linesToRadiusPx, spacingToPadPx, imageDensityFactor } from "../../lib/styleBar";
+import { linesToRadiusPx, spacingToPadPx, hideDecorativeImagery } from "../../lib/styleBar";
 
 // Design Settings spec §3 — the Style Bar: 3 continuous sliders (0-100) that
 // fine-tune the chosen template. A small live mini-preview reflects radius +
@@ -10,6 +10,10 @@ import { linesToRadiusPx, spacingToPadPx, imageDensityFactor } from "../../lib/s
 
 type StyleBarValue = { image_density?: number; lines?: number; spacing?: number };
 
+// image_density default MUST stay ≥ the hideDecorativeImagery threshold (20):
+// the re-sync effect fills unset density with this value, so a merchant nudging
+// only Lines/Spacing commits image_density: 50 — which must render the same as
+// unset (show imagery), else that nudge would silently repaint the quiz.
 const DEFAULTS: Required<StyleBarValue> = { image_density: 50, lines: 50, spacing: 50 };
 
 function Row({
@@ -78,7 +82,11 @@ export function StyleBar({
 
   const radius = linesToRadiusPx(sb.lines ?? 50);
   const pad = spacingToPadPx(sb.spacing ?? 50);
-  const density = imageDensityFactor(sb.image_density ?? 50);
+  // The runtime effect is a single flip at the hideDecorativeImagery threshold,
+  // not a continuum — the preview must show that cliff honestly, and on a
+  // HEADER-image proxy (question headers + intro hero are what's gated), never
+  // an answer swatch: answer imagery is functional and always shows.
+  const hidesDecor = hideDecorativeImagery(sb.image_density ?? 50);
 
   const previewCard: CSSProperties = {
     border: "1px solid var(--qz-rule)",
@@ -102,23 +110,22 @@ export function StyleBar({
       <div className="qz-col qz-gap-4">
         <span className="qz-label" style={{ fontSize: 10.5 }}>Live preview</span>
         <div style={previewCard}>
-          <div className="qz-row qz-gap-8" style={{ alignItems: "center" }}>
+          {hidesDecor ? null : (
             <span
               aria-hidden
               style={{
-                width: 34,
-                height: 34,
+                height: 30,
                 borderRadius: Math.min(radius, 12),
                 background: "var(--qz-accent)",
-                opacity: 0.15 + density * 0.85,
+                opacity: 0.35,
                 flexShrink: 0,
               }}
             />
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontSize: 13, fontWeight: 600 }}>Sample answer</div>
-              <div className="qz-dim" style={{ fontSize: 11 }}>
-                radius {radius}px · padding {pad}px
-              </div>
+          )}
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: 13, fontWeight: 600 }}>Sample answer</div>
+            <div className="qz-dim" style={{ fontSize: 11 }}>
+              radius {radius}px · padding {pad}px
             </div>
           </div>
           <span
@@ -134,6 +141,11 @@ export function StyleBar({
             Continue
           </span>
         </div>
+        <span className="qz-dim" style={{ fontSize: 10.5 }}>
+          {hidesDecor
+            ? "Text-forward: decorative images (question headers + the intro hero) are hidden at this density. Answer images always show."
+            : "Decorative images (question headers + the intro hero) show at this density; below 20 they hide. Answer images always show."}
+        </span>
       </div>
     </div>
   );

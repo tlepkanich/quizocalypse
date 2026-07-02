@@ -23,6 +23,7 @@ import {
 } from "../../lib/recommendDecider";
 import { resolveNodeOverride } from "../../lib/resultLayout";
 import { selectHeroAndGrid } from "../../lib/heroProduct";
+import { hideDecorativeImagery, questionImagePosition } from "../../lib/styleBar";
 import { cartPermalink, numericId, cartPermalinkMulti } from "../../lib/cartLink";
 import { productHref, type QuizPlatform } from "../../lib/productHref";
 import { progressPct, reachableQuestionCount } from "../../lib/progress";
@@ -881,7 +882,14 @@ export function QuizRuntime(props: QuizRuntimeProps) {
       // existing published quiz sets hero_image_url, so image-less intros render
       // exactly as before.)
       const introDesktop = breakpoint === "desktop";
-      const heroImg = currentNode.data.hero_image_url;
+      // Image-density renderer (owner-activated): a Minimal-leaning density
+      // hides the DECORATIVE intro hero on this DEFAULT render; unset density
+      // changes nothing. An explicit node_layouts composition takes the
+      // BlockRenderer path above this branch and stays ungated — a
+      // hand-composed layout is explicit merchant intent (styleBar.ts).
+      const heroImg = hideDecorativeImagery(resolved.style_bar?.image_density)
+        ? undefined
+        : currentNode.data.hero_image_url;
       const sideImage = introDesktop && !!heroImg;
       const headlineEl = (
         <h1
@@ -3340,7 +3348,14 @@ function QuestionView({
   // Explicit answer-column override (editor revamp P3). Unset keeps the
   // responsive default from stylesFor (2-up desktop, 1-up mobile).
   // §4 question image position (top default / side / none) — drives QuestionImage.
-  const qImgPos = tokens.question_image_position ?? "top";
+  // Image-density renderer (owner-activated): a Minimal-leaning density hides
+  // decorative question header images across all 8 question renderers; answer
+  // images (image_tile/image_picker/swatch) are FUNCTIONAL and never gated,
+  // and an EXPLICIT position token beats the gate (questionImagePosition).
+  const qImgPos = questionImagePosition(
+    tokens.style_bar?.image_density,
+    tokens.question_image_position,
+  );
   const answerGrid = {
     ...(node.data.answer_columns
       ? {
