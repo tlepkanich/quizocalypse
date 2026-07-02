@@ -324,8 +324,12 @@ body[data-qz] :focus-visible {
 .qz-page { padding: 40px 48px 96px; max-width: 1280px; margin: 0 auto; }
 /* Wide funnel shell — the create funnel opts in so every stage is FLUID: it
    expands with the viewport (owner ask: "full screen / expands with the page
-   size so we can better understand the real estate"). No max-width cap. */
-.qz-page.is-wide { max-width: none; }
+   size so we can better understand the real estate"). No max-width cap.
+   width:100% is load-bearing: .qz-page sits in the column-flex .qz-shell-main
+   with `margin: 0 auto`, and auto cross-axis margins in flexbox override the
+   default stretch — without an explicit width the page shrink-wraps to its
+   content's fit-content width (each stage a different width). */
+.qz-page.is-wide { max-width: none; width: 100%; }
 .qz-page-header { margin-bottom: 36px; }
 
 /* — Funnel two-panel editor split (config left · live preview right) with a
