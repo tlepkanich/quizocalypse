@@ -62,15 +62,20 @@ try {
   await page.locator("button:has-text('Test all paths')").click();
   await page.waitForSelector(".qz-ql-report", { timeout: 5000 });
   ok("overlay renders with Tier-1 + Tier-2 + outcomes sections", (await page.locator(".qz-ql-report-tier").count()) === 3);
-  ok("10 checks listed", (await page.locator(".qz-ql-check").count()) === 10);
+  ok("11 checks listed (V1–V10 + S1 structure)", (await page.locator(".qz-ql-check").count()) === 11);
   const v1Row = page.locator(".qz-ql-check").filter({ hasText: "Exactly one deciding question" });
   ok("V1 passes (✓)", /✓/.test((await v1Row.locator(".qz-ql-check-glyph").textContent()) ?? ""));
   const v4Row = page.locator(".qz-ql-check").filter({ hasText: "Every deciding answer has a result" });
   ok("V4 fails with findings", (await v4Row.locator(".qz-ql-check-findings li").count()) === q1.data.answers.length - 1);
   ok("Tier-2 renders as a labeled placeholder", /arrives in a later update/.test((await page.locator(".qz-ql-report-tier2ph").textContent()) ?? ""));
   ok("outcome table has decider-answer rows", (await page.locator(".qz-ql-report-outcomes tbody tr").count()) >= q1.data.answers.length);
+  // The REAL draft carries a genuinely orphaned end node — the S1 fold-in must
+  // surface it (this is the review's key fix live: the report agrees with the
+  // publish gate). blocking = unmapped answers + the structural orphan.
+  const s1Row = page.locator(".qz-ql-check").filter({ hasText: "Structure" });
+  ok("S1 structure check surfaces the real orphan", (await s1Row.locator(".qz-ql-check-findings li").count()) >= 1);
   const verdict1 = (await page.locator(".qz-ql-report-verdict").textContent()) ?? "";
-  ok("§7.3 verdict: not safe + blocking count", /not safe to publish/.test(verdict1) && new RegExp(`${q1.data.answers.length - 1} blocking`).test(verdict1));
+  ok("§7.3 verdict: not safe + blocking count (V4 + S1)", /not safe to publish/.test(verdict1) && new RegExp(`${q1.data.answers.length - 1 + 1} blocking`).test(verdict1));
 
   // ── deep link: V4 finding → the decider card in the Builder view ──
   await v4Row.locator(".qz-ql-report-goto").first().click();
@@ -78,23 +83,38 @@ try {
   ok("deep link closed the overlay", (await page.locator(".qz-ql-report").count()) === 0);
   ok("deep link landed on the ACTIVE decider card", await page.locator(".qz-ql-card.is-decider").first().evaluate((el) => el.classList.contains("is-active")));
 
-  // ── fix the doc (map everything) → verdict flips to safe ──
+  // ── fix the doc (map everything + drop the pre-existing orphaned end node)
+  //    → verdict flips to safe ──
+  const reachable = new Set();
+  {
+    const queue = ["intro"];
+    const introNode = seeded.nodes.find((n) => n.type === "intro");
+    queue[0] = introNode?.id ?? "intro";
+    while (queue.length) {
+      const id = queue.shift();
+      if (reachable.has(id)) continue;
+      reachable.add(id);
+      for (const e of seeded.edges) if (e.source === id) queue.push(e.target);
+    }
+  }
   const fixed = {
     ...seeded,
-    nodes: seeded.nodes.map((n) =>
-      n.id === q1.id
-        ? {
-            ...n,
-            data: {
-              ...n.data,
-              answers: n.data.answers.map((a, i) => ({
-                ...a,
-                target_id: buckets[i % buckets.length]?.id ?? buckets[0].id,
-              })),
-            },
-          }
-        : n,
-    ),
+    nodes: seeded.nodes
+      .filter((n) => n.type === "intro" || reachable.has(n.id)) // drop orphans
+      .map((n) =>
+        n.id === q1.id
+          ? {
+              ...n,
+              data: {
+                ...n.data,
+                answers: n.data.answers.map((a, i) => ({
+                  ...a,
+                  target_id: buckets[i % buckets.length]?.id ?? buckets[0].id,
+                })),
+              },
+            }
+          : n,
+      ),
   };
   ok("fix PUT ok", (await putDoc(fixed)).ok === true);
   await page.reload({ waitUntil: "networkidle" });
