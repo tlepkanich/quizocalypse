@@ -1,6 +1,11 @@
 import type { Quiz, ResultData, MatchLadderStrategy } from "./quizSchema";
 import type { z } from "zod";
-import { resolveTarget, settingsForTarget, targetProducts } from "./recommendDecider";
+import {
+  resolveTarget,
+  settingsForTarget,
+  targetProducts,
+  type ResolvedRecPageConfig,
+} from "./recommendDecider";
 
 type QuizDoc = z.infer<typeof Quiz>;
 type ResultDataT = z.infer<typeof ResultData>;
@@ -121,6 +126,18 @@ export interface ExplainedRecommendation {
   oosSwapped: boolean;
   /** tag → effective weight from the selected answers (Phase J aware). */
   tagBag: Record<string, number>;
+  /** LOGIC v2 — present ONLY when the doc is a decider doc. Hands the runtime
+   *  the ONE authoritative resolution (target + config + hero/grid split +
+   *  the §5 all-OOS flag targetProducts computes) so no consumer duplicates
+   *  resolveTarget/settingsForTarget. Absent on every legacy path. */
+  decider?: {
+    targetId: string;
+    matchedRuleId: string | null;
+    config: ResolvedRecPageConfig;
+    hero: ExplainedProduct | null;
+    grid: ExplainedProduct[];
+    allOutOfStock: boolean;
+  };
 }
 
 // The shopper's tag bag: tag → best contributing answer's weight (Phase J),
@@ -345,16 +362,32 @@ export function recommendForResultExplained(
       targetId: resolved.targetId,
       targetShape: input.targetIndex?.[resolved.targetId]?.type,
       config,
-      productIndex,
+      // The same junk filter walkLadder applies (L2-9 review): $0+OOS
+      // placeholders never surface. Real OOS items keep their price and stay —
+      // the §5 OOS handling governs them.
+      productIndex: productIndex.filter(isSellable),
       targetProductIdsMap: input.targetProductIdsMap ?? {},
+    });
+    const asExplained = (p: IndexedProduct): ExplainedProduct => ({
+      ...p,
+      score: 0,
+      matched_tags: [],
     });
     const ordered = split.hero ? [split.hero, ...split.grid] : split.grid;
     return {
-      products: ordered.map((p) => ({ ...p, score: 0, matched_tags: [] })),
+      products: ordered.map(asExplained),
       rungUsed: resolved.matchedRuleId ? "decider_rule" : "decider",
       poolSize: split.poolSize,
       oosSwapped: false,
       tagBag: {},
+      decider: {
+        targetId: resolved.targetId,
+        matchedRuleId: resolved.matchedRuleId,
+        config,
+        hero: split.hero ? asExplained(split.hero) : null,
+        grid: split.grid.map(asExplained),
+        allOutOfStock: split.allOutOfStock,
+      },
     };
   }
   // ──────────────────────────────────────────────────────────────────────────
@@ -652,10 +685,11 @@ export interface PreviewRecommendationInput {
   slotCount?: number;
 }
 
-// NOTE: a quiz-level "global fallback" (Rec-Page spec §7) was intentionally NOT
-// implemented in the runtime. The product goal is non-negotiable: if a shopper's
-// answers fit NO bucket, the result shows NO products. The global_fallback field
-// remains in the schema (parsed for back-compat) but is never resolved or rendered.
+// NOTE (history): the quiz-level "global fallback" (legacy Rec-Page spec §7) was
+// originally NOT implemented ("no fit → no products"), then OWNER-APPROVED and
+// shipped via resolveGlobalFallbackProducts above (60fa80c/516b7a7) — it fires
+// only when global_fallback.enabled is explicitly set. LOGIC v2 decider docs use
+// their own §6 fallback chain (emptyFallback/safetyNetCol) instead.
 
 // Mid-quiz preview. Same scoring as the result-page engine, but with a different
 // fallback ladder since there's no result node context yet:

@@ -1225,6 +1225,13 @@ export const RecPageGlobal = z.object({
   emptyFallback: z.enum(["collection", "hide"]).optional(),
   emptyFallbackCol: z.string().optional(),
   safetyNetCol: z.string().optional(),
+  // §7.1 — the capture screen before the reveal. Email is default-ON at READ
+  // time (REC_PAGE_DEFAULTS); when every capture option is off the screen is
+  // skipped entirely. .optional() NEVER .default() — the translations-field
+  // discipline (a default would inject keys into every doc on parse→write).
+  captureEmail: z.boolean().optional(),
+  captureName: z.boolean().optional(),
+  capturePhone: z.boolean().optional(),
 });
 export type RecPageGlobal = z.infer<typeof RecPageGlobal>;
 

@@ -36,6 +36,12 @@ function resolveRecommendedProducts(
   path: Array<{ questionNodeId: string; answerIds: string[] }>,
   fromNodeId: string,
   answerWeights?: Record<string, number> | null,
+  // LOGIC v2 (L2-9) — the decider bake, threaded from the raw publishedJson so
+  // decider docs resolve their target's products here too. Absent on legacy.
+  targetFields: {
+    targetProductIdsMap?: Record<string, string[]>;
+    targetIndex?: Record<string, { type: "product" | "collection" | "tag"; name?: string }>;
+  } = {},
 ): { ids: string[]; titles: string[] } {
   const selectedAnswerIds = new Set<string>();
   const accumulatedTags = new Set<string>();
@@ -62,6 +68,7 @@ function resolveRecommendedProducts(
         selectedAnswerIds: [...selectedAnswerIds],
         resultNodeId: nextId,
         ...(answerWeights ? { answerWeights } : {}),
+        ...targetFields,
       });
       return { ids: recs.map((r) => r.product_id), titles: recs.map((r) => r.title) };
     }
@@ -111,7 +118,16 @@ export async function action({ params, request }: ActionFunctionArgs) {
     (quiz.publishedJson as { product_index?: IndexedProduct[] }).product_index ?? [];
   const answerWeights =
     (quiz.publishedJson as { answer_weights?: Record<string, number> }).answer_weights ?? null;
-  const recommended = resolveRecommendedProducts(doc, productIndex, body.path, node.id, answerWeights);
+  const rawBake = quiz.publishedJson as {
+    target_product_ids_map?: Record<string, string[]>;
+    target_index?: Record<string, { type: "product" | "collection" | "tag"; name?: string }>;
+  };
+  const recommended = resolveRecommendedProducts(doc, productIndex, body.path, node.id, answerWeights, {
+    ...(rawBake.target_product_ids_map
+      ? { targetProductIdsMap: rawBake.target_product_ids_map }
+      : {}),
+    ...(rawBake.target_index ? { targetIndex: rawBake.target_index } : {}),
+  });
 
   // Build the outbound payload from the path: question text → picked answer
   // text(s) + accumulated tags. Receivers get a flat readable shape.

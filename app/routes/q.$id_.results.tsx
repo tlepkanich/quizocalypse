@@ -48,6 +48,16 @@ export const loader = async ({ params, request }: LoaderFunctionArgs) => {
     product_index?: IndexedProduct[];
     shop_domain?: string;
     answer_weights?: Record<string, number>;
+    // LOGIC v2 (L2-9) — the decider bake, recovered from the raw JSON (the
+    // answer_weights pattern; Quiz.safeParse strips publish-time-only fields).
+    target_product_ids_map?: Record<string, string[]>;
+    target_index?: Record<string, { type: "product" | "collection" | "tag"; name?: string }>;
+  };
+  const targetFields = {
+    ...(publishedRaw.target_product_ids_map
+      ? { targetProductIdsMap: publishedRaw.target_product_ids_map }
+      : {}),
+    ...(publishedRaw.target_index ? { targetIndex: publishedRaw.target_index } : {}),
   };
   // Phase K2 — localize BEFORE share/recs compute so the whole page (and its
   // unfurl) follows the locale. Strip the raw maps from what we serve.
@@ -75,6 +85,7 @@ export const loader = async ({ params, request }: LoaderFunctionArgs) => {
           selectedAnswerIds: session.answerIds,
           resultNodeId: outcomeNode.id,
           ...(publishedRaw.answer_weights ? { answerWeights: publishedRaw.answer_weights } : {}),
+          ...targetFields,
         })
       : [];
   const share = {
@@ -96,6 +107,8 @@ export const loader = async ({ params, request }: LoaderFunctionArgs) => {
     productIndex,
     shopDomain: publishedRaw.shop_domain ?? "",
     answerWeights: publishedRaw.answer_weights ?? null,
+    targetProductIdsMap: publishedRaw.target_product_ids_map ?? null,
+    targetIndex: publishedRaw.target_index ?? null,
     share,
     locale: locale ?? "en",
     chrome,
@@ -127,8 +140,19 @@ export const meta: MetaFunction<typeof loader> = ({ data }) => {
 };
 
 export default function MyResults() {
-  const { quizId, doc, productIndex, shopDomain, answerWeights, share, session, locale, chrome } =
-    useLoaderData<typeof loader>();
+  const {
+    quizId,
+    doc,
+    productIndex,
+    shopDomain,
+    answerWeights,
+    targetProductIdsMap,
+    targetIndex,
+    share,
+    session,
+    locale,
+    chrome,
+  } = useLoaderData<typeof loader>();
   const tc = (token: ChromeToken, vars?: Record<string, string | number>) =>
     t(chrome as Record<ChromeToken, string>, token, vars);
   const localeSuffix = locale !== "en" ? `?locale=${encodeURIComponent(locale)}` : "";
@@ -160,6 +184,8 @@ export default function MyResults() {
     selectedAnswerIds: session.answerIds,
     resultNodeId: resultNode.id,
     ...(answerWeights ? { answerWeights } : {}),
+    ...(targetProductIdsMap ? { targetProductIdsMap } : {}),
+    ...(targetIndex ? { targetIndex } : {}),
   });
   const completedDate = session.completedAt ? formatDate(session.completedAt) : null;
 

@@ -95,6 +95,16 @@ export const CHROME_TOKENS = {
   notify_email_placeholder: "Email me when available",
   notify_section_prompt:
     "These picks are currently out of stock. Notify me when they're back.",
+  // LOGIC v2 (L2-9) — the decider capture→loading→reveal flow. New tokens fall
+  // back per-string to this English until a locale is regenerated (K1 contract).
+  capture_headline: "Your results are ready",
+  capture_subtext: "Enter your email and we'll reveal your personalized match.",
+  decider_hero_badge: "⭐ Our top pick for you",
+  decider_fallback_heading:
+    "We couldn't find an exact match — here are our most-loved products.",
+  all_out_of_stock: "These picks are temporarily out of stock — check back soon.",
+  incentive_code_auto: "🎁 Code {code} — applied automatically at checkout",
+  incentive_code_manual: "🎁 Use code {code} at checkout",
 } as const;
 
 export type ChromeToken = keyof typeof CHROME_TOKENS;

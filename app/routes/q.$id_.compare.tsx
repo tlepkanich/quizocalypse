@@ -46,15 +46,28 @@ export const loader = async ({ params, request }: LoaderFunctionArgs) => {
     ? applyTranslations(parsed.data, parsed.data.translations![locale]!.strings)
     : parsed.data;
 
-  const publishedRaw = quiz.publishedJson as { product_index?: IndexedProduct[]; shop_domain?: string; answer_weights?: Record<string, number> };
+  const publishedRaw = quiz.publishedJson as {
+    product_index?: IndexedProduct[];
+    shop_domain?: string;
+    answer_weights?: Record<string, number>;
+    // LOGIC v2 (L2-9) — the decider bake (Quiz.safeParse strips it; recover raw).
+    target_product_ids_map?: Record<string, string[]>;
+    target_index?: Record<string, { type: "product" | "collection" | "tag"; name?: string }>;
+  };
   const productIndex = publishedRaw.product_index ?? [];
+  const targetFields = {
+    ...(publishedRaw.target_product_ids_map
+      ? { targetProductIdsMap: publishedRaw.target_product_ids_map }
+      : {}),
+    ...(publishedRaw.target_index ? { targetIndex: publishedRaw.target_index } : {}),
+  };
 
   const resolve = (outcomeId: string | null, answerIds: string[]) => {
     const node =
       doc.nodes.find((n): n is ResultNode => n.type === "result" && n.id === outcomeId) ??
       doc.nodes.find((n): n is ResultNode => n.type === "result");
     const recs = node
-      ? recommendForResult({ quiz: doc, productIndex, selectedAnswerIds: answerIds, resultNodeId: node.id, ...(publishedRaw.answer_weights ? { answerWeights: publishedRaw.answer_weights } : {}) })
+      ? recommendForResult({ quiz: doc, productIndex, selectedAnswerIds: answerIds, resultNodeId: node.id, ...(publishedRaw.answer_weights ? { answerWeights: publishedRaw.answer_weights } : {}), ...targetFields })
       : [];
     return { headline: node?.data.headline ?? "", recs };
   };

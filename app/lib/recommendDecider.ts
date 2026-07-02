@@ -55,6 +55,9 @@ export const REC_PAGE_DEFAULTS: Required<
     | "incentiveAutoApply"
     | "incentivePos"
     | "emptyFallback"
+    | "captureEmail"
+    | "captureName"
+    | "capturePhone"
   >
 > = {
   headline: "Your perfect match",
@@ -70,6 +73,10 @@ export const REC_PAGE_DEFAULTS: Required<
   incentiveAutoApply: true,
   incentivePos: "banner",
   emptyFallback: "collection",
+  // §7.1 — email capture default-ON (mandatory when on); name/phone opt-in.
+  captureEmail: true,
+  captureName: false,
+  capturePhone: false,
 };
 
 export type ResolvedRecPageConfig = RecPageGlobalT & typeof REC_PAGE_DEFAULTS;
@@ -235,4 +242,39 @@ export function targetProducts(input: TargetProductsInput): TargetProducts {
   const rest = pool.filter((p) => p.product_id !== hero.product_id);
   const grid = orderBySignal(rest, config.gridSort).slice(0, config.gridMax);
   return { hero, grid, poolSize: pool.length, allOutOfStock: true };
+}
+
+// ── §6 fallback chain (empty resolved target) ───────────────────────────────
+
+export interface DeciderFallback {
+  /** Which named fallback produced the products; null = nothing to show (the
+   *  runtime renders the graceful no-match state). */
+  source: "empty_fallback" | "safety_net" | null;
+  products: IndexedProduct[];
+}
+
+/** §6 — what renders when the RESOLVED target has nothing showable. Two named
+ *  fallbacks, tried in order: emptyFallbackCol (unless the merchant explicitly
+ *  chose "hide" — respected, the safety net does not override an explicit
+ *  hide), then safetyNetCol as the global last resort. Members come from
+ *  product_index (publish unions both collections in — no live fetch); only
+ *  in-stock products qualify (a fallback of sold-out items helps nobody).
+ *  The no-target-RESOLVED case is prevented at build time by V1/V2 and is
+ *  deliberately not handled here. */
+export function deciderFallbackProducts(
+  config: ResolvedRecPageConfig,
+  productIndex: readonly IndexedProduct[],
+): DeciderFallback {
+  if (config.emptyFallback === "hide") return { source: null, products: [] };
+  const fromCollection = (collectionId: string | undefined): IndexedProduct[] =>
+    collectionId
+      ? productIndex.filter(
+          (p) => inStock(p) && p.collection_ids.includes(collectionId),
+        )
+      : [];
+  const primary = fromCollection(config.emptyFallbackCol).slice(0, config.gridMax);
+  if (primary.length > 0) return { source: "empty_fallback", products: primary };
+  const net = fromCollection(config.safetyNetCol).slice(0, config.gridMax);
+  if (net.length > 0) return { source: "safety_net", products: net };
+  return { source: null, products: [] };
 }

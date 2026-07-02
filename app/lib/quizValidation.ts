@@ -230,7 +230,15 @@ export function validateQuiz(doc: QuizDoc): NodeIssue[] {
         message: "No outbound edge — flow would dead-end here.",
       });
     }
-    if (node.type === "result" && !node.data.fallback_collection_id) {
+    // LOGIC v2: decider docs replace the per-result fallback with the §6
+    // quiz-level chain (emptyFallback/safetyNetCol in rec_page_settings), so
+    // the legacy per-node requirement must not block their publish. Legacy
+    // docs (logic_model unset) are flagged exactly as before.
+    if (
+      node.type === "result" &&
+      !node.data.fallback_collection_id &&
+      doc.logic_model !== "decider"
+    ) {
       issues.push({
         nodeId: node.id,
         kind: "missing_fallback",

@@ -78,12 +78,16 @@ export const loader = async ({ params, request }: LoaderFunctionArgs) => {
     throw new Response("Published JSON failed validation", { status: 500 });
   }
   // product_index + shop_domain + answer_weights aren't in the Zod schema
-  // (added at publish time).
+  // (added at publish time). LOGIC v2: the decider bake (target_product_ids_map
+  // + target_index) is likewise publish-time-only — Quiz.safeParse strips it,
+  // so it must be recovered from the raw JSON here (the answer_weights pattern).
   const publishedRaw = quiz.publishedJson as {
     product_index?: IndexedProduct[];
     shop_domain?: string;
     answer_weights?: Record<string, number>;
     platform?: "shopify" | "standalone";
+    target_product_ids_map?: Record<string, string[]>;
+    target_index?: Record<string, { type: "product" | "collection" | "tag"; name?: string }>;
   };
 
   // Phase K: resolve the requested locale against the quiz's translations and
@@ -131,6 +135,8 @@ export const loader = async ({ params, request }: LoaderFunctionArgs) => {
       // shopper runtime keeps add-to-cart with zero re-publish (back-compat).
       platform: publishedRaw.platform ?? "shopify",
       answerWeights: publishedRaw.answer_weights ?? null,
+      targetProductIdsMap: publishedRaw.target_product_ids_map ?? null,
+      targetIndex: publishedRaw.target_index ?? null,
       locale: locale ?? "en",
       chrome,
       buddySessionId,
@@ -161,6 +167,8 @@ export default function StorefrontRuntime() {
       shopDomain={data.shopDomain}
       platform={data.platform}
       answerWeights={data.answerWeights}
+      targetProductIdsMap={data.targetProductIdsMap}
+      targetIndex={data.targetIndex}
       chrome={data.chrome}
       locale={data.locale}
       buddySessionId={data.buddySessionId}

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   REC_PAGE_DEFAULTS,
+  deciderFallbackProducts,
   orderBySignal,
   resolveRecPageGlobal,
   resolveTarget,
@@ -369,5 +370,136 @@ describe("recommendForResultExplained dispatch — decider docs bypass the ladde
     });
     expect(out.products).toEqual([]);
     expect(out.rungUsed).toBeNull();
+    // No resolution → no decider payload; the runtime's isDecider guard owns
+    // the graceful state (never a legacy render).
+    expect(out.decider).toBeUndefined();
+  });
+});
+
+// ── L2-9 runtime handoff — the explained `decider` payload ──────────────────
+
+describe("explained.decider — the runtime's one authoritative resolution", () => {
+  const index = [P("a"), P("b"), P("c"), P("d")];
+
+  it("carries target, rule, override-merged config, and the hero/grid split", () => {
+    const doc = deciderDoc({
+      rec_page_settings: {
+        global: { headline: "Global headline", gridMax: 2 },
+        overrides: { cat_park: { headline: "Park headline" } },
+      },
+    });
+    const out = recommendForResultExplained({
+      quiz: doc,
+      productIndex: index,
+      selectedAnswerIds: ["park"],
+      resultNodeId: "r1",
+      targetProductIdsMap: { cat_park: ["a", "b", "c", "d"] },
+      targetIndex: { cat_park: { type: "collection" } },
+    });
+    expect(out.decider).toBeDefined();
+    expect(out.decider!.targetId).toBe("cat_park");
+    expect(out.decider!.matchedRuleId).toBeNull();
+    // Override-merged config with read-time defaults filled in.
+    expect(out.decider!.config.headline).toBe("Park headline");
+    expect(out.decider!.config.gridMax).toBe(2);
+    expect(out.decider!.config.captureEmail).toBe(true);
+    // Hero = first by collection_order; grid capped at gridMax.
+    expect(out.decider!.hero?.product_id).toBe("a");
+    expect(out.decider!.grid.map((p) => p.product_id)).toEqual(["b", "c"]);
+    expect(out.decider!.allOutOfStock).toBe(false);
+    // products stays hero-first (the flat consumers' contract).
+    expect(out.products.map((p) => p.product_id)).toEqual(["a", "b", "c"]);
+  });
+
+  it("legacy docs never carry the decider payload — with or without target fields", () => {
+    const doc = deciderDoc({ logic_model: undefined });
+    const base = recommendForResultExplained({
+      quiz: doc, productIndex: index, selectedAnswerIds: ["park"], resultNodeId: "r1",
+    });
+    expect(base.decider).toBeUndefined();
+    // Threading the L2-9 fields into a legacy call is inert: deep-equal output.
+    const threaded = recommendForResultExplained({
+      quiz: doc, productIndex: index, selectedAnswerIds: ["park"], resultNodeId: "r1",
+      targetProductIdsMap: { cat_park: ["a", "b"] },
+      targetIndex: { cat_park: { type: "collection" } },
+    });
+    expect(threaded).toEqual(base);
+  });
+
+  it("drops $0 + out-of-stock placeholders from the target pool (isSellable)", () => {
+    const doc = deciderDoc();
+    const junk = P("junk", { price: "0", inventory_in_stock: false });
+    const realOos = P("oos", { price: "20", inventory_in_stock: false });
+    // All-OOS target (no in-stock member): §5.3 shows the real OOS item
+    // badged — but the $0 placeholder must never surface even there.
+    const out = recommendForResultExplained({
+      quiz: doc,
+      productIndex: [junk, realOos],
+      selectedAnswerIds: ["park"],
+      resultNodeId: "r1",
+      targetProductIdsMap: { cat_park: ["junk", "oos"] },
+      targetIndex: { cat_park: { type: "collection" } },
+    });
+    const ids = out.products.map((p) => p.product_id);
+    expect(ids).not.toContain("junk"); // placeholder filtered
+    expect(ids).toContain("oos"); // real OOS item stays (§5 governs it)
+    expect(out.decider!.allOutOfStock).toBe(true);
+  });
+});
+
+// ── §7.1 capture defaults ────────────────────────────────────────────────────
+
+describe("REC_PAGE_DEFAULTS — capture screen defaults (§7.1)", () => {
+  it("email is default-ON; name/phone opt-in", () => {
+    expect(REC_PAGE_DEFAULTS.captureEmail).toBe(true);
+    expect(REC_PAGE_DEFAULTS.captureName).toBe(false);
+    expect(REC_PAGE_DEFAULTS.capturePhone).toBe(false);
+  });
+});
+
+// ── §6 fallback chain ────────────────────────────────────────────────────────
+
+describe("deciderFallbackProducts — the §6 empty-target chain", () => {
+  const col = (id: string, ...members: IndexedProduct[]) =>
+    members.map((p) => ({ ...p, collection_ids: [...p.collection_ids, id] }));
+
+  it("emptyFallbackCol resolves in-stock members, capped at gridMax", () => {
+    const idx = [
+      ...col("fb", P("f1"), P("f2"), P("f3"), P("f4")),
+      P("other"),
+    ];
+    const out = deciderFallbackProducts(
+      cfg({ emptyFallbackCol: "fb", gridMax: 3 }),
+      idx,
+    );
+    expect(out.source).toBe("empty_fallback");
+    expect(out.products.map((p) => p.product_id)).toEqual(["f1", "f2", "f3"]);
+  });
+
+  it("out-of-stock members never qualify for a fallback", () => {
+    const idx = col("fb", P("f1", { inventory_in_stock: false }), P("f2"));
+    const out = deciderFallbackProducts(cfg({ emptyFallbackCol: "fb" }), idx);
+    expect(out.products.map((p) => p.product_id)).toEqual(["f2"]);
+  });
+
+  it("an empty primary falls through to safetyNetCol; nothing → null source", () => {
+    const idx = col("net", P("n1"));
+    const chained = deciderFallbackProducts(
+      cfg({ emptyFallbackCol: "fb-missing", safetyNetCol: "net" }),
+      idx,
+    );
+    expect(chained.source).toBe("safety_net");
+    expect(chained.products.map((p) => p.product_id)).toEqual(["n1"]);
+    const dry = deciderFallbackProducts(cfg({ emptyFallbackCol: "fb-missing" }), idx.filter(() => false));
+    expect(dry).toEqual({ source: null, products: [] });
+  });
+
+  it('an explicit "hide" is respected — the safety net does not override it', () => {
+    const idx = col("net", P("n1"));
+    const out = deciderFallbackProducts(
+      cfg({ emptyFallback: "hide", emptyFallbackCol: "net", safetyNetCol: "net" }),
+      idx,
+    );
+    expect(out).toEqual({ source: null, products: [] });
   });
 });
