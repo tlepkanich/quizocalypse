@@ -28,6 +28,7 @@ import {
 import {
   startStep2Types,
   startStep2Templates,
+  startQuestionBuild,
   initPickedTemplate,
   startStep2Build,
 } from "./step2Build.server";
@@ -852,6 +853,14 @@ async function runStep1FunnelActionImpl(
       stage: "templating",
       goal: { goal_text: goal, struggle_text: struggle },
       gen_error: undefined,
+      // O-3 (decider only, review-caught) — a goal build is a FRESH direction:
+      // clear any leftover template artifacts (a stale picked_type_id would make
+      // retry-gen regenerate the OLD type's templates; stale rich/picked would
+      // make the saved-template retry fallback rebuild the OLD template if this
+      // job is killed before its own templates persist). Legacy untouched.
+      ...(doc.logic_model === "decider"
+        ? { picked_type_id: undefined, rich_templates: [], picked_template: undefined }
+        : {}),
     };
     await writeDoc(quiz.id, {
       ...doc,
@@ -933,6 +942,32 @@ async function runStep1FunnelActionImpl(
         });
         return json({ intent, ok: true });
       }
+      // O-3 (DECIDER only — provably legacy-inert) — the saved-template kick
+      // parks templating with NO picked_type_id (deliberately cleared) but the
+      // session carries the template + working copy: a stalled/killed build
+      // re-runs the question build directly. Also fires for a decider
+      // shape-goal-build killed AFTER its templates persisted (the completion
+      // seeds rich+picked at stage templating) — retrying the auto-picked
+      // template is correct there too; a kill BEFORE they persist finds
+      // nothing (shape-goal-build clears stale artifacts at kick) and falls
+      // to the honest 400 below, same as pre-O-3.
+      if (doc.logic_model === "decider") {
+        const retryRich = session.rich_templates.find(
+          (t) => t.id === session.picked_template?.template_id,
+        );
+        if (retryRich && session.picked_template) {
+          await writeDoc(quiz.id, { ...doc, build_session: { ...session, gen_error: undefined } });
+          await startQuestionBuild(
+            shop.id,
+            quiz.id,
+            retryRich,
+            session.picked_template,
+            session.goal?.goal_text || retryRich.angle,
+            session.goal?.struggle_text ?? "",
+          );
+          return json({ intent, ok: true });
+        }
+      }
     }
     return json({ intent, ok: false, error: "Nothing to retry — start over from the quiz list." }, { status: 400 });
   }
@@ -956,19 +991,12 @@ async function runStep1FunnelActionImpl(
   }
 
   // Reuse a saved template — skip the AI tiers entirely. Loads the stored
-  // RichTemplateOption, seeds it as the sole tier-2 option + an auto-named working
-  // copy, and jumps straight to the battle card (stage "configuring").
+  // RichTemplateOption; LEGACY drafts seed it as the sole tier-2 option + an
+  // auto-named working copy and jump to the battle card (stage "configuring").
+  // DECIDER drafts (O-3, owner-approved 2026-07-03) never enter the retired
+  // battle card: the template seeds the working copy and kicks the SAME early
+  // question build the Shape cards use → lands at Questions & Logic.
   if (intent === "use-saved-template") {
-    // LOGIC v2 (L2-10d) — the battle-card stage this jumps to bypasses the
-    // decider funnel's Questions & Logic + Rec Page steps and exits into a
-    // builder without decider authoring UI. The UI hides the row for decider
-    // drafts; this 400 is defense (stale tabs, scripted posts).
-    if (doc.logic_model === "decider") {
-      return json(
-        { intent, ok: false, error: "Saved templates aren't available for this flow yet." },
-        { status: 400 },
-      );
-    }
     const templateId = String(form.get("templateId") ?? "");
     const rich = await loadSavedTemplate(shop.id, templateId);
     if (!rich) return json({ intent, ok: false, error: "That saved template is no longer available." }, { status: 400 });
@@ -977,6 +1005,42 @@ async function runStep1FunnelActionImpl(
       select: { id: true, name: true, productIds: true },
       orderBy: { createdAt: "asc" },
     });
+    if (doc.logic_model === "decider") {
+      // recommended_bucket_ids are the SOURCE quiz's Category cuids — on this
+      // draft they match nothing, so initPickedTemplate would disable EVERY
+      // group (empty preResolvedBuckets → bucket discovery instead of the
+      // merchant's confirmed buckets). Neutralize them: the confirmed buckets
+      // ARE the merchant's choice here.
+      const richForDraft = { ...rich, recommended_bucket_ids: [] };
+      const picked = initPickedTemplate(
+        richForDraft,
+        cats.map((c) => ({ id: c.id, name: c.name, product_ids: c.productIds })),
+        new Date(),
+      );
+      // continue-buckets always seeds goal_text before Shape; angle is defense.
+      const goal = session.goal?.goal_text || richForDraft.angle;
+      const struggle = session.goal?.struggle_text ?? "";
+      // writeDoc BEFORE startQuestionBuild — it snapshots priorSession up front
+      // and restores it on completion; reversing wipes picked_template post-build
+      // (the same ordering startStep2Templates uses). picked_type_id is CLEARED
+      // so a later retry-gen retries THIS template instead of re-generating
+      // tier-2 options from a leftover Shape pick.
+      await writeDoc(quiz.id, {
+        ...doc,
+        scoring_model: "direct",
+        experience_type: richForDraft.experience_type,
+        build_session: {
+          ...session,
+          stage: "templating",
+          picked_type_id: undefined,
+          rich_templates: [richForDraft],
+          picked_template: picked,
+          gen_error: undefined,
+        },
+      });
+      await startQuestionBuild(shop.id, quiz.id, richForDraft, picked, goal, struggle);
+      return json({ intent, ok: true });
+    }
     const picked = initPickedTemplate(
       rich,
       cats.map((c) => ({ id: c.id, name: c.name, product_ids: c.productIds })),
@@ -1525,6 +1589,14 @@ async function runStep1FunnelActionImpl(
       return redirect(opts.builderPath(quiz.id));
     }
 
+    // LOGIC v2 / O-3 trapdoor — a decider draft mid-build (built:false, and the
+    // saved-template path now also seeds picked_template) must never reach the
+    // legacy startStep2Build below: it would strip + rebuild outside the decider
+    // pipeline. Only the built:true non-AI finalize above is decider-legal.
+    if (doc.logic_model === "decider") {
+      return json({ intent, ok: false, error: "The quiz is still building — give it a moment." }, { status: 400 });
+    }
+
     // Legacy in-flight draft that reached Overview the OLD way (no build yet) →
     // run the real detached build, landing in the builder via the buildState overlay.
     const rich = session.rich_templates.find((t) => t.id === picked.template_id);
@@ -1539,6 +1611,13 @@ async function runStep1FunnelActionImpl(
       session.goal.struggle_text ?? "",
     );
     return redirect(opts.builderPath(quiz.id));
+  }
+
+  // LOGIC v2 / O-3 — decider drafts never use the retired battle card; the
+  // saved-template path re-seeds rich_templates + picked_template, so this
+  // navigation intent must stay closed (stale tabs, scripted posts).
+  if (intent === "back-to-configuring" && doc.logic_model === "decider") {
+    return json({ intent, ok: false, error: "That step isn't part of this flow." }, { status: 400 });
   }
 
   if (

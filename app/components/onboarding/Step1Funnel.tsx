@@ -1883,7 +1883,11 @@ function ShapeStage({
     pendingIntent === "shape-continue" ||
     pendingIntent === "shape-manual" ||
     pendingIntent === "shape-regenerate" ||
-    pendingIntent === "shape-goal-build";
+    pendingIntent === "shape-goal-build" ||
+    // O-3 — the decider saved-template pick kicks the question build; keep the
+    // other Shape affordances muted while it's in flight (isDecider-gated so
+    // legacy render behavior is byte-identical).
+    (isDecider && pendingIntent === "use-saved-template");
   // When one card is expanded (or the goal card is open), the others mute so the
   // merchant can still compare without losing focus.
   const somethingOpen = expandedId !== null || writingGoal;
@@ -2095,13 +2099,15 @@ function ShapeStage({
         ) : null}
       </div>
 
-      {/* Saved templates route through the retired battle-card stage, which
-          skips the decider funnel's Questions & Logic + Rec Page steps and
-          strands the merchant in a builder without decider authoring UI — so
-          they stay LEGACY-only until a decider-native template path exists. */}
-      {!isDecider ? (
-        <SavedTemplatesRow templates={data.savedTemplates} fetcher={fetcher} pendingIntent={pendingIntent} />
-      ) : null}
+      {/* Saved templates — legacy drafts seed the battle card ("configuring");
+          decider drafts (O-3, owner-approved 2026-07-03) kick the early
+          question build directly and land in Questions & Logic. */}
+      <SavedTemplatesRow
+        templates={data.savedTemplates}
+        fetcher={fetcher}
+        pendingIntent={pendingIntent}
+        isDecider={isDecider}
+      />
 
       <div className="qz-row" style={{ gap: 10, alignItems: "center" }}>
         <button
@@ -2125,26 +2131,33 @@ function ShapeStage({
   );
 }
 
-// Saved templates (shop-scoped) surface as an alternative to the AI tiers — pick
-// one to skip straight to a pre-filled battle card (the use-saved-template intent
-// seeds it as the sole tier-2 option + an auto-named working copy → configuring).
+// Saved templates (shop-scoped) surface as an alternative to the AI tiers.
+// LEGACY drafts: pick one to skip straight to a pre-filled battle card (the
+// use-saved-template intent seeds it as the sole tier-2 option + an auto-named
+// working copy → configuring). DECIDER drafts (O-3): the pick kicks the early
+// question build directly and lands at Questions & Logic — no battle card.
 function SavedTemplatesRow({
   templates,
   fetcher,
   pendingIntent,
+  isDecider,
 }: {
   templates: FunnelData["savedTemplates"];
   fetcher: ReturnType<typeof useFetcher<ActionResult>>;
   pendingIntent: string | null;
+  isDecider: boolean;
 }) {
   if (templates.length === 0) return null;
   const using = pendingIntent === "use-saved-template";
+  const usingId = using ? String(fetcher.formData?.get("templateId") ?? "") : null;
   return (
     <QzCard style={{ display: "flex", flexDirection: "column", gap: 10 }}>
       <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
         <span className="qz-label">Or reuse a saved template</span>
         <span className="qz-dim" style={{ fontSize: 12 }}>
-          Start from one you saved before — its design dials and recommendation settings come along.
+          {isDecider
+            ? "Start from one you saved before — we’ll build your questions from it and take you straight to Questions & Logic."
+            : "Start from one you saved before — its design dials and recommendation settings come along."}
         </span>
       </div>
       <div className="qz-template-rail">
@@ -2159,7 +2172,7 @@ function SavedTemplatesRow({
               fetcher.submit({ intent: "use-saved-template", templateId: s.id }, { method: "post" })
             }
           >
-            ♻ {s.name}
+            {isDecider && usingId === s.id ? "Building…" : <>♻ {s.name}</>}
           </button>
         ))}
       </div>

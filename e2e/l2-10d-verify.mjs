@@ -100,7 +100,12 @@ await page.goto(funnelUrl, { waitUntil: "domcontentloaded" });
 await page.waitForTimeout(1200);
 ok("Shape heading renders", await page.getByText("Shape your quiz").first().isVisible().catch(() => false));
 ok("Manual card HIDDEN for decider", !(await page.getByText("Manual create").first().isVisible().catch(() => false)));
-ok("saved-templates row HIDDEN for decider", !(await page.getByText("saved template", { exact: false }).first().isVisible().catch(() => false)));
+// O-3 flipped this: saved templates are decider-native now (early question
+// build). The row only renders when the shop HAS saved templates — assert
+// visibility MATCHES the loader state so a clean shop can't false-fail.
+const hasSaved = (fd.savedTemplates?.length ?? 0) > 0;
+const rowVisible = await page.getByText("saved template", { exact: false }).first().isVisible().catch(() => false);
+ok("saved-templates row visibility matches loader state (O-3)", rowVisible === hasSaved, `templates=${fd.savedTemplates?.length ?? 0} visible=${rowVisible}`);
 ok("Write-your-goal card kept", await page.getByText("Write your goal", { exact: false }).first().isVisible().catch(() => false));
 await page.getByRole("button", { name: "Use this type →" }).first().click();
 await page.waitForTimeout(400);
@@ -116,7 +121,9 @@ ok("shape-manual → 400 for decider", manResp.status() === 400, `${manResp.stat
 const wResp = await postIntent(draftId, { intent: "shape-continue", typeId, scoring: "weighted" });
 ok("shape-continue scoring=weighted → 400 for decider", wResp.status() === 400, `${wResp.status()}`);
 const stResp = await postIntent(draftId, { intent: "use-saved-template", templateId: "anything" });
-ok("use-saved-template → 400 for decider", stResp.status() === 400, `${stResp.status()}`);
+// O-3: the L2-10d decider guard is gone — this 400 now comes from the NOT-FOUND path
+// (bogus template id), which still defends against scripted posts.
+ok("use-saved-template bogus id → 400 (not-found)", stResp.status() === 400, `${stResp.status()}`);
 
 // ── 5. LEGACY regression — strip the stamp, same stage renders 4 cards ──────
 const preStrip = (await readBuilder(draftId)).doc;
