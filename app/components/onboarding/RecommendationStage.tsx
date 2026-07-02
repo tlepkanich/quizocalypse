@@ -9,6 +9,8 @@ import { useQuizDraft } from "../studio/useQuizDraft";
 import { ResultSettingsPanel } from "../builder/ResultSettingsPanel";
 import { RecPageDiagram } from "../studio/RecPageDiagram";
 import { RecPagePreview } from "./RecPagePreview";
+import { RecPageV2Panel } from "./RecPageV2Panel";
+import { RecPageV2Preview } from "./RecPageV2Preview";
 import { QzCard } from "../qz";
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -54,6 +56,12 @@ export function RecommendationStage({
   pendingIntent: string | null;
 }) {
   const { doc, commit, isSaving, savedAt } = useQuizDraft(initialDoc);
+
+  // LOGIC v2 — decider docs get the target-based Step-4 surface (ONE global
+  // config + sparse per-target overrides, rec-page-spec-V2 §2/§3) instead of
+  // the legacy per-result-node panel. Legacy docs render exactly as before.
+  const deciderMode = doc.logic_model === "decider";
+  const [targetId, setTargetId] = useState<string | null>(null);
 
   const resultNodes = useMemo(
     () => doc.nodes.filter((n): n is ResultNode => n.type === "result"),
@@ -102,7 +110,44 @@ export function RecommendationStage({
         </span>
       </header>
 
-      {resultNodes.length === 0 ? (
+      {deciderMode ? (
+        // LOGIC v2: target selector + global/override config + the §11.1
+        // live preview (both target shapes, real engine, no runtime needed).
+        <div className={`qz-qb-split${leftOpen ? "" : " is-collapsed"}`}>
+          <div className="qz-qb-config">
+            <QzCard style={{ padding: 14 }}>
+              <RecPageV2Panel
+                doc={doc}
+                categories={categories}
+                collections={collections}
+                onCommit={commit}
+                selectedTargetId={targetId}
+                onSelectTarget={setTargetId}
+              />
+            </QzCard>
+          </div>
+          <div className="qz-qb-preview">
+            <button
+              type="button"
+              className="qz-btn qz-btn-ghost qz-btn-sm"
+              aria-expanded={leftOpen}
+              aria-label={leftOpen ? "Collapse settings" : "Show settings"}
+              style={{ marginBottom: 10 }}
+              onClick={() => setLeftOpen((v) => !v)}
+            >
+              {leftOpen ? "◀ Hide settings" : "▶ Show settings"}
+            </button>
+            <QzCard style={{ padding: 18 }}>
+              <RecPageV2Preview
+                doc={doc}
+                categories={categories}
+                productIndex={productIndex}
+                targetId={targetId}
+              />
+            </QzCard>
+          </div>
+        </div>
+      ) : resultNodes.length === 0 ? (
         <QzCard style={{ padding: 16 }}>
           <p className="qz-dim" style={{ margin: 0 }}>
             No recommendations yet — add product buckets first.

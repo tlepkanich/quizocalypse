@@ -1173,6 +1173,81 @@ export function updateDecisionRule(
   };
 }
 
+// ── LOGIC v2 rec-page-spec-V2 §3 — rec_page_settings (decider docs only) ────
+// SPARSE storage discipline: defaults are applied at READ time (REC_PAGE_
+// DEFAULTS in recommendDecider), so these writers persist ONLY merchant-set
+// fields. A patch value of `undefined` REMOVES the key (clear-to-default), and
+// when everything empties out the rec_page_settings root itself is dropped —
+// the H3 harness pins it absent-when-unset on the published wire.
+
+type RecPageGlobalPatch = Partial<
+  NonNullable<NonNullable<QuizDoc["rec_page_settings"]>["global"]>
+>;
+type RecPageOverridePatch = Partial<
+  NonNullable<NonNullable<QuizDoc["rec_page_settings"]>["overrides"]>[string]
+>;
+
+function applySparse<T extends Record<string, unknown>>(
+  base: T | undefined,
+  patch: Record<string, unknown>,
+): T {
+  const next: Record<string, unknown> = { ...(base ?? {}) };
+  for (const [k, v] of Object.entries(patch)) {
+    if (v === undefined) delete next[k];
+    else next[k] = v;
+  }
+  return next as T;
+}
+
+function packRecPageSettings(
+  doc: QuizDoc,
+  global: Record<string, unknown>,
+  overrides: Record<string, Record<string, unknown>>,
+): QuizDoc {
+  const empty =
+    Object.keys(global).length === 0 && Object.keys(overrides).length === 0;
+  if (empty) {
+    const { rec_page_settings: _dropped, ...rest } = doc;
+    return rest as QuizDoc;
+  }
+  return { ...doc, rec_page_settings: { global, overrides } as QuizDoc["rec_page_settings"] };
+}
+
+/** Patch the GLOBAL rec-page config (§3.1). `undefined` clears a key. Pure. */
+export function setRecPageGlobal(doc: QuizDoc, patch: RecPageGlobalPatch): QuizDoc {
+  if (doc.logic_model !== "decider") return doc;
+  const cur = doc.rec_page_settings;
+  const global = applySparse(cur?.global, patch as Record<string, unknown>);
+  return packRecPageSettings(doc, global, { ...(cur?.overrides ?? {}) });
+}
+
+/** Patch ONE target's sparse override (§3.2 — "Give this its own page").
+ *  `undefined` clears a key; an override that empties out is removed (the
+ *  target fully inherits global again). Pure. */
+export function setRecPageOverride(
+  doc: QuizDoc,
+  targetId: string,
+  patch: RecPageOverridePatch,
+): QuizDoc {
+  if (doc.logic_model !== "decider" || !targetId) return doc;
+  const cur = doc.rec_page_settings;
+  const overrides = { ...(cur?.overrides ?? {}) };
+  const next = applySparse(overrides[targetId], patch as Record<string, unknown>);
+  if (Object.keys(next).length === 0) delete overrides[targetId];
+  else overrides[targetId] = next as (typeof overrides)[string];
+  return packRecPageSettings(doc, { ...(cur?.global ?? {}) }, overrides);
+}
+
+/** Drop a target's override entirely (the toggle going OFF → inherit global). */
+export function removeRecPageOverride(doc: QuizDoc, targetId: string): QuizDoc {
+  if (doc.logic_model !== "decider") return doc;
+  const cur = doc.rec_page_settings;
+  if (!cur?.overrides?.[targetId]) return doc;
+  const overrides = { ...cur.overrides };
+  delete overrides[targetId];
+  return packRecPageSettings(doc, { ...(cur.global ?? {}) }, overrides);
+}
+
 // Weighted scoring: set ONE bucket's weight in the answer's points map,
 // preserving the others. A weight ≤ 0 removes just that bucket. Pure.
 export function setAnswerBucketWeight(

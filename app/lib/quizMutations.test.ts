@@ -24,6 +24,9 @@ import {
   removeDecisionRule,
   moveDecisionRule,
   updateDecisionRule,
+  setRecPageGlobal,
+  setRecPageOverride,
+  removeRecPageOverride,
 } from "./quizMutations";
 import { insertModule } from "../components/studio/studioDoc";
 import { orderFlow } from "./flowOrder";
@@ -825,6 +828,55 @@ describe("LOGIC v2 role/target mutations (setQuestionRole / setAnswerTarget)", (
       expect(removeDecisionRule(legacy, "r1")).toBe(legacy);
       expect(moveDecisionRule(legacy, "r1", 0)).toBe(legacy);
       expect(updateDecisionRule(legacy, "r1", { target_id: "x" })).toBe(legacy);
+    });
+  });
+
+  describe("rec-page-spec-V2 §3 — rec_page_settings mutations (SPARSE writes)", () => {
+    it("setRecPageGlobal writes only set fields; undefined clears; empty settings DROP the root key", () => {
+      let doc = setRecPageGlobal(deciderDoc(), { headline: "Custom", gridMax: 5 });
+      expect(doc.rec_page_settings?.global).toEqual({ headline: "Custom", gridMax: 5 });
+      // Clear one field (back to the read-time default).
+      doc = setRecPageGlobal(doc, { gridMax: undefined });
+      expect(doc.rec_page_settings?.global).toEqual({ headline: "Custom" });
+      expect(Object.prototype.hasOwnProperty.call(doc.rec_page_settings!.global, "gridMax")).toBe(false);
+      // Clear the last field → the ROOT key vanishes (absent-when-unset).
+      doc = setRecPageGlobal(doc, { headline: undefined });
+      expect(Object.prototype.hasOwnProperty.call(doc, "rec_page_settings")).toBe(false);
+      expect(() => Quiz.parse(doc)).not.toThrow();
+    });
+
+    it("setRecPageOverride keeps overrides sparse per target; emptying one removes it (inherit again)", () => {
+      let doc = setRecPageOverride(deciderDoc(), "cat_a", { headline: "Just for A" });
+      doc = setRecPageOverride(doc, "cat_b", { incentiveOn: true, incentiveCode: "SAVE10" });
+      expect(doc.rec_page_settings?.overrides).toEqual({
+        cat_a: { headline: "Just for A" },
+        cat_b: { incentiveOn: true, incentiveCode: "SAVE10" },
+      });
+      // Empty cat_a's override → the target key vanishes; cat_b untouched.
+      doc = setRecPageOverride(doc, "cat_a", { headline: undefined });
+      expect(doc.rec_page_settings?.overrides).toEqual({
+        cat_b: { incentiveOn: true, incentiveCode: "SAVE10" },
+      });
+      // removeRecPageOverride drops the whole override (toggle OFF).
+      doc = removeRecPageOverride(doc, "cat_b");
+      expect(Object.prototype.hasOwnProperty.call(doc, "rec_page_settings")).toBe(false);
+      expect(removeRecPageOverride(doc, "nope")).toBe(doc); // identity when absent
+      expect(() => Quiz.parse(doc)).not.toThrow();
+    });
+
+    it("global + overrides coexist independently; all three no-op on a LEGACY doc", () => {
+      let doc = setRecPageGlobal(deciderDoc(), { heroLogic: "bestseller" });
+      doc = setRecPageOverride(doc, "cat_a", { heroLogic: "newest" });
+      expect(doc.rec_page_settings?.global).toEqual({ heroLogic: "bestseller" });
+      expect(doc.rec_page_settings?.overrides?.cat_a).toEqual({ heroLogic: "newest" });
+      // Removing the override keeps the global.
+      doc = removeRecPageOverride(doc, "cat_a");
+      expect(doc.rec_page_settings?.global).toEqual({ heroLogic: "bestseller" });
+      expect(doc.rec_page_settings?.overrides).toEqual({});
+      const legacy = linearQuestionsDoc();
+      expect(setRecPageGlobal(legacy, { headline: "x" })).toBe(legacy);
+      expect(setRecPageOverride(legacy, "cat_a", { headline: "x" })).toBe(legacy);
+      expect(removeRecPageOverride(legacy, "cat_a")).toBe(legacy);
     });
   });
 });
