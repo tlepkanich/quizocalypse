@@ -1731,10 +1731,26 @@ body[data-qz] ::selection { background: var(--qz-ink); color: var(--qz-cream); }
   padding: 3px 10px;
   white-space: nowrap;
 }
-/* The Rules tab placeholder (until the L2-6 rule builder lands). */
-.qz-ql-rules-placeholder {
-  max-width: 560px;
-  margin: 40px auto;
+/* ── LOGIC v2 §4.2 — the Rules tab priority matrix ── */
+.qz-ql-rules {
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 20px 24px 60px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+/* §4.1 — precedence stated on-screen (spec mandate). */
+.qz-ql-rules-precedence {
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: var(--ql-gold);
+  background: var(--ql-gold-bg);
+  border: 1px solid #fde68a;
+  border-radius: 10px;
+  padding: 10px 14px;
+}
+.qz-ql-rules-empty {
   padding: 28px;
   border: 1px dashed var(--ql-border);
   border-radius: 14px;
@@ -1749,6 +1765,177 @@ body[data-qz] ::selection { background: var(--qz-ink); color: var(--qz-cream); }
   color: var(--ql-txt);
   margin-bottom: 8px;
 }
+.qz-ql-rules-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.qz-ql-rule {
+  background: #fff;
+  border: 1px solid var(--ql-border);
+  border-radius: 12px;
+  padding: 12px 14px;
+}
+.qz-ql-rule.is-dragover { border-color: var(--ql-gold-border); box-shadow: 0 0 0 1px var(--ql-gold-border); }
+.qz-ql-rule-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.qz-ql-rule-grip { cursor: grab; color: var(--ql-txt3); font-size: 13px; }
+.qz-ql-rule-prio {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+  color: var(--ql-txt2);
+}
+.qz-ql-rule-flag {
+  font-size: 10.5px;
+  font-weight: 700;
+  border-radius: 999px;
+  padding: 2px 8px;
+  border: 1px solid transparent;
+}
+.qz-ql-rule-flag.is-half { color: var(--ql-txt3); background: var(--ql-surface); border-color: var(--ql-border); }
+.qz-ql-rule-flag.is-dead,
+.qz-ql-rule-flag.is-shadow { color: var(--ql-danger); background: var(--ql-danger-bg); border-color: #fca5a5; }
+.qz-ql-rule-flag.is-fragile { color: var(--ql-warn); background: var(--ql-warn-bg); border-color: #fcd34d; }
+.qz-ql-rule-est {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--ql-txt2);
+  font-variant-numeric: tabular-nums;
+  margin-right: 4px;
+}
+.qz-ql-rule-head button {
+  background: none;
+  border: 1px solid var(--ql-border);
+  border-radius: 6px;
+  padding: 1px 7px;
+  font-size: 12px;
+  cursor: pointer;
+  color: var(--ql-txt2);
+}
+.qz-ql-rule-head button:hover:not(:disabled) { border-color: var(--ql-accent); }
+.qz-ql-rule-head button:disabled { opacity: 0.3; cursor: not-allowed; }
+.qz-ql-rule-head .qz-ql-rule-del:hover { border-color: var(--ql-danger); color: var(--ql-danger); background: var(--ql-danger-bg); }
+.qz-ql-rule-conds {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.qz-ql-cond {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.qz-ql-cond-join {
+  min-width: 34px;
+  text-align: right;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.4px;
+  color: var(--ql-gold);
+}
+.qz-ql-cond select,
+.qz-ql-rule-target select {
+  font: inherit;
+  font-size: 12.5px;
+  padding: 4px 8px;
+  border-radius: 8px;
+  border: 1px solid var(--ql-border);
+  background: #fff;
+  color: var(--ql-txt);
+  max-width: 260px;
+  cursor: pointer;
+}
+.qz-ql-cond-del {
+  background: none;
+  border: 0;
+  cursor: pointer;
+  font-size: 12px;
+  opacity: 0.5;
+  padding: 2px 4px;
+}
+.qz-ql-cond-del:hover { opacity: 1; color: var(--ql-danger); }
+.qz-ql-rule-addcond {
+  align-self: flex-start;
+  margin-left: 40px;
+  background: none;
+  border: 1px dashed var(--ql-border);
+  border-radius: 8px;
+  padding: 3px 10px;
+  font-size: 12px;
+  color: var(--ql-txt2);
+  cursor: pointer;
+}
+.qz-ql-rule-addcond:hover:not(:disabled) { border-color: var(--ql-gold-border); color: var(--ql-gold); }
+.qz-ql-rule-target {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--ql-border2);
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--ql-txt2);
+}
+.qz-ql-rule-arrow { color: var(--ql-gold); font-weight: 800; }
+.qz-ql-rules-add { align-self: flex-start; }
+.qz-ql-rules-fallthrough {
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--ql-txt2);
+  background: var(--ql-surface);
+  border: 1px solid var(--ql-border2);
+  border-radius: 10px;
+  padding: 10px 14px;
+  margin: 0;
+}
+/* §4.2 — the inline per-question accordion (collapsed by default). */
+.qz-ql-inline-rules {
+  margin: 12px 18px 16px;
+  border-top: 1px solid var(--ql-border2);
+  padding-top: 10px;
+  font-size: 12.5px;
+  color: var(--ql-txt2);
+}
+.qz-ql-inline-rules > summary {
+  cursor: pointer;
+  font-weight: 700;
+  color: var(--ql-txt2);
+  list-style-position: inside;
+}
+.qz-ql-inline-rules > summary:hover { color: var(--ql-gold); }
+.qz-ql-inline-rules-hint { font-weight: 400; color: var(--ql-txt3); }
+.qz-ql-inline-rules ul {
+  margin: 8px 0 4px;
+  padding-left: 22px;
+  line-height: 1.6;
+}
+.qz-ql-inline-rule-prio {
+  font-size: 10.5px;
+  font-weight: 800;
+  letter-spacing: 0.3px;
+  text-transform: uppercase;
+  color: var(--ql-gold);
+  margin-right: 4px;
+}
+.qz-ql-inline-rules-edit {
+  margin-top: 6px;
+  background: none;
+  border: 0;
+  padding: 0;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--ql-accent);
+  cursor: pointer;
+}
+.qz-ql-inline-rules-edit:hover { text-decoration: underline; }
 
 .qz-ql-qdel {
   background: none;

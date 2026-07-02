@@ -20,6 +20,10 @@ import {
   setQuestionType,
   setQuestionRole,
   setAnswerTarget,
+  addDecisionRule,
+  removeDecisionRule,
+  moveDecisionRule,
+  updateDecisionRule,
 } from "./quizMutations";
 import { insertModule } from "../components/studio/studioDoc";
 import { orderFlow } from "./flowOrder";
@@ -762,5 +766,65 @@ describe("LOGIC v2 role/target mutations (setQuestionRole / setAnswerTarget)", (
     expect(qOf(next, "q1").data.role).toBe("qualifier");
     expect(qOf(next, "q1").data.question_type).toBe("text");
     expect(() => Quiz.parse(next)).not.toThrow();
+  });
+
+  describe("LOGIC v2 §4 decision-rule mutations (priority = array order)", () => {
+    const cond = (q: string, a: string, op: "is" | "is_not" = "is") => ({
+      question_id: q,
+      answer_id: a,
+      op,
+    });
+
+    it("addDecisionRule appends at the BOTTOM with zero conditions + the seeded target; parse-safe", () => {
+      let doc = addDecisionRule(deciderDoc(), "cat_a");
+      doc = addDecisionRule(doc, "cat_b");
+      expect(doc.decision_rules).toHaveLength(2);
+      expect(doc.decision_rules![0]!.target_id).toBe("cat_a");
+      expect(doc.decision_rules![1]!.target_id).toBe("cat_b"); // appended below
+      expect(doc.decision_rules![0]!.conditions).toEqual([]); // half-built — never fires (V9)
+      expect(doc.decision_rules![0]!.id).not.toBe(doc.decision_rules![1]!.id);
+      expect(() => Quiz.parse(doc)).not.toThrow();
+      // Empty target seed refused (schema requires min(1)).
+      expect(addDecisionRule(deciderDoc(), "")).toEqual(deciderDoc());
+    });
+
+    it("moveDecisionRule reorders (priority!) with clamping; unknown id no-ops", () => {
+      let doc = addDecisionRule(deciderDoc(), "cat_a");
+      doc = addDecisionRule(doc, "cat_b");
+      doc = addDecisionRule(doc, "cat_c");
+      const [r1, r2, r3] = doc.decision_rules!.map((r) => r.id);
+      const up = moveDecisionRule(doc, r3!, 0);
+      expect(up.decision_rules!.map((r) => r.id)).toEqual([r3, r1, r2]);
+      const clamped = moveDecisionRule(doc, r1!, 99);
+      expect(clamped.decision_rules!.map((r) => r.id)).toEqual([r2, r3, r1]);
+      expect(moveDecisionRule(doc, "nope", 0)).toBe(doc);
+      expect(moveDecisionRule(doc, r2!, 1)).toBe(doc); // same index — identity
+    });
+
+    it("updateDecisionRule patches conditions/target; empty target ignored; removeDecisionRule deletes", () => {
+      let doc = addDecisionRule(deciderDoc(), "cat_a");
+      const id = doc.decision_rules![0]!.id;
+      doc = updateDecisionRule(doc, id, {
+        conditions: [cond("q1", "q1_a1"), cond("q2", "q2_a2", "is_not")],
+        target_id: "cat_z",
+      });
+      expect(doc.decision_rules![0]!.conditions).toHaveLength(2);
+      expect(doc.decision_rules![0]!.target_id).toBe("cat_z");
+      // Empty-string target patch is ignored (schema min(1)).
+      const kept = updateDecisionRule(doc, id, { target_id: "" });
+      expect(kept.decision_rules![0]!.target_id).toBe("cat_z");
+      expect(() => Quiz.parse(doc)).not.toThrow();
+      const gone = removeDecisionRule(doc, id);
+      expect(gone.decision_rules).toEqual([]);
+      expect(removeDecisionRule(doc, "nope")).toBe(doc);
+    });
+
+    it("all four no-op on a LEGACY doc (logic_model unset — byte-stability)", () => {
+      const legacy = linearQuestionsDoc();
+      expect(addDecisionRule(legacy, "cat_a")).toBe(legacy);
+      expect(removeDecisionRule(legacy, "r1")).toBe(legacy);
+      expect(moveDecisionRule(legacy, "r1", 0)).toBe(legacy);
+      expect(updateDecisionRule(legacy, "r1", { target_id: "x" })).toBe(legacy);
+    });
   });
 });

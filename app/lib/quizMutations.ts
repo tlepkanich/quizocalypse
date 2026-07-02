@@ -1,5 +1,5 @@
 import { ResultData, ResultStage, isFreeformType } from "./quizSchema";
-import type { Quiz, QuestionType } from "./quizSchema";
+import type { Quiz, QuestionType, DecisionRule } from "./quizSchema";
 import type { z } from "zod";
 
 type QuizDoc = z.infer<typeof Quiz>;
@@ -1108,6 +1108,67 @@ export function setAnswerTarget(
             },
           }
         : n,
+    ),
+  };
+}
+
+// ── LOGIC v2 §4 — advanced decision rules (decider docs only) ───────────────
+// Priority = ARRAY ORDER (top→bottom, first full match wins — the engine's
+// resolveTarget contract). All four are pure + logic_model-gated like
+// setQuestionRole: a stray call against a legacy doc no-ops so decision_rules
+// never appears on the legacy wire.
+
+/** Append a new rule at the BOTTOM (lowest priority). Starts with zero
+ *  conditions — half-built (V9), so it can never fire until the merchant adds
+ *  one. `defaultTargetId` seeds the required target (schema min(1)); the UI
+ *  passes the first bucket. */
+export function addDecisionRule(doc: QuizDoc, defaultTargetId: string): QuizDoc {
+  if (doc.logic_model !== "decider" || !defaultTargetId) return doc;
+  const rule: DecisionRule = { id: uid("rule"), conditions: [], target_id: defaultTargetId };
+  return { ...doc, decision_rules: [...(doc.decision_rules ?? []), rule] };
+}
+
+export function removeDecisionRule(doc: QuizDoc, ruleId: string): QuizDoc {
+  if (doc.logic_model !== "decider") return doc;
+  const rules = doc.decision_rules ?? [];
+  if (!rules.some((r) => r.id === ruleId)) return doc;
+  return { ...doc, decision_rules: rules.filter((r) => r.id !== ruleId) };
+}
+
+/** Move a rule to `toIndex` (clamped) — the §4.1 priority reorder. */
+export function moveDecisionRule(doc: QuizDoc, ruleId: string, toIndex: number): QuizDoc {
+  if (doc.logic_model !== "decider") return doc;
+  const rules = [...(doc.decision_rules ?? [])];
+  const from = rules.findIndex((r) => r.id === ruleId);
+  if (from < 0) return doc;
+  const to = Math.max(0, Math.min(rules.length - 1, toIndex));
+  if (to === from) return doc;
+  const [rule] = rules.splice(from, 1);
+  rules.splice(to, 0, rule!);
+  return { ...doc, decision_rules: rules };
+}
+
+/** Patch a rule's conditions and/or target. The UI builds the whole conditions
+ *  array (dropdown-built, §4.1 — never free text), so one setter suffices. An
+ *  empty-string target patch is ignored (schema requires min(1)). */
+export function updateDecisionRule(
+  doc: QuizDoc,
+  ruleId: string,
+  patch: Partial<Pick<DecisionRule, "conditions" | "target_id">>,
+): QuizDoc {
+  if (doc.logic_model !== "decider") return doc;
+  const rules = doc.decision_rules ?? [];
+  if (!rules.some((r) => r.id === ruleId)) return doc;
+  return {
+    ...doc,
+    decision_rules: rules.map((r) =>
+      r.id === ruleId
+        ? {
+            ...r,
+            ...(patch.conditions ? { conditions: patch.conditions } : {}),
+            ...(patch.target_id ? { target_id: patch.target_id } : {}),
+          }
+        : r,
     ),
   };
 }

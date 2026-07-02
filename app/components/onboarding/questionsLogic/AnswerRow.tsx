@@ -168,7 +168,20 @@ export function AnswerRow({
         title={canDelete ? "Remove answer" : "Minimum 2 answers required"}
         aria-label={`Remove answer ${answerLetter(index)}`}
         onClick={() => {
-          if (canDelete) onCommit(removeAnswer(doc, node.id, answer.id));
+          if (!canDelete) return;
+          // §9 — confirm-with-consequences when advanced rules reference this
+          // answer. Legacy docs carry no decision_rules, so the count is always
+          // 0 there and the delete stays confirm-free (unchanged behaviour).
+          const refs = (doc.decision_rules ?? []).filter((r) =>
+            r.conditions.some((c) => c.answer_id === answer.id),
+          ).length;
+          const ok =
+            refs === 0 ||
+            typeof window === "undefined" ||
+            window.confirm(
+              `${refs} advanced rule${refs === 1 ? "" : "s"} reference this answer and will break. Delete anyway?`,
+            );
+          if (ok) onCommit(removeAnswer(doc, node.id, answer.id));
         }}
       >
         ✕

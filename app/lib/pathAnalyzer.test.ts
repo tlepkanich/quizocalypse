@@ -3,6 +3,7 @@ import {
   answerNextNode,
   answersReachable,
   answersReachDecider,
+  brokenRuleRefs,
   deadRules,
   halfBuiltRules,
   outcomeTable,
@@ -224,6 +225,24 @@ describe("rule diagnostics (V7/V8/V9)", () => {
       ],
     });
     expect(shadowedRules(doc).map((f) => f.ruleId)).toEqual(["r_low"]);
+  });
+
+  it("§9: brokenRuleRefs flags deleted-question/answer conditions, with op-aware severity copy", () => {
+    const doc = makeDoc({
+      decision_rules: [
+        // `is` on a deleted answer (question exists) — the engine can NEVER fire it.
+        rule("r_is_gone", [{ question_id: "q1", answer_id: "a_deleted", op: "is" }]),
+        // `is_not` on a deleted question — vacuously TRUE → would match EVERYONE.
+        rule("r_isnot_gone", [{ question_id: "q_gone", answer_id: "x", op: "is_not" }]),
+        // Intact refs — clean.
+        rule("r_ok", [{ question_id: "q1", answer_id: "a_adv", op: "is" }]),
+      ],
+    });
+    const findings = brokenRuleRefs(doc);
+    expect(findings.map((f) => f.ruleId)).toEqual(["r_is_gone", "r_isnot_gone"]);
+    expect(findings[0]!.message).toMatch(/can never fire/);
+    expect(findings[1]!.message).toMatch(/EVERY shopper/);
+    expect(brokenRuleRefs(makeDoc())).toEqual([]); // no rules → no findings
   });
 
   it("§4.3: match estimates — uniform-independence products", () => {

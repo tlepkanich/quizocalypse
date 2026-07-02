@@ -20,6 +20,7 @@ import {
 import { QuestionList, type RowAction } from "./QuestionList";
 import { OutcomeCoverage } from "./OutcomeCoverage";
 import { QuestionCard } from "./QuestionCard";
+import { RulesTab } from "./RulesTab";
 import { TableView } from "./TableView";
 import { ContinueGuard } from "./ContinueGuard";
 import { QuestionBankDrawer } from "../../studio/QuestionBankDrawer";
@@ -484,6 +485,7 @@ export function QuestionsLogicLayout({
                     onRetryRegenerate={() => onRegenerate(node.id)}
                     onDismissRegenError={onDismissRegenError}
                     deciderMode={deciderMode}
+                    onOpenRules={deciderMode ? () => setView("rules") : undefined}
                   />
                 ))
               )}
@@ -504,15 +506,7 @@ export function QuestionsLogicLayout({
           </div>
         ) : view === "rules" && deciderMode ? (
           <div className="qz-ql-main">
-            <div className="qz-ql-rules-placeholder">
-              <div className="qz-ql-rules-ph-title">Advanced rules</div>
-              <p>
-                Rules override the deciding question for specific answer combinations —
-                “If <em>Terrain is Park</em> AND <em>Level is Advanced</em>, recommend
-                <em> Pro Park Boards</em>.” Priority-ordered, first match wins.
-              </p>
-              <p className="qz-dim">The rule builder arrives in the next update.</p>
-            </div>
+            <RulesTab doc={doc} categories={categories} onCommit={onCommit} />
           </div>
         ) : (
           <div className="qz-ql-main qz-ql-flowmain">

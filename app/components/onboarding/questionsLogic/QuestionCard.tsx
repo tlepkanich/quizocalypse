@@ -1,11 +1,12 @@
-import { useLayoutEffect, useRef } from "react";
+import { useLayoutEffect, useMemo, useRef } from "react";
 import type { Quiz as QuizDoc, QuestionType } from "../../../lib/quizSchema";
 import { isFreeformType } from "../../../lib/quizSchema";
 import type { BuilderCategory } from "../../builder/stepProps";
 import { addAnswer, setQuestionType, setQuestionRole } from "../../../lib/quizMutations";
 import { updateNodeData } from "../../studio/studioDoc";
 import { AnswerRow, type SkipOption } from "./AnswerRow";
-import { type QuestionNode } from "./questionOrder";
+import { orderedQuestions, type QuestionNode } from "./questionOrder";
+import { ruleSummary } from "./RulesTab";
 
 const TEXT_MAX = 150;
 const MAX_ANSWERS = 8;
@@ -59,6 +60,7 @@ export function QuestionCard({
   onRetryRegenerate,
   onDismissRegenError,
   deciderMode = false,
+  onOpenRules,
 }: {
   doc: QuizDoc;
   node: QuestionNode;
@@ -81,10 +83,27 @@ export function QuestionCard({
   onDismissRegenError: () => void;
   /** LOGIC v2 only — true when the doc's logic_model is "decider". */
   deciderMode?: boolean;
+  /** LOGIC v2 §4.2 — switches the layout to the Rules tab (the inline
+   *  accordion's "Edit in Rules tab" affordance). */
+  onOpenRules?: () => void;
 }) {
   const data = node.data;
   const freeform = isFreeformType(data.question_type);
   const isRequired = data.required ?? true;
+  // §4.2 inline surface — rules whose conditions reference THIS question,
+  // summarised in plain language for the collapsed accordion + the §9
+  // delete-with-consequences dialog. Decider docs only (empty otherwise).
+  const referencingRules = useMemo(() => {
+    if (!deciderMode) return [];
+    const all = orderedQuestions(doc);
+    return (doc.decision_rules ?? [])
+      .map((r, i) => ({ rule: r, priority: i + 1 }))
+      .filter(({ rule }) => rule.conditions.some((c) => c.question_id === node.id))
+      .map(({ rule, priority }) => ({
+        priority,
+        summary: ruleSummary(rule.conditions, rule.target_id, all, categories),
+      }));
+  }, [deciderMode, doc, node.id, categories]);
   // LOGIC v2 role state (decider docs only).
   const isDecider = deciderMode && data.role === "decides";
   const cannotDecide = data.question_type === "multi_select" || freeform;
@@ -236,7 +255,20 @@ export function QuestionCard({
           aria-label={`Delete question ${qIndex}`}
           onClick={() => {
             if (!canDelete) return;
-            const ok = typeof window === "undefined" || window.confirm("Delete this question?");
+            // §9 — confirm-with-consequences: name what breaks before deleting.
+            const consequences = [
+              isDecider
+                ? "This is the DECIDING question — publishing stays blocked until you pick another decider."
+                : null,
+              referencingRules.length > 0
+                ? `${referencingRules.length} advanced rule${referencingRules.length === 1 ? "" : "s"} reference it and will break.`
+                : null,
+            ]
+              .filter(Boolean)
+              .join("\n");
+            const ok =
+              typeof window === "undefined" ||
+              window.confirm(consequences ? `Delete this question?\n\n${consequences}` : "Delete this question?");
             if (ok) onDelete();
           }}
         >
@@ -322,6 +354,39 @@ export function QuestionCard({
           ) : null}
         </>
       )}
+
+      {/* §4.2 — the inline "Advanced rules" surface: collapsed by default,
+          shows the count, expands to plain-language summaries. Editing lives
+          in the Rules tab (the matrix is the single write surface). */}
+      {deciderMode && !freeform ? (
+        <details className="qz-ql-inline-rules">
+          <summary>
+            Advanced rules ({referencingRules.length})
+            <span className="qz-ql-inline-rules-hint">
+              {referencingRules.length === 0 ? " — none reference this question" : ""}
+            </span>
+          </summary>
+          {referencingRules.length > 0 ? (
+            <ul>
+              {referencingRules.map((r) => (
+                <li key={r.priority}>
+                  <span className="qz-ql-inline-rule-prio">Rule {r.priority}</span> {r.summary}
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="qz-dim">
+              Rules force a result from a combination of answers across questions — this
+              question isn&rsquo;t used in any yet.
+            </p>
+          )}
+          {onOpenRules ? (
+            <button type="button" className="qz-ql-inline-rules-edit" onClick={onOpenRules}>
+              {referencingRules.length > 0 ? "Edit in the Rules tab →" : "Create one in the Rules tab →"}
+            </button>
+          ) : null}
+        </details>
+      ) : null}
     </div>
   );
 }
