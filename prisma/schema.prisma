@@ -63,6 +63,13 @@ model Shop {
   shopifyConnectToken  String?
   shopifyConnectedAt   DateTime?
 
+  // LOGIC v2 L2-12 (owner GO 2026-07-03, "kill switch default on" = feature
+  // ENABLED by default): gates ONLY the public per-shopper rec-copy endpoint
+  // (q.$id.rec-copy — runtime AI spend on the shopper hot path). Never gates
+  // the admin ✦ why-copy generate or the Tier-2 quality review — those are
+  // merchant-initiated, visible-error spends.
+  aiRecCopyEnabled Boolean @default(true)
+
   products       Product[]
   collections    Collection[]
   categories     Category[]

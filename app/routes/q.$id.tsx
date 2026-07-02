@@ -66,6 +66,9 @@ export const loader = async ({ params, request }: LoaderFunctionArgs) => {
       status: true,
       version: true,
       publishedJson: true,
+      // L2-12 — the per-shop runtime-AI kill switch; read live (never baked
+      // into publishedJson) so a flip takes effect without a republish.
+      shop: { select: { aiRecCopyEnabled: true } },
     },
   });
   if (!quiz) throw new Response("Quiz not found", { status: 404 });
@@ -140,6 +143,11 @@ export const loader = async ({ params, request }: LoaderFunctionArgs) => {
       locale: locale ?? "en",
       chrome,
       buddySessionId,
+      // L2-12 — additive loader key (the L2-9 mechanism): lets the runtime
+      // skip the rec-copy fetch entirely when the shop's switch is off. The
+      // ENDPOINT re-checks the live column regardless (this value can lag the
+      // 60s CDN window and a hand-rolled POST bypasses it).
+      aiCopyEnabled: quiz.shop?.aiRecCopyEnabled ?? true,
     },
     {
       // Same 60s convention as the JSON + launcher endpoints: a re-publish
