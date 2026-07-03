@@ -1,5 +1,5 @@
 import prisma from "../db.server";
-import { buildScopedIndex } from "./catalogIndex";
+import { buildScopedIndex, scopeCatalogToChosen } from "./catalogIndex";
 import { detectGroupingDimension } from "./groupingDetect";
 import { parseBrandIdentitySafe } from "./brandIdentity";
 import {
@@ -37,13 +37,28 @@ const toGroupingProduct = (p: {
   collectionIds: p.collectionIds,
 });
 
-async function loadStep2Context(shopId: string) {
+async function loadStep2Context(shopId: string, quizId?: string) {
   const [products, collections, shop] = await Promise.all([
     prisma.product.findMany({ where: { shopId } }),
     prisma.collection.findMany({ where: { shopId } }),
     prisma.shop.findUnique({ where: { id: shopId }, select: { brandIdentity: true } }),
   ]);
-  const indexed = buildScopedIndex(products, collections, []);
+  // Owner fix: the Shape page must generate from the merchant's CHOSEN recommended
+  // products — the confirmed buckets — NOT the whole catalog. When a quizId is
+  // given, scope the catalog summary the type/template AI reads (product types,
+  // price band, and tag framing shown to the model) to the union of those buckets'
+  // products. NOTE: the Shape stage itself emits no answer.tags — the questions +
+  // answers are written later in the question-flow build, which scopes the same way
+  // (onboardingBuild.server.ts, via scopeCatalogToChosen).
+  const chosenProductIds = quizId
+    ? new Set(
+        (
+          await prisma.category.findMany({ where: { shopId, quizId }, select: { productIds: true } })
+        ).flatMap((c) => c.productIds),
+      )
+    : new Set<string>();
+  const scope = scopeCatalogToChosen(products, collections, chosenProductIds);
+  const indexed = buildScopedIndex(scope.products, scope.collections, []);
   const identity = parseBrandIdentitySafe(shop?.brandIdentity);
   const brandSummary = identity?.summary ?? "";
   const brandVoiceSample = identity?.voice
@@ -82,6 +97,7 @@ export async function runStep2WebResearch(shopId: string): Promise<string> {
 // degraded path (model knowledge only).
 export async function generateStep2Types(
   shopId: string,
+  quizId: string,
   input: {
     goal: string;
     struggle?: string;
@@ -90,7 +106,8 @@ export async function generateStep2Types(
     skipWebResearch?: boolean;
   },
 ): Promise<{ types: QuizType[]; webResearchSummary: string }> {
-  const ctx = await loadStep2Context(shopId);
+  // Scope the catalog summary to the quiz's confirmed buckets (chosen products).
+  const ctx = await loadStep2Context(shopId, quizId);
   const buckets =
     input.buckets ?? ctx.detect.proposed.map((g) => ({ name: g.name, tags: g.tags }));
 
@@ -122,10 +139,12 @@ export async function generateStep2Types(
 // Tier 2: rich battle-card templates for the chosen type.
 export async function generateStep2Templates(
   shopId: string,
+  quizId: string,
   chosenType: QuizType,
   input: { goal: string; struggle?: string; buckets?: Array<{ id: string; name: string; tags: string[] }> },
 ): Promise<RichTemplateOption[]> {
-  const ctx = await loadStep2Context(shopId);
+  // Scope the catalog summary to the quiz's confirmed buckets (chosen products).
+  const ctx = await loadStep2Context(shopId, quizId);
   const buckets =
     input.buckets ??
     ctx.detect.proposed.map((g) => ({ id: g.sourceRef ?? g.name, name: g.name, tags: g.tags }));
@@ -250,7 +269,7 @@ export function startStep2Types(
   void (async () => {
     try {
       const webResearchText = await runStep2WebResearch(shopId);
-      const { types } = await generateStep2Types(shopId, { ...input, webResearchText });
+      const { types } = await generateStep2Types(shopId, quizId, { ...input, webResearchText });
       await patchBuildSession(quizId, (s) =>
         BuildSession.parse({
           ...s,
@@ -286,7 +305,7 @@ export function startStep2Templates(
   const failMode = opts?.failMode ?? "shape";
   void (async () => {
     try {
-      const templates = await generateStep2Templates(shopId, chosenType, input);
+      const templates = await generateStep2Templates(shopId, quizId, chosenType, input);
       const cats = await prisma.category.findMany({
         where: { shopId, quizId },
         select: { id: true, name: true, productIds: true },

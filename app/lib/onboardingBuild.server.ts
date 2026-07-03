@@ -3,7 +3,12 @@ import { Quiz } from "./quizSchema";
 import type { Quiz as QuizDoc, OosBehavior } from "./quizSchema";
 import type { DesignTokensT } from "./designTokens";
 import { buildSeedQuiz } from "./seedQuiz";
-import { buildScopedIndex, toneSampleFromCatalog, suggestPlacement } from "./catalogIndex";
+import {
+  buildScopedIndex,
+  scopeCatalogToChosen,
+  toneSampleFromCatalog,
+  suggestPlacement,
+} from "./catalogIndex";
 import { ingestWebsite } from "./websiteIngest.server";
 import {
   discoverAndPersistBuckets,
@@ -273,7 +278,24 @@ export async function runAiOnboardingBuild(
   }
 
   // 5. Generate the question flow + wire it. On failure, keep the bound pages.
-  const indexed = buildScopedIndex(allProducts, allCollections, doc.scope.collection_ids);
+  // Owner intent: the quiz the Shape page generates — its QUESTIONS and ANSWERS,
+  // not just its type/template name — must ground in the merchant's CHOSEN
+  // recommended products (the confirmed buckets), NOT the whole catalog. Scope the
+  // catalog summary the question-writer AI reads to the union of those buckets'
+  // products. scopeCatalogToChosen falls back to the full catalog when the quiz has
+  // no buckets or the ids are stale, so this never starves generation (and is
+  // byte-identical to the prior full-catalog behavior in the no-bucket case).
+  const chosenProductIds = new Set(
+    (
+      await prisma.category.findMany({ where: { shopId, quizId }, select: { productIds: true } })
+    ).flatMap((c) => c.productIds),
+  );
+  const chosenScope = scopeCatalogToChosen(allProducts, allCollections, chosenProductIds);
+  const indexed = buildScopedIndex(
+    chosenScope.products,
+    chosenScope.collections,
+    doc.scope.collection_ids,
+  );
   const brandGuidelines = effectiveBrandGuidelines(shop);
   // Optional enrichment: catalog tone sample + merchant website text. Both are
   // best-effort — ingestWebsite returns "" on any failure, never throwing.

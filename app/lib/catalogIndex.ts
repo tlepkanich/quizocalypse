@@ -13,6 +13,28 @@ export interface ScopedIndex {
   summary: string;
 }
 
+// Narrow a catalog to a chosen set of product ids — the products in those ids
+// plus only the collections at least one chosen product belongs to. When the
+// chosen set is empty (nothing selected yet) or resolves to ZERO catalog matches
+// (stale/unsynced ids), fall back to the FULL catalog — a broad summary always
+// beats an empty one. Pure; used to scope the funnel's AI grounding to the
+// merchant's confirmed recommendation buckets (their chosen products) at BOTH
+// generation layers: the Shape stage (quiz type/template framing, step2Build) and
+// the question-flow build (the questions + answers themselves, onboardingBuild).
+export function scopeCatalogToChosen(
+  products: Product[],
+  collections: Collection[],
+  chosenProductIds: ReadonlySet<string>,
+): { products: Product[]; collections: Collection[] } {
+  if (chosenProductIds.size === 0) return { products, collections };
+  const scopedProducts = products.filter((p) => chosenProductIds.has(p.productId));
+  if (scopedProducts.length === 0) return { products, collections };
+  const scopedCollections = collections.filter((c) =>
+    scopedProducts.some((p) => p.collectionIds.includes(c.collectionId)),
+  );
+  return { products: scopedProducts, collections: scopedCollections };
+}
+
 export function buildScopedIndex(
   allProducts: Product[],
   allCollections: Collection[],

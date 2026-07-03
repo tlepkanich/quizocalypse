@@ -1,10 +1,11 @@
 import { describe, it, expect } from "vitest";
-import type { Product } from "@prisma/client";
+import type { Product, Collection } from "@prisma/client";
 import {
   scoreCatalogCompleteness,
   toneSampleFromCatalog,
   suggestPlacement,
   selectIdentityCorpus,
+  scopeCatalogToChosen,
   IDENTITY_MAX_CORPUS,
 } from "./catalogIndex";
 
@@ -167,5 +168,42 @@ describe("selectIdentityCorpus (Brand Identity Step 0)", () => {
     const c = selectIdentityCorpus(products);
     // The single imaged product wins the top slot despite the shortest description.
     expect(c.products[0]!.productId).toBe("gid://p/0");
+  });
+});
+
+describe("scopeCatalogToChosen (Shape-page AI grounds in chosen products, not the whole catalog)", () => {
+  const col = (collectionId: string): Collection =>
+    ({ collectionId, shopId: "s1", title: collectionId, handle: collectionId, productIds: [], updatedAt: new Date() } as unknown as Collection);
+  const products = [
+    mk({ productId: "p1", collectionIds: ["c1"] }),
+    mk({ productId: "p2", collectionIds: ["c1"] }),
+    mk({ productId: "p3", collectionIds: ["c2"] }),
+    mk({ productId: "p4", collectionIds: [] }),
+  ];
+  const collections = [col("c1"), col("c2"), col("c3")];
+
+  it("empty chosen set → the FULL catalog (nothing selected yet)", () => {
+    const out = scopeCatalogToChosen(products, collections, new Set());
+    expect(out.products).toHaveLength(4);
+    expect(out.collections).toHaveLength(3);
+  });
+
+  it("narrows to the chosen products + only their collections", () => {
+    const out = scopeCatalogToChosen(products, collections, new Set(["p1", "p3"]));
+    expect(out.products.map((p) => p.productId).sort()).toEqual(["p1", "p3"]);
+    // c1 (p1) + c2 (p3) referenced; c3 is not → dropped.
+    expect(out.collections.map((c) => c.collectionId).sort()).toEqual(["c1", "c2"]);
+  });
+
+  it("a chosen product in no collection scopes to zero collections", () => {
+    const out = scopeCatalogToChosen(products, collections, new Set(["p4"]));
+    expect(out.products.map((p) => p.productId)).toEqual(["p4"]);
+    expect(out.collections).toHaveLength(0);
+  });
+
+  it("chosen ids that match NOTHING (stale/unsynced) → FALL BACK to the full catalog", () => {
+    const out = scopeCatalogToChosen(products, collections, new Set(["ghost-1", "ghost-2"]));
+    expect(out.products).toHaveLength(4);
+    expect(out.collections).toHaveLength(3);
   });
 });
