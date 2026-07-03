@@ -38,7 +38,7 @@ export function QuestionBuilderStage({
   fetcher: ReturnType<typeof useFetcher>;
   pendingIntent: string | null;
 }) {
-  const { doc, commit, isSaving, savedAt, saveError, retrySave, beginAiEdit, applyAiResult, endAiEdit } =
+  const { doc, commit, isSaving, savedAt, saveError, retrySave, flushSave, beginAiEdit, applyAiResult, endAiEdit } =
     useQuizDraft(initialDoc);
   const navigating =
     pendingIntent === "to-rec-page" || pendingIntent === "back-to-types";
@@ -116,6 +116,7 @@ export function QuestionBuilderStage({
     <QuestionsLogicLayout
       doc={doc}
       onCommit={commit}
+      onFlush={flushSave}
       isSaving={isSaving}
       savedAt={savedAt}
       saveError={saveError}

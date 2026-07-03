@@ -1337,6 +1337,26 @@ export const Quiz = z.object({
   why_copy_meta: z
     .record(z.string(), z.object({ at: z.string(), members: z.string() }))
     .optional(),
+  // §8.x (L2-12c) — ADVISORY AI path-quality review: one snapshot per draft,
+  // rows keyed by outcome_id (a decider answer id or a rule id) with a verdict
+  // + note, plus `at` and a `hash` over the outcome-table STRUCTURE so the panel
+  // can flag STALE advice after the logic changes. Draft-only scratch — STRIPPED
+  // at publish (see quizPublish.ts). NEVER gates publish: the pure Tier-1 report
+  // (pathReport.ts) neither reads nor depends on this. `.optional()` NEVER
+  // `.default()` (the translations-field hazard) → absent-when-unset, byte-stable.
+  path_report_ai: z
+    .object({
+      at: z.string(),
+      hash: z.string(),
+      rows: z.array(
+        z.object({
+          outcome_id: z.string(),
+          verdict: z.string(),
+          note: z.string(),
+        }),
+      ),
+    })
+    .optional(),
   // ────────────────────────────────────────────────────────────────────────────
   // Builder Re-work Step 1 — the creation funnel's transient scratch state
   // (grouping/goal/template-options). Additive/optional, lives only on DRAFTs,

@@ -58,6 +58,7 @@ function savedTimeLabel(iso: string): string {
 export function QuestionsLogicLayout({
   doc,
   onCommit,
+  onFlush,
   isSaving,
   savedAt,
   saveError,
@@ -76,6 +77,8 @@ export function QuestionsLogicLayout({
 }: {
   doc: QuizDoc;
   onCommit: (doc: QuizDoc) => void;
+  /** Flush the pending autosave now (L2-12c: before the read-only path review). */
+  onFlush: () => void;
   isSaving: boolean;
   savedAt: string | null;
   saveError: string | null;
@@ -567,6 +570,9 @@ export function QuestionsLogicLayout({
         <PathReportPanel
           doc={doc}
           categories={categories}
+          quizId={quizId}
+          onCommit={onCommit}
+          onFlush={onFlush}
           onClose={() => setReportOpen(false)}
           onNavigate={(link) => {
             // Deep link (§7.3): close the overlay, then land on the exact

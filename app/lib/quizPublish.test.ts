@@ -346,6 +346,7 @@ describe("publishQuiz — byte-stability when net-new optional fields are unset"
         enriched_at: "2026-01-01T00:00:00.000Z",
       },
       why_copy_meta: { __global__: { at: "2026-01-01T00:00:00.000Z", members: "deadbeef" } },
+      path_report_ai: { at: "2026-01-01T00:00:00.000Z", hash: "deadbeef", rows: [] },
       nodes: [
         { id: "intro", type: "intro", position: { x: 0, y: 0 }, data: { headline: "Hi" } },
         {
@@ -425,6 +426,7 @@ describe("publishQuiz — byte-stability when net-new optional fields are unset"
     expect(wire).not.toHaveProperty("build_session");
     expect(wire).not.toHaveProperty("review_enrichment_sources");
     expect(wire).not.toHaveProperty("why_copy_meta"); // L2-11 config-time provenance
+    expect(wire).not.toHaveProperty("path_report_ai"); // L2-12c advisory review
 
     // (2) Every UNSET net-new root-level optional is absent → byte-identical /q.
     for (const key of [

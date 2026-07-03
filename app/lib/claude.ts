@@ -1702,6 +1702,110 @@ export async function generateRuntimeRecCopy(input: RuntimeRecCopyInput): Promis
   throw new QuizGenerationError("Runtime rec-copy generation failed", MAX_ATTEMPTS, lastError);
 }
 
+// ---------- Tier-2 advisory path-quality review (spec §7 Tier-2, L2-12c) ------
+
+// The ADVISORY AI pass behind "Run AI quality review". Reads each reachable,
+// mapped outcome (path → recommendation target + its why-copy + a product
+// sample) and judges whether the pairing makes sense — "looks_right" or
+// "review" with a one-line note. NEVER gates publish: publish never calls this
+// (it fills a draft-only panel field), so a throw here is merchant-button
+// feedback only. Capped at 2 attempts (own bound, not the module's 3) to stay
+// inside the Fly ~60s edge window; runs on MODEL (Sonnet) explicitly.
+const PATH_QUALITY_MAX_ATTEMPTS = 2;
+
+const pathReviewToolJsonSchema = {
+  type: "object",
+  required: ["rows"],
+  properties: {
+    rows: {
+      type: "array",
+      items: {
+        type: "object",
+        required: ["outcome_id", "verdict", "note"],
+        properties: {
+          outcome_id: { type: "string", description: "The exact outcome_id from the input list." },
+          verdict: { type: "string", enum: ["looks_right", "review"] },
+          note: { type: "string", description: "One short sentence: why it looks right, or what to reconsider." },
+        },
+      },
+    },
+  },
+} as const;
+
+const PathReviewSchema = z.object({
+  rows: z.array(
+    z.object({
+      outcome_id: z.string().min(1),
+      verdict: z.enum(["looks_right", "review"]),
+      note: z.string().max(400),
+    }),
+  ),
+});
+
+export interface PathReviewInput {
+  outcomes: Array<{
+    outcome_id: string;
+    path: string;
+    target: string;
+    whyCopy: string;
+    products: string[];
+  }>;
+  brandGuidelines?: BrandGuidelines | null;
+}
+
+export async function reviewPathQuality(
+  input: PathReviewInput,
+): Promise<Array<{ outcome_id: string; verdict: "looks_right" | "review"; note: string }>> {
+  const tool = {
+    name: "emit_path_review",
+    description: "Emit one advisory row per outcome judging recommendation quality.",
+    input_schema: pathReviewToolJsonSchema as unknown as Anthropic.Tool.InputSchema,
+  } satisfies Anthropic.Tool;
+
+  const system =
+    "You are a merchandising reviewer for a product-recommendation quiz. For EACH outcome you are " +
+    "given the shopper's path, the product group it recommends, that group's shown \"why we " +
+    "recommend\" copy, and a sample of its products. Judge whether the recommendation is a sensible " +
+    "fit for that path. Return ONE row per outcome (use the given outcome_id verbatim): verdict " +
+    "\"looks_right\" when the pairing is coherent, \"review\" when the path and the recommended " +
+    "products/copy seem mismatched or the copy overclaims. Keep each note to one short, concrete " +
+    "sentence. Reason only from the supplied data. Output only the tool call." +
+    buildBrandVoiceAddition(input.brandGuidelines);
+
+  const userMessage = [
+    "Outcomes to review:",
+    ...input.outcomes.map((o, i) =>
+      [
+        `${i + 1}. outcome_id: ${o.outcome_id}`,
+        `   Shopper path: ${o.path}`,
+        `   Recommends: ${o.target}`,
+        `   Why-copy shown: ${o.whyCopy || "(none set)"}`,
+        `   Sample products: ${o.products.length ? o.products.join(", ") : "(none synced)"}`,
+      ].join("\n"),
+    ),
+  ].join("\n\n");
+
+  let lastError = "no tool call";
+  for (let attempt = 1; attempt <= PATH_QUALITY_MAX_ATTEMPTS; attempt++) {
+    const response = await client().messages.create({
+      model: MODEL,
+      max_tokens: 1024,
+      system,
+      tools: [tool],
+      tool_choice: { type: "tool", name: "emit_path_review" },
+      messages: [{ role: "user", content: userMessage }],
+    });
+    const toolUse = response.content.find(
+      (b): b is Anthropic.ToolUseBlock => b.type === "tool_use",
+    );
+    if (!toolUse) continue;
+    const parsed = PathReviewSchema.safeParse(toolUse.input);
+    if (parsed.success) return parsed.data.rows;
+    lastError = parsed.error.issues[0]?.message ?? "invalid tool output";
+  }
+  throw new QuizGenerationError("Path-quality review failed", PATH_QUALITY_MAX_ATTEMPTS, lastError);
+}
+
 // ---------- AskAI chat (Phase 3) ----------
 
 export interface AskAIMessage {

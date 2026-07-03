@@ -123,6 +123,17 @@ export function useQuizDraft(initial: QuizDoc) {
   // Re-PUT the current doc (the source of truth) after a save failure.
   const retrySave = useCallback(() => submitSave(docRef.current), [submitSave]);
 
+  // Flush any pending (debounced) autosave NOW, WITHOUT pausing autosave (unlike
+  // beginAiEdit). Used before a same-screen read-only AI call (L2-12c path
+  // review) so the server reads the merchant's latest draft, not a stale one.
+  const flushSave = useCallback(() => {
+    if (timer.current) {
+      clearTimeout(timer.current);
+      timer.current = null;
+    }
+    if (pending.current) submitSave(pending.current);
+  }, [submitSave]);
+
   return {
     doc,
     setDoc,
@@ -131,6 +142,7 @@ export function useQuizDraft(initial: QuizDoc) {
     savedAt,
     saveError,
     retrySave,
+    flushSave,
     beginAiEdit,
     applyAiResult,
     endAiEdit,
