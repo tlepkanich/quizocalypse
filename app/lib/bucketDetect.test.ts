@@ -60,4 +60,32 @@ describe("suggestBucketStrategy", () => {
     expect(s.secondary).toBeDefined();
     expect(s.reason).toMatch(/could work with/);
   });
+
+  // ── Step-1 spec §4 — the banner is an ACTION: a concrete applicable set ────
+  it("collection winner → apply names the collection ids + message + real-count why-line", () => {
+    const s = suggestBucketStrategy(mk(50, (i) => ({ collectionIds: [`gid://col${i % 4}`] })), cols);
+    expect(s.apply?.type).toBe("collection");
+    expect(s.apply?.keys.sort()).toEqual(["gid://col0", "gid://col1", "gid://col2", "gid://col3"]);
+    expect(s.apply?.names).toHaveLength(4);
+    expect(s.message).toMatch(/Use your 4 collections/);
+    expect(s.why).toMatch(/50 products across 4 collections and 0 tags/);
+    expect(s.counts).toEqual({ products: 50, collections: 4, tags: 0 });
+  });
+
+  it("tag winner → apply carries the tag partition keys (capped at 8, biggest first)", () => {
+    const s = suggestBucketStrategy(mk(50, (i) => ({ tags: [`tag${i % 10}`] })), []);
+    expect(s.suggestedType).toBe("tag");
+    expect(s.apply?.type).toBe("tag");
+    expect(s.apply?.keys.length).toBeLessThanOrEqual(8);
+    expect(s.apply!.keys.length).toBeGreaterThanOrEqual(2);
+  });
+
+  it("product fallback → a curated set of up to 6 products; empty catalog → no apply", () => {
+    const small = suggestBucketStrategy(mk(10, () => ({})), []);
+    expect(small.apply?.type).toBe("product");
+    expect(small.apply?.keys).toHaveLength(6);
+    expect(small.apply?.names[0]).toBe("Product 0");
+    const empty = suggestBucketStrategy([], []);
+    expect(empty.apply).toBeNull();
+  });
 });

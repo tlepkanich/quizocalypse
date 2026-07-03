@@ -57,7 +57,7 @@ describe("funnelStages", () => {
   });
 
   it("resolves labels through the fold", () => {
-    expect(labelForStage("grouping")).toBe("Product Buckets");
+    expect(labelForStage("grouping")).toBe("Recommendations");
     expect(labelForStage("configuring")).toBe("Shape Your Quiz");
     expect(labelForStage("done")).toBe("Design");
   });

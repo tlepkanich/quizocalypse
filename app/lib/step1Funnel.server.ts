@@ -276,8 +276,13 @@ export async function loadStep1FunnelData(
     title: p.title,
     imageUrl: p.imageUrl ?? null,
     price: p.priceMin != null ? Number(p.priceMin) : null,
-    // Normalized tag keys + collection ids so the ProductPreviewDrawer can list a
-    // tag/collection's members client-side (these match the bucket key identities).
+    // Step-1 spec §5: the single-product preview screen shows a description
+    // clamped to 3 lines — slice server-side so 100+ products don't bloat the
+    // payload with full descriptions.
+    description: p.descriptionText ? p.descriptionText.slice(0, 220) : null,
+    // Normalized tag keys + collection ids so the results-page preview drawer
+    // can list a tag/collection's members client-side (these match the bucket
+    // key identities).
     tagKeys: normalizeTags(p.tags, new Set()),
     collectionIds: p.collectionIds,
   }));
@@ -302,6 +307,35 @@ export async function loadStep1FunnelData(
   const browser = session.bucket_browser;
   const activeTab: BucketType = browser?.active_tab ?? suggestion.suggestedType;
   const bannerDismissed = browser?.banner_dismissed ?? false;
+
+  // Step-1 spec §6 (downstream integrity): selections the DRAFT already
+  // references — answer target_ids + decision rules (decider docs) and points
+  // keys / result-node bindings (legacy docs). Removing one of these on a
+  // return visit can orphan Step-3 mappings, so the client warns first
+  // (V5/V6 still catch anything broken at Step 3 — this is the courtesy).
+  const referencedCategoryIds = new Set<string>();
+  for (const n of doc.nodes) {
+    if (n.type === "result" && n.data.category_id) referencedCategoryIds.add(n.data.category_id);
+    if ("answers" in n.data && Array.isArray(n.data.answers)) {
+      for (const a of n.data.answers) {
+        if (a.target_id) referencedCategoryIds.add(a.target_id);
+        for (const k of Object.keys(a.points ?? {})) referencedCategoryIds.add(k);
+        // The dormant swapped-scoring sidecar references categories too.
+        for (const k of Object.keys(a.points_alt ?? {})) referencedCategoryIds.add(k);
+      }
+    }
+  }
+  // Legacy points-mode Branch routing: the category id lives on the EDGE
+  // condition (QuizEdge.condition.points_category), not on the branch node.
+  for (const e of doc.edges) {
+    if (e.condition?.points_category) referencedCategoryIds.add(e.condition.points_category);
+  }
+  for (const r of doc.decision_rules ?? []) referencedCategoryIds.add(r.target_id);
+  const referencedKeys = categories
+    .filter((c) => c.sourceRef && referencedCategoryIds.has(c.id))
+    .map(
+      (c) => `${c.source === "smart_collection" ? "collection" : c.source}:${c.sourceRef as string}`,
+    );
 
   // A detached generation job (typing/templating) that dies mid-run — e.g. the
   // Fly machine restarts on a deploy — strands the stage forever, since the
@@ -432,6 +466,7 @@ export async function loadStep1FunnelData(
     buckets,
     activeTab,
     bannerDismissed,
+    referencedKeys,
     backHref: opts?.backHref ?? "/studio/quizzes",
   };
 }
@@ -612,6 +647,63 @@ async function runStep1FunnelActionImpl(
     return json({ intent, ok: true });
   }
 
+  // Bulk replace the whole (homogeneous) selection — the §4 AI banner's
+  // "Use this" and its Undo both swap the full set. Empty keys = clear-all
+  // (the Undo of an apply over an empty selection). Same trust boundary as
+  // select-all: the client sends WHICH keys, membership is always re-resolved
+  // server-side. DIFF-based (review-caught): a clear-then-add would rotate
+  // EVERY Category id, orphaning the draft's answer/rule target_ids even for
+  // keys present in BOTH sets — so rows whose (source, sourceRef) stays in
+  // the requested set are KEPT (their ids survive), only leavers delete and
+  // only newcomers create. No clear-all window mid-write either.
+  if (intent === "set-buckets") {
+    const rawType = String(form.get("type") ?? "");
+    if (rawType !== "product" && rawType !== "tag" && rawType !== "collection") {
+      return json({ intent, ok: false, error: "Unknown recommendation type." }, { status: 400 });
+    }
+    const keys = String(form.get("keys") ?? "")
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean);
+    const wanted = new Set(keys.map((k) => `${rawType}:${k}`));
+    const normSource = (s: string) => (s === "smart_collection" ? "collection" : s);
+    const existing = await prisma.category.findMany({
+      where: { shopId: shop.id, quizId: quiz.id },
+      select: { id: true, source: true, sourceRef: true },
+    });
+    const staysFor = (c: { source: string; sourceRef: string | null }) =>
+      Boolean(c.sourceRef) && wanted.has(`${normSource(c.source)}:${c.sourceRef}`);
+    const leaverIds = existing.filter((c) => !staysFor(c)).map((c) => c.id);
+    if (leaverIds.length > 0) {
+      await prisma.category.deleteMany({ where: { id: { in: leaverIds } } });
+    }
+    const keptKeys = new Set(
+      existing.filter(staysFor).map((c) => `${normSource(c.source)}:${c.sourceRef}`),
+    );
+    const missing = keys.filter((k) => !keptKeys.has(`${rawType}:${k}`));
+    if (missing.length > 0) {
+      const inputs = await loadBucketInputs(shop.id);
+      const rows = bucketRowsFor(
+        missing.map((key) => ({ type: rawType as BucketType, key })),
+        inputs.products,
+        inputs.collections,
+        inputs.productTitleById,
+        inputs.collectionTitleById,
+      );
+      await addBuckets(shop.id, quiz.id, rows);
+    }
+    // Land the picker on the applied type so the merchant sees their new set.
+    const next: BuildSession = {
+      ...session,
+      bucket_browser: {
+        banner_dismissed: session.bucket_browser?.banner_dismissed ?? false,
+        active_tab: rawType,
+      },
+    };
+    await writeDoc(quiz.id, { ...doc, build_session: next });
+    return json({ intent, ok: true });
+  }
+
   if (intent === "switch-tab") {
     const rawType = String(form.get("type") ?? "");
     if (rawType !== "product" && rawType !== "tag" && rawType !== "collection") {
@@ -636,6 +728,10 @@ async function runStep1FunnelActionImpl(
     return json({ intent, ok: true });
   }
 
+  // Kept for legacy in-flight sessions only — since the Step-1 spec (§4),
+  // "Not now" dismisses client-side for the session (sessionStorage) and the
+  // client no longer calls this; a previously PERSISTED dismissal is still
+  // honored by the loader.
   if (intent === "dismiss-banner") {
     const browser = session.bucket_browser;
     const next: BuildSession = {
@@ -656,7 +752,7 @@ async function runStep1FunnelActionImpl(
     });
     if (cats.length === 0) {
       return json(
-        { intent, ok: false, error: "Add at least one recommendation bucket to continue." },
+        { intent, ok: false, error: "Add at least one recommendation to continue." },
         { status: 400 },
       );
     }
