@@ -18,6 +18,8 @@ import {
 } from "../../lib/recommendationEngine";
 import {
   deciderFallbackProducts,
+  resolveTarget,
+  settingsForTarget,
   type DeciderFallback,
   type ResolvedRecPageConfig,
 } from "../../lib/recommendDecider";
@@ -171,6 +173,11 @@ export interface QuizRuntimeProps {
     string,
     { type: "product" | "collection" | "tag"; name?: string }
   > | null;
+  // LOGIC v2 (L2-12b) — the per-shop runtime rec-copy kill switch, read live by
+  // the /q loader (never baked). When false the runtime skips the rec-copy fetch
+  // entirely; the endpoint re-checks the live column regardless. Default false so
+  // preview/builder surfaces never spend (only the live loader sets it true).
+  aiCopyEnabled?: boolean;
 }
 
 // Content-block types the storefront renders directly. Literal blocks render via
@@ -250,6 +257,7 @@ export function QuizRuntime(props: QuizRuntimeProps) {
     buddySessionId = null,
     targetProductIdsMap = null,
     targetIndex = null,
+    aiCopyEnabled = false,
   } = props;
   const isPreview = mode === "preview";
   // LOGIC v2 — decider docs take the capture→loading→reveal result flow below.
@@ -285,6 +293,16 @@ export function QuizRuntime(props: QuizRuntimeProps) {
   // discipline as recap/reveal: a jump-back + new path replays them).
   const [captureDone, setCaptureDone] = useState(false);
   const [loadingDone, setLoadingDone] = useState(false);
+  // L2-12b — the runtime AI rec-copy race. `beatsDone` = the interstitial's
+  // animation finished; `aiSettled` = the AI fetch resolved/failed/timed out
+  // (default TRUE so non-eligible paths flip loadingDone on beatsDone alone,
+  // byte-identical to before this phase). loadingDone flips only when BOTH, so
+  // the reveal never flashes template→AI. `aiWhyCopy` replaces the merchant
+  // template for THIS paint; a late arrival is discarded (cache serves next).
+  const [beatsDone, setBeatsDone] = useState(false);
+  const [aiSettled, setAiSettled] = useState(true);
+  const [aiWhyCopy, setAiWhyCopy] = useState<string | null>(null);
+  const aiFiredRef = useRef(false);
   // Spec §2 urgency — product_id → live stock qty (only entries at/below the
   // result's threshold). Fetched fresh when a result page renders (never baked,
   // never cached) so "Only X left" reflects real-time Shopify inventory.
@@ -294,6 +312,12 @@ export function QuizRuntime(props: QuizRuntimeProps) {
     setRevealDone(false);
     setCaptureDone(false);
     setLoadingDone(false);
+    // L2-12b — a jump-back + new path re-derives a (possibly different) target,
+    // so reset the AI race too (the fetch re-fires for the new reveal).
+    setBeatsDone(false);
+    setAiSettled(true);
+    setAiWhyCopy(null);
+    aiFiredRef.current = false;
   }, [currentNodeId]);
 
   // Spec §2 urgency — when a result page with the urgency toggle renders, fetch
@@ -456,6 +480,90 @@ export function QuizRuntime(props: QuizRuntimeProps) {
   const analyticsRef = useRef<ReturnType<typeof createAnalyticsClient> | null>(null);
   const startedAtRef = useRef<number>(0);
   const completedRef = useRef(false);
+
+  // ── L2-12b — runtime AI rec-copy eligibility + the fetch race ──────────────
+  // Eligible iff: live (not preview), decider doc, shop switch on, the current
+  // node is a result, the shopper's path resolves a target, and that target's
+  // effective config has whyOn AND is NOT locked (a locked merchant paragraph
+  // ships as-is). All of this mirrors the endpoint's own refusals so the client
+  // doesn't waste a rate-limited request. Null → the whole feature is inert
+  // (every legacy/preview/non-decider render, byte-identical to before).
+  const aiRecCopy = useMemo(() => {
+    if (isPreview || !isDecider || !aiCopyEnabled || !quizId) return null;
+    const node = doc.nodes.find((n) => n.id === currentNodeId);
+    if (!node || node.type !== "result") return null;
+    const answerIds = path.flatMap((p) => p.answerIds);
+    const resolved = resolveTarget(answerIds, doc);
+    if (!resolved) return null;
+    const cfg = settingsForTarget(doc.rec_page_settings, resolved.targetId);
+    if (!cfg.whyOn || cfg.whyCopyLocked) return null;
+    return {
+      targetId: resolved.targetId,
+      answerIds,
+      captureNeeded: Boolean(cfg.captureEmail || cfg.captureName || cfg.capturePhone),
+    };
+  }, [isPreview, isDecider, aiCopyEnabled, quizId, currentNodeId, path, doc]);
+
+  // Fire at capture-gate-clear (abandoners cost $0) — the loading interstitial
+  // then absorbs the latency. Reduced-motion skips the interstitial, so there's
+  // no buffer → skip the spend entirely (the reveal shows template copy). The
+  // fetch is raced against a 5s client cap; the SERVER still completes + caches,
+  // so a late arrival is only discarded for THIS paint (a reload serves cached).
+  useEffect(() => {
+    if (!aiRecCopy || aiFiredRef.current) return;
+    const captureCleared = captureDone || !aiRecCopy.captureNeeded;
+    if (!captureCleared) return;
+    if (
+      typeof window !== "undefined" &&
+      window.matchMedia?.("(prefers-reduced-motion: reduce)").matches
+    ) {
+      return;
+    }
+    aiFiredRef.current = true;
+    setAiSettled(false);
+    const controller = new AbortController();
+    let done = false;
+    const settle = () => {
+      if (done) return;
+      done = true;
+      clearTimeout(timer);
+      setAiSettled(true);
+    };
+    const timer = setTimeout(() => {
+      controller.abort();
+      settle();
+    }, 5000);
+    fetch(`/q/${quizId}/rec-copy`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        sessionId: sessionIdRef.current,
+        answerIds: aiRecCopy.answerIds,
+      }),
+      signal: controller.signal,
+    })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (d && d.ok && typeof d.copy === "string" && d.copy.trim()) {
+          setAiWhyCopy(d.copy);
+        }
+      })
+      .catch(() => {})
+      .finally(settle);
+    return () => {
+      clearTimeout(timer);
+      controller.abort();
+    };
+    // sessionIdRef is stable; the reset effect clears aiFiredRef on node change.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [aiRecCopy, captureDone, quizId]);
+
+  // The reveal waits for BOTH the interstitial beats AND the AI to settle (or
+  // its 5s cap) — so the copy never flashes template→AI. aiSettled defaults true,
+  // so a render that never fired the fetch flips loadingDone on beatsDone alone.
+  useEffect(() => {
+    if (beatsDone && aiSettled && !loadingDone) setLoadingDone(true);
+  }, [beatsDone, aiSettled, loadingDone]);
 
   // Save/resume: persist progress to localStorage so closing/re-opening the
   // quiz resumes instead of restarting. Sticky A/B assignments ride along.
@@ -1236,6 +1344,7 @@ export function QuizRuntime(props: QuizRuntimeProps) {
               completed={completedRef}
               analytics={analyticsRef.current}
               buddySessionId={buddySessionId}
+              aiWhyCopy={aiWhyCopy}
               onReset={reset}
             />
           );
@@ -1251,7 +1360,7 @@ export function QuizRuntime(props: QuizRuntimeProps) {
             content = (
               <DeciderLoadingView
                 poolSize={explained.poolSize}
-                onDone={() => setLoadingDone(true)}
+                onDone={() => setBeatsDone(true)}
               />
             );
           }
@@ -2305,6 +2414,7 @@ function DeciderResultView({
   completed,
   analytics,
   buddySessionId,
+  aiWhyCopy,
   onReset,
 }: {
   decider: NonNullable<ExplainedRecommendation["decider"]>;
@@ -2319,6 +2429,9 @@ function DeciderResultView({
   completed: React.MutableRefObject<boolean>;
   analytics: ReturnType<typeof createAnalyticsClient> | null;
   buddySessionId?: string | null;
+  // L2-12b — the per-shopper AI paragraph, when it arrived before this paint.
+  // Replaces (never stacks with) the merchant template inside the whyOn gate.
+  aiWhyCopy?: string | null;
   onReset: () => void;
 }) {
   const tc = useChrome();
@@ -2436,8 +2549,10 @@ function DeciderResultView({
     <div style={styles.card}>
       {cfg.incentivePos === "banner" ? incentiveChip : null}
       <h2 style={styles.h2}>{cfg.headline}</h2>
-      {cfg.whyOn && cfg.whyCopy.trim() ? (
-        <p style={{ ...styles.muted, marginTop: 8 }}>{cfg.whyCopy}</p>
+      {cfg.whyOn && (aiWhyCopy?.trim() || cfg.whyCopy.trim()) ? (
+        <p style={{ ...styles.muted, marginTop: 8 }}>
+          {aiWhyCopy?.trim() || cfg.whyCopy}
+        </p>
       ) : null}
       {cfg.incentivePos === "below-headline" ? incentiveChip : null}
       {decider.allOutOfStock ? (

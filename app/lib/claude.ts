@@ -1601,6 +1601,107 @@ export async function generateWhyCopy(input: WhyCopyInput): Promise<string> {
   throw new QuizGenerationError("Why-copy generation failed", MAX_ATTEMPTS, lastError);
 }
 
+// ---------- Runtime per-shopper rec-copy (rec-page-spec-V2 §8.3, L2-12b) ------
+
+// The RUNTIME variant of the grounded why-copy: generated per shopper at result
+// time (raced against the reveal interstitial), grounded in the ONE hero product
+// + the shopper's OWN answers. §8.3 combination-framing: when a rule fired, the
+// copy explains the recommendation as the COMBINATION of answers that matched.
+// Reuses WHY_COPY_CONSTRAINT VERBATIM — the same anti-unsubstantiated-claims
+// safety line the config-time generator uses. ONE paragraph that REPLACES the
+// merchant's template (never stacked).
+const RUNTIME_REC_COPY_SYSTEM_PROMPT =
+  'You write the single "why we recommend this for you" paragraph a shopper sees ' +
+  "after finishing a product quiz. Speak directly to the shopper (\"you\"), warm and " +
+  "specific, ONE paragraph of 1–3 sentences (≤ 55 words). No headings, no quotes, no " +
+  'exclamation pile-ups, no "just/simply". Connect their quiz answers to why this ' +
+  "product fits. " +
+  WHY_COPY_CONSTRAINT +
+  " Output only the tool call.";
+
+const runtimeRecCopyToolJsonSchema = {
+  type: "object",
+  required: ["copy"],
+  properties: {
+    copy: {
+      type: "string",
+      description: "The grounded, shopper-personalized why-we-recommend paragraph.",
+    },
+  },
+} as const;
+
+const RuntimeRecCopySchema = z.object({ copy: z.string().min(1).max(600) });
+
+export interface RuntimeRecCopyInput {
+  /** The resolved target's display name (bucket/collection/product name). */
+  targetName: string;
+  /** The ONE hero product — the primary grounding material (§8.2). Null when the
+   *  target resolved but has no in-stock hero (the copy stays general). */
+  heroProduct: { title: string; description: string; tags: string[] } | null;
+  /** The shopper's chosen answer texts — the personalization + framing source. */
+  answerTexts: string[];
+  /** §8.3 — a human-readable phrase for the rule that fired, when a rule (not the
+   *  bare deciding answer) decided the target. Drives combination-framing. */
+  matchedRuleText?: string;
+  brandGuidelines?: BrandGuidelines | null;
+}
+
+export async function generateRuntimeRecCopy(input: RuntimeRecCopyInput): Promise<string> {
+  const tool = {
+    name: "emit_rec_copy",
+    description: "Emit the shopper-personalized why-we-recommend paragraph.",
+    input_schema: runtimeRecCopyToolJsonSchema as unknown as Anthropic.Tool.InputSchema,
+  } satisfies Anthropic.Tool;
+
+  const lines = [
+    `Recommendation scope: ${input.targetName}`,
+    "",
+    input.answerTexts.length
+      ? `The shopper's quiz answers: ${input.answerTexts.join("; ")}`
+      : "The shopper completed the quiz.",
+  ];
+  if (input.matchedRuleText) {
+    lines.push(
+      "",
+      `This recommendation was chosen because that COMBINATION of answers matched: ${input.matchedRuleText}. ` +
+        "Frame the paragraph around how those answers together point to this product.",
+    );
+  }
+  lines.push("", "Hero product data (the ONLY product facts you may reason from):");
+  if (input.heroProduct) {
+    const p = input.heroProduct;
+    lines.push(
+      `- ${p.title}${p.tags.length ? ` [tags: ${p.tags.join(", ")}]` : ""}${
+        p.description ? ` — ${p.description.slice(0, 400)}` : ""
+      }`,
+    );
+  } else {
+    lines.push("- (no specific product data — give a general, answer-grounded benefit statement)");
+  }
+  const userMessage = lines.join("\n");
+  const system = RUNTIME_REC_COPY_SYSTEM_PROMPT + buildBrandVoiceAddition(input.brandGuidelines);
+
+  let lastError = "no tool call";
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+    const response = await client().messages.create({
+      model: MODEL_FAST,
+      max_tokens: 512,
+      system,
+      tools: [tool],
+      tool_choice: { type: "tool", name: "emit_rec_copy" },
+      messages: [{ role: "user", content: userMessage }],
+    });
+    const toolUse = response.content.find(
+      (b): b is Anthropic.ToolUseBlock => b.type === "tool_use",
+    );
+    if (!toolUse) continue;
+    const parsed = RuntimeRecCopySchema.safeParse(toolUse.input);
+    if (parsed.success) return parsed.data.copy.trim();
+    lastError = parsed.error.issues[0]?.message ?? "invalid tool output";
+  }
+  throw new QuizGenerationError("Runtime rec-copy generation failed", MAX_ATTEMPTS, lastError);
+}
+
 // ---------- AskAI chat (Phase 3) ----------
 
 export interface AskAIMessage {

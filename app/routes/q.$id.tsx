@@ -180,6 +180,7 @@ export default function StorefrontRuntime() {
       chrome={data.chrome}
       locale={data.locale}
       buddySessionId={data.buddySessionId}
+      aiCopyEnabled={data.aiCopyEnabled}
     />
   );
 }
