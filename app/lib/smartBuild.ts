@@ -477,3 +477,41 @@ export function applyDeciderQuestionFlow(
     },
   };
 }
+
+// ════════════════════════════════════════════════════════════════════════════
+// Start-routing spec §1.2 — the MANUAL (blank quiz) decider skeleton. No AI:
+// the merchant builds every question by hand from a minimal-but-COMPLETE
+// decider canvas — the seed's intro + starter question plus the ONE reveal
+// terminus (result nodes require fallback_collection_id, and the Results-page
+// step only mounts when a result node exists). Also reused by a failed
+// write-a-goal generation (§1.3: "land on the blank Questions tab" — never
+// strand the merchant on a stage they didn't choose). Idempotent: a doc that
+// already has a result node is returned unchanged.
+// ════════════════════════════════════════════════════════════════════════════
+export function applyManualDeciderSkeleton(
+  doc: QuizDoc,
+  fallbackCollectionId: string,
+): QuizDoc {
+  if (doc.nodes.some((n) => n.type === "result")) return { ...doc, logic_model: "decider" };
+  const lastQuestion = [...doc.nodes].reverse().find((n) => n.type === "question");
+  const maxX = Math.max(0, ...doc.nodes.map((n) => n.position?.x ?? 0));
+  const resultNode = {
+    id: "sb_result",
+    type: "result",
+    position: { x: maxX + 320, y: 0 },
+    data: { headline: "Your match", fallback_collection_id: fallbackCollectionId },
+  } as QuizNode;
+  return {
+    ...doc,
+    logic_model: "decider",
+    nodes: [...doc.nodes, resultNode],
+    edges: [
+      ...doc.edges,
+      { id: "sb_e_result", source: lastQuestion?.id ?? "intro", target: "sb_result" },
+    ],
+    rec_page_settings: doc.rec_page_settings ?? {
+      global: { emptyFallbackCol: fallbackCollectionId },
+      overrides: {},
+    },
+  };
+}

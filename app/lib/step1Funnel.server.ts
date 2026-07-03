@@ -33,6 +33,7 @@ import {
   startStep2Build,
 } from "./step2Build.server";
 import { saveTemplate, listSavedTemplates, loadSavedTemplate } from "./savedTemplates.server";
+import { applyManualDeciderSkeleton } from "./smartBuild";
 import {
   MAX_LOGO_BYTES,
   isAllowedLogoType,
@@ -936,6 +937,15 @@ async function runStep1FunnelActionImpl(
       where: { shopId: shop.id, quizId: quiz.id },
       select: { id: true, name: true, tags: true },
     });
+    // Start-routing spec §1 — the intercept modal fires this straight from the
+    // Recommendations step (Shape is SKIPPED on the write-a-goal route), so a
+    // decider goal build needs selections to map onto.
+    if (doc.logic_model === "decider" && cats.length === 0) {
+      return json(
+        { intent, ok: false, error: "Add at least one recommendation to continue." },
+        { status: 400 },
+      );
+    }
     const syntheticType = QuizType.parse({
       id: "custom-goal",
       experience_type: "product_match",
@@ -944,18 +954,30 @@ async function runStep1FunnelActionImpl(
       question_range: { min: 4, max: 7 },
     });
     const struggle = session.goal?.struggle_text ?? "";
+    const tabDim = session.bucket_browser?.active_tab;
     const next: BuildSession = {
       ...session,
       stage: "templating",
       goal: { goal_text: goal, struggle_text: struggle },
       gen_error: undefined,
+      // When fired from the modal at the Recommendations step, the grouping
+      // bookkeeping continue-buckets would have written hasn't happened yet.
+      grouping: session.grouping ?? {
+        dimension: tabDim === "tag" ? "tag" : tabDim === "collection" ? "collection" : "all",
+        confirmed_category_ids: cats.map((c) => c.id),
+        detected_rationale: "",
+      },
       // O-3 (decider only, review-caught) — a goal build is a FRESH direction:
       // clear any leftover template artifacts (a stale picked_type_id would make
       // retry-gen regenerate the OLD type's templates; stale rich/picked would
       // make the saved-template retry fallback rebuild the OLD template if this
       // job is killed before its own templates persist). Legacy untouched.
+      // SR §3 — the goal route SKIPS Shape, so quiz_types must be cleared too:
+      // Back-from-Questions keys on quiz_types.length===0 to route to
+      // Recommendations; a stale non-empty list (merchant ran AI templates, backed
+      // out, then wrote a goal) would wrongly send Back to Shape.
       ...(doc.logic_model === "decider"
-        ? { picked_type_id: undefined, rich_templates: [], picked_template: undefined }
+        ? { quiz_types: [], picked_type_id: undefined, rich_templates: [], picked_template: undefined }
         : {}),
     };
     await writeDoc(quiz.id, {
@@ -964,11 +986,70 @@ async function runStep1FunnelActionImpl(
       experience_type: "product_match",
       build_session: next,
     });
-    startStep2Templates(shop.id, quiz.id, syntheticType, {
-      goal,
-      ...(struggle ? { struggle } : {}),
-      ...(cats.length ? { buckets: cats } : {}),
+    startStep2Templates(
+      shop.id,
+      quiz.id,
+      syntheticType,
+      {
+        goal,
+        ...(struggle ? { struggle } : {}),
+        ...(cats.length ? { buckets: cats } : {}),
+      },
+      // §1.3 — a failed goal generation lands on BLANK Questions with a notice
+      // (decider; the merchant chose a goal, not Shape). Legacy keeps the
+      // Shape-error treatment (its write-goal card lives ON Shape).
+      doc.logic_model === "decider" ? { failMode: "blank_questions" } : undefined,
+    );
+    return json({ intent, ok: true });
+  }
+
+  // Start-routing spec §1.2 — "Build from a blank quiz" (the intercept modal's
+  // quiet tertiary + Shape's escape link). No AI: seed the minimal-but-complete
+  // decider skeleton and land straight on the Questions step. Reinstates the
+  // manual path the L2-10d flip closed (this newer owner spec supersedes it) —
+  // now decider-NATIVE instead of exiting into a builder with no decider UI.
+  if (intent === "manual-build") {
+    if (doc.logic_model !== "decider") {
+      // Legacy in-flight drafts keep their own Manual card (shape-manual).
+      return json({ intent, ok: false, error: "This flow isn't available for this quiz." }, { status: 400 });
+    }
+    const cats = await prisma.category.findMany({
+      where: { shopId: shop.id, quizId: quiz.id },
+      select: { id: true },
+      orderBy: { createdAt: "asc" },
     });
+    if (cats.length === 0) {
+      return json(
+        { intent, ok: false, error: "Add at least one recommendation to continue." },
+        { status: 400 },
+      );
+    }
+    const firstCollection = await prisma.collection.findFirst({
+      where: { shopId: shop.id },
+      select: { collectionId: true },
+    });
+    const skeleton = applyManualDeciderSkeleton(doc, firstCollection?.collectionId ?? "manual");
+    const tabDim = session.bucket_browser?.active_tab;
+    const next: BuildSession = {
+      ...session,
+      stage: "question_builder",
+      built: true, // no AI build to wait for — the skeleton IS the build
+      gen_error: undefined,
+      grouping: session.grouping ?? {
+        dimension: tabDim === "tag" ? "tag" : tabDim === "collection" ? "collection" : "all",
+        confirmed_category_ids: cats.map((c) => c.id),
+        detected_rationale: "",
+      },
+      // SR §3 — the blank route SKIPS Shape. Clear quiz_types (alongside the other
+      // template artifacts) so Back-from-Questions routes to Recommendations, not
+      // Shape, even when the merchant ran AI templates then backed out to pick
+      // "Build manually" (back-to-grouping preserves the stale list).
+      quiz_types: [],
+      picked_type_id: undefined,
+      rich_templates: [],
+      picked_template: undefined,
+    };
+    await writeDoc(quiz.id, { ...skeleton, scoring_model: "direct", build_session: next });
     return json({ intent, ok: true });
   }
 
@@ -1244,7 +1325,8 @@ async function runStep1FunnelActionImpl(
   // (the re-architected order: Question Builder → Rec Page → Design) and Overview
   // "← Back".
   if (intent === "to-design") {
-    if (!session.picked_template) {
+    // Same relaxation as to-rec-page (manual/failed-goal decider drafts).
+    if (!session.picked_template && !(doc.logic_model === "decider" && session.built)) {
       return json({ intent, ok: false, error: "No template selected." }, { status: 400 });
     }
     await writeDoc(quiz.id, { ...doc, build_session: { ...session, stage: "design" } });
@@ -1260,7 +1342,9 @@ async function runStep1FunnelActionImpl(
 
   // Design "Continue →": advance to the Recommendation Page step (rec settings).
   if (intent === "to-rec-page") {
-    if (!session.picked_template) {
+    // Start-routing spec: manual/blank + failed-goal DECIDER drafts carry no
+    // picked_template — a built doc (result node present) is the credential.
+    if (!session.picked_template && !(doc.logic_model === "decider" && session.built)) {
       return json({ intent, ok: false, error: "No template selected." }, { status: 400 });
     }
     await writeDoc(quiz.id, { ...doc, build_session: { ...session, stage: "rec_page" } });
@@ -1667,7 +1751,12 @@ async function runStep1FunnelActionImpl(
 
   if (intent === "generate-build") {
     const picked = session.picked_template;
-    if (!picked) return json({ intent, ok: false, error: "No template selected." }, { status: 400 });
+    // Start-routing spec: manual/blank + failed-goal DECIDER drafts have no
+    // picked_template; built:true is their finalize credential (the graduate
+    // branch below never reads `picked`). Legacy behavior unchanged.
+    if (!picked && !(doc.logic_model === "decider" && session.built)) {
+      return json({ intent, ok: false, error: "No template selected." }, { status: 400 });
+    }
 
     // Re-architected flow: the quiz is ALREADY built (the question build ran at
     // the Question Builder step). Generate is a NON-AI finalize — just open the
@@ -1695,6 +1784,11 @@ async function runStep1FunnelActionImpl(
 
     // Legacy in-flight draft that reached Overview the OLD way (no build yet) →
     // run the real detached build, landing in the builder via the buildState overlay.
+    // (A missing picked_template only passes the top guard on decider+built drafts,
+    // and both of those branches returned above — this re-check narrows the type.)
+    if (!picked) {
+      return json({ intent, ok: false, error: "No template selected." }, { status: 400 });
+    }
     const rich = session.rich_templates.find((t) => t.id === picked.template_id);
     if (!rich) return json({ intent, ok: false, error: "Template not found." }, { status: 400 });
     if (!session.goal?.goal_text) return json({ intent, ok: false, error: "Add a goal before building." }, { status: 400 });
@@ -1729,7 +1823,14 @@ async function runStep1FunnelActionImpl(
           ? "goal"
           : intent === "back-to-configuring"
             ? "configuring"
-            : "types";
+            : // Start-routing spec §3 — Back from Questions goes to Shape only
+              // when the merchant came THROUGH it (tier-1 types exist). The
+              // write-a-goal and blank-quiz routes skip Shape, so their Back
+              // returns to Recommendations. Decider-gated: legacy in-flight
+              // drafts keep today's destination byte-identically.
+              doc.logic_model === "decider" && session.quiz_types.length === 0
+              ? "grouping"
+              : "types";
     const next: BuildSession = { ...session, stage };
     await writeDoc(quiz.id, { ...doc, build_session: next });
     return json({ intent, ok: true });

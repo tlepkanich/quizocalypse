@@ -2791,3 +2791,86 @@ body[data-qz] ::selection { background: var(--qz-ink); color: var(--qz-cream); }
   flex: none; display: flex; align-items: center; justify-content: space-between; gap: 10px;
   padding-top: 8px; border-top: 1px solid var(--qz-rule);
 }
+
+/* ── Start-routing spec (SR) — the intercept modal + decider Shape ────────── */
+.qz-start-modal { width: min(520px, 94vw); }
+.qz-start-choices { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.qz-start-choice {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 6px;
+  padding: 14px; text-align: left; cursor: pointer;
+  background: var(--qz-paper); color: var(--qz-ink);
+  border: 1px solid var(--qz-rule); border-radius: var(--qz-radius);
+  transition: border-color .12s ease, box-shadow .12s ease;
+}
+.qz-start-choice:hover { border-color: var(--qz-accent); box-shadow: var(--qz-shadow); }
+.qz-start-choice.is-ai { border-color: var(--qz-accent); background: var(--qz-accent-tint); }
+.qz-link-quiet {
+  align-self: flex-start; padding: 0; background: none; border: none; cursor: pointer;
+  font-size: 12.5px; color: var(--qz-ink-3); text-decoration: underline; text-underline-offset: 2px;
+}
+.qz-link-quiet:hover:not(:disabled) { color: var(--qz-ink); }
+.qz-link-quiet:disabled { opacity: .5; cursor: default; }
+
+.qz-shape-provenance {
+  display: flex; align-items: center; gap: 8px;
+  padding: 10px 14px; font-size: 13px;
+  background: var(--qz-accent-tint); color: var(--qz-ink);
+  border: 1px solid var(--qz-accent); border-radius: var(--qz-radius);
+}
+.qz-shape-card {
+  display: flex; flex-direction: column; align-items: stretch; gap: 8px;
+  text-align: left; cursor: pointer;
+  transition: border-color .12s ease, box-shadow .12s ease;
+}
+.qz-shape-card:hover:not(:disabled) { border-color: var(--qz-accent); box-shadow: var(--qz-shadow); }
+.qz-shape-card.is-active { border-color: var(--qz-accent); box-shadow: 0 0 0 2px var(--qz-accent-tint); }
+.qz-shape-card:disabled { opacity: .6; cursor: default; }
+.qz-shape-see { font-size: 12.5px; font-weight: 600; color: var(--qz-accent); }
+
+/* §2.1 mini-thumbnail — a themed rendered quiz screen, never an icon. */
+.qz-shape-thumb {
+  display: flex; flex-direction: column; gap: 7px;
+  padding: 12px; min-height: 96px; overflow: hidden;
+  background: var(--qz-color-bg, #fff); color: var(--qz-color-text, #111);
+  font-family: var(--qz-font-body, inherit);
+  border: 1px solid var(--qz-rule); border-radius: calc(var(--qz-radius) - 4px);
+}
+.qz-shape-thumb-bar {
+  display: block; height: 4px; border-radius: 2px; overflow: hidden;
+  background: color-mix(in srgb, currentColor 12%, transparent);
+}
+.qz-shape-thumb-bar > span {
+  display: block; height: 100%; border-radius: 2px;
+  background: var(--qz-color-primary, #5563de);
+}
+.qz-shape-thumb-q { font-size: 11.5px; font-weight: 700; line-height: 1.25; }
+.qz-shape-thumb-answers { display: flex; flex-direction: column; gap: 4px; }
+.qz-shape-thumb-chip {
+  padding: 3px 8px; font-size: 10px; line-height: 1.3;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  background: color-mix(in srgb, currentColor 6%, transparent);
+  border-radius: 6px;
+}
+
+/* §2.2 preview-drawer interactive screens (reuses the .qz-rb-phone frame). */
+.qz-tpl-q { display: flex; flex-direction: column; gap: 10px; min-height: 0; }
+.qz-tpl-chips { display: flex; flex-direction: column; gap: 6px; }
+.qz-tpl-chip {
+  padding: 9px 12px; font-size: 12.5px; text-align: left; cursor: pointer;
+  color: inherit; font-family: inherit;
+  background: color-mix(in srgb, currentColor 6%, transparent);
+  border: 1px solid transparent; border-radius: 8px;
+}
+.qz-tpl-chip.is-on {
+  border-color: var(--qz-color-primary, #5563de);
+  background: color-mix(in srgb, var(--qz-color-primary, #5563de) 12%, transparent);
+}
+.qz-tpl-next {
+  margin-top: auto; padding: 9px 12px; font-size: 13px; font-weight: 600; cursor: pointer;
+  background: var(--qz-color-primary, #5563de); border: none; border-radius: 8px;
+}
+.qz-tpl-next:disabled { opacity: .4; cursor: default; }
+.qz-tpl-next.is-restart {
+  background: transparent; color: inherit;
+  border: 1px solid color-mix(in srgb, currentColor 25%, transparent);
+}

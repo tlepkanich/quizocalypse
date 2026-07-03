@@ -1034,6 +1034,11 @@ function RecommendationBucketsStage({
   const [previewOpen, setPreviewOpen] = useState(false);
   const [removeWarn, setRemoveWarn] = useState<BucketCard | null>(null);
   const [bulkWarn, setBulkWarn] = useState<{ count: number; run: () => void } | null>(null);
+  // Start-routing spec §1 — Continue opens the "How do you want to start?"
+  // intercept (decider drafts only; legacy Continue submits directly as today).
+  // Dismissal returns here unchanged; it re-opens on the next Continue.
+  const [interceptOpen, setInterceptOpen] = useState(false);
+  const isDecider = data.logicModel === "decider";
   const referencedSet = useMemo(() => new Set(data.referencedKeys), [data.referencedKeys]);
 
   // Optimistic overlay over the server's selection: id → card (added) | null
@@ -1496,8 +1501,12 @@ function RecommendationBucketsStage({
               <button
                 type="button"
                 className="qz-btn qz-btn-accent"
-                onClick={() => fetcher.submit({ intent: "continue-buckets" }, { method: "post" })}
-                disabled={continuing}
+                onClick={() =>
+                  isDecider
+                    ? setInterceptOpen(true)
+                    : fetcher.submit({ intent: "continue-buckets" }, { method: "post" })
+                }
+                disabled={continuing || pendingIntent === "shape-goal-build" || pendingIntent === "manual-build"}
               >
                 {continuing ? "Saving…" : "Continue →"}
               </button>
@@ -1546,6 +1555,169 @@ function RecommendationBucketsStage({
           designTokens={data.designTokens ?? null}
           onClose={() => setPreviewOpen(false)}
         />
+      ) : null}
+      {interceptOpen ? (
+        <StartInterceptModal
+          suggestedGoal={data.goal?.goal_text || data.suggestedGoal}
+          minGoalChars={data.minGoalChars}
+          onAiTemplates={() => {
+            setInterceptOpen(false);
+            fetcher.submit({ intent: "continue-buckets" }, { method: "post" });
+          }}
+          onGoalBuild={(goal) => {
+            setInterceptOpen(false);
+            fetcher.submit({ intent: "shape-goal-build", goal }, { method: "post" });
+          }}
+          onManual={() => {
+            setInterceptOpen(false);
+            fetcher.submit({ intent: "manual-build" }, { method: "post" });
+          }}
+          onClose={() => setInterceptOpen(false)}
+        />
+      ) : null}
+    </div>
+  );
+}
+
+// Start-routing spec §1.1 — the intercept modal: two primary choices side by
+// side + one quiet tertiary. The AI choice carries the "Fastest" badge; the
+// write-a-goal input lives IN the modal (the spec's own recommendation — one
+// navigation, never a trapped state). Esc/scrim closes with nothing changed.
+function StartInterceptModal({
+  suggestedGoal,
+  minGoalChars,
+  onAiTemplates,
+  onGoalBuild,
+  onManual,
+  onClose,
+}: {
+  suggestedGoal: string;
+  minGoalChars: number;
+  onAiTemplates: () => void;
+  onGoalBuild: (goal: string) => void;
+  onManual: () => void;
+  onClose: () => void;
+}) {
+  useEscClose(onClose);
+  const [screen, setScreen] = useState<"choose" | "goal">("choose");
+  return (
+    <div className="qz-rb-scrim" onClick={onClose}>
+      <div
+        className="qz-rb-modal qz-start-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-label="How do you want to start?"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {screen === "choose" ? (
+          <>
+            <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+              <strong style={{ fontSize: 17 }}>How do you want to start?</strong>
+              <span className="qz-dim" style={{ fontSize: 13 }}>
+                Your recommendations are set — pick how to build the quiz itself.
+              </span>
+            </div>
+            <div className="qz-start-choices">
+              <button type="button" className="qz-start-choice is-ai" onClick={onAiTemplates}>
+                <span className="qz-row qz-row-between" style={{ gap: 8 }}>
+                  <span style={{ fontSize: 20 }} aria-hidden>
+                    ✨
+                  </span>
+                  <QzBadge tone="ok">Fastest</QzBadge>
+                </span>
+                <strong>Generate AI templates</strong>
+                <span className="qz-dim" style={{ fontSize: 12.5 }}>
+                  We read your catalog and draft two quiz directions — preview them live and
+                  pick one.
+                </span>
+              </button>
+              <button
+                type="button"
+                className="qz-start-choice"
+                onClick={() => setScreen("goal")}
+              >
+                <span style={{ fontSize: 20 }} aria-hidden>
+                  ✏
+                </span>
+                <strong>Write your goal</strong>
+                <span className="qz-dim" style={{ fontSize: 12.5 }}>
+                  Describe what the quiz should do — we&rsquo;ll generate the questions from
+                  it and take you straight to editing.
+                </span>
+              </button>
+            </div>
+            <button type="button" className="qz-link-quiet" onClick={onManual}>
+              Build from a blank quiz instead →
+            </button>
+          </>
+        ) : (
+          <>
+            <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+              <strong style={{ fontSize: 17 }}>Describe what you want your quiz to do</strong>
+              <span className="qz-dim" style={{ fontSize: 13 }}>
+                Your own words work best — we&rsquo;ll draft the questions from this.
+              </span>
+            </div>
+            <GoalPromptBody
+              suggestedGoal={suggestedGoal}
+              minGoalChars={minGoalChars}
+              submitLabel="Generate from my goal →"
+              onSubmit={onGoalBuild}
+              onCancel={() => setScreen("choose")}
+            />
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// The shared write-a-goal form (the intercept modal's second screen + Shape's
+// escape-link card). Prefilled with the store-derived suggestion so it's an
+// approval, not a blank box; the merchant's own words always win.
+function GoalPromptBody({
+  suggestedGoal,
+  minGoalChars,
+  submitLabel,
+  onSubmit,
+  onCancel,
+}: {
+  suggestedGoal: string;
+  minGoalChars: number;
+  submitLabel: string;
+  onSubmit: (goal: string) => void;
+  onCancel: () => void;
+}) {
+  const [goal, setGoal] = useState(suggestedGoal);
+  const met = goal.trim().length >= minGoalChars;
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+      <textarea
+        className="qz-input"
+        rows={3}
+        autoFocus
+        value={goal}
+        onChange={(e) => setGoal(e.target.value)}
+        placeholder={'e.g. "Help shoppers find the right board for how and where they ride"'}
+        style={{ resize: "vertical", fontSize: 13 }}
+      />
+      <div className="qz-row" style={{ gap: 10 }}>
+        <button
+          type="button"
+          className="qz-btn qz-btn-accent qz-btn-sm"
+          disabled={!met}
+          onClick={() => onSubmit(goal.trim())}
+        >
+          {submitLabel}
+        </button>
+        <button type="button" className="qz-btn qz-btn-ghost qz-btn-sm" onClick={onCancel}>
+          ← Back
+        </button>
+      </div>
+      {!met ? (
+        <span className="qz-dim" style={{ fontSize: 11.5 }}>
+          Add a little more detail (at least {minGoalChars} characters).
+        </span>
       ) : null}
     </div>
   );
@@ -2241,6 +2413,16 @@ function ShapeStage({
   const muted = (mine: boolean): React.CSSProperties =>
     somethingOpen && !mine ? { opacity: 0.5, pointerEvents: "none" } : {};
 
+  // Start-routing spec §2 — decider drafts get the template-picker Shape
+  // (provenance banner, two thumbnail-led cards, the live preview drawer,
+  // quiet escape links). Legacy in-flight drafts keep the four-card UI below
+  // byte-identically.
+  if (isDecider) {
+    return (
+      <DeciderShapeStage data={data} fetcher={fetcher} pendingIntent={pendingIntent} busy={busy} />
+    );
+  }
+
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
       <QzCard style={{ display: "flex", flexDirection: "column", gap: 6 }}>
@@ -2474,6 +2656,353 @@ function ShapeStage({
           ← Back to recommendations
         </button>
       </div>
+    </div>
+  );
+}
+
+// ── Start-routing spec §2 — the decider Shape: a TEMPLATE PICKER whose single
+// job is letting the merchant experience two drafted directions and pick one.
+// Write-a-goal + manual live in the intercept modal; here they're quiet escape
+// links only (the routing rule: Shape is only ever reached via AI templates).
+function DeciderShapeStage({
+  data,
+  fetcher,
+  pendingIntent,
+  busy,
+}: {
+  data: FunnelData;
+  fetcher: ReturnType<typeof useFetcher<ActionResult>>;
+  pendingIntent: string | null;
+  busy: boolean;
+}) {
+  const [previewTypeId, setPreviewTypeId] = useState<string | null>(null);
+  const [writingGoal, setWritingGoal] = useState(false);
+  const aiTypes = data.quizTypes.slice(0, 2);
+  const previewType = aiTypes.find((t) => t.id === previewTypeId) ?? null;
+  const resolved = useMemo(() => resolveDesignTokens(data.designTokens ?? undefined), [data.designTokens]);
+  const cssVars = useMemo(() => tokensToCssVars(resolved) as CSSProperties, [resolved]);
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+      <QzCard style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+        <div className="qz-row qz-row-between" style={{ alignItems: "center", gap: 8 }}>
+          <h2 className="qz-h2" style={{ margin: 0 }}>Shape your quiz</h2>
+          <QzBadge tone="draft">Brand ✦</QzBadge>
+        </div>
+        <p className="qz-dim" style={{ margin: 0 }}>
+          Two quiz directions drafted from your catalog — see each one live, then pick.
+        </p>
+      </QzCard>
+
+      {/* §2.1 provenance banner — the catalog-confidence signal, real counts. */}
+      <div className="qz-shape-provenance">
+        <span aria-hidden>✨</span>
+        <span>
+          Generated from your catalog — based on <strong>{data.productCount} products</strong>{" "}
+          across <strong>{data.productGroups.length} recommendation target{data.productGroups.length === 1 ? "" : "s"}</strong>.
+        </span>
+      </div>
+
+      <div className="qz-type-grid">
+        {aiTypes.map((t) => (
+          <button
+            key={t.id}
+            type="button"
+            className={`qz-card qz-shape-card${previewTypeId === t.id ? " is-active" : ""}`}
+            disabled={busy}
+            onClick={() => setPreviewTypeId(t.id)}
+          >
+            <TypeMiniThumb type={t} cssVars={cssVars} buckets={data.buckets} />
+            <span className="qz-row qz-row-between" style={{ gap: 8, alignItems: "flex-start" }}>
+              <span style={{ fontFamily: "var(--qz-font-display)", fontSize: 17, lineHeight: 1.2, textAlign: "left" }}>
+                {t.name}
+              </span>
+              <QzBadge tone={t.experience_type === "personality" ? "ok" : "draft"}>
+                {XTYPE_LABEL[t.experience_type] ?? t.experience_type}
+              </QzBadge>
+            </span>
+            <span className="qz-muted" style={{ fontSize: 13.5, textAlign: "left" }}>{t.achieves}</span>
+            <span className="qz-label">{t.question_range.min}–{t.question_range.max} questions</span>
+            <span className="qz-shape-see" aria-hidden>See it live →</span>
+          </button>
+        ))}
+      </div>
+
+      {/* §2.1 escape links (quiet) — these re-route per §1.2; not cards. */}
+      <div className="qz-row" style={{ gap: 6, fontSize: 12.5 }}>
+        <span className="qz-dim">Prefer to start differently?</span>
+        <button type="button" className="qz-link-quiet" disabled={busy} onClick={() => setWritingGoal((v) => !v)}>
+          Write a goal
+        </button>
+        <span className="qz-dim" aria-hidden>·</span>
+        <button
+          type="button"
+          className="qz-link-quiet"
+          disabled={busy}
+          onClick={() => fetcher.submit({ intent: "manual-build" }, { method: "post" })}
+        >
+          {pendingIntent === "manual-build" ? "Opening…" : "Build manually"}
+        </button>
+      </div>
+
+      {writingGoal ? (
+        <QzCard style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          <strong style={{ fontSize: 14 }}>Describe what you want your quiz to do</strong>
+          <GoalPromptBody
+            suggestedGoal={data.goal?.goal_text || data.suggestedGoal}
+            minGoalChars={data.minGoalChars}
+            submitLabel={pendingIntent === "shape-goal-build" ? "Building…" : "Generate from my goal →"}
+            onSubmit={(goal) => fetcher.submit({ intent: "shape-goal-build", goal }, { method: "post" })}
+            onCancel={() => setWritingGoal(false)}
+          />
+        </QzCard>
+      ) : null}
+
+      <SavedTemplatesRow
+        templates={data.savedTemplates}
+        fetcher={fetcher}
+        pendingIntent={pendingIntent}
+        isDecider
+      />
+
+      <div className="qz-row" style={{ gap: 10, alignItems: "center" }}>
+        <button
+          type="button"
+          className="qz-btn qz-btn-ghost qz-btn-sm"
+          disabled={busy}
+          onClick={() => fetcher.submit({ intent: "shape-regenerate" }, { method: "post" })}
+        >
+          {pendingIntent === "shape-regenerate" ? "Regenerating…" : "↻ Regenerate suggestions"}
+        </button>
+        <button
+          type="button"
+          className="qz-btn qz-btn-ghost qz-btn-sm"
+          disabled={busy}
+          onClick={() => fetcher.submit({ intent: "back-to-grouping" }, { method: "post" })}
+        >
+          ← Back to recommendations
+        </button>
+      </div>
+
+      {previewType ? (
+        <TemplatePreviewDrawer
+          type={previewType}
+          buckets={data.buckets}
+          catalog={data.catalog}
+          cssVars={cssVars}
+          resolvedPrimary={resolved.colors?.primary ?? "#5563DE"}
+          headingFamily={resolved.typography?.heading?.family ?? ""}
+          bodyFamily={resolved.typography?.body?.family ?? ""}
+          building={pendingIntent === "shape-continue"}
+          onUse={() =>
+            fetcher.submit(
+              { intent: "shape-continue", typeId: previewType.id, scoring: "direct" },
+              { method: "post" },
+            )
+          }
+          onClose={() => setPreviewTypeId(null)}
+        />
+      ) : null}
+    </div>
+  );
+}
+
+// §2.1 — the card's LIVE mini-thumbnail: a small rendered quiz screen (progress
+// bar, question, answers) themed with the draft's tokens — never an icon. The
+// answers are the merchant's REAL recommendation targets.
+function TypeMiniThumb({
+  type,
+  cssVars,
+  buckets,
+}: {
+  type: QuizType;
+  cssVars: CSSProperties;
+  buckets: FunnelData["buckets"];
+}) {
+  const answers = buckets.slice(0, 3).map((b) => b.name);
+  return (
+    <span className="qz-shape-thumb" style={cssVars} aria-hidden>
+      <span className="qz-shape-thumb-bar">
+        <span style={{ width: type.experience_type === "personality" ? "45%" : "30%" }} />
+      </span>
+      <span className="qz-shape-thumb-q">What are you shopping for today?</span>
+      <span className="qz-shape-thumb-answers">
+        {(answers.length ? answers : ["Option A", "Option B", "Option C"]).map((a) => (
+          <span key={a} className="qz-shape-thumb-chip">
+            {a}
+          </span>
+        ))}
+      </span>
+    </span>
+  );
+}
+
+// §2.2 — the live preview drawer: an interactive phone-frame walk of the
+// template (Q1 → Q2 → result) on the merchant's REAL targets and products,
+// brand-themed, ending on a result screen so the full arc is visible. "Use
+// this template" applies it (the same shape-continue the old expanded card
+// submitted) and the build takes over.
+function TemplatePreviewDrawer({
+  type,
+  buckets,
+  catalog,
+  cssVars,
+  resolvedPrimary,
+  headingFamily,
+  bodyFamily,
+  building,
+  onUse,
+  onClose,
+}: {
+  type: QuizType;
+  buckets: FunnelData["buckets"];
+  catalog: FunnelData["catalog"];
+  cssVars: CSSProperties;
+  resolvedPrimary: string;
+  headingFamily: string;
+  bodyFamily: string;
+  building: boolean;
+  onUse: () => void;
+  onClose: () => void;
+}) {
+  useEscClose(onClose);
+  const [screen, setScreen] = useState(0);
+  const [pick1, setPick1] = useState<number | null>(null);
+  const [pick2, setPick2] = useState<number | null>(null);
+  // Clicking the other card swaps the drawer content — reset the walk.
+  useEffect(() => {
+    setScreen(0);
+    setPick1(null);
+    setPick2(null);
+  }, [type.id]);
+
+  const fontUrl = useMemo(() => googleFontsUrl([headingFamily, bodyFamily]), [headingFamily, bodyFamily]);
+  const ctaText = suggestContrastText(resolvedPrimary);
+  const q1Answers = buckets.slice(0, 4).map((b) => b.name);
+  const q2Answers = catalog.tags.slice(0, 3).map((t) => t.label);
+  const q2Final = q2Answers.length >= 2 ? q2Answers : ["The best overall fit", "Something new"];
+  // The tapped target drives the result — real interactivity on real data.
+  const resultBucket = buckets[pick1 ?? 0] ?? buckets[0] ?? null;
+  const resultProduct = useMemo(() => {
+    if (!resultBucket) return catalog.products[0] ?? null;
+    if (resultBucket.type === "tag")
+      return catalog.products.find((p) => p.tagKeys.includes(resultBucket.key)) ?? catalog.products[0] ?? null;
+    if (resultBucket.type === "collection")
+      return (
+        catalog.products.find((p) => p.collectionIds.includes(resultBucket.key)) ??
+        catalog.products[0] ??
+        null
+      );
+    return catalog.products.find((p) => p.id === resultBucket.key) ?? catalog.products[0] ?? null;
+  }, [resultBucket, catalog.products]);
+
+  const chip = (label: string, on: boolean, onClick: () => void) => (
+    <button key={label} type="button" className={`qz-tpl-chip${on ? " is-on" : ""}`} onClick={onClick}>
+      {label}
+    </button>
+  );
+
+  return (
+    <div className="qz-rb-scrim" onClick={onClose}>
+      <aside
+        className="qz-rb-pvdrawer"
+        role="dialog"
+        aria-modal="true"
+        aria-label={`Preview: ${type.name}`}
+        onClick={(e) => e.stopPropagation()}
+      >
+        {fontUrl ? <link rel="stylesheet" href={fontUrl} /> : null}
+        <div className="qz-rb-drawer-head">
+          <div style={{ minWidth: 0 }}>
+            <strong style={{ fontSize: 15 }}>{type.name}</strong>
+            <span className="qz-dim" style={{ display: "block", fontSize: 12 }}>
+              {XTYPE_LABEL[type.experience_type] ?? type.experience_type} · tap through the
+              preview
+            </span>
+          </div>
+          <button type="button" className="qz-rb-banner-x" aria-label="Close" onClick={onClose}>
+            ✕
+          </button>
+        </div>
+        <p className="qz-dim" style={{ margin: 0, fontSize: 12 }}>
+          Themed with your brand identity · your real products.
+        </p>
+
+        <div className="qz-rb-phone">
+          <div className="qz-rb-phone-screen" style={cssVars}>
+            <span className="qz-shape-thumb-bar" style={{ marginBottom: 10 }}>
+              <span style={{ width: `${((screen + 1) / 3) * 100}%` }} />
+            </span>
+            {screen === 0 ? (
+              <div className="qz-tpl-q">
+                <strong className="qz-rb-pv-name">What are you shopping for today?</strong>
+                <div className="qz-tpl-chips">
+                  {q1Answers.map((a, i) => chip(a, pick1 === i, () => setPick1(i)))}
+                </div>
+              </div>
+            ) : screen === 1 ? (
+              <div className="qz-tpl-q">
+                <strong className="qz-rb-pv-name">Anything specific you&rsquo;re into?</strong>
+                <div className="qz-tpl-chips">
+                  {q2Final.map((a, i) => chip(a, pick2 === i, () => setPick2(i)))}
+                </div>
+              </div>
+            ) : (
+              <div className="qz-rb-pv-single">
+                <span className="qz-label" style={{ color: "inherit", opacity: 0.6 }}>
+                  Your match
+                </span>
+                {resultProduct?.imageUrl ? (
+                  <img className="qz-rb-pv-heroimg" src={resultProduct.imageUrl} alt="" loading="lazy" />
+                ) : (
+                  <div className="qz-rb-pv-heroimg qz-rb-pv-noimg" aria-hidden>
+                    📦
+                  </div>
+                )}
+                <strong className="qz-rb-pv-name">{resultProduct?.title ?? "Your product"}</strong>
+                <p className="qz-rb-ghost">✦ AI writes the &ldquo;why we recommend this&rdquo; at quiz time</p>
+                <div className="qz-rb-pv-buyrow">
+                  <span className="qz-rb-pv-price">
+                    {resultProduct?.price != null ? `$${resultProduct.price.toFixed(2)}` : ""}
+                  </span>
+                  <span className="qz-rb-pv-cta" style={{ color: ctaText }}>
+                    Add to cart
+                  </span>
+                </div>
+              </div>
+            )}
+            {screen < 2 ? (
+              <button
+                type="button"
+                className="qz-tpl-next"
+                style={{ color: ctaText }}
+                disabled={screen === 0 ? pick1 === null : pick2 === null}
+                onClick={() => setScreen((s) => s + 1)}
+              >
+                Next
+              </button>
+            ) : (
+              <button type="button" className="qz-tpl-next is-restart" onClick={() => setScreen(0)}>
+                ↺ Start over
+              </button>
+            )}
+          </div>
+        </div>
+
+        <div className="qz-rb-pvfoot">
+          <span className="qz-dim" style={{ fontSize: 12 }}>
+            Screen {screen + 1} of 3
+          </span>
+          <button
+            type="button"
+            className="qz-btn qz-btn-accent qz-btn-sm"
+            disabled={building}
+            onClick={onUse}
+          >
+            {building ? "Building…" : "Use this template →"}
+          </button>
+        </div>
+      </aside>
     </div>
   );
 }

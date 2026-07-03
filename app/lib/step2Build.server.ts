@@ -8,6 +8,7 @@ import {
   generateQuizTemplates,
 } from "./claude";
 import { Quiz, BuildSession, PickedTemplate } from "./quizSchema";
+import { applyManualDeciderSkeleton } from "./smartBuild";
 import { dialsToBuildDirectives, autoQuizName } from "./dialDirectives";
 import { runAiOnboardingBuild } from "./onboardingBuild.server";
 import type { DesignTokensT } from "./designTokens";
@@ -196,6 +197,47 @@ async function writeGenError(
   }
 }
 
+// How a template/question generation failure lands (start-routing spec):
+//  - "shape" (default): back to the Shape stage with gen_error + retry — the
+//    AI-templates route's own §3 treatment.
+//  - "blank_questions" (§1.3, the write-a-goal route): the merchant chose a
+//    goal, not Shape — seed the manual decider skeleton and land them on a
+//    BLANK Questions step with a non-blocking notice, never a stage they
+//    didn't pick.
+export type GenFailMode = "shape" | "blank_questions";
+
+// §1.3 — apply the blank-Questions landing. Same never-throw posture as
+// writeGenError (a throw in a void async strands the spinner forever).
+async function failToBlankQuestions(shopId: string, quizId: string): Promise<void> {
+  try {
+    const [quiz, firstCollection] = await Promise.all([
+      prisma.quiz.findUnique({ where: { id: quizId }, select: { draftJson: true } }),
+      prisma.collection.findFirst({ where: { shopId }, select: { collectionId: true } }),
+    ]);
+    if (!quiz) return;
+    const parsed = Quiz.safeParse(quiz.draftJson);
+    if (!parsed.success) return;
+    const doc = applyManualDeciderSkeleton(
+      parsed.data,
+      firstCollection?.collectionId ?? "manual",
+    );
+    const session = parsed.data.build_session ?? BuildSession.parse({});
+    const next = BuildSession.parse({
+      ...session,
+      stage: "question_builder",
+      built: true,
+      gen_error:
+        "We couldn't generate from your goal — starting blank. Build your questions below, or go back and try again.",
+    });
+    await prisma.quiz.update({
+      where: { id: quizId },
+      data: { draftJson: Quiz.parse({ ...doc, build_session: next }) as never },
+    });
+  } catch (e) {
+    console.error("[step2] failed to land blank questions:", e instanceof Error ? e.message : e);
+  }
+}
+
 // The funnel's "typing" job — web research + quiz types, DETACHED (research ~40s +
 // types ~31s outruns the edge window; measured at T2). On success → stage "types"
 // with the cards; on failure → back to "types" (Shape) with a gen_error so the
@@ -239,7 +281,9 @@ export function startStep2Templates(
   quizId: string,
   chosenType: QuizType,
   input: { goal: string; struggle?: string; buckets?: Array<{ id: string; name: string; tags: string[] }> },
+  opts?: { failMode?: GenFailMode },
 ): void {
+  const failMode = opts?.failMode ?? "shape";
   void (async () => {
     try {
       const templates = await generateStep2Templates(shopId, chosenType, input);
@@ -269,7 +313,11 @@ export function startStep2Templates(
             gen_error: undefined,
           }),
         );
-        await startQuestionBuild(shopId, quizId, top, picked, input.goal, input.struggle ?? "");
+        await startQuestionBuild(shopId, quizId, top, picked, input.goal, input.struggle ?? "", {
+          failMode,
+        });
+      } else if (failMode === "blank_questions") {
+        await failToBlankQuestions(shopId, quizId);
       } else {
         // No template generated (degenerate) → route back to Shape with an honest
         // error + retry, NOT the retired BattleCard. (The `configuring` stage +
@@ -287,9 +335,13 @@ export function startStep2Templates(
       }
     } catch (err) {
       console.error("[step2] template generation failed:", err instanceof Error ? err.message : err);
-      await writeGenError(quizId, (s) =>
-        BuildSession.parse({ ...s, stage: "types", gen_error: friendlyGenError(err) }),
-      );
+      if (failMode === "blank_questions") {
+        await failToBlankQuestions(shopId, quizId);
+      } else {
+        await writeGenError(quizId, (s) =>
+          BuildSession.parse({ ...s, stage: "types", gen_error: friendlyGenError(err) }),
+        );
+      }
     }
   })();
 }
@@ -447,6 +499,7 @@ export async function startQuestionBuild(
   picked: PickedTemplate,
   goal: string,
   struggle: string,
+  opts?: { failMode?: GenFailMode },
 ): Promise<void> {
   // Capture the funnel session BEFORE the build. runAiOnboardingBuild rebuilds
   // draftJson from a fresh seed and DROPS build_session, so we RESTORE the prior
@@ -479,8 +532,14 @@ export async function startQuestionBuild(
     )
     .catch(async (err) => {
       console.error("[step2] question build failed:", err instanceof Error ? err.message : err);
-      await writeGenError(quizId, () =>
-        BuildSession.parse({ ...priorSession, stage: "types", gen_error: friendlyGenError(err) }),
-      );
+      if (opts?.failMode === "blank_questions") {
+        // §1.3 (start-routing spec) — the write-a-goal route never traps the
+        // merchant on Shape: land the blank Questions canvas with the notice.
+        await failToBlankQuestions(shopId, quizId);
+      } else {
+        await writeGenError(quizId, () =>
+          BuildSession.parse({ ...priorSession, stage: "types", gen_error: friendlyGenError(err) }),
+        );
+      }
     });
 }

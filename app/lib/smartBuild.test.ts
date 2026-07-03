@@ -7,6 +7,7 @@ import { validateQuiz } from "./quizValidation";
 import {
   applyQuestionFlow,
   applyDeciderQuestionFlow,
+  applyManualDeciderSkeleton,
   normalizeQuestionSpec,
   type GeneratedQuestionFlow,
   type SmartBuildBucket,
@@ -625,5 +626,44 @@ describe("applyDeciderQuestionFlow — review-hardened edges", () => {
     };
     const out = applyDeciderQuestionFlow(seed, generated as never, deciderBuckets, FB);
     expect(out.rec_page_settings?.global).toEqual({ capturePhone: true });
+  });
+});
+
+describe("applyManualDeciderSkeleton (SR — blank/failed-goal decider drafts)", () => {
+
+  it("stamps decider + appends one result (with the required fallback) wired from the last question", () => {
+    const seed = Quiz.parse(buildSeedQuiz("Manual"));
+    const out = applyManualDeciderSkeleton(seed, FB);
+    expect(() => Quiz.parse(out)).not.toThrow();
+    expect(out.logic_model).toBe("decider");
+
+    const results = out.nodes.filter((n) => n.type === "result");
+    expect(results).toHaveLength(1);
+    expect(results[0]?.type === "result" && results[0].data.fallback_collection_id).toBe(FB);
+
+    const lastQuestion = [...seed.nodes].reverse().find((n) => n.type === "question");
+    const edge = out.edges.find((e) => e.target === "sb_result");
+    expect(edge?.source).toBe(lastQuestion?.id);
+  });
+
+  it("seeds sparse rec_page_settings only when absent (never clobbers a merchant config)", () => {
+    const seed = Quiz.parse(buildSeedQuiz("Manual"));
+    const fresh = applyManualDeciderSkeleton(seed, FB);
+    expect(fresh.rec_page_settings).toEqual({ global: { emptyFallbackCol: FB }, overrides: {} });
+
+    const configured = Quiz.parse({
+      ...buildSeedQuiz("Manual"),
+      rec_page_settings: { global: { capturePhone: true }, overrides: {} },
+    });
+    const out = applyManualDeciderSkeleton(configured, FB);
+    expect(out.rec_page_settings?.global).toEqual({ capturePhone: true });
+  });
+
+  it("is a stamp-only no-op on a doc that already has a result node (idempotent)", () => {
+    const seed = Quiz.parse(buildSeedQuiz("Manual"));
+    const once = applyManualDeciderSkeleton(seed, FB);
+    const twice = applyManualDeciderSkeleton(once, FB);
+    expect(twice.nodes).toEqual(once.nodes);
+    expect(twice.edges).toEqual(once.edges);
   });
 });
