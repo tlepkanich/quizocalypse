@@ -1,10 +1,11 @@
-import type { LoaderFunctionArgs } from "@remix-run/node";
+import type { ActionFunctionArgs, LoaderFunctionArgs } from "@remix-run/node";
 import { json } from "@remix-run/node";
 import { Link, useLoaderData } from "@remix-run/react";
 import { requireStudioAccess, resolveStudioShop } from "../lib/studioAccess.server";
 import prisma from "../db.server";
 import { Quiz } from "../lib/quizSchema";
 import { QzPage, QzPageHeader, QzCard, QzBadge } from "../components/qz";
+import { RecCopyToggleCard } from "../components/RecCopyToggleCard";
 
 // QD-8 — Integrations: every place a quiz sends data when a shopper reaches an
 // integration node — Klaviyo profile syncs and outbound webhooks. Scans each
@@ -19,6 +20,20 @@ function hostOf(url: string): string {
     return url;
   }
 }
+
+// L2-12d — the per-shop runtime rec-copy kill switch lives here (the standalone
+// settings surface). Writing it is the ONLY thing this route's action does.
+export const action = async ({ request }: ActionFunctionArgs) => {
+  await requireStudioAccess(request);
+  const shop = await resolveStudioShop();
+  const form = await request.formData();
+  if (form.get("intent") === "toggle-rec-copy") {
+    const enabled = form.get("enabled") === "true";
+    await prisma.shop.update({ where: { id: shop.id }, data: { aiRecCopyEnabled: enabled } });
+    return json({ ok: true, aiRecCopyEnabled: enabled });
+  }
+  return json({ ok: false, error: "unknown intent" }, { status: 400 });
+};
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   await requireStudioAccess(request);
@@ -59,7 +74,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     }
   }
 
-  return json({ rows, klaviyoCount, webhookCount });
+  return json({ rows, klaviyoCount, webhookCount, aiRecCopyEnabled: shop.aiRecCopyEnabled });
 };
 
 const KIND_META: Record<string, { label: string; emoji: string }> = {
@@ -76,6 +91,10 @@ export default function StudioIntegrations() {
         title="Where your quiz data flows"
         subtitle="Sync captured contacts and answers to Klaviyo, or POST them to any webhook. Add or edit connections from a quiz's Logic view."
       />
+
+      <div style={{ marginBottom: 16 }}>
+        <RecCopyToggleCard enabled={data.aiRecCopyEnabled} />
+      </div>
 
       {data.rows.length === 0 ? (
         <QzCard>

@@ -1,4 +1,4 @@
-import type { LoaderFunctionArgs } from "@remix-run/node";
+import type { ActionFunctionArgs, LoaderFunctionArgs } from "@remix-run/node";
 import { json } from "@remix-run/node";
 import { useLoaderData } from "@remix-run/react";
 import { TitleBar } from "@shopify/app-bridge-react";
@@ -13,6 +13,22 @@ import {
   QzInput,
   QzBanner,
 } from "../components/qz";
+import { RecCopyToggleCard } from "../components/RecCopyToggleCard";
+
+// L2-12d — the embedded twin of the standalone kill-switch action.
+export const action = async ({ request }: ActionFunctionArgs) => {
+  const { session } = await authenticate.admin(request);
+  const form = await request.formData();
+  if (form.get("intent") === "toggle-rec-copy") {
+    const enabled = form.get("enabled") === "true";
+    await prisma.shop.update({
+      where: { shopDomain: session.shop },
+      data: { aiRecCopyEnabled: enabled },
+    });
+    return json({ ok: true, aiRecCopyEnabled: enabled });
+  }
+  return json({ ok: false, error: "unknown intent" }, { status: 400 });
+};
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { session } = await authenticate.admin(request);
@@ -24,6 +40,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       scope: true,
       installedAt: true,
       lastSyncAt: true,
+      aiRecCopyEnabled: true,
     },
   });
   return json({
@@ -51,6 +68,8 @@ export default function Settings() {
       />
 
       <div style={{ maxWidth: 720 }} className="qz-col qz-gap-24">
+        <RecCopyToggleCard enabled={shop?.aiRecCopyEnabled ?? true} />
+
         <QzCard>
           <div className="qz-col qz-gap-12">
             <div>
