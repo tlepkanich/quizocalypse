@@ -1,6 +1,6 @@
 import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties, KeyboardEvent as ReactKeyboardEvent } from "react";
-import { Link, useFetcher, useRevalidator, useSearchParams } from "@remix-run/react";
+import { Link, useFetcher, useRevalidator } from "@remix-run/react";
 import {
   QzPage,
   QzCard,
@@ -179,12 +179,11 @@ export function Step1Funnel({ data }: { data: FunnelData }) {
   // page leads with the actual task, not a paragraph of summary).
   const [showIdentity, setShowIdentity] = useState(false);
 
-  // QL3-P1 — when the Step-3 v3 shell is active (decider doc + ?step3=v3) it
-  // renders its OWN floating top bar (TopBar3, same wordmark + step pills), so
-  // the standard sticky bar steps aside — the spec's Step-3 has exactly one bar.
-  const [searchParams] = useSearchParams();
+  // QL3-P5 — the Step-3 v3 shell is active for EVERY decider doc on the
+  // question_builder stage (the ?step3=v3 flag is retired). It renders its OWN
+  // floating top bar (TopBar3, same wordmark + step pills), so the standard
+  // sticky bar steps aside — the spec's Step-3 has exactly one bar.
   const step3V3Active =
-    searchParams.get("step3") === "v3" &&
     data.stage === "question_builder" &&
     data.questionBuilder?.doc.logic_model === "decider";
 

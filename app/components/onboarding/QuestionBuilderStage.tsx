@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useSearchParams } from "@remix-run/react";
 import type { useFetcher } from "@remix-run/react";
 import type { Quiz, DesignTokens } from "../../lib/quizSchema";
 import type { IndexedProduct } from "../../lib/recommendationEngine";
@@ -46,10 +45,10 @@ export function QuestionBuilderStage({
 }) {
   const { doc, commit, isSaving, savedAt, saveError, retrySave, flushSave, beginAiEdit, applyAiResult, endAiEdit } =
     useQuizDraft(initialDoc);
-  // QL3-P1 — the Step-3 v3 shell mounts ONLY on decider docs behind the
-  // client-read ?step3=v3 flag; the legacy layout stays the default (P5 flips).
-  const [searchParams] = useSearchParams();
-  const useV3 = doc.logic_model === "decider" && searchParams.get("step3") === "v3";
+  // QL3-P5 — the flip: decider docs render the Step-3 v3 shell UNCONDITIONALLY
+  // (the ?step3=v3 flag is retired); legacy (points/ladder) docs keep the
+  // QuestionsLogicLayout surface unchanged.
+  const useV3 = doc.logic_model === "decider";
   const navigating =
     pendingIntent === "to-rec-page" || pendingIntent === "back-to-types";
 
@@ -153,13 +152,11 @@ export function QuestionBuilderStage({
     <QuestionsLogicLayout
       doc={doc}
       onCommit={commit}
-      onFlush={flushSave}
       isSaving={isSaving}
       savedAt={savedAt}
       saveError={saveError}
       onRetry={retrySave}
       categories={categories}
-      quizId={quizId}
       navigating={navigating}
       onBack={() => fetcher.submit({ intent: "back-to-types" }, { method: "post" })}
       onContinue={() => fetcher.submit({ intent: "to-rec-page" }, { method: "post" })}

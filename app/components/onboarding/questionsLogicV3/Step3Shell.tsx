@@ -14,13 +14,12 @@ import { LogicScroll, type LogicScrollHandle } from "./logic/LogicScroll";
 
 /* ════════════════════════════════════════════════════════════════════════════
    quiz-step3 v3 — Step3Shell: the two-view (Content · Logic) Step-3 rebuild
-   for DECIDER docs, mounted by QuestionBuilderStage behind the client-read
-   `?step3=v3` flag (the legacy QuestionsLogicLayout stays the default until
-   P5 flips). P1 shell + rail + phone canvas, P2 inline editing, P3 the Logic
-   view, P4 (this phase) the live health surface: ONE memoized Tier-1 report
-   feeds the pill, the popover's check list, AND the Continue gate — the
-   legacy decider ContinueGuard dialog is superseded by this gating and is
-   NOT mounted here (its wiring is deleted in P5).
+   for DECIDER docs, mounted UNCONDITIONALLY by QuestionBuilderStage since the
+   QL3-P5 flip (legacy points/ladder docs keep QuestionsLogicLayout). P1 shell
+   + rail + phone canvas, P2 inline editing, P3 the Logic view, P4 the live
+   health surface: ONE memoized Tier-1 report feeds the pill, the popover's
+   check list, AND the Continue gate — the legacy decider ContinueGuard dialog
+   was superseded by this gating and its wiring retired in P5.
    ════════════════════════════════════════════════════════════════════════════ */
 
 export type Step3View = "content" | "logic";

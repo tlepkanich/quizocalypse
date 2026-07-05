@@ -17,8 +17,10 @@ type QuizDoc = z.infer<typeof Quiz>;
 // LOGIC v2 §7.1 — the Tier-1 "Test all paths" REPORT assembler. Pure + sync:
 // every check is deterministic graph analysis (spec: "NO AI ... evaluates
 // V1–V9 with certainty"), composed from pathAnalyzer + local ref checks.
-// Consumed by the PathReportPanel overlay (L2-7) and mountable anywhere the
-// owner wants the tester ("used in many places"). Tier 2 (AI quality) is a
+// Consumed by the Step-3 v3 health surface (Step3Shell → HealthPill/Popover →
+// Tier1CheckList; the L2-7 PathReportPanel overlay was retired in QL3-P5) and
+// mountable anywhere the owner wants the tester ("used in many places"). Tier 2
+// (AI quality) is a
 // SEPARATE component by spec mandate — nothing here may depend on it.
 // ════════════════════════════════════════════════════════════════════════════
 

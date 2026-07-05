@@ -121,21 +121,6 @@ export function questionHasUnmappedTarget(node: QuestionNode): boolean {
   return unmappedDeciderAnswers(node).length > 0;
 }
 
-/** Per-target count of (deciding answers + advanced rules) that resolve to it.
- *  Drives the decider-mode coverage pills. NOTE the §5 re-scope: 0 here is
- *  "unused", which is FINE in v2 (a target may be rule-only later or simply
- *  unpicked) — never a red/blocking state. */
-export function targetMappedCounts(doc: QuizDoc, bucketIds: string[]): Map<string, number> {
-  const counts = new Map<string, number>(bucketIds.map((id) => [id, 0]));
-  const bump = (id: string | undefined) => {
-    if (id && counts.has(id)) counts.set(id, (counts.get(id) ?? 0) + 1);
-  };
-  const decider = deciderQuestion(doc);
-  if (decider) for (const a of decider.data.answers) bump(a.target_id);
-  for (const r of doc.decision_rules ?? []) bump(r.target_id);
-  return counts;
-}
-
 export type CoverageTier = "strong" | "weak" | "orphan";
 
 // 3-state coverage tier for the Outcome-coverage PILLS only (roadmap green/yellow/red).
