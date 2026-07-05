@@ -7,10 +7,14 @@ import {
   generateQuizTypes,
   generateQuizTemplates,
 } from "./claude";
+import {
+  getOrStartShopWebResearch,
+  peekFreshShopWebResearch,
+} from "./shopWebResearch.server";
 import { Quiz, BuildSession, PickedTemplate } from "./quizSchema";
 import { applyManualDeciderSkeleton } from "./smartBuild";
 import { dialsToBuildDirectives, autoQuizName } from "./dialDirectives";
-import { runAiOnboardingBuild } from "./onboardingBuild.server";
+import { runAiOnboardingBuild, type PrefetchedBuildCatalog } from "./onboardingBuild.server";
 import type { DesignTokensT } from "./designTokens";
 import type { GroupingProduct } from "./categoryGrouping";
 import type { QuizType, RichTemplateOption, Quiz as QuizDocT } from "./quizSchema";
@@ -80,17 +84,10 @@ async function loadStep2Context(shopId: string, quizId?: string) {
   return { products, collections, indexed, brandSummary, brandVoiceSample, positioning, detect };
 }
 
-// Best-effort live web research for the shop's positioning (the slow ~40s pass;
-// in the funnel it runs inside the detached typing job, never synchronously).
-export async function runStep2WebResearch(shopId: string): Promise<string> {
-  const ctx = await loadStep2Context(shopId);
-  return runWebResearchForQuizTypes({
-    industry: ctx.positioning.industry,
-    vertical: ctx.positioning.vertical,
-    priceTier: ctx.positioning.price_tier,
-    demographic: ctx.positioning.demographic,
-  });
-}
+// (runStep2WebResearch retired by FAST F1 — the typing job now resolves
+// research through getOrStartShopWebResearch, the shop-level cache +
+// single-flight in shopWebResearch.server.ts. Cold-cache behavior is the
+// identical inline runWebResearchForQuizTypes call with the same positioning.)
 
 // Tier 1: brand-tailored quiz types. `webResearchText` is passed in (the caller
 // runs runStep2WebResearch first, detached); `skipWebResearch` runs the fast
@@ -216,6 +213,22 @@ async function writeGenError(
   }
 }
 
+// FAST F3 — persist the jobs' honest live checkpoint. Same never-throw posture
+// as writeGenError: a progress write is cosmetic and must NEVER be able to
+// fail a detached job (a throw here would land in the job's catch and write a
+// bogus gen_error). Fresh-read via patchBuildSession, one small write per REAL
+// pass boundary — never inside retry loops.
+async function writeGenProgress(
+  quizId: string,
+  progress: NonNullable<BuildSession["gen_progress"]>,
+): Promise<void> {
+  try {
+    await patchBuildSession(quizId, (s) => BuildSession.parse({ ...s, gen_progress: progress }));
+  } catch (e) {
+    console.error("[step2] failed to persist gen_progress:", e instanceof Error ? e.message : e);
+  }
+}
+
 // How a template/question generation failure lands (start-routing spec):
 //  - "shape" (default): back to the Shape stage with gen_error + retry — the
 //    AI-templates route's own §3 treatment.
@@ -247,6 +260,7 @@ async function failToBlankQuestions(shopId: string, quizId: string): Promise<voi
       built: true,
       gen_error:
         "We couldn't generate from your goal — starting blank. Build your questions below, or go back and try again.",
+      gen_progress: undefined,
     });
     await prisma.quiz.update({
       where: { id: quizId },
@@ -268,8 +282,21 @@ export function startStep2Types(
 ): void {
   void (async () => {
     try {
-      const webResearchText = await runStep2WebResearch(shopId);
+      // FAST F1 — resolve research through the shop-level cache: a fresh cache
+      // (or an entry-time prefetch that already finished) makes this instant;
+      // an in-flight prefetch is awaited (single-flight); a cold cache runs the
+      // identical inline research as before. FAST F3 — only announce the
+      // "research" checkpoint when we genuinely have to wait for research.
+      const cachedResearch = await peekFreshShopWebResearch(shopId);
+      if (cachedResearch === null) await writeGenProgress(quizId, "research");
+      const tResearch = Date.now();
+      const webResearchText = cachedResearch ?? (await getOrStartShopWebResearch(shopId));
+      console.log(`[step2] research took ${Date.now() - tResearch}ms`);
+
+      await writeGenProgress(quizId, "types");
+      const tTypes = Date.now();
       const { types } = await generateStep2Types(shopId, quizId, { ...input, webResearchText });
+      console.log(`[step2] types took ${Date.now() - tTypes}ms`);
       await patchBuildSession(quizId, (s) =>
         BuildSession.parse({
           ...s,
@@ -277,12 +304,18 @@ export function startStep2Types(
           quiz_types: types,
           web_research_summary: webResearchText.slice(0, 600),
           gen_error: undefined,
+          gen_progress: undefined,
         }),
       );
     } catch (err) {
       console.error("[step2] type generation failed:", err instanceof Error ? err.message : err);
       await writeGenError(quizId, (s) =>
-        BuildSession.parse({ ...s, stage: "types", gen_error: friendlyGenError(err) }),
+        BuildSession.parse({
+          ...s,
+          stage: "types",
+          gen_error: friendlyGenError(err),
+          gen_progress: undefined,
+        }),
       );
     }
   })();
@@ -305,7 +338,17 @@ export function startStep2Templates(
   const failMode = opts?.failMode ?? "shape";
   void (async () => {
     try {
+      // FAST F2 — start the question build's slow NON-AI inputs (catalog rows +
+      // shop brand row) CONCURRENTLY with template generation. The promise is
+      // threaded down to runAiOnboardingBuild via startQuestionBuild; it never
+      // rejects (a prep failure resolves undefined → the build falls back to
+      // its own inline queries, today's exact path). FAST F3 — announce the
+      // templating job's first real checkpoint.
+      await writeGenProgress(quizId, "templates");
+      const prefetchedCatalog = prefetchBuildCatalog(shopId);
+      const tTemplates = Date.now();
       const templates = await generateStep2Templates(shopId, quizId, chosenType, input);
+      console.log(`[step2] templates took ${Date.now() - tTemplates}ms`);
       const cats = await prisma.category.findMany({
         where: { shopId, quizId },
         select: { id: true, name: true, productIds: true },
@@ -334,6 +377,7 @@ export function startStep2Templates(
         );
         await startQuestionBuild(shopId, quizId, top, picked, input.goal, input.struggle ?? "", {
           failMode,
+          prefetchedCatalog,
         });
       } else if (failMode === "blank_questions") {
         await failToBlankQuestions(shopId, quizId);
@@ -349,6 +393,7 @@ export function startStep2Templates(
             picked_template: undefined,
             gen_error:
               "We couldn't shape a quiz from that just yet — try again, or pick one of the suggested directions.",
+            gen_progress: undefined,
           }),
         );
       }
@@ -358,11 +403,43 @@ export function startStep2Templates(
         await failToBlankQuestions(shopId, quizId);
       } else {
         await writeGenError(quizId, (s) =>
-          BuildSession.parse({ ...s, stage: "types", gen_error: friendlyGenError(err) }),
+          BuildSession.parse({
+            ...s,
+            stage: "types",
+            gen_error: friendlyGenError(err),
+            gen_progress: undefined,
+          }),
         );
       }
     }
   })();
+}
+
+// FAST F2 — the question build's non-AI prep, prefetched concurrently with
+// template generation: the SAME product/collection/shop rows
+// runAiOnboardingBuild queries at its catalog step. NEVER rejects — any
+// failure resolves undefined and the build degrades to its own inline queries
+// (today's exact behavior).
+async function prefetchBuildCatalog(
+  shopId: string,
+): Promise<PrefetchedBuildCatalog | undefined> {
+  try {
+    const [products, collections, shop] = await Promise.all([
+      prisma.product.findMany({ where: { shopId } }),
+      prisma.collection.findMany({ where: { shopId } }),
+      prisma.shop.findUnique({
+        where: { id: shopId },
+        select: { brandGuidelines: true, brandIdentity: true },
+      }),
+    ]);
+    return { products, collections, shop };
+  } catch (err) {
+    console.warn(
+      "[step2] catalog prefetch failed (build will query inline):",
+      err instanceof Error ? err.message : err,
+    );
+    return undefined;
+  }
 }
 
 // Build the merchant's editable working copy from a chosen rich template + the
@@ -405,6 +482,9 @@ async function buildQuizFromPicked(
   picked: PickedTemplate,
   goal: string,
   struggle: string,
+  // FAST F2 — optional prep started concurrently with template generation.
+  // Absent (legacy/wizard/retry callers) → the build queries inline as today.
+  prefetchedCatalog?: Promise<PrefetchedBuildCatalog | undefined>,
 ): Promise<unknown> {
   const cats = await prisma.category.findMany({
     where: { shopId, quizId },
@@ -449,6 +529,12 @@ async function buildQuizFromPicked(
     ? (draftRaw?.rec_page_settings as QuizDocT["rec_page_settings"] | undefined)
     : undefined;
 
+  // FAST F2 — resolve the concurrent prep (already settled or nearly so by the
+  // time the template pass + category writes above finish). undefined (absent
+  // param or a prep failure) leaves runAiOnboardingBuild's inline queries in
+  // charge — byte-identical behavior.
+  const prefetched = prefetchedCatalog ? await prefetchedCatalog : undefined;
+
   return runAiOnboardingBuild({
     shopId,
     quizId,
@@ -475,6 +561,7 @@ async function buildQuizFromPicked(
       oos_behavior: picked.rec_defaults.oos_behavior,
       fallback_collection_id: picked.rec_defaults.fallback_collection_id,
     },
+    ...(prefetched ? { prefetchedCatalog: prefetched } : {}),
   });
 }
 
@@ -518,7 +605,12 @@ export async function startQuestionBuild(
   picked: PickedTemplate,
   goal: string,
   struggle: string,
-  opts?: { failMode?: GenFailMode },
+  opts?: {
+    failMode?: GenFailMode;
+    // FAST F2 — prep started concurrently with template generation (only the
+    // templating job passes it; retry-gen / saved-template callers don't).
+    prefetchedCatalog?: Promise<PrefetchedBuildCatalog | undefined>;
+  },
 ): Promise<void> {
   // Capture the funnel session BEFORE the build. runAiOnboardingBuild rebuilds
   // draftJson from a fresh seed and DROPS build_session, so we RESTORE the prior
@@ -538,17 +630,27 @@ export async function startQuestionBuild(
   // Set the name now (the build reads it too); the stage flip waits for success.
   await prisma.quiz.update({ where: { id: quizId }, data: { name: picked.quiz_name } });
 
-  void buildQuizFromPicked(shopId, quizId, rich, picked, goal, struggle)
-    .then(() =>
-      patchBuildSession(quizId, () =>
+  // FAST F3 — the long question-build pass begins (all startQuestionBuild
+  // callers: templating job, retry-gen, saved-template). Written AFTER the
+  // priorSession snapshot, so the completion restore below can't resurrect it.
+  await writeGenProgress(quizId, "questions");
+  const tBuild = Date.now();
+
+  void buildQuizFromPicked(shopId, quizId, rich, picked, goal, struggle, opts?.prefetchedCatalog)
+    .then(() => {
+      console.log(`[step2] question-build took ${Date.now() - tBuild}ms`);
+      return patchBuildSession(quizId, () =>
         BuildSession.parse({
           ...priorSession,
           stage: "question_builder",
           built: true,
           gen_error: undefined,
+          // priorSession predates this job but MAY carry the templating job's
+          // "templates" checkpoint — clear explicitly on the stage flip.
+          gen_progress: undefined,
         }),
-      ),
-    )
+      );
+    })
     .catch(async (err) => {
       console.error("[step2] question build failed:", err instanceof Error ? err.message : err);
       if (opts?.failMode === "blank_questions") {
@@ -557,7 +659,12 @@ export async function startQuestionBuild(
         await failToBlankQuestions(shopId, quizId);
       } else {
         await writeGenError(quizId, () =>
-          BuildSession.parse({ ...priorSession, stage: "types", gen_error: friendlyGenError(err) }),
+          BuildSession.parse({
+            ...priorSession,
+            stage: "types",
+            gen_error: friendlyGenError(err),
+            gen_progress: undefined,
+          }),
         );
       }
     });

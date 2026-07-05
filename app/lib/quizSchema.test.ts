@@ -930,6 +930,29 @@ describe("build_session (Step 1 funnel scratch state)", () => {
       }),
     ).toThrow();
   });
+
+  // FAST F3 — gen_progress is optional WITHOUT a default: absent must
+  // round-trip absent (the translations-field discipline), set must survive,
+  // junk must reject.
+  it("gen_progress: absent round-trips absent; set round-trips; junk rejects", () => {
+    const absent = JSON.parse(
+      JSON.stringify(Quiz.parse({ ...validQuiz, build_session: { stage: "typing" } })),
+    );
+    expect(absent.build_session).not.toHaveProperty("gen_progress");
+    // Byte-idempotent through a second parse→write cycle.
+    const absent2 = JSON.parse(JSON.stringify(Quiz.parse(absent)));
+    expect(JSON.stringify(absent2)).toBe(JSON.stringify(absent));
+
+    const set = Quiz.parse({
+      ...validQuiz,
+      build_session: { stage: "typing", gen_progress: "research" },
+    });
+    expect(set.build_session?.gen_progress).toBe("research");
+
+    expect(() =>
+      Quiz.parse({ ...validQuiz, build_session: { stage: "typing", gen_progress: "warp-drive" } }),
+    ).toThrow();
+  });
 });
 
 // ════════════════════════════════════════════════════════════════════════════

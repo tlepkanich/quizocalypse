@@ -1,4 +1,5 @@
 import prisma from "../db.server";
+import type { Product, Collection } from "@prisma/client";
 import { Quiz } from "./quizSchema";
 import type { Quiz as QuizDoc, OosBehavior } from "./quizSchema";
 import type { DesignTokensT } from "./designTokens";
@@ -96,6 +97,26 @@ export interface OnboardingBuildInput {
   // threaded through the re-seed exactly like design_tokens — without it a
   // Shape-step regenerate would silently wipe the merchant's rec-page setup.
   recPageSettings?: QuizDoc["rec_page_settings"];
+  // FAST F2 — pre-resolved catalog inputs (the SAME product/collection/shop
+  // rows the catalog step below queries), prefetched by the funnel's
+  // templating job concurrently with template generation. ABSENT (the wizard /
+  // legacy paths pass nothing) → behavior is byte-identical: the inline
+  // queries below run exactly as before.
+  prefetchedCatalog?: PrefetchedBuildCatalog;
+  // FAST F2 — pre-ingested website text. When DEFINED it replaces the
+  // ingestWebsite(websiteUrl) call (which is best-effort — "" on any failure);
+  // undefined keeps today's inline path. NOTE: the funnel never sets
+  // websiteUrl, so its builds ingest nothing either way — this seam exists for
+  // callers that do pass websiteUrl and want the fetch off the critical path.
+  prefetchedWebsiteText?: string;
+}
+
+// FAST F2 — the shape of the prefetched catalog inputs (mirrors the catalog
+// step's own Promise.all selects).
+export interface PrefetchedBuildCatalog {
+  products: Product[];
+  collections: Collection[];
+  shop: { brandGuidelines: unknown; brandIdentity: unknown } | null;
 }
 
 export interface OnboardingBuildResult {
@@ -215,14 +236,22 @@ export async function runAiOnboardingBuild(
   }
 
   // 2. Catalog: a fallback collection is REQUIRED to create result pages.
-  const [allProducts, allCollections, shop] = await Promise.all([
-    prisma.product.findMany({ where: { shopId } }),
-    prisma.collection.findMany({ where: { shopId } }),
-    prisma.shop.findUnique({
-      where: { id: shopId },
-      select: { brandGuidelines: true, brandIdentity: true },
-    }),
-  ]);
+  // FAST F2 — a caller-prefetched catalog (fetched concurrently with template
+  // generation) short-circuits these queries; absent → identical inline reads.
+  const [allProducts, allCollections, shop] = input.prefetchedCatalog
+    ? ([
+        input.prefetchedCatalog.products,
+        input.prefetchedCatalog.collections,
+        input.prefetchedCatalog.shop,
+      ] as const)
+    : await Promise.all([
+        prisma.product.findMany({ where: { shopId } }),
+        prisma.collection.findMany({ where: { shopId } }),
+        prisma.shop.findUnique({
+          where: { id: shopId },
+          select: { brandGuidelines: true, brandIdentity: true },
+        }),
+      ]);
   const firstCollection = allCollections[0]?.collectionId ?? "";
   if (!firstCollection) {
     return {
@@ -299,8 +328,15 @@ export async function runAiOnboardingBuild(
   const brandGuidelines = effectiveBrandGuidelines(shop);
   // Optional enrichment: catalog tone sample + merchant website text. Both are
   // best-effort — ingestWebsite returns "" on any failure, never throwing.
+  // FAST F2 — a caller-prefetched website text (already best-effort "") skips
+  // the inline ingest; undefined keeps today's exact path.
   const toneSample = toneSampleFromCatalog(allProducts);
-  const websiteText = input.websiteUrl ? await ingestWebsite(input.websiteUrl) : "";
+  const websiteText =
+    input.prefetchedWebsiteText !== undefined
+      ? input.prefetchedWebsiteText
+      : input.websiteUrl
+        ? await ingestWebsite(input.websiteUrl)
+        : "";
 
   let generated;
   try {

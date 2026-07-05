@@ -1149,6 +1149,13 @@ export const BuildSession = z.object({
   // can surface an honest banner + template fallback instead of silently reverting
   // the stage. Cleared on the next successful generation.
   gen_error: z.string().optional(),
+  // FAST F3 — the detached jobs' honest live checkpoint, written at REAL pass
+  // boundaries (typing job: "research" → "types"; templating job: "templates"
+  // → "questions") so GeneratingScreen can show real progress instead of a
+  // timed guess. OPTIONAL WITHOUT DEFAULT (the translations-field discipline):
+  // absent round-trips absent, so old in-flight sessions and every non-gen
+  // write stay byte-identical. Cleared (undefined) on stage flips.
+  gen_progress: z.enum(["research", "types", "templates", "questions"]).optional(),
   // True once the question build has run (re-architected flow: build happens
   // EARLY, at the Question Builder step). The Generate step reads this to decide
   // whether to OPEN the already-built draft (non-AI finalize) or run a real build

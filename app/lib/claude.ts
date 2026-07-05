@@ -78,6 +78,13 @@ const MODEL = "claude-sonnet-4-6";
 // feature→benefit bullets). Kept on the same known-good family for now; this is
 // the single seam to swap in a Haiku id once confirmed, to cut cost per the spec.
 const MODEL_FAST = MODEL;
+// FAST F4 (owner-approved, quality-gated) — Haiku for the funnel's two MIDDLE
+// passes ONLY: generateQuizTypes + generateQuizTemplates (bounded, schema-
+// forced card copy where latency is the merchant-visible cost). Everything
+// else — question flow, edits, web research, tooltips — stays on MODEL /
+// MODEL_FAST per the owner's keep-Sonnet decision. Haiku 4.5 takes plain
+// forced-tool messages.create (no effort param — it would 400).
+const MODEL_SPEED = "claude-haiku-4-5";
 const MAX_TOKENS = 8192;
 
 export type QuizTone = "friendly" | "editorial" | "playful" | "professional";
@@ -752,6 +759,10 @@ export interface GenerateQuizTypesInput {
   buckets: Array<{ name: string; tags: string[] }>;
   catalogSummary: string;
   webResearchText: string;
+  // FAST F4 quality gate — probe-only seam (e2e/fast-sidebyside.mjs) to force
+  // a specific model for side-by-side comparison. Production callers never set
+  // it; absent → MODEL_SPEED.
+  modelOverride?: string;
 }
 
 export async function generateQuizTypes(input: GenerateQuizTypesInput): Promise<QuizTypeT[]> {
@@ -792,7 +803,7 @@ export async function generateQuizTypes(input: GenerateQuizTypesInput): Promise<
   let lastIssue: string | undefined;
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
     const response = await client().messages.create({
-      model: MODEL,
+      model: input.modelOverride ?? MODEL_SPEED,
       max_tokens: 2048,
       system: QUIZ_TYPES_SYSTEM_PROMPT,
       tools: [tool],
@@ -927,6 +938,8 @@ export interface GenerateQuizTemplatesInput {
   buckets: Array<{ id: string; name: string; tags: string[] }>;
   catalogSummary: string;
   brandGuidelines?: BrandGuidelines | null;
+  // FAST F4 quality gate — probe-only model override (see GenerateQuizTypesInput).
+  modelOverride?: string;
 }
 
 export async function generateQuizTemplates(
@@ -973,7 +986,7 @@ export async function generateQuizTemplates(
   let lastIssue: string | undefined;
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
     const response = await client().messages.create({
-      model: MODEL,
+      model: input.modelOverride ?? MODEL_SPEED,
       max_tokens: 3072,
       system,
       tools: [tool],

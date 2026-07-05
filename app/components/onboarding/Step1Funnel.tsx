@@ -87,6 +87,9 @@ export interface FunnelData {
   webResearchSummary: string | null;
   genError: string | null;
   genStalled: boolean;
+  // FAST F3 — the detached generation jobs' REAL checkpoint (written at pass
+  // boundaries); null = absent (old in-flight session) → timed-beat fallback.
+  genProgress: "research" | "types" | "templates" | "questions" | null;
   productGroups: Array<{ id: string; name: string; products: Array<{ id: string; title: string }> }>;
   collections: Array<{ collectionId: string; title: string }>;
   savedTemplates: Array<{ id: string; name: string; template: RichTemplateOption }>;
@@ -189,12 +192,14 @@ export function Step1Funnel({ data }: { data: FunnelData }) {
 
   // Poll the loader while a detached generation job runs (typing/templating);
   // the job writes the next stage, the revalidate picks it up, the poll stops.
+  // FAST F3 — 1500ms (was 3000): the loader is cheap and this halves both the
+  // stage-flip latency and the gen_progress checkpoint latency.
   const isGenerating = data.stage === "typing" || data.stage === "templating";
   useEffect(() => {
     if (!isGenerating) return;
     const t = setInterval(() => {
       if (revalidator.state === "idle") revalidator.revalidate();
-    }, 3000);
+    }, 1500);
     return () => clearInterval(t);
   }, [isGenerating, revalidator]);
 
@@ -293,13 +298,17 @@ export function Step1Funnel({ data }: { data: FunnelData }) {
         <GoalStage data={data} fetcher={fetcher} pendingIntent={pendingIntent} />
       ) : null}
 
-      {data.stage === "typing" ? <GeneratingScreen kind="typing" /> : null}
+      {data.stage === "typing" ? (
+        <GeneratingScreen kind="typing" progress={data.genProgress} />
+      ) : null}
 
       {data.stage === "types" ? (
         <ShapeStage data={data} fetcher={fetcher} pendingIntent={pendingIntent} />
       ) : null}
 
-      {data.stage === "templating" ? <GeneratingScreen kind="templating" /> : null}
+      {data.stage === "templating" ? (
+        <GeneratingScreen kind="templating" progress={data.genProgress} />
+      ) : null}
 
       {/* Question Builder — the pre-config editing step. Client-only: it composes
           the heavy builder panels (FlowRail / ContextPanel / live preview) which
@@ -2272,16 +2281,37 @@ function TemplatesStage({
 const TYPING_BEATS = ["Researching quiz strategies", "Reading your catalog", "Drafting tailored quiz types"];
 const TEMPLATING_BEATS = ["Reading your brand identity", "Designing template variations", "Tuning the design dials"];
 
+// FAST F3 — map the jobs' REAL gen_progress checkpoints onto the beat indexes.
+// typing: "research" = the live web-research pass; "types" = the type cards
+// are being drafted. templating: "templates" = the battle-card pass;
+// "questions" = the long question build. Unknown/absent → timed fallback.
+const PROGRESS_BEAT: Record<"typing" | "templating", Record<string, number>> = {
+  typing: { research: 0, types: 2 },
+  templating: { templates: 1, questions: 2 },
+};
+
 // The "AI in flight" screen for the detached typing/templating jobs. The parent
 // polls the loader; this just animates the staged beats while we wait.
-function GeneratingScreen({ kind }: { kind: "typing" | "templating" }) {
+// FAST F3 — when the loader reports a real gen_progress checkpoint, it drives
+// the active beat; the timed cycle stays as the fallback for old in-flight
+// sessions (and for the window before the first checkpoint lands).
+function GeneratingScreen({
+  kind,
+  progress,
+}: {
+  kind: "typing" | "templating";
+  progress: string | null;
+}) {
   const beats = kind === "typing" ? TYPING_BEATS : TEMPLATING_BEATS;
-  const [active, setActive] = useState(0);
+  const progressBeat = progress !== null ? (PROGRESS_BEAT[kind][progress] ?? null) : null;
+  const [timedActive, setTimedActive] = useState(0);
   useEffect(() => {
-    if (active >= beats.length - 1) return;
-    const t = setTimeout(() => setActive((b) => b + 1), kind === "typing" ? 18000 : 12000);
+    if (timedActive >= beats.length - 1) return;
+    const t = setTimeout(() => setTimedActive((b) => b + 1), kind === "typing" ? 18000 : 12000);
     return () => clearTimeout(t);
-  }, [active, beats.length, kind]);
+  }, [timedActive, beats.length, kind]);
+  // A real checkpoint never moves backwards; once seen it wins over the timer.
+  const active = progressBeat ?? timedActive;
   const title =
     kind === "typing"
       ? "Researching the best quiz types for your brand…"

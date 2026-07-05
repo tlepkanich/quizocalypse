@@ -70,6 +70,14 @@ model Shop {
   // merchant-initiated, visible-error spends.
   aiRecCopyEnabled Boolean @default(true)
 
+  // FAST F1 — cached quiz-strategy web research for the create funnel. Shape:
+  // { text: string, positioning_hash: string, at: ISO string } (see
+  // app/lib/shopWebResearch.server.ts). The research inputs are SHOP-LEVEL only
+  // (brand-identity positioning), so one row serves every draft; freshness is
+  // a positioning hash + 24h TTL. Null = never researched (failures are never
+  // persisted, so a failed run can't poison the cache).
+  webResearch Json?
+
   products       Product[]
   collections    Collection[]
   categories     Category[]

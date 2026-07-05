@@ -33,6 +33,7 @@ import {
   startStep2Build,
 } from "./step2Build.server";
 import { saveTemplate, listSavedTemplates, loadSavedTemplate } from "./savedTemplates.server";
+import { prefetchShopWebResearch } from "./shopWebResearch.server";
 import { applyManualDeciderSkeleton } from "./smartBuild";
 import {
   MAX_LOGO_BYTES,
@@ -192,6 +193,16 @@ export async function loadStep1FunnelData(
   opts?: { backHref?: string },
 ) {
   const { quiz, doc, session } = await loadFunnelDraft(shop.id, quizId);
+
+  // FAST F1 — kick the web-research prefetch at funnel ENTRY (the research
+  // inputs are shop-level, not bucket-level), so by the time the merchant
+  // finishes picking buckets (typically >40s) the typing job finds it cached
+  // or in flight. Fire-and-forget + internally throttled/single-flighted, so
+  // repeated loader passes (action revalidations, polls, reloads) never stack
+  // calls. "goal" is included for legacy in-flight drafts parked there.
+  if (session.stage === "grouping" || session.stage === "goal") {
+    prefetchShopWebResearch(shop.id);
+  }
 
   const [products, collections, shopRow, categories, savedTemplates] = await Promise.all([
     prisma.product.findMany({ where: { shopId: shop.id } }),
@@ -452,6 +463,9 @@ export async function loadStep1FunnelData(
     webResearchSummary: session.web_research_summary ?? null,
     genError: session.gen_error ?? null,
     genStalled,
+    // FAST F3 — the detached jobs' honest live checkpoint (null for old
+    // in-flight sessions / non-gen stages → the UI falls back to timed beats).
+    genProgress: session.gen_progress ?? null,
     productGroups: categories.map((c) => ({
       id: c.id,
       name: c.name,
