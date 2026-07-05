@@ -1112,6 +1112,51 @@ export function setAnswerTarget(
   };
 }
 
+// quiz-step3 v3 §5.4 — MOVE the decider (the flag-tab's radio semantics).
+// "Moving the decider clears its current mappings" (locked behavior): the old
+// decider demotes to qualifier AND every one of its answers DROPS target_id
+// (destructure-drop — the same absent-when-unset shape as setAnswerTarget's
+// clear path), while the new decider promotes with required forced true.
+// decision_rules are deliberately UNTOUCHED — the spec wipes MAPPINGS only;
+// rules referencing the old decider's answers survive and surface through the
+// V7/V8 diagnostics (the confirm dialog says rules are kept). Also covers
+// first-promotion (no current decider): a pure promote, nothing to wipe.
+export function moveDecider(doc: QuizDoc, toNodeId: string): QuizDoc {
+  if (doc.logic_model !== "decider") return doc;
+  const target = doc.nodes.find((n) => n.id === toNodeId);
+  if (!target || target.type !== "question") return doc;
+  if (
+    target.data.question_type === "multi_select" ||
+    isFreeformType(target.data.question_type)
+  )
+    return doc;
+  if (target.data.role === "decides") return doc;
+  return {
+    ...doc,
+    nodes: doc.nodes.map((n) => {
+      if (n.type !== "question") return n;
+      if (n.id === toNodeId) {
+        return { ...n, data: { ...n.data, role: "decides" as const, required: true } };
+      }
+      if (n.data.role === "decides") {
+        return {
+          ...n,
+          data: {
+            ...n.data,
+            role: "qualifier" as const,
+            answers: n.data.answers.map((a) => {
+              if (!("target_id" in a)) return a;
+              const { target_id: _cleared, ...rest } = a;
+              return rest;
+            }),
+          },
+        };
+      }
+      return n;
+    }),
+  };
+}
+
 // ── LOGIC v2 §4 — advanced decision rules (decider docs only) ───────────────
 // Priority = ARRAY ORDER (top→bottom, first full match wins — the engine's
 // resolveTarget contract). All four are pure + logic_model-gated like
