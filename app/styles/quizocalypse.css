@@ -3612,15 +3612,299 @@ body[data-qz] .qz-s3-editable:focus-visible {
   font: inherit; font-size: 12px; opacity: 0.7; margin-left: auto;
 }
 
-/* — logic view stub (P3 replaces with the real section cards) — */
-.qz-s3-logicstub { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
-.qz-s3-stubcard {
-  display: flex; align-items: flex-start; gap: 12px;
-  padding: 16px 18px;
+/* ── P3: the Logic view (.qz-s3-logic — sticky RulesStrip + per-question
+   section cards + distributed RuleRows + add-question dividers). Section
+   color arrives as --sec-color/--sec-wash inlined by QuestionSection
+   (sectionPalette — decider gold); every colored treatment reads those. ── */
+.qz-s3-logic {
+  display: flex; flex-direction: column;
+  min-width: 0; position: relative;
+  max-height: calc(100vh - 130px);
+  overflow-y: auto;
+  padding: 2px 6px 24px 2px;
+}
+
+/* — sticky rules strip (§5.5) — */
+.qz-s3-rulesstrip {
+  position: sticky; top: 0; z-index: 6;
+  display: flex; flex-direction: column; gap: 8px;
+  padding: 12px 16px;
   background: var(--qz-paper);
   border-radius: var(--qz-radius);
   box-shadow: var(--qz-lift-1);
 }
-.qz-s3-stubbody { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
-.qz-s3-stubtitle { font-size: 14.5px; line-height: 1.35; }
-.qz-s3-stubnote { font-size: 12.5px; color: var(--qz-ink-4); }
+.qz-s3-rulesstrip-head { display: flex; align-items: baseline; gap: 10px; }
+.qz-s3-rulesstrip-count {
+  font-family: var(--qz-font-mono); font-size: 11px; font-weight: 700;
+  letter-spacing: 0.08em; color: var(--qz-accent);
+}
+.qz-s3-rulesstrip-note { font-size: 11px; color: var(--qz-ink-4); }
+.qz-s3-rulesstrip-empty { margin: 0; font-size: 12.5px; color: var(--qz-ink-3); }
+.qz-s3-rulesstrip-list {
+  display: flex; flex-direction: column; gap: 2px;
+  max-height: 132px; overflow-y: auto;
+}
+.qz-s3-ruleline {
+  display: flex; align-items: center; gap: 8px;
+  border: none; background: transparent;
+  padding: 4px 6px; border-radius: 8px;
+  cursor: pointer; text-align: left; font: inherit; min-width: 0;
+}
+.qz-s3-ruleline:hover { background: var(--qz-accent-wash); }
+.qz-s3-ruleline-text {
+  min-width: 0; font-size: 12.5px; color: var(--qz-ink-3);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.qz-s3-unfinished {
+  display: flex; flex-direction: column; gap: 6px;
+  border-top: 1px solid var(--qz-rule); padding-top: 8px;
+}
+.qz-s3-unfinished-head { display: flex; align-items: baseline; gap: 8px; }
+.qz-s3-unfinished-title { font-size: 12px; font-weight: 700; color: var(--qz-warn); }
+.qz-s3-unfinished-note { font-size: 11px; color: var(--qz-ink-4); }
+
+/* — section cards (§5.2): floating, per-question color, flag-tab clearance — */
+.qz-s3-secwrap { display: flex; flex-direction: column; margin-top: 26px; }
+.qz-s3-sec {
+  position: relative;
+  padding: 20px 20px 12px;
+  background: var(--qz-paper);
+  border-radius: var(--qz-radius);
+  box-shadow: var(--qz-lift-1);
+  scroll-margin-top: 128px;
+  transition: box-shadow var(--qz-dur) var(--qz-ease);
+}
+/* hover: tinted shadow + the left color bar, both reading --sec-color */
+.qz-s3-sec::after {
+  content: ""; position: absolute;
+  left: 0; top: 16px; bottom: 16px; width: 3px;
+  border-radius: 2px;
+  background: var(--sec-color);
+  opacity: 0;
+  transition: opacity var(--qz-dur-fast) var(--qz-ease);
+}
+.qz-s3-sec:hover {
+  box-shadow: var(--qz-lift-1), 0 18px 40px -14px color-mix(in srgb, var(--sec-color) 35%, transparent);
+}
+.qz-s3-sec:hover::after { opacity: 1; }
+.qz-s3-sec.is-active { box-shadow: var(--qz-lift-1), 0 0 0 1.5px color-mix(in srgb, var(--sec-color) 45%, transparent); }
+
+/* — the decider flag tab (§5.4 — spec geometry −19px top / 20px left) — */
+.qz-s3-flag {
+  position: absolute; top: -19px; left: 20px;
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 4px 12px 6px;
+  border: none; border-radius: 8px 8px 0 0;
+  font-family: var(--qz-font-mono); font-size: 10.5px; font-weight: 700;
+  letter-spacing: 0.04em; text-transform: uppercase; line-height: 1.2;
+}
+.qz-s3-flag.is-decider { background: var(--qz-gold); color: var(--qz-cream); }
+.qz-s3-flag.is-ghost {
+  background: var(--qz-paper); color: var(--qz-ink-4);
+  box-shadow: inset 0 0 0 1px var(--qz-rule);
+  cursor: pointer;
+}
+.qz-s3-flag.is-ghost:not(:disabled):hover {
+  color: var(--qz-gold); background: var(--qz-gold-wash);
+  box-shadow: inset 0 0 0 1px var(--qz-gold-line);
+}
+.qz-s3-flag.is-ghost:disabled { opacity: 0.45; cursor: not-allowed; }
+
+.qz-s3-sec-head { display: flex; align-items: flex-start; gap: 10px; }
+.qz-s3-sec .qz-s3-numchip { background: var(--sec-wash); color: var(--sec-color); box-shadow: none; }
+.qz-s3-sec .qz-s3-numchip.is-decider { background: var(--qz-gold); color: var(--qz-cream); }
+.qz-s3-sec-title {
+  margin: 0; flex: 1 1 auto; min-width: 0;
+  font-size: 15px; font-weight: 600; line-height: 1.35; padding-top: 3px;
+}
+.qz-s3-sec-edit {
+  flex: none;
+  border: none; background: transparent;
+  padding: 4px 8px; border-radius: var(--qz-radius-pill);
+  color: var(--qz-ink-4); font: inherit; font-size: 12px; cursor: pointer;
+}
+.qz-s3-sec-edit:hover { color: var(--qz-accent); background: var(--qz-accent-wash); }
+.qz-s3-sec-freeform { margin: 10px 0 2px 36px; font-size: 12.5px; color: var(--qz-ink-4); }
+
+/* — answers table (§5.2): letter · text · λ chips · maps-to · then-go-to · ✕ — */
+.qz-s3-atable { margin-top: 12px; display: flex; flex-direction: column; }
+.qz-s3-atable-head,
+.qz-s3-arow {
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr) auto 150px 108px 24px;
+  gap: 8px; align-items: center;
+}
+.qz-s3-atable-head {
+  padding: 0 0 6px; border-bottom: 1px solid var(--qz-rule);
+  font-family: var(--qz-font-mono); font-size: 10px; font-weight: 600;
+  letter-spacing: 0.06em; text-transform: uppercase; color: var(--qz-ink-4);
+}
+.qz-s3-arow { padding: 6px 0; border-bottom: 1px solid var(--qz-rule-2); }
+.qz-s3-arow:last-child { border-bottom: none; }
+.qz-s3-aletter {
+  width: 22px; height: 22px; display: grid; place-items: center;
+  border-radius: 7px;
+  font-family: var(--qz-font-mono); font-size: 10.5px; font-weight: 700;
+  background: var(--sec-wash); color: var(--sec-color);
+}
+.qz-s3-ainput {
+  min-width: 0; border: none; background: transparent;
+  padding: 4px 6px; border-radius: 7px;
+  font: inherit; font-size: 13.5px; color: var(--qz-ink);
+}
+.qz-s3-ainput:focus {
+  outline: none;
+  background: var(--qz-cream-2);
+  box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--sec-color) 60%, transparent);
+}
+.qz-s3-achiprow { display: flex; gap: 4px; }
+.qz-s3-rulechip {
+  border: none; padding: 3px 8px; border-radius: var(--qz-radius-pill);
+  background: var(--qz-accent-wash); color: var(--qz-accent);
+  font-family: var(--qz-font-mono); font-size: 10.5px; font-weight: 700;
+  white-space: nowrap; cursor: pointer;
+}
+.qz-s3-rulechip:hover { background: color-mix(in srgb, var(--qz-accent) 18%, var(--qz-paper)); }
+.qz-s3-rulechip.is-home {
+  background: transparent;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--qz-accent) 30%, transparent);
+  color: color-mix(in srgb, var(--qz-accent) 75%, var(--qz-ink));
+}
+.qz-s3-target,
+.qz-s3-goto {
+  min-width: 0; max-width: 100%;
+  padding: 5px 6px; border-radius: var(--qz-radius-sm);
+  border: 1px solid var(--qz-rule); background: var(--qz-paper);
+  font: inherit; font-size: 12.5px; color: var(--qz-ink-3); cursor: pointer;
+}
+.qz-s3-target { font-weight: 600; }
+.qz-s3-target.is-mapped {
+  color: var(--qz-gold); border-color: var(--qz-gold-line); background: var(--qz-gold-wash);
+}
+.qz-s3-target.is-unset {
+  color: var(--qz-warn); border-color: var(--qz-warn-edge); background: var(--qz-warn-tint);
+}
+.qz-s3-goto.is-active { color: var(--qz-accent); border-color: color-mix(in srgb, var(--qz-accent) 35%, transparent); }
+.qz-s3-nomap { text-align: center; color: var(--qz-ink-25); }
+.qz-s3-adel {
+  border: none; background: transparent; padding: 2px;
+  color: var(--qz-ink-25); font: inherit; font-size: 12px; cursor: pointer;
+}
+.qz-s3-adel:not(:disabled):hover { color: var(--qz-crit); }
+.qz-s3-adel:disabled { opacity: 0.35; cursor: not-allowed; }
+
+/* — homed rules (§5.5): the indigo band + tokenized editor — */
+.qz-s3-sec-rules { margin-top: 12px; display: flex; flex-direction: column; gap: 8px; }
+.qz-s3-rr {
+  border-radius: 10px;
+  border-left: 3px solid var(--qz-accent);
+  background: color-mix(in srgb, var(--qz-accent) 6%, var(--qz-paper));
+}
+.qz-s3-rr.is-draft { border: 1px dashed color-mix(in srgb, var(--qz-accent) 40%, transparent); border-left: 3px solid var(--qz-accent); }
+@keyframes qz-s3-ruleflash {
+  0% { background: color-mix(in srgb, var(--qz-accent) 24%, var(--qz-paper)); }
+  100% { background: color-mix(in srgb, var(--qz-accent) 6%, var(--qz-paper)); }
+}
+.qz-s3-rr.is-flash { animation: qz-s3-ruleflash 1.6s var(--qz-ease); }
+@media (prefers-reduced-motion: reduce) {
+  .qz-s3-rr.is-flash { animation: none; }
+}
+.qz-s3-rr-head {
+  width: 100%; display: flex; align-items: center; gap: 10px;
+  border: none; background: transparent;
+  padding: 9px 12px; cursor: pointer; text-align: left; font: inherit;
+}
+.qz-s3-rr-head.is-static { cursor: default; }
+.qz-s3-rr-no {
+  flex: none; padding: 2px 7px; border-radius: var(--qz-radius-pill);
+  background: var(--qz-accent-wash); color: var(--qz-accent);
+  font-family: var(--qz-font-mono); font-size: 10.5px; font-weight: 700;
+  white-space: nowrap;
+}
+.qz-s3-rr-summary {
+  flex: 1 1 auto; min-width: 0;
+  font-size: 12.5px; color: var(--qz-ink-3);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.qz-s3-rr-caret { flex: none; color: var(--qz-ink-4); font-size: 11px; }
+.qz-s3-rr-editor { display: flex; flex-direction: column; gap: 8px; padding: 2px 12px 12px; }
+.qz-s3-rr-halfnote { margin: 0; font-size: 12px; color: var(--qz-warn); }
+.qz-s3-cond { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.qz-s3-cond select,
+.qz-s3-rr-target select {
+  max-width: 200px;
+  padding: 4px 6px; border-radius: 7px;
+  border: 1px solid var(--qz-rule); background: var(--qz-paper);
+  font: inherit; font-size: 12px; color: var(--qz-ink); cursor: pointer;
+}
+.qz-s3-cond select:disabled { color: var(--qz-ink-3); cursor: default; }
+.qz-s3-cond-join {
+  flex: none; width: 30px; text-align: right;
+  font-family: var(--qz-font-mono); font-size: 10px; font-weight: 700;
+  text-transform: uppercase; color: var(--qz-accent);
+}
+.qz-s3-cond-del {
+  border: none; background: transparent; padding: 2px;
+  color: var(--qz-ink-25); font: inherit; font-size: 11px; cursor: pointer;
+}
+.qz-s3-cond-del:hover { color: var(--qz-crit); }
+.qz-s3-rr-addcond {
+  align-self: flex-start; margin-left: 36px;
+  border: none; background: transparent; padding: 2px 4px;
+  color: var(--qz-accent); font: inherit; font-size: 12px; font-weight: 600; cursor: pointer;
+}
+.qz-s3-rr-addcond:disabled { opacity: 0.45; cursor: not-allowed; }
+.qz-s3-rr-target {
+  display: flex; align-items: center; gap: 6px;
+  font-size: 12.5px; color: var(--qz-ink-3);
+}
+.qz-s3-rr-actions {
+  display: flex; align-items: center; gap: 6px; justify-content: flex-end;
+  border-top: 1px solid color-mix(in srgb, var(--qz-accent) 14%, transparent);
+  padding-top: 8px;
+}
+.qz-s3-rr-prionote {
+  margin-right: auto; min-width: 0;
+  font-size: 11px; color: var(--qz-ink-4);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.qz-s3-rr-actions button {
+  border: 1px solid var(--qz-rule); border-radius: 7px;
+  background: var(--qz-paper); padding: 2px 8px;
+  font: inherit; font-size: 12px; color: var(--qz-ink-3); cursor: pointer;
+}
+.qz-s3-rr-actions button:disabled { opacity: 0.35; cursor: not-allowed; }
+.qz-s3-rr-actions .qz-s3-rr-del:not(:disabled):hover { color: var(--qz-crit); border-color: var(--qz-crit-edge); }
+.qz-s3-rr-actions .qz-btn { border: none; }
+
+/* — section footer: + Add answer · λ Add rule — */
+.qz-s3-sec-foot {
+  display: flex; gap: 4px; margin-top: 10px; padding-top: 8px;
+  border-top: 1px solid var(--qz-rule-2);
+}
+.qz-s3-sec-footbtn {
+  border: none; background: transparent;
+  padding: 5px 10px; border-radius: var(--qz-radius-pill);
+  color: var(--qz-ink-3); font: inherit; font-size: 12.5px; font-weight: 600; cursor: pointer;
+}
+.qz-s3-sec-footbtn:not(:disabled):hover { background: var(--qz-cream-2); color: var(--qz-ink); }
+.qz-s3-sec-footbtn:disabled { opacity: 0.45; cursor: not-allowed; }
+
+/* — slim add-question dividers (§5.7 — between sections + after the last) — */
+.qz-s3-divider { position: relative; display: flex; justify-content: center; padding: 8px 0 0; }
+.qz-s3-divider::before {
+  content: ""; position: absolute;
+  left: 8%; right: 8%; top: 50%; height: 1px;
+  background: var(--qz-rule);
+}
+.qz-s3-divider-btn {
+  position: relative; z-index: 1;
+  border: none; padding: 3px 12px; border-radius: var(--qz-radius-pill);
+  background: var(--qz-cream);
+  box-shadow: inset 0 0 0 1px var(--qz-rule);
+  color: var(--qz-ink-4); font: inherit; font-size: 11.5px; font-weight: 600; cursor: pointer;
+}
+.qz-s3-divider-btn:hover {
+  background: var(--qz-paper); color: var(--qz-accent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--qz-accent) 35%, transparent);
+}

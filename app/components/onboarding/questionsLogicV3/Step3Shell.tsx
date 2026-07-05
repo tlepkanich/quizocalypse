@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import type { Quiz as QuizDoc, DesignTokens } from "../../../lib/quizSchema";
 import type { BuilderCategory } from "../../builder/stepProps";
 import { buildTier1Report } from "../../../lib/pathReport";
@@ -8,6 +8,7 @@ import { QuestionBankDrawer } from "../../studio/QuestionBankDrawer";
 import { TopBar3 } from "./TopBar3";
 import { LeftRail, CAPTURE_ID, REVEAL_ID } from "./LeftRail";
 import { PhoneCanvas } from "./content/PhoneCanvas";
+import { LogicScroll, type LogicScrollHandle } from "./logic/LogicScroll";
 
 /* ════════════════════════════════════════════════════════════════════════════
    quiz-step3 v3 — Step3Shell: the two-view (Content · Logic) Step-3 rebuild
@@ -70,6 +71,7 @@ export function Step3Shell({
   const [view, setView] = useState<Step3View>("content");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [libraryOpen, setLibraryOpen] = useState(false);
+  const logicRef = useRef<LogicScrollHandle>(null);
 
   // Valid canvas positions; a stale selection (deleted question, capture
   // toggled off) falls back derived-style — no effect needed.
@@ -90,8 +92,13 @@ export function Step3Shell({
     const next = insertQuestionRelative(doc, ref, "below");
     const newId = next.nodes.find((n) => !before.has(n.id))?.id ?? null;
     onCommit(next);
-    if (newId) setSelectedId(newId);
-  }, [doc, questions, onCommit]);
+    if (newId) {
+      setSelectedId(newId);
+      // Logic view: glide the new section in once it mounts (scrollToSection
+      // parks unknown ids until the card exists).
+      if (view === "logic") logicRef.current?.scrollToSection(newId);
+    }
+  }, [doc, questions, onCommit, view]);
 
   const handleContinue = useCallback(() => {
     if (view === "content") {
@@ -126,7 +133,9 @@ export function Step3Shell({
           onViewChange={setView}
           onSelect={(id) => {
             setSelectedId(id);
-            if (view !== "content") setView("content");
+            // Logic view: a rail click scrolls its section (bidirectional
+            // sync); Content view keeps the phone walk as before.
+            if (view === "logic") logicRef.current?.scrollToSection(id);
           }}
           onAddQuestion={addQuestion}
           onOpenLibrary={() => setLibraryOpen(true)}
@@ -145,27 +154,20 @@ export function Step3Shell({
             regen={regen}
           />
         ) : (
-          // P3 replaces this stub scroll with the real per-question section
-          // cards (palette, flag tabs, answers table, distributed rules).
-          <div className="qz-s3-logicstub" aria-label="Logic view (coming next)">
-            {questions.map((q) => (
-              <div key={q.node.id} className="qz-s3-stubcard">
-                <span
-                  className={`qz-s3-numchip${q.node.id === decider?.id ? " is-decider" : ""}`}
-                >
-                  {q.qIndex}
-                </span>
-                <div className="qz-s3-stubbody">
-                  <strong className="qz-s3-stubtitle">{q.node.data.text}</strong>
-                  <span className="qz-s3-stubnote">
-                    {q.node.id === decider?.id
-                      ? "◆ Decides the result — the full logic editor lands in the next phase."
-                      : "Logic editing for this question lands in the next phase."}
-                  </span>
-                </div>
-              </div>
-            ))}
-          </div>
+          <LogicScroll
+            ref={logicRef}
+            doc={doc}
+            questions={questions}
+            deciderId={decider?.id ?? null}
+            categories={categories}
+            activeId={activeId}
+            onActiveChange={setSelectedId}
+            onEditContent={(id) => {
+              setSelectedId(id);
+              setView("content");
+            }}
+            onCommit={onCommit}
+          />
         )}
       </div>
 

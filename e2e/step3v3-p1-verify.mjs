@@ -214,9 +214,9 @@ try {
   await page.locator(".qz-s3-row", { hasText: "What are you shopping for" }).click();
   ok("rail click → phone loads Q2", (await page.locator(".qz-s3-kicker").textContent())?.trim() === "QUESTION 2 OF 3");
 
-  // view toggle → logic stubs + Continue tri-label
+  // view toggle → logic sections (P3 replaced the P1 stubs with real cards) + Continue tri-label
   await page.locator(".qz-s3-viewtoggle button", { hasText: "Logic" }).click();
-  ok("Logic view: stub scroll with 3 cards", (await page.locator(".qz-s3-stubcard").count()) === 3);
+  ok("Logic view: section scroll with 3 cards", (await page.locator(".qz-s3-sec").count()) === 3);
   ok("Logic view: Continue reads '◆ Continue to Results'", await page.locator(".qz-topbar-right button", { hasText: "Continue to Results" }).isVisible());
   await page.screenshot({ path: `${SHOTS}/5-logic-stub.png`, fullPage: true });
   await page.locator(".qz-s3-viewtoggle button", { hasText: "Content" }).click();
