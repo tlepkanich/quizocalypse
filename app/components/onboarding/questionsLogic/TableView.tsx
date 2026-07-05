@@ -101,7 +101,7 @@ export function TableView({
               <th className="qz-qlt-c-q">Q</th>
               <th className="qz-qlt-c-question">Question</th>
               <th className="qz-qlt-c-answer">Answer</th>
-              <th className="qz-qlt-c-bucket">Maps to bucket</th>
+              <th className="qz-qlt-c-bucket">Maps to recommendation</th>
               <th className="qz-qlt-c-skip">Then go to</th>
             </tr>
           </thead>
@@ -162,7 +162,7 @@ export function TableView({
                           <td>
                             <div className="qz-qlt-bucketcell">
                               {!isAnswerMapped(a) ? (
-                                <span className="qz-qlt-gap" title="No bucket mapped" aria-label="Gap">
+                                <span className="qz-qlt-gap" title="No recommendation mapped" aria-label="Gap">
                                   ⚠
                                 </span>
                               ) : null}
@@ -172,7 +172,7 @@ export function TableView({
                                 disabled={weighted}
                                 title={
                                   weighted
-                                    ? "Weighted scoring is active — switch to Direct mapping in the top bar to edit buckets here"
+                                    ? "Weighted scoring is active — switch to Direct mapping in the top bar to edit recommendations here"
                                     : undefined
                                 }
                                 style={
@@ -183,9 +183,9 @@ export function TableView({
                                 onChange={(e) =>
                                   onCommit(setAnswerBucketDirect(doc, node.id, a.id, e.target.value || null))
                                 }
-                                aria-label={`Q${qIndex} answer ${answerLetter(i)} maps to bucket`}
+                                aria-label={`Q${qIndex} answer ${answerLetter(i)} maps to recommendation`}
                               >
-                                <option value="">— Map to bucket</option>
+                                <option value="">— Map to recommendation</option>
                                 {categories.map((c) => (
                                   <option key={c.id} value={c.id}>
                                     {c.name}

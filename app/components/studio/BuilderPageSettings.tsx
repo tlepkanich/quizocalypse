@@ -78,11 +78,11 @@ export function BuilderPageSettings({
 
   return (
     <div className="qz-card qz-page-settings">
-      <div className="qz-ps-title">Page Settings</div>
+      <div className="qz-ps-title">Page settings</div>
 
       <div className="qz-ps-field">
         <label className="qz-ps-label" htmlFor="qz-ps-bg">
-          Background Color
+          Background color
         </label>
         <div className="qz-ps-color">
           <input
@@ -125,7 +125,7 @@ export function BuilderPageSettings({
       <div className="qz-ps-field">
         <div className="qz-ps-label-row">
           <span className="qz-row" style={{ gap: 8, alignItems: "center" }}>
-            <span className="qz-ps-label">Page Paddings</span>
+            <span className="qz-ps-label">Page paddings</span>
             <button
               type="button"
               className={`qz-ps-link${linked ? " is-on" : ""}`}

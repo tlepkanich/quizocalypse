@@ -83,7 +83,7 @@ export function QuestionBankDrawer({
       />
       <aside
         role="dialog"
-        aria-label="Question Bank"
+        aria-label="Question bank"
         style={{
           position: "fixed",
           top: 0,
@@ -102,7 +102,7 @@ export function QuestionBankDrawer({
           className="qz-row qz-row-between"
           style={{ padding: "14px 16px", borderBottom: "1px solid var(--qz-rule, #e5e5e5)" }}
         >
-          <strong style={{ fontSize: 15 }}>📚 Question Bank</strong>
+          <strong style={{ fontSize: 15 }}>📚 Question bank</strong>
           <button type="button" className="qz-btn qz-btn-ghost qz-btn-sm" onClick={onClose} aria-label="Close">
             ✕
           </button>

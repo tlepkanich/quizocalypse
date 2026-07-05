@@ -21,6 +21,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "e2e": "playwright test",
+    "check-tokens": "node scripts/check-tokens.mjs",
     "gen:releases": "node scripts/generate-releases.mjs",
     "shopify": "shopify",
     "prisma": "prisma",

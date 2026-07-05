@@ -235,7 +235,7 @@ export function QuestionCard({
           type="button"
           className="qz-ql-regen"
           disabled={regenerating}
-          title="Regenerate this question with AI (keeps bucket mappings on unchanged answers)"
+          title="Regenerate this question with AI (keeps recommendation mappings on unchanged answers)"
           aria-label={`Regenerate question ${qIndex}`}
           onClick={onRegenerate}
         >
@@ -326,7 +326,7 @@ export function QuestionCard({
                 <span className="qz-ql-ahead-bucket">Points to result</span>
               ) : null
             ) : (
-              <span className="qz-ql-ahead-bucket">Maps to bucket</span>
+              <span className="qz-ql-ahead-bucket">Maps to recommendation</span>
             )}
             <span className="qz-ql-ahead-skip">Skip to</span>
           </div>

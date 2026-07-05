@@ -115,7 +115,7 @@ function BucketCoveragePills({
   return (
     <div>
       <div className="qz-label" style={{ marginBottom: 4, fontSize: 11 }}>
-        Bucket coverage
+        Recommendation coverage
       </div>
       <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
         {coverage.map((c) => {
@@ -125,9 +125,9 @@ function BucketCoveragePills({
               key={c.id}
               title={`${c.count} answer${c.count === 1 ? "" : "s"} point at “${c.name}”${
                 c.level === "none"
-                  ? " — no answers reach this bucket yet"
+                  ? " — no answers reach this recommendation yet"
                   : c.level === "weak"
-                    ? " — weak (under half of the best-covered bucket)"
+                    ? " — weak (under half of the best-covered recommendation)"
                     : ""
               }`}
               className="qz-row"
@@ -288,7 +288,7 @@ function AnswerMappingSection({
 
       {categories.length === 0 ? (
         <p className="qz-dim" style={{ fontSize: 11, margin: 0 }}>
-          No buckets yet — add recommendation buckets to map answers to.
+          No recommendations yet — add recommendations to map answers to.
         </p>
       ) : model === "direct" ? (
         <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
@@ -315,9 +315,9 @@ function AnswerMappingSection({
                     borderRadius: 6,
                     border: "1px solid #00000022",
                   }}
-                  aria-label={`Bucket for answer: ${a.text}`}
+                  aria-label={`Recommendation for answer: ${a.text}`}
                 >
-                  <option value="">No bucket</option>
+                  <option value="">No recommendation</option>
                   {categories.map((c) => (
                     <option key={c.id} value={c.id}>
                       {c.name}
@@ -460,8 +460,8 @@ function RoutingBody({
                   const catId = node.data.category_id;
                   const cat = catId ? categories.find((c) => c.id === catId) : null;
                   return cat
-                    ? `Bound to the “${cat.name}” bucket (${cat.productIds.length} products), with tag-match ranking on top.`
-                    : "Ranked by answer-tag overlap with a collection fallback (no bucket binding).";
+                    ? `Bound to the “${cat.name}” recommendation (${cat.productIds.length} products), with tag-match ranking on top.`
+                    : "Ranked by answer-tag overlap with a collection fallback (no recommendation binding).";
                 })()}
               </p>
               {onOpenLogic ? (
@@ -476,7 +476,7 @@ function RoutingBody({
             </div>
           ) : (
             <p className="qz-dim" style={{ fontSize: 12, margin: 0 }}>
-              Select a question to map its answers to recommendation buckets.
+              Select a question to map its answers to recommendations.
             </p>
           )}
           <details>

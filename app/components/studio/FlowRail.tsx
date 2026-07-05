@@ -534,7 +534,7 @@ export function FlowRail({
                   onClick={() => setBankOpen(true)}
                   title="Browse a library of pre-built questions"
                 >
-                  📚 Question Bank
+                  📚 Question bank
                 </button>
               </div>
             )}
@@ -552,7 +552,7 @@ export function FlowRail({
       ) : (
         <p className="qz-dim" style={{ fontSize: 12, margin: "4px 2px" }}>
           {view === "products"
-            ? "Group your catalog into buckets — they become the result pages answers route to."
+            ? "Group your catalog into recommendations — they become the result pages answers route to."
             : view === "results"
               ? "Design the result pages: layout model, ranking rules, and discounts."
               : "Recommendation mapping, path testing, and A/B splits."}

@@ -207,7 +207,7 @@ export function RecPageDiagram({
         <Block
           muted={!gf.enabled}
           title="Global fallback"
-          sub={gf.enabled ? gf.heading : "No bucket match → empty"}
+          sub={gf.enabled ? gf.heading : "No recommendation match → empty"}
           chip={gf.enabled ? `${gfProducts.length} ready` : "off"}
         />
 

@@ -260,7 +260,7 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
             setReconcileError(null);
           } catch {
             setReconcileError(
-              "We couldn't turn your buckets into result pages yet — sync at least one Shopify collection (result pages need a fallback collection). You can keep building; pages will appear once a collection is synced.",
+              "We couldn't turn your recommendations into result pages yet — sync at least one Shopify collection (result pages need a fallback collection). You can keep building; pages will appear once a collection is synced.",
             );
           }
         }

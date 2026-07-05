@@ -1,0 +1,212 @@
+{
+  "files": {
+    "app/components/ProductLeaderboard.tsx": {
+      "hex": 5,
+      "boxShadow": 0
+    },
+    "app/components/builder/Step1Products.tsx": {
+      "hex": 2,
+      "boxShadow": 0
+    },
+    "app/components/builder/Step5Preview.tsx": {
+      "hex": 4,
+      "boxShadow": 0
+    },
+    "app/components/builder/preview/DeviceFrame.tsx": {
+      "hex": 5,
+      "boxShadow": 1
+    },
+    "app/components/builder/preview/ReskinSwitcher.tsx": {
+      "hex": 11,
+      "boxShadow": 0
+    },
+    "app/components/builder/results/ResultPageCard.tsx": {
+      "hex": 1,
+      "boxShadow": 0
+    },
+    "app/components/builder/results/ResultPageEditor.tsx": {
+      "hex": 4,
+      "boxShadow": 0
+    },
+    "app/components/logic/AbTestCard.tsx": {
+      "hex": 2,
+      "boxShadow": 0
+    },
+    "app/components/logic/LogicFlowMap.tsx": {
+      "hex": 9,
+      "boxShadow": 0
+    },
+    "app/components/logic/LogicView.tsx": {
+      "hex": 1,
+      "boxShadow": 0
+    },
+    "app/components/logic/PathTester.tsx": {
+      "hex": 6,
+      "boxShadow": 0
+    },
+    "app/components/logic/ProductMappingTable.tsx": {
+      "hex": 7,
+      "boxShadow": 0
+    },
+    "app/components/onboarding/RecPageV2Panel.tsx": {
+      "hex": 1,
+      "boxShadow": 0
+    },
+    "app/components/onboarding/RecommendationStage.tsx": {
+      "hex": 1,
+      "boxShadow": 0
+    },
+    "app/components/onboarding/Step1Funnel.tsx": {
+      "hex": 7,
+      "boxShadow": 0
+    },
+    "app/components/qz.tsx": {
+      "hex": 3,
+      "boxShadow": 0
+    },
+    "app/components/studio/AiChatPanel.tsx": {
+      "hex": 1,
+      "boxShadow": 0
+    },
+    "app/components/studio/BrandIdentityPanel.tsx": {
+      "hex": 7,
+      "boxShadow": 0
+    },
+    "app/components/studio/BrandIdentityReview.tsx": {
+      "hex": 1,
+      "boxShadow": 0
+    },
+    "app/components/studio/BuilderDesignPanel.tsx": {
+      "hex": 2,
+      "boxShadow": 0
+    },
+    "app/components/studio/BuilderPageSettings.tsx": {
+      "hex": 8,
+      "boxShadow": 0
+    },
+    "app/components/studio/ClientOnly.tsx": {
+      "hex": 4,
+      "boxShadow": 0
+    },
+    "app/components/studio/ContextPanel.tsx": {
+      "hex": 20,
+      "boxShadow": 0
+    },
+    "app/components/studio/EmojiIconPicker.tsx": {
+      "hex": 5,
+      "boxShadow": 0
+    },
+    "app/components/studio/ExperiencePanel.tsx": {
+      "hex": 1,
+      "boxShadow": 0
+    },
+    "app/components/studio/FlowRail.tsx": {
+      "hex": 10,
+      "boxShadow": 0
+    },
+    "app/components/studio/ImagePicker.tsx": {
+      "hex": 7,
+      "boxShadow": 0
+    },
+    "app/components/studio/QuestionBankDrawer.tsx": {
+      "hex": 3,
+      "boxShadow": 1
+    },
+    "app/components/studio/ReviewEnrichPanel.tsx": {
+      "hex": 1,
+      "boxShadow": 0
+    },
+    "app/components/studio/StyleBar.tsx": {
+      "hex": 1,
+      "boxShadow": 0
+    },
+    "app/components/studio/TranslationsPanel.tsx": {
+      "hex": 1,
+      "boxShadow": 0
+    },
+    "app/components/studio/UnifiedWorkspace.tsx": {
+      "hex": 2,
+      "boxShadow": 0
+    },
+    "app/components/studio/VibeTemplateSelector.tsx": {
+      "hex": 7,
+      "boxShadow": 0
+    },
+    "app/components/studio/panels/ContentTab.tsx": {
+      "hex": 10,
+      "boxShadow": 0
+    },
+    "app/components/studio/panels/CssTab.tsx": {
+      "hex": 0,
+      "boxShadow": 1
+    },
+    "app/components/studio/panels/LayoutTab.tsx": {
+      "hex": 1,
+      "boxShadow": 0
+    },
+    "app/components/studio/panels/StyleTab.tsx": {
+      "hex": 2,
+      "boxShadow": 0
+    },
+    "app/components/studio/studioShared.tsx": {
+      "hex": 1,
+      "boxShadow": 0
+    },
+    "app/routes/app.design.tsx": {
+      "hex": 3,
+      "boxShadow": 1
+    },
+    "app/routes/app.onboarding.tsx": {
+      "hex": 1,
+      "boxShadow": 0
+    },
+    "app/routes/app.quizzes.$id.tsx": {
+      "hex": 26,
+      "boxShadow": 6
+    },
+    "app/routes/q.$id[.]launcher[.]js.tsx": {
+      "hex": 3,
+      "boxShadow": 3
+    },
+    "app/routes/q.$id_.compare.tsx": {
+      "hex": 6,
+      "boxShadow": 0
+    },
+    "app/routes/q.$id_.results.tsx": {
+      "hex": 13,
+      "boxShadow": 0
+    },
+    "app/routes/studio.$id_.analytics.tsx": {
+      "hex": 6,
+      "boxShadow": 0
+    },
+    "app/routes/studio.$id_.embed.tsx": {
+      "hex": 1,
+      "boxShadow": 0
+    },
+    "app/routes/studio._index.tsx": {
+      "hex": 1,
+      "boxShadow": 0
+    },
+    "app/routes/studio.new.tsx": {
+      "hex": 3,
+      "boxShadow": 0
+    },
+    "app/routes/studio.products.tsx": {
+      "hex": 2,
+      "boxShadow": 0
+    },
+    "app/routes/studio_.$id.tsx": {
+      "hex": 2,
+      "boxShadow": 0
+    },
+    "app/routes/studio_.login.tsx": {
+      "hex": 10,
+      "boxShadow": 0
+    },
+    "app/routes/studio_.verify.tsx": {
+      "hex": 7,
+      "boxShadow": 0
+    }
+  }
+}

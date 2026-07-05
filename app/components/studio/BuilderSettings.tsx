@@ -25,8 +25,8 @@ type TabKey =
   | "utm";
 
 const TABS: { key: TabKey; label: string; help?: string }[] = [
-  { key: "product_match", label: "Product Match", help: "How each answer maps to the products you recommend." },
-  { key: "jump_logic", label: "Jump Logic", help: "Branch the flow and route each answer to the right step." },
+  { key: "product_match", label: "Product match", help: "How each answer maps to the products you recommend." },
+  { key: "jump_logic", label: "Jump logic", help: "Branch the flow and route each answer to the right step." },
   { key: "translation", label: "Translation", help: "Serve the quiz in multiple languages." },
   { key: "score", label: "Score", help: "The experience type and how answers are scored." },
   { key: "currency", label: "Currency" },

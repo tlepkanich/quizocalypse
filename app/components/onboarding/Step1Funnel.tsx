@@ -958,7 +958,7 @@ type BucketCard = {
 const idOf = (type: BucketType, key: string) => `${type}:${key}`;
 
 const TAB_META: Array<{ type: BucketType; label: string }> = [
-  { type: "product", label: "Individual Products" },
+  { type: "product", label: "Individual products" },
   { type: "tag", label: "Tags" },
   { type: "collection", label: "Collections" },
 ];

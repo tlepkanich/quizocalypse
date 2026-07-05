@@ -567,7 +567,7 @@ export function QuestionContent({
           ) : null}
           {node.data.question_type === "rating" ? (
             <p className="qz-dim" style={{ fontSize: 11.5, margin: 0 }}>
-              Each rating point is an answer below — map it to a bucket in Routing → Mapping.
+              Each rating point is an answer below — map it to a recommendation in Routing → Mapping.
             </p>
           ) : null}
         </div>

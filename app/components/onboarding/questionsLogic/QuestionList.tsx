@@ -89,7 +89,7 @@ export function QuestionList({
                       title={
                         deciderMode
                           ? "A deciding answer doesn't point at a result yet"
-                          : "An answer has no bucket mapped"
+                          : "An answer has no recommendation mapped"
                       }
                       aria-label="Has an unmapped answer"
                     >

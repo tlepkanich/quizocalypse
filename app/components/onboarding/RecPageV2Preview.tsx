@@ -41,7 +41,7 @@ export function RecPageV2Preview({
   }, [doc.rec_page_settings, target, productIndex]);
 
   if (!target || !view) {
-    return <p className="qz-dim">No result targets yet — pick buckets in Step 1.</p>;
+    return <p className="qz-dim">No result targets yet — pick recommendations in Step 1.</p>;
   }
   const { config, shape, products } = view;
 
@@ -79,7 +79,7 @@ export function RecPageV2Preview({
     <div className="qz-rp2p" data-target-shape={shape}>
       <div className="qz-rp2p-frame-note">
         Previewing <strong>{target.name}</strong> ({shape === "product" ? "single product — hero only" : "collection/tag — hero + grid"}).
-        Draft order comes from your bucket; publishing bakes your real Shopify collection order.
+        Draft order comes from your recommendation; publishing bakes your real Shopify collection order.
         {doc.rec_page_settings?.overrides?.[target.id]
           ? " This result has its own overrides — global edits may not show here."
           : ""}

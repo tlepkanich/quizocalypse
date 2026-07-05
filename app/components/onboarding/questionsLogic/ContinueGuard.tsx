@@ -53,11 +53,11 @@ export function ContinueGuard({
         className="qz-ql-guard"
         role="alertdialog"
         aria-modal="true"
-        aria-label={title ?? "Some buckets have no mapped answers"}
+        aria-label={title ?? "Some recommendations have no mapped answers"}
         onMouseDown={(e) => e.stopPropagation()}
       >
         <div className="qz-ql-guard-title">
-          {title ?? `${n} ${n === 1 ? "bucket has" : "buckets have"} no mapped answers`}
+          {title ?? `${n} ${n === 1 ? "recommendation has" : "recommendations have"} no mapped answers`}
         </div>
         {bucketNames.length > 0 ? (
           <ul className="qz-ql-guard-list">

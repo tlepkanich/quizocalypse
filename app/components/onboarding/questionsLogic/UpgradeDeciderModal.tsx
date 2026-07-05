@@ -76,12 +76,12 @@ export default function UpgradeDeciderModal({
           <>
             <p className="qz-dim" style={{ margin: 0, fontSize: 13.5 }}>
               One question decides the result — each of its answers points at one of your
-              buckets, and advanced rules can override it. Here&rsquo;s what changes:
+              recommendations, and advanced rules can override it. Here&rsquo;s what changes:
             </p>
             <ul className="qz-upg-list">
               <li>
                 <strong>&ldquo;{proposal.decidingQuestionText}&rdquo;</strong> becomes the
-                deciding question, with each answer pre-mapped to a bucket. Your other
+                deciding question, with each answer pre-mapped to a recommendation. Your other
                 questions stay as qualifiers.
               </li>
               {mergedPages.length > 0 ? (
@@ -89,12 +89,12 @@ export default function UpgradeDeciderModal({
                   Your result pages merge into one —{" "}
                   {mergedPages.map((n) => `“${n}”`).join(", ")} fold into{" "}
                   <strong>&ldquo;{keptPage}&rdquo;</strong>; custom page headlines carry
-                  over as per-bucket overrides.
+                  over as per-recommendation overrides.
                 </li>
               ) : (
                 <li>
                   <strong>&ldquo;{keptPage}&rdquo;</strong> stays as your single results
-                  page, configurable per bucket.
+                  page, configurable per recommendation.
                 </li>
               )}
               <li>
@@ -137,10 +137,10 @@ export default function UpgradeDeciderModal({
         ) : (
           <>
             <p className="qz-dim" style={{ margin: 0, fontSize: 13.5 }}>
-              This quiz&rsquo;s answers don&rsquo;t map cleanly enough onto your buckets to
-              auto-convert — it needs at least two buckets, a reachable results page, and a
+              This quiz&rsquo;s answers don&rsquo;t map cleanly enough onto your recommendations to
+              auto-convert — it needs at least two recommendations, a reachable results page, and a
               single-answer question (asked of everyone) whose answers point at two or more
-              different buckets. Adjust the quiz or its buckets and try again.
+              different recommendations. Adjust the quiz or its recommendations and try again.
             </p>
             <div className="qz-row" style={{ gap: 10, justifyContent: "flex-end" }}>
               <button type="button" className="qz-btn qz-btn-ghost" ref={cancelRef} onClick={onClose}>

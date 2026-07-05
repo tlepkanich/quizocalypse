@@ -284,7 +284,7 @@ export function RulesTab({
                   >
                     {categories.some((c) => c.id === rule.target_id) ? null : (
                       <option value="" disabled>
-                        (deleted bucket — pick again)
+                        (deleted recommendation — pick again)
                       </option>
                     )}
                     {categories.map((c) => (

@@ -82,7 +82,7 @@ export function OutcomeCoverage({
             tier === "orphan"
               ? `${c.name}: no answers map here yet`
               : tier === "weak"
-                ? `${c.name}: only ${count} answer${count === 1 ? "" : "s"} mapped — fewer than half the top bucket`
+                ? `${c.name}: only ${count} answer${count === 1 ? "" : "s"} mapped — fewer than half the top recommendation`
                 : `${c.name}: ${count} answer${count === 1 ? "" : "s"} mapped`;
           return (
             <span

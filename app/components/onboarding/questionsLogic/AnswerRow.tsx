@@ -121,7 +121,7 @@ export function AnswerRow({
           disabled={weighted}
           title={
             weighted
-              ? "Weighted scoring is active — switch to Direct mapping in the top bar to edit buckets here"
+              ? "Weighted scoring is active — switch to Direct mapping in the top bar to edit recommendations here"
               : undefined
           }
           onChange={(e) =>
@@ -132,9 +132,9 @@ export function AnswerRow({
               ? { color: color.solid, background: color.bg, borderColor: color.mid }
               : undefined
           }
-          aria-label={`Maps ${answer.text || "answer"} to bucket`}
+          aria-label={`Maps ${answer.text || "answer"} to recommendation`}
         >
-          <option value="">— Map to bucket</option>
+          <option value="">— Map to recommendation</option>
           {categories.map((c) => (
             <option key={c.id} value={c.id}>
               {c.name}

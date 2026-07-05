@@ -92,7 +92,7 @@ export function RecommendationStage({
           </div>
           <h2 style={{ margin: 0, fontSize: 20 }}>Tune your recommendations</h2>
           <p className="qz-dim" style={{ margin: "4px 0 0", fontSize: 13 }}>
-            For each bucket, set how results show — sections, sort, sub-filters, “why we recommend”
+            For each recommendation, set how results show — sections, sort, sub-filters, “why we recommend”
             copy, discount, and out-of-stock behaviour. The live preview on the right updates as you
             edit. Collapse the settings to see the full page.
           </p>
@@ -151,7 +151,7 @@ export function RecommendationStage({
       ) : resultNodes.length === 0 ? (
         <QzCard style={{ padding: 16 }}>
           <p className="qz-dim" style={{ margin: 0 }}>
-            No recommendations yet — add product buckets first.
+            No recommendations yet — pick your recommendations in Step 1 first.
           </p>
         </QzCard>
       ) : (
@@ -160,7 +160,7 @@ export function RecommendationStage({
             <div
               className="qz-row qz-gap-4"
               role="group"
-              aria-label="Pick a bucket"
+              aria-label="Pick a recommendation"
               style={{ flexWrap: "wrap", marginBottom: 12 }}
             >
               {resultNodes.map((node) => (

@@ -41,6 +41,8 @@ jobs:
         run: npm run build
       - name: Lint
         run: npm run lint
+      - name: Design tokens (DS-5 ratchet)
+        run: node scripts/check-tokens.mjs
 
   # Until FLY_API_TOKEN is added (Settings → Secrets → Actions), `deploy` is
   # SKIPPED rather than failing red. `secrets` can't be read in a job `if:`, so
