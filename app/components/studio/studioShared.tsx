@@ -36,6 +36,65 @@ export const PLACEMENTS: Array<{ value: Placement; label: string; hint: string }
   { value: "product_widget", label: "Product page widget", hint: "add the App Block to your product template as a compact launcher." },
 ];
 
+// ── BLD-2 — inline canvas text editing (the DOM half) ────────────────────────
+// Turns an already-rendered canvas element contenteditable in place: focus +
+// select-all, Enter/blur commits the trimmed text, Escape cancels. Purely
+// imperative on the LIVE DOM node — React never renders contenteditable, so
+// the shopper runtime is untouched; on cancel the original text is restored
+// so React's vdom stays truthful, and on commit the host writes the same text
+// through the normal doc-commit seam (undo + autosave included).
+export function startInlineTextEdit(
+  el: HTMLElement,
+  onCommit: (text: string) => void,
+): void {
+  if (el.isContentEditable) return; // already editing
+  const prevText = el.textContent ?? "";
+  el.contentEditable = "plaintext-only";
+  // Safari < 17 doesn't know plaintext-only; plain true is fine for our
+  // single-field commits (we read textContent, so pasted markup flattens).
+  if (el.contentEditable !== "plaintext-only") el.contentEditable = "true";
+  el.classList.add("qz-inline-editing");
+  el.focus();
+  const range = document.createRange();
+  range.selectNodeContents(el);
+  const sel = window.getSelection();
+  sel?.removeAllRanges();
+  sel?.addRange(range);
+
+  let done = false;
+  const finish = (commit: boolean) => {
+    if (done) return;
+    done = true;
+    el.removeEventListener("blur", onBlur);
+    el.removeEventListener("keydown", onKey);
+    el.removeAttribute("contenteditable");
+    el.classList.remove("qz-inline-editing");
+    const text = (el.textContent ?? "").trim();
+    if (!commit || !text || text === prevText.trim()) {
+      el.textContent = prevText;
+      return;
+    }
+    onCommit(text);
+  };
+  const onBlur = () => finish(true);
+  const onKey = (e: KeyboardEvent) => {
+    // Keep the workspace's global shortcuts (Esc clears selection, Delete
+    // arms a step delete) out of the edit session.
+    e.stopPropagation();
+    if (e.key === "Enter") {
+      e.preventDefault();
+      finish(true);
+      el.blur();
+    } else if (e.key === "Escape") {
+      e.preventDefault();
+      finish(false);
+      el.blur();
+    }
+  };
+  el.addEventListener("blur", onBlur);
+  el.addEventListener("keydown", onKey);
+}
+
 export function EditableTitle({ name, onRename }: { name: string; onRename: (name: string) => void }) {
   const [editing, setEditing] = useState(false);
   const [value, setValue] = useState(name);

@@ -1146,6 +1146,16 @@ body[data-qz] ::selection { background: var(--qz-ink); color: var(--qz-cream); }
 }
 .qz-railmenu-item:hover { background: var(--qz-cream-2); }
 .qz-railmenu-item.is-crit { color: var(--qz-crit); }
+
+/* BLD-2 — an inline-editing canvas element (contenteditable session). The
+   solid accent ring replaces the runtime's .qz-insp-sel outline while typing. */
+.qz-builder-canvas .qz-inline-editing {
+  outline: 2px solid var(--qz-accent);
+  outline-offset: 3px;
+  border-radius: 4px;
+  cursor: text;
+  white-space: pre-wrap;
+}
 .qz-builder-rail-item {
   appearance: none; border: none; background: none; cursor: pointer; font: inherit;
   display: flex; flex-direction: column; align-items: center; gap: 5px;

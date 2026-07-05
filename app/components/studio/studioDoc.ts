@@ -123,6 +123,59 @@ export function insertModule(
   return { doc: next, newNodeId };
 }
 
+// ── BLD-2 — inline canvas text editing ───────────────────────────────────────
+// The inspect system tags every editable element with a typed InspectTarget;
+// double-clicking the SELECTED element turns it contenteditable (builder-side
+// DOM only — zero runtime changes) and the committed text lands here. Only
+// parts whose DISPLAYED text is exactly the stored field are editable inline:
+// answers render `${icon} ${text}` composites, message_text resolves merge
+// tags, education cards are multi-field — those keep panel-only editing.
+export const INLINE_EDITABLE_PARTS: ReadonlySet<string> = new Set([
+  "headline",
+  "subtext",
+  "cta",
+  "question_text",
+  "end_headline",
+  "end_subtext",
+  "email_headline",
+  "email_subtext",
+  "result_headline",
+  "result_subtext",
+  "pc_headline",
+  "pc_subtext",
+  "askai_persona",
+]);
+
+// InspectPart → the node-data field the runtime renders for it (verified
+// against each QuizRuntime call site).
+const INSPECT_TEXT_FIELD: Record<string, string> = {
+  headline: "headline",
+  end_headline: "headline",
+  email_headline: "headline",
+  result_headline: "headline",
+  pc_headline: "headline",
+  subtext: "subtext",
+  end_subtext: "subtext",
+  email_subtext: "subtext",
+  result_subtext: "subtext",
+  pc_subtext: "subtext",
+  cta: "button_label",
+  question_text: "text",
+  askai_persona: "persona_name",
+};
+
+/** Write inline-edited text back to the field the canvas rendered it from.
+ *  Unknown/excluded parts return the doc unchanged (defensive no-op). */
+export function applyInspectText(
+  doc: QuizDoc,
+  target: { nodeId: string; part: string },
+  text: string,
+): QuizDoc {
+  const field = INSPECT_TEXT_FIELD[target.part];
+  if (!field) return doc;
+  return updateNodeData(doc, target.nodeId, { [field]: text });
+}
+
 // Shallow-merge a patch into a node's data (immutable).
 export function updateNodeData(
   doc: QuizDoc,

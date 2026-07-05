@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useFetcher, useSearchParams } from "@remix-run/react";
 import { TitleBar } from "@shopify/app-bridge-react";
 import { QzPage, QzPageHeader, QzButton, QzBanner } from "../qz";
@@ -20,7 +20,8 @@ import { ContextPanel } from "./ContextPanel";
 import type { RegenApi } from "./panels/ContentTab";
 import { AiChatPanel } from "./AiChatPanel";
 import { ReviewEnrichPanel } from "./ReviewEnrichPanel";
-import { EditableTitle, PLACEMENTS, type StudioBuilderData } from "./studioShared";
+import { EditableTitle, PLACEMENTS, startInlineTextEdit, type StudioBuilderData } from "./studioShared";
+import { applyInspectText, INLINE_EDITABLE_PARTS } from "./studioDoc";
 import { BuilderNavRail, BuilderTopBar, type BuilderNavKey } from "./BuilderChrome";
 import { HealthPill } from "../onboarding/questionsLogicV3/HealthPill";
 import { HealthPopover } from "../onboarding/questionsLogicV3/HealthPopover";
@@ -325,6 +326,27 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
   );
   const [healthOpen, setHealthOpen] = useState(false);
   const isDecider = doc.logic_model === "decider";
+  // BLD-2 — inline canvas editing commits on BLUR, which can land after other
+  // commits; read the live doc through a ref so a stale closure can't clobber
+  // edits made while the contenteditable session was open.
+  const docRef = useRef(doc);
+  docRef.current = doc;
+  // Double-click the SELECTED (.qz-insp-sel) canvas element to edit its text
+  // in place — builder-side DOM only, the runtime just re-renders the commit.
+  const onCanvasDoubleClick = useCallback(
+    (e: React.MouseEvent) => {
+      if (!editMode || !inspectTarget) return;
+      if (!INLINE_EDITABLE_PARTS.has(inspectTarget.part)) return;
+      const el = (e.target as HTMLElement).closest?.(".qz-insp-sel");
+      if (!(el instanceof HTMLElement)) return;
+      e.preventDefault();
+      const target = inspectTarget;
+      startInlineTextEdit(el, (text) => {
+        commit(applyInspectText(docRef.current, target, text));
+      });
+    },
+    [editMode, inspectTarget, commit],
+  );
   // Health popover jump-links: a question/node finding focuses that node in
   // the Build view's editor; a rule finding lives in the Logic view (BLD-4
   // will deep-scroll it — landing the view is the useful move today).
@@ -1043,7 +1065,7 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
                 {/* QB-8 — slim notices strip (transient publish/reconcile results
                     only); empty = 0 height, so the canvas is just the live quiz. */}
                 <div className="qz-builder-notices">{standaloneNotices}</div>
-                <div className="qz-builder-canvas">
+                <div className="qz-builder-canvas" onDoubleClick={onCanvasDoubleClick}>
                   <div
                     style={{
                       width: "100%",
