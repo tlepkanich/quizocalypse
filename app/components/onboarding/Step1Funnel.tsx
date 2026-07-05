@@ -16,6 +16,7 @@ import {
   QzExpandCard,
   StagedProgress,
 } from "../qz";
+import { QzModal, QzDrawer } from "../qz-overlays";
 import type {
   Quiz,
   TemplateOption,
@@ -1579,77 +1580,71 @@ function StartInterceptModal({
   onManual: () => void;
   onClose: () => void;
 }) {
-  useEscClose(onClose);
   const [screen, setScreen] = useState<"choose" | "goal">("choose");
   return (
-    <div className="qz-rb-scrim" onClick={onClose}>
-      <div
-        className="qz-rb-modal qz-start-modal"
-        role="dialog"
-        aria-modal="true"
-        aria-label="How do you want to start?"
-        onClick={(e) => e.stopPropagation()}
-      >
-        {screen === "choose" ? (
-          <>
-            <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-              <strong style={{ fontSize: 17 }}>How do you want to start?</strong>
-              <span className="qz-dim" style={{ fontSize: 13 }}>
-                Your recommendations are set — pick how to build the quiz itself.
-              </span>
-            </div>
-            <div className="qz-start-choices">
-              <button type="button" className="qz-start-choice is-ai" onClick={onAiTemplates}>
-                <span className="qz-row qz-row-between" style={{ gap: 8 }}>
-                  <span style={{ fontSize: 20 }} aria-hidden>
-                    ✨
-                  </span>
-                  <QzBadge tone="ok">Fastest</QzBadge>
-                </span>
-                <strong>Generate AI templates</strong>
-                <span className="qz-dim" style={{ fontSize: 12.5 }}>
-                  We read your catalog and draft two quiz directions — preview them live and
-                  pick one.
-                </span>
-              </button>
-              <button
-                type="button"
-                className="qz-start-choice"
-                onClick={() => setScreen("goal")}
-              >
+    <QzModal
+      open
+      onClose={onClose}
+      size="md"
+      title={
+        screen === "choose"
+          ? "How do you want to start?"
+          : "Describe what you want your quiz to do"
+      }
+    >
+      {screen === "choose" ? (
+        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+          <span className="qz-dim" style={{ fontSize: 13 }}>
+            Your recommendations are set — pick how to build the quiz itself.
+          </span>
+          <div className="qz-start-choices">
+            <button type="button" className="qz-start-choice is-ai" onClick={onAiTemplates}>
+              <span className="qz-row qz-row-between" style={{ gap: 8 }}>
                 <span style={{ fontSize: 20 }} aria-hidden>
-                  ✏
+                  ✨
                 </span>
-                <strong>Write your goal</strong>
-                <span className="qz-dim" style={{ fontSize: 12.5 }}>
-                  Describe what the quiz should do — we&rsquo;ll generate the questions from
-                  it and take you straight to editing.
-                </span>
-              </button>
-            </div>
-            <button type="button" className="qz-link-quiet" onClick={onManual}>
-              Build from a blank quiz instead →
-            </button>
-          </>
-        ) : (
-          <>
-            <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-              <strong style={{ fontSize: 17 }}>Describe what you want your quiz to do</strong>
-              <span className="qz-dim" style={{ fontSize: 13 }}>
-                Your own words work best — we&rsquo;ll draft the questions from this.
+                <QzBadge tone="ok">Fastest</QzBadge>
               </span>
-            </div>
-            <GoalPromptBody
-              suggestedGoal={suggestedGoal}
-              minGoalChars={minGoalChars}
-              submitLabel="Generate from my goal →"
-              onSubmit={onGoalBuild}
-              onCancel={() => setScreen("choose")}
-            />
-          </>
-        )}
-      </div>
-    </div>
+              <strong>Generate AI templates</strong>
+              <span className="qz-dim" style={{ fontSize: 12.5 }}>
+                We read your catalog and draft two quiz directions — preview them live and
+                pick one.
+              </span>
+            </button>
+            <button
+              type="button"
+              className="qz-start-choice"
+              onClick={() => setScreen("goal")}
+            >
+              <span style={{ fontSize: 20 }} aria-hidden>
+                ✏
+              </span>
+              <strong>Write your goal</strong>
+              <span className="qz-dim" style={{ fontSize: 12.5 }}>
+                Describe what the quiz should do — we&rsquo;ll generate the questions from
+                it and take you straight to editing.
+              </span>
+            </button>
+          </div>
+          <button type="button" className="qz-link-quiet" onClick={onManual}>
+            Build from a blank quiz instead →
+          </button>
+        </div>
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+          <span className="qz-dim" style={{ fontSize: 13 }}>
+            Your own words work best — we&rsquo;ll draft the questions from this.
+          </span>
+          <GoalPromptBody
+            suggestedGoal={suggestedGoal}
+            minGoalChars={minGoalChars}
+            submitLabel="Generate from my goal →"
+            onSubmit={onGoalBuild}
+            onCancel={() => setScreen("choose")}
+          />
+        </div>
+      )}
+    </QzModal>
   );
 }
 
@@ -1704,56 +1699,31 @@ function GoalPromptBody({
   );
 }
 
-// Close an overlay on Escape (the QzTooltip pattern, listener-scoped to mount).
-function useEscClose(onClose: () => void) {
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
-    };
-    document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
-  }, [onClose]);
-}
-
 // Confirm switching the bucket source when buckets already exist (they're tied to
 // the current source, so switching clears them).
 // The brand identity summary, opened on demand from the funnel header so the page
 // leads with the task instead of a paragraph of summary. Read-only here — the full
 // view/edit lives on the Brand Identity tab.
 function BrandIdentityModal({ summary, onClose }: { summary: string; onClose: () => void }) {
-  useEscClose(onClose);
   return (
-    <div className="qz-rb-scrim" onClick={onClose}>
-      <div
-        className="qz-rb-modal"
-        role="dialog"
-        aria-modal="true"
-        aria-label="Current brand identity"
-        style={{ width: "min(540px, 92vw)" }}
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="qz-row qz-row-between" style={{ alignItems: "flex-start", gap: 10 }}>
-          <strong style={{ fontSize: 16 }}>Current brand identity</strong>
-          <button
-            type="button"
-            className="qz-btn qz-btn-ghost qz-btn-sm"
-            onClick={onClose}
-            aria-label="Close"
-          >
-            ✕
-          </button>
-        </div>
+    <QzModal
+      open
+      onClose={onClose}
+      size="md"
+      title="Current brand identity"
+      footer={
+        <Link to="/studio/brand" className="qz-btn qz-btn-ghost qz-btn-sm">
+          View &amp; edit full identity →
+        </Link>
+      }
+    >
+      <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
         <p style={{ margin: 0, fontSize: 13.5, lineHeight: 1.6 }}>{summary}</p>
         <p className="qz-dim" style={{ margin: 0, fontSize: 12 }}>
           The AI uses this to tailor every quiz it builds.
         </p>
-        <div className="qz-row" style={{ justifyContent: "flex-end" }}>
-          <Link to="/studio/brand" className="qz-btn qz-btn-ghost qz-btn-sm">
-            View &amp; edit full identity →
-          </Link>
-        </div>
       </div>
-    </div>
+    </QzModal>
   );
 }
 
@@ -1770,33 +1740,30 @@ function TabLockModal({
   onConfirm: () => void;
   onCancel: () => void;
 }) {
-  useEscClose(onCancel);
   // §3 — a modal, not a toast: it names the cost (your selections are removed)
   // and offers the path to yes in one gesture. Destructive-and-final → modal.
   return (
-    <div className="qz-rb-scrim" onClick={onCancel}>
-      <div
-        className="qz-rb-modal"
-        role="dialog"
-        aria-modal="true"
-        aria-label="Switch recommendation type"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <strong style={{ fontSize: 16 }}>Switch to {targetLabel}?</strong>
-        <p className="qz-dim" style={{ margin: 0, fontSize: 13.5 }}>
-          You have {count} {currentNoun} selected. Switching will remove{" "}
-          {count === 1 ? "it" : "them all"} and let you pick {targetLabel.toLowerCase()} instead.
-        </p>
-        <div className="qz-row" style={{ gap: 10, justifyContent: "flex-end" }}>
+    <QzModal
+      open
+      onClose={onCancel}
+      size="sm"
+      title={<>Switch to {targetLabel}?</>}
+      footer={
+        <>
           <button type="button" className="qz-btn qz-btn-ghost" onClick={onCancel}>
             Cancel
           </button>
           <button type="button" className="qz-btn qz-btn-accent" onClick={onConfirm}>
             Switch types
           </button>
-        </div>
-      </div>
-    </div>
+        </>
+      }
+    >
+      <p className="qz-dim" style={{ margin: 0, fontSize: 13.5 }}>
+        You have {count} {currentNoun} selected. Switching will remove{" "}
+        {count === 1 ? "it" : "them all"} and let you pick {targetLabel.toLowerCase()} instead.
+      </p>
+    </QzModal>
   );
 }
 
@@ -1811,34 +1778,29 @@ function BulkWarnModal({
   onConfirm: () => void;
   onCancel: () => void;
 }) {
-  useEscClose(onCancel);
   return (
-    <div className="qz-rb-scrim" onClick={onCancel}>
-      <div
-        className="qz-rb-modal"
-        role="dialog"
-        aria-modal="true"
-        aria-label="Remove referenced recommendations"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <strong style={{ fontSize: 16 }}>
-          Remove {count} referenced recommendation{count === 1 ? "" : "s"}?
-        </strong>
-        <p className="qz-dim" style={{ margin: 0, fontSize: 13.5 }}>
-          Your questions already point at {count === 1 ? "one of these" : "some of these"}{" "}
-          recommendations. Continuing can leave broken mappings — the Questions step will flag
-          anything that breaks so you can fix it there.
-        </p>
-        <div className="qz-row" style={{ gap: 10, justifyContent: "flex-end" }}>
+    <QzModal
+      open
+      onClose={onCancel}
+      size="sm"
+      title={<>Remove {count} referenced recommendation{count === 1 ? "" : "s"}?</>}
+      footer={
+        <>
           <button type="button" className="qz-btn qz-btn-ghost" onClick={onCancel}>
             Cancel
           </button>
           <button type="button" className="qz-btn qz-btn-accent" onClick={onConfirm}>
             Continue
           </button>
-        </div>
-      </div>
-    </div>
+        </>
+      }
+    >
+      <p className="qz-dim" style={{ margin: 0, fontSize: 13.5 }}>
+        Your questions already point at {count === 1 ? "one of these" : "some of these"}{" "}
+        recommendations. Continuing can leave broken mappings — the Questions step will flag
+        anything that breaks so you can fix it there.
+      </p>
+    </QzModal>
   );
 }
 
@@ -1854,31 +1816,28 @@ function RemoveWarnModal({
   onConfirm: () => void;
   onCancel: () => void;
 }) {
-  useEscClose(onCancel);
   return (
-    <div className="qz-rb-scrim" onClick={onCancel}>
-      <div
-        className="qz-rb-modal"
-        role="dialog"
-        aria-modal="true"
-        aria-label="Remove a referenced recommendation"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <strong style={{ fontSize: 16 }}>Remove &ldquo;{name}&rdquo;?</strong>
-        <p className="qz-dim" style={{ margin: 0, fontSize: 13.5 }}>
-          Your questions already point at this recommendation. Removing it can leave broken
-          mappings — the Questions step will flag anything that breaks so you can fix it there.
-        </p>
-        <div className="qz-row" style={{ gap: 10, justifyContent: "flex-end" }}>
+    <QzModal
+      open
+      onClose={onCancel}
+      size="sm"
+      title={<>Remove &ldquo;{name}&rdquo;?</>}
+      footer={
+        <>
           <button type="button" className="qz-btn qz-btn-ghost" onClick={onCancel}>
             Cancel
           </button>
           <button type="button" className="qz-btn qz-btn-accent" onClick={onConfirm}>
             Remove
           </button>
-        </div>
-      </div>
-    </div>
+        </>
+      }
+    >
+      <p className="qz-dim" style={{ margin: 0, fontSize: 13.5 }}>
+        Your questions already point at this recommendation. Removing it can leave broken
+        mappings — the Questions step will flag anything that breaks so you can fix it there.
+      </p>
+    </QzModal>
   );
 }
 
@@ -1901,7 +1860,6 @@ function ResultsPreviewDrawer({
   designTokens: DesignTokens | null;
   onClose: () => void;
 }) {
-  useEscClose(onClose);
   const [tabIdx, setTabIdx] = useState(0);
   const sel = selections[Math.min(tabIdx, selections.length - 1)];
 
@@ -1936,21 +1894,17 @@ function ResultsPreviewDrawer({
   const ctaText = suggestContrastText(resolved.colors?.primary ?? "#5563DE");
 
   return (
-    <div className="qz-rb-scrim" onClick={onClose}>
-      <aside
-        className="qz-rb-pvdrawer"
-        role="dialog"
-        aria-modal="true"
-        aria-label="Results page preview"
-        onClick={(e) => e.stopPropagation()}
+    <QzDrawer open onClose={onClose} title="Results page preview" width="min(496px, 94vw)">
+      <div
+        style={{
+          display: "flex",
+          flexDirection: "column",
+          gap: 10,
+          height: "100%",
+          overflow: "hidden",
+        }}
       >
         {fontUrl ? <link rel="stylesheet" href={fontUrl} /> : null}
-        <div className="qz-rb-drawer-head">
-          <strong style={{ fontSize: 15 }}>Results page preview</strong>
-          <button type="button" className="qz-rb-banner-x" aria-label="Close" onClick={onClose}>
-            ✕
-          </button>
-        </div>
         {selections.length > 1 ? (
           <div className="qz-rb-pvtabs" role="tablist" aria-label="Previewed recommendation">
             {selections.map((s, i) => (
@@ -2044,8 +1998,8 @@ function ResultsPreviewDrawer({
             Looks good
           </button>
         </div>
-      </aside>
-    </div>
+      </div>
+    </QzDrawer>
   );
 }
 
@@ -2685,7 +2639,7 @@ function DeciderShapeStage({
       </div>
 
       <div className="qz-type-grid">
-        {aiTypes.map((t) => (
+        {aiTypes.map((t, i) => (
           <button
             key={t.id}
             type="button"
@@ -2693,6 +2647,13 @@ function DeciderShapeStage({
             disabled={busy}
             onClick={() => setPreviewTypeId(t.id)}
           >
+            {/* Gold moment #2 — the AI's top pick carries the ◆ Recommended ribbon. */}
+            {i === 0 ? (
+              <span className="qz-ribbon-recommended">
+                <span className="qz-mark qz-mark--sm" aria-hidden />
+                Recommended
+              </span>
+            ) : null}
             <TypeMiniThumb type={t} cssVars={cssVars} buckets={data.buckets} />
             <span className="qz-row qz-row-between" style={{ gap: 8, alignItems: "flex-start" }}>
               <span style={{ fontFamily: "var(--qz-font-display)", fontSize: 17, lineHeight: 1.2, textAlign: "left" }}>
@@ -2846,7 +2807,6 @@ function TemplatePreviewDrawer({
   onUse: () => void;
   onClose: () => void;
 }) {
-  useEscClose(onClose);
   const [screen, setScreen] = useState(0);
   const [pick1, setPick1] = useState<number | null>(null);
   const [pick2, setPick2] = useState<number | null>(null);
@@ -2884,27 +2844,23 @@ function TemplatePreviewDrawer({
   );
 
   return (
-    <div className="qz-rb-scrim" onClick={onClose}>
-      <aside
-        className="qz-rb-pvdrawer"
-        role="dialog"
-        aria-modal="true"
-        aria-label={`Preview: ${type.name}`}
-        onClick={(e) => e.stopPropagation()}
+    <QzDrawer
+      open
+      onClose={onClose}
+      title={type.name}
+      subtitle={`${XTYPE_LABEL[type.experience_type] ?? type.experience_type} · tap through the preview`}
+      width="min(496px, 94vw)"
+    >
+      <div
+        style={{
+          display: "flex",
+          flexDirection: "column",
+          gap: 10,
+          height: "100%",
+          overflow: "hidden",
+        }}
       >
         {fontUrl ? <link rel="stylesheet" href={fontUrl} /> : null}
-        <div className="qz-rb-drawer-head">
-          <div style={{ minWidth: 0 }}>
-            <strong style={{ fontSize: 15 }}>{type.name}</strong>
-            <span className="qz-dim" style={{ display: "block", fontSize: 12 }}>
-              {XTYPE_LABEL[type.experience_type] ?? type.experience_type} · tap through the
-              preview
-            </span>
-          </div>
-          <button type="button" className="qz-rb-banner-x" aria-label="Close" onClick={onClose}>
-            ✕
-          </button>
-        </div>
         <p className="qz-dim" style={{ margin: 0, fontSize: 12 }}>
           Themed with your brand identity · your real products.
         </p>
@@ -2983,8 +2939,8 @@ function TemplatePreviewDrawer({
             {building ? "Building…" : "Use this template →"}
           </button>
         </div>
-      </aside>
-    </div>
+      </div>
+    </QzDrawer>
   );
 }
 
