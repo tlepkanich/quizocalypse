@@ -3290,3 +3290,249 @@ body[data-qz] ::selection { background: var(--qz-ink); color: var(--qz-cream); }
   pointer-events: none;
   animation: qz-toast-in var(--qz-dur) var(--qz-ease);
 }
+
+/* ════════════════════════════════════════════════════════════════════════════
+   QL3-P1 — Step-3 two-view shell (.qz-s3-*), decider docs behind ?step3=v3.
+   Floating TopBar3 (the shared .qz-topbar--floating) + flow rail + the
+   brand-themed phone canvas. Inside .qz-s3-phone-screen the merchant brand
+   vars (--qz-color-* / --qz-font-* / --qz-radius, inlined by PhoneCanvas via
+   tokensToCssVars) win; everything outside the bezel is admin tokens only.
+   ════════════════════════════════════════════════════════════════════════════ */
+.qz-s3 { display: flex; flex-direction: column; gap: var(--qz-space-4); }
+.qz-s3-body {
+  display: grid;
+  grid-template-columns: 268px minmax(0, 1fr);
+  gap: var(--qz-space-5);
+  align-items: start;
+}
+
+/* — top-bar right-zone bits — */
+.qz-s3-healthpill {
+  display: inline-flex; align-items: center; gap: 7px;
+  padding: 5px 12px; border-radius: var(--qz-radius-pill);
+  font-size: 12.5px; font-weight: 600; white-space: nowrap;
+}
+.qz-s3-healthpill.is-ok { background: var(--qz-ok-tint); color: var(--qz-ok); }
+.qz-s3-healthpill.is-bad { background: var(--qz-crit-tint); color: var(--qz-crit); }
+.qz-s3-healthdot { width: 7px; height: 7px; border-radius: var(--qz-radius-pill); background: currentColor; }
+
+/* — left rail (§3): view toggle · flow rows · termini · footer — */
+.qz-s3-rail {
+  display: flex; flex-direction: column; gap: 12px;
+  padding: 14px;
+  background: var(--qz-paper);
+  border-radius: var(--qz-radius);
+  box-shadow: var(--qz-lift-1);
+  position: sticky; top: 92px;
+  max-height: calc(100vh - 130px);
+}
+.qz-s3-viewtoggle {
+  display: flex; gap: 4px; padding: 4px;
+  border-radius: var(--qz-radius-pill);
+  background: var(--qz-cream-2);
+}
+.qz-s3-viewtoggle button {
+  flex: 1; padding: 7px 10px;
+  border: none; border-radius: var(--qz-radius-pill);
+  background: transparent; cursor: pointer;
+  font: inherit; font-size: 12.5px; font-weight: 600; color: var(--qz-ink-3);
+  transition: background var(--qz-dur-fast) var(--qz-ease), color var(--qz-dur-fast) var(--qz-ease);
+}
+.qz-s3-viewtoggle button[aria-pressed="true"] {
+  background: var(--qz-gold-wash);
+  color: var(--qz-gold);
+  box-shadow: inset 0 0 0 1px var(--qz-gold-line);
+}
+
+.qz-s3-flow {
+  position: relative;
+  display: flex; flex-direction: column; gap: 6px;
+  flex: 1 1 auto; min-height: 0; overflow-y: auto;
+  padding: 2px;
+}
+/* the 1.5px vertical connector, behind the number chips */
+.qz-s3-flow::before {
+  content: ""; position: absolute;
+  left: 22px; top: 18px; bottom: 18px; width: 1.5px;
+  background: var(--qz-rule);
+}
+.qz-s3-row {
+  position: relative;
+  display: flex; align-items: flex-start; gap: 10px;
+  padding: 7px 8px;
+  border: none; border-radius: 10px; background: transparent;
+  text-align: left; cursor: pointer; font: inherit; color: var(--qz-ink);
+}
+.qz-s3-row:hover { background: var(--qz-cream-2); }
+.qz-s3-row.is-active { background: var(--qz-accent-wash); }
+.qz-s3-row.is-terminus { cursor: default; color: var(--qz-ink-3); }
+.qz-s3-row.is-terminus:hover { background: transparent; }
+.qz-s3-row.is-terminus.is-active { background: var(--qz-accent-wash); }
+.qz-s3-numchip {
+  position: relative; z-index: 1; flex: none;
+  width: 26px; height: 26px;
+  display: grid; place-items: center;
+  border-radius: 8px;
+  font-family: var(--qz-font-mono); font-size: 11.5px; font-weight: 600;
+  background: var(--qz-paper); color: var(--qz-ink-3);
+  box-shadow: inset 0 0 0 1px var(--qz-rule);
+}
+.qz-s3-numchip.is-decider { background: var(--qz-gold); color: var(--qz-cream); box-shadow: none; }
+.qz-s3-numchip.is-capture { background: var(--qz-accent-wash); color: var(--qz-accent); box-shadow: none; }
+.qz-s3-numchip.is-reveal { background: var(--qz-gold-wash); color: var(--qz-gold); box-shadow: inset 0 0 0 1px var(--qz-gold-line); }
+.qz-s3-rowtitle {
+  padding-top: 4px;
+  font-size: 13px; line-height: 1.35; min-width: 0;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+}
+.qz-s3-railfoot {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 2px;
+  padding-top: 10px; border-top: 1px solid var(--qz-rule);
+}
+
+/* — content view: caption pill · 322px ink-bezel phone · regenerate chip — */
+.qz-s3-canvas { display: flex; flex-direction: column; align-items: center; gap: 14px; }
+.qz-s3-caption {
+  margin: 0;
+  display: inline-flex; align-items: center; gap: 7px;
+  padding: 6px 14px; border-radius: var(--qz-radius-pill);
+  background: var(--qz-accent-wash); color: var(--qz-accent);
+  font-size: 12.5px; font-weight: 600;
+}
+.qz-s3-phone {
+  flex: none; width: 322px; box-sizing: border-box;
+  padding: 9px; border-radius: 44px;
+  background: var(--qz-ink);
+  box-shadow: var(--qz-lift-2);
+}
+.qz-s3-phone-screen {
+  display: flex; flex-direction: column; gap: 12px;
+  height: min(700px, calc(100vh - 240px));
+  border-radius: 33px; overflow: hidden;
+  padding: 18px 16px;
+  background: var(--qz-color-bg, var(--qz-paper));
+  color: var(--qz-color-text, var(--qz-ink));
+  font-family: var(--qz-font-body);
+}
+.qz-s3-screen-top { display: flex; align-items: center; gap: 8px; flex: none; }
+.qz-s3-backpill {
+  flex: none;
+  padding: 4px 10px; border: none; border-radius: var(--qz-radius-pill);
+  background: color-mix(in srgb, currentColor 8%, transparent);
+  color: inherit; font: inherit; font-size: 11.5px; font-weight: 600; cursor: pointer;
+}
+.qz-s3-backpill:disabled { opacity: 0.35; cursor: default; }
+.qz-s3-brandname {
+  flex: 1 1 auto; min-width: 0; text-align: center;
+  font-size: 11.5px; font-weight: 700; letter-spacing: 0.04em;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.qz-s3-progressbar {
+  flex: 0 0 52px; height: 4px; border-radius: 2px; overflow: hidden;
+  background: color-mix(in srgb, currentColor 12%, transparent);
+}
+.qz-s3-progressbar > span {
+  display: block; height: 100%; border-radius: 2px;
+  background: var(--qz-color-primary, var(--qz-accent));
+  transition: width var(--qz-dur) var(--qz-ease);
+}
+
+.qz-s3-qbody { display: flex; flex-direction: column; gap: 12px; flex: 1 1 auto; min-height: 0; overflow: hidden; }
+.qz-s3-kickerrow { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex: none; }
+.qz-s3-kicker {
+  font-family: var(--qz-font-mono); font-size: 10px; font-weight: 600;
+  letter-spacing: 0.08em; color: var(--qz-accent);
+}
+.qz-s3-typechip {
+  flex: none;
+  padding: 3px 8px; border-radius: var(--qz-radius-pill);
+  background: color-mix(in srgb, currentColor 8%, transparent);
+  font-size: 9.5px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase;
+  opacity: 0.75;
+}
+.qz-s3-qtitle {
+  margin: 0;
+  font-family: var(--qz-font-heading, var(--qz-font-body));
+  font-size: 22px; line-height: 1.22; font-weight: 700;
+}
+.qz-s3-subtext { margin: 0; font-size: 12.5px; opacity: 0.7; }
+.qz-s3-achips { display: flex; flex-direction: column; gap: 8px; min-height: 0; overflow: hidden; }
+.qz-s3-achip {
+  padding: 11px 14px;
+  border-radius: var(--qz-radius, 10px);
+  border: 1px solid color-mix(in srgb, currentColor 14%, transparent);
+  background: color-mix(in srgb, currentColor 6%, transparent);
+  font-size: 13.5px; line-height: 1.3;
+}
+/* fit steps (§4.2) — deterministic count-based compaction; sizing lives HERE */
+.qz-s3-qbody[data-fit="compact"] .qz-s3-qtitle { font-size: 19px; }
+.qz-s3-qbody[data-fit="compact"] .qz-s3-achips { gap: 6px; }
+.qz-s3-qbody[data-fit="compact"] .qz-s3-achip { padding: 9px 12px; font-size: 13px; }
+.qz-s3-qbody[data-fit="tight"] .qz-s3-qtitle { font-size: 17px; }
+.qz-s3-qbody[data-fit="tight"] .qz-s3-achips { gap: 5px; }
+.qz-s3-qbody[data-fit="tight"] .qz-s3-achip { padding: 7px 10px; font-size: 12.5px; }
+.qz-s3-qbody[data-title-long] .qz-s3-qtitle { font-size: 19px; }
+.qz-s3-qbody[data-fit="tight"][data-title-long] .qz-s3-qtitle { font-size: 17px; }
+
+.qz-s3-inputmock {
+  padding: 12px 14px;
+  border-radius: var(--qz-radius, 10px);
+  border: 1.5px solid color-mix(in srgb, currentColor 22%, transparent);
+  font-size: 13px; opacity: 0.65;
+}
+.qz-s3-capture { display: flex; flex-direction: column; gap: 12px; flex: 1 1 auto; min-height: 0; }
+.qz-s3-reveal { display: flex; flex-direction: column; gap: 10px; flex: 1 1 auto; min-height: 0; overflow: hidden; }
+.qz-s3-prodcard {
+  display: flex; flex-direction: column; gap: 8px;
+  padding: 12px;
+  border-radius: var(--qz-radius, 10px);
+  background: color-mix(in srgb, currentColor 5%, transparent);
+  min-height: 0; overflow: hidden;
+}
+.qz-s3-prodimg {
+  height: 118px; flex: none;
+  display: grid; place-items: center;
+  border-radius: 10px; font-size: 26px;
+  background: color-mix(in srgb, currentColor 8%, transparent);
+}
+.qz-s3-prodname { font-size: 14px; line-height: 1.3; }
+.qz-s3-prodwhy { margin: 0; font-size: 11px; font-style: italic; opacity: 0.55; }
+.qz-s3-prodrow { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.qz-s3-prodprice { font-weight: 700; font-size: 13.5px; }
+.qz-s3-prodcta {
+  padding: 7px 13px; border-radius: var(--qz-radius-pill);
+  background: var(--qz-color-primary, var(--qz-accent));
+  font-size: 12px; font-weight: 600;
+}
+.qz-s3-next {
+  margin-top: auto; flex: none;
+  padding: 12px; border: none;
+  border-radius: var(--qz-radius, 10px);
+  background: var(--qz-color-primary, var(--qz-accent));
+  font: inherit; font-size: 13.5px; font-weight: 600; cursor: pointer;
+}
+.qz-s3-next.is-restart {
+  background: transparent; color: inherit;
+  border: 1px solid color-mix(in srgb, currentColor 25%, transparent);
+}
+.qz-s3-regen {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 6px 14px;
+  border: none; border-radius: var(--qz-radius-pill);
+  background: var(--qz-cream-2); color: var(--qz-ink-3);
+  font: inherit; font-size: 12.5px; font-weight: 600;
+}
+.qz-s3-regen:disabled { opacity: 0.55; cursor: not-allowed; }
+
+/* — logic view stub (P3 replaces with the real section cards) — */
+.qz-s3-logicstub { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.qz-s3-stubcard {
+  display: flex; align-items: flex-start; gap: 12px;
+  padding: 16px 18px;
+  background: var(--qz-paper);
+  border-radius: var(--qz-radius);
+  box-shadow: var(--qz-lift-1);
+}
+.qz-s3-stubbody { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.qz-s3-stubtitle { font-size: 14.5px; line-height: 1.35; }
+.qz-s3-stubnote { font-size: 12.5px; color: var(--qz-ink-4); }

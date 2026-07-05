@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useSearchParams } from "@remix-run/react";
 import type { useFetcher } from "@remix-run/react";
-import type { Quiz } from "../../lib/quizSchema";
+import type { Quiz, DesignTokens } from "../../lib/quizSchema";
 import type { IndexedProduct } from "../../lib/recommendationEngine";
 import type { BuilderCategory, BuilderCollection } from "../builder/stepProps";
 import { useQuizDraft } from "../studio/useQuizDraft";
 import { QuestionsLogicLayout } from "./questionsLogic/QuestionsLogicLayout";
+import { Step3Shell } from "./questionsLogicV3/Step3Shell";
 
 // ════════════════════════════════════════════════════════════════════════════
 // QuestionBuilderStage — Step 3 of the create funnel ("Questions & Logic"), the
@@ -29,6 +31,7 @@ export function QuestionBuilderStage({
   categories,
   fetcher,
   pendingIntent,
+  designTokens,
 }: {
   quizId: string;
   initialDoc: Quiz;
@@ -37,9 +40,16 @@ export function QuestionBuilderStage({
   collections: BuilderCollection[];
   fetcher: ReturnType<typeof useFetcher>;
   pendingIntent: string | null;
+  // QL3 — the draft's design tokens (FunnelData.designTokens), threaded to the
+  // v3 phone canvas so the preview wears the merchant brand.
+  designTokens?: DesignTokens | null;
 }) {
   const { doc, commit, isSaving, savedAt, saveError, retrySave, flushSave, beginAiEdit, applyAiResult, endAiEdit } =
     useQuizDraft(initialDoc);
+  // QL3-P1 — the Step-3 v3 shell mounts ONLY on decider docs behind the
+  // client-read ?step3=v3 flag; the legacy layout stays the default (P5 flips).
+  const [searchParams] = useSearchParams();
+  const useV3 = doc.logic_model === "decider" && searchParams.get("step3") === "v3";
   const navigating =
     pendingIntent === "to-rec-page" || pendingIntent === "back-to-types";
 
@@ -111,6 +121,23 @@ export function QuestionBuilderStage({
     },
     [],
   );
+
+  if (useV3) {
+    return (
+      <Step3Shell
+        doc={doc}
+        onCommit={commit}
+        isSaving={isSaving}
+        savedAt={savedAt}
+        saveError={saveError}
+        onRetry={retrySave}
+        categories={categories}
+        navigating={navigating}
+        onContinue={() => fetcher.submit({ intent: "to-rec-page" }, { method: "post" })}
+        designTokens={designTokens}
+      />
+    );
+  }
 
   return (
     <QuestionsLogicLayout

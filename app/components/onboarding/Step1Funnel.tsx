@@ -1,6 +1,6 @@
 import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties, KeyboardEvent as ReactKeyboardEvent } from "react";
-import { Link, useFetcher, useRevalidator } from "@remix-run/react";
+import { Link, useFetcher, useRevalidator, useSearchParams } from "@remix-run/react";
 import {
   QzPage,
   QzCard,
@@ -179,6 +179,15 @@ export function Step1Funnel({ data }: { data: FunnelData }) {
   // page leads with the actual task, not a paragraph of summary).
   const [showIdentity, setShowIdentity] = useState(false);
 
+  // QL3-P1 — when the Step-3 v3 shell is active (decider doc + ?step3=v3) it
+  // renders its OWN floating top bar (TopBar3, same wordmark + step pills), so
+  // the standard sticky bar steps aside — the spec's Step-3 has exactly one bar.
+  const [searchParams] = useSearchParams();
+  const step3V3Active =
+    searchParams.get("step3") === "v3" &&
+    data.stage === "question_builder" &&
+    data.questionBuilder?.doc.logic_model === "decider";
+
   // Poll the loader while a detached generation job runs (typing/templating);
   // the job writes the next stage, the revalidate picks it up, the poll stops.
   const isGenerating = data.stage === "typing" || data.stage === "templating";
@@ -194,7 +203,9 @@ export function Step1Funnel({ data }: { data: FunnelData }) {
     <>
       {/* Design-system-V2 §7.6 — the creation flow's sticky top bar: wordmark ·
           step-nav pills · ancillary actions. Replaces the old QzPageHeader +
-          FunnelProgress dots (each stage renders its own page-title zone). */}
+          FunnelProgress dots (each stage renders its own page-title zone).
+          Hidden while the Step-3 v3 shell renders its own floating bar. */}
+      {step3V3Active ? null : (
       <TopBar
         center={<FunnelStepNav stage={data.stage} />}
         right={
@@ -214,6 +225,7 @@ export function Step1Funnel({ data }: { data: FunnelData }) {
           </>
         }
       />
+      )}
     <QzPage wide>
       {showIdentity && data.identitySummary ? (
         <BrandIdentityModal summary={data.identitySummary} onClose={() => setShowIdentity(false)} />
@@ -304,6 +316,7 @@ export function Step1Funnel({ data }: { data: FunnelData }) {
               collections={data.collections}
               fetcher={fetcher}
               pendingIntent={pendingIntent}
+              designTokens={data.designTokens}
             />
           )}
         </ClientOnly>
