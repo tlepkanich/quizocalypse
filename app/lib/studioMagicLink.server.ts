@@ -101,14 +101,64 @@ export async function consumeMagicLink(token: string): Promise<string | null> {
   return claimed.count === 1 ? row.email : null;
 }
 
-// Send via Resend's HTTP API (no SDK dependency). Without RESEND_API_KEY the
-// link is logged to stdout instead — the dev / not-yet-configured path.
+const EMAIL_SUBJECT = "Your Quizocalypse Studio sign-in link";
+
+function emailHtml(link: string): string {
+  return [
+    `<p>Click to sign in to Quizocalypse Studio:</p>`,
+    `<p><a href="${link}">Sign in to Studio</a></p>`,
+    `<p>This link works once and expires in 15 minutes. If you didn't request it, ignore this email.</p>`,
+  ].join("\n");
+}
+
+function emailText(link: string): string {
+  return `Sign in to Quizocalypse Studio: ${link}\n\nThis link works once and expires in 15 minutes.`;
+}
+
+// Transport priority: Gmail SMTP (app password) → Resend HTTP API → stdout.
+// Gmail first because a Resend account without a verified domain can only
+// deliver to its own owner; the Gmail path can email any allowlisted address.
+// Without either configured, the link is logged instead — the dev path.
 async function sendMagicLinkEmail(email: string, link: string): Promise<void> {
-  const apiKey = process.env.RESEND_API_KEY;
-  if (!apiKey) {
-    console.log(`[studio-login] RESEND_API_KEY unset — magic link for ${email}: ${link}`);
-    return;
+  const smtpUser = process.env.GMAIL_SMTP_USER;
+  const smtpPass = process.env.GMAIL_SMTP_APP_PASSWORD;
+  if (smtpUser && smtpPass) {
+    return sendViaGmailSmtp(email, link, smtpUser, smtpPass);
   }
+  if (process.env.RESEND_API_KEY) {
+    return sendViaResend(email, link, process.env.RESEND_API_KEY);
+  }
+  console.log(`[studio-login] no email transport configured — magic link for ${email}: ${link}`);
+}
+
+async function sendViaGmailSmtp(
+  email: string,
+  link: string,
+  user: string,
+  pass: string,
+): Promise<void> {
+  // Lazy import keeps nodemailer out of the module graph for unit tests.
+  const { default: nodemailer } = await import("nodemailer");
+  const transporter = nodemailer.createTransport({
+    host: "smtp.gmail.com",
+    port: 465,
+    secure: true,
+    auth: { user, pass },
+  });
+  try {
+    await transporter.sendMail({
+      from: `"Quizocalypse Studio" <${user}>`,
+      to: email,
+      subject: EMAIL_SUBJECT,
+      html: emailHtml(link),
+      text: emailText(link),
+    });
+  } catch (error) {
+    console.error(`[studio-login] Gmail SMTP send failed for ${email}: ${String(error)}`);
+  }
+}
+
+async function sendViaResend(email: string, link: string, apiKey: string): Promise<void> {
   const from = process.env.STUDIO_EMAIL_FROM ?? "Quizocalypse Studio <onboarding@resend.dev>";
   const res = await fetch("https://api.resend.com/emails", {
     method: "POST",
@@ -119,13 +169,9 @@ async function sendMagicLinkEmail(email: string, link: string): Promise<void> {
     body: JSON.stringify({
       from,
       to: [email],
-      subject: "Your Quizocalypse Studio sign-in link",
-      html: [
-        `<p>Click to sign in to Quizocalypse Studio:</p>`,
-        `<p><a href="${link}">Sign in to Studio</a></p>`,
-        `<p>This link works once and expires in 15 minutes. If you didn't request it, ignore this email.</p>`,
-      ].join("\n"),
-      text: `Sign in to Quizocalypse Studio: ${link}\n\nThis link works once and expires in 15 minutes.`,
+      subject: EMAIL_SUBJECT,
+      html: emailHtml(link),
+      text: emailText(link),
     }),
   });
   if (!res.ok) {
