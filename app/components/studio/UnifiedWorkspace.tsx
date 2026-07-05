@@ -29,7 +29,7 @@ import { Step3Results } from "../builder/Step3Results";
 import { TranslationsPanel } from "./TranslationsPanel";
 import { ExperiencePanel } from "./ExperiencePanel";
 import { CssTab } from "./panels/CssTab";
-import { BuilderSettings } from "./BuilderSettings";
+import { BuilderLogicView, QuizSettingsDrawer } from "./BuilderSettings";
 import { BuilderDesignPanel } from "./BuilderDesignPanel";
 import { BuilderBlocksPalette } from "./BuilderBlocksPalette";
 import { BuilderPageSettings } from "./BuilderPageSettings";
@@ -200,6 +200,9 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
   const [editMode, setEditMode] = useState(true);
   // LOGIC v2 (L2-10f) — the explicit legacy→decider upgrade wizard.
   const [upgradeOpen, setUpgradeOpen] = useState(false);
+  // BLD-4 — the Quiz-settings drawer (score/translation/placement — the
+  // never-was-logic half of the old 8-tab Settings screen).
+  const [quizSettingsOpen, setQuizSettingsOpen] = useState(false);
   // Device-frame width lifted from Step5Preview so the Design tab's layer
   // selector can follow it ("edit what you see").
   const [frameW, setFrameW] = useState<number>(DEVICE_PRESETS.desktop);
@@ -626,13 +629,26 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
         }}
       >
         {placementGrid}
-        <Link
-          to={`/studio/${data.quizId}/embed`}
-          className="qz-btn qz-btn-ghost qz-btn-sm"
-          style={{ textDecoration: "none", display: "inline-flex" }}
-        >
-          Share &amp; embed →
-        </Link>
+        <div className="qz-row" style={{ gap: 6, flexWrap: "wrap" }}>
+          <Link
+            to={`/studio/${data.quizId}/embed`}
+            className="qz-btn qz-btn-ghost qz-btn-sm"
+            style={{ textDecoration: "none", display: "inline-flex" }}
+          >
+            Share &amp; embed →
+          </Link>
+          <button
+            type="button"
+            className="qz-btn qz-btn-ghost qz-btn-sm"
+            onClick={(e) => {
+              // Close the <details> menu before the drawer opens.
+              (e.currentTarget.closest("details") as HTMLDetailsElement | null)?.removeAttribute("open");
+              setQuizSettingsOpen(true);
+            }}
+          >
+            Quiz settings…
+          </button>
+        </div>
       </div>
     </details>
   );
@@ -1113,14 +1129,33 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
                     goToStep={(n) => setView(n === 1 ? "products" : "build")}
                   />
                 ) : (
-                  // QB-3 — the Settings rail tool: Quizell's 8 top-tabs.
-                  <BuilderSettings data={data} doc={doc} commit={commit} onSelectNode={select} />
+                  // BLD-4 — the Logic view: LogicScroll for decider docs,
+                  // LogicView for legacy; Try-a-path below.
+                  <BuilderLogicView
+                    data={data}
+                    doc={doc}
+                    commit={commit}
+                    onSelectNode={select}
+                    onEditContent={(nodeId) => {
+                      setTool("editor");
+                      setView("build");
+                      select(nodeId);
+                    }}
+                  />
                 )}
               </div>
             </div>
           )}
         </div>
         {upgradeModal}
+        <QuizSettingsDrawer
+          data={data}
+          doc={doc}
+          commit={commit}
+          onSelectNode={select}
+          open={quizSettingsOpen}
+          onClose={() => setQuizSettingsOpen(false)}
+        />
       </div>
     );
   }
