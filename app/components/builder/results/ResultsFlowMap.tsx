@@ -181,7 +181,7 @@ export function ResultsFlowMap({
 
           {ordered.steps.length === 0 ? (
             <span className="qz-dim" style={{ fontSize: 12 }}>
-              Add a question flow in Step 2 to see routing here.
+              Add questions in the Build view to see routing here.
             </span>
           ) : null}
         </div>

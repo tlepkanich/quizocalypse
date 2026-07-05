@@ -71,6 +71,22 @@ export function Step3Results(props: StepProps) {
         }
       />
 
+      {/* BLD-5 — the empty state leads (it used to sit BELOW a screenful of
+          layout/theme controls that are pointless without result pages). */}
+      {resultNodes.length === 0 ? (
+        <QzCard style={{ padding: 20 }}>
+          <strong style={{ fontSize: 15 }}>No result pages yet</strong>
+          <p className="qz-dim" style={{ fontSize: 13, margin: "6px 0 12px", maxWidth: 520 }}>
+            Group your products in the <strong>Products</strong> view — each group becomes a
+            result page shoppers can land on, and everything below configures how those pages
+            look.
+          </p>
+          <QzButton size="sm" variant="primary" onClick={() => goToStep(1)}>
+            Go to Products →
+          </QzButton>
+        </QzCard>
+      ) : null}
+
       {/* Global controls: layout posture + theme */}
       <QzCard style={{ padding: 16 }}>
         <div
@@ -117,7 +133,9 @@ export function Step3Results(props: StepProps) {
               ]}
             />
           </div>
-          <div>
+          {/* BLD-5 — let the theme grid SPREAD (auto-fill) instead of being
+              squeezed into a one-column tower by the flex row. */}
+          <div style={{ flex: "1 1 340px", minWidth: 280 }}>
             <div className="qz-label" style={{ marginBottom: 6 }}>
               Theme
             </div>
@@ -128,11 +146,7 @@ export function Step3Results(props: StepProps) {
 
       <DiscountCard doc={doc} onCommit={onCommit} collections={collections} />
 
-      {resultNodes.length === 0 ? (
-        <QzBanner tone="warn" title="No result pages yet">
-          Group products into buckets in Step 1 to create result pages.
-        </QzBanner>
-      ) : (
+      {resultNodes.length === 0 ? null : (
         <>
           <ResultsFlowMap
             doc={doc}

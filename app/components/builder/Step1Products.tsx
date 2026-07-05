@@ -379,10 +379,12 @@ export function Step1Products(props: StepProps) {
         />
       )}
 
+      {/* BLD-5 — builder-native footer (the "Step 1 of 4" wizard framing leaked
+          from the retired 4-step builder; there are no steps here). */}
       <p className="qz-dim" style={{ fontSize: 12 }}>
         {hasGroups
-          ? `${categories.length} group${categories.length === 1 ? "" : "s"} ready · Step 1 of 4`
-          : "Group your products to continue · Step 1 of 4"}
+          ? `${categories.length} group${categories.length === 1 ? "" : "s"} ready — each becomes a result page in the Results view.`
+          : "Group your products — each group becomes a result page shoppers can land on."}
       </p>
     </div>
   );
