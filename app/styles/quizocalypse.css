@@ -1,31 +1,98 @@
 /* =====================================================================
-   Quizocalypse — "Quizell-style" admin design system
-   Cool zinc neutrals + an azure (#0B6BCB) brand accent, near-black
-   primary buttons, soft cards, a clean geometric sans. Light + dark.
+   Quizocalypse — admin design system (quiz-design-system-V2, custom)
+   "A clean, Canva-style workspace with per-template palettes and a rare
+   gold ◆ signature for decisions." White paper workspace, near-black ink,
+   depth via layered soft shadows (never borders), indigo as the ONE
+   action color, gold ◆ at 5 canonical moments only. Light + dark
+   (dark kept by owner decision; V2 ships light-first).
    Admin chrome ONLY — gated by body[data-qz]; the shopper runtime
    (/q) overrides its own --qz-color-* on its subtree, so it's
    unaffected. Loaded globally via app/root.tsx `links`.
    ===================================================================== */
 
-/* — Fonts (free, Google Fonts) — Geist (sans, display + body) + JetBrains Mono — */
-@import url("https://fonts.googleapis.com/css2?family=Geist:wght@300..700&family=JetBrains+Mono:wght@400;500;600&display=swap");
+/* — Fonts — self-hosted (public/fonts). Mona Sans = variable (wght; we use
+   500–800 only per the V2 weight ladder); JetBrains Mono = static 400/500/600.
+   Preloaded from root.tsx links(). — */
+@font-face {
+  font-family: "Mona Sans";
+  src: url("/fonts/MonaSans.woff2") format("woff2");
+  font-weight: 200 900;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "JetBrains Mono";
+  src: url("/fonts/JetBrainsMono-Regular.woff2") format("woff2");
+  font-weight: 400;
+  font-display: swap;
+}
+@font-face {
+  font-family: "JetBrains Mono";
+  src: url("/fonts/JetBrainsMono-Medium.woff2") format("woff2");
+  font-weight: 500;
+  font-display: swap;
+}
+@font-face {
+  font-family: "JetBrains Mono";
+  src: url("/fonts/JetBrainsMono-SemiBold.woff2") format("woff2");
+  font-weight: 600;
+  font-display: swap;
+}
+/* Metrics-adjusted local fallback — keeps layout close while Mona Sans loads. */
+@font-face {
+  font-family: "Mona Sans Fallback";
+  src: local("Helvetica Neue"), local("Arial");
+  ascent-override: 96%;
+  descent-override: 24%;
+  line-gap-override: 0%;
+  size-adjust: 102%;
+}
 
 :root {
-  /* Palette — zinc neutrals + azure brand */
-  --qz-cream:    #F4F4F5;   /* app background (zinc-100) */
-  --qz-cream-2:  #E9E9EC;   /* strips / segmented track / hovers */
-  --qz-paper:    #FFFFFF;   /* cards */
-  --qz-ink:      #18181B;   /* primary text / near-black buttons (zinc-900) */
-  --qz-ink-2:    #27272A;   /* zinc-800 */
-  --qz-ink-3:    #52525B;   /* secondary text (zinc-600) */
-  --qz-ink-4:    #6B6B73;   /* muted / mono labels; darkened from zinc-400 #A1A1AA (2.56:1) to pass WCAG AA on white AND the cream card/app bg (--qz-cream #F4F4F5, where #71717A was still 4.4) */
-  --qz-rule:     #18181B17;  /* hairline border */
-  --qz-rule-2:   #18181B0A;
-  --qz-accent:   #0B6BCB;     /* azure — brand (links, active nav, focus) */
-  --qz-accent-2: #095AAB;
-  --qz-ok:       #157D3C;   /* green; darkened for WCAG AA on the ok-tint badge (was #15803D = 4.46:1) */
-  --qz-warn:     #A8430C;   /* burnt amber; darkened from #B45309 (4.45:1) for WCAG AA on the warn-tint badge (matches the --qz-ok precedent above) */
-  --qz-crit:     #B91C1C;
+  /* ============ V2 spec-name → token mapping (keep names, V2 values) ============
+     paper→--qz-cream (page bg) · surface→--qz-paper · ink→--qz-ink ·
+     ink-70→--qz-ink-3 · ink-45→--qz-ink-4 · ink-25→--qz-ink-25 · rule→--qz-rule ·
+     link→--qz-accent (+ --qz-accent-wash) · warn→--qz-warn · err→--qz-crit ·
+     ok→--qz-ok · scrim→--qz-scrim · gold*→--qz-gold* · lift-1/2/3→--qz-lift-*
+     (aliased by the legacy --qz-shadow-sm/md/lg) · palettes→--qz-pal-*        */
+
+  /* Paper & ink (V2 §3.1) — white workspace; depth via shadow, not tone */
+  --qz-cream:    #FFFFFF;   /* page background ("paper") */
+  --qz-cream-2:  #F2F2F4;   /* hover washes / segmented track (≈ ink 4% on paper) */
+  --qz-paper:    #FFFFFF;   /* card surface — same as paper BY DESIGN (V2) */
+  --qz-ink:      #0E0F11;   /* body text, headings, primary buttons */
+  --qz-ink-2:    #0E0F11;   /* legacy slot — collapsed into ink (no V2 role) */
+  --qz-ink-3:    #4A4D52;   /* ink-70 — emphasized secondary text */
+  --qz-ink-4:    #84878C;   /* ink-45 — muted; 3.3:1 on white → ≥18px or non-essential text ONLY (V2 accepts; interactive muted text stays on --qz-ink-3) */
+  --qz-ink-25:   #C3C5C8;   /* disabled, dividers, pipes */
+  --qz-rule:     #E9EAEE;   /* hairlines — sparing, mostly inside components */
+  --qz-rule-2:   #F2F3F5;
+  --qz-scrim:    rgba(14, 15, 17, 0.45);
+
+  /* The gold ◆ signature (V2 §3.2) — FIVE canonical moments ONLY:
+     wordmark · recommended-template ribbon · decider question · loading/
+     celebration mark · (optional) primary-CTA inline ◆. Anything else = defect. */
+  --qz-gold:        #8C6D1F;
+  --qz-gold-bright: #C79A2B;
+  --qz-gold-wash:   #FDF6E0;
+  --qz-gold-line:   #E8D8A6;
+
+  /* Semantic colors (V2 §3.4) — every color has ONE job */
+  --qz-accent:      #5B47E5;  /* --link: links, focus rings, action chips */
+  --qz-accent-2:    #4936C4;
+  --qz-accent-wash: #EEEBFF;  /* active-nav wash, selected tints */
+  --qz-ok:          #158A5A;
+  --qz-warn:        #B04A2E;  /* terracotta — non-destructive warnings */
+  --qz-crit:        #C53B32;  /* true red — destructive confirms only */
+
+  /* Per-template palettes (V2 §3.3) — never reuse one across visible cards */
+  --qz-pal-green:  #22A06B;  --qz-pal-green-wash:  #E4F4EC;
+  --qz-pal-coral:  #FF6B5B;  --qz-pal-coral-wash:  #FFECE8;
+  --qz-pal-blue:   #3E7BFA;  --qz-pal-blue-wash:   #E6EEFF;
+  --qz-pal-pink:   #F472B6;  --qz-pal-pink-wash:   #FDE7F1;
+  --qz-pal-purple: #8B5CF6;  --qz-pal-purple-wash: #EFE9FE;
+  --qz-pal-teal:   #0D9488;  --qz-pal-teal-wash:   #E1F4F1;
+  --qz-pal-amber:  #F59E0B;  --qz-pal-amber-wash:  #FFF3DC;
 
   /* Semantic tints — derived from the colors above (one source of truth) */
   --qz-ok-tint:     color-mix(in srgb, var(--qz-ok)     9%,  var(--qz-paper));
@@ -36,55 +103,67 @@
   --qz-warn-edge:   color-mix(in srgb, var(--qz-warn)   28%, transparent);
   --qz-crit-edge:   color-mix(in srgb, var(--qz-crit)   28%, transparent);
 
-  /* Type — geometric sans for everything (display + body) */
-  --qz-font-display: "Geist", -apple-system, "Segoe UI", "Helvetica Neue", sans-serif;
-  --qz-font-body:    "Geist", -apple-system, "Segoe UI", "Helvetica Neue", sans-serif;
+  /* Type (V2 §4) — Mona Sans (500/600/700/800 ONLY) + JetBrains Mono */
+  --qz-font-display: "Mona Sans", "Mona Sans Fallback", -apple-system, "Segoe UI", "Helvetica Neue", sans-serif;
+  --qz-font-body:    "Mona Sans", "Mona Sans Fallback", -apple-system, "Segoe UI", "Helvetica Neue", sans-serif;
   --qz-font-mono:    "JetBrains Mono", ui-monospace, monospace;
 
-  /* Sizes — elevated editorial (airier than the old Grid Notebook) */
-  --qz-t-display: 52px;
-  --qz-t-h1: 30px;
+  /* Sizes — V2 scale: display/H1 44 · H2 28 · H3/card 20 · body 16 · small 14 */
+  --qz-t-display: 44px;
+  --qz-t-h1: 28px;
   --qz-t-h2: 20px;
-  --qz-t-h3: 15px;
-  --qz-t-body: 15px;
-  --qz-t-small: 13px;
-  --qz-t-mono: 11.5px;
+  --qz-t-h3: 16px;
+  --qz-t-body: 16px;
+  --qz-t-small: 14px;
+  --qz-t-mono: 11px;
   --qz-lh-tight: 1.15;
-  --qz-lh: 1.6;
+  --qz-lh: 1.55;
 
-  /* Spacing scale */
+  /* Spacing scale (V2 §2.1: 4·8·12·16·20·24·32·40·56·72·100) */
   --qz-space-1: 4px;
   --qz-space-2: 8px;
   --qz-space-3: 12px;
   --qz-space-4: 16px;
   --qz-space-5: 24px;
   --qz-space-6: 32px;
-  --qz-space-7: 48px;
-  --qz-pad-card: 28px;
+  --qz-space-7: 56px;
+  --qz-pad-card: 24px;
   --qz-pad-gap: 20px;
 
-  /* Radius — soft, Quizell-style rounding */
-  --qz-radius:    12px;   /* cards / containers */
-  --qz-radius-sm: 8px;    /* inputs / buttons */
-  --qz-radius-lg: 16px;   /* large surfaces */
+  /* Radius (V2 §5.4) — pill for actions, 9 fields, 14–18 cards, 18 overlays */
+  --qz-radius:    16px;   /* cards / containers */
+  --qz-radius-sm: 9px;    /* form fields (buttons are pill) */
+  --qz-radius-lg: 18px;   /* hero cards, modals, drawers */
+  --qz-radius-toast: 12px;
   --qz-radius-pill: 999px;
 
-  /* Elevation — cool neutral, soft */
-  --qz-shadow-sm: 0 1px 2px rgba(24, 24, 27, 0.06), 0 1px 1px rgba(24, 24, 27, 0.04);
-  --qz-shadow-md: 0 4px 16px rgba(24, 24, 27, 0.08), 0 1px 3px rgba(24, 24, 27, 0.05);
-  --qz-shadow-lg: 0 16px 48px rgba(24, 24, 27, 0.12), 0 4px 12px rgba(24, 24, 27, 0.06);
+  /* Elevation (V2 §5) — the Canva rule: layered soft shadows, not borders.
+     The 0 0 0 1px head of each stack IS the card edge (inset-ring substitute). */
+  --qz-lift-1: 0 0 0 1px rgba(20, 22, 26, 0.03), 0 1px 2px rgba(20, 22, 26, 0.04), 0 4px 12px -2px rgba(20, 22, 26, 0.05), 0 20px 40px -12px rgba(20, 22, 26, 0.10);
+  --qz-lift-2: 0 0 0 1px rgba(20, 22, 26, 0.06), 0 2px 6px rgba(20, 22, 26, 0.05), 0 10px 20px -4px rgba(20, 22, 26, 0.08), 0 34px 60px -18px rgba(20, 22, 26, 0.14);
+  --qz-lift-3: 0 24px 60px rgba(20, 22, 26, 0.22);
+  /* Legacy aliases — old consumers keep working, one source of truth */
+  --qz-shadow-sm: var(--qz-lift-1);
+  --qz-shadow-md: var(--qz-lift-2);
+  --qz-shadow-lg: var(--qz-lift-3);
   --qz-shadow-focus: 0 0 0 3px color-mix(in srgb, var(--qz-accent) 28%, transparent);
 
-  /* Motion */
-  --qz-ease: cubic-bezier(0.2, 0, 0, 1);
-  --qz-dur-fast: 110ms;
-  --qz-dur: 170ms;
+  /* Motion (V2 §6) — ONE curve, four durations */
+  --qz-ease: cubic-bezier(0.2, 0.7, 0.3, 1);
+  --qz-dur-fast: 140ms;
+  --qz-dur: 220ms;
+  --qz-dur-slow: 300ms;
+  --qz-dur-xslow: 500ms;
 
-  /* Z-index layers */
+  /* Z-index ladder (V2 §7.5) — content 0-10 · sub-header 30 · top bar 40 ·
+     drawer 80 · modal 120 · toast 200. Legacy names kept, mapped into the ladder. */
   --qz-z-sticky: 20;
-  --qz-z-dropdown: 40;
-  --qz-z-modal: 60;
-  --qz-z-toast: 80;
+  --qz-z-subheader: 30;
+  --qz-z-topbar: 40;
+  --qz-z-dropdown: 70;
+  --qz-z-drawer: 80;
+  --qz-z-modal: 120;
+  --qz-z-toast: 200;
 }
 
 /* — Scope: wrap your admin app in <body data-qz="1"> to opt in
@@ -94,6 +173,7 @@ body[data-qz] {
   margin: 0;
   font-family: var(--qz-font-body);
   font-size: var(--qz-t-body);
+  font-weight: 500; /* V2 weight ladder starts at 500 — no 400 body text */
   color: var(--qz-ink);
   background: var(--qz-cream);
   -webkit-font-smoothing: antialiased;
@@ -107,92 +187,168 @@ body[data-qz] *, body[data-qz] *::before, body[data-qz] *::after { box-sizing: b
      (ThemeToggle) flips it + persists. Only re-declares token VALUES on the
      admin body, so /q (its own --qz-color-* subtree) is untouched. — */
 html[data-theme="dark"] body[data-qz] {
-  --qz-cream:    #18181B;   /* app background (zinc-900) */
-  --qz-cream-2:  #27272A;
-  --qz-paper:    #1F1F23;   /* cards */
-  --qz-ink:      #FAFAFA;   /* primary text */
-  --qz-ink-2:    #E4E4E7;
-  --qz-ink-3:    #A1A1AA;
-  --qz-ink-4:    #71717A;
-  --qz-rule:     #FFFFFF1F;
-  --qz-rule-2:   #FFFFFF12;
-  --qz-accent:   #3B92E8;   /* lighter azure for contrast on dark */
-  --qz-accent-2: #5BA6F0;
-  --qz-ok:       #34D399;
-  --qz-warn:     #FBBF24;
-  --qz-crit:     #F87171;
-  --qz-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.40), 0 1px 1px rgba(0, 0, 0, 0.30);
-  --qz-shadow-md: 0 4px 16px rgba(0, 0, 0, 0.50), 0 1px 3px rgba(0, 0, 0, 0.35);
-  --qz-shadow-lg: 0 16px 48px rgba(0, 0, 0, 0.60), 0 4px 12px rgba(0, 0, 0, 0.40);
+  /* Hand-derived dark counterparts of the V2 tokens (owner decision: dark
+     stays — the V2 spec is light-first). On dark, the 1px ring at the head of
+     each lift stack carries the card edge; ambient shadows deepen. */
+  --qz-cream:    #131417;   /* page */
+  --qz-cream-2:  #1E2024;   /* hover washes */
+  --qz-paper:    #1A1C1F;   /* surfaces */
+  --qz-ink:      #F5F6F7;
+  --qz-ink-2:    #F5F6F7;
+  --qz-ink-3:    #B4B7BC;
+  --qz-ink-4:    #84878C;   /* mid-gray reads on both modes */
+  --qz-ink-25:   #4A4D52;
+  --qz-rule:     rgba(255, 255, 255, 0.09);
+  --qz-rule-2:   rgba(255, 255, 255, 0.05);
+  --qz-scrim:    rgba(0, 0, 0, 0.55);
+  --qz-gold:        #C79A2B;  /* the bright hue is the dark-mode workhorse */
+  --qz-gold-bright: #E0B94F;
+  --qz-gold-wash:   color-mix(in srgb, #C79A2B 14%, var(--qz-paper));
+  --qz-gold-line:   rgba(199, 154, 43, 0.4);
+  --qz-accent:      #8A7BF0;
+  --qz-accent-2:    #A79BF5;
+  --qz-accent-wash: color-mix(in srgb, #8A7BF0 16%, var(--qz-paper));
+  --qz-ok:       #34C08B;
+  --qz-warn:     #E07B5A;
+  --qz-crit:     #F07A72;
+  --qz-pal-green-wash:  color-mix(in srgb, var(--qz-pal-green)  18%, var(--qz-paper));
+  --qz-pal-coral-wash:  color-mix(in srgb, var(--qz-pal-coral)  18%, var(--qz-paper));
+  --qz-pal-blue-wash:   color-mix(in srgb, var(--qz-pal-blue)   18%, var(--qz-paper));
+  --qz-pal-pink-wash:   color-mix(in srgb, var(--qz-pal-pink)   18%, var(--qz-paper));
+  --qz-pal-purple-wash: color-mix(in srgb, var(--qz-pal-purple) 18%, var(--qz-paper));
+  --qz-pal-teal-wash:   color-mix(in srgb, var(--qz-pal-teal)   18%, var(--qz-paper));
+  --qz-pal-amber-wash:  color-mix(in srgb, var(--qz-pal-amber)  18%, var(--qz-paper));
+  --qz-lift-1: 0 0 0 1px rgba(255, 255, 255, 0.07), 0 1px 2px rgba(0, 0, 0, 0.35), 0 4px 12px -2px rgba(0, 0, 0, 0.40), 0 20px 40px -12px rgba(0, 0, 0, 0.50);
+  --qz-lift-2: 0 0 0 1px rgba(255, 255, 255, 0.10), 0 2px 6px rgba(0, 0, 0, 0.40), 0 10px 20px -4px rgba(0, 0, 0, 0.45), 0 34px 60px -18px rgba(0, 0, 0, 0.55);
+  --qz-lift-3: 0 0 0 1px rgba(255, 255, 255, 0.12), 0 24px 60px rgba(0, 0, 0, 0.65);
+  /* Re-declare the DERIVED tints here: an unregistered custom property
+     substitutes its inner var()s on the element it's DECLARED on, so the
+     :root-declared tints bake the LIGHT palette. Declaring the same
+     expressions on the dark body makes them resolve against the dark values. */
+  --qz-ok-tint:     color-mix(in srgb, var(--qz-ok)     9%,  var(--qz-paper));
+  --qz-warn-tint:   color-mix(in srgb, var(--qz-warn)   9%,  var(--qz-paper));
+  --qz-crit-tint:   color-mix(in srgb, var(--qz-crit)   9%,  var(--qz-paper));
+  --qz-accent-tint: color-mix(in srgb, var(--qz-accent) 10%, var(--qz-paper));
+  --qz-ok-edge:     color-mix(in srgb, var(--qz-ok)     28%, transparent);
+  --qz-warn-edge:   color-mix(in srgb, var(--qz-warn)   28%, transparent);
+  --qz-crit-edge:   color-mix(in srgb, var(--qz-crit)   28%, transparent);
 }
 /* The banner text colors were hardcoded for light tints — re-tint for dark. */
-html[data-theme="dark"] body[data-qz] .qz-banner-ok   { color: #6EE7B7; }
-html[data-theme="dark"] body[data-qz] .qz-banner-warn { color: #FCD34D; }
-html[data-theme="dark"] body[data-qz] .qz-banner-crit { color: #FCA5A5; }
+html[data-theme="dark"] body[data-qz] .qz-banner-ok   { color: #52D6A5; }
+html[data-theme="dark"] body[data-qz] .qz-banner-warn { color: #F2A184; }
+html[data-theme="dark"] body[data-qz] .qz-banner-crit { color: #F8A69F; }
 
-/* Global focus-visible: a warm ring on any keyboard-focused control. */
+/* Global focus-visible (V2 §6.4): 3px indigo outline, offset 2 — visible on
+   every background, keyboard-only via :focus-visible, NEVER removed. */
 body[data-qz] :focus-visible {
-  outline: none;
-  box-shadow: var(--qz-shadow-focus);
+  outline: 3px solid var(--qz-accent);
+  outline-offset: 2px;
+  box-shadow: none;
   border-radius: var(--qz-radius-sm);
 }
 
+/* Reduced motion (V2 §10): kill lifts/slides for users who prefer it. */
+@media (prefers-reduced-motion: reduce) {
+  body[data-qz] *, body[data-qz] *::before, body[data-qz] *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* — The gold ◆ mark (V2: a CSS-rendered rotated square, never an SVG) — */
+.qz-mark {
+  display: inline-block; width: 12px; height: 12px;
+  background: var(--qz-gold);
+  transform: rotate(45deg);
+  box-shadow: 0 2px 4px rgba(140, 109, 31, 0.35);
+  flex: none;
+}
+.qz-mark--sm { width: 8px; height: 8px; box-shadow: 0 1px 3px rgba(140, 109, 31, 0.35); }
+/* Small loading: the ◆ rotates in place — 900ms revolution, linear (V2 §6.5). */
+@keyframes qz-mark-spin { from { transform: rotate(45deg); } to { transform: rotate(405deg); } }
+.qz-mark--spin { animation: qz-mark-spin 900ms linear infinite; }
+/* Skeleton bones for content-area loading (V2: no spinners for content). */
+@keyframes qz-skeleton-pulse { 0%, 100% { opacity: 0.55; } 50% { opacity: 1; } }
+.qz-skeleton {
+  background: var(--qz-cream-2);
+  border-radius: var(--qz-radius-sm);
+  animation: qz-skeleton-pulse 1.4s var(--qz-ease) infinite;
+}
+
+/* Desktop-only admin (V2 §2.1): below 1024px show the notice, hide the app.
+   Mount <div class="qz-viewport-notice">…</div> once per shell (DS-4). */
+.qz-viewport-notice { display: none; }
+@media (max-width: 1023px) {
+  .qz-viewport-notice {
+    display: flex; align-items: center; justify-content: center; gap: 12px;
+    position: fixed; inset: 0; z-index: 300;
+    background: var(--qz-cream); color: var(--qz-ink);
+    padding: 40px; text-align: center; font-size: 16px;
+  }
+}
+
 /* — Typography helpers — */
-.qz-display { font-family: var(--qz-font-display); font-weight: 600; font-size: var(--qz-t-display); line-height: 1.04; letter-spacing: -0.025em; margin: 0; }
-.qz-h1 { font-family: var(--qz-font-display); font-weight: 600; font-size: var(--qz-t-h1); line-height: var(--qz-lh-tight); letter-spacing: -0.02em; margin: 0; }
-.qz-h2 { font-family: var(--qz-font-display); font-weight: 600; font-size: var(--qz-t-h2); line-height: 1.25; letter-spacing: -0.01em; margin: 0; }
-.qz-h3 { font-family: var(--qz-font-body); font-weight: 600; font-size: var(--qz-t-h3); letter-spacing: -0.005em; margin: 0; }
-.qz-label { font-family: var(--qz-font-mono); font-size: 11px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.12em; color: var(--qz-ink-4); }
+/* V2 §4.2 roles: .qz-display = H1 44/700/-0.03 · .qz-h1 = H2 28/700/-0.025 ·
+   .qz-h2 = H3/card 20/700/-0.02 · .qz-h3 = small subhead 16/700 */
+.qz-display { font-family: var(--qz-font-display); font-weight: 700; font-size: var(--qz-t-display); line-height: 1.05; letter-spacing: -0.03em; margin: 0; }
+.qz-h1 { font-family: var(--qz-font-display); font-weight: 700; font-size: var(--qz-t-h1); line-height: var(--qz-lh-tight); letter-spacing: -0.025em; margin: 0; }
+.qz-h2 { font-family: var(--qz-font-display); font-weight: 700; font-size: var(--qz-t-h2); line-height: 1.3; letter-spacing: -0.02em; margin: 0; }
+.qz-h3 { font-family: var(--qz-font-body); font-weight: 700; font-size: var(--qz-t-h3); letter-spacing: -0.01em; margin: 0; }
+.qz-label { font-family: var(--qz-font-mono); font-size: 11px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.06em; color: var(--qz-ink-4); }
 .qz-mono { font-family: var(--qz-font-mono); font-size: var(--qz-t-mono); }
 .qz-muted { color: var(--qz-ink-3); }
 .qz-dim { color: var(--qz-ink-4); }
 .qz-serif-italic { font-family: var(--qz-font-display); font-style: italic; }
 .qz-tnum { font-variant-numeric: tabular-nums; }
 
-/* — Card — */
+/* — Card (V2 §7.3) — no border; the lift-1 ring+shadow stack IS the edge — */
 .qz-card {
   background: var(--qz-paper);
-  border: 1px solid var(--qz-rule);
+  border: none;
   border-radius: var(--qz-radius);
   padding: var(--qz-pad-card);
-  box-shadow: var(--qz-shadow-sm);
+  box-shadow: var(--qz-lift-1);
 }
 .qz-card.qz-flush { padding: 0; }
-.qz-card.qz-dash { border-style: dashed; background: transparent; box-shadow: none; }
-/* Opt-in lift for clickable cards (gallery tiles, etc.) */
+.qz-card.qz-dash { border: 1px dashed var(--qz-ink-25); background: transparent; box-shadow: none; }
+/* Opt-in lift for clickable cards (gallery tiles, etc.) — V2: lift 4-6px */
 .qz-card.qz-interactive {
   cursor: pointer;
-  transition: box-shadow var(--qz-dur) var(--qz-ease), transform var(--qz-dur) var(--qz-ease), border-color var(--qz-dur) var(--qz-ease);
+  transition: box-shadow var(--qz-dur) var(--qz-ease), transform var(--qz-dur) var(--qz-ease);
 }
-.qz-card.qz-interactive:hover { box-shadow: var(--qz-shadow-md); transform: translateY(-2px); border-color: color-mix(in srgb, var(--qz-ink) 12%, transparent); }
+.qz-card.qz-interactive:hover { box-shadow: var(--qz-lift-2); transform: translateY(-4px); }
 
-/* — Button — */
+/* — Button (V2 §7.1) — pills, one canonical size (11px 22px · 14px/600).
+   Primary = ink · secondary (default) = white w/ inset-ring · ghost · the old
+   accent variant is mapped to the ink primary look (V2: primary actions are
+   ink, never a color). Hover = 1px lift + deepened shadow, no color change. — */
 .qz-btn {
-  display: inline-flex; align-items: center; gap: 8px;
-  height: 36px; padding: 0 16px;
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  padding: 11px 22px;
   background: var(--qz-paper); color: var(--qz-ink);
-  border: 1px solid var(--qz-rule); border-radius: var(--qz-radius-sm);
-  font-size: 13.5px; font-weight: 500;
+  border: none; border-radius: var(--qz-radius-pill);
+  box-shadow: var(--qz-lift-1);
+  font-size: 14px; font-weight: 600;
   font-family: var(--qz-font-body);
+  line-height: 1;
   cursor: pointer;
-  transition: background var(--qz-dur) var(--qz-ease), border-color var(--qz-dur) var(--qz-ease), color var(--qz-dur) var(--qz-ease), box-shadow var(--qz-dur) var(--qz-ease), transform var(--qz-dur) var(--qz-ease);
+  transition: box-shadow var(--qz-dur-fast) var(--qz-ease), transform var(--qz-dur-fast) var(--qz-ease), background var(--qz-dur-fast) var(--qz-ease), color var(--qz-dur-fast) var(--qz-ease);
   white-space: nowrap;
 }
-.qz-btn:hover { border-color: var(--qz-ink-3); box-shadow: var(--qz-shadow-sm); }
-.qz-btn:active { transform: translateY(0.5px); }
-.qz-btn[disabled], .qz-btn[aria-disabled="true"] { opacity: 0.45; cursor: not-allowed; box-shadow: none; transform: none; }
-.qz-btn-primary {
-  background: var(--qz-ink); color: var(--qz-paper); border-color: var(--qz-ink);
-}
-.qz-btn-primary:hover { background: var(--qz-ink-2); border-color: var(--qz-ink-2); box-shadow: var(--qz-shadow-md); transform: translateY(-1px); }
-.qz-btn-accent {
-  background: var(--qz-accent); color: #fff; border-color: var(--qz-accent);
-}
-.qz-btn-accent:hover { background: var(--qz-accent-2); border-color: var(--qz-accent-2); box-shadow: var(--qz-shadow-md); transform: translateY(-1px); }
-.qz-btn-ghost { background: transparent; border-color: transparent; box-shadow: none; }
-.qz-btn-ghost:hover { background: var(--qz-rule-2); border-color: var(--qz-rule); box-shadow: none; }
-.qz-btn-sm { height: 30px; padding: 0 12px; font-size: 12.5px; }
-.qz-btn-lg { height: 46px; padding: 0 24px; font-size: 15px; }
+.qz-btn:hover { transform: translateY(-1px); box-shadow: var(--qz-lift-2); }
+.qz-btn:active { transform: translateY(0); }
+.qz-btn[disabled], .qz-btn[aria-disabled="true"] { opacity: 0.45; cursor: not-allowed; box-shadow: var(--qz-lift-1); transform: none; }
+.qz-btn-primary { background: var(--qz-ink); color: var(--qz-cream, #fff); }
+.qz-btn-primary:hover { background: var(--qz-ink); }
+.qz-btn-accent { background: var(--qz-ink); color: var(--qz-cream, #fff); }
+.qz-btn-accent:hover { background: var(--qz-ink); }
+.qz-btn-ghost { background: transparent; box-shadow: none; color: var(--qz-accent); }
+.qz-btn-ghost:hover { background: var(--qz-cream-2); box-shadow: none; transform: none; text-decoration: underline; }
+/* Legacy size modifiers — V2 wants ONE size; keep the paddings close so old
+   call sites stay sane (sm for dense toolbars only). */
+.qz-btn-sm { padding: 7px 14px; font-size: 13px; }
+.qz-btn-lg { padding: 13px 26px; font-size: 15px; }
 
 /* — Segmented control (e.g. Build / Optimize) — */
 .qz-segmented {
@@ -280,16 +436,17 @@ body[data-qz] :focus-visible {
 /* — Table — */
 .qz-table { width: 100%; border-collapse: collapse; }
 .qz-table thead th {
-  text-align: left; padding: 12px 16px;
-  font-family: var(--qz-font-mono); font-size: 11px; font-weight: 500;
-  text-transform: uppercase; letter-spacing: 0.12em;
-  color: var(--qz-ink-3);
+  text-align: left; padding: 12px 20px;
+  font-family: var(--qz-font-mono); font-size: 10.5px; font-weight: 500;
+  text-transform: uppercase; letter-spacing: 0.06em;
+  color: var(--qz-ink-4);
   border-bottom: 1px solid var(--qz-rule);
 }
 .qz-table tbody td {
-  padding: 16px;
+  padding: 11px 20px;
+  height: 48px; /* V2 §7.6 row min-height */
   border-bottom: 1px solid var(--qz-rule);
-  font-size: 14.5px;
+  font-size: 14px;
   vertical-align: middle;
 }
 .qz-table tbody tr:last-child td { border-bottom: 0; }
@@ -307,21 +464,27 @@ body[data-qz] :focus-visible {
   text-transform: uppercase; letter-spacing: 0.12em; color: var(--qz-ink-3);
 }
 .qz-field-hint { font-size: 12.5px; color: var(--qz-ink-3); }
+/* Inputs (V2 §7.4): inset-shadow border (not a border), 9px radius, indigo
+   focus ring + deepened inset on hover/focus. */
 .qz-input, .qz-textarea, .qz-select {
   background: var(--qz-paper); color: var(--qz-ink);
-  border: 1px solid var(--qz-rule); border-radius: var(--qz-radius-sm);
-  padding: 11px 13px; font-size: 14.5px; line-height: 1.4;
+  border: none; border-radius: var(--qz-radius-sm);
+  box-shadow: inset 0 0 0 1px var(--qz-rule);
+  padding: 11px 16px; font-size: 14px; line-height: 1.4;
   width: 100%; outline: none;
   font-family: inherit;
-  transition: border-color var(--qz-dur) var(--qz-ease), box-shadow var(--qz-dur) var(--qz-ease);
+  transition: box-shadow var(--qz-dur-fast) var(--qz-ease);
+}
+.qz-input:hover, .qz-textarea:hover, .qz-select:hover {
+  box-shadow: inset 0 0 0 1px var(--qz-ink-25);
 }
 .qz-input:focus, .qz-textarea:focus, .qz-select:focus {
-  border-color: var(--qz-accent); box-shadow: var(--qz-shadow-focus);
+  box-shadow: inset 0 0 0 1px var(--qz-accent), var(--qz-shadow-focus);
 }
-.qz-textarea { resize: vertical; min-height: 96px; }
+.qz-textarea { resize: vertical; min-height: 96px; max-height: 240px; }
 
-/* — Page layout — */
-.qz-page { padding: 40px 48px 96px; max-width: 1280px; margin: 0 auto; }
+/* — Page layout (V2 §2.1: max 1180, 40px side padding) — */
+.qz-page { padding: 34px 40px 96px; max-width: 1180px; margin: 0 auto; }
 /* Wide funnel shell — the create funnel opts in so every stage is FLUID: it
    expands with the viewport (owner ask: "full screen / expands with the page
    size so we can better understand the real estate"). No max-width cap.

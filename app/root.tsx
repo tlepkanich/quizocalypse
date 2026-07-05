@@ -11,6 +11,10 @@ import { json, type LinksFunction, type LoaderFunctionArgs } from "@remix-run/no
 import qzStyles from "./styles/quizocalypse.css?url";
 
 export const links: LinksFunction = () => [
+  // Self-hosted fonts (design-system-V2): preload so the swap window is one
+  // paint, not a fetch round-trip. crossOrigin is required for font preloads.
+  { rel: "preload", href: "/fonts/MonaSans.woff2", as: "font", type: "font/woff2", crossOrigin: "anonymous" },
+  { rel: "preload", href: "/fonts/JetBrainsMono-Medium.woff2", as: "font", type: "font/woff2", crossOrigin: "anonymous" },
   { rel: "stylesheet", href: qzStyles },
 ];
 
