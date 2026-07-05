@@ -1,4 +1,6 @@
 import {
+  cloneElement,
+  isValidElement,
   useCallback,
   useEffect,
   useId,
@@ -350,14 +352,17 @@ export function QzPopover({
 
   return (
     <>
-      <span
-        ref={anchorRef}
-        className="qz-popover-anchor"
-        onClick={() => setOpen(!open)}
-        aria-expanded={open}
-        aria-haspopup="dialog"
-      >
-        {trigger}
+      {/* BLD-6 (axe critical aria-allowed-attr): aria-expanded/haspopup are
+          not valid on a plain span — clone them onto the trigger ELEMENT
+          (every consumer passes a real <button>); the span stays a bare
+          click/measure anchor. */}
+      <span ref={anchorRef} className="qz-popover-anchor" onClick={() => setOpen(!open)}>
+        {isValidElement(trigger)
+          ? cloneElement(trigger as React.ReactElement<Record<string, unknown>>, {
+              "aria-expanded": open,
+              "aria-haspopup": "dialog",
+            })
+          : trigger}
       </span>
       {ready && open && pos
         ? createPortal(

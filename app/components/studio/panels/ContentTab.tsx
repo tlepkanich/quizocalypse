@@ -426,6 +426,7 @@ export function QuestionContent({
         }
       >
         <QzTextarea
+          aria-label="Question text"
           value={node.data.text}
           onChange={(e) => setText(e.target.value.slice(0, QUESTION_MAX))}
           maxLength={QUESTION_MAX}
@@ -453,6 +454,7 @@ export function QuestionContent({
       {regen ? <RegenerateQuestion nodeId={node.id} regen={regen} /> : null}
       <QzField label="Type">
         <QzSelect
+          aria-label="Question type"
           value={node.data.question_type}
           onChange={(e) => {
             const next = e.target.value;
@@ -583,6 +585,7 @@ export function QuestionContent({
             <div key={a.id} style={{ display: "flex", flexDirection: "column", gap: 4 }}>
               <div className="qz-row" style={{ gap: 6, alignItems: "center" }}>
                 <QzInput
+                  aria-label="Answer text"
                   value={a.text}
                   onChange={(e) => setAnswer(a.id, { text: e.target.value.slice(0, ANSWER_MAX) })}
                   maxLength={ANSWER_MAX}
