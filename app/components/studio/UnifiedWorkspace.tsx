@@ -857,6 +857,7 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
                 confirmDeleteId={confirmDeleteId}
                 onConfirmDelete={setConfirmDeleteId}
                 hideViewSwitcher
+                variant="v3"
               />
               {selectedId ? (
                 <ContextPanel

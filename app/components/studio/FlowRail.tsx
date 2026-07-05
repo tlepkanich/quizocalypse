@@ -14,6 +14,7 @@ import { INSERTABLE_MODULES, insertModule, updateNodeData, type InsertKind } fro
 import { NODE_LABEL } from "./panels/nodeMeta";
 import { QuestionBankDrawer } from "./QuestionBankDrawer";
 import { LogicFlowMap } from "../logic/LogicFlowMap";
+import { QzPopover } from "../qz-overlays";
 import type { BuilderCategory } from "../builder/stepProps";
 
 // Per-answer divergence chips ("answer → destination") — shown under question
@@ -126,6 +127,7 @@ export function FlowRail({
   confirmDeleteId,
   onConfirmDelete,
   hideViewSwitcher,
+  variant = "classic",
   categories = [],
 }: {
   doc: QuizDoc;
@@ -144,10 +146,15 @@ export function FlowRail({
   // the selected step can arm the same two-step confirm (UnifiedWorkspace owns it).
   confirmDeleteId: string | null;
   onConfirmDelete: (nodeId: string | null) => void;
-  // Standalone hides FlowRail's own view switcher — the Quizell chrome renders a
-  // persistent Build/Products/Results/Logic strip in the top bar instead. The
-  // embedded `body` layout (no top bar) keeps it as the primary view nav.
+  // Standalone hides FlowRail's own view switcher — the builder chrome's nav
+  // rail carries the views instead. The embedded `body` layout (no top bar)
+  // keeps it as the primary view nav.
   hideViewSwitcher?: boolean;
+  // BLD-2 — "v3" renders the questionsLogicV3 row anatomy (26px mono chip +
+  // connector + 2-line-clamped title, gold decider chip) with the row actions
+  // in a portaled ⋯ menu instead of inline buttons. Standalone-only opt-in;
+  // the embedded surface keeps the classic rows untouched.
+  variant?: "classic" | "v3";
   // B4 — the confirmed buckets, so the Flow View's result cards can show each
   // page's bound bucket + size. Optional (defaults []) for any future caller.
   categories?: BuilderCategory[];
@@ -155,6 +162,8 @@ export function FlowRail({
   const [adding, setAdding] = useState(false);
   // Question Bank drawer (B5) — a searchable library of pre-built questions.
   const [bankOpen, setBankOpen] = useState(false);
+  // BLD-2 (v3) — which row's ⋯ actions menu is open (one at a time).
+  const [menuOpenId, setMenuOpenId] = useState<string | null>(null);
   // B4 — swap the step list for a read-only skip-logic diagram (LogicFlowMap).
   const [showFlowView, setShowFlowView] = useState(false);
   // Inline rename: the node being renamed + the working value (double-click a row).
@@ -414,6 +423,185 @@ export function FlowRail({
     );
   };
 
+  // ── BLD-2 — the v3 row: 26px mono number chip (gold when the question
+  // decides the result, ✉/◆ tints for capture/result termini), 2-line-clamped
+  // title, red issue dot, and ONE ⋯ menu (QzPopover → document.body, so the
+  // scrollable panel can't clip it — the overlay-portal lesson) holding the
+  // actions the classic row crammed inline (＋↑ ＋↓ ⧉ ✕ truncated the title).
+  // The two-step delete confirm lives inside the menu; closing it disarms.
+  const menuItem = (
+    label: string,
+    onClick: () => void,
+    opts?: { destructive?: boolean },
+  ) => (
+    <button
+      type="button"
+      className={`qz-railmenu-item${opts?.destructive ? " is-crit" : ""}`}
+      onClick={onClick}
+    >
+      {label}
+    </button>
+  );
+
+  const rowV3 = (nodeId: string, indent = 0) => {
+    const node = byId.get(nodeId);
+    if (!node) return null;
+    const sel = selectedId === nodeId;
+    const issues = issuesByNode.get(nodeId)?.length ?? 0;
+    const movable = runIndex.has(nodeId) && node.type !== "intro";
+    const qNum = questionNumber.get(nodeId);
+    const isDecider =
+      node.type === "question" && (node.data as Record<string, unknown>).role === "decides";
+    const chipClass = isDecider
+      ? " is-decider"
+      : node.type === "email_gate"
+        ? " is-capture"
+        : node.type === "result" || node.type === "end"
+          ? " is-reveal"
+          : "";
+    const armed = confirmDeleteId === nodeId;
+    const selectRow = () => {
+      onConfirmDelete(null);
+      onSelect(sel ? null : nodeId);
+    };
+    return (
+      <div key={nodeId} style={{ marginLeft: indent ? 14 : 0 }}>
+        <div
+          className={`qz-s3-row qz-railrow${sel ? " is-active" : ""}${currentId === nodeId ? " is-current" : ""}`}
+          onClick={selectRow}
+          onDoubleClick={() => startRename(node)}
+          role="button"
+          aria-pressed={sel}
+          tabIndex={0}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              selectRow();
+            }
+          }}
+        >
+          <span
+            className={`qz-s3-numchip${chipClass}`}
+            aria-hidden
+            title={
+              isDecider
+                ? "The deciding question"
+                : qNum
+                  ? `Question ${qNum}`
+                  : NODE_LABEL[node.type]
+            }
+          >
+            {qNum ?? GLYPH[node.type]}
+          </span>
+          {renaming === nodeId ? (
+            <input
+              className="qz-input"
+              autoFocus
+              value={renameVal}
+              onChange={(e) => setRenameVal(e.target.value)}
+              onClick={(e) => e.stopPropagation()}
+              onKeyDown={(e) => {
+                e.stopPropagation();
+                if (e.key === "Enter") commitRename(node);
+                else if (e.key === "Escape") setRenaming(null);
+              }}
+              onBlur={() => commitRename(node)}
+              style={{ flex: 1, minWidth: 0, fontSize: 12.5, height: 26, padding: "0 6px" }}
+            />
+          ) : (
+            <span
+              className="qz-s3-rowtitle"
+              style={{ flex: "1 1 auto" }}
+              title={`${nodeTitle(node)} — double-click to rename`}
+            >
+              {nodeTitle(node)}
+            </span>
+          )}
+          {issues > 0 ? (
+            <span className="qz-raildot" title={`${issues} issue${issues > 1 ? "s" : ""} to fix`} />
+          ) : null}
+          <span onClick={(e) => e.stopPropagation()} onDoubleClick={(e) => e.stopPropagation()}>
+            <QzPopover
+              open={menuOpenId === nodeId}
+              onOpenChange={(o) => {
+                setMenuOpenId(o ? nodeId : null);
+                if (!o) onConfirmDelete(null);
+              }}
+              placement="bottom"
+              maxWidth={200}
+              trigger={
+                <button
+                  type="button"
+                  className={`qz-railmenu-btn${menuOpenId === nodeId ? " is-open" : ""}`}
+                  aria-label={`Step actions for ${nodeTitle(node)}`}
+                >
+                  ⋯
+                </button>
+              }
+              content={
+                <div className="qz-railmenu">
+                  {menuItem("Rename", () => {
+                    setMenuOpenId(null);
+                    startRename(node);
+                  })}
+                  {movable
+                    ? menuItem("Move up", () => move(nodeId, -1))
+                    : null}
+                  {movable
+                    ? menuItem("Move down", () => move(nodeId, 1))
+                    : null}
+                  {node.type === "question"
+                    ? menuItem("Add question above", () => {
+                        setMenuOpenId(null);
+                        insertRelative(nodeId, "above");
+                      })
+                    : null}
+                  {node.type === "question"
+                    ? menuItem("Add question below", () => {
+                        setMenuOpenId(null);
+                        insertRelative(nodeId, "below");
+                      })
+                    : null}
+                  {node.type === "question"
+                    ? menuItem("Duplicate", () => {
+                        setMenuOpenId(null);
+                        duplicate(nodeId);
+                      })
+                    : null}
+                  {node.type !== "intro" ? (
+                    armed ? (
+                      <>
+                        {menuItem(
+                          "Confirm delete",
+                          () => {
+                            setMenuOpenId(null);
+                            onConfirmDelete(null);
+                            remove(nodeId);
+                          },
+                          { destructive: true },
+                        )}
+                        {menuItem("Cancel", () => onConfirmDelete(null))}
+                      </>
+                    ) : (
+                      menuItem("Delete…", () => onConfirmDelete(nodeId), { destructive: true })
+                    )
+                  ) : null}
+                </div>
+              }
+            />
+          </span>
+        </div>
+        {node.type === "question" ? (
+          <div style={{ marginLeft: 34 }}>
+            <RouteBadges doc={doc} nodeId={nodeId} />
+          </div>
+        ) : null}
+      </div>
+    );
+  };
+
+  const renderRow = variant === "v3" ? rowV3 : row;
+
   return (
     <div className="qz-card" style={{ padding: 10, position: "sticky", top: 8 }}>
       {!hideViewSwitcher && (
@@ -466,15 +654,18 @@ export function FlowRail({
             </div>
           ) : (
             <>
-          <div style={{ display: "flex", flexDirection: "column", gap: 2, maxHeight: "62vh", overflowY: "auto" }}>
-            {ordered.steps.map((s) => row(s.nodeId))}
+          <div
+            className={variant === "v3" ? "qz-s3-flow" : undefined}
+            style={{ display: "flex", flexDirection: "column", gap: variant === "v3" ? 4 : 2, maxHeight: "62vh", overflowY: "auto" }}
+          >
+            {ordered.steps.map((s) => renderRow(s.nodeId))}
             {ordered.branches.map((lane) =>
               lane.steps.length > 0 ? (
                 <div key={lane.laneId} style={{ marginTop: 2 }}>
                   <div className="qz-dim" style={{ fontSize: 10.5, margin: "4px 0 2px 22px", textTransform: "uppercase", letterSpacing: 0.4 }}>
                     ⑂ {lane.slotLabel}
                   </div>
-                  {lane.steps.map((s) => row(s.nodeId, 1))}
+                  {lane.steps.map((s) => renderRow(s.nodeId, 1))}
                 </div>
               ) : null,
             )}
@@ -498,7 +689,7 @@ export function FlowRail({
                   Clean up
                 </button>
               </div>
-              {ordered.orphans.map((id) => row(id))}
+              {ordered.orphans.map((id) => renderRow(id))}
             </div>
           ) : null}
 
