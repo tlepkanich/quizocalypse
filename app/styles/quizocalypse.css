@@ -1216,6 +1216,17 @@ body[data-qz] ::selection { background: var(--qz-ink); color: var(--qz-cream); }
   padding: 14px; display: flex; flex-direction: column; gap: 14px;
 }
 .qz-builder-stage { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; background: var(--qz-cream-2); }
+/* BLD-3 — the right-side step inspector (the embedded 3-pane's 400px column):
+   the ContextPanel gets real room, so its tabs stop clipping. Narrower
+   laptops trade it down to 340px before the canvas gives up its space. */
+.qz-builder-inspector {
+  flex: 0 0 400px; width: 400px; min-width: 0; overflow-y: auto;
+  background: var(--qz-paper); border-left: 1px solid var(--qz-rule);
+  padding: 14px; display: flex; flex-direction: column; gap: 14px;
+}
+@media (max-width: 1499px) {
+  .qz-builder-inspector { flex-basis: 340px; width: 340px; }
+}
 /* QB-8 — slim validation/publish notices above the canvas; collapses to nothing
    when there's nothing to show, so the canvas is just the live quiz. */
 .qz-builder-notices { flex: 0 0 auto; padding: 14px 18px 0; display: flex; flex-direction: column; gap: 10px; }

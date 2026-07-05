@@ -834,7 +834,14 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
           />
         </>
       ) : tool === "theme" ? (
-        <BuilderDesignPanel doc={doc} commit={commit} onSelectNode={select} />
+        <>
+          {/* BLD-3 — every tool panel opens with a header (the design panel's
+              first control read as a floating checkbox without one). */}
+          <div className="qz-label" style={{ fontSize: 11 }}>
+            Theme
+          </div>
+          <BuilderDesignPanel doc={doc} commit={commit} onSelectNode={select} />
+        </>
       ) : tool === "code" ? (
         selectedNode ? (
           <CssTab doc={doc} node={selectedNode} onCommit={commit} />
@@ -860,10 +867,10 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
             <BuilderBlocksPalette doc={doc} node={selectedNode} commit={commit} />
           ) : (
             <>
-              {/* Step list first (navigation), then the selected step's editor
-                  right below it — select a step, edit it there (Quizell-style).
-                  The quiz-global Page Settings live in the no-selection state so
-                  they never bury the node editor. */}
+              {/* BLD-3 — the left panel is pure NAVIGATION now (step list +
+                  quiz-global Page Settings, always reachable); the selected
+                  step edits in the right-side inspector instead of burying
+                  the list. */}
               <FlowRail
                 doc={doc}
                 ordered={ordered}
@@ -881,34 +888,37 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
                 hideViewSwitcher
                 variant="v3"
               />
-              {selectedId ? (
-                <ContextPanel
-                  doc={doc}
-                  nodeId={selectedId}
-                  onCommit={commit}
-                  onClose={() => select(null)}
-                  products={data.productIndex}
-                  productIndex={data.productIndex}
-                  categories={data.categories}
-                  frameBreakpoint={breakpointForWidth(frameW)}
-                  onOpenLogic={() => setView("logic")}
-                regen={regenApi}
-                />
-              ) : (
-                <>
-                  {/* QP-2 — quiz-global Page Settings (background + page paddings). */}
-                  <BuilderPageSettings doc={doc} commit={commit} />
-                  <div className="qz-card" style={{ padding: 12 }}>
-                    <p className="qz-dim" style={{ fontSize: 12.5, margin: 0 }}>
-                      Select a step to edit its content, design, and layout.
-                    </p>
-                  </div>
-                </>
-              )}
+              {/* QP-2 — quiz-global Page Settings (background + page paddings). */}
+              <BuilderPageSettings doc={doc} commit={commit} />
             </>
           )}
         </>
       );
+
+    // BLD-3 — the right-side 400px inspector (the embedded 3-pane geometry):
+    // the ContextPanel gets real room, so its Content/Design/Routing tabs fit
+    // instead of clipping at the old 320px left panel's edge.
+    const inspector = selectedId ? (
+      <ContextPanel
+        doc={doc}
+        nodeId={selectedId}
+        onCommit={commit}
+        onClose={() => select(null)}
+        products={data.productIndex}
+        productIndex={data.productIndex}
+        categories={data.categories}
+        frameBreakpoint={breakpointForWidth(frameW)}
+        onOpenLogic={() => setView("logic")}
+        regen={regenApi}
+      />
+    ) : (
+      <div className="qz-card" style={{ padding: 12 }}>
+        <p className="qz-dim" style={{ fontSize: 12.5, margin: 0 }}>
+          Select a step in the rail — or click any element in the preview — to
+          edit its content, design, and layout here.
+        </p>
+      </div>
+    );
 
     // The health pill + its controlled popover (QzPopover portals correctly
     // inside the blurred top bar — same hosting as TopBar3). Legacy docs hide
@@ -1087,6 +1097,9 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
                   </div>
                 </div>
               </div>
+              <aside className="qz-builder-inspector" aria-label="Step inspector">
+                {inspector}
+              </aside>
             </>
           ) : (
             <div className="qz-builder-settings">

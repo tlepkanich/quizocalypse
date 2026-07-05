@@ -29,7 +29,11 @@ const swatch: CSSProperties = {
   background: "none",
 };
 const hexInput: CSSProperties = {
+  // BLD-3 — shrinkable so a narrow panel wraps the row instead of clipping
+  // the trailing ✨ Auto button off the panel edge.
   width: 96,
+  flex: "0 1 96px",
+  minWidth: 64,
   font: "inherit",
   fontSize: 13,
   padding: "5px 8px",
@@ -60,7 +64,7 @@ function ColorRow({
   const [text, setText] = useState(value ?? "");
   useEffect(() => setText(value ?? ""), [value]);
   return (
-    <div className="qz-row qz-gap-8" style={{ alignItems: "center" }}>
+    <div className="qz-row qz-gap-8" style={{ alignItems: "center", flexWrap: "wrap" }}>
       <span style={{ fontSize: 13, width: 96, flexShrink: 0 }}>{label}</span>
       <input
         type="color"
