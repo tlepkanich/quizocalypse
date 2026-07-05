@@ -1,10 +1,11 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { createPortal } from "react-dom";
 import type { Quiz as QuizDoc } from "../../../lib/quizSchema";
 import type { BuilderCategory } from "../../builder/stepProps";
 import { buildTier1Report, type Tier1Link } from "../../../lib/pathReport";
 import { outcomeTable } from "../../../lib/pathAnalyzer";
-import { pathReportHash, isPathReportStale } from "../../../lib/pathReportMeta";
+import { Tier1CheckList } from "./Tier1CheckList";
+import { usePathQuality } from "./usePathQuality";
 
 // LOGIC v2 §7 — the "Test all paths" report overlay. Tier 1 (deterministic
 // structure/validity, buildTier1Report) renders in full; Tier 2 (AI quality
@@ -14,6 +15,8 @@ import { pathReportHash, isPathReportStale } from "../../../lib/pathReportMeta";
 // places"): it needs doc + categories + quizId + onCommit + onNavigate. Tier 1
 // is computed live from the current doc on every open (pure + sync — always
 // fresh). Portaled to document.body (the builder-overlay-portal lesson).
+// Composition (QL3-P0b): Tier1CheckList renders the Tier-1 section, the
+// usePathQuality hook owns the Tier-2 review flow — this file is the shell.
 export function PathReportPanel({
   doc,
   categories,
@@ -37,20 +40,14 @@ export function PathReportPanel({
 }) {
   const report = useMemo(() => buildTier1Report(doc, categories), [doc, categories]);
 
-  // ── Tier-2 advisory AI review (L2-12c) ──────────────────────────────────────
-  // Race guard (the useQuizDraft beginAiEdit class): the fetch takes seconds and
-  // the merchant may keep editing; compose the commit against the LATEST doc.
-  const docRef = useRef(doc);
-  docRef.current = doc;
-  const [aiState, setAiState] = useState<
-    { state: "idle" | "busy" } | { state: "error"; message: string }
-  >({ state: "idle" });
-  // Synchronous single-flight (a React-state check can double-fire on a rapid
-  // double-click before the "busy" state commits — a wasted paid AI call).
-  const inFlight = useRef(false);
-  const aiReport = doc.path_report_ai;
-  const currentHash = useMemo(() => pathReportHash(doc), [doc]);
-  const aiStale = isPathReportStale(aiReport, currentHash);
+  // ── Tier-2 advisory AI review (L2-12c) — extracted to usePathQuality ──────
+  const {
+    report: aiReport,
+    busy: aiBusy,
+    error: aiError,
+    isStale: aiStale,
+    runReview,
+  } = usePathQuality({ doc, quizId, onCommit, onFlush });
 
   // outcome_id → deep link: a rule id → Rules tab; else a decider answer id →
   // the decider question card.
@@ -67,48 +64,6 @@ export function PathReportPanel({
       return { link: null, label };
     };
   }, [doc]);
-
-  const runReview = async () => {
-    if (inFlight.current) return;
-    inFlight.current = true;
-    setAiState({ state: "busy" });
-    // Flush the pending autosave so the server reviews the merchant's LIVE draft,
-    // not a debounced-stale one; snapshot the reviewed structure NOW so the
-    // stored staleness hash is anchored to exactly what the rows describe (a
-    // during-fetch edit then correctly re-flags stale).
-    onFlush();
-    const reviewedHash = pathReportHash(docRef.current);
-    try {
-      const res = await fetch("/api/path-quality", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ quizId }),
-      });
-      const body = (await res.json()) as {
-        ok: boolean;
-        review?: { outcome_id: string; verdict: string; note: string }[];
-        meta?: { at: string; hash: string };
-        error?: string;
-      };
-      if (!body.ok || !body.review || !body.meta) {
-        setAiState({ state: "error", message: body.error ?? "Quality review failed — try again." });
-        return;
-      }
-      // One sparse commit against the CURRENT doc (nothing else touched). The
-      // hash is CLIENT-computed over the reviewed structure — NOT the server's
-      // meta.hash, which could be a debounced-stale snapshot → a spurious "stale"
-      // banner the instant the review lands.
-      onCommit({
-        ...docRef.current,
-        path_report_ai: { at: body.meta.at, hash: reviewedHash, rows: body.review },
-      });
-      setAiState({ state: "idle" });
-    } catch {
-      setAiState({ state: "error", message: "Quality review failed — try again." });
-    } finally {
-      inFlight.current = false;
-    }
-  };
 
   const closeRef = useRef<HTMLButtonElement>(null);
   useEffect(() => {
@@ -155,71 +110,7 @@ export function PathReportPanel({
         </header>
 
         <div className="qz-ql-report-body">
-          {/* ── Tier 1 — structure & validity ── */}
-          <div className="qz-ql-report-tier">Tier 1 · Structure &amp; validity</div>
-          <ul className="qz-ql-report-checks">
-            {report.checks.map((c) => (
-              <li key={c.id} className={`qz-ql-check is-${c.status === "pass" ? "pass" : c.severity}`}>
-                <div className="qz-ql-check-head">
-                  <span className="qz-ql-check-glyph" aria-hidden>
-                    {c.status === "pass" ? "✓" : c.severity === "block" ? "✕" : c.severity === "warn" ? "⚠" : "ⓘ"}
-                  </span>
-                  <span className="qz-ql-check-id">{c.id}</span>
-                  <span className="qz-ql-check-title">{c.title}</span>
-                  <span className="qz-sr-only">
-                    {c.status === "pass" ? " — passed" : ` — ${c.findings.length} finding(s)`}
-                  </span>
-                </div>
-                {c.findings.length > 0 ? (
-                  <ul className="qz-ql-check-findings">
-                    {c.findings.map((f, i) => (
-                      <li key={i}>
-                        {f.message}{" "}
-                        {f.link ? (
-                          <button
-                            type="button"
-                            className="qz-ql-report-goto"
-                            onClick={() => onNavigate(f.link!)}
-                          >
-                            Go to it →
-                          </button>
-                        ) : null}
-                      </li>
-                    ))}
-                  </ul>
-                ) : null}
-              </li>
-            ))}
-          </ul>
-
-          {/* ── Outcome table (linear: decider answers ∪ rules) ── */}
-          <div className="qz-ql-report-tier">Every possible outcome</div>
-          {report.outcomes.length === 0 ? (
-            <p className="qz-dim" style={{ fontSize: 12.5 }}>
-              No outcomes yet — pick a deciding question and map its answers.
-            </p>
-          ) : (
-            <table className="qz-ql-report-outcomes">
-              <thead>
-                <tr>
-                  <th>Via</th>
-                  <th>When the shopper picks</th>
-                  <th>They get</th>
-                  <th>Reachable</th>
-                </tr>
-              </thead>
-              <tbody>
-                {report.outcomes.map((o, i) => (
-                  <tr key={i}>
-                    <td>{o.kind === "rule" ? "Rule" : "Answer"}</td>
-                    <td>{o.label}</td>
-                    <td>{o.targetName}</td>
-                    <td>{o.reachable ? "✓" : "—"}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
+          <Tier1CheckList report={report} onNavigate={onNavigate} />
 
           {/* ── Tier 2 — SEPARATE by spec mandate; ADVISORY AI (L2-12c) ── */}
           <div className="qz-ql-report-tier qz-ql-report-tier--ai">
@@ -228,10 +119,10 @@ export function PathReportPanel({
               type="button"
               className="qz-btn qz-btn-ghost qz-btn-sm"
               onClick={runReview}
-              disabled={aiState.state === "busy"}
-              aria-busy={aiState.state === "busy"}
+              disabled={aiBusy}
+              aria-busy={aiBusy}
             >
-              {aiState.state === "busy" ? "Reviewing…" : "✦ Run AI quality review"}
+              {aiBusy ? "Reviewing…" : "✦ Run AI quality review"}
             </button>
           </div>
           <p className="qz-ql-report-tier2note">
@@ -240,8 +131,8 @@ export function PathReportPanel({
             correctness checks above never depend on it.
           </p>
           <div role="status" aria-live="polite">
-          {aiState.state === "error" ? (
-            <p className="qz-ql-report-aierr">{aiState.message}</p>
+          {aiError !== null ? (
+            <p className="qz-ql-report-aierr">{aiError}</p>
           ) : null}
           {aiReport ? (
             <>

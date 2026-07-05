@@ -6,7 +6,7 @@ import { addAnswer, setQuestionType, setQuestionRole } from "../../../lib/quizMu
 import { updateNodeData } from "../../studio/studioDoc";
 import { AnswerRow, type SkipOption } from "./AnswerRow";
 import { orderedQuestions, type QuestionNode } from "./questionOrder";
-import { ruleSummary } from "./RulesTab";
+import { ruleSummary } from "../../../lib/ruleSummary";
 
 const TEXT_MAX = 150;
 const MAX_ANSWERS = 8;
