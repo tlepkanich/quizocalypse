@@ -1136,7 +1136,27 @@ export function moveDecider(doc: QuizDoc, toNodeId: string): QuizDoc {
     nodes: doc.nodes.map((n) => {
       if (n.type !== "question") return n;
       if (n.id === toNodeId) {
-        return { ...n, data: { ...n.data, role: "decides" as const, required: true } };
+        // Review-caught (cross-UI resurrection): a question demoted through the
+        // OLD UI's setQuestionRole keeps its answers' target_id invisibly (the
+        // qualifier row renders no target select) — promoting it here would
+        // bring months-old mappings back to life as live routing while the
+        // confirm dialog says mappings were cleared, with V4/publish all green.
+        // So the promote branch ALSO drops any pre-existing target_id: the new
+        // decider always arrives UNMAPPED ("Choose…" per §5.4). No-op for
+        // v3-pure docs (our own demote already wipes).
+        return {
+          ...n,
+          data: {
+            ...n.data,
+            role: "decides" as const,
+            required: true,
+            answers: n.data.answers.map((a) => {
+              if (!("target_id" in a)) return a;
+              const { target_id: _stale, ...rest } = a;
+              return rest;
+            }),
+          },
+        };
       }
       if (n.data.role === "decides") {
         return {

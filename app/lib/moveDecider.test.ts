@@ -120,6 +120,28 @@ describe("moveDecider (quiz-step3 v3 §5.4)", () => {
     expect(q(out, "q1").data.answers.every((a) => "target_id" in a)).toBe(true);
   });
 
+  it("REVIEW FIX — promotion wipes STALE target_ids on the new decider (cross-UI resurrection)", () => {
+    // A question demoted through the OLD UI (setQuestionRole) keeps its
+    // answers' target_id invisibly. Promoting it must NOT resurrect those
+    // months-old mappings as live routing — the new decider arrives unmapped.
+    const doc = deciderDoc();
+    const demotedWithStale: QuizDoc = {
+      ...doc,
+      nodes: doc.nodes.map((n) =>
+        n.type === "question" && n.id === "q1"
+          ? { ...n, data: { ...n.data, role: "qualifier" as const } } // targets KEPT (the old-UI demote shape)
+          : n,
+      ),
+    };
+    const out = moveDecider(demotedWithStale, "q1");
+    const promoted = q(out, "q1");
+    expect(promoted.data.role).toBe("decides");
+    for (const a of promoted.data.answers) {
+      expect("target_id" in a).toBe(false); // arrives UNMAPPED — V4 forces a re-pick
+    }
+    expect(() => Quiz.parse(out)).not.toThrow();
+  });
+
   it("no-ops: multi_select target, same-node, unknown node, legacy doc", () => {
     const doc = deciderDoc();
     expect(moveDecider(doc, "qm")).toBe(doc); // multi cannot decide
