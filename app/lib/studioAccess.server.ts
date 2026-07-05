@@ -5,11 +5,13 @@ import prisma from "../db.server";
 
 // ───────────────────────────────────────────────────────────────────────────
 // Access gate for the standalone /studio surface. This surface is NOT behind
-// Shopify's embedded auth, so it's protected by a single shared token
-// (STUDIO_ACCESS_TOKEN). Flow: visit /studio?key=<token> once → we set a
-// signed, httpOnly cookie and redirect to the clean URL; thereafter the cookie
-// grants access. Rotating the token invalidates every existing cookie (the
-// cookie is HMAC-signed WITH the token, and stores only a constant marker).
+// Shopify's embedded auth. Primary auth is email magic links: /studio/login →
+// emailed single-use link → /studio/verify sets a signed, httpOnly session
+// cookie (grantStudioSession below; issuing lives in studioMagicLink.server).
+// The legacy shared-token path (?key=<STUDIO_ACCESS_TOKEN> → qz_studio cookie)
+// is kept as a break-glass fallback until magic-link login is confirmed
+// working, then it gets removed. Rotating the signing secret invalidates every
+// cookie at once (cookies are HMAC-signed with it and carry no secrets).
 // ───────────────────────────────────────────────────────────────────────────
 
 // Constant-time string compare (length-guarded) to avoid a timing side-channel
@@ -43,39 +45,98 @@ function accessCookie(token: string, secure: boolean) {
   });
 }
 
+// Secret that signs the magic-link session cookie. Falls back to the legacy
+// access token so no new env var is strictly required; rotating whichever
+// secret is in use invalidates every session at once.
+function sessionSecret(): string | undefined {
+  return process.env.STUDIO_SESSION_SECRET ?? process.env.STUDIO_ACCESS_TOKEN;
+}
+
+// Signed session cookie set after a successful magic-link verify. The value is
+// the allowlisted email the link was issued to.
+function sessionCookie(secret: string, secure: boolean) {
+  return createCookie("qz_studio_session", {
+    httpOnly: true,
+    sameSite: "lax",
+    path: "/",
+    secure,
+    maxAge: 60 * 60 * 24 * 30, // 30 days
+    secrets: [secret],
+  });
+}
+
+/**
+ * Serialize the session cookie for `email` — called by /studio/verify after a
+ * magic link is consumed. Returns the Set-Cookie header value.
+ */
+export async function grantStudioSession(email: string, request: Request): Promise<string> {
+  const secret = sessionSecret();
+  if (!secret) {
+    throw new Response(
+      "Studio login is not configured. Set STUDIO_SESSION_SECRET (or STUDIO_ACCESS_TOKEN).",
+      { status: 503 },
+    );
+  }
+  return sessionCookie(secret, isSecureRequest(request)).serialize(email);
+}
+
+/**
+ * Email carried by a valid magic-link session cookie, or null. The HMAC
+ * signature check (bound to sessionSecret) is what authenticates; the parsed
+ * value just identifies who logged in. Exported for tests and for screens
+ * that want to show the signed-in address.
+ */
+export async function studioSessionEmail(request: Request): Promise<string | null> {
+  const secret = sessionSecret();
+  if (!secret) return null;
+  const parsed = await sessionCookie(secret, isSecureRequest(request)).parse(
+    request.headers.get("Cookie"),
+  );
+  return typeof parsed === "string" && parsed.includes("@") ? parsed : null;
+}
+
+// True when the request carries the legacy break-glass token cookie.
+async function hasLegacyTokenCookie(request: Request): Promise<boolean> {
+  const token = process.env.STUDIO_ACCESS_TOKEN;
+  if (!token) return false;
+  const granted = await accessCookie(token, isSecureRequest(request)).parse(
+    request.headers.get("Cookie"),
+  );
+  return granted === "granted";
+}
+
 /**
  * Gate a standalone /studio request. Returns void when access is granted;
- * otherwise throws a Response (redirect after a valid ?key=, or a 401 prompt).
- * Call at the top of every /studio loader/action.
+ * otherwise throws a Response (redirect to /studio/login, or the legacy ?key=
+ * cookie-set redirect). Call at the top of every /studio loader/action.
  */
 export async function requireStudioAccess(request: Request): Promise<void> {
-  const token = process.env.STUDIO_ACCESS_TOKEN;
-  if (!token) {
+  if (!sessionSecret()) {
     throw new Response(
-      "The standalone builder is not configured. Set STUDIO_ACCESS_TOKEN in the environment.",
+      "The standalone builder is not configured. Set STUDIO_SESSION_SECRET (or STUDIO_ACCESS_TOKEN).",
       { status: 503 },
     );
   }
 
-  const cookie = accessCookie(token, isSecureRequest(request));
-  const granted = await cookie.parse(request.headers.get("Cookie"));
-  if (granted === "granted") return;
+  // Primary: magic-link session.
+  if (await studioSessionEmail(request)) return;
 
+  // Break-glass: legacy shared-token cookie / ?key= (remove once magic-link
+  // login is confirmed working for everyone).
+  if (await hasLegacyTokenCookie(request)) return;
+  const token = process.env.STUDIO_ACCESS_TOKEN;
   const url = new URL(request.url);
   const key = url.searchParams.get("key");
-  if (key && safeEqual(key, token)) {
+  if (token && key && safeEqual(key, token)) {
     // Valid key → set the signed cookie and redirect to the clean URL so the
     // token doesn't linger in the address bar / history.
     url.searchParams.delete("key");
     throw redirect(url.pathname + url.search, {
-      headers: { "Set-Cookie": await cookie.serialize("granted") },
+      headers: { "Set-Cookie": await accessCookie(token, isSecureRequest(request)).serialize("granted") },
     });
   }
 
-  throw new Response(accessPromptHtml(), {
-    status: 401,
-    headers: { "Content-Type": "text/html; charset=utf-8" },
-  });
+  throw redirect("/studio/login");
 }
 
 // Spin-off: the synthetic, non-myshopify domain that keys the single standalone
@@ -131,15 +192,12 @@ export async function resolveStudioShop(): Promise<Shop> {
 }
 
 // Non-throwing variant of the gate: true when the request carries a valid
-// signed studio cookie. Used to dual-auth shared API endpoints (the builder's
-// same-origin fetches carry the cookie). Exported for tests.
+// magic-link session cookie OR the legacy signed token cookie. Used to
+// dual-auth shared API endpoints (the builder's same-origin fetches carry the
+// cookie). Exported for tests.
 export async function hasStudioAccess(request: Request): Promise<boolean> {
-  const token = process.env.STUDIO_ACCESS_TOKEN;
-  if (!token) return false;
-  const granted = await accessCookie(token, isSecureRequest(request)).parse(
-    request.headers.get("Cookie"),
-  );
-  return granted === "granted";
+  if (await studioSessionEmail(request)) return true;
+  return hasLegacyTokenCookie(request);
 }
 
 // Resolve the shop for a shared API endpoint that must serve BOTH the embedded
@@ -159,31 +217,4 @@ export async function resolveApiShop(request: Request): Promise<Shop> {
   const shop = await prisma.shop.findUnique({ where: { shopDomain: session.shop } });
   if (!shop) throw new Response("Shop not found", { status: 404 });
   return shop;
-}
-
-// Minimal standalone "enter access key" page (rendered as a raw Response, so it
-// carries its own inline styles rather than going through root.tsx). The form
-// has no `action`, so it GETs back to the current URL — nothing user-controlled
-// is reflected into the markup (no XSS surface on this pre-auth page).
-function accessPromptHtml(): string {
-  return `<!doctype html>
-<html lang="en"><head><meta charset="utf-8" />
-<meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>Studio · access</title>
-<style>
-  body{margin:0;min-height:100vh;display:grid;place-items:center;background:#0f0f10;color:#fafafa;
-       font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
-  form{display:flex;flex-direction:column;gap:12px;width:300px;padding:28px;background:#1a1a1c;
-       border:1px solid #2a2a2e;border-radius:14px}
-  h1{font-size:16px;margin:0 0 4px}
-  p{font-size:13px;color:#a1a1aa;margin:0 0 8px}
-  input{padding:10px 12px;border-radius:8px;border:1px solid #3a3a3e;background:#0f0f10;color:#fafafa;font-size:14px}
-  button{padding:10px 12px;border-radius:8px;border:none;background:#2a6df4;color:#fff;font-weight:600;cursor:pointer}
-</style></head>
-<body><form method="get">
-  <h1>Quizocalypse Studio</h1>
-  <p>Enter the access key to open the builder.</p>
-  <input name="key" type="password" placeholder="Access key" autofocus autocomplete="current-password" />
-  <button type="submit">Enter</button>
-</form></body></html>`;
 }

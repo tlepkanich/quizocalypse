@@ -69,3 +69,54 @@ describe("hasStudioAccess", () => {
     expect(await hasStudioAccess(requestWith(stale))).toBe(false);
   });
 });
+
+// Magic-link session cookie path: qz_studio_session is HMAC-signed with
+// STUDIO_SESSION_SECRET (falling back to STUDIO_ACCESS_TOKEN) and carries the
+// allowlisted email. Forged the same way as above — value + secret drive the
+// signature.
+describe("hasStudioAccess (magic-link session)", () => {
+  const SECRET = "session-secret-under-test";
+
+  async function sessionCookieHeader(email: string, secret: string): Promise<string> {
+    const cookie = createCookie("qz_studio_session", { secrets: [secret], path: "/" });
+    return cookie.serialize(email);
+  }
+
+  function requestWith(header?: string): Request {
+    return new Request("http://localhost/api/categories/group", {
+      headers: header ? { Cookie: header } : {},
+    });
+  }
+
+  it("returns true for a session cookie signed with STUDIO_SESSION_SECRET", async () => {
+    delete process.env.STUDIO_ACCESS_TOKEN;
+    process.env.STUDIO_SESSION_SECRET = SECRET;
+    const header = await sessionCookieHeader("owner@example.com", SECRET);
+    expect(await hasStudioAccess(requestWith(header))).toBe(true);
+    delete process.env.STUDIO_SESSION_SECRET;
+  });
+
+  it("falls back to STUDIO_ACCESS_TOKEN as the signing secret", async () => {
+    delete process.env.STUDIO_SESSION_SECRET;
+    process.env.STUDIO_ACCESS_TOKEN = SECRET;
+    const header = await sessionCookieHeader("owner@example.com", SECRET);
+    expect(await hasStudioAccess(requestWith(header))).toBe(true);
+    delete process.env.STUDIO_ACCESS_TOKEN;
+  });
+
+  it("rejects a session cookie signed with the wrong secret", async () => {
+    delete process.env.STUDIO_ACCESS_TOKEN;
+    process.env.STUDIO_SESSION_SECRET = SECRET;
+    const header = await sessionCookieHeader("owner@example.com", "some-other-secret");
+    expect(await hasStudioAccess(requestWith(header))).toBe(false);
+    delete process.env.STUDIO_SESSION_SECRET;
+  });
+
+  it("rejects a signed value that is not an email", async () => {
+    delete process.env.STUDIO_ACCESS_TOKEN;
+    process.env.STUDIO_SESSION_SECRET = SECRET;
+    const header = await sessionCookieHeader("granted", SECRET);
+    expect(await hasStudioAccess(requestWith(header))).toBe(false);
+    delete process.env.STUDIO_SESSION_SECRET;
+  });
+});

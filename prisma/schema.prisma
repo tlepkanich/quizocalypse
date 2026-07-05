@@ -247,6 +247,21 @@ model Event {
   @@index([quizId, eventType, ts])
 }
 
+// Magic-link login tokens for the standalone /studio surface. One row per
+// issued link; stores only the SHA-256 hash of the token (a DB leak yields no
+// usable links). Single-use (usedAt) with a short TTL (expiresAt). The email
+// is the allowlisted address the link was issued to.
+model StudioLoginToken {
+  id        String    @id @default(cuid())
+  email     String
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([email, createdAt])
+}
+
 model EmailCapture {
   id         String   @id @default(cuid())
   shopId     String?
