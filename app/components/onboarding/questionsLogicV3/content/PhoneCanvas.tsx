@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import type { CSSProperties } from "react";
 import type { Quiz as QuizDoc, DesignTokens } from "../../../../lib/quizSchema";
+import { isFreeformType } from "../../../../lib/quizSchema";
 import type { OrderedQuestion } from "../../questionsLogic/questionOrder";
 import {
   resolveDesignTokens,
@@ -8,16 +9,21 @@ import {
   suggestContrastText,
 } from "../../../../lib/designTokens";
 import { googleFontsUrl } from "../../../runtime/runtimeStyles";
+import { assignSectionColors, sectionColorVars } from "../sectionPalette";
+import { answersExceedBudget } from "../fitSteps";
 import { CAPTURE_ID, REVEAL_ID } from "../LeftRail";
+import type { RegenApi } from "../Step3Shell";
 import { PhoneScreen, type ScreenPosition } from "./PhoneScreen";
 
 /* quiz-step3 v3 §4 — the Content view's phone canvas: the persistent caption
    pill, a 322px ink-bezel phone whose screen is brand-themed by inlining
    resolveDesignTokens → tokensToCssVars (the TemplatePreviewDrawer fork —
    inside the bezel the merchant brand owns every var), and the ↻ Regenerate
-   chip (static this phase; P2 wires it through the existing AI bracket).
-   Back/Next drive the REAL walk Q1 → … → Qn → capture → reveal; the shell
-   owns the position (`activeId`) so the rail stays in sync. */
+   chip (P2: live, driven through the stage's existing beginAiEdit/undo
+   bracket — single-flight, 10s Undo, actionable error). Back/Next drive the
+   REAL walk Q1 → … → Qn → capture → reveal; the shell owns the position
+   (`activeId`) so the rail stays in sync. P2 also adds the >8-answer
+   advisory banner under the phone (fitSteps.answersExceedBudget). */
 
 export function PhoneCanvas({
   doc,
@@ -25,7 +31,10 @@ export function PhoneCanvas({
   activeId,
   captureOn,
   designTokens,
+  deciderId,
   onNavigate,
+  onCommit,
+  regen,
 }: {
   doc: QuizDoc;
   questions: OrderedQuestion[];
@@ -33,7 +42,11 @@ export function PhoneCanvas({
   activeId: string;
   captureOn: boolean;
   designTokens: DesignTokens | null | undefined;
+  deciderId: string | null;
   onNavigate: (id: string) => void;
+  onCommit: (doc: QuizDoc) => void;
+  /** The stage's existing regenerate bracket, threaded through the shell. */
+  regen: RegenApi;
 }) {
   const resolved = useMemo(() => resolveDesignTokens(designTokens ?? undefined), [designTokens]);
   const cssVars = useMemo(() => tokensToCssVars(resolved) as CSSProperties, [resolved]);
@@ -67,11 +80,33 @@ export function PhoneCanvas({
               questions.find((q) => q.node.id === activeId) ?? questions[0]!,
           };
 
+  // §5.3 — the active question's section color (decider = gold), inlined as
+  // --sec-color/--sec-wash on the question wrapper for the editable treatment.
+  const sectionColors = useMemo(
+    () =>
+      assignSectionColors(
+        questions.map((q) => q.node.id),
+        deciderId,
+      ),
+    [questions, deciderId],
+  );
+  const activeQuestion = position.kind === "question" ? position.question.node : null;
+  const activeColorKey = activeQuestion ? sectionColors.get(activeQuestion.id) : undefined;
+  const sectionVars = activeColorKey ? sectionColorVars(activeColorKey) : null;
+
+  const answersOverBudget =
+    activeQuestion !== null &&
+    !isFreeformType(activeQuestion.data.question_type) &&
+    answersExceedBudget(activeQuestion.data.answers.length);
+
   // The phone's "brand" line — the intro headline is the closest on-doc voice
   // (the real storefront shows the shop brand; the canvas is a preview).
   const introNode = doc.nodes.find((n) => n.type === "intro");
   const brandName =
     (introNode?.type === "intro" ? introNode.data.headline : "") || "Preview";
+
+  const busy = regen.regeneratingId !== null;
+  const regenError = regen.regenError;
 
   return (
     <section className="qz-s3-canvas">
@@ -96,18 +131,74 @@ export function PhoneCanvas({
             }
             onRestart={() => onNavigate(positions[0]!)}
             ctaText={ctaText}
+            sectionVars={sectionVars}
+            onCommit={onCommit}
           />
         </div>
       </div>
 
-      <button
-        type="button"
-        className="qz-s3-regen"
-        disabled
-        title="Regenerate this question with AI — lands in the next phase"
-      >
-        ↻ Regenerate
-      </button>
+      {answersOverBudget ? (
+        <div className="qz-s3-warnbanner" role="status">
+          <span aria-hidden>⚠</span> This question has more than 8 answers — shoppers on
+          small screens will struggle. Consider splitting it.
+        </div>
+      ) : null}
+
+      <div className="qz-s3-regenrow">
+        {regen.undoNodeId ? (
+          <button
+            type="button"
+            className="qz-s3-regen-undo"
+            onClick={regen.onUndoRegenerate}
+            title="Undo the regeneration"
+          >
+            ↺ Undo
+          </button>
+        ) : null}
+        <button
+          type="button"
+          className="qz-s3-regen"
+          disabled={busy || !activeQuestion}
+          title={
+            activeQuestion
+              ? "Regenerate this question with AI (keeps recommendation mappings on unchanged answers)"
+              : "Select a question to regenerate it with AI"
+          }
+          onClick={() => activeQuestion && regen.onRegenerate(activeQuestion.id)}
+        >
+          {activeQuestion && regen.regeneratingId === activeQuestion.id ? (
+            <>
+              <span className="qz-ql-spin" aria-hidden /> Regenerating…
+            </>
+          ) : (
+            "↻ Regenerate"
+          )}
+        </button>
+      </div>
+
+      {regenError ? (
+        <div
+          className={`qz-s3-regen-error${regenError.credits ? " is-credits" : ""}`}
+          role="alert"
+        >
+          <span aria-hidden>⚠</span> {regenError.message}{" "}
+          <button
+            type="button"
+            className="qz-s3-retry"
+            onClick={() => regen.onRegenerate(regenError.nodeId)}
+          >
+            Retry
+          </button>
+          <button
+            type="button"
+            className="qz-s3-regen-dismiss"
+            onClick={regen.onDismissRegenError}
+            aria-label="Dismiss"
+          >
+            ✕
+          </button>
+        </div>
+      ) : null}
     </section>
   );
 }

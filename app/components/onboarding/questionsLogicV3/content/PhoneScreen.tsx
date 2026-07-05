@@ -1,73 +1,99 @@
+import type { CSSProperties } from "react";
 import type { Quiz as QuizDoc } from "../../../../lib/quizSchema";
 import { isFreeformType } from "../../../../lib/quizSchema";
 import type { OrderedQuestion } from "../../questionsLogic/questionOrder";
+import { updateNodeData } from "../../../studio/studioDoc";
 import { computeFitStep, isTitleLong } from "../fitSteps";
+import { EditableText } from "./EditableText";
+import { TypeChipSelector } from "./TypeChipSelector";
 
 /* quiz-step3 v3 §4 — the phone SCREEN contents (inside the brand-themed
    bezel): top chrome (‹ Back pill · brand line · progress bar), then one of
-   three surfaces — the ACTIVE question (read-only this phase: kicker
-   "QUESTION N OF T" + a static type chip + title + answer chips, all sized by
-   the data-fit steps), the capture mock (email field per rec_page_settings),
-   or the reveal mock (headline + a product-card placeholder). Everything
-   inherits the brand CSS vars the canvas inlines on the screen div. */
+   three surfaces — the ACTIVE question (P2: title + answers are inline-
+   editable through EditableText, the kicker's type chip is a dropdown that
+   intercepts type changes with the block/reset dialogs), the capture mock
+   (read-only — configured in Step 4), or the reveal mock (read-only).
+   Everything inherits the brand CSS vars the canvas inlines on the screen
+   div; the question wrapper additionally carries --sec-color/--sec-wash
+   (the active question's section color — decider gold) which the editable
+   hover/focus treatment reads. */
 
 export type ScreenPosition =
   | { kind: "question"; question: OrderedQuestion }
   | { kind: "capture" }
   | { kind: "reveal" };
 
-const TYPE_CHIP_LABEL: Record<string, string> = {
-  single_select: "Single select",
-  multi_select: "Multi select",
-  image_tile: "Image tiles",
-  text: "Free text",
-  email: "Email",
-  searchable: "Searchable",
-  image_picker: "Image picker",
-  dropdown: "Dropdown",
-  rating: "Rating",
-  swatch: "Swatch",
-  numeric: "Number",
-  date: "Date",
-  slider: "Slider",
-};
+// The legacy Step-3 editor's caps (QuestionCard TEXT_MAX / AnswerRow ANSWER_MAX).
+const TEXT_MAX = 150;
+const ANSWER_MAX = 60;
 
 function QuestionSurface({
+  doc,
   question,
   totalQuestions,
+  sectionVars,
+  onCommit,
 }: {
+  doc: QuizDoc;
   question: OrderedQuestion;
   totalQuestions: number;
+  /** The active question's section color (decider = gold), from sectionPalette. */
+  sectionVars: { color: string; wash: string } | null;
+  onCommit: (doc: QuizDoc) => void;
 }) {
   const { node, qIndex } = question;
   const answers = node.data.answers;
   const freeform = isFreeformType(node.data.question_type);
+
+  const setTitle = (text: string) => {
+    onCommit(updateNodeData(doc, node.id, { text }));
+  };
+  // Mirrors AnswerRow's setText — patch ONE answer's text in the answers map.
+  const setAnswerText = (answerId: string, text: string) => {
+    const next = node.data.answers.map((a) => (a.id === answerId ? { ...a, text } : a));
+    onCommit(updateNodeData(doc, node.id, { answers: next }));
+  };
+
   return (
     <div
       className="qz-s3-qbody"
       data-fit={computeFitStep(freeform ? 0 : answers.length)}
       data-title-long={isTitleLong(node.data.text) || undefined}
+      style={
+        sectionVars
+          ? ({ "--sec-color": sectionVars.color, "--sec-wash": sectionVars.wash } as CSSProperties)
+          : undefined
+      }
     >
       <div className="qz-s3-kickerrow">
         <span className="qz-s3-kicker">
           QUESTION {qIndex} OF {totalQuestions}
         </span>
-        {/* Static type chip — the TypeChipSelector lands in P2. */}
-        <span className="qz-s3-typechip">
-          {TYPE_CHIP_LABEL[node.data.question_type] ?? node.data.question_type}
-        </span>
+        <TypeChipSelector doc={doc} node={node} onCommit={onCommit} />
       </div>
-      <h2 className="qz-s3-qtitle">{node.data.text}</h2>
+      <h2 className="qz-s3-qtitle">
+        <EditableText
+          value={node.data.text}
+          onCommit={setTitle}
+          maxLength={TEXT_MAX}
+          ariaLabel={`Question ${qIndex} text`}
+        />
+      </h2>
       {freeform ? (
         <div className="qz-s3-inputmock">
           {node.data.input_config?.placeholder || "Type your answer…"}
         </div>
       ) : (
         <div className="qz-s3-achips">
-          {answers.map((a) => (
+          {answers.map((a, i) => (
             <div key={a.id} className="qz-s3-achip">
               {a.icon ? <span aria-hidden>{a.icon} </span> : null}
-              {a.text}
+              <EditableText
+                value={a.text}
+                onCommit={(text) => setAnswerText(a.id, text)}
+                maxLength={ANSWER_MAX}
+                ariaLabel={`Answer ${i + 1} text`}
+              />
             </div>
           ))}
         </div>
@@ -87,6 +113,8 @@ export function PhoneScreen({
   onNext,
   onRestart,
   ctaText,
+  sectionVars,
+  onCommit,
 }: {
   doc: QuizDoc;
   position: ScreenPosition;
@@ -100,6 +128,9 @@ export function PhoneScreen({
   onRestart: () => void;
   /** Contrast-safe label color on the brand primary (the runtime's rule). */
   ctaText: string;
+  /** Active question's section color vars (null on the termini). */
+  sectionVars: { color: string; wash: string } | null;
+  onCommit: (doc: QuizDoc) => void;
 }) {
   const global = doc.rec_page_settings?.global;
   return (
@@ -120,7 +151,13 @@ export function PhoneScreen({
       </div>
 
       {position.kind === "question" ? (
-        <QuestionSurface question={position.question} totalQuestions={totalQuestions} />
+        <QuestionSurface
+          doc={doc}
+          question={position.question}
+          totalQuestions={totalQuestions}
+          sectionVars={sectionVars}
+          onCommit={onCommit}
+        />
       ) : position.kind === "capture" ? (
         <div className="qz-s3-capture">
           <h2 className="qz-s3-qtitle">Your results are ready</h2>

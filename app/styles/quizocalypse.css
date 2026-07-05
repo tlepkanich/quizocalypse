@@ -3523,6 +3523,94 @@ body[data-qz] ::selection { background: var(--qz-ink); color: var(--qz-cream); }
   font: inherit; font-size: 12.5px; font-weight: 600;
 }
 .qz-s3-regen:disabled { opacity: 0.55; cursor: not-allowed; }
+.qz-s3-regen:not(:disabled) { cursor: pointer; }
+.qz-s3-regen:not(:disabled):hover { color: var(--qz-ink); }
+
+/* — P2: inline editing (EditableText) — the hover/focus wash + dashed border
+   read the ACTIVE question's section color (--sec-color/--sec-wash inlined
+   on .qz-s3-qbody by PhoneScreen; decider = gold). — */
+.qz-s3-editable {
+  border-radius: 6px;
+  padding: 1px 4px; margin: -1px -4px;
+  border: 1.5px dashed transparent;
+  cursor: text;
+  -webkit-box-decoration-break: clone; box-decoration-break: clone;
+}
+.qz-s3-editable:hover {
+  background: var(--sec-wash, var(--qz-cream-2));
+  border-color: color-mix(in srgb, var(--sec-color, var(--qz-accent)) 55%, transparent);
+}
+.qz-s3-editable:focus {
+  outline: none;
+  background: var(--sec-wash, var(--qz-cream-2));
+  border-color: var(--sec-color, var(--qz-accent));
+}
+/* Editable elements ALWAYS match :focus-visible in Chromium, so the global
+   V2 §6.4 indigo ring would double up with the section-color treatment on
+   every click. Component-level replacement per the .qz-ql-target precedent:
+   the wash + dashed --sec-color border IS the visible focus indicator. */
+body[data-qz] .qz-s3-editable:focus-visible {
+  outline: none;
+  border-radius: 6px;
+}
+/* An emptied run keeps a clickable footprint. */
+.qz-s3-editable:empty::before { content: "…"; opacity: 0.4; }
+
+/* — P2: the type chip as a real dropdown — inherits the chip skin. — */
+.qz-s3-typechip.is-select {
+  appearance: none; -webkit-appearance: none;
+  border: none; margin: 0;
+  color: inherit; font-family: inherit;
+  cursor: pointer;
+  max-width: 46%;
+  text-overflow: ellipsis; white-space: nowrap; overflow: hidden;
+}
+.qz-s3-typechip.is-select:hover { opacity: 1; }
+.qz-s3-typechip.is-select:focus-visible {
+  outline: 2px solid var(--sec-color, var(--qz-accent)); outline-offset: 1px;
+}
+
+/* — P2: >8-answer advisory under the phone (terracotta wash, never blocks) — */
+.qz-s3-warnbanner {
+  display: flex; align-items: flex-start; gap: 8px;
+  width: 322px; box-sizing: border-box;
+  padding: 10px 14px;
+  border: 1px solid var(--qz-warn-edge);
+  border-radius: var(--qz-radius-sm);
+  background: var(--qz-warn-tint);
+  color: var(--qz-warn);
+  font-size: 12.5px; line-height: 1.45;
+}
+
+/* — P2: the regenerate bracket around the chip (10s Undo + actionable error) — */
+.qz-s3-regenrow { display: flex; align-items: center; gap: 8px; }
+.qz-s3-regen-undo {
+  padding: 6px 12px;
+  border: none; border-radius: var(--qz-radius-pill);
+  background: var(--qz-ink); color: var(--qz-cream);
+  font: inherit; font-size: 12.5px; font-weight: 600; cursor: pointer;
+}
+.qz-s3-regen-error {
+  display: flex; align-items: center; gap: 8px;
+  max-width: 322px;
+  padding: 8px 12px;
+  border: 1px solid var(--qz-crit-edge);
+  border-radius: var(--qz-radius-sm);
+  background: var(--qz-crit-tint); color: var(--qz-crit);
+  font-size: 12.5px; line-height: 1.4;
+}
+.qz-s3-regen-error.is-credits {
+  border-color: var(--qz-warn-edge); background: var(--qz-warn-tint); color: var(--qz-warn);
+}
+.qz-s3-retry {
+  border: none; padding: 2px 8px; border-radius: var(--qz-radius-pill);
+  background: color-mix(in srgb, currentColor 12%, transparent);
+  color: inherit; font: inherit; font-size: 12px; font-weight: 700; cursor: pointer;
+}
+.qz-s3-regen-dismiss {
+  border: none; background: transparent; color: inherit; cursor: pointer;
+  font: inherit; font-size: 12px; opacity: 0.7; margin-left: auto;
+}
 
 /* — logic view stub (P3 replaces with the real section cards) — */
 .qz-s3-logicstub { display: flex; flex-direction: column; gap: 14px; min-width: 0; }

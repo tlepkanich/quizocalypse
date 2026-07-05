@@ -135,6 +135,14 @@ export function QuestionBuilderStage({
         navigating={navigating}
         onContinue={() => fetcher.submit({ intent: "to-rec-page" }, { method: "post" })}
         designTokens={designTokens}
+        regen={{
+          regeneratingId,
+          undoNodeId,
+          regenError,
+          onRegenerate: startRegenerate,
+          onUndoRegenerate: undoRegenerate,
+          onDismissRegenError: () => setRegenError(null),
+        }}
       />
     );
   }

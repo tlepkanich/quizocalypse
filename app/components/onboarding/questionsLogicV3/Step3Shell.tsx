@@ -21,6 +21,18 @@ import { PhoneCanvas } from "./content/PhoneCanvas";
 
 export type Step3View = "content" | "logic";
 
+/** The stage's existing per-question AI-regenerate bracket (startRegenerate +
+    pendingId + the 10s undo snapshot), threaded down to the canvas chip —
+    the SAME api QuestionBuilderStage hands the legacy QuestionsLogicLayout. */
+export type RegenApi = {
+  regeneratingId: string | null;
+  undoNodeId: string | null;
+  regenError: { nodeId: string; message: string; credits: boolean } | null;
+  onRegenerate: (nodeId: string) => void;
+  onUndoRegenerate: () => void;
+  onDismissRegenError: () => void;
+};
+
 export function Step3Shell({
   doc,
   onCommit,
@@ -32,6 +44,7 @@ export function Step3Shell({
   navigating,
   onContinue,
   designTokens,
+  regen,
 }: {
   doc: QuizDoc;
   onCommit: (doc: QuizDoc) => void;
@@ -44,6 +57,7 @@ export function Step3Shell({
   /** Fires the existing to-rec-page intent (the fetcher lives in the stage). */
   onContinue: () => void;
   designTokens: DesignTokens | null | undefined;
+  regen: RegenApi;
 }) {
   const questions = useMemo(() => orderedQuestions(doc), [doc]);
   const decider = useMemo(() => deciderQuestion(doc), [doc]);
@@ -125,7 +139,10 @@ export function Step3Shell({
             activeId={activeId}
             captureOn={captureOn}
             designTokens={designTokens}
+            deciderId={decider?.id ?? null}
             onNavigate={setSelectedId}
+            onCommit={onCommit}
+            regen={regen}
           />
         ) : (
           // P3 replaces this stub scroll with the real per-question section
