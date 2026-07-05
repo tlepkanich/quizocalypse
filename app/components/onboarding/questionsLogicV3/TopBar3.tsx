@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { TopBar } from "../../chrome/TopBar";
 import { StepNav, type StepNavStep } from "../../chrome/StepNav";
 import { FUNNEL_STEPS, stepIndex } from "../../../lib/funnelStages";
@@ -7,9 +8,12 @@ import type { Step3View } from "./Step3Shell";
 /* quiz-step3 v3 §2 — Step-3's floating top bar: the shared DS TopBar in its
    `floating` variant (sticky rounded widget). Left = wordmark (TopBar owns it) ·
    center = the funnel's 5 step pills (Questions current) · right = save chip +
-   the HealthPill stub + the tri-state Continue. The pill's popover and the
-   full tri-state gate land in P4 — this phase renders the verdict and keeps
-   the existing blocking behavior (blocked = disabled-styled, click no-ops). */
+   the HealthPill (a slot the shell composes with its single memoized report)
+   + the tri-state Continue (P4): Content → "◆ Continue to Logic" (view
+   switch) · Logic healthy → "◆ Continue to Results" (the stage's to-rec-page
+   intent) · Logic blocked → "Fix N issues to continue", which stays CLICKABLE
+   and opens the health popover (the shell routes the click — this button
+   never advances while verdict.blocking > 0). */
 
 // `savedAt` is an ISO string from the CLIENT autosave fetcher — never
 // server-rendered, so local-time formatting is safe ([[ssr-unsafe-locale-dates]]).
@@ -35,6 +39,7 @@ function step3NavSteps(): StepNavStep[] {
 export function TopBar3({
   view,
   verdict,
+  healthPill,
   isSaving,
   savedAt,
   saveError,
@@ -44,12 +49,16 @@ export function TopBar3({
 }: {
   view: Step3View;
   verdict: Tier1Report["verdict"];
+  /** The HealthPill (+ its controlled popover), composed by Step3Shell from
+   *  the SAME report instance `verdict` comes from. */
+  healthPill: ReactNode;
   isSaving: boolean;
   savedAt: string | null;
   saveError: string | null;
   onRetry: () => void;
   navigating: boolean;
-  /** Content view → switch to Logic; Logic view (healthy) → to-rec-page. */
+  /** Content view → switch to Logic; Logic healthy → to-rec-page; Logic
+   *  blocked → the shell opens the health popover instead of advancing. */
   onContinue: () => void;
 }) {
   const blocked = view === "logic" && verdict.blocking > 0;
@@ -84,23 +93,13 @@ export function TopBar3({
               </span>
             ) : null}
           </span>
-          {/* HealthPill stub — live verdict from the memoized Tier-1 report;
-              the popover (checks + jump links) lands in P4. */}
-          <span
-            className={`qz-s3-healthpill ${verdict.blocking > 0 ? "is-bad" : "is-ok"}`}
-            title={verdict.label}
-          >
-            <span className="qz-s3-healthdot" aria-hidden />
-            {verdict.blocking > 0
-              ? `${verdict.blocking} issue${verdict.blocking === 1 ? "" : "s"}`
-              : "Logic valid"}
-          </span>
+          {healthPill}
           <button
             type="button"
-            className="qz-btn qz-btn-accent qz-btn-sm"
-            aria-disabled={blocked || navigating || undefined}
+            className={`qz-btn qz-btn-sm qz-s3-continue${blocked ? " is-blocked" : " qz-btn-accent"}`}
             disabled={navigating}
-            onClick={blocked ? undefined : onContinue}
+            aria-haspopup={blocked ? "dialog" : undefined}
+            onClick={onContinue}
           >
             {continueLabel}
           </button>

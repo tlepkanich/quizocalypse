@@ -3310,11 +3310,59 @@ body[data-qz] ::selection { background: var(--qz-ink); color: var(--qz-cream); }
 .qz-s3-healthpill {
   display: inline-flex; align-items: center; gap: 7px;
   padding: 5px 12px; border-radius: var(--qz-radius-pill);
+  border: none; cursor: pointer; font-family: inherit;
   font-size: 12.5px; font-weight: 600; white-space: nowrap;
 }
 .qz-s3-healthpill.is-ok { background: var(--qz-ok-tint); color: var(--qz-ok); }
+.qz-s3-healthpill.is-warn { background: var(--qz-warn-tint); color: var(--qz-warn); }
 .qz-s3-healthpill.is-bad { background: var(--qz-crit-tint); color: var(--qz-crit); }
 .qz-s3-healthdot { width: 7px; height: 7px; border-radius: var(--qz-radius-pill); background: currentColor; }
+
+/* — P4: the blocked Continue — clickable (opens the health popover), styled
+   as "can't advance" rather than disabled. — */
+.qz-s3-continue.is-blocked { background: var(--qz-crit-tint); color: var(--qz-crit); }
+.qz-s3-continue.is-blocked:hover { background: color-mix(in srgb, var(--qz-crit) 16%, var(--qz-paper)); }
+
+/* — P4: the health popover body (Tier-1 checks reused; ✦ Tier-2 advisory) — */
+.qz-s3-health { display: flex; flex-direction: column; gap: 8px; width: 430px; max-width: 100%; }
+.qz-s3-health-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+.qz-s3-health-title { font-size: 13.5px; font-weight: 700; }
+.qz-s3-health-verdict { font-size: 11.5px; font-weight: 600; color: var(--qz-ink-3); white-space: nowrap; }
+.qz-s3-health-verdict.is-safe { color: var(--qz-ok); }
+.qz-s3-health-verdict.is-blocked { color: var(--qz-crit); }
+.qz-s3-health-tier2 {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  margin-top: 6px; padding-top: 10px; border-top: 1px solid var(--qz-rule);
+}
+.qz-s3-health-tier2label {
+  font-size: 10.5px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: 0.5px;
+  color: var(--qz-ink-4);
+}
+.qz-s3-health-tier2note { margin: 0; font-size: 12px; color: var(--qz-ink-4); line-height: 1.5; }
+.qz-s3-health-tier2note strong { color: var(--qz-ink-3); }
+.qz-s3-health-aierr {
+  font-size: 12.5px; color: var(--qz-crit); background: var(--qz-crit-tint);
+  border-radius: 8px; padding: 8px 10px; margin: 4px 0 0;
+}
+.qz-s3-health-aistale {
+  font-size: 12px; color: var(--qz-warn); background: var(--qz-warn-tint);
+  border-radius: 8px; padding: 7px 10px; margin: 4px 0 0;
+}
+.qz-s3-health-ainone { margin: 4px 0 0; font-size: 12.5px; color: var(--qz-ink-4); }
+.qz-s3-airows { list-style: none; margin: 6px 0 0; padding: 0; display: flex; flex-direction: column; gap: 5px; }
+.qz-s3-airow {
+  display: flex; align-items: flex-start; gap: 8px;
+  padding: 7px 10px; border-radius: 9px; font-size: 12.5px;
+}
+.qz-s3-airow.is-ok { background: var(--qz-ok-tint); }
+.qz-s3-airow.is-review { background: var(--qz-warn-tint); }
+.qz-s3-airow-glyph { flex: none; font-weight: 700; }
+.qz-s3-airow.is-ok .qz-s3-airow-glyph { color: var(--qz-ok); }
+.qz-s3-airow.is-review .qz-s3-airow-glyph { color: var(--qz-warn); }
+.qz-s3-airow-body { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.qz-s3-airow-path { font-weight: 600; }
+.qz-s3-airow-note { color: var(--qz-ink-3); line-height: 1.45; }
 
 /* — left rail (§3): view toggle · flow rows · termini · footer — */
 .qz-s3-rail {
@@ -3688,6 +3736,16 @@ body[data-qz] .qz-s3-editable:focus-visible {
 }
 .qz-s3-sec:hover::after { opacity: 1; }
 .qz-s3-sec.is-active { box-shadow: var(--qz-lift-1), 0 0 0 1.5px color-mix(in srgb, var(--sec-color) 45%, transparent); }
+/* P4 — the health jump-link landing pulse: the WARN wash (the rule flash
+   stays indigo; this one says "a finding lives here"). */
+@keyframes qz-s3-secflashwarn {
+  0% { background: var(--qz-warn-tint); box-shadow: var(--qz-lift-1), 0 0 0 2px var(--qz-warn-edge); }
+  100% { background: var(--qz-paper); box-shadow: var(--qz-lift-1); }
+}
+.qz-s3-sec.is-flashwarn { animation: qz-s3-secflashwarn 1.6s var(--qz-ease); }
+@media (prefers-reduced-motion: reduce) {
+  .qz-s3-sec.is-flashwarn { animation: none; }
+}
 
 /* — the decider flag tab (§5.4 — spec geometry −19px top / 20px left) — */
 .qz-s3-flag {

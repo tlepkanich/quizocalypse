@@ -35,6 +35,7 @@ export function QuestionSection({
   conditionQuestions,
   expandedRuleId,
   flashRuleId,
+  flashWarn,
   draftActive,
   active,
   onCommit,
@@ -61,6 +62,8 @@ export function QuestionSection({
   conditionQuestions: OrderedQuestion[];
   expandedRuleId: string | null;
   flashRuleId: string | null;
+  /** P4 — pulse the warn wash (a health jump-link landed on this section). */
+  flashWarn: boolean;
   /** The pre-scoped draft editor is open on THIS section. */
   draftActive: boolean;
   active: boolean;
@@ -90,7 +93,7 @@ export function QuestionSection({
 
   return (
     <section
-      className={`qz-s3-sec${isDecider ? " is-decider" : ""}${active ? " is-active" : ""}`}
+      className={`qz-s3-sec${isDecider ? " is-decider" : ""}${active ? " is-active" : ""}${flashWarn ? " is-flashwarn" : ""}`}
       style={{ "--sec-color": vars.color, "--sec-wash": vars.wash } as CSSProperties}
       ref={(el) => registerSection(node.id, el)}
       data-node-id={node.id}

@@ -1,11 +1,13 @@
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Quiz as QuizDoc, DesignTokens } from "../../../lib/quizSchema";
 import type { BuilderCategory } from "../../builder/stepProps";
-import { buildTier1Report } from "../../../lib/pathReport";
+import { buildTier1Report, type Tier1Link } from "../../../lib/pathReport";
 import { insertQuestionRelative } from "../../../lib/quizMutations";
 import { orderedQuestions, deciderQuestion } from "../questionsLogic/questionOrder";
 import { QuestionBankDrawer } from "../../studio/QuestionBankDrawer";
 import { TopBar3 } from "./TopBar3";
+import { HealthPill } from "./HealthPill";
+import { HealthPopover } from "./HealthPopover";
 import { LeftRail, CAPTURE_ID, REVEAL_ID } from "./LeftRail";
 import { PhoneCanvas } from "./content/PhoneCanvas";
 import { LogicScroll, type LogicScrollHandle } from "./logic/LogicScroll";
@@ -14,10 +16,11 @@ import { LogicScroll, type LogicScrollHandle } from "./logic/LogicScroll";
    quiz-step3 v3 — Step3Shell: the two-view (Content · Logic) Step-3 rebuild
    for DECIDER docs, mounted by QuestionBuilderStage behind the client-read
    `?step3=v3` flag (the legacy QuestionsLogicLayout stays the default until
-   P5 flips). This phase (P1) is read-mostly: floating top bar (TopBar3) +
-   the flow rail + the brand-themed phone canvas with a real Back/Next walk;
-   the Logic view is a per-question stub scroll (P3 fills it), inline editing
-   lands in P2, health popover + the full Continue tri-state in P4.
+   P5 flips). P1 shell + rail + phone canvas, P2 inline editing, P3 the Logic
+   view, P4 (this phase) the live health surface: ONE memoized Tier-1 report
+   feeds the pill, the popover's check list, AND the Continue gate — the
+   legacy decider ContinueGuard dialog is superseded by this gating and is
+   NOT mounted here (its wiring is deleted in P5).
    ════════════════════════════════════════════════════════════════════════════ */
 
 export type Step3View = "content" | "logic";
@@ -36,7 +39,9 @@ export type RegenApi = {
 
 export function Step3Shell({
   doc,
+  quizId,
   onCommit,
+  onFlush,
   isSaving,
   savedAt,
   saveError,
@@ -48,7 +53,10 @@ export function Step3Shell({
   regen,
 }: {
   doc: QuizDoc;
+  quizId: string;
   onCommit: (doc: QuizDoc) => void;
+  /** useQuizDraft.flushSave — the Tier-2 review flushes BEFORE hashing. */
+  onFlush: () => void;
   isSaving: boolean;
   savedAt: string | null;
   saveError: string | null;
@@ -71,6 +79,11 @@ export function Step3Shell({
   const [view, setView] = useState<Step3View>("content");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [libraryOpen, setLibraryOpen] = useState(false);
+  // P4 — the health popover, CONTROLLED so the blocked Continue can open it.
+  const [healthOpen, setHealthOpen] = useState(false);
+  // A rule jump-link fired from the Content view: LogicScroll isn't mounted
+  // until the view flips, so the target parks here for one render.
+  const [pendingRuleJump, setPendingRuleJump] = useState<string | null>(null);
   const logicRef = useRef<LogicScrollHandle>(null);
 
   // Valid canvas positions; a stale selection (deleted question, capture
@@ -100,21 +113,78 @@ export function Step3Shell({
     }
   }, [doc, questions, onCommit, view]);
 
+  // P4 tri-state Continue — Content: pure view switch (no server intent);
+  // Logic + healthy: the stage's existing to-rec-page intent; Logic +
+  // blocking: open the health popover instead of advancing. The gate is the
+  // SAME report instance the pill and popover render — `verdict.blocking`
+  // folds validateQuiz via S1, so "advance enabled" ⇒ the publish gate is
+  // clean and the three surfaces cannot disagree.
   const handleContinue = useCallback(() => {
     if (view === "content") {
       setView("logic");
       return;
     }
-    // Logic view: TopBar3 renders the blocked state itself (click no-ops
-    // there); a healthy verdict advances to Results via the real intent.
-    if (report.verdict.blocking === 0) onContinue();
+    if (report.verdict.blocking > 0) {
+      setHealthOpen(true);
+      return;
+    }
+    onContinue();
   }, [view, report.verdict.blocking, onContinue]);
+
+  // P4 health jump-links. Question findings: Logic view scrolls the section
+  // in with a warn-wash flash; Content view selects the node in the rail —
+  // the phone canvas shows it (the simpler correct behavior: the finding is
+  // about the question, and the rail selection is the Content view's focus
+  // primitive). Rule findings live only in the Logic view — switch first if
+  // needed (the jump parks until LogicScroll mounts).
+  const handleHealthNavigate = useCallback(
+    (link: Tier1Link) => {
+      setHealthOpen(false);
+      if (link.kind === "question" && link.nodeId) {
+        setSelectedId(link.nodeId);
+        if (view === "logic") logicRef.current?.scrollToSection(link.nodeId, { flashWarn: true });
+        return;
+      }
+      if (link.kind === "rule" && link.ruleId) {
+        if (view === "logic") {
+          logicRef.current?.scrollToRule(link.ruleId);
+        } else {
+          setView("logic");
+          setPendingRuleJump(link.ruleId);
+        }
+      }
+    },
+    [view],
+  );
+
+  useEffect(() => {
+    if (view !== "logic" || !pendingRuleJump) return;
+    logicRef.current?.scrollToRule(pendingRuleJump);
+    setPendingRuleJump(null);
+  }, [view, pendingRuleJump]);
 
   return (
     <div className="qz-s3">
       <TopBar3
         view={view}
         verdict={report.verdict}
+        healthPill={
+          <HealthPill
+            verdict={report.verdict}
+            open={healthOpen}
+            onOpenChange={setHealthOpen}
+            popover={
+              <HealthPopover
+                report={report}
+                doc={doc}
+                quizId={quizId}
+                onCommit={onCommit}
+                onFlush={onFlush}
+                onNavigate={handleHealthNavigate}
+              />
+            }
+          />
+        }
         isSaving={isSaving}
         savedAt={savedAt}
         saveError={saveError}

@@ -32,7 +32,9 @@ import { AddQuestionDivider } from "./AddQuestionDivider";
    are exposed imperatively for the shell (rail clicks, P4 health jump-links). */
 
 export interface LogicScrollHandle {
-  scrollToSection: (nodeId: string) => void;
+  /** `flashWarn` pulses the section with the warn wash after the glide —
+   *  the P4 health jump-link treatment (rules keep their indigo flash). */
+  scrollToSection: (nodeId: string, opts?: { flashWarn?: boolean }) => void;
   scrollToRule: (ruleId: string) => void;
 }
 
@@ -73,12 +75,17 @@ export const LogicScroll = forwardRef<
   const [expandedRuleId, setExpandedRuleId] = useState<string | null>(null);
   const [flashRuleId, setFlashRuleId] = useState<string | null>(null);
   const flashTimer = useRef<number | undefined>(undefined);
+  // P4 — the section-level warn-wash flash (health jump-link landing).
+  const [flashSectionId, setFlashSectionId] = useState<string | null>(null);
+  const flashSectionTimer = useRef<number | undefined>(undefined);
   // §5.6 — the pre-scoped rule draft: PURELY LOCAL until the first answer
   // pick (zero doc writes on open/cancel). Holds the home section's node id.
   const [draftHome, setDraftHome] = useState<string | null>(null);
   // A section that doesn't exist yet (freshly inserted question) — scroll
-  // once its card mounts.
-  const [pendingScrollId, setPendingScrollId] = useState<string | null>(null);
+  // once its card mounts (carrying a requested flash along).
+  const [pendingScroll, setPendingScroll] = useState<{ id: string; flashWarn: boolean } | null>(
+    null,
+  );
 
   const rules = useMemo(() => doc.decision_rules ?? [], [doc.decision_rules]);
   const rulesById = useMemo(() => new Map(rules.map((r) => [r.id, r] as const)), [rules]);
@@ -136,26 +143,33 @@ export const LogicScroll = forwardRef<
     if (flashTimer.current) window.clearTimeout(flashTimer.current);
     flashTimer.current = window.setTimeout(() => setFlashRuleId(null), 2000);
   }, []);
+  const flashSection = useCallback((nodeId: string) => {
+    setFlashSectionId(nodeId);
+    if (flashSectionTimer.current) window.clearTimeout(flashSectionTimer.current);
+    flashSectionTimer.current = window.setTimeout(() => setFlashSectionId(null), 2000);
+  }, []);
   useEffect(
     () => () => {
       if (flashTimer.current) window.clearTimeout(flashTimer.current);
+      if (flashSectionTimer.current) window.clearTimeout(flashSectionTimer.current);
     },
     [],
   );
 
   const scrollToSection = useCallback(
-    (nodeId: string) => {
+    (nodeId: string, opts?: { flashWarn?: boolean }) => {
       const el = sectionEls.current.get(nodeId);
       if (!el) {
         // Not mounted yet (a just-inserted question) — retry on next render.
-        setPendingScrollId(nodeId);
+        setPendingScroll({ id: nodeId, flashWarn: opts?.flashWarn === true });
         return;
       }
       suppressUntil.current = Date.now() + SUPPRESS_MS;
       onActiveChange(nodeId); // report the destination immediately
       el.scrollIntoView({ behavior: "smooth", block: "start" });
+      if (opts?.flashWarn) flashSection(nodeId);
     },
-    [onActiveChange],
+    [onActiveChange, flashSection],
   );
 
   const scrollToRule = useCallback(
@@ -184,15 +198,16 @@ export const LogicScroll = forwardRef<
 
   // Deferred scroll for a freshly-inserted question (mounts after the commit).
   useEffect(() => {
-    if (!pendingScrollId) return;
-    const el = sectionEls.current.get(pendingScrollId);
+    if (!pendingScroll) return;
+    const el = sectionEls.current.get(pendingScroll.id);
     if (el) {
       suppressUntil.current = Date.now() + SUPPRESS_MS;
-      onActiveChange(pendingScrollId);
+      onActiveChange(pendingScroll.id);
       el.scrollIntoView({ behavior: "smooth", block: "start" });
-      setPendingScrollId(null);
+      if (pendingScroll.flashWarn) flashSection(pendingScroll.id);
+      setPendingScroll(null);
     }
-  }, [pendingScrollId, idsKey, onActiveChange]);
+  }, [pendingScroll, idsKey, onActiveChange, flashSection]);
 
   // Rail sync — geometry-based active recompute (the QuestionsLogicLayout
   // pattern) + the programmatic-scroll mute above.
@@ -247,7 +262,7 @@ export const LogicScroll = forwardRef<
       const next = insertQuestionRelative(doc, refId, "below");
       const newId = next.nodes.find((n) => !before.has(n.id))?.id ?? null;
       onCommit(next);
-      if (newId) setPendingScrollId(newId);
+      if (newId) setPendingScroll({ id: newId, flashWarn: false });
     },
     [doc, onCommit],
   );
@@ -286,6 +301,7 @@ export const LogicScroll = forwardRef<
             conditionQuestions={conditionQuestions}
             expandedRuleId={expandedRuleId}
             flashRuleId={flashRuleId}
+            flashWarn={flashSectionId === q.node.id}
             draftActive={draftHome === q.node.id}
             active={activeId === q.node.id}
             onCommit={onCommit}

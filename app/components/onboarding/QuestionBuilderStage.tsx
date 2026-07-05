@@ -126,7 +126,9 @@ export function QuestionBuilderStage({
     return (
       <Step3Shell
         doc={doc}
+        quizId={quizId}
         onCommit={commit}
+        onFlush={flushSave}
         isSaving={isSaving}
         savedAt={savedAt}
         saveError={saveError}
