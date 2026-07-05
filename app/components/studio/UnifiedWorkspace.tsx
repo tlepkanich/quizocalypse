@@ -6,7 +6,8 @@ import { experienceTypeOf, type Quiz } from "../../lib/quizSchema";
 import { validateQuiz, validateQuizWarnings, type NodeIssue } from "../../lib/quizValidation";
 import { orderFlow } from "../../lib/flowOrder";
 import { reconcileBucketsToResultNodes } from "../../lib/bucketReconcile";
-import { straightThroughRun, swapScoringModel } from "../../lib/quizMutations";
+import { swapScoringModel } from "../../lib/quizMutations";
+import { buildBuilderHealthReport, type Tier1Link } from "../../lib/pathReport";
 import type { StepProps } from "../builder/stepProps";
 import { Step5Preview } from "../builder/Step5Preview";
 import { Step1Products } from "../builder/Step1Products";
@@ -20,7 +21,9 @@ import type { RegenApi } from "./panels/ContentTab";
 import { AiChatPanel } from "./AiChatPanel";
 import { ReviewEnrichPanel } from "./ReviewEnrichPanel";
 import { EditableTitle, PLACEMENTS, type StudioBuilderData } from "./studioShared";
-import { BuilderRail, BuilderFilmstrip } from "./BuilderChrome";
+import { BuilderNavRail, BuilderTopBar, type BuilderNavKey } from "./BuilderChrome";
+import { HealthPill } from "../onboarding/questionsLogicV3/HealthPill";
+import { HealthPopover } from "../onboarding/questionsLogicV3/HealthPopover";
 import { Step3Results } from "../builder/Step3Results";
 import { TranslationsPanel } from "./TranslationsPanel";
 import { ExperiencePanel } from "./ExperiencePanel";
@@ -29,7 +32,6 @@ import { BuilderSettings } from "./BuilderSettings";
 import { BuilderDesignPanel } from "./BuilderDesignPanel";
 import { BuilderBlocksPalette } from "./BuilderBlocksPalette";
 import { BuilderPageSettings } from "./BuilderPageSettings";
-import { insertModule } from "./studioDoc";
 import UpgradeDeciderModal from "../onboarding/questionsLogic/UpgradeDeciderModal";
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -50,6 +52,15 @@ const XTYPE_LABEL: Record<string, string> = {
 
 type Chrome = "embedded" | "standalone";
 type QuizDoc = Quiz;
+
+// `savedAt` is an ISO string from the CLIENT autosave fetcher — never
+// server-rendered (the builder is ClientOnly besides), so local-time
+// formatting is safe here (the ssr-unsafe-locale-dates trap doesn't apply).
+function savedTimeLabel(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  return d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+}
 
 export function UnifiedWorkspace({ data, chrome }: { data: StudioBuilderData; chrome: Chrome }) {
   if (!data.valid || !data.doc) {
@@ -73,8 +84,18 @@ export function UnifiedWorkspace({ data, chrome }: { data: StudioBuilderData; ch
 }
 
 function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chrome }) {
-  const { doc, commit: rawCommit, isSaving, savedAt, beginAiEdit, applyAiResult, endAiEdit } =
-    useQuizDraft(data.doc as QuizDoc);
+  const {
+    doc,
+    commit: rawCommit,
+    isSaving,
+    savedAt,
+    saveError,
+    retrySave,
+    flushSave,
+    beginAiEdit,
+    applyAiResult,
+    endAiEdit,
+  } = useQuizDraft(data.doc as QuizDoc);
   // QB-2 — snapshot undo/redo. Every panel edit replaces the whole doc, so a
   // stack of prior docs IS the history; undo/redo replay a snapshot through the
   // same autosave seam (an undo persists). Capped at 50 snapshots to bound memory.
@@ -294,6 +315,32 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
   const ordered = useMemo(() => orderFlow(doc), [doc]);
   const fallbackCollection = data.collections[0]?.collectionId ?? "";
   const canPublish = allIssues.length === 0;
+  // BLD-1 — the standalone chrome's ONE health report (decider: full Tier-1;
+  // legacy: the S1/S2 adapter). The pill, its popover and the tri-state
+  // Publish all read this instance, so they cannot disagree; `blocking === 0`
+  // ⇔ `canPublish` in both arms (S1 folds validateQuiz).
+  const healthReport = useMemo(
+    () => buildBuilderHealthReport(doc, data.categories),
+    [doc, data.categories],
+  );
+  const [healthOpen, setHealthOpen] = useState(false);
+  const isDecider = doc.logic_model === "decider";
+  // Health popover jump-links: a question/node finding focuses that node in
+  // the Build view's editor; a rule finding lives in the Logic view (BLD-4
+  // will deep-scroll it — landing the view is the useful move today).
+  const onHealthNavigate = useCallback(
+    (link: Tier1Link) => {
+      setHealthOpen(false);
+      if (link.kind === "question" && link.nodeId) {
+        setTool("editor");
+        setView("build");
+        select(link.nodeId);
+      } else if (link.kind === "rule") {
+        setView("logic");
+      }
+    },
+    [setView, select],
+  );
   const isPublishing = publishFetcher.state !== "idle";
   const placement = doc.placement ?? "page";
   const currentPlacement = PLACEMENTS.find((p) => p.value === placement) ?? PLACEMENTS[0]!;
@@ -312,30 +359,6 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
     form.set("intent", "rename");
     form.set("name", name);
     renameFetcher.submit(form, { method: "POST" });
-  };
-
-  // QB-5 — the filmstrip "+" inserts a question into the question sequence, then
-  // opens it in the Editor (undoable via the top bar). Anchor to the LAST MOVABLE
-  // step (the last question), NOT ordered.steps[last] — the orderFlow spine ends
-  // at the terminal result/end node, and anchoring there made insertModule append
-  // the question AFTER the result (no successor edge to re-route → a dead-end the
-  // shopper never reaches and the preview never shows → "lost in the flow"). Using
-  // straightThroughRun().run (which stops at terminals) splices it as the last
-  // question. The anchor expression is byte-identical to appendBankQuestion, and
-  // the same last-movable-step anchor as FlowRail's "+ Add step"; the empty-run
-  // `: head` fallback splices intro → new → result (vs FlowRail's null fallback,
-  // which would orphan) so a first question is never lost — the filmstrip has no
-  // orphan tray, so head-splicing is the safe choice here.
-  const addStep = () => {
-    const { head, run } = straightThroughRun(doc);
-    const anchor = run.length ? run[run.length - 1]! : head;
-    const { doc: next, newNodeId } = insertModule(doc, "question", anchor, undefined, fallbackCollection);
-    commit(next);
-    if (newNodeId) {
-      setTool("editor");
-      setView("build");
-      select(newNodeId);
-    }
   };
 
   const stepProps: StepProps = {
@@ -396,7 +419,7 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
               title={`Scoring: ${m === "direct" ? "Direct mapping" : "Weighted scoring"} — click to switch (both models are saved)`}
               onClick={() => commit(swapScoringModel(doc, other))}
             >
-              {m === "direct" ? "→ Direct mapping" : "⚖ Weighted scoring"} <span aria-hidden>⚙</span>
+              {m === "direct" ? "Direct mapping" : "Weighted scoring"}
             </button>
             <button
               type="button"
@@ -432,7 +455,7 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
       title="Edit: click any element in the preview to edit it · Interact: walk through the quiz normally"
     >
       <button type="button" aria-pressed={editMode} onClick={() => setEditMode(true)}>
-        ✎ Edit
+        Edit
       </button>
       <button
         type="button"
@@ -442,7 +465,7 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
           setInspectTarget(null);
         }}
       >
-        ▶ Interact
+        Interact
       </button>
     </div>
   );
@@ -501,16 +524,43 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
     </div>
   );
 
-  const shareBtn = (
-    <Link to={`/studio/${data.quizId}/embed`} className="qz-btn qz-btn-ghost qz-btn-sm" style={{ textDecoration: "none" }}>
-      🔗 Share
-    </Link>
+  const placementGrid = (
+    <>
+      <div className="qz-label" style={{ marginBottom: 6, fontSize: 11 }}>
+        Where should it appear?
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6, marginBottom: 10 }}>
+        {PLACEMENTS.map((p) => {
+          const sel = p.value === placement;
+          return (
+            <button
+              key={p.value}
+              type="button"
+              onClick={() => commit({ ...doc, placement: p.value })}
+              title={p.hint}
+              style={{
+                textAlign: "left",
+                padding: "6px 8px",
+                borderRadius: "var(--qz-radius)",
+                cursor: "pointer",
+                fontSize: 12,
+                fontWeight: sel ? 600 : 400,
+                border: sel ? "2px solid var(--qz-accent)" : "1px solid var(--qz-rule)",
+                background: sel ? "var(--qz-accent-tint)" : "var(--qz-paper)",
+              }}
+            >
+              {p.label}
+            </button>
+          );
+        })}
+      </div>
+    </>
   );
 
   const settingsPopover = (
     <details style={{ position: "relative" }}>
       <summary className="qz-btn qz-btn-ghost qz-btn-sm" style={{ listStyle: "none", cursor: "pointer" }}>
-        ⚙ Settings
+        Placement
       </summary>
       <div
         className="qz-card"
@@ -524,34 +574,43 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
           boxShadow: "var(--qz-shadow-md)",
         }}
       >
-        <div className="qz-label" style={{ marginBottom: 6, fontSize: 11 }}>
-          Where should it appear?
-        </div>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6, marginBottom: 10 }}>
-          {PLACEMENTS.map((p) => {
-            const sel = p.value === placement;
-            return (
-              <button
-                key={p.value}
-                type="button"
-                onClick={() => commit({ ...doc, placement: p.value })}
-                title={p.hint}
-                style={{
-                  textAlign: "left",
-                  padding: "6px 8px",
-                  borderRadius: "var(--qz-radius)",
-                  cursor: "pointer",
-                  fontSize: 12,
-                  fontWeight: sel ? 600 : 400,
-                  border: sel ? "2px solid var(--qz-accent)" : "1px solid var(--qz-rule)",
-                  background: sel ? "var(--qz-accent-tint)" : "var(--qz-paper)",
-                }}
-              >
-                {p.label}
-              </button>
-            );
-          })}
-        </div>
+        {placementGrid}
+      </div>
+    </details>
+  );
+
+  // BLD-1 — the standalone bar's secondary actions folded into one ⋯ menu
+  // (placement grid + share/embed) so the title keeps its room at 1280w.
+  const moreMenu = (
+    <details style={{ position: "relative" }}>
+      <summary
+        className="qz-btn qz-btn-ghost qz-btn-sm qz-tip"
+        data-tip="Placement & sharing"
+        aria-label="More options"
+        style={{ listStyle: "none", cursor: "pointer", fontWeight: 700, letterSpacing: "0.08em" }}
+      >
+        ⋯
+      </summary>
+      <div
+        className="qz-card"
+        style={{
+          position: "absolute",
+          right: 0,
+          top: "calc(100% + 6px)",
+          width: 380,
+          padding: 12,
+          zIndex: 60,
+          boxShadow: "var(--qz-lift-2)",
+        }}
+      >
+        {placementGrid}
+        <Link
+          to={`/studio/${data.quizId}/embed`}
+          className="qz-btn qz-btn-ghost qz-btn-sm"
+          style={{ textDecoration: "none", display: "inline-flex" }}
+        >
+          Share &amp; embed →
+        </Link>
       </div>
     </details>
   );
@@ -722,13 +781,17 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
         </div>
       );
 
-  // QD-6 / QB-1 — standalone gets the Quizell builder: a full-width top bar over a
-  // body row of icon-rail · tool-switched left panel · centered stage (preview +
-  // filmstrip). Clicking a rail tool now actually SWAPS the left panel (the QD-6
-  // gap). Settings takes over the body full-width. The embedded /app surface
-  // keeps the shared `body` 3-pane layout below (untouched).
+  // BLD-1 — standalone gets the V2 builder chrome: the DS top bar (wordmark ·
+  // truncating title · preview controls · save/health/publish) over a body row
+  // of ONE nav rail · tool-switched left panel · centered stage. Validation
+  // moved off the canvas into the health pill; the filmstrip is retired. The
+  // embedded /app surface keeps the shared `body` 3-pane layout below
+  // (untouched by owner decision).
   if (chrome === "standalone") {
-    const activeTool = view === "build" ? tool : "settings";
+    // ONE active key for the single nav rail: a non-build view IS the key; in
+    // the Build view the focused tool lights (editor ⇒ the Build item).
+    const railActive: BuilderNavKey =
+      view !== "build" ? view : tool === "editor" ? "build" : tool;
     const selectedNode = selectedId ? doc.nodes.find((n) => n.id === selectedId) ?? null : null;
 
     // The left panel content for the focused tool (build view only).
@@ -824,81 +887,151 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
         </>
       );
 
+    // The health pill + its controlled popover (QzPopover portals correctly
+    // inside the blurred top bar — same hosting as TopBar3). Legacy docs hide
+    // the decider-only sections (Tier-2 review, outcome table).
+    const healthPill = (
+      <HealthPill
+        verdict={healthReport.verdict}
+        open={healthOpen}
+        onOpenChange={setHealthOpen}
+        popover={
+          <HealthPopover
+            report={healthReport}
+            doc={doc}
+            quizId={data.quizId}
+            onCommit={commit}
+            onFlush={flushSave}
+            onNavigate={onHealthNavigate}
+            tier2={isDecider}
+            showOutcomes={isDecider}
+          />
+        }
+      />
+    );
+
+    // The v3 save-chip anatomy: Saving… / Saved HH:MM / error + Retry (the
+    // embedded surface keeps the simpler shared `saveStatus` chip).
+    const saveStatusV2 = (
+      <span className="qz-save-status" aria-live="polite">
+        {isSaving ? (
+          <span className="qz-save-chip is-saving">
+            <span className="qz-save-dot" aria-hidden /> Saving…
+          </span>
+        ) : saveError ? (
+          <span className="qz-save-chip is-error">
+            <span aria-hidden>⚠</span> {saveError} ·{" "}
+            <button type="button" className="qz-ql-retry" onClick={retrySave}>
+              Retry
+            </button>
+          </span>
+        ) : savedAt ? (
+          <span key={savedAt} className="qz-save-chip is-saved">
+            <span aria-hidden>✓</span> Saved {savedTimeLabel(savedAt)}
+          </span>
+        ) : null}
+      </span>
+    );
+
+    // Tri-state Publish (the v3 Continue pattern): blocked stays CLICKABLE
+    // and opens the health popover with the jump-links — it never publishes
+    // while blocking > 0 (same gate as canPublish; S1 folds validateQuiz).
+    const blocking = healthReport.verdict.blocking;
+    const publishBtnV2 =
+      blocking > 0 ? (
+        <button
+          type="button"
+          className="qz-btn qz-btn-sm qz-s3-continue is-blocked"
+          aria-haspopup="dialog"
+          onClick={() => setHealthOpen(true)}
+        >
+          Fix {blocking} issue{blocking === 1 ? "" : "s"}
+        </button>
+      ) : (
+        <QzButton variant="primary" size="sm" disabled={isPublishing} onClick={publish}>
+          {isPublishing ? "Publishing…" : "◆ Publish"}
+        </QzButton>
+      );
+
+    // Transient outcomes only — validation + suggestions live in the pill now,
+    // so a merely-unfinished quiz shows a clean canvas, not a nag banner.
+    const standaloneNotices = (
+      <>
+        {reconcileError ? (
+          <QzBanner tone="warn" title="Result pages pending">
+            {reconcileError}
+          </QzBanner>
+        ) : null}
+        {publishFetcher.data?.ok === false && publishFetcher.data.error ? (
+          <QzBanner tone="crit" title="Publish failed">
+            {publishFetcher.data.error}
+          </QzBanner>
+        ) : null}
+        {publishFetcher.data?.ok && publishFetcher.data.version ? (
+          <QzBanner tone="ok" title={`Published v${publishFetcher.data.version}`}>
+            Live at{" "}
+            <a href={data.previewUrl} target="_blank" rel="noreferrer">
+              {data.previewUrl}
+            </a>{" "}
+            — embed mode: <strong>{currentPlacement.label}</strong>.
+          </QzBanner>
+        ) : null}
+      </>
+    );
+
     return (
       <div className="qz-builder">
-        <header className="qz-builder-topbar">
-          {/* Left: Q logo + breadcrumb + experience-type badge */}
-          <div className="qz-row" style={{ gap: 9, minWidth: 0, alignItems: "center", flex: "1 1 0" }}>
-            <Link to="/studio" className="qz-brand-badge" aria-label="All quizzes" style={{ textDecoration: "none", flex: "0 0 auto" }}>
-              Q
-            </Link>
-            <Link to="/studio" className="qz-dim" style={{ textDecoration: "none", fontSize: 13 }}>
-              Dashboard
-            </Link>
-            <span className="qz-dim" aria-hidden="true">›</span>
-            <EditableTitle name={data.name} onRename={renameQuiz} />
-            <span className="qz-badge" style={{ fontSize: 10 }}>
-              {XTYPE_LABEL[experienceTypeOf(doc)]}
-            </span>
-          </div>
-          {/* Center: device toggle + zoom (build view only) */}
-          {view === "build" ? (
-            <div className="qz-row" style={{ gap: 14, alignItems: "center", flex: "0 0 auto" }}>
-              {deviceToggle}
-              {zoomStepper}
-            </div>
-          ) : null}
-          {/* Right: edit/interact · undo/redo · settings · share · preview · save · publish */}
-          <div className="qz-row" style={{ gap: 8, alignItems: "center", justifyContent: "flex-end", flex: "1 1 0", flexWrap: "wrap" }}>
-            {view === "build" ? editInteractToggle : null}
-            {view === "build" ? scoringBadge : null}
-            {undoRedo}
-            {settingsPopover}
-            {saveStatus}
-            {shareBtn}
-            <a
-              href={data.previewUrl}
-              target="_blank"
-              rel="noreferrer"
-              className="qz-btn qz-btn-ghost qz-btn-sm"
-            >
-              Preview
-            </a>
-            {publishBtn}
-          </div>
-        </header>
-        {/* Persistent workspace-view nav — Build/Products/Results/Logic. Lives
-            here (not buried in the Editor→Settings FlowRail) so it's reachable
-            and visible from EVERY view; switching no longer hides the switcher. */}
-        <nav className="qz-builder-views" role="group" aria-label="Workspace view">
-          {(
-            [
-              ["build", "Build"],
-              ["products", "Products"],
-              ["results", "Results"],
-              ["logic", "Logic"],
-            ] as [WorkspaceView, string][]
-          ).map(([v, label]) => (
-            <button
-              key={v}
-              type="button"
-              className={view === v ? "is-active" : ""}
-              aria-pressed={view === v}
-              onClick={() => setView(v)}
-            >
-              {label}
-            </button>
-          ))}
-        </nav>
+        <BuilderTopBar
+          left={
+            <>
+              <div className="qz-builder-titlewrap">
+                <EditableTitle name={data.name} onRename={renameQuiz} />
+              </div>
+              <span className="qz-badge" style={{ fontSize: 10, flex: "0 0 auto" }}>
+                {XTYPE_LABEL[experienceTypeOf(doc)]}
+              </span>
+              {scoringBadge}
+            </>
+          }
+          center={
+            view === "build" ? (
+              <>
+                {deviceToggle}
+                {zoomStepper}
+                {editInteractToggle}
+              </>
+            ) : null
+          }
+          right={
+            <>
+              {saveStatusV2}
+              {undoRedo}
+              {healthPill}
+              {moreMenu}
+              <a
+                href={data.previewUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="qz-btn qz-btn-ghost qz-btn-sm"
+              >
+                Preview
+              </a>
+              {publishBtnV2}
+            </>
+          }
+        />
         <div className="qz-builder-body">
-          <BuilderRail
-            active={activeTool}
+          <BuilderNavRail
+            active={railActive}
             onSelect={(key) => {
-              if (key === "settings") {
-                setView("logic");
-              } else {
-                setTool(key as "editor" | "ai" | "theme" | "code");
+              if (key === "theme" || key === "ai" || key === "code") {
+                setTool(key);
                 setView("build");
+              } else if (key === "build") {
+                setTool("editor");
+                setView("build");
+              } else {
+                setView(key);
               }
             }}
           />
@@ -906,9 +1039,9 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
             <>
               <aside className="qz-builder-panel">{toolPanel}</aside>
               <div className="qz-builder-stage">
-                {/* QB-8 — slim notices strip (validation/publish); empty = 0 height,
-                    so a clean quiz shows the canvas as just the live quiz. */}
-                <div className="qz-builder-notices">{banners}</div>
+                {/* QB-8 — slim notices strip (transient publish/reconcile results
+                    only); empty = 0 height, so the canvas is just the live quiz. */}
+                <div className="qz-builder-notices">{standaloneNotices}</div>
                 <div className="qz-builder-canvas">
                   <div
                     style={{
@@ -930,13 +1063,12 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
                     />
                   </div>
                 </div>
-                <BuilderFilmstrip doc={doc} steps={ordered.steps} selectedId={selectedId} onSelect={select} onAdd={addStep} productIndex={data.productIndex} categories={data.categories} />
               </div>
             </>
           ) : (
             <div className="qz-builder-settings">
               <div style={{ padding: "18px 22px", maxWidth: 1200, margin: "0 auto" }}>
-                {banners}
+                {standaloneNotices}
                 {view === "products" ? (
                   <Step1Products {...stepProps} />
                 ) : view === "results" ? (

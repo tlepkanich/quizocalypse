@@ -22,6 +22,8 @@ export function HealthPopover({
   onCommit,
   onFlush,
   onNavigate,
+  tier2 = true,
+  showOutcomes = true,
 }: {
   report: Tier1Report;
   doc: QuizDoc;
@@ -32,6 +34,12 @@ export function HealthPopover({
   onFlush: () => void;
   /** Deep-link handler — the shell closes the popover and jumps the surface. */
   onNavigate: (link: Tier1Link) => void;
+  /** BLD-1 — decider-only sections, hidden when the builder hosts a LEGACY
+   *  doc: the ✦ Tier-2 path review reads decision_rules, and the outcome
+   *  table's empty state coaches "pick a deciding question". Both stay on
+   *  (default) for every decider surface. */
+  tier2?: boolean;
+  showOutcomes?: boolean;
 }) {
   const {
     report: aiReport,
@@ -67,8 +75,10 @@ export function HealthPopover({
         </span>
       </div>
 
-      <Tier1CheckList report={report} onNavigate={onNavigate} />
+      <Tier1CheckList report={report} onNavigate={onNavigate} showOutcomes={showOutcomes} />
 
+      {!tier2 ? null : (
+        <>
       {/* ── ✦ Tier 2 — SEPARATE by spec mandate; ADVISORY AI (L2-12c) ── */}
       <div className="qz-s3-health-tier2">
         <span className="qz-s3-health-tier2label">✦ Tier 2 · Recommendation quality</span>
@@ -128,6 +138,8 @@ export function HealthPopover({
           </>
         ) : null}
       </div>
+        </>
+      )}
     </div>
   );
 }

@@ -9,7 +9,7 @@ import {
   outcomeTable,
   shadowedRules,
 } from "./pathAnalyzer";
-import { validateQuiz } from "./quizValidation";
+import { validateQuiz, validateQuizWarnings } from "./quizValidation";
 
 type QuizDoc = z.infer<typeof Quiz>;
 
@@ -41,7 +41,7 @@ export interface Tier1Finding {
 }
 
 export interface Tier1Check {
-  id: "V1" | "V2" | "V3" | "V4" | "V5" | "V6" | "V7" | "V8" | "V9" | "V10" | "S1";
+  id: "V1" | "V2" | "V3" | "V4" | "V5" | "V6" | "V7" | "V8" | "V9" | "V10" | "S1" | "S2";
   severity: CheckSeverity;
   status: CheckStatus;
   title: string;
@@ -267,6 +267,60 @@ export function buildTier1Report(
       warnings,
       safe,
       // §7.3 verbatim shape: "N to review · M blocking · safe/not safe to publish."
+      label: `${warnings} to review · ${blocking} blocking · ${safe ? "safe" : "not safe"} to publish`,
+    },
+  };
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// BLD-1 — the builder's model-agnostic health adapter. The standalone builder
+// replaces its "N to fix before publishing" banner with the Step-3 health
+// pill/popover, but it serves BOTH logic models: decider docs get the full
+// Tier-1 report above; legacy docs (direct/weighted scoring) synthesize the
+// SAME Tier1Report shape from the publish gate (validateQuiz → S1, blocking)
+// plus the advisory pass (validateQuizWarnings → S2, warn) — so the pill, the
+// popover and the tri-state Publish read one verdict for either model and can
+// never disagree with the gate (`safe` ⇔ validateQuiz is clean in both arms).
+// ════════════════════════════════════════════════════════════════════════════
+export function buildBuilderHealthReport(
+  doc: QuizDoc,
+  buckets: Array<{ id: string; name: string }>,
+): Tier1Report {
+  if (doc.logic_model === "decider") return buildTier1Report(doc, buckets);
+  const gate = validateQuiz(doc);
+  const advisories = validateQuizWarnings(doc);
+  // Tier1Link's "question" kind means "focus this node" to every consumer —
+  // gate issues pin to intro/result nodes too, and selecting those is right.
+  const toFinding = (i: { nodeId: string; message: string }): Tier1Finding => ({
+    message: i.message,
+    link: { kind: "question", nodeId: i.nodeId },
+  });
+  const checks: Tier1Check[] = [
+    {
+      id: "S1",
+      severity: "block",
+      title: "Structure — every step wired and reachable",
+      status: gate.length === 0 ? "pass" : "fail",
+      findings: gate.map(toFinding),
+    },
+    {
+      id: "S2",
+      severity: "warn",
+      title: "Suggestions — won't block publishing",
+      status: advisories.length === 0 ? "pass" : "fail",
+      findings: advisories.map(toFinding),
+    },
+  ];
+  const blocking = gate.length;
+  const warnings = advisories.length;
+  const safe = blocking === 0;
+  return {
+    checks,
+    outcomes: [],
+    verdict: {
+      blocking,
+      warnings,
+      safe,
       label: `${warnings} to review · ${blocking} blocking · ${safe ? "safe" : "not safe"} to publish`,
     },
   };

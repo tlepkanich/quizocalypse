@@ -447,7 +447,7 @@ export function FlowRail({
               title="See how answers route to result pages"
               onClick={() => setShowFlowView((v) => !v)}
             >
-              {showFlowView ? "⟁ Edit View" : "⟁ Flow View"}
+              {showFlowView ? "Edit view" : "Flow view"}
             </button>
           </div>
           {showFlowView ? (
@@ -534,7 +534,7 @@ export function FlowRail({
                   onClick={() => setBankOpen(true)}
                   title="Browse a library of pre-built questions"
                 >
-                  📚 Question bank
+                  Question library
                 </button>
               </div>
             )}

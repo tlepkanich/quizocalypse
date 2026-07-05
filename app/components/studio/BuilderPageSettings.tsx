@@ -133,7 +133,7 @@ export function BuilderPageSettings({
               title={linked ? "Sides linked — editing one sets all four" : "Link all sides"}
               onClick={() => setLinked((v) => !v)}
             >
-              🔗 {linked ? "Linked" : "Link"}
+              {linked ? "Linked" : "Link"}
             </button>
           </span>
           <span className="qz-ps-note">Applies to every page</span>

@@ -8,11 +8,15 @@ import type { Tier1Link, Tier1Report } from "../../../lib/pathReport";
 export function Tier1CheckList({
   report,
   onNavigate,
+  showOutcomes = true,
 }: {
   report: Tier1Report;
   /** Deep-link handler — the host closes its surface and focuses the
    *  question card / switches to the Rules tab. */
   onNavigate: (link: Tier1Link) => void;
+  /** BLD-1 — the outcome table is a decider concept (answers ∪ rules); the
+   *  builder hides it for legacy docs, whose adapter report has none. */
+  showOutcomes?: boolean;
 }) {
   return (
     <>
@@ -54,6 +58,8 @@ export function Tier1CheckList({
       </ul>
 
       {/* ── Outcome table (linear: decider answers ∪ rules) ── */}
+      {!showOutcomes ? null : (
+        <>
       <div className="qz-ql-report-tier">Every possible outcome</div>
       {report.outcomes.length === 0 ? (
         <p className="qz-dim" style={{ fontSize: 12.5 }}>
@@ -80,6 +86,8 @@ export function Tier1CheckList({
             ))}
           </tbody>
         </table>
+      )}
+        </>
       )}
     </>
   );

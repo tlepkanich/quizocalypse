@@ -102,7 +102,7 @@ export function QuestionBankDrawer({
           className="qz-row qz-row-between"
           style={{ padding: "14px 16px", borderBottom: "1px solid var(--qz-rule, #e5e5e5)" }}
         >
-          <strong style={{ fontSize: 15 }}>📚 Question bank</strong>
+          <strong style={{ fontSize: 15 }}>Question library</strong>
           <button type="button" className="qz-btn qz-btn-ghost qz-btn-sm" onClick={onClose} aria-label="Close">
             ✕
           </button>

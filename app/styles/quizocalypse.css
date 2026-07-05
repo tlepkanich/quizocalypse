@@ -1088,15 +1088,33 @@ body[data-qz] ::selection { background: var(--qz-ink); color: var(--qz-cream); }
 .qz-inspo-card { display: flex; flex-direction: column; gap: 10px; padding: 12px; text-decoration: none; color: inherit; }
 .qz-inspo-thumb { display: block; height: 116px; border-radius: 9px; border: 1px solid var(--qz-rule); }
 
-/* ── QD-6 / QB-1 — Quizell builder chrome (standalone): full-width top bar over
-     a body row of icon-rail · tool-switched left panel · centered stage. ── */
+/* ── BLD-1 — the standalone builder chrome on the V2 primitives: the shared
+     .qz-topbar (--builder modifier) over a body row of ONE nav rail ·
+     tool-switched left panel · centered stage. ── */
 .qz-builder { display: flex; flex-direction: column; height: 100vh; min-width: 0; }
+/* The top bar is a flex-column child here, not a scroll-context header: drop
+   stickiness, let the LEFT zone shrink so a long quiz title truncates (the
+   old bespoke bar wrapped it to three lines and blew up the header). */
+.qz-topbar--builder { position: static; flex: 0 0 auto; padding: 0 16px; }
+/* Zone flex model: the TITLE is the only elastic thing in the bar — the left
+   zone takes the slack and its titlewrap truncates; the control zones keep
+   their natural width so badges/buttons never clip. */
+.qz-topbar--builder .qz-topbar-left { min-width: 0; flex: 1 1 0; }
+.qz-topbar--builder .qz-topbar-center { flex: 0 0 auto; flex-wrap: nowrap; }
+.qz-topbar--builder .qz-topbar-right { flex: 0 0 auto; gap: 8px; }
+.qz-builder-titlewrap {
+  min-width: 40px; max-width: 420px; flex: 0 1 auto;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font-size: 13.5px; font-weight: 600;
+}
 .qz-builder-rail {
   flex: 0 0 76px; width: 76px;
   display: flex; flex-direction: column; gap: 4px;
   padding: 12px 8px; background: var(--qz-paper); border-right: 1px solid var(--qz-rule);
 }
 .qz-builder-rail-spacer { margin-top: auto; }
+/* The hairline between the workspace views and the build-scoped tools. */
+.qz-builder-rail-rule { height: 1px; margin: 6px 10px; background: var(--qz-rule); flex: 0 0 auto; }
 .qz-builder-rail-item {
   appearance: none; border: none; background: none; cursor: pointer; font: inherit;
   display: flex; flex-direction: column; align-items: center; gap: 5px;
@@ -1107,10 +1125,6 @@ body[data-qz] ::selection { background: var(--qz-ink); color: var(--qz-cream); }
 .qz-builder-rail-item:hover { background: var(--qz-rule-2); color: var(--qz-ink); }
 .qz-builder-rail-item.is-active { background: var(--qz-accent-tint); color: var(--qz-accent); }
 
-.qz-builder-topbar {
-  flex: 0 0 auto; display: flex; align-items: center; justify-content: space-between;
-  gap: 12px; padding: 10px 18px; background: var(--qz-paper); border-bottom: 1px solid var(--qz-rule);
-}
 /* QB-2 — small square icon buttons in the top bar (zoom, undo/redo). */
 .qz-icon-btn {
   appearance: none; border: 1px solid transparent; background: none; cursor: pointer;
@@ -1154,22 +1168,6 @@ body[data-qz] ::selection { background: var(--qz-ink); color: var(--qz-cream); }
   background: var(--qz-cream-2, #eee); color: var(--qz-ink-3); font-size: 13px;
 }
 /* The row under the top bar: rail · tool panel · stage (or full-width settings). */
-/* Persistent Build/Products/Results/Logic nav — a thin strip under the top bar,
-   always visible so switching views never hides the switcher (the fix for the
-   buried/vanishing FlowRail switcher). */
-.qz-builder-views {
-  flex: 0 0 auto; display: flex; gap: 2px; align-items: center;
-  padding: 5px 12px; background: var(--qz-paper);
-  border-bottom: 1px solid var(--qz-rule);
-}
-.qz-builder-views button {
-  border: none; background: none; cursor: pointer; font: inherit;
-  font-size: 13px; font-weight: 600; color: var(--qz-ink-3);
-  padding: 6px 13px; border-radius: 8px; line-height: 1.4;
-  transition: background var(--qz-dur-fast) var(--qz-ease), color var(--qz-dur-fast) var(--qz-ease);
-}
-.qz-builder-views button:hover { color: var(--qz-ink); background: var(--qz-cream); }
-.qz-builder-views button.is-active { color: var(--qz-accent); background: var(--qz-accent-tint); }
 .qz-builder-body { flex: 1 1 auto; min-height: 0; display: flex; align-items: stretch; }
 .qz-builder-panel {
   flex: 0 0 320px; width: 320px; min-width: 0; overflow-y: auto;
@@ -1228,42 +1226,6 @@ body[data-qz] ::selection { background: var(--qz-ink); color: var(--qz-cream); }
   background: transparent !important;
   min-height: 0 !important;
 }
-
-.qz-builder-filmstrip {
-  flex: 0 0 auto; display: flex; gap: 12px; align-items: flex-start;
-  padding: 14px 16px; background: var(--qz-paper); border-top: 1px solid var(--qz-rule);
-  overflow-x: auto;
-}
-/* QP-1 — each card is a clipped viewport over a scaled live StepPreview (set in
-   BuilderChrome.tsx) so the strip shows real step thumbnails like Quizell. */
-.qz-film-card {
-  appearance: none; cursor: pointer; font: inherit; padding: 0;
-  position: relative; flex: 0 0 auto; width: 156px; height: 104px;
-  border: 1px solid var(--qz-rule); border-radius: 12px; overflow: hidden;
-  background: var(--qz-paper); box-shadow: 0 1px 3px rgba(0, 0, 0, .06);
-  transition: border-color var(--qz-dur-fast) var(--qz-ease), box-shadow var(--qz-dur-fast) var(--qz-ease);
-}
-.qz-film-card:hover { border-color: var(--qz-ink-3); box-shadow: 0 2px 8px rgba(0, 0, 0, .10); }
-.qz-film-card.is-active { border-color: var(--qz-accent); box-shadow: 0 0 0 2px var(--qz-accent); }
-.qz-film-thumb { position: absolute; inset: 0; overflow: hidden; pointer-events: none; background: #fff; }
-.qz-film-thumb-scale { display: block; transform-origin: top left; }
-.qz-film-num {
-  position: absolute; left: 7px; bottom: 7px; z-index: 1;
-  min-width: 18px; height: 18px; padding: 0 5px;
-  display: inline-flex; align-items: center; justify-content: center;
-  font-size: 11px; font-weight: 700; font-variant-numeric: tabular-nums;
-  color: #fff; background: rgba(17, 17, 17, .82); border-radius: 6px;
-}
-/* QB-5 — the "+" add-step card at the end of the filmstrip. */
-.qz-film-add {
-  appearance: none; cursor: pointer; font: inherit;
-  flex: 0 0 auto; width: 56px; height: 104px;
-  display: flex; align-items: center; justify-content: center;
-  border: 1px dashed var(--qz-rule); border-radius: 12px;
-  background: var(--qz-cream); color: var(--qz-ink-3); font-size: 24px; font-weight: 300;
-  transition: border-color var(--qz-dur-fast) var(--qz-ease), color var(--qz-dur-fast) var(--qz-ease);
-}
-.qz-film-add:hover { border-color: var(--qz-accent); color: var(--qz-accent); }
 
 /* QP-2 — Page Settings panel (Editor → Settings sub-tab): background color + the
    Quizell page-paddings cross. */
