@@ -2,12 +2,13 @@ import type { LoaderFunctionArgs, MetaFunction } from "@remix-run/node";
 import { json } from "@remix-run/node";
 import { Outlet } from "@remix-run/react";
 import { requireStudioAccess } from "../lib/studioAccess.server";
-import { StudioSidebar } from "../components/studio/StudioSidebar";
+import { Rail } from "../components/chrome/Rail";
+import { QzToastProvider } from "../components/qz-toast";
 
-// Standalone /studio layout — the Quizell-style app shell. A persistent left
-// sidebar (StudioSidebar) wraps every /studio child route. Renders straight
-// through root.tsx with a shared-token gate (no App Bridge / Shopify auth).
-// Same DB as the embedded /app admin, so edits sync both ways.
+// Standalone /studio layout — the V2 app shell (DS-4). A persistent left nav
+// rail (Rail, design-system-V2 §7.7) wraps every /studio child route. Renders
+// straight through root.tsx with a shared-token gate (no App Bridge / Shopify
+// auth). Same DB as the embedded /app admin, so edits sync both ways.
 
 // Default <title> for every nested /studio screen (Remix applies a parent
 // route's meta to children that don't export their own). Without it, axe flags
@@ -22,11 +23,16 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 
 export default function StudioLayout() {
   return (
-    <div className="qz-shell">
-      <StudioSidebar />
-      <div className="qz-shell-main">
-        <Outlet />
+    <QzToastProvider>
+      <div className="qz-shell">
+        <Rail />
+        <div className="qz-shell-main">
+          <Outlet />
+        </div>
+        <div className="qz-viewport-notice">
+          This workspace is designed for larger screens — please use a desktop browser.
+        </div>
       </div>
-    </div>
+    </QzToastProvider>
   );
 }

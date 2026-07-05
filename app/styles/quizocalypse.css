@@ -954,47 +954,123 @@ body[data-qz] ::selection { background: var(--qz-ink); color: var(--qz-cream); }
 }
 .qz-chip-toggle.is-on::before { content: "✓ "; }
 
-/* ── QD-1 — the Quizell-style app shell: persistent left sidebar ───────────── */
+/* ── DS-4 — the V2 app shell: persistent left nav rail (V2 §7.7) ───────────── */
+/* .qz-shell is a plain flex row: the rail owns its width (240px ⇄ 60px, no
+   fixed flex-basis here) and .qz-shell-main flexes into the remainder. */
 .qz-shell { display: flex; min-height: 100vh; align-items: stretch; }
 .qz-shell-main { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; }
 
-.qz-sidebar {
-  flex: 0 0 244px; width: 244px;
-  position: sticky; top: 0; align-self: flex-start;
-  height: 100vh;
-  display: flex; flex-direction: column;
-  background: var(--qz-paper);
-  border-right: 1px solid var(--qz-rule);
-  padding: 14px 12px;
-}
-.qz-sidebar-brand { padding: 6px 8px 14px; }
-.qz-brand-link { display: inline-flex; align-items: center; gap: 10px; text-decoration: none; color: var(--qz-ink); }
+/* Legacy .qz-brand-badge (QD-1) — still used by UnifiedWorkspace's builder
+   chrome; the rest of the .qz-sidebar* family was replaced by .qz-rail*. */
 .qz-brand-badge {
   width: 30px; height: 30px; flex: 0 0 auto;
   display: inline-flex; align-items: center; justify-content: center;
   border-radius: 9px; background: var(--qz-accent); color: #fff;
   font-weight: 700; font-size: 17px; line-height: 1;
 }
-.qz-brand-word { font-size: 17px; font-weight: 650; letter-spacing: -0.01em; }
 
-.qz-sidebar-nav { display: flex; flex-direction: column; gap: 2px; margin-top: 4px; flex: 1 1 auto; overflow-y: auto; }
-.qz-sidenav-item {
-  display: flex; align-items: center; gap: 11px;
-  padding: 9px 11px; border-radius: 9px;
+/* The rail: full-height sticky paper column. Width animates 300ms; labels
+   fade 140ms — out immediately on collapse (then visibility-hidden after the
+   fade), in after a 160ms delay on expand so the width has mostly settled.
+   Collapsed horizontal padding drops to 10px so the 40×40 rows fit in 60px. */
+.qz-rail {
+  width: 240px; flex: 0 0 auto;
+  position: sticky; top: 0; align-self: flex-start;
+  height: 100vh;
+  display: flex; flex-direction: column;
+  background: var(--qz-paper);
+  border-right: 1px solid var(--qz-rule);
+  padding: 14px 12px;
+  overflow: hidden;
+  transition: width var(--qz-dur-slow) var(--qz-ease), padding var(--qz-dur-slow) var(--qz-ease);
+}
+.qz-rail.is-collapsed { width: 60px; padding-left: 10px; padding-right: 10px; }
+
+/* Header slot: wordmark, 16px gap, then the hairline divider. */
+.qz-rail-head {
+  display: flex; align-items: center;
+  padding: 4px 8px 16px;
+  border-bottom: 1px solid var(--qz-rule);
+}
+.qz-rail.is-collapsed .qz-rail-head { justify-content: center; padding-left: 0; padding-right: 0; }
+
+/* Labels also collapse their box (max-width → 0) alongside the rail width —
+   a merely-invisible label would keep its flex space and push the icon out
+   of the centered 40px rows. */
+.qz-rail-label {
+  white-space: nowrap; overflow: hidden; max-width: 200px;
+  opacity: 1; visibility: visible;
+  transition:
+    opacity var(--qz-dur-fast) var(--qz-ease) 160ms,
+    max-width var(--qz-dur-slow) var(--qz-ease),
+    visibility 0s linear 0s;
+}
+.qz-rail.is-collapsed .qz-rail-label {
+  opacity: 0; visibility: hidden; max-width: 0;
+  transition:
+    opacity var(--qz-dur-fast) var(--qz-ease),
+    max-width var(--qz-dur-slow) var(--qz-ease),
+    visibility 0s linear var(--qz-dur-fast);
+}
+
+.qz-rail-nav {
+  display: flex; flex-direction: column; gap: 2px;
+  margin-top: 8px; flex: 1 1 auto;
+  overflow-y: auto; overflow-x: hidden;
+}
+.qz-rail-item {
+  position: relative;
+  display: flex; align-items: center; gap: 12px; flex: none;
+  height: 40px; padding: 0 10px; border-radius: 10px;
   color: var(--qz-ink-3); text-decoration: none;
-  font-size: 13.5px; font-weight: 500; line-height: 1;
+  font-size: 14px; font-weight: 500; line-height: 1;
+  overflow: hidden;
   transition: background var(--qz-dur-fast) var(--qz-ease), color var(--qz-dur-fast) var(--qz-ease);
 }
-.qz-sidenav-item:hover { background: var(--qz-rule-2); color: var(--qz-ink); }
-.qz-sidenav-item[aria-current="page"] {
-  background: var(--qz-accent-tint); color: var(--qz-accent); font-weight: 600;
+.qz-rail.is-collapsed .qz-rail-item { width: 40px; padding: 0; gap: 0; justify-content: center; }
+.qz-rail-icon { flex: 0 0 auto; }
+.qz-rail-item:hover {
+  background: color-mix(in srgb, var(--qz-ink) 4%, transparent);
+  color: var(--qz-ink);
+}
+.qz-rail-item[aria-current="page"] {
+  background: var(--qz-accent-wash); color: var(--qz-accent); font-weight: 600;
+}
+.qz-rail-item[aria-current="page"]::before {
+  content: ""; position: absolute; left: 0; top: 8px; bottom: 8px; width: 3px;
+  border-radius: 0 2px 2px 0; background: var(--qz-accent);
 }
 
-.qz-sidebar-foot { border-top: 1px solid var(--qz-rule); padding: 12px 6px 4px; margin-top: 8px; }
-.qz-acct-avatar {
-  width: 26px; height: 26px; flex: 0 0 auto; border-radius: 50%;
-  background: linear-gradient(135deg, var(--qz-accent), var(--qz-accent-2));
+/* Collapse toggle: bottom-right of the rail, above the account divider. */
+.qz-rail-collapse {
+  align-self: flex-end; flex: none;
+  width: 28px; height: 28px; margin: 8px 2px;
+  display: inline-flex; align-items: center; justify-content: center;
+  border: none; border-radius: 8px;
+  background: transparent; color: var(--qz-ink-4); cursor: pointer;
+  transition: background var(--qz-dur-fast) var(--qz-ease), color var(--qz-dur-fast) var(--qz-ease);
 }
+.qz-rail-collapse:hover {
+  background: color-mix(in srgb, var(--qz-ink) 4%, transparent);
+  color: var(--qz-ink);
+}
+.qz-rail.is-collapsed .qz-rail-collapse { align-self: center; }
+
+/* Footer: divider, then the account row. Collapsed, the row stacks so the
+   theme toggle sits icon-only below the avatar. */
+.qz-rail-foot { border-top: 1px solid var(--qz-rule); padding-top: 12px; }
+.qz-rail-account { display: flex; align-items: center; gap: 10px; padding: 0 2px; }
+.qz-rail-account > .qz-rail-label { flex: 1 1 auto; font-size: 13.5px; font-weight: 500; }
+.qz-rail-avatar {
+  width: 28px; height: 28px; flex: 0 0 auto; border-radius: 50%;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: var(--qz-accent); color: #fff;
+  font-size: 12px; font-weight: 600; line-height: 1;
+}
+.qz-rail.is-collapsed .qz-rail-account { flex-direction: column; gap: 8px; padding: 0; }
+/* The account label would still hold flex space when merely invisible, so it
+   is display-removed in the collapsed column (no fade — pragmatic). */
+.qz-rail.is-collapsed .qz-rail-account > .qz-rail-label { display: none; }
 
 /* ── QD-3 — Home front door: big action cards + inspiration gallery ────────── */
 .qz-action-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
