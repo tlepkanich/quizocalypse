@@ -3,7 +3,6 @@ import type { CSSProperties, KeyboardEvent as ReactKeyboardEvent } from "react";
 import { Link, useFetcher, useRevalidator } from "@remix-run/react";
 import {
   QzPage,
-  QzPageHeader,
   QzCard,
   QzBanner,
   QzBadge,
@@ -36,6 +35,8 @@ import { StyleBar } from "../studio/StyleBar";
 import { BrandIdentityPanel } from "../studio/BrandIdentityPanel";
 import { QuestionBuilderStage } from "./QuestionBuilderStage";
 import { RecommendationStage } from "./RecommendationStage";
+import { TopBar } from "../chrome/TopBar";
+import { StepNav, type StepNavStep } from "../chrome/StepNav";
 import { ClientOnly, BuilderSkeleton } from "../studio/ClientOnly";
 import type { BucketSuggestion } from "../../lib/bucketDetect";
 import { THEME_PRESETS, type ThemePreset } from "../../lib/themePresets";
@@ -189,34 +190,33 @@ export function Step1Funnel({ data }: { data: FunnelData }) {
   }, [isGenerating, revalidator]);
 
   return (
-    <QzPage wide>
-      <QzPageHeader
-        eyebrow="AI-first setup · Step 1"
-        title="Shape your quiz"
-        subtitle="We read your catalog, group your products, and draft a few quiz directions to pick from."
-        actions={
-          <div className="qz-row" style={{ gap: 8 }}>
+    <>
+      {/* Design-system-V2 §7.6 — the creation flow's sticky top bar: wordmark ·
+          step-nav pills · ancillary actions. Replaces the old QzPageHeader +
+          FunnelProgress dots (each stage renders its own page-title zone). */}
+      <TopBar
+        center={<FunnelStepNav stage={data.stage} />}
+        right={
+          <>
             {data.identitySummary ? (
               <button
                 type="button"
                 className="qz-btn qz-btn-ghost qz-btn-sm"
                 onClick={() => setShowIdentity(true)}
               >
-                ✦ Current brand identity
+                ✦ Brand identity
               </button>
             ) : null}
             <Link to="/studio" className="qz-btn qz-btn-ghost qz-btn-sm">
               ← All quizzes
             </Link>
-          </div>
+          </>
         }
       />
-
+    <QzPage wide>
       {showIdentity && data.identitySummary ? (
         <BrandIdentityModal summary={data.identitySummary} onClose={() => setShowIdentity(false)} />
       ) : null}
-
-      <FunnelProgress stage={data.stage} />
 
       {errorMsg ? (
         <QzBanner tone="crit" title="That didn't go through">
@@ -346,11 +346,12 @@ export function Step1Funnel({ data }: { data: FunnelData }) {
         <TemplatesStage data={data} fetcher={fetcher} pendingIntent={pendingIntent} />
       ) : null}
     </QzPage>
+    </>
   );
 }
 
-// The funnel's visible step order — shared by FunnelProgress AND the Step-N-of-M
-// stepper inside each stage, so the "of N" count can't drift from the dots.
+// The funnel's visible step order — shared by the top-bar step pills AND the
+// Step-N-of-M stepper inside each stage, so the "of N" count can't drift.
 // The re-sequenced visible order: Buckets → Shape → Questions → Rec Page → Design.
 // Goal is folded INTO Shape (the "write your goal" card); the early question build
 // runs right after Shape and lands on Questions; Design's Continue opens the main
@@ -383,39 +384,19 @@ function visibleStageKey(stage: FunnelData["stage"]): string {
   return stage;
 }
 
-// A slim stage indicator across the funnel.
-function FunnelProgress({ stage }: { stage: FunnelData["stage"] }) {
+// The top bar's step pills (V2 §7.6): done ✓ · current gold-wash ◆ · upcoming
+// muted. Renders through the shared StepNav; navigation stays with each
+// stage's own Back/Continue intents for now (done-pill jumps are a later
+// wiring — StepNav simply omits onStepClick so done pills are inert).
+function FunnelStepNav({ stage }: { stage: FunnelData["stage"] }) {
   const activeIdx = FUNNEL_STAGES.findIndex((s) => s.key === visibleStageKey(stage));
-  return (
-    <div className="qz-row" style={{ gap: 8, margin: "2px 0 18px", flexWrap: "wrap" }}>
-      {FUNNEL_STAGES.map((s, i) => (
-        <span
-          key={s.key}
-          className="qz-row"
-          // H4 a11y — mark the CURRENT step for screen readers (the reached/active
-          // state was otherwise conveyed only by colour). The dot below adds a
-          // filled-vs-hollow non-colour cue (WCAG 1.4.1).
-          aria-current={i === activeIdx ? "step" : undefined}
-          style={{ gap: 6, fontSize: 12.5, color: i <= activeIdx ? "var(--qz-ink)" : "var(--qz-ink-4)" }}
-        >
-          <span
-            aria-hidden
-            style={{
-              width: 7,
-              height: 7,
-              borderRadius: 999,
-              boxSizing: "border-box",
-              background: i <= activeIdx ? "var(--qz-accent)" : "transparent",
-              border: i <= activeIdx ? "none" : "1.5px solid var(--qz-ink-4)",
-              opacity: i <= activeIdx ? 1 : 0.6,
-            }}
-          />
-          {s.label}
-          {i < FUNNEL_STAGES.length - 1 ? <span className="qz-dim" style={{ marginLeft: 2 }}>·</span> : null}
-        </span>
-      ))}
-    </div>
-  );
+  const steps: StepNavStep[] = FUNNEL_STAGES.map((s, i) => ({
+    id: s.key,
+    label: s.label,
+    number: i + 1,
+    state: i < activeIdx ? "done" : i === activeIdx ? "current" : "upcoming",
+  }));
+  return <StepNav steps={steps} />;
 }
 
 // A small segmented control row for the Design step's fine-tune options.

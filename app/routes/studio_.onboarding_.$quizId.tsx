@@ -4,10 +4,14 @@ import { useLoaderData } from "@remix-run/react";
 import { requireStudioAccess, resolveStudioShop } from "../lib/studioAccess.server";
 import { loadStep1FunnelData, runStep1FunnelAction } from "../lib/step1Funnel.server";
 import { Step1Funnel } from "../components/onboarding/Step1Funnel";
+import { QzToastProvider } from "../components/qz-toast";
 
 // Builder Re-work Step 1 — the studio (cookie-auth) funnel. A thin wrapper over
 // the shared shop-scoped loader/action in step1Funnel.server.ts; the embedded
 // twin (app.onboarding_.$quizId) wraps the same logic with Shopify admin auth.
+// DS-3 (design-system-V2 §7.7): the leading `studio_` in the route id escapes
+// the sidebar shell — the nav rail is ABSENT inside the creation flow; the
+// sticky top bar's step pills own navigation there.
 
 export const loader = async ({ request, params }: LoaderFunctionArgs) => {
   await requireStudioAccess(request);
@@ -25,5 +29,9 @@ export const action = async ({ request, params }: ActionFunctionArgs) => {
 
 export default function StudioOnboardingFunnel() {
   const data = useLoaderData<typeof loader>();
-  return <Step1Funnel data={data} />;
+  return (
+    <QzToastProvider>
+      <Step1Funnel data={data} />
+    </QzToastProvider>
+  );
 }
