@@ -5,7 +5,7 @@ import { act, createElement } from "react";
 
 import { TypeChipSelector } from "./TypeChipSelector";
 import { Quiz } from "../../../../lib/quizSchema";
-import type { QuestionNode } from "../../questionsLogic/questionOrder";
+import type { QuestionNode } from "../../../../lib/questionOrder";
 
 /* BIC-2 D3 — the type chip's dialog gates (quiz-step3 v3 §4.4). BOTH dialogs
    intercept BEFORE setQuestionType runs:

@@ -1,6 +1,6 @@
 import type { DecisionRuleCondition } from "./quizSchema";
 import type { BuilderCategory } from "../components/builder/stepProps";
-import type { OrderedQuestion } from "../components/onboarding/questionsLogic/questionOrder";
+import type { OrderedQuestion } from "./questionOrder";
 
 // Plain-language rule summary for confirm dialogs + the inline accordion:
 // "If Q1 is Park AND Q2 is not Advanced → Pro Park Boards".

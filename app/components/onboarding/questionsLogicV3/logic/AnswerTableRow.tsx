@@ -7,10 +7,13 @@ import {
   removeAnswer,
 } from "../../../../lib/quizMutations";
 import { updateNodeData } from "../../../studio/studioDoc";
-import { answerSkipValue, type QuestionNode } from "../../questionsLogic/questionOrder";
-import { answerLetter } from "../../questionsLogic/bucketPalette";
+import {
+  answerSkipValue,
+  type QuestionNode,
+  type SkipOption,
+} from "../../../../lib/questionOrder";
+import { answerLetter } from "../../../../lib/bucketPalette";
 import type { RuleRef } from "../ruleHomes";
-import type { SkipOption } from "../../questionsLogic/AnswerRow";
 
 const ANSWER_MAX = 60;
 

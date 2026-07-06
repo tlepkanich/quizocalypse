@@ -1,7 +1,7 @@
 import type { CSSProperties } from "react";
 import type { Quiz as QuizDoc } from "../../../../lib/quizSchema";
 import { isFreeformType } from "../../../../lib/quizSchema";
-import type { OrderedQuestion } from "../../questionsLogic/questionOrder";
+import type { OrderedQuestion } from "../../../../lib/questionOrder";
 import { updateNodeData } from "../../../studio/studioDoc";
 import { computeFitStep, isTitleLong } from "../fitSteps";
 import { EditableText } from "./EditableText";

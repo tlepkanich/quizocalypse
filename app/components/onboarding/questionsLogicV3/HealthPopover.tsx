@@ -2,8 +2,8 @@ import { useMemo } from "react";
 import type { Quiz as QuizDoc } from "../../../lib/quizSchema";
 import type { Tier1Link, Tier1Report } from "../../../lib/pathReport";
 import { outcomeTable } from "../../../lib/pathAnalyzer";
-import { Tier1CheckList } from "../questionsLogic/Tier1CheckList";
-import { usePathQuality } from "../questionsLogic/usePathQuality";
+import { Tier1CheckList } from "../../shared/health/Tier1CheckList";
+import { usePathQuality } from "../../shared/health/usePathQuality";
 
 /* quiz-step3 v3 / QL3-P4 — the health popover body: the reused Tier-1
    check list (deep links wired to the v3 surfaces by the shell's onNavigate)

@@ -11,7 +11,7 @@ import {
   moveDecisionRule,
 } from "../../../../lib/quizMutations";
 import { ruleSummary } from "../../../../lib/ruleSummary";
-import type { OrderedQuestion, QuestionNode } from "../../questionsLogic/questionOrder";
+import type { OrderedQuestion, QuestionNode } from "../../../../lib/questionOrder";
 
 /* quiz-step3 v3 §5.5 — a distributed rule row, rendered inside its HOME
    question section (indigo band). Collapsed = R# chip + the ruleSummary

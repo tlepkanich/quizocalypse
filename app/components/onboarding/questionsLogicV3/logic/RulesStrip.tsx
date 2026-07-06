@@ -1,7 +1,7 @@
 import type { Quiz as QuizDoc, DecisionRule } from "../../../../lib/quizSchema";
 import type { BuilderCategory } from "../../../builder/stepProps";
 import { ruleSummary } from "../../../../lib/ruleSummary";
-import type { OrderedQuestion } from "../../questionsLogic/questionOrder";
+import type { OrderedQuestion } from "../../../../lib/questionOrder";
 import type { RuleRef } from "../ruleHomes";
 import { RuleRow } from "./RuleRow";
 

@@ -6,7 +6,7 @@ import { act, createElement } from "react";
 import { RulesStrip } from "./RulesStrip";
 import { Quiz } from "../../../../lib/quizSchema";
 import type { BuilderCategory } from "../../../builder/stepProps";
-import type { OrderedQuestion } from "../../questionsLogic/questionOrder";
+import type { OrderedQuestion } from "../../../../lib/questionOrder";
 
 /* BIC-2 D3 — the sticky rules strip (quiz-step3 v3 §5.5): one clickable
    summary line per rule (click = jump home), an honest empty state, and the

@@ -6,7 +6,7 @@ import { LogicScroll } from "../onboarding/questionsLogicV3/logic/LogicScroll";
 import {
   deciderQuestion,
   orderedQuestions,
-} from "../onboarding/questionsLogic/questionOrder";
+} from "../../lib/questionOrder";
 import { TranslationsPanel } from "./TranslationsPanel";
 import { ExperiencePanel } from "./ExperiencePanel";
 import { QzDrawer } from "../qz-overlays";

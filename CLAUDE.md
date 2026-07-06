@@ -136,7 +136,8 @@ verify with ts-prune + grep first.
 | `RESEND_API_KEY` / `GMAIL_SMTP_*` / `STUDIO_EMAIL_FROM` | Magic-link email delivery (Resend preferred; Gmail SMTP fallback). |
 | `DEV_SHOP_DOMAIN` / `STUDIO_MODE` | Which shop the standalone surface manages; `STUDIO_MODE=standalone` = non-Shopify workspace. |
 
-**Model choices are code constants, not env** (`app/lib/claude.ts`):
+**Model choices are code constants, not env** (`app/lib/ai/client.ts`; the
+AI surfaces re-export through the `app/lib/claude.ts` barrel):
 `MODEL = claude-sonnet-4-6` for question builds/edits/research;
 `MODEL_SPEED = claude-haiku-4-5` for the funnel's type/template middle passes.
 The Haiku middle passes are **owner-approved via side-by-side comparison** —

@@ -3,8 +3,7 @@ import type { Quiz as QuizDoc, DecisionRule, DecisionRuleCondition } from "../..
 import { isFreeformType } from "../../../../lib/quizSchema";
 import type { BuilderCategory } from "../../../builder/stepProps";
 import { addAnswer, moveDecider } from "../../../../lib/quizMutations";
-import type { OrderedQuestion } from "../../questionsLogic/questionOrder";
-import type { SkipOption } from "../../questionsLogic/AnswerRow";
+import type { OrderedQuestion, SkipOption } from "../../../../lib/questionOrder";
 import type { RuleLayout } from "../ruleHomes";
 import { sectionColorVars, type SectionColorKey } from "../sectionPalette";
 import { FlagTab } from "./FlagTab";

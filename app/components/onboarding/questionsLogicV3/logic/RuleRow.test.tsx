@@ -6,7 +6,7 @@ import { act, createElement } from "react";
 import { RuleRow } from "./RuleRow";
 import { Quiz } from "../../../../lib/quizSchema";
 import type { BuilderCategory } from "../../../builder/stepProps";
-import type { OrderedQuestion } from "../../questionsLogic/questionOrder";
+import type { OrderedQuestion } from "../../../../lib/questionOrder";
 
 /* BIC-2 D3 — the distributed rule row (quiz-step3 v3 §5.5): collapsed shows
    the summary and only toggles; expanded edits write the updateDecisionRule

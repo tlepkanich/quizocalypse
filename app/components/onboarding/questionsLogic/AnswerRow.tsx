@@ -8,16 +8,19 @@ import {
   removeAnswer,
 } from "../../../lib/quizMutations";
 import { updateNodeData } from "../../studio/studioDoc";
-import { answerBucketId, answerSkipValue, type QuestionNode } from "./questionOrder";
+import {
+  answerBucketId,
+  answerSkipValue,
+  type QuestionNode,
+  type SkipOption,
+} from "./questionOrder";
 import { bucketColor, answerLetter, answerLetterColor } from "./bucketPalette";
 
 const ANSWER_MAX = 60;
 
-export interface SkipOption {
-  /** Node id to route to, or the sentinel "__end__" for End-quiz. */
-  value: string;
-  label: string;
-}
+// BIC-2 C5 — SkipOption moved to app/lib/questionOrder.ts (shared with the v3
+// answers table); re-exported here so the legacy-folder importers stay as-is.
+export type { SkipOption };
 
 // Questions & Logic spec §3.1 — one answer row inside a question card. Carries the
 // editable answer text plus the INLINE "Maps to bucket" colored pill and "Skip to"

@@ -3,7 +3,7 @@ import type { Quiz as QuizDoc, DesignTokens } from "../../../lib/quizSchema";
 import type { BuilderCategory } from "../../builder/stepProps";
 import { buildTier1Report, type Tier1Link } from "../../../lib/pathReport";
 import { insertQuestionRelative } from "../../../lib/quizMutations";
-import { orderedQuestions, deciderQuestion } from "../questionsLogic/questionOrder";
+import { orderedQuestions, deciderQuestion } from "../../../lib/questionOrder";
 import { QuestionBankDrawer } from "../../studio/QuestionBankDrawer";
 import { TopBar3 } from "./TopBar3";
 import { HealthPill } from "./HealthPill";

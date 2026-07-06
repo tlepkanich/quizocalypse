@@ -2,7 +2,7 @@ import { useRef, useState } from "react";
 import type { Quiz as QuizDoc, QuestionType } from "../../../../lib/quizSchema";
 import { isFreeformType } from "../../../../lib/quizSchema";
 import { setQuestionType } from "../../../../lib/quizMutations";
-import type { QuestionNode } from "../../questionsLogic/questionOrder";
+import type { QuestionNode } from "../../../../lib/questionOrder";
 import { QzModal } from "../../../qz-overlays";
 
 /* quiz-step3 v3 §4.4 — the kicker's type chip as a dropdown (QL3-P2).

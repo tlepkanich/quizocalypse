@@ -2,7 +2,7 @@ import { useMemo } from "react";
 import type { CSSProperties } from "react";
 import type { Quiz as QuizDoc, DesignTokens } from "../../../../lib/quizSchema";
 import { isFreeformType } from "../../../../lib/quizSchema";
-import type { OrderedQuestion } from "../../questionsLogic/questionOrder";
+import type { OrderedQuestion } from "../../../../lib/questionOrder";
 import {
   resolveDesignTokens,
   tokensToCssVars,
