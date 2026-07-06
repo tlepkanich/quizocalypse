@@ -57,7 +57,19 @@
       "boxShadow": 0
     },
     "app/components/onboarding/Step1Funnel.tsx": {
-      "hex": 7,
+      "hex": 1,
+      "boxShadow": 0
+    },
+    "app/components/onboarding/stages/DesignStage.tsx": {
+      "hex": 4,
+      "boxShadow": 0
+    },
+    "app/components/onboarding/stages/RecommendationBucketsStage.tsx": {
+      "hex": 1,
+      "boxShadow": 0
+    },
+    "app/components/onboarding/stages/ShapeStage.tsx": {
+      "hex": 1,
       "boxShadow": 0
     },
     "app/components/qz.tsx": {
