@@ -22,6 +22,13 @@ const VIEWPORTS = [
   { name: "desktop", width: 1280, height: 900 },
 ];
 
+// BIC-2 D1 — screenshot regression, opt-in via SMOKE_SHOTS=1. Baselines are
+// platform-suffixed by Playwright (…-darwin.png committed; linux not yet
+// blessed), so this MUST stay off in CI until linux baselines exist — a naive
+// always-on assert would fail on font rendering and trigger a false rollback.
+// Bless/re-bless: `npm run e2e:bless-shots` (see e2e/README.md).
+const SHOTS_ON = process.env.SMOKE_SHOTS === "1";
+
 mkdirSync("e2e/shots", { recursive: true });
 
 for (const q of QUIZZES) {
@@ -38,8 +45,20 @@ for (const q of QUIZZES) {
       });
       await page.goto(`/q/${q.id}`, { waitUntil: "networkidle", timeout: 30_000 });
 
-      const shot = (name: string) =>
-        page.screenshot({ path: `e2e/shots/${q.label}-${vp.name}-${name}.png`, fullPage: true });
+      const shot = async (name: string) => {
+        await page.screenshot({
+          path: `e2e/shots/${q.label}-${vp.name}-${name}.png`,
+          fullPage: true,
+        });
+        // Regression compare against the committed baseline (same shot, per
+        // step × viewport). toHaveScreenshot retries until two consecutive
+        // frames match, which also rides out late-loading imagery.
+        if (SHOTS_ON) {
+          await expect(page).toHaveScreenshot(`${q.label}-${vp.name}-${name}.png`, {
+            fullPage: true,
+          });
+        }
+      };
 
       const checkSanity = async (step: string) => {
         // 1) Progress-trail pills must stay short — a tall pill is the oval bug.

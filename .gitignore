@@ -26,11 +26,11 @@ pnpm-lock.yaml
 # Claude Code session state
 .claude/
 
-# Playwright e2e smoke-test artifacts (screenshots + reports)
+# Playwright e2e smoke-test artifacts (screenshots + reports). NOTE: the
+# committed screenshot BASELINES live in /e2e/*-snapshots/ and are tracked.
 /e2e/shots/
 /test-results/
 /playwright-report/
-/e2e/shots-baseline/
 scripts/audit/
 wf-audit-*.mjs
 wf-*.png
