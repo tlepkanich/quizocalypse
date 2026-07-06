@@ -96,9 +96,20 @@ export async function action({ params, request }: ActionFunctionArgs) {
     return json({ error: "Method not allowed" }, { status: 405 });
   }
 
-  const body = (await request.json()) as IntegrationRequestBody;
-  if (!body.nodeId) {
+  // BIC-2 D2 — malformed input is a client error, not a server crash: invalid
+  // JSON or a missing/mis-typed path used to escape as an unhandled throw
+  // (Remix generic 500). Same guard shape as q.$id.rec-copy.
+  let body: IntegrationRequestBody;
+  try {
+    body = (await request.json()) as IntegrationRequestBody;
+  } catch {
+    return json({ error: "Invalid JSON body" }, { status: 400 });
+  }
+  if (!body.nodeId || typeof body.nodeId !== "string") {
     return json({ error: "Missing nodeId" }, { status: 400 });
+  }
+  if (!Array.isArray(body.path)) {
+    return json({ error: "Missing path" }, { status: 400 });
   }
 
   const quiz = await prisma.quiz.findFirst({
