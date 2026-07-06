@@ -203,12 +203,60 @@ export function Step1Funnel({ data }: { data: FunnelData }) {
     return () => clearInterval(t);
   }, [isGenerating, revalidator]);
 
+  // §7.6 — the bar's right zone carries the PRIMARY Continue. Step-3 adopted
+  // this with TopBar3 (◆ Continue, destination-named); steps 4 and 5 had kept
+  // their pre-DS in-page footers (a bottom-left ← Back · Continue row that
+  // scrolled out of view, and step 5's said "Open builder →"). Their primary
+  // action moves here — same anatomy as step 3's — and the footers retire.
+  const navBusy = fetcher.state !== "idle";
+  const stageNav =
+    data.stage === "rec_page" ? (
+      <>
+        <button
+          type="button"
+          className="qz-btn qz-btn-ghost qz-btn-sm"
+          disabled={navBusy}
+          onClick={() => fetcher.submit({ intent: "to-question-builder" }, { method: "post" })}
+        >
+          ← Back
+        </button>
+        <button
+          type="button"
+          className="qz-btn qz-btn-sm qz-s3-continue qz-btn-accent"
+          disabled={navBusy}
+          onClick={() => fetcher.submit({ intent: "to-design" }, { method: "post" })}
+        >
+          {pendingIntent === "to-design" ? "Saving…" : "◆ Continue to Design"}
+        </button>
+      </>
+    ) : data.stage === "design" ? (
+      <>
+        <button
+          type="button"
+          className="qz-btn qz-btn-ghost qz-btn-sm"
+          disabled={navBusy}
+          onClick={() => fetcher.submit({ intent: "to-rec-page" }, { method: "post" })}
+        >
+          ← Back
+        </button>
+        <button
+          type="button"
+          className="qz-btn qz-btn-sm qz-s3-continue qz-btn-accent"
+          disabled={navBusy}
+          onClick={() => fetcher.submit({ intent: "generate-build" }, { method: "post" })}
+        >
+          {pendingIntent === "generate-build" ? "Opening builder…" : "◆ Open builder"}
+        </button>
+      </>
+    ) : null;
+
   return (
     <>
       {/* Design-system-V2 §7.6 — the creation flow's sticky top bar: wordmark ·
-          step-nav pills · ancillary actions. Replaces the old QzPageHeader +
-          FunnelProgress dots (each stage renders its own page-title zone).
-          Hidden while the Step-3 v3 shell renders its own floating bar. */}
+          step-nav pills · ancillary actions + the stage's primary Continue.
+          Replaces the old QzPageHeader + FunnelProgress dots (each stage
+          renders its own page-title zone). Hidden while the Step-3 v3 shell
+          renders its own floating bar. */}
       {step3V3Active ? null : (
       <TopBar
         center={<FunnelStepNav stage={data.stage} />}
@@ -226,6 +274,7 @@ export function Step1Funnel({ data }: { data: FunnelData }) {
             <Link to="/studio" className="qz-btn qz-btn-ghost qz-btn-sm">
               ← All quizzes
             </Link>
+            {stageNav}
           </>
         }
       />
@@ -350,8 +399,6 @@ export function Step1Funnel({ data }: { data: FunnelData }) {
               categories={data.recPage!.categories}
               productIndex={data.recPage!.productIndex}
               collections={data.collections}
-              fetcher={fetcher}
-              pendingIntent={pendingIntent}
             />
           )}
         </ClientOnly>
@@ -772,23 +819,7 @@ function DesignStage({
           />
         </div>
       </QzCard>
-      <div className="qz-row" style={{ gap: 8 }}>
-        <button
-          type="button"
-          className="qz-btn qz-btn-ghost"
-          onClick={() => fetcher.submit({ intent: "to-rec-page" }, { method: "post" })}
-        >
-          ← Back
-        </button>
-        <button
-          type="button"
-          className="qz-btn qz-btn-accent"
-          disabled={pendingIntent === "generate-build"}
-          onClick={() => fetcher.submit({ intent: "generate-build" }, { method: "post" })}
-        >
-          {pendingIntent === "generate-build" ? "Opening builder…" : "Open builder →"}
-        </button>
-      </div>
+      {/* §7.6 — Back/Open-builder live in the funnel top bar now (stageNav). */}
     </div>
   );
 }
@@ -864,22 +895,7 @@ function RecPageStage({
           <p className="qz-dim" style={{ margin: 0, fontSize: 13 }}>No template selected yet.</p>
         )}
       </QzCard>
-      <div className="qz-row" style={{ gap: 8 }}>
-        <button
-          type="button"
-          className="qz-btn qz-btn-ghost"
-          onClick={() => fetcher.submit({ intent: "to-question-builder" }, { method: "post" })}
-        >
-          ← Back
-        </button>
-        <button
-          type="button"
-          className="qz-btn qz-btn-accent"
-          onClick={() => fetcher.submit({ intent: "to-design" }, { method: "post" })}
-        >
-          Continue →
-        </button>
-      </div>
+      {/* §7.6 — Back/Continue live in the funnel top bar now (stageNav). */}
     </div>
   );
 }

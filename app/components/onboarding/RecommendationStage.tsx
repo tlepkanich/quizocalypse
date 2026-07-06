@@ -1,6 +1,5 @@
 import { useMemo, useState } from "react";
 import type { CSSProperties } from "react";
-import type { useFetcher } from "@remix-run/react";
 import type { Quiz, QuizNode } from "../../lib/quizSchema";
 import { stepNumber, TOTAL_STEPS } from "../../lib/funnelStages";
 import type { IndexedProduct } from "../../lib/recommendationEngine";
@@ -44,16 +43,12 @@ export function RecommendationStage({
   categories,
   productIndex,
   collections,
-  fetcher,
-  pendingIntent,
 }: {
   quizId: string;
   initialDoc: Quiz;
   categories: BuilderCategory[];
   productIndex: IndexedProduct[];
   collections: BuilderCollection[];
-  fetcher: ReturnType<typeof useFetcher>;
-  pendingIntent: string | null;
 }) {
   const { doc, commit, isSaving, savedAt } = useQuizDraft(initialDoc);
 
@@ -80,8 +75,6 @@ export function RecommendationStage({
     (node.data.category_id && categories.find((c) => c.id === node.data.category_id)?.name) ||
     node.data.headline ||
     "Result";
-
-  const navigating = pendingIntent === "to-design" || pendingIntent === "to-question-builder";
 
   return (
     <div className="qz-qb-stage">
@@ -253,24 +246,8 @@ export function RecommendationStage({
         </>
       )}
 
-      <div className="qz-row" style={{ gap: 8, marginTop: 16 }}>
-        <button
-          type="button"
-          className="qz-btn qz-btn-ghost"
-          disabled={navigating}
-          onClick={() => fetcher.submit({ intent: "to-question-builder" }, { method: "post" })}
-        >
-          ← Back
-        </button>
-        <button
-          type="button"
-          className="qz-btn qz-btn-accent"
-          disabled={navigating}
-          onClick={() => fetcher.submit({ intent: "to-design" }, { method: "post" })}
-        >
-          Continue →
-        </button>
-      </div>
+      {/* §7.6 — Back/Continue live in the funnel top bar now (Step1Funnel's
+          stageNav), not a bottom-of-page footer. */}
     </div>
   );
 }
