@@ -1,6 +1,7 @@
 import type { ActionFunctionArgs } from "@remix-run/node";
 import { authenticate } from "../shopify.server";
 import prisma from "../db.server";
+import { logFor } from "../lib/log.server";
 import {
   attributeOrderToSessions,
   DEFAULT_ATTRIBUTION_WINDOW_MS,
@@ -88,9 +89,9 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         })),
       });
     } catch (err) {
-      console.error("[webhook] order_attributed event write failed:", err);
+      logFor("webhook").error({ err, topic, shop }, "order_attributed event write failed");
     }
   }
-  console.log(`[webhook] ${topic} ${shop}: converted ${winnerIds.length} session(s)`);
+  logFor("webhook").info({ topic, shop, converted: winnerIds.length }, "conversion attribution done");
   return new Response();
 };

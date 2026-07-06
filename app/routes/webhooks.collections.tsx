@@ -1,10 +1,11 @@
 import type { ActionFunctionArgs } from "@remix-run/node";
 import { authenticate } from "../shopify.server";
 import prisma from "../db.server";
+import { logFor } from "../lib/log.server";
 
 export const action = async ({ request }: ActionFunctionArgs) => {
   const { topic, shop, payload } = await authenticate.webhook(request);
-  console.log(`[webhook] ${topic} for ${shop}`);
+  logFor("webhook").info({ topic, shop }, "received");
 
   const shopRecord = await prisma.shop.findUnique({
     where: { shopDomain: shop },
@@ -39,7 +40,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       },
     });
   } catch (err) {
-    console.error(`[webhook] ${topic} upsert failed:`, err instanceof Error ? err.message : err);
+    logFor("webhook").error({ err, topic, shop }, "upsert failed");
     return new Response(null, { status: 500 });
   }
 

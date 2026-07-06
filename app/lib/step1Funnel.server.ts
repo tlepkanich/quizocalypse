@@ -6,6 +6,7 @@ import {
 } from "@remix-run/node";
 import type { Shop } from "@prisma/client";
 import prisma from "../db.server";
+import { logFor } from "./log.server";
 import { Quiz, BuildSession, DesignDials, RecDefaults, DesignTokens, QuizType } from "./quizSchema";
 import { buildSeedQuiz } from "./seedQuiz";
 import { parseBrandIdentitySafe } from "./brandIdentity";
@@ -504,7 +505,7 @@ export async function runStep1FunnelAction(
     return await runStep1FunnelActionImpl(shop, quizId, request, opts);
   } catch (err) {
     if (err instanceof Response) throw err;
-    console.error("[step1Funnel] action failed:", err instanceof Error ? err.message : err);
+    logFor("step1Funnel").error({ err, quizId }, "action failed");
     return json(
       { ok: false, error: "Couldn't save your change — please try again." },
       { status: 500 },

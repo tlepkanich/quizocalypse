@@ -1,5 +1,6 @@
 import { createHash, randomBytes } from "node:crypto";
 import prisma from "../db.server";
+import { logFor } from "./log.server";
 
 // ───────────────────────────────────────────────────────────────────────────
 // Email magic-link auth for the standalone /studio surface. Flow:
@@ -128,7 +129,7 @@ async function sendMagicLinkEmail(email: string, link: string): Promise<void> {
   if (process.env.RESEND_API_KEY) {
     return sendViaResend(email, link, process.env.RESEND_API_KEY);
   }
-  console.log(`[studio-login] no email transport configured — magic link for ${email}: ${link}`);
+  logFor("studio-login").info({ email, link }, "no email transport configured — magic link logged");
 }
 
 async function sendViaGmailSmtp(
@@ -154,7 +155,7 @@ async function sendViaGmailSmtp(
       text: emailText(link),
     });
   } catch (error) {
-    console.error(`[studio-login] Gmail SMTP send failed for ${email}: ${String(error)}`);
+    logFor("studio-login").error({ err: error, email }, "Gmail SMTP send failed");
   }
 }
 
@@ -176,6 +177,6 @@ async function sendViaResend(email: string, link: string, apiKey: string): Promi
   });
   if (!res.ok) {
     const body = await res.text().catch(() => "");
-    console.error(`[studio-login] Resend send failed (${res.status}) for ${email}: ${body}`);
+    logFor("studio-login").error({ status: res.status, body, email }, "Resend send failed");
   }
 }

@@ -1,4 +1,5 @@
 import prisma from "../db.server";
+import { logFor, reportError } from "./log.server";
 import { buildScopedIndex, scopeCatalogToChosen } from "./catalogIndex";
 import { detectGroupingDimension } from "./groupingDetect";
 import { parseBrandIdentitySafe } from "./brandIdentity";
@@ -209,7 +210,7 @@ async function writeGenError(
   try {
     await patchBuildSession(quizId, mutate);
   } catch (e) {
-    console.error("[step2] failed to persist gen_error:", e instanceof Error ? e.message : e);
+    reportError(e, { scope: "step2", msg: "failed to persist gen_error", quizId });
   }
 }
 
@@ -225,7 +226,7 @@ async function writeGenProgress(
   try {
     await patchBuildSession(quizId, (s) => BuildSession.parse({ ...s, gen_progress: progress }));
   } catch (e) {
-    console.error("[step2] failed to persist gen_progress:", e instanceof Error ? e.message : e);
+    reportError(e, { scope: "step2", msg: "failed to persist gen_progress", quizId });
   }
 }
 
@@ -267,7 +268,7 @@ async function failToBlankQuestions(shopId: string, quizId: string): Promise<voi
       data: { draftJson: Quiz.parse({ ...doc, build_session: next }) as never },
     });
   } catch (e) {
-    console.error("[step2] failed to land blank questions:", e instanceof Error ? e.message : e);
+    reportError(e, { scope: "step2", msg: "failed to land blank questions", shopId, quizId });
   }
 }
 
@@ -291,12 +292,12 @@ export function startStep2Types(
       if (cachedResearch === null) await writeGenProgress(quizId, "research");
       const tResearch = Date.now();
       const webResearchText = cachedResearch ?? (await getOrStartShopWebResearch(shopId));
-      console.log(`[step2] research took ${Date.now() - tResearch}ms`);
+      logFor("step2").info({ quizId, ms: Date.now() - tResearch }, "research took");
 
       await writeGenProgress(quizId, "types");
       const tTypes = Date.now();
       const { types } = await generateStep2Types(shopId, quizId, { ...input, webResearchText });
-      console.log(`[step2] types took ${Date.now() - tTypes}ms`);
+      logFor("step2").info({ quizId, ms: Date.now() - tTypes }, "types took");
       await patchBuildSession(quizId, (s) =>
         BuildSession.parse({
           ...s,
@@ -308,7 +309,7 @@ export function startStep2Types(
         }),
       );
     } catch (err) {
-      console.error("[step2] type generation failed:", err instanceof Error ? err.message : err);
+      reportError(err, { scope: "step2", msg: "type generation failed", shopId, quizId });
       await writeGenError(quizId, (s) =>
         BuildSession.parse({
           ...s,
@@ -348,7 +349,7 @@ export function startStep2Templates(
       const prefetchedCatalog = prefetchBuildCatalog(shopId);
       const tTemplates = Date.now();
       const templates = await generateStep2Templates(shopId, quizId, chosenType, input);
-      console.log(`[step2] templates took ${Date.now() - tTemplates}ms`);
+      logFor("step2").info({ quizId, ms: Date.now() - tTemplates }, "templates took");
       const cats = await prisma.category.findMany({
         where: { shopId, quizId },
         select: { id: true, name: true, productIds: true },
@@ -398,7 +399,7 @@ export function startStep2Templates(
         );
       }
     } catch (err) {
-      console.error("[step2] template generation failed:", err instanceof Error ? err.message : err);
+      reportError(err, { scope: "step2", msg: "template generation failed", shopId, quizId });
       if (failMode === "blank_questions") {
         await failToBlankQuestions(shopId, quizId);
       } else {
@@ -434,10 +435,7 @@ async function prefetchBuildCatalog(
     ]);
     return { products, collections, shop };
   } catch (err) {
-    console.warn(
-      "[step2] catalog prefetch failed (build will query inline):",
-      err instanceof Error ? err.message : err,
-    );
+    logFor("step2").warn({ err, shopId }, "catalog prefetch failed (build will query inline)");
     return undefined;
   }
 }
@@ -638,7 +636,7 @@ export async function startQuestionBuild(
 
   void buildQuizFromPicked(shopId, quizId, rich, picked, goal, struggle, opts?.prefetchedCatalog)
     .then(() => {
-      console.log(`[step2] question-build took ${Date.now() - tBuild}ms`);
+      logFor("step2").info({ quizId, ms: Date.now() - tBuild }, "question-build took");
       return patchBuildSession(quizId, () =>
         BuildSession.parse({
           ...priorSession,
@@ -652,7 +650,7 @@ export async function startQuestionBuild(
       );
     })
     .catch(async (err) => {
-      console.error("[step2] question build failed:", err instanceof Error ? err.message : err);
+      reportError(err, { scope: "step2", msg: "question build failed", shopId, quizId });
       if (opts?.failMode === "blank_questions") {
         // §1.3 (start-routing spec) — the write-a-goal route never traps the
         // merchant on Shape: land the blank Questions canvas with the notice.

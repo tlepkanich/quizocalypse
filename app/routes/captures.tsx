@@ -1,5 +1,6 @@
 import type { ActionFunctionArgs } from "@remix-run/node";
 import prisma from "../db.server";
+import { reportError } from "../lib/log.server";
 import { CapturePayload } from "../lib/analytics";
 import { rateLimit } from "../lib/rateLimiters";
 
@@ -56,7 +57,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       select: { id: true, shopId: true },
     });
   } catch (err) {
-    console.error("[captures] quiz lookup failed:", err instanceof Error ? err.message : err);
+    reportError(err, { scope: "captures", msg: "quiz lookup failed" });
     return new Response(JSON.stringify({ error: "lookup failed" }), {
       status: 500,
       headers: { ...CORS, "content-type": "application/json" },
@@ -86,7 +87,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       },
     });
   } catch (err) {
-    console.error("[captures] write failed:", err instanceof Error ? err.message : err);
+    reportError(err, { scope: "captures", msg: "write failed" });
     return new Response(JSON.stringify({ error: "capture failed" }), {
       status: 500,
       headers: { ...CORS, "content-type": "application/json" },

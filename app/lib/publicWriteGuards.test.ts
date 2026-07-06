@@ -1,6 +1,7 @@
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "@remix-run/node";
 import { beforeEach, describe, expect, it, vi, type Mock } from "vitest";
 import prisma from "../db.server";
+import { logger } from "./log.server";
 import { action as capturesAction } from "../routes/captures";
 import { action as sessionsAction, loader as sessionsLoader } from "../routes/sessions";
 import { action as eventsAction } from "../routes/events";
@@ -52,8 +53,9 @@ beforeEach(() => {
   // Default: the quiz exists, so we reach the write.
   p.quiz.findUnique.mockResolvedValue({ id: "q1", shopId: "s1" });
   p.quiz.findMany.mockResolvedValue([{ id: "q1", shopId: "s1" }]);
-  // Suppress the intentional console.error on the failure-path tests.
-  vi.spyOn(console, "error").mockImplementation(() => {});
+  // Suppress the intentional reportError JSON line on the failure-path tests
+  // (BIC-2 A1 — these routes log through the pino seam now, not console).
+  logger.level = "silent";
 });
 
 describe("captures.tsx write guard", () => {

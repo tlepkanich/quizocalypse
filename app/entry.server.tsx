@@ -4,11 +4,34 @@ import { RemixServer } from "@remix-run/react";
 import {
   createReadableStreamFromReadable,
   type EntryContext,
+  type HandleErrorFunction,
 } from "@remix-run/node";
 import { isbot } from "isbot";
 import { addDocumentResponseHeaders } from "./shopify.server";
+import { reportError } from "./lib/log.server";
 
 export const streamTimeout = 5000;
+
+// BIC-2 A1 — the Remix v2 server-side error seam: every unexpected loader/
+// action/render error lands here (thrown Responses don't). Structured log +
+// dormant Sentry forward via reportError. Aborted requests (client bailed)
+// are noise, not errors — the documented Remix pattern skips them. Only the
+// PATHNAME is logged: query strings can carry session capability tokens.
+export const handleError: HandleErrorFunction = (error, { request }) => {
+  if (request.signal.aborted) return;
+  let pathname: string | undefined;
+  try {
+    pathname = new URL(request.url).pathname;
+  } catch {
+    pathname = undefined;
+  }
+  reportError(error, {
+    scope: "remix",
+    msg: "unhandled route error",
+    pathname,
+    method: request.method,
+  });
+};
 
 export default async function handleRequest(
   request: Request,
@@ -47,7 +70,7 @@ export default async function handleRequest(
         },
         onError(error) {
           responseStatusCode = 500;
-          console.error(error);
+          reportError(error, { scope: "remix", msg: "stream render error" });
         },
       }
     );

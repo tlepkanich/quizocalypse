@@ -1,5 +1,6 @@
 import { json, type ActionFunctionArgs } from "@remix-run/node";
 import prisma from "../db.server";
+import { logFor } from "../lib/log.server";
 import { resolveApiShop } from "../lib/studioAccess.server";
 import { generateWhyCopy, QuizGenerationError } from "../lib/claude";
 import { parseBrandGuidelinesSafe } from "../lib/brandGuidelines";
@@ -48,7 +49,7 @@ export async function action({ request }: ActionFunctionArgs) {
       });
     }
   } catch (err) {
-    console.error("[generate-why-copy] lookup failed", err);
+    logFor("generate-why-copy").error({ err, quizId }, "lookup failed");
     return json({ ok: false, error: "Lookup failed — try again." }, { status: 500 });
   }
   if (!quiz) return json({ ok: false, error: "Quiz not found" }, { status: 404 });
@@ -82,7 +83,7 @@ export async function action({ request }: ActionFunctionArgs) {
     }));
     brandGuidelines = shopRow?.brandGuidelines ?? null;
   } catch (err) {
-    console.error("[generate-why-copy] product lookup failed", err);
+    logFor("generate-why-copy").error({ err, quizId }, "product lookup failed");
     return json({ ok: false, error: "Lookup failed — try again." }, { status: 500 });
   }
   if (products.length === 0) {
@@ -109,7 +110,7 @@ export async function action({ request }: ActionFunctionArgs) {
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     const credit = /credit balance is too low|insufficient.*credit|billing|purchase credits/i.test(message);
-    console.error("[generate-why-copy] generation failed", message);
+    logFor("generate-why-copy").error({ quizId, detail: message }, "generation failed");
     if (err instanceof QuizGenerationError || credit) {
       return json(
         {

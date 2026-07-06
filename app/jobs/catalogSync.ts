@@ -1,5 +1,6 @@
 import type { AdminApiContext } from "@shopify/shopify-app-remix/server";
 import prisma from "../db.server";
+import { logFor, reportError } from "../lib/log.server";
 import {
   runResilientUpserts,
   deriveSyncStatus,
@@ -173,9 +174,9 @@ export async function syncCatalogForShopId(
     const products = await syncProducts(admin, shopId, opts?.storefrontDomain);
     const errorCount = collections.errors + products.errors;
     if (errorCount > 0) {
-      console.warn(
-        `[catalogSync] shop ${shopId} synced with ${errorCount} skipped row error(s) ` +
-          `(${products.errors} product, ${collections.errors} collection)`,
+      logFor("catalogSync").warn(
+        { shopId, skipped: errorCount, productErrors: products.errors, collectionErrors: collections.errors },
+        "synced with skipped row error(s)",
       );
     }
 
@@ -196,6 +197,7 @@ export async function syncCatalogForShopId(
       finishedAt: new Date(),
     };
   } catch (err) {
+    reportError(err, { scope: "catalogSync", msg: "catalog sync failed", shopId });
     const message = err instanceof Error ? err.message : String(err);
     await prisma.shop.update({
       where: { id: shopId },

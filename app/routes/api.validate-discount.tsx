@@ -1,5 +1,6 @@
 import { json, type ActionFunctionArgs } from "@remix-run/node";
 import { resolveApiShop } from "../lib/studioAccess.server";
+import { logFor } from "../lib/log.server";
 import { unauthenticated } from "../shopify.server";
 
 // rec-page-spec-V2 §10.2 — validate an EXISTING merchant-created discount code
@@ -82,7 +83,7 @@ export async function action({ request }: ActionFunctionArgs) {
       expiresAt: d.endsAt ?? null,
     });
   } catch (err) {
-    console.error("[validate-discount] lookup failed", err instanceof Error ? err.message : err);
+    logFor("validate-discount").error({ err }, "lookup failed");
     return json({ valid: null, reason: "Can't validate right now — try again shortly" });
   }
 }

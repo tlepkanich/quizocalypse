@@ -1,4 +1,5 @@
 import prisma from "../db.server";
+import { logFor } from "./log.server";
 import { parseBrandIdentitySafe } from "./brandIdentity";
 import { runWebResearchForQuizTypes } from "./claude";
 
@@ -133,10 +134,7 @@ export async function resolveShopWebResearch(
             at: new Date(io.now()).toISOString(),
           });
         } catch (err) {
-          console.warn(
-            "[step2] web research cache write failed (continuing uncached):",
-            err instanceof Error ? err.message : err,
-          );
+logFor("step2").warn({ err, shopId }, "web research cache write failed (continuing uncached)");
         }
       }
       return text;
@@ -148,10 +146,7 @@ export async function resolveShopWebResearch(
       inflight.delete(shopId);
     }
   } catch (err) {
-    console.warn(
-      "[step2] web research resolution failed, degrading to no-research:",
-      err instanceof Error ? err.message : err,
-    );
+logFor("step2").warn({ err, shopId }, "web research resolution failed, degrading to no-research");
     return "";
   }
 }

@@ -1,5 +1,6 @@
 import type { ActionFunctionArgs } from "@remix-run/node";
 import prisma from "../db.server";
+import { reportError } from "../lib/log.server";
 import { EventsBatch } from "../lib/analytics";
 import { rateLimit } from "../lib/rateLimiters";
 
@@ -58,7 +59,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       select: { id: true, shopId: true },
     });
   } catch (err) {
-    console.error("[events] quiz lookup failed:", err instanceof Error ? err.message : err);
+    reportError(err, { scope: "events", msg: "quiz lookup failed" });
     return new Response(JSON.stringify({ error: "lookup failed" }), {
       status: 500,
       headers: { ...CORS, "content-type": "application/json" },
@@ -89,7 +90,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         })),
     });
   } catch (err) {
-    console.error("[events] write failed:", err instanceof Error ? err.message : err);
+    reportError(err, { scope: "events", msg: "write failed" });
     return new Response(JSON.stringify({ error: "events not stored" }), {
       status: 500,
       headers: { ...CORS, "content-type": "application/json" },

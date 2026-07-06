@@ -1,6 +1,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import type { AdminApiContext } from "@shopify/shopify-app-remix/server";
 import prisma from "../db.server";
+import { logFor, reportError } from "./log.server";
 import {
   BrandIdentity,
   lockEditedFields,
@@ -303,8 +304,7 @@ async function resolveOfflineAdmin(shopDomain: string): Promise<Admin | null> {
     const { admin } = await unauthenticated.admin(shopDomain);
     return admin as Admin;
   } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    console.warn(`[brandIdentity] no offline admin for ${shopDomain}: ${msg}`);
+    logFor("brandIdentity").warn({ err, shopDomain }, "no offline admin — building from catalog alone");
     return null;
   }
 }
@@ -386,6 +386,7 @@ export async function runBrandIdentityBuild(
     });
     return { ok: true, identity };
   } catch (err) {
+    reportError(err, { scope: "brandIdentity", msg: "identity build failed", shopId });
     const msg = err instanceof Error ? err.message : String(err);
     await prisma.shop
       .update({ where: { id: shopId }, data: { brandIdentityState: `error:${msg.slice(0, 300)}` } })

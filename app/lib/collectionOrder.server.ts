@@ -13,6 +13,8 @@
 // instead, logging a warning. Publish is never blocked by this fetch.
 // ────────────────────────────────────────────────────────────────────────────
 
+import { logFor } from "./log.server";
+
 interface AdminGraphql {
   graphql: (
     query: string,
@@ -93,9 +95,9 @@ export async function resolveCollectionOrders(
     const { admin } = await unauthenticated.admin(shopDomain);
     return await fetchCollectionOrders(admin as AdminGraphql, targets);
   } catch (err) {
-    console.warn(
-      `[collectionOrder] no admin/order fetch for ${shopDomain} — falling back to synced order:`,
-      err instanceof Error ? err.message : err,
+    logFor("collectionOrder").warn(
+      { err, shopDomain },
+      "no admin/order fetch — falling back to synced order",
     );
     return null;
   }

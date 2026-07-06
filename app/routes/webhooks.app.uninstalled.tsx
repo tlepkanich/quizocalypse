@@ -1,10 +1,11 @@
 import type { ActionFunctionArgs } from "@remix-run/node";
 import { authenticate } from "../shopify.server";
 import prisma from "../db.server";
+import { logFor } from "../lib/log.server";
 
 export const action = async ({ request }: ActionFunctionArgs) => {
   const { shop, session, topic } = await authenticate.webhook(request);
-  console.log(`[webhook] ${topic} for ${shop}`);
+  logFor("webhook").info({ topic, shop }, "received");
 
   if (session) {
     await prisma.session.deleteMany({ where: { shop } });

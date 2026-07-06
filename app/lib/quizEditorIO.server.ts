@@ -2,6 +2,7 @@ import { json } from "@remix-run/node";
 import type { Shop } from "@prisma/client";
 import { authenticate } from "../shopify.server";
 import prisma from "../db.server";
+import { logFor } from "./log.server";
 import { Quiz } from "./quizSchema";
 import type { Quiz as QuizDoc } from "./quizSchema";
 import { publishQuiz, PublishError } from "./quizPublish";
@@ -198,7 +199,7 @@ export async function handleQuizEditorActionForShop(
     return await handleQuizEditorActionImpl(shop, id, request, getAdmin);
   } catch (err) {
     if (err instanceof Response) throw err;
-    console.error("[quizEditorIO] action failed:", err instanceof Error ? err.message : err);
+    logFor("quizEditorIO").error({ err, quizId: id }, "action failed");
     return json(
       { ok: false, error: "Couldn't save your change — please try again." },
       { status: 500 },

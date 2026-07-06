@@ -1,6 +1,7 @@
 import type { ActionFunctionArgs } from "@remix-run/node";
 import { json } from "@remix-run/node";
 import prisma from "../db.server";
+import { logFor } from "../lib/log.server";
 import type { IndexedProduct } from "../lib/recommendationEngine";
 import { rateLimit } from "../lib/rateLimiters";
 import { assertPublicHttpsUrl } from "../lib/ssrfGuard.server";
@@ -65,7 +66,7 @@ export async function action({ params, request }: ActionFunctionArgs) {
       select: { id: true, shopId: true, publishedJson: true },
     });
   } catch (err) {
-    console.error("[notify] quiz lookup failed", err instanceof Error ? err.message : err);
+    logFor("notify").error({ err, quizId: id }, "quiz lookup failed");
     return json({ error: "lookup failed" }, { status: 500, headers: CORS });
   }
   if (!quiz) return json({ error: "quiz not found" }, { status: 404, headers: CORS });
@@ -89,7 +90,7 @@ export async function action({ params, request }: ActionFunctionArgs) {
       },
     });
   } catch (err) {
-    console.error("[notify] write failed", err instanceof Error ? err.message : err);
+    logFor("notify").error({ err, quizId: quiz.id }, "write failed");
     return json({ error: "write failed" }, { status: 500, headers: CORS });
   }
 
@@ -102,7 +103,7 @@ export async function action({ params, request }: ActionFunctionArgs) {
     // address. Screen before POSTing shopper PII; never log the URL or email.
     const safe = await assertPublicHttpsUrl(webhookUrl);
     if (!safe.ok) {
-      console.warn(`[notify] back-in-stock webhook blocked: ${safe.reason}`);
+      logFor("notify").warn({ quizId: quiz.id, reason: safe.reason }, "back-in-stock webhook blocked");
     } else {
       try {
         const controller = new AbortController();

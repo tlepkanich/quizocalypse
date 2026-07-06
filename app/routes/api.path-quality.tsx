@@ -1,5 +1,6 @@
 import { json, type ActionFunctionArgs } from "@remix-run/node";
 import prisma from "../db.server";
+import { logFor } from "../lib/log.server";
 import { resolveApiShop } from "../lib/studioAccess.server";
 import { reviewPathQuality, QuizGenerationError } from "../lib/claude";
 import { parseBrandGuidelinesSafe } from "../lib/brandGuidelines";
@@ -48,7 +49,7 @@ export async function action({ request }: ActionFunctionArgs) {
     categories = cats;
     brandGuidelines = shopRow?.brandGuidelines ?? null;
   } catch (err) {
-    console.error("[path-quality] lookup failed", err);
+    logFor("path-quality").error({ err, quizId }, "lookup failed");
     return json({ ok: false, error: "Lookup failed — try again." }, { status: 500 });
   }
 
@@ -71,7 +72,7 @@ export async function action({ request }: ActionFunctionArgs) {
       for (const p of products) productTitleById.set(p.productId, p.title);
     }
   } catch (err) {
-    console.error("[path-quality] product lookup failed", err);
+    logFor("path-quality").error({ err, quizId }, "product lookup failed");
     return json({ ok: false, error: "Lookup failed — try again." }, { status: 500 });
   }
 
@@ -103,7 +104,7 @@ export async function action({ request }: ActionFunctionArgs) {
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     const credit = /credit balance is too low|insufficient.*credit|billing|purchase credits/i.test(message);
-    console.error("[path-quality] review failed", message);
+    logFor("path-quality").error({ quizId, detail: message }, "review failed");
     if (err instanceof QuizGenerationError || credit) {
       return json(
         {

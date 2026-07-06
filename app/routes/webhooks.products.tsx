@@ -1,13 +1,14 @@
 import type { ActionFunctionArgs } from "@remix-run/node";
 import { authenticate } from "../shopify.server";
 import prisma from "../db.server";
+import { logFor } from "../lib/log.server";
 
 // Handles products/create, products/update, products/delete. Webhook payloads
 // from the Shopify REST format are slim; we map the most useful fields into our
 // normalized Product row. For a delete topic, we remove the row.
 export const action = async ({ request }: ActionFunctionArgs) => {
   const { topic, shop, payload } = await authenticate.webhook(request);
-  console.log(`[webhook] ${topic} for ${shop}`);
+  logFor("webhook").info({ topic, shop }, "received");
 
   const shopRecord = await prisma.shop.findUnique({
     where: { shopDomain: shop },
@@ -23,7 +24,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     try {
       await prisma.product.deleteMany({ where: { productId: productGid } });
     } catch (err) {
-      console.error(`[webhook] ${topic} delete failed:`, err instanceof Error ? err.message : err);
+      logFor("webhook").error({ err, topic, shop }, "delete failed");
       return new Response(null, { status: 500 });
     }
     return new Response();
@@ -100,7 +101,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       },
     });
   } catch (err) {
-    console.error(`[webhook] ${topic} upsert failed:`, err instanceof Error ? err.message : err);
+    logFor("webhook").error({ err, topic, shop }, "upsert failed");
     return new Response(null, { status: 500 });
   }
 

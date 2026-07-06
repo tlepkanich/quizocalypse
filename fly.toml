@@ -16,6 +16,18 @@ primary_region = 'iad'
   auto_start_machines = true
   min_machines_running = 1
 
+  # BIC-2 A1 — machine health via GET /health (bounded DB ping → 200/503; see
+  # app/routes/health.tsx). grace_period covers the boot window: docker-start
+  # runs prisma generate + migrate deploy (~25-40s per the note above), so 60s
+  # keeps a slow boot/migration from failing a fresh machine and bricking a
+  # deploy. The endpoint's own DB ping is bounded at 4s, inside the 5s timeout.
+  [[http_service.checks]]
+    interval = '15s'
+    timeout = '5s'
+    grace_period = '60s'
+    method = 'GET'
+    path = '/health'
+
 [[vm]]
   size = 'shared-cpu-1x'
   memory = '512mb'

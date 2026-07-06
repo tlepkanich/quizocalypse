@@ -1,4 +1,5 @@
 import prisma from "../db.server";
+import { reportError } from "./log.server";
 import type { Product, Collection } from "@prisma/client";
 import { Quiz } from "./quizSchema";
 import type { Quiz as QuizDoc, OosBehavior } from "./quizSchema";
@@ -229,6 +230,7 @@ export async function runAiOnboardingBuild(
       await persist(quizId, seedDoc);
       return { quizId, degraded: "AI built a draft but it needs a tweak in the builder." };
     } catch (err) {
+      reportError(err, { scope: "onboardingBuild", msg: "question write failed (degraded draft)", shopId, quizId });
       await persist(quizId, seedDoc);
       const msg = err instanceof Error ? err.message : String(err);
       return { quizId, degraded: `AI couldn't write questions (${msg}) — add them in the builder.` };
@@ -271,6 +273,7 @@ export async function runAiOnboardingBuild(
       const res = await discoverAndPersistBuckets(shopId, quizId);
       buckets = res.buckets;
     } catch (err) {
+      reportError(err, { scope: "onboardingBuild", msg: "bucket discovery failed (degraded draft)", shopId, quizId });
       const msg =
         err instanceof BucketDiscoveryError || err instanceof CategoryDiscoveryError
           ? err.message
@@ -358,6 +361,7 @@ export async function runAiOnboardingBuild(
       ...(brandGuidelines ? { brandGuidelines } : {}),
     });
   } catch (err) {
+    reportError(err, { scope: "onboardingBuild", msg: "question flow build failed (degraded draft)", shopId, quizId });
     await persist(quizId, doc);
     const msg = err instanceof Error ? err.message : String(err);
     return {
@@ -486,6 +490,7 @@ export async function startAiOnboardingBuild(
       prisma.quiz.update({ where: { id: quizId }, data: { buildState: null } }),
     )
     .catch(async (err) => {
+      reportError(err, { scope: "onboardingBuild", msg: "detached build failed unexpectedly", quizId });
       const msg = err instanceof Error ? err.message : String(err);
       await prisma.quiz
         .update({ where: { id: quizId }, data: { buildState: `error:${msg.slice(0, 300)}` } })

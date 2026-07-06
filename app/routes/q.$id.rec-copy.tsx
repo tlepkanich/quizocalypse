@@ -1,6 +1,7 @@
 import type { ActionFunctionArgs } from "@remix-run/node";
 import { json } from "@remix-run/node";
 import prisma from "../db.server";
+import { logFor } from "../lib/log.server";
 import { Quiz } from "../lib/quizSchema";
 import type { IndexedProduct } from "../lib/recommendationEngine";
 import { resolveTarget, settingsForTarget } from "../lib/recommendDecider";
@@ -67,7 +68,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
       },
     });
   } catch (e) {
-    console.error("[rec-copy] lookup failed:", e instanceof Error ? e.message : e);
+    logFor("rec-copy").error({ err: e, quizId: id }, "lookup failed");
     return no("server_error", 500);
   }
   if (!quiz?.publishedJson) return no("not_found", 404);
@@ -164,10 +165,13 @@ export async function action({ request, params }: ActionFunctionArgs) {
       message,
     );
     if (credit) {
-      console.error("[rec-copy] AI credits depleted:", message);
+      logFor("rec-copy").error({ quizId: id, detail: message }, "AI credits depleted");
       return json({ ok: false, code: "ai_credits" }, { status: 402 });
     }
-    console.error("[rec-copy] generation failed:", err instanceof QuizGenerationError ? message : err);
+    logFor("rec-copy").error(
+      { err: err instanceof QuizGenerationError ? message : err, quizId: id },
+      "generation failed",
+    );
     return json({ ok: false, code: "ai_error" }, { status: 502 });
   }
 }

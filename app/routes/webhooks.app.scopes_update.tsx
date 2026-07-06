@@ -1,10 +1,11 @@
 import type { ActionFunctionArgs } from "@remix-run/node";
 import { authenticate } from "../shopify.server";
 import db from "../db.server";
+import { logFor } from "../lib/log.server";
 
 export const action = async ({ request }: ActionFunctionArgs) => {
     const { payload, session, topic, shop } = await authenticate.webhook(request);
-    console.log(`Received ${topic} webhook for ${shop}`);
+    logFor("webhook").info({ topic, shop }, "received");
 
     const current = payload.current as string[];
     if (session) {
@@ -21,7 +22,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
                 },
             });
         } catch (err) {
-            console.error(`[webhook] ${topic} scope update failed:`, err instanceof Error ? err.message : err);
+            logFor("webhook").error({ err, topic, shop }, "scope update failed");
             return new Response(null, { status: 500 });
         }
     }
