@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useFetcher, useSearchParams } from "@remix-run/react";
 import { TitleBar } from "@shopify/app-bridge-react";
 import { QzPage, QzPageHeader, QzButton, QzBanner } from "../qz";
-import { experienceTypeOf, type Quiz } from "../../lib/quizSchema";
+import { experienceTypeOf, type Quiz, type ContentBlockType } from "../../lib/quizSchema";
 import { validateQuiz, validateQuizWarnings, type NodeIssue } from "../../lib/quizValidation";
 import { orderFlow } from "../../lib/flowOrder";
 import { reconcileBucketsToResultNodes } from "../../lib/bucketReconcile";
@@ -32,7 +32,6 @@ import { CssTab } from "./panels/CssTab";
 import { BuilderLogicView, QuizSettingsDrawer } from "./BuilderSettings";
 import { BuilderDesignPanel } from "./BuilderDesignPanel";
 import { BLOCK_DRAG_MIME, BuilderBlocksPalette, insertBlock } from "./BuilderBlocksPalette";
-import type { ContentBlockType } from "../../lib/quizSchema";
 import { BuilderPageSettings } from "./BuilderPageSettings";
 import UpgradeDeciderModal from "../onboarding/questionsLogic/UpgradeDeciderModal";
 
