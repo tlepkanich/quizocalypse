@@ -4521,7 +4521,7 @@ function QuizSettingsModal({
                       margin: 0,
                     }}
                   >
-                    {`<script async src="/q/${doc.quiz_id}/launcher.js"></script>`}
+                    {`<script async src="/q/${doc.quiz_id}.launcher.js"></script>`}
                   </pre>
                 </QzField>
               </div>

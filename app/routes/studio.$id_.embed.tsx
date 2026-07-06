@@ -128,7 +128,7 @@ function CopyField({
 
 export default function StudioEmbed() {
   const data = useLoaderData<typeof loader>();
-  const scriptSnippet = `<script async src="${data.origin}/q/${data.quizId}/launcher.js"></script>`;
+  const scriptSnippet = `<script async src="${data.origin}/q/${data.quizId}.launcher.js"></script>`;
   const iframeSnippet = `<iframe src="${data.publicUrl}" title="${data.name}" style="width:100%;min-height:640px;border:0" loading="lazy"></iframe>`;
 
   return (

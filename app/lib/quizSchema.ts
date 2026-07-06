@@ -783,7 +783,8 @@ export const DesignTokens = z
 export type DesignTokens = z.infer<typeof DesignTokens>;
 
 // Floating launcher config: when set + `enabled: true`, the storefront can
-// embed /q/:id/launcher.js to render a floating button anywhere on the
+// embed /q/:id.launcher.js (dot form — the flat-route filename) to render
+// a floating button anywhere on the
 // merchant's site. Clicking the button opens the quiz inside a modal iframe.
 // Existing inline embedding via the Theme App Extension keeps working —
 // this is an *additional* embed mode, not a replacement.
