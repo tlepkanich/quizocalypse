@@ -13,6 +13,8 @@ database.sqlite
 
 .env
 .env.*
+# …but the placeholder template IS tracked (docs for every env var; no real values)
+!.env.example
 
 yarn.lock
 pnpm-lock.yaml
