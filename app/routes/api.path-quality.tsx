@@ -3,6 +3,7 @@ import prisma from "../db.server";
 import { logFor } from "../lib/log.server";
 import { resolveApiShop } from "../lib/studioAccess.server";
 import { reviewPathQuality, QuizGenerationError } from "../lib/claude";
+import { checkAiBudget, withAiSpendRecording } from "../lib/aiBudget.server";
 import { parseBrandGuidelinesSafe } from "../lib/brandGuidelines";
 import { Quiz } from "../lib/quizSchema";
 import { buildPathQualityOutcomes } from "../lib/pathQuality.server";
@@ -27,6 +28,21 @@ export async function action({ request }: ActionFunctionArgs) {
     // fall through to the missing-quizId 400 below
   }
   if (!quizId) return json({ ok: false, error: "quizId required" }, { status: 400 });
+
+  // BIC-2 A3 — per-shop daily merchant spend ceiling, checked before any
+  // grounding work (a refusal charges and loads nothing). checkAiBudget fails
+  // open on DB errors, so a budget hiccup never blocks the merchant.
+  const budget = await checkAiBudget(shop.id, "merchant");
+  if (!budget.allowed) {
+    return json(
+      {
+        ok: false,
+        code: "ai_budget",
+        error: "Today's AI limit for this shop is reached — try again tomorrow.",
+      },
+      { status: 402 },
+    );
+  }
 
   let draftJson: unknown = null;
   let categories: { id: string; name: string; productIds: string[] }[] = [];
@@ -87,10 +103,12 @@ export async function action({ request }: ActionFunctionArgs) {
   }
 
   try {
-    const review = await reviewPathQuality({
-      outcomes,
-      brandGuidelines: parseBrandGuidelinesSafe(brandGuidelines),
-    });
+    const review = await withAiSpendRecording(shop.id, () =>
+      reviewPathQuality({
+        outcomes,
+        brandGuidelines: parseBrandGuidelinesSafe(brandGuidelines),
+      }),
+    );
     // Defense: keep only rows the model anchored to a real server-sent outcome.
     const known = new Set(outcomes.map((o) => o.outcome_id));
     const rows = review

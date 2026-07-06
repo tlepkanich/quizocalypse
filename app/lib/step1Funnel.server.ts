@@ -7,6 +7,7 @@ import {
 import type { Shop } from "@prisma/client";
 import prisma from "../db.server";
 import { logFor } from "./log.server";
+import { withAiSpendRecording } from "./aiBudget.server";
 import { Quiz, BuildSession, DesignDials, RecDefaults, DesignTokens, QuizType } from "./quizSchema";
 import { buildSeedQuiz } from "./seedQuiz";
 import { parseBrandIdentitySafe } from "./brandIdentity";
@@ -1395,12 +1396,15 @@ async function runStep1FunnelActionImpl(
 
     let regen;
     try {
-      regen = await regenerateQuestion({
-        catalogSummary: indexed.summary,
-        existingQuestion: target.data,
-        steeringPrompt: "",
-        ...(brandGuidelines ? { brandGuidelines } : {}),
-      });
+      // BIC-2 A3 — record the regenerate's token usage against the shop.
+      regen = await withAiSpendRecording(shop.id, () =>
+        regenerateQuestion({
+          catalogSummary: indexed.summary,
+          existingQuestion: target.data,
+          steeringPrompt: "",
+          ...(brandGuidelines ? { brandGuidelines } : {}),
+        }),
+      );
     } catch (err) {
       const raw = err instanceof Error ? err.message : String(err);
       const credit = /credit balance is too low|insufficient.*credit|billing/i.test(raw);

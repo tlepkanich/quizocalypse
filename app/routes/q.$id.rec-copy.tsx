@@ -9,6 +9,7 @@ import { generateRuntimeRecCopy, QuizGenerationError } from "../lib/claude";
 import { parseBrandGuidelinesSafe } from "../lib/brandGuidelines";
 import { rateLimit } from "../lib/rateLimiters";
 import { recCopyCacheKey, resolveRecCopy } from "../lib/recCopyCache.server";
+import { checkAiBudget, withAiSpendRecording } from "../lib/aiBudget.server";
 
 // LOGIC v2 L2-12b — the per-shopper runtime rec-copy endpoint (rec-page-spec-V2
 // §8.3). POST-only, SAME-ORIGIN (the theme-extension iframe + hosted /q are both
@@ -56,6 +57,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
   if (!id) return no("not_found", 404);
 
   let quiz: {
+    shopId: string;
     publishedJson: unknown;
     shop: { aiRecCopyEnabled: boolean; brandGuidelines: unknown } | null;
   } | null;
@@ -63,6 +65,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
     quiz = await prisma.quiz.findFirst({
       where: { id },
       select: {
+        shopId: true,
         publishedJson: true,
         shop: { select: { aiRecCopyEnabled: true, brandGuidelines: true } },
       },
@@ -75,6 +78,13 @@ export async function action({ request, params }: ActionFunctionArgs) {
 
   // Kill switch — checked LIVE (never baked) and BEFORE any cache/AI work.
   if (quiz.shop && quiz.shop.aiRecCopyEnabled === false) return no("disabled");
+
+  // BIC-2 A3 — per-shop daily spend ceiling on the PUBLIC surface. Over budget
+  // → the same cheap 200 refusal shape as "disabled" (the runtime degrades to
+  // the merchant copy silently); never a 5xx. checkAiBudget fails OPEN on DB
+  // errors, so a budget-table hiccup can't break the endpoint.
+  const budget = await checkAiBudget(quiz.shopId, "runtime");
+  if (!budget.allowed) return no("budget");
 
   const parsed = Quiz.safeParse(quiz.publishedJson);
   if (!parsed.success) return no("not_found", 404);
@@ -149,14 +159,18 @@ export async function action({ request, params }: ActionFunctionArgs) {
   const brandGuidelines = parseBrandGuidelinesSafe(quiz.shop?.brandGuidelines);
 
   try {
-    const { copy, cached } = await resolveRecCopy(key, now, () =>
-      generateRuntimeRecCopy({
-        targetName,
-        heroProduct,
-        answerTexts,
-        ...(matchedRuleText ? { matchedRuleText } : {}),
-        brandGuidelines,
-      }),
+    // BIC-2 A3 — record usage against the shop (only fires on an actual API
+    // response, so a cache hit charges nothing).
+    const { copy, cached } = await withAiSpendRecording(quiz.shopId, () =>
+      resolveRecCopy(key, now, () =>
+        generateRuntimeRecCopy({
+          targetName,
+          heroProduct,
+          answerTexts,
+          ...(matchedRuleText ? { matchedRuleText } : {}),
+          brandGuidelines,
+        }),
+      ),
     );
     return json({ ok: true, copy, cached });
   } catch (err) {

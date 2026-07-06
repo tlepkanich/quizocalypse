@@ -326,3 +326,21 @@ model QuizSession {
   @@unique([quizId, sessionId])
   @@index([quizId, completedAt])
 }
+
+// BIC-2 A3 — per-shop daily AI token usage, the single source of truth for the
+// spend ceilings (app/lib/aiBudget.server.ts). One row per (shopId, UTC day);
+// `day` is a "yyyy-mm-dd" string (cleanest upsert key — a @db.Date round-trips
+// through JS Date and invites timezone drift on the unique key). Counters are
+// atomic upsert-increments; recording is best-effort and NEVER gates a feature.
+// No FK to Shop on purpose (the EmailCapture precedent): usage rows are an
+// operational ledger, not domain data, and must survive any shop-row churn.
+model AiUsage {
+  id           String @id @default(cuid())
+  shopId       String
+  day          String
+  inputTokens  Int    @default(0)
+  outputTokens Int    @default(0)
+  calls        Int    @default(0)
+
+  @@unique([shopId, day])
+}

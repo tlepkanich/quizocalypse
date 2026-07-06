@@ -1,5 +1,6 @@
 import prisma from "../db.server";
 import { logFor, reportError } from "./log.server";
+import { checkAiBudget, withAiSpendRecording } from "./aiBudget.server";
 import { buildScopedIndex, scopeCatalogToChosen } from "./catalogIndex";
 import { detectGroupingDimension } from "./groupingDetect";
 import { parseBrandIdentitySafe } from "./brandIdentity";
@@ -178,6 +179,30 @@ export async function generateStep2Templates(
 export const GENERIC_BUILD_ERROR =
   "The AI build didn't finish — try again, or start from a template.";
 
+// BIC-2 A3 — the funnel jobs' over-budget banner. Renders in the existing
+// gen_error treatment (banner + retry affordance), so tomorrow's retry Just
+// Works once the UTC day rolls over.
+const BUDGET_GEN_ERROR =
+  "Today's AI generation limit for this shop is reached — try again tomorrow.";
+
+// Check the merchant ceiling ONCE at job kick (never mid-pipeline). Same
+// never-throw posture as the jobs themselves: checkAiBudget fails open and the
+// gen_error write goes through writeGenError. Returns true when the job may run.
+async function budgetAllowsGenJob(
+  shopId: string,
+  quizId: string,
+  onRefusal: () => Promise<void>,
+): Promise<boolean> {
+  const budget = await checkAiBudget(shopId, "merchant");
+  if (budget.allowed) return true;
+  logFor("step2").warn(
+    { shopId, quizId, spentUSD: budget.spentUSD, limitUSD: budget.limitUSD },
+    "gen job refused — daily AI budget reached",
+  );
+  await onRefusal();
+  return false;
+}
+
 function friendlyGenError(err: unknown): string {
   const msg = err instanceof Error ? err.message : String(err);
   if (/credit balance|billing|quota|insufficient|payment/i.test(msg)) {
@@ -287,7 +312,21 @@ export function startStep2Types(
   quizId: string,
   input: { goal: string; struggle?: string; buckets?: Array<{ name: string; tags: string[] }> },
 ): void {
-  void (async () => {
+  // BIC-2 A3 — the whole job runs inside the shop's usage-recording scope
+  // (research + types both bill the shop); the ceiling is checked ONCE at kick.
+  // Every code path below is caught or never-throw, so the void is safe.
+  void withAiSpendRecording(shopId, async () => {
+    const allowed = await budgetAllowsGenJob(shopId, quizId, () =>
+      writeGenError(quizId, (s) =>
+        BuildSession.parse({
+          ...s,
+          stage: "types",
+          gen_error: BUDGET_GEN_ERROR,
+          gen_progress: undefined,
+        }),
+      ),
+    );
+    if (!allowed) return;
     try {
       // FAST F1 — resolve research through the shop-level cache: a fresh cache
       // (or an entry-time prefetch that already finished) makes this instant;
@@ -325,7 +364,7 @@ export function startStep2Types(
         }),
       );
     }
-  })();
+  });
 }
 
 // The funnel's "templating" job — rich battle-card templates for the chosen type,
@@ -343,7 +382,23 @@ export function startStep2Templates(
   opts?: { failMode?: GenFailMode },
 ): void {
   const failMode = opts?.failMode ?? "shape";
-  void (async () => {
+  // BIC-2 A3 — recording scope + ONE ceiling check at kick; the question build
+  // this job chains into (startQuestionBuild) inherits the check via
+  // budgetPrechecked so the pipeline is never interrupted midway.
+  void withAiSpendRecording(shopId, async () => {
+    const allowed = await budgetAllowsGenJob(shopId, quizId, () =>
+      failMode === "blank_questions"
+        ? failToBlankQuestions(shopId, quizId)
+        : writeGenError(quizId, (s) =>
+            BuildSession.parse({
+              ...s,
+              stage: "types",
+              gen_error: BUDGET_GEN_ERROR,
+              gen_progress: undefined,
+            }),
+          ),
+    );
+    if (!allowed) return;
     try {
       // FAST F2 — start the question build's slow NON-AI inputs (catalog rows +
       // shop brand row) CONCURRENTLY with template generation. The promise is
@@ -385,6 +440,7 @@ export function startStep2Templates(
         await startQuestionBuild(shopId, quizId, top, picked, input.goal, input.struggle ?? "", {
           failMode,
           prefetchedCatalog,
+          budgetPrechecked: true,
         });
       } else if (failMode === "blank_questions") {
         await failToBlankQuestions(shopId, quizId);
@@ -419,7 +475,7 @@ export function startStep2Templates(
         );
       }
     }
-  })();
+  });
 }
 
 // FAST F2 — the question build's non-AI prep, prefetched concurrently with
@@ -539,34 +595,40 @@ async function buildQuizFromPicked(
   // charge — byte-identical behavior.
   const prefetched = prefetchedCatalog ? await prefetchedCatalog : undefined;
 
-  return runAiOnboardingBuild({
-    shopId,
-    quizId,
-    name: picked.quiz_name,
-    goalPrompt,
-    questionCount: picked.question_count,
-    tone: "friendly",
-    flow: {
-      welcome_message: false,
-      email_gate: rich.experience_type === "lead_capture",
-      mixed_input_types: false,
-    },
-    experienceType: rich.experience_type,
-    ...(logicModel ? { logicModel } : {}),
-    ...(recPageSettings ? { recPageSettings } : {}),
-    ...(enabledBuckets.length ? { preResolvedBuckets: enabledBuckets } : {}),
-    directionAngle: rich.angle,
-    sampleQuestionSeeds: rich.sample_questions,
-    designTokens: draftTokens,
-    tokenPatch,
-    dialDirectives: promptDirectives,
-    recOverride: {
-      max_products: picked.rec_defaults.max_products,
-      oos_behavior: picked.rec_defaults.oos_behavior,
-      fallback_collection_id: picked.rec_defaults.fallback_collection_id,
-    },
-    ...(prefetched ? { prefetchedCatalog: prefetched } : {}),
-  });
+  // BIC-2 A3 — the build's AI passes bill the shop. Nested inside the
+  // templating job's scope this is a same-shop re-wrap (emits still fire once
+  // per response); for the direct callers (retry-gen, saved-template, legacy
+  // startStep2Build) it IS the recording scope.
+  return withAiSpendRecording(shopId, () =>
+    runAiOnboardingBuild({
+      shopId,
+      quizId,
+      name: picked.quiz_name,
+      goalPrompt,
+      questionCount: picked.question_count,
+      tone: "friendly",
+      flow: {
+        welcome_message: false,
+        email_gate: rich.experience_type === "lead_capture",
+        mixed_input_types: false,
+      },
+      experienceType: rich.experience_type,
+      ...(logicModel ? { logicModel } : {}),
+      ...(recPageSettings ? { recPageSettings } : {}),
+      ...(enabledBuckets.length ? { preResolvedBuckets: enabledBuckets } : {}),
+      directionAngle: rich.angle,
+      sampleQuestionSeeds: rich.sample_questions,
+      designTokens: draftTokens,
+      tokenPatch,
+      dialDirectives: promptDirectives,
+      recOverride: {
+        max_products: picked.rec_defaults.max_products,
+        oos_behavior: picked.rec_defaults.oos_behavior,
+        fallback_collection_id: picked.rec_defaults.fallback_collection_id,
+      },
+      ...(prefetched ? { prefetchedCatalog: prefetched } : {}),
+    }),
+  );
 }
 
 // LEGACY pick → detached full build that lands in the builder via the
@@ -620,8 +682,28 @@ export async function startQuestionBuild(
     // FAST F2 — prep started concurrently with template generation (only the
     // templating job passes it; retry-gen / saved-template callers don't).
     prefetchedCatalog?: Promise<PrefetchedBuildCatalog | undefined>;
+    // BIC-2 A3 — the templating job already checked the ceiling at ITS kick;
+    // it passes true so the chained build is never interrupted mid-pipeline.
+    // Direct callers (retry-gen, saved-template) leave it unset → checked here.
+    budgetPrechecked?: boolean;
   },
 ): Promise<void> {
+  // BIC-2 A3 — merchant ceiling at job kick (direct callers only, see above).
+  if (!opts?.budgetPrechecked) {
+    const allowed = await budgetAllowsGenJob(shopId, quizId, () =>
+      opts?.failMode === "blank_questions"
+        ? failToBlankQuestions(shopId, quizId)
+        : writeGenError(quizId, (s) =>
+            BuildSession.parse({
+              ...s,
+              stage: "types",
+              gen_error: BUDGET_GEN_ERROR,
+              gen_progress: undefined,
+            }),
+          ),
+    );
+    if (!allowed) return;
+  }
   // Capture the funnel session BEFORE the build. runAiOnboardingBuild rebuilds
   // draftJson from a fresh seed and DROPS build_session, so we RESTORE the prior
   // session (grouping/goal/picked_template) with the new stage on completion —

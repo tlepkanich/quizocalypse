@@ -99,6 +99,44 @@ function client(): Anthropic {
   return cachedClient;
 }
 
+// BIC-2 A3 — per-shop usage recording, without polluting this isomorphic
+// module: this file stays prisma-free AND node-builtin-free (an async_hooks
+// import here fails the client build), so the AsyncLocalStorage lives in
+// aiUsageContext.server.ts and aiBudget.server.ts installs its emitAiUsage
+// through this hook at module load. Until something installs it (or in any
+// client bundle that dead-code-carries this file), the emitter is null and
+// usage emission is a no-op.
+export type AiUsageEmitter = (usage: {
+  input_tokens: number;
+  output_tokens: number;
+}) => void;
+
+let aiUsageEmitter: AiUsageEmitter | null = null;
+
+export function setAiUsageEmitter(emitter: AiUsageEmitter): void {
+  aiUsageEmitter = emitter;
+}
+
+// BIC-2 A3 — the ONE seam every generator's API call goes through. Emits each
+// response's token usage to the installed emitter, so server callers that wrap
+// a generator in withAiSpendRecording(shopId, …) get per-shop usage recorded
+// with ZERO per-generator changes here. The emit can NEVER fail a generation
+// that already succeeded.
+async function createMessage(
+  params: Anthropic.MessageCreateParamsNonStreaming,
+): Promise<Anthropic.Message> {
+  const res = await client().messages.create(params);
+  try {
+    aiUsageEmitter?.({
+      input_tokens: res.usage.input_tokens,
+      output_tokens: res.usage.output_tokens,
+    });
+  } catch {
+    // Emitter bugs are the emitter's problem; the response stands.
+  }
+  return res;
+}
+
 export class QuizGenerationError extends Error {
   constructor(
     message: string,
@@ -160,7 +198,7 @@ export async function regenerateQuestion(
 
   let lastIssue: string | undefined;
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
-    const response = await client().messages.create({
+    const response = await createMessage({
       model: MODEL,
       max_tokens: 2048,
       system: regenSystem,
@@ -435,7 +473,7 @@ export async function generateQuestionFlow(
 
   let lastIssue: string | undefined;
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
-    const response = await client().messages.create({
+    const response = await createMessage({
       model: MODEL,
       max_tokens: MAX_TOKENS,
       system,
@@ -596,7 +634,7 @@ export async function generateTemplateOptions(
 
   let lastIssue: string | undefined;
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
-    const response = await client().messages.create({
+    const response = await createMessage({
       model: MODEL,
       max_tokens: 2048,
       system: TEMPLATE_OPTIONS_SYSTEM_PROMPT,
@@ -675,7 +713,7 @@ export async function runWebResearchForQuizTypes(input: {
       `Research best practices for ${input.industry} ${input.vertical} product-recommendation quizzes. ` +
       `Focus on: typical question counts, proven quiz types/formats, and what drives conversion for ` +
       `${input.priceTier} brands targeting ${audience}.`;
-    const res = await client().messages.create({
+    const res = await createMessage({
       model: MODEL,
       max_tokens: 1536,
       system: WEB_RESEARCH_SYSTEM,
@@ -802,7 +840,7 @@ export async function generateQuizTypes(input: GenerateQuizTypesInput): Promise<
 
   let lastIssue: string | undefined;
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
-    const response = await client().messages.create({
+    const response = await createMessage({
       model: input.modelOverride ?? MODEL_SPEED,
       max_tokens: 2048,
       system: QUIZ_TYPES_SYSTEM_PROMPT,
@@ -985,7 +1023,7 @@ export async function generateQuizTemplates(
 
   let lastIssue: string | undefined;
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
-    const response = await client().messages.create({
+    const response = await createMessage({
       model: input.modelOverride ?? MODEL_SPEED,
       max_tokens: 3072,
       system,
@@ -1219,7 +1257,7 @@ export async function editQuiz(input: EditQuizInput): Promise<EditQuizResult> {
 
   let lastIssue: string | undefined;
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
-    const response = await client().messages.create({
+    const response = await createMessage({
       model: MODEL,
       max_tokens: MAX_TOKENS,
       system,
@@ -1356,7 +1394,7 @@ export async function enrichFromReviews(
 
   let lastIssue: string | undefined;
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
-    const response = await client().messages.create({
+    const response = await createMessage({
       model: MODEL,
       max_tokens: MAX_TOKENS,
       system,
@@ -1441,7 +1479,7 @@ export async function translateFeaturesToBenefits(input: BenefitInput): Promise<
   const system = BENEFIT_SYSTEM_PROMPT + buildBrandVoiceAddition(input.brandGuidelines);
 
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
-    const response = await client().messages.create({
+    const response = await createMessage({
       model: MODEL_FAST,
       max_tokens: 512,
       system,
@@ -1516,7 +1554,7 @@ export async function generateAnswerTooltips(
 
   const known = new Set(input.answers.map((a) => a.id));
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
-    const response = await client().messages.create({
+    const response = await createMessage({
       model: MODEL_FAST,
       max_tokens: 1024,
       system,
@@ -1595,7 +1633,7 @@ export async function generateWhyCopy(input: WhyCopyInput): Promise<string> {
 
   let lastError = "no tool call";
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
-    const response = await client().messages.create({
+    const response = await createMessage({
       model: MODEL_FAST,
       max_tokens: 512,
       system,
@@ -1696,7 +1734,7 @@ export async function generateRuntimeRecCopy(input: RuntimeRecCopyInput): Promis
 
   let lastError = "no tool call";
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
-    const response = await client().messages.create({
+    const response = await createMessage({
       model: MODEL_FAST,
       max_tokens: 512,
       system,
@@ -1800,7 +1838,7 @@ export async function reviewPathQuality(
 
   let lastError = "no tool call";
   for (let attempt = 1; attempt <= PATH_QUALITY_MAX_ATTEMPTS; attempt++) {
-    const response = await client().messages.create({
+    const response = await createMessage({
       model: MODEL,
       max_tokens: 1024,
       system,
@@ -1910,7 +1948,7 @@ export async function runAskAIChat(
     { role: "user" as const, content: input.userMessage },
   ];
 
-  const response = await client().messages.create({
+  const response = await createMessage({
     model: MODEL,
     max_tokens: 1024,
     system,
@@ -2010,7 +2048,7 @@ export async function translateQuiz(
 
     let lastIssue: string | undefined;
     for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
-      const response = await client().messages.create({
+      const response = await createMessage({
         model: MODEL,
         max_tokens: MAX_TOKENS,
         system,

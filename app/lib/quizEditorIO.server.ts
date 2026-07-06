@@ -3,6 +3,7 @@ import type { Shop } from "@prisma/client";
 import { authenticate } from "../shopify.server";
 import prisma from "../db.server";
 import { logFor } from "./log.server";
+import { withAiSpendRecording } from "./aiBudget.server";
 import { Quiz } from "./quizSchema";
 import type { Quiz as QuizDoc } from "./quizSchema";
 import { publishQuiz, PublishError } from "./quizPublish";
@@ -196,7 +197,13 @@ export async function handleQuizEditorActionForShop(
   // see it instead of a silent "looks saved but didn't". Re-throw Responses
   // (redirects) so navigation is preserved; only the FAILURE path changes.
   try {
-    return await handleQuizEditorActionImpl(shop, id, request, getAdmin);
+    // BIC-2 A3 — every AI intent this action can reach (regenerate-node,
+    // generate, ai-edit, enrich, translate, and publish's benefits/tooltips
+    // passes inside quizPublish) records its token usage against the shop.
+    // Pure recording — no ceiling is enforced on editor intents this phase.
+    return await withAiSpendRecording(shop.id, () =>
+      handleQuizEditorActionImpl(shop, id, request, getAdmin),
+    );
   } catch (err) {
     if (err instanceof Response) throw err;
     logFor("quizEditorIO").error({ err, quizId: id }, "action failed");

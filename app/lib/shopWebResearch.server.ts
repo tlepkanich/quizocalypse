@@ -1,5 +1,6 @@
 import prisma from "../db.server";
 import { logFor } from "./log.server";
+import { withAiSpendRecording } from "./aiBudget.server";
 import { parseBrandIdentitySafe } from "./brandIdentity";
 import { runWebResearchForQuizTypes } from "./claude";
 
@@ -194,7 +195,14 @@ const defaultIO: ShopWebResearchIO = {
  *  instant; in flight (loader prefetch) → awaits the same promise; cold →
  *  runs research inline exactly as today. Never rejects; failures → "". */
 export function getOrStartShopWebResearch(shopId: string): Promise<string> {
-  return resolveShopWebResearch(shopId, defaultIO);
+  // BIC-2 A3 — every research CREATOR funnels through here (typing job inline
+  // + the funnel-entry prefetch), so this one recording scope bills the shop
+  // whichever caller actually triggers the API call. Single-flight sharers
+  // that merely await an in-flight promise record nothing (the emit fires in
+  // the creator's context — once per response).
+  return withAiSpendRecording(shopId, () =>
+    resolveShopWebResearch(shopId, defaultIO),
+  );
 }
 
 /** Cache-only read (no AI, no single-flight): the fresh cached text, or null.

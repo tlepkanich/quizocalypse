@@ -5,6 +5,7 @@ import { Quiz } from "../lib/quizSchema";
 import { runAskAIChat, type AskAIMessage } from "../lib/claude";
 import { parseBrandGuidelinesSafe } from "../lib/brandGuidelines";
 import { rateLimit } from "../lib/rateLimiters";
+import { withAiSpendRecording } from "../lib/aiBudget.server";
 import type { IndexedProduct } from "../lib/recommendationEngine";
 import { formatMoney } from "../lib/formatMoney";
 
@@ -54,6 +55,7 @@ export async function action({ params, request }: ActionFunctionArgs) {
     // Include the parent shop's brand guidelines so we can apply the
     // brand voice to the assistant's reply.
     select: {
+      shopId: true,
       publishedJson: true,
       shop: { select: { brandGuidelines: true } },
     },
@@ -118,20 +120,24 @@ export async function action({ params, request }: ActionFunctionArgs) {
     .join("\n");
 
   try {
-    const result = await runAskAIChat({
-      // K2: when the quiz is served in a locale, ask the assistant to reply in
-      // it (the persona/opening are already translated doc copy).
-      systemPrompt:
-        typeof body.locale === "string" && /^[a-z]{2}(-[a-z]{2,4})?$/i.test(body.locale) && body.locale !== "en"
-          ? `${node.data.system_prompt}\n\nRespond in the language with ISO code "${body.locale}".`
-          : node.data.system_prompt,
-      personaName: node.data.persona_name,
-      quizContext,
-      catalogSummary,
-      history: body.history,
-      userMessage: body.userMessage,
-      ...(brandGuidelines ? { brandGuidelines } : {}),
-    });
+    // BIC-2 A3 — record the shopper chat's token usage against the shop
+    // (recording only; the spend bound here stays the per-IP rate limit).
+    const result = await withAiSpendRecording(quiz.shopId, () =>
+      runAskAIChat({
+        // K2: when the quiz is served in a locale, ask the assistant to reply in
+        // it (the persona/opening are already translated doc copy).
+        systemPrompt:
+          typeof body.locale === "string" && /^[a-z]{2}(-[a-z]{2,4})?$/i.test(body.locale) && body.locale !== "en"
+            ? `${node.data.system_prompt}\n\nRespond in the language with ISO code "${body.locale}".`
+            : node.data.system_prompt,
+        personaName: node.data.persona_name,
+        quizContext,
+        catalogSummary,
+        history: body.history,
+        userMessage: body.userMessage,
+        ...(brandGuidelines ? { brandGuidelines } : {}),
+      }),
+    );
     return json({ reply: result.reply });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Unknown error";

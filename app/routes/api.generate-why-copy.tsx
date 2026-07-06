@@ -5,6 +5,7 @@ import { resolveApiShop } from "../lib/studioAccess.server";
 import { generateWhyCopy, QuizGenerationError } from "../lib/claude";
 import { parseBrandGuidelinesSafe } from "../lib/brandGuidelines";
 import { membershipHash } from "../lib/whyCopyMeta";
+import { checkAiBudget, withAiSpendRecording } from "../lib/aiBudget.server";
 
 // rec-page-spec-V2 §8.2 (L2-11) — CONFIG-TIME grounded why-copy: the merchant
 // clicks "✦ AI generate" in the Step-4 panel and this drafts the reasoning
@@ -33,6 +34,21 @@ export async function action({ request }: ActionFunctionArgs) {
     // fall through to the missing-quizId 400 below
   }
   if (!quizId) return json({ ok: false, error: "quizId required" }, { status: 400 });
+
+  // BIC-2 A3 — per-shop daily merchant spend ceiling, checked before any
+  // grounding work (a refusal charges and loads nothing). checkAiBudget fails
+  // open on DB errors, so a budget hiccup never blocks the merchant.
+  const budget = await checkAiBudget(shop.id, "merchant");
+  if (!budget.allowed) {
+    return json(
+      {
+        ok: false,
+        code: "ai_budget",
+        error: "Today's AI limit for this shop is reached — try again tomorrow.",
+      },
+      { status: 402 },
+    );
+  }
 
   let quiz: { id: string; name: string } | null = null;
   let categories: { id: string; name: string; productIds: string[] }[] = [];
@@ -94,11 +110,13 @@ export async function action({ request }: ActionFunctionArgs) {
   }
 
   try {
-    const copy = await generateWhyCopy({
-      targetName: target ? target.name : `${quiz.name} (all results)`,
-      products,
-      brandGuidelines: parseBrandGuidelinesSafe(brandGuidelines),
-    });
+    const copy = await withAiSpendRecording(shop.id, () =>
+      generateWhyCopy({
+        targetName: target ? target.name : `${quiz.name} (all results)`,
+        products,
+        brandGuidelines: parseBrandGuidelinesSafe(brandGuidelines),
+      }),
+    );
     return json({
       ok: true,
       copy,
