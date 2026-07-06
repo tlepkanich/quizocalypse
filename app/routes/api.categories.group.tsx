@@ -11,6 +11,7 @@
 
 import type { ActionFunctionArgs } from "@remix-run/node";
 import { json } from "@remix-run/node";
+import { z } from "zod";
 import { resolveApiShop } from "../lib/studioAccess.server";
 import prisma from "../db.server";
 import {
@@ -26,20 +27,32 @@ import {
 // partitioned, so refuse rather than persist a degenerate set.
 const MIN_PRODUCTS = 5;
 
-// Non-AI grouping sources we route through resolveGroupsBySource. "manual"
-// is handled separately (the merchant hands us the buckets directly).
-const GROUPING_SOURCES: ReadonlySet<string> = new Set<GroupingSource>([
-  "collection",
-  "smart_collection",
-  "tag",
-  "product_type",
-  "metafield",
-]);
+// BIC-2 A2(e) — Zod at the boundary (the captures.tsx pattern). readBody
+// normalizes both transports (urlencoded form / JSON) into a flat string
+// record first; this schema then validates it before ANY business logic.
+// The source enum folds the old GROUPING_SOURCES membership check in.
+const ManualGroup = z.object({
+  name: z.string(),
+  productIds: z.array(z.string()),
+});
+type ManualGroupInput = z.infer<typeof ManualGroup>;
 
-interface ManualGroupInput {
-  name: string;
-  productIds: string[];
-}
+const GroupRequestBody = z.object({
+  source: z.enum([
+    "manual",
+    "collection",
+    "smart_collection",
+    "tag",
+    "product_type",
+    "metafield",
+  ]),
+  quizId: z.string().nullish(),
+  sourceRef: z.string().nullish(),
+  metafieldKey: z.string().nullish(),
+  // Manual buckets travel as a JSON string (re-stringified by readBody when
+  // posted as a real JSON array); parsed structurally by ManualGroup below.
+  groups: z.string().nullish(),
+});
 
 // Flatten a stored Product.metafields Json ({ "ns.key": { value, type } })
 // into the Record<string,string> shape the resolver expects. Anything
@@ -59,7 +72,7 @@ function flattenMetafields(raw: unknown): Record<string, string> {
 // Coerce the posted `groups` field (manual mode) into a validated list of
 // { name, productIds }. Returns null on any structural problem so the
 // caller can return a 400.
-function parseManualGroups(raw: string | null): ManualGroupInput[] | null {
+function parseManualGroups(raw: string | null | undefined): ManualGroupInput[] | null {
   if (!raw) return null;
   let parsed: unknown;
   try {
@@ -67,22 +80,8 @@ function parseManualGroups(raw: string | null): ManualGroupInput[] | null {
   } catch {
     return null;
   }
-  if (!Array.isArray(parsed)) return null;
-  const groups: ManualGroupInput[] = [];
-  for (const item of parsed) {
-    if (!item || typeof item !== "object") return null;
-    const name = (item as { name?: unknown }).name;
-    const productIds = (item as { productIds?: unknown }).productIds;
-    if (typeof name !== "string") return null;
-    if (
-      !Array.isArray(productIds) ||
-      !productIds.every((id) => typeof id === "string")
-    ) {
-      return null;
-    }
-    groups.push({ name, productIds: productIds as string[] });
-  }
-  return groups;
+  const result = z.array(ManualGroup).safeParse(parsed);
+  return result.success ? result.data : null;
 }
 
 // Pull a field from either a urlencoded form body or a JSON body. Remix's
@@ -124,23 +123,28 @@ export async function action({ request }: ActionFunctionArgs) {
   // Dual-auth: works from the embedded admin AND the standalone /studio surface.
   const shop = await resolveApiShop(request);
 
-  let body: Record<string, string | null>;
+  let rawBody: Record<string, string | null>;
   try {
-    body = await readBody(request);
+    rawBody = await readBody(request);
   } catch {
     return json({ ok: false, error: "Invalid request body" }, { status: 400 });
   }
 
-  const source = body.source;
-  if (!source) {
-    return json({ ok: false, error: "Missing source" }, { status: 400 });
-  }
-  if (source !== "manual" && !GROUPING_SOURCES.has(source)) {
+  // Return early on validation failure — no business logic on unvalidated
+  // input (BIC-2 A2e; the captures.tsx 400-with-issues shape).
+  const parsedBody = GroupRequestBody.safeParse(rawBody);
+  if (!parsedBody.success) {
     return json(
-      { ok: false, error: `Unknown grouping source: ${source}` },
+      {
+        ok: false,
+        error: "Invalid request body",
+        issues: parsedBody.error.issues.slice(0, 3),
+      },
       { status: 400 },
     );
   }
+  const body = parsedBody.data;
+  const source = body.source;
 
   // Optional quiz scope. When present, the created rows are bound to this
   // quiz and the destructive deleteMany only clears THIS quiz's buckets,

@@ -45,7 +45,9 @@ function getArgs(query: string): LoaderFunctionArgs {
 }
 
 const CAPTURE = { quiz_id: "q1", session_id: "sess1", email: "a@b.co" };
-const SESSION = { quiz_id: "q1", session_id: "sess1" };
+// BIC-2 A2(c): the sessions WRITE now floors session_id at 16 chars (the
+// runtime mints 36-char UUIDs) — the write fixture uses a realistic id.
+const SESSION = { quiz_id: "q1", session_id: "3f2a9c04-77d1-4e2b-9a63-0d5b1c8e4f21" };
 const EVENTS = { events: [{ quiz_id: "q1", session_id: "sess1", event_type: "quiz_started" }] };
 
 beforeEach(() => {
@@ -98,6 +100,37 @@ describe("sessions.tsx write guard", () => {
     expect(res.status).toBe(500);
     expect(res.headers.get("access-control-allow-origin")).toBe("*");
     expect(((await res.json()) as { error?: string }).error).toBeTruthy();
+  });
+
+  // BIC-2 A2(c) — the guessing-resistance floor on NEW writes.
+  it("400 + CORS when session_id is shorter than 16 chars, upsert never attempted", async () => {
+    const res = await sessionsAction(
+      postArgs("sessions", { quiz_id: "q1", session_id: "abcde0123456789" }), // 15 chars
+    );
+    expect(res.status).toBe(400);
+    expect(res.headers.get("access-control-allow-origin")).toBe("*");
+    expect(((await res.json()) as { error?: string }).error).toContain("session_id");
+    expect(p.quizSession.upsert).not.toHaveBeenCalled();
+  });
+
+  it("202 at exactly 16 chars and for a 32-char id (the floor is ≥16, not >16)", async () => {
+    p.quizSession.upsert.mockResolvedValue({});
+    const sixteen = await sessionsAction(
+      postArgs("sessions", { quiz_id: "q1", session_id: "abcdef0123456789" }),
+    );
+    expect(sixteen.status).toBe(202);
+    const thirtyTwo = await sessionsAction(
+      postArgs("sessions", { quiz_id: "q1", session_id: "abcdef0123456789abcdef0123456789" }),
+    );
+    expect(thirtyTwo.status).toBe(202);
+  });
+
+  it("GET reads are NOT floored — existing short stored ids keep resolving", async () => {
+    p.quizSession.findUnique.mockResolvedValue({
+      outcomeId: "o1", answerIds: [], matchedProductIds: [], converted: false, completedAt: new Date(),
+    });
+    const res = await sessionsLoader(getArgs("quiz_id=q1&session_id=sess1"));
+    expect(res.status).toBe(200);
   });
 });
 

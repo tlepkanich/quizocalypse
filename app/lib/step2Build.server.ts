@@ -172,6 +172,12 @@ export async function generateStep2Templates(
 // surfaces billing/rate problems as 4xx with a recognizable message; everything else
 // gets a generic retry nudge. Never leaks raw account/billing detail to a merchant —
 // the full error stays in the operator's server logs.
+// BIC-2 A2(f) — the ONLY copy the detached main-builder build may persist into
+// Quiz.buildState's "error:" payload (it renders verbatim in the builder's
+// BuildError screen). Exported for step1Build's twin catch + the scrub test.
+export const GENERIC_BUILD_ERROR =
+  "The AI build didn't finish — try again, or start from a template.";
+
 function friendlyGenError(err: unknown): string {
   const msg = err instanceof Error ? err.message : String(err);
   if (/credit balance|billing|quota|insufficient|payment/i.test(msg)) {
@@ -583,9 +589,15 @@ export async function startStep2Build(
   void buildQuizFromPicked(shopId, quizId, rich, picked, goal, struggle)
     .then(() => prisma.quiz.update({ where: { id: quizId }, data: { buildState: null } }))
     .catch(async (err) => {
-      const msg = err instanceof Error ? err.message : String(err);
+      // BIC-2 A2(f) — buildState's "error:" payload renders verbatim in the
+      // builder (studio_.$id BuildError), so persist generic copy only; the
+      // full error goes to the log seam.
+      reportError(err, { scope: "step2", msg: "detached build failed", shopId, quizId });
       await prisma.quiz
-        .update({ where: { id: quizId }, data: { buildState: `error:${msg.slice(0, 300)}` } })
+        .update({
+          where: { id: quizId },
+          data: { buildState: `error:${GENERIC_BUILD_ERROR}` },
+        })
         .catch(() => {});
     });
 }

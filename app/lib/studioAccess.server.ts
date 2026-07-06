@@ -2,6 +2,8 @@ import { createCookie, redirect } from "@remix-run/node";
 import { timingSafeEqual } from "node:crypto";
 import type { Shop } from "@prisma/client";
 import prisma from "../db.server";
+import { logFor } from "./log.server";
+import { clientIp } from "./rateLimiters";
 
 // ───────────────────────────────────────────────────────────────────────────
 // Access gate for the standalone /studio surface. This surface is NOT behind
@@ -40,7 +42,7 @@ function accessCookie(token: string, secure: boolean) {
     sameSite: "lax",
     path: "/",
     secure,
-    maxAge: 60 * 60 * 24 * 30, // 30 days
+    maxAge: 60 * 60 * 24 * 7, // 7 days (BIC-2 A2b — was 30)
     secrets: [token],
   });
 }
@@ -60,7 +62,7 @@ function sessionCookie(secret: string, secure: boolean) {
     sameSite: "lax",
     path: "/",
     secure,
-    maxAge: 60 * 60 * 24 * 30, // 30 days
+    maxAge: 60 * 60 * 24 * 7, // 7 days (BIC-2 A2b — was 30)
     secrets: [secret],
   });
 }
@@ -128,6 +130,12 @@ export async function requireStudioAccess(request: Request): Promise<void> {
   const url = new URL(request.url);
   const key = url.searchParams.get("key");
   if (token && key && safeEqual(key, token)) {
+    // BIC-2 A2(b) — every break-glass use leaves an audit line (ip + path;
+    // pino adds the timestamp; NEVER token values).
+    logFor("studio-login").warn(
+      { ip: clientIp(request), path: url.pathname, accepted: true },
+      "legacy ?key= break-glass login",
+    );
     // Valid key → set the signed cookie and redirect to the clean URL so the
     // token doesn't linger in the address bar / history.
     url.searchParams.delete("key");
@@ -135,8 +143,29 @@ export async function requireStudioAccess(request: Request): Promise<void> {
       headers: { "Set-Cookie": await accessCookie(token, isSecureRequest(request)).serialize("granted") },
     });
   }
+  if (key !== null) {
+    // A wrong key is a probe worth seeing in the logs too.
+    logFor("studio-login").warn(
+      { ip: clientIp(request), path: url.pathname, accepted: false },
+      "legacy ?key= break-glass login rejected",
+    );
+  }
 
   throw redirect("/studio/login");
+}
+
+/**
+ * BIC-2 A2(b) — Set-Cookie values that clear BOTH studio cookies (the
+ * magic-link session and the legacy break-glass token cookie). Used by
+ * POST /studio/logout. Expiring a cookie needs only name+path, so missing
+ * secrets fall back to a placeholder rather than failing the sign-out.
+ */
+export async function clearStudioCookies(request: Request): Promise<string[]> {
+  const secure = isSecureRequest(request);
+  return Promise.all([
+    sessionCookie(sessionSecret() ?? "unset", secure).serialize("", { maxAge: 0 }),
+    accessCookie(process.env.STUDIO_ACCESS_TOKEN ?? "unset", secure).serialize("", { maxAge: 0 }),
+  ]);
 }
 
 // Spin-off: the synthetic, non-myshopify domain that keys the single standalone

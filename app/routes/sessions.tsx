@@ -99,6 +99,18 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     );
   }
 
+  // BIC-2 A2(c) — guessing-resistance floor on NEW writes only: session_id is
+  // the bearer capability for /q/:id/results, so short ids are enumerable. The
+  // runtime mints crypto.randomUUID() (36 chars — app/lib/analytics.ts
+  // newSessionId), so real traffic clears this comfortably. Reads (the GET
+  // loader above) are untouched — existing stored sessions keep working.
+  if (parsed.data.session_id.length < 16) {
+    return new Response(
+      JSON.stringify({ error: "session_id too short (min 16 chars)" }),
+      { status: 400, headers: { ...CORS, "content-type": "application/json" } },
+    );
+  }
+
   // HII-1b — guard the lookup READ (the upsert below is already guarded); a
   // DB-down read otherwise escapes as Remix's generic un-CORS'd 500.
   let quiz: { id: string; shopId: string } | null;

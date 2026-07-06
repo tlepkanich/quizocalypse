@@ -9,6 +9,7 @@ import {
 import { isbot } from "isbot";
 import { addDocumentResponseHeaders } from "./shopify.server";
 import { reportError } from "./lib/log.server";
+import { applySecurityHeaders } from "./lib/securityHeaders.server";
 
 export const streamTimeout = 5000;
 
@@ -40,6 +41,16 @@ export default async function handleRequest(
   remixContext: EntryContext
 ) {
   addDocumentResponseHeaders(request, responseHeaders);
+  // BIC-2 A2(a) — security headers per route class (nosniff + referrer-policy
+  // everywhere; CSP/XFO on admin trees only; /q stays storefront-frameable).
+  // AFTER Shopify's call so the embedded admin's exact-shop frame-ancestors is
+  // preserved. Document responses only — resource routes (incl. the byte-pinned
+  // /q/:id.json) never reach handleRequest.
+  try {
+    applySecurityHeaders(new URL(request.url).pathname, responseHeaders);
+  } catch {
+    // A malformed URL must not take down the render path.
+  }
   const userAgent = request.headers.get("user-agent");
   const callbackName = isbot(userAgent ?? '')
     ? "onAllReady"

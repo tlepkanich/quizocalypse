@@ -15,6 +15,7 @@
 
 import type { ActionFunctionArgs } from "@remix-run/node";
 import { json } from "@remix-run/node";
+import { z } from "zod";
 import { authenticate } from "../shopify.server";
 import prisma from "../db.server";
 import {
@@ -22,6 +23,13 @@ import {
   enrichProductTags,
   mergeTags,
 } from "../lib/enrichTags";
+
+// BIC-2 A2(e) — this action takes NO body parameters today (the dashboard
+// fetcher posts an empty form; batch size + refresh window are fixed
+// server-side), but the boundary still validates: a JSON body must at least
+// be an object. Garbage is a 400 instead of being silently ignored, and any
+// future parameter has to land in this schema to be read at all.
+const EnrichRequestBody = z.object({}).passthrough();
 
 // Process up to BATCH_SIZE products per request. Each Claude call is
 // ~2-5s; 10 fits comfortably inside Remix's default action timeout while
@@ -45,6 +53,25 @@ export async function action({ request }: ActionFunctionArgs) {
   const { session, admin } = await authenticate.admin(request);
   if (request.method !== "POST") {
     return json({ ok: false, error: "Method not allowed" }, { status: 405 });
+  }
+
+  // Validate before any business logic; return early on failure (A2e). Form
+  // posts (the real caller) carry no JSON body and skip straight through.
+  const contentType = request.headers.get("content-type") ?? "";
+  if (contentType.includes("application/json")) {
+    let raw: unknown;
+    try {
+      raw = await request.json();
+    } catch {
+      return json({ ok: false, error: "Invalid JSON body" }, { status: 400 });
+    }
+    const parsed = EnrichRequestBody.safeParse(raw);
+    if (!parsed.success) {
+      return json(
+        { ok: false, error: "Invalid request body", issues: parsed.error.issues.slice(0, 3) },
+        { status: 400 },
+      );
+    }
   }
 
   const shop = await prisma.shop.findUnique({

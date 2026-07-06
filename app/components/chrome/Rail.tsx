@@ -1,4 +1,4 @@
-import { NavLink } from "@remix-run/react";
+import { Form, NavLink } from "@remix-run/react";
 import { useEffect, useState } from "react";
 import {
   BarChart3,
@@ -7,6 +7,7 @@ import {
   FlaskConical,
   Home,
   Layers,
+  LogOut,
   Mail,
   Package,
   Palette,
@@ -122,6 +123,27 @@ export function Rail() {
           <span className="qz-rail-label">My account</span>
           <ThemeToggle className="qz-rail-theme" />
         </div>
+        {/* BIC-2 A2(b) — sign out (POST /studio/logout clears both studio
+            cookies). Reuses the nav item styling; the inline resets only strip
+            the native button chrome (no colors — DS tokens via the class). */}
+        <Form method="post" action="/studio/logout" style={{ margin: "8px 0 0" }}>
+          <button
+            type="submit"
+            className="qz-rail-item"
+            title={collapsed ? "Sign out" : undefined}
+            style={{
+              width: "100%",
+              border: "none",
+              background: "none",
+              cursor: "pointer",
+              fontFamily: "inherit",
+              textAlign: "left",
+            }}
+          >
+            <LogOut size={20} strokeWidth={1.5} aria-hidden="true" className="qz-rail-icon" />
+            <span className="qz-rail-label">Sign out</span>
+          </button>
+        </Form>
       </div>
     </aside>
   );

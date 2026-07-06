@@ -197,15 +197,23 @@ export async function syncCatalogForShopId(
       finishedAt: new Date(),
     };
   } catch (err) {
+    // BIC-2 A2(f) — the FULL upstream error goes to logs/Sentry only (the
+    // reportError line). The PERSISTED string surfaces in the merchant UI
+    // (app._index + studio.products), so it stays generic: raw Shopify/network
+    // messages can leak internals (hosts, GraphQL guts, token hints).
     reportError(err, { scope: "catalogSync", msg: "catalog sync failed", shopId });
-    const message = err instanceof Error ? err.message : String(err);
     await prisma.shop.update({
       where: { id: shopId },
-      data: { lastSyncAt: new Date(), lastSyncStatus: "error", lastSyncError: message.slice(0, 500) },
+      data: { lastSyncAt: new Date(), lastSyncStatus: "error", lastSyncError: GENERIC_SYNC_ERROR },
     });
     throw err;
   }
 }
+
+// Exported for the A2(f) scrub test — the ONLY string the systemic-abort path
+// may persist to Shop.lastSyncError.
+export const GENERIC_SYNC_ERROR =
+  "Catalog sync failed — re-sync to retry, or reconnect Shopify if it persists";
 
 export async function ensureShop(shopDomain: string) {
   return prisma.shop.upsert({

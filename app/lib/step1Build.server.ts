@@ -10,6 +10,8 @@ import {
   type BucketRow,
 } from "./bucketPersist";
 import type { TemplateOption, BuildSession } from "./quizSchema";
+import { GENERIC_BUILD_ERROR } from "./step2Build.server";
+import { reportError } from "./log.server";
 
 // Re-export the pure bucket resolver so callers can import the whole bucket
 // API (pure resolve + IO persist) from one place.
@@ -196,9 +198,15 @@ export async function startStep1Build(
   })
     .then(() => prisma.quiz.update({ where: { id: quizId }, data: { buildState: null } }))
     .catch(async (err) => {
-      const msg = err instanceof Error ? err.message : String(err);
+      // BIC-2 A2(f) — buildState's "error:" payload renders verbatim in the
+      // builder (studio_.$id BuildError): generic copy persisted, full error
+      // to the log seam (mirrors step2Build's twin catch).
+      reportError(err, { scope: "step1", msg: "detached build failed", quizId });
       await prisma.quiz
-        .update({ where: { id: quizId }, data: { buildState: `error:${msg.slice(0, 300)}` } })
+        .update({
+          where: { id: quizId },
+          data: { buildState: `error:${GENERIC_BUILD_ERROR}` },
+        })
         .catch(() => {});
     });
 }

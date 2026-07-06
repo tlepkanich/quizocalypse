@@ -9,11 +9,18 @@ import {
   type IndexedProduct,
 } from "../lib/recommendationEngine";
 import { assertPublicHttpsUrl } from "../lib/ssrfGuard.server";
+import { webhookSignatureHeader } from "../lib/webhookSignature.server";
 
 // Integration node executor. When the storefront runtime reaches an
 // integration node it POSTs here with the session payload; we fire every
 // configured action server-side (so webhook secrets stay off the client)
 // and respond OK so the runtime can advance.
+//
+// Outbound webhook authentication (when a secret is configured):
+//   X-Quizocalypse-Secret:    the shared secret verbatim (legacy — kept).
+//   X-Quizocalypse-Signature: sha256=<hex HMAC-SHA256(raw request body, secret)>
+//     (BIC-2 A2d, additive). Receivers verify by HMAC-ing the exact raw body
+//     bytes they received with the shared secret and constant-time comparing.
 
 interface IntegrationRequestBody {
   nodeId: string;
@@ -181,6 +188,9 @@ export async function action({ params, request }: ActionFunctionArgs) {
   // Fire every action with bounded timeout. We collect per-action results
   // for the response so the runtime can log failures, but advancement
   // happens regardless when continue_on_error is true.
+  // Serialized ONCE so the signature (A2d) is computed over the exact bytes
+  // every webhook action sends.
+  const rawOutboundBody = JSON.stringify(outboundPayload);
   const results: Array<{ kind: string; ok: boolean; status?: number; error?: string }> = [];
   for (const act of node.data.actions) {
     if (act.kind === "webhook") {
@@ -198,9 +208,16 @@ export async function action({ params, request }: ActionFunctionArgs) {
           headers: {
             "Content-Type": "application/json",
             "User-Agent": "Quizocalypse/1.0",
-            ...(act.secret ? { "X-Quizocalypse-Secret": act.secret } : {}),
+            ...(act.secret
+              ? {
+                  "X-Quizocalypse-Secret": act.secret,
+                  // BIC-2 A2(d) — additive HMAC signature over the exact raw
+                  // body below (see the route comment for verification).
+                  "X-Quizocalypse-Signature": webhookSignatureHeader(rawOutboundBody, act.secret),
+                }
+              : {}),
           },
-          body: JSON.stringify(outboundPayload),
+          body: rawOutboundBody,
           signal: controller.signal,
         });
         clearTimeout(t);

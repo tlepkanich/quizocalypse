@@ -1,6 +1,6 @@
-import type { LoaderFunctionArgs, MetaFunction } from "@remix-run/node";
+import type { HeadersFunction, LoaderFunctionArgs, MetaFunction } from "@remix-run/node";
 import { json, redirect } from "@remix-run/node";
-import { useLoaderData } from "@remix-run/react";
+import { isRouteErrorResponse, useLoaderData, useParams, useRouteError } from "@remix-run/react";
 import { useState } from "react";
 import prisma from "../db.server";
 import { Quiz, type QuizNode } from "../lib/quizSchema";
@@ -9,6 +9,7 @@ import { applyTranslations, parseLocaleParam, resolveLocale } from "../lib/quizT
 import { stripPublicDoc } from "../lib/quizPublish";
 import { chromeFor, t, type ChromeToken } from "../components/runtime/chromeStrings";
 import { formatDate } from "../lib/formatDate";
+import { rateLimit } from "../lib/rateLimiters";
 
 // Public "My Results" page (Miro "Save State & Resume → persistent recommendation
 // page; return via email link"). A shopper returns via a link carrying
@@ -17,11 +18,57 @@ import { formatDate } from "../lib/formatDate";
 // only non-PII fields are exposed. Reuses recommendForResult (the same engine the
 // live runtime uses) rather than rebuilding the result logic.
 
+// Remix derives a document's headers from this export, NOT from a thrown
+// Response's headers — without it the limiter's Retry-After never reaches the
+// client. Forwards it from the thrown 429 (errorHeaders); everything else is
+// unchanged (empty object = the pre-existing no-route-headers behavior).
+// NB: errorHeaders is only consulted when THIS route owns the error boundary,
+// hence the ErrorBoundary export below.
+export const headers: HeadersFunction = ({ errorHeaders }) => {
+  const out: Record<string, string> = {};
+  const retryAfter = errorHeaders?.get("Retry-After");
+  if (retryAfter) out["Retry-After"] = retryAfter;
+  return out;
+};
+
+// Route-local boundary: (1) it makes the headers export receive the thrown
+// 429's errorHeaders (Retry-After), and (2) shoppers hitting an error on a
+// shared results link get a plain message + a way into the quiz instead of the
+// bare framework error screen. Thrown redirects (the unknown-session soft
+// path) never land here.
+export function ErrorBoundary() {
+  const error = useRouteError();
+  const { id } = useParams();
+  const throttled = isRouteErrorResponse(error) && error.status === 429;
+  return (
+    <div style={shellStyle}>
+      <p>
+        {throttled
+          ? "Too many requests — please wait a moment and try again."
+          : "We couldn't load these results."}{" "}
+        {id ? <a href={`/q/${id}`}>Take the quiz</a> : null}
+      </p>
+    </div>
+  );
+}
+
 export const loader = async ({ params, request }: LoaderFunctionArgs) => {
   const { id } = params;
   if (!id) throw new Response("Missing id", { status: 400 });
   const sessionId = new URL(request.url).searchParams.get("session_id");
   if (!sessionId) throw new Response("Missing session_id", { status: 400 });
+
+  // BIC-2 A2(c) — session_id is a bearer capability token; throttle lookups so
+  // it can't be brute-forced. 30/min/IP is far above any legitimate shopper
+  // (one click from an email/share link) while making enumeration useless.
+  // Checked BEFORE any DB read; unknown sessions still soft-redirect below.
+  const rl = rateLimit(request, "results", 30);
+  if (!rl.ok) {
+    throw new Response("Too many requests", {
+      status: 429,
+      headers: { "Retry-After": String(rl.retryAfterS) },
+    });
+  }
 
   const quiz = await prisma.quiz.findFirst({
     where: { id },
