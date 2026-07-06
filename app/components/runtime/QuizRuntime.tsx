@@ -43,6 +43,7 @@ import {
   resolveCopyTokens,
   type PathStep,
 } from "../../lib/mergeTags";
+import { collectNextStepImages } from "../../lib/nextStepImages";
 import { stylesFor, googleFontsUrl, useContainerBreakpoint } from "./runtimeStyles";
 import { BlockRenderer, type BlockRenderCtx } from "./BlockRenderer";
 
@@ -201,6 +202,25 @@ const RUNTIME_SMART_BLOCK_HOSTS: Record<string, string> = {
   answers: "question",
   email_input: "email_gate",
 };
+
+// BIC-2 B3 — is `shorter` a step-for-step prefix of `longer`? Used by the
+// browser-history integration to decide whether a Forward press can safely
+// re-enter the retained journey (a re-answer after going back diverges the
+// path, invalidating the old forward positions).
+function isPathPrefix(shorter: PathStep[], longer: PathStep[]): boolean {
+  if (shorter.length > longer.length) return false;
+  for (let i = 0; i < shorter.length; i++) {
+    const a = shorter[i];
+    const b = longer[i];
+    if (!a || !b) return false;
+    if (a.questionNodeId !== b.questionNodeId) return false;
+    if (a.answerIds.length !== b.answerIds.length) return false;
+    for (let k = 0; k < a.answerIds.length; k++) {
+      if (a.answerIds[k] !== b.answerIds[k]) return false;
+    }
+  }
+  return true;
+}
 
 // Preview mode flag shared with the deep leaf views (cart / email-capture /
 // integration / ai-chat) so they can no-op their side-effects without threading
@@ -814,6 +834,152 @@ export function QuizRuntime(props: QuizRuntimeProps) {
     previewViewedRef.current = false;
     completedRef.current = false;
   }
+
+  // ── BIC-2 B3 — browser Back/Forward inside the quiz ───────────────────────
+  // Live mode only (the builder preview must never touch the host page's
+  // history), everything effect/handler-scoped so SSR + hydration are
+  // untouched. A position is (currentNodeId, path.length) — path.length alone
+  // can't address a step because interstitials (intro/gate/message/…) don't
+  // append to `path`, so the history state carries both: {qz: {n, p}}.
+  //   • Every ADVANCE pushes an entry; mount/resume-restore and every
+  //     jump-BACK (trail pill, in-quiz Back, Start over, popstate restore)
+  //     REPLACE instead — the current entry always mirrors the current
+  //     position, and a trail jump never creates double entries. Trade-off
+  //     (reasoned): after a trail jump 3→1 the browser's back stack still
+  //     holds positions 2,1,0 — Back walks the JOURNEY, not the click
+  //     chronology. That keeps one invariant ("Back = one step shallower")
+  //     instead of two mechanisms fighting.
+  //   • popstate maps the entry back onto the SAME code path the trail jump
+  //     uses: a target that is an answered question in the current path calls
+  //     gotoStep() literally; intro/interstitial targets replay its exact
+  //     statements (truncate + re-enter). Forward re-enters the retained
+  //     journey (journeyPathRef, the deepest consistent path) only while the
+  //     current path is still a prefix of it; anything else is ignored — and a
+  //     re-answer after Back pushes, which clears the browser's forward stack
+  //     anyway. Back from the first entry leaves the page (natural exit).
+  //   • Existing history.state fields (React Router's usr/key/idx) are
+  //     preserved by spread so router bookkeeping never breaks; all History
+  //     calls sit in try/catch (sandboxed embeds / Safari rate limits).
+  const historyPosRef = useRef<{ n: string | null; p: number } | null>(null);
+  const journeyPathRef = useRef<PathStep[]>([]);
+  const popRestoreRef = useRef(false);
+
+  useEffect(() => {
+    if (isPreview || typeof window === "undefined") return;
+    // Retain the deepest journey this path is consistent with (for Forward).
+    if (
+      path.length >= journeyPathRef.current.length ||
+      !isPathPrefix(path, journeyPathRef.current)
+    ) {
+      journeyPathRef.current = path;
+    }
+    const pos = { n: currentNodeId, p: path.length };
+    const prev = historyPosRef.current;
+    historyPosRef.current = pos;
+    if (popRestoreRef.current) {
+      // The browser already sits on the target entry — write nothing.
+      popRestoreRef.current = false;
+      return;
+    }
+    if (prev && prev.n === pos.n && prev.p === pos.p) return;
+    try {
+      const base = window.history.state as Record<string, unknown> | null;
+      const state = { ...(base ?? {}), qz: pos };
+      if (!prev || !hasNavigatedRef.current || pos.p < prev.p) {
+        // Mount / resume-restore / jump-back — mirror, don't grow.
+        window.history.replaceState(state, "");
+      } else {
+        window.history.pushState(state, "");
+      }
+    } catch {
+      // History API unavailable or throttled — the quiz works without it.
+    }
+  }, [currentNodeId, path, isPreview]);
+
+  useEffect(() => {
+    if (isPreview || typeof window === "undefined") return;
+    const onPop = (event: PopStateEvent) => {
+      const raw = event.state as unknown;
+      const qz =
+        raw && typeof raw === "object" && "qz" in raw
+          ? (raw as { qz?: unknown }).qz
+          : null;
+      if (!qz || typeof qz !== "object") return; // pre-quiz/foreign entry
+      const n = (qz as { n?: unknown }).n;
+      const pRaw = (qz as { p?: unknown }).p;
+      if (typeof n !== "string" || typeof pRaw !== "number" || !Number.isFinite(pRaw)) return;
+      const p = Math.floor(pRaw);
+      if (p < 0) return;
+      const targetNode = doc.nodes.find((x) => x.id === n);
+      if (!targetNode) return; // republish removed it → ignore
+      if (n === currentNodeId && p === path.length) return; // idempotent
+      if (p <= path.length) {
+        // BACK (or lateral) within the current journey.
+        popRestoreRef.current = true;
+        if (p < path.length && path[p]?.questionNodeId === n) {
+          gotoStep(p); // literally the trail-jump code path
+          return;
+        }
+        // Intro / interstitial target — gotoStep's exact statements, with the
+        // node id taken from the entry instead of path[i].
+        hasNavigatedRef.current = true;
+        setPath(path.slice(0, p));
+        setCurrentNodeId(n);
+        previewViewedRef.current = false;
+        completedRef.current = targetNode.type === "result";
+        return;
+      }
+      // FORWARD re-entry into the retained journey.
+      const journey = journeyPathRef.current;
+      if (p <= journey.length && isPathPrefix(path, journey)) {
+        popRestoreRef.current = true;
+        hasNavigatedRef.current = true;
+        setPath(journey.slice(0, p));
+        setCurrentNodeId(n);
+        previewViewedRef.current = false;
+        // Re-entering a result you already saw: mirror the resume flow —
+        // completed stays true so quiz_completed/abandoned can't double-fire.
+        completedRef.current = targetNode.type === "result";
+        return;
+      }
+      // Beyond anything visited (stale forward after divergence) → ignore.
+    };
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
+    // gotoStep is re-created each render but only reads path/currentNodeId,
+    // which ARE deps — listing it would just re-register every render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isPreview, doc, currentNodeId, path]);
+
+  // ── BIC-2 B2e — preload the NEXT step's images while this one renders ─────
+  // Straight-through target only (collectNextStepImages, pure + unit-tested),
+  // ≤4 https URLs, injected as <link rel="preload" as="image"> via this
+  // effect (client-only → zero SSR/hydration surface; preview skipped). Links
+  // are removed on step change/unmount so the head never litters; the session
+  // Set stops re-preloading URLs the browser already fetched (revisits after
+  // Back, shared images across steps). The intro hero is untouched — it ships
+  // via the B2b Link response header and is never a question image.
+  const preloadedUrlsRef = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    if (isPreview || typeof document === "undefined" || !currentNodeId) return;
+    const urls = collectNextStepImages(doc, currentNodeId).filter(
+      (u) => !preloadedUrlsRef.current.has(u),
+    );
+    if (urls.length === 0) return;
+    const links: HTMLLinkElement[] = [];
+    for (const url of urls) {
+      preloadedUrlsRef.current.add(url);
+      const link = document.createElement("link");
+      link.rel = "preload";
+      link.as = "image";
+      link.href = url;
+      document.head.appendChild(link);
+      links.push(link);
+    }
+    return () => {
+      for (const link of links) link.remove();
+    };
+  }, [currentNodeId, doc, isPreview]);
 
   // `extraStep` is the answer the shopper JUST picked. setPath() is async, so a
   // branch that conditions on the current question would otherwise resolve
@@ -3813,6 +3979,8 @@ function QuestionView({
                 <img
                   src={a.image_url}
                   alt=""
+                  loading="lazy"
+                  decoding="async"
                   style={{
                     width: "100%",
                     aspectRatio: "1 / 1",
@@ -4004,6 +4172,8 @@ function QuestionView({
               <img
                 src={a.image_url}
                 alt=""
+                loading="lazy"
+                decoding="async"
                 style={{
                   width: "100%",
                   maxHeight: 200,
