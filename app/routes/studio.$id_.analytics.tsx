@@ -12,6 +12,7 @@ import {
 } from "../lib/funnelAggregation";
 import { productPerformance } from "../lib/productPerformance";
 import { detectHotspots } from "../lib/abandonmentHotspots";
+import { ANALYTICS_EVENT_WINDOW, windowRows } from "../lib/analyticsWindow";
 import { ProductLeaderboard } from "../components/ProductLeaderboard";
 import { QzPage, QzPageHeader, QzCard, QzStat, QzStatGrid, QzBanner } from "../components/qz";
 
@@ -43,14 +44,22 @@ export const loader = async ({ params, request }: LoaderFunctionArgs) => {
   };
   const hasRange = Object.keys(tsRange).length > 0;
 
-  const [eventRows, sessionRows, captureCount, productMeta] = await Promise.all([
+  const [eventRowsRaw, sessionRows, captureCount, productMeta] = await Promise.all([
     prisma.event.findMany({
       where: { quizId: quiz.id, ...(hasRange ? { ts: tsRange } : {}) },
       select: { sessionId: true, eventType: true, payload: true },
+      // B2a — most-recent window: an unbounded fetch times out on high-traffic
+      // quizzes. Every consumer counts distinct sessions (order-independent),
+      // so a desc window is safe; fetch cap+1 to detect truncation for the UI.
+      orderBy: { ts: "desc" },
+      take: ANALYTICS_EVENT_WINDOW + 1,
     }),
     prisma.quizSession.findMany({
       where: { quizId: quiz.id, ...(hasRange ? { startedAt: tsRange } : {}) },
       select: { converted: true },
+      // B2a — same recency window (conversionSummary only counts flags).
+      orderBy: { startedAt: "desc" },
+      take: ANALYTICS_EVENT_WINDOW,
     }),
     prisma.emailCapture.count({
       where: { quizId: quiz.id, ...(hasRange ? { capturedAt: tsRange } : {}) },
@@ -61,6 +70,8 @@ export const loader = async ({ params, request }: LoaderFunctionArgs) => {
       select: { productId: true, title: true, imageUrl: true, handle: true },
     }),
   ]);
+
+  const { rows: eventRows, truncated } = windowRows(eventRowsRaw);
 
   // PP2 — per-product impressions / clicks / ATC from the same event rows.
   const topProducts = productPerformance(eventRows, productMeta);
@@ -123,6 +134,7 @@ export const loader = async ({ params, request }: LoaderFunctionArgs) => {
     captureCount,
     revenue: { formatted: formatRevenue(revenue), orders: revenue.orders },
     range: { from: fromParam ?? "", to: toParam ?? "" },
+    truncated,
     xtype,
     outcomes,
     topProducts,
@@ -151,6 +163,12 @@ export default function StudioAnalytics() {
       {funnel.started === 0 ? (
         <QzBanner tone="default" title="No events yet">
           Take the quiz on its storefront link — the funnel populates as shoppers move through it.
+        </QzBanner>
+      ) : null}
+
+      {data.truncated ? (
+        <QzBanner tone="default" title="Showing the most recent 5,000 events">
+          Use the date filter below to narrow the window for older activity.
         </QzBanner>
       ) : null}
 

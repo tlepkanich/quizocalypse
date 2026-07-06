@@ -13,6 +13,7 @@ import {
 import { unauthenticated } from "../shopify.server";
 import prisma from "../db.server";
 import { aggregateAllAbFunnels, type FunnelCounts } from "../lib/abAnalytics";
+import { ANALYTICS_EVENT_WINDOW } from "../lib/analyticsWindow";
 
 // Standalone builder route — the SAME StudioBuilder the embedded route renders,
 // but resolved from the configured dev shop (DEV_SHOP_DOMAIN) behind the shared
@@ -37,6 +38,10 @@ export const loader = async ({ params, request }: LoaderFunctionArgs) => {
     const events = await prisma.event.findMany({
       where: { quizId: id },
       select: { sessionId: true, eventType: true, payload: true },
+      // B2a — bounded: most-recent window (A/B funnels are distinct-session
+      // sets, order-independent); unbounded fetches time out at high traffic.
+      orderBy: { ts: "desc" },
+      take: ANALYTICS_EVENT_WINDOW,
     });
     abAnalytics = aggregateAllAbFunnels(data.doc, events);
   }

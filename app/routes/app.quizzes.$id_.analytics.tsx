@@ -1,6 +1,6 @@
 import type { LoaderFunctionArgs } from "@remix-run/node";
 import { json } from "@remix-run/node";
-import { Link, useLoaderData } from "@remix-run/react";
+import { Link, useLoaderData, useSearchParams } from "@remix-run/react";
 import { TitleBar } from "@shopify/app-bridge-react";
 import { authenticate } from "../shopify.server";
 import prisma from "../db.server";
@@ -15,6 +15,7 @@ import {
 } from "../lib/funnelAggregation";
 import { productPerformance } from "../lib/productPerformance";
 import { detectHotspots } from "../lib/abandonmentHotspots";
+import { ANALYTICS_EVENT_WINDOW, windowRows } from "../lib/analyticsWindow";
 import { ProductLeaderboard } from "../components/ProductLeaderboard";
 import {
   QzPage,
@@ -54,10 +55,17 @@ export const loader = async ({ params, request }: LoaderFunctionArgs) => {
   };
   const hasRange = Object.keys(tsRange).length > 0;
 
-  const eventRows = await prisma.event.findMany({
+  const eventRowsRaw = await prisma.event.findMany({
     where: { quizId: quiz.id, ...(hasRange ? { ts: tsRange } : {}) },
     select: { sessionId: true, eventType: true, ts: true, payload: true },
+    // B2a — most-recent window: an unbounded fetch times out on high-traffic
+    // quizzes. Every consumer counts distinct sessions (order-independent) and
+    // earliest/latest are min/max scans, so a desc window is safe; fetch cap+1
+    // to detect truncation for the UI note.
+    orderBy: { ts: "desc" },
+    take: ANALYTICS_EVENT_WINDOW + 1,
   });
+  const { rows: eventRows, truncated } = windowRows(eventRowsRaw);
 
   // A/B tests: segment the funnel by the variant each session was assigned at
   // an ab_split branch (payload.ab carries the assignment). Prefer the live
@@ -118,6 +126,9 @@ export const loader = async ({ params, request }: LoaderFunctionArgs) => {
   const sessionRows = await prisma.quizSession.findMany({
     where: { quizId: quiz.id, ...(hasRange ? { startedAt: tsRange } : {}) },
     select: { converted: true },
+    // B2a — same recency window (conversionSummary only counts flags).
+    orderBy: { startedAt: "desc" },
+    take: ANALYTICS_EVENT_WINDOW,
   });
   const conversion = conversionSummary(sessionRows, completed);
   const questions = parsedDoc.success
@@ -146,6 +157,7 @@ export const loader = async ({ params, request }: LoaderFunctionArgs) => {
     conversion,
     revenue: { formatted: formatRevenue(revenue), orders: revenue.orders },
     range: { from: fromParam ?? "", to: toParam ?? "" },
+    truncated,
     dropoff,
     hotspots,
     earliest: earliest ? earliest.toISOString() : null,
@@ -160,6 +172,14 @@ export const loader = async ({ params, request }: LoaderFunctionArgs) => {
 
 export default function QuizAnalytics() {
   const data = useLoaderData<typeof loader>();
+  // B2a — the GET date-filter form must not drop the embedded-app params
+  // (host/embedded/shop/…) App Bridge needs on navigation: carry every
+  // non-from/to param through as hidden inputs, and preserve them on Clear.
+  const [searchParams] = useSearchParams();
+  const passthroughParams = Array.from(searchParams.entries()).filter(
+    ([key]) => key !== "from" && key !== "to",
+  );
+  const clearHref = `?${new URLSearchParams(passthroughParams).toString()}`;
   const { funnel } = data;
   const completionRate =
     funnel.started > 0 ? funnel.completed / funnel.started : 0;
@@ -201,6 +221,14 @@ export default function QuizAnalytics() {
         </div>
       )}
 
+      {data.truncated ? (
+        <div style={{ marginBottom: 24 }}>
+          <QzBanner tone="default" title="Showing the most recent 5,000 events">
+            Use the date filter below to narrow the window for older activity.
+          </QzBanner>
+        </div>
+      ) : null}
+
       <QzStatGrid>
         <QzStat
           label="Completion rate"
@@ -236,6 +264,24 @@ export default function QuizAnalytics() {
           }
         />
       </QzStatGrid>
+
+      <form
+        method="get"
+        className="qz-row"
+        style={{ gap: 8, alignItems: "center", marginTop: 16, fontSize: 12 }}
+      >
+        {passthroughParams.map(([key, value], i) => (
+          <input key={`${key}-${i}`} type="hidden" name={key} value={value} />
+        ))}
+        <span className="qz-dim">From</span>
+        <input type="date" name="from" defaultValue={data.range.from} style={{ font: "inherit", padding: "4px 6px", borderRadius: 6, border: "1px solid var(--qz-rule)" }} />
+        <span className="qz-dim">to</span>
+        <input type="date" name="to" defaultValue={data.range.to} style={{ font: "inherit", padding: "4px 6px", borderRadius: 6, border: "1px solid var(--qz-rule)" }} />
+        <button type="submit" className="qz-btn qz-btn-ghost qz-btn-sm">Apply</button>
+        {data.range.from || data.range.to ? (
+          <Link to={clearHref} className="qz-btn qz-btn-ghost qz-btn-sm">Clear</Link>
+        ) : null}
+      </form>
 
       <section
         className="qz-mt-48"

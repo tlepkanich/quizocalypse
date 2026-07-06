@@ -5,6 +5,7 @@ import { requireStudioAccess, resolveStudioShop } from "../lib/studioAccess.serv
 import prisma from "../db.server";
 import { computeBenchmarks } from "../lib/quizBenchmarks";
 import { totalRevenue, formatRevenue } from "../lib/funnelAggregation";
+import { ANALYTICS_EVENT_WINDOW } from "../lib/analyticsWindow";
 import { QzPage, QzPageHeader, QzCard, QzStat, QzStatGrid } from "../components/qz";
 
 // QD-8 — Analytics: the account-wide rollup across every quiz (the per-quiz
@@ -30,6 +31,11 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     prisma.event.findMany({
       where: { quizId: { in: quizIds }, eventType: "order_attributed" },
       select: { sessionId: true, eventType: true, payload: true },
+      // B2a — bounded: most-recent window (totalRevenue dedupes by order_id,
+      // order-independent). order_attributed volume is naturally small, but
+      // never fetch unbounded from a loader.
+      orderBy: { ts: "desc" },
+      take: ANALYTICS_EVENT_WINDOW,
     }),
     prisma.emailCapture.count({ where: { quiz: { shopId: shop.id } } }),
   ]);

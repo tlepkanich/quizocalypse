@@ -4,6 +4,7 @@ import { Link, useLoaderData } from "@remix-run/react";
 import { TitleBar } from "@shopify/app-bridge-react";
 import { authenticate } from "../shopify.server";
 import prisma from "../db.server";
+import { ANALYTICS_EVENT_WINDOW } from "../lib/analyticsWindow";
 import {
   QzPage,
   QzPageHeader,
@@ -30,6 +31,10 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const events = await prisma.event.findMany({
     where: { shopId: shop.id },
     select: { sessionId: true, eventType: true, quizId: true },
+    // B2a — bounded: most-recent window across the shop (distinct-session
+    // counting is order-independent); unbounded fetches time out at scale.
+    orderBy: { ts: "desc" },
+    take: ANALYTICS_EVENT_WINDOW,
   });
   const captures = await prisma.emailCapture.count({
     where: { quiz: { shopId: shop.id } },

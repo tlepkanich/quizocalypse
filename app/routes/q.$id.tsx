@@ -7,6 +7,7 @@ import type { IndexedProduct } from "../lib/recommendationEngine";
 import { QuizRuntime } from "../components/runtime/QuizRuntime";
 import { applyTranslations, parseLocaleParam, resolveLocale } from "../lib/quizTranslate";
 import { stripPublicDoc } from "../lib/quizPublish";
+import { imagePreloadLinkHeader } from "../lib/imagePreload";
 import { chromeFor } from "../components/runtime/chromeStrings";
 
 // Public shopper-facing runtime. No Polaris, no Shopify auth — this is what a
@@ -22,8 +23,9 @@ export const links: LinksFunction = () => [
   { rel: "preconnect", href: "https://fonts.gstatic.com", crossOrigin: "anonymous" },
 ];
 
-// Pass the loader's Cache-Control through to the document response. Loader-set
-// (not static) so thrown 404s ("not published") are never publicly cached.
+// Pass the loader's headers through to the document response (Cache-Control +
+// the optional hero-preload Link). Loader-set (not static) so thrown 404s
+// ("not published") are never publicly cached.
 export const headers: HeadersFunction = ({ loaderHeaders }) => loaderHeaders;
 
 // Phase L1 — rich unfurls when the merchant shares the quiz link (socials,
@@ -119,6 +121,17 @@ export const loader = async ({ params, request }: LoaderFunctionArgs) => {
   // already applied above; the client never needs the raw maps).
   const publicDoc = stripPublicDoc(localized);
 
+  // BIC-2 B2b — preload the intro hero (the LCP image on quizzes that set
+  // one) via a `Link: <url>; rel=preload; as=image` response header. Header
+  // only, ZERO DOM change: `links()` is static (it can't see loader data) and
+  // a <link> element would alter the /q HTML. https-only + header-safe
+  // encoding enforced by the helper; anything odd → no header.
+  const introNode = publicDoc.nodes.find((n) => n.type === "intro");
+  const heroPreload =
+    introNode?.type === "intro"
+      ? imagePreloadLinkHeader(introNode.data.hero_image_url)
+      : null;
+
   return json(
     {
       quizId: quiz.id,
@@ -152,7 +165,10 @@ export const loader = async ({ params, request }: LoaderFunctionArgs) => {
     {
       // Same 60s convention as the JSON + launcher endpoints: a re-publish
       // propagates within a minute; SWR keeps repeat visits instant.
-      headers: { "Cache-Control": "public, max-age=60, stale-while-revalidate=300" },
+      headers: {
+        "Cache-Control": "public, max-age=60, stale-while-revalidate=300",
+        ...(heroPreload ? { Link: heroPreload } : {}),
+      },
     },
   );
 };
