@@ -1147,6 +1147,13 @@ body[data-qz] ::selection { background: var(--qz-ink); color: var(--qz-cream); }
 .qz-railmenu-item:hover { background: var(--qz-cream-2); }
 .qz-railmenu-item.is-crit { color: var(--qz-crit); }
 
+/* BLD-7 — a palette tile dragged over the canvas: the drop ring. */
+.qz-builder-canvas.is-blockdrop {
+  outline: 2px dashed var(--qz-accent);
+  outline-offset: -6px;
+  background: color-mix(in srgb, var(--qz-accent) 4%, var(--qz-cream-2));
+}
+
 /* BLD-2 — an inline-editing canvas element (contenteditable session). The
    solid accent ring replaces the runtime's .qz-insp-sel outline while typing. */
 .qz-builder-canvas .qz-inline-editing {
@@ -1224,6 +1231,12 @@ body[data-qz] ::selection { background: var(--qz-ink); color: var(--qz-cream); }
   background: var(--qz-paper); border-left: 1px solid var(--qz-rule);
   padding: 14px; display: flex; flex-direction: column; gap: 14px;
 }
+/* BLD-7 — the panels are flex columns with overflow-y:auto; without this,
+   a tall child (e.g. the inspector's block list) gets flex-SHRUNK to the
+   panel height and its content paints past the scrollport instead of
+   scrolling — the Design tab's lower block rows were unreachable. */
+.qz-builder-panel > *,
+.qz-builder-inspector > * { flex: 0 0 auto; }
 @media (max-width: 1499px) {
   .qz-builder-inspector { flex-basis: 340px; width: 340px; }
 }

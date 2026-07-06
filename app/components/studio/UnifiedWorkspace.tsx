@@ -31,7 +31,8 @@ import { ExperiencePanel } from "./ExperiencePanel";
 import { CssTab } from "./panels/CssTab";
 import { BuilderLogicView, QuizSettingsDrawer } from "./BuilderSettings";
 import { BuilderDesignPanel } from "./BuilderDesignPanel";
-import { BuilderBlocksPalette } from "./BuilderBlocksPalette";
+import { BLOCK_DRAG_MIME, BuilderBlocksPalette, insertBlock } from "./BuilderBlocksPalette";
+import type { ContentBlockType } from "../../lib/quizSchema";
 import { BuilderPageSettings } from "./BuilderPageSettings";
 import UpgradeDeciderModal from "../onboarding/questionsLogic/UpgradeDeciderModal";
 
@@ -197,6 +198,8 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
   // drives the rail's ▸ marker so walking the quiz in Interact mode keeps you
   // oriented without opening the editing panel.
   const [liveNodeId, setLiveNodeId] = useState<string | null>(null);
+  // BLD-7 — a palette tile is being dragged over the canvas (drop ring).
+  const [blockDropActive, setBlockDropActive] = useState(false);
   const [editMode, setEditMode] = useState(true);
   // LOGIC v2 (L2-10f) — the explicit legacy→decider upgrade wizard.
   const [upgradeOpen, setUpgradeOpen] = useState(false);
@@ -831,6 +834,30 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
     const railActive: BuilderNavKey =
       view !== "build" ? view : tool === "editor" ? "build" : tool;
     const selectedNode = selectedId ? doc.nodes.find((n) => n.id === selectedId) ?? null : null;
+    // BLD-7 — block-insert targeting: the SELECTED step wins; with nothing
+    // selected, the step the canvas is showing (so the palette always works
+    // when you can see a step). Drops target what you see (live first).
+    const liveNode = liveNodeId ? doc.nodes.find((n) => n.id === liveNodeId) ?? null : null;
+    const blockTarget = selectedNode ?? liveNode;
+    const dropTarget = liveNode ?? selectedNode;
+    const onCanvasDragOver = (e: React.DragEvent) => {
+      if (!e.dataTransfer.types.includes(BLOCK_DRAG_MIME)) return;
+      e.preventDefault();
+      e.dataTransfer.dropEffect = dropTarget ? "copy" : "none";
+      if (!blockDropActive) setBlockDropActive(true);
+    };
+    const onCanvasDragLeave = (e: React.DragEvent) => {
+      if (e.currentTarget.contains(e.relatedTarget as Node)) return;
+      setBlockDropActive(false);
+    };
+    const onCanvasDrop = (e: React.DragEvent) => {
+      const type = e.dataTransfer.getData(BLOCK_DRAG_MIME);
+      setBlockDropActive(false);
+      if (!type || !dropTarget) return;
+      e.preventDefault();
+      commit(insertBlock(doc, dropTarget, type as ContentBlockType));
+      select(dropTarget.id); // open the inspector on the step that grew a block
+    };
 
     // The left panel content for the focused tool (build view only).
     const toolPanel =
@@ -880,7 +907,7 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
             </button>
           </div>
           {editorSubtab === "blocks" ? (
-            <BuilderBlocksPalette doc={doc} node={selectedNode} commit={commit} />
+            <BuilderBlocksPalette doc={doc} node={blockTarget} commit={commit} />
           ) : (
             <>
               {/* BLD-3 — the left panel is pure NAVIGATION now (step list +
@@ -1091,7 +1118,13 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
                 {/* QB-8 — slim notices strip (transient publish/reconcile results
                     only); empty = 0 height, so the canvas is just the live quiz. */}
                 <div className="qz-builder-notices">{standaloneNotices}</div>
-                <div className="qz-builder-canvas" onDoubleClick={onCanvasDoubleClick}>
+                <div
+                  className={`qz-builder-canvas${blockDropActive ? " is-blockdrop" : ""}`}
+                  onDoubleClick={onCanvasDoubleClick}
+                  onDragOver={onCanvasDragOver}
+                  onDragLeave={onCanvasDragLeave}
+                  onDrop={onCanvasDrop}
+                >
                   <div
                     style={{
                       width: "100%",

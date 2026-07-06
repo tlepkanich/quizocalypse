@@ -180,19 +180,27 @@ export interface QuizRuntimeProps {
   aiCopyEnabled?: boolean;
 }
 
-// Content-block types the storefront renders directly. Literal blocks render via
-// BlockRenderer; `recommendations` delegates to the (bare) result view. Layouts
-// containing the harder interactive regions (answers/email_input/ai_chat/
-// product_grid) fall back to the node's fixed template — safe + byte-identical.
-const RUNTIME_BLOCK_TYPES = new Set([
+// Content-block types the storefront renders directly via BlockRenderer.
+const RUNTIME_LITERAL_BLOCK_TYPES = new Set([
   "heading",
   "text",
   "image",
   "button",
   "spacer",
   "divider",
-  "recommendations",
 ]);
+// BLD-7 — a smart block renders only on the node type whose interactive
+// region exists (renderSmart mounts the region-mode view with the SAME
+// wiring as the fixed template). A layout containing any other smart block
+// falls back to the node's fixed template — never a silent blank region.
+// (The pre-BLD-7 gate excluded "answers" entirely, so every QUESTION layout
+// the builder's palette wrote was committed but never rendered.)
+// ai_chat / product_grid regions are not yet extracted → not listed.
+const RUNTIME_SMART_BLOCK_HOSTS: Record<string, string> = {
+  recommendations: "result",
+  answers: "question",
+  email_input: "email_gate",
+};
 
 // Preview mode flag shared with the deep leaf views (cart / email-capture /
 // integration / ai-chat) so they can no-op their side-effects without threading
@@ -961,7 +969,11 @@ export function QuizRuntime(props: QuizRuntimeProps) {
       !!currentNode &&
       !!layout &&
       layout.length > 0 &&
-      layout.every((b) => RUNTIME_BLOCK_TYPES.has(b.type));
+      layout.every(
+        (b) =>
+          RUNTIME_LITERAL_BLOCK_TYPES.has(b.type) ||
+          RUNTIME_SMART_BLOCK_HOSTS[b.type] === currentNode.type,
+      );
     if (!currentNode) {
       content = (
         <div style={styles.card}>
@@ -977,10 +989,65 @@ export function QuizRuntime(props: QuizRuntimeProps) {
         resolveText: (t, merge) =>
           merge ? resolveMergeTags(t, buildMergeContext(path, doc)) : t,
         onPrimary: () => gotoNextFrom(node.id, null),
-        renderSmart: (block, n) =>
-          block.type === "recommendations" && n.type === "result"
-            ? renderRecommendations(n)
-            : null,
+        // BLD-7 — the smart regions mount the SAME views the fixed templates
+        // use, in region mode (no card shell / heading — the layout's blocks
+        // own those), with identical advance/analytics wiring.
+        renderSmart: (block, n) => {
+          if (block.type === "recommendations" && n.type === "result") {
+            return renderRecommendations(n);
+          }
+          if (block.type === "answers" && n.type === "question") {
+            return (
+              <QuestionView
+                region
+                node={n}
+                styles={styles}
+                tokens={resolved}
+                onBack={() => gotoStep(path.length - 1)}
+                canBack={path.length > 0}
+                onTooltipView={(answerId) =>
+                  analyticsRef.current?.track("tooltip_viewed", {
+                    question_id: n.id,
+                    answer_id: answerId,
+                  })
+                }
+                onInspect={inspectFn}
+                inspectedTarget={inspectedTarget}
+                onAdvance={(answerIds, handle) => {
+                  analyticsRef.current?.track("question_answered", {
+                    question_id: n.id,
+                    answer_ids: answerIds,
+                  });
+                  const step = { questionNodeId: n.id, answerIds };
+                  setPath((prev) => [...prev, step]);
+                  gotoNextFrom(n.id, handle, step);
+                }}
+              />
+            );
+          }
+          if (block.type === "email_input" && n.type === "email_gate") {
+            return (
+              <EmailGateView
+                region
+                node={n}
+                styles={styles}
+                quizId={quizId}
+                inspect={(part) => insp({ nodeId: n.id, part })}
+                sessionId={sessionIdRef.current}
+                onBack={() => gotoStep(path.length - 1)}
+                canBack={path.length > 0}
+                onSubmit={(contact) => {
+                  if (contact?.email) {
+                    contactRef.current = contact;
+                    analyticsRef.current?.track("email_captured", {});
+                  }
+                  gotoNextFrom(n.id, null);
+                }}
+              />
+            );
+          }
+          return null;
+        },
       };
       content = <BlockRenderer node={node} blocks={layout} ctx={blockCtx} />;
     } else if (currentNode.type === "intro") {
@@ -2910,6 +2977,7 @@ function DropdownQuestion({
   onInspect,
   inspectedTarget,
   qImgPos,
+  region = false,
 }: {
   node: Extract<QuizDoc["nodes"][number], { type: "question" }>;
   onAdvance: (answerIds: string[], handle: string | null) => void;
@@ -2917,6 +2985,7 @@ function DropdownQuestion({
   onInspect?: (target: InspectTarget) => void;
   inspectedTarget?: InspectTarget | null;
   qImgPos?: "none" | "top" | "side";
+  region?: boolean;
 }) {
   const tc = useChrome();
   const insp = (part: InspectPart, answerId?: string) =>
@@ -2925,15 +2994,22 @@ function DropdownQuestion({
       part,
       ...(answerId ? { answerId } : {}),
     });
-  const [sel, setSel] = useState("");
-  const answer = node.data.answers.find((a) => a.id === sel);
-  return (
-    <div style={styles.card}>
+  // BLD-7 — region mode (see QuestionView): no card shell / question header.
+  const shell = region ? { display: "flex", flexDirection: "column" as const } : styles.card;
+  const header = region ? null : (
+    <>
       <QuestionImage url={node.data.image_url} position={qImgPos} />
       <h2 style={styles.h2} {...insp("question_text")}>{node.data.text}</h2>
       {node.data.helper_text ? (
         <p style={{ ...styles.muted, fontSize: "0.85em", marginTop: -6 }}>{node.data.helper_text}</p>
       ) : null}
+    </>
+  );
+  const [sel, setSel] = useState("");
+  const answer = node.data.answers.find((a) => a.id === sel);
+  return (
+    <div style={shell}>
+      {header}
       <div style={{ marginTop: 20, display: "flex", flexDirection: "column", gap: 12 }}>
         <select
           value={sel}
@@ -3432,6 +3508,7 @@ function QuestionView({
   onTooltipView,
   onInspect,
   inspectedTarget,
+  region = false,
 }: {
   node: Extract<QuizDoc["nodes"][number], { type: "question" }>;
   onAdvance: (answerIds: string[], handle: string | null) => void;
@@ -3442,6 +3519,8 @@ function QuestionView({
   onTooltipView?: (answerId: string) => void;
   onInspect?: (target: InspectTarget) => void;
   inspectedTarget?: InspectTarget | null;
+  // BLD-7 — render only the interactive region (for the "answers" block).
+  region?: boolean;
 }) {
   // MQ — minimal chrome turns single-select into select-then-Next (a pending
   // pick highlights; an explicit Next commits) + a Back/Next nav row. Classic
@@ -3470,6 +3549,19 @@ function QuestionView({
   const qImgPos = questionImagePosition(
     tokens.style_bar?.image_density,
     tokens.question_image_position,
+  );
+  // BLD-7 — region mode: the "answers" smart block mounts this view minus the
+  // card shell + question header (the layout's heading block owns the title);
+  // region=false (every existing caller) renders byte-identically.
+  const shell = region ? { display: "flex", flexDirection: "column" as const } : styles.card;
+  const header = region ? null : (
+    <>
+      <QuestionImage url={node.data.image_url} position={qImgPos} />
+      <h2 style={styles.h2} {...insp("question_text")}>{node.data.text}</h2>
+      {node.data.helper_text ? (
+        <p style={{ ...styles.muted, fontSize: "0.85em", marginTop: -6 }}>{node.data.helper_text}</p>
+      ) : null}
+    </>
   );
   const answerGrid = {
     ...(node.data.answer_columns
@@ -3519,12 +3611,8 @@ function QuestionView({
       (value.length > 0 &&
         (inputType !== "email" || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)));
     return (
-      <div style={styles.card}>
-        <QuestionImage url={node.data.image_url} position={qImgPos} />
-      <h2 style={styles.h2} {...insp("question_text")}>{node.data.text}</h2>
-      {node.data.helper_text ? (
-        <p style={{ ...styles.muted, fontSize: "0.85em", marginTop: -6 }}>{node.data.helper_text}</p>
-      ) : null}
+      <div style={shell}>
+        {header}
         <form
           onSubmit={(e) => {
             e.preventDefault();
@@ -3605,12 +3693,8 @@ function QuestionView({
     const tooMany = typeof max === "number" && selectedIds.length > max;
     const tooFew = typeof min === "number" && selectedIds.length < min;
     return (
-      <div style={styles.card}>
-        <QuestionImage url={node.data.image_url} position={qImgPos} />
-      <h2 style={styles.h2} {...insp("question_text")}>{node.data.text}</h2>
-      {node.data.helper_text ? (
-        <p style={{ ...styles.muted, fontSize: "0.85em", marginTop: -6 }}>{node.data.helper_text}</p>
-      ) : null}
+      <div style={shell}>
+        {header}
         <div style={answerGrid}>
           {node.data.answers.map((a) => (
             <div key={a.id} style={{ position: "relative" }}>
@@ -3684,6 +3768,7 @@ function QuestionView({
         onInspect={onInspect}
         inspectedTarget={inspectedTarget}
         qImgPos={qImgPos}
+        region={region}
       />
     );
   }
@@ -3693,12 +3778,8 @@ function QuestionView({
   // styles feels right?".
   if (node.data.question_type === "image_picker") {
     return (
-      <div style={styles.card}>
-        <QuestionImage url={node.data.image_url} position={qImgPos} />
-      <h2 style={styles.h2} {...insp("question_text")}>{node.data.text}</h2>
-      {node.data.helper_text ? (
-        <p style={{ ...styles.muted, fontSize: "0.85em", marginTop: -6 }}>{node.data.helper_text}</p>
-      ) : null}
+      <div style={shell}>
+        {header}
         <div
           style={{
             marginTop: 20,
@@ -3767,6 +3848,7 @@ function QuestionView({
         onInspect={onInspect}
         inspectedTarget={inspectedTarget}
         qImgPos={qImgPos}
+        region={region}
       />
     );
   }
@@ -3774,12 +3856,8 @@ function QuestionView({
   // Rating / Likert scale: a single-select rendered as a compact horizontal row.
   if (node.data.question_type === "rating") {
     return (
-      <div style={styles.card}>
-        <QuestionImage url={node.data.image_url} position={qImgPos} />
-      <h2 style={styles.h2} {...insp("question_text")}>{node.data.text}</h2>
-      {node.data.helper_text ? (
-        <p style={{ ...styles.muted, fontSize: "0.85em", marginTop: -6 }}>{node.data.helper_text}</p>
-      ) : null}
+      <div style={shell}>
+        {header}
         <div
           role="group"
           aria-label={node.data.text}
@@ -3822,12 +3900,8 @@ function QuestionView({
   // Swatch picker: single-select rendered as circular colour / material swatches.
   if (node.data.question_type === "swatch") {
     return (
-      <div style={styles.card}>
-        <QuestionImage url={node.data.image_url} position={qImgPos} />
-      <h2 style={styles.h2} {...insp("question_text")}>{node.data.text}</h2>
-      {node.data.helper_text ? (
-        <p style={{ ...styles.muted, fontSize: "0.85em", marginTop: -6 }}>{node.data.helper_text}</p>
-      ) : null}
+      <div style={shell}>
+        {header}
         <div style={{ marginTop: 20, display: "flex", gap: 14, flexWrap: "wrap" }}>
           {node.data.answers.map((a) => (
             <div key={a.id} style={{ position: "relative" }}>
@@ -3881,12 +3955,8 @@ function QuestionView({
     if (a) onAdvance([a.id], a.edge_handle_id);
   };
   return (
-    <div style={styles.card}>
-      <QuestionImage url={node.data.image_url} position={qImgPos} />
-      <h2 style={styles.h2} {...insp("question_text")}>{node.data.text}</h2>
-      {node.data.helper_text ? (
-        <p style={{ ...styles.muted, fontSize: "0.85em", marginTop: -6 }}>{node.data.helper_text}</p>
-      ) : null}
+    <div style={shell}>
+      {header}
       <div style={answerGrid}>
         {node.data.answers.map((a) => {
           const isPicked = minimal && picked === a.id;
@@ -3976,6 +4046,7 @@ function SearchableQuestion({
   onInspect,
   inspectedTarget,
   qImgPos,
+  region = false,
 }: {
   node: Extract<QuizDoc["nodes"][number], { type: "question" }>;
   onAdvance: (answerIds: string[], handle: string | null) => void;
@@ -3983,6 +4054,7 @@ function SearchableQuestion({
   onInspect?: (target: InspectTarget) => void;
   inspectedTarget?: InspectTarget | null;
   qImgPos?: "none" | "top" | "side";
+  region?: boolean;
 }) {
   const tc = useChrome();
   const insp = (part: InspectPart, answerId?: string) =>
@@ -3991,18 +4063,25 @@ function SearchableQuestion({
       part,
       ...(answerId ? { answerId } : {}),
     });
+  // BLD-7 — region mode (see QuestionView): no card shell / question header.
+  const shell = region ? { display: "flex", flexDirection: "column" as const } : styles.card;
+  const header = region ? null : (
+    <>
+      <QuestionImage url={node.data.image_url} position={qImgPos} />
+      <h2 style={styles.h2} {...insp("question_text")}>{node.data.text}</h2>
+      {node.data.helper_text ? (
+        <p style={{ ...styles.muted, fontSize: "0.85em", marginTop: -6 }}>{node.data.helper_text}</p>
+      ) : null}
+    </>
+  );
   const [query, setQuery] = useState("");
   const needle = query.trim().toLowerCase();
   const filtered = needle
     ? node.data.answers.filter((a) => a.text.toLowerCase().includes(needle))
     : node.data.answers;
   return (
-    <div style={styles.card}>
-      <QuestionImage url={node.data.image_url} position={qImgPos} />
-      <h2 style={styles.h2} {...insp("question_text")}>{node.data.text}</h2>
-      {node.data.helper_text ? (
-        <p style={{ ...styles.muted, fontSize: "0.85em", marginTop: -6 }}>{node.data.helper_text}</p>
-      ) : null}
+    <div style={shell}>
+      {header}
       <input
         type="text"
         aria-label={node.data.text}
@@ -4074,6 +4153,7 @@ function EmailGateView({
   onBack,
   canBack,
   inspect,
+  region = false,
 }: {
   node: Extract<QuizDoc["nodes"][number], { type: "email_gate" }>;
   styles: ReturnType<typeof stylesFor>;
@@ -4083,6 +4163,8 @@ function EmailGateView({
   onBack?: () => void;
   canBack?: boolean;
   inspect?: (part: InspectPart) => React.HTMLAttributes<HTMLElement>;
+  // BLD-7 — render only the capture form (for the "email_input" block).
+  region?: boolean;
 }) {
   const tc = useChrome();
   const minimal = useContext(RuntimeChromeContext) === "minimal";
@@ -4130,14 +4212,21 @@ function EmailGateView({
     fontFamily: "var(--qz-font-body)",
     ...(minimal ? { textAlign: "left" as const, background: "var(--qz-color-bg)" } : {}),
   };
-  return (
-    <div style={styles.card}>
+  // BLD-7 — region mode: the layout's heading/text blocks own the headline.
+  const shell = region ? { display: "flex", flexDirection: "column" as const } : styles.card;
+  const header = region ? null : (
+    <>
       <h2 style={styles.h2} {...(inspect?.("email_headline") ?? {})}>{node.data.headline}</h2>
       {node.data.subtext && (
         <p style={{ ...styles.muted, marginTop: 8 }} {...(inspect?.("email_subtext") ?? {})}>
           {node.data.subtext}
         </p>
       )}
+    </>
+  );
+  return (
+    <div style={shell}>
+      {header}
       <div style={{ marginTop: 20, display: "grid", gap: 12 }}>
         <input
           type="email"

@@ -479,7 +479,7 @@ function RoutingBody({
               Select a question to map its answers to recommendations.
             </p>
           )}
-          <details>
+          <details style={{ flex: "0 0 auto" }}>
             <summary style={{ cursor: "pointer", fontSize: 12.5, fontWeight: 600 }}>Try a path</summary>
             <div style={{ marginTop: 8 }}>
               <PathTester doc={doc} productIndex={productIndex} categories={categories} compact />
@@ -780,7 +780,10 @@ function ContextPanelBody({
               ) : null}
             </div>
             <StyleTab doc={doc} node={node} mode={layer} onCommit={onCommit} />
-            <details>
+            {/* BLD-7 — flex:0 0 auto: a <details> flex item otherwise shrinks
+                to its summary height and its OPEN content paints past the
+                scrollport (the block list's lower rows were unreachable). */}
+            <details style={{ flex: "0 0 auto" }}>
               <summary style={{ cursor: "pointer", fontSize: 12.5, fontWeight: 600 }}>
                 Layout blocks
               </summary>
@@ -788,7 +791,7 @@ function ContextPanelBody({
                 <LayoutTab doc={doc} node={node} onCommit={onCommit} />
               </div>
             </details>
-            <details>
+            <details style={{ flex: "0 0 auto" }}>
               <summary style={{ cursor: "pointer", fontSize: 12.5, fontWeight: 600 }}>
                 Custom CSS
               </summary>

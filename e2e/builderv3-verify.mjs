@@ -133,6 +133,59 @@ if (await selEl.count()) {
   ok("canvas element selectable for inline edit", false, "no .qz-insp-sel after click");
 }
 
+// ── BLD-7: blocks palette + block management (net-zero: ends with Reset) ───
+await page.locator('[aria-label="Editor mode"] button', { hasText: "Blocks" }).click();
+await page.waitForTimeout(300);
+ok(
+  "palette tiles enabled with a step on canvas",
+  (await page.locator(".qz-block-tile:not(:disabled)").count()) > 0,
+);
+ok(
+  "palette hides off-type smart tiles",
+  (await page.locator(".qz-block-tile", { hasText: "Recommendations" }).count()) === 0,
+);
+await page.locator(".qz-block-tile", { hasText: "Divider" }).click();
+await page.waitForTimeout(700);
+ok("tile click renders on canvas", (await page.locator(".qz-builder-canvas hr").count()) >= 1);
+await page.evaluate(() => {
+  const c = document.querySelector(".qz-builder-canvas");
+  const dt = new DataTransfer();
+  dt.setData("application/x-qz-block", "spacer");
+  c.dispatchEvent(new DragEvent("dragover", { dataTransfer: dt, bubbles: true, cancelable: true }));
+});
+await page.waitForTimeout(250);
+ok(
+  "drop ring on dragover",
+  await page.evaluate(() =>
+    document.querySelector(".qz-builder-canvas").className.includes("is-blockdrop"),
+  ),
+);
+await page.evaluate(() => {
+  const c = document.querySelector(".qz-builder-canvas");
+  const dt = new DataTransfer();
+  dt.setData("application/x-qz-block", "spacer");
+  c.dispatchEvent(new DragEvent("drop", { dataTransfer: dt, bubbles: true, cancelable: true }));
+});
+await page.waitForTimeout(600);
+await page.locator(".qz-builder-inspector button", { hasText: "Design" }).first().click();
+await page.waitForTimeout(300);
+await page.locator(".qz-builder-inspector summary", { hasText: "Layout blocks" }).click();
+await page.waitForTimeout(300);
+const xBtns = page.locator(".qz-builder-inspector button", { hasText: "✕" });
+const xBefore = await xBtns.count();
+await xBtns.last().scrollIntoViewIfNeeded();
+await xBtns.last().click();
+await page.waitForTimeout(500);
+ok("block ✕ deletes a row", (await xBtns.count()) === xBefore - 1);
+await page.locator(".qz-builder-inspector button", { hasText: "Reset to template" }).click();
+await page.waitForTimeout(700);
+ok(
+  "Reset to template restores the default",
+  (await page.locator(".qz-builder-canvas hr").count()) === 0,
+);
+await page.locator('[aria-label="Editor mode"] button', { hasText: "Settings" }).click();
+await page.waitForTimeout(300);
+
 // ── BLD-4: Logic view = LogicScroll + Try-a-path ────────────────────────────
 await page.locator(".qz-builder-rail-item", { hasText: "Logic" }).click();
 await page.waitForTimeout(600);
