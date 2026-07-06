@@ -33,6 +33,9 @@ pnpm-lock.yaml
 /e2e/shots/
 /test-results/
 /playwright-report/
+
+# Vitest coverage output (BIC-2 D4, report-only)
+/coverage/
 scripts/audit/
 wf-audit-*.mjs
 wf-*.png

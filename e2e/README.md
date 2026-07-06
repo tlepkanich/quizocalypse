@@ -108,6 +108,7 @@ pin, never republish), plus the "O3 Probe Terrain Finder" SavedTemplate.
 | `fast-verify.mjs` | FAST funnel latency program: research prefetch/cache, gen_progress checkpoints, full funnel walk | LOCAL build + `cmr7khgd5…` | prisma seed/restore |
 | `fast-sidebyside.mjs` | Sonnet-vs-Haiku quality gate for the two middle funnel AI passes (direct server-fn calls) | local, real AI spend | one-shot report; no doc writes |
 | `a3-budget-verify.mjs` | BIC-2 A3 per-shop AI budget ceilings (record + refusal matrix) | LOCAL build + `cmpuov6yc…`, `cmr7khgd5…` | prisma seed/restore |
+| `b3-verify.mjs` | BIC-2 B3 browser Back/Forward inside the quiz + B2c lazy answer images + B2e next-step preloads | LOCAL build + `cmr7khgd5…` | prisma seed/restore (publishedJson byte-identical) |
 | `step3v3-p1…p5-verify.mjs` | Step-3 v3 shell/content/logic/health/flip (P5 also proves legacy DOM-identical vs live) | LOCAL build + `cmr7khgd5…` (P5 also touches live `cmqwd15f…`, restores byte-identically) | prisma seed/restore; P5 mirrors via HTTP |
 | `o3-verify.mjs` | Decider-native saved templates (front-door draft, save/use-saved-template, retry-gen backstop) | LIVE; self-seeds; `cmqqcb0ao…` byte pin | graduates its drafts; real AI |
 | `o2-verify.mjs` | Image-density renderer (density 15/decorative hides, explicit intent wins) | LIVE `cmqqcb0ao…` draft-only | doc backup/restore; byte pin proves /q untouched |
@@ -123,11 +124,10 @@ pin, never republish), plus the "O3 Probe Terrain Finder" SavedTemplate.
 | `l212b-verify.mjs` | Runtime per-shopper rec-copy endpoint + client race | LIVE `cmr3ku9kb…`; real AI | publish/restore |
 | `l212c-verify.mjs` | Tier-2 AI path-quality review endpoint | LIVE `cmr3ku9kb…`; real AI | restore |
 | `l212d-verify.mjs` | Rec-copy kill-switch toggle (Shop.aiRecCopyEnabled) + FALSE-path | LIVE `cmr3ku9kb…` | toggles back ON |
-| `l2-5-verify.mjs` | **STALE — delete candidate** (task chip exists): drives the v2.x decider Step-3 UI retired by QL3-P5 | LIVE `cmqwd15f…` | — |
-| `l2-6-verify.mjs` | **STALE — delete candidate** (same): v2.x Rules surfaces retired by QL3-P5 | LIVE `cmqwd15f…` | — |
 
-(`l2-7-verify.mjs` was already deleted in QL3-P5; its coverage lives in
-`step3v3-p4/p5`.)
+(`l2-5-verify.mjs` / `l2-6-verify.mjs` were deleted in BIC-2 C4 — they drove
+the v2.x decider Step-3/Rules UIs retired by QL3-P5. `l2-7-verify.mjs` was
+already deleted in QL3-P5; its coverage lives in `step3v3-p4/p5`.)
 
 ## Cleanup discipline (the live deploy is production)
 

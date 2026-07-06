@@ -4,3 +4,5 @@ public/build
 shopify-app-remix
 */*.yml
 .shopify
+# Vitest coverage output (BIC-2 D4) — generated report, never lint it
+coverage

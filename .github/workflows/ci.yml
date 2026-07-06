@@ -37,6 +37,14 @@ jobs:
         run: npm run typecheck
       - name: Test
         run: npm test
+      # BIC-2 D4: coverage is REPORT-ONLY. `continue-on-error: true` means this
+      # step can NEVER fail the job — no thresholds are set either (ratchet
+      # later, like check-tokens). Cost: it re-runs the suite with v8
+      # instrumentation (~+30% over the Test step locally, ~10s vs ~7.5s), so
+      # it is cheap enough to run on PRs as well as main pushes.
+      - name: Coverage (report-only, non-blocking)
+        run: npm run test:coverage -- --run
+        continue-on-error: true
       - name: Build
         run: npm run build
       - name: Lint
