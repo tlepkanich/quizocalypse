@@ -1,0 +1,70 @@
+/* quiz-runtime.css — BIC-2 B1: the ONLY stylesheet served to shopper routes
+   (/q/:id, /q/:id/results, /q/:id/compare; the launcher iframe loads /q).
+
+   The shopper path used to download the full admin sheet (quizocalypse.css,
+   ~100KB) from root.tsx. The runtime styles itself inline (tokensToCssVars on
+   its subtree root + in-tree <style> blocks in QuizRuntime), so almost none of
+   that sheet was consumed. This file carries ONLY what the audit found the
+   shopper DOM actually using — every rule is COPIED from quizocalypse.css,
+   with admin-token var() references frozen to the values they resolved to
+   there (the admin :root no longer ships on this path). Do not add styling
+   here; new runtime styles belong in the runtime's own <style>/inline system. */
+
+/* Motion tokens (quizocalypse.css :root) — the runtime's step-enter animation
+   and progress/hover transitions reference var(--qz-dur)/var(--qz-ease) with
+   170ms/ease fallbacks; carrying the tokens keeps served motion identical. */
+:root {
+  --qz-ease: cubic-bezier(0.2, 0.7, 0.3, 1);
+  --qz-dur: 220ms;
+}
+
+/* Base reset (quizocalypse.css body[data-qz]) — the FULL rule, tokens frozen
+   to their light values. The typography lines matter: font-size / weight /
+   line-height are INHERITED properties, and both the runtime subtree (which
+   overrides only font-family + color at its root) and the results/compare
+   shells lean on them — dropping any of these visibly reflows the pages
+   (verified by pixel-diff). Mona Sans itself isn't shipped here (no
+   @font-face / preload on the shopper path — that's the point of the split);
+   body-level text simply resolves to the same stack's fallbacks, and no
+   shopper surface renders body-level text in Mona Sans anyway (the runtime
+   swaps in merchant fonts; results/compare set their own inline stacks). */
+body[data-qz] {
+  margin: 0;
+  font-family: "Mona Sans", "Mona Sans Fallback", -apple-system, "Segoe UI", "Helvetica Neue", sans-serif;
+  font-size: 16px;    /* --qz-t-body */
+  font-weight: 500;   /* V2 weight ladder starts at 500 — no 400 body text */
+  color: #0E0F11;     /* --qz-ink */
+  background: #FFFFFF; /* --qz-cream */
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  line-height: 1.55;  /* --qz-lh */
+}
+body[data-qz] *, body[data-qz] *::before, body[data-qz] *::after { box-sizing: border-box; }
+
+/* Keyboard focus ring (quizocalypse.css body[data-qz] :focus-visible, V2 §6.4)
+   — var(--qz-accent) / var(--qz-radius-sm) frozen to their light values. */
+body[data-qz] :focus-visible {
+  outline: 3px solid #5B47E5;
+  outline-offset: 2px;
+  box-shadow: none;
+  border-radius: 9px;
+}
+
+/* Reduced motion (quizocalypse.css, verbatim) — kills the runtime's step-enter
+   / urgency-pulse animations for users who prefer it, exactly as before. */
+@media (prefers-reduced-motion: reduce) {
+  body[data-qz] *, body[data-qz] *::before, body[data-qz] *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* Text selection (quizocalypse.css) — var(--qz-ink)/var(--qz-cream) frozen to
+   their light values (ink-on-paper selection, as served before the split). */
+body[data-qz] ::selection { background: #0E0F11; color: #FFFFFF; }
+
+/* .qz-dim — the EducationCard hint text (QuizRuntime) is the one admin CLASS a
+   live shopper surface consumes. var(--qz-ink-4) frozen: #84878C is the ink-4
+   value in BOTH light and dark ("mid-gray reads on both modes"). */
+.qz-dim { color: #84878C; }

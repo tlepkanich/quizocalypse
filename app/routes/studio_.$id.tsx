@@ -1,5 +1,6 @@
-import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "@remix-run/node";
+import type { ActionFunctionArgs, LinksFunction, LoaderFunctionArgs, MetaFunction } from "@remix-run/node";
 import { json } from "@remix-run/node";
+import { adminStyleLinks } from "../styles/adminLinks";
 import { Link, useLoaderData, useRevalidator, useSearchParams } from "@remix-run/react";
 import { useEffect, useState } from "react";
 import { UnifiedWorkspace } from "../components/studio/UnifiedWorkspace";
@@ -14,6 +15,10 @@ import { unauthenticated } from "../shopify.server";
 import prisma from "../db.server";
 import { aggregateAllAbFunnels, type FunnelCounts } from "../lib/abAnalytics";
 import { ANALYTICS_EVENT_WINDOW } from "../lib/analyticsWindow";
+
+// BIC-2 B1 — de-nested route (studio_ prefix escapes the studio.tsx layout),
+// so it must link the admin sheet itself.
+export const links: LinksFunction = () => adminStyleLinks;
 
 // Standalone builder route — the SAME StudioBuilder the embedded route renders,
 // but resolved from the configured dev shop (DEV_SHOP_DOMAIN) behind the shared

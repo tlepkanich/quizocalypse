@@ -1,5 +1,6 @@
-import type { HeadersFunction, LoaderFunctionArgs, MetaFunction } from "@remix-run/node";
+import type { HeadersFunction, LinksFunction, LoaderFunctionArgs, MetaFunction } from "@remix-run/node";
 import { json, redirect } from "@remix-run/node";
+import quizRuntimeStyles from "../styles/quiz-runtime.css?url";
 import { isRouteErrorResponse, useLoaderData, useParams, useRouteError } from "@remix-run/react";
 import { useState } from "react";
 import prisma from "../db.server";
@@ -10,6 +11,9 @@ import { stripPublicDoc } from "../lib/quizPublish";
 import { chromeFor, t, type ChromeToken } from "../components/runtime/chromeStrings";
 import { formatDate } from "../lib/formatDate";
 import { rateLimit } from "../lib/rateLimiters";
+
+// BIC-2 B1 — shopper-side sheet only (base body reset); no admin CSS here.
+export const links: LinksFunction = () => [{ rel: "stylesheet", href: quizRuntimeStyles }];
 
 // Public "My Results" page (Miro "Save State & Resume → persistent recommendation
 // page; return via email link"). A shopper returns via a link carrying

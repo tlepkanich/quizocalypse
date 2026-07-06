@@ -6,17 +6,12 @@ import {
   ScrollRestoration,
   useLoaderData,
 } from "@remix-run/react";
-import { json, type LinksFunction, type LoaderFunctionArgs } from "@remix-run/node";
+import { json, type LoaderFunctionArgs } from "@remix-run/node";
 
-import qzStyles from "./styles/quizocalypse.css?url";
-
-export const links: LinksFunction = () => [
-  // Self-hosted fonts (design-system-V2): preload so the swap window is one
-  // paint, not a fetch round-trip. crossOrigin is required for font preloads.
-  { rel: "preload", href: "/fonts/MonaSans.woff2", as: "font", type: "font/woff2", crossOrigin: "anonymous" },
-  { rel: "preload", href: "/fonts/JetBrainsMono-Medium.woff2", as: "font", type: "font/woff2", crossOrigin: "anonymous" },
-  { rel: "stylesheet", href: qzStyles },
-];
+// BIC-2 B1 — no root-level stylesheet: the admin sheet (quizocalypse.css) +
+// font preloads moved to the admin route trees' links() (app/styles/
+// adminLinks.ts), and the shopper routes link the tiny quiz-runtime.css
+// themselves. Shoppers no longer download ~100KB of admin CSS.
 
 // Read the persisted admin theme from a cookie so SSR can set data-theme on
 // <html> before first paint (no FOUC, no inline script). Only the admin chrome

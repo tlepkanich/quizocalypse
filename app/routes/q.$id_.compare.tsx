@@ -1,11 +1,15 @@
-import type { LoaderFunctionArgs, MetaFunction } from "@remix-run/node";
+import type { LinksFunction, LoaderFunctionArgs, MetaFunction } from "@remix-run/node";
 import { json } from "@remix-run/node";
 import { useLoaderData } from "@remix-run/react";
 import prisma from "../db.server";
+import quizRuntimeStyles from "../styles/quiz-runtime.css?url";
 import { Quiz, type QuizNode } from "../lib/quizSchema";
 import { recommendForResult, type IndexedProduct, type RecommendedProduct } from "../lib/recommendationEngine";
 import { compareBuddies } from "../lib/buddyCompare";
 import { applyTranslations, parseLocaleParam, resolveLocale } from "../lib/quizTranslate";
+
+// BIC-2 B1 — shopper-side sheet only (base body reset); no admin CSS here.
+export const links: LinksFunction = () => [{ rel: "stylesheet", href: quizRuntimeStyles }];
 
 // ════════════════════════════════════════════════════════════════════════════
 // Buddy mode (Phase L2) — /q/:id/compare?a=<session>&b=<session>: two saved

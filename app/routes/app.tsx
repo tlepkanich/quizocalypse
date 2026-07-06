@@ -4,12 +4,15 @@ import { Outlet, useLoaderData, useRouteError } from "@remix-run/react";
 import { boundary } from "@shopify/shopify-app-remix/server";
 import { AppProvider } from "@shopify/shopify-app-remix/react";
 import polarisStyles from "@shopify/polaris/build/esm/styles.css?url";
+import { adminStyleLinks } from "../styles/adminLinks";
 
 import { authenticate } from "../shopify.server";
 import prisma from "../db.server";
 import { Sidebar, SidebarLayout } from "../components/sidebar";
 
-export const links = () => [{ rel: "stylesheet", href: polarisStyles }];
+// BIC-2 B1 — the admin sheet (previously root-level) now rides this layout's
+// links(), FIRST so the cascade order matches the old root→route head order.
+export const links = () => [...adminStyleLinks, { rel: "stylesheet", href: polarisStyles }];
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { session } = await authenticate.admin(request);

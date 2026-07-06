@@ -1,9 +1,14 @@
-import type { LoaderFunctionArgs, MetaFunction } from "@remix-run/node";
+import type { LinksFunction, LoaderFunctionArgs, MetaFunction } from "@remix-run/node";
 import { json } from "@remix-run/node";
 import { Outlet } from "@remix-run/react";
+import { adminStyleLinks } from "../styles/adminLinks";
 import { requireStudioAccess } from "../lib/studioAccess.server";
 import { Rail } from "../components/chrome/Rail";
 import { QzToastProvider } from "../components/qz-toast";
+
+// BIC-2 B1 — the admin sheet moved out of root.tsx; this layout route links it
+// for every nested /studio child.
+export const links: LinksFunction = () => adminStyleLinks;
 
 // Standalone /studio layout — the V2 app shell (DS-4). A persistent left nav
 // rail (Rail, design-system-V2 §7.7) wraps every /studio child route. Renders

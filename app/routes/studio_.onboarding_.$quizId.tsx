@@ -1,10 +1,15 @@
-import type { ActionFunctionArgs, LoaderFunctionArgs } from "@remix-run/node";
+import type { ActionFunctionArgs, LinksFunction, LoaderFunctionArgs } from "@remix-run/node";
 import { json } from "@remix-run/node";
+import { adminStyleLinks } from "../styles/adminLinks";
 import { useLoaderData } from "@remix-run/react";
 import { requireStudioAccess, resolveStudioShop } from "../lib/studioAccess.server";
 import { loadStep1FunnelData, runStep1FunnelAction } from "../lib/step1Funnel.server";
 import { Step1Funnel } from "../components/onboarding/Step1Funnel";
 import { QzToastProvider } from "../components/qz-toast";
+
+// BIC-2 B1 — de-nested route (studio_ prefix escapes the studio.tsx layout),
+// so it must link the admin sheet itself.
+export const links: LinksFunction = () => adminStyleLinks;
 
 // Builder Re-work Step 1 — the studio (cookie-auth) funnel. A thin wrapper over
 // the shared shop-scoped loader/action in step1Funnel.server.ts; the embedded

@@ -12,12 +12,15 @@ import {
 } from "@shopify/polaris";
 import polarisTranslations from "@shopify/polaris/locales/en.json";
 import polarisStyles from "@shopify/polaris/build/esm/styles.css?url";
+import { adminStyleLinks } from "../../styles/adminLinks";
 
 import { login } from "../../shopify.server";
 
 import { loginErrorMessage } from "./error.server";
 
-export const links = () => [{ rel: "stylesheet", href: polarisStyles }];
+// BIC-2 B1 — keep the previously-root-level admin sheet (body reset) ahead of
+// Polaris, matching the old root→route head order.
+export const links = () => [...adminStyleLinks, { rel: "stylesheet", href: polarisStyles }];
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const errors = loginErrorMessage(await login(request));

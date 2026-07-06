@@ -5,6 +5,7 @@ import prisma from "../db.server";
 import { Quiz } from "../lib/quizSchema";
 import type { IndexedProduct } from "../lib/recommendationEngine";
 import { QuizRuntime } from "../components/runtime/QuizRuntime";
+import quizRuntimeStyles from "../styles/quiz-runtime.css?url";
 import { applyTranslations, parseLocaleParam, resolveLocale } from "../lib/quizTranslate";
 import { stripPublicDoc } from "../lib/quizPublish";
 import { imagePreloadLinkHeader } from "../lib/imagePreload";
@@ -18,9 +19,13 @@ import { chromeFor } from "../components/runtime/chromeStrings";
 
 // Warm up the font origins before the runtime's in-tree Google Fonts <link>
 // resolves — saves the DNS/TLS round-trips on first paint (best-in-class P1).
+// BIC-2 B1: quiz-runtime.css is the shopper-side sheet (base reset + the few
+// straggler rules the runtime consumes) — the ~100KB admin sheet no longer
+// ships on this path.
 export const links: LinksFunction = () => [
   { rel: "preconnect", href: "https://fonts.googleapis.com" },
   { rel: "preconnect", href: "https://fonts.gstatic.com", crossOrigin: "anonymous" },
+  { rel: "stylesheet", href: quizRuntimeStyles },
 ];
 
 // Pass the loader's headers through to the document response (Cache-Control +
