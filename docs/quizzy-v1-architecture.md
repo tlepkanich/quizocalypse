@@ -92,3 +92,46 @@ local published quiz (runtime) · runtime-touching phases run the local
 runtime smoke with LOCAL quiz ids (`SMOKE_QUIZZES=a:cmpwqf6zw…`) · extend
 `e2e/builderv3-verify.mjs` or add `e2e/qzy-*.mjs` probes per Acceptance
 lines · byte pin `c02ccaec98a0fe9e` after deploys · commit per phase.
+
+## 6. Status — QZY v1 COMPLETE (2026-07-07)
+
+Every phase shipped to main (undeployed until the owner says "deploy"):
+
+| Phase | Commit | Delivered |
+|---|---|---|
+| QZY-0 | `39c96ff` | this architecture doc |
+| QZY-1 | `de22238` | filter role + counts (`filterMatching.ts`) · rule actions show/hide/prioritize · `global_fallback.mode` chooser · `wouldCreateRevisit` cycle guard · pathReport V11 |
+| QZY-2 | `a8582ac` | step-3 Logic v1.2 — map cards (inline title/type/role/coverage), THEN GO TO revisit-disable, RulesWidget, FallbackSection, DiagnoseModal, explainer strip, capture terminal module |
+| QZY-3 | `bbe9100` | type switch preserves answers · curated picker · capture full step (heading/desc/SMS/terms) · tap-to-delete answers · + add question |
+| QZY-4 | `c263a65` | AI mix 1-2 product-match + 1 personality · budget-question ban |
+| QZY-5 | `9a973e5` | step-4 LIGHT (Step4Results) — archetypes, product toggles, ONE fallback switch, ScrubNumber; wired into the real reveal |
+| QZY-6 | `fc5c8c4` | 5-rail shell (Build·Products·Logic·Design·Settings) · top-bar ✦ Assist · Settings section · Results folds into Build |
+| QZY-7 | `320f8f3` | Add/Layers/Background panel · screen carousel (center only, impact-naming delete) · one-question-per-screen · `ContentBlock.hidden` |
+| QZY-8 | `172bf68` | NumericControl (linked range+number) · More options · single-option scope · inline gold ◆ Logic section · footer move/delete |
+| QZY-9 | `6292b74` | 5 answer display modes (`answer_display`, lossless) · per-option media in the scope panel · shape presets/backgrounds/selected-style |
+| QZY-10 | `260c497` | video/progress/logo/content blocks · button actions · image extras · letter spacing · ⚠ RUNTIME_LITERAL_BLOCK_TYPES gate |
+| QZY-11 | `4127b76` | per-screen `node_backgrounds` (color/gradient/image/video, muted + poster-first mobile, overlay, apply-to-all, readability hint) |
+| QZY-12 | `2268695` | slider v1 — `Answer.range` bands (bands ARE answers), V12 blocking gap check, stepped mode, track styling |
+| QZY-13 | (this commit) | content-page conversion (builder type select) · vocabulary sweep clean · this status table |
+
+**Verification inventory:** `e2e/builderv3-verify.mjs` (~72 checks — shell,
+carousel, one-question rule, inspector v2, display modes, blocks,
+backgrounds) · `e2e/qzy5-verify.mjs` (32 — step-4 light) · unit suites
+`filterMatching` / `answerDisplay` / `sliderBands` / `screenBackground` /
+`recommendDecider` QZY blocks / `pathReport` V11+V12 · byte-safety
+round-trip tests on every new schema field. Local runtime smoke pinned to
+the pre-QZY baseline throughout (the 3 failures are pre-existing local-env:
+mobile overflow, locale-fr, analytics DB state).
+
+**Spec-sanctioned deferrals (§4 list) confirmed NOT built:** AI Assist full
+design · pattern backgrounds · custom-icon slider thumb · per-option
+partial-image band · kits/personality-points · Klaviyo sync. Icon LIBRARY
+and the media pipeline remain declared dependencies (emoji + URL shipped).
+
+**Migration posture:** every new schema field is `.optional()` (never
+`.default()`); no converter changes were needed — the L2-10f upgrade wizard
+is untouched and its acceptance tests still pass in the suite. Legacy docs
+round-trip byte-identically (asserted per phase). RulesStrip.tsx /
+FlagTab.tsx became unreachable in QZY-2 — kept per the repo's
+deliberately-legacy rule; delete only after an owner-approved ts-prune
+sweep.

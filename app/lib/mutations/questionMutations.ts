@@ -506,3 +506,39 @@ export function swapScoringModel(doc: QuizDoc, next: "direct" | "weighted"): Qui
   );
   return { ...doc, nodes, scoring_model: next };
 }
+
+
+/**
+ * QZY-13 (owner supplement — "content page" as an available type): convert a
+ * QUESTION screen into a MESSAGE (content) screen in place. The node keeps
+ * its id (inbound edges intact); the question text becomes the message text;
+ * per-answer outbound edges collapse to ONE plain edge (the first outbound
+ * target — a content page has a single Continue). Refuses on the DECIDING
+ * question (single-decider invariant) — swap the decider first. The reverse
+ * direction is the palette's question tile (a new question screen).
+ */
+export function convertQuestionToMessage(doc: QuizDoc, nodeId: string): QuizDoc {
+  const node = doc.nodes.find((n) => n.id === nodeId);
+  if (!node || node.type !== "question") return doc;
+  if (node.data.role === "decides") return doc;
+  const outbound = doc.edges.filter((e) => e.source === nodeId);
+  const nextTarget = outbound[0]?.target ?? null;
+  const edges = doc.edges.filter((e) => e.source !== nodeId);
+  if (nextTarget) {
+    edges.push({ id: uid("e"), source: nodeId, target: nextTarget });
+  }
+  return {
+    ...doc,
+    nodes: doc.nodes.map((n) =>
+      n.id === nodeId
+        ? {
+            id: n.id,
+            type: "message" as const,
+            position: n.position,
+            data: { text: node.data.text, supports_merge_tags: true },
+          }
+        : n,
+    ),
+    edges,
+  };
+}

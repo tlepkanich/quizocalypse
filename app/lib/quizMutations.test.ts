@@ -27,6 +27,7 @@ import {
   setRecPageGlobal,
   setRecPageOverride,
   removeRecPageOverride,
+  convertQuestionToMessage,
 } from "./quizMutations";
 import { insertModule } from "../components/studio/studioDoc";
 import { orderFlow } from "./flowOrder";
@@ -922,5 +923,74 @@ describe("LOGIC v2 role/target mutations (setQuestionRole / setAnswerTarget)", (
       expect(setRecPageOverride(legacy, "cat_a", { headline: "x" })).toBe(legacy);
       expect(removeRecPageOverride(legacy, "cat_a")).toBe(legacy);
     });
+  });
+});
+
+// ── QZY-13 — the "content page" conversion (owner supplement) ────────────────
+
+describe("convertQuestionToMessage", () => {
+  const doc = () =>
+    Quiz.parse({
+      quiz_id: "qz",
+      scope: { collection_ids: [] },
+      logic_model: "decider",
+      nodes: [
+        { id: "intro", type: "intro", position: { x: 0, y: 0 }, data: { headline: "Hi" } },
+        {
+          id: "q1",
+          type: "question",
+          position: { x: 0, y: 0 },
+          data: {
+            text: "Anything else?",
+            question_type: "single_select",
+            role: "qualifier",
+            answers: [
+              { id: "a1", text: "A", tags: [], edge_handle_id: "h1" },
+              { id: "a2", text: "B", tags: [], edge_handle_id: "h2" },
+            ],
+          },
+        },
+        {
+          id: "qd",
+          type: "question",
+          position: { x: 0, y: 0 },
+          data: {
+            text: "Pick",
+            question_type: "single_select",
+            required: true,
+            role: "decides",
+            answers: [
+              { id: "d1", text: "X", tags: [], edge_handle_id: "h3", target_id: "cat1" },
+              { id: "d2", text: "Y", tags: [], edge_handle_id: "h4", target_id: "cat1" },
+            ],
+          },
+        },
+        { id: "r1", type: "result", position: { x: 0, y: 0 }, data: { headline: "R", fallback_collection_id: "c" } },
+      ],
+      edges: [
+        { id: "e1", source: "intro", target: "q1" },
+        { id: "e2", source: "q1", target: "qd", source_handle: "h1" },
+        { id: "e2b", source: "q1", target: "qd", source_handle: "h2" },
+        { id: "e3", source: "qd", target: "r1" },
+      ],
+      results_pages: [],
+    });
+
+  it("converts in place: same id, text carried, per-answer edges collapse to ONE", () => {
+    const next = convertQuestionToMessage(doc(), "q1");
+    const msg = next.nodes.find((n) => n.id === "q1");
+    expect(msg?.type).toBe("message");
+    expect(msg?.type === "message" && msg.data.text).toBe("Anything else?");
+    const outbound = next.edges.filter((e) => e.source === "q1");
+    expect(outbound.length).toBe(1);
+    expect(outbound[0]?.target).toBe("qd");
+    expect(outbound[0]?.source_handle ?? undefined).toBeUndefined();
+    // Inbound edge intact (same node id).
+    expect(next.edges.some((e) => e.source === "intro" && e.target === "q1")).toBe(true);
+  });
+
+  it("refuses on the deciding question (single-decider invariant)", () => {
+    const d = doc();
+    expect(convertQuestionToMessage(d, "qd")).toBe(d);
   });
 });

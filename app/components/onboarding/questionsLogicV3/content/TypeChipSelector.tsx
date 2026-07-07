@@ -9,9 +9,9 @@ import { QzModal } from "../../../qz-overlays";
    Curated picks: Single select · Multi-select · Five-point scale · Rating
    (five-point = the rating type with a 1–5 scale preset; a question already
    on another stored type keeps it listed so nothing is hidden). "Content
-   page" joins in QZY-2 alongside the map's full-screen modules — the v3
-   rail/canvas only walk question nodes today, so a message-screen
-   conversion here would strand the step. Dialogs:
+   page" lives in the BUILDER's type select (QZY-13) where message screens
+   are first-class in the carousel/canvas — the v3 funnel rail/canvas only
+   walk question nodes, so a message conversion here would strand the step. Dialogs:
    — decider + multi-select/open-text pick → BLOCK dialog (multi/freeform
      can't decide; the UI refuses instead of silently demoting);
    — card → freeform → confirm (extra answers drop; the first survives as

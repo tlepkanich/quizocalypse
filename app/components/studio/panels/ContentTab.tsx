@@ -3,7 +3,7 @@ import { useFetcher } from "@remix-run/react";
 import { QzButton, QzField, QzInput, QzSelect, QzTextarea } from "../../qz";
 import type { Quiz, QuizNode } from "../../../lib/quizSchema";
 import { isFreeformType } from "../../../lib/quizSchema";
-import { addAnswer, removeAnswer } from "../../../lib/quizMutations";
+import { addAnswer, convertQuestionToMessage, removeAnswer } from "../../../lib/quizMutations";
 import { updateNodeData } from "../studioDoc";
 import { EmojiIconPicker } from "../EmojiIconPicker";
 import { NumericControl } from "../../controls/NumericControl";
@@ -459,6 +459,25 @@ export function QuestionContent({
           value={node.data.question_type}
           onChange={(e) => {
             const next = e.target.value;
+            // QZY-13 (owner supplement) — "Content page" converts this screen
+            // into a message node (question + answers removed, routing kept as
+            // one Continue). Deciders refuse — swap the decider first.
+            if (next === "__content_page") {
+              if (node.data.role === "decides") {
+                window.alert(
+                  "This question picks the result — make another question the decider first, then convert this one.",
+                );
+                return;
+              }
+              if (
+                window.confirm(
+                  `Turn this question into a content page? Its ${node.data.answers.length} answer${node.data.answers.length === 1 ? "" : "s"} (and their mappings) are removed; the text becomes the page copy.`,
+                )
+              ) {
+                onCommit(convertQuestionToMessage(doc, node.id));
+              }
+              return;
+            }
             // Switching a multi-answer card question to a freeform input makes the
             // extra answers inert (freeform keeps only the first as a seed) — confirm
             // before discarding that work. The controlled select snaps back on cancel.
@@ -489,6 +508,7 @@ export function QuestionContent({
           <option value="searchable">Searchable</option>
           <option value="text">Text input</option>
           <option value="email">Email input</option>
+          <option value="__content_page">Content page (no answers)</option>
         </QzSelect>
       </QzField>
       {/* B6 — an optional per-question context/education image (above the text). */}
