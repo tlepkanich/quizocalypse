@@ -1246,8 +1246,27 @@ export const RecPageGlobal = z.object({
   heroLogic: z.enum(["collection_order", "bestseller", "reviewed", "newest"]).optional(),
   showDesc: z.boolean().optional(),
   heroOos: z.enum(["next", "grid"]).optional(),
-  gridMax: z.number().int().min(1).max(12).optional(),
+  // QZY-5 widened min 1 → 0: step-4 "products after the hero" scrubs 0–6;
+  // 0 = a hero-only reveal (results-step4 §5). Parse-widening only.
+  gridMax: z.number().int().min(0).max(12).optional(),
   gridSort: z.enum(["collection_order", "bestseller", "reviewed", "newest"]).optional(),
+  // QZY-5 (results-step4 v1.0) — the light step-4 reveal controls. showPrice/
+  // showAtc/showAddAll/fallbackOn get read-time defaults equal to the pre-QZY
+  // rendering (REC_PAGE_DEFAULTS); layout + the image trio deliberately have
+  // NO defaults anywhere — absent = today's exact markup, so published decider
+  // docs stay pixel-identical until a merchant explicitly chooses.
+  layout: z.enum(["hero_grid", "grid", "list", "single_hero"]).optional(),
+  showPrice: z.boolean().optional(),
+  showAtc: z.boolean().optional(),
+  showAddAll: z.boolean().optional(),
+  // §2.4 — ONE switch: whether the no-match fallback block shows at all. The
+  // fallback PRODUCTS are inherited from the logic build (global_fallback,
+  // QZY-1) with the legacy emptyFallbackCol chain as the last resort.
+  fallbackOn: z.boolean().optional(),
+  // §2.5 More options — the light image controls (deep image work = dashboard).
+  imgFit: z.enum(["cover", "contain"]).optional(),
+  cardAspect: z.enum(["square", "portrait", "landscape"]).optional(),
+  cardRadius: z.number().int().min(0).max(40).optional(),
   // §9.3 — the incentive VALIDATES/displays/applies an EXISTING merchant-created
   // Shopify discount code; the app never creates discounts here.
   incentiveOn: z.boolean().optional(),

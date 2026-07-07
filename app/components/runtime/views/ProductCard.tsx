@@ -30,6 +30,11 @@ export function ProductCard({
   reasons,
   showVariants = false,
   showDescriptions = false,
+  showPrice = true,
+  showCta = true,
+  imgFit,
+  imgAspect,
+  imgRadius,
   lowStockQty,
   oosNotify = false,
   quizId,
@@ -46,6 +51,16 @@ export function ProductCard({
   // number) renders the live "Only X left" urgency line.
   showVariants?: boolean;
   showDescriptions?: boolean;
+  // QZY-5 (results-step4 §2.3/§2.5) — reveal display toggles + the light image
+  // controls. Every default equals the pre-QZY rendering: price shown, CTA
+  // shown, cover fit, square aspect (vertical), var(--qz-radius) corners.
+  showPrice?: boolean;
+  showCta?: boolean;
+  imgFit?: "cover" | "contain";
+  /** CSS aspect-ratio value (e.g. "3 / 4") — vertical cards only. */
+  imgAspect?: string;
+  /** Corner radius in px; absent = var(--qz-radius). */
+  imgRadius?: number;
   lowStockQty?: number | null;
   // Spec §5 — when this card is sold out and the page's OOS behavior is
   // "notify_me", the CTA becomes an inline back-in-stock email capture.
@@ -136,16 +151,16 @@ export function ProductCard({
           height={80}
           style={
             vertical
-              ? { width: "100%", height: "auto", aspectRatio: "1 / 1", objectFit: "cover", borderRadius: "var(--qz-radius)" }
-              : { width: 80, height: 80, objectFit: "cover", borderRadius: "var(--qz-radius)", flexShrink: 0 }
+              ? { width: "100%", height: "auto", aspectRatio: imgAspect ?? "1 / 1", objectFit: imgFit ?? "cover", borderRadius: imgRadius ?? "var(--qz-radius)" }
+              : { width: 80, height: 80, objectFit: imgFit ?? "cover", borderRadius: imgRadius ?? "var(--qz-radius)", flexShrink: 0 }
           }
         />
       ) : (
         <div
           style={
             vertical
-              ? { width: "100%", aspectRatio: "1 / 1", background: "#00000010", borderRadius: "var(--qz-radius)" }
-              : { width: 80, height: 80, background: "#00000010", borderRadius: "var(--qz-radius)", flexShrink: 0 }
+              ? { width: "100%", aspectRatio: imgAspect ?? "1 / 1", background: "#00000010", borderRadius: imgRadius ?? "var(--qz-radius)" }
+              : { width: 80, height: 80, background: "#00000010", borderRadius: imgRadius ?? "var(--qz-radius)", flexShrink: 0 }
           }
         />
       )}
@@ -178,7 +193,8 @@ export function ProductCard({
             ))}
           </div>
         ) : null}
-        {product.price &&
+        {showPrice &&
+          product.price &&
           (() => {
             // Per-item struck price only for an unconditional percentage discount
             // that THIS result opts into (discountLabel set) AND that the quiz
@@ -257,6 +273,10 @@ export function ProductCard({
           {info}
         </button>
       )}
+      {/* QZY-5 §5 — showCta OFF removes the entire action column (the variant
+          picker is add-to-cart's input, so it goes with it); the info region
+          still links/tracks. Layout reflows via the parent flex. */}
+      {!showCta ? null : (
       <div style={{ display: "flex", flexDirection: "column", gap: 6, alignItems: "stretch", flexShrink: 0 }}>
         {/* Only show the variant picker on the cart path: selectedVariantId is
             consumed by add-to-cart (cartUrl) only. On standalone there's no
@@ -329,6 +349,7 @@ export function ProductCard({
           <span style={{ ...ctaStyle, cursor: "default" }}>{ctaLabel}</span>
         )}
       </div>
+      )}
     </div>
   );
 }

@@ -65,6 +65,10 @@ export const REC_PAGE_DEFAULTS: Required<
     | "captureName"
     | "capturePhone"
     | "captureTermsOn"
+    | "showPrice"
+    | "showAtc"
+    | "showAddAll"
+    | "fallbackOn"
   >
 > = {
   headline: "Your perfect match",
@@ -88,6 +92,14 @@ export const REC_PAGE_DEFAULTS: Required<
   // TermsText deliberately have NO defaults here — absent falls through to
   // the locale-aware chrome copy so translations keep working.)
   captureTermsOn: false,
+  // QZY-5 — step-4 reveal toggles. Each default EQUALS the pre-QZY rendering
+  // (price + ATC always showed; no add-all bar; fallback always rendered), so
+  // published decider docs are unchanged. layout/imgFit/cardAspect/cardRadius
+  // are deliberately NOT defaulted — absent means "today's exact markup".
+  showPrice: true,
+  showAtc: true,
+  showAddAll: false,
+  fallbackOn: true,
 };
 
 export type ResolvedRecPageConfig = RecPageGlobalT & typeof REC_PAGE_DEFAULTS;
@@ -304,12 +316,53 @@ export function targetProducts(input: TargetProductsInput): TargetProducts {
   return { hero, grid, poolSize: pool.length, allOutOfStock: true };
 }
 
+// ── QZY-5 §3 — the archetype lineup ─────────────────────────────────────────
+
+export type RevealLayout = "hero_grid" | "grid" | "list" | "single_hero";
+
+export interface RevealLineup<P extends IndexedProduct = IndexedProduct> {
+  /** The featured hero (with badge) — hero_grid / single_hero only. */
+  heroBlock: P | null;
+  /** What renders in the grid/list body. grid/list archetypes fold the hero
+   *  in as the first item (no hero treatment). */
+  bodyItems: P[];
+  /** Everything visible, in order — the add-all pool and the analytics
+   *  shown-ids source. */
+  shown: P[];
+}
+
+/** results-step4 §3 — split the resolved hero+grid into what each archetype
+ *  actually RENDERS. `layout` absent (every pre-QZY doc) resolves to
+ *  hero_grid, which is byte-for-byte today's markup. */
+export function revealLineup<P extends IndexedProduct>(
+  layout: RevealLayout | undefined,
+  hero: P | null,
+  grid: readonly P[],
+): RevealLineup<P> {
+  const mode: RevealLayout = layout ?? "hero_grid";
+  if (mode === "single_hero") {
+    const heroBlock = hero ?? grid[0] ?? null;
+    return { heroBlock, bodyItems: [], shown: heroBlock ? [heroBlock] : [] };
+  }
+  if (mode === "grid" || mode === "list") {
+    const bodyItems = [...(hero ? [hero] : []), ...grid];
+    return { heroBlock: null, bodyItems, shown: bodyItems };
+  }
+  const bodyItems = [...grid];
+  return {
+    heroBlock: hero,
+    bodyItems,
+    shown: [...(hero ? [hero] : []), ...bodyItems],
+  };
+}
+
 // ── §6 fallback chain (empty resolved target) ───────────────────────────────
 
 export interface DeciderFallback {
   /** Which named fallback produced the products; null = nothing to show (the
-   *  runtime renders the graceful no-match state). */
-  source: "empty_fallback" | "safety_net" | null;
+   *  runtime renders the graceful no-match state). "global_fallback" = the
+   *  QZY-1 logic-build chooser (preferred when it resolves products). */
+  source: "global_fallback" | "empty_fallback" | "safety_net" | null;
   products: IndexedProduct[];
 }
 

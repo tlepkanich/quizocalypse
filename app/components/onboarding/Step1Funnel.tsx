@@ -11,6 +11,7 @@ import { RecommendationBucketsStage } from "./stages/RecommendationBucketsStage"
 import { ShapeStage } from "./stages/ShapeStage";
 import { DesignStage } from "./stages/DesignStage";
 import { RecPageStage } from "./stages/RecPageStage";
+import { Step4Results } from "./stages/Step4Results";
 import { FUNNEL_STAGES, type ActionResult, type FunnelData } from "./stages/stagesShared";
 
 // BIC-2 C2 — the loader shape (and the other cross-stage types) moved to
@@ -261,20 +262,31 @@ export function Step1Funnel({ data }: { data: FunnelData }) {
         <DesignStage data={data} fetcher={fetcher} pendingIntent={pendingIntent} />
       ) : null}
 
-      {/* Recommendation — the full per-bucket config editor over the built draft.
-          Client-only (ResultSettingsPanel + RecPageDiagram + useQuizDraft). Falls
-          back to the lean RecPageStage for legacy drafts with no result nodes. */}
+      {/* Results reveal — QZY-5: decider drafts get the LIGHT step-4 surface
+          (quiz-results-step4 v1.0); legacy built drafts keep the heavy
+          RecommendationStage (now the dashboard-class advanced editor), and
+          unbuilt legacy drafts the lean RecPageStage. All client-only. */}
       {data.stage === "rec_page" && data.recPage ? (
         <ClientOnly fallback={<BuilderSkeleton />}>
-          {() => (
-            <RecommendationStage
-              quizId={data.quizId}
-              initialDoc={data.recPage!.doc}
-              categories={data.recPage!.categories}
-              productIndex={data.recPage!.productIndex}
-              collections={data.collections}
-            />
-          )}
+          {() =>
+            data.recPage!.doc.logic_model === "decider" ? (
+              <Step4Results
+                quizId={data.quizId}
+                initialDoc={data.recPage!.doc}
+                categories={data.recPage!.categories}
+                productIndex={data.recPage!.productIndex}
+                designTokens={data.designTokens}
+              />
+            ) : (
+              <RecommendationStage
+                quizId={data.quizId}
+                initialDoc={data.recPage!.doc}
+                categories={data.recPage!.categories}
+                productIndex={data.recPage!.productIndex}
+                collections={data.collections}
+              />
+            )
+          }
         </ClientOnly>
       ) : data.stage === "rec_page" ? (
         <RecPageStage data={data} fetcher={fetcher} pendingIntent={pendingIntent} />

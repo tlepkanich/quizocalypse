@@ -1045,13 +1045,16 @@ describe("LOGIC v2 schema seams (logic_model / role / target_id / rules / rec_pa
     expect(() =>
       Quiz.parse(bad({ rec_page_settings: { global: { gridSort: "relevance" } } })),
     ).toThrow();
-    // gridMax bounds 1–12.
+    // gridMax bounds 0–12 (QZY-5 widened min to 0: hero-only reveals).
     expect(() =>
-      Quiz.parse(bad({ rec_page_settings: { global: { gridMax: 0 } } })),
+      Quiz.parse(bad({ rec_page_settings: { global: { gridMax: -1 } } })),
     ).toThrow();
     expect(() =>
       Quiz.parse(bad({ rec_page_settings: { global: { gridMax: 13 } } })),
     ).toThrow();
+    expect(() =>
+      Quiz.parse(bad({ rec_page_settings: { global: { gridMax: 0 } } })),
+    ).not.toThrow();
     // Rule conditions only support is / is_not.
     expect(() =>
       Quiz.parse(

@@ -4,6 +4,19 @@
 // (add then continue, no navigation). If no ack arrives quickly (not embedded /
 // no listener), fall back to navigating the top window to the cart permalink,
 // which adds the item + auto-applies the discount.
+/** QZY-5 — multi-item adds (the "Add all" bar) go straight to the cart
+ *  permalink: the TAE postMessage contract is single-variant, and Shopify's
+ *  comma-pair permalink handles quantities + the discount natively. Same
+ *  top-window escape as the single-item fallback below. */
+export function goToCartPermalink(cartUrl: string) {
+  if (typeof window === "undefined") return;
+  try {
+    (window.top ?? window).location.href = cartUrl;
+  } catch {
+    window.open(cartUrl, "_blank");
+  }
+}
+
 export function addToCartFromQuiz(cartUrl: string, variantId: string | null, hasDiscount: boolean) {
   if (typeof window === "undefined") return;
   const goToCart = () => {

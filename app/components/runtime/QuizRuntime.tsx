@@ -1493,9 +1493,19 @@ export function QuizRuntime(props: QuizRuntimeProps) {
         if (explained.decider) {
           // ── LOGIC v2 reveal (rec-page-spec-V2 §4–§7) ────────────────────
           const cfg = explained.decider.config;
+          // QZY-5 §2.4 — ONE fallback switch (default ON = pre-QZY behavior).
+          // The logic-build chooser (global_fallback, QZY-1) is preferred when
+          // it resolves products; the legacy emptyFallbackCol → safetyNetCol
+          // chain stays as the last resort so pre-QZY docs are unchanged.
+          const globalFallbackRecs =
+            explained.products.length === 0 && cfg.fallbackOn !== false
+              ? resolveGlobalFallbackProducts(doc.global_fallback, productIndex)
+              : [];
           const fallback =
-            explained.products.length === 0
-              ? deciderFallbackProducts(cfg, productIndex)
+            explained.products.length === 0 && cfg.fallbackOn !== false
+              ? globalFallbackRecs.length > 0
+                ? { source: "global_fallback" as const, products: globalFallbackRecs }
+                : deciderFallbackProducts(cfg, productIndex)
               : null;
           content = (
             <DeciderResultView

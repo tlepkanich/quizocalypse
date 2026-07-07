@@ -1,20 +1,20 @@
 import { describe, expect, it } from "vitest";
 import {
   REC_PAGE_DEFAULTS,
+  // QZY-1 (quiz-logic spec §6.1) — rule LIST actions.
+  applyRuleAction,
   deciderFallbackProducts,
   orderBySignal,
   resolveRecPageGlobal,
   resolveTarget,
+  // QZY-5 (results-step4 v1.0) — the archetype lineup.
+  revealLineup,
   settingsForTarget,
   targetProducts,
   type ResolvedRecPageConfig,
 } from "./recommendDecider";
 import { recommendForResultExplained, type IndexedProduct } from "./recommendationEngine";
 import { Quiz } from "./quizSchema";
-
-// ── QZY-1 (quiz-logic spec §6.1) — rule LIST actions ─────────────────────────
-
-import { applyRuleAction } from "./recommendDecider";
 
 // ── fixtures ────────────────────────────────────────────────────────────────
 
@@ -646,5 +646,118 @@ describe("QZY-1 engine integration — filters + actions adjust the decider pool
     // filter (stiff) narrows to s2; hide removes cat_sale's member s2 → empty
     expect(out.products).toEqual([]);
     expect(out.rungUsed).toBe("decider_rule");
+  });
+});
+
+// ── QZY-5 (results-step4 v1.0) — reveal defaults + archetype lineup ──────────
+
+describe("QZY-5 REC_PAGE_DEFAULTS — every reveal default equals the pre-QZY rendering", () => {
+  it("price + ATC shown, no add-all bar, fallback on", () => {
+    expect(REC_PAGE_DEFAULTS.showPrice).toBe(true);
+    expect(REC_PAGE_DEFAULTS.showAtc).toBe(true);
+    expect(REC_PAGE_DEFAULTS.showAddAll).toBe(false);
+    expect(REC_PAGE_DEFAULTS.fallbackOn).toBe(true);
+  });
+
+  it("layout + the image trio have NO defaults — absent means today's markup", () => {
+    const resolved = resolveRecPageGlobal(undefined);
+    expect(resolved.layout).toBeUndefined();
+    expect(resolved.imgFit).toBeUndefined();
+    expect(resolved.cardAspect).toBeUndefined();
+    expect(resolved.cardRadius).toBeUndefined();
+  });
+});
+
+describe("QZY-5 revealLineup — what each archetype renders", () => {
+  const hero = P("hero");
+  const grid = [P("g1"), P("g2"), P("g3")];
+
+  it("absent layout = hero_grid = the exact pre-QZY split", () => {
+    const absent = revealLineup(undefined, hero, grid);
+    const explicit = revealLineup("hero_grid", hero, grid);
+    expect(absent).toEqual(explicit);
+    expect(absent.heroBlock?.product_id).toBe("hero");
+    expect(absent.bodyItems.map((p) => p.product_id)).toEqual(["g1", "g2", "g3"]);
+    expect(absent.shown.map((p) => p.product_id)).toEqual(["hero", "g1", "g2", "g3"]);
+  });
+
+  it("grid + list fold the hero in as the first body item (no hero treatment)", () => {
+    for (const mode of ["grid", "list"] as const) {
+      const lineup = revealLineup(mode, hero, grid);
+      expect(lineup.heroBlock).toBeNull();
+      expect(lineup.bodyItems.map((p) => p.product_id)).toEqual(["hero", "g1", "g2", "g3"]);
+      expect(lineup.shown).toEqual(lineup.bodyItems);
+    }
+  });
+
+  it("single_hero shows ONLY the hero (grid promoted when hero missing)", () => {
+    const withHero = revealLineup("single_hero", hero, grid);
+    expect(withHero.shown.map((p) => p.product_id)).toEqual(["hero"]);
+    expect(withHero.bodyItems).toEqual([]);
+    const noHero = revealLineup("single_hero", null, grid);
+    expect(noHero.shown.map((p) => p.product_id)).toEqual(["g1"]);
+  });
+
+  it("no hero: hero_grid renders body-only; empty everything stays empty", () => {
+    const lineup = revealLineup("hero_grid", null, grid);
+    expect(lineup.heroBlock).toBeNull();
+    expect(lineup.shown.map((p) => p.product_id)).toEqual(["g1", "g2", "g3"]);
+    expect(revealLineup(undefined, null, []).shown).toEqual([]);
+  });
+});
+
+describe("QZY-5 schema — the new step-4 fields parse and stay sparse", () => {
+  it("accepts the reveal controls and gridMax 0 (hero-only)", () => {
+    const doc = deciderDoc({
+      rec_page_settings: {
+        global: {
+          layout: "list",
+          showPrice: false,
+          showAtc: false,
+          showAddAll: true,
+          fallbackOn: false,
+          imgFit: "contain",
+          cardAspect: "portrait",
+          cardRadius: 16,
+          gridMax: 0,
+        },
+        overrides: {},
+      },
+    });
+    const g = doc.rec_page_settings!.global;
+    expect(g.layout).toBe("list");
+    expect(g.gridMax).toBe(0);
+    expect(g.fallbackOn).toBe(false);
+    expect(g.cardRadius).toBe(16);
+  });
+
+  it("gridMax 0 → hero-only from targetProducts", () => {
+    const products = targetProducts({
+      targetId: "t1",
+      targetShape: "collection",
+      config: cfg({ gridMax: 0 }),
+      productIndex: [P("a"), P("b"), P("c")],
+      targetProductIdsMap: { t1: ["a", "b", "c"] },
+    });
+    expect(products.hero?.product_id).toBe("a");
+    expect(products.grid).toEqual([]);
+  });
+
+  it("a legacy doc without the new fields round-trips byte-identical", () => {
+    const raw = {
+      quiz_id: "qz-legacy",
+      scope: { collection_ids: [] },
+      nodes: [
+        { id: "intro", type: "intro", position: { x: 0, y: 0 }, data: { headline: "Hi" } },
+        { id: "end", type: "end", position: { x: 0, y: 0 }, data: { headline: "Bye" } },
+      ],
+      edges: [{ id: "e1", source: "intro", target: "end" }],
+      results_pages: [],
+    };
+    const once = Quiz.parse(raw);
+    const twice = Quiz.parse(JSON.parse(JSON.stringify(once)));
+    expect(JSON.stringify(twice)).toBe(JSON.stringify(once));
+    expect(JSON.stringify(once)).not.toContain("fallbackOn");
+    expect(JSON.stringify(once)).not.toContain("showAddAll");
   });
 });

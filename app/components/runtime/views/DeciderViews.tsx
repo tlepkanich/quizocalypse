@@ -4,15 +4,21 @@ import type {
   RecommendedProduct,
 } from "../../../lib/recommendationEngine";
 import type { DeciderFallback, ResolvedRecPageConfig } from "../../../lib/recommendDecider";
+import { revealLineup } from "../../../lib/recommendDecider";
 import { productHref } from "../../../lib/productHref";
+import { cartPermalinkMulti } from "../../../lib/cartLink";
+import { formatMoney } from "../../../lib/formatMoney";
 import type { createAnalyticsClient } from "../../../lib/analytics";
 import type { stylesFor } from "../runtimeStyles";
 import { useChrome } from "../chromeStrings";
 import {
   RuntimeChromeContext,
+  RuntimeCurrencyContext,
+  RuntimeLocaleContext,
   RuntimePlatformContext,
   RuntimePreviewContext,
 } from "../runtimeContexts";
+import { goToCartPermalink } from "../addToCart";
 import { SaveResultsLink, BuddyRow } from "../bits/resultLinks";
 import { ProductCard } from "./ProductCard";
 import { postQuizSession } from "./postQuizSession";
@@ -287,10 +293,15 @@ export function DeciderResultView({
   const tc = useChrome();
   const isPreviewMode = useContext(RuntimePreviewContext);
   const platform = useContext(RuntimePlatformContext);
+  const currency = useContext(RuntimeCurrencyContext);
+  const locale = useContext(RuntimeLocaleContext);
   const minimal = useContext(RuntimeChromeContext) === "minimal";
   const cfg = decider.config;
   const hero = decider.hero;
   const grid = decider.grid;
+  // QZY-5 §3 — the archetype lineup. Absent layout = hero_grid = the exact
+  // pre-QZY rendering (heroBlock=hero, bodyItems=grid).
+  const lineup = revealLineup(cfg.layout, hero, grid);
   const showFallback =
     !hero && grid.length === 0 && (fallback?.products.length ?? 0) > 0;
   const fallbackRecs: RecommendedProduct[] = showFallback
@@ -304,8 +315,7 @@ export function DeciderResultView({
     if (completed.current || !analytics) return;
     completed.current = true;
     const shownIds = [
-      ...(hero ? [hero.product_id] : []),
-      ...grid.map((p) => p.product_id),
+      ...lineup.shown.map((p) => p.product_id),
       ...fallbackRecs.map((p) => p.product_id),
     ];
     analytics.track("quiz_completed", {
@@ -363,18 +373,54 @@ export function DeciderResultView({
         gridTemplateColumns: "repeat(auto-fit, minmax(190px, 1fr))",
       }
     : { marginTop: 20, ...styles.productGrid };
+  // QZY-5 — "list" stacks full-width horizontal rows instead of the grid.
+  const isList = cfg.layout === "list";
+  const bodyStyle: React.CSSProperties = isList
+    ? { marginTop: 20, display: "flex", flexDirection: "column", gap: 12 }
+    : gridStyle;
+
+  // QZY-5 §2.3 — the add-all bar: only when the toggle is on, 2+ products
+  // show, and a cart exists (standalone has none). Multi-adds ride the
+  // comma-pair permalink (the TAE postMessage contract is single-variant).
+  const addAllUrl =
+    cfg.showAddAll && lineup.shown.length >= 2 && platform !== "standalone"
+      ? cartPermalinkMulti(
+          shopDomain,
+          lineup.shown.map((p) => p.default_variant_id ?? p.variants?.[0]?.id),
+          discountCode,
+        )
+      : null;
+  const addAllTotal = lineup.shown.reduce(
+    (sum, p) => sum + (Number(p.price) || 0),
+    0,
+  );
+
+  // QZY-5 §2.5 — the light image controls; absent = the card's own defaults.
+  const cardAspectCss =
+    cfg.cardAspect === "portrait"
+      ? "3 / 4"
+      : cfg.cardAspect === "landscape"
+        ? "4 / 3"
+        : cfg.cardAspect === "square"
+          ? "1 / 1"
+          : undefined;
 
   const card = (p: RecommendedProduct, position: number, extra?: Record<string, unknown>) => (
     <ProductCard
       key={p.product_id}
       product={p}
       position={position}
-      vertical={minimal}
+      vertical={isList ? false : minimal}
       ctaLabel={tc("shop_now")}
       href={productHref(p, shopDomain, platform)}
       shopDomain={shopDomain}
       discountCode={discountCode}
       showDescriptions={cfg.showDesc}
+      showPrice={cfg.showPrice}
+      showCta={cfg.showAtc}
+      imgFit={cfg.imgFit}
+      imgAspect={cardAspectCss}
+      imgRadius={cfg.cardRadius}
       quizId={quizId}
       sessionId={sessionId}
       styles={styles}
@@ -420,7 +466,7 @@ export function DeciderResultView({
           {tc("no_results_match")}
         </p>
       ) : null}
-      {hero ? (
+      {lineup.heroBlock ? (
         <div style={{ marginTop: 20 }}>
           <div
             style={{
@@ -436,11 +482,32 @@ export function DeciderResultView({
           >
             {tc("decider_hero_badge")}
           </div>
-          {card(hero, 0, { hero: true })}
+          {card(lineup.heroBlock, 0, { hero: true })}
         </div>
       ) : null}
-      {grid.length > 0 ? (
-        <div style={gridStyle}>{grid.map((p, i) => card(p, i + (hero ? 1 : 0)))}</div>
+      {lineup.bodyItems.length > 0 ? (
+        <div style={bodyStyle}>
+          {lineup.bodyItems.map((p, i) => card(p, i + (lineup.heroBlock ? 1 : 0)))}
+        </div>
+      ) : null}
+      {addAllUrl ? (
+        <button
+          type="button"
+          onClick={() => {
+            analytics?.track("add_to_cart", {
+              product_ids: lineup.shown.map((p) => p.product_id),
+              add_all: true,
+            });
+            if (isPreviewMode) return;
+            goToCartPermalink(addAllUrl);
+          }}
+          style={{ ...styles.primaryBtn, marginTop: 16, width: "100%" }}
+        >
+          {tc("add_all_to_cart", {
+            count: lineup.shown.length,
+            total: formatMoney(addAllTotal, currency, locale),
+          })}
+        </button>
       ) : null}
       {showFallback ? (
         <div style={gridStyle}>

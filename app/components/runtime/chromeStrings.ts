@@ -105,6 +105,8 @@ export const CHROME_TOKENS = {
   all_out_of_stock: "These picks are temporarily out of stock — check back soon.",
   incentive_code_auto: "🎁 Code {code} — applied automatically at checkout",
   incentive_code_manual: "🎁 Use code {code} at checkout",
+  // QZY-5 (results-step4 §2.3) — the bulk-add bar under the reveal grid.
+  add_all_to_cart: "Add all {count} to cart · {total}",
 } as const;
 
 export type ChromeToken = keyof typeof CHROME_TOKENS;
