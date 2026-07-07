@@ -223,9 +223,13 @@ export function BlockRenderer({
       style={{ ...ctx.styles.card, display: "flex", flexDirection: "column", gap: 16 }}
     >
       {scopedCss ? <style>{scopedCss}</style> : null}
-      {blocks.map((block) => (
-        <BlockFrame key={block.id} block={block} node={node} ctx={ctx} />
-      ))}
+      {/* QZY-7 — Layers hide/show: hidden blocks are kept in the layout but
+          never rendered (absent = shown, so existing docs are unchanged). */}
+      {blocks
+        .filter((block) => block.hidden !== true)
+        .map((block) => (
+          <BlockFrame key={block.id} block={block} node={node} ctx={ctx} />
+        ))}
     </div>
   );
 }

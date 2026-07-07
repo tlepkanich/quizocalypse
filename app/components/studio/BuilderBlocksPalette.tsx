@@ -46,15 +46,26 @@ export function insertBlock(doc: QuizDoc, node: QuizNode, type: ContentBlockType
 
 export const BLOCK_DRAG_MIME = "application/x-qz-block";
 
+// QZY-7 (build-tab §3) — the palette's QUESTION tiles are not free blocks:
+// on a question screen they SWITCH the question's input type; elsewhere they
+// create a NEW question screen. A second question can never join a screen.
+const QUESTION_TILES: { kind: "single_select" | "slider"; label: string; glyph: string }[] = [
+  { kind: "single_select", label: "Choice answers", glyph: "☑" },
+  { kind: "slider", label: "Slider / scale", glyph: "⟷" },
+];
+
 export function BuilderBlocksPalette({
   doc,
   node,
   commit,
+  onQuestionTile,
 }: {
   doc: QuizDoc;
   /** The insert target: the selected step, else the step the canvas shows. */
   node: QuizNode | null;
   commit: (doc: QuizDoc) => void;
+  /** QZY-7 — switch-or-create for the question tiles (host-implemented). */
+  onQuestionTile?: (kind: "single_select" | "slider") => void;
 }) {
   const byType = new Map(PALETTE_BLOCKS.map((p) => [p.type, p]));
   const [query, setQuery] = useState("");
@@ -82,6 +93,35 @@ export function BuilderBlocksPalette({
         <p className="qz-dim" style={{ fontSize: 12.5, margin: 0 }}>
           Select a step below (or click an element in the canvas) to add blocks to it.
         </p>
+      ) : null}
+      {onQuestionTile ? (
+        <div>
+          <div className="qz-label" style={{ marginBottom: 7, fontSize: 11 }}>
+            Questions
+          </div>
+          <div style={{ display: "grid", gap: 6 }}>
+            {QUESTION_TILES.filter(
+              (q) => !needle || q.label.toLowerCase().includes(needle),
+            ).map((q) => (
+              <button
+                key={q.kind}
+                type="button"
+                className="qz-block-tile"
+                onClick={() => onQuestionTile(q.kind)}
+                title={
+                  node?.type === "question"
+                    ? `Switch this question to ${q.label.toLowerCase()}`
+                    : `Add a new ${q.label.toLowerCase()} question screen`
+                }
+              >
+                <span className="qz-block-glyph" aria-hidden="true">
+                  {q.glyph}
+                </span>
+                <span>{q.label}</span>
+              </button>
+            ))}
+          </div>
+        </div>
       ) : null}
       {CATEGORIES.map((cat) => {
         const tiles = cat.types.filter(

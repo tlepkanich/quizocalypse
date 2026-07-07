@@ -114,24 +114,49 @@ ok("Settings: experience/placement/embed/translation/CSS sections render",
 await page.locator(".qz-builder-rail-item", { hasText: "Build" }).click();
 await page.waitForTimeout(300);
 
-// ── BLD-2a: v3 step rows + ⋯ menu ───────────────────────────────────────────
-const rows = page.locator(".qz-s3-row.qz-railrow");
-ok("v3 step rows render", (await rows.count()) >= 2, `${await rows.count()} rows`);
-ok("rows carry mono chips", (await page.locator(".qz-railrow .qz-s3-numchip").count()) >= 2);
-const qRow = page.locator(".qz-s3-row", { hasText: "What are you shopping" }).first();
-await qRow.locator(".qz-railmenu-btn").click({ force: true });
+// ── QZY-7: the screen carousel is the navigator (center column only) ────────
+const thumbs = page.locator(".qz-screens-thumb");
+const thumbCount = await thumbs.count();
+ok("carousel renders the screens", thumbCount >= 2, `${thumbCount} thumbs`);
+ok("carousel lives under the CANVAS column only",
+  (await page.locator(".qz-builder-stage .qz-screens").count()) === 1 &&
+  (await page.locator(".qz-builder-panel .qz-screens").count()) === 0 &&
+  (await page.locator(".qz-builder-inspector .qz-screens").count()) === 0);
+ok("+ add-screen tile present", (await page.locator(".qz-screens-add").count()) === 1);
+ok("carousel labels render (Intro + Q1)",
+  (await page.locator(".qz-screens-label", { hasText: "Intro" }).count()) === 1 &&
+  (await page.locator(".qz-screens-label", { hasText: "Q1" }).count()) >= 1);
+const q1Thumb = page.locator(".qz-screens-item", { hasText: "Q1" }).first();
+await q1Thumb.locator(".qz-screens-thumb").click();
+await page.waitForTimeout(600);
+ok("thumb click activates the screen",
+  ((await page.locator(".qz-screens-item.is-active .qz-screens-label").textContent()) ?? "").includes("Q1"));
+
+// One-question-per-screen (build-tab §3): the palette question tile on a
+// question screen switches type (same type = no-op, never a 2nd question);
+// on Intro it creates a NEW screen; the carousel confirm deletes it again.
+ok("palette Questions section present",
+  (await page.locator(".qz-block-tile", { hasText: "Choice answers" }).count()) === 1);
+await page.locator(".qz-block-tile", { hasText: "Choice answers" }).click();
+await page.waitForTimeout(500);
+ok("question tile on a question screen adds NO screen",
+  (await thumbs.count()) === thumbCount);
+await page.locator(".qz-screens-item", { hasText: "Intro" }).locator(".qz-screens-thumb").click();
+await page.waitForTimeout(400);
+await page.locator(".qz-block-tile", { hasText: "Choice answers" }).click();
+await page.waitForTimeout(700);
+ok("question tile elsewhere creates a NEW question screen",
+  (await thumbs.count()) === thumbCount + 1);
+await page.locator('.qz-screens-del[aria-label^="Delete"]').click();
 await page.waitForTimeout(300);
-ok("⋯ opens the portaled actions menu", (await page.locator(".qz-railmenu").count()) === 1);
-ok(
-  "menu holds the classic inline actions",
-  (await page.locator(".qz-railmenu-item", { hasText: "Rename" }).count()) === 1 &&
-    (await page.locator(".qz-railmenu-item", { hasText: "Duplicate" }).count()) === 1,
-);
-await page.keyboard.press("Escape");
-await page.waitForTimeout(200);
+ok("✕ arms a confirm naming the impact",
+  (await page.locator(".qz-screens-confirm").count()) === 1);
+await page.locator(".qz-screens-confirm-yes").click();
+await page.waitForTimeout(700);
+ok("confirm deletes the screen (net-zero)", (await thumbs.count()) === thumbCount);
 
 // ── BLD-3: right inspector, unclipped tabs ──────────────────────────────────
-await qRow.click();
+await q1Thumb.locator(".qz-screens-thumb").click();
 await page.waitForTimeout(400);
 const insp = page.locator(".qz-builder-inspector");
 ok("right-side inspector present", (await insp.count()) === 1);
@@ -160,8 +185,28 @@ if (await selEl.count()) {
   ok("canvas element selectable for inline edit", false, "no .qz-insp-sel after click");
 }
 
+// ── QZY-7: Layers + Background tabs (AFTER the inline-edit check — the
+// hide/show round-trip materializes an explicit layout; BLD-7's final
+// "Reset to template" clears it again). ──────────────────────────────────────
+await q1Thumb.locator(".qz-screens-thumb").click();
+await page.waitForTimeout(400);
+await page.locator('[aria-label="Build panel"] button', { hasText: "Layers" }).click();
+await page.waitForTimeout(400);
+ok("Layers lists the screen's blocks", (await page.locator(".qz-layers-row").count()) >= 1);
+await page.locator('.qz-layers-actions button[aria-label="Hide block"]').first().click();
+await page.waitForTimeout(400);
+ok("hide marks the row (kept, not deleted)",
+  (await page.locator(".qz-layers-row.is-hidden").count()) === 1);
+await page.locator('.qz-layers-actions button[aria-label="Show block"]').first().click();
+await page.waitForTimeout(400);
+ok("show restores it", (await page.locator(".qz-layers-row.is-hidden").count()) === 0);
+await page.locator('[aria-label="Build panel"] button', { hasText: "Background" }).click();
+await page.waitForTimeout(300);
+ok("Background tab renders the page settings",
+  (await page.locator(".qz-builder-panel").textContent())?.includes("Background"));
+
 // ── BLD-7: blocks palette + block management (net-zero: ends with Reset) ───
-await page.locator('[aria-label="Editor mode"] button', { hasText: "Blocks" }).click();
+await page.locator('[aria-label="Build panel"] button', { hasText: "Add" }).click();
 await page.waitForTimeout(300);
 ok(
   "palette tiles enabled with a step on canvas",
@@ -210,9 +255,6 @@ ok(
   "Reset to template restores the default",
   (await page.locator(".qz-builder-canvas hr").count()) === 0,
 );
-await page.locator('[aria-label="Editor mode"] button', { hasText: "Settings" }).click();
-await page.waitForTimeout(300);
-
 // ── BLD-4: Logic view = LogicScroll + Try-a-path ────────────────────────────
 await page.locator(".qz-builder-rail-item", { hasText: "Logic" }).click();
 await page.waitForTimeout(600);

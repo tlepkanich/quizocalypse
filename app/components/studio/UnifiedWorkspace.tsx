@@ -6,7 +6,13 @@ import { experienceTypeOf, type Quiz, type ContentBlockType } from "../../lib/qu
 import { validateQuiz, validateQuizWarnings, type NodeIssue } from "../../lib/quizValidation";
 import { orderFlow } from "../../lib/flowOrder";
 import { reconcileBucketsToResultNodes } from "../../lib/bucketReconcile";
-import { swapScoringModel } from "../../lib/quizMutations";
+import {
+  deleteNode,
+  duplicateQuestionNode,
+  setQuestionType,
+  straightThroughRun,
+  swapScoringModel,
+} from "../../lib/quizMutations";
 import { buildBuilderHealthReport, type Tier1Link } from "../../lib/pathReport";
 import type { StepProps } from "../builder/stepProps";
 import { Step5Preview } from "../builder/Step5Preview";
@@ -21,7 +27,7 @@ import type { RegenApi } from "./panels/ContentTab";
 import { AiChatPanel } from "./AiChatPanel";
 import { ReviewEnrichPanel } from "./ReviewEnrichPanel";
 import { EditableTitle, PLACEMENTS, startInlineTextEdit, type StudioBuilderData } from "./studioShared";
-import { applyInspectText, INLINE_EDITABLE_PARTS } from "./studioDoc";
+import { applyInspectText, INLINE_EDITABLE_PARTS, insertModule } from "./studioDoc";
 import { BuilderNavRail, BuilderTopBar, type BuilderNavKey } from "./BuilderChrome";
 import { HealthPill } from "../onboarding/questionsLogicV3/HealthPill";
 import { HealthPopover } from "../onboarding/questionsLogicV3/HealthPopover";
@@ -33,6 +39,8 @@ import { BuilderLogicView, QuizSettingsView } from "./BuilderSettings";
 import { BuilderDesignPanel } from "./BuilderDesignPanel";
 import { BLOCK_DRAG_MIME, BuilderBlocksPalette, insertBlock } from "./BuilderBlocksPalette";
 import { BuilderPageSettings } from "./BuilderPageSettings";
+import { BuilderLayersTab } from "./BuilderLayersTab";
+import { ScreenCarousel } from "./ScreenCarousel";
 import UpgradeDeciderModal from "../onboarding/questionsLogic/UpgradeDeciderModal";
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -213,8 +221,10 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
   // "theme" is the rail's Design section (the canvas stays visible); the old
   // ai/code tools moved to the Assist drawer + the Settings section.
   const [tool, setTool] = useState<"editor" | "theme">("editor");
-  // QB-4b: the Editor tool's Blocks ‖ Settings sub-tab.
-  const [editorSubtab, setEditorSubtab] = useState<"settings" | "blocks">("settings");
+  // QB-4b → QZY-7: the Build tab's left panel (build-tab spec §2) — Add
+  // (palette) · Layers (current screen's blocks) · Background. The step LIST
+  // left this panel: the screen carousel under the canvas is the navigator.
+  const [editorSubtab, setEditorSubtab] = useState<"add" | "layers" | "background">("add");
   const [reconcileError, setReconcileError] = useState<string | null>(null);
 
   const select = useCallback((nodeId: string | null) => {
@@ -870,6 +880,51 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
       select(dropTarget.id); // open the inspector on the step that grew a block
     };
 
+    // QZY-7 (build-tab §3) — the palette's question tiles: on a question
+    // screen they SWITCH the input type (choice ↔ slider confirms, naming the
+    // mapping impact — §9); elsewhere they add a NEW question screen after
+    // the last movable step (the add-anchor rule: straightThroughRun, never
+    // the ordered spine's terminal).
+    const addQuestionScreen = (kind: "single_select" | "slider") => {
+      const run = straightThroughRun(doc);
+      const anchor =
+        blockTarget && run.run.includes(blockTarget.id)
+          ? blockTarget.id
+          : run.run[run.run.length - 1] ?? run.head;
+      if (!anchor) return;
+      const { doc: next, newNodeId } = insertModule(
+        doc,
+        "question",
+        anchor,
+        undefined,
+        fallbackCollection,
+      );
+      if (!newNodeId) return;
+      commit(kind === "slider" ? setQuestionType(next, newNodeId, "slider") : next);
+      select(newNodeId);
+    };
+    const onQuestionTile = (kind: "single_select" | "slider") => {
+      if (blockTarget?.type === "question") {
+        const cur = blockTarget.data.question_type;
+        if (cur === kind) return;
+        const crossing = (cur === "slider") !== (kind === "slider");
+        if (
+          crossing &&
+          !window.confirm(
+            kind === "slider"
+              ? "Switch this question to a slider? Answers are kept (the first becomes the slider's seed); discrete mappings translate to range bands."
+              : "Switch this question to choice answers? The slider's seed answer is kept and a second option is added.",
+          )
+        ) {
+          return;
+        }
+        commit(setQuestionType(doc, blockTarget.id, kind));
+        select(blockTarget.id);
+        return;
+      }
+      addQuestionScreen(kind);
+    };
+
     // The left panel content for the focused tool (build view only). QZY-6:
     // ai/code left this switch — Assist is a top-bar drawer, custom CSS lives
     // in Settings.
@@ -885,41 +940,40 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
         </>
       ) : (
         <>
-          {/* QB-4b — Quizell's Editor "Blocks ‖ Settings" sub-tabs. */}
-          <div className="qz-segmented" role="group" aria-label="Editor mode">
-            <button type="button" aria-pressed={editorSubtab === "blocks"} onClick={() => setEditorSubtab("blocks")}>
-              Blocks
+          {/* QZY-7 (build-tab §2) — the three left-panel tabs. Screen
+              NAVIGATION moved to the carousel under the canvas. */}
+          <div className="qz-segmented" role="group" aria-label="Build panel">
+            <button type="button" aria-pressed={editorSubtab === "add"} onClick={() => setEditorSubtab("add")}>
+              Add
             </button>
-            <button type="button" aria-pressed={editorSubtab === "settings"} onClick={() => setEditorSubtab("settings")}>
-              Settings
+            <button type="button" aria-pressed={editorSubtab === "layers"} onClick={() => setEditorSubtab("layers")}>
+              Layers
+            </button>
+            <button type="button" aria-pressed={editorSubtab === "background"} onClick={() => setEditorSubtab("background")}>
+              Background
             </button>
           </div>
-          {editorSubtab === "blocks" ? (
-            <BuilderBlocksPalette doc={doc} node={blockTarget} commit={commit} />
+          {editorSubtab === "add" ? (
+            <BuilderBlocksPalette
+              doc={doc}
+              node={blockTarget}
+              commit={commit}
+              onQuestionTile={onQuestionTile}
+            />
+          ) : editorSubtab === "layers" ? (
+            <BuilderLayersTab
+              doc={doc}
+              node={blockTarget}
+              commit={commit}
+              onSelectNode={select}
+            />
           ) : (
             <>
-              {/* BLD-3 — the left panel is pure NAVIGATION now (step list +
-                  quiz-global Page Settings, always reachable); the selected
-                  step edits in the right-side inspector instead of burying
-                  the list. */}
-              <FlowRail
-                doc={doc}
-                ordered={ordered}
-                issuesByNode={issuesByNode}
-                selectedId={selectedId}
-                currentId={liveNodeId}
-                onSelect={select}
-                onCommit={commit}
-                fallbackCollection={fallbackCollection}
-                categories={data.categories}
-                view={view}
-                onView={setView}
-                confirmDeleteId={confirmDeleteId}
-                onConfirmDelete={setConfirmDeleteId}
-                hideViewSwitcher
-                variant="v3"
-              />
-              {/* QP-2 — quiz-global Page Settings (background + page paddings). */}
+              <div className="qz-label" style={{ fontSize: 11 }}>
+                Background
+              </div>
+              {/* QP-2 background + paddings (quiz-global). Per-screen
+                  backgrounds land in QZY-11 and will override this default. */}
               <BuilderPageSettings doc={doc} commit={commit} />
             </>
           )}
@@ -1144,6 +1198,28 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
                     />
                   </div>
                 </div>
+                {/* QZY-7 (build-tab §2) — the screen carousel, bottom of the
+                    CENTER column only (never under the side panels). */}
+                <ScreenCarousel
+                  doc={doc}
+                  ordered={ordered}
+                  activeId={selectedId ?? liveNodeId}
+                  onSelect={select}
+                  onAddScreen={() => addQuestionScreen("single_select")}
+                  confirmDeleteId={confirmDeleteId}
+                  onConfirmDelete={setConfirmDeleteId}
+                  onDelete={(nodeId) => {
+                    commit(deleteNode(doc, nodeId));
+                    setConfirmDeleteId(null);
+                    select(null);
+                  }}
+                  onDuplicate={(nodeId) => {
+                    const next = duplicateQuestionNode(doc, nodeId);
+                    if (next !== doc) commit(next);
+                  }}
+                  productIndex={data.productIndex}
+                  categories={data.categories}
+                />
               </div>
               <aside className="qz-builder-inspector" aria-label="Step inspector">
                 {inspector}

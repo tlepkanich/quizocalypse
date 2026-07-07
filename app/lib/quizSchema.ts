@@ -871,6 +871,9 @@ const blockBase = {
   id: z.string().min(1),
   class_name: z.string().max(64).optional(),
   style: BlockStyle.default({}),
+  // QZY-7 (build-tab §2 Layers) — hide/show without deleting. Absent = shown
+  // (every existing layout renders unchanged).
+  hidden: z.boolean().optional(),
 };
 
 // ── Literal blocks ─────────────────────────────────────────────────────────
