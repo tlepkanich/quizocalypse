@@ -353,6 +353,8 @@ export function StepPreview({
   }, [doc.node_layouts, node, resolved]);
 
   const ctx: BlockRenderCtx = {
+    // QZY-10 — a fixed sample position for the `progress` block preview.
+    progress: { index: 2, total: 5 },
     styles,
     nodeCss: doc.node_css[node.id] ?? null,
     resolveText: (t) => t,

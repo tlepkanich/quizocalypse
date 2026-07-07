@@ -48,6 +48,8 @@ export function blockStyleToCss(s: BlockStyle | undefined | null): CSSProperties
   if (typeof s.font_size === "number") out.fontSize = s.font_size;
   if (typeof s.font_weight === "number") out.fontWeight = s.font_weight;
   if (s.radius) out.borderRadius = radiusToPx(s.radius);
+  // QZY-10 §7 — letter spacing (px).
+  if (typeof s.letter_spacing === "number") out.letterSpacing = s.letter_spacing;
   return out;
 }
 

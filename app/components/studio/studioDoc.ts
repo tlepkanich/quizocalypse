@@ -229,6 +229,10 @@ export const PALETTE_BLOCKS: { type: ContentBlockType; label: string; glyph: str
   { type: "answers", label: "Answers", glyph: "☰" },
   { type: "recommendations", label: "Recommendations", glyph: "★" },
   { type: "email_input", label: "Email field", glyph: "✉" },
+  { type: "video", label: "Video", glyph: "▶" },
+  { type: "progress", label: "Progress bar", glyph: "▭" },
+  { type: "logo", label: "Logo", glyph: "◈" },
+  { type: "content", label: "Content block", glyph: "¶" },
   { type: "ai_chat", label: "AI chat", glyph: "✶" },
   { type: "product_grid", label: "Product grid", glyph: "▦" },
 ];
@@ -254,6 +258,15 @@ export function makeBlock(type: ContentBlockType): ContentBlock {
       return { ...base, type, stage: "all" };
     case "email_input":
       return { ...base, type };
+    // QZY-10 §7 — the v1 inventory additions.
+    case "video":
+      return { ...base, type, autoplay: false, loop: false, controls: true, muted: false };
+    case "progress":
+      return { ...base, type, bar_style: "bar", thickness: 6 };
+    case "logo":
+      return { ...base, type, size: 48, align: "center" };
+    case "content":
+      return { ...base, type, text: "Add your paragraphs here.\n\n- Lists start with a dash\n- [Links look like this](https://example.com)" };
     case "ai_chat":
       return { ...base, type };
     case "product_grid":

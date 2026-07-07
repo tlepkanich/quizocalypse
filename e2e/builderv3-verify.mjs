@@ -303,6 +303,21 @@ ok(
 await page.locator(".qz-block-tile", { hasText: "Divider" }).click();
 await page.waitForTimeout(700);
 ok("tile click renders on canvas", (await page.locator(".qz-builder-canvas hr").count()) >= 1);
+// QZY-10 — the v1 inventory tiles exist; progress + content render on canvas.
+ok("QZY-10 palette tiles present (Video/Progress/Logo/Content)",
+  (await page.locator(".qz-block-tile", { hasText: "Video" }).count()) === 1 &&
+  (await page.locator(".qz-block-tile", { hasText: "Progress bar" }).count()) === 1 &&
+  (await page.locator(".qz-block-tile", { hasText: "Logo" }).count()) === 1 &&
+  (await page.locator(".qz-block-tile", { hasText: "Content block" }).count()) === 1);
+await page.locator(".qz-block-tile", { hasText: "Progress bar" }).click();
+await page.waitForTimeout(1200);
+ok("progress bar renders on canvas",
+  (await page.locator(".qz-builder-canvas [role=progressbar]").count()) >= 1);
+await page.locator(".qz-block-tile", { hasText: "Content block" }).click();
+await page.waitForTimeout(1200);
+ok("content block renders paragraphs + a safe link + a list",
+  (await page.locator(".qz-builder-canvas ul li").count()) >= 2 &&
+  (await page.locator('.qz-builder-canvas a[href="https://example.com"]').count()) === 1);
 await page.evaluate(() => {
   const c = document.querySelector(".qz-builder-canvas");
   const dt = new DataTransfer();

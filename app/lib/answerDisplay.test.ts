@@ -123,3 +123,62 @@ describe("QZY-9 schema — answer_display parses and stays absent-by-default", (
     expect(() => Quiz.parse(bad({ overlay_tint: 90 }))).toThrow();
   });
 });
+
+// ── QZY-10 (build-tab §7) — the v1 block inventory parses; docs without the
+// new blocks are untouched (the discriminated union only grew) ──────────────
+
+describe("QZY-10 schema — new block types", () => {
+  const docWith = (blocks: unknown[]) =>
+    Quiz.parse({
+      quiz_id: "qz",
+      scope: { collection_ids: [] },
+      nodes: [
+        { id: "intro", type: "intro", position: { x: 0, y: 0 }, data: { headline: "Hi" } },
+        { id: "end", type: "end", position: { x: 0, y: 0 }, data: { headline: "Bye" } },
+      ],
+      edges: [{ id: "e1", source: "intro", target: "end" }],
+      results_pages: [],
+      node_layouts: { intro: blocks },
+    });
+
+  it("video / progress / logo / content blocks parse with defaults", () => {
+    const doc = docWith([
+      { id: "b1", type: "video", url: "https://cdn.example.com/v.mp4", autoplay: true },
+      { id: "b2", type: "progress", bar_style: "dots" },
+      { id: "b3", type: "logo", url: "https://cdn.example.com/l.png", size: 64 },
+      { id: "b4", type: "content", text: "Hello\n\n- one\n- [two](https://x.com)" },
+    ]);
+    const blocks = doc.node_layouts["intro"]!;
+    expect(blocks.map((b) => b.type)).toEqual(["video", "progress", "logo", "content"]);
+    const video = blocks[0]!;
+    expect(video.type === "video" && video.controls).toBe(true);
+    const progress = blocks[1]!;
+    expect(progress.type === "progress" && progress.thickness).toBe(6);
+  });
+
+  it("button action + image extras + letter spacing parse", () => {
+    const doc = docWith([
+      {
+        id: "b1",
+        type: "button",
+        label: "Shop",
+        action: "link",
+        href: "https://shop.example.com",
+        full_width: true,
+        icon: "→",
+      },
+      { id: "b2", type: "image", url: "https://cdn.example.com/i.png", height: 240, radius: 8, link: "https://x.com" },
+      { id: "b3", type: "text", text: "T", style: { letter_spacing: 1.5 } },
+    ]);
+    const btn = doc.node_layouts["intro"]![0]!;
+    expect(btn.type === "button" && btn.action).toBe("link");
+    const txt = doc.node_layouts["intro"]![2]!;
+    expect(txt.style.letter_spacing).toBe(1.5);
+  });
+
+  it("rejects bad actions and out-of-range values", () => {
+    expect(() => docWith([{ id: "b", type: "button", action: "explode" }])).toThrow();
+    expect(() => docWith([{ id: "b", type: "progress", thickness: 40 }])).toThrow();
+    expect(() => docWith([{ id: "b", type: "logo", size: 4 }])).toThrow();
+  });
+});

@@ -156,6 +156,11 @@ const RUNTIME_LITERAL_BLOCK_TYPES = new Set([
   "button",
   "spacer",
   "divider",
+  // QZY-10 §7 — the v1 inventory additions (BlockRenderer literal cases).
+  "video",
+  "progress",
+  "logo",
+  "content",
 ]);
 // BLD-7 — a smart block renders only on the node type whose interactive
 // region exists (renderSmart mounts the region-mode view with the SAME
@@ -1089,6 +1094,14 @@ export function QuizRuntime(props: QuizRuntimeProps) {
         resolveText: (t, merge) =>
           merge ? resolveMergeTags(t, buildMergeContext(path, doc)) : t,
         onPrimary: () => gotoNextFrom(node.id, null),
+        // QZY-10 — the `progress` block: answered so far + total questions.
+        progress: {
+          index: Math.min(
+            path.length + 1,
+            doc.nodes.filter((x) => x.type === "question").length || 1,
+          ),
+          total: doc.nodes.filter((x) => x.type === "question").length || 1,
+        },
         // BLD-7 — the smart regions mount the SAME views the fixed templates
         // use, in region mode (no card shell / heading — the layout's blocks
         // own those), with identical advance/analytics wiring.

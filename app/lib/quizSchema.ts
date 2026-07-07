@@ -879,6 +879,8 @@ export const BlockStyle = z
     font_size: z.number().int().min(8).max(96),
     font_weight: z.number().int().min(100).max(900),
     radius: z.enum(["square", "rounded", "pill"]),
+    // QZY-10 §7 — letter spacing (px) for text-bearing blocks.
+    letter_spacing: z.number().min(-2).max(10),
   })
   .partial();
 export type BlockStyle = z.infer<typeof BlockStyle>;
@@ -931,6 +933,10 @@ export const ImageBlock = z.object({
   alt: z.string().default(""),
   fit: z.enum(["cover", "contain"]).default("cover"),
   aspect: z.enum(["auto", "1/1", "4/3", "16/9"]).default("auto"),
+  // QZY-10 §7 — height scrub, corner radius, and an optional click-through.
+  height: z.number().int().min(24).max(800).optional(),
+  radius: z.number().int().min(0).max(40).optional(),
+  link: z.string().url().optional(),
 });
 export const SpacerBlock = z.object({
   ...blockBase,
@@ -949,6 +955,50 @@ export const ButtonBlock = z.object({
   bind: ButtonBind.default("none"),
   label: z.string().default("Continue"),
   variant: z.enum(["primary", "outline", "ghost"]).default("primary"),
+  // QZY-10 (build-tab §7) — on-click action. Absent = today's behavior
+  // (advance via onPrimary / the end-node CTA link special case). "link"
+  // opens href; start/next/submit all advance (names for authoring intent).
+  action: z.enum(["start", "next", "submit", "link"]).optional(),
+  href: z.string().url().optional(),
+  full_width: z.boolean().optional(),
+  icon: z.string().max(8).optional(),
+});
+
+// ── QZY-10 (build-tab §7) — the v1 block inventory additions. New block
+// TYPES only render when authored, so every existing layout is untouched.
+export const VideoBlock = z.object({
+  ...blockBase,
+  type: z.literal("video"),
+  url: z.string().url().optional(),
+  // Unlike backgrounds, in-content video may have SOUND — but autoplay
+  // forces muted (browser policy; enforced at render).
+  autoplay: z.boolean().default(false),
+  loop: z.boolean().default(false),
+  controls: z.boolean().default(true),
+  muted: z.boolean().default(false),
+  poster: z.string().url().optional(),
+});
+export const ProgressBlock = z.object({
+  ...blockBase,
+  type: z.literal("progress"),
+  bar_style: z.enum(["bar", "dots", "steps"]).default("bar"),
+  thickness: z.number().int().min(2).max(16).default(6),
+  color: z.string().optional(),
+  track_color: z.string().optional(),
+});
+export const LogoBlock = z.object({
+  ...blockBase,
+  type: z.literal("logo"),
+  url: z.string().url().optional(),
+  size: z.number().int().min(16).max(240).default(48),
+  align: z.enum(["left", "center", "right"]).default("center"),
+});
+// "content" — a rich-text section (paragraphs, [text](url) links, "- " lists)
+// rendered through a SAFE minimal parser (React nodes, never raw HTML).
+export const RichTextBlock = z.object({
+  ...blockBase,
+  type: z.literal("content"),
+  text: z.string().default(""),
 });
 
 // ── Smart blocks (delegate to node data + the existing render/recs path) ─────
@@ -984,6 +1034,10 @@ export const ContentBlock = z.discriminatedUnion("type", [
   SpacerBlock,
   DividerBlock,
   ButtonBlock,
+  VideoBlock,
+  ProgressBlock,
+  LogoBlock,
+  RichTextBlock,
   AnswersBlock,
   RecommendationsBlock,
   EmailInputBlock,

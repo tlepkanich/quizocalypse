@@ -25,10 +25,22 @@ const SMART_HOST: Record<string, QuizNode["type"]> = {
 const UNSUPPORTED: ReadonlySet<string> = new Set(["ai_chat", "product_grid"]);
 
 const CATEGORIES: { name: string; types: ContentBlockType[] }[] = [
-  { name: "Media", types: ["image"] },
+  // QZY-10 §7 — the v1 inventory: video/logo join Media; the rich-text
+  // content block + progress bar join Content.
+  { name: "Media", types: ["image", "video", "logo"] },
   {
     name: "Content",
-    types: ["heading", "text", "divider", "spacer", "answers", "recommendations", "email_input"],
+    types: [
+      "heading",
+      "text",
+      "content",
+      "divider",
+      "spacer",
+      "progress",
+      "answers",
+      "recommendations",
+      "email_input",
+    ],
   },
   { name: "Actions", types: ["button"] },
 ];
