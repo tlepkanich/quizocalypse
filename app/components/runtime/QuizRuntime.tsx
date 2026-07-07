@@ -37,6 +37,7 @@ import {
 import { collectNextStepImages } from "../../lib/nextStepImages";
 import { stylesFor, googleFontsUrl, useContainerBreakpoint } from "./runtimeStyles";
 import { BlockRenderer, type BlockRenderCtx } from "./BlockRenderer";
+import { screenBackgroundCss, screenOverlayAlpha, videoLayer } from "../../lib/screenBackground";
 import {
   RuntimeChromeContext,
   RuntimeCurrencyContext,
@@ -1752,6 +1753,10 @@ export function QuizRuntime(props: QuizRuntimeProps) {
       ? dcRoot.value
       : null;
 
+  // QZY-11 — the current screen's background (absent = today's page markup).
+  const screenBg = currentNodeId ? doc.node_backgrounds?.[currentNodeId] : undefined;
+  const screenBgVideo = screenBg ? videoLayer(screenBg) : null;
+
   return (
     <RuntimePreviewContext.Provider value={isPreview}>
     <RuntimeDiscountContext.Provider value={strikethroughPercent}>
@@ -1834,8 +1839,53 @@ export function QuizRuntime(props: QuizRuntimeProps) {
           .qz-unmeasured .qz-preview-chip { display: none !important; }
         }
       `}</style>
-      <div className="qz-runtime-page" style={styles.page}>
-        <div className="qz-runtime-shell">
+      <div
+        className="qz-runtime-page"
+        data-qz-screenbg={screenBg ? "" : undefined}
+        style={
+          screenBg
+            ? {
+                ...styles.page,
+                ...screenBackgroundCss(screenBg),
+                position: "relative",
+                overflow: "hidden",
+              }
+            : styles.page
+        }
+      >
+        {/* QZY-11 §8.2 — the video background layer: ALWAYS muted; mobile
+            falls back to the poster by default (a per-instance style tag ships
+            only when a video background exists). */}
+        {screenBgVideo ? (
+          <div className="qz-screenbg" aria-hidden data-mobile={screenBgVideo.mobilePlays ? "play" : "poster"}>
+            <style>{`.qz-screenbg{position:absolute;inset:0;pointer-events:none}.qz-screenbg video,.qz-screenbg img{width:100%;height:100%;object-fit:cover;object-position:${(screenBg?.focal_x ?? 50)}% ${(screenBg?.focal_y ?? 50)}%}.qz-screenbg img{display:none}@media (max-width:640px){.qz-screenbg[data-mobile="poster"] video{display:none}.qz-screenbg[data-mobile="poster"] img{display:block}}`}</style>
+            <video
+              src={screenBgVideo.url}
+              poster={screenBgVideo.poster}
+              autoPlay
+              loop
+              muted
+              playsInline
+            />
+            {screenBgVideo.poster ? <img src={screenBgVideo.poster} alt="" /> : null}
+          </div>
+        ) : null}
+        {screenBg && screenOverlayAlpha(screenBg) > 0 ? (
+          <div
+            aria-hidden
+            style={{
+              position: "absolute",
+              inset: 0,
+              background: `rgba(0,0,0,${screenOverlayAlpha(screenBg)})`,
+              backdropFilter: screenBg.blur ? `blur(${screenBg.blur}px)` : undefined,
+              pointerEvents: "none",
+            }}
+          />
+        ) : null}
+        <div
+          className="qz-runtime-shell"
+          style={screenBg ? { position: "relative", zIndex: 1 } : undefined}
+        >
           <div key={currentNodeId ?? "none"} className="qz-runtime-content" ref={contentRef} tabIndex={-1} style={{ outline: "none" }}>
             {/* Design §1 — brand logo header. Renders once above the step when a
                 logo is set; absent → no header (byte-stable). data: and https:

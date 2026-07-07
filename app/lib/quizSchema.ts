@@ -1584,6 +1584,32 @@ export const Quiz = z.object({
   // defaulted to {}), so the node union + every existing parser stay untouched
   // and existing quizzes are byte-identical (empty map = no behavior change).
   node_layouts: z.record(z.string(), z.array(ContentBlock)).default({}),
+  // QZY-11 (build-tab §8) — PER-SCREEN backgrounds, keyed by node id.
+  // .optional() (never .default({})) so docs without one gain no key; the
+  // global default stays in Design (design_tokens) and a per-screen entry
+  // wins. Video is ALWAYS muted (not configurable — §8.2); mobile defaults
+  // to the poster fallback.
+  node_backgrounds: z
+    .record(
+      z.string(),
+      z.object({
+        type: z.enum(["color", "gradient", "image", "video"]).optional(),
+        color: z.string().max(64).optional(),
+        color2: z.string().max(64).optional(),
+        angle: z.number().int().min(0).max(360).optional(),
+        image_url: z.string().url().optional(),
+        video_url: z.string().url().optional(),
+        poster_url: z.string().url().optional(),
+        fit: z.enum(["cover", "contain", "tile"]).optional(),
+        focal_x: z.number().min(0).max(100).optional(),
+        focal_y: z.number().min(0).max(100).optional(),
+        overlay: z.number().int().min(0).max(80).optional(),
+        blur: z.number().int().min(0).max(20).optional(),
+        fixed: z.boolean().optional(),
+        mobile_video: z.enum(["poster", "play"]).optional(),
+      }),
+    )
+    .optional(),
   // Phase 2 (paid) — per-node merchant CSS. Raw declaration/selector text,
   // scoped to the node root at render time (see app/components/runtime/
   // blockStyle.ts scopeNodeCss). Empty default = no CSS injected.

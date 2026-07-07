@@ -38,7 +38,7 @@ import { QzDrawer } from "../qz-overlays";
 import { BuilderLogicView, QuizSettingsView } from "./BuilderSettings";
 import { BuilderDesignPanel } from "./BuilderDesignPanel";
 import { BLOCK_DRAG_MIME, BuilderBlocksPalette, insertBlock } from "./BuilderBlocksPalette";
-import { BuilderPageSettings } from "./BuilderPageSettings";
+import { BuilderBackgroundTab } from "./BuilderBackgroundTab";
 import { BuilderLayersTab } from "./BuilderLayersTab";
 import { ScreenCarousel } from "./ScreenCarousel";
 import UpgradeDeciderModal from "../onboarding/questionsLogic/UpgradeDeciderModal";
@@ -968,14 +968,9 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
               onSelectNode={select}
             />
           ) : (
-            <>
-              <div className="qz-label" style={{ fontSize: 11 }}>
-                Background
-              </div>
-              {/* QP-2 background + paddings (quiz-global). Per-screen
-                  backgrounds land in QZY-11 and will override this default. */}
-              <BuilderPageSettings doc={doc} commit={commit} />
-            </>
+            // QZY-11 — PER-SCREEN backgrounds (§8); the quiz-wide default
+            // stays reachable in a disclosure inside.
+            <BuilderBackgroundTab doc={doc} node={blockTarget} commit={commit} />
           )}
         </>
       );

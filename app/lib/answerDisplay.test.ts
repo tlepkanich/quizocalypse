@@ -6,6 +6,12 @@ import {
   displayRadius,
 } from "./answerDisplay";
 import { Quiz } from "./quizSchema";
+import {
+  readabilityHint,
+  screenBackgroundCss,
+  screenOverlayAlpha,
+  videoLayer,
+} from "./screenBackground";
 
 // ── QZY-9 (build-tab §5/§5.2) — answer display resolution ────────────────────
 
@@ -180,5 +186,62 @@ describe("QZY-10 schema — new block types", () => {
     expect(() => docWith([{ id: "b", type: "button", action: "explode" }])).toThrow();
     expect(() => docWith([{ id: "b", type: "progress", thickness: 40 }])).toThrow();
     expect(() => docWith([{ id: "b", type: "logo", size: 4 }])).toThrow();
+  });
+});
+
+// ── QZY-11 (build-tab §8) — per-screen backgrounds ───────────────────────────
+
+describe("QZY-11 screenBackground — resolution + guards", () => {
+  it("color / gradient / image css", () => {
+    expect(screenBackgroundCss({ type: "color", color: "#123456" }).background).toBe("#123456");
+    expect(
+      screenBackgroundCss({ type: "gradient", color: "#000", color2: "#fff", angle: 90 }).background,
+    ).toBe("linear-gradient(90deg, #000, #fff)");
+    const img = screenBackgroundCss({
+      type: "image",
+      image_url: "https://cdn.example.com/x.jpg",
+      fit: "tile",
+      focal_x: 20,
+      focal_y: 80,
+    });
+    expect(img.backgroundRepeat).toBe("repeat");
+    expect(img.backgroundPosition).toBe("20% 80%");
+  });
+
+  it("video layer: always muted semantics, poster fallback default on mobile", () => {
+    const v = videoLayer({ type: "video", video_url: "https://cdn.example.com/v.mp4", poster_url: "https://cdn.example.com/p.jpg" });
+    expect(v?.mobilePlays).toBe(false);
+    expect(videoLayer({ type: "video", video_url: "https://cdn.example.com/v.mp4", mobile_video: "play" })?.mobilePlays).toBe(true);
+    expect(videoLayer({ type: "image" })).toBeNull();
+  });
+
+  it("overlay alpha + readability hint (non-blocking)", () => {
+    expect(screenOverlayAlpha({ overlay: 45 })).toBe(0.45);
+    expect(readabilityHint({ type: "image", image_url: "https://x.com/i.jpg", overlay: 10 })).toBeTruthy();
+    expect(readabilityHint({ type: "image", image_url: "https://x.com/i.jpg", overlay: 40 })).toBeNull();
+    expect(readabilityHint({ type: "color", color: "#fff" })).toBeNull();
+  });
+
+  it("schema: node_backgrounds parses; docs without it gain no key", () => {
+    const base = {
+      quiz_id: "qz",
+      scope: { collection_ids: [] },
+      nodes: [
+        { id: "intro", type: "intro", position: { x: 0, y: 0 }, data: { headline: "Hi" } },
+        { id: "end", type: "end", position: { x: 0, y: 0 }, data: { headline: "Bye" } },
+      ],
+      edges: [{ id: "e1", source: "intro", target: "end" }],
+      results_pages: [],
+    };
+    const withBg = Quiz.parse({
+      ...base,
+      node_backgrounds: {
+        intro: { type: "video", video_url: "https://cdn.example.com/v.mp4", overlay: 40 },
+      },
+    });
+    expect(withBg.node_backgrounds?.["intro"]?.type).toBe("video");
+    const once = Quiz.parse(base);
+    expect(JSON.stringify(once)).not.toContain("node_backgrounds");
+    expect(() => Quiz.parse({ ...base, node_backgrounds: { intro: { overlay: 90 } } })).toThrow();
   });
 });

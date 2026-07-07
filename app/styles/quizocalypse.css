@@ -1287,8 +1287,12 @@ body[data-qz] ::selection { background: var(--qz-ink); color: var(--qz-cream); }
    hardcodes a #FAFAFA backdrop + 100vh (an inline style → needs !important),
    which read as a "white box" around the quiz card. Strip it here only (scoped
    to the builder canvas; published /q + embedded /app keep their backdrop). */
-.qz-builder-canvas .qz-runtime-page {
+/* QZY-11 — scoped to screens WITHOUT a per-screen background, so the
+   Background tab stays WYSIWYG on the canvas. */
+.qz-builder-canvas .qz-runtime-page:not([data-qz-screenbg]) {
   background: transparent !important;
+}
+.qz-builder-canvas .qz-runtime-page {
   min-height: 0 !important;
 }
 

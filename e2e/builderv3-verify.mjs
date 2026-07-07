@@ -289,6 +289,47 @@ await page.waitForTimeout(300);
 ok("Background tab renders the page settings",
   (await page.locator(".qz-builder-panel").textContent())?.includes("Background"));
 
+// ── QZY-11: per-screen backgrounds — type picker, live canvas, hint ─────────
+ok("background type picker (None/Color/Gradient/Image/Video)",
+  (await page.locator('[aria-label="Background type"] button').count()) === 5);
+await page.locator('[aria-label="Background type"] button', { hasText: "Gradient" }).click();
+await page.waitForTimeout(800);
+const pageBg = await page
+  .locator(".qz-builder-canvas .qz-runtime-page")
+  .first()
+  .evaluate((el) => getComputedStyle(el).backgroundImage + " " + getComputedStyle(el).background)
+  .catch(() => "");
+ok("gradient type selects (canvas live once colors are set)",
+  (await page.locator('[aria-label="Background type"] button[aria-pressed=true]', { hasText: "Gradient" }).count()) === 1,
+  pageBg.slice(0, 40));
+await page.locator('[aria-label="Background type"] button', { hasText: "Image" }).click();
+await page.waitForTimeout(300);
+await page.locator('.qz-builder-panel input[placeholder="https://…"]').first()
+  .fill("https://cdn.shopify.com/example.jpg");
+await page.waitForTimeout(800);
+ok("image background applies to the LIVE canvas page",
+  /example\.jpg/.test(
+    await page
+      .locator(".qz-builder-canvas .qz-runtime-page")
+      .first()
+      .evaluate((el) => getComputedStyle(el).backgroundImage)
+      .catch(() => ""),
+  ));
+ok("image background shows the non-blocking readability hint (overlay < 20)",
+  (await page.locator(".qz-builder-panel [role=note]").count()) === 1);
+ok("quiz-wide default reachable in a disclosure",
+  (await page.locator(".qz-builder-panel summary", { hasText: "Quiz-wide default" }).count()) === 1);
+await page.locator('[aria-label="Background type"] button', { hasText: "None" }).click();
+await page.waitForTimeout(800);
+ok("None clears the per-screen background (net-zero)",
+  !/example\.jpg/.test(
+    await page
+      .locator(".qz-builder-canvas .qz-runtime-page")
+      .first()
+      .evaluate((el) => getComputedStyle(el).backgroundImage)
+      .catch(() => ""),
+  ));
+
 // ── BLD-7: blocks palette + block management (net-zero: ends with Reset) ───
 await page.locator('[aria-label="Build panel"] button', { hasText: "Add" }).click();
 await page.waitForTimeout(300);
