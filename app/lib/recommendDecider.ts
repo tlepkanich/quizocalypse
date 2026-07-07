@@ -36,6 +36,12 @@ export interface ResolvedTarget {
   /** The rule that overrode the direct mapping, or null when the deciding
    *  answer's own mapping produced the target. */
   matchedRuleId: string | null;
+  // QZY-1 (quiz-logic spec §6.1) — when the winning rule carries a LIST
+  // action (show / hide / prioritize), the base mapping still resolves the
+  // target above and the action post-processes the ranked pool against the
+  // rule's own target. Absent/null = the legacy replace-target rule.
+  ruleAction?: "show" | "hide" | "prioritize" | null;
+  ruleTargetId?: string | null;
 }
 
 /** Rec-page-spec-V2 §3.1 — the spec defaults, applied at READ time so stored
@@ -119,22 +125,71 @@ export function resolveTarget(
 ): ResolvedTarget | null {
   const selected = new Set(selectedAnswerIds);
 
+  // First matching rule wins and evaluation stops (spec §6 precedence) —
+  // whether it replaces the target (legacy, no action) or post-processes the
+  // list (QZY-1 show/hide/prioritize).
+  let actionRule: DecisionRuleT | null = null;
   for (const rule of doc.decision_rules ?? []) {
     if (rule.conditions.length === 0) continue; // half-built — never fires (V9)
-    if (ruleMatches(rule, selected)) {
+    if (!ruleMatches(rule, selected)) continue;
+    if (!rule.action) {
       return { targetId: rule.target_id, matchedRuleId: rule.id };
     }
+    actionRule = rule;
+    break;
   }
 
   const decider = doc.nodes.find(
     (n) => n.type === "question" && n.data.role === "decides",
   );
-  if (!decider || decider.type !== "question") return null;
-  const picked = decider.data.answers.find(
-    (a) => selected.has(a.id) && a.target_id,
-  );
-  if (!picked?.target_id) return null;
-  return { targetId: picked.target_id, matchedRuleId: null };
+  const picked =
+    decider && decider.type === "question"
+      ? decider.data.answers.find((a) => selected.has(a.id) && a.target_id)
+      : undefined;
+  const baseTargetId = picked?.target_id ?? null;
+
+  if (actionRule) {
+    if (baseTargetId) {
+      return {
+        targetId: baseTargetId,
+        matchedRuleId: actionRule.id,
+        ruleAction: actionRule.action ?? null,
+        ruleTargetId: actionRule.target_id,
+      };
+    }
+    // No base mapping to act on: show/prioritize degrade to the rule's own
+    // target (something must render); a bare hide has nothing to hide from.
+    if (actionRule.action === "hide") return null;
+    return { targetId: actionRule.target_id, matchedRuleId: actionRule.id };
+  }
+
+  if (!baseTargetId) return null;
+  return { targetId: baseTargetId, matchedRuleId: null };
+}
+
+/** QZY-1 (spec §6.1) — apply the winning rule's list action to the resolved
+ *  ordered id pool. `ruleMemberIds` are the rule target's baked members.
+ *    show       → ensure the members are present (missing ones append, in
+ *                 their own baked order — they were not ranked by the pool).
+ *    hide       → remove the members from the pool.
+ *    prioritize → stable-move members already in the pool to the front.
+ *  Pure; order of untouched ids is preserved. */
+export function applyRuleAction(
+  poolIds: readonly string[],
+  ruleMemberIds: readonly string[],
+  action: "show" | "hide" | "prioritize",
+): string[] {
+  const members = new Set(ruleMemberIds);
+  if (action === "hide") return poolIds.filter((id) => !members.has(id));
+  if (action === "prioritize") {
+    const first = poolIds.filter((id) => members.has(id));
+    const rest = poolIds.filter((id) => !members.has(id));
+    return [...first, ...rest];
+  }
+  // show
+  const present = new Set(poolIds);
+  const missing = ruleMemberIds.filter((id) => !present.has(id));
+  return [...poolIds, ...missing];
 }
 
 function ruleMatches(rule: DecisionRuleT, selected: ReadonlySet<string>): boolean {

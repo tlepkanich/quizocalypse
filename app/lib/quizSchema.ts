@@ -108,6 +108,11 @@ export const Answer = z.object({
   image_url: z.string().url().optional(),
   tags: z.array(z.string()).default([]),
   collection_filter: z.string().optional(),
+  // QZY-1 (quiz-logic spec §5) — "No preference" as a FIRST-CLASS state on a
+  // filter answer: an intentional pass-through that does not narrow the pool
+  // (vs. an accidentally-empty tags[]). Never blocking; the Logic map renders
+  // it as "doesn't narrow". Optional/additive — absent on every legacy doc.
+  no_preference: z.boolean().optional(),
   // Phase 5: an optional short video shown in the answer card (mp4/embed URL).
   video_url: z.string().url().optional(),
   edge_handle_id: z.string().min(1),
@@ -219,7 +224,12 @@ export const QuestionDataObject = z.object({
   // renders on it). Only meaningful when the quiz's logic_model is "decider";
   // multi-select questions are auto-qualifier (§2.2). Additive/optional →
   // absent on every legacy doc.
-  role: z.enum(["decides", "qualifier"]).optional(),
+  // QZY-1 (quiz-logic spec §3) adds "filter": narrows the pool by an
+  // attribute value per answer (tags/collection_filter — the machinery the
+  // engine already reads). UI vocabulary: decides = "Picks the result ◆",
+  // filter = "Filters results", qualifier = "Info only" (stored value stays
+  // `qualifier` forever — parse-forever rule; do not migrate docs).
+  role: z.enum(["decides", "qualifier", "filter"]).optional(),
 });
 
 export const QuestionData = QuestionDataObject.refine(
@@ -998,6 +1008,13 @@ export type DiscountConfig = z.infer<typeof DiscountConfig>;
 export const GlobalFallback = z.object({
   enabled: z.boolean().default(false),
   heading: z.string().default("Our most-loved products"),
+  // QZY-1 (quiz-logic spec §9) — the empty-case chooser, exactly three
+  // options: best_sellers (safe default — whole sellable catalog, best-seller
+  // ranked) · collection (collection_id) · featured (hand-picked
+  // product_ids). OPTIONAL so every pre-QZY doc parses byte-identically;
+  // absent = legacy inference (collection_id → collection, product_ids →
+  // featured, tag → tag pool, else nothing).
+  mode: z.enum(["best_sellers", "collection", "featured"]).optional(),
   collection_id: z.string().optional(),
   tag: z.string().optional(),
   product_ids: z.array(z.string()).default([]),
@@ -1198,8 +1215,19 @@ export type DecisionRuleCondition = z.infer<typeof DecisionRuleCondition>;
 export const DecisionRule = z.object({
   id: z.string().min(1),
   conditions: z.array(DecisionRuleCondition).default([]),
-  // The recommendation target (a Category id) this rule forces.
+  // The recommendation target (a Category id — an individual product, a
+  // collection, or a tag bucket, matching quiz-logic spec §6.2's "tag/
+  // collection OR a specific product").
   target_id: z.string().min(1),
+  // QZY-1 (quiz-logic spec §6.1) — what the winning rule DOES with its
+  // target on the resolved ranked list:
+  //   absent   → legacy semantics: the rule's target REPLACES the base
+  //              mapping outright (parse-forever; every existing rule).
+  //   show     → force the target's products into the results.
+  //   hide     → remove the target's products from the results.
+  //   prioritize → keep the results but rank the target's products first
+  //              (renamed from "boost" — ranked-list only).
+  action: z.enum(["show", "hide", "prioritize"]).optional(),
 });
 export type DecisionRule = z.infer<typeof DecisionRule>;
 

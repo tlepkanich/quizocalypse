@@ -4,6 +4,7 @@
 // import the concrete module (never the barrel) so the graph stays acyclic.
 import { uid, type QuizDoc } from "./shared";
 import { addEndNode } from "./nodeMutations";
+import { wouldCreateRevisit } from "../pathAnalyzer";
 
 // Set the edge's condition (used by the per-slot Rule editor on Branch
 // nodes). Pass `undefined` to clear it back to unconditional.
@@ -102,6 +103,12 @@ export function setAnswerRoute(
   if (!node || node.type !== "question") return doc;
   const answer = node.data.answers.find((a) => a.id === answerId);
   if (!answer) return doc;
+  // QZY-1 (quiz-logic spec §1) — refuse a route that would create a revisit
+  // (cycle) on some path. The THEN GO TO dropdown disables these; the
+  // mutation layer is the backstop (a cycling quiz traps the shopper).
+  if (targetNodeId && wouldCreateRevisit(doc, questionNodeId, targetNodeId)) {
+    return doc;
+  }
   const handle = answer.edge_handle_id;
   // Delete EVERY edge on this answer's handle, not just the first — defense in
   // depth so a pre-corrupted doc carrying duplicate-handle edges (e.g. a legacy

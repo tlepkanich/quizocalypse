@@ -1,11 +1,17 @@
 import type { Quiz, ResultData, MatchLadderStrategy } from "./quizSchema";
 import type { z } from "zod";
 import {
+  applyRuleAction,
   resolveTarget,
   settingsForTarget,
   targetProducts,
   type ResolvedRecPageConfig,
 } from "./recommendDecider";
+import {
+  filterQuestions,
+  narrowIdsByFilters,
+  type AppliedFilter,
+} from "./filterMatching";
 
 type QuizDoc = z.infer<typeof Quiz>;
 type ResultDataT = z.infer<typeof ResultData>;
@@ -137,6 +143,13 @@ export interface ExplainedRecommendation {
     hero: ExplainedProduct | null;
     grid: ExplainedProduct[];
     allOutOfStock: boolean;
+    // QZY-1 (quiz-logic spec §3/§8) — which filter questions narrowed the
+    // pool on this path, and whether they narrowed it to ZERO (the empty
+    // case §9 fallback owns). Absent on docs with no filter-role questions.
+    filters?: {
+      applied: AppliedFilter[];
+      zeroAfterFilters: boolean;
+    };
   };
 }
 
@@ -358,15 +371,48 @@ export function recommendForResultExplained(
       return { products: [], rungUsed: null, poolSize: 0, oosSwapped: false, tagBag: {} };
     }
     const config = settingsForTarget(quiz.rec_page_settings, resolved.targetId);
+    // The same junk filter walkLadder applies (L2-9 review): $0+OOS
+    // placeholders never surface. Real OOS items keep their price and stay —
+    // the §5 OOS handling governs them.
+    const sellable = productIndex.filter(isSellable);
+    // ── QZY-1 — the "Filters results" stage (rules → decider → FILTERS →
+    // fallback). Path-aware by construction: only the shopper's selected
+    // answers on filter-role questions narrow the target's pool; no legacy
+    // doc carries the role, so pre-QZY docs resolve byte-identically.
+    const baseIds = input.targetProductIdsMap?.[resolved.targetId] ?? [];
+    const hasFilters = filterQuestions(quiz).length > 0;
+    const narrowed = hasFilters
+      ? narrowIdsByFilters(
+          baseIds,
+          new Map(sellable.map((p) => [p.product_id, p])),
+          quiz,
+          selectedAnswerIds,
+        )
+      : null;
+    // ── QZY-1 — pipeline order per spec: rules(action) run on the pool the
+    // base mapping + filters produced. Only the FIRST matching rule fired
+    // (resolveTarget); an action-less rule already replaced the target above.
+    let poolIds =
+      narrowed && narrowed.applied.length > 0 ? narrowed.ids : baseIds;
+    if (resolved.ruleAction && resolved.ruleTargetId) {
+      poolIds = applyRuleAction(
+        poolIds,
+        input.targetProductIdsMap?.[resolved.ruleTargetId] ?? [],
+        resolved.ruleAction,
+      );
+    }
+    const poolAdjusted =
+      poolIds !== baseIds ||
+      (narrowed !== null && narrowed.applied.length > 0) ||
+      Boolean(resolved.ruleAction);
     const split = targetProducts({
       targetId: resolved.targetId,
       targetShape: input.targetIndex?.[resolved.targetId]?.type,
       config,
-      // The same junk filter walkLadder applies (L2-9 review): $0+OOS
-      // placeholders never surface. Real OOS items keep their price and stay —
-      // the §5 OOS handling governs them.
-      productIndex: productIndex.filter(isSellable),
-      targetProductIdsMap: input.targetProductIdsMap ?? {},
+      productIndex: sellable,
+      targetProductIdsMap: poolAdjusted
+        ? { ...(input.targetProductIdsMap ?? {}), [resolved.targetId]: poolIds }
+        : (input.targetProductIdsMap ?? {}),
     });
     const asExplained = (p: IndexedProduct): ExplainedProduct => ({
       ...p,
@@ -387,6 +433,14 @@ export function recommendForResultExplained(
         hero: split.hero ? asExplained(split.hero) : null,
         grid: split.grid.map(asExplained),
         allOutOfStock: split.allOutOfStock,
+        ...(narrowed
+          ? {
+              filters: {
+                applied: narrowed.applied,
+                zeroAfterFilters: narrowed.zeroAfterFilters,
+              },
+            }
+          : {}),
       },
     };
   }
@@ -452,7 +506,19 @@ export function resolveGlobalFallbackProducts(
   if (!gf?.enabled) return [];
   const idx = productIndex.filter(isSellable);
   let pool: IndexedProduct[];
-  if (gf.collection_id) {
+  // QZY-1 (quiz-logic spec §9) — an explicit mode wins. best_sellers = the
+  // whole sellable catalog, best-seller ranked below ("always populated —
+  // safe default"). Absent mode keeps the legacy field inference exactly.
+  if (gf.mode === "best_sellers") {
+    pool = idx;
+  } else if (gf.mode === "collection") {
+    if (!gf.collection_id) return [];
+    pool = idx.filter((p) => p.collection_ids.includes(gf.collection_id!));
+  } else if (gf.mode === "featured") {
+    if (!gf.product_ids.length) return [];
+    const want = new Set(gf.product_ids);
+    pool = idx.filter((p) => want.has(p.product_id));
+  } else if (gf.collection_id) {
     pool = idx.filter((p) => p.collection_ids.includes(gf.collection_id!));
   } else if (gf.tag) {
     const t = gf.tag.toLowerCase();

@@ -342,3 +342,17 @@ export function outcomeTable(doc: QuizDoc): OutcomeRow[] {
   }
   return rows;
 }
+
+/** QZY-1 (quiz-logic dev-handoff v1.2 §1) — would routing an answer of
+ *  `fromQuestionId` to `targetId` create a revisit (cycle) on some path?
+ *  True when the target IS the source, or the target can reach the source
+ *  again by following any forward edge. The THEN GO TO dropdown disables
+ *  such targets; the mutation layer refuses to write them. */
+export function wouldCreateRevisit(
+  doc: QuizDoc,
+  fromQuestionId: string,
+  targetId: string,
+): boolean {
+  if (targetId === fromQuestionId) return true;
+  return reachableNodeIds(doc, targetId).has(fromQuestionId);
+}

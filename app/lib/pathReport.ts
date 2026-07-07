@@ -10,6 +10,8 @@ import {
   shadowedRules,
 } from "./pathAnalyzer";
 import { validateQuiz, validateQuizWarnings } from "./quizValidation";
+import { filterAnswerMatchCount } from "./filterMatching";
+import { isSellable, type IndexedProduct } from "./recommendationEngine";
 
 type QuizDoc = z.infer<typeof Quiz>;
 
@@ -41,7 +43,7 @@ export interface Tier1Finding {
 }
 
 export interface Tier1Check {
-  id: "V1" | "V2" | "V3" | "V4" | "V5" | "V6" | "V7" | "V8" | "V9" | "V10" | "S1" | "S2";
+  id: "V1" | "V2" | "V3" | "V4" | "V5" | "V6" | "V7" | "V8" | "V9" | "V10" | "V11" | "S1" | "S2";
   severity: CheckSeverity;
   status: CheckStatus;
   title: string;
@@ -71,6 +73,11 @@ const ANSWER_ADVISORY_LEN = 60;
 export function buildTier1Report(
   doc: QuizDoc,
   buckets: Array<{ id: string; name: string }>,
+  // QZY-1 (quiz-logic spec §5/§8) — pass the product index to enable the V11
+  // filter dead-end check (a filter answer matching 0 products is BLOCKING).
+  // Absent (some hosts have no catalog handy) → the check is omitted, never
+  // rendered as a hollow "pass".
+  productIndex?: readonly IndexedProduct[],
 ): Tier1Report {
   const bucketIds = new Set(buckets.map((b) => b.id));
   // Distinguish "never picked" from "picked, then the bucket was deleted" —
@@ -228,6 +235,26 @@ export function buildTier1Report(
       ...(qIndex.has(i.nodeId) ? { link: { kind: "question" as const, nodeId: i.nodeId } } : {}),
     }));
 
+  // QZY-1 (spec §5/§8) — V11: every filter answer must match ≥1 sellable
+  // product; 0 = a dead end that blocks every path traversing that answer.
+  // "No preference" / unmapped answers return null from the counter and are
+  // pass-throughs, never dead ends.
+  const v11: Tier1Finding[] = [];
+  if (productIndex) {
+    const sellable = productIndex.filter(isSellable);
+    for (const q of questions) {
+      if (q.type !== "question" || q.data.role !== "filter") continue;
+      for (const a of q.data.answers) {
+        if (filterAnswerMatchCount(a, sellable) === 0) {
+          v11.push({
+            message: `${qLabel(q.id)} “${q.data.text}” → answer “${a.text}” matches 0 products — every path through it dead-ends. Re-map it, AI-tag products, or set it to no preference.`,
+            link: { kind: "question", nodeId: q.id },
+          });
+        }
+      }
+    }
+  }
+
   const checks: Tier1Check[] = [
     check("V1", "block", "Exactly one deciding question", v1),
     check("V2", "block", "Every path reaches the decider", v2),
@@ -239,6 +266,9 @@ export function buildTier1Report(
     check("V8", "warn", "No rule is shadowed by a higher one", v8),
     check("V9", "warn", "No half-built rules", v9),
     check("V10", "info", "Answer text fits comfortably", v10),
+    ...(productIndex
+      ? [check("V11", "block", "Every filter answer matches products", v11)]
+      : []),
     check("S1", "block", "Structure (orphans, dead ends, routing)", s1),
   ];
 

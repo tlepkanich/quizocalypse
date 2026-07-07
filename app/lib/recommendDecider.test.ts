@@ -12,6 +12,10 @@ import {
 import { recommendForResultExplained, type IndexedProduct } from "./recommendationEngine";
 import { Quiz } from "./quizSchema";
 
+// ── QZY-1 (quiz-logic spec §6.1) — rule LIST actions ─────────────────────────
+
+import { applyRuleAction } from "./recommendDecider";
+
 // ── fixtures ────────────────────────────────────────────────────────────────
 
 const P = (
@@ -501,5 +505,146 @@ describe("deciderFallbackProducts — the §6 empty-target chain", () => {
       idx,
     );
     expect(out).toEqual({ source: null, products: [] });
+  });
+});
+
+describe("QZY-1 applyRuleAction — show / hide / prioritize on the pool", () => {
+  const pool = ["a", "b", "c"];
+  it("hide removes the rule target's members", () => {
+    expect(applyRuleAction(pool, ["b", "x"], "hide")).toEqual(["a", "c"]);
+  });
+  it("prioritize stable-moves present members to the front", () => {
+    expect(applyRuleAction(pool, ["c", "b"], "prioritize")).toEqual(["b", "c", "a"]);
+  });
+  it("prioritize does not inject absent members", () => {
+    expect(applyRuleAction(pool, ["x"], "prioritize")).toEqual(pool);
+  });
+  it("show appends missing members, keeps existing order", () => {
+    expect(applyRuleAction(pool, ["b", "x", "y"], "show")).toEqual(["a", "b", "c", "x", "y"]);
+  });
+});
+
+describe("QZY-1 resolveTarget — action rules keep the base mapping", () => {
+  const withRule = (action?: "show" | "hide" | "prioritize") =>
+    deciderDoc({
+      decision_rules: [
+        {
+          id: "rule1",
+          conditions: [{ question_id: "q1", answer_id: "beginner", op: "is" }],
+          target_id: "cat_sale",
+          ...(action ? { action } : {}),
+        },
+      ],
+    });
+
+  it("action-less rule still REPLACES the target (legacy semantics, parse-forever)", () => {
+    expect(resolveTarget(["beginner", "park"], withRule())).toEqual({
+      targetId: "cat_sale",
+      matchedRuleId: "rule1",
+    });
+  });
+
+  it("a prioritize rule resolves the BASE target and carries the action", () => {
+    expect(resolveTarget(["beginner", "park"], withRule("prioritize"))).toEqual({
+      targetId: "cat_park",
+      matchedRuleId: "rule1",
+      ruleAction: "prioritize",
+      ruleTargetId: "cat_sale",
+    });
+  });
+
+  it("non-matching conditions leave the base mapping alone", () => {
+    expect(resolveTarget(["advanced", "park"], withRule("hide"))).toEqual({
+      targetId: "cat_park",
+      matchedRuleId: null,
+    });
+  });
+
+  it("show with no base mapping degrades to the rule's own target", () => {
+    // decider answer not picked → no base target
+    expect(resolveTarget(["beginner"], withRule("show"))).toEqual({
+      targetId: "cat_sale",
+      matchedRuleId: "rule1",
+    });
+  });
+
+  it("hide with no base mapping resolves nothing (nothing to hide from)", () => {
+    expect(resolveTarget(["beginner"], withRule("hide"))).toBeNull();
+  });
+});
+
+describe("QZY-1 engine integration — filters + actions adjust the decider pool", () => {
+  const filteredDoc = (rules: unknown[] = []) =>
+    deciderDoc({
+      decision_rules: rules,
+      nodes: deciderDoc().nodes.map((n) =>
+        n.id === "q1"
+          ? {
+              ...n,
+              data: {
+                ...(n as { data: Record<string, unknown> }).data,
+                role: "filter",
+                answers: [
+                  { id: "beginner", text: "Beginner", tags: ["soft"], edge_handle_id: "h1" },
+                  { id: "advanced", text: "Advanced", tags: ["stiff"], edge_handle_id: "h2" },
+                ],
+              },
+            }
+          : n,
+      ),
+    });
+
+  const idx = [
+    P("s1", { tags: ["Soft"] }),
+    P("s2", { tags: ["stiff"] }),
+    P("s3", { tags: ["soft"] }),
+  ];
+  const maps = { targetProductIdsMap: { cat_park: ["s1", "s2", "s3"], cat_sale: ["s2"] } };
+
+  it("a filter answer narrows the resolved target's pool (case-insensitive)", () => {
+    const out = recommendForResultExplained({
+      quiz: filteredDoc() as never,
+      productIndex: idx,
+      selectedAnswerIds: ["beginner", "park"],
+      resultNodeId: "r1",
+      ...maps,
+    } as never);
+    expect(out.products.map((p) => p.product_id).sort()).toEqual(["s1", "s3"]);
+    expect(out.decider?.filters).toEqual({
+      applied: [{ questionId: "q1", questionText: "Level?", answerIds: ["beginner"] }],
+      zeroAfterFilters: false,
+    });
+  });
+
+  it("qualifier docs (no filter role) resolve byte-identically — no narrowing", () => {
+    const out = recommendForResultExplained({
+      quiz: deciderDoc() as never,
+      productIndex: idx,
+      selectedAnswerIds: ["beginner", "park"],
+      resultNodeId: "r1",
+      ...maps,
+    } as never);
+    expect(out.products.map((p) => p.product_id).sort()).toEqual(["s1", "s2", "s3"]);
+    expect(out.decider?.filters).toBeUndefined();
+  });
+
+  it("a hide-action rule removes its target's members from the resolved pool", () => {
+    const out = recommendForResultExplained({
+      quiz: filteredDoc([
+        {
+          id: "rule1",
+          conditions: [{ question_id: "q1", answer_id: "advanced", op: "is" }],
+          target_id: "cat_sale",
+          action: "hide",
+        },
+      ]) as never,
+      productIndex: idx,
+      selectedAnswerIds: ["advanced", "park"],
+      resultNodeId: "r1",
+      ...maps,
+    } as never);
+    // filter (stiff) narrows to s2; hide removes cat_sale's member s2 → empty
+    expect(out.products).toEqual([]);
+    expect(out.rungUsed).toBe("decider_rule");
   });
 });

@@ -1453,4 +1453,52 @@ describe("Rec-Page §7 global fallback (resolveGlobalFallbackProducts)", () => {
     );
     expect(out.map((p) => p.product_id).sort()).toEqual(["g2", "g3"]);
   });
+
+  // ── QZY-1 (quiz-logic spec §9) — the explicit empty-case chooser ──────────
+  describe("QZY-1 mode chooser", () => {
+    it("mode=best_sellers pools the WHOLE sellable catalog, bestseller-ranked", () => {
+      const out = resolveGlobalFallbackProducts(
+        { enabled: true, heading: "x", mode: "best_sellers", product_ids: [], count: 4 },
+        gfProducts,
+      );
+      // g4 unsellable; the rest by rank desc — "always populated" safe default.
+      expect(out.map((p) => p.product_id)).toEqual(["g1", "g2", "g3"]);
+    });
+
+    it("mode=collection requires collection_id (ignores stray product_ids)", () => {
+      const out = resolveGlobalFallbackProducts(
+        { enabled: true, heading: "x", mode: "collection", collection_id: "misc", product_ids: ["g1"], count: 4 },
+        gfProducts,
+      );
+      expect(out.map((p) => p.product_id)).toEqual(["g3"]);
+      expect(
+        resolveGlobalFallbackProducts(
+          { enabled: true, heading: "x", mode: "collection", product_ids: ["g1"], count: 4 },
+          gfProducts,
+        ),
+      ).toEqual([]);
+    });
+
+    it("mode=featured requires hand-picked product_ids (ignores stray collection_id)", () => {
+      const out = resolveGlobalFallbackProducts(
+        { enabled: true, heading: "x", mode: "featured", collection_id: "best", product_ids: ["g3"], count: 4 },
+        gfProducts,
+      );
+      expect(out.map((p) => p.product_id)).toEqual(["g3"]);
+      expect(
+        resolveGlobalFallbackProducts(
+          { enabled: true, heading: "x", mode: "featured", collection_id: "best", product_ids: [], count: 4 },
+          gfProducts,
+        ),
+      ).toEqual([]);
+    });
+
+    it("absent mode keeps the legacy field inference byte-for-byte", () => {
+      const out = resolveGlobalFallbackProducts(
+        { enabled: true, heading: "x", collection_id: "best", product_ids: [], count: 4 },
+        gfProducts,
+      );
+      expect(out.map((p) => p.product_id)).toEqual(["g1", "g2"]);
+    });
+  });
 });

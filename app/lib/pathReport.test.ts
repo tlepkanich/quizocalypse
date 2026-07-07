@@ -2,6 +2,11 @@ import { describe, expect, it } from "vitest";
 import { buildTier1Report } from "./pathReport";
 import { Quiz } from "./quizSchema";
 
+// ── QZY-1 — V11 filter dead ends + the cycle guard ───────────────────────────
+
+import { wouldCreateRevisit } from "./pathAnalyzer";
+import type { IndexedProduct } from "./recommendationEngine";
+
 const BUCKETS = [
   { id: "cat_park", name: "Park Boards" },
   { id: "cat_pow", name: "Powder Boards" },
@@ -253,5 +258,73 @@ describe("buildTier1Report (§7.1 Tier-1)", () => {
     expect(r.verdict.safe).toBe(true); // info never blocks (§10)
     expect(r.verdict.blocking).toBe(0);
     expect(r.verdict.warnings).toBe(0); // …and never counts as a warning either
+  });
+});
+
+const IDX: IndexedProduct[] = [
+  { product_id: "p1", title: "P1", handle: "p1", price: "10", image_url: null, tags: ["Soft"], collection_ids: [], inventory_in_stock: true },
+  { product_id: "p2", title: "P2", handle: "p2", price: "0", image_url: null, tags: ["velvet"], collection_ids: [], inventory_in_stock: false },
+];
+
+function withFilterQ(tags: string[], extra: Record<string, unknown> = {}) {
+  const base = cleanDoc();
+  return Quiz.parse({
+    ...base,
+    nodes: base.nodes.map((n) =>
+      n.id === "q1"
+        ? {
+            ...n,
+            data: {
+              ...(n as { data: Record<string, unknown> }).data,
+              role: "filter",
+              answers: [
+                { id: "a_beg", text: "Beginner", tags, edge_handle_id: "h_beg", ...extra },
+                { id: "a_adv", text: "Advanced", tags: ["soft"], edge_handle_id: "h_adv" },
+              ],
+            },
+          }
+        : n,
+    ),
+  });
+}
+
+describe("QZY-1 V11 — filter answers must match products", () => {
+  it("omits the check entirely without a product index (never a hollow pass)", () => {
+    const r = buildTier1Report(cleanDoc(), BUCKETS);
+    expect(r.checks.find((c) => c.id === "V11")).toBeUndefined();
+  });
+
+  it("flags a filter answer matching 0 SELLABLE products as blocking", () => {
+    // "velvet" only matches p2, which is $0 + OOS → not sellable → dead end.
+    const r = buildTier1Report(withFilterQ(["velvet"]), BUCKETS, IDX);
+    const v11 = r.checks.find((c) => c.id === "V11")!;
+    expect(v11.status).toBe("fail");
+    expect(v11.severity).toBe("block");
+    expect(v11.findings[0]!.message).toContain("matches 0 products");
+    expect(r.verdict.blocking).toBeGreaterThan(0);
+  });
+
+  it("passes when every filter answer matches (case-insensitive)", () => {
+    const r = buildTier1Report(withFilterQ(["soft"]), BUCKETS, IDX);
+    expect(r.checks.find((c) => c.id === "V11")!.status).toBe("pass");
+  });
+
+  it("no_preference answers are pass-throughs, never dead ends", () => {
+    const r = buildTier1Report(withFilterQ(["velvet"], { no_preference: true }), BUCKETS, IDX);
+    // a_beg passes through; a_adv (soft) matches → clean.
+    expect(r.checks.find((c) => c.id === "V11")!.status).toBe("pass");
+  });
+});
+
+describe("QZY-1 wouldCreateRevisit — THEN GO TO cycle guard", () => {
+  it("routing forward is fine", () => {
+    expect(wouldCreateRevisit(cleanDoc() as never, "q1", "q2")).toBe(false);
+    expect(wouldCreateRevisit(cleanDoc() as never, "q1", "r1")).toBe(false);
+  });
+  it("routing to itself is a revisit", () => {
+    expect(wouldCreateRevisit(cleanDoc() as never, "q1", "q1")).toBe(true);
+  });
+  it("routing BACK to an earlier question is a revisit", () => {
+    expect(wouldCreateRevisit(cleanDoc() as never, "q2", "q1")).toBe(true);
   });
 });
