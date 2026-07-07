@@ -133,14 +133,24 @@ function previewRenderSmart(
           />
         );
       }
-      const grid = qt === "image_tile" || qt === "image_picker";
+      // QZY-9 — a configured display mode drives the container (coarse mirror
+      // of AnswerOptions; the live canvas renders the real thing).
+      const ad = node.data.answer_display;
+      const grid =
+        ad?.mode === "cards" || ad?.mode === "tiles"
+          ? true
+          : ad?.mode
+            ? false
+            : qt === "image_tile" || qt === "image_picker";
+      const wrap = ad?.mode === "pills";
       return (
         <div
           style={{
             display: grid ? "grid" : "flex",
-            flexDirection: grid ? undefined : "column",
-            gridTemplateColumns: grid ? "repeat(2, 1fr)" : undefined,
-            gap: 10,
+            flexDirection: grid || wrap ? undefined : "column",
+            flexWrap: wrap ? "wrap" : undefined,
+            gridTemplateColumns: grid ? `repeat(${ad?.columns ?? 2}, 1fr)` : undefined,
+            gap: ad?.spacing ?? 10,
           }}
         >
           {node.data.answers.map((a) => (
@@ -177,6 +187,7 @@ function previewRenderSmart(
                   }}
                 />
               ) : null}
+              {a.icon ? `${a.icon} ` : ""}
               {a.text}
             </div>
           ))}

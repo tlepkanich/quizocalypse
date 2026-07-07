@@ -175,6 +175,33 @@ function AnswerScopePanel({
           onChange={(e) => setAnswer({ text: e.target.value })}
         />
       </label>
+      {/* QZY-9 §5.1 — per-option media, scoped to THIS option only. */}
+      <div className="qz-row" style={{ gap: 10, alignItems: "flex-end", flexWrap: "wrap" }}>
+        <label style={{ display: "grid", gap: 4, fontSize: 12.5 }}>
+          <span className="qz-dim" style={{ fontSize: 11.5 }}>
+            Icon (emoji)
+          </span>
+          <input
+            className="qz-input"
+            style={{ width: 72, textAlign: "center" }}
+            value={answer.icon ?? ""}
+            maxLength={4}
+            placeholder="🙂"
+            onChange={(e) => setAnswer({ icon: e.target.value.trim() || undefined })}
+          />
+        </label>
+        <label style={{ display: "grid", gap: 4, fontSize: 12.5, flex: "1 1 160px" }}>
+          <span className="qz-dim" style={{ fontSize: 11.5 }}>
+            Image URL
+          </span>
+          <input
+            className="qz-input"
+            value={answer.image_url ?? ""}
+            placeholder="https://…"
+            onChange={(e) => setAnswer({ image_url: e.target.value.trim() || undefined })}
+          />
+        </label>
+      </div>
       {role === "decides" ? (
         <label style={{ display: "grid", gap: 4, fontSize: 12.5 }}>
           <span className="qz-dim" style={{ fontSize: 11.5 }}>
@@ -205,7 +232,7 @@ function AnswerScopePanel({
         </p>
       ) : null}
       <p className="qz-dim" style={{ fontSize: 11.5, margin: 0 }}>
-        Per-option media &amp; styling arrive with answer display modes.
+        Question-level layout &amp; option styling live under Content → Answer display.
       </p>
     </div>
   );

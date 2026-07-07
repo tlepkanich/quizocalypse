@@ -196,6 +196,37 @@ export const QuestionDataObject = z.object({
   // Editor revamp P3 — explicit answer-grid column count (1 or 2). Unset keeps
   // the responsive default (2-up desktop, 1-up mobile). Additive.
   answer_columns: z.number().int().min(1).max(2).optional(),
+  // QZY-9 (build-tab §5/§5.2) — the answer DISPLAY MODE + its styling knobs.
+  // Whole object optional, every field optional, NO defaults: absent = the
+  // pre-QZY answer rendering byte-for-byte (the mode gate in QuestionView).
+  // Switching modes only rewrites `mode` — media/labels/mappings live on the
+  // answers, so mode changes are lossless by construction. The per-option
+  // partial-image band is spec-DEFERRED (§12: crop UX first).
+  answer_display: z
+    .object({
+      mode: z.enum(["list", "icon", "cards", "tiles", "pills"]).optional(),
+      icon_size: z.number().int().min(12).max(96).optional(),
+      icon_position: z.enum(["left", "top"]).optional(),
+      columns: z.number().int().min(2).max(4).optional(),
+      aspect: z.enum(["1:1", "4:3", "16:9"]).optional(),
+      fit: z.enum(["cover", "contain"]).optional(),
+      label_position: z.enum(["below", "overlay", "hidden"]).optional(),
+      overlay_tint: z.number().int().min(0).max(80).optional(),
+      overlay_text_color: z.string().max(32).optional(),
+      label_size: z.number().int().min(9).max(40).optional(),
+      label_color: z.string().max(32).optional(),
+      label_bold: z.boolean().optional(),
+      shape: z.enum(["pill", "rounded", "square"]).optional(),
+      radius: z.number().int().min(0).max(40).optional(),
+      spacing: z.number().int().min(0).max(40).optional(),
+      pad: z.number().int().min(2).max(40).optional(),
+      bg: z.string().max(64).optional(),
+      bg2: z.string().max(64).optional(),
+      border_color: z.string().max(32).optional(),
+      border_width: z.number().int().min(0).max(6).optional(),
+      selected_style: z.enum(["border", "fill", "check"]).optional(),
+    })
+    .optional(),
   // B6 — scale config for rating / slider / numeric questions: a configurable
   // range + endpoint labels. All optional; absent = today's behavior exactly
   // (slider 0–100 step 1, numeric unbounded, rating flanked by nothing). Per-point

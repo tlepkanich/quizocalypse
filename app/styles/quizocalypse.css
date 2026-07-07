@@ -4303,3 +4303,14 @@ body[data-qz] .qz-s3-editable:focus-visible {
 
 .qz-insp-foot { display: flex; gap: 6px; margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--qz-rule); }
 .qz-insp-foot-del { margin-left: auto; color: var(--qz-danger, currentColor); }
+
+/* QZY-9 — the answer-display picker (build-tab §5). */
+.qz-ads-modes { display: grid; grid-template-columns: repeat(5, 1fr); gap: 4px; }
+.qz-ads-modes button {
+  font: inherit; font-size: 10.5px; padding: 6px 2px; cursor: pointer;
+  border: 1px solid var(--qz-rule); border-radius: var(--qz-radius, 8px);
+  background: var(--qz-bg); color: var(--qz-ink-3);
+}
+.qz-ads-modes button.is-active { border-color: var(--qz-accent); color: var(--qz-ink-1); font-weight: 600; box-shadow: 0 0 0 1px var(--qz-accent) inset; }
+.qz-ads-color { display: inline-flex; align-items: center; gap: 6px; font-size: 11.5px; color: var(--qz-ink-3); }
+.qz-ads-color input[type="color"] { width: 28px; height: 22px; padding: 0; border: 1px solid var(--qz-rule); border-radius: 6px; background: transparent; cursor: pointer; }

@@ -238,6 +238,37 @@ await page.locator(".qz-builder-inspector summary", { hasText: "Layout blocks" }
 await page.locator(".qz-builder-inspector button", { hasText: "Content" }).first().click();
 await page.waitForTimeout(200);
 
+// ── QZY-9: answer display modes — picker, live canvas, lossless switch ──────
+await q1Thumb.locator(".qz-screens-thumb").click();
+await page.waitForTimeout(500);
+ok("Answer display mode picker present (5 modes)",
+  (await page.locator(".qz-ads-modes button").count()) === 5);
+const canvasAnswerCount = await page.locator(".qz-builder-canvas button.qz-insp").count();
+await page.locator(".qz-ads-modes button", { hasText: "Compact pills" }).click();
+await page.waitForTimeout(600);
+ok("pills mode: options survive (lossless), aria state set",
+  (await page.locator(".qz-builder-canvas button.qz-insp").count()) === canvasAnswerCount &&
+  (await page.locator(".qz-ads-modes button.is-active", { hasText: "Compact pills" }).count()) === 1);
+ok("shape presets appear with a mode set",
+  (await page.locator('[aria-label="Option shape"] button').count()) === 3);
+await page.locator(".qz-ads-modes button", { hasText: "Large tiles" }).click();
+await page.waitForTimeout(600);
+ok("tiles mode: options still intact (flip again, no loss)",
+  (await page.locator(".qz-builder-canvas button.qz-insp").count()) === canvasAnswerCount);
+await page.locator(".qz-ads-modes button", { hasText: "Text list" }).click();
+await page.waitForTimeout(600);
+ok("back to Text list: legacy rendering + options unchanged (round-trip)",
+  (await page.locator(".qz-builder-canvas button.qz-insp").count()) === canvasAnswerCount &&
+  (await page.locator(".qz-ads-modes button.is-active", { hasText: "Text list" }).count()) === 1);
+// per-option media in the scoped panel (§5.1)
+await page.locator(".qz-builder-canvas button.qz-insp").first().click();
+await page.waitForTimeout(400);
+ok("scoped option panel carries per-option icon + image controls",
+  (await page.locator(".qz-insp-scope input[placeholder='https://…']").count()) === 1 &&
+  (await page.locator(".qz-insp-scope input[placeholder='🙂']").count()) === 1);
+await page.locator("button", { hasText: "Style all options" }).click();
+await page.waitForTimeout(300);
+
 // ── QZY-7: Layers + Background tabs (AFTER the inline-edit check — the
 // hide/show round-trip materializes an explicit layout; BLD-7's final
 // "Reset to template" clears it again). ──────────────────────────────────────

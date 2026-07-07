@@ -8,6 +8,7 @@ import { useChrome } from "../chromeStrings";
 import { RuntimeChromeContext } from "../runtimeContexts";
 import { inspectAttrs, type InspectPart, type InspectTarget } from "../inspect";
 import { answerLabel } from "../bits/answerLabel";
+import { AnswerOptions } from "./AnswerOptions";
 import { QuestionImage } from "../bits/QuestionImage";
 import { TooltipChip } from "../bits/TooltipChip";
 import { SkipLink, MinimalNav } from "../bits/nav";
@@ -277,6 +278,19 @@ export function QuestionView({
     return (
       <div style={shell}>
         {header}
+        {node.data.answer_display?.mode ? (
+          // QZY-9 — a configured display mode swaps in the mode renderer;
+          // clicking toggles the checkbox state (same commit semantics below).
+          <AnswerOptions
+            node={node}
+            display={node.data.answer_display}
+            selectedIds={new Set(selectedIds)}
+            onPickAnswer={(a) => setChecked({ ...checked, [a.id]: !checked[a.id] })}
+            insp={insp}
+            onTooltipView={onTooltipView}
+            styles={styles}
+          />
+        ) : (
         <div style={answerGrid}>
           {node.data.answers.map((a) => (
             <div key={a.id} style={{ position: "relative" }}>
@@ -307,6 +321,7 @@ export function QuestionView({
             </div>
           ))}
         </div>
+        )}
         {minimal ? (
           <MinimalNav
             onBack={onBack}
@@ -541,6 +556,21 @@ export function QuestionView({
   return (
     <div style={shell}>
       {header}
+      {node.data.answer_display?.mode ? (
+        // QZY-9 — mode renderer; the HOST keeps its semantics (classic
+        // tap-to-advance, minimal pending-pick + Next).
+        <AnswerOptions
+          node={node}
+          display={node.data.answer_display}
+          selectedIds={new Set(picked ? [picked] : [])}
+          onPickAnswer={(a) =>
+            minimal ? setPicked(a.id) : onAdvance([a.id], a.edge_handle_id)
+          }
+          insp={insp}
+          onTooltipView={onTooltipView}
+          styles={styles}
+        />
+      ) : (
       <div style={answerGrid}>
         {node.data.answers.map((a) => {
           const isPicked = minimal && picked === a.id;
@@ -608,6 +638,7 @@ export function QuestionView({
           );
         })}
       </div>
+      )}
       {minimal ? (
         <MinimalNav
           onBack={onBack}

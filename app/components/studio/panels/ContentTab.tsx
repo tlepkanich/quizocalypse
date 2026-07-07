@@ -7,6 +7,7 @@ import { addAnswer, removeAnswer } from "../../../lib/quizMutations";
 import { updateNodeData } from "../studioDoc";
 import { EmojiIconPicker } from "../EmojiIconPicker";
 import { NumericControl } from "../../controls/NumericControl";
+import { AnswerDisplaySection } from "./AnswerDisplaySection";
 import { ImagePicker, IMAGE_ANSWER_TYPES, type PickerProduct } from "../ImagePicker";
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -699,6 +700,8 @@ export function QuestionContent({
           </div>
         </div>
       ) : null}
+      {/* QZY-9 §5 — the answer display-mode picker + option styling. */}
+      <AnswerDisplaySection doc={doc} node={node} onCommit={onCommit} />
       {/* QZY-8 §10 — progressive disclosure: 3–5 essentials above, the long
           tail lives here (collapsed by default). flex:0 0 auto = the BLD-7
           details-in-scrollport fix. */}
