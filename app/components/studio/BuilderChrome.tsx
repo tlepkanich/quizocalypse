@@ -1,13 +1,11 @@
 import type { ReactNode } from "react";
 import { Fragment } from "react";
 import {
-  Code,
   GitBranch,
   Package,
   Palette,
   Pencil,
-  Sparkles,
-  Star,
+  Settings,
   type LucideIcon,
 } from "lucide-react";
 import { Wordmark } from "../chrome/Wordmark";
@@ -26,25 +24,23 @@ import { ThemeToggle } from "./ThemeToggle";
 // and the canvas gets its height back.
 // ════════════════════════════════════════════════════════════════════════════
 
+// QZY-6 (build-tab spec §1) — the five rail sections. Results left the rail
+// (result screens edit in Build); AI became the top-bar "Assist" companion
+// (never a destination tab); Code/placement/integrations/embed live in
+// Settings. Design is still a build-scoped tool (the canvas stays visible).
 export type BuilderNavKey =
   | "build"
   | "products"
-  | "results"
   | "logic"
-  | "theme"
-  | "ai"
-  | "code";
+  | "design"
+  | "settings";
 
 const NAV: Array<{ key: BuilderNavKey; label: string; icon: LucideIcon; ruleAbove?: boolean }> = [
   { key: "build", label: "Build", icon: Pencil },
   { key: "products", label: "Products", icon: Package },
-  { key: "results", label: "Results", icon: Star },
   { key: "logic", label: "Logic", icon: GitBranch },
-  // Build-scoped tools below the hairline: each opens the Build view with its
-  // panel focused (Theme = quiz-level design, AI = chat/enrich, Code = CSS).
-  { key: "theme", label: "Theme", icon: Palette, ruleAbove: true },
-  { key: "ai", label: "AI", icon: Sparkles },
-  { key: "code", label: "Code", icon: Code },
+  { key: "design", label: "Design", icon: Palette, ruleAbove: true },
+  { key: "settings", label: "Settings", icon: Settings },
 ];
 
 export function BuilderNavRail({

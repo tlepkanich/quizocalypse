@@ -62,7 +62,10 @@ function RouteBadges({ doc, nodeId }: { doc: QuizDoc; nodeId: string }) {
 
 type QuizDoc = Quiz;
 
-export type WorkspaceView = "build" | "products" | "results" | "logic";
+// QZY-6 — "settings" joined for the standalone 5-rail (build-tab spec §1);
+// "results" stays for deep links + the embedded switcher, but the standalone
+// rail no longer offers it (result screens edit in Build).
+export type WorkspaceView = "build" | "products" | "results" | "logic" | "settings";
 
 const GLYPH: Record<QuizNode["type"], string> = {
   intro: "▶",

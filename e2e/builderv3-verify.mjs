@@ -74,18 +74,45 @@ if (/blocking/.test(pillText)) {
   ok("healthy doc shows ◆ Publish", (await page.locator("button", { hasText: "Publish" }).count()) > 0);
 }
 
-// ── BLD-1: one rail, exactly one active per view ────────────────────────────
+// ── BLD-1 → QZY-6: the FIVE-section rail, exactly one active per view ───────
 const railActive = () =>
   page.locator(".qz-builder-rail-item.is-active").allTextContents();
-ok("rail has 7 items", (await page.locator(".qz-builder-rail-item").count()) === 7);
-for (const label of ["Products", "Results", "Logic", "Theme", "AI", "Code", "Build"]) {
+ok("rail has 5 items (QZY-6)", (await page.locator(".qz-builder-rail-item").count()) === 5);
+for (const label of ["Products", "Logic", "Design", "Settings", "Build"]) {
   await page.locator(".qz-builder-rail-item", { hasText: label }).click();
   await page.waitForTimeout(300);
   const act = await railActive();
   ok(`rail: ${label} lights itself only`, act.length === 1 && act[0].trim() === label, act.join(","));
 }
+ok("no Results / Theme / AI / Code rail items",
+  (await page.locator(".qz-builder-rail-item", { hasText: "Results" }).count()) === 0 &&
+  (await page.locator(".qz-builder-rail-item", { hasText: "Theme" }).count()) === 0 &&
+  (await page.locator(".qz-builder-rail-item", { hasText: "AI" }).count()) === 0 &&
+  (await page.locator(".qz-builder-rail-item", { hasText: "Code" }).count()) === 0);
 ok("old view-tab strip is gone", (await page.locator(".qz-builder-views").count()) === 0);
 ok("filmstrip is gone", (await page.locator(".qz-builder-filmstrip, .qz-film-card").count()) === 0);
+
+// QZY-6: the top-bar Assist companion (never a rail tab) opens the chat drawer.
+ok("✦ Assist button in the top bar",
+  (await page.locator(".qz-topbar button", { hasText: "Assist" }).count()) === 1);
+await page.locator(".qz-topbar button", { hasText: "Assist" }).click();
+await page.waitForTimeout(400);
+ok("Assist drawer opens with the chat panel",
+  (await page.locator(".qz-drawer, [role=dialog]").count()) >= 1 &&
+  (await page.getByText("Assist").count()) >= 1);
+await page.keyboard.press("Escape");
+await page.waitForTimeout(300);
+
+// QZY-6: the Settings section carries placement + embed + translation + CSS.
+await page.locator(".qz-builder-rail-item", { hasText: "Settings" }).click();
+await page.waitForTimeout(400);
+ok("Settings: experience/placement/embed/translation/CSS sections render",
+  (await page.getByText("Experience & scoring").count()) >= 1 &&
+  (await page.getByText("Where the quiz appears").count()) >= 1 &&
+  (await page.getByText("Share & embed").count()) >= 1 &&
+  (await page.getByText("Custom CSS").count()) >= 1);
+await page.locator(".qz-builder-rail-item", { hasText: "Build" }).click();
+await page.waitForTimeout(300);
 
 // ── BLD-2a: v3 step rows + ⋯ menu ───────────────────────────────────────────
 const rows = page.locator(".qz-s3-row.qz-railrow");
@@ -193,19 +220,14 @@ ok("LogicScroll rules strip present", (await page.locator("text=/first match win
 ok("Try a path present", (await page.locator("text=/Try a path/i").count()) > 0);
 ok("settings-dump tabs gone", (await page.locator(".qz-settings-tab").count()) === 0);
 
-// ── BLD-5: Results empty state leads + CTA; no wizard leaks ────────────────
-await page.locator(".qz-builder-rail-item", { hasText: "Results" }).click();
-await page.waitForTimeout(600);
-const empty = page.locator("text=No result pages yet").first();
-if (await empty.count()) {
-  const emptyBox = await empty.boundingBox();
-  const layoutBox = await page.locator("text=Layout").first().boundingBox();
-  ok("empty state sits ABOVE the layout controls", !!emptyBox && !!layoutBox && emptyBox.y < layoutBox.y);
-  await page.locator("button", { hasText: "Go to Products" }).click();
-  await page.waitForTimeout(400);
-  ok("empty-state CTA lands on Products", (await railActive()).join() === "Products");
-}
+// ── BLD-5 → QZY-6: Results left the rail; ?view=results stays deep-linkable ─
+await page.goto(`${BASE}/studio/${QUIZ}?view=results`, { waitUntil: "domcontentloaded" });
+await page.waitForTimeout(900);
+ok("?view=results deep link still renders the heavy editor (rail lights Build)",
+  (await railActive()).join() === "Build");
 ok("no 'Step N of 4' wizard copy", !(await page.locator("text=/Step \\d of 4/").count()));
+await page.locator(".qz-builder-rail-item", { hasText: "Build" }).click();
+await page.waitForTimeout(400);
 
 // ── BLD-6: dark toggle + axe ────────────────────────────────────────────────
 await page.locator(".qz-builder-rail-item", { hasText: "Build" }).click();

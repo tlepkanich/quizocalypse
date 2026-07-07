@@ -28,8 +28,8 @@ import { HealthPopover } from "../onboarding/questionsLogicV3/HealthPopover";
 import { Step3Results } from "../builder/Step3Results";
 import { TranslationsPanel } from "./TranslationsPanel";
 import { ExperiencePanel } from "./ExperiencePanel";
-import { CssTab } from "./panels/CssTab";
-import { BuilderLogicView, QuizSettingsDrawer } from "./BuilderSettings";
+import { QzDrawer } from "../qz-overlays";
+import { BuilderLogicView, QuizSettingsView } from "./BuilderSettings";
 import { BuilderDesignPanel } from "./BuilderDesignPanel";
 import { BLOCK_DRAG_MIME, BuilderBlocksPalette, insertBlock } from "./BuilderBlocksPalette";
 import { BuilderPageSettings } from "./BuilderPageSettings";
@@ -202,14 +202,17 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
   const [editMode, setEditMode] = useState(true);
   // LOGIC v2 (L2-10f) — the explicit legacy→decider upgrade wizard.
   const [upgradeOpen, setUpgradeOpen] = useState(false);
-  // BLD-4 — the Quiz-settings drawer (score/translation/placement — the
-  // never-was-logic half of the old 8-tab Settings screen).
-  const [quizSettingsOpen, setQuizSettingsOpen] = useState(false);
+  // QZY-6 — the "Assist" top-bar companion (build-tab spec §1: AI acts in
+  // context, never a destination tab). Opens the existing chat + enrich
+  // panels in a right-side drawer; the full Assist design is DEFERRED.
+  const [assistOpen, setAssistOpen] = useState(false);
   // Device-frame width lifted from Step5Preview so the Design tab's layer
   // selector can follow it ("edit what you see").
   const [frameW, setFrameW] = useState<number>(DEVICE_PRESETS.desktop);
-  // QD-6: which Quizell builder rail tool is focused (standalone chrome only).
-  const [tool, setTool] = useState<"editor" | "ai" | "theme" | "code">("editor");
+  // QD-6 → QZY-6: the Build view's focused left panel (standalone only).
+  // "theme" is the rail's Design section (the canvas stays visible); the old
+  // ai/code tools moved to the Assist drawer + the Settings section.
+  const [tool, setTool] = useState<"editor" | "theme">("editor");
   // QB-4b: the Editor tool's Blocks ‖ Settings sub-tab.
   const [editorSubtab, setEditorSubtab] = useState<"settings" | "blocks">("settings");
   const [reconcileError, setReconcileError] = useState<string | null>(null);
@@ -273,7 +276,9 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
   const [params, setParams] = useSearchParams();
   const [view, setViewState] = useState<WorkspaceView>(() => {
     const p = params.get("view");
-    return p === "products" || p === "results" || p === "logic" ? p : "build";
+    return p === "products" || p === "results" || p === "logic" || p === "settings"
+      ? p
+      : "build";
   });
   const setView = useCallback(
     (v: WorkspaceView) => {
@@ -643,9 +648,10 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
             type="button"
             className="qz-btn qz-btn-ghost qz-btn-sm"
             onClick={(e) => {
-              // Close the <details> menu before the drawer opens.
+              // Close the <details> menu before navigating (QZY-6: quiz
+              // settings is the rail's Settings section now).
               (e.currentTarget.closest("details") as HTMLDetailsElement | null)?.removeAttribute("open");
-              setQuizSettingsOpen(true);
+              setView("settings");
             }}
           >
             Quiz settings…
@@ -828,10 +834,16 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
   // embedded /app surface keeps the shared `body` 3-pane layout below
   // (untouched by owner decision).
   if (chrome === "standalone") {
-    // ONE active key for the single nav rail: a non-build view IS the key; in
-    // the Build view the focused tool lights (editor ⇒ the Build item).
+    // ONE active key for the single nav rail: a non-build view IS the key
+    // (the deep-linkable "results" view lights Build — result screens are
+    // Build screens now); in the Build view the focused tool lights
+    // (editor ⇒ Build, theme ⇒ Design).
     const railActive: BuilderNavKey =
-      view !== "build" ? view : tool === "editor" ? "build" : tool;
+      view === "products" || view === "logic" || view === "settings"
+        ? view
+        : tool === "theme"
+          ? "design"
+          : "build";
     const selectedNode = selectedId ? doc.nodes.find((n) => n.id === selectedId) ?? null : null;
     // BLD-7 — block-insert targeting: the SELECTED step wins; with nothing
     // selected, the step the canvas is showing (so the palette always works
@@ -858,42 +870,19 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
       select(dropTarget.id); // open the inspector on the step that grew a block
     };
 
-    // The left panel content for the focused tool (build view only).
+    // The left panel content for the focused tool (build view only). QZY-6:
+    // ai/code left this switch — Assist is a top-bar drawer, custom CSS lives
+    // in Settings.
     const toolPanel =
-      tool === "ai" ? (
-        <>
-          <AiChatPanel
-            onApply={applyAi}
-            onAiStart={beginAiEdit}
-            onAiError={endAiEdit}
-            selectedNodeId={selectedId}
-          />
-          <ReviewEnrichPanel
-            onApply={applyAi}
-            onAiStart={beginAiEdit}
-            onAiError={endAiEdit}
-            sources={doc.review_enrichment_sources}
-          />
-        </>
-      ) : tool === "theme" ? (
+      tool === "theme" ? (
         <>
           {/* BLD-3 — every tool panel opens with a header (the design panel's
               first control read as a floating checkbox without one). */}
           <div className="qz-label" style={{ fontSize: 11 }}>
-            Theme
+            Design
           </div>
           <BuilderDesignPanel doc={doc} commit={commit} onSelectNode={select} />
         </>
-      ) : tool === "code" ? (
-        selectedNode ? (
-          <CssTab doc={doc} node={selectedNode} onCommit={commit} />
-        ) : (
-          <div className="qz-card" style={{ padding: 14 }}>
-            <p className="qz-dim" style={{ fontSize: 12.5, margin: 0 }}>
-              Select a step below to add custom CSS scoped to it.
-            </p>
-          </div>
-        )
       ) : (
         <>
           {/* QB-4b — Quizell's Editor "Blocks ‖ Settings" sub-tabs. */}
@@ -1082,6 +1071,17 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
               {saveStatusV2}
               {undoRedo}
               {healthPill}
+              {/* QZY-6 — AI is a persistent top-bar companion, never a tab.
+                  Full Assist design is spec-DEFERRED; this opens the existing
+                  chat + review-enrich panels in context. */}
+              <button
+                type="button"
+                className="qz-btn qz-btn-ghost qz-btn-sm"
+                aria-pressed={assistOpen}
+                onClick={() => setAssistOpen((v) => !v)}
+              >
+                ✦ Assist
+              </button>
               {moreMenu}
               <a
                 href={data.previewUrl}
@@ -1099,8 +1099,8 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
           <BuilderNavRail
             active={railActive}
             onSelect={(key) => {
-              if (key === "theme" || key === "ai" || key === "code") {
-                setTool(key);
+              if (key === "design") {
+                setTool("theme");
                 setView("build");
               } else if (key === "build") {
                 setTool("editor");
@@ -1156,9 +1156,19 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
                 {view === "products" ? (
                   <Step1Products {...stepProps} />
                 ) : view === "results" ? (
+                  // QZY-6 — off the rail (result screens edit in Build) but
+                  // kept deep-linkable (?view=results) as the heavy editor.
                   <Step3Results
                     {...stepProps}
                     goToStep={(n) => setView(n === 1 ? "products" : "build")}
+                  />
+                ) : view === "settings" ? (
+                  <QuizSettingsView
+                    data={data}
+                    doc={doc}
+                    commit={commit}
+                    onSelectNode={select}
+                    selectedNodeId={selectedId}
                   />
                 ) : (
                   // BLD-4 — the Logic view: LogicScroll for decider docs,
@@ -1175,14 +1185,27 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
           )}
         </div>
         {upgradeModal}
-        <QuizSettingsDrawer
-          data={data}
-          doc={doc}
-          commit={commit}
-          onSelectNode={select}
-          open={quizSettingsOpen}
-          onClose={() => setQuizSettingsOpen(false)}
-        />
+        <QzDrawer
+          open={assistOpen}
+          onClose={() => setAssistOpen(false)}
+          title="✦ Assist"
+          width="440px"
+        >
+          <div style={{ display: "grid", gap: 14 }}>
+            <AiChatPanel
+              onApply={applyAi}
+              onAiStart={beginAiEdit}
+              onAiError={endAiEdit}
+              selectedNodeId={selectedId}
+            />
+            <ReviewEnrichPanel
+              onApply={applyAi}
+              onAiStart={beginAiEdit}
+              onAiError={endAiEdit}
+              sources={doc.review_enrichment_sources}
+            />
+          </div>
+        </QzDrawer>
       </div>
     );
   }
