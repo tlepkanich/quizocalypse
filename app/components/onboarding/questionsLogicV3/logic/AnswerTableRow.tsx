@@ -1,5 +1,8 @@
+import { useState } from "react";
 import type { Quiz as QuizDoc, Answer } from "../../../../lib/quizSchema";
 import type { BuilderCategory } from "../../../builder/stepProps";
+import type { IndexedProduct } from "../../../../lib/recommendationEngine";
+import { filterAnswerMatchCount } from "../../../../lib/filterMatching";
 import {
   setAnswerTarget,
   setAnswerRoute,
@@ -34,8 +37,11 @@ export function AnswerTableRow({
   answer,
   index,
   isDeciderRow,
+  isFilterRow = false,
+  productIndex = [],
   categories,
   skipOptions,
+  isRevisitTarget,
   chips,
   homeRuleIds,
   canDelete,
@@ -47,8 +53,13 @@ export function AnswerTableRow({
   answer: Answer;
   index: number;
   isDeciderRow: boolean;
+  /** QZY-2 (spec §5) — this question filters results: the MATCHES cell. */
+  isFilterRow?: boolean;
+  productIndex?: IndexedProduct[];
   categories: BuilderCategory[];
   skipOptions: SkipOption[];
+  /** QZY-2 (spec §1) — disables THEN GO TO targets that would revisit. */
+  isRevisitTarget?: (fromQuestionId: string, targetId: string) => boolean;
   /** Rules referencing this answer (priority order), from ruleHomes. */
   chips: RuleRef[];
   /** Rule ids homed in THIS section — their chips render subtler (is-home). */
@@ -61,6 +72,17 @@ export function AnswerTableRow({
   const targetKnown = answer.target_id
     ? categories.some((c) => c.id === answer.target_id)
     : false;
+  // QZY-2 (spec §5) — the filter answer's three explicit states. null =
+  // pass-through ("doesn't narrow"), 0 = dead end (blocking), n = matches.
+  const matchCount = isFilterRow ? filterAnswerMatchCount(answer, productIndex) : null;
+  const [matchOpen, setMatchOpen] = useState(false);
+
+  const patchAnswer = (patch: Partial<Answer>) => {
+    const answers = node.data.answers.map((a) =>
+      a.id === answer.id ? { ...a, ...patch } : a,
+    );
+    onCommit(updateNodeData(doc, node.id, { answers }));
+  };
 
   const setText = (text: string) => {
     const answers = node.data.answers.map((a) =>
@@ -128,8 +150,70 @@ export function AnswerTableRow({
             </option>
           ))}
         </select>
+      ) : isFilterRow ? (
+        <span className="qz-s3-matchwrap">
+          <button
+            type="button"
+            className={`qz-s3-match ${
+              answer.no_preference || matchCount === null
+                ? "is-nopref"
+                : matchCount === 0
+                  ? "is-dead"
+                  : "is-ok"
+            }`}
+            title="What this answer narrows to — click to manage matches"
+            onClick={() => setMatchOpen((o) => !o)}
+          >
+            {answer.no_preference
+              ? "no preference"
+              : matchCount === null
+                ? "doesn't narrow"
+                : matchCount === 0
+                  ? "⚠ 0 products · fix"
+                  : `${answer.tags[0] ?? "match"} ✓ ${matchCount}`}
+          </button>
+          {matchOpen ? (
+            <span className="qz-s3-matchpop">
+              <label className="qz-s3-matchpop-row">
+                <input
+                  type="checkbox"
+                  checked={answer.no_preference === true}
+                  onChange={(e) =>
+                    patchAnswer({ no_preference: e.target.checked ? true : undefined })
+                  }
+                />
+                <span>No preference — doesn&rsquo;t narrow</span>
+              </label>
+              <input
+                className="qz-s3-matchpop-tags"
+                defaultValue={answer.tags.join(", ")}
+                key={answer.tags.join(",")}
+                placeholder="tag, tag…"
+                aria-label={`Attribute tags for ${answer.text || "answer"}`}
+                disabled={answer.no_preference === true}
+                onBlur={(e) =>
+                  patchAnswer({
+                    tags: e.target.value
+                      .split(",")
+                      .map((t) => t.trim())
+                      .filter(Boolean),
+                  })
+                }
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+                }}
+              />
+              <span className="qz-s3-matchpop-hint">
+                Products matching ANY of these tags stay in the results.
+              </span>
+              <button type="button" className="qz-s3-matchpop-done" onClick={() => setMatchOpen(false)}>
+                Done
+              </button>
+            </span>
+          ) : null}
+        </span>
       ) : (
-        <span className="qz-s3-nomap" title="Qualifiers assign nothing — routing and context only" aria-hidden>
+        <span className="qz-s3-nomap" title="Info-only questions assign nothing — routing and context only" aria-hidden>
           —
         </span>
       )}
@@ -147,11 +231,15 @@ export function AnswerTableRow({
         <option value="">Next</option>
         {skipOptions
           .filter((o) => o.value !== node.id)
-          .map((o) => (
-            <option key={o.value} value={o.value}>
-              {o.label}
-            </option>
-          ))}
+          .map((o) => {
+            const revisit = isRevisitTarget ? isRevisitTarget(node.id, o.value) : false;
+            return (
+              <option key={o.value} value={o.value} disabled={revisit}>
+                {o.label}
+                {revisit ? " (would revisit)" : ""}
+              </option>
+            );
+          })}
       </select>
 
       <button

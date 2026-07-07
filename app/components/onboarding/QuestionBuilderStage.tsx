@@ -28,6 +28,8 @@ export function QuestionBuilderStage({
   quizId,
   initialDoc,
   categories,
+  productIndex,
+  collections,
   fetcher,
   pendingIntent,
   designTokens,
@@ -133,6 +135,8 @@ export function QuestionBuilderStage({
         saveError={saveError}
         onRetry={retrySave}
         categories={categories}
+        collections={collections}
+        productIndex={productIndex}
         navigating={navigating}
         onContinue={() => fetcher.submit({ intent: "to-rec-page" }, { method: "post" })}
         designTokens={designTokens}

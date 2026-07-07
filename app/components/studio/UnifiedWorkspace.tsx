@@ -1168,11 +1168,6 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
                     doc={doc}
                     commit={commit}
                     onSelectNode={select}
-                    onEditContent={(nodeId) => {
-                      setTool("editor");
-                      setView("build");
-                      select(nodeId);
-                    }}
                   />
                 )}
               </div>

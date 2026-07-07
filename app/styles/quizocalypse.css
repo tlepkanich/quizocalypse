@@ -3807,3 +3807,165 @@ body[data-qz] .qz-s3-editable:focus-visible {
   background: var(--qz-paper); color: var(--qz-accent);
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--qz-accent) 35%, transparent);
 }
+
+/* ── QZY-2 (quiz-logic dev-handoff v1.2) — the Logic sub-view layout ─────────
+   sub-header (toggle + Diagnose/Preview) · explainer strip · two-column body
+   (map left · sticky rules widget + fallback right) · map-card header v2
+   (inline title · type chip · badges · role select · collapse) · the filter
+   MATCHES cell + its popover editor · the capture terminal module. ── */
+.qz-s3-logicview { display: flex; flex-direction: column; gap: 12px; padding: 16px 20px 40px; }
+.qz-s3-subhead { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.qz-s3-subhead .qz-s3-viewtoggle { margin-right: 6px; }
+
+.qz-s3-explainer {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  padding: 9px 13px; border-radius: 12px;
+  background: var(--qz-paper); box-shadow: var(--qz-lift-1);
+  font-size: 12.5px;
+}
+.qz-s3-explainer-caret, .qz-s3-explainer-info {
+  appearance: none; border: none; background: none; cursor: pointer; font: inherit;
+  color: var(--qz-ink-3); padding: 2px 4px; border-radius: 6px;
+}
+.qz-s3-explainer-caret:hover, .qz-s3-explainer-info:hover { color: var(--qz-ink); background: var(--qz-cream-2); }
+.qz-s3-explainer-title { font-weight: 700; font-size: 12px; }
+.qz-s3-explainer-chips { display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.qz-s3-expchip {
+  padding: 3px 10px; border-radius: var(--qz-radius-pill);
+  background: var(--qz-cream-2); color: var(--qz-ink-3);
+  font-size: 11.5px; font-weight: 600;
+}
+.qz-s3-expchip.is-gold { background: var(--qz-gold-wash); color: var(--qz-gold); box-shadow: inset 0 0 0 1px var(--qz-gold-line); }
+.qz-s3-exparrow { color: var(--qz-ink-4); font-size: 11px; }
+.qz-s3-explainer-sentence { flex-basis: 100%; margin: 2px 0 0 24px; color: var(--qz-ink-3); font-size: 12.5px; }
+
+/* Two columns: map + 356px sticky rules column (spec §2, fits at 1024). */
+.qz-s3-logicbody { display: grid; grid-template-columns: minmax(0, 1fr) 356px; gap: 16px; align-items: start; }
+@media (max-width: 1023px) { .qz-s3-logicbody { grid-template-columns: 1fr; } }
+.qz-s3-rwcol { position: sticky; top: 76px; display: flex; flex-direction: column; gap: 12px; max-height: calc(100vh - 96px); overflow-y: auto; }
+
+/* Rules widget */
+.qz-s3-ruleswidget {
+  background: var(--qz-paper); border-radius: 14px; box-shadow: var(--qz-lift-1);
+  padding: 12px 14px; display: flex; flex-direction: column; gap: 10px;
+}
+.qz-s3-rw-head { display: flex; align-items: baseline; gap: 8px; }
+.qz-s3-rw-title { font-size: 12.5px; font-weight: 700; letter-spacing: .02em; }
+.qz-s3-rw-lambda { color: var(--qz-accent); }
+.qz-s3-rw-note { font-size: 11px; color: var(--qz-ink-4); flex: 1 1 auto; }
+.qz-s3-rw-caret {
+  appearance: none; border: none; background: none; cursor: pointer; font: inherit;
+  color: var(--qz-ink-3); padding: 0 4px; border-radius: 6px;
+}
+.qz-s3-rw-empty { margin: 0; font-size: 12.5px; color: var(--qz-ink-4); }
+.qz-s3-rw-list { display: flex; flex-direction: column; gap: 8px; }
+.qz-s3-rw-add {
+  appearance: none; cursor: pointer; font: inherit; align-self: flex-start;
+  border: 1px dashed var(--qz-rule); border-radius: var(--qz-radius-pill);
+  background: transparent; padding: 5px 12px;
+  font-size: 12px; font-weight: 600; color: var(--qz-ink-3);
+}
+.qz-s3-rw-add:hover:not(:disabled) { color: var(--qz-accent); border-color: var(--qz-accent); }
+.qz-s3-rw-add:disabled { opacity: .5; cursor: default; }
+
+/* Fallback section (spec §9) */
+.qz-s3-fallback { background: var(--qz-paper); border-radius: 14px; box-shadow: var(--qz-lift-1); }
+.qz-s3-fb-head {
+  appearance: none; border: none; background: none; cursor: pointer; font: inherit;
+  width: 100%; display: flex; align-items: center; gap: 8px; padding: 12px 14px;
+}
+.qz-s3-fb-title { font-size: 12.5px; font-weight: 700; }
+.qz-s3-fb-pill {
+  margin-left: auto; padding: 2px 10px; border-radius: var(--qz-radius-pill);
+  background: var(--qz-cream-2); color: var(--qz-ink-3); font-size: 11.5px; font-weight: 600;
+}
+.qz-s3-fb-caret { color: var(--qz-ink-3); }
+.qz-s3-fb-body { padding: 0 14px 14px; display: flex; flex-direction: column; gap: 8px; font-size: 12.5px; }
+.qz-s3-fb-note { margin: 0; color: var(--qz-ink-3); }
+.qz-s3-fb-opt { display: flex; align-items: flex-start; gap: 8px; cursor: pointer; }
+.qz-s3-fb-opt.is-dim { opacity: .5; }
+.qz-s3-fb-hint { color: var(--qz-ink-4); font-style: normal; font-size: 11.5px; }
+.qz-s3-fb-select { font: inherit; font-size: 12.5px; padding: 6px 8px; border: 1px solid var(--qz-rule); border-radius: 8px; background: var(--qz-paper); }
+.qz-s3-fb-featured { display: flex; flex-direction: column; gap: 6px; }
+.qz-s3-fb-picked, .qz-s3-fb-results { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 3px; }
+.qz-s3-fb-picked li { display: flex; align-items: center; gap: 6px; font-size: 12px; }
+.qz-s3-fb-picked li button { appearance: none; border: none; background: none; cursor: pointer; color: var(--qz-ink-4); }
+.qz-s3-fb-picked li button:hover { color: var(--qz-crit); }
+.qz-s3-fb-results button {
+  appearance: none; border: none; background: none; cursor: pointer; font: inherit;
+  font-size: 12px; color: var(--qz-accent); text-align: left; padding: 2px 0;
+}
+.qz-s3-fb-results button:disabled { color: var(--qz-ink-4); cursor: default; }
+.qz-s3-fb-bound { margin: 4px 0 0; font-size: 11px; color: var(--qz-ink-4); }
+
+/* Map card header v2 */
+.qz-s3-sec.is-collapsed { padding-bottom: 12px; }
+.qz-s3-sec-titleinput {
+  flex: 1 1 auto; min-width: 80px; font: inherit; font-size: 14.5px; font-weight: 650;
+  color: var(--qz-ink); background: transparent; border: none; outline: none;
+  border-bottom: 1.5px solid transparent; padding: 2px 0;
+}
+.qz-s3-sec-titleinput:hover { border-bottom-color: var(--qz-rule); }
+.qz-s3-sec-titleinput:focus { border-bottom-color: var(--sec-color, var(--qz-accent)); }
+.qz-s3-sec-rulesbadge {
+  flex: 0 0 auto; padding: 2px 8px; border-radius: var(--qz-radius-pill);
+  background: var(--qz-accent-wash); color: var(--qz-accent);
+  font-size: 11px; font-weight: 600; white-space: nowrap;
+}
+.qz-s3-sec-coverage {
+  flex: 0 0 auto; padding: 2px 8px; border-radius: var(--qz-radius-pill);
+  font-size: 11px; font-weight: 600; white-space: nowrap;
+}
+.qz-s3-sec-coverage.is-ok { background: var(--qz-ok-tint); color: var(--qz-ok); }
+.qz-s3-sec-coverage.is-warn { background: var(--qz-warn-tint); color: var(--qz-warn); }
+.qz-s3-sec-coverage.is-crit { background: var(--qz-crit-tint); color: var(--qz-crit); }
+.qz-s3-sec-coverage.is-dim { background: var(--qz-cream-2); color: var(--qz-ink-4); }
+.qz-s3-rolesel {
+  flex: 0 0 auto; font: inherit; font-size: 11.5px; font-weight: 600;
+  padding: 4px 6px; border: 1px solid var(--qz-rule); border-radius: 8px;
+  background: var(--qz-paper); color: var(--qz-ink-2); cursor: pointer; max-width: 168px;
+}
+.qz-s3-rolesel.is-decider { border-color: var(--qz-gold-line); background: var(--qz-gold-wash); color: var(--qz-gold); }
+.qz-s3-sec-caret {
+  appearance: none; border: none; background: none; cursor: pointer; font: inherit;
+  color: var(--qz-ink-3); padding: 2px 6px; border-radius: 6px; flex: 0 0 auto;
+}
+.qz-s3-sec-caret:hover { color: var(--qz-ink); background: var(--qz-cream-2); }
+
+/* Filter MATCHES cell + popover (spec §5) */
+.qz-s3-matchwrap { position: relative; display: inline-flex; }
+.qz-s3-match {
+  appearance: none; cursor: pointer; font: inherit; font-size: 11.5px; font-weight: 600;
+  padding: 4px 9px; border-radius: var(--qz-radius-pill); border: none; white-space: nowrap;
+  max-width: 150px; overflow: hidden; text-overflow: ellipsis;
+}
+.qz-s3-match.is-ok { background: var(--qz-ok-tint); color: var(--qz-ok); }
+.qz-s3-match.is-nopref { background: var(--qz-cream-2); color: var(--qz-ink-4); }
+.qz-s3-match.is-dead { background: var(--qz-crit-tint); color: var(--qz-crit); }
+.qz-s3-matchpop {
+  position: absolute; z-index: 30; top: calc(100% + 6px); right: 0; width: 240px;
+  display: flex; flex-direction: column; gap: 8px;
+  padding: 12px; border-radius: 12px; background: var(--qz-paper); box-shadow: var(--qz-lift-2);
+  font-size: 12px;
+}
+.qz-s3-matchpop-row { display: flex; align-items: center; gap: 7px; cursor: pointer; }
+.qz-s3-matchpop-tags { font: inherit; font-size: 12px; padding: 6px 8px; border: 1px solid var(--qz-rule); border-radius: 8px; }
+.qz-s3-matchpop-hint { color: var(--qz-ink-4); font-size: 11px; }
+.qz-s3-matchpop-done {
+  appearance: none; cursor: pointer; font: inherit; align-self: flex-end;
+  border: none; border-radius: 8px; padding: 4px 12px;
+  background: var(--qz-ink); color: var(--qz-cream); font-size: 12px; font-weight: 600;
+}
+
+/* Capture terminal module (owner supplement) */
+.qz-s3-capmod {
+  border-radius: 16px; background: var(--qz-paper); box-shadow: var(--qz-lift-1);
+  padding: 14px 16px; margin-top: 4px;
+}
+.qz-s3-capmod-head { display: flex; align-items: center; gap: 10px; }
+.qz-s3-capmod-title { margin: 0; font-size: 14.5px; }
+.qz-s3-capmod-note { margin-left: auto; font-size: 11px; color: var(--qz-ink-4); }
+.qz-s3-capmod-body { margin-top: 10px; display: flex; flex-direction: column; gap: 6px; }
+.qz-s3-capmod-toggle { display: flex; align-items: center; gap: 8px; font-size: 12.5px; cursor: pointer; }
+.qz-s3-capmod-toggle.is-dim { opacity: .5; }
+.qz-s3-capmod-hint { margin: 4px 0 0; font-size: 11.5px; color: var(--qz-ink-4); }

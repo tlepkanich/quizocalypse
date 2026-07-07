@@ -8,27 +8,31 @@ import {
   useState,
 } from "react";
 import type { Quiz as QuizDoc, DecisionRuleCondition } from "../../../../lib/quizSchema";
-import { isFreeformType } from "../../../../lib/quizSchema";
-import type { BuilderCategory } from "../../../builder/stepProps";
+import type { BuilderCategory, BuilderCollection } from "../../../builder/stepProps";
+import type { IndexedProduct } from "../../../../lib/recommendationEngine";
 import { insertQuestionRelative } from "../../../../lib/quizMutations";
+import { wouldCreateRevisit } from "../../../../lib/pathAnalyzer";
 import { createRuleWithCondition } from "./draftRule";
 import type { OrderedQuestion, SkipOption } from "../../../../lib/questionOrder";
 import { assignSectionColors } from "../sectionPalette";
 import { computeRuleLayout } from "../ruleHomes";
-import { RulesStrip } from "./RulesStrip";
 import { QuestionSection } from "./QuestionSection";
 import { AddQuestionDivider } from "./AddQuestionDivider";
+import { RulesWidget } from "./RulesWidget";
+import { FallbackSection } from "./FallbackSection";
+import { CaptureModule } from "./CaptureModule";
 
-/* quiz-step3 v3 §5 — the Logic view's scrolling column: the sticky RulesStrip,
-   then one floating QuestionSection per question in flow order with slim
-   add-question dividers between/after. Owns the view's ephemeral state
-   (expanded rule · flash · the zero-write pre-scoped rule draft) and the
-   BIDIRECTIONAL rail sync: an IntersectionObserver recomputes the active
-   section from geometry (the QuestionsLogicLayout pattern) with
-   PROGRAMMATIC-SCROLL SUPPRESSION — a chip/rail/strip jump animates through
-   intermediate sections, so IO updates are muted for the glide and the
-   destination is reported immediately instead. scrollToSection/scrollToRule
-   are exposed imperatively for the shell (rail clicks, P4 health jump-links). */
+/* quiz-step3 v3 §5 → QZY-2 (quiz-logic dev-handoff v1.2 §2) — the Logic
+   sub-view BODY: a two-column layout. LEFT is the map — one collapsible
+   QuestionSection card per question in flow order (collapsed is the default
+   scannable state), slim add-question dividers, and the capture terminal
+   module ("Email Capture / End Quiz") at the bottom. RIGHT is the sticky
+   RulesWidget (ONE global rule list, open on load — every rule's editable
+   band lives there now; map cards keep per-answer λ chips + the pre-scoped
+   "λ Add rule" shortcut whose draft LANDS in the widget) above the §9
+   Fallback chooser. Owns the ephemeral state (expanded rule · flashes ·
+   the zero-write draft · per-card collapse) and the bidirectional rail
+   sync. THEN GO TO options are cycle-guarded via wouldCreateRevisit. */
 
 export interface LogicScrollHandle {
   /** `flashWarn` pulses the section with the warn wash after the glide —
@@ -57,13 +61,26 @@ export const LogicScroll = forwardRef<
     questions: OrderedQuestion[];
     deciderId: string | null;
     categories: BuilderCategory[];
+    collections: BuilderCollection[];
+    productIndex: IndexedProduct[];
+    captureOn: boolean;
     activeId: string;
     onActiveChange: (nodeId: string) => void;
-    onEditContent: (nodeId: string) => void;
     onCommit: (doc: QuizDoc) => void;
   }
 >(function LogicScroll(
-  { doc, questions, deciderId, categories, activeId, onActiveChange, onEditContent, onCommit },
+  {
+    doc,
+    questions,
+    deciderId,
+    categories,
+    collections,
+    productIndex,
+    captureOn,
+    activeId,
+    onActiveChange,
+    onCommit,
+  },
   handleRef,
 ) {
   const rootRef = useRef<HTMLDivElement>(null);
@@ -78,16 +95,28 @@ export const LogicScroll = forwardRef<
   const [flashSectionId, setFlashSectionId] = useState<string | null>(null);
   const flashSectionTimer = useRef<number | undefined>(undefined);
   // §5.6 — the pre-scoped rule draft: PURELY LOCAL until the first answer
-  // pick (zero doc writes on open/cancel). Holds the home section's node id.
+  // pick (zero doc writes on open/cancel). Holds the pre-filled question id.
   const [draftHome, setDraftHome] = useState<string | null>(null);
   // A section that doesn't exist yet (freshly inserted question) — scroll
   // once its card mounts (carrying a requested flash along).
   const [pendingScroll, setPendingScroll] = useState<{ id: string; flashWarn: boolean } | null>(
     null,
   );
+  // QZY-2 (spec §4) — per-card collapse; COLLAPSED is the default scannable
+  // state, expansion persists for the session; jumps auto-expand the target.
+  const [expandedCards, setExpandedCards] = useState<Record<string, boolean>>({});
+  const cardExpanded = useCallback(
+    (id: string) => expandedCards[id] === true,
+    [expandedCards],
+  );
+  const expandCard = useCallback((id: string) => {
+    setExpandedCards((m) => (m[id] ? m : { ...m, [id]: true }));
+  }, []);
+  const toggleCard = useCallback((id: string) => {
+    setExpandedCards((m) => ({ ...m, [id]: !m[id] }));
+  }, []);
 
   const rules = useMemo(() => doc.decision_rules ?? [], [doc.decision_rules]);
-  const rulesById = useMemo(() => new Map(rules.map((r) => [r.id, r] as const)), [rules]);
   const questionIds = useMemo(() => questions.map((q) => q.node.id), [questions]);
   const idsKey = questionIds.join("|");
 
@@ -98,13 +127,25 @@ export const LogicScroll = forwardRef<
   );
   const layout = useMemo(() => computeRuleLayout(rules, questionIds), [rules, questionIds]);
 
-  const conditionQuestions = useMemo(
-    () => questions.filter((q) => !isFreeformType(q.node.data.question_type)),
-    [questions],
-  );
+  // Spec §4 — the in-N-rules badge: rules whose CONDITIONS reference the
+  // question (by question_id or one of its answer ids).
+  const rulesReferencing = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const q of questions) {
+      const answerIds = new Set(q.node.data.answers.map((a) => a.id));
+      let n = 0;
+      for (const r of rules) {
+        if (r.conditions.some((c) => c.question_id === q.node.id || answerIds.has(c.answer_id)))
+          n++;
+      }
+      counts.set(q.node.id, n);
+    }
+    return counts;
+  }, [questions, rules]);
 
   // Then-go-to options (the QuestionsLogicLayout recipe): every question as
-  // Q{n} + any exotic already-routed target + End quiz. Rows filter self.
+  // Q{n} + any exotic already-routed target + End quiz. Rows filter self;
+  // QZY-2 disables revisit-creating targets per question (spec §1).
   const skipOptions = useMemo<SkipOption[]>(() => {
     const opts: SkipOption[] = questions.map((q) => ({
       value: q.node.id,
@@ -127,6 +168,14 @@ export const LogicScroll = forwardRef<
     opts.push({ value: "__end__", label: "End quiz" });
     return opts;
   }, [questions, questionIds, doc.nodes, doc.edges]);
+
+  const isRevisitTarget = useCallback(
+    (fromQuestionId: string, targetId: string) => {
+      if (targetId === "__end__") return false;
+      return wouldCreateRevisit(doc, fromQuestionId, targetId);
+    },
+    [doc],
+  );
 
   const registerSection = useCallback((nodeId: string, el: HTMLElement | null) => {
     if (el) sectionEls.current.set(nodeId, el);
@@ -157,6 +206,7 @@ export const LogicScroll = forwardRef<
 
   const scrollToSection = useCallback(
     (nodeId: string, opts?: { flashWarn?: boolean }) => {
+      expandCard(nodeId); // a jump always lands on an OPEN card
       const el = sectionEls.current.get(nodeId);
       if (!el) {
         // Not mounted yet (a just-inserted question) — retry on next render.
@@ -168,26 +218,21 @@ export const LogicScroll = forwardRef<
       el.scrollIntoView({ behavior: "smooth", block: "start" });
       if (opts?.flashWarn) flashSection(nodeId);
     },
-    [onActiveChange, flashSection],
+    [onActiveChange, flashSection, expandCard],
   );
 
   const scrollToRule = useCallback(
     (ruleId: string) => {
       setExpandedRuleId(ruleId);
       flash(ruleId);
-      const home = layout.homes.get(ruleId) ?? null;
-      suppressUntil.current = Date.now() + SUPPRESS_MS;
-      if (home) onActiveChange(home);
       // The expanded editor mounts on the NEXT render — scroll after a frame
-      // so the geometry includes it (rule els register for homed AND homeless).
+      // so the geometry includes it (rules live in the right-column widget).
       requestAnimationFrame(() => {
         suppressUntil.current = Date.now() + SUPPRESS_MS;
-        const el =
-          ruleEls.current.get(ruleId) ?? (home ? sectionEls.current.get(home) : undefined);
-        el?.scrollIntoView({ behavior: "smooth", block: "center" });
+        ruleEls.current.get(ruleId)?.scrollIntoView({ behavior: "smooth", block: "center" });
       });
     },
-    [layout, onActiveChange, flash],
+    [flash],
   );
 
   useImperativeHandle(handleRef, () => ({ scrollToSection, scrollToRule }), [
@@ -267,55 +312,61 @@ export const LogicScroll = forwardRef<
   );
 
   return (
-    <div className="qz-s3-logic" ref={rootRef} aria-label="Logic view">
-      <RulesStrip
-        doc={doc}
-        rules={rules}
-        homeless={layout.homeless}
-        questions={questions}
-        conditionQuestions={conditionQuestions}
-        categories={categories}
-        expandedRuleId={expandedRuleId}
-        flashRuleId={flashRuleId}
-        onRuleClick={scrollToRule}
-        onToggleRule={toggleRule}
-        onCommit={onCommit}
-        registerRuleEl={registerRuleEl}
-      />
+    <div className="qz-s3-logicbody">
+      <div className="qz-s3-logic" ref={rootRef} aria-label="Logic map">
+        {questions.map((q) => (
+          <div key={q.node.id} className="qz-s3-secwrap">
+            <QuestionSection
+              doc={doc}
+              question={q}
+              isDecider={q.node.id === deciderId}
+              hasCurrentDecider={deciderId !== null}
+              colorKey={sectionColors.get(q.node.id) ?? "green"}
+              categories={categories}
+              productIndex={productIndex}
+              skipOptions={skipOptions}
+              isRevisitTarget={isRevisitTarget}
+              chipsByAnswer={layout.chipsByAnswer}
+              inRulesCount={rulesReferencing.get(q.node.id) ?? 0}
+              flashWarn={flashSectionId === q.node.id}
+              active={activeId === q.node.id}
+              expanded={cardExpanded(q.node.id)}
+              onToggleExpanded={() => toggleCard(q.node.id)}
+              onCommit={onCommit}
+              onChipClick={scrollToRule}
+              onStartDraft={setDraftHome}
+              registerSection={registerSection}
+            />
+            <AddQuestionDivider onAdd={() => addBelow(q.node.id)} />
+          </div>
+        ))}
+        {/* QZY-2 (owner supplement) — the map pre-populates the capture as
+            the LAST step: "Email Capture / End Quiz" instead of a bare end. */}
+        <CaptureModule doc={doc} captureOn={captureOn} onCommit={onCommit} />
+      </div>
 
-      {questions.map((q) => (
-        <div key={q.node.id} className="qz-s3-secwrap">
-          <QuestionSection
-            doc={doc}
-            question={q}
-            isDecider={q.node.id === deciderId}
-            hasCurrentDecider={deciderId !== null}
-            colorKey={sectionColors.get(q.node.id) ?? "green"}
-            categories={categories}
-            skipOptions={skipOptions}
-            layout={layout}
-            rulesById={rulesById}
-            totalRules={rules.length}
-            questions={questions}
-            conditionQuestions={conditionQuestions}
-            expandedRuleId={expandedRuleId}
-            flashRuleId={flashRuleId}
-            flashWarn={flashSectionId === q.node.id}
-            draftActive={draftHome === q.node.id}
-            active={activeId === q.node.id}
-            onCommit={onCommit}
-            onEditContent={onEditContent}
-            onChipClick={scrollToRule}
-            onToggleRule={toggleRule}
-            onStartDraft={setDraftHome}
-            onCommitDraft={commitDraft}
-            onCancelDraft={() => setDraftHome(null)}
-            registerSection={registerSection}
-            registerRuleEl={registerRuleEl}
-          />
-          <AddQuestionDivider onAdd={() => addBelow(q.node.id)} />
-        </div>
-      ))}
+      <div className="qz-s3-rwcol">
+        <RulesWidget
+          doc={doc}
+          questions={questions}
+          categories={categories}
+          expandedRuleId={expandedRuleId}
+          flashRuleId={flashRuleId}
+          draftHome={draftHome}
+          registerRuleEl={registerRuleEl}
+          onToggleRule={toggleRule}
+          onCommit={onCommit}
+          onCommitDraft={commitDraft}
+          onCancelDraft={() => setDraftHome(null)}
+          onStartDraft={() => setDraftHome(questions[0]?.node.id ?? null)}
+        />
+        <FallbackSection
+          doc={doc}
+          collections={collections}
+          productIndex={productIndex}
+          onCommit={onCommit}
+        />
+      </div>
     </div>
   );
 });

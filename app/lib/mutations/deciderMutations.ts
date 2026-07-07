@@ -15,7 +15,9 @@ import { uid, type QuizDoc } from "./shared";
 export function setQuestionRole(
   doc: QuizDoc,
   nodeId: string,
-  role: "decides" | "qualifier",
+  // QZY-2 (quiz-logic spec §3) adds "filter" — narrows the resolved pool by
+  // the selected answers' attribute values (lib/filterMatching.ts).
+  role: "decides" | "qualifier" | "filter",
 ): QuizDoc {
   // Defense-in-depth: role is a decider-doc concept. A stray call against a
   // legacy doc would inject keys that violate legacy byte-stability — no-op.

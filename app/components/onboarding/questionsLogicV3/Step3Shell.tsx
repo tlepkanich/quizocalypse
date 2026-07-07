@@ -1,16 +1,17 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Quiz as QuizDoc, DesignTokens } from "../../../lib/quizSchema";
-import type { BuilderCategory } from "../../builder/stepProps";
+import type { BuilderCategory, BuilderCollection } from "../../builder/stepProps";
+import type { IndexedProduct } from "../../../lib/recommendationEngine";
 import { buildTier1Report, type Tier1Link } from "../../../lib/pathReport";
 import { insertQuestionRelative } from "../../../lib/quizMutations";
 import { orderedQuestions, deciderQuestion } from "../../../lib/questionOrder";
 import { QuestionBankDrawer } from "../../studio/QuestionBankDrawer";
 import { TopBar3 } from "./TopBar3";
-import { HealthPill } from "./HealthPill";
-import { HealthPopover } from "./HealthPopover";
+import { pillPresentation } from "./HealthPill";
 import { LeftRail, CAPTURE_ID, REVEAL_ID } from "./LeftRail";
 import { PhoneCanvas } from "./content/PhoneCanvas";
 import { LogicScroll, type LogicScrollHandle } from "./logic/LogicScroll";
+import { DiagnoseModal, type DiagnoseTab } from "./logic/DiagnoseModal";
 
 /* ════════════════════════════════════════════════════════════════════════════
    quiz-step3 v3 — Step3Shell: the two-view (Content · Logic) Step-3 rebuild
@@ -46,6 +47,8 @@ export function Step3Shell({
   saveError,
   onRetry,
   categories,
+  collections,
+  productIndex,
   navigating,
   onContinue,
   designTokens,
@@ -61,6 +64,10 @@ export function Step3Shell({
   saveError: string | null;
   onRetry: () => void;
   categories: BuilderCategory[];
+  // QZY-2 — the fallback chooser's collection picker + the filter counts /
+  // V11 dead-end diagnostics / Test-a-path all need the catalog.
+  collections: BuilderCollection[];
+  productIndex: IndexedProduct[];
   navigating: boolean;
   /** Fires the existing to-rec-page intent (the fetcher lives in the stage). */
   onContinue: () => void;
@@ -71,15 +78,22 @@ export function Step3Shell({
   const decider = useMemo(() => deciderQuestion(doc), [doc]);
   // The live health verdict — pure + cheap by design, memoized per doc change
   // (powers the pill now, the popover and the Continue gate in P4).
-  const report = useMemo(() => buildTier1Report(doc, categories), [doc, categories]);
+  const report = useMemo(
+    () => buildTier1Report(doc, categories, productIndex),
+    [doc, categories, productIndex],
+  );
 
   const captureOn = doc.rec_page_settings?.global?.captureEmail !== false;
 
   const [view, setView] = useState<Step3View>("content");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [libraryOpen, setLibraryOpen] = useState(false);
-  // P4 — the health popover, CONTROLLED so the blocked Continue can open it.
-  const [healthOpen, setHealthOpen] = useState(false);
+  // QZY-2 (spec §10) — the ONE diagnose/preview modal; the Fix-N-issues
+  // control and a blocked Continue open it on the Diagnostics tab.
+  const [diagnose, setDiagnose] = useState<{ open: boolean; tab: DiagnoseTab }>({
+    open: false,
+    tab: "diagnostics",
+  });
   // A rule jump-link fired from the Content view: LogicScroll isn't mounted
   // until the view flips, so the target parks here for one render.
   const [pendingRuleJump, setPendingRuleJump] = useState<string | null>(null);
@@ -124,7 +138,7 @@ export function Step3Shell({
       return;
     }
     if (report.verdict.blocking > 0) {
-      setHealthOpen(true);
+      setDiagnose({ open: true, tab: "diagnostics" });
       return;
     }
     onContinue();
@@ -138,7 +152,7 @@ export function Step3Shell({
   // needed (the jump parks until LogicScroll mounts).
   const handleHealthNavigate = useCallback(
     (link: Tier1Link) => {
-      setHealthOpen(false);
+      setDiagnose((d) => ({ ...d, open: false }));
       if (link.kind === "question" && link.nodeId) {
         setSelectedId(link.nodeId);
         if (view === "logic") logicRef.current?.scrollToSection(link.nodeId, { flashWarn: true });
@@ -162,28 +176,31 @@ export function Step3Shell({
     setPendingRuleJump(null);
   }, [view, pendingRuleJump]);
 
+  // QZY-2 (spec §2) — ONE status control top-right: the Fix-N-issues pill
+  // (or the healthy/review verdict) opening the diagnose modal's
+  // Diagnostics tab. No separate popover chip anymore.
+  const pill = pillPresentation(report.verdict);
+  const fixControl = (
+    <button
+      type="button"
+      className={`qz-s3-healthpill is-${pill.state}`}
+      aria-haspopup="dialog"
+      title={report.verdict.label}
+      onClick={() => setDiagnose({ open: true, tab: "diagnostics" })}
+    >
+      <span className="qz-s3-healthdot" aria-hidden />
+      {report.verdict.blocking > 0
+        ? `Fix ${report.verdict.blocking} issue${report.verdict.blocking === 1 ? "" : "s"}`
+        : pill.text}
+    </button>
+  );
+
   return (
     <div className="qz-s3">
       <TopBar3
         view={view}
         verdict={report.verdict}
-        healthPill={
-          <HealthPill
-            verdict={report.verdict}
-            open={healthOpen}
-            onOpenChange={setHealthOpen}
-            popover={
-              <HealthPopover
-                report={report}
-                doc={doc}
-                quizId={quizId}
-                onCommit={onCommit}
-                onFlush={onFlush}
-                onNavigate={handleHealthNavigate}
-              />
-            }
-          />
-        }
+        healthPill={fixControl}
         isSaving={isSaving}
         savedAt={savedAt}
         saveError={saveError}
@@ -192,25 +209,19 @@ export function Step3Shell({
         onContinue={handleContinue}
       />
 
-      <div className="qz-s3-body">
-        <LeftRail
-          questions={questions}
-          deciderId={decider?.id ?? null}
-          activeId={activeId}
-          view={view}
-          captureOn={captureOn}
-          onViewChange={setView}
-          onSelect={(id) => {
-            setSelectedId(id);
-            // Logic view: a rail click scrolls its section (bidirectional
-            // sync); Content view keeps the phone walk as before.
-            if (view === "logic") logicRef.current?.scrollToSection(id);
-          }}
-          onAddQuestion={addQuestion}
-          onOpenLibrary={() => setLibraryOpen(true)}
-        />
-
-        {view === "content" ? (
+      {view === "content" ? (
+        <div className="qz-s3-body">
+          <LeftRail
+            questions={questions}
+            deciderId={decider?.id ?? null}
+            activeId={activeId}
+            view={view}
+            captureOn={captureOn}
+            onViewChange={setView}
+            onSelect={(id) => setSelectedId(id)}
+            onAddQuestion={addQuestion}
+            onOpenLibrary={() => setLibraryOpen(true)}
+          />
           <PhoneCanvas
             doc={doc}
             questions={questions}
@@ -222,26 +233,133 @@ export function Step3Shell({
             onCommit={onCommit}
             regen={regen}
           />
-        ) : (
+        </div>
+      ) : (
+        <div className="qz-s3-logicview">
+          {/* Spec §2 — the sub-header: Content-Logic toggle (Logic active) +
+              the "+ Diagnose / Preview" entry. No question rail here — the
+              map IS the list. */}
+          <div className="qz-s3-subhead">
+            <div className="qz-s3-viewtoggle" role="group" aria-label="Content or Logic view">
+              <button type="button" aria-pressed={false} onClick={() => setView("content")}>
+                ✎ Content
+              </button>
+              <button type="button" aria-pressed onClick={() => setView("logic")}>
+                λ Logic
+              </button>
+            </div>
+            <button
+              type="button"
+              className="qz-btn qz-btn-ghost qz-btn-sm"
+              onClick={() => setDiagnose({ open: true, tab: "test" })}
+            >
+              + Diagnose / Preview
+            </button>
+            <button
+              type="button"
+              className="qz-btn qz-btn-ghost qz-btn-sm"
+              onClick={addQuestion}
+            >
+              + Add question
+            </button>
+            <button
+              type="button"
+              className="qz-btn qz-btn-ghost qz-btn-sm"
+              onClick={() => setLibraryOpen(true)}
+            >
+              Question library
+            </button>
+          </div>
+
+          {/* Spec §2 — the collapsible "How this quiz resolves" explainer. */}
+          <ExplainerStrip />
+
           <LogicScroll
             ref={logicRef}
             doc={doc}
             questions={questions}
             deciderId={decider?.id ?? null}
             categories={categories}
+            collections={collections}
+            productIndex={productIndex}
+            captureOn={captureOn}
             activeId={activeId}
             onActiveChange={setSelectedId}
-            onEditContent={(id) => {
-              setSelectedId(id);
-              setView("content");
-            }}
             onCommit={onCommit}
           />
-        )}
-      </div>
+        </div>
+      )}
+
+      <DiagnoseModal
+        open={diagnose.open}
+        initialTab={diagnose.tab}
+        onClose={() => setDiagnose((d) => ({ ...d, open: false }))}
+        doc={doc}
+        quizId={quizId}
+        report={report}
+        categories={categories}
+        productIndex={productIndex}
+        onCommit={onCommit}
+        onFlush={onFlush}
+        onNavigate={(link) => {
+          // Jump-links land in the LOGIC view's map.
+          if (view !== "logic") setView("logic");
+          handleHealthNavigate(link);
+        }}
+      />
 
       {libraryOpen ? (
         <QuestionBankDrawer doc={doc} onCommit={onCommit} onClose={() => setLibraryOpen(false)} />
+      ) : null}
+    </div>
+  );
+}
+
+/* QZY-2 (spec §2) — "How this quiz resolves": pipeline chips on load, an
+   info reveal with the plain-English sentence, a chevron collapse. */
+function ExplainerStrip() {
+  const [collapsed, setCollapsed] = useState(false);
+  const [showInfo, setShowInfo] = useState(false);
+  return (
+    <div className="qz-s3-explainer">
+      <button
+        type="button"
+        className="qz-s3-explainer-caret"
+        aria-expanded={!collapsed}
+        aria-label={collapsed ? "Expand the resolution explainer" : "Collapse the resolution explainer"}
+        onClick={() => setCollapsed((c) => !c)}
+      >
+        {collapsed ? "▸" : "▾"}
+      </button>
+      <span className="qz-s3-explainer-title">How this quiz resolves</span>
+      {collapsed ? null : (
+        <>
+          <span className="qz-s3-explainer-chips" aria-hidden>
+            <span className="qz-s3-expchip">Rules</span>
+            <span className="qz-s3-exparrow">→</span>
+            <span className="qz-s3-expchip is-gold">Picks the result ◆</span>
+            <span className="qz-s3-exparrow">→</span>
+            <span className="qz-s3-expchip">Filters</span>
+            <span className="qz-s3-exparrow">→</span>
+            <span className="qz-s3-expchip">Fallback</span>
+          </span>
+          <button
+            type="button"
+            className="qz-s3-explainer-info"
+            aria-expanded={showInfo}
+            aria-label="What does this mean?"
+            onClick={() => setShowInfo((v) => !v)}
+          >
+            ⓘ
+          </button>
+        </>
+      )}
+      {!collapsed && showInfo ? (
+        <p className="qz-s3-explainer-sentence">
+          Rules run first (top to bottom, first match wins), then the question that picks the
+          result chooses the recommendation, filter questions narrow it to what fits, and the
+          fallback covers a shopper nothing matches.
+        </p>
       ) : null}
     </div>
   );

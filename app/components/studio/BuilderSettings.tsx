@@ -31,14 +31,11 @@ export function BuilderLogicView({
   doc,
   commit,
   onSelectNode,
-  onEditContent,
 }: {
   data: StudioBuilderData;
   doc: QuizDoc;
   commit: (doc: QuizDoc) => void;
   onSelectNode: (nodeId: string | null) => void;
-  /** Jump to the Build view focused on a question (LogicScroll's ✎ affordance). */
-  onEditContent: (nodeId: string) => void;
 }) {
   const isDecider = doc.logic_model === "decider";
   const questions = useMemo(() => orderedQuestions(doc), [doc]);
@@ -75,9 +72,11 @@ export function BuilderLogicView({
         questions={questions}
         deciderId={decider?.id ?? null}
         categories={data.categories}
+        collections={data.collections}
+        productIndex={data.productIndex}
+        captureOn={doc.rec_page_settings?.global?.captureEmail !== false}
         activeId={activeId}
         onActiveChange={setActiveId}
-        onEditContent={onEditContent}
         onCommit={commit}
       />
       {/* PathTester renders its own "Try a path" header. */}
