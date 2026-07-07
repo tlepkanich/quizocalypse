@@ -424,13 +424,34 @@ export function setQuestionType(
 ): QuizDoc {
   const node = doc.nodes.find((n) => n.id === nodeId);
   if (!node || node.type !== "question") return doc;
-  const oldHandles = new Set(node.data.answers.map((a) => a.edge_handle_id));
+  const old = node.data.answers;
+  // QZY-3 (owner supplement) — changing the type KEEPS the original answers.
+  //   card → card:      answers untouched (ids, handles, tags, targets,
+  //                     points, per-answer routing edges all survive).
+  //   card → freeform:  the FIRST answer becomes the seed (freeform types
+  //                     piggyback on answers[0] for tag accumulation +
+  //                     routing) — its identity survives; the rest drop.
+  //   freeform → card:  the seed survives as the first option; a second
+  //                     placeholder is added so card types stay valid (≥2).
+  // Pre-QZY behavior replaced EVERYTHING with "Option 1/2" placeholders —
+  // a single→multi switch silently destroyed the merchant's answers.
   const answers = isFreeformType(newType)
-    ? [{ id: uid("a"), text: "Response", tags: [], edge_handle_id: uid("h") }]
-    : [
-        { id: uid("a"), text: "Option 1", tags: [], edge_handle_id: uid("h") },
-        { id: uid("a"), text: "Option 2", tags: [], edge_handle_id: uid("h") },
-      ];
+    ? old.length > 0
+      ? [old[0]!]
+      : [{ id: uid("a"), text: "Response", tags: [], edge_handle_id: uid("h") }]
+    : old.length >= 2
+      ? old
+      : old.length === 1
+        ? [old[0]!, { id: uid("a"), text: "Option 2", tags: [], edge_handle_id: uid("h") }]
+        : [
+            { id: uid("a"), text: "Option 1", tags: [], edge_handle_id: uid("h") },
+            { id: uid("a"), text: "Option 2", tags: [], edge_handle_id: uid("h") },
+          ];
+  // Only edges whose answers were actually DROPPED lose their routing.
+  const keptHandles = new Set(answers.map((a) => a.edge_handle_id));
+  const droppedHandles = new Set(
+    old.map((a) => a.edge_handle_id).filter((h) => !keptHandles.has(h)),
+  );
   return {
     ...doc,
     nodes: doc.nodes.map((n) =>
@@ -457,7 +478,11 @@ export function setQuestionType(
     ),
     edges: doc.edges.filter(
       (e) =>
-        !(e.source === nodeId && e.source_handle != null && oldHandles.has(e.source_handle)),
+        !(
+          e.source === nodeId &&
+          e.source_handle != null &&
+          droppedHandles.has(e.source_handle)
+        ),
     ),
   };
 }

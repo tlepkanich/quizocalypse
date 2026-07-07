@@ -94,26 +94,33 @@ export function LeftRail({
             onSelect={() => onSelect(q.node.id)}
           />
         ))}
+        {/* QZY-3 — the capture screen is a FULL step now (heading/description
+            editable on the canvas, SMS + terms toggles), so its row navigates
+            like any question. The reveal row navigates too (read-only mock). */}
         {captureOn ? (
-          <div
+          <button
+            type="button"
             className={`qz-s3-row is-terminus${activeId === CAPTURE_ID ? " is-active" : ""}`}
-            title={TERMINUS_TOOLTIP}
+            title="Email capture — edit its heading, description, SMS and terms on the canvas"
+            onClick={() => onSelect(CAPTURE_ID)}
           >
             <span className="qz-s3-numchip is-capture" aria-hidden>
               ✉
             </span>
             <span className="qz-s3-rowtitle">Email capture</span>
-          </div>
+          </button>
         ) : null}
-        <div
+        <button
+          type="button"
           className={`qz-s3-row is-terminus${activeId === REVEAL_ID ? " is-active" : ""}`}
           title={TERMINUS_TOOLTIP}
+          onClick={() => onSelect(REVEAL_ID)}
         >
           <span className="qz-s3-numchip is-reveal" aria-hidden>
             ◆
           </span>
           <span className="qz-s3-rowtitle">Result reveal</span>
-        </div>
+        </button>
       </div>
 
       <div className="qz-s3-railfoot">

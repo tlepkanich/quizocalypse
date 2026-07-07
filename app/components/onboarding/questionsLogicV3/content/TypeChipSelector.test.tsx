@@ -7,13 +7,13 @@ import { TypeChipSelector } from "./TypeChipSelector";
 import { Quiz } from "../../../../lib/quizSchema";
 import type { QuestionNode } from "../../../../lib/questionOrder";
 
-/* BIC-2 D3 — the type chip's dialog gates (quiz-step3 v3 §4.4). BOTH dialogs
-   intercept BEFORE setQuestionType runs:
-   — decider + multi-select/open-text → BLOCK dialog, onCommit NEVER called
-     (the spec's locked refusal — the mutation would silently auto-demote);
-   — any other change → reset-confirm, and only "Change type" commits the
-     setQuestionType shape (answers reset to defaults, stale skip edges
-     pruned, question text kept). */
+/* BIC-2 D3 + QZY-3 — the type chip after the owner supplement:
+   — the picker is CURATED (Single select · Multi-select · Five-point scale ·
+     Rating; the current stored type stays listed) — freeform picks are gone;
+   — decider + multi-select → BLOCK dialog, onCommit NEVER called;
+   — card ↔ card commits DIRECTLY and KEEPS the original answers, mappings,
+     and per-answer routing (nothing resets anymore);
+   — Five-point scale = the rating type + a 1–5 scale preset. */
 
 (globalThis as Record<string, unknown>).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -133,70 +133,47 @@ describe("TypeChipSelector — decider BLOCK dialog", () => {
     expect(onCommit).not.toHaveBeenCalled(); // doc untouched end to end
   });
 
-  it("decider → open text is REFUSED with the freeform copy, no commit", () => {
+  it("QZY-3 — the picker is curated: no freeform picks offered", () => {
     const d = doc();
-    const onCommit = vi.fn();
-    mount(createElement(TypeChipSelector, { doc: d, node: questionNode(d, "q2"), onCommit }));
-
-    pickType("text");
-    expect(document.body.querySelector('[role="dialog"]')?.textContent).toContain(
-      "Open text can't decide the result",
-    );
-    expect(onCommit).not.toHaveBeenCalled();
+    mount(createElement(TypeChipSelector, { doc: d, node: questionNode(d, "q2"), onCommit: vi.fn() }));
+    const values = Array.from(typeSelect().options).map((o) => o.value);
+    expect(values).toEqual(["single_select", "multi_select", "rating5", "rating"]);
   });
 
-  it("decider → a single-pick type is allowed via the reset-confirm and KEEPS the decider role", () => {
+  it("decider → Five-point scale commits DIRECTLY, keeps the role + answers, sets the 1–5 preset", () => {
     const d = doc();
     const onCommit = vi.fn();
     mount(createElement(TypeChipSelector, { doc: d, node: questionNode(d, "q2"), onCommit }));
 
-    pickType("image_tile");
-    expect(document.body.querySelector('[role="dialog"]')?.textContent).toContain(
-      "resets this question's answers",
-    );
-    act(() => buttonByText("Change type").click());
-
+    pickType("rating5");
+    expect(document.body.querySelector('[role="dialog"]')).toBeNull(); // no dialog — nothing resets
     expect(onCommit).toHaveBeenCalledTimes(1);
     const committed = onCommit.mock.calls[0]![0] as Quiz;
     const q2 = questionNode(committed, "q2");
-    expect(q2.data.question_type).toBe("image_tile");
+    expect(q2.data.question_type).toBe("rating");
+    expect(q2.data.scale_config).toMatchObject({ min: 1, max: 5 });
     expect(q2.data.role).toBe("decides"); // no silent demotion on a decidable type
+    expect(q2.data.answers.map((a) => a.id)).toEqual(["park", "powder"]); // answers KEPT
   });
 });
 
-describe("TypeChipSelector — reset-confirm commit shape (setQuestionType contract)", () => {
-  it("confirming commits the mutation: answers reset to defaults, text kept, stale skip edge pruned", () => {
+describe("TypeChipSelector — QZY-3 card ↔ card keeps everything (no dialog)", () => {
+  it("qualifier → multi-select commits directly: answers, text, and the skip edge all survive", () => {
     const d = doc();
     const onCommit = vi.fn();
     mount(createElement(TypeChipSelector, { doc: d, node: questionNode(d, "q1"), onCommit }));
 
-    pickType("image_tile");
-    act(() => buttonByText("Change type").click());
-
+    pickType("multi_select");
+    expect(document.body.querySelector('[role="dialog"]')).toBeNull();
     expect(onCommit).toHaveBeenCalledTimes(1);
     const committed = onCommit.mock.calls[0]![0] as Quiz;
     const q1 = questionNode(committed, "q1");
-    expect(q1.data.question_type).toBe("image_tile");
+    expect(q1.data.question_type).toBe("multi_select");
     expect(q1.data.text).toBe("Level?"); // question text preserved
-    expect(q1.data.answers.map((a) => a.text)).toEqual(["Option 1", "Option 2"]);
-    // The skip edge sourced from the old answer handle is gone; plain edges stay.
-    expect(committed.edges.some((e) => e.source === "q1" && e.source_handle === "h1")).toBe(false);
+    // The owner-reported bug: answers used to reset to placeholders.
+    expect(q1.data.answers.map((a) => a.text)).toEqual(["Beginner", "Advanced"]);
+    // The per-answer skip edge SURVIVES a card→card type change now.
+    expect(committed.edges.some((e) => e.source === "q1" && e.source_handle === "h1")).toBe(true);
     expect(committed.edges.some((e) => e.id === "e2")).toBe(true);
-    // The dialog closed after committing.
-    expect(document.body.querySelector('[role="dialog"]')).toBeNull();
-  });
-
-  it("Cancel discards: dialog closes, onCommit never called", () => {
-    const d = doc();
-    const onCommit = vi.fn();
-    mount(createElement(TypeChipSelector, { doc: d, node: questionNode(d, "q1"), onCommit }));
-
-    pickType("multi_select"); // q1 is a qualifier — multi is a normal confirm here
-    expect(document.body.querySelector('[role="dialog"]')?.textContent).toContain(
-      "resets this question's answers",
-    );
-    act(() => buttonByText("Cancel").click());
-    expect(document.body.querySelector('[role="dialog"]')).toBeNull();
-    expect(onCommit).not.toHaveBeenCalled();
   });
 });

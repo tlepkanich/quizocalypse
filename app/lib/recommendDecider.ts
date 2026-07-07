@@ -64,6 +64,7 @@ export const REC_PAGE_DEFAULTS: Required<
     | "captureEmail"
     | "captureName"
     | "capturePhone"
+    | "captureTermsOn"
   >
 > = {
   headline: "Your perfect match",
@@ -83,6 +84,10 @@ export const REC_PAGE_DEFAULTS: Required<
   captureEmail: true,
   captureName: false,
   capturePhone: false,
+  // QZY-3 — the terms consent checkbox is opt-in. (captureHeadline/Subtext/
+  // TermsText deliberately have NO defaults here — absent falls through to
+  // the locale-aware chrome copy so translations keep working.)
+  captureTermsOn: false,
 };
 
 export type ResolvedRecPageConfig = RecPageGlobalT & typeof REC_PAGE_DEFAULTS;

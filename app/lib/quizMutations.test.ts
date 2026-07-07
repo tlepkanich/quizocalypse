@@ -631,8 +631,8 @@ describe("Rec-Page §1 multi-section (setResultSectionCount / setResultStage)", 
   });
 });
 
-describe("setQuestionType (Questions & Logic spec §3.1)", () => {
-  it("preserves text + other fields, resets answers to ≥2 fresh, prunes per-answer edges", () => {
+describe("setQuestionType (QZY-3 — type changes KEEP the original answers)", () => {
+  it("card → card preserves answers, mappings, and per-answer routing intact", () => {
     // Map q1.a1 to a bucket and route it to q3, then flip the type.
     let doc = linearQuestionsDoc();
     doc = setAnswerBucketDirect(doc, "q1", "q1_a1", "buk");
@@ -645,23 +645,41 @@ describe("setQuestionType (Questions & Logic spec §3.1)", () => {
     if (q1?.type !== "question") throw new Error("q1 not a question");
     expect(q1.data.question_type).toBe("multi_select");
     expect(q1.data.text).toBe("q1"); // text preserved
-    expect(q1.data.answers).toHaveLength(2); // reset to ≥2
-    // Fresh answers carry no points and brand-new handles.
-    expect(q1.data.answers.every((a) => !a.points)).toBe(true);
-    expect(q1.data.answers.every((a) => a.edge_handle_id !== "q1_h1" && a.edge_handle_id !== "q1_h2")).toBe(true);
-    // The dangling per-answer route edge was pruned.
-    expect(next.edges.some((e) => e.source === "q1" && e.source_handle === "q1_h1")).toBe(false);
+    // The owner-reported bug: switching type used to REPLACE the answers
+    // with placeholders. Now ids, handles, and mappings all survive.
+    const before = doc.nodes.find((n) => n.id === "q1");
+    if (before?.type !== "question") throw new Error("q1 not a question");
+    expect(q1.data.answers.map((a) => a.id)).toEqual(before.data.answers.map((a) => a.id));
+    expect(q1.data.answers[0]!.edge_handle_id).toBe("q1_h1");
+    // The per-answer route edge SURVIVES the type change.
+    expect(next.edges.some((e) => e.source === "q1" && e.source_handle === "q1_h1" && e.target === "q3")).toBe(true);
     // Spine edge intro→q1→q2 intact; doc round-trips.
     expect(next.edges.some((e) => e.source === "q1" && e.target === "q2" && !e.source_handle)).toBe(true);
     expect(() => Quiz.parse(next)).not.toThrow();
   });
 
-  it("freeform target resets to a single seed answer", () => {
-    const next = setQuestionType(linearQuestionsDoc(), "q1", "text");
+  it("card → freeform keeps the FIRST answer as the seed (identity + routing) and prunes the rest", () => {
+    let doc = linearQuestionsDoc();
+    doc = setAnswerRoute(doc, "q1", "q1_a1", "q3");
+    const next = setQuestionType(doc, "q1", "text");
     const q1 = next.nodes.find((n) => n.id === "q1");
     if (q1?.type !== "question") throw new Error("q1 not a question");
     expect(q1.data.question_type).toBe("text");
     expect(q1.data.answers).toHaveLength(1);
+    expect(q1.data.answers[0]!.id).toBe("q1_a1"); // the seed IS the old first answer
+    // Its route edge survives; dropped answers' edges are pruned.
+    expect(next.edges.some((e) => e.source === "q1" && e.source_handle === "q1_h1" && e.target === "q3")).toBe(true);
+    expect(next.edges.some((e) => e.source === "q1" && e.source_handle === "q1_h2")).toBe(false);
+    expect(() => Quiz.parse(next)).not.toThrow();
+  });
+
+  it("freeform → card keeps the seed and appends a placeholder to reach ≥2", () => {
+    const mid = setQuestionType(linearQuestionsDoc(), "q1", "text");
+    const next = setQuestionType(mid, "q1", "single_select");
+    const q1 = next.nodes.find((n) => n.id === "q1");
+    if (q1?.type !== "question") throw new Error("q1 not a question");
+    expect(q1.data.answers).toHaveLength(2);
+    expect(q1.data.answers[0]!.id).toBe("q1_a1"); // seed survives round-trip
     expect(() => Quiz.parse(next)).not.toThrow();
   });
 

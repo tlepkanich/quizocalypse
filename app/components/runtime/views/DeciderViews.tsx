@@ -114,9 +114,15 @@ export function DeciderCaptureView({
   const [email, setEmail] = useState("");
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
+  // QZY-3 — the optional terms & conditions consent: when the merchant turns
+  // it on, the box must be TICKED before the reveal unlocks.
+  const [termsChecked, setTermsChecked] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const emailValid = /^\S+@\S+\.\S+$/.test(email);
-  const canSubmit = (config.captureEmail ? emailValid : true) && !submitting;
+  const canSubmit =
+    (config.captureEmail ? emailValid : true) &&
+    (!config.captureTermsOn || termsChecked) &&
+    !submitting;
 
   async function handleSubmit() {
     if (!canSubmit) return;
@@ -165,8 +171,12 @@ export function DeciderCaptureView({
   };
   return (
     <div style={styles.card}>
-      <h2 style={styles.h2}>{tc("capture_headline")}</h2>
-      <p style={{ ...styles.muted, marginTop: 8 }}>{tc("capture_subtext")}</p>
+      {/* QZY-3 — merchant copy wins; absent falls through to the locale-
+          aware chrome strings (translations keep working). */}
+      <h2 style={styles.h2}>{config.captureHeadline || tc("capture_headline")}</h2>
+      <p style={{ ...styles.muted, marginTop: 8 }}>
+        {config.captureSubtext || tc("capture_subtext")}
+      </p>
       <div style={{ marginTop: 20, display: "grid", gap: 12 }}>
         {config.captureEmail && (
           <input
@@ -200,6 +210,31 @@ export function DeciderCaptureView({
             onKeyDown={submitOnEnter}
             style={inputStyle}
           />
+        )}
+        {config.captureTermsOn && (
+          <label
+            style={{
+              display: "flex",
+              alignItems: "flex-start",
+              gap: 10,
+              fontSize: "calc(var(--qz-base-size) * 0.85)",
+              fontFamily: "var(--qz-font-body)",
+              color: "var(--qz-color-muted)",
+              cursor: "pointer",
+              textAlign: "left",
+            }}
+          >
+            <input
+              type="checkbox"
+              checked={termsChecked}
+              onChange={(e) => setTermsChecked(e.target.checked)}
+              style={{ marginTop: 3 }}
+            />
+            <span>
+              {config.captureTermsText ||
+                "I agree to receive marketing messages and accept the terms & conditions."}
+            </span>
+          </label>
         )}
       </div>
       <button

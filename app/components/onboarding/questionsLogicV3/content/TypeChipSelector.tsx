@@ -5,24 +5,30 @@ import { setQuestionType } from "../../../../lib/quizMutations";
 import type { QuestionNode } from "../../../../lib/questionOrder";
 import { QzModal } from "../../../qz-overlays";
 
-/* quiz-step3 v3 §4.4 — the kicker's type chip as a dropdown (QL3-P2).
-   Quick picks = the headline four (labels match the legacy Step-3 selector);
-   a question already on another type keeps it listed so nothing is hidden.
-   BOTH dialogs intercept BEFORE setQuestionType is called:
-   — decider + multi-select/open-text pick → BLOCK dialog (spec's locked
-     behavior: multi/freeform can't decide; setQuestionType would silently
-     auto-demote the decider, so the UI refuses instead — doc UNCHANGED);
-   — any other type change → reset-confirm (answers reset to type defaults,
-     stale skip edges pruned — the mutation's documented contract). */
+/* quiz-step3 v3 §4.4 + QZY-3 (owner supplement) — the kicker's type chip.
+   Curated picks: Single select · Multi-select · Five-point scale · Rating
+   (five-point = the rating type with a 1–5 scale preset; a question already
+   on another stored type keeps it listed so nothing is hidden). "Content
+   page" joins in QZY-2 alongside the map's full-screen modules — the v3
+   rail/canvas only walk question nodes today, so a message-screen
+   conversion here would strand the step. Dialogs:
+   — decider + multi-select/open-text pick → BLOCK dialog (multi/freeform
+     can't decide; the UI refuses instead of silently demoting);
+   — card → freeform → confirm (extra answers drop; the first survives as
+     the seed). Card ↔ card commits DIRECTLY — since QZY-3, type changes
+     keep the original answers, mappings, and routing, so there is nothing
+     to warn about. */
 
-const CHIP_TYPE_OPTIONS: { value: QuestionType; label: string }[] = [
+type PickValue = QuestionType | "rating5";
+
+const CHIP_TYPE_OPTIONS: { value: PickValue; label: string }[] = [
   { value: "single_select", label: "Single select" },
   { value: "multi_select", label: "Multi-select" },
-  { value: "image_tile", label: "Image select" },
-  { value: "text", label: "Open text" },
+  { value: "rating5", label: "Five-point scale" },
+  { value: "rating", label: "Rating" },
 ];
 
-/** Labels for types outside the quick picks (so the current value renders). */
+/** Labels for stored types outside the quick picks (so the current value renders). */
 const TYPE_CHIP_LABEL: Record<string, string> = {
   single_select: "Single select",
   multi_select: "Multi-select",
@@ -32,7 +38,7 @@ const TYPE_CHIP_LABEL: Record<string, string> = {
   searchable: "Searchable list",
   image_picker: "Image grid",
   dropdown: "Dropdown",
-  rating: "Scale / rating",
+  rating: "Rating",
   swatch: "Swatch picker",
   numeric: "Number input",
   date: "Date input",
@@ -40,6 +46,15 @@ const TYPE_CHIP_LABEL: Record<string, string> = {
 };
 
 type Dialog = { kind: "block"; pick: QuestionType } | { kind: "confirm"; pick: QuestionType };
+
+/** A five-point question is the rating type carrying the 1–5 scale preset. */
+function isFivePoint(node: QuestionNode): boolean {
+  return (
+    node.data.question_type === "rating" &&
+    node.data.scale_config?.min === 1 &&
+    node.data.scale_config?.max === 5
+  );
+}
 
 export function TypeChipSelector({
   doc,
@@ -52,22 +67,57 @@ export function TypeChipSelector({
 }) {
   const [dialog, setDialog] = useState<Dialog | null>(null);
   const cancelRef = useRef<HTMLButtonElement>(null);
-  const current = node.data.question_type;
+  const current: PickValue = isFivePoint(node) ? "rating5" : node.data.question_type;
   const isDecider = node.data.role === "decides";
 
   const options = CHIP_TYPE_OPTIONS.some((o) => o.value === current)
     ? CHIP_TYPE_OPTIONS
-    : [{ value: current, label: TYPE_CHIP_LABEL[current] ?? current }, ...CHIP_TYPE_OPTIONS];
+    : [
+        { value: current, label: TYPE_CHIP_LABEL[current] ?? current },
+        ...CHIP_TYPE_OPTIONS,
+      ];
 
-  const handlePick = (pick: QuestionType) => {
-    if (pick === current) return;
+  const apply = (pickValue: PickValue) => {
+    const storedType: QuestionType = pickValue === "rating5" ? "rating" : pickValue;
+    let next = setQuestionType(doc, node.id, storedType);
+    // Five-point = rating + the 1–5 preset; the plain Rating pick clears an
+    // old preset so the two picks stay distinguishable in the chip.
+    next = {
+      ...next,
+      nodes: next.nodes.map((n) =>
+        n.id === node.id && n.type === "question"
+          ? {
+              ...n,
+              data: {
+                ...n.data,
+                ...(pickValue === "rating5"
+                  ? { scale_config: { ...(n.data.scale_config ?? {}), min: 1, max: 5 } }
+                  : storedType === "rating"
+                    ? { scale_config: undefined }
+                    : {}),
+              },
+            }
+          : n,
+      ),
+    };
+    onCommit(next);
+  };
+
+  const handlePick = (pickValue: PickValue) => {
+    if (pickValue === current) return;
+    const storedType: QuestionType = pickValue === "rating5" ? "rating" : pickValue;
     // Intercept BEFORE the mutation: setQuestionType would auto-demote a
     // decider on multi/freeform — the spec locks that path behind a refusal.
-    if (isDecider && (pick === "multi_select" || isFreeformType(pick))) {
-      setDialog({ kind: "block", pick });
+    if (isDecider && (storedType === "multi_select" || isFreeformType(storedType))) {
+      setDialog({ kind: "block", pick: storedType });
       return;
     }
-    setDialog({ kind: "confirm", pick });
+    if (isFreeformType(storedType) && node.data.answers.length > 1) {
+      setDialog({ kind: "confirm", pick: storedType });
+      return;
+    }
+    // QZY-3 — card ↔ card keeps every answer, mapping, and route: no dialog.
+    apply(pickValue);
   };
 
   return (
@@ -75,9 +125,9 @@ export function TypeChipSelector({
       <select
         className="qz-s3-typechip is-select"
         value={current}
-        onChange={(e) => handlePick(e.target.value as QuestionType)}
+        onChange={(e) => handlePick(e.target.value as PickValue)}
         aria-label="Question type"
-        title="Change the question type"
+        title="Change the question type — your answers are kept"
       >
         {options.map((o) => (
           <option key={o.value} value={o.value}>
@@ -110,7 +160,7 @@ export function TypeChipSelector({
         open={dialog?.kind === "confirm"}
         onClose={() => setDialog(null)}
         size="sm"
-        title="Changing the type resets this question's answers"
+        title="Switching to a typed answer"
         initialFocusRef={cancelRef}
         footer={
           <>
@@ -126,7 +176,7 @@ export function TypeChipSelector({
               type="button"
               className="qz-btn qz-btn-primary"
               onClick={() => {
-                if (dialog?.kind === "confirm") onCommit(setQuestionType(doc, node.id, dialog.pick));
+                if (dialog?.kind === "confirm") apply(dialog.pick);
                 setDialog(null);
               }}
             >
@@ -135,8 +185,8 @@ export function TypeChipSelector({
           </>
         }
       >
-        The answers go back to type defaults (and any skip logic tied to the old answers is
-        removed). Your question text is kept.
+        Shoppers will type their answer instead of picking one. Your first answer stays (it
+        carries this question&rsquo;s routing); the other answers are removed.
       </QzModal>
     </>
   );

@@ -133,6 +133,7 @@ export function PhoneCanvas({
             ctaText={ctaText}
             sectionVars={sectionVars}
             onCommit={onCommit}
+            onNavigate={onNavigate}
           />
         </div>
       </div>

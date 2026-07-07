@@ -1268,6 +1268,15 @@ export const RecPageGlobal = z.object({
   captureEmail: z.boolean().optional(),
   captureName: z.boolean().optional(),
   capturePhone: z.boolean().optional(),
+  // QZY-3 (owner supplement) — the capture screen as a full editable step:
+  // merchant-owned heading/description (absent → the locale-aware chrome
+  // copy renders, so translations keep working), plus an optional
+  // terms-&-conditions consent checkbox (must be ticked to submit when on).
+  // SMS collection reuses capturePhone above.
+  captureHeadline: z.string().optional(),
+  captureSubtext: z.string().optional(),
+  captureTermsOn: z.boolean().optional(),
+  captureTermsText: z.string().optional(),
   // §8.2 (L2-11) — the merchant LOCKED this why-copy: config-time ✦ regenerate
   // refuses to overwrite it, and the L2-12 runtime layer must never replace it.
   whyCopyLocked: z.boolean().optional(),
