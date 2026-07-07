@@ -4249,3 +4249,57 @@ body[data-qz] .qz-s3-editable:focus-visible {
 }
 .qz-layers-actions button:hover:not(:disabled) { background: var(--qz-accent-tint, transparent); color: var(--qz-ink-1); }
 .qz-layers-actions button:disabled { opacity: 0.35; cursor: default; }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   QZY-8 — Inspector v2 (build-tab spec §2/§4/§5.1/§10)
+   Linked range+number pairs, More-options disclosure, single-option scope,
+   footer actions, and the inline gold Logic section.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.qz-numctl { display: grid; grid-template-columns: 76px minmax(0, 1fr) auto; gap: 8px; align-items: center; font-size: 12px; }
+.qz-numctl-label { color: var(--qz-ink-3); font-size: 11.5px; }
+.qz-numctl input[type="range"] { width: 100%; min-width: 0; accent-color: var(--qz-accent); }
+.qz-numctl-exact { display: inline-flex; align-items: center; gap: 3px; }
+.qz-numctl-exact input {
+  width: 58px; font: inherit; font-size: 12px; padding: 3px 6px; text-align: right;
+  border: 1px solid var(--qz-rule); border-radius: var(--qz-radius, 8px);
+  background: var(--qz-bg); color: var(--qz-ink-1); font-variant-numeric: tabular-nums;
+}
+.qz-numctl-suffix { font-size: 10.5px; color: var(--qz-ink-4); }
+
+.qz-insp-more > summary { cursor: pointer; font-size: 12.5px; font-weight: 600; color: var(--qz-ink-2); }
+
+.qz-insp-logic {
+  border: 1px solid var(--qz-gold-line, var(--qz-rule));
+  background: var(--qz-gold-wash, transparent);
+  border-radius: 10px;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex: 0 0 auto;
+}
+.qz-insp-logic-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--qz-gold, var(--qz-ink-2)); }
+.qz-insp-logic-open { border: none; background: transparent; cursor: pointer; font: inherit; font-size: 11px; color: var(--qz-accent); text-transform: none; letter-spacing: 0; font-weight: 600; padding: 0; }
+.qz-insp-logic-role { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 12px; }
+.qz-insp-logic-role > span { color: var(--qz-ink-3); font-size: 11.5px; }
+.qz-insp-logic-role select {
+  font: inherit; font-size: 12px; padding: 4px 6px; max-width: 190px;
+  border: 1px solid var(--qz-gold-line, var(--qz-rule)); border-radius: var(--qz-radius, 8px);
+  background: var(--qz-paper); color: var(--qz-ink-1);
+}
+.qz-insp-logic-rows { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 3px; }
+.qz-insp-logic-rows li { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; font-size: 11.5px; }
+.qz-insp-logic-atext { color: var(--qz-ink-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.qz-insp-logic-sum { color: var(--qz-ink-3); flex: 0 0 auto; font-variant-numeric: tabular-nums; }
+
+.qz-insp-scope { display: flex; flex-direction: column; gap: 10px; }
+.qz-insp-scope-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.qz-insp-scope select {
+  font: inherit; font-size: 12.5px; padding: 6px 8px;
+  border: 1px solid var(--qz-rule); border-radius: var(--qz-radius, 8px);
+  background: var(--qz-paper); color: var(--qz-ink-1);
+}
+
+.qz-insp-foot { display: flex; gap: 6px; margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--qz-rule); }
+.qz-insp-foot-del { margin-left: auto; color: var(--qz-danger, currentColor); }

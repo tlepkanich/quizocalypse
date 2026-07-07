@@ -6,6 +6,7 @@ import { isFreeformType } from "../../../lib/quizSchema";
 import { addAnswer, removeAnswer } from "../../../lib/quizMutations";
 import { updateNodeData } from "../studioDoc";
 import { EmojiIconPicker } from "../EmojiIconPicker";
+import { NumericControl } from "../../controls/NumericControl";
 import { ImagePicker, IMAGE_ANSWER_TYPES, type PickerProduct } from "../ImagePicker";
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -361,7 +362,6 @@ export function QuestionContent({
   const isCard = !isFreeformType(node.data.question_type);
   const supportsImages = IMAGE_ANSWER_TYPES.has(node.data.question_type);
   const columns = node.data.answer_columns;
-  const num = (v: string) => (v.trim() ? Math.max(1, Math.round(Number(v) || 1)) : undefined);
   // B6 — scale config (range + endpoint labels) for rating / slider / numeric.
   const sc = node.data.scale_config;
   const scStr = (v: number | undefined) => (v === undefined ? "" : String(v));
@@ -498,23 +498,24 @@ export function QuestionContent({
         products={products}
       />
       {node.data.question_type === "multi_select" ? (
-        <div className="qz-row" style={{ gap: 12 }}>
-          <QzField label="Min picks">
-            <QzInput
-              type="number"
-              min={1}
-              value={node.data.min_selections ? String(node.data.min_selections) : ""}
-              onChange={(e) => setData({ min_selections: num(e.target.value) })}
-            />
-          </QzField>
-          <QzField label="Max picks">
-            <QzInput
-              type="number"
-              min={1}
-              value={node.data.max_selections ? String(node.data.max_selections) : ""}
-              onChange={(e) => setData({ max_selections: num(e.target.value) })}
-            />
-          </QzField>
+        <div style={{ display: "grid", gap: 6 }}>
+          {/* QZY-8 §2 — linked range+number pair; blank = no limit. */}
+          <NumericControl
+            label="Min picks"
+            value={node.data.min_selections}
+            min={1}
+            max={Math.max(2, node.data.answers.length)}
+            allowEmpty
+            onChange={(n) => setData({ min_selections: n })}
+          />
+          <NumericControl
+            label="Max picks"
+            value={node.data.max_selections}
+            min={1}
+            max={Math.max(2, node.data.answers.length)}
+            allowEmpty
+            onChange={(n) => setData({ max_selections: n })}
+          />
         </div>
       ) : null}
       {node.data.question_type === "rating" ||
@@ -698,46 +699,54 @@ export function QuestionContent({
           </div>
         </div>
       ) : null}
-      <QzField
-        label="Chapter label (optional)"
-        hint="Groups questions in the progress trail — consecutive questions sharing a label read as one chapter (e.g. SKIN PROFILE)."
-      >
-        <QzInput
-          value={node.data.section_label ?? ""}
-          onChange={(e) => {
-            const v = e.target.value.slice(0, 40);
-            setData({ section_label: v.trim().length > 0 ? v : undefined });
-          }}
-          placeholder="e.g. Skin profile"
-        />
-      </QzField>
-      <QzField
-        label="Reassurance line (optional)"
-        hint="One quiet line under the question — lowers decision anxiety."
-      >
-        <QzInput
-          value={node.data.helper_text ?? ""}
-          onChange={(e) => {
-            const v = e.target.value.slice(0, 160);
-            setData({ helper_text: v.trim().length > 0 ? v : undefined });
-          }}
-          placeholder="There's no wrong answer — pick what feels like you."
-        />
-      </QzField>
-      <QzField
-        label="Education card (optional)"
-        hint="A short explainer shown before this question — use it for unfamiliar terms. Leave empty for none."
-      >
-        <QzTextarea
-          value={node.data.education_card_before ?? ""}
-          onChange={(e) => {
-            const v = e.target.value.trim();
-            setData({ education_card_before: v.length > 0 ? v : undefined });
-          }}
-          rows={2}
-          placeholder="e.g. SPF measures how long a sunscreen protects against UVB rays."
-        />
-      </QzField>
+      {/* QZY-8 §10 — progressive disclosure: 3–5 essentials above, the long
+          tail lives here (collapsed by default). flex:0 0 auto = the BLD-7
+          details-in-scrollport fix. */}
+      <details className="qz-insp-more" style={{ flex: "0 0 auto" }}>
+        <summary>More options</summary>
+        <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 8 }}>
+          <QzField
+            label="Chapter label (optional)"
+            hint="Groups questions in the progress trail — consecutive questions sharing a label read as one chapter (e.g. SKIN PROFILE)."
+          >
+            <QzInput
+              value={node.data.section_label ?? ""}
+              onChange={(e) => {
+                const v = e.target.value.slice(0, 40);
+                setData({ section_label: v.trim().length > 0 ? v : undefined });
+              }}
+              placeholder="e.g. Skin profile"
+            />
+          </QzField>
+          <QzField
+            label="Reassurance line (optional)"
+            hint="One quiet line under the question — lowers decision anxiety."
+          >
+            <QzInput
+              value={node.data.helper_text ?? ""}
+              onChange={(e) => {
+                const v = e.target.value.slice(0, 160);
+                setData({ helper_text: v.trim().length > 0 ? v : undefined });
+              }}
+              placeholder="There's no wrong answer — pick what feels like you."
+            />
+          </QzField>
+          <QzField
+            label="Education card (optional)"
+            hint="A short explainer shown before this question — use it for unfamiliar terms. Leave empty for none."
+          >
+            <QzTextarea
+              value={node.data.education_card_before ?? ""}
+              onChange={(e) => {
+                const v = e.target.value.trim();
+                setData({ education_card_before: v.length > 0 ? v : undefined });
+              }}
+              rows={2}
+              placeholder="e.g. SPF measures how long a sunscreen protects against UVB rays."
+            />
+          </QzField>
+        </div>
+      </details>
     </>
   );
 }

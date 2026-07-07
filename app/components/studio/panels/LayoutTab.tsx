@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { QzBadge, QzButton, QzField, QzInput, QzSelect, QzTextarea } from "../../qz";
+import { NumericControl } from "../../controls/NumericControl";
 import type { ContentBlock, Quiz, QuizNode } from "../../../lib/quizSchema";
 import { synthesizeLayout } from "../../../lib/synthesizeLayout";
 import {
@@ -243,13 +244,14 @@ function BlockFields({
         </QzField>
       ) : null}
       {block.type === "spacer" ? (
-        <QzField label="Size (px)">
-          <QzInput
-            type="number"
-            value={block.size}
-            onChange={(e) => onChange({ size: Number(e.target.value) } as Partial<ContentBlock>)}
-          />
-        </QzField>
+        <NumericControl
+          label="Size"
+          value={block.size}
+          min={0}
+          max={160}
+          suffix="px"
+          onChange={(n) => onChange({ size: n ?? 0 } as Partial<ContentBlock>)}
+        />
       ) : null}
       <QzField label="Alignment">
         <QzSelect
@@ -269,52 +271,48 @@ function BlockFields({
       {/* Editor revamp P5 — the BlockStyle sizing/color fields existed in the
           schema since 2A but were never exposed. A compact grid: blank = theme
           default (undefined strips the override). */}
+      <div style={{ display: "grid", gap: 8 }}>
+        {/* QZY-8 §2 — every numeric = a linked range+number pair; blank exact
+            input = theme default (undefined strips the override). */}
+        <NumericControl
+          label="Font size"
+          value={block.style.font_size}
+          min={8}
+          max={72}
+          fallback={16}
+          allowEmpty
+          suffix="px"
+          onChange={(n) =>
+            onChange({ style: { ...block.style, font_size: n } } as Partial<ContentBlock>)
+          }
+        />
+        <NumericControl
+          label="Padding"
+          value={block.style.padding}
+          min={0}
+          max={80}
+          fallback={0}
+          allowEmpty
+          suffix="px"
+          onChange={(n) =>
+            onChange({ style: { ...block.style, padding: n } } as Partial<ContentBlock>)
+          }
+        />
+        <NumericControl
+          label="Max width"
+          value={block.style.max_width}
+          min={80}
+          max={1200}
+          step={10}
+          fallback={740}
+          allowEmpty
+          suffix="px"
+          onChange={(n) =>
+            onChange({ style: { ...block.style, max_width: n } } as Partial<ContentBlock>)
+          }
+        />
+      </div>
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-        <QzField label="Font size (px)">
-          <QzInput
-            type="number"
-            value={block.style.font_size ?? ""}
-            placeholder="auto"
-            onChange={(e) =>
-              onChange({
-                style: {
-                  ...block.style,
-                  font_size: e.target.value ? Number(e.target.value) : undefined,
-                },
-              } as Partial<ContentBlock>)
-            }
-          />
-        </QzField>
-        <QzField label="Padding (px)">
-          <QzInput
-            type="number"
-            value={block.style.padding ?? ""}
-            placeholder="auto"
-            onChange={(e) =>
-              onChange({
-                style: {
-                  ...block.style,
-                  padding: e.target.value ? Number(e.target.value) : undefined,
-                },
-              } as Partial<ContentBlock>)
-            }
-          />
-        </QzField>
-        <QzField label="Max width (px)">
-          <QzInput
-            type="number"
-            value={block.style.max_width ?? ""}
-            placeholder="auto"
-            onChange={(e) =>
-              onChange({
-                style: {
-                  ...block.style,
-                  max_width: e.target.value ? Number(e.target.value) : undefined,
-                },
-              } as Partial<ContentBlock>)
-            }
-          />
-        </QzField>
         <QzField label="Corners">
           <QzSelect
             value={block.style.radius ?? ""}

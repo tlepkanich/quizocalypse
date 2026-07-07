@@ -12,7 +12,14 @@ import {
   setAnswerBucketDirect,
   setAnswerBucketWeight,
   swapScoringModel,
+  moveStep,
+  moveDecider,
+  setQuestionRole,
+  setAnswerTarget,
 } from "../../lib/quizMutations";
+import { updateNodeData } from "./studioDoc";
+import { filterAnswerMatchCount } from "../../lib/filterMatching";
+import type { InspectTarget } from "../runtime/QuizRuntime";
 import { computeBucketCoverage, type CoverageLevel } from "../../lib/bucketCoverage";
 import { StepPreview } from "../runtime/StepPreview";
 import { PathTester } from "../logic/PathTester";
@@ -33,6 +40,176 @@ import type { PickerProduct } from "./ImagePicker";
 
 type QuizDoc = Quiz;
 type Tab = "content" | "design" | "routing";
+type QuestionNode = Extract<QuizNode, { type: "question" }>;
+
+// QZY-8 (build-tab §4) — the binding role vocabulary (never "decider/bucket").
+const ROLE_OPTIONS = [
+  { value: "decides", label: "Picks the result ◆" },
+  { value: "filter", label: "Filters results" },
+  { value: "qualifier", label: "Info only" },
+] as const;
+
+/** §4 — the inline gold Logic section: role dropdown + a one-line per-answer
+ *  mapping summary + the jump to the full map. Uses the SAME mutations as the
+ *  Logic view (moveDecider / setQuestionRole), so enforcement is identical. */
+function InlineLogicSection({
+  doc,
+  node,
+  onCommit,
+  onOpenLogic,
+  categories,
+  productIndex,
+}: {
+  doc: QuizDoc;
+  node: QuestionNode;
+  onCommit: (doc: QuizDoc) => void;
+  onOpenLogic?: () => void;
+  categories: BuilderCategory[];
+  productIndex: IndexedProduct[];
+}) {
+  const role = node.data.role ?? "qualifier";
+  const catName = (id: string | undefined | null) =>
+    (id && categories.find((c) => c.id === id)?.name) || null;
+  const summary = (a: QuestionNode["data"]["answers"][number]): string => {
+    if (role === "decides") {
+      const name = catName(a.target_id);
+      return name ? `→ ${name}` : "unmapped";
+    }
+    if (role === "filter") {
+      if (a.no_preference) return "no preference — doesn't narrow";
+      const n = filterAnswerMatchCount(a, productIndex);
+      if (n === null) return "doesn't narrow";
+      if (n === 0) return "⚠ matches 0 products";
+      return `${(a.tags ?? [])[0] ?? "match"} ✓ ${n}`;
+    }
+    return "info only";
+  };
+  const changeRole = (next: string) => {
+    if (next === role) return;
+    onCommit(
+      next === "decides"
+        ? moveDecider(doc, node.id)
+        : setQuestionRole(doc, node.id, next as "filter" | "qualifier"),
+    );
+  };
+  return (
+    <section className="qz-insp-logic">
+      <div className="qz-insp-logic-head">
+        <span>◆ Logic</span>
+        {onOpenLogic ? (
+          <button type="button" className="qz-insp-logic-open" onClick={onOpenLogic}>
+            Open full map in Logic →
+          </button>
+        ) : null}
+      </div>
+      <label className="qz-insp-logic-role">
+        <span>This question</span>
+        <select value={role} onChange={(e) => changeRole(e.target.value)} aria-label="Question role">
+          {ROLE_OPTIONS.map((o) => (
+            <option key={o.value} value={o.value}>
+              {o.label}
+            </option>
+          ))}
+        </select>
+      </label>
+      <ul className="qz-insp-logic-rows">
+        {node.data.answers.map((a) => (
+          <li key={a.id}>
+            <span className="qz-insp-logic-atext">{a.text || "…"}</span>
+            <span className="qz-insp-logic-sum">{summary(a)}</span>
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
+/** QZY-8 (build-tab §5.1) — single-option scope: clicking one answer on the
+ *  canvas scopes the inspector to THAT option; "Style all options" returns to
+ *  question level. Media/label styling deepen in QZY-9 — this is the scoping
+ *  mechanic + the option's text and its logic line. */
+function AnswerScopePanel({
+  doc,
+  node,
+  answerId,
+  onCommit,
+  onClearScope,
+  categories,
+  productIndex,
+}: {
+  doc: QuizDoc;
+  node: QuestionNode;
+  answerId: string;
+  onCommit: (doc: QuizDoc) => void;
+  onClearScope: () => void;
+  categories: BuilderCategory[];
+  productIndex: IndexedProduct[];
+}) {
+  const answer = node.data.answers.find((a) => a.id === answerId);
+  if (!answer) return null;
+  const role = node.data.role ?? "qualifier";
+  const setAnswer = (patch: Record<string, unknown>) =>
+    onCommit(
+      updateNodeData(doc, node.id, {
+        answers: node.data.answers.map((a) => (a.id === answerId ? { ...a, ...patch } : a)),
+      }),
+    );
+  return (
+    <div className="qz-insp-scope">
+      <div className="qz-insp-scope-head">
+        <span className="qz-label" style={{ fontSize: 11 }}>
+          Option
+        </span>
+        <button type="button" className="qz-btn qz-btn-ghost qz-btn-sm" onClick={onClearScope}>
+          Style all options
+        </button>
+      </div>
+      <label style={{ display: "grid", gap: 4, fontSize: 12.5 }}>
+        <span className="qz-dim" style={{ fontSize: 11.5 }}>
+          Label
+        </span>
+        <input
+          className="qz-input"
+          value={answer.text}
+          maxLength={60}
+          onChange={(e) => setAnswer({ text: e.target.value })}
+        />
+      </label>
+      {role === "decides" ? (
+        <label style={{ display: "grid", gap: 4, fontSize: 12.5 }}>
+          <span className="qz-dim" style={{ fontSize: 11.5 }}>
+            Maps to
+          </span>
+          <select
+            value={answer.target_id ?? ""}
+            onChange={(e) => onCommit(setAnswerTarget(doc, node.id, answerId, e.target.value || null))}
+          >
+            <option value="">— unmapped —</option>
+            {categories.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.name}
+              </option>
+            ))}
+          </select>
+        </label>
+      ) : role === "filter" ? (
+        <p className="qz-dim" style={{ fontSize: 12, margin: 0 }}>
+          {answer.no_preference
+            ? "No preference — this option doesn't narrow results."
+            : (() => {
+                const n = filterAnswerMatchCount(answer, productIndex);
+                if (n === null) return "Doesn't narrow — add tags in the Logic map.";
+                if (n === 0) return "⚠ Matches 0 products — fix in the Logic map.";
+                return `Matches ${n} product${n === 1 ? "" : "s"}.`;
+              })()}
+        </p>
+      ) : null}
+      <p className="qz-dim" style={{ fontSize: 11.5, margin: 0 }}>
+        Per-option media &amp; styling arrive with answer display modes.
+      </p>
+    </div>
+  );
+}
 
 export function ContextPanel({
   doc,
@@ -45,6 +222,9 @@ export function ContextPanel({
   frameBreakpoint,
   onOpenLogic,
   regen,
+  inspectTarget,
+  onClearScope,
+  onArmDelete,
 }: {
   doc: QuizDoc;
   nodeId: string;
@@ -60,6 +240,11 @@ export function ContextPanel({
   onOpenLogic?: () => void;
   // Optional per-question AI regenerate plumbing (studio only).
   regen?: RegenApi;
+  // QZY-8 — the exact canvas element clicked (single-option scoping).
+  inspectTarget?: InspectTarget | null;
+  onClearScope?: () => void;
+  // QZY-8 — footer delete arms the carousel's two-step confirm.
+  onArmDelete?: (nodeId: string) => void;
 }) {
   const [tab, setTab] = useState<Tab>("content");
   // null = follow the frame ("edit what you see"); explicit pick overrides.
@@ -86,6 +271,9 @@ export function ContextPanel({
       frameBreakpoint={frameBreakpoint}
       onOpenLogic={onOpenLogic}
       regen={regen}
+      inspectTarget={inspectTarget}
+      onClearScope={onClearScope}
+      onArmDelete={onArmDelete}
     />
   );
 }
@@ -684,6 +872,9 @@ function ContextPanelBody({
   frameBreakpoint,
   onOpenLogic,
   regen,
+  inspectTarget,
+  onClearScope,
+  onArmDelete,
 }: {
   doc: QuizDoc;
   node: QuizNode;
@@ -700,7 +891,26 @@ function ContextPanelBody({
   frameBreakpoint: "desktop" | "mobile";
   onOpenLogic?: () => void;
   regen?: RegenApi;
+  inspectTarget?: InspectTarget | null;
+  onClearScope?: () => void;
+  onArmDelete?: (nodeId: string) => void;
 }) {
+  // QZY-8 — single-option scope: a canvas click on ONE answer scopes the
+  // Content tab to that option (build-tab §5.1).
+  const scopedAnswerId =
+    node.type === "question" &&
+    inspectTarget?.nodeId === node.id &&
+    inspectTarget.part === "answer" &&
+    inspectTarget.answerId
+      ? inspectTarget.answerId
+      : null;
+  const isDecider = doc.logic_model === "decider";
+
+  // QZY-8 — footer move/delete (§2): reorder within the straight-through run;
+  // delete arms the carousel's impact-naming confirm.
+  const run = straightThroughRun(doc).run;
+  const runIdx = run.indexOf(node.id);
+  const movable = runIdx >= 0;
 
   return (
     <div className="qz-card" style={{ padding: 12, marginBottom: 16 }}>
@@ -743,7 +953,17 @@ function ContextPanelBody({
       </div>
 
       <div style={{ display: "flex", flexDirection: "column", gap: 10, maxHeight: "48vh", overflowY: "auto", paddingRight: 2 }}>
-        {tab === "content" ? (
+        {tab === "content" && scopedAnswerId && node.type === "question" && onClearScope ? (
+          <AnswerScopePanel
+            doc={doc}
+            node={node}
+            answerId={scopedAnswerId}
+            onCommit={onCommit}
+            onClearScope={onClearScope}
+            categories={categories}
+            productIndex={productIndex}
+          />
+        ) : tab === "content" ? (
           <ContentTab doc={doc} node={node} onCommit={onCommit} products={products} regen={regen} />
         ) : tab === "routing" ? (
           <RoutingBody
@@ -801,7 +1021,59 @@ function ContextPanelBody({
             </details>
           </>
         )}
+        {/* QZY-8 §4 — the inline gold Logic section for questions on decider
+            docs, visible under every tab (the 80% logic case without leaving
+            Build). */}
+        {node.type === "question" && isDecider ? (
+          <InlineLogicSection
+            doc={doc}
+            node={node}
+            onCommit={onCommit}
+            onOpenLogic={onOpenLogic}
+            categories={categories}
+            productIndex={productIndex}
+          />
+        ) : null}
       </div>
+      {/* QZY-8 §2 — footer actions for the selected screen. */}
+      {(movable || (onArmDelete && node.type !== "intro")) ? (
+        <div className="qz-insp-foot">
+          {movable ? (
+            <>
+              <button
+                type="button"
+                className="qz-btn qz-btn-ghost qz-btn-sm"
+                disabled={runIdx <= 0}
+                onClick={() => onCommit(moveStep(doc, node.id, run[runIdx - 1]!))}
+              >
+                ↑ Move
+              </button>
+              <button
+                type="button"
+                className="qz-btn qz-btn-ghost qz-btn-sm"
+                disabled={runIdx >= run.length - 1}
+                onClick={() =>
+                  onCommit(
+                    moveStep(doc, node.id, runIdx + 2 < run.length ? run[runIdx + 2]! : null),
+                  )
+                }
+              >
+                ↓ Move
+              </button>
+            </>
+          ) : null}
+          {onArmDelete && node.type !== "intro" ? (
+            <button
+              type="button"
+              className="qz-btn qz-btn-ghost qz-btn-sm qz-insp-foot-del"
+              onClick={() => onArmDelete(node.id)}
+              title="Arms the confirm in the screen strip below"
+            >
+              Delete step…
+            </button>
+          ) : null}
+        </div>
+      ) : null}
     </div>
   );
 }

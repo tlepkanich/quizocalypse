@@ -185,6 +185,59 @@ if (await selEl.count()) {
   ok("canvas element selectable for inline edit", false, "no .qz-insp-sel after click");
 }
 
+// ── QZY-8: Inspector v2 — gold Logic, option scope, footer, numeric pairs ───
+await q1Thumb.locator(".qz-screens-thumb").click();
+await page.waitForTimeout(500);
+ok("inline gold Logic section on the question",
+  (await page.locator(".qz-insp-logic").count()) === 1);
+ok("role dropdown speaks the binding vocabulary",
+  (await page.locator(".qz-insp-logic-role option", { hasText: "Picks the result" }).count()) === 1 &&
+  (await page.locator(".qz-insp-logic-role option", { hasText: "Info only" }).count()) === 1);
+ok("per-answer mapping summary rows",
+  (await page.locator(".qz-insp-logic-rows li").count()) >= 2);
+await page.locator(".qz-builder-canvas button.qz-insp").first().click();
+await page.waitForTimeout(400);
+ok("clicking ONE option scopes the inspector (§5.1)",
+  (await page.locator(".qz-insp-scope").count()) === 1);
+await page.locator("button", { hasText: "Style all options" }).click();
+await page.waitForTimeout(300);
+ok("'Style all options' returns to question scope",
+  (await page.locator(".qz-insp-scope").count()) === 0);
+ok("More options disclosure in Content tab",
+  (await page.locator(".qz-builder-inspector .qz-insp-more > summary", { hasText: "More options" }).count()) === 1);
+// This fixture's lone question dangles (no outbound edge), so it sits outside
+// the reorderable run — Move buttons correctly stay hidden; Delete renders.
+ok("footer: Delete step present (Move only inside a reorderable run)",
+  (await page.locator(".qz-insp-foot button", { hasText: "Delete step" }).count()) === 1);
+await page.locator(".qz-insp-foot button", { hasText: "Delete step" }).click();
+await page.waitForTimeout(300);
+ok("footer delete arms the carousel confirm",
+  (await page.locator(".qz-screens-confirm").count()) === 1);
+await page.locator(".qz-screens-confirm button", { hasText: "Keep" }).click();
+await page.waitForTimeout(200);
+await page.locator(".qz-builder-inspector button", { hasText: "Design" }).first().click();
+await page.waitForTimeout(300);
+await page.locator(".qz-builder-inspector summary", { hasText: "Layout blocks" }).click();
+await page.waitForTimeout(300);
+// A template-rendered step must be broken into blocks first (BLD-7's final
+// "Reset to template" restores this state, so the probe stays net-zero).
+const breakBtn = page.locator(".qz-builder-inspector button", { hasText: "Break into blocks" });
+if (await breakBtn.count()) {
+  await breakBtn.click();
+  await page.waitForTimeout(400);
+}
+const blockCaret = page.locator(".qz-builder-inspector button", { hasText: "▸" }).first();
+if (await blockCaret.count()) {
+  await blockCaret.click();
+  await page.waitForTimeout(300);
+}
+ok("numerics render as LINKED range+number pairs (§2)",
+  (await page.locator(".qz-numctl input[type=range]").count()) >= 1 &&
+  (await page.locator(".qz-numctl input[type=number]").count()) >= 1);
+await page.locator(".qz-builder-inspector summary", { hasText: "Layout blocks" }).click();
+await page.locator(".qz-builder-inspector button", { hasText: "Content" }).first().click();
+await page.waitForTimeout(200);
+
 // ── QZY-7: Layers + Background tabs (AFTER the inline-edit check — the
 // hide/show round-trip materializes an explicit layout; BLD-7's final
 // "Reset to template" clears it again). ──────────────────────────────────────

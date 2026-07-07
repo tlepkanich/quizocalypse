@@ -995,6 +995,9 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
         frameBreakpoint={breakpointForWidth(frameW)}
         onOpenLogic={() => setView("logic")}
         regen={regenApi}
+        inspectTarget={inspectTarget}
+        onClearScope={() => setInspectTarget(null)}
+        onArmDelete={setConfirmDeleteId}
       />
     ) : (
       <div className="qz-card" style={{ padding: 12 }}>
