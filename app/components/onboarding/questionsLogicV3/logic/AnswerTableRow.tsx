@@ -119,6 +119,17 @@ export function AnswerTableRow({
         aria-label={`Answer ${answerLetter(index)} text`}
       />
 
+      {/* QZY-12 §6.3 — a slider band shows its range on the map (edit the
+          bounds in the question's Content editor). */}
+      {answer.range ? (
+        <span
+          className="qz-s3-bandchip"
+          title="Slider range band — this answer fires when the value lands here"
+        >
+          {answer.range.min}–{answer.range.max}
+        </span>
+      ) : null}
+
       <span className="qz-s3-achiprow">
         {chips.map((ref) => (
           <button

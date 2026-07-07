@@ -574,6 +574,9 @@ export function QuestionContent({
               Each rating point is an answer below — map it to a recommendation in Routing → Mapping.
             </p>
           ) : null}
+          {node.data.question_type === "slider" ? (
+            <SliderConfig doc={doc} node={node} onCommit={onCommit} />
+          ) : null}
         </div>
       ) : null}
       {isFreeformType(node.data.question_type) ? (
@@ -751,5 +754,233 @@ export function QuestionContent({
         </div>
       </details>
     </>
+  );
+}
+
+
+// ════════════════════════════════════════════════════════════════════════════
+// SliderConfig (QZY-12, build-tab §6) — mode (continuous / stepped points),
+// label position, RANGE BANDS (§6.3 — bands are ordinary answers carrying
+// `range`, so decider mapping / filters / rules apply unchanged; gaps show as
+// blocking dead ends in the health report), and slider styling under More.
+// ════════════════════════════════════════════════════════════════════════════
+
+function SliderConfig({
+  doc,
+  node,
+  onCommit,
+}: {
+  doc: QuizDoc;
+  node: Extract<QuizNode, { type: "question" }>;
+  onCommit: (doc: QuizDoc) => void;
+}) {
+  const sc = node.data.scale_config;
+  const ss = node.data.slider_style ?? {};
+  const min = sc?.min ?? 0;
+  const max = sc?.max ?? 100;
+  const setData = (patch: Record<string, unknown>) =>
+    onCommit(updateNodeData(doc, node.id, patch));
+  const setScale = (patch: Record<string, unknown>) => {
+    const next: Record<string, unknown> = { ...(sc ?? {}) };
+    for (const [k, v] of Object.entries(patch)) {
+      if (v === undefined) delete next[k];
+      else next[k] = v;
+    }
+    setData({ scale_config: Object.keys(next).length ? next : undefined });
+  };
+  const setStyle = (patch: Record<string, unknown>) => {
+    const next: Record<string, unknown> = { ...ss };
+    for (const [k, v] of Object.entries(patch)) {
+      if (v === undefined) delete next[k];
+      else next[k] = v;
+    }
+    setData({ slider_style: Object.keys(next).length ? next : undefined });
+  };
+  const bands = node.data.answers.filter((a) => a.range !== undefined);
+  const setAnswers = (answers: typeof node.data.answers) => setData({ answers });
+  const patchBand = (id: string, patch: Record<string, unknown>) =>
+    setAnswers(node.data.answers.map((a) => (a.id === id ? { ...a, ...patch } : a)));
+  const addBand = () => {
+    const last = bands[bands.length - 1];
+    const from = last?.range ? last.range.max + (sc?.step ?? 1) : min;
+    const to = Math.min(max, from + Math.max(1, Math.round((max - min) / 3)));
+    const band = {
+      id: `band_${Math.random().toString(36).slice(2, 9)}`,
+      text: `${from}–${to}`,
+      tags: [] as string[],
+      edge_handle_id: `h_band_${Math.random().toString(36).slice(2, 9)}`,
+      range: { min: from, max: to },
+    };
+    setAnswers([...node.data.answers, band]);
+  };
+  const removeBand = (id: string) =>
+    setAnswers(node.data.answers.filter((a) => a.id !== id));
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+      <div className="qz-row" style={{ gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+        <span className="qz-dim" style={{ fontSize: 11.5 }}>Mode</span>
+        <div className="qz-segmented" role="group" aria-label="Slider mode">
+          <button
+            type="button"
+            aria-pressed={(sc?.mode ?? "continuous") === "continuous"}
+            onClick={() => setScale({ mode: undefined, points: undefined })}
+          >
+            Continuous
+          </button>
+          <button
+            type="button"
+            aria-pressed={sc?.mode === "stepped"}
+            onClick={() => setScale({ mode: "stepped", points: sc?.points ?? 5 })}
+          >
+            Stepped
+          </button>
+        </div>
+        {sc?.mode === "stepped" ? (
+          <div className="qz-segmented" role="group" aria-label="Scale points">
+            {[3, 5, 7, 10].map((p) => (
+              <button
+                key={p}
+                type="button"
+                aria-pressed={(sc?.points ?? 5) === p}
+                onClick={() => setScale({ points: p })}
+              >
+                {p}
+              </button>
+            ))}
+          </div>
+        ) : null}
+        <div className="qz-segmented" role="group" aria-label="Label position">
+          {(["below", "above"] as const).map((pos) => (
+            <button
+              key={pos}
+              type="button"
+              aria-pressed={(sc?.labels_position ?? "below") === pos}
+              onClick={() => setScale({ labels_position: pos === "below" ? undefined : pos })}
+            >
+              Labels {pos}
+            </button>
+          ))}
+        </div>
+      </div>
+      <QzField
+        label="Range bands"
+        hint="Each band is a real answer — map it to a recommendation, tags, or a route in Logic. Bands must cover the whole range; a gap is a blocking dead end."
+      >
+        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+          {bands.map((b) => (
+            <div key={b.id} className="qz-row" style={{ gap: 6, alignItems: "center" }}>
+              <QzInput
+                style={{ flex: "1 1 auto" }}
+                value={b.text}
+                onChange={(e) => patchBand(b.id, { text: e.target.value })}
+              />
+              <QzInput
+                type="number"
+                style={{ width: 72 }}
+                aria-label="Band from"
+                value={String(b.range!.min)}
+                onChange={(e) =>
+                  patchBand(b.id, { range: { ...b.range!, min: Number(e.target.value) || 0 } })
+                }
+              />
+              <span className="qz-dim">–</span>
+              <QzInput
+                type="number"
+                style={{ width: 72 }}
+                aria-label="Band to"
+                value={String(b.range!.max)}
+                onChange={(e) =>
+                  patchBand(b.id, { range: { ...b.range!, max: Number(e.target.value) || 0 } })
+                }
+              />
+              <button
+                type="button"
+                className="qz-btn qz-btn-ghost qz-btn-sm"
+                aria-label="Remove band"
+                onClick={() => removeBand(b.id)}
+              >
+                ✕
+              </button>
+            </div>
+          ))}
+          <QzButton size="sm" variant="ghost" onClick={addBand}>
+            + Add band
+          </QzButton>
+        </div>
+      </QzField>
+      <details className="qz-insp-more" style={{ flex: "0 0 auto" }}>
+        <summary>Slider style</summary>
+        <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 8 }}>
+          <NumericControl
+            label="Line thickness"
+            value={ss.track_thickness}
+            min={2}
+            max={16}
+            fallback={6}
+            allowEmpty
+            suffix="px"
+            onChange={(n) => setStyle({ track_thickness: n })}
+          />
+          <NumericControl
+            label="Line width"
+            value={ss.track_width_pct}
+            min={40}
+            max={100}
+            fallback={100}
+            allowEmpty
+            suffix="%"
+            onChange={(n) => setStyle({ track_width_pct: n })}
+          />
+          <NumericControl
+            label="Thumb size"
+            value={ss.thumb_size}
+            min={12}
+            max={40}
+            fallback={20}
+            allowEmpty
+            suffix="px"
+            onChange={(n) => setStyle({ thumb_size: n })}
+          />
+          <div className="qz-row" style={{ gap: 6, alignItems: "center" }}>
+            <span className="qz-dim" style={{ fontSize: 11.5 }}>Thumb</span>
+            <div className="qz-segmented" role="group" aria-label="Thumb shape">
+              {(["circle", "square"] as const).map((t) => (
+                <button
+                  key={t}
+                  type="button"
+                  aria-pressed={(ss.thumb ?? "circle") === t}
+                  onClick={() => setStyle({ thumb: t === "circle" ? undefined : t })}
+                >
+                  {t[0]!.toUpperCase() + t.slice(1)}
+                </button>
+              ))}
+            </div>
+            <div className="qz-segmented" role="group" aria-label="Step markers">
+              {(["dot", "tick", "none"] as const).map((m) => (
+                <button
+                  key={m}
+                  type="button"
+                  aria-pressed={(ss.markers ?? "dot") === m}
+                  onClick={() => setStyle({ markers: m === "dot" ? undefined : m })}
+                >
+                  {m[0]!.toUpperCase() + m.slice(1)}
+                </button>
+              ))}
+            </div>
+          </div>
+          <NumericControl
+            label="Label size"
+            value={ss.label_size}
+            min={9}
+            max={24}
+            fallback={13}
+            allowEmpty
+            suffix="px"
+            onChange={(n) => setStyle({ label_size: n })}
+          />
+        </div>
+      </details>
+    </div>
   );
 }

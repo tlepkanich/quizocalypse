@@ -77,9 +77,9 @@ const byId = (r: ReturnType<typeof buildTier1Report>, id: string) =>
   r.checks.find((c) => c.id === id)!;
 
 describe("buildTier1Report (§7.1 Tier-1)", () => {
-  it("clean doc → all 11 checks pass (incl. S1 structure), verdict safe, outcomes named", () => {
+  it("clean doc → all 13 checks pass (incl. S1 structure + the QZY-12 V12 pair), verdict safe, outcomes named", () => {
     const r = buildTier1Report(cleanDoc(), BUCKETS);
-    expect(r.checks).toHaveLength(11);
+    expect(r.checks).toHaveLength(13);
     expect(r.checks.every((c) => c.status === "pass")).toBe(true);
     expect(r.verdict).toMatchObject({ blocking: 0, warnings: 0, safe: true });
     expect(r.verdict.label).toBe("0 to review · 0 blocking · safe to publish");

@@ -11,6 +11,7 @@ import {
 } from "./pathAnalyzer";
 import { validateQuiz, validateQuizWarnings } from "./quizValidation";
 import { filterAnswerMatchCount } from "./filterMatching";
+import { bandCoverage, sliderBandAnswers } from "./sliderBands";
 import { isSellable, type IndexedProduct } from "./recommendationEngine";
 
 type QuizDoc = z.infer<typeof Quiz>;
@@ -43,7 +44,7 @@ export interface Tier1Finding {
 }
 
 export interface Tier1Check {
-  id: "V1" | "V2" | "V3" | "V4" | "V5" | "V6" | "V7" | "V8" | "V9" | "V10" | "V11" | "S1" | "S2";
+  id: "V1" | "V2" | "V3" | "V4" | "V5" | "V6" | "V7" | "V8" | "V9" | "V10" | "V11" | "V12" | "S1" | "S2";
   severity: CheckSeverity;
   status: CheckStatus;
   title: string;
@@ -255,6 +256,33 @@ export function buildTier1Report(
     }
   }
 
+  // QZY-12 §6.3 — slider RANGE-BAND coverage: bands must cover the full
+  // scale; a gap is a BLOCKING dead end (a shopper can land where no band —
+  // and so no mapping/route — exists). Overlaps flag as warnings (first band
+  // wins, like rules). Sliders WITHOUT bands are legacy-valid.
+  const v12: Tier1Finding[] = [];
+  const v12warn: Tier1Finding[] = [];
+  for (const q of questions) {
+    if (q.type !== "question" || q.data.question_type !== "slider") continue;
+    if (sliderBandAnswers(q.data.answers).length === 0) continue;
+    const min = q.data.scale_config?.min ?? 0;
+    const max = q.data.scale_config?.max ?? 100;
+    const step = q.data.scale_config?.step ?? 1;
+    const cov = bandCoverage(q.data.answers, min, max, step);
+    for (const [from, to] of cov.gaps) {
+      v12.push({
+        message: `${qLabel(q.id)} “${q.data.text}” — slider values ${from}–${to} land in NO band; shoppers there dead-end. Extend a band to cover them.`,
+        link: { kind: "question", nodeId: q.id },
+      });
+    }
+    for (const [from, to] of cov.overlaps) {
+      v12warn.push({
+        message: `${qLabel(q.id)} “${q.data.text}” — bands overlap at ${from}–${to}; the first band wins.`,
+        link: { kind: "question", nodeId: q.id },
+      });
+    }
+  }
+
   const checks: Tier1Check[] = [
     check("V1", "block", "Exactly one deciding question", v1),
     check("V2", "block", "Every path reaches the decider", v2),
@@ -269,6 +297,8 @@ export function buildTier1Report(
     ...(productIndex
       ? [check("V11", "block", "Every filter answer matches products", v11)]
       : []),
+    check("V12", "block", "Slider bands cover the whole range", v12),
+    check("V12", "warn", "Slider bands don't overlap", v12warn),
     check("S1", "block", "Structure (orphans, dead ends, routing)", s1),
   ];
 

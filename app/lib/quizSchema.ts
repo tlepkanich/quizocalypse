@@ -113,6 +113,11 @@ export const Answer = z.object({
   // (vs. an accidentally-empty tags[]). Never blocking; the Logic map renders
   // it as "doesn't narrow". Optional/additive — absent on every legacy doc.
   no_preference: z.boolean().optional(),
+  // QZY-12 (build-tab §6.3) — slider RANGE BAND: this answer fires when the
+  // slider value lands in [min, max]. Bands are ordinary answers, so decider
+  // mapping / filters / rules / routing apply unchanged. Absent on every
+  // non-slider answer.
+  range: z.object({ min: z.number(), max: z.number() }).optional(),
   // Phase 5: an optional short video shown in the answer card (mp4/embed URL).
   video_url: z.string().url().optional(),
   edge_handle_id: z.string().min(1),
@@ -240,6 +245,27 @@ export const QuestionDataObject = z.object({
       step: z.number().positive().optional(),
       endpoint_label_min: z.string().max(40).optional(),
       endpoint_label_max: z.string().max(40).optional(),
+      // QZY-12 §6.1 — continuous (default) vs a stepped scale of N points;
+      // label row above or below the track (default below — thumb unobstructed).
+      mode: z.enum(["continuous", "stepped"]).optional(),
+      points: z.number().int().min(2).max(11).optional(),
+      labels_position: z.enum(["above", "below"]).optional(),
+    })
+    .optional(),
+  // QZY-12 §6.2 — slider styling (all optional; absent = today's plain range).
+  slider_style: z
+    .object({
+      track_thickness: z.number().int().min(2).max(16).optional(),
+      track_width_pct: z.number().int().min(40).max(100).optional(),
+      track_color: z.string().max(32).optional(),
+      fill_color: z.string().max(32).optional(),
+      thumb: z.enum(["circle", "square"]).optional(),
+      thumb_size: z.number().int().min(12).max(40).optional(),
+      thumb_color: z.string().max(32).optional(),
+      markers: z.enum(["none", "dot", "tick"]).optional(),
+      label_size: z.number().int().min(9).max(24).optional(),
+      label_color: z.string().max(32).optional(),
+      label_bold: z.boolean().optional(),
     })
     .optional(),
   // Questions & Logic spec §7 — marks a question as AI-generated (pre-populated by

@@ -9,6 +9,7 @@ import { RuntimeChromeContext } from "../runtimeContexts";
 import { inspectAttrs, type InspectPart, type InspectTarget } from "../inspect";
 import { answerLabel } from "../bits/answerLabel";
 import { AnswerOptions } from "./AnswerOptions";
+import { bandFor, sliderBandAnswers } from "../../../lib/sliderBands";
 import { QuestionImage } from "../bits/QuestionImage";
 import { TooltipChip } from "../bits/TooltipChip";
 import { SkipLink, MinimalNav } from "../bits/nav";
@@ -200,6 +201,17 @@ export function QuestionView({
           onSubmit={(e) => {
             e.preventDefault();
             if (!canSubmit || !seed) return;
+            // QZY-12 §6.3 — a slider with RANGE BANDS routes/maps through the
+            // band the value lands in (bands are ordinary answers, so tags /
+            // target / edges apply exactly like a card pick). No bands (every
+            // pre-QZY doc) = the seed-answer behavior byte-for-byte.
+            if (node.data.question_type === "slider") {
+              const band = bandFor(node.data.answers, Number(freeform || sliderMid));
+              if (band) {
+                onAdvance([band.id], band.edge_handle_id);
+                return;
+              }
+            }
             // Capture the typed value as the picked answer so it shows up in
             // merge tags and the path. The runtime persists step.answerIds
             // by id; here we use the seed answer's id.
@@ -211,27 +223,95 @@ export function QuestionView({
           style={{ marginTop: 20, display: "flex", flexDirection: "column", gap: 12 }}
         >
           {node.data.question_type === "slider" ? (
-            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-              <input
-                type="range"
-                aria-label={node.data.text}
-                min={sliderMin}
-                max={sliderMax}
-                step={sc?.step}
-                value={freeform || sliderMid}
-                onChange={(e) => setFreeform(e.target.value)}
-                style={{ width: "100%", cursor: "pointer", accentColor: "var(--qz-color-primary)" }}
-              />
-              {sc?.endpoint_label_min || sc?.endpoint_label_max ? (
-                <div style={{ ...styles.muted, display: "flex", justifyContent: "space-between", fontSize: "0.8em" }}>
-                  <span>{sc?.endpoint_label_min ?? sliderMin}</span>
-                  <span>{sc?.endpoint_label_max ?? sliderMax}</span>
+            (() => {
+              // QZY-12 §6.1/§6.2 — stepped mode + label position + styling.
+              // Every knob absent = today's plain range input exactly.
+              const ss = node.data.slider_style;
+              const stepped = sc?.mode === "stepped";
+              const points = stepped ? (sc?.points ?? 5) : null;
+              const stepVal = points ? (sliderMax - sliderMin) / (points - 1) : sc?.step;
+              const labelsAbove = sc?.labels_position === "above";
+              const labelRow =
+                sc?.endpoint_label_min || sc?.endpoint_label_max ? (
+                  <div
+                    style={{
+                      ...styles.muted,
+                      display: "flex",
+                      justifyContent: "space-between",
+                      fontSize: ss?.label_size ?? "0.8em",
+                      color: ss?.label_color ?? undefined,
+                      fontWeight: ss?.label_bold ? 700 : undefined,
+                    }}
+                  >
+                    <span>{sc?.endpoint_label_min ?? sliderMin}</span>
+                    <span>{sc?.endpoint_label_max ?? sliderMax}</span>
+                  </div>
+                ) : null;
+              const styled = Boolean(ss);
+              return (
+                <div
+                  className={styled ? "qz-slider-styled" : undefined}
+                  style={{
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: 8,
+                    ...(ss?.track_width_pct
+                      ? { width: `${ss.track_width_pct}%`, margin: "0 auto" }
+                      : {}),
+                  }}
+                >
+                  {styled ? (
+                    <style>{`.qz-slider-styled input[type=range]{-webkit-appearance:none;appearance:none;height:${ss?.track_thickness ?? 6}px;border-radius:999px;background:${ss?.track_color ?? "color-mix(in srgb, var(--qz-color-text) 15%, transparent)"};accent-color:${ss?.fill_color ?? "var(--qz-color-primary)"}}.qz-slider-styled input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:${ss?.thumb_size ?? 20}px;height:${ss?.thumb_size ?? 20}px;border-radius:${ss?.thumb === "square" ? "4px" : "999px"};background:${ss?.thumb_color ?? "var(--qz-color-primary)"};cursor:pointer;border:none}.qz-slider-styled input[type=range]::-moz-range-thumb{width:${ss?.thumb_size ?? 20}px;height:${ss?.thumb_size ?? 20}px;border-radius:${ss?.thumb === "square" ? "4px" : "999px"};background:${ss?.thumb_color ?? "var(--qz-color-primary)"};cursor:pointer;border:none}`}</style>
+                  ) : null}
+                  {labelsAbove ? labelRow : null}
+                  <input
+                    type="range"
+                    aria-label={node.data.text}
+                    min={sliderMin}
+                    max={sliderMax}
+                    step={stepVal}
+                    value={freeform || sliderMid}
+                    onChange={(e) => setFreeform(e.target.value)}
+                    style={
+                      styled
+                        ? { width: "100%", cursor: "pointer" }
+                        : { width: "100%", cursor: "pointer", accentColor: "var(--qz-color-primary)" }
+                    }
+                  />
+                  {points && (ss?.markers ?? "dot") !== "none" ? (
+                    <div
+                      aria-hidden
+                      style={{ display: "flex", justifyContent: "space-between", padding: "0 2px" }}
+                    >
+                      {Array.from({ length: points }, (_, i) => (
+                        <span
+                          key={i}
+                          style={
+                            ss?.markers === "tick"
+                              ? { width: 2, height: 8, background: "color-mix(in srgb, var(--qz-color-text) 35%, transparent)" }
+                              : { width: 5, height: 5, borderRadius: 999, background: "color-mix(in srgb, var(--qz-color-text) 35%, transparent)" }
+                          }
+                        />
+                      ))}
+                    </div>
+                  ) : null}
+                  {!labelsAbove ? labelRow : null}
+                  <div style={{ textAlign: "center", fontWeight: 600, fontSize: 18 }}>
+                    {freeform || sliderMid}
+                    {sliderBandAnswers(node.data.answers).length > 0
+                      ? (() => {
+                          const b = bandFor(node.data.answers, Number(freeform || sliderMid));
+                          return b ? (
+                            <span style={{ ...styles.muted, fontSize: "0.7em", marginLeft: 8 }}>
+                              {b.text}
+                            </span>
+                          ) : null;
+                        })()
+                      : null}
+                  </div>
                 </div>
-              ) : null}
-              <div style={{ textAlign: "center", fontWeight: 600, fontSize: 18 }}>
-                {freeform || sliderMid}
-              </div>
-            </div>
+              );
+            })()
           ) : (
             <input
               type={inputType}
