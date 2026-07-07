@@ -25,12 +25,20 @@ import {
   QuizGenerationError,
 } from "./client";
 
+// QZY-4 (owner supplement) — a shared ban folded onto EVERY question-writing
+// prompt: budget questions are not something brands ask their shoppers.
+const BANNED_QUESTION_GUIDANCE =
+  "\nNEVER ask about budget, price range, or how much the shopper wants to " +
+  "spend — brands don't ask that. If price sensitivity matters, infer it " +
+  "from product choices instead.";
+
 const REGEN_SYSTEM_PROMPT =
   "You are regenerating ONE question in an existing Shopify product quiz. " +
   "Use the catalog summary for tag accuracy — only use tags that exist in the " +
   "supplied catalog. Keep the question useful for product targeting. The " +
   "downstream system will preserve answer IDs where possible by order — keep " +
-  "the answer count similar to the original so edge connections survive.";
+  "the answer count similar to the original so edge connections survive." +
+  BANNED_QUESTION_GUIDANCE;
 
 const regenQuestionToolJsonSchema = {
   type: "object",
@@ -200,7 +208,8 @@ const QUESTION_FLOW_SYSTEM_PROMPT =
   "Across the whole quiz every bucket must be reachable: each answer should lean " +
   "toward exactly one bucket by including at least one of that bucket's routing tags, " +
   "and together the answers must cover every bucket's tags. Keep questions concise and " +
-  "useful for narrowing products. Never write commentary or anything outside the tool call.";
+  "useful for narrowing products. Never write commentary or anything outside the tool call." +
+  BANNED_QUESTION_GUIDANCE;
 
 const questionFlowToolJsonSchema = {
   type: "object",
@@ -512,11 +521,17 @@ const TEMPLATE_OPTIONS_TOOL_SCHEMA = {
 const TEMPLATE_OPTIONS_SYSTEM_PROMPT =
   "You propose 2-3 DISTINCT quiz directions for a Shopify product-finder, grounded " +
   "in the brand and the merchant's goal. Rules:\n" +
+  // QZY-4 (owner supplement) — the surfaced mix is fixed: shoppers compare a
+  // product-match direction against a personality one, so they read as two
+  // genuinely different products, not three flavors of one.
+  "- The set MUST contain 1-2 product_match directions and EXACTLY 1 personality " +
+  "direction (no lead_capture/survey unless the merchant's goal demands it).\n" +
   "- Each direction picks an experience type from the menu and frames the shopper's " +
   "journey differently — make them genuinely DIFFERENT angles, not variations of one.\n" +
   "- Each has a short title, a one-line angle, a one-sentence rationale (why it fits " +
   "THIS brand + goal + what customers struggle with), and 2-3 sample question texts.\n" +
-  "- Sample questions must be answerable given the outcome buckets; NO answers, NO tags.\n" +
+  "- Sample questions must be answerable given the outcome buckets; NO answers, NO tags. " +
+  "Never a budget / price-range / how-much-to-spend question — brands don't ask that.\n" +
   "- Lean on the brand summary + voice so copy sounds on-brand from the first read.\n" +
   "- Respond ONLY via the tool call.";
 
@@ -668,7 +683,17 @@ export async function runWebResearchForQuizTypes(input: {
 }
 
 // ── Tier 1: brand-tailored quiz TYPE cards ──────────────────────────────────
-const QuizTypesResult = z.object({ types: z.array(QuizType).min(3).max(4) });
+// QZY-4 — 2-3 types (1-2 product_match + exactly 1 personality; enforced
+// post-parse in generateQuizTypes with a retry, degrading to the last valid
+// parse rather than failing the funnel).
+const QuizTypesResult = z.object({ types: z.array(QuizType).min(2).max(3) });
+
+function quizTypeMixIssue(types: Array<{ experience_type: string }>): string | null {
+  const pm = types.filter((t) => t.experience_type === "product_match").length;
+  const pers = types.filter((t) => t.experience_type === "personality").length;
+  if (pm >= 1 && pm <= 2 && pers === 1) return null;
+  return `Wrong archetype mix: got ${pm} product_match + ${pers} personality; need 1-2 product_match and exactly 1 personality.`;
+}
 
 const QUIZ_TYPES_TOOL_SCHEMA = {
   type: "object",
@@ -710,8 +735,11 @@ const QUIZ_TYPES_TOOL_SCHEMA = {
 } as const;
 
 const QUIZ_TYPES_SYSTEM_PROMPT =
-  "You propose 3-4 DISTINCT quiz TYPES for a Shopify brand, each tailored to the " +
+  "You propose 2-3 DISTINCT quiz TYPES for a Shopify brand, each tailored to the " +
   "brand's positioning AND real-world best practices for the category. Rules:\n" +
+  // QZY-4 (owner supplement) — fixed archetype mix, so the two cards read as
+  // genuinely different products (a matcher vs a persona reveal).
+  "- The set MUST contain 1-2 product_match types and EXACTLY 1 personality type.\n" +
   "- Each type names a concrete format (e.g. Educational Explainer, Gift Finder, " +
   "Routine Builder, Type/Needs Matcher), a one-line 'what it achieves', a question-" +
   "count RANGE informed by the category (educational/wellness run longer, 8-12; " +
@@ -741,7 +769,8 @@ export interface GenerateQuizTypesInput {
 export async function generateQuizTypes(input: GenerateQuizTypesInput): Promise<QuizTypeT[]> {
   const tool = {
     name: "emit_quiz_types",
-    description: "Emit 3-4 distinct, brand-tailored quiz types. The only allowed response.",
+    description:
+      "Emit 2-3 distinct, brand-tailored quiz types (1-2 product_match + exactly 1 personality). The only allowed response.",
     input_schema: QUIZ_TYPES_TOOL_SCHEMA as unknown as Anthropic.Tool.InputSchema,
   } satisfies Anthropic.Tool;
 
@@ -770,10 +799,11 @@ export async function generateQuizTypes(input: GenerateQuizTypesInput): Promise<
     "Web research (best practices for this category):",
     input.webResearchText || "(no research available — use your own knowledge)",
     "",
-    "Propose 3-4 distinct, tailored quiz types. Emit via the tool call.",
+    "Propose 2-3 distinct, tailored quiz types: 1-2 product_match + exactly 1 personality. Emit via the tool call.",
   ].join("\n");
 
   let lastIssue: string | undefined;
+  let lastValidTypes: QuizTypeT[] | null = null;
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
     const response = await createMessage({
       model: input.modelOverride ?? MODEL_SPEED,
@@ -800,12 +830,23 @@ export async function generateQuizTypes(input: GenerateQuizTypesInput): Promise<
       continue;
     }
     const parsed = QuizTypesResult.safeParse(toolUse.input);
-    if (parsed.success) return parsed.data.types;
+    if (parsed.success) {
+      const mixIssue = quizTypeMixIssue(parsed.data.types);
+      if (!mixIssue) return parsed.data.types;
+      lastValidTypes = parsed.data.types; // degraded-but-usable if retries run out
+      lastIssue = mixIssue;
+      continue;
+    }
     lastIssue = parsed.error.issues
       .slice(0, 5)
       .map((i) => `${i.path.join(".")}: ${i.message}`)
       .join("; ");
   }
+
+  // QZY-4 — a wrong archetype MIX with an otherwise-valid parse degrades to
+  // that parse rather than stranding the funnel (the mix is a preference,
+  // schema validity is the contract).
+  if (lastValidTypes) return lastValidTypes;
 
   throw new QuizGenerationError(
     "Quiz types generation failed validation after retries.",
@@ -890,7 +931,7 @@ const RICH_TEMPLATES_SYSTEM_PROMPT =
   "You generate 2-3 DISTINCT template configurations for a chosen quiz type — each " +
   "a full 'battle card'. Rules:\n" +
   "- Each template: a title, a one-line angle, a rationale, 2-3 sample question " +
-  "texts, exactly 3 feature_notes that distinguish THIS template (e.g. 'Opens with " +
+  "texts (never budget / price-range questions — brands don't ask that), exactly 3 feature_notes that distinguish THIS template (e.g. 'Opens with " +
   "a visual mood question'), design dials (imagery/graphics/word_forward high|medium|" +
   "low and lines soft|sharp|rounded) that genuinely match the template's style, a " +
   "recommended max_products + oos_behavior, optional recommended_bucket_ids (the " +
