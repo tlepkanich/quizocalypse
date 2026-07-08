@@ -16,11 +16,15 @@ export function StyleTab({
   node,
   mode,
   onCommit,
+  hideBackground = false,
 }: {
   doc: QuizDoc;
   node: QuizNode;
   mode: DesignLayerMode;
   onCommit: (doc: QuizDoc) => void;
+  // build-tab v2.0 §1 — decider docs edit the screen background ONLY in the left
+  // Background tab; the right inspector must not carry a page-background control.
+  hideBackground?: boolean;
 }) {
   const layer =
     mode === "synced"
@@ -58,7 +62,7 @@ export function StyleTab({
         Editing the <strong>{mode}</strong> layer. Use the preview toggle to switch.
       </p>
       {color("primary", "Primary")}
-      {color("background", "Background")}
+      {hideBackground ? null : color("background", "Background")}
       {color("text", "Text")}
       {contrastIssues.length > 0 ? (
         <div

@@ -13,12 +13,8 @@ import {
   setAnswerBucketWeight,
   swapScoringModel,
   moveStep,
-  moveDecider,
-  setQuestionRole,
-  setAnswerTarget,
 } from "../../lib/quizMutations";
 import { updateNodeData } from "./studioDoc";
-import { filterAnswerMatchCount } from "../../lib/filterMatching";
 import type { InspectTarget } from "../runtime/QuizRuntime";
 import { computeBucketCoverage, type CoverageLevel } from "../../lib/bucketCoverage";
 import { StepPreview } from "../runtime/StepPreview";
@@ -42,87 +38,10 @@ type QuizDoc = Quiz;
 type Tab = "content" | "design" | "routing";
 type QuestionNode = Extract<QuizNode, { type: "question" }>;
 
-// QZY-8 (build-tab §4) — the binding role vocabulary (never "decider/bucket").
-const ROLE_OPTIONS = [
-  { value: "decides", label: "Picks the result ◆" },
-  { value: "filter", label: "Filters results" },
-  { value: "qualifier", label: "Info only" },
-] as const;
-
-/** §4 — the inline gold Logic section: role dropdown + a one-line per-answer
- *  mapping summary + the jump to the full map. Uses the SAME mutations as the
- *  Logic view (moveDecider / setQuestionRole), so enforcement is identical. */
-function InlineLogicSection({
-  doc,
-  node,
-  onCommit,
-  onOpenLogic,
-  categories,
-  productIndex,
-}: {
-  doc: QuizDoc;
-  node: QuestionNode;
-  onCommit: (doc: QuizDoc) => void;
-  onOpenLogic?: () => void;
-  categories: BuilderCategory[];
-  productIndex: IndexedProduct[];
-}) {
-  const role = node.data.role ?? "qualifier";
-  const catName = (id: string | undefined | null) =>
-    (id && categories.find((c) => c.id === id)?.name) || null;
-  const summary = (a: QuestionNode["data"]["answers"][number]): string => {
-    if (role === "decides") {
-      const name = catName(a.target_id);
-      return name ? `→ ${name}` : "unmapped";
-    }
-    if (role === "filter") {
-      if (a.no_preference) return "no preference — doesn't narrow";
-      const n = filterAnswerMatchCount(a, productIndex);
-      if (n === null) return "doesn't narrow";
-      if (n === 0) return "⚠ matches 0 products";
-      return `${(a.tags ?? [])[0] ?? "match"} ✓ ${n}`;
-    }
-    return "info only";
-  };
-  const changeRole = (next: string) => {
-    if (next === role) return;
-    onCommit(
-      next === "decides"
-        ? moveDecider(doc, node.id)
-        : setQuestionRole(doc, node.id, next as "filter" | "qualifier"),
-    );
-  };
-  return (
-    <section className="qz-insp-logic">
-      <div className="qz-insp-logic-head">
-        <span>◆ Logic</span>
-        {onOpenLogic ? (
-          <button type="button" className="qz-insp-logic-open" onClick={onOpenLogic}>
-            Open full map in Logic →
-          </button>
-        ) : null}
-      </div>
-      <label className="qz-insp-logic-role">
-        <span>This question</span>
-        <select value={role} onChange={(e) => changeRole(e.target.value)} aria-label="Question role">
-          {ROLE_OPTIONS.map((o) => (
-            <option key={o.value} value={o.value}>
-              {o.label}
-            </option>
-          ))}
-        </select>
-      </label>
-      <ul className="qz-insp-logic-rows">
-        {node.data.answers.map((a) => (
-          <li key={a.id}>
-            <span className="qz-insp-logic-atext">{a.text || "…"}</span>
-            <span className="qz-insp-logic-sum">{summary(a)}</span>
-          </li>
-        ))}
-      </ul>
-    </section>
-  );
-}
+// build-tab v2.0 §1/§10 — the Build inspector is DESIGN-ONLY. Roles, result
+// mapping and routing live exclusively in the Logic view; the old inline gold
+// Logic section (role dropdown + per-answer mapping) was removed here. A single
+// one-line pointer to Logic is all that remains (see DeciderInspectorBody).
 
 /** QZY-8 (build-tab §5.1) — single-option scope: clicking one answer on the
  *  canvas scopes the inspector to THAT option; "Style all options" returns to
@@ -134,20 +53,15 @@ function AnswerScopePanel({
   answerId,
   onCommit,
   onClearScope,
-  categories,
-  productIndex,
 }: {
   doc: QuizDoc;
   node: QuestionNode;
   answerId: string;
   onCommit: (doc: QuizDoc) => void;
   onClearScope: () => void;
-  categories: BuilderCategory[];
-  productIndex: IndexedProduct[];
 }) {
   const answer = node.data.answers.find((a) => a.id === answerId);
   if (!answer) return null;
-  const role = node.data.role ?? "qualifier";
   const setAnswer = (patch: Record<string, unknown>) =>
     onCommit(
       updateNodeData(doc, node.id, {
@@ -202,37 +116,10 @@ function AnswerScopePanel({
           />
         </label>
       </div>
-      {role === "decides" ? (
-        <label style={{ display: "grid", gap: 4, fontSize: 12.5 }}>
-          <span className="qz-dim" style={{ fontSize: 11.5 }}>
-            Maps to
-          </span>
-          <select
-            value={answer.target_id ?? ""}
-            onChange={(e) => onCommit(setAnswerTarget(doc, node.id, answerId, e.target.value || null))}
-          >
-            <option value="">— unmapped —</option>
-            {categories.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.name}
-              </option>
-            ))}
-          </select>
-        </label>
-      ) : role === "filter" ? (
-        <p className="qz-dim" style={{ fontSize: 12, margin: 0 }}>
-          {answer.no_preference
-            ? "No preference — this option doesn't narrow results."
-            : (() => {
-                const n = filterAnswerMatchCount(answer, productIndex);
-                if (n === null) return "Doesn't narrow — add tags in the Logic map.";
-                if (n === 0) return "⚠ Matches 0 products — fix in the Logic map.";
-                return `Matches ${n} product${n === 1 ? "" : "s"}.`;
-              })()}
-        </p>
-      ) : null}
+      {/* build-tab v2.0 §1 — design-only: this option's result mapping / filter
+          match lives in the Logic view, never here. */}
       <p className="qz-dim" style={{ fontSize: 11.5, margin: 0 }}>
-        Question-level layout &amp; option styling live under Content → Answer display.
+        Layout &amp; option styling apply to every option — set them under Answer display.
       </p>
     </div>
   );
@@ -883,6 +770,135 @@ function RoutingBody({
   );
 }
 
+/** The design-layer selector (synced / desktop / mobile) — shared by the legacy
+ *  Design tab and the decider inspector's style surface. */
+function LayerSelector({
+  layer,
+  layerOverride,
+  setLayerOverride,
+}: {
+  layer: DesignLayerMode;
+  layerOverride: DesignLayerMode | null;
+  setLayerOverride: (m: DesignLayerMode | null) => void;
+}) {
+  return (
+    <div className="qz-row" style={{ gap: 8, alignItems: "center" }}>
+      <span className="qz-dim" style={{ fontSize: 11 }}>
+        Layer:
+      </span>
+      <div className="qz-segmented" role="group" aria-label="Design layer">
+        {(["synced", "desktop", "mobile"] as const).map((m) => (
+          <button
+            key={m}
+            type="button"
+            aria-pressed={layer === m}
+            onClick={() => setLayerOverride(m)}
+            title={
+              m === "synced"
+                ? "Applies to every screen size"
+                : `Only when the quiz renders ${m === "desktop" ? "wide" : "narrow"}`
+            }
+          >
+            {m === "synced" ? "All" : m === "desktop" ? "Desktop" : "Mobile"}
+          </button>
+        ))}
+      </div>
+      {layerOverride === null ? (
+        <span className="qz-dim" style={{ fontSize: 10.5 }}>
+          (following the preview)
+        </span>
+      ) : null}
+    </div>
+  );
+}
+
+// ── Decider inspector (build-tab v2.0) — the CORRECTED right panel: purely
+// selection-driven DESIGN. No tabs, no logic, no page-background (that lives in
+// the left Background tab). Content + style for the selected element, then a
+// single one-line pointer to the Logic view. Legacy docs keep the old tabbed
+// ContextPanelBody untouched. (Element-granular per-element control sets are
+// R7; this phase makes the panel tab-less and logic-free.)
+function DeciderInspectorBody({
+  doc,
+  node,
+  layer,
+  layerOverride,
+  setLayerOverride,
+  onCommit,
+  products,
+  regen,
+  scopedAnswerId,
+  onClearScope,
+  onOpenLogic,
+}: {
+  doc: QuizDoc;
+  node: QuizNode;
+  layer: DesignLayerMode;
+  layerOverride: DesignLayerMode | null;
+  setLayerOverride: (m: DesignLayerMode | null) => void;
+  onCommit: (doc: QuizDoc) => void;
+  products?: PickerProduct[];
+  regen?: RegenApi;
+  scopedAnswerId: string | null;
+  onClearScope?: () => void;
+  onOpenLogic?: () => void;
+}) {
+  // Single-option scope (build-tab §5.1): the option's own label + media only.
+  if (scopedAnswerId && node.type === "question" && onClearScope) {
+    return (
+      <AnswerScopePanel
+        doc={doc}
+        node={node}
+        answerId={scopedAnswerId}
+        onCommit={onCommit}
+        onClearScope={onClearScope}
+      />
+    );
+  }
+  return (
+    <>
+      <ContentTab doc={doc} node={node} onCommit={onCommit} products={products} regen={regen} />
+      <LayerSelector layer={layer} layerOverride={layerOverride} setLayerOverride={setLayerOverride} />
+      {/* §1 — hideBackground: the screen background lives ONLY in the left tab. */}
+      <StyleTab doc={doc} node={node} mode={layer} onCommit={onCommit} hideBackground />
+      <details style={{ flex: "0 0 auto" }}>
+        <summary style={{ cursor: "pointer", fontSize: 12.5, fontWeight: 600 }}>Layout blocks</summary>
+        <div style={{ marginTop: 8 }}>
+          <LayoutTab doc={doc} node={node} onCommit={onCommit} />
+        </div>
+      </details>
+      <details style={{ flex: "0 0 auto" }}>
+        <summary style={{ cursor: "pointer", fontSize: 12.5, fontWeight: 600 }}>Custom CSS</summary>
+        <div style={{ marginTop: 8 }}>
+          <CssTab doc={doc} node={node} onCommit={onCommit} />
+        </div>
+      </details>
+      {/* §1/§10 — the ONE allowed line of logic on this page: a pointer, not UI. */}
+      {node.type === "question" ? (
+        <div
+          className="qz-row qz-row-between"
+          style={{
+            gap: 8,
+            alignItems: "center",
+            padding: "8px 10px",
+            borderRadius: 8,
+            border: "1px solid var(--qz-rule)",
+          }}
+        >
+          <span className="qz-dim" style={{ fontSize: 11.5 }}>
+            Roles, result mapping &amp; routing live in the Logic view.
+          </span>
+          {onOpenLogic ? (
+            <button type="button" className="qz-btn qz-btn-ghost qz-btn-sm" onClick={onOpenLogic}>
+              Open Logic →
+            </button>
+          ) : null}
+        </div>
+      ) : null}
+    </>
+  );
+}
+
 function ContextPanelBody({
   doc,
   node,
@@ -944,17 +960,21 @@ function ContextPanelBody({
       <div className="qz-row qz-row-between" style={{ alignItems: "center", marginBottom: 8 }}>
         <strong style={{ fontSize: 13 }}>{NODE_LABEL[node.type]}</strong>
         <div className="qz-row" style={{ gap: 6, alignItems: "center" }}>
-          <div className="qz-segmented" role="group" aria-label="Panel tab">
-            <button type="button" aria-pressed={tab === "content"} onClick={() => setTab("content")}>
-              Content
-            </button>
-            <button type="button" aria-pressed={tab === "design"} onClick={() => setTab("design")}>
-              Design
-            </button>
-            <button type="button" aria-pressed={tab === "routing"} onClick={() => setTab("routing")}>
-              Routing
-            </button>
-          </div>
+          {/* build-tab v2.0 §1 — decider docs have NO tab bar (design-only,
+              selection-driven). Legacy docs keep Content/Design/Routing. */}
+          {!isDecider ? (
+            <div className="qz-segmented" role="group" aria-label="Panel tab">
+              <button type="button" aria-pressed={tab === "content"} onClick={() => setTab("content")}>
+                Content
+              </button>
+              <button type="button" aria-pressed={tab === "design"} onClick={() => setTab("design")}>
+                Design
+              </button>
+              <button type="button" aria-pressed={tab === "routing"} onClick={() => setTab("routing")}>
+                Routing
+              </button>
+            </div>
+          ) : null}
           <button className="qz-btn qz-btn-ghost qz-btn-sm" onClick={onClose} title="Close (Esc)">
             Done
           </button>
@@ -980,6 +1000,22 @@ function ContextPanelBody({
       </div>
 
       <div style={{ display: "flex", flexDirection: "column", gap: 10, maxHeight: "48vh", overflowY: "auto", paddingRight: 2 }}>
+        {isDecider ? (
+          <DeciderInspectorBody
+            doc={doc}
+            node={node}
+            layer={layer}
+            layerOverride={layerOverride}
+            setLayerOverride={setLayerOverride}
+            onCommit={onCommit}
+            products={products}
+            regen={regen}
+            scopedAnswerId={scopedAnswerId}
+            onClearScope={onClearScope}
+            onOpenLogic={onOpenLogic}
+          />
+        ) : (
+          <>
         {tab === "content" && scopedAnswerId && node.type === "question" && onClearScope ? (
           <AnswerScopePanel
             doc={doc}
@@ -987,8 +1023,6 @@ function ContextPanelBody({
             answerId={scopedAnswerId}
             onCommit={onCommit}
             onClearScope={onClearScope}
-            categories={categories}
-            productIndex={productIndex}
           />
         ) : tab === "content" ? (
           <ContentTab doc={doc} node={node} onCommit={onCommit} products={products} regen={regen} />
@@ -1048,19 +1082,8 @@ function ContextPanelBody({
             </details>
           </>
         )}
-        {/* QZY-8 §4 — the inline gold Logic section for questions on decider
-            docs, visible under every tab (the 80% logic case without leaving
-            Build). */}
-        {node.type === "question" && isDecider ? (
-          <InlineLogicSection
-            doc={doc}
-            node={node}
-            onCommit={onCommit}
-            onOpenLogic={onOpenLogic}
-            categories={categories}
-            productIndex={productIndex}
-          />
-        ) : null}
+          </>
+        )}
       </div>
       {/* QZY-8 §2 — footer actions for the selected screen. */}
       {(movable || (onArmDelete && node.type !== "intro")) ? (

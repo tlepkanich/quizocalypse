@@ -185,7 +185,7 @@ DOM-identical, never rewrite.
 | Phase | Commit | Status |
 |---|---|---|
 | R1 · Path-enumeration engine | (uncommitted) | ✅ code-complete, gate-green — `app/lib/pathEnumeration.ts` (`enumeratePaths` forks the runtime router + resolves each path with `resolveTarget`; `groupPathsByResult`) + `pathEnumeration.test.ts` (12 tests: faithfulness, skipped-question omission, branch flags, both dead-end reasons, grouping, maxPaths/cycle backstops). Full strict gate: 1372 tests, build, lint, tokens all pass. Product "+N more" enrichment deferred to R8/R9 (§7 dependency). |
-| R2 · Inspector correction | — | next (phase one) |
+| R2 · Inspector correction | (uncommitted) | ✅ code-complete, gate-green, **live-verified**. Decider-gated: `ContextPanel.tsx` deletes `InlineLogicSection` + strips `AnswerScopePanel`/`RoutingBody` logic + adds tab-less `DeciderInspectorBody` (content+style+layout+CSS + one "Open Logic →" pointer); `StyleTab` `hideBackground`; `ContentTab` model-aware copy. Legacy = verbatim `!isDecider` branch. Live probe `e2e/qzy-r2-verify.mjs` 13/13 PASS on the real server (no tabs, no logic, pointer, bg suppressed, 0 errors) + screenshot. `builderv3-verify.mjs` R2 sections updated (full run needs the local fixture's Q1 restored to a choice question — see below). Full strict gate green. |
 | R3 · Master/override + toast | — | not started |
 | R4 · Shared media picker + upload | — | not started |
 | R5 · Answer display + interaction states | — | not started |
@@ -194,6 +194,12 @@ DOM-identical, never rewrite.
 | R8 · Logic 3-tab shell + Paths tab | — | not started |
 | R9 · Table tab + override-writes-a-rule | — | not started |
 | R10 · Migration, probes, sweep | — | not started |
+
+**Local-env note (R2):** the local fixture `cmr7khgd5…` has drifted — its Q1 is a
+stray "New question" slider, so `builderv3-verify.mjs`'s QZY-7/8/9 sections (which
+assume a choice Q1) can't run green until it's restored. This is pre-existing, not
+R2-caused; R2's own acceptance is covered by `e2e/qzy-r2-verify.mjs` (green, works
+for any question type). Restore the fixture, then re-run the full `builderv3-verify`.
 
 **Spec-sanctioned deferrals (still NOT in v1):** AI Assist full design · pattern
 backgrounds · custom-icon slider thumb · bulk multi-select rule apply (Table §5 is

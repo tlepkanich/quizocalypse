@@ -155,18 +155,19 @@ await page.locator(".qz-screens-confirm-yes").click();
 await page.waitForTimeout(700);
 ok("confirm deletes the screen (net-zero)", (await thumbs.count()) === thumbCount);
 
-// ── BLD-3: right inspector, unclipped tabs ──────────────────────────────────
+// ── BLD-3 → QZY-R2: decider inspector is TAB-LESS + logic-free (build-tab
+// v2.0 §1). No Content/Design/Routing bar; roles/mapping/routing live only in
+// the Logic view (one pointer remains). Deep R2 coverage: e2e/qzy-r2-verify.mjs.
 await q1Thumb.locator(".qz-screens-thumb").click();
 await page.waitForTimeout(400);
 const insp = page.locator(".qz-builder-inspector");
 ok("right-side inspector present", (await insp.count()) === 1);
-const inspBox = await insp.boundingBox();
-let clipped = false;
-for (const t of ["Content", "Design", "Routing"]) {
-  const b = await insp.locator("button", { hasText: t }).first().boundingBox();
-  if (!b || !inspBox || b.x + b.width > inspBox.x + inspBox.width + 1) clipped = true;
-}
-ok("inspector tabs fit (no clip)", !clipped);
+ok("no Content/Design/Routing tab bar (v2.0 §1)",
+  (await insp.locator('.qz-segmented[aria-label="Panel tab"]').count()) === 0);
+ok("one-line 'Open Logic →' pointer present (the only logic allowance)",
+  (await insp.locator("button", { hasText: "Open Logic" }).count()) === 1);
+ok("no page-background control on the right (v2.0 §1)",
+  (await insp.getByText("Background", { exact: true }).count()) === 0);
 
 // ── BLD-2b: inline canvas edit (Escape-cancelled — no commit) ───────────────
 const canvasHead = page.locator(".qz-builder-canvas h1, .qz-builder-canvas h2").first();
@@ -185,16 +186,12 @@ if (await selEl.count()) {
   ok("canvas element selectable for inline edit", false, "no .qz-insp-sel after click");
 }
 
-// ── QZY-8: Inspector v2 — gold Logic, option scope, footer, numeric pairs ───
+// ── QZY-8 → QZY-R2: option scope, footer, numeric pairs (inline logic REMOVED
+// per build-tab v2.0 §1 — asserted absent here; relocated to the Logic view).
 await q1Thumb.locator(".qz-screens-thumb").click();
 await page.waitForTimeout(500);
-ok("inline gold Logic section on the question",
-  (await page.locator(".qz-insp-logic").count()) === 1);
-ok("role dropdown speaks the binding vocabulary",
-  (await page.locator(".qz-insp-logic-role option", { hasText: "Picks the result" }).count()) === 1 &&
-  (await page.locator(".qz-insp-logic-role option", { hasText: "Info only" }).count()) === 1);
-ok("per-answer mapping summary rows",
-  (await page.locator(".qz-insp-logic-rows li").count()) >= 2);
+ok("inline gold Logic section is GONE (v2.0 §1)",
+  (await page.locator(".qz-insp-logic, .qz-insp-logic-role").count()) === 0);
 await page.locator(".qz-builder-canvas button.qz-insp").first().click();
 await page.waitForTimeout(400);
 ok("clicking ONE option scopes the inspector (§5.1)",
@@ -215,8 +212,7 @@ ok("footer delete arms the carousel confirm",
   (await page.locator(".qz-screens-confirm").count()) === 1);
 await page.locator(".qz-screens-confirm button", { hasText: "Keep" }).click();
 await page.waitForTimeout(200);
-await page.locator(".qz-builder-inspector button", { hasText: "Design" }).first().click();
-await page.waitForTimeout(300);
+// Decider inspector has NO Design tab — Layout blocks is directly present.
 await page.locator(".qz-builder-inspector summary", { hasText: "Layout blocks" }).click();
 await page.waitForTimeout(300);
 // A template-rendered step must be broken into blocks first (BLD-7's final
@@ -235,7 +231,6 @@ ok("numerics render as LINKED range+number pairs (§2)",
   (await page.locator(".qz-numctl input[type=range]").count()) >= 1 &&
   (await page.locator(".qz-numctl input[type=number]").count()) >= 1);
 await page.locator(".qz-builder-inspector summary", { hasText: "Layout blocks" }).click();
-await page.locator(".qz-builder-inspector button", { hasText: "Content" }).first().click();
 await page.waitForTimeout(200);
 
 // ── QZY-9: answer display modes — picker, live canvas, lossless switch ──────
@@ -379,8 +374,7 @@ await page.evaluate(() => {
   c.dispatchEvent(new DragEvent("drop", { dataTransfer: dt, bubbles: true, cancelable: true }));
 });
 await page.waitForTimeout(600);
-await page.locator(".qz-builder-inspector button", { hasText: "Design" }).first().click();
-await page.waitForTimeout(300);
+// Decider inspector has NO Design tab — Layout blocks is directly present.
 await page.locator(".qz-builder-inspector summary", { hasText: "Layout blocks" }).click();
 await page.waitForTimeout(300);
 const xBtns = page.locator(".qz-builder-inspector button", { hasText: "✕" });
