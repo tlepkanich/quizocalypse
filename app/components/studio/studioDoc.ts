@@ -294,6 +294,28 @@ export function blockMove(blocks: ContentBlock[], blockId: string, dir: -1 | 1):
   return next;
 }
 
+// QZY-R7 (BT4) — drag-to-reorder: move `blockId` to sit just before the block
+// currently at `toIndex` (the row it was dropped on). `blockMove`'s ±1 swap is
+// the keyboard/click path; this is the arbitrary-position drop. Pure; an
+// out-of-range index or unknown id returns the list unchanged (never throws).
+export function blockReorder(
+  blocks: ContentBlock[],
+  blockId: string,
+  toIndex: number,
+): ContentBlock[] {
+  const from = blocks.findIndex((b) => b.id === blockId);
+  if (from < 0) return blocks;
+  const clamped = Math.max(0, Math.min(toIndex, blocks.length));
+  const next = blocks.slice();
+  const [moved] = next.splice(from, 1);
+  if (!moved) return blocks;
+  // Removing the dragged item shifts every later index down by one, so a drop
+  // target below the source lands one slot earlier.
+  const insertAt = from < clamped ? clamped - 1 : clamped;
+  next.splice(insertAt, 0, moved);
+  return next;
+}
+
 export function blockRemove(blocks: ContentBlock[], blockId: string): ContentBlock[] {
   return blocks.filter((b) => b.id !== blockId);
 }

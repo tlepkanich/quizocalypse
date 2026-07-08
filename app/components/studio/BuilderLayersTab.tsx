@@ -1,9 +1,10 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import type { Quiz, QuizNode, ContentBlock } from "../../lib/quizSchema";
 import {
   PALETTE_BLOCKS,
   blockMove,
   blockRemove,
+  blockReorder,
   blockUpdate,
   setNodeLayout,
 } from "./studioDoc";
@@ -50,6 +51,10 @@ export function BuilderLayersTab({
     () => (node ? currentLayout(doc, node) : []),
     [doc, node],
   );
+  // BT4 — drag-to-reorder. `dragId` = the row being dragged; `overIndex` = the
+  // row it is hovering, for a drop-line indicator. Cleared on drop/leave.
+  const [dragId, setDragId] = useState<string | null>(null);
+  const [overIndex, setOverIndex] = useState<number | null>(null);
   if (!node) {
     return (
       <div className="qz-card" style={{ padding: 14 }}>
@@ -67,7 +72,41 @@ export function BuilderLayersTab({
         Layers — {blocks.length} block{blocks.length === 1 ? "" : "s"}
       </div>
       {blocks.map((b, i) => (
-        <div key={b.id} className={`qz-layers-row${b.hidden ? " is-hidden" : ""}`}>
+        <div
+          key={b.id}
+          className={`qz-layers-row${b.hidden ? " is-hidden" : ""}${
+            dragId === b.id ? " is-dragging" : ""
+          }${overIndex === i && dragId && dragId !== b.id ? " is-drop-target" : ""}`}
+          draggable
+          onDragStart={(e) => {
+            setDragId(b.id);
+            e.dataTransfer.effectAllowed = "move";
+          }}
+          onDragOver={(e) => {
+            if (!dragId) return;
+            e.preventDefault();
+            e.dataTransfer.dropEffect = "move";
+            if (overIndex !== i) setOverIndex(i);
+          }}
+          onDrop={(e) => {
+            e.preventDefault();
+            if (dragId && dragId !== b.id) apply(blockReorder(blocks, dragId, i));
+            setDragId(null);
+            setOverIndex(null);
+          }}
+          onDragEnd={() => {
+            setDragId(null);
+            setOverIndex(null);
+          }}
+        >
+          <span
+            className="qz-layers-grip"
+            aria-hidden
+            title="Drag to reorder"
+            style={{ cursor: "grab", userSelect: "none", opacity: 0.45, paddingRight: 2 }}
+          >
+            ⠿
+          </span>
           <button
             type="button"
             className="qz-layers-main"

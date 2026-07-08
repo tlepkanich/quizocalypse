@@ -4225,6 +4225,11 @@ body[data-qz] .qz-s3-editable:focus-visible {
   background: var(--qz-paper);
 }
 .qz-layers-row.is-hidden { opacity: 0.55; }
+/* BT4 drag-to-reorder — the dragged row dims; the hovered target shows a top
+   drop-line so the merchant sees where the block will land. */
+.qz-layers-row.is-dragging { opacity: 0.4; }
+.qz-layers-row.is-drop-target { box-shadow: inset 0 2px 0 0 var(--qz-accent, var(--qz-ink-1)); }
+.qz-layers-grip { font-size: 12px; line-height: 1; flex: 0 0 auto; }
 .qz-layers-main {
   display: flex;
   align-items: center;
