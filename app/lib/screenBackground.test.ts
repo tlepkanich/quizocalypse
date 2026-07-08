@@ -3,6 +3,7 @@ import { Quiz } from "./quizSchema";
 import {
   applyBackgroundToAll,
   hasBackgroundOverride,
+  screenBackgroundCss,
   screensWithBackgroundOverride,
 } from "./screenBackground";
 
@@ -96,5 +97,74 @@ describe("applyBackgroundToAll — §9 respects overrides", () => {
     });
     expect(skipped).toBe(0);
     expect(Object.keys(next.node_backgrounds ?? {}).sort()).toEqual(["intro", "q1", "q2"]);
+  });
+});
+
+// ── R6-1 (build-tab §4) — radial / 3-stop gradient + partial-image renderer ──
+describe("screenBackgroundCss — R6-1 additions", () => {
+  it("a 2-stop gradient without the new fields is byte-identical (linear)", () => {
+    const css = screenBackgroundCss({ type: "gradient", color: "#000", color2: "#fff" });
+    expect(css.background).toBe("linear-gradient(135deg, #000, #fff)");
+  });
+
+  it("renders a 3-stop radial gradient", () => {
+    const css = screenBackgroundCss({
+      type: "gradient",
+      gradient_type: "radial",
+      color: "#000",
+      color2: "#888",
+      color3: "#fff",
+    });
+    expect(css.background).toBe("radial-gradient(circle, #000, #888, #fff)");
+  });
+
+  it("renders a partial-image band + fill colour", () => {
+    const left = screenBackgroundCss({
+      type: "partial",
+      image_url: "https://x/i.png",
+      band: "left",
+      coverage: 40,
+      fill_color: "#eee",
+    });
+    expect(left.backgroundColor).toBe("#eee");
+    expect(left.backgroundImage).toBe('url("https://x/i.png")');
+    expect(left.backgroundSize).toBe("40% 100%");
+    expect(left.backgroundPosition).toBe("left");
+    const top = screenBackgroundCss({ type: "partial", image_url: "https://x/i.png", band: "top" });
+    expect(top.backgroundSize).toBe("100% 50%");
+    expect(top.backgroundPosition).toBe("top");
+  });
+
+  it("schema: partial + radial fields parse; absent → no keys (byte-safe)", () => {
+    const base = {
+      quiz_id: "qz_bg2",
+      scope: { collection_ids: [] },
+      nodes: [
+        { id: "intro", type: "intro", position: { x: 0, y: 0 }, data: { headline: "Hi" } },
+        {
+          id: "q1",
+          type: "question",
+          position: { x: 1, y: 0 },
+          data: {
+            text: "Q",
+            question_type: "single_select",
+            answers: [
+              { id: "a1", text: "A", tags: [], edge_handle_id: "h1" },
+              { id: "a2", text: "B", tags: [], edge_handle_id: "h2" },
+            ],
+          },
+        },
+      ],
+      edges: [{ id: "e0", source: "intro", target: "q1" }],
+    };
+    const clean = Quiz.parse({ ...base, node_backgrounds: { intro: { type: "color", color: "#111" } } });
+    const bgJson = JSON.stringify(clean.node_backgrounds);
+    for (const k of ["color3", "gradient_type", "band", "coverage", "fill_color"])
+      expect(bgJson).not.toContain(k);
+    const withPartial = Quiz.parse({
+      ...base,
+      node_backgrounds: { intro: { type: "partial", image_url: "https://x/i.png", band: "right", coverage: 60, fill_color: "#eee" } },
+    });
+    expect(withPartial.node_backgrounds?.intro?.type).toBe("partial");
   });
 });

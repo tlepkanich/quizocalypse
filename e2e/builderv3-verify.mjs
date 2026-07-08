@@ -290,8 +290,8 @@ ok("Background tab renders the page settings",
   (await page.locator(".qz-builder-panel").textContent())?.includes("Background"));
 
 // ── QZY-11: per-screen backgrounds — type picker, live canvas, hint ─────────
-ok("background type picker (None/Color/Gradient/Image/Video)",
-  (await page.locator('[aria-label="Background type"] button').count()) === 5);
+ok("background type picker (None/Color/Gradient/Image/Video/Partial — R6-1)",
+  (await page.locator('[aria-label="Background type"] button').count()) === 6);
 await page.locator('[aria-label="Background type"] button', { hasText: "Gradient" }).click();
 await page.waitForTimeout(800);
 const pageBg = await page

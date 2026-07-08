@@ -108,7 +108,7 @@ export function BuilderBackgroundTab({
     }
   };
 
-  const colorField = (label: string, key: "color" | "color2") => (
+  const colorField = (label: string, key: "color" | "color2" | "color3" | "fill_color") => (
     <label className="qz-ads-color">
       <span>{label}</span>
       <input
@@ -176,7 +176,7 @@ export function BuilderBackgroundTab({
             ) : null}
           </div>
           <div className="qz-segmented" role="group" aria-label="Background type">
-            {(["none", "color", "gradient", "image", "video"] as const).map((t) => (
+            {(["none", "color", "gradient", "image", "video", "partial"] as const).map((t) => (
               <button
                 key={t}
                 type="button"
@@ -189,21 +189,40 @@ export function BuilderBackgroundTab({
           </div>
           {bg.type === "color" ? colorField("Color", "color") : null}
           {bg.type === "gradient" ? (
-            <div className="qz-row" style={{ gap: 10, alignItems: "center", flexWrap: "wrap" }}>
-              {colorField("From", "color")}
-              {colorField("To", "color2")}
-              <NumericControl
-                label="Angle"
-                value={bg.angle}
-                min={0}
-                max={360}
-                step={5}
-                fallback={135}
-                allowEmpty
-                suffix="°"
-                onChange={(n) => patch({ angle: n })}
-              />
-            </div>
+            <>
+              <div className="qz-row" style={{ gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+                {colorField("From", "color")}
+                {colorField("To", "color2")}
+                {colorField("Third", "color3")}
+              </div>
+              <div className="qz-row" style={{ gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+                <div className="qz-segmented" role="group" aria-label="Gradient shape">
+                  {(["linear", "radial"] as const).map((g) => (
+                    <button
+                      key={g}
+                      type="button"
+                      aria-pressed={(bg.gradient_type ?? "linear") === g}
+                      onClick={() => patch({ gradient_type: g === "linear" ? undefined : g })}
+                    >
+                      {g[0]!.toUpperCase() + g.slice(1)}
+                    </button>
+                  ))}
+                </div>
+                {(bg.gradient_type ?? "linear") === "linear" ? (
+                  <NumericControl
+                    label="Angle"
+                    value={bg.angle}
+                    min={0}
+                    max={360}
+                    step={5}
+                    fallback={135}
+                    allowEmpty
+                    suffix="°"
+                    onChange={(n) => patch({ angle: n })}
+                  />
+                ) : null}
+              </div>
+            </>
           ) : null}
           {bg.type === "image" ? (
             // §8 — the shared picker (upload as base64 + URL) for the screen image.
@@ -212,6 +231,44 @@ export function BuilderBackgroundTab({
               onImage={(v) => patch({ image_url: v })}
               onClear={() => patch({ image_url: undefined })}
             />
+          ) : null}
+          {bg.type === "partial" ? (
+            // R6-1 §4 — image fills a band; the rest is the fill colour.
+            <>
+              <MediaPicker
+                image={bg.image_url}
+                onImage={(v) => patch({ image_url: v })}
+                onClear={() => patch({ image_url: undefined })}
+              />
+              <div className="qz-row" style={{ gap: 6, alignItems: "center" }}>
+                <span className="qz-dim" style={{ fontSize: 11.5 }}>
+                  Band
+                </span>
+                <div className="qz-segmented" role="group" aria-label="Partial image band">
+                  {(["left", "top", "right"] as const).map((b) => (
+                    <button
+                      key={b}
+                      type="button"
+                      aria-pressed={(bg.band ?? "left") === b}
+                      onClick={() => patch({ band: b === "left" ? undefined : b })}
+                    >
+                      {b[0]!.toUpperCase() + b.slice(1)}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <NumericControl
+                label="Coverage"
+                value={bg.coverage}
+                min={10}
+                max={90}
+                fallback={50}
+                allowEmpty
+                suffix="%"
+                onChange={(n) => patch({ coverage: n })}
+              />
+              {colorField("Fill", "fill_color")}
+            </>
           ) : null}
           {bg.type === "video" ? (
             <>

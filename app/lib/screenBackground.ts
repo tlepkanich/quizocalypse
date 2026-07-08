@@ -18,11 +18,18 @@ export function screenBackgroundCss(bg: ScreenBackground): CSSProperties {
     case "color":
       if (bg.color) out.background = bg.color;
       break;
-    case "gradient":
-      if (bg.color && bg.color2)
-        out.background = `linear-gradient(${bg.angle ?? 135}deg, ${bg.color}, ${bg.color2})`;
+    case "gradient": {
+      // R6-1 §4 — up to 3 stops, linear or radial. Absent extras → today's
+      // 2-stop linear exactly (byte-identical).
+      const stops = [bg.color, bg.color2, bg.color3].filter((c): c is string => Boolean(c));
+      if (stops.length >= 2)
+        out.background =
+          bg.gradient_type === "radial"
+            ? `radial-gradient(circle, ${stops.join(", ")})`
+            : `linear-gradient(${bg.angle ?? 135}deg, ${stops.join(", ")})`;
       else if (bg.color) out.background = bg.color;
       break;
+    }
     case "image":
       if (bg.image_url) {
         out.backgroundImage = `url("${bg.image_url}")`;
@@ -37,6 +44,25 @@ export function screenBackgroundCss(bg: ScreenBackground): CSSProperties {
         if (bg.fixed) out.backgroundAttachment = "fixed";
       }
       break;
+    case "partial": {
+      // R6-1 §4 — the image fills a band on one edge at coverage %; the rest is
+      // fill_color.
+      if (bg.fill_color) out.backgroundColor = bg.fill_color;
+      if (bg.image_url) {
+        const cov = bg.coverage ?? 50;
+        const band = bg.band ?? "left";
+        out.backgroundImage = `url("${bg.image_url}")`;
+        out.backgroundRepeat = "no-repeat";
+        if (band === "top") {
+          out.backgroundSize = `100% ${cov}%`;
+          out.backgroundPosition = "top";
+        } else {
+          out.backgroundSize = `${cov}% 100%`;
+          out.backgroundPosition = band === "right" ? "right" : "left";
+        }
+      }
+      break;
+    }
     default:
       break;
   }
@@ -66,7 +92,11 @@ export function videoLayer(bg: ScreenBackground): {
 /** §8 readability guard — non-blocking: an image/video background with a
  *  light overlay likely fights the foreground text. */
 export function readabilityHint(bg: ScreenBackground): string | null {
-  if ((bg.type === "image" && bg.image_url) || (bg.type === "video" && bg.video_url)) {
+  if (
+    (bg.type === "image" && bg.image_url) ||
+    (bg.type === "video" && bg.video_url) ||
+    (bg.type === "partial" && bg.image_url)
+  ) {
     if ((bg.overlay ?? 0) < 20)
       return "Text may be hard to read over this background — consider raising the overlay.";
   }

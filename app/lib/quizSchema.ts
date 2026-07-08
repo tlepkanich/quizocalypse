@@ -1652,9 +1652,14 @@ export const Quiz = z.object({
     .record(
       z.string(),
       z.object({
-        type: z.enum(["color", "gradient", "image", "video"]).optional(),
+        // R6-1 §4 — "partial" (image band + fill) joins the type set.
+        type: z.enum(["color", "gradient", "image", "video", "partial"]).optional(),
         color: z.string().max(64).optional(),
         color2: z.string().max(64).optional(),
+        // R6-1 §4 — an optional 3rd gradient stop + radial vs linear. Absent →
+        // today's 2-stop linear gradient exactly (byte-identical).
+        color3: z.string().max(64).optional(),
+        gradient_type: z.enum(["linear", "radial"]).optional(),
         angle: z.number().int().min(0).max(360).optional(),
         image_url: z.string().url().optional(),
         video_url: z.string().url().optional(),
@@ -1666,6 +1671,11 @@ export const Quiz = z.object({
         blur: z.number().int().min(0).max(20).optional(),
         fixed: z.boolean().optional(),
         mobile_video: z.enum(["poster", "play"]).optional(),
+        // R6-1 §4 — partial-image: the image fills a band on one edge at a
+        // coverage %, the rest is fill_color.
+        band: z.enum(["left", "top", "right"]).optional(),
+        coverage: z.number().int().min(10).max(90).optional(),
+        fill_color: z.string().max(64).optional(),
       }),
     )
     .optional(),
