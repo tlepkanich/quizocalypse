@@ -82,10 +82,20 @@ export const stylesFor = (
   primaryBtn: {
     ...buttonStyle(t),
     marginTop: 24,
-    borderRadius: "var(--qz-radius)",
-    padding: "calc(var(--qz-pad) / 2) var(--qz-pad)",
+    // QZY-R7-3 §7.2 — a button-specific radius/scale, applied ONLY when the
+    // merchant set them. Absent → the exact prior CSS strings, so a doc without
+    // these tokens serializes byte-for-byte as before (the byte pin holds).
+    borderRadius:
+      t.button_radius != null ? `${t.button_radius}px` : "var(--qz-radius)",
+    padding:
+      t.button_scale != null
+        ? `calc(var(--qz-pad) / 2 * ${t.button_scale}) calc(var(--qz-pad) * ${t.button_scale})`
+        : "calc(var(--qz-pad) / 2) var(--qz-pad)",
     fontFamily: "var(--qz-font-body)",
-    fontSize: "var(--qz-base-size)",
+    fontSize:
+      t.button_scale != null
+        ? `calc(var(--qz-base-size) * ${t.button_scale})`
+        : "var(--qz-base-size)",
     fontWeight: 600,
     cursor: "pointer",
   } satisfies React.CSSProperties,

@@ -107,6 +107,10 @@ export function resolveDesignTokens(
     }
     if (layer.radius) out.radius = layer.radius;
     if (layer.button_style) out.button_style = layer.button_style;
+    // QZY-R7-3 — carry the Next-button size/radius through the cascade (same
+    // per-field-merge discipline; `!= null` so a 0 radius still lands).
+    if (layer.button_radius != null) out.button_radius = layer.button_radius;
+    if (layer.button_scale != null) out.button_scale = layer.button_scale;
     if (layer.spacing) out.spacing = layer.spacing;
     if (layer.shadow) out.shadow = layer.shadow;
     // Boolean — checked explicitly so a layer can also turn the split OFF.

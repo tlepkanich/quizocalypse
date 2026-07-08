@@ -79,6 +79,23 @@ describe("tokensToCssVars page padding (QP-2)", () => {
   });
 });
 
+describe("Next-button size + radius (QZY-R7-3 §7.2)", () => {
+  it("resolveDesignTokens CARRIES button_radius/button_scale (per-field-merge trap)", () => {
+    const resolved = resolveDesignTokens(null, { button_radius: 16, button_scale: 1.2 });
+    expect(resolved.button_radius).toBe(16);
+    expect(resolved.button_scale).toBe(1.2);
+  });
+  it("a later layer overrides, and 0 radius survives (!= null guard)", () => {
+    const resolved = resolveDesignTokens({ button_radius: 20 }, { button_radius: 0 });
+    expect(resolved.button_radius).toBe(0);
+  });
+  it("absent → the fields never appear (byte-safe: theme-only doc unchanged)", () => {
+    const resolved = resolveDesignTokens(null, { radius: "pill" });
+    expect("button_radius" in resolved).toBe(false);
+    expect("button_scale" in resolved).toBe(false);
+  });
+});
+
 describe("fluid typography (Unified P7)", () => {
   const tok = (base: number) => ({ typography: { body: { family: "Inter", base_size: base, scale_ratio: 1.25 } } });
 

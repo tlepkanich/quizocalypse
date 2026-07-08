@@ -72,6 +72,81 @@ function Row({
   );
 }
 
+// QZY-R7-3 §7.2 — the Next/primary button's own size + radius scrubbers. Both
+// stay UNSET ("auto"/"theme") until the merchant drags; Reset clears them back
+// to undefined so the doc serializes byte-identically to a theme-only design.
+function ButtonSizeSection({
+  scale,
+  radius,
+  onScale,
+  onRadius,
+  onReset,
+}: {
+  scale: number | undefined;
+  radius: number | undefined;
+  onScale: (v: number) => void;
+  onRadius: (v: number) => void;
+  onReset: () => void;
+}) {
+  const custom = scale != null || radius != null;
+  return (
+    <div className="qz-col qz-gap-4">
+      <div className="qz-row qz-gap-8" style={{ alignItems: "center" }}>
+        <span style={{ fontSize: 13, width: 84, flexShrink: 0 }}>Button size</span>
+        <input
+          type="range"
+          min={0.7}
+          max={1.6}
+          step={0.05}
+          value={scale ?? 1}
+          onChange={(e) => onScale(Number(e.target.value))}
+          style={{ flex: 1 }}
+          aria-label="Next button size"
+        />
+        <span className="qz-dim" style={{ fontSize: 12, width: 44, textAlign: "right" }}>
+          {scale != null ? `${scale.toFixed(2)}×` : "auto"}
+        </span>
+      </div>
+      <div className="qz-row qz-gap-8" style={{ alignItems: "center" }}>
+        <span style={{ fontSize: 13, width: 84, flexShrink: 0 }}>Button radius</span>
+        <input
+          type="range"
+          min={0}
+          max={48}
+          step={1}
+          value={radius ?? 10}
+          onChange={(e) => onRadius(Math.round(Number(e.target.value)))}
+          style={{ flex: 1 }}
+          aria-label="Next button radius"
+        />
+        <span className="qz-dim" style={{ fontSize: 12, width: 44, textAlign: "right" }}>
+          {radius != null ? `${radius}px` : "theme"}
+        </span>
+      </div>
+      {custom ? (
+        <button
+          type="button"
+          onClick={onReset}
+          className="qz-dim"
+          style={{
+            font: "inherit",
+            fontSize: 12,
+            background: "none",
+            border: "none",
+            cursor: "pointer",
+            textAlign: "left",
+            padding: 0,
+            textDecoration: "underline",
+            width: "fit-content",
+          }}
+        >
+          Reset button size to theme
+        </button>
+      ) : null}
+    </div>
+  );
+}
+
 export function BuilderDesignPanel({
   doc,
   commit,
@@ -248,6 +323,15 @@ export function BuilderDesignPanel({
           options={[["filled", "Filled"], ["outline", "Outline"], ["ghost", "Ghost"]]}
           active={base.button_style}
           onPick={(v) => onField("button_style", v)}
+        />
+        <ButtonSizeSection
+          scale={base.button_scale}
+          radius={base.button_radius}
+          onScale={(v) => mergeTokens({ button_scale: v } as Partial<Tokens>)}
+          onRadius={(v) => mergeTokens({ button_radius: v } as Partial<Tokens>)}
+          onReset={() =>
+            mergeTokens({ button_scale: undefined, button_radius: undefined } as Partial<Tokens>)
+          }
         />
       </div>
 

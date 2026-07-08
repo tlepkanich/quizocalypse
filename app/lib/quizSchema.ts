@@ -813,6 +813,14 @@ export const DesignTokens = z
       .partial(),
     radius: z.enum(["square", "rounded", "pill"]).optional(),
     button_style: z.enum(["filled", "outline", "ghost"]).optional(),
+    // QZY-R7-3 §7.2 — the primary/Next button gets its OWN size + radius,
+    // decoupled from the theme's shared radius/base-size. Both `.optional()`:
+    // absent, the runtime's `primaryBtn` keeps the exact prior CSS strings
+    // (`var(--qz-radius)`, `var(--qz-base-size)`, `calc(var(--qz-pad)…)`) so a
+    // doc that never sets them stays byte-identical. `button_scale` multiplies
+    // the button's padding + font; `button_radius` is a literal px override.
+    button_radius: z.number().int().min(0).max(48).optional(),
+    button_scale: z.number().min(0.7).max(1.6).optional(),
     spacing: z.enum(["compact", "normal", "spacious"]).optional(),
     // Card elevation — distinguishes flat editorial from lifted/glowing themes.
     shadow: z.enum(["none", "soft", "elevated"]).optional(),
