@@ -113,15 +113,21 @@ Every phase shipped to main (undeployed until the owner says "deploy"):
 | QZY-11 | `4127b76` | per-screen `node_backgrounds` (color/gradient/image/video, muted + poster-first mobile, overlay, apply-to-all, readability hint) |
 | QZY-12 | `2268695` | slider v1 — `Answer.range` bands (bands ARE answers), V12 blocking gap check, stepped mode, track styling |
 | QZY-13 | (this commit) | content-page conversion (builder type select) · vocabulary sweep clean · this status table |
+| **QZY-R** | `1156d8c`…`547b880` | **remediation program** — the build-tab **v2.0** + logic-view **v1.0** specs the QZY-1…13 pass missed (55 MISSING / 33 PARTIAL audit). R1 path engine · R2 decider inspector (design-only) · R3 master/override + toast · R4 shared media picker (base64 upload) · R5 answer display + interaction states · R6 background unification · R7 block polish + Next-button size/radius + Layers drag-reorder · R8 Logic **Map·Paths·Table** tabs + shared global rules stack · R9 Table tab + **override-writes-a-rule**. Full backbone + per-phase status: **`docs/quizzy-v1-remediation.md`**. |
 
-**Verification inventory:** `e2e/builderv3-verify.mjs` (~72 checks — shell,
+**Verification inventory:** `e2e/builderv3-verify.mjs` (76 checks — shell,
 carousel, one-question rule, inspector v2, display modes, blocks,
-backgrounds) · `e2e/qzy5-verify.mjs` (32 — step-4 light) · unit suites
-`filterMatching` / `answerDisplay` / `sliderBands` / `screenBackground` /
-`recommendDecider` QZY blocks / `pathReport` V11+V12 · byte-safety
-round-trip tests on every new schema field. Local runtime smoke pinned to
-the pre-QZY baseline throughout (the 3 failures are pre-existing local-env:
-mobile overflow, locale-fr, analytics DB state).
+backgrounds) · `e2e/qzy5-verify.mjs` (32 — step-4 light) · **QZY-R probes**
+`qzy-r2…r9b-verify.mjs` (inspector · media · answer-display/interaction ·
+backgrounds · Next-button · Layers drag · Logic Paths/Table/rules-bar ·
+override-writes-a-rule — several net-zero via prisma try/finally or a stubbed
+autosave PUT) · unit suites `filterMatching` / `answerDisplay` / `sliderBands`
+/ `screenBackground` / `recommendDecider` QZY blocks / `pathReport` V11+V12 /
+`pathEnumeration` (R1) / `primaryButton` (R7-3) / `studioDoc` blockReorder
+(R7-4) / `draftRule` multi-condition (R9-2) · byte-safety round-trip tests on
+every new schema field. Local runtime smoke pinned to the pre-QZY baseline
+throughout (the 3 failures are pre-existing local-env: mobile overflow,
+locale-fr, analytics DB state).
 
 **Spec-sanctioned deferrals (§4 list) confirmed NOT built:** AI Assist full
 design · pattern backgrounds · custom-icon slider thumb · per-option

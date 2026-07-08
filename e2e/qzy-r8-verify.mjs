@@ -55,13 +55,13 @@ await page.locator(".qz-path-chip.is-decider").first().click();
 await page.waitForTimeout(400);
 ok("clicking a step chip did not error", errs.length === 0);
 
-// Table tab is the R9 placeholder.
+// Table tab now renders the real grid (R9-1 replaced the placeholder).
 await page.locator(".qz-builder-rail button", { hasText: "Logic" }).click().catch(() => {});
 await page.waitForTimeout(300);
 await page.locator(".qz-logic-tab", { hasText: "Table" }).click();
 await page.waitForTimeout(300);
-ok("Table tab shows the R9 placeholder",
-  (await page.locator(".qz-builder", { hasText: "QZY-R9" }).count()) >= 1);
+ok("Table tab renders the grid (R9-1)",
+  (await page.locator(".qz-ltable").count()) === 1);
 ok("zero page errors", errs.length === 0, errs.slice(0, 3).join(" | "));
 
 await browser.close();
