@@ -128,6 +128,7 @@ export function BuilderLogicView({
           doc={doc}
           questions={questions}
           categories={data.categories}
+          commit={commit}
           onSelectNode={onSelectNode}
         />
       ) : null}

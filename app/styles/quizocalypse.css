@@ -4329,6 +4329,30 @@ body[data-qz] .qz-s3-editable:focus-visible {
 .qz-ltable-skip { color: var(--qz-ink-25); }
 .qz-ltable-ok { color: var(--qz-ok); }
 .qz-ltable-warn { color: var(--qz-warn); white-space: nowrap; }
+/* R9-2 override → writes a path-signature rule. */
+.qz-ltable-ruled {
+  font-size: 10.5px; font-weight: 700; letter-spacing: 0.02em; text-transform: uppercase;
+  color: #fff; background: var(--qz-accent); padding: 2px 7px; border-radius: 999px;
+}
+.qz-ltable-status-wrap { display: inline-flex; align-items: center; gap: 8px; }
+.qz-ltable-override {
+  font: inherit; font-size: 11px; color: var(--qz-accent); background: none; border: none;
+  cursor: pointer; text-decoration: underline; padding: 0; opacity: 0; transition: opacity 120ms;
+}
+.qz-ltable-path:hover .qz-ltable-override { opacity: 1; }
+.qz-ltable-override-pop { display: inline-flex; align-items: center; gap: 4px; }
+.qz-ltable-select {
+  font: inherit; font-size: 11.5px; padding: 3px 6px; border: 1px solid var(--qz-rule);
+  border-radius: 6px; background: var(--qz-paper); color: var(--qz-ink); max-width: 160px;
+}
+.qz-ltable-apply {
+  font: inherit; font-size: 11.5px; padding: 3px 9px; border: none; border-radius: 6px;
+  background: var(--qz-ink); color: var(--qz-paper); cursor: pointer;
+}
+.qz-ltable-apply:disabled { opacity: 0.4; cursor: default; }
+.qz-ltable-cancel {
+  font: inherit; font-size: 11px; border: none; background: none; cursor: pointer; color: var(--qz-ink-3); padding: 2px;
+}
 
 /* ═══════════════════════════════════════════════════════════════════════════
    QZY-8 — Inspector v2 (build-tab spec §2/§4/§5.1/§10)

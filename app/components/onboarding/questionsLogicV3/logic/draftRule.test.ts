@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import type { Quiz as QuizDoc } from "../../../../lib/quizSchema";
-import { createRuleWithCondition } from "./draftRule";
+import { createRuleWithCondition, createRuleWithConditions } from "./draftRule";
 
 // §5.6 — the pre-scoped draft's one-write materializer.
 
@@ -54,5 +54,36 @@ describe("createRuleWithCondition (§5.6 pre-scoped add — one doc write)", () 
     const snapshot = JSON.stringify(doc);
     createRuleWithCondition(doc, COND, "cat_b");
     expect(JSON.stringify(doc)).toBe(snapshot);
+  });
+});
+
+describe("createRuleWithConditions (QZY-R9-2 — the path-signature override)", () => {
+  const CONDS = [
+    { question_id: "q1", answer_id: "a1", op: "is" as const },
+    { question_id: "q3", answer_id: "a7", op: "is" as const },
+  ];
+
+  it("appends ONE rule carrying the full multi-condition AND signature", () => {
+    const doc = deciderDoc();
+    const { doc: next, ruleId } = createRuleWithConditions(doc, CONDS, "cat_b");
+    expect(ruleId).toBeTruthy();
+    expect(next.decision_rules).toHaveLength(2);
+    const added = next.decision_rules![1]!;
+    expect(added.target_id).toBe("cat_b");
+    expect(added.conditions).toEqual(CONDS);
+    expect(next.decision_rules![0]).toBe(doc.decision_rules![0]); // priority preserved
+  });
+
+  it("legacy doc / empty target → no-op, null ruleId, same reference", () => {
+    const legacy = { ...deciderDoc(), logic_model: undefined } as unknown as QuizDoc;
+    expect(createRuleWithConditions(legacy, CONDS, "cat_b").ruleId).toBeNull();
+    expect(createRuleWithConditions(deciderDoc(), CONDS, "").ruleId).toBeNull();
+  });
+
+  it("single-element array matches createRuleWithCondition", () => {
+    const doc = deciderDoc();
+    const a = createRuleWithConditions(doc, [COND], "cat_b").doc.decision_rules;
+    const b = createRuleWithCondition(doc, COND, "cat_b").doc.decision_rules;
+    expect(a![1]!.conditions).toEqual(b![1]!.conditions);
   });
 });

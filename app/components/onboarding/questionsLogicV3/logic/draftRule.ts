@@ -12,12 +12,25 @@ export function createRuleWithCondition(
   cond: DecisionRuleCondition,
   targetId: string,
 ): { doc: QuizDoc; ruleId: string | null } {
+  return createRuleWithConditions(doc, [cond], targetId);
+}
+
+/* QZY-R9-2 (LV4) — the same materialize-in-one-commit contract for a
+   MULTI-condition rule (a "path signature": Q1 is X AND Q3 is Y → target).
+   The Table/Paths result-cell override builds the conditions from a path's
+   steps. Empty target / legacy doc no-ops (ruleId null → caller commits
+   nothing). */
+export function createRuleWithConditions(
+  doc: QuizDoc,
+  conditions: DecisionRuleCondition[],
+  targetId: string,
+): { doc: QuizDoc; ruleId: string | null } {
   const before = new Set((doc.decision_rules ?? []).map((r) => r.id));
   const withRule = addDecisionRule(doc, targetId);
   const newRule = (withRule.decision_rules ?? []).find((r) => !before.has(r.id));
   if (!newRule) return { doc, ruleId: null };
   return {
-    doc: updateDecisionRule(withRule, newRule.id, { conditions: [cond] }),
+    doc: updateDecisionRule(withRule, newRule.id, { conditions }),
     ruleId: newRule.id,
   };
 }
