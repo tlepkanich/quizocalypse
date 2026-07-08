@@ -4306,6 +4306,30 @@ body[data-qz] .qz-s3-editable:focus-visible {
   border: none; cursor: pointer; text-decoration: underline; align-self: flex-start; padding: 2px 0;
 }
 
+/* R9 Table tab — the same path dataset as a grid (skipped questions = "–"). */
+.qz-ltable-wrap { overflow-x: auto; }
+.qz-ltable { width: 100%; border-collapse: collapse; font-size: 12px; }
+.qz-ltable th {
+  text-align: left; font-weight: 600; color: var(--qz-ink-3); font-size: 11px;
+  padding: 6px 10px; border-bottom: 1px solid var(--qz-rule); white-space: nowrap;
+}
+.qz-ltable td { padding: 5px 10px; border-bottom: 1px solid var(--qz-rule-2); vertical-align: middle; }
+.qz-ltable-group { cursor: pointer; }
+.qz-ltable-group:hover { background: var(--qz-cream-2); }
+.qz-ltable-caret { border: none; background: none; cursor: pointer; font-size: 11px; color: var(--qz-ink-3); padding: 0; }
+.qz-ltable-path td { color: var(--qz-ink); }
+.qz-ltable-idx { font-variant-numeric: tabular-nums; }
+.qz-ltable-num { font-variant-numeric: tabular-nums; color: var(--qz-ink-3); }
+.qz-ltable-ans {
+  font: inherit; font-size: 12px; border: none; background: none; cursor: pointer;
+  color: var(--qz-ink); text-decoration: underline; text-decoration-color: var(--qz-rule);
+  text-underline-offset: 2px; padding: 0; text-align: left;
+}
+.qz-ltable-ans:hover { text-decoration-color: var(--qz-accent); }
+.qz-ltable-skip { color: var(--qz-ink-25); }
+.qz-ltable-ok { color: var(--qz-ok); }
+.qz-ltable-warn { color: var(--qz-warn); white-space: nowrap; }
+
 /* ═══════════════════════════════════════════════════════════════════════════
    QZY-8 — Inspector v2 (build-tab spec §2/§4/§5.1/§10)
    Linked range+number pairs, More-options disclosure, single-option scope,

@@ -5,6 +5,7 @@ import { LogicView } from "../logic/LogicView";
 import { PathTester } from "../logic/PathTester";
 import { LogicScroll } from "../onboarding/questionsLogicV3/logic/LogicScroll";
 import { LogicPathsTab } from "./LogicPathsTab";
+import { LogicTableTab } from "./LogicTableTab";
 import {
   deciderQuestion,
   orderedQuestions,
@@ -123,12 +124,12 @@ export function BuilderLogicView({
       ) : null}
 
       {logicTab === "table" ? (
-        <div className="qz-card" style={{ padding: 16 }}>
-          <p className="qz-dim" style={{ margin: 0, fontSize: 13 }}>
-            The Table view — one row per result, expandable to every path, with
-            override-writes-a-rule — lands next (QZY-R9).
-          </p>
-        </div>
+        <LogicTableTab
+          doc={doc}
+          questions={questions}
+          categories={data.categories}
+          onSelectNode={onSelectNode}
+        />
       ) : null}
     </div>
   );
