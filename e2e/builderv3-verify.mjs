@@ -170,6 +170,11 @@ ok("no page-background control on the right (v2.0 §1)",
   (await insp.getByText("Background", { exact: true }).count()) === 0);
 
 // ── BLD-2b: inline canvas edit (Escape-cancelled — no commit) ───────────────
+// Inline HEADING edit on the intro — its headline is an inline-editable element
+// (a template question screen edits its text via the panel, not inline, so pick
+// the intro where the heading is inspectable).
+await page.locator(".qz-screens-item", { hasText: "Intro" }).locator(".qz-screens-thumb").click();
+await page.waitForTimeout(400);
 const canvasHead = page.locator(".qz-builder-canvas h1, .qz-builder-canvas h2").first();
 await canvasHead.click();
 await page.waitForTimeout(300);
@@ -244,8 +249,8 @@ await page.waitForTimeout(600);
 ok("pills mode: options survive (lossless), aria state set",
   (await page.locator(".qz-builder-canvas button.qz-insp").count()) === canvasAnswerCount &&
   (await page.locator(".qz-ads-modes button.is-active", { hasText: "Compact pills" }).count()) === 1);
-ok("shape presets appear with a mode set",
-  (await page.locator('[aria-label="Option shape"] button').count()) === 3);
+ok("corner-radius presets appear with a mode set (R5a §3.1 — unified control)",
+  (await page.locator('[aria-label="Corner radius preset"] button').count()) === 3);
 await page.locator(".qz-ads-modes button", { hasText: "Large tiles" }).click();
 await page.waitForTimeout(600);
 ok("tiles mode: options still intact (flip again, no loss)",
@@ -258,9 +263,9 @@ ok("back to Text list: legacy rendering + options unchanged (round-trip)",
 // per-option media in the scoped panel (§5.1)
 await page.locator(".qz-builder-canvas button.qz-insp").first().click();
 await page.waitForTimeout(400);
-ok("scoped option panel carries per-option icon + image controls",
-  (await page.locator(".qz-insp-scope input[placeholder='https://…']").count()) === 1 &&
-  (await page.locator(".qz-insp-scope input[placeholder='🙂']").count()) === 1);
+ok("scoped option panel carries the shared MediaPicker (R4 §8)",
+  (await page.locator('.qz-insp-scope [aria-label="Media source"]').count()) === 1 &&
+  (await page.locator(".qz-insp-scope button", { hasText: "Upload" }).count()) >= 1);
 await page.locator("button", { hasText: "Style all options" }).click();
 await page.waitForTimeout(300);
 
@@ -299,8 +304,13 @@ ok("gradient type selects (canvas live once colors are set)",
   pageBg.slice(0, 40));
 await page.locator('[aria-label="Background type"] button', { hasText: "Image" }).click();
 await page.waitForTimeout(300);
+// R4 §8 — the image is chosen via the shared MediaPicker: switch to the URL
+// source, paste, and Use.
+await page.locator('.qz-builder-panel [aria-label="Media source"] button', { hasText: "URL" }).click();
+await page.waitForTimeout(200);
 await page.locator('.qz-builder-panel input[placeholder="https://…"]').first()
   .fill("https://cdn.shopify.com/example.jpg");
+await page.locator(".qz-builder-panel button", { hasText: "Use" }).click();
 await page.waitForTimeout(800);
 ok("image background applies to the LIVE canvas page",
   /example\.jpg/.test(
