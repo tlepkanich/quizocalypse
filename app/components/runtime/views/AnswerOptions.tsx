@@ -334,13 +334,23 @@ export function AnswerOptions({
         const on = selectedIds.has(a.id);
         const inspProps = insp("answer", a.id);
         const inspClass = (inspProps as { className?: string }).className;
+        // R5c-4 §6.1 — reveal-on-interaction is per-answer; it also opts the
+        // option into the interactive class. Absent → no wrapper class, no
+        // reveal img, no class change (byte-identical).
+        const hasReveal = Boolean(a.reveal_image);
+        const optInteractive = interactive || hasReveal;
         return (
-          <div key={a.id} style={{ position: "relative", ...(mode === "pills" ? { display: "inline-flex" } : {}) }}>
+          <div
+            key={a.id}
+            className={hasReveal ? "qz-opt-wrap" : undefined}
+            {...(hasReveal && on ? { "data-qz-selected": "" } : {})}
+            style={{ position: "relative", ...(mode === "pills" ? { display: "inline-flex" } : {}) }}
+          >
             <button
               type="button"
               aria-pressed={on}
               {...inspProps}
-              className={interactive ? [inspClass, "qz-answer-opt"].filter(Boolean).join(" ") : inspClass}
+              className={optInteractive ? [inspClass, "qz-answer-opt"].filter(Boolean).join(" ") : inspClass}
               {...(motion ? { "data-qz-motion": motion } : {})}
               {...(effect ? { "data-qz-effect": effect } : {})}
               {...(hoverOn ? { "data-qz-hover": "" } : {})}
@@ -349,6 +359,16 @@ export function AnswerOptions({
             >
               {optionBody(a, on)}
             </button>
+            {a.reveal_image ? (
+              <img
+                className="qz-reveal"
+                data-qz-reveal-pos={a.reveal_position ?? "beside"}
+                src={a.reveal_image}
+                alt=""
+                aria-hidden
+                loading="lazy"
+              />
+            ) : null}
             {a.tooltip_text ? (
               <TooltipChip text={a.tooltip_text} onReveal={() => onTooltipView?.(a.id)} />
             ) : null}

@@ -263,8 +263,8 @@ ok("back to Text list: legacy rendering + options unchanged (round-trip)",
 // per-option media in the scoped panel (§5.1)
 await page.locator(".qz-builder-canvas button.qz-insp").first().click();
 await page.waitForTimeout(400);
-ok("scoped option panel carries the shared MediaPicker (R4 §8)",
-  (await page.locator('.qz-insp-scope [aria-label="Media source"]').count()) === 1 &&
+ok("scoped option panel carries the shared MediaPicker (R4 §8; +reveal picker R5c-4)",
+  (await page.locator('.qz-insp-scope [aria-label="Media source"]').count()) >= 1 &&
   (await page.locator(".qz-insp-scope button", { hasText: "Upload" }).count()) >= 1);
 await page.locator("button", { hasText: "Style all options" }).click();
 await page.waitForTimeout(300);

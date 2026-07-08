@@ -106,6 +106,12 @@ export const Answer = z.object({
   // (all question types). 16 chars allows multi-codepoint emoji. Additive.
   icon: z.string().max(16).optional(),
   image_url: z.string().url().optional(),
+  // R5c-4 §6.1 — reveal-on-interaction: an image shown on hover/select, beside
+  // or above the option (basic show/hide via CSS). Additive; a plain string so
+  // it accepts both https and base64 data-URLs (R4 upload). Absent on every
+  // existing answer, so the runtime is byte-identical without it.
+  reveal_image: z.string().optional(),
+  reveal_position: z.enum(["beside", "above"]).optional(),
   tags: z.array(z.string()).default([]),
   collection_filter: z.string().optional(),
   // QZY-1 (quiz-logic spec §5) — "No preference" as a FIRST-CLASS state on a

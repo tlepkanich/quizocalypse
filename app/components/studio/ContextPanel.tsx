@@ -125,6 +125,39 @@ function AnswerScopePanel({
           Apply this option&rsquo;s look to all options
         </button>
       ) : null}
+      {/* R5c-4 §6.1 — reveal-on-interaction image for THIS option (hover/select). */}
+      <details style={{ flex: "0 0 auto" }}>
+        <summary style={{ cursor: "pointer", fontSize: 12, fontWeight: 600 }}>
+          Reveal image on hover ▸
+        </summary>
+        <div style={{ marginTop: 8, display: "grid", gap: 8 }}>
+          <MediaPicker
+            image={answer.reveal_image}
+            onImage={(v) => setAnswer({ reveal_image: v })}
+            onClear={() => setAnswer({ reveal_image: undefined, reveal_position: undefined })}
+            products={products}
+          />
+          {answer.reveal_image ? (
+            <div className="qz-row" style={{ gap: 6, alignItems: "center" }}>
+              <span className="qz-dim" style={{ fontSize: 11.5 }}>
+                Position
+              </span>
+              <div className="qz-segmented" role="group" aria-label="Reveal position">
+                {(["beside", "above"] as const).map((p) => (
+                  <button
+                    key={p}
+                    type="button"
+                    aria-pressed={(answer.reveal_position ?? "beside") === p}
+                    onClick={() => setAnswer({ reveal_position: p === "beside" ? undefined : p })}
+                  >
+                    {p === "beside" ? "Beside" : "Above"}
+                  </button>
+                ))}
+              </div>
+            </div>
+          ) : null}
+        </div>
+      </details>
       {/* build-tab v2.0 §1 — design-only: this option's result mapping / filter
           match lives in the Logic view, never here. */}
       <p className="qz-dim" style={{ fontSize: 11.5, margin: 0 }}>

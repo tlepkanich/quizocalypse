@@ -104,3 +104,20 @@ body[data-qz] ::selection { background: #0E0F11; color: #FFFFFF; }
 @media (prefers-reduced-motion: reduce) {
   .qz-answer-opt[data-qz-effect] { animation: none; }
 }
+/* R5c-4 (build-tab §6.1) — reveal-on-interaction: a per-option image shown on
+   hover or select, beside/above the option. Hidden by default; opt-in via the
+   .qz-opt-wrap wrapper (only present when an option has a reveal image). */
+.qz-reveal {
+  display: none;
+  position: absolute;
+  z-index: 3;
+  max-width: 160px;
+  max-height: 160px;
+  border-radius: 8px;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.18);
+  pointer-events: none;
+}
+.qz-reveal[data-qz-reveal-pos="beside"] { left: 100%; top: 0; margin-left: 8px; }
+.qz-reveal[data-qz-reveal-pos="above"] { bottom: 100%; left: 0; margin-bottom: 8px; }
+.qz-opt-wrap:hover .qz-reveal,
+.qz-opt-wrap[data-qz-selected] .qz-reveal { display: block; }

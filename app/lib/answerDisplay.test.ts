@@ -356,4 +356,32 @@ describe("answer_display R5b fields", () => {
       selected_border_width: 3,
     });
   });
+
+  it("R5c-4 §6.1 — answer reveal_image/position parse; absent answers stay clean", () => {
+    const parsed = Quiz.parse({
+      quiz_id: "qz_rev",
+      scope: { collection_ids: [] },
+      nodes: [
+        { id: "intro", type: "intro", position: { x: 0, y: 0 }, data: { headline: "Hi" } },
+        {
+          id: "q1",
+          type: "question",
+          position: { x: 1, y: 0 },
+          data: {
+            text: "Pick",
+            question_type: "single_select",
+            answers: [
+              { id: "a1", text: "A", tags: [], edge_handle_id: "h1", reveal_image: "https://x/r.png", reveal_position: "above" },
+              { id: "a2", text: "B", tags: [], edge_handle_id: "h2" },
+            ],
+          },
+        },
+      ],
+      edges: [{ id: "e0", source: "intro", target: "q1" }],
+    });
+    const q = parsed.nodes[1] as { data: { answers: Array<Record<string, unknown>> } };
+    expect(q.data.answers[0]!.reveal_image).toBe("https://x/r.png");
+    expect(q.data.answers[0]!.reveal_position).toBe("above");
+    expect(JSON.stringify(q.data.answers[1])).not.toContain("reveal");
+  });
 });
