@@ -108,7 +108,10 @@ export function BuilderBackgroundTab({
     }
   };
 
-  const colorField = (label: string, key: "color" | "color2" | "color3" | "fill_color") => (
+  const colorField = (
+    label: string,
+    key: "color" | "color2" | "color3" | "fill_color" | "overlay_color",
+  ) => (
     <label className="qz-ads-color">
       <span>{label}</span>
       <input
@@ -181,7 +184,14 @@ export function BuilderBackgroundTab({
                 key={t}
                 type="button"
                 aria-pressed={t === "none" ? bg.type === undefined : bg.type === t}
-                onClick={() => (t === "none" ? write(null) : patch({ type: t }))}
+                onClick={() => {
+                  if (t === "none") return write(null);
+                  // R6-2 §4 — auto-add a readability overlay when switching to an
+                  // image/video/partial background (only if none is set yet).
+                  const needsOverlay =
+                    (t === "image" || t === "video" || t === "partial") && bg.overlay === undefined;
+                  patch(needsOverlay ? { type: t, overlay: 30 } : { type: t });
+                }}
               >
                 {t === "none" ? "None" : t[0]!.toUpperCase() + t.slice(1)}
               </button>
@@ -337,21 +347,37 @@ export function BuilderBackgroundTab({
                   suffix="%"
                   onChange={(n) => patch({ focal_y: n })}
                 />
+                {bg.type === "image" ? (
+                  <NumericControl
+                    label="Zoom"
+                    value={bg.zoom}
+                    min={100}
+                    max={300}
+                    fallback={100}
+                    allowEmpty
+                    suffix="%"
+                    onChange={(n) => patch({ zoom: n })}
+                  />
+                ) : null}
               </div>
             </>
           ) : null}
           {bg.type ? (
             <>
-              <NumericControl
-                label="Overlay"
-                value={bg.overlay}
-                min={0}
-                max={80}
-                fallback={0}
-                allowEmpty
-                suffix="%"
-                onChange={(n) => patch({ overlay: n })}
-              />
+              <div className="qz-row" style={{ gap: 10, alignItems: "flex-end", flexWrap: "wrap" }}>
+                <NumericControl
+                  label="Overlay"
+                  value={bg.overlay}
+                  min={0}
+                  max={80}
+                  fallback={0}
+                  allowEmpty
+                  suffix="%"
+                  onChange={(n) => patch({ overlay: n })}
+                />
+                {/* R6-2 §4 — overlay tint colour (absent → black). */}
+                {colorField("Overlay tint", "overlay_color")}
+              </div>
               {hint ? (
                 <p className="qz-dim" role="note" style={{ fontSize: 11.5, margin: 0 }}>
                   💡 {hint}

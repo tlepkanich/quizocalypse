@@ -37,7 +37,7 @@ import {
 import { collectNextStepImages } from "../../lib/nextStepImages";
 import { stylesFor, googleFontsUrl, useContainerBreakpoint } from "./runtimeStyles";
 import { BlockRenderer, type BlockRenderCtx } from "./BlockRenderer";
-import { screenBackgroundCss, screenOverlayAlpha, videoLayer } from "../../lib/screenBackground";
+import { screenBackgroundCss, screenOverlayAlpha, screenOverlayBg, videoLayer } from "../../lib/screenBackground";
 import {
   RuntimeChromeContext,
   RuntimeCurrencyContext,
@@ -1876,7 +1876,7 @@ export function QuizRuntime(props: QuizRuntimeProps) {
             style={{
               position: "absolute",
               inset: 0,
-              background: `rgba(0,0,0,${screenOverlayAlpha(screenBg)})`,
+              background: screenOverlayBg(screenBg),
               backdropFilter: screenBg.blur ? `blur(${screenBg.blur}px)` : undefined,
               pointerEvents: "none",
             }}

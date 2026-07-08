@@ -39,7 +39,12 @@ export function screenBackgroundCss(bg: ScreenBackground): CSSProperties {
           out.backgroundSize = "auto";
         } else {
           out.backgroundRepeat = "no-repeat";
-          out.backgroundSize = bg.fit === "contain" ? "contain" : "cover";
+          // R6-2 §4 — zoom overrides cover/contain; absent → today's exact fit.
+          out.backgroundSize = bg.zoom
+            ? `${bg.zoom}% auto`
+            : bg.fit === "contain"
+              ? "contain"
+              : "cover";
         }
         if (bg.fixed) out.backgroundAttachment = "fixed";
       }
@@ -72,6 +77,14 @@ export function screenBackgroundCss(bg: ScreenBackground): CSSProperties {
 /** The darkening overlay alpha (0–0.8); 0 = no overlay layer at all. */
 export function screenOverlayAlpha(bg: ScreenBackground): number {
   return (bg.overlay ?? 0) / 100;
+}
+
+/** R6-2 §4 — the overlay layer's background. Absent overlay_color → the current
+ *  black overlay exactly (byte-identical); set → a tint at the same alpha. */
+export function screenOverlayBg(bg: ScreenBackground): string {
+  const alpha = screenOverlayAlpha(bg);
+  if (!bg.overlay_color) return `rgba(0,0,0,${alpha})`;
+  return `color-mix(in srgb, ${bg.overlay_color} ${Math.round(alpha * 100)}%, transparent)`;
 }
 
 /** §8.2 — video layer facts: always muted; mobile falls back to the poster

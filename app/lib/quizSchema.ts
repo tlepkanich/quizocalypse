@@ -1668,6 +1668,10 @@ export const Quiz = z.object({
         focal_x: z.number().min(0).max(100).optional(),
         focal_y: z.number().min(0).max(100).optional(),
         overlay: z.number().int().min(0).max(80).optional(),
+        // R6-2 §4 — overlay TINT colour (absent → the current black overlay
+        // exactly) + image size/zoom %.
+        overlay_color: z.string().max(64).optional(),
+        zoom: z.number().int().min(100).max(300).optional(),
         blur: z.number().int().min(0).max(20).optional(),
         fixed: z.boolean().optional(),
         mobile_video: z.enum(["poster", "play"]).optional(),

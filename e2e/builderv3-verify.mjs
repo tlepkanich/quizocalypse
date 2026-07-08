@@ -320,8 +320,11 @@ ok("image background applies to the LIVE canvas page",
       .evaluate((el) => getComputedStyle(el).backgroundImage)
       .catch(() => ""),
   ));
-ok("image background shows the non-blocking readability hint (overlay < 20)",
-  (await page.locator(".qz-builder-panel [role=note]").count()) === 1);
+// R6-2 §4 — picking Image auto-applies a readability overlay (30%), so the
+// low-contrast nudge (overlay < 20) does NOT fire by default; lowering the
+// overlay below 20 brings it back.
+ok("image auto-applies a readability overlay (no low-contrast nudge by default)",
+  (await page.locator(".qz-builder-panel [role=note]").count()) === 0);
 ok("quiz-wide default reachable via the All-screens scope (R3 §5.3)",
   (await page.locator('[aria-label="Background applies to"] button', { hasText: "All screens" }).count()) === 1);
 await page.locator('[aria-label="Background type"] button', { hasText: "None" }).click();

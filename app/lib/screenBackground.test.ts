@@ -4,6 +4,7 @@ import {
   applyBackgroundToAll,
   hasBackgroundOverride,
   screenBackgroundCss,
+  screenOverlayBg,
   screensWithBackgroundOverride,
 } from "./screenBackground";
 
@@ -133,6 +134,19 @@ describe("screenBackgroundCss — R6-1 additions", () => {
     const top = screenBackgroundCss({ type: "partial", image_url: "https://x/i.png", band: "top" });
     expect(top.backgroundSize).toBe("100% 50%");
     expect(top.backgroundPosition).toBe("top");
+  });
+
+  it("R6-2 §4 — overlay tint + zoom (absent → byte-identical)", () => {
+    // Overlay: no tint → the exact black rgba; with tint → color-mix.
+    expect(screenOverlayBg({ type: "image", overlay: 40 })).toBe("rgba(0,0,0,0.4)");
+    expect(screenOverlayBg({ type: "image", overlay: 40, overlay_color: "#123456" })).toBe(
+      "color-mix(in srgb, #123456 40%, transparent)",
+    );
+    // Zoom: overrides cover; absent → cover exactly.
+    expect(screenBackgroundCss({ type: "image", image_url: "https://x/i.png" }).backgroundSize).toBe("cover");
+    expect(
+      screenBackgroundCss({ type: "image", image_url: "https://x/i.png", zoom: 150 }).backgroundSize,
+    ).toBe("150% auto");
   });
 
   it("schema: partial + radial fields parse; absent → no keys (byte-safe)", () => {
