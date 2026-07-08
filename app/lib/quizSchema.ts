@@ -243,6 +243,12 @@ export const QuestionDataObject = z.object({
       pad: z.number().int().min(2).max(40).optional(),
       bg: z.string().max(64).optional(),
       bg2: z.string().max(64).optional(),
+      // R6-3 §4 — option background gains a 3rd gradient stop, radial vs linear,
+      // and a background image (parity with the screen background set). Absent →
+      // today's solid / 2-stop linear exactly (byte-identical).
+      bg3: z.string().max(64).optional(),
+      bg_gradient_type: z.enum(["linear", "radial"]).optional(),
+      bg_image: z.string().optional(),
       border_color: z.string().max(32).optional(),
       border_width: z.number().int().min(0).max(6).optional(),
       // selected_style is the LEGACY coarse preset (border/fill/check) — kept

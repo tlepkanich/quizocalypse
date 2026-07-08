@@ -58,9 +58,16 @@ export function displayContainer(d: AnswerDisplay): CSSProperties {
   }
 }
 
-/** §5.2 — the option background: solid, 2-stop gradient, or none (theme). */
+/** §5.2/§4 — the option background: image, gradient (2–3 stops, linear/radial),
+ *  solid, or none (theme). R6-3 adds the image + radial/3-stop; a bare bg or a
+ *  bg+bg2 pair with no extras resolves byte-identically to before. */
 export function displayBackground(d: AnswerDisplay): string | undefined {
-  if (d.bg && d.bg2) return `linear-gradient(135deg, ${d.bg}, ${d.bg2})`;
+  if (d.bg_image) return `center / cover no-repeat url("${d.bg_image}")`;
+  const stops = [d.bg, d.bg2, d.bg3].filter((c): c is string => Boolean(c));
+  if (stops.length >= 2)
+    return d.bg_gradient_type === "radial"
+      ? `radial-gradient(circle, ${stops.join(", ")})`
+      : `linear-gradient(135deg, ${stops.join(", ")})`;
   return d.bg || undefined;
 }
 

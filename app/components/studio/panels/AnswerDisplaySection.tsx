@@ -3,6 +3,7 @@ import type { AnswerDisplay, AnswerDisplayMode } from "../../../lib/answerDispla
 import { resolveDesignTokens } from "../../../lib/designTokens";
 import { updateNodeData } from "../studioDoc";
 import { NumericControl } from "../../controls/NumericControl";
+import { MediaPicker } from "../MediaPicker";
 
 // The color <input> needs a concrete value while a knob is unset — use the
 // theme's default background (no raw hex literal; the check-tokens ratchet).
@@ -326,9 +327,36 @@ export function AnswerDisplaySection({
                   Bold
                 </label>
               </div>
+              {/* R6-3 §4 — option background: colour / gradient (2–3 stops,
+                  linear or radial) / image — parity with the screen bg set. */}
               <div className="qz-row" style={{ gap: 10, alignItems: "center", flexWrap: "wrap" }}>
                 {colorInput("Option background", d.bg, "bg")}
                 {colorInput("Gradient stop", d.bg2, "bg2")}
+                {colorInput("Third stop", d.bg3, "bg3")}
+              </div>
+              {d.bg && d.bg2 ? (
+                <div className="qz-segmented" role="group" aria-label="Option gradient shape">
+                  {(["linear", "radial"] as const).map((g) => (
+                    <button
+                      key={g}
+                      type="button"
+                      aria-pressed={(d.bg_gradient_type ?? "linear") === g}
+                      onClick={() => patch({ bg_gradient_type: g === "linear" ? undefined : g })}
+                    >
+                      {g[0]!.toUpperCase() + g.slice(1)}
+                    </button>
+                  ))}
+                </div>
+              ) : null}
+              <div style={{ display: "grid", gap: 4 }}>
+                <span className="qz-dim" style={{ fontSize: 11.5 }}>
+                  Option background image
+                </span>
+                <MediaPicker
+                  image={d.bg_image}
+                  onImage={(v) => patch({ bg_image: v })}
+                  onClear={() => patch({ bg_image: undefined })}
+                />
               </div>
               <div className="qz-row" style={{ gap: 10, alignItems: "center", flexWrap: "wrap" }}>
                 {colorInput("Border color", d.border_color, "border_color")}

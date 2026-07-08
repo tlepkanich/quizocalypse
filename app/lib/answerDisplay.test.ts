@@ -50,6 +50,19 @@ describe("displayBackground / displayAspect", () => {
     );
     expect(displayBackground({})).toBeUndefined();
   });
+  it("R6-3 §4 — radial / 3-stop gradient + image (2-stop stays byte-identical)", () => {
+    expect(displayBackground({ bg: "#000", bg2: "#888", bg3: "#fff", bg_gradient_type: "radial" })).toBe(
+      "radial-gradient(circle, #000, #888, #fff)",
+    );
+    expect(displayBackground({ bg: "#000", bg2: "#fff", bg3: "#888" })).toBe(
+      "linear-gradient(135deg, #000, #fff, #888)",
+    );
+    expect(displayBackground({ bg_image: "https://x/i.png" })).toBe(
+      'center / cover no-repeat url("https://x/i.png")',
+    );
+    // 2-stop with no extras is unchanged.
+    expect(displayBackground({ bg: "#fff", bg2: "#000" })).toBe("linear-gradient(135deg, #fff, #000)");
+  });
   it("aspect ratios", () => {
     expect(displayAspect({})).toBe("1 / 1");
     expect(displayAspect({ aspect: "4:3" })).toBe("4 / 3");
