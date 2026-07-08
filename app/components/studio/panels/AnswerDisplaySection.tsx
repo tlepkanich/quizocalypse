@@ -99,24 +99,48 @@ export function AnswerDisplaySection({
       </div>
       {activeMode !== "default" ? (
         <>
-          {/* §5.2 — shape presets as one-tap toggles; custom radius overrides
-              (in More options). */}
-          <div className="qz-row" style={{ gap: 6, alignItems: "center" }}>
+          {/* §3.1 — ONE corner-radius control: the chips SNAP the value, the
+              scrubber fine-tunes. Pill = the fully-round preset; Rounded/Square
+              and the scrubber write an explicit radius. They never disagree —
+              each write clears the other (legacy `shape` still resolves via
+              displayRadius, so the runtime is unchanged). */}
+          <div className="qz-row" style={{ gap: 8, alignItems: "center", flexWrap: "wrap" }}>
             <span className="qz-dim" style={{ fontSize: 11.5 }}>
-              Shape
+              Corner radius
             </span>
-            <div className="qz-segmented" role="group" aria-label="Option shape">
-              {(["pill", "rounded", "square"] as const).map((s) => (
-                <button
-                  key={s}
-                  type="button"
-                  aria-pressed={d.shape === s}
-                  onClick={() => patch({ shape: d.shape === s ? undefined : s, radius: undefined })}
-                >
-                  {s[0]!.toUpperCase() + s.slice(1)}
-                </button>
-              ))}
+            <div className="qz-segmented" role="group" aria-label="Corner radius preset">
+              <button
+                type="button"
+                aria-pressed={d.shape === "pill"}
+                onClick={() => patch({ shape: "pill", radius: undefined })}
+              >
+                Pill
+              </button>
+              <button
+                type="button"
+                aria-pressed={d.shape === "rounded" || (!d.shape && d.radius === 12)}
+                onClick={() => patch({ shape: undefined, radius: 12 })}
+              >
+                Rounded
+              </button>
+              <button
+                type="button"
+                aria-pressed={d.shape === "square" || (!d.shape && d.radius === 0)}
+                onClick={() => patch({ shape: undefined, radius: 0 })}
+              >
+                Square
+              </button>
             </div>
+            <NumericControl
+              label="Radius"
+              value={d.shape === "pill" ? undefined : d.radius}
+              min={0}
+              max={40}
+              fallback={12}
+              allowEmpty
+              suffix="px"
+              onChange={(n) => patch({ radius: n, shape: undefined })}
+            />
           </div>
           {activeMode === "cards" || activeMode === "tiles" ? (
             <NumericControl
@@ -173,16 +197,6 @@ export function AnswerDisplaySection({
           <details className="qz-insp-more" style={{ flex: "0 0 auto" }}>
             <summary>More options</summary>
             <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 8 }}>
-              <NumericControl
-                label="Radius"
-                value={d.radius}
-                min={0}
-                max={40}
-                fallback={12}
-                allowEmpty
-                suffix="px"
-                onChange={(n) => patch({ radius: n })}
-              />
               {activeMode === "cards" || activeMode === "tiles" ? (
                 <>
                   <div className="qz-row" style={{ gap: 6, alignItems: "center", flexWrap: "wrap" }}>

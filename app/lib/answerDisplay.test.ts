@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  copyOptionMediaToAll,
   displayAspect,
   displayBackground,
   displayContainer,
@@ -243,5 +244,34 @@ describe("QZY-11 screenBackground — resolution + guards", () => {
     const once = Quiz.parse(base);
     expect(JSON.stringify(once)).not.toContain("node_backgrounds");
     expect(() => Quiz.parse({ ...base, node_backgrounds: { intro: { overlay: 90 } } })).toThrow();
+  });
+});
+
+// ── R5a (build-tab §3.2) — apply one option's media to all ───────────────────
+describe("copyOptionMediaToAll", () => {
+  it("pushes the source option's icon + image to every other option", () => {
+    const answers = [
+      { id: "a", icon: "🔥", image_url: "https://x/a.png" },
+      { id: "b", icon: "💧" },
+      { id: "c", image_url: "https://x/c.png" },
+    ];
+    const out = copyOptionMediaToAll(answers, "a");
+    expect(out[0]).toEqual(answers[0]); // source untouched
+    expect(out[1]).toEqual({ id: "b", icon: "🔥", image_url: "https://x/a.png" });
+    expect(out[2]).toEqual({ id: "c", icon: "🔥", image_url: "https://x/a.png" });
+  });
+
+  it("clears media on others when the source has none", () => {
+    const answers = [
+      { id: "a" },
+      { id: "b", icon: "💧", image_url: "https://x/b.png" },
+    ];
+    const out = copyOptionMediaToAll(answers, "a");
+    expect(out[1]).toEqual({ id: "b" }); // both cleared to match the source
+  });
+
+  it("returns a copy unchanged when the source id is missing", () => {
+    const answers = [{ id: "a", icon: "🔥" }];
+    expect(copyOptionMediaToAll(answers, "zzz")).toEqual(answers);
   });
 });

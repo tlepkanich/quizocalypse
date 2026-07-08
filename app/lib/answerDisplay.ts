@@ -63,3 +63,24 @@ export function displayBackground(d: AnswerDisplay): string | undefined {
   if (d.bg && d.bg2) return `linear-gradient(135deg, ${d.bg}, ${d.bg2})`;
   return d.bg || undefined;
 }
+
+/** §3.2 — "Apply this option's look to all options": push the source option's
+ *  media (icon + image) across every other option, so the set matches. The
+ *  source is left untouched; options without the source's media have theirs
+ *  cleared to match. Pure. */
+export function copyOptionMediaToAll<A extends { id: string; icon?: string; image_url?: string }>(
+  answers: readonly A[],
+  sourceId: string,
+): A[] {
+  const src = answers.find((a) => a.id === sourceId);
+  if (!src) return [...answers];
+  return answers.map((a) => {
+    if (a.id === sourceId) return a;
+    const next: A = { ...a };
+    if (src.icon !== undefined) next.icon = src.icon;
+    else delete next.icon;
+    if (src.image_url !== undefined) next.image_url = src.image_url;
+    else delete next.image_url;
+    return next;
+  });
+}

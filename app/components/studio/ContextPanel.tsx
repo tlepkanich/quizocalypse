@@ -26,6 +26,7 @@ import { CssTab } from "./panels/CssTab";
 import { NODE_LABEL } from "./panels/nodeMeta";
 import type { PickerProduct } from "./ImagePicker";
 import { MediaPicker } from "./MediaPicker";
+import { copyOptionMediaToAll } from "../../lib/answerDisplay";
 
 // ════════════════════════════════════════════════════════════════════════════
 // ContextPanel (Unified P2) — the right-hand contextual editor of the unified
@@ -107,6 +108,23 @@ function AnswerScopePanel({
           products={products}
         />
       </div>
+      {/* §3.2 — push this option's media across the whole set. */}
+      {node.data.answers.length > 1 ? (
+        <button
+          type="button"
+          className="qz-btn qz-btn-ghost qz-btn-sm"
+          style={{ alignSelf: "flex-start" }}
+          onClick={() =>
+            onCommit(
+              updateNodeData(doc, node.id, {
+                answers: copyOptionMediaToAll(node.data.answers, answerId),
+              }),
+            )
+          }
+        >
+          Apply this option&rsquo;s look to all options
+        </button>
+      ) : null}
       {/* build-tab v2.0 §1 — design-only: this option's result mapping / filter
           match lives in the Logic view, never here. */}
       <p className="qz-dim" style={{ fontSize: 11.5, margin: 0 }}>
