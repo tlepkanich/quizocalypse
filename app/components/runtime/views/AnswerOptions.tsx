@@ -76,39 +76,58 @@ export function AnswerOptions({
 
   const selectedCss = (on: boolean): CSSProperties => {
     if (!on) return {};
-    if (selStyle === "fill")
-      return {
-        background: "color-mix(in srgb, var(--qz-color-primary) 18%, transparent)",
-        borderColor: "var(--qz-color-primary)",
-      };
-    // border (default) — the check style keeps the base look + a corner badge.
-    if (selStyle === "border")
-      return { boxShadow: "inset 0 0 0 2px var(--qz-color-primary)" };
-    return {};
+    // The coarse preset (legacy selected_style).
+    const base: CSSProperties =
+      selStyle === "fill"
+        ? {
+            background: "color-mix(in srgb, var(--qz-color-primary) 18%, transparent)",
+            borderColor: "var(--qz-color-primary)",
+          }
+        : selStyle === "border"
+          ? { boxShadow: "inset 0 0 0 2px var(--qz-color-primary)" }
+          : {};
+    // R5c-1 §6.1 — granular overrides layer over the preset. Absent → base only
+    // (byte-identical to today).
+    const over: CSSProperties = {};
+    if (display.selected_fill) over.background = display.selected_fill;
+    if (display.selected_border_color || display.selected_border_width !== undefined)
+      over.border = `${display.selected_border_width ?? 2}px solid ${
+        display.selected_border_color ?? "var(--qz-color-primary)"
+      }`;
+    if (display.selected_text_color) over.color = display.selected_text_color;
+    return { ...base, ...over };
   };
 
-  const checkBadge = (on: boolean): ReactNode =>
-    selStyle === "check" && on ? (
+  // R5c-1 §6.1 — the selection indicator. Absent → derived from the legacy
+  // selected_style (check → check badge, else none), so today's render is exact.
+  const indicatorKind: "check" | "dot" | "filled" | "none" =
+    display.selected_indicator ?? (selStyle === "check" ? "check" : "none");
+
+  const checkBadge = (on: boolean): ReactNode => {
+    if (!on || (indicatorKind !== "check" && indicatorKind !== "dot")) return null;
+    const dot = indicatorKind === "dot";
+    return (
       <span
         aria-hidden
         style={{
           position: "absolute",
           top: 6,
           right: 6,
-          width: 20,
-          height: 20,
+          width: dot ? 12 : 20,
+          height: dot ? 12 : 20,
           borderRadius: 999,
           background: "var(--qz-color-primary)",
           color: "var(--qz-color-bg)",
           fontSize: 12,
-          lineHeight: "20px",
+          lineHeight: dot ? "12px" : "20px",
           textAlign: "center",
           zIndex: 2,
         }}
       >
-        ✓
+        {dot ? "" : "✓"}
       </span>
-    ) : null;
+    );
+  };
 
   const icon = (a: Answer): ReactNode =>
     a.icon ? (

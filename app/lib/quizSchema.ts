@@ -239,7 +239,15 @@ export const QuestionDataObject = z.object({
       bg2: z.string().max(64).optional(),
       border_color: z.string().max(32).optional(),
       border_width: z.number().int().min(0).max(6).optional(),
+      // selected_style is the LEGACY coarse preset (border/fill/check) — kept
+      // parsed + rendered; the R5c-1 §6.1 granular fields below layer over it
+      // (all optional; absent → today's selected_style behavior exactly).
       selected_style: z.enum(["border", "fill", "check"]).optional(),
+      selected_fill: z.string().max(32).optional(),
+      selected_border_color: z.string().max(32).optional(),
+      selected_border_width: z.number().int().min(0).max(8).optional(),
+      selected_text_color: z.string().max(32).optional(),
+      selected_indicator: z.enum(["check", "dot", "filled", "none"]).optional(),
     })
     .optional(),
   // B6 — scale config for rating / slider / numeric questions: a configurable

@@ -343,24 +343,42 @@ export function AnswerDisplaySection({
                   onChange={(n) => patch({ border_width: n })}
                 />
               </div>
+              {/* R5c-1 §6.1 — selected-state: indicator + fill / text / border. */}
               <div className="qz-row" style={{ gap: 6, alignItems: "center" }}>
                 <span className="qz-dim" style={{ fontSize: 11.5 }}>
-                  Selected style
+                  When selected
                 </span>
-                <div className="qz-segmented" role="group" aria-label="Selected state style">
-                  {(["border", "fill", "check"] as const).map((s) => (
+                <div className="qz-segmented" role="group" aria-label="Selection indicator">
+                  {(["check", "dot", "filled", "none"] as const).map((s) => (
                     <button
                       key={s}
                       type="button"
-                      aria-pressed={(d.selected_style ?? "border") === s}
-                      onClick={() =>
-                        patch({ selected_style: s === "border" ? undefined : s })
+                      aria-pressed={
+                        (d.selected_indicator ?? (d.selected_style === "check" ? "check" : "none")) === s
                       }
+                      onClick={() => patch({ selected_indicator: s })}
                     >
-                      {s[0]!.toUpperCase() + s.slice(1)}
+                      {s === "check" ? "Check" : s === "dot" ? "Dot" : s === "filled" ? "Filled" : "None"}
                     </button>
                   ))}
                 </div>
+              </div>
+              <div className="qz-row" style={{ gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+                {colorInput("Selected fill", d.selected_fill, "selected_fill")}
+                {colorInput("Selected text", d.selected_text_color, "selected_text_color")}
+              </div>
+              <div className="qz-row" style={{ gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+                {colorInput("Selected border", d.selected_border_color, "selected_border_color")}
+                <NumericControl
+                  label="Border width"
+                  value={d.selected_border_width}
+                  min={0}
+                  max={8}
+                  fallback={2}
+                  allowEmpty
+                  suffix="px"
+                  onChange={(n) => patch({ selected_border_width: n })}
+                />
               </div>
               {activeMode === "pills" ? (
                 <NumericControl

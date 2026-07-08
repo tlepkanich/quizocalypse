@@ -313,8 +313,35 @@ describe("answer_display R5b fields", () => {
   it("a display config WITHOUT the new fields serializes without them (byte-safe)", () => {
     const once = Quiz.parse(docWith({ mode: "list", label_size: 16, selected_style: "check" }));
     const json = JSON.stringify(once);
-    for (const k of ["show_media", "content_align", "image_size"]) {
+    for (const k of [
+      "show_media",
+      "content_align",
+      "image_size",
+      "selected_fill",
+      "selected_indicator",
+      "selected_border_color",
+    ]) {
       expect(json).not.toContain(k);
     }
+  });
+
+  it("R5c-1 §6.1 — parses the granular selected-state fields", () => {
+    const parsed = Quiz.parse(
+      docWith({
+        mode: "list",
+        selected_indicator: "dot",
+        selected_fill: "#eef",
+        selected_border_color: "#123456",
+        selected_border_width: 3,
+        selected_text_color: "#900",
+      }),
+    );
+    const ad = (parsed.nodes[1] as { data: { answer_display?: Record<string, unknown> } }).data
+      .answer_display;
+    expect(ad).toMatchObject({
+      selected_indicator: "dot",
+      selected_fill: "#eef",
+      selected_border_width: 3,
+    });
   });
 });
