@@ -14,6 +14,12 @@ import {
   setNodeLayout,
 } from "../studioDoc";
 import { NODE_LABEL } from "./nodeMeta";
+import { MediaPicker } from "../MediaPicker";
+import { resolveDesignTokens } from "../../../lib/designTokens";
+
+// Concrete value for a color <input> while a knob is unset (no raw hex literal —
+// the check-tokens ratchet); mirrors AnswerDisplaySection.
+const SWATCH_FALLBACK = resolveDesignTokens().colors?.background ?? "";
 
 // ════════════════════════════════════════════════════════════════════════════
 // Layout panel — the Layout Library (Unified P0: extracted from StudioBuilder
@@ -190,6 +196,27 @@ function BlockFields({
   block: ContentBlock;
   onChange: (patch: Partial<ContentBlock>) => void;
 }) {
+  // R7-1 — a labeled color input + clear (divider/progress colors already exist
+  // in the schema; this exposes them).
+  const colorField = (label: string, value: string | undefined, key: string) => (
+    <label className="qz-ads-color">
+      <span>{label}</span>
+      <input
+        type="color"
+        value={value ?? SWATCH_FALLBACK}
+        onChange={(e) => onChange({ [key]: e.target.value } as Partial<ContentBlock>)}
+      />
+      <button
+        type="button"
+        className="qz-btn qz-btn-ghost qz-btn-sm"
+        disabled={value === undefined}
+        onClick={() => onChange({ [key]: undefined } as Partial<ContentBlock>)}
+        title="Clear (theme default)"
+      >
+        ✕
+      </button>
+    </label>
+  );
   return (
     <div style={{ marginTop: 8, display: "flex", flexDirection: "column", gap: 8 }}>
       {block.type === "heading" ? (
@@ -232,10 +259,13 @@ function BlockFields({
       ) : null}
       {block.type === "image" ? (
         <>
-          <QzField label="Image URL">
-            <QzInput
-              value={block.url ?? ""}
-              onChange={(e) => onChange({ url: e.target.value } as Partial<ContentBlock>)}
+          {/* R7-1 §7.3 — the shared picker (upload as base64 + URL) for the
+              block image, replacing the URL-only field. */}
+          <QzField label="Image">
+            <MediaPicker
+              image={block.url}
+              onImage={(v) => onChange({ url: v } as Partial<ContentBlock>)}
+              onClear={() => onChange({ url: undefined } as Partial<ContentBlock>)}
             />
           </QzField>
           <QzField label="Alt text">
@@ -401,6 +431,11 @@ function BlockFields({
             suffix="px"
             onChange={(n) => onChange({ thickness: n ?? 6 } as Partial<ContentBlock>)}
           />
+          {/* R7-1 §7.1 — fill + track colours (schema already carries them). */}
+          <div className="qz-row" style={{ gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+            {colorField("Fill", block.color, "color")}
+            {colorField("Track", block.track_color, "track_color")}
+          </div>
         </>
       ) : null}
       {block.type === "logo" ? (
@@ -455,6 +490,20 @@ function BlockFields({
           suffix="px"
           onChange={(n) => onChange({ size: n ?? 0 } as Partial<ContentBlock>)}
         />
+      ) : null}
+      {/* R7-1 §7.3 — divider thickness + colour (schema had them, no editor). */}
+      {block.type === "divider" ? (
+        <div className="qz-row" style={{ gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+          <NumericControl
+            label="Thickness"
+            value={block.thickness}
+            min={1}
+            max={8}
+            suffix="px"
+            onChange={(n) => onChange({ thickness: n ?? 1 } as Partial<ContentBlock>)}
+          />
+          {colorField("Color", block.color, "color")}
+        </div>
       ) : null}
       <QzField label="Alignment">
         <QzSelect
