@@ -209,9 +209,19 @@ export const QuestionDataObject = z.object({
   // partial-image band is spec-DEFERRED (§12: crop UX first).
   answer_display: z
     .object({
+      // mode "icon" is retired from the builder picker (R5b §3.1) — media is now
+      // an independent toggle — but stays PARSED forever so legacy docs render.
       mode: z.enum(["list", "icon", "cards", "tiles", "pills"]).optional(),
       icon_size: z.number().int().min(12).max(96).optional(),
-      icon_position: z.enum(["left", "top"]).optional(),
+      icon_position: z.enum(["left", "top", "right"]).optional(),
+      // R5b §3.1 — independent "show icon/image on each option" toggle (works
+      // across every layout, replacing the removed Icon mode). Absent = today's
+      // per-mode behavior exactly (byte-identical).
+      show_media: z.boolean().optional(),
+      // R5b §3.1 — content alignment within the option (left / center / right).
+      content_align: z.enum(["left", "center", "right"]).optional(),
+      // R5b §3.3 — media size, INDEPENDENT of label_size (list/pills media).
+      image_size: z.number().int().min(16).max(160).optional(),
       columns: z.number().int().min(2).max(4).optional(),
       aspect: z.enum(["1:1", "4:3", "16:9"]).optional(),
       fit: z.enum(["cover", "contain"]).optional(),

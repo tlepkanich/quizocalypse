@@ -19,9 +19,11 @@ const SWATCH_FALLBACK = resolveDesignTokens().colors?.background ?? "";
 type QuizDoc = Quiz;
 type QuestionNode = Extract<QuizNode, { type: "question" }>;
 
+// R5b §3.1 — four STRUCTURAL layout modes (Icon is retired as a mode; media is
+// now the independent "Show icon/image" toggle below). Legacy mode:"icon" docs
+// still render — the runtime keeps that case.
 const MODES: Array<{ id: AnswerDisplayMode | "default"; label: string }> = [
   { id: "default", label: "Text list" },
-  { id: "icon", label: "Icon + text" },
   { id: "cards", label: "Image cards" },
   { id: "tiles", label: "Large tiles" },
   { id: "pills", label: "Compact pills" },
@@ -153,37 +155,79 @@ export function AnswerDisplaySection({
               onChange={(n) => patch({ columns: n })}
             />
           ) : null}
-          {activeMode === "icon" ? (
+          {/* R5b §3.1 — media as an INDEPENDENT toggle on the inline layouts
+              (list / pills); cards & tiles inherently show images. */}
+          {activeMode !== "cards" && activeMode !== "tiles" ? (
             <>
-              <NumericControl
-                label="Icon size"
-                value={d.icon_size}
-                min={12}
-                max={96}
-                fallback={22}
-                allowEmpty
-                suffix="px"
-                onChange={(n) => patch({ icon_size: n })}
-              />
-              <div className="qz-row" style={{ gap: 6, alignItems: "center" }}>
-                <span className="qz-dim" style={{ fontSize: 11.5 }}>
-                  Icon position
-                </span>
-                <div className="qz-segmented" role="group" aria-label="Icon position">
-                  {(["left", "top"] as const).map((p) => (
-                    <button
-                      key={p}
-                      type="button"
-                      aria-pressed={(d.icon_position ?? "left") === p}
-                      onClick={() => patch({ icon_position: p === "left" ? undefined : p })}
-                    >
-                      {p === "left" ? "Left" : "Above"}
-                    </button>
-                  ))}
-                </div>
-              </div>
+              <label style={{ display: "inline-flex", gap: 6, alignItems: "center", fontSize: 12 }}>
+                <input
+                  type="checkbox"
+                  checked={Boolean(d.show_media)}
+                  onChange={(e) => patch({ show_media: e.target.checked || undefined })}
+                />
+                Show icon / image on each option
+              </label>
+              {d.show_media ? (
+                <>
+                  <NumericControl
+                    label="Icon size"
+                    value={d.icon_size}
+                    min={12}
+                    max={96}
+                    fallback={22}
+                    allowEmpty
+                    suffix="px"
+                    onChange={(n) => patch({ icon_size: n })}
+                  />
+                  <NumericControl
+                    label="Image size"
+                    value={d.image_size}
+                    min={16}
+                    max={160}
+                    fallback={40}
+                    allowEmpty
+                    suffix="px"
+                    onChange={(n) => patch({ image_size: n })}
+                  />
+                  <div className="qz-row" style={{ gap: 6, alignItems: "center" }}>
+                    <span className="qz-dim" style={{ fontSize: 11.5 }}>
+                      Icon position
+                    </span>
+                    <div className="qz-segmented" role="group" aria-label="Icon position">
+                      {(["left", "top", "right"] as const).map((p) => (
+                        <button
+                          key={p}
+                          type="button"
+                          aria-pressed={(d.icon_position ?? "left") === p}
+                          onClick={() => patch({ icon_position: p === "left" ? undefined : p })}
+                        >
+                          {p === "left" ? "Left" : p === "top" ? "Above" : "Right"}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </>
+              ) : null}
             </>
           ) : null}
+          {/* R5b §3.1 — content alignment within each option. */}
+          <div className="qz-row" style={{ gap: 6, alignItems: "center" }}>
+            <span className="qz-dim" style={{ fontSize: 11.5 }}>
+              Align
+            </span>
+            <div className="qz-segmented" role="group" aria-label="Content alignment">
+              {(["left", "center", "right"] as const).map((al) => (
+                <button
+                  key={al}
+                  type="button"
+                  aria-pressed={(d.content_align ?? "left") === al}
+                  onClick={() => patch({ content_align: al === "left" ? undefined : al })}
+                >
+                  {al[0]!.toUpperCase() + al.slice(1)}
+                </button>
+              ))}
+            </div>
+          </div>
           <NumericControl
             label="Spacing"
             value={d.spacing}

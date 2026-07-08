@@ -152,12 +152,54 @@ export function AnswerOptions({
 
   const labelPos = display.label_position ?? "below";
 
+  // R5b §3.1 — content alignment. Absent → today's layout exactly (byte-safe).
+  const contentAlignCss: CSSProperties = display.content_align
+    ? {
+        justifyContent:
+          display.content_align === "center"
+            ? "center"
+            : display.content_align === "right"
+              ? "flex-end"
+              : "flex-start",
+        textAlign: display.content_align,
+      }
+    : {};
+
+  // R5b §3.1 — the independent media toggle. When show_media is UNDEFINED this
+  // returns the glyph exactly as before (byte-identical); true = prefer a sized
+  // image (or the glyph); false = no media.
+  const inlineMedia = (a: Answer): ReactNode => {
+    if (display.show_media === undefined) return icon(a);
+    if (display.show_media === false) return null;
+    if (a.image_url)
+      return (
+        <img
+          src={a.image_url}
+          alt=""
+          loading="lazy"
+          decoding="async"
+          style={{
+            width: display.image_size ?? 40,
+            height: display.image_size ?? 40,
+            objectFit: display.fit ?? "cover",
+            borderRadius: 6,
+            flexShrink: 0,
+            display: "block",
+          }}
+        />
+      );
+    return icon(a);
+  };
+  // Card/tile media: absent/true → today's image; false → hidden.
+  const cardMedia = (a: Answer): ReactNode =>
+    display.show_media === false ? null : media(a);
+
   const optionBody = (a: Answer, on: boolean): ReactNode => {
     switch (mode) {
       case "cards":
         return (
           <>
-            {media(a)}
+            {cardMedia(a)}
             {labelPos !== "hidden" ? (
               <span
                 style={{
@@ -185,7 +227,7 @@ export function AnswerOptions({
       case "tiles":
         return (
           <>
-            {media(a)}
+            {cardMedia(a)}
             {labelPos !== "hidden" ? (
               <span
                 style={{
@@ -214,22 +256,28 @@ export function AnswerOptions({
           <span
             style={{
               display: "flex",
-              flexDirection: (display.icon_position ?? "left") === "top" ? "column" : "row",
+              flexDirection:
+                display.icon_position === "top"
+                  ? "column"
+                  : display.icon_position === "right"
+                    ? "row-reverse"
+                    : "row",
               alignItems: "center",
               gap: 10,
               justifyContent:
                 (display.icon_position ?? "left") === "top" ? "center" : "flex-start",
+              ...contentAlignCss,
             }}
           >
-            {icon(a)}
+            {inlineMedia(a)}
             <span style={labelCss}>{a.text}</span>
             {checkBadge(on)}
           </span>
         );
       case "pills":
         return (
-          <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-            {icon(a)}
+          <span style={{ display: "inline-flex", alignItems: "center", gap: 6, ...contentAlignCss }}>
+            {inlineMedia(a)}
             <span style={labelCss}>{a.text}</span>
             {checkBadge(on)}
           </span>
@@ -237,8 +285,8 @@ export function AnswerOptions({
       default:
         // list
         return (
-          <span style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            {icon(a)}
+          <span style={{ display: "flex", alignItems: "center", gap: 10, ...contentAlignCss }}>
+            {inlineMedia(a)}
             <span style={labelCss}>{a.text}</span>
             {checkBadge(on)}
           </span>

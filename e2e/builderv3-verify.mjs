@@ -241,8 +241,8 @@ await page.waitForTimeout(200);
 // ── QZY-9: answer display modes — picker, live canvas, lossless switch ──────
 await q1Thumb.locator(".qz-screens-thumb").click();
 await page.waitForTimeout(500);
-ok("Answer display mode picker present (5 modes)",
-  (await page.locator(".qz-ads-modes button").count()) === 5);
+ok("Answer display mode picker present (4 structural modes — Icon retired, R5b §3.1)",
+  (await page.locator(".qz-ads-modes button").count()) === 4);
 const canvasAnswerCount = await page.locator(".qz-builder-canvas button.qz-insp").count();
 await page.locator(".qz-ads-modes button", { hasText: "Compact pills" }).click();
 await page.waitForTimeout(600);

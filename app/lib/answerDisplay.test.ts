@@ -275,3 +275,46 @@ describe("copyOptionMediaToAll", () => {
     expect(copyOptionMediaToAll(answers, "zzz")).toEqual(answers);
   });
 });
+
+// ── R5b (build-tab §3.1/§3.3) — new answer-display fields are optional & byte-safe
+describe("answer_display R5b fields", () => {
+  const docWith = (ad: Record<string, unknown>) => ({
+    quiz_id: "qz_ad",
+    scope: { collection_ids: [] },
+    nodes: [
+      { id: "intro", type: "intro", position: { x: 0, y: 0 }, data: { headline: "Hi" } },
+      {
+        id: "q1",
+        type: "question",
+        position: { x: 1, y: 0 },
+        data: {
+          text: "Pick",
+          question_type: "single_select",
+          answers: [
+            { id: "a1", text: "A", tags: [], edge_handle_id: "h1" },
+            { id: "a2", text: "B", tags: [], edge_handle_id: "h2" },
+          ],
+          answer_display: ad,
+        },
+      },
+    ],
+    edges: [{ id: "e0", source: "intro", target: "q1" }],
+  });
+
+  it("parses show_media / content_align / image_size / icon_position:right", () => {
+    const parsed = Quiz.parse(
+      docWith({ mode: "list", show_media: true, content_align: "center", image_size: 48, icon_position: "right" }),
+    );
+    const ad = (parsed.nodes[1] as { data: { answer_display?: Record<string, unknown> } }).data
+      .answer_display;
+    expect(ad).toMatchObject({ show_media: true, content_align: "center", image_size: 48, icon_position: "right" });
+  });
+
+  it("a display config WITHOUT the new fields serializes without them (byte-safe)", () => {
+    const once = Quiz.parse(docWith({ mode: "list", label_size: 16, selected_style: "check" }));
+    const json = JSON.stringify(once);
+    for (const k of ["show_media", "content_align", "image_size"]) {
+      expect(json).not.toContain(k);
+    }
+  });
+});
