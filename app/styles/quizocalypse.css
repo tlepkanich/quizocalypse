@@ -4264,6 +4264,23 @@ body[data-qz] .qz-s3-editable:focus-visible {
    Builder-only (admin sheet); status accents (gold decider / indigo ruled /
    amber dead-end / green ok) are semantic and intentionally literal.
    ═══════════════════════════════════════════════════════════════════════════ */
+/* R8-2 — the shared global rules stack, above all three Logic tabs. */
+.qz-logic-rules {
+  border: 1px solid var(--qz-rule); border-radius: 10px; padding: 10px 12px;
+  background: var(--qz-cream-2); display: flex; flex-direction: column; gap: 6px;
+}
+.qz-logic-rules-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+.qz-logic-rules-title { font-size: 12px; font-weight: 600; color: var(--qz-ink); }
+.qz-logic-rules-manage { font: inherit; font-size: 11.5px; color: var(--qz-accent); background: none; border: none; cursor: pointer; padding: 0; }
+.qz-logic-rules-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 3px; }
+.qz-logic-rule {
+  font: inherit; font-size: 12px; display: flex; align-items: baseline; gap: 8px; width: 100%;
+  text-align: left; background: none; border: none; cursor: pointer; padding: 3px 4px; border-radius: 6px; color: var(--qz-ink);
+}
+.qz-logic-rule:hover { background: var(--qz-paper); }
+.qz-logic-rule-pri { color: var(--qz-accent); flex: 0 0 auto; font-variant-numeric: tabular-nums; }
+.qz-logic-rule-text { color: var(--qz-ink); }
+
 .qz-logic-tabs { display: flex; gap: 2px; border-bottom: 1px solid var(--qz-rule); }
 .qz-logic-tab {
   font: inherit; font-size: 13px; font-weight: 600; padding: 8px 14px;

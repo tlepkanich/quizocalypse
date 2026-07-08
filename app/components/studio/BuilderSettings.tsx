@@ -6,6 +6,7 @@ import { PathTester } from "../logic/PathTester";
 import { LogicScroll } from "../onboarding/questionsLogicV3/logic/LogicScroll";
 import { LogicPathsTab } from "./LogicPathsTab";
 import { LogicTableTab } from "./LogicTableTab";
+import { LogicRulesBar } from "./LogicRulesBar";
 import {
   deciderQuestion,
   orderedQuestions,
@@ -79,6 +80,13 @@ export function BuilderLogicView({
           same flow.
         </p>
       </div>
+      {/* QZY-R8-2 — the global rules stack, shared above all three tabs. */}
+      <LogicRulesBar
+        doc={doc}
+        questions={questions}
+        categories={data.categories}
+        onManage={() => setLogicTab("map")}
+      />
       <div className="qz-logic-tabs" role="tablist" aria-label="Logic views">
         {tabs.map((t) => (
           <button
