@@ -1,16 +1,28 @@
+import { useState } from "react";
 import type { Quiz, QuizNode } from "../../lib/quizSchema";
-import { readabilityHint, type ScreenBackground } from "../../lib/screenBackground";
+import {
+  readabilityHint,
+  applyBackgroundToAll,
+  screensWithBackgroundOverride,
+  hasBackgroundOverride,
+  type ScreenBackground,
+} from "../../lib/screenBackground";
 import { resolveDesignTokens } from "../../lib/designTokens";
 import { NumericControl } from "../controls/NumericControl";
 import { BuilderPageSettings } from "./BuilderPageSettings";
+import { useQzToast } from "../qz-toast";
 
 // ════════════════════════════════════════════════════════════════════════════
-// BuilderBackgroundTab (QZY-11, build-tab §8) — PER-SCREEN backgrounds:
-// solid / 2-stop gradient / image / video, fit + focal point, overlay scrub,
-// blur + fixed under More; "Apply to all screens" (confirmed); a non-blocking
-// readability hint. The quiz-wide default stays in Design — a per-screen
-// entry here wins. Video is ALWAYS muted (§8.2, not configurable); mobile
-// defaults to the poster fallback.
+// BuilderBackgroundTab (QZY-11 + R3, build-tab v2.0 §5.3/§8/§9) — PER-SCREEN
+// backgrounds with the master/override model:
+//   • Scope control "This screen / All screens" (§5.3): This-screen edits write
+//     a per-screen override (node_backgrounds); All-screens edits the quiz-wide
+//     default (the master, in Design). A per-screen override WINS.
+//   • Apply-all RESPECTS overrides (§9): customized screens are kept, the kept
+//     count is shown, and "Include customized" is the explicit stomp escape
+//     hatch — never a silent auto-overwrite.
+//   • A Custom indicator flags a screen that overrides the default.
+// Video is ALWAYS muted (§8.2); mobile defaults to the poster fallback.
 // ════════════════════════════════════════════════════════════════════════════
 
 type QuizDoc = Quiz;
@@ -27,6 +39,10 @@ export function BuilderBackgroundTab({
   node: QuizNode | null;
   commit: (doc: QuizDoc) => void;
 }) {
+  const toast = useQzToast();
+  const [scope, setScope] = useState<"screen" | "all">("screen");
+  const [applyConfirm, setApplyConfirm] = useState(false);
+
   if (!node) {
     return (
       <div className="qz-card" style={{ padding: 14 }}>
@@ -56,18 +72,40 @@ export function BuilderBackgroundTab({
     }
     write(next as ScreenBackground);
   };
-  const applyToAll = () => {
-    if (
-      !window.confirm(
-        "Apply this background to EVERY screen? Each screen's current background is replaced.",
-      )
-    )
-      return;
-    const map: NonNullable<QuizDoc["node_backgrounds"]> = {};
-    for (const n of doc.nodes) map[n.id] = { ...bg };
-    commit({ ...doc, node_backgrounds: map });
-  };
   const hint = readabilityHint(bg);
+
+  // §9 master/override state.
+  const thisIsCustom = hasBackgroundOverride(doc, node.id);
+  const otherOverrides = screensWithBackgroundOverride(doc).filter((id) => id !== node.id);
+  const allCustomCount = screensWithBackgroundOverride(doc).length;
+
+  const doApplyAll = (includeCustomized: boolean) => {
+    const { doc: next, skipped } = applyBackgroundToAll(doc, bg, {
+      sourceNodeId: node.id,
+      includeCustomized,
+    });
+    commit(next);
+    setApplyConfirm(false);
+    toast(
+      skipped > 0
+        ? `Applied — ${skipped} custom screen${skipped === 1 ? "" : "s"} kept.`
+        : otherOverrides.length > 0
+          ? `Applied to all screens (${otherOverrides.length} custom replaced).`
+          : "Background applied to all screens.",
+    );
+  };
+  const onApplyClick = () => {
+    if (otherOverrides.length === 0) doApplyAll(false);
+    else setApplyConfirm(true);
+  };
+  const setScopeTo = (next: "screen" | "all") => {
+    if (next === scope) return;
+    setScope(next);
+    setApplyConfirm(false);
+    if (next === "all" && thisIsCustom) {
+      toast("This screen keeps its custom background — edits here change the default.");
+    }
+  };
 
   const colorField = (label: string, key: "color" | "color2") => (
     <label className="qz-ads-color">
@@ -95,170 +133,241 @@ export function BuilderBackgroundTab({
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-      <div className="qz-label" style={{ fontSize: 11 }}>
-        Background — this screen
+      {/* §5.3 — scope control: where do background edits land? */}
+      <div className="qz-segmented qz-segmented--fill" role="group" aria-label="Background applies to">
+        <button type="button" aria-pressed={scope === "screen"} onClick={() => setScopeTo("screen")}>
+          This screen
+        </button>
+        <button type="button" aria-pressed={scope === "all"} onClick={() => setScopeTo("all")}>
+          All screens
+        </button>
       </div>
-      <div className="qz-segmented" role="group" aria-label="Background type">
-        {(["none", "color", "gradient", "image", "video"] as const).map((t) => (
-          <button
-            key={t}
-            type="button"
-            aria-pressed={t === "none" ? bg.type === undefined : bg.type === t}
-            onClick={() => (t === "none" ? write(null) : patch({ type: t }))}
-          >
-            {t === "none" ? "None" : t[0]!.toUpperCase() + t.slice(1)}
-          </button>
-        ))}
-      </div>
-      {bg.type === "color" ? colorField("Color", "color") : null}
-      {bg.type === "gradient" ? (
-        <div className="qz-row" style={{ gap: 10, alignItems: "center", flexWrap: "wrap" }}>
-          {colorField("From", "color")}
-          {colorField("To", "color2")}
-          <NumericControl
-            label="Angle"
-            value={bg.angle}
-            min={0}
-            max={360}
-            step={5}
-            fallback={135}
-            allowEmpty
-            suffix="°"
-            onChange={(n) => patch({ angle: n })}
-          />
-        </div>
-      ) : null}
-      {bg.type === "image" ? urlField("Image URL", "image_url") : null}
-      {bg.type === "video" ? (
+
+      {scope === "all" ? (
+        // ── Master: the quiz-wide default (Design). Screens with their own
+        // background keep it — §9's "won't change" count is surfaced here. ──
         <>
-          {urlField("Video URL (MP4/WebM)", "video_url")}
-          {urlField("Poster frame", "poster_url")}
-          <div className="qz-row" style={{ gap: 6, alignItems: "center" }}>
-            <span className="qz-dim" style={{ fontSize: 11.5 }}>
-              On mobile
-            </span>
-            <div className="qz-segmented" role="group" aria-label="Mobile video behavior">
-              {(["poster", "play"] as const).map((m) => (
-                <button
-                  key={m}
-                  type="button"
-                  aria-pressed={(bg.mobile_video ?? "poster") === m}
-                  onClick={() => patch({ mobile_video: m === "poster" ? undefined : m })}
-                >
-                  {m === "poster" ? "Show poster" : "Play video"}
-                </button>
-              ))}
-            </div>
-          </div>
           <p className="qz-dim" style={{ fontSize: 11.5, margin: 0 }}>
-            Background video always plays muted (browser autoplay rules).
+            The default applies to every screen without its own background.
           </p>
-        </>
-      ) : null}
-      {bg.type === "image" || bg.type === "video" ? (
-        <>
-          <div className="qz-row" style={{ gap: 6, alignItems: "center" }}>
-            <span className="qz-dim" style={{ fontSize: 11.5 }}>
-              Fit
-            </span>
-            <div className="qz-segmented" role="group" aria-label="Background fit">
-              {(["cover", "contain", "tile"] as const).map((f) => (
-                <button
-                  key={f}
-                  type="button"
-                  aria-pressed={(bg.fit ?? "cover") === f}
-                  disabled={f === "tile" && bg.type === "video"}
-                  onClick={() => patch({ fit: f === "cover" ? undefined : f })}
-                >
-                  {f[0]!.toUpperCase() + f.slice(1)}
-                </button>
-              ))}
-            </div>
-          </div>
-          <div className="qz-row" style={{ gap: 8, flexWrap: "wrap" }}>
-            <NumericControl
-              label="Focal X"
-              value={bg.focal_x}
-              min={0}
-              max={100}
-              fallback={50}
-              allowEmpty
-              suffix="%"
-              onChange={(n) => patch({ focal_x: n })}
-            />
-            <NumericControl
-              label="Focal Y"
-              value={bg.focal_y}
-              min={0}
-              max={100}
-              fallback={50}
-              allowEmpty
-              suffix="%"
-              onChange={(n) => patch({ focal_y: n })}
-            />
-          </div>
-        </>
-      ) : null}
-      {bg.type ? (
-        <>
-          <NumericControl
-            label="Overlay"
-            value={bg.overlay}
-            min={0}
-            max={80}
-            fallback={0}
-            allowEmpty
-            suffix="%"
-            onChange={(n) => patch({ overlay: n })}
-          />
-          {hint ? (
+          {allCustomCount > 0 ? (
             <p className="qz-dim" role="note" style={{ fontSize: 11.5, margin: 0 }}>
-              💡 {hint}
+              {allCustomCount} screen{allCustomCount === 1 ? "" : "s"} have a custom background and
+              won&rsquo;t change.
             </p>
           ) : null}
-          <details className="qz-insp-more" style={{ flex: "0 0 auto" }}>
-            <summary>More options</summary>
-            <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 8 }}>
+          <BuilderPageSettings doc={doc} commit={commit} />
+        </>
+      ) : (
+        <>
+          <div className="qz-row qz-row-between" style={{ alignItems: "center" }}>
+            <div className="qz-label" style={{ fontSize: 11 }}>
+              Background — this screen
+            </div>
+            {thisIsCustom ? (
+              <span
+                className="qz-dim"
+                title="This screen overrides the default background"
+                style={{ fontSize: 9.5, letterSpacing: 0.4, textTransform: "uppercase" }}
+              >
+                ● Custom
+              </span>
+            ) : null}
+          </div>
+          <div className="qz-segmented" role="group" aria-label="Background type">
+            {(["none", "color", "gradient", "image", "video"] as const).map((t) => (
+              <button
+                key={t}
+                type="button"
+                aria-pressed={t === "none" ? bg.type === undefined : bg.type === t}
+                onClick={() => (t === "none" ? write(null) : patch({ type: t }))}
+              >
+                {t === "none" ? "None" : t[0]!.toUpperCase() + t.slice(1)}
+              </button>
+            ))}
+          </div>
+          {bg.type === "color" ? colorField("Color", "color") : null}
+          {bg.type === "gradient" ? (
+            <div className="qz-row" style={{ gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+              {colorField("From", "color")}
+              {colorField("To", "color2")}
               <NumericControl
-                label="Blur"
-                value={bg.blur}
+                label="Angle"
+                value={bg.angle}
                 min={0}
-                max={20}
+                max={360}
+                step={5}
+                fallback={135}
+                allowEmpty
+                suffix="°"
+                onChange={(n) => patch({ angle: n })}
+              />
+            </div>
+          ) : null}
+          {bg.type === "image" ? urlField("Image URL", "image_url") : null}
+          {bg.type === "video" ? (
+            <>
+              {urlField("Video URL (MP4/WebM)", "video_url")}
+              {urlField("Poster frame", "poster_url")}
+              <div className="qz-row" style={{ gap: 6, alignItems: "center" }}>
+                <span className="qz-dim" style={{ fontSize: 11.5 }}>
+                  On mobile
+                </span>
+                <div className="qz-segmented" role="group" aria-label="Mobile video behavior">
+                  {(["poster", "play"] as const).map((m) => (
+                    <button
+                      key={m}
+                      type="button"
+                      aria-pressed={(bg.mobile_video ?? "poster") === m}
+                      onClick={() => patch({ mobile_video: m === "poster" ? undefined : m })}
+                    >
+                      {m === "poster" ? "Show poster" : "Play video"}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <p className="qz-dim" style={{ fontSize: 11.5, margin: 0 }}>
+                Background video always plays muted (browser autoplay rules).
+              </p>
+            </>
+          ) : null}
+          {bg.type === "image" || bg.type === "video" ? (
+            <>
+              <div className="qz-row" style={{ gap: 6, alignItems: "center" }}>
+                <span className="qz-dim" style={{ fontSize: 11.5 }}>
+                  Fit
+                </span>
+                <div className="qz-segmented" role="group" aria-label="Background fit">
+                  {(["cover", "contain", "tile"] as const).map((f) => (
+                    <button
+                      key={f}
+                      type="button"
+                      aria-pressed={(bg.fit ?? "cover") === f}
+                      disabled={f === "tile" && bg.type === "video"}
+                      onClick={() => patch({ fit: f === "cover" ? undefined : f })}
+                    >
+                      {f[0]!.toUpperCase() + f.slice(1)}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="qz-row" style={{ gap: 8, flexWrap: "wrap" }}>
+                <NumericControl
+                  label="Focal X"
+                  value={bg.focal_x}
+                  min={0}
+                  max={100}
+                  fallback={50}
+                  allowEmpty
+                  suffix="%"
+                  onChange={(n) => patch({ focal_x: n })}
+                />
+                <NumericControl
+                  label="Focal Y"
+                  value={bg.focal_y}
+                  min={0}
+                  max={100}
+                  fallback={50}
+                  allowEmpty
+                  suffix="%"
+                  onChange={(n) => patch({ focal_y: n })}
+                />
+              </div>
+            </>
+          ) : null}
+          {bg.type ? (
+            <>
+              <NumericControl
+                label="Overlay"
+                value={bg.overlay}
+                min={0}
+                max={80}
                 fallback={0}
                 allowEmpty
-                suffix="px"
-                onChange={(n) => patch({ blur: n })}
+                suffix="%"
+                onChange={(n) => patch({ overlay: n })}
               />
-              {bg.type === "image" ? (
-                <label style={{ display: "inline-flex", gap: 6, alignItems: "center", fontSize: 12 }}>
-                  <input
-                    type="checkbox"
-                    checked={Boolean(bg.fixed)}
-                    onChange={(e) => patch({ fixed: e.target.checked || undefined })}
-                  />
-                  Fixed (doesn&rsquo;t scroll)
-                </label>
+              {hint ? (
+                <p className="qz-dim" role="note" style={{ fontSize: 11.5, margin: 0 }}>
+                  💡 {hint}
+                </p>
               ) : null}
-            </div>
-          </details>
-          <button
-            type="button"
-            className="qz-btn qz-btn-ghost qz-btn-sm"
-            onClick={applyToAll}
-          >
-            Apply to all screens…
-          </button>
+              <details className="qz-insp-more" style={{ flex: "0 0 auto" }}>
+                <summary>More options</summary>
+                <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 8 }}>
+                  <NumericControl
+                    label="Blur"
+                    value={bg.blur}
+                    min={0}
+                    max={20}
+                    fallback={0}
+                    allowEmpty
+                    suffix="px"
+                    onChange={(n) => patch({ blur: n })}
+                  />
+                  {bg.type === "image" ? (
+                    <label style={{ display: "inline-flex", gap: 6, alignItems: "center", fontSize: 12 }}>
+                      <input
+                        type="checkbox"
+                        checked={Boolean(bg.fixed)}
+                        onChange={(e) => patch({ fixed: e.target.checked || undefined })}
+                      />
+                      Fixed (doesn&rsquo;t scroll)
+                    </label>
+                  ) : null}
+                </div>
+              </details>
+              {/* §9 apply-all that respects overrides. */}
+              {applyConfirm ? (
+                <div
+                  role="alertdialog"
+                  aria-label="Apply background to all screens"
+                  style={{
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: 8,
+                    padding: 10,
+                    borderRadius: 8,
+                    border: "1px solid var(--qz-rule)",
+                  }}
+                >
+                  <span className="qz-dim" style={{ fontSize: 12 }}>
+                    {otherOverrides.length} other screen{otherOverrides.length === 1 ? "" : "s"} have a
+                    custom background.
+                  </span>
+                  <div className="qz-row" style={{ gap: 6, flexWrap: "wrap" }}>
+                    <button
+                      type="button"
+                      className="qz-btn qz-btn-accent qz-btn-sm"
+                      onClick={() => doApplyAll(false)}
+                    >
+                      Apply to the rest
+                    </button>
+                    <button
+                      type="button"
+                      className="qz-btn qz-btn-ghost qz-btn-sm"
+                      onClick={() => doApplyAll(true)}
+                    >
+                      Include customized
+                    </button>
+                    <button
+                      type="button"
+                      className="qz-btn qz-btn-ghost qz-btn-sm"
+                      onClick={() => setApplyConfirm(false)}
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <button type="button" className="qz-btn qz-btn-ghost qz-btn-sm" onClick={onApplyClick}>
+                  Apply to all screens…
+                </button>
+              )}
+            </>
+          ) : null}
         </>
-      ) : null}
-      <details className="qz-insp-more" style={{ flex: "0 0 auto" }}>
-        <summary>Quiz-wide default (Design)</summary>
-        <div style={{ marginTop: 8 }}>
-          <p className="qz-dim" style={{ fontSize: 11.5, margin: "0 0 8px" }}>
-            The default lives in Design; a per-screen background above wins.
-          </p>
-          <BuilderPageSettings doc={doc} commit={commit} />
-        </div>
-      </details>
+      )}
     </div>
   );
 }

@@ -5,6 +5,7 @@ import { Link, useLoaderData, useRevalidator, useSearchParams } from "@remix-run
 import { useEffect, useState } from "react";
 import { UnifiedWorkspace } from "../components/studio/UnifiedWorkspace";
 import { ClientOnly, BuilderSkeleton } from "../components/studio/ClientOnly";
+import { QzToastProvider } from "../components/qz-toast";
 import { QzPage, QzCard, QzBanner, StagedProgress } from "../components/qz";
 import { requireStudioAccess, resolveStudioShop } from "../lib/studioAccess.server";
 import {
@@ -100,9 +101,11 @@ export default function StandaloneStudio() {
   // client-only eliminates the recoverable React #418 hydration mismatches it
   // would otherwise throw on every load. (The shopper runtime is untouched.)
   return (
-    <ClientOnly fallback={<BuilderSkeleton />}>
-      {() => <UnifiedWorkspace data={data} chrome="standalone" />}
-    </ClientOnly>
+    <QzToastProvider>
+      <ClientOnly fallback={<BuilderSkeleton />}>
+        {() => <UnifiedWorkspace data={data} chrome="standalone" />}
+      </ClientOnly>
+    </QzToastProvider>
   );
 }
 

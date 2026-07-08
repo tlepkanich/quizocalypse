@@ -312,8 +312,8 @@ ok("image background applies to the LIVE canvas page",
   ));
 ok("image background shows the non-blocking readability hint (overlay < 20)",
   (await page.locator(".qz-builder-panel [role=note]").count()) === 1);
-ok("quiz-wide default reachable in a disclosure",
-  (await page.locator(".qz-builder-panel summary", { hasText: "Quiz-wide default" }).count()) === 1);
+ok("quiz-wide default reachable via the All-screens scope (R3 §5.3)",
+  (await page.locator('[aria-label="Background applies to"] button', { hasText: "All screens" }).count()) === 1);
 await page.locator('[aria-label="Background type"] button', { hasText: "None" }).click();
 await page.waitForTimeout(800);
 ok("None clears the per-screen background (net-zero)",

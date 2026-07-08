@@ -72,3 +72,56 @@ export function readabilityHint(bg: ScreenBackground): string | null {
   }
   return null;
 }
+
+// ── R3 (build-tab v2.0 §5.3/§9) — master / per-screen override model ─────────
+// The quiz-wide default (Design) is the master; a `node_backgrounds` entry is a
+// per-screen override that WINS. These pure helpers back the scope control, the
+// carousel Custom badge, and the override-respecting apply-all.
+
+/** Screen node ids carrying a per-screen background override (a non-empty
+ *  node_backgrounds entry) — the "Custom" screens apply-all must respect. */
+export function screensWithBackgroundOverride(
+  doc: Pick<Quiz, "node_backgrounds">,
+): string[] {
+  const map = doc.node_backgrounds ?? {};
+  return Object.keys(map).filter((id) => Object.keys(map[id] ?? {}).length > 0);
+}
+
+/** True when this screen carries its own background override (drives the
+ *  carousel Custom badge + the This-screen scope indicator). */
+export function hasBackgroundOverride(
+  doc: Pick<Quiz, "node_backgrounds">,
+  nodeId: string,
+): boolean {
+  const bg = doc.node_backgrounds?.[nodeId];
+  return !!bg && Object.keys(bg).length > 0;
+}
+
+/** §9 apply-all that RESPECTS overrides. Every screen WITHOUT its own
+ *  background gets `bg`; screens that already customized theirs are KEPT
+ *  (skipped), never silently stomped. `includeCustomized` is the explicit
+ *  escape hatch that overwrites them too. Returns the new doc + the count of
+ *  customized screens kept (the number the UI must surface). Pure. */
+export function applyBackgroundToAll(
+  doc: Quiz,
+  bg: ScreenBackground,
+  opts: { sourceNodeId: string; includeCustomized: boolean },
+): { doc: Quiz; skipped: number } {
+  const existing = doc.node_backgrounds ?? {};
+  // "Customized" = a screen OTHER than the source with its own override.
+  const customized = new Set(
+    screensWithBackgroundOverride(doc).filter((id) => id !== opts.sourceNodeId),
+  );
+  const map: NonNullable<Quiz["node_backgrounds"]> = {};
+  let skipped = 0;
+  for (const n of doc.nodes) {
+    if (!opts.includeCustomized && customized.has(n.id)) {
+      const own = existing[n.id];
+      if (own) map[n.id] = own; // keep the screen's own background
+      skipped++;
+      continue;
+    }
+    map[n.id] = { ...bg };
+  }
+  return { doc: { ...doc, node_backgrounds: map }, skipped };
+}

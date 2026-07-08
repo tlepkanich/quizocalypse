@@ -4,6 +4,7 @@ import type { OrderedFlow } from "../../lib/flowOrder";
 import type { IndexedProduct } from "../../lib/recommendationEngine";
 import type { BuilderCategory } from "../builder/stepProps";
 import { StepPreview } from "../runtime/StepPreview";
+import { hasBackgroundOverride } from "../../lib/screenBackground";
 
 // ════════════════════════════════════════════════════════════════════════════
 // ScreenCarousel (QZY-7, build-tab spec §2) — the filmstrip of every screen at
@@ -133,6 +134,17 @@ export function ScreenCarousel({
             </button>
             <div className="qz-screens-caption">
               <span className="qz-screens-label">{label}</span>
+              {/* R3 (§5.3) — Custom badge: this screen overrides the default background. */}
+              {hasBackgroundOverride(doc, node.id) ? (
+                <span
+                  className="qz-dim"
+                  title="Custom background"
+                  aria-label="Custom background"
+                  style={{ fontSize: 8.5 }}
+                >
+                  ●
+                </span>
+              ) : null}
               {active && node.type === "question" && !armed && onDuplicate ? (
                 <button
                   type="button"
