@@ -70,9 +70,21 @@ const after = await opt.evaluate((el) => getComputedStyle(el).transform).catch((
 ok("hovering the option applies the motion transform (/q CSS wired)",
   before !== after && after !== "none", `${before} → ${after}`);
 
+// R5c-3 §6.2 — the playful Effects drawer (gated, never default).
+await page.locator(".qz-ads summary", { hasText: "Effects (playful)" }).click();
+await page.waitForTimeout(250);
+ok("effects drawer offers None / Flash / Rainbow / Pulse (§6.2)",
+  (await page.locator('[aria-label="Playful effect"] button').count()) === 4);
+await page.locator('[aria-label="Playful effect"] button', { hasText: "Pulse" }).click();
+await page.waitForTimeout(500);
+ok("runtime tags the option with data-qz-effect",
+  (await page.locator('.qz-builder-canvas button[data-qz-effect="pulse"]').count()) >= 1);
+
 await page.locator(".qz-ads").screenshot({ path: `${SHOTS}/interaction.png` }).catch(() => {});
 
 // ── net-zero ────────────────────────────────────────────────────────────────
+await page.locator('[aria-label="Playful effect"] button', { hasText: "None" }).click();
+await page.waitForTimeout(150);
 await page.locator('[aria-label="Motion preset"] button', { hasText: "None" }).click();
 await page.waitForTimeout(200);
 await page.locator(".qz-ads-modes button", { hasText: "Text list" }).click();

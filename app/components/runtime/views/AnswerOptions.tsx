@@ -318,8 +318,9 @@ export function AnswerOptions({
   // option without them keeps its exact current HTML (byte-identical). The hover
   // + transition rules live in quiz-runtime.css (inline styles can't do :hover).
   const motion = display.motion && display.motion !== "none" ? display.motion : null;
+  const effect = display.effect && display.effect !== "none" ? display.effect : null;
   const hoverOn = Boolean(display.hover_bg);
-  const interactive = Boolean(motion || hoverOn);
+  const interactive = Boolean(motion || hoverOn || effect);
   const hoverVars: CSSProperties = hoverOn
     ? ({
         ["--qz-opt-hover-bg" as string]: display.hover_bg,
@@ -341,6 +342,7 @@ export function AnswerOptions({
               {...inspProps}
               className={interactive ? [inspClass, "qz-answer-opt"].filter(Boolean).join(" ") : inspClass}
               {...(motion ? { "data-qz-motion": motion } : {})}
+              {...(effect ? { "data-qz-effect": effect } : {})}
               {...(hoverOn ? { "data-qz-hover": "" } : {})}
               style={{ ...baseOption, ...selectedCss(on), ...hoverVars }}
               onClick={() => onPickAnswer(a)}

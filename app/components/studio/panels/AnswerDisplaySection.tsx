@@ -402,6 +402,30 @@ export function AnswerDisplaySection({
                 {colorInput("Hover fill", d.hover_bg, "hover_bg")}
                 {colorInput("Hover border", d.hover_border, "hover_border")}
               </div>
+              {/* R5c-3 §6.2 — playful effects, gated behind a collapsed drawer,
+                  never a default. */}
+              <details style={{ flex: "0 0 auto" }}>
+                <summary style={{ cursor: "pointer", fontSize: 12, fontWeight: 600 }}>
+                  Effects (playful) ▸
+                </summary>
+                <div style={{ marginTop: 8, display: "flex", flexDirection: "column", gap: 6 }}>
+                  <div className="qz-segmented" role="group" aria-label="Playful effect">
+                    {(["none", "flash", "rainbow", "pulse"] as const).map((e) => (
+                      <button
+                        key={e}
+                        type="button"
+                        aria-pressed={(d.effect ?? "none") === e}
+                        onClick={() => patch({ effect: e === "none" ? undefined : e })}
+                      >
+                        {e[0]!.toUpperCase() + e.slice(1)}
+                      </button>
+                    ))}
+                  </div>
+                  <p className="qz-dim" style={{ fontSize: 11, margin: 0 }}>
+                    Experimental — heavy effects can hurt conversion. Off by default.
+                  </p>
+                </div>
+              </details>
               {activeMode === "pills" ? (
                 <NumericControl
                   label="Pill padding"

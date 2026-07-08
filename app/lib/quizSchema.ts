@@ -254,6 +254,9 @@ export const QuestionDataObject = z.object({
       hover_bg: z.string().max(32).optional(),
       hover_border: z.string().max(32).optional(),
       motion: z.enum(["none", "pop", "lift", "fade"]).optional(),
+      // R5c-3 §6.2 — playful effects (gated behind a drawer in the builder,
+      // never a default). Opt-in like motion; absent → byte-identical.
+      effect: z.enum(["none", "flash", "rainbow", "pulse"]).optional(),
     })
     .optional(),
   // B6 — scale config for rating / slider / numeric questions: a configurable

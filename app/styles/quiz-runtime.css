@@ -92,3 +92,15 @@ body[data-qz] ::selection { background: #0E0F11; color: #FFFFFF; }
 @media (hover: none) {
   .qz-answer-opt[data-qz-motion]:hover { transform: none; box-shadow: none; opacity: 1; }
 }
+/* R5c-3 (build-tab §6.2) — playful effects (opt-in via data-qz-effect; gated
+   behind a drawer in the builder, never a default). Continuous animations are
+   disabled under prefers-reduced-motion. */
+@keyframes qz-pulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.04); } }
+@keyframes qz-rainbow { 0% { filter: hue-rotate(0deg); } 100% { filter: hue-rotate(360deg); } }
+@keyframes qz-flash { 0%, 100% { filter: brightness(1); } 50% { filter: brightness(1.3); } }
+.qz-answer-opt[data-qz-effect="pulse"] { animation: qz-pulse 1.6s ease-in-out infinite; }
+.qz-answer-opt[data-qz-effect="rainbow"] { animation: qz-rainbow 3s linear infinite; }
+.qz-answer-opt[data-qz-effect="flash"] { animation: qz-flash 1.2s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) {
+  .qz-answer-opt[data-qz-effect] { animation: none; }
+}
