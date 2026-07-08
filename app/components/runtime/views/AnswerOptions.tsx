@@ -313,17 +313,36 @@ export function AnswerOptions({
     }
   };
 
+  // R5c-2 §6.1 — desktop hover shift + a motion preset. Opt-in: the runtime adds
+  // the `qz-answer-opt` class + data attrs + CSS vars ONLY when one is set, so an
+  // option without them keeps its exact current HTML (byte-identical). The hover
+  // + transition rules live in quiz-runtime.css (inline styles can't do :hover).
+  const motion = display.motion && display.motion !== "none" ? display.motion : null;
+  const hoverOn = Boolean(display.hover_bg);
+  const interactive = Boolean(motion || hoverOn);
+  const hoverVars: CSSProperties = hoverOn
+    ? ({
+        ["--qz-opt-hover-bg" as string]: display.hover_bg,
+        ["--qz-opt-hover-border" as string]: display.hover_border ?? display.hover_bg,
+      } as CSSProperties)
+    : {};
+
   return (
     <div style={displayContainer(display)}>
       {node.data.answers.map((a) => {
         const on = selectedIds.has(a.id);
+        const inspProps = insp("answer", a.id);
+        const inspClass = (inspProps as { className?: string }).className;
         return (
           <div key={a.id} style={{ position: "relative", ...(mode === "pills" ? { display: "inline-flex" } : {}) }}>
             <button
               type="button"
               aria-pressed={on}
-              style={{ ...baseOption, ...selectedCss(on) }}
-              {...insp("answer", a.id)}
+              {...inspProps}
+              className={interactive ? [inspClass, "qz-answer-opt"].filter(Boolean).join(" ") : inspClass}
+              {...(motion ? { "data-qz-motion": motion } : {})}
+              {...(hoverOn ? { "data-qz-hover": "" } : {})}
+              style={{ ...baseOption, ...selectedCss(on), ...hoverVars }}
               onClick={() => onPickAnswer(a)}
             >
               {optionBody(a, on)}

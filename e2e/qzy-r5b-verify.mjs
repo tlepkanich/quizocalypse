@@ -65,7 +65,8 @@ await page.locator(".qz-ads").screenshot({ path: `${SHOTS}/answer-display.png` }
 await page.locator("label", { hasText: "Show icon / image on each option" }).locator("input[type=checkbox]").uncheck();
 await page.waitForTimeout(200);
 await page.locator(".qz-ads-modes button", { hasText: "Text list" }).click();
-await page.waitForTimeout(300);
+// Wait past the 700ms autosave debounce so the reset PERSISTS before we close.
+await page.waitForTimeout(1100);
 ok("reset to Text list (net-zero — controls collapse)",
   (await page.locator('[aria-label="Content alignment"] button').count()) === 0);
 

@@ -320,9 +320,18 @@ describe("answer_display R5b fields", () => {
       "selected_fill",
       "selected_indicator",
       "selected_border_color",
+      "hover_bg",
+      "motion",
     ]) {
       expect(json).not.toContain(k);
     }
+  });
+
+  it("R5c-2 §6.1 — parses hover + motion", () => {
+    const parsed = Quiz.parse(docWith({ mode: "list", hover_bg: "#eef", hover_border: "#99f", motion: "lift" }));
+    const ad = (parsed.nodes[1] as { data: { answer_display?: Record<string, unknown> } }).data
+      .answer_display;
+    expect(ad).toMatchObject({ hover_bg: "#eef", motion: "lift" });
   });
 
   it("R5c-1 §6.1 — parses the granular selected-state fields", () => {

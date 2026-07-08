@@ -327,7 +327,7 @@ export function AnswerDisplaySection({
                 </label>
               </div>
               <div className="qz-row" style={{ gap: 10, alignItems: "center", flexWrap: "wrap" }}>
-                {colorInput("Background", d.bg, "bg")}
+                {colorInput("Option background", d.bg, "bg")}
                 {colorInput("Gradient stop", d.bg2, "bg2")}
               </div>
               <div className="qz-row" style={{ gap: 10, alignItems: "center", flexWrap: "wrap" }}>
@@ -379,6 +379,28 @@ export function AnswerDisplaySection({
                   suffix="px"
                   onChange={(n) => patch({ selected_border_width: n })}
                 />
+              </div>
+              {/* R5c-2 §6.1 — desktop hover shift + a motion preset. */}
+              <div className="qz-row" style={{ gap: 6, alignItems: "center" }}>
+                <span className="qz-dim" style={{ fontSize: 11.5 }}>
+                  Motion
+                </span>
+                <div className="qz-segmented" role="group" aria-label="Motion preset">
+                  {(["none", "pop", "lift", "fade"] as const).map((m) => (
+                    <button
+                      key={m}
+                      type="button"
+                      aria-pressed={(d.motion ?? "none") === m}
+                      onClick={() => patch({ motion: m === "none" ? undefined : m })}
+                    >
+                      {m[0]!.toUpperCase() + m.slice(1)}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="qz-row" style={{ gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+                {colorInput("Hover fill", d.hover_bg, "hover_bg")}
+                {colorInput("Hover border", d.hover_border, "hover_border")}
               </div>
               {activeMode === "pills" ? (
                 <NumericControl

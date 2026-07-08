@@ -248,6 +248,12 @@ export const QuestionDataObject = z.object({
       selected_border_width: z.number().int().min(0).max(8).optional(),
       selected_text_color: z.string().max(32).optional(),
       selected_indicator: z.enum(["check", "dot", "filled", "none"]).optional(),
+      // R5c-2 §6.1 — desktop hover shift + a motion preset. The runtime adds the
+      // `qz-answer-opt` class + data attrs ONLY when one of these is set, so an
+      // option without them keeps its exact current HTML (byte-identical).
+      hover_bg: z.string().max(32).optional(),
+      hover_border: z.string().max(32).optional(),
+      motion: z.enum(["none", "pop", "lift", "fade"]).optional(),
     })
     .optional(),
   // B6 — scale config for rating / slider / numeric questions: a configurable

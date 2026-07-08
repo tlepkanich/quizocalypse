@@ -68,3 +68,27 @@ body[data-qz] ::selection { background: #0E0F11; color: #FFFFFF; }
    live shopper surface consumes. var(--qz-ink-4) frozen: #84878C is the ink-4
    value in BOTH light and dark ("mid-gray reads on both modes"). */
 .qz-dim { color: #84878C; }
+
+/* R5c-2 (build-tab §6.1) — OPT-IN answer-option hover + motion. Applied only to
+   options the merchant configured; those carry .qz-answer-opt + data attrs +
+   the --qz-opt-hover-* vars. Options without them never get the class, so their
+   HTML + rendering are byte-identical. Inline styles can't express :hover, so
+   the state/transition lives here. */
+.qz-answer-opt {
+  transition: transform 0.15s ease, box-shadow 0.15s ease,
+    background-color 0.15s ease, border-color 0.15s ease, opacity 0.15s ease;
+}
+.qz-answer-opt[data-qz-hover]:hover {
+  background: var(--qz-opt-hover-bg);
+  border-color: var(--qz-opt-hover-border);
+}
+.qz-answer-opt[data-qz-motion="pop"]:hover { transform: scale(1.03); }
+.qz-answer-opt[data-qz-motion="lift"]:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.14);
+}
+.qz-answer-opt[data-qz-motion="fade"]:hover { opacity: 0.85; }
+/* Touch devices fall back to the selected state — no sticky hover motion. */
+@media (hover: none) {
+  .qz-answer-opt[data-qz-motion]:hover { transform: none; box-shadow: none; opacity: 1; }
+}

@@ -4330,3 +4330,24 @@ body[data-qz] .qz-s3-editable:focus-visible {
   color: var(--qz-ink-3);
   background: var(--qz-bg);
 }
+
+/* R5c-2 (build-tab §6.1) — answer-option hover + motion, mirrored from
+   quiz-runtime.css so the builder canvas previews the same states the shopper
+   sees (opt-in via .qz-answer-opt + data attrs; unset options are unaffected). */
+.qz-answer-opt {
+  transition: transform 0.15s ease, box-shadow 0.15s ease,
+    background-color 0.15s ease, border-color 0.15s ease, opacity 0.15s ease;
+}
+.qz-answer-opt[data-qz-hover]:hover {
+  background: var(--qz-opt-hover-bg);
+  border-color: var(--qz-opt-hover-border);
+}
+.qz-answer-opt[data-qz-motion="pop"]:hover { transform: scale(1.03); }
+.qz-answer-opt[data-qz-motion="lift"]:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.14);
+}
+.qz-answer-opt[data-qz-motion="fade"]:hover { opacity: 0.85; }
+@media (hover: none) {
+  .qz-answer-opt[data-qz-motion]:hover { transform: none; box-shadow: none; opacity: 1; }
+}
