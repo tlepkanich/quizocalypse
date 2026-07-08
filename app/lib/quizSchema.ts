@@ -1042,6 +1042,8 @@ export const VideoBlock = z.object({
   controls: z.boolean().default(true),
   muted: z.boolean().default(false),
   poster: z.string().url().optional(),
+  // R7-2 §7.3 — an optional captions/subtitles track (VTT URL).
+  captions: z.string().optional(),
 });
 export const ProgressBlock = z.object({
   ...blockBase,
@@ -1050,6 +1052,10 @@ export const ProgressBlock = z.object({
   thickness: z.number().int().min(2).max(16).default(6),
   color: z.string().optional(),
   track_color: z.string().optional(),
+  // R7-2 §7.1 — corner radius + a "N of M" count alongside the bar/dots. Absent
+  // → today's pill bar with no count label (byte-identical).
+  radius: z.number().int().min(0).max(20).optional(),
+  show_count: z.boolean().optional(),
 });
 export const LogoBlock = z.object({
   ...blockBase,

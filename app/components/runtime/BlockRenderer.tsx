@@ -172,7 +172,10 @@ function LiteralBlock({
           muted={muted}
           playsInline
           style={{ width: "100%", borderRadius: "var(--qz-radius)", display: "block" }}
-        />
+        >
+          {/* R7-2 §7.3 — captions track when provided. */}
+          {block.captions ? <track kind="captions" src={block.captions} default /> : null}
+        </video>
       );
     }
     case "progress": {
@@ -188,8 +191,10 @@ function LiteralBlock({
           </div>
         );
       }
-      if (block.bar_style === "dots") {
-        return (
+      // R7-2 §7.1 — radius (absent → the pill 999) + an optional "N of M" count
+      // alongside the bar/dots (absent → the bar/dots node exactly as before).
+      const body =
+        block.bar_style === "dots" ? (
           <div style={{ display: "flex", gap: 6 }} aria-hidden>
             {Array.from({ length: total }, (_, i) => (
               <span
@@ -203,23 +208,36 @@ function LiteralBlock({
               />
             ))}
           </div>
-        );
-      }
-      return (
-        <div
-          role="progressbar"
-          aria-valuemin={0}
-          aria-valuemax={total}
-          aria-valuenow={index}
-          style={{ height: block.thickness, borderRadius: 999, background: track, overflow: "hidden" }}
-        >
+        ) : (
           <div
+            role="progressbar"
+            aria-valuemin={0}
+            aria-valuemax={total}
+            aria-valuenow={index}
             style={{
-              width: `${Math.round((index / total) * 100)}%`,
-              height: "100%",
-              background: color,
+              height: block.thickness,
+              borderRadius: block.radius ?? 999,
+              background: track,
+              overflow: "hidden",
+              flex: block.show_count ? 1 : undefined,
             }}
-          />
+          >
+            <div
+              style={{
+                width: `${Math.round((index / total) * 100)}%`,
+                height: "100%",
+                background: color,
+              }}
+            />
+          </div>
+        );
+      if (!block.show_count) return body;
+      return (
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          {body}
+          <span style={{ ...styles.muted, fontSize: "0.8em", fontWeight: 600, whiteSpace: "nowrap" }}>
+            {index} of {total}
+          </span>
         </div>
       );
     }

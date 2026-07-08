@@ -385,6 +385,16 @@ function BlockFields({
               }
             />
           </QzField>
+          {/* R7-2 §7.3 — captions/subtitles track. */}
+          <QzField label="Captions (VTT URL, optional)">
+            <QzInput
+              value={block.captions ?? ""}
+              placeholder="https://…/captions.vtt"
+              onChange={(e) =>
+                onChange({ captions: e.target.value.trim() || undefined } as Partial<ContentBlock>)
+              }
+            />
+          </QzField>
           <div className="qz-row" style={{ gap: 12, flexWrap: "wrap", fontSize: 12 }}>
             {(
               [
@@ -436,6 +446,26 @@ function BlockFields({
             {colorField("Fill", block.color, "color")}
             {colorField("Track", block.track_color, "track_color")}
           </div>
+          {/* R7-2 §7.1 — radius + a "N of M" count alongside the bar/dots. */}
+          <NumericControl
+            label="Radius"
+            value={block.radius}
+            min={0}
+            max={20}
+            allowEmpty
+            suffix="px"
+            onChange={(n) => onChange({ radius: n } as Partial<ContentBlock>)}
+          />
+          <label style={{ display: "inline-flex", gap: 6, alignItems: "center", fontSize: 12 }}>
+            <input
+              type="checkbox"
+              checked={Boolean(block.show_count)}
+              onChange={(e) =>
+                onChange({ show_count: e.target.checked || undefined } as Partial<ContentBlock>)
+              }
+            />
+            Show &ldquo;N of M&rdquo; count
+          </label>
         </>
       ) : null}
       {block.type === "logo" ? (
