@@ -4260,6 +4260,53 @@ body[data-qz] .qz-s3-editable:focus-visible {
 .qz-layers-actions button:disabled { opacity: 0.35; cursor: default; }
 
 /* ═══════════════════════════════════════════════════════════════════════════
+   QZY-R8 — Logic view: Map · Paths · Table tab shell + the Paths lanes (LV1/LV3).
+   Builder-only (admin sheet); status accents (gold decider / indigo ruled /
+   amber dead-end / green ok) are semantic and intentionally literal.
+   ═══════════════════════════════════════════════════════════════════════════ */
+.qz-logic-tabs { display: flex; gap: 2px; border-bottom: 1px solid var(--qz-rule); }
+.qz-logic-tab {
+  font: inherit; font-size: 13px; font-weight: 600; padding: 8px 14px;
+  border: none; background: none; cursor: pointer; color: var(--qz-ink-3);
+  border-bottom: 2px solid transparent; margin-bottom: -1px;
+}
+.qz-logic-tab:hover { color: var(--qz-ink); }
+.qz-logic-tab.is-active { color: var(--qz-ink); border-bottom-color: var(--qz-ink); }
+
+.qz-paths { display: flex; flex-direction: column; gap: 16px; }
+.qz-paths-head { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.qz-paths-trunc { font-size: 11.5px; color: var(--qz-warn); }
+.qz-path-group { display: flex; flex-direction: column; gap: 8px; }
+.qz-path-group-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.qz-path-result {
+  font-size: 12.5px; font-weight: 600; padding: 4px 10px; border-radius: 8px;
+  background: var(--qz-ink); color: var(--qz-paper);
+}
+.qz-path-result.is-ruled { background: var(--qz-accent); color: #fff; }
+.qz-path-result.is-deadend { background: var(--qz-warn); color: #fff; }
+.qz-path-result-meta { font-weight: 400; opacity: 0.78; }
+.qz-path-lanes { display: flex; flex-direction: column; gap: 6px; }
+.qz-path-lane { display: flex; align-items: center; gap: 2px; flex-wrap: wrap; padding: 3px 0; }
+.qz-path-seg { display: inline-flex; align-items: center; gap: 2px; }
+.qz-path-chip {
+  font: inherit; font-size: 11.5px; padding: 3px 9px; border-radius: 999px;
+  border: 1px solid var(--qz-rule); background: var(--qz-paper); color: var(--qz-ink);
+  cursor: pointer; display: inline-flex; gap: 5px; align-items: center; white-space: nowrap;
+}
+.qz-path-chip:hover { border-color: var(--qz-ink-3); }
+/* The decider chip carries the canonical gold ◆ signature (V2 §3.2). */
+.qz-path-chip.is-decider { border-color: var(--qz-gold-bright); box-shadow: inset 0 0 0 1px var(--qz-gold-bright); }
+.qz-path-chip.is-branch { border-style: dashed; }
+.qz-path-chip.is-deadend { border-color: var(--qz-warn); color: var(--qz-warn); cursor: default; }
+.qz-path-chip.is-terminal { border: none; background: none; color: var(--qz-ok); cursor: default; padding: 3px 4px; }
+.qz-path-chip-ans { max-width: 150px; overflow: hidden; text-overflow: ellipsis; }
+.qz-path-arrow { color: var(--qz-ink-4); font-size: 11px; padding: 0 1px; }
+.qz-path-more {
+  font: inherit; font-size: 11.5px; color: var(--qz-ink-3); background: none;
+  border: none; cursor: pointer; text-decoration: underline; align-self: flex-start; padding: 2px 0;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
    QZY-8 — Inspector v2 (build-tab spec §2/§4/§5.1/§10)
    Linked range+number pairs, More-options disclosure, single-option scope,
    footer actions, and the inline gold Logic section.

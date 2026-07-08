@@ -4,6 +4,7 @@ import type { Quiz } from "../../lib/quizSchema";
 import { LogicView } from "../logic/LogicView";
 import { PathTester } from "../logic/PathTester";
 import { LogicScroll } from "../onboarding/questionsLogicV3/logic/LogicScroll";
+import { LogicPathsTab } from "./LogicPathsTab";
 import {
   deciderQuestion,
   orderedQuestions,
@@ -42,6 +43,9 @@ export function BuilderLogicView({
   const questions = useMemo(() => orderedQuestions(doc), [doc]);
   const decider = useMemo(() => deciderQuestion(doc), [doc]);
   const [activeId, setActiveId] = useState<string>("");
+  // QZY-R8 (LV1) — Map · Paths · Table tabs over ONE dataset (the doc). Map owns
+  // add/remove structure; Paths/Table are live projections (R1's engine).
+  const [logicTab, setLogicTab] = useState<"map" | "paths" | "table">("map");
 
   if (!isDecider) {
     // Legacy scoring docs: the existing mapping surface (it embeds its own
@@ -58,30 +62,74 @@ export function BuilderLogicView({
     );
   }
 
+  const tabs: Array<{ key: "map" | "paths" | "table"; label: string }> = [
+    { key: "map", label: "Map" },
+    { key: "paths", label: "Paths" },
+    { key: "table", label: "Table" },
+  ];
+
   return (
-    <div style={{ display: "grid", gap: 20 }}>
+    <div style={{ display: "grid", gap: 16 }}>
       <div>
         <h2 style={{ margin: 0, fontSize: 22, letterSpacing: "-0.01em" }}>Logic</h2>
         <p className="qz-dim" style={{ fontSize: 13, margin: "6px 0 0", maxWidth: 640 }}>
           Every answer&rsquo;s route, per question — the deciding question picks the result,
-          rules override it. Edit a rule inline, or jump to a question&rsquo;s content in the
-          Build view.
+          rules override it. The Map edits structure; Paths and Table are live views of the
+          same flow.
         </p>
       </div>
-      <LogicScroll
-        doc={doc}
-        questions={questions}
-        deciderId={decider?.id ?? null}
-        categories={data.categories}
-        collections={data.collections}
-        productIndex={data.productIndex}
-        captureOn={doc.rec_page_settings?.global?.captureEmail !== false}
-        activeId={activeId}
-        onActiveChange={setActiveId}
-        onCommit={commit}
-      />
-      {/* PathTester renders its own "Try a path" header. */}
-      <PathTester doc={doc} productIndex={data.productIndex} categories={data.categories} />
+      <div className="qz-logic-tabs" role="tablist" aria-label="Logic views">
+        {tabs.map((t) => (
+          <button
+            key={t.key}
+            type="button"
+            role="tab"
+            aria-selected={logicTab === t.key}
+            className={`qz-logic-tab${logicTab === t.key ? " is-active" : ""}`}
+            onClick={() => setLogicTab(t.key)}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      {logicTab === "map" ? (
+        <>
+          <LogicScroll
+            doc={doc}
+            questions={questions}
+            deciderId={decider?.id ?? null}
+            categories={data.categories}
+            collections={data.collections}
+            productIndex={data.productIndex}
+            captureOn={doc.rec_page_settings?.global?.captureEmail !== false}
+            activeId={activeId}
+            onActiveChange={setActiveId}
+            onCommit={commit}
+          />
+          {/* PathTester renders its own "Try a path" header. */}
+          <PathTester doc={doc} productIndex={data.productIndex} categories={data.categories} />
+        </>
+      ) : null}
+
+      {logicTab === "paths" ? (
+        <LogicPathsTab
+          doc={doc}
+          questions={questions}
+          deciderId={decider?.id ?? null}
+          categories={data.categories}
+          onSelectNode={onSelectNode}
+        />
+      ) : null}
+
+      {logicTab === "table" ? (
+        <div className="qz-card" style={{ padding: 16 }}>
+          <p className="qz-dim" style={{ margin: 0, fontSize: 13 }}>
+            The Table view — one row per result, expandable to every path, with
+            override-writes-a-rule — lands next (QZY-R9).
+          </p>
+        </div>
+      ) : null}
     </div>
   );
 }
