@@ -25,6 +25,7 @@ import { StyleTab } from "./panels/StyleTab";
 import { CssTab } from "./panels/CssTab";
 import { NODE_LABEL } from "./panels/nodeMeta";
 import type { PickerProduct } from "./ImagePicker";
+import { MediaPicker } from "./MediaPicker";
 
 // ════════════════════════════════════════════════════════════════════════════
 // ContextPanel (Unified P2) — the right-hand contextual editor of the unified
@@ -53,12 +54,14 @@ function AnswerScopePanel({
   answerId,
   onCommit,
   onClearScope,
+  products,
 }: {
   doc: QuizDoc;
   node: QuestionNode;
   answerId: string;
   onCommit: (doc: QuizDoc) => void;
   onClearScope: () => void;
+  products?: PickerProduct[];
 }) {
   const answer = node.data.answers.find((a) => a.id === answerId);
   if (!answer) return null;
@@ -89,32 +92,20 @@ function AnswerScopePanel({
           onChange={(e) => setAnswer({ text: e.target.value })}
         />
       </label>
-      {/* QZY-9 §5.1 — per-option media, scoped to THIS option only. */}
-      <div className="qz-row" style={{ gap: 10, alignItems: "flex-end", flexWrap: "wrap" }}>
-        <label style={{ display: "grid", gap: 4, fontSize: 12.5 }}>
-          <span className="qz-dim" style={{ fontSize: 11.5 }}>
-            Icon (emoji)
-          </span>
-          <input
-            className="qz-input"
-            style={{ width: 72, textAlign: "center" }}
-            value={answer.icon ?? ""}
-            maxLength={4}
-            placeholder="🙂"
-            onChange={(e) => setAnswer({ icon: e.target.value.trim() || undefined })}
-          />
-        </label>
-        <label style={{ display: "grid", gap: 4, fontSize: 12.5, flex: "1 1 160px" }}>
-          <span className="qz-dim" style={{ fontSize: 11.5 }}>
-            Image URL
-          </span>
-          <input
-            className="qz-input"
-            value={answer.image_url ?? ""}
-            placeholder="https://…"
-            onChange={(e) => setAnswer({ image_url: e.target.value.trim() || undefined })}
-          />
-        </label>
+      {/* QZY-R4 §8 — per-option media via the ONE shared picker (emoji · icons ·
+          upload · url · products), scoped to THIS option only. */}
+      <div style={{ display: "grid", gap: 4 }}>
+        <span className="qz-dim" style={{ fontSize: 11.5 }}>
+          Icon or image
+        </span>
+        <MediaPicker
+          glyph={answer.icon}
+          image={answer.image_url}
+          onGlyph={(v) => setAnswer({ icon: v })}
+          onImage={(v) => setAnswer({ image_url: v })}
+          onClear={() => setAnswer({ icon: undefined, image_url: undefined })}
+          products={products}
+        />
       </div>
       {/* build-tab v2.0 §1 — design-only: this option's result mapping / filter
           match lives in the Logic view, never here. */}
@@ -852,6 +843,7 @@ function DeciderInspectorBody({
         answerId={scopedAnswerId}
         onCommit={onCommit}
         onClearScope={onClearScope}
+        products={products}
       />
     );
   }
@@ -1023,6 +1015,7 @@ function ContextPanelBody({
             answerId={scopedAnswerId}
             onCommit={onCommit}
             onClearScope={onClearScope}
+            products={products}
           />
         ) : tab === "content" ? (
           <ContentTab doc={doc} node={node} onCommit={onCommit} products={products} regen={regen} />

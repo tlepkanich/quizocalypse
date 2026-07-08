@@ -11,6 +11,7 @@ import { resolveDesignTokens } from "../../lib/designTokens";
 import { NumericControl } from "../controls/NumericControl";
 import { BuilderPageSettings } from "./BuilderPageSettings";
 import { useQzToast } from "../qz-toast";
+import { MediaPicker } from "./MediaPicker";
 
 // ════════════════════════════════════════════════════════════════════════════
 // BuilderBackgroundTab (QZY-11 + R3, build-tab v2.0 §5.3/§8/§9) — PER-SCREEN
@@ -204,7 +205,14 @@ export function BuilderBackgroundTab({
               />
             </div>
           ) : null}
-          {bg.type === "image" ? urlField("Image URL", "image_url") : null}
+          {bg.type === "image" ? (
+            // §8 — the shared picker (upload as base64 + URL) for the screen image.
+            <MediaPicker
+              image={bg.image_url}
+              onImage={(v) => patch({ image_url: v })}
+              onClear={() => patch({ image_url: undefined })}
+            />
+          ) : null}
           {bg.type === "video" ? (
             <>
               {urlField("Video URL (MP4/WebM)", "video_url")}
