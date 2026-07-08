@@ -5,6 +5,8 @@ import { TitleBar } from "@shopify/app-bridge-react";
 import { authenticate } from "../shopify.server";
 import prisma from "../db.server";
 import { buildSeedQuiz } from "../lib/seedQuiz";
+import { parseBrandIdentitySafe } from "../lib/brandIdentity";
+import { brandSeedTokens } from "../lib/brandSeed";
 import { QzPage, QzPageHeader, QzCard, QzButton, QzField, QzInput } from "../components/qz";
 
 // Minimal "New quiz" — seeds a draft and drops the merchant straight into the
@@ -24,12 +26,20 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   const form = await request.formData();
   const name = String(form.get("name") ?? "").trim().slice(0, 120) || "Untitled quiz";
 
+  // DGN-1 — a brand-new manual quiz gets the shop's brand look too (no
+  // byte-identity concern on a fresh doc). Absent identity → null → house theme.
+  const brandTokens = brandSeedTokens(parseBrandIdentitySafe(shop.brandIdentity));
+  const seed = buildSeedQuiz(name);
+
   const quiz = await prisma.quiz.create({
     data: {
       shopId: shop.id,
       name,
       status: "draft",
-      draftJson: buildSeedQuiz(name) as never,
+      draftJson: {
+        ...seed,
+        ...(brandTokens ? { design_tokens: brandTokens } : {}),
+      } as never,
     },
   });
 

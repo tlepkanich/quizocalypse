@@ -10,6 +10,7 @@ import {
   type BucketRow,
 } from "./bucketPersist";
 import type { TemplateOption, BuildSession } from "./quizSchema";
+import type { DesignTokensT } from "./designTokens";
 import { GENERIC_BUILD_ERROR } from "./step2Build.server";
 import { reportError } from "./log.server";
 
@@ -170,6 +171,16 @@ export async function startStep1Build(
     orderBy: { createdAt: "asc" },
   });
 
+  // DGN-1 — thread the draft's design_tokens (which now carry the shop's brand
+  // seed from draft creation) into the build; without this the re-seed falls
+  // back to the house theme and the brand look is lost on the legacy pick path.
+  const draftDoc = await prisma.quiz.findUnique({
+    where: { id: quizId },
+    select: { draftJson: true },
+  });
+  const draftTokens =
+    (draftDoc?.draftJson as { design_tokens?: DesignTokensT } | null)?.design_tokens ?? null;
+
   const goal = session.goal?.goal_text?.trim() || picked.angle;
   const struggle = session.goal?.struggle_text?.trim();
   const goalPrompt = struggle ? `${goal}\n\nShoppers struggle with: ${struggle}` : goal;
@@ -195,6 +206,7 @@ export async function startStep1Build(
     ...(cats.length ? { preResolvedBuckets: cats } : {}),
     directionAngle: picked.angle,
     sampleQuestionSeeds: picked.sample_questions,
+    designTokens: draftTokens,
   })
     .then(() => prisma.quiz.update({ where: { id: quizId }, data: { buildState: null } }))
     .catch(async (err) => {

@@ -8,6 +8,7 @@ import { VibeTemplateSelector } from "../../studio/VibeTemplateSelector";
 import { StyleBar } from "../../studio/StyleBar";
 import { BrandIdentityPanel } from "../../studio/BrandIdentityPanel";
 import { THEME_PRESETS, type ThemePreset } from "../../../lib/themePresets";
+import { BRAND_TEMPLATE_ID } from "../../../lib/brandSeed";
 import type { ActionResult, FunnelData } from "./stagesShared";
 
 // A small segmented control row for the Design step's fine-tune options.
@@ -188,6 +189,63 @@ export function DesignStage({
             and the style bar next; everything’s editable in the builder.
           </p>
         </div>
+        {data.brandDerivedTokens ? (
+          <button
+            type="button"
+            onClick={() => {
+              setAppliedId(BRAND_TEMPLATE_ID);
+              fetcher.submit(
+                {
+                  intent: "set-design",
+                  tokens: JSON.stringify(data.brandDerivedTokens),
+                  scope: brandScope,
+                },
+                { method: "post" },
+              );
+            }}
+            disabled={applying}
+            className="qz-card qz-interactive"
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 12,
+              padding: 12,
+              cursor: "pointer",
+              textAlign: "left",
+              outline:
+                panelTokens.template_id === BRAND_TEMPLATE_ID ? "2px solid var(--qz-accent)" : "none",
+              outlineOffset: 2,
+            }}
+          >
+            <span aria-hidden style={{ display: "flex", gap: 5 }}>
+              {[
+                data.brandDerivedTokens.colors?.background,
+                data.brandDerivedTokens.colors?.primary,
+                data.brandDerivedTokens.colors?.accent,
+                data.brandDerivedTokens.colors?.text,
+              ].map((c, i) => (
+                <span
+                  key={i}
+                  style={{
+                    width: 22,
+                    height: 22,
+                    borderRadius: 6,
+                    background: c,
+                    border: "1px solid var(--qz-ink-4)",
+                  }}
+                />
+              ))}
+            </span>
+            <span style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+              <span style={{ fontSize: 14, fontWeight: 600 }}>Your brand</span>
+              <span className="qz-dim" style={{ fontSize: 11.5 }}>
+                {panelTokens.template_id === BRAND_TEMPLATE_ID
+                  ? "Applied ✓ · colors & fonts from your store"
+                  : "Colors & fonts from your store"}
+              </span>
+            </span>
+          </button>
+        ) : null}
         <VibeTemplateSelector
           currentTokens={panelTokens}
           busy={applying}

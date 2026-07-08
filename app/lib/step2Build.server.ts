@@ -4,6 +4,7 @@ import { checkAiBudget, withAiSpendRecording } from "./aiBudget.server";
 import { buildScopedIndex, scopeCatalogToChosen } from "./catalogIndex";
 import { detectGroupingDimension } from "./groupingDetect";
 import { parseBrandIdentitySafe } from "./brandIdentity";
+import { brandSeedTokens, isUntouchedHouseTokens } from "./brandSeed";
 import {
   runWebResearchForQuizTypes,
   generateQuizTypes,
@@ -577,7 +578,20 @@ async function buildQuizFromPicked(
     logic_model?: string;
     rec_page_settings?: unknown;
   } | null;
-  const draftTokens = draftRaw?.design_tokens ?? null;
+  let draftTokens = draftRaw?.design_tokens ?? null;
+  // DGN-1 late-adopt — a draft created before the shop's brand identity finished
+  // building carries pristine HOUSE_TOKENS. If the identity has since landed and
+  // the merchant hasn't picked a look (isUntouchedHouseTokens), seed the brand
+  // pack now so the generated quiz still matches the store. Any preset/vibe/hand
+  // edit flips isUntouchedHouseTokens false, so this never clobbers a choice.
+  if (isUntouchedHouseTokens(draftTokens)) {
+    const shopRow = await prisma.shop.findUnique({
+      where: { id: shopId },
+      select: { brandIdentity: true },
+    });
+    const brandTokens = brandSeedTokens(parseBrandIdentitySafe(shopRow?.brandIdentity));
+    if (brandTokens) draftTokens = brandTokens;
+  }
   // LOGIC v2 (L2-10c) — the CREATION stamp lives on the draft; thread it into
   // the build here so every build intent (shape-continue / shape-goal-build /
   // pick-template / use-saved-template / retry-gen) preserves it uniformly

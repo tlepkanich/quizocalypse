@@ -3,6 +3,7 @@
 // loadStep1FunnelData is byte-identical to the original.
 import prisma from "../db.server";
 import { parseBrandIdentitySafe } from "./brandIdentity";
+import { brandSeedTokens } from "./brandSeed";
 import { suggestQuizGoal } from "./goalSuggest";
 import { detectGroupingDimension } from "./groupingDetect";
 import { suggestBucketStrategy } from "./bucketDetect";
@@ -66,7 +67,11 @@ export async function loadStep1FunnelData(
   // Pre-computed goal suggestion so the goal stage is an approval, not a blank
   // box — derived from the brand identity + confirmed (else detected) groups,
   // mapped to the built-in templates' intent. Deterministic, no AI call.
-  const identitySummary = parseBrandIdentitySafe(shopRow?.brandIdentity)?.summary ?? null;
+  const brandIdentity = parseBrandIdentitySafe(shopRow?.brandIdentity);
+  const identitySummary = brandIdentity?.summary ?? null;
+  // DGN-1 — the brand-derived token pack the Design stage offers as a "Your
+  // brand" card. null when there's no usable brand design (falls back to presets).
+  const brandDerivedTokens = brandSeedTokens(brandIdentity);
   const suggestedGoal = suggestQuizGoal({
     identitySummary,
     groupNames: categories.length
@@ -270,6 +275,7 @@ export async function loadStep1FunnelData(
     minGoalChars: MIN_GOAL_CHARS,
     productCount: products.length,
     identitySummary,
+    brandDerivedTokens,
     suggestedGoal,
     detection: {
       dimension: detect.dimension,

@@ -6,6 +6,8 @@ import type { Shop } from "@prisma/client";
 import prisma from "../db.server";
 import { Quiz, BuildSession } from "./quizSchema";
 import { buildSeedQuiz } from "./seedQuiz";
+import { parseBrandIdentitySafe } from "./brandIdentity";
+import { brandSeedTokens } from "./brandSeed";
 
 // Builder Re-work Step 1 — the funnel's loader + action, lifted out of the route
 // so the studio (cookie) and embedded (Shopify admin) routes are thin wrappers
@@ -52,12 +54,24 @@ export async function findOrCreateStep1Draft(shopId: string): Promise<string> {
   }
   if (resumeId) return resumeId;
 
+  // DGN-1 — seed the draft's design from the shop's brand identity so an
+  // AI-generated quiz comes out looking like the store, not the house "Linen"
+  // theme. Best-effort: the identity is built detached at install and may be
+  // absent/building/errored here — brandSeedTokens returns null in every such
+  // case and the draft falls back to HOUSE_TOKENS, byte-identical to before.
+  const shopRow = await prisma.shop.findUnique({
+    where: { id: shopId },
+    select: { brandIdentity: true },
+  });
+  const brandTokens = brandSeedTokens(parseBrandIdentitySafe(shopRow?.brandIdentity));
+
   // LOGIC v2 (L2-10d) — every NEW funnel draft is a DECIDER doc from creation
   // (the stamp is never applied retroactively; in-flight pre-flip drafts
   // resume as legacy with today's exact behavior — every consumer keys off
   // the stamp, never off deploy time).
   const doc = Quiz.parse({
     ...buildSeedQuiz("New quiz"),
+    ...(brandTokens ? { design_tokens: brandTokens } : {}),
     logic_model: "decider",
     build_session: { stage: "grouping" },
   });
