@@ -13,6 +13,7 @@ import {
   Package,
   Palette,
   Plug,
+  Settings,
   Sparkles,
   Users,
   type LucideIcon,
@@ -51,6 +52,8 @@ const NAV: RailItem[] = [
   { to: "/studio/brand", label: "Brand Identity", icon: Palette },
   { to: "/studio/customers", label: "Customers", icon: Users },
   { to: "/studio/integrations", label: "Integrations", icon: Plug },
+  // Ported (handoff bundle) — account-level defaults (engagement §L Layer 2).
+  { to: "/studio/settings", label: "Settings", icon: Settings },
   { to: "/studio/email", label: "Email Automation", icon: Mail },
   { to: "/studio/ab", label: "AB Testing", icon: FlaskConical },
   { to: "/studio/ai-agent", label: "AI Agent", icon: Sparkles },
