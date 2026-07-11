@@ -38,6 +38,9 @@ model Shop {
   lastSyncStatus String?
   lastSyncError  String?
   brandTokens    Json?
+  // §L — account-level engagement defaults (EngagementSettings shape). Applied
+  // to new quizzes; per-quiz `engagement` overrides. Null = use ENGAGEMENT_DEFAULTS.
+  engagementDefaults Json?
   // Phase 7: structured brand voice guidelines distilled from a brand
   // book / image / text upload, or selected from the curated preset
   // library. See app/lib/brandGuidelines.ts for the schema.
@@ -188,6 +191,13 @@ model Category {
   // Explicitly pinned product ids in manual mode (productIds is the
   // resolved set; this is the merchant's hand-picked subset).
   manualProductIds String[]
+  // P3 Edit 2 — Groups & Personas: mixed-source membership criteria for a group
+  // built in the /studio Groups page. Shape (all optional):
+  //   { tags: string[], collections: string[], metafields: string[],
+  //     manual: string[], persona?: { name, description, image } }
+  // Null for legacy single-source categories (source/sourceRef still apply).
+  // productIds stays the resolved set (re-resolved from membership on edit).
+  membership     Json?
   // One-sentence rationale Claude wrote — surfaced in the admin tooltip.
   rationale      String?
   // Groups every Category created in a single discovery invocation so
@@ -224,6 +234,10 @@ model Quiz {
   captures EmailCapture[]
   sessions QuizSession[]
   backInStockRequests BackInStockRequest[]
+  feedback QuizFeedback[]
+  rewards QuizReward[]
+  referralTokens ReferralToken[]
+  referrals Referral[]
 
   @@index([shopId])
 }
@@ -303,6 +317,82 @@ model BackInStockRequest {
 
   @@index([quizId, requestedAt])
   @@index([email])
+}
+
+// §L L2 — post-result feedback ("Was this helpful?"). One submission per session
+// (enforced by the unique index). Pseudonymous: keyed by sessionId, no email
+// (open text is PII-stripped before egress). Powers quiz-optimization signals.
+model QuizFeedback {
+  id        String   @id @default(cuid())
+  quizId    String
+  sessionId String
+  rating    Int // thumbs: 1 up / 0 down · stars: 1–5
+  text      String?
+  outcomeId String?
+  createdAt DateTime @default(now())
+
+  quiz Quiz @relation(fields: [quizId], references: [id], onDelete: Cascade)
+
+  @@unique([quizId, sessionId])
+  @@index([quizId, createdAt])
+}
+
+// §M6 — a referrer's public, stable share token (E5, not the session bearer).
+// Minted when the referrer completes; a friend redeems with it. `email` is PII.
+model ReferralToken {
+  id        String   @id @default(cuid())
+  token     String   @unique
+  quizId    String
+  sessionId String
+  email     String?
+  createdAt DateTime @default(now())
+
+  quiz        Quiz       @relation(fields: [quizId], references: [id], onDelete: Cascade)
+  redemptions Referral[]
+
+  @@unique([quizId, sessionId])
+  @@index([quizId, createdAt])
+}
+
+// §M6 — one redemption (a friend arriving via a referral link). Single-use per
+// redeemer. status: pending → qualified (granted at the qualifying order).
+// give/get codes are filled when granted. `redeemerEmail` is PII.
+model Referral {
+  id                String   @id @default(cuid())
+  quizId            String
+  tokenValue        String
+  redeemerSessionId String
+  redeemerEmail     String?
+  status            String   @default("pending")
+  giveCode          String?
+  getCode           String?
+  createdAt         DateTime @default(now())
+
+  quiz  Quiz          @relation(fields: [quizId], references: [id], onDelete: Cascade)
+  token ReferralToken @relation(fields: [tokenValue], references: [token], onDelete: Cascade)
+
+  @@unique([tokenValue, redeemerSessionId])
+  @@index([quizId, createdAt])
+}
+
+// §M3 — a reward issued to a shopper at result reveal (one per session, E1
+// anti-abuse). Stores the created single-use Shopify code so a retry reuses it.
+// `email` is shopper PII → covered by GDPR redaction (gdpr.server).
+model QuizReward {
+  id         String    @id @default(cuid())
+  quizId     String
+  sessionId  String
+  code       String
+  rewardType String // percentage | fixed | free_shipping
+  value      Float
+  email      String?
+  expiresAt  DateTime?
+  createdAt  DateTime  @default(now())
+
+  quiz Quiz @relation(fields: [quizId], references: [id], onDelete: Cascade)
+
+  @@unique([quizId, sessionId])
+  @@index([quizId, createdAt])
 }
 
 // Server-side quiz session (Dev Spec §7.2). One row per (quizId, sessionId):

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { EngagementSettings } from "./engagementSchema";
 
 // Quiz JSON contract — mirrors Technical Spec §3.2 verbatim.
 // This is the single source of truth: the AI generator's Claude tool definition
@@ -1707,6 +1708,11 @@ export const Quiz = z.object({
   // scoped to the node root at render time (see app/components/runtime/
   // blockStyle.ts scopeNodeCss). Empty default = no CSS injected.
   node_css: z.record(z.string(), z.string()).default({}),
+  // §L — engagement/conversion settings (interstitial, feedback, reward, social
+  // proof, share, urgency, email flows). ONE optional field; absent on every
+  // legacy/unconfigured doc → byte-identical. Baked into publishedJson; resolved
+  // against Shop.engagementDefaults at read time (resolveEngagement).
+  engagement: EngagementSettings.optional(),
   // Phase 6: floating launcher embed mode. Disabled by default so existing
   // inline-embed quizzes don't suddenly grow a floating button.
   launcher_config: LauncherConfig.default({
