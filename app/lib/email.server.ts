@@ -66,9 +66,15 @@ async function sendViaGmailSmtp(
     });
     return true;
   } catch (error) {
-    logFor(scope).error({ err: error, to: msg.to }, "Gmail SMTP send failed");
+    logFor(scope).error({ err: error, to: maskRecipient(msg.to) }, "Gmail SMTP send failed");
     return false;
   }
+}
+
+// No PII in logs (CLAUDE.md): failure logs carry a masked recipient — enough
+// to correlate a delivery complaint, never the address itself.
+function maskRecipient(email: string): string {
+  return email.replace(/^(.)[^@]*(@.*)$/, "$1…$2");
 }
 
 async function sendViaResend(msg: EmailMessage, apiKey: string, scope: string): Promise<boolean> {
@@ -89,7 +95,7 @@ async function sendViaResend(msg: EmailMessage, apiKey: string, scope: string): 
   });
   if (!res.ok) {
     const body = await res.text().catch(() => "");
-    logFor(scope).error({ status: res.status, body, to: msg.to }, "Resend send failed");
+    logFor(scope).error({ status: res.status, body, to: maskRecipient(msg.to) }, "Resend send failed");
     return false;
   }
   return true;

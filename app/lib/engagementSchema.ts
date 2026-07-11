@@ -138,6 +138,11 @@ export const ENGAGEMENT_DEFAULTS = {
     reveal: "tap" as "tap" | "spin",
     expiryHours: 24,
     emailGated: true,
+    // Audit hardening (M4) — a read-time DEFAULT mint ceiling. Without one, a
+    // merchant enabling rewards without a cap exposes unbounded code farming
+    // (session_id is client-chosen; per-IP rate limits don't bound a
+    // distributed client). Merchants can raise it explicitly in the panel.
+    usageCap: 100,
   },
   referral: {
     enabled: false,

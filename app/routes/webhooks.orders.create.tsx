@@ -6,7 +6,7 @@ import {
   attributeOrderToSessions,
   DEFAULT_ATTRIBUTION_WINDOW_MS,
 } from "../lib/conversionAttribution";
-import { grantReferralForOrder } from "../lib/referralGrant.server";
+import { grantReferralForOrder, repairCodelessReferrals } from "../lib/referralGrant.server";
 
 // orders/create → conversion attribution (Dev Spec §7.2 `converted`) + the §M6
 // referral grant step. Attribution matches the order to recent quiz sessions
@@ -36,7 +36,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   // no product overlap) and never throws. `email` falls back to customer.email
   // (attribution below keeps its original order.email-only behavior).
   const subtotal = Number(order.subtotal_price ?? order.total_price ?? "0");
-  await grantReferralForOrder({
+  const grantOrder = {
     shopId: shopRecord.id,
     shopDomain: shop,
     shopSource: shopRecord.source,
@@ -44,7 +44,12 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     orderEmail: order.email?.trim() || order.customer?.email?.trim() || null,
     subtotal: Number.isFinite(subtotal) ? subtotal : 0,
     nowMs: Date.now(),
-  });
+  };
+  await grantReferralForOrder(grantOrder);
+  // Audit M1 — heal any rows stranded qualified-without-codes by an earlier
+  // crash (deploy/restart mid-grant). Rides this webhook as its backstop tick;
+  // never throws, bounded to 3 rows per order.
+  await repairCodelessReferrals(grantOrder);
 
   const productIds = (order.line_items ?? [])
     .map((li) => (li.product_id != null ? `gid://shopify/Product/${li.product_id}` : null))

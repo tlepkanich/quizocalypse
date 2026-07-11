@@ -78,11 +78,36 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   if (!reward.enabled) return json({ reward: null }); // not offered on this quiz
   if (reward.emailGated && !email) return json({ error: "email required", reward: null }, 400);
 
+  // Shopify capability, needed by both the repair path and the mint below.
+  const shopDomain = quiz.shop.shopDomain;
+  const shopifyCapable = quiz.shop.source !== "standalone" && shopDomain.endsWith(".myshopify.com");
+
   // Idempotency — a reward already issued for this session is returned as-is.
   const existing = await prisma.quizReward.findUnique({
     where: { quizId_sessionId: { quizId: quiz.id, sessionId: session_id } },
   });
   if (existing) {
+    // Audit M2 — crash-window repair: the row may have been reserved without
+    // its Shopify discount (process killed between reserve and mint), which
+    // would hand back a dead code forever. Best-effort re-create with the
+    // STORED code+value: a "code already exists" userError means the discount
+    // is live (the common case); ok means we just backfilled it. Skipped for
+    // expired rewards (nothing to honor) and standalone shops (never minted).
+    const live = existing.expiresAt === null || existing.expiresAt.getTime() > Date.now();
+    if (live && shopifyCapable) {
+      try {
+        const { admin } = await unauthenticated.admin(shopDomain);
+        const storedType = existing.rewardType as "percentage" | "fixed" | "free_shipping";
+        await createCodeDiscount(
+          admin,
+          rewardToDiscountConfig({ ...reward, type: storedType }, existing.value, existing.expiresAt!.toISOString()),
+          existing.code,
+          new Date().toISOString(),
+        ); // result deliberately unchecked — "exists" and "created" are both healthy
+      } catch (err) {
+        reportError(err, { scope: "reward", msg: "existing-reward backfill check failed" });
+      }
+    }
     return json({
       reward: { code: existing.code, type: existing.rewardType, value: existing.value, expires_at: existing.expiresAt },
     });
@@ -90,8 +115,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
   // Shopify discounts need an offline admin session — standalone workspaces
   // (no myshopify domain) can't mint codes, so the reward is skipped there.
-  const shopDomain = quiz.shop.shopDomain;
-  if (quiz.shop.source === "standalone" || !shopDomain.endsWith(".myshopify.com")) {
+  if (!shopifyCapable) {
     return json({ reward: null, reason: "no_shopify" });
   }
 
@@ -110,10 +134,13 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     }
   }
 
-  const value = pickRewardValue({ value: reward.value, rangeMax: reward.rangeMax, odds: reward.odds }, session_id);
   const nowMs = Date.now();
   const expiresAtISO = rewardExpiresAt(nowMs, reward.expiryHours);
-  const code = rewardCode(session_id);
+  const code = rewardCode();
+  // Audit M4 — seed the value pick with the crypto-random CODE, not the
+  // client-chosen session_id (which was offline-grindable to always land
+  // rangeMax). The reserved row stores the value, so retries stay stable.
+  const value = pickRewardValue({ value: reward.value, rangeMax: reward.rangeMax, odds: reward.odds }, code);
   const cfg = rewardToDiscountConfig(reward, value, expiresAtISO);
 
   // Reserve the row FIRST (the unique index is the per-session lock) so a

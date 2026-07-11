@@ -98,24 +98,36 @@ async function grant(order: OrderForReferralGrant): Promise<void> {
     };
   });
 
-  const winner = pickGrantableReferral({ email, subtotal: order.subtotal }, candidates);
-  if (!winner) return;
-
   // Shopify discounts need an offline admin session — standalone workspaces
   // can't mint codes. Leave the row pending (a future Shopify connect could
   // still grant it) rather than qualifying it codeless.
   if (order.shopSource === "standalone" || !order.shopDomain.endsWith(".myshopify.com")) {
-    log.info({ shopDomain: order.shopDomain }, "referral grant skipped — no Shopify admin session");
+    if (pickGrantableReferral({ email, subtotal: order.subtotal }, candidates)) {
+      log.info({ shopDomain: order.shopDomain }, "referral grant skipped — no Shopify admin session");
+    }
     return;
   }
 
   // CAS pending → qualified: the idempotency lock. A webhook redelivery or a
-  // concurrent same-email order loses here and no-ops.
-  const claimed = await prisma.referral.updateMany({
-    where: { id: winner.id, status: "pending" },
-    data: { status: "qualified" },
-  });
-  if (claimed.count === 0) return;
+  // concurrent duplicate delivery of the SAME row loses here and no-ops.
+  // Audit m2 — a concurrent same-email order that claimed the same row is a
+  // different case: this order is still a legitimate grant trigger, so fall
+  // through to the next-oldest eligible candidate instead of dropping it.
+  const tried = new Set<string>();
+  let winner = pickGrantableReferral({ email, subtotal: order.subtotal }, candidates);
+  while (winner) {
+    const claimed = await prisma.referral.updateMany({
+      where: { id: winner.id, status: "pending" },
+      data: { status: "qualified" },
+    });
+    if (claimed.count > 0) break;
+    tried.add(winner.id);
+    winner = pickGrantableReferral(
+      { email, subtotal: order.subtotal },
+      candidates.filter((c) => !tried.has(c.id)),
+    );
+  }
+  if (!winner) return;
 
   const settings = winner.settings;
   const expiresAtISO = rewardExpiresAt(order.nowMs, settings.expiryHours);
@@ -172,6 +184,82 @@ async function grant(order: OrderForReferralGrant): Promise<void> {
     settings,
     expiresAtISO,
   }).catch((err) => reportError(err, { scope: "referral-grant", msg: "reward email delivery failed" }));
+}
+
+/** Audit M1 — heal rows stranded `qualified` with NO codes (process killed
+ *  between the CAS and the code-store; the pending-only scan skips them
+ *  forever). Mint FIRST, then CAS-store on `giveCode: null`: a concurrent
+ *  repairer's loss orphans two single-use expiring codes (the acknowledged
+ *  pattern) but can never store a dead code or double-grant. Healing rides
+ *  the next qualifying-order webhook for the shop — the same backstop idiom
+ *  as the funnel's stall detection. Never throws (webhook safety). Exported
+ *  separately from the grant so each is independently testable. */
+export async function repairCodelessReferrals(order: OrderForReferralGrant): Promise<void> {
+  try {
+    if (order.shopSource === "standalone" || !order.shopDomain.endsWith(".myshopify.com")) return;
+    const stuck = await prisma.referral.findMany({
+      where: { status: "qualified", giveCode: null, quiz: { shopId: order.shopId } },
+      select: {
+        id: true,
+        redeemerEmail: true,
+        token: { select: { email: true } },
+        quiz: { select: { publishedJson: true } },
+      },
+      orderBy: { createdAt: "asc" },
+      take: 3, // webhook latency budget — the rest heal on later orders
+    });
+    if (stuck.length === 0) return;
+    const accountParsed = EngagementSettings.safeParse(order.engagementDefaults ?? {});
+    const account = accountParsed.success ? accountParsed.data : undefined;
+    const { admin } = await unauthenticated.admin(order.shopDomain);
+    for (const row of stuck) {
+      const parsedDoc = Quiz.safeParse(row.quiz.publishedJson);
+      const settings = resolveEngagement(
+        parsedDoc.success ? parsedDoc.data.engagement : undefined,
+        account,
+      ).referral;
+      const expiresAtISO = rewardExpiresAt(order.nowMs, settings.expiryHours);
+      const startsAtISO = new Date(order.nowMs).toISOString();
+      const giveCode = referralGrantCode("give");
+      const getCode = referralGrantCode("get");
+      const give = await createCodeDiscount(
+        admin,
+        referralDiscountConfig(settings.giveType, settings.giveValue, expiresAtISO),
+        giveCode,
+        startsAtISO,
+      );
+      const get = give.ok
+        ? await createCodeDiscount(
+            admin,
+            referralDiscountConfig(settings.getType, settings.getValue, expiresAtISO),
+            getCode,
+            startsAtISO,
+          )
+        : give;
+      // Mint failure → row stays codeless-qualified; retried on a later order.
+      if (!give.ok || !get.ok) continue;
+      const claimed = await prisma.referral.updateMany({
+        where: { id: row.id, status: "qualified", giveCode: null },
+        data: { giveCode, getCode },
+      });
+      // Lost to a concurrent repairer — our two codes orphan (single-use,
+      // expiring); the winner's codes are the stored truth.
+      if (claimed.count === 0) continue;
+      log.info({ referralId: row.id, shopDomain: order.shopDomain }, "codeless grant repaired — codes minted");
+      if (row.redeemerEmail) {
+        void deliverReferralEmails({
+          referrerEmail: row.token.email,
+          redeemerEmail: row.redeemerEmail,
+          giveCode,
+          getCode,
+          settings,
+          expiresAtISO,
+        }).catch((err) => reportError(err, { scope: "referral-grant", msg: "repair email delivery failed" }));
+      }
+    }
+  } catch (err) {
+    reportError(err, { scope: "referral-grant", msg: "codeless-grant repair failed" });
+  }
 }
 
 async function deliverReferralEmails(args: {

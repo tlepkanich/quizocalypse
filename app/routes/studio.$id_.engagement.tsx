@@ -34,22 +34,31 @@ export const action = async ({ request, params }: ActionFunctionArgs) => {
   const form = await request.formData();
   if (form.get("intent") !== "save-engagement") return json({ ok: false }, { status: 400 });
 
-  let raw: unknown = {};
+  // Audit hardening — an unparseable/invalid payload is a 400, never a silent
+  // CLEAR (the old fallback treated a truncated submit as "wipe all engagement
+  // settings"). A deliberate clear is an EMPTY object: it parses fine and
+  // setEngagement drops the key.
+  let raw: unknown;
   try {
     raw = JSON.parse(String(form.get("engagement") ?? "{}"));
   } catch {
-    raw = {};
+    return json({ ok: false, error: "invalid engagement payload" }, { status: 400 });
   }
   const parsed = EngagementSettings.safeParse(raw);
-  const engagement = parsed.success ? parsed.data : undefined;
+  if (!parsed.success) return json({ ok: false, error: "invalid engagement payload" }, { status: 400 });
 
   const quiz = await prisma.quiz.findFirst({
     where: { id: params.id, shopId: shop.id },
     select: { id: true, draftJson: true },
   });
   if (!quiz) throw new Response("Not found", { status: 404 });
-  const doc = Quiz.parse(quiz.draftJson);
-  const next = setEngagement(doc, engagement);
+  // safeParse + 400, matching every neighboring draft-write path (an invalid
+  // mid-gen draft must not 500).
+  const parsedDoc = Quiz.safeParse(quiz.draftJson);
+  if (!parsedDoc.success) {
+    return json({ ok: false, error: "draft failed validation" }, { status: 400 });
+  }
+  const next = setEngagement(parsedDoc.data, parsed.data);
   await prisma.quiz.update({ where: { id: quiz.id }, data: { draftJson: next as never } });
   return redirect(`/studio/${params.id}/engagement`);
 };

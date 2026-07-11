@@ -12,26 +12,24 @@ import { rewardToDiscountConfig, type ResolvedReward } from "./rewardDiscount";
 
 const ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // no ambiguous chars
 
-// FNV-1a → fixed-length base32-ish suffix. Deterministic per (quiz, session).
-function suffix(seed: string, len: number): string {
-  let h = 2166136261;
-  for (let i = 0; i < seed.length; i++) {
-    h ^= seed.charCodeAt(i);
-    h = Math.imul(h, 16777619);
-  }
-  let n = h >>> 0;
+// Crypto-random fixed-length suffix. 32 divides 2^32 → no modulo bias.
+// globalThis.crypto keeps this module client-safe (Node 20 + browsers).
+function randomSuffix(len: number): string {
+  const buf = new Uint32Array(len);
+  globalThis.crypto.getRandomValues(buf);
   let s = "";
-  for (let i = 0; i < len; i++) {
-    s += ALPHABET[n % ALPHABET.length];
-    n = Math.floor(n / ALPHABET.length) + ((n % ALPHABET.length) + 13);
-  }
+  for (let i = 0; i < len; i++) s += ALPHABET[buf[i]! % ALPHABET.length];
   return s;
 }
 
-/** Public, stable referral token for a referrer's session. Shareable; carries
- *  no session-bearer capability. Deterministic so a re-mint returns the same. */
-export function referralToken(quizId: string, sessionId: string): string {
-  return `R${suffix(`${quizId}:${sessionId}`, 8)}`;
+/** Public referral token for a referrer's session. Shareable; carries no
+ *  session-bearer capability. RANDOM at mint (audit hardening — the earlier
+ *  deterministic (quiz, session) hash had ≤32 bits of real entropy, so
+ *  birthday collisions on the @unique column 500'd mints at scale). Stability
+ *  across re-mints comes from the ReferralToken ROW (unique quizId+sessionId):
+ *  the endpoint upserts and returns the STORED token, never recomputes it. */
+export function newReferralToken(): string {
+  return `R${randomSuffix(10)}`;
 }
 
 const norm = (e: string | null | undefined): string => (e ?? "").trim().toLowerCase();
@@ -91,13 +89,16 @@ export function pickGrantableReferral(
   return eligible.reduce((oldest, c) => (c.createdAt < oldest.createdAt ? c : oldest));
 }
 
-/** Random single-use code for a granted give/get discount. RANDOM (unlike the
- *  deterministic per-session reward codes) so a retry after a partial Shopify
- *  failure mints fresh codes instead of colliding with a half-created one; the
- *  Referral row's status CAS is the idempotency guard. `rand` injectable for
- *  tests. QZG = the referrer's "give", QZF = the friend's "get". */
-export function referralGrantCode(kind: "give" | "get", rand: () => number = Math.random): string {
+/** Random single-use code for a granted give/get discount. Random so a retry
+ *  after a partial Shopify failure mints fresh codes instead of colliding with
+ *  a half-created one; the Referral row's status CAS is the idempotency guard.
+ *  CRYPTO random by default (audit m3 — Math.random's xorshift state is
+ *  recoverable from a few outputs, letting an attacker predict others' codes
+ *  and spend them first); `rand` stays injectable for tests.
+ *  QZG = the referrer's "give", QZF = the friend's "get". */
+export function referralGrantCode(kind: "give" | "get", rand?: () => number): string {
   const prefix = kind === "give" ? "QZG" : "QZF";
+  if (!rand) return `${prefix}-${randomSuffix(8)}`;
   let s = "";
   for (let i = 0; i < 8; i++) s += ALPHABET[Math.floor(rand() * ALPHABET.length) % ALPHABET.length];
   return `${prefix}-${s}`;

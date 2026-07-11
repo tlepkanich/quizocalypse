@@ -36,26 +36,26 @@ export function rewardToDiscountConfig(
   };
 }
 
-// FNV-1a → a fixed-length base32-ish suffix. Deterministic per seed.
-function codeSuffix(seed: string): string {
-  const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // no ambiguous chars
-  let h = 2166136261;
-  for (let i = 0; i < seed.length; i++) {
-    h ^= seed.charCodeAt(i);
-    h = Math.imul(h, 16777619);
-  }
-  let n = h >>> 0;
+// Crypto-random fixed-length suffix. 32-char alphabet (no ambiguous chars);
+// 32 divides 2^32, so Uint32 % 32 has zero modulo bias. globalThis.crypto is
+// universal (Node 20 + browsers) — keeps this module client-safe.
+function codeSuffix(len: number): string {
+  const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+  const buf = new Uint32Array(len);
+  globalThis.crypto.getRandomValues(buf);
   let s = "";
-  for (let i = 0; i < 6; i++) {
-    s += alphabet[n % alphabet.length];
-    n = Math.floor(n / alphabet.length) + ((n % alphabet.length) + 7); // spread
-  }
+  for (let i = 0; i < len; i++) s += alphabet[buf[i]! % alphabet.length];
   return s;
 }
 
-/** Per-shopper reward code, deterministic by session (retry-safe). */
-export function rewardCode(sessionId: string): string {
-  return `QZR-${codeSuffix(sessionId)}`;
+/** Per-shopper reward code. RANDOM (audit M3) — the earlier deterministic
+ *  session hash was 32-bit, shop-global, and offline-forgeable (an attacker
+ *  could pre-mint a victim session's code and permanently block it; organic
+ *  collisions 502-looped at scale). Idempotency does NOT need determinism:
+ *  the QuizReward row (unique quizId+sessionId, reserved BEFORE the mint)
+ *  stores the code, and retries return the stored one. */
+export function rewardCode(): string {
+  return `QZR-${codeSuffix(8)}`;
 }
 
 /** ISO expiry from a base time + the reward's expiryHours (default 24). */

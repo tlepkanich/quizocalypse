@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
-  referralToken,
+  newReferralToken,
   isSelfReferral,
   capReached,
   referralDiscountConfig,
@@ -13,11 +13,12 @@ import {
 import { ENGAGEMENT_DEFAULTS } from "./engagementSchema";
 
 describe("§M6 referral helpers", () => {
-  it("referralToken is deterministic per (quiz, session) + prefixed", () => {
-    expect(referralToken("q", "s1")).toBe(referralToken("q", "s1"));
-    expect(referralToken("q", "s1")).not.toBe(referralToken("q", "s2"));
-    expect(referralToken("q1", "s")).not.toBe(referralToken("q2", "s"));
-    expect(referralToken("q", "s1")).toMatch(/^R[A-Z0-9]{8}$/);
+  it("newReferralToken is crypto-random, unique, prefixed (re-mint stability comes from the row)", () => {
+    const a = newReferralToken();
+    const b = newReferralToken();
+    expect(a).toMatch(/^R[A-Z2-9]{10}$/);
+    expect(b).toMatch(/^R[A-Z2-9]{10}$/);
+    expect(a).not.toBe(b);
   });
 
   it("isSelfReferral blocks same email (case-insensitive), allows different/absent", () => {

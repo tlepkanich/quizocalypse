@@ -25,10 +25,13 @@ describe("§M3 reward → discount mapping", () => {
     expect(rewardToDiscountConfig(reward(), 15, "x").minimum_subtotal).toBeUndefined();
   });
 
-  it("rewardCode is deterministic per session + prefixed", () => {
-    expect(rewardCode("sess-1")).toBe(rewardCode("sess-1"));
-    expect(rewardCode("sess-1")).not.toBe(rewardCode("sess-2"));
-    expect(rewardCode("sess-1")).toMatch(/^QZR-[A-Z0-9]{6}$/);
+  it("rewardCode is crypto-random, unique per call, prefixed (audit M3)", () => {
+    const a = rewardCode();
+    const b = rewardCode();
+    expect(a).toMatch(/^QZR-[A-Z2-9]{8}$/);
+    expect(b).toMatch(/^QZR-[A-Z2-9]{8}$/);
+    // Randomness, not determinism: the QuizReward row is the idempotency lock.
+    expect(a).not.toBe(b);
   });
 
   it("rewardExpiresAt adds expiryHours (default 24)", () => {

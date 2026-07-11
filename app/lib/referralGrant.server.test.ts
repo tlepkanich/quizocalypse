@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { grantReferralForOrder } from "./referralGrant.server";
+import { grantReferralForOrder, repairCodelessReferrals } from "./referralGrant.server";
 import prisma from "../db.server";
 import { createCodeDiscount } from "./discount.server";
 import { sendEmail } from "./email.server";
@@ -190,6 +190,63 @@ describe("grantReferralForOrder", () => {
   it("never throws — a DB failure is reported, the webhook survives", async () => {
     db.referral.findMany.mockRejectedValue(new Error("db down"));
     await expect(grantReferralForOrder(baseOrder)).resolves.toBeUndefined();
+    expect(mockedReport).toHaveBeenCalled();
+  });
+});
+
+// Audit M1 — the codeless-grant repair pass (exported separately so these
+// mocks never collide with the grant tests above).
+describe("repairCodelessReferrals", () => {
+  const stuckRow = (over: Record<string, unknown> = {}) => ({
+    id: "stuck1",
+    redeemerEmail: "friend@example.com",
+    token: { email: "referrer@example.com" },
+    quiz: { publishedJson: {} },
+    ...over,
+  });
+
+  it("no stuck rows → no admin session, no mints", async () => {
+    db.referral.findMany.mockResolvedValue([]);
+    await repairCodelessReferrals(baseOrder);
+    expect(mockedAdmin).not.toHaveBeenCalled();
+    expect(mockedMint).not.toHaveBeenCalled();
+  });
+
+  it("standalone shop → bails before any query", async () => {
+    await repairCodelessReferrals({ ...baseOrder, shopSource: "standalone" });
+    expect(db.referral.findMany).not.toHaveBeenCalled();
+  });
+
+  it("stuck row → mints give+get FIRST, then CAS-stores on giveCode:null, then delivers", async () => {
+    db.referral.findMany.mockResolvedValue([stuckRow()]);
+    await repairCodelessReferrals(baseOrder);
+    expect(mockedMint).toHaveBeenCalledTimes(2);
+    expect(db.referral.updateMany).toHaveBeenCalledWith({
+      where: { id: "stuck1", status: "qualified", giveCode: null },
+      data: { giveCode: expect.stringMatching(/^QZG-/), getCode: expect.stringMatching(/^QZF-/) },
+    });
+    await vi.waitFor(() => expect(mockedSend).toHaveBeenCalledTimes(2));
+  });
+
+  it("mint failure → row stays codeless (no store, no email), retried later", async () => {
+    db.referral.findMany.mockResolvedValue([stuckRow()]);
+    mockedMint.mockResolvedValue({ ok: false, warning: "boom" });
+    await repairCodelessReferrals(baseOrder);
+    expect(db.referral.updateMany).not.toHaveBeenCalled();
+    expect(mockedSend).not.toHaveBeenCalled();
+  });
+
+  it("CAS-store lost to a concurrent repairer → codes orphan, no delivery", async () => {
+    db.referral.findMany.mockResolvedValue([stuckRow()]);
+    db.referral.updateMany.mockResolvedValue({ count: 0 });
+    await repairCodelessReferrals(baseOrder);
+    expect(mockedMint).toHaveBeenCalledTimes(2);
+    expect(mockedSend).not.toHaveBeenCalled();
+  });
+
+  it("never throws — a DB failure is reported, the webhook survives", async () => {
+    db.referral.findMany.mockRejectedValue(new Error("db down"));
+    await expect(repairCodelessReferrals(baseOrder)).resolves.toBeUndefined();
     expect(mockedReport).toHaveBeenCalled();
   });
 });

@@ -78,8 +78,12 @@ export async function redactCustomer(
     prisma.backInStockRequest.deleteMany({ where: { email, quiz: { shopId: shop.id } } }),
     // Only rows carrying THIS email — pseudonymous rows (no email) are kept.
     prisma.quizReward.deleteMany({ where: { email, quiz: { shopId: shop.id } } }),
-    // §M6 — referrer tokens carrying this email; redemptions clear only the PII.
-    prisma.referralToken.deleteMany({ where: { email, quiz: { shopId: shop.id } } }),
+    // §M6 — clear the PII, keep the pseudonymous rows, on BOTH sides. Never
+    // deleteMany the tokens: Referral.token is onDelete: Cascade, so a token
+    // delete would destroy OTHER shoppers' redemption rows (and the only
+    // record of minted codes) — one user's erasure must not erase third
+    // parties (audit finding).
+    prisma.referralToken.updateMany({ where: { email, quiz: { shopId: shop.id } }, data: { email: null } }),
     prisma.referral.updateMany({ where: { redeemerEmail: email, quiz: { shopId: shop.id } }, data: { redeemerEmail: null } }),
   ]);
   return { captures: c.count, backInStock: b.count, rewards: r.count, referrals: rt.count + rd.count };

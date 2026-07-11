@@ -23,7 +23,9 @@ function mockPrisma(shop: { id: string } | null) {
     },
     referralToken: {
       findMany: vi.fn().mockResolvedValue([]),
-      deleteMany: vi.fn().mockResolvedValue({ count: 0 }),
+      // Audit hardening: erasure NULLS token emails (never deleteMany — the
+      // Referral cascade would destroy third-party redemption rows).
+      updateMany: vi.fn().mockResolvedValue({ count: 0 }),
     },
     referral: {
       findMany: vi.fn().mockResolvedValue([]),

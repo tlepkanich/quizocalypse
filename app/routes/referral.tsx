@@ -5,7 +5,7 @@ import { reportError } from "../lib/log.server";
 import { rateLimit } from "../lib/rateLimiters";
 import { Quiz } from "../lib/quizSchema";
 import { EngagementSettings, resolveEngagement } from "../lib/engagementSchema";
-import { referralToken, isSelfReferral, capReached } from "../lib/referral";
+import { newReferralToken, isSelfReferral, capReached } from "../lib/referral";
 
 // §M6 — public referral endpoint. Two intents:
 //  • mint  — the referrer's result mints their stable share token (E5) + link.
@@ -77,15 +77,19 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   ).referral;
   if (!referral.enabled) return json({ referral: null }); // not offered on this quiz
 
-  // ── mint — the referrer's shareable token (idempotent, deterministic). ──────
+  // ── mint — the referrer's shareable token (idempotent via the row). ─────────
   if (data.intent === "mint") {
-    const token = referralToken(quiz.id, data.session_id);
+    let token: string;
     try {
-      await prisma.referralToken.upsert({
+      // Random token on CREATE; a re-mint returns the STORED token (the upsert
+      // row, unique on quizId+sessionId, is the stability guarantee — audit
+      // hardening: the old deterministic hash collided at scale).
+      const row = await prisma.referralToken.upsert({
         where: { quizId_sessionId: { quizId: quiz.id, sessionId: data.session_id } },
-        create: { token, quizId: quiz.id, sessionId: data.session_id, email: data.email ?? null },
+        create: { token: newReferralToken(), quizId: quiz.id, sessionId: data.session_id, email: data.email ?? null },
         update: data.email ? { email: data.email } : {},
       });
+      token = row.token;
     } catch (err) {
       reportError(err, { scope: "referral", msg: "mint failed" });
       return json({ error: "mint failed" }, 500);
@@ -113,8 +117,17 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     await prisma.referral.upsert({
       where: { tokenValue_redeemerSessionId: { tokenValue: data.token, redeemerSessionId: data.session_id } },
       create: { quizId: quiz.id, tokenValue: data.token, redeemerSessionId: data.session_id, redeemerEmail: data.email ?? null, status: "pending" },
-      update: data.email ? { redeemerEmail: data.email } : {},
+      update: {},
     });
+    // Audit m4b — the redeemer email binds ONCE: a repeat redeem may fill a
+    // missing email but never repoint an existing one at a different address
+    // (blocked farming grants off guessed third-party customer emails).
+    if (data.email) {
+      await prisma.referral.updateMany({
+        where: { tokenValue: data.token, redeemerSessionId: data.session_id, redeemerEmail: null },
+        data: { redeemerEmail: data.email },
+      });
+    }
   } catch (err) {
     reportError(err, { scope: "referral", msg: "redeem failed" });
     return json({ error: "redeem failed" }, 500);

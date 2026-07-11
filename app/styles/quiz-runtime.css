@@ -42,9 +42,13 @@ body[data-qz] {
 body[data-qz] *, body[data-qz] *::before, body[data-qz] *::after { box-sizing: border-box; }
 
 /* Keyboard focus ring (quizocalypse.css body[data-qz] :focus-visible, V2 §6.4)
-   — var(--qz-accent) / var(--qz-radius-sm) frozen to their light values. */
+   — radius frozen to its light value. The ring color follows the quiz's own
+   brand primary (tokensToCssVars sets it on the runtime subtree root for every
+   doc model); outside the subtree, or docs without tokens, fall back to the
+   previous admin accent. An admin-purple outline on a merchant-branded quiz
+   was the one un-themed color on the shopper surface. */
 body[data-qz] :focus-visible {
-  outline: 3px solid #5B47E5;
+  outline: 3px solid var(--qz-color-primary, #5B47E5);
   outline-offset: 2px;
   box-shadow: none;
   border-radius: 9px;
@@ -208,3 +212,14 @@ body[data-qz] ::selection { background: #0E0F11; color: #FFFFFF; }
 .qz-share-btn:hover  { border-color: var(--qz-color-primary); }
 
 .qz-scarcity  { display: inline-flex; align-items: center; font-size: 11px; font-weight: 600; color: #D0463C; margin-top: 4px; }
+
+/* Audit fixes (post-port): the two star-rating rules were dropped by the
+   port's block extraction (template-literal className missed the scan), and
+   --qz-color-border was undefined on BOTH branches — every widget border was
+   silently none. Defined here scoped to the widget roots: a stylesheet var,
+   zero DOM impact on docs without engagement. */
+.qz-fb, .qz-reward, .qz-referral, .qz-share, .qz-proof, .qz-scarcity {
+  --qz-color-border: color-mix(in srgb, var(--qz-color-text) 18%, transparent);
+}
+.qz-fb-star { color: var(--qz-color-border); }
+.qz-fb-star.is-on { color: var(--qz-color-primary); border-color: var(--qz-color-primary); }
