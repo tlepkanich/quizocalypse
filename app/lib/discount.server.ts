@@ -115,6 +115,45 @@ function generateCode(): string {
   return `QUIZ-${s}`;
 }
 
+interface DiscountCreateBody {
+  data?: {
+    discountCodeBasicCreate?: { codeDiscountNode?: { id?: string } | null; userErrors?: Array<{ message: string }> };
+    discountCodeFreeShippingCreate?: { codeDiscountNode?: { id?: string } | null; userErrors?: Array<{ message: string }> };
+  };
+}
+
+/**
+ * §M3 — create ONE Shopify code discount for an arbitrary DiscountConfig + code
+ * (the reward engine's per-shopper single-use codes). Reuses the same proven
+ * mutations + pure input builders as ensureQuizDiscount. Never throws — returns
+ * ok/warning so the caller can degrade gracefully.
+ */
+export async function createCodeDiscount(
+  admin: AdminGraphql,
+  cfg: DiscountConfig,
+  code: string,
+  startsAtISO: string,
+): Promise<{ ok: boolean; warning?: string }> {
+  const isFreeShipping = cfg.kind === "free_shipping";
+  try {
+    const res = isFreeShipping
+      ? await admin.graphql(DISCOUNT_CODE_FREE_SHIPPING_CREATE, {
+          variables: { freeShippingCodeDiscount: buildFreeShippingInput(cfg, code, startsAtISO) },
+        })
+      : await admin.graphql(DISCOUNT_CODE_BASIC_CREATE, {
+          variables: { basicCodeDiscount: buildDiscountInput(cfg, code, startsAtISO) },
+        });
+    const body = (await res.json()) as DiscountCreateBody;
+    const result = isFreeShipping ? body.data?.discountCodeFreeShippingCreate : body.data?.discountCodeBasicCreate;
+    const errors = result?.userErrors ?? [];
+    if (errors.length > 0) return { ok: false, warning: errors.map((e) => e.message).join("; ") };
+    if (!result?.codeDiscountNode?.id) return { ok: false, warning: "Shopify returned no discount." };
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, warning: err instanceof Error ? err.message : String(err) };
+  }
+}
+
 export interface EnsureDiscountResult {
   doc: QuizDoc;
   code: string | null;
