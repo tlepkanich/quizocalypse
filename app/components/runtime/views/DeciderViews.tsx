@@ -268,15 +268,34 @@ export function DeciderCaptureView({
       </p>
       <div style={{ marginTop: 20, display: "grid", gap: 12 }}>
         {config.captureEmail && (
-          <input
-            type="email"
-            aria-label={tc("gate_email_placeholder")}
-            placeholder={tc("gate_email_placeholder")}
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            onKeyDown={submitOnEnter}
-            style={inputStyle}
-          />
+          <>
+            {/* A placeholder-only field loses its identity once the shopper
+                types — visible label above, placeholder becomes an example.
+                Decider-only view, so legacy gate DOM is untouched. */}
+            <label
+              htmlFor="qz-cap-email"
+              style={{
+                fontSize: 13,
+                fontWeight: 600,
+                color: "var(--qz-color-muted)",
+                marginBottom: -6,
+                textAlign: "left",
+                fontFamily: "var(--qz-font-body)",
+              }}
+            >
+              {tc("gate_email_placeholder")}
+            </label>
+            <input
+              id="qz-cap-email"
+              type="email"
+              aria-label={tc("gate_email_placeholder")}
+              placeholder="you@example.com"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              onKeyDown={submitOnEnter}
+              style={inputStyle}
+            />
+          </>
         )}
         {config.captureName && (
           <input
@@ -327,7 +346,13 @@ export function DeciderCaptureView({
         )}
       </div>
       <button
-        style={{ ...styles.primaryBtn, opacity: canSubmit ? 1 : 0.5, marginTop: 20 }}
+        style={{
+          ...styles.primaryBtn,
+          opacity: canSubmit ? 1 : 0.5,
+          marginTop: 20,
+          transition:
+            "opacity 180ms ease, transform 140ms cubic-bezier(0.23, 1, 0.32, 1)",
+        }}
         disabled={!canSubmit}
         onClick={handleSubmit}
       >
@@ -581,7 +606,10 @@ export function DeciderResultView({
         </p>
       ) : null}
       {lineup.heroBlock ? (
-        <div style={{ marginTop: 20 }}>
+        // qz-rev-* — the reveal choreography (headline first, then badge+hero,
+        // then the grid, then CTAs). Decider-only view, so legacy docs never
+        // render these classes; keyframes+delays live in QuizRuntime's style block.
+        <div className="qz-rev-1" style={{ marginTop: 20 }}>
           <div
             style={{
               display: "inline-block",
@@ -600,13 +628,14 @@ export function DeciderResultView({
         </div>
       ) : null}
       {lineup.bodyItems.length > 0 ? (
-        <div style={bodyStyle}>
+        <div className="qz-rev-2" style={bodyStyle}>
           {lineup.bodyItems.map((p, i) => card(p, i + (lineup.heroBlock ? 1 : 0)))}
         </div>
       ) : null}
       {addAllUrl ? (
         <button
           type="button"
+          className="qz-rev-3"
           onClick={() => {
             analytics?.track("add_to_cart", {
               product_ids: lineup.shown.map((p) => p.product_id),
@@ -653,6 +682,7 @@ export function DeciderResultView({
       ) : null}
       <button
         onClick={onReset}
+        className="qz-rev-3"
         style={{
           ...styles.primaryBtn,
           background: "transparent",

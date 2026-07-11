@@ -16,7 +16,11 @@ export function EducationCard({
     <div
       style={{
         ...styles.card,
-        borderLeft: "4px solid var(--qz-color-primary)",
+        // Full hairline + tint instead of the 4px side-stripe accent (the
+        // side-tab is the most recognizable template tell; a quiet tinted
+        // callout reads as designed).
+        border: "1px solid color-mix(in srgb, var(--qz-color-primary) 25%, transparent)",
+        background: "color-mix(in srgb, var(--qz-color-primary) 6%, transparent)",
         marginBottom: 12,
       }}
       {...(inspectProps ?? {})}

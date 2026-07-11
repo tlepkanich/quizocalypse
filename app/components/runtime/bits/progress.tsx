@@ -25,6 +25,9 @@ export function ProgressBar({
   const total = useMemo(() => reachableQuestionCount(doc), [doc]);
   if (total <= 0) return null;
   const node = currentNodeId ? doc.nodes.find((n) => n.id === currentNodeId) : null;
+  // An empty 0% track on the intro reads as broken chrome — progress starts
+  // rendering once the shopper is actually in the flow.
+  if (node?.type === "intro") return null;
   const onResult = node?.type === "result" || node?.type === "end";
   const onQuestion = node?.type === "question";
   const answered = path.length + (onQuestion ? 1 : 0);
@@ -88,11 +91,15 @@ export function ProgressBar({
     >
       <div
         style={{
-          width: `${pct}%`,
+          // scaleX instead of width: compositor-only, no layout thrash on every
+          // step change (the track's overflow:hidden clips the cap identically).
+          width: "100%",
+          transform: `scaleX(${pct / 100})`,
+          transformOrigin: "left center",
           height: "100%",
           ...(minimal ? { borderRadius: 999 } : {}),
           background: minimal ? "var(--qz-color-text)" : "var(--qz-color-primary)",
-          transition: "width var(--qz-dur, 170ms) var(--qz-ease, ease)",
+          transition: "transform var(--qz-dur, 170ms) var(--qz-ease, ease)",
         }}
       />
     </div>
@@ -112,6 +119,7 @@ export function MinimalQuestionLabel({
   currentNodeId: string | null;
 }) {
   const tc = useChrome();
+  const total = useMemo(() => reachableQuestionCount(doc), [doc]);
   const node = currentNodeId ? doc.nodes.find((n) => n.id === currentNodeId) : null;
   if (node?.type !== "question") return null;
   return (
@@ -127,7 +135,7 @@ export function MinimalQuestionLabel({
         fontFamily: "var(--qz-font-body)",
       }}
     >
-      {tc("question_counter", { n: path.length + 1 })}
+      {tc("question_counter", { n: path.length + 1, total })}
     </div>
   );
 }

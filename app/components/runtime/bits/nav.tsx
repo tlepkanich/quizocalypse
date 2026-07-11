@@ -80,6 +80,7 @@ export function MinimalNav({
           fontSize: "var(--qz-base-size)",
           fontWeight: 600,
           cursor: canBack ? "pointer" : "default",
+          transition: "transform 140ms cubic-bezier(0.23, 1, 0.32, 1)",
         }}
       >
         {tc("back")}
@@ -99,6 +100,10 @@ export function MinimalNav({
           fontWeight: 600,
           cursor: nextEnabled ? "pointer" : "default",
           opacity: nextEnabled ? 1 : 0.45,
+          // The enable is the state change the shopper just caused — ease it in
+          // instead of snapping. transform pairs with the global :active press.
+          transition:
+            "opacity 180ms ease, transform 140ms cubic-bezier(0.23, 1, 0.32, 1)",
         }}
       >
         {tc("next")}

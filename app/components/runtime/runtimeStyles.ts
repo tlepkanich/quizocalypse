@@ -112,7 +112,8 @@ export const stylesFor = (
         fontWeight: 500,
         color: "var(--qz-color-text)",
         cursor: "pointer",
-        transition: "background 150ms, box-shadow 150ms",
+        transition:
+          "background 150ms, box-shadow 150ms, transform 140ms cubic-bezier(0.23, 1, 0.32, 1)",
         width: "100%",
       } satisfies React.CSSProperties)
     : ({
@@ -125,7 +126,8 @@ export const stylesFor = (
         fontFamily: "var(--qz-font-body)",
         color: "var(--qz-color-text)",
         cursor: "pointer",
-        transition: "border-color 150ms",
+        transition:
+          "border-color 150ms, transform 140ms cubic-bezier(0.23, 1, 0.32, 1)",
         width: "100%",
       } satisfies React.CSSProperties),
   // A native <select> for the "dropdown" question type. Theme-matched (same

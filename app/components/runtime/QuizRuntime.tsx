@@ -1800,6 +1800,7 @@ export function QuizRuntime(props: QuizRuntimeProps) {
         @media (prefers-reduced-motion: reduce) {
           *, *::before, *::after {
             animation-duration: 0ms !important;
+            animation-delay: 0ms !important;
             animation-iteration-count: 1 !important;
             transition-duration: 0ms !important;
             scroll-behavior: auto !important;
@@ -1816,6 +1817,22 @@ export function QuizRuntime(props: QuizRuntimeProps) {
         @keyframes qz-node-enter {
           from { opacity: 0; transform: translateY(6px); }
           to { opacity: 1; transform: translateY(0); }
+        }
+        /* Result reveal choreography — the one rare screen that earned delight.
+           Same keyframe and curve as the step enter; backwards fill hides each
+           tier until its beat. Classes render only on the decider result view. */
+        .qz-rev-1, .qz-rev-2, .qz-rev-3 { animation: qz-node-enter var(--qz-dur, 170ms) var(--qz-ease, ease) backwards; }
+        .qz-rev-1 { animation-delay: 70ms; }
+        .qz-rev-2 { animation-delay: 150ms; }
+        .qz-rev-3 { animation-delay: 230ms; }
+        /* Press + hover feedback (Emil: buttons must confirm the press). Scale
+           is transform-only so it composites; the reduced-motion strip zeroes
+           the transition but the pressed state itself still registers. Hover
+           is gated to real pointers so touch taps never stick. */
+        .qz-runtime-page button { -webkit-tap-highlight-color: transparent; }
+        .qz-runtime-page button:not(:disabled):active { transform: scale(0.97); }
+        @media (hover: hover) and (pointer: fine) {
+          .qz-runtime-page button:not(:disabled):hover { filter: brightness(0.96); opacity: 0.93; }
         }
         /* RP1 — a quiet heartbeat on the urgency badge (opt-in via urgency_enabled).
            The reduced-motion strip above zeroes it automatically. */

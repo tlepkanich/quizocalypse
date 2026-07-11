@@ -84,7 +84,11 @@ export function AnswerOptions({
             borderColor: "var(--qz-color-primary)",
           }
         : selStyle === "border"
-          ? { boxShadow: "inset 0 0 0 2px var(--qz-color-primary)" }
+          ? {
+              boxShadow: "inset 0 0 0 2px var(--qz-color-primary)",
+              background:
+                "color-mix(in srgb, var(--qz-color-primary) 10%, transparent)",
+            }
           : {};
     // R5c-1 §6.1 — granular overrides layer over the preset. Absent → base only
     // (byte-identical to today).

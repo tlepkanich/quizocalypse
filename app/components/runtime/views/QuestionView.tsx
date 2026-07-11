@@ -652,16 +652,35 @@ export function QuestionView({
         />
       ) : (
       <div style={answerGrid}>
-        {node.data.answers.map((a) => {
+        {node.data.answers.map((a, ai) => {
           const isPicked = minimal && picked === a.id;
           return (
-          <div key={a.id} style={{ position: "relative" }}>
+          <div
+            key={a.id}
+            style={{
+              position: "relative",
+              // 40ms cascade after the question reads (Emil: 30-80ms, capped);
+              // backwards fill hides each row only until its beat, and the
+              // reduced-motion strip zeroes both duration and delay.
+              animation:
+                "qz-node-enter var(--qz-dur, 170ms) var(--qz-ease, ease) backwards",
+              animationDelay: `${Math.min(ai, 5) * 40}ms`,
+            }}
+          >
           <button
             style={
               isPicked
-                ? { ...styles.answerBtn, boxShadow: "inset 0 0 0 2px var(--qz-color-text)" }
+                ? {
+                    ...styles.answerBtn,
+                    // Ring + fill: a 2px ring alone fails the glance test on a
+                    // light chip; the fill survives a scan-back and colorblindness.
+                    boxShadow: "inset 0 0 0 2px var(--qz-color-text)",
+                    background:
+                      "color-mix(in srgb, var(--qz-color-text) 10%, var(--qz-color-surface))",
+                  }
                 : styles.answerBtn
             }
+            aria-pressed={minimal ? picked === a.id : undefined}
             {...insp("answer", a.id)}
             onMouseEnter={
               minimal

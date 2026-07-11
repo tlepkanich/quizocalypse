@@ -250,7 +250,7 @@ export function ResultView({
                 padding: "3px 10px",
               }}
             >
-              ⭐ {tc("hero_badge")}
+              {tc("hero_badge")}
             </span>
           </div>
           <ProductCard

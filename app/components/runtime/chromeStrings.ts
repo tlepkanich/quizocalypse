@@ -82,7 +82,7 @@ export const CHROME_TOKENS = {
   // MQ — minimal "Quizell" chrome: explicit Back/Next nav + the question counter.
   back: "Back",
   next: "Next",
-  question_counter: "Question # {n}",
+  question_counter: "Question {n} of {total}",
   // Rec-Page spec §2/§6.
   only_x_left: "Only {count} left in stock",
   your_answers: "Your answers",
@@ -99,7 +99,7 @@ export const CHROME_TOKENS = {
   // back per-string to this English until a locale is regenerated (K1 contract).
   capture_headline: "Your results are ready",
   capture_subtext: "Enter your email and we'll reveal your personalized match.",
-  decider_hero_badge: "⭐ Our top pick for you",
+  decider_hero_badge: "Our top pick for you",
   decider_fallback_heading:
     "We couldn't find an exact match — here are our most-loved products.",
   all_out_of_stock: "These picks are temporarily out of stock — check back soon.",

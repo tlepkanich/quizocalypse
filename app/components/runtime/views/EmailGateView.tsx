@@ -92,10 +92,29 @@ export function EmailGateView({
     <div style={shell}>
       {header}
       <div style={{ marginTop: 20, display: "grid", gap: 12 }}>
+        {minimal ? (
+          // A placeholder-only field loses its identity the moment the shopper
+          // types. Visible label above; the placeholder becomes an example.
+          // Minimal-chrome only, so classic/legacy gate DOM is unchanged.
+          <label
+            htmlFor={`qz-gate-email-${node.id}`}
+            style={{
+              fontSize: 13,
+              fontWeight: 600,
+              color: "var(--qz-color-muted)",
+              marginBottom: -6,
+              textAlign: "left",
+              fontFamily: "var(--qz-font-body)",
+            }}
+          >
+            {tc("gate_email_placeholder")}
+          </label>
+        ) : null}
         <input
+          id={minimal ? `qz-gate-email-${node.id}` : undefined}
           type="email"
           aria-label={tc("gate_email_placeholder")}
-          placeholder={tc("gate_email_placeholder")}
+          placeholder={minimal ? "you@example.com" : tc("gate_email_placeholder")}
           value={email}
           onChange={(e) => setEmail(e.target.value)}
           style={inputStyle}
@@ -153,7 +172,12 @@ export function EmailGateView({
       ) : (
         <>
           <button
-            style={{ ...styles.primaryBtn, opacity: valid && !submitting ? 1 : 0.5 }}
+            style={{
+              ...styles.primaryBtn,
+              opacity: valid && !submitting ? 1 : 0.5,
+              transition:
+                "opacity 180ms ease, transform 140ms cubic-bezier(0.23, 1, 0.32, 1)",
+            }}
             disabled={!valid || submitting}
             onClick={handleSubmit}
           >
