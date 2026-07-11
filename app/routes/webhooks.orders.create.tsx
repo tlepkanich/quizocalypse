@@ -6,10 +6,13 @@ import {
   attributeOrderToSessions,
   DEFAULT_ATTRIBUTION_WINDOW_MS,
 } from "../lib/conversionAttribution";
+import { grantReferralForOrder } from "../lib/referralGrant.server";
 
-// orders/create → conversion attribution (Dev Spec §7.2 `converted`). Matches the
-// order to recent quiz sessions (by email + product overlap, then product overlap
-// within a window) and flips `QuizSession.converted`. HMAC is verified by
+// orders/create → conversion attribution (Dev Spec §7.2 `converted`) + the §M6
+// referral grant step. Attribution matches the order to recent quiz sessions
+// (by email + product overlap, then product overlap within a window) and flips
+// `QuizSession.converted`; the grant step qualifies pending referral
+// redemptions (referralGrant.server.ts). HMAC is verified by
 // authenticate.webhook(). Requires the `read_orders` scope + the orders/create
 // subscription (shopify.app.toml) to fire.
 export const action = async ({ request }: ActionFunctionArgs) => {
@@ -21,11 +24,28 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   const order = payload as {
     id?: number | string | null;
     email?: string | null;
+    customer?: { email?: string | null } | null;
     created_at?: string | null;
+    subtotal_price?: string | null;
     total_price?: string | null;
     currency?: string | null;
     line_items?: Array<{ product_id?: number | string | null }>;
   };
+
+  // §M6 referral grant — runs before the line-item early-return (a grant needs
+  // no product overlap) and never throws. `email` falls back to customer.email
+  // (attribution below keeps its original order.email-only behavior).
+  const subtotal = Number(order.subtotal_price ?? order.total_price ?? "0");
+  await grantReferralForOrder({
+    shopId: shopRecord.id,
+    shopDomain: shop,
+    shopSource: shopRecord.source,
+    engagementDefaults: shopRecord.engagementDefaults,
+    orderEmail: order.email?.trim() || order.customer?.email?.trim() || null,
+    subtotal: Number.isFinite(subtotal) ? subtotal : 0,
+    nowMs: Date.now(),
+  });
+
   const productIds = (order.line_items ?? [])
     .map((li) => (li.product_id != null ? `gid://shopify/Product/${li.product_id}` : null))
     .filter((x): x is string => x !== null);

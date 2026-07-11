@@ -1,6 +1,7 @@
 import { createHash, randomBytes } from "node:crypto";
 import prisma from "../db.server";
 import { logFor } from "./log.server";
+import { sendEmail } from "./email.server";
 
 // ───────────────────────────────────────────────────────────────────────────
 // Email magic-link auth for the standalone /studio surface. Flow:
@@ -116,67 +117,20 @@ function emailText(link: string): string {
   return `Sign in to Quizocalypse Studio: ${link}\n\nThis link works once and expires in 15 minutes.`;
 }
 
-// Transport priority: Gmail SMTP (app password) → Resend HTTP API → stdout.
-// Gmail first because a Resend account without a verified domain can only
-// deliver to its own owner; the Gmail path can email any allowlisted address.
+// Transport priority lives in email.server.ts (Gmail SMTP → Resend → none).
 // Without either configured, the link is logged instead — the dev path.
 async function sendMagicLinkEmail(email: string, link: string): Promise<void> {
-  const smtpUser = process.env.GMAIL_SMTP_USER;
-  const smtpPass = process.env.GMAIL_SMTP_APP_PASSWORD;
-  if (smtpUser && smtpPass) {
-    return sendViaGmailSmtp(email, link, smtpUser, smtpPass);
-  }
-  if (process.env.RESEND_API_KEY) {
-    return sendViaResend(email, link, process.env.RESEND_API_KEY);
-  }
-  logFor("studio-login").info({ email, link }, "no email transport configured — magic link logged");
-}
-
-async function sendViaGmailSmtp(
-  email: string,
-  link: string,
-  user: string,
-  pass: string,
-): Promise<void> {
-  // Lazy import keeps nodemailer out of the module graph for unit tests.
-  const { default: nodemailer } = await import("nodemailer");
-  const transporter = nodemailer.createTransport({
-    host: "smtp.gmail.com",
-    port: 465,
-    secure: true,
-    auth: { user, pass },
-  });
-  try {
-    await transporter.sendMail({
-      from: `"Quizocalypse Studio" <${user}>`,
+  const { transport } = await sendEmail(
+    {
       to: email,
       subject: EMAIL_SUBJECT,
       html: emailHtml(link),
       text: emailText(link),
-    });
-  } catch (error) {
-    logFor("studio-login").error({ err: error, email }, "Gmail SMTP send failed");
-  }
-}
-
-async function sendViaResend(email: string, link: string, apiKey: string): Promise<void> {
-  const from = process.env.STUDIO_EMAIL_FROM ?? "Quizocalypse Studio <onboarding@resend.dev>";
-  const res = await fetch("https://api.resend.com/emails", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
+      fromName: "Quizocalypse Studio",
     },
-    body: JSON.stringify({
-      from,
-      to: [email],
-      subject: EMAIL_SUBJECT,
-      html: emailHtml(link),
-      text: emailText(link),
-    }),
-  });
-  if (!res.ok) {
-    const body = await res.text().catch(() => "");
-    logFor("studio-login").error({ status: res.status, body, email }, "Resend send failed");
+    "studio-login",
+  );
+  if (transport === "none") {
+    logFor("studio-login").info({ email, link }, "no email transport configured — magic link logged");
   }
 }

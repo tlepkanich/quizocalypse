@@ -1,4 +1,5 @@
 import type { DiscountConfig } from "./quizSchema";
+import type { ResolvedEngagement } from "./engagementSchema";
 import { rewardToDiscountConfig, type ResolvedReward } from "./rewardDiscount";
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -45,6 +46,69 @@ export function isSelfReferral(referrerEmail: string | null | undefined, redeeme
 /** Redemption cap guard — has the referrer already rewarded `cap` friends? */
 export function capReached(redemptions: number, cap: number | undefined): boolean {
   return typeof cap === "number" && cap > 0 && redemptions >= cap;
+}
+
+export type ResolvedReferral = ResolvedEngagement["referral"];
+
+/** One pending redemption as seen by the grant step: the Referral row + its
+ *  referrer context + the quiz's RESOLVED referral settings. The caller (order
+ *  webhook) does the DB reads; this stays pure. */
+export interface GrantCandidate {
+  /** Referral row id. */
+  id: string;
+  createdAt: Date;
+  /** ReferralToken.email — the referrer, when known. */
+  referrerEmail: string | null;
+  /** Redemptions of this referrer's token already granted ("qualified"). */
+  qualifiedCount: number;
+  settings: ResolvedReferral;
+}
+
+/**
+ * §M6 grant step — pick which pending referral (if any) a qualifying order
+ * grants. First-touch attribution: the OLDEST eligible redemption wins, and an
+ * order grants AT MOST ONE referral (a shopper who clicked several referral
+ * links must not multiply one purchase into several rewards). Eligibility
+ * re-checks every fraud guard at grant time — redeem-time checks ran against
+ * whatever emails were known THEN; the order email is the authoritative one:
+ *  - referral currently enabled on that quiz (merchant can disable mid-flight)
+ *  - order subtotal ≥ qualifyingSubtotal (the E fraud guard)
+ *  - not a self-referral (referrer email vs the order email)
+ *  - the referrer's redemption cap counts GRANTED rewards, not clicks
+ */
+export function pickGrantableReferral(
+  order: { email: string | null; subtotal: number },
+  candidates: GrantCandidate[],
+): GrantCandidate | null {
+  const eligible = candidates.filter((c) => {
+    if (c.settings.enabled !== true) return false;
+    if (!(order.subtotal >= (c.settings.qualifyingSubtotal ?? 0))) return false;
+    if (isSelfReferral(c.referrerEmail, order.email)) return false;
+    if (capReached(c.qualifiedCount, c.settings.redemptionCap)) return false;
+    return true;
+  });
+  if (eligible.length === 0) return null;
+  return eligible.reduce((oldest, c) => (c.createdAt < oldest.createdAt ? c : oldest));
+}
+
+/** Random single-use code for a granted give/get discount. RANDOM (unlike the
+ *  deterministic per-session reward codes) so a retry after a partial Shopify
+ *  failure mints fresh codes instead of colliding with a half-created one; the
+ *  Referral row's status CAS is the idempotency guard. `rand` injectable for
+ *  tests. QZG = the referrer's "give", QZF = the friend's "get". */
+export function referralGrantCode(kind: "give" | "get", rand: () => number = Math.random): string {
+  const prefix = kind === "give" ? "QZG" : "QZF";
+  let s = "";
+  for (let i = 0; i < 8; i++) s += ALPHABET[Math.floor(rand() * ALPHABET.length) % ALPHABET.length];
+  return `${prefix}-${s}`;
+}
+
+/** Human phrasing of a give/get reward for delivery emails. No currency symbol
+ *  on fixed amounts — the shop's currency isn't known at this layer. */
+export function describeReferralReward(type: "percentage" | "fixed" | "free_shipping", value: number): string {
+  if (type === "free_shipping") return "free shipping";
+  if (type === "fixed") return `${value} off your order`;
+  return `${value}% off your order`;
 }
 
 /** A give/get reward (fixed type + value) → the single-use discount config,
