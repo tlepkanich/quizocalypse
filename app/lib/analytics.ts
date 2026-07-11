@@ -50,6 +50,16 @@ export const CapturePayload = z.object({
   phone: z.string().max(40).optional(),
 });
 
+// §L L2 — post-result feedback. rating: thumbs (1 up / 0 down) or stars (1–5).
+// One submission per session (enforced by the QuizFeedback unique index).
+export const FeedbackPayload = z.object({
+  quiz_id: z.string().min(1),
+  session_id: z.string().min(1),
+  rating: z.number().int().min(0).max(5),
+  text: z.string().max(1000).optional(),
+  outcome_id: z.string().max(200).optional(),
+});
+
 // Server-side session write (Dev Spec §7.2). Posted from the runtime on quiz
 // completion: the shopper's answers, the products matched, and the outcome page.
 export const SessionPayload = z.object({
