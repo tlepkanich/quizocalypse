@@ -25,6 +25,20 @@ api_version = "2026-07"
   topics = [ "orders/create" ]
   uri = "/webhooks/orders/create"
 
+  # X6 (§N) — MANDATORY GDPR/CCPA compliance webhooks (App-Store-blocking).
+  # Handlers: app/routes/webhooks.customers.data_request|redact + shop.redact.
+  [[webhooks.subscriptions]]
+  compliance_topics = [ "customers/data_request" ]
+  uri = "/webhooks/customers/data_request"
+
+  [[webhooks.subscriptions]]
+  compliance_topics = [ "customers/redact" ]
+  uri = "/webhooks/customers/redact"
+
+  [[webhooks.subscriptions]]
+  compliance_topics = [ "shop/redact" ]
+  uri = "/webhooks/shop/redact"
+
 [build]
 # Pinned to the stable Fly URL above. Keep false so `shopify app dev` can't
 # overwrite application_url with an ephemeral tunnel — that is exactly what
