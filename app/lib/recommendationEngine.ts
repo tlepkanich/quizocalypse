@@ -63,7 +63,10 @@ export interface RecommendationInput {
   // IS the merchant's Shopify collection sort — the collection_order signal).
   // targetIndex: targetId → shape metadata. Absent on every legacy call site.
   targetProductIdsMap?: Record<string, string[]>;
-  targetIndex?: Record<string, { type: "product" | "collection" | "tag"; name?: string }>;
+  targetIndex?: Record<
+    string,
+    { type: "product" | "collection" | "tag"; name?: string; persona?: { name: string; description?: string; image?: string | null } }
+  >;
 }
 
 // Deterministic recommendation engine. Spec §3.4.
@@ -143,6 +146,11 @@ export interface ExplainedRecommendation {
     hero: ExplainedProduct | null;
     grid: ExplainedProduct[];
     allOutOfStock: boolean;
+    // §C4/§J1 — the mapped Group's ACTIVE persona (baked into target_index at
+    // publish). The result view uses it as the DEFAULT shopper-facing content;
+    // a Results-page (Step-04) override still wins. Absent when the Group has
+    // no persona.
+    persona?: { name: string; description?: string; image?: string | null };
     // QZY-1 (quiz-logic spec §3/§8) — which filter questions narrowed the
     // pool on this path, and whether they narrowed it to ZERO (the empty
     // case §9 fallback owns). Absent on docs with no filter-role questions.
@@ -433,6 +441,9 @@ export function recommendForResultExplained(
         hero: split.hero ? asExplained(split.hero) : null,
         grid: split.grid.map(asExplained),
         allOutOfStock: split.allOutOfStock,
+        ...(input.targetIndex?.[resolved.targetId]?.persona
+          ? { persona: input.targetIndex[resolved.targetId]!.persona }
+          : {}),
         ...(narrowed
           ? {
               filters: {

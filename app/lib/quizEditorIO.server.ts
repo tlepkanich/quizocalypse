@@ -6,7 +6,7 @@ import { logFor } from "./log.server";
 import { withAiSpendRecording } from "./aiBudget.server";
 import { Quiz } from "./quizSchema";
 import type { Quiz as QuizDoc } from "./quizSchema";
-import { publishQuiz, PublishError } from "./quizPublish";
+import { publishQuiz, PublishError, collectDeciderTargetIds } from "./quizPublish";
 import { resolveCollectionOrders } from "./collectionOrder.server";
 import { qrDataUrl } from "./qrCode.server";
 import { ensureQuizDiscount } from "./discount.server";
@@ -94,10 +94,16 @@ export async function loadQuizEditorDataForShop(shop: Shop, id: string, origin: 
   // (quizId = null) rows referenced by the draft's result nodes (so existing
   // AI-bound quizzes show their groups). Mapped to a lean, client-safe shape.
   const referencedCategoryIds = parsed.success
-    ? parsed.data.nodes
-        .filter((n) => n.type === "result" && n.data.category_id)
-        .map((n) => (n.type === "result" ? (n.data.category_id as string) : ""))
-        .filter(Boolean)
+    ? [
+        ...parsed.data.nodes
+          .filter((n) => n.type === "result" && n.data.category_id)
+          .map((n) => (n.type === "result" ? (n.data.category_id as string) : ""))
+          .filter(Boolean),
+        // §J1 — decider answers may target account-level (quizId=null) Groups;
+        // include those ids so the Logic picker loads them by name (not
+        // "deleted — choose again"). Publish already resolves any Category id.
+        ...collectDeciderTargetIds(parsed.data),
+      ]
     : [];
   const categoryRows = await prisma.category.findMany({
     where: {

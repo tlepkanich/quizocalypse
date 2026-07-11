@@ -152,6 +152,30 @@ export function QzPage({ children, wide = false }: { children: ReactNode; wide?:
   return <div className={wide ? "qz-page is-wide" : "qz-page"}>{children}</div>;
 }
 
+// P3 Edit 9 (ported from handoff bundle) — empty / first-run state: calm, one
+// line + one action, optional icon chip. Shared by list pages (Groups, etc.).
+export function QzEmpty({
+  icon,
+  title,
+  action,
+}: {
+  icon?: ReactNode;
+  title: ReactNode;
+  action?: ReactNode;
+}) {
+  return (
+    <div className="qz-empty">
+      {icon ? (
+        <div className="qz-empty-icon" aria-hidden>
+          {icon}
+        </div>
+      ) : null}
+      <p className="qz-empty-title">{title}</p>
+      {action ? <div className="qz-empty-action">{action}</div> : null}
+    </div>
+  );
+}
+
 export function QzPageHeader({
   eyebrow,
   title,

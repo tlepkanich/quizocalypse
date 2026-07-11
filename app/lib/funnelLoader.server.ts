@@ -57,6 +57,24 @@ export async function loadStep1FunnelData(
     listSavedTemplates(shop.id),
   ]);
 
+  // §J1 — account-level Groups (quizId=null) offered as decider/rec-page targets
+  // in the Logic + Rec Page pickers ONLY (merged into builderCategories below).
+  // Kept OUT of the raw `categories` above so Step-1's own grouping is unaffected.
+  const accountGroups = await prisma.category.findMany({
+    where: { shopId: shop.id, quizId: null },
+    select: {
+      id: true,
+      name: true,
+      productIds: true,
+      source: true,
+      sourceRef: true,
+      description: true,
+      tags: true,
+      quizId: true,
+    },
+    orderBy: { createdAt: "asc" },
+  });
+
   const titleById = new Map(products.map((p) => [p.productId, p.title]));
 
   const detect = detectGroupingDimension(
@@ -204,7 +222,7 @@ export async function loadStep1FunnelData(
   // Builder-shaped catalog views, shared by the rich editing stages
   // (Question Builder + Recommendation), so both mount the SAME panels over the
   // SAME draft. Built once; each stage's payload is gated below.
-  const builderCategories = categories.map((c) => ({
+  const builderCategories = [...categories, ...accountGroups].map((c) => ({
     id: c.id,
     name: c.name,
     description: c.description ?? "",

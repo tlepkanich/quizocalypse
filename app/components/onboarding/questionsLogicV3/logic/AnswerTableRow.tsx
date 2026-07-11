@@ -16,6 +16,7 @@ import {
   type SkipOption,
 } from "../../../../lib/questionOrder";
 import { answerLetter } from "../../../../lib/bucketPalette";
+import { TargetOptions } from "./TargetOptions";
 import type { RuleRef } from "../ruleHomes";
 
 const ANSWER_MAX = 60;
@@ -155,11 +156,7 @@ export function AnswerTableRow({
           <option value="">
             {answer.target_id && !targetKnown ? "(deleted — choose again)" : "Choose…"}
           </option>
-          {categories.map((c) => (
-            <option key={c.id} value={c.id}>
-              {c.name}
-            </option>
-          ))}
+          <TargetOptions categories={categories} />
         </select>
       ) : isFilterRow ? (
         <span className="qz-s3-matchwrap">

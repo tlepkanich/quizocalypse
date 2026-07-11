@@ -2,6 +2,7 @@ import { Form, NavLink } from "@remix-run/react";
 import { useEffect, useState } from "react";
 import {
   BarChart3,
+  Boxes,
   ChevronsLeft,
   ChevronsRight,
   FlaskConical,
@@ -45,6 +46,8 @@ const NAV: RailItem[] = [
   { to: "/studio/quizzes", label: "Quizzes", icon: Layers },
   { to: "/studio/analytics", label: "Analytics", icon: BarChart3 },
   { to: "/studio/products", label: "Products", icon: Package },
+  // Ported (handoff bundle) — account-level Groups & Personas (P3 Edit 5/§J1).
+  { to: "/studio/groups", label: "Personas & Groups", icon: Boxes },
   { to: "/studio/brand", label: "Brand Identity", icon: Palette },
   { to: "/studio/customers", label: "Customers", icon: Users },
   { to: "/studio/integrations", label: "Integrations", icon: Plug },

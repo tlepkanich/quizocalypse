@@ -6,6 +6,7 @@ import { translateFeaturesToBenefits, generateAnswerTooltips } from "./claude";
 import { toneSampleFromCatalog } from "./catalogIndex";
 import { parseBrandGuidelinesSafe } from "./brandGuidelines";
 import { computeAnswerWeights } from "./answerPerformance";
+import { StoredMembershipSchema } from "./groupMembership";
 import {
   BrandTokens,
   resolveDesignTokens,
@@ -14,6 +15,18 @@ import {
 import type { z } from "zod";
 
 type QuizDoc = z.infer<typeof Quiz>;
+
+// §J1/§C4 — extract a Group's ACTIVE persona (name present) from its membership
+// Json, for baking into target_index. Returns undefined for legacy / no-persona
+// groups, so the bake stays absent (byte-identical) unless a persona is set.
+function personaOfMembership(
+  membership: unknown,
+): { name: string; description?: string; image?: string | null } | undefined {
+  const parsed = StoredMembershipSchema.safeParse(membership);
+  const p = parsed.success ? parsed.data.persona : null;
+  if (!p || !p.name || !p.name.trim()) return undefined;
+  return { name: p.name, description: p.description, image: p.image ?? null };
+}
 
 // The public `/q/:id.json` embed endpoint serves publishedJson raw (it never
 // applies a locale, unlike the HTML routes). Strip the editor-only maps that
@@ -67,8 +80,19 @@ export interface PublishedQuiz extends QuizDoc {
   // order). target_index: targetId → shape + display name for the runtime
   // and the Step-4 target selector.
   target_product_ids_map?: Record<string, string[]>;
-  target_index?: Record<string, { type: "product" | "collection" | "tag"; name: string }>;
+  // §J1/§C4 — `persona` is baked ONLY for a decider doc whose mapped Group
+  // carries an ACTIVE persona (persona.name set). Absent otherwise, so decider
+  // docs without personas stay byte-identical, and legacy docs never reach this
+  // bake at all (the whole block is decider-gated). Runtime render is a separate
+  // step; this is the baked data foundation (§C4 result precedence).
+  target_index?: Record<string, TargetIndexEntry>;
 }
+
+export type TargetIndexEntry = {
+  type: "product" | "collection" | "tag";
+  name: string;
+  persona?: { name: string; description?: string; image?: string | null };
+};
 
 export interface PublishResult {
   ok: true;
@@ -332,7 +356,7 @@ export async function publishQuiz(
     fetchCategoryIds.size > 0
       ? await prisma.category.findMany({
           where: { id: { in: [...fetchCategoryIds] } },
-          select: { id: true, productIds: true, source: true, sourceRef: true, name: true },
+          select: { id: true, productIds: true, source: true, sourceRef: true, name: true, membership: true },
         })
       : [];
   const categoryProductIdsById = new Map(
@@ -344,7 +368,7 @@ export async function publishQuiz(
   // publish: the runtime would resolve an empty target for those shoppers.
   let targetBake: {
     map: Record<string, string[]>;
-    index: Record<string, { type: "product" | "collection" | "tag"; name: string }>;
+    index: Record<string, TargetIndexEntry>;
   } | null = null;
   if (doc.logic_model === "decider") {
     const rowById = new Map(categoryRows.map((c) => [c.id, c]));
@@ -374,7 +398,7 @@ export async function publishQuiz(
       }
     }
     const map: Record<string, string[]> = {};
-    const index: Record<string, { type: "product" | "collection" | "tag"; name: string }> = {};
+    const index: Record<string, TargetIndexEntry> = {};
     for (const id of deciderTargetIds) {
       const row = rowById.get(id)!;
       const ordered = shopifyOrder?.[id];
@@ -390,7 +414,9 @@ export async function publishQuiz(
         : [...synced];
       const type =
         row.source === "product" ? "product" : row.source === "tag" ? "tag" : "collection";
-      index[id] = { type, name: row.name };
+      // §J1/§C4 — carry the Group's ACTIVE persona (name set) into the bake.
+      const persona = personaOfMembership(row.membership);
+      index[id] = persona ? { type, name: row.name, persona } : { type, name: row.name };
     }
     targetBake = { map, index };
   }
