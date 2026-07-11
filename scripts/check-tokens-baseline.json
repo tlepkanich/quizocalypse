@@ -188,6 +188,10 @@
       "hex": 6,
       "boxShadow": 0
     },
+    "app/routes/q.$id_.persona.$slug.tsx": {
+      "hex": 14,
+      "boxShadow": 0
+    },
     "app/routes/q.$id_.results.tsx": {
       "hex": 13,
       "boxShadow": 0
