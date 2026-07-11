@@ -4,6 +4,7 @@ import { Link, useLoaderData } from "@remix-run/react";
 import prisma from "../db.server";
 import type { IndexedProduct } from "../lib/recommendationEngine";
 import { extractPersonaPages, findPersonaPage, productUrl } from "../lib/personaSeo";
+import { requestOrigin } from "../lib/requestOrigin";
 
 // §M8.1/M8.3/M9 — the persona landing page. SSR + indexable (crawlable by
 // default, unlike per-session result snapshots which are noindex). Generated
@@ -11,7 +12,7 @@ import { extractPersonaPages, findPersonaPage, productUrl } from "../lib/persona
 // it's near-zero extra authoring. Carries JSON-LD (ItemList + FAQPage) for rich
 // results + answer-engine extraction (GEO). Self-contained styles — never the
 // admin sheet.
-export const loader = async ({ params }: LoaderFunctionArgs) => {
+export const loader = async ({ params, request }: LoaderFunctionArgs) => {
   const { id, slug } = params;
   if (!id || !slug) throw new Response("Not found", { status: 404 });
   const quiz = await prisma.quiz.findFirst({
@@ -50,8 +51,12 @@ export const loader = async ({ params }: LoaderFunctionArgs) => {
   });
   const matchedCount = matchedRows.length >= MATCH_FLOOR ? matchedRows.length : null;
 
+  // §M8.3 — canonical/og:url must be https behind Fly's TLS-terminating proxy
+  // (request.url alone is http:// there).
+  const canonicalUrl = `${requestOrigin(request)}/q/${quiz.id}/persona/${page.slug}`;
+
   return json(
-    { quizId: quiz.id, quizName: quiz.name, page: { ...page, products }, siblings, matchedCount },
+    { quizId: quiz.id, quizName: quiz.name, page: { ...page, products }, siblings, matchedCount, canonicalUrl },
     { headers: { "Cache-Control": "public, max-age=60, s-maxage=60", "X-Robots-Tag": "index, follow" } },
   );
 };
@@ -66,9 +71,11 @@ export const meta: MetaFunction<typeof loader> = ({ data }) => {
   return [
     { title },
     { name: "description", content: description },
+    { tagName: "link", rel: "canonical", href: data.canonicalUrl },
     { property: "og:title", content: title },
     { property: "og:description", content: description },
     { property: "og:type", content: "website" },
+    { property: "og:url", content: data.canonicalUrl },
     ...(page.image ? [{ property: "og:image", content: page.image }] : []),
   ];
 };

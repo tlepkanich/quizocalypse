@@ -1,6 +1,7 @@
 import type { LoaderFunctionArgs } from "@remix-run/node";
 import prisma from "../db.server";
 import { extractPersonaPages } from "../lib/personaSeo";
+import { requestOrigin } from "../lib/requestOrigin";
 
 // §M9.4 — llms.txt: a clean, extractable index of this quiz's public surfaces
 // (the quiz itself + every persona guide) for AI answer engines. Plain text,
@@ -15,7 +16,7 @@ export const loader = async ({ params, request }: LoaderFunctionArgs) => {
   if (!quiz?.publishedJson) throw new Response("Not found", { status: 404 });
   const raw = quiz.publishedJson as Parameters<typeof extractPersonaPages>[0];
   const pages = extractPersonaPages(raw);
-  const origin = new URL(request.url).origin;
+  const origin = requestOrigin(request);
   const name = quiz.name || "Product quiz";
 
   const lines = [
