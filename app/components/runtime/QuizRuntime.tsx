@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { ChromeContext, CHROME_TOKENS, useChrome, type ChromeToken } from "./chromeStrings";
 import { tagToAnswerText, reasonsForProduct } from "../../lib/matchReasons";
 import type { Quiz } from "../../lib/quizSchema";
+import { resolveEngagement } from "../../lib/engagementSchema";
 import {
   resolveNextStep,
   recommendForResult,
@@ -1521,6 +1522,10 @@ export function QuizRuntime(props: QuizRuntimeProps) {
                 ? { source: "global_fallback" as const, products: globalFallbackRecs }
                 : deciderFallbackProducts(cfg, productIndex)
               : null;
+          // §L — resolved engagement (undefined for every doc without an
+          // opt-in `engagement` block, so the loading/result views stay
+          // byte- and DOM-identical for existing quizzes).
+          const engagement = doc.engagement ? resolveEngagement(doc.engagement) : undefined;
           content = (
             <DeciderResultView
               decider={explained.decider}
@@ -1536,6 +1541,7 @@ export function QuizRuntime(props: QuizRuntimeProps) {
               analytics={analyticsRef.current}
               buddySessionId={buddySessionId}
               aiWhyCopy={aiWhyCopy}
+              engagement={engagement}
               onReset={reset}
             />
           );
@@ -1552,6 +1558,7 @@ export function QuizRuntime(props: QuizRuntimeProps) {
               <DeciderLoadingView
                 poolSize={explained.poolSize}
                 onDone={() => setBeatsDone(true)}
+                interstitial={engagement?.interstitial}
               />
             );
           }

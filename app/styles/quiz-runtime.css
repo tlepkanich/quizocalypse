@@ -121,3 +121,90 @@ body[data-qz] ::selection { background: #0E0F11; color: #FFFFFF; }
 .qz-reveal[data-qz-reveal-pos="above"] { bottom: 100%; left: 0; margin-bottom: 8px; }
 .qz-opt-wrap:hover .qz-reveal,
 .qz-opt-wrap[data-qz-selected] .qz-reveal { display: block; }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   PORTED (handoff bundle) — §L L3 engagement result widgets (feedback /
+   reward / referral / share / social-proof). Every class below is rendered
+   ONLY when a doc opts into engagement — no legacy doc's DOM references
+   these selectors, so existing published quizzes are style-unaffected.
+   ═══════════════════════════════════════════════════════════════════════════ */
+.qz-proof  { display: flex; align-items: center; justify-content: center; gap: 6px; font-size: 12.5px; color: var(--qz-color-muted); margin-bottom: 12px; }
+
+/* §M3 — reward reveal (shopper-facing, brand-themed via --qz-color-* tokens). */
+.qz-reward  {
+  border: 1px solid color-mix(in srgb, var(--qz-color-primary) 30%, var(--qz-color-border));
+  background: color-mix(in srgb, var(--qz-color-primary) 6%, transparent);
+  border-radius: 14px; padding: 16px 18px; margin-top: 18px;
+  display: flex; flex-direction: column; gap: 10px; align-items: stretch;
+}
+
+.qz-reward-head  { font-weight: 700; font-size: 15px; color: var(--qz-color-text); }
+
+.qz-reward-email  {
+  padding: 10px 12px; border-radius: 10px; border: 1px solid var(--qz-color-border);
+  background: var(--qz-color-surface); font: inherit; font-size: 14px; color: var(--qz-color-text);
+}
+
+.qz-reward-btn  {
+  padding: 11px 16px; border-radius: 10px; border: none; cursor: pointer;
+  background: var(--qz-color-primary); color: #fff; font: inherit; font-weight: 700; font-size: 14px;
+}
+
+.qz-reward-btn:disabled  { opacity: .55; cursor: default; }
+
+.qz-reward-err  { font-size: 12.5px; color: var(--qz-color-muted); }
+
+.qz-reward-done  { text-align: center; }
+
+.qz-reward-label  { font-weight: 700; font-size: 16px; color: var(--qz-color-text); }
+
+.qz-reward-code  {
+  font-family: ui-monospace, Menlo, monospace; font-size: 20px; font-weight: 700; letter-spacing: .08em;
+  color: var(--qz-color-primary); padding: 8px 14px; margin: 4px auto 0; display: inline-block;
+  border: 1px dashed color-mix(in srgb, var(--qz-color-primary) 50%, var(--qz-color-border)); border-radius: 10px;
+}
+
+.qz-reward-note  { font-size: 12.5px; color: var(--qz-color-muted); margin: 6px 0 0; }
+
+/* §M6 — referral give-get share block. */
+.qz-referral  {
+  border: 1px solid color-mix(in srgb, var(--qz-color-primary) 26%, var(--qz-color-border));
+  background: color-mix(in srgb, var(--qz-color-primary) 5%, transparent);
+  border-radius: 14px; padding: 15px 18px; margin-top: 18px;
+  display: flex; flex-direction: column; gap: 10px;
+}
+
+.qz-referral-head  { font-weight: 700; font-size: 14.5px; color: var(--qz-color-text); }
+
+.qz-referral-linkrow  { display: flex; gap: 8px; flex-wrap: wrap; }
+
+.qz-referral-link  {
+  flex: 1 1 200px; min-width: 0; padding: 9px 12px; border-radius: 10px;
+  border: 1px solid var(--qz-color-border); background: var(--qz-color-surface);
+  font: inherit; font-size: 13px; color: var(--qz-color-muted);
+}
+
+.qz-referral-copy  {
+  flex: 0 0 auto; padding: 9px 16px; border-radius: 10px; border: none; cursor: pointer;
+  background: var(--qz-color-primary); color: #fff; font: inherit; font-weight: 700; font-size: 13px;
+}
+
+.qz-fb  { border-top: 1px solid var(--qz-color-border); padding-top: 14px; margin-top: 10px; display: flex; align-items: center; flex-wrap: wrap; gap: 8px; font-size: 13.5px; color: var(--qz-color-muted); }
+
+.qz-fb-prompt  { font-weight: 600; }
+
+.qz-fb-thumbs, .qz-fb-stars  { display: inline-flex; gap: 6px; }
+
+.qz-fb-btn, .qz-fb-star  { width: 34px; height: 34px; border-radius: 9px; border: 1px solid var(--qz-color-border); background: var(--qz-color-surface); cursor: pointer; font-size: 16px; line-height: 1; }
+
+.qz-fb-text  { flex: 1 1 100%; margin-top: 8px; padding: 8px 10px; border: 1px solid var(--qz-color-border); border-radius: 8px; font: inherit; font-size: 13px; }
+
+.qz-fb-done  { color: var(--qz-color-primary); font-weight: 600; }
+
+.qz-share  { display: flex; gap: 8px; margin-top: 14px; }
+
+.qz-share-btn  { flex: 1; font: inherit; font-size: 12.5px; font-weight: 600; padding: 9px; border-radius: 9px; border: 1px solid var(--qz-color-border); background: var(--qz-color-surface); color: var(--qz-color-text); cursor: pointer; }
+
+.qz-share-btn:hover  { border-color: var(--qz-color-primary); }
+
+.qz-scarcity  { display: inline-flex; align-items: center; font-size: 11px; font-weight: 600; color: #D0463C; margin-top: 4px; }

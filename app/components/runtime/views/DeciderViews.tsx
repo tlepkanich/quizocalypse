@@ -1,10 +1,15 @@
-import { useContext, useEffect, useRef, useState } from "react";
+import { useContext, useEffect, useMemo, useRef, useState } from "react";
 import type {
   ExplainedRecommendation,
   RecommendedProduct,
 } from "../../../lib/recommendationEngine";
 import type { DeciderFallback, ResolvedRecPageConfig } from "../../../lib/recommendDecider";
-import { revealLineup } from "../../../lib/recommendDecider";
+import { revealLineup, REC_PAGE_DEFAULTS } from "../../../lib/recommendDecider";
+import type { ResolvedEngagement } from "../../../lib/engagementSchema";
+import { FeedbackWidget } from "../engagement/FeedbackWidget";
+import { RewardReveal } from "../engagement/RewardReveal";
+import { ReferralShare } from "../engagement/ReferralShare";
+import { ShareRow } from "../engagement/ResultExtras";
 import { productHref } from "../../../lib/productHref";
 import { cartPermalinkMulti } from "../../../lib/cartLink";
 import { formatMoney } from "../../../lib/formatMoney";
@@ -39,30 +44,109 @@ import { postQuizSession } from "./postQuizSession";
 export function DeciderLoadingView({
   poolSize,
   onDone,
+  interstitial,
 }: {
   poolSize: number;
   onDone: () => void;
+  // §L L3 — optional engagement override. ABSENT for every existing decider doc
+  // (engagement is opt-in), so the branch below keeps the exact legacy beats,
+  // copy, and spinner: DOM-identical, no behavior change. Present + enabled →
+  // the merchant's headline/steps/style/duration drive the interstitial.
+  interstitial?: ResolvedEngagement["interstitial"];
 }) {
   const tc = useChrome();
   const [beat, setBeat] = useState(0);
+  const custom = interstitial?.enabled ? interstitial : null;
+  // Copy: custom stepped-style uses the merchant's steps; otherwise the K1
+  // reveal tokens (existing translations carry over unchanged).
+  const lines =
+    custom && custom.style === "stepped" && custom.steps && custom.steps.length > 0
+      ? custom.steps
+      : [
+          tc("reveal_weighing"),
+          poolSize > 0 ? tc("reveal_matching", { n: poolSize }) : tc("reveal_weighing"),
+        ];
+  // Legacy default: two fixed beats (~1.6s). Custom: split the merchant's total
+  // delay evenly across its lines (clamped to the spec's 1.5–5s band). Memoized
+  // on PRIMITIVES (not the `interstitial` object, whose identity changes every
+  // parent render) so the beat timer below never resets mid-interstitial.
+  const beats = useMemo(() => {
+    if (!custom) return [900, 700];
+    const total = Math.min(5000, Math.max(1500, custom.delayMs ?? 2500));
+    const n = Math.max(1, lines.length);
+    return Array.from({ length: n }, () => Math.round(total / n));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [!!custom, custom?.delayMs, lines.length]);
   // onDone is an inline arrow at the call site (new identity per parent
   // render) — hold it in a ref so a mid-beat parent re-render can't reset
   // the running beat timer and stretch the interstitial.
   const onDoneRef = useRef(onDone);
   onDoneRef.current = onDone;
   useEffect(() => {
-    const beats = [900, 700];
     if (beat >= beats.length) {
       onDoneRef.current();
       return;
     }
     const t = setTimeout(() => setBeat((b) => b + 1), beats[beat]);
     return () => clearTimeout(t);
-  }, [beat]);
-  const lines = [
-    tc("reveal_weighing"),
-    poolSize > 0 ? tc("reveal_matching", { n: poolSize }) : tc("reveal_weighing"),
-  ];
+  }, [beat, beats]);
+  const spinner = (
+    <div
+      aria-hidden
+      style={{
+        width: 34,
+        height: 34,
+        borderRadius: 999,
+        border: "3px solid color-mix(in srgb, var(--qz-color-primary) 25%, transparent)",
+        borderTopColor: "var(--qz-color-primary)",
+        animation: "qz-spin 0.9s linear infinite",
+      }}
+    />
+  );
+  // §A3 — Variation-A conic ring (spin + breathe), runtime-themed via
+  // --qz-color-primary. INLINE styles/keyframes because /q loads only
+  // quiz-runtime.css (never the admin sheet). Used ONLY on the opted-in custom
+  // interstitial; the legacy (no-config) path keeps the exact spinner below, so
+  // existing published quizzes render byte/DOM-identical.
+  const ring = (
+    <div aria-hidden style={{ animation: "qz-breathe 2.8s ease-in-out infinite" }}>
+      <div
+        style={{
+          width: 60,
+          height: 60,
+          borderRadius: 999,
+          background:
+            "conic-gradient(from 0deg, var(--qz-color-primary), color-mix(in srgb, var(--qz-color-primary) 55%, white), var(--qz-color-primary))",
+          WebkitMask: "radial-gradient(farthest-side, transparent calc(100% - 7px), black calc(100% - 7px))",
+          mask: "radial-gradient(farthest-side, transparent calc(100% - 7px), black calc(100% - 7px))",
+          animation: "qz-spin 1.1s linear infinite",
+        }}
+      />
+    </div>
+  );
+  // Progress-bar variant fills beat-by-beat (custom "progress" style only).
+  const progressBar = (
+    <div
+      aria-hidden
+      style={{
+        width: "min(240px, 70%)",
+        height: 6,
+        borderRadius: 999,
+        background: "color-mix(in srgb, var(--qz-color-primary) 15%, transparent)",
+        overflow: "hidden",
+      }}
+    >
+      <div
+        style={{
+          width: `${Math.round(((Math.min(beat, lines.length - 1) + 1) / lines.length) * 100)}%`,
+          height: "100%",
+          background: "var(--qz-color-primary)",
+          borderRadius: 999,
+          transition: "width 0.4s ease",
+        }}
+      />
+    </div>
+  );
   return (
     <div
       role="status"
@@ -77,21 +161,20 @@ export function DeciderLoadingView({
         textAlign: "center",
       }}
     >
-      <div
-        aria-hidden
-        style={{
-          width: 34,
-          height: 34,
-          borderRadius: 999,
-          border: "3px solid color-mix(in srgb, var(--qz-color-primary) 25%, transparent)",
-          borderTopColor: "var(--qz-color-primary)",
-          animation: "qz-spin 0.9s linear infinite",
-        }}
-      />
+      {custom?.headline ? (
+        <div style={{ fontSize: "1.25em", fontWeight: 700 }}>{custom.headline}</div>
+      ) : null}
+      {/* Gated: legacy (no interstitial config) → the exact original spinner
+          (byte/DOM-identical). Opted-in custom → the §A3 ring (or progress). */}
+      {custom ? (custom.style === "progress" ? progressBar : ring) : spinner}
       <div style={{ fontSize: "1.05em", fontWeight: 600 }}>
         {lines[Math.min(beat, lines.length - 1)]}
       </div>
-      <style>{`@keyframes qz-spin { to { transform: rotate(360deg); } }`}</style>
+      {/* Legacy keeps the EXACT original style block (byte-identical); the
+          breathe keyframe is added only when the ring renders (custom). */}
+      <style>{custom
+        ? `@keyframes qz-spin { to { transform: rotate(360deg); } } @keyframes qz-breathe { 0%,100% { transform: scale(0.85); } 50% { transform: scale(1.1); } }`
+        : `@keyframes qz-spin { to { transform: rotate(360deg); } }`}</style>
     </div>
   );
 }
@@ -271,6 +354,7 @@ export function DeciderResultView({
   analytics,
   buddySessionId,
   aiWhyCopy,
+  engagement,
   onReset,
 }: {
   decider: NonNullable<ExplainedRecommendation["decider"]>;
@@ -288,6 +372,9 @@ export function DeciderResultView({
   // L2-12b — the per-shopper AI paragraph, when it arrived before this paint.
   // Replaces (never stacks with) the merchant template inside the whyOn gate.
   aiWhyCopy?: string | null;
+  // §L L3 — resolved engagement config (present only when the merchant opted in;
+  // undefined → widgets don't render → existing quizzes unchanged).
+  engagement?: ResolvedEngagement;
   onReset: () => void;
 }) {
   const tc = useChrome();
@@ -382,8 +469,13 @@ export function DeciderResultView({
   // QZY-5 §2.3 — the add-all bar: only when the toggle is on, 2+ products
   // show, and a cart exists (standalone has none). Multi-adds ride the
   // comma-pair permalink (the TAE postMessage contract is single-variant).
+  // §M1.1 — an opt-in engagement bundle also enables it (with a configurable
+  // min-items). Legacy docs carry no `engagement`, so the condition is
+  // byte-identical: `cfg.showAddAll || false` and minItems 2.
+  const bundle = engagement?.bundle;
+  const addAllMinItems = bundle?.minItems ?? 2;
   const addAllUrl =
-    cfg.showAddAll && lineup.shown.length >= 2 && platform !== "standalone"
+    (cfg.showAddAll || !!bundle?.enabled) && lineup.shown.length >= addAllMinItems && platform !== "standalone"
       ? cartPermalinkMulti(
           shopDomain,
           lineup.shown.map((p) => p.default_variant_id ?? p.variants?.[0]?.id),
@@ -441,10 +533,32 @@ export function DeciderResultView({
     />
   );
 
+  // §C4 — persona precedence: an explicit Results-page headline (≠ the default)
+  // wins; otherwise the mapped Group's persona name; otherwise the plain default.
+  // The persona image + description render only when the persona is the active
+  // content (no headline override).
+  const persona = decider.persona;
+  const headlineOverridden = cfg.headline !== REC_PAGE_DEFAULTS.headline;
+  const revealHeadline = headlineOverridden ? cfg.headline : persona?.name?.trim() || cfg.headline;
+  const showPersona = Boolean(persona && !headlineOverridden);
+
   return (
     <div style={styles.card}>
       {cfg.incentivePos === "banner" ? incentiveChip : null}
-      <h2 style={styles.h2}>{cfg.headline}</h2>
+      {showPersona && persona?.image ? (
+        <img
+          src={persona.image}
+          alt=""
+          style={{ width: 88, height: 88, borderRadius: "50%", objectFit: "cover", margin: "0 auto 12px", display: "block" }}
+        />
+      ) : null}
+      <h2 style={styles.h2}>{revealHeadline}</h2>
+      {/* Persona framing (§C4) and the why-copy are DIFFERENT content — render
+          both. (An earlier else-if wrongly suppressed the AI why-copy when a
+          persona had a description.) */}
+      {showPersona && persona?.description?.trim() ? (
+        <p style={{ ...styles.muted, marginTop: 8 }}>{persona.description}</p>
+      ) : null}
       {cfg.whyOn && (aiWhyCopy?.trim() || cfg.whyCopy.trim()) ? (
         <p style={{ ...styles.muted, marginTop: 8 }}>
           {aiWhyCopy?.trim() || cfg.whyCopy}
@@ -506,7 +620,7 @@ export function DeciderResultView({
           {tc("add_all_to_cart", {
             count: lineup.shown.length,
             total: formatMoney(addAllTotal, currency, locale),
-          })}
+          }) + (bundle?.discountValue ? ` — save ${bundle.discountValue}%` : "")}
         </button>
       ) : null}
       {showFallback ? (
@@ -515,6 +629,28 @@ export function DeciderResultView({
         </div>
       ) : null}
       {cfg.incentivePos === "bottom" ? incentiveChip : null}
+      {/* §L L3 — engagement widgets (present only when the merchant opted in). */}
+      {engagement?.reward.enabled && quizId && sessionId ? (
+        <RewardReveal config={engagement.reward} quizId={quizId} sessionId={sessionId} />
+      ) : null}
+      {engagement?.referral.enabled && quizId && sessionId ? (
+        <ReferralShare config={engagement.referral} quizId={quizId} sessionId={sessionId} preview={isPreviewMode} />
+      ) : null}
+      {engagement?.feedback.enabled && quizId && sessionId ? (
+        <FeedbackWidget
+          config={engagement.feedback}
+          quizId={quizId}
+          sessionId={sessionId}
+          outcomeId={resultNodeId}
+        />
+      ) : null}
+      {engagement?.share.enabled ? (
+        <ShareRow
+          config={engagement.share}
+          shareUrl={typeof window !== "undefined" ? window.location.origin + window.location.pathname : ""}
+          personaName={persona?.name}
+        />
+      ) : null}
       <button
         onClick={onReset}
         style={{
