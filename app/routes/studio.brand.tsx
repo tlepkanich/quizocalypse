@@ -1,6 +1,7 @@
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "@remix-run/node";
 import { json } from "@remix-run/node";
-import { Link, useLoaderData } from "@remix-run/react";
+import { Link, useFetcher, useLoaderData } from "@remix-run/react";
+import prisma from "../db.server";
 import { requireStudioAccess, resolveStudioShop } from "../lib/studioAccess.server";
 import { parseBrandIdentitySafe } from "../lib/brandIdentity";
 import {
@@ -8,8 +9,10 @@ import {
   saveBrandIdentityEdits,
   confirmBrandIdentity,
 } from "../lib/brandIdentityBuild.server";
+import { DesignTokens } from "../lib/quizSchema";
+import { parseBrandGuidelinesSafe, BrandVoice, type BrandGuidelines } from "../lib/brandGuidelines";
 import { QzPage, QzPageHeader } from "../components/qz";
-import { BrandIdentityReview } from "../components/studio/BrandIdentityReview";
+import { BrandBook } from "../components/studio/BrandBook";
 
 // Brand Identity — the deploy-validation surface (P3). Cookie-gated like the
 // rest of /studio; it runs a REAL build against the dev shop via the offline
@@ -21,10 +24,13 @@ import { BrandIdentityReview } from "../components/studio/BrandIdentityReview";
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   await requireStudioAccess(request);
   const shop = await resolveStudioShop();
+  const tokensParse = DesignTokens.safeParse(shop.brandTokens ?? {});
   return json({
     shopDomain: shop.shopDomain,
     state: shop.brandIdentityState ?? null,
     identity: parseBrandIdentitySafe(shop.brandIdentity),
+    tokens: tokensParse.success ? tokensParse.data : {},
+    voice: parseBrandGuidelinesSafe(shop.brandGuidelines)?.voice ?? null,
   });
 };
 
@@ -44,6 +50,59 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     const res = await saveBrandIdentityEdits(shop.id, parsed);
     return json(res, { status: res.ok ? 200 : 400 });
   }
+  if (intent === "save-tokens") {
+    // Brand book visual sections (logo/colors/type/shape/spacing/imagery/presets)
+    // persist to shop.brandTokens — merged over the stored set so a partial edit
+    // never drops other fields. The token cascade (brand → quiz override →
+    // default) then feeds every AI-built quiz's Design step.
+    let raw: unknown;
+    try {
+      raw = JSON.parse(String(form.get("tokens") ?? "null"));
+    } catch {
+      return json({ ok: false, error: "bad tokens JSON" }, { status: 400 });
+    }
+    const parsedTokens = DesignTokens.safeParse(raw);
+    if (!parsedTokens.success) return json({ ok: false, error: "invalid tokens" }, { status: 400 });
+    const existing = DesignTokens.safeParse(shop.brandTokens ?? {});
+    const base: Record<string, unknown> = existing.success ? { ...existing.data } : {};
+    // One-level deep merge: for object-valued keys (colors, typography, logo,
+    // style_bar, …) merge fields so a payload touching one nested field can't
+    // drop its siblings. Scalars/enums/arrays replace wholesale.
+    for (const [k, v] of Object.entries(parsedTokens.data)) {
+      const prev = base[k];
+      if (v && typeof v === "object" && !Array.isArray(v) && prev && typeof prev === "object" && !Array.isArray(prev)) {
+        base[k] = { ...(prev as object), ...(v as object) };
+      } else {
+        base[k] = v;
+      }
+    }
+    await prisma.shop.update({ where: { id: shop.id }, data: { brandTokens: base as never } });
+    return json({ ok: true });
+  }
+  if (intent === "save-voice") {
+    // Voice & tone (do / don't / sample copy) persists to shop.brandGuidelines'
+    // BrandVoice. If no guidelines exist yet, synthesize a minimal wrapper so a
+    // merchant can author voice without first uploading a brand-guidelines file.
+    let raw: unknown;
+    try {
+      raw = JSON.parse(String(form.get("voice") ?? "null"));
+    } catch {
+      return json({ ok: false, error: "bad voice JSON" }, { status: 400 });
+    }
+    const parsedVoice = BrandVoice.safeParse(raw);
+    if (!parsedVoice.success) return json({ ok: false, error: "invalid voice" }, { status: 400 });
+    const existing = parseBrandGuidelinesSafe(shop.brandGuidelines);
+    const next: BrandGuidelines = existing
+      ? { ...existing, voice: parsedVoice.data }
+      : {
+          name: "Brand",
+          voice: parsedVoice.data,
+          visual_suggestions: { notes: [] },
+          source: { uploaded_at: new Date().toISOString(), file_kind: "preset", extraction_model: "merchant-edited" },
+        };
+    await prisma.shop.update({ where: { id: shop.id }, data: { brandGuidelines: next as never } });
+    return json({ ok: true });
+  }
   if (intent === "confirm") {
     const res = await confirmBrandIdentity(shop.id);
     return json(res, { status: res.ok ? 200 : 400 });
@@ -56,31 +115,26 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 };
 
 export default function StudioBrand() {
-  const { shopDomain, state, identity } = useLoaderData<typeof loader>();
+  const { identity, tokens, voice } = useLoaderData<typeof loader>();
+  const buildFetcher = useFetcher<{ ok: boolean }>();
+  const building = buildFetcher.state !== "idle";
   return (
-    <QzPage>
+    <QzPage width="wide">
       <QzPageHeader
-        eyebrow="Brand identity"
-        title="Here's what we see"
-        subtitle={`The internal brand identity we digested for ${shopDomain}. Edit anything that's off — your edits are locked so a re-sync never overwrites them.`}
+        title="Brand Identity"
         actions={
-          <Link to="/studio" className="qz-btn qz-btn-ghost qz-btn-sm">
-            ← All quizzes
-          </Link>
+          <div className="qz-row" style={{ gap: 8 }}>
+            <buildFetcher.Form method="post">
+              <input type="hidden" name="intent" value={identity ? "refresh" : "build"} />
+              <button type="submit" className="qz-btn qz-btn-ghost qz-btn-sm" disabled={building}>
+                {building ? "Working…" : identity ? "Re-sync from store" : "Build identity"}
+              </button>
+            </buildFetcher.Form>
+            <Link to="/studio" className="qz-btn qz-btn-ghost qz-btn-sm">← All quizzes</Link>
+          </div>
         }
       />
-      <BrandIdentityReview identity={identity} state={state} />
-      <div
-        className="qz-row qz-row-between"
-        style={{ marginTop: 20, gap: 12, flexWrap: "wrap", alignItems: "center" }}
-      >
-        <span className="qz-dim" style={{ fontSize: 13 }}>
-          This identity is applied automatically whenever the AI builds a quiz — no need to revisit it each time.
-        </span>
-        <Link to="/studio/onboarding" className="qz-btn qz-btn-ghost qz-btn-sm">
-          Create a quiz →
-        </Link>
-      </div>
+      <BrandBook identity={identity} tokens={tokens} voice={voice} />
     </QzPage>
   );
 }

@@ -2,15 +2,14 @@ import { Form, NavLink } from "@remix-run/react";
 import { useEffect, useState } from "react";
 import {
   BarChart3,
-  Boxes,
   ChevronsLeft,
   ChevronsRight,
   FlaskConical,
   Home,
   Layers,
   LogOut,
+  Boxes,
   Mail,
-  Package,
   Palette,
   Plug,
   Settings,
@@ -37,6 +36,8 @@ interface RailItem {
   label: string;
   icon: LucideIcon;
   end?: boolean;
+  /** P3 Edit 5 — v1 placeholder: shows a "Soon" tag; route renders a Soon state. */
+  soon?: boolean;
 }
 
 /* Same 10 destinations as the old StudioSidebar. Icon rules (§7.7): lucide
@@ -46,17 +47,14 @@ const NAV: RailItem[] = [
   { to: "/studio", label: "Home", icon: Home, end: true },
   { to: "/studio/quizzes", label: "Quizzes", icon: Layers },
   { to: "/studio/analytics", label: "Analytics", icon: BarChart3 },
-  { to: "/studio/products", label: "Products", icon: Package },
-  // Ported (handoff bundle) — account-level Groups & Personas (P3 Edit 5/§J1).
   { to: "/studio/groups", label: "Personas & Groups", icon: Boxes },
   { to: "/studio/brand", label: "Brand Identity", icon: Palette },
-  { to: "/studio/customers", label: "Customers", icon: Users },
+  { to: "/studio/customers", label: "Customer Engagement", icon: Users },
   { to: "/studio/integrations", label: "Integrations", icon: Plug },
-  // Ported (handoff bundle) — account-level defaults (engagement §L Layer 2).
   { to: "/studio/settings", label: "Settings", icon: Settings },
   { to: "/studio/email", label: "Email Automation", icon: Mail },
-  { to: "/studio/ab", label: "AB Testing", icon: FlaskConical },
-  { to: "/studio/ai-agent", label: "AI Agent", icon: Sparkles },
+  { to: "/studio/ab", label: "A/B testing", icon: FlaskConical, soon: true },
+  { to: "/studio/ai-agent", label: "AI Agent", icon: Sparkles, soon: true },
 ];
 
 export function Rail() {
@@ -101,6 +99,7 @@ export function Rail() {
             >
               <Icon size={20} strokeWidth={1.5} aria-hidden="true" className="qz-rail-icon" />
               <span className="qz-rail-label">{item.label}</span>
+              {item.soon ? <span className="qz-rail-soon">Soon</span> : null}
             </NavLink>
           );
         })}

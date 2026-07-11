@@ -134,7 +134,9 @@ export function QzModal({
         aria-modal="true"
         aria-labelledby={title ? labelId : undefined}
       >
-        {!destructive && size !== "sm" ? (
+        {/* §A2 — visible × on every non-destructive modal (any size).
+            Destructive alertdialogs keep explicit Cancel/confirm only. */}
+        {!destructive ? (
           <button type="button" className="qz-modal-x" aria-label="Close" onClick={onClose}>
             <X size={16} strokeWidth={2} />
           </button>
@@ -383,5 +385,55 @@ export function QzPopover({
           )
         : null}
     </>
+  );
+}
+
+/* ── Menu (P2 Edit 3) ─────────────────────────────────────────────────────
+   Dropdown ACTIONS menu — a thin ergonomic over QzPopover (the dropdown
+   primitive already in this file): a role=menu list where each item is an
+   action. Reuses Popover's positioning, one-at-a-time registry, and
+   outside-click/Esc dismiss, so it stays on the single overlay contract. */
+export function QzMenu({
+  trigger,
+  items,
+  placement = "bottom",
+}: {
+  trigger: ReactNode;
+  items: Array<{
+    label: ReactNode;
+    onSelect: () => void;
+    tone?: "default" | "crit";
+    disabled?: boolean;
+  }>;
+  placement?: "top" | "bottom";
+}) {
+  const [open, setOpen] = useState(false);
+  return (
+    <QzPopover
+      placement={placement}
+      maxWidth={260}
+      open={open}
+      onOpenChange={setOpen}
+      trigger={trigger}
+      content={
+        <div className="qz-menu" role="menu">
+          {items.map((it, i) => (
+            <button
+              key={i}
+              type="button"
+              role="menuitem"
+              disabled={it.disabled}
+              className={`qz-menu-item${it.tone === "crit" ? " qz-menu-item-crit" : ""}`}
+              onClick={() => {
+                it.onSelect();
+                setOpen(false);
+              }}
+            >
+              {it.label}
+            </button>
+          ))}
+        </div>
+      }
+    />
   );
 }

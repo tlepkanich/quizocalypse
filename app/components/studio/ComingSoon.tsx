@@ -5,7 +5,7 @@ import { QzPage, QzPageHeader, QzCard } from "../qz";
 export function ComingSoon({ title, blurb }: { title: string; blurb?: string }) {
   return (
     <QzPage>
-      <QzPageHeader eyebrow="Studio" title={title} />
+      <QzPageHeader title={title} />
       <QzCard dashed style={{ textAlign: "center", padding: "56px 28px" }}>
         <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 6 }}>Coming soon</div>
         <p className="qz-muted" style={{ margin: "0 auto", maxWidth: "44ch", fontSize: 14 }}>

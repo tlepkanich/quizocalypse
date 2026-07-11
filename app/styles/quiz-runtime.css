@@ -41,12 +41,10 @@ body[data-qz] {
 }
 body[data-qz] *, body[data-qz] *::before, body[data-qz] *::after { box-sizing: border-box; }
 
-/* Keyboard focus ring (quizocalypse.css body[data-qz] :focus-visible, V2 §6.4)
-   — radius frozen to its light value. The ring color follows the quiz's own
-   brand primary (tokensToCssVars sets it on the runtime subtree root for every
-   doc model); outside the subtree, or docs without tokens, fall back to the
-   previous admin accent. An admin-purple outline on a merchant-branded quiz
-   was the one un-themed color on the shopper surface. */
+/* Keyboard focus ring. Inside the quiz subtree --qz-color-primary is inherited,
+   so keyboard focus picks up the merchant's BRAND color (design §10/§12 — the
+   quiz's one real color is the brand); the frozen neutral is the fallback for
+   any focusable outside that subtree. radius-sm frozen to its light value. */
 body[data-qz] :focus-visible {
   outline: 3px solid var(--qz-color-primary, #5B47E5);
   outline-offset: 2px;
@@ -73,153 +71,137 @@ body[data-qz] ::selection { background: #0E0F11; color: #FFFFFF; }
    value in BOTH light and dark ("mid-gray reads on both modes"). */
 .qz-dim { color: #84878C; }
 
-/* R5c-2 (build-tab §6.1) — OPT-IN answer-option hover + motion. Applied only to
-   options the merchant configured; those carry .qz-answer-opt + data attrs +
-   the --qz-opt-hover-* vars. Options without them never get the class, so their
-   HTML + rendering are byte-identical. Inline styles can't express :hover, so
-   the state/transition lives here. */
-.qz-answer-opt {
-  transition: transform 0.15s ease, box-shadow 0.15s ease,
-    background-color 0.15s ease, border-color 0.15s ease, opacity 0.15s ease;
-}
-.qz-answer-opt[data-qz-hover]:hover {
-  background: var(--qz-opt-hover-bg);
-  border-color: var(--qz-opt-hover-border);
-}
-.qz-answer-opt[data-qz-motion="pop"]:hover { transform: scale(1.03); }
-.qz-answer-opt[data-qz-motion="lift"]:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.14);
-}
-.qz-answer-opt[data-qz-motion="fade"]:hover { opacity: 0.85; }
-/* Touch devices fall back to the selected state — no sticky hover motion. */
-@media (hover: none) {
-  .qz-answer-opt[data-qz-motion]:hover { transform: none; box-shadow: none; opacity: 1; }
-}
-/* R5c-3 (build-tab §6.2) — playful effects (opt-in via data-qz-effect; gated
-   behind a drawer in the builder, never a default). Continuous animations are
-   disabled under prefers-reduced-motion. */
-@keyframes qz-pulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.04); } }
-@keyframes qz-rainbow { 0% { filter: hue-rotate(0deg); } 100% { filter: hue-rotate(360deg); } }
-@keyframes qz-flash { 0%, 100% { filter: brightness(1); } 50% { filter: brightness(1.3); } }
-.qz-answer-opt[data-qz-effect="pulse"] { animation: qz-pulse 1.6s ease-in-out infinite; }
-.qz-answer-opt[data-qz-effect="rainbow"] { animation: qz-rainbow 3s linear infinite; }
-.qz-answer-opt[data-qz-effect="flash"] { animation: qz-flash 1.2s ease-in-out infinite; }
+/* §A6 — option interaction MOTION presets. Applied per-option on hover/active
+   inside a configured answer_display; absent (data-qz-motion="none") = static.
+   Honors prefers-reduced-motion. The option wrapper is the direct child div. */
+[data-qz-motion="pop"] > div { transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1); }
+[data-qz-motion="pop"] > div:hover { transform: scale(1.03); }
+[data-qz-motion="pop"] > div:active { transform: scale(0.98); }
+[data-qz-motion="lift"] > div { transition: transform 0.18s ease, box-shadow 0.18s ease; }
+[data-qz-motion="lift"] > div:hover { transform: translateY(-3px); box-shadow: 0 6px 20px rgba(0, 0, 0, 0.12); }
+[data-qz-motion="fade"] > div { transition: opacity 0.2s ease; }
+[data-qz-motion="fade"] > div:hover { opacity: 0.82; }
 @media (prefers-reduced-motion: reduce) {
-  .qz-answer-opt[data-qz-effect] { animation: none; }
+  [data-qz-motion] > div { transition: none !important; }
+  [data-qz-motion] > div:hover,
+  [data-qz-motion] > div:active { transform: none !important; box-shadow: none !important; }
 }
-/* R5c-4 (build-tab §6.1) — reveal-on-interaction: a per-option image shown on
-   hover or select, beside/above the option. Hidden by default; opt-in via the
-   .qz-opt-wrap wrapper (only present when an option has a reveal image). */
-.qz-reveal {
-  display: none;
-  position: absolute;
-  z-index: 3;
-  max-width: 160px;
-  max-height: 160px;
-  border-radius: 8px;
-  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.18);
-  pointer-events: none;
-}
-.qz-reveal[data-qz-reveal-pos="beside"] { left: 100%; top: 0; margin-left: 8px; }
-.qz-reveal[data-qz-reveal-pos="above"] { bottom: 100%; left: 0; margin-bottom: 8px; }
-.qz-opt-wrap:hover .qz-reveal,
-.qz-opt-wrap[data-qz-selected] .qz-reveal { display: block; }
 
-/* ═══════════════════════════════════════════════════════════════════════════
-   PORTED (handoff bundle) — §L L3 engagement result widgets (feedback /
-   reward / referral / share / social-proof). Every class below is rendered
-   ONLY when a doc opts into engagement — no legacy doc's DOM references
-   these selectors, so existing published quizzes are style-unaffected.
-   ═══════════════════════════════════════════════════════════════════════════ */
-.qz-proof  { display: flex; align-items: center; justify-content: center; gap: 6px; font-size: 12.5px; color: var(--qz-color-muted); margin-bottom: 12px; }
+/* §A6 — per-option reveal image: floats above the option on hover/focus. */
+.qz-reveal-opt .qz-reveal-img {
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  width: 132px;
+  max-width: 62vw;
+  height: auto;
+  border-radius: 10px;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.18);
+  opacity: 0;
+  pointer-events: none;
+  z-index: 6;
+  transform: translateX(-50%) translateY(4px);
+  transition: opacity 0.18s ease, transform 0.18s ease;
+}
+.qz-reveal-opt:hover .qz-reveal-img,
+.qz-reveal-opt:focus-within .qz-reveal-img {
+  opacity: 1;
+  transform: translateX(-50%) translateY(-6px);
+}
+@media (prefers-reduced-motion: reduce) {
+  .qz-reveal-opt .qz-reveal-img { transition: opacity 0.01ms; transform: translateX(-50%); }
+}
+
+/* §L — engagement runtime components (interstitial + result-page widgets).
+   Brand-book themed via the inherited --qz-color-* tokens; reduced-motion safe;
+   each widget renders only when configured + real. */
+.qz-int { height: 100%; min-height: 320px; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 24px; gap: 6px; }
+.qz-int-head { font-size: 16px; font-weight: 600; color: var(--qz-color-text); }
+.qz-int-spin { width: 44px; height: 44px; border-radius: 50%; border: 3px solid color-mix(in srgb, var(--qz-color-primary) 18%, transparent); border-top-color: var(--qz-color-primary); animation: qz-int-rot 0.9s linear infinite; margin-bottom: 12px; }
+@keyframes qz-int-rot { to { transform: rotate(360deg); } }
+.qz-int-bar { width: 180px; height: 6px; border-radius: 999px; background: color-mix(in srgb, var(--qz-color-primary) 15%, transparent); overflow: hidden; margin-top: 10px; }
+.qz-int-bar > span { display: block; height: 100%; background: var(--qz-color-primary); transition: width 0.1s linear; }
+.qz-int-steps { text-align: left; margin-top: 14px; display: flex; flex-direction: column; gap: 8px; }
+.qz-int-step { display: flex; align-items: center; gap: 9px; font-size: 13px; color: var(--qz-color-muted); }
+.qz-int-step.is-done { color: var(--qz-color-text); }
+.qz-int-dot { width: 18px; height: 18px; border-radius: 50%; border: 1.5px solid var(--qz-color-border); display: inline-flex; align-items: center; justify-content: center; color: #fff; font-size: 11px; }
+.qz-int-step.is-done .qz-int-dot { background: var(--qz-color-primary); border-color: var(--qz-color-primary); }
+
+.qz-proof { display: flex; align-items: center; justify-content: center; gap: 6px; font-size: 12.5px; color: var(--qz-color-muted); margin-bottom: 12px; }
 
 /* §M3 — reward reveal (shopper-facing, brand-themed via --qz-color-* tokens). */
-.qz-reward  {
+.qz-reward {
   border: 1px solid color-mix(in srgb, var(--qz-color-primary) 30%, var(--qz-color-border));
   background: color-mix(in srgb, var(--qz-color-primary) 6%, transparent);
   border-radius: 14px; padding: 16px 18px; margin-top: 18px;
   display: flex; flex-direction: column; gap: 10px; align-items: stretch;
 }
-
-.qz-reward-head  { font-weight: 700; font-size: 15px; color: var(--qz-color-text); }
-
-.qz-reward-email  {
+.qz-reward-head { font-weight: 700; font-size: 15px; color: var(--qz-color-text); }
+.qz-reward-email {
   padding: 10px 12px; border-radius: 10px; border: 1px solid var(--qz-color-border);
   background: var(--qz-color-surface); font: inherit; font-size: 14px; color: var(--qz-color-text);
 }
-
-.qz-reward-btn  {
+.qz-reward-btn {
   padding: 11px 16px; border-radius: 10px; border: none; cursor: pointer;
   background: var(--qz-color-primary); color: #fff; font: inherit; font-weight: 700; font-size: 14px;
 }
-
-.qz-reward-btn:disabled  { opacity: .55; cursor: default; }
-
-.qz-reward-err  { font-size: 12.5px; color: var(--qz-color-muted); }
-
-.qz-reward-done  { text-align: center; }
-
-.qz-reward-label  { font-weight: 700; font-size: 16px; color: var(--qz-color-text); }
-
-.qz-reward-code  {
+.qz-reward-btn:disabled { opacity: .55; cursor: default; }
+.qz-reward-err { font-size: 12.5px; color: var(--qz-color-muted); }
+.qz-reward-done { text-align: center; }
+.qz-reward-label { font-weight: 700; font-size: 16px; color: var(--qz-color-text); }
+.qz-reward-code {
   font-family: ui-monospace, Menlo, monospace; font-size: 20px; font-weight: 700; letter-spacing: .08em;
   color: var(--qz-color-primary); padding: 8px 14px; margin: 4px auto 0; display: inline-block;
   border: 1px dashed color-mix(in srgb, var(--qz-color-primary) 50%, var(--qz-color-border)); border-radius: 10px;
 }
-
-.qz-reward-note  { font-size: 12.5px; color: var(--qz-color-muted); margin: 6px 0 0; }
+.qz-reward-note { font-size: 12.5px; color: var(--qz-color-muted); margin: 6px 0 0; }
 
 /* §M6 — referral give-get share block. */
-.qz-referral  {
+.qz-referral {
   border: 1px solid color-mix(in srgb, var(--qz-color-primary) 26%, var(--qz-color-border));
   background: color-mix(in srgb, var(--qz-color-primary) 5%, transparent);
   border-radius: 14px; padding: 15px 18px; margin-top: 18px;
   display: flex; flex-direction: column; gap: 10px;
 }
-
-.qz-referral-head  { font-weight: 700; font-size: 14.5px; color: var(--qz-color-text); }
-
-.qz-referral-linkrow  { display: flex; gap: 8px; flex-wrap: wrap; }
-
-.qz-referral-link  {
+.qz-referral-head { font-weight: 700; font-size: 14.5px; color: var(--qz-color-text); }
+.qz-referral-linkrow { display: flex; gap: 8px; flex-wrap: wrap; }
+.qz-referral-link {
   flex: 1 1 200px; min-width: 0; padding: 9px 12px; border-radius: 10px;
   border: 1px solid var(--qz-color-border); background: var(--qz-color-surface);
   font: inherit; font-size: 13px; color: var(--qz-color-muted);
 }
-
-.qz-referral-copy  {
+.qz-referral-copy {
   flex: 0 0 auto; padding: 9px 16px; border-radius: 10px; border: none; cursor: pointer;
   background: var(--qz-color-primary); color: #fff; font: inherit; font-weight: 700; font-size: 13px;
 }
 
-.qz-fb  { border-top: 1px solid var(--qz-color-border); padding-top: 14px; margin-top: 10px; display: flex; align-items: center; flex-wrap: wrap; gap: 8px; font-size: 13.5px; color: var(--qz-color-muted); }
+.qz-fb { border-top: 1px solid var(--qz-color-border); padding-top: 14px; margin-top: 10px; display: flex; align-items: center; flex-wrap: wrap; gap: 8px; font-size: 13.5px; color: var(--qz-color-muted); }
+.qz-fb-prompt { font-weight: 600; }
+.qz-fb-thumbs, .qz-fb-stars { display: inline-flex; gap: 6px; }
+.qz-fb-btn, .qz-fb-star { width: 34px; height: 34px; border-radius: 9px; border: 1px solid var(--qz-color-border); background: var(--qz-color-surface); cursor: pointer; font-size: 16px; line-height: 1; }
+.qz-fb-star { color: var(--qz-color-border); }
+.qz-fb-star.is-on { color: var(--qz-color-primary); border-color: var(--qz-color-primary); }
+.qz-fb-text { flex: 1 1 100%; margin-top: 8px; padding: 8px 10px; border: 1px solid var(--qz-color-border); border-radius: 8px; font: inherit; font-size: 13px; }
+.qz-fb-done { color: var(--qz-color-primary); font-weight: 600; }
 
-.qz-fb-prompt  { font-weight: 600; }
+.qz-share { display: flex; gap: 8px; margin-top: 14px; }
+.qz-share-btn { flex: 1; font: inherit; font-size: 12.5px; font-weight: 600; padding: 9px; border-radius: 9px; border: 1px solid var(--qz-color-border); background: var(--qz-color-surface); color: var(--qz-color-text); cursor: pointer; }
+.qz-share-btn:hover { border-color: var(--qz-color-primary); }
 
-.qz-fb-thumbs, .qz-fb-stars  { display: inline-flex; gap: 6px; }
+.qz-scarcity { display: inline-flex; align-items: center; font-size: 11px; font-weight: 600; color: #D0463C; margin-top: 4px; }
 
-.qz-fb-btn, .qz-fb-star  { width: 34px; height: 34px; border-radius: 9px; border: 1px solid var(--qz-color-border); background: var(--qz-color-surface); cursor: pointer; font-size: 16px; line-height: 1; }
+/* ═══ post-fork main additions (QZY-R + audit fixes), carried over the design merge ═══ */
+   — radius frozen to its light value. The ring color follows the quiz's own
+   brand primary (tokensToCssVars sets it on the runtime subtree root for every
+   doc model); outside the subtree, or docs without tokens, fall back to the
+   previous admin accent. An admin-purple outline on a merchant-branded quiz
+   was the one un-themed color on the shopper surface. */
 
-.qz-fb-text  { flex: 1 1 100%; margin-top: 8px; padding: 8px 10px; border: 1px solid var(--qz-color-border); border-radius: 8px; font: inherit; font-size: 13px; }
+  outline: 3px solid var(--qz-color-primary, #5B47E5);
 
-.qz-fb-done  { color: var(--qz-color-primary); font-weight: 600; }
-
-.qz-share  { display: flex; gap: 8px; margin-top: 14px; }
-
-.qz-share-btn  { flex: 1; font: inherit; font-size: 12.5px; font-weight: 600; padding: 9px; border-radius: 9px; border: 1px solid var(--qz-color-border); background: var(--qz-color-surface); color: var(--qz-color-text); cursor: pointer; }
-
-.qz-share-btn:hover  { border-color: var(--qz-color-primary); }
-
-.qz-scarcity  { display: inline-flex; align-items: center; font-size: 11px; font-weight: 600; color: #D0463C; margin-top: 4px; }
-
-/* Audit fixes (post-port): the two star-rating rules were dropped by the
-   port's block extraction (template-literal className missed the scan), and
-   --qz-color-border was undefined on BOTH branches — every widget border was
-   silently none. Defined here scoped to the widget roots: a stylesheet var,
-   zero DOM impact on docs without engagement. */
+/* Audit fix — --qz-color-border was undefined on both branches; every widget
+   border rendered none. Scoped to the widget roots (stylesheet var: zero DOM
+   impact on docs without engagement). */
 .qz-fb, .qz-reward, .qz-referral, .qz-share, .qz-proof, .qz-scarcity {
   --qz-color-border: color-mix(in srgb, var(--qz-color-text) 18%, transparent);
 }
-.qz-fb-star { color: var(--qz-color-border); }
-.qz-fb-star.is-on { color: var(--qz-color-primary); border-color: var(--qz-color-primary); }

@@ -1782,10 +1782,13 @@ export function QuizRuntime(props: QuizRuntimeProps) {
     >
       {fontUrl && <link rel="stylesheet" href={fontUrl} />}
       {inspectFn ? (
+        // Design-rules v4 (ported) — violet selection ring. BUILDER-ONLY: this
+        // whole block is inspectFn-gated, so the storefront DOM/CSS is
+        // byte-identical (inspectFn is undefined on /q).
         <style>{`
-          .qz-insp { cursor: pointer; }
-          .qz-insp:hover { outline: 2px dashed var(--qz-color-accent, #999); outline-offset: 3px; border-radius: 4px; }
-          .qz-insp-sel { outline: 2px solid var(--qz-color-accent, #999); outline-offset: 3px; border-radius: 4px; }
+          .qz-insp { cursor: pointer; transition: outline-color .12s, box-shadow .12s; }
+          .qz-insp:hover { outline: 2px solid #C7BEF6; outline-offset: 2px; border-radius: 8px; }
+          .qz-insp-sel { outline: 2px solid #6D5AE6; outline-offset: 2px; border-radius: 8px; box-shadow: 0 0 0 4px rgba(109,90,230,.18); }
         `}</style>
       ) : null}
       {/* CSS must stay free of ' " < > & — React HTML-escapes text children of

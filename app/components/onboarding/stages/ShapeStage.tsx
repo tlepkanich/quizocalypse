@@ -357,12 +357,10 @@ function DeciderShapeStage({
             disabled={busy}
             onClick={() => setPreviewTypeId(t.id)}
           >
-            {/* Gold moment #2 — the AI's top pick carries the ◆ Recommended ribbon. */}
+            {/* Soft Pastel §8.1 — the AI's top pick carries the violet Recommended
+                ribbon (the diamond mark was removed; the accent leads). */}
             {i === 0 ? (
-              <span className="qz-ribbon-recommended">
-                <span className="qz-mark qz-mark--sm" aria-hidden />
-                Recommended
-              </span>
+              <span className="qz-ribbon-recommended">Recommended</span>
             ) : null}
             <TypeMiniThumb type={t} cssVars={cssVars} buckets={data.buckets} />
             <span className="qz-row qz-row-between" style={{ gap: 8, alignItems: "flex-start" }}>

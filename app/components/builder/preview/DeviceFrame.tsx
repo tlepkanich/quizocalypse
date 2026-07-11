@@ -1,5 +1,5 @@
 import { useRef, useState, type ReactNode } from "react";
-import { clampFrameWidth } from "./previewWidth";
+import { clampFrameWidth, breakpointForWidth } from "./previewWidth";
 
 // A polished, resizable device bezel. The frame is centered, so dragging the
 // right-edge handle moves both edges → the width delta counts double. Pointer
@@ -68,6 +68,57 @@ export function DeviceFrame({
   // canvas, not the mismatched-bg "white box". overflow:hidden only rounds the
   // corners (the card is content-height; the canvas scrolls tall pages).
   if (bare) {
+    // At the mobile breakpoint, frame the quiz as a modern slim phone (thin dark
+    // bezel, large radius, dynamic-island pill, aspect-locked screen that scrolls
+    // internally) instead of a stretched full-height narrow card — the mobile
+    // preview should read as a phone, not a column. Desktop keeps the clean card.
+    if (breakpointForWidth(width) === "mobile") {
+      return (
+        <div style={{ width: "100%", display: "flex", justifyContent: "center" }}>
+          <div
+            style={{
+              width,
+              maxWidth: "100%",
+              flex: "0 0 auto",
+              position: "relative",
+              padding: 9,
+              borderRadius: 46,
+              background: "linear-gradient(158deg, #34343c 0%, #17171b 62%)",
+              boxShadow:
+                "0 1px 2px rgba(17,17,17,.06), 0 26px 64px rgba(17,17,17,.24), inset 0 0 0 1px rgba(255,255,255,.06)",
+            }}
+          >
+            {/* dynamic-island pill — floats over the top of the screen */}
+            <div
+              aria-hidden
+              style={{
+                position: "absolute",
+                top: 20,
+                left: "50%",
+                transform: "translateX(-50%)",
+                width: 92,
+                height: 24,
+                borderRadius: 999,
+                background: "#0b0b0d",
+                zIndex: 3,
+              }}
+            />
+            <div
+              className="qz-canvas-card"
+              style={{
+                width: "100%",
+                borderRadius: 38,
+                height: "min(760px, 74vh)",
+                overflow: "auto",
+                background: "#fff",
+              }}
+            >
+              {children}
+            </div>
+          </div>
+        </div>
+      );
+    }
     return (
       <div style={{ width: "100%", display: "flex", justifyContent: "center" }}>
         <div className="qz-canvas-card" style={{ width, maxWidth: "100%", flex: "0 0 auto" }}>

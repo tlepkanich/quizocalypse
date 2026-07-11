@@ -179,7 +179,9 @@ function fluidPx(mobilePx: number, desktopPx: number): string {
 }
 
 function typeScale(t: DesignTokensT): { base: number; h1: number; h2: number } {
-  const base = t.typography?.body?.base_size ?? 16;
+  // design-rules.md §12.1 — the live quiz font never drops below 14px. Floor the
+  // merchant base here (default 16 is unaffected); headings derive from it.
+  const base = Math.max(14, t.typography?.body?.base_size ?? 16);
   const scale = t.typography?.body?.scale_ratio ?? 1.25;
   return { base, h1: base * scale * scale * 1.4, h2: base * scale * scale };
 }

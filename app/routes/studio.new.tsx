@@ -199,9 +199,13 @@ export default function StudioNew() {
       </div>
 
       {!hasCollection && selectedCard.needsCatalog ? (
-        <QzBanner tone="warn" title="No collections synced">
-          {selectedCard.label} experiences recommend from your catalog — sync it from the Shopify
-          app first. (Surveys and lead capture work without one.)
+        <QzBanner tone="warn" title="Add products first">
+          {selectedCard.label} experiences recommend from your catalog, so a quiz needs something to
+          recommend — otherwise Step 1 is empty. Connect Shopify or add products (import a CSV / add
+          manually), then group them.{" "}
+          <Link to="/studio/products" className="qz-link">Manage products →</Link>
+          {"  ·  "}
+          <Link to="/studio/groups" className="qz-link">Groups →</Link>
         </QzBanner>
       ) : null}
 

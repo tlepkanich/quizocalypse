@@ -77,9 +77,12 @@ describe("StepNav", () => {
     expect(pillByLabel("Buckets").disabled).toBe(true);
   });
 
-  it("renders the zero-padded mono numeral", () => {
+  it("renders the zero-padded mono numeral on non-completed steps", () => {
     mount(createElement(StepNav, { steps: STEPS }));
-    expect(pillByLabel("Buckets").textContent).toContain("01");
-    expect(pillByLabel("Shape").textContent).toContain("02");
+    // P2 Edit 1 (segmented bar): current + upcoming show the padded numeral;
+    // COMPLETED steps show the ✓ check in its place, not the number.
+    expect(pillByLabel("Shape").textContent).toContain("02"); // current
+    expect(pillByLabel("Design").textContent).toContain("03"); // upcoming
+    expect(pillByLabel("Buckets").querySelector('[aria-label="done"]')).toBeTruthy();
   });
 });

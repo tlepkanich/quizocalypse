@@ -257,7 +257,7 @@ export function Step1Products(props: StepProps) {
       >
         <div>
           <h2 className="qz-h1" style={{ margin: 0 }}>
-            {showEditor ? "Group your products into outcome buckets" : "Your product groupings"}
+            {showEditor ? "Sort your products into recommendation groups" : "Your product groups"}
           </h2>
           <p className="qz-dim" style={{ marginTop: 6 }}>
             {showEditor
@@ -466,10 +466,10 @@ function SourceControls({
             ? "Discovering…"
             : hasCategories
               ? "Re-discover"
-              : "Discover buckets"}
+              : "Discover groups"}
         </QzButton>
         <span className="qz-muted" style={{ fontSize: 13 }}>
-          Claude reads your catalog and proposes 5–9 outcome buckets.
+          Claude reads your catalog and proposes 5–9 recommendation groups.
         </span>
       </div>
     );

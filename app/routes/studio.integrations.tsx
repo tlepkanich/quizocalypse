@@ -86,11 +86,7 @@ export default function StudioIntegrations() {
   const data = useLoaderData<typeof loader>();
   return (
     <QzPage>
-      <QzPageHeader
-        eyebrow="Integrations"
-        title="Where your quiz data flows"
-        subtitle="Sync captured contacts and answers to Klaviyo, or POST them to any webhook. Add or edit connections from a quiz's Logic view."
-      />
+      <QzPageHeader title="Integrations" />
 
       <div style={{ marginBottom: 16 }}>
         <RecCopyToggleCard enabled={data.aiRecCopyEnabled} />

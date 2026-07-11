@@ -88,22 +88,40 @@ export function QzBanner({
   );
 }
 
-export function QzStatGrid({ children }: { children: ReactNode }) {
-  return <div className="qz-stat-grid">{children}</div>;
+export function QzStatGrid({ children, cards }: { children: ReactNode; cards?: boolean }) {
+  // Expressive §8.1 — `cards` switches the hairline table to gapped pastel cards.
+  return <div className={`qz-stat-grid${cards ? " qz-stat-grid--cards" : ""}`}>{children}</div>;
 }
 export function QzStat({
   label,
   value,
   delta,
   deltaTone,
+  hue,
+  hero,
+  accent,
 }: {
   label: string;
   value: ReactNode;
   delta?: ReactNode;
   deltaTone?: "up" | "down";
+  // Expressive §8.1 — optional pastel fill; `hero` is the ONE saturated tile
+  // per view (violet gradient, wins over `hue`). Omitting both = the neutral
+  // card, so every existing call site is unchanged.
+  hue?: "violet" | "rose" | "mint" | "amber";
+  hero?: boolean;
+  // White tile with a purple accent bar + purple number (a lighter alternative
+  // to the saturated `hero`). Wins over `hue`; `hero` still wins over this.
+  accent?: boolean;
 }) {
+  const cls = [
+    "qz-stat",
+    hero ? "qz-stat--hero" : accent ? "qz-stat--accent" : hue ? `qz-stat--${hue}` : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
   return (
-    <div className="qz-stat">
+    <div className={cls}>
       <span className="qz-label">{label}</span>
       <span className="qz-stat-value">{value}</span>
       {delta && (
@@ -148,12 +166,24 @@ export function QzSelect(props: React.SelectHTMLAttributes<HTMLSelectElement>) {
   return <select {...props} className={`qz-select ${props.className ?? ""}`} />;
 }
 
-export function QzPage({ children, wide = false }: { children: ReactNode; wide?: boolean }) {
-  return <div className={wide ? "qz-page is-wide" : "qz-page"}>{children}</div>;
+export function QzPage({
+  children,
+  wide = false,
+  width = "comfortable",
+}: {
+  children: ReactNode;
+  /** Legacy full-bleed (funnel / workspace surfaces). Prefer `width`. */
+  wide?: boolean;
+  /** P3 Edit 3 — centered max-width token: narrow 680 · comfortable 960 · wide 1280. */
+  width?: "narrow" | "comfortable" | "wide";
+}) {
+  const cls = wide ? "qz-page is-wide" : `qz-page pw-${width}`;
+  return <div className={cls}>{children}</div>;
 }
 
-// P3 Edit 9 (ported from handoff bundle) — empty / first-run state: calm, one
-// line + one action, optional icon chip. Shared by list pages (Groups, etc.).
+// P3 Edit 9 — the standard empty / first-run state: calm, one line + one action.
+// Reuse everywhere (Groups, All products, Analytics, lists) instead of raw 0s /
+// blank panels. Optional icon; the action is usually a single QzButton/link.
 export function QzEmpty({
   icon,
   title,
@@ -172,6 +202,23 @@ export function QzEmpty({
       ) : null}
       <p className="qz-empty-title">{title}</p>
       {action ? <div className="qz-empty-action">{action}</div> : null}
+    </div>
+  );
+}
+
+// P2 Edit 6 — the ONE standardized section/panel title. Stop hand-styling
+// section headers per page; use this everywhere (title + optional right action).
+export function QzSectionHeader({
+  title,
+  action,
+}: {
+  title: ReactNode;
+  action?: ReactNode;
+}) {
+  return (
+    <div className="qz-section-head">
+      <h2 className="qz-h2">{title}</h2>
+      {action ? <div className="qz-section-action">{action}</div> : null}
     </div>
   );
 }
@@ -432,33 +479,30 @@ export function QzExpandCard({
 // Shows progress through a known sequence (not a spinner): beats before `active`
 // read done (✓), `active` is in-flight (◐), the rest wait (○). Pure render — the
 // caller advances `active` on its own clock; reduced-motion-safe (no animation).
-export function StagedProgress({
-  stages,
-  active,
-}: {
-  stages: string[];
-  active: number;
-}) {
+// P2 Edit 8 — inter-step loader: a centered, gently animated mark + ONE status
+// message fading in at a time as each stage completes (replacing the old static
+// checklist). Same {stages, active} API, so every funnel gen site upgrades with
+// no call-site change. `StepLoader` is the design-system name; `StagedProgress`
+// is kept as an alias for existing importers.
+export function StepLoader({ stages, active }: { stages: string[]; active: number }) {
+  const idx = Math.min(Math.max(active, 0), Math.max(stages.length - 1, 0));
+  const message = stages[idx] ?? "";
   return (
-    <div className="qz-staged">
-      {stages.map((stage, i) => {
-        const done = i < active;
-        const isActive = i === active;
-        const cls = ["qz-staged-beat", done ? "is-done" : "", isActive ? "is-active" : ""]
-          .filter(Boolean)
-          .join(" ");
-        return (
-          <div key={stage} className={cls}>
-            <span className="qz-staged-glyph" aria-hidden>
-              {done ? "✓" : isActive ? "◐" : "○"}
-            </span>
-            <span>{stage}</span>
-          </div>
-        );
-      })}
+    <div className="qz-steploader">
+      <div className="qz-steploader-mark" aria-hidden />
+      {/* key forces a fresh fade-in each time the message advances */}
+      <div className="qz-steploader-msg" key={idx} role="status" aria-live="polite">
+        {message}
+      </div>
+      <div className="qz-steploader-dots" aria-hidden>
+        {stages.map((_, i) => (
+          <span key={i} className={i <= idx ? "is-on" : ""} />
+        ))}
+      </div>
     </div>
   );
 }
+export const StagedProgress = StepLoader;
 
 // Responsive 16:9 video embed (YouTube/Vimeo/mp4 iframe). When `url` is null it
 // renders a tidy placeholder, so onboarding steps can ship the structure now and

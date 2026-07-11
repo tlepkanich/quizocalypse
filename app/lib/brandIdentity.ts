@@ -58,6 +58,10 @@ export const DesignProfile = z.object({
   aesthetic: z.array(z.string()).default([]),
   // How photo-heavy the brand reads — drives template + imagery guidance.
   imagery_density: z.enum(["sparse", "moderate", "rich"]).default("moderate"),
+  // R-5 Imagery module — the merchant-picked framing style + free-text notes.
+  // Optional (never a default) so existing identity blobs parse unchanged.
+  imagery_style: z.enum(["product_neutral", "lifestyle", "editorial", "minimal"]).optional(),
+  imagery_notes: z.string().optional(),
   // The "black-and-white vs colorful" axis.
   color_temperament: z
     .enum(["warm", "cool", "neutral", "monochrome", "vibrant"])

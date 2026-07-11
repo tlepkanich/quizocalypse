@@ -15,8 +15,11 @@ import qzStyles from "./quizocalypse.css?url";
 // Adding a new studio_./app_. de-nested document route? It needs these links
 // too, or it renders unstyled.
 export const adminStyleLinks: LinkDescriptor[] = [
-  // Self-hosted fonts (design-system-V2): preload so the swap window is one
-  // paint, not a fetch round-trip. crossOrigin is required for font preloads.
+  // Self-hosted fonts: preload so the swap window is one paint, not a fetch
+  // round-trip. crossOrigin is required for font preloads. Quicksand is the
+  // Soft-Pastel admin typeface (leads --qz-font-*); Mona Sans is its metrics-
+  // close fallback during the swap window; JetBrains Mono is the eyebrow label.
+  { rel: "preload", href: "/fonts/Quicksand.woff2", as: "font", type: "font/woff2", crossOrigin: "anonymous" },
   { rel: "preload", href: "/fonts/MonaSans.woff2", as: "font", type: "font/woff2", crossOrigin: "anonymous" },
   { rel: "preload", href: "/fonts/JetBrainsMono-Medium.woff2", as: "font", type: "font/woff2", crossOrigin: "anonymous" },
   { rel: "stylesheet", href: qzStyles },

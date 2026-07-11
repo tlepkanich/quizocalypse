@@ -19,7 +19,7 @@ import {
   resyncConnected,
   disconnectShopify,
 } from "../lib/shopifyConnect.server";
-import { QzPage, QzPageHeader, QzCard, QzField, QzInput, QzTextarea, QzBadge } from "../components/qz";
+import { QzPage, QzPageHeader, QzCard, QzField, QzInput, QzTextarea, QzBadge, QzEmpty } from "../components/qz";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   await requireStudioAccess(request);
@@ -368,8 +368,8 @@ export default function StudioProducts() {
           <h2 className="qz-h2">{products.length} product{products.length === 1 ? "" : "s"}</h2>
         </div>
         {products.length === 0 ? (
-          <QzCard dashed style={{ textAlign: "center", padding: "44px 28px" }}>
-            <p className="qz-muted" style={{ margin: 0 }}>No products yet — connect Shopify above, add one by hand, or import a CSV.</p>
+          <QzCard>
+            <QzEmpty title="No products yet — connect Shopify above, add one by hand, or import a CSV." />
           </QzCard>
         ) : (
           <QzCard flush>

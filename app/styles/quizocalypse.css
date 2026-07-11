@@ -1,14 +1,18 @@
 /* =====================================================================
-   Quizocalypse — admin design system (quiz-design-system-V2, custom)
-   "A clean, Canva-style workspace with per-template palettes and a rare
-   gold ◆ signature for decisions." White paper workspace, near-black ink,
-   depth via layered soft shadows (never borders), indigo as the ONE
-   action color, gold ◆ at 5 canonical moments only. Light + dark
-   (dark kept by owner decision; V2 ships light-first).
-   Admin chrome ONLY — gated by body[data-qz]; the shopper runtime
-   (/q) overrides its own --qz-color-* on its subtree, so it's
-   unaffected. Loaded globally via app/root.tsx `links`.
-   ===================================================================== */
+   Quizocalypse — admin design system.
+   Implements the Quizzy Master Design System v0.3 — "Soft Pastel"
+   (docs/design-rules.md): white surfaces, a warm violet-grey ink ladder,
+   ONE accent (violet #6D5AE6), a global pastel set used as fills, soft
+   low-contrast violet-tinted elevation, and one Spring motion language.
+   Typeface Quicksand (admin); no pictorial brand mark. Token VALUES carry
+   the system — components consume --qz-* and follow. Light + dark (dark
+   kept by owner decision; dark-mode-for-v1 is a design open item).
+   NOTE: token *names* are inherited from the prior V2 sheet (--qz-cream,
+   --qz-ink-3, --qz-lift-*, etc.); only their values changed, so every
+   existing consumer keeps working. Admin chrome ONLY — gated by
+   body[data-qz]; the shopper runtime (/q) overrides its own --qz-color-*
+   on its subtree, so it's unaffected. Loaded via the admin route trees'
+   links(). ===================================================================== */
 
 /* — Fonts — self-hosted (public/fonts). Mona Sans = variable (wght; we use
    500–800 only per the V2 weight ladder); JetBrains Mono = static 400/500/600.
@@ -38,7 +42,7 @@
   font-weight: 600;
   font-display: swap;
 }
-/* Metrics-adjusted local fallback — keeps layout close while Mona Sans loads. */
+/* Metrics-adjusted local fallback — keeps layout close while the display font loads. */
 @font-face {
   font-family: "Mona Sans Fallback";
   src: local("Helvetica Neue"), local("Arial");
@@ -46,6 +50,19 @@
   descent-override: 24%;
   line-gap-override: 0%;
   size-adjust: 102%;
+}
+
+/* Quizzy Master Design System v0.3 — admin typeface is Quicksand (400–700), a
+   rounded geometric sans carrying the "Soft Pastel" personality (design-rules.md
+   §3). Self-hosted variable woff2 (latin subset, OFL) in public/fonts; leads the
+   --qz-font-* stacks, with Mona Sans as the metrics-close fallback while it
+   loads. */
+@font-face {
+  font-family: "Quicksand";
+  src: url("/fonts/Quicksand.woff2") format("woff2");
+  font-weight: 400 700;
+  font-style: normal;
+  font-display: swap;
 }
 
 :root {
@@ -56,18 +73,20 @@
      ok→--qz-ok · scrim→--qz-scrim · gold*→--qz-gold* · lift-1/2/3→--qz-lift-*
      (aliased by the legacy --qz-shadow-sm/md/lg) · palettes→--qz-pal-*        */
 
-  /* Paper & ink (V2 §3.1) — white workspace; depth via shadow, not tone */
-  --qz-cream:    #FFFFFF;   /* page background ("paper") */
-  --qz-cream-2:  #F2F2F4;   /* hover washes / segmented track (≈ ink 4% on paper) */
-  --qz-paper:    #FFFFFF;   /* card surface — same as paper BY DESIGN (V2) */
-  --qz-ink:      #0E0F11;   /* body text, headings, primary buttons */
-  --qz-ink-2:    #0E0F11;   /* legacy slot — collapsed into ink (no V2 role) */
-  --qz-ink-3:    #4A4D52;   /* ink-70 — emphasized secondary text */
-  --qz-ink-4:    #84878C;   /* ink-45 — muted; 3.3:1 on white → ≥18px or non-essential text ONLY (V2 accepts; interactive muted text stays on --qz-ink-3) */
-  --qz-ink-25:   #C3C5C8;   /* disabled, dividers, pipes */
-  --qz-rule:     #E9EAEE;   /* hairlines — sparing, mostly inside components */
-  --qz-rule-2:   #F2F3F5;
-  --qz-scrim:    rgba(14, 15, 17, 0.45);
+  /* Core neutrals (design-rules.md §2.1) — white surfaces; warm violet-grey
+     ink ladder; depth via shadow, not tone. Names kept; Soft Pastel values. */
+  --qz-cream:    #FFFFFF;   /* Surface — page background, cards, editor chrome */
+  --qz-cream-2:  #F2F1F5;   /* Neutral wash — search, segments, hovers (warm grey) */
+  --qz-paper:    #FFFFFF;   /* Surface — card surface (same as page BY DESIGN) */
+  --qz-stage:    #F4F4F7;   /* Stage — neutral canvas backdrop (builder, §2.1/§9.1) */
+  --qz-ink:      #2E2740;   /* Ink — primary text & structure */
+  --qz-ink-2:    #2E2740;   /* legacy slot — collapsed into Ink */
+  --qz-ink-3:    #5A5470;   /* Ink-2 — strong secondary text */
+  --qz-ink-4:    #7C7791;   /* Muted — labels, secondary text */
+  --qz-ink-25:   #B6B0C8;   /* Faint — meta, disabled */
+  --qz-rule:     #E9E7EF;   /* Line — hairline dividers & borders */
+  --qz-rule-2:   #F1EFF6;   /* lighter line — inside-component hairlines */
+  --qz-scrim:    rgba(46, 39, 64, 0.45);   /* Ink @ 45% */
 
   /* The gold ◆ signature (V2 §3.2) — FIVE canonical moments ONLY:
      wordmark · recommended-template ribbon · decider question · loading/
@@ -77,15 +96,37 @@
   --qz-gold-wash:   #FDF6E0;
   --qz-gold-line:   #E8D8A6;
 
-  /* Semantic colors (V2 §3.4) — every color has ONE job */
-  --qz-accent:      #5B47E5;  /* --link: links, focus rings, action chips */
-  --qz-accent-2:    #4936C4;
-  --qz-accent-wash: #EEEBFF;  /* active-nav wash, selected tints */
-  --qz-ok:          #158A5A;
+  /* Accent & editing (design-rules.md §2.2) — violet is the ONE accent */
+  --qz-accent:      #6D5AE6;  /* Violet — links, active, primary actions, focus rings */
+  --qz-accent-2:    #6B4FD8;  /* Violet-deep — gradients, hover */
+  --qz-accent-ink:  #3C3489;  /* Violet-ink — accent TEXT on light (prototype --brand-ink; deep, ≈9:1) */
+  --qz-accent-wash: #EDEBFC;  /* Violet pastel — active-nav wash, selected tints (prototype --brand-bg) */
+  --qz-accent-grad: linear-gradient(135deg, #6D5AE6 0%, #6B4FD8 100%); /* primary button */
+  --qz-graphite:    #4A4560;  /* editing selection ring (brand-agnostic; builder only) */
+  /* §A4 — coral "priority" accent: the ONE act-now / money item per surface
+     (soft tint gradient + coral border/CTA). Same restraint as violet. */
+  --qz-priority:      #D4537E;
+  --qz-priority-wash: #FBEAF2;
+  --qz-ok:          #158A5A;  /* legible success text (kept; §2.4 Live fill below) */
   --qz-warn:        #B04A2E;  /* terracotta — non-destructive warnings */
   --qz-crit:        #C53B32;  /* true red — destructive confirms only */
 
-  /* Per-template palettes (V2 §3.3) — never reuse one across visible cards */
+  /* Status (design-rules.md §2.4) — Draft grey · Live green. FILL + text/dot. */
+  --qz-draft-wash:  #F0EDF5;  --qz-draft-ink:  #8B85A0;
+  --qz-live-wash:   #E0F5EE;  --qz-live-ink:   #3FAE86;
+
+  /* Soft Pastel set (design-rules.md §2.3) — GLOBAL tokens. Expressive surfaces
+     use these as fills (stat cards, category surfaces); each pastel has a light
+     fill and a matching darker tone for its number/label. Focused mode renders
+     them as quiet greys (mode-level, not here). */
+  --qz-pastel-violet: #E6DDFE;  --qz-pastel-violet-ink: #5B4A8F;
+  --qz-pastel-rose:   #FDE4EF;  --qz-pastel-rose-ink:   #8F4A70;
+  --qz-pastel-mint:   #D7F2EC;  --qz-pastel-mint-ink:   #3A7D6D;
+  --qz-pastel-amber:  #FDEED7;  --qz-pastel-amber-ink:  #8F6A3A;
+  --qz-pastel-sky:    #A8C9FB;  /* secondary use */
+
+  /* Per-template palettes (legacy V2 §3.3) — still consumed by --qz-pal-* call
+     sites; reconciled onto the Soft Pastel set in the studio-shell pass. */
   --qz-pal-green:  #22A06B;  --qz-pal-green-wash:  #E4F4EC;
   --qz-pal-coral:  #FF6B5B;  --qz-pal-coral-wash:  #FFECE8;
   --qz-pal-blue:   #3E7BFA;  --qz-pal-blue-wash:   #E6EEFF;
@@ -93,6 +134,13 @@
   --qz-pal-purple: #8B5CF6;  --qz-pal-purple-wash: #EFE9FE;
   --qz-pal-teal:   #0D9488;  --qz-pal-teal-wash:   #E1F4F1;
   --qz-pal-amber:  #F59E0B;  --qz-pal-amber-wash:  #FFF3DC;
+
+  /* Source-accent tokens (P3 Edit 6 / §2.5) — TAXONOMY ONLY (group membership
+     chips + icons). Each is a legible text/icon color over its wash. */
+  --qz-src-tag:  var(--qz-accent-ink);  --qz-src-tag-bg:  var(--qz-accent-wash);
+  --qz-src-col:  #0B6E64;               --qz-src-col-bg:  var(--qz-pal-teal-wash);
+  --qz-src-meta: #8A5A12;               --qz-src-meta-bg: var(--qz-pal-amber-wash);
+  --qz-src-man:  #9D3567;               --qz-src-man-bg:  var(--qz-pal-pink-wash);
 
   /* Semantic tints — derived from the colors above (one source of truth) */
   --qz-ok-tint:     color-mix(in srgb, var(--qz-ok)     9%,  var(--qz-paper));
@@ -103,19 +151,23 @@
   --qz-warn-edge:   color-mix(in srgb, var(--qz-warn)   28%, transparent);
   --qz-crit-edge:   color-mix(in srgb, var(--qz-crit)   28%, transparent);
 
-  /* Type (V2 §4) — Mona Sans (500/600/700/800 ONLY) + JetBrains Mono */
-  --qz-font-display: "Mona Sans", "Mona Sans Fallback", -apple-system, "Segoe UI", "Helvetica Neue", sans-serif;
-  --qz-font-body:    "Mona Sans", "Mona Sans Fallback", -apple-system, "Segoe UI", "Helvetica Neue", sans-serif;
+  /* Type (design-rules.md §3) — admin typeface Quicksand (400–700), a rounded
+     geometric sans. Quicksand leads the stack; Mona Sans is the immediate
+     fallback until the woff2 lands (see @font-face note above), so the admin
+     stays intentional either way. Mono stays JetBrains for the eyebrow labels. */
+  --qz-font-display: "Quicksand", "Mona Sans", "Mona Sans Fallback", -apple-system, "Segoe UI", "Helvetica Neue", sans-serif;
+  --qz-font-body:    "Quicksand", "Mona Sans", "Mona Sans Fallback", -apple-system, "Segoe UI", "Helvetica Neue", sans-serif;
   --qz-font-mono:    "JetBrains Mono", ui-monospace, monospace;
 
-  /* Sizes — V2 scale: display/H1 44 · H2 28 · H3/card 20 · body 16 · small 14 */
-  --qz-t-display: 44px;
-  --qz-t-h1: 28px;
-  --qz-t-h2: 20px;
-  --qz-t-h3: 16px;
-  --qz-t-body: 16px;
-  --qz-t-small: 14px;
-  --qz-t-mono: 11px;
+  /* Sizes (design-rules.md §3) — H1 page 24 · H2 panel 16–17 · body 14 ·
+     meta 11.5–12.5 · label 10–11 · stat 28–30. Names kept, values re-scaled. */
+  --qz-t-display: 30px;   /* Stat number / hero metric (top of 28–30) */
+  --qz-t-h1: 24px;        /* H1 — page greeting */
+  --qz-t-h2: 17px;        /* H2 — panel header (16–17) */
+  --qz-t-h3: 15px;        /* small subhead */
+  --qz-t-body: 14px;      /* Body — default text */
+  --qz-t-small: 12.5px;   /* Meta — timestamps, sublabels */
+  --qz-t-mono: 11px;      /* Label — uppercase eyebrow (10–11) */
   --qz-lh-tight: 1.15;
   --qz-lh: 1.55;
 
@@ -130,26 +182,30 @@
   --qz-pad-card: 24px;
   --qz-pad-gap: 20px;
 
-  /* Radius (V2 §5.4) — pill for actions, 9 fields, 14–18 cards, 18 overlays */
-  --qz-radius:    16px;   /* cards / containers */
-  --qz-radius-sm: 9px;    /* form fields (buttons are pill) */
-  --qz-radius-lg: 18px;   /* hero cards, modals, drawers */
+  /* Radius (design-rules.md §4) — cards/panels 18–24 · buttons/chips/inputs/
+     icon-tiles 12–16 · pills 100. */
+  --qz-radius:    20px;   /* cards / panels (18–24) */
+  --qz-radius-sm: 14px;   /* buttons, chips, inputs, icon tiles (12–16) */
+  --qz-radius-lg: 24px;   /* hero cards, modals, drawers */
   --qz-radius-toast: 12px;
   --qz-radius-pill: 999px;
 
-  /* Elevation (V2 §5) — the Canva rule: layered soft shadows, not borders.
-     The 0 0 0 1px head of each stack IS the card edge (inset-ring substitute). */
-  --qz-lift-1: 0 0 0 1px rgba(20, 22, 26, 0.03), 0 1px 2px rgba(20, 22, 26, 0.04), 0 4px 12px -2px rgba(20, 22, 26, 0.05), 0 20px 40px -12px rgba(20, 22, 26, 0.10);
-  --qz-lift-2: 0 0 0 1px rgba(20, 22, 26, 0.06), 0 2px 6px rgba(20, 22, 26, 0.05), 0 10px 20px -4px rgba(20, 22, 26, 0.08), 0 34px 60px -18px rgba(20, 22, 26, 0.14);
-  --qz-lift-3: 0 24px 60px rgba(20, 22, 26, 0.22);
+  /* Elevation (design-rules.md §4) — soft, low-contrast, violet-grey tinted.
+     Resting = lift-1, raised (hover) = lift-2. The faint 0 0 0 1px head of each
+     stack keeps the card edge (the system uses shadow, not borders). */
+  --qz-lift-1: 0 0 0 1px rgba(120, 110, 150, 0.06), 0 6px 18px rgba(120, 110, 150, 0.13);
+  --qz-lift-2: 0 0 0 1px rgba(120, 110, 150, 0.07), 0 12px 30px rgba(120, 110, 150, 0.16);
+  --qz-lift-3: 0 0 0 1px rgba(120, 110, 150, 0.08), 0 24px 60px rgba(120, 110, 150, 0.22);
   /* Legacy aliases — old consumers keep working, one source of truth */
   --qz-shadow-sm: var(--qz-lift-1);
   --qz-shadow-md: var(--qz-lift-2);
   --qz-shadow-lg: var(--qz-lift-3);
   --qz-shadow-focus: 0 0 0 3px color-mix(in srgb, var(--qz-accent) 28%, transparent);
 
-  /* Motion (V2 §6) — ONE curve, four durations */
-  --qz-ease: cubic-bezier(0.2, 0.7, 0.3, 1);
+  /* Motion (design-rules.md §5.1) — two curves: Ease for color/shadow/fades,
+     Spring for movement (lift, press, sliding pills / knobs / underlines). */
+  --qz-ease: cubic-bezier(0.3, 0.7, 0.3, 1);
+  --qz-spring: cubic-bezier(0.34, 1.4, 0.6, 1);
   --qz-dur-fast: 140ms;
   --qz-dur: 220ms;
   --qz-dur-slow: 300ms;
@@ -205,9 +261,14 @@ html[data-theme="dark"] body[data-qz] {
   --qz-gold-bright: #E0B94F;
   --qz-gold-wash:   color-mix(in srgb, #C79A2B 14%, var(--qz-paper));
   --qz-gold-line:   rgba(199, 154, 43, 0.4);
-  --qz-accent:      #8A7BF0;
-  --qz-accent-2:    #A79BF5;
-  --qz-accent-wash: color-mix(in srgb, #8A7BF0 16%, var(--qz-paper));
+  --qz-accent:      #A996F8;  /* Soft-Pastel violet, lightened for dark */
+  --qz-accent-2:    #C4B7FA;
+  --qz-accent-ink:  #C4B7FA;  /* accent text reads light on dark */
+  --qz-accent-wash: color-mix(in srgb, #A996F8 16%, var(--qz-paper));
+  --qz-stage:       #16141C;  /* neutral builder stage, dark */
+  --qz-graphite:    #6E6884;  /* editing ring, lightened for dark */
+  --qz-priority:      #E97DA6;  /* coral priority, lightened for dark */
+  --qz-priority-wash: color-mix(in srgb, #E97DA6 16%, var(--qz-paper));
   --qz-ok:       #34C08B;
   --qz-warn:     #E07B5A;
   --qz-crit:     #F07A72;
@@ -256,18 +317,11 @@ body[data-qz] :focus-visible {
   }
 }
 
-/* — The gold ◆ mark (V2: a CSS-rendered rotated square, never an SVG) — */
-.qz-mark {
-  display: inline-block; width: 12px; height: 12px;
-  background: var(--qz-gold);
-  transform: rotate(45deg);
-  box-shadow: 0 2px 4px rgba(140, 109, 31, 0.35);
-  flex: none;
-}
-.qz-mark--sm { width: 8px; height: 8px; box-shadow: 0 1px 3px rgba(140, 109, 31, 0.35); }
-/* Small loading: the ◆ rotates in place — 900ms revolution, linear (V2 §6.5). */
-@keyframes qz-mark-spin { from { transform: rotate(45deg); } to { transform: rotate(405deg); } }
-.qz-mark--spin { animation: qz-mark-spin 900ms linear infinite; }
+/* The gold ◆ mark was REMOVED (design-rules.md §13 — no pictorial brand mark).
+   Its former uses are now typographic/accent: the wordmark monogram
+   (.qz-wordmark-mono), the funnel stepper's active segment, and the
+   violet Recommended ribbon (.qz-ribbon-recommended). The --qz-gold* tokens
+   remain defined but unused; drop them once nothing references them. */
 /* Skeleton bones for content-area loading (V2: no spinners for content). */
 @keyframes qz-skeleton-pulse { 0%, 100% { opacity: 0.55; } 50% { opacity: 1; } }
 .qz-skeleton {
@@ -309,7 +363,11 @@ body[data-qz] :focus-visible {
   border-radius: var(--qz-radius);
   padding: var(--qz-pad-card);
   box-shadow: var(--qz-lift-1);
+  /* P2 Edit 11 — global hover-lift on every card (Spring); dashed empty-state
+     cards opt out below. */
+  transition: box-shadow var(--qz-dur) var(--qz-ease), transform var(--qz-dur) var(--qz-spring);
 }
+.qz-card:not(.qz-dash):hover { box-shadow: var(--qz-lift-2); transform: translateY(-2px); }
 .qz-card.qz-flush { padding: 0; }
 .qz-card.qz-dash { border: 1px dashed var(--qz-ink-25); background: transparent; box-shadow: none; }
 /* Opt-in lift for clickable cards (gallery tiles, etc.) — V2: lift 4-6px */
@@ -323,27 +381,29 @@ body[data-qz] :focus-visible {
    Primary = ink · secondary (default) = white w/ inset-ring · ghost · the old
    accent variant is mapped to the ink primary look (V2: primary actions are
    ink, never a color). Hover = 1px lift + deepened shadow, no color change. — */
+/* Buttons (design-rules.md §7 + states §5.2). Primary = violet gradient (the one
+   bold moment); Secondary (base) = neutral wash + violet-ink; Ghost = violet
+   text. Movement runs on the Spring: hover pops (lift 2–5px), press dips + squishes
+   (scale .97); color/shadow run on the Ease. Radius per §4 (buttons 12–16). */
 .qz-btn {
   display: inline-flex; align-items: center; justify-content: center; gap: 8px;
   padding: 11px 22px;
-  background: var(--qz-paper); color: var(--qz-ink);
-  border: none; border-radius: var(--qz-radius-pill);
-  box-shadow: var(--qz-lift-1);
+  background: var(--qz-cream-2); color: var(--qz-accent-ink);
+  border: none; border-radius: var(--qz-radius-sm);
+  box-shadow: none;
   font-size: 14px; font-weight: 600;
   font-family: var(--qz-font-body);
   line-height: 1;
   cursor: pointer;
-  transition: box-shadow var(--qz-dur-fast) var(--qz-ease), transform var(--qz-dur-fast) var(--qz-ease), background var(--qz-dur-fast) var(--qz-ease), color var(--qz-dur-fast) var(--qz-ease);
+  transition: box-shadow var(--qz-dur-fast) var(--qz-ease), background var(--qz-dur-fast) var(--qz-ease), color var(--qz-dur-fast) var(--qz-ease), transform var(--qz-dur) var(--qz-spring);
   white-space: nowrap;
 }
-.qz-btn:hover { transform: translateY(-1px); box-shadow: var(--qz-lift-2); }
-.qz-btn:active { transform: translateY(0); }
-.qz-btn[disabled], .qz-btn[aria-disabled="true"] { opacity: 0.45; cursor: not-allowed; box-shadow: var(--qz-lift-1); transform: none; }
-.qz-btn-primary { background: var(--qz-ink); color: var(--qz-cream, #fff); }
-.qz-btn-primary:hover { background: var(--qz-ink); }
-.qz-btn-accent { background: var(--qz-ink); color: var(--qz-cream, #fff); }
-.qz-btn-accent:hover { background: var(--qz-ink); }
-.qz-btn-ghost { background: transparent; box-shadow: none; color: var(--qz-accent); }
+.qz-btn:hover { transform: translateY(-3px); box-shadow: var(--qz-lift-2); }
+.qz-btn:active { transform: translateY(0) scale(0.97); }
+.qz-btn[disabled], .qz-btn[aria-disabled="true"] { opacity: 0.6; cursor: not-allowed; box-shadow: none; transform: none; }
+.qz-btn-primary, .qz-btn-accent { background: var(--qz-accent-grad); color: #fff; box-shadow: var(--qz-lift-1); }
+.qz-btn-primary:hover, .qz-btn-accent:hover { background: var(--qz-accent-grad); box-shadow: var(--qz-lift-2); }
+.qz-btn-ghost { background: transparent; box-shadow: none; color: var(--qz-accent-ink); }
 .qz-btn-ghost:hover { background: var(--qz-cream-2); box-shadow: none; transform: none; text-decoration: underline; }
 /* Legacy size modifiers — V2 wants ONE size; keep the paddings close so old
    call sites stay sane (sm for dense toolbars only). */
@@ -361,10 +421,11 @@ body[data-qz] :focus-visible {
   height: 28px; padding: 0 14px; border-radius: var(--qz-radius-pill);
   font-family: var(--qz-font-body); font-size: 13px; font-weight: 500;
   color: var(--qz-ink-3); cursor: pointer;
-  transition: background var(--qz-dur) var(--qz-ease), color var(--qz-dur) var(--qz-ease), box-shadow var(--qz-dur) var(--qz-ease);
+  /* §5.3 — the active pill settles on the Spring (label color eases muted→ink) */
+  transition: background var(--qz-dur-slow) var(--qz-spring), color var(--qz-dur) var(--qz-ease), box-shadow var(--qz-dur-slow) var(--qz-spring);
 }
 .qz-segmented button:hover { color: var(--qz-ink); }
-.qz-segmented button[aria-pressed="true"] { background: var(--qz-paper); color: var(--qz-ink); box-shadow: var(--qz-shadow-sm); }
+.qz-segmented button[aria-pressed="true"] { background: var(--qz-paper); color: var(--qz-ink); box-shadow: var(--qz-lift-1); }
 
 /* Fill variant for narrow containers (the FlowRail view switcher): buttons
    share the row equally and compress instead of overflowing. */
@@ -388,10 +449,13 @@ body[data-qz] :focus-visible {
   content: ""; width: 6px; height: 6px; border-radius: 50%;
   background: var(--qz-ink-3);
 }
-.qz-badge.qz-ok    { color: var(--qz-ok);   background: var(--qz-ok-tint); }
-.qz-badge.qz-ok::before    { background: var(--qz-ok); }
-.qz-badge.qz-draft { color: var(--qz-ink-3); background: var(--qz-rule-2); }
-.qz-badge.qz-draft::before { background: var(--qz-ink-4); }
+/* §2.4 — Live green (legible ink text on the mint wash) · Draft grey */
+.qz-badge.qz-ok    { color: var(--qz-ok);   background: var(--qz-live-wash); }
+.qz-badge.qz-ok::before    { background: var(--qz-live-ink); }
+/* §14.5 AA fix — the Draft label at #8B85A0 fails AA on the wash (≈2.4:1); use
+   Ink-2 for the text (≈6.6:1) and keep the §2.4 Draft tone on the dot. */
+.qz-badge.qz-draft { color: var(--qz-ink-3); background: var(--qz-draft-wash); }
+.qz-badge.qz-draft::before { background: var(--qz-draft-ink); }
 .qz-badge.qz-warn  { color: var(--qz-warn); background: var(--qz-warn-tint); }
 .qz-badge.qz-warn::before  { background: var(--qz-warn); }
 .qz-badge.qz-crit  { color: var(--qz-crit); background: var(--qz-crit-tint); }
@@ -428,10 +492,51 @@ body[data-qz] :focus-visible {
 .qz-stat-value {
   font-family: var(--qz-font-display); font-weight: 600; font-size: 40px; line-height: 1;
   letter-spacing: -0.02em; font-variant-numeric: tabular-nums;
+  transform-origin: left center;
+  transition: transform var(--qz-dur) var(--qz-spring);
 }
 .qz-stat-delta { font-family: var(--qz-font-mono); font-size: 11.5px; color: var(--qz-ink-3); }
 .qz-stat-delta.up   { color: var(--qz-ok); }
 .qz-stat-delta.down { color: var(--qz-crit); }
+
+/* Expressive stat cards (design-rules.md §8.1) — pastel fills; exactly one
+   saturated hero per view. Opt-in: .qz-stat-grid--cards switches the hairline
+   table to real gaps so pastels read as cards, then a hue modifier per cell
+   (+ .qz-stat--hero on the one violet tile). The number takes the pastel's
+   darker tone; the hero inverts to white. (Wiring the dashboard's hues is the
+   remaining Expressive step; these classes make it a markup-only change.) */
+/* P3 Edit 4 — 4-up → 2×2 → 1 (no 3+1 orphan for the 4 KPI tiles). */
+/* min-width KPI tiles reflow instead of squishing as the page narrows. */
+.qz-stat-grid--cards { grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: var(--qz-pad-gap); background: transparent; border: none; box-shadow: none; overflow: visible; }
+.qz-stat-grid--cards .qz-stat {
+  border-radius: var(--qz-radius); box-shadow: var(--qz-lift-1);
+  /* Match the global card hover-lift (P2 Edit 11) — stat tiles are .qz-stat,
+     not .qz-card, so they don't inherit .qz-card:hover. */
+  transition: box-shadow var(--qz-dur) var(--qz-ease), transform var(--qz-dur) var(--qz-spring);
+}
+.qz-stat-grid--cards .qz-stat:hover { box-shadow: var(--qz-lift-2); transform: translateY(-2px); }
+/* The number pops up + grows on hover (button-like), globally for KPI tiles. */
+.qz-stat-grid--cards .qz-stat:hover .qz-stat-value { transform: scale(1.1) translateY(-3px); }
+.qz-stat--violet { background: var(--qz-pastel-violet); }
+.qz-stat--violet .qz-stat-value { color: var(--qz-pastel-violet-ink); }
+.qz-stat--rose   { background: var(--qz-pastel-rose); }
+.qz-stat--rose   .qz-stat-value { color: var(--qz-pastel-rose-ink); }
+.qz-stat--mint   { background: var(--qz-pastel-mint); }
+.qz-stat--mint   .qz-stat-value { color: var(--qz-pastel-mint-ink); }
+.qz-stat--amber  { background: var(--qz-pastel-amber); }
+.qz-stat--amber  .qz-stat-value { color: var(--qz-pastel-amber-ink); }
+.qz-stat--hero { background: var(--qz-accent-grad); }
+.qz-stat--hero .qz-label,
+.qz-stat--hero .qz-stat-value,
+.qz-stat--hero .qz-stat-delta { color: #fff; }
+/* White tile, purple accent — a top accent bar (respects the card radius) + the
+   number in the brand purple. A lighter, cleaner KPI look than the saturated hero. */
+.qz-stat--accent { background: var(--qz-paper); position: relative; overflow: hidden; }
+.qz-stat--accent::before {
+  content: ""; position: absolute; top: 0; left: 0; right: 0; height: 3px;
+  background: var(--qz-accent-grad);
+}
+.qz-stat--accent .qz-stat-value { color: var(--qz-accent); }
 
 /* — Table — */
 .qz-table { width: 100%; border-collapse: collapse; }
@@ -484,7 +589,133 @@ body[data-qz] :focus-visible {
 .qz-textarea { resize: vertical; min-height: 96px; max-height: 240px; }
 
 /* — Page layout (V2 §2.1: max 1180, 40px side padding) — */
-.qz-page { padding: 34px 40px 96px; max-width: 1180px; margin: 0 auto; }
+/* P2 Edit 4 — ONE global content padding for every studio page (never per-page).
+   P2 Edit 10 — consistent gap so stacked cards/panels never touch/overlap. */
+/* §A1 (LOCKED) — SINGLE consistent width cap. Every studio page caps at
+   max-width:1440, width:100%, left-aligned, ~40px side padding; content STOPS
+   past the cap (side whitespace is intended). No per-page width variation — the
+   old pw-narrow/comfortable/wide tokens all resolve to the one cap; readability
+   is controlled by per-card max-widths in the grids, not by narrowing the page.
+   §P still holds: left-aligned, starts at the sidebar edge, no centered column. */
+.qz-page { padding: 32px 40px 96px; max-width: 1440px; width: 100%; }
+.qz-page > * + * { margin-top: var(--qz-pad-gap); }
+.qz-page.pw-narrow,
+.qz-page.pw-comfortable,
+.qz-page.pw-wide { max-width: 1440px; }
+/* §A1 — form/reading column: page stays 1440, but a single-column form
+   constrains its OWN content so inputs don't stretch across the full cap. */
+.qz-formcol { max-width: 760px; }
+/* P3 Edit 4 — card-grid guardrail: fill the container, equal 1fr columns, 16px
+   gap, no orphans. 4-up → 2×2 → 1 · 3-up → 1 · 2-up → 1. */
+.qz-grid { display: grid; gap: 16px; }
+.qz-grid-2 { grid-template-columns: repeat(2, 1fr); }
+.qz-grid-3 { grid-template-columns: repeat(3, 1fr); }
+.qz-grid-4 { grid-template-columns: repeat(4, 1fr); }
+@media (max-width: 1080px) { .qz-grid-4 { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 720px) {
+  .qz-grid-2, .qz-grid-3, .qz-grid-4 { grid-template-columns: 1fr; }
+}
+/* P3 Edit 9 — empty / first-run state (calm, one line + one action). */
+.qz-empty {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 12px; padding: 48px 24px; text-align: center;
+}
+.qz-empty-icon {
+  width: 48px; height: 48px; border-radius: 14px; flex: none;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: var(--qz-accent-wash); color: var(--qz-accent-ink);
+}
+.qz-empty-title { margin: 0; font-size: 14px; color: var(--qz-ink-3); max-width: 44ch; }
+.qz-empty-action { margin-top: 4px; }
+/* P3 §2.5/§16 — source-coded taxonomy chip. Color ALWAYS pairs with the label
+   text (never color-only — Edit 8). Used for group membership. */
+.qz-src-chip {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 4px 11px; border-radius: 8px; font-size: 12px; font-weight: 600;
+  background: var(--qz-cream-2); color: var(--qz-ink-3);
+}
+.qz-src-chip.src-tag  { background: var(--qz-src-tag-bg);  color: var(--qz-src-tag); }
+.qz-src-chip.src-col  { background: var(--qz-src-col-bg);  color: var(--qz-src-col); }
+.qz-src-chip.src-meta { background: var(--qz-src-meta-bg); color: var(--qz-src-meta); }
+.qz-src-chip.src-man  { background: var(--qz-src-man-bg);  color: var(--qz-src-man); }
+
+/* ── P3 Edit 2 (§16) — Groups & Personas page ─────────────────────────────── */
+.qz-src-status { font-size: 13px; color: var(--qz-ink-3); display: inline-flex; align-items: center; gap: 7px; }
+.qz-src-status-icon { color: var(--qz-ok); }
+.qz-groups {
+  display: grid; grid-template-columns: 260px minmax(0, 1fr); overflow: hidden;
+  background: var(--qz-paper); border-radius: var(--qz-radius); box-shadow: var(--qz-lift-1);
+}
+.qz-glist { border-right: 1px solid var(--qz-rule); padding: 12px; display: flex; flex-direction: column; gap: 3px; }
+.qz-gitem {
+  display: flex; align-items: center; gap: 11px; padding: 9px; border: none; border-radius: 10px;
+  background: none; cursor: pointer; text-align: left; font: inherit; color: inherit;
+  transition: background var(--qz-dur-fast) var(--qz-ease);
+}
+.qz-gitem:hover { background: var(--qz-cream-2); }
+.qz-gitem.is-active { background: var(--qz-accent-wash); }
+.qz-gtile, .qz-gbig { flex: none; display: inline-flex; align-items: center; justify-content: center; font-weight: 700; }
+.qz-gtile { width: 38px; height: 38px; border-radius: 9px; font-size: 16px; }
+.qz-gbig { width: 56px; height: 56px; border-radius: 13px; font-size: 22px; }
+.qz-gtile.src-tag, .qz-gbig.src-tag   { background: var(--qz-src-tag-bg);  color: var(--qz-src-tag); }
+.qz-gtile.src-col, .qz-gbig.src-col   { background: var(--qz-src-col-bg);  color: var(--qz-src-col); }
+.qz-gtile.src-meta, .qz-gbig.src-meta { background: var(--qz-src-meta-bg); color: var(--qz-src-meta); }
+.qz-gtile.src-man, .qz-gbig.src-man   { background: var(--qz-src-man-bg);  color: var(--qz-src-man); }
+.qz-gname { display: block; font-size: 13px; font-weight: 600; letter-spacing: -0.01em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.qz-gitem.is-active .qz-gname { color: var(--qz-accent-ink); }
+.qz-gmeta { display: block; font-size: 11px; color: var(--qz-ink-4); }
+.qz-gdetail { min-height: 360px; animation: qz-steploader-fade var(--qz-dur-slow) var(--qz-ease); }
+.qz-gbanner { display: flex; align-items: center; gap: 15px; padding: 20px 22px; border-bottom: 1px solid var(--qz-rule); }
+.qz-pill { font-size: 11px; padding: 3px 10px; border-radius: 999px; font-weight: 600; background: var(--qz-cream-2); color: var(--qz-ink-3); }
+.qz-gbuild { margin: 14px 22px 0; background: var(--qz-cream-2); border-radius: 10px; padding: 13px 15px; font-size: 13px; color: var(--qz-ink-3); }
+.qz-gbuild b { color: var(--qz-ink); }
+.qz-gbody { padding: 18px 22px; }
+.qz-klabel { font-size: 11px; letter-spacing: 0.05em; text-transform: uppercase; color: var(--qz-ink-4); margin-bottom: 9px; }
+.qz-gmosaic { display: flex; flex-wrap: wrap; gap: 9px; }
+@keyframes qz-gpop { from { opacity: 0; transform: scale(0.85); } to { opacity: 1; transform: scale(1); } }
+.qz-gthumb {
+  width: 52px; height: 52px; border-radius: 9px; object-fit: cover; flex: none;
+  background: var(--qz-cream-2); color: var(--qz-ink-4);
+  display: inline-flex; align-items: center; justify-content: center; font-size: 16px;
+  animation: qz-gpop var(--qz-dur) var(--qz-ease) both;
+  transition: transform var(--qz-dur-fast) var(--qz-spring);
+}
+.qz-gthumb:hover { transform: scale(1.07); }
+.qz-gthumb-more { font-size: 13px; font-weight: 600; }
+.qz-gused { display: flex; align-items: center; gap: 7px; font-size: 13px; color: var(--qz-ink-3); font-weight: 600; margin-top: 16px; }
+@media (max-width: 720px) { .qz-groups { grid-template-columns: 1fr; } .qz-glist { border-right: none; border-bottom: 1px solid var(--qz-rule); } }
+
+/* Group create wizard + source picker (P3 Edit 2). */
+.qz-wsteps { display: flex; gap: 8px; margin-bottom: 14px; }
+.qz-wstep { flex: 1; text-align: center; padding: 8px 6px; border-radius: 8px; font-size: 12px; background: var(--qz-cream-2); color: var(--qz-ink-4); }
+.qz-wstep.is-active { background: var(--qz-accent-wash); color: var(--qz-accent-ink); font-weight: 700; }
+.qz-wstep.is-done { background: var(--qz-live-wash); color: var(--qz-ok); }
+.qz-wpanel { animation: qz-steploader-fade var(--qz-dur) var(--qz-ease); }
+.qz-wsrc { border: 1px solid var(--qz-rule); border-radius: 11px; padding: 12px 14px; margin-bottom: 10px; }
+.qz-wsrc-head { display: flex; align-items: center; gap: 9px; margin-bottom: 9px; }
+.qz-wsrc-icon { width: 26px; height: 26px; border-radius: 7px; flex: none; display: inline-flex; align-items: center; justify-content: center; }
+.qz-wsrc-icon.src-tag  { background: var(--qz-src-tag-bg);  color: var(--qz-src-tag); }
+.qz-wsrc-icon.src-col  { background: var(--qz-src-col-bg);  color: var(--qz-src-col); }
+.qz-wsrc-icon.src-meta { background: var(--qz-src-meta-bg); color: var(--qz-src-meta); }
+.qz-wsrc-icon.src-man  { background: var(--qz-src-man-bg);  color: var(--qz-src-man); }
+.qz-wsrc-name { font-size: 13px; font-weight: 600; }
+.qz-wsrc-add { margin-left: auto; font-size: 12px; font-weight: 600; color: var(--qz-accent-ink); background: var(--qz-accent-wash); border: none; padding: 5px 11px; border-radius: 8px; cursor: pointer; font-family: inherit; }
+.qz-wsrc-add:hover { background: color-mix(in srgb, var(--qz-accent) 22%, var(--qz-paper)); }
+.qz-chip-x { display: inline-flex; align-items: center; background: none; border: none; padding: 0; margin-left: 2px; cursor: pointer; color: inherit; opacity: 0.6; }
+.qz-chip-x:hover { opacity: 1; }
+.qz-wpreview { background: var(--qz-cream-2); border-radius: 11px; padding: 14px; margin-top: 4px; }
+.qz-wtoggle { display: inline-flex; align-items: center; gap: 10px; background: none; border: none; font: inherit; font-size: 14px; cursor: pointer; color: inherit; }
+.qz-wswitch { width: 40px; height: 22px; border-radius: 999px; background: var(--qz-ink-25); position: relative; flex: none; transition: background var(--qz-dur) var(--qz-ease); }
+.qz-wswitch::after { content: ""; position: absolute; top: 2px; left: 2px; width: 18px; height: 18px; border-radius: 50%; background: #fff; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2); transition: transform var(--qz-dur) var(--qz-spring); }
+.qz-wtoggle.is-on .qz-wswitch { background: var(--qz-accent); }
+.qz-wtoggle.is-on .qz-wswitch::after { transform: translateX(18px); }
+.qz-picklist { display: flex; flex-direction: column; gap: 2px; max-height: 46vh; overflow-y: auto; }
+.qz-prow { display: flex; align-items: center; gap: 11px; padding: 9px; border: none; border-radius: 9px; background: none; cursor: pointer; text-align: left; font: inherit; color: inherit; }
+.qz-prow:hover { background: var(--qz-cream-2); }
+.qz-prow-cb { width: 20px; height: 20px; border-radius: 6px; border: 1.5px solid var(--qz-rule); flex: none; display: inline-flex; align-items: center; justify-content: center; color: #fff; font-size: 13px; }
+.qz-prow.is-sel .qz-prow-cb { background: var(--qz-accent); border-color: var(--qz-accent); }
+.qz-prow-img { width: 36px; height: 36px; border-radius: 7px; object-fit: cover; flex: none; background: var(--qz-cream-2); display: inline-flex; align-items: center; justify-content: center; color: var(--qz-ink-4); }
+.qz-prow-label { font-size: 13px; font-weight: 600; }
 /* Wide funnel shell — the create funnel opts in so every stage is FLUID: it
    expands with the viewport (owner ask: "full screen / expands with the page
    size so we can better understand the real estate"). No max-width cap.
@@ -521,6 +752,17 @@ body[data-qz] :focus-visible {
 .qz-page-header .qz-eyebrow { color: var(--qz-ink-3); margin-bottom: 14px; }
 .qz-page-header .qz-subtitle { color: var(--qz-ink-3); margin-top: 14px; max-width: 60ch; line-height: 1.55; font-size: 15px; }
 
+/* Global page header pass (design: global page header) — studio-scoped via
+   `.qz-shell` so the embedded /app admin + the builder (studio_.$id, outside
+   this layout) keep their own header treatment. Visual target:
+   docs/prototypes/page-header-global.html — no kicker/subtitle (removed
+   per-page), title = nav label, a bold 38px h1 and tight Title→band→widgets
+   rhythm. */
+.qz-shell .qz-page-header { margin-bottom: 18px; }
+.qz-shell .qz-page-header .qz-display {
+  font-size: 38px; letter-spacing: -0.01em; line-height: 1.1; margin: 0;
+}
+
 /* — Page actions row (the row of buttons under a title) — */
 .qz-actions { display: flex; gap: 10px; flex-wrap: wrap; }
 
@@ -556,7 +798,9 @@ body[data-qz] ::selection { background: var(--qz-ink); color: var(--qz-cream); }
     transition-duration: 0.01ms !important;
     animation-duration: 0.01ms !important;
   }
-  .qz-card.qz-interactive:hover,
+  .qz-card:hover, .qz-card.qz-interactive:hover,
+  .qz-stat-grid--cards .qz-stat:hover,
+  .qz-stat-grid--cards .qz-stat:hover .qz-stat-value,
   .qz-btn-primary:hover, .qz-btn-accent:hover { transform: none; }
 }
 
@@ -682,10 +926,31 @@ body[data-qz] ::selection { background: var(--qz-ink); color: var(--qz-cream); }
 /* Unified P2 — the three-pane unified workspace: rail / preview / panel. */
 .qz-unified {
   display: grid;
-  grid-template-columns: 264px minmax(0, 1fr) 400px;
+  /* P2 Edits 9/13 — first column is the resizable/collapsible rail (var driven
+     by useResizableRail); falls back to 264px pre-hydration. */
+  grid-template-columns: var(--rail-w, 264px) minmax(0, 1fr) 400px;
   gap: var(--qz-space-4);
   align-items: start;
 }
+/* Resizable rail wrapper — holds the panel, a drag handle on its right edge,
+   and a collapse toggle. */
+.qz-rail-wrap { position: relative; min-width: 0; }
+.qz-rail-wrap.is-collapsed > :not(.qz-rail-handle) { display: none; }
+/* The gray grab-bar is the ONE rail control (P2 Edits 9/13): drag to resize,
+   click/tap (or Enter/Space) to collapse & expand. Visible in both states. */
+.qz-rail-handle {
+  position: absolute; top: 0; right: -6px; width: 14px; height: 100%;
+  z-index: 5; background: transparent; border: none; padding: 0;
+  cursor: col-resize; touch-action: none;
+  display: flex; align-items: center; justify-content: center;
+}
+.qz-rail-handle::after {
+  content: ""; width: 4px; height: 46px; border-radius: 3px;
+  background: var(--qz-ink-25);
+  transition: background var(--qz-dur-fast) var(--qz-ease), height var(--qz-dur-fast) var(--qz-ease);
+}
+.qz-rail-handle:hover::after, .qz-rail-handle:focus-visible::after { background: var(--qz-accent); height: 76px; }
+.qz-rail-wrap.is-collapsed .qz-rail-handle { cursor: pointer; }
 @media (max-width: 1100px) {
   .qz-unified {
     grid-template-columns: 220px minmax(0, 1fr);
@@ -834,6 +1099,33 @@ body[data-qz] ::selection { background: var(--qz-ink); color: var(--qz-cream); }
 .qz-staged-beat.is-done .qz-staged-glyph {
   color: var(--qz-ok);
 }
+
+/* Inter-step loader (P2 Edit 8) — centered animated mark + one fading message. */
+.qz-steploader {
+  display: flex; flex-direction: column; align-items: center; gap: 18px;
+  padding: 44px 24px; text-align: center;
+}
+.qz-steploader-mark {
+  width: 56px; height: 56px; border-radius: 50%; position: relative;
+  background: conic-gradient(from 0deg, var(--qz-accent), var(--qz-accent-2), var(--qz-pastel-violet), var(--qz-accent));
+  animation: qz-steploader-spin 1.3s linear infinite;
+}
+.qz-steploader-mark::after {
+  content: ""; position: absolute; inset: 6px; border-radius: 50%; background: var(--qz-paper);
+}
+@keyframes qz-steploader-spin { to { transform: rotate(360deg); } }
+.qz-steploader-msg {
+  font-family: var(--qz-font-display); font-size: 16px; font-weight: 600;
+  color: var(--qz-ink); min-height: 22px;
+  animation: qz-steploader-fade var(--qz-dur-slow) var(--qz-ease);
+}
+@keyframes qz-steploader-fade { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+.qz-steploader-dots { display: flex; gap: 6px; }
+.qz-steploader-dots span {
+  width: 6px; height: 6px; border-radius: 50%; background: var(--qz-ink-25);
+  transition: background var(--qz-dur) var(--qz-ease);
+}
+.qz-steploader-dots span.is-on { background: var(--qz-accent); }
 
 /* Step 2 T4 — the tier-1 quiz-type card grid. */
 .qz-type-grid {
@@ -1034,8 +1326,17 @@ body[data-qz] ::selection { background: var(--qz-ink); color: var(--qz-cream); }
   color: var(--qz-ink);
 }
 .qz-rail-item[aria-current="page"] {
-  background: var(--qz-accent-wash); color: var(--qz-accent); font-weight: 600;
+  /* P2 Edit 5 — active item reads by weight, not just color. */
+  background: var(--qz-accent-wash); color: var(--qz-accent); font-weight: 700;
 }
+/* P3 Edit 5 — "Soon" tag on v1 placeholder nav items. */
+.qz-rail-soon {
+  margin-left: auto; flex: none;
+  font-size: 9px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase;
+  padding: 2px 6px; border-radius: 999px;
+  background: var(--qz-cream-2); color: var(--qz-ink-4);
+}
+.qz-rail.is-collapsed .qz-rail-soon { display: none; }
 .qz-rail-item[aria-current="page"]::before {
   content: ""; position: absolute; left: 0; top: 8px; bottom: 8px; width: 3px;
   border-radius: 0 2px 2px 0; background: var(--qz-accent);
@@ -1073,8 +1374,7 @@ body[data-qz] ::selection { background: var(--qz-ink); color: var(--qz-cream); }
 .qz-rail.is-collapsed .qz-rail-account > .qz-rail-label { display: none; }
 
 /* ── QD-3 — Home front door: big action cards + inspiration gallery ────────── */
-.qz-action-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
-@media (max-width: 900px) { .qz-action-grid { grid-template-columns: 1fr; } }
+.qz-action-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 16px; }
 .qz-action-card {
   display: flex; flex-direction: column; gap: 11px;
   padding: 26px; text-decoration: none; color: inherit; min-height: 172px;
@@ -1087,6 +1387,114 @@ body[data-qz] ::selection { background: var(--qz-ink); color: var(--qz-cream); }
 .qz-inspo-row { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 14px; }
 .qz-inspo-card { display: flex; flex-direction: column; gap: 10px; padding: 12px; text-decoration: none; color: inherit; }
 .qz-inspo-thumb { display: block; height: 116px; border-radius: 9px; border: 1px solid var(--qz-rule); }
+
+/* ── P2 Edit 6/12 — Home dashboard ─────────────────────────────────────── */
+.qz-quick { display: flex; flex-direction: column; gap: 9px; padding: 18px; }
+/* P3 Edit 5 — "Soon" placeholder action card (not clickable, no hover-lift). */
+.qz-soon-tag {
+  font-size: 9.5px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase;
+  padding: 2px 7px; border-radius: 999px;
+  background: var(--qz-cream-2); color: var(--qz-ink-4);
+}
+.qz-quick.is-soon { opacity: 0.72; cursor: default; }
+.qz-quick.is-soon:hover { transform: none; box-shadow: var(--qz-lift-1); }
+.qz-quick-icon {
+  width: 42px; height: 42px; border-radius: 12px; color: var(--qz-accent-ink);
+  display: inline-flex; align-items: center; justify-content: center;
+}
+.qz-hero-banner {
+  position: relative; overflow: hidden;
+  display: flex; align-items: center; min-height: 168px;
+  background: linear-gradient(120deg, var(--qz-pastel-violet), color-mix(in srgb, var(--qz-pastel-sky) 55%, var(--qz-paper)));
+  background-size: 180% 180%;
+  animation: qz-hero-banner-drift 11s ease-in-out infinite;
+}
+@keyframes qz-hero-banner-drift { 0%, 100% { background-position: 0% 50%; } 50% { background-position: 100% 50%; } }
+.qz-hero-art { position: absolute; right: 16px; top: 0; height: 100%; width: 244px; pointer-events: none; z-index: 0; filter: blur(0.5px); }
+@media (max-width: 760px) { .qz-hero-art { display: none; } }
+/* Decorative shapes drift + swell so the banner feels lively. */
+.qz-heroart-a { transform-box: fill-box; transform-origin: center; animation: qz-heroart-drift-a 8s ease-in-out infinite; }
+.qz-heroart-b { transform-box: fill-box; transform-origin: center; animation: qz-heroart-drift-b 10s ease-in-out infinite; }
+.qz-heroart-card { transform-box: fill-box; transform-origin: center; animation: qz-heroart-bob 6.5s ease-in-out infinite; }
+@keyframes qz-heroart-drift-a { 0%, 100% { transform: translate(0, 0) scale(1); } 50% { transform: translate(-8px, 6px) scale(1.06); } }
+@keyframes qz-heroart-drift-b { 0%, 100% { transform: translate(0, 0) scale(1); } 50% { transform: translate(8px, -7px) scale(1.12); } }
+@keyframes qz-heroart-bob { 0%, 100% { transform: translate(0, 0) rotate(0deg); } 50% { transform: translate(2px, -5px) rotate(-1.5deg); } }
+/* A ✨ that runs across the banner every ~8s to pull the eye. */
+.qz-hero-spark { position: absolute; z-index: 2; left: -5%; top: 55%; font-size: 22px; pointer-events: none; opacity: 0; animation: qz-hero-spark-run 8s ease-in-out infinite; }
+@keyframes qz-hero-spark-run {
+  0% { left: -5%; opacity: 0; transform: translateY(10px) scale(.4) rotate(0deg); }
+  5% { opacity: 1; }
+  14% { transform: translateY(-64px) scale(1.15) rotate(160deg); }
+  26% { left: 104%; opacity: 0; transform: translateY(-18px) scale(.5) rotate(300deg); }
+  100% { left: 104%; opacity: 0; }
+}
+/* A faint diagonal shine sweeping with the sparkle. */
+.qz-hero-banner::after { content: ""; position: absolute; inset: 0; z-index: 1; pointer-events: none; background: linear-gradient(105deg, transparent 44%, color-mix(in srgb, white 42%, transparent) 50%, transparent 56%); transform: translateX(-150%); animation: qz-hero-shine 8s ease-in-out infinite; }
+@keyframes qz-hero-shine { 0% { transform: translateX(-150%); } 20%, 100% { transform: translateX(150%); } }
+@media (prefers-reduced-motion: reduce) {
+  .qz-hero-banner, .qz-heroart-a, .qz-heroart-b, .qz-heroart-card, .qz-hero-banner::after { animation: none; }
+  .qz-hero-spark { display: none; }
+}
+
+/* Home welcome intro — pops in, emoji waves, then collapses so the page slides up. */
+.qz-home-welcome {
+  overflow: hidden; max-height: 90px;
+  animation: qz-home-welcome-in 560ms var(--qz-spring, cubic-bezier(.2,.8,.2,1)) both;
+  transition: max-height 600ms var(--qz-ease), opacity 400ms var(--qz-ease);
+}
+.qz-home-welcome.is-gone { max-height: 0; opacity: 0; }
+@keyframes qz-home-welcome-in { 0% { opacity: 0; transform: translateY(-10px) scale(.97); } 100% { opacity: 1; transform: none; } }
+.qz-home-wave { display: inline-block; transform-origin: 72% 78%; animation: qz-home-wave 1.5s ease-in-out .35s 2; }
+@keyframes qz-home-wave {
+  0%, 55%, 100% { transform: rotate(0deg); }
+  8% { transform: rotate(16deg); } 18% { transform: rotate(-10deg); }
+  28% { transform: rotate(16deg); } 38% { transform: rotate(-6deg); } 48% { transform: rotate(12deg); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .qz-home-welcome { animation: none; transition: none; }
+  .qz-home-wave { animation: none; }
+}
+.qz-recent-row { gap: 12px; padding: 12px 2px; }
+.qz-recent-row:hover { background: var(--qz-rule-2); border-radius: 8px; }
+.qz-weekchart { display: flex; align-items: flex-end; gap: 8px; height: 132px; padding-top: 8px; }
+.qz-weekchart-col { flex: 1 1 0; height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; gap: 6px; }
+.qz-weekchart-bar {
+  width: 58%; min-height: 4px; border-radius: 6px 6px 3px 3px;
+  background: linear-gradient(var(--qz-accent), var(--qz-accent-2));
+  transition: height var(--qz-dur-slow) var(--qz-spring);
+}
+.qz-weekchart-label { font-size: 11px; color: var(--qz-ink-4); }
+
+/* ── P3 Edit 1 (§15.7) — per-quiz analytics modules ────────────────────────── */
+/* §R-1 — per-quiz analytics modules (prototype-v4): full-width white cards,
+   colored icon tile + Open button in the head, a 4-col grid of grey KPI tiles
+   (each with a number/label/delta/sparkline), and an insight footer. */
+.qz-qmod-list { display: flex; flex-direction: column; gap: 16px; }
+.qz-qmod { background: var(--qz-paper); border: 0.5px solid var(--qz-rule); border-radius: 16px; box-shadow: var(--qz-lift-1); padding: 20px 22px; }
+.qz-qmod.is-deeplinked { outline: 2px solid var(--qz-accent); outline-offset: 2px; animation: qz-amod-pulse 2.2s var(--qz-ease); }
+@keyframes qz-amod-pulse { 0% { box-shadow: 0 0 0 0 var(--qz-accent-wash); } 30% { box-shadow: 0 0 0 6px var(--qz-accent-wash); } 100% { box-shadow: var(--qz-lift-1); } }
+@media (prefers-reduced-motion: reduce) { .qz-qmod.is-deeplinked { animation: none; } }
+.qz-qmod-head { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
+.qz-qmod-ic { width: 40px; height: 40px; flex: none; border-radius: 11px; background: var(--mod-wash); color: var(--mod-ink); display: flex; align-items: center; justify-content: center; font-family: var(--qz-font-display); font-weight: 700; font-size: 18px; }
+.qz-qmod-name { font-size: 16px; font-weight: 700; letter-spacing: -0.01em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.qz-qmod-facts { font-size: 12px; color: var(--qz-ink-3); margin-top: 1px; }
+.qz-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(115px, 1fr)); gap: 12px; }
+.qz-kpi { background: var(--qz-cream-2); border-radius: 11px; padding: 13px 15px; }
+.qz-kpi .n { font-size: 22px; font-weight: 700; letter-spacing: -0.02em; }
+.qz-kpi .l { font-size: 11px; color: var(--qz-ink-3); margin-top: 2px; }
+.qz-kpi .d { font-size: 11px; font-weight: 700; margin-top: 3px; }
+.qz-kpi .d.up { color: var(--qz-ok); } .qz-kpi .d.down { color: var(--qz-crit); }
+.qz-spark { height: 30px; display: flex; align-items: flex-end; gap: 3px; margin-top: 8px; }
+/* Sparklines always render, greyed + animated (a metric with no daily series
+   yet shows a muted placeholder shape, never fabricated data). */
+.qz-spark span { flex: 1; min-height: 2px; border-radius: 2px 2px 0 0; background: var(--qz-ink-25); transform-origin: bottom; animation: qz-amod-grow var(--qz-dur-slow) var(--qz-spring) both; }
+.qz-kpis.is-muted .n, .qz-kpis.is-muted .l { color: var(--qz-ink-3); }
+.qz-kpis.is-muted .qz-spark span { opacity: 0.5; }
+@keyframes qz-amod-grow { from { transform: scaleY(0); } to { transform: scaleY(1); } }
+.qz-qmod-draft { font-size: 12.5px; color: var(--qz-ink-3); display: flex; align-items: center; gap: 6px; padding: 6px 0; }
+.qz-qmod-foot { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 14px; }
+.qz-modpill { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; font-weight: 600; padding: 4px 10px; border-radius: 999px; background: var(--qz-cream-2); color: var(--qz-ink-2); }
+.qz-modpill.is-br { background: var(--qz-accent-wash); color: var(--qz-accent-ink); }
 
 /* ── BLD-1 — the standalone builder chrome on the V2 primitives: the shared
      .qz-topbar (--builder modifier) over a body row of ONE nav rail ·
@@ -1222,6 +1630,9 @@ body[data-qz] ::selection { background: var(--qz-ink); color: var(--qz-cream); }
   background: var(--qz-paper); border-right: 1px solid var(--qz-rule);
   padding: 14px; display: flex; flex-direction: column; gap: 14px;
 }
+/* §O2.2 — unpinned: the aside shrinks to just the icon-rail and lets the
+   flyout panel overflow over the canvas (reclaims stage width). */
+.qz-builder-panel.is-railonly { flex: 0 0 auto; width: auto; overflow: visible; }
 .qz-builder-stage { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; background: var(--qz-cream-2); }
 /* BLD-3 — the right-side step inspector (the embedded 3-pane's 400px column):
    the ContextPanel gets real room, so its tabs stop clipping. Narrower
@@ -2769,8 +3180,12 @@ body[data-qz] ::selection { background: var(--qz-ink); color: var(--qz-cream); }
 .qz-rb-pvtab.is-active { border-color: var(--qz-accent); color: var(--qz-accent); background: var(--qz-accent-tint); }
 .qz-rb-phone { flex: 1 1 auto; min-height: 0; display: grid; place-items: center; }
 .qz-rb-phone-screen {
+  /* P2 Edit 7 — slim frameless phone matching the repainted runtime (§11.2):
+     no bezel, squarer ~26px corners, soft shadow + hairline instead of a
+     heavy dark border. */
   width: min(300px, 100%); height: min(500px, calc(100vh - 260px));
-  border: 6px solid var(--qz-ink); border-radius: 24px; overflow: hidden;
+  border-radius: 26px; overflow: hidden;
+  box-shadow: 0 18px 50px -18px rgba(120, 110, 150, 0.45), 0 0 0 1px var(--qz-rule);
   background: var(--qz-color-bg, #fff); color: var(--qz-color-text, #111);
   font-family: var(--qz-font-body, inherit);
   display: flex; flex-direction: column; padding: 16px;
@@ -2850,8 +3265,8 @@ body[data-qz] ::selection { background: var(--qz-ink); color: var(--qz-cream); }
   position: absolute; top: 12px; right: 12px; z-index: 1;
   display: inline-flex; align-items: center; gap: 5px;
   padding: 3px 9px; border-radius: 999px;
-  background: var(--qz-gold-wash); color: var(--qz-gold);
-  box-shadow: inset 0 0 0 1px var(--qz-gold-line);
+  background: var(--qz-accent-wash); color: var(--qz-accent-ink);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--qz-accent) 30%, transparent);
   font-size: 11px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase;
   pointer-events: none;
 }
@@ -2861,12 +3276,15 @@ body[data-qz] ::selection { background: var(--qz-ink); color: var(--qz-cream); }
 .qz-shape-see { font-size: 12.5px; font-weight: 600; color: var(--qz-accent); }
 
 /* §2.1 mini-thumbnail — a themed rendered quiz screen, never an icon. */
+/* P2 Edit 7 — noticeably larger, on-theme template thumbnail (a live themed
+   quiz mini-screen), lifted with a soft shadow so the cards read friendly. */
 .qz-shape-thumb {
-  display: flex; flex-direction: column; gap: 7px;
-  padding: 12px; min-height: 96px; overflow: hidden;
+  display: flex; flex-direction: column; gap: 9px;
+  padding: 16px; min-height: 140px; overflow: hidden;
   background: var(--qz-color-bg, #fff); color: var(--qz-color-text, #111);
   font-family: var(--qz-font-body, inherit);
-  border: 1px solid var(--qz-rule); border-radius: calc(var(--qz-radius) - 4px);
+  border: 1px solid var(--qz-rule); border-radius: calc(var(--qz-radius) - 2px);
+  box-shadow: 0 8px 22px -12px rgba(120, 110, 150, 0.30);
 }
 .qz-shape-thumb-bar {
   display: block; height: 4px; border-radius: 2px; overflow: hidden;
@@ -2889,14 +3307,21 @@ body[data-qz] ::selection { background: var(--qz-ink); color: var(--qz-cream); }
 .qz-tpl-q { display: flex; flex-direction: column; gap: 10px; min-height: 0; }
 .qz-tpl-chips { display: flex; flex-direction: column; gap: 6px; }
 .qz-tpl-chip {
-  padding: 9px 12px; font-size: 12.5px; text-align: left; cursor: pointer;
+  padding: 9px 12px; font-size: 12.5px; cursor: pointer;
   color: inherit; font-family: inherit;
+  display: flex; align-items: center; gap: 8px;
   background: color-mix(in srgb, currentColor 6%, transparent);
   border: 1px solid transparent; border-radius: 8px;
 }
+/* P2 Edit 7 — selected chip matches the runtime's §10 selection: brand ring + check. */
 .qz-tpl-chip.is-on {
-  border-color: var(--qz-color-primary, #5563de);
+  border-color: transparent;
+  box-shadow: inset 0 0 0 2px var(--qz-color-primary, #5563de);
   background: color-mix(in srgb, var(--qz-color-primary, #5563de) 12%, transparent);
+}
+.qz-tpl-chip.is-on::after {
+  content: "✓"; margin-left: auto;
+  color: var(--qz-color-primary, #5563de); font-weight: 700; font-size: 12px;
 }
 .qz-tpl-next {
   margin-top: auto; padding: 9px 12px; font-size: 13px; font-weight: 600; cursor: pointer;
@@ -2919,6 +3344,16 @@ body[data-qz] ::selection { background: var(--qz-ink); color: var(--qz-cream); }
   display: inline-flex; align-items: center; gap: 10px;
   padding: 6px; margin: -6px; /* invisible hit-target padding */
   text-decoration: none; color: var(--qz-ink);
+}
+/* Typographic monogram — the interim mark now that the diamond is gone (§13).
+   A rounded violet-wash tile with the initial in the display face. */
+.qz-wordmark-mono {
+  flex: none;
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 28px; height: 28px; border-radius: 9px;
+  background: var(--qz-accent-wash); color: var(--qz-accent-ink);
+  font-family: var(--qz-font-display); font-weight: 700; font-size: 16px;
+  line-height: 1; letter-spacing: -0.02em;
 }
 .qz-wordmark-name {
   font-family: var(--qz-font-display);
@@ -2950,30 +3385,34 @@ body[data-qz] ::selection { background: var(--qz-ink); color: var(--qz-cream); }
 }
 
 /* — Step-nav pills (§7.6) — */
-.qz-stepnav { display: flex; align-items: center; min-width: 0; }
-.qz-stepnav-item { display: inline-flex; align-items: center; }
-.qz-stepnav-connector { width: 20px; height: 1px; background: var(--qz-rule); flex: none; }
+/* Funnel stepper — segmented bar (P2 Edit 1). Equal-width connected rounded
+   segments reading as one control. Restyle only — StepNav owns the states. */
+.qz-stepnav { display: flex; align-items: stretch; gap: 6px; width: 100%; min-width: 0; }
+.qz-stepnav-item { display: flex; flex: 1 1 0; min-width: 0; }
 .qz-stepnav-pill {
-  display: inline-flex; align-items: center; gap: 8px;
-  padding: 6px 13px; border: none; border-radius: 9px;
-  background: transparent; cursor: default;
+  display: inline-flex; align-items: center; justify-content: center; gap: 7px;
+  width: 100%; padding: 11px 12px; border: none; border-radius: 8px;
+  background: var(--qz-cream-2); cursor: default; overflow: hidden;
   font-family: var(--qz-font-body); font-size: 12.5px; font-weight: 500;
-  color: var(--qz-ink-45, var(--qz-ink-4));
-  transition: background var(--qz-dur-fast) var(--qz-ease), color var(--qz-dur-fast) var(--qz-ease);
-  white-space: nowrap;
+  color: var(--qz-ink-4);
+  transition: background var(--qz-dur) var(--qz-spring), color var(--qz-dur) var(--qz-ease);
 }
 .qz-stepnav-num { font-family: var(--qz-font-mono); font-size: 10.5px; color: var(--qz-ink-25); }
-.qz-stepnav-pill.is-upcoming { color: var(--qz-ink-4); }
-.qz-stepnav-pill.is-done { color: var(--qz-ink-3); cursor: pointer; }
-.qz-stepnav-pill.is-done .qz-stepnav-num { color: var(--qz-ink-4); }
-.qz-stepnav-pill.is-done:hover { background: color-mix(in srgb, var(--qz-ink) 4%, transparent); }
-.qz-stepnav-check { color: var(--qz-ok); }
-.qz-stepnav-pill.is-current {
-  background: var(--qz-gold-wash);
-  box-shadow: inset 0 0 0 1px var(--qz-gold-line);
-  color: var(--qz-gold); font-weight: 600;
+.qz-stepnav-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.qz-stepnav-check { flex: none; }
+/* Upcoming — neutral surface, muted. */
+.qz-stepnav-pill.is-upcoming { background: var(--qz-cream-2); color: var(--qz-ink-4); }
+/* Completed — light-violet fill, green check, dark-violet label; clickable. */
+.qz-stepnav-pill.is-done { background: var(--qz-accent-wash); color: var(--qz-accent-ink); cursor: pointer; }
+.qz-stepnav-pill.is-done .qz-stepnav-check { color: var(--qz-ok); }
+.qz-stepnav-pill.is-done:hover { background: color-mix(in srgb, var(--qz-accent) 22%, var(--qz-paper)); }
+/* Active — solid violet fill, white label. */
+.qz-stepnav-pill.is-current { background: var(--qz-accent); color: #fff; font-weight: 600; }
+.qz-stepnav-pill.is-current .qz-stepnav-num { color: rgba(255, 255, 255, 0.7); }
+/* Narrow: non-active labels drop to numbers/checks; the active keeps its label. */
+@media (max-width: 720px) {
+  .qz-stepnav-pill:not(.is-current) .qz-stepnav-name { display: none; }
 }
-.qz-stepnav-pill.is-current .qz-stepnav-num { color: var(--qz-gold); }
 
 /* — Modal (§7.5) — */
 .qz-modal-scrim {
@@ -2995,9 +3434,11 @@ body[data-qz] ::selection { background: var(--qz-ink); color: var(--qz-cream); }
   display: flex; flex-direction: column; gap: 12px;
   animation: qz-modal-in var(--qz-dur) var(--qz-ease);
 }
-.qz-modal--sm { width: min(440px, 100%); }
-.qz-modal--md { width: min(640px, 100%); }
-.qz-modal--lg { width: min(880px, 100%); }
+/* §A2 (LOCKED) — width:min(92vw,maxWidth) keeps a screen gutter; sizes are
+   compact 440 · standard 560 · wide 720. */
+.qz-modal--sm { width: min(92vw, 440px); }
+.qz-modal--md { width: min(92vw, 560px); }
+.qz-modal--lg { width: min(92vw, 720px); }
 .qz-modal-x {
   position: absolute; top: 16px; right: 16px;
   width: 32px; height: 32px; display: grid; place-items: center;
@@ -3010,7 +3451,8 @@ body[data-qz] ::selection { background: var(--qz-ink); color: var(--qz-cream); }
   display: grid; place-items: center;
   background: var(--qz-cream-2); font-size: 20px;
 }
-.qz-modal-title { margin: 0; font-size: 20px; font-weight: 700; letter-spacing: -0.02em; }
+/* §A2 — copy always wraps, never truncated (long unbroken strings too). */
+.qz-modal-title { margin: 0; font-size: 20px; font-weight: 700; letter-spacing: -0.02em; overflow-wrap: anywhere; padding-right: 32px; }
 .qz-modal-body { font-size: 14px; color: var(--qz-ink-3); overflow-y: auto; min-height: 0; }
 .qz-modal-footer { display: flex; justify-content: flex-end; gap: 10px; padding-top: 4px; }
 .qz-btn-danger { background: var(--qz-paper); color: var(--qz-warn); }
@@ -3055,6 +3497,22 @@ body[data-qz] ::selection { background: var(--qz-ink); color: var(--qz-cream); }
 }
 
 /* — Popover (§7.5): anchored, no backdrop, one at a time — */
+/* Menu (P2 Edit 3) — actions list rendered inside a QzPopover card; negative
+   margins let the row hover-fill reach the card edges. */
+.qz-menu { display: flex; flex-direction: column; margin: -6px -8px; min-width: 180px; }
+.qz-menu-item {
+  display: flex; align-items: center; gap: 8px;
+  height: 38px; padding: 0 12px;
+  background: none; border: none; border-radius: 8px;
+  font: inherit; font-size: 13.5px; color: var(--qz-ink); text-align: left;
+  cursor: pointer;
+  transition: background var(--qz-dur-fast) var(--qz-ease), color var(--qz-dur-fast) var(--qz-ease);
+}
+.qz-menu-item:hover:not(:disabled) { background: var(--qz-accent-wash); color: var(--qz-accent-ink); }
+.qz-menu-item:disabled { opacity: .5; cursor: default; }
+.qz-menu-item-crit { color: var(--qz-crit); }
+.qz-menu-item-crit:hover:not(:disabled) { background: var(--qz-crit-tint); color: var(--qz-crit); }
+
 .qz-popover-anchor { display: inline-flex; }
 @keyframes qz-popover-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
 .qz-popover {
@@ -3629,6 +4087,19 @@ body[data-qz] .qz-s3-editable:focus-visible {
 .qz-s3-sec-edit:hover { color: var(--qz-accent); background: var(--qz-accent-wash); }
 .qz-s3-sec-freeform { margin: 10px 0 2px 36px; font-size: 12.5px; color: var(--qz-ink-4); }
 
+/* §I2 — keyword→outcome mapping editor (text/email questions). */
+.qz-s3-sec-freeform-wrap { margin-left: 36px; }
+.qz-s3-sec-freeform-wrap .qz-s3-sec-freeform { margin-left: 0; }
+.qz-s3-kw { margin-top: 10px; border-top: 1px solid var(--qz-rule-2); padding-top: 12px; }
+.qz-s3-kw-head { display: flex; flex-direction: column; gap: 2px; margin-bottom: 10px; }
+.qz-s3-kw-row { display: grid; grid-template-columns: minmax(0, 1fr) 92px 14px minmax(0, 1fr) 28px; gap: 8px; align-items: center; margin-bottom: 8px; }
+.qz-s3-kw-arrow { color: var(--qz-ink-4); font-size: 13px; text-align: center; }
+@media (max-width: 900px) { .qz-s3-kw-arrow { display: none; } }
+.qz-s3-kw-row .qz-input { height: 34px; font-size: 13px; }
+.qz-s3-kw-x { width: 28px; height: 28px; border: none; border-radius: 7px; background: none; color: var(--qz-ink-4); font-size: 18px; line-height: 1; cursor: pointer; }
+.qz-s3-kw-x:hover { background: var(--qz-crit-wash); color: var(--qz-crit); }
+@media (max-width: 900px) { .qz-s3-kw-row { grid-template-columns: 1fr 1fr; } .qz-s3-kw-x { grid-column: 2; justify-self: end; } }
+
 /* — answers table (§5.2): letter · text · λ chips · maps-to · then-go-to · ✕ — */
 .qz-s3-atable { margin-top: 12px; display: flex; flex-direction: column; }
 .qz-s3-atable-head,
@@ -3844,9 +4315,10 @@ body[data-qz] .qz-s3-editable:focus-visible {
 .qz-s3-explainer-sentence { flex-basis: 100%; margin: 2px 0 0 24px; color: var(--qz-ink-3); font-size: 12.5px; }
 
 /* Two columns: map + 356px sticky rules column (spec §2, fits at 1024). */
-.qz-s3-logicbody { display: grid; grid-template-columns: minmax(0, 1fr) 356px; gap: 16px; align-items: start; }
-@media (max-width: 1023px) { .qz-s3-logicbody { grid-template-columns: 1fr; } }
-.qz-s3-rwcol { position: sticky; top: 76px; display: flex; flex-direction: column; gap: 12px; max-height: calc(100vh - 96px); overflow-y: auto; }
+/* logic-page-v4 — single-column stacked (Rules → map → Fallback), not a
+   two-column map|rules grid. */
+.qz-s3-logicbody { display: flex; flex-direction: column; gap: 16px; align-items: stretch; }
+.qz-s3-rwcol { display: flex; flex-direction: column; gap: 12px; }
 
 /* Rules widget */
 .qz-s3-ruleswidget {
@@ -4225,11 +4697,12 @@ body[data-qz] .qz-s3-editable:focus-visible {
   background: var(--qz-paper);
 }
 .qz-layers-row.is-hidden { opacity: 0.55; }
-/* BT4 drag-to-reorder — the dragged row dims; the hovered target shows a top
-   drop-line so the merchant sees where the block will land. */
+/* §O2.2 — drag-reorder + lock affordances. */
 .qz-layers-row.is-dragging { opacity: 0.4; }
-.qz-layers-row.is-drop-target { box-shadow: inset 0 2px 0 0 var(--qz-accent, var(--qz-ink-1)); }
-.qz-layers-grip { font-size: 12px; line-height: 1; flex: 0 0 auto; }
+.qz-layers-row.is-dragover { border-color: var(--qz-accent); box-shadow: 0 -2px 0 var(--qz-accent) inset; }
+.qz-layers-row.is-locked { background: var(--qz-cream-2); }
+.qz-layers-grip { flex: 0 0 auto; display: flex; align-items: center; color: var(--qz-ink-25); cursor: grab; }
+.qz-layers-row.is-locked .qz-layers-grip { cursor: not-allowed; opacity: 0.4; }
 .qz-layers-main {
   display: flex;
   align-items: center;
@@ -4258,6 +4731,717 @@ body[data-qz] .qz-s3-editable:focus-visible {
 }
 .qz-layers-actions button:hover:not(:disabled) { background: var(--qz-accent-tint, transparent); color: var(--qz-ink-1); }
 .qz-layers-actions button:disabled { opacity: 0.35; cursor: default; }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   QZY-8 — Inspector v2 (build-tab spec §2/§4/§5.1/§10)
+   Linked range+number pairs, More-options disclosure, single-option scope,
+   footer actions, and the inline gold Logic section.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.qz-numctl { display: grid; grid-template-columns: 76px minmax(0, 1fr) auto; gap: 8px; align-items: center; font-size: 12px; }
+.qz-numctl-label { color: var(--qz-ink-3); font-size: 11.5px; }
+.qz-numctl input[type="range"] { width: 100%; min-width: 0; accent-color: var(--qz-accent); }
+.qz-numctl-exact { display: inline-flex; align-items: center; gap: 3px; }
+.qz-numctl-exact input {
+  width: 58px; font: inherit; font-size: 12px; padding: 3px 6px; text-align: right;
+  border: 1px solid var(--qz-rule); border-radius: var(--qz-radius, 8px);
+  background: var(--qz-bg); color: var(--qz-ink-1); font-variant-numeric: tabular-nums;
+}
+.qz-numctl-suffix { font-size: 10.5px; color: var(--qz-ink-4); }
+
+.qz-insp-more > summary { cursor: pointer; font-size: 12.5px; font-weight: 600; color: var(--qz-ink-2); }
+
+.qz-insp-logic {
+  border: 1px solid var(--qz-gold-line, var(--qz-rule));
+  background: var(--qz-gold-wash, transparent);
+  border-radius: 10px;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex: 0 0 auto;
+}
+/* §R R-5 / §P Edit 4 — the brand book's flowing brand-gradient header (the one
+   sanctioned animated-color exception; built from the merchant's own palette). */
+.qz-bb-hero {
+  position: relative;
+  overflow: hidden;
+  height: 88px;
+  border-radius: 16px;
+  margin-bottom: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  padding: 14px 22px;
+  background: linear-gradient(115deg, var(--g1), var(--g2), var(--g3), var(--g4));
+  background-size: 300% 300%;
+  /* Slow color drift + a gentle pulse that swells from time to time. */
+  animation: qz-bb-flow 18s ease infinite, qz-bb-pulse 8s ease-in-out infinite;
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,.12);
+}
+.qz-bb-hero-cap { position: relative; z-index: 1; display: flex; flex-direction: column; align-items: flex-start; text-align: left; gap: 1px; color: #fff; text-shadow: 0 1px 8px rgba(0,0,0,.28); }
+.qz-bb-hero-cap strong { font-size: 15px; }
+.qz-bb-hero-cap span { font-size: 12.5px; opacity: .92; }
+
+/* Decorative floating brand-icon cluster on the right of the header. */
+.qz-bb-hero-art { position: absolute; inset: 0; z-index: 0; pointer-events: none; }
+.qz-bb-hero-icon { position: absolute; color: white; opacity: .3; }
+.qz-bb-hero-icon.i1 { right: 7%; top: 18%; animation: qz-bb-hero-float 6.5s ease-in-out infinite; }
+.qz-bb-hero-icon.i2 { right: 16%; top: 52%; opacity: .42; animation: qz-bb-hero-twinkle 4.5s ease-in-out infinite; }
+.qz-bb-hero-icon.i3 { right: 27%; top: 28%; opacity: .24; animation: qz-bb-hero-float 7.6s ease-in-out infinite .5s; }
+.qz-bb-hero-icon.i4 { right: 11%; top: 64%; opacity: .3; animation: qz-bb-hero-float 8.2s ease-in-out infinite .3s; }
+.qz-bb-hero-icon.i5 { right: 33%; top: 60%; opacity: .5; animation: qz-bb-hero-twinkle 3.8s ease-in-out infinite 1s; }
+@keyframes qz-bb-hero-float { 0%, 100% { transform: translateY(0) rotate(-4deg); } 50% { transform: translateY(-9px) rotate(6deg); } }
+@keyframes qz-bb-hero-twinkle { 0%, 100% { opacity: .12; transform: scale(.8); } 50% { opacity: .75; transform: scale(1.12); } }
+@media (prefers-reduced-motion: reduce) { .qz-bb-hero-icon { animation: none; } }
+@keyframes qz-bb-flow { 0% { background-position: 0% 50%; } 50% { background-position: 100% 50%; } 100% { background-position: 0% 50%; } }
+@keyframes qz-bb-pulse { 0%, 82%, 100% { transform: scale(1); filter: brightness(1); } 91% { transform: scale(1.014); filter: brightness(1.07); } }
+@media (prefers-reduced-motion: reduce) { .qz-bb-hero { animation: none; } }
+
+/* ── Brand book (Phase-4 Edit 2/3) — collapsible accordion at a capped reading
+   width, with a compact collapsible checklist nav. ─────────────────────────── */
+.qz-bb {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 236px; /* modules left · checklist right */
+  gap: 32px;
+  align-items: start;
+}
+.qz-bb-nav { position: sticky; top: 12px; align-self: start; padding-left: 16px; order: 2; }
+/* Vertical scroll-progress bar (violet→coral) that fills as the page scrolls. */
+.qz-bb-track { position: absolute; left: 0; top: 4px; bottom: 4px; width: 3px; border-radius: 999px; background: var(--qz-rule); overflow: hidden; }
+.qz-bb-track-fill { width: 100%; background: linear-gradient(var(--qz-accent), var(--qz-priority)); transition: height 120ms linear; }
+@media (prefers-reduced-motion: reduce) { .qz-bb-track-fill { transition: none; } }
+.qz-bb-navgroups { display: flex; flex-direction: column; gap: 14px; }
+.qz-bb-navgroup { display: flex; flex-direction: column; gap: 2px; }
+.qz-bb-navsub { font-size: 10.5px; font-weight: 700; letter-spacing: .07em; text-transform: uppercase; color: var(--qz-ink-3); padding: 2px 8px 4px; }
+.qz-bb-navitem {
+  display: flex; align-items: center; gap: 8px; border: none; background: transparent; cursor: pointer;
+  font: inherit; font-size: 12.5px; color: var(--qz-ink-2); text-align: left; padding: 6px 8px;
+  border-radius: 7px; width: 100%; transition: background 120ms;
+}
+.qz-bb-navitem:hover { background: var(--qz-cream-2, #00000008); }
+.qz-bb-navitem.is-active { background: color-mix(in srgb, var(--qz-accent) 11%, transparent); color: var(--qz-ink-1); font-weight: 600; }
+.qz-bb-navicon { color: var(--qz-ink-3); flex: 0 0 auto; }
+.qz-bb-navitem.is-active .qz-bb-navicon { color: var(--qz-accent); }
+.qz-bb-navlabel { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.qz-bb-dot { width: 7px; height: 7px; border-radius: 999px; flex: 0 0 auto; }
+
+.qz-bb-doc { display: flex; flex-direction: column; gap: 22px; min-width: 0; order: 1; }
+
+/* Module band — the two grouped sections ("1 · Brand basics" / "2 · Look & feel"). */
+.qz-bb-band { display: flex; flex-direction: column; gap: 10px; }
+.qz-bb-bandhead { display: flex; align-items: baseline; gap: 8px; padding: 2px 2px 2px; }
+.qz-bb-bandnum { display: grid; place-items: center; width: 20px; height: 20px; border-radius: 6px; font-size: 11px; font-weight: 700; color: var(--qz-accent); background: color-mix(in srgb, var(--qz-accent) 12%, transparent); align-self: center; }
+.qz-bb-bandname { font-size: 14px; font-weight: 700; color: var(--qz-ink-1); }
+.qz-bb-bandtag { font-size: 12.5px; color: var(--qz-ink-3); }
+
+/* Module — collapsible card, clearly differentiated; open state lifts + accents. */
+.qz-bb-sec { border: 1px solid var(--qz-rule, #00000014); border-radius: 14px; background: var(--qz-paper, #fff); scroll-margin-top: 12px; transition: box-shadow 140ms, border-color 140ms; }
+.qz-bb-sec.is-open { border-color: color-mix(in srgb, var(--qz-accent) 30%, var(--qz-rule, #00000014)); box-shadow: 0 1px 2px rgba(17,17,17,.03), 0 10px 30px rgba(17,17,17,.06); }
+.qz-bb-sechead {
+  display: flex; align-items: center; gap: 12px; width: 100%; border: none; background: transparent;
+  cursor: pointer; font: inherit; text-align: left; padding: 15px 18px; border-radius: 14px;
+}
+.qz-bb-secicon {
+  display: grid; place-items: center; width: 34px; height: 34px; flex: 0 0 auto; border-radius: 9px;
+  background: color-mix(in srgb, var(--qz-accent) 10%, transparent); color: var(--qz-accent);
+  animation: qz-bb-iconpulse 7s ease-in-out infinite;
+}
+/* Two-phase ripple so the module icons don't all pulse in unison. */
+.qz-bb-sec:nth-child(odd) .qz-bb-secicon { animation-delay: 1.4s; }
+@keyframes qz-bb-iconpulse { 0%, 76%, 100% { transform: scale(1); } 86% { transform: scale(1.14); } }
+@media (prefers-reduced-motion: reduce) { .qz-bb-secicon { animation: none; } }
+.qz-bb-sectitle { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.qz-bb-secname { font-size: 15px; font-weight: 650; color: var(--qz-ink-1); }
+.qz-bb-sechint { font-size: 12px; color: var(--qz-ink-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.qz-bb-sechint-open { margin: 0 0 4px; font-size: 12.5px; color: var(--qz-ink-3); }
+.qz-bb-secmeta { display: flex; align-items: center; gap: 8px; flex: 0 0 auto; }
+.qz-bb-secbody { display: flex; flex-direction: column; gap: 13px; padding: 2px 18px 18px; }
+
+.qz-bb-badge { display: inline-flex; align-items: center; gap: 6px; flex: 0 0 auto; font-size: 11px; font-weight: 600; padding: 3px 9px; border-radius: 999px; border: 1px solid var(--qz-rule, #00000014); color: var(--qz-ink-2); }
+.qz-bb-badge.is-ok { color: #1c7c2c; background: color-mix(in srgb, #28c840 12%, transparent); }
+.qz-bb-badge.is-warn { color: #8a5b00; background: color-mix(in srgb, #febc2e 16%, transparent); }
+.qz-bb-badge.is-bad { color: #b3241a; background: color-mix(in srgb, #ff5f57 12%, transparent); }
+.qz-bb-conf { font-size: 10.5px; font-weight: 600; text-transform: capitalize; padding: 2px 8px; border-radius: 999px; color: var(--qz-ink-3); background: var(--qz-cream-2, #00000008); }
+.qz-bb-conf.is-high { color: #1c7c2c; }
+.qz-bb-conf.is-medium { color: #8a5b00; }
+
+.qz-bb-fld { display: grid; gap: 5px; font-size: 13px; }
+.qz-bb-lab { display: flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--qz-ink-3); }
+.qz-bb-lab svg { color: var(--qz-ink-3); }
+.qz-bb-2col { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+/* Long-form fields (positioning statement, voice summary) shown IN FULL —
+   comfortable line-height, ~74ch measure, generous padding. No scroll-boxes. */
+.qz-bb-longtext { line-height: 1.7; width: 100%; padding: 11px 13px; resize: none; overflow: hidden; }
+.qz-bb-usedfor { margin: 0 0 6px; font-size: 12.5px; font-style: italic; color: var(--qz-ink-3); }
+.qz-bb-fontsel { width: 100%; }
+.qz-bb-chips { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.qz-bb-chip { display: inline-flex; align-items: center; gap: 5px; font-size: 12.5px; padding: 3px 10px; border-radius: 999px; background: var(--qz-cream-2, #00000008); border: 1px solid var(--qz-rule, #00000014); }
+.qz-bb-chip.is-ro { opacity: .8; }
+.qz-bb-chip button { border: none; background: transparent; cursor: pointer; font: inherit; line-height: 1; padding: 0; color: var(--qz-ink-3); }
+.qz-bb-chipin { border: 1px dashed var(--qz-rule, #00000022); background: transparent; border-radius: 999px; padding: 4px 10px; font: inherit; font-size: 12.5px; min-width: 120px; flex: 1; }
+.qz-bb-swatches { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; }
+.qz-bb-swatch { display: flex; align-items: center; gap: 10px; }
+.qz-bb-swatch input[type="color"] { width: 36px; height: 36px; padding: 0; border: 1px solid var(--qz-rule, #00000022); border-radius: 8px; background: none; cursor: pointer; flex: 0 0 auto; }
+.qz-bb-hex { border: 1px solid var(--qz-rule, #00000022); border-radius: 6px; padding: 3px 7px; font: inherit; font-size: 12px; width: 92px; font-variant-numeric: tabular-nums; }
+.qz-bb-logoprev { padding: 12px; border: 1px solid var(--qz-rule, #00000014); border-radius: 10px; background: var(--qz-cream-2, #00000006); display: inline-block; }
+.qz-bb-logoprev img { max-height: 48px; max-width: 200px; display: block; }
+.qz-bb-scale { display: flex; flex-direction: column; gap: 6px; border-top: 1px solid var(--qz-rule, #00000012); padding-top: 12px; }
+.qz-bb-scale-row { display: flex; align-items: baseline; gap: 12px; }
+.qz-bb-presets { display: grid; grid-template-columns: repeat(auto-fill, minmax(132px, 1fr)); gap: 10px; }
+.qz-bb-preset { display: flex; align-items: center; gap: 10px; border: 1px solid var(--qz-rule, #00000018); background: var(--qz-paper, #fff); border-radius: 10px; padding: 10px 12px; font: inherit; font-size: 13px; cursor: pointer; transition: border-color 120ms, box-shadow 120ms; }
+.qz-bb-preset:hover { border-color: var(--qz-accent); }
+.qz-bb-preset.is-on { border-color: var(--qz-accent); box-shadow: 0 0 0 2px color-mix(in srgb, var(--qz-accent) 30%, transparent); }
+.qz-bb-preset-swatches { display: inline-flex; flex: 0 0 auto; }
+.qz-bb-preset-swatches span { width: 13px; height: 20px; border: 1px solid rgba(0,0,0,.08); }
+.qz-bb-preset-swatches span:first-child { border-radius: 5px 0 0 5px; }
+.qz-bb-preset-swatches span:last-child { border-radius: 0 5px 5px 0; }
+.qz-bb-presetnote { font-size: 12px; margin: 6px 0 0; padding-top: 12px; border-top: 1px solid var(--qz-rule); }
+.qz-bb-foot { font-size: 12px; margin-top: 2px; }
+@media (max-width: 820px) {
+  .qz-bb { grid-template-columns: 1fr; }
+  .qz-bb-nav { position: static; padding-left: 0; }
+  .qz-bb-track { display: none; }
+  .qz-bb-navgroups { flex-direction: row; flex-wrap: wrap; }
+  .qz-bb-2col { grid-template-columns: 1fr; }
+}
+
+/* §R R-2(d) — Dynamic vs Manual membership legibility. */
+.qz-gmemsub { margin-bottom: 12px; }
+.qz-gmemtag {
+  display: inline-block; font-size: 10.5px; font-weight: 700; letter-spacing: .04em;
+  text-transform: uppercase; margin-bottom: 6px; padding: 2px 8px; border-radius: 999px;
+}
+.qz-gmemtag.is-dyn { color: #1c7c2c; background: color-mix(in srgb, #28c840 14%, transparent); }
+.qz-gmemtag.is-man { color: #6a4b12; background: color-mix(in srgb, #e0a116 16%, transparent); }
+
+/* §O2.1/O2.3 — the inspector's top device-layer control + override note. */
+.qz-insp-devrow { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+.qz-insp-devnote {
+  /* prototype .devbanner — violet wash, editor-affordance tone. */
+  margin: 0 0 8px; font-size: 11.5px; line-height: 1.4; color: var(--qz-accent-ink);
+  padding: 7px 10px; border-radius: 8px;
+  background: var(--qz-accent-wash);
+  display: flex; align-items: center; gap: 6px;
+}
+
+/* §3.3 — Logic answer-audit table. */
+.qz-audit-table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+.qz-audit-table th {
+  text-align: left; padding: 8px 10px; background: var(--qz-canvas, #f7f7f8); color: var(--qz-ink-3);
+  font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: .04em; white-space: nowrap;
+}
+.qz-audit-table td { padding: 8px 10px; border-top: 1px solid var(--qz-rule-2, #f4f4f6); color: var(--qz-ink-2); vertical-align: top; }
+.qz-audit-table tr:hover td { background: var(--qz-cream-2, #00000005); }
+.qz-audit-num { text-align: center; font-variant-numeric: tabular-nums; color: var(--qz-ink-3); }
+.qz-audit-q { max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.qz-audit-route { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.qz-audit-cov { display: inline-flex; align-items: center; gap: 5px; font-weight: 600; white-space: nowrap; }
+.qz-audit-filters { font-size: 12px; }
+
+/* §O2 — clicked quiz-chrome element panels (progress bar / button). */
+.qz-insp-el { display: flex; flex-direction: column; gap: 11px; }
+.qz-insp-el-head { font-size: 13px; font-weight: 700; }
+
+/* §R R-6 — engagement toggles surfaced in the result-screen inspector. */
+.qz-insp-eng {
+  display: flex; flex-direction: column; gap: 8px; flex: 0 0 auto;
+  border: 1px solid color-mix(in srgb, var(--qz-accent) 22%, var(--qz-rule, #00000014));
+  background: color-mix(in srgb, var(--qz-accent) 5%, transparent);
+  border-radius: 10px; padding: 10px 12px;
+}
+.qz-insp-eng-head { font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--qz-accent); }
+.qz-insp-eng-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.qz-insp-eng-loud { font-size: 10px; font-weight: 700; text-transform: uppercase; color: var(--qz-ink-3); letter-spacing: .04em; }
+
+/* §O §2 — the design-only Build tab's single pointer to the Logic view. */
+.qz-insp-logic-ptr {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex: 0 0 auto;
+  border-top: 1px solid var(--qz-rule, #00000014);
+  padding-top: 10px;
+  margin-top: 2px;
+}
+.qz-insp-logic-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--qz-gold, var(--qz-ink-2)); }
+.qz-insp-logic-open { border: none; background: transparent; cursor: pointer; font: inherit; font-size: 11px; color: var(--qz-accent); text-transform: none; letter-spacing: 0; font-weight: 600; padding: 0; }
+.qz-insp-logic-role { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 12px; }
+.qz-insp-logic-role > span { color: var(--qz-ink-3); font-size: 11.5px; }
+.qz-insp-logic-role select {
+  font: inherit; font-size: 12px; padding: 4px 6px; max-width: 190px;
+  border: 1px solid var(--qz-gold-line, var(--qz-rule)); border-radius: var(--qz-radius, 8px);
+  background: var(--qz-paper); color: var(--qz-ink-1);
+}
+.qz-insp-logic-rows { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 3px; }
+.qz-insp-logic-rows li { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; font-size: 11.5px; }
+.qz-insp-logic-atext { color: var(--qz-ink-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.qz-insp-logic-sum { color: var(--qz-ink-3); flex: 0 0 auto; font-variant-numeric: tabular-nums; }
+
+.qz-insp-scope { display: flex; flex-direction: column; gap: 10px; }
+.qz-insp-scope-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.qz-insp-scope select {
+  font: inherit; font-size: 12.5px; padding: 6px 8px;
+  border: 1px solid var(--qz-rule); border-radius: var(--qz-radius, 8px);
+  background: var(--qz-paper); color: var(--qz-ink-1);
+}
+
+.qz-insp-foot { display: flex; gap: 6px; margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--qz-rule); }
+.qz-insp-foot-del { margin-left: auto; color: var(--qz-danger, currentColor); }
+
+/* QZY-9 — the answer-display picker (build-tab §5). */
+.qz-ads-modes { display: grid; grid-template-columns: repeat(5, 1fr); gap: 4px; }
+.qz-ads-modes button {
+  font: inherit; font-size: 10.5px; padding: 6px 2px; cursor: pointer;
+  border: 1px solid var(--qz-rule); border-radius: var(--qz-radius, 8px);
+  background: var(--qz-bg); color: var(--qz-ink-3);
+}
+.qz-ads-modes button.is-active { border-color: var(--qz-accent); color: var(--qz-ink-1); font-weight: 600; box-shadow: 0 0 0 1px var(--qz-accent) inset; }
+.qz-ads-color { display: inline-flex; align-items: center; gap: 6px; font-size: 11.5px; color: var(--qz-ink-3); }
+.qz-ads-color input[type="color"] { width: 28px; height: 22px; padding: 0; border: 1px solid var(--qz-rule); border-radius: 6px; background: transparent; cursor: pointer; }
+
+/* QZY-12 — the slider range-band chip on Logic map rows. */
+.qz-s3-bandchip {
+  flex: 0 0 auto;
+  font-size: 10.5px;
+  font-variant-numeric: tabular-nums;
+  padding: 1px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--qz-rule);
+  color: var(--qz-ink-3);
+  background: var(--qz-bg);
+}
+
+/* §L Layer 2 — Engagement settings panel (studio). */
+.qz-eng-sec { border: 1px solid var(--qz-rule); border-radius: 12px; margin-bottom: 12px; overflow: hidden; }
+.qz-eng-sec.is-loud { border-color: color-mix(in srgb, var(--qz-warn) 40%, var(--qz-rule)); }
+.qz-eng-head { display: flex; align-items: center; gap: 12px; padding: 14px 16px; }
+.qz-eng-name { font-size: 14.5px; font-weight: 600; display: flex; align-items: center; gap: 8px; }
+.qz-eng-chip { font-size: 10.5px; font-weight: 700; padding: 2px 8px; border-radius: 999px; background: var(--qz-live-wash); color: var(--qz-ok); letter-spacing: 0.02em; }
+.qz-eng-chip.is-opt { background: var(--qz-warn-wash); color: var(--qz-warn); }
+.qz-eng-body { padding: 4px 16px 16px; border-top: 1px solid var(--qz-rule-2); display: flex; flex-direction: column; gap: 12px; }
+.qz-eng-fld { display: flex; flex-direction: column; gap: 6px; flex: 1; }
+.qz-eng-lab { display: flex; justify-content: space-between; font-size: 12px; color: var(--qz-ink-3); }
+.qz-eng-lab .qz-dim { font-size: 12px; }
+.qz-eng-warn { font-size: 11.5px; color: var(--qz-warn); background: var(--qz-warn-wash); border-radius: 8px; padding: 8px 11px; margin: 0; }
+.qz-eng-subrow { display: flex; align-items: center; gap: 8px; padding: 7px 0; }
+.qz-eng-chipbtn { font: inherit; font-size: 12.5px; padding: 6px 12px; border-radius: 999px; border: 1px solid var(--qz-rule); background: var(--qz-paper); color: var(--qz-ink-3); cursor: pointer; }
+.qz-eng-chipbtn.is-on { background: var(--qz-accent-wash); color: var(--qz-accent-ink); border-color: var(--qz-accent); }
+.qz-eng-tg { width: 40px; height: 22px; border-radius: 999px; background: var(--qz-ink-25); border: none; position: relative; cursor: pointer; flex: none; transition: background var(--qz-dur) var(--qz-ease); }
+.qz-eng-tg.is-on { background: var(--qz-accent); }
+.qz-eng-knob { position: absolute; top: 2px; left: 2px; width: 18px; height: 18px; border-radius: 50%; background: #fff; box-shadow: 0 1px 2px rgba(0,0,0,.2); transition: transform var(--qz-dur) var(--qz-spring); }
+.qz-eng-tg.is-on .qz-eng-knob { transform: translateX(18px); }
+
+/* §R-7 — Quizzes library (operate): search · status · sort · grid/list, then a
+   card grid whose only accent is the single "Open builder" button. */
+.qz-lib-toolbar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 16px; }
+.qz-lib-search { flex: 1 1 200px; max-width: 340px; }
+.qz-lib-sort { flex: 0 0 auto; width: auto; }
+.qz-lib-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px; }
+.qz-lib-card { transition: box-shadow var(--qz-dur) var(--qz-ease), transform var(--qz-dur) var(--qz-ease); }
+.qz-lib-card:hover { box-shadow: var(--qz-shadow-2, 0 6px 20px rgba(0,0,0,.08)); transform: translateY(-1px); }
+.qz-lib-title { font-family: var(--qz-font-display); font-weight: 600; font-size: 16px; line-height: 1.25; letter-spacing: -0.01em; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.qz-lib-more { min-width: 34px; padding-left: 8px; padding-right: 8px; font-size: 18px; line-height: 1; flex: 0 0 auto; }
+.qz-lib-list { display: flex; flex-direction: column; gap: 10px; }
+.qz-lib-row { display: flex; align-items: center; gap: 14px; }
+
+/* §R-7 (LOCKED · quizzes-4A) — the card: tall brand-rendered first-screen
+   preview on top, title + ⋯ below, stat trio (Questions/Personas/Recs),
+   overlapping product thumbnails. Portrait cards, 4→3→2→1 responsive. */
+/* Min column = the card's width in the 3-across layout ((4·250 + 18)/3 ≈ 340),
+   so cards never shrink to the cramped 4-up size — the grid tops out at 3
+   roomy columns and reflows 3→2→1 as the page narrows. Max 420 (§A1) keeps a
+   few cards from over-stretching. */
+.qz-qcard-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 18px; }
+.qz-qcard { position: relative; background: var(--qz-paper); border: 0.5px solid var(--qz-rule); border-radius: 18px; box-shadow: var(--qz-lift-1); overflow: hidden; transition: transform 0.22s var(--qz-spring), box-shadow 0.22s var(--qz-ease); }
+.qz-qcard:hover { transform: translateY(-6px); box-shadow: var(--qz-lift-3); }
+.qz-qcard-preview { position: relative; height: 210px; overflow: hidden; cursor: pointer; display: block; }
+.qz-qcard-shot { position: absolute; inset: 0; transition: transform 0.35s var(--qz-ease); }
+.qz-qcard:hover .qz-qcard-shot { transform: scale(1.04); }
+.qz-qcard-status { position: absolute; top: 11px; right: 11px; z-index: 3; display: inline-flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 600; padding: 3px 9px; border-radius: 999px; background: var(--qz-paper); box-shadow: var(--qz-lift-1); }
+.qz-qcard-status .qz-qcard-dot { width: 7px; height: 7px; border-radius: 50%; }
+.qz-qcard-status.is-live { color: var(--qz-ok); } .qz-qcard-status.is-live .qz-qcard-dot { background: var(--qz-ok); animation: qz-livepulse 1.8s ease-in-out infinite; }
+.qz-qcard-status.is-draft { color: var(--qz-ink-3); } .qz-qcard-status.is-draft .qz-qcard-dot { background: var(--qz-ink-25); }
+@keyframes qz-livepulse { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.35; transform: scale(0.6); } }
+.qz-qcard-float { position: absolute; left: 12px; right: 12px; bottom: 12px; display: flex; gap: 8px; transform: translateY(150%); opacity: 0; transition: transform 0.3s var(--qz-spring), opacity 0.2s var(--qz-ease); z-index: 4; }
+.qz-qcard:hover .qz-qcard-float, .qz-qcard-preview:focus-within .qz-qcard-float { transform: translateY(0); opacity: 1; }
+.qz-qcard-fbtn { flex: 1; padding: 9px; border: none; border-radius: 10px; font: inherit; font-weight: 600; font-size: 13px; cursor: pointer; text-align: center; text-decoration: none; background: color-mix(in srgb, var(--qz-paper) 94%, transparent); color: var(--qz-accent-ink); backdrop-filter: blur(4px); box-shadow: var(--qz-lift-1); }
+.qz-qcard-fbtn.is-solid { background: var(--qz-accent); color: white; }
+/* Brand-rendered first screen (merchant tokens via inline style). */
+.qz-qprev { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 22px 20px; gap: 8px; }
+.qz-qprev.is-compact { position: static; width: 76px; height: 76px; flex: 0 0 auto; padding: 8px; border-radius: 8px; gap: 4px; overflow: hidden; }
+.qz-qprev-empty { background: var(--qz-cream-2); }
+.qz-qprev-logo { width: 30px; height: 30px; border-radius: 9px; color: white; font-weight: 700; font-size: 16px; display: flex; align-items: center; justify-content: center; }
+.qz-qprev-logo-neutral { background: var(--qz-ink-3); }
+.qz-qprev-logoimg { width: 34px; height: 34px; border-radius: 9px; object-fit: contain; }
+.qz-qprev-h { font-size: 15px; font-weight: 700; line-height: 1.25; max-width: 92%; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.qz-qprev.is-compact .qz-qprev-h { font-size: 9px; -webkit-line-clamp: 2; }
+.qz-qprev-sub { font-size: 10.5px; opacity: 0.75; }
+.qz-qprev-start { margin-top: 4px; color: white; font-size: 11px; font-weight: 700; padding: 7px 18px; border-radius: 999px; }
+.qz-qprev.is-compact .qz-qprev-start { display: none; }
+.qz-qprev-start-neutral { margin-top: 4px; background: var(--qz-ink); color: white; font-size: 11px; font-weight: 600; padding: 6px 15px; border-radius: 999px; }
+.qz-qprev.is-compact .qz-qprev-start-neutral { padding: 3px 10px; font-size: 9px; }
+/* Body */
+.qz-qcard-body { padding: 12px 14px 14px; }
+.qz-qcard-titlerow { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
+.qz-qcard-title { font-family: var(--qz-font-display); font-weight: 700; font-size: 14.5px; line-height: 1.25; letter-spacing: -0.01em; color: var(--qz-ink); text-decoration: none; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.qz-qcard-title:hover { color: var(--qz-accent-ink); }
+.qz-qcard-upd { font-size: 10.5px; color: var(--qz-ink-3); margin-top: 4px; }
+.qz-qcard-trio { display: flex; gap: 6px; margin-top: 11px; }
+.qz-qcard-stat { flex: 1; background: var(--qz-cream-2); border: 0.5px solid var(--qz-rule-2); border-radius: 10px; padding: 7px 4px; text-align: center; }
+.qz-qcard-stat .num { display: block; font-size: 17px; font-weight: 700; line-height: 1; }
+.qz-qcard-stat .num.is-rec { color: var(--qz-accent); }
+.qz-qcard-stat .lab { display: block; font-size: 9px; font-weight: 600; color: var(--qz-ink-3); text-transform: uppercase; letter-spacing: 0.02em; margin-top: 4px; }
+.qz-qcard-recrow { display: flex; align-items: center; gap: 8px; margin-top: 11px; min-height: 24px; }
+.qz-qcard-reclbl { font-size: 10.5px; font-weight: 600; color: var(--qz-ink-3); }
+.qz-qcard-stack { display: flex; }
+.qz-qcard-prod { width: 24px; height: 24px; border-radius: 7px; object-fit: cover; border: 1.5px solid var(--qz-paper); box-shadow: 0 1px 3px rgba(0,0,0,.12); }
+.qz-qcard-stack .qz-qcard-prod:not(:first-child) { margin-left: -8px; }
+.qz-qcard-more { width: 24px; height: 24px; border-radius: 7px; background: var(--qz-accent-wash); color: var(--qz-accent-ink); font-size: 9.5px; font-weight: 700; display: flex; align-items: center; justify-content: center; border: 1.5px solid var(--qz-paper); margin-left: -8px; }
+@media (prefers-reduced-motion: reduce) {
+  .qz-qcard, .qz-qcard-shot, .qz-qcard-float { transition: none; }
+  .qz-qcard:hover { transform: none; } .qz-qcard:hover .qz-qcard-shot { transform: none; }
+  .qz-qcard-status.is-live .qz-qcard-dot { animation: none; }
+  .qz-qcard-float { transform: none; opacity: 1; position: static; margin-top: 8px; }
+}
+
+/* §R-8 — Customers re-engagement hub: smart-segment cards + actions + table. */
+.qz-seg-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 12px; margin-bottom: 14px; }
+.qz-seg { text-align: left; background: var(--qz-paper); border: 1px solid var(--qz-rule); border-radius: 12px; padding: 14px; cursor: pointer; display: flex; flex-direction: column; gap: 3px; transition: box-shadow var(--qz-dur) var(--qz-ease), border-color var(--qz-dur) var(--qz-ease); }
+.qz-seg:hover { box-shadow: var(--qz-lift-1); }
+.qz-seg.is-active { border-color: var(--qz-accent); box-shadow: 0 0 0 1px var(--qz-accent); }
+.qz-seg.is-flagship { background: var(--qz-accent-wash); border-color: var(--qz-accent); }
+.qz-seg-count { font-family: var(--qz-font-display); font-weight: 700; font-size: 26px; line-height: 1; color: var(--qz-ink); }
+.qz-seg-label { font-size: 13px; font-weight: 600; }
+.qz-seg-star { color: var(--qz-accent); }
+.qz-seg-blurb { font-size: 11.5px; color: var(--qz-ink-3); line-height: 1.35; }
+.qz-seg-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 16px; }
+.qz-cust-table { width: 100%; border-collapse: collapse; }
+.qz-cust-table th { text-align: left; padding: 8px 12px; border-bottom: 1px solid var(--qz-rule); font-size: 12px; color: var(--qz-ink-3); font-weight: 600; white-space: nowrap; }
+.qz-cust-table td { padding: 10px 12px; border-bottom: 1px solid var(--qz-rule-2); font-size: 13.5px; vertical-align: middle; }
+.qz-cust-row { cursor: pointer; transition: background var(--qz-dur) var(--qz-ease); }
+.qz-cust-row:hover, .qz-cust-row:focus-visible { background: var(--qz-accent-wash); outline: none; }
+/* §S — channel status pills */
+.qz-chanrow { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 22px; }
+.qz-chan { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; padding: 7px 12px; border-radius: 999px; border: 0.5px solid var(--qz-rule); color: var(--qz-ink-3); text-decoration: none; transition: border-color var(--qz-dur) var(--qz-ease), color var(--qz-dur) var(--qz-ease); }
+.qz-chan:hover { border-color: var(--qz-accent); color: var(--qz-accent-ink); }
+.qz-chan::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--qz-ink-25); }
+.qz-chan:hover::before { background: var(--qz-accent); }
+/* §S — suggested play card */
+/* The top graphic uses the homepage purple (pastel violet → sky) with a slow
+   sheen sweep that passes across it from time to time. */
+.qz-play { position: relative; overflow: hidden; display: flex; align-items: center; gap: 16px; padding: 15px 18px; margin-bottom: 24px; border-radius: 14px; border: 0.5px solid color-mix(in srgb, var(--qz-pastel-violet-ink) 28%, transparent); background: linear-gradient(120deg, var(--qz-pastel-violet), color-mix(in srgb, var(--qz-pastel-sky) 55%, var(--qz-paper))); box-shadow: var(--qz-lift-1); }
+.qz-play > * { position: relative; z-index: 1; }
+.qz-play::before { content: ""; position: absolute; inset: 0; z-index: 0; pointer-events: none; background: linear-gradient(105deg, transparent 38%, color-mix(in srgb, white 42%, transparent) 50%, transparent 62%); transform: translateX(-130%); animation: qz-play-sheen 7s ease-in-out infinite; }
+@keyframes qz-play-sheen { 0% { transform: translateX(-130%); } 60%, 100% { transform: translateX(130%); } }
+@media (prefers-reduced-motion: reduce) { .qz-play::before { animation: none; display: none; } }
+.qz-play-ic { width: 40px; height: 40px; flex: none; border-radius: 11px; background: var(--qz-paper); display: flex; align-items: center; justify-content: center; font-size: 20px; box-shadow: var(--qz-lift-1); }
+.qz-play-eyebrow { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--qz-pastel-violet-ink); }
+
+/* Collapsible segment filter toggle. */
+.qz-segfilter-toggle { display: inline-flex; align-items: center; gap: 8px; border: 0.5px solid var(--qz-rule); background: var(--qz-paper); border-radius: 999px; padding: 7px 15px; font: inherit; font-size: 12.5px; font-weight: 600; color: var(--qz-ink-2); cursor: pointer; margin-bottom: 16px; box-shadow: var(--qz-lift-1); transition: border-color var(--qz-dur) var(--qz-ease); }
+.qz-segfilter-toggle:hover { border-color: var(--qz-accent); }
+.qz-segfilter-toggle svg { color: var(--qz-ink-3); }
+.qz-segfilter-current { color: var(--qz-accent-ink); font-weight: 700; }
+.qz-play-title { font-size: 14px; font-weight: 700; letter-spacing: -0.01em; }
+.qz-play-sub { font-size: 12px; color: var(--qz-ink-2); margin-top: 1px; }
+/* §S — onsite recognition preview */
+.qz-onsite { display: flex; gap: 20px; align-items: center; flex-wrap: wrap; }
+.qz-onsite-preview { width: 190px; flex: none; border: 0.5px solid var(--qz-rule); border-radius: 14px; overflow: hidden; }
+.qz-onsite-top { background: var(--qz-accent-wash); color: var(--qz-accent-ink); padding: 12px; text-align: center; }
+.qz-onsite-btm { padding: 10px; font-size: 11px; color: var(--qz-ink-2); }
+.qz-onsite-copy { flex: 1; min-width: 220px; font-size: 12px; color: var(--qz-ink-2); line-height: 1.7; }
+/* §3.2 — Logic Paths view: flow of question nodes, decider ◆, dead-ends flagged. */
+.qz-paths { display: flex; flex-direction: column; align-items: stretch; max-width: 760px; }
+.qz-paths-legend { display: flex; align-items: center; gap: 10px; font-size: 11.5px; color: var(--qz-ink-3); margin-bottom: 14px; flex-wrap: wrap; }
+.qz-paths-diamond { color: var(--qz-accent); font-size: 13px; }
+.qz-pathnode-wrap { display: flex; flex-direction: column; align-items: stretch; }
+.qz-pathnode { border: 0.5px solid var(--qz-rule); border-radius: 12px; background: var(--qz-paper); box-shadow: var(--qz-lift-1); overflow: hidden; }
+.qz-pathnode.is-decider { border-color: var(--qz-accent); box-shadow: 0 0 0 1px var(--qz-accent-wash); }
+.qz-pathnode-result { background: var(--qz-cream-2); box-shadow: none; }
+.qz-pathnode-head { display: flex; align-items: center; gap: 8px; padding: 11px 14px; border-bottom: 0.5px solid var(--qz-rule-2); }
+.qz-pathnode-result .qz-pathnode-head { border-bottom: none; }
+.qz-pathnode-num { width: 22px; height: 22px; flex: none; border-radius: 6px; background: var(--qz-cream-2); display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; color: var(--qz-ink-3); }
+.qz-pathnode-q { font-size: 13.5px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.qz-pathnode-answers { display: flex; flex-direction: column; }
+.qz-pathrow { display: flex; align-items: center; gap: 10px; padding: 8px 14px; font-size: 12.5px; border-top: 0.5px solid var(--qz-rule-2); }
+.qz-pathrow:first-child { border-top: none; }
+.qz-pathrow-ans { font-weight: 500; }
+.qz-pathrow-map { font-size: 11.5px; }
+.qz-pathrow-route { margin-left: auto; font-size: 11.5px; color: var(--qz-accent-ink); font-weight: 600; white-space: nowrap; }
+.qz-paths-connector { text-align: center; color: var(--qz-ink-25); font-size: 14px; padding: 4px 0; }
+/* §A3 (LOCKED) — master loading = Variation A: one centered conic-sweep ring
+   that spins + breathes, warm messages fading in beneath. Reduced-motion →
+   static ring + single message. */
+.qz-loadring { display: flex; flex-direction: column; align-items: center; gap: 16px; padding: 24px; text-align: center; }
+.qz-ring-wrap { animation: qz-breathe 2.8s ease-in-out infinite; }
+.qz-ring {
+  border-radius: 50%;
+  background: conic-gradient(from 0deg, var(--qz-accent), var(--qz-priority), var(--qz-accent-2), var(--qz-accent));
+  -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 8px), black calc(100% - 8px));
+  mask: radial-gradient(farthest-side, transparent calc(100% - 8px), black calc(100% - 8px));
+  animation: qz-ring-spin 1.1s linear infinite;
+}
+@keyframes qz-ring-spin { to { transform: rotate(360deg); } }
+@keyframes qz-breathe { 0%, 100% { transform: scale(0.85); } 50% { transform: scale(1.1); } }
+.qz-loadring-msg { font-size: 14px; font-weight: 500; color: var(--qz-ink-2); animation: qz-msg-fade 0.6s var(--qz-ease); }
+@keyframes qz-msg-fade { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+.qz-loadring-stall { font-size: 12.5px; color: var(--qz-ink-3); display: flex; align-items: center; }
+@media (prefers-reduced-motion: reduce) {
+  .qz-ring, .qz-ring-wrap { animation: none; transform: scale(1); }
+  .qz-loadring-msg { animation: none; }
+}
+/* §S — 5 compact KPI tiles (prototype-v4 kpi5). */
+.qz-kpi5-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-bottom: 28px; }
+.qz-kpi5 { background: var(--qz-paper); border: 0.5px solid var(--qz-rule); border-radius: 12px; padding: 14px 16px; box-shadow: var(--qz-lift-1); transition: box-shadow var(--qz-dur) var(--qz-ease), transform var(--qz-dur) var(--qz-ease); }
+.qz-kpi5:hover { box-shadow: var(--qz-lift-2); transform: translateY(-2px); }
+.qz-kpi5 .l { font-size: 10px; letter-spacing: 0.05em; text-transform: uppercase; color: var(--qz-ink-3); }
+.qz-kpi5 .n { font-size: 24px; font-weight: 700; margin-top: 2px; letter-spacing: -0.02em; }
+/* §S — smart-segment cards (prototype-v4 segcard) + attribute pills. */
+.qz-segcard-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 14px; margin-bottom: 18px; }
+.qz-segcard { border: 0.5px solid var(--qz-rule); border-radius: 12px; padding: 14px; background: var(--qz-paper); box-shadow: var(--qz-lift-1); cursor: pointer; transition: box-shadow var(--qz-dur) var(--qz-ease), border-color var(--qz-dur) var(--qz-ease); }
+.qz-segcard:hover { box-shadow: var(--qz-lift-2); }
+.qz-segcard.is-hot { border-color: var(--qz-priority); background: linear-gradient(135deg, var(--qz-priority-wash), var(--qz-paper) 70%); }
+/* Each smart segment is a pastel that fades to white (the hot card is coral above). */
+.qz-segcard-grid .qz-segcard:nth-child(2) { background: linear-gradient(135deg, color-mix(in srgb, var(--qz-pal-blue) 24%, var(--qz-paper)), var(--qz-paper) 72%); }
+.qz-segcard-grid .qz-segcard:nth-child(3) { background: linear-gradient(135deg, color-mix(in srgb, var(--qz-pal-teal) 24%, var(--qz-paper)), var(--qz-paper) 72%); }
+.qz-segcard.is-active { border-color: var(--qz-accent); box-shadow: 0 0 0 1px var(--qz-accent); }
+.qz-segcard-label { font-size: 13px; font-weight: 700; }
+.qz-segcard-count { font-size: 26px; font-weight: 700; margin: 4px 0; letter-spacing: -0.02em; }
+.qz-segcard-blurb { font-size: 11px; color: var(--qz-ink-2); margin-bottom: 10px; }
+.qz-segacts { display: flex; gap: 6px; flex-wrap: wrap; }
+.qz-segact { font: inherit; font-size: 11px; font-weight: 600; padding: 5px 9px; border-radius: 7px; border: 0.5px solid var(--qz-rule); background: var(--qz-paper); color: var(--qz-ink-2); cursor: pointer; text-decoration: none; }
+.qz-segact:hover { border-color: var(--qz-accent); color: var(--qz-accent-ink); }
+.qz-segact.is-pri { background: var(--qz-priority); color: white; border-color: var(--qz-priority); }
+.qz-segcard-note { font-size: 10px; color: var(--qz-ink-3); margin-top: 8px; }
+.qz-segpills { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 22px; }
+.qz-segpill { font: inherit; font-size: 12px; font-weight: 600; padding: 5px 12px; border-radius: 999px; border: none; background: var(--qz-accent-wash); color: var(--qz-accent-ink); cursor: pointer; }
+.qz-segpill.is-active { background: var(--qz-accent); color: white; }
+
+/* §O2.1 — slim icon-rail for the builder's left tool panel (Add·Layers·Background). */
+.qz-buildrail-wrap { display: flex; gap: 10px; align-items: flex-start; }
+.qz-buildrail { display: flex; flex-direction: column; gap: 4px; flex: 0 0 auto; position: sticky; top: 8px; }
+.qz-buildrail-btn { display: flex; flex-direction: column; align-items: center; gap: 3px; width: 58px; padding: 8px 4px; border: 1px solid transparent; border-radius: 10px; background: none; color: var(--qz-ink-3); cursor: pointer; font: inherit; font-size: 10.5px; font-weight: 600; transition: background var(--qz-dur) var(--qz-ease), color var(--qz-dur) var(--qz-ease); }
+.qz-buildrail-btn:hover { background: var(--qz-accent-wash); color: var(--qz-ink); }
+.qz-buildrail-btn.is-active { background: var(--qz-accent-wash); color: var(--qz-accent-ink); border-color: var(--qz-accent); }
+.qz-buildrail-btn svg { display: block; }
+.qz-buildrail-pin { margin-top: 8px; border-top: 1px solid var(--qz-rule-2); border-radius: 0 0 10px 10px; padding-top: 10px; color: var(--qz-ink-25); }
+.qz-buildrail-pin[aria-pressed="false"] { color: var(--qz-accent-ink); }
+.qz-buildrail-panel { flex: 1 1 auto; min-width: 0; }
+/* §O2.2 — flyout mode: the rail stays; the panel overlays the canvas and is
+   hidden until a rail icon opens it. Pin toggles back to the docked column. */
+.qz-buildrail-wrap.is-flyout { position: relative; gap: 0; }
+.qz-buildrail-wrap.is-flyout .qz-buildrail-panel {
+  position: absolute; left: calc(100% + 8px); top: 0; width: 300px; z-index: 40;
+  background: var(--qz-paper); border: 0.5px solid var(--qz-rule); border-radius: 12px;
+  box-shadow: var(--qz-lift-3); padding: 12px; max-height: calc(100vh - 160px); overflow-y: auto;
+}
+.qz-buildrail-wrap.is-flyout:not(.is-open) .qz-buildrail-panel { display: none; }
+
+/* §O2.1 — titled inspector group headers (Content · Style · Layout · CSS). */
+.qz-insp-grptitle { cursor: pointer; font-size: 11px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: var(--qz-ink-3); padding: 4px 0; user-select: none; }
+.qz-insp-grptitle::marker { color: var(--qz-ink-3); }
+
+/* §R-2 — Personas & Groups detail: union summary + persona card. */
+.qz-gunion { font-size: 12.5px; color: var(--qz-ink-2); margin: 2px 0 4px; }
+.qz-gunion b { color: var(--qz-ink); }
+.qz-gpersona { display: flex; align-items: center; gap: 12px; margin-top: 8px; padding: 12px; border: 0.5px solid var(--qz-rule); border-radius: 12px; background: var(--qz-paper); }
+.qz-gpersona-av { width: 40px; height: 40px; flex: none; border-radius: 10px; display: flex; align-items: center; justify-content: center; color: white; background: linear-gradient(135deg, var(--qz-accent), var(--qz-pastel-rose-ink)); }
+
+/* ── Persona Explainer Strip ──────────────────────────────────────────────
+   3-step animated explainer that replaces the "Personas & Groups" page title.
+   Pure-CSS timeline (no JS): the base rules below ARE the final rested state.
+   Each keyframe animates FROM its intro frame (0%) with `backwards` fill, so
+   the intro frame is shown through the stagger delay, the animation plays once
+   on mount, then the element rests back at its base (= 100% frame). Because the
+   rested state lives in the base rules, `prefers-reduced-motion` simply drops
+   every animation and the strip renders fully-settled with no motion.
+   Relay: card 1 lights ~.15s, card 2 ~2.6s, card 3 ~5.2s; idle chip pulse
+   begins ~9.2s. Decorative — the three <h3>s carry the meaning. */
+.qz-pexplain {
+  --pex-icon: 40px;
+  --pex-lit-shadow:
+    0 0 0 1px color-mix(in srgb, var(--qz-accent) 34%, transparent),
+    0 12px 28px -10px color-mix(in srgb, var(--qz-accent) 42%, transparent);
+  --pex-peach: color-mix(in srgb, var(--qz-pastel-amber-ink) 42%, #fff);
+  margin: 4px 0 18px;
+}
+.qz-pex-row { display: flex; align-items: stretch; gap: 16px; }
+
+.qz-pex-chev {
+  flex: 0 0 auto; align-self: center; display: inline-flex;
+  color: var(--qz-accent);
+  opacity: 1;                                   /* rested */
+  animation: pexFade 0.5s backwards;
+}
+.qz-pex-chev[data-chev="1"] { animation-delay: 2.6s; }
+.qz-pex-chev[data-chev="2"] { animation-delay: 5.2s; }
+@keyframes pexFade { 0% { opacity: 0; } 100% { opacity: 1; } }
+
+.qz-pex-card {
+  flex: 1 1 0; min-width: 0;
+  padding: 16px 18px 18px;
+  background: var(--qz-paper);
+  border: 1px solid var(--qz-accent);           /* rested = lit */
+  border-radius: var(--qz-radius-sm);
+  box-shadow: var(--pex-lit-shadow);            /* rested = lit */
+  opacity: 1;                                   /* rested = lit */
+  animation: pexCardLight 0.55s backwards;
+}
+.qz-pex-card[data-step="1"] { --pex-base: 0.15s; animation-delay: 0.15s; }
+.qz-pex-card[data-step="2"] { --pex-base: 2.6s;  animation-delay: 2.6s; }
+.qz-pex-card[data-step="3"] { --pex-base: 5.2s;  animation-delay: 5.2s; }
+@keyframes pexCardLight {
+  0%   { opacity: 0.5; border-color: var(--qz-rule); box-shadow: var(--qz-lift-1); }
+  100% { opacity: 1;   border-color: var(--qz-accent); box-shadow: var(--pex-lit-shadow); }
+}
+
+.qz-pex-chip {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 26px; height: 26px; border-radius: 7px;
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-size: 13px; font-weight: 600;
+  color: var(--qz-accent-ink); background: var(--qz-accent-wash);
+  animation:
+    pexChipLight 0.55s var(--pex-base) backwards,
+    pexChipPulse 3s 9.2s infinite;
+}
+@keyframes pexChipLight { 0% { transform: scale(0.82); } 100% { transform: scale(1); } }
+@keyframes pexChipPulse {
+  0%, 100% { transform: scale(1); box-shadow: 0 0 0 0 transparent; }
+  50% { transform: scale(1.07); box-shadow: 0 0 0 4px color-mix(in srgb, var(--qz-accent) 12%, transparent); }
+}
+
+.qz-pex-viz {
+  position: relative; height: 74px; margin: 12px 0 14px;
+  display: flex; align-items: center; justify-content: center;
+}
+.qz-pex-title { margin: 0; font-size: 16px; font-weight: 700; color: var(--qz-ink); }
+.qz-pex-desc  { margin: 3px 0 0; font-size: 13px; color: var(--qz-ink-4); }
+
+/* Shared grown icon — identical final size across steps 1, 2, 3. */
+.qz-pex-icon {
+  flex: 0 0 auto;
+  display: inline-flex; align-items: center; justify-content: center;
+  width: var(--pex-icon); height: var(--pex-icon); border-radius: 10px;
+  background: var(--qz-accent-wash); color: var(--qz-accent);
+}
+
+/* Shared persona pill — identical component in steps 2 and 3. */
+.qz-pex-pill {
+  font-size: 11px; font-weight: 600; line-height: 1; white-space: nowrap;
+  padding: 5px 9px; border-radius: var(--qz-radius-pill);
+  background: var(--qz-accent-wash); color: var(--qz-accent-ink);
+}
+
+/* Step 1 — four tiles fly in from the corners, converge, bundle blooms. */
+.qz-pex-viz-1 .qz-pex-icon { animation: pexBloom 0.8s calc(var(--pex-base) + 0.55s) backwards; }
+.qz-pex-fly {
+  position: absolute; width: 20px; height: 20px; border-radius: 6px;
+  background: var(--qz-accent-wash);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--qz-accent) 22%, transparent);
+  opacity: 0;                                   /* rested = merged away */
+  animation: pexFly 0.95s backwards;
+}
+.qz-pex-viz-1 .qz-pex-fly:nth-child(1) { animation-delay: calc(var(--pex-base) + 0s); }
+.qz-pex-viz-1 .qz-pex-fly:nth-child(2) { animation-delay: calc(var(--pex-base) + 0.15s); }
+.qz-pex-viz-1 .qz-pex-fly:nth-child(3) { animation-delay: calc(var(--pex-base) + 0.3s); }
+.qz-pex-viz-1 .qz-pex-fly:nth-child(4) { animation-delay: calc(var(--pex-base) + 0.45s); }
+@keyframes pexFly {
+  0%   { transform: translate(var(--fx), var(--fy)) scale(0.85); opacity: 0; }
+  25%  { opacity: 1; }
+  70%  { transform: translate(0, 0) scale(0.9); opacity: 0.9; }
+  100% { transform: translate(0, 0) scale(0.5); opacity: 0; }
+}
+@keyframes pexBloom {
+  0%   { transform: scale(0); opacity: 0; }
+  60%  { transform: scale(1.08); opacity: 1; }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+/* Step 2 — a single tile grows, then the persona pill fades up onto it. */
+.qz-pex-viz-2 .qz-pex-icon { animation: pexGrow 0.7s var(--pex-base) backwards; }
+.qz-pex-pill-2 {
+  position: absolute; top: 14px; left: 50%; transform: translateX(-50%);
+  animation: pexPillUp2 0.7s calc(var(--pex-base) + 0.8s) backwards;
+}
+@keyframes pexGrow {
+  0%   { transform: scale(0); opacity: 0; }
+  60%  { transform: scale(1.06); opacity: 1; }
+  100% { transform: scale(1); opacity: 1; }
+}
+@keyframes pexPillUp2 {
+  0%   { transform: translate(-50%, 10px); opacity: 0; }
+  100% { transform: translate(-50%, 0); opacity: 1; }
+}
+
+/* Step 3 — tile (left) → three lines draw out → three shopper avatars, pill last. */
+.qz-pex-viz-3 { justify-content: flex-start; gap: 6px; padding: 0 4px; }
+.qz-pex-viz-3 .qz-pex-icon { animation: pexGrow 0.7s var(--pex-base) backwards; }
+.qz-pex-fan {
+  flex: 1 1 auto; align-self: stretch;
+  display: flex; flex-direction: column; justify-content: center; gap: 12px;
+  padding: 16px 0;
+}
+.qz-pex-line {
+  height: 2px; width: 100%; border-radius: 2px;
+  background: var(--pex-peach);
+  transform: scaleX(1); transform-origin: left center;   /* rested = drawn */
+  animation: pexDraw 1.1s backwards;
+}
+.qz-pex-line:nth-child(1) { animation-delay: calc(var(--pex-base) + 0.8s); }
+.qz-pex-line:nth-child(2) { animation-delay: calc(var(--pex-base) + 1s); }
+.qz-pex-line:nth-child(3) { animation-delay: calc(var(--pex-base) + 1.2s); }
+@keyframes pexDraw { 0% { transform: scaleX(0); } 100% { transform: scaleX(1); } }
+
+.qz-pex-avatars {
+  flex: 0 0 auto;
+  display: flex; flex-direction: column; justify-content: center; gap: 8px;
+}
+.qz-pex-av {
+  width: 22px; height: 22px; border-radius: var(--qz-radius-pill);
+  display: inline-flex; align-items: center; justify-content: center;
+  background: var(--qz-pastel-amber); color: var(--qz-pastel-amber-ink);
+  transform: scale(1); opacity: 1;                        /* rested */
+  animation: pexPop 0.5s backwards;
+}
+.qz-pex-av:nth-child(1) { animation-delay: calc(var(--pex-base) + 1.6s); }
+.qz-pex-av:nth-child(2) { animation-delay: calc(var(--pex-base) + 1.8s); }
+.qz-pex-av:nth-child(3) { animation-delay: calc(var(--pex-base) + 2s); }
+@keyframes pexPop {
+  0%   { transform: scale(0); opacity: 0; }
+  70%  { transform: scale(1.12); opacity: 1; }
+  100% { transform: scale(1); opacity: 1; }
+}
+.qz-pex-pill-3 {
+  position: absolute; top: 2px; right: 4px;
+  animation: pexPillUp3 0.6s calc(var(--pex-base) + 2.4s) backwards;
+}
+@keyframes pexPillUp3 {
+  0%   { transform: translateY(8px); opacity: 0; }
+  100% { transform: translateY(0); opacity: 1; }
+}
+
+/* Narrow admin widths — stack the three cards, drop the row chevrons. */
+@media (max-width: 900px) {
+  .qz-pex-row { flex-wrap: wrap; }
+  .qz-pex-card { flex: 1 1 100%; }
+  .qz-pex-chev { display: none; }
+}
+
+/* Reduced motion — render the fully-settled rested state, no motion at all. */
+@media (prefers-reduced-motion: reduce) {
+  .qz-pexplain,
+  .qz-pexplain * { animation: none !important; }
+}
+
+/* ═══ post-fork main additions (QZY-R era), carried over the design merge ═══ */
+/* BT4 drag-to-reorder — the dragged row dims; the hovered target shows a top
+   drop-line so the merchant sees where the block will land. */
+.qz-layers-row.is-dragging { opacity: 0.4; }
+.qz-layers-row.is-drop-target { box-shadow: inset 0 2px 0 0 var(--qz-accent, var(--qz-ink-1)); }
+.qz-layers-grip { font-size: 12px; line-height: 1; flex: 0 0 auto; }
 
 /* ═══════════════════════════════════════════════════════════════════════════
    QZY-R8 — Logic view: Map · Paths · Table tab shell + the Paths lanes (LV1/LV3).
@@ -4371,565 +5555,8 @@ body[data-qz] .qz-s3-editable:focus-visible {
   font: inherit; font-size: 11px; border: none; background: none; cursor: pointer; color: var(--qz-ink-3); padding: 2px;
 }
 
-/* ═══════════════════════════════════════════════════════════════════════════
-   QZY-8 — Inspector v2 (build-tab spec §2/§4/§5.1/§10)
-   Linked range+number pairs, More-options disclosure, single-option scope,
-   footer actions, and the inline gold Logic section.
-   ═══════════════════════════════════════════════════════════════════════════ */
 
-.qz-numctl { display: grid; grid-template-columns: 76px minmax(0, 1fr) auto; gap: 8px; align-items: center; font-size: 12px; }
-.qz-numctl-label { color: var(--qz-ink-3); font-size: 11.5px; }
-.qz-numctl input[type="range"] { width: 100%; min-width: 0; accent-color: var(--qz-accent); }
-.qz-numctl-exact { display: inline-flex; align-items: center; gap: 3px; }
-.qz-numctl-exact input {
-  width: 58px; font: inherit; font-size: 12px; padding: 3px 6px; text-align: right;
-  border: 1px solid var(--qz-rule); border-radius: var(--qz-radius, 8px);
-  background: var(--qz-bg); color: var(--qz-ink-1); font-variant-numeric: tabular-nums;
-}
-.qz-numctl-suffix { font-size: 10.5px; color: var(--qz-ink-4); }
-
-.qz-insp-more > summary { cursor: pointer; font-size: 12.5px; font-weight: 600; color: var(--qz-ink-2); }
-
-.qz-insp-logic {
-  border: 1px solid var(--qz-gold-line, var(--qz-rule));
-  background: var(--qz-gold-wash, transparent);
-  border-radius: 10px;
-  padding: 10px 12px;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  flex: 0 0 auto;
-}
-.qz-insp-logic-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--qz-gold, var(--qz-ink-2)); }
-.qz-insp-logic-open { border: none; background: transparent; cursor: pointer; font: inherit; font-size: 11px; color: var(--qz-accent); text-transform: none; letter-spacing: 0; font-weight: 600; padding: 0; }
-.qz-insp-logic-role { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 12px; }
-.qz-insp-logic-role > span { color: var(--qz-ink-3); font-size: 11.5px; }
-.qz-insp-logic-role select {
-  font: inherit; font-size: 12px; padding: 4px 6px; max-width: 190px;
-  border: 1px solid var(--qz-gold-line, var(--qz-rule)); border-radius: var(--qz-radius, 8px);
-  background: var(--qz-paper); color: var(--qz-ink-1);
-}
-.qz-insp-logic-rows { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 3px; }
-.qz-insp-logic-rows li { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; font-size: 11.5px; }
-.qz-insp-logic-atext { color: var(--qz-ink-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.qz-insp-logic-sum { color: var(--qz-ink-3); flex: 0 0 auto; font-variant-numeric: tabular-nums; }
-
-.qz-insp-scope { display: flex; flex-direction: column; gap: 10px; }
-.qz-insp-scope-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
-.qz-insp-scope select {
-  font: inherit; font-size: 12.5px; padding: 6px 8px;
-  border: 1px solid var(--qz-rule); border-radius: var(--qz-radius, 8px);
-  background: var(--qz-paper); color: var(--qz-ink-1);
-}
-
-.qz-insp-foot { display: flex; gap: 6px; margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--qz-rule); }
-.qz-insp-foot-del { margin-left: auto; color: var(--qz-danger, currentColor); }
-
-/* QZY-9 — the answer-display picker (build-tab §5). */
-.qz-ads-modes { display: grid; grid-template-columns: repeat(5, 1fr); gap: 4px; }
-.qz-ads-modes button {
-  font: inherit; font-size: 10.5px; padding: 6px 2px; cursor: pointer;
-  border: 1px solid var(--qz-rule); border-radius: var(--qz-radius, 8px);
-  background: var(--qz-bg); color: var(--qz-ink-3);
-}
-.qz-ads-modes button.is-active { border-color: var(--qz-accent); color: var(--qz-ink-1); font-weight: 600; box-shadow: 0 0 0 1px var(--qz-accent) inset; }
-.qz-ads-color { display: inline-flex; align-items: center; gap: 6px; font-size: 11.5px; color: var(--qz-ink-3); }
-.qz-ads-color input[type="color"] { width: 28px; height: 22px; padding: 0; border: 1px solid var(--qz-rule); border-radius: 6px; background: transparent; cursor: pointer; }
-
-/* QZY-12 — the slider range-band chip on Logic map rows. */
-.qz-s3-bandchip {
-  flex: 0 0 auto;
-  font-size: 10.5px;
-  font-variant-numeric: tabular-nums;
-  padding: 1px 8px;
-  border-radius: 999px;
-  border: 1px solid var(--qz-rule);
-  color: var(--qz-ink-3);
-  background: var(--qz-bg);
-}
-
-/* R5c-2 (build-tab §6.1) — answer-option hover + motion, mirrored from
-   quiz-runtime.css so the builder canvas previews the same states the shopper
-   sees (opt-in via .qz-answer-opt + data attrs; unset options are unaffected). */
-.qz-answer-opt {
-  transition: transform 0.15s ease, box-shadow 0.15s ease,
-    background-color 0.15s ease, border-color 0.15s ease, opacity 0.15s ease;
-}
-.qz-answer-opt[data-qz-hover]:hover {
-  background: var(--qz-opt-hover-bg);
-  border-color: var(--qz-opt-hover-border);
-}
-.qz-answer-opt[data-qz-motion="pop"]:hover { transform: scale(1.03); }
-.qz-answer-opt[data-qz-motion="lift"]:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.14);
-}
-.qz-answer-opt[data-qz-motion="fade"]:hover { opacity: 0.85; }
-@media (hover: none) {
-  .qz-answer-opt[data-qz-motion]:hover { transform: none; box-shadow: none; opacity: 1; }
-}
-/* R5c-3 (build-tab §6.2) — playful effects (opt-in via data-qz-effect; gated
-   behind a drawer in the builder, never a default). Continuous animations are
-   disabled under prefers-reduced-motion. */
-@keyframes qz-pulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.04); } }
-@keyframes qz-rainbow { 0% { filter: hue-rotate(0deg); } 100% { filter: hue-rotate(360deg); } }
-@keyframes qz-flash { 0%, 100% { filter: brightness(1); } 50% { filter: brightness(1.3); } }
-.qz-answer-opt[data-qz-effect="pulse"] { animation: qz-pulse 1.6s ease-in-out infinite; }
-.qz-answer-opt[data-qz-effect="rainbow"] { animation: qz-rainbow 3s linear infinite; }
-.qz-answer-opt[data-qz-effect="flash"] { animation: qz-flash 1.2s ease-in-out infinite; }
-@media (prefers-reduced-motion: reduce) {
-  .qz-answer-opt[data-qz-effect] { animation: none; }
-}
-/* R5c-4 (build-tab §6.1) — reveal-on-interaction: a per-option image shown on
-   hover or select, beside/above the option. Hidden by default; opt-in via the
-   .qz-opt-wrap wrapper (only present when an option has a reveal image). */
-.qz-reveal {
-  display: none;
-  position: absolute;
-  z-index: 3;
-  max-width: 160px;
-  max-height: 160px;
-  border-radius: 8px;
-  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.18);
-  pointer-events: none;
-}
-.qz-reveal[data-qz-reveal-pos="beside"] { left: 100%; top: 0; margin-left: 8px; }
-.qz-reveal[data-qz-reveal-pos="above"] { bottom: 100%; left: 0; margin-bottom: 8px; }
-.qz-opt-wrap:hover .qz-reveal,
-.qz-opt-wrap[data-qz-selected] .qz-reveal { display: block; }
-
-/* ═══════════════════════════════════════════════════════════════════════════
-   PORTED (handoff bundle, nasa/build-tab-deep) — Groups & Personas surface:
-   tokens + the qz-empty / qz-g* / qz-pex-* / qz-w* / source-chip blocks.
-   Admin-only sheet — never loaded by /q (byte-pin unaffected).
-   ═══════════════════════════════════════════════════════════════════════════ */
+/* Audit fix — --qz-warn-wash was undefined on both branches (qz-eng warn chip). */
 :root {
-  --qz-accent-ink:  #3C3489;  /* Violet-ink — accent TEXT on light (deep, ≈9:1) */
-  --qz-pastel-rose-ink:   #8F4A70;
-  --qz-pastel-amber:  #FDEED7;  --qz-pastel-amber-ink:  #8F6A3A;
-  /* Source-accent tokens (P3 §2.5) — tag/collection/metafield/manual chips. */
-  --qz-src-tag:  var(--qz-accent-ink);  --qz-src-tag-bg:  var(--qz-accent-wash);
-  --qz-src-col:  #0B6E64;               --qz-src-col-bg:  var(--qz-pal-teal-wash);
-  --qz-src-meta: #8A5A12;               --qz-src-meta-bg: var(--qz-pal-amber-wash);
-  --qz-src-man:  #9D3567;               --qz-src-man-bg:  var(--qz-pal-pink-wash);
-  --qz-spring: cubic-bezier(0.34, 1.4, 0.6, 1);
-}
-html[data-theme="dark"] body[data-qz] {
-  --qz-accent-ink:  #C4B7FA;  /* accent text reads light on dark */
-}
-
-/* §A1 — form/reading column: page stays 1440, but a single-column form
-   constrains its OWN content so inputs don't stretch across the full cap. */
-.qz-formcol  { max-width: 760px; }
-
-/* P3 Edit 9 — empty / first-run state (calm, one line + one action). */
-.qz-empty  {
-  display: flex; flex-direction: column; align-items: center; justify-content: center;
-  gap: 12px; padding: 48px 24px; text-align: center;
-}
-
-.qz-empty-icon  {
-  width: 48px; height: 48px; border-radius: 14px; flex: none;
-  display: inline-flex; align-items: center; justify-content: center;
-  background: var(--qz-accent-wash); color: var(--qz-accent-ink);
-}
-
-.qz-empty-title  { margin: 0; font-size: 14px; color: var(--qz-ink-3); max-width: 44ch; }
-
-.qz-empty-action  { margin-top: 4px; }
-
-/* P3 §2.5/§16 — source-coded taxonomy chip. Color ALWAYS pairs with the label
-   text (never color-only — Edit 8). Used for group membership. */
-.qz-src-chip  {
-  display: inline-flex; align-items: center; gap: 6px;
-  padding: 4px 11px; border-radius: 8px; font-size: 12px; font-weight: 600;
-  background: var(--qz-cream-2); color: var(--qz-ink-3);
-}
-
-.qz-src-chip.src-tag   { background: var(--qz-src-tag-bg);  color: var(--qz-src-tag); }
-
-.qz-src-chip.src-col   { background: var(--qz-src-col-bg);  color: var(--qz-src-col); }
-
-.qz-src-chip.src-meta  { background: var(--qz-src-meta-bg); color: var(--qz-src-meta); }
-
-.qz-src-chip.src-man   { background: var(--qz-src-man-bg);  color: var(--qz-src-man); }
-
-/* ── P3 Edit 2 (§16) — Groups & Personas page ─────────────────────────────── */
-.qz-src-status  { font-size: 13px; color: var(--qz-ink-3); display: inline-flex; align-items: center; gap: 7px; }
-
-.qz-src-status-icon  { color: var(--qz-ok); }
-
-.qz-groups  {
-  display: grid; grid-template-columns: 260px minmax(0, 1fr); overflow: hidden;
-  background: var(--qz-paper); border-radius: var(--qz-radius); box-shadow: var(--qz-lift-1);
-}
-
-.qz-glist  { border-right: 1px solid var(--qz-rule); padding: 12px; display: flex; flex-direction: column; gap: 3px; }
-
-.qz-gtile.src-tag, .qz-gbig.src-tag    { background: var(--qz-src-tag-bg);  color: var(--qz-src-tag); }
-
-.qz-gtile.src-col, .qz-gbig.src-col    { background: var(--qz-src-col-bg);  color: var(--qz-src-col); }
-
-.qz-gtile.src-meta, .qz-gbig.src-meta  { background: var(--qz-src-meta-bg); color: var(--qz-src-meta); }
-
-.qz-gtile.src-man, .qz-gbig.src-man    { background: var(--qz-src-man-bg);  color: var(--qz-src-man); }
-
-.qz-gname  { display: block; font-size: 13px; font-weight: 600; letter-spacing: -0.01em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-
-.qz-gitem.is-active .qz-gname  { color: var(--qz-accent-ink); }
-
-.qz-gmeta  { display: block; font-size: 11px; color: var(--qz-ink-4); }
-
-.qz-gdetail  { min-height: 360px; animation: qz-steploader-fade var(--qz-dur-slow) var(--qz-ease); }
-
-.qz-gbanner  { display: flex; align-items: center; gap: 15px; padding: 20px 22px; border-bottom: 1px solid var(--qz-rule); }
-
-.qz-pill  { font-size: 11px; padding: 3px 10px; border-radius: 999px; font-weight: 600; background: var(--qz-cream-2); color: var(--qz-ink-3); }
-
-.qz-gbuild  { margin: 14px 22px 0; background: var(--qz-cream-2); border-radius: 10px; padding: 13px 15px; font-size: 13px; color: var(--qz-ink-3); }
-
-.qz-gbuild b  { color: var(--qz-ink); }
-
-.qz-gbody  { padding: 18px 22px; }
-
-.qz-klabel  { font-size: 11px; letter-spacing: 0.05em; text-transform: uppercase; color: var(--qz-ink-4); margin-bottom: 9px; }
-
-.qz-gmosaic  { display: flex; flex-wrap: wrap; gap: 9px; }
-
-.qz-gthumb  {
-  width: 52px; height: 52px; border-radius: 9px; object-fit: cover; flex: none;
-  background: var(--qz-cream-2); color: var(--qz-ink-4);
-  display: inline-flex; align-items: center; justify-content: center; font-size: 16px;
-  animation: qz-gpop var(--qz-dur) var(--qz-ease) both;
-  transition: transform var(--qz-dur-fast) var(--qz-spring);
-}
-
-.qz-gthumb:hover  { transform: scale(1.07); }
-
-.qz-gthumb-more  { font-size: 13px; font-weight: 600; }
-
-.qz-gused  { display: flex; align-items: center; gap: 7px; font-size: 13px; color: var(--qz-ink-3); font-weight: 600; margin-top: 16px; }
-
-@media (max-width: 720px) {
-.qz-groups { grid-template-columns: 1fr; }
-.qz-glist { border-right: none; border-bottom: 1px solid var(--qz-rule); }
-}
-
-/* Group create wizard + source picker (P3 Edit 2). */
-.qz-wsteps  { display: flex; gap: 8px; margin-bottom: 14px; }
-
-.qz-wpanel  { animation: qz-steploader-fade var(--qz-dur) var(--qz-ease); }
-
-.qz-wsrc  { border: 1px solid var(--qz-rule); border-radius: 11px; padding: 12px 14px; margin-bottom: 10px; }
-
-.qz-wsrc-head  { display: flex; align-items: center; gap: 9px; margin-bottom: 9px; }
-
-.qz-wsrc-icon.src-tag   { background: var(--qz-src-tag-bg);  color: var(--qz-src-tag); }
-
-.qz-wsrc-icon.src-col   { background: var(--qz-src-col-bg);  color: var(--qz-src-col); }
-
-.qz-wsrc-icon.src-meta  { background: var(--qz-src-meta-bg); color: var(--qz-src-meta); }
-
-.qz-wsrc-icon.src-man   { background: var(--qz-src-man-bg);  color: var(--qz-src-man); }
-
-.qz-wsrc-name  { font-size: 13px; font-weight: 600; }
-
-.qz-wsrc-add  { margin-left: auto; font-size: 12px; font-weight: 600; color: var(--qz-accent-ink); background: var(--qz-accent-wash); border: none; padding: 5px 11px; border-radius: 8px; cursor: pointer; font-family: inherit; }
-
-.qz-wsrc-add:hover  { background: color-mix(in srgb, var(--qz-accent) 22%, var(--qz-paper)); }
-
-.qz-chip-x  { display: inline-flex; align-items: center; background: none; border: none; padding: 0; margin-left: 2px; cursor: pointer; color: inherit; opacity: 0.6; }
-
-.qz-chip-x:hover  { opacity: 1; }
-
-.qz-wpreview  { background: var(--qz-cream-2); border-radius: 11px; padding: 14px; margin-top: 4px; }
-
-.qz-wswitch  { width: 40px; height: 22px; border-radius: 999px; background: var(--qz-ink-25); position: relative; flex: none; transition: background var(--qz-dur) var(--qz-ease); }
-
-.qz-wswitch::after  { content: ""; position: absolute; top: 2px; left: 2px; width: 18px; height: 18px; border-radius: 50%; background: #fff; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2); transition: transform var(--qz-dur) var(--qz-spring); }
-
-.qz-wtoggle.is-on .qz-wswitch  { background: var(--qz-accent); }
-
-.qz-wtoggle.is-on .qz-wswitch::after  { transform: translateX(18px); }
-
-.qz-picklist  { display: flex; flex-direction: column; gap: 2px; max-height: 46vh; overflow-y: auto; }
-
-.qz-prow-cb  { width: 20px; height: 20px; border-radius: 6px; border: 1.5px solid var(--qz-rule); flex: none; display: inline-flex; align-items: center; justify-content: center; color: #fff; font-size: 13px; }
-
-.qz-prow.is-sel .qz-prow-cb  { background: var(--qz-accent); border-color: var(--qz-accent); }
-
-.qz-prow-img  { width: 36px; height: 36px; border-radius: 7px; object-fit: cover; flex: none; background: var(--qz-cream-2); display: inline-flex; align-items: center; justify-content: center; color: var(--qz-ink-4); }
-
-.qz-prow-label  { font-size: 13px; font-weight: 600; }
-
-/* §R R-2(d) — Dynamic vs Manual membership legibility. */
-.qz-gmemsub  { margin-bottom: 12px; }
-
-.qz-gmemtag  {
-  display: inline-block; font-size: 10.5px; font-weight: 700; letter-spacing: .04em;
-  text-transform: uppercase; margin-bottom: 6px; padding: 2px 8px; border-radius: 999px;
-}
-
-.qz-gmemtag.is-dyn  { color: #1c7c2c; background: color-mix(in srgb, #28c840 14%, transparent); }
-
-.qz-gmemtag.is-man  { color: #6a4b12; background: color-mix(in srgb, #e0a116 16%, transparent); }
-
-/* §R-2 — Personas & Groups detail: union summary + persona card. */
-.qz-gunion  { font-size: 12.5px; color: var(--qz-ink-2); margin: 2px 0 4px; }
-
-.qz-gunion b  { color: var(--qz-ink); }
-
-.qz-gpersona  { display: flex; align-items: center; gap: 12px; margin-top: 8px; padding: 12px; border: 0.5px solid var(--qz-rule); border-radius: 12px; background: var(--qz-paper); }
-
-.qz-gpersona-av  { width: 40px; height: 40px; flex: none; border-radius: 10px; display: flex; align-items: center; justify-content: center; color: white; background: linear-gradient(135deg, var(--qz-accent), var(--qz-pastel-rose-ink)); }
-
-begins ~9.2s. Decorative — the three <h3>s carry the meaning. */
-.qz-pexplain  {
-  --pex-icon: 40px;
-  --pex-lit-shadow:
-    0 0 0 1px color-mix(in srgb, var(--qz-accent) 34%, transparent),
-    0 12px 28px -10px color-mix(in srgb, var(--qz-accent) 42%, transparent);
-  --pex-peach: color-mix(in srgb, var(--qz-pastel-amber-ink) 42%, #fff);
-  margin: 4px 0 18px;
-}
-
-.qz-pex-row  { display: flex; align-items: stretch; gap: 16px; }
-
-.qz-pex-chev  {
-  flex: 0 0 auto; align-self: center; display: inline-flex;
-  color: var(--qz-accent);
-  opacity: 1;                                   /* rested */
-  animation: pexFade 0.5s backwards;
-}
-
-.qz-pex-chev[data-chev="1"]  { animation-delay: 2.6s; }
-
-.qz-pex-chev[data-chev="2"]  { animation-delay: 5.2s; }
-
-.qz-pex-card  {
-  flex: 1 1 0; min-width: 0;
-  padding: 16px 18px 18px;
-  background: var(--qz-paper);
-  border: 1px solid var(--qz-accent);           /* rested = lit */
-  border-radius: var(--qz-radius-sm);
-  box-shadow: var(--pex-lit-shadow);            /* rested = lit */
-  opacity: 1;                                   /* rested = lit */
-  animation: pexCardLight 0.55s backwards;
-}
-
-.qz-pex-card[data-step="1"]  { --pex-base: 0.15s; animation-delay: 0.15s; }
-
-.qz-pex-card[data-step="2"]  { --pex-base: 2.6s;  animation-delay: 2.6s; }
-
-.qz-pex-card[data-step="3"]  { --pex-base: 5.2s;  animation-delay: 5.2s; }
-
-.qz-pex-chip  {
-  display: inline-flex; align-items: center; justify-content: center;
-  width: 26px; height: 26px; border-radius: 7px;
-  font-family: "JetBrains Mono", ui-monospace, monospace;
-  font-size: 13px; font-weight: 600;
-  color: var(--qz-accent-ink); background: var(--qz-accent-wash);
-  animation:
-    pexChipLight 0.55s var(--pex-base) backwards,
-    pexChipPulse 3s 9.2s infinite;
-}
-
-.qz-pex-viz  {
-  position: relative; height: 74px; margin: 12px 0 14px;
-  display: flex; align-items: center; justify-content: center;
-}
-
-.qz-pex-title  { margin: 0; font-size: 16px; font-weight: 700; color: var(--qz-ink); }
-
-.qz-pex-desc   { margin: 3px 0 0; font-size: 13px; color: var(--qz-ink-4); }
-
-/* Shared grown icon — identical final size across steps 1, 2, 3. */
-.qz-pex-icon  {
-  flex: 0 0 auto;
-  display: inline-flex; align-items: center; justify-content: center;
-  width: var(--pex-icon); height: var(--pex-icon); border-radius: 10px;
-  background: var(--qz-accent-wash); color: var(--qz-accent);
-}
-
-/* Shared persona pill — identical component in steps 2 and 3. */
-.qz-pex-pill  {
-  font-size: 11px; font-weight: 600; line-height: 1; white-space: nowrap;
-  padding: 5px 9px; border-radius: var(--qz-radius-pill);
-  background: var(--qz-accent-wash); color: var(--qz-accent-ink);
-}
-
-/* Step 1 — four tiles fly in from the corners, converge, bundle blooms. */
-.qz-pex-viz-1 .qz-pex-icon  { animation: pexBloom 0.8s calc(var(--pex-base) + 0.55s) backwards; }
-
-.qz-pex-fly  {
-  position: absolute; width: 20px; height: 20px; border-radius: 6px;
-  background: var(--qz-accent-wash);
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--qz-accent) 22%, transparent);
-  opacity: 0;                                   /* rested = merged away */
-  animation: pexFly 0.95s backwards;
-}
-
-.qz-pex-viz-1 .qz-pex-fly:nth-child(1)  { animation-delay: calc(var(--pex-base) + 0s); }
-
-.qz-pex-viz-1 .qz-pex-fly:nth-child(2)  { animation-delay: calc(var(--pex-base) + 0.15s); }
-
-.qz-pex-viz-1 .qz-pex-fly:nth-child(3)  { animation-delay: calc(var(--pex-base) + 0.3s); }
-
-.qz-pex-viz-1 .qz-pex-fly:nth-child(4)  { animation-delay: calc(var(--pex-base) + 0.45s); }
-
-/* Step 2 — a single tile grows, then the persona pill fades up onto it. */
-.qz-pex-viz-2 .qz-pex-icon  { animation: pexGrow 0.7s var(--pex-base) backwards; }
-
-.qz-pex-pill-2  {
-  position: absolute; top: 14px; left: 50%; transform: translateX(-50%);
-  animation: pexPillUp2 0.7s calc(var(--pex-base) + 0.8s) backwards;
-}
-
-/* Step 3 — tile (left) → three lines draw out → three shopper avatars, pill last. */
-.qz-pex-viz-3  { justify-content: flex-start; gap: 6px; padding: 0 4px; }
-
-.qz-pex-viz-3 .qz-pex-icon  { animation: pexGrow 0.7s var(--pex-base) backwards; }
-
-.qz-pex-fan  {
-  flex: 1 1 auto; align-self: stretch;
-  display: flex; flex-direction: column; justify-content: center; gap: 12px;
-  padding: 16px 0;
-}
-
-.qz-pex-line  {
-  height: 2px; width: 100%; border-radius: 2px;
-  background: var(--pex-peach);
-  transform: scaleX(1); transform-origin: left center;   /* rested = drawn */
-  animation: pexDraw 1.1s backwards;
-}
-
-.qz-pex-line:nth-child(1)  { animation-delay: calc(var(--pex-base) + 0.8s); }
-
-.qz-pex-line:nth-child(2)  { animation-delay: calc(var(--pex-base) + 1s); }
-
-.qz-pex-line:nth-child(3)  { animation-delay: calc(var(--pex-base) + 1.2s); }
-
-.qz-pex-avatars  {
-  flex: 0 0 auto;
-  display: flex; flex-direction: column; justify-content: center; gap: 8px;
-}
-
-.qz-pex-av  {
-  width: 22px; height: 22px; border-radius: var(--qz-radius-pill);
-  display: inline-flex; align-items: center; justify-content: center;
-  background: var(--qz-pastel-amber); color: var(--qz-pastel-amber-ink);
-  transform: scale(1); opacity: 1;                        /* rested */
-  animation: pexPop 0.5s backwards;
-}
-
-.qz-pex-av:nth-child(1)  { animation-delay: calc(var(--pex-base) + 1.6s); }
-
-.qz-pex-av:nth-child(2)  { animation-delay: calc(var(--pex-base) + 1.8s); }
-
-.qz-pex-av:nth-child(3)  { animation-delay: calc(var(--pex-base) + 2s); }
-
-.qz-pex-pill-3  {
-  position: absolute; top: 2px; right: 4px;
-  animation: pexPillUp3 0.6s calc(var(--pex-base) + 2.4s) backwards;
-}
-
-@keyframes qz-gpop { from { opacity: 0; transform: scale(0.85); } to { opacity: 1; transform: scale(1); } }
-
-@keyframes qz-steploader-fade { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
-
-@keyframes pexFade { 0% { opacity: 0; } 100% { opacity: 1; } }
-
-@keyframes pexCardLight {
-  0%   { opacity: 0.5; border-color: var(--qz-rule); box-shadow: var(--qz-lift-1); }
-  100% { opacity: 1;   border-color: var(--qz-accent); box-shadow: var(--pex-lit-shadow); }
-}
-
-@keyframes pexChipLight { 0% { transform: scale(0.82); } 100% { transform: scale(1); } }
-
-@keyframes pexChipPulse {
-  0%, 100% { transform: scale(1); box-shadow: 0 0 0 0 transparent; }
-  50% { transform: scale(1.07); box-shadow: 0 0 0 4px color-mix(in srgb, var(--qz-accent) 12%, transparent); }
-}
-
-@keyframes pexFly {
-  0%   { transform: translate(var(--fx), var(--fy)) scale(0.85); opacity: 0; }
-  25%  { opacity: 1; }
-  70%  { transform: translate(0, 0) scale(0.9); opacity: 0.9; }
-  100% { transform: translate(0, 0) scale(0.5); opacity: 0; }
-}
-
-@keyframes pexBloom {
-  0%   { transform: scale(0); opacity: 0; }
-  60%  { transform: scale(1.08); opacity: 1; }
-  100% { transform: scale(1); opacity: 1; }
-}
-
-@keyframes pexGrow {
-  0%   { transform: scale(0); opacity: 0; }
-  60%  { transform: scale(1.06); opacity: 1; }
-  100% { transform: scale(1); opacity: 1; }
-}
-
-@keyframes pexPillUp2 {
-  0%   { transform: translate(-50%, 10px); opacity: 0; }
-  100% { transform: translate(-50%, 0); opacity: 1; }
-}
-
-@keyframes pexDraw { 0% { transform: scaleX(0); } 100% { transform: scaleX(1); } }
-
-@keyframes pexPop {
-  0%   { transform: scale(0); opacity: 0; }
-  70%  { transform: scale(1.12); opacity: 1; }
-  100% { transform: scale(1); opacity: 1; }
-}
-
-@keyframes pexPillUp3 {
-  0%   { transform: translateY(8px); opacity: 0; }
-  100% { transform: translateY(0); opacity: 1; }
-}
-
-/* PORTED (handoff bundle) — §L Engagement settings panel (qz-eng-*). */
-/* §L Layer 2 — Engagement settings panel (studio). */
-.qz-eng-sec  { border: 1px solid var(--qz-rule); border-radius: 12px; margin-bottom: 12px; overflow: hidden; }
-
-.qz-eng-sec.is-loud  { border-color: color-mix(in srgb, var(--qz-warn) 40%, var(--qz-rule)); }
-
-.qz-eng-head  { display: flex; align-items: center; gap: 12px; padding: 14px 16px; }
-
-.qz-eng-name  { font-size: 14.5px; font-weight: 600; display: flex; align-items: center; gap: 8px; }
-
-.qz-eng-chip  { font-size: 10.5px; font-weight: 700; padding: 2px 8px; border-radius: 999px; background: var(--qz-live-wash); color: var(--qz-ok); letter-spacing: 0.02em; }
-
-.qz-eng-chip.is-opt  { background: var(--qz-warn-wash); color: var(--qz-warn); }
-
-.qz-eng-body  { padding: 4px 16px 16px; border-top: 1px solid var(--qz-rule-2); display: flex; flex-direction: column; gap: 12px; }
-
-.qz-eng-fld  { display: flex; flex-direction: column; gap: 6px; flex: 1; }
-
-.qz-eng-lab  { display: flex; justify-content: space-between; font-size: 12px; color: var(--qz-ink-3); }
-
-.qz-eng-lab .qz-dim  { font-size: 12px; }
-
-.qz-eng-warn  { font-size: 11.5px; color: var(--qz-warn); background: var(--qz-warn-wash); border-radius: 8px; padding: 8px 11px; margin: 0; }
-
-.qz-eng-subrow  { display: flex; align-items: center; gap: 8px; padding: 7px 0; }
-
-.qz-eng-chipbtn  { font: inherit; font-size: 12.5px; padding: 6px 12px; border-radius: 999px; border: 1px solid var(--qz-rule); background: var(--qz-paper); color: var(--qz-ink-3); cursor: pointer; }
-
-.qz-eng-chipbtn.is-on  { background: var(--qz-accent-wash); color: var(--qz-accent-ink); border-color: var(--qz-accent); }
-
-.qz-eng-tg  { width: 40px; height: 22px; border-radius: 999px; background: var(--qz-ink-25); border: none; position: relative; cursor: pointer; flex: none; transition: background var(--qz-dur) var(--qz-ease); }
-
-.qz-eng-tg.is-on  { background: var(--qz-accent); }
-
-.qz-eng-knob  { position: absolute; top: 2px; left: 2px; width: 18px; height: 18px; border-radius: 50%; background: #fff; box-shadow: 0 1px 2px rgba(0,0,0,.2); transition: transform var(--qz-dur) var(--qz-spring); }
-
-.qz-eng-tg.is-on .qz-eng-knob  { transform: translateX(18px); }
-
-/* PORTED tokens the qz-eng-* blocks reference. --qz-warn-wash was undefined
-   even on the source branch (chip background silently transparent) — defined
-   here via the sheet's wash idiom. */
-:root {
-  --qz-live-wash:   #E0F5EE;
   --qz-warn-wash: color-mix(in srgb, var(--qz-warn) 14%, var(--qz-paper));
 }

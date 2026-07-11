@@ -13,7 +13,7 @@
       "boxShadow": 0
     },
     "app/components/builder/preview/DeviceFrame.tsx": {
-      "hex": 5,
+      "hex": 9,
       "boxShadow": 1
     },
     "app/components/builder/preview/ReskinSwitcher.tsx": {
@@ -78,6 +78,10 @@
     },
     "app/components/studio/AiChatPanel.tsx": {
       "hex": 1,
+      "boxShadow": 0
+    },
+    "app/components/studio/BrandBook.tsx": {
+      "hex": 4,
       "boxShadow": 0
     },
     "app/components/studio/BrandIdentityPanel.tsx": {
@@ -196,10 +200,6 @@
       "hex": 1,
       "boxShadow": 0
     },
-    "app/routes/studio._index.tsx": {
-      "hex": 1,
-      "boxShadow": 0
-    },
     "app/routes/studio.new.tsx": {
       "hex": 3,
       "boxShadow": 0
@@ -210,10 +210,6 @@
     },
     "app/routes/studio_.$id.tsx": {
       "hex": 2,
-      "boxShadow": 0
-    },
-    "app/routes/studio_.login.tsx": {
-      "hex": 10,
       "boxShadow": 0
     },
     "app/routes/studio_.verify.tsx": {

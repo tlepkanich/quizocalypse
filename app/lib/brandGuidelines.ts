@@ -6,11 +6,29 @@ import { DesignTokens } from "./quizSchema";
 // curated preset library. Stored on shop.brandGuidelines and folded into
 // every AI surface so generated copy stays on-brand.
 
+// The five tone presets offered in the Brand Identity → Voice module's Tone
+// single-select. Optional so every existing guidelines blob parses unchanged
+// (never a default — absent stays absent through a parse→save round-trip).
+export const BrandTone = z.enum(["warm_expert", "playful", "clinical", "luxury", "minimal"]);
+export type BrandTone = z.infer<typeof BrandTone>;
+
+// Display labels for the tone presets — shared by the UI select and the prompt.
+export const TONE_LABEL: Record<BrandTone, string> = {
+  warm_expert: "Warm & expert",
+  playful: "Playful",
+  clinical: "Clinical",
+  luxury: "Luxury",
+  minimal: "Minimal",
+};
+
 export const BrandVoice = z.object({
   // 1–2 sentence summary of the brand's tone (e.g. "Warm and knowing,
   // never preachy. Speaks like a trusted friend who happens to be an
   // expert.").
   tone_description: z.string().min(1),
+  // A coarse tone register the merchant picks (R-5 Voice module). Complements
+  // the free-form tone_description; folded into the AI prompt when present.
+  tone: BrandTone.optional(),
   // Hand-curated "do this" list. Each entry is short — chip-sized.
   do_list: z.array(z.string()).default([]),
   // Hand-curated "avoid this" list. Empty by default.
@@ -77,6 +95,9 @@ export function buildBrandVoiceAddition(
   );
   lines.push(`Brand: ${g.name}`);
   lines.push(`Tone: ${g.voice.tone_description}`);
+  if (g.voice.tone) {
+    lines.push(`Tone register: ${TONE_LABEL[g.voice.tone]}`);
+  }
   if (g.voice.do_list.length > 0) {
     lines.push(`Do: ${g.voice.do_list.map((s) => `"${s}"`).join(" / ")}`);
   }
