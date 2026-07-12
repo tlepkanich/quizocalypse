@@ -72,7 +72,9 @@ export function MinimalNav({
         style={{
           visibility: canBack ? "visible" : "hidden",
           background: "transparent",
-          border: "1.5px solid var(--qz-color-text)",
+          // Quiet outline: Back must not compete with Next for attention —
+          // the softened border keeps it findable without weight.
+          border: "1.5px solid color-mix(in srgb, var(--qz-color-text) 30%, transparent)",
           color: "var(--qz-color-text)",
           borderRadius: "var(--qz-radius)",
           padding: "calc(var(--qz-pad) * 0.5) calc(var(--qz-pad) * 1.1)",
@@ -90,9 +92,13 @@ export function MinimalNav({
         onClick={onNext}
         disabled={!nextEnabled}
         style={{
-          background: "var(--qz-color-text)",
-          color: "var(--qz-color-bg)",
-          border: "1.5px solid var(--qz-color-text)",
+          // Brand primary, not ink: the pre-redesign Quizell chrome painted this
+          // with --qz-color-text, which made every quiz's main CTA black no
+          // matter the palette. White label is AA-guaranteed by the preset
+          // contrast tests (white/primary >=4.5).
+          background: "var(--qz-color-primary)",
+          color: "#FFF",
+          border: "1.5px solid var(--qz-color-primary)",
           borderRadius: "var(--qz-radius)",
           padding: "calc(var(--qz-pad) * 0.5) calc(var(--qz-pad) * 1.5)",
           fontFamily: "var(--qz-font-body)",

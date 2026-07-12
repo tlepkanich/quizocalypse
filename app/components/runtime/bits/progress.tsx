@@ -37,7 +37,9 @@ export function ProgressBar({
   // reasonable count so a long quiz doesn't overflow (falls back to the bar).
   if ((barStyle === "dots" || barStyle === "steps") && total <= 12) {
     const filled = onResult ? total : Math.min(answered, total);
-    const on = minimal ? "var(--qz-color-text)" : "var(--qz-color-primary)";
+    // Brand primary in both chromes — the minimal chrome's old text-color fill
+    // read as a black bar on every palette (pre-redesign Quizell leftover).
+    const on = "var(--qz-color-primary)";
     const off = minimal ? "var(--qz-color-surface)" : "#00000010";
     const isSteps = barStyle === "steps";
     return (
@@ -98,7 +100,7 @@ export function ProgressBar({
           transformOrigin: "left center",
           height: "100%",
           ...(minimal ? { borderRadius: 999 } : {}),
-          background: minimal ? "var(--qz-color-text)" : "var(--qz-color-primary)",
+          background: "var(--qz-color-primary)",
           transition: "transform var(--qz-dur, 170ms) var(--qz-ease, ease)",
         }}
       />
@@ -128,10 +130,12 @@ export function MinimalQuestionLabel({
         width: "100%",
         maxWidth: 640,
         textAlign: "left",
-        fontSize: "1em",
-        fontWeight: 500,
-        color: "var(--qz-color-text)",
-        marginBottom: 22,
+        // Recede below the question headline: the counter is orientation, not
+        // content — muted + smaller keeps the visual hierarchy on the question.
+        fontSize: "0.85em",
+        fontWeight: 600,
+        color: "var(--qz-color-muted, var(--qz-color-text))",
+        marginBottom: 18,
         fontFamily: "var(--qz-font-body)",
       }}
     >

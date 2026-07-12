@@ -131,10 +131,13 @@ export const stylesFor = (
   } satisfies React.CSSProperties,
   answerBtn: minimal
     ? ({
-        // Quizell grey chip: filled surface, centered text, no visible border.
+        // Quizell chip: filled surface, centered text. A hairline of the text
+        // ink (10%) gives the chip an edge so it reads as pressable instead of
+        // a flat slab — border only, no shadow (the ghost-card pairing is the
+        // tell impeccable bans).
         textAlign: "center" as const,
         background: "var(--qz-color-surface)",
-        border: "1px solid transparent",
+        border: "1px solid color-mix(in srgb, var(--qz-color-text) 10%, transparent)",
         borderRadius: "var(--qz-radius)",
         padding: "calc(var(--qz-pad) * 0.95) var(--qz-pad)",
         fontSize: "var(--qz-base-size)",
