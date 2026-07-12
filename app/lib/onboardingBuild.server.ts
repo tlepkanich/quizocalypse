@@ -22,6 +22,7 @@ import { generateQuestionFlow, type QuizTone } from "./claude";
 import { applyQuestionFlow, applyDeciderQuestionFlow, type SmartBuildBucket } from "./smartBuild";
 import { parseBrandGuidelinesSafe, type BrandGuidelines } from "./brandGuidelines";
 import { identityToBrandGuidelines, parseBrandIdentitySafe } from "./brandIdentity";
+import { applyGeneratedArtDirection } from "./deciderArtDirection";
 
 // Step 1 — generation reads the BRAND IDENTITY first (its voice, via the
 // dormant adapter, activated here as the first real consumer), falling back to
@@ -407,9 +408,15 @@ export async function runAiOnboardingBuild(
       : {}),
   };
   // Step 2 — bake the battle-card recommendation settings onto every result node.
-  const finalDoc = input.recOverride
+  const configuredDoc = input.recOverride
     ? applyRecOverride(withFinalFields, input.recOverride)
     : withFinalFields;
+  // New decider quizzes arrive as a coherent campaign, not a collection of
+  // unrelated theme choices. The selector is conservative and leaves
+  // unsupported catalogs untouched until a vetted direction exists.
+  const finalDoc = decider
+    ? applyGeneratedArtDirection(configuredDoc, allProducts)
+    : configuredDoc;
   await prisma.quiz.update({ where: { id: quizId }, data: { draftJson: finalDoc as never } });
   return { quizId };
 }

@@ -3696,6 +3696,15 @@ body[data-qz] ::selection { background: var(--qz-ink); color: var(--qz-cream); }
   background: var(--qz-accent-wash); color: var(--qz-accent);
   font-size: 12.5px; font-weight: 600;
 }
+.qz-s3-caption.is-art-directed {
+  border-radius: 2px;
+  background: #17362a;
+  color: #f1eee5;
+  font-family: var(--qz-font-mono);
+  font-size: 10px;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+}
 .qz-s3-phone {
   flex: none; width: 322px; box-sizing: border-box;
   padding: 9px; border-radius: 44px;
@@ -3710,6 +3719,109 @@ body[data-qz] ::selection { background: var(--qz-ink); color: var(--qz-cream); }
   background: var(--qz-color-bg, var(--qz-paper));
   color: var(--qz-color-text, var(--qz-ink));
   font-family: var(--qz-font-body);
+}
+/* Generated art direction preview — the Step 3 canvas shows the campaign
+   composition itself, not a generic phone skin carrying brand colors. */
+.qz-s3-phone-screen.is-alpine-art {
+  padding: 0;
+  gap: 0;
+  background-color: #f1eee5;
+  background-repeat: no-repeat;
+  background-position: 43% top;
+  background-size: 100% 42%;
+  color: #14231c;
+}
+.qz-s3-phone-screen.is-alpine-art .qz-s3-screen-top {
+  min-height: 58px;
+  padding: 12px 14px;
+  box-sizing: border-box;
+  color: #f4f0e7;
+  background: linear-gradient(rgba(15,30,23,.58), transparent);
+}
+.qz-s3-phone-screen.is-alpine-art .qz-s3-backpill,
+.qz-s3-phone-screen.is-alpine-art .qz-s3-typechip {
+  border-radius: 2px;
+  background: rgba(15,30,23,.42);
+}
+.qz-s3-phone-screen.is-alpine-art .qz-s3-progressbar {
+  height: 2px;
+  border-radius: 0;
+  background: rgba(244,240,231,.28);
+}
+.qz-s3-phone-screen.is-alpine-art .qz-s3-qbody {
+  margin-top: 196px;
+  padding: 22px 18px 0;
+  gap: 12px;
+  background: #f1eee5;
+}
+.qz-s3-phone-screen.is-alpine-art .qz-s3-kicker {
+  color: #d56a36;
+  letter-spacing: .14em;
+}
+.qz-s3-phone-screen.is-alpine-art .qz-s3-qtitle {
+  font-family: "Barlow Condensed", var(--qz-font-heading);
+  font-size: 30px;
+  line-height: .92;
+  letter-spacing: -.025em;
+  text-transform: uppercase;
+}
+.qz-s3-phone-screen.is-alpine-art .qz-s3-achips {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 7px;
+}
+.qz-s3-phone-screen.is-alpine-art .qz-s3-achip {
+  min-height: 58px;
+  padding: 10px;
+  border-radius: 0;
+  border: 1px solid rgba(20,35,28,.2);
+  background: transparent;
+  align-items: flex-end;
+  font-size: 11.5px;
+  font-weight: 650;
+}
+.qz-s3-phone-screen.is-alpine-art .qz-s3-addq {
+  border-radius: 0;
+  margin-top: 2px;
+}
+.qz-s3-phone-screen.is-alpine-art .qz-s3-next {
+  margin: 14px 18px 18px;
+  border-radius: 2px;
+  background: #d56a36;
+  color: #f4f0e7;
+  font-size: 11px;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+}
+.qz-s3-phone-screen.is-alpine-art[data-screen-kind="capture"],
+.qz-s3-phone-screen.is-alpine-art[data-screen-kind="reveal"] {
+  padding: 0 18px 18px;
+  background-image: none !important;
+}
+.qz-s3-phone-screen.is-alpine-art[data-screen-kind="capture"] .qz-s3-screen-top,
+.qz-s3-phone-screen.is-alpine-art[data-screen-kind="reveal"] .qz-s3-screen-top {
+  margin: 0 -18px 30px;
+  color: #f1eee5;
+  background: #17362a;
+}
+.qz-s3-phone-screen.is-alpine-art .qz-s3-reveal .qz-s3-qtitle {
+  font-size: 38px;
+}
+.qz-s3-phone-screen.is-alpine-art .qz-s3-prodcard {
+  border-radius: 0;
+  padding: 0;
+  background: transparent;
+}
+.qz-s3-phone-screen.is-alpine-art .qz-s3-prodimg {
+  height: 210px;
+  border-radius: 0;
+  background: linear-gradient(rgba(16,32,24,.25), rgba(16,32,24,.65)), url("/art-directions/alpine-afterglow/hero.webp") center/cover;
+  color: transparent;
+}
+.qz-s3-phone-screen.is-alpine-art .qz-s3-prodcta {
+  border-radius: 2px;
+  background: #d56a36;
+  color: #f4f0e7 !important;
 }
 .qz-s3-screen-top { display: flex; align-items: center; gap: 8px; flex: none; }
 .qz-s3-backpill {

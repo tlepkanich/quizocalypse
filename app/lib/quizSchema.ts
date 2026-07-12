@@ -835,6 +835,22 @@ export const DesignTokens = z
     // Back/Next + vertical product row. Absent → the runtime defaults by platform
     // (standalone → minimal, shopify → classic), so Shopify /q is untouched.
     chrome: z.enum(["classic", "minimal"]).optional(),
+    // A generated art direction ties palette, typography, composition, and
+    // imagery into one campaign world. Optional and only stamped on new
+    // decider builds, so legacy documents remain byte-identical.
+    art_direction: z
+      .object({
+        id: z.string().min(1),
+        name: z.string().min(1),
+        concept: z.string().min(1),
+        composition: z.enum([
+          "immersive_intro_split_questions_editorial_result",
+          "product_led_editorial",
+        ]),
+        hero_image_url: z.string().min(1).optional(),
+        question_image_url: z.string().min(1).optional(),
+      })
+      .optional(),
     // QP-2 — per-quiz page padding (Quizell's "Page Paddings"): the inset in px
     // from the viewport edge to the centered quiz content. Absent → the runtime's
     // default 24px (every existing quiz byte-identical via the var fallback); set →
@@ -1682,7 +1698,12 @@ export const Quiz = z.object({
         color3: z.string().max(64).optional(),
         gradient_type: z.enum(["linear", "radial"]).optional(),
         angle: z.number().int().min(0).max(360).optional(),
-        image_url: z.string().url().optional(),
+        // Project-owned generated assets are root-relative; merchant and
+        // remote assets remain absolute URLs. Runtime CSS supports both.
+        image_url: z
+          .string()
+          .refine((u) => u.startsWith("/") || URL.canParse(u), "Invalid image URL")
+          .optional(),
         video_url: z.string().url().optional(),
         poster_url: z.string().url().optional(),
         fit: z.enum(["cover", "contain", "tile"]).optional(),

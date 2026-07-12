@@ -107,16 +107,33 @@ export function PhoneCanvas({
 
   const busy = regen.regeneratingId !== null;
   const regenError = regen.regenError;
+  const artDirection = resolved.art_direction;
+  const alpine = artDirection?.id === "alpine-afterglow";
+  const artScreenStyle: CSSProperties = alpine
+    ? {
+        ...cssVars,
+        backgroundImage:
+          position.kind === "question"
+            ? `url("${artDirection.question_image_url ?? ""}")`
+            : undefined,
+      }
+    : cssVars;
 
   return (
     <section className="qz-s3-canvas">
-      <p className="qz-s3-caption">
-        <span aria-hidden>✎</span> Click any text to change the words · styling lives in
-        Design (Step 5)
+      <p className={`qz-s3-caption${alpine ? " is-art-directed" : ""}`}>
+        <span aria-hidden>{alpine ? "◆" : "✎"}</span>{" "}
+        {alpine
+          ? `Art direction · ${artDirection?.name}`
+          : "Click any text to change the words · styling lives in Design (Step 5)"}
       </p>
 
       <div className="qz-s3-phone">
-        <div className="qz-s3-phone-screen" style={cssVars}>
+        <div
+          className={`qz-s3-phone-screen${alpine ? " is-alpine-art" : ""}`}
+          data-screen-kind={position.kind}
+          style={artScreenStyle}
+        >
           {fontUrl ? <link rel="stylesheet" href={fontUrl} /> : null}
           <PhoneScreen
             doc={doc}

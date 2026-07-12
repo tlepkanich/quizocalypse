@@ -33,6 +33,9 @@ export const RuntimePlatformContext = createContext<QuizPlatform>("shopify");
 // read it via context (same seam as platform/preview/locale) — no prop drilling.
 export type ChromeVariant = "classic" | "minimal";
 export const RuntimeChromeContext = createContext<ChromeVariant>("classic");
+// Generated campaign id. Null for every pre-art-direction document, keeping
+// deep result views unaware of the feature unless a new build opts in.
+export const RuntimeArtDirectionContext = createContext<string | null>(null);
 // R6 (Rec-Page §2) — the quiz-level PERCENTAGE that ProductCard may render as a
 // struck original + accent discounted price. Set only for an unconditional
 // percentage discount (kind=percentage · applies_to=all · no minimums); null for

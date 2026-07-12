@@ -18,6 +18,7 @@ import type { stylesFor } from "../runtimeStyles";
 import { useChrome } from "../chromeStrings";
 import {
   RuntimeChromeContext,
+  RuntimeArtDirectionContext,
   RuntimeCurrencyContext,
   RuntimeLocaleContext,
   RuntimePlatformContext,
@@ -402,6 +403,7 @@ export function DeciderResultView({
   engagement?: ResolvedEngagement;
   onReset: () => void;
 }) {
+  const artDirection = useContext(RuntimeArtDirectionContext);
   const tc = useChrome();
   const isPreviewMode = useContext(RuntimePreviewContext);
   const platform = useContext(RuntimePlatformContext);
@@ -568,7 +570,10 @@ export function DeciderResultView({
   const showPersona = Boolean(persona && !headlineOverridden);
 
   return (
-    <div style={styles.card}>
+    <div
+      className={artDirection === "alpine-afterglow" ? "qz-art-result" : undefined}
+      style={styles.card}
+    >
       {cfg.incentivePos === "banner" ? incentiveChip : null}
       {showPersona && persona?.image ? (
         <img

@@ -39,6 +39,7 @@ const VARIABLE_WGHT_FAMILIES = new Set([
   "Work Sans",
   "Manrope",
   "Archivo",
+  "Barlow Condensed",
   "Syne",
   "Space Grotesk",
   "Playfair Display",

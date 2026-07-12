@@ -41,6 +41,7 @@ import { BlockRenderer, type BlockRenderCtx } from "./BlockRenderer";
 import { screenBackgroundCss, screenOverlayAlpha, screenOverlayBg, videoLayer } from "../../lib/screenBackground";
 import {
   RuntimeChromeContext,
+  RuntimeArtDirectionContext,
   RuntimeCurrencyContext,
   RuntimeDiscountContext,
   RuntimeLocaleContext,
@@ -1177,9 +1178,13 @@ export function QuizRuntime(props: QuizRuntimeProps) {
       // changes nothing. An explicit node_layouts composition takes the
       // BlockRenderer path above this branch and stays ungated — a
       // hand-composed layout is explicit merchant intent (styleBar.ts).
-      const heroImg = hideDecorativeImagery(resolved.style_bar?.image_density)
+      // A full-bleed art direction owns the intro media plane. Reusing an old
+      // node-level product hero here creates a card inside the campaign image.
+      const heroImg = resolved.art_direction
         ? undefined
-        : currentNode.data.hero_image_url;
+        : hideDecorativeImagery(resolved.style_bar?.image_density)
+          ? undefined
+          : currentNode.data.hero_image_url;
       const sideImage = introDesktop && !!heroImg;
       const headlineEl = (
         <h1
@@ -1769,18 +1774,66 @@ export function QuizRuntime(props: QuizRuntimeProps) {
     <RuntimeDiscountContext.Provider value={strikethroughPercent}>
     <RuntimePlatformContext.Provider value={platform}>
     <RuntimeChromeContext.Provider value={chromeVariant}>
+    <RuntimeArtDirectionContext.Provider value={resolved.art_direction?.id ?? null}>
     <ChromeContext.Provider value={chromeTable}>
     <RuntimeLocaleContext.Provider value={locale}>
     <RuntimeCurrencyContext.Provider value={currency}>
     <div
       ref={rootRef}
       lang={locale}
+      data-qz-art-direction={resolved.art_direction?.id}
+      data-qz-node-type={resolved.art_direction ? currentNode?.type : undefined}
       className={`${breakpoint === "desktop" ? "qz-bp-desktop" : "qz-bp-mobile"}${
         !isPreview && measuredBreakpoint === null ? " qz-unmeasured" : ""
       }`}
       style={rootStyle}
     >
       {fontUrl && <link rel="stylesheet" href={fontUrl} />}
+      {resolved.art_direction?.id === "alpine-afterglow" ? (
+        <style>{`
+          [data-qz-art-direction="alpine-afterglow"] .qz-runtime-page { min-height: 720px; }
+          [data-qz-art-direction="alpine-afterglow"][data-qz-node-type="intro"] .qz-runtime-page { align-items: flex-start !important; justify-content: flex-end !important; }
+          [data-qz-art-direction="alpine-afterglow"][data-qz-node-type="intro"] .qz-runtime-shell { width: min(1180px, 100%); margin: 0 auto; }
+          [data-qz-art-direction="alpine-afterglow"][data-qz-node-type="intro"] .qz-runtime-content { align-items: flex-start !important; }
+          [data-qz-art-direction="alpine-afterglow"][data-qz-node-type="intro"] .qz-runtime-content > div { max-width: 660px !important; padding: 0 0 54px !important; text-align: left !important; }
+          [data-qz-art-direction="alpine-afterglow"][data-qz-node-type="intro"] h1 { color: #F4F0E7 !important; font-family: "Barlow Condensed", sans-serif !important; font-weight: 700 !important; font-size: clamp(72px, 10vw, 138px) !important; line-height: .78 !important; letter-spacing: -.035em; text-transform: uppercase; max-width: 640px; }
+          [data-qz-art-direction="alpine-afterglow"][data-qz-node-type="intro"] p { color: rgba(244,240,231,.75) !important; max-width: 470px !important; margin-left: 0 !important; font-size: 16px !important; }
+          [data-qz-art-direction="alpine-afterglow"][data-qz-node-type="intro"] button { color: #F7F0E7; text-transform: uppercase; letter-spacing: .12em; font-size: 12px !important; padding: 16px 24px !important; }
+          [data-qz-art-direction="alpine-afterglow"][data-qz-node-type="message"] .qz-runtime-shell { width: min(940px, 100%); }
+          [data-qz-art-direction="alpine-afterglow"][data-qz-node-type="message"] p { color: #F1EEE5 !important; font-family: "Barlow Condensed", sans-serif !important; font-size: clamp(38px,6vw,74px) !important; line-height: .98 !important; text-transform: uppercase; }
+          [data-qz-art-direction="alpine-afterglow"][data-qz-node-type="message"] button { color: #F1EEE5; text-transform: uppercase; letter-spacing: .12em; font-size: 12px !important; }
+          [data-qz-art-direction="alpine-afterglow"][data-qz-node-type="question"] .qz-runtime-page { justify-content: center !important; }
+          [data-qz-art-direction="alpine-afterglow"][data-qz-node-type="question"] .qz-runtime-shell { width: 54%; margin-left: 46%; padding: 28px clamp(28px,5vw,78px); box-sizing: border-box; }
+          [data-qz-art-direction="alpine-afterglow"][data-qz-node-type="question"] .qz-runtime-content { align-items: stretch !important; max-width: 620px; margin: auto; }
+          [data-qz-art-direction="alpine-afterglow"][data-qz-node-type="question"] h2 { text-align: left !important; text-transform: uppercase; font-family: "Barlow Condensed", sans-serif !important; font-weight: 700 !important; font-size: clamp(38px,4vw,58px) !important; line-height: .92 !important; letter-spacing: -.025em; }
+          [data-qz-art-direction="alpine-afterglow"][data-qz-node-type="question"] .qz-answer-opt { text-align: left !important; background: transparent !important; border: 1px solid rgba(20,35,28,.22) !important; border-radius: 0 !important; }
+          [data-qz-art-direction="alpine-afterglow"][data-qz-node-type="question"] .qz-answer-opt:hover { border-color: #D56A36 !important; }
+          [data-qz-art-direction="alpine-afterglow"][data-qz-node-type="result"] .qz-runtime-shell { width: min(1180px, 100%); }
+          [data-qz-art-direction="alpine-afterglow"][data-qz-node-type="result"] .qz-runtime-content { max-width: 1120px; margin: auto; }
+          [data-qz-art-direction="alpine-afterglow"][data-qz-node-type="result"] h2 { text-transform: uppercase; font-family: "Barlow Condensed", sans-serif !important; font-weight: 700 !important; font-size: clamp(56px,7vw,96px) !important; line-height: .88 !important; }
+          [data-qz-art-direction="alpine-afterglow"][data-qz-node-type="result"] img { border-radius: 0 !important; }
+          [data-qz-art-direction="alpine-afterglow"] .qz-art-result { max-width: 1120px !important; text-align: left !important; }
+          [data-qz-art-direction="alpine-afterglow"] .qz-art-result > h2 { max-width: 620px; }
+          [data-qz-art-direction="alpine-afterglow"] .qz-art-result > p { max-width: 680px; line-height: 1.65; }
+          [data-qz-art-direction="alpine-afterglow"] .qz-art-result .qz-rev-1 { display: grid; grid-template-columns: minmax(0,1.35fr) minmax(280px,.65fr); gap: 24px; align-items: start; }
+          [data-qz-art-direction="alpine-afterglow"] .qz-art-result .qz-rev-1 > div:last-child { grid-column: 1 / -1; }
+          [data-qz-art-direction="alpine-afterglow"] .qz-art-result .qz-rev-2 { grid-template-columns: repeat(2,minmax(0,1fr)) !important; }
+          @media (max-width: 700px) {
+            [data-qz-art-direction="alpine-afterglow"] .qz-runtime-page { min-height: 680px; }
+            [data-qz-art-direction="alpine-afterglow"][data-qz-node-type="intro"] .qz-runtime-content > div { padding-bottom: 28px !important; }
+            [data-qz-art-direction="alpine-afterglow"][data-qz-node-type="intro"] h1 { font-size: clamp(58px,19vw,88px) !important; }
+            [data-qz-art-direction="alpine-afterglow"][data-qz-node-type="question"] .qz-runtime-page { background-size: 100% 38% !important; background-position: top !important; }
+            [data-qz-art-direction="alpine-afterglow"][data-qz-node-type="question"] .qz-runtime-shell { width: 100%; margin: 38vh 0 0; padding: 28px 20px; }
+            [data-qz-art-direction="alpine-afterglow"] .qz-art-result .qz-rev-1,
+            [data-qz-art-direction="alpine-afterglow"] .qz-art-result .qz-rev-2 { grid-template-columns: 1fr !important; }
+          }
+          @container (max-width: 800px) {
+            [data-qz-art-direction="alpine-afterglow"][data-qz-node-type="question"] .qz-runtime-shell { padding: 14px 20px; }
+            [data-qz-art-direction="alpine-afterglow"][data-qz-node-type="question"] h2 { font-size: 34px !important; }
+            [data-qz-art-direction="alpine-afterglow"][data-qz-node-type="question"] .qz-answer-opt { font-size: 11px !important; }
+          }
+        `}</style>
+      ) : null}
       {inspectFn ? (
         // Design-rules v4 (ported) — violet selection ring. BUILDER-ONLY: this
         // whole block is inspectFn-gated, so the storefront DOM/CSS is
@@ -2069,6 +2122,7 @@ export function QuizRuntime(props: QuizRuntimeProps) {
     </RuntimeCurrencyContext.Provider>
     </RuntimeLocaleContext.Provider>
     </ChromeContext.Provider>
+    </RuntimeArtDirectionContext.Provider>
     </RuntimeChromeContext.Provider>
     </RuntimePlatformContext.Provider>
     </RuntimeDiscountContext.Provider>
