@@ -18,15 +18,63 @@ describe("Theme presets", () => {
     expect(p?.name).toBe("Dark");
   });
 
-  it("leads with the Linen house theme (warm editorial)", () => {
+  it("leads with the Linen house theme (warm friendly)", () => {
     expect(THEME_PRESETS[0]?.id).toBe("linen");
     const p = getPreset("linen");
     expect(p?.name).toBe("Linen");
     expect(p?.tokens).toBe(HOUSE_TOKENS);
-    expect(p?.tokens.colors?.background).toBe("#F8F6F1"); // cream
-    expect(p?.tokens.colors?.accent).toBe("#E8623C"); // persimmon
-    expect(p?.tokens.typography?.heading?.family).toBe("Spectral");
-    expect(p?.tokens.typography?.body?.family).toBe("Geist");
+    expect(p?.tokens.colors?.background).toBe("#FBF4EC"); // apricot ivory
+    expect(p?.tokens.colors?.primary).toBe("#AD4B2E"); // terracotta CTA
+    expect(p?.tokens.typography?.heading?.family).toBe("Lora");
+    expect(p?.tokens.typography?.body?.family).toBe("Nunito Sans");
+  });
+
+  it("white button labels pass AA on every preset", () => {
+    // buttonStyle renders filled CTAs as white-on-primary; the friendly
+    // redesign promises that axis holds even for outline presets (whose
+    // primary doubles as border/label ink).
+    for (const preset of THEME_PRESETS) {
+      const issue = findContrastIssues(preset.tokens).find(
+        (i) => i.pair === "Primary button label on primary",
+      );
+      expect(
+        issue,
+        `Preset "${preset.id}" fails white-on-primary: ${issue?.ratio.toFixed(2)}:1`,
+      ).toBeUndefined();
+    }
+  });
+
+  it("accent-on-background passes 3:1 on every preset", () => {
+    for (const preset of THEME_PRESETS) {
+      const issue = findContrastIssues(preset.tokens).find(
+        (i) => i.pair === "Accent on background",
+      );
+      expect(
+        issue,
+        `Preset "${preset.id}" fails accent contrast: ${issue?.ratio.toFixed(2)}:1`,
+      ).toBeUndefined();
+    }
+  });
+
+  it("no preset uses a face from the AI-overused font list", () => {
+    const overused = new Set([
+      "Inter",
+      "Roboto",
+      "Fraunces",
+      "Geist",
+      "Plus Jakarta Sans",
+      "Space Grotesk",
+    ]);
+    for (const preset of THEME_PRESETS) {
+      expect(
+        overused.has(preset.tokens.typography?.heading?.family ?? ""),
+        `${preset.id} heading uses an overused face`,
+      ).toBe(false);
+      expect(
+        overused.has(preset.tokens.typography?.body?.family ?? ""),
+        `${preset.id} body uses an overused face`,
+      ).toBe(false);
+    }
   });
 
   it("getPreset returns undefined for unknown ids", () => {

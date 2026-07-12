@@ -7,7 +7,7 @@ import prisma from "../db.server";
 import { buildSeedQuiz } from "../lib/seedQuiz";
 import { buildDemoQuiz, DEMO_QUIZ_NAME } from "../lib/demoQuiz";
 import { buildTemplateQuiz, TEMPLATE_LIST, isTemplateId } from "../lib/quizTemplates";
-import { STANDALONE_MINIMAL_TOKENS } from "../lib/themePresets";
+import { HOUSE_TOKENS } from "../lib/themePresets";
 import { QzPage, QzPageHeader, QzCard, QzButton, QzField, QzInput, QzBanner } from "../components/qz";
 import { SHOW_OTHER_BUILD_PATHS } from "../lib/studioFlags";
 
@@ -94,9 +94,10 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         shopId: shop.id,
         name: name || BLANK_NAME_PLACEHOLDER[xtype],
         status: "draft",
-        // Standalone quizzes default to the minimal "Quizell" theme (the minimal
-        // chrome reads B&W); merchants can re-theme per quiz in the Theme panel.
-        draftJson: { ...buildSeedQuiz(name, xtype), design_tokens: STANDALONE_MINIMAL_TOKENS } as never,
+        // Standalone quizzes default to the warm Linen house theme (the
+        // best-looking preset per the 2026-07 side-by-side render pass);
+        // merchants can re-theme per quiz in the Theme panel.
+        draftJson: { ...buildSeedQuiz(name, xtype), design_tokens: HOUSE_TOKENS } as never,
       },
     });
     return redirect(`/studio/${quiz.id}?step=1`);
@@ -109,13 +110,13 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     }
     const { doc, name } = buildTemplateQuiz(templateId, fb);
     const quiz = await prisma.quiz.create({
-      // Minimal "Quizell" theme over the template's structure (questions/results
-      // stay; only the palette/typography flips to clean B&W).
+      // Linen house theme over the template's structure (questions/results
+      // stay; only the palette/typography flips to the house look).
       data: {
         shopId: shop.id,
         name,
         status: "draft",
-        draftJson: { ...doc, design_tokens: STANDALONE_MINIMAL_TOKENS } as never,
+        draftJson: { ...doc, design_tokens: HOUSE_TOKENS } as never,
       },
     });
     return redirect(`/studio/${quiz.id}?step=1`);

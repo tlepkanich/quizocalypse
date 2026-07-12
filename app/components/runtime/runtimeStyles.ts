@@ -19,10 +19,40 @@ const SYSTEM_FONTS = new Set([
   "Courier New",
 ]);
 
+// Families verified as Google VARIABLE fonts whose wght axis covers 400–700
+// (checked against css2 2026-07). For these we request the real weight range,
+// so 500/600/700 headings render true faces instead of browser-synthesized
+// bold. Unknown families keep the plain 400-only request on purpose: one bad
+// weight spec 400s the ENTIRE css2 response and every font on the page.
+const VARIABLE_WGHT_FAMILIES = new Set([
+  "Lora",
+  "Nunito Sans",
+  "Outfit",
+  "Newsreader",
+  "Source Sans 3",
+  "Bricolage Grotesque",
+  "Schibsted Grotesk",
+  "Quicksand",
+  "Karla",
+  "Sora",
+  "Figtree",
+  "Work Sans",
+  "Manrope",
+  "Archivo",
+  "Syne",
+  "Space Grotesk",
+  "Playfair Display",
+]);
+
 export function googleFontsUrl(families: string[]): string | null {
-  const params = families
+  const params = [...new Set(families)]
     .filter((f) => f && !SYSTEM_FONTS.has(f))
-    .map((f) => `family=${encodeURIComponent(f).replace(/%20/g, "+")}`);
+    .map((f) => {
+      const enc = encodeURIComponent(f).replace(/%20/g, "+");
+      return VARIABLE_WGHT_FAMILIES.has(f)
+        ? `family=${enc}:wght@400..700`
+        : `family=${enc}`;
+    });
   if (params.length === 0) return null;
   return `https://fonts.googleapis.com/css2?${params.join("&")}&display=swap`;
 }

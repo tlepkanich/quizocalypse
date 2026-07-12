@@ -12,13 +12,15 @@ export interface CuratedFont {
 }
 
 export const CURATED_FONTS: CuratedFont[] = [
-  // Serif (5)
+  // Serif (6)
   { family: "Playfair Display", category: "serif" },
   { family: "Lora", category: "serif" },
   { family: "Spectral", category: "serif" },
   { family: "Fraunces", category: "serif" },
   { family: "Cormorant Garamond", category: "serif" },
-  // Sans-serif (8)
+  { family: "Newsreader", category: "serif" },
+  // Sans-serif (15 — includes every family the friendly theme presets ship,
+  // so a preset's faces stay re-selectable in the typography dropdowns)
   { family: "Inter", category: "sans" },
   { family: "Geist", category: "sans" },
   { family: "Poppins", category: "sans" },
@@ -27,6 +29,13 @@ export const CURATED_FONTS: CuratedFont[] = [
   { family: "Manrope", category: "sans" },
   { family: "Space Grotesk", category: "sans" },
   { family: "Figtree", category: "sans" },
+  { family: "Nunito Sans", category: "sans" },
+  { family: "Outfit", category: "sans" },
+  { family: "Karla", category: "sans" },
+  { family: "Source Sans 3", category: "sans" },
+  { family: "Schibsted Grotesk", category: "sans" },
+  { family: "Quicksand", category: "sans" },
+  { family: "Sora", category: "sans" },
   // Display (4)
   { family: "Archivo", category: "display" },
   { family: "Bricolage Grotesque", category: "display" },

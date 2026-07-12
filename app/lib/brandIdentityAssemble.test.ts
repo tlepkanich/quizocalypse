@@ -56,18 +56,19 @@ describe("BrandIdentityDraft (AI-facing shape)", () => {
 
 describe("reconcileDesignTokens (preset palette + real brand colors)", () => {
   it("overlays brand primary/secondary onto the preset, preserving the rest", () => {
-    // Linen's known palette: bg #F8F6F1, accent #E8623C, primary #1B1A17.
+    // Linen's known palette (2026-07 friendly redesign): bg #FBF4EC,
+    // accent #C05B2E, primary #AD4B2E.
     const t = reconcileDesignTokens("linen", { primary: "#123456", secondary: "#abcdef" });
     expect(t.colors?.primary).toBe("#123456"); // brand wins
     expect(t.colors?.secondary).toBe("#abcdef"); // brand wins
-    expect(t.colors?.background).toBe("#F8F6F1"); // preset preserved
-    expect(t.colors?.accent).toBe("#E8623C"); // preset preserved
+    expect(t.colors?.background).toBe("#FBF4EC"); // preset preserved
+    expect(t.colors?.accent).toBe("#C05B2E"); // preset preserved
     expect(t.typography).toBeTruthy(); // preset base carried through
   });
 
   it("uses the preset palette untouched when no brand colors", () => {
     const t = reconcileDesignTokens("linen");
-    expect(t.colors?.primary).toBe("#1B1A17");
+    expect(t.colors?.primary).toBe("#AD4B2E");
   });
 });
 

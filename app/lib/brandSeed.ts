@@ -12,7 +12,7 @@
 // docs" posture).
 import type { BrandIdentity } from "./brandIdentity";
 import type { DesignTokensT } from "./designTokens";
-import { HOUSE_TOKENS } from "./themePresets";
+import { HOUSE_TOKENS, LEGACY_HOUSE_TOKENS } from "./themePresets";
 
 // The synthetic template id stamped on brand-seeded tokens. It is NOT a
 // THEME_PRESETS id — it exists only so the Design-stage selector can show a
@@ -54,5 +54,8 @@ export function brandSeedTokens(identity: BrandIdentity | null): DesignTokensT |
  */
 export function isUntouchedHouseTokens(tokens: DesignTokensT | null | undefined): boolean {
   if (!tokens || tokens.template_id) return false;
-  return stableStringify(tokens) === stableStringify(HOUSE_TOKENS);
+  const s = stableStringify(tokens);
+  // Drafts seeded before the 2026-07 friendly redesign carry the old house
+  // pack — they are just as "untouched" as a fresh seed, so match both.
+  return s === stableStringify(HOUSE_TOKENS) || s === stableStringify(LEGACY_HOUSE_TOKENS);
 }

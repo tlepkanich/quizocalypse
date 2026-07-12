@@ -47,7 +47,10 @@ describe("/studio — admin, never framed", () => {
     expect(csp).toContain("default-src 'self'");
     expect(csp).toContain("frame-ancestors 'none'");
     expect(csp).toContain("img-src 'self' data: https:");
-    expect(csp).toContain("font-src 'self' data:");
+    // Merchant quiz fonts preview from Google Fonts in the builder canvas —
+    // the CSS origin in style-src, the font files in font-src, nothing wider.
+    expect(csp).toContain("style-src 'self' 'unsafe-inline' https://fonts.googleapis.com");
+    expect(csp).toContain("font-src 'self' data: https://fonts.gstatic.com");
   });
 });
 

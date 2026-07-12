@@ -23,14 +23,19 @@
 
 // Remix streams HTML with inline hydration scripts and React uses inline
 // style attributes, hence 'unsafe-inline' in both script-src and style-src.
-// Product imagery is served from Shopify's CDN (img-src https:); fonts are
-// self-hosted (font-src 'self', data: for inline glyph fallbacks).
+// Product imagery is served from Shopify's CDN (img-src https:); the ADMIN
+// CHROME's fonts are self-hosted (font-src 'self', data: for inline glyph
+// fallbacks) — but the builder canvas previews MERCHANT quiz fonts, which
+// load from Google Fonts (googleFontsUrl → fonts.googleapis.com CSS →
+// fonts.gstatic.com files). Without those two origins every canvas heading
+// silently fell back to Times, so the builder could never show a quiz's real
+// typography. Allow exactly that origin pair, nothing wider.
 const STUDIO_DIRECTIVES: readonly string[] = [
   "default-src 'self'",
   "script-src 'self' 'unsafe-inline'",
-  "style-src 'self' 'unsafe-inline'",
+  "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
   "img-src 'self' data: https:",
-  "font-src 'self' data:",
+  "font-src 'self' data: https://fonts.gstatic.com",
   "connect-src 'self' https:",
   "frame-ancestors 'none'",
 ];
@@ -40,9 +45,9 @@ const STUDIO_DIRECTIVES: readonly string[] = [
 const APP_DIRECTIVES: readonly string[] = [
   "default-src 'self'",
   "script-src 'self' 'unsafe-inline' https://cdn.shopify.com",
-  "style-src 'self' 'unsafe-inline'",
+  "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
   "img-src 'self' data: https:",
-  "font-src 'self' data:",
+  "font-src 'self' data: https://fonts.gstatic.com",
   "connect-src 'self' https:",
 ];
 
