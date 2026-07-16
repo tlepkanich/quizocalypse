@@ -66,6 +66,10 @@ import { EmailGateView } from "./views/EmailGateView";
 import { AskAIView } from "./views/AskAIView";
 import { IntegrationView } from "./views/IntegrationView";
 import { ProductCardsView } from "./views/ProductCardsView";
+import {
+  ALPINE_ART_DIRECTION_CSS,
+  GENERATED_ART_DIRECTION_CSS,
+} from "./runtimeArtDirection";
 
 // Inspect types are re-exported so existing importers (the builder workspace,
 // Step5Preview) keep their `from "../runtime/QuizRuntime"` imports unchanged.
@@ -668,11 +672,6 @@ export function QuizRuntime(props: QuizRuntimeProps) {
   // and the fluid type's cqw units both measure against it.
   const rootStyle: React.CSSProperties = {
     ...cssVars,
-    ...(resolved.art_direction
-      ? ({
-          "--qz-art-motif-x": `${resolved.art_direction.motif_offset ?? 50}%`,
-        } as React.CSSProperties)
-      : {}),
     containerType: "inline-size",
     position: "relative", // anchor the QB-5 "Build with" badge (standalone only)
     // E3 takeover: hosted /q fills the viewport in the theme background so
@@ -1796,94 +1795,9 @@ export function QuizRuntime(props: QuizRuntimeProps) {
       style={rootStyle}
     >
       {fontUrl && <link rel="stylesheet" href={fontUrl} />}
-      {resolved.art_direction ? (
-        <style>{`
-          [data-qz-art-direction]:not([data-qz-art-direction="alpine-afterglow"]) .qz-runtime-page { min-height: 680px; position: relative; overflow: hidden; }
-          [data-qz-art-direction]:not([data-qz-art-direction="alpine-afterglow"]) .qz-runtime-shell { position: relative; z-index: 1; width: min(1040px,100%); }
-          [data-qz-art-direction]:not([data-qz-art-direction="alpine-afterglow"]) .qz-runtime-content { align-items: stretch !important; }
-          [data-qz-art-direction]:not([data-qz-art-direction="alpine-afterglow"]) h1,
-          [data-qz-art-direction]:not([data-qz-art-direction="alpine-afterglow"]) h2 { letter-spacing: -.035em; text-wrap: balance; }
-          [data-qz-art-direction]:not([data-qz-art-direction="alpine-afterglow"])[data-qz-node-type="question"] h2 { text-align: left !important; font-size: clamp(34px,4.4vw,62px) !important; line-height: .98 !important; max-width: 760px; }
-          [data-qz-art-direction]:not([data-qz-art-direction="alpine-afterglow"]) .qz-answer-opt { text-align: left !important; transition: border-color 180ms ease-out, background-color 180ms ease-out, color 180ms ease-out; }
-          [data-qz-art-direction]:not([data-qz-art-direction="alpine-afterglow"]) .qz-answer-opt:hover { border-color: var(--qz-color-primary) !important; }
-          [data-qz-art-direction]:not([data-qz-art-direction="alpine-afterglow"])[data-qz-node-type="message"] h1,
-          [data-qz-art-direction]:not([data-qz-art-direction="alpine-afterglow"])[data-qz-node-type="message"] h2,
-          [data-qz-art-direction]:not([data-qz-art-direction="alpine-afterglow"])[data-qz-node-type="message"] p { color: #FFF !important; }
-          [data-qz-art-direction]:not([data-qz-art-direction="alpine-afterglow"])[data-qz-art-treatment="ruled"] .qz-runtime-page { background-image: repeating-linear-gradient(0deg, transparent 0 31px, color-mix(in srgb, var(--qz-color-text) 8%, transparent) 32px) !important; }
-          [data-qz-art-direction]:not([data-qz-art-direction="alpine-afterglow"])[data-qz-art-treatment="corner_block"] .qz-runtime-page::before { content: ""; position: absolute; top: 0; bottom: 0; left: var(--qz-art-motif-x); width: clamp(52px,13vw,180px); background: color-mix(in srgb, var(--qz-color-primary) 13%, transparent); pointer-events: none; }
-          [data-qz-art-direction]:not([data-qz-art-direction="alpine-afterglow"])[data-qz-art-treatment="bands"] .qz-runtime-page { background-image: linear-gradient(112deg, transparent 0 67%, color-mix(in srgb, var(--qz-color-primary) 9%, transparent) 67% 84%, transparent 84%) !important; }
-          [data-qz-art-composition="poster_grid"][data-qz-node-type="intro"] .qz-runtime-page { background: var(--qz-color-primary) !important; justify-content: flex-end !important; }
-          [data-qz-art-composition="poster_grid"][data-qz-node-type="intro"] .qz-runtime-content > div { max-width: 920px !important; padding-bottom: 44px !important; text-align: left !important; }
-          [data-qz-art-composition="poster_grid"][data-qz-node-type="intro"] h1 { color: #FFF !important; font-size: clamp(64px,9vw,124px) !important; line-height: .84 !important; text-transform: uppercase; }
-          [data-qz-art-composition="poster_grid"][data-qz-node-type="intro"] p { color: color-mix(in srgb,#FFF 78%,transparent) !important; max-width: 520px !important; margin-left: 0 !important; }
-          [data-qz-art-composition="poster_grid"][data-qz-node-type="intro"] button { background: #FFF !important; color: var(--qz-color-primary) !important; }
-          [data-qz-art-composition="poster_grid"][data-qz-node-type="question"] .qz-runtime-content { max-width: 900px; margin: auto; }
-          [data-qz-art-composition="field_guide"][data-qz-node-type="intro"] .qz-runtime-content > div { max-width: 820px !important; text-align: left !important; }
-          [data-qz-art-composition="field_guide"][data-qz-node-type="intro"] h1 { font-size: clamp(58px,8vw,104px) !important; line-height: .9 !important; }
-          [data-qz-art-composition="field_guide"][data-qz-node-type="intro"] p { max-width: 540px !important; margin-left: 0 !important; }
-          [data-qz-art-composition="field_guide"][data-qz-node-type="question"] h2 { border-top: 2px solid var(--qz-color-primary); padding-top: 18px; }
-          [data-qz-art-composition="field_guide"][data-qz-node-type="question"] .qz-runtime-content { max-width: 820px; margin: auto; }
-          [data-qz-art-composition="quiet_form"] .qz-runtime-shell { width: min(760px,100%) !important; }
-          [data-qz-art-composition="quiet_form"][data-qz-node-type="intro"] .qz-runtime-content > div { max-width: 660px !important; }
-          [data-qz-art-composition="quiet_form"][data-qz-node-type="intro"] h1 { font-size: clamp(48px,7vw,82px) !important; line-height: .94 !important; }
-          [data-qz-art-composition="quiet_form"][data-qz-node-type="question"] h2 { font-size: clamp(32px,4vw,50px) !important; }
-          [data-qz-art-composition="product_led_editorial"][data-qz-node-type="intro"] .qz-runtime-content > div { max-width: 880px !important; margin-left: 0 !important; text-align: left !important; }
-          [data-qz-art-composition="product_led_editorial"][data-qz-node-type="intro"] h1 { font-size: clamp(62px,8vw,112px) !important; line-height: .88 !important; max-width: 820px; }
-          [data-qz-art-composition="product_led_editorial"][data-qz-node-type="intro"] p { max-width: 520px !important; margin-left: 0 !important; }
-          [data-qz-art-direction]:not([data-qz-art-direction="alpine-afterglow"]) .qz-art-result { max-width: 1080px !important; text-align: left !important; }
-          [data-qz-art-direction]:not([data-qz-art-direction="alpine-afterglow"]) .qz-art-result > h2 { font-size: clamp(48px,6vw,84px) !important; line-height: .92 !important; max-width: 760px; }
-          @media (max-width: 700px) {
-            [data-qz-art-direction]:not([data-qz-art-direction="alpine-afterglow"]) .qz-runtime-page { min-height: 620px; }
-            [data-qz-art-direction]:not([data-qz-art-direction="alpine-afterglow"])[data-qz-node-type="intro"] .qz-runtime-content > div { padding-bottom: 20px !important; }
-            [data-qz-art-direction]:not([data-qz-art-direction="alpine-afterglow"])[data-qz-node-type="intro"] h1 { font-size: clamp(48px,15vw,72px) !important; }
-            [data-qz-art-direction]:not([data-qz-art-direction="alpine-afterglow"])[data-qz-node-type="question"] h2 { font-size: 34px !important; }
-          }
-        `}</style>
-      ) : null}
+      {resolved.art_direction ? <style>{GENERATED_ART_DIRECTION_CSS}</style> : null}
       {resolved.art_direction?.id === "alpine-afterglow" ? (
-        <style>{`
-          [data-qz-art-direction="alpine-afterglow"] .qz-runtime-page { min-height: 720px; }
-          [data-qz-art-direction="alpine-afterglow"][data-qz-node-type="intro"] .qz-runtime-page { align-items: flex-start !important; justify-content: flex-end !important; }
-          [data-qz-art-direction="alpine-afterglow"][data-qz-node-type="intro"] .qz-runtime-shell { width: min(1180px, 100%); margin: 0 auto; }
-          [data-qz-art-direction="alpine-afterglow"][data-qz-node-type="intro"] .qz-runtime-content { align-items: flex-start !important; }
-          [data-qz-art-direction="alpine-afterglow"][data-qz-node-type="intro"] .qz-runtime-content > div { max-width: 660px !important; padding: 0 0 54px !important; text-align: left !important; }
-          [data-qz-art-direction="alpine-afterglow"][data-qz-node-type="intro"] h1 { color: #F4F0E7 !important; font-family: "Barlow Condensed", sans-serif !important; font-weight: 700 !important; font-size: clamp(72px, 10vw, 138px) !important; line-height: .78 !important; letter-spacing: -.035em; text-transform: uppercase; max-width: 640px; }
-          [data-qz-art-direction="alpine-afterglow"][data-qz-node-type="intro"] p { color: rgba(244,240,231,.75) !important; max-width: 470px !important; margin-left: 0 !important; font-size: 16px !important; }
-          [data-qz-art-direction="alpine-afterglow"][data-qz-node-type="intro"] button { color: #F7F0E7; text-transform: uppercase; letter-spacing: .12em; font-size: 12px !important; padding: 16px 24px !important; }
-          [data-qz-art-direction="alpine-afterglow"][data-qz-node-type="message"] .qz-runtime-shell { width: min(940px, 100%); }
-          [data-qz-art-direction="alpine-afterglow"][data-qz-node-type="message"] p { color: #F1EEE5 !important; font-family: "Barlow Condensed", sans-serif !important; font-size: clamp(38px,6vw,74px) !important; line-height: .98 !important; text-transform: uppercase; }
-          [data-qz-art-direction="alpine-afterglow"][data-qz-node-type="message"] button { color: #F1EEE5; text-transform: uppercase; letter-spacing: .12em; font-size: 12px !important; }
-          [data-qz-art-direction="alpine-afterglow"][data-qz-node-type="question"] .qz-runtime-page { justify-content: center !important; }
-          [data-qz-art-direction="alpine-afterglow"][data-qz-node-type="question"] .qz-runtime-shell { width: 54%; margin-left: 46%; padding: 28px clamp(28px,5vw,78px); box-sizing: border-box; }
-          [data-qz-art-direction="alpine-afterglow"][data-qz-node-type="question"] .qz-runtime-content { align-items: stretch !important; max-width: 620px; margin: auto; }
-          [data-qz-art-direction="alpine-afterglow"][data-qz-node-type="question"] h2 { text-align: left !important; text-transform: uppercase; font-family: "Barlow Condensed", sans-serif !important; font-weight: 700 !important; font-size: clamp(38px,4vw,58px) !important; line-height: .92 !important; letter-spacing: -.025em; }
-          [data-qz-art-direction="alpine-afterglow"][data-qz-node-type="question"] .qz-answer-opt { text-align: left !important; background: transparent !important; border: 1px solid rgba(20,35,28,.22) !important; border-radius: 0 !important; }
-          [data-qz-art-direction="alpine-afterglow"][data-qz-node-type="question"] .qz-answer-opt:hover { border-color: var(--qz-color-primary) !important; }
-          [data-qz-art-direction="alpine-afterglow"][data-qz-node-type="result"] .qz-runtime-shell { width: min(1180px, 100%); }
-          [data-qz-art-direction="alpine-afterglow"][data-qz-node-type="result"] .qz-runtime-content { max-width: 1120px; margin: auto; }
-          [data-qz-art-direction="alpine-afterglow"][data-qz-node-type="result"] h2 { text-transform: uppercase; font-family: "Barlow Condensed", sans-serif !important; font-weight: 700 !important; font-size: clamp(56px,7vw,96px) !important; line-height: .88 !important; }
-          [data-qz-art-direction="alpine-afterglow"][data-qz-node-type="result"] img { border-radius: 0 !important; }
-          [data-qz-art-direction="alpine-afterglow"] .qz-art-result { max-width: 1120px !important; text-align: left !important; }
-          [data-qz-art-direction="alpine-afterglow"] .qz-art-result > h2 { max-width: 620px; }
-          [data-qz-art-direction="alpine-afterglow"] .qz-art-result > p { max-width: 680px; line-height: 1.65; }
-          [data-qz-art-direction="alpine-afterglow"] .qz-art-result .qz-rev-1 { display: grid; grid-template-columns: minmax(0,1.35fr) minmax(280px,.65fr); gap: 24px; align-items: start; }
-          [data-qz-art-direction="alpine-afterglow"] .qz-art-result .qz-rev-1 > div:last-child { grid-column: 1 / -1; }
-          [data-qz-art-direction="alpine-afterglow"] .qz-art-result .qz-rev-2 { grid-template-columns: repeat(2,minmax(0,1fr)) !important; }
-          @media (max-width: 700px) {
-            [data-qz-art-direction="alpine-afterglow"] .qz-runtime-page { min-height: 680px; }
-            [data-qz-art-direction="alpine-afterglow"][data-qz-node-type="intro"] .qz-runtime-content > div { padding-bottom: 28px !important; }
-            [data-qz-art-direction="alpine-afterglow"][data-qz-node-type="intro"] h1 { font-size: clamp(58px,19vw,88px) !important; }
-            [data-qz-art-direction="alpine-afterglow"][data-qz-node-type="question"] .qz-runtime-page { background-size: 100% 38% !important; background-position: top !important; }
-            [data-qz-art-direction="alpine-afterglow"][data-qz-node-type="question"] .qz-runtime-shell { width: 100%; margin: 38vh 0 0; padding: 28px 20px; }
-            [data-qz-art-direction="alpine-afterglow"] .qz-art-result .qz-rev-1,
-            [data-qz-art-direction="alpine-afterglow"] .qz-art-result .qz-rev-2 { grid-template-columns: 1fr !important; }
-          }
-          @container (max-width: 800px) {
-            [data-qz-art-direction="alpine-afterglow"][data-qz-node-type="question"] .qz-runtime-shell { padding: 14px 20px; }
-            [data-qz-art-direction="alpine-afterglow"][data-qz-node-type="question"] h2 { font-size: 34px !important; }
-            [data-qz-art-direction="alpine-afterglow"][data-qz-node-type="question"] .qz-answer-opt { font-size: 11px !important; }
-          }
-        `}</style>
+        <style>{ALPINE_ART_DIRECTION_CSS}</style>
       ) : null}
       {inspectFn ? (
         // Design-rules v4 (ported) — violet selection ring. BUILDER-ONLY: this

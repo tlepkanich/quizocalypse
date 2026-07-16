@@ -55,11 +55,18 @@ describe("applyGeneratedArtDirection", () => {
     expect(out.design_tokens.typography?.heading?.family).toBe("Barlow Condensed");
     expect(findContrastIssues(out.design_tokens)).toEqual([]);
     const intro = out.nodes.find((node) => node.type === "intro");
-    expect(intro && out.node_backgrounds?.[intro.id]?.image_url).toContain("hero.webp");
+    const introBackground = intro ? out.node_backgrounds?.[intro.id] : undefined;
+    expect(introBackground).toMatchObject({
+      type: "partial",
+      band: "right",
+      coverage: 50,
+      overlay: 0,
+    });
+    expect(introBackground?.image_url).toContain("hero.webp");
     expect(Quiz.safeParse(out).success).toBe(true);
   });
 
-  it("varies the alpine crop and accent by quiz id without changing its campaign family", () => {
+  it("varies the alpine accent by quiz id without changing its split campaign family", () => {
     const doc = decider("Find your board");
     const first = applyGeneratedArtDirection(doc, [{ title: "Snowboard" }], {
       quizId: "alpine-sibling-001",
@@ -72,9 +79,8 @@ describe("applyGeneratedArtDirection", () => {
     expect(sibling.design_tokens.art_direction?.seed).not.toBe(
       first.design_tokens.art_direction?.seed,
     );
-    expect(sibling.node_backgrounds?.intro?.focal_x).not.toBe(
-      first.node_backgrounds?.intro?.focal_x,
-    );
+    expect(sibling.design_tokens.colors?.primary).not.toBe(first.design_tokens.colors?.primary);
+    expect(sibling.node_backgrounds?.intro).toEqual(first.node_backgrounds?.intro);
   });
 
   it.each(EXPERIENCES)("art-directs the %s experience", (experience) => {
@@ -134,16 +140,52 @@ describe("applyGeneratedArtDirection", () => {
     const question = out.nodes.find((node) => node.type === "question");
 
     expect(question?.data.answer_display).toBeDefined();
+    expect(question?.data.answer_display?.label_position).toBe("below");
+    expect(question?.data.answers.every((answer) => Boolean(answer.image_url))).toBe(true);
     if (
       question &&
       (questionType === "image_tile" || questionType === "image_picker" || questionType === "swatch")
     ) {
-      expect(question.data.answers.every((answer) => Boolean(answer.image_url))).toBe(true);
       expect(question.data.answer_display?.show_media).toBe(true);
     } else if (question) {
-      expect(question.data.answers.every((answer) => answer.image_url === undefined)).toBe(true);
+      expect(question.data.answer_display?.show_media).toBe(false);
     }
     expect(Quiz.safeParse(out).success).toBe(true);
+  });
+
+  it("uses only solid generated screen planes and preserves source media data", () => {
+    for (let i = 0; i < 80; i += 1) {
+      const out = applyGeneratedArtDirection(decider(`Plane ${i}`, EXPERIENCES[i % 4]), [], {
+        quizId: `quiz-plane-${i}`,
+      });
+      expect(Object.values(out.node_backgrounds ?? {}).every((background) => background.type === "color")).toBe(
+        true,
+      );
+      expect(Object.values(out.node_backgrounds ?? {}).every((background) => (background.overlay ?? 0) === 0)).toBe(
+        true,
+      );
+    }
+  });
+
+  it("avoids saturated generator-font defaults", () => {
+    const banned = new Set([
+      "Inter",
+      "Roboto",
+      "Fraunces",
+      "Geist",
+      "Plus Jakarta Sans",
+      "Space Grotesk",
+      "Outfit",
+      "Newsreader",
+      "Syne",
+    ]);
+    for (let i = 0; i < 120; i += 1) {
+      const out = applyGeneratedArtDirection(decider(`Type ${i}`), [], {
+        quizId: `quiz-font-${i}`,
+      });
+      expect(banned.has(out.design_tokens.typography?.heading?.family ?? "")).toBe(false);
+      expect(banned.has(out.design_tokens.typography?.body?.family ?? "")).toBe(false);
+    }
   });
 
   it("ignores a pure preset copy even when the identity has brand provenance", () => {

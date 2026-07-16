@@ -132,7 +132,7 @@ const PALETTES: readonly Palette[] = [
 ] as const;
 
 const TYPE_PAIRS: readonly TypePair[] = [
-  { heading: "Outfit", body: "Manrope", headingWeight: 650, scale: 1.28 },
+  { heading: "Spectral", body: "Karla", headingWeight: 600, scale: 1.28 },
   {
     heading: "Bricolage Grotesque",
     body: "Schibsted Grotesk",
@@ -140,9 +140,9 @@ const TYPE_PAIRS: readonly TypePair[] = [
     scale: 1.26,
   },
   { heading: "Sora", body: "Figtree", headingWeight: 650, scale: 1.24 },
-  { heading: "Syne", body: "Manrope", headingWeight: 650, scale: 1.3 },
   { heading: "Archivo", body: "Work Sans", headingWeight: 650, scale: 1.24 },
-  { heading: "Newsreader", body: "Source Sans 3", headingWeight: 600, scale: 1.32 },
+  { heading: "Unbounded", body: "Manrope", headingWeight: 600, scale: 1.24 },
+  { heading: "Quicksand", body: "Karla", headingWeight: 650, scale: 1.24 },
 ] as const;
 
 const COMPOSITIONS: Record<ExperienceType, readonly Composition[]> = {
@@ -260,15 +260,7 @@ function backgroundForNode(
   questionIndex: number,
 ): NonNullable<Quiz["node_backgrounds"]>[string] {
   if (node.type === "message") return { type: "color", color: palette.primary };
-  if (node.type === "intro" && treatment === "bands") {
-    return {
-      type: "gradient",
-      color: palette.background,
-      color2: palette.surface,
-      angle: 112,
-    };
-  }
-  if (node.type === "intro" && treatment === "corner_block") {
+  if (node.type === "intro" && (treatment === "corner_block" || treatment === "ruled")) {
     return { type: "color", color: palette.surface };
   }
   if (node.type === "question" && questionIndex % 2 === 1) {
@@ -288,11 +280,11 @@ function applyAlpineDirection(doc: Quiz, hash: number): Quiz {
 
   if (intro) {
     nodeBackgrounds[intro.id] = {
-      type: "image",
+      type: "partial",
       image_url: ALPINE_HERO,
-      fit: "cover",
-      focal_x: 60 + (hash % 17),
-      focal_y: 50,
+      fill_color: "#17362A",
+      band: "right",
+      coverage: 50,
       overlay: 0,
     };
   }
@@ -321,12 +313,6 @@ function applyAlpineDirection(doc: Quiz, hash: number): Quiz {
       data: {
         ...node.data,
         image_url: undefined,
-        answers: node.data.answers.map((answer) => {
-          const clean = { ...answer };
-          delete clean.image_url;
-          delete clean.reveal_image;
-          return clean;
-        }),
         answer_display: answerDisplayFor(node.data.question_type, "ruled"),
       },
     };
@@ -368,7 +354,6 @@ function applyAlpineDirection(doc: Quiz, hash: number): Quiz {
         composition: "immersive_intro_split_questions_editorial_result",
         background_treatment: "solid",
         seed,
-        motif_offset: 60 + (hash % 17),
         hero_image_url: ALPINE_HERO,
         question_image_url: ALPINE_CARVE,
       },
@@ -403,7 +388,6 @@ export function applyGeneratedArtDirection(
   const palette = paletteWithRealBrandSignal(basePalette, context?.brandIdentity);
   const typePair = pick(TYPE_PAIRS, hash, 19);
   const seed = hash.toString(16).padStart(8, "0");
-  const motifOffset = 12 + (hash % 77);
   const nodeBackgrounds: NonNullable<Quiz["node_backgrounds"]> = {
     ...(doc.node_backgrounds ?? {}),
   };
@@ -418,20 +402,10 @@ export function applyGeneratedArtDirection(
       return { ...node, data: { ...node.data, hero_image_url: undefined } };
     }
     if (node.type !== "question") return node;
-    const preserveMedia = CARD_MEDIA_TYPES.has(node.data.question_type);
     return {
       ...node,
       data: {
         ...node.data,
-        ...(preserveMedia ? {} : { image_url: undefined }),
-        answers: preserveMedia
-          ? node.data.answers
-          : node.data.answers.map((answer) => {
-              const clean = { ...answer };
-              delete clean.image_url;
-              delete clean.reveal_image;
-              return clean;
-            }),
         answer_display: answerDisplayFor(node.data.question_type, treatment),
       },
     };
@@ -469,24 +443,23 @@ export function applyGeneratedArtDirection(
       id: `${composition}-${basePalette.id}`,
       name:
         composition === "poster_grid"
-          ? "Signal Poster"
+          ? "Campaign Focus"
           : composition === "quiet_form"
             ? "Quiet Invitation"
             : composition === "field_guide"
-              ? "Field Notes"
-              : "Object Study",
+              ? "Open Sequence"
+              : "Product Focus",
       concept:
         composition === "poster_grid"
-          ? "A confident campaign poster softened by practical, tactile choices."
+          ? "One committed color and a clear reading path with no decorative layer between the shopper and the action."
           : composition === "quiet_form"
             ? "A calm invitation with deliberate pacing and almost no visual noise."
             : composition === "field_guide"
-              ? "An annotated field guide: useful, human, and quietly structured."
-              : "A product-editorial study with offset type and generous negative space.",
+              ? "An open, readable sequence that uses spacing and proportion instead of ornamental rules."
+              : "A product-led composition with a direct hierarchy and generous negative space.",
       composition,
       background_treatment: treatment,
       seed,
-      motif_offset: motifOffset,
     },
   };
   if (findContrastIssues(tokens).length > 0) {
