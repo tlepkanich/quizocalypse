@@ -846,7 +846,18 @@ export const DesignTokens = z
         composition: z.enum([
           "immersive_intro_split_questions_editorial_result",
           "product_led_editorial",
+          "poster_grid",
+          "quiet_form",
+          "field_guide",
         ]),
+        // Deterministic recipe metadata. The runtime consumes only these
+        // optional fields on newly generated decider docs; older campaigns and
+        // every legacy document keep their existing DOM and styling path.
+        background_treatment: z
+          .enum(["solid", "ruled", "corner_block", "bands"])
+          .optional(),
+        seed: z.string().min(1).optional(),
+        motif_offset: z.number().int().min(0).max(100).optional(),
         hero_image_url: z.string().min(1).optional(),
         question_image_url: z.string().min(1).optional(),
       })

@@ -571,7 +571,7 @@ export function DeciderResultView({
 
   return (
     <div
-      className={artDirection === "alpine-afterglow" ? "qz-art-result" : undefined}
+      className={artDirection ? "qz-art-result" : undefined}
       style={styles.card}
     >
       {cfg.incentivePos === "banner" ? incentiveChip : null}

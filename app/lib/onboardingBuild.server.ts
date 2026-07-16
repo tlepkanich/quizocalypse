@@ -415,7 +415,10 @@ export async function runAiOnboardingBuild(
   // unrelated theme choices. The selector is conservative and leaves
   // unsupported catalogs untouched until a vetted direction exists.
   const finalDoc = decider
-    ? applyGeneratedArtDirection(configuredDoc, allProducts)
+    ? applyGeneratedArtDirection(configuredDoc, allProducts, {
+        quizId,
+        brandIdentity: parseBrandIdentitySafe(shop?.brandIdentity),
+      })
     : configuredDoc;
   await prisma.quiz.update({ where: { id: quizId }, data: { draftJson: finalDoc as never } });
   return { quizId };
