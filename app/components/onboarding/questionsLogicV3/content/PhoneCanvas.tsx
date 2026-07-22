@@ -14,6 +14,7 @@ import { answersExceedBudget } from "../fitSteps";
 import { CAPTURE_ID, REVEAL_ID } from "../LeftRail";
 import type { RegenApi } from "../Step3Shell";
 import { PhoneScreen, type ScreenPosition } from "./PhoneScreen";
+import { TypeChipSelector } from "./TypeChipSelector";
 
 /* quiz-step3 v3 §4 — the Content view's phone canvas: the persistent caption
    pill, a 322px ink-bezel phone whose screen is brand-themed by inlining
@@ -99,12 +100,6 @@ export function PhoneCanvas({
     !isFreeformType(activeQuestion.data.question_type) &&
     answersExceedBudget(activeQuestion.data.answers.length);
 
-  // The phone's "brand" line — the intro headline is the closest on-doc voice
-  // (the real storefront shows the shop brand; the canvas is a preview).
-  const introNode = doc.nodes.find((n) => n.type === "intro");
-  const brandName =
-    (introNode?.type === "intro" ? introNode.data.headline : "") || "Preview";
-
   const busy = regen.regeneratingId !== null;
   const regenError = regen.regenError;
   const artDirection = resolved.art_direction;
@@ -121,38 +116,49 @@ export function PhoneCanvas({
 
   return (
     <section className="qz-s3-canvas">
-      <p className={`qz-s3-caption${alpine ? " is-art-directed" : ""}`}>
-        <span aria-hidden>{alpine ? "◆" : "✎"}</span>{" "}
-        {alpine
-          ? `Art direction · ${artDirection?.name}`
-          : "Click any text to change the words · styling lives in Design (Step 5)"}
-      </p>
+      {/* questions-full-page mock — no caption pill above the phone (the edit
+          hint lives in the sub-header). The art-direction caption stays: it is
+          functional provenance for stamped docs. */}
+      {alpine ? (
+        <p className="qz-s3-caption is-art-directed">
+          <span aria-hidden>◆</span> Art direction · {artDirection?.name}
+        </p>
+      ) : null}
 
-      <div className="qz-s3-phone">
-        <div
-          className={`qz-s3-phone-screen${alpine ? " is-alpine-art" : ""}`}
-          data-screen-kind={position.kind}
-          style={artScreenStyle}
-        >
-          {fontUrl ? <link rel="stylesheet" href={fontUrl} /> : null}
-          <PhoneScreen
-            doc={doc}
-            position={position}
-            totalQuestions={questions.length}
-            brandName={brandName}
-            progress={positions.length > 1 ? (posIndex + 1) / positions.length : 1}
-            canBack={posIndex > 0}
-            onBack={() => onNavigate(positions[posIndex - 1] ?? positions[0]!)}
-            onNext={() =>
-              onNavigate(positions[posIndex + 1] ?? positions[positions.length - 1]!)
-            }
-            onRestart={() => onNavigate(positions[0]!)}
-            ctaText={ctaText}
-            sectionVars={sectionVars}
-            onCommit={onCommit}
-            onNavigate={onNavigate}
-          />
+      <div className="qz-s3-phoneholder">
+        <div className="qz-s3-phone">
+          <div
+            className={`qz-s3-phone-screen${alpine ? " is-alpine-art" : ""}`}
+            data-screen-kind={position.kind}
+            style={artScreenStyle}
+          >
+            {fontUrl ? <link rel="stylesheet" href={fontUrl} /> : null}
+            <PhoneScreen
+              doc={doc}
+              position={position}
+              stepLabel={`${posIndex + 1}/${positions.length}`}
+              progress={positions.length > 1 ? (posIndex + 1) / positions.length : 1}
+              canBack={posIndex > 0}
+              onBack={() => onNavigate(positions[posIndex - 1] ?? positions[0]!)}
+              onNext={() =>
+                onNavigate(positions[posIndex + 1] ?? positions[positions.length - 1]!)
+              }
+              onRestart={() => onNavigate(positions[0]!)}
+              ctaText={ctaText}
+              sectionVars={sectionVars}
+              onCommit={onCommit}
+              onNavigate={onNavigate}
+            />
+          </div>
         </div>
+        {/* The mock's floating type tag at the phone's right — the SAME
+            TypeChipSelector (native select + decider guards), relocated out
+            of the phone. Question screens only. */}
+        {activeQuestion ? (
+          <div className="qz-s3-typetag">
+            <TypeChipSelector doc={doc} node={activeQuestion} onCommit={onCommit} />
+          </div>
+        ) : null}
       </div>
 
       {answersOverBudget ? (

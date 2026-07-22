@@ -7,7 +7,6 @@ import { insertQuestionRelative, removeAnswer } from "../../../../lib/quizMutati
 import { resolveRecPageGlobal } from "../../../../lib/recommendDecider";
 import { computeFitStep, isTitleLong } from "../fitSteps";
 import { EditableText } from "./EditableText";
-import { TypeChipSelector } from "./TypeChipSelector";
 
 /* quiz-step3 v3 §4 — the phone SCREEN contents (inside the brand-themed
    bezel): top chrome (‹ Back pill · brand line · progress bar), then one of
@@ -32,14 +31,12 @@ const ANSWER_MAX = 60;
 function QuestionSurface({
   doc,
   question,
-  totalQuestions,
   sectionVars,
   onCommit,
   onNavigate,
 }: {
   doc: QuizDoc;
   question: OrderedQuestion;
-  totalQuestions: number;
   /** The active question's section color (decider = gold), from sectionPalette. */
   sectionVars: { color: string; wash: string } | null;
   onCommit: (doc: QuizDoc) => void;
@@ -86,12 +83,9 @@ function QuestionSurface({
           : undefined
       }
     >
-      <div className="qz-s3-kickerrow">
-        <span className="qz-s3-kicker">
-          QUESTION {qIndex} OF {totalQuestions}
-        </span>
-        <TypeChipSelector doc={doc} node={node} onCommit={onCommit} />
-      </div>
+      {/* questions-full-page mock — the type moved OUT of the phone (the
+          floating tag beside the frame); the step counter lives in the top
+          bar. No in-phone kicker row. */}
       <h2 className="qz-s3-qtitle">
         <EditableText
           value={node.data.text}
@@ -226,8 +220,7 @@ function CaptureSurface({
 export function PhoneScreen({
   doc,
   position,
-  totalQuestions,
-  brandName,
+  stepLabel,
   progress,
   canBack,
   onBack,
@@ -240,8 +233,8 @@ export function PhoneScreen({
 }: {
   doc: QuizDoc;
   position: ScreenPosition;
-  totalQuestions: number;
-  brandName: string;
+  /** The top-bar step counter, e.g. "1/7" (mock stepn). */
+  stepLabel: string;
   /** 0..1 fill of the top progress bar. */
   progress: number;
   canBack: boolean;
@@ -259,6 +252,7 @@ export function PhoneScreen({
   const global = doc.rec_page_settings?.global;
   return (
     <>
+      {/* Mock top bar: back · full-width progress · step counter. */}
       <div className="qz-s3-screen-top">
         <button
           type="button"
@@ -268,17 +262,16 @@ export function PhoneScreen({
         >
           ‹ Back
         </button>
-        <span className="qz-s3-brandname">{brandName}</span>
         <span className="qz-s3-progressbar" aria-hidden>
           <span style={{ transform: `scaleX(${progress})` }} />
         </span>
+        <span className="qz-s3-kicker">{stepLabel}</span>
       </div>
 
       {position.kind === "question" ? (
         <QuestionSurface
           doc={doc}
           question={position.question}
-          totalQuestions={totalQuestions}
           sectionVars={sectionVars}
           onCommit={onCommit}
           onNavigate={onNavigate}

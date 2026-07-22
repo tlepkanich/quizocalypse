@@ -4009,11 +4009,16 @@ textarea.qz-sm-inp { resize: vertical; min-height: 62px; line-height: 1.5; }
 .qz-s3-contentview { display: flex; flex-direction: column; gap: 12px; }
 .qz-s3-subhead--questions { padding: 0 2px; }
 .qz-s3-subhint { margin-left: auto; color: var(--qz-ink-4); font-size: 12px; }
+/* questions-full-page mock — one bordered panel: navigator column + phone
+   column, hairline between them. */
 .qz-s3-body {
   display: grid;
-  grid-template-columns: 268px minmax(0, 1fr);
-  gap: var(--qz-space-5);
-  align-items: start;
+  grid-template-columns: 304px minmax(340px, 1fr);
+  border: 1px solid var(--qz-rule);
+  border-radius: 14px;
+  overflow: hidden;
+  align-items: stretch;
+  min-height: 600px;
 }
 
 /* — top-bar right-zone bits — */
@@ -4076,57 +4081,73 @@ textarea.qz-sm-inp { resize: vertical; min-height: 62px; line-height: 1.5; }
 
 /* — left rail (§3): view toggle · flow rows · termini · footer — */
 .qz-s3-rail {
-  display: flex; flex-direction: column; gap: 12px;
-  padding: 14px;
+  display: flex; flex-direction: column;
   background: var(--qz-paper);
-  border-radius: var(--qz-radius);
-  box-shadow: var(--qz-lift-1);
-  position: sticky; top: 92px;
-  max-height: calc(100vh - 130px);
+  border-right: 1px solid var(--qz-rule-2);
+  min-width: 0; overflow: hidden;
 }
+/* Mock qtabs: cream track, white active with accent-ink + a whisper of shadow
+   (replaces the earlier gold-wash active — the gold stays on decider marks). */
 .qz-s3-viewtoggle {
-  display: flex; gap: 4px; padding: 4px;
-  border-radius: var(--qz-radius-pill);
+  display: inline-flex; gap: 0; padding: 3px;
+  border-radius: 10px;
   background: var(--qz-cream-2);
 }
 .qz-s3-viewtoggle button {
-  flex: 1; padding: 7px 10px;
-  border: none; border-radius: var(--qz-radius-pill);
+  flex: none; padding: 7px 15px;
+  border: none; border-radius: 8px;
   background: transparent; cursor: pointer;
-  font: inherit; font-size: 12.5px; font-weight: 600; color: var(--qz-ink-3);
+  font: inherit; font-size: 13px; font-weight: 600; color: var(--qz-ink-4);
   transition: background var(--qz-dur-fast) var(--qz-ease), color var(--qz-dur-fast) var(--qz-ease);
 }
 .qz-s3-viewtoggle button[aria-pressed="true"] {
-  background: var(--qz-gold-wash);
-  color: var(--qz-gold);
-  box-shadow: inset 0 0 0 1px var(--qz-gold-line);
+  background: var(--qz-paper);
+  color: var(--qz-accent-ink);
+  box-shadow: 0 1px 2px color-mix(in srgb, var(--qz-accent) 12%, transparent);
 }
-
+/* Mock navhd — the FLOW kicker (ink-4 over the mock's ink-25: a11y). */
+.qz-s3-navhd {
+  font: 600 9px/1.2 var(--qz-font-mono);
+  text-transform: uppercase; letter-spacing: .06em; color: var(--qz-ink-4);
+  padding: 11px 13px 8px;
+  border-bottom: 1px solid var(--qz-rule-2);
+}
 .qz-s3-flow {
   position: relative;
-  display: flex; flex-direction: column; gap: 6px;
+  display: flex; flex-direction: column; gap: 0;
   flex: 1 1 auto; min-height: 0; overflow-y: auto;
-  padding: 2px;
-}
-/* the 1.5px vertical connector, behind the number chips */
-.qz-s3-flow::before {
-  content: ""; position: absolute;
-  left: 22px; top: 18px; bottom: 18px; width: 1.5px;
-  background: var(--qz-rule);
+  padding: 0;
 }
 .qz-s3-row {
-  position: relative;
-  display: flex; align-items: flex-start; gap: 10px;
-  padding: 7px 8px;
-  border: none; border-radius: 10px; background: transparent;
+  position: relative; width: 100%;
+  display: flex; align-items: flex-start; gap: 9px;
+  padding: 10px 13px;
+  border: none; border-bottom: 1px solid var(--qz-rule-2); border-radius: 0;
+  background: transparent;
   text-align: left; cursor: pointer; font: inherit; color: var(--qz-ink);
 }
-.qz-s3-row:hover { background: var(--qz-cream-2); }
-.qz-s3-row.is-active { background: var(--qz-accent-wash); }
+.qz-s3-row:hover { background: color-mix(in srgb, var(--qz-accent) 2%, var(--qz-paper)); }
+.qz-s3-row.is-active { background: var(--qz-accent-tint); box-shadow: inset 2.5px 0 0 var(--qz-accent); }
 /* QZY-3 — termini rows navigate now (the capture screen is a full step). */
-.qz-s3-row.is-terminus { cursor: pointer; color: var(--qz-ink-3); width: 100%; }
-.qz-s3-row.is-terminus:hover { background: var(--qz-cream-2); }
-.qz-s3-row.is-terminus.is-active { background: var(--qz-accent-wash); }
+.qz-s3-row.is-terminus { cursor: pointer; color: var(--qz-ink-3); }
+.qz-s3-row.is-terminus:hover { background: color-mix(in srgb, var(--qz-accent) 2%, var(--qz-paper)); }
+.qz-s3-row.is-terminus.is-active { background: var(--qz-accent-tint); box-shadow: inset 2.5px 0 0 var(--qz-accent); }
+.qz-s3-rowmid { min-width: 0; flex: 1; display: flex; flex-direction: column; }
+.qz-s3-rowtype {
+  font: 600 8.5px/1.2 var(--qz-font-mono);
+  text-transform: uppercase; color: var(--qz-ink-4);
+  margin-top: 3px;
+}
+.qz-s3-mv { display: inline-flex; flex-direction: column; gap: 2px; flex: none; opacity: .55; transition: opacity .12s; }
+.qz-s3-row:hover .qz-s3-mv, .qz-s3-row.is-active .qz-s3-mv { opacity: 1; }
+.qz-s3-mvb {
+  width: 19px; height: 14px; padding: 0;
+  border: 1px solid var(--qz-rule); background: var(--qz-paper); border-radius: 4px;
+  display: grid; place-items: center; cursor: pointer;
+  color: var(--qz-ink-4); font-size: 9px; line-height: 1; font-family: inherit;
+}
+.qz-s3-mvb:hover:not(:disabled) { background: var(--qz-accent-tint); border-color: var(--qz-accent-wash); color: var(--qz-accent-ink); }
+.qz-s3-mvb:disabled { opacity: .3; cursor: default; }
 .qz-s3-numchip {
   position: relative; z-index: 1; flex: none;
   width: 26px; height: 26px;
@@ -4140,17 +4161,33 @@ textarea.qz-sm-inp { resize: vertical; min-height: 62px; line-height: 1.5; }
 .qz-s3-numchip.is-capture { background: var(--qz-accent-wash); color: var(--qz-accent); box-shadow: none; }
 .qz-s3-numchip.is-reveal { background: var(--qz-gold-wash); color: var(--qz-gold); box-shadow: inset 0 0 0 1px var(--qz-gold-line); }
 .qz-s3-rowtitle {
-  padding-top: 4px;
-  font-size: 13px; line-height: 1.35; min-width: 0;
+  padding-top: 2px;
+  font-size: 12.5px; font-weight: 600; line-height: 1.32; min-width: 0;
   display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
 }
 .qz-s3-railfoot {
-  display: flex; flex-direction: column; align-items: flex-start; gap: 2px;
-  padding-top: 10px; border-top: 1px solid var(--qz-rule);
+  display: flex; flex-direction: column; align-items: stretch; gap: 0;
+  border-top: 1px solid var(--qz-rule-2);
 }
+.qz-s3-navadd {
+  border: none; background: transparent;
+  color: var(--qz-accent-ink); font-size: 12.5px; font-weight: 500;
+  padding: 11px 14px; cursor: pointer; font-family: inherit;
+  width: 100%; text-align: left;
+}
+.qz-s3-navadd:hover { background: var(--qz-accent-tint); }
+.qz-s3-navadd.is-quiet { color: var(--qz-ink-4); padding-top: 0; }
 
-/* — content view: caption pill · 322px ink-bezel phone · regenerate chip — */
-.qz-s3-canvas { display: flex; flex-direction: column; align-items: center; gap: 14px; }
+/* — content view: the phone column (mock phonecol) + floating type tag — */
+.qz-s3-canvas {
+  display: flex; flex-direction: column; align-items: center; gap: 12px;
+  background: color-mix(in srgb, var(--qz-accent) 1.5%, var(--qz-paper));
+  padding: 18px 16px 22px;
+  min-width: 0;
+}
+.qz-s3-phoneholder { position: relative; }
+.qz-s3-typetag { position: absolute; top: 16px; left: calc(100% + 14px); z-index: 6; }
+@media (max-width: 1240px) { .qz-s3-typetag { position: static; margin-top: 10px; display: flex; justify-content: center; } }
 .qz-s3-caption {
   margin: 0;
   display: inline-flex; align-items: center; gap: 7px;
@@ -4293,13 +4330,9 @@ textarea.qz-sm-inp { resize: vertical; min-height: 62px; line-height: 1.5; }
   color: inherit; font: inherit; font-size: 11.5px; font-weight: 600; cursor: pointer;
 }
 .qz-s3-backpill:disabled { opacity: 0.35; cursor: default; }
-.qz-s3-brandname {
-  flex: 1 1 auto; min-width: 0; text-align: center;
-  font-size: 11.5px; font-weight: 700; letter-spacing: 0.04em;
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-}
+/* Mock top bar: the progress bar spans the row (back · bar · counter). */
 .qz-s3-progressbar {
-  flex: 0 0 52px; height: 4px; border-radius: 2px; overflow: hidden;
+  flex: 1 1 auto; min-width: 0; height: 5px; border-radius: 999px; overflow: hidden;
   background: color-mix(in srgb, currentColor 12%, transparent);
 }
 .qz-s3-progressbar > span {
@@ -4311,9 +4344,9 @@ textarea.qz-sm-inp { resize: vertical; min-height: 62px; line-height: 1.5; }
 
 .qz-s3-qbody { display: flex; flex-direction: column; gap: 12px; flex: 1 1 auto; min-height: 0; overflow: hidden; }
 .qz-s3-kickerrow { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex: none; }
+/* The top-bar step counter ("1/7" — the mock's stepn). */
 .qz-s3-kicker {
-  font-family: var(--qz-font-mono); font-size: 10px; font-weight: 600;
-  letter-spacing: 0.08em; color: var(--qz-accent);
+  flex: none; font-size: 11px; font-weight: 700; opacity: .7;
 }
 .qz-s3-typechip {
   flex: none;
@@ -4483,15 +4516,27 @@ body[data-qz] .qz-s3-editable:focus-visible {
 .qz-s3-editable:empty::before { content: "…"; opacity: 0.4; }
 
 /* — P2: the type chip as a real dropdown — inherits the chip skin. — */
+/* Mock floating type tag: a white pill beside the phone (still the native
+   select — decider guards + dialogs unchanged). */
 .qz-s3-typechip.is-select {
   appearance: none; -webkit-appearance: none;
-  border: none; margin: 0;
-  color: inherit; font-family: inherit;
-  cursor: pointer;
-  max-width: 46%;
-  text-overflow: ellipsis; white-space: nowrap; overflow: hidden;
+  margin: 0; cursor: pointer;
+  display: inline-flex; align-items: center;
+  white-space: nowrap; text-overflow: ellipsis; overflow: hidden;
+  max-width: 200px;
+  background: var(--qz-paper);
+  border: 1px solid var(--qz-rule); border-radius: 999px;
+  padding: 6px 26px 6px 12px;
+  font-family: inherit; font-size: 12px; font-weight: 600;
+  color: var(--qz-accent-ink);
+  letter-spacing: 0; text-transform: none; opacity: 1;
+  box-shadow: 0 3px 10px rgba(60, 50, 90, .13);
+  background-image: linear-gradient(45deg, transparent 50%, var(--qz-ink-25) 50%), linear-gradient(135deg, var(--qz-ink-25) 50%, transparent 50%);
+  background-position: calc(100% - 15px) 55%, calc(100% - 11px) 55%;
+  background-size: 4px 4px, 4px 4px;
+  background-repeat: no-repeat;
 }
-.qz-s3-typechip.is-select:hover { opacity: 1; }
+.qz-s3-typechip.is-select:hover { border-color: color-mix(in srgb, var(--qz-accent) 32%, var(--qz-paper)); }
 .qz-s3-typechip.is-select:focus-visible {
   outline: 2px solid var(--sec-color, var(--qz-accent)); outline-offset: 1px;
 }

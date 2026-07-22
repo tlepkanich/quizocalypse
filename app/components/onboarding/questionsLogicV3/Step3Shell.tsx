@@ -3,7 +3,7 @@ import type { Quiz as QuizDoc, DesignTokens } from "../../../lib/quizSchema";
 import type { BuilderCategory, BuilderCollection } from "../../builder/stepProps";
 import type { IndexedProduct } from "../../../lib/recommendationEngine";
 import { buildTier1Report, type Tier1Link } from "../../../lib/pathReport";
-import { insertQuestionRelative } from "../../../lib/quizMutations";
+import { insertQuestionRelative, moveStep } from "../../../lib/quizMutations";
 import { orderedQuestions, deciderQuestion } from "../../../lib/questionOrder";
 import { QuestionBankDrawer } from "../../studio/QuestionBankDrawer";
 import { TopBar3 } from "./TopBar3";
@@ -126,6 +126,25 @@ export function Step3Shell({
     }
   }, [doc, questions, onCommit, view]);
 
+  // questions-full-page mock — the navigator's ↑/↓ movers, via the pure
+  // moveStep mutation (rebuilds the straight-through chain; branch/lane edges
+  // untouched). Up = before the previous question; down = before the one two
+  // ahead (or the run end).
+  const moveQuestion = useCallback(
+    (id: string, dir: -1 | 1) => {
+      const idx = questions.findIndex((q) => q.node.id === id);
+      if (idx < 0) return;
+      const beforeId =
+        dir === -1
+          ? questions[idx - 1]?.node.id ?? null
+          : questions[idx + 2]?.node.id ?? null;
+      if (dir === -1 && idx === 0) return;
+      if (dir === 1 && idx === questions.length - 1) return;
+      onCommit(moveStep(doc, id, beforeId));
+    },
+    [doc, questions, onCommit],
+  );
+
   // P4 tri-state Continue — Content: pure view switch (no server intent);
   // Logic + healthy: the stage's existing to-rec-page intent; Logic +
   // blocking: open the health popover instead of advancing. The gate is the
@@ -213,10 +232,10 @@ export function Step3Shell({
         <div className="qz-s3-contentview">
           <div className="qz-s3-subhead qz-s3-subhead--questions">
             <div className="qz-s3-viewtoggle" role="group" aria-label="Questions or Overview view">
-              <button type="button" aria-pressed onClick={() => setView("content")}>Questions</button>
-              <button type="button" aria-pressed={false} onClick={() => setView("logic")}>Overview</button>
+              <button type="button" aria-pressed onClick={() => setView("content")}>✎ Questions</button>
+              <button type="button" aria-pressed={false} onClick={() => setView("logic")}>▦ Overview</button>
             </div>
-            <span className="qz-s3-subhint">Click any text on the preview to edit it</span>
+            <span className="qz-s3-subhint">Click any text on the phone to edit it</span>
             <button type="button" className="qz-btn qz-btn-accent qz-btn-sm" onClick={addQuestion}>+ Add</button>
           </div>
         <div className="qz-s3-body">
@@ -226,6 +245,7 @@ export function Step3Shell({
             activeId={activeId}
             captureOn={captureOn}
             onSelect={(id) => setSelectedId(id)}
+            onMove={moveQuestion}
             onAddQuestion={addQuestion}
             onOpenLibrary={() => setLibraryOpen(true)}
           />
@@ -250,10 +270,10 @@ export function Step3Shell({
           <div className="qz-s3-subhead">
             <div className="qz-s3-viewtoggle" role="group" aria-label="Questions or Overview view">
               <button type="button" aria-pressed={false} onClick={() => setView("content")}>
-                Questions
+                ✎ Questions
               </button>
               <button type="button" aria-pressed onClick={() => setView("logic")}>
-                Overview
+                ▦ Overview
               </button>
             </div>
             <button
