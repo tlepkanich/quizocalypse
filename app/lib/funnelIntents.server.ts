@@ -517,6 +517,24 @@ async function runStep1FunnelActionImpl(
         { status: 400 },
       );
     }
+    // Goal-brief fields (start-modal-flow mock) — optional sharpeners. Audience
+    // + factors fold into the stored goal text (it IS the brief, and every goal
+    // consumer — prompts, prefills — should see the whole thing). Length pins
+    // the synthetic type's question_range to an exact count, which the template
+    // pass reads as its question-count instruction. Absent fields (the Shape
+    // page's plain write-your-goal card sends none) keep today's behavior.
+    const audience = String(form.get("audience") ?? "").trim().slice(0, 200);
+    const factors = String(form.get("factors") ?? "").trim().slice(0, 200);
+    const lengthRaw = Number(form.get("length"));
+    const questionLength =
+      Number.isInteger(lengthRaw) && lengthRaw >= 3 && lengthRaw <= 7 ? lengthRaw : null;
+    const goalBrief = [
+      goal,
+      audience ? `Audience: ${audience}` : "",
+      factors ? `Deciding factors: ${factors}` : "",
+    ]
+      .filter(Boolean)
+      .join("\n");
     // LOGIC v2 (L2-10d) — decider drafts are always direct; legacy keeps the
     // weighted default (the merchant can switch later in the Question Builder).
     const scoring =
@@ -543,14 +561,16 @@ async function runStep1FunnelActionImpl(
       experience_type: "product_match",
       name: "Your goal",
       achieves: goal.slice(0, 160),
-      question_range: { min: 4, max: 7 },
+      question_range: questionLength
+        ? { min: questionLength, max: questionLength }
+        : { min: 4, max: 7 },
     });
     const struggle = session.goal?.struggle_text ?? "";
     const tabDim = session.bucket_browser?.active_tab;
     const next: BuildSession = {
       ...session,
       stage: "templating",
-      goal: { goal_text: goal, struggle_text: struggle },
+      goal: { goal_text: goalBrief, struggle_text: struggle },
       gen_error: undefined,
       // When fired from the modal at the Recommendations step, the grouping
       // bookkeeping continue-buckets would have written hasn't happened yet.
@@ -583,7 +603,9 @@ async function runStep1FunnelActionImpl(
       quiz.id,
       syntheticType,
       {
-        goal,
+        // The FULL brief (goal + audience + factors) — the generation prompt
+        // should see everything the merchant wrote, same as session.goal.
+        goal: goalBrief,
         ...(struggle ? { struggle } : {}),
         ...(cats.length ? { buckets: cats } : {}),
       },

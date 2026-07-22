@@ -85,6 +85,7 @@ export function QzModal({
   open,
   onClose,
   size = "sm",
+  width,
   title,
   icon,
   footer,
@@ -96,6 +97,9 @@ export function QzModal({
   onClose: () => void;
   /** sm = 440 confirm · md = 640 content · lg = 880 editor */
   size?: "sm" | "md" | "lg";
+  /** Exact-width override in px (a mock-specified modal, e.g. the start
+      modal's 560). Wins over the size class; still capped to the viewport. */
+  width?: number;
   title?: ReactNode;
   /** Optional 44px role-colored icon tile above the title. */
   icon?: ReactNode;
@@ -130,6 +134,7 @@ export function QzModal({
       <div
         ref={boxRef}
         className={`qz-modal qz-modal--${size}`}
+        style={width ? { width: `min(${width}px, 100%)` } : undefined}
         role={destructive ? "alertdialog" : "dialog"}
         aria-modal="true"
         aria-labelledby={title ? labelId : undefined}

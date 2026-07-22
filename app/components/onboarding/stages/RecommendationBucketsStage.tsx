@@ -6,7 +6,7 @@ import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties, KeyboardEvent as ReactKeyboardEvent } from "react";
 import { Link } from "@remix-run/react";
 import type { useFetcher } from "@remix-run/react";
-import { Box, Check, FolderOpen, PencilLine, Play, RotateCcw, Sparkles, Tag, X } from "lucide-react";
+import { Box, Check, FolderOpen, Play, RotateCcw, Sparkles, Tag, X } from "lucide-react";
 import { QzCard, QzBadge, QzInput, QzTooltip } from "../../qz";
 import { QzModal, QzDrawer } from "../../qz-overlays";
 import type { DesignTokens } from "../../../lib/quizSchema";
@@ -14,7 +14,6 @@ import type { BucketSuggestion } from "../../../lib/bucketDetect";
 import { resolveDesignTokens, tokensToCssVars, suggestContrastText } from "../../../lib/designTokens";
 import { googleFontsUrl } from "../../runtime/runtimeStyles";
 import {
-  GoalPromptBody,
   type ActionResult,
   type BucketType,
   type FunnelData,
@@ -36,11 +35,19 @@ type BucketCard = {
 
 const idOf = (type: BucketType, key: string) => `${type}:${key}`;
 
+// Mock tab labels (step1-final-page): terse — "Products", not "Individual
+// products". SUB_LABEL is the per-row type line the mock shows under the name
+// on the non-leaf tabs.
 const TAB_META: Array<{ type: BucketType; label: string }> = [
-  { type: "product", label: "Individual products" },
+  { type: "product", label: "Products" },
   { type: "tag", label: "Tags" },
   { type: "collection", label: "Collections" },
 ];
+const SUB_LABEL: Record<BucketType, string | null> = {
+  product: null,
+  tag: "Tag",
+  collection: "Collection",
+};
 
 const TYPE_BADGE: Record<BucketType, "draft" | "ok" | "warn"> = {
   product: "draft",
@@ -414,11 +421,11 @@ export function RecommendationBucketsStage({
           />
           <button
             type="button"
-            className="qz-btn qz-btn-ghost qz-btn-sm"
+            className="qz-rb-selall"
             onClick={allVisibleOn ? clearVisible : selectAllVisible}
             disabled={visible.length === 0}
           >
-            {allVisibleOn ? "Clear visible" : `Select all (${visible.length})`}
+            {allVisibleOn ? "Clear visible" : "Select all"}
           </button>
         </div>
 
@@ -448,13 +455,19 @@ export function RecommendationBucketsStage({
                   </span>
                   <span className="qz-rb-card-body">
                     <span className="qz-rb-card-name">{c.name}</span>
-                    {activeTab === "product" ? (
-                      <span className="qz-rb-card-meta qz-dim">
-                        {price != null ? `$${price.toFixed(2)}` : "—"}
-                      </span>
+                    {SUB_LABEL[activeTab] ? (
+                      <span className="qz-rb-card-sub">{SUB_LABEL[activeTab]}</span>
                     ) : null}
                   </span>
-                  {activeTab !== "product" ? (
+                  {/* Mock row order: name · spacer · selcheck · count-pill/price. */}
+                  <span className={`qz-rb-check${on ? " is-on" : ""}`} aria-hidden>
+                    {on ? <Check size={12} strokeWidth={2.8} /> : null}
+                  </span>
+                  {activeTab === "product" ? (
+                    <span className="qz-rb-pricetag">
+                      {price != null ? `$${price.toFixed(2)}` : "—"}
+                    </span>
+                  ) : (
                     <span
                       role="button"
                       tabIndex={0}
@@ -472,10 +485,7 @@ export function RecommendationBucketsStage({
                     >
                       {c.count} product{c.count === 1 ? "" : "s"} <span aria-hidden>→</span>
                     </span>
-                  ) : null}
-                  <span className={`qz-rb-check${on ? " is-on" : ""}`} aria-hidden>
-                    {on ? <Check size={12} strokeWidth={2.8} /> : null}
-                  </span>
+                  )}
                 </button>
               );
             })}
@@ -515,9 +525,13 @@ export function RecommendationBucketsStage({
             </span>
           </div>
           {count === 0 ? (
-            <div className="qz-rb-empty qz-dim">
-              Nothing added yet — pick {activeLabel.toLowerCase()} on the left to see them
-              appear here.
+            <div className="qz-rb-rail-empty">
+              <div className="qz-rb-rail-empty-ic" aria-hidden>🗂️</div>
+              <p>
+                Nothing added yet — click{" "}
+                {activeTab === "product" ? "a product" : activeTab === "tag" ? "a tag" : "a collection"}{" "}
+                to add it.
+              </p>
             </div>
           ) : (
             <div className="qz-rb-rail-list">
@@ -636,9 +650,18 @@ export function RecommendationBucketsStage({
             setInterceptOpen(false);
             fetcher.submit({ intent: "continue-buckets" }, { method: "post" });
           }}
-          onGoalBuild={(goal) => {
+          onGoalBuild={(brief) => {
             setInterceptOpen(false);
-            fetcher.submit({ intent: "shape-goal-build", goal }, { method: "post" });
+            fetcher.submit(
+              {
+                intent: "shape-goal-build",
+                goal: brief.goal,
+                audience: brief.audience,
+                factors: brief.factors,
+                length: String(brief.length),
+              },
+              { method: "post" },
+            );
           }}
           onManual={() => {
             setInterceptOpen(false);
@@ -703,10 +726,16 @@ function BucketProductsModal({
   );
 }
 
-// Start-routing spec §1.1 — the intercept modal: two primary choices side by
-// side + one quiet tertiary. The AI choice carries the "Fastest" badge; the
-// write-a-goal input lives IN the modal (the spec's own recommendation — one
-// navigation, never a trapped state). Esc/scrim closes with nothing changed.
+// Step-1 start modal (start-modal-flow.html mock, EXACT). Screen 1: three
+// stacked TITLE-ONLY rows — Generate with AI (primary: accent border + tint,
+// pulsing ✦ tile, mono RECOMMENDED tag), Write your goal (✎), Start from
+// blank (▢) — each with a trailing arrow. Screen 2: the goal-brief — ← Back,
+// "Describe what your quiz should do", the "Your brief" tracker (one segment
+// bar + dashed-circle→check chip per field; chips focus their field; count
+// reads "N of 4 complete"), Goal / Audience / Deciding factors / Length, and
+// a footer whose note narrates readiness. Generate needs goal (≥ minGoalChars)
+// + a length; audience/factors are optional sharpeners. Esc/scrim closes with
+// nothing changed.
 function StartInterceptModal({
   suggestedGoal,
   minGoalChars,
@@ -718,75 +747,179 @@ function StartInterceptModal({
   suggestedGoal: string;
   minGoalChars: number;
   onAiTemplates: () => void;
-  onGoalBuild: (goal: string) => void;
+  onGoalBuild: (brief: { goal: string; audience: string; factors: string; length: number }) => void;
   onManual: () => void;
   onClose: () => void;
 }) {
   const [screen, setScreen] = useState<"choose" | "goal">("choose");
+  const [goal, setGoal] = useState("");
+  const [audience, setAudience] = useState("");
+  const [factors, setFactors] = useState("");
+  const [length, setLength] = useState<number | null>(null);
+  const goalRef = useRef<HTMLTextAreaElement>(null);
+  const audRef = useRef<HTMLInputElement>(null);
+  const facRef = useRef<HTMLInputElement>(null);
+  const segRef = useRef<HTMLDivElement>(null);
+
+  const goalOk = goal.trim().length >= minGoalChars;
+  const audOk = audience.trim().length > 2;
+  const facOk = factors.trim().length > 2;
+  const lenOk = length !== null;
+  const done = [goalOk, audOk, facOk, lenOk].filter(Boolean).length;
+  const ready = goalOk && lenOk;
+  const note = !ready
+    ? "Add your goal and pick a length"
+    : done < 4
+      ? "Optional — but the rest sharpens the questions"
+      : "Ready to generate";
+
+  const tracker = [
+    { key: "goal", label: "Goal", ok: goalOk, focus: () => goalRef.current?.focus() },
+    { key: "aud", label: "Audience", ok: audOk, focus: () => audRef.current?.focus() },
+    { key: "fac", label: "Factors", ok: facOk, focus: () => facRef.current?.focus() },
+    {
+      key: "len",
+      label: "Length",
+      ok: lenOk,
+      focus: () => segRef.current?.scrollIntoView({ block: "center", behavior: "smooth" }),
+    },
+  ];
+
   return (
-    <QzModal
-      open
-      onClose={onClose}
-      size="md"
-      title={
-        screen === "choose"
-          ? "How do you want to start?"
-          : "Describe what you want your quiz to do"
-      }
-    >
+    // Mock modal envelope: min(560px, 100%) — narrower than the DS md (640).
+    <QzModal open onClose={onClose} size="md" width={560}>
       {screen === "choose" ? (
-        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-          <span className="qz-dim" style={{ fontSize: 13 }}>
-            Your recommendations are set — pick how to build the quiz itself.
-          </span>
-          <div className="qz-start-choices">
-            <button type="button" className="qz-start-choice is-ai" onClick={onAiTemplates}>
-              <span className="qz-start-choice-icon" aria-hidden><Sparkles size={20} /></span>
-              <span className="qz-start-choice-copy">
-                <strong>Generate with AI</strong>
-                <span className="qz-dim">
-                  Get two tailored directions built from your catalog, then choose the one that fits.
-                </span>
-              </span>
-              <QzBadge tone="ok">Recommended</QzBadge>
-              <span className="qz-start-choice-arrow" aria-hidden>→</span>
+        <>
+          <h2 className="qz-sm-title">How do you want to start?</h2>
+          <div className="qz-sm-rows">
+            <button type="button" className="qz-sm-row is-pri" onClick={onAiTemplates}>
+              <span className="qz-sm-ico" aria-hidden><i>✦</i></span>
+              <h3>Generate with AI</h3>
+              <span className="qz-sm-rec">Recommended</span>
+              <span className="qz-sm-spacer" />
+              <span className="qz-sm-arr" aria-hidden>→</span>
             </button>
-            <button
-              type="button"
-              className="qz-start-choice"
-              onClick={() => setScreen("goal")}
-            >
-              <span className="qz-start-choice-icon" aria-hidden><PencilLine size={20} /></span>
-              <span className="qz-start-choice-copy">
-                <strong>Write your goal</strong>
-                <span className="qz-dim">
-                  Describe the outcome you want and we&rsquo;ll generate the questions around it.
-                </span>
-              </span>
-              <span className="qz-start-choice-arrow" aria-hidden>→</span>
+            <button type="button" className="qz-sm-row" onClick={() => setScreen("goal")}>
+              <span className="qz-sm-ico is-neutral" aria-hidden><i>✎</i></span>
+              <h3>Write your goal</h3>
+              <span className="qz-sm-spacer" />
+              <span className="qz-sm-arr" aria-hidden>→</span>
+            </button>
+            <button type="button" className="qz-sm-row" onClick={onManual}>
+              <span className="qz-sm-ico is-neutral" aria-hidden><i>▢</i></span>
+              <h3>Start from blank</h3>
+              <span className="qz-sm-spacer" />
+              <span className="qz-sm-arr" aria-hidden>→</span>
             </button>
           </div>
-          <button type="button" className="qz-start-blank" onClick={onManual}>
-            <span className="qz-start-choice-copy">
-              <strong>Start blank</strong>
-              <span className="qz-dim">Open an empty quiz and build it yourself.</span>
-            </span>
-            <span aria-hidden>→</span>
-          </button>
-        </div>
+        </>
       ) : (
-        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-          <span className="qz-dim" style={{ fontSize: 13 }}>
-            Your own words work best — we&rsquo;ll draft the questions from this.
-          </span>
-          <GoalPromptBody
-            suggestedGoal={suggestedGoal}
-            minGoalChars={minGoalChars}
-            submitLabel="Generate from my goal →"
-            onSubmit={onGoalBuild}
-            onCancel={() => setScreen("choose")}
-          />
-        </div>
+        <>
+          <button type="button" className="qz-sm-back" onClick={() => setScreen("choose")}>
+            ← Back
+          </button>
+          <h2 className="qz-sm-title">Describe what your quiz should do</h2>
+
+          <div className="qz-sm-track">
+            <div className="qz-sm-thead">
+              <span className="qz-sm-tlbl">Your brief</span>
+              <span className="qz-sm-tcnt">{done} of 4 complete</span>
+            </div>
+            <div className="qz-sm-tcols">
+              {tracker.map((t) => (
+                <button
+                  key={t.key}
+                  type="button"
+                  className={`qz-sm-tcol${t.ok ? " is-done" : ""}`}
+                  onClick={t.focus}
+                >
+                  <span className="qz-sm-sbar" />
+                  <span className="qz-sm-titem">
+                    <span className="qz-sm-c" aria-hidden>✓</span>
+                    {t.label}
+                  </span>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="qz-sm-field">
+            <label className="qz-sm-flabel" htmlFor="qz-sm-goal">Goal</label>
+            <span className="qz-sm-fhint">What the quiz helps shoppers decide.</span>
+            <textarea
+              id="qz-sm-goal"
+              ref={goalRef}
+              className="qz-sm-inp"
+              value={goal}
+              placeholder={suggestedGoal || "Help shoppers find the right board for how and where they ride"}
+              onChange={(e) => setGoal(e.target.value)}
+            />
+          </div>
+          <div className="qz-sm-field">
+            <label className="qz-sm-flabel" htmlFor="qz-sm-aud">Audience</label>
+            <span className="qz-sm-fhint">Who it&rsquo;s for.</span>
+            <input
+              id="qz-sm-aud"
+              ref={audRef}
+              className="qz-sm-inp"
+              value={audience}
+              placeholder="First-time riders buying a starter setup"
+              onChange={(e) => setAudience(e.target.value)}
+            />
+          </div>
+          <div className="qz-sm-field">
+            <label className="qz-sm-flabel" htmlFor="qz-sm-fac">Deciding factors</label>
+            <span className="qz-sm-fhint">
+              What makes one option right over another — terrain, skill level, price, style.
+            </span>
+            <input
+              id="qz-sm-fac"
+              ref={facRef}
+              className="qz-sm-inp"
+              value={factors}
+              placeholder="Terrain they ride, experience level, and how much they want to spend"
+              onChange={(e) => setFactors(e.target.value)}
+            />
+          </div>
+          <div className="qz-sm-field">
+            <span className="qz-sm-flabel">Length</span>
+            <span className="qz-sm-fhint">How many questions.</span>
+            <div className="qz-sm-seg" ref={segRef} role="radiogroup" aria-label="How many questions">
+              {[3, 4, 5, 6, 7].map((n) => (
+                <button
+                  key={n}
+                  type="button"
+                  role="radio"
+                  aria-checked={length === n}
+                  className={`qz-sm-segb${length === n ? " is-on" : ""}`}
+                  onClick={() => setLength(n)}
+                >
+                  {n}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="qz-sm-foot">
+            <button
+              type="button"
+              className="qz-sm-gen"
+              disabled={!ready}
+              onClick={() =>
+                length !== null &&
+                onGoalBuild({
+                  goal: goal.trim(),
+                  audience: audience.trim(),
+                  factors: factors.trim(),
+                  length,
+                })
+              }
+            >
+              Generate questions →
+            </button>
+            <span className="qz-sm-note" aria-live="polite">{note}</span>
+          </div>
+        </>
       )}
     </QzModal>
   );
@@ -1096,13 +1229,14 @@ function RbBanner({
   }
   return (
     <div className="qz-rb-ai-tip">
-      <span className="qz-rb-ai-icon" aria-hidden><Sparkles size={18} /></span>
+      <span className="qz-rb-ai-icon" aria-hidden><Sparkles size={16} /></span>
       <div className="qz-rb-banner-body">
-        <span className="qz-rb-ai-label">AI TIP</span>
-        <strong style={{ fontSize: 14 }}>{suggestion.message}</strong>
-        <p className="qz-dim" style={{ margin: 0, fontSize: 13 }}>
-          {suggestion.reason}
-        </p>
+        {/* Mock lead-row: the mono AI-TIP label sits INLINE with the headline. */}
+        <span className="qz-rb-ai-lead">
+          <span className="qz-rb-ai-label">AI TIP</span>
+          <strong className="qz-rb-ai-title">{suggestion.message}</strong>
+        </span>
+        <p className="qz-rb-ai-reason">{suggestion.reason}</p>
         {suggestion.counts.products > 0 ? (
           <div className="qz-rb-ai-based">
             <span>Based on</span>
@@ -1118,7 +1252,7 @@ function RbBanner({
             Use this
           </button>
         ) : null}
-        <button type="button" className="qz-btn qz-btn-ghost qz-btn-sm" onClick={onHide}>
+        <button type="button" className="qz-rb-ai-hide" onClick={onHide}>
           Hide
         </button>
       </div>
