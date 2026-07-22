@@ -66,7 +66,8 @@ describe("DeciderLoadingView — §L interstitial (byte-safe default)", () => {
         interstitial: { enabled: true, delayMs: 2000, style: "progress", steps: [], headline: "One sec…" },
       }),
     );
-    expect(html).toMatch(/transition: ?width/);
+    expect(html).toMatch(/transition: ?transform/);
+    expect(html).toContain("scaleX");
   });
 
   it("a disabled config falls back to the legacy default (opt-in only)", () => {

@@ -120,7 +120,7 @@ body[data-qz] ::selection { background: #0E0F11; color: #FFFFFF; }
 .qz-int-spin { width: 44px; height: 44px; border-radius: 50%; border: 3px solid color-mix(in srgb, var(--qz-color-primary) 18%, transparent); border-top-color: var(--qz-color-primary); animation: qz-int-rot 0.9s linear infinite; margin-bottom: 12px; }
 @keyframes qz-int-rot { to { transform: rotate(360deg); } }
 .qz-int-bar { width: 180px; height: 6px; border-radius: 999px; background: color-mix(in srgb, var(--qz-color-primary) 15%, transparent); overflow: hidden; margin-top: 10px; }
-.qz-int-bar > span { display: block; height: 100%; background: var(--qz-color-primary); transition: width 0.1s linear; }
+.qz-int-bar > span { display: block; width: 100%; height: 100%; background: var(--qz-color-primary); transform-origin: left center; transition: transform 0.1s linear; }
 .qz-int-steps { text-align: left; margin-top: 14px; display: flex; flex-direction: column; gap: 8px; }
 .qz-int-step { display: flex; align-items: center; gap: 9px; font-size: 13px; color: var(--qz-color-muted); }
 .qz-int-step.is-done { color: var(--qz-color-text); }
@@ -189,15 +189,6 @@ body[data-qz] ::selection { background: #0E0F11; color: #FFFFFF; }
 .qz-share-btn:hover { border-color: var(--qz-color-primary); }
 
 .qz-scarcity { display: inline-flex; align-items: center; font-size: 11px; font-weight: 600; color: #D0463C; margin-top: 4px; }
-
-/* ═══ post-fork main additions (QZY-R + audit fixes), carried over the design merge ═══ */
-   — radius frozen to its light value. The ring color follows the quiz's own
-   brand primary (tokensToCssVars sets it on the runtime subtree root for every
-   doc model); outside the subtree, or docs without tokens, fall back to the
-   previous admin accent. An admin-purple outline on a merchant-branded quiz
-   was the one un-themed color on the shopper surface. */
-
-  outline: 3px solid var(--qz-color-primary, #5B47E5);
 
 /* Audit fix — --qz-color-border was undefined on both branches; every widget
    border rendered none. Scoped to the widget roots (stylesheet var: zero DOM

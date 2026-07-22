@@ -417,7 +417,7 @@ export function QzProgress({
       >
         <div
           className={met ? "qz-progress-fill is-met" : "qz-progress-fill"}
-          style={{ width: `${pct}%` }}
+          style={{ transform: `scaleX(${pct / 100})` }}
         />
       </div>
       {label != null ? <div className="qz-dim" style={{ fontSize: 12 }}>{label}</div> : null}

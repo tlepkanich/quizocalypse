@@ -173,7 +173,7 @@ export function DeviceFrame({
             overflow: "hidden",
             borderRadius: "var(--qz-radius-lg, 14px)",
             boxShadow: "var(--qz-shadow-lg, 0 14px 44px rgba(27,26,23,.10))",
-            transition: dragging ? "none" : "width 160ms var(--qz-ease, ease)",
+            transition: dragging ? "none" : "box-shadow 160ms var(--qz-ease, ease)",
           }}
         >
           {/* faux browser bar */}

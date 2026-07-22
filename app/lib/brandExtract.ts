@@ -1,4 +1,8 @@
-import Anthropic from "@anthropic-ai/sdk";
+import type Anthropic from "@anthropic-ai/sdk";
+// ai-fallbacks Gap 8 — the shared client seam (60s timeout, transient retries,
+// budget-ledger usage emit) replaces this file's former self-built client.
+// createBetaMessage because PDF document blocks need the beta messages API.
+import { createBetaMessage } from "./ai/client";
 import { BrandGuidelines, type BrandGuidelines as BrandGuidelinesT } from "./brandGuidelines";
 
 // Extract structured brand guidelines from an uploaded file. Accepts PDF
@@ -10,15 +14,6 @@ const MODEL = "claude-sonnet-4-6";
 const MAX_TOKENS = 4096;
 const MAX_ATTEMPTS = 3;
 
-let cachedClient: Anthropic | null = null;
-function client(): Anthropic {
-  if (!cachedClient) {
-    const apiKey = process.env.ANTHROPIC_API_KEY;
-    if (!apiKey) throw new Error("ANTHROPIC_API_KEY is not set.");
-    cachedClient = new Anthropic({ apiKey });
-  }
-  return cachedClient;
-}
 
 const EXTRACT_SYSTEM_PROMPT =
   "You are a senior brand strategist reading a brand's guidelines and " +
@@ -177,7 +172,7 @@ export async function extractBrandGuidelines(
     // Use beta.messages.create for PDF document support — the stable
     // messages API doesn't expose document blocks yet. Beta header is
     // injected automatically by the SDK.
-    const response = await client().beta.messages.create({
+    const response = await createBetaMessage({
       model: MODEL,
       max_tokens: MAX_TOKENS,
       system: EXTRACT_SYSTEM_PROMPT,

@@ -75,6 +75,25 @@ export async function createMessage(
   return res;
 }
 
+// Beta twin of createMessage for the one surface that needs it (brand-PDF
+// extraction uses beta.messages for document support). Same shared client —
+// timeout + transient retries — and the same usage emit, so the call lands in
+// the budget ledger instead of the Gap-8 blind spot of a self-built client.
+export async function createBetaMessage(
+  params: Anthropic.Beta.Messages.MessageCreateParamsNonStreaming,
+): Promise<Anthropic.Beta.Messages.BetaMessage> {
+  const res = await client().beta.messages.create(params);
+  try {
+    aiUsageEmitter?.({
+      input_tokens: res.usage.input_tokens,
+      output_tokens: res.usage.output_tokens,
+    });
+  } catch {
+    // Emitter bugs are the emitter's problem; the response stands.
+  }
+  return res;
+}
+
 export class QuizGenerationError extends Error {
   constructor(
     message: string,

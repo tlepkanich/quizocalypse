@@ -238,6 +238,22 @@ body[data-qz] {
 }
 body[data-qz] *, body[data-qz] *::before, body[data-qz] *::after { box-sizing: border-box; }
 
+.qz-skip-link {
+  position: fixed;
+  z-index: var(--qz-z-toast);
+  top: 12px;
+  left: 12px;
+  padding: 10px 14px;
+  border-radius: var(--qz-radius-sm);
+  background: var(--qz-ink);
+  color: var(--qz-paper);
+  font-weight: 700;
+  text-decoration: none;
+  transform: translateY(calc(-100% - 20px));
+  transition: transform var(--qz-dur-fast) var(--qz-ease);
+}
+.qz-skip-link:focus { transform: translateY(0); }
+
 /* — Dark mode — admin chrome only. The FOUC-safe inline script in root.tsx
      sets html[data-theme="dark"] from localStorage before paint; the toggle
      (ThemeToggle) flips it + persists. Only re-declares token VALUES on the
@@ -996,10 +1012,12 @@ body[data-qz] ::selection { background: var(--qz-ink); color: var(--qz-cream); }
   overflow: hidden;
 }
 .qz-progress-fill {
+  width: 100%;
   height: 100%;
   border-radius: var(--qz-radius-pill);
   background: var(--qz-accent);
-  transition: width var(--qz-dur) var(--qz-ease), background var(--qz-dur) var(--qz-ease);
+  transform-origin: left center;
+  transition: transform var(--qz-dur) var(--qz-ease), background var(--qz-dur) var(--qz-ease);
 }
 .qz-progress-fill.is-met {
   background: var(--qz-ok);
@@ -3987,9 +4005,10 @@ body[data-qz] ::selection { background: var(--qz-ink); color: var(--qz-cream); }
   background: color-mix(in srgb, currentColor 12%, transparent);
 }
 .qz-s3-progressbar > span {
-  display: block; height: 100%; border-radius: 2px;
+  display: block; width: 100%; height: 100%; border-radius: 2px;
   background: var(--qz-color-primary, var(--qz-accent));
-  transition: width var(--qz-dur) var(--qz-ease);
+  transform-origin: left center;
+  transition: transform var(--qz-dur) var(--qz-ease);
 }
 
 .qz-s3-qbody { display: flex; flex-direction: column; gap: 12px; flex: 1 1 auto; min-height: 0; overflow: hidden; }
@@ -5067,7 +5086,7 @@ body[data-qz] .qz-s3-editable:focus-visible {
 .qz-bb-nav { position: sticky; top: 12px; align-self: start; padding-left: 16px; order: 2; }
 /* Vertical scroll-progress bar (violet→coral) that fills as the page scrolls. */
 .qz-bb-track { position: absolute; left: 0; top: 4px; bottom: 4px; width: 3px; border-radius: 999px; background: var(--qz-rule); overflow: hidden; }
-.qz-bb-track-fill { width: 100%; background: linear-gradient(var(--qz-accent), var(--qz-priority)); transition: height 120ms linear; }
+.qz-bb-track-fill { width: 100%; height: 100%; background: linear-gradient(var(--qz-accent), var(--qz-priority)); transform-origin: top center; transition: transform 120ms linear; }
 @media (prefers-reduced-motion: reduce) { .qz-bb-track-fill { transition: none; } }
 .qz-bb-navgroups { display: flex; flex-direction: column; gap: 14px; }
 .qz-bb-navgroup { display: flex; flex-direction: column; gap: 2px; }

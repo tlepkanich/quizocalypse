@@ -208,7 +208,20 @@ export async function startStep1Build(
     sampleQuestionSeeds: picked.sample_questions,
     designTokens: draftTokens,
   })
-    .then(() => prisma.quiz.update({ where: { id: quizId }, data: { buildState: null } }))
+    // ai-fallbacks Gap 1 — runAiOnboardingBuild swallows its own AI failure and
+    // resolves with a `degraded` hint; treating that as success dropped the
+    // merchant into a question-less builder with no explanation. Mirror
+    // startAiOnboardingBuild: degraded → an error buildState the builder shows.
+    .then((result) =>
+      prisma.quiz.update({
+        where: { id: quizId },
+        data: {
+          buildState: result.degraded
+            ? "error:AI couldn't finish this draft. Try again or continue manually."
+            : null,
+        },
+      }),
+    )
     .catch(async (err) => {
       // BIC-2 A2(f) — buildState's "error:" payload renders verbatim in the
       // builder (studio_.$id BuildError): generic copy persisted, full error

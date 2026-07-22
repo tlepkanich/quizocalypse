@@ -29,11 +29,12 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 export default function StudioLayout() {
   return (
     <QzToastProvider>
+      <a className="qz-skip-link" href="#main-content">Skip to content</a>
       <div className="qz-shell">
         <Rail />
-        <div className="qz-shell-main">
+        <main className="qz-shell-main" id="main-content" tabIndex={-1}>
           <Outlet />
-        </div>
+        </main>
         <div className="qz-viewport-notice">
           This workspace is designed for larger screens — please use a desktop browser.
         </div>

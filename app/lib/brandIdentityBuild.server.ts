@@ -1,5 +1,8 @@
-import Anthropic from "@anthropic-ai/sdk";
+import type Anthropic from "@anthropic-ai/sdk";
 import type { AdminApiContext } from "@shopify/shopify-app-remix/server";
+// ai-fallbacks Gap 8 — the shared client seam (60s timeout, transient retries,
+// budget-ledger usage emit) replaces this file's former self-built client.
+import { createMessage } from "./ai/client";
 import prisma from "../db.server";
 import { logFor, reportError } from "./log.server";
 import {
@@ -44,15 +47,6 @@ const MODEL = "claude-sonnet-4-6";
 const MAX_TOKENS = 2048;
 const MAX_ATTEMPTS = 3;
 
-let cachedClient: Anthropic | null = null;
-function client(): Anthropic {
-  if (!cachedClient) {
-    const apiKey = process.env.ANTHROPIC_API_KEY;
-    if (!apiKey) throw new Error("ANTHROPIC_API_KEY is not set.");
-    cachedClient = new Anthropic({ apiKey });
-  }
-  return cachedClient;
-}
 
 export class BrandIdentityError extends Error {
   constructor(
@@ -242,7 +236,7 @@ export async function buildBrandIdentity(
 
   let lastIssue: string | undefined;
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
-    const response = await client().messages.create({
+    const response = await createMessage({
       model: MODEL,
       max_tokens: MAX_TOKENS,
       system: IDENTITY_SYSTEM_PROMPT,

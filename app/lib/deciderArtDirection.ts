@@ -362,6 +362,13 @@ function applyAlpineDirection(doc: Quiz, hash: number): Quiz {
   };
 }
 
+// Owner switch (2026-07-22): art direction is PAUSED pending rework — the
+// generated looks need more design work before they ship on new quizzes.
+// Flipping this back to true re-enables the stamp for NEWLY generated decider
+// quizzes only; docs already stamped keep rendering their baked tokens either
+// way (the runtime render path stays live so existing quizzes don't change).
+export const ART_DIRECTION_ENABLED = false;
+
 /**
  * Give every newly generated decider quiz a coherent, deterministic campaign
  * world. Legacy docs return by reference; the same quiz id always selects the

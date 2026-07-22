@@ -22,7 +22,7 @@ import { generateQuestionFlow, type QuizTone } from "./claude";
 import { applyQuestionFlow, applyDeciderQuestionFlow, type SmartBuildBucket } from "./smartBuild";
 import { parseBrandGuidelinesSafe, type BrandGuidelines } from "./brandGuidelines";
 import { identityToBrandGuidelines, parseBrandIdentitySafe } from "./brandIdentity";
-import { applyGeneratedArtDirection } from "./deciderArtDirection";
+import { ART_DIRECTION_ENABLED, applyGeneratedArtDirection } from "./deciderArtDirection";
 
 // Step 1 — generation reads the BRAND IDENTITY first (its voice, via the
 // dormant adapter, activated here as the first real consumer), falling back to
@@ -412,7 +412,8 @@ export async function runAiOnboardingBuild(
   // New decider quizzes arrive as a coherent campaign, not a collection of
   // unrelated theme choices. The selector is conservative and leaves
   // unsupported catalogs untouched until a vetted direction exists.
-  const finalDoc = decider
+  // ART_DIRECTION_ENABLED is the owner pause switch — see deciderArtDirection.ts.
+  const finalDoc = decider && ART_DIRECTION_ENABLED
     ? applyGeneratedArtDirection(configuredDoc, allProducts, {
         quizId,
         brandIdentity: parseBrandIdentitySafe(shop?.brandIdentity),

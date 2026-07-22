@@ -181,7 +181,7 @@ export function BrandBook({
         {/* Left — grouped checklist with a scroll-tracking gradient bar. */}
         <aside className="qz-bb-nav" aria-label="Brand book sections">
           <div className="qz-bb-track" aria-hidden>
-            <div className="qz-bb-track-fill" style={{ height: `${Math.round(fill * 100)}%` }} />
+            <div className="qz-bb-track-fill" style={{ transform: `scaleY(${fill})` }} />
           </div>
           <div className="qz-bb-navgroups">
             {BRAND_GROUPS.map((g) => (

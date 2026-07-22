@@ -139,11 +139,13 @@ export function DeciderLoadingView({
     >
       <div
         style={{
-          width: `${Math.round(((Math.min(beat, lines.length - 1) + 1) / lines.length) * 100)}%`,
+          width: "100%",
           height: "100%",
           background: "var(--qz-color-primary)",
           borderRadius: 999,
-          transition: "width 0.4s ease",
+          transform: `scaleX(${(Math.min(beat, lines.length - 1) + 1) / lines.length})`,
+          transformOrigin: "left center",
+          transition: "transform 0.4s cubic-bezier(0.22, 1, 0.36, 1)",
         }}
       />
     </div>

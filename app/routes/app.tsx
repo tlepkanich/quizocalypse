@@ -42,14 +42,17 @@ export default function App() {
 
   return (
     <AppProvider isEmbeddedApp apiKey={apiKey}>
+      <a className="qz-skip-link" href="#main-content">Skip to content</a>
       <SidebarLayout>
         <Sidebar counts={counts} />
-        <div
+        <main
           className="qz-main"
+          id="main-content"
+          tabIndex={-1}
           style={{ flex: 1, minWidth: 0, overflow: "auto" }}
         >
           <Outlet />
-        </div>
+        </main>
       </SidebarLayout>
     </AppProvider>
   );

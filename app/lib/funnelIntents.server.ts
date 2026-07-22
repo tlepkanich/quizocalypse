@@ -465,7 +465,11 @@ async function runStep1FunnelActionImpl(
   // pre-selects nothing).
   if (intent === "shape-continue") {
     const typeId = String(form.get("typeId") ?? "");
-    const scoring = String(form.get("scoring") ?? "");
+    // Shape redesign (handoff §0) — scoring is no longer merchant-facing, so an
+    // absent value DEFAULTS to "direct" instead of blocking (the old four-card
+    // picker that supplied it is retired). An explicit invalid value still 400s.
+    const scoringRaw = String(form.get("scoring") ?? "").trim();
+    const scoring = scoringRaw === "" ? "direct" : scoringRaw;
     if (scoring !== "direct" && scoring !== "weighted") {
       return json({ intent, ok: false, error: "Pick how to score this quiz first." }, { status: 400 });
     }
@@ -598,8 +602,14 @@ async function runStep1FunnelActionImpl(
   // now decider-NATIVE instead of exiting into a builder with no decider UI.
   if (intent === "manual-build") {
     if (doc.logic_model !== "decider") {
-      // Legacy in-flight drafts keep their own Manual card (shape-manual).
-      return json({ intent, ok: false, error: "This flow isn't available for this quiz." }, { status: 400 });
+      // Shape redesign — the unified Shape page now serves legacy drafts too,
+      // and its "Build manually" escape fires THIS intent for both models (the
+      // old four-card UI that fired shape-manual is retired). Legacy manual
+      // create keeps its original semantics: straight to the builder with the
+      // seed doc, scoring unset so the builder prompts (see shape-manual).
+      await writeDoc(quiz.id, { ...doc, build_session: { ...session, stage: "done" } });
+      await prisma.quiz.update({ where: { id: quiz.id }, data: { buildState: null } });
+      return redirect(opts.builderPath(quiz.id));
     }
     const cats = await prisma.category.findMany({
       where: { shopId: shop.id, quizId: quiz.id },

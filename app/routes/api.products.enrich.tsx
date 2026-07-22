@@ -18,6 +18,7 @@ import { json } from "@remix-run/node";
 import { z } from "zod";
 import { authenticate } from "../shopify.server";
 import prisma from "../db.server";
+import { withAiSpendRecording } from "../lib/aiBudget.server";
 import {
   EnrichmentError,
   enrichProductTags,
@@ -138,13 +139,17 @@ export async function action({ request }: ActionFunctionArgs) {
   for (const p of stale) {
     let newTags: string[];
     try {
-      newTags = await enrichProductTags({
-        title: p.title,
-        description: p.descriptionText,
-        existingTags: p.tags,
-        vendor: p.vendor,
-        productType: p.productType,
-      });
+      // ai-fallbacks Gap 8 — thread the shopId so enrichment token usage lands
+      // in the budget ledger (enrichTags now calls the shared client).
+      newTags = await withAiSpendRecording(shop.id, () =>
+        enrichProductTags({
+          title: p.title,
+          description: p.descriptionText,
+          existingTags: p.tags,
+          vendor: p.vendor,
+          productType: p.productType,
+        }),
+      );
     } catch (err) {
       const msg =
         err instanceof EnrichmentError

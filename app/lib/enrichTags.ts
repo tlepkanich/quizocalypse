@@ -1,5 +1,8 @@
-import Anthropic from "@anthropic-ai/sdk";
+import type Anthropic from "@anthropic-ai/sdk";
 import { z } from "zod";
+// ai-fallbacks Gap 8 — the shared client seam (60s timeout, transient retries,
+// budget-ledger usage emit) replaces this file's former self-built client.
+import { createMessage } from "./ai/client";
 
 // Claude-powered product tag enrichment. Reads title + description +
 // existing tags + vendor + product type, returns a list of additional
@@ -10,16 +13,6 @@ import { z } from "zod";
 const MODEL = "claude-sonnet-4-6";
 const MAX_TOKENS = 1024;
 const MAX_ATTEMPTS = 3;
-
-let cachedClient: Anthropic | null = null;
-function client(): Anthropic {
-  if (!cachedClient) {
-    const apiKey = process.env.ANTHROPIC_API_KEY;
-    if (!apiKey) throw new Error("ANTHROPIC_API_KEY is not set.");
-    cachedClient = new Anthropic({ apiKey });
-  }
-  return cachedClient;
-}
 
 const ENRICH_SYSTEM_PROMPT =
   "You are a Shopify merchandiser tagging products to power tag-overlap " +
@@ -112,7 +105,7 @@ export async function enrichProductTags(
 
   let lastIssue: string | undefined;
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
-    const response = await client().messages.create({
+    const response = await createMessage({
       model: MODEL,
       max_tokens: MAX_TOKENS,
       system: ENRICH_SYSTEM_PROMPT,

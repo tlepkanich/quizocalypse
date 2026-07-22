@@ -1,4 +1,7 @@
-import Anthropic from "@anthropic-ai/sdk";
+import type Anthropic from "@anthropic-ai/sdk";
+// ai-fallbacks Gap 8 — the shared client seam (60s timeout, transient retries,
+// budget-ledger usage emit) replaces this file's former self-built client.
+import { createMessage } from "./ai/client";
 import {
   DiscoveryResult,
   type DiscoveredCategory,
@@ -14,16 +17,6 @@ import { assignProducts } from "./categoryAssign";
 const MODEL = "claude-sonnet-4-6";
 const MAX_TOKENS = 2048;
 const MAX_ATTEMPTS = 3;
-
-let cachedClient: Anthropic | null = null;
-function client(): Anthropic {
-  if (!cachedClient) {
-    const apiKey = process.env.ANTHROPIC_API_KEY;
-    if (!apiKey) throw new Error("ANTHROPIC_API_KEY is not set.");
-    cachedClient = new Anthropic({ apiKey });
-  }
-  return cachedClient;
-}
 
 const DISCOVER_SYSTEM_PROMPT =
   "You are a senior merchandiser studying a Shopify catalog and " +
@@ -103,7 +96,7 @@ export async function discoverCategories(
 
   let lastIssue: string | undefined;
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
-    const response = await client().messages.create({
+    const response = await createMessage({
       model: MODEL,
       max_tokens: MAX_TOKENS,
       system: DISCOVER_SYSTEM_PROMPT,
@@ -232,7 +225,7 @@ export async function assignProductsAI(
 
   let lastIssue: string | undefined;
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
-    const response = await client().messages.create({
+    const response = await createMessage({
       model: MODEL,
       max_tokens: ASSIGN_MAX_TOKENS,
       system: ASSIGN_SYSTEM_PROMPT,

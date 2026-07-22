@@ -198,10 +198,24 @@ export async function handleQuizEditorActionForShop(
   request: Request,
   getAdmin: () => Promise<Parameters<typeof ensureQuizDiscount>[0]>,
 ) {
+  // Peek the intent from EITHER body shape so the AI budget gate can't be
+  // bypassed by content-type. JSON bodies are autosave-only today (no intent
+  // field → empty string → no gate), but a future JSON-bodied AI intent must
+  // still hit the ceiling. The clone-parse is the price of gating before the
+  // impl's own parse; bodies are small admin posts.
   const contentType = request.headers.get("content-type") ?? "";
-  if (!contentType.includes("application/json")) {
-    const form = await request.clone().formData();
-    const intent = String(form.get("intent") ?? "");
+  {
+    let intent = "";
+    if (contentType.includes("application/json")) {
+      const body = (await request
+        .clone()
+        .json()
+        .catch(() => null)) as { intent?: unknown } | null;
+      intent = typeof body?.intent === "string" ? body.intent : "";
+    } else {
+      const form = await request.clone().formData();
+      intent = String(form.get("intent") ?? "");
+    }
     const aiIntents = new Set([
       "regenerate-node",
       "generate-questions",

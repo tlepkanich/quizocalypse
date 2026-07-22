@@ -270,7 +270,7 @@ export function PhoneScreen({
         </button>
         <span className="qz-s3-brandname">{brandName}</span>
         <span className="qz-s3-progressbar" aria-hidden>
-          <span style={{ width: `${Math.round(progress * 100)}%` }} />
+          <span style={{ transform: `scaleX(${progress})` }} />
         </span>
       </div>
 

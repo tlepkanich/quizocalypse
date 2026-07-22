@@ -16,6 +16,8 @@ import {
   extractBrandGuidelines,
   BrandExtractionError,
 } from "../lib/brandExtract";
+import { withAiSpendRecording } from "../lib/aiBudget.server";
+import { reportError } from "../lib/log.server";
 import { getPreset, BRAND_VOICE_PRESETS } from "../lib/brandVoicePresets";
 import type { BrandGuidelines } from "../lib/brandGuidelines";
 import {
@@ -117,11 +119,15 @@ async function handleUpload(
 
   const buf = Buffer.from(await file.arrayBuffer());
   try {
-    const guidelines = await extractBrandGuidelines({
-      file: buf,
-      mediaType: file.type || "text/plain",
-      fileName: file.name || "upload",
-    });
+    // ai-fallbacks Gap 8 — thread the shopId so the extraction's token usage
+    // lands in the budget ledger (brandExtract now calls the shared client).
+    const guidelines = await withAiSpendRecording(shopId, () =>
+      extractBrandGuidelines({
+        file: buf,
+        mediaType: file.type || "text/plain",
+        fileName: file.name || "upload",
+      }),
+    );
     const updateData = buildShopUpdate(guidelines, existingTokens);
     await prisma.shop.update({
       where: { id: shopId },
@@ -142,8 +148,14 @@ async function handleUpload(
         { status: 502 },
       );
     }
-    const msg = err instanceof Error ? err.message : String(err);
-    return json({ ok: false, error: msg }, { status: 500 });
+    // ai-fallbacks Gap 2 — never render a raw provider error to the merchant
+    // (this path once surfaced billing text verbatim). Log the detail, return
+    // our copy.
+    reportError(err, { scope: "brandExtract", msg: "guidelines upload failed", shopId });
+    return json(
+      { ok: false, error: "AI is temporarily unavailable — try again in a moment." },
+      { status: 500 },
+    );
   }
 }
 
