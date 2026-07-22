@@ -110,7 +110,7 @@ export function BuilderBackgroundTab({
 
   const colorField = (
     label: string,
-    key: "color" | "color2" | "color3" | "fill_color" | "overlay_color",
+    key: "color" | "color2" | "color3" | "color4" | "fill_color" | "overlay_color",
   ) => (
     <label className="qz-ads-color">
       <span>{label}</span>
@@ -179,7 +179,7 @@ export function BuilderBackgroundTab({
             ) : null}
           </div>
           <div className="qz-segmented" role="group" aria-label="Background type">
-            {(["none", "color", "gradient", "image", "video", "partial"] as const).map((t) => (
+            {(["none", "color", "gradient", "split", "quadrant", "image", "video", "partial"] as const).map((t) => (
               <button
                 key={t}
                 type="button"
@@ -231,6 +231,87 @@ export function BuilderBackgroundTab({
                     onChange={(n) => patch({ angle: n })}
                   />
                 ) : null}
+              </div>
+            </>
+          ) : null}
+          {/* build-tab §6 — split: two regions, direction, edge position + softness. */}
+          {bg.type === "split" ? (
+            <>
+              <div className="qz-row" style={{ gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+                {colorField("Side A", "color")}
+                {colorField("Side B", "color2")}
+              </div>
+              <div className="qz-segmented" role="group" aria-label="Split direction">
+                {(["horizontal", "vertical", "diagonal"] as const).map((d) => (
+                  <button
+                    key={d}
+                    type="button"
+                    aria-pressed={(bg.split_dir ?? "horizontal") === d}
+                    onClick={() => patch({ split_dir: d === "horizontal" ? undefined : d })}
+                  >
+                    {d[0]!.toUpperCase() + d.slice(1)}
+                  </button>
+                ))}
+              </div>
+              <div className="qz-row" style={{ gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+                <NumericControl
+                  label="Position"
+                  value={bg.split_pos}
+                  min={0}
+                  max={100}
+                  step={5}
+                  fallback={50}
+                  allowEmpty
+                  suffix="%"
+                  onChange={(n) => patch({ split_pos: n })}
+                />
+                <NumericControl
+                  label="Softness"
+                  value={bg.split_soft}
+                  min={0}
+                  max={40}
+                  step={2}
+                  fallback={0}
+                  allowEmpty
+                  onChange={(n) => patch({ split_soft: n })}
+                />
+              </div>
+            </>
+          ) : null}
+          {/* §6 — quadrant: four corner fills + off-center split lines. */}
+          {bg.type === "quadrant" ? (
+            <>
+              <div className="qz-row" style={{ gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+                {colorField("Top left", "color")}
+                {colorField("Top right", "color2")}
+              </div>
+              <div className="qz-row" style={{ gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+                {colorField("Bottom left", "color3")}
+                {colorField("Bottom right", "color4")}
+              </div>
+              <div className="qz-row" style={{ gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+                <NumericControl
+                  label="Split X"
+                  value={bg.split_x}
+                  min={0}
+                  max={100}
+                  step={5}
+                  fallback={50}
+                  allowEmpty
+                  suffix="%"
+                  onChange={(n) => patch({ split_x: n })}
+                />
+                <NumericControl
+                  label="Split Y"
+                  value={bg.split_y}
+                  min={0}
+                  max={100}
+                  step={5}
+                  fallback={50}
+                  allowEmpty
+                  suffix="%"
+                  onChange={(n) => patch({ split_y: n })}
+                />
               </div>
             </>
           ) : null}

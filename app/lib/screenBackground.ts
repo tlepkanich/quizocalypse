@@ -49,6 +49,42 @@ export function screenBackgroundCss(bg: ScreenBackground): CSSProperties {
         if (bg.fixed) out.backgroundAttachment = "fixed";
       }
       break;
+    case "split": {
+      // build-tab §6 — two regions with a hard or soft edge. Hard = both
+      // stops at the position (linear-gradient(dir, A pos%, B pos%)); soft
+      // spreads the stops ±softness/2.
+      const a = bg.color ?? "#FFFFFF";
+      const b = bg.color2 ?? "#111111";
+      const pos = bg.split_pos ?? 50;
+      const soft = bg.split_soft ?? 0;
+      const dir =
+        bg.split_dir === "vertical"
+          ? "to bottom"
+          : bg.split_dir === "diagonal"
+            ? "135deg"
+            : "to right";
+      const lo = Math.max(0, pos - soft / 2);
+      const hi = Math.min(100, pos + soft / 2);
+      out.background = `linear-gradient(${dir}, ${a} ${lo}%, ${b} ${hi}%)`;
+      break;
+    }
+    case "quadrant": {
+      // build-tab §6 — four corner fills as a FOUR-LAYER background (each
+      // corner a sized no-repeat layer), so the split can be off-center and a
+      // corner value may itself be a css gradient string.
+      const x = bg.split_x ?? 50;
+      const y = bg.split_y ?? 50;
+      const tl = bg.color ?? "#FFFFFF";
+      const tr = bg.color2 ?? tl;
+      const bl = bg.color3 ?? tl;
+      const br = bg.color4 ?? tl;
+      const layer = (v: string) => (v.includes("gradient(") ? v : `linear-gradient(${v}, ${v})`);
+      out.backgroundImage = [layer(tl), layer(tr), layer(bl), layer(br)].join(", ");
+      out.backgroundRepeat = "no-repeat";
+      out.backgroundPosition = "left top, right top, left bottom, right bottom";
+      out.backgroundSize = `${x}% ${y}%, ${100 - x}% ${y}%, ${x}% ${100 - y}%, ${100 - x}% ${100 - y}%`;
+      break;
+    }
     case "partial": {
       // R6-1 §4 — the image fills a band on one edge at coverage %; the rest is
       // fill_color.

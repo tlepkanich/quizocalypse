@@ -1750,7 +1750,10 @@ export const Quiz = z.object({
       z.string(),
       z.object({
         // R6-1 §4 — "partial" (image band + fill) joins the type set.
-        type: z.enum(["color", "gradient", "image", "video", "partial"]).optional(),
+        // build-tab §6 — "split" (two regions, hard or soft edge) and
+        // "quadrant" (four corner fills) join it. Both are pure PAINT layers —
+        // they never reflow blocks.
+        type: z.enum(["color", "gradient", "image", "video", "partial", "split", "quadrant"]).optional(),
         color: z.string().max(64).optional(),
         color2: z.string().max(64).optional(),
         // R6-1 §4 — an optional 3rd gradient stop + radial vs linear. Absent →
@@ -1782,6 +1785,16 @@ export const Quiz = z.object({
         band: z.enum(["left", "top", "right"]).optional(),
         coverage: z.number().int().min(10).max(90).optional(),
         fill_color: z.string().max(64).optional(),
+        // build-tab §6 — split: regions A (color) + B (color2), direction,
+        // edge position 0-100, softness 0-40 (0 = hard edge).
+        split_dir: z.enum(["horizontal", "vertical", "diagonal"]).optional(),
+        split_pos: z.number().int().min(0).max(100).optional(),
+        split_soft: z.number().int().min(0).max(40).optional(),
+        // build-tab §6 — quadrant: corners TL (color) · TR (color2) ·
+        // BL (color3) · BR (color4), with off-center split lines.
+        color4: z.string().max(64).optional(),
+        split_x: z.number().int().min(0).max(100).optional(),
+        split_y: z.number().int().min(0).max(100).optional(),
       }),
     )
     .optional(),
