@@ -11,6 +11,7 @@ export function DeviceFrame({
   children,
   bare = false,
   urlLabel,
+  placement,
 }: {
   width: number;
   onWidthChange: (w: number) => void;
@@ -22,12 +23,27 @@ export function DeviceFrame({
   // Optional storefront URL shown in the faux browser bar (e.g. the funnel Rec
   // Page preview shows "yourstore.com/quiz/results"). Absent → just the width.
   urlLabel?: string;
+  // build-tab handoff §4 — desktop frame dims FOLLOW PLACEMENT, and pop-up
+  // renders as a real modal envelope on a dark backdrop (not a tiny toast in a
+  // huge page): full = 1200×760 full-bleed · pop-up ≈ modal + margin · inline
+  // = contained card (content + 200 × 720). Absent → today's sizing (other
+  // mounts unchanged). Bare-desktop only; mobile always fits the phone.
+  placement?: "page" | "popup" | "inline" | "product_widget";
 }) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const fitRef = useRef<HTMLDivElement | null>(null);
   const dragRef = useRef<{ startX: number; startW: number } | null>(null);
+  const scrollRef = useRef<HTMLDivElement | null>(null);
   const [dragging, setDragging] = useState(false);
   const [fitBounds, setFitBounds] = useState({ width: 0, height: 0 });
+
+  // §4 — content sits at a stable top offset across formats: reset the frame's
+  // internal scroll whenever the placement (or the device size) switches, so a
+  // format change never lands the merchant mid-page ("preview lost to the
+  // bottom").
+  useEffect(() => {
+    if (scrollRef.current) scrollRef.current.scrollTop = 0;
+  }, [placement, width]);
 
   useEffect(() => {
     const host = fitRef.current;
@@ -128,25 +144,83 @@ export function DeviceFrame({
         </div>
       );
     }
-    const logicalHeight = 720;
-    const scale = fitBounds.width > 0 ? Math.min(1, fitBounds.width / width) : 1;
+    // §4 — placement drives the desktop frame. Undefined placement keeps the
+    // pre-existing draggable-width frame (RecPagePreview etc. unchanged).
+    const logicalWidth =
+      placement === "page" ? 1200 : placement === "popup" ? 1000 : placement ? 920 : width;
+    const logicalHeight = placement === "page" ? 760 : placement === "popup" ? 760 : 720;
+    const scale = fitBounds.width > 0 ? Math.min(1, fitBounds.width / logicalWidth) : 1;
+    const isPopup = placement === "popup";
+    const isContained = placement === "inline" || placement === "product_widget";
     return (
       <div ref={fitRef} className="qz-device-fit-desktop">
-        <div style={{ width: width * scale, height: logicalHeight * scale, position: "relative", flex: "0 0 auto" }}>
+        <div
+          style={{
+            width: logicalWidth * scale,
+            height: logicalHeight * scale,
+            position: "relative",
+            flex: "0 0 auto",
+          }}
+        >
           <div
             className="qz-canvas-card"
             style={{
               position: "absolute",
               inset: 0,
-              width,
+              width: logicalWidth,
               height: logicalHeight,
-              overflow: "auto",
+              overflow: isPopup ? "hidden" : "auto",
               transform: `scale(${scale})`,
               transformOrigin: "top left",
-              background: "#fff",
+              background: isContained ? "var(--qz-cream-2)" : "var(--qz-paper)",
             }}
+            ref={scrollRef}
           >
-            {children}
+            {isPopup ? (
+              // Pop-up: the modal FILLS its frame — envelope min(92%, 900) wide,
+              // min(90%, 760) tall, radius 16, on the .55 backdrop; internal
+              // scroll lives inside the modal.
+              <div
+                style={{
+                  position: "absolute",
+                  inset: 0,
+                  background: "rgba(0,0,0,.55)",
+                  display: "grid",
+                  placeItems: "center",
+                  padding: 24,
+                }}
+              >
+                <div
+                  style={{
+                    width: "min(92%, 900px)",
+                    maxWidth: 1200,
+                    height: "min(90%, 760px)",
+                    borderRadius: 16,
+                    overflow: "auto",
+                    background: "var(--qz-paper)",
+                    boxShadow: "var(--qz-lift-3)",
+                  }}
+                >
+                  {children}
+                </div>
+              </div>
+            ) : isContained ? (
+              // Inline: a contained card on a neutral host page (content + 200).
+              <div style={{ padding: "36px 100px", minHeight: "100%" }}>
+                <div
+                  style={{
+                    borderRadius: 14,
+                    overflow: "hidden",
+                    background: "var(--qz-paper)",
+                    boxShadow: "var(--qz-shadow-lg)",
+                  }}
+                >
+                  {children}
+                </div>
+              </div>
+            ) : (
+              children
+            )}
           </div>
         </div>
       </div>

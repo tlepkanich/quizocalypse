@@ -35,7 +35,10 @@ export function displayAspect(d: AnswerDisplay): string {
     case "16:9":
       return "16 / 9";
     default:
-      return "1 / 1";
+      // build-tab handoff §4 image guardrail — TILES default to 4:3 (the 1:1
+      // default stretched each tile to ~349px tall on a 2-col desktop grid).
+      // An explicit merchant aspect always wins above.
+      return d.mode === "tiles" ? "4 / 3" : "1 / 1";
   }
 }
 

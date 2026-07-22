@@ -236,6 +236,22 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
   const [libraryCollapsed, setLibraryCollapsed] = useState(false);
   const [reconcileError, setReconcileError] = useState<string | null>(null);
 
+  // build-tab handoff §7 — "[" toggles the left library panel (never while
+  // typing: inputs, textareas, selects, and contenteditable are exempt).
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "[" || e.metaKey || e.ctrlKey || e.altKey) return;
+      const t = e.target as HTMLElement | null;
+      if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.tagName === "SELECT" || t.isContentEditable)) {
+        return;
+      }
+      e.preventDefault();
+      setLibraryCollapsed((c) => !c);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
   const select = useCallback((nodeId: string | null) => {
     setSelectedId(nodeId);
     setInspectTarget(null);
@@ -518,6 +534,27 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
       >
         Interact
       </button>
+    </div>
+  );
+
+  // build-tab handoff §7 — the desktop stage-bar "Show as": ONE source of
+  // truth (it writes doc.placement, exactly like Settings) and mirrors the
+  // Settings labels. Desktop-only — mobile always previews the phone.
+  const showAsToggle = (
+    <div className="qz-segmented" role="group" aria-label="Show as">
+      {PLACEMENTS.map((p) => (
+        <button
+          key={p.value}
+          type="button"
+          className="qz-tip"
+          aria-pressed={placement === p.value}
+          data-tip={`Show as ${p.label}`}
+          onClick={() => commit({ ...doc, placement: p.value })}
+          style={{ display: "inline-flex", alignItems: "center", padding: "5px 10px", fontSize: 12 }}
+        >
+          {p.label}
+        </button>
+      ))}
     </div>
   );
 
@@ -1132,6 +1169,7 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
             view === "build" ? (
               <>
                 {deviceToggle}
+                {breakpointForWidth(frameW) === "desktop" ? showAsToggle : null}
                 {zoomStepper}
                 {editInteractToggle}
               </>

@@ -13,7 +13,7 @@
       "boxShadow": 0
     },
     "app/components/builder/preview/DeviceFrame.tsx": {
-      "hex": 8,
+      "hex": 7,
       "boxShadow": 1
     },
     "app/components/builder/preview/ReskinSwitcher.tsx": {

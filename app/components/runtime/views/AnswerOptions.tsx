@@ -160,6 +160,8 @@ export function AnswerOptions({
           aspectRatio: displayAspect(display),
           objectFit: display.fit ?? "cover",
           display: "block",
+          // §4 guardrail — tile imagery never exceeds 200px tall on desktop.
+          ...(mode === "tiles" ? { maxHeight: 200 } : {}),
         }}
       />
     ) : (

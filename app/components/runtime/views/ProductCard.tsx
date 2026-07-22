@@ -151,7 +151,15 @@ export function ProductCard({
           height={80}
           style={
             vertical
-              ? { width: "100%", height: "auto", aspectRatio: imgAspect ?? "1 / 1", objectFit: imgFit ?? "cover", borderRadius: imgRadius ?? "var(--qz-radius)" }
+              ? {
+          width: "100%",
+          height: "auto",
+          aspectRatio: imgAspect ?? "1 / 1",
+          objectFit: imgFit ?? "cover",
+          borderRadius: imgRadius ?? "var(--qz-radius)",
+          // build-tab §4 guardrail — product imagery caps at 300px tall.
+          maxHeight: 300,
+        }
               : { width: 80, height: 80, objectFit: imgFit ?? "cover", borderRadius: imgRadius ?? "var(--qz-radius)", flexShrink: 0 }
           }
         />

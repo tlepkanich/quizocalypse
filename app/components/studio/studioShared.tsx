@@ -30,9 +30,11 @@ export interface StudioBuilderData {
 
 type Placement = NonNullable<Quiz["placement"]>;
 export const PLACEMENTS: Array<{ value: Placement; label: string; hint: string }> = [
-  { value: "page", label: "Dedicated page", hint: "share the link above, or add the App Block to any page." },
-  { value: "popup", label: "Popup", hint: "add the Quizocalypse App Block and set it to open as a modal." },
-  { value: "inline", label: "Inline embed", hint: "drop the App Block into a page section to embed it in-flow." },
+  // build-tab handoff §7 — ONE placement vocabulary everywhere: Settings and
+  // the desktop stage-bar "Show as" mirror these labels.
+  { value: "page", label: "Full page", hint: "share the link above, or add the App Block to any page." },
+  { value: "popup", label: "Pop-up", hint: "add the Quizocalypse App Block and set it to open as a modal." },
+  { value: "inline", label: "Inline", hint: "drop the App Block into a page section to embed it in-flow." },
   { value: "product_widget", label: "Product page widget", hint: "add the App Block to your product template as a compact launcher." },
 ];
 
