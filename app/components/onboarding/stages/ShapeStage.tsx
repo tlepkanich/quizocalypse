@@ -5,6 +5,7 @@
 import { useEffect, useMemo, useState } from "react";
 import type { CSSProperties } from "react";
 import type { useFetcher } from "@remix-run/react";
+import { Box, Check, RotateCcw, Sparkles } from "lucide-react";
 import { QzCard, QzBadge } from "../../qz";
 import { QzDrawer } from "../../qz-overlays";
 import type { QuizType } from "../../../lib/quizSchema";
@@ -62,9 +63,9 @@ export function ShapeStage({
   // (provenance banner, two thumbnail-led cards, the live preview drawer,
   // quiet escape links). Legacy in-flight drafts keep the four-card UI below
   // byte-identically.
-  if (isDecider) {
+  if (isDecider || data.logicModel == null) {
     return (
-      <DeciderShapeStage data={data} fetcher={fetcher} pendingIntent={pendingIntent} busy={busy} />
+      <DeciderShapeStage data={data} fetcher={fetcher} pendingIntent={pendingIntent} busy={busy} isDecider={isDecider} />
     );
   }
 
@@ -314,89 +315,80 @@ function DeciderShapeStage({
   fetcher,
   pendingIntent,
   busy,
+  isDecider,
 }: {
   data: FunnelData;
   fetcher: ReturnType<typeof useFetcher<ActionResult>>;
   pendingIntent: string | null;
   busy: boolean;
+  isDecider: boolean;
 }) {
-  const [previewTypeId, setPreviewTypeId] = useState<string | null>(null);
+  const [selectedTypeId, setSelectedTypeId] = useState<string | null>(null);
   const [writingGoal, setWritingGoal] = useState(false);
   const aiTypes = data.quizTypes.slice(0, 2);
-  const previewType = aiTypes.find((t) => t.id === previewTypeId) ?? null;
   const resolved = useMemo(() => resolveDesignTokens(data.designTokens ?? undefined), [data.designTokens]);
   const cssVars = useMemo(() => tokensToCssVars(resolved) as CSSProperties, [resolved]);
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-      <QzCard style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-        <div className="qz-row qz-row-between" style={{ alignItems: "center", gap: 8 }}>
-          <h2 className="qz-h2" style={{ margin: 0 }}>Shape your quiz</h2>
-          <QzBadge tone="draft">Brand ✦</QzBadge>
-        </div>
-        <p className="qz-dim" style={{ margin: 0 }}>
-          Two quiz directions drafted from your catalog — see each one live, then pick.
-        </p>
-      </QzCard>
-
-      {/* §2.1 provenance banner — the catalog-confidence signal, real counts. */}
-      <div className="qz-shape-provenance">
-        <span aria-hidden>✨</span>
-        <span>
-          Generated from your catalog — based on <strong>{data.productCount} products</strong>{" "}
-          across <strong>{data.productGroups.length} recommendation target{data.productGroups.length === 1 ? "" : "s"}</strong>.
-        </span>
-      </div>
+    <div className="qz-shape-page">
+      <h2 className="qz-h2" style={{ margin: 0 }}>Choose the optimal quiz type</h2>
 
       <div className="qz-type-grid">
-        {aiTypes.map((t, i) => (
-          <button
+        {aiTypes.map((t, i) => {
+          const selected = selectedTypeId === t.id;
+          const building = selected && pendingIntent === "shape-continue";
+          return (
+          <article
             key={t.id}
-            type="button"
-            className={`qz-card qz-shape-card${previewTypeId === t.id ? " is-active" : ""}`}
-            disabled={busy}
-            onClick={() => setPreviewTypeId(t.id)}
+            className={`qz-card qz-shape-card${selected ? " is-active" : ""}`}
           >
             {/* Soft Pastel §8.1 — the AI's top pick carries the violet Recommended
                 ribbon (the diamond mark was removed; the accent leads). */}
             {i === 0 ? (
-              <span className="qz-ribbon-recommended">Recommended</span>
+              <span className="qz-ribbon-recommended"><Sparkles size={11} aria-hidden /> Recommended</span>
             ) : null}
-            <TypeMiniThumb type={t} cssVars={cssVars} buckets={data.buckets} />
+            <TypeFilm type={t} cssVars={cssVars} buckets={data.buckets} catalog={data.catalog} />
             <span className="qz-row qz-row-between" style={{ gap: 8, alignItems: "flex-start" }}>
-              <span style={{ fontFamily: "var(--qz-font-display)", fontSize: 17, lineHeight: 1.2, textAlign: "left" }}>
+              <strong className="qz-shape-title">
                 {t.name}
-              </span>
+              </strong>
               <QzBadge tone={t.experience_type === "personality" ? "ok" : "draft"}>
                 {XTYPE_LABEL[t.experience_type] ?? t.experience_type}
               </QzBadge>
             </span>
-            <span className="qz-muted" style={{ fontSize: 13.5, textAlign: "left" }}>{t.achieves}</span>
-            <span className="qz-label">{t.question_range.min}–{t.question_range.max} questions</span>
-            <span className="qz-shape-see" aria-hidden>See it live →</span>
+            <span className="qz-shape-line"><b>GOAL</b><span>{t.achieves}</span></span>
+            <span className="qz-shape-line"><b>WHY</b><span>{t.rationale}</span></span>
+            <span className="qz-shape-meta">{t.question_range.min}–{t.question_range.max} questions</span>
+            <button
+              type="button"
+              className={`qz-btn ${selected ? "qz-btn-accent" : "qz-btn-ghost"} qz-shape-use`}
+              disabled={busy}
+              onClick={() => {
+                if (!selected) {
+                  setSelectedTypeId(t.id);
+                  return;
+                }
+                fetcher.submit({ intent: "shape-continue", typeId: t.id, scoring: "direct" }, { method: "post" });
+              }}
+            >
+              {building ? "Building…" : selected ? "Continue → build your questions" : "Use this"}
+            </button>
+          </article>
+          );
+        })}
+      </div>
+
+      <details className="qz-shape-other">
+        <summary>Other ways to start</summary>
+        <div className="qz-shape-other-body">
+          <button type="button" className="qz-link-quiet" disabled={busy} onClick={() => setWritingGoal((v) => !v)}>
+            Write your own goal
           </button>
-        ))}
-      </div>
-
-      {/* §2.1 escape links (quiet) — these re-route per §1.2; not cards. */}
-      <div className="qz-row" style={{ gap: 6, fontSize: 12.5 }}>
-        <span className="qz-dim">Prefer to start differently?</span>
-        <button type="button" className="qz-link-quiet" disabled={busy} onClick={() => setWritingGoal((v) => !v)}>
-          Write a goal
-        </button>
-        <span className="qz-dim" aria-hidden>·</span>
-        <button
-          type="button"
-          className="qz-link-quiet"
-          disabled={busy}
-          onClick={() => fetcher.submit({ intent: "manual-build" }, { method: "post" })}
-        >
-          {pendingIntent === "manual-build" ? "Opening…" : "Build manually"}
-        </button>
-      </div>
-
-      {writingGoal ? (
-        <QzCard style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          <button type="button" className="qz-link-quiet" disabled={busy} onClick={() => fetcher.submit({ intent: "manual-build" }, { method: "post" })}>
+            {pendingIntent === "manual-build" ? "Opening…" : "Build manually"}
+          </button>
+        {writingGoal ? (
+        <QzCard style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 4 }}>
           <strong style={{ fontSize: 14 }}>Describe what you want your quiz to do</strong>
           <GoalPromptBody
             suggestedGoal={data.goal?.goal_text || data.suggestedGoal}
@@ -406,14 +398,16 @@ function DeciderShapeStage({
             onCancel={() => setWritingGoal(false)}
           />
         </QzCard>
-      ) : null}
+        ) : null}
 
       <SavedTemplatesRow
         templates={data.savedTemplates}
         fetcher={fetcher}
         pendingIntent={pendingIntent}
-        isDecider
+        isDecider={isDecider}
       />
+        </div>
+      </details>
 
       <div className="qz-row" style={{ gap: 10, alignItems: "center" }}>
         <button
@@ -422,7 +416,7 @@ function DeciderShapeStage({
           disabled={busy}
           onClick={() => fetcher.submit({ intent: "shape-regenerate" }, { method: "post" })}
         >
-          {pendingIntent === "shape-regenerate" ? "Regenerating…" : "↻ Regenerate suggestions"}
+          {pendingIntent === "shape-regenerate" ? "Regenerating…" : <><RotateCcw size={13} aria-hidden /> Regenerate suggestions</>}
         </button>
         <button
           type="button"
@@ -434,25 +428,95 @@ function DeciderShapeStage({
         </button>
       </div>
 
-      {previewType ? (
-        <TemplatePreviewDrawer
-          type={previewType}
-          buckets={data.buckets}
-          catalog={data.catalog}
-          cssVars={cssVars}
-          resolvedPrimary={resolved.colors?.primary ?? "#5563DE"}
-          headingFamily={resolved.typography?.heading?.family ?? ""}
-          bodyFamily={resolved.typography?.body?.family ?? ""}
-          building={pendingIntent === "shape-continue"}
-          onUse={() =>
-            fetcher.submit(
-              { intent: "shape-continue", typeId: previewType.id, scoring: "direct" },
-              { method: "post" },
-            )
-          }
-          onClose={() => setPreviewTypeId(null)}
-        />
-      ) : null}
+    </div>
+  );
+}
+
+function TypeFilm({
+  type,
+  cssVars,
+  buckets,
+  catalog,
+}: {
+  type: QuizType;
+  cssVars: CSSProperties;
+  buckets: FunnelData["buckets"];
+  catalog: FunnelData["catalog"];
+}) {
+  const [showResults, setShowResults] = useState(false);
+  useEffect(() => {
+    const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (reduced) {
+      setShowResults(true);
+      return;
+    }
+    const timer = window.setInterval(() => setShowResults((current) => !current), 3200);
+    return () => window.clearInterval(timer);
+  }, []);
+
+  const answers = buckets.slice(0, 4).map((bucket) => {
+    const product = bucket.type === "product"
+      ? catalog.products.find((item) => item.id === bucket.key)
+      : bucket.type === "tag"
+        ? catalog.products.find((item) => item.tagKeys.includes(bucket.key))
+        : catalog.products.find((item) => item.collectionIds.includes(bucket.key));
+    return { label: bucket.name, imageUrl: bucket.thumbnailUrl ?? product?.imageUrl ?? null };
+  });
+  const products = catalog.products.slice(0, 3);
+  const personality = type.experience_type === "personality";
+
+  return (
+    <div className="qz-shape-film" style={cssVars} aria-label={`${type.name} preview`}>
+      <div className={`qz-shape-film-screen is-question${showResults ? " is-hidden" : ""}`}>
+        <span className="qz-shape-film-progress"><i /></span>
+        <strong>What are you shopping for today?</strong>
+        <div className="qz-shape-film-answers">
+          {(answers.length ? answers : [
+            { label: "Everyday essentials", imageUrl: null },
+            { label: "A focused upgrade", imageUrl: null },
+            { label: "Something new", imageUrl: null },
+            { label: "The best fit", imageUrl: null },
+          ]).map((answer, index) => (
+            <span key={`${answer.label}-${index}`} className={`qz-shape-film-answer${index === 0 ? " is-selected" : ""}`}>
+              <span className="qz-shape-film-image">
+                {answer.imageUrl ? <img src={answer.imageUrl} alt="" loading="lazy" /> : <Box size={15} aria-hidden />}
+              </span>
+              <span>{answer.label}</span>
+              {index === 0 ? <Check size={11} aria-hidden /> : null}
+            </span>
+          ))}
+        </div>
+      </div>
+      <div className={`qz-shape-film-screen is-results${showResults ? "" : " is-hidden"}`}>
+        {personality ? (
+          <div className="qz-shape-persona">
+            <span>YOUR SHOPPER TYPE</span>
+            <strong>You&rsquo;re the Considered Curator</strong>
+            <small>Thoughtful picks, chosen for how you actually shop.</small>
+          </div>
+        ) : (
+          <div className="qz-shape-film-heading">
+            <strong>Your matches</strong>
+            <small>Picked from your catalog for this shopper.</small>
+          </div>
+        )}
+        {personality ? <span className="qz-shape-film-kicker">Your product picks</span> : null}
+        <div className="qz-shape-film-products">
+          {(products.length ? products : [{ id: "placeholder", title: "Your top match", imageUrl: null, price: null }]).slice(0, personality ? 2 : 3).map((product, index) => (
+            <span key={product.id} className={`qz-shape-film-product${index === 0 ? " is-top" : ""}`}>
+              <span className="qz-shape-film-product-image">
+                {product.imageUrl ? <img src={product.imageUrl} alt="" loading="lazy" /> : <Box size={14} aria-hidden />}
+              </span>
+              <span className="qz-shape-film-product-copy">
+                <strong>{product.title}</strong>
+                <small>{product.price != null ? `$${product.price.toFixed(2)}` : "Made for your store"}</small>
+              </span>
+              {index === 0 ? <b>Top</b> : null}
+            </span>
+          ))}
+        </div>
+        <span className="qz-shape-film-cta">Add all to cart</span>
+      </div>
     </div>
   );
 }
@@ -460,7 +524,7 @@ function DeciderShapeStage({
 // §2.1 — the card's LIVE mini-thumbnail: a small rendered quiz screen (progress
 // bar, question, answers) themed with the draft's tokens — never an icon. The
 // answers are the merchant's REAL recommendation targets.
-function TypeMiniThumb({
+export function TypeMiniThumb({
   type,
   cssVars,
   buckets,
@@ -492,7 +556,7 @@ function TypeMiniThumb({
 // brand-themed, ending on a result screen so the full arc is visible. "Use
 // this template" applies it (the same shape-continue the old expanded card
 // submitted) and the build takes over.
-function TemplatePreviewDrawer({
+export function TemplatePreviewDrawer({
   type,
   buckets,
   catalog,

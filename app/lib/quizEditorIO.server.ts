@@ -3,7 +3,7 @@ import type { Shop } from "@prisma/client";
 import { authenticate } from "../shopify.server";
 import prisma from "../db.server";
 import { logFor } from "./log.server";
-import { withAiSpendRecording } from "./aiBudget.server";
+import { checkAiBudget, withAiSpendRecording } from "./aiBudget.server";
 import { Quiz } from "./quizSchema";
 import type { Quiz as QuizDoc } from "./quizSchema";
 import { publishQuiz, PublishError, collectDeciderTargetIds } from "./quizPublish";
@@ -198,6 +198,27 @@ export async function handleQuizEditorActionForShop(
   request: Request,
   getAdmin: () => Promise<Parameters<typeof ensureQuizDiscount>[0]>,
 ) {
+  const contentType = request.headers.get("content-type") ?? "";
+  if (!contentType.includes("application/json")) {
+    const form = await request.clone().formData();
+    const intent = String(form.get("intent") ?? "");
+    const aiIntents = new Set([
+      "regenerate-node",
+      "generate-questions",
+      "ai-edit",
+      "enrich-reviews",
+      "translate-quiz",
+    ]);
+    if (aiIntents.has(intent)) {
+      const budget = await checkAiBudget(shop.id, "merchant");
+      if (!budget.allowed) {
+        return json(
+          { ok: false, error: "You've hit today's AI limit. It resets tomorrow; your current content is unchanged." },
+          { status: 429 },
+        );
+      }
+    }
+  }
   // Surface a DB-write / unexpected failure as a parseable JSON error rather than
   // an unhandled throw (ErrorBoundary), so the builder's useQuizDraft saveError can
   // see it instead of a silent "looks saved but didn't". Re-throw Responses
@@ -326,8 +347,8 @@ async function handleQuizEditorActionImpl(
           { status: 400 },
         );
       }
-      const message = err instanceof Error ? err.message : String(err);
-      return json({ ok: false, error: message }, { status: 500 });
+      logFor("quizEditorIO").error({ err, quizId: id }, "publish failed");
+      return json({ ok: false, error: "Publishing failed — please try again." }, { status: 500 });
     }
   }
 
@@ -371,8 +392,8 @@ async function handleQuizEditorActionImpl(
         ...(brandGuidelines ? { brandGuidelines } : {}),
       });
     } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      return json({ ok: false, error: message }, { status: 502 });
+      logFor("quizEditorIO").error({ err, quizId: id }, "question regeneration failed");
+      return json({ ok: false, error: "AI is busy right now — try again. Your current question is unchanged." }, { status: 502 });
     }
 
     // Merge the AI answers with the prior ones, preserving each answer's bucket
@@ -535,8 +556,8 @@ async function handleQuizEditorActionImpl(
         ...(brandGuidelines ? { brandGuidelines } : {}),
       });
     } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      return json({ ok: false, error: message }, { status: 502 });
+      logFor("quizEditorIO").error({ err, quizId: id }, "question generation failed");
+      return json({ ok: false, error: "AI is busy right now — try again. Your current questions are unchanged." }, { status: 502 });
     }
 
     const updatedDoc = applyQuestionFlow(doc, generated, buckets);
@@ -626,8 +647,8 @@ async function handleQuizEditorActionImpl(
         ...(brandGuidelines ? { brandGuidelines } : {}),
       });
     } catch (err) {
-      const m = err instanceof Error ? err.message : String(err);
-      return json({ ok: false, error: m }, { status: 502 });
+      logFor("quizEditorIO").error({ err, quizId: id }, "AI edit failed");
+      return json({ ok: false, error: "That edit didn't come back usable — try again. Your current content is unchanged." }, { status: 502 });
     }
 
     // Apply the ops deterministically, then gate on Quiz.parse. On failure we
@@ -700,8 +721,8 @@ async function handleQuizEditorActionImpl(
         ...(brandGuidelines ? { brandGuidelines } : {}),
       });
     } catch (err) {
-      const m = err instanceof Error ? err.message : String(err);
-      return json({ ok: false, error: m }, { status: 502 });
+      logFor("quizEditorIO").error({ err, quizId: id }, "review enrichment failed");
+      return json({ ok: false, error: "AI is temporarily unavailable. Your current content is unchanged." }, { status: 502 });
     }
 
     const { doc: enriched, changed } = applyReviewEnrichment(doc, enrichment);
@@ -789,8 +810,8 @@ async function handleQuizEditorActionImpl(
         ...(brandGuidelines ? { brandGuidelines } : {}),
       });
     } catch (err) {
-      const m = err instanceof Error ? err.message : String(err);
-      return json({ ok: false, error: m }, { status: 502 });
+      logFor("quizEditorIO").error({ err, quizId: id }, "translation failed");
+      return json({ ok: false, error: "Translation is temporarily unavailable. Your current content is unchanged." }, { status: 502 });
     }
 
     // Merge target: the merchant's current doc when the studio sent it (autosave

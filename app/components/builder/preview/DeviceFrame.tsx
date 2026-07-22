@@ -1,4 +1,4 @@
-import { useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { clampFrameWidth, breakpointForWidth } from "./previewWidth";
 
 // A polished, resizable device bezel. The frame is centered, so dragging the
@@ -24,8 +24,20 @@ export function DeviceFrame({
   urlLabel?: string;
 }) {
   const containerRef = useRef<HTMLDivElement | null>(null);
+  const fitRef = useRef<HTMLDivElement | null>(null);
   const dragRef = useRef<{ startX: number; startW: number } | null>(null);
   const [dragging, setDragging] = useState(false);
+  const [fitBounds, setFitBounds] = useState({ width: 0, height: 0 });
+
+  useEffect(() => {
+    const host = fitRef.current;
+    if (!host) return;
+    const measure = () => setFitBounds({ width: host.clientWidth, height: host.clientHeight });
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(host);
+    return () => observer.disconnect();
+  }, [width]);
 
   const onPointerDown = (e: React.PointerEvent) => {
     e.preventDefault();
@@ -73,42 +85,38 @@ export function DeviceFrame({
     // internally) instead of a stretched full-height narrow card — the mobile
     // preview should read as a phone, not a column. Desktop keeps the clean card.
     if (breakpointForWidth(width) === "mobile") {
+      const bezel = 6;
+      const logicalWidth = width;
+      const logicalHeight = 844;
+      const frameWidth = logicalWidth + bezel * 2;
+      const frameHeight = logicalHeight + bezel * 2;
+      const scale = fitBounds.width > 0 && fitBounds.height > 0
+        ? Math.min(1, fitBounds.width / frameWidth, fitBounds.height / frameHeight)
+        : 1;
       return (
-        <div style={{ width: "100%", display: "flex", justifyContent: "center" }}>
+        <div ref={fitRef} className="qz-device-fit-mobile">
+          <div style={{ width: frameWidth * scale, height: frameHeight * scale, position: "relative", flex: "0 0 auto" }}>
           <div
             style={{
-              width,
-              maxWidth: "100%",
-              flex: "0 0 auto",
-              position: "relative",
-              padding: 9,
-              borderRadius: 46,
-              background: "linear-gradient(158deg, #34343c 0%, #17171b 62%)",
+              width: frameWidth,
+              height: frameHeight,
+              position: "absolute",
+              inset: 0,
+              padding: bezel,
+              transform: `scale(${scale})`,
+              transformOrigin: "top left",
+              borderRadius: 38,
+              background: "#202024",
               boxShadow:
                 "0 1px 2px rgba(17,17,17,.06), 0 26px 64px rgba(17,17,17,.24), inset 0 0 0 1px rgba(255,255,255,.06)",
             }}
           >
-            {/* dynamic-island pill — floats over the top of the screen */}
-            <div
-              aria-hidden
-              style={{
-                position: "absolute",
-                top: 20,
-                left: "50%",
-                transform: "translateX(-50%)",
-                width: 92,
-                height: 24,
-                borderRadius: 999,
-                background: "#0b0b0d",
-                zIndex: 3,
-              }}
-            />
             <div
               className="qz-canvas-card"
               style={{
-                width: "100%",
-                borderRadius: 38,
-                height: "min(760px, 74vh)",
+                width: logicalWidth,
+                borderRadius: 32,
+                height: logicalHeight,
                 overflow: "auto",
                 background: "#fff",
               }}
@@ -116,13 +124,30 @@ export function DeviceFrame({
               {children}
             </div>
           </div>
+          </div>
         </div>
       );
     }
+    const logicalHeight = 720;
+    const scale = fitBounds.width > 0 ? Math.min(1, fitBounds.width / width) : 1;
     return (
-      <div style={{ width: "100%", display: "flex", justifyContent: "center" }}>
-        <div className="qz-canvas-card" style={{ width, maxWidth: "100%", flex: "0 0 auto" }}>
-          {children}
+      <div ref={fitRef} className="qz-device-fit-desktop">
+        <div style={{ width: width * scale, height: logicalHeight * scale, position: "relative", flex: "0 0 auto" }}>
+          <div
+            className="qz-canvas-card"
+            style={{
+              position: "absolute",
+              inset: 0,
+              width,
+              height: logicalHeight,
+              overflow: "auto",
+              transform: `scale(${scale})`,
+              transformOrigin: "top left",
+              background: "#fff",
+            }}
+          >
+            {children}
+          </div>
         </div>
       </div>
     );

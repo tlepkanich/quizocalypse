@@ -56,7 +56,7 @@ describe("estimateSpendUSD — conservative Sonnet-rate math", () => {
   });
 });
 
-describe("checkAiBudget — limits, defaults, 0-unlimited, fail-open", () => {
+describe("checkAiBudget — limits, defaults, 0-unlimited, failure posture", () => {
   it("defaults: runtime $2, merchant $10 when envs are unset", async () => {
     vi.stubEnv("AI_BUDGET_RUNTIME_DAILY_USD", "");
     vi.stubEnv("AI_BUDGET_MERCHANT_DAILY_USD", "");
@@ -109,6 +109,14 @@ describe("checkAiBudget — limits, defaults, 0-unlimited, fail-open", () => {
     const check = await checkAiBudget("s1", "merchant");
     expect(check.allowed).toBe(true);
     expect(check.limitUSD).toBe(10);
+    expect(reportError).toHaveBeenCalledTimes(1);
+  });
+
+  it("FAILS CLOSED for the public runtime when the ledger is unavailable", async () => {
+    p.aiUsage.findUnique.mockRejectedValue(new Error("db down"));
+    const check = await checkAiBudget("s1", "runtime");
+    expect(check.allowed).toBe(false);
+    expect(check.limitUSD).toBe(2);
     expect(reportError).toHaveBeenCalledTimes(1);
   });
 });

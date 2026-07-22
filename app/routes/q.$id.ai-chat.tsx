@@ -5,7 +5,8 @@ import { Quiz } from "../lib/quizSchema";
 import { runAskAIChat, type AskAIMessage } from "../lib/claude";
 import { parseBrandGuidelinesSafe } from "../lib/brandGuidelines";
 import { rateLimit } from "../lib/rateLimiters";
-import { withAiSpendRecording } from "../lib/aiBudget.server";
+import { checkAiBudget, withAiSpendRecording } from "../lib/aiBudget.server";
+import { reportError } from "../lib/log.server";
 import type { IndexedProduct } from "../lib/recommendationEngine";
 import { formatMoney } from "../lib/formatMoney";
 
@@ -86,6 +87,14 @@ export async function action({ params, request }: ActionFunctionArgs) {
     return json({ error: "Max turns reached" }, { status: 429 });
   }
 
+  const budget = await checkAiBudget(quiz.shopId, "runtime");
+  if (!budget.allowed) {
+    return json(
+      { error: "Chat isn't available right now. You can keep going with the quiz." },
+      { status: 503 },
+    );
+  }
+
   // Build quiz-context summary from the visited path.
   const lines: string[] = [];
   for (const step of body.path) {
@@ -140,7 +149,10 @@ export async function action({ params, request }: ActionFunctionArgs) {
     );
     return json({ reply: result.reply });
   } catch (err) {
-    const message = err instanceof Error ? err.message : "Unknown error";
-    return json({ error: `AI chat failed: ${message}` }, { status: 502 });
+    reportError(err, { scope: "ai-chat", msg: "shopper chat failed", quizId: id, shopId: quiz.shopId });
+    return json(
+      { error: "Chat isn't available right now. You can keep going with the quiz." },
+      { status: 502 },
+    );
   }
 }

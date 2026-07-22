@@ -111,7 +111,7 @@ export function Step5Preview({
     onCommit({ ...doc, launcher_config: { ...lc, ...patch } });
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+    <div className={chromeless ? "qz-step5-chromeless" : undefined} style={{ display: "flex", flexDirection: "column", gap: 16 }}>
       {!chromeless && (
         <div className="qz-row qz-row-between" style={{ alignItems: "flex-end", gap: 12, flexWrap: "wrap" }}>
           <div>
@@ -253,19 +253,19 @@ export function Step5Preview({
         />
       </DeviceFrame>
 
-      {ordered.orphans.length > 0 ? (
+      {!chromeless && ordered.orphans.length > 0 ? (
         <QzBadge tone="warn">
           {ordered.orphans.length} unreachable step(s) — fix in the Questions step
         </QzBadge>
       ) : null}
 
-      <p className="qz-dim" style={{ fontSize: 11.5, margin: 0 }}>
+      {!chromeless ? <p className="qz-dim" style={{ fontSize: 11.5, margin: 0 }}>
         Recommendations here resolve from your current product groups — the same products
         shoppers will see once you publish.
-      </p>
+      </p> : null}
 
       {/* Floating launcher config (unchanged) */}
-      <QzCard style={{ padding: 16 }}>
+      {!chromeless ? <QzCard style={{ padding: 16 }}>
         <div
           className="qz-row qz-row-between"
           style={{ alignItems: "center", marginBottom: lc.enabled ? 12 : 0 }}
@@ -318,7 +318,7 @@ export function Step5Preview({
             </QzField>
           </div>
         ) : null}
-      </QzCard>
+      </QzCard> : null}
     </div>
   );
 }

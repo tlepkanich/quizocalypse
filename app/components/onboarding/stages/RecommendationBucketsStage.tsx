@@ -6,6 +6,7 @@ import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties, KeyboardEvent as ReactKeyboardEvent } from "react";
 import { Link } from "@remix-run/react";
 import type { useFetcher } from "@remix-run/react";
+import { Box, Check, FolderOpen, PencilLine, Play, RotateCcw, Sparkles, Tag, X } from "lucide-react";
 import { QzCard, QzBadge, QzInput, QzTooltip } from "../../qz";
 import { QzModal, QzDrawer } from "../../qz-overlays";
 import type { DesignTokens } from "../../../lib/quizSchema";
@@ -13,7 +14,6 @@ import type { BucketSuggestion } from "../../../lib/bucketDetect";
 import { resolveDesignTokens, tokensToCssVars, suggestContrastText } from "../../../lib/designTokens";
 import { googleFontsUrl } from "../../runtime/runtimeStyles";
 import {
-  FUNNEL_STAGES,
   GoalPromptBody,
   type ActionResult,
   type BucketType,
@@ -48,7 +48,10 @@ const TYPE_BADGE: Record<BucketType, "draft" | "ok" | "warn"> = {
   collection: "warn",
 };
 
-const TYPE_GLYPH: Record<BucketType, string> = { product: "📦", tag: "🏷️", collection: "🗂️" };
+function BucketGlyph({ type, size = 18 }: { type: BucketType; size?: number }) {
+  const Icon = type === "product" ? Box : type === "tag" ? Tag : FolderOpen;
+  return <Icon size={size} strokeWidth={1.8} aria-hidden />;
+}
 
 // Merchant-facing nouns for the switch-confirm copy ("You have 4 collections
 // selected…") — the tab labels are display-cased/pluralized, so counts need
@@ -95,6 +98,7 @@ export function RecommendationBucketsStage({
   const [previewOpen, setPreviewOpen] = useState(false);
   const [removeWarn, setRemoveWarn] = useState<BucketCard | null>(null);
   const [bulkWarn, setBulkWarn] = useState<{ count: number; run: () => void } | null>(null);
+  const [bucketPreview, setBucketPreview] = useState<BucketCard | null>(null);
   // Start-routing spec §1 — Continue opens the "How do you want to start?"
   // intercept (decider drafts only; legacy Continue submits directly as today).
   // Dismissal returns here unchanged; it re-opens on the next Continue.
@@ -324,7 +328,6 @@ export function RecommendationBucketsStage({
   const continuing = pendingIntent === "continue-buckets";
   const resyncing = pendingIntent === "resync";
   const resyncResult = result && result.intent === "resync" ? result : null;
-  const stepCount = FUNNEL_STAGES.length;
   const tabCounts: Record<BucketType, number> = {
     product: data.catalog.products.length,
     tag: data.catalog.tags.length,
@@ -338,22 +341,15 @@ export function RecommendationBucketsStage({
   return (
     <div className="qz-rb">
       <div className="qz-rb-head">
-        <div className="qz-label">Step 1 of {stepCount} · Recommendations</div>
         <h2 className="qz-h2" style={{ margin: 0 }}>
           What can your quiz recommend?
         </h2>
-        <p className="qz-dim" style={{ margin: 0 }}>
-          Pick the outcomes shoppers can land on — individual products, tags, or whole
-          collections. We&rsquo;ll route the quiz toward whichever fits each shopper.
-        </p>
       </div>
 
       {/* §4 — AI recommendation banner (an action, not advice) */}
       {applied ? (
         <div className="qz-rb-banner is-applied">
-          <span className="qz-rb-banner-icon" aria-hidden>
-            ✓
-          </span>
+          <span className="qz-rb-banner-icon" aria-hidden><Check size={17} strokeWidth={2.6} /></span>
           <div className="qz-rb-banner-body">
             <div className="qz-rb-banner-head">
               <strong>Applied — {data.suggestion.message.replace(/^Use |^Start with /, "using ")}</strong>
@@ -366,9 +362,9 @@ export function RecommendationBucketsStage({
             Undo
           </button>
         </div>
-      ) : !dismissed ? (
-        <RbBanner suggestion={data.suggestion} onUse={useThis} onNotNow={notNow} />
-      ) : null}
+      ) : (
+        <RbBanner suggestion={data.suggestion} collapsed={dismissed} onUse={useThis} onHide={notNow} onExpand={() => setDismissed(false)} />
+      )}
 
       <div className="qz-rb-split">
         <div className="qz-rb-main">
@@ -443,27 +439,42 @@ export function RecommendationBucketsStage({
                   aria-pressed={on}
                   onClick={() => toggle(c)}
                 >
-                  {activeTab === "product" ? (
-                    <span className="qz-rb-thumb">
-                      {c.thumbnailUrl ? (
-                        <img src={c.thumbnailUrl} alt="" loading="lazy" />
-                      ) : (
-                        <span aria-hidden>{TYPE_GLYPH.product}</span>
-                      )}
-                    </span>
-                  ) : null}
+                  <span className={`qz-rb-thumb${c.thumbnailUrl ? "" : " is-placeholder"}`}>
+                    {c.thumbnailUrl ? (
+                      <img src={c.thumbnailUrl} alt="" loading="lazy" />
+                    ) : (
+                      <BucketGlyph type={c.type} />
+                    )}
+                  </span>
                   <span className="qz-rb-card-body">
                     <span className="qz-rb-card-name">{c.name}</span>
-                    <span className="qz-rb-card-meta qz-dim">
-                      {activeTab === "product"
-                        ? price != null
-                          ? `$${price.toFixed(2)}`
-                          : "—"
-                        : `${c.count} product${c.count === 1 ? "" : "s"}`}
-                    </span>
+                    {activeTab === "product" ? (
+                      <span className="qz-rb-card-meta qz-dim">
+                        {price != null ? `$${price.toFixed(2)}` : "—"}
+                      </span>
+                    ) : null}
                   </span>
+                  {activeTab !== "product" ? (
+                    <span
+                      role="button"
+                      tabIndex={0}
+                      className="qz-rb-count-link"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        setBucketPreview(c);
+                      }}
+                      onKeyDown={(event) => {
+                        if (event.key !== "Enter" && event.key !== " ") return;
+                        event.preventDefault();
+                        event.stopPropagation();
+                        setBucketPreview(c);
+                      }}
+                    >
+                      {c.count} product{c.count === 1 ? "" : "s"} <span aria-hidden>→</span>
+                    </span>
+                  ) : null}
                   <span className={`qz-rb-check${on ? " is-on" : ""}`} aria-hidden>
-                    {on ? "✓" : ""}
+                    {on ? <Check size={12} strokeWidth={2.8} /> : null}
                   </span>
                 </button>
               );
@@ -482,7 +493,7 @@ export function RecommendationBucketsStage({
               onClick={() => fetcher.submit({ intent: "resync" }, { method: "post" })}
               disabled={resyncing}
             >
-              {resyncing ? "Refreshing…" : "↻ Refresh catalog"}
+              {resyncing ? "Refreshing…" : <><RotateCcw size={13} aria-hidden /> Refresh catalog</>}
             </button>
             {resyncResult ? (
               <span className="qz-dim" style={{ fontSize: 12 }}>
@@ -516,7 +527,7 @@ export function RecommendationBucketsStage({
                     {c.thumbnailUrl ? (
                       <img src={c.thumbnailUrl} alt="" loading="lazy" />
                     ) : (
-                      <span aria-hidden>{TYPE_GLYPH[c.type]}</span>
+                      <BucketGlyph type={c.type} size={14} />
                     )}
                   </span>
                   <span className="qz-rb-chip-body">
@@ -531,7 +542,7 @@ export function RecommendationBucketsStage({
                     aria-label={`Remove ${c.name}`}
                     onClick={() => toggle(c)}
                   >
-                    ✕
+                    <X size={13} aria-hidden />
                   </button>
                 </div>
               ))}
@@ -550,7 +561,7 @@ export function RecommendationBucketsStage({
               disabled={count === 0}
               onClick={() => setPreviewOpen(true)}
             >
-              ▷ Preview results page
+              <Play size={14} aria-hidden /> Preview results page
             </button>
             {count === 0 ? (
               <QzTooltip content="Add at least one recommendation to continue.">
@@ -636,7 +647,59 @@ export function RecommendationBucketsStage({
           onClose={() => setInterceptOpen(false)}
         />
       ) : null}
+      {bucketPreview ? (
+        <BucketProductsModal
+          bucket={bucketPreview}
+          products={data.catalog.products}
+          onClose={() => setBucketPreview(null)}
+        />
+      ) : null}
     </div>
+  );
+}
+
+function BucketProductsModal({
+  bucket,
+  products,
+  onClose,
+}: {
+  bucket: BucketCard;
+  products: FunnelData["catalog"]["products"];
+  onClose: () => void;
+}) {
+  const members = bucket.type === "tag"
+    ? products.filter((product) => product.tagKeys.includes(bucket.key))
+    : bucket.type === "collection"
+      ? products.filter((product) => product.collectionIds.includes(bucket.key))
+      : products.filter((product) => product.id === bucket.key);
+  return (
+    <QzModal
+      open
+      onClose={onClose}
+      size="md"
+      title={
+        <span className="qz-rb-modal-title">
+          <span className="qz-rb-modal-icon"><BucketGlyph type={bucket.type} size={16} /></span>
+          <span>{bucket.name}</span>
+          <span className="qz-rb-count">{members.length}</span>
+        </span>
+      }
+      footer={<button type="button" className="qz-btn qz-btn-accent" onClick={onClose}>Done</button>}
+    >
+      <div className="qz-rb-product-list">
+        {members.length ? members.map((product) => (
+          <div key={product.id} className="qz-rb-product-row">
+            <span className={`qz-rb-product-image${product.imageUrl ? "" : " is-placeholder"}`}>
+              {product.imageUrl ? <img src={product.imageUrl} alt="" loading="lazy" /> : <Box size={18} aria-hidden />}
+            </span>
+            <span className="qz-rb-product-copy">
+              <strong>{product.title}</strong>
+              <span className="qz-dim">{product.price != null ? `$${product.price.toFixed(2)}` : "Price unavailable"}</span>
+            </span>
+          </div>
+        )) : <p className="qz-dim" style={{ margin: 0 }}>No matching products are currently available.</p>}
+      </div>
+    </QzModal>
   );
 }
 
@@ -678,35 +741,37 @@ function StartInterceptModal({
           </span>
           <div className="qz-start-choices">
             <button type="button" className="qz-start-choice is-ai" onClick={onAiTemplates}>
-              <span className="qz-row qz-row-between" style={{ gap: 8 }}>
-                <span style={{ fontSize: 20 }} aria-hidden>
-                  ✨
+              <span className="qz-start-choice-icon" aria-hidden><Sparkles size={20} /></span>
+              <span className="qz-start-choice-copy">
+                <strong>Generate with AI</strong>
+                <span className="qz-dim">
+                  Get two tailored directions built from your catalog, then choose the one that fits.
                 </span>
-                <QzBadge tone="ok">Fastest</QzBadge>
               </span>
-              <strong>Generate AI templates</strong>
-              <span className="qz-dim" style={{ fontSize: 12.5 }}>
-                We read your catalog and draft two quiz directions — preview them live and
-                pick one.
-              </span>
+              <QzBadge tone="ok">Recommended</QzBadge>
+              <span className="qz-start-choice-arrow" aria-hidden>→</span>
             </button>
             <button
               type="button"
               className="qz-start-choice"
               onClick={() => setScreen("goal")}
             >
-              <span style={{ fontSize: 20 }} aria-hidden>
-                ✏
+              <span className="qz-start-choice-icon" aria-hidden><PencilLine size={20} /></span>
+              <span className="qz-start-choice-copy">
+                <strong>Write your goal</strong>
+                <span className="qz-dim">
+                  Describe the outcome you want and we&rsquo;ll generate the questions around it.
+                </span>
               </span>
-              <strong>Write your goal</strong>
-              <span className="qz-dim" style={{ fontSize: 12.5 }}>
-                Describe what the quiz should do — we&rsquo;ll generate the questions from
-                it and take you straight to editing.
-              </span>
+              <span className="qz-start-choice-arrow" aria-hidden>→</span>
             </button>
           </div>
-          <button type="button" className="qz-link-quiet" onClick={onManual}>
-            Build from a blank quiz instead →
+          <button type="button" className="qz-start-blank" onClick={onManual}>
+            <span className="qz-start-choice-copy">
+              <strong>Start blank</strong>
+              <span className="qz-dim">Open an empty quiz and build it yourself.</span>
+            </span>
+            <span aria-hidden>→</span>
           </button>
         </div>
       ) : (
@@ -918,7 +983,7 @@ function ResultsPreviewDrawer({
                 className={`qz-rb-pvtab${i === tabIdx ? " is-active" : ""}`}
                 onClick={() => setTabIdx(i)}
               >
-                <span aria-hidden>{TYPE_GLYPH[s.type]}</span> {s.name}
+                <BucketGlyph type={s.type} size={13} /> {s.name}
               </button>
             ))}
           </div>
@@ -1010,34 +1075,42 @@ function ResultsPreviewDrawer({
 // session. The why-line carries real catalog numbers.
 function RbBanner({
   suggestion,
+  collapsed,
   onUse,
-  onNotNow,
+  onHide,
+  onExpand,
 }: {
   suggestion: BucketSuggestion;
+  collapsed: boolean;
   onUse: () => void;
-  onNotNow: () => void;
+  onHide: () => void;
+  onExpand: () => void;
 }) {
+  if (collapsed) {
+    return (
+      <button type="button" className="qz-rb-ai-pill" onClick={onExpand}>
+        <span className="qz-rb-ai-spark" aria-hidden><Sparkles size={14} /></span>
+        <span>AI TIP</span>
+      </button>
+    );
+  }
   return (
-    <div className={`qz-rb-banner is-${suggestion.strength ?? "none"}`}>
-      <span className="qz-rb-banner-icon" aria-hidden>
-        ✨
-      </span>
+    <div className="qz-rb-ai-tip">
+      <span className="qz-rb-ai-icon" aria-hidden><Sparkles size={18} /></span>
       <div className="qz-rb-banner-body">
-        <div className="qz-rb-banner-head">
-          <span className="qz-label">AI recommendation</span>
-          {suggestion.strength ? (
-            <QzBadge tone={suggestion.strength === "strong" ? "ok" : "warn"}>
-              {suggestion.strength === "strong" ? "Strong signal" : "Worth a look"}
-            </QzBadge>
-          ) : null}
-        </div>
+        <span className="qz-rb-ai-label">AI TIP</span>
         <strong style={{ fontSize: 14 }}>{suggestion.message}</strong>
         <p className="qz-dim" style={{ margin: 0, fontSize: 13 }}>
-          {/* An empty catalog's why-line ("0 products across 0 collections…")
-              just restates the sync prompt — skip it. */}
-          {suggestion.counts.products > 0 ? `${suggestion.why} ` : ""}
           {suggestion.reason}
         </p>
+        {suggestion.counts.products > 0 ? (
+          <div className="qz-rb-ai-based">
+            <span>Based on</span>
+            <span>{suggestion.counts.products} products</span>
+            <span>{suggestion.counts.collections} collections</span>
+            <span>{suggestion.counts.tags} tags</span>
+          </div>
+        ) : null}
       </div>
       <div className="qz-rb-banner-actions">
         {suggestion.apply ? (
@@ -1045,8 +1118,8 @@ function RbBanner({
             Use this
           </button>
         ) : null}
-        <button type="button" className="qz-btn qz-btn-ghost qz-btn-sm" onClick={onNotNow}>
-          Not now
+        <button type="button" className="qz-btn qz-btn-ghost qz-btn-sm" onClick={onHide}>
+          Hide
         </button>
       </div>
     </div>

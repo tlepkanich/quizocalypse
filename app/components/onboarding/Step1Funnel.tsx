@@ -49,6 +49,7 @@ export function Step1Funnel({ data }: { data: FunnelData }) {
   // The brand identity is a tap-to-open overlay (kept out of the header so the
   // page leads with the actual task, not a paragraph of summary).
   const [showIdentity, setShowIdentity] = useState(false);
+  const [leaveSetupOpen, setLeaveSetupOpen] = useState(false);
 
   // QL3-P5 — the Step-3 v3 shell is active for EVERY decider doc on the
   // question_builder stage (the ?step3=v3 flag is retired). It renders its OWN
@@ -77,6 +78,7 @@ export function Step1Funnel({ data }: { data: FunnelData }) {
   // scrolled out of view, and step 5's said "Open builder →"). Their primary
   // action moves here — same anatomy as step 3's — and the footers retire.
   const navBusy = fetcher.state !== "idle";
+  const shapeVisible = visibleStageKey(data.stage) === "types";
   const stageNav =
     data.stage === "rec_page" ? (
       <>
@@ -130,7 +132,7 @@ export function Step1Funnel({ data }: { data: FunnelData }) {
         center={<FunnelStepNav stage={data.stage} />}
         right={
           <>
-            {data.identitySummary ? (
+            {data.identitySummary && !shapeVisible ? (
               <button
                 type="button"
                 className="qz-btn qz-btn-ghost qz-btn-sm"
@@ -139,9 +141,15 @@ export function Step1Funnel({ data }: { data: FunnelData }) {
                 ✦ Brand identity
               </button>
             ) : null}
-            <Link to="/studio" className="qz-btn qz-btn-ghost qz-btn-sm">
-              ← All quizzes
-            </Link>
+            {shapeVisible ? (
+              <button type="button" className="qz-btn qz-btn-ghost qz-btn-sm" onClick={() => setLeaveSetupOpen(true)}>
+                ← Homepage
+              </button>
+            ) : (
+              <Link to="/studio" className="qz-btn qz-btn-ghost qz-btn-sm">
+                ← All quizzes
+              </Link>
+            )}
             {stageNav}
           </>
         }
@@ -150,6 +158,24 @@ export function Step1Funnel({ data }: { data: FunnelData }) {
     <QzPage wide>
       {showIdentity && data.identitySummary ? (
         <BrandIdentityModal summary={data.identitySummary} onClose={() => setShowIdentity(false)} />
+      ) : null}
+      {leaveSetupOpen ? (
+        <QzModal
+          open
+          onClose={() => setLeaveSetupOpen(false)}
+          size="sm"
+          title="Leave setup?"
+          footer={
+            <>
+              <button type="button" className="qz-btn qz-btn-ghost" onClick={() => setLeaveSetupOpen(false)}>Stay here</button>
+              <Link to="/studio" className="qz-btn qz-btn-accent">Go to homepage</Link>
+            </>
+          }
+        >
+          <p className="qz-dim" style={{ margin: 0 }}>
+            Your quiz is saved as a draft. You can return and finish setup at any time.
+          </p>
+        </QzModal>
       ) : null}
 
       {errorMsg ? (

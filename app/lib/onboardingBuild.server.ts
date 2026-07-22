@@ -233,8 +233,7 @@ export async function runAiOnboardingBuild(
     } catch (err) {
       reportError(err, { scope: "onboardingBuild", msg: "question write failed (degraded draft)", shopId, quizId });
       await persist(quizId, seedDoc);
-      const msg = err instanceof Error ? err.message : String(err);
-      return { quizId, degraded: `AI couldn't write questions (${msg}) — add them in the builder.` };
+      return { quizId, degraded: "AI couldn't write questions — add them in the builder." };
     }
   }
 
@@ -364,10 +363,9 @@ export async function runAiOnboardingBuild(
   } catch (err) {
     reportError(err, { scope: "onboardingBuild", msg: "question flow build failed (degraded draft)", shopId, quizId });
     await persist(quizId, doc);
-    const msg = err instanceof Error ? err.message : String(err);
     return {
       quizId,
-      degraded: `AI set up your products + pages but couldn't write questions (${msg}) — add them in the builder.`,
+      degraded: "AI set up your products and pages but couldn't write questions — add them in the builder.",
     };
   }
 
@@ -496,14 +494,23 @@ export async function startAiOnboardingBuild(
   // failures (returns a degraded draft), so .then handles the normal path;
   // .catch only fires on an unexpected throw.
   void runAiOnboardingBuild({ ...input, quizId })
-    .then(() =>
-      prisma.quiz.update({ where: { id: quizId }, data: { buildState: null } }),
+    .then((result) =>
+      prisma.quiz.update({
+        where: { id: quizId },
+        data: {
+          buildState: result.degraded
+            ? "error:AI couldn't finish this draft. Try again or continue manually."
+            : null,
+        },
+      }),
     )
     .catch(async (err) => {
       reportError(err, { scope: "onboardingBuild", msg: "detached build failed unexpectedly", quizId });
-      const msg = err instanceof Error ? err.message : String(err);
       await prisma.quiz
-        .update({ where: { id: quizId }, data: { buildState: `error:${msg.slice(0, 300)}` } })
+        .update({
+          where: { id: quizId },
+          data: { buildState: "error:AI is temporarily unavailable. Try again or continue manually." },
+        })
         .catch(() => {});
     });
 

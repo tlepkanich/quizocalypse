@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useFetcher, useSearchParams } from "@remix-run/react";
 import { TitleBar } from "@shopify/app-bridge-react";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 import { QzPage, QzPageHeader, QzButton, QzBanner } from "../qz";
 import { experienceTypeOf, type Quiz, type ContentBlockType } from "../../lib/quizSchema";
 import { validateQuiz, validateQuizWarnings, type NodeIssue } from "../../lib/quizValidation";
@@ -225,6 +226,7 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
   // (palette) · Layers (current screen's blocks) · Background. The step LIST
   // left this panel: the screen carousel under the canvas is the navigator.
   const [editorSubtab, setEditorSubtab] = useState<"add" | "layers" | "background">("add");
+  const [libraryCollapsed, setLibraryCollapsed] = useState(false);
   const [reconcileError, setReconcileError] = useState<string | null>(null);
 
   const select = useCallback((nodeId: string | null) => {
@@ -1164,8 +1166,20 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
           />
           {view === "build" ? (
             <>
-              <aside className="qz-builder-panel">{toolPanel}</aside>
+              {libraryCollapsed ? null : (
+                <aside className="qz-builder-panel">
+                  <button type="button" className="qz-builder-panel-collapse" onClick={() => setLibraryCollapsed(true)} aria-label="Collapse component library">
+                    <ChevronLeft size={15} aria-hidden />
+                  </button>
+                  {toolPanel}
+                </aside>
+              )}
               <div className="qz-builder-stage">
+                {libraryCollapsed ? (
+                  <button type="button" className="qz-builder-panel-reopen" onClick={() => setLibraryCollapsed(false)} aria-label="Open component library">
+                    <ChevronRight size={15} aria-hidden /> <span>Library</span>
+                  </button>
+                ) : null}
                 {/* QB-8 — slim notices strip (transient publish/reconcile results
                     only); empty = 0 height, so the canvas is just the live quiz. */}
                 <div className="qz-builder-notices">{standaloneNotices}</div>

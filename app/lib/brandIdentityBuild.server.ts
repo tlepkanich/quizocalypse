@@ -387,11 +387,11 @@ export async function runBrandIdentityBuild(
     return { ok: true, identity };
   } catch (err) {
     reportError(err, { scope: "brandIdentity", msg: "identity build failed", shopId });
-    const msg = err instanceof Error ? err.message : String(err);
+    const message = "AI is temporarily unavailable. Try building your brand identity again.";
     await prisma.shop
-      .update({ where: { id: shopId }, data: { brandIdentityState: `error:${msg.slice(0, 300)}` } })
+      .update({ where: { id: shopId }, data: { brandIdentityState: `error:${message}` } })
       .catch(() => {});
-    return { ok: false, error: msg };
+    return { ok: false, error: message };
   }
 }
 

@@ -13,9 +13,9 @@ import {
 //                     row. NEVER throws: usage tracking must never break the
 //                     feature that spent the tokens.
 //   checkAiBudget   — "is this shop still under today's ceiling?" Reads the
-//                     SAME row recording writes (one source of truth). FAILS
-//                     OPEN on DB errors: a broken budget table must not take
-//                     down generation — log + allow.
+//                     SAME row recording writes (one source of truth). Merchant
+//                     tools fail open on DB errors; the public runtime fails
+//                     closed so a ledger outage cannot create unbounded spend.
 //   withAiSpendRecording — the caller-side wrapper that threads a shopId into
 //                     claude.ts's usage emits (see aiUsageContext.ts).
 //
@@ -113,8 +113,8 @@ export async function recordAiUsage(
 
 /** Is this shop still under today's ceiling for `kind`? Reads the same AiUsage
  *  row recording writes. limitUSD 0 = feature off → always allowed (and skips
- *  the DB read). FAILS OPEN on DB errors: log + allow — a budget-table hiccup
- *  must never take down generation. */
+ *  the DB read). On DB errors merchant tooling fails open, while the public
+ *  runtime fails closed to protect the shared account from unbounded spend. */
 export async function checkAiBudget(
   shopId: string,
   kind: AiBudgetKind,
@@ -131,10 +131,10 @@ export async function checkAiBudget(
   } catch (err) {
     reportError(err, {
       scope: "ai-budget",
-      msg: "budget check failed (fail-open)",
+      msg: `budget check failed (${kind === "runtime" ? "runtime fail-closed" : "merchant fail-open"})`,
       shopId,
     });
-    return { allowed: true, spentUSD: 0, limitUSD };
+    return { allowed: kind !== "runtime", spentUSD: 0, limitUSD };
   }
 }
 

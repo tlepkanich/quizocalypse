@@ -145,12 +145,12 @@ export const OOS_LABEL: Record<RecDefaults["oos_behavior"], string> = {
 // runs right after Shape and lands on Questions; Design's Continue opens the main
 // builder directly (Overview + Generate are retired from the flow).
 // Step-1 spec §1 — "bucket" is dead in merchant UI: Step 1 is "Recommendations"
-// and Step 4 is "Results page" (avoiding a collision with this step's noun).
+// and Step 4 is the canonical short label "Results" so the shared chrome fits.
 export const FUNNEL_STAGES: Array<{ key: string; label: string }> = [
   { key: "grouping", label: "Recommendations" },
   { key: "types", label: "Shape" },
   { key: "question_builder", label: "Questions" },
-  { key: "rec_page", label: "Results page" },
+  { key: "rec_page", label: "Results" },
   { key: "design", label: "Design" },
 ];
 

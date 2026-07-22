@@ -20,13 +20,19 @@ export const MODEL_FAST = MODEL;
 // forced-tool messages.create (no effort param — it would 400).
 export const MODEL_SPEED = "claude-haiku-4-5";
 export const MAX_TOKENS = 8192;
+const AI_TIMEOUT_MS = 60_000;
+const AI_TRANSIENT_RETRIES = 2;
 
 let cachedClient: Anthropic | null = null;
 function client(): Anthropic {
   if (!cachedClient) {
     const apiKey = process.env.ANTHROPIC_API_KEY;
     if (!apiKey) throw new Error("ANTHROPIC_API_KEY is not set.");
-    cachedClient = new Anthropic({ apiKey });
+    cachedClient = new Anthropic({
+      apiKey,
+      timeout: AI_TIMEOUT_MS,
+      maxRetries: AI_TRANSIENT_RETRIES,
+    });
   }
   return cachedClient;
 }

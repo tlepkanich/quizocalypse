@@ -37,9 +37,9 @@ export type BuilderNavKey =
 
 const NAV: Array<{ key: BuilderNavKey; label: string; icon: LucideIcon; ruleAbove?: boolean }> = [
   { key: "build", label: "Build", icon: Pencil },
-  { key: "products", label: "Products", icon: Package },
+  { key: "products", label: "Products", icon: Package, ruleAbove: true },
   { key: "logic", label: "Logic", icon: GitBranch },
-  { key: "design", label: "Design", icon: Palette, ruleAbove: true },
+  { key: "design", label: "Theme", icon: Palette },
   { key: "settings", label: "Settings", icon: Settings },
 ];
 
@@ -56,7 +56,7 @@ export function BuilderNavRail({
         const Icon = r.icon;
         return (
           <Fragment key={r.key}>
-            {r.ruleAbove ? <div className="qz-builder-rail-rule" aria-hidden="true" /> : null}
+            {r.ruleAbove ? <><div className="qz-builder-rail-rule" aria-hidden="true" /><span className="qz-builder-rail-label">Set up</span></> : null}
             <button
               type="button"
               className={`qz-builder-rail-item${active === r.key ? " is-active" : ""}`}

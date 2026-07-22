@@ -210,14 +210,21 @@ export function Step3Shell({
       />
 
       {view === "content" ? (
+        <div className="qz-s3-contentview">
+          <div className="qz-s3-subhead qz-s3-subhead--questions">
+            <div className="qz-s3-viewtoggle" role="group" aria-label="Questions or Overview view">
+              <button type="button" aria-pressed onClick={() => setView("content")}>Questions</button>
+              <button type="button" aria-pressed={false} onClick={() => setView("logic")}>Overview</button>
+            </div>
+            <span className="qz-s3-subhint">Click any text on the preview to edit it</span>
+            <button type="button" className="qz-btn qz-btn-accent qz-btn-sm" onClick={addQuestion}>+ Add</button>
+          </div>
         <div className="qz-s3-body">
           <LeftRail
             questions={questions}
             deciderId={decider?.id ?? null}
             activeId={activeId}
-            view={view}
             captureOn={captureOn}
-            onViewChange={setView}
             onSelect={(id) => setSelectedId(id)}
             onAddQuestion={addQuestion}
             onOpenLibrary={() => setLibraryOpen(true)}
@@ -234,18 +241,19 @@ export function Step3Shell({
             regen={regen}
           />
         </div>
+        </div>
       ) : (
         <div className="qz-s3-logicview">
           {/* Spec §2 — the sub-header: Content-Logic toggle (Logic active) +
               the "+ Diagnose / Preview" entry. No question rail here — the
               map IS the list. */}
           <div className="qz-s3-subhead">
-            <div className="qz-s3-viewtoggle" role="group" aria-label="Content or Logic view">
+            <div className="qz-s3-viewtoggle" role="group" aria-label="Questions or Overview view">
               <button type="button" aria-pressed={false} onClick={() => setView("content")}>
-                ✎ Content
+                Questions
               </button>
               <button type="button" aria-pressed onClick={() => setView("logic")}>
-                λ Logic
+                Overview
               </button>
             </div>
             <button

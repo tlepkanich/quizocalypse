@@ -1,10 +1,10 @@
 // The canonical, ordered, merchant-visible steps of the create-a-quiz funnel
 // (the re-sequenced flow: Recommendations → Shape Your Quiz → Question Builder →
-// Results page → Design → the builder).
+// Results → Design → the builder).
 //
 // Step-1 spec (quiz-step1-recommendations-spec §1): "bucket" never appears in
-// merchant-facing UI — Step 1 is "Recommendations", and Step 4 is "Results
-// page" so the two steps' nouns don't collide.
+// merchant-facing UI — Step 1 is "Recommendations", and Step 4 is the compact
+// canonical label "Results" so the shared chrome remains readable.
 //
 // Single source of truth for the progress indicator, the "Step N of M" label,
 // and Back/Continue navigation. Transient AI-in-flight stages (typing /
@@ -21,7 +21,7 @@ export const FUNNEL_STEPS = [
   { stage: "grouping", label: "Recommendations", short: "Recommendations" },
   { stage: "shape", label: "Shape Your Quiz", short: "Shape" },
   { stage: "question_builder", label: "Question Builder", short: "Questions" },
-  { stage: "rec_page", label: "Results page", short: "Results page" },
+  { stage: "rec_page", label: "Results", short: "Results" },
   { stage: "design", label: "Design", short: "Design" },
 ] as const;
 

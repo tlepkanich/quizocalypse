@@ -17,7 +17,11 @@ import {
 import { Quiz, BuildSession, PickedTemplate } from "./quizSchema";
 import { applyManualDeciderSkeleton } from "./smartBuild";
 import { dialsToBuildDirectives, autoQuizName } from "./dialDirectives";
-import { runAiOnboardingBuild, type PrefetchedBuildCatalog } from "./onboardingBuild.server";
+import {
+  runAiOnboardingBuild,
+  type OnboardingBuildResult,
+  type PrefetchedBuildCatalog,
+} from "./onboardingBuild.server";
 import type { DesignTokensT } from "./designTokens";
 import type { GroupingProduct } from "./categoryGrouping";
 import type { QuizType, RichTemplateOption, Quiz as QuizDocT } from "./quizSchema";
@@ -546,7 +550,7 @@ async function buildQuizFromPicked(
   // FAST F2 — optional prep started concurrently with template generation.
   // Absent (legacy/wizard/retry callers) → the build queries inline as today.
   prefetchedCatalog?: Promise<PrefetchedBuildCatalog | undefined>,
-): Promise<unknown> {
+): Promise<OnboardingBuildResult> {
   const cats = await prisma.category.findMany({
     where: { shopId, quizId },
     select: { id: true, name: true, tags: true },
@@ -743,9 +747,21 @@ export async function startQuestionBuild(
   const tBuild = Date.now();
 
   void buildQuizFromPicked(shopId, quizId, rich, picked, goal, struggle, opts?.prefetchedCatalog)
-    .then(() => {
+    .then(async (buildResult) => {
       logFor("step2").info({ quizId, ms: Date.now() - tBuild }, "question-build took");
-      return patchBuildSession(quizId, () =>
+      if (buildResult.degraded) {
+        logFor("step2").warn({ quizId }, "question-build produced a degraded draft");
+        await writeGenError(quizId, () =>
+          BuildSession.parse({
+            ...priorSession,
+            stage: "types",
+            gen_error: "AI couldn't finish the question flow. Try again or start from a template.",
+            gen_progress: undefined,
+          }),
+        );
+        return;
+      }
+      await patchBuildSession(quizId, () =>
         BuildSession.parse({
           ...priorSession,
           stage: "question_builder",

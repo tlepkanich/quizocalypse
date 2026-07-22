@@ -28,6 +28,7 @@ afterEach(() => {
   root = null;
   host = null;
   document.body.replaceChildren();
+  vi.useRealTimers();
 });
 
 const STEPS: StepNavStep[] = [
@@ -84,5 +85,15 @@ describe("StepNav", () => {
     expect(pillByLabel("Shape").textContent).toContain("02"); // current
     expect(pillByLabel("Design").textContent).toContain("03"); // upcoming
     expect(pillByLabel("Buckets").querySelector('[aria-label="done"]')).toBeTruthy();
+  });
+
+  it("ignites only the current step, then settles after three seconds", () => {
+    vi.useFakeTimers();
+    mount(createElement(StepNav, { steps: STEPS }));
+    const current = pillByLabel("Shape").closest(".qz-stepnav-item");
+    expect(current?.classList.contains("is-igniting")).toBe(true);
+    expect(pillByLabel("Design").closest(".qz-stepnav-item")?.classList.contains("is-igniting")).toBe(false);
+    act(() => vi.advanceTimersByTime(3000));
+    expect(current?.classList.contains("is-igniting")).toBe(false);
   });
 });

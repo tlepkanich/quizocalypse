@@ -64,7 +64,7 @@ export function TopBar3({
   const blocked = view === "logic" && verdict.blocking > 0;
   const continueLabel =
     view === "content"
-      ? "◆ Continue to Logic"
+      ? "Continue"
       : blocked
         ? `Fix ${verdict.blocking} issue${verdict.blocking === 1 ? "" : "s"} to continue`
         : "◆ Continue to Results";
