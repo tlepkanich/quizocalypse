@@ -295,6 +295,55 @@ function BlockFields({
             suffix="px"
             onChange={(n) => onChange({ radius: n } as Partial<ContentBlock>)}
           />
+          {/* build-tab §2 — fit + aspect + focal point (cover only). */}
+          <div className="qz-row" style={{ gap: 10, alignItems: "flex-end", flexWrap: "wrap" }}>
+            <QzField label="Fit">
+              <QzSelect
+                value={block.fit}
+                onChange={(e) => onChange({ fit: e.target.value } as Partial<ContentBlock>)}
+              >
+                <option value="cover">Cover</option>
+                <option value="contain">Contain</option>
+              </QzSelect>
+            </QzField>
+            <QzField label="Aspect">
+              <QzSelect
+                value={block.aspect}
+                onChange={(e) => onChange({ aspect: e.target.value } as Partial<ContentBlock>)}
+              >
+                <option value="auto">Auto</option>
+                <option value="1/1">1:1</option>
+                <option value="4/3">4:3</option>
+                <option value="16/9">16:9</option>
+              </QzSelect>
+            </QzField>
+          </div>
+          {block.fit === "cover" ? (
+            <div className="qz-row" style={{ gap: 10, alignItems: "flex-end", flexWrap: "wrap" }}>
+              <NumericControl
+                label="Focal X"
+                value={block.focal_x}
+                min={0}
+                max={100}
+                step={5}
+                fallback={50}
+                allowEmpty
+                suffix="%"
+                onChange={(n) => onChange({ focal_x: n } as Partial<ContentBlock>)}
+              />
+              <NumericControl
+                label="Focal Y"
+                value={block.focal_y}
+                min={0}
+                max={100}
+                step={5}
+                fallback={50}
+                allowEmpty
+                suffix="%"
+                onChange={(n) => onChange({ focal_y: n } as Partial<ContentBlock>)}
+              />
+            </div>
+          ) : null}
           <QzField label="Link (optional)">
             <QzInput
               value={block.link ?? ""}
@@ -310,6 +359,19 @@ function BlockFields({
         <>
           <QzField label="Label">
             <QzInput value={block.label} onChange={(e) => onChange({ label: e.target.value })} />
+          </QzField>
+          {/* build-tab §2 — the four button types. Height keeps a non-editable
+              44px floor in the renderer (WCAG tap target). */}
+          <QzField label="Type">
+            <QzSelect
+              value={block.variant}
+              onChange={(e) => onChange({ variant: e.target.value } as Partial<ContentBlock>)}
+            >
+              <option value="primary">Filled</option>
+              <option value="outline">Outline</option>
+              <option value="soft">Soft</option>
+              <option value="ghost">Ghost</option>
+            </QzSelect>
           </QzField>
           {/* QZY-10 §7 — on-click action. */}
           <QzField label="On click">
@@ -433,6 +495,22 @@ function BlockFields({
               <option value="steps">Step count (“2 of 5”)</option>
             </QzSelect>
           </QzField>
+          {/* build-tab §2 — bar line style (bar mode only). */}
+          {block.bar_style === "bar" ? (
+            <QzField label="Line">
+              <QzSelect
+                value={block.line ?? "solid"}
+                onChange={(e) =>
+                  onChange({
+                    line: e.target.value === "dashed" ? "dashed" : undefined,
+                  } as Partial<ContentBlock>)
+                }
+              >
+                <option value="solid">Solid</option>
+                <option value="dashed">Dashed</option>
+              </QzSelect>
+            </QzField>
+          ) : null}
           <NumericControl
             label="Thickness"
             value={block.thickness}

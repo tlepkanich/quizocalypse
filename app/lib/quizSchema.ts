@@ -1038,6 +1038,9 @@ export const ImageBlock = z.object({
   height: z.number().int().min(24).max(800).optional(),
   radius: z.number().int().min(0).max(40).optional(),
   link: z.string().url().optional(),
+  // build-tab §2 — focal point for fit=cover. Absent → browser default (50/50).
+  focal_x: z.number().int().min(0).max(100).optional(),
+  focal_y: z.number().int().min(0).max(100).optional(),
 });
 export const SpacerBlock = z.object({
   ...blockBase,
@@ -1055,7 +1058,8 @@ export const ButtonBlock = z.object({
   type: z.literal("button"),
   bind: ButtonBind.default("none"),
   label: z.string().default("Continue"),
-  variant: z.enum(["primary", "outline", "ghost"]).default("primary"),
+  // build-tab §2 — "soft" (tinted) joins the set.
+  variant: z.enum(["primary", "outline", "soft", "ghost"]).default("primary"),
   // QZY-10 (build-tab §7) — on-click action. Absent = today's behavior
   // (advance via onPrimary / the end-node CTA link special case). "link"
   // opens href; start/next/submit all advance (names for authoring intent).
@@ -1085,6 +1089,8 @@ export const ProgressBlock = z.object({
   ...blockBase,
   type: z.literal("progress"),
   bar_style: z.enum(["bar", "dots", "steps"]).default("bar"),
+  // build-tab §2 — bar line style. Absent → solid (byte-identical).
+  line: z.enum(["solid", "dashed"]).optional(),
   thickness: z.number().int().min(2).max(16).default(6),
   color: z.string().optional(),
   track_color: z.string().optional(),

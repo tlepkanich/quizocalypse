@@ -126,22 +126,35 @@ export function resolveBind(node: QuizNode, bind: string, literal: string): stri
 }
 
 function buttonVariantStyle(
-  variant: "primary" | "outline" | "ghost",
+  variant: "primary" | "outline" | "soft" | "ghost",
   base: CSSProperties,
 ): CSSProperties {
+  // build-tab §2 — a NON-EDITABLE 44px tap floor on every button block
+  // (WCAG 2.5.5 / Apple 44 / Material 48): no styling value can make the
+  // button un-tappable.
+  const floored = { ...base, minHeight: 44 };
   if (variant === "outline") {
     return {
-      ...base,
+      ...floored,
       background: "transparent",
       border: "2px solid var(--qz-color-primary)",
       color: "var(--qz-color-primary)",
       boxShadow: "none",
     };
   }
-  if (variant === "ghost") {
-    return { ...base, background: "transparent", boxShadow: "none" };
+  if (variant === "soft") {
+    // §2 — the tinted fill between filled and ghost.
+    return {
+      ...floored,
+      background: "color-mix(in srgb, var(--qz-color-primary) 14%, transparent)",
+      color: "var(--qz-color-primary)",
+      boxShadow: "none",
+    };
   }
-  return base;
+  if (variant === "ghost") {
+    return { ...floored, background: "transparent", boxShadow: "none" };
+  }
+  return floored;
 }
 
 function LiteralBlock({
@@ -185,6 +198,10 @@ function LiteralBlock({
             borderRadius: block.radius ?? "var(--qz-radius)",
             ...(aspect ? { aspectRatio: aspect } : {}),
             ...(block.height ? { height: block.height, aspectRatio: undefined } : {}),
+            // build-tab §2 — focal point on cover. Absent → browser default.
+            ...(block.focal_x !== undefined || block.focal_y !== undefined
+              ? { objectPosition: `${block.focal_x ?? 50}% ${block.focal_y ?? 50}%` }
+              : {}),
           }}
         />
       );
@@ -279,7 +296,12 @@ function LiteralBlock({
               style={{
                 width: `${Math.round((index / total) * 100)}%`,
                 height: "100%",
-                background: color,
+                // §2 — dashed bar line. Absent line → today's solid fill.
+                ...(block.line === "dashed"
+                  ? {
+                      backgroundImage: `repeating-linear-gradient(90deg, ${color} 0 8px, transparent 8px 14px)`,
+                    }
+                  : { background: color }),
               }}
             />
           </div>
