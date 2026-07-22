@@ -1,6 +1,6 @@
 import { lazy, Suspense, useEffect, useState } from "react";
 import { Link, useFetcher, useRevalidator } from "@remix-run/react";
-import { QzPage, QzCard, QzBanner, StagedProgress } from "../qz";
+import { QzPage, QzCard, QzBanner } from "../qz";
 import { QzModal } from "../qz-overlays";
 import { QuestionBuilderStage } from "./QuestionBuilderStage";
 import { RecommendationStage } from "./RecommendationStage";
@@ -198,35 +198,8 @@ export function Step1Funnel({ data }: { data: FunnelData }) {
         </QzBanner>
       ) : null}
 
-      {/* The detached AI job stopped writing without throwing — almost always a
-          server restart that KILLED the job mid-run, which no try/catch can
-          catch. The poll would otherwise spin forever on the spinner below, so
-          offer an honest re-run (re-kicks the same job from the saved session)
-          plus the reliable template escape. */}
-      {data.genStalled && !data.genError ? (
-        <QzBanner tone="warn" title="This is taking longer than it should">
-          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-            <span>
-              The generation step seems to have stalled — the server may have
-              restarted while it was working. Re-run it, or start from a
-              ready-made template.
-            </span>
-            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-              <button
-                type="button"
-                className="qz-btn qz-btn-accent qz-btn-sm"
-                disabled={pendingIntent === "retry-gen"}
-                onClick={() => fetcher.submit({ intent: "retry-gen" }, { method: "post" })}
-              >
-                {pendingIntent === "retry-gen" ? "Restarting…" : "Try again"}
-              </button>
-              <Link to="/studio/new" className="qz-btn qz-btn-ghost qz-btn-sm">
-                Start from a template →
-              </Link>
-            </div>
-          </div>
-        </QzBanner>
-      ) : null}
+      {/* Stalled is now a full generating-screen state (generating-states
+          mock), rendered by GeneratingScreen itself below — no banner here. */}
 
       {data.stage === "grouping" ? (
         <RecommendationBucketsStage
@@ -252,7 +225,13 @@ export function Step1Funnel({ data }: { data: FunnelData }) {
       ) : null}
 
       {data.stage === "typing" ? (
-        <GeneratingScreen kind="typing" progress={data.genProgress} />
+        <GeneratingScreen
+          kind="typing"
+          progress={data.genProgress}
+          stalled={data.genStalled && !data.genError}
+          retrying={pendingIntent === "retry-gen"}
+          onRetry={() => fetcher.submit({ intent: "retry-gen" }, { method: "post" })}
+        />
       ) : null}
 
       {data.stage === "types" ? (
@@ -260,7 +239,13 @@ export function Step1Funnel({ data }: { data: FunnelData }) {
       ) : null}
 
       {data.stage === "templating" ? (
-        <GeneratingScreen kind="templating" progress={data.genProgress} />
+        <GeneratingScreen
+          kind="templating"
+          progress={data.genProgress}
+          stalled={data.genStalled && !data.genError}
+          retrying={pendingIntent === "retry-gen"}
+          onRetry={() => fetcher.submit({ intent: "retry-gen" }, { method: "post" })}
+        />
       ) : null}
 
       {/* Question Builder — the pre-config editing step. Client-only: it composes
@@ -384,7 +369,7 @@ function BrandIdentityModal({ summary, onClose }: { summary: string; onClose: ()
 
 // ══ Step 2 ══════════════════════════════════════════════════════════════════
 
-const TYPING_BEATS = ["Researching quiz strategies", "Reading your catalog", "Drafting tailored quiz types"];
+const TYPING_BEATS = ["Researching your category", "Reading your catalog", "Drafting tailored quiz types"];
 const TEMPLATING_BEATS = ["Reading your brand identity", "Designing template variations", "Tuning the design dials"];
 
 // FAST F3 — map the jobs' REAL gen_progress checkpoints onto the beat indexes.
@@ -401,12 +386,25 @@ const PROGRESS_BEAT: Record<"typing" | "templating", Record<string, number>> = {
 // FAST F3 — when the loader reports a real gen_progress checkpoint, it drives
 // the active beat; the timed cycle stays as the fallback for old in-flight
 // sessions (and for the window before the first checkpoint lands).
+// generating-states mock (EXACT). Three visual states around the breathing
+// ignite ring: FAST (research cached — small ring, nothing to narrate),
+// SLOW (the real research pass — big ring + centered beats + honest copy),
+// STALLED (halted grey ring + ◷, Try again + the template escape). The FAILED
+// state stays the banner above the restored stage — the Gap-1 fix resets the
+// stage on failure, so there is no generating screen left to park it on; the
+// banner carries the mock's copy + actions.
 function GeneratingScreen({
   kind,
   progress,
+  stalled,
+  retrying,
+  onRetry,
 }: {
   kind: "typing" | "templating";
   progress: string | null;
+  stalled: boolean;
+  retrying: boolean;
+  onRetry: () => void;
 }) {
   const beats = kind === "typing" ? TYPING_BEATS : TEMPLATING_BEATS;
   const progressBeat = progress !== null ? (PROGRESS_BEAT[kind][progress] ?? null) : null;
@@ -418,39 +416,96 @@ function GeneratingScreen({
   }, [timedActive, beats.length, kind]);
   // A real checkpoint never moves backwards; once seen it wins over the timer.
   const active = progressBeat ?? timedActive;
+
+  if (stalled) {
+    return (
+      <QzCard style={{ padding: 0 }}>
+        <div className="qz-gen">
+          <div className="qz-gen-ringwrap" aria-hidden>
+            <span className="qz-gen-glow is-halt" />
+            <span className="qz-gen-ring is-halt" />
+            <span className="qz-gen-haltglyph is-warn">◷</span>
+          </div>
+          <h2 className="qz-gen-title">This is taking longer than it should</h2>
+          <p className="qz-gen-sub">
+            The generation seems to have stalled. You can re-run it, or start
+            from a ready-made template.
+          </p>
+          <div className="qz-gen-actions">
+            <button type="button" className="qz-btn qz-btn-accent" disabled={retrying} onClick={onRetry}>
+              {retrying ? "Restarting…" : "Try again"}
+            </button>
+            <Link to="/studio/new" className="qz-btn qz-btn-ghost">
+              Start from a template →
+            </Link>
+          </div>
+          <div className="qz-gen-foot">
+            Nothing you picked is lost — your recommendations are saved.
+          </div>
+        </div>
+      </QzCard>
+    );
+  }
+
+  // typing with the "research" checkpoint = the real web-research pass (slow
+  // layout, beats worth narrating); anything else — research prefetched/cached,
+  // the run takes seconds — is the fast state. Templating always narrates.
+  const fast = kind === "typing" && progress !== "research";
+  if (fast) {
+    return (
+      <QzCard style={{ padding: 0 }}>
+        <div className="qz-gen">
+          <div className="qz-gen-ringwrap is-sm" aria-hidden>
+            <span className="qz-gen-glow" />
+            <span className="qz-gen-ring" />
+            <i className="qz-gen-sp qz-gen-sp1">✦</i>
+            <i className="qz-gen-sp qz-gen-sp2">✦</i>
+            <i className="qz-gen-sp qz-gen-sp3">✦</i>
+          </div>
+          <h2 className="qz-gen-title">Drafting your quiz types</h2>
+          <div className="qz-gen-foot">This page refreshes itself — no need to reload.</div>
+        </div>
+      </QzCard>
+    );
+  }
+
   const title =
     kind === "typing"
-      ? "Researching the best quiz types for your brand…"
-      : "Designing your templates…";
+      ? "Researching the best quiz types for your brand"
+      : "Designing your templates";
   const sub =
     kind === "typing"
-      ? "Pulling real best-practices for your category, then tailoring a few quiz types to your catalog. About a minute."
-      : "Drafting a few distinct template directions for the type you picked. About 30 seconds.";
+      ? "Pulling real best-practices for your category, then shaping a few directions around the collections you picked."
+      : "Drafting a few distinct template directions for the type you picked, then building your questions.";
   return (
-    <QzCard style={{ padding: 28, display: "flex", flexDirection: "column", gap: 18 }}>
-      <style>{`@keyframes qzspin{to{transform:rotate(360deg)}}`}</style>
-      <div className="qz-row" style={{ gap: 12, alignItems: "center" }}>
-        <div
-          aria-hidden
-          style={{
-            width: 26,
-            height: 26,
-            flex: "none",
-            borderRadius: "50%",
-            border: "3px solid var(--qz-rule, #e5e5e5)",
-            borderTopColor: "var(--qz-accent)",
-            animation: "qzspin .8s linear infinite",
-          }}
-        />
-        <div style={{ display: "flex", flexDirection: "column" }}>
-          <strong>{title}</strong>
-          <span className="qz-dim" style={{ fontSize: 13 }}>{sub}</span>
+    <QzCard style={{ padding: 0 }}>
+      <div className="qz-gen">
+        <div className="qz-gen-ringwrap" aria-hidden>
+          <span className="qz-gen-glow" />
+          <span className="qz-gen-ring" />
+          <i className="qz-gen-sp qz-gen-sp1">✦</i>
+          <i className="qz-gen-sp qz-gen-sp2">✦</i>
+          <i className="qz-gen-sp qz-gen-sp3">✦</i>
+          <i className="qz-gen-sp qz-gen-sp4">✦</i>
         </div>
+        <h2 className="qz-gen-title">{title}</h2>
+        <p className="qz-gen-sub">{sub}</p>
+        {kind === "typing" ? (
+          <p className="qz-gen-slowline">Larger catalogs take a little longer.</p>
+        ) : null}
+        <div className="qz-gen-beats">
+          {beats.map((label, i) => (
+            <div
+              key={label}
+              className={`qz-gen-beat${i < active ? " is-done" : ""}${i === active ? " is-now" : ""}`}
+            >
+              <span className="qz-gen-dot" aria-hidden>✓</span>
+              {label}
+            </div>
+          ))}
+        </div>
+        <div className="qz-gen-foot">This page refreshes itself — no need to reload.</div>
       </div>
-      <div style={{ maxWidth: 340 }}>
-        <StagedProgress stages={beats} active={active} />
-      </div>
-      <div className="qz-dim" style={{ fontSize: 12 }}>This page refreshes itself — no need to reload.</div>
     </QzCard>
   );
 }
