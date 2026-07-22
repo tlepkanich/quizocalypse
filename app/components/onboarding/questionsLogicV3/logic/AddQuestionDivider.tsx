@@ -5,10 +5,17 @@
    never land after the result (the add-anchor terminal trap). */
 
 export function AddQuestionDivider({ onAdd }: { onAdd: () => void }) {
+  // questions-full-page mock — a circular ＋ inserter centered on the hairline.
   return (
     <div className="qz-s3-divider">
-      <button type="button" className="qz-s3-divider-btn" onClick={onAdd}>
-        + Add question
+      <button
+        type="button"
+        className="qz-s3-divider-btn"
+        onClick={onAdd}
+        aria-label="Add a question here"
+        title="Add a question here"
+      >
+        ＋
       </button>
     </div>
   );

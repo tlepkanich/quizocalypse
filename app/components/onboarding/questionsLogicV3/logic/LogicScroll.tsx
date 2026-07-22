@@ -66,6 +66,8 @@ export const LogicScroll = forwardRef<
     captureOn: boolean;
     activeId: string;
     onActiveChange: (nodeId: string) => void;
+    /** questions-full-page mock — the overview cards' ↑/↓ movers. */
+    onMove: (id: string, dir: -1 | 1) => void;
     onCommit: (doc: QuizDoc) => void;
   }
 >(function LogicScroll(
@@ -79,6 +81,7 @@ export const LogicScroll = forwardRef<
     captureOn,
     activeId,
     onActiveChange,
+    onMove,
     onCommit,
   },
   handleRef,
@@ -314,7 +317,7 @@ export const LogicScroll = forwardRef<
   return (
     <div className="qz-s3-logicbody">
       <div className="qz-s3-logic" ref={rootRef} aria-label="Logic map">
-        {questions.map((q) => (
+        {questions.map((q, qi) => (
           <div key={q.node.id} className="qz-s3-secwrap">
             <QuestionSection
               doc={doc}
@@ -331,6 +334,9 @@ export const LogicScroll = forwardRef<
               flashWarn={flashSectionId === q.node.id}
               active={activeId === q.node.id}
               expanded={cardExpanded(q.node.id)}
+              canUp={qi > 0}
+              canDown={qi < questions.length - 1}
+              onMove={(dir) => onMove(q.node.id, dir)}
               onToggleExpanded={() => toggleCard(q.node.id)}
               onCommit={onCommit}
               onChipClick={scrollToRule}

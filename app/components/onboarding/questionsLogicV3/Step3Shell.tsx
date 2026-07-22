@@ -313,6 +313,7 @@ export function Step3Shell({
             captureOn={captureOn}
             activeId={activeId}
             onActiveChange={setSelectedId}
+            onMove={moveQuestion}
             onCommit={onCommit}
           />
         </div>

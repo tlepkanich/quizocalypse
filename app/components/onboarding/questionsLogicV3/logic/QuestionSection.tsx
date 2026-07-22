@@ -27,6 +27,41 @@ const TEXT_MAX = 150;
 
 type Role = "decides" | "filter" | "qualifier";
 
+/** Mock stepper: − value + in one bordered pill (the SETTINGS controls). */
+function Stepper({
+  value,
+  min,
+  max,
+  onChange,
+}: {
+  value: number;
+  min: number;
+  max: number;
+  onChange: (v: number) => void;
+}) {
+  return (
+    <span className="qz-s3-stepper">
+      <button
+        type="button"
+        aria-label="Decrease"
+        disabled={value <= min}
+        onClick={() => onChange(Math.max(min, value - 1))}
+      >
+        −
+      </button>
+      <span className="qz-s3-stepper-val">{value}</span>
+      <button
+        type="button"
+        aria-label="Increase"
+        disabled={value >= max}
+        onClick={() => onChange(Math.min(max, value + 1))}
+      >
+        +
+      </button>
+    </span>
+  );
+}
+
 export function QuestionSection({
   doc,
   question,
@@ -42,6 +77,9 @@ export function QuestionSection({
   flashWarn,
   active,
   expanded,
+  canUp,
+  canDown,
+  onMove,
   onToggleExpanded,
   onCommit,
   onChipClick,
@@ -65,6 +103,10 @@ export function QuestionSection({
   flashWarn: boolean;
   active: boolean;
   expanded: boolean;
+  /** questions-full-page mock — the overview card's ↑/↓ movers. */
+  canUp: boolean;
+  canDown: boolean;
+  onMove: (dir: -1 | 1) => void;
   onToggleExpanded: () => void;
   onCommit: (doc: QuizDoc) => void;
   onChipClick: (ruleId: string) => void;
@@ -131,6 +173,26 @@ export function QuestionSection({
       aria-label={`Question ${qIndex} logic`}
     >
       <div className="qz-s3-sec-head">
+        <span className="qz-s3-mv">
+          <button
+            type="button"
+            className="qz-s3-mvb"
+            disabled={!canUp}
+            aria-label="Move question up"
+            onClick={() => onMove(-1)}
+          >
+            ↑
+          </button>
+          <button
+            type="button"
+            className="qz-s3-mvb"
+            disabled={!canDown}
+            aria-label="Move question down"
+            onClick={() => onMove(1)}
+          >
+            ↓
+          </button>
+        </span>
         <span className={`qz-s3-numchip${isDecider ? " is-decider" : ""}`}>{qIndex}</span>
         {/* QZY-2 (owner supplement) — the title edits HERE, same doc field
             the Content view edits; no more "Edit content" round-trip. */}
@@ -180,6 +242,105 @@ export function QuestionSection({
         </button>
       </div>
 
+      {/* questions-full-page mock — "Overview shows type settings under the
+          Type column": multi-select MIN/MAX steppers; scale range + the
+          endpoint labels ("numbers or words" — runtime-rendered on rating
+          and slider). Writes are plain updateNodeData patches. */}
+      {expanded && multi ? (
+        <div className="qz-s3-sec-settings">
+          <span className="qz-s3-set-kicker">Settings</span>
+          <span className="qz-s3-set-row">
+            <span className="qz-s3-set-lbl">Min</span>
+            <Stepper
+              value={node.data.min_selections ?? 1}
+              min={1}
+              max={node.data.max_selections ?? node.data.answers.length}
+              onChange={(v) => onCommit(updateNodeData(doc, node.id, { min_selections: v }))}
+            />
+          </span>
+          <span className="qz-s3-set-row">
+            <span className="qz-s3-set-lbl">Max</span>
+            <Stepper
+              value={node.data.max_selections ?? node.data.answers.length}
+              min={node.data.min_selections ?? 1}
+              max={Math.max(node.data.answers.length, 1)}
+              onChange={(v) => onCommit(updateNodeData(doc, node.id, { max_selections: v }))}
+            />
+          </span>
+        </div>
+      ) : null}
+      {expanded && node.data.question_type === "rating" ? (
+        <div className="qz-s3-sec-settings">
+          <span className="qz-s3-set-kicker">Settings</span>
+          <span className="qz-s3-set-row">
+            <span className="qz-s3-set-lbl">From</span>
+            <Stepper
+              value={node.data.scale_config?.min ?? 1}
+              min={0}
+              max={(node.data.scale_config?.max ?? 5) - 1}
+              onChange={(v) =>
+                onCommit(
+                  updateNodeData(doc, node.id, {
+                    scale_config: { ...(node.data.scale_config ?? {}), min: v },
+                  }),
+                )
+              }
+            />
+            <span className="qz-s3-set-lbl">To</span>
+            <Stepper
+              value={node.data.scale_config?.max ?? 5}
+              min={(node.data.scale_config?.min ?? 1) + 1}
+              max={10}
+              onChange={(v) =>
+                onCommit(
+                  updateNodeData(doc, node.id, {
+                    scale_config: { ...(node.data.scale_config ?? {}), max: v },
+                  }),
+                )
+              }
+            />
+          </span>
+          <span className="qz-s3-set-row">
+            <span className="qz-s3-set-lbl">Ends</span>
+            <input
+              className="qz-s3-set-input"
+              defaultValue={node.data.scale_config?.endpoint_label_min ?? ""}
+              key={`min-${node.data.scale_config?.endpoint_label_min ?? ""}`}
+              maxLength={40}
+              placeholder={String(node.data.scale_config?.min ?? 1)}
+              aria-label="Scale start label (number or word)"
+              onBlur={(e) =>
+                onCommit(
+                  updateNodeData(doc, node.id, {
+                    scale_config: {
+                      ...(node.data.scale_config ?? {}),
+                      endpoint_label_min: e.target.value.trim() || undefined,
+                    },
+                  }),
+                )
+              }
+            />
+            <input
+              className="qz-s3-set-input"
+              defaultValue={node.data.scale_config?.endpoint_label_max ?? ""}
+              key={`max-${node.data.scale_config?.endpoint_label_max ?? ""}`}
+              maxLength={40}
+              placeholder={String(node.data.scale_config?.max ?? 5)}
+              aria-label="Scale end label (number or word)"
+              onBlur={(e) =>
+                onCommit(
+                  updateNodeData(doc, node.id, {
+                    scale_config: {
+                      ...(node.data.scale_config ?? {}),
+                      endpoint_label_max: e.target.value.trim() || undefined,
+                    },
+                  }),
+                )
+              }
+            />
+          </span>
+        </div>
+      ) : null}
       {!expanded ? null : freeform ? (
         <p className="qz-s3-sec-freeform" role="note">
           Open text — shoppers type their answer. Nothing maps or routes here; responses are

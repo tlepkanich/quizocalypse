@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { Link } from "@remix-run/react";
 import type { Quiz } from "../../lib/quizSchema";
+import { moveStep } from "../../lib/quizMutations";
 import { LogicView } from "../logic/LogicView";
 import { PathTester } from "../logic/PathTester";
 import { LogicScroll } from "../onboarding/questionsLogicV3/logic/LogicScroll";
@@ -114,6 +115,19 @@ export function BuilderLogicView({
             captureOn={doc.rec_page_settings?.global?.captureEmail !== false}
             activeId={activeId}
             onActiveChange={setActiveId}
+            onMove={(id, dir) => {
+              // Same ↑/↓ semantics as the funnel shell: reorder within the
+              // straight-through run via the pure moveStep mutation.
+              const idx = questions.findIndex((q) => q.node.id === id);
+              if (idx < 0) return;
+              const beforeId =
+                dir === -1
+                  ? questions[idx - 1]?.node.id ?? null
+                  : questions[idx + 2]?.node.id ?? null;
+              if (dir === -1 && idx === 0) return;
+              if (dir === 1 && idx === questions.length - 1) return;
+              commit(moveStep(doc, id, beforeId));
+            }}
             onCommit={commit}
           />
           {/* PathTester renders its own "Try a path" header. */}

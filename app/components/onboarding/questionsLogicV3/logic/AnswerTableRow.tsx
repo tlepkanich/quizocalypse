@@ -107,8 +107,9 @@ export function AnswerTableRow({
 
   return (
     <div className="qz-s3-arow">
+      {/* questions-full-page mock — answers are NUMBERED in the overview. */}
       <span className="qz-s3-aletter" aria-hidden>
-        {answerLetter(index)}
+        {index + 1}
       </span>
 
       <input
