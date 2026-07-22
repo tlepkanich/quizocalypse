@@ -8,18 +8,37 @@ import { Wordmark } from "./Wordmark";
    zone carries save state / health pill / the primary Continue.
    `floating` renders the Step-3 variant (quiz-step3 spec §2): a rounded card
    that floats 10px from the viewport top with 14px side margins — still
-   pinned, never scrolls away. */
+   pinned, never scrolls away.
+   `nav` (step1 handoff §1) renders the TWO-ROW funnel chrome instead: row 1 =
+   wordmark (left) + actions (right, no zone dividers), row 2 = the step nav
+   spanning its own full-width row below the logo. `center` is ignored when
+   `nav` is set — the whole point is that the stepper leaves the center zone. */
 export function TopBar({
   center,
   right,
   homeTo,
   floating = false,
+  nav,
 }: {
   center?: ReactNode;
   right?: ReactNode;
   homeTo?: string;
   floating?: boolean;
+  nav?: ReactNode;
 }) {
+  if (nav) {
+    return (
+      <header className={`qz-topbar qz-topbar--tworow${floating ? " qz-topbar--floating" : ""}`}>
+        <div className="qz-topbar-row">
+          <div className="qz-topbar-zone qz-topbar-left">
+            <Wordmark to={homeTo} />
+          </div>
+          <div className="qz-topbar-zone qz-topbar-right">{right}</div>
+        </div>
+        <div className="qz-topbar-nav">{nav}</div>
+      </header>
+    );
+  }
   return (
     <header className={`qz-topbar${floating ? " qz-topbar--floating" : ""}`}>
       <div className="qz-topbar-zone qz-topbar-left">

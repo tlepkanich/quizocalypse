@@ -129,7 +129,7 @@ export function Step1Funnel({ data }: { data: FunnelData }) {
           renders its own floating bar. */}
       {step3V3Active ? null : (
       <TopBar
-        center={<FunnelStepNav stage={data.stage} />}
+        nav={<FunnelStepNav stage={data.stage} />}
         right={
           <>
             {data.identitySummary && !shapeVisible ? (

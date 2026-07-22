@@ -3498,6 +3498,30 @@ body[data-qz] ::selection { background: var(--qz-ink); color: var(--qz-cream); }
 .qz-topbar-left { padding-right: 16px; border-right: 1px solid var(--qz-rule); }
 .qz-topbar-center { flex: 1 1 auto; justify-content: center; padding: 0 16px; min-width: 0; }
 .qz-topbar-right { padding-left: 16px; border-left: 1px solid var(--qz-rule); }
+/* step1 handoff §1 — the TWO-ROW funnel chrome. Row 1: wordmark left, ghost
+   actions + the stage's primary right — no zone dividers (the mock's barrow).
+   Row 2: the progress-line step nav on its own full-width row below the logo,
+   separated by a hairline (the mock's stepline). */
+.qz-topbar--tworow {
+  height: auto;
+  flex-direction: column;
+  align-items: stretch;
+  padding: 0;
+}
+.qz-topbar-row {
+  height: 58px;
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0 24px;
+}
+.qz-topbar--tworow .qz-topbar-left { padding-right: 0; border-right: none; }
+.qz-topbar--tworow .qz-topbar-right { padding-left: 0; border-left: none; }
+.qz-topbar-nav {
+  display: flex; justify-content: center;
+  padding: 10px 24px 12px;
+  border-top: 1px solid var(--qz-rule);
+  min-width: 0;
+}
+
 /* The Step-3 floating variant (quiz-step3 spec §2): rounded card, pinned. */
 .qz-topbar--floating {
   top: 10px; margin: 10px 14px 0;
