@@ -12,6 +12,7 @@ import {
 } from "../lib/brandIdentityBuild.server";
 import { QzPage, QzPageHeader } from "../components/qz";
 import { BrandIdentityReview } from "../components/studio/BrandIdentityReview";
+import { resolveIdentityBuildState } from "../lib/stall.server";
 
 // Embedded twin of /studio/brand — the production "here's what we see" screen.
 // Same shared <BrandIdentityReview>, but it authenticates via Shopify admin and
@@ -28,8 +29,11 @@ async function resolveEmbeddedShop(request: Request) {
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { shop } = await resolveEmbeddedShop(request);
+  // Gap 6 — normalize "building:<iso>" to the client contract + derive stalled.
+  const identityBuild = resolveIdentityBuildState(shop.brandIdentityState ?? null);
   return json({
-    state: shop.brandIdentityState ?? null,
+    state: identityBuild.state,
+    stalled: identityBuild.stalled,
     identity: parseBrandIdentitySafe(shop.brandIdentity),
   });
 };
@@ -59,7 +63,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 };
 
 export default function AppOnboardingBrand() {
-  const { state, identity } = useLoaderData<typeof loader>();
+  const { state, stalled, identity } = useLoaderData<typeof loader>();
   return (
     <QzPage>
       <QzPageHeader
@@ -72,7 +76,7 @@ export default function AppOnboardingBrand() {
           </Link>
         }
       />
-      <BrandIdentityReview identity={identity} state={state} />
+      <BrandIdentityReview identity={identity} state={state} stalled={stalled} />
       <div
         className="qz-row qz-row-between"
         style={{ marginTop: 20, gap: 12, flexWrap: "wrap", alignItems: "center" }}

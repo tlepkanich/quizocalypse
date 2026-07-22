@@ -20,21 +20,26 @@ const commas = (s: string) => s.split(",").map((x) => x.trim()).filter(Boolean);
 export function BrandIdentityReview({
   identity,
   state,
+  stalled = false,
 }: {
   identity: BrandIdentity | null;
   state: string | null;
+  // Gap 6 — the loader's stall verdict for a "building" state. Stalled =
+  // presumed dead: stop polling, re-enable the build button (it IS the retry),
+  // and say so instead of spinning forever.
+  stalled?: boolean;
 }) {
   const fetcher = useFetcher();
   const revalidator = useRevalidator();
-  const building = fetcher.state !== "idle" || state === "building";
+  const building = fetcher.state !== "idle" || (state === "building" && !stalled);
   const errorState = state?.startsWith("error:") ? state.slice("error:".length) : null;
 
   // Poll while a detached (install-time) build is running.
   useEffect(() => {
-    if (state !== "building") return;
+    if (state !== "building" || stalled) return;
     const t = setInterval(() => revalidator.revalidate(), 3000);
     return () => clearInterval(t);
-  }, [state, revalidator]);
+  }, [state, stalled, revalidator]);
 
   // Editable local copies, re-seeded whenever a fresh identity arrives.
   const [summary, setSummary] = useState("");
@@ -104,9 +109,18 @@ export function BrandIdentityReview({
     </QzButton>
   );
 
+  const stalledBanner =
+    stalled && state === "building" && fetcher.state === "idle" ? (
+      <QzBanner tone="warn" title="This is taking longer than it should">
+        The last build looks interrupted — nothing has been written for a while.
+        Run it again.
+      </QzBanner>
+    ) : null;
+
   if (!identity) {
     return (
       <>
+        {stalledBanner}
         {errorState ? (
           <QzBanner tone="warn" title="Last build errored">
             {errorState}
@@ -134,6 +148,7 @@ export function BrandIdentityReview({
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+      {stalledBanner}
       {errorState ? (
         <QzBanner tone="warn" title="Last build errored">
           {errorState}

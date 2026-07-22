@@ -98,6 +98,11 @@ export interface PublishResult {
   ok: true;
   version: number;
   productCount: number;
+  // ai-fallbacks Gap 7 — true when a publish-time AI pass (benefit bullets /
+  // answer tooltips) FAILED and the quiz shipped without that copy. Publish is
+  // never blocked by it; the caller surfaces a quiet warning so the degrade
+  // isn't silent.
+  aiCopyDegraded?: boolean;
 }
 
 export class PublishError extends Error {
@@ -528,6 +533,9 @@ export async function publishQuiz(
   // from the bound bucket's top products' titles + descriptions.
   const productById = new Map(products.map((p) => [p.productId, p]));
   const toneSample = toneSampleFromCatalog(products);
+  // Gap 7 — flipped by the benefit/tooltip catches below so the degrade is
+  // reported to the caller instead of silently shipping without the copy.
+  let aiCopyDegraded = false;
   const bakedNodes = await Promise.all(
     doc.nodes.map(async (node) => {
       // Result nodes → "why this product" benefit bullets (Call 3).
@@ -549,7 +557,10 @@ export async function publishQuiz(
           features: features.slice(0, 6),
           ...(toneSample ? { brandVoiceSample: toneSample } : {}),
           ...(brandGuidelines ? { brandGuidelines } : {}),
-        }).catch(() => [] as string[]);
+        }).catch(() => {
+          aiCopyDegraded = true;
+          return [] as string[];
+        });
         return bullets.length > 0
           ? { ...node, data: { ...node.data, why_bullets: bullets } }
           : node;
@@ -562,7 +573,10 @@ export async function publishQuiz(
           answers: node.data.answers.map((a) => ({ id: a.id, text: a.text })),
           context: node.data.text,
           ...(brandGuidelines ? { brandGuidelines } : {}),
-        }).catch(() => ({}) as Record<string, string>);
+        }).catch(() => {
+          aiCopyDegraded = true;
+          return {} as Record<string, string>;
+        });
         if (Object.keys(tips).length === 0) return node;
         return {
           ...node,
@@ -679,5 +693,10 @@ export async function publishQuiz(
     await prisma.quizVersion.deleteMany({ where: { id: { in: toDelete } } });
   }
 
-  return { ok: true, version: nextVersion, productCount: productIndex.length };
+  return {
+    ok: true,
+    version: nextVersion,
+    productCount: productIndex.length,
+    ...(aiCopyDegraded ? { aiCopyDegraded: true } : {}),
+  };
 }

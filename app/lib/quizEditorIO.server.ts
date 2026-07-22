@@ -347,12 +347,18 @@ async function handleQuizEditorActionImpl(
         // collection-sourced targets; any failure falls back to synced order.
         { collectionOrder: (targets) => resolveCollectionOrders(shop.shopDomain, targets) },
       );
+      // Gap 7 — a publish-time AI pass that failed still ships (never blocks),
+      // but leaves a visible trace instead of silently missing copy.
+      const aiCopyWarning = result.aiCopyDegraded
+        ? "Some AI copy (benefit bullets / answer tooltips) couldn't be generated this time — published without it. Re-publish to retry."
+        : null;
+      const warning = [discountWarning, aiCopyWarning].filter(Boolean).join(" ");
       return json({
         ok: true,
         action: "publish" as const,
         version: result.version,
         productCount: result.productCount,
-        ...(discountWarning ? { warning: discountWarning } : {}),
+        ...(warning ? { warning } : {}),
       });
     } catch (err) {
       if (err instanceof PublishError) {

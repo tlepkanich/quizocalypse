@@ -3,6 +3,7 @@
 // loadStep1FunnelData is byte-identical to the original.
 import prisma from "../db.server";
 import { parseBrandIdentitySafe } from "./brandIdentity";
+import { isDetachedJobStalled } from "./stall.server";
 import { brandSeedTokens } from "./brandSeed";
 import { suggestQuizGoal } from "./goalSuggest";
 import { detectGroupingDimension } from "./groupingDetect";
@@ -207,11 +208,10 @@ export async function loadStep1FunnelData(
   // hasn't been written in well past a real run. The "templating" stage now spans
   // BOTH template-gen AND the early question build (runAiOnboardingBuild only
   // writes draftJson at the very end), so the no-write window can reach ~75-110s;
-  // 200s gives a legitimately slow build margin before we surface the re-run /
-  // template escape instead of polling indefinitely.
+  // the shared 200s rule (stall.server.ts, Gap 6) gives a legitimately slow
+  // build margin before we surface the re-run / template escape.
   const genInFlight = session.stage === "typing" || session.stage === "templating";
-  const genStalled =
-    genInFlight && Date.now() - new Date(quiz.updatedAt).getTime() > 200_000;
+  const genStalled = genInFlight && isDetachedJobStalled(quiz.updatedAt);
 
   // ── Question Builder (the pre-config editing step) ───────────────────────
   // ONLY on this stage do we ship the full editable doc + the builder's

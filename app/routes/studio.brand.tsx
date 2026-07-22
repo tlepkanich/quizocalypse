@@ -4,6 +4,7 @@ import { Link, useFetcher, useLoaderData } from "@remix-run/react";
 import prisma from "../db.server";
 import { requireStudioAccess, resolveStudioShop } from "../lib/studioAccess.server";
 import { parseBrandIdentitySafe } from "../lib/brandIdentity";
+import { resolveIdentityBuildState } from "../lib/stall.server";
 import {
   runBrandIdentityBuild,
   saveBrandIdentityEdits,
@@ -27,7 +28,8 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const tokensParse = DesignTokens.safeParse(shop.brandTokens ?? {});
   return json({
     shopDomain: shop.shopDomain,
-    state: shop.brandIdentityState ?? null,
+    // Gap 6 — "building:<iso>" stall stamp normalized to the client contract.
+    state: resolveIdentityBuildState(shop.brandIdentityState ?? null).state,
     identity: parseBrandIdentitySafe(shop.brandIdentity),
     tokens: tokensParse.success ? tokensParse.data : {},
     voice: parseBrandGuidelinesSafe(shop.brandGuidelines)?.voice ?? null,

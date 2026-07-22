@@ -191,7 +191,14 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
   }, [undo, redo]);
   // QB-2 — preview zoom (a CSS scale on the canvas frame), 50–100%.
   const [zoom, setZoom] = useState(100);
-  const publishFetcher = useFetcher<{ ok: boolean; version?: number; error?: string }>();
+  const publishFetcher = useFetcher<{
+    ok: boolean;
+    version?: number;
+    error?: string;
+    // Non-blocking publish caveats (discount creation failed, AI copy passes
+    // degraded) — rendered as a warn banner beside the success banner.
+    warning?: string;
+  }>();
   const renameFetcher = useFetcher<{ ok: boolean; name?: string }>();
 
   // Selection drives the ContextPanel; the optional inspect target carries the
@@ -711,6 +718,11 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
           {publishFetcher.data.error}
         </QzBanner>
       ) : null}
+      {publishFetcher.data?.ok && publishFetcher.data.warning ? (
+        <QzBanner tone="warn" title="Published with a caveat">
+          {publishFetcher.data.warning}
+        </QzBanner>
+      ) : null}
       {publishFetcher.data?.ok && publishFetcher.data.version ? (
         <QzBanner tone="ok" title={`Published v${publishFetcher.data.version}`}>
           Live at{" "}
@@ -1083,6 +1095,11 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
         {publishFetcher.data?.ok === false && publishFetcher.data.error ? (
           <QzBanner tone="crit" title="Publish failed">
             {publishFetcher.data.error}
+          </QzBanner>
+        ) : null}
+        {publishFetcher.data?.ok && publishFetcher.data.warning ? (
+          <QzBanner tone="warn" title="Published with a caveat">
+            {publishFetcher.data.warning}
           </QzBanner>
         ) : null}
         {publishFetcher.data?.ok && publishFetcher.data.version ? (

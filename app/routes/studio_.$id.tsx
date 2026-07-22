@@ -8,6 +8,7 @@ import { ClientOnly, BuilderSkeleton } from "../components/studio/ClientOnly";
 import { QzToastProvider } from "../components/qz-toast";
 import { QzPage, QzCard, QzBanner, StagedProgress } from "../components/qz";
 import { requireStudioAccess, resolveStudioShop } from "../lib/studioAccess.server";
+import { isDetachedJobStalled } from "../lib/stall.server";
 import {
   loadQuizEditorDataForShop,
   handleQuizEditorActionForShop,
@@ -55,9 +56,21 @@ export const loader = async ({ params, request }: LoaderFunctionArgs) => {
   // doesn't surface it). Drives the polling "Building…" overlay below.
   const buildRow = await prisma.quiz.findUnique({
     where: { id },
-    select: { buildState: true },
+    select: { buildState: true, updatedAt: true },
   });
-  return json({ ...data, abAnalytics, buildState: buildRow?.buildState ?? null });
+  // ai-fallbacks Gap 6 — a build whose row has been silent past the shared
+  // stall rule is presumed dead (e.g. a deploy restart killed the detached
+  // job); the overlay surfaces the interrupted state instead of spinning
+  // forever. Polling continues underneath, so a slow-but-alive job that
+  // finally writes still clears it.
+  const buildStalled =
+    buildRow?.buildState === "building" && isDetachedJobStalled(buildRow.updatedAt);
+  return json({
+    ...data,
+    abAnalytics,
+    buildState: buildRow?.buildState ?? null,
+    buildStalled,
+  });
 };
 
 export const action = async ({ params, request }: ActionFunctionArgs) => {
@@ -90,7 +103,7 @@ export default function StandaloneStudio() {
     return () => clearInterval(t);
   }, [force, buildState, revalidator]);
 
-  if (!force && buildState === "building") return <BuildingOverlay />;
+  if (!force && buildState === "building") return <BuildingOverlay stalled={data.buildStalled} />;
   if (!force && buildState?.startsWith("error:")) {
     return <BuildError message={buildState.slice("error:".length)} />;
   }
@@ -121,7 +134,7 @@ const BUILD_STAGES = [
   "Building your results page",
 ];
 
-function BuildingOverlay() {
+function BuildingOverlay({ stalled = false }: { stalled?: boolean }) {
   // Advance the beats on a slow clock (the ~75s build dwarfs any single beat);
   // hold on the last until the poll clears. The spinner keeps it animated so it
   // never reads as frozen even while a beat lingers.
@@ -159,12 +172,28 @@ function BuildingOverlay() {
         <div style={{ width: "100%", maxWidth: 320 }}>
           <StagedProgress stages={BUILD_STAGES} active={active} />
         </div>
-        <p className="qz-dim" style={{ margin: 0, fontSize: 13, maxWidth: 460, textAlign: "center" }}>
-          This usually takes about a minute. This page refreshes itself — no need to reload.{" "}
-          <Link to="?force=1" className="qz-link">
-            Taking too long? Open the builder →
-          </Link>
-        </p>
+        {stalled ? (
+          // Gap 6 — the stall backstop's honest state: presumed dead, offer the
+          // way forward instead of an infinite spinner.
+          <>
+            <QzBanner tone="warn" title="This is taking longer than it should">
+              The build looks interrupted — nothing has been written for a
+              while. Everything generated so far is saved in the draft.
+            </QzBanner>
+            <p className="qz-dim" style={{ margin: 0, fontSize: 13, maxWidth: 460, textAlign: "center" }}>
+              <Link to="?force=1" className="qz-link">
+                Open the builder and continue from the draft →
+              </Link>
+            </p>
+          </>
+        ) : (
+          <p className="qz-dim" style={{ margin: 0, fontSize: 13, maxWidth: 460, textAlign: "center" }}>
+            This usually takes about a minute. This page refreshes itself — no need to reload.{" "}
+            <Link to="?force=1" className="qz-link">
+              Taking too long? Open the builder →
+            </Link>
+          </p>
+        )}
       </QzCard>
     </QzPage>
   );

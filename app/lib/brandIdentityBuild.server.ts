@@ -313,7 +313,14 @@ export async function runBrandIdentityBuild(
   opts?: { refine?: boolean },
 ): Promise<RunIdentityResult> {
   await prisma.shop
-    .update({ where: { id: shopId }, data: { brandIdentityState: "building" } })
+    // Gap 6 — Shop has no updatedAt, so the stall backstop needs the start
+    // time IN the state. Loaders parse "building:<iso>" and normalize back to
+    // "building" for the client; a bare legacy "building" reads as stalled
+    // (any pre-deploy build is dead — deploys kill detached jobs).
+    .update({
+      where: { id: shopId },
+      data: { brandIdentityState: `building:${new Date().toISOString()}` },
+    })
     .catch(() => {});
   try {
     const shop = await prisma.shop.findUnique({ where: { id: shopId } });

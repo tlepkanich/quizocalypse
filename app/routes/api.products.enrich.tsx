@@ -158,12 +158,15 @@ export async function action({ request }: ActionFunctionArgs) {
             ? err.message
             : String(err);
       enrichmentErrors.push({ productId: p.productId, error: msg });
-      // Bump lastEnrichedAt anyway so the next batch doesn't immediately
-      // re-fail on the same product. Merchant can manually re-trigger by
-      // clearing the column if they fix whatever caused the failure.
+      // ai-fallbacks Gap 7 — a FAILED product must stay retryable, not be
+      // marked enriched forever (the old bump silently gave up on it). But it
+      // also must not block the queue head: stamped to just-inside-stale
+      // (cutoff − 1ms) it sorts LAST among stale products, so fresh products
+      // enrich first and failures retry at the back of every run. Spend on
+      // repeat failures is bounded by the merchant AI budget + manual runs.
       await prisma.product.update({
         where: { productId: p.productId },
-        data: { lastEnrichedAt: new Date() },
+        data: { lastEnrichedAt: new Date(cutoff.getTime() - 1) },
       });
       processed += 1;
       continue;
