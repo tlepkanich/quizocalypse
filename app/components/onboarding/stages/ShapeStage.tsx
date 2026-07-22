@@ -5,7 +5,7 @@
 import { useEffect, useMemo, useState } from "react";
 import type { CSSProperties } from "react";
 import type { useFetcher } from "@remix-run/react";
-import { Box, Check, RotateCcw, Sparkles } from "lucide-react";
+import { Box, Check } from "lucide-react";
 import { QzCard, QzBadge } from "../../qz";
 import { QzDrawer } from "../../qz-overlays";
 import type { QuizType } from "../../../lib/quizSchema";
@@ -333,46 +333,43 @@ function DeciderShapeStage({
     <div className="qz-shape-page">
       <h2 className="qz-h2" style={{ margin: 0 }}>Choose the optimal quiz type</h2>
 
-      <div className="qz-type-grid">
+      <div className="qz-shape-grid">
         {aiTypes.map((t, i) => {
           const selected = selectedTypeId === t.id;
           const building = selected && pendingIntent === "shape-continue";
           return (
           <article
             key={t.id}
-            className={`qz-card qz-shape-card${selected ? " is-active" : ""}`}
+            className={`qz-shape-card${selected ? " is-active" : ""}`}
           >
-            {/* Soft Pastel §8.1 — the AI's top pick carries the violet Recommended
-                ribbon (the diamond mark was removed; the accent leads). */}
-            {i === 0 ? (
-              <span className="qz-ribbon-recommended"><Sparkles size={11} aria-hidden /> Recommended</span>
-            ) : null}
+            {/* Mock ribbon: an accent pill overlapping the card's top edge. */}
+            {i === 0 ? <span className="qz-shape-ribbon">✦ Recommended</span> : null}
             <TypeFilm type={t} cssVars={cssVars} buckets={data.buckets} catalog={data.catalog} />
             <span className="qz-row qz-row-between" style={{ gap: 8, alignItems: "flex-start" }}>
               <strong className="qz-shape-title">
                 {t.name}
               </strong>
-              <QzBadge tone={t.experience_type === "personality" ? "ok" : "draft"}>
-                {XTYPE_LABEL[t.experience_type] ?? t.experience_type}
-              </QzBadge>
+              <span className="qz-shape-tbadge">{XTYPE_LABEL[t.experience_type] ?? t.experience_type}</span>
             </span>
-            <span className="qz-shape-line"><b>GOAL</b><span>{t.achieves}</span></span>
-            <span className="qz-shape-line"><b>WHY</b><span>{t.rationale}</span></span>
+            <span className="qz-shape-line"><b>Goal</b><span>{t.achieves}</span></span>
+            <span className="qz-shape-line"><b>Why</b><span>{t.rationale}</span></span>
             <span className="qz-shape-meta">{t.question_range.min}–{t.question_range.max} questions</span>
-            <button
-              type="button"
-              className={`qz-btn ${selected ? "qz-btn-accent" : "qz-btn-ghost"} qz-shape-use`}
-              disabled={busy}
-              onClick={() => {
-                if (!selected) {
-                  setSelectedTypeId(t.id);
-                  return;
-                }
-                fetcher.submit({ intent: "shape-continue", typeId: t.id, scoring: "direct" }, { method: "post" });
-              }}
-            >
-              {building ? "Building…" : selected ? "Continue → build your questions" : "Use this"}
-            </button>
+            <span className="qz-shape-foot">
+              <button
+                type="button"
+                className="qz-shape-pick"
+                disabled={busy}
+                onClick={() => {
+                  if (!selected) {
+                    setSelectedTypeId(t.id);
+                    return;
+                  }
+                  fetcher.submit({ intent: "shape-continue", typeId: t.id, scoring: "direct" }, { method: "post" });
+                }}
+              >
+                {building ? "Building…" : selected ? "Continue → build your questions" : "Use this"}
+              </button>
+            </span>
           </article>
           );
         })}
@@ -381,46 +378,58 @@ function DeciderShapeStage({
       <details className="qz-shape-other">
         <summary>Other ways to start</summary>
         <div className="qz-shape-other-body">
-          <button type="button" className="qz-link-quiet" disabled={busy} onClick={() => setWritingGoal((v) => !v)}>
-            Write your own goal
+          <button type="button" className="qz-shape-oopt" disabled={busy} onClick={() => setWritingGoal((v) => !v)}>
+            <span className="qz-shape-oi" aria-hidden>✏️</span>
+            <span>
+              <span className="qz-shape-on" style={{ display: "block" }}>Write your own goal</span>
+              <span className="qz-shape-od" style={{ display: "block" }}>
+                Describe what you want the quiz to do — we&rsquo;ll draft a type from it.
+              </span>
+            </span>
+            <span className="qz-shape-oarr" aria-hidden>→</span>
           </button>
-          <button type="button" className="qz-link-quiet" disabled={busy} onClick={() => fetcher.submit({ intent: "manual-build" }, { method: "post" })}>
-            {pendingIntent === "manual-build" ? "Opening…" : "Build manually"}
+          {writingGoal ? (
+            <div className="qz-shape-goalbox">
+              <GoalPromptBody
+                suggestedGoal={data.goal?.goal_text || data.suggestedGoal}
+                minGoalChars={data.minGoalChars}
+                submitLabel={pendingIntent === "shape-goal-build" ? "Building…" : "Generate type →"}
+                onSubmit={(goal) => fetcher.submit({ intent: "shape-goal-build", goal }, { method: "post" })}
+                onCancel={() => setWritingGoal(false)}
+              />
+            </div>
+          ) : null}
+          <button type="button" className="qz-shape-oopt" disabled={busy} onClick={() => fetcher.submit({ intent: "manual-build" }, { method: "post" })}>
+            <span className="qz-shape-oi" aria-hidden>⚒️</span>
+            <span>
+              <span className="qz-shape-on" style={{ display: "block" }}>
+                {pendingIntent === "manual-build" ? "Opening…" : "Build manually"}
+              </span>
+              <span className="qz-shape-od" style={{ display: "block" }}>
+                Start from a blank quiz and write every question yourself.
+              </span>
+            </span>
+            <span className="qz-shape-oarr" aria-hidden>→</span>
           </button>
-        {writingGoal ? (
-        <QzCard style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 4 }}>
-          <strong style={{ fontSize: 14 }}>Describe what you want your quiz to do</strong>
-          <GoalPromptBody
-            suggestedGoal={data.goal?.goal_text || data.suggestedGoal}
-            minGoalChars={data.minGoalChars}
-            submitLabel={pendingIntent === "shape-goal-build" ? "Building…" : "Generate from my goal →"}
-            onSubmit={(goal) => fetcher.submit({ intent: "shape-goal-build", goal }, { method: "post" })}
-            onCancel={() => setWritingGoal(false)}
+          <SavedTemplatesRow
+            templates={data.savedTemplates}
+            fetcher={fetcher}
+            pendingIntent={pendingIntent}
+            isDecider={isDecider}
           />
-        </QzCard>
-        ) : null}
-
-      <SavedTemplatesRow
-        templates={data.savedTemplates}
-        fetcher={fetcher}
-        pendingIntent={pendingIntent}
-        isDecider={isDecider}
-      />
         </div>
       </details>
 
-      <div className="qz-row" style={{ gap: 10, alignItems: "center" }}>
+      <div className="qz-shape-underrow">
         <button
           type="button"
-          className="qz-btn qz-btn-ghost qz-btn-sm"
           disabled={busy}
           onClick={() => fetcher.submit({ intent: "shape-regenerate" }, { method: "post" })}
         >
-          {pendingIntent === "shape-regenerate" ? "Regenerating…" : <><RotateCcw size={13} aria-hidden /> Regenerate suggestions</>}
+          {pendingIntent === "shape-regenerate" ? "↻ Regenerating…" : "↻ Regenerate suggestions"}
         </button>
         <button
           type="button"
-          className="qz-btn qz-btn-ghost qz-btn-sm"
           disabled={busy}
           onClick={() => fetcher.submit({ intent: "back-to-grouping" }, { method: "post" })}
         >
@@ -465,8 +474,11 @@ function TypeFilm({
   const products = catalog.products.slice(0, 3);
   const personality = type.experience_type === "personality";
 
+  const personaAvatar = answers[1]?.imageUrl ?? answers[0]?.imageUrl ?? null;
+
   return (
-    <div className="qz-shape-film" style={cssVars} aria-label={`${type.name} preview`}>
+    <div className="qz-shape-filmwrap" style={cssVars}>
+    <div className="qz-shape-film" aria-label={`${type.name} preview`}>
       <div className={`qz-shape-film-screen is-question${showResults ? " is-hidden" : ""}`}>
         <span className="qz-shape-film-progress"><i /></span>
         <strong>What are you shopping for today?</strong>
@@ -486,21 +498,28 @@ function TypeFilm({
             </span>
           ))}
         </div>
+        <span className="qz-shape-film-next">Next →</span>
       </div>
       <div className={`qz-shape-film-screen is-results${showResults ? "" : " is-hidden"}`}>
+        <span className="qz-shape-film-progress"><i /></span>
         {personality ? (
           <div className="qz-shape-persona">
-            <span>YOUR SHOPPER TYPE</span>
-            <strong>You&rsquo;re the Considered Curator</strong>
-            <small>Thoughtful picks, chosen for how you actually shop.</small>
+            <span className="qz-shape-film-avatar">
+              {personaAvatar ? <img src={personaAvatar} alt="" loading="lazy" /> : <Box size={16} aria-hidden />}
+            </span>
+            <span className="qz-shape-persona-copy">
+              <span>Your shopper type</span>
+              <strong>You&rsquo;re the Considered Curator</strong>
+              <small>Thoughtful picks, chosen for how you actually shop.</small>
+            </span>
           </div>
         ) : (
           <div className="qz-shape-film-heading">
             <strong>Your matches</strong>
-            <small>Picked from your catalog for this shopper.</small>
+            <small>Picked from your catalog for their answers</small>
           </div>
         )}
-        {personality ? <span className="qz-shape-film-kicker">Your product picks</span> : null}
+        {personality ? <span className="qz-shape-persona-sub">Your product picks</span> : null}
         <div className="qz-shape-film-products">
           {(products.length ? products : [{ id: "placeholder", title: "Your top match", imageUrl: null, price: null }]).slice(0, personality ? 2 : 3).map((product, index) => (
             <span key={product.id} className={`qz-shape-film-product${index === 0 ? " is-top" : ""}`}>
@@ -517,6 +536,7 @@ function TypeFilm({
         </div>
         <span className="qz-shape-film-cta">Add all to cart</span>
       </div>
+    </div>
     </div>
   );
 }
@@ -735,22 +755,25 @@ function SavedTemplatesRow({
   if (templates.length === 0) return null;
   const using = pendingIntent === "use-saved-template";
   const usingId = using ? String(fetcher.formData?.get("templateId") ?? "") : null;
+  // Mock: a static option row (no arrow — the pills are the action) with the
+  // saved-template pill rail beneath it.
   return (
-    <QzCard style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-      <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-        <span className="qz-label">Or reuse a saved template</span>
-        <span className="qz-dim" style={{ fontSize: 12 }}>
-          {isDecider
-            ? "Start from one you saved before — we’ll build your questions from it and take you straight to Questions & Logic."
-            : "Start from one you saved before — its design dials and recommendation settings come along."}
+    <div>
+      <div className="qz-shape-oopt is-static">
+        <span className="qz-shape-oi" aria-hidden>♻️</span>
+        <span>
+          <span className="qz-shape-on" style={{ display: "block" }}>Reuse a saved template</span>
+          <span className="qz-shape-od" style={{ display: "block" }}>
+            Start from one you saved before — its settings come along.
+          </span>
         </span>
       </div>
-      <div className="qz-template-rail">
+      <div className="qz-shape-savedrail">
         {templates.map((s) => (
           <button
             key={s.id}
             type="button"
-            className="qz-template-pill"
+            className="qz-shape-savedpill"
             disabled={using}
             title={s.template.angle}
             onClick={() =>
@@ -761,6 +784,6 @@ function SavedTemplatesRow({
           </button>
         ))}
       </div>
-    </QzCard>
+    </div>
   );
 }
