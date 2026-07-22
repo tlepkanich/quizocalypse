@@ -521,6 +521,184 @@ function BlockFields({
           onChange={(n) => onChange({ size: n ?? 0 } as Partial<ContentBlock>)}
         />
       ) : null}
+      {/* build-tab §5 — the Social-proof blocks' content + format fields. */}
+      {block.type === "testimonial" ? (
+        <>
+          <QzField label="Quote">
+            <QzTextarea
+              rows={3}
+              value={block.quote}
+              onChange={(e) => onChange({ quote: e.target.value } as Partial<ContentBlock>)}
+            />
+          </QzField>
+          <div className="qz-row" style={{ gap: 10, flexWrap: "wrap" }}>
+            <QzField label="Author">
+              <QzInput
+                value={block.author}
+                onChange={(e) => onChange({ author: e.target.value } as Partial<ContentBlock>)}
+              />
+            </QzField>
+            <QzField label="Role">
+              <QzInput
+                value={block.role}
+                placeholder="Verified buyer"
+                onChange={(e) => onChange({ role: e.target.value } as Partial<ContentBlock>)}
+              />
+            </QzField>
+          </div>
+          <QzField label="Avatar URL (optional)">
+            <QzInput
+              value={block.avatar_url ?? ""}
+              placeholder="https://…"
+              onChange={(e) =>
+                onChange({ avatar_url: e.target.value.trim() || undefined } as Partial<ContentBlock>)
+              }
+            />
+          </QzField>
+          <div className="qz-row" style={{ gap: 10, alignItems: "flex-end", flexWrap: "wrap" }}>
+            <QzField label="Style">
+              <QzSelect
+                value={block.variant}
+                onChange={(e) => onChange({ variant: e.target.value } as Partial<ContentBlock>)}
+              >
+                <option value="card">Card</option>
+                <option value="plain">Plain</option>
+                <option value="big_quote">Big quote</option>
+              </QzSelect>
+            </QzField>
+            <NumericControl
+              label="Stars (0 hides)"
+              value={block.stars}
+              min={0}
+              max={5}
+              onChange={(n) => onChange({ stars: n ?? 0 } as Partial<ContentBlock>)}
+            />
+          </div>
+        </>
+      ) : null}
+      {block.type === "review_stars" ? (
+        <>
+          <div className="qz-row" style={{ gap: 10, alignItems: "flex-end", flexWrap: "wrap" }}>
+            <NumericControl
+              label="Rating"
+              value={block.rating}
+              min={0}
+              max={5}
+              onChange={(n) => onChange({ rating: n ?? 0 } as Partial<ContentBlock>)}
+            />
+            <NumericControl
+              label="Star size"
+              value={block.size}
+              min={12}
+              max={40}
+              suffix="px"
+              onChange={(n) => onChange({ size: n ?? 18 } as Partial<ContentBlock>)}
+            />
+            {colorField("Color", block.color, "color")}
+          </div>
+          <QzField label="Count text">
+            <QzInput
+              value={block.count_text}
+              placeholder="4.8 · 2,300+ reviews"
+              onChange={(e) => onChange({ count_text: e.target.value } as Partial<ContentBlock>)}
+            />
+          </QzField>
+          <QzField label="Align">
+            <QzSelect
+              value={block.align}
+              onChange={(e) => onChange({ align: e.target.value } as Partial<ContentBlock>)}
+            >
+              <option value="left">Left</option>
+              <option value="center">Center</option>
+              <option value="right">Right</option>
+            </QzSelect>
+          </QzField>
+        </>
+      ) : null}
+      {block.type === "trust_badges" ? (
+        <>
+          <QzField label="Badges — one per line, icon first (e.g. “🚚 Free shipping”)">
+            <QzTextarea
+              rows={3}
+              value={block.items.map((it) => `${it.icon} ${it.label}`.trim()).join("\n")}
+              onChange={(e) =>
+                onChange({
+                  items: e.target.value
+                    .split("\n")
+                    .map((line) => line.trim())
+                    .filter(Boolean)
+                    .map((line) => {
+                      const sp = line.indexOf(" ");
+                      return sp < 0
+                        ? { icon: line, label: "" }
+                        : { icon: line.slice(0, sp), label: line.slice(sp + 1).trim() };
+                    }),
+                } as Partial<ContentBlock>)
+              }
+            />
+          </QzField>
+          <div className="qz-row" style={{ gap: 10, alignItems: "flex-end", flexWrap: "wrap" }}>
+            <NumericControl
+              label="Columns"
+              value={block.columns}
+              min={1}
+              max={4}
+              onChange={(n) => onChange({ columns: n ?? 3 } as Partial<ContentBlock>)}
+            />
+            <NumericControl
+              label="Icon size"
+              value={block.icon_size}
+              min={12}
+              max={48}
+              suffix="px"
+              onChange={(n) => onChange({ icon_size: n ?? 20 } as Partial<ContentBlock>)}
+            />
+            {colorField("Icon color", block.color, "color")}
+          </div>
+        </>
+      ) : null}
+      {block.type === "coupon" ? (
+        <>
+          <div className="qz-row" style={{ gap: 10, flexWrap: "wrap" }}>
+            <QzField label="Code">
+              <QzInput
+                value={block.code}
+                onChange={(e) => onChange({ code: e.target.value } as Partial<ContentBlock>)}
+              />
+            </QzField>
+            <QzField label="Frame">
+              <QzSelect
+                value={block.frame}
+                onChange={(e) => onChange({ frame: e.target.value } as Partial<ContentBlock>)}
+              >
+                <option value="ticket">Ticket</option>
+                <option value="solid">Solid</option>
+                <option value="soft">Soft</option>
+              </QzSelect>
+            </QzField>
+          </div>
+          <QzField label="Headline">
+            <QzInput
+              value={block.headline}
+              onChange={(e) => onChange({ headline: e.target.value } as Partial<ContentBlock>)}
+            />
+          </QzField>
+          <QzField label="Subtext">
+            <QzInput
+              value={block.subtext}
+              onChange={(e) => onChange({ subtext: e.target.value } as Partial<ContentBlock>)}
+            />
+          </QzField>
+          <label style={{ display: "inline-flex", gap: 6, alignItems: "center", fontSize: 12 }}>
+            <input
+              type="checkbox"
+              checked={block.show_copy}
+              onChange={(e) => onChange({ show_copy: e.target.checked } as Partial<ContentBlock>)}
+            />
+            Copy button
+          </label>
+        </>
+      ) : null}
       {/* R7-1 §7.3 — divider thickness + colour (schema had them, no editor). */}
       {block.type === "divider" ? (
         <div className="qz-row" style={{ gap: 10, alignItems: "center", flexWrap: "wrap" }}>

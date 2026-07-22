@@ -168,6 +168,11 @@ const RUNTIME_LITERAL_BLOCK_TYPES = new Set([
   "progress",
   "logo",
   "content",
+  // build-tab §5 — the Social-proof inventory (BlockRenderer literal cases).
+  "testimonial",
+  "review_stars",
+  "trust_badges",
+  "coupon",
 ]);
 // BLD-7 — a smart block renders only on the node type whose interactive
 // region exists (renderSmart mounts the region-mode view with the SAME

@@ -43,6 +43,8 @@ const CATEGORIES: { name: string; types: ContentBlockType[] }[] = [
     ],
   },
   { name: "Actions", types: ["button"] },
+  // build-tab §5 — the Social-proof gap-closers.
+  { name: "Social proof", types: ["testimonial", "review_stars", "trust_badges", "coupon"] },
 ];
 
 /** The block stack an insert appends to: the node's explicit layout when one

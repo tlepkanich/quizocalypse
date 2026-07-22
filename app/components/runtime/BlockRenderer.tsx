@@ -1,6 +1,59 @@
+import { useState } from "react";
 import type { CSSProperties, ReactNode } from "react";
 import type { ContentBlock, QuizNode } from "../../lib/quizSchema";
 import { blockStyleToCss, isEmptyBlockStyle, nodeScopeClass, scopeNodeCss } from "./blockStyle";
+
+// build-tab §5 — the star row shared by testimonial + review_stars: filled
+// stars in the brand primary (or the block's color), the remainder dimmed.
+// Fractional ratings round to the nearest whole star (no half-star glyphs).
+function StarRow({ rating, size, color }: { rating: number; size: number; color?: string }) {
+  const filled = Math.max(0, Math.min(5, Math.round(rating)));
+  const on = color ?? "var(--qz-color-primary)";
+  return (
+    <span
+      aria-label={`${rating} out of 5 stars`}
+      style={{ display: "inline-flex", gap: 2, fontSize: size, lineHeight: 1 }}
+    >
+      {[0, 1, 2, 3, 4].map((i) => (
+        <span key={i} aria-hidden style={{ color: i < filled ? on : "color-mix(in srgb, currentColor 22%, transparent)" }}>
+          ★
+        </span>
+      ))}
+    </span>
+  );
+}
+
+// §5 coupon — the copy affordance. Static block content, clipboard-only.
+function CopyCodeButton({ code }: { code: string }) {
+  const [copied, setCopied] = useState(false);
+  return (
+    <button
+      type="button"
+      onClick={() => {
+        navigator.clipboard?.writeText(code).then(
+          () => {
+            setCopied(true);
+            window.setTimeout(() => setCopied(false), 1800);
+          },
+          () => {},
+        );
+      }}
+      style={{
+        border: "1px solid color-mix(in srgb, currentColor 30%, transparent)",
+        background: "transparent",
+        color: "inherit",
+        borderRadius: 7,
+        padding: "3px 9px",
+        fontSize: "0.7em",
+        fontFamily: "var(--qz-font-body)",
+        fontWeight: 600,
+        cursor: "pointer",
+      }}
+    >
+      {copied ? "Copied ✓" : "Copy"}
+    </button>
+  );
+}
 
 // ───────────────────────────────────────────────────────────────────────────
 // BlockRenderer (Phase 2) — the ONE shared renderer for a node's content-block
@@ -256,6 +309,140 @@ function LiteralBlock({
     case "content": {
       if (!block.text.trim()) return null;
       return <RichText text={block.text} muted={styles.muted} />;
+    }
+    // ── build-tab §5 — the Social-proof inventory ───────────────────────────
+    case "testimonial": {
+      if (!block.quote.trim()) return null;
+      const stars = block.stars > 0 ? <StarRow rating={block.stars} size={13} /> : null;
+      const attribution =
+        block.author || block.role ? (
+          <div style={{ display: "flex", alignItems: "center", gap: 9, marginTop: 10 }}>
+            {block.avatar_url ? (
+              <img
+                src={block.avatar_url}
+                alt=""
+                style={{ width: 34, height: 34, borderRadius: "50%", objectFit: "cover" }}
+              />
+            ) : null}
+            <span style={{ display: "flex", flexDirection: "column" }}>
+              <strong style={{ fontSize: "0.85em" }}>{block.author}</strong>
+              {block.role ? (
+                <span style={{ ...styles.muted, fontSize: "0.75em" }}>{block.role}</span>
+              ) : null}
+            </span>
+          </div>
+        ) : null;
+      if (block.variant === "big_quote") {
+        return (
+          <figure style={{ margin: 0, textAlign: "center" }}>
+            <blockquote
+              style={{
+                margin: 0,
+                fontFamily: "var(--qz-font-heading)",
+                fontSize: "1.35em",
+                lineHeight: 1.35,
+              }}
+            >
+              &ldquo;{block.quote}&rdquo;
+            </blockquote>
+            {stars ? <div style={{ marginTop: 8 }}>{stars}</div> : null}
+            <figcaption style={{ display: "inline-block" }}>{attribution}</figcaption>
+          </figure>
+        );
+      }
+      const chrome: CSSProperties =
+        block.variant === "card"
+          ? {
+              background: "var(--qz-color-surface)",
+              borderRadius: "var(--qz-radius)",
+              padding: "var(--qz-pad)",
+            }
+          : {};
+      return (
+        <figure style={{ margin: 0, ...chrome }}>
+          {stars}
+          <blockquote style={{ margin: stars ? "8px 0 0" : 0, fontSize: "0.95em", lineHeight: 1.5 }}>
+            &ldquo;{block.quote}&rdquo;
+          </blockquote>
+          <figcaption>{attribution}</figcaption>
+        </figure>
+      );
+    }
+    case "review_stars": {
+      return (
+        <div style={{ textAlign: block.align }}>
+          <StarRow rating={block.rating} size={block.size} color={block.color} />
+          {block.count_text ? (
+            <div style={{ ...styles.muted, fontSize: "0.8em", marginTop: 3 }}>{block.count_text}</div>
+          ) : null}
+        </div>
+      );
+    }
+    case "trust_badges": {
+      const items = block.items.filter((it) => it.label || it.icon);
+      if (items.length === 0) return null;
+      return (
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: `repeat(${block.columns}, minmax(0, 1fr))`,
+            gap: 10,
+          }}
+        >
+          {items.map((it, i) => (
+            <div key={i} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 5, textAlign: "center" }}>
+              <span aria-hidden style={{ fontSize: block.icon_size, lineHeight: 1, color: block.color ?? "var(--qz-color-primary)" }}>
+                {it.icon}
+              </span>
+              <span style={{ fontSize: "0.78em", fontWeight: 600 }}>{it.label}</span>
+            </div>
+          ))}
+        </div>
+      );
+    }
+    case "coupon": {
+      if (!block.code.trim()) return null;
+      const frame: CSSProperties =
+        block.frame === "solid"
+          ? { background: "var(--qz-color-primary)", color: "#fff" }
+          : block.frame === "soft"
+            ? { background: "var(--qz-color-surface)" }
+            : {
+                background: "var(--qz-color-bg)",
+                border: "1.5px dashed var(--qz-color-primary)",
+              };
+      return (
+        <div
+          style={{
+            ...frame,
+            borderRadius: "var(--qz-radius)",
+            padding: "calc(var(--qz-pad) * 0.9)",
+            textAlign: "center",
+          }}
+        >
+          {block.headline ? (
+            <div style={{ fontWeight: 700, fontSize: "0.9em" }}>{block.headline}</div>
+          ) : null}
+          {block.subtext ? (
+            <div style={{ fontSize: "0.8em", opacity: 0.75, marginTop: 2 }}>{block.subtext}</div>
+          ) : null}
+          <div
+            style={{
+              marginTop: block.headline || block.subtext ? 8 : 0,
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 8,
+              fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
+              fontWeight: 700,
+              fontSize: "1.05em",
+              letterSpacing: "0.06em",
+            }}
+          >
+            {block.code}
+            {block.show_copy ? <CopyCodeButton code={block.code} /> : null}
+          </div>
+        </div>
+      );
     }
     case "button": {
       const label = resolveBind(node, block.bind, block.label);

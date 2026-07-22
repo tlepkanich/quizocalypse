@@ -235,6 +235,11 @@ export const PALETTE_BLOCKS: { type: ContentBlockType; label: string; glyph: str
   { type: "content", label: "Content block", glyph: "¶" },
   { type: "ai_chat", label: "AI chat", glyph: "✶" },
   { type: "product_grid", label: "Product grid", glyph: "▦" },
+  // build-tab §5 — Social proof.
+  { type: "testimonial", label: "Testimonial", glyph: "❝" },
+  { type: "review_stars", label: "Review stars", glyph: "★" },
+  { type: "trust_badges", label: "Trust badges", glyph: "✔" },
+  { type: "coupon", label: "Coupon reveal", glyph: "%" },
 ];
 
 export function makeBlock(type: ContentBlockType): ContentBlock {
@@ -271,6 +276,42 @@ export function makeBlock(type: ContentBlockType): ContentBlock {
       return { ...base, type };
     case "product_grid":
       return { ...base, type };
+    // build-tab §5 — the Social-proof inventory. Palette inserts arrive with
+    // real-looking sample content so the block reads immediately.
+    case "testimonial":
+      return {
+        ...base,
+        type,
+        quote: "This quiz found exactly what I needed — no more guessing.",
+        author: "Jamie L.",
+        role: "Verified buyer",
+        stars: 5,
+        variant: "card",
+      };
+    case "review_stars":
+      return { ...base, type, rating: 4.8, count_text: "4.8 · 2,300+ reviews", size: 18, align: "center" };
+    case "trust_badges":
+      return {
+        ...base,
+        type,
+        items: [
+          { icon: "🚚", label: "Free shipping" },
+          { icon: "↩", label: "30-day returns" },
+          { icon: "🔒", label: "Secure checkout" },
+        ],
+        columns: 3,
+        icon_size: 20,
+      };
+    case "coupon":
+      return {
+        ...base,
+        type,
+        code: "WELCOME10",
+        headline: "Your reward",
+        subtext: "10% off your match today",
+        frame: "ticket",
+        show_copy: true,
+      };
   }
 }
 

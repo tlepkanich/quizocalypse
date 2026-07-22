@@ -1134,6 +1134,51 @@ export const ProductGridBlock = z.object({
   type: z.literal("product_grid"),
 });
 
+// ── build-tab handoff §5 — the P0 gap-closer blocks (Social proof) ─────────
+// New block TYPES only ever exist when a merchant inserts them, so defaults
+// inside these objects can never rewrite a legacy doc (same discipline as
+// every block above).
+export const TestimonialBlock = z.object({
+  ...blockBase,
+  type: z.literal("testimonial"),
+  quote: z.string().default(""),
+  author: z.string().default(""),
+  role: z.string().default(""),
+  avatar_url: z.string().optional(),
+  // 0 hides the star row.
+  stars: z.number().int().min(0).max(5).default(5),
+  variant: z.enum(["card", "plain", "big_quote"]).default("card"),
+});
+export const ReviewStarsBlock = z.object({
+  ...blockBase,
+  type: z.literal("review_stars"),
+  rating: z.number().min(0).max(5).default(4.8),
+  count_text: z.string().default(""),
+  size: z.number().int().min(12).max(40).default(18),
+  // Absent → the quiz brand primary.
+  color: z.string().optional(),
+  align: z.enum(["left", "center", "right"]).default("center"),
+});
+export const TrustBadgesBlock = z.object({
+  ...blockBase,
+  type: z.literal("trust_badges"),
+  items: z
+    .array(z.object({ icon: z.string().default("✓"), label: z.string().default("") }))
+    .default([]),
+  columns: z.number().int().min(1).max(4).default(3),
+  icon_size: z.number().int().min(12).max(48).default(20),
+  color: z.string().optional(),
+});
+export const CouponBlock = z.object({
+  ...blockBase,
+  type: z.literal("coupon"),
+  code: z.string().default(""),
+  headline: z.string().default(""),
+  subtext: z.string().default(""),
+  frame: z.enum(["ticket", "solid", "soft"]).default("ticket"),
+  show_copy: z.boolean().default(true),
+});
+
 export const ContentBlock = z.discriminatedUnion("type", [
   HeadingBlock,
   TextBlock,
@@ -1150,6 +1195,10 @@ export const ContentBlock = z.discriminatedUnion("type", [
   EmailInputBlock,
   AiChatBlock,
   ProductGridBlock,
+  TestimonialBlock,
+  ReviewStarsBlock,
+  TrustBadgesBlock,
+  CouponBlock,
 ]);
 export type ContentBlock = z.infer<typeof ContentBlock>;
 export type ContentBlockType = ContentBlock["type"];
