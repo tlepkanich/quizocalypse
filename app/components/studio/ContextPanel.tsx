@@ -202,7 +202,9 @@ export function ContextPanel({
   // QZY-8 — footer delete arms the carousel's two-step confirm.
   onArmDelete?: (nodeId: string) => void;
 }) {
-  const [tab, setTab] = useState<Tab>("content");
+  // build-tab handoff §1 — DESIGN-FIRST is deliberate: blocks arrive
+  // pre-populated with AI content, so styling is the dominant remaining task.
+  const [tab, setTab] = useState<Tab>("design");
   // null = follow the frame ("edit what you see"); explicit pick overrides.
   const [layerOverride, setLayerOverride] = useState<DesignLayerMode | null>(null);
   const layer: DesignLayerMode = layerOverride ?? frameBreakpoint;
@@ -900,10 +902,12 @@ function DeciderInspectorBody({
   }
   return (
     <>
-      <ContentTab doc={doc} node={node} onCommit={onCommit} products={products} regen={regen} />
+      {/* build-tab handoff §1 — DESIGN FIRST (blocks arrive pre-populated with
+          AI content; styling is the dominant remaining task), content second. */}
       <LayerSelector layer={layer} layerOverride={layerOverride} setLayerOverride={setLayerOverride} />
       {/* §1 — hideBackground: the screen background lives ONLY in the left tab. */}
       <StyleTab doc={doc} node={node} mode={layer} onCommit={onCommit} hideBackground />
+      <ContentTab doc={doc} node={node} onCommit={onCommit} products={products} regen={regen} />
       <details style={{ flex: "0 0 auto" }}>
         <summary style={{ cursor: "pointer", fontSize: 12.5, fontWeight: 600 }}>Layout blocks</summary>
         <div style={{ marginTop: 8 }}>
@@ -1007,11 +1011,13 @@ function ContextPanelBody({
               selection-driven). Legacy docs keep Content/Design/Routing. */}
           {!isDecider ? (
             <div className="qz-segmented" role="group" aria-label="Panel tab">
-              <button type="button" aria-pressed={tab === "content"} onClick={() => setTab("content")}>
-                Content
-              </button>
+              {/* §1 — Design first (default), Content second. Routing stays as
+                  legacy's owning-surface embed (it is not a "Settings" tab). */}
               <button type="button" aria-pressed={tab === "design"} onClick={() => setTab("design")}>
                 Design
+              </button>
+              <button type="button" aria-pressed={tab === "content"} onClick={() => setTab("content")}>
+                Content
               </button>
               <button type="button" aria-pressed={tab === "routing"} onClick={() => setTab("routing")}>
                 Routing
