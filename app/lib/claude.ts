@@ -18,6 +18,7 @@ export {
 } from "./ai/client";
 export * from "./ai/generation";
 export * from "./ai/editing";
+export * from "./ai/designAi";
 export * from "./ai/enrichment";
 export * from "./ai/askAi";
 export * from "./ai/translate";

@@ -4,13 +4,15 @@ import { authenticate } from "../shopify.server";
 import prisma from "../db.server";
 import { logFor } from "./log.server";
 import { checkAiBudget, withAiSpendRecording } from "./aiBudget.server";
-import { Quiz } from "./quizSchema";
+import { Quiz, DesignTokens } from "./quizSchema";
 import type { Quiz as QuizDoc } from "./quizSchema";
 import { publishQuiz, PublishError, collectDeciderTargetIds } from "./quizPublish";
 import { resolveCollectionOrders } from "./collectionOrder.server";
 import { qrDataUrl } from "./qrCode.server";
 import { ensureQuizDiscount } from "./discount.server";
-import { regenerateQuestion, generateQuestionFlow, editQuiz, enrichFromReviews, translateQuiz } from "./claude";
+import { regenerateQuestion, generateQuestionFlow, editQuiz, enrichFromReviews, translateQuiz, generateDesignRestyle } from "./claude";
+import { applyDesignAiPatch, ensureReadableTokens } from "./designAiPatch";
+import { parseBrandIdentitySafe } from "./brandIdentity";
 import { applyEditOps, outlineQuiz } from "./quizEdit";
 import {
   extractTranslatableStrings,
@@ -222,6 +224,7 @@ export async function handleQuizEditorActionForShop(
       "ai-edit",
       "enrich-reviews",
       "translate-quiz",
+      "design-ai",
     ]);
     if (aiIntents.has(intent)) {
       const budget = await checkAiBudget(shop.id, "merchant");
@@ -874,6 +877,68 @@ async function handleQuizEditorActionImpl(
       locale: rawLocale,
       translated: Object.keys(translated).length,
     });
+  }
+
+  if (intent === "design-ai") {
+    // BLD-2 — prompt-driven design-token restyle. The AI emits a SMALL patch
+    // constrained to the fields the Global styles panel already writes
+    // (Zod-gated: curated fonts rejected off-list, numerics clamped), the
+    // contrast guardrail darkens/lightens unreadable picks deterministically,
+    // and the result goes through the same DesignTokens + Quiz parse gates as
+    // any manual edit before the write. On any failure the draft is untouched.
+    const prompt = String(form.get("prompt") ?? "").trim().slice(0, 500);
+    if (!prompt) {
+      return json({ ok: false, error: "Describe the look you want first." }, { status: 400 });
+    }
+
+    const quiz = await prisma.quiz.findFirst({ where: { id, shopId: shop.id } });
+    if (!quiz) return json({ ok: false, error: "Quiz not found" }, { status: 404 });
+    // Restyle the doc the merchant is looking at (single-flight `baseDoc`),
+    // not a stale stored draft — same non-clobbering base as ai-edit.
+    const doc = resolveAiBaseDoc(form, quiz.draftJson);
+    if (!doc) {
+      return json({ ok: false, error: "Invalid quiz JSON" }, { status: 400 });
+    }
+
+    // DGN-1 brand context — the AI restyles WITH the shop's brand identity in
+    // view (derived_tokens) so "make it ours" stays grounded; absent → omitted.
+    const identity = parseBrandIdentitySafe(shop.brandIdentity);
+
+    let patch;
+    try {
+      patch = await generateDesignRestyle({
+        prompt,
+        currentTokens: doc.design_tokens ?? {},
+        brandTokens: identity?.design.derived_tokens ?? null,
+      });
+    } catch (err) {
+      logFor("quizEditorIO").error({ err, quizId: id }, "design restyle failed");
+      return json(
+        { ok: false, error: "AI styling is temporarily unavailable — try again. Your design is unchanged." },
+        { status: 502 },
+      );
+    }
+
+    const nextTokens = ensureReadableTokens(
+      applyDesignAiPatch(doc.design_tokens ?? {}, patch),
+    );
+    const parsedTokens = DesignTokens.safeParse(nextTokens);
+    if (!parsedTokens.success) {
+      return json(
+        { ok: false, error: "That restyle didn't come back usable — try a different description. Your design is unchanged." },
+        { status: 422 },
+      );
+    }
+    const reparsed = Quiz.safeParse({ ...doc, design_tokens: parsedTokens.data });
+    if (!reparsed.success) {
+      return json(
+        { ok: false, error: "That restyle didn't come back usable — try a different description. Your design is unchanged." },
+        { status: 422 },
+      );
+    }
+
+    await prisma.quiz.update({ where: { id }, data: { draftJson: reparsed.data as never } });
+    return json({ ok: true, action: "design-ai" as const, doc: reparsed.data });
   }
 
   if (intent === "remove-locale") {

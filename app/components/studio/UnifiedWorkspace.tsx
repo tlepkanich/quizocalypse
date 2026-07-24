@@ -44,6 +44,7 @@ import { BLOCK_DRAG_MIME, BuilderBlocksPalette, insertBlock } from "./BuilderBlo
 import { BuilderBackgroundTab } from "./BuilderBackgroundTab";
 import { BuilderLayersTab } from "./BuilderLayersTab";
 import { ScreenCarousel } from "./ScreenCarousel";
+import { DesignAiButton, type DesignAiApi } from "./DesignAiButton";
 import { AllScreensGrid, GlobalStylesPanel } from "./AllScreensView";
 import UpgradeDeciderModal from "../onboarding/questionsLogic/UpgradeDeciderModal";
 
@@ -161,6 +162,13 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
       error: endAiEdit,
       undo,
     }),
+    [beginAiEdit, applyAi, endAiEdit, undo],
+  );
+  // BLD-2 — the same AI seam for the top-bar Design AI restyle, but start()
+  // RETURNS the flushed doc so the intent can send it as the single-flight
+  // `baseDoc` (the ai-edit non-clobbering contract).
+  const designAiApi = useMemo<DesignAiApi>(
+    () => ({ start: beginAiEdit, apply: applyAi, error: endAiEdit, undo }),
     [beginAiEdit, applyAi, endAiEdit, undo],
   );
   // Keyboard shortcuts for undo/redo (⌘Z / ⌘⇧Z, plus Ctrl+Y for Windows redo).
@@ -1260,6 +1268,10 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
             view === "build" ? (
               <>
                 {canvasModeToggle}
+                {/* BLD-2 — Design AI: prompt-driven token restyle, next to the
+                    BLD-1 canvas controls. Shown in BOTH canvas modes — the
+                    All-screens grid is where the repaint is most visible. */}
+                <DesignAiButton api={designAiApi} />
                 {/* Single-screen controls only — the All-screens grid has no
                     device frame / zoom / inspect target to drive. */}
                 {allScreensMode ? null : (
