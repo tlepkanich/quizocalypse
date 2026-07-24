@@ -44,6 +44,7 @@ import { BLOCK_DRAG_MIME, BuilderBlocksPalette, insertBlock } from "./BuilderBlo
 import { BuilderBackgroundTab } from "./BuilderBackgroundTab";
 import { BuilderLayersTab } from "./BuilderLayersTab";
 import { ScreenCarousel } from "./ScreenCarousel";
+import { AllScreensGrid, GlobalStylesPanel } from "./AllScreensView";
 import UpgradeDeciderModal from "../onboarding/questionsLogic/UpgradeDeciderModal";
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -239,6 +240,10 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
   // (palette) · Layers (current screen's blocks) · Background. The step LIST
   // left this panel: the screen carousel under the canvas is the navigator.
   const [editorSubtab, setEditorSubtab] = useState<"add" | "layers" | "background">("add");
+  // BLD-1 — the Build view's canvas mode (standalone only): "screen" is the
+  // existing single-screen editor; "all" lays every screen out as a live card
+  // grid with the simplified Global styles panel on the right.
+  const [canvasMode, setCanvasMode] = useState<"screen" | "all">("screen");
   const [libraryCollapsed, setLibraryCollapsed] = useState(false);
   const [reconcileError, setReconcileError] = useState<string | null>(null);
   // phone-preview SPEC §2 (+ build-tab stagebar) — the Expand control: the
@@ -997,6 +1002,25 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
       commit(kind === "slider" ? setQuestionType(next, newNodeId, "slider") : next);
       select(newNodeId);
     };
+    // BLD-1 — the All-screens "+ New screen" card promises "at the end", so it
+    // ALWAYS anchors at the last MOVABLE step (straightThroughRun's tail —
+    // never the ordered spine's terminal, the "lost in the flow" trap), even
+    // when a mid-flow screen is selected.
+    const appendQuestionScreen = () => {
+      const run = straightThroughRun(doc);
+      const anchor = run.run[run.run.length - 1] ?? run.head;
+      if (!anchor) return;
+      const { doc: next, newNodeId } = insertModule(
+        doc,
+        "question",
+        anchor,
+        undefined,
+        fallbackCollection,
+      );
+      if (!newNodeId) return;
+      commit(next);
+      select(newNodeId);
+    };
     const onQuestionTile = (kind: "single_select" | "slider") => {
       if (blockTarget?.type === "question") {
         const cur = blockTarget.data.question_type;
@@ -1018,6 +1042,29 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
       }
       addQuestionScreen(kind);
     };
+
+    // BLD-1 — the All-screens ⇄ This-screen segmented control (top bar, Build
+    // view). "All screens" swaps the canvas for the card grid + Global styles
+    // panel; a card click focuses that screen and flips back here.
+    const canvasModeToggle = (
+      <div className="qz-segmented" role="group" aria-label="Canvas mode">
+        <button
+          type="button"
+          aria-pressed={canvasMode === "all"}
+          onClick={() => setCanvasMode("all")}
+        >
+          All screens
+        </button>
+        <button
+          type="button"
+          aria-pressed={canvasMode === "screen"}
+          onClick={() => setCanvasMode("screen")}
+        >
+          This screen
+        </button>
+      </div>
+    );
+    const allScreensMode = view === "build" && canvasMode === "all";
 
     // The left panel content for the focused tool (build view only). QZY-6:
     // ai/code left this switch — Assist is a top-bar drawer, custom CSS lives
@@ -1212,18 +1259,25 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
           center={
             view === "build" ? (
               <>
-                {deviceToggle}
-                {breakpointForWidth(frameW) === "desktop" ? showAsToggle : null}
-                {/* phone-preview SPEC — Expand: inspect the same screen big. */}
-                <button
-                  type="button"
-                  className="qz-s3-expandbtn"
-                  onClick={() => setPreviewExpanded(true)}
-                >
-                  <IconExpand /> Expand
-                </button>
-                {zoomStepper}
-                {editInteractToggle}
+                {canvasModeToggle}
+                {/* Single-screen controls only — the All-screens grid has no
+                    device frame / zoom / inspect target to drive. */}
+                {allScreensMode ? null : (
+                  <>
+                    {deviceToggle}
+                    {breakpointForWidth(frameW) === "desktop" ? showAsToggle : null}
+                    {/* phone-preview SPEC — Expand: inspect the same screen big. */}
+                    <button
+                      type="button"
+                      className="qz-s3-expandbtn"
+                      onClick={() => setPreviewExpanded(true)}
+                    >
+                      <IconExpand /> Expand
+                    </button>
+                    {zoomStepper}
+                    {editInteractToggle}
+                  </>
+                )}
               </>
             ) : null
           }
@@ -1271,7 +1325,53 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
               }
             }}
           />
-          {view === "build" ? (
+          {view === "build" && canvasMode === "all" ? (
+            <>
+              {/* BLD-1 — All-screens mode: every screen as a live card; the
+                  library panel steps aside (its Add/Layers/Background tabs
+                  target ONE screen) and the inspector hosts the simplified
+                  Global styles panel. The filmstrip stays as the shared
+                  navigator; grid + strip highlight the same active screen. */}
+              <div className="qz-builder-stage">
+                <div className="qz-builder-notices">{standaloneNotices}</div>
+                <AllScreensGrid
+                  doc={doc}
+                  ordered={ordered}
+                  activeId={selectedId ?? liveNodeId}
+                  onOpenScreen={(nodeId) => {
+                    select(nodeId);
+                    setCanvasMode("screen");
+                  }}
+                  onAddScreen={appendQuestionScreen}
+                  productIndex={data.productIndex}
+                  categories={data.categories}
+                />
+                <ScreenCarousel
+                  doc={doc}
+                  ordered={ordered}
+                  activeId={selectedId ?? liveNodeId}
+                  onSelect={select}
+                  onAddScreen={() => addQuestionScreen("single_select")}
+                  confirmDeleteId={confirmDeleteId}
+                  onConfirmDelete={setConfirmDeleteId}
+                  onDelete={(nodeId) => {
+                    commit(deleteNode(doc, nodeId));
+                    setConfirmDeleteId(null);
+                    select(null);
+                  }}
+                  onDuplicate={(nodeId) => {
+                    const next = duplicateQuestionNode(doc, nodeId);
+                    if (next !== doc) commit(next);
+                  }}
+                  productIndex={data.productIndex}
+                  categories={data.categories}
+                />
+              </div>
+              <aside className="qz-builder-inspector" aria-label="Global styles">
+                <GlobalStylesPanel doc={doc} commit={commit} />
+              </aside>
+            </>
+          ) : view === "build" ? (
             <>
               {libraryCollapsed ? null : (
                 <aside className="qz-builder-panel">

@@ -80,8 +80,9 @@ const GLYPH: Record<QuizNode["type"], string> = {
   product_cards: "▦",
 };
 
-// One-line merchant-readable summary per node.
-function nodeTitle(node: QuizNode): string {
+// One-line merchant-readable summary per node. Exported for the All-screens
+// grid's card titles (BLD-1) so the two surfaces can't drift on naming.
+export function nodeTitle(node: QuizNode): string {
   const d = node.data as Record<string, unknown>;
   const s = (k: string) => (typeof d[k] === "string" ? (d[k] as string) : "");
   switch (node.type) {
