@@ -32,13 +32,35 @@ const BANNED_QUESTION_GUIDANCE =
   "spend — brands don't ask that. If price sensitivity matters, infer it " +
   "from product choices instead.";
 
+// AUDIT-21 — the strategy build-rules (docs/design/strategy/quiz-templates/
+// build-rules.json, Tier-A survey-methodology rules) folded onto the two
+// AUTHORING prompts (flow build + single-question regenerate). Content-quality
+// steering only: the tool schemas, Zod parsing, and retries are untouched, and
+// the merchant-directed edit-ops prompt deliberately excludes these (an
+// explicit merchant request wins over authoring defaults). Exported for the
+// prompt-inclusion test.
+export const QUESTION_WRITING_RULES =
+  "\nQUESTION-WRITING RULES (always apply): one concept per question — never " +
+  "double-barreled (\"lightweight AND durable\" is two questions). Use neutral " +
+  "wording that describes the shopper's need — never leading, loaded, or " +
+  "marketing copy (\"our best-selling premium X\"). Answer options must be " +
+  "mutually exclusive and collectively exhaustive: no overlapping numeric " +
+  "ranges, and include an \"Other\" / \"Not sure\" escape option when the set " +
+  "can't cover everyone. Single-select questions: at most 7 options, 5 or " +
+  "fewer preferred — use a searchable or dropdown type for longer lists. " +
+  "Multi-select questions: keep the list to ~6 options and set " +
+  "max_selections. Order easy, concrete questions first; personal or " +
+  "sensitive ones late; never place two high-effort questions (long " +
+  "multi-selects) back to back.";
+
 const REGEN_SYSTEM_PROMPT =
   "You are regenerating ONE question in an existing Shopify product quiz. " +
   "Use the catalog summary for tag accuracy — only use tags that exist in the " +
   "supplied catalog. Keep the question useful for product targeting. The " +
   "downstream system will preserve answer IDs where possible by order — keep " +
   "the answer count similar to the original so edge connections survive." +
-  BANNED_QUESTION_GUIDANCE;
+  BANNED_QUESTION_GUIDANCE +
+  QUESTION_WRITING_RULES;
 
 const regenQuestionToolJsonSchema = {
   type: "object",
@@ -209,7 +231,8 @@ const QUESTION_FLOW_SYSTEM_PROMPT =
   "toward exactly one bucket by including at least one of that bucket's routing tags, " +
   "and together the answers must cover every bucket's tags. Keep questions concise and " +
   "useful for narrowing products. Never write commentary or anything outside the tool call." +
-  BANNED_QUESTION_GUIDANCE;
+  BANNED_QUESTION_GUIDANCE +
+  QUESTION_WRITING_RULES;
 
 const questionFlowToolJsonSchema = {
   type: "object",

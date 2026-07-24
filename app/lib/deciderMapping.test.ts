@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { mapAnswersToTargets, pickDeciderIndex } from "./deciderMapping";
-import { deciderAddendum } from "./claude";
+import { deciderAddendum, QUESTION_WRITING_RULES } from "./claude";
 
 const buckets = [
   { id: "cat_dry", tags: ["dry", "hydration"] },
@@ -88,5 +88,15 @@ describe("deciderAddendum — prompt byte-stability", () => {
   });
   it("decider flag returns a non-empty addendum", () => {
     expect(deciderAddendum("decider")).toContain("ONE-DECIDER");
+  });
+});
+
+// AUDIT-21 — the strategy build-rules folded onto the authoring prompts.
+describe("QUESTION_WRITING_RULES — authoring-prompt guardrails", () => {
+  it("encodes the Tier-A survey-methodology rules", () => {
+    expect(QUESTION_WRITING_RULES).toContain("double-barreled");
+    expect(QUESTION_WRITING_RULES).toContain("mutually exclusive and collectively exhaustive");
+    expect(QUESTION_WRITING_RULES).toContain("at most 7 options");
+    expect(QUESTION_WRITING_RULES).toContain("max_selections");
   });
 });

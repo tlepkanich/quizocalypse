@@ -170,6 +170,51 @@ describe("validateQuizWarnings (BIC P3) — suggestions never block publishing",
     // warnDoc has suggestions but a clean graph — validateQuiz must stay [].
     expect(validateQuiz(warnDoc())).toEqual([]);
   });
+
+  // AUDIT-21 — strategy build-rules "radio-option-cap" (warn tier).
+  it("single-select with 8+ options gets an option_overload suggestion", () => {
+    const doc = warnDoc();
+    const q2 = doc.nodes.find((n) => n.id === "q2");
+    if (q2?.type === "question") {
+      q2.data.answers = Array.from({ length: 9 }, (_, i) => ({
+        id: `oa${i}`,
+        text: `Option ${i + 1}`,
+        tags: [],
+        edge_handle_id: `oh${i}`,
+      }));
+    }
+    const s = validateQuizWarnings(doc);
+    expect(s.some((x) => x.kind === "option_overload" && x.nodeId === "q2")).toBe(true);
+    // Still never blocks: the graph is unchanged, so the gate stays clean.
+    expect(validateQuiz(doc)).toEqual([]);
+  });
+
+  it("7 options is fine, and a 9-option dropdown is fine (the cap is single-select only)", () => {
+    const seven = warnDoc();
+    const q2a = seven.nodes.find((n) => n.id === "q2");
+    if (q2a?.type === "question") {
+      q2a.data.answers = Array.from({ length: 7 }, (_, i) => ({
+        id: `sa${i}`,
+        text: `Option ${i + 1}`,
+        tags: [],
+        edge_handle_id: `sh${i}`,
+      }));
+    }
+    expect(validateQuizWarnings(seven).some((x) => x.kind === "option_overload")).toBe(false);
+
+    const dropdown = warnDoc();
+    const q2b = dropdown.nodes.find((n) => n.id === "q2");
+    if (q2b?.type === "question") {
+      q2b.data.question_type = "dropdown";
+      q2b.data.answers = Array.from({ length: 9 }, (_, i) => ({
+        id: `da${i}`,
+        text: `Option ${i + 1}`,
+        tags: [],
+        edge_handle_id: `dh${i}`,
+      }));
+    }
+    expect(validateQuizWarnings(dropdown).some((x) => x.kind === "option_overload")).toBe(false);
+  });
 });
 
 // ─── Experiences E1: type-aware guard rails ─────────────────────────────────

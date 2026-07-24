@@ -334,9 +334,18 @@ export function validateQuiz(doc: QuizDoc): NodeIssue[] {
 
 export interface QuizSuggestion {
   nodeId: string;
-  kind: "duplicate_question_text" | "type_content_mismatch" | "missing_capture";
+  kind:
+    | "duplicate_question_text"
+    | "type_content_mismatch"
+    | "missing_capture"
+    | "option_overload";
   message: string;
 }
+
+// AUDIT-21 — strategy build-rules "radio-option-cap" (severity: warn): a
+// single-select with 8+ options overwhelms as tap cards; a dropdown/searchable
+// renders long lists better (Pew / NN/g). Advisory only — never blocks.
+const SINGLE_SELECT_OPTION_CAP = 7;
 
 export function validateQuizWarnings(doc: QuizDoc): QuizSuggestion[] {
   const suggestions: QuizSuggestion[] = [];
@@ -394,6 +403,16 @@ export function validateQuizWarnings(doc: QuizDoc): QuizSuggestion[] {
         nodeId: n.id,
         kind: "type_content_mismatch",
         message: `“${n.data.text.slice(0, 48)}” is a swatch picker but some answers have no image — they render as empty circles.`,
+      });
+    }
+    if (
+      n.data.question_type === "single_select" &&
+      n.data.answers.length > SINGLE_SELECT_OPTION_CAP
+    ) {
+      suggestions.push({
+        nodeId: n.id,
+        kind: "option_overload",
+        message: `“${n.data.text.slice(0, 48)}” has ${n.data.answers.length} options — past ~7, tap cards overwhelm shoppers. Consider a dropdown or searchable type, or trim to 5 or fewer.`,
       });
     }
   }
