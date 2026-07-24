@@ -5,6 +5,7 @@ import {
   applyRuleAction,
   deciderFallbackProducts,
   orderBySignal,
+  productRating,
   resolveRecPageGlobal,
   resolveTarget,
   // QZY-5 (results-step4 v1.0) — the archetype lineup.
@@ -759,5 +760,39 @@ describe("QZY-5 schema — the new step-4 fields parse and stay sparse", () => {
     expect(JSON.stringify(twice)).toBe(JSON.stringify(once));
     expect(JSON.stringify(once)).not.toContain("fallbackOn");
     expect(JSON.stringify(once)).not.toContain("showAddAll");
+  });
+});
+
+// Results-page redesign — displayable review stars come ONLY from real baked
+// metafields; anything unparseable or out of range renders nothing.
+describe("productRating — real review metafields only", () => {
+  it("reads bare-number reviews.rating + count", () => {
+    expect(
+      productRating({ metafields: { "reviews.rating": "4.8", "reviews.rating_count": "212" } }),
+    ).toEqual({ value: 4.8, count: 212 });
+  });
+  it("reads the metafield JSON form and bare rating keys", () => {
+    expect(
+      productRating({ metafields: { "reviews.rating": '{"value":"4.6","scale_max":"5"}' } }),
+    ).toEqual({ value: 4.6 });
+    expect(productRating({ metafields: { rating: "4.2", rating_count: "17" } })).toEqual({
+      value: 4.2,
+      count: 17,
+    });
+  });
+  it("never invents a rating: absent, junk, and out-of-range → null", () => {
+    expect(productRating({})).toBeNull();
+    expect(productRating({ metafields: {} })).toBeNull();
+    expect(productRating({ metafields: { "reviews.rating": "great!" } })).toBeNull();
+    expect(productRating({ metafields: { "reviews.rating": "0" } })).toBeNull();
+    expect(productRating({ metafields: { "reviews.rating": "7.5" } })).toBeNull();
+    expect(productRating({ metafields: { "reviews.rating": '{"value":"nope"}' } })).toBeNull();
+  });
+  it("Trust pair defaults OFF (existing docs unchanged)", () => {
+    expect(REC_PAGE_DEFAULTS.showStars).toBe(false);
+    expect(REC_PAGE_DEFAULTS.showPerWhy).toBe(false);
+    const g = resolveRecPageGlobal(undefined);
+    expect(g.showStars).toBe(false);
+    expect(g.showPerWhy).toBe(false);
   });
 });

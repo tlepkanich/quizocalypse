@@ -69,6 +69,8 @@ export const REC_PAGE_DEFAULTS: Required<
     | "showAtc"
     | "showAddAll"
     | "fallbackOn"
+    | "showStars"
+    | "showPerWhy"
   >
 > = {
   headline: "Your perfect match",
@@ -100,7 +102,41 @@ export const REC_PAGE_DEFAULTS: Required<
   showAtc: true,
   showAddAll: false,
   fallbackOn: true,
+  // Results-page redesign — the Trust pair defaults OFF: existing published
+  // decider docs render exactly as before until a merchant opts in.
+  showStars: false,
+  showPerWhy: false,
 };
+
+// ── Results-page redesign — displayable review stars ─────────────────────────
+// Reads the BAKED product metafields for a real review rating; renders nothing
+// when absent. Accepts the common Shopify reviews-app keys (`reviews.rating`
+// arrives either as a bare number string or as the metafield JSON
+// `{"value":"4.8","scale_max":"5"}`) plus bare `rating`/`rating_count`.
+// Never invents a value — FTC fake-reviews exposure (strategy doc §D).
+export function productRating(
+  p: Pick<IndexedProduct, "metafields">,
+): { value: number; count?: number } | null {
+  const meta = p.metafields;
+  if (!meta) return null;
+  const raw = meta["reviews.rating"] ?? meta["rating"];
+  if (!raw) return null;
+  let value = Number(raw);
+  if (!Number.isFinite(value)) {
+    try {
+      const parsed = JSON.parse(raw) as { value?: unknown };
+      value = Number(parsed?.value);
+    } catch {
+      return null;
+    }
+  }
+  if (!Number.isFinite(value) || value <= 0 || value > 5) return null;
+  const rawCount = meta["reviews.rating_count"] ?? meta["rating_count"];
+  const count = rawCount != null ? Number(rawCount) : NaN;
+  return Number.isFinite(count) && count > 0
+    ? { value, count: Math.round(count) }
+    : { value };
+}
 
 export type ResolvedRecPageConfig = RecPageGlobalT & typeof REC_PAGE_DEFAULTS;
 

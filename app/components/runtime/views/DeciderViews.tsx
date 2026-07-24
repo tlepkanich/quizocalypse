@@ -4,7 +4,7 @@ import type {
   RecommendedProduct,
 } from "../../../lib/recommendationEngine";
 import type { DeciderFallback, ResolvedRecPageConfig } from "../../../lib/recommendDecider";
-import { revealLineup, REC_PAGE_DEFAULTS } from "../../../lib/recommendDecider";
+import { revealLineup, REC_PAGE_DEFAULTS, productRating } from "../../../lib/recommendDecider";
 import type { ResolvedEngagement } from "../../../lib/engagementSchema";
 import { FeedbackWidget } from "../engagement/FeedbackWidget";
 import { RewardReveal } from "../engagement/RewardReveal";
@@ -383,6 +383,7 @@ export function DeciderResultView({
   buddySessionId,
   aiWhyCopy,
   engagement,
+  answerLabels,
   onReset,
 }: {
   decider: NonNullable<ExplainedRecommendation["decider"]>;
@@ -403,6 +404,10 @@ export function DeciderResultView({
   // §L L3 — resolved engagement config (present only when the merchant opted in;
   // undefined → widgets don't render → existing quizzes unchanged).
   engagement?: ResolvedEngagement;
+  // Results-page redesign — the shopper's picked answer TEXTS (computed by the
+  // caller from the doc, only when cfg.showPerWhy is on): grounds the
+  // per-product "Because you chose …" chips. Absent → chips never render.
+  answerLabels?: string[];
   onReset: () => void;
 }) {
   const artDirection = useContext(RuntimeArtDirectionContext);
@@ -542,6 +547,12 @@ export function DeciderResultView({
       imgFit={cfg.imgFit}
       imgAspect={cardAspectCss}
       imgRadius={cfg.cardRadius}
+      rating={cfg.showStars ? productRating(p) : undefined}
+      reasons={
+        cfg.showPerWhy && answerLabels && answerLabels.length > 0
+          ? answerLabels.slice(0, 2)
+          : undefined
+      }
       quizId={quizId}
       sessionId={sessionId}
       styles={styles}

@@ -40,6 +40,7 @@ export function ProductCard({
   quizId,
   sessionId,
   blurb,
+  rating,
 }: {
   product: RecommendedProduct;
   position: number;
@@ -83,6 +84,9 @@ export function ProductCard({
   // else, so nothing changes unless the split layout asks for it.
   vertical?: boolean;
   reasons?: string[];
+  // Results-page redesign — a REAL baked review rating (productRating()); the
+  // card renders a star row above the title only when this is present.
+  rating?: { value: number; count?: number } | null;
 }) {
   const tc = useChrome();
   const isPreviewMode = useContext(RuntimePreviewContext);
@@ -173,6 +177,20 @@ export function ProductCard({
         />
       )}
       <div style={{ flex: 1, minWidth: 0 }}>
+        {rating ? (
+          <div
+            style={{ display: "flex", alignItems: "center", gap: 4, marginBottom: 3, fontSize: 12 }}
+            aria-label={tc("rating_stars", { value: rating.value })}
+          >
+            <span aria-hidden style={{ color: "#E0A33A", letterSpacing: 1 }}>
+              {"★".repeat(Math.round(rating.value)) + "☆".repeat(5 - Math.round(rating.value))}
+            </span>
+            <span aria-hidden style={{ color: "var(--qz-color-muted)", fontSize: 11 }}>
+              {rating.value.toFixed(1)}
+              {rating.count != null ? ` (${rating.count})` : ""}
+            </span>
+          </div>
+        ) : null}
         <div style={{ fontWeight: 600 }}>{product.title}</div>
         {blurb && blurb.trim() ? (
           <div style={{ fontSize: 13, color: "var(--qz-color-muted)", marginTop: 3, lineHeight: 1.4 }}>

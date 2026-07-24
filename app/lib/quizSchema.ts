@@ -1513,6 +1513,13 @@ export const RecPageGlobal = z.object({
   // fallback PRODUCTS are inherited from the logic build (global_fallback,
   // QZY-1) with the legacy emptyFallbackCol chain as the last resort.
   fallbackOn: z.boolean().optional(),
+  // Results-page redesign (design bundle 07-13) — the Trust pair. showStars
+  // renders review stars ONLY from baked product review metafields (never
+  // invented values — FTC fake-reviews exposure). showPerWhy renders the
+  // grounded "Because you chose …" per-product chips from the shopper's own
+  // deciding answers. Both default OFF at read time.
+  showStars: z.boolean().optional(),
+  showPerWhy: z.boolean().optional(),
   // §2.5 More options — the light image controls (deep image work = dashboard).
   imgFit: z.enum(["cover", "contain"]).optional(),
   cardAspect: z.enum(["square", "portrait", "landscape"]).optional(),

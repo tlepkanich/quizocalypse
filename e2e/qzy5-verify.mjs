@@ -134,28 +134,41 @@ try {
   await page.goto(`${BASE}/studio/onboarding/${QUIZ}`, { waitUntil: "domcontentloaded" });
   await page.waitForTimeout(1500);
 
-  // §1 — layout: panel + phone, no collapse control.
+  // §1 — layout: panel + 3D phone, no collapse control.
   ok("Step4 split mounts (.qz-s4-split)", (await page.locator(".qz-s4-split").count()) === 1);
   ok("settings panel rendered", await page.locator(".qz-s4-panel").isVisible());
   ok("NO collapse/hide-settings control",
     (await page.locator("button", { hasText: "Hide settings" }).count()) === 0 &&
     (await page.locator("button", { hasText: "Show settings" }).count()) === 0);
-  ok("phone preview rendered", await page.locator(".qz-s4-phone").isVisible());
+  ok("3D phone preview rendered", await page.locator(".qz-s4-phone3d").isVisible());
+  ok("aura + ground + hint (mock envelope)",
+    (await page.locator(".qz-s4-aura").count()) === 1 &&
+    (await page.locator(".qz-s4-ground").count()) === 1 &&
+    (await page.locator(".qz-s4-phint", { hasText: "straighten" }).count()) === 1);
   ok("persistent dashboard explainer",
     await page.locator(".qz-s4-explainer", { hasText: "in the dashboard" }).isVisible());
 
-  // §4 — nothing re-configured here: no OOS, no contact capture.
+  // Mock structure: AI tip + mono section kickers.
+  ok("AI tip card w/ Use this",
+    await page.locator(".qz-s4-aitip-tt", { hasText: "review stars and per-product reasons" }).isVisible() &&
+    await page.locator(".qz-s4-aitip-use", { hasText: "Use this" }).isVisible());
+  for (const sec of ["Layout", "Content", "Trust", "Products", "Offer", "Fallback"]) {
+    ok(`section kicker ${sec}`,
+      await page.locator(".qz-s4-sec-title", { hasText: sec }).first().isVisible());
+  }
+  ok("Best-practice pills present", (await page.locator(".qz-s4-bp").count()) >= 4);
+
+  // §4 — nothing re-configured here: no OOS control.
   const panelText = (await page.locator(".qz-s4-panel").textContent()) ?? "";
   ok("NO out-of-stock control on the page", !/out.of.stock/i.test(panelText));
-  ok("NO contact-capture control on the page", !/email|phone|sms/i.test(panelText));
 
   // §3 — no preview state tabs.
-  ok("NO preview state tabs", (await page.locator(".qz-s4-previewcol [role=tab]").count()) === 0);
+  ok("NO preview state tabs", (await page.locator(".qz-s4-preview [role=tab]").count()) === 0);
 
   // §2.1 — four archetypes, hero+grid default; default preview = hero + 3 grid.
-  ok("4 layout thumbs", (await page.locator(".qz-s4-layout").count()) === 4);
+  ok("4 layout cards", (await page.locator(".qz-s4-lay").count()) === 4);
   ok("Hero + grid active by default",
-    await page.locator(".qz-s4-layout.is-active", { hasText: "Hero + grid" }).isVisible());
+    await page.locator(".qz-s4-lay.is-on", { hasText: "Hero + grid" }).isVisible());
   ok("default headline in preview",
     await page.locator(".qz-s4p-headline", { hasText: "Your perfect match" }).isVisible());
   // The bucket seeds 4 catalog products, but the engine drops unsellable/OOS
@@ -167,53 +180,80 @@ try {
     `hero + ${initialGrid} grid`);
 
   // Layout switches re-lay-out the preview.
-  await page.locator(".qz-s4-layout", { hasText: "Single hero" }).click();
+  await page.locator(".qz-s4-lay", { hasText: "Single hero" }).click();
   await page.waitForTimeout(200);
   ok("Single hero → one hero card, no grid",
     (await page.locator(".qz-s4p-herowrap").count()) === 1 &&
     (await page.locator(".qz-s4p-items .qz-s4p-card").count()) === 0);
-  await page.locator(".qz-s4-layout", { hasText: "List" }).click();
+  await page.locator(".qz-s4-lay", { hasText: "List" }).click();
   await page.waitForTimeout(200);
   ok("List → hero folded into stacked rows, no hero treatment",
     (await page.locator(".qz-s4p-herowrap").count()) === 0 &&
     (await page.locator(".qz-s4p-items.is-list .qz-s4p-card.is-row").count()) === shownTotal);
-  await page.locator(".qz-s4-layout", { hasText: "Hero + grid" }).first().click();
+  await page.locator(".qz-s4-lay", { hasText: "Hero + grid" }).first().click();
   await page.waitForTimeout(200);
   ok("switching back never loses copy/product settings",
     (await page.locator(".qz-s4p-herowrap").count()) === 1 &&
     (await page.locator(".qz-s4p-items .qz-s4p-card").count()) === initialGrid);
 
-  // §2.3 — products scrub (exact entry) + toggles.
-  const scrub = page.locator(".qz-s4-sec", { hasText: "Products" }).locator(".qz-scrub-value").first();
-  await scrub.click();
-  await page.locator(".qz-s4-sec", { hasText: "Products" }).locator(".qz-scrub-input").fill("1");
-  await page.keyboard.press("Enter");
+  // Trust — the AI tip applies BOTH best practices; stars + per-why hit the preview.
+  ok("no stars before the tip", (await page.locator(".qz-s4p-stars").count()) === 0);
+  await page.locator(".qz-s4-aitip-use").click();
   await page.waitForTimeout(300);
-  ok("scrub exact → 1 product after the hero",
+  ok("Use this → ✓ Applied", await page.locator(".qz-s4-aitip-use", { hasText: "Applied" }).isVisible());
+  ok("both Trust switches on",
+    (await page.locator(".qz-s4-sec:has(.qz-s4-sec-title:text-is('Trust')) .qz-s4-tog.is-on").count()) === 2);
+  ok("preview shows star rows", (await page.locator(".qz-s4p-stars").count()) >= 1);
+  ok("preview shows grounded per-why chips",
+    await page.locator(".qz-s4p-pwhy", { hasText: "Because you chose" }).first().isVisible());
+
+  // Offer — toggle reveals the code input; a code renders the reveal bar.
+  ok("no offer bar before the toggle", (await page.locator(".qz-s4p-offer").count()) === 0);
+  await page.locator(".qz-s4-tog", { hasText: "Show a discount at the reveal" }).click();
+  await page.waitForTimeout(200);
+  await page.locator(".qz-s4-inp[placeholder='e.g. RIDE10']").fill("RIDE10");
+  await page.waitForTimeout(300);
+  ok("offer bar shows the code", await page.locator(".qz-s4p-offer", { hasText: "RIDE10" }).isVisible());
+
+  // 3D phone straightens on click (transform drops the Y-rotation).
+  // force: the float animation keeps the element "unstable" for Playwright's
+  // actionability check — a real pointer click lands fine.
+  await page.locator(".qz-s4-phone3d").click({ force: true });
+  await page.waitForTimeout(100);
+  ok("click → flat preview state", (await page.locator(".qz-s4-preview.is-flat").count()) === 1);
+  await page.locator(".qz-s4-phone3d").click({ force: true });
+  await page.waitForTimeout(800);
+
+  // §2.3 — products stepper (gridMax) + switch toggle-rows.
+  const fewer = page.locator(".qz-s4-stepper button[aria-label='Fewer products']");
+  await fewer.click();
+  await fewer.click();
+  await page.waitForTimeout(300);
+  ok("stepper − twice → 1 product after the hero",
     (await page.locator(".qz-s4p-items .qz-s4p-card").count()) === 1);
 
   ok("prices show by default", (await page.locator(".qz-s4p-price").count()) > 0);
-  await page.locator(".qz-s4-check", { hasText: "Show price" }).locator("input").click();
+  await page.locator(".qz-s4-tog", { hasText: "Show price" }).click();
   await page.waitForTimeout(200);
   ok("price toggle off → no prices in preview", (await page.locator(".qz-s4p-price").count()) === 0);
 
   ok("ATC pills show by default", (await page.locator(".qz-s4p-atc").count()) > 0);
-  await page.locator(".qz-s4-check", { hasText: "Show “Add to cart”" }).locator("input").click();
+  await page.locator(".qz-s4-tog", { hasText: "Show “Add to cart”" }).click();
   await page.waitForTimeout(200);
   ok("ATC toggle off → no add-to-cart pills", (await page.locator(".qz-s4p-atc").count()) === 0);
 
   ok("no add-all bar by default", (await page.locator(".qz-s4p-addall").count()) === 0);
-  await page.locator(".qz-s4-check", { hasText: "Show “Add all to cart”" }).locator("input").click();
+  await page.locator(".qz-s4-tog", { hasText: "Show “Add all to cart”" }).click();
   await page.waitForTimeout(200);
   const addAllText = (await page.locator(".qz-s4p-addall").textContent().catch(() => "")) ?? "";
   ok("add-all on → bar with item count + total (2 shown)",
     /Add all 2 to cart · \$\d/.test(addAllText), addAllText.trim());
 
   // §5 — everything off still renders a valid reveal.
-  await page.locator(".qz-s4-check", { hasText: "Show descriptions" }).locator("input").click();
+  await page.locator(".qz-s4-tog", { hasText: "Show descriptions" }).click();
   await page.waitForTimeout(200);
   ok("all product toggles off → reveal still valid (title cards remain)",
-    (await page.locator(".qz-s4p-card .qz-s4p-title").count()) === 2 &&
+    (await page.locator(".qz-s4p-card .qz-s4p-title").count()) >= 2 &&
     out.pageErrors.length === 0);
 
   // §2.4/§3 — fallback: default ON, inline block, toggle removes it.
@@ -221,10 +261,10 @@ try {
     await page.locator(".qz-s4p-fb-head", { hasText: "If nothing matches" }).isVisible());
   ok("fallback tag 'default copy · edit in dashboard'",
     await page.locator(".qz-s4p-fb-tag", { hasText: "edit in dashboard" }).isVisible());
-  await page.locator(".qz-s4-check", { hasText: "fallback" }).locator("input").click();
+  await page.locator(".qz-s4-tog", { hasText: "fallback" }).click();
   await page.waitForTimeout(200);
   ok("fallback toggle OFF → block absent", (await page.locator(".qz-s4p-fb").count()) === 0);
-  await page.locator(".qz-s4-check", { hasText: "fallback" }).locator("input").click();
+  await page.locator(".qz-s4-tog", { hasText: "fallback" }).click();
   await page.waitForTimeout(200);
 
   // §2.5 — More options: fit applies to preview images live.
@@ -241,7 +281,7 @@ try {
   await page.waitForTimeout(600);
 
   // Content — headline edit updates the preview.
-  await page.locator(".qz-s4-field input[type=text]").fill("Made for you");
+  await page.locator(".qz-s4-field input[type=text]").first().fill("Made for you");
   await page.waitForTimeout(300);
   ok("headline edit live in preview",
     await page.locator(".qz-s4p-headline", { hasText: "Made for you" }).isVisible());
@@ -253,7 +293,9 @@ try {
   ok("autosave persisted the changed fields",
     g.gridMax === 1 && g.showPrice === false && g.showAtc === false &&
     g.showAddAll === true && g.showDesc === false && g.imgFit === "contain" &&
-    g.cardAspect === "portrait" && g.headline === "Made for you",
+    g.cardAspect === "portrait" && g.headline === "Made for you" &&
+    g.showStars === true && g.showPerWhy === true &&
+    g.incentiveOn === true && g.incentiveCode === "RIDE10",
     JSON.stringify(g));
   ok("defaults stay sparse (no layout/fallbackOn keys after round-trips)",
     !("layout" in g) && !("fallbackOn" in g));

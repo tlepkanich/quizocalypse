@@ -9,6 +9,7 @@ import {
   targetProducts,
   revealLineup,
   deciderFallbackProducts,
+  productRating,
   type ResolvedRecPageConfig,
   type RevealLayout,
 } from "../../../lib/recommendDecider";
@@ -20,13 +21,19 @@ import { useQuizDraft } from "../../studio/useQuizDraft";
 import { ScrubNumber } from "../../controls/ScrubNumber";
 
 // ════════════════════════════════════════════════════════════════════════════
-// Step4Results — the funnel's Step 4 rebuilt LIGHT per quiz-results-step4-dev-
-// handoff v1.0 (QZY-5): a fixed always-visible settings panel on the left
-// (layout archetypes · content · products · ONE fallback toggle · More
-// options) and a live phone preview on the right. Deep control (per-result
-// copy, sort, sub-filters, discounts, custom fallback design) is the
-// dashboard's job — the persistent footer explainer says so. Deliberately NO
-// out-of-stock and NO contact-capture controls here (§4: both are inherited).
+// Step4Results — the funnel's Step 4, EXACT to results-page-redesign.html
+// (design bundle 07-13): AI-tip card → mono-kicker sections (Layout · Content
+// · Trust · Products · Offer · Fallback) with switch toggle-rows + Best-
+// practice pills, and the 3D floating phone preview (aura + ground shadow +
+// float, click to straighten). All controls write rec_page_settings.global
+// through the same sparse-patch autosave as before; the preview still renders
+// through the REAL v2 engine helpers (targetProducts → revealLineup).
+// Deliberate deviations from the mock (functionality kept): the "Show why we
+// recommend" toggle row (the runtime's whyOn gate has no other UI), the
+// Products-shown stepper writes gridMax 0–6 (products AFTER the hero on hero
+// layouts — sublabel says so), a Discount-code input under the Offer toggle
+// (incentiveOn without a code renders nothing), More options + the persistent
+// dashboard explainer, and the inline no-match fallback block in the phone.
 // Decider docs only; legacy drafts keep their existing stage.
 // ════════════════════════════════════════════════════════════════════════════
 
@@ -37,36 +44,23 @@ const LAYOUTS: ReadonlyArray<{ id: RevealLayout; name: string }> = [
   { id: "single_hero", name: "Single hero" },
 ];
 
-/** CSS-drawn archetype thumbnail (no image assets — matches the funnel's
- *  sketch-style pickers). */
-function LayoutThumb({ id }: { id: RevealLayout }) {
-  const cell = (key: number, tall = false): JSX.Element => (
-    <span key={key} className={`qz-s4-thumb-cell${tall ? " is-tall" : ""}`} />
-  );
-  if (id === "hero_grid")
-    return (
-      <span className="qz-s4-thumb is-herogrid" aria-hidden>
-        <span className="qz-s4-thumb-hero" />
-        <span className="qz-s4-thumb-grid">{[0, 1].map((i) => cell(i))}</span>
-      </span>
-    );
-  if (id === "grid")
-    return (
-      <span className="qz-s4-thumb is-grid" aria-hidden>
-        <span className="qz-s4-thumb-grid">{[0, 1, 2, 3].map((i) => cell(i))}</span>
-      </span>
-    );
-  if (id === "list")
-    return (
-      <span className="qz-s4-thumb is-list" aria-hidden>
-        {[0, 1, 2].map((i) => (
-          <span key={i} className="qz-s4-thumb-row" />
-        ))}
-      </span>
-    );
+/** The mock's CSS-drawn layout glyphs (.g.hero/.grid/.list/.single). */
+function LayoutGlyph({ id }: { id: RevealLayout }) {
+  const bars =
+    id === "hero_grid" ? 3 : id === "grid" ? 4 : id === "list" ? 3 : 1;
+  const cls =
+    id === "hero_grid"
+      ? "is-hero"
+      : id === "grid"
+        ? "is-grid"
+        : id === "list"
+          ? "is-list"
+          : "is-single";
   return (
-    <span className="qz-s4-thumb is-single" aria-hidden>
-      {cell(0, true)}
+    <span className={`qz-s4-g ${cls}`} aria-hidden>
+      {Array.from({ length: bars }, (_, i) => (
+        <b key={i} />
+      ))}
     </span>
   );
 }
@@ -145,28 +139,48 @@ export function Step4Results({
     }
   };
 
-  const check = (
-    label: string,
-    value: boolean,
-    onToggle: (next: boolean) => void,
-  ) => (
-    <label className="qz-s4-check">
-      <input type="checkbox" checked={value} onChange={(e) => onToggle(e.target.checked)} />
-      <span>{label}</span>
-    </label>
+  // The AI tip applies the two Trust best practices in ONE commit.
+  const tipApplied = cfg.showStars && cfg.showPerWhy;
+  const applyTip = () => {
+    if (tipApplied) return;
+    commit(setRecPageGlobal(doc, { showStars: true, showPerWhy: true }));
+  };
+
+  /** The mock's .tog row — a switch button with name / Best-practice pill /
+   *  description. Static rows (the stepper) render the same shell as a div. */
+  const tog = (opts: {
+    label: string;
+    value: boolean;
+    onToggle: (next: boolean) => void;
+    desc?: string;
+    bp?: boolean;
+  }) => (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={opts.value}
+      className={`qz-s4-tog${opts.value ? " is-on" : ""}`}
+      onClick={() => opts.onToggle(!opts.value)}
+    >
+      <span className="qz-s4-sw" aria-hidden />
+      <span className="qz-s4-tog-b">
+        <span className="qz-s4-tog-n">
+          {opts.label}
+          {opts.bp ? <span className="qz-s4-bp">Best practice</span> : null}
+        </span>
+        {opts.desc ? <span className="qz-s4-tog-d">{opts.desc}</span> : null}
+      </span>
+    </button>
   );
 
   return (
     <div className="qz-qb-stage">
-      <header className="qz-row" style={{ justifyContent: "space-between", marginBottom: 12 }}>
+      <header className="qz-row" style={{ justifyContent: "space-between", marginBottom: 14 }}>
         <div>
           <div className="qz-label" style={{ fontSize: 11, marginBottom: 2 }}>
             Step {stepNumber("rec_page")} of {TOTAL_STEPS} · Results reveal
           </div>
-          <h2 style={{ margin: 0, fontSize: 20 }}>Design the reveal</h2>
-          <p className="qz-dim" style={{ margin: "4px 0 0", fontSize: 13 }}>
-            Pick a layout, set the copy, choose what shows. The phone updates as you edit.
-          </p>
+          <h2 style={{ margin: 0, fontSize: 21, letterSpacing: "-.02em" }}>Design the reveal</h2>
         </div>
         <span className="qz-save-status" aria-live="polite">
           {isSaving ? (
@@ -182,8 +196,25 @@ export function Step4Results({
       </header>
 
       <div className="qz-s4-split">
-        {/* §1 — the settings panel is ALWAYS visible; no collapse control. */}
         <div className="qz-s4-panel">
+          {/* AI tip (the bundle's locked standard) */}
+          <div className="qz-s4-aitip">
+            <span className="qz-s4-aico" aria-hidden>
+              <i>✦</i>
+            </span>
+            <div className="qz-s4-aitip-body">
+              <span className="qz-s4-ailabel">AI tip</span>
+              <div className="qz-s4-aitip-tt">Turn on review stars and per-product reasons</div>
+              <p>
+                Shoppers who click a recommendation convert ~5.5× higher — but only when they
+                trust it. Peer proof and a stated reason are what earn that trust.
+              </p>
+            </div>
+            <button type="button" className="qz-s4-aitip-use" onClick={applyTip}>
+              {tipApplied ? "✓ Applied" : "Use this"}
+            </button>
+          </div>
+
           <section className="qz-s4-sec">
             <div className="qz-s4-sec-title">Layout</div>
             <div className="qz-s4-layouts" role="radiogroup" aria-label="Reveal layout">
@@ -195,10 +226,10 @@ export function Step4Results({
                     type="button"
                     role="radio"
                     aria-checked={active}
-                    className={`qz-s4-layout${active ? " is-active" : ""}`}
+                    className={`qz-s4-lay${active ? " is-on" : ""}`}
                     onClick={() => patch("layout", l.id, "hero_grid")}
                   >
-                    <LayoutThumb id={l.id} />
+                    <LayoutGlyph id={l.id} />
                     <span>{l.name}</span>
                   </button>
                 );
@@ -209,32 +240,41 @@ export function Step4Results({
           <section className="qz-s4-sec">
             <div className="qz-s4-sec-title">Content</div>
             <label className="qz-s4-field">
-              <span>Headline</span>
+              <span className="qz-s4-f">Headline</span>
               <input
                 type="text"
+                className="qz-s4-inp"
                 value={cfg.headline}
                 onChange={(e) =>
                   patch("headline", e.target.value.trim() ? e.target.value : undefined, undefined)
                 }
               />
             </label>
-            {check("Show “why we recommend”", cfg.whyOn, (v) => patch("whyOn", v, true))}
+            {tog({
+              label: "Show “why we recommend”",
+              value: cfg.whyOn,
+              onToggle: (v) => patch("whyOn", v, true),
+            })}
             {cfg.whyOn ? (
               <div className="qz-s4-why">
-                <textarea
-                  rows={3}
-                  value={cfg.whyCopy}
-                  onChange={(e) => editWhyCopy(e.target.value)}
-                />
+                <label className="qz-s4-field">
+                  <span className="qz-s4-f">Why we recommend</span>
+                  <textarea
+                    className="qz-s4-inp"
+                    rows={3}
+                    value={cfg.whyCopy}
+                    onChange={(e) => editWhyCopy(e.target.value)}
+                  />
+                </label>
                 <div className="qz-s4-why-row">
                   <button
                     type="button"
-                    className="qz-btn qz-btn-ghost qz-btn-sm"
+                    className="qz-s4-genbtn"
                     disabled={whyGen.state === "busy" || Boolean(cfg.whyCopyLocked)}
                     title={cfg.whyCopyLocked ? "This copy is locked — unlock it in the dashboard." : undefined}
                     onClick={generateWhy}
                   >
-                    {whyGen.state === "busy" ? "✦ Writing…" : "✦ AI generate"}
+                    <i aria-hidden>✦</i> {whyGen.state === "busy" ? "Writing…" : "AI generate"}
                   </button>
                   {whyGen.state === "error" ? (
                     <span className="qz-s4-err" role="alert">{whyGen.message}</span>
@@ -245,38 +285,122 @@ export function Step4Results({
           </section>
 
           <section className="qz-s4-sec">
+            <div className="qz-s4-sec-title">Trust</div>
+            {tog({
+              label: "Show review stars",
+              bp: true,
+              value: cfg.showStars,
+              onToggle: (v) => patch("showStars", v, false),
+              desc: "Peer proof is the #1 trust signal — shoppers now trust each other as much as experts.",
+            })}
+            {tog({
+              label: "Why each product matched",
+              bp: true,
+              value: cfg.showPerWhy,
+              onToggle: (v) => patch("showPerWhy", v, false),
+              desc: "A stated reason per product kills the “black box” problem. One generic blurb doesn’t.",
+            })}
+          </section>
+
+          <section className="qz-s4-sec">
             <div className="qz-s4-sec-title">Products</div>
-            <ScrubNumber
-              label="Products after the hero"
-              value={Math.min(cfg.gridMax, 6)}
-              min={0}
-              max={6}
-              onChange={(n) => patch("gridMax", n, 3)}
-            />
-            {check("Show price", cfg.showPrice, (v) => patch("showPrice", v, true))}
-            {check("Show descriptions", cfg.showDesc, (v) => patch("showDesc", v, true))}
-            {check("Show “Add to cart”", cfg.showAtc, (v) => patch("showAtc", v, true))}
-            {check("Show “Add all to cart”", cfg.showAddAll, (v) => patch("showAddAll", v, false))}
-            <p className="qz-dim qz-s4-hint">
-              “Add all” appears when 2+ products show — it adds every shown product in one tap.
-            </p>
+            <div className="qz-s4-tog is-static">
+              <span className="qz-s4-tog-b">
+                <span className="qz-s4-tog-n">Products shown</span>
+                <span className="qz-s4-tog-d">
+                  On hero layouts this counts the products after the hero pick.
+                </span>
+              </span>
+              <span className="qz-s4-stepper">
+                <button
+                  type="button"
+                  aria-label="Fewer products"
+                  onClick={() => patch("gridMax", Math.max(0, Math.min(6, cfg.gridMax) - 1), 3)}
+                >
+                  −
+                </button>
+                <span className="qz-s4-stepper-v" aria-live="polite">{Math.min(cfg.gridMax, 6)}</span>
+                <button
+                  type="button"
+                  aria-label="More products"
+                  onClick={() => patch("gridMax", Math.min(6, cfg.gridMax + 1), 3)}
+                >
+                  +
+                </button>
+              </span>
+            </div>
+            {tog({
+              label: "Show price",
+              value: cfg.showPrice,
+              onToggle: (v) => patch("showPrice", v, true),
+            })}
+            {tog({
+              label: "Show descriptions",
+              value: cfg.showDesc,
+              onToggle: (v) => patch("showDesc", v, true),
+              desc: "Thin product info is a top drop-off cause.",
+            })}
+            {tog({
+              label: "Show “Add to cart”",
+              bp: true,
+              value: cfg.showAtc,
+              onToggle: (v) => patch("showAtc", v, true),
+              desc: "Buy in place. Every redirect costs conversion.",
+            })}
+            {tog({
+              label: "Show “Add all to cart”",
+              value: cfg.showAddAll,
+              onToggle: (v) => patch("showAddAll", v, false),
+              desc: "Appears when 2+ products show.",
+            })}
+          </section>
+
+          <section className="qz-s4-sec">
+            <div className="qz-s4-sec-title">Offer</div>
+            {tog({
+              label: "Show a discount at the reveal",
+              bp: true,
+              value: cfg.incentiveOn,
+              onToggle: (v) => patch("incentiveOn", v, false),
+              desc: "Pairing the match with an offer at the result step is the single largest documented lift.",
+            })}
+            {cfg.incentiveOn ? (
+              <label className="qz-s4-field">
+                <span className="qz-s4-f">Discount code</span>
+                <input
+                  type="text"
+                  className="qz-s4-inp"
+                  placeholder="e.g. RIDE10"
+                  value={cfg.incentiveCode ?? ""}
+                  onChange={(e) =>
+                    patch(
+                      "incentiveCode",
+                      e.target.value.trim() ? e.target.value.trim() : undefined,
+                      undefined,
+                    )
+                  }
+                />
+                <span className="qz-s4-hint qz-dim">
+                  An existing code from your store — the reveal displays and applies it.
+                </span>
+              </label>
+            ) : null}
           </section>
 
           <section className="qz-s4-sec">
             <div className="qz-s4-sec-title">Fallback</div>
-            {check("Show a fallback if a shopper gets no matches", cfg.fallbackOn, (v) =>
-              patch("fallbackOn", v, true),
-            )}
-            <p className="qz-dim qz-s4-hint">
-              The fallback products come from your logic build; heading, copy, and layout are set in
-              the dashboard.
-            </p>
+            {tog({
+              label: "Show a fallback if no matches",
+              value: cfg.fallbackOn,
+              onToggle: (v) => patch("fallbackOn", v, true),
+              desc: "Fallback products come from your logic build.",
+            })}
           </section>
 
           {/* §2.5 — progressive disclosure, collapsed by default. */}
           <details className="qz-s4-more">
             <summary>More options</summary>
-            <div className="qz-s4-field is-seg">
+            <div className="qz-s4-morefield">
               <span>Image fit</span>
               <div className="qz-s4-seg" role="radiogroup" aria-label="Image fit">
                 {(["cover", "contain"] as const).map((v) => (
@@ -293,7 +417,7 @@ export function Step4Results({
                 ))}
               </div>
             </div>
-            <div className="qz-s4-field is-seg">
+            <div className="qz-s4-morefield">
               <span>Card aspect</span>
               <div className="qz-s4-seg" role="radiogroup" aria-label="Card aspect">
                 {(["square", "portrait", "landscape"] as const).map((v) => (
@@ -327,25 +451,32 @@ export function Step4Results({
           </p>
         </div>
 
-        <div className="qz-s4-previewcol">
-          <Step4Preview
-            doc={doc}
-            cfg={cfg}
-            categories={categories}
-            productIndex={productIndex}
-            designTokens={designTokens}
-          />
-        </div>
+        <Step4Preview
+          doc={doc}
+          cfg={cfg}
+          categories={categories}
+          productIndex={productIndex}
+          designTokens={designTokens}
+        />
       </div>
     </div>
   );
 }
 
-// ── §3 — the phone preview ───────────────────────────────────────────────────
-// A merchant-facing mock rendered through the REAL v2 engine helpers
-// (targetProducts → revealLineup), so what the panel toggles is what the
-// runtime will do. Fallback shows INLINE below the matched reveal (no state
-// tabs — §3 acceptance).
+// ── The 3D floating phone preview ────────────────────────────────────────────
+// The mock's aura + ground-shadow + float envelope (click to straighten)
+// around the REAL engine-driven reveal (targetProducts → revealLineup), so
+// what the panel toggles is what the runtime will do. Stars use REAL baked
+// review metafields when present, else a clearly-sample cycle; per-product
+// reasons preview the runtime's grounded "Because you chose …" chips using
+// the doc's own first answers. Fallback stays INLINE below the matched reveal.
+
+const SAMPLE_STARS = [
+  { value: 4.8, count: 212 },
+  { value: 4.6, count: 88 },
+  { value: 4.9, count: 341 },
+  { value: 4.5, count: 63 },
+];
 
 function Step4Preview({
   doc,
@@ -360,6 +491,7 @@ function Step4Preview({
   productIndex: IndexedProduct[];
   designTokens?: DesignTokens | null;
 }) {
+  const [flat, setFlat] = useState(false);
   const cssVars = useMemo(
     () => tokensToCssVars(resolveDesignTokens(designTokens ?? undefined)) as CSSProperties,
     [designTokens],
@@ -389,6 +521,15 @@ function Step4Preview({
     return deciderFallbackProducts(cfg, productIndex).products.slice(0, 4);
   }, [doc.global_fallback, cfg, productIndex]);
 
+  // Grounded per-product-why sample: the doc's own first question answers —
+  // the same texts the runtime's "Because you chose …" chips will show.
+  const sampleReasons = useMemo(() => {
+    const q = doc.nodes.find((n) => n.type === "question");
+    return q && q.type === "question"
+      ? q.data.answers.slice(0, 2).map((a) => a.text).filter(Boolean)
+      : [];
+  }, [doc.nodes]);
+
   if (!target || !lineup) {
     return (
       <p className="qz-dim" style={{ margin: 8 }}>
@@ -402,7 +543,7 @@ function Step4Preview({
   const imgStyle: CSSProperties = {
     objectFit: cfg.imgFit ?? "cover",
     aspectRatio: aspectCss,
-    borderRadius: cfg.cardRadius ?? 10,
+    borderRadius: cfg.cardRadius ?? 9,
   };
   const isList = cfg.layout === "list";
 
@@ -411,7 +552,35 @@ function Step4Preview({
       <div className="qz-s4p-price">${Number(p.price).toFixed(2)}</div>
     ) : null;
 
-  const card = (p: IndexedProduct, hero: boolean) => (
+  const stars = (p: IndexedProduct, i: number) => {
+    if (!cfg.showStars) return null;
+    const real = productRating(p);
+    const r = real ?? SAMPLE_STARS[i % SAMPLE_STARS.length]!;
+    return (
+      <div
+        className="qz-s4p-stars"
+        title={real ? undefined : "Sample rating — live stars use your products’ review data."}
+      >
+        <span aria-hidden>
+          {"★".repeat(Math.round(r.value)) + "☆".repeat(5 - Math.round(r.value))}
+        </span>
+        <span>
+          {r.value.toFixed(1)}
+          {r.count != null ? ` (${r.count})` : ""}
+        </span>
+      </div>
+    );
+  };
+
+  const perWhy = () =>
+    cfg.showPerWhy && sampleReasons.length > 0 ? (
+      <div className="qz-s4p-pwhy">
+        <b aria-hidden>✦</b>
+        <span>Because you chose: {sampleReasons.join(" · ")}</span>
+      </div>
+    ) : null;
+
+  const card = (p: IndexedProduct, hero: boolean, i: number) => (
     <div
       key={p.product_id}
       className={`qz-s4p-card${hero ? " is-hero" : ""}${isList ? " is-row" : ""}`}
@@ -422,11 +591,13 @@ function Step4Preview({
         <div className="qz-s4p-noimg" style={imgStyle} />
       )}
       <div className="qz-s4p-body">
+        {stars(p, i)}
         <div className="qz-s4p-title">{p.title}</div>
         {price(p)}
         {cfg.showDesc && p.description ? (
           <div className="qz-s4p-desc">{p.description}</div>
         ) : null}
+        {perWhy()}
         {cfg.showAtc ? <span className="qz-s4p-atc">Add to cart</span> : null}
       </div>
     </div>
@@ -435,57 +606,83 @@ function Step4Preview({
   const addAllTotal = lineup.shown.reduce((sum, p) => sum + (Number(p.price) || 0), 0);
   const showAddAll = cfg.showAddAll && lineup.shown.length >= 2;
   const fbHeading = doc.global_fallback?.heading || "Our most-loved products";
+  const offerActive = cfg.incentiveOn && Boolean(cfg.incentiveCode);
 
   return (
-    <div className="qz-s4-phone">
-      <div className="qz-s4-phone-notch" aria-hidden />
-      <div className="qz-s4-screen" style={cssVars}>
-        <h3 className="qz-s4p-headline">{cfg.headline}</h3>
-        {cfg.whyOn && cfg.whyCopy.trim() ? (
-          <p className="qz-s4p-why">{cfg.whyCopy}</p>
-        ) : null}
-        {lineup.heroBlock ? (
-          <div className="qz-s4p-herowrap">
-            <span className="qz-s4p-badge">⭐ Our top pick for you</span>
-            {card(lineup.heroBlock, true)}
-          </div>
-        ) : null}
-        {lineup.bodyItems.length > 0 ? (
-          <div className={`qz-s4p-items${isList ? " is-list" : ""}`}>
-            {lineup.bodyItems.map((p) => card(p, false))}
-          </div>
-        ) : null}
-        {lineup.shown.length === 0 ? (
-          <p className="qz-dim" style={{ fontSize: 12 }}>
-            This recommendation has no products yet.
-          </p>
-        ) : null}
-        {showAddAll ? (
-          <div className="qz-s4p-addall">
-            Add all {lineup.shown.length} to cart · ${addAllTotal.toFixed(2)}
-          </div>
-        ) : null}
-        {cfg.fallbackOn !== false ? (
-          <div className="qz-s4p-fb">
-            <div className="qz-s4p-fb-head">
-              <span>If nothing matches</span>
-              <span className="qz-s4p-fb-tag">default copy · edit in dashboard</span>
+    <div className={`qz-s4-preview${flat ? " is-flat" : ""}`}>
+      <span className="qz-s4-aura" aria-hidden />
+      <span className="qz-s4-ground" aria-hidden />
+      <div
+        className="qz-s4-phone3d"
+        role="button"
+        tabIndex={0}
+        aria-pressed={flat}
+        aria-label="Straighten the phone preview"
+        onClick={() => setFlat((f) => !f)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            setFlat((f) => !f);
+          }
+        }}
+      >
+        <div className="qz-s4-screen" style={cssVars}>
+          <h3 className="qz-s4p-headline">{cfg.headline}</h3>
+          {cfg.whyOn && cfg.whyCopy.trim() ? (
+            <p className="qz-s4p-why">{cfg.whyCopy}</p>
+          ) : null}
+          {offerActive ? (
+            <div className="qz-s4p-offer">
+              <span>
+                🎁 Code <b>{cfg.incentiveCode}</b>
+                {cfg.incentiveAutoApply ? " — applied automatically at checkout" : " at checkout"}
+              </span>
             </div>
-            {fallbackProducts.length > 0 ? (
-              <>
-                <div className="qz-s4p-fb-heading">{fbHeading}</div>
-                <div className="qz-s4p-items">
-                  {fallbackProducts.map((p) => card(p, false))}
-                </div>
-              </>
-            ) : (
-              <p className="qz-dim" style={{ fontSize: 12, margin: 0 }}>
-                No fallback products yet — choose them in the Logic step’s Fallback panel.
-              </p>
-            )}
-          </div>
-        ) : null}
+          ) : null}
+          {lineup.heroBlock ? (
+            <div className="qz-s4p-herowrap">
+              <span className="qz-s4p-badge">⭐ Our top pick for you</span>
+              {card(lineup.heroBlock, true, 0)}
+            </div>
+          ) : null}
+          {lineup.bodyItems.length > 0 ? (
+            <div className={`qz-s4p-items${isList ? " is-list" : ""}`}>
+              {lineup.bodyItems.map((p, i) => card(p, false, i + (lineup.heroBlock ? 1 : 0)))}
+            </div>
+          ) : null}
+          {lineup.shown.length === 0 ? (
+            <p className="qz-dim" style={{ fontSize: 12 }}>
+              This recommendation has no products yet.
+            </p>
+          ) : null}
+          {showAddAll ? (
+            <div className="qz-s4p-addall">
+              Add all {lineup.shown.length} to cart · ${addAllTotal.toFixed(2)}
+            </div>
+          ) : null}
+          {cfg.fallbackOn !== false ? (
+            <div className="qz-s4p-fb">
+              <div className="qz-s4p-fb-head">
+                <span>If nothing matches</span>
+                <span className="qz-s4p-fb-tag">default copy · edit in dashboard</span>
+              </div>
+              {fallbackProducts.length > 0 ? (
+                <>
+                  <div className="qz-s4p-fb-heading">{fbHeading}</div>
+                  <div className="qz-s4p-items">
+                    {fallbackProducts.map((p, i) => card(p, false, i))}
+                  </div>
+                </>
+              ) : (
+                <p className="qz-dim" style={{ fontSize: 12, margin: 0 }}>
+                  No fallback products yet — choose them in the Logic step’s Fallback panel.
+                </p>
+              )}
+            </div>
+          ) : null}
+        </div>
       </div>
+      <span className="qz-s4-phint">Click the phone to straighten it</span>
     </div>
   );
 }

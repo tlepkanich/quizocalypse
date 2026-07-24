@@ -1556,6 +1556,9 @@ export function QuizRuntime(props: QuizRuntimeProps) {
               buddySessionId={buddySessionId}
               aiWhyCopy={aiWhyCopy}
               engagement={engagement}
+              answerLabels={
+                cfg.showPerWhy ? pickedAnswerLabels(doc, selectedAnswerIds) : undefined
+              }
               onReset={reset}
             />
           );

@@ -107,6 +107,8 @@ export const CHROME_TOKENS = {
   incentive_code_manual: "🎁 Use code {code} at checkout",
   // QZY-5 (results-step4 §2.3) — the bulk-add bar under the reveal grid.
   add_all_to_cart: "Add all {count} to cart · {total}",
+  // Results-page redesign — SR label for the review-star row (showStars).
+  rating_stars: "Rated {value} out of 5 stars",
 } as const;
 
 export type ChromeToken = keyof typeof CHROME_TOKENS;
