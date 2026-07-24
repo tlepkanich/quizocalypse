@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { Link, useFetcher, useSearchParams } from "@remix-run/react";
 import { TitleBar } from "@shopify/app-bridge-react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
@@ -32,6 +33,7 @@ import { applyInspectText, INLINE_EDITABLE_PARTS, insertModule } from "./studioD
 import { BuilderNavRail, BuilderTopBar, type BuilderNavKey } from "./BuilderChrome";
 import { HealthPill } from "../onboarding/questionsLogicV3/HealthPill";
 import { HealthPopover } from "../onboarding/questionsLogicV3/HealthPopover";
+import { IconExpand, IconX } from "../onboarding/questionsLogicV3/icons";
 import { Step3Results } from "../builder/Step3Results";
 import { TranslationsPanel } from "./TranslationsPanel";
 import { ExperiencePanel } from "./ExperiencePanel";
@@ -235,6 +237,9 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
   const [editorSubtab, setEditorSubtab] = useState<"add" | "layers" | "background">("add");
   const [libraryCollapsed, setLibraryCollapsed] = useState(false);
   const [reconcileError, setReconcileError] = useState<string | null>(null);
+  // phone-preview SPEC §2 (+ build-tab stagebar) — the Expand control: the
+  // same screen, bigger, in a dimmed overlay. Esc / ✕ / click-outside close.
+  const [previewExpanded, setPreviewExpanded] = useState(false);
 
   // build-tab handoff §7 — "[" toggles the left library panel (never while
   // typing: inputs, textareas, selects, and contenteditable are exempt).
@@ -263,17 +268,19 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
     setConfirmDeleteId(null);
   }, []);
 
-  // Esc backs out one level: disarm a pending delete first, else clear selection.
+  // Esc backs out one level: close the Expand overlay first, then disarm a
+  // pending delete, else clear selection.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== "Escape") return;
       if (upgradeOpen) return; // the wizard modal owns Escape while open
-      if (confirmDeleteId) setConfirmDeleteId(null);
+      if (previewExpanded) setPreviewExpanded(false);
+      else if (confirmDeleteId) setConfirmDeleteId(null);
       else select(null);
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [select, confirmDeleteId, upgradeOpen]);
+  }, [select, confirmDeleteId, upgradeOpen, previewExpanded]);
 
   // Delete / Backspace on the selected step ARMS its two-step delete confirm in
   // the rail (never deletes outright — the actual delete is a second explicit
@@ -1170,6 +1177,14 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
               <>
                 {deviceToggle}
                 {breakpointForWidth(frameW) === "desktop" ? showAsToggle : null}
+                {/* phone-preview SPEC — Expand: inspect the same screen big. */}
+                <button
+                  type="button"
+                  className="qz-s3-expandbtn"
+                  onClick={() => setPreviewExpanded(true)}
+                >
+                  <IconExpand /> Expand
+                </button>
                 {zoomStepper}
                 {editInteractToggle}
               </>
@@ -1328,6 +1343,45 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
           )}
         </div>
         {upgradeModal}
+        {/* SPEC Expand — the dimmed overlay (portal to body: the builder-
+            overlay-portal lesson — the stage's transforms would pointer-trap
+            an in-flow fixed layer). A second preview mount pinned to the
+            focused step, view-only (no inspect outlines): only the scale
+            differs, so it can't lie about wrapping. Mobile floors at true
+            1:1; desktop fits ~90% of the viewport. */}
+        {previewExpanded && typeof document !== "undefined"
+          ? createPortal(
+              <div
+                className="qz-s3-phscrim"
+                role="dialog"
+                aria-modal="true"
+                aria-label="Expanded preview"
+                onClick={(e) => {
+                  if (e.target === e.currentTarget) setPreviewExpanded(false);
+                }}
+              >
+                <button
+                  type="button"
+                  className="qz-s3-phclose"
+                  aria-label="Close the expanded preview"
+                  onClick={() => setPreviewExpanded(false)}
+                >
+                  <IconX />
+                </button>
+                <div className="qz-builder-expandhost">
+                  <Step5Preview
+                    {...stepProps}
+                    frameW={frameW}
+                    focusNodeId={selectedId ?? liveNodeId}
+                    chromeless
+                    platform="standalone"
+                    expand
+                  />
+                </div>
+              </div>,
+              document.body,
+            )
+          : null}
         <QzDrawer
           open={assistOpen}
           onClose={() => setAssistOpen(false)}

@@ -1713,6 +1713,14 @@ body[data-qz] ::selection { background: var(--qz-ink); color: var(--qz-cream); }
 .qz-step5-chromeless { min-height: 0; height: 100%; width: 100%; }
 .qz-device-fit-mobile { width: 100%; height: 100%; min-height: 0; display: flex; justify-content: center; align-items: flex-start; overflow: hidden; }
 .qz-device-fit-desktop { width: 100%; height: 100%; min-height: 0; display: flex; justify-content: center; align-items: flex-start; overflow: hidden; }
+/* phone-preview SPEC Expand — the overlay's preview host: ~90% of the
+   viewport, centered (reuses the funnel's .qz-s3-phscrim scrim + ✕). The
+   device frame measures this box, so mobile floors at true 1:1 and desktop
+   fits both axes. Center-align vertically so an over-tall 1:1 phone clips
+   evenly instead of hanging off the bottom. */
+.qz-builder-expandhost { width: 92vw; height: 90vh; display: flex; align-items: center; justify-content: center; }
+.qz-builder-expandhost .qz-device-fit-mobile,
+.qz-builder-expandhost .qz-device-fit-desktop { align-items: center; overflow: visible; }
 /* QP-3 — Quizell's centered preview card: the quiz framed as a rounded,
    soft-shadowed card on the grey canvas (the quiz paints its own bg inside, so
    the card surface matches the content — no mismatched "white box"). */

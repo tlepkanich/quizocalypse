@@ -78,15 +78,17 @@ if (/blocking/.test(pillText)) {
 const railActive = () =>
   page.locator(".qz-builder-rail-item.is-active").allTextContents();
 ok("rail has 5 items (QZY-6)", (await page.locator(".qz-builder-rail-item").count()) === 5);
-for (const label of ["Products", "Logic", "Design", "Settings", "Build"]) {
+for (const label of ["Products", "Logic", "Theme", "Settings", "Build"]) {
   await page.locator(".qz-builder-rail-item", { hasText: label }).click();
   await page.waitForTimeout(300);
   const act = await railActive();
   ok(`rail: ${label} lights itself only`, act.length === 1 && act[0].trim() === label, act.join(","));
 }
-ok("no Results / Theme / AI / Code rail items",
+// build-tab §7 — the rail's design section is labelled THEME ("Design" means
+// the block Design tab); Results/AI/Code stay off the rail.
+ok("no Results / Design / AI / Code rail items",
   (await page.locator(".qz-builder-rail-item", { hasText: "Results" }).count()) === 0 &&
-  (await page.locator(".qz-builder-rail-item", { hasText: "Theme" }).count()) === 0 &&
+  (await page.locator(".qz-builder-rail-item", { hasText: "Design" }).count()) === 0 &&
   (await page.locator(".qz-builder-rail-item", { hasText: "AI" }).count()) === 0 &&
   (await page.locator(".qz-builder-rail-item", { hasText: "Code" }).count()) === 0);
 ok("old view-tab strip is gone", (await page.locator(".qz-builder-views").count()) === 0);
@@ -290,8 +292,9 @@ ok("Background tab renders the page settings",
   (await page.locator(".qz-builder-panel").textContent())?.includes("Background"));
 
 // ── QZY-11: per-screen backgrounds — type picker, live canvas, hint ─────────
-ok("background type picker (None/Color/Gradient/Image/Video/Partial — R6-1)",
-  (await page.locator('[aria-label="Background type"] button').count()) === 6);
+// R6-1 six + build-tab §6's Split & Quadrant (AUDIT-12) = 8 types.
+ok("background type picker (None/Color/Gradient/Split/Quadrant/Image/Video/Partial)",
+  (await page.locator('[aria-label="Background type"] button').count()) === 8);
 await page.locator('[aria-label="Background type"] button', { hasText: "Gradient" }).click();
 await page.waitForTimeout(800);
 const pageBg = await page

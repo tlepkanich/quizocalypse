@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { QuizRuntime } from "../runtime/QuizRuntime";
 import type { InspectTarget } from "../runtime/QuizRuntime";
 import { QzBadge, QzButton, QzCard, QzField, QzInput, QzSegmented, QzSelect } from "../qz";
@@ -40,6 +40,7 @@ export function Step5Preview({
   onNodeShown,
   chromeless = false,
   platform = "shopify",
+  expand = false,
 }: StepProps & {
   // Editor revamp P2: click-to-inspect pass-through (AI editor only — the
   // 4-step builder doesn't pass these, so its preview behaves as before).
@@ -60,12 +61,26 @@ export function Step5Preview({
   // QB-5: the standalone builder passes "standalone" so the preview shows the
   // "Build with Quizocalypse" badge (matching the published quiz).
   platform?: "shopify" | "standalone";
+  // phone-preview SPEC Expand — this mount lives inside the dimmed overlay:
+  // the device frame floors mobile at true 1:1 / fits desktop to the host.
+  expand?: boolean;
 }) {
   const [frameWState, setFrameWState] = useState<number>(DEVICE_PRESETS.desktop);
   const frameW = frameWProp ?? frameWState;
   const setFrameW = onFrameWChange ?? setFrameWState;
   const [tryOnId, setTryOnId] = useState<string | null>(null);
   const [restartKey, setRestartKey] = useState(0);
+  // SPEC — "scroll position resets when the previewed step changes": track the
+  // step the runtime is SHOWING (selection jumps AND interact-mode walks both
+  // land here) and hand it to the frame as its scroll-reset key.
+  const [shownNodeId, setShownNodeId] = useState<string | null>(null);
+  const handleNodeShown = useCallback(
+    (nodeId: string) => {
+      setShownNodeId(nodeId);
+      onNodeShown?.(nodeId);
+    },
+    [onNodeShown],
+  );
 
   // Live draft recommendations: the runtime resolves result pages from the
   // baked `category_product_ids_map` (a publish-time field a draft lacks). Bake
@@ -231,6 +246,8 @@ export function Step5Preview({
         onWidthChange={setFrameW}
         bare={chromeless}
         placement={chromeless ? previewDoc.placement ?? "page" : undefined}
+        resetKey={shownNodeId}
+        expand={expand}
       >
         <QuizRuntime
           key={restartKey}
@@ -254,7 +271,7 @@ export function Step5Preview({
           onInspect={onInspect}
           inspectedTarget={inspectedTarget}
           focusNodeId={focusNodeId}
-          onNodeShown={onNodeShown}
+          onNodeShown={handleNodeShown}
         />
       </DeviceFrame>
 

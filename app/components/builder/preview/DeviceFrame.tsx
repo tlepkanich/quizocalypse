@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { clampFrameWidth, breakpointForWidth } from "./previewWidth";
 
 // A polished, resizable device bezel. The frame is centered, so dragging the
@@ -12,6 +12,8 @@ export function DeviceFrame({
   bare = false,
   urlLabel,
   placement,
+  resetKey,
+  expand = false,
 }: {
   width: number;
   onWidthChange: (w: number) => void;
@@ -29,6 +31,14 @@ export function DeviceFrame({
   // = contained card (content + 200 × 720). Absent → today's sizing (other
   // mounts unchanged). Bare-desktop only; mobile always fits the phone.
   placement?: "page" | "popup" | "inline" | "product_widget";
+  // phone-preview SPEC — "scroll position resets when the previewed step
+  // changes, not on every keystroke": the host passes the shown node's id and
+  // the frame's screen scrolls back to the top when it changes.
+  resetKey?: string | null;
+  // phone-preview SPEC Expand — rendered inside the dimmed overlay: mobile is
+  // FLOORED at true 1:1 (always visibly bigger than the inline fit) and capped
+  // at 1.4×; desktop fits both axes of the ~90%-viewport host (may upscale).
+  expand?: boolean;
 }) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const fitRef = useRef<HTMLDivElement | null>(null);
@@ -37,13 +47,35 @@ export function DeviceFrame({
   const [dragging, setDragging] = useState(false);
   const [fitBounds, setFitBounds] = useState({ width: 0, height: 0 });
 
+  // SPEC scroll affordance — a subtle bottom fade on the phone screen that
+  // disappears at the end of the scroll (and when nothing overflows). Desktop
+  // hides the fade (build-tab prototype: `.device.desktop .fade{display:none}`).
+  const [fadeVisible, setFadeVisible] = useState(false);
+  const contentRef = useRef<HTMLDivElement | null>(null);
+  const updateFade = useCallback(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    setFadeVisible(el.scrollHeight - el.clientHeight - el.scrollTop > 8);
+  }, []);
+
   // §4 — content sits at a stable top offset across formats: reset the frame's
   // internal scroll whenever the placement (or the device size) switches, so a
   // format change never lands the merchant mid-page ("preview lost to the
-  // bottom").
+  // bottom"). SPEC: also when the previewed STEP changes (resetKey).
   useEffect(() => {
     if (scrollRef.current) scrollRef.current.scrollTop = 0;
-  }, [placement, width]);
+    updateFade();
+  }, [placement, width, resetKey, updateFade]);
+
+  // Content growing/shrinking (blocks added, answers edited) re-evaluates the
+  // fade without a scroll event.
+  useEffect(() => {
+    const el = contentRef.current;
+    if (!el) return;
+    const observer = new ResizeObserver(updateFade);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [updateFade, width]);
 
   useEffect(() => {
     const host = fitRef.current;
@@ -96,50 +128,68 @@ export function DeviceFrame({
   // canvas, not the mismatched-bg "white box". overflow:hidden only rounds the
   // corners (the card is content-height; the canvas scrolls tall pages).
   if (bare) {
-    // At the mobile breakpoint, frame the quiz as a modern slim phone (thin dark
-    // bezel, large radius, dynamic-island pill, aspect-locked screen that scrolls
-    // internally) instead of a stretched full-height narrow card — the mobile
-    // preview should read as a phone, not a column. Desktop keeps the clean card.
+    // Phone-preview SPEC primitive — a TRUE 390×844 viewport with a MINIMAL
+    // bezel: no notch, no hardware chrome, rounded corners + soft shadow only
+    // (the funnel's qz-s3-frame geometry, so every surface shares one look).
+    // The frame is fixed; the SCREEN scrolls (overscroll contained) under a
+    // bottom fade that disappears at the end of the scroll. Fit-the-pane never
+    // upscales past 1:1 inline; the Expand overlay floors at 1, caps at 1.4.
     if (breakpointForWidth(width) === "mobile") {
-      const bezel = 6;
       const logicalWidth = width;
       const logicalHeight = 844;
-      const frameWidth = logicalWidth + bezel * 2;
-      const frameHeight = logicalHeight + bezel * 2;
-      const scale = fitBounds.width > 0 && fitBounds.height > 0
-        ? Math.min(1, fitBounds.width / frameWidth, fitBounds.height / frameHeight)
+      const fitBoth = fitBounds.width > 0 && fitBounds.height > 0
+        ? Math.min(fitBounds.width / logicalWidth, fitBounds.height / logicalHeight)
         : 1;
+      const scale = expand ? Math.max(1, Math.min(1.4, fitBoth)) : Math.min(1, fitBoth);
       return (
         <div ref={fitRef} className="qz-device-fit-mobile">
-          <div style={{ width: frameWidth * scale, height: frameHeight * scale, position: "relative", flex: "0 0 auto" }}>
-          <div
-            style={{
-              width: frameWidth,
-              height: frameHeight,
-              position: "absolute",
-              inset: 0,
-              padding: bezel,
-              transform: `scale(${scale})`,
-              transformOrigin: "top left",
-              borderRadius: 38,
-              background: "#202024",
-              boxShadow:
-                "0 1px 2px rgba(17,17,17,.06), 0 26px 64px rgba(17,17,17,.24), inset 0 0 0 1px rgba(255,255,255,.06)",
-            }}
-          >
+          <div style={{ width: logicalWidth * scale, height: logicalHeight * scale, position: "relative", flex: "0 0 auto" }}>
             <div
-              className="qz-canvas-card"
+              className="qz-devframe"
               style={{
                 width: logicalWidth,
-                borderRadius: 32,
                 height: logicalHeight,
-                overflow: "auto",
-                background: "#fff",
+                position: "absolute",
+                top: 0,
+                left: 0,
+                transform: `scale(${scale})`,
+                transformOrigin: "top left",
+                borderRadius: 44,
+                overflow: "hidden",
+                background: "var(--qz-paper)",
+                boxShadow: "var(--qz-lift-3)",
               }}
             >
-              {children}
+              <div
+                className="qz-devscreen"
+                ref={scrollRef}
+                onScroll={updateFade}
+                style={{
+                  width: "100%",
+                  height: "100%",
+                  overflowY: "auto",
+                  overscrollBehavior: "contain",
+                }}
+              >
+                <div ref={contentRef}>{children}</div>
+              </div>
+              <span
+                className="qz-devfade"
+                aria-hidden
+                style={{
+                  position: "absolute",
+                  left: 0,
+                  right: 0,
+                  bottom: 0,
+                  height: 52,
+                  pointerEvents: "none",
+                  background: "linear-gradient(to bottom, transparent, var(--qz-paper))",
+                  borderRadius: "0 0 44px 44px",
+                  opacity: fadeVisible ? 1 : 0,
+                  transition: "opacity 160ms var(--qz-ease, ease)",
+                }}
+              />
             </div>
-          </div>
           </div>
         </div>
       );
@@ -149,7 +199,15 @@ export function DeviceFrame({
     const logicalWidth =
       placement === "page" ? 1200 : placement === "popup" ? 1000 : placement ? 920 : width;
     const logicalHeight = placement === "page" ? 760 : placement === "popup" ? 760 : 720;
-    const scale = fitBounds.width > 0 ? Math.min(1, fitBounds.width / logicalWidth) : 1;
+    // Inline: top-anchored, WIDTH-fit, never upscale (§4). Expand overlay:
+    // fit both axes of the ~90%-viewport host (may upscale — funnel parity).
+    const scale = expand
+      ? fitBounds.width > 0 && fitBounds.height > 0
+        ? Math.min(fitBounds.width / logicalWidth, fitBounds.height / logicalHeight)
+        : 1
+      : fitBounds.width > 0
+        ? Math.min(1, fitBounds.width / logicalWidth)
+        : 1;
     const isPopup = placement === "popup";
     const isContained = placement === "inline" || placement === "product_widget";
     return (
