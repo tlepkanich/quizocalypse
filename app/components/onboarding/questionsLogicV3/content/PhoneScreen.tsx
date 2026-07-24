@@ -1,65 +1,46 @@
-import { useRef, useState } from "react";
-import type { CSSProperties, DragEvent, MouseEvent } from "react";
+import { useState } from "react";
 import type { Quiz as QuizDoc, RecPageGlobal } from "../../../../lib/quizSchema";
 import { isFreeformType } from "../../../../lib/quizSchema";
 import type { OrderedQuestion } from "../../../../lib/questionOrder";
-import { updateNodeData } from "../../../studio/studioDoc";
-import { addAnswer, moveAnswer, removeAnswer } from "../../../../lib/quizMutations";
 import { resolveRecPageGlobal } from "../../../../lib/recommendDecider";
 import { computeFitStep, isTitleLong } from "../fitSteps";
-import { IconDots, IconGrip, IconTrash } from "../icons";
 import { EditableText } from "./EditableText";
 
-/* questions-full-page mock (AUDIT-17) — the phone SCREEN contents inside the
-   brand-themed frame: one `.qz-s3-scr` column (mock scr — the Next button
-   rides min-height:100% to the bottom, the screen itself scrolls), top chrome
-   (‹ Back pill — HIDDEN at the first step per the mock, not disabled ·
-   progress bar · step counter), then one of three surfaces — the ACTIVE
-   question (title + answers inline-editable through EditableText; answer rows
-   carry the mock's ⠿ drag handle (drag-to-reorder via the pure moveAnswer
-   mutation), a radio/checkbox selection indicator with a shopper-style
-   preview selection, and a ⋯ kebab menu with Delete answer; a "+ Add answer"
-   dashed row follows; multi-select shows "Select up to N"; rating renders the
-   mock's scale bar with endpoint labels), the capture mock, or the reveal
-   mock. Everything inherits the brand CSS vars the canvas inlines on the
-   screen div; the question wrapper additionally carries --sec-color/
-   --sec-wash (the active question's section color — decider gold) which the
-   editable hover/focus treatment reads. */
+/* questions-simple mock (AUDIT-22) — the phone SCREEN contents inside the
+   brand-themed frame: one `.qz-s3-scr` column (the screen itself scrolls),
+   top chrome (‹ Back pill — HIDDEN at the first step per the mock, not
+   disabled · progress bar · step counter), then one of three surfaces. The
+   QUESTION surface is now a pure live preview of the selected question
+   (editing happens in the list): the 4-line-clamped title, the option cards
+   (2-line clamp, tap moves the shopper-style preview selection — the mock
+   renders the first one hot), then the Next button 20px below. Per-type
+   truthfulness is kept as a functionality-preserving deviation from the
+   mock's render-everything-as-cards: multi-select shows "Select up to N" +
+   checkbox semantics, rating renders the scale bar with endpoint labels,
+   freeform types show the input mock. No emoji anywhere (mock rule) — answer
+   icon glyphs are not rendered, and the reveal card's image slot is a styled
+   placeholder. The capture screen STAYS a full editable step (QZY-3 —
+   heading/description/terms inline-edit + SMS/terms toggles; the list has no
+   home for it), and the reveal mock stays read-only. */
 
 export type ScreenPosition =
   | { kind: "question"; question: OrderedQuestion }
   | { kind: "capture" }
   | { kind: "reveal" };
 
-// The legacy Step-3 editor's caps (QuestionCard TEXT_MAX / AnswerRow ANSWER_MAX).
-const TEXT_MAX = 150;
-const ANSWER_MAX = 60;
-
-function QuestionSurface({
-  doc,
-  question,
-  sectionVars,
-  onCommit,
-}: {
-  doc: QuizDoc;
-  question: OrderedQuestion;
-  /** The active question's section color (decider = gold), from sectionPalette. */
-  sectionVars: { color: string; wash: string } | null;
-  onCommit: (doc: QuizDoc) => void;
-}) {
-  const { node, qIndex } = question;
+function QuestionSurface({ question }: { question: OrderedQuestion }) {
+  const { node } = question;
   const answers = node.data.answers;
   const type = node.data.question_type;
   const freeform = isFreeformType(type);
   const multi = type === "multi_select";
   const rating = type === "rating";
-  const canDeleteAnswer = answers.length > 2; // card types must keep ≥2
   const maxSelections = multi
     ? Math.max(1, Math.min(node.data.max_selections ?? answers.length, answers.length))
     : 1;
 
-  // Shopper-style PREVIEW selection (mock opt.hot / sb-n.on) — local state
-  // only, never persisted. The surface remounts per question (key=node.id).
+  // Shopper-style PREVIEW selection (mock opt.hot — first hot on load) —
+  // local state only, never persisted. Remounts per question (key=node.id).
   const [singleSel, setSingleSel] = useState(0);
   const [multiSel, setMultiSel] = useState<number[]>([0]);
   const isHot = (i: number) => (multi ? multiSel.includes(i) : singleSel === i);
@@ -73,62 +54,6 @@ function QuestionSurface({
     } else {
       setSingleSel(i);
     }
-  };
-
-  // ⋯ kebab menu (mock omore/omenu) — one open at a time.
-  const [menuFor, setMenuFor] = useState<string | null>(null);
-
-  // ⠿ drag-to-reorder (mock odrag + drop-hi). The row is draggable only while
-  // the pointer is DOWN on the grip, so inline text editing never starts an
-  // element drag (functionality-preserving deviation from the mock's
-  // always-draggable rows).
-  const [dragArmed, setDragArmed] = useState<string | null>(null);
-  const dragFrom = useRef<number | null>(null);
-  const [dropIdx, setDropIdx] = useState<number | null>(null);
-  const endDrag = () => {
-    dragFrom.current = null;
-    setDragArmed(null);
-    setDropIdx(null);
-  };
-
-  const setTitle = (text: string) => {
-    onCommit(updateNodeData(doc, node.id, { text }));
-  };
-  // Mirrors AnswerRow's setText — patch ONE answer's text in the answers map.
-  const setAnswerText = (answerId: string, text: string) => {
-    const next = node.data.answers.map((a) => (a.id === answerId ? { ...a, text } : a));
-    onCommit(updateNodeData(doc, node.id, { answers: next }));
-  };
-  // Tap-to-delete an answer ON the phone (mock omenu → Delete answer). The
-  // mutation prunes the answer's route edge and refuses below the ≥2 floor.
-  const deleteAnswer = (answerId: string) => {
-    onCommit(removeAnswer(doc, node.id, answerId));
-    setSingleSel(0);
-    setMultiSel([0]);
-  };
-
-  const onRowClick = (e: MouseEvent<HTMLDivElement>, i: number) => {
-    const t = e.target as HTMLElement;
-    if (t.closest(".qz-s3-editable, .qz-s3-omore, .qz-s3-omenu, .qz-s3-odrag")) return;
-    toggleSel(i);
-  };
-  const onRowDragStart = (e: DragEvent<HTMLDivElement>, i: number) => {
-    dragFrom.current = i;
-    e.dataTransfer.effectAllowed = "move";
-  };
-  const onRowDragOver = (e: DragEvent<HTMLDivElement>, i: number) => {
-    if (dragFrom.current === null) return;
-    e.preventDefault();
-    setDropIdx(i);
-  };
-  const onRowDrop = (e: DragEvent<HTMLDivElement>, i: number) => {
-    e.preventDefault();
-    const from = dragFrom.current;
-    if (from !== null && from !== i) {
-      const moving = answers[from];
-      if (moving) onCommit(moveAnswer(doc, node.id, moving.id, i));
-    }
-    endDrag();
   };
 
   const scale = node.data.scale_config;
@@ -181,81 +106,17 @@ function QuestionSurface({
         {multi ? <p className="qz-s3-subcap">Select up to {maxSelections}</p> : null}
         <div className="qz-s3-achips">
           {answers.map((a, i) => (
-            <div
+            <button
               key={a.id}
-              className={`qz-s3-achip${isHot(i) ? " is-hot" : ""}${dropIdx === i ? " is-drophi" : ""}`}
-              draggable={dragArmed === a.id}
-              onClick={(e) => onRowClick(e, i)}
-              onDragStart={(e) => onRowDragStart(e, i)}
-              onDragEnd={endDrag}
-              onDragOver={(e) => onRowDragOver(e, i)}
-              onDragLeave={() => setDropIdx((d) => (d === i ? null : d))}
-              onDrop={(e) => onRowDrop(e, i)}
+              type="button"
+              className={`qz-s3-achip${isHot(i) ? " is-hot" : ""}`}
+              aria-pressed={isHot(i)}
+              onClick={() => toggleSel(i)}
             >
-              <span
-                className="qz-s3-odrag"
-                title="Drag to reorder"
-                onPointerDown={() => setDragArmed(a.id)}
-                onPointerUp={() => setDragArmed(null)}
-              >
-                <IconGrip />
-              </span>
-              <span className={multi ? "qz-s3-obox" : "qz-s3-oradio"} aria-hidden />
-              {a.icon ? <span aria-hidden>{a.icon} </span> : null}
-              <span className="qz-s3-otext">
-                <EditableText
-                  value={a.text}
-                  onCommit={(text) => setAnswerText(a.id, text)}
-                  maxLength={ANSWER_MAX}
-                  ariaLabel={`Answer ${i + 1} text`}
-                />
-              </span>
-              <button
-                type="button"
-                className="qz-s3-omore"
-                aria-haspopup="menu"
-                aria-expanded={menuFor === a.id}
-                aria-label={`Answer ${i + 1} options`}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setMenuFor((m) => (m === a.id ? null : a.id));
-                }}
-              >
-                <IconDots />
-              </button>
-              {menuFor === a.id ? (
-                <span className="qz-s3-omenu" role="menu">
-                  <button
-                    type="button"
-                    role="menuitem"
-                    className="qz-s3-omdel"
-                    disabled={!canDeleteAnswer}
-                    title={
-                      canDeleteAnswer
-                        ? "Delete this answer (its mapping and routing go with it)"
-                        : "Questions need at least 2 answers"
-                    }
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setMenuFor(null);
-                      if (canDeleteAnswer) deleteAnswer(a.id);
-                    }}
-                  >
-                    <IconTrash /> Delete answer
-                  </button>
-                </span>
-              ) : null}
-            </div>
+              {a.text}
+            </button>
           ))}
         </div>
-        <button
-          type="button"
-          className="qz-s3-addopt"
-          title="Add an answer to this question"
-          onClick={() => onCommit(addAnswer(doc, node.id))}
-        >
-          + Add answer
-        </button>
       </>
     );
   }
@@ -265,28 +126,10 @@ function QuestionSurface({
       className="qz-s3-qbody"
       data-fit={computeFitStep(freeform || rating ? 0 : answers.length)}
       data-title-long={isTitleLong(node.data.text) || undefined}
-      style={
-        sectionVars
-          ? ({ "--sec-color": sectionVars.color, "--sec-wash": sectionVars.wash } as CSSProperties)
-          : undefined
-      }
-      onClick={(e) => {
-        // Any click outside a kebab closes the open answer menu (mock).
-        const t = e.target as HTMLElement;
-        if (!t.closest(".qz-s3-omore, .qz-s3-omenu")) setMenuFor(null);
-      }}
     >
-      {/* questions-full-page mock — the type moved OUT of the phone (the
-          floating tag beside the frame); the step counter lives in the top
-          bar. No in-phone kicker row. */}
-      <h2 className="qz-s3-qtitle">
-        <EditableText
-          value={node.data.text}
-          onCommit={setTitle}
-          maxLength={TEXT_MAX}
-          ariaLabel={`Question ${qIndex} text`}
-        />
-      </h2>
+      {/* Mock q-scr — the plain 4-line-clamped question title (editing lives
+          in the list; the clamp is in the stylesheet). */}
+      <h2 className="qz-s3-qtitle">{node.data.text}</h2>
       {body}
     </div>
   );
@@ -380,7 +223,6 @@ export function PhoneScreen({
   onNext,
   onRestart,
   ctaText,
-  sectionVars,
   onCommit,
 }: {
   doc: QuizDoc;
@@ -395,8 +237,6 @@ export function PhoneScreen({
   onRestart: () => void;
   /** Contrast-safe label color on the brand primary (the runtime's rule). */
   ctaText: string;
-  /** Active question's section color vars (null on the termini). */
-  sectionVars: { color: string; wash: string } | null;
   onCommit: (doc: QuizDoc) => void;
 }) {
   const global = doc.rec_page_settings?.global;
@@ -416,24 +256,16 @@ export function PhoneScreen({
       </div>
 
       {position.kind === "question" ? (
-        <QuestionSurface
-          key={position.question.node.id}
-          doc={doc}
-          question={position.question}
-          sectionVars={sectionVars}
-          onCommit={onCommit}
-        />
+        <QuestionSurface key={position.question.node.id} question={position.question} />
       ) : position.kind === "capture" ? (
         <CaptureSurface doc={doc} onCommit={onCommit} />
       ) : (
         <div className="qz-s3-reveal">
           <h2 className="qz-s3-qtitle">{global?.headline || "Your perfect match"}</h2>
           <div className="qz-s3-prodcard">
-            <div className="qz-s3-prodimg" aria-hidden>
-              📦
-            </div>
+            <div className="qz-s3-prodimg" aria-hidden />
             <strong className="qz-s3-prodname">Your top pick</strong>
-            <p className="qz-s3-prodwhy">✦ AI writes the “why we recommend this” at quiz time</p>
+            <p className="qz-s3-prodwhy">AI writes the “why we recommend this” at quiz time</p>
             <div className="qz-s3-prodrow">
               <span className="qz-s3-prodprice">$—</span>
               <span className="qz-s3-prodcta" style={{ color: ctaText }}>

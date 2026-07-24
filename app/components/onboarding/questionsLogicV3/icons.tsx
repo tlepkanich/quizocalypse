@@ -75,6 +75,12 @@ export const IconDown = () => (
   </S>
 );
 
+export const IconPlus = () => (
+  <S>
+    <path d="M12 5v14M5 12h14" />
+  </S>
+);
+
 export const IconX = () => (
   <S>
     <path d="M6 6l12 12M18 6L6 18" />

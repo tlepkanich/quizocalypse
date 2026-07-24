@@ -101,10 +101,14 @@ export function TypeChipSelector({
   doc,
   node,
   onCommit,
+  variant = "tag",
 }: {
   doc: QuizDoc;
   node: QuestionNode;
   onCommit: (doc: QuizDoc) => void;
+  /** AUDIT-22 — "meta": the questions-simple row's mono "N · TYPE" run is the
+      trigger (the popover is unchanged); "tag": the floating pill. */
+  variant?: "tag" | "meta";
 }) {
   const [dialog, setDialog] = useState<Dialog | null>(null);
   const [open, setOpen] = useState(false);
@@ -300,17 +304,35 @@ export function TypeChipSelector({
 
   return (
     <span ref={wrapRef} className="qz-s3-typetagwrap">
-      <button
-        type="button"
-        className="qz-s3-typetagbtn"
-        aria-haspopup="true"
-        aria-expanded={open}
-        title="Change the question type — your answers are kept"
-        onClick={() => setOpen((v) => !v)}
-      >
-        <span className="qz-s3-tt-type">{currentLabel}</span>
-        <IconCaret />
-      </button>
+      {variant === "meta" ? (
+        <button
+          type="button"
+          className="qz-qs-qmeta"
+          aria-haspopup="true"
+          aria-expanded={open}
+          title="Change the question type — your answers are kept"
+          onClick={(e) => {
+            e.stopPropagation();
+            setOpen((v) => !v);
+          }}
+        >
+          {isFreeformType(node.data.question_type)
+            ? currentLabel
+            : `${answers.length} · ${currentLabel}`}
+        </button>
+      ) : (
+        <button
+          type="button"
+          className="qz-s3-typetagbtn"
+          aria-haspopup="true"
+          aria-expanded={open}
+          title="Change the question type — your answers are kept"
+          onClick={() => setOpen((v) => !v)}
+        >
+          <span className="qz-s3-tt-type">{currentLabel}</span>
+          <IconCaret />
+        </button>
+      )}
 
       {open ? (
         <div className="qz-s3-typepop">

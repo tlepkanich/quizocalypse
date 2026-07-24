@@ -2,7 +2,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import type { CSSProperties, ReactNode } from "react";
 import type { Quiz as QuizDoc, DesignTokens } from "../../../../lib/quizSchema";
-import { isFreeformType } from "../../../../lib/quizSchema";
 import type { OrderedQuestion } from "../../../../lib/questionOrder";
 import {
   resolveDesignTokens,
@@ -10,28 +9,26 @@ import {
   suggestContrastText,
 } from "../../../../lib/designTokens";
 import { googleFontsUrl } from "../../../runtime/runtimeStyles";
-import { assignSectionColors, sectionColorVars } from "../sectionPalette";
-import { answersExceedBudget } from "../fitSteps";
 import { CAPTURE_ID, REVEAL_ID } from "../LeftRail";
 import { IconDesktop, IconExpand, IconMobile, IconX } from "../icons";
-import type { RegenApi } from "../Step3Shell";
 import { PhoneScreen, type ScreenPosition } from "./PhoneScreen";
-import { TypeChipSelector } from "./TypeChipSelector";
 
-/* questions-full-page mock + phone-preview SPEC (AUDIT-17) — the Content
-   view's phone column on the shared preview-primitive geometry: a pv-bar
-   (Mobile/Desktop segmented control · Expand), then a TRUE-viewport device —
-   mobile 390×844, desktop 1180×740 — laid out at logical size and scaled to
-   fit the pane (`--s = min(paneW/vw, paneH/vh, 1)`, never upscaling past
-   1:1), minimal bezel (rounded corners + soft shadow, no ink bar), a
-   scrollable screen with a bottom scroll fade, and the desktop frame's faux
-   browser chrome (dots + blurred URL + top progress). Expand opens the same
-   screen in a dimmed overlay (portal to body — the builder-overlay-portal
-   lesson), scaled ≥1 for mobile so it is always visibly bigger; Esc/✕/
-   click-outside close. The screen stays brand-themed by inlining
-   resolveDesignTokens → tokensToCssVars; the ↻ Regenerate chip keeps the
-   stage's beginAiEdit/undo bracket. Back/Next drive the REAL walk
-   Q1 → … → Qn → capture → reveal; the shell owns `activeId`. */
+/* questions-simple mock + phone-preview SPEC (AUDIT-22) — the ✎ Questions
+   tab's 340px preview pane: the mock's centered "Live preview · your brand"
+   chip (blinking ok dot), the SPEC's pv-bar (Mobile/Desktop segmented
+   control · Expand), then the shared preview primitive — a TRUE-viewport
+   device (mobile 390×844, desktop 1180×740) laid out at logical size and
+   scaled to fit the pane (`--s = min(paneW/vw, viewportH-fit/vh, 1)`, never
+   upscaling past 1:1), minimal bezel (radius 44 + soft shadow), a scrollable
+   screen with a bottom scroll fade, and the desktop frame's faux browser
+   chrome (dots + blurred URL + top progress). Expand opens the same screen
+   in a dimmed overlay (portal to body — the builder-overlay-portal lesson),
+   scaled ≥1 for mobile so it is always visibly bigger; Esc/✕/click-outside
+   close. The screen stays brand-themed by inlining resolveDesignTokens →
+   tokensToCssVars. Back/Next drive the REAL walk Q1 → … → Qn → capture →
+   reveal; the shell owns `activeId`. Editing moved to the question list
+   (questions-simple): the phone is the live preview — the floating type tag,
+   the answer-budget banner, and the under-phone regen row left this file. */
 
 const DEVICE_DIMS = {
   mobile: { vw: 390, vh: 844 },
@@ -46,10 +43,8 @@ export function PhoneCanvas({
   activeId,
   captureOn,
   designTokens,
-  deciderId,
   onNavigate,
   onCommit,
-  regen,
 }: {
   doc: QuizDoc;
   questions: OrderedQuestion[];
@@ -57,11 +52,9 @@ export function PhoneCanvas({
   activeId: string;
   captureOn: boolean;
   designTokens: DesignTokens | null | undefined;
-  deciderId: string | null;
   onNavigate: (id: string) => void;
+  /** Capture-screen inline edits still commit through the doc. */
   onCommit: (doc: QuizDoc) => void;
-  /** The stage's existing regenerate bracket, threaded through the shell. */
-  regen: RegenApi;
 }) {
   const resolved = useMemo(() => resolveDesignTokens(designTokens ?? undefined), [designTokens]);
   const cssVars = useMemo(() => tokensToCssVars(resolved) as CSSProperties, [resolved]);
@@ -96,27 +89,6 @@ export function PhoneCanvas({
               questions.find((q) => q.node.id === activeId) ?? questions[0]!,
           };
 
-  // §5.3 — the active question's section color (decider = gold), inlined as
-  // --sec-color/--sec-wash on the question wrapper for the editable treatment.
-  const sectionColors = useMemo(
-    () =>
-      assignSectionColors(
-        questions.map((q) => q.node.id),
-        deciderId,
-      ),
-    [questions, deciderId],
-  );
-  const activeQuestion = position.kind === "question" ? position.question.node : null;
-  const activeColorKey = activeQuestion ? sectionColors.get(activeQuestion.id) : undefined;
-  const sectionVars = activeColorKey ? sectionColorVars(activeColorKey) : null;
-
-  const answersOverBudget =
-    activeQuestion !== null &&
-    !isFreeformType(activeQuestion.data.question_type) &&
-    answersExceedBudget(activeQuestion.data.answers.length);
-
-  const busy = regen.regeneratingId !== null;
-  const regenError = regen.regenError;
   const artDirection = resolved.art_direction;
   const alpine = artDirection?.id === "alpine-afterglow";
   const artScreenStyle: CSSProperties = alpine
@@ -129,7 +101,9 @@ export function PhoneCanvas({
       }
     : cssVars;
 
-  // — SPEC "fit the pane": scale off the stage, never the layout —
+  // — SPEC "fit the pane": scale off the pane width (the split's fixed 340px
+  //   column) capped by the viewport height — scale the pixels, never the
+  //   layout. —
   const [device, setDevice] = useState<DeviceMode>("mobile");
   const [expanded, setExpanded] = useState(false);
   const stageRef = useRef<HTMLDivElement>(null);
@@ -143,16 +117,21 @@ export function PhoneCanvas({
     const dev = deviceRef.current;
     if (!stage || !dev) return;
     const fit = () => {
+      const maxH = Math.max(320, window.innerHeight - 210);
       const s = Math.max(
-        0.34,
-        Math.min((stage.clientWidth - 24) / dims.vw, (stage.clientHeight - 20) / dims.vh, 1),
+        0.2,
+        Math.min((stage.clientWidth - 8) / dims.vw, maxH / dims.vh, 1),
       );
       dev.style.setProperty("--s", s.toFixed(3));
     };
     fit();
     const ro = new ResizeObserver(fit);
     ro.observe(stage);
-    return () => ro.disconnect();
+    window.addEventListener("resize", fit);
+    return () => {
+      ro.disconnect();
+      window.removeEventListener("resize", fit);
+    };
   }, [dims]);
 
   // Scroll resets when the previewed step changes, not on every keystroke.
@@ -237,7 +216,6 @@ export function PhoneCanvas({
           }
           onRestart={() => onNavigate(positions[0]!)}
           ctaText={ctaText}
-          sectionVars={sectionVars}
           onCommit={onCommit}
         />
       </div>
@@ -248,10 +226,14 @@ export function PhoneCanvas({
   const setDeviceMode = useCallback((mode: DeviceMode) => setDevice(mode), []);
 
   return (
-    <section className="qz-s3-canvas">
-      {/* questions-full-page mock — no caption pill above the phone (the edit
-          hint lives in the sub-header). The art-direction caption stays: it is
-          functional provenance for stamped docs. */}
+    <aside className="qz-s3-canvas qz-qs-pv">
+      {/* questions-simple — the centered live chip above the phone. */}
+      <div className="qz-qs-pvhead">
+        <span className="qz-qs-livechip">
+          <span className="qz-qs-livedot" aria-hidden />
+          Live preview · your brand
+        </span>
+      </div>
       {alpine ? (
         <p className="qz-s3-caption is-art-directed">
           <span aria-hidden>◆</span> Art direction · {artDirection?.name}
@@ -297,82 +279,9 @@ export function PhoneCanvas({
           ref={deviceRef}
           style={deviceStyle}
         >
-          <div className="qz-s3-holder">
-            {renderFrame(true)}
-            {/* The mock's floating type tag at the phone's right — the tag +
-                popover (type radios · Min/Max · scale endpoints); question
-                screens only. Docks top-right inside the desktop frame. */}
-            {activeQuestion ? (
-              <div className="qz-s3-typetag">
-                <TypeChipSelector doc={doc} node={activeQuestion} onCommit={onCommit} />
-              </div>
-            ) : null}
-          </div>
+          <div className="qz-s3-holder">{renderFrame(true)}</div>
         </div>
       </div>
-
-      {answersOverBudget ? (
-        <div className="qz-s3-warnbanner" role="status">
-          <span aria-hidden>⚠</span> This question has more than 8 answers — shoppers on
-          small screens will struggle. Consider splitting it.
-        </div>
-      ) : null}
-
-      <div className="qz-s3-regenrow">
-        {regen.undoNodeId ? (
-          <button
-            type="button"
-            className="qz-s3-regen-undo"
-            onClick={regen.onUndoRegenerate}
-            title="Undo the regeneration"
-          >
-            ↺ Undo
-          </button>
-        ) : null}
-        <button
-          type="button"
-          className="qz-s3-regen"
-          disabled={busy || !activeQuestion}
-          title={
-            activeQuestion
-              ? "Regenerate this question with AI (keeps recommendation mappings on unchanged answers)"
-              : "Select a question to regenerate it with AI"
-          }
-          onClick={() => activeQuestion && regen.onRegenerate(activeQuestion.id)}
-        >
-          {activeQuestion && regen.regeneratingId === activeQuestion.id ? (
-            <>
-              <span className="qz-ql-spin" aria-hidden /> Regenerating…
-            </>
-          ) : (
-            "↻ Regenerate"
-          )}
-        </button>
-      </div>
-
-      {regenError ? (
-        <div
-          className={`qz-s3-regen-error${regenError.credits ? " is-credits" : ""}`}
-          role="alert"
-        >
-          <span aria-hidden>⚠</span> {regenError.message}{" "}
-          <button
-            type="button"
-            className="qz-s3-retry"
-            onClick={() => regen.onRegenerate(regenError.nodeId)}
-          >
-            Retry
-          </button>
-          <button
-            type="button"
-            className="qz-s3-regen-dismiss"
-            onClick={regen.onDismissRegenError}
-            aria-label="Dismiss"
-          >
-            ✕
-          </button>
-        </div>
-      ) : null}
 
       {expanded && typeof document !== "undefined"
         ? createPortal(
@@ -404,6 +313,6 @@ export function PhoneCanvas({
             document.body,
           )
         : null}
-    </section>
+    </aside>
   );
 }

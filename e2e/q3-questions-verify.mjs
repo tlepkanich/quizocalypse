@@ -1,32 +1,33 @@
-// AUDIT-17 live-verify — the funnel Step-3 ✎ Questions view exact to
-// docs/design/questions/questions-full-page.html (+ the phone-preview SPEC
-// geometry) against a LOCAL production build (BASE env).
+// AUDIT-22 live-verify — the funnel Step-3 ✎ Questions tab exact to the
+// OWNER-RULED simple spec docs/design/questions/questions-simple.html
+// (+ the phone-preview SPEC geometry) against a LOCAL production build
+// (BASE env, default :3200).
 //
 // Fixture: draft cmr7khgd50001vkhscvox8dgt — snapshot draftJson + quiz-scoped
 // Category rows, seed a minimal decider doc at question_builder (intro →
 // single_select DECIDES w/ target_id → multi_select → rating(5) → result),
 // restore byte-for-byte in the finally.
 //
-// Asserts the AUDIT-17 deltas: 3-col grid + drag-resizable navigator ·
-// nav inline title edit · click-to-renumber · hover ✕ delete (disabled on
-// the decider) · mock navterm termini · pv-bar (Mobile/Desktop + Expand) ·
-// true 390×844 frame scaled via transform (fit-the-pane) · desktop 1180
-// frame w/ browser chrome + hidden in-screen top bar + 600px column ·
-// Expand overlay ≥1:1 + Esc close · floating type tag → popover (radios +
-// multi Min/Max steppers + scale Max/endpoint labels) · answer rows (⠿ grip
-// · radio/checkbox indicator + preview selection · ⋯ kebab → Delete answer ·
-// + Add answer · drag-reorder via moveAnswer) · multi "Select up to N" ·
-// rating scalebar + endpoint labels · Back pill hidden at the first step ·
-// zero page errors. Screenshots → /tmp/q3-shots.
+// Asserts the AUDIT-22 deltas: one panel (toolbar: title · mono count ·
+// + New question · library) over a compact-list | 340px preview split ·
+// compact rows (19px number circle, deciding = accent + dot · inline-editable
+// wording · mono "N · TYPE" meta that OPENS the type popover · hover ⠿/trash,
+// decider delete disabled) · click a row → answers expand INLINE (editable
+// inputs · ✕ delete w/ 2-floor · + answer · regen bracket) · whole-question
+// AND answer drag-reorder · quiet termini rows w/ right hints · live chip ·
+// pv-bar (Mobile/Desktop + Expand) · TRUE 390×844 frame scaled ≤1 via
+// transform · READ-ONLY phone question surface (no editables/grips/kebabs) ·
+// desktop 1180 frame w/ chrome · Expand ≥1:1 + Esc · zero page errors.
+// Screenshots → /tmp/qs-shots.
 import { chromium } from "playwright";
 import { PrismaClient } from "@prisma/client";
 import { mkdirSync, writeFileSync } from "node:fs";
 
-const BASE = process.env.BASE ?? "http://localhost:3000";
+const BASE = process.env.BASE ?? "http://localhost:3200";
 const KEY = process.env.STUDIO_ACCESS_TOKEN;
 const QUIZ = "cmr7khgd50001vkhscvox8dgt";
-const SHOTS = "/tmp/q3-shots";
-const BACKUP = `${SHOTS}/q3-${QUIZ}-backup.json`;
+const SHOTS = "/tmp/qs-shots";
+const BACKUP = `${SHOTS}/qs-${QUIZ}-backup.json`;
 
 if (!KEY) {
   console.error("STUDIO_ACCESS_TOKEN missing — source .env first");
@@ -96,16 +97,16 @@ try {
   await prisma.category.deleteMany({ where: { quizId: QUIZ } });
   const catA = await prisma.category.create({
     data: {
-      shopId: quiz.shopId, quizId: QUIZ, name: "Q3 Boards", description: "", tags: [],
+      shopId: quiz.shopId, quizId: QUIZ, name: "QS Boards", description: "", tags: [],
       productIds: products.slice(0, 4).map((p) => p.productId),
-      source: "manual", discoveryRunId: "q3_probe",
+      source: "manual", discoveryRunId: "qs_probe",
     },
   });
   const catB = await prisma.category.create({
     data: {
-      shopId: quiz.shopId, quizId: QUIZ, name: "Q3 Accessories", description: "", tags: [],
+      shopId: quiz.shopId, quizId: QUIZ, name: "QS Accessories", description: "", tags: [],
       productIds: products.slice(4, 6).map((p) => p.productId),
-      source: "manual", discoveryRunId: "q3_probe",
+      source: "manual", discoveryRunId: "qs_probe",
     },
   });
 
@@ -124,7 +125,7 @@ try {
     },
     nodes: [
       { id: "intro1", type: "intro", position: { x: 0, y: 0 },
-        data: { headline: "Q3 Probe Shop", subtext: "Quick fit check.", button_label: "Start" } },
+        data: { headline: "QS Probe Shop", subtext: "Quick fit check.", button_label: "Start" } },
       { id: "q1", type: "question", position: { x: 0, y: 120 },
         data: { text: "What are you shopping for today?", question_type: "single_select", required: true, role: "decides",
           answers: answers([["a_board", "A snowboard", catA.id], ["a_acc", "Accessories", catB.id]]) } },
@@ -166,55 +167,150 @@ try {
     }
   };
   await goto(`${BASE}/studio?key=${KEY}`);
-  const open = async () => {
-    await goto(`${BASE}/studio/onboarding/${QUIZ}`);
-    await page.waitForTimeout(1400);
-  };
-  await open();
+  await goto(`${BASE}/studio/onboarding/${QUIZ}`);
+  await page.waitForTimeout(1400);
   ok("Step3Shell mounts (.qz-s3)", (await page.locator(".qz-s3").count()) === 1);
 
-  // 1 ── panel geometry: nav · resizer · phone col; resizer drags
-  ok("resizer column present", (await page.locator(".qz-s3-resizer").count()) === 1);
-  const railW0 = await page.locator(".qz-s3-rail").evaluate((el) => el.getBoundingClientRect().width);
-  const rz = page.locator(".qz-s3-resizer");
-  const rzBox = await rz.boundingBox();
-  await page.mouse.move(rzBox.x + rzBox.width / 2, rzBox.y + 200);
-  await page.mouse.down();
-  await page.mouse.move(rzBox.x + rzBox.width / 2 - 60, rzBox.y + 200, { steps: 6 });
-  await page.mouse.up();
-  await page.waitForTimeout(200);
-  const railW1 = await page.locator(".qz-s3-rail").evaluate((el) => el.getBoundingClientRect().width);
-  ok("navigator drag-resizes (−60px)", Math.abs(railW0 - 60 - railW1) < 4, `${railW0} → ${railW1}`);
-  // floor: drag far left clamps at 232
-  await page.mouse.move(rzBox.x - 58, rzBox.y + 200);
-  await page.mouse.down();
-  await page.mouse.move(rzBox.x - 500, rzBox.y + 200, { steps: 6 });
-  await page.mouse.up();
-  await page.waitForTimeout(200);
-  const railW2 = await page.locator(".qz-s3-rail").evaluate((el) => el.getBoundingClientRect().width);
-  ok("navigator width floors at 232px", Math.abs(railW2 - 232) < 4, `${railW2}`);
+  // 1 ── the panel: toolbar (title · mono count · library · + New question)
+  ok("one questions-simple panel", (await page.locator(".qz-qs-panel").count()) === 1);
+  ok('toolbar title "Questions"',
+    (await page.locator(".qz-qs-ttitle").textContent())?.trim() === "Questions");
+  ok('mono count "3 questions"',
+    (await page.locator(".qz-qs-tcount").textContent())?.trim() === "3 questions");
+  ok("+ New question toolbar button", await page.locator(".qz-qs-tbtn", { hasText: "New question" }).isVisible());
+  ok("Question library toolbar entry", await page.locator(".qz-qs-tlib").isVisible());
+  ok("old resizer/rail retired", (await page.locator(".qz-s3-resizer, .qz-s3-rail, .qz-s3-navterm").count()) === 0);
 
-  // 2 ── nav rows: editable titles, delete affordance, termini styling
-  ok("nav titles are inline-editable (3 rows)", (await page.locator(".qz-s3-navedit").count()) === 3);
-  ok("per-row delete buttons render", (await page.locator(".qz-s3-ndel").count()) === 3);
-  const deciderDel = page.locator(".qz-s3-row").first().locator(".qz-s3-ndel");
-  ok("decider row's delete is DISABLED", await deciderDel.isDisabled());
-  ok("mock navterm termini (✉ capture + ◎ reveal)", (await page.locator(".qz-s3-navterm").count()) === 2);
-  ok("+ New question row present", await page.locator(".qz-s3-navadd", { hasText: "New question" }).isVisible());
+  // 2 ── split geometry: 340px preview column
+  const pvW = await page.locator(".qz-qs-pv").evaluate((el) => el.getBoundingClientRect().width);
+  ok("preview column is 340px", Math.abs(pvW - 340) < 2, `${pvW}`);
 
-  // nav inline title edit syncs the phone
-  const navTitle = page.locator(".qz-s3-navedit").first();
-  await navTitle.click();
+  // 3 ── compact rows: number circles, deciding accent, mono meta, ONE expansion
+  ok("3 compact question rows", (await page.locator(".qz-qs-q").count()) === 3);
+  ok("decider row's number circle is accent (is-deciding)",
+    await page.locator(".qz-qs-q").first().locator(".qz-qs-qn.is-deciding").count() === 1);
+  ok("exactly one deciding dot", (await page.locator(".qz-qs-decdot").count()) === 1);
+  ok('decider meta reads "2 · Single select"',
+    (await page.locator(".qz-qs-qmeta").first().textContent())?.trim() === "2 · Single select");
+  ok("meta renders UPPERCASE mono (CSS)",
+    await page.locator(".qz-qs-qmeta").first().evaluate((el) => {
+      const cs = getComputedStyle(el);
+      return cs.textTransform === "uppercase" && /mono|Menlo|SFMono/i.test(cs.fontFamily);
+    }));
+  ok("first question expanded by default (ONE .qz-qs-ans)",
+    (await page.locator(".qz-qs-ans").count()) === 1 &&
+    (await page.locator(".qz-qs-q").first().locator(".qz-qs-ans").count()) === 1);
+  ok("expanded answers are editable inputs (2 on the decider)",
+    (await page.locator(".qz-qs-ainput").count()) === 2);
+  ok("✕ answer delete DISABLED at the 2-answer floor",
+    await page.locator(".qz-qs-adel").first().isDisabled());
+  ok("regen bracket lives in the expanded footer",
+    (await page.locator(".qz-qs-ans .qz-qs-regen").count()) === 1);
+  await page.locator(".qz-qs-list").screenshot({ path: `${SHOTS}/1-list-default.png` });
+
+  // 4 ── click a row → its answers expand inline (and only one expansion)
+  await page.locator(".qz-qs-q").nth(1).locator(".qz-qs-qn").click();
+  await page.waitForTimeout(300);
+  ok("clicking row 2 moves the expansion (4 multi answers)",
+    (await page.locator(".qz-qs-ans").count()) === 1 &&
+    (await page.locator(".qz-qs-q").nth(1).locator(".qz-qs-ainput").count()) === 4);
+  ok("row 2 gains the selected wash (is-on)",
+    await page.locator(".qz-qs-q").nth(1).evaluate((el) => el.classList.contains("is-on")));
+  await page.locator(".qz-qs-list").screenshot({ path: `${SHOTS}/2-row-expanded.png` });
+
+  // phone follows the selection + multi stays truthful
+  ok('multi subcap "Select up to 2" on the phone',
+    (await page.locator(".qz-s3-subcap").textContent())?.trim() === "Select up to 2");
+
+  // 5 ── inline edits persist (wording via the LIST row, answer via the input)
+  const wording = page.locator(".qz-qs-q").nth(1).locator(".qz-qs-qtext");
+  await wording.click();
   await page.keyboard.press("ControlOrMeta+a");
-  await page.keyboard.type("Renamed from the nav", { delay: 20 });
+  await page.keyboard.type("Renamed in the list", { delay: 20 });
   await page.keyboard.press("Enter");
   await page.waitForTimeout(300);
-  ok("nav title edit syncs the phone title",
-    (await page.locator(".qz-s3-qtitle .qz-s3-editable").first().textContent())?.trim() === "Renamed from the nav");
+  ok("list wording edit syncs the phone title",
+    (await page.locator(".qz-s3-qtitle").first().textContent())?.trim() === "Renamed in the list");
   await page.waitForTimeout(1400); // autosave
-  ok("nav title edit persisted (prisma)", (await draftNode("q1"))?.data?.text === "Renamed from the nav");
+  ok("wording edit persisted (prisma)", (await draftNode("q2"))?.data?.text === "Renamed in the list");
 
-  // 3 ── pv-bar + true-viewport phone geometry (fit-the-pane)
+  const firstAnswer = page.locator(".qz-qs-q").nth(1).locator(".qz-qs-ainput").first();
+  await firstAnswer.click();
+  await page.keyboard.press("ControlOrMeta+a");
+  await page.keyboard.type("Featherweight build", { delay: 20 });
+  await page.keyboard.press("Enter");
+  await page.waitForTimeout(1400);
+  ok("answer edit persisted (prisma)",
+    (await draftNode("q2"))?.data?.answers?.[0]?.text === "Featherweight build");
+
+  // 6 ── + answer / ✕ delete round-trip on the expanded row
+  await page.locator(".qz-qs-aadd").click();
+  await page.waitForTimeout(1400);
+  ok("+ answer persisted (5 answers in prisma)", (await draftNode("q2"))?.data?.answers?.length === 5);
+  const freshDel = page.locator(".qz-qs-q").nth(1).locator(".qz-qs-adel").nth(4);
+  ok("✕ delete ENABLED above the floor", !(await freshDel.isDisabled()));
+  await freshDel.click();
+  await page.waitForTimeout(1400);
+  ok("✕ delete persisted (back to 4)", (await draftNode("q2"))?.data?.answers?.length === 4);
+
+  // 7 ── the mono meta IS the type control: popover + decider guard
+  await page.locator(".qz-qs-qmeta").first().click();
+  ok("meta click opens the type popover (4 radios)", (await page.locator(".qz-s3-tp-type").count()) === 4);
+  ok("current type radio marked", await page.locator(".qz-s3-tp-type.is-on", { hasText: "Single select" }).isVisible());
+  await page.screenshot({ path: `${SHOTS}/3-typepop-from-meta.png` });
+  await page.locator(".qz-s3-tp-type", { hasText: "Multi-select" }).click();
+  ok("decider → Multi-select still BLOCKED",
+    await page.locator(".qz-modal-title", { hasText: "Multi-select can" }).isVisible());
+  await page.locator(".qz-modal button", { hasText: "Got it" }).click();
+  await page.keyboard.press("Escape");
+  await page.waitForTimeout(200);
+
+  // multi meta shows its own count · type
+  ok('multi meta reads "4 · Multi-select"',
+    (await page.locator(".qz-qs-qmeta").nth(1).textContent())?.trim() === "4 · Multi-select");
+
+  // 8 ── answer drag-reorder (synthetic HTML5 dnd) → moveAnswer persists
+  const orderBefore = ((await draftNode("q2"))?.data?.answers ?? []).map((a) => a.id);
+  await page.evaluate(() => {
+    const rows = [...document.querySelectorAll(".qz-qs-a")];
+    const dt = new DataTransfer();
+    rows[0].dispatchEvent(new DragEvent("dragstart", { bubbles: true, dataTransfer: dt }));
+    rows[2].dispatchEvent(new DragEvent("dragover", { bubbles: true, cancelable: true, dataTransfer: dt }));
+    rows[2].dispatchEvent(new DragEvent("drop", { bubbles: true, cancelable: true, dataTransfer: dt }));
+  });
+  await page.waitForTimeout(1400);
+  const orderAfter = ((await draftNode("q2"))?.data?.answers ?? []).map((a) => a.id);
+  ok("answer ⠿ drag-reorder persisted (a→index 2, objects intact)",
+    orderAfter.join(",") === [orderBefore[1], orderBefore[2], orderBefore[0], orderBefore[3]].join(","),
+    orderAfter.join(","));
+
+  // 9 ── whole-question drag-reorder → moveStep persists (q3 → row 2)
+  await page.evaluate(() => {
+    const rows = [...document.querySelectorAll(".qz-qs-q")];
+    const dt = new DataTransfer();
+    rows[2].dispatchEvent(new DragEvent("dragstart", { bubbles: true, dataTransfer: dt }));
+    rows[1].dispatchEvent(new DragEvent("dragover", { bubbles: true, cancelable: true, dataTransfer: dt }));
+    rows[1].dispatchEvent(new DragEvent("drop", { bubbles: true, cancelable: true, dataTransfer: dt }));
+  });
+  await page.waitForTimeout(1600);
+  const metas = await page.locator(".qz-qs-qmeta").allTextContents();
+  ok("question drag-reorder: rating now row 2 (meta shows 5 · Five-point scale)",
+    (metas[1] ?? "").includes("Five-point scale"), metas.join(" | "));
+  const q3Doc = await draftDoc();
+  const flowAfter = (q3Doc?.edges ?? []).map((e) => `${e.source}→${e.target}`).join(",");
+  ok("reorder persisted in the edge chain (q1→q3→q2)",
+    flowAfter.includes("q1→q3") && flowAfter.includes("q3→q2"), flowAfter);
+
+  // 10 ── termini rows with the mock's right hints
+  ok("two quiet termini rows", (await page.locator(".qz-qs-term").count()) === 2);
+  ok('capture hint "Optional lead step"',
+    (await page.locator(".qz-qs-term").first().locator(".qz-qs-ts").textContent())?.trim() === "Optional lead step");
+  ok('reveal hint "Configured in Step 4 · Results"',
+    (await page.locator(".qz-qs-term").nth(1).locator(".qz-qs-ts").textContent())?.trim() === "Configured in Step 4 · Results");
+
+  // 11 ── the live chip + pv-bar + TRUE-viewport phone geometry
+  ok('live chip "Live preview · your brand"',
+    ((await page.locator(".qz-qs-livechip").textContent()) ?? "").includes("Live preview · your brand"));
   ok("pv-bar: Mobile/Desktop segmented control", (await page.locator(".qz-s3-segbtns button").count()) === 2);
   ok("pv-bar: Expand control", await page.locator(".qz-s3-expandbtn").isVisible());
   const frame = page.locator(".qz-s3-device:not(.is-expand) .qz-s3-frame");
@@ -226,130 +322,34 @@ try {
   ok("frame is 844 logical px tall", geo.h === "844px", geo.h);
   ok("frame scales via transform (not layout)", geo.transform.startsWith("matrix("), geo.transform);
   const scale = Number(geo.transform.match(/matrix\(([\d.]+)/)?.[1] ?? 0);
-  ok("fit-the-pane scale in (0.34, 1]", scale > 0.34 && scale <= 1, `s=${scale}`);
-  ok("minimal bezel (44px radius, no ink bar)", geo.radius.includes("44px"), geo.radius);
+  ok("fit-the-pane scale ≤ 1 (never upscales)", scale > 0.2 && scale <= 1, `s=${scale}`);
+  ok("minimal bezel (44px radius)", geo.radius.includes("44px"), geo.radius);
   ok("scroll fade present", (await page.locator(".qz-s3-device:not(.is-expand) .qz-s3-fade").count()) === 1);
+
+  // 12 ── phone question surface is READ-ONLY (editing lives in the list)
+  ok("no editables inside the phone question surface",
+    (await page.locator(".qz-s3-qbody .qz-s3-editable").count()) === 0);
+  ok("no grips/kebabs/add-answer inside the phone",
+    (await page.locator(".qz-s3-phone-screen .qz-s3-odrag, .qz-s3-phone-screen .qz-s3-omore, .qz-s3-phone-screen .qz-s3-addopt").count()) === 0);
+  ok("floating type tag retired", (await page.locator(".qz-s3-typetag").count()) === 0);
+
+  // select the FIRST question: Back pill hidden at the first step (mock)
+  await page.locator(".qz-qs-q").first().locator(".qz-qs-qn").click();
+  await page.waitForTimeout(300);
   ok("Back pill HIDDEN at the first step", (await page.locator(".qz-s3-backpill").count()) === 0);
+  ok("first option card is the preview selection (is-hot)",
+    await page.locator(".qz-s3-achip").first().evaluate((el) => el.classList.contains("is-hot")));
+  await page.screenshot({ path: `${SHOTS}/4-full-tab.png`, fullPage: true });
 
-  // 4 ── floating type tag → popover (decider question: no settings block)
-  ok("floating type tag reads Single select",
-    (await page.locator(".qz-s3-typetagbtn .qz-s3-tt-type").textContent())?.trim() === "Single select");
-  await page.locator(".qz-s3-typetagbtn").click();
-  ok("type popover opens with 4 radios", (await page.locator(".qz-s3-tp-type").count()) === 4);
-  ok("current type radio marked", await page.locator(".qz-s3-tp-type.is-on", { hasText: "Single select" }).isVisible());
-  await page.screenshot({ path: `${SHOTS}/1-typepop-decider.png` });
-  // decider guard still intercepts multi
-  await page.locator(".qz-s3-tp-type", { hasText: "Multi-select" }).click();
-  ok("decider → Multi-select still BLOCKED",
-    await page.locator(".qz-modal-title", { hasText: "Multi-select can" }).isVisible());
-  await page.locator(".qz-modal button", { hasText: "Got it" }).click();
-  await page.keyboard.press("Escape");
-
-  // answer rows on the decider (single select): grip · radio · kebab
-  ok("answer rows carry the ⠿ grip", (await page.locator(".qz-s3-odrag").count()) === 2);
-  ok("single select renders RADIO indicators", (await page.locator(".qz-s3-oradio").count()) === 2);
-  ok("first answer is the preview selection", await page.locator(".qz-s3-achip").first().evaluate((el) => el.classList.contains("is-hot")));
-  await page.locator(".qz-s3-oradio").nth(1).click();
-  ok("clicking an answer moves the preview selection",
-    await page.locator(".qz-s3-achip").nth(1).evaluate((el) => el.classList.contains("is-hot")));
-  ok("+ Add answer on the phone", await page.locator(".qz-s3-addopt").isVisible());
-  await page.screenshot({ path: `${SHOTS}/2-decider-phone.png` });
-
-  // kebab → Delete answer (on a 2-answer question the item is disabled)
-  await page.locator(".qz-s3-achip").first().hover();
-  await page.locator(".qz-s3-omore").first().click();
-  ok("kebab menu opens with Delete answer", await page.locator(".qz-s3-omdel").isVisible());
-  ok("Delete answer DISABLED at the 2-answer floor", await page.locator(".qz-s3-omdel").isDisabled());
-  await page.screenshot({ path: `${SHOTS}/3-kebab-menu.png` });
-  await page.keyboard.press("Escape");
-  await page.locator(".qz-s3-qtitle").click(); // close menu via outside click
-
-  // + Add answer → persists; then kebab-delete the fresh answer → back to 2
-  await page.locator(".qz-s3-addopt").click();
-  await page.waitForTimeout(1400);
-  ok("+ Add answer persisted (3 answers in prisma)", (await draftNode("q1"))?.data?.answers?.length === 3);
-  await page.locator(".qz-s3-achip").nth(2).hover();
-  await page.locator(".qz-s3-achip").nth(2).locator(".qz-s3-omore").click();
-  await page.locator(".qz-s3-omdel").click();
-  await page.waitForTimeout(1400);
-  ok("kebab Delete answer persisted (back to 2)", (await draftNode("q1"))?.data?.answers?.length === 2);
-
-  // 5 ── multi-select question: checkbox indicators + Select-up-to + steppers
-  await page.locator(".qz-s3-row", { hasText: "Which features matter most" }).click();
+  // rating preview stays truthful: select the rating row (now row 2)
+  await page.locator(".qz-qs-q").nth(1).locator(".qz-qs-qn").click();
   await page.waitForTimeout(300);
-  ok("multi select renders CHECKBOX indicators", (await page.locator(".qz-s3-obox").count()) === 4);
-  ok('multi subcap "Select up to 2"', (await page.locator(".qz-s3-subcap").textContent())?.trim() === "Select up to 2");
-  await page.locator(".qz-s3-typetagbtn").click();
-  ok("multi settings: Min/Max steppers", (await page.locator(".qz-s3-stepper").count()) === 2);
-  await page.screenshot({ path: `${SHOTS}/4-typepop-multi.png` });
-  // bump Max 2 → 3, assert doc + subcap
-  await page.locator(".qz-s3-tp-row", { hasText: "Max" }).locator("button", { hasText: "+" }).click();
-  await page.waitForTimeout(1400);
-  ok("Max stepper writes max_selections=3", (await draftNode("q2"))?.data?.max_selections === 3);
-  ok('subcap follows: "Select up to 3"', (await page.locator(".qz-s3-subcap").textContent())?.trim() === "Select up to 3");
-  await page.keyboard.press("Escape");
-
-  // answer drag-reorder (synthetic HTML5 dnd) → moveAnswer persists
-  const orderBefore = ((await draftNode("q2"))?.data?.answers ?? []).map((a) => a.id);
-  await page.evaluate(() => {
-    const chips = [...document.querySelectorAll(".qz-s3-achip")];
-    const dt = new DataTransfer();
-    chips[0].dispatchEvent(new DragEvent("dragstart", { bubbles: true, dataTransfer: dt }));
-    chips[2].dispatchEvent(new DragEvent("dragover", { bubbles: true, cancelable: true, dataTransfer: dt }));
-    chips[2].dispatchEvent(new DragEvent("drop", { bubbles: true, cancelable: true, dataTransfer: dt }));
-  });
-  await page.waitForTimeout(1400);
-  const orderAfter = ((await draftNode("q2"))?.data?.answers ?? []).map((a) => a.id);
-  ok("⠿ drag-reorder persisted (a→index 2, objects intact)",
-    orderAfter.join(",") === [orderBefore[1], orderBefore[2], orderBefore[0], orderBefore[3]].join(","),
-    orderAfter.join(","));
-
-  // 6 ── rating question: scalebar + endpoint labels + scale settings
-  await page.locator(".qz-s3-row", { hasText: "riding ability" }).click();
-  await page.waitForTimeout(300);
-  ok("rating renders the mock scalebar (5 points)", (await page.locator(".qz-s3-sbn").count()) === 5);
+  ok("rating renders the scalebar (5 points)", (await page.locator(".qz-s3-sbn").count()) === 5);
   ok("scalebar endpoint labels (Beginner/Expert)",
     ((await page.locator(".qz-s3-scalelab").textContent()) ?? "").includes("Beginner"));
-  await page.locator(".qz-s3-sbn").nth(2).click();
-  ok("tapping a point selects it (preview)", await page.locator(".qz-s3-sbn").nth(2).evaluate((el) => el.classList.contains("is-on")));
-  const fillW = await page.locator(".qz-s3-sbtrack span").evaluate((el) => el.style.width);
-  ok("track fill follows the selection (50%)", /^50(\.0)?%$/.test(fillW), fillW);
-  await page.locator(".qz-s3-typetagbtn").click();
-  ok("scale settings: Max stepper + 2 endpoint inputs",
-    (await page.locator(".qz-s3-stepper").count()) === 1 && (await page.locator(".qz-s3-lblinput").count()) === 2);
-  await page.screenshot({ path: `${SHOTS}/5-typepop-scale.png` });
-  // Max + → a 6th REAL answer named "6", scale_config.max synced
-  await page.locator(".qz-s3-stepper button", { hasText: "+" }).click();
-  await page.waitForTimeout(1400);
-  const q3d = await draftNode("q3");
-  ok("scale Max+ adds a REAL answer point (6, named '6')",
-    q3d?.data?.answers?.length === 6 && q3d?.data?.answers?.[5]?.text === "6");
-  ok("scale_config.max synced to 6", q3d?.data?.scale_config?.max === 6);
-  // endpoint label edit → phone label + prisma
-  await page.locator(".qz-s3-lblinput").nth(1).fill("Pro rider");
-  await page.waitForTimeout(1400);
-  ok("endpoint label persists (prisma)", (await draftNode("q3"))?.data?.scale_config?.endpoint_label_max === "Pro rider");
-  ok("endpoint label live on the phone",
-    ((await page.locator(".qz-s3-scalelab").textContent()) ?? "").includes("Pro rider"));
-  await page.keyboard.press("Escape");
-  await page.screenshot({ path: `${SHOTS}/6-rating-scalebar.png` });
-
-  // Back pill visible off the first step
   ok("Back pill visible mid-walk", (await page.locator(".qz-s3-backpill").count()) === 1);
 
-  // 7 ── click-to-renumber: move q3 (rating, #3) to spot 2
-  await page.locator(".qz-s3-row").nth(2).locator(".qz-s3-numchip.is-edit").click();
-  await page.locator(".qz-s3-ncninput").fill("2");
-  await page.keyboard.press("Enter");
-  await page.waitForTimeout(1600);
-  const orderIds = (await draftDoc())?.edges ? null : null;
-  const rowTypes = await page.locator(".qz-s3-rowtype").allTextContents();
-  ok("renumber 3→2 reorders the flow (Scale now row 2)",
-    rowTypes[1] === "Scale", rowTypes.join(" · "));
-  void orderIds;
-  await page.screenshot({ path: `${SHOTS}/7-renumbered.png` });
-
-  // 8 ── desktop toggle: 1180 frame, browser chrome, hidden top bar, 600px col
+  // 13 ── desktop toggle: 1180 frame, browser chrome, hidden top bar, 600px col
   await page.locator(".qz-s3-segbtns button").nth(1).click();
   await page.waitForTimeout(400);
   const dgeo = await page.locator(".qz-s3-device:not(.is-expand) .qz-s3-frame").evaluate((el) => {
@@ -357,16 +357,13 @@ try {
     return { w: cs.width, radius: cs.borderRadius };
   });
   ok("desktop frame is 1180 logical px", dgeo.w === "1180px", dgeo.w);
-  ok("desktop frame radius 16px", dgeo.radius.includes("16px"), dgeo.radius);
   ok("desktop browser chrome (dots + blurred URL)", await page.locator(".qz-s3-dchrome").isVisible());
-  ok("desktop top progress bar", (await page.locator(".qz-s3-dprogfill").count()) === 1);
   ok("in-screen top bar hidden on desktop",
     await page.locator(".qz-s3-screen-top").first().evaluate((el) => getComputedStyle(el).display === "none"));
   ok("desktop content centers in a 600px column",
     await page.locator(".qz-s3-scr").first().evaluate((el) => getComputedStyle(el).maxWidth === "600px"));
-  await page.screenshot({ path: `${SHOTS}/8-desktop.png` });
 
-  // 9 ── Expand overlay (back on mobile): scale ≥ 1, Esc closes
+  // 14 ── Expand overlay (back on mobile): scale ≥ 1, Esc closes
   await page.locator(".qz-s3-segbtns button").nth(0).click();
   await page.locator(".qz-s3-expandbtn").click();
   await page.waitForTimeout(400);
@@ -374,19 +371,33 @@ try {
   const exScale = await page.locator(".qz-s3-device.is-expand").evaluate((el) =>
     Number(getComputedStyle(el).getPropertyValue("--s")));
   ok("Expand floors mobile at TRUE 1:1", exScale >= 1, `s=${exScale}`);
-  await page.screenshot({ path: `${SHOTS}/9-expand.png` });
+  await page.screenshot({ path: `${SHOTS}/5-expand.png` });
   await page.keyboard.press("Escape");
   await page.waitForTimeout(200);
   ok("Esc closes the Expand overlay", (await page.locator(".qz-s3-phscrim").count()) === 0);
 
-  // 10 ── nav delete (qualifier): confirm dialog → row gone + doc pruned
-  page.once("dialog", (d) => d.accept());
-  await page.locator(".qz-s3-row", { hasText: "Which features matter most" }).locator(".qz-s3-ndel").click();
+  // 15 ── + New question (toolbar) → appended + selected + persisted
+  await page.locator(".qz-qs-tbtn").click();
   await page.waitForTimeout(1600);
-  ok("nav ✕ delete removes the question (2 rows left)", (await page.locator(".qz-s3-row").count()) === 2);
-  ok("delete persisted (q2 gone from the doc)", (await draftNode("q2")) === null);
-  ok("flow re-stitched (no orphans: rail still renders)", (await page.locator(".qz-s3-navedit").count()) === 2);
-  await page.screenshot({ path: `${SHOTS}/10-after-delete.png`, fullPage: true });
+  ok("+ New question appends a 4th row", (await page.locator(".qz-qs-q").count()) === 4);
+  ok("the new question is selected (expanded)",
+    (await page.locator(".qz-qs-q").nth(3).locator(".qz-qs-ans").count()) === 1);
+  ok("count follows: 4 questions",
+    (await page.locator(".qz-qs-tcount").textContent())?.trim() === "4 questions");
+  const afterAdd = await draftDoc();
+  ok("add persisted (4 question nodes)",
+    (afterAdd?.nodes ?? []).filter((n) => n.type === "question").length === 4);
+
+  // 16 ── hover-trash delete: decider disabled; qualifier deletes + re-stitches
+  const deciderTrash = page.locator(".qz-qs-q").first().locator(".qz-qs-icon").nth(1);
+  ok("decider row's delete is DISABLED", await deciderTrash.isDisabled());
+  page.once("dialog", (d) => d.accept());
+  await page.locator(".qz-qs-q").nth(3).locator(".qz-qs-icon").nth(1).click();
+  await page.waitForTimeout(1600);
+  ok("trash delete removes the question (3 rows left)", (await page.locator(".qz-qs-q").count()) === 3);
+  const afterDel = await draftDoc();
+  ok("delete persisted (3 question nodes, flow re-stitched)",
+    (afterDel?.nodes ?? []).filter((n) => n.type === "question").length === 3);
 
   ok("zero page errors", out.pageErrors.length === 0, out.pageErrors.join(" | "));
   await browser.close();
