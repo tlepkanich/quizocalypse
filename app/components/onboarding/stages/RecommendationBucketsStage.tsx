@@ -81,12 +81,18 @@ export function RecommendationBucketsStage({
   result: ActionResult | null;
 }) {
   const [activeTab, setActiveTab] = useState<BucketType>(data.activeTab);
-  // §4 — "Not now" dismisses the banner for THIS SESSION only (sessionStorage,
-  // no server write); a legacy persisted dismissal is still honored.
+  // §4 — "Not now"/Hide dismisses the banner for THIS SESSION only
+  // (sessionStorage, no server write); a legacy persisted dismissal is still
+  // honored. HANDOFF §3 first-visit rule: the tip renders EXPANDED exactly once
+  // (a localStorage seen-flag), collapsed to the ✦ AI TIP pill thereafter.
   const [dismissed, setDismissed] = useState(data.bannerDismissed);
   useEffect(() => {
-    if (typeof window !== "undefined" && sessionStorage.getItem(`qz-rb-nb-${data.quizId}`)) {
+    if (typeof window === "undefined") return;
+    const seenKey = `qz-rb-tip-seen-${data.quizId}`;
+    if (sessionStorage.getItem(`qz-rb-nb-${data.quizId}`) || localStorage.getItem(seenKey)) {
       setDismissed(true);
+    } else {
+      localStorage.setItem(seenKey, "1");
     }
   }, [data.quizId]);
   // §4 — the auto-apply Applied state; `prior` is what Undo restores (the
@@ -493,13 +499,14 @@ export function RecommendationBucketsStage({
         )}
       </QzCard>
 
+          {/* Mock underrow: quiet accent-ink text links (← Back · ↻ Refresh catalog). */}
           <div className="qz-rb-underrow">
-            <Link to={data.backHref} className="qz-btn qz-btn-ghost qz-btn-sm">
+            <Link to={data.backHref} className="qz-rb-underlink">
               ← Back
             </Link>
             <button
               type="button"
-              className="qz-btn qz-btn-ghost qz-btn-sm"
+              className="qz-rb-underlink"
               onClick={() => fetcher.submit({ intent: "resync" }, { method: "post" })}
               disabled={resyncing}
             >
@@ -701,10 +708,17 @@ function BucketProductsModal({
       onClose={onClose}
       size="md"
       title={
+        // Mock mhead (EXACT): icon tile · name over a "N products in this
+        // collection/tag" meta line. No count badge.
         <span className="qz-rb-modal-title">
-          <span className="qz-rb-modal-icon"><BucketGlyph type={bucket.type} size={16} /></span>
-          <span>{bucket.name}</span>
-          <span className="qz-rb-count">{members.length}</span>
+          <span className="qz-rb-modal-icon"><BucketGlyph type={bucket.type} size={17} /></span>
+          <span className="qz-rb-modal-copy">
+            <span>{bucket.name}</span>
+            <span className="qz-rb-modal-meta">
+              {members.length} product{members.length === 1 ? "" : "s"} in this{" "}
+              {bucket.type === "collection" ? "collection" : "tag"}
+            </span>
+          </span>
         </span>
       }
       footer={<button type="button" className="qz-btn qz-btn-accent" onClick={onClose}>Done</button>}

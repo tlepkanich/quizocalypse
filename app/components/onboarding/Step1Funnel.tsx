@@ -172,8 +172,10 @@ export function Step1Funnel({ data }: { data: FunnelData }) {
             </>
           }
         >
+          {/* shape-decider mock copy (EXACT) */}
           <p className="qz-dim" style={{ margin: 0 }}>
-            Your quiz is saved as a draft. You can return and finish setup at any time.
+            Your quiz is saved as a draft — you can pick up right here anytime. Head back to
+            your quizzes?
           </p>
         </QzModal>
       ) : null}

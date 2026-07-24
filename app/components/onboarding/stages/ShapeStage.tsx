@@ -328,9 +328,21 @@ function DeciderShapeStage({
   const aiTypes = data.quizTypes.slice(0, 2);
   const resolved = useMemo(() => resolveDesignTokens(data.designTokens ?? undefined), [data.designTokens]);
   const cssVars = useMemo(() => tokensToCssVars(resolved) as CSSProperties, [resolved]);
+  // HANDOFF §6 — the film themes from the draft's tokens INCLUDING the brand
+  // fonts; load them (admin CSP allows Google Fonts) or the frame silently
+  // falls back to the system stack.
+  const fontUrl = useMemo(
+    () =>
+      googleFontsUrl([
+        resolved.typography?.heading?.family ?? "",
+        resolved.typography?.body?.family ?? "",
+      ]),
+    [resolved],
+  );
 
   return (
     <div className="qz-shape-page">
+      {fontUrl ? <link rel="stylesheet" href={fontUrl} /> : null}
       <h2 className="qz-h2" style={{ margin: 0 }}>Choose the optimal quiz type</h2>
 
       <div className="qz-shape-grid">

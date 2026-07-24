@@ -1807,7 +1807,7 @@ body[data-qz] ::selection { background: var(--qz-ink); color: var(--qz-cream); }
   width: 34px; height: 34px; flex: none; display: grid; place-items: center;
   border-radius: 10px; color: var(--qz-accent-ink); background: var(--qz-accent-wash);
 }
-.qz-rb-ai-icon svg, .qz-rb-ai-spark svg { animation: qz-ai-tip-pulse 2.8s ease-in-out infinite; }
+.qz-rb-ai-icon svg, .qz-rb-ai-spark svg { animation: qz-ai-tip-pulse 2.6s ease-in-out infinite; }
 .qz-rb-ai-lead { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .qz-rb-ai-title { font-size: 14px; font-weight: 600; color: var(--qz-ink); }
 .qz-rb-ai-reason { margin: 0; font-size: 12.5px; color: var(--qz-ink-3); line-height: 1.5; }
@@ -1819,14 +1819,25 @@ body[data-qz] ::selection { background: var(--qz-ink); color: var(--qz-cream); }
 .qz-rb-ai-label { font: 500 11px/1.2 var(--qz-font-mono); text-transform: uppercase; letter-spacing: .06em; color: var(--qz-accent-ink); }
 .qz-rb-ai-based { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-top: 3px; color: var(--qz-ink-4); font-size: 11.5px; }
 .qz-rb-ai-based span:not(:first-child) { padding: 3px 7px; border-radius: 999px; background: color-mix(in srgb, var(--qz-paper) 68%, transparent); border: 1px solid var(--qz-rule); }
+/* Collapsed mini pill (ai-tip-collapse mock, EXACT): the tip card's own colors
+   shrunk to a pill — 22px wash icon tile + the mono AI-TIP label only; hover =
+   tint fill + wash border. */
 .qz-rb-ai-pill {
   align-self: flex-start; display: inline-flex; align-items: center; gap: 7px;
-  padding: 7px 10px; border: 1px solid color-mix(in srgb, var(--qz-accent) 22%, var(--qz-rule));
-  border-radius: 999px; background: var(--qz-accent-tint); color: var(--qz-accent-ink);
-  cursor: pointer; font: 700 10px/1 var(--qz-font-mono); letter-spacing: .1em;
+  padding: 5px 13px 5px 6px;
+  border: 1px solid color-mix(in srgb, var(--qz-accent) 14%, var(--qz-rule));
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--qz-accent) 3%, var(--qz-paper));
+  color: var(--qz-accent-ink);
+  cursor: pointer; font: 600 10.5px/1.2 var(--qz-font-mono);
+  letter-spacing: .06em; text-transform: uppercase;
 }
-.qz-rb-ai-spark { display: inline-flex; color: var(--qz-accent); }
-@keyframes qz-ai-tip-pulse { 0%, 100% { transform: scale(1) rotate(0); } 50% { transform: scale(1.08) rotate(5deg); } }
+.qz-rb-ai-pill:hover { background: var(--qz-accent-tint); border-color: var(--qz-accent-wash); }
+.qz-rb-ai-spark {
+  width: 22px; height: 22px; flex: none; display: grid; place-items: center;
+  border-radius: 7px; background: var(--qz-accent-wash); color: var(--qz-accent-ink);
+}
+@keyframes qz-ai-tip-pulse { 0%, 100% { transform: scale(1) rotate(0); opacity: .9; } 50% { transform: scale(1.2) rotate(15deg); opacity: 1; } }
 @media (prefers-reduced-motion: reduce) { .qz-rb-ai-icon svg, .qz-rb-ai-spark svg { animation: none; } }
 
 /* AI suggestion banner */
@@ -1887,7 +1898,7 @@ body[data-qz] ::selection { background: var(--qz-ink); color: var(--qz-cream); }
 .qz-rb-empty { padding: 28px 16px; text-align: center; font-size: 13.5px; }
 
 .qz-rb-grid {
-  display: grid; grid-template-columns: 1fr; gap: 8px;
+  display: grid; grid-template-columns: 1fr; gap: 9px;
   padding: 14px; max-height: 460px; overflow-y: auto;
 }
 .qz-rb-grid.is-products { grid-template-columns: 1fr; }
@@ -1968,9 +1979,11 @@ body[data-qz] ::selection { background: var(--qz-ink); color: var(--qz-cream); }
   color: var(--qz-ink-4); font-size: 12px; padding: 2px 5px; border-radius: 999px; line-height: 1;
 }
 .qz-rb-chip-x:hover { color: var(--qz-ink); background: var(--qz-cream-2); }
+/* Mock rwarn (EXACT): the amber one-recommendation warning. Mock amber hexes
+   (#FAEEDA / #854F0B) → the DS gold pair. */
 .qz-rb-warn {
-  margin: 0; font-size: 12.5px; color: var(--qz-ink-3);
-  background: var(--qz-cream-2); border-radius: var(--qz-radius-sm); padding: 8px 10px;
+  margin: 0; font-size: 11.5px; line-height: 1.45; color: var(--qz-gold);
+  background: var(--qz-gold-wash); border-radius: 9px; padding: 8px 11px;
 }
 
 /* Stepper */
@@ -3231,7 +3244,16 @@ body[data-qz] ::selection { background: var(--qz-ink); color: var(--qz-cream); }
 }
 @media (max-width: 900px) { .qz-rb-split { grid-template-columns: 1fr; } }
 .qz-rb-main { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
-.qz-rb-underrow { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+/* Mock underrow (EXACT): quiet accent-ink text links, not ghost buttons. */
+.qz-rb-underrow { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; font-size: 12.5px; }
+.qz-rb-underlink {
+  display: inline-flex; align-items: center; gap: 5px;
+  border: none; background: transparent; padding: 0;
+  color: var(--qz-accent-ink); font-size: 12.5px; cursor: pointer;
+  font-family: inherit; text-decoration: none;
+}
+.qz-rb-underlink:hover:not(:disabled) { text-decoration: underline; }
+.qz-rb-underlink:disabled { opacity: .5; cursor: default; }
 /* The card grid lost its wrapper div — keep the 100+ scroll optimization. */
 .qz-rb-grid > .qz-rb-card { content-visibility: auto; contain-intrinsic-size: 0 66px; }
 /* §3 — a locked type mutes the other tabs (no lock icon); they stay clickable. */
@@ -3261,16 +3283,27 @@ body[data-qz] ::selection { background: var(--qz-ink); color: var(--qz-cream); }
 .qz-rb-rail-foot .qz-btn { width: 100%; justify-content: center; }
 .qz-rb-rail-foot .qz-tooltip-wrap { width: 100%; }
 
-/* §4 — banner actions + the green Applied state */
+/* §4 — banner actions + the green Applied state (mock .applied, EXACT: even
+   1px green border, 13px radius, a 26px ok icon tile). */
 .qz-rb-banner-actions { display: flex; flex-direction: row; align-items: center; gap: 6px; flex: none; }
 .qz-rb-banner.is-applied {
-  border-left-color: var(--qz-ok, #1E7A4F);
-  background: color-mix(in srgb, var(--qz-ok, #1E7A4F) 8%, var(--qz-paper));
+  border: 1px solid color-mix(in srgb, var(--qz-ok) 32%, var(--qz-rule));
+  border-radius: 13px; padding: 12px 15px;
+  background: color-mix(in srgb, var(--qz-ok) 8%, var(--qz-paper));
   align-items: center;
 }
+.qz-rb-banner.is-applied .qz-rb-banner-icon {
+  width: 26px; height: 26px; border-radius: 8px; display: grid; place-items: center;
+  background: color-mix(in srgb, var(--qz-ok) 14%, var(--qz-paper)); color: var(--qz-ok);
+}
 
-.qz-rb-modal-title { display: inline-flex; align-items: center; gap: 9px; }
-.qz-rb-modal-icon { width: 30px; height: 30px; display: grid; place-items: center; border-radius: 9px; background: var(--qz-accent-tint); color: var(--qz-accent); }
+.qz-rb-modal-title { display: inline-flex; align-items: center; gap: 12px; }
+.qz-rb-modal-icon { width: 38px; height: 38px; flex: none; display: grid; place-items: center; border-radius: 10px; background: var(--qz-accent-tint); color: var(--qz-accent); }
+/* Mock mhead (EXACT): name with the "N products in this collection" meta line
+   stacked beneath it. */
+.qz-rb-modal-copy { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.qz-rb-modal-copy > span:first-child { font-size: 16px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.qz-rb-modal-meta { font-size: 12px; font-weight: 400; color: var(--qz-ink-4); }
 .qz-rb-product-list { display: flex; flex-direction: column; gap: 7px; max-height: min(56vh, 480px); overflow-y: auto; padding-right: 3px; }
 .qz-rb-product-row { display: flex; align-items: center; gap: 11px; padding: 9px; border: 1px solid var(--qz-rule); border-radius: 10px; }
 .qz-rb-product-image { width: 46px; height: 46px; flex: none; display: grid; place-items: center; border-radius: 8px; overflow: hidden; background: var(--qz-cream-2); }
@@ -3791,9 +3824,30 @@ textarea.qz-sm-inp { resize: vertical; min-height: 62px; line-height: 1.5; }
 .qz-topbar--tworow .qz-topbar-right { padding-left: 0; border-left: none; }
 .qz-topbar-nav {
   display: flex; justify-content: center;
-  padding: 10px 24px 12px;
-  border-top: 1px solid var(--qz-rule);
+  padding: 13px 24px 15px;
+  border-top: 1px solid var(--qz-rule-2);
   min-width: 0;
+}
+/* step1-final-page + shape-decider mocks (EXACT): inside the two-row funnel
+   chrome the stepper is the mock's PROGRESS LINE — 24px numbered dot ABOVE the
+   label (104px column nodes), 2px full-width flexed connectors aligned to the
+   dot centers. This replaces the inline segmented-pill remnant. Scoped to the
+   nav row so TopBar3's single-row floating bar keeps the compact inline form. */
+.qz-topbar-nav .qz-stepnav { width: 100%; }
+.qz-topbar-nav .qz-stepnav-segment,
+.qz-topbar-nav .qz-stepnav-item { display: contents; }
+.qz-topbar-nav .qz-stepnav-link { flex: 1 1 auto; width: auto; height: 2px; margin-top: -22px; }
+.qz-topbar-nav .qz-stepnav-pill {
+  flex-direction: column; gap: 7px; flex: none; width: 104px; padding: 0;
+}
+.qz-topbar-nav .qz-stepnav-dot { width: 24px; height: 24px; }
+.qz-topbar-nav .qz-stepnav-num { font-size: 11px; font-weight: 600; }
+@media (max-width: 720px) {
+  /* Only the current node keeps its label (base rule below) → column heights
+     differ, so top-align and re-seat the connectors on the 24px dot centers. */
+  .qz-topbar-nav .qz-stepnav { align-items: flex-start; }
+  .qz-topbar-nav .qz-stepnav-link { margin-top: 11px; }
+  .qz-topbar-nav .qz-stepnav-pill { width: auto; min-width: 34px; }
 }
 
 /* The Step-3 floating variant (quiz-step3 spec §2): rounded card, pinned. */
