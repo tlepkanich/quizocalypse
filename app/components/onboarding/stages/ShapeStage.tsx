@@ -11,6 +11,7 @@ import { QzDrawer } from "../../qz-overlays";
 import type { QuizType } from "../../../lib/quizSchema";
 import { resolveDesignTokens, tokensToCssVars, suggestContrastText } from "../../../lib/designTokens";
 import { googleFontsUrl } from "../../runtime/runtimeStyles";
+import { categoryLabel } from "../../../lib/industryTemplates";
 import {
   GoalPromptBody,
   XTYPE_LABEL,
@@ -779,11 +780,13 @@ export function TemplatePreviewDrawer({
   );
 }
 
-// Saved templates (shop-scoped) surface as an alternative to the AI tiers.
-// LEGACY drafts: pick one to skip straight to a pre-filled battle card (the
-// use-saved-template intent seeds it as the sole tier-2 option + an auto-named
-// working copy → configuring). DECIDER drafts (O-3): the pick kicks the early
-// question build directly and lands at Questions & Logic — no battle card.
+// Saved templates surface as an alternative to the AI tiers — the shop's own
+// saved rows PLUS the global industry "starters" (PORT-10, shopId=NULL rows),
+// each starter labeled with its vertical. LEGACY drafts: pick one to skip
+// straight to a pre-filled battle card (the use-saved-template intent seeds it
+// as the sole tier-2 option + an auto-named working copy → configuring).
+// DECIDER drafts (O-3): the pick kicks the SAME early question build the
+// Shape cards use and lands at Questions & Logic — no battle card, no fork.
 function SavedTemplatesRow({
   templates,
   fetcher,
@@ -796,37 +799,71 @@ function SavedTemplatesRow({
   isDecider: boolean;
 }) {
   if (templates.length === 0) return null;
+  const own = templates.filter((t) => t.scope !== "starter");
+  const starters = templates.filter((t) => t.scope === "starter");
   const using = pendingIntent === "use-saved-template";
   const usingId = using ? String(fetcher.formData?.get("templateId") ?? "") : null;
-  // Mock: a static option row (no arrow — the pills are the action) with the
-  // saved-template pill rail beneath it.
+  const pill = (s: FunnelData["savedTemplates"][number], glyph: string) => (
+    <button
+      key={s.id}
+      type="button"
+      className="qz-shape-savedpill"
+      data-template-scope={s.scope}
+      disabled={using}
+      title={s.template.angle}
+      onClick={() =>
+        fetcher.submit({ intent: "use-saved-template", templateId: s.id }, { method: "post" })
+      }
+    >
+      {isDecider && usingId === s.id ? (
+        "Building…"
+      ) : (
+        <>
+          {glyph} {s.name}
+          {s.category ? (
+            <span className="qz-muted" style={{ marginLeft: 6, fontSize: 11.5 }}>
+              {categoryLabel(s.category)}
+            </span>
+          ) : null}
+        </>
+      )}
+    </button>
+  );
+  // Mock: static option rows (no arrow — the pills are the action) with the
+  // template pill rails beneath them.
   return (
     <div>
-      <div className="qz-shape-oopt is-static">
-        <span className="qz-shape-oi" aria-hidden>♻️</span>
-        <span>
-          <span className="qz-shape-on" style={{ display: "block" }}>Reuse a saved template</span>
-          <span className="qz-shape-od" style={{ display: "block" }}>
-            Start from one you saved before — its settings come along.
-          </span>
-        </span>
-      </div>
-      <div className="qz-shape-savedrail">
-        {templates.map((s) => (
-          <button
-            key={s.id}
-            type="button"
-            className="qz-shape-savedpill"
-            disabled={using}
-            title={s.template.angle}
-            onClick={() =>
-              fetcher.submit({ intent: "use-saved-template", templateId: s.id }, { method: "post" })
-            }
-          >
-            {isDecider && usingId === s.id ? "Building…" : <>♻ {s.name}</>}
-          </button>
-        ))}
-      </div>
+      {own.length > 0 ? (
+        <>
+          <div className="qz-shape-oopt is-static">
+            <span className="qz-shape-oi" aria-hidden>♻️</span>
+            <span>
+              <span className="qz-shape-on" style={{ display: "block" }}>Reuse a saved template</span>
+              <span className="qz-shape-od" style={{ display: "block" }}>
+                Start from one you saved before — its settings come along.
+              </span>
+            </span>
+          </div>
+          <div className="qz-shape-savedrail">{own.map((s) => pill(s, "♻"))}</div>
+        </>
+      ) : null}
+      {starters.length > 0 ? (
+        <>
+          <div className="qz-shape-oopt is-static">
+            <span className="qz-shape-oi" aria-hidden>✦</span>
+            <span>
+              <span className="qz-shape-on" style={{ display: "block" }}>Start from an industry template</span>
+              <span className="qz-shape-od" style={{ display: "block" }}>
+                Proven quiz structures by vertical — pick the closest to your store and the AI
+                adapts it to your catalog.
+              </span>
+            </span>
+          </div>
+          <div className="qz-shape-savedrail" data-starter-rail>
+            {starters.map((s) => pill(s, "✦"))}
+          </div>
+        </>
+      ) : null}
     </div>
   );
 }

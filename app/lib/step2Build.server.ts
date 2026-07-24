@@ -17,6 +17,7 @@ import {
 import { Quiz, BuildSession, PickedTemplate } from "./quizSchema";
 import { applyManualDeciderSkeleton } from "./smartBuild";
 import { dialsToBuildDirectives, autoQuizName } from "./dialDirectives";
+import { industryGuidanceText } from "./industryTemplates";
 import {
   runAiOnboardingBuild,
   type OnboardingBuildResult,
@@ -636,6 +637,10 @@ async function buildQuizFromPicked(
       ...(enabledBuckets.length ? { preResolvedBuckets: enabledBuckets } : {}),
       directionAngle: rich.angle,
       sampleQuestionSeeds: rich.sample_questions,
+      // PORT-10 — a global industry starter carries structured metadata; render
+      // it into prompt guidance. AI-generated / merchant-saved templates have
+      // no `industry` block → nothing is added (byte-identical goal context).
+      ...(rich.industry ? { templateGuidance: industryGuidanceText(rich.industry) } : {}),
       designTokens: draftTokens,
       tokenPatch,
       dialDirectives: promptDirectives,

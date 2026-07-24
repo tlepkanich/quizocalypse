@@ -1335,14 +1335,99 @@ export const RecommendedGroup = z.object({
 });
 export type RecommendedGroup = z.infer<typeof RecommendedGroup>;
 
+// ── PORT-10 — industry-template metadata (the strategy library's fields) ─────
+// A faithful home for docs/design/strategy/quiz-templates/*.template.json on a
+// stored template payload. EVERY field is .optional() (never .default()) so
+// existing SavedTemplate rows — which predate this block — parse byte-stable
+// through the safeParse gates in savedTemplates.server.ts. §I2 v1 posture: the
+// freeform maps_to keyword bindings are STORED faithfully but consumed as
+// authoring guidance only (they inform the build prompt's context via
+// industryGuidanceText — never hard attribute bindings; the build grounds in
+// the merchant's chosen buckets).
+export const IndustryTemplateQuestion = z.object({
+  ordinal: z.number().int().optional(),
+  id: z.string().optional(),
+  prompt: z.string().min(1),
+  type: z
+    .enum([
+      "single_select",
+      "image_choice",
+      "multi_select",
+      "binary",
+      "scale",
+      "ranking",
+      "short_text",
+      "dropdown",
+    ])
+    .optional(),
+  options: z
+    .array(z.object({ label: z.string(), maps_to: z.string().optional() }))
+    .optional(),
+  maps_to: z.string().optional(),
+  weight_tier: z.enum(["primary", "secondary", "tie_breaker", "none"]).optional(),
+  multi_select_cap: z.number().int().optional(),
+  branch: z.string().optional(),
+  note: z.string().optional(),
+});
+export type IndustryTemplateQuestion = z.infer<typeof IndustryTemplateQuestion>;
+
+export const IndustryTemplateMeta = z.object({
+  category: z.string().min(1), // vertical, e.g. "beauty/custom-formulation"
+  variant: z.string().optional(),
+  use_when: z.string().optional(),
+  // Length BAND (min/max), not just a scalar count — subscription-onboarding
+  // runs 25–40.
+  length: z
+    .object({
+      min: z.number().int(),
+      max: z.number().int(),
+      band: z.enum(["short", "medium", "long"]).optional(),
+      note: z.string().optional(),
+    })
+    .optional(),
+  gate: z
+    .object({
+      placement: z
+        .enum(["at_result", "before_results", "deferred_to_action", "mid_flow", "front"])
+        .optional(),
+      style: z.enum(["soft", "hard"]).optional(),
+      rationale: z.string().optional(),
+    })
+    .optional(),
+  result_shape: z
+    .enum(["single_bespoke_output", "ranked_shortlist", "profile_plus_first_box"])
+    .optional(),
+  arc: z.array(z.string()).optional(),
+  branching: z.enum(["light", "moderate", "heavy"]).optional(),
+  questions: z.array(IndustryTemplateQuestion).optional(),
+  recommendation: z
+    .object({
+      architecture: z
+        .enum(["route_tree", "attribute_filter", "weighted_score", "hybrid"])
+        .optional(),
+      tie_break: z.string().optional(),
+      empty_fallback: z.string().optional(),
+    })
+    .optional(),
+  personalization_hooks: z.array(z.string()).optional(),
+  sources: z.array(z.string()).optional(),
+});
+export type IndustryTemplateMeta = z.infer<typeof IndustryTemplateMeta>;
+
 // Tier-2: a rich AI-proposed template for the chosen type — TemplateOption plus
 // the battle-card data (3 feature notes, design dials, rec defaults, count).
+// question_count max is 40 (was 20) so long-band industry templates (skincare
+// 20–35, subscription 25–40) fit; a widened MAX is parse-compatible with every
+// existing row. `industry` is PORT-10's optional metadata block (absent on all
+// AI-generated and pre-PORT-10 merchant-saved templates — absent round-trips
+// absent).
 export const RichTemplateOption = TemplateOption.extend({
   feature_notes: z.array(z.string().min(1)).min(1).max(3),
   dials: DesignDials,
   rec_defaults: RecDefaults,
   recommended_bucket_ids: z.array(z.string()).default([]),
-  question_count: z.number().int().min(3).max(20).default(6),
+  question_count: z.number().int().min(3).max(40).default(6),
+  industry: IndustryTemplateMeta.optional(),
 });
 export type RichTemplateOption = z.infer<typeof RichTemplateOption>;
 
@@ -1355,7 +1440,8 @@ export const PickedTemplate = z.object({
   rec_defaults: RecDefaults,
   recommended_groups: z.array(RecommendedGroup).default([]),
   feature_notes: z.array(z.string()).default([]),
-  question_count: z.number().int().min(3).max(20).default(6),
+  // Max 40 (was 20) — must admit the long-band industry starters (PORT-10).
+  question_count: z.number().int().min(3).max(40).default(6),
   goal_line: z.string().default(""),
   saved_as_template: z.boolean().default(false),
 });

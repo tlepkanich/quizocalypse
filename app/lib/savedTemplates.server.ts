@@ -43,11 +43,35 @@ export async function listSavedTemplates(shopId: string): Promise<SavedTemplateR
   return out;
 }
 
+// PORT-10 — the global "starter" templates (shopId=NULL rows, seeded from
+// docs/design/strategy/quiz-templates/ by scripts/seed-templates.mjs). Same
+// safeParse gate as the shop list — a nonconforming row is silently skipped.
+// Name-ordered (a stable builtin catalog, not a recency feed).
+export async function listGlobalTemplates(): Promise<SavedTemplateRow[]> {
+  const rows = await prisma.savedTemplate.findMany({
+    where: { shopId: null },
+    orderBy: { name: "asc" },
+  });
+  const out: SavedTemplateRow[] = [];
+  for (const r of rows) {
+    const parsed = RichTemplateOption.safeParse(r.payload);
+    if (parsed.success) {
+      out.push({ id: r.id, name: r.name, createdAt: r.createdAt.toISOString(), template: parsed.data });
+    }
+  }
+  return out;
+}
+
 export async function loadSavedTemplate(
   shopId: string,
   templateId: string,
 ): Promise<RichTemplateOptionT | null> {
-  const row = await prisma.savedTemplate.findFirst({ where: { id: templateId, shopId } });
+  // A shop may load its OWN rows or the global (shopId=NULL) starters — never
+  // another shop's. For existing per-shop rows this matches exactly what it
+  // matched before.
+  const row = await prisma.savedTemplate.findFirst({
+    where: { id: templateId, OR: [{ shopId }, { shopId: null }] },
+  });
   if (!row) return null;
   const parsed = RichTemplateOption.safeParse(row.payload);
   return parsed.success ? parsed.data : null;

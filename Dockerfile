@@ -47,6 +47,11 @@ COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/build ./build
 COPY --from=builder /app/prisma ./prisma
 COPY --from=builder /app/package.json ./package.json
+# PORT-10 — the global-template seed (run manually on the deploy via
+# `fly ssh console -a quizocalypse-studio -C "node /app/scripts/seed-templates.mjs"`)
+# + its single source of truth, the checked-in industry template JSONs.
+COPY --from=builder /app/scripts/seed-templates.mjs ./scripts/seed-templates.mjs
+COPY --from=builder /app/docs/design/strategy/quiz-templates ./docs/design/strategy/quiz-templates
 
 # docker-start = prisma generate && prisma migrate deploy && remix-serve.
 # Running migrate deploy on boot keeps the DB schema in sync on every release;

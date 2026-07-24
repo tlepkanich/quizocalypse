@@ -81,6 +81,12 @@ export interface OnboardingBuildInput {
   // saw on the card (expand-and-refine, not copy).
   directionAngle?: string;
   sampleQuestionSeeds?: string[];
+  // PORT-10 — structured guidance rendered from a global industry template's
+  // stored metadata (industryGuidanceText). Appended to the goal context like
+  // dialDirectives; ABSENT (AI-generated / pre-PORT-10 templates) → the goal
+  // context is byte-identical to before. Guidance only — catalog grounding
+  // (the merchant's chosen buckets) always wins over template attributes.
+  templateGuidance?: string;
   // Step 2 battle-card overrides. `tokenPatch` overlays the seed design tokens
   // (radius/spacing from the Lines/Graphics dials); `dialDirectives` append to the
   // generation goal context (imagery/word-forward/graphics steering); `recOverride`
@@ -156,6 +162,11 @@ export async function runAiOnboardingBuild(
   // Step 2 — the design dials' generation directives (imagery/word-forward/graphics).
   if (input.dialDirectives) {
     goalContext += `\n\n${input.dialDirectives}`;
+  }
+  // PORT-10 — the industry starter template's structured guidance (skeleton
+  // questions, arc, gate, length band). Authoring context only.
+  if (input.templateGuidance) {
+    goalContext += `\n\n${input.templateGuidance}`;
   }
   const seed = buildSeedQuiz(name, xtype);
   // Step 2 — overlay the dials' tokenPatch (radius/spacing) onto the base tokens

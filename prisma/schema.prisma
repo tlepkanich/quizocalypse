@@ -91,14 +91,19 @@ model Shop {
 // Builder Re-work Step 2: a merchant-saved "battle card" template (a serialized
 // RichTemplateOption — design dials, rec defaults, feature notes) reusable on a
 // future quiz. See app/lib/savedTemplates.server.ts + app/lib/quizSchema.ts.
+// PORT-10: shopId is NULLABLE — NULL = a global "starter" template (the 8
+// industry templates from docs/design/strategy/quiz-templates/, seeded by
+// scripts/seed-templates.mjs) visible to every shop; slug is the seed's stable
+// upsert key (null on merchant-saved rows).
 model SavedTemplate {
   id        String   @id @default(cuid())
-  shopId    String
+  shopId    String?
   name      String
+  slug      String?  @unique
   payload   Json
   createdAt DateTime @default(now())
 
-  shop Shop @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  shop Shop? @relation(fields: [shopId], references: [id], onDelete: Cascade)
 
   @@index([shopId])
 }

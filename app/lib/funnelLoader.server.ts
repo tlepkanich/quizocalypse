@@ -9,7 +9,8 @@ import { suggestQuizGoal } from "./goalSuggest";
 import { detectGroupingDimension } from "./groupingDetect";
 import { suggestBucketStrategy } from "./bucketDetect";
 import type { BucketType } from "./step1Build.server";
-import { listSavedTemplates } from "./savedTemplates.server";
+import { listSavedTemplates, listGlobalTemplates } from "./savedTemplates.server";
+import { mergeTemplateOptions } from "./industryTemplates";
 import { prefetchShopWebResearch } from "./shopWebResearch.server";
 import { normalizeTags } from "./enrichTags";
 import { inverseCollectionIndex } from "./categoryGrouping";
@@ -35,7 +36,7 @@ export async function loadStep1FunnelData(
     prefetchShopWebResearch(shop.id);
   }
 
-  const [products, collections, shopRow, categories, savedTemplates] = await Promise.all([
+  const [products, collections, shopRow, categories, savedTemplates, starterTemplates] = await Promise.all([
     prisma.product.findMany({ where: { shopId: shop.id } }),
     prisma.collection.findMany({ where: { shopId: shop.id } }),
     prisma.shop.findUnique({ where: { id: shop.id }, select: { brandIdentity: true } }),
@@ -56,6 +57,9 @@ export async function loadStep1FunnelData(
       orderBy: { createdAt: "asc" },
     }),
     listSavedTemplates(shop.id),
+    // PORT-10 — the global industry starters (shopId=NULL rows), offered to
+    // every shop alongside its own saved templates.
+    listGlobalTemplates(),
   ]);
 
   // §J1 — account-level Groups (quizId=null) offered as decider/rec-page targets
@@ -327,7 +331,12 @@ export async function loadStep1FunnelData(
       products: c.productIds.map((pid) => ({ id: pid, title: titleById.get(pid) ?? pid })),
     })),
     collections: collections.map((c) => ({ collectionId: c.collectionId, title: c.title })),
-    savedTemplates: savedTemplates.map((t) => ({ id: t.id, name: t.name, template: t.template })),
+    // Shop-saved rows first, then the global starters, each labeled with its
+    // scope (+ vertical category for starters) — see mergeTemplateOptions.
+    savedTemplates: mergeTemplateOptions(
+      savedTemplates.map((t) => ({ id: t.id, name: t.name, template: t.template })),
+      starterTemplates.map((t) => ({ id: t.id, name: t.name, template: t.template })),
+    ),
     // ── Recommendation Buckets (RB Step 1) ──
     catalog: { products: catalogProducts, tags: catalogTags, collections: catalogCollections },
     suggestion,

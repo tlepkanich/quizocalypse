@@ -59,7 +59,15 @@ export interface FunnelData {
   genProgress: "research" | "types" | "templates" | "questions" | null;
   productGroups: Array<{ id: string; name: string; products: Array<{ id: string; title: string }> }>;
   collections: Array<{ collectionId: string; title: string }>;
-  savedTemplates: Array<{ id: string; name: string; template: RichTemplateOption }>;
+  // PORT-10 — shop-saved templates first, then the global industry "starter"
+  // templates (scope "starter", with a vertical category label).
+  savedTemplates: Array<{
+    id: string;
+    name: string;
+    template: RichTemplateOption;
+    scope: "shop" | "starter";
+    category: string | null;
+  }>;
   // ── Recommendation Buckets (RB Step 1) ──
   catalog: {
     products: Array<{
