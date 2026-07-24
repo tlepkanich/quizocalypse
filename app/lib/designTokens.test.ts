@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { normalizeHex, mergeHexIntoTokens, tokensToCssVars, resolveDesignTokens } from "./designTokens";
+import {
+  stylesFor,
+  PAGE_PAD_DEFAULT_PX,
+  PAGE_PAD_DESKTOP_TOP_PX,
+} from "../components/runtime/runtimeStyles";
 
 describe("normalizeHex", () => {
   it("accepts #rrggbb and #rgb (with/without #), lowercased + expanded", () => {
@@ -76,6 +81,19 @@ describe("tokensToCssVars page padding (QP-2)", () => {
     expect(resolved.page_padding).toEqual({ top: 96, right: 48, bottom: 48, left: 48 });
     // …and it reaches the CSS vars after resolution (the full runtime chain).
     expect(tokensToCssVars(resolved)["--qz-pp-top"]).toBe("96px");
+  });
+  // FIX-1 — the preview↔publish parity pin: the runtime page's fallbacks, the
+  // BLD-1 panels, and the admin card CSS all read from these two constants.
+  // If either number changes, the .qz-allcard-doc literals in quizocalypse.css
+  // must move with it.
+  it("page-padding defaults are the agreed source of truth (24 mobile / 48 desktop top)", () => {
+    expect(PAGE_PAD_DEFAULT_PX).toBe(24);
+    expect(PAGE_PAD_DESKTOP_TOP_PX).toBe(48);
+    const page = stylesFor({}).page;
+    expect(page.paddingTop).toBe(`var(--qz-pp-top, ${PAGE_PAD_DEFAULT_PX}px)`);
+    expect(page.paddingRight).toBe(`var(--qz-pp-right, ${PAGE_PAD_DEFAULT_PX}px)`);
+    expect(page.paddingBottom).toBe(`var(--qz-pp-bottom, ${PAGE_PAD_DEFAULT_PX}px)`);
+    expect(page.paddingLeft).toBe(`var(--qz-pp-left, ${PAGE_PAD_DEFAULT_PX}px)`);
   });
 });
 

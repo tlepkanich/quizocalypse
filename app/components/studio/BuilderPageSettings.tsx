@@ -1,5 +1,6 @@
 import { useState } from "react";
 import type { Quiz } from "../../lib/quizSchema";
+import { PAGE_PAD_DEFAULT_PX } from "../runtime/runtimeStyles";
 
 // QP-2 — Quizell's "Page Settings" panel for the standalone Editor → Settings
 // sub-tab: a Background Color swatch+hex and a Page Paddings cross-layout. Both
@@ -9,7 +10,14 @@ import type { Quiz } from "../../lib/quizSchema";
 
 const SIDES = ["top", "right", "bottom", "left"] as const;
 type Side = (typeof SIDES)[number];
-const PAD_DEFAULT: Record<Side, number> = { top: 24, right: 24, bottom: 24, left: 24 };
+// FIX-1 — the sides' default mirrors the runtime's PAGE_PAD_DEFAULT_PX (one
+// source of truth; the runtime's desktop shell overrides top to 48 when unset).
+const PAD_DEFAULT: Record<Side, number> = {
+  top: PAGE_PAD_DEFAULT_PX,
+  right: PAGE_PAD_DEFAULT_PX,
+  bottom: PAGE_PAD_DEFAULT_PX,
+  left: PAGE_PAD_DEFAULT_PX,
+};
 const HEX_RE = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i;
 // Quick-pick page backgrounds (light → warm → cool → dark), aligned to the
 // house/dark theme surfaces. Clicking one writes design_tokens.colors.background

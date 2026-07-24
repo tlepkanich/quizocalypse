@@ -6005,7 +6005,9 @@ textarea.qz-s4-inp { resize: vertical; min-height: 56px; line-height: 1.5; }
 }
 /* The card's quiz surface paints the doc's OWN tokens (StepPreview sets the
    --qz-color-* / --qz-pp-* vars inline), so global-panel edits repaint every
-   card live — background and content padding included. */
+   card live — background and content padding included. The 24px fallbacks
+   mirror PAGE_PAD_DEFAULT_PX (runtimeStyles.ts) — the runtime's mobile page
+   default; keep them in lockstep (FIX-1). */
 .qz-allcard-doc {
   display: block;
   min-height: 476px;

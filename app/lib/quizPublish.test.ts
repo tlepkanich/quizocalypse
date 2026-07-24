@@ -464,6 +464,9 @@ describe("publishQuiz — byte-stability when net-new optional fields are unset"
     // result_split is a DesignTokens field with no default → absent on the
     // resolved tokens unless a layer set it (it didn't here).
     expect(wire.design_tokens).not.toHaveProperty("result_split");
+    // FIX-1 — the chrome parity bake is DECIDER-GATED: a legacy publish must
+    // not sprout design_tokens.chrome (byte-identical republish).
+    expect(wire.design_tokens).not.toHaveProperty("chrome");
 
     // (4) Result-node data: the unset E4 optional + the RP-S4 hero optionals stay
     // absent (hero_logic/hero_oos are .optional() not .default() — a slipped default
@@ -655,6 +658,28 @@ describe("publishQuiz — decider target bake (L2-3)", () => {
     expect(result.ok).toBe(true);
     const wire = JSON.parse(JSON.stringify(getCaptured())) as PublishedQuiz;
     expect(wire.target_product_ids_map?.["cat_col"]).toEqual(["p1", "p2", "p3"]);
+  });
+
+  // FIX-1 — preview↔publish chrome parity: every builder surface previews the
+  // card-less "minimal" chrome, so a decider publish bakes it into the tokens
+  // (the doc carries the truth /q resolves first). An explicit merchant
+  // chrome always wins; legacy docs are pinned absent in the byte-stability
+  // suite above.
+  it("bakes chrome:'minimal' into a decider publish when unset", async () => {
+    const { prisma, getCaptured } = mockDeciderPrisma(deciderDraft(), CATEGORY_ROWS);
+    const result = await publishQuiz(prisma, { quizId: "qrow", shopId: "s1" });
+    expect(result.ok).toBe(true);
+    const wire = JSON.parse(JSON.stringify(getCaptured())) as PublishedQuiz;
+    expect(wire.design_tokens?.chrome).toBe("minimal");
+  });
+
+  it("an explicit design_tokens.chrome survives the bake (merchant choice wins)", async () => {
+    const draft = { ...deciderDraft(), design_tokens: { chrome: "classic" } };
+    const { prisma, getCaptured } = mockDeciderPrisma(draft, CATEGORY_ROWS);
+    const result = await publishQuiz(prisma, { quizId: "qrow", shopId: "s1" });
+    expect(result.ok).toBe(true);
+    const wire = JSON.parse(JSON.stringify(getCaptured())) as PublishedQuiz;
+    expect(wire.design_tokens?.chrome).toBe("classic");
   });
 
   it("BLOCKS publish when a mapped target's bucket row was deleted (V4/V5 DB half)", async () => {

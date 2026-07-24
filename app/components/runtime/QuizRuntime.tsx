@@ -36,7 +36,12 @@ import {
   type PathStep,
 } from "../../lib/mergeTags";
 import { collectNextStepImages } from "../../lib/nextStepImages";
-import { stylesFor, googleFontsUrl, useContainerBreakpoint } from "./runtimeStyles";
+import {
+  stylesFor,
+  googleFontsUrl,
+  useContainerBreakpoint,
+  PAGE_PAD_DESKTOP_TOP_PX,
+} from "./runtimeStyles";
 import { BlockRenderer, type BlockRenderCtx } from "./BlockRenderer";
 import { screenBackgroundCss, screenOverlayAlpha, screenOverlayBg, videoLayer } from "../../lib/screenBackground";
 import {
@@ -1821,7 +1826,14 @@ export function QuizRuntime(props: QuizRuntimeProps) {
           <style>, turning e.g. an apostrophe in a comment into &#x27; on the
           server (but ' on the client) → a #425 hydration mismatch that cascades
           into #418 on every quiz. Keep apostrophe-prone prose in JSX comments
-          like this one, never in the CSS string below. */}
+          like this one, never in the CSS string below.
+
+          FIX-1 (desktop shell): .qz-runtime-page is a COLUMN flex, so
+          align-items is the HORIZONTAL axis — the old `flex-start` pinned the
+          1100px shell to the LEFT edge on wider viewports; DESKTOP-SPEC wants
+          a centered column, so it's `center` now. The padding-top fallback is
+          PAGE_PAD_DESKTOP_TOP_PX (48, DESKTOP-SPEC §1 section padding — was a
+          drifted 64 while the builder panels documented 24). */}
       <style>{`
         @media (prefers-reduced-motion: reduce) {
           *, *::before, *::after {
@@ -1869,9 +1881,8 @@ export function QuizRuntime(props: QuizRuntimeProps) {
         .qz-urgency-pulse { display: inline-block; animation: qz-urgency-pulse 1.8s var(--qz-ease, ease) infinite; }
         /* Unified P1: ONE layout mechanism for preview AND live — the qz-bp-*
            class on the root. Preview sets it from the DeviceFrame width prop;
-           live sets it from the container-measured breakpoint. The old live
-           @media(900px) fork carried these exact rules keyed to the WINDOW. */
-        .qz-bp-desktop .qz-runtime-page { align-items: flex-start !important; justify-content: center !important; padding-top: var(--qz-pp-top, 64px) !important; }
+           live sets it from the container-measured breakpoint. */
+        .qz-bp-desktop .qz-runtime-page { align-items: center !important; justify-content: center !important; padding-top: var(--qz-pp-top, ${PAGE_PAD_DESKTOP_TOP_PX}px) !important; }
         .qz-bp-desktop .qz-runtime-shell { flex-direction: row; align-items: flex-start; max-width: 1100px; gap: 40px; }
         .qz-bp-desktop .qz-runtime-content { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: center; }
         .qz-bp-desktop .qz-preview-rail { flex: 0 0 320px; position: sticky; top: 64px; }
@@ -1885,7 +1896,7 @@ export function QuizRuntime(props: QuizRuntimeProps) {
            including the 16px hysteresis band). Browsers without @container
            keep the coherent mobile-first default. */
         @container (min-width: 900px) {
-          .qz-unmeasured .qz-runtime-page { align-items: flex-start !important; justify-content: center !important; padding-top: var(--qz-pp-top, 64px) !important; }
+          .qz-unmeasured .qz-runtime-page { align-items: center !important; justify-content: center !important; padding-top: var(--qz-pp-top, ${PAGE_PAD_DESKTOP_TOP_PX}px) !important; }
           .qz-unmeasured .qz-runtime-shell { flex-direction: row; align-items: flex-start; max-width: 1100px; gap: 40px; }
           .qz-unmeasured .qz-runtime-content { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: center; }
           .qz-unmeasured .qz-preview-rail { flex: 0 0 320px; position: sticky; top: 64px; }

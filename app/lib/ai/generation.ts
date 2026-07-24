@@ -51,7 +51,46 @@ export const QUESTION_WRITING_RULES =
   "Multi-select questions: keep the list to ~6 options and set " +
   "max_selections. Order easy, concrete questions first; personal or " +
   "sensitive ones late; never place two high-effort questions (long " +
-  "multi-selects) back to back.";
+  "multi-selects) back to back." +
+  // FIX-1 — copy standards (anti-slop). The owner's complaint: generated
+  // questions kept arriving with emoji and hype framing. These bind the two
+  // AUTHORING prompts only — the merchant-directed edit prompt deliberately
+  // excludes them (an explicit "add emojis" request must still comply).
+  "\nCOPY STANDARDS (always apply): NEVER use emoji or decorative pictographs " +
+  "anywhere — not in question text, not in answer options, not in helper or " +
+  "welcome copy. No exclamation-mark enthusiasm and no hype framing " +
+  "(\"Let's find your perfect match! 🎉\" is banned on both counts) — write " +
+  "plain, confident, declarative copy. Use sentence case for questions and " +
+  "answers: capitalize only the first word and proper nouns, never Title Case. " +
+  "Skip filler superlatives (\"amazing\", \"perfect\", \"incredible\") — say " +
+  "what the thing is.";
+
+// FIX-1 — deterministic anti-slop backstop at the generation PARSE boundary.
+// Strips emoji / pictograph sequences (ZWJ chains, variation selectors, skin
+// tones, flags, keycaps) from AI-authored question + answer text, keeping
+// legitimate symbols (& % $ ° – — © ® ™) and all letters (accents, CJK).
+// Applied ONLY where AI output is parsed (regenerateQuestion +
+// generateQuestionFlow below) — merchant-typed text and existing docs are
+// never touched.
+const EMOJI_SEQUENCE_RE =
+  // pictograph (opt. variation selector FE0E/FE0F) + any ZWJ(200D)-joined
+  // continuations | regional-indicator pair (flags) | keycap sequences
+  /\p{Extended_Pictographic}[\uFE0E\uFE0F]?(?:\u200D\p{Extended_Pictographic}[\uFE0E\uFE0F]?)*|[\u{1F1E6}-\u{1F1FF}]{2}|[0-9#*]\uFE0F?\u20E3/gu;
+// Stray skin-tone modifiers, ZWJs, variation selectors, and keycap combiners
+// left behind by partial sequences.
+const EMOJI_RESIDUE_RE = /[\u{1F3FB}-\u{1F3FF}\u200D\uFE0E\uFE0F\u20E3]/gu;
+const KEEP_PICTOGRAPHS = new Set(["©", "®", "™"]);
+
+export function stripEmoji(text: string): string {
+  const cleaned = text
+    .replace(EMOJI_SEQUENCE_RE, (m) => (KEEP_PICTOGRAPHS.has(m.charAt(0)) ? m.charAt(0) : ""))
+    .replace(EMOJI_RESIDUE_RE, "")
+    .replace(/ {2,}/g, " ")
+    .trim();
+  // An all-emoji string must not collapse to "" (blank buttons are worse than
+  // slop) — keep the original in that degenerate case.
+  return cleaned.length > 0 ? cleaned : text;
+}
 
 const REGEN_SYSTEM_PROMPT =
   "You are regenerating ONE question in an existing Shopify product quiz. " +
@@ -191,14 +230,15 @@ export async function regenerateQuestion(
     const parsed = RegenInput.safeParse(toolUse.input);
     if (parsed.success) {
       return {
-        text: parsed.data.text,
+        // FIX-1 — deterministic anti-slop pass on the AI-authored copy only.
+        text: stripEmoji(parsed.data.text),
         question_type: parsed.data.question_type,
         required: parsed.data.required ?? true,
         ...(parsed.data.max_selections !== undefined
           ? { max_selections: parsed.data.max_selections }
           : {}),
         answers: parsed.data.answers.map((a) => ({
-          text: a.text,
+          text: stripEmoji(a.text),
           tags: a.tags,
           ...(a.collection_filter ? { collection_filter: a.collection_filter } : {}),
           ...(a.image_url ? { image_url: a.image_url } : {}),
@@ -469,13 +509,14 @@ export async function generateQuestionFlow(
     if (parsed.success) {
       return {
         questions: parsed.data.questions.map((q) => ({
-          text: q.text,
+          // FIX-1 — deterministic anti-slop pass on the AI-authored copy only.
+          text: stripEmoji(q.text),
           question_type: q.question_type,
           ...(q.required !== undefined ? { required: q.required } : {}),
           ...(q.max_selections !== undefined ? { max_selections: q.max_selections } : {}),
           ...(q.education_card_before ? { education_card_before: q.education_card_before } : {}),
           answers: q.answers.map((a) => ({
-            text: a.text,
+            text: stripEmoji(a.text),
             tags: a.tags,
             ...(a.collection_filter ? { collection_filter: a.collection_filter } : {}),
             ...(a.image_url ? { image_url: a.image_url } : {}),

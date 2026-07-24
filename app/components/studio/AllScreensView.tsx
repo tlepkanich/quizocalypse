@@ -12,6 +12,7 @@ import {
 } from "../../lib/curatedFonts";
 import type { BuilderCategory } from "../builder/stepProps";
 import { StepPreview } from "../runtime/StepPreview";
+import { PAGE_PAD_DEFAULT_PX } from "../runtime/runtimeStyles";
 import { nodeTitle } from "./FlowRail";
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -317,8 +318,9 @@ export function GlobalStylesPanel({
 
   // Content padding: ONE value for all four sides (deliberate simplification —
   // the Theme rail's Page settings keeps the per-side cross). Reads the top
-  // side as the representative value; the runtime default is 24.
-  const padValue = dt.page_padding?.top ?? 24;
+  // side as the representative value; the default is the runtime's own
+  // PAGE_PAD_DEFAULT_PX (FIX-1 — one source of truth, no drift).
+  const padValue = dt.page_padding?.top ?? PAGE_PAD_DEFAULT_PX;
   const onPad = (v: number) =>
     mergeTokens({
       page_padding: { top: v, right: v, bottom: v, left: v },

@@ -58,6 +58,17 @@ export function googleFontsUrl(families: string[]): string | null {
   return `https://fonts.googleapis.com/css2?${params.join("&")}&display=swap`;
 }
 
+// FIX-1 — THE page-padding defaults, one source of truth for preview AND
+// publish (they had drifted: runtime desktop said 64px while the BLD-1 Global
+// panel + All-screens cards documented 24px). SPEC.md / DESKTOP-SPEC.md §1:
+// section padding is 24px on mobile, 48px top on desktop. Consumed by the
+// runtime page styles below, QuizRuntime's desktop-shell CSS, the BLD-1
+// Global panel (AllScreensView), and the Page-settings cross
+// (BuilderPageSettings). The admin sheet's .qz-allcard-doc fallback
+// (quizocalypse.css) mirrors PAGE_PAD_DEFAULT_PX — keep them in lockstep.
+export const PAGE_PAD_DEFAULT_PX = 24;
+export const PAGE_PAD_DESKTOP_TOP_PX = 48;
+
 export const stylesFor = (
   t: DesignTokensT,
   breakpoint: "desktop" | "mobile" = "mobile",
@@ -77,12 +88,13 @@ export const stylesFor = (
     alignItems: "center",
     justifyContent: "center",
     // QP-2 — Quizell "Page Paddings", per-side. The vars are only present when a
-    // merchant sets page_padding (tokensToCssVars); absent → 24px, byte-identical.
-    // The desktop-shell rule overrides padding-top with its own var(--qz-pp-top,64px).
-    paddingTop: "var(--qz-pp-top, 24px)",
-    paddingRight: "var(--qz-pp-right, 24px)",
-    paddingBottom: "var(--qz-pp-bottom, 24px)",
-    paddingLeft: "var(--qz-pp-left, 24px)",
+    // merchant sets page_padding (tokensToCssVars); absent → PAGE_PAD_DEFAULT_PX,
+    // byte-identical. The desktop-shell rule overrides padding-top with its own
+    // var(--qz-pp-top, PAGE_PAD_DESKTOP_TOP_PX).
+    paddingTop: `var(--qz-pp-top, ${PAGE_PAD_DEFAULT_PX}px)`,
+    paddingRight: `var(--qz-pp-right, ${PAGE_PAD_DEFAULT_PX}px)`,
+    paddingBottom: `var(--qz-pp-bottom, ${PAGE_PAD_DEFAULT_PX}px)`,
+    paddingLeft: `var(--qz-pp-left, ${PAGE_PAD_DEFAULT_PX}px)`,
     fontFamily: "var(--qz-font-body)",
     color: "var(--qz-color-text)",
   } satisfies React.CSSProperties,

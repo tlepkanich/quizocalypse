@@ -519,6 +519,17 @@ export async function publishQuiz(
     ? shopParsed.data
     : null;
   const resolvedTokens = resolveDesignTokens(shopTokens, doc.design_tokens);
+  // FIX-1 — preview↔publish chrome parity. Every builder surface previews the
+  // doc with the card-less "minimal" chrome (UnifiedWorkspace pins
+  // platform="standalone" on Step5Preview), but /q's runtime defaulted the
+  // chrome from the SHOP's platform — a shopify-source shop published the
+  // legacy card-on-grey "classic" look the merchant never saw. Bake the
+  // previewed chrome into the published tokens so the doc carries the truth.
+  // Decider-gated: legacy points-model publishes stay byte-identical, and an
+  // explicit design_tokens.chrome (either value) always wins.
+  if (doc.logic_model === "decider" && !resolvedTokens.chrome) {
+    resolvedTokens.chrome = "minimal";
+  }
   const brandGuidelines = parseBrandGuidelinesSafe(shop?.brandGuidelines);
 
   // Bake category → productIds onto each result page so the storefront needs no
