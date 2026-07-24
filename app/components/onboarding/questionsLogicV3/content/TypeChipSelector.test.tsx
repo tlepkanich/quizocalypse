@@ -94,19 +94,33 @@ function questionNode(d: Quiz, id: string): QuestionNode {
   return node;
 }
 
-function typeSelect(): HTMLSelectElement {
-  const el = document.body.querySelector('select[aria-label="Question type"]');
-  if (!(el instanceof HTMLSelectElement)) throw new Error("type select not rendered");
-  return el;
+// AUDIT-17 — the chip is the mock's tag + popover now: open the tag, then
+// click the type's radio row.
+const PICK_LABEL: Record<string, string> = {
+  single_select: "Single select",
+  multi_select: "Multi-select",
+  rating5: "Five-point scale",
+  rating: "Rating",
+};
+
+function openTypePop(): HTMLElement {
+  const tag = document.body.querySelector(".qz-s3-typetagbtn");
+  if (!(tag instanceof HTMLButtonElement)) throw new Error("type tag not rendered");
+  if (!document.body.querySelector(".qz-s3-typepop")) act(() => tag.click());
+  const pop = document.body.querySelector(".qz-s3-typepop");
+  if (!(pop instanceof HTMLElement)) throw new Error("type popover did not open");
+  return pop;
+}
+
+function typeRadios(): HTMLButtonElement[] {
+  return Array.from(openTypePop().querySelectorAll<HTMLButtonElement>('[role="radio"]'));
 }
 
 function pickType(value: string) {
-  const el = typeSelect();
-  const desc = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value");
-  desc?.set?.call(el, value);
-  act(() => {
-    el.dispatchEvent(new Event("change", { bubbles: true }));
-  });
+  const label = PICK_LABEL[value] ?? value;
+  const radio = typeRadios().find((b) => b.textContent?.trim() === label);
+  if (!radio) throw new Error(`no type radio "${label}"`);
+  act(() => radio.click());
 }
 
 function buttonByText(text: string): HTMLButtonElement {
@@ -136,8 +150,8 @@ describe("TypeChipSelector — decider BLOCK dialog", () => {
   it("QZY-3 — the picker is curated: no freeform picks offered", () => {
     const d = doc();
     mount(createElement(TypeChipSelector, { doc: d, node: questionNode(d, "q2"), onCommit: vi.fn() }));
-    const values = Array.from(typeSelect().options).map((o) => o.value);
-    expect(values).toEqual(["single_select", "multi_select", "rating5", "rating"]);
+    const labels = typeRadios().map((b) => b.textContent?.trim());
+    expect(labels).toEqual(["Single select", "Multi-select", "Five-point scale", "Rating"]);
   });
 
   it("decider → Five-point scale commits DIRECTLY, keeps the role + answers, sets the 1–5 preset", () => {

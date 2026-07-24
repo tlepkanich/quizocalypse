@@ -9,6 +9,7 @@ import {
   deleteNode,
   duplicateQuestionNode,
   insertQuestionRelative,
+  moveAnswer,
   moveStep,
   routeAnswerToEnd,
   setAnswerBucketDirect,
@@ -231,6 +232,45 @@ describe("duplicateQuestionNode / insertQuestionRelative (Question-Builder spec)
     expect(second.nodes.filter((n) => n.type === "end")).toHaveLength(1);
     const edge2 = second.edges.find((e) => e.source === "q2" && e.source_handle === "q2_h1");
     expect(edge2?.target).toBe(ends[0]!.id);
+  });
+});
+
+describe("moveAnswer (AUDIT-17 — phone-canvas answer drag-reorder)", () => {
+  const answersOf = (doc: ReturnType<typeof linearQuestionsDoc>, id: string) => {
+    const n = doc.nodes.find((x) => x.id === id);
+    if (!n || n.type !== "question") throw new Error("fixture");
+    return n.data.answers;
+  };
+
+  it("moves an answer to a new index, order only", () => {
+    const doc = linearQuestionsDoc();
+    const next = moveAnswer(doc, "q1", "q1_a2", 0);
+    expect(answersOf(next, "q1").map((a) => a.id)).toEqual(["q1_a2", "q1_a1"]);
+    // The answer OBJECTS ride along untouched (handles, tags — mappings/routes).
+    expect(answersOf(next, "q1")[0]).toEqual(answersOf(doc, "q1")[1]);
+    expect(next.edges).toBe(doc.edges);
+    expect(() => Quiz.parse(next)).not.toThrow();
+  });
+
+  it("clamps toIndex into range", () => {
+    const next = moveAnswer(linearQuestionsDoc(), "q1", "q1_a1", 99);
+    expect(answersOf(next, "q1").map((a) => a.id)).toEqual(["q1_a2", "q1_a1"]);
+    const back = moveAnswer(next, "q1", "q1_a1", -5);
+    expect(answersOf(back, "q1").map((a) => a.id)).toEqual(["q1_a1", "q1_a2"]);
+  });
+
+  it("is a no-op for the same slot / unknown answer / non-question node", () => {
+    const doc = linearQuestionsDoc();
+    expect(moveAnswer(doc, "q1", "q1_a1", 0)).toBe(doc);
+    expect(moveAnswer(doc, "q1", "nope", 1)).toBe(doc);
+    expect(moveAnswer(doc, "intro", "q1_a1", 1)).toBe(doc);
+    expect(moveAnswer(doc, "missing", "q1_a1", 1)).toBe(doc);
+  });
+
+  it("does not touch other questions' answers", () => {
+    const doc = linearQuestionsDoc();
+    const next = moveAnswer(doc, "q1", "q1_a2", 0);
+    expect(answersOf(next, "q2")).toBe(answersOf(doc, "q2"));
   });
 });
 

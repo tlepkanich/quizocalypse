@@ -207,6 +207,37 @@ export function addAnswer(doc: QuizDoc, questionNodeId: string): QuizDoc {
   };
 }
 
+// questions-full-page mock (AUDIT-17) — reorder ONE answer within its question
+// (the phone canvas's ⠿ drag handle). Pure order-only splice: the answer
+// objects (ids, tags, target_id, edge_handle_id, points) ride along untouched,
+// so mappings and per-answer routing survive by construction. `toIndex` is
+// clamped into range; a no-op (same slot, unknown answer/node) returns the doc
+// unchanged.
+export function moveAnswer(
+  doc: QuizDoc,
+  questionNodeId: string,
+  answerId: string,
+  toIndex: number,
+): QuizDoc {
+  const node = doc.nodes.find((n) => n.id === questionNodeId);
+  if (!node || node.type !== "question") return doc;
+  const from = node.data.answers.findIndex((a) => a.id === answerId);
+  if (from < 0) return doc;
+  const to = Math.max(0, Math.min(node.data.answers.length - 1, toIndex));
+  if (to === from) return doc;
+  const answers = [...node.data.answers];
+  const [moving] = answers.splice(from, 1);
+  answers.splice(to, 0, moving!);
+  return {
+    ...doc,
+    nodes: doc.nodes.map((n) =>
+      n.id === questionNodeId && n.type === "question"
+        ? { ...n, data: { ...n.data, answers } }
+        : n,
+    ),
+  };
+}
+
 export function removeAnswer(
   doc: QuizDoc,
   questionNodeId: string,

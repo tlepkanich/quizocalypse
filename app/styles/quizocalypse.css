@@ -4009,16 +4009,31 @@ textarea.qz-sm-inp { resize: vertical; min-height: 62px; line-height: 1.5; }
 .qz-s3-contentview { display: flex; flex-direction: column; gap: 12px; }
 .qz-s3-subhead--questions { padding: 0 2px; }
 .qz-s3-subhint { margin-left: auto; color: var(--qz-ink-4); font-size: 12px; }
-/* questions-full-page mock — one bordered panel: navigator column + phone
-   column, hairline between them. */
+/* questions-full-page mock — one bordered panel: navigator column + a 9px
+   drag resizer + phone column. The shell inlines --qz-s3-navw (232px floor,
+   ≥360px kept for the phone pane). */
 .qz-s3-body {
   display: grid;
-  grid-template-columns: 304px minmax(340px, 1fr);
+  grid-template-columns: var(--qz-s3-navw, 304px) 9px minmax(340px, 1fr);
   border: 1px solid var(--qz-rule);
   border-radius: 14px;
   overflow: hidden;
   align-items: stretch;
   min-height: 600px;
+}
+.qz-s3-resizer { cursor: col-resize; background: transparent; position: relative; touch-action: none; }
+.qz-s3-resizer::before {
+  content: ""; position: absolute; top: 50%; left: 50%;
+  transform: translate(-50%, -50%);
+  width: 3px; height: 34px; border-radius: 3px;
+  background: var(--qz-rule);
+}
+.qz-s3-resizer:hover::before,
+.qz-s3-resizer.is-drag::before { background: var(--qz-accent); }
+@media (max-width: 820px) {
+  .qz-s3-body { grid-template-columns: 1fr; }
+  .qz-s3-resizer { display: none; }
+  .qz-s3-rail { border-right: none; border-bottom: 1px solid var(--qz-rule-2); }
 }
 
 /* — top-bar right-zone bits — */
@@ -4146,11 +4161,13 @@ textarea.qz-sm-inp { resize: vertical; min-height: 62px; line-height: 1.5; }
   display: grid; place-items: center; cursor: pointer;
   color: var(--qz-ink-4); font-size: 9px; line-height: 1; font-family: inherit;
 }
+.qz-s3-mvb svg { width: 9px; height: 9px; }
 .qz-s3-mvb:hover:not(:disabled) { background: var(--qz-accent-tint); border-color: var(--qz-accent-wash); color: var(--qz-accent-ink); }
 .qz-s3-mvb:disabled { opacity: .3; cursor: default; }
 .qz-s3-numchip {
   position: relative; z-index: 1; flex: none;
   width: 26px; height: 26px;
+  border: none; padding: 0;
   display: grid; place-items: center;
   border-radius: 8px;
   font-family: var(--qz-font-mono); font-size: 11.5px; font-weight: 600;
@@ -4160,15 +4177,55 @@ textarea.qz-sm-inp { resize: vertical; min-height: 62px; line-height: 1.5; }
 .qz-s3-numchip.is-decider { background: var(--qz-gold); color: var(--qz-cream); box-shadow: none; }
 .qz-s3-numchip.is-capture { background: var(--qz-accent-wash); color: var(--qz-accent); box-shadow: none; }
 .qz-s3-numchip.is-reveal { background: var(--qz-gold-wash); color: var(--qz-gold); box-shadow: inset 0 0 0 1px var(--qz-gold-line); }
+/* AUDIT-17 — the mock's click-to-renumber chip (ncn-edit + ncninput). */
+.qz-s3-numchip.is-edit { cursor: pointer; }
+.qz-s3-numchip.is-edit:hover { background: var(--qz-accent-wash); color: var(--qz-accent-ink); box-shadow: none; }
+.qz-s3-numchip.is-edit.is-decider:hover { background: var(--qz-gold); color: var(--qz-cream); box-shadow: 0 0 0 2px var(--qz-gold-wash); }
+.qz-s3-ncninput {
+  width: 24px; border: none; padding: 1px 0;
+  background: var(--qz-paper);
+  box-shadow: 0 0 0 2px var(--qz-accent-wash);
+  border-radius: 4px; text-align: center; outline: none;
+  font-family: var(--qz-font-mono); font-size: 10.5px; font-weight: 600;
+  color: var(--qz-accent-ink);
+  -moz-appearance: textfield; appearance: textfield;
+}
+.qz-s3-ncninput::-webkit-outer-spin-button,
+.qz-s3-ncninput::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
 .qz-s3-rowtitle {
   padding-top: 2px;
   font-size: 12.5px; font-weight: 600; line-height: 1.32; min-width: 0;
+}
+/* AUDIT-17 — the navigator title is inline-editable (mock ncq.ed): 2-line
+   clamp at rest, unclamped while focused; quiet accent hover/focus wash
+   (the phone's section-color treatment stays inside the bezel). */
+.qz-s3-navedit {
   display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+  border-radius: 5px; margin: -1px -3px; padding: 1px 3px;
+  border: none; cursor: text;
 }
-.qz-s3-railfoot {
-  display: flex; flex-direction: column; align-items: stretch; gap: 0;
-  border-top: 1px solid var(--qz-rule-2);
+.qz-s3-navedit:hover { background: color-mix(in srgb, var(--qz-accent) 6%, transparent); border-color: transparent; }
+.qz-s3-navedit:focus {
+  outline: none; border-color: transparent;
+  background: var(--qz-paper);
+  box-shadow: 0 0 0 2px var(--qz-accent-wash);
+  display: block; -webkit-line-clamp: unset; overflow: visible;
 }
+/* AUDIT-17 — the mock's hover ✕ delete on a navigator row. */
+.qz-s3-ndel {
+  opacity: 0; flex: none;
+  border: none; background: transparent;
+  width: 24px; height: 24px; border-radius: 6px; padding: 0;
+  display: grid; place-items: center;
+  color: var(--qz-ink-25); cursor: pointer;
+  transition: opacity .12s;
+}
+.qz-s3-ndel svg { width: 13px; height: 13px; }
+.qz-s3-row:hover .qz-s3-ndel,
+.qz-s3-ndel:focus-visible { opacity: 1; }
+.qz-s3-ndel:hover:not(:disabled) { background: var(--qz-crit-wash); color: var(--qz-crit); }
+.qz-s3-ndel:disabled { cursor: default; }
+.qz-s3-row:hover .qz-s3-ndel:disabled { opacity: .3; }
 .qz-s3-navadd {
   border: none; background: transparent;
   color: var(--qz-accent-ink); font-size: 12.5px; font-weight: 500;
@@ -4177,17 +4234,225 @@ textarea.qz-sm-inp { resize: vertical; min-height: 62px; line-height: 1.5; }
 }
 .qz-s3-navadd:hover { background: var(--qz-accent-tint); }
 .qz-s3-navadd.is-quiet { color: var(--qz-ink-4); padding-top: 0; }
+/* AUDIT-17 — the mock's terminus rows (navterm): quiet 18px icon circles at
+   the rail's bottom. They stay clickable here (real canvas positions). */
+.qz-s3-navterm {
+  display: flex; align-items: center; gap: 9px;
+  width: 100%; padding: 9px 13px;
+  border: none; border-top: 1px solid var(--qz-rule-2);
+  background: transparent; text-align: left;
+  color: var(--qz-ink-4); font: inherit; font-size: 12px; cursor: pointer;
+}
+.qz-s3-navterm + .qz-s3-navterm { border-top: none; }
+.qz-s3-navterm:hover { background: color-mix(in srgb, var(--qz-accent) 2%, var(--qz-paper)); }
+.qz-s3-navterm.is-active { background: var(--qz-accent-tint); box-shadow: inset 2.5px 0 0 var(--qz-accent); }
+.qz-s3-navterm-tc {
+  width: 18px; height: 18px; flex: none; border-radius: var(--qz-radius-pill);
+  display: grid; place-items: center;
+  background: var(--qz-cream-2); color: var(--qz-ink-4);
+}
+.qz-s3-navterm-tc svg { width: 10px; height: 10px; }
 
-/* — content view: the phone column (mock phonecol) + floating type tag — */
+/* — content view: the phone column (mock phonecol) on the preview-primitive
+   geometry — pv-bar (device toggle · Expand), a fit-the-pane stage, and the
+   true-viewport device (mobile 390×844 · desktop 1180×740) scaled via
+   transform, never re-laid-out. — */
 .qz-s3-canvas {
   display: flex; flex-direction: column; align-items: center; gap: 12px;
   background: color-mix(in srgb, var(--qz-accent) 1.5%, var(--qz-paper));
   padding: 18px 16px 22px;
   min-width: 0;
 }
-.qz-s3-phoneholder { position: relative; }
+.qz-s3-pvbar { display: flex; align-items: center; gap: 10px; width: 100%; padding: 0 2px; }
+.qz-s3-pvsp { flex: 1; }
+.qz-s3-segbtns {
+  display: inline-flex; background: var(--qz-cream-2);
+  border-radius: 9px; padding: 3px;
+}
+.qz-s3-segbtns button {
+  border: none; background: transparent;
+  padding: 6px 10px; border-radius: 7px; cursor: pointer;
+  color: var(--qz-ink-4); display: grid; place-items: center;
+}
+.qz-s3-segbtns svg { width: 15px; height: 15px; }
+.qz-s3-segbtns button.is-on {
+  background: var(--qz-paper); color: var(--qz-accent-ink);
+  box-shadow: 0 1px 2px color-mix(in srgb, var(--qz-accent) 12%, transparent);
+}
+.qz-s3-expandbtn {
+  display: inline-flex; align-items: center; gap: 7px;
+  border: 1px solid var(--qz-rule); background: var(--qz-paper);
+  color: var(--qz-ink-3); font: inherit; font-size: 12px; font-weight: 600;
+  padding: 6px 11px; border-radius: 9px; cursor: pointer;
+}
+.qz-s3-expandbtn:hover { background: var(--qz-cream-2); }
+.qz-s3-expandbtn svg { width: 13px; height: 13px; }
+.qz-s3-stage { flex: 1 1 auto; min-height: 320px; width: 100%; position: relative; align-self: stretch; }
+.qz-s3-device {
+  --vw: 390px; --vh: 844px; --s: 0.62;
+  position: absolute; top: 50%; left: 50%;
+  transform: translate(-50%, -50%);
+}
+.qz-s3-device.is-expand { position: relative; top: auto; left: auto; transform: none; }
+.qz-s3-holder {
+  width: calc(var(--vw) * var(--s));
+  height: calc(var(--vh) * var(--s));
+  position: relative;
+}
+.qz-s3-frame {
+  width: var(--vw); height: var(--vh);
+  position: absolute; top: 0; left: 0;
+  transform-origin: top left; transform: scale(var(--s));
+  overflow: hidden;
+  display: flex; flex-direction: column;
+  background: var(--qz-color-bg, var(--qz-paper));
+  border-radius: 44px;
+  box-shadow: 0 26px 62px -22px color-mix(in srgb, var(--qz-ink) 30%, transparent), 0 0 0 1px var(--qz-rule);
+}
+.qz-s3-fade {
+  position: absolute; left: 0; right: 0; bottom: 0; height: 52px;
+  pointer-events: none;
+  background: linear-gradient(to bottom, transparent, var(--qz-color-bg, var(--qz-paper)));
+  border-radius: 0 0 44px 44px;
+}
+/* — desktop frame: faux browser chrome (dots · blurred URL) + top progress;
+   the in-screen top bar hides and the content centers in a 600px column — */
+.qz-s3-device.is-desktop .qz-s3-frame { border-radius: 16px; }
+.qz-s3-device.is-desktop .qz-s3-fade { border-radius: 0 0 16px 16px; }
+.qz-s3-dhead { display: flex; flex: none; flex-direction: column; }
+.qz-s3-dchrome {
+  display: flex; align-items: center; gap: 11px;
+  padding: 10px 15px;
+  background: var(--qz-cream-2);
+  border-bottom: 1px solid var(--qz-rule);
+}
+.qz-s3-ddots { display: flex; gap: 6px; flex: none; }
+.qz-s3-ddots i { width: 9px; height: 9px; border-radius: var(--qz-radius-pill); background: var(--qz-ink-25); }
+.qz-s3-durl {
+  flex: 1; min-width: 0;
+  background: var(--qz-paper); border: 1px solid var(--qz-rule);
+  border-radius: 8px; padding: 6px 13px;
+  font-family: var(--qz-font-mono); font-size: 11.5px; color: var(--qz-ink-4);
+  white-space: nowrap; overflow: hidden;
+  filter: blur(1.7px); user-select: none;
+}
+.qz-s3-dprog { height: 6px; width: 100%; background: color-mix(in srgb, var(--qz-ink) 8%, transparent); }
+.qz-s3-dprogfill {
+  display: block; height: 100%;
+  background: var(--qz-color-primary, var(--qz-accent));
+  transition: width var(--qz-dur) var(--qz-ease);
+}
+.qz-s3-device.is-desktop .qz-s3-screen-top { display: none; }
+.qz-s3-device.is-desktop .qz-s3-scr { max-width: 600px; margin: 0 auto; width: 100%; padding-top: 34px; }
+/* — Expand overlay (portal to body; z above every builder layer) — */
+.qz-s3-phscrim {
+  position: fixed; inset: 0; z-index: 1200;
+  display: flex; align-items: center; justify-content: center;
+  padding: 24px;
+  background: color-mix(in srgb, var(--qz-ink) 66%, transparent);
+}
+.qz-s3-phclose {
+  position: fixed; top: 22px; right: 24px;
+  width: 40px; height: 40px;
+  border: none; border-radius: 11px; cursor: pointer;
+  display: grid; place-items: center;
+  background: color-mix(in srgb, var(--qz-paper) 14%, transparent);
+  color: var(--qz-paper);
+}
+.qz-s3-phclose:hover { background: color-mix(in srgb, var(--qz-paper) 24%, transparent); }
+.qz-s3-phclose svg { width: 18px; height: 18px; }
+/* — the floating type tag + popover (mock typetag/typepop) — */
 .qz-s3-typetag { position: absolute; top: 16px; left: calc(100% + 14px); z-index: 6; }
-@media (max-width: 1240px) { .qz-s3-typetag { position: static; margin-top: 10px; display: flex; justify-content: center; } }
+.qz-s3-typetagwrap { display: block; position: relative; }
+.qz-s3-device.is-desktop .qz-s3-typetag { top: 6.5%; left: auto; right: 18px; }
+/* Narrow panes: the tag docks centered under the phone (it can't float off
+   the frame's right without clipping on the panel edge). */
+@media (max-width: 1240px) {
+  .qz-s3-typetag { top: calc(100% + 10px); left: 50%; transform: translateX(-50%); }
+  .qz-s3-typetag .qz-s3-typepop { left: 50%; transform: translateX(-50%); }
+  .qz-s3-device.is-desktop .qz-s3-typetag { right: auto; }
+  .qz-s3-device.is-desktop .qz-s3-typepop { right: auto; }
+}
+.qz-s3-typetagbtn {
+  display: inline-flex; align-items: center; gap: 7px;
+  white-space: nowrap;
+  background: var(--qz-paper);
+  border: 1px solid var(--qz-rule); border-radius: var(--qz-radius-pill);
+  padding: 6px 12px;
+  font: inherit; font-size: 12px; font-weight: 600; color: var(--qz-ink-3);
+  cursor: pointer;
+  box-shadow: var(--qz-lift-1);
+}
+.qz-s3-typetagbtn:hover { border-color: color-mix(in srgb, var(--qz-accent) 32%, var(--qz-paper)); }
+.qz-s3-typetagbtn .qz-s3-tt-type { color: var(--qz-accent-ink); }
+.qz-s3-typetagbtn svg { width: 10px; height: 10px; color: var(--qz-ink-25); }
+.qz-s3-typepop {
+  position: absolute; top: calc(100% + 8px); left: 0; z-index: 7;
+  width: min(212px, 44vw);
+  background: var(--qz-paper);
+  border: 1px solid var(--qz-rule); border-radius: 13px;
+  box-shadow: var(--qz-lift-2);
+  padding: 11px;
+}
+.qz-s3-device.is-desktop .qz-s3-typepop { left: auto; right: 0; width: 220px; }
+.qz-s3-tp-h {
+  font-family: var(--qz-font-mono); font-size: 9px; font-weight: 600;
+  text-transform: uppercase; letter-spacing: .05em;
+  color: var(--qz-ink-4);
+  margin: 2px 2px 7px;
+}
+.qz-s3-tp-types { display: flex; flex-direction: column; gap: 2px; }
+.qz-s3-tp-type {
+  display: flex; align-items: center; gap: 9px;
+  width: 100%; border: none; background: transparent;
+  border-radius: 8px; padding: 8px 9px;
+  font: inherit; font-size: 13px; color: var(--qz-ink);
+  cursor: pointer; text-align: left;
+}
+.qz-s3-tp-type:hover { background: var(--qz-cream-2); }
+.qz-s3-tp-type.is-on { background: var(--qz-accent-tint); color: var(--qz-accent-ink); font-weight: 600; }
+.qz-s3-tp-rd {
+  width: 15px; height: 15px; flex: none;
+  border-radius: var(--qz-radius-pill);
+  border: 1.5px solid var(--qz-ink-25);
+}
+.qz-s3-tp-type.is-on .qz-s3-tp-rd {
+  border-color: var(--qz-accent);
+  box-shadow: inset 0 0 0 3.5px var(--qz-accent);
+}
+.qz-s3-tp-set {
+  border-top: 1px solid var(--qz-rule-2);
+  margin-top: 8px; padding-top: 10px;
+  display: flex; flex-direction: column; gap: 9px;
+}
+.qz-s3-tp-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.qz-s3-tp-lbl { width: 34px; font-size: 11.5px; color: var(--qz-ink-4); white-space: nowrap; }
+.qz-s3-tp-note { font-size: 10.5px; line-height: 1.45; color: var(--qz-ink-4); padding: 3px 2px 0; }
+.qz-s3-stepper {
+  display: inline-flex; align-items: center;
+  border: 1px solid var(--qz-rule); border-radius: 8px; overflow: hidden;
+}
+.qz-s3-stepper button {
+  border: none; background: var(--qz-paper);
+  width: 26px; height: 28px; cursor: pointer;
+  color: var(--qz-ink-3); font-size: 14px; font-family: inherit;
+}
+.qz-s3-stepper button:hover:not(:disabled) { background: var(--qz-cream-2); }
+.qz-s3-stepper button:disabled { opacity: .35; cursor: default; }
+.qz-s3-stepval {
+  min-width: 26px; text-align: center;
+  font-family: var(--qz-font-mono); font-size: 12.5px; font-weight: 600;
+}
+.qz-s3-lblinput {
+  flex: 1 1 66px; min-width: 0;
+  border: 1px solid var(--qz-rule); border-radius: 8px;
+  padding: 6px 9px;
+  font: inherit; font-size: 12px; color: var(--qz-ink);
+}
+.qz-s3-lblinput:focus {
+  outline: none; border-color: var(--qz-accent);
+  box-shadow: 0 0 0 2px var(--qz-accent-wash);
+}
 .qz-s3-caption {
   margin: 0;
   display: inline-flex; align-items: center; gap: 7px;
@@ -4204,23 +4469,24 @@ textarea.qz-sm-inp { resize: vertical; min-height: 62px; line-height: 1.5; }
   letter-spacing: .1em;
   text-transform: uppercase;
 }
-.qz-s3-phone {
-  flex: none; width: 322px; box-sizing: border-box;
-  padding: 9px; border-radius: 44px;
-  background: var(--qz-ink);
-  box-shadow: var(--qz-lift-2);
-}
+/* The SCREEN always scrolls — never the page, never the frame (SPEC). The
+   layout column is .qz-s3-scr (min-height 100% so Next rides the bottom). */
 .qz-s3-phone-screen {
-  display: flex; flex-direction: column; gap: 12px;
-  height: min(700px, calc(100vh - 240px));
-  border-radius: 33px; overflow: hidden;
-  padding: 18px 16px;
+  width: 100%; flex: 1 1 auto; min-height: 0;
+  overflow-y: auto; overscroll-behavior: contain;
   background: var(--qz-color-bg, var(--qz-paper));
   color: var(--qz-color-text, var(--qz-ink));
   font-family: var(--qz-font-body);
 }
+.qz-s3-scr {
+  display: flex; flex-direction: column; gap: 12px;
+  min-height: 100%;
+  padding: 20px 20px 44px;
+  box-sizing: border-box;
+}
 /* Generated art direction preview — the Step 3 canvas shows the campaign
    composition itself, not a generic phone skin carrying brand colors. */
+.qz-s3-phone-screen.is-alpine-art .qz-s3-scr { padding: 0; gap: 0; }
 .qz-s3-phone-screen.is-alpine-art {
   padding: 0;
   gap: 0;
@@ -4297,6 +4563,8 @@ textarea.qz-sm-inp { resize: vertical; min-height: 62px; line-height: 1.5; }
   padding: 0 18px 18px;
   background-image: none !important;
 }
+.qz-s3-phone-screen.is-alpine-art[data-screen-kind="capture"] .qz-s3-scr,
+.qz-s3-phone-screen.is-alpine-art[data-screen-kind="reveal"] .qz-s3-scr { padding: 0 18px 18px; }
 .qz-s3-phone-screen.is-alpine-art[data-screen-kind="capture"] .qz-s3-screen-top,
 .qz-s3-phone-screen.is-alpine-art[data-screen-kind="reveal"] .qz-s3-screen-top {
   margin: 0 -18px 30px;
@@ -4342,7 +4610,8 @@ textarea.qz-sm-inp { resize: vertical; min-height: 62px; line-height: 1.5; }
   transition: transform var(--qz-dur) var(--qz-ease);
 }
 
-.qz-s3-qbody { display: flex; flex-direction: column; gap: 12px; flex: 1 1 auto; min-height: 0; overflow: hidden; }
+/* The question column — the SCREEN scrolls now (SPEC), so nothing clips. */
+.qz-s3-qbody { display: flex; flex-direction: column; gap: 12px; flex: 1 1 auto; }
 .qz-s3-kickerrow { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex: none; }
 /* The top-bar step counter ("1/7" — the mock's stepn). */
 .qz-s3-kicker {
@@ -4361,48 +4630,130 @@ textarea.qz-sm-inp { resize: vertical; min-height: 62px; line-height: 1.5; }
   font-size: 22px; line-height: 1.22; font-weight: 700;
 }
 .qz-s3-subtext { margin: 0; font-size: 12.5px; opacity: 0.7; }
-.qz-s3-achips { display: flex; flex-direction: column; gap: 8px; min-height: 0; overflow: hidden; }
+.qz-s3-subcap { margin: -4px 0 4px; font-size: 12.5px; opacity: .65; }
+.qz-s3-achips { display: flex; flex-direction: column; gap: 10px; }
+/* AUDIT-17 — the mock's answer row (opt): ⠿ drag grip · radio/checkbox
+   indicator · editable text · ⋯ kebab. Hot = the shopper-style preview
+   selection in the brand primary. */
 .qz-s3-achip {
-  padding: 11px 14px;
-  border-radius: var(--qz-radius, 10px);
+  padding: 12px 13px;
+  border-radius: var(--qz-radius, 13px);
   border: 1px solid color-mix(in srgb, currentColor 14%, transparent);
   background: color-mix(in srgb, currentColor 6%, transparent);
   font-size: 13.5px; line-height: 1.3;
   position: relative;
-  display: flex; align-items: center; gap: 8px;
+  display: flex; align-items: center; gap: 9px;
+  cursor: pointer;
 }
-/* QZY-3 — tap-to-delete an answer on the phone. Hidden until the chip is
-   hovered/focused; disabled (≥2 floor) renders faint. */
-.qz-s3-achip-del {
-  appearance: none; border: none; cursor: pointer; font: inherit;
-  margin-left: auto; flex: 0 0 auto;
-  width: 20px; height: 20px; border-radius: var(--qz-radius-pill);
-  display: inline-grid; place-items: center;
-  font-size: 14px; line-height: 1;
-  color: color-mix(in srgb, currentColor 55%, transparent);
-  background: transparent;
-  opacity: 0;
-  transition: opacity var(--qz-dur-fast) var(--qz-ease), background var(--qz-dur-fast) var(--qz-ease);
+.qz-s3-achip.is-hot {
+  border: 1.5px solid var(--qz-color-primary, currentColor);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--qz-color-primary, currentColor) 15%, transparent);
 }
-.qz-s3-achip:hover .qz-s3-achip-del,
-.qz-s3-achip-del:focus-visible { opacity: 1; }
-.qz-s3-achip-del:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--qz-crit) 12%, transparent);
+.qz-s3-achip.is-drophi { box-shadow: inset 0 2px 0 var(--qz-color-primary, currentColor); }
+.qz-s3-odrag {
+  opacity: 0; flex: none;
+  display: grid; place-items: center;
+  color: color-mix(in srgb, currentColor 28%, transparent);
+  cursor: grab;
+  transition: opacity .12s;
+}
+.qz-s3-odrag svg { width: 13px; height: 13px; }
+.qz-s3-achip:hover .qz-s3-odrag { opacity: 1; }
+.qz-s3-oradio {
+  width: 19px; height: 19px; flex: none;
+  border-radius: var(--qz-radius-pill);
+  border: 1.5px solid color-mix(in srgb, currentColor 28%, transparent);
+}
+.qz-s3-achip.is-hot .qz-s3-oradio {
+  border-color: var(--qz-color-primary, currentColor);
+  box-shadow: inset 0 0 0 4px var(--qz-color-primary, currentColor);
+}
+.qz-s3-obox {
+  width: 19px; height: 19px; flex: none;
+  border-radius: 6px;
+  border: 1.5px solid color-mix(in srgb, currentColor 28%, transparent);
+}
+.qz-s3-achip.is-hot .qz-s3-obox {
+  border-color: var(--qz-color-primary, currentColor);
+  background: var(--qz-color-primary, currentColor);
+}
+.qz-s3-otext { flex: 1; min-width: 0; font-size: 15px; line-height: 1.3; }
+.qz-s3-omore {
+  opacity: 0; flex: none;
+  border: none; background: transparent;
+  width: 24px; height: 24px; border-radius: 6px; padding: 0;
+  display: grid; place-items: center;
+  color: color-mix(in srgb, currentColor 35%, transparent);
+  cursor: pointer;
+  transition: opacity .12s;
+}
+.qz-s3-omore svg { width: 15px; height: 15px; }
+.qz-s3-achip:hover .qz-s3-omore,
+.qz-s3-omore:focus-visible,
+.qz-s3-omore[aria-expanded="true"] { opacity: 1; }
+.qz-s3-omore:hover { background: color-mix(in srgb, currentColor 5%, transparent); }
+.qz-s3-omenu {
+  position: absolute; top: calc(100% - 2px); right: 6px; z-index: 8;
+  background: var(--qz-paper);
+  border: 1px solid var(--qz-rule); border-radius: 10px;
+  box-shadow: var(--qz-lift-2);
+  padding: 4px;
+}
+.qz-s3-omdel {
+  display: flex; align-items: center; gap: 7px;
+  border: none; background: transparent;
   color: var(--qz-crit);
+  font: inherit; font-size: 12.5px; font-weight: 600;
+  padding: 8px 11px; border-radius: 7px;
+  cursor: pointer; white-space: nowrap;
 }
-.qz-s3-achip-del:disabled { cursor: default; opacity: 0; }
-.qz-s3-achip:hover .qz-s3-achip-del:disabled { opacity: .3; }
-/* QZY-3 — "+ Add question" under the final answer. */
-.qz-s3-addq {
+.qz-s3-omdel svg { width: 13px; height: 13px; }
+.qz-s3-omdel:hover:not(:disabled) { background: var(--qz-crit-wash); }
+.qz-s3-omdel:disabled { color: var(--qz-ink-25); cursor: default; }
+/* Mock addopt — "+ Add answer" after the answer list. */
+.qz-s3-addopt {
   appearance: none; cursor: pointer; font: inherit;
-  margin-top: 10px; padding: 8px 12px; width: 100%;
-  border: 1px dashed color-mix(in srgb, currentColor 25%, transparent);
-  border-radius: var(--qz-radius, 10px); background: transparent;
-  font-size: 12.5px; font-weight: 600;
+  margin-top: 10px; padding: 11px; width: 100%;
+  border: 1px dashed color-mix(in srgb, currentColor 22%, transparent);
+  border-radius: var(--qz-radius, 13px); background: transparent;
+  font-size: 13px; font-weight: 600;
   color: color-mix(in srgb, currentColor 65%, transparent);
   transition: border-color var(--qz-dur-fast) var(--qz-ease), color var(--qz-dur-fast) var(--qz-ease);
 }
-.qz-s3-addq:hover { border-color: currentColor; color: currentColor; }
+.qz-s3-addopt:hover { border-color: currentColor; color: currentColor; }
+/* Mock scalebar — the rating question's numbered points over a filled track,
+   with the endpoint labels row below. */
+.qz-s3-scalebar { position: relative; margin: 8px 2px 2px; }
+.qz-s3-sbtrack {
+  position: absolute; left: 17px; right: 17px; top: 17px; height: 5px;
+  border-radius: var(--qz-radius-pill);
+  background: color-mix(in srgb, currentColor 10%, transparent);
+}
+.qz-s3-sbtrack span {
+  display: block; height: 100%;
+  background: var(--qz-color-primary, currentColor);
+  border-radius: var(--qz-radius-pill);
+  transition: width var(--qz-dur-fast) var(--qz-ease);
+}
+.qz-s3-sbnums { display: flex; justify-content: space-between; position: relative; }
+.qz-s3-sbn {
+  width: 35px; height: 35px; flex: none;
+  border-radius: var(--qz-radius-pill);
+  border: 1.5px solid color-mix(in srgb, currentColor 18%, transparent);
+  background: var(--qz-color-surface, var(--qz-paper));
+  font: inherit; font-size: 14px; font-weight: 700;
+  color: inherit; cursor: pointer;
+}
+.qz-s3-sbn.is-on {
+  border-color: var(--qz-color-primary, currentColor);
+  background: var(--qz-color-primary, currentColor);
+  color: var(--qz-color-bg, var(--qz-paper));
+  box-shadow: 0 3px 9px color-mix(in srgb, var(--qz-color-primary, currentColor) 40%, transparent);
+}
+.qz-s3-scalelab {
+  display: flex; justify-content: space-between;
+  margin-top: 8px; font-size: 11.5px; opacity: .65;
+}
 /* QZY-3 — the capture step's terms mock + option toggles. */
 .qz-s3-termsmock {
   display: flex; align-items: flex-start; gap: 8px;
@@ -4440,7 +4791,7 @@ textarea.qz-sm-inp { resize: vertical; min-height: 62px; line-height: 1.5; }
   font-size: 13px; opacity: 0.65;
 }
 .qz-s3-capture { display: flex; flex-direction: column; gap: 12px; flex: 1 1 auto; min-height: 0; }
-.qz-s3-reveal { display: flex; flex-direction: column; gap: 10px; flex: 1 1 auto; min-height: 0; overflow: hidden; }
+.qz-s3-reveal { display: flex; flex-direction: column; gap: 10px; flex: 1 1 auto; }
 .qz-s3-prodcard {
   display: flex; flex-direction: column; gap: 8px;
   padding: 12px;
@@ -4515,36 +4866,10 @@ body[data-qz] .qz-s3-editable:focus-visible {
 /* An emptied run keeps a clickable footprint. */
 .qz-s3-editable:empty::before { content: "…"; opacity: 0.4; }
 
-/* — P2: the type chip as a real dropdown — inherits the chip skin. — */
-/* Mock floating type tag: a white pill beside the phone (still the native
-   select — decider guards + dialogs unchanged). */
-.qz-s3-typechip.is-select {
-  appearance: none; -webkit-appearance: none;
-  margin: 0; cursor: pointer;
-  display: inline-flex; align-items: center;
-  white-space: nowrap; text-overflow: ellipsis; overflow: hidden;
-  max-width: 200px;
-  background: var(--qz-paper);
-  border: 1px solid var(--qz-rule); border-radius: 999px;
-  padding: 6px 26px 6px 12px;
-  font-family: inherit; font-size: 12px; font-weight: 600;
-  color: var(--qz-accent-ink);
-  letter-spacing: 0; text-transform: none; opacity: 1;
-  box-shadow: 0 3px 10px rgba(60, 50, 90, .13);
-  background-image: linear-gradient(45deg, transparent 50%, var(--qz-ink-25) 50%), linear-gradient(135deg, var(--qz-ink-25) 50%, transparent 50%);
-  background-position: calc(100% - 15px) 55%, calc(100% - 11px) 55%;
-  background-size: 4px 4px, 4px 4px;
-  background-repeat: no-repeat;
-}
-.qz-s3-typechip.is-select:hover { border-color: color-mix(in srgb, var(--qz-accent) 32%, var(--qz-paper)); }
-.qz-s3-typechip.is-select:focus-visible {
-  outline: 2px solid var(--sec-color, var(--qz-accent)); outline-offset: 1px;
-}
-
 /* — P2: >8-answer advisory under the phone (terracotta wash, never blocks) — */
 .qz-s3-warnbanner {
   display: flex; align-items: flex-start; gap: 8px;
-  width: 322px; box-sizing: border-box;
+  max-width: 420px; box-sizing: border-box;
   padding: 10px 14px;
   border: 1px solid var(--qz-warn-edge);
   border-radius: var(--qz-radius-sm);
@@ -4563,7 +4888,7 @@ body[data-qz] .qz-s3-editable:focus-visible {
 }
 .qz-s3-regen-error {
   display: flex; align-items: center; gap: 8px;
-  max-width: 322px;
+  max-width: 420px;
   padding: 8px 12px;
   border: 1px solid var(--qz-crit-edge);
   border-radius: var(--qz-radius-sm);

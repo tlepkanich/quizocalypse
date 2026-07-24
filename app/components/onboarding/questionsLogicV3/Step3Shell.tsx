@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { CSSProperties, PointerEvent as ReactPointerEvent } from "react";
 import type { Quiz as QuizDoc, DesignTokens } from "../../../lib/quizSchema";
 import type { BuilderCategory, BuilderCollection } from "../../builder/stepProps";
 import type { IndexedProduct } from "../../../lib/recommendationEngine";
 import { buildTier1Report, type Tier1Link } from "../../../lib/pathReport";
-import { insertQuestionRelative, moveStep } from "../../../lib/quizMutations";
+import { deleteNode, insertQuestionRelative, moveStep } from "../../../lib/quizMutations";
+import { updateNodeData } from "../../studio/studioDoc";
 import { orderedQuestions, deciderQuestion } from "../../../lib/questionOrder";
 import { QuestionBankDrawer } from "../../studio/QuestionBankDrawer";
 import { TopBar3 } from "./TopBar3";
@@ -145,6 +147,69 @@ export function Step3Shell({
     [doc, questions, onCommit],
   );
 
+  // AUDIT-17 — the mock's click-to-renumber number chip: move the question to
+  // the 1-based ordinal (mock moveQuestionToOrdinal semantics: land AFTER the
+  // target when moving down, BEFORE it when moving up), through the same pure
+  // moveStep mutation the ↑/↓ movers use.
+  const renumberQuestion = useCallback(
+    (id: string, ordinal: number) => {
+      const ids = questions.map((q) => q.node.id);
+      const from = ids.indexOf(id);
+      if (from < 0) return;
+      const target = Math.max(1, Math.min(ids.length, ordinal)) - 1;
+      if (target === from) return;
+      const beforeId = from < target ? ids[target + 1] ?? null : ids[target]!;
+      onCommit(moveStep(doc, id, beforeId));
+    },
+    [doc, questions, onCommit],
+  );
+
+  // AUDIT-17 — the navigator's inline title edit (mock contenteditable ncq).
+  const renameQuestion = useCallback(
+    (id: string, text: string) => {
+      onCommit(updateNodeData(doc, id, { text }));
+    },
+    [doc, onCommit],
+  );
+
+  // AUDIT-17 — the navigator's hover-✕ delete (mock ndel + confirm). deleteNode
+  // re-stitches the straight-through chain so the flow never strands. The
+  // decider row's delete is disabled in the rail (deviation: deleting the
+  // deciding question would orphan every mapping — move the role first).
+  const deleteQuestion = useCallback(
+    (id: string) => {
+      if (typeof window !== "undefined" && !window.confirm("Delete this question?")) return;
+      onCommit(deleteNode(doc, id));
+      if (selectedId === id) setSelectedId(null);
+    },
+    [doc, onCommit, selectedId],
+  );
+
+  // AUDIT-17 — the mock's draggable navigator/phone divider (resizer col):
+  // pointer-captured drag, 232px floor, keep ≥360px for the phone pane.
+  const bodyRef = useRef<HTMLDivElement>(null);
+  const [navWidth, setNavWidth] = useState(304);
+  const [railDragging, setRailDragging] = useState(false);
+  const railDrag = useRef<{ startX: number; startW: number } | null>(null);
+  const onResizerPointerDown = useCallback(
+    (e: ReactPointerEvent<HTMLDivElement>) => {
+      e.currentTarget.setPointerCapture(e.pointerId);
+      railDrag.current = { startX: e.clientX, startW: navWidth };
+      setRailDragging(true);
+    },
+    [navWidth],
+  );
+  const onResizerPointerMove = useCallback((e: ReactPointerEvent<HTMLDivElement>) => {
+    const d = railDrag.current;
+    if (!d) return;
+    const max = (bodyRef.current?.clientWidth ?? 1000) - 360 - 9;
+    setNavWidth(Math.max(232, Math.min(max, d.startW + (e.clientX - d.startX))));
+  }, []);
+  const onResizerPointerUp = useCallback(() => {
+    railDrag.current = null;
+    setRailDragging(false);
+  }, []);
+
   // P4 tri-state Continue — Content: pure view switch (no server intent);
   // Logic + healthy: the stage's existing to-rec-page intent; Logic +
   // blocking: open the health popover instead of advancing. The gate is the
@@ -238,7 +303,11 @@ export function Step3Shell({
             <span className="qz-s3-subhint">Click any text on the phone to edit it</span>
             <button type="button" className="qz-btn qz-btn-accent qz-btn-sm" onClick={addQuestion}>+ Add</button>
           </div>
-        <div className="qz-s3-body">
+        <div
+          className="qz-s3-body"
+          ref={bodyRef}
+          style={{ "--qz-s3-navw": `${navWidth}px` } as CSSProperties}
+        >
           <LeftRail
             questions={questions}
             deciderId={decider?.id ?? null}
@@ -246,8 +315,21 @@ export function Step3Shell({
             captureOn={captureOn}
             onSelect={(id) => setSelectedId(id)}
             onMove={moveQuestion}
+            onRename={renameQuestion}
+            onRenumber={renumberQuestion}
+            onDelete={deleteQuestion}
             onAddQuestion={addQuestion}
             onOpenLibrary={() => setLibraryOpen(true)}
+          />
+          <div
+            className={`qz-s3-resizer${railDragging ? " is-drag" : ""}`}
+            role="separator"
+            aria-orientation="vertical"
+            aria-label="Resize the question navigator"
+            onPointerDown={onResizerPointerDown}
+            onPointerMove={onResizerPointerMove}
+            onPointerUp={onResizerPointerUp}
+            onPointerCancel={onResizerPointerUp}
           />
           <PhoneCanvas
             doc={doc}
