@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Shape step — decider (mock)</title>
+<style>
+  :root{
+    --accent:#6D5AE6; --accent-2:#6B4FD8; --accent-ink:#3C3489;
+    --accent-wash:#EDEBFC; --accent-tint:#F3F1FD;
+    --ink:#2E2740; --ink-3:#5A5470; --ink-4:#7C7791; --ink-25:#B6B0C8;
+    --rule:#E9E7EF; --rule-2:#F1EFF6; --paper:#FFFFFF; --cream-2:#F2F1F5;
+    --ok:#158A5A; --amber-bg:#FAEEDA; --amber-ink:#854F0B;
+    --mono:ui-monospace,SFMono-Regular,Menlo,monospace;
+    --sans:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:#EDECF1;font-family:var(--sans);color:var(--ink);-webkit-font-smoothing:antialiased;padding:26px 0 80px}
+  .wrap{max-width:1080px;margin:0 auto;padding:0 22px}                 /* GUARDRAIL 1: chrome caps 1080 */
+  .cap{font-size:12.5px;color:var(--ink-4);margin:0 2px 14px;line-height:1.7}
+  .cap b{color:var(--ink-3)}
+  .cap button{border:1px solid var(--rule);background:#fff;color:var(--accent-ink);font-size:12px;padding:5px 11px;border-radius:8px;cursor:pointer;font-family:inherit;margin-left:6px}
+
+  .app{background:var(--paper);border:1px solid var(--rule);border-radius:18px;overflow:hidden;box-shadow:0 10px 34px rgba(120,110,150,.12)}
+
+  .barrow{display:flex;align-items:center;justify-content:space-between;padding:13px 20px}
+  .brand{display:flex;align-items:center;gap:10px}
+  .logo{width:28px;height:28px;border-radius:9px;background:var(--accent);color:#fff;display:grid;place-items:center;font-weight:600;font-size:15px}
+  .brand strong{font-size:16px;font-weight:600;letter-spacing:-.01em}
+  .actions{display:flex;align-items:center;gap:6px}
+  .ghost{font-size:13px;color:var(--accent-ink);padding:7px 11px;border-radius:9px;background:transparent;cursor:pointer;white-space:nowrap;border:none;font-family:var(--sans)}
+  .ghost:hover{background:var(--cream-2)}
+
+  .stepline{padding:13px 24px 15px;background:#fff;border-top:1px solid var(--rule-2);border-bottom:1px solid var(--rule-2)}
+  .track{display:flex;align-items:center}
+  .node{display:flex;flex-direction:column;align-items:center;gap:7px;position:relative;flex:none;width:104px;cursor:default}
+  .node.done{cursor:pointer}
+  .glow{position:absolute;top:-9px;left:50%;transform:translateX(-50%);width:52px;height:52px;border-radius:50%;pointer-events:none;opacity:0;transition:opacity .6s ease;background:radial-gradient(circle,rgba(109,90,230,.24),transparent 68%)}
+  .dot{width:24px;height:24px;border-radius:50%;display:grid;place-items:center;font-family:var(--mono);font-size:11px;font-weight:600;background:var(--cream-2);color:var(--ink-4);position:relative}
+  .node .lbl{font-size:12px;color:var(--ink-4);font-weight:500}
+  .node.cur .dot{background:var(--accent);color:#fff;box-shadow:0 0 0 4px var(--accent-wash);z-index:1;overflow:visible;transition:box-shadow .6s ease}
+  .node.cur .lbl{color:var(--ink);font-weight:600}
+  .node.done .dot{background:var(--accent-wash);color:var(--accent-ink)}
+  .link{flex:1;height:2px;background:var(--rule);margin-top:-22px}
+  .link.done{background:var(--accent-wash)}
+  .node.cur.igniting .dot{animation:qzHalo 2.3s ease-in-out infinite}
+  @keyframes qzHalo{0%,100%{box-shadow:0 0 0 3px var(--accent-wash),0 0 6px 1px rgba(109,90,230,.32)}
+    50%{box-shadow:0 0 0 5px rgba(237,235,252,.55),0 0 18px 4px rgba(109,90,230,.58)}}
+  .node.cur .dot::after{content:'';position:absolute;inset:-4px;border-radius:50%;pointer-events:none;opacity:0;transition:opacity .6s ease;
+    background:conic-gradient(from 0deg,rgba(109,90,230,0) 48%,rgba(157,140,255,.95) 76%,#fff 85%,rgba(109,90,230,0) 94%);
+    -webkit-mask:radial-gradient(farthest-side,transparent calc(100% - 3px),#000 0);mask:radial-gradient(farthest-side,transparent calc(100% - 3px),#000 0)}
+  .node.cur.igniting .dot::after{opacity:1;animation:qzSpin 1.9s linear infinite}
+  @keyframes qzSpin{to{transform:rotate(360deg)}}
+  .node.cur.igniting .glow{animation:qzGlowPulse 2.3s ease-in-out infinite}
+  @keyframes qzGlowPulse{0%,100%{opacity:.4;transform:translateX(-50%) scale(.78)}50%{opacity:1;transform:translateX(-50%) scale(1.28)}}
+  .spark{position:absolute;font-size:10px;color:#fff;opacity:0;pointer-events:none;z-index:2;text-shadow:0 0 7px rgba(157,140,255,1)}
+  .dot .spark.s1{top:-10px;right:-6px;animation-delay:0s}.dot .spark.s2{bottom:-8px;left:-8px;font-size:8px;animation-delay:.5s}
+  .dot .spark.s3{top:0;right:-12px;font-size:9px;animation-delay:.9s}.dot .spark.s4{top:-8px;left:-8px;font-size:7px;animation-delay:1.3s}
+  .dot .spark.s5{bottom:-4px;right:-10px;font-size:8px;animation-delay:1.55s}
+  .node.cur.igniting .spark{animation:qzTwinkle 1.7s ease-in-out infinite}
+  @keyframes qzTwinkle{0%,100%{opacity:0;transform:scale(.3) rotate(0)}50%{opacity:1;transform:scale(1.15) rotate(90deg)}}
+
+  .content{padding:22px 22px 26px}
+  .col{max-width:900px;margin:0 auto}                                 /* GUARDRAIL 2: working column caps 900 */
+  .col h2{margin:0 0 18px;font-size:21px;font-weight:600;letter-spacing:-.02em}
+
+  /* ── direction cards ── */
+  .dgrid{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+  .dcard{position:relative;border:1px solid var(--rule);border-radius:16px;background:#fff;padding:16px 16px 15px;display:flex;flex-direction:column;gap:13px;transition:border-color .15s,background .15s,box-shadow .15s}
+  .dcard:hover{border-color:#D9D3F2;box-shadow:0 2px 14px rgba(109,90,230,.10)}
+  .dcard.sel{border-color:var(--accent);background:var(--accent-tint)}
+  .ribbon{position:absolute;top:-10px;left:16px;z-index:5;display:inline-flex;align-items:center;gap:5px;background:var(--accent);color:#fff;font-family:var(--mono);font-size:10px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;padding:4px 10px;border-radius:999px;box-shadow:0 3px 8px rgba(109,90,230,.28)}
+
+  /* GUARDRAIL 3: the preview is a fixed-size, centered phone screen — can't stretch or run off */
+  .filmwrap{display:grid;place-items:center;padding:10px 0 4px;background:
+    radial-gradient(120% 90% at 50% 0%, color-mix(in srgb,var(--brand,#0E7C6B) 7%, #fff) 0%, transparent 70%);border-radius:12px}
+  .film{position:relative;width:min(272px,100%);aspect-ratio:3/4;max-height:392px;border-radius:26px;overflow:hidden;
+    background:var(--brand-bg,#F5F2EA);font-family:var(--brand-font,var(--sans));
+    box-shadow:0 18px 44px -18px rgba(60,50,90,.5), 0 0 0 1px rgba(0,0,0,.06)}
+  .film .fscr{position:absolute;inset:0;padding:15px 14px;display:flex;flex-direction:column;gap:9px;opacity:0;z-index:1;background:var(--brand-bg,#F5F2EA);transition:opacity .55s ease}
+  .film .fscr.on{opacity:1;z-index:2}
+  .fbar{height:5px;border-radius:999px;background:rgba(0,0,0,.08);overflow:hidden;flex:none}
+  .fbar span{display:block;height:100%;background:var(--brand,#0E7C6B);border-radius:999px}
+
+  /* question screen — image answer tiles */
+  .fq{font-size:14.5px;font-weight:700;color:#20211F;line-height:1.25;font-family:var(--brand-font,var(--sans))}
+  .fagrid{display:grid;grid-template-columns:1fr 1fr;gap:8px;flex:1;min-height:0}
+  .fatile{position:relative;border:1px solid rgba(0,0,0,.1);border-radius:12px;overflow:hidden;background:#fff;display:flex;flex-direction:column;min-width:0}
+  .fatile.hot{border:1.5px solid var(--brand,#0E7C6B);box-shadow:0 0 0 3px color-mix(in srgb,var(--brand,#0E7C6B) 16%,transparent)}
+  .faimg{width:100%;flex:1 1 auto;min-height:0;object-fit:cover;display:block;background:#00000010}   /* real: collection/product imageUrl + object-fit cover; #00000010 fallback */
+  .fal{font-size:11px;font-weight:600;color:#20211F;padding:6px 8px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:none}
+  .fatile.hot .fal{color:var(--brand,#0E7C6B)}
+  .fatile.hot::after{content:'✓';position:absolute;top:6px;right:6px;width:17px;height:17px;border-radius:50%;background:var(--brand,#0E7C6B);color:#fff;font-size:10px;font-weight:700;display:grid;place-items:center}
+  .fnext{margin-top:auto;align-self:stretch;text-align:center;font-size:12px;font-weight:700;color:#fff;background:var(--brand,#0E7C6B);border-radius:10px;padding:9px;flex:none}
+
+  /* recommendations screen — matches our ProductCard */
+  .frecs-h{font-size:14px;font-weight:700;color:#20211F;font-family:var(--brand-font,var(--sans));line-height:1.15}
+  .frecs-h.sub{font-size:12px}
+  .frecs-s{font-size:10.5px;color:#6a6b66;margin-top:-4px}
+  /* personality result — a PERSONA above the picks */
+  .fpersona{display:flex;gap:9px;align-items:center;border-bottom:1px solid rgba(0,0,0,.07);padding-bottom:8px}
+  .fpav{width:40px;height:40px;border-radius:11px;object-fit:cover;flex:none;background:#00000010}
+  .fpname{font-size:13px;font-weight:700;color:#20211F;font-family:var(--brand-font,var(--sans));line-height:1.15}
+  .fpsub{font-size:10px;color:#6a6b66;line-height:1.3;margin-top:2px}
+  .fpk{font-family:var(--mono);font-size:8.5px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--brand,#0E7C6B);margin-bottom:1px}
+  .flist{display:flex;flex-direction:column;gap:7px;flex:1;min-height:0}
+  .frow{display:flex;gap:10px;align-items:center;border:1px solid rgba(0,0,0,.08);border-radius:11px;background:#fff;padding:7px 8px}
+  .frow.hero{border:1.5px solid var(--brand,#0E7C6B)}
+  .frow .fimg{width:50px;height:50px;border-radius:8px;object-fit:cover;flex:none;background:#00000010}
+  .frow .fb{min-width:0;flex:1;display:flex;flex-direction:column;gap:2px}
+  .frow .fn{font-size:11.5px;font-weight:600;color:#20211F;line-height:1.2;
+    display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}    /* GUARDRAIL 4: name clamps, never overflows */
+  .frow .fp{font-size:11px;color:#6a6b66;font-weight:600}
+  .frow .ftop{flex:none;font-family:var(--sans);font-size:8px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#fff;background:var(--brand,#0E7C6B);border-radius:999px;padding:2px 7px}
+  .faddall{align-self:stretch;text-align:center;font-size:11px;font-weight:700;color:#fff;background:var(--brand,#0E7C6B);border-radius:9px;padding:8px;margin-top:2px;flex:none}
+
+  .dhead{display:flex;align-items:flex-start;justify-content:space-between;gap:8px}
+  .dname{font-size:16px;font-weight:600;letter-spacing:-.01em;line-height:1.25}
+  .tbadge{font-family:var(--mono);font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--accent-ink);background:var(--accent-wash);border-radius:999px;padding:4px 9px;white-space:nowrap;flex:none}
+
+  .gw{display:flex;gap:9px;align-items:baseline}
+  .gwl{flex:none;width:34px;font-family:var(--mono);font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.04em;color:var(--ink-25);padding-top:1px}
+  .gwt{font-size:13px;color:var(--ink-3);line-height:1.42}
+  .dmeta{margin-top:1px;font-family:var(--mono);font-size:11px;color:var(--ink-4);letter-spacing:.03em;text-transform:uppercase}
+
+  /* commit-on-card: unselected = quiet outline "Use this"; selected = primary "Continue → build" */
+  .dfoot{margin-top:auto;padding-top:4px}
+  .btn-pick{width:100%;border:1px solid var(--rule);background:#fff;color:var(--accent-ink);font-size:13px;font-weight:600;padding:11px 12px;border-radius:10px;cursor:pointer;font-family:var(--sans);transition:background .15s,border-color .15s}
+  .btn-pick:hover{background:var(--accent-tint);border-color:var(--accent-wash)}
+  .dcard.sel .btn-pick{background:var(--accent);border-color:var(--accent);color:#fff}
+  .dcard.sel .btn-pick:hover{background:var(--accent-2)}
+
+  .otherwrap{margin-top:22px;border-top:1px solid var(--rule-2);padding-top:14px}
+  .otherhead{display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--ink-4);cursor:pointer;user-select:none}
+  .otherhead .chev{transition:transform .2s ease;font-size:11px}
+  .otherwrap.open .otherhead .chev{transform:rotate(90deg)}
+  .otherbody{max-height:0;overflow:hidden;opacity:0;transition:max-height .3s ease,opacity .25s ease,margin-top .3s ease}
+  .otherwrap.open .otherbody{max-height:460px;opacity:1;margin-top:12px}
+  .otheropts{display:flex;flex-direction:column;gap:8px}
+  .oopt{display:flex;align-items:center;gap:11px;border:1px solid var(--rule);border-radius:11px;background:#fff;padding:11px 13px;cursor:pointer}
+  .oopt:hover{border-color:#D9D3F2;background:#FCFBFE}
+  .oopt .oi{width:30px;height:30px;border-radius:8px;background:var(--accent-tint);display:grid;place-items:center;font-size:15px;flex:none}
+  .oopt .on{font-size:13.5px;font-weight:600}
+  .oopt .od{font-size:12px;color:var(--ink-4)}
+  .oopt .oarr{margin-left:auto;color:var(--ink-25);font-size:14px}
+  .savedrail{display:flex;flex-wrap:wrap;gap:8px;margin-top:2px}
+  .savedpill{border:1px solid var(--rule);background:#fff;color:var(--accent-ink);font-size:12.5px;padding:7px 13px;border-radius:999px;cursor:pointer;font-family:var(--sans)}
+  .savedpill:hover{background:var(--accent-tint);border-color:var(--accent-wash)}
+  .goalbox{display:none;flex-direction:column;gap:9px;border:1px solid var(--rule);border-radius:11px;background:#FCFBFE;padding:13px}
+  .goalbox.on{display:flex}
+  .goalbox textarea{resize:vertical;font-family:var(--sans);font-size:13px;color:var(--ink);border:1px solid var(--rule);border-radius:9px;padding:10px 11px;background:#fff}
+  .goalbox .grow{display:flex;gap:9px}
+  .use{border:none;background:var(--accent);color:#fff;font-size:12.5px;font-weight:500;padding:8px 16px;border-radius:9px;cursor:pointer;font-family:var(--sans)}
+  .hidebtn{border:none;background:transparent;color:var(--accent-ink);font-size:12px;cursor:pointer;font-family:var(--sans);padding:8px 10px;border-radius:8px}
+
+  .underrow{display:flex;gap:16px;margin-top:18px;font-size:12.5px;color:var(--accent-ink)}
+  .underrow span{cursor:pointer}
+
+  /* ── leave-setup confirm modal ── */
+  .scrim{position:fixed;inset:0;background:rgba(46,39,64,.46);display:none;align-items:center;justify-content:center;z-index:50;padding:20px}
+  .scrim.on{display:flex}
+  .modal{width:min(380px,100%);background:#fff;border-radius:16px;overflow:hidden;box-shadow:0 24px 60px rgba(46,39,64,.3)}
+  .confirm{padding:20px 20px 18px}
+  .confirm h3{margin:0 0 6px;font-size:16px;font-weight:600}
+  .confirm p{margin:0 0 16px;font-size:13px;color:var(--ink-3);line-height:1.5}
+  .confirm .crow{display:flex;justify-content:flex-end;gap:9px}
+  .confirm .cstay{border:1px solid var(--rule);background:#fff;color:var(--ink-3);font-size:13px;font-weight:500;padding:9px 16px;border-radius:9px;cursor:pointer;font-family:var(--sans)}
+  .confirm .cleave{border:none;background:var(--accent);color:#fff;font-size:13px;font-weight:600;padding:9px 16px;border-radius:9px;cursor:pointer;font-family:var(--sans)}
+
+  @media (max-width:720px){.dgrid{grid-template-columns:1fr}.dcard{max-width:420px;margin:0 auto;width:100%}}
+  @media (prefers-reduced-motion:reduce){
+    .node.cur.igniting .dot,.node.cur.igniting .dot::after,.node.cur.igniting .glow,.node.cur.igniting .spark{animation:none!important}
+    .film .fscr{transition:none}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <p class="cap"><b>Step 2 · Shape — decider (v5, locked candidate).</b> No pop-out preview. The question screen now uses image answer tiles (real collection/product imagery). Preview themes from the merchant's brand (colors + fonts) — here a teal / serif brand; falls back to Quizocalypse’s palette when the brand read is weak. <button onclick="ignite()">▶ Replay ring</button></p>
+
+  <div class="app">
+    <div class="barrow">
+      <div class="brand"><span class="logo">Q</span><strong>Quizocalypse</strong></div>
+      <div class="actions"><button class="ghost" id="homeBtn">← Homepage</button></div>
+    </div>
+
+    <div class="stepline">
+      <div class="track">
+        <div class="node done"><span class="dot">✓</span><span class="lbl">Recommendations</span></div>
+        <div class="link done"></div>
+        <div class="node cur" id="curNode"><span class="glow"></span><span class="dot">02<i class="spark s1">✦</i><i class="spark s2">✦</i><i class="spark s3">✦</i><i class="spark s4">✦</i><i class="spark s5">✦</i></span><span class="lbl">Shape</span></div>
+        <div class="link"></div>
+        <div class="node"><span class="dot">03</span><span class="lbl">Questions</span></div>
+        <div class="link"></div>
+        <div class="node"><span class="dot">04</span><span class="lbl">Results</span></div>
+        <div class="link"></div>
+        <div class="node"><span class="dot">05</span><span class="lbl">Design</span></div>
+      </div>
+    </div>
+
+    <div class="content">
+      <div class="col">
+        <h2>Choose the optimal quiz type</h2>
+
+        <div class="dgrid" id="directions"></div>
+
+        <div class="otherwrap" id="otherwrap">
+          <div class="otherhead" id="otherhead"><span class="chev">▸</span><span>Other ways to start</span></div>
+          <div class="otherbody">
+            <div class="otheropts">
+              <div class="oopt" id="optGoal"><span class="oi">✏️</span><div><div class="on">Write your own goal</div><div class="od">Describe what you want the quiz to do — we’ll draft a type from it.</div></div><span class="oarr">→</span></div>
+              <div class="goalbox" id="goalbox">
+                <textarea rows="3" placeholder='e.g. "Help riders find the right board for their style and terrain"'></textarea>
+                <div class="grow"><button class="use">Generate type →</button><button class="hidebtn" id="goalCancel">Cancel</button></div>
+              </div>
+              <div class="oopt" id="optManual"><span class="oi">⚒️</span><div><div class="on">Build manually</div><div class="od">Start from a blank quiz and write every question yourself.</div></div><span class="oarr">→</span></div>
+              <div>
+                <div class="oopt" style="cursor:default"><span class="oi">♻️</span><div><div class="on">Reuse a saved template</div><div class="od">Start from one you saved before — its settings come along.</div></div></div>
+                <div class="savedrail"><button class="savedpill">♻ Holiday Gift Finder</button><button class="savedpill">♻ Beginner Board Match</button></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="underrow">
+          <span id="regen">↻ Regenerate suggestions</span>
+          <span>← Back to recommendations</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="scrim" id="scrim"><div class="modal" id="modal"></div></div>
+
+<script>
+  const $=id=>document.getElementById(id);
+  const REDUCED=window.matchMedia("(prefers-reduced-motion:reduce)").matches;
+
+  // merchant brand (from designTokens: --qz-color-primary + --qz-font-*). Weak read → Quizocalypse defaults.
+  const BRAND={primary:"#0E7C6B",bg:"#F5F2EA",font:"Georgia, 'Times New Roman', serif"};
+  const brandStyle=`--brand:${BRAND.primary};--brand-bg:${BRAND.bg};--brand-font:${BRAND.font}`;
+
+  // inline-SVG stand-in imagery (Artifact blocks remote images) — real build swaps in imageUrl + object-fit:cover
+  const svg=s=>`data:image/svg+xml;utf8,`+encodeURIComponent(s);
+  function board(i,deck,g1,g2){return svg(`<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 120 120'><defs><linearGradient id='b${i}' x1='0' y1='0' x2='1' y2='1'><stop offset='0' stop-color='${g1}'/><stop offset='1' stop-color='${g2}'/></linearGradient></defs><rect width='120' height='120' fill='url(#b${i})'/><g transform='translate(60 62) rotate(26)'><rect x='-12' y='-44' width='24' height='88' rx='12' fill='${deck}'/><rect x='-8' y='-38' width='16' height='76' rx='8' fill='#fff' opacity='.5'/><rect x='-10' y='-15' width='20' height='6' rx='3' fill='rgba(0,0,0,.28)'/><rect x='-10' y='9' width='20' height='6' rx='3' fill='rgba(0,0,0,.28)'/></g></svg>`);}
+  function scene(i,s1,s2,mtn,snow){return svg(`<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 120 120'><defs><linearGradient id='s${i}' x1='0' y1='0' x2='0' y2='1'><stop offset='0' stop-color='${s1}'/><stop offset='1' stop-color='${s2}'/></linearGradient></defs><rect width='120' height='120' fill='url(#s${i})'/><circle cx='88' cy='34' r='13' fill='#ffffffcc'/><polygon points='0,120 40,54 76,120' fill='${mtn}'/><polygon points='40,54 52,74 28,74' fill='${snow}'/><polygon points='52,120 92,42 120,120' fill='${mtn}' opacity='.9'/><polygon points='92,42 104,62 80,62' fill='${snow}'/></svg>`);}
+  const IMG={coral:board(1,"#E2603F","#FBE6DC","#F6CDBE"),teal:board(2,"#127C6B","#D7EEE7","#B6DED2"),amber:board(3,"#C98A2E","#F6E7C9","#EBD09B"),slate:board(4,"#42618C","#DDE6F1","#BCCBE2"),plum:board(5,"#7A4F9E","#EADFF3","#D4BFE7")};
+  const SC={powder:scene(1,"#CFE6F5","#EAF4FB","#6E8FB0","#fff"),park:scene(2,"#F6E2CC","#FBF1E4","#C08A57","#fff"),back:scene(3,"#E1D6F0","#F1EAF8","#7A5E9E","#fff"),groom:scene(4,"#CFEAE2","#EAF6F2","#3E8C79","#fff")};
+
+  const DIRS=[
+    {id:"d1",name:"Find Your Perfect Board",type:"Product match",rec:true,
+     goal:"The right board in a few quick taps",
+     why:"Your catalog has the range to match with confidence",
+     q:"4–6 questions",
+     q1:{q:"What are you shopping for today?",hot:0,opts:[
+       {l:"Snowboards",img:IMG.coral},{l:"Automated Collection",img:IMG.teal},{l:"Hydrogen",img:IMG.slate},{l:"Home page",img:IMG.amber}]},
+     recs:[["The Collection Snowboard: Liquid","$749.95",IMG.coral],["The Complete Snowboard","$699.95",IMG.teal],["The Multi-managed Snowboard","$629.95",IMG.amber]]},
+    {id:"d2",name:"What’s Your Rider Type?",type:"Personality",rec:false,
+     goal:"Turn a personality read into a gear match",
+     why:"Best when shoppers don’t know the specs yet",
+     q:"5–7 questions",
+     // personality quizzes resolve to a PERSONA first, then its gear picks
+     persona:{name:"the Powder Purist",sub:"Lives for deep days and untouched lines.",av:SC.powder},
+     q1:{q:"Pick the mountain that calls to you",hot:0,opts:[
+       {l:"Powder day",img:SC.powder},{l:"Park laps",img:SC.park},{l:"Backcountry",img:SC.back},{l:"Groomed",img:SC.groom}]},
+     recs:[["The Videographer Snowboard","$885.95",IMG.plum],["The Complete Snowboard","$699.95",IMG.teal],["The Draft Snowboard","$749.95",IMG.amber]]},
+  ];
+
+  let selected=null,committing=false,timers=[];
+
+  const qScreen=(s,fill)=>`
+    <div class="fbar"><span style="width:${fill}%"></span></div>
+    <div class="fq">${s.q}</div>
+    <div class="fagrid">${s.opts.map((o,i)=>`<div class="fatile${i===s.hot?" hot":""}"><img class="faimg" src="${o.img}" alt=""><span class="fal">${o.l}</span></div>`).join("")}</div>
+    <span class="fnext">Next →</span>`;
+  const recsScreen=(recs,persona)=>`
+    <div class="fbar"><span style="width:100%"></span></div>
+    ${persona
+      ? `<div class="fpersona"><img class="fpav" src="${persona.av}" alt=""><div><div class="fpk">Your rider type</div><div class="fpname">You’re ${persona.name}</div><div class="fpsub">${persona.sub}</div></div></div><div class="frecs-h sub">Your gear picks</div>`
+      : `<div class="frecs-h">Your matches</div><div class="frecs-s">Picked from your catalog for their answers</div>`}
+    <div class="flist">${recs.slice(0,persona?2:3).map((p,i)=>`<div class="frow${i===0?" hero":""}"><img class="fimg" src="${p[2]}" alt=""><div class="fb"><div class="fn">${p[0]}</div><div class="fp">${p[1]}</div></div>${i===0?'<span class="ftop">Top</span>':''}</div>`).join("")}</div>
+    <span class="faddall">Add all to cart</span>`;
+
+  function mountFilm(el,screens,interval){
+    el.innerHTML=screens.map((h,i)=>`<div class="fscr${i===0?" on":""}">${h}</div>`).join("");
+    if(REDUCED){el.querySelectorAll(".fscr").forEach((s,i)=>s.classList.toggle("on",i===screens.length-1));return null;}
+    const layers=[...el.querySelectorAll(".fscr")];let i=0;
+    return setInterval(()=>{layers[i].classList.remove("on");i=(i+1)%layers.length;layers[i].classList.add("on");},interval);
+  }
+
+  function cardHTML(d){
+    return `<div class="dcard${selected===d.id?" sel":""}" data-id="${d.id}" style="${brandStyle}">
+      ${d.rec?'<span class="ribbon">✦ Recommended</span>':''}
+      <div class="filmwrap"><div class="film" data-film="${d.id}"></div></div>
+      <div class="dhead"><span class="dname">${d.name}</span><span class="tbadge">${d.type}</span></div>
+      <div class="gw"><span class="gwl">Goal</span><span class="gwt">${d.goal}</span></div>
+      <div class="gw"><span class="gwl">Why</span><span class="gwt">${d.why}</span></div>
+      <div class="dmeta">${d.q}</div>
+      <div class="dfoot"><button class="btn-pick" data-act="pick" data-id="${d.id}">${
+        committing&&selected===d.id ? "Building…"
+        : selected===d.id ? "Continue → build your questions"
+        : "Use this"}</button></div>
+    </div>`;
+  }
+
+  function render(){
+    timers.forEach(clearInterval);timers=[];
+    $("directions").innerHTML=DIRS.map(cardHTML).join("");
+    DIRS.forEach(d=>{
+      const el=$("directions").querySelector(`.film[data-film="${d.id}"]`);
+      const t=mountFilm(el,[qScreen(d.q1,32),recsScreen(d.recs,d.persona)],3200);
+      if(t)timers.push(t);
+    });
+    $("directions").querySelectorAll('[data-act="pick"]').forEach(b=>b.addEventListener("click",()=>onBtn(b.dataset.id)));
+  }
+
+  // commit-on-card: first click selects (button → Continue), second commits the build
+  function onBtn(id){
+    if(committing)return;
+    if(selected===id){committing=true;render();/* real build fires shape-continue {typeId,scoring:"direct"} */}
+    else{selected=id;render();}
+  }
+
+  $("otherhead").addEventListener("click",()=>$("otherwrap").classList.toggle("open"));
+  $("optGoal").addEventListener("click",()=>$("goalbox").classList.toggle("on"));
+  $("goalCancel").addEventListener("click",()=>$("goalbox").classList.remove("on"));
+
+  // ── leave-setup confirm (Homepage) ──
+  function openLeaveConfirm(){
+    $("modal").innerHTML=`<div class="confirm">
+      <h3>Leave setup?</h3>
+      <p>Your quiz is saved as a draft — you can pick up right here anytime. Head back to your quizzes?</p>
+      <div class="crow"><button class="cstay" id="cStay">Stay here</button><button class="cleave" id="cLeave">Go to homepage</button></div>
+    </div>`;
+    $("scrim").classList.add("on");
+    $("cStay").onclick=closeModal;
+    $("cLeave").onclick=closeModal; // mock: real build navigates home
+  }
+  function closeModal(){$("scrim").classList.remove("on");}
+  $("scrim").addEventListener("click",e=>{if(e.target===$("scrim"))closeModal();});
+  $("homeBtn").addEventListener("click",openLeaveConfirm);
+
+  function ignite(){const n=$("curNode");n.classList.remove("igniting");void n.offsetWidth;n.classList.add("igniting");setTimeout(()=>n.classList.remove("igniting"),3000);}
+
+  render();ignite();
+</script>
+</body>
+</html>

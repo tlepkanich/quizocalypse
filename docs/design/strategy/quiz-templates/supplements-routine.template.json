@@ -1,0 +1,28 @@
+{
+  "id": "supplements-routine",
+  "name": "Supplements / health routine",
+  "category": "health/supplements",
+  "variant": "goal-framed pack (Care/of, Persona)",
+  "use_when": "Multiple SKUs combine into a personalized daily set; goal framing routes into concern-specific deep-dives; safety cross-checks may apply.",
+  "length": { "min": 8, "max": 15, "band": "medium", "note": "Care/of deliberately long — longer outperformed shorter for high-personalization health." },
+  "gate": { "placement": "before_results", "style": "soft", "rationale": "Ask at peak anticipation right before the reveal — the canonical placement." },
+  "result_shape": "single_bespoke_output",
+  "arc": ["basics", "goal_framing", "concern_deep_dive", "diet_lifestyle", "safety", "config"],
+  "branching": "heavy",
+  "questions": [
+    { "ordinal": 1, "id": "age_band", "prompt": "What's your age range?", "type": "single_select", "options": [{ "label": "18–29", "maps_to": "age:18_29" }, { "label": "30–44", "maps_to": "age:30_44" }, { "label": "45–59", "maps_to": "age:45_59" }, { "label": "60+", "maps_to": "age:60_plus" }], "maps_to": "age_band", "weight_tier": "secondary" },
+    { "ordinal": 2, "id": "primary_goal", "prompt": "What's your main goal?", "type": "single_select", "options": [{ "label": "Overall wellness", "maps_to": "goal:wellness" }, { "label": "Immunity", "maps_to": "goal:immunity" }, { "label": "Sleep", "maps_to": "goal:sleep" }, { "label": "Stress", "maps_to": "goal:stress" }, { "label": "Energy", "maps_to": "goal:energy" }, { "label": "Digestion", "maps_to": "goal:digestion" }], "maps_to": "primary_goal", "weight_tier": "primary", "branch": "routes into the matching concern deep-dive" },
+    { "ordinal": 3, "id": "concerns", "prompt": "Any of these apply?", "type": "multi_select", "multi_select_cap": 5, "options": [{ "label": "Low energy", "maps_to": "concern:energy" }, { "label": "Trouble sleeping", "maps_to": "concern:sleep" }, { "label": "Joint discomfort", "maps_to": "concern:joint" }, { "label": "Skin/hair/nails", "maps_to": "concern:beauty" }, { "label": "None", "maps_to": "concern:none" }], "maps_to": "concerns", "weight_tier": "primary", "note": "Normalize by proportion." },
+    { "ordinal": 4, "id": "diet", "prompt": "Which best describes your diet?", "type": "single_select", "options": [{ "label": "Omnivore", "maps_to": "diet:omnivore" }, { "label": "Vegetarian", "maps_to": "diet:vegetarian" }, { "label": "Vegan", "maps_to": "diet:vegan" }], "maps_to": "diet", "weight_tier": "secondary", "note": "Filters non-compliant SKUs (e.g. gelatin caps)." },
+    { "ordinal": 5, "id": "meds", "prompt": "Are you currently taking any medications?", "type": "binary", "options": [{ "label": "Yes", "maps_to": "meds:yes" }, { "label": "No", "maps_to": "meds:no" }], "maps_to": "on_medication", "weight_tier": "primary", "branch": "if yes, surface interaction-safety screen; exclude contraindicated SKUs", "note": "Safety gate — never recommend a contraindicated product." }
+  ],
+  "recommendation": {
+    "architecture": "hybrid",
+    "tie_break": "primary_goal weight -> evidence-strength attribute -> stable product id",
+    "empty_fallback": "drop secondary concerns -> core pack for primary_goal -> single best-seller for the goal",
+    "deterministic": true,
+    "explainable": true
+  },
+  "personalization_hooks": ["evidence/citation card per SKU", "'your routine' framing", "subscription cadence from usage"],
+  "sources": ["Care/of (Prehook teardown)", "Persona Nutrition (interaction DB)", "Ritual (lite router variant)", "Tier C"]
+}

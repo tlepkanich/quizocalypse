@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Quiz builder · Step 1 — final page</title>
+<style>
+  :root{
+    --accent:#6D5AE6; --accent-2:#6B4FD8; --accent-ink:#3C3489;
+    --accent-wash:#EDEBFC; --accent-tint:#F3F1FD;
+    --ink:#2E2740; --ink-3:#5A5470; --ink-4:#7C7791; --ink-25:#B6B0C8;
+    --rule:#E9E7EF; --rule-2:#F1EFF6; --paper:#FFFFFF; --cream-2:#F2F1F5;
+    --ok:#158A5A; --amber-bg:#FAEEDA; --amber-ink:#854F0B;
+    --mono:ui-monospace,SFMono-Regular,Menlo,monospace;
+    --sans:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:#EDECF1;font-family:var(--sans);color:var(--ink);-webkit-font-smoothing:antialiased;padding:26px 0 80px}
+  .wrap{max-width:1080px;margin:0 auto;padding:0 22px}
+  .cap{font-size:12.5px;color:var(--ink-4);margin:0 2px 14px;line-height:1.55}
+  .cap button{border:1px solid var(--rule);background:#fff;color:var(--accent-ink);font-size:12px;padding:5px 11px;border-radius:8px;cursor:pointer;font-family:inherit;margin-left:6px}
+
+  .app{background:var(--paper);border:1px solid var(--rule);border-radius:18px;overflow:hidden;box-shadow:0 10px 34px rgba(120,110,150,.12)}
+
+  .barrow{display:flex;align-items:center;justify-content:space-between;padding:13px 20px}
+  .brand{display:flex;align-items:center;gap:10px}
+  .logo{width:28px;height:28px;border-radius:9px;background:var(--accent);color:#fff;display:grid;place-items:center;font-weight:600;font-size:15px}
+  .brand strong{font-size:16px;font-weight:600;letter-spacing:-.01em}
+  .actions{display:flex;align-items:center;gap:6px}
+  .ghost{font-size:13px;color:var(--ink-3);padding:7px 11px;border-radius:9px;background:var(--cream-2);cursor:pointer;white-space:nowrap}
+  .ghost.link{background:transparent;color:var(--accent-ink)}
+
+  /* progress line */
+  .stepline{padding:13px 24px 15px;background:#fff;border-top:1px solid var(--rule-2);border-bottom:1px solid var(--rule-2)}
+  .track{display:flex;align-items:center}
+  .node{display:flex;flex-direction:column;align-items:center;gap:7px;position:relative;flex:none;width:104px}
+  .glow{position:absolute;top:-9px;left:50%;transform:translateX(-50%);width:52px;height:52px;border-radius:50%;pointer-events:none;opacity:0;transition:opacity .6s ease;background:radial-gradient(circle,rgba(109,90,230,.24),transparent 68%)}
+  .dot{width:24px;height:24px;border-radius:50%;display:grid;place-items:center;font-family:var(--mono);font-size:11px;font-weight:600;background:var(--cream-2);color:var(--ink-4);position:relative}
+  .node .lbl{font-size:12px;color:var(--ink-4);font-weight:500}
+  .node.cur .dot{background:var(--accent);color:#fff;box-shadow:0 0 0 4px var(--accent-wash);z-index:1;overflow:visible;transition:box-shadow .6s ease}
+  .node.cur .lbl{color:var(--ink);font-weight:600}
+  .node.done .dot{background:var(--accent-wash);color:var(--accent-ink)}
+  .link{flex:1;height:2px;background:var(--rule);margin-top:-22px}
+  .node.cur.igniting .dot{animation:qzHalo 2.3s ease-in-out infinite}
+  @keyframes qzHalo{0%,100%{box-shadow:0 0 0 3px var(--accent-wash),0 0 6px 1px rgba(109,90,230,.32)}
+    50%{box-shadow:0 0 0 5px rgba(237,235,252,.55),0 0 18px 4px rgba(109,90,230,.58)}}
+  .node.cur .dot::after{content:'';position:absolute;inset:-4px;border-radius:50%;pointer-events:none;opacity:0;transition:opacity .6s ease;
+    background:conic-gradient(from 0deg,rgba(109,90,230,0) 48%,rgba(157,140,255,.95) 76%,#fff 85%,rgba(109,90,230,0) 94%);
+    -webkit-mask:radial-gradient(farthest-side,transparent calc(100% - 3px),#000 0);mask:radial-gradient(farthest-side,transparent calc(100% - 3px),#000 0)}
+  .node.cur.igniting .dot::after{opacity:1;animation:qzSpin 1.9s linear infinite}
+  @keyframes qzSpin{to{transform:rotate(360deg)}}
+  .node.cur.igniting .glow{animation:qzGlowPulse 2.3s ease-in-out infinite}
+  @keyframes qzGlowPulse{0%,100%{opacity:.4;transform:translateX(-50%) scale(.78)}50%{opacity:1;transform:translateX(-50%) scale(1.28)}}
+  .spark{position:absolute;font-size:10px;color:#fff;opacity:0;pointer-events:none;z-index:2;text-shadow:0 0 7px rgba(157,140,255,1)}
+  .dot .spark.s1{top:-10px;right:-6px;animation-delay:0s}
+  .dot .spark.s2{bottom:-8px;left:-8px;font-size:8px;animation-delay:.5s}
+  .dot .spark.s3{top:0;right:-12px;font-size:9px;animation-delay:.9s}
+  .dot .spark.s4{top:-8px;left:-8px;font-size:7px;animation-delay:1.3s}
+  .dot .spark.s5{bottom:-4px;right:-10px;font-size:8px;animation-delay:1.55s}
+  .node.cur.igniting .spark{animation:qzTwinkle 1.7s ease-in-out infinite}
+  @keyframes qzTwinkle{0%,100%{opacity:0;transform:scale(.3) rotate(0)}50%{opacity:1;transform:scale(1.15) rotate(90deg)}}
+
+  .content{padding:20px 22px 24px}
+  .content h2{margin:0 0 16px;font-size:21px;font-weight:600;letter-spacing:-.02em}
+
+  /* AI tip */
+  .aitip{display:flex;gap:13px;align-items:center;position:relative;border:1px solid #E4E0F4;border-radius:13px;background:#FBFAFE;padding:12px 14px;margin-bottom:16px}
+  .aitip.is-open{align-items:flex-start}
+  .aitip .ico{width:34px;height:34px;border-radius:10px;flex:none;display:grid;place-items:center;font-size:16px;color:var(--accent-ink);background:var(--accent-wash)}
+  .aitip .ico i{display:block;animation:qzIconPulse 2.6s ease-in-out infinite;transform-origin:center;font-style:normal}
+  @keyframes qzIconPulse{0%,100%{transform:scale(1) rotate(0);opacity:.9}50%{transform:scale(1.2) rotate(15deg);opacity:1}}
+  .aitip .m{flex:1;min-width:200px;display:flex;flex-direction:column}
+  .lead-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+  .ai-label{font-family:var(--mono);font-size:11px;font-weight:500;text-transform:uppercase;letter-spacing:.06em;color:var(--accent-ink)}
+  .tiptitle{font-size:14px;font-weight:600;color:var(--ink)}
+  .more{max-height:0;overflow:hidden;opacity:0;transition:max-height .32s ease,opacity .25s ease,margin-top .32s ease}
+  .aitip.is-open .more{max-height:170px;opacity:1;margin-top:9px}
+  .more p{margin:0 0 9px;font-size:12.5px;color:var(--ink-3);line-height:1.5}
+  .basedon{display:flex;align-items:center;gap:7px;flex-wrap:wrap}
+  .basedon .bl{font-size:11.5px;color:var(--ink-25)}
+  .chip{font-size:11.5px;color:var(--ink-4);background:var(--cream-2);padding:3px 10px;border-radius:999px}
+  .cta{display:flex;align-items:center;gap:6px;flex:none}
+  .use{border:none;background:var(--accent);color:#fff;font-size:12.5px;font-weight:500;padding:8px 16px;border-radius:9px;cursor:pointer;font-family:var(--sans)}
+  .hidebtn{border:none;background:transparent;color:var(--accent-ink);font-size:12px;cursor:pointer;font-family:var(--sans);padding:8px 10px;border-radius:8px}
+  .hidebtn:hover{background:var(--cream-2)}
+  /* collapsed mini pill: icon + AI TIP only, click to expand */
+  .aitip.mini{display:inline-flex;align-items:center;gap:7px;width:auto;padding:5px 13px 5px 6px;cursor:pointer;border-radius:999px}
+  .aitip.mini:hover{background:var(--accent-tint);border-color:var(--accent-wash)}
+  .aitip.mini .ico{width:22px;height:22px;font-size:12px;border-radius:7px}
+  .aitip.mini .m{flex:0 0 auto;min-width:0}
+  .aitip.mini .lead-row{margin:0}
+  .aitip.mini .ai-label{font-size:10.5px}
+  .aitip.mini .tiptitle,.aitip.mini .more,.aitip.mini .cta{display:none}
+  .applied{display:none;align-items:center;gap:11px;border:1px solid #BFE3D0;border-radius:13px;background:#EAF6EF;padding:12px 15px;margin-bottom:16px}
+  .applied.on{display:flex}
+  .applied .ok{width:26px;height:26px;border-radius:8px;background:#D5EFE0;color:var(--ok);display:grid;place-items:center;font-size:14px;flex:none}
+  .applied strong{font-size:13.5px;font-weight:600}
+  .applied .undo{margin-left:auto;border:none;background:transparent;color:var(--ink-4);font-size:12.5px;cursor:pointer;font-family:var(--sans)}
+
+  .split{display:grid;grid-template-columns:minmax(0,1.9fr) minmax(0,1fr);gap:16px;align-items:start}
+
+  .picker{border:1px solid var(--rule);border-radius:14px;background:#fff;padding:14px}
+  .ptabs{display:flex;gap:6px;margin-bottom:13px}
+  .ptab{display:flex;align-items:center;gap:7px;padding:9px 14px;border-radius:10px;font-size:13px;font-weight:500;background:var(--cream-2);color:var(--ink-4);cursor:pointer;border:1px solid transparent;font-family:var(--sans)}
+  .ptab .n{font-size:11.5px;color:var(--ink-25)}
+  .ptab.on{background:#fff;color:var(--accent-ink);border-color:var(--accent);box-shadow:0 1px 2px rgba(109,90,230,.12)}
+  .ptab.on .n{color:var(--accent)}
+  .ptool{display:flex;gap:8px;align-items:center;margin-bottom:12px}
+  .search{flex:1;font-size:12.5px;color:var(--ink-25);background:#F7F6FA;border:1px solid var(--rule);border-radius:9px;padding:8px 11px}
+  .selall{font-size:12.5px;color:var(--accent-ink);white-space:nowrap;cursor:pointer}
+
+  /* clickable row (whole module toggles select) */
+  .row{display:flex;align-items:center;gap:12px;border:1px solid var(--rule);border-radius:12px;background:#fff;margin-bottom:9px;padding:10px 12px;cursor:pointer;transition:border-color .15s,background .15s,box-shadow .15s}
+  .row:hover{border-color:#D9D3F2;box-shadow:0 1px 3px rgba(109,90,230,.08)}
+  .row.sel{border-color:var(--accent);background:var(--accent-tint)}
+  .thumb{width:42px;height:42px;border-radius:10px;flex:none;display:grid;place-items:center;font-size:19px;background:var(--accent-tint);position:relative;overflow:hidden}
+  .thumb img{width:100%;height:100%;object-fit:cover}
+  /* default placeholder animation when no image */
+  .thumb.ph{background:linear-gradient(135deg,#EEEBFB,#F5EFFA)}
+  .thumb.ph .g{opacity:.35;font-size:17px}
+  .thumb.ph::after{content:'';position:absolute;inset:0;transform:translateX(-100%);
+    background:linear-gradient(110deg,transparent 30%,rgba(255,255,255,.65) 50%,transparent 70%);animation:shim 2.2s ease-in-out infinite}
+  @keyframes shim{to{transform:translateX(100%)}}
+  .row .nm{font-size:14px;font-weight:600}
+  .row .sub{font-size:12px;color:var(--ink-4)}
+  .selcheck{width:20px;height:20px;border-radius:50%;background:var(--accent);color:#fff;display:none;place-items:center;font-size:12px;font-weight:700;flex:none}
+  .row.sel .selcheck{display:grid}
+  .spacer{flex:1}
+  .countpill{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--rule);background:#fff;color:var(--accent-ink);font-size:12px;font-weight:500;padding:7px 12px;border-radius:9px;cursor:pointer;font-family:var(--sans);white-space:nowrap}
+  .countpill:hover{background:var(--accent-tint);border-color:var(--accent-wash)}
+  .pricetag{font-size:13px;color:var(--ink-3);font-weight:500;white-space:nowrap}
+
+  .underrow{display:flex;gap:16px;margin-top:12px;font-size:12.5px;color:var(--accent-ink)}
+
+  .rail{position:sticky;top:16px;border:1px solid #E4E0F4;border-radius:14px;background:#fff;box-shadow:0 1px 3px rgba(120,110,150,.08)}
+  .rh{display:flex;align-items:center;justify-content:space-between;padding:15px 15px 0}
+  .rh strong{font-size:14.5px;font-weight:600}
+  .count{min-width:23px;height:23px;padding:0 7px;border-radius:999px;background:var(--accent-wash);color:var(--accent-ink);font-size:12px;font-weight:600;display:grid;place-items:center}
+  .railList{display:flex;flex-direction:column;gap:6px;padding:12px 15px}
+  .railRow{display:flex;align-items:center;gap:9px;border:1px solid var(--rule);border-radius:9px;padding:8px 10px;background:#fff}
+  .railRow .th{width:30px;height:30px;border-radius:7px;font-size:14px}
+  .railRow .nm{font-size:12.5px;font-weight:500}
+  .railRow .mt{font-size:11px;color:var(--ink-4)}
+  .railRow .x{margin-left:auto;border:none;background:transparent;color:var(--ink-25);cursor:pointer;font-size:13px}
+  .railEmpty{margin:12px 15px;border:1px dashed #E4E0F4;border-radius:10px;background:var(--accent-tint);padding:20px 14px;text-align:center}
+  .railEmpty .ic{font-size:20px;margin-bottom:7px}
+  .railEmpty p{margin:0;font-size:12px;color:var(--ink-4);line-height:1.5}
+  .rwarn{margin:0 15px;font-size:11.5px;color:var(--amber-ink);background:var(--amber-bg);border-radius:9px;padding:8px 11px;line-height:1.45;display:none}
+  .rwarn.on{display:block}
+  .rfoot{padding:12px 15px 15px;display:flex;flex-direction:column;gap:8px}
+  .btn{width:100%;border:none;font-size:13px;font-weight:500;padding:10px;border-radius:10px;cursor:pointer;font-family:var(--sans)}
+  .btn.sec{border:1px solid var(--rule);background:#fff;color:var(--ink-3)}
+  .btn.pri{background:var(--accent);color:#fff}
+  .btn.pri.off{background:#C9C3E8;cursor:default}
+
+  /* products modal */
+  .scrim{position:fixed;inset:0;background:rgba(46,39,64,.42);display:none;align-items:center;justify-content:center;z-index:50;padding:20px}
+  .scrim.on{display:flex}
+  .modal{width:min(560px,100%);max-height:82vh;background:#fff;border-radius:16px;overflow:hidden;display:flex;flex-direction:column;box-shadow:0 24px 60px rgba(46,39,64,.3)}
+  .mhead{display:flex;align-items:center;gap:12px;padding:16px 18px;border-bottom:1px solid var(--rule-2)}
+  .mhead .thumb{width:38px;height:38px;font-size:17px}
+  .mhead .nm{font-size:16px;font-weight:600}
+  .mhead .mt{font-size:12px;color:var(--ink-4)}
+  .mhead .cl{margin-left:auto;border:none;background:var(--cream-2);width:30px;height:30px;border-radius:9px;cursor:pointer;font-size:15px}
+  .mbody{overflow:auto;padding:14px 18px}
+  .prod{display:flex;align-items:center;gap:11px;padding:9px 0;border-bottom:1px solid var(--rule-2)}
+  .prod:last-child{border-bottom:none}
+  .prod .thumb{width:40px;height:40px;font-size:17px}
+  .prod .pn{font-size:13px;font-weight:500}
+  .prod .pp{font-size:12px;color:var(--ink-4)}
+  .mfoot{padding:12px 18px;border-top:1px solid var(--rule-2);display:flex;justify-content:flex-end}
+
+  @media (prefers-reduced-motion:reduce){
+    .node.cur.igniting .dot,.node.cur.igniting .dot::after,.node.cur.igniting .glow,.node.cur.igniting .spark,.aitip .ico i,.thumb.ph::after{animation:none!important}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <p class="cap">Final Step 1. Rows are fully clickable to select/deselect (no checkbox). Icon is the product/collection image, or an animated placeholder when there's none. The product count on the right opens a scrollable modal. <button onclick="ignite()">▶ Replay ring</button></p>
+
+  <div class="app">
+    <div class="barrow">
+      <div class="brand"><span class="logo">Q</span><strong>Quizocalypse</strong></div>
+      <div class="actions"><span class="ghost">✦ Brand identity</span><span class="ghost link">← All quizzes</span></div>
+    </div>
+
+    <div class="stepline">
+      <div class="track">
+        <div class="node cur" id="curNode"><span class="glow"></span><span class="dot">01<i class="spark s1">✦</i><i class="spark s2">✦</i><i class="spark s3">✦</i><i class="spark s4">✦</i><i class="spark s5">✦</i></span><span class="lbl">Recommendations</span></div>
+        <div class="link"></div>
+        <div class="node"><span class="dot">02</span><span class="lbl">Shape</span></div>
+        <div class="link"></div>
+        <div class="node"><span class="dot">03</span><span class="lbl">Questions</span></div>
+        <div class="link"></div>
+        <div class="node"><span class="dot">04</span><span class="lbl">Results</span></div>
+        <div class="link"></div>
+        <div class="node"><span class="dot">05</span><span class="lbl">Design</span></div>
+      </div>
+    </div>
+
+    <div class="content">
+      <h2>What can your quiz recommend?</h2>
+
+      <div class="aitip is-open" id="aitip">
+        <span class="ico"><i>✦</i></span>
+        <div class="m">
+          <div class="lead-row"><span class="ai-label">AI tip</span><span class="tiptitle">Start with your 4 collections</span></div>
+          <div class="more">
+            <p>They match how you already organize your store — the fastest path to a quiz that routes cleanly.</p>
+            <div class="basedon"><span class="bl">Based on</span><span class="chip">125 products</span><span class="chip">4 collections</span><span class="chip">32 tags</span></div>
+          </div>
+        </div>
+        <div class="cta">
+          <button class="use" id="use">Use this</button>
+          <button class="hidebtn" id="hide">Hide</button>
+        </div>
+      </div>
+
+      <div class="applied" id="applied"><span class="ok">✓</span><strong>Applied — using your 4 collections</strong><button class="undo" id="undo">Undo</button></div>
+
+      <div class="split">
+        <div class="picker">
+          <div class="ptabs" id="ptabs">
+            <div class="ptab" data-t="product">Products <span class="n">125</span></div>
+            <div class="ptab" data-t="tag">Tags <span class="n">32</span></div>
+            <div class="ptab on" data-t="collection">Collections <span class="n">4</span></div>
+          </div>
+          <div class="ptool"><div class="search" id="searchlbl">Search collections…</div><span class="selall">Select all</span></div>
+          <div id="list"></div>
+          <div class="underrow"><span>← Back</span><span>↻ Refresh catalog</span></div>
+        </div>
+
+        <aside class="rail">
+          <div class="rh"><strong>Your recommendations</strong><span class="count" id="count">0</span></div>
+          <div class="railList" id="rail"></div>
+          <div class="railEmpty" id="empty"><div class="ic">🗂️</div><p>Nothing added yet — click a collection to add it.</p></div>
+          <p class="rwarn" id="warn">One recommendation means every shopper sees the same products. Add a few more so the quiz can differentiate.</p>
+          <div class="rfoot"><button class="btn sec">▷ Preview results page</button><button class="btn pri off" id="cont">Continue →</button></div>
+        </aside>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="scrim" id="scrim"><div class="modal" id="modal"></div></div>
+
+<script>
+  const SNOW=[["The Collection Snowboard: Liquid","$749.95"],["The Multi-managed Snowboard","$629.95"],["The Complete Snowboard","$699.95"],["The 3p Fulfilled Snowboard","$2,629.95"],["The Videographer Snowboard","$885.95"],["The Draft Snowboard","$749.95"],["The Hidden Snowboard","$749.95"],["The Inventory Snowboard","$949.95"]];
+  const DATA={
+    product:{label:"Products",glyph:"📦",leaf:true,items:[
+      {key:"p1",name:"The Collection Snowboard: Liquid",meta:"$749.95"},
+      {key:"p2",name:"The Multi-managed Snowboard",meta:"$629.95"},
+      {key:"p3",name:"The Complete Snowboard",meta:"$699.95"},
+      {key:"p4",name:"The Videographer Snowboard",meta:"$885.95"},
+      {key:"p5",name:"Selling Plans Ski Wax",meta:"$24.95"}]},
+    tag:{label:"Tags",glyph:"🏷️",items:[
+      {key:"t1",name:"snowboard",count:40,products:SNOW},
+      {key:"t2",name:"winter",count:25,products:SNOW.slice(0,6)},
+      {key:"t3",name:"sale",count:12,products:SNOW.slice(0,4)},
+      {key:"t4",name:"featured",count:8,products:SNOW.slice(0,3)}]},
+    collection:{label:"Collections",glyph:"🗂️",items:[
+      {key:"c1",name:"Snowboards",count:15,products:SNOW},
+      {key:"c2",name:"Automated Collection",count:13,products:SNOW.slice(0,6)},
+      {key:"c3",name:"Hydrogen",count:3,products:[["The Hydrogen Snowboard — Blue","$600.00"],["The Hydrogen Snowboard — Green","$600.00"],["The Hydrogen Snowboard — Red","$600.00"]]},
+      {key:"c4",name:"Home page",count:1,products:[["The Compare at Price Snowboard","$785.95"]]}]}
+  };
+  const $=id=>document.getElementById(id);
+  let active="collection";
+  const SEL=new Map();
+
+  // thumbnail: category glyph for tag/collection; animated placeholder for products (no image)
+  const thumbHTML=(type)=> type==="product"
+    ? `<span class="thumb ph"><span class="g">📦</span></span>`
+    : `<span class="thumb">${DATA[type].glyph}</span>`;
+  const prodHTML=p=>`<div class="prod"><span class="thumb ph"><span class="g">🏂</span></span><div><div class="pn">${p[0]}</div><div class="pp">${p[1]}</div></div></div>`;
+
+  function renderList(){
+    const d=DATA[active];
+    $('searchlbl').textContent=`Search ${d.label.toLowerCase()}…`;
+    $('list').innerHTML=d.items.map(it=>{
+      const id=active+':'+it.key,sel=SEL.has(id);
+      const right=d.leaf
+        ? `<span class="pricetag">${it.meta}</span>`
+        : `<button class="countpill" data-act="peek">${it.count} product${it.count>1?'s':''} →</button>`;
+      return `<div class="row${sel?' sel':''}" data-id="${id}" data-key="${it.key}">
+        ${thumbHTML(active)}
+        <div><div class="nm">${it.name}</div>${d.leaf?'':`<div class="sub">Collection</div>`}</div>
+        <span class="spacer"></span>
+        <span class="selcheck">✓</span>
+        ${right}
+      </div>`;
+    }).join('');
+    bind();
+  }
+  function bind(){
+    $('list').querySelectorAll('.row').forEach(row=>{
+      row.addEventListener('click',()=>{
+        const id=row.dataset.id,key=row.dataset.key,it=DATA[active].items.find(x=>x.key===key);
+        if(SEL.has(id))SEL.delete(id);
+        else SEL.set(id,{name:it.name,meta:DATA[active].leaf?it.meta:it.count+' products',glyph:DATA[active].glyph});
+        renderList();renderRail();
+      });
+    });
+    $('list').querySelectorAll('[data-act="peek"]').forEach(b=>b.addEventListener('click',e=>{
+      e.stopPropagation();
+      openModal(b.closest('.row').dataset.key);
+    }));
+  }
+  function renderRail(){
+    const arr=[...SEL.entries()];$('count').textContent=arr.length;
+    $('empty').style.display=arr.length?'none':'block';
+    $('warn').classList.toggle('on',arr.length===1);
+    $('cont').classList.toggle('off',!arr.length);
+    $('rail').innerHTML=arr.map(([id,v])=>`<div class="railRow"><span class="thumb">${v.glyph}</span><div><div class="nm">${v.name}</div><div class="mt">${v.meta}</div></div><button class="x" data-id="${id}">✕</button></div>`).join('');
+    $('rail').querySelectorAll('.x').forEach(x=>x.addEventListener('click',()=>{SEL.delete(x.dataset.id);renderList();renderRail();}));
+  }
+  function openModal(key){
+    const d=DATA[active],it=d.items.find(x=>x.key===key);
+    const extra=it.count-it.products.length;
+    $('modal').innerHTML=`
+      <div class="mhead"><span class="thumb">${d.glyph}</span><div><div class="nm">${it.name}</div><div class="mt">${it.count} product${it.count>1?'s':''} in this ${active}</div></div><button class="cl" id="mclose">✕</button></div>
+      <div class="mbody">${it.products.map(prodHTML).join('')}${extra>0?`<div class="prod" style="justify-content:center;color:var(--ink-4)">+ ${extra} more not shown</div>`:''}</div>
+      <div class="mfoot"><button class="btn pri" style="width:auto;padding:9px 18px" id="mclose2">Done</button></div>`;
+    $('scrim').classList.add('on');
+    $('mclose').onclick=$('mclose2').onclick=()=>$('scrim').classList.remove('on');
+  }
+  $('scrim').addEventListener('click',e=>{if(e.target===$('scrim'))$('scrim').classList.remove('on');});
+
+  $('ptabs').querySelectorAll('.ptab').forEach(t=>t.addEventListener('click',()=>{
+    $('ptabs').querySelectorAll('.ptab').forEach(x=>x.classList.toggle('on',x===t));
+    active=t.dataset.t;renderList();
+  }));
+
+  $('hide').addEventListener('click',e=>{e.stopPropagation();$('aitip').classList.add('mini');});
+  $('aitip').addEventListener('click',()=>{if($('aitip').classList.contains('mini'))$('aitip').classList.remove('mini');});
+  $('use').addEventListener('click',e=>{
+    e.stopPropagation();
+    $('aitip').style.display='none';$('applied').classList.add('on');
+    SEL.clear();DATA.collection.items.forEach(it=>SEL.set('collection:'+it.key,{name:it.name,meta:it.count+' products',glyph:'🗂️'}));
+    active='collection';$('ptabs').querySelectorAll('.ptab').forEach(x=>x.classList.toggle('on',x.dataset.t==='collection'));
+    renderList();renderRail();
+  });
+  $('undo').addEventListener('click',()=>{$('applied').classList.remove('on');$('aitip').style.display='';$('aitip').classList.remove('mini');SEL.clear();renderList();renderRail();});
+
+  function ignite(){const n=$('curNode');n.classList.remove('igniting');void n.offsetWidth;n.classList.add('igniting');setTimeout(()=>n.classList.remove('igniting'),3000);}
+
+  renderList();renderRail();ignite();
+</script>
+</body>
+</html>

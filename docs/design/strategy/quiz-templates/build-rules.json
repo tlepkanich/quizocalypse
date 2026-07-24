@@ -1,0 +1,169 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "quizocalypse/build-rules",
+  "title": "Quiz generator guardrails",
+  "description": "Enforceable rules the builder validates a generated quiz against. severity=error blocks the emit; severity=warn surfaces a caution the merchant can override. Mirrors master Part 7 section 5.",
+  "updated": "2026-07-14",
+  "rules": [
+    {
+      "id": "length-cap",
+      "group": "length_flow",
+      "severity": "warn",
+      "rule": "Scored questions should be within the template's length band; hard-warn past ~8-10 unless category is formulation/subscription. Map length to category, do not globally minimize.",
+      "tier": "C",
+      "source": "master Part 4 (length/order)"
+    },
+    {
+      "id": "front-load-easy",
+      "group": "length_flow",
+      "severity": "warn",
+      "rule": "Easy/concrete questions first; demographics/personal/email late; never two high-effort questions (ranking, long multi-select) back to back.",
+      "tier": "A",
+      "source": "Pew; goal-gradient (Kivetz 2006)"
+    },
+    {
+      "id": "no-double-barreled",
+      "group": "question_integrity",
+      "severity": "error",
+      "rule": "No double-barreled, leading, or loaded question. One concept per question; neutral wording describing the shopper's need, not the product's virtues.",
+      "tier": "A",
+      "source": "Pew Writing Survey Questions"
+    },
+    {
+      "id": "mece-options",
+      "group": "question_integrity",
+      "severity": "error",
+      "rule": "Answer options are mutually exclusive and collectively exhaustive; numeric ranges must not overlap; include an Other/None/Not-sure escape when the set cannot be exhaustive.",
+      "tier": "A",
+      "source": "Pew; MeasuringU"
+    },
+    {
+      "id": "radio-option-cap",
+      "group": "question_integrity",
+      "severity": "warn",
+      "rule": "Single-select <=7 options as radios/cards (ideal <=5); 8+ options must render as a dropdown.",
+      "tier": "A",
+      "source": "Pew; NN/g dropdowns"
+    },
+    {
+      "id": "no-slider",
+      "group": "question_integrity",
+      "severity": "error",
+      "rule": "Never emit a slider. Scale questions render as 3-5 discrete labeled tap points.",
+      "tier": "A",
+      "source": "Bosch et al. 2019"
+    },
+    {
+      "id": "multi-select-guard",
+      "group": "question_integrity",
+      "severity": "error",
+      "rule": "Multi-select only with a capped list (~5-6) and normalized scoring (score by proportion of matched attributes, not raw count) so selecting more boxes cannot auto-win. Prefer forced-choice yes/no per item for short lists.",
+      "tier": "A",
+      "source": "Pew 2019 select-all satisficing"
+    },
+    {
+      "id": "option-order",
+      "group": "question_integrity",
+      "severity": "warn",
+      "rule": "Randomize nominal option order across respondents (pin Other/Not-sure last, exempt); keep ordinal scales in logical order. Randomize display only, never the outcome.",
+      "tier": "A",
+      "source": "Pew primacy effect"
+    },
+    {
+      "id": "no-dead-questions",
+      "group": "logic_integrity",
+      "severity": "error",
+      "rule": "Every question must change at least one filter or score for at least one product. A question whose answers never alter any outcome is removed/flagged.",
+      "tier": "A/C",
+      "source": "master Part 7 3.4"
+    },
+    {
+      "id": "no-dead-ends",
+      "group": "logic_integrity",
+      "severity": "error",
+      "rule": "Every branch is reachable and every path terminates at a result. No unreachable or non-terminating paths.",
+      "tier": "A/C",
+      "source": "master Part 7 3.4"
+    },
+    {
+      "id": "result-has-product",
+      "group": "logic_integrity",
+      "severity": "error",
+      "rule": "Every reachable result path resolves to >=1 product, validated against the live catalog, with an empty-set fallback ladder defined (relax least-important filter -> weighted closest-match -> best-seller). The single most important runtime guardrail.",
+      "tier": "C",
+      "source": "RevenueHunt; master Part 7 3.4"
+    },
+    {
+      "id": "determinism",
+      "group": "logic_integrity",
+      "severity": "error",
+      "rule": "Same answers must always yield the same recommendation. Scoring is a pure function of (answers, catalog snapshot); no randomness, time, or inventory-order dependence in outcomes.",
+      "tier": "C",
+      "source": "master Part 7 3.3"
+    },
+    {
+      "id": "tie-break-defined",
+      "group": "logic_integrity",
+      "severity": "error",
+      "rule": "A deterministic tie-break chain is defined: primary-question weight -> priority/popularity attribute -> stable sort by product id.",
+      "tier": "C",
+      "source": "master Part 7 3.4"
+    },
+    {
+      "id": "no-dominant-question",
+      "group": "logic_integrity",
+      "severity": "warn",
+      "rule": "No single question can dominate scoring: cap per-question contribution; normalize multi-select.",
+      "tier": "C",
+      "source": "master Part 7 3.4"
+    },
+    {
+      "id": "shared-attribute-vocab",
+      "group": "logic_integrity",
+      "severity": "warn",
+      "rule": "Attribute vocabulary is small and shared across products, reusing catalog tags/metafields (Shopify Search & Discovery filters/synonyms) rather than free-form.",
+      "tier": "A",
+      "source": "Shopify Search & Discovery"
+    },
+    {
+      "id": "explainable-rec",
+      "group": "logic_integrity",
+      "severity": "warn",
+      "rule": "A 'because you chose X and Y' rationale is generable from the specific answers that drove the match/score.",
+      "tier": "C",
+      "source": "master Part 7 3.3"
+    },
+    {
+      "id": "gate-placement",
+      "group": "gate",
+      "severity": "warn",
+      "rule": "Place the email gate late - after the shopper has invested answers, at/just before the result - never the first screen. Category-dependent: at_result for diagnostic/formulation/pack/pet/shade; deferred_to_action for fit/durables/gifting.",
+      "tier": "C",
+      "source": "master Part 4; convergent vendor practice"
+    },
+    {
+      "id": "native-controls",
+      "group": "accessibility",
+      "severity": "error",
+      "rule": "Native, labeled controls: real input type=radio/checkbox, one label per option; radio groups announce as a group and are arrow-navigable. No div-with-click-handler controls.",
+      "tier": "A",
+      "source": "NN/g; WebAIM"
+    },
+    {
+      "id": "text-label-on-images",
+      "group": "accessibility",
+      "severity": "error",
+      "rule": "Every option, including image tiles, has a text label; images are not the only signal.",
+      "tier": "A",
+      "source": "WCAG"
+    },
+    {
+      "id": "contrast-and-target",
+      "group": "accessibility",
+      "severity": "warn",
+      "rule": "Sufficient color contrast (AA), selection state not conveyed by color alone, mobile-first hit targets >=24px.",
+      "tier": "A",
+      "source": "WCAG 2.5.8; enforced on inherited brand palette"
+    }
+  ]
+}

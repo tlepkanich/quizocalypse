@@ -1,0 +1,28 @@
+{
+  "id": "apparel-fit",
+  "name": "Apparel fit finder",
+  "category": "apparel/fit",
+  "variant": "fit-diagnostic (ThirdLove / Warby Parker)",
+  "use_when": "The output is a size + a few matching styles; the current garment is the anchor and the quiz diagnoses what's wrong with it.",
+  "length": { "min": 6, "max": 12, "band": "medium", "note": "Marketed ~60 seconds; the payoff (a size) can be shown free to build trust." },
+  "gate": { "placement": "deferred_to_action", "style": "soft", "rationale": "Show sizes/styles free; capture email at the action step (try-on / add-to-cart). Fit buyers won't trade an email for an unseen size." },
+  "result_shape": "ranked_shortlist",
+  "arc": ["current_garment_anchor", "fit_problem_diagnosis", "body_shape", "style_preferences", "action"],
+  "branching": "moderate",
+  "questions": [
+    { "ordinal": 1, "id": "current_size", "prompt": "What size do you usually wear now?", "type": "single_select", "options": [{ "label": "XS", "maps_to": "size:xs" }, { "label": "S", "maps_to": "size:s" }, { "label": "M", "maps_to": "size:m" }, { "label": "L", "maps_to": "size:l" }, { "label": "XL", "maps_to": "size:xl" }], "maps_to": "current_size", "weight_tier": "primary", "note": "Anchor — everything calibrates off this." },
+    { "ordinal": 2, "id": "fit_problem", "prompt": "What's the main issue with your current fit?", "type": "image_choice", "options": [{ "label": "Too tight", "maps_to": "issue:tight" }, { "label": "Too loose", "maps_to": "issue:loose" }, { "label": "Length off", "maps_to": "issue:length" }, { "label": "Fits well", "maps_to": "issue:none" }], "maps_to": "fit_problem", "weight_tier": "primary", "branch": "routes size adjustment up/down" },
+    { "ordinal": 3, "id": "body_shape", "prompt": "Which shape is closest to yours?", "type": "image_choice", "options": [{ "label": "Straight", "maps_to": "shape:straight" }, { "label": "Curvy", "maps_to": "shape:curvy" }, { "label": "Athletic", "maps_to": "shape:athletic" }], "maps_to": "body_shape", "weight_tier": "secondary" },
+    { "ordinal": 4, "id": "fit_pref", "prompt": "How do you like things to fit?", "type": "single_select", "options": [{ "label": "Relaxed", "maps_to": "prefer:relaxed" }, { "label": "True to size", "maps_to": "prefer:tts" }, { "label": "Fitted", "maps_to": "prefer:fitted" }], "maps_to": "fit_preference", "weight_tier": "secondary" },
+    { "ordinal": 5, "id": "styles", "prompt": "Which styles are you into? (also captures upsell)", "type": "multi_select", "multi_select_cap": 4, "options": [{ "label": "Basics", "maps_to": "style:basic" }, { "label": "Statement", "maps_to": "style:statement" }, { "label": "Athleisure", "maps_to": "style:athleisure" }, { "label": "Workwear", "maps_to": "style:workwear" }], "maps_to": "style_preferences", "weight_tier": "tie_breaker" }
+  ],
+  "recommendation": {
+    "architecture": "hybrid",
+    "tie_break": "computed size exactness -> style match count -> stable product id",
+    "empty_fallback": "widen adjacent size -> best-selling style in the computed size -> brand best-seller",
+    "deterministic": true,
+    "explainable": true
+  },
+  "personalization_hooks": ["single recommended size headline", "small ranked style set", "home try-on continuation"],
+  "sources": ["ThirdLove Fit Finder (Prehook)", "Warby Parker (adaptive branching + Home Try-On)", "True Fit (data-network variant)", "Tier C/B"]
+}

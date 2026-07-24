@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AI Tip — collapse behavior</title>
+<style>
+  :root{
+    --accent:#6D5AE6; --accent-ink:#3C3489; --accent-wash:#EDEBFC; --accent-tint:#F3F1FD;
+    --ink:#2E2740; --ink-3:#5A5470; --ink-4:#7C7791; --ink-25:#B6B0C8;
+    --rule:#E9E7EF; --rule-2:#F1EFF6; --cream-2:#F2F1F5; --ok:#158A5A;
+    --mono:ui-monospace,SFMono-Regular,Menlo,monospace;
+    --sans:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:#EDECF1;font-family:var(--sans);color:var(--ink);-webkit-font-smoothing:antialiased;padding:30px 0 80px}
+  .wrap{max-width:720px;margin:0 auto;padding:0 22px}
+  h1{font-size:19px;font-weight:600;margin:0 0 4px}
+  .lead{font-size:13px;color:var(--ink-3);margin:0 0 20px;line-height:1.55}
+  .panel{background:#fff;border:1px solid var(--rule);border-radius:16px;padding:20px;box-shadow:0 6px 24px rgba(120,110,150,.10);margin-bottom:22px}
+  .plabel{font-family:var(--mono);font-size:10.5px;text-transform:uppercase;letter-spacing:.06em;color:var(--ink-4);margin-bottom:12px}
+  h2{margin:0 0 14px;font-size:20px;font-weight:600;letter-spacing:-.02em}
+
+  /* ===== AI Tip ===== */
+  .aitip{display:flex;gap:13px;align-items:flex-start;position:relative;
+    border:1px solid #E4E0F4;border-radius:13px;background:#FBFAFE;padding:13px 15px;max-width:100%;
+    transition:max-width .35s ease,padding .3s ease,background .2s ease,border-color .2s ease}
+  .aitip .ico{width:34px;height:34px;border-radius:10px;flex:none;display:grid;place-items:center;font-size:16px;color:var(--accent-ink);background:var(--accent-wash);transition:width .3s ease,height .3s ease,font-size .3s ease}
+  .aitip .ico i{display:block;font-style:normal;animation:qzIconPulse 2.6s ease-in-out infinite;transform-origin:center}
+  @keyframes qzIconPulse{0%,100%{transform:scale(1) rotate(0);opacity:.9}50%{transform:scale(1.2) rotate(15deg);opacity:1}}
+  .aitip .body{flex:1;min-width:0;display:flex;flex-direction:column}
+  .lead{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+  .ai-label{font-family:var(--mono);font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--accent-ink)}
+  .tiptitle{font-size:14px;font-weight:600;color:var(--ink)}
+  .more{overflow:hidden;max-height:170px;opacity:1;margin-top:9px;transition:max-height .3s ease,opacity .25s ease,margin-top .3s ease}
+  .more p{margin:0 0 9px;font-size:12.5px;color:var(--ink-3);line-height:1.5}
+  .basedon{display:flex;align-items:center;gap:7px;flex-wrap:wrap}
+  .basedon .bl{font-size:11.5px;color:var(--ink-25)}
+  .chip{font-size:11.5px;color:var(--ink-4);background:var(--cream-2);padding:3px 10px;border-radius:999px}
+  .cta{display:flex;align-items:center;gap:6px;flex:none}
+  .use{border:none;background:var(--accent);color:#fff;font-size:12.5px;font-weight:500;padding:8px 16px;border-radius:9px;cursor:pointer;font-family:var(--sans)}
+  .hide{border:none;background:transparent;color:var(--accent-ink);font-size:12px;cursor:pointer;font-family:var(--sans);padding:8px 10px;border-radius:8px}
+  .hide:hover{background:var(--cream-2)}
+  .mini-caret{display:none}
+
+  /* ---- collapsed / mini state ---- */
+  .aitip.mini{display:inline-flex;align-items:center;gap:7px;width:auto;max-width:none;
+    padding:5px 13px 5px 6px;cursor:pointer;border-radius:999px}
+  .aitip.mini:hover{background:var(--accent-tint);border-color:var(--accent-wash)}
+  .aitip.mini .ico{width:22px;height:22px;font-size:12px;border-radius:7px}
+  .aitip.mini .body{flex:0 0 auto;display:flex;align-items:center}
+  .aitip.mini .lead{margin:0}
+  .aitip.mini .ai-label{font-size:10.5px}
+  .aitip.mini .tiptitle,.aitip.mini .more,.aitip.mini .cta,.aitip.mini .mini-caret{display:none}
+
+  .applied{display:none;align-items:center;gap:11px;border:1px solid #BFE3D0;border-radius:13px;background:#EAF6EF;padding:12px 15px}
+  .applied.on{display:flex}
+  .applied .ok{width:26px;height:26px;border-radius:8px;background:#D5EFE0;color:var(--ok);display:grid;place-items:center;font-size:14px;flex:none}
+  .applied strong{font-size:13.5px;font-weight:600}
+  .applied .undo{margin-left:auto;border:none;background:transparent;color:var(--ink-4);font-size:12.5px;cursor:pointer;font-family:var(--sans)}
+
+  .note{font-size:12px;color:var(--ink-4);margin-top:14px;line-height:1.5}
+  .two{display:flex;flex-direction:column;gap:20px}
+  .two .col{width:100%}
+  .two .cl{font-size:12px;color:var(--ink-4);margin-bottom:9px}
+
+  @media (prefers-reduced-motion:reduce){.aitip .ico i{animation:none}.aitip,.more,.aitip .ico{transition:none}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>AI Tip — collapse behavior</h1>
+  <p class="lead">Click <b>Hide</b> to shrink it to a small <b>✦ AI TIP</b> pill (page gets quieter). Click the pill to expand it back to the full tip. Live below, in the page context.</p>
+
+  <div class="panel">
+    <div class="plabel">Live — click Hide, then click the pill</div>
+    <h2>What can your quiz recommend?</h2>
+
+    <div class="aitip" id="tip">
+      <span class="ico"><i>✦</i></span>
+      <div class="body">
+        <div class="lead"><span class="ai-label">AI tip</span><span class="tiptitle">Start with your 4 collections</span></div>
+        <div class="more">
+          <p>They match how you already organize your store — the fastest path to a quiz that routes cleanly.</p>
+          <div class="basedon"><span class="bl">Based on</span><span class="chip">125 products</span><span class="chip">4 collections</span><span class="chip">32 tags</span></div>
+        </div>
+      </div>
+      <span class="mini-caret">⌄</span>
+      <div class="cta">
+        <button class="use" id="use">Use this</button>
+        <button class="hide" id="hide">Hide</button>
+      </div>
+    </div>
+
+    <div class="applied" id="applied" style="margin-top:14px"><span class="ok">✓</span><strong>Applied — using your 4 collections</strong><button class="undo" id="undo">Undo</button></div>
+
+    <p class="note">Rule: clicking the module while collapsed expands it; while expanded, only <b>Hide</b> collapses it (so clicking “Use this” never collapses). The pulse icon stays in both states so it still reads as AI.</p>
+  </div>
+
+  <div class="panel">
+    <div class="plabel">Static reference — the two states</div>
+    <div class="two">
+      <div class="col">
+        <div class="cl">Collapsed (default after Hide)</div>
+        <div class="aitip mini"><span class="ico"><i>✦</i></span><div class="body"><div class="lead"><span class="ai-label">AI tip</span></div></div><span class="mini-caret">⌄</span></div>
+      </div>
+      <div class="col">
+        <div class="cl">Expanded</div>
+        <div class="aitip">
+          <span class="ico"><i>✦</i></span>
+          <div class="body">
+            <div class="lead"><span class="ai-label">AI tip</span><span class="tiptitle">Start with your 4 collections</span></div>
+            <div class="more"><p>They match how you already organize your store — the fastest path to a quiz that routes cleanly.</p><div class="basedon"><span class="bl">Based on</span><span class="chip">125 products</span><span class="chip">4 collections</span><span class="chip">32 tags</span></div></div>
+          </div>
+          <div class="cta"><button class="use">Use this</button><button class="hide">Hide</button></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  const tip=document.getElementById('tip');
+  document.getElementById('hide').addEventListener('click',e=>{e.stopPropagation();tip.classList.add('mini');});
+  document.getElementById('use').addEventListener('click',e=>{e.stopPropagation();tip.style.display='none';document.getElementById('applied').classList.add('on');});
+  document.getElementById('undo').addEventListener('click',()=>{document.getElementById('applied').classList.remove('on');tip.style.display='';tip.classList.remove('mini');});
+  tip.addEventListener('click',()=>{if(tip.classList.contains('mini'))tip.classList.remove('mini');});
+</script>
+</body>
+</html>

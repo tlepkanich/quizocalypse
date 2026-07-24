@@ -1,0 +1,28 @@
+{
+  "id": "instant-shade-match",
+  "name": "Instant shade / match diagnostic",
+  "category": "beauty/shade-match",
+  "variant": "short image-heavy (Il Makiage PowerMatch)",
+  "use_when": "A single best match exists (foundation shade, paint color) and speed is the pitch; a questionnaire stands in for a physical scan.",
+  "length": { "min": 10, "max": 14, "band": "medium", "note": "Marketed as ~90 seconds; heavy on visual swatches over text." },
+  "gate": { "placement": "at_result", "style": "soft", "rationale": "Show the match, capture email to save it + a try-before-you-buy offer; soft so the reveal isn't withheld." },
+  "result_shape": "single_bespoke_output",
+  "arc": ["visible_attributes", "undertone", "preferences", "config"],
+  "branching": "light",
+  "questions": [
+    { "ordinal": 1, "id": "depth", "prompt": "Which skin depth is closest to you?", "type": "image_choice", "options": [{ "label": "Fair", "maps_to": "depth:fair" }, { "label": "Light", "maps_to": "depth:light" }, { "label": "Medium", "maps_to": "depth:medium" }, { "label": "Deep", "maps_to": "depth:deep" }], "maps_to": "depth", "weight_tier": "primary", "note": "Visual swatches; the strongest predictor." },
+    { "ordinal": 2, "id": "undertone", "prompt": "Which undertone matches your wrist?", "type": "image_choice", "options": [{ "label": "Cool / pink", "maps_to": "undertone:cool" }, { "label": "Neutral", "maps_to": "undertone:neutral" }, { "label": "Warm / golden", "maps_to": "undertone:warm" }], "maps_to": "undertone", "weight_tier": "primary" },
+    { "ordinal": 3, "id": "coverage", "prompt": "How much coverage do you want?", "type": "scale", "options": [{ "label": "Sheer", "maps_to": "coverage:1" }, { "label": "Light", "maps_to": "coverage:2" }, { "label": "Medium", "maps_to": "coverage:3" }, { "label": "Full", "maps_to": "coverage:4" }], "maps_to": "coverage", "weight_tier": "secondary", "note": "Discrete labeled points, not a slider." },
+    { "ordinal": 4, "id": "finish", "prompt": "Preferred finish?", "type": "single_select", "options": [{ "label": "Matte", "maps_to": "finish:matte" }, { "label": "Natural", "maps_to": "finish:natural" }, { "label": "Dewy", "maps_to": "finish:dewy" }], "maps_to": "finish", "weight_tier": "secondary" },
+    { "ordinal": 5, "id": "skin_type", "prompt": "Your skin tends to be…", "type": "single_select", "options": [{ "label": "Dry", "maps_to": "skin:dry" }, { "label": "Combination", "maps_to": "skin:combo" }, { "label": "Oily", "maps_to": "skin:oily" }], "maps_to": "skin_type", "weight_tier": "tie_breaker" }
+  ],
+  "recommendation": {
+    "architecture": "attribute_filter",
+    "tie_break": "undertone exactness -> coverage proximity -> stable product id",
+    "empty_fallback": "nearest depth+undertone by distance metric -> best-selling shade in that depth band",
+    "deterministic": true,
+    "explainable": true
+  },
+  "personalization_hooks": ["claimed match % as trust device", "saved shade profile personalizes future sessions"],
+  "sources": ["Il Makiage PowerMatch", "Curology (front-gate is prescription-medical — do NOT copy for commerce)", "Tier C/B"]
+}

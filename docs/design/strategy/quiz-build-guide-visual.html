@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Quiz build guide — templates, ROI, proof</title>
+<style>
+  :root{
+    --bg:#F4F3F8; --surface:#FFFFFF; --surface-2:#FAF9FD;
+    --ink:#241F31; --ink-2:#4E4863; --ink-3:#726C86; --ink-4:#9F98B2;
+    --rule:#E6E3EF; --rule-2:#F0EDF6;
+    --accent:#6D5AE6; --accent-ink:#3C3489; --accent-wash:#ECE9FB;
+    --ok:#157A52; --ok-wash:#E4F1EA; --warn:#B23A2E; --warn-wash:#F8E9E6;
+    --amber:#8A6A16; --amber-wash:#F6EED9;
+    --serif:Georgia,'Times New Roman',serif; --sans:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
+    --mono:ui-monospace,SFMono-Regular,Menlo,monospace;
+    --shadow:0 12px 34px -14px rgba(60,50,110,.22);
+  }
+  @media (prefers-color-scheme:dark){:root{
+    --bg:#15121D; --surface:#201B2C; --surface-2:#1B1726;
+    --ink:#EEEBF6; --ink-2:#C6C0D6; --ink-3:#958DAC; --ink-4:#6E6685;
+    --rule:#332B45; --rule-2:#2A2338;
+    --accent:#9E8CFF; --accent-ink:#C6B9FF; --accent-wash:#2A2340;
+    --ok:#5AC494; --ok-wash:#182A20; --warn:#E9786A; --warn-wash:#2F1B18;
+    --amber:#D9B25A; --amber-wash:#2B2413;
+    --shadow:0 14px 38px -16px rgba(0,0,0,.55);
+  }}
+  :root[data-theme="light"]{
+    --bg:#F4F3F8; --surface:#FFFFFF; --surface-2:#FAF9FD;
+    --ink:#241F31; --ink-2:#4E4863; --ink-3:#726C86; --ink-4:#9F98B2;
+    --rule:#E6E3EF; --rule-2:#F0EDF6;
+    --accent:#6D5AE6; --accent-ink:#3C3489; --accent-wash:#ECE9FB;
+    --ok:#157A52; --ok-wash:#E4F1EA; --warn:#B23A2E; --warn-wash:#F8E9E6;
+    --amber:#8A6A16; --amber-wash:#F6EED9;
+    --shadow:0 12px 34px -14px rgba(60,50,110,.22);
+  }
+  :root[data-theme="dark"]{
+    --bg:#15121D; --surface:#201B2C; --surface-2:#1B1726;
+    --ink:#EEEBF6; --ink-2:#C6C0D6; --ink-3:#958DAC; --ink-4:#6E6685;
+    --rule:#332B45; --rule-2:#2A2338;
+    --accent:#9E8CFF; --accent-ink:#C6B9FF; --accent-wash:#2A2340;
+    --ok:#5AC494; --ok-wash:#182A20; --warn:#E9786A; --warn-wash:#2F1B18;
+    --amber:#D9B25A; --amber-wash:#2B2413;
+    --shadow:0 14px 38px -16px rgba(0,0,0,.55);
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);-webkit-font-smoothing:antialiased;line-height:1.5}
+  .page{max-width:1060px;margin:0 auto;padding:40px 26px 64px}
+  .eyebrow{font-family:var(--mono);font-size:11px;font-weight:600;letter-spacing:.14em;text-transform:uppercase;color:var(--accent-ink)}
+  h1{font-family:var(--serif);font-weight:600;font-size:clamp(30px,5vw,46px);line-height:1.06;margin:10px 0 0;text-wrap:balance;letter-spacing:-.01em}
+  .lede{font-size:16px;color:var(--ink-2);margin:14px 0 0;max-width:64ch;line-height:1.55}
+  .lede b{color:var(--ink)}
+  .reframe{margin-top:22px;background:var(--surface);border:1px solid var(--rule);border-left:4px solid var(--accent);border-radius:14px;padding:16px 20px;box-shadow:var(--shadow)}
+  .reframe .rh{font-family:var(--mono);font-size:10.5px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--accent-ink);margin-bottom:5px}
+  .reframe p{margin:0;font-size:13.5px;color:var(--ink-2);line-height:1.55}
+  .reframe b{color:var(--ink)}
+
+  .sec{margin-top:44px}
+  .sec-h{display:flex;align-items:baseline;gap:12px;margin:0 0 16px}
+  .sec-h .k{font-family:var(--mono);font-size:11px;font-weight:700;color:var(--accent);letter-spacing:.06em}
+  .sec-h h2{font-family:var(--serif);font-weight:600;font-size:22px;margin:0;letter-spacing:-.01em}
+  .sec-h .sub{font-size:12.5px;color:var(--ink-4);margin-left:auto;text-align:right}
+
+  /* flow-template gallery */
+  .gallery{display:grid;grid-template-columns:repeat(4,1fr);gap:13px}
+  .tpl{background:var(--surface);border:1px solid var(--rule);border-radius:14px;padding:14px 15px 15px;box-shadow:var(--shadow);display:flex;flex-direction:column}
+  .tpl .cat{font-family:var(--mono);font-size:9px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--accent-ink)}
+  .tpl h3{font-family:var(--serif);font-size:16px;margin:3px 0 10px;font-weight:600;line-height:1.12}
+  .tpl .rows{margin-top:auto;display:flex;flex-direction:column;gap:6px}
+  .tpl .r{display:flex;justify-content:space-between;gap:8px;font-size:11px;line-height:1.3}
+  .tpl .r .lbl{color:var(--ink-4);text-transform:uppercase;letter-spacing:.04em;font-family:var(--mono);font-size:9px;padding-top:1px}
+  .tpl .r .val{color:var(--ink-2);text-align:right;font-weight:500}
+  .chip{display:inline-block;font-family:var(--mono);font-size:9px;font-weight:700;padding:1px 6px;border-radius:5px}
+  .chip.short{color:var(--ok);background:var(--ok-wash)}
+  .chip.medium{color:var(--amber);background:var(--amber-wash)}
+  .chip.long{color:var(--accent-ink);background:var(--accent-wash)}
+
+  /* ship vs prove */
+  .cols3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px}
+  .col{background:var(--surface);border:1px solid var(--rule);border-radius:16px;padding:16px 16px 18px;box-shadow:var(--shadow)}
+  .col .ch{font-family:var(--mono);font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;padding:5px 10px;border-radius:7px;display:inline-block;margin-bottom:12px}
+  .col.ship .ch{color:var(--ok);background:var(--ok-wash)}
+  .col.prove .ch{color:#fff;background:var(--accent)}
+  .col.never .ch{color:var(--warn);background:var(--warn-wash)}
+  .col ul{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:9px}
+  .col li{font-size:12.5px;color:var(--ink-2);line-height:1.4;padding-left:16px;position:relative}
+  .col li::before{content:"";position:absolute;left:0;top:6px;width:6px;height:6px;border-radius:50%;background:var(--ok)}
+  .col.prove li::before{background:var(--accent)}
+  .col.never li::before{background:var(--warn);border-radius:1px}
+  .col li b{color:var(--ink)}
+  .col li .ev{display:block;color:var(--ink-4);font-size:10.5px;margin-top:1px}
+  .col.ship{border-color:var(--ok)} .col.prove{border-color:var(--accent)}
+  .col .why{margin-top:12px;font-size:11px;color:var(--ink-4);line-height:1.45;border-top:1px solid var(--rule-2);padding-top:10px}
+
+  /* a/b reality */
+  .abwrap{display:grid;grid-template-columns:1.15fr .85fr;gap:14px}
+  .abtbl{background:var(--surface);border:1px solid var(--rule);border-radius:16px;overflow:hidden;box-shadow:var(--shadow)}
+  .abtbl-scroll{overflow-x:auto}
+  table{width:100%;border-collapse:collapse;min-width:340px}
+  thead th{text-align:left;font-family:var(--mono);font-size:9.5px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;padding:12px 14px;border-bottom:1px solid var(--rule);color:var(--ink-4)}
+  tbody td{padding:11px 14px;border-bottom:1px solid var(--rule-2);font-size:12.5px;vertical-align:middle}
+  tbody tr:last-child td{border-bottom:none}
+  td.mde{font-weight:600;color:var(--ink);font-variant-numeric:tabular-nums}
+  td.dur{font-family:var(--mono);font-variant-numeric:tabular-nums}
+  tr.bad td.dur{color:var(--warn);font-weight:700}
+  tr.good td.dur{color:var(--ok);font-weight:700}
+  .roadmap{background:var(--surface-2);border:1px solid var(--rule);border-radius:16px;padding:16px 18px}
+  .roadmap .rh{font-family:var(--mono);font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-4);margin-bottom:11px}
+  .roadmap ol{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:8px}
+  .roadmap li{font-size:12.5px;color:var(--ink-2);line-height:1.4}
+  .roadmap li b{color:var(--ink)}
+  .abnote{margin-top:12px;font-size:11.5px;color:var(--warn);line-height:1.45;background:var(--warn-wash);border-radius:10px;padding:11px 13px}
+  .abnote b{color:var(--warn)}
+
+  /* guardrails */
+  .guards{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+  .guard{background:var(--surface-2);border:1px solid var(--rule);border-left:3px solid var(--warn);border-radius:12px;padding:13px 15px}
+  .guard .gk{font-family:var(--mono);font-size:9.5px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--warn);margin-bottom:5px}
+  .guard p{margin:0;font-size:12px;color:var(--ink-2);line-height:1.42}
+  .guard p b{color:var(--ink)}
+
+  .foot{margin-top:40px;padding-top:16px;border-top:1px solid var(--rule);display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap;font-size:11.5px;color:var(--ink-4);font-family:var(--mono)}
+
+  @media (max-width:820px){ .gallery{grid-template-columns:1fr 1fr} .cols3,.guards{grid-template-columns:1fr} .abwrap{grid-template-columns:1fr} .sec-h .sub{display:none} }
+  @media (max-width:460px){ .gallery{grid-template-columns:1fr} }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <header>
+    <div class="eyebrow">Quiz build guide · templates × ROI × proof</div>
+    <h1>Don&rsquo;t design a quiz. Assemble one.</h1>
+    <p class="lede">A good product quiz is a known <b>flow template</b> for the category, filled with a small set of <b>evidence-backed features</b>, and validated behind a <b>holdout</b>. The builder picks the template, ships the Tier-A features by default, and A/B-proves the rest. Two rules govern everything below.</p>
+    <div class="reframe">
+      <div class="rh">The two governing rules</div>
+      <p><b>1 · Map length &amp; gate to the category, don&rsquo;t globally minimize.</b> Gifting/durables stay short with the email gate deferred; formulation/subscription run long with the gate at the reveal. <b>2 · Every lift number — including yours — is only believable behind an A/B holdout.</b> Plan to a credible 5&ndash;15% band, prove the rest, and never quote a vendor&rsquo;s selection-biased &ldquo;25&times;.&rdquo;</p>
+    </div>
+  </header>
+
+  <section class="sec">
+    <div class="sec-h"><span class="k">A</span><h2>Flow templates by vertical</h2><span class="sub">the proven arc · gate · result shape</span></div>
+    <div class="gallery">
+
+      <div class="tpl">
+        <span class="cat">Beauty · formulation</span>
+        <h3>Custom-formulation diagnostic</h3>
+        <div class="rows">
+          <div class="r"><span class="lbl">Length</span><span class="val"><span class="chip long">LONG 20–35</span></span></div>
+          <div class="r"><span class="lbl">Gate</span><span class="val">At result · hard</span></div>
+          <div class="r"><span class="lbl">Result</span><span class="val">Single bespoke formula</span></div>
+        </div>
+      </div>
+
+      <div class="tpl">
+        <span class="cat">Beauty · shade</span>
+        <h3>Instant shade match</h3>
+        <div class="rows">
+          <div class="r"><span class="lbl">Length</span><span class="val"><span class="chip medium">MED 10–14</span></span></div>
+          <div class="r"><span class="lbl">Gate</span><span class="val">At result · soft</span></div>
+          <div class="r"><span class="lbl">Result</span><span class="val">Hero + match %</span></div>
+        </div>
+      </div>
+
+      <div class="tpl">
+        <span class="cat">Health · supplements</span>
+        <h3>Goal-framed routine pack</h3>
+        <div class="rows">
+          <div class="r"><span class="lbl">Length</span><span class="val"><span class="chip medium">MED 8–15</span></span></div>
+          <div class="r"><span class="lbl">Gate</span><span class="val">Before results</span></div>
+          <div class="r"><span class="lbl">Result</span><span class="val">Multi-SKU pack</span></div>
+        </div>
+      </div>
+
+      <div class="tpl">
+        <span class="cat">Apparel · fit</span>
+        <h3>Fit finder</h3>
+        <div class="rows">
+          <div class="r"><span class="lbl">Length</span><span class="val"><span class="chip medium">MED 6–12</span></span></div>
+          <div class="r"><span class="lbl">Gate</span><span class="val">Deferred · soft</span></div>
+          <div class="r"><span class="lbl">Result</span><span class="val">Size + ranked styles</span></div>
+        </div>
+      </div>
+
+      <div class="tpl">
+        <span class="cat">Gifting</span>
+        <h3>Recipient-first gift finder</h3>
+        <div class="rows">
+          <div class="r"><span class="lbl">Length</span><span class="val"><span class="chip short">SHORT 5–7</span></span></div>
+          <div class="r"><span class="lbl">Gate</span><span class="val">Deferred · soft</span></div>
+          <div class="r"><span class="lbl">Result</span><span class="val">Curated shortlist</span></div>
+        </div>
+      </div>
+
+      <div class="tpl">
+        <span class="cat">Food · pet</span>
+        <h3>Named-pet meal plan</h3>
+        <div class="rows">
+          <div class="r"><span class="lbl">Length</span><span class="val"><span class="chip medium">MED 8–14</span></span></div>
+          <div class="r"><span class="lbl">Gate</span><span class="val">At result · soft</span></div>
+          <div class="r"><span class="lbl">Result</span><span class="val">Single meal plan</span></div>
+        </div>
+      </div>
+
+      <div class="tpl">
+        <span class="cat">Durables</span>
+        <h3>High-ticket narrower</h3>
+        <div class="rows">
+          <div class="r"><span class="lbl">Length</span><span class="val"><span class="chip short">SHORT 6–8</span></span></div>
+          <div class="r"><span class="lbl">Gate</span><span class="val">Deferred · soft</span></div>
+          <div class="r"><span class="lbl">Result</span><span class="val">Hero + 1 alt</span></div>
+        </div>
+      </div>
+
+      <div class="tpl">
+        <span class="cat">Subscription</span>
+        <h3>Commitment onboarding</h3>
+        <div class="rows">
+          <div class="r"><span class="lbl">Length</span><span class="val"><span class="chip long">LONG 25+</span></span></div>
+          <div class="r"><span class="lbl">Gate</span><span class="val">Mid-flow · hard</span></div>
+          <div class="r"><span class="lbl">Result</span><span class="val">Profile + first box</span></div>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <section class="sec">
+    <div class="sec-h"><span class="k">B</span><h2>What to ship vs what to prove</h2><span class="sub">graded by strongest independent evidence</span></div>
+    <div class="cols3">
+      <div class="col ship">
+        <span class="ch">Ship by default · Tier A</span>
+        <ul>
+          <li><b>One-click add + discount permalink + Shop Pay on result</b><span class="ev">Baymard: ~70% abandonment, ~35% friction upside</span></li>
+          <li><b>Curated 1–3 recommendations</b><span class="ev">Iyengar/Lepper — pitch as cognitive-load, not &ldquo;paradox&rdquo;</span></li>
+          <li><b>Social proof (rating + count + verified-buyer)</b><span class="ev">Spiegel: +270% at 5 reviews; peaks 4.0–4.7★</span></li>
+          <li><b>Progress bar + one-question-per-screen</b><span class="ev">NN/g, Baymard — cheap, cuts abandonment</span></li>
+          <li><b>Save-results (soft gate) + segmented email flows</b><span class="ev">McKinsey: 10–15% personalization lift</span></li>
+        </ul>
+        <div class="why">Independent evidence, low cost, close to the money.</div>
+      </div>
+      <div class="col prove">
+        <span class="ch">A/B-prove first</span>
+        <ul>
+          <li><b>Bundles / &ldquo;complete the routine&rdquo;</b><span class="ev">Best AOV lever, but numbers are vendor — test your catalog</span></li>
+          <li><b>Endowed progress (bar &gt;0%)</b><span class="ev">Tier-A theory, loyalty-card context — A/B the offset</span></li>
+          <li><b>Auto-advance on select</b><span class="ev">Controlled study: no sig. gain + a11y cost. Test, default OFF</span></li>
+          <li><b>AI review summaries / &ldquo;why it fits you&rdquo;</b><span class="ev">Gate behind grounding — ungrounded = FTC exposure</span></li>
+          <li><b>Mystery discount · SMS flows</b><span class="ev">Vendor-inflated; SMS = hard TCPA consent</span></li>
+        </ul>
+        <div class="why">Real upside, but evidence is biased or carries a tax.</div>
+      </div>
+      <div class="col never">
+        <span class="ch">Do not build</span>
+        <ul>
+          <li><b>Fake / resetting countdown timers</b><span class="ev">FTC Dark Patterns + EU Digital Fairness</span></li>
+          <li><b>False scarcity</b><span class="ev">Server-enforced real expiry is fine; cosmetic is illegal</span></li>
+          <li><b>Non-redeemable &ldquo;everyone-wins&rdquo; wheels</b><span class="ev">The prize shown must be real</span></li>
+        </ul>
+        <div class="why">Regulatory lines, not preferences.</div>
+      </div>
+    </div>
+  </section>
+
+  <section class="sec">
+    <div class="sec-h"><span class="k">C</span><h2>The A/B reality</h2><span class="sub">most stores can&rsquo;t test small effects — know which case you&rsquo;re in</span></div>
+    <div class="abwrap">
+      <div class="abtbl"><div class="abtbl-scroll">
+        <table>
+          <thead><tr><th>Detect (base 2%)</th><th>Visitors needed</th><th>@ 10k/mo</th></tr></thead>
+          <tbody>
+            <tr class="bad"><td class="mde">+10% relative</td><td>~160,000</td><td class="dur">~16 mo</td></tr>
+            <tr><td class="mde">+20% relative</td><td>~40,000</td><td class="dur">~4 mo</td></tr>
+            <tr class="good"><td class="mde">+50% relative</td><td>~7,600</td><td class="dur">~3 wk</td></tr>
+          </tbody>
+        </table>
+      </div></div>
+      <div class="roadmap">
+        <div class="rh">Test roadmap · impact × testability</div>
+        <ol>
+          <li><b>Quiz vs no quiz</b> (holdout, RPV) — kills the selection-bias myth</li>
+          <li><b>Email gate: required vs optional vs post-result</b></li>
+          <li><b>Quiz length</b> — completion is high-frequency, testable</li>
+          <li><b>Entry point / placement</b></li>
+          <li><b>Rec logic A vs B</b> — small effect, defer to sequential</li>
+        </ol>
+      </div>
+    </div>
+    <div class="abnote"><b>Measure revenue-per-visitor, not completion</b> (gameable), and analyze <b>everyone assigned</b>, not just quiz-takers — comparing takers to all traffic is the #1 error. If a clean test needs &gt;8 weeks: test a bigger swing, use a higher-frequency proxy, or <b>ship on priors + a 5% permanent holdout</b> and call it a monitored bet, not a proven result.</div>
+  </section>
+
+  <section class="sec">
+    <div class="sec-h"><span class="k">D</span><h2>Build guardrails the generator enforces</h2><span class="sub">hard invariants — block the emit</span></div>
+    <div class="guards">
+      <div class="guard"><div class="gk">≥1 product / path</div><p>Every reachable result resolves to a real product; empty-set <b>fallback ladder</b> defined. The top runtime guardrail.</p></div>
+      <div class="guard"><div class="gk">Determinism</div><p>Same answers → same rec. Scoring is a <b>pure function</b>; randomize display order, never the outcome.</p></div>
+      <div class="guard"><div class="gk">No dead questions</div><p>Every question must change <b>≥1 filter or score</b>. No dead-ends, no unreachable paths.</p></div>
+      <div class="guard"><div class="gk">No sliders</div><p>Scale questions render as <b>3–5 discrete labeled taps</b> (Bosch 2019). Default to tap-cards on native radios.</p></div>
+      <div class="guard"><div class="gk">MECE options</div><p>Mutually exclusive &amp; exhaustive; no overlapping ranges; ≤7 as radios, 8+ → dropdown; no double-barreled.</p></div>
+      <div class="guard"><div class="gk">Gate late, by category</div><p>At/just before the result — never screen one. At-result for diagnostic; deferred for fit/durables/gifting.</p></div>
+    </div>
+  </section>
+
+  <div class="foot">
+    <span>Full detail → QUIZ-MASTER-STRATEGY.md (Parts 3–4, 6–7) · quiz-templates/*.json</span>
+    <span>Baymard · Spiegel · Iyengar · McKinsey · Pew · Bosch 2019 · NN/g · Kohavi · FTC · every number behind a holdout</span>
+  </div>
+</div>
+</body>
+</html>

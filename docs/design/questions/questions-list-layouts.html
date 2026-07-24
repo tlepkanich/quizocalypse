@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Question list — 5 layouts</title>
+<style>
+  :root{
+    --accent:#6D5AE6; --accent-2:#6B4FD8; --accent-ink:#3C3489;
+    --accent-wash:#EDEBFC; --accent-tint:#F3F1FD;
+    --ink:#2E2740; --ink-3:#5A5470; --ink-4:#7C7791; --ink-25:#B6B0C8;
+    --rule:#E9E7EF; --rule-2:#F1EFF6; --cream-2:#F2F1F5;
+    --mono:ui-monospace,SFMono-Regular,Menlo,monospace;
+    --sans:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:#EDECF1;font-family:var(--sans);color:var(--ink);-webkit-font-smoothing:antialiased;padding:24px 0 80px}
+  .wrap{max-width:720px;margin:0 auto;padding:0 22px}
+  .cap{font-size:12.5px;color:var(--ink-4);margin:0 2px 14px;line-height:1.6}
+  .cap b{color:var(--ink-3)}
+  .switch{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px}
+  .switch button{border:1px solid var(--rule);background:#fff;color:var(--ink-3);font-size:12.5px;font-weight:600;padding:8px 13px;border-radius:9px;cursor:pointer;font-family:var(--sans)}
+  .switch button.on{background:var(--accent);color:#fff;border-color:var(--accent)}
+  .vhead{font-size:12.5px;color:var(--ink-4);margin:0 2px 16px;line-height:1.5}
+  .vhead b{color:var(--ink-3)}
+  .frame{background:#fff;border:1px solid var(--rule);border-radius:14px;box-shadow:0 8px 26px rgba(120,110,150,.09);overflow:hidden}
+
+  .num{font-family:var(--mono);font-weight:600;color:var(--ink-25)}
+  .type{font-family:var(--mono);font-size:9.5px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--ink-25);white-space:nowrap}
+
+  /* L1 — clean accordion rows */
+  .l1 .row{position:relative;border-bottom:1px solid var(--rule-2)}
+  .l1 .row:last-child{border-bottom:none}
+  .l1 .row.on::before{content:'';position:absolute;left:0;top:10px;bottom:10px;width:2.5px;border-radius:2px;background:var(--accent)}
+  .l1 .head{display:flex;align-items:baseline;gap:11px;padding:13px 16px;cursor:pointer}
+  .l1 .head:hover{background:#FBFAFD}
+  .l1 .n{width:20px;flex:none;font-family:var(--mono);font-size:11px;font-weight:600;color:var(--ink-25)}
+  .l1 .row.dec .n{color:var(--accent)}
+  .l1 .qt{flex:1;font-size:14.5px;font-weight:600;line-height:1.4;color:var(--ink)}
+  .l1 .type{align-self:center}
+  .l1 .ans{padding:0 16px 13px 47px;display:flex;flex-direction:column;gap:2px}
+  .l1 .a{font-size:13px;color:var(--ink-3);line-height:1.5;padding:2px 0}
+
+  /* L2 — question + one-line answer preview */
+  .l2 .row{display:flex;gap:11px;padding:13px 16px;border-bottom:1px solid var(--rule-2)}
+  .l2 .row:last-child{border-bottom:none}
+  .l2 .n{width:20px;flex:none;font-family:var(--mono);font-size:11px;font-weight:600;color:var(--ink-25);padding-top:2px}
+  .l2 .row.dec .n{color:var(--accent)}
+  .l2 .mid{flex:1;min-width:0}
+  .l2 .toprow{display:flex;align-items:baseline;gap:10px}
+  .l2 .qt{flex:1;font-size:14px;font-weight:600;line-height:1.35;color:var(--ink)}
+  .l2 .prev{margin-top:4px;font-size:12px;color:var(--ink-4);line-height:1.4;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+  /* L3 — cards with answer chips */
+  .l3{background:var(--cream-2);padding:12px;display:flex;flex-direction:column;gap:10px}
+  .l3 .card{background:#fff;border:1px solid var(--rule);border-radius:12px;padding:13px 15px}
+  .l3 .card.dec{border-color:var(--accent-wash);box-shadow:0 0 0 2px var(--accent-tint)}
+  .l3 .top{display:flex;align-items:baseline;gap:10px;margin-bottom:10px}
+  .l3 .n{font-family:var(--mono);font-size:11px;font-weight:600;color:var(--ink-25)}
+  .l3 .card.dec .n{color:var(--accent)}
+  .l3 .qt{flex:1;font-size:15.5px;font-weight:600;line-height:1.3;color:var(--ink)}
+  .l3 .chips{display:flex;flex-wrap:wrap;gap:6px}
+  .l3 .chip{font-size:12px;color:var(--ink-3);background:var(--cream-2);border:1px solid var(--rule);border-radius:999px;padding:5px 11px;line-height:1.2}
+
+  /* L4 — tight table, question column wide */
+  .l4 table{width:100%;border-collapse:collapse}
+  .l4 th{text-align:left;font-family:var(--mono);font-size:9.5px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--ink-25);padding:11px 16px 8px;border-bottom:1px solid var(--rule)}
+  .l4 td{padding:12px 16px;border-bottom:1px solid var(--rule-2);vertical-align:top}
+  .l4 tr:last-child td{border-bottom:none}
+  .l4 tr:hover td{background:#FBFAFD}
+  .l4 .cn{width:34px;font-family:var(--mono);font-size:11px;font-weight:600;color:var(--ink-25)}
+  .l4 tr.dec .cn{color:var(--accent)}
+  .l4 .cq{font-size:14px;font-weight:600;line-height:1.4;color:var(--ink)}
+  .l4 .ct{width:120px;font-family:var(--mono);font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.03em;color:var(--ink-4);white-space:nowrap}
+
+  /* L5 — big-type reading index */
+  .l5{padding:8px 20px}
+  .l5 .row{display:flex;gap:16px;padding:16px 0;border-bottom:1px solid var(--rule-2)}
+  .l5 .row:last-child{border-bottom:none}
+  .l5 .n{font-family:var(--mono);font-size:13px;font-weight:600;color:var(--ink-25);padding-top:5px;min-width:26px}
+  .l5 .row.dec .n{color:var(--accent)}
+  .l5 .qt{font-size:19px;font-weight:600;line-height:1.3;color:var(--ink);letter-spacing:-.01em}
+  .l5 .cap2{margin-top:5px;font-family:var(--mono);font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.04em;color:var(--ink-25)}
+  .l5 .cap2 .dt{color:var(--accent)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <p class="cap"><b>Question list — 5 layout directions</b> (isolated, for formatting comparison). All lead with the question wording; type is quiet; answer visibility varies.</p>
+  <div class="switch" id="switch">
+    <button class="on" data-v="1">1 · Clean rows</button>
+    <button data-v="2">2 · Answer preview</button>
+    <button data-v="3">3 · Cards + chips</button>
+    <button data-v="4">4 · Table</button>
+    <button data-v="5">5 · Reading index</button>
+  </div>
+  <p class="vhead" id="vhead"></p>
+  <div class="frame" id="frame"></div>
+</div>
+
+<script>
+  const $=id=>document.getElementById(id);
+  const esc=s=>String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+  const QS=[
+    {n:1,dec:true,type:"Single select",text:"What best describes how you ride? Choose the style that gets you most excited on the mountain.",answers:["Park & Freestyle — rails, jumps, and creative expression","All-Mountain — I go wherever the mountain takes me","Carving & Precision — edge-to-edge control on groomed runs","Backcountry & Powder — off-piste and untracked terrain"]},
+    {n:2,type:"Single select",text:"Which terrain do you spend the most time on?",answers:["Groomed runs","Trees & side-country","Open powder bowls"]},
+    {n:3,type:"Scale",text:"How would you honestly rate your riding ability right now?",answers:["Beginner","Intermediate","Advanced / expert"]},
+    {n:4,type:"Single select",text:"How important is board responsiveness and edge hold to you?",answers:["Critical — I want precision","Nice to have","Not a priority"]},
+    {n:5,type:"Single select",text:"What does your ideal riding day look like from a volume standpoint?",answers:["A few perfect runs","Steady all-day laps","Dawn-to-dusk everything"]},
+    {n:6,type:"Single select",text:"Which board characteristic matters most to you when choosing?",answers:["Stability at speed","Playful & forgiving","Float in powder"]},
+  ];
+  const VHEAD={
+    1:"<b>1 · Clean rows.</b> Minimal rows — number, question, quiet type. Click a row to reveal its answers (accordion). Calmest resting state; answers on demand.",
+    2:"<b>2 · Answer preview.</b> Each question shows a one-line preview of its answers underneath, muted — you see the whole Q&A shape without expanding anything.",
+    3:"<b>3 · Cards + chips.</b> Each question is a card with its answers as chips — every answer visible, grouped and airy. Densest but most complete.",
+    4:"<b>4 · Table.</b> A tight grid: number · question · type. The question column is widest for fast scanning; answers are out of the way.",
+    5:"<b>5 · Reading index.</b> Large question type, generous spacing — reads like a document outline. Pure question-wording legibility; type is a small caption.",
+  };
+  let sel=0;
+
+  function render1(){
+    $("frame").className="frame l1";
+    $("frame").innerHTML=QS.map((q,i)=>`<div class="row${q.dec?" dec":""}${i===sel?" on":""}" data-i="${i}">
+      <div class="head" data-sel="${i}"><span class="n">${String(q.n).padStart(2,"0")}</span><span class="qt">${esc(q.text)}</span><span class="type">${esc(q.type)}</span></div>
+      ${i===sel?`<div class="ans">${q.answers.map(a=>`<span class="a">${esc(a)}</span>`).join("")}</div>`:""}
+    </div>`).join("");
+    $("frame").querySelectorAll("[data-sel]").forEach(el=>el.onclick=()=>{sel=+el.dataset.sel;render1();});
+  }
+  function render2(){
+    $("frame").className="frame l2";
+    $("frame").innerHTML=QS.map(q=>`<div class="row${q.dec?" dec":""}">
+      <span class="n">${String(q.n).padStart(2,"0")}</span>
+      <div class="mid"><div class="toprow"><span class="qt">${esc(q.text)}</span><span class="type">${esc(q.type)}</span></div>
+      <div class="prev">${q.answers.map(esc).join("  ·  ")}</div></div>
+    </div>`).join("");
+  }
+  function render3(){
+    $("frame").className="frame l3";
+    $("frame").innerHTML=QS.map(q=>`<div class="card${q.dec?" dec":""}">
+      <div class="top"><span class="n">${String(q.n).padStart(2,"0")}</span><span class="qt">${esc(q.text)}</span><span class="type">${esc(q.type)}</span></div>
+      <div class="chips">${q.answers.map(a=>`<span class="chip">${esc(a)}</span>`).join("")}</div>
+    </div>`).join("");
+  }
+  function render4(){
+    $("frame").className="frame l4";
+    $("frame").innerHTML=`<table><thead><tr><th class="cn">#</th><th>Question</th><th class="ct">Type</th></tr></thead><tbody>${
+      QS.map(q=>`<tr class="${q.dec?"dec":""}"><td class="cn">${String(q.n).padStart(2,"0")}</td><td class="cq">${esc(q.text)}</td><td class="ct">${esc(q.type)}</td></tr>`).join("")
+    }</tbody></table>`;
+  }
+  function render5(){
+    $("frame").className="frame l5";
+    $("frame").innerHTML=QS.map(q=>`<div class="row${q.dec?" dec":""}">
+      <span class="n">${String(q.n).padStart(2,"0")}</span>
+      <div><div class="qt">${esc(q.text)}</div><div class="cap2">${esc(q.type)}${q.dec?' · <span class="dt">Decides the result</span>':''}</div></div>
+    </div>`).join("");
+  }
+  const R={1:render1,2:render2,3:render3,4:render4,5:render5};
+
+  function show(v){$("switch").querySelectorAll("button").forEach(b=>b.classList.toggle("on",b.dataset.v===v));$("vhead").innerHTML=VHEAD[v];R[v]();}
+  $("switch").querySelectorAll("button").forEach(b=>b.onclick=()=>show(b.dataset.v));
+  show("1");
+</script>
+</body>
+</html>

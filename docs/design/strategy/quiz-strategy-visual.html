@@ -1,0 +1,376 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Quiz tool — ROI strategy on a page</title>
+<style>
+  :root{
+    --bg:#F4F3F8; --surface:#FFFFFF; --surface-2:#FAF9FD;
+    --ink:#241F31; --ink-2:#4E4863; --ink-3:#726C86; --ink-4:#9F98B2;
+    --rule:#E6E3EF; --rule-2:#F0EDF6;
+    --accent:#6D5AE6; --accent-ink:#3C3489; --accent-wash:#ECE9FB;
+    --ok:#157A52; --ok-wash:#E4F1EA; --warn:#B23A2E; --warn-wash:#F8E9E6;
+    --serif:Georgia,'Times New Roman',serif; --sans:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
+    --mono:ui-monospace,SFMono-Regular,Menlo,monospace;
+    --shadow:0 12px 34px -14px rgba(60,50,110,.22);
+  }
+  @media (prefers-color-scheme:dark){:root{
+    --bg:#15121D; --surface:#201B2C; --surface-2:#1B1726;
+    --ink:#EEEBF6; --ink-2:#C6C0D6; --ink-3:#958DAC; --ink-4:#6E6685;
+    --rule:#332B45; --rule-2:#2A2338;
+    --accent:#9E8CFF; --accent-ink:#C6B9FF; --accent-wash:#2A2340;
+    --ok:#5AC494; --ok-wash:#182A20; --warn:#E9786A; --warn-wash:#2F1B18;
+    --shadow:0 14px 38px -16px rgba(0,0,0,.55);
+  }}
+  :root[data-theme="light"]{
+    --bg:#F4F3F8; --surface:#FFFFFF; --surface-2:#FAF9FD;
+    --ink:#241F31; --ink-2:#4E4863; --ink-3:#726C86; --ink-4:#9F98B2;
+    --rule:#E6E3EF; --rule-2:#F0EDF6;
+    --accent:#6D5AE6; --accent-ink:#3C3489; --accent-wash:#ECE9FB;
+    --ok:#157A52; --ok-wash:#E4F1EA; --warn:#B23A2E; --warn-wash:#F8E9E6;
+    --shadow:0 12px 34px -14px rgba(60,50,110,.22);
+  }
+  :root[data-theme="dark"]{
+    --bg:#15121D; --surface:#201B2C; --surface-2:#1B1726;
+    --ink:#EEEBF6; --ink-2:#C6C0D6; --ink-3:#958DAC; --ink-4:#6E6685;
+    --rule:#332B45; --rule-2:#2A2338;
+    --accent:#9E8CFF; --accent-ink:#C6B9FF; --accent-wash:#2A2340;
+    --ok:#5AC494; --ok-wash:#182A20; --warn:#E9786A; --warn-wash:#2F1B18;
+    --shadow:0 14px 38px -16px rgba(0,0,0,.55);
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);-webkit-font-smoothing:antialiased;line-height:1.5}
+  .page{max-width:1060px;margin:0 auto;padding:40px 26px 64px}
+  .eyebrow{font-family:var(--mono);font-size:11px;font-weight:600;letter-spacing:.14em;text-transform:uppercase;color:var(--accent-ink)}
+  h1{font-family:var(--serif);font-weight:600;font-size:clamp(30px,5vw,46px);line-height:1.06;margin:10px 0 0;text-wrap:balance;letter-spacing:-.01em}
+  .lede{font-size:16px;color:var(--ink-2);margin:14px 0 0;max-width:60ch;line-height:1.55}
+  .lede b{color:var(--ink)}
+
+  /* skeptical reframe */
+  .reframe{margin-top:22px;background:var(--surface);border:1px solid var(--rule);border-left:4px solid var(--warn);border-radius:14px;padding:16px 20px;box-shadow:var(--shadow)}
+  .reframe .rh{font-family:var(--mono);font-size:10.5px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--warn);margin-bottom:5px}
+  .reframe p{margin:0;font-size:13.5px;color:var(--ink-2);line-height:1.55}
+  .reframe b{color:var(--ink)} .num{font-variant-numeric:tabular-nums;font-weight:700;color:var(--ink)}
+
+  .sec{margin-top:44px}
+  .sec-h{display:flex;align-items:baseline;gap:12px;margin:0 0 16px}
+  .sec-h .k{font-family:var(--mono);font-size:11px;font-weight:700;color:var(--accent);letter-spacing:.06em}
+  .sec-h h2{font-family:var(--serif);font-weight:600;font-size:22px;margin:0;letter-spacing:-.01em}
+  .sec-h .sub{font-size:12.5px;color:var(--ink-4);margin-left:auto;text-align:right}
+
+  /* three loops (a funnel — order is meaningful) */
+  .loops{display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px;align-items:stretch}
+  .loop{position:relative;background:var(--surface);border:1px solid var(--rule);border-radius:16px;padding:18px 18px 20px;box-shadow:var(--shadow);display:flex;flex-direction:column}
+  .loop.hero{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent),var(--shadow)}
+  .loop .n{font-family:var(--mono);font-size:11px;font-weight:700;color:var(--accent-ink)}
+  .loop h3{font-family:var(--serif);font-size:19px;margin:4px 0 2px;font-weight:600}
+  .loop .flow{font-size:12px;color:var(--ink-4);margin:0 0 12px}
+  .loop .lever{font-size:13px;color:var(--ink-2);line-height:1.5;margin:0 0 12px}
+  .loop .lever b{color:var(--ink)}
+  .loop .metric{margin-top:auto;border-top:1px solid var(--rule-2);padding-top:11px}
+  .loop .metric .big{font-family:var(--mono);font-size:17px;font-weight:700;color:var(--ink);font-variant-numeric:tabular-nums}
+  .loop .metric .cap{font-size:11px;color:var(--ink-4);margin-top:1px}
+  .loop.hero .tagpill{display:inline-block;font-family:var(--mono);font-size:9px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:#fff;background:var(--accent);padding:3px 8px;border-radius:6px;margin-bottom:8px;align-self:flex-start}
+  .arrow{position:absolute;right:-11px;top:50%;transform:translateY(-50%);z-index:2;width:20px;height:20px;color:var(--ink-4)}
+  .loop:last-child .arrow{display:none}
+
+  /* honest-mechanic table */
+  .htbl{background:var(--surface);border:1px solid var(--rule);border-radius:16px;overflow:hidden;box-shadow:var(--shadow)}
+  .htbl-scroll{overflow-x:auto}
+  table{width:100%;border-collapse:collapse;min-width:660px}
+  thead th{text-align:left;font-family:var(--mono);font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;padding:13px 18px;border-bottom:1px solid var(--rule);color:var(--ink-4)}
+  thead th.avoid{color:var(--warn)} thead th.use{color:var(--ok)}
+  tbody td{padding:12px 18px;border-bottom:1px solid var(--rule-2);font-size:13px;vertical-align:top;line-height:1.4}
+  tbody tr:last-child td{border-bottom:none}
+  td.mech{font-weight:600;color:var(--ink);width:23%}
+  td.avoid{color:var(--ink-3);width:36%}
+  td.use{color:var(--ink);width:41%}
+  td.use .chk{color:var(--ok);font-weight:700;margin-right:5px}
+  td.avoid .x{color:var(--warn);font-weight:700;margin-right:5px}
+
+  /* build matrix */
+  .matrix{display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px}
+  .col{background:var(--surface);border:1px solid var(--rule);border-radius:16px;padding:16px 16px 18px;box-shadow:var(--shadow)}
+  .col .ch{font-family:var(--mono);font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;padding:5px 10px;border-radius:7px;display:inline-block;margin-bottom:12px}
+  .col.first .ch{color:var(--ok);background:var(--ok-wash)}
+  .col.star .ch{color:#fff;background:var(--accent)}
+  .col.skip .ch{color:var(--warn);background:var(--warn-wash)}
+  .col ul{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:9px}
+  .col li{font-size:13px;color:var(--ink-2);line-height:1.4;padding-left:16px;position:relative}
+  .col li::before{content:"";position:absolute;left:0;top:7px;width:6px;height:6px;border-radius:50%;background:var(--accent)}
+  .col.skip li::before{background:var(--warn);border-radius:1px}
+  .col li b{color:var(--ink)}
+  .col.star{border-color:var(--accent)}
+  .col .why{margin-top:12px;font-size:11.5px;color:var(--ink-4);line-height:1.45;border-top:1px solid var(--rule-2);padding-top:10px}
+
+  /* part II — four levers */
+  .l2grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  .l2{background:var(--surface);border:1px solid var(--rule);border-radius:16px;padding:17px 18px 18px;box-shadow:var(--shadow);display:flex;flex-direction:column}
+  .l2 .lh{display:flex;align-items:baseline;gap:9px;margin-bottom:7px}
+  .l2 .lh .ln{font-family:var(--mono);font-size:10.5px;font-weight:700;color:var(--accent-ink)}
+  .l2 .lh h3{font-family:var(--serif);font-size:18px;margin:0;font-weight:600}
+  .l2 .thesis{font-size:12.5px;color:var(--ink-2);line-height:1.5;margin:0 0 11px}
+  .l2 .thesis b{color:var(--ink)}
+  .l2 ul{list-style:none;margin:0 0 12px;padding:0;display:flex;flex-direction:column;gap:7px}
+  .l2 li{font-size:12.5px;color:var(--ink-2);line-height:1.42;padding-left:15px;position:relative}
+  .l2 li::before{content:"";position:absolute;left:0;top:6px;width:5px;height:5px;border-radius:50%;background:var(--accent)}
+  .l2 li b{color:var(--ink)}
+  .l2 .foot2{margin-top:auto;display:flex;flex-direction:column;gap:6px;border-top:1px solid var(--rule-2);padding-top:11px}
+  .l2 .stat{font-size:11.5px;color:var(--ink-3);line-height:1.4}
+  .l2 .stat .big{font-family:var(--mono);font-weight:700;color:var(--ink);font-variant-numeric:tabular-nums}
+  .l2 .stat.ok .big{color:var(--ok)} .l2 .stat.warn .big{color:var(--warn)}
+  .l2 .fix{font-size:11px;color:var(--warn);line-height:1.4;background:var(--warn-wash);border-radius:8px;padding:7px 9px}
+  .l2 .fix b{color:var(--warn)}
+
+  /* warnings — the adversarial layer */
+  .warncols{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  .wcard{background:var(--surface);border:1px solid var(--rule);border-left:4px solid var(--warn);border-radius:14px;padding:16px 18px 17px;box-shadow:var(--shadow)}
+  .wcard .wt{font-family:var(--mono);font-size:10.5px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--warn);margin:0 0 12px}
+  .myth{display:flex;flex-direction:column;gap:11px;margin:0;padding:0;list-style:none}
+  .myth li{font-size:12.5px;line-height:1.4}
+  .myth .bad{color:var(--ink-4);text-decoration:line-through;text-decoration-color:var(--warn);text-decoration-thickness:1.5px}
+  .myth .real{display:block;color:var(--ink-2);margin-top:2px}
+  .myth .real b{color:var(--ink)}
+  .myth .tag{font-family:var(--mono);font-size:9px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--warn);background:var(--warn-wash);border-radius:5px;padding:1px 6px;margin-right:6px;vertical-align:1px}
+  .flip{display:flex;flex-direction:column;gap:10px;margin:0;padding:0;list-style:none}
+  .flip li{font-size:12.5px;line-height:1.4}
+  .flip .no{color:var(--ink-3)} .flip .no::before{content:"✕";color:var(--warn);font-weight:700;margin-right:6px}
+  .flip .yes{display:block;color:var(--ink);margin-top:2px;padding-left:16px}
+  .flip .yes::before{content:"→";color:var(--ok);font-weight:700;margin-left:-16px;margin-right:7px}
+  .flip .yes b{color:var(--ink)}
+  .tripwire{margin-top:14px;background:var(--surface-2);border:1px solid var(--rule);border-radius:14px;padding:15px 18px}
+  .tripwire .tw-h{font-family:var(--mono);font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-4);margin-bottom:11px}
+  .twgrid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}
+  .tw{font-size:12px;line-height:1.42;color:var(--ink-2)}
+  .tw .twk{font-family:var(--serif);font-size:14px;font-weight:600;color:var(--ink);display:block;margin-bottom:3px}
+  .tw b{color:var(--warn)}
+
+  /* hard gates */
+  .gates{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+  .gate{background:var(--surface-2);border:1px solid var(--rule);border-radius:13px;padding:14px 15px}
+  .gate .gk{font-family:var(--mono);font-size:9.5px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--accent-ink);margin-bottom:6px}
+  .gate p{margin:0;font-size:12px;color:var(--ink-2);line-height:1.45}
+  .gate p b{color:var(--ink);font-variant-numeric:tabular-nums}
+
+  code{font-family:var(--mono);font-size:.86em;background:var(--surface-2);border:1px solid var(--rule-2);border-radius:5px;padding:1px 5px;color:var(--ink-2)}
+  .foot{margin-top:40px;padding-top:16px;border-top:1px solid var(--rule);display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap;font-size:11.5px;color:var(--ink-4);font-family:var(--mono)}
+  .foot a{color:var(--accent-ink);text-decoration:none}
+
+  @media (max-width:760px){
+    .loops,.matrix,.l2grid,.warncols{grid-template-columns:1fr}
+    .gates,.twgrid{grid-template-columns:1fr 1fr}
+    .arrow{display:none}
+    .sec-h .sub{display:none}
+  }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <header>
+    <div class="eyebrow">Product-quiz strategy · behavioral × ROI × compliant</div>
+    <h1>A quiz isn&rsquo;t a form. It&rsquo;s a value-exchange engine.</h1>
+    <p class="lede">The shop gives personalization, a real reward, and a genuinely good pick; the shopper gives attention, zero-party data, consent, and a purchase. Every feature earns its place by moving one of <b>three loops</b> — and by being <b>honest</b> and <b>light</b>.</p>
+    <div class="reframe">
+      <div class="rh">⚠ Read the numbers skeptically — this governs everything</div>
+      <p>&ldquo;Quiz-takers convert <span class="num">25&times;</span>&rdquo; is mostly <b>selection bias</b> — starters are already high-intent, and the case studies have no holdout. Honest e-commerce reality: <span class="num">~55&ndash;65%</span> complete, <span class="num">~38&ndash;40%</span> opt in (Interact, 80M+ leads), flat since 2013. Drop-off is <b>front-loaded</b> — question&nbsp;4 is expensive, 12 is cheap. <b>Cut early questions.</b></p>
+    </div>
+  </header>
+
+  <section class="sec">
+    <div class="sec-h"><span class="k">A</span><h2>The three loops</h2><span class="sub">a funnel — order is the strategy</span></div>
+    <div class="loops">
+      <div class="loop">
+        <span class="n">01 · COMPLETE</span>
+        <h3>Attention &rarr; answers</h3>
+        <p class="flow">friction &darr; · momentum &uarr;</p>
+        <p class="lever">One question per screen, <b>auto-advance</b>, an <b>endowed-progress</b> bar (the intro is step&nbsp;1). Steal TikTok&rsquo;s micro-interactions, never its endless scroll.</p>
+        <div class="metric"><div class="big">~3&times;</div><div class="cap">multi-step vs single-page completion (vendor, Tier B)</div></div>
+        <svg class="arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M5 12h13M13 6l6 6-6 6"/></svg>
+      </div>
+      <div class="loop">
+        <span class="n">02 · CONVERT</span>
+        <h3>Answers &rarr; purchase</h3>
+        <p class="flow">earned recommendation + reward</p>
+        <p class="lever">The rec page is the <b>peak-end</b> moment: &ldquo;based on your 6 answers,&rdquo; the <b>why</b>, curated <b>1&ndash;3</b> picks, one-click add, and the honest reward reveal.</p>
+        <div class="metric"><div class="big">30% vs 3%</div><div class="cap">6 vs 24 options (curate the set)</div></div>
+        <svg class="arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M5 12h13M13 6l6 6-6 6"/></svg>
+      </div>
+      <div class="loop hero">
+        <span class="tagpill">Test it · unproven</span>
+        <span class="n">03 · CONTINUE</span>
+        <h3>Rec &rarr; more data</h3>
+        <p class="flow">consent · retention · AOV</p>
+        <p class="lever"><b>Progressive profiling after the rec</b> — trade a marginal discount for zero-party data + consent. <b>No independent evidence it converts</b> (survey fatigue is worsening) — a speculative A/B bet, not a proven play.</p>
+        <div class="metric"><div class="big">~45% vs ~12%</div><div class="cap">post-result vs email survey response</div></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="sec">
+    <div class="sec-h"><span class="k">B</span><h2>Borrow the mechanism, reject the manipulation</h2><span class="sub">honest if it works when you say it out loud</span></div>
+    <div class="htbl"><div class="htbl-scroll"><table>
+      <thead><tr><th>Sticky mechanic</th><th class="avoid">Dark version — avoid</th><th class="use">Honest analog — use</th></tr></thead>
+      <tbody>
+        <tr><td class="mech">Variable reward</td><td class="avoid"><span class="x">&times;</span>Gambling; near-miss; &ldquo;you won nothing&rdquo;</td><td class="use"><span class="chk">&check;</span>Mystery discount where <b>everyone wins</b> (also the legal safe harbor)</td></tr>
+        <tr><td class="mech">Infinite scroll</td><td class="avoid"><span class="x">&times;</span>Endless, no exit, dopamine trap</td><td class="use"><span class="chk">&check;</span>Auto-advance, one screen per question, a real <b>finish line</b></td></tr>
+        <tr><td class="mech">For-You personalization</td><td class="avoid"><span class="x">&times;</span>Fake or manipulative profiling</td><td class="use"><span class="chk">&check;</span>Result <b>genuinely reflects</b> their answers</td></tr>
+        <tr><td class="mech">Progress / goal-gradient</td><td class="avoid"><span class="x">&times;</span>Fake &ldquo;40% done&rdquo; on question 1</td><td class="use"><span class="chk">&check;</span>Honest bar; the intro <b>really is</b> a step</td></tr>
+        <tr><td class="mech">Scarcity / urgency</td><td class="avoid"><span class="x">&times;</span>Fake or resetting countdowns</td><td class="use"><span class="chk">&check;</span><b>Real expiry</b> on a real reward, only</td></tr>
+        <tr><td class="mech">Commitment escalation</td><td class="avoid"><span class="x">&times;</span>Bait-and-switch to a huge ask</td><td class="use"><span class="chk">&check;</span>Easy first Q &rarr; deeper later, as a value exchange</td></tr>
+      </tbody>
+    </table></div></div>
+  </section>
+
+  <section class="sec">
+    <div class="sec-h"><span class="k">C</span><h2>Build order</h2><span class="sub">(loop impact × honesty) ÷ (margin + dev + weight)</span></div>
+    <div class="matrix">
+      <div class="col first">
+        <span class="ch">Do first</span>
+        <ul>
+          <li><b>Auto-advance</b> + one-Q-per-screen + transitions</li>
+          <li><b>Endowed progress</b> + goal-gradient bar</li>
+          <li>&ldquo;Why this pick&rdquo; + social proof, <b>curated 1&ndash;3</b> recs</li>
+          <li>One-click add-to-cart + <b>reward reveal</b></li>
+          <li>Save-results email (proper consent)</li>
+        </ul>
+        <div class="why">Near-zero weight, biggest completion &amp; conversion levers.</div>
+      </div>
+      <div class="col star">
+        <span class="ch">The differentiator</span>
+        <ul>
+          <li><b>Post-rec progressive profiling &rarr; unlock reward</b></li>
+          <li>Optional, clearly rewarding, never bait-and-switch</li>
+          <li>Trades marginal discount for data + consent + intent</li>
+        </ul>
+        <div class="why">Timing is proven; the exact trade has no external number &mdash; <b>ship it behind an A/B holdout</b>. The one test worth running.</div>
+      </div>
+      <div class="col skip">
+        <span class="ch">Skip</span>
+        <ul>
+          <li><b>Spin-to-win wheel</b> — wins opt-in (vanity), loses list quality (fake emails), cheapens brand</li>
+          <li><b>Autoplay video</b> per question — page weight</li>
+          <li><b>Infinite scroll</b> quiz — fights the model</li>
+        </ul>
+        <div class="why">Popup vendors themselves warn about spin-to-win&rsquo;s downside.</div>
+      </div>
+    </div>
+  </section>
+
+  <section class="sec">
+    <div class="sec-h"><span class="k">D</span><h2>Four levers, deeper</h2><span class="sub">Part II · seamless · interactive · AI · personalize</span></div>
+    <div class="l2grid">
+
+      <div class="l2">
+        <div class="lh"><span class="ln">01</span><h3>Seamless</h3></div>
+        <p class="thesis">Kill the biggest leak: <b>forced capture</b>. Gate on the transition <b>into</b> the result, never before — and make the CTA arm the reward in one tap.</p>
+        <ul>
+          <li><b>Results-first, soft gate</b> as the default; hard gate is an A/B variant, not baseline</li>
+          <li><b>Skip the gate</b> entirely for logged-in <code>customer</code> — email + consent already held</li>
+          <li>&ldquo;Shop your match&rdquo; = <b>discount permalink</b> → adds product <b>and</b> auto-applies at checkout</li>
+        </ul>
+        <div class="foot2">
+          <div class="stat warn"><span class="big">~19%</span> of cart abandonment is forced account creation (Baymard)</div>
+          <div class="stat ok"><span class="big">~+1%</span> conversion per 100ms saved — advance optimistically, no spinners</div>
+        </div>
+      </div>
+
+      <div class="l2">
+        <div class="lh"><span class="ln">02</span><h3>Interactive &amp; on-brand</h3></div>
+        <p class="thesis">Pull them in with the <b>boring, fast</b> input, themed to the brand — not novelty controls that lose on the evidence.</p>
+        <ul>
+          <li><b>Tap-cards on native radios</b> = fastest input + free accessibility; the default question</li>
+          <li>One-Q-per-screen with conversational <b>tone</b>, not a literal chatbot (~90s slower)</li>
+          <li>Brand theming for trust — but <b>subset the font</b> (top LCP/CLS cost)</li>
+        </ul>
+        <div class="foot2">
+          <div class="fix"><b>Correction:</b> sliders &amp; drag-to-rank <b>lose</b> — slower, less-preferred, no data gain (Bosch 2019). Inline validation <b>on blur</b> is the one micro-interaction with real payoff.</div>
+        </div>
+      </div>
+
+      <div class="l2">
+        <div class="lh"><span class="ln">03</span><h3>AI for the shopper</h3></div>
+        <p class="thesis">AI <b>compresses info the merchant already has</b> — computed <b>at publish time</b>, grounded, source-linked, honest about negatives. Gimmick the moment it invents claims or runs live.</p>
+        <ul>
+          <li><b>Pre-compute, don&rsquo;t call live</b> → static text: zero weight, zero per-shopper cost, deterministic (fits <code>/q</code>)</li>
+          <li>Review summaries that <b>surface negatives</b> + link to source; &ldquo;why it fits <b>you</b>&rdquo; from your own answers</li>
+          <li><b>Extract-and-attribute</b> only — RAG cuts but doesn&rsquo;t kill hallucination (Rufus still fabricates)</li>
+        </ul>
+        <div class="foot2">
+          <div class="stat warn"><span class="big">$51,744</span> / violation — FTC Fake Reviews Rule. Summaries must be faithful, incl. negatives</div>
+        </div>
+      </div>
+
+      <div class="l2">
+        <div class="lh"><span class="ln">04</span><h3>Personalize more</h3></div>
+        <p class="thesis">The payoff is <b>modest and lives in lifecycle flows</b>, not fancier on-quiz personalization. Anchor to McKinsey <b>10&ndash;15%</b>, not the 96&times; stories.</p>
+        <ul>
+          <li><b>Post-quiz email/SMS flows first</b> — the only defensible economics</li>
+          <li>On-quiz honest lever is <b>AOV via bundles</b>; static rules-map is the right default</li>
+          <li>Branch for <b>relevance &amp; clean data</b>, not conversion (linear 5&ndash;7Q often wins)</li>
+        </ul>
+        <div class="foot2">
+          <div class="stat ok"><span class="big">&gt;3&times;</span> revenue / recipient from segmented flows (Klaviyo) — data is worth what flows extract</div>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <section class="sec">
+    <div class="sec-h"><span class="k">E</span><h2>Warnings — the adversarial layer</h2><span class="sub">re-read before building · hand this to a skeptic</span></div>
+    <div class="warncols">
+
+      <div class="wcard">
+        <p class="wt">⚠ Numbers to never repeat — they&rsquo;ll get you caught</p>
+        <ul class="myth">
+          <li><span class="bad">&ldquo;NN/g: animation → +12% completion / −22% correction&rdquo;</span><span class="real"><span class="tag">fabricated</span>The source is qualitative — <b>no such stats exist</b>.</span></li>
+          <li><span class="bad">&ldquo;Quiz-takers convert 3.2× / 25×&rdquo;</span><span class="real"><span class="tag">selection bias</span>Starters are already high-intent; <b>no holdout, not causal</b>.</span></li>
+          <li><span class="bad">&ldquo;96× ROI · +296% · +141% · 4×&rdquo;</span><span class="real"><span class="tag">tier-C</span>Single self-selected brand, no control. <b>Marketing, not evidence</b>.</span></li>
+          <li><span class="bad">&ldquo;Sliders capture higher-quality data&rdquo;</span><span class="real"><span class="tag">false</span>No gain over radios, and slower (Bosch 2019).</span></li>
+          <li><span class="bad">&ldquo;Branching/AI quiz converts better&rdquo;</span><span class="real"><span class="tag">no evidence</span>Chat is <b>preferred but ~90s slower</b> — engagement ≠ conversion.</span></li>
+        </ul>
+      </div>
+
+      <div class="wcard">
+        <p class="wt">⚠ Instincts that are wrong — the corrections</p>
+        <ul class="flip">
+          <li><span class="no">Sliders &amp; drag-to-rank feel modern</span><span class="yes"><b>Tap-cards on native radios</b> — the boring input wins</span></li>
+          <li><span class="no">Adaptive AI picks the next question — feels 1:1</span><span class="yes"><b>Fixed, auditable tree</b> — AI adds latency + non-determinism</span></li>
+          <li><span class="no">Live AI concierge on the result page — feels premium</span><span class="yes"><b>Pre-compute at publish time</b>, serve static text</span></li>
+          <li><span class="no">More data sources = richer personalization</span><span class="yes">Layer <b>two</b> high-signal sources, then build flows</span></li>
+          <li><span class="no">Ask for the email early to &ldquo;capture the lead&rdquo;</span><span class="yes">Gate <b>at the reveal</b> — forced account creation = ~19% of abandonment</span></li>
+        </ul>
+      </div>
+
+    </div>
+
+    <div class="tripwire">
+      <div class="tw-h">The gimmick tripwire — each lever&rsquo;s honest form and the line it must not cross</div>
+      <div class="twgrid">
+        <div class="tw"><span class="twk">Seamless</span>Dark when the gate moves <b>before value</b> — a wall before Q1, or &ldquo;enter email to see results.&rdquo;</div>
+        <div class="tw"><span class="twk">Interactive</span>Gimmick when novelty controls <b>replace the fast tap</b> for the sake of &ldquo;engagement.&rdquo;</div>
+        <div class="tw"><span class="twk">AI</span>Liability when it <b>invents claims</b>, runs live in the path, or replaces the deterministic rec.</div>
+        <div class="tw"><span class="twk">Personalize</span>Theater when it&rsquo;s on-quiz vanity, not lifecycle flows — or crosses the <b>creepiness line</b>.</div>
+      </div>
+    </div>
+  </section>
+
+  <section class="sec">
+    <div class="sec-h"><span class="k">F</span><h2>Hard gates that bound the design</h2></div>
+    <div class="gates">
+      <div class="gate"><div class="gk">SMS consent</div><p>TCPA prior express written consent · <b>$500&ndash;1,500 / message</b>. Email &amp; SMS = <b>separate, unchecked</b> opt-ins.</p></div>
+      <div class="gate"><div class="gk">Not a lottery</div><p><b>Everyone wins</b> a real discount &rarr; no chance element &rarr; not a lottery. Deterministic reward = safe harbor.</p></div>
+      <div class="gate"><div class="gk">No dark patterns</div><p>EU DSA Art. 25 + FTC §5: no fake timers, false scarcity, confirmshaming, bundled/pre-checked consent.</p></div>
+      <div class="gate"><div class="gk">Page weight</div><p><b>&lt;10KB JS · &lt;50KB CSS</b>; don&rsquo;t drop Lighthouse &gt;10 pts. 0.1s faster = <b>+8.4%</b> conversion.</p></div>
+    </div>
+  </section>
+
+  <div class="foot">
+    <span>Sources &amp; full detail → QUIZ-MASTER-STRATEGY.md (Parts 1–2, 8)</span>
+    <span>Baymard · McKinsey · Twilio Segment · Klaviyo/Omnisend · Bosch&nbsp;2019 · NN/g · FTC · WCAG · Shopify · every lift number behind an A/B holdout</span>
+  </div>
+</div>
+</body>
+</html>

@@ -1,0 +1,220 @@
+<title>Questions tab — simple (mock)</title>
+<style>
+  :root{
+    --accent:#6D5AE6; --accent-2:#6B4FD8; --accent-ink:#3C3489;
+    --accent-wash:#EDEBFC; --accent-tint:#F3F1FD;
+    --ink:#2E2740; --ink-3:#5A5470; --ink-4:#7C7791; --ink-25:#B6B0C8;
+    --rule:#E9E7EF; --rule-2:#F1EFF6; --paper:#FFFFFF; --cream-2:#F2F1F5;
+    --ok:#158A5A;
+    --mono:ui-monospace,SFMono-Regular,Menlo,monospace;
+    --sans:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
+    /* merchant brand tokens — the ONLY thing that reaches inside the phone screen */
+    --brand:#0E7C6B; --b-bg:#FCFBF8; --b-card:#fff; --b-ink:#18201E; --b-dim:#6E7975; --b-line:#E7E9E6;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:#EDECF1;font-family:var(--sans);color:var(--ink);-webkit-font-smoothing:antialiased;padding:22px 0 80px}
+  .wrap{max-width:1040px;margin:0 auto;padding:0 22px}
+  .cap{font-size:12.5px;color:var(--ink-4);margin:0 2px 14px;line-height:1.6}
+  .cap b{color:var(--ink-3)}
+
+  .panel{background:#fff;border:1px solid var(--rule);border-radius:14px;box-shadow:0 8px 26px rgba(120,110,150,.09);overflow:hidden}
+  .tool{display:flex;align-items:center;gap:10px;padding:11px 15px;border-bottom:1px solid var(--rule-2)}
+  .tool .t-title{font-size:14px;font-weight:600}
+  .tool .t-count{font-size:12px;color:var(--ink-25);font-family:var(--mono)}
+  .tool .sp{flex:1}
+  .tbtn{border:none;background:var(--accent);color:#fff;font-size:12.5px;font-weight:600;padding:8px 14px;border-radius:9px;cursor:pointer;font-family:var(--sans)}
+  .tbtn:hover{background:var(--accent-2)}
+
+  .split{display:grid;grid-template-columns:minmax(0,1fr) 340px}
+
+  /* ── compact question table (left) — all visible at a glance ── */
+  .list{padding:5px 6px}
+  .q{border-radius:10px;border:1px solid transparent}
+  .q.on{background:#FBFAFE;border-color:var(--accent-wash)}
+  .q.drop-hi{box-shadow:inset 0 2px 0 var(--accent)}
+  .q-line{display:flex;align-items:flex-start;gap:9px;padding:8px 9px;cursor:pointer}
+  .qn{width:19px;height:19px;flex:none;border-radius:50%;display:grid;place-items:center;font-family:var(--mono);font-size:10px;font-weight:600;background:var(--cream-2);color:var(--ink-4);margin-top:1px}
+  .qn.deciding{background:var(--accent);color:#fff}
+  .qtext{flex:1;min-width:0;border:1px solid transparent;background:transparent;font-family:var(--sans);font-size:13.5px;font-weight:600;line-height:1.35;color:var(--ink);border-radius:6px;padding:2px 6px;cursor:text}
+  .qtext:hover{background:#fff}
+  .qtext:focus{outline:none;background:#fff;border-color:var(--accent);box-shadow:0 0 0 2px var(--accent-wash)}
+  .q-right{display:flex;align-items:center;gap:7px;flex:none;padding-top:2px}
+  .q-meta{font-family:var(--mono);font-size:9px;color:var(--ink-25);white-space:nowrap}
+  .deciding-dot{width:6px;height:6px;border-radius:50%;background:var(--accent);flex:none}
+  .q-tools{display:flex;align-items:center;gap:1px;flex:none;opacity:0;transition:opacity .12s}
+  .q-line:hover .q-tools{opacity:1}
+  .icon{border:none;background:transparent;color:var(--ink-25);cursor:pointer;width:22px;height:22px;border-radius:6px;display:grid;place-items:center}
+  .icon:hover{background:var(--cream-2);color:var(--ink-3)}
+  .icon.drag{cursor:grab}
+  .icon svg{width:13px;height:13px}
+
+  /* expanded answers (only the selected question) */
+  .ans{padding:2px 9px 11px 37px;display:flex;flex-direction:column;gap:5px}
+  .a{display:flex;align-items:center;gap:5px}
+  .a.drop-hi{box-shadow:inset 0 2px 0 var(--accent)}
+  .a-dot{width:14px;flex:none;text-align:center;color:var(--ink-25);cursor:grab;opacity:0;transition:opacity .12s}
+  .a:hover .a-dot{opacity:1}
+  .a-dot svg{width:11px;height:11px}
+  .a-input{flex:1;min-width:0;border:1px solid var(--rule);background:#fff;font-family:var(--sans);font-size:12.5px;line-height:1.35;color:var(--ink-3);border-radius:7px;padding:6px 9px;cursor:text}
+  .a-input:hover{border-color:#D9D3F2}
+  .a-input:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 2px var(--accent-wash);color:var(--ink)}
+  .a-del{border:none;background:transparent;color:var(--ink-25);cursor:pointer;width:22px;height:22px;border-radius:6px;flex:none;opacity:0;transition:opacity .12s;display:grid;place-items:center}
+  .a:hover .a-del{opacity:1}
+  .a-del svg{width:12px;height:12px}
+  .a-del:hover{background:var(--cream-2);color:var(--ink-3)}
+  .a-del:disabled{opacity:0!important}
+  .a-add{align-self:flex-start;border:none;background:transparent;color:var(--accent-ink);font-size:12px;padding:4px 7px;border-radius:6px;cursor:pointer;font-family:var(--sans)}
+  .a-add:hover{background:var(--accent-tint)}
+
+  .term{display:flex;align-items:center;gap:9px;padding:9px 15px;color:var(--ink-4);border-top:1px solid var(--rule-2);font-size:12.5px}
+  .term .tc{width:19px;height:19px;flex:none;border-radius:50%;display:grid;place-items:center;background:var(--cream-2);color:var(--ink-4)}
+  .term .tc svg{width:11px;height:11px}
+  .term .ts{font-size:11px;color:var(--ink-25);margin-left:auto}
+
+  /* ── right: shared phone-preview primitive (true 390px viewport, scaled) ── */
+  .pv{border-left:1px solid var(--rule-2);background:#FBFAFC;padding:14px 0}
+  .pv-head{display:flex;align-items:center;justify-content:center;gap:8px;margin-bottom:12px}
+  .livechip{display:inline-flex;align-items:center;gap:6px;font-size:11px;font-weight:600;color:var(--ok);background:#E4F3EB;padding:4px 10px;border-radius:999px}
+  .livedot{width:6px;height:6px;border-radius:50%;background:var(--ok);animation:blink 1.6s ease-in-out infinite}
+  @keyframes blink{0%,100%{opacity:1}50%{opacity:.35}}
+  .stage{display:grid;place-items:center}
+  .device{--vw:390px;--vh:800px;--s:.80}
+  .holder{width:calc(var(--vw)*var(--s));height:calc(var(--vh)*var(--s));position:relative}
+  .frame{width:var(--vw);height:var(--vh);position:absolute;top:0;left:0;transform-origin:top left;transform:scale(var(--s));
+    overflow:hidden;background:var(--b-bg);border-radius:44px;box-shadow:0 26px 62px -22px rgba(46,39,64,.30),0 0 0 1px var(--rule)}
+  .screen{width:100%;height:100%;overflow-y:auto;overscroll-behavior:contain}
+  .fade{position:absolute;left:0;right:0;bottom:0;height:54px;pointer-events:none;background:linear-gradient(to bottom,transparent,var(--b-bg));border-radius:0 0 44px 44px}
+
+  /* shopper content inside the screen (brand tokens + runtime style only) */
+  .scr{padding:20px 20px 44px;color:var(--b-ink);display:flex;flex-direction:column;min-height:100%}
+  .topbar{display:flex;align-items:center;gap:10px;min-height:32px;margin-bottom:18px;flex:none}
+  .back{display:none;align-items:center;gap:4px;border:1px solid var(--b-line);background:var(--b-card);color:var(--b-ink);font-size:12px;font-weight:600;padding:6px 11px;border-radius:999px;font-family:var(--sans)}
+  .back.on{display:inline-flex}
+  .back svg{width:13px;height:13px}
+  .fbar{flex:1;height:5px;border-radius:999px;background:rgba(0,0,0,.08);overflow:hidden}
+  .fbar span{display:block;height:100%;background:var(--brand);border-radius:999px;transition:width .35s ease}
+  .stepn{font-size:11px;color:var(--b-dim);font-weight:700;white-space:nowrap}
+  .q-scr{font-family:Georgia,serif;font-size:24px;line-height:1.2;font-weight:600;margin:0 0 20px;
+    display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical;overflow:hidden}
+  .opts{display:flex;flex-direction:column;gap:11px}
+  .opt{border:1px solid var(--b-line);background:var(--b-card);border-radius:14px;padding:15px 15px;font-size:15px;line-height:1.3;color:var(--b-ink);text-align:left;font-family:var(--sans);
+    display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+  .opt.hot{border:1.5px solid var(--brand);box-shadow:0 0 0 3px color-mix(in srgb,var(--brand) 15%,transparent)}
+  .fnext{margin-top:20px;text-align:center;font-size:15px;font-weight:700;color:#fff;background:var(--brand);border:none;border-radius:13px;padding:15px;font-family:var(--sans);width:100%;flex:none}
+
+  @media (max-width:820px){.split{grid-template-columns:minmax(0,1fr)}.pv{border-left:none;border-top:1px solid var(--rule-2)}}
+</style>
+
+<svg style="display:none">
+  <symbol id="i-back" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M15 5l-7 7 7 7"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12 5v14M5 12h14"/></symbol>
+  <symbol id="i-x" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M6 6l12 12M18 6L6 18"/></symbol>
+  <symbol id="i-grip" viewBox="0 0 24 24" fill="currentColor"><circle cx="9" cy="6" r="1.6"/><circle cx="15" cy="6" r="1.6"/><circle cx="9" cy="12" r="1.6"/><circle cx="15" cy="12" r="1.6"/><circle cx="9" cy="18" r="1.6"/><circle cx="15" cy="18" r="1.6"/></symbol>
+  <symbol id="i-trash" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 7h16M9 7V5h6v2M6 7l1 13h10l1-13"/></symbol>
+  <symbol id="i-mail" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7l9 6 9-6"/></symbol>
+  <symbol id="i-target" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3"/></symbol>
+</svg>
+
+<div class="wrap">
+
+  <div class="panel">
+    <div class="tool"><span class="t-title">Questions</span><span class="t-count" id="tcount"></span><span class="sp"></span>
+      <button class="tbtn" id="newBtn"><svg style="width:12px;height:12px;vertical-align:-1px"><use href="#i-plus"/></svg> New question</button></div>
+    <div class="split">
+      <div>
+        <div class="list" id="list"></div>
+        <div class="term"><span class="tc"><svg><use href="#i-mail"/></svg></span><span>Email capture</span><span class="ts">Optional lead step</span></div>
+        <div class="term"><span class="tc"><svg><use href="#i-target"/></svg></span><span>Result reveal</span><span class="ts">Configured in Step 4 · Results</span></div>
+      </div>
+      <aside class="pv">
+        <div class="pv-head"><span class="livechip"><span class="livedot"></span>Live preview · your brand</span></div>
+        <div class="stage"><div class="device"><div class="holder"><div class="frame"><div class="screen" id="screen"></div><span class="fade"></span></div></div></div></div>
+      </aside>
+    </div>
+  </div>
+</div>
+
+<script>
+  const $=id=>document.getElementById(id);
+  const esc=s=>String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+  const ic=id=>`<svg><use href="#${id}"/></svg>`;
+
+  let QS=[
+    {id:"q1",deciding:true,type:"Single select",text:"What best describes how you ride? Choose the style that gets you most excited on the mountain.",answers:[{id:"a1",t:"Park & Freestyle — rails, jumps, and creative expression"},{id:"a2",t:"All-Mountain — I go wherever the mountain takes me"},{id:"a3",t:"Carving & Precision — edge-to-edge control on groomed runs"},{id:"a4",t:"Backcountry & Powder — off-piste and untracked terrain"}]},
+    {id:"q2",type:"Single select",text:"Which terrain do you spend the most time on?",answers:[{id:"b1",t:"Groomed runs"},{id:"b2",t:"Trees & side-country"},{id:"b3",t:"Open powder bowls"}]},
+    {id:"q3",type:"Scale",text:"How would you honestly rate your riding ability right now?",answers:[{id:"c1",t:"Beginner"},{id:"c2",t:"Intermediate"},{id:"c3",t:"Advanced / expert"}]},
+    {id:"q4",type:"Single select",text:"How important is board responsiveness and edge hold to you?",answers:[{id:"d1",t:"Critical — I want precision"},{id:"d2",t:"Nice to have"},{id:"d3",t:"Not a priority"}]},
+    {id:"q5",type:"Single select",text:"What does your ideal riding day look like from a volume standpoint?",answers:[{id:"e1",t:"A few perfect runs"},{id:"e2",t:"Steady all-day laps"},{id:"e3",t:"Dawn-to-dusk everything"}]},
+    {id:"q6",type:"Single select",text:"Which board characteristic matters most to you when choosing?",answers:[{id:"f1",t:"Stability at speed"},{id:"f2",t:"Playful & forgiving"},{id:"f3",t:"Float in powder"}]},
+  ];
+  let sel="q1";
+
+  function dnd(container, arr, done){
+    if(!container)return; let from=null;
+    [...container.querySelectorAll("[data-i]")].forEach(el=>{
+      el.setAttribute("draggable","true");
+      el.addEventListener("dragstart",e=>{from=+el.dataset.i;el.style.opacity=.4;e.stopPropagation();});
+      el.addEventListener("dragend",()=>{el.style.opacity="";container.querySelectorAll(".drop-hi").forEach(x=>x.classList.remove("drop-hi"));});
+      el.addEventListener("dragover",e=>{e.preventDefault();el.classList.add("drop-hi");});
+      el.addEventListener("dragleave",()=>el.classList.remove("drop-hi"));
+      el.addEventListener("drop",e=>{e.preventDefault();const to=+el.dataset.i;if(from===null||from===to)return;const m=arr.splice(from,1)[0];arr.splice(to,0,m);from=null;done();});
+    });
+  }
+
+  function render(){
+    $("tcount").textContent=QS.length+" questions";
+    $("list").innerHTML=QS.map((q,i)=>`
+      <div class="q${q.id===sel?" on":""}" data-i="${i}" data-q="${q.id}">
+        <div class="q-line" data-select="${q.id}">
+          <span class="qn${q.deciding?" deciding":""}">${i+1}</span>
+          <div class="qtext" contenteditable data-qt="${q.id}">${esc(q.text)}</div>
+          <span class="q-right">
+            ${q.deciding?'<span class="deciding-dot" title="Deciding question"></span>':''}
+            <span class="q-meta">${q.answers.length} · ${esc(q.type.toUpperCase())}</span>
+            <span class="q-tools"><button class="icon drag" title="Drag to reorder">${ic("i-grip")}</button><button class="icon" data-qdel="${q.id}" title="Delete question">${ic("i-trash")}</button></span>
+          </span>
+        </div>
+        ${q.id===sel?`<div class="ans" data-ans="${q.id}">
+          ${q.answers.map((a,ai)=>`<div class="a" data-i="${ai}"><span class="a-dot">${ic("i-grip")}</span><div class="a-input" contenteditable data-at="${q.id}:${a.id}">${esc(a.t)}</div><button class="a-del" data-adel="${q.id}:${a.id}" ${q.answers.length<=2?"disabled":""}>${ic("i-x")}</button></div>`).join("")}
+          <button class="a-add" data-aadd="${q.id}">+ answer</button>
+        </div>`:""}
+      </div>`).join("");
+    bind();
+    dnd($("list"),QS,render);
+    const ansC=document.querySelector(`[data-ans="${sel}"]`);
+    if(ansC)dnd(ansC,QS.find(x=>x.id===sel).answers,render);
+    renderPhone();
+  }
+
+  function renderPhone(){
+    const q=QS.find(x=>x.id===sel)||QS[0]; const idx=QS.indexOf(q); const total=QS.length;
+    $("screen").innerHTML=`<div class="scr">
+      <div class="topbar"><button class="back ${idx>0?"on":""}">${ic("i-back")}Back</button><span class="fbar"><span style="width:${((idx+1)/total)*100}%"></span></span><span class="stepn">${idx+1}/${total}</span></div>
+      <h2 class="q-scr" id="pScrTitle">${esc(q.text)}</h2>
+      <div class="opts" id="pScrOpts">${q.answers.map((a,k)=>`<button class="opt${k===0?" hot":""}">${esc(a.t)}</button>`).join("")}</div>
+      <button class="fnext">Next</button>
+    </div>`;
+    $("screen").scrollTop=0;
+  }
+  function pOpts(){const q=QS.find(x=>x.id===sel);const el=$("pScrOpts");if(el)el.innerHTML=q.answers.map((a,k)=>`<button class="opt${k===0?" hot":""}">${esc(a.t)}</button>`).join("");}
+
+  function bind(){
+    const val=el=>el.isContentEditable?el.textContent:el.value;
+    $("list").querySelectorAll("[data-select]").forEach(el=>el.addEventListener("mousedown",e=>{
+      if(e.target.closest(".qtext,.icon,.q-tools"))return; // let edits/tools work without switching
+      if(sel!==el.dataset.select){sel=el.dataset.select;render();}
+    }));
+    $("list").querySelectorAll("[data-qt]").forEach(inp=>{
+      inp.addEventListener("focus",()=>{if(sel!==inp.dataset.qt){sel=inp.dataset.qt;render();setTimeout(()=>{const n=document.querySelector(`[data-qt="${sel}"]`);n&&n.focus();},0);}});
+      inp.addEventListener("input",()=>{const q=QS.find(x=>x.id===inp.dataset.qt);q.text=val(inp);const t=$("pScrTitle");if(t&&sel===q.id)t.textContent=q.text;});
+    });
+    $("list").querySelectorAll("[data-at]").forEach(inp=>inp.addEventListener("input",()=>{const[qid,aid]=inp.dataset.at.split(":");QS.find(x=>x.id===qid).answers.find(a=>a.id===aid).t=val(inp);pOpts();}));
+    $("list").querySelectorAll("[data-adel]").forEach(b=>b.addEventListener("click",e=>{e.stopPropagation();const[qid,aid]=b.dataset.adel.split(":");const q=QS.find(x=>x.id===qid);if(q.answers.length<=2)return;q.answers=q.answers.filter(a=>a.id!==aid);render();}));
+    $("list").querySelectorAll("[data-aadd]").forEach(b=>b.addEventListener("click",e=>{e.stopPropagation();const q=QS.find(x=>x.id===b.dataset.aadd);q.answers.push({id:"n"+Date.now(),t:"New answer"});render();}));
+    $("list").querySelectorAll("[data-qdel]").forEach(b=>b.addEventListener("click",e=>{e.stopPropagation();if(QS.length<=1)return;const wasSel=b.dataset.qdel===sel;QS=QS.filter(x=>x.id!==b.dataset.qdel);if(wasSel)sel=QS[0].id;render();}));
+  }
+
+  $("newBtn").onclick=()=>{const n={id:"n"+Date.now(),type:"Single select",text:"New question",answers:[{id:"x"+Date.now(),t:"Answer 1"},{id:"y"+Date.now(),t:"Answer 2"}]};QS.push(n);sel=n.id;render();};
+
+  render();
+</script>

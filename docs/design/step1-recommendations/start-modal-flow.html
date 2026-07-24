@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Start modal — stacked rows + goal screen</title>
+<style>
+  :root{
+    --accent:#6D5AE6; --accent-ink:#3C3489; --accent-wash:#EDEBFC; --accent-tint:#F3F1FD;
+    --ink:#2E2740; --ink-3:#5A5470; --ink-4:#7C7791; --ink-25:#B6B0C8;
+    --rule:#E9E7EF; --rule-2:#F1EFF6; --cream-2:#F2F1F5;
+    --mono:ui-monospace,SFMono-Regular,Menlo,monospace;
+    --sans:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:#EDECF1;font-family:var(--sans);color:var(--ink);-webkit-font-smoothing:antialiased;padding:26px 0 70px}
+  .wrap{max-width:820px;margin:0 auto;padding:0 22px}
+  h1{font-size:20px;font-weight:600;margin:0 0 14px}
+  .stage{background:#6E6880;border-radius:16px;padding:34px 20px;display:flex;justify-content:center}
+
+  .modal{width:min(560px,100%);background:#fff;border-radius:22px;padding:26px 28px 22px;position:relative;box-shadow:0 26px 60px rgba(46,39,64,.32)}
+  .close{position:absolute;top:18px;right:18px;border:none;background:transparent;color:var(--ink-25);font-size:17px;cursor:pointer;width:30px;height:30px;border-radius:8px}
+  .close:hover{background:var(--cream-2);color:var(--ink-3)}
+  .mtitle{margin:0 0 20px;font-size:21px;font-weight:600;letter-spacing:-.02em}
+  .screen{display:none}.screen.on{display:block}
+
+  .ico{width:36px;height:36px;border-radius:10px;display:grid;place-items:center;font-size:16px;flex:none;background:var(--accent-wash);color:var(--accent-ink)}
+  .ico i{display:block;font-style:normal;animation:pulse 2.6s ease-in-out infinite;transform-origin:center}
+  @keyframes pulse{0%,100%{transform:scale(1) rotate(0);opacity:.9}50%{transform:scale(1.2) rotate(15deg);opacity:1}}
+  .ico.neutral{background:var(--cream-2);color:var(--ink-4)}
+  .ico.neutral i{animation:none}
+  .rec{font-family:var(--mono);font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.07em;color:var(--accent-ink)}
+
+  /* stacked rows — title only */
+  .rows{display:flex;flex-direction:column;gap:9px}
+  .rrow{display:flex;align-items:center;gap:13px;border:1px solid var(--rule);border-radius:13px;padding:13px 15px;cursor:pointer;background:#fff;transition:border-color .15s,box-shadow .15s,background .15s;width:100%;font-family:var(--sans);text-align:left}
+  .rrow:hover{border-color:#D9D3F2;box-shadow:0 2px 10px rgba(109,90,230,.10)}
+  .rrow.pri{border-color:var(--accent);background:var(--accent-tint)}
+  .rrow h3{margin:0;font-size:14.5px;font-weight:600}
+  .rrow .spacer{flex:1}
+  .rrow .arr{color:var(--ink-25);font-size:15px;flex:none}
+  .rrow.pri .arr{color:var(--accent)}
+
+  /* goal screen */
+  .back{border:none;background:transparent;color:var(--ink-4);font-size:12.5px;cursor:pointer;font-family:var(--sans);padding:6px 8px;border-radius:8px;margin:0 0 8px -8px}
+  .back:hover{background:var(--cream-2);color:var(--ink-3)}
+
+  /* progress bar + checklist */
+  .track{border:1px solid #E4E0F4;background:#FBFAFE;border-radius:12px;padding:13px 14px;margin-bottom:18px}
+  .tHead{display:flex;align-items:center;justify-content:space-between;margin-bottom:9px}
+  .tHead .lbl{font-size:12.5px;font-weight:600}
+  .tHead .cnt{font-size:11.5px;font-weight:600;color:var(--accent-ink)}
+  /* segmented: one bar segment per field, fills as each completes */
+  .tCols{display:flex;gap:8px}
+  .tCol{flex:1;min-width:0;display:flex;flex-direction:column;gap:8px;align-items:flex-start;
+    background:none;border:none;padding:0;cursor:pointer;font-family:var(--sans)}
+  .sbar{display:block;width:100%;height:5px;border-radius:999px;background:var(--cream-2);transition:background .3s ease}
+  .tCol.done .sbar{background:var(--accent)}
+  .tItem{display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--ink-4);min-width:0}
+  .tItem .c{width:15px;height:15px;border-radius:50%;border:1.5px dashed var(--ink-25);display:grid;place-items:center;font-size:9px;color:transparent;transition:all .2s;flex:none}
+  .tCol.done .tItem{color:var(--accent-ink);font-weight:600}
+  .tCol.done .tItem .c{background:var(--accent);border:1.5px solid var(--accent);color:#fff}
+
+  .field{margin-bottom:15px}
+  .flabel{display:block;font-size:13px;font-weight:600;margin-bottom:3px}
+  .fhint{display:block;font-size:11.5px;color:var(--ink-4);margin-bottom:7px}
+  .inp{width:100%;font-family:var(--sans);font-size:13px;color:var(--ink);background:#fff;border:1px solid var(--rule);border-radius:10px;padding:10px 12px;outline:none}
+  .inp:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(109,90,230,.14)}
+  textarea.inp{resize:vertical;min-height:62px;line-height:1.5}
+  .seg{display:flex;gap:6px}
+  .segb{border:1px solid var(--rule);background:#fff;color:var(--ink-3);font-size:13px;font-weight:500;padding:8px 15px;border-radius:9px;cursor:pointer;font-family:var(--sans)}
+  .segb.on{background:var(--accent);color:#fff;border-color:var(--accent)}
+  .foot{display:flex;align-items:center;gap:10px;margin-top:20px;padding-top:16px;border-top:1px solid var(--rule-2)}
+  .btn{border:none;background:var(--accent);color:#fff;font-size:13px;font-weight:500;padding:11px 20px;border-radius:10px;cursor:pointer;font-family:var(--sans)}
+  .btn:disabled{background:#C9C3E8;cursor:not-allowed}
+  .note{font-size:11.5px;color:var(--ink-25);margin-left:auto}
+
+  @media (prefers-reduced-motion:reduce){.ico i{animation:none}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Start modal — stacked rows, then the goal screen</h1>
+
+  <div class="stage">
+    <div class="modal">
+      <button class="close">✕</button>
+
+      <div class="screen on" id="s1">
+        <h2 class="mtitle">How do you want to start?</h2>
+        <div class="rows">
+          <button class="rrow pri">
+            <span class="ico"><i>✦</i></span><h3>Generate with AI</h3><span class="rec">Recommended</span>
+            <span class="spacer"></span><span class="arr">→</span>
+          </button>
+          <button class="rrow" id="toGoal">
+            <span class="ico neutral"><i>✎</i></span><h3>Write your goal</h3>
+            <span class="spacer"></span><span class="arr">→</span>
+          </button>
+          <button class="rrow">
+            <span class="ico neutral"><i>▢</i></span><h3>Start from blank</h3>
+            <span class="spacer"></span><span class="arr">→</span>
+          </button>
+        </div>
+      </div>
+
+      <div class="screen" id="s2">
+        <button class="back" id="back">← Back</button>
+        <h2 class="mtitle">Describe what your quiz should do</h2>
+
+        <div class="track">
+          <div class="tHead">
+            <span class="lbl">Your brief</span>
+            <span class="cnt" id="cnt">0 of 4 complete</span>
+          </div>
+          <div class="tCols">
+            <button class="tCol" data-f="goal"><span class="sbar"></span><span class="tItem"><span class="c">✓</span>Goal</span></button>
+            <button class="tCol" data-f="aud"><span class="sbar"></span><span class="tItem"><span class="c">✓</span>Audience</span></button>
+            <button class="tCol" data-f="fac"><span class="sbar"></span><span class="tItem"><span class="c">✓</span>Factors</span></button>
+            <button class="tCol" data-f="len"><span class="sbar"></span><span class="tItem"><span class="c">✓</span>Length</span></button>
+          </div>
+        </div>
+
+        <div class="field">
+          <label class="flabel">Goal</label>
+          <span class="fhint">What the quiz helps shoppers decide.</span>
+          <textarea class="inp" id="f-goal" placeholder="Help shoppers find the right board for how and where they ride"></textarea>
+        </div>
+        <div class="field">
+          <label class="flabel">Audience</label>
+          <span class="fhint">Who it's for.</span>
+          <input class="inp" id="f-aud" placeholder="First-time riders buying a starter setup">
+        </div>
+        <div class="field">
+          <label class="flabel">Deciding factors</label>
+          <span class="fhint">What makes one option right over another — terrain, skill level, price, style.</span>
+          <input class="inp" id="f-fac" placeholder="Terrain they ride, experience level, and how much they want to spend">
+        </div>
+        <div class="field">
+          <label class="flabel">Length</label>
+          <span class="fhint">How many questions.</span>
+          <div class="seg" id="seg">
+            <button class="segb" data-n="3">3</button>
+            <button class="segb" data-n="4">4</button>
+            <button class="segb" data-n="5">5</button>
+            <button class="segb" data-n="6">6</button>
+            <button class="segb" data-n="7">7</button>
+          </div>
+        </div>
+
+        <div class="foot">
+          <button class="btn" id="gen" disabled>Generate questions →</button>
+          <span class="note" id="note">Add your goal and pick a length</span>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<script>
+  const $=id=>document.getElementById(id);
+  $('toGoal').onclick=()=>{$('s1').classList.remove('on');$('s2').classList.add('on');};
+  $('back').onclick=()=>{$('s2').classList.remove('on');$('s1').classList.add('on');};
+
+  const MIN=25, FIELDS=['goal','aud','fac','len'];
+  const state={goal:'',aud:'',fac:'',len:null};
+  const ok=f=> f==='len' ? state.len!==null
+            : f==='goal' ? state.goal.trim().length>=MIN
+            : state[f].trim().length>2;
+
+  function sync(){
+    let done=0;
+    FIELDS.forEach(f=>{
+      const good=ok(f); if(good) done++;
+      document.querySelector(`.tCol[data-f="${f}"]`).classList.toggle('done',good);
+    });
+    $('cnt').textContent=`${done} of 4 complete`;
+    const ready=ok('goal')&&ok('len');
+    $('gen').disabled=!ready;
+    $('note').textContent = !ready ? 'Add your goal and pick a length'
+      : (done<4 ? 'Optional — but the rest sharpens the questions' : 'Ready to generate');
+  }
+  $('f-goal').oninput=e=>{state.goal=e.target.value;sync();};
+  $('f-aud').oninput=e=>{state.aud=e.target.value;sync();};
+  $('f-fac').oninput=e=>{state.fac=e.target.value;sync();};
+  $('seg').querySelectorAll('.segb').forEach(b=>b.onclick=()=>{
+    $('seg').querySelectorAll('.segb').forEach(x=>x.classList.toggle('on',x===b));
+    state.len=+b.dataset.n;sync();
+  });
+  document.querySelectorAll('.tCol').forEach(el=>el.onclick=()=>{
+    const f=el.dataset.f;
+    if(f==='len') $('seg').scrollIntoView({block:'center'});
+    else $('f-'+f).focus();
+  });
+  sync();
+</script>
+</body>
+</html>

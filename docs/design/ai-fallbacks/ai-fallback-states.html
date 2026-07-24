@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AI fallback states — UI kit</title>
+<style>
+  :root{
+    --accent:#6D5AE6; --accent-ink:#3C3489; --accent-wash:#EDEBFC; --accent-tint:#F3F1FD;
+    --ink:#2E2740; --ink-3:#5A5470; --ink-4:#7C7791; --ink-25:#B6B0C8;
+    --rule:#E9E7EF; --rule-2:#F1EFF6; --cream-2:#F2F1F5;
+    --warn:#B07A18; --warn-bg:#FDF4E5; --warn-edge:#F0DCB4;
+    --crit:#B4483F; --crit-bg:#FCEEEC; --crit-edge:#F1CFCA;
+    --mono:ui-monospace,SFMono-Regular,Menlo,monospace;
+    --sans:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:#EDECF1;font-family:var(--sans);color:var(--ink);-webkit-font-smoothing:antialiased;padding:28px 0 80px}
+  .wrap{max-width:760px;margin:0 auto;padding:0 22px}
+  h1{font-size:20px;font-weight:600;margin:0 0 6px}
+  .lead{font-size:13px;color:var(--ink-3);margin:0 0 24px;line-height:1.55}
+  h2{font-size:15px;font-weight:600;margin:28px 0 4px}
+  .rule{font-size:12.5px;color:var(--ink-4);margin:0 0 14px;line-height:1.55}
+  .rule b{color:var(--ink)}
+  .card{background:#fff;border:1px solid var(--rule);border-radius:14px;padding:16px;margin-bottom:11px}
+  .cl{font-family:var(--mono);font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:var(--ink-25);margin-bottom:11px}
+
+  .btn{border:none;background:var(--accent);color:#fff;font-size:12.5px;font-weight:500;padding:8px 15px;border-radius:9px;cursor:pointer;font-family:var(--sans)}
+  .btn.sec{background:#fff;border:1px solid var(--rule);color:var(--ink-3)}
+  .btn.sm{padding:6px 12px;font-size:12px}
+  .row{display:flex;align-items:center;gap:9px;flex-wrap:wrap}
+
+  /* inline notice — the universal merchant failure block */
+  .notice{display:flex;gap:11px;align-items:flex-start;border-radius:11px;padding:12px 14px;border:1px solid}
+  .notice.warn{background:var(--warn-bg);border-color:var(--warn-edge)}
+  .notice.crit{background:var(--crit-bg);border-color:var(--crit-edge)}
+  .notice.quiet{background:var(--cream-2);border-color:var(--rule)}
+  .notice .g{width:24px;height:24px;border-radius:7px;display:grid;place-items:center;font-size:13px;flex:none;font-weight:700}
+  .notice.warn .g{background:#F6E4C4;color:var(--warn)}
+  .notice.crit .g{background:#F5D8D3;color:var(--crit)}
+  .notice.quiet .g{background:#E4E2EA;color:var(--ink-4)}
+  .notice .b{flex:1;min-width:0}
+  .notice strong{display:block;font-size:13px;font-weight:600;margin-bottom:2px}
+  .notice p{margin:0 0 9px;font-size:12.5px;color:var(--ink-3);line-height:1.5}
+  .notice.warn strong{color:var(--warn)}
+  .notice.crit strong{color:var(--crit)}
+  .notice .x{border:none;background:transparent;color:var(--ink-25);cursor:pointer;font-size:13px;flex:none}
+
+  /* field with AI generate button */
+  .field{border:1px solid var(--rule);border-radius:11px;padding:12px;background:#FBFAFE}
+  .fhead{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
+  .fhead .l{font-size:12.5px;font-weight:600}
+  .gen{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--accent);background:#fff;color:var(--accent-ink);font-size:12px;font-weight:500;padding:6px 12px;border-radius:8px;cursor:pointer;font-family:var(--sans)}
+  .gen i{font-style:normal;animation:pulse 2.6s ease-in-out infinite;display:block}
+  .gen:disabled{opacity:.6;cursor:default}
+  @keyframes pulse{0%,100%{transform:scale(1) rotate(0)}50%{transform:scale(1.2) rotate(15deg)}}
+  .spin{width:12px;height:12px;border-radius:50%;border:2px solid var(--accent-wash);border-top-color:var(--accent);animation:sp .7s linear infinite}
+  @keyframes sp{to{transform:rotate(360deg)}}
+  .fbody{font-size:12.5px;color:var(--ink-3);line-height:1.5;background:#fff;border:1px solid var(--rule);border-radius:8px;padding:9px 11px}
+  .inlinefail{display:flex;align-items:center;gap:8px;margin-top:8px;font-size:12px;color:var(--crit)}
+  .inlinefail button{border:none;background:transparent;color:var(--accent-ink);font-size:12px;font-weight:500;cursor:pointer;font-family:var(--sans);text-decoration:underline}
+
+  /* shopper chat bubble */
+  .chat{background:#fff;border:1px solid var(--rule);border-radius:12px;padding:13px}
+  .bub{max-width:78%;font-size:12.5px;line-height:1.5;padding:9px 12px;border-radius:12px;margin-bottom:8px}
+  .bub.me{background:var(--accent);color:#fff;margin-left:auto;border-bottom-right-radius:4px}
+  .bub.ai{background:var(--cream-2);color:var(--ink-3);border-bottom-left-radius:4px}
+  .bub.ai.off{color:var(--ink-4);font-style:italic}
+  .bad{font-family:var(--mono);font-size:11px;color:var(--crit);background:var(--crit-bg);border:1px dashed var(--crit-edge);border-radius:8px;padding:8px 10px;margin-top:6px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>AI fallback states — UI kit</h1>
+  <p class="lead">Reusable states for every AI surface. Rule: merchants get an honest message and a way forward; shoppers never see an AI error at all.</p>
+
+  <h2>1 · Inline AI action — the four merchant outcomes</h2>
+  <p class="rule">Used by why-copy, editor intents, regenerate-node, translate. <b>The merchant's existing content is never destroyed</b> — a failed generation leaves what was already there.</p>
+
+  <div class="card">
+    <div class="cl">Working</div>
+    <div class="field">
+      <div class="fhead"><span class="l">Why we recommend this</span>
+        <button class="gen" disabled><span class="spin"></span> Generating…</button></div>
+      <div class="fbody">Built for all-mountain riders who want one board that handles groomers and powder.</div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="cl">Failed — retry, content preserved</div>
+    <div class="field">
+      <div class="fhead"><span class="l">Why we recommend this</span>
+        <button class="gen"><i>✦</i> Generate</button></div>
+      <div class="fbody">Built for all-mountain riders who want one board that handles groomers and powder.</div>
+      <div class="inlinefail">AI is busy right now. <button>Try again</button></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="cl">Limit reached — daily budget ceiling</div>
+    <div class="notice warn">
+      <span class="g">◷</span>
+      <div class="b">
+        <strong>Today's AI limit is reached</strong>
+        <p>It resets tomorrow. You can still write this yourself — everything else keeps working.</p>
+        <button class="btn sec sm">Write it myself</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="cl">Unavailable — credits depleted / provider down</div>
+    <div class="notice crit">
+      <span class="g">!</span>
+      <div class="b">
+        <strong>AI is temporarily unavailable</strong>
+        <p>Nothing you've done is lost. Write this yourself for now, or try again in a bit.</p>
+        <div class="row"><button class="btn sm">Try again</button><button class="btn sec sm">Write it myself</button></div>
+      </div>
+    </div>
+  </div>
+
+  <h2>2 · Silent degrade — quiet trace, not silence</h2>
+  <p class="rule">Publish-time tooltips/benefits and web research currently fail to empty with <b>zero</b> merchant signal. They should still not block — but they must leave a trace.</p>
+  <div class="card">
+    <div class="cl">Dismissible strip on the affected surface</div>
+    <div class="notice quiet">
+      <span class="g">✦</span>
+      <div class="b">
+        <strong>Published without AI answer tooltips</strong>
+        <p>The quiz is live and working — this extra copy just didn't generate.</p>
+        <button class="btn sec sm">Generate them now</button>
+      </div>
+      <button class="x">✕</button>
+    </div>
+  </div>
+
+  <h2>3 · Shopper-facing — never show an AI error</h2>
+  <p class="rule">Shoppers must never learn the AI failed. rec-copy already does this right: it silently falls back to the merchant's template copy. <b>ask_ai does not</b> — it renders the raw error.</p>
+
+  <div class="card">
+    <div class="cl">✅ Correct — ask_ai unavailable</div>
+    <div class="chat">
+      <div class="bub me">Which board is better for icy days?</div>
+      <div class="bub ai off">Chat isn't available right now — but your recommendations below are ready.</div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="cl">🔴 What ships today — raw error to the shopper</div>
+    <div class="chat">
+      <div class="bub me">Which board is better for icy days?</div>
+      <div class="bad">AI chat failed: 400 your credit balance is too low to access the Anthropic API…</div>
+    </div>
+  </div>
+</div>
+</body>
+</html>

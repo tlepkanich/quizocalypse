@@ -1,0 +1,29 @@
+{
+  "id": "skincare-formulation",
+  "name": "Custom-formulation diagnostic",
+  "category": "beauty/custom-formulation",
+  "variant": "long-diagnostic (Prose / Function of Beauty)",
+  "use_when": "Catalog is made-to-order or highly configurable; personalization depth is the value proposition and a long quiz reads as thoroughness.",
+  "length": { "min": 20, "max": 35, "band": "long", "note": "Length IS the pitch — sunk-cost investment before the gate. Show a segmented, labeled progress bar." },
+  "gate": { "placement": "at_result", "style": "hard", "rationale": "Account/email required to see & buy the bespoke formula; the long quiz builds enough investment to justify a hard gate at peak anticipation." },
+  "result_shape": "single_bespoke_output",
+  "arc": ["physical_attributes", "behaviors_treatments", "lifestyle_environment", "goals_preferences", "config"],
+  "branching": "moderate",
+  "questions": [
+    { "ordinal": 1, "id": "hair_type", "prompt": "What's your hair type?", "type": "image_choice", "options": [{ "label": "Straight", "maps_to": "type:straight" }, { "label": "Wavy", "maps_to": "type:wavy" }, { "label": "Curly", "maps_to": "type:curly" }, { "label": "Coily", "maps_to": "type:coily" }], "maps_to": "hair_type", "weight_tier": "primary", "note": "Easy, concrete, builds the endowed-progress streak. Reference photos disambiguate." },
+    { "ordinal": 2, "id": "scalp", "prompt": "How does your scalp usually feel?", "type": "single_select", "options": [{ "label": "Dry", "maps_to": "scalp:dry" }, { "label": "Balanced", "maps_to": "scalp:balanced" }, { "label": "Oily", "maps_to": "scalp:oily" }], "maps_to": "scalp_condition", "weight_tier": "primary" },
+    { "ordinal": 3, "id": "treatments", "prompt": "Any of these apply to your hair?", "type": "multi_select", "multi_select_cap": 5, "options": [{ "label": "Color-treated", "maps_to": "treated:color" }, { "label": "Heat-styled often", "maps_to": "treated:heat" }, { "label": "Chemically straightened", "maps_to": "treated:chemical" }, { "label": "None", "maps_to": "treated:none" }], "maps_to": "treatments", "weight_tier": "secondary", "branch": "gates damage-repair follow-ups", "note": "Normalize by proportion matched." },
+    { "ordinal": 4, "id": "climate", "prompt": "What's your climate like?", "type": "single_select", "options": [{ "label": "Humid", "maps_to": "climate:humid" }, { "label": "Dry", "maps_to": "climate:dry" }, { "label": "Temperate", "maps_to": "climate:temperate" }], "maps_to": "climate", "weight_tier": "secondary" },
+    { "ordinal": 5, "id": "goals", "prompt": "Pick up to 5 goals for your formula", "type": "multi_select", "multi_select_cap": 5, "options": [{ "label": "Hydration", "maps_to": "goal:hydration" }, { "label": "Volume", "maps_to": "goal:volume" }, { "label": "Frizz control", "maps_to": "goal:frizz" }, { "label": "Damage repair", "maps_to": "goal:repair" }, { "label": "Shine", "maps_to": "goal:shine" }, { "label": "Scalp balance", "maps_to": "goal:scalp" }], "maps_to": "goals", "weight_tier": "primary", "note": "The cap prevents dilution; aspirational, placed late to keep engagement." },
+    { "ordinal": 6, "id": "scent", "prompt": "Fragrance preference?", "type": "single_select", "options": [{ "label": "Fragrance-free", "maps_to": "scent:none" }, { "label": "Light", "maps_to": "scent:light" }, { "label": "Bold", "maps_to": "scent:bold" }], "maps_to": "scent", "weight_tier": "tie_breaker" }
+  ],
+  "recommendation": {
+    "architecture": "hybrid",
+    "tie_break": "primary-goal weight -> scalp match -> stable product id",
+    "empty_fallback": "relax scent/tie-breaker filters -> weighted closest formula -> base formula for the hair_type",
+    "deterministic": true,
+    "explainable": true
+  },
+  "personalization_hooks": ["name the formula after the customer", "per-goal ingredient rationale on the result"],
+  "sources": ["Prose", "Function of Beauty", "DTC Patterns teardown (Tier C)"]
+}

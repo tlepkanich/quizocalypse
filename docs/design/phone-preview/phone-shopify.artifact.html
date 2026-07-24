@@ -1,0 +1,132 @@
+<title>Phone preview — Shopify-style + Expand</title>
+<style>
+  :root{
+    --accent:#6D5AE6; --accent-2:#6B4FD8; --accent-ink:#3C3489; --accent-wash:#EDEBFC; --accent-tint:#F3F1FD;
+    --ink:#2E2740; --ink-3:#5A5470; --ink-4:#7C7791; --ink-25:#B6B0C8;
+    --rule:#E9E7EF; --rule-2:#F1EFF6; --cream-2:#F2F1F5;
+    --mono:ui-monospace,SFMono-Regular,Menlo,monospace; --sans:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
+    --brand:#0E7C6B; --b-bg:#FCFBF8; --b-card:#fff; --b-ink:#18201E; --b-dim:#6E7975; --b-line:#E7E9E6;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:#EDECF1;font-family:var(--sans);color:var(--ink);-webkit-font-smoothing:antialiased;padding:26px 0 90px}
+  .wrap{max-width:1080px;margin:0 auto;padding:0 22px}
+  h1.doc{font-size:15px;margin:0 2px 6px}
+  .cap{font-size:12.5px;color:var(--ink-4);margin:0 2px 4px;line-height:1.6}.cap b{color:var(--ink-3)}
+  .rec{font-size:12.5px;color:var(--accent-ink);background:var(--accent-wash);border-radius:10px;padding:11px 14px;margin:14px 2px 22px;line-height:1.6}
+
+  /* ── builder canvas (like the editor's preview pane) ── */
+  .pane{position:relative;background:#fff;border:1px solid var(--rule);border-radius:16px;box-shadow:0 10px 30px rgba(120,110,150,.10);overflow:hidden}
+  .pane-bar{display:flex;align-items:center;gap:10px;padding:11px 14px;border-bottom:1px solid var(--rule-2)}
+  .pane-bar .live{display:inline-flex;align-items:center;gap:6px;font-size:11px;font-weight:600;color:var(--brand);background:#E4F1EE;padding:4px 10px;border-radius:999px}
+  .pane-bar .dot{width:6px;height:6px;border-radius:50%;background:var(--brand)}
+  .pane-bar .sp{flex:1}
+  /* device toggle (Shopify has desktop/mobile — quiz is mobile-first, shown for parity) */
+  .segbtns{display:inline-flex;background:var(--cream-2);border-radius:9px;padding:3px}
+  .segbtns button{border:none;background:transparent;padding:6px 10px;border-radius:7px;cursor:pointer;color:var(--ink-4);display:grid;place-items:center}
+  .segbtns button.on{background:#fff;color:var(--accent-ink);box-shadow:0 1px 2px rgba(109,90,230,.12)}
+  .segbtns svg{width:15px;height:15px}
+  .expandbtn{display:inline-flex;align-items:center;gap:7px;border:1px solid var(--rule);background:#fff;color:var(--ink-3);font-size:12.5px;font-weight:600;padding:7px 12px;border-radius:9px;cursor:pointer;font-family:var(--sans)}.expandbtn:hover{background:var(--cream-2)}.expandbtn svg{width:14px;height:14px}
+  .pane-stage{display:grid;place-items:start center;padding:30px 0 34px;background:radial-gradient(120% 90% at 50% 0,#FBFAFE,#F4F3F8);min-height:560px}
+
+  /* ── the primitive: true 390 viewport, scaled ── */
+  .device{--vw:390px;--vh:740px}
+  .holder{width:calc(var(--vw)*var(--s));height:calc(var(--vh)*var(--s));position:relative}
+  .frame{width:var(--vw);height:var(--vh);position:absolute;top:0;left:0;transform-origin:top left;transform:scale(var(--s));overflow:hidden;background:var(--b-bg);border-radius:40px;box-shadow:0 20px 46px -14px rgba(70,60,100,.32),0 0 0 1px rgba(0,0,0,.05)}
+  .screen{width:100%;height:100%;overflow-y:auto;overscroll-behavior:contain}
+  .fade{position:absolute;left:0;right:0;bottom:0;height:46px;pointer-events:none;background:linear-gradient(to bottom,rgba(252,251,248,0),var(--b-bg));border-radius:0 0 40px 40px}
+
+  /* ── quiz content (brand runtime look) ── */
+  .scr{padding:20px 20px 30px;color:var(--b-ink);min-height:100%}
+  .topbar{display:flex;align-items:center;gap:11px;margin-bottom:18px}
+  .back{border:none;background:transparent;color:var(--b-dim);font-size:13px;font-weight:600;cursor:pointer;padding:0}
+  .fbar{flex:1;height:5px;border-radius:999px;background:rgba(0,0,0,.08);overflow:hidden}.fbar span{display:block;height:100%;width:14%;background:var(--brand);border-radius:999px}
+  .stepn{font-size:11px;color:var(--b-dim);font-weight:700}
+  .q{font-family:Georgia,'Times New Roman',serif;font-size:23px;line-height:1.22;font-weight:600;margin:0 0 6px}
+  .qs{font-size:13px;color:var(--b-dim);margin:0 0 16px}
+  .opts{display:flex;flex-direction:column;gap:11px}
+  .opt{display:flex;align-items:center;gap:12px;border:1.5px solid var(--b-line);background:var(--b-card);border-radius:14px;padding:15px;font-size:14.5px;line-height:1.35;color:var(--b-ink)}
+  .opt.hot{border-color:var(--brand);box-shadow:0 0 0 1px var(--brand)}
+  .box{width:21px;height:21px;border-radius:6px;border:1.5px solid rgba(0,0,0,.24);flex:none}
+  .opt.hot .box{background:var(--brand);border-color:var(--brand)}
+  .fnext{margin-top:16px;border:none;background:var(--brand);color:#fff;font-weight:700;font-size:15px;border-radius:14px;padding:15px;width:100%;font-family:var(--sans);cursor:pointer}
+
+  /* ── expand overlay (the "preview bigger" view) ── */
+  .exscrim{position:fixed;inset:0;background:rgba(30,24,44,.66);display:none;align-items:center;justify-content:center;z-index:50;padding:24px}
+  .exscrim.on{display:flex}
+  .exwrap{display:flex;flex-direction:column;align-items:center;gap:16px}
+  .exclose{position:fixed;top:22px;right:24px;width:40px;height:40px;border:none;background:rgba(255,255,255,.14);color:#fff;border-radius:11px;cursor:pointer;display:grid;place-items:center}.exclose:hover{background:rgba(255,255,255,.24)}.exclose svg{width:18px;height:18px}
+  .exnote{font-size:12px;color:rgba(255,255,255,.72);font-family:var(--mono)}
+
+  .lead{font-size:12px;color:var(--ink-25);text-align:center;margin-top:12px}
+</style>
+
+<svg style="display:none">
+  <symbol id="i-mobile" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="7" y="3" width="10" height="18" rx="2"/><line x1="11" y1="18" x2="13" y2="18"/></symbol>
+  <symbol id="i-desktop" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></symbol>
+  <symbol id="i-expand" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 9V4h5M20 15v5h-5M15 4h5v5M9 20H4v-5"/></symbol>
+  <symbol id="i-x" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M6 6l12 12M18 6L6 18"/></symbol>
+</svg>
+
+<div class="wrap">
+  <h1 class="doc">Phone preview — Shopify-style, with “Expand”</h1>
+  <p class="cap"><b>Like the Shopify theme editor.</b> The preview sits at a comfortable size that fits the pane; a corner <b>Expand</b> control blows it up to a large, centered view for close inspection.</p>
+  <p class="rec"><b>How it maps →</b> Default = the shared primitive at a pane-fitting size (~0.82, near-true, legible). <b>Expand</b> opens the same true-390 screen scaled to fill the height of the screen (as big as fits). Nothing about the layout changes between the two — only the scale — so it never lies about wrapping.</p>
+
+  <div class="pane">
+    <div class="pane-bar">
+      <span class="live"><span class="dot"></span>Live preview · your brand</span>
+      <span class="sp"></span>
+      <span class="segbtns"><button class="on" title="Mobile"><svg><use href="#i-mobile"/></svg></button><button title="Desktop"><svg><use href="#i-desktop"/></svg></button></span>
+      <button class="expandbtn" id="expandBtn"><svg><use href="#i-expand"/></svg> Expand</button>
+    </div>
+    <div class="pane-stage">
+      <div class="device" style="--s:.82"><div class="holder"><div class="frame"><div class="screen" id="srcScreen">
+        <div class="scr">
+          <div class="topbar"><button class="back">‹ Back</button><span class="fbar"><span></span></span><span class="stepn">1/7</span></div>
+          <h2 class="q">What best describes how you ride? Choose the style that gets you most excited on the mountain.</h2>
+          <p class="qs">Select up to 2</p>
+          <div class="opts">
+            <div class="opt hot"><span class="box"></span>Park &amp; Freestyle — rails, jumps, and creative expression</div>
+            <div class="opt hot"><span class="box"></span>All-Mountain — I go wherever the mountain takes me</div>
+            <div class="opt"><span class="box"></span>Carving &amp; Precision — edge-to-edge control on groomed runs</div>
+            <div class="opt"><span class="box"></span>Backcountry &amp; Powder — off-piste and untracked terrain</div>
+          </div>
+          <button class="fnext">Next</button>
+        </div>
+      </div><span class="fade"></span></div></div></div>
+    </div>
+  </div>
+  <p class="lead">Click <b>Expand</b> ⤢ to preview bigger · Esc or click outside to close</p>
+</div>
+
+<div class="exscrim" id="exscrim">
+  <button class="exclose" id="exClose"><svg><use href="#i-x"/></svg></button>
+  <div class="exwrap">
+    <div class="device" id="exDevice" style="--s:1"><div class="holder"><div class="frame"><div class="screen" id="exScreen"></div><span class="fade"></span></div></div></div>
+    <span class="exnote" id="exNote"></span>
+  </div>
+</div>
+
+<script>
+  const $=id=>document.getElementById(id);
+  function fitExpand(){
+    const vw=390,vh=740;
+    // as big as the screen allows, but never smaller than true 1:1 (so Expand is always bigger than the inline preview)
+    const s=Math.min(1.4,Math.max(1.0,(window.innerHeight*0.9)/vh));
+    $("exDevice").style.setProperty("--s",s.toFixed(3));
+    $("exNote").textContent=`390 × 740 · scale ${s.toFixed(2)} · ${Math.round(390*s)} px wide`;
+  }
+  function openExpand(){
+    $("exScreen").innerHTML=$("srcScreen").innerHTML;   // same content, only bigger
+    fitExpand();
+    $("exscrim").classList.add("on");
+  }
+  function closeExpand(){$("exscrim").classList.remove("on");}
+  $("expandBtn").onclick=openExpand;
+  $("exClose").onclick=closeExpand;
+  $("exscrim").addEventListener("click",e=>{if(e.target===$("exscrim"))closeExpand();});
+  document.addEventListener("keydown",e=>{if(e.key==="Escape")closeExpand();});
+  window.addEventListener("resize",()=>{if($("exscrim").classList.contains("on"))fitExpand();});
+  // device toggle (visual only in this mock)
+  document.querySelectorAll(".segbtns button").forEach(b=>b.onclick=()=>document.querySelectorAll(".segbtns button").forEach(x=>x.classList.toggle("on",x===b)));
+</script>

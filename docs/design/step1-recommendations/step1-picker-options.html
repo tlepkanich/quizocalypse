@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Recommendation picker — layout options</title>
+<style>
+  :root{
+    --accent:#6D5AE6; --accent-ink:#3C3489; --accent-wash:#EDEBFC; --accent-tint:#F3F1FD;
+    --ink:#2E2740; --ink-3:#5A5470; --ink-4:#7C7791; --ink-25:#B6B0C8;
+    --rule:#E9E7EF; --rule-2:#F1EFF6; --paper:#FFFFFF; --cream-2:#F2F1F5;
+    --ok:#158A5A; --amber-bg:#FAEEDA; --amber-ink:#854F0B;
+    --mono:ui-monospace,SFMono-Regular,Menlo,monospace;
+    --sans:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:#EDECF1;font-family:var(--sans);color:var(--ink);-webkit-font-smoothing:antialiased;padding:0 0 90px}
+  .page{max-width:1080px;margin:0 auto;padding:26px 22px}
+  h1{font-size:21px;font-weight:600;letter-spacing:-.02em;margin:0 0 4px}
+  .lead{font-size:14px;color:var(--ink-3);margin:0 0 20px;line-height:1.55;max-width:780px}
+  .tabs{position:sticky;top:0;z-index:30;display:flex;gap:6px;flex-wrap:wrap;background:#EDECF1;padding:12px 0 14px;margin-bottom:6px;border-bottom:1px solid #DEDCE6}
+  .tabbtn{border:1px solid var(--rule);background:var(--paper);color:var(--ink-3);font-size:13px;font-weight:500;padding:8px 14px;border-radius:10px;cursor:pointer;font-family:var(--sans)}
+  .tabbtn.on{background:var(--accent);color:#fff;border-color:var(--accent)}
+  .variant{display:none}.variant.on{display:block}
+  .vhead{font-size:13px;color:var(--ink-4);margin:14px 2px 14px;line-height:1.6}
+  .vhead b{color:var(--ink);font-weight:600}
+  .vhead .tag{display:inline-block;background:var(--accent-wash);color:var(--accent-ink);font-size:11px;font-weight:600;padding:2px 8px;border-radius:999px;margin-right:6px}
+
+  .frame{background:var(--paper);border:1px solid var(--rule);border-radius:16px;padding:18px;box-shadow:0 8px 30px rgba(120,110,150,.10)}
+
+  /* shared type tabs */
+  .ptabs{display:flex;gap:6px;margin-bottom:14px}
+  .ptab{display:flex;align-items:center;gap:7px;padding:9px 14px;border-radius:10px;font-size:13px;font-weight:500;background:var(--cream-2);color:var(--ink-4);cursor:pointer;border:1px solid transparent}
+  .ptab .n{font-size:11.5px;color:var(--ink-25)}
+  .ptab.on{background:#fff;color:var(--accent-ink);border-color:var(--accent);box-shadow:0 1px 2px rgba(109,90,230,.12)}
+  .ptab.on .n{color:var(--accent)}
+
+  .split{display:grid;gap:16px;align-items:start}
+  .selall{font-size:12.5px;color:var(--accent-ink);cursor:pointer}
+  .search{font-size:12.5px;color:var(--ink-25);background:#F7F6FA;border:1px solid var(--rule);border-radius:9px;padding:8px 11px}
+
+  /* thumbnails */
+  .th{width:38px;height:38px;border-radius:8px;background:var(--accent-tint);display:grid;place-items:center;font-size:17px;flex:none}
+  .th.sm{width:30px;height:30px;font-size:14px;border-radius:7px}
+
+  /* recommendations rail (shared) */
+  .rail{border:1px solid #E4E0F4;border-radius:14px;background:#fff;box-shadow:0 1px 3px rgba(120,110,150,.08)}
+  .rail .rh{display:flex;align-items:center;justify-content:space-between;padding:14px 15px 0}
+  .rail .rh strong{font-size:14.5px;font-weight:600}
+  .count{min-width:23px;height:23px;padding:0 7px;border-radius:999px;background:var(--accent-wash);color:var(--accent-ink);font-size:12px;font-weight:600;display:grid;place-items:center}
+  .railList{display:flex;flex-direction:column;gap:6px;padding:12px 15px;min-height:60px}
+  .railRow{display:flex;align-items:center;gap:9px;border:1px solid var(--rule);border-radius:9px;padding:8px 10px;background:#fff}
+  .railRow .nm{font-size:12.5px;font-weight:500}
+  .railRow .mt{font-size:11px;color:var(--ink-4)}
+  .railRow .x{margin-left:auto;border:none;background:transparent;color:var(--ink-25);cursor:pointer;font-size:13px}
+  .railEmpty{margin:12px 15px;border:1px dashed #E4E0F4;border-radius:10px;background:var(--accent-tint);padding:18px 14px;text-align:center;font-size:12px;color:var(--ink-4);line-height:1.5}
+  .rfoot{padding:0 15px 15px;display:flex;flex-direction:column;gap:8px}
+  .btn{width:100%;border:none;font-size:13px;font-weight:500;padding:10px;border-radius:10px;cursor:pointer;font-family:var(--sans)}
+  .btn.sec{border:1px solid var(--rule);background:#fff;color:var(--ink-3)}
+  .btn.pri{background:var(--accent);color:#fff}
+  .btn.pri.off{background:#C9C3E8;cursor:default}
+
+  /* ---------- V1 accordion ---------- */
+  .accRow{border:1px solid var(--rule);border-radius:12px;background:#fff;margin-bottom:9px;overflow:hidden;transition:border-color .15s}
+  .accRow.sel{border-color:var(--accent);background:var(--accent-tint)}
+  .accHead{display:flex;align-items:center;gap:12px;padding:12px 13px}
+  .accHead .nm{font-size:14px;font-weight:600}
+  .accHead .mt{font-size:12px;color:var(--ink-4)}
+  .peek{margin-left:auto;display:flex;align-items:center;gap:6px;border:1px solid var(--rule);background:#fff;color:var(--ink-3);font-size:12px;padding:6px 11px;border-radius:8px;cursor:pointer;font-family:var(--sans);white-space:nowrap}
+  .peek .chev{transition:transform .25s}
+  .accRow.open .peek .chev{transform:rotate(180deg)}
+  .selbox{width:38px;height:38px;border-radius:9px;border:1px solid var(--rule);background:#fff;display:grid;place-items:center;cursor:pointer;flex:none;color:transparent;font-size:16px;font-weight:700}
+  .accRow.sel .selbox{background:var(--accent);border-color:var(--accent);color:#fff}
+  .accBody{max-height:0;overflow:hidden;transition:max-height .3s ease;background:#fff;border-top:1px solid transparent}
+  .accRow.open .accBody{max-height:280px;border-top-color:var(--rule-2)}
+  .prodGrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px;padding:12px 13px}
+  .prod{display:flex;align-items:center;gap:9px;border:1px solid var(--rule-2);border-radius:9px;padding:7px 9px;background:#FBFAFE}
+  .prod .pn{font-size:12px;font-weight:500;line-height:1.25}
+  .prod .pp{font-size:11px;color:var(--ink-4)}
+  .moreline{padding:0 13px 12px;font-size:12px;color:var(--accent-ink)}
+  .hintbar{display:flex;gap:14px;align-items:center;font-size:11.5px;color:var(--ink-4);margin-bottom:12px}
+  .hintbar b{color:var(--ink-3);font-weight:600}
+  .swatch{display:inline-flex;align-items:center;gap:5px}
+  .swatch i{width:15px;height:15px;border-radius:5px;display:inline-block;vertical-align:middle}
+
+  /* ---------- V2 master–detail ---------- */
+  .md{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.55fr);gap:14px;align-items:start}
+  .mdList{border:1px solid var(--rule);border-radius:12px;overflow:hidden;background:#fff}
+  .mdItem{display:flex;align-items:center;gap:10px;padding:12px 13px;cursor:pointer;border-bottom:1px solid var(--rule-2)}
+  .mdItem:last-child{border-bottom:none}
+  .mdItem.on{background:var(--accent-tint)}
+  .mdItem.on .nm{color:var(--accent-ink)}
+  .mdItem .nm{font-size:13.5px;font-weight:600}
+  .mdItem .mt{font-size:11.5px;color:var(--ink-4)}
+  .mdItem .arr{margin-left:auto;color:var(--ink-25)}
+  .mdItem.added .arr{color:var(--ok)}
+  .mdDetail{border:1px solid var(--rule);border-radius:12px;background:#fff;overflow:hidden}
+  .mdDh{display:flex;align-items:center;gap:11px;padding:14px;border-bottom:1px solid var(--rule-2);background:#FBFAFE}
+  .mdDh .nm{font-size:15px;font-weight:600}
+  .mdDh .mt{font-size:12px;color:var(--ink-4)}
+  .mdDh .addbtn{margin-left:auto;border:none;background:var(--accent);color:#fff;font-size:12.5px;font-weight:500;padding:9px 15px;border-radius:9px;cursor:pointer;font-family:var(--sans);white-space:nowrap}
+  .mdDh .addbtn.added{background:#EAF6EF;color:var(--ok);border:1px solid #BFE3D0}
+  .mdProds{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px;padding:13px;max-height:320px;overflow:auto}
+
+  /* selected chip bar */
+  .chipbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:14px;padding:12px 14px;border:1px solid #E4E0F4;border-radius:12px;background:var(--accent-tint)}
+  .chipbar .lbl{font-size:12.5px;font-weight:600;color:var(--accent-ink)}
+  .selchip{display:inline-flex;align-items:center;gap:7px;background:#fff;border:1px solid var(--rule);border-radius:999px;padding:5px 6px 5px 10px;font-size:12px;font-weight:500}
+  .selchip .x{border:none;background:transparent;color:var(--ink-25);cursor:pointer;font-size:13px}
+  .chipbar .cont{margin-left:auto;border:none;background:var(--accent);color:#fff;font-size:12.5px;font-weight:500;padding:9px 16px;border-radius:9px;cursor:pointer;font-family:var(--sans)}
+  .chipbar .cont.off{background:#C9C3E8}
+
+  /* ---------- V3 preview cards ---------- */
+  .cardgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:12px}
+  .cCard{border:1px solid var(--rule);border-radius:13px;background:#fff;padding:13px;transition:border-color .15s}
+  .cCard.sel{border-color:var(--accent);background:var(--accent-tint)}
+  .cCard .ct{display:flex;align-items:center;justify-content:space-between;margin-bottom:11px}
+  .cCard .nm{font-size:14px;font-weight:600}
+  .cCard .mt{font-size:11.5px;color:var(--ink-4)}
+  .thumbstrip{display:flex;gap:5px;margin-bottom:11px}
+  .thumbstrip .t{width:44px;height:44px;border-radius:8px;background:var(--accent-tint);display:grid;place-items:center;font-size:18px;flex:none;border:1px solid var(--rule-2)}
+  .thumbstrip .tmore{width:44px;height:44px;border-radius:8px;background:#F7F6FA;display:grid;place-items:center;font-size:11px;color:var(--ink-4);flex:none;border:1px dashed var(--rule)}
+  .cCard .crow{display:flex;align-items:center;gap:8px}
+  .addtog{flex:1;border:1px solid var(--accent);background:#fff;color:var(--accent-ink);font-size:12.5px;font-weight:500;padding:8px;border-radius:8px;cursor:pointer;font-family:var(--sans)}
+  .cCard.sel .addtog{background:var(--accent);color:#fff}
+  .seeall{border:1px solid var(--rule);background:#fff;color:var(--ink-3);font-size:12px;padding:8px 11px;border-radius:8px;cursor:pointer;font-family:var(--sans);white-space:nowrap}
+
+  /* drawer for "see all" */
+  .drawerScrim{position:absolute;inset:0;background:rgba(46,39,64,.35);display:none;align-items:stretch;justify-content:flex-end;border-radius:16px;z-index:20}
+  .drawerScrim.on{display:flex}
+  .drawer{width:min(380px,86%);background:#fff;height:100%;overflow:auto;padding:16px;border-radius:0 16px 16px 0}
+  .drawer .dh{display:flex;align-items:center;gap:10px;margin-bottom:12px}
+  .drawer .dh .nm{font-size:15px;font-weight:600}
+  .drawer .dh .cl{margin-left:auto;border:none;background:var(--cream-2);width:28px;height:28px;border-radius:8px;cursor:pointer;font-size:14px}
+  .relframe{position:relative}
+</style>
+</head>
+<body>
+<div class="page">
+  <h1>Recommendation picker — 3 navigation models</h1>
+  <p class="lead">Same job in all three: pick which tags or collections the quiz can recommend, but now you can <b>see the products inside</b> before committing — and the double-select friction is gone. Collections tab shown; tags behave the same. Everything below is clickable.</p>
+
+  <div class="tabs">
+    <button class="tabbtn on" data-v="1">1 · Expand-in-place</button>
+    <button class="tabbtn" data-v="2">2 · Browse &amp; add</button>
+    <button class="tabbtn" data-v="3">3 · Preview cards</button>
+  </div>
+
+  <!-- ============ V1 ============ -->
+  <section class="variant on" data-v="1">
+    <p class="vhead"><span class="tag">Expand-in-place</span><b>One list, two clearly separate actions.</b> The big checkbox on the left <b>selects</b> the whole collection as a recommendation. “Preview ⌄” <b>expands the row</b> to show the products inside — look without committing. No mode-switching, no second screen.</p>
+    <div class="frame">
+      <div class="ptabs">
+        <div class="ptab">Products <span class="n">125</span></div>
+        <div class="ptab">Tags <span class="n">32</span></div>
+        <div class="ptab on">Collections <span class="n">4</span></div>
+      </div>
+      <div class="split" style="grid-template-columns:minmax(0,1.9fr) minmax(0,1fr)">
+        <div id="v1list"></div>
+        <aside class="rail"><div class="rh"><strong>Your recommendations</strong><span class="count" id="v1count">0</span></div><div class="railList" id="v1rail"></div><div class="railEmpty" id="v1empty">Nothing added yet — tap a collection's box to add it.</div><div class="rfoot"><button class="btn sec">▷ Preview results page</button><button class="btn pri off" id="v1cont">Continue →</button></div></aside>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ V2 ============ -->
+  <section class="variant" data-v="2">
+    <p class="vhead"><span class="tag">Browse &amp; add</span><b>Click a collection, see its products, add it.</b> Left is the list; clicking one loads all its products on the right with a single “Add” button. Feels like browsing a store, not filling checkboxes — and there's only ever one thing to decide per collection. Selected ones collect in the bar below.</p>
+    <div class="frame">
+      <div class="ptabs">
+        <div class="ptab">Products <span class="n">125</span></div>
+        <div class="ptab">Tags <span class="n">32</span></div>
+        <div class="ptab on">Collections <span class="n">4</span></div>
+      </div>
+      <div class="md">
+        <div class="mdList" id="v2list"></div>
+        <div class="mdDetail" id="v2detail"></div>
+      </div>
+      <div class="chipbar"><span class="lbl">Your recommendations</span><span id="v2chips" style="display:flex;gap:7px;flex-wrap:wrap"></span><span id="v2none" style="font-size:12px;color:var(--ink-4)">— none yet</span><button class="cont off" id="v2cont">Continue →</button></div>
+    </div>
+  </section>
+
+  <!-- ============ V3 ============ -->
+  <section class="variant" data-v="3">
+    <p class="vhead"><span class="tag">Preview cards</span><b>Each collection is a card that shows a peek of its products.</b> Thumbnails tell you what's inside at a glance — no expanding needed. “Add” toggles it on; “See all” opens the full product list in a drawer. Most visual of the three, best when catalog imagery matters.</p>
+    <div class="frame relframe">
+      <div class="ptabs">
+        <div class="ptab">Products <span class="n">125</span></div>
+        <div class="ptab">Tags <span class="n">32</span></div>
+        <div class="ptab on">Collections <span class="n">4</span></div>
+      </div>
+      <div class="split" style="grid-template-columns:minmax(0,1.9fr) minmax(0,1fr)">
+        <div class="cardgrid" id="v3grid"></div>
+        <aside class="rail"><div class="rh"><strong>Your recommendations</strong><span class="count" id="v3count">0</span></div><div class="railList" id="v3rail"></div><div class="railEmpty" id="v3empty">Nothing added yet — hit “Add” on a card.</div><div class="rfoot"><button class="btn sec">▷ Preview results page</button><button class="btn pri off" id="v3cont">Continue →</button></div></aside>
+      </div>
+      <div class="drawerScrim" id="v3scrim"><div class="drawer" id="v3drawer"></div></div>
+    </div>
+  </section>
+</div>
+
+<script>
+  const DATA={
+    "Snowboards":{count:15,products:[
+      ["The Collection Snowboard: Liquid","$749.95"],["The Multi-managed Snowboard","$629.95"],
+      ["The Complete Snowboard","$699.95"],["The 3p Fulfilled Snowboard","$2,629.95"],
+      ["The Videographer Snowboard","$885.95"],["The Draft Snowboard","$749.95"],
+      ["The Hidden Snowboard","$749.95"],["The Inventory Snowboard","$949.95"]]},
+    "Automated Collection":{count:13,products:[
+      ["The Compare at Price Snowboard","$785.95"],["The Multi-location Snowboard","$729.95"],
+      ["The Out of Stock Snowboard","$729.95"],["The Archived Snowboard","$629.95"],
+      ["Selling Plans Ski Wax","$24.95"],["The Minimal Snowboard","$885.95"]]},
+    "Hydrogen":{count:3,products:[
+      ["The Hydrogen Snowboard — Blue","$600.00"],["The Hydrogen Snowboard — Green","$600.00"],
+      ["The Hydrogen Snowboard — Red","$600.00"]]},
+    "Home page":{count:1,products:[["The Compare at Price Snowboard","$785.95"]]}
+  };
+  const names=Object.keys(DATA);
+  const $=id=>document.getElementById(id);
+  const prodHTML=(p)=>`<div class="prod"><span class="th sm">🏂</span><div><div class="pn">${p[0]}</div><div class="pp">${p[1]}</div></div></div>`;
+  const shown=(arr,coll)=>{let h=arr.map(prodHTML).join('');const extra=DATA[coll].count-arr.length;return h+(extra>0?`<div class="prod" style="justify-content:center;color:var(--accent-ink);background:#fff;border-style:dashed">+ ${extra} more</div>`:'')};
+
+  /* ---------- variant switch ---------- */
+  document.querySelectorAll('.tabbtn').forEach(b=>b.addEventListener('click',()=>{
+    document.querySelectorAll('.tabbtn').forEach(x=>x.classList.toggle('on',x===b));
+    document.querySelectorAll('.variant').forEach(s=>s.classList.toggle('on',s.dataset.v===b.dataset.v));
+    window.scrollTo({top:0,behavior:'smooth'});
+  }));
+
+  /* ---------- V1 ---------- */
+  const v1sel=new Set();
+  function v1render(){
+    $('v1list').innerHTML=names.map(n=>{
+      const d=DATA[n],sel=v1sel.has(n);
+      return `<div class="accRow${sel?' sel':''}" data-n="${n}">
+        <div class="accHead">
+          <div class="selbox" data-act="sel">✓</div>
+          <div><div class="nm">${n}</div><div class="mt">${d.count} product${d.count>1?'s':''}</div></div>
+          <button class="peek" data-act="peek">Preview <span class="chev">⌄</span></button>
+        </div>
+        <div class="accBody"><div class="prodGrid">${shown(d.products,n)}</div></div>
+      </div>`;
+    }).join('');
+    $('v1list').querySelectorAll('.accRow').forEach(row=>{
+      row.querySelector('[data-act="sel"]').addEventListener('click',()=>{const n=row.dataset.n;v1sel.has(n)?v1sel.delete(n):v1sel.add(n);v1render();v1rail();});
+      row.querySelector('[data-act="peek"]').addEventListener('click',()=>row.classList.toggle('open'));
+    });
+  }
+  function v1rail(){
+    const rl=$('v1rail'),arr=[...v1sel];$('v1count').textContent=arr.length;
+    $('v1empty').style.display=arr.length?'none':'block';
+    $('v1cont').classList.toggle('off',!arr.length);
+    rl.innerHTML=arr.map(n=>`<div class="railRow"><span class="th sm">🗂️</span><div><div class="nm">${n}</div><div class="mt">${DATA[n].count} products</div></div><button class="x" data-n="${n}">✕</button></div>`).join('');
+    rl.querySelectorAll('.x').forEach(x=>x.addEventListener('click',()=>{v1sel.delete(x.dataset.n);v1render();v1rail();}));
+  }
+  v1render();v1rail();
+
+  /* ---------- V2 ---------- */
+  const v2sel=new Set();let v2active=names[0];
+  function v2list(){
+    $('v2list').innerHTML=names.map(n=>{
+      const d=DATA[n];
+      return `<div class="mdItem${n===v2active?' on':''}${v2sel.has(n)?' added':''}" data-n="${n}">
+        <span class="th">🗂️</span><div><div class="nm">${n}</div><div class="mt">${d.count} product${d.count>1?'s':''}</div></div>
+        <span class="arr">${v2sel.has(n)?'✓ added':'›'}</span></div>`;
+    }).join('');
+    $('v2list').querySelectorAll('.mdItem').forEach(it=>it.addEventListener('click',()=>{v2active=it.dataset.n;v2list();v2detail();}));
+  }
+  function v2detail(){
+    const n=v2active,d=DATA[n],added=v2sel.has(n);
+    $('v2detail').innerHTML=`<div class="mdDh"><span class="th">🗂️</span><div><div class="nm">${n}</div><div class="mt">${d.count} products in this collection</div></div>
+      <button class="addbtn${added?' added':''}" id="v2add">${added?'✓ Added':'Add to recommendations'}</button></div>
+      <div class="mdProds">${shown(d.products,n)}</div>`;
+    $('v2add').addEventListener('click',()=>{v2sel.has(n)?v2sel.delete(n):v2sel.add(n);v2list();v2detail();v2chips();});
+  }
+  function v2chips(){
+    const arr=[...v2sel];$('v2none').style.display=arr.length?'none':'inline';
+    $('v2cont').classList.toggle('off',!arr.length);
+    $('v2chips').innerHTML=arr.map(n=>`<span class="selchip">🗂️ ${n}<button class="x" data-n="${n}">✕</button></span>`).join('');
+    $('v2chips').querySelectorAll('.x').forEach(x=>x.addEventListener('click',()=>{v2sel.delete(x.dataset.n);v2list();v2detail();v2chips();}));
+  }
+  v2list();v2detail();v2chips();
+
+  /* ---------- V3 ---------- */
+  const v3sel=new Set();
+  function v3grid(){
+    $('v3grid').innerHTML=names.map(n=>{
+      const d=DATA[n],sel=v3sel.has(n);
+      const thumbs=d.products.slice(0,4).map(()=>`<span class="t">🏂</span>`).join('');
+      const more=d.count>4?`<span class="tmore">+${d.count-4}</span>`:'';
+      return `<div class="cCard${sel?' sel':''}" data-n="${n}">
+        <div class="ct"><div><div class="nm">${n}</div><div class="mt">${d.count} product${d.count>1?'s':''}</div></div></div>
+        <div class="thumbstrip">${thumbs}${more}</div>
+        <div class="crow"><button class="addtog" data-act="add">${sel?'✓ Added':'Add'}</button><button class="seeall" data-act="see">See all</button></div>
+      </div>`;
+    }).join('');
+    $('v3grid').querySelectorAll('.cCard').forEach(c=>{
+      c.querySelector('[data-act="add"]').addEventListener('click',()=>{const n=c.dataset.n;v3sel.has(n)?v3sel.delete(n):v3sel.add(n);v3grid();v3rail();});
+      c.querySelector('[data-act="see"]').addEventListener('click',()=>v3open(c.dataset.n));
+    });
+  }
+  function v3rail(){
+    const arr=[...v3sel];$('v3count').textContent=arr.length;
+    $('v3empty').style.display=arr.length?'none':'block';
+    $('v3cont').classList.toggle('off',!arr.length);
+    $('v3rail').innerHTML=arr.map(n=>`<div class="railRow"><span class="th sm">🗂️</span><div><div class="nm">${n}</div><div class="mt">${DATA[n].count} products</div></div><button class="x" data-n="${n}">✕</button></div>`).join('');
+    $('v3rail').querySelectorAll('.x').forEach(x=>x.addEventListener('click',()=>{v3sel.delete(x.dataset.n);v3grid();v3rail();}));
+  }
+  function v3open(n){
+    const d=DATA[n];
+    $('v3drawer').innerHTML=`<div class="dh"><span class="th">🗂️</span><div class="nm">${n}</div><button class="cl" id="v3close">✕</button></div>
+      <div style="font-size:12px;color:var(--ink-4);margin-bottom:12px">${d.count} products in this collection</div>
+      <div style="display:flex;flex-direction:column;gap:7px">${d.products.map(prodHTML).join('')}${d.count>d.products.length?`<div class="prod" style="justify-content:center;color:var(--accent-ink);border-style:dashed">+ ${d.count-d.products.length} more</div>`:''}</div>`;
+    $('v3scrim').classList.add('on');
+    $('v3close').addEventListener('click',()=>$('v3scrim').classList.remove('on'));
+  }
+  $('v3scrim').addEventListener('click',e=>{if(e.target===$('v3scrim'))$('v3scrim').classList.remove('on');});
+  v3grid();v3rail();
+</script>
+</body>
+</html>

@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>"How do you want to start?" modal — 3 variations</title>
+<style>
+  :root{
+    --accent:#6D5AE6; --accent-ink:#3C3489; --accent-wash:#EDEBFC; --accent-tint:#F3F1FD;
+    --ink:#2E2740; --ink-3:#5A5470; --ink-4:#7C7791; --ink-25:#B6B0C8;
+    --rule:#E9E7EF; --rule-2:#F1EFF6; --cream-2:#F2F1F5; --ok:#158A5A;
+    --mono:ui-monospace,SFMono-Regular,Menlo,monospace;
+    --sans:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:#EDECF1;font-family:var(--sans);color:var(--ink);-webkit-font-smoothing:antialiased;padding:26px 0 70px}
+  .wrap{max-width:900px;margin:0 auto;padding:0 22px}
+  h1{font-size:20px;font-weight:600;margin:0 0 4px}
+  .lead{font-size:13.5px;color:var(--ink-3);margin:0 0 18px;line-height:1.55;max-width:700px}
+  .tabs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px}
+  .tabbtn{border:1px solid var(--rule);background:#fff;color:var(--ink-3);font-size:13px;font-weight:500;padding:8px 14px;border-radius:10px;cursor:pointer;font-family:var(--sans)}
+  .tabbtn.on{background:var(--accent);color:#fff;border-color:var(--accent)}
+  .variant{display:none}.variant.on{display:block}
+  .vnote{font-size:12.5px;color:var(--ink-4);margin:12px 2px 12px;line-height:1.6}
+  .vnote b{color:var(--ink);font-weight:600}
+
+  /* faux dimmed viewport */
+  .stage{background:#6E6880;border-radius:16px;padding:34px 20px;display:flex;justify-content:center}
+
+  /* modal chrome (shared) */
+  .modal{width:min(560px,100%);background:#fff;border-radius:22px;padding:26px 28px 22px;position:relative;box-shadow:0 26px 60px rgba(46,39,64,.32)}
+  .close{position:absolute;top:18px;right:18px;border:none;background:transparent;color:var(--ink-25);font-size:17px;cursor:pointer;width:30px;height:30px;border-radius:8px}
+  .close:hover{background:var(--cream-2);color:var(--ink-3)}
+  .mtitle{margin:0 0 6px;font-size:21px;font-weight:600;letter-spacing:-.02em}
+  .msub{margin:0 0 20px;font-size:13.5px;color:var(--ink-3);line-height:1.5}
+
+  /* sparkle icon tile (locked AI standard: pulse only) */
+  .ico{width:38px;height:38px;border-radius:11px;display:grid;place-items:center;font-size:17px;flex:none;background:var(--accent-wash);color:var(--accent-ink)}
+  .ico i{display:block;font-style:normal;animation:pulse 2.6s ease-in-out infinite;transform-origin:center}
+  @keyframes pulse{0%,100%{transform:scale(1) rotate(0);opacity:.9}50%{transform:scale(1.2) rotate(15deg);opacity:1}}
+  .ico.neutral{background:var(--cream-2);color:var(--ink-4)}
+  .ico.neutral i{animation:none}
+  .rec{font-family:var(--mono);font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.07em;color:var(--accent-ink)}
+
+  /* ---------- V1: two balanced cards ---------- */
+  .cards{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px}
+  .card{border:1px solid var(--rule);border-radius:14px;padding:16px;cursor:pointer;background:#fff;transition:border-color .15s,box-shadow .15s,background .15s;text-align:left}
+  .card:hover{border-color:#D9D3F2;box-shadow:0 2px 10px rgba(109,90,230,.10)}
+  .card.pri{border-color:var(--accent);background:var(--accent-tint)}
+  .card .top{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
+  .card h3{margin:0 0 5px;font-size:15px;font-weight:600}
+  .card p{margin:0;font-size:12.5px;color:var(--ink-3);line-height:1.5}
+  .quiet{width:100%;border:none;background:transparent;color:var(--ink-4);font-size:12.5px;cursor:pointer;font-family:var(--sans);padding:9px;border-radius:9px;text-align:center}
+  .quiet:hover{background:var(--cream-2);color:var(--ink-3)}
+
+  /* ---------- V2: stacked rows ---------- */
+  .rows{display:flex;flex-direction:column;gap:9px}
+  .rrow{display:flex;align-items:center;gap:13px;border:1px solid var(--rule);border-radius:13px;padding:14px 15px;cursor:pointer;background:#fff;transition:border-color .15s,box-shadow .15s,background .15s;text-align:left;width:100%;font-family:var(--sans)}
+  .rrow:hover{border-color:#D9D3F2;box-shadow:0 2px 10px rgba(109,90,230,.10)}
+  .rrow.pri{border-color:var(--accent);background:var(--accent-tint)}
+  .rrow .body{flex:1;min-width:0}
+  .rrow .hd{display:flex;align-items:center;gap:9px;margin-bottom:3px}
+  .rrow h3{margin:0;font-size:14.5px;font-weight:600}
+  .rrow p{margin:0;font-size:12.5px;color:var(--ink-3);line-height:1.45}
+  .rrow .arr{color:var(--ink-25);font-size:15px;flex:none}
+  .rrow.pri .arr{color:var(--accent)}
+
+  /* ---------- V3: hero + quiet alternatives ---------- */
+  .hero{border:1px solid var(--accent);background:var(--accent-tint);border-radius:16px;padding:18px;display:flex;gap:14px;align-items:flex-start;margin-bottom:14px}
+  .hero .body{flex:1}
+  .hero .hd{display:flex;align-items:center;gap:9px;margin-bottom:5px}
+  .hero h3{margin:0;font-size:16px;font-weight:600}
+  .hero p{margin:0 0 13px;font-size:13px;color:var(--ink-3);line-height:1.5}
+  .btn{border:none;background:var(--accent);color:#fff;font-size:13px;font-weight:500;padding:10px 18px;border-radius:10px;cursor:pointer;font-family:var(--sans)}
+  .orline{display:flex;align-items:center;gap:12px;margin:14px 0}
+  .orline .l{flex:1;height:1px;background:var(--rule)}
+  .orline span{font-size:11.5px;color:var(--ink-25)}
+  .alts{display:grid;grid-template-columns:1fr 1fr;gap:9px}
+  .alt{border:1px solid var(--rule);background:#fff;border-radius:11px;padding:12px 14px;cursor:pointer;text-align:left;font-family:var(--sans);transition:border-color .15s,background .15s}
+  .alt:hover{border-color:#D9D3F2;background:#FCFBFE}
+  .alt strong{display:block;font-size:13.5px;font-weight:600;margin-bottom:2px}
+  .alt span{font-size:12px;color:var(--ink-4);line-height:1.4}
+
+  @media (prefers-reduced-motion:reduce){.ico i{animation:none}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>“How do you want to start?” — 3 redesigns</h1>
+  <p class="lead">The intercept modal after Continue on the Recommendations page. All three drop the green “FASTEST” pill (it fights the violet system), fix the broken pencil glyph, and use the locked AI standard (pulsing ✦, violet only). Everything is hoverable/clickable.</p>
+
+  <div class="tabs">
+    <button class="tabbtn on" data-v="1">1 · Balanced cards</button>
+    <button class="tabbtn" data-v="2">2 · Stacked rows</button>
+    <button class="tabbtn" data-v="3">3 · Hero + alternatives</button>
+  </div>
+
+  <!-- V1 -->
+  <section class="variant on" data-v="1">
+    <p class="vnote"><b>1 · Balanced cards.</b> Closest to today, cleaned up. Two equal cards; the AI one is marked with a quiet mono <b>RECOMMENDED</b> label instead of a loud green pill. Consistent icon tiles (violet = AI, neutral = manual). The blank-quiz option becomes a proper full-width quiet button, not a stray underlined link.</p>
+    <div class="stage">
+      <div class="modal">
+        <button class="close">✕</button>
+        <h2 class="mtitle">How do you want to start?</h2>
+        <p class="msub">Your recommendations are set — now pick how to build the quiz.</p>
+        <div class="cards">
+          <button class="card pri">
+            <div class="top"><span class="ico"><i>✦</i></span><span class="rec">Recommended</span></div>
+            <h3>Generate with AI</h3>
+            <p>We read your catalog and draft two quiz directions — preview them live and pick one.</p>
+          </button>
+          <button class="card">
+            <div class="top"><span class="ico neutral"><i>✎</i></span></div>
+            <h3>Write your goal</h3>
+            <p>Describe what the quiz should do and we'll generate the questions from it.</p>
+          </button>
+        </div>
+        <button class="quiet">Start from a blank quiz instead</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- V2 -->
+  <section class="variant" data-v="2">
+    <p class="vnote"><b>2 · Stacked rows.</b> Simplest to scan — one column, all three paths visible and equal in structure, nothing hidden as a link. Reads top-to-bottom from most-guided to least. Best if you want the blank-quiz path to be a real, discoverable option.</p>
+    <div class="stage">
+      <div class="modal">
+        <button class="close">✕</button>
+        <h2 class="mtitle">How do you want to start?</h2>
+        <p class="msub">Your recommendations are set — now pick how to build the quiz.</p>
+        <div class="rows">
+          <button class="rrow pri">
+            <span class="ico"><i>✦</i></span>
+            <span class="body">
+              <span class="hd"><h3>Generate with AI</h3><span class="rec">Recommended</span></span>
+              <p>We read your catalog and draft two quiz directions to pick from.</p>
+            </span>
+            <span class="arr">→</span>
+          </button>
+          <button class="rrow">
+            <span class="ico neutral"><i>✎</i></span>
+            <span class="body">
+              <span class="hd"><h3>Write your goal</h3></span>
+              <p>Describe what the quiz should do — we'll generate the questions.</p>
+            </span>
+            <span class="arr">→</span>
+          </button>
+          <button class="rrow">
+            <span class="ico neutral"><i>▢</i></span>
+            <span class="body">
+              <span class="hd"><h3>Start from blank</h3></span>
+              <p>Build the questions yourself, from an empty quiz.</p>
+            </span>
+            <span class="arr">→</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- V3 -->
+  <section class="variant" data-v="3">
+    <p class="vnote"><b>3 · Hero + alternatives.</b> Strongest guidance, least decision fatigue. One clear recommended action with a real button; the other two paths sit quietly below an “or” divider. Best if most merchants should take the AI path and the rest are escape hatches.</p>
+    <div class="stage">
+      <div class="modal">
+        <button class="close">✕</button>
+        <h2 class="mtitle">How do you want to start?</h2>
+        <p class="msub">Your recommendations are set — now pick how to build the quiz.</p>
+        <div class="hero">
+          <span class="ico"><i>✦</i></span>
+          <div class="body">
+            <div class="hd"><h3>Generate with AI</h3><span class="rec">Recommended</span></div>
+            <p>We read your catalog and draft two quiz directions — preview them live and pick one.</p>
+            <button class="btn">Generate templates →</button>
+          </div>
+        </div>
+        <div class="orline"><span class="l"></span><span>or build it yourself</span><span class="l"></span></div>
+        <div class="alts">
+          <button class="alt"><strong>Write your goal</strong><span>We'll draft the questions from it.</span></button>
+          <button class="alt"><strong>Start from blank</strong><span>An empty quiz to build on.</span></button>
+        </div>
+      </div>
+    </div>
+  </section>
+</div>
+
+<script>
+  document.querySelectorAll('.tabbtn').forEach(b=>b.addEventListener('click',()=>{
+    document.querySelectorAll('.tabbtn').forEach(x=>x.classList.toggle('on',x===b));
+    document.querySelectorAll('.variant').forEach(s=>s.classList.toggle('on',s.dataset.v===b.dataset.v));
+  }));
+</script>
+</body>
+</html>

@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Questions step — content (mock)</title>
+<style>
+  :root{
+    --accent:#6D5AE6; --accent-2:#6B4FD8; --accent-ink:#3C3489;
+    --accent-wash:#EDEBFC; --accent-tint:#F3F1FD;
+    --ink:#2E2740; --ink-3:#5A5470; --ink-4:#7C7791; --ink-25:#B6B0C8;
+    --rule:#E9E7EF; --rule-2:#F1EFF6; --paper:#FFFFFF; --cream-2:#F2F1F5;
+    --ok:#158A5A; --ok-wash:#E7F4EE; --amber-bg:#FAEEDA; --amber-ink:#854F0B;
+    --mono:ui-monospace,SFMono-Regular,Menlo,monospace;
+    --sans:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:#EDECF1;font-family:var(--sans);color:var(--ink);-webkit-font-smoothing:antialiased;padding:26px 0 80px}
+  .wrap{max-width:1120px;margin:0 auto;padding:0 22px}
+  .cap{font-size:12.5px;color:var(--ink-4);margin:0 2px 14px;line-height:1.7}
+  .cap b{color:var(--ink-3)}
+  .cap button{border:1px solid var(--rule);background:#fff;color:var(--accent-ink);font-size:12px;padding:5px 11px;border-radius:8px;cursor:pointer;font-family:inherit;margin-left:6px}
+
+  .app{background:var(--paper);border:1px solid var(--rule);border-radius:18px;overflow:hidden;box-shadow:0 10px 34px rgba(120,110,150,.12)}
+
+  /* ── two-row chrome (shared) ── */
+  .barrow{display:flex;align-items:center;justify-content:space-between;padding:13px 20px}
+  .brand{display:flex;align-items:center;gap:10px}
+  .logo{width:28px;height:28px;border-radius:9px;background:var(--accent);color:#fff;display:grid;place-items:center;font-weight:600;font-size:15px}
+  .brand strong{font-size:16px;font-weight:600;letter-spacing:-.01em}
+  .actions{display:flex;align-items:center;gap:10px}
+  .health{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;font-weight:500;color:var(--ok);background:var(--ok-wash);border:1px solid #BFE3D0;padding:6px 11px;border-radius:999px;cursor:pointer}
+  .health .hd{width:7px;height:7px;border-radius:50%;background:var(--ok)}
+  .homelink{font-size:13px;color:var(--accent-ink);cursor:pointer}
+  .btn-cont{border:none;background:var(--accent);color:#fff;font-size:13px;font-weight:600;padding:9px 16px;border-radius:10px;cursor:pointer;font-family:var(--sans)}
+
+  .stepline{padding:13px 24px 15px;background:#fff;border-top:1px solid var(--rule-2);border-bottom:1px solid var(--rule-2)}
+  .track{display:flex;align-items:center}
+  .node{display:flex;flex-direction:column;align-items:center;gap:7px;position:relative;flex:none;width:110px;cursor:default}
+  .node.done{cursor:pointer}
+  .glow{position:absolute;top:-9px;left:50%;transform:translateX(-50%);width:52px;height:52px;border-radius:50%;pointer-events:none;opacity:0;transition:opacity .6s ease;background:radial-gradient(circle,rgba(109,90,230,.24),transparent 68%)}
+  .dot{width:24px;height:24px;border-radius:50%;display:grid;place-items:center;font-family:var(--mono);font-size:11px;font-weight:600;background:var(--cream-2);color:var(--ink-4);position:relative}
+  .node .lbl{font-size:12px;color:var(--ink-4);font-weight:500}
+  .node.cur .dot{background:var(--accent);color:#fff;box-shadow:0 0 0 4px var(--accent-wash);z-index:1;overflow:visible;transition:box-shadow .6s ease}
+  .node.cur .lbl{color:var(--ink);font-weight:600}
+  .node.done .dot{background:var(--accent-wash);color:var(--accent-ink)}
+  .link{flex:1;height:2px;background:var(--rule);margin-top:-22px}
+  .link.done{background:var(--accent-wash)}
+  .node.cur.igniting .dot{animation:qzHalo 2.3s ease-in-out infinite}
+  @keyframes qzHalo{0%,100%{box-shadow:0 0 0 3px var(--accent-wash),0 0 6px 1px rgba(109,90,230,.32)}
+    50%{box-shadow:0 0 0 5px rgba(237,235,252,.55),0 0 18px 4px rgba(109,90,230,.58)}}
+  .node.cur .dot::after{content:'';position:absolute;inset:-4px;border-radius:50%;pointer-events:none;opacity:0;transition:opacity .6s ease;
+    background:conic-gradient(from 0deg,rgba(109,90,230,0) 48%,rgba(157,140,255,.95) 76%,#fff 85%,rgba(109,90,230,0) 94%);
+    -webkit-mask:radial-gradient(farthest-side,transparent calc(100% - 3px),#000 0);mask:radial-gradient(farthest-side,transparent calc(100% - 3px),#000 0)}
+  .node.cur.igniting .dot::after{opacity:1;animation:qzSpin 1.9s linear infinite}
+  @keyframes qzSpin{to{transform:rotate(360deg)}}
+  .node.cur.igniting .glow{animation:qzGlowPulse 2.3s ease-in-out infinite}
+  @keyframes qzGlowPulse{0%,100%{opacity:.4;transform:translateX(-50%) scale(.78)}50%{opacity:1;transform:translateX(-50%) scale(1.28)}}
+  .spark{position:absolute;font-size:10px;color:#fff;opacity:0;pointer-events:none;z-index:2;text-shadow:0 0 7px rgba(157,140,255,1)}
+  .dot .spark.s1{top:-10px;right:-6px;animation-delay:0s}.dot .spark.s2{bottom:-8px;left:-8px;font-size:8px;animation-delay:.5s}
+  .dot .spark.s3{top:0;right:-12px;font-size:9px;animation-delay:.9s}.dot .spark.s4{top:-8px;left:-8px;font-size:7px;animation-delay:1.3s}
+  .dot .spark.s5{bottom:-4px;right:-10px;font-size:8px;animation-delay:1.55s}
+  .node.cur.igniting .spark{animation:qzTwinkle 1.7s ease-in-out infinite}
+  @keyframes qzTwinkle{0%,100%{opacity:0;transform:scale(.3) rotate(0)}50%{opacity:1;transform:scale(1.15) rotate(90deg)}}
+
+  /* ── workspace ── */
+  .content{padding:16px 22px 24px}
+  .subhead{display:flex;align-items:center;gap:12px;margin-bottom:14px}
+  .qtabs{display:inline-flex;background:var(--cream-2);border-radius:10px;padding:3px}
+  .qtabs button{border:none;background:transparent;font-family:var(--sans);font-size:13px;font-weight:600;color:var(--ink-4);padding:7px 15px;border-radius:8px;cursor:pointer;display:inline-flex;align-items:center;gap:6px}
+  .qtabs button.on{background:#fff;color:var(--accent-ink);box-shadow:0 1px 2px rgba(109,90,230,.12)}
+  .subhead .sublabel{font-size:12.5px;color:var(--ink-4)}
+
+  .work{display:grid;grid-template-columns:244px minmax(0,1fr) 300px;gap:18px;align-items:start}
+
+  /* navigator */
+  .nav{border:1px solid var(--rule);border-radius:14px;background:#fff;padding:11px;display:flex;flex-direction:column;gap:3px}
+  .flow{display:flex;flex-direction:column;position:relative}
+  .qrow{display:flex;gap:11px;align-items:flex-start;padding:9px 9px;border-radius:10px;cursor:pointer;border:1px solid transparent;text-align:left;background:transparent;font-family:var(--sans);position:relative}
+  .qrow:hover{background:#FBFAFE}
+  .qrow.on{background:var(--accent-tint);border-color:var(--accent-wash)}
+  .numchip{width:25px;height:25px;flex:none;border-radius:50%;display:grid;place-items:center;font-family:var(--mono);font-size:11px;font-weight:600;background:var(--cream-2);color:var(--ink-4);z-index:1}
+  .qrow.on .numchip{background:#fff;color:var(--accent-ink);box-shadow:0 0 0 1px var(--accent-wash)}
+  .numchip.deciding{background:var(--accent);color:#fff}
+  .qtext{font-size:12.5px;line-height:1.38;color:var(--ink);overflow-wrap:break-word}   /* full question text — wraps naturally, no mid-word cut */
+  .qrow.on .qtext{color:var(--ink)}
+  .qmeta{display:block;font-family:var(--mono);font-size:9px;font-weight:600;text-transform:uppercase;letter-spacing:.04em;color:var(--accent-ink);margin-top:4px}
+  .connector{position:absolute;left:21px;top:24px;bottom:24px;width:1.5px;background:var(--rule);z-index:0}
+  .termrow{display:flex;gap:11px;align-items:center;padding:9px;border-radius:10px;cursor:pointer;border:1px solid transparent;background:transparent;font-family:var(--sans)}
+  .termrow:hover{background:#FBFAFE}
+  .termrow.on{background:var(--accent-tint);border-color:var(--accent-wash)}
+  .termchip{width:25px;height:25px;flex:none;border-radius:50%;display:grid;place-items:center;font-size:12px;background:var(--cream-2);color:var(--ink-4)}
+  .termtext{font-size:12.5px;font-weight:500;color:var(--ink-3)}
+  .termsub{font-size:10px;color:var(--ink-25)}
+  .navdiv{height:1px;background:var(--rule-2);margin:8px 2px}
+  .navfoot{display:flex;flex-direction:column;gap:6px}
+  .navbtn{border:none;background:transparent;color:var(--accent-ink);font-size:12.5px;font-weight:500;text-align:left;padding:7px 9px;border-radius:9px;cursor:pointer;font-family:var(--sans)}
+  .navbtn:hover{background:var(--accent-tint)}
+
+  /* editor */
+  .editor{border:1px solid var(--rule);border-radius:14px;background:#fff;padding:18px 20px 20px;display:flex;flex-direction:column;gap:16px;min-width:0}
+  .ed-head{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+  .ed-qnum{font-family:var(--mono);font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--ink-4)}
+  .ed-decide{font-family:var(--mono);font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.04em;color:var(--accent-ink);background:var(--accent-wash);padding:3px 9px;border-radius:999px}
+  .ed-spacer{flex:1}
+  .ed-type{display:inline-flex;align-items:center;gap:7px;border:1px solid var(--rule);background:#fff;border-radius:9px;padding:7px 11px;font-size:12.5px;color:var(--ink);cursor:pointer;font-family:var(--sans)}
+  .ed-type .cv{color:var(--ink-4);font-size:11px}
+  .ai-rewrite{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--accent-wash);background:var(--accent-tint);color:var(--accent-ink);border-radius:9px;padding:7px 11px;font-size:12.5px;font-weight:500;cursor:pointer;font-family:var(--sans)}
+  .ai-rewrite i{font-style:normal;animation:pulse 2.6s ease-in-out infinite;display:inline-block}
+  @keyframes pulse{0%,100%{transform:scale(1)}50%{transform:scale(1.22) rotate(12deg)}}
+
+  .field label{display:flex;justify-content:space-between;align-items:baseline;font-family:var(--mono);font-size:10.5px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--ink-4);margin-bottom:7px}
+  .field label .count{color:var(--ink-25);letter-spacing:0}
+  .qinput{width:100%;border:1px solid var(--rule);border-radius:11px;padding:12px 13px;font-family:var(--sans);font-size:16px;line-height:1.45;color:var(--ink);resize:vertical;background:#fff}
+  .qinput:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-wash)}
+
+  .answers{display:flex;flex-direction:column;gap:8px}
+  .ans-row{display:flex;gap:8px;align-items:center;border:1px solid var(--rule);border-radius:11px;background:#fff;padding:8px 9px}
+  .ans-row:focus-within{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-wash)}
+  .ans-drag{cursor:grab;color:var(--ink-25);font-size:14px;flex:none;user-select:none}
+  .ans-emoji{width:32px;height:32px;flex:none;border:1px solid var(--rule);border-radius:8px;background:var(--cream-2);display:grid;place-items:center;font-size:15px;cursor:pointer}
+  .ans-input{flex:1;min-width:0;border:none;background:transparent;font-family:var(--sans);font-size:14px;color:var(--ink);padding:4px 2px}
+  .ans-input:focus{outline:none}
+  .ans-del{flex:none;border:none;background:transparent;color:var(--ink-25);font-size:16px;cursor:pointer;width:26px;height:26px;border-radius:7px}
+  .ans-del:hover{background:var(--cream-2);color:var(--ink-3)}
+  .ans-del:disabled{opacity:.35;cursor:default}
+  .add-ans{align-self:flex-start;border:1px dashed var(--rule);background:transparent;color:var(--accent-ink);font-size:12.5px;font-weight:500;padding:9px 14px;border-radius:10px;cursor:pointer;font-family:var(--sans)}
+  .add-ans:hover{background:var(--accent-tint);border-color:var(--accent-wash)}
+
+  /* preview column */
+  .previewcol{position:sticky;top:16px;display:flex;flex-direction:column;gap:8px;align-items:center}
+  .pv-label{font-family:var(--mono);font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--ink-4);align-self:center}
+  .pv-phone{width:300px;max-width:100%;border-radius:26px;overflow:hidden;background:var(--brand-bg,#F6EFE0);font-family:var(--brand-font,var(--sans));
+    box-shadow:0 18px 44px -18px rgba(60,50,90,.5),0 0 0 1px rgba(0,0,0,.06);padding:16px 15px;display:flex;flex-direction:column;gap:12px;min-height:520px}
+  .pv-top{display:flex;align-items:center;gap:9px}
+  .pv-back{font-size:11px;color:#6a655c;background:rgba(0,0,0,.05);border-radius:999px;padding:3px 9px}
+  .pv-brand{font-size:11.5px;font-weight:700;color:#3a3630;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .pv-prog{width:64px;height:5px;border-radius:999px;background:rgba(0,0,0,.09);overflow:hidden;flex:none}
+  .pv-prog span{display:block;height:100%;width:16%;background:var(--brand,#B04A26);border-radius:999px}
+  .pv-kick{display:flex;align-items:center;justify-content:space-between;gap:8px}
+  .pv-kicker{font-family:var(--mono);font-size:10px;font-weight:700;letter-spacing:.06em;color:var(--brand,#B04A26)}
+  .pv-seltype{font-family:var(--mono);font-size:9px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:#6a655c;background:rgba(0,0,0,.05);border-radius:999px;padding:3px 8px}
+  .pv-title{font-size:20px;font-weight:700;color:#241f1a;line-height:1.25;font-family:var(--brand-font,var(--sans));margin:0}
+  .pv-opts{display:flex;flex-direction:column;gap:9px}
+  .pv-opt{border:1px solid rgba(0,0,0,.1);background:rgba(255,255,255,.45);border-radius:12px;padding:12px 13px;font-size:13px;color:#2f2a24;line-height:1.35}
+  .pv-next{margin-top:auto;border:none;background:var(--brand,#B04A26);color:#fff;font-size:14px;font-weight:700;padding:13px;border-radius:12px;font-family:var(--sans)}
+
+  /* logic placeholder */
+  .logicph{border:1px dashed var(--rule);border-radius:14px;background:#FCFBFE;padding:40px 22px;text-align:center;color:var(--ink-4)}
+  .logicph .li{font-size:26px;margin-bottom:8px}
+  .logicph p{margin:4px 0 0;font-size:13px;line-height:1.5}
+
+  /* responsive: below ~1040px the preview drops below the editor so fields stay readable */
+  @media (max-width:1040px){
+    .work{grid-template-columns:230px minmax(0,1fr)}
+    .previewcol{grid-column:1 / -1;margin-top:6px}
+  }
+  @media (max-width:640px){
+    .work{grid-template-columns:1fr}
+    .nav,.editor{grid-column:1 / -1}
+  }
+  @media (prefers-reduced-motion:reduce){
+    .node.cur.igniting .dot,.node.cur.igniting .dot::after,.node.cur.igniting .glow,.node.cur.igniting .spark,.ai-rewrite i{animation:none!important}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <p class="cap"><b>Step 3 · Questions — Content view (v1).</b> Split editor: full-text navigator · readable edit panel (real fields, not phone taps) · live brand phone preview that mirrors your edits. Two-row chrome + igniting stepper. Tab renamed Content → Questions; Logic is a separate later pass. <button onclick="ignite()">▶ Replay ring</button></p>
+
+  <div class="app">
+    <div class="barrow">
+      <div class="brand"><span class="logo">Q</span><strong>Quizocalypse</strong></div>
+      <div class="actions">
+        <span class="homelink">← Homepage</span>
+        <button class="health" id="health"><span class="hd"></span>Logic valid</button>
+        <button class="btn-cont" id="continue">Continue to Logic →</button>
+      </div>
+    </div>
+
+    <div class="stepline">
+      <div class="track">
+        <div class="node done"><span class="dot">✓</span><span class="lbl">Recommendations</span></div>
+        <div class="link done"></div>
+        <div class="node done"><span class="dot">✓</span><span class="lbl">Shape</span></div>
+        <div class="link done"></div>
+        <div class="node cur" id="curNode"><span class="glow"></span><span class="dot">03<i class="spark s1">✦</i><i class="spark s2">✦</i><i class="spark s3">✦</i><i class="spark s4">✦</i><i class="spark s5">✦</i></span><span class="lbl">Questions</span></div>
+        <div class="link"></div>
+        <div class="node"><span class="dot">04</span><span class="lbl">Results</span></div>
+        <div class="link"></div>
+        <div class="node"><span class="dot">05</span><span class="lbl">Design</span></div>
+      </div>
+    </div>
+
+    <div class="content">
+      <div class="subhead">
+        <div class="qtabs">
+          <button class="on" id="tabQ">✎ Questions</button>
+          <button id="tabL">λ Logic</button>
+        </div>
+        <span class="sublabel" id="sublabel">Edit the words here — styling lives in Design (Step 5).</span>
+      </div>
+
+      <div class="work" id="work"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+  const $=id=>document.getElementById(id);
+  const BRAND={primary:"#B04A26",bg:"#F6EFE0",font:"Georgia, 'Times New Roman', serif"};
+
+  let QS=[
+    {id:"q1",deciding:true,type:"Single select",text:"What best describes how you ride? Choose the style that gets you most excited on the mountain.",
+     answers:[{id:"a1",emoji:"🏂",text:"Park & Freestyle — rails, jumps, and creative expression"},{id:"a2",emoji:"🏔️",text:"All-Mountain — I go wherever the mountain takes me"},{id:"a3",emoji:"⛷️",text:"Carving & Precision — edge-to-edge control on groomed runs"},{id:"a4",emoji:"❄️",text:"Backcountry & Powder — off-piste and untracked terrain"}]},
+    {id:"q2",type:"Single select",text:"Which terrain do you spend the most time on?",answers:[{id:"b1",emoji:"🎿",text:"Groomed runs"},{id:"b2",emoji:"🌲",text:"Trees & side-country"},{id:"b3",emoji:"🏔️",text:"Open powder bowls"}]},
+    {id:"q3",type:"Scale",text:"How would you honestly rate your riding ability right now?",answers:[{id:"c1",emoji:"🟢",text:"Beginner"},{id:"c2",emoji:"🔵",text:"Intermediate"},{id:"c3",emoji:"⚫",text:"Advanced / expert"}]},
+    {id:"q4",type:"Single select",text:"How important is board responsiveness and edge hold to you?",answers:[{id:"d1",emoji:"",text:"Critical — I want precision"},{id:"d2",emoji:"",text:"Nice to have"},{id:"d3",emoji:"",text:"Not a priority"}]},
+    {id:"q5",type:"Single select",text:"What does your ideal riding day look like from a volume standpoint?",answers:[{id:"e1",emoji:"",text:"A few perfect runs"},{id:"e2",emoji:"",text:"Steady all-day laps"},{id:"e3",emoji:"",text:"Dawn-to-dusk everything"}]},
+    {id:"q6",type:"Single select",text:"Which board characteristic matters most to you when choosing?",answers:[{id:"f1",emoji:"",text:"Stability at speed"},{id:"f2",emoji:"",text:"Playful & forgiving"},{id:"f3",emoji:"",text:"Float in powder"}]},
+  ];
+  let sel="q1", tab="Q";
+
+  const brandStyle=`--brand:${BRAND.primary};--brand-bg:${BRAND.bg};--brand-font:${BRAND.font}`;
+
+  function navHTML(){
+    const rows=QS.map((q,i)=>`
+      <button class="qrow${sel===q.id?" on":""}" data-sel="${q.id}">
+        <span class="numchip${q.deciding?" deciding":""}">${i+1}</span>
+        <span><span class="qtext">${esc(q.text)}</span>${q.deciding?'<span class="qmeta">◆ Deciding question</span>':''}</span>
+      </button>`).join("");
+    return `<aside class="nav">
+      <div class="flow"><span class="connector"></span>${rows}</div>
+      <button class="termrow${sel==="__cap__"?" on":""}" data-sel="__cap__"><span class="termchip">✉</span><span><span class="termtext">Email capture</span><span class="termsub" style="display:block">Optional lead step</span></span></button>
+      <button class="termrow${sel==="__rev__"?" on":""}" data-sel="__rev__"><span class="termchip">◆</span><span><span class="termtext">Result reveal</span><span class="termsub" style="display:block">Configured in Step 4 · Results</span></span></button>
+      <div class="navdiv"></div>
+      <div class="navfoot"><button class="navbtn" id="addQ">+ New question</button><button class="navbtn">▣ Question library</button></div>
+    </aside>`;
+  }
+
+  function editorHTML(){
+    const q=QS.find(x=>x.id===sel);
+    if(!q) return terminusEditor();
+    const idx=QS.indexOf(q)+1;
+    const rows=q.answers.map((a,i)=>`
+      <div class="ans-row" data-aid="${a.id}">
+        <span class="ans-drag" title="Drag to reorder">⠿</span>
+        <button class="ans-emoji" title="Pick an icon">${a.emoji||"🙂"}</button>
+        <input class="ans-input" value="${esc(a.text)}" maxlength="60" data-aid="${a.id}" aria-label="Answer ${i+1}">
+        <button class="ans-del" data-del="${a.id}" ${q.answers.length<=2?"disabled":""} title="${q.answers.length<=2?"Questions need at least 2 answers":"Delete answer"}">×</button>
+      </div>`).join("");
+    return `<section class="editor">
+      <div class="ed-head">
+        <span class="ed-qnum">Question ${idx} of ${QS.length}</span>
+        ${q.deciding?'<span class="ed-decide">◆ Deciding question</span>':''}
+        <span class="ed-spacer"></span>
+        <button class="ed-type" id="typeBtn">${q.type} <span class="cv">▾</span></button>
+        <button class="ai-rewrite"><i>✦</i> Rewrite</button>
+      </div>
+      <div class="field">
+        <label>Question <span class="count"><span id="qcount">${q.text.length}</span>/150</span></label>
+        <textarea class="qinput" id="qtext" rows="3" maxlength="150">${esc(q.text)}</textarea>
+      </div>
+      <div class="field">
+        <label>Answers <span class="count">${q.answers.length} options</span></label>
+        <div class="answers" id="answers">${rows}</div>
+        <button class="add-ans" id="addAns" style="margin-top:8px">+ Add answer</button>
+      </div>
+    </section>`;
+  }
+  function terminusEditor(){
+    const cap=sel==="__cap__";
+    return `<section class="editor">
+      <div class="ed-head"><span class="ed-qnum">${cap?"Email capture":"Result reveal"}</span></div>
+      <p style="margin:0;color:var(--ink-4);font-size:13px;line-height:1.55">${cap
+        ? "Edit the capture heading, description, and toggle SMS / terms here. (Full editor mirrors the question fields.)"
+        : "The result reveal is generated from your recommendations. Its content and styling are configured in <strong>Step 4 · Results</strong> and <strong>Step 5 · Design</strong>."}</p>
+    </section>`;
+  }
+
+  function previewHTML(){
+    const q=QS.find(x=>x.id===sel);
+    const idx=q?QS.indexOf(q)+1:1;
+    const title=q?q.text:(sel==="__cap__"?"Your results are ready":"Your perfect match");
+    const opts=q?q.answers.map(a=>`<div class="pv-opt">${a.emoji?esc(a.emoji)+" ":""}${esc(a.text)}</div>`).join(""):"";
+    return `<div class="previewcol">
+      <span class="pv-label">Live preview · your brand</span>
+      <div class="pv-phone" style="${brandStyle}">
+        <div class="pv-top"><span class="pv-back">‹ Back</span><span class="pv-brand">Riding Style &amp; Terrain Finder</span><span class="pv-prog"><span style="width:${Math.round(idx/QS.length*100)}%"></span></span></div>
+        <div class="pv-kick"><span class="pv-kicker">QUESTION ${idx} OF ${QS.length}</span>${q?`<span class="pv-seltype">${esc(q.type)}</span>`:""}</div>
+        <h2 class="pv-title" id="pvTitle">${esc(title)}</h2>
+        <div class="pv-opts" id="pvOpts">${opts}</div>
+        <button class="pv-next">Next</button>
+      </div>
+    </div>`;
+  }
+
+  function render(){
+    if(tab==="L"){ $("work").style.display="block"; $("work").innerHTML=`<div class="logicph"><div class="li">λ</div><strong>Logic view</strong><p>The rules / mapping map is redesigned in a separate pass.<br>This mock covers the Questions (content) view.</p></div>`; return; }
+    $("work").style.display="grid";
+    $("work").innerHTML=navHTML()+editorHTML()+previewHTML();
+    bind();
+  }
+
+  function bind(){
+    $("work").querySelectorAll("[data-sel]").forEach(b=>b.addEventListener("click",()=>{sel=b.dataset.sel;render();}));
+    const qt=$("qtext");
+    if(qt){
+      qt.addEventListener("input",()=>{
+        const q=QS.find(x=>x.id===sel);q.text=qt.value;
+        $("qcount").textContent=qt.value.length;
+        $("pvTitle").textContent=qt.value;
+      });
+    }
+    $("work").querySelectorAll(".ans-input").forEach(inp=>inp.addEventListener("input",()=>{
+      const q=QS.find(x=>x.id===sel);const a=q.answers.find(x=>x.id===inp.dataset.aid);a.text=inp.value;
+      renderPreviewOpts();
+    }));
+    $("work").querySelectorAll("[data-del]").forEach(b=>b.addEventListener("click",()=>{
+      const q=QS.find(x=>x.id===sel);if(q.answers.length<=2)return;
+      q.answers=q.answers.filter(a=>a.id!==b.dataset.del);render();
+    }));
+    const addAns=$("addAns");
+    if(addAns)addAns.addEventListener("click",()=>{
+      const q=QS.find(x=>x.id===sel);q.answers.push({id:"n"+Date.now(),emoji:"",text:"New answer"});render();
+    });
+    const addQ=$("addQ");
+    if(addQ)addQ.addEventListener("click",()=>{
+      const n={id:"n"+Date.now(),type:"Single select",text:"New question",answers:[{id:"x1",emoji:"",text:"Answer 1"},{id:"x2",emoji:"",text:"Answer 2"}]};
+      QS.push(n);sel=n.id;render();
+    });
+  }
+  function renderPreviewOpts(){
+    const q=QS.find(x=>x.id===sel);
+    $("pvOpts").innerHTML=q.answers.map(a=>`<div class="pv-opt">${a.emoji?esc(a.emoji)+" ":""}${esc(a.text)}</div>`).join("");
+  }
+
+  $("tabQ").addEventListener("click",()=>{tab="Q";$("tabQ").classList.add("on");$("tabL").classList.remove("on");$("sublabel").style.visibility="visible";render();});
+  $("tabL").addEventListener("click",()=>{tab="L";$("tabL").classList.add("on");$("tabQ").classList.remove("on");$("sublabel").style.visibility="hidden";render();});
+
+  function esc(s){return String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));}
+  function ignite(){const n=$("curNode");n.classList.remove("igniting");void n.offsetWidth;n.classList.add("igniting");setTimeout(()=>n.classList.remove("igniting"),3000);}
+
+  render();ignite();
+</script>
+</body>
+</html>

@@ -1,0 +1,29 @@
+{
+  "id": "subscription-onboarding",
+  "name": "Subscription onboarding",
+  "category": "subscription",
+  "variant": "commitment-building profile (Stitch Fix)",
+  "use_when": "Goal is a committed style/preference profile + a scheduled first box, not a product list; friction is deliberate investment.",
+  "length": { "min": 25, "max": 40, "band": "long", "note": "10–15 min / 25+ inputs. The survey IS friction that builds investment, trust, and identity (sunk-cost)." },
+  "gate": { "placement": "mid_flow", "style": "hard", "rationale": "Create the account partway — after enough initial investment to convert, before the heaviest questions, locking identity in." },
+  "result_shape": "profile_plus_first_box",
+  "arc": ["sizing", "fit_preferences", "style_identity", "lifestyle_occasion", "budget", "account", "cadence"],
+  "branching": "moderate",
+  "questions": [
+    { "ordinal": 1, "id": "sizes", "prompt": "What sizes do you wear?", "type": "single_select", "options": [{ "label": "XS–S", "maps_to": "size:xs_s" }, { "label": "M", "maps_to": "size:m" }, { "label": "L", "maps_to": "size:l" }, { "label": "XL+", "maps_to": "size:xl_plus" }], "maps_to": "size", "weight_tier": "primary", "note": "Objective first." },
+    { "ordinal": 2, "id": "fit_top", "prompt": "How do you like tops to fit?", "type": "single_select", "options": [{ "label": "Fitted", "maps_to": "fit_top:fitted" }, { "label": "True to size", "maps_to": "fit_top:tts" }, { "label": "Loose", "maps_to": "fit_top:loose" }], "maps_to": "fit_top", "weight_tier": "secondary" },
+    { "ordinal": 3, "id": "style_rating", "prompt": "Rate these looks", "type": "image_choice", "options": [{ "label": "Love", "maps_to": "affinity:love" }, { "label": "It's okay", "maps_to": "affinity:neutral" }, { "label": "Not me", "maps_to": "affinity:dislike" }], "maps_to": "style_affinity", "weight_tier": "primary", "note": "Repeated like/dislike over several outfits builds the style vector." },
+    { "ordinal": 4, "id": "occasions", "prompt": "What are you dressing for?", "type": "multi_select", "multi_select_cap": 4, "options": [{ "label": "Work", "maps_to": "occasion:work" }, { "label": "Casual", "maps_to": "occasion:casual" }, { "label": "Going out", "maps_to": "occasion:evening" }, { "label": "Active", "maps_to": "occasion:active" }], "maps_to": "occasions", "weight_tier": "secondary" },
+    { "ordinal": 5, "id": "budget", "prompt": "What's your budget per item?", "type": "single_select", "options": [{ "label": "$", "maps_to": "budget:value" }, { "label": "$$", "maps_to": "budget:mid" }, { "label": "$$$", "maps_to": "budget:premium" }], "maps_to": "budget", "weight_tier": "primary" },
+    { "ordinal": 6, "id": "cadence", "prompt": "How often would you like a box?", "type": "single_select", "options": [{ "label": "Monthly", "maps_to": "cadence:monthly" }, { "label": "Every 2 months", "maps_to": "cadence:bimonthly" }, { "label": "Quarterly", "maps_to": "cadence:quarterly" }], "maps_to": "cadence", "weight_tier": "none", "note": "Config, not scored." }
+  ],
+  "recommendation": {
+    "architecture": "weighted_score",
+    "tie_break": "style_affinity vector distance -> budget fit -> stable item id",
+    "empty_fallback": "widen budget one band -> broaden occasion -> stylist-curated default box for the size",
+    "deterministic": true,
+    "explainable": true
+  },
+  "personalization_hooks": ["saved style profile the user owns", "scheduled first box as the 'result'", "no product list shown"],
+  "sources": ["Stitch Fix (Reforge teardown, Tier B/C)", "Lexi Neubauer onboarding case study"]
+}

@@ -1,0 +1,27 @@
+{
+  "id": "gift-finder",
+  "name": "Gift finder",
+  "category": "gifting",
+  "variant": "recipient-first shortlist",
+  "use_when": "Shopper is buying for someone else; low patience; the result is a curated shortlist, not one hero.",
+  "length": { "min": 5, "max": 7, "band": "short", "note": "The tightest template in the library — givers have low patience." },
+  "gate": { "placement": "deferred_to_action", "style": "soft", "rationale": "Weakest gating pressure of all templates — givers resist a gate before seeing ideas. Show results, capture as 'email me this list / get a discount.'" },
+  "result_shape": "ranked_shortlist",
+  "arc": ["recipient", "occasion", "budget", "interests", "constraint"],
+  "branching": "light",
+  "questions": [
+    { "ordinal": 1, "id": "recipient", "prompt": "Who's the gift for?", "type": "single_select", "options": [{ "label": "Partner", "maps_to": "recipient:partner" }, { "label": "Parent", "maps_to": "recipient:parent" }, { "label": "Friend", "maps_to": "recipient:friend" }, { "label": "Kid", "maps_to": "recipient:kid" }, { "label": "Pet", "maps_to": "recipient:pet" }], "maps_to": "recipient", "weight_tier": "primary", "note": "Reframes the whole result set — ask first." },
+    { "ordinal": 2, "id": "occasion", "prompt": "What's the occasion?", "type": "single_select", "options": [{ "label": "Birthday", "maps_to": "occasion:birthday" }, { "label": "Anniversary", "maps_to": "occasion:anniversary" }, { "label": "Holiday", "maps_to": "occasion:holiday" }, { "label": "Just because", "maps_to": "occasion:justbecause" }], "maps_to": "occasion", "weight_tier": "secondary" },
+    { "ordinal": 3, "id": "budget", "prompt": "What's your budget?", "type": "single_select", "options": [{ "label": "Under $25", "maps_to": "budget:0_24" }, { "label": "$25–49", "maps_to": "budget:25_49" }, { "label": "$50–99", "maps_to": "budget:50_99" }, { "label": "$100+", "maps_to": "budget:100_plus" }], "maps_to": "budget", "weight_tier": "primary", "note": "Ask early — every result must be in-range and actionable. Non-overlapping bands." },
+    { "ordinal": 4, "id": "vibe", "prompt": "Which vibe fits them best?", "type": "image_choice", "options": [{ "label": "Adventurer", "maps_to": "vibe:adventurer" }, { "label": "Homebody", "maps_to": "vibe:homebody" }, { "label": "Techie", "maps_to": "vibe:techie" }, { "label": "Creative", "maps_to": "vibe:creative" }], "maps_to": "interest_tags", "weight_tier": "primary" }
+  ],
+  "recommendation": {
+    "architecture": "attribute_filter",
+    "tie_break": "interest match count -> in-budget proximity -> popularity -> stable product id",
+    "empty_fallback": "relax vibe to category -> widen budget one band -> best-selling gift for the recipient",
+    "deterministic": true,
+    "explainable": true
+  },
+  "personalization_hooks": ["'gifts they'll love' framing by recipient", "email-me-the-list capture"],
+  "sources": ["Digioh / Quizell / WithGifted gift-finder conventions (Tier C, convergent consensus)"]
+}

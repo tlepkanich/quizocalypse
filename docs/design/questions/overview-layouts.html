@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Overview tab — 3 layouts</title>
+<style>
+  :root{
+    --accent:#6D5AE6; --accent-2:#6B4FD8; --accent-ink:#3C3489; --accent-wash:#EDEBFC; --accent-tint:#F3F1FD;
+    --ink:#2E2740; --ink-3:#5A5470; --ink-4:#7C7791; --ink-25:#B6B0C8;
+    --rule:#E9E7EF; --rule-2:#F1EFF6; --cream-2:#F2F1F5;
+    --mono:ui-monospace,SFMono-Regular,Menlo,monospace; --sans:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:#EDECF1;font-family:var(--sans);color:var(--ink);-webkit-font-smoothing:antialiased;padding:26px 0 100px}
+  .wrap{max-width:1180px;margin:0 auto;padding:0 22px}
+  h1.doc{font-size:15px;margin:0 2px 4px}
+  .cap{font-size:12.5px;color:var(--ink-4);margin:0 2px 26px;line-height:1.6}.cap b{color:var(--ink-3)}
+  .vhead{display:flex;align-items:baseline;gap:10px;margin:0 2px 12px}
+  .vhead .vn{font-family:var(--mono);font-size:11px;font-weight:700;color:#fff;background:var(--accent);border-radius:6px;padding:3px 8px;letter-spacing:.03em}
+  .vhead .vt{font-size:14px;font-weight:700}
+  .vhead .vd{font-size:12px;color:var(--ink-4)}
+  .card{background:#fff;border:1px solid var(--rule);border-radius:16px;box-shadow:0 10px 30px rgba(120,110,150,.10);overflow:hidden}
+  .section{margin-bottom:44px}
+
+  /* shared bits ------------------------------------------------ */
+  .cnum{width:24px;height:24px;border-radius:50%;background:var(--accent-wash);color:var(--accent-ink);display:grid;place-items:center;font-family:var(--mono);font-size:11px;font-weight:700;flex:none}
+  .cnum.c{background:var(--cream-2);color:var(--ink-3)}.cnum.c svg{width:13px;height:13px}
+  .qtext{font-size:14px;font-weight:600;line-height:1.42;color:var(--ink);border:1px solid transparent;border-radius:7px;padding:4px 7px;margin:-4px -7px;cursor:text}.qtext:hover{background:#FAFAFD}.qtext:focus{outline:none;background:#fff;border-color:var(--accent);box-shadow:0 0 0 2px var(--accent-wash)}
+  .ctag{display:inline-flex;align-items:center;gap:6px;font-family:var(--mono);font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--accent-ink);background:var(--accent-wash);padding:5px 9px;border-radius:7px;white-space:nowrap}
+  .meta{font-size:12.5px;color:var(--ink-3);line-height:1.5}.metasub{margin-top:3px;font-size:11.5px;color:var(--ink-4)}
+  /* move up/down control */
+  .mv{display:inline-flex;flex-direction:column;gap:2px}
+  .mvb{width:22px;height:18px;border:1px solid var(--rule);background:#fff;border-radius:5px;display:grid;place-items:center;cursor:pointer;color:var(--ink-4);padding:0}
+  .mvb:hover:not(:disabled){background:var(--accent-tint);border-color:var(--accent-wash);color:var(--accent-ink)}
+  .mvb:disabled{opacity:.32;cursor:default}.mvb svg{width:11px;height:11px}
+  /* type select */
+  .tsel{border:1px solid var(--rule);background:#fff;border-radius:8px;padding:7px 9px;font-size:12px;font-family:var(--sans);color:var(--ink);cursor:pointer;width:100%}
+  .tsel:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 2px var(--accent-wash)}
+  /* stepper */
+  .stp{display:inline-flex;align-items:center;border:1px solid var(--rule);border-radius:8px;overflow:hidden;background:#fff}
+  .stp button{border:none;background:#fff;width:26px;height:28px;cursor:pointer;color:var(--ink-3);font-size:15px;line-height:1}.stp button:hover{background:var(--cream-2)}
+  .stp b{min-width:26px;text-align:center;font-size:12.5px;font-family:var(--mono)}
+  .setl{font-family:var(--mono);font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--ink-25);width:26px;flex:none}
+  .win{font-size:11.5px;color:var(--ink-3);border:1px solid var(--rule);border-radius:6px;padding:5px 8px;background:#fff;font-family:var(--sans);width:100%}
+  .win:hover{background:#FAFAFD}.win:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 2px var(--accent-wash);color:var(--ink)}.win::placeholder{color:var(--ink-25)}
+  /* answers */
+  .alist{list-style:none;margin:0;padding:0;counter-reset:a}
+  .alist li{counter-increment:a;display:flex;gap:9px;font-size:12.5px;color:var(--ink-3);line-height:1.5;padding:3px 0}
+  .alist li::before{content:counter(a) ".";font-family:var(--mono);font-size:11px;color:var(--ink-25);flex:none;width:15px}
+  .adda{border:none;background:transparent;color:var(--accent-ink);font-size:11.5px;padding:4px 7px;border-radius:6px;cursor:pointer;font-family:var(--sans);margin-top:2px;margin-left:24px}.adda:hover{background:var(--accent-tint)}
+  .chips{display:flex;flex-wrap:wrap;gap:7px}
+  .chip{font-size:12px;color:var(--ink-3);background:var(--cream-2);border:1px solid transparent;border-radius:999px;padding:6px 12px;line-height:1.3}
+  .chip.add{background:transparent;border:1px dashed var(--rule);color:var(--accent-ink);cursor:pointer}.chip.add:hover{background:var(--accent-tint);border-color:var(--accent-wash)}
+
+  /* =====================================================================
+     VARIANT 1 — LEDGER  (banded table, columns separated by hairlines)
+     ===================================================================== */
+  .v1hd,.v1row{display:grid;grid-template-columns:56px minmax(220px,30%) 1fr 216px}
+  .v1hd{padding:12px 20px;border-bottom:1px solid var(--rule);background:#FCFBFE}
+  .v1hd span{font-family:var(--mono);font-size:9.5px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--ink-25)}
+  .v1row{border-bottom:1px solid var(--rule-2)}.v1row:last-child{border-bottom:none}
+  .v1row>div{padding:18px 20px}
+  .v1-a,.v1-t{border-left:1px solid var(--rule-2)}
+  .v1-g{padding-left:16px!important;display:flex;flex-direction:column;align-items:center;gap:8px}
+  .v1-g .mv{flex-direction:column}
+  .v1-t .set{margin-top:10px;background:#FBFAFE;border:1px solid var(--rule-2);border-radius:10px;padding:9px 10px;display:flex;flex-direction:column;gap:7px}
+  .v1-t .setr{display:flex;align-items:center;gap:8px}
+
+  /* =====================================================================
+     VARIANT 2 — CARDS  (each question a card; settings in a side panel)
+     ===================================================================== */
+  .v2{display:flex;flex-direction:column;gap:12px;background:none;border:none;box-shadow:none;padding:0}
+  .v2card{background:#fff;border:1px solid var(--rule);border-radius:14px;box-shadow:0 4px 14px rgba(120,110,150,.06);overflow:hidden}
+  .v2card.content{background:#FCFBFE;border-style:solid}
+  .v2head{display:flex;align-items:flex-start;gap:12px;padding:15px 16px}
+  .v2head .mv{margin-top:1px}
+  .v2head .cnum{margin-top:1px}
+  .v2q{flex:1;min-width:0}
+  .v2type{flex:none;width:170px}
+  .v2body{display:grid;grid-template-columns:1fr;gap:0;border-top:1px solid var(--rule-2);padding:14px 16px 16px 60px}
+  .v2body.hasset{grid-template-columns:1fr 220px;gap:22px}
+  .v2set{border-left:1px solid var(--rule-2);padding-left:20px;display:flex;flex-direction:column;gap:9px}
+  .v2set .sh{font-family:var(--mono);font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--ink-25)}
+  .v2set .setr{display:flex;align-items:center;gap:8px}
+  .v2gap{display:flex;justify-content:center;margin:-6px 0}
+
+  /* =====================================================================
+     VARIANT 3 — SPLIT PANEL  (chip answers left, tinted type panel right)
+     ===================================================================== */
+  .v3{background:none;border:none;box-shadow:none;padding:0;display:flex;flex-direction:column;gap:12px}
+  .v3row{display:grid;grid-template-columns:40px 1fr 300px;gap:20px;align-items:start;background:#fff;border:1px solid var(--rule);border-radius:14px;padding:18px 20px;box-shadow:0 4px 14px rgba(120,110,150,.06)}
+  .v3-g{display:flex;flex-direction:column;align-items:center;gap:8px}
+  .v3-main{min-width:0;display:flex;flex-direction:column;gap:12px}
+  .v3-mainhd{display:flex;gap:11px;align-items:flex-start}
+  .v3-panel{background:var(--accent-tint);border:1px solid var(--accent-wash);border-radius:12px;padding:13px 13px 14px}
+  .v3-panel .ph{font-family:var(--mono);font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--accent-ink);opacity:.75;margin-bottom:8px}
+  .v3-panel .sets{margin-top:11px;display:flex;flex-direction:column;gap:8px;background:#fff;border:1px solid var(--accent-wash);border-radius:9px;padding:10px}
+  .v3-panel .setr{display:flex;align-items:center;gap:8px}
+  .v3-panel.plain{background:#FBFAFE;border-color:var(--rule-2)}.v3-panel.plain .ph{color:var(--ink-25);opacity:1}
+</style>
+</head>
+<body>
+<svg style="display:none">
+  <symbol id="i-up" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6"><path d="M6 15l6-6 6 6"/></symbol>
+  <symbol id="i-down" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6"><path d="M6 9l6 6 6-6"/></symbol>
+  <symbol id="i-doc" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M6 2h8l4 4v16H6z"/><path d="M14 2v4h4"/><line x1="9" y1="12" x2="15" y2="12"/><line x1="9" y1="16" x2="13" y2="16"/></symbol>
+</svg>
+
+<div class="wrap">
+  <h1 class="doc">Overview tab — three layouts</h1>
+  <p class="cap"><b>Same data, three structures</b> for question · answers · type&nbsp;+&nbsp;settings. Each is live — edit questions, switch types, adjust Min/Max, and reorder with the <b>↑ / ↓</b> buttons on each row. Pick one (or a blend).</p>
+
+  <div class="section">
+    <div class="vhead"><span class="vn">01</span><span class="vt">Ledger</span><span class="vd">— tight banded table, columns split by hairlines; settings tucked in a mini-panel under Type.</span></div>
+    <div class="card"><div class="v1hd"><span>Move · #</span><span>Question</span><span>Answers</span><span>Type &amp; settings</span></div><div id="v1"></div></div>
+  </div>
+
+  <div class="section">
+    <div class="vhead"><span class="vn">02</span><span class="vt">Cards</span><span class="vd">— each question is its own card; type sits in the header, settings in a right side-panel.</span></div>
+    <div id="v2" class="v2"></div>
+  </div>
+
+  <div class="section">
+    <div class="vhead"><span class="vn">03</span><span class="vt">Split panel</span><span class="vd">— answers as chips on the left, a distinct tinted Type&nbsp;+&nbsp;settings panel on the right.</span></div>
+    <div id="v3" class="v3"></div>
+  </div>
+</div>
+
+<script>
+  const POSTS=["How to choose your first snowboard","Waxing 101 — keep your base fast","Park vs. all-mountain — which rider are you?"];
+  const TYPES=["Single select","Multi select","Scale","Short text"];
+  const BASE=[
+    {id:"q1",type:"Single select",text:"What best describes how you ride? Choose the style that gets you most excited on the mountain.",answers:[{id:"a1",t:"Park & Freestyle — rails, jumps, and creative expression"},{id:"a2",t:"All-Mountain — I go wherever the mountain takes me"},{id:"a3",t:"Carving & Precision — edge-to-edge control on groomed runs"},{id:"a4",t:"Backcountry & Powder — off-piste and untracked terrain"}]},
+    {id:"q2",type:"Multi select",set:{min:1,max:2},text:"Which features matter most? Pick the ones you care about.",answers:[{id:"b1",t:"Lightweight build"},{id:"b2",t:"Powder float"},{id:"b3",t:"Edge grip on ice"},{id:"b4",t:"Park durability"}]},
+    {id:"c1",kind:"content",mode:"embed",src:"blog",post:0,text:"How to choose your first snowboard"},
+    {id:"q3",type:"Scale",set:{min:1,max:5,low:"Beginner",high:"Expert"},text:"How would you honestly rate your riding ability right now?",answers:[]},
+    {id:"q4",type:"Single select",text:"How important is board responsiveness and edge hold to you?",answers:[{id:"d1",t:"Critical — I want precision"},{id:"d2",t:"Nice to have"},{id:"d3",t:"Not a priority"}]},
+  ];
+  const clone=()=>JSON.parse(JSON.stringify(BASE));
+  const $=id=>document.getElementById(id);
+  const esc=s=>String(s).replace(/[&<>]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]));
+  const ic=id=>`<svg><use href="#${id}"/></svg>`;
+
+  const badge=q=>q.kind==="content"?`<span class="cnum c">${ic("i-doc")}</span>`:`<span class="cnum">%N%</span>`;
+  const mv=(id,i,len)=>`<div class="mv"><button class="mvb" data-mv="-1" data-id="${id}" ${i===0?"disabled":""}>${ic("i-up")}</button><button class="mvb" data-mv="1" data-id="${id}" ${i===len-1?"disabled":""}>${ic("i-down")}</button></div>`;
+  const qEdit=q=>`<div class="qtext" contenteditable data-q="${q.id}">${esc(q.text)}</div>`;
+  const typeSel=q=>q.kind==="content"?`<span class="ctag">◆ Content block</span>`:`<select class="tsel" data-ty data-id="${q.id}">${TYPES.map(t=>`<option${t===q.type?" selected":""}>${t}</option>`).join("")}</select>`;
+  const stp=(k,v,id)=>`<span class="stp"><button data-st="${k}" data-id="${id}" data-d="-1">−</button><b>${v}</b><button data-st="${k}" data-id="${id}" data-d="1">+</button></span>`;
+
+  function ansFull(q){ // numbered list (variants 1 & 2)
+    if(q.kind==="content")return `<div class="meta">Embedded blog post<div class="metasub">${esc(POSTS[q.post||0])}</div></div>`;
+    if(q.type==="Scale"){const s=q.set;return `<div class="meta">${s.min}–${s.max} scale<div class="metasub">${esc(s.low||s.min)} → ${esc(s.high||s.max)}</div></div>`;}
+    if(q.type==="Short text")return `<div class="meta">Open text answer</div>`;
+    return `<ol class="alist">${q.answers.map(a=>`<li><span contenteditable data-a="${q.id}:${a.id}">${esc(a.t)}</span></li>`).join("")}</ol><button class="adda" data-add="${q.id}">+ answer</button>`;
+  }
+  function ansChips(q){ // chips (variant 3)
+    if(q.kind==="content")return `<div class="meta">Embedded blog post · ${esc(POSTS[q.post||0])}</div>`;
+    if(q.type==="Scale"){const s=q.set;return `<div class="meta">${s.min}–${s.max} scale · ${esc(s.low||s.min)} → ${esc(s.high||s.max)}</div>`;}
+    if(q.type==="Short text")return `<div class="meta">Open text answer</div>`;
+    return `<div class="chips">${q.answers.map(a=>`<span class="chip" contenteditable data-a="${q.id}:${a.id}">${esc(a.t)}</span>`).join("")}<button class="chip add" data-add="${q.id}">+ answer</button></div>`;
+  }
+  function setBlock(q,rowClass){ // min/max rows (+ scale words)
+    if(q.kind==="content"||q.type==="Single select"||q.type==="Short text")return "";
+    if(q.type==="Multi select"){const s=q.set;return `<div class="${rowClass}"><span class="setl">Min</span>${stp("min",s.min,q.id)}</div><div class="${rowClass}"><span class="setl">Max</span>${stp("max",s.max,q.id)}</div>`;}
+    const s=q.set; // Scale
+    return `<div class="${rowClass}"><span class="setl">Min</span>${stp("min",s.min,q.id)}</div><input class="win" data-wl="low" data-id="${q.id}" value="${esc(s.low||"")}" placeholder="Word for ${s.min}"><div class="${rowClass}"><span class="setl">Max</span>${stp("max",s.max,q.id)}</div><input class="win" data-wl="high" data-id="${q.id}" value="${esc(s.high||"")}" placeholder="Word for ${s.max}">`;
+  }
+
+  // ---- renderers -------------------------------------------------------
+  const DA=clone(),DB=clone(),DC=clone();
+
+  function renderV1(){
+    DA.forEach(q=>{});
+    $("v1").innerHTML=DA.map((q,i)=>{
+      const set=setBlock(q,"setr");
+      return `<div class="v1row${q.kind==="content"?" content":""}">
+        <div class="v1-g">${badge(q).replace("%N%",i+1)}${mv(q.id,i,DA.length)}</div>
+        <div class="v1-q">${qEdit(q)}</div>
+        <div class="v1-a">${ansFull(q)}</div>
+        <div class="v1-t">${typeSel(q)}${set?`<div class="set">${set}</div>`:""}</div>
+      </div>`;
+    }).join("");
+    bind("v1",DA,renderV1);
+  }
+
+  function renderV2(){
+    $("v2").innerHTML=DB.map((q,i)=>{
+      const set=setBlock(q,"setr");
+      const body=q.kind==="content"
+        ? `<div class="v2body">${ansFull(q)}</div>`
+        : `<div class="v2body${set?" hasset":""}"><div>${ansFull(q)}</div>${set?`<div class="v2set"><span class="sh">Settings</span>${set}</div>`:""}</div>`;
+      return `<div class="v2card${q.kind==="content"?" content":""}">
+        <div class="v2head">${mv(q.id,i,DB.length)}${badge(q).replace("%N%",i+1)}<div class="v2q">${qEdit(q)}</div><div class="v2type">${typeSel(q)}</div></div>
+        ${body}
+      </div>`;
+    }).join("");
+    bind("v2",DB,renderV2);
+  }
+
+  function renderV3(){
+    $("v3").innerHTML=DC.map((q,i)=>{
+      const set=setBlock(q,"setr");
+      const plain=q.kind==="content"||q.type==="Single select"||q.type==="Short text";
+      return `<div class="v3row${q.kind==="content"?" content":""}">
+        <div class="v3-g">${badge(q).replace("%N%",i+1)}${mv(q.id,i,DC.length)}</div>
+        <div class="v3-main"><div class="v3-mainhd"><div style="flex:1;min-width:0">${qEdit(q)}</div></div>${ansChips(q)}</div>
+        <div class="v3-panel${plain?" plain":""}"><div class="ph">Type${plain?"":" &amp; settings"}</div>${typeSel(q)}${set?`<div class="sets">${set}</div>`:""}</div>
+      </div>`;
+    }).join("");
+    bind("v3",DC,renderV3);
+  }
+
+  // ---- shared binding --------------------------------------------------
+  function move(arr,id,d){const i=arr.findIndex(x=>x.id===id),j=i+d;if(j<0||j>=arr.length)return;const t=arr[i];arr[i]=arr[j];arr[j]=t;}
+  function clampSet(q,key,d){
+    let v=q.set[key]+d;
+    if(q.type==="Multi select"){if(key==="min")v=Math.max(1,Math.min(v,q.set.max));else v=Math.max(q.set.min,Math.min(v,q.answers.length));}
+    else{if(key==="min")v=Math.max(1,Math.min(v,q.set.max-1));else v=Math.max(q.set.min+1,Math.min(v,10));}
+    q.set[key]=v;
+  }
+  function bind(cid,arr,rerender){
+    const root=$(cid);
+    root.querySelectorAll("[data-mv]").forEach(b=>b.onclick=()=>{move(arr,b.dataset.id,+b.dataset.mv);rerender();});
+    root.querySelectorAll("[data-ty]").forEach(s=>s.onchange=()=>{const q=arr.find(x=>x.id===s.dataset.id);q.type=s.value;if(q.type==="Multi select")q.set={min:1,max:q.answers.length};else if(q.type==="Scale")q.set={min:1,max:5,low:"",high:""};else q.set=undefined;rerender();});
+    root.querySelectorAll("[data-st]").forEach(b=>b.onclick=()=>{const q=arr.find(x=>x.id===b.dataset.id);clampSet(q,b.dataset.st,+b.dataset.d);rerender();});
+    root.querySelectorAll("[data-wl]").forEach(inp=>inp.addEventListener("input",()=>{const q=arr.find(x=>x.id===inp.dataset.id);q.set[inp.dataset.wl]=inp.value;}));
+    root.querySelectorAll("[data-q]").forEach(el=>el.addEventListener("input",()=>{arr.find(x=>x.id===el.dataset.q).text=el.textContent;}));
+    root.querySelectorAll("[data-a]").forEach(el=>el.addEventListener("input",()=>{const[qid,aid]=el.dataset.a.split(":");arr.find(x=>x.id===qid).answers.find(a=>a.id===aid).t=el.textContent;}));
+    root.querySelectorAll("[data-add]").forEach(b=>b.onclick=()=>{arr.find(x=>x.id===b.dataset.add).answers.push({id:"n"+Math.round(performance.now()),t:"New answer"});rerender();});
+  }
+
+  renderV1();renderV2();renderV3();
+</script>
+</body>
+</html>

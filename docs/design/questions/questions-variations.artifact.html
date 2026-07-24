@@ -1,0 +1,325 @@
+<title>Questions tab — 3 layout variations</title>
+<style>
+  :root{
+    --accent:#6D5AE6; --accent-2:#6B4FD8; --accent-ink:#3C3489;
+    --accent-wash:#EDEBFC; --accent-tint:#F3F1FD;
+    --ink:#2E2740; --ink-3:#5A5470; --ink-4:#7C7791; --ink-25:#B6B0C8;
+    --rule:#E9E7EF; --rule-2:#F1EFF6; --paper:#FFFFFF; --cream-2:#F2F1F5;
+    --mono:ui-monospace,SFMono-Regular,Menlo,monospace;
+    --sans:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:#EDECF1;font-family:var(--sans);color:var(--ink);-webkit-font-smoothing:antialiased;padding:22px 0 90px}
+  .wrap{max-width:1120px;margin:0 auto;padding:0 22px}
+  .cap{font-size:12.5px;color:var(--ink-4);margin:0 2px 12px;line-height:1.6}
+  .cap b{color:var(--ink-3)}
+  .switch{display:inline-flex;background:#fff;border:1px solid var(--rule);border-radius:11px;padding:4px;gap:3px;margin-bottom:16px}
+  .switch button{border:none;background:transparent;font-family:var(--sans);font-size:13px;font-weight:600;color:var(--ink-4);padding:8px 15px;border-radius:8px;cursor:pointer}
+  .switch button.on{background:var(--accent);color:#fff}
+  .vhead{font-size:13px;color:var(--ink-4);margin:0 2px 12px;line-height:1.5}
+  .vhead b{color:var(--ink-3)}
+
+  /* the Questions-tab panel frame (content only — no builder chrome) */
+  .panel{background:#fff;border:1px solid var(--rule);border-radius:16px;box-shadow:0 8px 28px rgba(120,110,150,.10);overflow:hidden}
+  .ptool{display:flex;align-items:center;gap:10px;padding:13px 16px;border-bottom:1px solid var(--rule-2)}
+  .ptool .pt-title{font-size:14px;font-weight:600}
+  .ptool .pt-sub{font-size:12px;color:var(--ink-4)}
+  .ptool .sp{flex:1}
+  .btn{border:1px solid var(--rule);background:#fff;color:var(--accent-ink);font-size:12.5px;font-weight:500;padding:8px 13px;border-radius:9px;cursor:pointer;font-family:var(--sans)}
+  .btn:hover{background:var(--accent-tint);border-color:var(--accent-wash)}
+  .btn.pri{border:none;background:var(--accent);color:#fff}
+  .btn.pri:hover{background:var(--accent-2)}
+
+  .drag{cursor:grab;color:var(--ink-25);font-size:14px;flex:none;user-select:none;line-height:1}
+  .drag:active{cursor:grabbing}
+  .numchip{width:24px;height:24px;flex:none;border-radius:50%;display:grid;place-items:center;font-family:var(--mono);font-size:11px;font-weight:600;background:var(--cream-2);color:var(--ink-4)}
+  .numchip.deciding{background:var(--accent);color:#fff}
+  .decidetag{font-family:var(--mono);font-size:9px;font-weight:600;text-transform:uppercase;letter-spacing:.04em;color:var(--accent-ink);background:var(--accent-wash);padding:2px 8px;border-radius:999px;white-space:nowrap}
+  .typepill{font-family:var(--mono);font-size:9.5px;font-weight:600;text-transform:uppercase;letter-spacing:.04em;color:var(--ink-4);background:var(--cream-2);border:1px solid var(--rule);padding:4px 9px;border-radius:999px;cursor:pointer;white-space:nowrap}
+  .qinput,.ainput{border:1px solid transparent;background:transparent;font-family:var(--sans);color:var(--ink);border-radius:8px;padding:6px 8px;width:100%}
+  .qinput:hover,.ainput:hover{background:#FAFAFD}
+  .qinput:focus,.ainput:focus{outline:none;background:#fff;border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-wash)}
+  .adel{border:none;background:transparent;color:var(--ink-25);font-size:15px;cursor:pointer;width:24px;height:24px;border-radius:7px;flex:none}
+  .adel:hover{background:var(--cream-2);color:var(--ink-3)}
+  .adel:disabled{opacity:.3;cursor:default}
+  .addbtn{border:1px dashed var(--rule);background:transparent;color:var(--accent-ink);font-size:12px;font-weight:500;padding:7px 12px;border-radius:9px;cursor:pointer;font-family:var(--sans)}
+  .addbtn:hover{background:var(--accent-tint);border-color:var(--accent-wash)}
+  .termrow{display:flex;align-items:center;gap:11px;padding:11px 14px;color:var(--ink-3)}
+  .termchip{width:24px;height:24px;flex:none;border-radius:50%;display:grid;place-items:center;font-size:12px;background:var(--cream-2);color:var(--ink-4)}
+  .termsub{font-size:11px;color:var(--ink-25)}
+
+  /* ══ VARIATION A — overview list (everything visible) ══ */
+  .A-list{display:flex;flex-direction:column}
+  .A-q{display:flex;gap:12px;padding:14px 16px;border-bottom:1px solid var(--rule-2);align-items:flex-start}
+  .A-q.drop-hi{box-shadow:inset 0 2px 0 var(--accent)}
+  .A-qmain{flex:1;min-width:0;display:flex;flex-direction:column;gap:9px}
+  .A-qtop{display:flex;align-items:center;gap:9px}
+  .A-qtop .qinput{font-size:14px;font-weight:600}
+  .A-chips{display:flex;flex-wrap:wrap;gap:7px;padding-left:2px}
+  .A-chip{display:inline-flex;align-items:center;gap:4px;background:var(--cream-2);border:1px solid var(--rule);border-radius:999px;padding:2px 4px 2px 10px}
+  .A-chip .ainput{width:auto;min-width:40px;max-width:230px;padding:3px 2px;font-size:12.5px;field-sizing:content}
+  .A-chip .adel{width:20px;height:20px;font-size:13px}
+  .A-addchip{border:1px dashed var(--rule);background:transparent;color:var(--accent-ink);font-size:12px;border-radius:999px;padding:4px 11px;cursor:pointer;font-family:var(--sans)}
+
+  /* ══ VARIATION B — live canvas ══ */
+  .B-wrap{display:grid;grid-template-columns:190px minmax(0,1fr);gap:0}
+  .B-rail{border-right:1px solid var(--rule-2);padding:12px 10px;display:flex;flex-direction:column;gap:5px}
+  .B-railrow{display:flex;align-items:center;gap:9px;padding:8px;border-radius:9px;cursor:pointer;border:1px solid transparent}
+  .B-railrow:hover{background:#FBFAFE}
+  .B-railrow.on{background:var(--accent-tint);border-color:var(--accent-wash)}
+  .B-railrow.drop-hi{box-shadow:inset 0 2px 0 var(--accent)}
+  .B-railtext{font-size:11.5px;line-height:1.3;color:var(--ink-3);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+  .B-railadd{margin-top:4px;color:var(--accent-ink);font-size:12px;font-weight:500;background:none;border:none;text-align:left;padding:8px;cursor:pointer;border-radius:8px}
+  .B-railadd:hover{background:var(--accent-tint)}
+  .B-stage{padding:22px;display:flex;justify-content:center;background:
+    radial-gradient(130% 80% at 50% 0%, color-mix(in srgb,var(--brand,#B04A26) 6%, #fff) 0%, transparent 60%)}
+  .B-phone{width:330px;max-width:100%;border-radius:30px;background:var(--brand-bg,#F6EFE0);font-family:var(--brand-font,serif);
+    box-shadow:0 20px 50px -18px rgba(60,50,90,.5),0 0 0 1px rgba(0,0,0,.06);padding:20px 18px;display:flex;flex-direction:column;gap:14px;min-height:560px}
+  .B-ptop{display:flex;align-items:center;gap:9px}
+  .B-back{font-size:11px;color:#6a655c;background:rgba(0,0,0,.05);border-radius:999px;padding:3px 9px}
+  .B-bn{font-size:11.5px;font-weight:700;color:#3a3630;flex:1;font-family:var(--sans)}
+  .B-prog{width:60px;height:5px;border-radius:999px;background:rgba(0,0,0,.1);overflow:hidden}
+  .B-prog span{display:block;height:100%;background:var(--brand,#B04A26)}
+  .B-kick{display:flex;justify-content:space-between;align-items:center}
+  .B-kicker{font-family:var(--mono);font-size:10px;font-weight:700;color:var(--brand,#B04A26)}
+  .B-edit{outline:1px dashed transparent;border-radius:6px;cursor:text}
+  .B-edit:hover{outline-color:rgba(0,0,0,.18);background:rgba(255,255,255,.4)}
+  .B-edit:focus{outline:1px solid var(--brand,#B04A26);background:#fff}
+  .B-title{font-size:21px;font-weight:700;color:#241f1a;line-height:1.25;margin:0}
+  .B-opts{display:flex;flex-direction:column;gap:9px}
+  .B-opt{display:flex;align-items:center;gap:7px;border:1px solid rgba(0,0,0,.12);background:rgba(255,255,255,.5);border-radius:12px;padding:10px 11px}
+  .B-opt.drop-hi{box-shadow:inset 0 2px 0 var(--brand,#B04A26)}
+  .B-opt .drag{color:rgba(0,0,0,.25)}
+  .B-opt .B-edit{flex:1;font-size:13px;color:#2f2a24}
+  .B-opt .adel{color:rgba(0,0,0,.3)}
+  .B-addopt{border:1px dashed rgba(0,0,0,.2);background:transparent;color:#6a655c;font-size:12.5px;border-radius:11px;padding:9px;cursor:pointer;font-family:var(--sans)}
+  .B-next{margin-top:auto;border:none;background:var(--brand,#B04A26);color:#fff;font-size:14px;font-weight:700;padding:13px;border-radius:12px;font-family:var(--sans)}
+  .B-qactions{display:flex;gap:7px;margin-top:12px;justify-content:center}
+
+  /* ══ VARIATION C — document cards + drawer ══ */
+  .C-doc{max-width:640px;margin:0 auto;padding:18px 16px;display:flex;flex-direction:column;gap:12px}
+  .C-card{border:1px solid var(--rule);border-radius:13px;background:#fff;overflow:hidden}
+  .C-card.on{border-color:var(--accent-wash);box-shadow:0 2px 10px rgba(109,90,230,.08)}
+  .C-card.drop-hi{box-shadow:inset 0 2px 0 var(--accent)}
+  .C-chead{display:flex;align-items:center;gap:10px;padding:12px 13px;border-bottom:1px solid var(--rule-2)}
+  .C-chead .qinput{font-size:14px;font-weight:600}
+  .C-cbody{padding:11px 13px 13px;display:flex;flex-direction:column;gap:7px}
+  .C-arow{display:flex;align-items:center;gap:8px;border:1px solid var(--rule);border-radius:10px;padding:6px 8px;background:#fff}
+  .C-arow:focus-within{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-wash)}
+  .C-arow.drop-hi{box-shadow:inset 0 2px 0 var(--accent)}
+  .C-arow .ainput{font-size:13px}
+  .C-arow .aemoji{width:28px;height:28px;flex:none;border:1px solid var(--rule);border-radius:7px;background:var(--cream-2);display:grid;place-items:center;font-size:13px;cursor:pointer}
+
+  /* drawer (C preview) */
+  .drawer{position:fixed;top:0;right:0;bottom:0;width:380px;max-width:92vw;background:#fff;border-left:1px solid var(--rule);box-shadow:-16px 0 40px rgba(46,39,64,.16);transform:translateX(100%);transition:transform .28s ease;z-index:40;display:flex;flex-direction:column}
+  .drawer.on{transform:none}
+  .drawer-h{display:flex;align-items:center;gap:10px;padding:14px 16px;border-bottom:1px solid var(--rule-2)}
+  .drawer-h strong{font-size:14px}
+  .drawer-h .cl{margin-left:auto;border:none;background:var(--cream-2);width:30px;height:30px;border-radius:9px;cursor:pointer;font-size:15px}
+  .drawer-b{padding:18px;overflow:auto;display:grid;place-items:center}
+
+  /* modal (A preview) */
+  .scrim{position:fixed;inset:0;background:rgba(46,39,64,.45);display:none;align-items:center;justify-content:center;z-index:50;padding:20px}
+  .scrim.on{display:flex}
+  .modal{width:min(390px,100%);background:#fff;border-radius:18px;overflow:hidden;box-shadow:0 24px 60px rgba(46,39,64,.3)}
+  .modal-h{display:flex;align-items:center;gap:10px;padding:14px 16px;border-bottom:1px solid var(--rule-2)}
+  .modal-h strong{font-size:14px}
+  .modal-h .cl{margin-left:auto;border:none;background:var(--cream-2);width:30px;height:30px;border-radius:9px;cursor:pointer;font-size:15px}
+  .modal-b{padding:18px;background:#F6F5FA;display:grid;place-items:center}
+
+  /* shared brand mini-phone (modal + drawer previews) */
+  .mini-phone{width:280px;max-width:100%;border-radius:26px;background:var(--brand-bg,#F6EFE0);font-family:var(--brand-font,serif);
+    box-shadow:0 16px 40px -18px rgba(60,50,90,.5),0 0 0 1px rgba(0,0,0,.06);padding:16px 15px;display:flex;flex-direction:column;gap:11px;min-height:460px}
+  .mini-phone .mp-title{font-size:18px;font-weight:700;color:#241f1a;line-height:1.25;margin:0}
+  .mini-phone .mp-opt{border:1px solid rgba(0,0,0,.12);background:rgba(255,255,255,.5);border-radius:11px;padding:10px 11px;font-size:12.5px;color:#2f2a24}
+  .mini-phone .mp-next{margin-top:auto;border:none;background:var(--brand,#B04A26);color:#fff;font-size:13px;font-weight:700;padding:11px;border-radius:11px;font-family:var(--sans)}
+  .mp-top{display:flex;align-items:center;gap:8px}
+  .mp-back{font-size:10.5px;color:#6a655c;background:rgba(0,0,0,.05);border-radius:999px;padding:3px 8px}
+  .mp-kick{font-family:var(--mono);font-size:9.5px;font-weight:700;color:var(--brand,#B04A26)}
+</style>
+
+<div class="wrap">
+  <p class="cap"><b>Step 3 · Questions tab — 3 layout directions.</b> Questions-tab content only (no builder chrome). All support drag-reorder (⠿), inline editing, and add/remove. No AI-rewrite. Pick a direction to compare.</p>
+  <div class="switch">
+    <button class="on" data-v="A">A · Overview list</button>
+    <button data-v="B">B · Live canvas</button>
+    <button data-v="C">C · Document cards</button>
+  </div>
+  <p class="vhead" id="vhead"></p>
+
+  <div id="stage"></div>
+</div>
+
+<div class="scrim" id="scrim"><div class="modal" id="modal"></div></div>
+<div class="drawer" id="drawer"></div>
+
+<script>
+  const $=id=>document.getElementById(id);
+  const BRAND={primary:"#B04A26",bg:"#F6EFE0",font:"Georgia,'Times New Roman',serif"};
+  const bstyle=`--brand:${BRAND.primary};--brand-bg:${BRAND.bg};--brand-font:${BRAND.font}`;
+  const esc=s=>String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+
+  let QS=[
+    {id:"q1",deciding:true,type:"Single select",text:"What best describes how you ride? Choose the style that gets you most excited on the mountain.",answers:[{id:"a1",e:"🏂",t:"Park & Freestyle — rails, jumps, and creative expression"},{id:"a2",e:"🏔️",t:"All-Mountain — I go wherever the mountain takes me"},{id:"a3",e:"⛷️",t:"Carving & Precision — edge-to-edge control on groomed runs"},{id:"a4",e:"❄️",t:"Backcountry & Powder — off-piste and untracked terrain"}]},
+    {id:"q2",type:"Single select",text:"Which terrain do you spend the most time on?",answers:[{id:"b1",e:"🎿",t:"Groomed runs"},{id:"b2",e:"🌲",t:"Trees & side-country"},{id:"b3",e:"🏔️",t:"Open powder bowls"}]},
+    {id:"q3",type:"Scale",text:"How would you honestly rate your riding ability right now?",answers:[{id:"c1",e:"🟢",t:"Beginner"},{id:"c2",e:"🔵",t:"Intermediate"},{id:"c3",e:"⚫",t:"Advanced / expert"}]},
+    {id:"q4",type:"Single select",text:"How important is board responsiveness and edge hold to you?",answers:[{id:"d1",e:"",t:"Critical — I want precision"},{id:"d2",e:"",t:"Nice to have"},{id:"d3",e:"",t:"Not a priority"}]},
+    {id:"q5",type:"Single select",text:"What does your ideal riding day look like from a volume standpoint?",answers:[{id:"e1",e:"",t:"A few perfect runs"},{id:"e2",e:"",t:"Steady all-day laps"},{id:"e3",e:"",t:"Dawn-to-dusk everything"}]},
+    {id:"q6",type:"Single select",text:"Which board characteristic matters most to you when choosing?",answers:[{id:"f1",e:"",t:"Stability at speed"},{id:"f2",e:"",t:"Playful & forgiving"},{id:"f3",e:"",t:"Float in powder"}]},
+  ];
+  let V="A", sel="q1";
+  const VHEAD={
+    A:"<b>A · Overview list.</b> Every question AND its answers visible at once — inline-edit anything, drag ⠿ to reorder. Preview opens in a centered modal on demand. Best for scanning + bulk wording.",
+    B:"<b>B · Live canvas.</b> Edit right on a large brand phone (WYSIWYG — what you see is what ships). A slim rail switches questions; answers edit/reorder on the phone itself. The preview IS the editor.",
+    C:"<b>C · Document cards.</b> Scroll the whole quiz as stacked cards, each roomy for deep editing; drag to reorder questions and answers. A side drawer holds a live preview you can keep open while you edit.",
+  };
+
+  /* ── generic drag-reorder: children carry data-i (index into arr) ── */
+  function dnd(container, arr, done){
+    if(!container)return; let from=null;
+    [...container.querySelectorAll("[data-i]")].forEach(el=>{
+      el.setAttribute("draggable","true");
+      el.addEventListener("dragstart",()=>{from=+el.dataset.i;el.style.opacity=.4;});
+      el.addEventListener("dragend",()=>{el.style.opacity="";container.querySelectorAll(".drop-hi").forEach(x=>x.classList.remove("drop-hi"));});
+      el.addEventListener("dragover",e=>{e.preventDefault();el.classList.add("drop-hi");});
+      el.addEventListener("dragleave",()=>el.classList.remove("drop-hi"));
+      el.addEventListener("drop",e=>{e.preventDefault();const to=+el.dataset.i;if(from===null||from===to)return;const m=arr.splice(from,1)[0];arr.splice(to,0,m);from=null;done();});
+    });
+  }
+
+  /* ══════════ VARIATION A ══════════ */
+  function renderA(){
+    const rows=QS.map((q,i)=>`
+      <div class="A-q" data-i="${i}">
+        <span class="drag">⠿</span>
+        <span class="numchip${q.deciding?" deciding":""}">${i+1}</span>
+        <div class="A-qmain">
+          <div class="A-qtop">
+            <input class="qinput" value="${esc(q.text)}" data-qt="${q.id}">
+            ${q.deciding?'<span class="decidetag">◆ Deciding</span>':''}
+            <span class="typepill">${esc(q.type)} ▾</span>
+          </div>
+          <div class="A-chips">
+            ${q.answers.map(a=>`<span class="A-chip">${a.e?esc(a.e)+" ":""}<input class="ainput" value="${esc(a.t)}" data-at="${q.id}:${a.id}"><button class="adel" data-adel="${q.id}:${a.id}" ${q.answers.length<=2?"disabled":""}>×</button></span>`).join("")}
+            <button class="A-addchip" data-aadd="${q.id}">+ answer</button>
+          </div>
+        </div>
+      </div>`).join("");
+    $("stage").innerHTML=`<div class="panel">
+      <div class="ptool"><span class="pt-title">Questions</span><span class="pt-sub">${QS.length} questions · everything editable inline</span><span class="sp"></span>
+        <button class="btn" id="prevBtn">▷ Preview quiz</button><button class="btn pri" id="newBtn">+ New question</button></div>
+      <div class="A-list" id="Alist">${rows}</div>
+      <div class="termrow"><span class="termchip">✉</span><div><div>Email capture</div><div class="termsub">Optional lead step</div></div></div>
+      <div class="termrow" style="border-top:1px solid var(--rule-2)"><span class="termchip">◆</span><div><div>Result reveal</div><div class="termsub">Configured in Step 4 · Results</div></div></div>
+    </div>`;
+    bindEdits();
+    $("prevBtn").onclick=()=>openModal(QS[0]);
+    $("newBtn").onclick=newQuestion;
+    dnd($("Alist"),QS,renderA);
+  }
+
+  /* ══════════ VARIATION B ══════════ */
+  function renderB(){
+    const q=QS.find(x=>x.id===sel)||QS[0];
+    const idx=QS.indexOf(q);
+    const rail=QS.map((qq,i)=>`
+      <div class="B-railrow${qq.id===sel?" on":""}" data-i="${i}" data-sel="${qq.id}">
+        <span class="drag">⠿</span><span class="numchip${qq.deciding?" deciding":""}">${i+1}</span>
+        <span class="B-railtext">${esc(qq.text)}</span>
+      </div>`).join("");
+    const opts=q.answers.map(a=>`
+      <div class="B-opt" data-i="${q.answers.indexOf(a)}">
+        <span class="drag">⠿</span>
+        <span class="B-edit" contenteditable data-bt="${q.id}:${a.id}">${a.e?esc(a.e)+" ":""}${esc(a.t)}</span>
+        <button class="adel" data-adel="${q.id}:${a.id}" ${q.answers.length<=2?"disabled":""}>×</button>
+      </div>`).join("");
+    $("stage").innerHTML=`<div class="panel"><div class="B-wrap">
+      <div class="B-rail" id="Brail">${rail}<button class="B-railadd" id="newBtn">+ New question</button></div>
+      <div class="B-stage" style="${bstyle}">
+        <div class="B-phone">
+          <div class="B-ptop"><span class="B-back">‹ Back</span><span class="B-bn">Riding Style Finder</span><span class="B-prog"><span style="width:${Math.round((idx+1)/QS.length*100)}%"></span></span></div>
+          <div class="B-kick"><span class="B-kicker">QUESTION ${idx+1} OF ${QS.length}</span><span class="typepill">${esc(q.type)} ▾</span></div>
+          <h2 class="B-title B-edit" contenteditable data-qt="${q.id}">${esc(q.text)}</h2>
+          <div class="B-opts" id="Bopts">${opts}</div>
+          <button class="B-addopt" data-aadd="${q.id}">+ Add answer</button>
+          <button class="B-next">Next</button>
+          <div class="B-qactions">
+            <button class="btn" data-dup="${q.id}">⎘ Duplicate</button>
+            <button class="btn" data-qdel="${q.id}">🗑 Delete question</button>
+          </div>
+        </div>
+      </div>
+    </div></div>`;
+    bindEdits();
+    $("Brail").querySelectorAll("[data-sel]").forEach(r=>r.addEventListener("click",e=>{if(e.target.classList.contains("drag"))return;sel=r.dataset.sel;renderB();}));
+    $("newBtn").onclick=newQuestion;
+    dnd($("Brail"),QS,renderB);
+    dnd($("Bopts"),q.answers,renderB);
+  }
+
+  /* ══════════ VARIATION C ══════════ */
+  function renderC(){
+    const cards=QS.map((q,i)=>`
+      <div class="C-card${q.id===sel?" on":""}" data-i="${i}" data-card="${q.id}">
+        <div class="C-chead">
+          <span class="drag">⠿</span><span class="numchip${q.deciding?" deciding":""}">${i+1}</span>
+          <input class="qinput" value="${esc(q.text)}" data-qt="${q.id}">
+          ${q.deciding?'<span class="decidetag">◆ Deciding</span>':''}
+          <span class="typepill">${esc(q.type)} ▾</span>
+        </div>
+        <div class="C-cbody" data-answers="${q.id}">
+          ${q.answers.map((a,ai)=>`<div class="C-arow" data-i="${ai}"><span class="drag">⠿</span><button class="aemoji">${a.e||"🙂"}</button><input class="ainput" value="${esc(a.t)}" data-at="${q.id}:${a.id}"><button class="adel" data-adel="${q.id}:${a.id}" ${q.answers.length<=2?"disabled":""}>×</button></div>`).join("")}
+          <button class="addbtn" data-aadd="${q.id}" style="align-self:flex-start;margin-top:2px">+ Add answer</button>
+        </div>
+      </div>`).join("");
+    $("stage").innerHTML=`<div class="panel">
+      <div class="ptool"><span class="pt-title">Questions</span><span class="pt-sub">${QS.length} questions</span><span class="sp"></span>
+        <button class="btn" id="prevBtn">▷ Preview</button><button class="btn pri" id="newBtn">+ New question</button></div>
+      <div class="C-doc" id="Cdoc">${cards}
+        <div class="C-card" style="opacity:.75"><div class="termrow"><span class="termchip">✉</span><div><div>Email capture</div><div class="termsub">Optional lead step</div></div></div></div>
+        <div class="C-card" style="opacity:.75"><div class="termrow"><span class="termchip">◆</span><div><div>Result reveal</div><div class="termsub">Configured in Step 4 · Results</div></div></div></div>
+      </div>
+    </div>`;
+    bindEdits();
+    $("prevBtn").onclick=()=>openDrawer();
+    $("newBtn").onclick=newQuestion;
+    // reorder questions
+    dnd($("Cdoc"),QS,renderC);
+    // reorder answers within each card
+    QS.forEach(q=>dnd(document.querySelector(`[data-answers="${q.id}"]`),q.answers,renderC));
+    // focus tracking for the drawer
+    $("Cdoc").querySelectorAll("[data-card]").forEach(c=>c.addEventListener("focusin",()=>{sel=c.dataset.card;if($("drawer").classList.contains("on"))fillDrawer();}));
+  }
+
+  /* ── shared inline-edit binding ── */
+  function bindEdits(){
+    document.querySelectorAll("[data-qt]").forEach(el=>{
+      const ev=el.tagName==="INPUT"?"input":"input";
+      el.addEventListener(ev,()=>{const q=QS.find(x=>x.id===el.dataset.qt);q.text=el.tagName==="INPUT"?el.value:el.textContent;});
+    });
+    document.querySelectorAll("[data-at]").forEach(el=>el.addEventListener("input",()=>{const [qid,aid]=el.dataset.at.split(":");const a=QS.find(x=>x.id===qid).answers.find(y=>y.id===aid);a.t=el.value;}));
+    document.querySelectorAll("[data-bt]").forEach(el=>el.addEventListener("input",()=>{const [qid,aid]=el.dataset.bt.split(":");const a=QS.find(x=>x.id===qid).answers.find(y=>y.id===aid);a.t=el.textContent;}));
+    document.querySelectorAll("[data-adel]").forEach(el=>el.addEventListener("click",()=>{const [qid,aid]=el.dataset.adel.split(":");const q=QS.find(x=>x.id===qid);if(q.answers.length<=2)return;q.answers=q.answers.filter(a=>a.id!==aid);rerender();}));
+    document.querySelectorAll("[data-aadd]").forEach(el=>el.addEventListener("click",()=>{const q=QS.find(x=>x.id===el.dataset.aadd);q.answers.push({id:"n"+Date.now(),e:"",t:"New answer"});rerender();}));
+    document.querySelectorAll("[data-dup]").forEach(el=>el.addEventListener("click",()=>{const i=QS.findIndex(x=>x.id===el.dataset.dup);const q=QS[i];const copy={...q,id:"n"+Date.now(),deciding:false,answers:q.answers.map(a=>({...a,id:"n"+Math.random()}))};QS.splice(i+1,0,copy);rerender();}));
+    document.querySelectorAll("[data-qdel]").forEach(el=>el.addEventListener("click",()=>{if(QS.length<=1)return;QS=QS.filter(x=>x.id!==el.dataset.qdel);sel=QS[0].id;rerender();}));
+  }
+  function newQuestion(){const n={id:"n"+Date.now(),type:"Single select",text:"New question",answers:[{id:"x"+Date.now(),e:"",t:"Answer 1"},{id:"y"+Date.now(),e:"",t:"Answer 2"}]};QS.push(n);sel=n.id;rerender();}
+
+  /* ── preview surfaces ── */
+  function phoneHTML(q,cls){const idx=QS.indexOf(q)+1;return `<div class="${cls}" style="${bstyle}">
+    <div class="mp-top"><span class="mp-back">‹ Back</span><span class="mp-kick">QUESTION ${idx} OF ${QS.length}</span></div>
+    <h2 class="mp-title">${esc(q.text)}</h2>
+    ${q.answers.map(a=>`<div class="mp-opt">${a.e?esc(a.e)+" ":""}${esc(a.t)}</div>`).join("")}
+    <button class="mp-next">Next</button></div>`;}
+  function openModal(q){$("modal").innerHTML=`<div class="modal-h"><strong>Live preview · your brand</strong><button class="cl" id="mcl">✕</button></div><div class="modal-b">${phoneHTML(q,"mini-phone")}</div>`;$("scrim").classList.add("on");$("mcl").onclick=()=>$("scrim").classList.remove("on");}
+  $("scrim").addEventListener("click",e=>{if(e.target===$("scrim"))$("scrim").classList.remove("on");});
+  function openDrawer(){$("drawer").classList.add("on");fillDrawer();}
+  function fillDrawer(){const q=QS.find(x=>x.id===sel)||QS[0];$("drawer").innerHTML=`<div class="drawer-h"><strong>Live preview</strong><span style="font-size:11px;color:var(--ink-4)">follows the card you're editing</span><button class="cl" id="dcl">✕</button></div><div class="drawer-b">${phoneHTML(q,"mini-phone")}</div>`;$("dcl").onclick=()=>$("drawer").classList.remove("on");}
+
+  function rerender(){V==="A"?renderA():V==="B"?renderB():renderC();}
+  function setV(v){V=v;document.querySelectorAll(".switch button").forEach(b=>b.classList.toggle("on",b.dataset.v===v));$("vhead").innerHTML=VHEAD[v];$("scrim").classList.remove("on");$("drawer").classList.remove("on");rerender();}
+  document.querySelectorAll(".switch button").forEach(b=>b.addEventListener("click",()=>setV(b.dataset.v)));
+
+  setV("A");
+</script>

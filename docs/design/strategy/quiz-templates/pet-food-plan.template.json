@@ -1,0 +1,29 @@
+{
+  "id": "pet-food-plan",
+  "name": "Pet food plan",
+  "category": "food/pet",
+  "variant": "named-pet plan builder (Ollie / Nom Nom)",
+  "use_when": "Output is a single custom plan (portion, cadence, price) computed by algorithm; naming the pet early personalizes the whole flow.",
+  "length": { "min": 8, "max": 14, "band": "medium", "note": "Marketed under 5 minutes; the plan math is server-side, not visible branching." },
+  "gate": { "placement": "at_result", "style": "soft", "rationale": "Email/account at the plan-reveal transition; subscription intent captured with the plan." },
+  "result_shape": "single_bespoke_output",
+  "arc": ["identity", "physical", "health", "diet_sensitivities", "config"],
+  "branching": "moderate",
+  "questions": [
+    { "ordinal": 1, "id": "pet_name", "prompt": "What's your dog's name?", "type": "short_text", "maps_to": "pet_name", "weight_tier": "none", "note": "Personalization only, not scored — addresses the pet by name downstream." },
+    { "ordinal": 2, "id": "age", "prompt": "How old is {pet_name}?", "type": "single_select", "options": [{ "label": "Puppy (<1yr)", "maps_to": "age:puppy" }, { "label": "Adult (1–7)", "maps_to": "age:adult" }, { "label": "Senior (8+)", "maps_to": "age:senior" }], "maps_to": "life_stage", "weight_tier": "primary" },
+    { "ordinal": 3, "id": "weight", "prompt": "Current weight?", "type": "single_select", "options": [{ "label": "Under 10 lb", "maps_to": "weight:xs" }, { "label": "10–25 lb", "maps_to": "weight:s" }, { "label": "26–50 lb", "maps_to": "weight:m" }, { "label": "51–90 lb", "maps_to": "weight:l" }, { "label": "90+ lb", "maps_to": "weight:xl" }], "maps_to": "weight_band", "weight_tier": "primary", "note": "Drives the portion/calorie algorithm." },
+    { "ordinal": 4, "id": "body_condition", "prompt": "Which body shape looks most like {pet_name}?", "type": "image_choice", "options": [{ "label": "Underweight", "maps_to": "body:under" }, { "label": "Just right", "maps_to": "body:ideal" }, { "label": "Overweight", "maps_to": "body:over" }], "maps_to": "body_condition", "weight_tier": "secondary" },
+    { "ordinal": 5, "id": "activity", "prompt": "How active is {pet_name}?", "type": "single_select", "options": [{ "label": "Couch potato", "maps_to": "activity:low" }, { "label": "Average", "maps_to": "activity:med" }, { "label": "Very active", "maps_to": "activity:high" }], "maps_to": "activity_level", "weight_tier": "secondary" },
+    { "ordinal": 6, "id": "allergies", "prompt": "Any allergies or sensitivities?", "type": "multi_select", "multi_select_cap": 6, "options": [{ "label": "Chicken", "maps_to": "allergen:chicken" }, { "label": "Beef", "maps_to": "allergen:beef" }, { "label": "Grain", "maps_to": "allergen:grain" }, { "label": "Dairy", "maps_to": "allergen:dairy" }, { "label": "None", "maps_to": "allergen:none" }], "maps_to": "exclusions", "weight_tier": "primary", "note": "Hard exclusion filter — never recommend a recipe containing a flagged allergen." }
+  ],
+  "recommendation": {
+    "architecture": "hybrid",
+    "tie_break": "life_stage fit -> calorie-target proximity -> stable recipe id",
+    "empty_fallback": "drop soft preferences, keep hard allergen exclusions -> nearest recipe by calorie target -> vet-formulated default for life_stage",
+    "deterministic": true,
+    "explainable": true
+  },
+  "personalization_hooks": ["address the pet by name from Q2 on", "portion + cadence + price on one plan card"],
+  "sources": ["Ollie onboarding", "Nom Nom / Farmer's Dog", "iHeartDogs comparisons (Tier C)"]
+}

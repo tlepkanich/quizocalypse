@@ -1,0 +1,288 @@
+<title>Overview — Cards (refined)</title>
+<style>
+  :root{
+    --accent:#6D5AE6; --accent-2:#6B4FD8; --accent-ink:#3C3489; --accent-wash:#EDEBFC; --accent-tint:#F3F1FD;
+    --ink:#2E2740; --ink-3:#5A5470; --ink-4:#7C7791; --ink-25:#B6B0C8;
+    --rule:#E9E7EF; --rule-2:#F1EFF6; --cream-2:#F2F1F5;
+    --mono:ui-monospace,SFMono-Regular,Menlo,monospace; --sans:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:#EDECF1;font-family:var(--sans);color:var(--ink);-webkit-font-smoothing:antialiased;padding:26px 0 110px}
+  .wrap{max-width:1080px;margin:0 auto;padding:0 22px}
+  h1.doc{font-size:15px;margin:0 2px 4px}
+  .cap{font-size:12.5px;color:var(--ink-4);margin:0 2px 22px;line-height:1.6}.cap b{color:var(--ink-3)}
+
+  .cnum{width:25px;height:25px;border-radius:50%;background:var(--accent-wash);color:var(--accent-ink);display:grid;place-items:center;font-family:var(--mono);font-size:11.5px;font-weight:700;flex:none}
+  .cnum.c{background:var(--cream-2);color:var(--ink-3)}.cnum.c svg{width:14px;height:14px}
+  .mv{display:inline-flex;flex-direction:column;gap:2px;flex:none}
+  .mvb{width:22px;height:17px;border:1px solid var(--rule);background:#fff;border-radius:5px;display:grid;place-items:center;cursor:pointer;color:var(--ink-4);padding:0}
+  .mvb:hover:not(:disabled){background:var(--accent-tint);border-color:var(--accent-wash);color:var(--accent-ink)}
+  .mvb:disabled{opacity:.3;cursor:default}.mvb svg{width:11px;height:11px}
+
+  /* ---------------- CARD ---------------- */
+  .cards{display:flex;flex-direction:column}
+  .v2card{background:#fff;border:1px solid var(--rule);border-radius:14px;box-shadow:0 4px 14px rgba(120,110,150,.06);overflow:hidden}
+  .v2card.content{background:#FCFBFE}
+  /* header — question on the left; type control sits in the SAME right column as the settings so they align */
+  .v2head{display:grid;grid-template-columns:1fr 238px;gap:26px;align-items:center;padding:11px 16px}
+  .v2head-l{display:flex;align-items:center;gap:13px;min-width:0}
+  .v2q{flex:1;min-width:0;font-size:14.5px;font-weight:600;line-height:1.4;color:var(--ink);border:1px solid transparent;border-radius:7px;padding:5px 8px;margin:-5px -8px;cursor:text}.v2q:hover{background:#FAFAFD}.v2q:focus{outline:none;background:#fff;border-color:var(--accent);box-shadow:0 0 0 2px var(--accent-wash)}
+  .v2type{align-self:center;padding-left:22px}.v2type.hasline{border-left:1px solid var(--rule-2)}
+  .tsel{border:1px solid var(--rule);background:#fff;border-radius:9px;padding:9px 11px;font-size:12.5px;font-family:var(--sans);color:var(--ink);cursor:pointer;width:100%}
+  .tsel:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 2px var(--accent-wash)}
+  .ctag{display:inline-flex;align-items:center;gap:6px;font-family:var(--mono);font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--accent-ink);background:var(--accent-wash);padding:6px 10px;border-radius:8px;white-space:nowrap}
+
+  /* body — same horizontal padding + right column as the header so the settings line runs straight up through the type control */
+  .v2body{border-top:1px solid var(--rule-2);padding:16px 16px 18px 16px}
+  .v2body.hasset{display:grid;grid-template-columns:1fr 238px;gap:26px}
+  .v2ans{padding-left:54px;min-width:0}
+
+  /* answers — bigger, more visible */
+  .alist{list-style:none;margin:0;padding:0;counter-reset:a;display:flex;flex-direction:column;gap:3px}
+  .alist li{counter-increment:a;display:flex;gap:11px;align-items:baseline;font-size:13.5px;color:var(--ink);line-height:1.5;padding:5px 8px;border:1px solid transparent;border-radius:8px;margin:0 -8px}
+  .alist li:hover{background:#FAFAFD}
+  .alist li::before{content:counter(a);font-family:var(--mono);font-size:11px;font-weight:600;color:var(--accent-ink);background:var(--accent-wash);width:19px;height:19px;border-radius:5px;display:grid;place-items:center;flex:none;align-self:center}
+  .alist li .atx{flex:1;border-radius:5px;cursor:text;outline:none}.alist li .atx:focus{box-shadow:0 0 0 2px var(--accent-wash)}
+  .alist li .adel{opacity:0;border:none;background:transparent;color:var(--ink-25);cursor:pointer;width:22px;height:22px;border-radius:6px;flex:none;display:grid;place-items:center}.alist li:hover .adel{opacity:1}.alist li .adel:hover{background:var(--cream-2);color:var(--ink-3)}.alist li .adel svg{width:12px;height:12px}
+  /* +answer relocated: quiet full-width action at the foot of the answers */
+  .addans{display:inline-flex;align-items:center;gap:7px;border:1px dashed var(--rule);background:transparent;color:var(--accent-ink);font-size:12.5px;font-weight:600;padding:8px 12px;border-radius:9px;cursor:pointer;font-family:var(--sans);margin-top:10px}
+  .addans:hover{background:var(--accent-tint);border-color:var(--accent-wash)}.addans svg{width:12px;height:12px}
+  .meta{font-size:13px;color:var(--ink-3);line-height:1.55}.metasub{margin-top:3px;font-size:12px;color:var(--ink-4)}
+  /* scale preview: numbers laid out horizontally 1 → max, with end labels edited inline */
+  .scaleprev{display:flex;flex-direction:column;gap:15px;padding-top:2px}
+  .scalenums{display:flex;gap:9px;flex-wrap:wrap}
+  .sn{width:40px;height:40px;flex:0 0 auto;border:1.5px solid var(--rule);border-radius:11px;display:grid;place-items:center;font-size:15px;font-weight:700;color:var(--ink-3);background:#fff}
+  .sn.end{border-color:var(--accent-wash);color:var(--accent-ink);background:var(--accent-tint)}
+  .scaleends{display:flex;justify-content:space-between;gap:18px;flex-wrap:wrap}
+  .se{display:flex;align-items:center;gap:9px}.se.end{flex-direction:row-reverse}
+  .sek{width:22px;height:22px;border-radius:6px;background:var(--accent-wash);color:var(--accent-ink);display:grid;place-items:center;font-family:var(--mono);font-size:11px;font-weight:700;flex:none}
+  .slab{width:190px;max-width:40vw;font-size:12.5px;color:var(--ink);border:1px solid var(--rule);border-radius:8px;padding:8px 10px;background:#fff;font-family:var(--sans)}
+  .slab:hover{background:#FAFAFD}.slab:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 2px var(--accent-wash)}.slab::placeholder{color:var(--ink-25)}
+  .sethint{font-size:10.5px;color:var(--ink-25);line-height:1.45;margin-top:2px}
+
+  /* ---------------- SETTINGS PANEL (identical format for every type) ---------------- */
+  .v2set{border-left:1px solid var(--rule-2);padding-left:22px;display:flex;flex-direction:column;gap:10px}
+  .v2set .sh{font-family:var(--mono);font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--ink-25)}
+  .setr{display:grid;grid-template-columns:70px 1fr;align-items:center;gap:10px}
+  .setl{font-family:var(--mono);font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:.03em;color:var(--ink-4)}
+  .stp{display:inline-flex;align-items:center;border:1px solid var(--rule);border-radius:8px;overflow:hidden;background:#fff;width:max-content}
+  .stp button{border:none;background:#fff;width:30px;height:30px;cursor:pointer;color:var(--ink-3);font-size:16px;line-height:1}.stp button:hover{background:var(--cream-2)}
+  .stp b{min-width:30px;text-align:center;font-size:13px;font-family:var(--mono)}
+  .win{font-size:12.5px;color:var(--ink);border:1px solid var(--rule);border-radius:8px;padding:7px 9px;background:#fff;font-family:var(--sans);width:100%}
+  .win:hover{background:#FAFAFD}.win:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 2px var(--accent-wash)}.win::placeholder{color:var(--ink-25)}
+  .setbtn{display:inline-flex;align-items:center;gap:7px;border:1px solid var(--rule);background:#fff;color:var(--ink-3);font-size:12.5px;font-weight:600;padding:8px 12px;border-radius:9px;cursor:pointer;font-family:var(--sans)}.setbtn:hover{background:var(--cream-2)}.setbtn svg{width:14px;height:14px}
+
+  /* ---------------- BETWEEN-CARD INSERTER ---------------- */
+  .ins{position:relative;height:22px;display:flex;align-items:center;justify-content:center}
+  .ins::before{content:"";position:absolute;left:8px;right:8px;top:50%;height:1px;background:var(--rule);opacity:0;transition:opacity .12s}
+  .ins:hover::before,.ins.open::before{opacity:1}
+  .ins-add{width:24px;height:24px;border-radius:50%;border:1px solid var(--rule);background:#fff;color:var(--ink-4);display:grid;place-items:center;cursor:pointer;opacity:.28;transition:opacity .12s,transform .12s;z-index:2}
+  .ins:hover .ins-add,.ins.open .ins-add{opacity:1}.ins.open .ins-add{transform:rotate(45deg);background:var(--accent);border-color:var(--accent);color:#fff}
+  .ins-add svg{width:13px;height:13px}
+  .ins-menu{position:absolute;top:calc(100% - 2px);z-index:5;background:#fff;border:1px solid var(--rule);border-radius:11px;box-shadow:0 16px 40px -12px rgba(60,50,90,.28);padding:5px;display:none;min-width:186px}
+  .ins.open .ins-menu{display:block}
+  .ins-menu button{display:flex;align-items:center;gap:9px;width:100%;border:none;background:transparent;border-radius:8px;padding:9px 11px;font-size:13px;color:var(--ink);cursor:pointer;text-align:left;font-family:var(--sans)}
+  .ins-menu button:hover{background:var(--cream-2)}.ins-menu button svg{width:14px;height:14px;color:var(--ink-4)}
+
+  /* ---------------- CONTENT SETTINGS MODAL ---------------- */
+  .scrim{position:fixed;inset:0;background:rgba(46,39,64,.42);display:none;align-items:center;justify-content:center;z-index:50;padding:24px}
+  .scrim.on{display:flex}
+  .modal{background:#fff;border-radius:18px;width:min(460px,100%);max-height:88vh;overflow:auto;box-shadow:0 30px 70px -20px rgba(40,30,70,.5)}
+  .modal-h{display:flex;align-items:center;gap:10px;padding:16px 18px;border-bottom:1px solid var(--rule-2)}
+  .modal-h .cnum.c{background:var(--accent-wash)}.modal-h .cnum.c svg{color:var(--accent-ink)}
+  .modal-h .mt{font-size:14px;font-weight:700;flex:1}
+  .modal-h .mx{width:30px;height:30px;border:none;background:transparent;border-radius:8px;cursor:pointer;color:var(--ink-4);display:grid;place-items:center}.modal-h .mx:hover{background:var(--cream-2)}.modal-h .mx svg{width:15px;height:15px}
+  .modal-b{padding:16px 18px 20px}
+  .mrow{display:grid;grid-template-columns:78px 1fr;align-items:center;gap:12px;margin-bottom:12px}
+  .mrow.top{align-items:start}
+  .ml{font-family:var(--mono);font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:.03em;color:var(--ink-4)}
+  .mi{width:100%;border:1px solid var(--rule);border-radius:9px;padding:9px 11px;font-size:13px;font-family:var(--sans);color:var(--ink);background:#fff}.mi:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 2px var(--accent-wash)}
+  textarea.mi{resize:vertical}
+  .segs{display:inline-flex;background:var(--cream-2);border-radius:9px;padding:3px;width:100%}
+  .seg{flex:1;border:none;background:transparent;font-family:var(--sans);font-size:12.5px;font-weight:600;color:var(--ink-4);padding:7px 10px;border-radius:7px;cursor:pointer}
+  .seg.on{background:#fff;color:var(--accent-ink);box-shadow:0 1px 2px rgba(109,90,230,.12)}
+  .cbxs{display:flex;gap:16px}.cbxs label,.cbx1{display:inline-flex;align-items:center;gap:7px;font-size:12.5px;color:var(--ink-3);cursor:pointer}
+  .cbxs input,.cbx1 input{accent-color:var(--accent)}
+  .mnote{grid-column:1/-1;font-size:11px;line-height:1.5;color:var(--ink-4);background:var(--accent-tint);border-radius:9px;padding:9px 11px;margin:2px 0 0}
+  .modal-f{display:flex;justify-content:flex-end;gap:9px;padding:0 18px 18px}
+  .mdone{border:none;background:var(--accent);color:#fff;font-size:13px;font-weight:600;padding:10px 18px;border-radius:10px;cursor:pointer;font-family:var(--sans)}.mdone:hover{background:var(--accent-2)}
+</style>
+
+<svg style="display:none">
+  <symbol id="i-up" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6"><path d="M6 15l6-6 6 6"/></symbol>
+  <symbol id="i-down" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6"><path d="M6 9l6 6 6-6"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M12 5v14M5 12h14"/></symbol>
+  <symbol id="i-x" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M6 6l12 12M18 6L6 18"/></symbol>
+  <symbol id="i-doc" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M6 2h8l4 4v16H6z"/><path d="M14 2v4h4"/><line x1="9" y1="12" x2="15" y2="12"/><line x1="9" y1="16" x2="13" y2="16"/></symbol>
+  <symbol id="i-gear" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="12" cy="12" r="3"/><path d="M12 2.5l1.4 2.2 2.6-.5.4 2.6 2.3 1.3-1 2.4 1 2.4-2.3 1.3-.4 2.6-2.6-.5L12 21.5l-1.4-2.2-2.6.5-.4-2.6-2.3-1.3 1-2.4-1-2.4 2.3-1.3.4-2.6 2.6.5z"/></symbol>
+</svg>
+
+<div class="wrap">
+  <h1 class="doc">Overview — Cards</h1>
+  <p class="cap"><b>Refined.</b> Roomier answers, one consistent Settings panel for every type, a modal for content-block settings, and <b>＋</b> inserters between cards. Reorder with <b>↑ / ↓</b>. Everything is live.</p>
+  <div class="cards" id="cards"></div>
+</div>
+
+<!-- content settings modal -->
+<div class="scrim" id="scrim">
+  <div class="modal">
+    <div class="modal-h"><span class="cnum c">%doc%</span><span class="mt">Content block settings</span><button class="mx" id="mClose">%x%</button></div>
+    <div class="modal-b" id="mBody"></div>
+    <div class="modal-f"><button class="mdone" id="mDone">Done</button></div>
+  </div>
+</div>
+
+<script>
+  const POSTS=["How to choose your first snowboard","Waxing 101 — keep your base fast","Park vs. all-mountain — which rider are you?"];
+  const TYPES=["Single select","Multi select","Scale","Short text"];
+  let QS=[
+    {id:"q1",type:"Single select",text:"What best describes how you ride? Choose the style that gets you most excited on the mountain.",answers:[{id:"a1",t:"Park & Freestyle — rails, jumps, and creative expression"},{id:"a2",t:"All-Mountain — I go wherever the mountain takes me"},{id:"a3",t:"Carving & Precision — edge-to-edge control on groomed runs"},{id:"a4",t:"Backcountry & Powder — off-piste and untracked terrain"}]},
+    {id:"q2",type:"Multi select",set:{min:1,max:2},text:"Which features matter most? Pick the ones you care about.",answers:[{id:"b1",t:"Lightweight build"},{id:"b2",t:"Powder float"},{id:"b3",t:"Edge grip on ice"},{id:"b4",t:"Park durability"}]},
+    {id:"c1",kind:"content",mode:"embed",src:"blog",post:0,action:"read",cap:{email:true,sms:false},terms:true,discount:false},
+    {id:"q3",type:"Scale",set:{min:1,max:5,low:"Beginner",high:"Expert"},text:"How would you honestly rate your riding ability right now?",answers:[]},
+    {id:"q4",type:"Single select",text:"How important is board responsiveness and edge hold to you?",answers:[{id:"d1",t:"Critical — I want precision"},{id:"d2",t:"Nice to have"},{id:"d3",t:"Not a priority"}]},
+  ];
+
+  const $=id=>document.getElementById(id);
+  const esc=s=>String(s).replace(/[&<>]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]));
+  const ic=id=>`<svg><use href="#${id}"/></svg>`;
+  let uid=0; const nid=p=>p+(++uid)+"_"+Math.round(performance.now());
+
+  // fix the modal icon placeholders
+  $("scrim").innerHTML=$("scrim").innerHTML.replace("%doc%",ic("i-doc")).replace("%x%",ic("i-x"));
+
+  const contentSummary=q=>{
+    if(q.mode==="message")return `Message${q.heading?" · "+esc(q.heading):""}`;
+    const L={blog:"blog post",video:"video",image:"image"}[q.src||"blog"];
+    const title=(q.src||"blog")==="blog"?POSTS[q.post||0]:L;
+    let s=`Embedded ${L} · ${esc(title)}`;
+    if((q.action||"read")==="send"){const w=[q.cap?.email!==false&&"email",q.cap?.sms&&"SMS"].filter(Boolean).join(" + ")||"contact";s+=` · collects ${w}`;}
+    return s;
+  };
+
+  function answers(q){
+    if(q.type==="Scale"){const s=q.set;let nums="";for(let v=1;v<=s.max;v++)nums+=`<span class="sn${(v===1||v===s.max)?" end":""}">${v}</span>`;
+      return `<div class="scaleprev"><div class="scalenums">${nums}</div>
+        <div class="scaleends">
+          <label class="se"><span class="sek">1</span><input class="slab" data-wl="low" data-id="${q.id}" value="${esc(s.low||"")}" placeholder="Label for 1 (optional)"></label>
+          <label class="se end"><input class="slab" data-wl="high" data-id="${q.id}" value="${esc(s.high||"")}" placeholder="Label for ${s.max} (optional)"><span class="sek">${s.max}</span></label>
+        </div></div>`;}
+    if(q.type==="Short text")return `<div class="meta">Open text answer — respondents type their own reply.</div>`;
+    return `<ul class="alist">${q.answers.map(a=>`<li><span class="atx" contenteditable data-a="${q.id}:${a.id}">${esc(a.t)}</span><button class="adel" data-adel="${q.id}:${a.id}" title="Delete answer">${ic("i-x")}</button></li>`).join("")}</ul><button class="addans" data-add="${q.id}">${ic("i-plus")} Add answer</button>`;
+  }
+  const typeSel=q=>`<select class="tsel" data-ty="${q.id}">${TYPES.map(t=>`<option${t===q.type?" selected":""}>${t}</option>`).join("")}</select>`;
+  const stp=(k,v,id)=>`<span class="stp"><button data-st="${k}" data-id="${id}" data-d="-1">−</button><b>${v}</b><button data-st="${k}" data-id="${id}" data-d="1">+</button></span>`;
+
+  // ONE settings format for every type that has settings
+  function settingsPanel(q){
+    if(q.type==="Multi select"){const s=q.set;return `<div class="v2set"><span class="sh">Settings</span>
+      <div class="setr"><span class="setl">Min</span>${stp("min",s.min,q.id)}</div>
+      <div class="setr"><span class="setl">Max</span>${stp("max",s.max,q.id)}</div></div>`;}
+    if(q.type==="Scale"){const s=q.set;return `<div class="v2set"><span class="sh">Settings</span>
+      <div class="setr"><span class="setl">Max</span>${stp("max",s.max,q.id)}</div>
+      <div class="sethint">Scale runs 1 → ${s.max}. End labels are edited on the left.</div></div>`;}
+    return "";  // single select / short text have no settings
+  }
+
+  function insHTML(i){
+    return `<div class="ins" data-ins="${i}"><button class="ins-add" data-instoggle="${i}">${ic("i-plus")}</button>
+      <div class="ins-menu"><button data-insq="${i}">${ic("i-plus")} Question</button><button data-insc="${i}">${ic("i-doc")} Content block</button></div></div>`;
+  }
+
+  function render(){
+    let n=0;
+    const rows=QS.map((q,i)=>{
+      const mvb=`<div class="mv"><button class="mvb" data-mv="-1" data-id="${q.id}" ${i===0?"disabled":""}>${ic("i-up")}</button><button class="mvb" data-mv="1" data-id="${q.id}" ${i===QS.length-1?"disabled":""}>${ic("i-down")}</button></div>`;
+      let card;
+      if(q.kind==="content"){
+        card=`<div class="v2card content">
+          <div class="v2head"><div class="v2head-l">${mvb}<span class="cnum c">${ic("i-doc")}</span><div class="v2q" contenteditable data-q="${q.id}">${esc(q.mode==="message"?(q.heading||"Message"):POSTS[q.post||0])}</div></div>
+            <div class="v2type hasline"><span class="ctag">◆ Content block</span></div></div>
+          <div class="v2body content hasset"><div class="v2ans"><div class="meta">${contentSummary(q)}</div></div>
+            <div class="v2set"><span class="sh">Settings</span><button class="setbtn" data-csettings="${q.id}">${ic("i-gear")} Edit settings</button></div></div>
+        </div>`;
+      } else {
+        n++;
+        const set=settingsPanel(q);
+        card=`<div class="v2card">
+          <div class="v2head"><div class="v2head-l">${mvb}<span class="cnum">${n}</span><div class="v2q" contenteditable data-q="${q.id}">${esc(q.text)}</div></div>
+            <div class="v2type${set?" hasline":""}">${typeSel(q)}</div></div>
+          <div class="v2body${set?" hasset":""}"><div class="v2ans">${answers(q)}</div>${set}</div>
+        </div>`;
+      }
+      return insHTML(i)+card;
+    }).join("");
+    $("cards").innerHTML=rows+insHTML(QS.length);
+    bind();
+  }
+
+  function move(id,d){const i=QS.findIndex(x=>x.id===id),j=i+d;if(j<0||j>=QS.length)return;const t=QS[i];QS[i]=QS[j];QS[j]=t;}
+  function clampSet(q,key,d){let v=q.set[key]+d;
+    if(q.type==="Multi select"){if(key==="min")v=Math.max(1,Math.min(v,q.set.max));else v=Math.max(q.set.min,Math.min(v,q.answers.length));}
+    else{if(key==="min")v=Math.max(1,Math.min(v,q.set.max-1));else v=Math.max(q.set.min+1,Math.min(v,10));}
+    q.set[key]=v;}
+  function insertAt(i,kind){
+    const q=kind==="content"?{id:nid("c"),kind:"content",mode:"message",heading:"New message",body:"A quick note before results."}
+      :{id:nid("q"),type:"Single select",text:"New question",answers:[{id:nid("a"),t:"Option 1"},{id:nid("a"),t:"Option 2"}]};
+    QS.splice(i,0,q);render();
+    if(kind==="content")openModal(q.id);   // configure it right away
+  }
+
+  function bind(){
+    const r=$("cards");
+    r.querySelectorAll("[data-mv]").forEach(b=>b.onclick=()=>{move(b.dataset.id,+b.dataset.mv);render();});
+    r.querySelectorAll("[data-ty]").forEach(s=>s.onchange=()=>{const q=QS.find(x=>x.id===s.dataset.ty);q.type=s.value;if(q.type==="Multi select")q.set={min:1,max:q.answers.length};else if(q.type==="Scale")q.set={min:1,max:5,low:"",high:""};else q.set=undefined;render();});
+    r.querySelectorAll("[data-st]").forEach(b=>b.onclick=()=>{clampSet(QS.find(x=>x.id===b.dataset.id),b.dataset.st,+b.dataset.d);render();});
+    r.querySelectorAll("[data-wl]").forEach(inp=>inp.addEventListener("input",()=>{QS.find(x=>x.id===inp.dataset.id).set[inp.dataset.wl]=inp.value;}));
+    r.querySelectorAll("[data-q]").forEach(el=>el.addEventListener("input",()=>{const q=QS.find(x=>x.id===el.dataset.q);if(q.kind==="content"){if(q.mode==="message")q.heading=el.textContent;}else q.text=el.textContent;}));
+    r.querySelectorAll("[data-a]").forEach(el=>el.addEventListener("input",()=>{const[qid,aid]=el.dataset.a.split(":");QS.find(x=>x.id===qid).answers.find(a=>a.id===aid).t=el.textContent;}));
+    r.querySelectorAll("[data-adel]").forEach(b=>b.onclick=()=>{const[qid,aid]=b.dataset.adel.split(":");const q=QS.find(x=>x.id===qid);if(q.answers.length<=2)return;q.answers=q.answers.filter(a=>a.id!==aid);render();});
+    r.querySelectorAll("[data-add]").forEach(b=>b.onclick=()=>{QS.find(x=>x.id===b.dataset.add).answers.push({id:nid("a"),t:"New answer"});render();});
+    r.querySelectorAll("[data-csettings]").forEach(b=>b.onclick=()=>openModal(b.dataset.csettings));
+    // inserters
+    r.querySelectorAll("[data-instoggle]").forEach(b=>b.onclick=e=>{e.stopPropagation();const el=b.closest(".ins");const open=el.classList.contains("open");r.querySelectorAll(".ins.open").forEach(x=>x.classList.remove("open"));if(!open)el.classList.add("open");});
+    r.querySelectorAll("[data-insq]").forEach(b=>b.onclick=()=>insertAt(+b.dataset.insq,"question"));
+    r.querySelectorAll("[data-insc]").forEach(b=>b.onclick=()=>insertAt(+b.dataset.insc,"content"));
+  }
+  document.addEventListener("click",e=>{if(!e.target.closest(".ins"))$("cards").querySelectorAll(".ins.open").forEach(x=>x.classList.remove("open"));});
+
+  /* ---------------- content modal ---------------- */
+  let editId=null;
+  function openModal(id){editId=id;renderModal();$("scrim").classList.add("on");}
+  function closeModal(){$("scrim").classList.remove("on");editId=null;render();}
+  function renderModal(){
+    const q=QS.find(x=>x.id===editId);
+    const modeRow=`<div class="mrow"><span class="ml">Kind</span><div class="segs"><button class="seg${q.mode==="message"?" on":""}" data-cm="message">Message</button><button class="seg${q.mode==="embed"?" on":""}" data-cm="embed">Embed existing</button></div></div>`;
+    let rest="";
+    if(q.mode==="message"){
+      rest=`<div class="mrow"><span class="ml">Heading</span><input class="mi" data-cf="heading" value="${esc(q.heading||"")}"></div>
+      <div class="mrow top"><span class="ml">Body</span><textarea class="mi" data-cf="body" rows="3">${esc(q.body||"")}</textarea></div>`;
+    } else {
+      const src=q.src||"blog";
+      const srcSel=`<select class="mi" data-cf="src">${[["blog","Blog post"],["video","Video"],["image","Image"]].map(([v,l])=>`<option value="${v}"${src===v?" selected":""}>${l}</option>`).join("")}</select>`;
+      const postRow=src==="blog"?`<div class="mrow"><span class="ml">Post</span><select class="mi" data-cf="post">${POSTS.map((p,i)=>`<option value="${i}"${(q.post||0)===i?" selected":""}>${esc(p)}</option>`).join("")}</select></div>`:"";
+      const actSel=`<select class="mi" data-cf="action">${[["read","Read inside the quiz"],["send","Read more → send it to them"]].map(([v,l])=>`<option value="${v}"${(q.action||"read")===v?" selected":""}>${l}</option>`).join("")}</select>`;
+      let send="";
+      if((q.action||"read")==="send"){
+        send=`<div class="mrow"><span class="ml">Collect</span><div class="cbxs"><label><input type="checkbox" data-cc="email" ${q.cap?.email!==false?"checked":""}>Email</label><label><input type="checkbox" data-cc="sms" ${q.cap?.sms?"checked":""}>SMS</label></div></div>
+        <div class="mrow"><span class="ml"></span><label class="cbx1"><input type="checkbox" data-ct="terms" ${q.terms!==false?"checked":""}>Show terms &amp; consent</label></div>
+        <div class="mrow"><span class="ml"></span><label class="cbx1"><input type="checkbox" data-ct="discount" ${q.discount?"checked":""}>Offer a discount to unlock</label></div>
+        <p class="mnote">Collecting here replaces the separate Email-capture step${q.discount?"; the coupon shows on the results page":""}.</p>`;
+      }
+      rest=`<div class="mrow"><span class="ml">Source</span>${srcSel}</div>${postRow}<div class="mrow"><span class="ml">Read more</span>${actSel}</div>${send}`;
+    }
+    $("mBody").innerHTML=modeRow+rest;
+    // modal handlers
+    $("mBody").querySelectorAll("[data-cm]").forEach(b=>b.onclick=()=>{q.mode=b.dataset.cm;if(q.mode==="embed"&&!q.src)q.src="blog";renderModal();});
+    $("mBody").querySelectorAll("[data-cf]").forEach(el=>{
+      const k=el.dataset.cf;const struct=(k==="src"||k==="action");
+      el.addEventListener(el.tagName==="SELECT"?"change":"input",()=>{q[k]=k==="post"?+el.value:el.value;if(k==="action"&&q.action==="send"&&!q.cap)q.cap={email:true,sms:false};if(struct)renderModal();});
+    });
+    $("mBody").querySelectorAll("[data-cc]").forEach(cb=>cb.onchange=()=>{if(!q.cap)q.cap={};q.cap[cb.dataset.cc]=cb.checked;});
+    $("mBody").querySelectorAll("[data-ct]").forEach(cb=>cb.onchange=()=>{q[cb.dataset.ct]=cb.checked;renderModal();});
+  }
+  $("mClose").onclick=closeModal;$("mDone").onclick=closeModal;
+  $("scrim").addEventListener("click",e=>{if(e.target===$("scrim"))closeModal();});
+
+  render();
+</script>

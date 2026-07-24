@@ -1,0 +1,388 @@
+<title>Quiz Builder — Full Functional Breakdown</title>
+<style>
+:root{
+  --bg:#FBFAFC; --surface:#fff; --surface-2:#F6F4FA;
+  --ink:#2A2535; --ink-2:#4E4860; --muted:#726C82; --faint:#A79FB8;
+  --rule:#E9E6F0; --rule-2:#F1EEF6;
+  --accent:#6D5AE6; --accent-ink:#3C3489; --accent-wash:#EDEBFC; --accent-tint:#F4F2FD;
+  --ok:#158A5A; --ok-wash:#E4F3EB; --ok-ink:#0F6B45;
+  --build:#B26A16; --build-wash:#FBEEDA; --build-ink:#8A5310;
+  --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  --sans:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;
+  --shadow:0 1px 2px rgba(42,37,53,.04), 0 8px 24px -12px rgba(42,37,53,.12);
+}
+@media (prefers-color-scheme:dark){
+  :root{
+    --bg:#151320; --surface:#1E1B29; --surface-2:#242030;
+    --ink:#ECEAF4; --ink-2:#C8C3D6; --muted:#968FA8; --faint:#6C6580;
+    --rule:#322C41; --rule-2:#2A2537;
+    --accent:#9585F0; --accent-ink:#C9C0F7; --accent-wash:#2C2646; --accent-tint:#221E35;
+    --ok:#3FBF88; --ok-wash:#16301F; --ok-ink:#7FD9AE;
+    --build:#E0A050; --build-wash:#302410; --build-ink:#F0C889;
+    --shadow:0 1px 2px rgba(0,0,0,.3), 0 10px 30px -14px rgba(0,0,0,.5);
+  }
+}
+:root[data-theme="light"]{
+  --bg:#FBFAFC; --surface:#fff; --surface-2:#F6F4FA; --ink:#2A2535; --ink-2:#4E4860; --muted:#726C82; --faint:#A79FB8;
+  --rule:#E9E6F0; --rule-2:#F1EEF6; --accent:#6D5AE6; --accent-ink:#3C3489; --accent-wash:#EDEBFC; --accent-tint:#F4F2FD;
+  --ok:#158A5A; --ok-wash:#E4F3EB; --ok-ink:#0F6B45; --build:#B26A16; --build-wash:#FBEEDA; --build-ink:#8A5310;
+  --shadow:0 1px 2px rgba(42,37,53,.04), 0 8px 24px -12px rgba(42,37,53,.12);
+}
+:root[data-theme="dark"]{
+  --bg:#151320; --surface:#1E1B29; --surface-2:#242030; --ink:#ECEAF4; --ink-2:#C8C3D6; --muted:#968FA8; --faint:#6C6580;
+  --rule:#322C41; --rule-2:#2A2537; --accent:#9585F0; --accent-ink:#C9C0F7; --accent-wash:#2C2646; --accent-tint:#221E35;
+  --ok:#3FBF88; --ok-wash:#16301F; --ok-ink:#7FD9AE; --build:#E0A050; --build-wash:#302410; --build-ink:#F0C889;
+  --shadow:0 1px 2px rgba(0,0,0,.3), 0 10px 30px -14px rgba(0,0,0,.5);
+}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0; background:var(--bg); color:var(--ink); font-family:var(--sans); line-height:1.55;
+  font-size:15px; -webkit-font-smoothing:antialiased;}
+.wrap{max-width:940px; margin:0 auto; padding:0 22px 90px;}
+a{color:var(--accent-ink)}
+
+/* header */
+.masthead{padding:44px 0 26px; border-bottom:1px solid var(--rule);}
+.eyebrow{font:600 11px var(--mono); letter-spacing:.14em; text-transform:uppercase; color:var(--accent-ink);
+  background:var(--accent-wash); display:inline-block; padding:5px 10px; border-radius:6px;}
+h1{font-size:clamp(28px,4.4vw,40px); line-height:1.08; letter-spacing:-.02em; margin:18px 0 12px; text-wrap:balance; font-weight:700;}
+.lede{font-size:clamp(15px,1.9vw,17.5px); color:var(--ink-2); max-width:64ch; margin:0;}
+.metabar{display:flex; flex-wrap:wrap; gap:8px; margin-top:20px;}
+.legend{display:inline-flex; align-items:center; gap:7px; font:600 11.5px var(--sans); padding:5px 11px; border-radius:999px; border:1px solid var(--rule);}
+.legend .dot{width:8px;height:8px;border-radius:50%}
+.legend.ok{color:var(--ok-ink); background:var(--ok-wash); border-color:transparent} .legend.ok .dot{background:var(--ok)}
+.legend.build{color:var(--build-ink); background:var(--build-wash); border-color:transparent} .legend.build .dot{background:var(--build)}
+
+/* section */
+section{padding:40px 0 8px; border-bottom:1px solid var(--rule-2);}
+.sec-eyebrow{font:700 10.5px var(--mono); letter-spacing:.13em; text-transform:uppercase; color:var(--faint);}
+h2{font-size:clamp(21px,3vw,27px); letter-spacing:-.015em; margin:8px 0 6px; font-weight:700; text-wrap:balance;}
+h3{font-size:16.5px; margin:26px 0 8px; font-weight:650; letter-spacing:-.01em;}
+p{margin:10px 0; color:var(--ink-2); max-width:70ch;}
+strong{color:var(--ink); font-weight:640;}
+.sec-intro{color:var(--ink-2); max-width:70ch; font-size:15.5px;}
+
+/* the 5 surfaces spine */
+.spine{display:grid; grid-template-columns:repeat(5,1fr); gap:8px; margin:22px 0 8px;}
+.surf{background:var(--surface); border:1px solid var(--rule); border-radius:12px; padding:13px 13px 14px; box-shadow:var(--shadow);}
+.surf .st{font:700 9.5px var(--mono); letter-spacing:.08em; text-transform:uppercase; color:var(--accent-ink);}
+.surf b{display:block; font-size:14.5px; margin:3px 0 5px; letter-spacing:-.01em;}
+.surf p{margin:0; font-size:12px; color:var(--muted); line-height:1.4;}
+.flowline{display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin:18px 0 4px; padding:14px 16px; background:var(--accent-tint); border:1px solid var(--accent-wash); border-radius:12px;}
+.flowline .step{font:600 12.5px var(--sans); color:var(--accent-ink);}
+.flowline .arw{color:var(--accent); font-weight:700;}
+
+/* chain rows — the signature "everything linked" device */
+.chain{background:var(--surface); border:1px solid var(--rule); border-radius:13px; box-shadow:var(--shadow); margin:14px 0; overflow:hidden;}
+.chain-hd{display:flex; align-items:center; gap:11px; padding:13px 16px; border-bottom:1px solid var(--rule-2);}
+.chain-hd b{font-size:15px; letter-spacing:-.01em;}
+.chip{font:700 9.5px var(--mono); letter-spacing:.05em; text-transform:uppercase; padding:3px 8px; border-radius:6px; white-space:nowrap;}
+.chip.ok{color:var(--ok-ink); background:var(--ok-wash);}
+.chip.build{color:var(--build-ink); background:var(--build-wash);}
+.chip.part{color:var(--accent-ink); background:var(--accent-wash);}
+.chain-hd .chip{margin-left:auto}
+.pipe{display:grid; grid-template-columns:repeat(4,1fr); gap:0;}
+.pipe .cell{padding:12px 16px; border-right:1px solid var(--rule-2); position:relative;}
+.pipe .cell:last-child{border-right:none}
+.pipe .cl{font:700 9px var(--mono); letter-spacing:.08em; text-transform:uppercase; color:var(--faint); margin-bottom:5px; display:flex; align-items:center; gap:5px;}
+.pipe .cv{font-size:12.8px; color:var(--ink-2); line-height:1.45;}
+.pipe .cv b{color:var(--ink);}
+.pipe .cell::after{content:'→'; position:absolute; right:-8px; top:50%; transform:translateY(-50%); color:var(--accent); font-weight:700; z-index:2; font-size:13px; background:var(--surface); width:16px; text-align:center;}
+.pipe .cell:last-child::after{display:none}
+
+/* recipe cards */
+.recipe{background:var(--surface); border:1px solid var(--rule); border-radius:14px; box-shadow:var(--shadow); margin:16px 0; overflow:hidden;}
+.recipe-hd{padding:15px 18px; display:flex; align-items:flex-start; gap:12px; border-bottom:1px solid var(--rule-2); background:var(--surface-2);}
+.recipe-hd .num{font:700 12px var(--mono); color:var(--accent-ink); background:var(--accent-wash); width:26px;height:26px; border-radius:7px; display:grid; place-items:center; flex:none; margin-top:1px;}
+.recipe-hd b{font-size:16px; display:block; letter-spacing:-.01em;}
+.recipe-hd span{font-size:12.5px; color:var(--muted);}
+.recipe-body{padding:6px 18px 16px;}
+.rrow{display:grid; grid-template-columns:170px 1fr; gap:14px; padding:11px 0; border-bottom:1px solid var(--rule-2); align-items:baseline;}
+.rrow:last-child{border-bottom:none}
+.rrow .rk{font:600 12px var(--sans); color:var(--ink);}
+.rrow .rk .loc{display:block; font:600 9.5px var(--mono); text-transform:uppercase; letter-spacing:.05em; color:var(--accent-ink); margin-top:3px;}
+.rrow .rv{font-size:13px; color:var(--ink-2);}
+.tag{display:inline-block; font:600 11px var(--sans); background:var(--surface-2); border:1px solid var(--rule); color:var(--ink-2); border-radius:6px; padding:2px 8px; margin:2px 3px 2px 0;}
+.tag.b{background:var(--build-wash); border-color:transparent; color:var(--build-ink);}
+
+/* callout / deep dive */
+.callout{background:var(--accent-tint); border:1px solid var(--accent-wash); border-radius:13px; padding:16px 18px; margin:16px 0;}
+.callout.warn{background:var(--build-wash); border-color:transparent;}
+.callout b{color:var(--ink)}
+.rule-card{background:var(--surface); border:1px solid var(--rule); border-left:3px solid var(--accent); border-radius:9px; padding:12px 15px; margin:11px 0; box-shadow:var(--shadow);}
+.rule-card .rt{font:700 10px var(--mono); letter-spacing:.06em; text-transform:uppercase; color:var(--accent-ink); margin-bottom:3px;}
+.rule-card p{margin:2px 0; font-size:13.5px;}
+
+/* size ladder */
+.sizes{display:grid; grid-template-columns:repeat(4,1fr); gap:10px; margin:16px 0;}
+.sizecard{background:var(--surface); border:1px solid var(--rule); border-radius:11px; padding:13px; box-shadow:var(--shadow);}
+.sizecard .sd{height:70px; border-radius:7px; background:repeating-linear-gradient(135deg,var(--surface-2),var(--surface-2) 6px,var(--accent-tint) 6px,var(--accent-tint) 12px); border:1px solid var(--rule); display:grid; place-items:center; margin-bottom:9px; position:relative; overflow:hidden;}
+.sizecard .modal{background:var(--accent); border-radius:4px;}
+.sizecard b{font-size:13px; display:block;}
+.sizecard small{font-size:11px; color:var(--muted); line-height:1.35; display:block; margin-top:3px;}
+
+/* table */
+.tablewrap{overflow-x:auto; margin:16px 0; border:1px solid var(--rule); border-radius:12px; box-shadow:var(--shadow);}
+table{border-collapse:collapse; width:100%; min-width:720px; font-size:12.8px; background:var(--surface);}
+thead th{text-align:left; font:700 9.5px var(--mono); letter-spacing:.07em; text-transform:uppercase; color:var(--faint);
+  padding:11px 14px; border-bottom:1px solid var(--rule); background:var(--surface-2); position:sticky; top:0;}
+tbody td{padding:11px 14px; border-bottom:1px solid var(--rule-2); vertical-align:top; color:var(--ink-2); line-height:1.4;}
+tbody tr:last-child td{border-bottom:none}
+tbody td b{color:var(--ink);}
+.grouprow td{background:var(--accent-tint); font:700 10px var(--mono); letter-spacing:.08em; text-transform:uppercase; color:var(--accent-ink); padding:9px 14px;}
+.s-ok{color:var(--ok-ink); font-weight:700;} .s-build{color:var(--build-ink); font-weight:700;} .s-part{color:var(--accent-ink); font-weight:700;}
+
+/* toc */
+.toc{position:sticky; top:0; z-index:5; background:color-mix(in srgb,var(--bg) 88%,transparent); backdrop-filter:blur(8px); border-bottom:1px solid var(--rule); margin-bottom:0;}
+.toc-inner{max-width:940px; margin:0 auto; padding:9px 22px; display:flex; gap:4px; flex-wrap:wrap; align-items:center;}
+.toc a{font:600 11.5px var(--sans); color:var(--muted); text-decoration:none; padding:5px 9px; border-radius:7px;}
+.toc a:hover{background:var(--surface-2); color:var(--ink);}
+.themebtn{margin-left:auto; border:1px solid var(--rule); background:var(--surface); color:var(--muted); border-radius:7px; padding:5px 10px; font:600 11px var(--sans); cursor:pointer;}
+
+@media (max-width:720px){
+  .spine{grid-template-columns:1fr 1fr;}
+  .pipe{grid-template-columns:1fr;}
+  .pipe .cell{border-right:none; border-bottom:1px solid var(--rule-2);}
+  .pipe .cell:last-child{border-bottom:none}
+  .pipe .cell::after{content:'↓'; right:auto; left:16px; top:auto; bottom:-9px; transform:none;}
+  .sizes{grid-template-columns:1fr 1fr;}
+  .rrow{grid-template-columns:1fr; gap:2px;}
+  .toc{position:static}
+}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+
+<nav class="toc">
+  <div class="toc-inner">
+    <a href="#model">Model</a>
+    <a href="#recipes">Format recipes</a>
+    <a href="#sizing">Sizing &amp; adaptation</a>
+    <a href="#map">Full map</a>
+    <a href="#links">How it links</a>
+    <a href="#gaps">Build list</a>
+    <button class="themebtn" id="themebtn">Theme</button>
+  </div>
+</nav>
+
+<div class="wrap">
+  <header class="masthead">
+    <span class="eyebrow">Quiz Builder · Functional Spec</span>
+    <h1>Everything the builder needs to make quizzes like these — and where each piece lives.</h1>
+    <p class="lede">A full dissection of the functionality required to build the MeUndies and Summer Fridays formats (and the strategy library's proven flows): the setting behind each capability, where it lives in the builder, the variations a merchant chooses from, how they select <em>and</em> customize it, and how it travels from control → preview → published embed. Every capability is shown as a single linked chain.</p>
+    <div class="metabar">
+      <span class="legend ok"><span class="dot"></span>In the prototype today</span>
+      <span class="legend build"><span class="dot"></span>To build next</span>
+      <span class="legend" style="color:var(--accent-ink);background:var(--accent-wash);border-color:transparent"><span class="dot" style="background:var(--accent)"></span>Partial — exists, needs completion</span>
+    </div>
+  </header>
+
+  <!-- MODEL -->
+  <section id="model">
+    <div class="sec-eyebrow">01 · The model</div>
+    <h2>Five surfaces, one spine</h2>
+    <p class="sec-intro">Every capability lives on exactly one of five surfaces. Nothing floats: the merchant sets a control, it autosaves to the one quiz document, the live preview re-renders it at the chosen device &amp; pop-up size, and Publish bakes it into the storefront embed. That chain is the through-line for everything below.</p>
+    <div class="spine">
+      <div class="surf"><span class="st">Build</span><b>The canvas</b><p>Screens, blocks, questions &amp; answers, per-screen background. What's on each screen.</p></div>
+      <div class="surf"><span class="st">Products</span><b>What it recommends</b><p>Catalog scope, buckets, and how each answer maps to products.</p></div>
+      <div class="surf"><span class="st">Logic</span><b>How it decides</b><p>Rules, branching, scoring, and the path tester.</p></div>
+      <div class="surf"><span class="st">Design</span><b>How it looks</b><p>Brand tokens, structural presets, spacing, backgrounds — inherited from the store.</p></div>
+      <div class="surf"><span class="st">Settings</span><b>How it behaves</b><p>Placement &amp; size, discounts, capture, boosters, integrations, locales.</p></div>
+    </div>
+    <div class="flowline">
+      <span class="step">Set a control</span><span class="arw">→</span>
+      <span class="step">Autosaves to the quiz doc</span><span class="arw">→</span>
+      <span class="step">Preview re-renders (device · size)</span><span class="arw">→</span>
+      <span class="step">Publish bakes the embed</span><span class="arw">→</span>
+      <span class="step">Live on the store</span>
+    </div>
+    <p>Two more surfaces sit above these: <strong>Templates</strong> (start from a proven flow — pre-sets placement, gate, length, result), and the <strong>Preview toolbar</strong> (device toggle, pop-up size, Expand) which is a *view* of the committed settings, not a separate place to configure.</p>
+  </section>
+
+  <!-- RECIPES -->
+  <section id="recipes">
+    <div class="sec-eyebrow">02 · Format recipes</div>
+    <h2>The reference quizzes, decomposed into builder controls</h2>
+    <p class="sec-intro">Each screenshot format maps to a specific stack of settings. If the builder can produce every row below, it can produce that quiz. Locations are shown as <span style="font:600 9.5px var(--mono);text-transform:uppercase;color:var(--accent-ink)">the surface</span> the control lives on.</p>
+
+    <div class="recipe">
+      <div class="recipe-hd"><span class="num">A</span><div><b>MeUndies — "Who are you shopping for?"</b><span>Full-screen pop-up · image-choice · Valentine's gift finder · 1 of 7</span></div></div>
+      <div class="recipe-body">
+        <div class="rrow"><div class="rk">Container<span class="loc">Settings → Placement</span></div><div class="rv">Pop-up modal, size <b>Full-screen</b> (takes over the viewport, thin margin, close ×). <span class="tag">Placement: Pop-up</span><span class="tag">Size: Full-screen</span></div></div>
+        <div class="rrow"><div class="rk">Screen type<span class="loc">Build</span></div><div class="rv">Question screen. Second screen shows a 3-up variant ("Women's / Men's / Kids") — same block, different column count.</div></div>
+        <div class="rrow"><div class="rk">Answer format<span class="loc">Build → Choice → Design</span></div><div class="rv">Layout <b>Image tiles / Cards</b>, <b>2 columns</b> (3 on the product-types screen). <span class="tag">List</span><span class="tag" style="background:var(--accent-wash);border-color:transparent;color:var(--accent-ink)">Cards</span><span class="tag">Image tiles</span><span class="tag">Pills</span></div></div>
+        <div class="rrow"><div class="rk">Per-answer image<span class="loc">Build → answer → Media</span></div><div class="rv">Full-bleed photo per option, shared aspect ratio, <b>cover fit + focal point</b> (never stretched). Label under the tile. Sourced via Upload / URL / Product catalog.</div></div>
+        <div class="rrow"><div class="rk">Progress "1 of 7"<span class="loc">Build → Progress block</span></div><div class="rv">Progress bar with <b>show count</b>; style bar / dots / steps; position bottom.</div></div>
+        <div class="rrow"><div class="rk">Back + Close<span class="loc">Settings → Chrome</span></div><div class="rv"><b>Back</b> nav button, modal <b>close ×</b>. <span class="tag b">Back/Restart nav = to build</span></div></div>
+      </div>
+    </div>
+
+    <div class="recipe">
+      <div class="recipe-hd"><span class="num">B</span><div><b>Summer Fridays — the skincare quiz</b><span>Large pop-up · intro + text-choice + data-enriched input · branded chrome</span></div></div>
+      <div class="recipe-body">
+        <div class="rrow"><div class="rk">Container<span class="loc">Settings → Placement</span></div><div class="rv">Pop-up modal, size <b>Large</b> (centered card, generous margin). Brand wordmark pinned in the modal header. <span class="tag">Size: Large</span></div></div>
+        <div class="rrow"><div class="rk">Intro screen<span class="loc">Build</span></div><div class="rv">Logo block (wordmark) + heading "The Skincare Quiz" + subtext + CTA <b>"Start now →"</b>. Striped background = per-screen background (pattern/image).</div></div>
+        <div class="rrow"><div class="rk">Text-choice + learn-more<span class="loc">Build → Choice</span></div><div class="rv">Layout <b>List</b>, 1 column. Helper "Select one to learn more," and each option reveals a <b>description on select</b>. <span class="tag b">Per-answer description / reveal = to build</span></div></div>
+        <div class="rrow"><div class="rk">Location + climate data<span class="loc">Build → Question type</span></div><div class="rv">"I live in…" text input that pulls live <b>UV / humidity / pollution</b> for the entered city. <span class="tag b">Data-enriched input type = to build</span></div></div>
+        <div class="rrow"><div class="rk">Header chrome<span class="loc">Settings → Chrome</span></div><div class="rv">Back arrow, <b>Restart</b>, close ×, brand wordmark. <span class="tag b">Restart + header wordmark = to build</span></div></div>
+        <div class="rrow"><div class="rk">Result<span class="loc">Result screen</span></div><div class="rv">"Personalized daily routine" = single bespoke output (Featured result layout).</div></div>
+      </div>
+    </div>
+    <p>The gap list is small and specific: <strong>Back / Restart nav chrome</strong>, a <strong>per-answer "learn-more" description</strong>, and a <strong>data-enriched input</strong> (location→climate). Everything else in both formats is already a control in the prototype.</p>
+  </section>
+
+  <!-- SIZING -->
+  <section id="sizing">
+    <div class="sec-eyebrow">03 · The part that's subtle</div>
+    <h2>Pop-up sizes: select the size, then adapt the content</h2>
+    <p class="sec-intro">Choosing a size is one control. Making the content <em>look right</em> at that size is a second set of controls — because a bigger frame must mean <strong>more breathing room, not stretched pictures</strong>. This is the piece worth getting exactly right.</p>
+
+    <h3>Step 1 — Select the format &amp; size</h3>
+    <p>Placement is a real, committed setting (<span style="font:600 9.5px var(--mono);text-transform:uppercase;color:var(--accent-ink)">Settings → Placement</span>), so the choice is locked in and baked at publish — there's no separate "save." The Preview toolbar mirrors the same setting so you can switch sizes while you watch.</p>
+    <div class="sizes">
+      <div class="sizecard"><div class="sd"><div class="modal" style="width:34%;height:44%"></div></div><b>Compact</b><small>~460px. Email capture, 1–2 question micro-quizzes.</small></div>
+      <div class="sizecard"><div class="sd"><div class="modal" style="width:52%;height:60%"></div></div><b>Standard</b><small>~660px. The everyday centered card.</small></div>
+      <div class="sizecard"><div class="sd"><div class="modal" style="width:72%;height:74%"></div></div><b>Large</b><small>~920px. Summer-Fridays-style roomy modal.</small></div>
+      <div class="sizecard"><div class="sd"><div class="modal" style="width:90%;height:90%"></div></div><b>Full-screen</b><small>MeUndies-style takeover, thin margin.</small></div>
+    </div>
+
+    <h3>Step 2 — Adapt the content to the size (so nothing stretches)</h3>
+    <p>These controls decide how the quiz <em>fills</em> the chosen frame. They live mostly in <span style="font:600 9.5px var(--mono);text-transform:uppercase;color:var(--accent-ink)">Design</span> (global) and on each image, and they respond to the frame width so a large modal reads as generous, not blown-up.</p>
+
+    <div class="rule-card"><div class="rt">Content max-width</div><p>Inside a wide/full-screen modal, the reading column caps (e.g. ~640px for questions, ~1080px for a product grid) and centers. The frame gets bigger; the text column doesn't stretch to the edges. <span class="tag">Design → Layout</span></p></div>
+    <div class="rule-card"><div class="rt">Padding &amp; gutters scale up</div><p>A Large / Full-screen modal uses larger section padding and side gutters than Compact. Merchant control is the <b>Spacing</b> feel (Compact ↔ Airy) plus per-screen padding; the size preset raises the floor automatically. <span class="tag">Design → Style · Spacing</span></p></div>
+    <div class="rule-card"><div class="rt">Images fit, never stretch — the key rule</div><p>Every image has a fixed <b>aspect ratio</b> (1:1 · 4:5 · 4:3 · 16:9) + <b>fit</b> (Cover crops to fill / Contain shows the whole image) + a draggable <b>focal point</b>. On a bigger frame the image renders larger at the <em>same ratio</em>, cropped by the focal point — it is never distorted. Product-grid ratio is one shared setting so cards always align. <span class="tag">Per image · answer / hero / product</span></p></div>
+    <div class="rule-card"><div class="rt">Columns respond to width</div><p>Answers: 1 column on mobile → 2–3 on desktop/large. Results: 1 → up to 4, capped. Merchant sets the desktop column target; mobile collapses automatically. <span class="tag">Choice → Design · Columns</span><span class="tag">Result → Columns</span></p></div>
+    <div class="rule-card"><div class="rt">Type scale (bounded)</div><p>Headings/body step up modestly on wide frames and stop — a floor of 14px body, a ceiling so nothing balloons. Driven by the brand token scale, not per-size guesswork. <span class="tag">Design → Brand · Type</span></p></div>
+
+    <div class="callout"><b>The governing principle:</b> the quiz is <em>one</em> responsive document. The size control changes the <b>frame</b>; Design tokens + per-image settings + column targets change how the content <b>fills</b> it. Layout is computed at the true frame width, then the whole thing is scaled to fit the builder pane — so the preview never lies about wrapping, and "more room" always means padding &amp; larger images at a fixed ratio, never stretch. <span style="color:var(--build-ink)"><b>To complete:</b> expose per-size padding as an explicit, previewable control (today it's the global Spacing feel).</span></div>
+  </section>
+
+  <!-- MAP -->
+  <section id="map">
+    <div class="sec-eyebrow">04 · The full map</div>
+    <h2>Every capability → where it lives → variations → what publishes</h2>
+    <p class="sec-intro">The complete functional inventory, grouped by surface. Read each row as a chain: the control on the left, the choices in the middle, the storefront result on the right.</p>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>Capability</th><th>Where it lives</th><th>Variations to choose from</th><th>Publishes as</th><th>Status</th></tr></thead>
+        <tbody>
+          <tr class="grouprow"><td colspan="5">Container &amp; chrome</td></tr>
+          <tr><td><b>Placement</b></td><td>Settings → Placement</td><td>Inline · Pop-up · Full-page · Product widget</td><td>Theme section / popup trigger / <code>/quiz</code> page</td><td class="s-ok">Live</td></tr>
+          <tr><td><b>Pop-up size</b></td><td>Settings + Preview toolbar</td><td>Compact · Standard · Large · Full-screen</td><td>Modal width/height + margin</td><td class="s-ok">Live</td></tr>
+          <tr><td><b>Inline width</b></td><td>Preview toolbar (Inline)</td><td>Narrow · Standard · Wide</td><td>Section max-width on the page</td><td class="s-ok">Live</td></tr>
+          <tr><td><b>Floating launcher</b></td><td>Settings → Placement</td><td>On/off · icon · corner · color</td><td>Sticky button that opens the quiz</td><td class="s-part">Toggle only</td></tr>
+          <tr><td><b>Modal chrome</b></td><td>Settings → Chrome</td><td>Close × · Back · Restart · brand wordmark</td><td>Modal header/footer controls</td><td class="s-build">Close only</td></tr>
+
+          <tr class="grouprow"><td colspan="5">Screens &amp; flow</td></tr>
+          <tr><td><b>Screen types</b></td><td>Build → filmstrip → Add</td><td>Intro · Question · Content · Email · Result · End</td><td>Sequenced quiz steps</td><td class="s-ok">Live</td></tr>
+          <tr><td><b>Gate placement</b></td><td>Template default + Email screen position</td><td>At result · Before results · Deferred to action · Mid-flow · Front</td><td>Where email is asked</td><td class="s-ok">Live</td></tr>
+          <tr><td><b>Reorder / add / delete</b></td><td>Build → filmstrip</td><td>Drag · duplicate · delete</td><td>Step order</td><td class="s-ok">Live</td></tr>
+
+          <tr class="grouprow"><td colspan="5">Questions &amp; answers</td></tr>
+          <tr><td><b>Answer layout</b></td><td>Choice → Design (variant tiles)</td><td>List · Cards · Image tiles · Pills</td><td>How options render</td><td class="s-ok">Live</td></tr>
+          <tr><td><b>Columns</b></td><td>Choice → Design</td><td>1 · 2 · 3 (responsive)</td><td>Answer grid width</td><td class="s-ok">Live</td></tr>
+          <tr><td><b>Per-answer media</b></td><td>Build → answer → Media popover</td><td>Emoji · Icon · Upload · URL · Product</td><td>Image/icon on each option</td><td class="s-ok">Live</td></tr>
+          <tr><td><b>Image ratio · fit · focal</b></td><td>Choice/Image → Design</td><td>1:1·4:5·4:3·16:9 · Cover/Contain · focal drag</td><td>Non-distorted media</td><td class="s-part">Ratio/fit live</td></tr>
+          <tr><td><b>Selection</b></td><td>Choice → Settings</td><td>Pick one · Pick many (min/max)</td><td>Single/multi select</td><td class="s-ok">Live</td></tr>
+          <tr><td><b>Scale question</b></td><td>Add → Scale</td><td>3 / 5 / 7 / 10 discrete points + end labels</td><td>Tap-point scale (no slider)</td><td class="s-ok">Live</td></tr>
+          <tr><td><b>Answer "learn-more"</b></td><td>Choice → answer</td><td>Per-option description that reveals on select</td><td>Explanatory text under the choice</td><td class="s-build">To build</td></tr>
+          <tr><td><b>Data-enriched input</b></td><td>Add → Question type</td><td>Location → climate · date · number</td><td>Input that pulls live context</td><td class="s-build">To build</td></tr>
+
+          <tr class="grouprow"><td colspan="5">Design &amp; adaptation</td></tr>
+          <tr><td><b>Brand tokens</b></td><td>Design → Brand</td><td>Colors · fonts · logo (from Shopify)</td><td>The quiz's look</td><td class="s-part">Own artifact</td></tr>
+          <tr><td><b>Structural presets</b></td><td>Design → Theme</td><td>Layout presets (not palettes)</td><td>Starting structure</td><td class="s-build">Per correction</td></tr>
+          <tr><td><b>Spacing / feel</b></td><td>Design → Style</td><td>Imagery · Lines · Spacing sliders</td><td>Density &amp; padding</td><td class="s-ok">Live</td></tr>
+          <tr><td><b>Per-screen background</b></td><td>Build → screen → Background</td><td>Color · gradient · image · pattern · video</td><td>Screen backdrop</td><td class="s-part">Referenced</td></tr>
+          <tr><td><b>Per-size padding</b></td><td>Design (size-aware)</td><td>Padding that scales with pop-up size</td><td>Breathing room per size</td><td class="s-build">To expose</td></tr>
+
+          <tr class="grouprow"><td colspan="5">Results &amp; offers</td></tr>
+          <tr><td><b>Result layout</b></td><td>Result → Design (variant tiles)</td><td>Grid · Featured · Carousel</td><td>How recs render</td><td class="s-ok">Live</td></tr>
+          <tr><td><b>Products per row</b></td><td>Result → Design</td><td>1 · 2 · 3 · 4</td><td>Grid density</td><td class="s-ok">Live</td></tr>
+          <tr><td><b>Card fields</b></td><td>Result → Design</td><td>Price · stars · verified · why · desc · ATC · add-all</td><td>What each card shows</td><td class="s-ok">Live</td></tr>
+          <tr><td><b>One-click ATC + express</b></td><td>Result → Settings</td><td>Add-to-cart · Shop Pay express</td><td>Buy-in-place on results</td><td class="s-ok">Live</td></tr>
+          <tr><td><b>Discount at reveal</b></td><td>Result → Settings + Settings → Discount</td><td>On/off · code · value · expiry</td><td>Banner + pre-applied code</td><td class="s-ok">Live</td></tr>
+          <tr><td><b>Subscription add-on</b></td><td>Result → Settings</td><td>Subscribe &amp; save toggle</td><td>Subscription option on cards</td><td class="s-ok">Live</td></tr>
+          <tr><td><b>Fallback &amp; OOS</b></td><td>Result → Settings</td><td>Fallback on · Badge/Hide/Notify</td><td>Never an empty result</td><td class="s-ok">Live</td></tr>
+
+          <tr class="grouprow"><td colspan="5">Capture · products · behavior</td></tr>
+          <tr><td><b>Email / SMS capture</b></td><td>Email screen → Settings</td><td>Required · skip · consent · SMS · discount-to-unlock</td><td>Lead capture</td><td class="s-ok">Live</td></tr>
+          <tr><td><b>Product scope &amp; buckets</b></td><td>Products</td><td>Collections · recommendation buckets</td><td>The recommendable pool</td><td class="s-part">Structure</td></tr>
+          <tr><td><b>Answer → product mapping</b></td><td>Products / Logic</td><td>Tags · collection filter · weights · rules</td><td>What each answer matches</td><td class="s-build">Structure only</td></tr>
+          <tr><td><b>Conversion boosters</b></td><td>Settings</td><td>Social proof · share · bundle · referral · urgency</td><td>On-quiz lift add-ons</td><td class="s-ok">Toggles live</td></tr>
+          <tr><td><b>Integrations</b></td><td>Settings</td><td>Klaviyo · webhook · back-in-stock</td><td>Where data flows</td><td class="s-ok">Toggles live</td></tr>
+          <tr><td><b>Post-result step</b></td><td>Build (after Result)</td><td>1–3 skippable Qs for a reward</td><td>Zero-party profiling loop</td><td class="s-build">To build</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- LINKS -->
+  <section id="links">
+    <div class="sec-eyebrow">05 · How it links</div>
+    <h2>The connections that make it one system</h2>
+    <p class="sec-intro">"Everything linked" means changing one control ripples correctly through the others. These are the joins the builder has to hold.</p>
+
+    <div class="chain">
+      <div class="chain-hd"><b>Answer → recommendation</b><span class="chip part">3 surfaces</span></div>
+      <div class="pipe">
+        <div class="cell"><div class="cl">Build</div><div class="cv">Merchant writes the <b>answers</b> on a Choice screen.</div></div>
+        <div class="cell"><div class="cl">Products / Logic</div><div class="cv">Each answer carries <b>tags / a filter / weight</b>; rules resolve to products.</div></div>
+        <div class="cell"><div class="cl">Result</div><div class="cv">Matched products fill the <b>result layout</b> you designed (grid/featured).</div></div>
+        <div class="cell"><div class="cl">Live</div><div class="cv">Shopper sees a real, in-stock set — with the fallback ladder if empty.</div></div>
+      </div>
+    </div>
+
+    <div class="chain">
+      <div class="chain-hd"><b>Gate → email → discount</b><span class="chip ok">Linked</span></div>
+      <div class="pipe">
+        <div class="cell"><div class="cl">Template / Settings</div><div class="cv">Category sets <b>gate placement</b> (at result vs deferred).</div></div>
+        <div class="cell"><div class="cl">Build</div><div class="cv">The <b>Email screen</b> lands in that position in the filmstrip.</div></div>
+        <div class="cell"><div class="cl">Settings → Discount</div><div class="cv">"Unlock a discount" uses the <b>store code</b> defined once.</div></div>
+        <div class="cell"><div class="cl">Result</div><div class="cv">The same coupon <b>carries to the reveal</b>; the gate auto-skips if already captured.</div></div>
+      </div>
+    </div>
+
+    <div class="chain">
+      <div class="chain-hd"><b>Size → adaptation → publish</b><span class="chip part">Complete padding</span></div>
+      <div class="pipe">
+        <div class="cell"><div class="cl">Settings / toolbar</div><div class="cv">Pick the <b>pop-up size</b> (frame).</div></div>
+        <div class="cell"><div class="cl">Design + images</div><div class="cv"><b>Max-width, padding, image ratio/fit, columns</b> decide how it fills.</div></div>
+        <div class="cell"><div class="cl">Preview</div><div class="cv">Renders at true width, scaled to fit — <b>no stretch, real wrapping</b>.</div></div>
+        <div class="cell"><div class="cl">Publish</div><div class="cv">The one responsive doc ships; the store page owns everything behind the modal.</div></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- GAPS -->
+  <section id="gaps">
+    <div class="sec-eyebrow">06 · The build list</div>
+    <h2>What's left to reach the full formats</h2>
+    <p class="sec-intro">The container, screens, questions, answer formats, results, and offers are already wired in the prototype. To fully reproduce both reference quizzes and the strategy flows, this is the remaining set — small and specific.</p>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>To build</th><th>Where it goes</th><th>Why it matters</th><th>Effort</th></tr></thead>
+        <tbody>
+          <tr><td><b>Per-size padding control</b></td><td>Design (size-aware) + preview</td><td>The "more room, not stretch" request — make padding an explicit, previewable choice per pop-up size</td><td>S</td></tr>
+          <tr><td><b>Modal chrome: Back / Restart / wordmark</b></td><td>Settings → Chrome</td><td>Both reference quizzes show them; standard pop-up controls</td><td>S–M</td></tr>
+          <tr><td><b>Per-answer "learn-more" description</b></td><td>Choice → answer</td><td>The Summer Fridays "select one to learn more" reveal</td><td>M</td></tr>
+          <tr><td><b>Data-enriched input (location→climate)</b></td><td>Add → Question type</td><td>The Summer Fridays "I live in…" screen</td><td>M–L</td></tr>
+          <tr><td><b>Answer → product mapping UI</b></td><td>Products / Logic</td><td>Turns answers into real recommendations — the engine behind every result</td><td>L</td></tr>
+          <tr><td><b>Post-result profiling step</b></td><td>Build (after Result)</td><td>The strategy's highest-ROI under-used loop</td><td>M–L</td></tr>
+          <tr><td><b>Structural (not color) theme presets</b></td><td>Design → Theme</td><td>Your correction — layout presets that inherit brand color</td><td>M</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p style="margin-top:22px; color:var(--muted); font-size:13px;">Prototype it maps to: <a href="https://claude.ai/code/artifact/225261ad-f9b8-406d-8baa-a6ffbc41dd34">the Build-tab builder</a>. Every "Live" row above is clickable there today.</p>
+  </section>
+</div>
+
+<script>
+(function(){
+  var b=document.getElementById('themebtn');
+  b.addEventListener('click',function(){
+    var r=document.documentElement;
+    var cur=r.getAttribute('data-theme') || (matchMedia('(prefers-color-scheme:dark)').matches?'dark':'light');
+    r.setAttribute('data-theme', cur==='dark'?'light':'dark');
+  });
+})();
+</script>

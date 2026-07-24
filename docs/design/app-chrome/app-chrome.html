@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>App chrome — top bar + stepper (shared primitive)</title>
+<style>
+  /* ============================================================
+     DESIGN TOKENS — the only values the chrome depends on.
+     Copy this :root into any host page (or import the app's token sheet).
+     ============================================================ */
+  :root{
+    --accent:#6D5AE6; --accent-2:#6B4FD8; --accent-ink:#3C3489; --accent-wash:#EDEBFC; --accent-tint:#F3F1FD;
+    --ink:#2E2740; --ink-3:#5A5470; --ink-4:#7C7791; --ink-25:#B6B0C8;
+    --rule:#E9E7EF; --rule-2:#F1EFF6; --cream-2:#F2F1F5;
+    --mono:ui-monospace,SFMono-Regular,Menlo,monospace; --sans:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:#EDECF1;font-family:var(--sans);color:var(--ink);-webkit-font-smoothing:antialiased;padding:26px 0 90px}
+  .wrap{max-width:1120px;margin:0 auto;padding:0 22px}
+  .cap{font-size:12.5px;color:var(--ink-4);margin:0 2px 8px;line-height:1.6}.cap b{color:var(--ink-3)}
+  h1.doc{font-size:15px;margin:0 2px 4px;color:var(--ink)}
+
+  /* ============================================================
+     THE APP SHELL — a screen is an .app card. The chrome lives at
+     the top; screen content lives under it.
+     ============================================================ */
+  .app{background:#fff;border:1px solid var(--rule);border-radius:18px;overflow:hidden;box-shadow:0 10px 34px rgba(120,110,150,.12)}
+
+  /* ---- TOP BAR: back · stepper · continue -------------------- */
+  .top{display:flex;align-items:center;gap:16px;padding:12px 16px;border-bottom:1px solid var(--rule-2)}
+  .iconbtn{width:34px;height:34px;flex:none;border:1px solid var(--rule);background:#fff;border-radius:10px;display:grid;place-items:center;cursor:pointer;color:var(--ink-3)}.iconbtn:hover{background:var(--cream-2)}.iconbtn svg{width:17px;height:17px}
+  .flow{flex:1;min-width:0;overflow-x:auto;padding:10px 2px;margin:-10px 0}   /* padding gives the current dot's halo room; -margin keeps bar height */
+  .track{display:flex;align-items:center;min-width:520px}
+  .node{display:flex;align-items:center;gap:8px;position:relative;flex:none}
+  .dot{width:23px;height:23px;border-radius:50%;display:grid;place-items:center;font-family:var(--mono);font-size:10.5px;font-weight:600;background:var(--cream-2);color:var(--ink-4);position:relative}
+  .node .lbl{font-size:12.5px;color:var(--ink-4);font-weight:500;white-space:nowrap}
+  .node.cur .dot{background:var(--accent);color:#fff;box-shadow:0 0 0 4px var(--accent-wash);z-index:1;overflow:visible}
+  .node.cur .lbl{color:var(--ink);font-weight:600}
+  .node.done .dot{background:var(--accent-wash);color:var(--accent-ink)}
+  .link{flex:1;height:2px;background:var(--rule);margin:0 10px;min-width:20px}.link.done{background:var(--accent-wash)}
+
+  /* ---- THE 3s "IGNITE" (fires once on screen entry) ---------- */
+  .node.cur.igniting .dot{animation:qzHalo 2.3s ease-in-out infinite}
+  @keyframes qzHalo{0%,100%{box-shadow:0 0 0 3px var(--accent-wash),0 0 6px 1px rgba(109,90,230,.32)}50%{box-shadow:0 0 0 5px rgba(237,235,252,.55),0 0 18px 4px rgba(109,90,230,.58)}}
+  .node.cur .dot::after{content:'';position:absolute;inset:-4px;border-radius:50%;pointer-events:none;opacity:0;transition:opacity .6s ease;background:conic-gradient(from 0deg,rgba(109,90,230,0) 48%,rgba(157,140,255,.95) 76%,#fff 85%,rgba(109,90,230,0) 94%);-webkit-mask:radial-gradient(farthest-side,transparent calc(100% - 3px),#000 0);mask:radial-gradient(farthest-side,transparent calc(100% - 3px),#000 0)}
+  .node.cur.igniting .dot::after{opacity:1;animation:qzSpin 1.9s linear infinite}@keyframes qzSpin{to{transform:rotate(360deg)}}
+  .spark{position:absolute;font-size:9px;color:#fff;opacity:0;pointer-events:none;z-index:2;text-shadow:0 0 7px rgba(157,140,255,1)}
+  .dot .spark.s1{top:-9px;right:-5px}.dot .spark.s2{bottom:-7px;left:-7px;font-size:7px}.dot .spark.s3{top:-2px;right:-10px;font-size:8px}
+  .node.cur.igniting .spark{animation:qzTwinkle 1.7s ease-in-out infinite}@keyframes qzTwinkle{0%,100%{opacity:0;transform:scale(.3)}50%{opacity:1;transform:scale(1.1)}}
+  @media (prefers-reduced-motion:reduce){
+    .node.cur.igniting .dot,.node.cur.igniting .dot::after,.node.cur.igniting .spark{animation:none}
+    .node.cur.igniting .dot::after{opacity:0}
+  }
+
+  .continue{flex:none;border:none;background:var(--accent);color:#fff;font-size:13px;font-weight:600;padding:9px 15px;border-radius:10px;cursor:pointer;font-family:var(--sans);display:inline-flex;align-items:center;gap:6px}.continue:hover{background:var(--accent-2)}.continue svg{width:14px;height:14px}
+
+  /* ---- OPTIONAL SUB-BAR: tabs · hint · primary action -------- */
+  .content{padding:14px 16px 20px}
+  .subhead{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+  .qtabs{display:inline-flex;background:var(--cream-2);border-radius:10px;padding:3px}
+  .qtabs button{border:none;background:transparent;font-family:var(--sans);font-size:13px;font-weight:600;color:var(--ink-4);padding:7px 15px;border-radius:8px;cursor:pointer}
+  .qtabs button.on{background:#fff;color:var(--accent-ink);box-shadow:0 1px 2px rgba(109,90,230,.12)}
+  .subhead .sp{flex:1}.hint{font-size:12px;color:var(--ink-4)}
+  .newbtn{border:none;background:var(--accent);color:#fff;font-size:12.5px;font-weight:600;padding:8px 14px;border-radius:9px;cursor:pointer;font-family:var(--sans);display:inline-flex;align-items:center;gap:5px}.newbtn:hover{background:var(--accent-2)}.newbtn svg{width:12px;height:12px}
+  .newwrap{position:relative}
+  .newsplit{display:inline-flex;border-radius:9px;overflow:hidden}
+  .newsplit .nb-main{border-radius:0}.newsplit .nb-caret{border-radius:0;padding:8px 8px;border-left:1px solid rgba(255,255,255,.25)}.newsplit .nb-caret svg{width:12px;height:12px}
+  .newmenu{position:absolute;top:calc(100% + 6px);right:0;z-index:20;background:#fff;border:1px solid var(--rule);border-radius:11px;box-shadow:0 16px 40px -12px rgba(60,50,90,.28);padding:5px;display:none;min-width:180px}
+  .newmenu.open{display:block}
+  .newmenu button{display:flex;align-items:center;gap:9px;width:100%;border:none;background:transparent;border-radius:8px;padding:9px 10px;font-size:13px;color:var(--ink);cursor:pointer;text-align:left;font-family:var(--sans)}
+  .newmenu button:hover{background:var(--cream-2)}.newmenu button svg{width:14px;height:14px;color:var(--ink-4)}
+
+  /* screen-body placeholder — NOT part of the chrome */
+  .screenph{height:150px;border:1px dashed var(--rule);border-radius:12px;display:grid;place-items:center;color:var(--ink-25);font-size:12.5px;margin-top:13px}
+
+  /* reference-page scaffolding (not shipped) */
+  .toolbar{display:flex;align-items:center;gap:10px;margin:6px 2px 16px;flex-wrap:wrap}
+  .toolbar .tbtn{border:1px solid var(--rule);background:#fff;border-radius:9px;padding:7px 12px;font-size:12.5px;font-weight:600;color:var(--ink-3);cursor:pointer;font-family:var(--sans)}.toolbar .tbtn:hover{background:var(--cream-2)}
+  .toolbar .tlabel{font-size:11px;font-family:var(--mono);text-transform:uppercase;letter-spacing:.05em;color:var(--ink-25)}
+  .stack{display:flex;flex-direction:column;gap:26px}
+  .variant-cap{font-size:11px;font-family:var(--mono);text-transform:uppercase;letter-spacing:.05em;color:var(--ink-25);margin:0 2px 8px}
+</style>
+</head>
+<body>
+
+<!-- Icon sprite. The chrome uses i-back, i-fwd, i-plus, i-caret. -->
+<svg style="display:none">
+  <symbol id="i-back" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M15 5l-7 7 7 7"/></symbol>
+  <symbol id="i-fwd" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M9 5l7 7-7 7"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12 5v14M5 12h14"/></symbol>
+  <symbol id="i-caret" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6"><path d="M6 9l6 6 6-6"/></symbol>
+  <symbol id="i-doc" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M6 2h8l4 4v16H6z"/><path d="M14 2v4h4"/><line x1="9" y1="12" x2="15" y2="12"/><line x1="9" y1="16" x2="13" y2="16"/></symbol>
+</svg>
+
+<div class="wrap">
+  <h1 class="doc">App chrome — top bar + stepper</h1>
+  <p class="cap"><b>Shared primitive.</b> Every quiz-builder screen mounts the same top bar (back · 5 step pills · Continue) and, optionally, a sub-bar (tabs + primary action). The <b>current</b> pill ignites once for ~3s on entry. Rules in <b>SPEC.md</b>; markup + CSS below.</p>
+
+  <!-- reference controls (not part of the primitive) -->
+  <div class="toolbar">
+    <span class="tlabel">Current step</span>
+    <button class="tbtn" data-step="0">Recs</button>
+    <button class="tbtn" data-step="1">Shape</button>
+    <button class="tbtn" data-step="2">Questions</button>
+    <button class="tbtn" data-step="3">Results</button>
+    <button class="tbtn" data-step="4">Design</button>
+    <span class="sp" style="flex:1"></span>
+    <button class="tbtn" id="reignite">↻ Re-run ignite</button>
+  </div>
+
+  <div class="stack">
+    <div>
+      <p class="variant-cap">Variant A — chrome + sub-bar (tabs + split primary action)</p>
+      <div class="app">
+        <div id="topA"></div>
+        <div class="content">
+          <div class="subhead">
+            <div class="qtabs"><button class="on" data-t="Q">✎ Questions</button><button data-t="O">▦ Overview</button></div>
+            <span class="sp"></span><span class="hint">Click any text on the phone to edit it</span>
+            <span class="newwrap">
+              <span class="newsplit">
+                <button class="newbtn nb-main" id="newBtnQ"><svg><use href="#i-plus"/></svg> Question</button>
+                <button class="newbtn nb-caret" id="newBtn"><svg><use href="#i-caret"/></svg></button>
+              </span>
+              <div class="newmenu" id="newMenu">
+                <button data-add="q"><svg><use href="#i-plus"/></svg> Question</button>
+                <button data-add="c"><svg><use href="#i-doc"/></svg> Content block</button>
+              </div>
+            </span>
+          </div>
+          <div class="screenph">screen content</div>
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <p class="variant-cap">Variant B — chrome only (no sub-bar)</p>
+      <div class="app">
+        <div id="topB"></div>
+        <div class="content"><div class="screenph">screen content</div></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  /* ============================================================
+     THE PRIMITIVE — data-driven chrome renderer.
+     Adopt by copying the tokens + chrome CSS above and this block.
+     ============================================================ */
+  const STEPS = ["Recs","Shape","Questions","Results","Design"];
+  const icon = id => `<svg><use href="#${id}"/></svg>`;
+
+  // Build the top bar for a given current step index (0-based).
+  // opts: { continueLabel = "Continue", showContinue = true }
+  function chromeTop(current, opts = {}){
+    const { continueLabel = "Continue", showContinue = true } = opts;
+    const track = STEPS.map((label, i) => {
+      const state = i < current ? "done" : i === current ? "cur" : "";
+      const num = String(i + 1).padStart(2, "0");
+      const inner = state === "done" ? "✓"
+        : state === "cur" ? `${num}<i class="spark s1">✦</i><i class="spark s2">✦</i><i class="spark s3">✦</i>`
+        : num;
+      const node = `<div class="node ${state}"${state === "cur" ? " data-cur" : ""}><span class="dot">${inner}</span><span class="lbl">${label}</span></div>`;
+      const link = i < STEPS.length - 1 ? `<div class="link ${i < current ? "done" : ""}"></div>` : "";
+      return node + link;
+    }).join("");
+    return `<div class="top">
+      <button class="iconbtn back" title="Back to ${current > 0 ? STEPS[current-1] : "all quizzes"}">${icon("i-back")}</button>
+      <div class="flow"><div class="track">${track}</div></div>
+      ${showContinue ? `<button class="continue">${continueLabel} ${icon("i-fwd")}</button>` : ""}
+    </div>`;
+  }
+
+  // Fire the one-shot ignite on the current pill inside `root`.
+  function ignite(root){
+    const n = root.querySelector("[data-cur]");
+    if(!n) return;
+    n.classList.remove("igniting");
+    void n.offsetWidth;            // reflow so the animation restarts
+    n.classList.add("igniting");
+    setTimeout(() => n.classList.remove("igniting"), 3000);
+  }
+
+  // Mount into an element; re-mount to change the current step.
+  function mountChrome(el, current, opts){
+    el.innerHTML = chromeTop(current, opts);
+    ignite(el);
+  }
+
+  /* ---- reference wiring (demonstration only) ---------------- */
+  const topA = document.getElementById("topA");
+  const topB = document.getElementById("topB");
+  let cur = 2;
+  function paint(){
+    mountChrome(topA, cur);
+    mountChrome(topB, 4, { continueLabel: "Publish" });
+  }
+  paint();
+
+  document.querySelectorAll(".toolbar [data-step]").forEach(b =>
+    b.onclick = () => { cur = +b.dataset.step; paint(); });
+  document.getElementById("reignite").onclick = () => { ignite(topA); ignite(topB); };
+
+  // sub-bar interactions (tabs + split-button menu)
+  document.querySelectorAll(".qtabs button").forEach(b =>
+    b.onclick = () => document.querySelectorAll(".qtabs button").forEach(x => x.classList.toggle("on", x === b)));
+  const menu = document.getElementById("newMenu");
+  document.getElementById("newBtn").onclick = e => { e.stopPropagation(); menu.classList.toggle("open"); };
+  document.getElementById("newBtnQ").onclick = () => menu.classList.remove("open");
+  menu.querySelectorAll("[data-add]").forEach(b => b.onclick = () => menu.classList.remove("open"));
+  document.addEventListener("click", e => { if(!e.target.closest(".newwrap")) menu.classList.remove("open"); });
+</script>
+</body>
+</html>

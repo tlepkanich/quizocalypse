@@ -1,0 +1,28 @@
+{
+  "id": "durables-narrower",
+  "name": "High-consideration durable narrower",
+  "category": "durables",
+  "variant": "shortlist-narrower (Casper mattress; generalizes to bikes/skis/golf)",
+  "use_when": "Small catalog of high-ticket models; the quiz builds buying confidence and narrows to one hero, it does not formulate.",
+  "length": { "min": 6, "max": 8, "band": "short", "note": "Short despite high price — '2 minutes.' A confidence-builder, not a data harvest." },
+  "gate": { "placement": "deferred_to_action", "style": "soft", "rationale": "Show the recommended model(s) free — high-ticket buyers won't gate-trade for an unseen answer; capture as 'save your result / get a discount.'" },
+  "result_shape": "single_bespoke_output",
+  "arc": ["current_product", "primary_use", "preference", "constraints", "action"],
+  "branching": "light",
+  "questions": [
+    { "ordinal": 1, "id": "current", "prompt": "What do you sleep on now?", "type": "single_select", "options": [{ "label": "Innerspring", "maps_to": "current:innerspring" }, { "label": "Memory foam", "maps_to": "current:foam" }, { "label": "Hybrid", "maps_to": "current:hybrid" }, { "label": "Not sure", "maps_to": "current:unknown" }], "maps_to": "current_product", "weight_tier": "secondary" },
+    { "ordinal": 2, "id": "position", "prompt": "How do you sleep?", "type": "image_choice", "options": [{ "label": "Back", "maps_to": "position:back" }, { "label": "Side", "maps_to": "position:side" }, { "label": "Stomach", "maps_to": "position:stomach" }, { "label": "Combination", "maps_to": "position:combo" }], "maps_to": "sleep_position", "weight_tier": "primary", "note": "The single most predictive input." },
+    { "ordinal": 3, "id": "firmness", "prompt": "How firm do you like it?", "type": "scale", "options": [{ "label": "Soft", "maps_to": "firmness:1" }, { "label": "Med-soft", "maps_to": "firmness:2" }, { "label": "Medium", "maps_to": "firmness:3" }, { "label": "Med-firm", "maps_to": "firmness:4" }, { "label": "Firm", "maps_to": "firmness:5" }], "maps_to": "firmness", "weight_tier": "primary", "note": "1–5 discrete labeled points, not a slider." },
+    { "ordinal": 4, "id": "temp", "prompt": "Do you sleep hot?", "type": "binary", "options": [{ "label": "Yes, I run warm", "maps_to": "temp:hot" }, { "label": "No", "maps_to": "temp:neutral" }], "maps_to": "temperature", "weight_tier": "secondary", "branch": "if hot, boost cooling-attribute models" },
+    { "ordinal": 5, "id": "size", "prompt": "What size do you need?", "type": "single_select", "options": [{ "label": "Twin", "maps_to": "size:twin" }, { "label": "Full", "maps_to": "size:full" }, { "label": "Queen", "maps_to": "size:queen" }, { "label": "King", "maps_to": "size:king" }], "maps_to": "size", "weight_tier": "tie_breaker" }
+  ],
+  "recommendation": {
+    "architecture": "weighted_score",
+    "tie_break": "position fit -> firmness proximity -> popularity -> stable product id",
+    "empty_fallback": "nearest firmness within position -> flagship model in the requested size",
+    "deterministic": true,
+    "explainable": true
+  },
+  "personalization_hooks": ["heavy 'why this matches your position/firmness' justification", "trial-period + returns reassurance", "single hero + 1 alternative"],
+  "sources": ["Casper mattress quiz", "ConvertFlow/Outgrow writeups (Tier C)"]
+}
