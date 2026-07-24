@@ -67,23 +67,41 @@ export function QzBadge({ tone = "draft", children }: { tone?: BadgeTone; childr
   return <span className={`qz-badge qz-${tone}`}>{children}</span>;
 }
 
-type BannerTone = "default" | "ok" | "warn" | "crit";
+type BannerTone = "default" | "ok" | "warn" | "crit" | "quiet";
+// ai-fallbacks mock §2 — `quiet` is the silent-degrade trace tone (cream strip,
+// glyph badge, dismissible ✕): a quiet notice, not an alarm. `glyph` renders
+// the mock's 24px badge; `onDismiss` renders the ✕ (both optional so the
+// existing tones are untouched).
 export function QzBanner({
   tone = "default",
   title,
+  glyph,
+  onDismiss,
   children,
 }: {
   tone?: BannerTone;
   title?: ReactNode;
+  glyph?: ReactNode;
+  onDismiss?: () => void;
   children?: ReactNode;
 }) {
   const cls = tone === "default" ? "qz-banner" : `qz-banner qz-banner-${tone}`;
   return (
     <div className={cls}>
-      <div>
+      {glyph ? (
+        <span className="qz-banner-glyph" aria-hidden>
+          {glyph}
+        </span>
+      ) : null}
+      <div style={{ flex: 1, minWidth: 0 }}>
         {title && <div className="qz-banner-title">{title}</div>}
         {children && <div className="qz-banner-body">{children}</div>}
       </div>
+      {onDismiss ? (
+        <button type="button" className="qz-banner-x" aria-label="Dismiss" onClick={onDismiss}>
+          ✕
+        </button>
+      ) : null}
     </div>
   );
 }

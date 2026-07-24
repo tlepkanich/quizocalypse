@@ -6,7 +6,7 @@ import { useEffect, useMemo, useState } from "react";
 import type { CSSProperties } from "react";
 import type { useFetcher } from "@remix-run/react";
 import { Box, Check } from "lucide-react";
-import { QzCard, QzBadge } from "../../qz";
+import { QzCard, QzBadge, QzBanner } from "../../qz";
 import { QzDrawer } from "../../qz-overlays";
 import type { QuizType } from "../../../lib/quizSchema";
 import { resolveDesignTokens, tokensToCssVars, suggestContrastText } from "../../../lib/designTokens";
@@ -326,6 +326,15 @@ function DeciderShapeStage({
   const [selectedTypeId, setSelectedTypeId] = useState<string | null>(null);
   const [writingGoal, setWritingGoal] = useState(false);
   const aiTypes = data.quizTypes.slice(0, 2);
+  // ai-fallbacks Gap 7 — "research skipped" leaves a quiet trace, not silence.
+  // The typing job stamps web_research_summary on completion; an EMPTY string
+  // means the live-research call degraded to model knowledge (null = a legacy
+  // session from before the stamp — no verdict, no strip). Dismissible; the
+  // regenerate action re-runs the typing job, which re-attempts research
+  // (empty runs are never cached).
+  const [researchTraceDismissed, setResearchTraceDismissed] = useState(false);
+  const researchDegraded =
+    aiTypes.length > 0 && data.webResearchSummary === "" && !researchTraceDismissed;
   const resolved = useMemo(() => resolveDesignTokens(data.designTokens ?? undefined), [data.designTokens]);
   const cssVars = useMemo(() => tokensToCssVars(resolved) as CSSProperties, [resolved]);
   // HANDOFF §6 — the film themes from the draft's tokens INCLUDING the brand
@@ -344,6 +353,28 @@ function DeciderShapeStage({
     <div className="qz-shape-page">
       {fontUrl ? <link rel="stylesheet" href={fontUrl} /> : null}
       <h2 className="qz-h2" style={{ margin: 0 }}>Choose the optimal quiz type</h2>
+
+      {researchDegraded ? (
+        <QzBanner
+          tone="quiet"
+          glyph="✦"
+          title="Suggested without live research"
+          onDismiss={() => setResearchTraceDismissed(true)}
+        >
+          <div style={{ marginBottom: 9 }}>
+            These directions come from your catalog and brand — market research
+            just didn&rsquo;t load this time. They work as-is.
+          </div>
+          <button
+            type="button"
+            className="qz-btn qz-btn-ghost qz-btn-sm"
+            disabled={busy}
+            onClick={() => fetcher.submit({ intent: "shape-regenerate" }, { method: "post" })}
+          >
+            {pendingIntent === "shape-regenerate" ? "Regenerating…" : "↻ Regenerate with research"}
+          </button>
+        </QzBanner>
+      ) : null}
 
       <div className="qz-shape-grid">
         {aiTypes.map((t, i) => {

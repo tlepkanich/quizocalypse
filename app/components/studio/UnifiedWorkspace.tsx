@@ -197,9 +197,13 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
     ok: boolean;
     version?: number;
     error?: string;
-    // Non-blocking publish caveats (discount creation failed, AI copy passes
-    // degraded) — rendered as a warn banner beside the success banner.
+    // Non-blocking operational publish caveats (discount creation failed) —
+    // rendered as a warn banner beside the success banner.
     warning?: string;
+    // ai-fallbacks Gap 7 — the publish-time AI passes (benefit bullets /
+    // answer tooltips) degraded. Rendered as the mock's QUIET dismissible
+    // strip with a regenerate action (re-publish retries only empty fields).
+    aiCopyDegraded?: boolean;
   }>();
   const renameFetcher = useFetcher<{ ok: boolean; name?: string }>();
 
@@ -428,6 +432,37 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
     form.set("doc", JSON.stringify(doc));
     publishFetcher.submit(form, { method: "POST" });
   };
+  // ai-fallbacks mock §2 — the quiet silent-degrade trace for a publish whose
+  // AI copy passes (benefit bullets / answer tooltips) failed: the quiz is
+  // live, so this is a dismissible strip with a regenerate action, not a warn
+  // banner. "Generate them now" re-publishes — quizPublish retries only the
+  // still-empty fields. A fresh publish attempt un-dismisses it.
+  const [aiTraceDismissed, setAiTraceDismissed] = useState(false);
+  useEffect(() => {
+    if (publishFetcher.state === "submitting") setAiTraceDismissed(false);
+  }, [publishFetcher.state]);
+  const aiDegradeStrip =
+    publishFetcher.data?.ok && publishFetcher.data.aiCopyDegraded && !aiTraceDismissed ? (
+      <QzBanner
+        tone="quiet"
+        glyph="✦"
+        title="Published without some AI copy"
+        onDismiss={() => setAiTraceDismissed(true)}
+      >
+        <div style={{ marginBottom: 9 }}>
+          The quiz is live and working — benefit bullets and answer tooltips just didn&rsquo;t
+          generate this time.
+        </div>
+        <button
+          type="button"
+          className="qz-btn qz-btn-ghost qz-btn-sm"
+          disabled={isPublishing}
+          onClick={publish}
+        >
+          {isPublishing ? "Generating…" : "Generate them now"}
+        </button>
+      </QzBanner>
+    ) : null;
   const renameQuiz = (name: string) => {
     const form = new FormData();
     form.set("intent", "rename");
@@ -767,6 +802,7 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
           {publishFetcher.data.warning}
         </QzBanner>
       ) : null}
+      {aiDegradeStrip}
       {publishFetcher.data?.ok && publishFetcher.data.version ? (
         <QzBanner tone="ok" title={`Published v${publishFetcher.data.version}`}>
           Live at{" "}
@@ -1146,6 +1182,7 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
             {publishFetcher.data.warning}
           </QzBanner>
         ) : null}
+        {aiDegradeStrip}
         {publishFetcher.data?.ok && publishFetcher.data.version ? (
           <QzBanner tone="ok" title={`Published v${publishFetcher.data.version}`}>
             Live at{" "}

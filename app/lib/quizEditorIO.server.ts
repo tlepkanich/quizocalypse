@@ -348,17 +348,17 @@ async function handleQuizEditorActionImpl(
         { collectionOrder: (targets) => resolveCollectionOrders(shop.shopDomain, targets) },
       );
       // Gap 7 — a publish-time AI pass that failed still ships (never blocks),
-      // but leaves a visible trace instead of silently missing copy.
-      const aiCopyWarning = result.aiCopyDegraded
-        ? "Some AI copy (benefit bullets / answer tooltips) couldn't be generated this time — published without it. Re-publish to retry."
-        : null;
-      const warning = [discountWarning, aiCopyWarning].filter(Boolean).join(" ");
+      // but leaves a visible trace instead of silently missing copy. The AI
+      // degrade is a SEPARATE flag (not folded into `warning`): the mock renders
+      // it as the quiet dismissible strip with a regenerate action, while
+      // `warning` keeps the louder operational caveats (discount creation).
       return json({
         ok: true,
         action: "publish" as const,
         version: result.version,
         productCount: result.productCount,
-        ...(warning ? { warning } : {}),
+        ...(discountWarning ? { warning: discountWarning } : {}),
+        ...(result.aiCopyDegraded ? { aiCopyDegraded: true as const } : {}),
       });
     } catch (err) {
       if (err instanceof PublishError) {

@@ -116,6 +116,7 @@ pin, never republish), plus the "O3 Probe Terrain Finder" SavedTemplate.
 | `rs-verify.mjs` | Step-1 Recommendations spec (copy, rail, no "bucket" leakage) | LIVE, `cmqqcb0ao…` pin | restore |
 | `shape-scope-verify.mjs` | Funnel AI grounds in CHOSEN buckets at both gen layers (65c55a5) | LIVE; real AI | restore |
 | `s12-reaudit-verify.mjs` | AUDIT-18 Step-1 + Shape vs the design sub-files (stacked stepper geometry, AI-tip pill/first-visit, amber warn, products-modal meta, shape cards/film/leave-confirm) | LOCAL build + `cmr7khgd5…` | prisma seed/restore (doc + categories) |
+| `audit20-verify.mjs` | AUDIT-20 ai-fallbacks merchant states: Shape "research skipped" quiet trace, funnel failed/stalled records, publish-degrade quiet strip + dismiss (server must run with `ANTHROPIC_API_KEY=` empty) | LOCAL build + `cmr7khgd5…` | prisma seed/restore (doc + categories + publish state) |
 | `l2-8-verify.mjs` | Step-4 v2 rec-page builder (targets, overrides, validate-discount) | LIVE `cmqwd15f…` | doc backup/restore |
 | `l2-9-verify.mjs` | Runtime cutover: publishes the decider smoke fixture; legacy byte pin | LIVE `cmqwd15f…` + `cmqqcb0ao…` | converted the fixture (historical) |
 | `l2-10a-verify.mjs` | Preview bake + default-target affordance + one-edge-per-handle | LIVE `cmqwd15f…` | publish + restore-publish |
