@@ -164,249 +164,263 @@ export function QuestionSection({
     onCommit(setQuestionRole(doc, node.id, next));
   };
 
+  // overview-cards.html (Refined) — cards are ALWAYS expanded; the caret and
+  // per-card collapse are gone. Props stay accepted so LogicScroll's state
+  // machinery keeps compiling (it simply no-ops now).
+  void expanded;
+  void onToggleExpanded;
+  const rating = node.data.question_type === "rating";
+  const scaleMin = node.data.scale_config?.min ?? 1;
+  const scaleMax = node.data.scale_config?.max ?? 5;
+  const patchScale = (patch: Record<string, unknown>) =>
+    onCommit(
+      updateNodeData(doc, node.id, {
+        scale_config: { ...(node.data.scale_config ?? {}), ...patch },
+      }),
+    );
+
   return (
     <section
-      className={`qz-s3-sec${isDecider ? " is-decider" : ""}${active ? " is-active" : ""}${flashWarn ? " is-flashwarn" : ""}${expanded ? "" : " is-collapsed"}`}
+      className={`qz-s3-sec qz-s3-card${isDecider ? " is-decider" : ""}${active ? " is-active" : ""}${flashWarn ? " is-flashwarn" : ""}`}
       style={{ "--sec-color": vars.color, "--sec-wash": vars.wash } as CSSProperties}
       ref={(el) => registerSection(node.id, el)}
       data-node-id={node.id}
       aria-label={`Question ${qIndex} logic`}
     >
-      <div className="qz-s3-sec-head">
-        <span className="qz-s3-mv">
-          <button
-            type="button"
-            className="qz-s3-mvb"
-            disabled={!canUp}
-            aria-label="Move question up"
-            onClick={() => onMove(-1)}
-          >
-            ↑
-          </button>
-          <button
-            type="button"
-            className="qz-s3-mvb"
-            disabled={!canDown}
-            aria-label="Move question down"
-            onClick={() => onMove(1)}
-          >
-            ↓
-          </button>
-        </span>
-        <span className={`qz-s3-numchip${isDecider ? " is-decider" : ""}`}>{qIndex}</span>
-        {/* QZY-2 (owner supplement) — the title edits HERE, same doc field
-            the Content view edits; no more "Edit content" round-trip. */}
-        <input
-          className="qz-s3-sec-titleinput"
-          defaultValue={node.data.text}
-          key={node.data.text /* re-sync external edits without controlling keystrokes */}
-          maxLength={TEXT_MAX}
-          aria-label={`Question ${qIndex} text`}
-          onBlur={(e) => setTitle(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") (e.target as HTMLInputElement).blur();
-            if (e.key === "Escape") {
-              (e.target as HTMLInputElement).value = node.data.text;
-              (e.target as HTMLInputElement).blur();
-            }
-          }}
-        />
-        <TypeChipSelector doc={doc} node={node} onCommit={onCommit} />
-        {inRulesCount > 0 ? (
-          <span className="qz-s3-sec-rulesbadge" title="Global rules referencing this question">
-            in {inRulesCount} rule{inRulesCount === 1 ? "" : "s"}
+      {/* header — question on the left; the type control sits in the SAME
+          right column as the settings so they align (mock .v2head). */}
+      <div className="qz-s3-card-head">
+        <div className="qz-s3-card-headl">
+          <span className="qz-s3-mv">
+            <button
+              type="button"
+              className="qz-s3-mvb"
+              disabled={!canUp}
+              aria-label="Move question up"
+              onClick={() => onMove(-1)}
+            >
+              ↑
+            </button>
+            <button
+              type="button"
+              className="qz-s3-mvb"
+              disabled={!canDown}
+              aria-label="Move question down"
+              onClick={() => onMove(1)}
+            >
+              ↓
+            </button>
           </span>
-        ) : null}
-        <span className={`qz-s3-sec-coverage is-${coverage.tone}`}>{coverage.label}</span>
-        <select
-          className={`qz-s3-rolesel${isDecider ? " is-decider" : ""}`}
-          value={role}
-          aria-label={`Question ${qIndex} role`}
-          title="What this question does to the result"
-          onChange={(e) => setRole(e.target.value as Role)}
-        >
-          <option value="decides" disabled={deciderBlocked}>
-            {deciderBlocked ? "Picks the result (needs single-pick)" : "Picks the result ◆"}
-          </option>
-          <option value="filter">Filters results</option>
-          <option value="qualifier">Info only</option>
-        </select>
-        <button
-          type="button"
-          className="qz-s3-sec-caret"
-          aria-expanded={expanded}
-          aria-label={expanded ? "Collapse question" : "Expand question"}
-          onClick={onToggleExpanded}
-        >
-          {expanded ? "▾" : "▸"}
-        </button>
+          <span className={`qz-s3-numchip${isDecider ? " is-decider" : ""}`}>{qIndex}</span>
+          <input
+            className="qz-s3-sec-titleinput"
+            defaultValue={node.data.text}
+            key={node.data.text /* re-sync external edits without controlling keystrokes */}
+            maxLength={TEXT_MAX}
+            aria-label={`Question ${qIndex} text`}
+            onBlur={(e) => setTitle(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+              if (e.key === "Escape") {
+                (e.target as HTMLInputElement).value = node.data.text;
+                (e.target as HTMLInputElement).blur();
+              }
+            }}
+          />
+        </div>
+        <div className="qz-s3-card-type">
+          <TypeChipSelector doc={doc} node={node} onCommit={onCommit} />
+        </div>
       </div>
 
-      {/* questions-full-page mock — "Overview shows type settings under the
-          Type column": multi-select MIN/MAX steppers; scale range + the
-          endpoint labels ("numbers or words" — runtime-rendered on rating
-          and slider). Writes are plain updateNodeData patches. */}
-      {expanded && multi ? (
-        <div className="qz-s3-sec-settings">
-          <span className="qz-s3-set-kicker">Settings</span>
-          <span className="qz-s3-set-row">
-            <span className="qz-s3-set-lbl">Min</span>
-            <Stepper
-              value={node.data.min_selections ?? 1}
-              min={1}
-              max={node.data.max_selections ?? node.data.answers.length}
-              onChange={(v) => onCommit(updateNodeData(doc, node.id, { min_selections: v }))}
-            />
-          </span>
-          <span className="qz-s3-set-row">
-            <span className="qz-s3-set-lbl">Max</span>
-            <Stepper
-              value={node.data.max_selections ?? node.data.answers.length}
-              min={node.data.min_selections ?? 1}
-              max={Math.max(node.data.answers.length, 1)}
-              onChange={(v) => onCommit(updateNodeData(doc, node.id, { max_selections: v }))}
-            />
-          </span>
+      {/* body — same right column as the header so the settings hairline runs
+          straight up through the type control (mock .v2body.hasset). */}
+      <div className="qz-s3-card-body">
+        <div className="qz-s3-card-ans">
+          {freeform ? (
+            <p className="qz-s3-sec-freeform" role="note">
+              Open text answer — respondents type their own reply.
+            </p>
+          ) : rating ? (
+            <div className="qz-s3-scaleprev">
+              <div className="qz-s3-scalenums" aria-hidden>
+                {Array.from({ length: Math.max(0, scaleMax - scaleMin + 1) }, (_, i) => scaleMin + i).map(
+                  (v) => (
+                    <span
+                      key={v}
+                      className={`qz-s3-sn${v === scaleMin || v === scaleMax ? " is-end" : ""}`}
+                    >
+                      {v}
+                    </span>
+                  ),
+                )}
+              </div>
+              <div className="qz-s3-scaleends">
+                <label className="qz-s3-se">
+                  <span className="qz-s3-sek" aria-hidden>{scaleMin}</span>
+                  <input
+                    className="qz-s3-slab"
+                    defaultValue={node.data.scale_config?.endpoint_label_min ?? ""}
+                    key={`min-${node.data.scale_config?.endpoint_label_min ?? ""}`}
+                    maxLength={40}
+                    placeholder={`Label for ${scaleMin} (optional)`}
+                    aria-label="Scale start label (number or word)"
+                    onBlur={(e) => patchScale({ endpoint_label_min: e.target.value.trim() || undefined })}
+                  />
+                </label>
+                <label className="qz-s3-se">
+                  <span className="qz-s3-sek" aria-hidden>{scaleMax}</span>
+                  <input
+                    className="qz-s3-slab"
+                    defaultValue={node.data.scale_config?.endpoint_label_max ?? ""}
+                    key={`max-${node.data.scale_config?.endpoint_label_max ?? ""}`}
+                    maxLength={40}
+                    placeholder={`Label for ${scaleMax} (optional)`}
+                    aria-label="Scale end label (number or word)"
+                    onBlur={(e) => patchScale({ endpoint_label_max: e.target.value.trim() || undefined })}
+                  />
+                </label>
+              </div>
+            </div>
+          ) : (
+            <div className="qz-s3-atable">
+              <div className="qz-s3-atable-head" aria-hidden>
+                <span />
+                <span>Answer</span>
+                <span />
+                <span>{role === "decides" ? "Maps to" : role === "filter" ? "Matches" : ""}</span>
+                <span>Then go to</span>
+                <span />
+              </div>
+              {node.data.answers.map((a, i) => (
+                <AnswerTableRow
+                  key={a.id}
+                  doc={doc}
+                  node={node}
+                  answer={a}
+                  index={i}
+                  isDeciderRow={role === "decides"}
+                  isFilterRow={role === "filter"}
+                  productIndex={productIndex}
+                  categories={categories}
+                  skipOptions={skipOptions}
+                  isRevisitTarget={isRevisitTarget}
+                  chips={chipsByAnswer.get(a.id) ?? []}
+                  homeRuleIds={new Set<string>()}
+                  canDelete={node.data.answers.length > minAnswers}
+                  onCommit={onCommit}
+                  onChipClick={onChipClick}
+                />
+              ))}
+            </div>
+          )}
+          {freeform || rating ? null : (
+            <div className="qz-s3-sec-foot">
+              <button
+                type="button"
+                className="qz-s3-sec-footbtn is-add"
+                onClick={() => onCommit(addAnswer(doc, node.id))}
+              >
+                ＋ Add answer
+              </button>
+              <button
+                type="button"
+                className="qz-s3-sec-footbtn"
+                disabled={categories.length === 0}
+                title={
+                  categories.length === 0
+                    ? "Add a recommendation in Step 1 first — rules need a target"
+                    : "Add a rule pre-filled with this question (it lands in the Rules panel)"
+                }
+                onClick={() => onStartDraft(node.id)}
+              >
+                λ Add rule
+              </button>
+            </div>
+          )}
         </div>
-      ) : null}
-      {expanded && node.data.question_type === "rating" ? (
-        <div className="qz-s3-sec-settings">
-          <span className="qz-s3-set-kicker">Settings</span>
-          <span className="qz-s3-set-row">
-            <span className="qz-s3-set-lbl">From</span>
-            <Stepper
-              value={node.data.scale_config?.min ?? 1}
-              min={0}
-              max={(node.data.scale_config?.max ?? 5) - 1}
-              onChange={(v) =>
-                onCommit(
-                  updateNodeData(doc, node.id, {
-                    scale_config: { ...(node.data.scale_config ?? {}), min: v },
-                  }),
-                )
-              }
-            />
-            <span className="qz-s3-set-lbl">To</span>
-            <Stepper
-              value={node.data.scale_config?.max ?? 5}
-              min={(node.data.scale_config?.min ?? 1) + 1}
-              max={10}
-              onChange={(v) =>
-                onCommit(
-                  updateNodeData(doc, node.id, {
-                    scale_config: { ...(node.data.scale_config ?? {}), max: v },
-                  }),
-                )
-              }
-            />
-          </span>
-          <span className="qz-s3-set-row">
-            <span className="qz-s3-set-lbl">Ends</span>
-            <input
-              className="qz-s3-set-input"
-              defaultValue={node.data.scale_config?.endpoint_label_min ?? ""}
-              key={`min-${node.data.scale_config?.endpoint_label_min ?? ""}`}
-              maxLength={40}
-              placeholder={String(node.data.scale_config?.min ?? 1)}
-              aria-label="Scale start label (number or word)"
-              onBlur={(e) =>
-                onCommit(
-                  updateNodeData(doc, node.id, {
-                    scale_config: {
-                      ...(node.data.scale_config ?? {}),
-                      endpoint_label_min: e.target.value.trim() || undefined,
-                    },
-                  }),
-                )
-              }
-            />
-            <input
-              className="qz-s3-set-input"
-              defaultValue={node.data.scale_config?.endpoint_label_max ?? ""}
-              key={`max-${node.data.scale_config?.endpoint_label_max ?? ""}`}
-              maxLength={40}
-              placeholder={String(node.data.scale_config?.max ?? 5)}
-              aria-label="Scale end label (number or word)"
-              onBlur={(e) =>
-                onCommit(
-                  updateNodeData(doc, node.id, {
-                    scale_config: {
-                      ...(node.data.scale_config ?? {}),
-                      endpoint_label_max: e.target.value.trim() || undefined,
-                    },
-                  }),
-                )
-              }
-            />
-          </span>
-        </div>
-      ) : null}
-      {!expanded ? null : freeform ? (
-        <p className="qz-s3-sec-freeform" role="note">
-          Open text — shoppers type their answer. Nothing maps or routes here; responses are
-          collected as context.
-        </p>
-      ) : (
-        <div className="qz-s3-atable">
-          <div className="qz-s3-atable-head" aria-hidden>
-            <span />
-            <span>Answer</span>
-            <span />
-            <span>{role === "decides" ? "Maps to" : role === "filter" ? "Matches" : ""}</span>
-            <span>Then go to</span>
-            <span />
-          </div>
-          {node.data.answers.map((a, i) => (
-            <AnswerTableRow
-              key={a.id}
-              doc={doc}
-              node={node}
-              answer={a}
-              index={i}
-              isDeciderRow={role === "decides"}
-              isFilterRow={role === "filter"}
-              productIndex={productIndex}
-              categories={categories}
-              skipOptions={skipOptions}
-              isRevisitTarget={isRevisitTarget}
-              chips={chipsByAnswer.get(a.id) ?? []}
-              homeRuleIds={new Set<string>()}
-              canDelete={node.data.answers.length > minAnswers}
-              onCommit={onCommit}
-              onChipClick={onChipClick}
-            />
-          ))}
-        </div>
-      )}
 
-      {!expanded ? null : (
-        <div className="qz-s3-sec-foot">
-          {!freeform ? (
-            <button
-              type="button"
-              className="qz-s3-sec-footbtn"
-              onClick={() => onCommit(addAnswer(doc, node.id))}
+        {/* ONE consistent settings panel for every type (mock .v2set) — role,
+            status, and the type-specific numeric controls live here now. */}
+        <div className="qz-s3-card-set">
+          <span className="qz-s3-set-kicker">Settings</span>
+          <div className="qz-s3-set-r">
+            <span className="qz-s3-set-lbl">Role</span>
+            <select
+              className={`qz-s3-rolesel${isDecider ? " is-decider" : ""}`}
+              value={role}
+              aria-label={`Question ${qIndex} role`}
+              title="What this question does to the result"
+              onChange={(e) => setRole(e.target.value as Role)}
             >
-              + Add answer
-            </button>
+              <option value="decides" disabled={deciderBlocked}>
+                {deciderBlocked ? "Picks the result (needs single-pick)" : "Picks the result ◆"}
+              </option>
+              <option value="filter">Filters results</option>
+              <option value="qualifier">Info only</option>
+            </select>
+          </div>
+          <div className="qz-s3-set-r">
+            <span className="qz-s3-set-lbl">Status</span>
+            <span className={`qz-s3-sec-coverage is-${coverage.tone}`}>{coverage.label}</span>
+          </div>
+          {inRulesCount > 0 ? (
+            <div className="qz-s3-set-r">
+              <span className="qz-s3-set-lbl">Rules</span>
+              <span className="qz-s3-sec-rulesbadge" title="Global rules referencing this question">
+                in {inRulesCount} rule{inRulesCount === 1 ? "" : "s"}
+              </span>
+            </div>
           ) : null}
-          {!freeform ? (
-            <button
-              type="button"
-              className="qz-s3-sec-footbtn"
-              disabled={categories.length === 0}
-              title={
-                categories.length === 0
-                  ? "Add a recommendation in Step 1 first — rules need a target"
-                  : "Add a rule pre-filled with this question (it lands in the Rules panel)"
-              }
-              onClick={() => onStartDraft(node.id)}
-            >
-              λ Add rule
-            </button>
+          {multi ? (
+            <>
+              <div className="qz-s3-set-r">
+                <span className="qz-s3-set-lbl">Min</span>
+                <Stepper
+                  value={node.data.min_selections ?? 1}
+                  min={1}
+                  max={node.data.max_selections ?? node.data.answers.length}
+                  onChange={(v) => onCommit(updateNodeData(doc, node.id, { min_selections: v }))}
+                />
+              </div>
+              <div className="qz-s3-set-r">
+                <span className="qz-s3-set-lbl">Max</span>
+                <Stepper
+                  value={node.data.max_selections ?? node.data.answers.length}
+                  min={node.data.min_selections ?? 1}
+                  max={Math.max(node.data.answers.length, 1)}
+                  onChange={(v) => onCommit(updateNodeData(doc, node.id, { max_selections: v }))}
+                />
+              </div>
+            </>
+          ) : null}
+          {rating ? (
+            <>
+              <div className="qz-s3-set-r">
+                <span className="qz-s3-set-lbl">From</span>
+                <Stepper
+                  value={scaleMin}
+                  min={0}
+                  max={scaleMax - 1}
+                  onChange={(v) => patchScale({ min: v })}
+                />
+              </div>
+              <div className="qz-s3-set-r">
+                <span className="qz-s3-set-lbl">To</span>
+                <Stepper
+                  value={scaleMax}
+                  min={scaleMin + 1}
+                  max={10}
+                  onChange={(v) => patchScale({ max: v })}
+                />
+              </div>
+              <span className="qz-s3-set-hint">
+                Scale runs {scaleMin} → {scaleMax}. End labels are edited on the left.
+              </span>
+            </>
           ) : null}
         </div>
-      )}
+      </div>
     </section>
   );
 }

@@ -6371,3 +6371,115 @@ textarea.qz-s4-inp { resize: vertical; min-height: 56px; line-height: 1.5; }
 :root {
   --qz-warn-wash: color-mix(in srgb, var(--qz-warn) 14%, var(--qz-paper));
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Step-3 ▦ Overview — EXACT to overview-cards.html ("Refined", bundle 07-13)
+   Card anatomy: header grid (question | 238px type column) over a body grid
+   (answers | 238px settings column) so the settings hairline runs straight
+   up through the type control. Roomier answer rows w/ hover-reveal ✕, dashed
+   ＋ Add answer, scale number-squares + end labels on the left, hairline ＋
+   inserters. Overrides the earlier .qz-s3-sec/.qz-s3-arow rules by cascade.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.qz-s3-card { padding: 0; border-radius: 14px; border: 1px solid var(--qz-rule); }
+.qz-s3-card-head {
+  display: grid; grid-template-columns: minmax(0, 1fr) 238px; gap: 26px;
+  align-items: center; padding: 11px 16px;
+}
+.qz-s3-card-headl { display: flex; align-items: center; gap: 13px; min-width: 0; }
+.qz-s3-card .qz-s3-sec-titleinput {
+  flex: 1; min-width: 0; font-size: 14.5px; font-weight: 600; line-height: 1.4;
+  color: var(--qz-ink); border: 1px solid transparent; border-radius: 7px;
+  padding: 5px 8px; margin: -5px 0; background: transparent;
+}
+.qz-s3-card .qz-s3-sec-titleinput:hover { background: color-mix(in srgb, var(--qz-accent) 2%, var(--qz-paper)); }
+.qz-s3-card .qz-s3-sec-titleinput:focus {
+  outline: none; background: var(--qz-paper);
+  border-color: var(--qz-accent); box-shadow: 0 0 0 2px var(--qz-accent-wash);
+}
+.qz-s3-card-type { align-self: center; padding-left: 11px; border-left: 1px solid var(--qz-rule-2); }
+.qz-s3-card-type select { width: 100%; }
+
+.qz-s3-card-body {
+  display: grid; grid-template-columns: minmax(0, 1fr) 238px; gap: 26px;
+  border-top: 1px solid var(--qz-rule-2); padding: 16px 16px 18px;
+}
+.qz-s3-card-ans { padding-left: 54px; min-width: 0; }
+.qz-s3-card .qz-s3-sec-freeform { margin: 2px 0; font-size: 13px; color: var(--qz-ink-3); line-height: 1.55; }
+
+/* settings column (mock .v2set) — one consistent panel for every type */
+.qz-s3-card-set { border-left: 1px solid var(--qz-rule-2); padding-left: 22px; display: flex; flex-direction: column; gap: 10px; align-items: flex-start; }
+.qz-s3-card-set .qz-s3-set-kicker { font-size: 9px; color: var(--qz-ink-25); }
+.qz-s3-set-r { display: grid; grid-template-columns: 70px 1fr; align-items: center; gap: 10px; width: 100%; }
+.qz-s3-set-r .qz-s3-rolesel { width: 100%; }
+.qz-s3-set-hint { font-size: 10.5px; color: var(--qz-ink-25); line-height: 1.45; margin-top: 2px; }
+
+/* answers — bigger, more visible (mock .alist) */
+.qz-s3-card .qz-s3-atable { margin-top: 0; gap: 3px; }
+.qz-s3-card .qz-s3-atable-head { border-bottom: none; padding: 0 8px 2px; font-size: 9px; color: var(--qz-ink-25); }
+.qz-s3-card .qz-s3-arow {
+  border-bottom: none; border: 1px solid transparent; border-radius: 8px;
+  padding: 5px 8px; margin: 0 -8px 0 -8px;
+}
+.qz-s3-card .qz-s3-arow:hover { background: color-mix(in srgb, var(--qz-accent) 2%, var(--qz-paper)); }
+.qz-s3-card .qz-s3-aletter { width: 19px; height: 19px; border-radius: 5px; font-size: 11px; }
+.qz-s3-card .qz-s3-adel { opacity: 0; transition: opacity .12s; }
+.qz-s3-card .qz-s3-arow:hover .qz-s3-adel,
+.qz-s3-card .qz-s3-adel:focus-visible { opacity: 1; }
+
+/* ＋ Add answer relocated: quiet dashed action at the foot (mock .addans) */
+.qz-s3-card .qz-s3-sec-foot { padding: 10px 0 0; }
+.qz-s3-card .qz-s3-sec-footbtn.is-add {
+  display: inline-flex; align-items: center; gap: 7px;
+  border: 1px dashed var(--qz-rule); background: transparent; color: var(--qz-accent-ink);
+  font-size: 12.5px; font-weight: 600; padding: 8px 12px; border-radius: 9px;
+}
+.qz-s3-card .qz-s3-sec-footbtn.is-add:hover { background: var(--qz-accent-tint); border-color: var(--qz-accent-wash); color: var(--qz-accent-ink); }
+
+/* scale preview — numbers 1 → max, end labels edited inline (mock .scaleprev) */
+.qz-s3-scaleprev { display: flex; flex-direction: column; gap: 14px; padding-top: 2px; }
+.qz-s3-scalenums { display: flex; gap: 7px; flex-wrap: wrap; }
+.qz-s3-sn {
+  width: 33px; height: 33px; flex: 0 0 auto; border: 1.5px solid var(--qz-rule);
+  border-radius: 9px; display: grid; place-items: center;
+  font-size: 13.5px; font-weight: 700; color: var(--qz-ink-3); background: var(--qz-paper);
+}
+.qz-s3-sn.is-end { border-color: var(--qz-accent-wash); color: var(--qz-accent-ink); background: var(--qz-accent-tint); }
+.qz-s3-scaleends { display: flex; justify-content: flex-start; gap: 16px; flex-wrap: wrap; }
+.qz-s3-se { display: flex; align-items: center; gap: 8px; }
+.qz-s3-sek {
+  width: 22px; height: 22px; border-radius: 6px; background: var(--qz-accent-wash);
+  color: var(--qz-accent-ink); display: grid; place-items: center;
+  font-family: var(--qz-font-mono); font-size: 11px; font-weight: 700; flex: none;
+}
+.qz-s3-slab {
+  width: 158px; max-width: 38vw; font-size: 12.5px; color: var(--qz-ink);
+  border: 1px solid var(--qz-rule); border-radius: 8px; padding: 8px 10px;
+  background: var(--qz-paper); font-family: inherit;
+}
+.qz-s3-slab:hover { background: color-mix(in srgb, var(--qz-accent) 2%, var(--qz-paper)); }
+.qz-s3-slab:focus { outline: none; border-color: var(--qz-accent); box-shadow: 0 0 0 2px var(--qz-accent-wash); }
+.qz-s3-slab::placeholder { color: var(--qz-ink-25); }
+
+/* between-card inserter — hairline + quiet circular ＋ (mock .ins) */
+.qz-s3-divider { position: relative; height: 22px; display: flex; align-items: center; justify-content: center; padding: 0; }
+.qz-s3-divider::before {
+  content: ""; position: absolute; left: 8px; right: 8px; top: 50%; height: 1px;
+  background: var(--qz-rule); opacity: 0; transition: opacity .12s; transform: none; width: auto;
+}
+.qz-s3-divider:hover::before { opacity: 1; }
+.qz-s3-divider-btn {
+  width: 24px; height: 24px; border-radius: 50%; border: 1px solid var(--qz-rule);
+  background: var(--qz-paper); color: var(--qz-ink-4); display: grid; place-items: center;
+  cursor: pointer; opacity: .28; transition: opacity .12s, transform .12s;
+  z-index: 2; font-size: 13px; line-height: 1; padding: 0; box-shadow: none;
+}
+.qz-s3-divider:hover .qz-s3-divider-btn, .qz-s3-divider-btn:focus-visible { opacity: 1; }
+.qz-s3-divider-btn:hover { background: var(--qz-accent); border-color: var(--qz-accent); color: var(--qz-paper); }
+
+@media (max-width: 1100px) {
+  .qz-s3-card-head, .qz-s3-card-body { grid-template-columns: 1fr; gap: 12px; }
+  .qz-s3-card-type { border-left: none; padding-left: 0; }
+  .qz-s3-card-set { border-left: none; border-top: 1px solid var(--qz-rule-2); padding: 12px 0 0; }
+  .qz-s3-card-ans { padding-left: 0; }
+}
