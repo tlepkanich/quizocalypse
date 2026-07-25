@@ -826,7 +826,9 @@ function LayerSelector({
   setLayerOverride: (m: DesignLayerMode | null) => void;
 }) {
   return (
-    <div className="qz-row" style={{ gap: 8, alignItems: "center" }}>
+    // FIX-2 — wraps: at the spec's 320px inspector the trailing hint drops to
+    // its own line instead of clipping off the panel edge.
+    <div className="qz-row" style={{ gap: 8, alignItems: "center", flexWrap: "wrap" }}>
       <span className="qz-dim" style={{ fontSize: 11 }}>
         Layer:
       </span>
@@ -1043,7 +1045,10 @@ function ContextPanelBody({
         }}
         aria-hidden
       >
-        <div style={{ width: 740, transform: "scale(0.485)", transformOrigin: "top left" }}>
+        {/* FIX-2 — 0.397 fits the spec's 320px inspector (294 content px);
+            the old 0.485 was sized for the 400px panel and cropped ~66px of
+            the step off the right edge. */}
+        <div style={{ width: 740, transform: "scale(0.397)", transformOrigin: "top left" }}>
           <StepPreview doc={doc} node={node} productIndex={productIndex} breakpoint={frameBreakpoint} />
         </div>
       </div>
@@ -1087,7 +1092,8 @@ function ContextPanelBody({
           />
         ) : (
           <>
-            <div className="qz-row" style={{ gap: 8, alignItems: "center" }}>
+            {/* FIX-2 — wraps at the spec's 320px inspector (hint on its own line). */}
+            <div className="qz-row" style={{ gap: 8, alignItems: "center", flexWrap: "wrap" }}>
               <span className="qz-dim" style={{ fontSize: 11 }}>Layer:</span>
               <div className="qz-segmented" role="group" aria-label="Design layer">
                 {(["synced", "desktop", "mobile"] as const).map((m) => (

@@ -1554,7 +1554,10 @@ body[data-qz] ::selection { background: var(--qz-ink); color: var(--qz-cream); }
 /* Zone flex model: the TITLE is the only elastic thing in the bar — the left
    zone takes the slack and its titlewrap truncates; the control zones keep
    their natural width so badges/buttons never clip. */
-.qz-topbar--builder .qz-topbar-left { min-width: 0; flex: 1 1 0; }
+/* FIX-2 — overflow:hidden: the zone CLIPS at its edge instead of sliding its
+   badges underneath the center controls (seen at 1440 with the This-screen
+   control set). */
+.qz-topbar--builder .qz-topbar-left { min-width: 0; flex: 1 1 0; overflow: hidden; }
 .qz-topbar--builder .qz-topbar-center { flex: 0 0 auto; flex-wrap: nowrap; }
 .qz-topbar--builder .qz-topbar-right { flex: 0 0 auto; gap: 8px; }
 .qz-builder-titlewrap {
@@ -1562,10 +1565,12 @@ body[data-qz] ::selection { background: var(--qz-ink); color: var(--qz-cream); }
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   font-size: 13.5px; font-weight: 600;
 }
+/* FIX-2 — build-tab.html geometry: the rail is 60px (spec .body grid col 1;
+   was 76). Item labels drop to the spec's 8.5px so they still fit. */
 .qz-builder-rail {
-  flex: 0 0 76px; width: 76px;
-  display: flex; flex-direction: column; gap: 4px;
-  padding: 12px 8px; background: var(--qz-paper); border-right: 1px solid var(--qz-rule);
+  flex: 0 0 60px; width: 60px;
+  display: flex; flex-direction: column; gap: 2px;
+  padding: 9px 6px; background: var(--qz-paper); border-right: 1px solid var(--qz-rule);
 }
 .qz-builder-rail-spacer { margin-top: auto; }
 /* The hairline between the workspace views and the build-scoped tools. */
@@ -1621,9 +1626,10 @@ body[data-qz] ::selection { background: var(--qz-ink); color: var(--qz-cream); }
 }
 .qz-builder-rail-item {
   appearance: none; border: none; background: none; cursor: pointer; font: inherit;
-  display: flex; flex-direction: column; align-items: center; gap: 5px;
-  padding: 10px 4px; border-radius: 10px; color: var(--qz-ink-3);
-  font-size: 11px; font-weight: 500;
+  display: flex; flex-direction: column; align-items: center; gap: 4px;
+  padding: 8px 3px 6px; border-radius: 10px; color: var(--qz-ink-3);
+  /* FIX-2 — spec .railitem span: 600 8.5px (fits the 60px rail). */
+  font-size: 8.5px; font-weight: 600;
   transition: background var(--qz-dur-fast) var(--qz-ease), color var(--qz-dur-fast) var(--qz-ease);
 }
 .qz-builder-rail-item:hover { background: var(--qz-rule-2); color: var(--qz-ink); }
@@ -1673,27 +1679,36 @@ body[data-qz] ::selection { background: var(--qz-ink); color: var(--qz-cream); }
 }
 /* The row under the top bar: rail · tool panel · stage (or full-width settings). */
 .qz-builder-body { flex: 1 1 auto; min-height: 0; display: flex; align-items: stretch; }
+/* FIX-2 — build-tab.html geometry: the component library is 244px (spec .body
+   grid col 2; was 320 — the extra 76px read as dead panel air and starved the
+   stage). */
 .qz-builder-panel {
-  flex: 0 0 320px; width: 320px; min-width: 0; overflow-y: auto;
+  flex: 0 0 244px; width: 244px; min-width: 0; overflow-y: auto;
   position: relative;
   background: var(--qz-paper); border-right: 1px solid var(--qz-rule);
-  padding: 14px; display: flex; flex-direction: column; gap: 14px;
+  padding: 12px; display: flex; flex-direction: column; gap: 12px;
 }
 /* §O2.2 — unpinned: the aside shrinks to just the icon-rail and lets the
    flyout panel overflow over the canvas (reclaims stage width). */
 .qz-builder-panel.is-railonly { flex: 0 0 auto; width: auto; overflow: visible; }
 .qz-builder-stage { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; background: var(--qz-cream-2); }
-.qz-builder-panel-collapse { position: absolute; top: 7px; right: 7px; z-index: 2; width: 26px; height: 26px; display: grid; place-items: center; border: 1px solid var(--qz-rule); border-radius: 8px; background: var(--qz-paper); color: var(--qz-ink-3); cursor: pointer; }
+/* FIX-2 — 22×22 at the spec's offsets (.libcollapse top:9 right:8; the old
+   26px box overlapped the Background tab at the spec's 244px panel). */
+.qz-builder-panel-collapse { position: absolute; top: 9px; right: 8px; z-index: 2; width: 22px; height: 22px; display: grid; place-items: center; border: 1px solid var(--qz-rule); border-radius: 6px; background: var(--qz-paper); color: var(--qz-ink-3); cursor: pointer; }
+/* FIX-2 — spec .libtabs: compact tabs (10.5px, thin pads, flex:1) so
+   Add · Layers · Background all fit the 244px library beside the chevron. */
+.qz-builder-panel > .qz-segmented { display: flex; margin-right: 24px; }
+.qz-builder-panel > .qz-segmented button { flex: 1 1 0; padding: 0 2px; font-size: 10.5px; font-weight: 600; height: 24px; }
 .qz-builder-panel-collapse:hover { color: var(--qz-ink); background: var(--qz-cream-2); }
 .qz-builder-stage { position: relative; }
-.qz-builder-panel-reopen { position: absolute; top: 12px; left: 12px; z-index: 4; display: inline-flex; align-items: center; gap: 5px; padding: 6px 9px; border: 1px solid var(--qz-rule); border-radius: 8px; background: color-mix(in srgb, var(--qz-paper) 92%, transparent); color: var(--qz-ink-3); box-shadow: var(--qz-shadow-sm); cursor: pointer; font: 600 11.5px/1 var(--qz-font-body); }
-/* BLD-3 — the right-side step inspector (the embedded 3-pane's 400px column):
-   the ContextPanel gets real room, so its tabs stop clipping. Narrower
-   laptops trade it down to 340px before the canvas gives up its space. */
+/* FIX-2 — sits under the stagebar (was top:12, which covered the step name). */
+.qz-builder-panel-reopen { position: absolute; top: 51px; left: 12px; z-index: 4; display: inline-flex; align-items: center; gap: 5px; padding: 6px 9px; border: 1px solid var(--qz-rule); border-radius: 8px; background: color-mix(in srgb, var(--qz-paper) 92%, transparent); color: var(--qz-ink-3); box-shadow: var(--qz-shadow-sm); cursor: pointer; font: 600 11.5px/1 var(--qz-font-body); }
+/* FIX-2 — build-tab.html geometry: the inspector is 320px (spec .body grid
+   col 4; BLD-3's 400px starved the stage — the mock proves the tabs fit). */
 .qz-builder-inspector {
-  flex: 0 0 400px; width: 400px; min-width: 0; overflow-y: auto;
+  flex: 0 0 320px; width: 320px; min-width: 0; overflow-y: auto;
   background: var(--qz-paper); border-left: 1px solid var(--qz-rule);
-  padding: 14px; display: flex; flex-direction: column; gap: 14px;
+  padding: 13px; display: flex; flex-direction: column; gap: 13px;
 }
 /* BLD-7 — the panels are flex columns with overflow-y:auto; without this,
    a tall child (e.g. the inspector's block list) gets flex-SHRUNK to the
@@ -1701,9 +1716,14 @@ body[data-qz] ::selection { background: var(--qz-ink); color: var(--qz-cream); }
    scrolling — the Design tab's lower block rows were unreachable. */
 .qz-builder-panel > *,
 .qz-builder-inspector > * { flex: 0 0 auto; }
-@media (max-width: 1499px) {
-  .qz-builder-inspector { flex-basis: 340px; width: 340px; }
-}
+/* FIX-2 — at the spec's 244px library, intrinsic min-content (the Google-font
+   <select>s' widest option ≈ 277px) must not stretch the panel's layout past
+   its edge: clamp the selects and let the row/column wrappers shrink. */
+.qz-builder-panel select { min-width: 0; max-width: 100%; }
+.qz-builder-panel input[type="range"] { min-width: 0; }
+.qz-builder-panel > *,
+.qz-builder-panel .qz-col,
+.qz-builder-panel .qz-row { min-width: 0; }
 /* QB-8 — slim validation/publish notices above the canvas; collapses to nothing
    when there's nothing to show, so the canvas is just the live quiz. */
 .qz-builder-notices { flex: 0 0 auto; padding: 14px 18px 0; display: flex; flex-direction: column; gap: 10px; }
@@ -1734,10 +1754,22 @@ body[data-qz] ::selection { background: var(--qz-ink); color: var(--qz-cream); }
   padding: 5px 11px; border-radius: 999px; border: 1px solid var(--qz-rule);
   font-size: 12.5px; color: var(--qz-ink-3); background: var(--qz-paper);
 }
+/* FIX-2 — build-tab.html .stage geometry: padding 24px 16px 16px (was a flat
+   28px), centered, top-anchored. */
 .qz-builder-canvas {
-  flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: 28px;
+  flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: 24px 16px 16px;
   display: flex; justify-content: center; align-items: flex-start;
 }
+/* FIX-2 — the build-tab .stagebar: step name · Show-as (desktop) · Expand ·
+   zoom, on a slim rule-bottom bar over the canvas (spec: 8px 12px padding). */
+.qz-stagebar {
+  flex: 0 0 auto; display: flex; align-items: center; gap: 8px;
+  padding: 5px 12px; background: var(--qz-paper);
+  border-bottom: 1px solid var(--qz-rule);
+  font-size: 11px; color: var(--qz-ink-3);
+}
+.qz-stagebar-name { font-weight: 600; color: var(--qz-ink-2); }
+.qz-stagebar-sp { flex: 1 1 auto; }
 .qz-builder-canvas > div { min-height: 0; height: 100%; }
 .qz-step5-chromeless { min-height: 0; height: 100%; width: 100%; }
 .qz-device-fit-mobile { width: 100%; height: 100%; min-height: 0; display: flex; justify-content: center; align-items: flex-start; overflow: hidden; }
@@ -1762,15 +1794,32 @@ body[data-qz] ::selection { background: var(--qz-ink); color: var(--qz-cream); }
 /* QB-10 — the standalone preview shows JUST the quiz. The runtime page wrapper
    hardcodes a #FAFAFA backdrop + 100vh (an inline style → needs !important),
    which read as a "white box" around the quiz card. Strip it here only (scoped
-   to the builder canvas; published /q + embedded /app keep their backdrop). */
+   to the builder canvas; published /q + embedded /app keep their backdrop).
+   FIX-2 broadens both rules to the Expand overlay so the portal-mounted frame
+   shows the identical surface. */
 /* QZY-11 — scoped to screens WITHOUT a per-screen background, so the
    Background tab stays WYSIWYG on the canvas. */
-.qz-builder-canvas .qz-runtime-page:not([data-qz-screenbg]) {
+.qz-builder-canvas .qz-runtime-page:not([data-qz-screenbg]),
+.qz-builder-expandhost .qz-runtime-page:not([data-qz-screenbg]) {
   background: transparent !important;
 }
-.qz-builder-canvas .qz-runtime-page {
+.qz-builder-canvas .qz-runtime-page,
+.qz-builder-expandhost .qz-runtime-page {
   min-height: 0 !important;
 }
+/* FIX-2 — .qz-devfill: the frame is a TRUE viewport, so the quiz must fill it
+   (build-tab.html: `.canvas{min-height:100%}` on the --b-bg device; the
+   prototype's phone/desktop frames are ALWAYS fully painted in the merchant's
+   background). The runtime root paints var(--qz-color-bg) (minimal chrome /
+   fillBackground), so stretching the chain kills the dead admin-white region
+   that filled the frame under short steps. `> div` (never `> *`) so the root's
+   <style>/<link> children keep their UA display:none. */
+.qz-devfill { min-height: 100%; display: flex; flex-direction: column; }
+.qz-devfill > div {
+  flex: 1 0 auto; min-width: 0;
+  display: flex; flex-direction: column;
+}
+.qz-devfill > div > .qz-runtime-page { flex: 1 0 auto; }
 
 /* QP-2 — Page Settings panel (Editor → Settings sub-tab): background color + the
    Quizell page-paddings cross. */
@@ -5814,25 +5863,27 @@ textarea.qz-s4-inp { resize: vertical; min-height: 56px; line-height: 1.5; }
    Screen carousel (center column only) + Layers tab rows.
    ═══════════════════════════════════════════════════════════════════════════ */
 
+/* FIX-2 — build-tab.html .strip geometry: 7px 12px 8px padding, 62×78 thumbs
+   (spec .stepcard), 8px gap. The old 84×118 + fat paddings made a 163px-tall
+   strip that ate ~52px of canvas height. */
 .qz-screens {
   display: flex;
-  gap: 10px;
+  gap: 8px;
   align-items: flex-start;
-  padding: 10px 12px 12px;
-  margin-top: 8px;
+  padding: 7px 12px 8px;
   border-top: 1px solid var(--qz-rule);
   overflow-x: auto;
   flex: 0 0 auto;
 }
 .qz-screens-item { display: flex; flex-direction: column; gap: 4px; flex: 0 0 auto; }
 .qz-screens-thumb {
-  width: 84px;
-  height: 118px;
+  width: 62px;
+  height: 78px;
   padding: 0;
   overflow: hidden;
   position: relative;
   border: 1px solid var(--qz-rule);
-  border-radius: 8px;
+  border-radius: 7px;
   background: var(--qz-paper);
   cursor: pointer;
 }
@@ -5841,8 +5892,9 @@ textarea.qz-s4-inp { resize: vertical; min-height: 56px; line-height: 1.5; }
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--qz-accent) 35%, transparent);
 }
 .qz-screens-scale {
+  /* 62 / 375 — the thumb width over the mobile preview's logical width. */
   width: 375px;
-  transform: scale(0.224);
+  transform: scale(0.165);
   transform-origin: top left;
   pointer-events: none;
 }
@@ -5850,13 +5902,17 @@ textarea.qz-s4-inp { resize: vertical; min-height: 56px; line-height: 1.5; }
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
-  min-height: 18px;
-  font-size: 10.5px;
+  gap: 5px;
+  min-height: 15px;
+  /* FIX-2 — spec .stepcard .tl: 600 8.5px. */
+  font-size: 8.5px;
+  font-weight: 600;
   color: var(--qz-ink-3);
   position: relative;
 }
-.qz-screens-item.is-active .qz-screens-label { color: var(--qz-ink-1); font-weight: 700; }
+/* FIX-2 — spec .stepcard.on .tl is accent-ink (var(--qz-ink-1) was undefined
+   repo-wide, so the active label silently inherited the dim caption color). */
+.qz-screens-item.is-active .qz-screens-label { color: var(--qz-accent); font-weight: 700; }
 .qz-screens-del {
   border: none;
   background: transparent;
@@ -5899,15 +5955,16 @@ textarea.qz-s4-inp { resize: vertical; min-height: 56px; line-height: 1.5; }
   border-color: transparent;
   font-weight: 600;
 }
+/* FIX-2 — spec .addstep: 38×78. */
 .qz-screens-add {
   flex: 0 0 auto;
-  width: 84px;
-  height: 118px;
-  border: 1px dashed var(--qz-rule);
-  border-radius: 8px;
+  width: 38px;
+  height: 78px;
+  border: 1.5px dashed var(--qz-rule);
+  border-radius: 7px;
   background: transparent;
   color: var(--qz-ink-3);
-  font-size: 26px;
+  font-size: 18px;
   cursor: pointer;
 }
 .qz-screens-add:hover { border-color: var(--qz-accent); color: var(--qz-accent); }

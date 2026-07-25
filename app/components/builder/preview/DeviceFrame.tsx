@@ -171,7 +171,12 @@ export function DeviceFrame({
                   overscrollBehavior: "contain",
                 }}
               >
-                <div ref={contentRef}>{children}</div>
+                {/* FIX-2 — .qz-devfill: the quiz row stretches to the frame's
+                    full logical height so the doc's own background paints
+                    edge-to-edge (build-tab.html: .canvas{min-height:100%} on
+                    the --b-bg device). Without it a short step left the rest
+                    of the 844px screen as dead admin-paper white. */}
+                <div ref={contentRef} className="qz-devfill">{children}</div>
               </div>
               <span
                 className="qz-devfade"
@@ -249,6 +254,7 @@ export function DeviceFrame({
                 }}
               >
                 <div
+                  className="qz-devfill"
                   style={{
                     width: "min(92%, 900px)",
                     maxWidth: 1200,
@@ -277,7 +283,10 @@ export function DeviceFrame({
                 </div>
               </div>
             ) : (
-              children
+              // Full page: the quiz IS the page — fill the whole 1200×760
+              // frame so the doc background paints full-bleed (FIX-2; the
+              // prototype's `.device.desktop.dfull{background:var(--b-bg)}`).
+              <div className="qz-devfill">{children}</div>
             )}
           </div>
         </div>

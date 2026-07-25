@@ -183,7 +183,8 @@ if (overflowFound) {
 
 // ── 4a: Expand (mobile) ─────────────────────────────────────────────────────
 const expandBtn = page.locator(".qz-s3-expandbtn", { hasText: "Expand" });
-ok("Expand control in the top bar", (await expandBtn.count()) === 1);
+// FIX-2 — Expand moved from the top bar onto the build-tab stagebar.
+ok("Expand control on the stagebar", (await expandBtn.count()) === 1);
 await expandBtn.click();
 await page.waitForSelector(".qz-s3-phscrim", { timeout: 5000 });
 await page.waitForTimeout(500);

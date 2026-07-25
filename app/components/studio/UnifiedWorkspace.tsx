@@ -1074,6 +1074,57 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
     );
     const allScreensMode = view === "build" && canvasMode === "all";
 
+    // FIX-2 (build-tab.html .stagebar) — stage-scoped controls live on a slim
+    // bar OVER the canvas (step name · Show-as on desktop · Expand · zoom),
+    // exactly where the prototype puts them. Moving Show-as (~370px) + Expand
+    // + zoom out of the top bar also stops the bar overflowing at 1280 (the
+    // Publish button was pushed off-screen; badges overlapped Design AI).
+    const stageNode =
+      doc.nodes.find((n) => n.id === (selectedId ?? liveNodeId)) ?? null;
+    let stageStepName = "Screen";
+    if (stageNode) {
+      if (stageNode.type === "question") {
+        let q = 0;
+        for (const s of ordered.steps) {
+          const n = doc.nodes.find((x) => x.id === s.nodeId);
+          if (n?.type === "question") {
+            q++;
+            if (n.id === stageNode.id) break;
+          }
+        }
+        stageStepName = `Question ${q}`;
+      } else {
+        const names: Partial<Record<typeof stageNode.type, string>> = {
+          intro: "Intro",
+          email_gate: "Email",
+          result: "Result",
+          end: "End",
+          message: "Message",
+          ask_ai: "Ask AI",
+          product_cards: "Products",
+          integration: "Integration",
+          branch: "Branch",
+        };
+        stageStepName = names[stageNode.type] ?? "Screen";
+      }
+    }
+    const stagebar = (
+      <div className="qz-stagebar">
+        <span className="qz-stagebar-name">{stageStepName}</span>
+        <span className="qz-stagebar-sp" aria-hidden />
+        {breakpointForWidth(frameW) === "desktop" ? showAsToggle : null}
+        {/* phone-preview SPEC — Expand: inspect the same screen big. */}
+        <button
+          type="button"
+          className="qz-s3-expandbtn"
+          onClick={() => setPreviewExpanded(true)}
+        >
+          <IconExpand /> Expand
+        </button>
+        {zoomStepper}
+      </div>
+    );
+
     // The left panel content for the focused tool (build view only). QZY-6:
     // ai/code left this switch — Assist is a top-bar drawer, custom CSS lives
     // in Settings.
@@ -1273,20 +1324,11 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
                     All-screens grid is where the repaint is most visible. */}
                 <DesignAiButton api={designAiApi} />
                 {/* Single-screen controls only — the All-screens grid has no
-                    device frame / zoom / inspect target to drive. */}
+                    device frame / zoom / inspect target to drive. FIX-2:
+                    Show-as / Expand / zoom moved to the stagebar (spec). */}
                 {allScreensMode ? null : (
                   <>
                     {deviceToggle}
-                    {breakpointForWidth(frameW) === "desktop" ? showAsToggle : null}
-                    {/* phone-preview SPEC — Expand: inspect the same screen big. */}
-                    <button
-                      type="button"
-                      className="qz-s3-expandbtn"
-                      onClick={() => setPreviewExpanded(true)}
-                    >
-                      <IconExpand /> Expand
-                    </button>
-                    {zoomStepper}
                     {editInteractToggle}
                   </>
                 )}
@@ -1394,6 +1436,9 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
                 </aside>
               )}
               <div className="qz-builder-stage">
+                {/* FIX-2 — the build-tab stagebar (step name · Show-as ·
+                    Expand · zoom) sits over the canvas, spec geometry. */}
+                {stagebar}
                 {libraryCollapsed ? (
                   <button type="button" className="qz-builder-panel-reopen" onClick={() => setLibraryCollapsed(false)} aria-label="Open component library">
                     <ChevronRight size={15} aria-hidden /> <span>Library</span>
