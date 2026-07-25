@@ -82,7 +82,15 @@ export const stylesFor = (
   return ({
   page: {
     minHeight: "100vh",
-    background: "#FAFAFA",
+    // FIX-3 — minimal chrome is CARD-LESS: the merchant's Background token IS
+    // the page, so paint it here. The hard-coded #FAFAFA backdrop otherwise
+    // sits at 100vh over the root's var(--qz-color-bg) and hides the merchant
+    // color on every published minimal doc (the builder canvas strips this
+    // backdrop — quizocalypse.css QB-10 — so the preview showed the color the
+    // published page didn't). Classic keeps the exact prior string: its card
+    // paints var(--qz-color-bg) ON the grey backdrop by design (byte-identical
+    // — legacy/Shopify regression guard).
+    background: minimal ? "var(--qz-color-bg)" : "#FAFAFA",
     display: "flex",
     flexDirection: "column" as const,
     alignItems: "center",
