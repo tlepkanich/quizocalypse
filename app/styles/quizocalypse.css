@@ -7554,6 +7554,12 @@ html[data-theme="dark"] {
 .qz-builder-body.is-previewing { grid-template-columns: 60px minmax(320px, 1fr); }
 .qz-builder-body.is-libhidden { grid-template-columns: 60px 0 minmax(320px, 1fr) 320px; }
 .qz-builder-body.is-libhidden .qz-builder-panel { overflow: hidden; border-right: none; padding: 0; }
+/* FIX-4 — All-screens mode: the library panel leaves the grid entirely
+   (display:none below), so the template must name THREE tracks — rail ·
+   stage (the card grid) · the 320px inspector (Global styles). Reusing the
+   4-track is-libhidden template put the stage in the 0 track and the
+   inspector in the 1fr track (the owner-reported break). */
+.qz-builder-body.is-allscreens { grid-template-columns: 60px minmax(320px, 1fr) 320px; }
 .qz-builder-body > .qz-builder-panel,
 .qz-builder-body > .qz-builder-rail,
 .qz-builder-body > .qz-builder-stage,

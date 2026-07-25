@@ -650,6 +650,8 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
   );
 
   // BLD-3 — the mock's .devseg: Mobile first (icon + label), then Desktop.
+  // FIX-4 — visible in BOTH canvas modes; the segs are single-screen
+  // controls, so using one from All-screens flips back to This-screen.
   const deviceToggle = (
     <div className="qz-bt-seg" role="group" aria-label="Device size">
       {([
@@ -671,7 +673,10 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
           type="button"
           aria-pressed={breakpointForWidth(frameW) === d.bp}
           aria-label={d.label}
-          onClick={() => setFrameW(d.w)}
+          onClick={() => {
+            setFrameW(d.w);
+            setCanvasMode("screen");
+          }}
         >
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
             {d.icon}
@@ -696,6 +701,8 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
         onClick={() => {
           setEditMode(false);
           setInspectTarget(null);
+          // FIX-4 — Preview walks ONE screen; leave the All-screens grid.
+          setCanvasMode("screen");
         }}
       >
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4l12 8-12 8z" fill="currentColor" stroke="none" /></svg>
@@ -1163,7 +1170,9 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
             <ChevronRight size={13} aria-hidden /> <span>Panel</span>
           </button>
         ) : null}
-        <span className="qz-stagebar-name">{stageStepName}</span>
+        <span className="qz-stagebar-name">
+          {allScreensMode ? "All screens" : stageStepName}
+        </span>
         {/* BLD-1 canvas mode + BLD-2 Design AI — stagebar-housed (the mock's
             top bar has no home for either; this is the stage control strip).
             Preview mode strips them (mock .previewing keeps only the basics). */}
@@ -1454,7 +1463,7 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
       (!onBuild
         ? " is-intab"
         : allScreensMode
-          ? " is-libhidden is-allscreens"
+          ? " is-allscreens"
           : !editMode
             ? " is-previewing"
             : libraryCollapsed
@@ -1481,7 +1490,10 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
             scoringBadge
           )}
           <span className="qz-bt-sp" />
-          {onBuild && !allScreensMode ? (
+          {/* FIX-4 — the device/mode segs stay in BOTH canvas modes (the
+              owner-reported regression stripped them in All-screens);
+              interacting with either flips back to This-screen. */}
+          {onBuild ? (
             <>
               {deviceToggle}
               {modeToggle}

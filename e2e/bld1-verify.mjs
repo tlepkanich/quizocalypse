@@ -15,6 +15,9 @@
 // autosave PUT (prisma read-back) · filmstrip stays and highlights follow ·
 // card click focuses the screen + flips to This-screen · + New screen adds a
 // question BEFORE the terminal (the add-anchor rule) · zero page errors.
+// FIX-4 layout assertions (the BLD-3 grid regression shipped past the DOM
+// checks): the stage track really holds the cards, the inspector is the
+// right-edge 320px column, cells = screens + 1, top-bar segs present.
 //
 // Run:  set -a; source .env; set +a; node e2e/bld1-verify.mjs
 import { chromium } from "playwright";
@@ -125,12 +128,49 @@ try {
     (await page.locator(".qz-allcard-title").count()) === cardCount &&
       (await page.locator(".qz-allcard-ord").first().textContent()) === "01",
   );
+  // FIX-4 — the device/mode segs STAY in All-screens (the BLD-3 regression
+  // stripped them); the stage-scoped Expand/zoom cluster still steps aside.
   ok(
-    "single-screen controls leave the top bar in All-screens mode",
-    (await page.locator('[role=group][aria-label="Device size"]').count()) === 0 &&
+    "top-bar segs stay in All-screens mode (Device size + Preview mode)",
+    (await page.locator('[role=group][aria-label="Device size"]').count()) === 1 &&
+      (await page.locator('[role=group][aria-label="Preview mode"]').count()) === 1 &&
       (await page.locator(".qz-s3-expandbtn").count()) === 0,
   );
   ok("filmstrip stays in All-screens mode", (await page.locator(".qz-screens").count()) === 1);
+
+  // ── FIX-4 layout assertions (the BLD-3 grid regression: the stage fell
+  //    into the is-libhidden 0-width track and the inspector into the 1fr
+  //    track — DOM presence passed while the layout was destroyed) ──────────
+  const stageBox = await page.locator(".qz-builder-stage").boundingBox();
+  const inspBox = await page.locator(".qz-builder-inspector").boundingBox();
+  const gspBox = await page.locator(".qz-gsp").boundingBox();
+  const card0Box = await page.locator(".qz-allcard").first().boundingBox();
+  const bodyBox = await page.locator(".qz-builder-body").boundingBox();
+  ok(
+    "stage track holds the card grid (width ≥ 320, cards inside it)",
+    stageBox !== null &&
+      card0Box !== null &&
+      stageBox.width >= 320 &&
+      card0Box.x >= stageBox.x - 1 &&
+      card0Box.x + card0Box.width <= stageBox.x + stageBox.width + 1,
+    `stage=${JSON.stringify(stageBox)} card0=${JSON.stringify(card0Box)}`,
+  );
+  ok(
+    "inspector is the right-edge 320px column and hosts the Global panel",
+    inspBox !== null &&
+      gspBox !== null &&
+      bodyBox !== null &&
+      inspBox.width >= 300 &&
+      inspBox.width <= 340 &&
+      Math.abs(inspBox.x + inspBox.width - (bodyBox.x + bodyBox.width)) <= 2 &&
+      gspBox.x >= inspBox.x - 1 &&
+      gspBox.x + gspBox.width <= inspBox.x + inspBox.width + 1,
+    `insp=${JSON.stringify(inspBox)} gsp=${JSON.stringify(gspBox)}`,
+  );
+  ok(
+    "grid cells = screens + the New-screen cell (no duplicate mounts)",
+    (await page.locator(".qz-allscreens-cell").count()) === nodeCount + 1,
+  );
 
   // ── global panel ───────────────────────────────────────────────────────────
   const gsp = page.locator(".qz-gsp");
@@ -233,8 +273,9 @@ try {
     `opened: ${targetTitle}`,
   );
   ok(
-    "single-screen controls return",
-    (await page.locator('[role=group][aria-label="Device size"]').count()) === 1,
+    "single-screen stage controls return (Expand)",
+    (await page.locator(".qz-s3-expandbtn").count()) === 1 &&
+      (await page.locator('[role=group][aria-label="Device size"]').count()) === 1,
   );
   await page.screenshot({ path: `${SHOTS}/bld1-this-screen-after-card-click.png` });
 
