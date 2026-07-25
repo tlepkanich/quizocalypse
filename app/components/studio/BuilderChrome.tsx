@@ -1,33 +1,18 @@
 import type { ReactNode } from "react";
 import { Fragment } from "react";
-import {
-  GitBranch,
-  Package,
-  Palette,
-  Pencil,
-  Settings,
-  type LucideIcon,
-} from "lucide-react";
 import { Wordmark } from "../chrome/Wordmark";
 import { ThemeToggle } from "./ThemeToggle";
 
 // ════════════════════════════════════════════════════════════════════════════
-// BLD-1 — the standalone builder's chrome, rebuilt on the Design-System-V2
-// primitives (§7.6 top bar · §7.7 rail vocabulary). ONE navigation rail
-// replaces the old two-system entanglement (a Build/Products/Results/Logic
-// tab strip ABOVE an Editor/AI/Theme/Settings/Code tool rail, where clicking
-// the "Logic" tab lit the "Settings" tool): the four workspace views and the
-// three build-scoped tools are peers on a single rail, and the parent derives
-// one `active` key so exactly one item ever lights. Pure presentational —
-// UnifiedWorkspace owns the view/tool state. The QP-1 filmstrip is retired
-// (owner decision, BLD-1): the rail's step list is the one step navigator,
-// and the canvas gets its height back.
+// BLD-3 — the standalone builder's chrome, a structural port of
+// docs/design/build-tab/build-tab.html. ONE navigation rail (the mock's
+// .rail): Build, a "Set up" divider, then Products · Logic · Theme ·
+// Settings — with the mock's exact icon set (its <symbol> paths, 19px,
+// stroke 1.8). Pure presentational — UnifiedWorkspace owns the view/tool
+// state. The top bar moved into UnifiedWorkspace itself (the mock's .top is
+// a single ordered row, not a 3-zone primitive).
 // ════════════════════════════════════════════════════════════════════════════
 
-// QZY-6 (build-tab spec §1) — the five rail sections. Results left the rail
-// (result screens edit in Build); AI became the top-bar "Assist" companion
-// (never a destination tab); Code/placement/integrations/embed live in
-// Settings. Design is still a build-scoped tool (the canvas stays visible).
 export type BuilderNavKey =
   | "build"
   | "products"
@@ -35,12 +20,61 @@ export type BuilderNavKey =
   | "design"
   | "settings";
 
-const NAV: Array<{ key: BuilderNavKey; label: string; icon: LucideIcon; ruleAbove?: boolean }> = [
-  { key: "build", label: "Build", icon: Pencil },
-  { key: "products", label: "Products", icon: Package, ruleAbove: true },
-  { key: "logic", label: "Logic", icon: GitBranch },
-  { key: "design", label: "Theme", icon: Palette },
-  { key: "settings", label: "Settings", icon: Settings },
+/** The mock's SVG symbol paths (build-tab.html <symbol> defs), 24px viewBox. */
+function RailIcon({ d }: { d: ReactNode }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      {d}
+    </svg>
+  );
+}
+
+// mock #i-build / #i-tag / #i-logic / #i-palette / #i-gear
+export const MOCK_ICONS: Record<BuilderNavKey, ReactNode> = {
+  build: (
+    <>
+      <rect x="3" y="3" width="7" height="7" rx="1.5" />
+      <rect x="14" y="3" width="7" height="7" rx="1.5" />
+      <rect x="3" y="14" width="7" height="7" rx="1.5" />
+      <rect x="14" y="14" width="7" height="7" rx="1.5" />
+    </>
+  ),
+  products: (
+    <path d="M20.6 13.4l-7.2 7.2a2 2 0 01-2.8 0l-7-7a2 2 0 01-.6-1.4V5a2 2 0 012-2h6.8a2 2 0 011.4.6l7 7a2 2 0 010 2.8z" />
+  ),
+  logic: (
+    <>
+      <circle cx="6" cy="6" r="2.5" />
+      <circle cx="6" cy="18" r="2.5" />
+      <circle cx="18" cy="12" r="2.5" />
+      <path d="M8.2 7.3l7.6 3.6M8.2 16.7l7.6-3.6" />
+    </>
+  ),
+  design: (
+    <path d="M12 3a9 9 0 000 18c1 0 1.7-.8 1.7-1.8 0-.5-.2-.9-.5-1.2-.3-.3-.5-.7-.5-1.2 0-1 .8-1.8 1.8-1.8H16a5 5 0 005-5c0-3.9-4-7-9-7z" />
+  ),
+  settings: (
+    <>
+      <circle cx="12" cy="12" r="3" />
+      <path d="M19.4 13a7.9 7.9 0 000-2l2-1.5-2-3.4-2.3 1a7 7 0 00-1.7-1L15 3.5h-4l-.4 2.6a7 7 0 00-1.7 1l-2.3-1-2 3.4L6.6 11a7.9 7.9 0 000 2l-2 1.5 2 3.4 2.3-1a7 7 0 001.7 1L11 20.5h4l.4-2.6a7 7 0 001.7-1l2.3 1 2-3.4z" />
+    </>
+  ),
+};
+
+const NAV: Array<{ key: BuilderNavKey; label: string; ruleAbove?: boolean }> = [
+  { key: "build", label: "Build" },
+  { key: "products", label: "Products", ruleAbove: true },
+  { key: "logic", label: "Logic" },
+  { key: "design", label: "Theme" },
+  { key: "settings", label: "Settings" },
 ];
 
 export function BuilderNavRail({
@@ -51,54 +85,37 @@ export function BuilderNavRail({
   onSelect: (key: BuilderNavKey) => void;
 }) {
   return (
-    <nav className="qz-builder-rail" aria-label="Builder navigation">
-      {NAV.map((r) => {
-        const Icon = r.icon;
-        return (
-          <Fragment key={r.key}>
-            {r.ruleAbove ? <><div className="qz-builder-rail-rule" aria-hidden="true" /><span className="qz-builder-rail-label">Set up</span></> : null}
-            <button
-              type="button"
-              className={`qz-builder-rail-item${active === r.key ? " is-active" : ""}`}
-              aria-current={active === r.key ? "page" : undefined}
-              onClick={() => onSelect(r.key)}
-            >
-              <Icon size={20} strokeWidth={1.7} aria-hidden="true" />
-              <span>{r.label}</span>
-            </button>
-          </Fragment>
-        );
-      })}
+    <nav className="qz-builder-rail" aria-label="Sections">
+      {NAV.map((r) => (
+        <Fragment key={r.key}>
+          {r.ruleAbove ? (
+            <span className="qz-builder-rail-label">Set up</span>
+          ) : null}
+          <button
+            type="button"
+            className={`qz-builder-rail-item${active === r.key ? " is-active" : ""}`}
+            aria-current={active === r.key ? "page" : undefined}
+            onClick={() => onSelect(r.key)}
+          >
+            <RailIcon d={MOCK_ICONS[r.key]} />
+            <span>{r.label}</span>
+          </button>
+        </Fragment>
+      ))}
       <div className="qz-builder-rail-spacer" />
       <ThemeToggle />
     </nav>
   );
 }
 
-/* §7.6 — the builder's top bar on the shared .qz-topbar zone primitive. Left
-   is ALWAYS the wordmark (compact ◆ — the word is reinforcement, the builder
-   spends the room on the quiz title), then the host's title/badges; center
-   carries the preview controls; right carries save state · health · actions.
-   The --builder modifier drops stickiness (the bar is a flex-column child)
-   and lets the left zone shrink so a long quiz title truncates instead of
-   wrapping the bar to three lines. */
-export function BuilderTopBar({
-  left,
-  center,
-  right,
-}: {
-  left: ReactNode;
-  center?: ReactNode;
-  right?: ReactNode;
-}) {
+/* BLD-3 — the mock's .top: ONE ordered flex row (brandmark · title · badges ·
+   spacer · device/mode segs · dividers · undo/redo · actions). The host
+   composes the row; this wrapper just provides the bar chrome + brandmark. */
+export function BuilderTopBar({ children }: { children: ReactNode }) {
   return (
-    <header className="qz-topbar qz-topbar--builder">
-      <div className="qz-topbar-zone qz-topbar-left">
-        <Wordmark to="/studio" compact />
-        {left}
-      </div>
-      <div className="qz-topbar-zone qz-topbar-center">{center}</div>
-      <div className="qz-topbar-zone qz-topbar-right">{right}</div>
+    <header className="qz-bt-top">
+      <Wordmark to="/studio" compact />
+      {children}
     </header>
   );
 }

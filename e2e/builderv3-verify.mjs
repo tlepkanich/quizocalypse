@@ -46,7 +46,8 @@ await page.waitForSelector(".qz-builder", { timeout: 15000 });
 await page.waitForTimeout(1500); // hydration settle
 
 // ── BLD-1: top bar + health ─────────────────────────────────────────────────
-ok("top bar is the V2 primitive", await page.locator(".qz-topbar--builder").count() === 1);
+// BLD-3 — the top bar is the mock's .top row now (.qz-bt-top).
+ok("top bar is the mock .top row (BLD-3)", await page.locator(".qz-bt-top").count() === 1);
 ok("exactly one wordmark", await page.locator(".qz-wordmark").count() === 1);
 const titleBox = await page.locator(".qz-builder-titlewrap").boundingBox();
 ok("title renders on one line", !!titleBox && titleBox.height < 30, `h=${titleBox?.height}`);
@@ -96,8 +97,8 @@ ok("filmstrip is gone", (await page.locator(".qz-builder-filmstrip, .qz-film-car
 
 // QZY-6: the top-bar Assist companion (never a rail tab) opens the chat drawer.
 ok("✦ Assist button in the top bar",
-  (await page.locator(".qz-topbar button", { hasText: "Assist" }).count()) === 1);
-await page.locator(".qz-topbar button", { hasText: "Assist" }).click();
+  (await page.locator(".qz-bt-top button", { hasText: "Assist" }).count()) === 1);
+await page.locator(".qz-bt-top button", { hasText: "Assist" }).click();
 await page.waitForTimeout(400);
 ok("Assist drawer opens with the chat panel",
   (await page.locator(".qz-drawer, [role=dialog]").count()) >= 1 &&
@@ -120,8 +121,9 @@ await page.waitForTimeout(300);
 const thumbs = page.locator(".qz-screens-thumb");
 const thumbCount = await thumbs.count();
 ok("carousel renders the screens", thumbCount >= 2, `${thumbCount} thumbs`);
-ok("carousel lives under the CANVAS column only",
-  (await page.locator(".qz-builder-stage .qz-screens").count()) === 1 &&
+// BLD-3 — the strip is APP-level now (mock .strip: full width under the body).
+ok("carousel is the app-level strip (BLD-3 — not inside a column)",
+  (await page.locator(".qz-builder > .qz-screens").count()) === 1 &&
   (await page.locator(".qz-builder-panel .qz-screens").count()) === 0 &&
   (await page.locator(".qz-builder-inspector .qz-screens").count()) === 0);
 ok("+ add-screen tile present", (await page.locator(".qz-screens-add").count()) === 1);
@@ -138,14 +140,14 @@ ok("thumb click activates the screen",
 // question screen switches type (same type = no-op, never a 2nd question);
 // on Intro it creates a NEW screen; the carousel confirm deletes it again.
 ok("palette Questions section present",
-  (await page.locator(".qz-block-tile", { hasText: "Choice answers" }).count()) === 1);
-await page.locator(".qz-block-tile", { hasText: "Choice answers" }).click();
+  (await page.locator(".qz-bt-comp", { hasText: "Choice" }).count()) === 1);
+await page.locator(".qz-bt-comp", { hasText: "Choice" }).first().click();
 await page.waitForTimeout(500);
 ok("question tile on a question screen adds NO screen",
   (await thumbs.count()) === thumbCount);
 await page.locator(".qz-screens-item", { hasText: "Intro" }).locator(".qz-screens-thumb").click();
 await page.waitForTimeout(400);
-await page.locator(".qz-block-tile", { hasText: "Choice answers" }).click();
+await page.locator(".qz-bt-comp", { hasText: "Choice" }).first().click();
 await page.waitForTimeout(700);
 ok("question tile elsewhere creates a NEW question screen",
   (await thumbs.count()) === thumbCount + 1);
@@ -346,26 +348,26 @@ await page.locator('[aria-label="Build panel"] button', { hasText: "Add" }).clic
 await page.waitForTimeout(300);
 ok(
   "palette tiles enabled with a step on canvas",
-  (await page.locator(".qz-block-tile:not(:disabled)").count()) > 0,
+  (await page.locator(".qz-bt-comp:not(:disabled)").count()) > 0,
 );
 ok(
   "palette hides off-type smart tiles",
-  (await page.locator(".qz-block-tile", { hasText: "Recommendations" }).count()) === 0,
+  (await page.locator(".qz-bt-comp", { hasText: "Product results" }).count()) === 0,
 );
-await page.locator(".qz-block-tile", { hasText: "Divider" }).click();
+await page.locator(".qz-bt-comp", { hasText: "Divider" }).click();
 await page.waitForTimeout(700);
 ok("tile click renders on canvas", (await page.locator(".qz-builder-canvas hr").count()) >= 1);
 // QZY-10 — the v1 inventory tiles exist; progress + content render on canvas.
 ok("QZY-10 palette tiles present (Video/Progress/Logo/Content)",
-  (await page.locator(".qz-block-tile", { hasText: "Video" }).count()) === 1 &&
-  (await page.locator(".qz-block-tile", { hasText: "Progress bar" }).count()) === 1 &&
-  (await page.locator(".qz-block-tile", { hasText: "Logo" }).count()) === 1 &&
-  (await page.locator(".qz-block-tile", { hasText: "Content block" }).count()) === 1);
-await page.locator(".qz-block-tile", { hasText: "Progress bar" }).click();
+  (await page.locator(".qz-bt-comp", { hasText: "Video" }).count()) === 1 &&
+  (await page.locator(".qz-bt-comp", { hasText: "Progress bar" }).count()) === 1 &&
+  (await page.locator(".qz-bt-comp", { hasText: "Logo" }).count()) === 1 &&
+  (await page.locator(".qz-bt-comp", { hasText: "Content block" }).count()) === 1);
+await page.locator(".qz-bt-comp", { hasText: "Progress bar" }).click();
 await page.waitForTimeout(1200);
 ok("progress bar renders on canvas",
   (await page.locator(".qz-builder-canvas [role=progressbar]").count()) >= 1);
-await page.locator(".qz-block-tile", { hasText: "Content block" }).click();
+await page.locator(".qz-bt-comp", { hasText: "Content block" }).click();
 await page.waitForTimeout(1200);
 ok("content block renders paragraphs + a safe link + a list",
   (await page.locator(".qz-builder-canvas ul li").count()) >= 2 &&

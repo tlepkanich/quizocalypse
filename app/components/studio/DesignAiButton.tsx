@@ -108,7 +108,7 @@ export function DesignAiButton({ api }: { api: DesignAiApi }) {
           <button
             ref={btnRef}
             type="button"
-            className="qz-btn qz-btn-ghost qz-btn-sm"
+            className="qz-bt-tbtn is-assist"
             data-testid="design-ai-btn"
           >
             {busy ? "✦ Styling…" : "✦ Design AI"}

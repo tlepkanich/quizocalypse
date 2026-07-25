@@ -109,6 +109,10 @@ export function ScreenCarousel({
 
   return (
     <nav className="qz-screens" aria-label="Screens">
+      {/* BLD-3 — the mock's .striplbl. */}
+      <span className="qz-bt-striplbl" aria-hidden="true">
+        Screens
+      </span>
       {screens.map(({ node, label }) => {
         const active = node.id === activeId;
         const armed = confirmDeleteId === node.id;

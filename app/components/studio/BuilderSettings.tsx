@@ -73,14 +73,7 @@ export function BuilderLogicView({
 
   return (
     <div style={{ display: "grid", gap: 16 }}>
-      <div>
-        <h2 style={{ margin: 0, fontSize: 22, letterSpacing: "-0.01em" }}>Logic</h2>
-        <p className="qz-dim" style={{ fontSize: 13, margin: "6px 0 0", maxWidth: 640 }}>
-          Every answer&rsquo;s route, per question — the deciding question picks the result,
-          rules override it. The Map edits structure; Paths and Table are live views of the
-          same flow.
-        </p>
-      </div>
+      {/* BLD-3 — the page header now comes from the host's mock .tphd. */}
       {/* QZY-R8-2 — the global rules stack, shared above all three tabs. */}
       <LogicRulesBar
         doc={doc}
@@ -181,14 +174,7 @@ export function QuizSettingsView({
 
   return (
     <div style={{ display: "grid", gap: 22, maxWidth: 720 }}>
-      <div>
-        <h2 style={{ margin: 0, fontSize: 22, letterSpacing: "-0.01em" }}>Settings</h2>
-        <p className="qz-dim" style={{ fontSize: 13, margin: "6px 0 0", maxWidth: 640 }}>
-          Everything that isn&rsquo;t the quiz itself — experience &amp; scoring, where it
-          appears, sharing &amp; embedding, translation, and custom code.
-        </p>
-      </div>
-
+      {/* BLD-3 — the page header now comes from the host's mock .tphd. */}
       <section>
         <div className="qz-label" style={{ fontSize: 11, marginBottom: 8 }}>
           Experience &amp; scoring

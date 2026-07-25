@@ -8,7 +8,8 @@
 // so there is nothing to restore.
 //
 // Asserts:
-//  1. Mobile phone = the SPEC primitive: minimal bezel (radius 44, no dark
+//  1. Mobile phone = the SPEC primitive: minimal bezel (radius 46 — BLD-3
+//     matched the mock .device — no dark
 //     hardware ring), true 390-wide logical viewport, fit-the-pane scale ≤ 1.
 //  2. The SCREEN scrolls (overscroll contained) with a bottom fade that shows
 //     on overflow and disappears at the end of the scroll.
@@ -67,7 +68,7 @@ const frameInfo = await page.evaluate(() => {
   };
 });
 ok("mobile frame renders", !!frameInfo);
-ok("minimal bezel: radius 44", frameInfo?.radius === "44px", frameInfo?.radius);
+ok("minimal bezel: radius 46 (BLD-3 mock .device)", frameInfo?.radius === "46px", frameInfo?.radius);
 ok(
   "minimal bezel: no dark hardware ring (paper bg)",
   frameInfo != null && !/32,\s*32,\s*36/.test(frameInfo.bg),

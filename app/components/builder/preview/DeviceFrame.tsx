@@ -145,7 +145,9 @@ export function DeviceFrame({
         <div ref={fitRef} className="qz-device-fit-mobile">
           <div style={{ width: logicalWidth * scale, height: logicalHeight * scale, position: "relative", flex: "0 0 auto" }}>
             <div
-              className="qz-devframe"
+              // BLD-3 — the mock's .device chrome (radius 46, deep drop
+              // shadow + a 1px hairline ring) lives in .qz-devframe-mock.
+              className="qz-devframe qz-devframe-mock"
               style={{
                 width: logicalWidth,
                 height: logicalHeight,
@@ -154,10 +156,6 @@ export function DeviceFrame({
                 left: 0,
                 transform: `scale(${scale})`,
                 transformOrigin: "top left",
-                borderRadius: 44,
-                overflow: "hidden",
-                background: "var(--qz-paper)",
-                boxShadow: "var(--qz-lift-3)",
               }}
             >
               <div
@@ -189,7 +187,7 @@ export function DeviceFrame({
                   height: 52,
                   pointerEvents: "none",
                   background: "linear-gradient(to bottom, transparent, var(--qz-paper))",
-                  borderRadius: "0 0 44px 44px",
+                  borderRadius: "0 0 46px 46px",
                   opacity: fadeVisible ? 1 : 0,
                   transition: "opacity 160ms var(--qz-ease, ease)",
                 }}
@@ -240,29 +238,25 @@ export function DeviceFrame({
             ref={scrollRef}
           >
             {isPopup ? (
-              // Pop-up: the modal FILLS its frame — envelope min(92%, 900) wide,
-              // min(90%, 760) tall, radius 16, on the .55 backdrop; internal
-              // scroll lives inside the modal.
+              // BLD-3 — the mock's .dpop: an OPAQUE #3a3743 stage behind a
+              // centered modal (width ~660–760 logical, radius 20, deep
+              // shadow, max-height frame−64); internal scroll in the modal.
               <div
+                className="qz-dpop-backdrop"
                 style={{
                   position: "absolute",
                   inset: 0,
-                  background: "rgba(0,0,0,.55)",
                   display: "grid",
                   placeItems: "center",
-                  padding: 24,
+                  padding: 32,
                 }}
               >
                 <div
-                  className="qz-devfill"
+                  className="qz-devfill qz-dpop-modal"
                   style={{
-                    width: "min(92%, 900px)",
-                    maxWidth: 1200,
-                    height: "min(90%, 760px)",
-                    borderRadius: 16,
-                    overflow: "auto",
-                    background: "var(--qz-paper)",
-                    boxShadow: "var(--qz-lift-3)",
+                    width: "min(76%, 760px)",
+                    maxWidth: "calc(100% - 64px)",
+                    maxHeight: "calc(100% - 64px)",
                   }}
                 >
                   {children}
@@ -270,17 +264,9 @@ export function DeviceFrame({
               </div>
             ) : isContained ? (
               // Inline: a contained card on a neutral host page (content + 200).
-              <div style={{ padding: "36px 100px", minHeight: "100%" }}>
-                <div
-                  style={{
-                    borderRadius: 14,
-                    overflow: "hidden",
-                    background: "var(--qz-paper)",
-                    boxShadow: "var(--qz-shadow-lg)",
-                  }}
-                >
-                  {children}
-                </div>
+              // BLD-3 — mock .dinline: radius 20 card, 40px top padding.
+              <div style={{ padding: "40px 100px", minHeight: "100%" }}>
+                <div className="qz-dinline-card">{children}</div>
               </div>
             ) : (
               // Full page: the quiz IS the page — fill the whole 1200×760

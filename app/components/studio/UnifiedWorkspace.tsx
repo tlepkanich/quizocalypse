@@ -29,18 +29,19 @@ import type { RegenApi } from "./panels/ContentTab";
 import { AiChatPanel } from "./AiChatPanel";
 import { ReviewEnrichPanel } from "./ReviewEnrichPanel";
 import { EditableTitle, PLACEMENTS, startInlineTextEdit, type StudioBuilderData } from "./studioShared";
-import { applyInspectText, INLINE_EDITABLE_PARTS, insertModule } from "./studioDoc";
-import { BuilderNavRail, BuilderTopBar, type BuilderNavKey } from "./BuilderChrome";
+import { applyInspectText, INLINE_EDITABLE_PARTS, insertModule, PALETTE_BLOCKS } from "./studioDoc";
+import { BuilderNavRail, BuilderTopBar, MOCK_ICONS, type BuilderNavKey } from "./BuilderChrome";
+import { hasBackgroundOverride } from "../../lib/screenBackground";
 import { HealthPill } from "../onboarding/questionsLogicV3/HealthPill";
 import { HealthPopover } from "../onboarding/questionsLogicV3/HealthPopover";
-import { IconExpand, IconX } from "../onboarding/questionsLogicV3/icons";
+import { IconX } from "../onboarding/questionsLogicV3/icons";
 import { Step3Results } from "../builder/Step3Results";
 import { TranslationsPanel } from "./TranslationsPanel";
 import { ExperiencePanel } from "./ExperiencePanel";
 import { QzDrawer } from "../qz-overlays";
 import { BuilderLogicView, QuizSettingsView } from "./BuilderSettings";
 import { BuilderDesignPanel } from "./BuilderDesignPanel";
-import { BLOCK_DRAG_MIME, BuilderBlocksPalette, insertBlock } from "./BuilderBlocksPalette";
+import { BLOCK_DRAG_MIME, BlockIcon, BuilderBlocksPalette, currentLayout, insertBlock } from "./BuilderBlocksPalette";
 import { BuilderBackgroundTab } from "./BuilderBackgroundTab";
 import { BuilderLayersTab } from "./BuilderLayersTab";
 import { ScreenCarousel } from "./ScreenCarousel";
@@ -95,6 +96,34 @@ export function UnifiedWorkspace({ data, chrome }: { data: StudioBuilderData; ch
     );
   }
   return <WorkspaceShell key={data.quizId} data={data} chrome={chrome} />;
+}
+
+/** BLD-3 — the mock's collapsible .sec (bordered rounded section: header row
+ *  with title · value · chevron, body shown when open). */
+function InspSec({
+  title,
+  value,
+  defaultOpen = false,
+  children,
+}: {
+  title: string;
+  value?: string;
+  defaultOpen?: boolean;
+  children: React.ReactNode;
+}) {
+  const [open, setOpen] = useState(defaultOpen);
+  return (
+    <div className={`qz-bt-sec${open ? " is-open" : ""}`}>
+      <button type="button" className="qz-bt-sechd" aria-expanded={open} onClick={() => setOpen((v) => !v)}>
+        <span className="qz-bt-st">{title}</span>
+        <span className="qz-bt-sv">{value ?? ""}</span>
+        <span className="qz-bt-chev" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M9 6l6 6-6 6" /></svg>
+        </span>
+      </button>
+      <div className="qz-bt-secbody">{children}</div>
+    </div>
+  );
 }
 
 function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chrome }) {
@@ -238,8 +267,9 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
   // panels in a right-side drawer; the full Assist design is DEFERRED.
   const [assistOpen, setAssistOpen] = useState(false);
   // Device-frame width lifted from Step5Preview so the Design tab's layer
-  // selector can follow it ("edit what you see").
-  const [frameW, setFrameW] = useState<number>(DEVICE_PRESETS.desktop);
+  // selector can follow it ("edit what you see"). BLD-3: the mock's default
+  // device is MOBILE (build-tab.html seed: device:'mobile').
+  const [frameW, setFrameW] = useState<number>(DEVICE_PRESETS.mobile);
   // QD-6 → QZY-6: the Build view's focused left panel (standalone only).
   // "theme" is the rail's Design section (the canvas stays visible); the old
   // ai/code tools moved to the Assist drawer + the Settings section.
@@ -248,6 +278,8 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
   // (palette) · Layers (current screen's blocks) · Background. The step LIST
   // left this panel: the screen carousel under the canvas is the navigator.
   const [editorSubtab, setEditorSubtab] = useState<"add" | "layers" | "background">("add");
+  // BLD-3 — the mock's libhd search (host-rendered; filters the Add palette).
+  const [libQuery, setLibQuery] = useState("");
   // BLD-1 — the Build view's canvas mode (standalone only): "screen" is the
   // existing single-screen editor; "all" lays every screen out as a live card
   // grid with the simplified Global styles panel on the right.
@@ -595,76 +627,106 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
   // build-tab handoff §7 — the desktop stage-bar "Show as": ONE source of
   // truth (it writes doc.placement, exactly like Settings) and mirrors the
   // Settings labels. Desktop-only — mobile always previews the phone.
+  // BLD-3: the mock's dtwctl anatomy — a mono "Show as" label + a compact seg.
   const showAsToggle = (
-    <div className="qz-segmented" role="group" aria-label="Show as">
-      {PLACEMENTS.map((p) => (
-        <button
-          key={p.value}
-          type="button"
-          className="qz-tip"
-          aria-pressed={placement === p.value}
-          data-tip={`Show as ${p.label}`}
-          onClick={() => commit({ ...doc, placement: p.value })}
-          style={{ display: "inline-flex", alignItems: "center", padding: "5px 10px", fontSize: 12 }}
-        >
-          {p.label}
-        </button>
-      ))}
-    </div>
+    <>
+      <span className="qz-bt-dl" aria-hidden="true">
+        Show as
+      </span>
+      <div className="qz-bt-seg" role="group" aria-label="Show as">
+        {PLACEMENTS.map((p) => (
+          <button
+            key={p.value}
+            type="button"
+            aria-pressed={placement === p.value}
+            title={`Show as ${p.label}`}
+            onClick={() => commit({ ...doc, placement: p.value })}
+          >
+            {p.label}
+          </button>
+        ))}
+      </div>
+    </>
   );
 
-  // QB-2 — Quizell top-bar controls (standalone builder).
+  // BLD-3 — the mock's .devseg: Mobile first (icon + label), then Desktop.
   const deviceToggle = (
-    <div className="qz-segmented" role="group" aria-label="Device size">
+    <div className="qz-bt-seg" role="group" aria-label="Device size">
       {([
-        {
-          bp: "desktop" as const,
-          w: DEVICE_PRESETS.desktop,
-          label: "Desktop",
-          icon: <><rect x="2" y="3" width="20" height="14" rx="2" /><path d="M8 21h8M12 17v4" /></>,
-        },
         {
           bp: "mobile" as const,
           w: DEVICE_PRESETS.mobile,
           label: "Mobile",
-          icon: <><rect x="7" y="2" width="10" height="20" rx="2" /><path d="M11 18h2" /></>,
+          icon: <><rect x="7" y="3" width="10" height="18" rx="2.5" /><path d="M11 18h2" /></>,
+        },
+        {
+          bp: "desktop" as const,
+          w: DEVICE_PRESETS.desktop,
+          label: "Desktop",
+          icon: <><rect x="3" y="4" width="18" height="12" rx="2" /><path d="M8 20h8M12 16v4" /></>,
         },
       ]).map((d) => (
         <button
           key={d.bp}
           type="button"
-          className="qz-tip"
           aria-pressed={breakpointForWidth(frameW) === d.bp}
-          data-tip={`${d.label} preview`}
           aria-label={d.label}
           onClick={() => setFrameW(d.w)}
-          style={{ display: "inline-flex", alignItems: "center", padding: "5px 12px" }}
         >
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
             {d.icon}
           </svg>
+          {d.label}
         </button>
       ))}
     </div>
   );
 
-  const zoomStepper = (
-    <div className="qz-row" style={{ gap: 2, alignItems: "center" }}>
-      <button type="button" className="qz-icon-btn qz-tip" data-tip="Zoom out" aria-label="Zoom out" onClick={() => setZoom((z) => Math.max(50, z - 10))}>−</button>
-      <span className="qz-dim" style={{ fontSize: 12.5, minWidth: 38, textAlign: "center", fontVariantNumeric: "tabular-nums" }}>{zoom}%</span>
-      <button type="button" className="qz-icon-btn qz-tip" data-tip="Zoom in" aria-label="Zoom in" onClick={() => setZoom((z) => Math.min(100, z + 10))}>+</button>
+  // BLD-3 — the mock's .modeseg: Edit (pencil) · Preview (play). "Preview"
+  // is the mock's name for the walk-through mode (was "Interact").
+  const modeToggle = (
+    <div className="qz-bt-seg" role="group" aria-label="Preview mode" title="Edit: click any element in the preview to edit it · Preview: walk through the quiz normally">
+      <button type="button" aria-pressed={editMode} onClick={() => setEditMode(true)}>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M12 20h9" /><path d="M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4z" /></svg>
+        Edit
+      </button>
+      <button
+        type="button"
+        aria-pressed={!editMode}
+        onClick={() => {
+          setEditMode(false);
+          setInspectTarget(null);
+        }}
+      >
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4l12 8-12 8z" fill="currentColor" stroke="none" /></svg>
+        Preview
+      </button>
     </div>
   );
 
+  // BLD-3 — the mock's zoom cluster (borderless 24px steppers + mono label).
+  const zoomStepper = (
+    <span className="qz-bt-zoom">
+      <button type="button" className="qz-bt-iconbtn" aria-label="Zoom out" title="Zoom out" onClick={() => setZoom((z) => Math.max(50, z - 10))}>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" style={{ width: 14, height: 14 }} aria-hidden="true"><path d="M5 12h14" /></svg>
+      </button>
+      <span className="qz-bt-zlabel">{zoom}%</span>
+      <button type="button" className="qz-bt-iconbtn" aria-label="Zoom in" title="Zoom in" onClick={() => setZoom((z) => Math.min(100, z + 10))}>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" style={{ width: 14, height: 14 }} aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg>
+      </button>
+    </span>
+  );
+
+  // BLD-3 — the mock's .iconbtn pair (32px bordered squares).
   const undoRedo = (
-    <div className="qz-row" style={{ gap: 2, alignItems: "center" }}>
-      <button type="button" className="qz-icon-btn qz-tip" aria-label="Undo" data-tip="Undo" disabled={!canUndo} onClick={undo}>
-        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M9 14 4 9l5-5" /><path d="M4 9h11a5 5 0 0 1 0 10h-1" /></svg>
+    <>
+      <button type="button" className="qz-bt-iconbtn" aria-label="Undo" title="Undo" disabled={!canUndo} onClick={undo}>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" style={{ width: 17, height: 17 }} aria-hidden="true"><path d="M9 14L4 9l5-5" /><path d="M4 9h11a5 5 0 015 5v1" /></svg>
       </button>
-      <button type="button" className="qz-icon-btn qz-tip" aria-label="Redo" data-tip="Redo" disabled={!canRedo} onClick={redo}>
-        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m15 14 5-5-5-5" /><path d="M20 9H9a5 5 0 0 0 0 10h1" /></svg>
+      <button type="button" className="qz-bt-iconbtn" aria-label="Redo" title="Redo" disabled={!canRedo} onClick={redo}>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" style={{ width: 17, height: 17 }} aria-hidden="true"><path d="M15 14l5-5-5-5" /><path d="M20 9H9a5 5 0 00-5 5v1" /></svg>
       </button>
-    </div>
+    </>
   );
 
   const placementGrid = (
@@ -722,55 +784,6 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
     </details>
   );
 
-  // BLD-1 — the standalone bar's secondary actions folded into one ⋯ menu
-  // (placement grid + share/embed) so the title keeps its room at 1280w.
-  const moreMenu = (
-    <details style={{ position: "relative" }}>
-      <summary
-        className="qz-btn qz-btn-ghost qz-btn-sm qz-tip"
-        data-tip="Placement & sharing"
-        aria-label="More options"
-        style={{ listStyle: "none", cursor: "pointer", fontWeight: 700, letterSpacing: "0.08em" }}
-      >
-        ⋯
-      </summary>
-      <div
-        className="qz-card"
-        style={{
-          position: "absolute",
-          right: 0,
-          top: "calc(100% + 6px)",
-          width: 380,
-          padding: 12,
-          zIndex: 60,
-          boxShadow: "var(--qz-lift-2)",
-        }}
-      >
-        {placementGrid}
-        <div className="qz-row" style={{ gap: 6, flexWrap: "wrap" }}>
-          <Link
-            to={`/studio/${data.quizId}/embed`}
-            className="qz-btn qz-btn-ghost qz-btn-sm"
-            style={{ textDecoration: "none", display: "inline-flex" }}
-          >
-            Share &amp; embed →
-          </Link>
-          <button
-            type="button"
-            className="qz-btn qz-btn-ghost qz-btn-sm"
-            onClick={(e) => {
-              // Close the <details> menu before navigating (QZY-6: quiz
-              // settings is the rail's Settings section now).
-              (e.currentTarget.closest("details") as HTMLDetailsElement | null)?.removeAttribute("open");
-              setView("settings");
-            }}
-          >
-            Quiz settings…
-          </button>
-        </div>
-      </div>
-    </details>
-  );
 
   const publishBtn = (
     <QzButton variant="primary" size="sm" disabled={!canPublish || isPublishing} onClick={publish}>
@@ -1054,8 +1067,10 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
     // BLD-1 — the All-screens ⇄ This-screen segmented control (top bar, Build
     // view). "All screens" swaps the canvas for the card grid + Global styles
     // panel; a card click focuses that screen and flips back here.
+    // BLD-3 — housed on the stagebar (the mock's top bar has no home for it;
+    // the stagebar is the stage-scoped control strip).
     const canvasModeToggle = (
-      <div className="qz-segmented" role="group" aria-label="Canvas mode">
+      <div className="qz-bt-seg" role="group" aria-label="Canvas mode">
         <button
           type="button"
           aria-pressed={canvasMode === "all"}
@@ -1108,101 +1123,6 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
         stageStepName = names[stageNode.type] ?? "Screen";
       }
     }
-    const stagebar = (
-      <div className="qz-stagebar">
-        <span className="qz-stagebar-name">{stageStepName}</span>
-        <span className="qz-stagebar-sp" aria-hidden />
-        {breakpointForWidth(frameW) === "desktop" ? showAsToggle : null}
-        {/* phone-preview SPEC — Expand: inspect the same screen big. */}
-        <button
-          type="button"
-          className="qz-s3-expandbtn"
-          onClick={() => setPreviewExpanded(true)}
-        >
-          <IconExpand /> Expand
-        </button>
-        {zoomStepper}
-      </div>
-    );
-
-    // The left panel content for the focused tool (build view only). QZY-6:
-    // ai/code left this switch — Assist is a top-bar drawer, custom CSS lives
-    // in Settings.
-    const toolPanel =
-      tool === "theme" ? (
-        <>
-          {/* BLD-3 — every tool panel opens with a header (the design panel's
-              first control read as a floating checkbox without one). */}
-          <div className="qz-label" style={{ fontSize: 11 }}>
-            Design
-          </div>
-          <BuilderDesignPanel doc={doc} commit={commit} onSelectNode={select} />
-        </>
-      ) : (
-        <>
-          {/* QZY-7 (build-tab §2) — the three left-panel tabs. Screen
-              NAVIGATION moved to the carousel under the canvas. */}
-          <div className="qz-segmented" role="group" aria-label="Build panel">
-            <button type="button" aria-pressed={editorSubtab === "add"} onClick={() => setEditorSubtab("add")}>
-              Add
-            </button>
-            <button type="button" aria-pressed={editorSubtab === "layers"} onClick={() => setEditorSubtab("layers")}>
-              Layers
-            </button>
-            <button type="button" aria-pressed={editorSubtab === "background"} onClick={() => setEditorSubtab("background")}>
-              Background
-            </button>
-          </div>
-          {editorSubtab === "add" ? (
-            <BuilderBlocksPalette
-              doc={doc}
-              node={blockTarget}
-              commit={commit}
-              onQuestionTile={onQuestionTile}
-            />
-          ) : editorSubtab === "layers" ? (
-            <BuilderLayersTab
-              doc={doc}
-              node={blockTarget}
-              commit={commit}
-              onSelectNode={select}
-            />
-          ) : (
-            // QZY-11 — PER-SCREEN backgrounds (§8); the quiz-wide default
-            // stays reachable in a disclosure inside.
-            <BuilderBackgroundTab doc={doc} node={blockTarget} commit={commit} />
-          )}
-        </>
-      );
-
-    // BLD-3 — the right-side 400px inspector (the embedded 3-pane geometry):
-    // the ContextPanel gets real room, so its Content/Design/Routing tabs fit
-    // instead of clipping at the old 320px left panel's edge.
-    const inspector = selectedId ? (
-      <ContextPanel
-        doc={doc}
-        nodeId={selectedId}
-        onCommit={commit}
-        onClose={() => select(null)}
-        products={data.productIndex}
-        productIndex={data.productIndex}
-        categories={data.categories}
-        frameBreakpoint={breakpointForWidth(frameW)}
-        onOpenLogic={() => setView("logic")}
-        regen={regenApi}
-        inspectTarget={inspectTarget}
-        onClearScope={() => setInspectTarget(null)}
-        onArmDelete={setConfirmDeleteId}
-      />
-    ) : (
-      <div className="qz-card" style={{ padding: 12 }}>
-        <p className="qz-dim" style={{ fontSize: 12.5, margin: 0 }}>
-          Select a step in the rail — or click any element in the preview — to
-          edit its content, design, and layout here.
-        </p>
-      </div>
-    );
-
     // The health pill + its controlled popover (QzPopover portals correctly
     // inside the blurred top bar — same hosting as TopBar3). Legacy docs hide
     // the decider-only sections (Tier-2 review, outcome table).
@@ -1226,14 +1146,232 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
       />
     );
 
-    // The v3 save-chip anatomy: Saving… / Saved HH:MM / error + Retry (the
-    // embedded surface keeps the simpler shared `saveStatus` chip).
+
+    const stagebar = (
+      <div className="qz-stagebar">
+        {/* mock .libshow — the reopen chip leads the bar when the panel is
+            hidden (inline: our stagebar carries more left content than the
+            mock's, so the mock's absolute overlay would cover it). */}
+        {libraryCollapsed && editMode && !allScreensMode ? (
+          <button
+            type="button"
+            className="qz-builder-panel-reopen is-inline"
+            onClick={() => setLibraryCollapsed(false)}
+            aria-label="Show panel"
+            title="Show panel"
+          >
+            <ChevronRight size={13} aria-hidden /> <span>Panel</span>
+          </button>
+        ) : null}
+        <span className="qz-stagebar-name">{stageStepName}</span>
+        {/* BLD-1 canvas mode + BLD-2 Design AI — stagebar-housed (the mock's
+            top bar has no home for either; this is the stage control strip).
+            Preview mode strips them (mock .previewing keeps only the basics). */}
+        {editMode ? canvasModeToggle : null}
+        {editMode ? <DesignAiButton api={designAiApi} /> : null}
+        <span className="qz-stagebar-sp" aria-hidden />
+        {/* BLD-3 — the health pill is stage-scoped chrome here (the mock's
+            top bar has no slot for it; "Fix N issues" opens its popover). */}
+        {healthPill}
+        {!allScreensMode && breakpointForWidth(frameW) === "desktop" ? showAsToggle : null}
+        {/* phone-preview SPEC — Expand: inspect the same screen big. */}
+        {allScreensMode ? null : (
+          <>
+            <button
+              type="button"
+              className="qz-bt-tbtn qz-s3-expandbtn"
+              onClick={() => setPreviewExpanded(true)}
+            >
+              Expand
+            </button>
+            {zoomStepper}
+          </>
+        )}
+      </div>
+    );
+
+    // BLD-3 — the mock's .lib anatomy: a .libhd (Add · Layers · Background
+    // tabs over the search field) above a scrolling .libbody. The mock's
+    // search lives in the header and filters the component palette.
+    const toolPanel = (
+      <>
+        <div className="qz-bt-libhd">
+          <div className="qz-bt-seg" role="group" aria-label="Build panel">
+            <button type="button" aria-pressed={editorSubtab === "add"} onClick={() => setEditorSubtab("add")}>
+              Add
+            </button>
+            <button type="button" aria-pressed={editorSubtab === "layers"} onClick={() => setEditorSubtab("layers")}>
+              Layers
+            </button>
+            <button type="button" aria-pressed={editorSubtab === "background"} onClick={() => setEditorSubtab("background")}>
+              Background
+            </button>
+          </div>
+          <div className="qz-bt-search">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <circle cx="11" cy="11" r="7" />
+              <path d="M21 21l-4-4" />
+            </svg>
+            <input
+              placeholder="Search components"
+              aria-label="Search components"
+              value={libQuery}
+              onChange={(e) => setLibQuery(e.target.value)}
+            />
+          </div>
+        </div>
+        <div className="qz-bt-libbody">
+          {editorSubtab === "add" ? (
+            <BuilderBlocksPalette
+              doc={doc}
+              node={blockTarget}
+              commit={commit}
+              onQuestionTile={onQuestionTile}
+              query={libQuery}
+            />
+          ) : editorSubtab === "layers" ? (
+            <BuilderLayersTab
+              doc={doc}
+              node={blockTarget}
+              commit={commit}
+              onSelectNode={select}
+            />
+          ) : (
+            // QZY-11 — PER-SCREEN backgrounds (§8); the quiz-wide default
+            // stays reachable in a disclosure inside.
+            <BuilderBackgroundTab doc={doc} node={blockTarget} commit={commit} />
+          )}
+        </div>
+      </>
+    );
+
+    // BLD-3 — the mock's inspector: .insphd header + scrolling .inspbody.
+    // With a selected step the ContextPanel hosts the editor; with nothing
+    // selected the mock's STEP inspector renders (screen outline · name ·
+    // background deep-link), driven by the screen the canvas is showing.
+    const kindNames: Partial<Record<NonNullable<typeof stageNode>["type"], string>> = {
+      intro: "Intro screen",
+      question: "Question screen",
+      email_gate: "Email capture",
+      result: "Results screen",
+      end: "End screen",
+      message: "Message screen",
+      ask_ai: "Ask AI screen",
+      product_cards: "Products screen",
+      integration: "Integration",
+      branch: "Branch",
+    };
+    const stageKindName = stageNode ? kindNames[stageNode.type] ?? "Screen" : "Screen";
+    const stageBlocks = stageNode ? currentLayout(doc, stageNode) : [];
+    const inspector = selectedId ? (
+      <div className="qz-bt-inspbody">
+        <ContextPanel
+          doc={doc}
+          nodeId={selectedId}
+          onCommit={commit}
+          onClose={() => select(null)}
+          products={data.productIndex}
+          productIndex={data.productIndex}
+          categories={data.categories}
+          frameBreakpoint={breakpointForWidth(frameW)}
+          onOpenLogic={() => setView("logic")}
+          regen={regenApi}
+          inspectTarget={inspectTarget}
+          onClearScope={() => setInspectTarget(null)}
+          onArmDelete={setConfirmDeleteId}
+        />
+      </div>
+    ) : stageNode ? (
+      <>
+        <div className="qz-bt-insphd">
+          <div className="qz-bt-ic" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+              {MOCK_ICONS.build}
+            </svg>
+          </div>
+          <div className="qz-bt-tt">
+            <b>{stageStepName}</b>
+            <small>{stageKindName}</small>
+          </div>
+        </div>
+        <div className="qz-bt-inspbody">
+          <div className="qz-bt-hint" style={{ margin: "-2px 0 0" }}>
+            Select a block to edit it — or use <b>+</b> on the canvas to add one.
+          </div>
+          <InspSec
+            title="On this screen"
+            value={`${stageBlocks.length} block${stageBlocks.length === 1 ? "" : "s"}`}
+            defaultOpen
+          >
+            {stageBlocks.map((b) => {
+              const p = PALETTE_BLOCKS.find((x) => x.type === b.type);
+              const nm =
+                (b.type === "heading" || b.type === "text") && "text" in b && b.text
+                  ? b.text
+                  : p?.label ?? b.type;
+              return (
+                <button
+                  key={b.id}
+                  type="button"
+                  className="qz-bt-arow"
+                  onClick={() => select(stageNode.id)}
+                >
+                  <span className="qz-bt-arow-glyph" aria-hidden="true">
+                    <BlockIcon type={b.type} />
+                  </span>
+                  <span className="qz-bt-arow-label">{nm}</span>
+                  <span className="qz-bt-arow-chev" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M9 6l6 6-6 6" /></svg>
+                  </span>
+                </button>
+              );
+            })}
+            {stageBlocks.length === 0 ? <div className="qz-bt-hint">No blocks yet.</div> : null}
+          </InspSec>
+          <InspSec title="Screen name" value={stageStepName}>
+            <div className="qz-bt-hint">
+              Screens are named by their role in the flow (Intro · Q1 · Email · Result).
+            </div>
+          </InspSec>
+          <InspSec
+            title="Background"
+            value={hasBackgroundOverride(doc, stageNode.id) ? "Custom" : "Brand default"}
+          >
+            <button
+              type="button"
+              className="qz-bt-deeplink"
+              onClick={() => {
+                setTool("editor");
+                setEditorSubtab("background");
+                setLibraryCollapsed(false);
+              }}
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{MOCK_ICONS.design}</svg>
+              <span>
+                Edit in the <b>Background</b> tab (left panel)
+              </span>
+              <span className="qz-bt-dlarrow" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" style={{ width: 13, height: 13 }}><path d="M9 6l6 6-6 6" /></svg>
+              </span>
+            </button>
+          </InspSec>
+        </div>
+      </>
+    ) : (
+      <div className="qz-bt-inspbody">
+        <p className="qz-bt-hint" style={{ margin: 0 }}>
+          Select a step in the rail — or click any element in the preview — to
+          edit its content, design, and layout here.
+        </p>
+      </div>
+    );
+
+    // BLD-3 — the mock's .savedpill (check + "Saved"); Saving…/error states
+    // reuse the same quiet pill anatomy.
     const saveStatusV2 = (
-      <span className="qz-save-status" aria-live="polite">
+      <span className="qz-bt-savedpill qz-save-status" aria-live="polite" title={savedAt ? `Saved ${savedTimeLabel(savedAt)}` : undefined}>
         {isSaving ? (
-          <span className="qz-save-chip is-saving">
-            <span className="qz-save-dot" aria-hidden /> Saving…
-          </span>
+          <span className="qz-save-chip is-saving">Saving…</span>
         ) : saveError ? (
           <span className="qz-save-chip is-error">
             <span aria-hidden>⚠</span> {saveError} ·{" "}
@@ -1243,7 +1381,8 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
           </span>
         ) : savedAt ? (
           <span key={savedAt} className="qz-save-chip is-saved">
-            <span aria-hidden>✓</span> Saved {savedTimeLabel(savedAt)}
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M5 12l5 5L20 6" /></svg>{" "}
+            Saved
           </span>
         ) : null}
       </span>
@@ -1252,21 +1391,27 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
     // Tri-state Publish (the v3 Continue pattern): blocked stays CLICKABLE
     // and opens the health popover with the jump-links — it never publishes
     // while blocking > 0 (same gate as canPublish; S1 folds validateQuiz).
+    // BLD-3: both states wear the mock's .tbtn anatomy (.primary when clean).
     const blocking = healthReport.verdict.blocking;
     const publishBtnV2 =
       blocking > 0 ? (
         <button
           type="button"
-          className="qz-btn qz-btn-sm qz-s3-continue is-blocked"
+          className="qz-bt-tbtn is-blocked qz-s3-continue"
           aria-haspopup="dialog"
           onClick={() => setHealthOpen(true)}
         >
           Fix {blocking} issue{blocking === 1 ? "" : "s"}
         </button>
       ) : (
-        <QzButton variant="primary" size="sm" disabled={isPublishing} onClick={publish}>
-          {isPublishing ? "Publishing…" : "◆ Publish"}
-        </QzButton>
+        <button
+          type="button"
+          className="qz-bt-tbtn is-primary"
+          disabled={isPublishing}
+          onClick={publish}
+        >
+          {isPublishing ? "Publishing…" : "Publish"}
+        </button>
       );
 
     // Transient outcomes only — validation + suggestions live in the pill now,
@@ -1301,70 +1446,74 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
       </>
     );
 
+    // BLD-3 — mock renderWorkspace(): the device/mode segs are canvas-only
+    // controls (hidden on the config surfaces); Theme renders as a tab panel.
+    const onBuild = view === "build" && tool === "editor";
+    const bodyCls =
+      "qz-builder-body" +
+      (!onBuild
+        ? " is-intab"
+        : allScreensMode
+          ? " is-libhidden is-allscreens"
+          : !editMode
+            ? " is-previewing"
+            : libraryCollapsed
+              ? " is-libhidden"
+              : "");
     return (
+      <div className="qz-bt-backdrop">
+      <div className="qz-bt-wrap">
       <div className="qz-builder">
-        <BuilderTopBar
-          left={
+        {/* BLD-3 — the mock's .top: one ordered row. */}
+        <BuilderTopBar>
+          <div className="qz-bt-qtitle qz-builder-titlewrap">
+            <EditableTitle name={data.name} onRename={renameQuiz} />
+          </div>
+          <span className="qz-tbadge">{XTYPE_LABEL[experienceTypeOf(doc)]}</span>
+          {isDecider ? (
+            <span
+              className="qz-tbadge is-dec"
+              title="One deciding question picks the result; advanced rules can override it"
+            >
+              Decider logic
+            </span>
+          ) : (
+            scoringBadge
+          )}
+          <span className="qz-bt-sp" />
+          {onBuild && !allScreensMode ? (
             <>
-              <div className="qz-builder-titlewrap">
-                <EditableTitle name={data.name} onRename={renameQuiz} />
-              </div>
-              <span className="qz-badge" style={{ fontSize: 10, flex: "0 0 auto" }}>
-                {XTYPE_LABEL[experienceTypeOf(doc)]}
-              </span>
-              {scoringBadge}
+              {deviceToggle}
+              {modeToggle}
+              <span className="qz-bt-topdiv" />
             </>
-          }
-          center={
-            view === "build" ? (
-              <>
-                {canvasModeToggle}
-                {/* BLD-2 — Design AI: prompt-driven token restyle, next to the
-                    BLD-1 canvas controls. Shown in BOTH canvas modes — the
-                    All-screens grid is where the repaint is most visible. */}
-                <DesignAiButton api={designAiApi} />
-                {/* Single-screen controls only — the All-screens grid has no
-                    device frame / zoom / inspect target to drive. FIX-2:
-                    Show-as / Expand / zoom moved to the stagebar (spec). */}
-                {allScreensMode ? null : (
-                  <>
-                    {deviceToggle}
-                    {editInteractToggle}
-                  </>
-                )}
-              </>
-            ) : null
-          }
-          right={
-            <>
-              {saveStatusV2}
-              {undoRedo}
-              {healthPill}
-              {/* QZY-6 — AI is a persistent top-bar companion, never a tab.
-                  Full Assist design is spec-DEFERRED; this opens the existing
-                  chat + review-enrich panels in context. */}
-              <button
-                type="button"
-                className="qz-btn qz-btn-ghost qz-btn-sm"
-                aria-pressed={assistOpen}
-                onClick={() => setAssistOpen((v) => !v)}
-              >
-                ✦ Assist
-              </button>
-              {moreMenu}
-              <a
-                href={data.previewUrl}
-                target="_blank"
-                rel="noreferrer"
-                className="qz-btn qz-btn-ghost qz-btn-sm"
-              >
-                Preview
-              </a>
-              {publishBtnV2}
-            </>
-          }
-        />
-        <div className="qz-builder-body">
+          ) : null}
+          {undoRedo}
+          <span className="qz-bt-topdiv" />
+          {/* QZY-6 — AI is a persistent top-bar companion, never a tab. */}
+          <button
+            type="button"
+            className="qz-bt-tbtn is-assist"
+            aria-pressed={assistOpen}
+            onClick={() => setAssistOpen((v) => !v)}
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M12 3l1.8 4.9L19 9.7l-5.2 1.8L12 16l-1.8-4.5L5 9.7l5.2-1.8z" /></svg>
+            Assist
+          </button>
+          {saveStatusV2}
+          <a
+            href={data.previewUrl}
+            target="_blank"
+            rel="noreferrer"
+            className="qz-bt-tbtn"
+            title="Opens the published quiz in a new tab"
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M10 13a5 5 0 007 0l2-2a5 5 0 00-7-7l-1 1" /><path d="M14 11a5 5 0 00-7 0l-2 2a5 5 0 007 7l1-1" /></svg>
+            Preview live
+          </a>
+          {publishBtnV2}
+        </BuilderTopBar>
+        <div className={bodyCls}>
           <BuilderNavRail
             active={railActive}
             onSelect={(key) => {
@@ -1379,131 +1528,129 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
               }
             }}
           />
-          {view === "build" && canvasMode === "all" ? (
+          {onBuild ? (
             <>
-              {/* BLD-1 — All-screens mode: every screen as a live card; the
-                  library panel steps aside (its Add/Layers/Background tabs
-                  target ONE screen) and the inspector hosts the simplified
-                  Global styles panel. The filmstrip stays as the shared
-                  navigator; grid + strip highlight the same active screen. */}
-              <div className="qz-builder-stage">
-                <div className="qz-builder-notices">{standaloneNotices}</div>
-                <AllScreensGrid
-                  doc={doc}
-                  ordered={ordered}
-                  activeId={selectedId ?? liveNodeId}
-                  onOpenScreen={(nodeId) => {
-                    select(nodeId);
-                    setCanvasMode("screen");
-                  }}
-                  onAddScreen={appendQuestionScreen}
-                  productIndex={data.productIndex}
-                  categories={data.categories}
-                />
-                <ScreenCarousel
-                  doc={doc}
-                  ordered={ordered}
-                  activeId={selectedId ?? liveNodeId}
-                  onSelect={select}
-                  onAddScreen={() => addQuestionScreen("single_select")}
-                  confirmDeleteId={confirmDeleteId}
-                  onConfirmDelete={setConfirmDeleteId}
-                  onDelete={(nodeId) => {
-                    commit(deleteNode(doc, nodeId));
-                    setConfirmDeleteId(null);
-                    select(null);
-                  }}
-                  onDuplicate={(nodeId) => {
-                    const next = duplicateQuestionNode(doc, nodeId);
-                    if (next !== doc) commit(next);
-                  }}
-                  productIndex={data.productIndex}
-                  categories={data.categories}
-                />
-              </div>
-              <aside className="qz-builder-inspector" aria-label="Global styles">
-                <GlobalStylesPanel doc={doc} commit={commit} />
+              {/* mock .lib — grid col 2 (0-width when hidden/previewing). */}
+              <aside className="qz-builder-panel" aria-label="Component library">
+                {allScreensMode || !editMode ? null : (
+                  <>
+                    <button type="button" className="qz-builder-panel-collapse" onClick={() => setLibraryCollapsed(true)} aria-label="Hide panel  ([)" title="Hide panel  ([)">
+                      <ChevronLeft size={13} aria-hidden />
+                    </button>
+                    {toolPanel}
+                  </>
+                )}
               </aside>
-            </>
-          ) : view === "build" ? (
-            <>
-              {libraryCollapsed ? null : (
-                <aside className="qz-builder-panel">
-                  <button type="button" className="qz-builder-panel-collapse" onClick={() => setLibraryCollapsed(true)} aria-label="Collapse component library">
-                    <ChevronLeft size={15} aria-hidden />
-                  </button>
-                  {toolPanel}
-                </aside>
-              )}
               <div className="qz-builder-stage">
                 {/* FIX-2 — the build-tab stagebar (step name · Show-as ·
                     Expand · zoom) sits over the canvas, spec geometry. */}
                 {stagebar}
-                {libraryCollapsed ? (
-                  <button type="button" className="qz-builder-panel-reopen" onClick={() => setLibraryCollapsed(false)} aria-label="Open component library">
-                    <ChevronRight size={15} aria-hidden /> <span>Library</span>
-                  </button>
-                ) : null}
                 {/* QB-8 — slim notices strip (transient publish/reconcile results
                     only); empty = 0 height, so the canvas is just the live quiz. */}
                 <div className="qz-builder-notices">{standaloneNotices}</div>
-                <div
-                  className={`qz-builder-canvas${blockDropActive ? " is-blockdrop" : ""}`}
-                  onDoubleClick={onCanvasDoubleClick}
-                  onDragOver={onCanvasDragOver}
-                  onDragLeave={onCanvasDragLeave}
-                  onDrop={onCanvasDrop}
-                >
-                  <div
-                    style={{
-                      width: "100%",
-                      transform: zoom !== 100 ? `scale(${zoom / 100})` : undefined,
-                      transformOrigin: "top center",
+                {allScreensMode ? (
+                  <AllScreensGrid
+                    doc={doc}
+                    ordered={ordered}
+                    activeId={selectedId ?? liveNodeId}
+                    onOpenScreen={(nodeId) => {
+                      select(nodeId);
+                      setCanvasMode("screen");
                     }}
+                    onAddScreen={appendQuestionScreen}
+                    productIndex={data.productIndex}
+                    categories={data.categories}
+                  />
+                ) : (
+                  <div
+                    className={`qz-builder-canvas${blockDropActive ? " is-blockdrop" : ""}`}
+                    onDoubleClick={onCanvasDoubleClick}
+                    onDragOver={onCanvasDragOver}
+                    onDragLeave={onCanvasDragLeave}
+                    onDrop={onCanvasDrop}
                   >
-                    <Step5Preview
-                      {...stepProps}
-                      onInspect={editMode ? onInspect : undefined}
-                      inspectedTarget={inspectTarget}
-                      frameW={frameW}
-                      onFrameWChange={setFrameW}
-                      focusNodeId={selectedId}
-                      onNodeShown={setLiveNodeId}
-                      chromeless
-                      platform="standalone"
-                    />
+                    <div
+                      style={{
+                        width: "100%",
+                        transform: zoom !== 100 ? `scale(${zoom / 100})` : undefined,
+                        transformOrigin: "top center",
+                      }}
+                    >
+                      <Step5Preview
+                        {...stepProps}
+                        onInspect={editMode ? onInspect : undefined}
+                        inspectedTarget={inspectTarget}
+                        frameW={frameW}
+                        onFrameWChange={setFrameW}
+                        focusNodeId={selectedId}
+                        onNodeShown={setLiveNodeId}
+                        chromeless
+                        platform="standalone"
+                      />
+                    </div>
                   </div>
-                </div>
-                {/* QZY-7 (build-tab §2) — the screen carousel, bottom of the
-                    CENTER column only (never under the side panels). */}
-                <ScreenCarousel
-                  doc={doc}
-                  ordered={ordered}
-                  activeId={selectedId ?? liveNodeId}
-                  onSelect={select}
-                  onAddScreen={() => addQuestionScreen("single_select")}
-                  confirmDeleteId={confirmDeleteId}
-                  onConfirmDelete={setConfirmDeleteId}
-                  onDelete={(nodeId) => {
-                    commit(deleteNode(doc, nodeId));
-                    setConfirmDeleteId(null);
-                    select(null);
-                  }}
-                  onDuplicate={(nodeId) => {
-                    const next = duplicateQuestionNode(doc, nodeId);
-                    if (next !== doc) commit(next);
-                  }}
-                  productIndex={data.productIndex}
-                  categories={data.categories}
-                />
+                )}
               </div>
-              <aside className="qz-builder-inspector" aria-label="Step inspector">
-                {inspector}
+              {/* mock .insp — grid col 4 (hidden while previewing). */}
+              <aside
+                className="qz-builder-inspector"
+                aria-label={allScreensMode ? "Global styles" : "Step inspector"}
+              >
+                {allScreensMode ? (
+                  <>
+                    <div className="qz-bt-insphd">
+                      <div className="qz-bt-ic" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                          {MOCK_ICONS.design}
+                        </svg>
+                      </div>
+                      <div className="qz-bt-tt">
+                        <b>Global styles</b>
+                        <small>All screens</small>
+                      </div>
+                    </div>
+                    <div className="qz-bt-inspbody">
+                      <GlobalStylesPanel doc={doc} commit={commit} />
+                    </div>
+                  </>
+                ) : (
+                  inspector
+                )}
               </aside>
             </>
           ) : (
             <div className="qz-builder-settings">
-              <div style={{ padding: "18px 22px", maxWidth: 1200, margin: "0 auto" }}>
+              {/* BLD-3 — mock .tabpanel/.tpwrap: centered 660px column with a
+                  19px h1 + 12.5px lede (Products/Theme/Settings); Logic and
+                  the deep-linkable Results editor keep a wide column
+                  (functional necessity — real rule/product tables). */}
+              <div
+                className={`qz-bt-tpwrap${view === "logic" || view === "results" ? " is-wide" : ""}`}
+              >
+                <div className="qz-bt-tphd">
+                  <h1>
+                    {view === "products"
+                      ? "Products"
+                      : view === "results"
+                        ? "Results"
+                        : view === "settings"
+                          ? "Settings"
+                          : view === "logic"
+                            ? "Logic"
+                            : "Theme"}
+                  </h1>
+                  <p>
+                    {view === "products"
+                      ? "What the quiz can recommend, and how answers map to products."
+                      : view === "results"
+                        ? "How the recommendation pages present their products."
+                        : view === "settings"
+                          ? "Quiz-wide behavior — how it’s shown, what it offers, where the data goes."
+                          : view === "logic"
+                            ? "How answers decide the outcome."
+                            : "Brand-wide look — colors, fonts, shape."}
+                  </p>
+                </div>
                 {standaloneNotices}
                 {view === "products" ? (
                   <Step1Products {...stepProps} />
@@ -1522,7 +1669,7 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
                     onSelectNode={select}
                     selectedNodeId={selectedId}
                   />
-                ) : (
+                ) : view === "logic" ? (
                   // BLD-4 — the Logic view: LogicScroll for decider docs,
                   // LogicView for legacy; Try-a-path below.
                   <BuilderLogicView
@@ -1531,11 +1678,39 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
                     commit={commit}
                     onSelectNode={select}
                   />
+                ) : (
+                  // BLD-3 — the mock's Theme tab panel hosts the real
+                  // brand-wide design controls (was the left tool panel).
+                  <BuilderDesignPanel doc={doc} commit={commit} onSelectNode={select} />
                 )}
               </div>
             </div>
           )}
         </div>
+        {/* BLD-3 — mock .strip: the filmstrip is APP-level (full width, under
+            the whole body row), Build tab only. */}
+        {onBuild ? (
+          <ScreenCarousel
+            doc={doc}
+            ordered={ordered}
+            activeId={selectedId ?? liveNodeId}
+            onSelect={select}
+            onAddScreen={() => addQuestionScreen("single_select")}
+            confirmDeleteId={confirmDeleteId}
+            onConfirmDelete={setConfirmDeleteId}
+            onDelete={(nodeId) => {
+              commit(deleteNode(doc, nodeId));
+              setConfirmDeleteId(null);
+              select(null);
+            }}
+            onDuplicate={(nodeId) => {
+              const next = duplicateQuestionNode(doc, nodeId);
+              if (next !== doc) commit(next);
+            }}
+            productIndex={data.productIndex}
+            categories={data.categories}
+          />
+        ) : null}
         {upgradeModal}
         {/* SPEC Expand — the dimmed overlay (portal to body: the builder-
             overlay-portal lesson — the stage's transforms would pointer-trap
@@ -1597,6 +1772,8 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
             />
           </div>
         </QzDrawer>
+      </div>
+      </div>
       </div>
     );
   }

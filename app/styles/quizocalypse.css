@@ -7419,3 +7419,395 @@ textarea.qz-s4-inp { resize: vertical; min-height: 56px; line-height: 1.5; }
 /* Mock scr stacks from the top: the question body must not grow, so Next
    sits 20px under the options (not pinned to the frame bottom). */
 .qz-s3-phone-screen[data-screen-kind="question"] .qz-s3-qbody { flex: 0 0 auto; }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   BLD-3 — build-tab.html replicated exactly (structural port)
+   The standalone builder page IS docs/design/build-tab/build-tab.html: the
+   floating app card on a grey backdrop, the mock's top bar anatomy, the
+   4-column body grid (rail 60 · library 244 · stage 1fr · inspector 320),
+   the library's libhd/libbody split with 2-col component tiles, the stagebar,
+   the mock step-inspector, and the app-level filmstrip. Every value below is
+   read off the mock's CSS through the locked token map (#6D5AE6=--qz-accent,
+   #EDEBFC=--qz-accent-wash, #B6B0C8=--qz-ink-25, #E9E7EF=--qz-rule, …).
+   Overrides earlier builder rules by cascade order on purpose.
+   ═══════════════════════════════════════════════════════════════════════════ */
+:root {
+  --qz-bt-backdrop: #EDECF1; /* mock --backdrop */
+  --qz-bt-pane: #FBFAFC;     /* mock --pane (stage) */
+}
+html[data-theme="dark"] {
+  --qz-bt-backdrop: #0E0F12;
+  --qz-bt-pane: #17181C;
+}
+
+/* ── page framing: body backdrop + .wrap + the .app card ── */
+.qz-bt-backdrop {
+  min-height: 100vh;
+  background: var(--qz-bt-backdrop);
+  padding: 16px 0 40px;
+}
+.qz-bt-wrap { max-width: 1320px; margin: 0 auto; padding: 0 16px; }
+.qz-bt-wrap .qz-builder {
+  background: var(--qz-paper);
+  border: 1px solid var(--qz-rule);
+  border-radius: 16px;
+  overflow: hidden;
+  box-shadow: 0 12px 40px rgba(120, 110, 150, .14);
+  display: flex; flex-direction: column;
+  height: calc(100vh - 32px); max-height: 960px; min-width: 0;
+}
+
+/* ── mock .top ── */
+.qz-bt-top {
+  display: flex; align-items: center; gap: 10px;
+  padding: 9px 14px; border-bottom: 1px solid var(--qz-rule);
+  flex: 0 0 auto; min-width: 0;
+}
+.qz-bt-top .qz-wordmark { padding: 0; margin: 0; flex: none; }
+.qz-bt-top .qz-wordmark-mono {
+  /* mock .brandmark: 26px, radius 7, solid accent, white glyph */
+  width: 26px; height: 26px; border-radius: 7px;
+  background: var(--qz-accent); color: #fff;
+  font-weight: 800; font-size: 14px;
+}
+.qz-bt-qtitle {
+  font-weight: 600; font-size: 13.5px; letter-spacing: -.01em;
+  min-width: 40px; max-width: 420px; flex: 0 1 auto;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.qz-bt-qtitle .qz-inline-title { font-size: 13.5px; font-weight: 600; }
+.qz-tbadge {
+  flex: 0 1 auto;
+  font: 600 10px var(--qz-font-body);
+  color: var(--qz-ink-4); background: var(--qz-cream-2);
+  padding: 3px 8px; border-radius: 999px; line-height: 1.3;
+}
+.qz-tbadge.is-dec { color: var(--qz-accent-ink); background: var(--qz-accent-wash); }
+.qz-bt-sp { flex: 1 1 0; min-width: 0; }
+.qz-bt-topdiv { width: 1px; height: 20px; background: var(--qz-rule); flex: none; margin: 0 3px; }
+
+/* mock .modeseg / .devseg — flatter + squarer than the DS pill segmented */
+.qz-bt-seg {
+  display: inline-flex; background: var(--qz-cream-2);
+  border: none; border-radius: 9px; padding: 3px; gap: 2px; flex: none;
+}
+.qz-bt-seg button {
+  border: none; background: transparent; color: var(--qz-ink-4);
+  font: 600 12px var(--qz-font-body); height: auto;
+  padding: 6px 12px; border-radius: 7px; cursor: pointer;
+  display: inline-flex; align-items: center; gap: 5px;
+}
+.qz-bt-seg button:hover { color: var(--qz-ink-3); }
+.qz-bt-seg button[aria-pressed="true"] {
+  background: var(--qz-paper); color: var(--qz-accent-ink);
+  box-shadow: 0 1px 2px rgba(109, 90, 230, .12);
+}
+.qz-bt-seg svg { width: 17px; height: 17px; flex: none; }
+
+/* mock .iconbtn — 32px bordered square (undo/redo) */
+.qz-bt-iconbtn {
+  appearance: none; cursor: pointer; font: inherit;
+  width: 32px; height: 32px; flex: none;
+  border: 1px solid var(--qz-rule); background: var(--qz-paper);
+  border-radius: 8px; display: grid; place-items: center; color: var(--qz-ink-3);
+}
+.qz-bt-iconbtn:hover:not(:disabled) { background: var(--qz-cream-2); }
+.qz-bt-iconbtn:disabled { opacity: .4; cursor: default; }
+
+/* mock .tbtn (+ .primary / .assist) */
+.qz-bt-tbtn {
+  appearance: none; cursor: pointer; flex: none;
+  border: 1px solid var(--qz-rule); background: var(--qz-paper); color: var(--qz-ink-3);
+  font: 600 12px var(--qz-font-body); padding: 7px 12px; border-radius: 8px;
+  display: inline-flex; gap: 6px; align-items: center; text-decoration: none;
+  line-height: normal;
+}
+.qz-bt-tbtn:hover { background: var(--qz-cream-2); }
+.qz-bt-tbtn.is-primary { border: none; background: var(--qz-accent); color: #fff; }
+.qz-bt-tbtn.is-primary:hover { background: var(--qz-accent-2); }
+.qz-bt-tbtn.is-primary:disabled { opacity: .6; cursor: default; }
+.qz-bt-tbtn.is-assist { color: var(--qz-accent-ink); border-color: var(--qz-accent-wash); background: var(--qz-accent-tint); }
+.qz-bt-tbtn.is-assist:hover { background: var(--qz-accent-wash); }
+.qz-bt-tbtn.is-blocked { border-color: var(--qz-crit, #C1362B); color: var(--qz-crit, #C1362B); }
+.qz-bt-tbtn svg { width: 17px; height: 17px; flex: none; }
+
+/* mock .savedpill */
+.qz-bt-savedpill {
+  display: inline-flex; align-items: center; gap: 4px; flex: none;
+  font: 600 11px var(--qz-font-body); color: var(--qz-ink-4);
+  padding: 0 2px; white-space: nowrap;
+}
+.qz-bt-savedpill svg { width: 13px; height: 13px; color: var(--qz-ok); }
+.qz-bt-savedpill .qz-ql-retry { font-size: 11px; }
+
+/* the top bar hosts the health pill compactly */
+.qz-bt-top .qz-s3-healthpill { flex: none; }
+
+/* ── mock .body — the 4-column grid ── */
+.qz-builder-body {
+  display: grid;
+  grid-template-columns: 60px 244px minmax(320px, 1fr) 320px;
+  align-items: stretch;
+  flex: 1 1 auto; min-height: 0; overflow: hidden;
+}
+.qz-builder-body.is-intab { grid-template-columns: 60px 1fr; }
+.qz-builder-body.is-previewing { grid-template-columns: 60px minmax(320px, 1fr); }
+.qz-builder-body.is-libhidden { grid-template-columns: 60px 0 minmax(320px, 1fr) 320px; }
+.qz-builder-body.is-libhidden .qz-builder-panel { overflow: hidden; border-right: none; padding: 0; }
+.qz-builder-body > .qz-builder-panel,
+.qz-builder-body > .qz-builder-rail,
+.qz-builder-body > .qz-builder-stage,
+.qz-builder-body > .qz-builder-inspector { width: auto; min-width: 0; }
+
+/* ── rail (mock .rail / .railitem / .raildiv) ── */
+.qz-builder-rail {
+  flex: none; width: auto;
+  padding: 9px 6px; gap: 2px;
+  border-right: 1px solid var(--qz-rule-2);
+  background: var(--qz-paper);
+}
+.qz-builder-rail-item { position: relative; padding: 8px 3px 6px; border-radius: 10px; gap: 4px; }
+.qz-builder-rail-item:hover { background: var(--qz-bt-pane); color: var(--qz-ink-3); }
+.qz-builder-rail-item.is-active { background: var(--qz-accent-tint); color: var(--qz-accent-ink); }
+.qz-builder-rail-item.is-active::before {
+  content: ''; position: absolute; left: -6px; top: 7px; bottom: 7px; width: 3px;
+  border-radius: 0 3px 3px 0; background: var(--qz-accent);
+}
+.qz-builder-rail-item svg { width: 19px; height: 19px; }
+/* mock .raildiv — label with the border-top, one element */
+.qz-builder-rail-rule { display: none; }
+.qz-builder-rail-label {
+  font: 700 8px var(--qz-font-mono); letter-spacing: .1em; color: var(--qz-ink-25);
+  text-transform: uppercase; padding: 12px 0 5px; text-align: center;
+  border-top: 1px solid var(--qz-rule-2); margin: 6px 10px 2px;
+}
+
+/* ── library (mock .lib / .libhd / .libbody) ── */
+.qz-builder-panel {
+  flex: none; width: auto;
+  padding: 0; gap: 0; overflow: hidden;
+  display: flex; flex-direction: column;
+  border-right: 1px solid var(--qz-rule-2);
+}
+.qz-bt-libhd { padding: 11px 12px 9px; border-bottom: 1px solid var(--qz-rule-2); flex: 0 0 auto; }
+.qz-bt-libhd .qz-bt-seg { display: flex; margin: 0 24px 9px 0; border-radius: 8px; }
+.qz-bt-libhd .qz-bt-seg button { flex: 1 1 0; padding: 5px 2px; font-size: 10.5px; border-radius: 6px; justify-content: center; }
+.qz-bt-search { position: relative; }
+.qz-bt-search svg {
+  position: absolute; left: 9px; top: 50%; transform: translateY(-50%);
+  width: 14px; height: 14px; color: var(--qz-ink-25); pointer-events: none;
+}
+.qz-bt-search input {
+  width: 100%; border: 1px solid var(--qz-rule); border-radius: 8px;
+  padding: 7px 9px 7px 28px; font: 500 12px var(--qz-font-body); color: var(--qz-ink);
+  background: var(--qz-paper);
+}
+.qz-bt-search input:focus { outline: none; border-color: var(--qz-accent); box-shadow: 0 0 0 2px var(--qz-accent-wash); }
+.qz-bt-libbody {
+  overflow-y: auto; padding: 9px 11px 14px;
+  display: flex; flex-direction: column; gap: 10px; flex: 1 1 auto; min-height: 0;
+}
+.qz-bt-libbody > * { flex: 0 0 auto; }
+/* mock .libgroup > .gl */
+.qz-bt-gl {
+  font: 700 8.5px var(--qz-font-mono); text-transform: uppercase; letter-spacing: .06em;
+  color: var(--qz-ink-25); margin-bottom: 6px; display: block;
+}
+/* mock .libgrid + .comp — 2-col compact component tiles */
+.qz-bt-libgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.qz-bt-comp {
+  appearance: none; cursor: pointer; font: inherit; min-width: 0;
+  border: 1px solid var(--qz-rule); border-radius: 8px; background: var(--qz-paper);
+  padding: 8px 7px; display: flex; align-items: center; gap: 7px;
+  color: var(--qz-ink-3); text-align: left;
+  transition: border-color .1s, box-shadow .1s;
+}
+.qz-bt-comp:hover:not(:disabled) { border-color: var(--qz-accent); box-shadow: 0 2px 8px rgba(109, 90, 230, .12); color: var(--qz-accent-ink); }
+.qz-bt-comp:disabled { opacity: .5; cursor: default; }
+.qz-bt-comp .qz-block-glyph { width: auto; height: auto; background: none; color: var(--qz-ink-4); font-size: 15px; line-height: 1; }
+.qz-bt-comp:hover:not(:disabled) .qz-block-glyph { color: var(--qz-accent); }
+.qz-bt-comp span:last-child { font: 600 11px var(--qz-font-body); line-height: 1.1; min-width: 0; }
+/* the collapse chevron at the mock's offsets over the new header */
+.qz-builder-panel-collapse { top: 9px; right: 8px; }
+/* mock .libshow — the "Panel" reopen chip */
+.qz-builder-panel-reopen {
+  top: 11px; left: 12px; z-index: 7;
+  padding: 5px 10px 5px 7px; border-radius: 8px;
+  font: 600 11px var(--qz-font-body); color: var(--qz-ink-3);
+  box-shadow: 0 2px 8px rgba(46, 39, 64, .08);
+}
+
+/* ── stage (mock .stagewrap / .stagebar / .stage) ── */
+.qz-builder-stage { background: var(--qz-bt-pane); }
+.qz-stagebar {
+  padding: 8px 12px; gap: 8px;
+  background: transparent; border-bottom: 1px solid var(--qz-rule-2);
+  font-size: 11px; color: var(--qz-ink-4);
+}
+.qz-stagebar-name { font-weight: 400; color: var(--qz-ink-4); }
+/* mock .stagebar .dl — tiny mono labels (SHOW AS · SIZE) */
+.qz-bt-dl {
+  font: 700 8.5px var(--qz-font-mono); text-transform: uppercase; letter-spacing: .05em;
+  color: var(--qz-ink-25); flex: none;
+}
+.qz-stagebar .qz-bt-seg { padding: 2px; }
+.qz-stagebar .qz-bt-seg button { padding: 4px 9px; font-size: 11px; }
+/* mock zoom cluster: borderless 24px steppers + mono % label */
+.qz-bt-zoom { display: inline-flex; align-items: center; gap: 4px; }
+.qz-bt-zoom .qz-bt-iconbtn { width: 24px; height: 24px; border: none; background: transparent; }
+.qz-bt-zoom .qz-bt-iconbtn:hover:not(:disabled) { background: var(--qz-cream-2); }
+.qz-bt-zoom .qz-bt-zlabel { font-family: var(--qz-font-mono); min-width: 38px; text-align: center; font-size: 11px; }
+.qz-stagebar .qz-bt-tbtn { padding: 6px 11px; font-size: 11.5px; }
+
+/* ── inspector (mock .insp / .insphd / .sec) ── */
+.qz-builder-inspector {
+  flex: none; width: auto;
+  border-left: 1px solid var(--qz-rule-2);
+  padding: 0; gap: 0; overflow: hidden;
+  display: flex; flex-direction: column;
+}
+.qz-bt-insphd {
+  padding: 11px 13px; border-bottom: 1px solid var(--qz-rule-2);
+  display: flex; align-items: center; gap: 9px; flex: 0 0 auto;
+}
+.qz-bt-insphd .qz-bt-ic {
+  width: 28px; height: 28px; border-radius: 7px;
+  background: var(--qz-accent-tint); color: var(--qz-accent-ink);
+  display: grid; place-items: center; flex: none;
+}
+.qz-bt-insphd .qz-bt-ic svg { width: 15px; height: 15px; }
+.qz-bt-insphd .qz-bt-tt { min-width: 0; flex: 1 1 auto; }
+.qz-bt-insphd .qz-bt-tt b {
+  display: block; font-size: 13px; font-weight: 600;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.qz-bt-insphd .qz-bt-tt small {
+  font: 600 9px var(--qz-font-mono); text-transform: uppercase;
+  letter-spacing: .05em; color: var(--qz-ink-25);
+}
+.qz-bt-inspbody {
+  overflow-y: auto; padding: 14px 13px 20px;
+  display: flex; flex-direction: column; gap: 8px; flex: 1 1 auto; min-height: 0;
+}
+.qz-bt-inspbody > * { flex: 0 0 auto; }
+/* mock .sec — collapsible bordered sections */
+.qz-bt-sec { border: 1px solid var(--qz-rule-2); border-radius: 10px; overflow: hidden; }
+.qz-bt-sechd {
+  appearance: none; border: none; background: var(--qz-paper); font: inherit; width: 100%;
+  display: flex; align-items: center; gap: 8px; padding: 9px 11px;
+  cursor: pointer; user-select: none;
+}
+.qz-bt-sechd:hover { background: var(--qz-bt-pane); }
+.qz-bt-sechd .qz-bt-st { font: 600 12px var(--qz-font-body); color: var(--qz-ink); }
+.qz-bt-sechd .qz-bt-sv {
+  margin-left: auto; font: 500 11px var(--qz-font-body); color: var(--qz-ink-25);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 120px;
+}
+.qz-bt-sechd .qz-bt-chev { color: var(--qz-ink-25); transition: transform .12s; display: inline-flex; }
+.qz-bt-sec.is-open .qz-bt-chev { transform: rotate(90deg); }
+.qz-bt-sechd .qz-bt-chev svg { width: 15px; height: 15px; }
+.qz-bt-secbody { padding: 4px 11px 12px; display: none; flex-direction: column; gap: 11px; }
+.qz-bt-sec.is-open .qz-bt-secbody { display: flex; }
+/* mock .arow — outline rows inside "On this screen" */
+.qz-bt-arow {
+  appearance: none; background: var(--qz-paper); font: inherit; width: 100%; text-align: left;
+  display: flex; align-items: center; gap: 7px;
+  border: 1px solid var(--qz-rule-2); border-radius: 8px; padding: 6px 8px;
+  cursor: pointer; color: var(--qz-ink);
+}
+.qz-bt-arow:hover { border-color: var(--qz-accent-wash); }
+.qz-bt-arow .qz-bt-arow-glyph { color: var(--qz-ink-4); font-size: 14px; line-height: 1; flex: none; }
+.qz-bt-arow .qz-bt-arow-label {
+  flex: 1 1 auto; min-width: 0; font-size: 12px; font-weight: 500;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.qz-bt-arow .qz-bt-arow-chev { color: var(--qz-ink-25); display: inline-flex; }
+.qz-bt-arow .qz-bt-arow-chev svg { width: 13px; height: 13px; }
+.qz-bt-hint { font-size: 11px; color: var(--qz-ink-4); line-height: 1.4; }
+/* mock .deeplink */
+.qz-bt-deeplink {
+  appearance: none; font: inherit; cursor: pointer; width: 100%; text-align: left;
+  display: flex; align-items: center; gap: 7px;
+  background: var(--qz-rule-2); border: 1px solid var(--qz-rule); border-radius: 9px;
+  padding: 9px 11px; font: 600 12px var(--qz-font-body); color: var(--qz-ink-3);
+}
+.qz-bt-deeplink:hover { border-color: var(--qz-accent); color: var(--qz-accent-ink); background: var(--qz-accent-tint); }
+.qz-bt-deeplink .qz-bt-dlarrow { margin-left: auto; color: var(--qz-ink-25); display: inline-flex; }
+.qz-bt-deeplink:hover .qz-bt-dlarrow { color: var(--qz-accent); }
+.qz-bt-deeplink svg { width: 14px; height: 14px; flex: none; }
+/* the selected-node ContextPanel drops its card chrome inside the inspector */
+.qz-bt-inspbody > .qz-card { border: none; box-shadow: none; padding: 0; margin: 0; background: transparent; }
+
+/* ── filmstrip (mock .strip at APP level, full width) ── */
+.qz-screens {
+  background: var(--qz-paper);
+  align-items: center;
+}
+.qz-bt-striplbl {
+  font: 700 8.5px var(--qz-font-mono); text-transform: uppercase; letter-spacing: .06em;
+  color: var(--qz-ink-25); flex: none; margin-right: 2px; align-self: center;
+}
+.qz-screens-item { width: 64px; align-items: center; }
+.qz-screens-thumb { border-width: 1.5px; }
+
+/* ── tab panels (mock .tabpanel / .tpwrap / .tphd) ── */
+.qz-builder-settings { background: var(--qz-paper); }
+.qz-bt-tpwrap { max-width: 660px; margin: 0 auto; display: flex; flex-direction: column; gap: 16px; padding: 22px 26px 34px; }
+.qz-bt-tpwrap.is-wide { max-width: 1200px; }
+.qz-bt-tphd h1 { margin: 0 0 3px; font-size: 19px; font-weight: 600; letter-spacing: -.01em; }
+.qz-bt-tphd p { margin: 0; font-size: 12.5px; color: var(--qz-ink-4); line-height: 1.4; }
+
+/* the old flex fallbacks must not fight the grid */
+.qz-builder-body > .qz-builder-stage { position: relative; }
+
+/* mock .body.previewing — the panels leave entirely (grid 60px 1fr) */
+.qz-builder-body.is-previewing .qz-builder-panel,
+.qz-builder-body.is-previewing .qz-builder-inspector { display: none; }
+.qz-builder-body.is-allscreens .qz-builder-panel { display: none; }
+/* the savedpill hosts the save-chip states without the chip's pill chrome */
+.qz-bt-savedpill .qz-save-chip {
+  background: none; border: none; padding: 0; margin: 0;
+  display: inline-flex; align-items: center; gap: 4px;
+  font: 600 11px var(--qz-font-body); color: var(--qz-ink-4);
+  box-shadow: none; animation: none;
+}
+.qz-bt-savedpill .qz-save-chip.is-error { color: var(--qz-crit, #C1362B); }
+
+/* grid min-content trap: without this the stage row grows to the 844px phone
+   and the canvas stops fitting (the frame overflowed behind the strip). */
+.qz-builder-body > * { min-height: 0; min-width: 0; }
+/* mock parity nits */
+.qz-bt-striplbl { white-space: nowrap; }
+.qz-builder-rail-label { white-space: nowrap; }
+/* mock 1280 squeeze: the bar tightens instead of clipping Publish */
+@media (max-width: 1366px) {
+  .qz-bt-top { gap: 8px; }
+  .qz-bt-seg button { padding: 6px 9px; }
+  .qz-bt-tbtn { padding: 7px 9px; }
+  .qz-bt-qtitle { max-width: 200px; }
+}
+
+/* the ContextPanel's insphd bleeds to its host's edges: the builder inspector
+   body (14/13 padding) and the embedded card (12) each reclaim their inset */
+.qz-card > .qz-bt-insphd { margin: -12px -12px 10px; }
+.qz-bt-inspbody > .qz-card > .qz-bt-insphd { margin: -14px -13px 12px; }
+
+/* the reopen chip rides the stagebar inline (mock .libshow geometry, no
+   absolute overlay — our stagebar's left cluster would sit underneath it) */
+.qz-builder-panel-reopen.is-inline { position: static; top: auto; left: auto; }
+
+/* BLD-3 — the mock's device chrome as classes (values are the mock's exact
+   shadows/backdrop; kept out of TSX so the token ratchet stays shrinking) */
+.qz-devframe-mock {
+  border-radius: 46px; overflow: hidden; background: var(--qz-paper);
+  box-shadow: 0 26px 64px -22px rgba(46, 39, 64, .42), 0 0 0 1px var(--qz-rule);
+}
+.qz-dpop-backdrop { background: #3A3743; }
+.qz-dpop-modal {
+  border-radius: 20px; overflow: auto; background: var(--qz-paper);
+  box-shadow: 0 40px 100px rgba(0, 0, 0, .5);
+}
+.qz-dinline-card {
+  border-radius: 20px; overflow: hidden; background: var(--qz-paper);
+  box-shadow: 0 20px 54px -20px rgba(46, 39, 64, .30), 0 0 0 1px rgba(0, 0, 0, .03);
+}

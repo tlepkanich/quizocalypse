@@ -1006,9 +1006,23 @@ function ContextPanelBody({
 
   return (
     <div className="qz-card" style={{ padding: 12, marginBottom: 16 }}>
-      <div className="qz-row qz-row-between" style={{ alignItems: "center", marginBottom: 8 }}>
-        <strong style={{ fontSize: 13 }}>{NODE_LABEL[node.type]}</strong>
-        <div className="qz-row" style={{ gap: 6, alignItems: "center" }}>
+      {/* BLD-3 — the mock's .insphd: icon tile · label · mono kind · actions.
+          Negative margins bleed it to the inspector's edges (the panel body
+          carries the mock .inspbody padding). */}
+      <div className="qz-bt-insphd">
+        <div className="qz-bt-ic" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+            <rect x="3" y="3" width="7" height="7" rx="1.5" />
+            <rect x="14" y="3" width="7" height="7" rx="1.5" />
+            <rect x="3" y="14" width="7" height="7" rx="1.5" />
+            <rect x="14" y="14" width="7" height="7" rx="1.5" />
+          </svg>
+        </div>
+        <div className="qz-bt-tt">
+          <b>{NODE_LABEL[node.type]}</b>
+          <small>{node.type.replace("_", " ")}</small>
+        </div>
+        <div className="qz-row" style={{ gap: 6, alignItems: "center", marginLeft: "auto" }}>
           {/* build-tab v2.0 §1 — decider docs have NO tab bar (design-only,
               selection-driven). Legacy docs keep Content/Design/Routing. */}
           {!isDecider ? (

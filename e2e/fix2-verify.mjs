@@ -184,7 +184,8 @@ try {
 
   // ── 8: library tabs clear the collapse chevron ────────────────────────────
   const lib = await page.evaluate(() => {
-    const seg = document.querySelector(".qz-builder-panel > .qz-segmented")?.getBoundingClientRect();
+    // BLD-3 — the tabs live in the mock's .libhd now (.qz-bt-libhd > .qz-bt-seg).
+    const seg = document.querySelector(".qz-builder-panel .qz-bt-libhd .qz-bt-seg")?.getBoundingClientRect();
     const chev = document.querySelector(".qz-builder-panel-collapse")?.getBoundingClientRect();
     return seg && chev ? { segRight: seg.right, chevLeft: chev.left } : null;
   });
