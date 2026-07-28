@@ -35,8 +35,12 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     identitySummary: parseBrandIdentitySafe(shopRow?.brandIdentity)?.summary ?? null,
     groupNames: detect.proposed.map((g) => g.name),
   });
+  // Owner 2026-07-25 — the homepage hero's goal box lands here with ?goal=
+  // pre-filled so the brief (audience/factors/length) still gets collected.
+  const prefillGoal = new URL(request.url).searchParams.get("goal")?.trim().slice(0, 500) ?? "";
   return json({
     suggestedGoal,
+    prefillGoal,
     minGoalChars: MIN_GOAL_CHARS,
     productCount: products.length,
   });
@@ -63,12 +67,12 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 };
 
 export default function StudioGoal() {
-  const { suggestedGoal, minGoalChars, productCount } = useLoaderData<typeof loader>();
+  const { suggestedGoal, prefillGoal, minGoalChars, productCount } = useLoaderData<typeof loader>();
   const submit = useSubmit();
   const navigation = useNavigation();
   const busy = navigation.state !== "idle";
 
-  const [goal, setGoal] = useState("");
+  const [goal, setGoal] = useState(prefillGoal);
   const [audience, setAudience] = useState("");
   const [factors, setFactors] = useState("");
   const [length, setLength] = useState<number | null>(null);

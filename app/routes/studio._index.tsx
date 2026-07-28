@@ -147,12 +147,12 @@ export default function StudioHome() {
             Turn browsers into buyers — build a guided quiz that recommends the right products.
           </p>
           {/* FLOW-1 (owner 2026-07-25) — the goal is written RIGHT HERE: the
-              hero is the text box; submit POSTs into /studio/goal's action
-              (audience/factors/length optional there) and starts the flow —
+              hero is the text box; submit carries ?goal= to /studio/goal so the
+              brief screen (audience/factors/length) collects the rest, then —
               AI pre-picks products and builds the quiz around them. FLOW-3 —
               Generate Quiz Templates drafts 2-3 very different directions.
               The existing funnel stays as the manual path (Flow 2). */}
-          <Form method="post" action="/studio/goal" style={{ maxWidth: 460 }}>
+          <Form method="get" action="/studio/goal" style={{ maxWidth: 460 }}>
             <textarea
               name="goal"
               rows={3}
