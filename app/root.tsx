@@ -29,6 +29,7 @@ export default function App() {
       <head>
         <meta charSet="utf-8" />
         <meta name="viewport" content="width=device-width,initial-scale=1" />
+        <link rel="icon" type="image/svg+xml" href="/wiskr-fox.svg" />
         <link rel="preconnect" href="https://cdn.shopify.com/" />
         <Meta />
         <Links />

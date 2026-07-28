@@ -1,10 +1,10 @@
 import { Link } from "@remix-run/react";
 
-/* Quizzy Master Design System §13 — there is NO pictorial brand mark (the gold
-   diamond glyph was removed). Identity is typographic: a rounded monogram tile +
-   the product name in the display face (Quicksand). `compact` renders the
-   monogram alone (collapsed rail / small-scale contexts). The final logo lockup
-   is a design open item (§14); the monogram is the interim mark. */
+import { FoxMark } from "./FoxMark";
+
+/* BRAND-2 closes the §14 "final logo lockup" open item: the wiskr fox sits in
+   the rounded tile, with the product name in the display face (Quicksand).
+   `compact` renders the tile alone (collapsed rail / small-scale contexts). */
 export function Wordmark({
   to = "/studio",
   name = "Wiskr",
@@ -17,7 +17,7 @@ export function Wordmark({
   return (
     <Link to={to} className="qz-wordmark" aria-label={`${name} — home`}>
       <span className="qz-wordmark-mono" aria-hidden="true">
-        {name.charAt(0)}
+        <FoxMark size={22} />
       </span>
       {compact ? null : <span className="qz-wordmark-name">{name}</span>}
     </Link>

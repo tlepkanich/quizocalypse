@@ -3,6 +3,7 @@ import type { ActionFunctionArgs, LinksFunction, LoaderFunctionArgs, MetaFunctio
 import { json, redirect } from "@remix-run/node";
 import { adminStyleLinks } from "../styles/adminLinks";
 import { Form, useActionData, useNavigation } from "@remix-run/react";
+import { FoxMark } from "../components/chrome/FoxMark";
 import { hasStudioAccess } from "../lib/studioAccess.server";
 import { requestMagicLink } from "../lib/studioMagicLink.server";
 
@@ -90,7 +91,7 @@ export default function StudioLogin() {
         <div className="qz-card" style={styles.card}>
           <div style={styles.brand}>
             <span style={styles.mono} aria-hidden>
-              W
+              <FoxMark size={27} />
             </span>
             <h1 style={styles.h1}>Check your email</h1>
           </div>
@@ -103,7 +104,7 @@ export default function StudioLogin() {
         <Form method="post" className="qz-card" style={styles.card}>
           <div style={styles.brand}>
             <span style={styles.mono} aria-hidden>
-              W
+              <FoxMark size={27} />
             </span>
             <h1 style={styles.h1}>Wiskr Studio</h1>
           </div>

@@ -28,6 +28,10 @@
       "hex": 4,
       "boxShadow": 0
     },
+    "app/components/chrome/FoxMark.tsx": {
+      "hex": 7,
+      "boxShadow": 0
+    },
     "app/components/logic/AbTestCard.tsx": {
       "hex": 2,
       "boxShadow": 0

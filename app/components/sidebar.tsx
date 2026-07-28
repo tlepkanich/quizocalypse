@@ -11,6 +11,8 @@
 import { Link, useLocation } from "@remix-run/react";
 import type { ReactNode } from "react";
 
+import { FoxMark } from "./chrome/FoxMark";
+
 const SIDEBAR_MOBILE_CSS = `
 @media (max-width: 899px) {
   .qz-sidebar-layout {
@@ -132,7 +134,10 @@ export function Sidebar({
           borderBottom: "1px solid var(--qz-rule)",
         }}
       >
-        <div className="qz-label">Wiskr</div>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <FoxMark size={18} />
+          <div className="qz-label">Wiskr</div>
+        </div>
         <div
           className="qz-display"
           style={{ fontSize: 20, lineHeight: 1.1, marginTop: 4 }}

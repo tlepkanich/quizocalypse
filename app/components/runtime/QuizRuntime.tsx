@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ChromeContext, CHROME_TOKENS, useChrome, type ChromeToken } from "./chromeStrings";
+import { FoxMark } from "../chrome/FoxMark";
 import { tagToAnswerText, reasonsForProduct } from "../../lib/matchReasons";
 import type { Quiz } from "../../lib/quizSchema";
 import { resolveEngagement } from "../../lib/engagementSchema";
@@ -2092,12 +2093,9 @@ export function QuizRuntime(props: QuizRuntimeProps) {
               height: 16,
               borderRadius: 4,
               background: "#E8590C",
-              color: "#fff",
-              fontWeight: 700,
-              fontSize: 11,
             }}
           >
-            w
+            <FoxMark size={13} variant="cream" />
           </span>
           wiskr.ai
         </a>
