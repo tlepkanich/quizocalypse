@@ -83,7 +83,15 @@ export function Step1Funnel({ data }: { data: FunnelData }) {
   // scrolled out of view, and step 5's said "Open builder →"). Their primary
   // action moves here — same anatomy as step 3's — and the footers retire.
   const navBusy = fetcher.state !== "idle";
-  const shapeVisible = visibleStageKey(data.stage) === "types";
+  // FLOW-3 — Shape is retired from the visible map (visibleStageKey folds its
+  // family onto Questions), so the "in the Shape zone" chrome (← Homepage +
+  // leave-setup confirm) keys on the RAW stages that used to fold there.
+  const shapeVisible =
+    data.stage === "types" ||
+    data.stage === "typing" ||
+    data.stage === "templates" ||
+    data.stage === "shape" ||
+    data.stage === "goal";
   const stageNav =
     data.stage === "rec_page" ? (
       <>
@@ -315,20 +323,23 @@ export function Step1Funnel({ data }: { data: FunnelData }) {
   );
 }
 
-// Map transient/legacy stages onto their owning visible step. `goal` is gone from
-// the flow (folded into Shape) → it maps to Shape; `overview`/`generate`/`done`
-// are retired → they map to Design (the new terminal visible step) so a legacy
-// in-flight draft parked there still shows a sensible bar position.
+// Map transient/legacy stages onto their owning visible step. FLOW-3 — Shape
+// is RETIRED from the visible map: the whole shape family (the legacy picker
+// at "types"/"shape"/"goal"/"templates" and the transient typing/templating
+// AI passes) routes FORWARD onto Questions, the step their flows land on.
+// This also kills FLOW-1's known cosmetic (the rail highlighting Shape during
+// the headless passes). `overview`/`generate`/`done` stay folded onto Design.
 function visibleStageKey(stage: FunnelData["stage"]): string {
   if (
     stage === "typing" ||
     stage === "templates" ||
     stage === "shape" ||
-    stage === "goal"
+    stage === "goal" ||
+    stage === "types" ||
+    stage === "templating" ||
+    stage === "configuring"
   )
-    return "types";
-  // "templating" now spans template-gen AND the early question build → Questions.
-  if (stage === "templating" || stage === "configuring") return "question_builder";
+    return "question_builder";
   if (stage === "overview" || stage === "done" || stage === "generate") return "design";
   return stage;
 }

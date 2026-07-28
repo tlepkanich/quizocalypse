@@ -332,6 +332,19 @@ export async function loadStep1FunnelData(
     // FLOW-1 — the goal-first flow marker + pre-pick state; null for every
     // other flow (its absence keeps the recs surface's existing behavior).
     goalFirst: session.goal_first ?? null,
+    // FLOW-3 — the template-first PICK marker (+ the picked card's name for
+    // the recs banner); null until a card is picked on /studio/templates, so
+    // a merely-browsed draft keeps today's recs behavior (pop-up included).
+    templateFirst: session.template_first?.picked
+      ? {
+          picked: session.template_first.picked,
+          name:
+            (session.template_first.picked === "template"
+              ? session.rich_templates[0]?.title
+              : session.quiz_types.find((t) => t.id === session.picked_type_id)?.name) ??
+            "your template",
+        }
+      : null,
     productGroups: categories.map((c) => ({
       id: c.id,
       name: c.name,

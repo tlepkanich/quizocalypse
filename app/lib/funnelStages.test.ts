@@ -10,31 +10,34 @@ import {
 } from "./funnelStages";
 
 describe("funnelStages", () => {
-  it("declares the re-sequenced 5-step order", () => {
+  it("declares the 4-step order (Shape retired — FLOW-3)", () => {
     expect(FUNNEL_STEPS.map((s) => s.stage)).toEqual([
       "grouping",
-      "shape",
       "question_builder",
       "rec_page",
       "design",
     ]);
-    expect(TOTAL_STEPS).toBe(5);
+    expect(TOTAL_STEPS).toBe(4);
   });
 
-  it("maps new stages to themselves", () => {
+  it("maps visible stages to themselves", () => {
     for (const s of FUNNEL_STEPS) {
       expect(stepForStage(s.stage)).toBe(s.stage);
     }
   });
 
-  it("folds legacy + transient stages onto their visible step", () => {
-    expect(stepForStage("goal")).toBe("shape");
-    expect(stepForStage("typing")).toBe("shape");
-    expect(stepForStage("types")).toBe("shape"); // the four-card lived here
-    expect(stepForStage("templating")).toBe("shape");
-    expect(stepForStage("configuring")).toBe("shape"); // battle card
-    expect(stepForStage("templates")).toBe("shape");
-    // Overview + Generate are retired → they fold onto Design (new terminal step).
+  it("routes the retired shape family FORWARD onto Questions", () => {
+    // Parse compatibility: an in-flight draft parked at ANY shape-family stage
+    // (the legacy picker or a transient AI pass) resolves forward onto the
+    // Questions step, never off the bar and never backwards.
+    expect(stepForStage("shape")).toBe("question_builder");
+    expect(stepForStage("goal")).toBe("question_builder");
+    expect(stepForStage("typing")).toBe("question_builder");
+    expect(stepForStage("types")).toBe("question_builder"); // the Shape picker lived here
+    expect(stepForStage("templating")).toBe("question_builder");
+    expect(stepForStage("configuring")).toBe("question_builder"); // battle card
+    expect(stepForStage("templates")).toBe("question_builder");
+    // Overview + Generate are retired → they fold onto Design (terminal step).
     expect(stepForStage("overview")).toBe("design");
     expect(stepForStage("generate")).toBe("design");
     expect(stepForStage("done")).toBe("design");
@@ -47,28 +50,28 @@ describe("funnelStages", () => {
 
   it("numbers steps 1-based for 'Step N of M'", () => {
     expect(stepNumber("grouping")).toBe(1);
-    expect(stepNumber("shape")).toBe(2);
-    expect(stepNumber("goal")).toBe(2); // folds to shape
-    expect(stepNumber("question_builder")).toBe(3);
-    expect(stepNumber("rec_page")).toBe(4);
-    expect(stepNumber("design")).toBe(5);
-    expect(stepNumber("overview")).toBe(5); // folds to design (last step)
-    expect(stepNumber("generate")).toBe(5);
+    expect(stepNumber("question_builder")).toBe(2);
+    expect(stepNumber("types")).toBe(2); // shape family folds to Questions
+    expect(stepNumber("typing")).toBe(2);
+    expect(stepNumber("rec_page")).toBe(3);
+    expect(stepNumber("design")).toBe(4);
+    expect(stepNumber("overview")).toBe(4); // folds to design (last step)
+    expect(stepNumber("generate")).toBe(4);
   });
 
   it("resolves labels through the fold", () => {
     expect(labelForStage("grouping")).toBe("Recommendations");
-    expect(labelForStage("configuring")).toBe("Shape Your Quiz");
+    expect(labelForStage("configuring")).toBe("Question Builder");
     expect(labelForStage("done")).toBe("Design");
   });
 
   it("navigates between visible steps and stops at the ends", () => {
-    expect(nextStep("grouping")).toBe("shape");
-    expect(nextStep("shape")).toBe("question_builder");
-    expect(nextStep("design")).toBeNull(); // design is now the last step
-    expect(nextStep("configuring")).toBe("question_builder"); // from shape
+    expect(nextStep("grouping")).toBe("question_builder");
+    expect(nextStep("question_builder")).toBe("rec_page");
+    expect(nextStep("design")).toBeNull(); // design is the last step
+    expect(nextStep("configuring")).toBe("rec_page"); // folds to Questions first
     expect(prevStep("grouping")).toBeNull();
-    expect(prevStep("shape")).toBe("grouping");
+    expect(prevStep("question_builder")).toBe("grouping");
     expect(prevStep("rec_page")).toBe("question_builder");
   });
 });

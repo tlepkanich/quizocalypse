@@ -1,6 +1,12 @@
 // Shape-scope live-verify — the funnel's AI now grounds generation in the CHOSEN
 // recommendation buckets, not the whole catalog (commit 65c55a5).
 //
+// FLOW-3 note (shape retirement): the Shape STAGE is display-retired (no rail
+// pill; new front doors skip it) but the flow this probe drives —
+// continue-buckets → typing → types → shape-continue → question build — is the
+// UNCHANGED flow-2 "AI generate" path (its cleanup is Phase 3). Every
+// intent/stage this probe touches still exists and behaves identically.
+//
 // This change scopes the catalog SUMMARY fed to the AI at BOTH generation layers
 // (Shape-stage types/templates in step2Build + the question-flow build in
 // onboardingBuild). The scope logic is deterministically unit-tested

@@ -1536,6 +1536,23 @@ export const BuildSession = z.object({
       question_length: z.number().int().min(3).max(7).optional(),
     })
     .optional(),
+  // FLOW-3 (funnel-reconfig Flow 3) — the "Generate Quiz Templates" front door
+  // (/studio/templates). OPTIONAL WITHOUT DEFAULT — absent round-trips absent,
+  // so legacy docs and every other flow stay byte-identical.
+  //  • gen: the detached candidate-generation job's lifecycle (the Shape
+  //    typing/types middle pass repurposed — candidates persist in quiz_types).
+  //  • picked: set when the merchant clicks a card. "candidate" = a generated
+  //    direction (picked_type_id holds it; the confirm short-circuits the types
+  //    pass); "template" = a starter/saved RichTemplateOption (rich_templates[0]
+  //    holds it; the confirm short-circuits types AND templates). Its presence
+  //    makes the recs Continue confirm via flow3-confirm with NO start pop-up.
+  template_first: z
+    .object({
+      gen: z.enum(["picking", "ready", "failed"]).optional(),
+      error: z.string().optional(),
+      picked: z.enum(["candidate", "template"]).optional(),
+    })
+    .optional(),
   // Recommendation Buckets (Step 1 rework) — the 3-tab catalog browser's UI state
   // that must survive a reload: which tab is active (the bucket type the quiz is
   // locked to) and whether the AI-suggestion banner has been dismissed this draft.

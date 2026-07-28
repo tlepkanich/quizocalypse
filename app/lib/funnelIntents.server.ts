@@ -691,6 +691,126 @@ async function runStep1FunnelActionImpl(
     return json({ intent, ok: true });
   }
 
+  // FLOW-3 (funnel-reconfig Flow 3) — the template-first recs confirm. The
+  // merchant picked a card on /studio/templates (a generated candidate or a
+  // starter/saved template) and refined the pre-populated selections; this
+  // confirm skips BOTH the start pop-up and the Shape stage. The already-picked
+  // card short-circuits the middle passes: a "candidate" pick carries its
+  // QuizType (picked_type_id), so only the templating pass + question build run
+  // (the flow1 headless chain minus the types pass); a "template" pick carries
+  // the full RichTemplateOption, so the question build runs directly (the O-3
+  // saved-template precedent). Every failure lands the blank-Questions notice —
+  // never a Shape the merchant didn't choose. Decider + template_first only.
+  if (intent === "flow3-confirm") {
+    if (doc.logic_model !== "decider" || !session.template_first?.picked) {
+      return json({ intent, ok: false, error: "This flow isn't available for this quiz." }, { status: 400 });
+    }
+    const cats = await prisma.category.findMany({
+      where: { shopId: shop.id, quizId: quiz.id },
+      select: { id: true, name: true, tags: true, productIds: true },
+      orderBy: { createdAt: "asc" },
+    });
+    if (cats.length === 0) {
+      return json(
+        { intent, ok: false, error: "Add at least one recommendation to continue." },
+        { status: 400 },
+      );
+    }
+    const tabDim = session.bucket_browser?.active_tab;
+    const struggle = session.goal?.struggle_text ?? "";
+    const grouping = {
+      dimension: (tabDim === "tag" ? "tag" : tabDim === "collection" ? "collection" : "all") as
+        | "tag"
+        | "collection"
+        | "all",
+      confirmed_category_ids: cats.map((c) => c.id),
+      detected_rationale: "Confirmed on the template-first recommendations step.",
+    };
+
+    if (session.template_first.picked === "template") {
+      const richStored = session.rich_templates[0];
+      if (!richStored) {
+        return json({ intent, ok: false, error: "That template is no longer available." }, { status: 400 });
+      }
+      // Defense-in-depth: the pick already neutralized the source quiz's
+      // Category cuids; re-neutralize so a hand-edited draft can't disable
+      // every group (the use-saved-template precedent).
+      const rich = { ...richStored, recommended_bucket_ids: [] };
+      const picked = initPickedTemplate(
+        rich,
+        cats.map((c) => ({ id: c.id, name: c.name, product_ids: c.productIds })),
+        new Date(),
+      );
+      const goal = session.goal?.goal_text || rich.angle;
+      // writeDoc BEFORE startQuestionBuild — it snapshots priorSession up front
+      // and restores it on completion (the use-saved-template ordering).
+      // picked_type_id stays CLEARED so a killed build retries THIS template
+      // via retry-gen's O-3 branch.
+      const next: BuildSession = {
+        ...session,
+        stage: "templating",
+        grouping,
+        picked_type_id: undefined,
+        rich_templates: [rich],
+        picked_template: picked,
+        gen_error: undefined,
+        // A prior failed chain's blank-Questions landing left built:true; a
+        // stale true would graduate the draft MID-generation (flow1-confirm
+        // precedent). The build's completion sets it honestly.
+        built: undefined,
+      };
+      await writeDoc(quiz.id, {
+        ...doc,
+        scoring_model: "direct",
+        experience_type: rich.experience_type,
+        build_session: next,
+      });
+      await startQuestionBuild(shop.id, quiz.id, rich, picked, goal, struggle, {
+        failMode: "blank_questions",
+      });
+      return json({ intent, ok: true });
+    }
+
+    // "candidate" — the generated direction's QuizType short-circuits the
+    // types pass; the templating job auto-picks its top template and chains
+    // the question build (the flow1 headless tail).
+    const type =
+      session.quiz_types.find((t) => t.id === session.picked_type_id) ?? session.quiz_types[0];
+    if (!type) {
+      return json({ intent, ok: false, error: "That candidate is no longer available." }, { status: 400 });
+    }
+    const next: BuildSession = {
+      ...session,
+      stage: "templating",
+      grouping,
+      picked_type_id: type.id,
+      // A re-confirmed flow starts a FRESH templating chain — stale template
+      // artifacts would misroute retry-gen (the flow1-confirm precedent).
+      rich_templates: [],
+      picked_template: undefined,
+      gen_error: undefined,
+      built: undefined,
+    };
+    await writeDoc(quiz.id, {
+      ...doc,
+      scoring_model: "direct",
+      experience_type: type.experience_type,
+      build_session: next,
+    });
+    startStep2Templates(
+      shop.id,
+      quiz.id,
+      type,
+      {
+        goal: session.goal?.goal_text || type.achieves,
+        ...(struggle ? { struggle } : {}),
+        buckets: cats.map((c) => ({ id: c.id, name: c.name, tags: c.tags })),
+      },
+      { failMode: "blank_questions" },
+    );
+    return json({ intent, ok: true });
+  }
+
   // Start-routing spec §1.2 — "Build from a blank quiz" (the intercept modal's
   // quiet tertiary + Shape's escape link). No AI: seed the minimal-but-complete
   // decider skeleton and land straight on the Questions step. Reinstates the
@@ -850,9 +970,12 @@ async function runStep1FunnelActionImpl(
             ...(session.goal?.struggle_text ? { struggle: session.goal.struggle_text } : {}),
             ...(retryCats.length ? { buckets: retryCats } : {}),
           },
-          // FLOW-1 — goal-first failures land the blank-Questions notice (the
-          // merchant never chose Shape); every other flow keeps today's default.
-          session.goal_first ? { failMode: "blank_questions" } : undefined,
+          // FLOW-1/FLOW-3 — goal-first + template-first failures land the
+          // blank-Questions notice (the merchant never chose Shape); every
+          // other flow keeps today's default.
+          session.goal_first || session.template_first?.picked
+            ? { failMode: "blank_questions" }
+            : undefined,
         );
         return json({ intent, ok: true });
       }
@@ -878,8 +1001,11 @@ async function runStep1FunnelActionImpl(
             session.picked_template,
             session.goal?.goal_text || retryRich.angle,
             session.goal?.struggle_text ?? "",
-            // FLOW-1 — goal-first build failures land blank Questions (see above).
-            session.goal_first ? { failMode: "blank_questions" } : undefined,
+            // FLOW-1/FLOW-3 — goal-first + template-first build failures land
+            // blank Questions (see above).
+            session.goal_first || session.template_first?.picked
+              ? { failMode: "blank_questions" }
+              : undefined,
           );
           return json({ intent, ok: true });
         }
@@ -1573,8 +1699,13 @@ async function runStep1FunnelActionImpl(
               // FLOW-1 — goal-first drafts DO carry quiz_types (the headless
               // pass persists them for retry-gen) but never visited Shape, so
               // their Back returns to Recommendations too.
+              // FLOW-3 — template-first picks likewise: the candidates live in
+              // quiz_types but the merchant chose them on /studio/templates,
+              // never on Shape.
               doc.logic_model === "decider" &&
-                (session.quiz_types.length === 0 || session.goal_first)
+                (session.quiz_types.length === 0 ||
+                  session.goal_first ||
+                  session.template_first?.picked)
               ? "grouping"
               : "types";
     const next: BuildSession = { ...session, stage };

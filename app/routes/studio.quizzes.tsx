@@ -243,10 +243,14 @@ export default function StudioQuizzes() {
                 New quiz
               </Link>
             )}
-            {/* FLOW-1 — goal-first is the primary create path; the existing
-                funnel entry stays alongside (Flow 2 keeps today's flow). */}
+            {/* FLOW-1 — goal-first is the primary create path; FLOW-3 adds the
+                Generate-Quiz-Templates entry; the existing funnel stays
+                alongside (Flow 2 keeps today's flow). */}
             <Link to="/studio/onboarding" className="qz-btn qz-btn-ghost">
               ✨ Build with AI
+            </Link>
+            <Link to="/studio/templates" className="qz-btn qz-btn-ghost">
+              ✦ Generate quiz templates
             </Link>
             <Link to="/studio/goal" className="qz-btn qz-btn-accent">
               ✎ Write your goal →
@@ -262,9 +266,12 @@ export default function StudioQuizzes() {
             Create your first quiz — write your goal and our AI picks the products and builds the
             questions for you.
           </p>
-          <div className="qz-row" style={{ gap: 8 }}>
+          <div className="qz-row" style={{ gap: 8, flexWrap: "wrap" }}>
             <Link to="/studio/goal" className="qz-btn qz-btn-accent qz-btn-sm">
               ✎ Write your goal →
+            </Link>
+            <Link to="/studio/templates" className="qz-btn qz-btn-ghost qz-btn-sm">
+              ✦ Generate quiz templates
             </Link>
             <Link to="/studio/onboarding" className="qz-btn qz-btn-ghost qz-btn-sm">
               ✨ Build with AI

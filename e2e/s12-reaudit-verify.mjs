@@ -1,9 +1,15 @@
-// AUDIT-18 re-audit probe — Step-1 (Recommendations) + Step-2 (Shape) vs the
-// full docs/design sub-file set. LOCAL prod build + the LOCAL fixture
+// AUDIT-18 re-audit probe — Step-1 (Recommendations) + the Shape surface vs
+// the docs/design sub-file set. LOCAL prod build + the LOCAL fixture
 // cmr7khgd50001vkhscvox8dgt (decider draft). Seeds build_session stages via
 // prisma (grouping → types with two authored quiz_types), walks the real
 // affordances, and restores the draft doc + Category rows byte-for-byte in
 // `finally`. Screenshots land in SHOT_DIR (default /tmp/s12-shots).
+//
+// UPDATED for FLOW-3 (shape retirement): the step rail is the 4-step
+// Recommendations → Questions → Results → Design map — Shape has no pill, and
+// a draft parked at stage "types" (legacy in-flight / the flow-2 AI path)
+// folds FORWARD onto Questions. The Shape page itself still renders for such
+// drafts and is asserted here as before.
 //
 // Run:  set -a; source .env; set +a; node e2e/s12-reaudit-verify.mjs
 import { chromium } from "@playwright/test";
@@ -87,11 +93,12 @@ try {
     check("connector aligned to dot center", geom.linkNearDotCenter);
   }
   check(
-    "5 steps, current = Recommendations",
-    (await page.locator(".qz-topbar-nav .qz-stepnav-pill").count()) === 5 &&
+    "4 steps (FLOW-3 — Shape retired), current = Recommendations",
+    (await page.locator(".qz-topbar-nav .qz-stepnav-pill").count()) === 4 &&
       ((await page.locator(".qz-topbar-nav .qz-stepnav-pill.is-current").textContent()) ?? "").includes(
         "Recommendations",
-      ),
+      ) &&
+      !((await page.locator(".qz-topbar-nav").textContent()) ?? "").includes("Shape"),
   );
 
   // AI tip — first visit renders EXPANDED (fresh context, no seen flag).
@@ -203,9 +210,9 @@ try {
       ((await page.locator(".qz-shape-ribbon").textContent()) ?? "").includes("Recommended"),
   );
   check(
-    "stepper: Recommendations done ✓, Shape current",
+    "stepper: Recommendations done ✓, stage 'types' folds FORWARD onto Questions (FLOW-3)",
     (await page.locator(".qz-topbar-nav .qz-stepnav-pill.is-done .qz-stepnav-check").count()) === 1 &&
-      ((await page.locator(".qz-topbar-nav .qz-stepnav-pill.is-current").textContent()) ?? "").includes("Shape"),
+      ((await page.locator(".qz-topbar-nav .qz-stepnav-pill.is-current").textContent()) ?? "").includes("Questions"),
   );
   const film = await page.locator(".qz-shape-film").first().evaluate((el) => {
     const r = el.getBoundingClientRect();

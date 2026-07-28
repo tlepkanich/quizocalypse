@@ -123,6 +123,10 @@ export function RecommendationBucketsStage({
   // selection's lifecycle instead of the generic AI tip.
   const goalFirst = data.goalFirst;
   const prepickBusy = goalFirst?.prepick === "picking";
+  // FLOW-3 — the template-first flow: the merchant already picked a card on
+  // /studio/templates, so Continue confirms straight into the build
+  // (flow3-confirm) with NO start pop-up; a quiet banner names the pick.
+  const templateFirst = data.templateFirst;
   const referencedSet = useMemo(() => new Set(data.referencedKeys), [data.referencedKeys]);
 
   // Optimistic overlay over the server's selection: id → card (added) | null
@@ -376,6 +380,19 @@ export function RecommendationBucketsStage({
           retrying={pendingIntent === "retry-gen"}
           onRetry={() => fetcher.submit({ intent: "retry-gen" }, { method: "post" })}
         />
+      ) : templateFirst ? (
+        <div className="qz-rb-banner is-applied qz-gf-banner" role="status">
+          <span className="qz-rb-banner-icon" aria-hidden><Check size={17} strokeWidth={2.6} /></span>
+          <div className="qz-rb-banner-body">
+            <div className="qz-rb-banner-head">
+              <strong>Building from &ldquo;{templateFirst.name}&rdquo;</strong>
+            </div>
+            <p className="qz-dim" style={{ margin: 0, fontSize: 13 }}>
+              Refine what your quiz should recommend below, then generate your quiz — the
+              questions come pre-shaped by your pick.
+            </p>
+          </div>
+        </div>
       ) : applied ? (
         <div className="qz-rb-banner is-applied">
           <span className="qz-rb-banner-icon" aria-hidden><Check size={17} strokeWidth={2.6} /></span>
@@ -603,7 +620,7 @@ export function RecommendationBucketsStage({
             {count === 0 ? (
               <QzTooltip content="Add at least one recommendation to continue.">
                 <button type="button" className="qz-btn qz-btn-accent" disabled>
-                  {goalFirst ? "Generate my quiz →" : "Continue →"}
+                  {goalFirst || templateFirst ? "Generate my quiz →" : "Continue →"}
                 </button>
               </QzTooltip>
             ) : (
@@ -613,21 +630,24 @@ export function RecommendationBucketsStage({
                 onClick={() =>
                   goalFirst
                     ? fetcher.submit({ intent: "flow1-confirm" }, { method: "post" })
-                    : isDecider
-                      ? setInterceptOpen(true)
-                      : fetcher.submit({ intent: "continue-buckets" }, { method: "post" })
+                    : templateFirst
+                      ? fetcher.submit({ intent: "flow3-confirm" }, { method: "post" })
+                      : isDecider
+                        ? setInterceptOpen(true)
+                        : fetcher.submit({ intent: "continue-buckets" }, { method: "post" })
                 }
                 disabled={
                   continuing ||
                   prepickBusy ||
                   pendingIntent === "flow1-confirm" ||
+                  pendingIntent === "flow3-confirm" ||
                   pendingIntent === "shape-goal-build" ||
                   pendingIntent === "manual-build"
                 }
               >
-                {continuing || pendingIntent === "flow1-confirm"
+                {continuing || pendingIntent === "flow1-confirm" || pendingIntent === "flow3-confirm"
                   ? "Saving…"
-                  : goalFirst
+                  : goalFirst || templateFirst
                     ? "Generate my quiz →"
                     : "Continue →"}
               </button>

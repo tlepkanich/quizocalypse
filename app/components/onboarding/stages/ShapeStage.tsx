@@ -277,9 +277,11 @@ export function ShapeStage({
 
       {/* Saved templates — legacy drafts seed the battle card ("configuring");
           decider drafts (O-3, owner-approved 2026-07-03) kick the early
-          question build directly and land in Questions & Logic. */}
+          question build directly and land in Questions & Logic. FLOW-3 — the
+          PORT-10 industry starter rail relocated to /studio/templates; only
+          the shop's own saved rows remain here for in-flight drafts. */}
       <SavedTemplatesRow
-        templates={data.savedTemplates}
+        templates={data.savedTemplates.filter((t) => t.scope !== "starter")}
         fetcher={fetcher}
         pendingIntent={pendingIntent}
         isDecider={isDecider}
@@ -455,8 +457,10 @@ function DeciderShapeStage({
             </span>
             <span className="qz-shape-oarr" aria-hidden>→</span>
           </button>
+          {/* FLOW-3 — the PORT-10 starter rail relocated to /studio/templates;
+              only the shop's own saved rows remain here. */}
           <SavedTemplatesRow
-            templates={data.savedTemplates}
+            templates={data.savedTemplates.filter((t) => t.scope !== "starter")}
             fetcher={fetcher}
             pendingIntent={pendingIntent}
             isDecider={isDecider}

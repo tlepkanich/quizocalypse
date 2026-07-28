@@ -66,6 +66,10 @@ export interface FunnelData {
     rationale?: string;
     question_length?: number;
   } | null;
+  // FLOW-3 — the template-first pick marker (+ the picked card's name). null
+  // until a card is picked on /studio/templates; presence changes the recs
+  // surface (template banner, Continue → flow3-confirm, no start pop-up).
+  templateFirst: { picked: "candidate" | "template"; name: string } | null;
   productGroups: Array<{ id: string; name: string; products: Array<{ id: string; title: string }> }>;
   collections: Array<{ collectionId: string; title: string }>;
   // PORT-10 — shop-saved templates first, then the global industry "starter"
@@ -157,15 +161,16 @@ export const OOS_LABEL: Record<RecDefaults["oos_behavior"], string> = {
 
 // The funnel's visible step order — shared by the top-bar step pills AND the
 // Step-N-of-M stepper inside each stage, so the "of N" count can't drift.
-// The re-sequenced visible order: Buckets → Shape → Questions → Rec Page → Design.
-// Goal is folded INTO Shape (the "write your goal" card); the early question build
-// runs right after Shape and lands on Questions; Design's Continue opens the main
-// builder directly (Overview + Generate are retired from the flow).
+// FLOW-3 (funnel-reconfig) — Shape is RETIRED from the visible map: every flow
+// resolves "what type of quiz" BEFORE the builder (the goal/template front
+// doors), so the rail is the 4-step Recommendations → Questions → Results →
+// Design. Drafts still parked at a shape-family stage (legacy in-flight + the
+// transient typing/templating AI passes) fold FORWARD onto Questions — see
+// visibleStageKey in Step1Funnel.tsx and app/lib/funnelStages.ts.
 // Step-1 spec §1 — "bucket" is dead in merchant UI: Step 1 is "Recommendations"
-// and Step 4 is the canonical short label "Results" so the shared chrome fits.
+// and the Results step keeps its canonical short label.
 export const FUNNEL_STAGES: Array<{ key: string; label: string }> = [
   { key: "grouping", label: "Recommendations" },
-  { key: "types", label: "Shape" },
   { key: "question_builder", label: "Questions" },
   { key: "rec_page", label: "Results" },
   { key: "design", label: "Design" },

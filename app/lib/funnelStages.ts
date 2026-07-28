@@ -1,25 +1,23 @@
-// The canonical, ordered, merchant-visible steps of the create-a-quiz funnel
-// (the re-sequenced flow: Recommendations → Shape Your Quiz → Question Builder →
-// Results → Design → the builder).
+// The canonical, ordered, merchant-visible steps of the create-a-quiz funnel.
+// FLOW-3 (funnel-reconfig) — SHAPE IS RETIRED: every flow now resolves "what
+// type of quiz" BEFORE the builder (the Write-Your-Goal and Generate-Quiz-
+// Templates front doors, or the recs pop-up), so the visible map is the 4-step
+// Recommendations → Questions → Results → Design.
 //
 // Step-1 spec (quiz-step1-recommendations-spec §1): "bucket" never appears in
-// merchant-facing UI — Step 1 is "Recommendations", and Step 4 is the compact
-// canonical label "Results" so the shared chrome remains readable.
+// merchant-facing UI — Step 1 is "Recommendations", and the Results step keeps
+// the compact canonical label "Results" so the shared chrome remains readable.
 //
 // Single source of truth for the progress indicator, the "Step N of M" label,
-// and Back/Continue navigation. Transient AI-in-flight stages (typing /
-// templating) and the legacy Step-2 selection stages map onto their owning
-// VISIBLE step, so an in-flight draft mid-old-flow still resolves to a sensible
-// position instead of falling off the progress bar.
-//
-// NOTE: the merchant goal is folded INTO Shape ("write your goal"), and Design's
-// Continue opens the main builder directly — the legacy Overview + Generate steps
-// are retired from the flow (the build runs right after Shape). The builder is
-// NOT itself a funnel step.
+// and Back/Continue navigation. PARSE COMPATIBILITY: every retired/legacy/
+// transient stage value stays mapped (an in-flight draft parked at any of them
+// must never 500 or fall off the bar) — the shape-family stages route FORWARD
+// onto Questions, the step their flows land on. This also retires FLOW-1's
+// known cosmetic (the rail highlighting Shape during the headless typing/
+// templating passes): those passes now honestly show Questions building.
 
 export const FUNNEL_STEPS = [
   { stage: "grouping", label: "Recommendations", short: "Recommendations" },
-  { stage: "shape", label: "Shape Your Quiz", short: "Shape" },
   { stage: "question_builder", label: "Question Builder", short: "Questions" },
   { stage: "rec_page", label: "Results", short: "Results" },
   { stage: "design", label: "Design", short: "Design" },
@@ -31,19 +29,21 @@ export type FunnelStep = (typeof FUNNEL_STEPS)[number]["stage"];
 const STAGE_TO_STEP: Record<string, FunnelStep> = {
   // visible steps (identity)
   grouping: "grouping",
-  shape: "shape",
   question_builder: "question_builder",
   rec_page: "rec_page",
   design: "design",
-  // `goal` folds into Shape (the spec's Card 3 "Write your goal").
-  goal: "shape",
-  // transient AI-in-flight + legacy Step-2 selection stages live under Shape.
-  typing: "shape",
-  types: "shape",
-  templating: "shape",
-  configuring: "shape",
-  templates: "shape",
-  // legacy terminal stages (Overview/Generate retired) → Design, the new last
+  // The RETIRED Shape family — the legacy picker stages ("shape"/"types"/
+  // "goal"/"templates"/"configuring") and the transient AI-in-flight passes
+  // ("typing"/"templating") all route FORWARD onto Questions: their flows'
+  // next (and now only) visible destination.
+  shape: "question_builder",
+  goal: "question_builder",
+  typing: "question_builder",
+  types: "question_builder",
+  templating: "question_builder",
+  configuring: "question_builder",
+  templates: "question_builder",
+  // legacy terminal stages (Overview/Generate retired) → Design, the last
   // visible step, so an in-flight draft parked there still resolves on the bar.
   overview: "design",
   generate: "design",

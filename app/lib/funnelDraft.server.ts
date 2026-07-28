@@ -121,6 +121,34 @@ export async function claimGoalFirstDraft(shopId: string): Promise<string> {
   return seedStep1Draft(shopId);
 }
 
+// FLOW-3 — claim a draft for the "Generate Quiz Templates" front door
+// (/studio/templates). Same posture as claimGoalFirstDraft: claim the resumed
+// draft only when overwriting it is safe — parked at the recs step with nothing
+// built, and either untouched (no goal yet — a pristine seed) or itself a
+// template-first draft (the merchant returning to browse candidates resumes
+// their own attempt). Goal-first drafts and anything mid-flow stay untouched;
+// a fresh draft is seeded instead.
+export async function claimTemplateFirstDraft(shopId: string): Promise<string> {
+  const id = await findOrCreateStep1Draft(shopId);
+  const quiz = await prisma.quiz.findUnique({
+    where: { id },
+    select: { draftJson: true },
+  });
+  const parsed = quiz ? Quiz.safeParse(quiz.draftJson) : null;
+  if (parsed?.success) {
+    const session = parsed.data.build_session;
+    const stage = session?.stage ?? "grouping";
+    const claimable =
+      parsed.data.logic_model === "decider" &&
+      stage === "grouping" &&
+      session?.built !== true &&
+      !session?.goal_first &&
+      (!session?.goal?.goal_text || session?.template_first !== undefined);
+    if (claimable) return id;
+  }
+  return seedStep1Draft(shopId);
+}
+
 // Load the owned draft + its parsed doc + build_session. Throws a 404 Response
 // when the quiz isn't this shop's (or doesn't parse).
 export async function loadFunnelDraft(shopId: string, quizId: string | undefined) {

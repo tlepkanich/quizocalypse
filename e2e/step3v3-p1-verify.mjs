@@ -151,8 +151,9 @@ try {
   ok("Step3Shell mounts (.qz-s3)", (await page.locator(".qz-s3").count()) === 1);
   ok("floating topbar renders", (await page.locator(".qz-topbar--floating").count()) === 1);
   ok("EXACTLY one topbar (standard bar suppressed)", (await page.locator(".qz-topbar").count()) === 1);
+  // FLOW-3 — the rail is the 4-step map (Shape retired from FUNNEL_STEPS).
   ok("step pills present, Questions current",
-    (await page.locator(".qz-stepnav-pill").count()) === 5 &&
+    (await page.locator(".qz-stepnav-pill").count()) === 4 &&
     (await page.locator(".qz-stepnav-pill.is-current").textContent())?.includes("Questions"));
   ok("health pill green 'Logic valid'", await page.locator(".qz-s3-healthpill.is-ok", { hasText: "Logic valid" }).isVisible());
   ok("Continue reads '◆ Continue to Logic'", await page.locator(".qz-topbar-right button", { hasText: "Continue to Logic" }).isVisible());

@@ -155,10 +155,13 @@ export default function StudioHome() {
             Turn browsers into buyers — build a guided quiz that recommends the right products.
           </p>
           {/* FLOW-1 — writing the goal is the primary entry: the AI pre-picks
-              products for it and builds the quiz around them. The existing
-              funnel stays as the secondary path (Flow 2 keeps today's flow). */}
-          <div className="qz-row" style={{ gap: 10 }}>
+              products for it and builds the quiz around them. FLOW-3 —
+              Generate Quiz Templates drafts 2-3 very different directions to
+              pick from. The existing funnel stays as the manual path (Flow 2
+              keeps today's flow). */}
+          <div className="qz-row" style={{ gap: 10, flexWrap: "wrap" }}>
             <Link to="/studio/goal" className="qz-btn qz-btn-primary">✎ Write your goal</Link>
+            <Link to="/studio/templates" className="qz-btn qz-btn-ghost">✦ Generate quiz templates</Link>
             <Link to="/studio/onboarding" className="qz-btn qz-btn-ghost">Create with AI</Link>
           </div>
         </div>

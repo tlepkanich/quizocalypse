@@ -836,6 +836,14 @@ export async function startQuestionBuild(
       logFor("step2").info({ quizId, ms: Date.now() - tBuild }, "question-build took");
       if (buildResult.degraded) {
         logFor("step2").warn({ quizId }, "question-build produced a degraded draft");
+        // FLOW-3 (probe-caught) — a DEGRADED build is a failure too: the
+        // goal/template-first flows (failMode blank_questions) must land the
+        // blank-Questions notice, never a Shape the merchant didn't choose.
+        // Every other caller keeps the Shape-error treatment byte-identically.
+        if (opts?.failMode === "blank_questions") {
+          await failToBlankQuestions(shopId, quizId);
+          return;
+        }
         await writeGenError(quizId, () =>
           BuildSession.parse({
             ...priorSession,
