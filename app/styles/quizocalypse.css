@@ -7500,21 +7500,19 @@ html[data-theme="dark"] {
   --qz-bt-pane: #17181C;
 }
 
-/* ── page framing: body backdrop + .wrap + the .app card ── */
+/* ── page framing — OWNER RULING 2026-07-25: the mock's grey backdrop +
+   floating app card were the PROTOTYPE's presentation wrapper, not app
+   chrome. The builder is full-bleed: edge-to-edge, full viewport height. ── */
 .qz-bt-backdrop {
   min-height: 100vh;
-  background: var(--qz-bt-backdrop);
-  padding: 16px 0 40px;
+  background: var(--qz-paper);
+  padding: 0;
 }
-.qz-bt-wrap { max-width: 1320px; margin: 0 auto; padding: 0 16px; }
+.qz-bt-wrap { max-width: none; margin: 0; padding: 0; }
 .qz-bt-wrap .qz-builder {
   background: var(--qz-paper);
-  border: 1px solid var(--qz-rule);
-  border-radius: 16px;
-  overflow: hidden;
-  box-shadow: 0 12px 40px rgba(120, 110, 150, .14);
   display: flex; flex-direction: column;
-  height: calc(100vh - 32px); max-height: 960px; min-width: 0;
+  height: 100vh; height: 100dvh; min-width: 0;
 }
 
 /* ── mock .top ── */
