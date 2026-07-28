@@ -4208,7 +4208,10 @@ textarea.qz-sm-inp { resize: vertical; min-height: 62px; line-height: 1.5; }
    tokensToCssVars) win; everything outside the bezel is admin tokens only.
    ════════════════════════════════════════════════════════════════════════════ */
 .qz-s3 { display: flex; flex-direction: column; gap: var(--qz-space-4); }
-.qz-s3-contentview { display: flex; flex-direction: column; gap: 12px; }
+/* AUDIT-23 — questions-simple page geometry: the mock's .wrap is a CENTERED
+   1040px column (996px of content after its 22px gutters), so the whole
+   panel — list AND phone — sits centered, never glued to the screen edge. */
+.qz-s3-contentview { display: flex; flex-direction: column; gap: 12px; max-width: 996px; width: 100%; margin: 0 auto; }
 .qz-s3-subhead--questions { padding: 0 2px; }
 .qz-s3-subhint { margin-left: auto; color: var(--qz-ink-4); font-size: 12px; }
 /* questions-full-page mock — one bordered panel: navigator column + a 9px
@@ -5461,7 +5464,9 @@ body[data-qz] .qz-s3-editable:focus-visible {
    (map left · sticky rules widget + fallback right) · map-card header v2
    (inline title · type chip · badges · role select · collapse) · the filter
    MATCHES cell + its popover editor · the capture terminal module. ── */
-.qz-s3-logicview { display: flex; flex-direction: column; gap: 12px; padding: 16px 20px 40px; }
+/* AUDIT-23 — overview-cards page geometry: the mock's .wrap is a CENTERED
+   1080px column (1036px of content after its 22px gutters). */
+.qz-s3-logicview { display: flex; flex-direction: column; gap: 12px; padding: 16px 20px 40px; max-width: 1076px; width: 100%; margin: 0 auto; }
 .qz-s3-subhead { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .qz-s3-subhead .qz-s3-viewtoggle { margin-right: 6px; }
 
@@ -7876,4 +7881,135 @@ html[data-theme="dark"] {
 .qz-dinline-card {
   border-radius: 20px; overflow: hidden; background: var(--qz-paper);
   box-shadow: 0 20px 54px -20px rgba(46, 39, 64, .30), 0 0 0 1px rgba(0, 0, 0, .03);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   AUDIT-23 — funnel Step-3 exact replicas (owner escalation):
+   ✎ Questions vs docs/design/questions/questions-simple.html and
+   ▦ Overview vs docs/design/questions/overview-cards.html. Every value below
+   is read off the mock CSS through the locked token map (#6D5AE6=--qz-accent,
+   #3C3489=--qz-accent-ink, #EDEBFC=--qz-accent-wash, #F3F1FD≈--qz-accent-tint,
+   #B6B0C8=--qz-ink-25, #5A5470=--qz-ink-3, #7C7791=--qz-ink-4, #E9E7EF=--qz-rule,
+   #F1EFF6=--qz-rule-2, #F2F1F5=--qz-cream-2, #158A5A=--qz-ok). APPENDED so the
+   cascade wins over the AUDIT-16/17/22 blocks above.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── ✎ Questions: the preview pane (mock .pv{padding:14px 0}) — the phone's
+   gutters come from the device scale (mock --s:.80 → 312px in the 340px
+   column), not pane padding. ── */
+.qz-qs-pv.qz-s3-canvas { padding: 14px 0 22px; }
+.qz-qs-pv .qz-s3-pvbar { width: auto; align-self: stretch; padding: 0 14px; }
+
+/* ── ✎ Questions: phone-screen geometry exact to mock .scr (topbar mb 18 ·
+   q-scr mb 20 · opts gap 11 · fnext mt 20). The scr flex gap is zeroed on
+   question screens and replaced with the mock's explicit margins. ── */
+.qz-s3-phone-screen[data-screen-kind="question"]:not(.is-alpine-art) .qz-s3-scr { gap: 0; }
+.qz-s3-phone-screen[data-screen-kind="question"]:not(.is-alpine-art) .qz-s3-screen-top {
+  min-height: 32px; margin-bottom: 18px;
+}
+.qz-s3-phone-screen[data-screen-kind="question"]:not(.is-alpine-art) .qz-s3-qbody { gap: 0; }
+.qz-s3-phone-screen[data-screen-kind="question"]:not(.is-alpine-art) .qz-s3-qbody .qz-s3-qtitle {
+  margin: 0 0 20px;
+}
+.qz-s3-phone-screen[data-screen-kind="question"]:not(.is-alpine-art) .qz-s3-subcap {
+  margin: -12px 0 12px;
+}
+/* Mock .opt — a WHITE brand card (b-card) on a hairline (b-line ≈ 12% ink). */
+.qz-s3-phone-screen:not(.is-alpine-art) .qz-s3-achip {
+  background: var(--qz-color-card, #fff);
+  border: 1px solid color-mix(in srgb, currentColor 12%, transparent);
+  border-radius: 14px;
+}
+.qz-s3-phone-screen:not(.is-alpine-art) .qz-s3-achip.is-hot {
+  border: 1.5px solid var(--qz-color-primary, currentColor);
+}
+.qz-s3-phone-screen[data-screen-kind="question"]:not(.is-alpine-art) .qz-s3-next {
+  border-radius: 13px;
+}
+/* Mock stepn — hidden when the walk stands on a non-question screen. */
+.qz-s3-kicker:empty { display: none; }
+
+/* ── ▦ Overview: page flow like the mock (no inner scroller — the PAGE
+   scrolls) and mock card rhythm (cards separated ONLY by the 22px inserter
+   rows, one leading inserter above the first card). ── */
+.qz-s3-logic { max-height: none; overflow: visible; padding: 0; }
+.qz-s3-secwrap { margin-top: 0; }
+
+/* ── ▦ Overview: the card is ACCENT-family everywhere (mock has no section
+   palette and no gold — the decider keeps the sibling-tab accent treatment). ── */
+.qz-s3-card {
+  --sec-color: var(--qz-accent);
+  --sec-wash: var(--qz-accent-wash);
+  box-shadow: 0 4px 14px color-mix(in srgb, var(--qz-ink) 6%, transparent);
+}
+.qz-s3-card:hover,
+.qz-s3-card.is-active {
+  box-shadow: 0 4px 14px color-mix(in srgb, var(--qz-ink) 6%, transparent);
+}
+.qz-s3-card::after { display: none; }
+
+/* mock .cnum — 25px circle, accent wash/ink; decider = solid accent (the ✎
+   list's is-deciding language; the mock itself draws every chip identically) */
+.qz-s3-card .qz-s3-numchip {
+  width: 25px; height: 25px; border-radius: var(--qz-radius-pill);
+  background: var(--qz-accent-wash); color: var(--qz-accent-ink);
+  font-size: 11.5px; font-weight: 700; box-shadow: none;
+}
+.qz-s3-card .qz-s3-numchip.is-decider { background: var(--qz-accent); color: var(--qz-paper); }
+
+/* mock .mv/.mvb — always-visible 22×17 bordered squares, svg chevrons */
+.qz-s3-card .qz-s3-mv { opacity: 1; }
+.qz-s3-card .qz-s3-mvb { width: 22px; height: 17px; border-radius: 5px; }
+.qz-s3-card .qz-s3-mvb svg { width: 11px; height: 11px; }
+
+/* mock .v2q — the title pulls into its own gutter on both sides */
+.qz-s3-card .qz-s3-sec-titleinput { margin: -5px -8px; }
+
+/* mock .tsel — the type control reads as a full-width bordered select in the
+   238px right column (the popover keeps every capability) */
+.qz-s3-card-type .qz-s3-typetagwrap { display: block; position: relative; width: 100%; }
+.qz-s3-card-type .qz-s3-typetagbtn {
+  width: 100%; justify-content: space-between;
+  border-radius: 9px; padding: 9px 11px;
+  font-size: 12.5px; font-weight: 400; color: var(--qz-ink);
+  box-shadow: none;
+}
+.qz-s3-card-type .qz-s3-typetagbtn .qz-s3-tt-type { color: var(--qz-ink); font-weight: 400; }
+.qz-s3-card-type .qz-s3-typepop { left: 0; right: auto; }
+
+/* mock .alist — answer chips/rows in the accent family, hover-reveal ✕ in a
+   22px rounded hit target */
+.qz-s3-card .qz-s3-aletter { font-size: 11px; font-weight: 600; }
+.qz-s3-card .qz-s3-adel {
+  width: 22px; height: 22px; border-radius: 6px;
+  display: grid; place-items: center; padding: 0;
+}
+.qz-s3-card .qz-s3-adel:not(:disabled):hover {
+  background: var(--qz-cream-2); color: var(--qz-ink-3);
+}
+/* the maps-to select is a plain bordered control (no gold state) */
+.qz-s3-card .qz-s3-target.is-mapped {
+  color: var(--qz-ink); border-color: var(--qz-rule); background: var(--qz-paper);
+}
+/* mock has no hairline above the ＋ Add answer foot */
+.qz-s3-card .qz-s3-sec-foot { border-top: none; }
+
+/* mock .v2set — the settings column; steppers at the mock's 30px metrics,
+   hugging their content (mock .stp width:max-content) */
+.qz-s3-card-set .qz-s3-stepper { justify-self: start; width: max-content; }
+.qz-s3-card-set .qz-s3-stepper button { width: 30px; height: 30px; font-size: 16px; }
+.qz-s3-card-set .qz-s3-stepper-val { min-width: 30px; font-size: 13px; }
+.qz-s3-card .qz-s3-rolesel.is-decider {
+  border-color: var(--qz-rule); background: var(--qz-paper);
+  color: var(--qz-accent-ink); font-weight: 600;
+}
+
+/* ── AUDIT-23 round-2 closures ── */
+/* mock: the termini rows sit TIGHT under the question list (the list never
+   grows to push them to the panel foot) */
+.qz-qs-list { flex: 0 0 auto; }
+/* mock .back — a white brand-card pill on the b-line hairline */
+.qz-s3-phone-screen:not(.is-alpine-art) .qz-s3-backpill {
+  background: var(--qz-color-card, #fff);
+  border-color: color-mix(in srgb, currentColor 14%, transparent);
 }

@@ -1,4 +1,3 @@
-import type { CSSProperties } from "react";
 import type { Quiz as QuizDoc } from "../../../../lib/quizSchema";
 import { isFreeformType } from "../../../../lib/quizSchema";
 import type { BuilderCategory } from "../../../builder/stepProps";
@@ -8,9 +7,10 @@ import { filterAnswerMatchCount } from "../../../../lib/filterMatching";
 import { updateNodeData } from "../../../studio/studioDoc";
 import type { OrderedQuestion, SkipOption } from "../../../../lib/questionOrder";
 import type { RuleRef } from "../ruleHomes";
-import { sectionColorVars, type SectionColorKey } from "../sectionPalette";
+import type { SectionColorKey } from "../sectionPalette";
 import { AnswerTableRow } from "./AnswerTableRow";
 import { TypeChipSelector } from "../content/TypeChipSelector";
+import { IconUp, IconDown } from "../icons";
 
 /* quiz-step3 v3 §5.2 → QZY-2 (quiz-logic dev-handoff v1.2 §3/§4 + owner
    supplement) — the MAP CARD. Collapsed is the default scannable state:
@@ -116,7 +116,11 @@ export function QuestionSection({
   const { node, qIndex } = question;
   const freeform = isFreeformType(node.data.question_type);
   const multi = node.data.question_type === "multi_select";
-  const vars = sectionColorVars(colorKey);
+  // AUDIT-23 (overview-cards mock) — the card is accent-family everywhere:
+  // the per-section palette is NOT inlined any more (the .qz-s3-card CSS
+  // supplies --sec-color/--sec-wash = accent); colorKey stays accepted so
+  // LogicScroll's palette machinery keeps compiling.
+  void colorKey;
   const minAnswers = freeform ? 1 : 2;
   const role: Role = isDecider ? "decides" : node.data.role === "filter" ? "filter" : "qualifier";
 
@@ -182,7 +186,6 @@ export function QuestionSection({
   return (
     <section
       className={`qz-s3-sec qz-s3-card${isDecider ? " is-decider" : ""}${active ? " is-active" : ""}${flashWarn ? " is-flashwarn" : ""}`}
-      style={{ "--sec-color": vars.color, "--sec-wash": vars.wash } as CSSProperties}
       ref={(el) => registerSection(node.id, el)}
       data-node-id={node.id}
       aria-label={`Question ${qIndex} logic`}
@@ -199,7 +202,7 @@ export function QuestionSection({
               aria-label="Move question up"
               onClick={() => onMove(-1)}
             >
-              ↑
+              <IconUp />
             </button>
             <button
               type="button"
@@ -208,7 +211,7 @@ export function QuestionSection({
               aria-label="Move question down"
               onClick={() => onMove(1)}
             >
-              ↓
+              <IconDown />
             </button>
           </span>
           <span className={`qz-s3-numchip${isDecider ? " is-decider" : ""}`}>{qIndex}</span>

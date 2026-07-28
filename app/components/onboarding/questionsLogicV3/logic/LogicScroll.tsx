@@ -314,9 +314,22 @@ export const LogicScroll = forwardRef<
     [doc, onCommit],
   );
 
+  // AUDIT-23 (overview-cards mock) — the LEADING ＋ inserter above the first
+  // card: insert ABOVE the first question (still anchored on a movable step).
+  const addAboveFirst = useCallback(() => {
+    const refId = questions[0]?.node.id;
+    if (!refId) return;
+    const before = new Set(doc.nodes.map((n) => n.id));
+    const next = insertQuestionRelative(doc, refId, "above");
+    const newId = next.nodes.find((n) => !before.has(n.id))?.id ?? null;
+    onCommit(next);
+    if (newId) setPendingScroll({ id: newId, flashWarn: false });
+  }, [doc, questions, onCommit]);
+
   return (
     <div className="qz-s3-logicbody">
       <div className="qz-s3-logic" ref={rootRef} aria-label="Logic map">
+        {questions.length > 0 ? <AddQuestionDivider onAdd={addAboveFirst} /> : null}
         {questions.map((q, qi) => (
           <div key={q.node.id} className="qz-s3-secwrap">
             <QuestionSection

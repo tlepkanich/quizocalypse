@@ -18,6 +18,16 @@
 // pv-bar (Mobile/Desktop + Expand) · TRUE 390×844 frame scaled ≤1 via
 // transform · READ-ONLY phone question surface (no editables/grips/kebabs) ·
 // desktop 1180 frame w/ chrome · Expand ≥1:1 + Esc · zero page errors.
+//
+// AUDIT-23 additions (exact-replica escalation): the ✎ panel is the mock's
+// CENTERED 996px column (equal side margins — the builder/phone example can
+// never glue to the screen edge again) · the phone sits at the mock's fixed
+// mobile scale (--s .80 in the 340px pane, 14px gutters, holder centered) ·
+// the step counter counts QUESTIONS only ("1/3") · option cards are white
+// brand cards · termini sit tight under the list · ▦ Overview: centered
+// ≤1036 cards column, page-flow (no inner scroller), accent-family cards
+// (decider numchip = solid accent, NO gold), full-width type control in the
+// 238px right column, N+1 inserters incl. the leading one.
 // Screenshots → /tmp/qs-shots.
 import { chromium } from "playwright";
 import { PrismaClient } from "@prisma/client";
@@ -184,6 +194,40 @@ try {
   // 2 ── split geometry: 340px preview column
   const pvW = await page.locator(".qz-qs-pv").evaluate((el) => el.getBoundingClientRect().width);
   ok("preview column is 340px", Math.abs(pvW - 340) < 2, `${pvW}`);
+
+  // 2b ── AUDIT-23: the mock's centered 996px page column (questions-simple
+  // .wrap) — the panel must be centered with equal side margins.
+  const panelGeo = await page.locator(".qz-qs-panel").evaluate((el) => {
+    const r = el.getBoundingClientRect();
+    return { w: r.width, left: r.left, right: window.innerWidth - r.right };
+  });
+  ok("panel is the mock's 996px column", Math.abs(panelGeo.w - 996) < 3, `${panelGeo.w}`);
+  ok("panel is CENTERED (equal side margins)",
+    Math.abs(panelGeo.left - panelGeo.right) < 4, `L${panelGeo.left} R${panelGeo.right}`);
+  // The device holds the mock's fixed mobile scale (.80 → 312px in the 340
+  // pane) and sits centered in the pane.
+  const holderGeo = await page.locator(".qz-s3-device:not(.is-expand) .qz-s3-holder").evaluate((el) => {
+    const r = el.getBoundingClientRect();
+    const pv = el.closest(".qz-qs-pv").getBoundingClientRect();
+    return { w: r.width, lgap: r.left - pv.left, rgap: pv.right - r.right };
+  });
+  ok("phone at the mock scale (holder ≈312px = 390×.80)",
+    Math.abs(holderGeo.w - 312) < 3, `${holderGeo.w}`);
+  ok("phone centered in the pane (equal gutters)",
+    Math.abs(holderGeo.lgap - holderGeo.rgap) < 3, `L${holderGeo.lgap} R${holderGeo.rgap}`);
+  // Mock stepn — questions-only counting ("1/3", never the walk's "1/5").
+  ok('step counter counts questions only ("1/3")',
+    (await page.locator(".qz-s3-kicker").textContent())?.trim() === "1/3");
+  // Mock .opt — a white brand card.
+  ok("option cards are white brand cards",
+    await page.locator(".qz-s3-achip").first().evaluate(
+      (el) => getComputedStyle(el).backgroundColor === "rgb(255, 255, 255)"));
+  // Mock — the termini sit TIGHT under the list (never pushed to the foot).
+  ok("termini sit tight under the question list",
+    await page.locator(".qz-qs-term").first().evaluate((el) => {
+      const list = document.querySelector(".qz-qs-list").getBoundingClientRect();
+      return Math.abs(el.getBoundingClientRect().top - list.bottom) < 8;
+    }));
 
   // 3 ── compact rows: number circles, deciding accent, mono meta, ONE expansion
   ok("3 compact question rows", (await page.locator(".qz-qs-q").count()) === 3);
@@ -398,6 +442,44 @@ try {
   const afterDel = await draftDoc();
   ok("delete persisted (3 question nodes, flow re-stitched)",
     (afterDel?.nodes ?? []).filter((n) => n.type === "question").length === 3);
+
+  // 17 ── AUDIT-23: ▦ Overview exact to overview-cards.html
+  await page.locator(".qz-s3-viewtoggle button", { hasText: "Overview" }).first().click();
+  await page.waitForTimeout(600);
+  ok("Overview renders one card per question", (await page.locator(".qz-s3-card").count()) === 3);
+  const lvGeo = await page.locator(".qz-s3-logicview").evaluate((el) => {
+    const r = el.getBoundingClientRect();
+    return { w: r.width, left: r.left, right: window.innerWidth - r.right };
+  });
+  ok("Overview column is the mock's centered ≤1076px wrap",
+    lvGeo.w <= 1078 && Math.abs(lvGeo.left - lvGeo.right) < 4,
+    `w${lvGeo.w} L${lvGeo.left} R${lvGeo.right}`);
+  ok("Overview flows on the PAGE (no inner scroller)",
+    await page.locator(".qz-s3-logic").evaluate((el) => getComputedStyle(el).maxHeight === "none"));
+  const chipBgs = await page.locator(".qz-s3-card .qz-s3-numchip").evaluateAll(
+    (els) => els.map((el) => getComputedStyle(el).backgroundColor));
+  ok("decider numchip is SOLID ACCENT (no gold anywhere)",
+    chipBgs.includes("rgb(109, 90, 230)") && !chipBgs.some((c) => c === "rgb(140, 109, 31)"),
+    chipBgs.join(" | "));
+  ok("answer chips are accent-wash (mock .alist counters)",
+    await page.locator(".qz-s3-card .qz-s3-aletter").first().evaluate(
+      (el) => getComputedStyle(el).backgroundColor === "rgb(237, 235, 252)"));
+  const typeW = await page.locator(".qz-s3-card-type .qz-s3-typetagbtn").first()
+    .evaluate((el) => el.getBoundingClientRect().width);
+  ok("type control fills the mock's 238px right column", typeW > 200, `${typeW}`);
+  ok("N+1 inserters (incl. the leading one above card 1)",
+    (await page.locator(".qz-s3-divider").count()) === 4);
+  const mvGeo = await page.locator(".qz-s3-card .qz-s3-mvb").first().evaluate((el) => {
+    const r = el.getBoundingClientRect();
+    return { w: r.width, h: r.height, o: getComputedStyle(el.parentElement).opacity };
+  });
+  ok("movers are the mock's always-visible 22×17 squares",
+    Math.abs(mvGeo.w - 22) < 2 && Math.abs(mvGeo.h - 17) < 2 && mvGeo.o === "1",
+    JSON.stringify(mvGeo));
+  await page.screenshot({ path: `${SHOTS}/6-overview-cards.png`, fullPage: true });
+  // back to ✎ so the trailing checks (if any grow later) see the Content view
+  await page.locator(".qz-s3-viewtoggle button", { hasText: "Questions" }).first().click();
+  await page.waitForTimeout(300);
 
   ok("zero page errors", out.pageErrors.length === 0, out.pageErrors.join(" | "));
   await browser.close();

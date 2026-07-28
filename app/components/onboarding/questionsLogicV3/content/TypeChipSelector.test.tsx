@@ -100,7 +100,7 @@ const PICK_LABEL: Record<string, string> = {
   single_select: "Single select",
   multi_select: "Multi-select",
   rating5: "Five-point scale",
-  rating: "Rating",
+  rating: "Scale", // AUDIT-23 — the mocks' vocabulary
 };
 
 function openTypePop(): HTMLElement {
@@ -151,7 +151,7 @@ describe("TypeChipSelector — decider BLOCK dialog", () => {
     const d = doc();
     mount(createElement(TypeChipSelector, { doc: d, node: questionNode(d, "q2"), onCommit: vi.fn() }));
     const labels = typeRadios().map((b) => b.textContent?.trim());
-    expect(labels).toEqual(["Single select", "Multi-select", "Five-point scale", "Rating"]);
+    expect(labels).toEqual(["Single select", "Multi-select", "Five-point scale", "Scale"]);
   });
 
   it("decider → Five-point scale commits DIRECTLY, keeps the role + answers, sets the 1–5 preset", () => {

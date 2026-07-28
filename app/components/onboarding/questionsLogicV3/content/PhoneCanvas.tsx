@@ -76,7 +76,13 @@ export function PhoneCanvas({
     return ids;
   }, [questions, captureOn]);
   const posIndex = Math.max(0, positions.indexOf(activeId));
-  const progress = positions.length > 1 ? (posIndex + 1) / positions.length : 1;
+  // AUDIT-23 — the mock's stepn/fbar count QUESTIONS only ("1/6"): the
+  // counter hides on the capture/reveal screens (which the mock doesn't
+  // draw a top bar for) and the progress bar reads full there.
+  const qIndex = questions.findIndex((q) => q.node.id === activeId);
+  const stepLabel = qIndex >= 0 ? `${qIndex + 1}/${questions.length}` : "";
+  const progress =
+    qIndex >= 0 && questions.length > 0 ? (qIndex + 1) / questions.length : 1;
 
   const position: ScreenPosition =
     activeId === CAPTURE_ID
@@ -117,10 +123,16 @@ export function PhoneCanvas({
     const dev = deviceRef.current;
     if (!stage || !dev) return;
     const fit = () => {
+      // AUDIT-23 — the width fit leaves the mock's gutters (the 340px pane
+      // holds a 312px device: --s .80), so 28px stays around the frame. The
+      // MOBILE device keeps the mock's fixed-scale behavior (the page
+      // scrolls, exactly like the mock at short viewports); only the wide
+      // desktop frame still caps by viewport height.
       const maxH = Math.max(320, window.innerHeight - 210);
+      const hFit = device === "desktop" ? maxH / dims.vh : 1;
       const s = Math.max(
         0.2,
-        Math.min((stage.clientWidth - 8) / dims.vw, maxH / dims.vh, 1),
+        Math.min((stage.clientWidth - 28) / dims.vw, hFit, 1),
       );
       dev.style.setProperty("--s", s.toFixed(3));
     };
@@ -132,7 +144,7 @@ export function PhoneCanvas({
       ro.disconnect();
       window.removeEventListener("resize", fit);
     };
-  }, [dims]);
+  }, [dims, device]);
 
   // Scroll resets when the previewed step changes, not on every keystroke.
   useEffect(() => {
@@ -207,7 +219,7 @@ export function PhoneCanvas({
         <PhoneScreen
           doc={doc}
           position={position}
-          stepLabel={`${posIndex + 1}/${positions.length}`}
+          stepLabel={stepLabel}
           progress={progress}
           canBack={posIndex > 0}
           onBack={() => onNavigate(positions[posIndex - 1] ?? positions[0]!)}

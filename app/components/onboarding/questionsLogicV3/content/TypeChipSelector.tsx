@@ -29,7 +29,8 @@ const CHIP_TYPE_OPTIONS: { value: PickValue; label: string }[] = [
   { value: "single_select", label: "Single select" },
   { value: "multi_select", label: "Multi-select" },
   { value: "rating5", label: "Five-point scale" },
-  { value: "rating", label: "Rating" },
+  // AUDIT-23 — the mocks' vocabulary: the free-count rating type is "Scale".
+  { value: "rating", label: "Scale" },
 ];
 
 /** Labels for stored types outside the quick picks (so the current value renders). */
@@ -42,7 +43,7 @@ const TYPE_CHIP_LABEL: Record<string, string> = {
   searchable: "Searchable list",
   image_picker: "Image grid",
   dropdown: "Dropdown",
-  rating: "Rating",
+  rating: "Scale",
   swatch: "Swatch picker",
   numeric: "Number input",
   date: "Date input",
