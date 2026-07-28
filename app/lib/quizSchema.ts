@@ -1509,7 +1509,7 @@ export const BuildSession = z.object({
   // timed guess. OPTIONAL WITHOUT DEFAULT (the translations-field discipline):
   // absent round-trips absent, so old in-flight sessions and every non-gen
   // write stay byte-identical. Cleared (undefined) on stage flips.
-  gen_progress: z.enum(["research", "types", "templates", "questions"]).optional(),
+  gen_progress: z.enum(["research", "types", "templates", "questions", "products"]).optional(),
   // True once the question build has run (re-architected flow: build happens
   // EARLY, at the Question Builder step). The Generate step reads this to decide
   // whether to OPEN the already-built draft (non-AI finalize) or run a real build
@@ -1517,6 +1517,25 @@ export const BuildSession = z.object({
   // Skipping the rebuild is critical — re-running applyQuestionFlow strips the
   // sb_ question nodes + reassigns answer ids, destroying every editing-step edit.
   built: z.boolean().optional(),
+  // FLOW-1 (funnel-reconfig Flow 1) — the "Write Your Goal" goal-first flow
+  // marker + the AI product pre-pick's lifecycle. Present ONLY on drafts created
+  // through the /studio/goal front door (its presence IS the flow marker: the
+  // recs surface skips the start pop-up and confirms via flow1-confirm, and the
+  // Shape middle passes run headless). OPTIONAL WITHOUT DEFAULT — absent
+  // round-trips absent, so legacy docs and every other flow stay byte-identical.
+  //  • prepick: the detached product pre-pick job's state ("picking" while the
+  //    AI chooses buckets for the goal; "ready" once persisted as Category rows;
+  //    "failed" surfaces `error` with the manual browser as the way forward).
+  //  • question_length: the goal brief's chosen length — pins the auto-picked
+  //    type's question_range at flow1-confirm (the shape-goal-build precedent).
+  goal_first: z
+    .object({
+      prepick: z.enum(["picking", "ready", "failed"]),
+      error: z.string().optional(),
+      rationale: z.string().optional(),
+      question_length: z.number().int().min(3).max(7).optional(),
+    })
+    .optional(),
   // Recommendation Buckets (Step 1 rework) — the 3-tab catalog browser's UI state
   // that must survive a reload: which tab is active (the bucket type the quiz is
   // locked to) and whether the AI-suggestion banner has been dismissed this draft.

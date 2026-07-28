@@ -117,6 +117,12 @@ export function RecommendationBucketsStage({
   // Dismissal returns here unchanged; it re-opens on the next Continue.
   const [interceptOpen, setInterceptOpen] = useState(false);
   const isDecider = data.logicModel === "decider";
+  // FLOW-1 — the goal-first flow: the merchant already wrote their goal at the
+  // front door, so Continue confirms straight into the headless build
+  // (flow1-confirm) with NO start pop-up; the pre-pick banner narrates the AI
+  // selection's lifecycle instead of the generic AI tip.
+  const goalFirst = data.goalFirst;
+  const prepickBusy = goalFirst?.prepick === "picking";
   const referencedSet = useMemo(() => new Set(data.referencedKeys), [data.referencedKeys]);
 
   // Optimistic overlay over the server's selection: id → card (added) | null
@@ -359,8 +365,18 @@ export function RecommendationBucketsStage({
         </h2>
       </div>
 
-      {/* §4 — AI recommendation banner (an action, not advice) */}
-      {applied ? (
+      {/* §4 — AI recommendation banner (an action, not advice). FLOW-1 drafts
+          swap it for the goal pre-pick's lifecycle banner. */}
+      {goalFirst ? (
+        <GoalFirstBanner
+          state={goalFirst}
+          stalled={data.genStalled}
+          goalText={data.goal?.goal_text ?? ""}
+          count={count}
+          retrying={pendingIntent === "retry-gen"}
+          onRetry={() => fetcher.submit({ intent: "retry-gen" }, { method: "post" })}
+        />
+      ) : applied ? (
         <div className="qz-rb-banner is-applied">
           <span className="qz-rb-banner-icon" aria-hidden><Check size={17} strokeWidth={2.6} /></span>
           <div className="qz-rb-banner-body">
@@ -587,7 +603,7 @@ export function RecommendationBucketsStage({
             {count === 0 ? (
               <QzTooltip content="Add at least one recommendation to continue.">
                 <button type="button" className="qz-btn qz-btn-accent" disabled>
-                  Continue →
+                  {goalFirst ? "Generate my quiz →" : "Continue →"}
                 </button>
               </QzTooltip>
             ) : (
@@ -595,13 +611,25 @@ export function RecommendationBucketsStage({
                 type="button"
                 className="qz-btn qz-btn-accent"
                 onClick={() =>
-                  isDecider
-                    ? setInterceptOpen(true)
-                    : fetcher.submit({ intent: "continue-buckets" }, { method: "post" })
+                  goalFirst
+                    ? fetcher.submit({ intent: "flow1-confirm" }, { method: "post" })
+                    : isDecider
+                      ? setInterceptOpen(true)
+                      : fetcher.submit({ intent: "continue-buckets" }, { method: "post" })
                 }
-                disabled={continuing || pendingIntent === "shape-goal-build" || pendingIntent === "manual-build"}
+                disabled={
+                  continuing ||
+                  prepickBusy ||
+                  pendingIntent === "flow1-confirm" ||
+                  pendingIntent === "shape-goal-build" ||
+                  pendingIntent === "manual-build"
+                }
               >
-                {continuing ? "Saving…" : "Continue →"}
+                {continuing || pendingIntent === "flow1-confirm"
+                  ? "Saving…"
+                  : goalFirst
+                    ? "Generate my quiz →"
+                    : "Continue →"}
               </button>
             )}
           </div>
@@ -1220,6 +1248,109 @@ function ResultsPreviewDrawer({
 // §4 — the AI recommendation banner: an ACTION, not advice. "Use this" applies
 // the concrete recommended set in one click; "Not now" dismisses for the
 // session. The why-line carries real catalog numbers.
+// FLOW-1 — the goal pre-pick's lifecycle banner (replaces the generic AI tip on
+// goal-first drafts). Four states: picking (the detached job runs; the page
+// polls), stalled (the shared 200s backstop → Retry), ready (the pick landed —
+// refine + continue), failed (four-outcome copy + Retry; the browser below is
+// always the manual way forward).
+function GoalFirstBanner({
+  state,
+  stalled,
+  goalText,
+  count,
+  retrying,
+  onRetry,
+}: {
+  state: NonNullable<FunnelData["goalFirst"]>;
+  stalled: boolean;
+  goalText: string;
+  count: number;
+  retrying: boolean;
+  onRetry: () => void;
+}) {
+  const goalLine = goalText.split("\n")[0] ?? "";
+  const excerpt = goalLine.length > 110 ? `${goalLine.slice(0, 110)}…` : goalLine;
+
+  if (state.prepick === "picking" && stalled) {
+    return (
+      <div className="qz-rb-banner is-weak qz-gf-banner" role="status">
+        <span className="qz-rb-banner-icon" aria-hidden>◷</span>
+        <div className="qz-rb-banner-body">
+          <div className="qz-rb-banner-head">
+            <strong>This is taking longer than it should</strong>
+          </div>
+          <p className="qz-dim" style={{ margin: 0, fontSize: 13 }}>
+            The product pick seems to have stalled. Re-run it, or choose your products below.
+          </p>
+        </div>
+        <div className="qz-rb-banner-actions">
+          <button type="button" className="qz-btn qz-btn-accent qz-btn-sm" disabled={retrying} onClick={onRetry}>
+            {retrying ? "Restarting…" : "Try again"}
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (state.prepick === "picking") {
+    return (
+      <div className="qz-rb-banner is-strong qz-gf-banner" role="status" aria-live="polite">
+        <span className="qz-rb-banner-icon qz-gf-spark" aria-hidden>✦</span>
+        <div className="qz-rb-banner-body">
+          <div className="qz-rb-banner-head">
+            <strong>Choosing the best products for your goal…</strong>
+          </div>
+          <p className="qz-dim" style={{ margin: 0, fontSize: 13 }}>
+            {excerpt ? <>“{excerpt}” — </> : null}
+            they&rsquo;ll appear here in a moment, ready to refine.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  if (state.prepick === "failed") {
+    return (
+      <div className="qz-rb-banner is-weak qz-gf-banner" role="status">
+        <span className="qz-rb-banner-icon" aria-hidden>!</span>
+        <div className="qz-rb-banner-body">
+          <div className="qz-rb-banner-head">
+            <strong>Products weren&rsquo;t picked automatically</strong>
+          </div>
+          <p className="qz-dim" style={{ margin: 0, fontSize: 13 }}>
+            {state.error ?? "We couldn't pick products for that goal — try again, or choose them below."}
+          </p>
+        </div>
+        <div className="qz-rb-banner-actions">
+          <button type="button" className="qz-btn qz-btn-accent qz-btn-sm" disabled={retrying} onClick={onRetry}>
+            {retrying ? "Retrying…" : "Try again"}
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // ready
+  return (
+    <div className="qz-rb-banner is-applied qz-gf-banner" role="status">
+      <span className="qz-rb-banner-icon" aria-hidden><Check size={17} strokeWidth={2.6} /></span>
+      <div className="qz-rb-banner-body">
+        <div className="qz-rb-banner-head">
+          <strong>
+            {count > 0
+              ? `AI picked ${count} recommendation${count === 1 ? "" : "s"} for your goal`
+              : "AI picked recommendations for your goal"}
+          </strong>
+        </div>
+        <p className="qz-dim" style={{ margin: 0, fontSize: 13 }}>
+          {state.rationale ? `${state.rationale} ` : ""}
+          Refine the selection below, then generate your quiz.
+        </p>
+      </div>
+    </div>
+  );
+}
+
 function RbBanner({
   suggestion,
   collapsed,

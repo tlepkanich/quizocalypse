@@ -214,7 +214,13 @@ export async function loadStep1FunnelData(
   // writes draftJson at the very end), so the no-write window can reach ~75-110s;
   // the shared 200s rule (stall.server.ts, Gap 6) gives a legitimately slow
   // build margin before we surface the re-run / template escape.
-  const genInFlight = session.stage === "typing" || session.stage === "templating";
+  // FLOW-1 — the goal-first product pre-pick is a detached job too: "picking"
+  // with no draft write past the shared threshold is presumed dead (deploy
+  // restart), and retry-gen's prepick branch is the re-kick.
+  const prepickInFlight =
+    session.stage === "grouping" && session.goal_first?.prepick === "picking";
+  const genInFlight =
+    session.stage === "typing" || session.stage === "templating" || prepickInFlight;
   const genStalled = genInFlight && isDetachedJobStalled(quiz.updatedAt);
 
   // ── Question Builder (the pre-config editing step) ───────────────────────
@@ -323,6 +329,9 @@ export async function loadStep1FunnelData(
     // FAST F3 — the detached jobs' honest live checkpoint (null for old
     // in-flight sessions / non-gen stages → the UI falls back to timed beats).
     genProgress: session.gen_progress ?? null,
+    // FLOW-1 — the goal-first flow marker + pre-pick state; null for every
+    // other flow (its absence keeps the recs surface's existing behavior).
+    goalFirst: session.goal_first ?? null,
     productGroups: categories.map((c) => ({
       id: c.id,
       name: c.name,

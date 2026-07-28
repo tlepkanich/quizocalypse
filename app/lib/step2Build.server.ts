@@ -14,7 +14,7 @@ import {
   getOrStartShopWebResearch,
   peekFreshShopWebResearch,
 } from "./shopWebResearch.server";
-import { Quiz, BuildSession, PickedTemplate } from "./quizSchema";
+import { Quiz, BuildSession, PickedTemplate, QuizType as QuizTypeSchema } from "./quizSchema";
 import { applyManualDeciderSkeleton } from "./smartBuild";
 import { dialsToBuildDirectives, autoQuizName } from "./dialDirectives";
 import { industryGuidanceText } from "./industryTemplates";
@@ -194,7 +194,9 @@ const BUDGET_GEN_ERROR =
 // Check the merchant ceiling ONCE at job kick (never mid-pipeline). Same
 // never-throw posture as the jobs themselves: checkAiBudget fails open and the
 // gen_error write goes through writeGenError. Returns true when the job may run.
-async function budgetAllowsGenJob(
+// Exported for the FLOW-1 goal pre-pick job (goalPrepick.server.ts) — the same
+// kick-time gate every funnel gen job uses.
+export async function budgetAllowsGenJob(
   shopId: string,
   quizId: string,
   onRefusal: () => Promise<void>,
@@ -220,7 +222,8 @@ function friendlyGenError(err: unknown): string {
   return "We couldn't generate that with AI. Try again, or start from a ready-made template below.";
 }
 
-async function patchBuildSession(
+// Exported for the FLOW-1 goal pre-pick job (goalPrepick.server.ts).
+export async function patchBuildSession(
   quizId: string,
   mutate: (s: BuildSession) => BuildSession,
 ): Promise<void> {
@@ -256,7 +259,8 @@ async function writeGenError(
 // fail a detached job (a throw here would land in the job's catch and write a
 // bogus gen_error). Fresh-read via patchBuildSession, one small write per REAL
 // pass boundary — never inside retry loops.
-async function writeGenProgress(
+// Exported for the FLOW-1 goal pre-pick job (goalPrepick.server.ts).
+export async function writeGenProgress(
   quizId: string,
   progress: NonNullable<BuildSession["gen_progress"]>,
 ): Promise<void> {
@@ -278,7 +282,14 @@ export type GenFailMode = "shape" | "blank_questions";
 
 // §1.3 — apply the blank-Questions landing. Same never-throw posture as
 // writeGenError (a throw in a void async strands the spinner forever).
-async function failToBlankQuestions(shopId: string, quizId: string): Promise<void> {
+// FLOW-1 — `notice` lets the goal-first budget refusal land honest limit copy
+// (the four-outcome standard's limit_reached class); absent → today's default,
+// so every pre-existing caller is byte-identical.
+async function failToBlankQuestions(
+  shopId: string,
+  quizId: string,
+  notice?: string,
+): Promise<void> {
   try {
     const [quiz, firstCollection] = await Promise.all([
       prisma.quiz.findUnique({ where: { id: quizId }, select: { draftJson: true } }),
@@ -297,6 +308,7 @@ async function failToBlankQuestions(shopId: string, quizId: string): Promise<voi
       stage: "question_builder",
       built: true,
       gen_error:
+        notice ??
         "We couldn't generate from your goal — starting blank. Build your questions below, or go back and try again.",
       gen_progress: undefined,
     });
@@ -313,24 +325,41 @@ async function failToBlankQuestions(shopId: string, quizId: string): Promise<voi
 // types ~31s outruns the edge window; measured at T2). On success → stage "types"
 // with the cards; on failure → back to "types" (Shape) with a gen_error so the
 // merchant can retry / write a goal there (the standalone Goal step is retired).
+//
+// FLOW-1 — `opts.headless` (the goal-first flow's confirm, funnel-reconfig Flow
+// 1): the merchant never sees Shape, so on success the job AUTO-PICKS the AI's
+// top type (types[0] — the templates[0] precedent), pins its question_range to
+// the goal brief's chosen length when one was set, and chains straight into
+// startStep2Templates with failMode "blank_questions" (the merchant chose a
+// goal, not Shape — every failure lands the blank-Questions notice, never a
+// stage they didn't pick). quiz_types + picked_type_id are persisted so the
+// existing retry-gen "templating" branch re-kicks a killed chain unchanged.
 export function startStep2Types(
   shopId: string,
   quizId: string,
   input: { goal: string; struggle?: string; buckets?: Array<{ name: string; tags: string[] }> },
+  opts?: { headless?: { questionLength?: number } },
 ): void {
+  const headless = opts?.headless;
   // BIC-2 A3 — the whole job runs inside the shop's usage-recording scope
   // (research + types both bill the shop); the ceiling is checked ONCE at kick.
   // Every code path below is caught or never-throw, so the void is safe.
   void withAiSpendRecording(shopId, async () => {
     const allowed = await budgetAllowsGenJob(shopId, quizId, () =>
-      writeGenError(quizId, (s) =>
-        BuildSession.parse({
-          ...s,
-          stage: "types",
-          gen_error: BUDGET_GEN_ERROR,
-          gen_progress: undefined,
-        }),
-      ),
+      headless
+        ? failToBlankQuestions(
+            shopId,
+            quizId,
+            "Today's AI generation limit for this shop is reached — we started a blank quiz. Build questions below, or try again tomorrow.",
+          )
+        : writeGenError(quizId, (s) =>
+            BuildSession.parse({
+              ...s,
+              stage: "types",
+              gen_error: BUDGET_GEN_ERROR,
+              gen_progress: undefined,
+            }),
+          ),
     );
     if (!allowed) return;
     try {
@@ -349,6 +378,52 @@ export function startStep2Types(
       const tTypes = Date.now();
       const { types } = await generateStep2Types(shopId, quizId, { ...input, webResearchText });
       logFor("step2").info({ quizId, ms: Date.now() - tTypes }, "types took");
+
+      // FLOW-1 headless — auto-pick the top type and chain the templating job
+      // (which itself auto-picks the top template and chains the question
+      // build). The stage moves straight to "templating" so the merchant's
+      // generating screen narrates the template + question passes; a kill
+      // between here and the templates persisting is covered by retry-gen's
+      // existing "templating" branch (picked_type_id finds the type below).
+      const top = headless ? types[0] : undefined;
+      if (headless && top) {
+        const len = headless.questionLength;
+        const effectiveType = len
+          ? QuizTypeSchema.parse({ ...top, question_range: { min: len, max: len } })
+          : top;
+        await patchBuildSession(quizId, (s) =>
+          BuildSession.parse({
+            ...s,
+            stage: "templating",
+            quiz_types: len ? [effectiveType, ...types.slice(1)] : types,
+            picked_type_id: top.id,
+            web_research_summary: webResearchText.slice(0, 600),
+            gen_error: undefined,
+          }),
+        );
+        const cats = await prisma.category.findMany({
+          where: { shopId, quizId },
+          select: { id: true, name: true, tags: true },
+        });
+        startStep2Templates(
+          shopId,
+          quizId,
+          effectiveType,
+          {
+            goal: input.goal,
+            ...(input.struggle ? { struggle: input.struggle } : {}),
+            ...(cats.length ? { buckets: cats } : {}),
+          },
+          { failMode: "blank_questions" },
+        );
+        return;
+      }
+      if (headless) {
+        // Degenerate: no type came back at all — land the honest blank canvas.
+        await failToBlankQuestions(shopId, quizId);
+        return;
+      }
+
       await patchBuildSession(quizId, (s) =>
         BuildSession.parse({
           ...s,
@@ -361,6 +436,11 @@ export function startStep2Types(
       );
     } catch (err) {
       reportError(err, { scope: "step2", msg: "type generation failed", shopId, quizId });
+      if (headless) {
+        // FLOW-1 — the merchant chose a goal, not Shape: never park them there.
+        await failToBlankQuestions(shopId, quizId);
+        return;
+      }
       await writeGenError(quizId, (s) =>
         BuildSession.parse({
           ...s,

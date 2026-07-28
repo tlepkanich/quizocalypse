@@ -243,8 +243,13 @@ export default function StudioQuizzes() {
                 New quiz
               </Link>
             )}
-            <Link to="/studio/onboarding" className="qz-btn qz-btn-accent">
-              ✨ Build with AI →
+            {/* FLOW-1 — goal-first is the primary create path; the existing
+                funnel entry stays alongside (Flow 2 keeps today's flow). */}
+            <Link to="/studio/onboarding" className="qz-btn qz-btn-ghost">
+              ✨ Build with AI
+            </Link>
+            <Link to="/studio/goal" className="qz-btn qz-btn-accent">
+              ✎ Write your goal →
             </Link>
           </div>
         }
@@ -254,11 +259,17 @@ export default function StudioQuizzes() {
         <QzCard dashed style={{ display: "flex", flexDirection: "column", gap: 10, alignItems: "flex-start" }}>
           <div className="qz-label">No quizzes yet</div>
           <p className="qz-dim" style={{ margin: 0 }}>
-            Create your first quiz — our AI builds it for you from your products.
+            Create your first quiz — write your goal and our AI picks the products and builds the
+            questions for you.
           </p>
-          <Link to="/studio/onboarding" className="qz-btn qz-btn-accent qz-btn-sm">
-            ✨ Build with AI →
-          </Link>
+          <div className="qz-row" style={{ gap: 8 }}>
+            <Link to="/studio/goal" className="qz-btn qz-btn-accent qz-btn-sm">
+              ✎ Write your goal →
+            </Link>
+            <Link to="/studio/onboarding" className="qz-btn qz-btn-ghost qz-btn-sm">
+              ✨ Build with AI
+            </Link>
+          </div>
         </QzCard>
       ) : (
         <>

@@ -63,7 +63,12 @@ export function Step1Funnel({ data }: { data: FunnelData }) {
   // the job writes the next stage, the revalidate picks it up, the poll stops.
   // FAST F3 — 1500ms (was 3000): the loader is cheap and this halves both the
   // stage-flip latency and the gen_progress checkpoint latency.
-  const isGenerating = data.stage === "typing" || data.stage === "templating";
+  const isGenerating =
+    data.stage === "typing" ||
+    data.stage === "templating" ||
+    // FLOW-1 — the goal-first product pre-pick runs detached on the recs step;
+    // poll the same way until it lands "ready"/"failed".
+    (data.stage === "grouping" && data.goalFirst?.prepick === "picking");
   useEffect(() => {
     if (!isGenerating) return;
     const t = setInterval(() => {

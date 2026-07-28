@@ -56,7 +56,16 @@ export interface FunnelData {
   genStalled: boolean;
   // FAST F3 — the detached generation jobs' REAL checkpoint (written at pass
   // boundaries); null = absent (old in-flight session) → timed-beat fallback.
-  genProgress: "research" | "types" | "templates" | "questions" | null;
+  genProgress: "research" | "types" | "templates" | "questions" | "products" | null;
+  // FLOW-1 — the goal-first flow marker + the product pre-pick's state. null
+  // for every other flow; presence changes the recs surface (pre-pick banner,
+  // Continue → flow1-confirm, no start pop-up).
+  goalFirst: {
+    prepick: "picking" | "ready" | "failed";
+    error?: string;
+    rationale?: string;
+    question_length?: number;
+  } | null;
   productGroups: Array<{ id: string; name: string; products: Array<{ id: string; title: string }> }>;
   collections: Array<{ collectionId: string; title: string }>;
   // PORT-10 — shop-saved templates first, then the global industry "starter"

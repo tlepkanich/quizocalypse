@@ -38,6 +38,7 @@ import {
   startStep2Build,
 } from "./step2Build.server";
 import { saveTemplate, loadSavedTemplate } from "./savedTemplates.server";
+import { startGoalPrepick } from "./goalPrepick.server";
 import { applyManualDeciderSkeleton } from "./smartBuild";
 import {
   MAX_LOGO_BYTES,
@@ -617,6 +618,79 @@ async function runStep1FunnelActionImpl(
     return json({ intent, ok: true });
   }
 
+  // FLOW-1 (funnel-reconfig Flow 1) — the goal-first recs confirm. The merchant
+  // already wrote their goal at the front door (session.goal carries the folded
+  // brief) and refined the AI-pre-picked selections; this confirm skips BOTH
+  // the start pop-up and the Shape stage: the type/template middle passes run
+  // headless (startStep2Types auto-picks the top type, chains the templating
+  // job which auto-picks the top template, which chains the question build) and
+  // the merchant lands on the Questions step. Shape's defaults fold in here:
+  // scoring "direct" (the shape-continue precedent — decider drafts are
+  // direct-only) and the brief's chosen length pins question_range inside the
+  // headless pass. Decider + goal_first only; every other flow is untouched.
+  if (intent === "flow1-confirm") {
+    if (doc.logic_model !== "decider" || !session.goal_first) {
+      return json({ intent, ok: false, error: "This flow isn't available for this quiz." }, { status: 400 });
+    }
+    const goal = session.goal?.goal_text ?? "";
+    if (goal.trim().length < MIN_GOAL_CHARS) {
+      return json({ intent, ok: false, error: "Write your goal first." }, { status: 400 });
+    }
+    const cats = await prisma.category.findMany({
+      where: { shopId: shop.id, quizId: quiz.id },
+      select: { id: true, name: true, tags: true },
+      orderBy: { createdAt: "asc" },
+    });
+    if (cats.length === 0) {
+      return json(
+        { intent, ok: false, error: "Add at least one recommendation to continue." },
+        { status: 400 },
+      );
+    }
+    const tabDim = session.bucket_browser?.active_tab;
+    const struggle = session.goal?.struggle_text ?? "";
+    const next: BuildSession = {
+      ...session,
+      stage: "typing",
+      grouping: {
+        dimension: tabDim === "tag" ? "tag" : tabDim === "collection" ? "collection" : "all",
+        confirmed_category_ids: cats.map((c) => c.id),
+        detected_rationale: "Confirmed on the goal-first recommendations step.",
+      },
+      gen_error: undefined,
+      // A retried/re-confirmed flow starts a FRESH headless chain — stale
+      // template artifacts would misroute retry-gen (the shape-goal-build
+      // precedent). goal_first itself survives: it marks the flow.
+      quiz_types: [],
+      picked_type_id: undefined,
+      rich_templates: [],
+      picked_template: undefined,
+      // A prior failed chain's blank-Questions landing left built:true; a
+      // stale true here would let findOrCreateStep1Draft graduate the draft
+      // MID-generation (built reads as "finished"). The build's completion
+      // sets it honestly.
+      built: undefined,
+    };
+    await writeDoc(quiz.id, { ...doc, scoring_model: "direct", build_session: next });
+    startStep2Types(
+      shop.id,
+      quiz.id,
+      {
+        goal,
+        ...(struggle ? { struggle } : {}),
+        buckets: cats.map((c) => ({ name: c.name, tags: c.tags })),
+      },
+      {
+        headless: {
+          ...(session.goal_first.question_length
+            ? { questionLength: session.goal_first.question_length }
+            : {}),
+        },
+      },
+    );
+    return json({ intent, ok: true });
+  }
+
   // Start-routing spec §1.2 — "Build from a blank quiz" (the intercept modal's
   // quiet tertiary + Shape's escape link). No AI: seed the minimal-but-complete
   // decider skeleton and land straight on the Questions step. Reinstates the
@@ -714,14 +788,49 @@ async function runStep1FunnelActionImpl(
     // job; writeDoc resets updatedAt so the stall clears. If the AI genuinely
     // fails this time, the job's own catch sets gen_error (the honest "didn't
     // finish" banner + template escape).
+    // FLOW-1 — a stalled (killed job) or failed goal pre-pick re-kicks the SAME
+    // detached pre-pick; writeDoc resets updatedAt so the stall clears. Gated on
+    // goal_first, so no other flow can reach it (stage "grouping" never
+    // generates elsewhere).
+    if (
+      session.stage === "grouping" &&
+      session.goal_first &&
+      session.goal_first.prepick !== "ready"
+    ) {
+      await writeDoc(quiz.id, {
+        ...doc,
+        build_session: {
+          ...session,
+          goal_first: { ...session.goal_first, prepick: "picking", error: undefined },
+          gen_error: undefined,
+        },
+      });
+      startGoalPrepick(shop.id, quiz.id);
+      return json({ intent, ok: true });
+    }
     if (session.stage === "typing") {
       const retryBuckets = await loadConfirmedBuckets(shop.id, quiz.id);
       await writeDoc(quiz.id, { ...doc, build_session: { ...session, gen_error: undefined } });
-      startStep2Types(shop.id, quiz.id, {
-        goal: session.goal?.goal_text ?? "",
-        ...(session.goal?.struggle_text ? { struggle: session.goal.struggle_text } : {}),
-        ...(retryBuckets.length ? { buckets: retryBuckets } : {}),
-      });
+      startStep2Types(
+        shop.id,
+        quiz.id,
+        {
+          goal: session.goal?.goal_text ?? "",
+          ...(session.goal?.struggle_text ? { struggle: session.goal.struggle_text } : {}),
+          ...(retryBuckets.length ? { buckets: retryBuckets } : {}),
+        },
+        // FLOW-1 — a goal-first typing job is HEADLESS; re-kicking it without
+        // the flag would park the merchant on the Shape stage they never chose.
+        session.goal_first
+          ? {
+              headless: {
+                ...(session.goal_first.question_length
+                  ? { questionLength: session.goal_first.question_length }
+                  : {}),
+              },
+            }
+          : undefined,
+      );
       return json({ intent, ok: true });
     }
     if (session.stage === "templating") {
@@ -732,11 +841,19 @@ async function runStep1FunnelActionImpl(
           select: { id: true, name: true, tags: true },
         });
         await writeDoc(quiz.id, { ...doc, build_session: { ...session, gen_error: undefined } });
-        startStep2Templates(shop.id, quiz.id, retryType, {
-          goal: session.goal?.goal_text ?? "",
-          ...(session.goal?.struggle_text ? { struggle: session.goal.struggle_text } : {}),
-          ...(retryCats.length ? { buckets: retryCats } : {}),
-        });
+        startStep2Templates(
+          shop.id,
+          quiz.id,
+          retryType,
+          {
+            goal: session.goal?.goal_text ?? "",
+            ...(session.goal?.struggle_text ? { struggle: session.goal.struggle_text } : {}),
+            ...(retryCats.length ? { buckets: retryCats } : {}),
+          },
+          // FLOW-1 — goal-first failures land the blank-Questions notice (the
+          // merchant never chose Shape); every other flow keeps today's default.
+          session.goal_first ? { failMode: "blank_questions" } : undefined,
+        );
         return json({ intent, ok: true });
       }
       // O-3 (DECIDER only — provably legacy-inert) — the saved-template kick
@@ -761,6 +878,8 @@ async function runStep1FunnelActionImpl(
             session.picked_template,
             session.goal?.goal_text || retryRich.angle,
             session.goal?.struggle_text ?? "",
+            // FLOW-1 — goal-first build failures land blank Questions (see above).
+            session.goal_first ? { failMode: "blank_questions" } : undefined,
           );
           return json({ intent, ok: true });
         }
@@ -1451,7 +1570,11 @@ async function runStep1FunnelActionImpl(
               // write-a-goal and blank-quiz routes skip Shape, so their Back
               // returns to Recommendations. Decider-gated: legacy in-flight
               // drafts keep today's destination byte-identically.
-              doc.logic_model === "decider" && session.quiz_types.length === 0
+              // FLOW-1 — goal-first drafts DO carry quiz_types (the headless
+              // pass persists them for retry-gen) but never visited Shape, so
+              // their Back returns to Recommendations too.
+              doc.logic_model === "decider" &&
+                (session.quiz_types.length === 0 || session.goal_first)
               ? "grouping"
               : "types";
     const next: BuildSession = { ...session, stage };

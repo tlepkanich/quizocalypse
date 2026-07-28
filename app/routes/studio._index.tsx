@@ -154,7 +154,13 @@ export default function StudioHome() {
           <p className="qz-muted" style={{ margin: "0 0 16px", maxWidth: 420, fontSize: 14 }}>
             Turn browsers into buyers — build a guided quiz that recommends the right products.
           </p>
-          <Link to="/studio/onboarding" className="qz-btn qz-btn-primary">Create with AI</Link>
+          {/* FLOW-1 — writing the goal is the primary entry: the AI pre-picks
+              products for it and builds the quiz around them. The existing
+              funnel stays as the secondary path (Flow 2 keeps today's flow). */}
+          <div className="qz-row" style={{ gap: 10 }}>
+            <Link to="/studio/goal" className="qz-btn qz-btn-primary">✎ Write your goal</Link>
+            <Link to="/studio/onboarding" className="qz-btn qz-btn-ghost">Create with AI</Link>
+          </div>
         </div>
         <HeroArt />
         {/* A sparkle that runs across the banner every ~8s to draw the eye. */}

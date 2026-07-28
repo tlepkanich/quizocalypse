@@ -1101,3 +1101,141 @@ export async function generateQuizTemplates(
     lastIssue,
   );
 }
+
+// ── FLOW-1: the "Write Your Goal" product pre-pick ───────────────────────────
+// Given the merchant's goal and the shop's catalog candidates, pick the set of
+// recommendations (buckets) the quiz should route to. One strategy per pick —
+// the recs surface locks selections to a single type, so the model must too.
+// Keys MUST come verbatim from the candidate lists; the caller re-resolves them
+// through bucketRowsFor, so a hallucinated key silently drops (never persists).
+
+export const GoalBucketPick = z.object({
+  strategy: z.enum(["product", "tag", "collection"]),
+  keys: z.array(z.string().min(1)).min(1).max(12),
+  rationale: z.string(),
+});
+export type GoalBucketPick = z.infer<typeof GoalBucketPick>;
+
+const GOAL_BUCKET_TOOL_SCHEMA = {
+  type: "object",
+  required: ["strategy", "keys", "rationale"],
+  properties: {
+    strategy: {
+      type: "string",
+      enum: ["product", "tag", "collection"],
+      description: "the ONE kind of key every entry in `keys` is",
+    },
+    keys: {
+      type: "array",
+      minItems: 1,
+      maxItems: 12,
+      items: { type: "string" },
+      description: "keys copied VERBATIM from the chosen strategy's candidate list",
+    },
+    rationale: {
+      type: "string",
+      description: "one merchant-facing sentence: why these fit the goal",
+    },
+  },
+} as const;
+
+const GOAL_BUCKET_SYSTEM_PROMPT =
+  "You choose which of a Shopify store's products a product-finder quiz should " +
+  "recommend, given the merchant's goal for the quiz. Each key you pick becomes " +
+  "ONE outcome the quiz routes shoppers to. Rules:\n" +
+  "- Pick exactly ONE strategy: `collection` or `tag` when the store's groupings " +
+  "map cleanly onto the goal (each collection/tag = one distinct recommendation), " +
+  "`product` when the catalog is small or the goal targets specific items.\n" +
+  "- Aim for 3-6 keys — enough distinct outcomes for the quiz to genuinely " +
+  "differentiate shoppers, never one, rarely more than 8.\n" +
+  "- Every key MUST be copied verbatim from the candidate lists. Never invent, " +
+  "rename, or normalize a key.\n" +
+  "- Choose the set most relevant to the merchant's goal, not simply the largest.\n" +
+  "- The rationale is shown to the merchant: one plain sentence, no hype.\n" +
+  "- Respond ONLY via the tool call.";
+
+export interface PickGoalBucketsInput {
+  goal: string;
+  brandSummary: string;
+  candidates: {
+    products: Array<{ id: string; title: string }>;
+    tags: Array<{ key: string; label: string; count: number }>;
+    collections: Array<{ key: string; label: string; count: number }>;
+  };
+}
+
+export async function pickGoalBuckets(input: PickGoalBucketsInput): Promise<GoalBucketPick> {
+  const tool = {
+    name: "emit_goal_buckets",
+    description:
+      "Emit the recommendation set (one strategy + its keys) for the merchant's goal. The only allowed response.",
+    input_schema: GOAL_BUCKET_TOOL_SCHEMA as unknown as Anthropic.Tool.InputSchema,
+  } satisfies Anthropic.Tool;
+
+  const c = input.candidates;
+  const userMessage = [
+    "Merchant's goal for this quiz:",
+    input.goal || "(none stated)",
+    "",
+    "Brand summary:",
+    input.brandSummary || "(no brand digest — infer from the catalog)",
+    "",
+    `Candidate collections (key — title · member count):`,
+    c.collections.length
+      ? c.collections.map((x) => `- ${x.key} — ${x.label} · ${x.count}`).join("\n")
+      : "- (none)",
+    "",
+    `Candidate tags (key — label · member count):`,
+    c.tags.length ? c.tags.map((x) => `- ${x.key} — ${x.label} · ${x.count}`).join("\n") : "- (none)",
+    "",
+    `Candidate products (key — title)${c.products.length >= 150 ? " (truncated list)" : ""}:`,
+    c.products.length
+      ? c.products.map((x) => `- ${x.id} — ${x.title}`).join("\n")
+      : "- (none)",
+    "",
+    "Pick ONE strategy + the keys that best serve the goal. Emit via the tool call.",
+  ].join("\n");
+
+  let lastIssue: string | undefined;
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+    // MODEL (Sonnet), not MODEL_SPEED: this is the merchandising judgment the
+    // whole Flow-1 quiz hangs off (the owner's Haiku approval covers only the
+    // Shape type/template middle passes).
+    const response = await createMessage({
+      model: MODEL,
+      max_tokens: 1024,
+      system: GOAL_BUCKET_SYSTEM_PROMPT,
+      tools: [tool],
+      tool_choice: { type: "tool", name: "emit_goal_buckets" },
+      messages: [
+        {
+          role: "user",
+          content:
+            attempt === 1
+              ? userMessage
+              : `${userMessage}\n\nPrevious attempt failed validation: ${lastIssue}. Regenerate strictly matching the schema.`,
+        },
+      ],
+    });
+
+    const toolUse = response.content.find(
+      (b): b is Anthropic.ToolUseBlock => b.type === "tool_use",
+    );
+    if (!toolUse) {
+      lastIssue = "No tool_use block in response.";
+      continue;
+    }
+    const parsed = GoalBucketPick.safeParse(toolUse.input);
+    if (parsed.success) return parsed.data;
+    lastIssue = parsed.error.issues
+      .slice(0, 5)
+      .map((i) => `${i.path.join(".")}: ${i.message}`)
+      .join("; ");
+  }
+
+  throw new QuizGenerationError(
+    "Goal product pre-pick failed validation after retries.",
+    MAX_ATTEMPTS,
+    lastIssue,
+  );
+}

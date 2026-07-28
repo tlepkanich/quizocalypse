@@ -53,7 +53,12 @@ export async function findOrCreateStep1Draft(shopId: string): Promise<string> {
     }
   }
   if (resumeId) return resumeId;
+  return seedStep1Draft(shopId);
+}
 
+// The fresh-draft seed, split out of findOrCreateStep1Draft (a pure move) so
+// FLOW-1's goal-first claim below can seed without re-running the resume scan.
+async function seedStep1Draft(shopId: string): Promise<string> {
   // DGN-1 — seed the draft's design from the shop's brand identity so an
   // AI-generated quiz comes out looking like the store, not the house "Linen"
   // theme. Best-effort: the identity is built detached at install and may be
@@ -86,6 +91,34 @@ export async function findOrCreateStep1Draft(shopId: string): Promise<string> {
     select: { id: true },
   });
   return created.id;
+}
+
+// FLOW-1 — claim a draft for the "Write Your Goal" front door. Reuses the
+// resume-or-seed scan, but only CLAIMS the resumed draft when overwriting it is
+// safe: still parked at the recs step with nothing built, and either untouched
+// (no goal yet — a pristine front-door seed) or itself a goal-first draft (the
+// merchant re-writing their goal replaces their own abandoned Flow-1 attempt).
+// Anything else (a draft mid-Shape/Questions, or a manual draft with a goal)
+// stays untouched and a fresh draft is seeded instead — the goal flow must
+// never clobber in-flight work.
+export async function claimGoalFirstDraft(shopId: string): Promise<string> {
+  const id = await findOrCreateStep1Draft(shopId);
+  const quiz = await prisma.quiz.findUnique({
+    where: { id },
+    select: { draftJson: true },
+  });
+  const parsed = quiz ? Quiz.safeParse(quiz.draftJson) : null;
+  if (parsed?.success) {
+    const session = parsed.data.build_session;
+    const stage = session?.stage ?? "grouping";
+    const claimable =
+      parsed.data.logic_model === "decider" &&
+      stage === "grouping" &&
+      session?.built !== true &&
+      (!session?.goal?.goal_text || session?.goal_first !== undefined);
+    if (claimable) return id;
+  }
+  return seedStep1Draft(shopId);
 }
 
 // Load the owned draft + its parsed doc + build_session. Throws a 404 Response
