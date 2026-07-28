@@ -67,7 +67,9 @@ const url = `${BASE}/studio/onboarding/${draftId}`;
 await page.goto(url, { waitUntil: "domcontentloaded" });
 await page.waitForTimeout(1000);
 ok("H1 renders", await page.getByText("What can your quiz recommend?").first().isVisible().catch(() => false));
-ok("head label says Recommendations (bucket-free)", await page.getByText("Step 1 of 5 · Recommendations", { exact: false }).first().isVisible().catch(() => false));
+// FLOW-3/FLOW-2 — the funnel is the 4-step map (Shape retired); the top bar's
+// step pills carry the labels now (no "Step 1 of 5" header line).
+ok("step pills show Recommendations, no Shape pill", await page.getByText("Recommendations", { exact: true }).first().isVisible().catch(() => false) && !(await page.getByText("Shape", { exact: true }).first().isVisible().catch(() => false)));
 ok("rail title 'Your recommendations'", await page.getByText("Your recommendations", { exact: true }).first().isVisible().catch(() => false));
 const bodyText = (await page.locator("body").innerText().catch(() => "")) ?? "";
 ok("NO merchant-visible 'bucket' on the page", !/bucket/i.test(bodyText));

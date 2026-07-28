@@ -4,12 +4,13 @@
 // Walks the REAL funnel affordances end-to-end and asserts the FAST behaviors:
 //   1. At the grouping stage, the loader fires the web-research prefetch —
 //      Shop.webResearch appears while the draft is STILL at grouping.
-//   2. continue-buckets → "typing": gen_progress transitions are observable
-//      via the polled loader and the cached research SKIPS the "research"
-//      checkpoint (straight to "types"); stage flips to "types".
-//   3. shape-continue → "templating": gen_progress "templates" → "questions",
-//      then stage "question_builder"; gen_progress is CLEARED on the flip.
-//   4. retry-gen from a (simulated) stalled typing stage REUSES the cached
+//   2. continue-buckets → the FLOW-2 HEADLESS chain (funnel-reconfig Phase 3):
+//      "typing" (cached research SKIPS the "research" checkpoint, "types"
+//      checkpoint observed) hands off to "templating" with NO Shape stop
+//      ("templates" → "questions" checkpoints), then stage "question_builder";
+//      gen_progress is CLEARED on the flip.
+//   4. retry-gen from a (simulated) stalled NON-headless typing stage (the
+//      shape-regenerate class — ai_generate stripped) REUSES the cached
 //      research — no second Shop.webResearch write (same `at`).
 // Timings are logged (informational). Seed/restore discipline: draft doc,
 // Category rows, Shop.webResearch and Shop.brandIdentity all restored.
@@ -163,6 +164,8 @@ try {
   ok("continue-buckets accepted", (await rCont.json()).ok === true);
 
   // typing: poll the loader like the UI does; record gen_progress transitions.
+  // FLOW-2 — the decider chain is HEADLESS: typing auto-picks the top type and
+  // hands straight off to templating (no "types"/Shape stop).
   const tTyping = Date.now();
   let fd = await readFunnel();
   while (fd.stage === "typing" && Date.now() - tTyping < 180_000) {
@@ -173,7 +176,11 @@ try {
     fd = await readFunnel();
   }
   out.timings.typingMs = Date.now() - tTyping;
-  ok("typing → types", fd.stage === "types", `${out.timings.typingMs}ms, progress=[${out.progressSeen.typing}]`);
+  ok(
+    "typing → templating (headless — no Shape stop)",
+    fd.stage === "templating" || fd.stage === "question_builder",
+    `stage=${fd.stage}, ${out.timings.typingMs}ms, progress=[${out.progressSeen.typing}]`,
+  );
   ok(
     "cached research SKIPS the research checkpoint",
     !out.progressSeen.typing.includes("research"),
@@ -188,15 +195,14 @@ try {
     researchAfterTyping?.at === researchAt1,
     `at=${researchAfterTyping?.at}`,
   );
+  ok(
+    "headless auto-pick recorded (quiz_types + picked_type_id persisted)",
+    (fd.quizTypes?.length ?? 0) >= 1 && Boolean(fd.pickedTypeId),
+    `${fd.quizTypes?.length} cards, picked=${fd.pickedTypeId}`,
+  );
 
-  // ── 3. shape-continue → templating → question_builder ──────────────────────
-  const typeId = fd.quizTypes?.[0]?.id;
-  ok("types arrived (≥2 cards)", (fd.quizTypes?.length ?? 0) >= 2, `${fd.quizTypes?.length} cards`);
-  const rShape = await postIntent({ intent: "shape-continue", typeId, scoring: "direct" });
-  ok("shape-continue accepted", (await rShape.json()).ok === true);
-
+  // ── 3. (chained) templating → question_builder ──────────────────────────────
   const tTempl = Date.now();
-  fd = await readFunnel();
   while (fd.stage === "templating" && Date.now() - tTempl < 300_000) {
     if (fd.genProgress && out.progressSeen.templating.at(-1) !== fd.genProgress) {
       out.progressSeen.templating.push(fd.genProgress);
@@ -229,12 +235,17 @@ try {
   );
 
   // ── 4. retry-gen after a simulated typing stall reuses the cache ───────────
+  // FLOW-2 — the built doc's session carries ai_generate (the headless marker);
+  // strip it so the sim is the NON-headless typing class (a stalled
+  // shape-regenerate on an in-flight draft), whose retry parks on "types" —
+  // a cheap single pass. The headless retry class is flow2-verify's job.
+  const { ai_generate: _ai, goal_first: _gf, ...stallSession } = builtDoc.build_session ?? {};
   await prisma.quiz.update({
     where: { id: QUIZ },
     data: {
       draftJson: {
         ...builtDoc,
-        build_session: { ...builtDoc.build_session, stage: "typing" },
+        build_session: { ...stallSession, stage: "typing" },
       },
     },
   });

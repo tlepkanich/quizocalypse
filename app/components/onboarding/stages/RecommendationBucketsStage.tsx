@@ -699,24 +699,9 @@ export function RecommendationBucketsStage({
       ) : null}
       {interceptOpen ? (
         <StartInterceptModal
-          suggestedGoal={data.goal?.goal_text || data.suggestedGoal}
-          minGoalChars={data.minGoalChars}
           onAiTemplates={() => {
             setInterceptOpen(false);
             fetcher.submit({ intent: "continue-buckets" }, { method: "post" });
-          }}
-          onGoalBuild={(brief) => {
-            setInterceptOpen(false);
-            fetcher.submit(
-              {
-                intent: "shape-goal-build",
-                goal: brief.goal,
-                audience: brief.audience,
-                factors: brief.factors,
-                length: String(brief.length),
-              },
-              { method: "post" },
-            );
           }}
           onManual={() => {
             setInterceptOpen(false);
@@ -788,201 +773,53 @@ function BucketProductsModal({
   );
 }
 
-// Step-1 start modal (start-modal-flow.html mock, EXACT). Screen 1: three
-// stacked TITLE-ONLY rows — Generate with AI (primary: accent border + tint,
-// pulsing ✦ tile, mono RECOMMENDED tag), Write your goal (✎), Start from
-// blank (▢) — each with a trailing arrow. Screen 2: the goal-brief — ← Back,
-// "Describe what your quiz should do", the "Your brief" tracker (one segment
-// bar + dashed-circle→check chip per field; chips focus their field; count
-// reads "N of 4 complete"), Goal / Audience / Deciding factors / Length, and
-// a footer whose note narrates readiness. Generate needs goal (≥ minGoalChars)
-// + a length; audience/factors are optional sharpeners. Esc/scrim closes with
-// nothing changed.
+// Step-1 start modal (start-modal-flow.html mock screen 1, EXACT). FLOW-2
+// (funnel-reconfig): this pop-up survives ONLY in the manual flow — goal-first
+// and template-first drafts confirm straight through flow1/flow3-confirm and
+// never see it. Three stacked TITLE-ONLY rows, each with a trailing arrow:
+//  • Generate with AI (primary: accent border + tint, pulsing ✦ tile, mono
+//    RECOMMENDED tag) → continue-buckets, whose decider branch runs the
+//    HEADLESS typing→templating→build chain and lands on Questions (Shape is
+//    unreachable for new drafts).
+//  • Write your goal (✎) → the Flow-1 /studio/goal front door (the old
+//    in-modal goal-brief second screen is retired in favor of that page —
+//    reuse, not duplication; the goal flow re-claims this pristine draft).
+//  • Start from blank (▢) → manual-build → the blank Questions canvas.
+// Esc/scrim closes with nothing changed.
 function StartInterceptModal({
-  suggestedGoal,
-  minGoalChars,
   onAiTemplates,
-  onGoalBuild,
   onManual,
   onClose,
 }: {
-  suggestedGoal: string;
-  minGoalChars: number;
   onAiTemplates: () => void;
-  onGoalBuild: (brief: { goal: string; audience: string; factors: string; length: number }) => void;
   onManual: () => void;
   onClose: () => void;
 }) {
-  const [screen, setScreen] = useState<"choose" | "goal">("choose");
-  const [goal, setGoal] = useState("");
-  const [audience, setAudience] = useState("");
-  const [factors, setFactors] = useState("");
-  const [length, setLength] = useState<number | null>(null);
-  const goalRef = useRef<HTMLTextAreaElement>(null);
-  const audRef = useRef<HTMLInputElement>(null);
-  const facRef = useRef<HTMLInputElement>(null);
-  const segRef = useRef<HTMLDivElement>(null);
-
-  const goalOk = goal.trim().length >= minGoalChars;
-  const audOk = audience.trim().length > 2;
-  const facOk = factors.trim().length > 2;
-  const lenOk = length !== null;
-  const done = [goalOk, audOk, facOk, lenOk].filter(Boolean).length;
-  const ready = goalOk && lenOk;
-  const note = !ready
-    ? "Add your goal and pick a length"
-    : done < 4
-      ? "Optional — but the rest sharpens the questions"
-      : "Ready to generate";
-
-  const tracker = [
-    { key: "goal", label: "Goal", ok: goalOk, focus: () => goalRef.current?.focus() },
-    { key: "aud", label: "Audience", ok: audOk, focus: () => audRef.current?.focus() },
-    { key: "fac", label: "Factors", ok: facOk, focus: () => facRef.current?.focus() },
-    {
-      key: "len",
-      label: "Length",
-      ok: lenOk,
-      focus: () => segRef.current?.scrollIntoView({ block: "center", behavior: "smooth" }),
-    },
-  ];
-
   return (
     // Mock modal envelope: min(560px, 100%) — narrower than the DS md (640).
     <QzModal open onClose={onClose} size="md" width={560}>
-      {screen === "choose" ? (
-        <>
-          <h2 className="qz-sm-title">How do you want to start?</h2>
-          <div className="qz-sm-rows">
-            <button type="button" className="qz-sm-row is-pri" onClick={onAiTemplates}>
-              <span className="qz-sm-ico" aria-hidden><i>✦</i></span>
-              <h3>Generate with AI</h3>
-              <span className="qz-sm-rec">Recommended</span>
-              <span className="qz-sm-spacer" />
-              <span className="qz-sm-arr" aria-hidden>→</span>
-            </button>
-            <button type="button" className="qz-sm-row" onClick={() => setScreen("goal")}>
-              <span className="qz-sm-ico is-neutral" aria-hidden><i>✎</i></span>
-              <h3>Write your goal</h3>
-              <span className="qz-sm-spacer" />
-              <span className="qz-sm-arr" aria-hidden>→</span>
-            </button>
-            <button type="button" className="qz-sm-row" onClick={onManual}>
-              <span className="qz-sm-ico is-neutral" aria-hidden><i>▢</i></span>
-              <h3>Start from blank</h3>
-              <span className="qz-sm-spacer" />
-              <span className="qz-sm-arr" aria-hidden>→</span>
-            </button>
-          </div>
-        </>
-      ) : (
-        <>
-          <button type="button" className="qz-sm-back" onClick={() => setScreen("choose")}>
-            ← Back
-          </button>
-          <h2 className="qz-sm-title">Describe what your quiz should do</h2>
-
-          <div className="qz-sm-track">
-            <div className="qz-sm-thead">
-              <span className="qz-sm-tlbl">Your brief</span>
-              <span className="qz-sm-tcnt">{done} of 4 complete</span>
-            </div>
-            <div className="qz-sm-tcols">
-              {tracker.map((t) => (
-                <button
-                  key={t.key}
-                  type="button"
-                  className={`qz-sm-tcol${t.ok ? " is-done" : ""}`}
-                  onClick={t.focus}
-                >
-                  <span className="qz-sm-sbar" />
-                  <span className="qz-sm-titem">
-                    <span className="qz-sm-c" aria-hidden>✓</span>
-                    {t.label}
-                  </span>
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <div className="qz-sm-field">
-            <label className="qz-sm-flabel" htmlFor="qz-sm-goal">Goal</label>
-            <span className="qz-sm-fhint">What the quiz helps shoppers decide.</span>
-            <textarea
-              id="qz-sm-goal"
-              ref={goalRef}
-              className="qz-sm-inp"
-              value={goal}
-              placeholder={suggestedGoal || "Help shoppers find the right board for how and where they ride"}
-              onChange={(e) => setGoal(e.target.value)}
-            />
-          </div>
-          <div className="qz-sm-field">
-            <label className="qz-sm-flabel" htmlFor="qz-sm-aud">Audience</label>
-            <span className="qz-sm-fhint">Who it&rsquo;s for.</span>
-            <input
-              id="qz-sm-aud"
-              ref={audRef}
-              className="qz-sm-inp"
-              value={audience}
-              placeholder="First-time riders buying a starter setup"
-              onChange={(e) => setAudience(e.target.value)}
-            />
-          </div>
-          <div className="qz-sm-field">
-            <label className="qz-sm-flabel" htmlFor="qz-sm-fac">Deciding factors</label>
-            <span className="qz-sm-fhint">
-              What makes one option right over another — terrain, skill level, price, style.
-            </span>
-            <input
-              id="qz-sm-fac"
-              ref={facRef}
-              className="qz-sm-inp"
-              value={factors}
-              placeholder="Terrain they ride, experience level, and how much they want to spend"
-              onChange={(e) => setFactors(e.target.value)}
-            />
-          </div>
-          <div className="qz-sm-field">
-            <span className="qz-sm-flabel">Length</span>
-            <span className="qz-sm-fhint">How many questions.</span>
-            <div className="qz-sm-seg" ref={segRef} role="radiogroup" aria-label="How many questions">
-              {[3, 4, 5, 6, 7].map((n) => (
-                <button
-                  key={n}
-                  type="button"
-                  role="radio"
-                  aria-checked={length === n}
-                  className={`qz-sm-segb${length === n ? " is-on" : ""}`}
-                  onClick={() => setLength(n)}
-                >
-                  {n}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <div className="qz-sm-foot">
-            <button
-              type="button"
-              className="qz-sm-gen"
-              disabled={!ready}
-              onClick={() =>
-                length !== null &&
-                onGoalBuild({
-                  goal: goal.trim(),
-                  audience: audience.trim(),
-                  factors: factors.trim(),
-                  length,
-                })
-              }
-            >
-              Generate questions →
-            </button>
-            <span className="qz-sm-note" aria-live="polite">{note}</span>
-          </div>
-        </>
-      )}
+      <h2 className="qz-sm-title">How do you want to start?</h2>
+      <div className="qz-sm-rows">
+        <button type="button" className="qz-sm-row is-pri" onClick={onAiTemplates}>
+          <span className="qz-sm-ico" aria-hidden><i>✦</i></span>
+          <h3>Generate with AI</h3>
+          <span className="qz-sm-rec">Recommended</span>
+          <span className="qz-sm-spacer" />
+          <span className="qz-sm-arr" aria-hidden>→</span>
+        </button>
+        <Link to="/studio/goal" className="qz-sm-row">
+          <span className="qz-sm-ico is-neutral" aria-hidden><i>✎</i></span>
+          <h3>Write your goal</h3>
+          <span className="qz-sm-spacer" />
+          <span className="qz-sm-arr" aria-hidden>→</span>
+        </Link>
+        <button type="button" className="qz-sm-row" onClick={onManual}>
+          <span className="qz-sm-ico is-neutral" aria-hidden><i>▢</i></span>
+          <h3>Start from blank</h3>
+          <span className="qz-sm-spacer" />
+          <span className="qz-sm-arr" aria-hidden>→</span>
+        </button>
+      </div>
     </QzModal>
   );
 }

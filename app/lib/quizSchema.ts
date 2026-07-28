@@ -1536,6 +1536,15 @@ export const BuildSession = z.object({
       question_length: z.number().int().min(3).max(7).optional(),
     })
     .optional(),
+  // FLOW-2 (funnel-reconfig Flow 2) — the manual flow's pop-up "Generate with
+  // AI" choice. Present ONLY on decider drafts whose recs Continue confirmed
+  // through that row (the continue-buckets intent); its presence marks the
+  // typing/templating chain HEADLESS — Shape is unreachable for new drafts —
+  // so retry-gen re-kicks headless, failures land the blank-Questions notice,
+  // and Back-from-Questions returns to Recommendations. OPTIONAL WITHOUT
+  // DEFAULT — absent round-trips absent, so legacy docs and every other flow
+  // stay byte-identical.
+  ai_generate: z.literal(true).optional(),
   // FLOW-3 (funnel-reconfig Flow 3) — the "Generate Quiz Templates" front door
   // (/studio/templates). OPTIONAL WITHOUT DEFAULT — absent round-trips absent,
   // so legacy docs and every other flow stay byte-identical.

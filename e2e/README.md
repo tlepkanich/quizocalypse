@@ -110,19 +110,23 @@ pin, never republish), plus the "O3 Probe Terrain Finder" SavedTemplate.
 | `a3-budget-verify.mjs` | BIC-2 A3 per-shop AI budget ceilings (record + refusal matrix) | LOCAL build + `cmpuov6yc…`, `cmr7khgd5…` | prisma seed/restore |
 | `b3-verify.mjs` | BIC-2 B3 browser Back/Forward inside the quiz + B2c lazy answer images + B2e next-step preloads | LOCAL build + `cmr7khgd5…` | prisma seed/restore (publishedJson byte-identical) |
 | `step3v3-p1…p5-verify.mjs` | Step-3 v3 shell/content/logic/health/flip (P5 also proves legacy DOM-identical vs live) | LOCAL build + `cmr7khgd5…` (P5 also touches live `cmqwd15f…`, restores byte-identically) | prisma seed/restore; P5 mirrors via HTTP |
-| `o3-verify.mjs` | Decider-native saved templates (front-door draft, save/use-saved-template, retry-gen backstop) | LIVE; self-seeds; `cmqqcb0ao…` byte pin | graduates its drafts; real AI |
+| `o3-verify.mjs` | Decider-native saved templates (front-door draft, save/use-saved-template, retry-gen backstop; reaches Shape via shape-regenerate — FLOW-2 made continue-buckets headless) | LIVE; self-seeds; `cmqqcb0ao…` byte pin | graduates its drafts; real AI |
 | `o2-verify.mjs` | Image-density renderer (density 15/decorative hides, explicit intent wins) | LIVE `cmqqcb0ao…` draft-only | doc backup/restore; byte pin proves /q untouched |
-| `sr-verify.mjs` | Start-routing spec (intercept modal, three routes) | LIVE, `cmqqcb0ao…` pin | restore |
+| `sr-verify.mjs` | Start-routing spec (intercept modal — FLOW-2: manual-flow-only, single screen, Write-your-goal links /studio/goal; manual-build; back-routing) | LIVE, `cmqqcb0ao…` pin | restore |
+| `start-modal-verify.mjs` | AUDIT-5 start pop-up vs the mock's screen 1 (FLOW-2: manual-only, goal-brief screen retired → /studio/goal link) | LOCAL build, front-door draft | read-only beyond a bucket toggle |
+| `flow1-verify.mjs` | FLOW-1 Write-Your-Goal front door (goal brief → AI pre-pick → flow1-confirm headless → Questions; fail mode $0 with `ANTHROPIC_API_KEY=` blank, happy mode real AI) | LOCAL build, probe draft `flow1-probe-*` | restore/delete probe draft |
+| `flow2-verify.mjs` | FLOW-2 pop-up scoping + routing (manual sees it; AI-generate → headless → Questions; write-goal → /studio/goal; blank → Questions; goal/template-first never see it; gen-error + stalled links → /studio/templates; fail mode $0, happy mode real AI ≈3 calls) | LOCAL build, probe draft `flow2-probe-*` | restore/delete probe draft |
+| `flow3-verify.mjs` | FLOW-3 Generate-Quiz-Templates front door (candidates, starter rail relocation, flow3-confirm, blank-Questions failures; fail mode $0, happy mode real AI) | LOCAL build, probe drafts `flow3-probe-*` | restore/delete probe drafts |
 | `rs-verify.mjs` | Step-1 Recommendations spec (copy, rail, no "bucket" leakage) | LIVE, `cmqqcb0ao…` pin | restore |
 | `shape-scope-verify.mjs` | Funnel AI grounds in CHOSEN buckets at both gen layers (65c55a5) | LIVE; real AI | restore |
 | `s12-reaudit-verify.mjs` | AUDIT-18 Step-1 + Shape vs the design sub-files (stacked stepper geometry, AI-tip pill/first-visit, amber warn, products-modal meta, shape cards/film/leave-confirm) | LOCAL build + `cmr7khgd5…` | prisma seed/restore (doc + categories) |
 | `audit20-verify.mjs` | AUDIT-20 ai-fallbacks merchant states: Shape "research skipped" quiet trace, funnel failed/stalled records, publish-degrade quiet strip + dismiss (server must run with `ANTHROPIC_API_KEY=` empty) | LOCAL build + `cmr7khgd5…` | prisma seed/restore (doc + categories + publish state) |
-| `starter-templates-verify.mjs` | PORT-10 global industry starter templates: 8 seeded shopId=NULL rows render labeled in Shape "Other ways to start", pick → picked_template + industry payload land in the draft (server must run with `ANTHROPIC_API_KEY=` empty; DB must be seeded first — see below) | LOCAL build + `cmr7khgd5…` | prisma seed/restore (doc + categories) |
+| `starter-templates-verify.mjs` | PORT-10 global industry starter templates after the FLOW-3 relocation: 8 seeded shopId=NULL rows render on `/studio/templates` (Shape's starter rail GONE), pick → template_first + rich_templates land in the draft (server must run with `ANTHROPIC_API_KEY=` empty; DB must be seeded first — see below) | LOCAL build + `cmr7khgd5…` | prisma seed/restore (doc + categories) |
 | `bld2-designai-verify.mjs` | BLD-2 Design AI top-bar restyle: popover portal + Enter/Esc/focus, mapped failure copy with `ANTHROPIC_API_KEY=` blank (`PROBE_MODE=fail`), real-call happy path (`PROBE_MODE=happy`: ≥2 cards repaint, curated fonts + contrast ≥4.5 persisted, Undo reverts) | LOCAL build + `cmr7khgd5…` | prisma seed/restore; happy mode = 1 real AI call |
 | `l2-8-verify.mjs` | Step-4 v2 rec-page builder (targets, overrides, validate-discount) | LIVE `cmqwd15f…` | doc backup/restore |
 | `l2-9-verify.mjs` | Runtime cutover: publishes the decider smoke fixture; legacy byte pin | LIVE `cmqwd15f…` + `cmqqcb0ao…` | converted the fixture (historical) |
 | `l2-10a-verify.mjs` | Preview bake + default-target affordance + one-edge-per-handle | LIVE `cmqwd15f…` | publish + restore-publish |
-| `l2-10d-verify.mjs` | THE FUNNEL FLIP end-to-end (front door → buckets → tier-1 → build → publish) | LIVE; real AI (slow, ~minutes) | graduates its draft |
+| `l2-10d-verify.mjs` | THE FUNNEL FLIP end-to-end (front door → buckets → tier-1 via shape-regenerate → build → publish; FLOW-2 made continue-buckets headless, so Shape is reached the in-flight way) | LIVE; real AI (slow, ~minutes) | graduates its draft |
 | `l2-10f-verify.mjs` | Legacy→decider upgrade wizard | LIVE `cmr0tattc…` | draft backup/restore |
 | `l2-11-verify.mjs` | Config-time grounded AI why-copy panel (sparse persist, lock, stale hash) | LIVE `cmr3ku9kb…`; real AI | restore |
 | `l212b-verify.mjs` | Runtime per-shopper rec-copy endpoint + client race | LIVE `cmr3ku9kb…`; real AI | publish/restore |
@@ -138,8 +142,9 @@ already deleted in QL3-P5; its coverage lives in `step3v3-p4/p5`.)
 The 8 industry templates in `docs/design/strategy/quiz-templates/*.template.json`
 are seeded as global (`shopId=NULL`) `SavedTemplate` rows by
 `scripts/seed-templates.mjs` — idempotent upserts keyed by slug
-(`starter-<template id>`), so re-runs are no-ops. They surface to every shop in
-the funnel's Shape stage ("Start from an industry template").
+(`starter-<template id>`), so re-runs are no-ops. They surface to every shop on
+the `/studio/templates` front door (FLOW-3 relocated the rail off the retired
+Shape stage; own shop-saved rows still show for in-flight drafts parked there).
 
 ```sh
 # locally (after `npx prisma migrate deploy` has applied

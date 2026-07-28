@@ -9,11 +9,13 @@
 //      (legacy published doc → "not_decider")
 //   3. why-copy over-limit  → 402 {code:"ai_budget"} friendly copy
 //   4. path-quality over-limit → 402 {code:"ai_budget"}
-//   5. funnel typing kick (continue-buckets) over-limit → gen_error banner
-//      copy in the session, stage "types", ZERO AiUsage delta (no AI spend)
-//   6. ONE real cheap generation: under-limit typing kick runs research+types
-//      for real and the AiUsage row increments with real token counts
-//      (recording proven end-to-end). Set SKIP_REAL_GEN=1 to skip.
+//   5. funnel gen kick (continue-buckets — the FLOW-2 headless chain)
+//      over-limit → the blank-Questions landing with the limit copy (stage
+//      "question_builder", never Shape), ZERO AiUsage delta (no AI spend)
+//   6. ONE real cheap generation: under-limit shape-regenerate kick runs
+//      research+types for real (single pass, terminal at "types") and the
+//      AiUsage row increments with real token counts (recording proven
+//      end-to-end). Set SKIP_REAL_GEN=1 to skip.
 // Seed/restore: fixture draftJson, Shop.webResearch/brandIdentity, and every
 // AiUsage row for the shop are restored/deleted at the end.
 //
@@ -25,8 +27,8 @@ const BASE = process.env.BASE ?? "http://localhost:3457";
 const KEY = process.env.STUDIO_ACCESS_TOKEN;
 const PUB = "cmpuov6yc0001vkk3rva5wad4"; // published legacy quiz (local DB)
 const FUNNEL = "cmr7khgd50001vkhscvox8dgt"; // decider draft parked at grouping
-const BUDGET_GEN_ERROR =
-  "Today's AI generation limit for this shop is reached — try again tomorrow.";
+// (The Shape-banner budget copy const retired with FLOW-2 — the over-limit
+// decider kick now lands the blank-Questions limit notice, asserted inline.)
 
 if (!KEY) {
   console.error("STUDIO_ACCESS_TOKEN missing — source .env first");
@@ -193,6 +195,9 @@ try {
   );
 
   // ── 5: funnel typing kick over-limit ───────────────────────────────────────
+  // FLOW-2 (funnel-reconfig Phase 3) — continue-buckets on a decider draft
+  // runs the HEADLESS chain: a budget refusal lands the blank-Questions notice
+  // (limit-copy variant), never the Shape gen_error banner.
   await seedCategories();
   const usageSeeded = await prisma.aiUsage.findUnique({
     where: { shopId_day: { shopId, day } },
@@ -206,11 +211,15 @@ try {
     if (session.gen_error) break;
   }
   ok(
-    "over-limit kick → gen_error banner with the budget copy",
-    session.gen_error === BUDGET_GEN_ERROR,
+    "over-limit kick → blank-Questions landing with the budget copy",
+    /AI generation limit for this shop is reached/.test(session.gen_error ?? "") &&
+      /blank/i.test(session.gen_error ?? ""),
     JSON.stringify({ stage: session.stage, gen_error: session.gen_error }),
   );
-  ok("over-limit kick → lands back on Shape (stage 'types')", session.stage === "types");
+  ok(
+    "over-limit kick → lands on Questions (stage 'question_builder', never Shape)",
+    session.stage === "question_builder" && session.built === true,
+  );
   const usageAfterRefusal = await prisma.aiUsage.findUnique({
     where: { shopId_day: { shopId, day } },
   });
@@ -222,17 +231,33 @@ try {
   );
 
   // ── 6: ONE real cheap generation (recording end-to-end) ───────────────────
+  // FLOW-2 — continue-buckets would now run the FULL headless chain (types +
+  // templates + question build ≈ 3 calls); keep this a single cheap typing
+  // pass by kicking shape-regenerate instead (same startStep2Types recording
+  // scope, non-headless → terminal at stage "types").
   if (process.env.SKIP_REAL_GEN === "1") {
     console.log("· SKIP_REAL_GEN=1 — skipping the real typing-kick generation");
   } else {
-    // Reset the draft to the grouping snapshot and clear usage (under limit).
+    // Reset the draft to the grouping snapshot (+ a goal for the regenerate)
+    // and clear usage (under limit).
     await prisma.quiz.update({
       where: { id: FUNNEL },
-      data: { draftJson: funnelQuiz.draftJson },
+      data: {
+        draftJson: {
+          ...funnelQuiz.draftJson,
+          build_session: {
+            ...(funnelQuiz.draftJson?.build_session ?? {}),
+            goal: {
+              goal_text: "Help shoppers find the right product for how they ride",
+              struggle_text: "",
+            },
+          },
+        },
+      },
     });
     await clearUsage();
     const t0 = Date.now();
-    const realKick = await funnelIntent({ intent: "continue-buckets" });
+    const realKick = await funnelIntent({ intent: "shape-regenerate" });
     ok("real kick accepted", realKick.status < 400, `status ${realKick.status}`);
     let realSession = {};
     for (let i = 0; i < 150; i++) {

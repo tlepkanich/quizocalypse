@@ -1,11 +1,12 @@
 // Shape-scope live-verify — the funnel's AI now grounds generation in the CHOSEN
 // recommendation buckets, not the whole catalog (commit 65c55a5).
 //
-// FLOW-3 note (shape retirement): the Shape STAGE is display-retired (no rail
-// pill; new front doors skip it) but the flow this probe drives —
-// continue-buckets → typing → types → shape-continue → question build — is the
-// UNCHANGED flow-2 "AI generate" path (its cleanup is Phase 3). Every
-// intent/stage this probe touches still exists and behaves identically.
+// FLOW-2 note (funnel-reconfig Phase 3): continue-buckets on a decider draft
+// now runs the whole chain HEADLESS — typing auto-picks the top type, chains
+// the templating job and the question build, and lands on question_builder
+// with NO Shape stop. This probe drives that single intent end-to-end; the
+// scope gates below are unchanged (the same generation layers run, just
+// without the merchant picking a card in between).
 //
 // This change scopes the catalog SUMMARY fed to the AI at BOTH generation layers
 // (Shape-stage types/templates in step2Build + the question-flow build in
@@ -113,29 +114,25 @@ const groupResp = await ctx.request.post(`${BASE}/api/categories/group`, {
 const cats = (await groupResp.json().catch(() => ({}))).categories ?? [];
 const catIds = new Set(cats.map((c) => c.id));
 ok("confirmed buckets persisted", cats.length >= 1, cats.map((c) => c.name).join(", "));
-await postIntent(draftId, { intent: "continue-buckets" });
+const cbResp = await postIntent(draftId, { intent: "continue-buckets" });
+ok("continue-buckets accepted (headless chain kicked)", cbResp.ok(), `${cbResp.status()}`);
 
-// ── 3. tier-1 → types ───────────────────────────────────────────────────────
+// ── 3/4. HEADLESS types → templates → REAL question build (one chain) ───────
+// FLOW-2: no Shape stop — the chain lands on question_builder by itself. A
+// stop at "types" would mean the headless flag regressed.
 let fd = null;
-for (let i = 0; i < 40; i++) {
-  await sleep(5000);
-  fd = await readFunnel(draftId);
-  if (fd.stage === "types" || fd.genError) break;
-}
-ok("tier-1 done (stage types)", fd?.stage === "types", `stage=${fd?.stage} genError=${fd?.genError ?? ""}`);
-if (fd?.stage !== "types") { await browser.close(); process.exit(1); }
-
-// ── 4. shape-continue (direct) → REAL question build via onboardingBuild ─────
-const typeId = fd.quizTypes?.[0]?.id ?? "x";
-const scResp = await postIntent(draftId, { intent: "shape-continue", typeId, scoring: "direct" });
-ok("shape-continue (direct) accepted", scResp.ok(), `${scResp.status()}`);
-for (let i = 0; i < 60; i++) {
+let sawTypesStop = false;
+for (let i = 0; i < 90; i++) {
   await sleep(6000);
   fd = await readFunnel(draftId);
-  if (fd.stage === "question_builder" || fd.genError) break;
+  if (fd.stage === "types") sawTypesStop = true;
+  if (fd.stage === "question_builder" || fd.stage === "types" || fd.genError) break;
 }
-ok("question build completed (→ question_builder)", fd?.stage === "question_builder", `stage=${fd?.stage} genError=${fd?.genError ?? ""}`);
-if (fd?.stage !== "question_builder") { await browser.close(); process.exit(1); }
+ok("headless chain never parked on Shape (types)", !sawTypesStop, `stage=${fd?.stage}`);
+// A failed headless chain also lands question_builder (the blank-Questions
+// notice in genError) — completion means landing there WITHOUT one.
+ok("question build completed (→ question_builder, no genError)", fd?.stage === "question_builder" && !fd?.genError, `stage=${fd?.stage} genError=${fd?.genError ?? ""}`);
+if (fd?.stage !== "question_builder" || fd?.genError) { await browser.close(); process.exit(1); }
 
 // ── 5. HARD: the built doc is a valid decider quiz (orchestrator regression) ──
 const built = (await readBuilder(draftId)).doc;

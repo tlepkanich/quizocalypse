@@ -1,7 +1,11 @@
 // L2-10d live-verify — the FUNNEL FLIP end-to-end on the standalone deploy.
 // 1. Front door creates a FRESH DECIDER draft (graduating any stuck pre-flip
 //    draft first — the flagged cmr3… "typing" strandee gets healed en route).
-// 2. Buckets (headless grouping API) → continue-buckets → detached tier-1 AI.
+// 2. Buckets (headless grouping API) → tier-1 AI. FLOW-2 (funnel-reconfig
+//    Phase 3): continue-buckets on a decider draft now runs the HEADLESS
+//    chain straight to Questions (flow2-verify owns that path), so this probe
+//    reaches the Shape surface the way an IN-FLIGHT draft still does — seed
+//    the goal, then shape-regenerate (Shape's own re-kick) → typing → types.
 // 3. Shape stage renders the decider UI: 3 cards (Manual hidden), no scoring
 //    radios, fixed "Direct mapping" descriptor, Continue enabled immediately.
 // 4. Server guards: shape-manual → 400 · shape-continue scoring=weighted → 400.
@@ -80,8 +84,24 @@ const groupResp = await ctx.request.post(`${BASE}/api/categories/group`, {
 const cats = (await groupResp.json().catch(() => ({}))).categories ?? [];
 ok("2 buckets persisted", cats.length === 2, `${cats.length}`);
 
-const cbResp = await postIntent(draftId, { intent: "continue-buckets" });
-ok("continue-buckets accepted (goal auto-suggested, typing kicked)", cbResp.ok());
+// FLOW-2: reach Shape as an in-flight draft would (continue-buckets is now
+// headless-to-Questions for decider drafts). Seed the goal via the builder's
+// verbatim PUT, then fire Shape's own re-kick.
+const preShape = (await readBuilder(draftId)).doc;
+await ctx.request.put(builderData(draftId), {
+  headers: { "content-type": "application/json" },
+  data: {
+    doc: {
+      ...preShape,
+      build_session: {
+        ...(preShape.build_session ?? {}),
+        goal: { goal_text: "Help shoppers find the right board for how and where they ride", struggle_text: "" },
+      },
+    },
+  },
+});
+const cbResp = await postIntent(draftId, { intent: "shape-regenerate" });
+ok("shape-regenerate accepted (typing kicked, non-headless)", cbResp.ok());
 
 let fd = null;
 for (let i = 0; i < 40; i++) {

@@ -1,5 +1,7 @@
 // O-3 live-verify — decider-native saved templates on the standalone deploy.
-// 1. Front door → fresh DECIDER draft → 2 buckets → tier-1 AI → stage "types".
+// 1. Front door → fresh DECIDER draft → 2 buckets → tier-1 AI → stage "types"
+//    (via shape-regenerate — FLOW-2 made continue-buckets headless; Shape is
+//    now the in-flight-draft surface this probe deliberately exercises).
 // 2. Guards at types: shape-manual 400 · weighted 400 · back-to-configuring 400
 //    (NEW) · use-saved-template bogus id 400 (not-found).
 // 3. LEGACY regression on the SAME draft: strip the stamp → use-saved-template
@@ -71,7 +73,19 @@ const groupResp = await ctx.request.post(`${BASE}/api/categories/group`, {
 const cats = (await groupResp.json().catch(() => ({}))).categories ?? [];
 const catIds = new Set(cats.map((c) => c.id));
 ok("2 buckets persisted", cats.length === 2, cats.map((c) => c.name).join(", "));
-await postIntent(draftId, { intent: "continue-buckets" });
+// FLOW-2 (funnel-reconfig Phase 3): continue-buckets on a decider draft now
+// runs the HEADLESS chain straight to Questions — Shape is only reachable for
+// drafts already parked in its family. Reach it the in-flight way: seed the
+// goal, then shape-regenerate (Shape's own re-kick) → typing → types.
+const preShape = (await readBuilder(draftId)).doc;
+await putDoc(draftId, {
+  ...preShape,
+  build_session: {
+    ...(preShape.build_session ?? {}),
+    goal: { goal_text: "Help shoppers find the right board for how and where they ride", struggle_text: "" },
+  },
+});
+await postIntent(draftId, { intent: "shape-regenerate" });
 
 let fd = null;
 for (let i = 0; i < 40; i++) {
