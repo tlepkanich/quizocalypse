@@ -95,18 +95,19 @@ const QUICK_ACTIONS: Array<{ to?: string; icon: ReactNode; title: string; blurb:
   //   soon: true,
   //   icon: <path d="M4 20V10M10 20V4M16 20v-7M22 20V8" />,
   // },
-  {
-    hue: "var(--qz-pastel-rose)",
-    title: "Strategy ideas",
-    blurb: "AI-suggested quiz angles for your store.",
-    soon: true,
-    icon: (
-      <>
-        <path d="M12 3a6 6 0 0 0-4 10.5c.7.7 1 1.2 1 2.5h6c0-1.3.3-1.8 1-2.5A6 6 0 0 0 12 3Z" />
-        <path d="M9 20h6M10 22h4" />
-      </>
-    ),
-  },
+  // OWNER 2026-07-25 — Strategy ideas card removed too.
+  // {
+  //   hue: "var(--qz-pastel-rose)",
+  //   title: "Strategy ideas",
+  //   blurb: "AI-suggested quiz angles for your store.",
+  //   soon: true,
+  //   icon: (
+  //     <>
+  //       <path d="M12 3a6 6 0 0 0-4 10.5c.7.7 1 1.2 1 2.5h6c0-1.3.3-1.8 1-2.5A6 6 0 0 0 12 3Z" />
+  //       <path d="M9 20h6M10 22h4" />
+  //     </>
+  //   ),
+  // },
 ];
 
 function TileIcon({ children }: { children: ReactNode }) {
@@ -175,7 +176,9 @@ export default function StudioHome() {
         <span className="qz-hero-spark" aria-hidden>✨</span>
       </div>
 
-      {/* 2 — 3 action cards (Edit 5); A/B + Strategy are "Soon" placeholders */}
+      {/* 2 — quick-action cards; all currently owner-hidden (2026-07-25) —
+          the grid renders nothing while QUICK_ACTIONS is empty. */}
+      {QUICK_ACTIONS.length === 0 ? null : (
       <div className="qz-grid qz-grid-3">
         {QUICK_ACTIONS.map((a) => {
           const inner = (
@@ -201,6 +204,7 @@ export default function StudioHome() {
           );
         })}
       </div>
+      )}
 
       {/* 3 — 4 KPI tiles: white with a purple accent bar + purple number. */}
       <QzStatGrid cards>
