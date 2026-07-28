@@ -1,6 +1,6 @@
 import type { LoaderFunctionArgs } from "@remix-run/node";
 import { json } from "@remix-run/node";
-import { Link, useLoaderData } from "@remix-run/react";
+import { Form, Link, useLoaderData } from "@remix-run/react";
 import { useEffect, useState, type ReactNode } from "react";
 import { requireStudioAccess, resolveStudioShop } from "../lib/studioAccess.server";
 import prisma from "../db.server";
@@ -85,37 +85,29 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 // testing + Strategy ideas are v1 PLACEHOLDERS: shown with a "Soon" tag, not
 // clickable (no `to`).
 const QUICK_ACTIONS: Array<{ to?: string; icon: ReactNode; title: string; blurb: string; hue: string; soon?: boolean }> = [
-  {
-    to: "/studio/new",
-    hue: "var(--qz-pastel-mint)",
-    title: "Create manually",
-    blurb: "Start from scratch and add your own questions.",
-    icon: (
-      <>
-        <path d="M12 20h9" />
-        <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5Z" />
-      </>
-    ),
-  },
-  {
-    hue: "var(--qz-pastel-amber)",
-    title: "A/B testing",
-    blurb: "Run experiments to find what converts.",
-    soon: true,
-    icon: <path d="M4 20V10M10 20V4M16 20v-7M22 20V8" />,
-  },
-  {
-    hue: "var(--qz-pastel-rose)",
-    title: "Strategy ideas",
-    blurb: "AI-suggested quiz angles for your store.",
-    soon: true,
-    icon: (
-      <>
-        <path d="M12 3a6 6 0 0 0-4 10.5c.7.7 1 1.2 1 2.5h6c0-1.3.3-1.8 1-2.5A6 6 0 0 0 12 3Z" />
-        <path d="M9 20h6M10 22h4" />
-      </>
-    ),
-  },
+  // OWNER 2026-07-25 — 'Create manually' card removed from the homepage
+  // (manual entry lives behind Create with AI / the quizzes surface).
+  // OWNER 2026-07-25 — A/B testing card hidden for now (to return later).
+  // {
+  //   hue: "var(--qz-pastel-amber)",
+  //   title: "A/B testing",
+  //   blurb: "Run experiments to find what converts.",
+  //   soon: true,
+  //   icon: <path d="M4 20V10M10 20V4M16 20v-7M22 20V8" />,
+  // },
+  // OWNER 2026-07-25 — Strategy ideas card removed too.
+  // {
+  //   hue: "var(--qz-pastel-rose)",
+  //   title: "Strategy ideas",
+  //   blurb: "AI-suggested quiz angles for your store.",
+  //   soon: true,
+  //   icon: (
+  //     <>
+  //       <path d="M12 3a6 6 0 0 0-4 10.5c.7.7 1 1.2 1 2.5h6c0-1.3.3-1.8 1-2.5A6 6 0 0 0 12 3Z" />
+  //       <path d="M9 20h6M10 22h4" />
+  //     </>
+  //   ),
+  // },
 ];
 
 function TileIcon({ children }: { children: ReactNode }) {
@@ -154,23 +146,39 @@ export default function StudioHome() {
           <p className="qz-muted" style={{ margin: "0 0 16px", maxWidth: 420, fontSize: 14 }}>
             Turn browsers into buyers — build a guided quiz that recommends the right products.
           </p>
-          {/* FLOW-1 — writing the goal is the primary entry: the AI pre-picks
-              products for it and builds the quiz around them. FLOW-3 —
-              Generate Quiz Templates drafts 2-3 very different directions to
-              pick from. The existing funnel stays as the manual path (Flow 2
-              keeps today's flow). */}
-          <div className="qz-row" style={{ gap: 10, flexWrap: "wrap" }}>
-            <Link to="/studio/goal" className="qz-btn qz-btn-primary">✎ Write your goal</Link>
-            <Link to="/studio/templates" className="qz-btn qz-btn-ghost">✦ Generate quiz templates</Link>
-            <Link to="/studio/onboarding" className="qz-btn qz-btn-ghost">Create with AI</Link>
-          </div>
+          {/* FLOW-1 (owner 2026-07-25) — the goal is written RIGHT HERE: the
+              hero is the text box; submit carries ?goal= to /studio/goal so the
+              brief screen (audience/factors/length) collects the rest, then —
+              AI pre-picks products and builds the quiz around them. FLOW-3 —
+              Generate Quiz Templates drafts 2-3 very different directions.
+              The existing funnel stays as the manual path (Flow 2). */}
+          <Form method="get" action="/studio/goal" style={{ maxWidth: 460 }}>
+            <textarea
+              name="goal"
+              rows={3}
+              required
+              minLength={24}
+              maxLength={500}
+              placeholder="Write your goal — e.g. “Help first-time buyers pick the right snowboard for their terrain and skill level”"
+              aria-label="Your quiz goal"
+              className="qz-input"
+              style={{ width: "100%", resize: "vertical", fontSize: 14, lineHeight: 1.5, padding: "10px 12px" }}
+            />
+            <div className="qz-row" style={{ gap: 10, flexWrap: "wrap", marginTop: 10 }}>
+              <button type="submit" className="qz-btn qz-btn-primary">✎ Start from your goal</button>
+              <Link to="/studio/templates" className="qz-btn qz-btn-ghost">✦ Generate quiz templates</Link>
+              <Link to="/studio/onboarding" className="qz-btn qz-btn-ghost">Create with AI</Link>
+            </div>
+          </Form>
         </div>
         <HeroArt />
         {/* A sparkle that runs across the banner every ~8s to draw the eye. */}
         <span className="qz-hero-spark" aria-hidden>✨</span>
       </div>
 
-      {/* 2 — 3 action cards (Edit 5); A/B + Strategy are "Soon" placeholders */}
+      {/* 2 — quick-action cards; all currently owner-hidden (2026-07-25) —
+          the grid renders nothing while QUICK_ACTIONS is empty. */}
+      {QUICK_ACTIONS.length === 0 ? null : (
       <div className="qz-grid qz-grid-3">
         {QUICK_ACTIONS.map((a) => {
           const inner = (
@@ -196,6 +204,7 @@ export default function StudioHome() {
           );
         })}
       </div>
+      )}
 
       {/* 3 — 4 KPI tiles: white with a purple accent bar + purple number. */}
       <QzStatGrid cards>

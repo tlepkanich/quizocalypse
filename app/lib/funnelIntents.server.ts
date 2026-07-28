@@ -349,11 +349,11 @@ async function runStep1FunnelActionImpl(
     const tab = session.bucket_browser?.active_tab;
     const dimension = tab === "tag" ? "tag" : tab === "collection" ? "collection" : "all";
 
-    // Re-sequenced flow (owner): Buckets → Shape DIRECTLY (no standalone Goal step).
     // Derive the goal automatically from the brand identity + confirmed buckets —
-    // the same deterministic suggestion the old Goal stage pre-filled — and kick the
-    // tier-1 type generation now, so Shape loads with the 2 AI template options. The
-    // merchant can still override via Shape's "write your goal" card (shape-goal-build).
+    // the same deterministic suggestion the old Goal stage pre-filled — and kick
+    // the tier-1 type generation now. DECIDER drafts run the whole chain headless
+    // (FLOW-2, below); LEGACY drafts keep the original re-sequenced route
+    // (Buckets → Shape directly, where the merchant picks a type card).
     const shopRow = await prisma.shop.findUnique({
       where: { id: shop.id },
       select: { brandIdentity: true },
@@ -362,6 +362,55 @@ async function runStep1FunnelActionImpl(
       identitySummary: parseBrandIdentitySafe(shopRow?.brandIdentity)?.summary ?? null,
       groupNames: cats.map((c) => c.name),
     });
+
+    // FLOW-2 (funnel-reconfig Flow 2) — the manual flow's pop-up "Generate with
+    // AI" row is the ONLY caller of this intent on a decider draft, and per the
+    // spec Shape is gone from all flows: the middle passes run HEADLESS (the
+    // flow1-confirm machinery — startStep2Types auto-picks the top type, chains
+    // the templating job which auto-picks the top template, which chains the
+    // question build) and the merchant lands on the Questions step. Every
+    // failure lands the blank-Questions notice — never a Shape they didn't
+    // choose. ai_generate marks the chain so retry-gen re-kicks headless and
+    // Back-from-Questions returns to Recommendations. Shape's defaults fold in
+    // (scoring "direct" — the flow1-confirm precedent); the deterministic goal
+    // suggestion grounds the generation exactly as the old typing kick did.
+    // Legacy drafts keep the byte-identical Shape route below.
+    if (doc.logic_model === "decider") {
+      const next: BuildSession = {
+        ...session,
+        stage: "typing",
+        grouping: {
+          dimension,
+          confirmed_category_ids: cats.map((c) => c.id),
+          detected_rationale: "Selected in the recommendation buckets browser.",
+        },
+        goal: { goal_text: suggestedGoal, struggle_text: session.goal?.struggle_text ?? "" },
+        gen_error: undefined,
+        ai_generate: true,
+        // A re-confirmed flow starts a FRESH headless chain — stale template
+        // artifacts would misroute retry-gen, and a stale built:true would
+        // graduate the draft MID-generation (the flow1-confirm precedent).
+        quiz_types: [],
+        picked_type_id: undefined,
+        rich_templates: [],
+        picked_template: undefined,
+        built: undefined,
+      };
+      await writeDoc(quiz.id, { ...doc, scoring_model: "direct", build_session: next });
+      const buckets = await loadConfirmedBuckets(shop.id, quiz.id);
+      startStep2Types(
+        shop.id,
+        quiz.id,
+        {
+          goal: suggestedGoal,
+          ...(buckets.length ? { buckets } : {}),
+        },
+        // No goal brief here (unlike flow1) — no question-length pin.
+        { headless: {} },
+      );
+      return json({ intent, ok: true });
+    }
+
     const next: BuildSession = {
       ...session,
       stage: "typing",
@@ -589,8 +638,16 @@ async function runStep1FunnelActionImpl(
       // Back-from-Questions keys on quiz_types.length===0 to route to
       // Recommendations; a stale non-empty list (merchant ran AI templates, backed
       // out, then wrote a goal) would wrongly send Back to Shape.
+      // FLOW-2 — a goal build supersedes any prior pop-up-AI chain: clear the
+      // headless marker alongside the other stale artifacts.
       ...(doc.logic_model === "decider"
-        ? { quiz_types: [], picked_type_id: undefined, rich_templates: [], picked_template: undefined }
+        ? {
+            quiz_types: [],
+            picked_type_id: undefined,
+            rich_templates: [],
+            picked_template: undefined,
+            ai_generate: undefined,
+          }
         : {}),
     };
     await writeDoc(quiz.id, {
@@ -660,11 +717,13 @@ async function runStep1FunnelActionImpl(
       gen_error: undefined,
       // A retried/re-confirmed flow starts a FRESH headless chain — stale
       // template artifacts would misroute retry-gen (the shape-goal-build
-      // precedent). goal_first itself survives: it marks the flow.
+      // precedent). goal_first itself survives: it marks the flow. A stale
+      // FLOW-2 marker is cleared — goal_first owns this chain.
       quiz_types: [],
       picked_type_id: undefined,
       rich_templates: [],
       picked_template: undefined,
+      ai_generate: undefined,
       // A prior failed chain's blank-Questions landing left built:true; a
       // stale true here would let findOrCreateStep1Draft graduate the draft
       // MID-generation (built reads as "finished"). The build's completion
@@ -756,8 +815,10 @@ async function runStep1FunnelActionImpl(
         gen_error: undefined,
         // A prior failed chain's blank-Questions landing left built:true; a
         // stale true would graduate the draft MID-generation (flow1-confirm
-        // precedent). The build's completion sets it honestly.
+        // precedent). The build's completion sets it honestly. A stale FLOW-2
+        // marker is cleared — template_first owns this chain.
         built: undefined,
+        ai_generate: undefined,
       };
       await writeDoc(quiz.id, {
         ...doc,
@@ -790,6 +851,7 @@ async function runStep1FunnelActionImpl(
       picked_template: undefined,
       gen_error: undefined,
       built: undefined,
+      ai_generate: undefined,
     };
     await writeDoc(quiz.id, {
       ...doc,
@@ -857,11 +919,13 @@ async function runStep1FunnelActionImpl(
       // SR §3 — the blank route SKIPS Shape. Clear quiz_types (alongside the other
       // template artifacts) so Back-from-Questions routes to Recommendations, not
       // Shape, even when the merchant ran AI templates then backed out to pick
-      // "Build manually" (back-to-grouping preserves the stale list).
+      // "Build manually" (back-to-grouping preserves the stale list). The FLOW-2
+      // marker clears with them — the merchant chose blank, not the AI chain.
       quiz_types: [],
       picked_type_id: undefined,
       rich_templates: [],
       picked_template: undefined,
+      ai_generate: undefined,
     };
     await writeDoc(quiz.id, { ...skeleton, scoring_model: "direct", build_session: next });
     return json({ intent, ok: true });
@@ -939,8 +1003,10 @@ async function runStep1FunnelActionImpl(
           ...(session.goal?.struggle_text ? { struggle: session.goal.struggle_text } : {}),
           ...(retryBuckets.length ? { buckets: retryBuckets } : {}),
         },
-        // FLOW-1 — a goal-first typing job is HEADLESS; re-kicking it without
-        // the flag would park the merchant on the Shape stage they never chose.
+        // FLOW-1/FLOW-2 — a goal-first or pop-up-AI typing job is HEADLESS;
+        // re-kicking it without the flag would park the merchant on the Shape
+        // stage they never chose. (ai_generate carries no goal brief — no
+        // question-length pin.)
         session.goal_first
           ? {
               headless: {
@@ -949,7 +1015,9 @@ async function runStep1FunnelActionImpl(
                   : {}),
               },
             }
-          : undefined,
+          : session.ai_generate
+            ? { headless: {} }
+            : undefined,
       );
       return json({ intent, ok: true });
     }
@@ -970,10 +1038,10 @@ async function runStep1FunnelActionImpl(
             ...(session.goal?.struggle_text ? { struggle: session.goal.struggle_text } : {}),
             ...(retryCats.length ? { buckets: retryCats } : {}),
           },
-          // FLOW-1/FLOW-3 — goal-first + template-first failures land the
-          // blank-Questions notice (the merchant never chose Shape); every
-          // other flow keeps today's default.
-          session.goal_first || session.template_first?.picked
+          // FLOW-1/FLOW-2/FLOW-3 — goal-first, pop-up-AI, and template-first
+          // failures land the blank-Questions notice (the merchant never chose
+          // Shape); every other flow keeps today's default.
+          session.goal_first || session.ai_generate || session.template_first?.picked
             ? { failMode: "blank_questions" }
             : undefined,
         );
@@ -1001,9 +1069,9 @@ async function runStep1FunnelActionImpl(
             session.picked_template,
             session.goal?.goal_text || retryRich.angle,
             session.goal?.struggle_text ?? "",
-            // FLOW-1/FLOW-3 — goal-first + template-first build failures land
-            // blank Questions (see above).
-            session.goal_first || session.template_first?.picked
+            // FLOW-1/FLOW-2/FLOW-3 — goal-first, pop-up-AI, and template-first
+            // build failures land blank Questions (see above).
+            session.goal_first || session.ai_generate || session.template_first?.picked
               ? { failMode: "blank_questions" }
               : undefined,
           );
@@ -1702,9 +1770,13 @@ async function runStep1FunnelActionImpl(
               // FLOW-3 — template-first picks likewise: the candidates live in
               // quiz_types but the merchant chose them on /studio/templates,
               // never on Shape.
+              // FLOW-2 — the pop-up's "Generate with AI" chain runs headless
+              // (ai_generate): its quiz_types are retry bookkeeping, not a
+              // Shape visit — Back returns to Recommendations.
               doc.logic_model === "decider" &&
                 (session.quiz_types.length === 0 ||
                   session.goal_first ||
+                  session.ai_generate ||
                   session.template_first?.picked)
               ? "grouping"
               : "types";

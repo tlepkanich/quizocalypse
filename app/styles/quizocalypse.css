@@ -3604,6 +3604,8 @@ body[data-qz] ::selection { background: var(--qz-ink); color: var(--qz-cream); }
   cursor: pointer; background: var(--qz-paper); color: var(--qz-ink);
   transition: border-color .15s, box-shadow .15s, background .15s;
   width: 100%; font-family: inherit; text-align: left;
+  /* FLOW-2 — the Write-your-goal row is now a <Link> to /studio/goal. */
+  text-decoration: none; box-sizing: border-box;
 }
 .qz-sm-row:hover {
   border-color: color-mix(in srgb, var(--qz-accent) 32%, var(--qz-paper));

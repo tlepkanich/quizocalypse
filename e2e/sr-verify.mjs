@@ -1,8 +1,9 @@
 // Start-routing spec live-verify (quiz-start-routing-design-system-spec, Polaris
 // design skipped — qz system retained) on the standalone deploy.
-//   §1 intercept modal: decider Recommendations "Continue" opens the modal (does
-//      NOT submit continue-buckets); three routes present; Esc dismisses; the
-//      "Build from a blank quiz" tertiary → manual-build.
+//   §1 intercept modal (FLOW-2: manual-flow-only, single screen): decider
+//      Recommendations "Continue" opens the modal (does NOT submit
+//      continue-buckets); three routes present (AI / goal-link / blank); Esc
+//      dismisses; the "Start from blank" row → manual-build.
 //   §1.2 manual-build: no AI → a valid decider skeleton (ONE result node w/ a
 //      non-empty fallback, built:true, scoring_model direct) at question_builder;
 //      quiz_types cleared (§3 marker).
@@ -80,10 +81,13 @@ await page.goto(url, { waitUntil: "domcontentloaded" });
 await page.waitForTimeout(1000);
 await page.locator(".qz-rb-rail-foot .qz-btn-accent").first().click();
 await page.waitForTimeout(500);
+// FLOW-2 (funnel-reconfig Phase 3) — the pop-up is single-screen, manual-flow
+// only; row labels are the AUDIT-5 mock's, and Write-your-goal is a LINK to
+// the Flow-1 /studio/goal page (the in-modal brief screen is retired).
 ok("Continue opens the intercept modal (no navigation)", await page.getByText("How do you want to start?").first().isVisible().catch(() => false));
-ok("route (a) Generate AI templates present", await page.getByText("Generate AI templates").first().isVisible().catch(() => false));
-ok("route (b) Write your goal present", await page.getByText("Write your goal").first().isVisible().catch(() => false));
-ok("route (c) blank-quiz tertiary present", await page.getByText("Build from a blank quiz instead", { exact: false }).first().isVisible().catch(() => false));
+ok("route (a) Generate with AI present", await page.getByText("Generate with AI").first().isVisible().catch(() => false));
+ok("route (b) Write your goal links /studio/goal", (await page.locator('a.qz-sm-row[href="/studio/goal"]').count()) === 1);
+ok("route (c) Start from blank present", await page.getByText("Start from blank").first().isVisible().catch(() => false));
 await page.screenshot({ path: "e2e/shots/sr-intercept-modal.png" });
 // still at grouping (modal is client-state only)
 fd = await readFunnel(draftId);
@@ -96,7 +100,7 @@ ok("Esc closes the modal", !(await page.getByText("How do you want to start?").f
 // ── §1.2 manual-build (no AI) ────────────────────────────────────────────────
 await page.locator(".qz-rb-rail-foot .qz-btn-accent").first().click();
 await page.waitForTimeout(400);
-await page.getByText("Build from a blank quiz instead", { exact: false }).first().click();
+await page.locator(".qz-sm-row", { hasText: "Start from blank" }).click();
 await page.waitForTimeout(1600);
 fd = await readFunnel(draftId);
 const mb = await readBuilder(draftId);

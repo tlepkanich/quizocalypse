@@ -201,12 +201,14 @@ export function Step1Funnel({ data }: { data: FunnelData }) {
 
       {/* An AI generation job failed (e.g. the AI is unavailable). Surface it
           honestly with a template fallback instead of silently stranding the
-          merchant on a stage that won't advance. */}
+          merchant on a stage that won't advance. FLOW-2 — the escape targets
+          /studio/templates (the Flow-3 template front door): /studio/new is a
+          redirect-gated bounce back into this funnel, not a template surface. */}
       {data.genError ? (
         <QzBanner tone="warn" title="AI generation didn't finish">
           <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
             <span>{data.genError}</span>
-            <Link to="/studio/new" className="qz-btn qz-btn-accent qz-btn-sm" style={{ alignSelf: "flex-start" }}>
+            <Link to="/studio/templates" className="qz-btn qz-btn-accent qz-btn-sm" style={{ alignSelf: "flex-start" }}>
               Start from a template →
             </Link>
           </div>
@@ -453,7 +455,9 @@ function GeneratingScreen({
             <button type="button" className="qz-btn qz-btn-accent" disabled={retrying} onClick={onRetry}>
               {retrying ? "Restarting…" : "Try again"}
             </button>
-            <Link to="/studio/new" className="qz-btn qz-btn-ghost">
+            {/* FLOW-2 — the template escape goes to the real template front
+                door; /studio/new only redirect-bounces back into the funnel. */}
+            <Link to="/studio/templates" className="qz-btn qz-btn-ghost">
               Start from a template →
             </Link>
           </div>
