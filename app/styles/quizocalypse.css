@@ -3923,13 +3923,13 @@ textarea.qz-sm-inp { resize: vertical; min-height: 62px; line-height: 1.5; }
   padding: 6px; margin: -6px; /* invisible hit-target padding */
   text-decoration: none; color: var(--qz-ink);
 }
-/* Typographic monogram — the interim mark now that the diamond is gone (§13).
-   A rounded violet-wash tile with the initial in the display face. */
+/* BRAND-3 — the studio-violet fox tile: solid accent ground, cream FoxMark,
+   features punched out in the accent itself (the board's "studio violet"). */
 .qz-wordmark-mono {
   flex: none;
   display: inline-flex; align-items: center; justify-content: center;
   width: 28px; height: 28px; border-radius: 9px;
-  background: var(--qz-accent-wash); color: var(--qz-accent-ink);
+  background: var(--qz-accent); color: var(--qz-accent-ink);
   font-family: var(--qz-font-display); font-weight: 700; font-size: 16px;
   line-height: 1; letter-spacing: -0.02em;
 }

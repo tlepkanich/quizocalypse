@@ -20,14 +20,18 @@ export function FoxMark({
   size = 20,
   variant = "color",
   detailed = false,
+  feature: featureOverride,
 }: {
   size?: number;
   /** "color" = rust fox for light grounds; "cream" = cream fox for dark/colored tiles. */
   variant?: "color" | "cream";
   detailed?: boolean;
+  /** Overrides the eye/nose/whisker color — pass the tile's own background
+      (e.g. "var(--qz-accent)") for the punched-out one-color treatment. */
+  feature?: string;
 }) {
   const head = variant === "cream" ? "#FFF8F0" : "#E8590C";
-  const feature = variant === "cream" ? "#E8590C" : "#2A1810";
+  const feature = featureOverride ?? (variant === "cream" ? "#E8590C" : "#2A1810");
   const blaze = variant === "cream" ? undefined : "#FFF8F0";
   return (
     <svg

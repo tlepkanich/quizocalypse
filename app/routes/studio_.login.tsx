@@ -63,7 +63,7 @@ const styles: Record<string, CSSProperties> = {
     display: "inline-flex",
     alignItems: "center",
     justifyContent: "center",
-    background: "var(--qz-accent-wash)",
+    background: "var(--qz-accent)",
     color: "var(--qz-accent-ink)",
     fontFamily: "var(--qz-font-display)",
     fontWeight: 700,
@@ -91,7 +91,7 @@ export default function StudioLogin() {
         <div className="qz-card" style={styles.card}>
           <div style={styles.brand}>
             <span style={styles.mono} aria-hidden>
-              <FoxMark size={27} />
+              <FoxMark size={27} variant="cream" feature="var(--qz-accent)" />
             </span>
             <h1 style={styles.h1}>Check your email</h1>
           </div>
@@ -104,7 +104,7 @@ export default function StudioLogin() {
         <Form method="post" className="qz-card" style={styles.card}>
           <div style={styles.brand}>
             <span style={styles.mono} aria-hidden>
-              <FoxMark size={27} />
+              <FoxMark size={27} variant="cream" feature="var(--qz-accent)" />
             </span>
             <h1 style={styles.h1}>Wiskr Studio</h1>
           </div>

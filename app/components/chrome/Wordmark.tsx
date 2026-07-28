@@ -17,7 +17,7 @@ export function Wordmark({
   return (
     <Link to={to} className="qz-wordmark" aria-label={`${name} — home`}>
       <span className="qz-wordmark-mono" aria-hidden="true">
-        <FoxMark size={22} />
+        <FoxMark size={22} variant="cream" feature="var(--qz-accent)" />
       </span>
       {compact ? null : <span className="qz-wordmark-name">{name}</span>}
     </Link>
