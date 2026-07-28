@@ -59,7 +59,7 @@ export function Step5Preview({
   // just the device toolbar + the live frame in the centered canvas.
   chromeless?: boolean;
   // QB-5: the standalone builder passes "standalone" so the preview shows the
-  // "Build with Quizocalypse" badge (matching the published quiz).
+  // "Build with wiskr.ai" badge (matching the published quiz).
   platform?: "shopify" | "standalone";
   // phone-preview SPEC Expand — this mount lives inside the dimmed overlay:
   // the device frame floors mobile at true 1:1 / fits desktop to the host.

@@ -45,7 +45,7 @@ export async function ingestWebsite(url: string): Promise<string> {
   try {
     const res = await fetch(parsed.toString(), {
       headers: {
-        "User-Agent": "QuizocalypseBot/1.0 (+https://quizocalypse.app)",
+        "User-Agent": "WiskrBot/1.0 (+https://wiskr.ai)",
         Accept: "text/html,application/xhtml+xml",
       },
       redirect: "follow",

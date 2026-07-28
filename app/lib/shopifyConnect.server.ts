@@ -121,7 +121,7 @@ export async function resolveAppAdmin(
   } catch {
     return {
       ok: false,
-      error: `No installed Quizocalypse app was found for ${domain}. Install the app on that store first, or connect with an Admin API token instead.`,
+      error: `No installed Wiskr app was found for ${domain}. Install the app on that store first, or connect with an Admin API token instead.`,
     };
   }
 }
@@ -237,7 +237,7 @@ export async function connectShopifyViaApp(shopId: string, rawDomain: string): P
   return {
     ok: false,
     error: sessionToken
-      ? `Found the installed app's session for ${domain}, but Shopify rejected its token — token-exchange offline tokens are short-lived. Re-open the Quizocalypse app in your Shopify admin to refresh it, then try again, or connect with an Admin API token.`
+      ? `Found the installed app's session for ${domain}, but Shopify rejected its token — token-exchange offline tokens are short-lived. Re-open the Wiskr app in your Shopify admin to refresh it, then try again, or connect with an Admin API token.`
       : `No installed-app session for ${domain} exists in this workspace's database. If the app is installed on a different server or a local dev build, its token lives in that database — connect with an Admin API token instead.`,
   };
 }

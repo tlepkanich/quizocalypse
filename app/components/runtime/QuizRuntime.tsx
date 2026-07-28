@@ -2050,7 +2050,7 @@ export function QuizRuntime(props: QuizRuntimeProps) {
           />
         )}
       </div>
-      {/* QB-5 — "Build with Quizocalypse" badge. Standalone quizzes only, so the
+      {/* QB-5 — "Build with wiskr.ai" badge. Standalone quizzes only, so the
           embedded /app preview + every published Shopify /q stay pixel-identical
           (the regression guarantee). Preview: anchored to the runtime box; live:
           fixed bottom-right of the viewport, like Quizell's badge. */}
@@ -2091,15 +2091,15 @@ export function QuizRuntime(props: QuizRuntimeProps) {
               width: 16,
               height: 16,
               borderRadius: 4,
-              background: "#0B6BCB",
+              background: "#E8590C",
               color: "#fff",
               fontWeight: 700,
               fontSize: 11,
             }}
           >
-            Q
+            w
           </span>
-          Quizocalypse
+          wiskr.ai
         </a>
       ) : null}
     </div>

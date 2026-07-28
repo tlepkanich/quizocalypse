@@ -218,7 +218,7 @@ export async function action({ params, request }: ActionFunctionArgs) {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            "User-Agent": "Quizocalypse/1.0",
+            "User-Agent": "Wiskr/1.0",
             ...(act.secret
               ? {
                   "X-Quizocalypse-Secret": act.secret,

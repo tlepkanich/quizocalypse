@@ -4788,7 +4788,7 @@ function EmbedSnippet({
         Theme block settings
       </div>
       <p className="qz-muted" style={{ fontSize: 13, margin: "0 0 8px" }}>
-        When adding the Quizocalypse block to a storefront section, paste:
+        When adding the Wiskr block to a storefront section, paste:
       </p>
       <div
         className="qz-mono"
@@ -5012,7 +5012,7 @@ export default function QuizEditor() {
                 >
                   Open the live storefront preview
                 </a>{" "}
-                — share this link, or embed via the Quizocalypse theme block.
+                — share this link, or embed via the Wiskr theme block.
               </p>
               <EmbedSnippet quizId={data.quizId} previewUrl={previewUrl} />
             </div>

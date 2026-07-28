@@ -17,7 +17,7 @@ export const links: LinksFunction = () => adminStyleLinks;
 // admin sheet (above) and uses the token-wired --qz-* system + qz-* classes so
 // the first screen users see carries the identity.
 
-export const meta: MetaFunction = () => [{ title: "Sign in · Quizocalypse Studio" }];
+export const meta: MetaFunction = () => [{ title: "Sign in · Wiskr Studio" }];
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   if (await hasStudioAccess(request)) throw redirect("/studio");
@@ -90,7 +90,7 @@ export default function StudioLogin() {
         <div className="qz-card" style={styles.card}>
           <div style={styles.brand}>
             <span style={styles.mono} aria-hidden>
-              Q
+              W
             </span>
             <h1 style={styles.h1}>Check your email</h1>
           </div>
@@ -103,9 +103,9 @@ export default function StudioLogin() {
         <Form method="post" className="qz-card" style={styles.card}>
           <div style={styles.brand}>
             <span style={styles.mono} aria-hidden>
-              Q
+              W
             </span>
-            <h1 style={styles.h1}>Quizocalypse Studio</h1>
+            <h1 style={styles.h1}>Wiskr Studio</h1>
           </div>
           <p style={styles.p}>Enter your email and we&rsquo;ll send you a sign-in link.</p>
           <input

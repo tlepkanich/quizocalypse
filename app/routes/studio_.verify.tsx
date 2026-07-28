@@ -14,7 +14,7 @@ export const links: LinksFunction = () => adminStyleLinks;
 // (studio_ prefix) — it must be reachable pre-auth. An invalid/expired/used
 // token falls through to the default export, which offers a retry link.
 
-export const meta: MetaFunction = () => [{ title: "Sign in · Quizocalypse Studio" }];
+export const meta: MetaFunction = () => [{ title: "Sign in · Wiskr Studio" }];
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const token = new URL(request.url).searchParams.get("token") ?? "";

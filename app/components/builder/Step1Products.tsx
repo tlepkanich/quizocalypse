@@ -609,7 +609,7 @@ interface ManualBuilderProps {
   onSave: () => void;
 }
 
-const DND_MIME = "application/x-quizocalypse-product";
+const DND_MIME = "application/x-wiskr-product";
 
 function ManualBuilder({
   unassignedProducts,

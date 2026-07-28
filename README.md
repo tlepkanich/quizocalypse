@@ -1,4 +1,8 @@
-# Quizocalypse
+# Wiskr — wiskr.ai
+
+> Rebranded from **Quizocalypse** (2026-07). The repo name, Fly app
+> (`quizocalypse-studio`), production URL, and `X-Quizocalypse-*` webhook
+> headers intentionally keep the old name for now.
 
 AI-first product-recommendation quiz app for Shopify (and standalone) stores.
 A merchant describes their brand and goal; the app researches the brand, walks

@@ -110,7 +110,7 @@ export async function action({ params, request }: ActionFunctionArgs) {
         const t = setTimeout(() => controller.abort(), 5000);
         await fetch(webhookUrl, {
           method: "POST",
-          headers: { "content-type": "application/json", "user-agent": "Quizocalypse/1.0" },
+          headers: { "content-type": "application/json", "user-agent": "Wiskr/1.0" },
           body: JSON.stringify({
             quiz_id: quiz.id,
             email,

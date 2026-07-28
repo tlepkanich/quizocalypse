@@ -1,6 +1,8 @@
-# Quizocalypse — repo guide for agents
+# Wiskr (wiskr.ai) — repo guide for agents
 
-AI-first Shopify quiz app, developed almost entirely by Codex agents. This file
+AI-first Shopify quiz app (brand: **Wiskr** / wiskr.ai; repo, Fly app, URLs
+and `X-Quizocalypse-*` wire headers keep the legacy name), developed almost
+entirely by Codex agents. This file
 complements the global `~/AGENTS.md` (stack rules: Zod at boundaries, no `any`,
 pino, strict TS, etc. — those apply here and are not repeated). Read this whole
 file before your first edit; every rule below has shipped-code or incident

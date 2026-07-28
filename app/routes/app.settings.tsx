@@ -64,7 +64,7 @@ export default function Settings() {
       <QzPageHeader
         eyebrow="Configuration"
         title="Settings"
-        subtitle="Where Quizocalypse connects to your shop and other systems. Webhook delivery, real KMS for token encryption, and the public App Store billing setup all land here."
+        subtitle="Where Wiskr connects to your shop and other systems. Webhook delivery, real KMS for token encryption, and the public App Store billing setup all land here."
       />
 
       <div style={{ maxWidth: 720 }} className="qz-col qz-gap-24">

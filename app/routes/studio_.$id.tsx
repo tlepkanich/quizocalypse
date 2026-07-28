@@ -31,7 +31,7 @@ export const links: LinksFunction = () => adminStyleLinks;
 
 // The de-nested builder route isn't under studio.tsx, so it needs its own
 // <title> (else axe flags "document-title").
-export const meta: MetaFunction = () => [{ title: "Builder · Quizocalypse Studio" }];
+export const meta: MetaFunction = () => [{ title: "Builder · Wiskr Studio" }];
 
 export const loader = async ({ params, request }: LoaderFunctionArgs) => {
   const { id } = params;

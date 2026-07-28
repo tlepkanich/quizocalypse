@@ -58,7 +58,7 @@ async function sendViaGmailSmtp(
   });
   try {
     await transporter.sendMail({
-      from: `"${msg.fromName ?? "Quizocalypse"}" <${user}>`,
+      from: `"${msg.fromName ?? "Wiskr"}" <${user}>`,
       to: msg.to,
       subject: msg.subject,
       html: msg.html,
@@ -78,7 +78,7 @@ function maskRecipient(email: string): string {
 }
 
 async function sendViaResend(msg: EmailMessage, apiKey: string, scope: string): Promise<boolean> {
-  const from = process.env.STUDIO_EMAIL_FROM ?? "Quizocalypse Studio <onboarding@resend.dev>";
+  const from = process.env.STUDIO_EMAIL_FROM ?? "Wiskr Studio <onboarding@resend.dev>";
   const res = await fetch("https://api.resend.com/emails", {
     method: "POST",
     headers: {

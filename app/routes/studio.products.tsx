@@ -185,7 +185,7 @@ function ConnectShopifyCard({
         <div>
           <div className="qz-label">Connect Shopify</div>
           <p className="qz-muted" style={{ margin: "2px 0 0", fontSize: 13, lineHeight: 1.5 }}>
-            Sync your whole Shopify catalog automatically. If you’ve installed the Quizocalypse app on your store,
+            Sync your whole Shopify catalog automatically. If you’ve installed the Wiskr app on your store,
             just enter your store domain — we’ll reuse that connection, no token needed.
           </p>
         </div>

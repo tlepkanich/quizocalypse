@@ -132,7 +132,7 @@ export function Sidebar({
           borderBottom: "1px solid var(--qz-rule)",
         }}
       >
-        <div className="qz-label">Quizocalypse</div>
+        <div className="qz-label">Wiskr</div>
         <div
           className="qz-display"
           style={{ fontSize: 20, lineHeight: 1.1, marginTop: 4 }}

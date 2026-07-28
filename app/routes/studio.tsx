@@ -19,7 +19,7 @@ export const links: LinksFunction = () => adminStyleLinks;
 // route's meta to children that don't export their own). Without it, axe flags
 // a serious "document-title" violation on every admin page. Individual screens
 // may override with a more specific title later.
-export const meta: MetaFunction = () => [{ title: "Quizocalypse Studio" }];
+export const meta: MetaFunction = () => [{ title: "Wiskr Studio" }];
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   await requireStudioAccess(request);

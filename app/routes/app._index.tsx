@@ -1,5 +1,5 @@
 // app/routes/app._index.tsx
-// Quizocalypse dashboard, redesigned in Grid Notebook style.
+// Wiskr dashboard, redesigned in Grid Notebook style.
 // Same loader/action behavior as the original — only the JSX is rebuilt.
 
 import { useEffect, useRef } from "react";
@@ -157,7 +157,7 @@ export default function Index() {
 
   return (
     <QzPage>
-      <TitleBar title="Quizocalypse" />
+      <TitleBar title="Wiskr" />
 
       {data.lastSyncStatus === "error" && (
         <QzBanner tone="crit" title="Last catalog sync failed">

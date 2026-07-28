@@ -38,10 +38,10 @@ describe("sendEmail", () => {
     vi.stubEnv("GMAIL_SMTP_USER", "u@gmail.com");
     vi.stubEnv("GMAIL_SMTP_APP_PASSWORD", "pass");
     sendMail.mockResolvedValue({});
-    const res = await sendEmail({ ...MSG, fromName: "Quizocalypse Studio" }, "test");
+    const res = await sendEmail({ ...MSG, fromName: "Wiskr Studio" }, "test");
     expect(res).toEqual({ sent: true, transport: "gmail" });
     expect(sendMail).toHaveBeenCalledWith(
-      expect.objectContaining({ from: '"Quizocalypse Studio" <u@gmail.com>', to: "a@b.com", subject: "Hi" }),
+      expect.objectContaining({ from: '"Wiskr Studio" <u@gmail.com>', to: "a@b.com", subject: "Hi" }),
     );
   });
 

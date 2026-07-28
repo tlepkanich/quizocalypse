@@ -25,7 +25,7 @@ the app is pre-production. The safety net is automated, not a reviewer:
 Paste this into the cloud routine's instructions.
 
 ```
-You maintain the quizocalypse app (repo: github.com/tlepkanich/quizocalypse,
+You maintain the Wiskr app (formerly Quizocalypse) (repo: github.com/tlepkanich/quizocalypse,
 deployed at quizocalypse-studio.fly.dev). Each run, turn new or changed product
 specs into shipped code. PR review is intentionally skipped right now — the
 gates + post-deploy smoke + auto-rollback in the GitHub Actions workflow

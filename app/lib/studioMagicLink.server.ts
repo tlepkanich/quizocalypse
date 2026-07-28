@@ -103,18 +103,18 @@ export async function consumeMagicLink(token: string): Promise<string | null> {
   return claimed.count === 1 ? row.email : null;
 }
 
-const EMAIL_SUBJECT = "Your Quizocalypse Studio sign-in link";
+const EMAIL_SUBJECT = "Your Wiskr Studio sign-in link";
 
 function emailHtml(link: string): string {
   return [
-    `<p>Click to sign in to Quizocalypse Studio:</p>`,
+    `<p>Click to sign in to Wiskr Studio:</p>`,
     `<p><a href="${link}">Sign in to Studio</a></p>`,
     `<p>This link works once and expires in 15 minutes. If you didn't request it, ignore this email.</p>`,
   ].join("\n");
 }
 
 function emailText(link: string): string {
-  return `Sign in to Quizocalypse Studio: ${link}\n\nThis link works once and expires in 15 minutes.`;
+  return `Sign in to Wiskr Studio: ${link}\n\nThis link works once and expires in 15 minutes.`;
 }
 
 // Transport priority lives in email.server.ts (Gmail SMTP → Resend → none).
@@ -126,7 +126,7 @@ async function sendMagicLinkEmail(email: string, link: string): Promise<void> {
       subject: EMAIL_SUBJECT,
       html: emailHtml(link),
       text: emailText(link),
-      fromName: "Quizocalypse Studio",
+      fromName: "Wiskr Studio",
     },
     "studio-login",
   );

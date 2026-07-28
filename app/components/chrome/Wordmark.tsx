@@ -7,7 +7,7 @@ import { Link } from "@remix-run/react";
    is a design open item (§14); the monogram is the interim mark. */
 export function Wordmark({
   to = "/studio",
-  name = "Quizocalypse",
+  name = "Wiskr",
   compact = false,
 }: {
   to?: string;

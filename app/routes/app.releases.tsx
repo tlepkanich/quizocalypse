@@ -33,7 +33,7 @@ export default function ReleasesPage() {
             What we&apos;ve <span className="qz-serif-italic">shipped</span>.
           </>
         }
-        subtitle="Every feature added to Quizocalypse, newest first. Hover or tap any feature pill to see what it does."
+        subtitle="Every feature added to Wiskr, newest first. Hover or tap any feature pill to see what it does."
       />
 
       <div className="qz-col qz-gap-24" style={{ maxWidth: 840 }}>

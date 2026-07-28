@@ -193,7 +193,7 @@ plain iframe: `<iframe src="https://<app-origin>/q/<quiz-id>" …></iframe>`.
 
 When a shopper reaches an integration node, the server POSTs each configured
 webhook URL (merchant-set, SSRF-screened, 5 s timeout,
-`User-Agent: Quizocalypse/1.0`):
+`User-Agent: Wiskr/1.0`):
 
 ```json
 {
