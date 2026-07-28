@@ -4,16 +4,13 @@ import {
   BarChart3,
   ChevronsLeft,
   ChevronsRight,
-  FlaskConical,
   Home,
   Layers,
   LogOut,
-  Boxes,
   Mail,
   Palette,
   Plug,
   Settings,
-  Sparkles,
   Users,
   type LucideIcon,
 } from "lucide-react";
@@ -47,14 +44,17 @@ const NAV: RailItem[] = [
   { to: "/studio", label: "Home", icon: Home, end: true },
   { to: "/studio/quizzes", label: "Quizzes", icon: Layers },
   { to: "/studio/analytics", label: "Analytics", icon: BarChart3 },
-  { to: "/studio/groups", label: "Personas & Groups", icon: Boxes },
+  // OWNER 2026-07-25 — hidden for now, to return later: Personas & Groups
+  // (needs a full new builder format), A/B testing, AI Agent. Routes stay
+  // live; only the nav entries are hidden. Restore by un-commenting (re-add the Boxes/FlaskConical/Sparkles lucide imports).
+  // { to: "/studio/groups", label: "Personas & Groups", icon: Boxes },
   { to: "/studio/brand", label: "Brand Identity", icon: Palette },
   { to: "/studio/customers", label: "Customer Engagement", icon: Users },
   { to: "/studio/integrations", label: "Integrations", icon: Plug },
   { to: "/studio/settings", label: "Settings", icon: Settings },
   { to: "/studio/email", label: "Email Automation", icon: Mail },
-  { to: "/studio/ab", label: "A/B testing", icon: FlaskConical, soon: true },
-  { to: "/studio/ai-agent", label: "AI Agent", icon: Sparkles, soon: true },
+  // { to: "/studio/ab", label: "A/B testing", icon: FlaskConical, soon: true },
+  // { to: "/studio/ai-agent", label: "AI Agent", icon: Sparkles, soon: true },
 ];
 
 export function Rail() {

@@ -97,13 +97,14 @@ const QUICK_ACTIONS: Array<{ to?: string; icon: ReactNode; title: string; blurb:
       </>
     ),
   },
-  {
-    hue: "var(--qz-pastel-amber)",
-    title: "A/B testing",
-    blurb: "Run experiments to find what converts.",
-    soon: true,
-    icon: <path d="M4 20V10M10 20V4M16 20v-7M22 20V8" />,
-  },
+  // OWNER 2026-07-25 — A/B testing card hidden for now (to return later).
+  // {
+  //   hue: "var(--qz-pastel-amber)",
+  //   title: "A/B testing",
+  //   blurb: "Run experiments to find what converts.",
+  //   soon: true,
+  //   icon: <path d="M4 20V10M10 20V4M16 20v-7M22 20V8" />,
+  // },
   {
     hue: "var(--qz-pastel-rose)",
     title: "Strategy ideas",
