@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
+import type { CSSProperties } from "react";
 import type { Quiz as QuizDoc, QuestionType } from "../../../../lib/quizSchema";
 import { isFreeformType } from "../../../../lib/quizSchema";
 import { addAnswer, removeAnswer, setQuestionType } from "../../../../lib/quizMutations";
@@ -116,23 +118,51 @@ export function TypeChipSelector({
   const [open, setOpen] = useState(false);
   const cancelRef = useRef<HTMLButtonElement>(null);
   const wrapRef = useRef<HTMLSpanElement>(null);
+  const popRef = useRef<HTMLDivElement>(null);
+  // Owner bugfix — the popover PORTALS to document.body ([[builder-overlay-
+  // portal]]): its old in-flow absolute position was clipped by whichever
+  // ancestor carried overflow:hidden (the Overview ledger, the Questions
+  // panel). Fixed-position coords come from the trigger's rect, clamped to
+  // the viewport, so every option is always visible.
+  const [popPos, setPopPos] = useState<CSSProperties | null>(null);
+  const placePop = () => {
+    const r = wrapRef.current?.getBoundingClientRect();
+    if (!r) return;
+    const W = 232;
+    const left = Math.max(8, Math.min(r.left, window.innerWidth - W - 8));
+    const below = r.bottom + 6;
+    const maxH = Math.max(180, window.innerHeight - below - 12);
+    setPopPos({ position: "fixed", top: below, left, width: W, maxHeight: maxH, overflowY: "auto", zIndex: 1200 });
+  };
+  const toggleOpen = () => {
+    setOpen((v) => {
+      if (!v) placePop();
+      return !v;
+    });
+  };
   const current: PickValue = isFivePoint(node) ? "rating5" : node.data.question_type;
   const isDecider = node.data.role === "decides";
 
   // Outside click / Escape close the popover (mock document-level handler).
+  // The popover lives in a body portal now, so containment checks BOTH refs.
   useEffect(() => {
     if (!open) return;
     const onDown = (e: MouseEvent) => {
-      if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) setOpen(false);
+      const t = e.target as Node;
+      if (wrapRef.current?.contains(t)) return;
+      if (popRef.current?.contains(t)) return;
+      setOpen(false);
     };
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") setOpen(false);
     };
     document.addEventListener("mousedown", onDown);
     document.addEventListener("keydown", onKey);
+    window.addEventListener("resize", placePop);
     return () => {
       document.removeEventListener("mousedown", onDown);
       document.removeEventListener("keydown", onKey);
+      window.removeEventListener("resize", placePop);
     };
   }, [open]);
 
@@ -315,7 +345,7 @@ export function TypeChipSelector({
           title="Change the question type — your answers are kept"
           onClick={(e) => {
             e.stopPropagation();
-            setOpen((v) => !v);
+            toggleOpen();
           }}
         >
           {isFreeformType(node.data.question_type)
@@ -329,34 +359,37 @@ export function TypeChipSelector({
           aria-haspopup="true"
           aria-expanded={open}
           title="Change the question type — your answers are kept"
-          onClick={() => setOpen((v) => !v)}
+          onClick={() => toggleOpen()}
         >
           <span className="qz-s3-tt-type">{currentLabel}</span>
           <IconCaret />
         </button>
       )}
 
-      {open ? (
-        <div className="qz-s3-typepop">
-          <div className="qz-s3-tp-h">Question type</div>
-          <div className="qz-s3-tp-types" role="radiogroup" aria-label="Question type">
-            {options.map((o) => (
-              <button
-                key={o.value}
-                type="button"
-                role="radio"
-                aria-checked={o.value === current}
-                className={`qz-s3-tp-type${o.value === current ? " is-on" : ""}`}
-                onClick={() => handlePick(o.value)}
-              >
-                <span className="qz-s3-tp-rd" aria-hidden />
-                {o.label}
-              </button>
-            ))}
-          </div>
-          {settings}
-        </div>
-      ) : null}
+      {open && popPos && typeof document !== "undefined"
+        ? createPortal(
+            <div className="qz-s3-typepop is-portal" ref={popRef} style={popPos}>
+              <div className="qz-s3-tp-h">Question type</div>
+              <div className="qz-s3-tp-types" role="radiogroup" aria-label="Question type">
+                {options.map((o) => (
+                  <button
+                    key={o.value}
+                    type="button"
+                    role="radio"
+                    aria-checked={o.value === current}
+                    className={`qz-s3-tp-type${o.value === current ? " is-on" : ""}`}
+                    onClick={() => handlePick(o.value)}
+                  >
+                    <span className="qz-s3-tp-rd" aria-hidden />
+                    {o.label}
+                  </button>
+                ))}
+              </div>
+              {settings}
+            </div>,
+            document.body,
+          )
+        : null}
 
       <QzModal
         open={dialog?.kind === "block"}
