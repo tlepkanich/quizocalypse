@@ -16,13 +16,14 @@ import { SHOW_OTHER_BUILD_PATHS } from "../lib/studioFlags";
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   await requireStudioAccess(request);
   const shop = await resolveStudioShop();
+  // Owner correction (2026-08-01) — mid-funnel drafts (buildState "step1")
+  // are VISIBLE now: a quiz abandoned before the last step used to vanish
+  // from the library, making the work impossible to resume. Their cards
+  // route back into the setup flow instead of the builder.
   const quizzes = await prisma.quiz.findMany({
-    where: {
-      shopId: shop.id,
-      OR: [{ buildState: null }, { buildState: { not: "step1" } }],
-    },
     // draftJson drives the per-card facts + screen-1 thumbnail (§R-7).
-    select: { id: true, name: true, status: true, version: true, updatedAt: true, draftJson: true },
+    where: { shopId: shop.id },
+    select: { id: true, name: true, status: true, version: true, updatedAt: true, draftJson: true, buildState: true },
     orderBy: { updatedAt: "desc" },
   });
   const eventRows = await prisma.event.findMany({
@@ -60,6 +61,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
         id: q.id,
         name: q.name,
         status: q.status,
+        inSetup: q.buildState === "step1",
         version: q.version,
         updatedAt: q.updatedAt.toISOString(),
         bench: benchmarks.byQuiz[q.id] ?? null,
@@ -213,7 +215,19 @@ export default function StudioQuizzes() {
     return rows;
   }, [quizzes, query, status, sort]);
 
-  const menuItems = (q: QuizRow) => [
+  // Where "open" leads: a mid-funnel draft resumes the setup flow where it
+  // left off; everything else opens the builder.
+  const openTo = (q: QuizRow) => (q.inSetup ? `/studio/onboarding/${q.id}` : `/studio/${q.id}`);
+
+  const menuItems = (q: QuizRow) =>
+    q.inSetup
+      ? [
+          // Setup drafts: publish/share/preview don't apply yet — resume or delete.
+          { label: "Resume setup", onSelect: () => navigate(`/studio/onboarding/${q.id}`) },
+          { label: "Delete", tone: "crit" as const, onSelect: () => setPendingDelete({ id: q.id, name: q.name }) },
+        ]
+      : menuItemsBuilt(q);
+  const menuItemsBuilt = (q: QuizRow) => [
     { label: "Preview", onSelect: () => window.open(`/q/${q.id}`, "_blank", "noopener") },
     { label: "Share", onSelect: () => navigate(`/studio/${q.id}/embed`) },
     { label: "Duplicate", onSelect: () => act("duplicate", q.id) },
@@ -320,23 +334,27 @@ export default function StudioQuizzes() {
                     className="qz-qcard-preview"
                     role="button"
                     tabIndex={0}
-                    aria-label={`Open ${q.name} in the builder`}
-                    onClick={() => navigate(`/studio/${q.id}`)}
-                    onKeyDown={(e) => { if (e.key === "Enter") navigate(`/studio/${q.id}`); }}
+                    aria-label={q.inSetup ? `Resume setting up ${q.name}` : `Open ${q.name} in the builder`}
+                    onClick={() => navigate(openTo(q))}
+                    onKeyDown={(e) => { if (e.key === "Enter") navigate(openTo(q)); }}
                   >
                     <span className={`qz-qcard-status is-${q.status === "published" ? "live" : "draft"}`}>
                       <span className="qz-qcard-dot" aria-hidden />
-                      {q.status === "published" ? "Live" : "Draft"}
+                      {q.status === "published" ? "Live" : q.inSetup ? "In setup" : "Draft"}
                     </span>
                     <div className="qz-qcard-shot"><QuizCardPreview thumb={q.thumb} /></div>
                     <div className="qz-qcard-float">
-                      <a className="qz-qcard-fbtn" href={`/q/${q.id}`} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()}>Preview</a>
-                      <button type="button" className="qz-qcard-fbtn is-solid" onClick={(e) => { e.stopPropagation(); navigate(`/studio/${q.id}`); }}>Open builder</button>
+                      {q.inSetup ? null : (
+                        <a className="qz-qcard-fbtn" href={`/q/${q.id}`} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()}>Preview</a>
+                      )}
+                      <button type="button" className="qz-qcard-fbtn is-solid" onClick={(e) => { e.stopPropagation(); navigate(openTo(q)); }}>
+                        {q.inSetup ? "Resume setup" : "Open builder"}
+                      </button>
                     </div>
                   </div>
                   <div className="qz-qcard-body">
                     <div className="qz-qcard-titlerow">
-                      <Link to={`/studio/${q.id}`} className="qz-qcard-title">{q.name}</Link>
+                      <Link to={openTo(q)} className="qz-qcard-title">{q.name}</Link>
                       <QzMenu trigger={overflowTrigger} items={menuItems(q)} />
                     </div>
                     <div className="qz-qcard-upd">Updated {formatDate(q.updatedAt)} · v{q.version}</div>
@@ -371,14 +389,14 @@ export default function StudioQuizzes() {
                     <div className="qz-row" style={{ gap: 8, alignItems: "center" }}>
                       <span className="qz-lib-title" style={{ fontSize: 15 }}>{q.name}</span>
                       <QzBadge tone={q.status === "published" ? "ok" : "draft"}>
-                        {q.status === "published" ? "Live" : "Draft"}
+                        {q.status === "published" ? "Live" : q.inSetup ? "In setup" : "Draft"}
                       </QzBadge>
                     </div>
                     <Facts q={q} />
                   </div>
                   <div className="qz-row" style={{ gap: 8, alignItems: "center", flex: "0 0 auto" }}>
-                    <Link to={`/studio/${q.id}`} className="qz-btn qz-btn-primary qz-btn-sm">
-                      Open builder →
+                    <Link to={openTo(q)} className="qz-btn qz-btn-primary qz-btn-sm">
+                      {q.inSetup ? "Resume setup →" : "Open builder →"}
                     </Link>
                     <QzMenu trigger={overflowTrigger} items={menuItems(q)} placement="bottom" />
                   </div>

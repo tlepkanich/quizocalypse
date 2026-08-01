@@ -24,10 +24,19 @@
 // never glue to the screen edge again) · the phone sits at the mock's fixed
 // mobile scale (--s .80 in the 340px pane, 14px gutters, holder centered) ·
 // the step counter counts QUESTIONS only ("1/3") · option cards are white
-// brand cards · termini sit tight under the list · ▦ Overview: centered
-// ≤1036 cards column, page-flow (no inner scroller), accent-family cards
-// (decider numchip = solid accent, NO gold), full-width type control in the
-// 238px right column, N+1 inserters incl. the leading one.
+// brand cards · termini sit tight under the list.
+//
+// ONE-LINE-CHROME rewrite (6ee1ee5): the in-shell ✎/▦ view toggle is RETIRED —
+// Logic is its own funnel STAGE after Questions. The probe drives the REAL bar
+// affordances: Continue posts the to-logic intent (build_session.stage
+// persists to "logic") and the surface becomes the questions-full-page.html
+// LEDGER — ONE connected bordered container (.qz-s3-ledger) of flush hairline
+// rows (no per-row radius/side borders/gaps), the right column defined ONCE
+// (--rcol: 226px) so the settings divider runs one vertical line through
+// header AND body (§1.1), N+1 ＋ inserters riding the dividers (leading one
+// included), capture terminal OUTSIDE the ledger, decider guards (solid-accent
+// numchip, disabled .qz-s3-cdel). The bar's ‹ back drives goto-stage
+// (backwards-only, server-enforced) home to Questions.
 // Screenshots → /tmp/qs-shots.
 import { chromium } from "playwright";
 import { PrismaClient } from "@prisma/client";
@@ -88,6 +97,16 @@ const draftDoc = async () => {
   return row?.draftJson ?? null;
 };
 const draftNode = async (nodeId) => (await draftDoc())?.nodes?.find((n) => n.id === nodeId) ?? null;
+// Poll the draft until pred holds (autosave = 700ms debounce + a round-trip;
+// a fixed sleep is a flake — the add-answer check raced it once).
+const waitDraft = async (pred, ms = 6000) => {
+  const t0 = Date.now();
+  for (;;) {
+    if (pred(await draftDoc())) return true;
+    if (Date.now() - t0 > ms) return false;
+    await new Promise((r) => setTimeout(r, 250));
+  }
+};
 
 let browser = null;
 try {
@@ -195,13 +214,20 @@ try {
   const pvW = await page.locator(".qz-qs-pv").evaluate((el) => el.getBoundingClientRect().width);
   ok("preview column is 340px", Math.abs(pvW - 340) < 2, `${pvW}`);
 
-  // 2b ── AUDIT-23: the mock's centered 996px page column (questions-simple
-  // .wrap) — the panel must be centered with equal side margins.
+  // 2b ── one-line-chrome: pages are CAPPED — .qz-page.is-funnel is a 1000px
+  // centered column (952px content at 24px side padding) and the panel fills
+  // its content box (the AUDIT-23 self-owned 996px width is retired).
   const panelGeo = await page.locator(".qz-qs-panel").evaluate((el) => {
     const r = el.getBoundingClientRect();
-    return { w: r.width, left: r.left, right: window.innerWidth - r.right };
+    const pg = el.closest(".qz-page");
+    const cs = getComputedStyle(pg);
+    const content = pg.getBoundingClientRect().width -
+      parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
+    return { w: r.width, left: r.left, right: window.innerWidth - r.right, content };
   });
-  ok("panel is the mock's 996px column", Math.abs(panelGeo.w - 996) < 3, `${panelGeo.w}`);
+  ok("panel fills the capped 1000px funnel column (952 content)",
+    Math.abs(panelGeo.w - panelGeo.content) < 2 && Math.abs(panelGeo.w - 952) < 3,
+    `${panelGeo.w} vs content ${panelGeo.content}`);
   ok("panel is CENTERED (equal side margins)",
     Math.abs(panelGeo.left - panelGeo.right) < 4, `L${panelGeo.left} R${panelGeo.right}`);
   // The device holds the mock's fixed mobile scale (.80 → 312px in the 340
@@ -289,13 +315,13 @@ try {
 
   // 6 ── + answer / ✕ delete round-trip on the expanded row
   await page.locator(".qz-qs-aadd").click();
-  await page.waitForTimeout(1400);
-  ok("+ answer persisted (5 answers in prisma)", (await draftNode("q2"))?.data?.answers?.length === 5);
+  ok("+ answer persisted (5 answers in prisma)",
+    await waitDraft((d) => d?.nodes?.find((n) => n.id === "q2")?.data?.answers?.length === 5));
   const freshDel = page.locator(".qz-qs-q").nth(1).locator(".qz-qs-adel").nth(4);
   ok("✕ delete ENABLED above the floor", !(await freshDel.isDisabled()));
   await freshDel.click();
-  await page.waitForTimeout(1400);
-  ok("✕ delete persisted (back to 4)", (await draftNode("q2"))?.data?.answers?.length === 4);
+  ok("✕ delete persisted (back to 4)",
+    await waitDraft((d) => d?.nodes?.find((n) => n.id === "q2")?.data?.answers?.length === 4));
 
   // 7 ── the mono meta IS the type control: popover + decider guard
   await page.locator(".qz-qs-qmeta").first().click();
@@ -443,43 +469,101 @@ try {
   ok("delete persisted (3 question nodes, flow re-stitched)",
     (afterDel?.nodes ?? []).filter((n) => n.type === "question").length === 3);
 
-  // 17 ── AUDIT-23: ▦ Overview exact to overview-cards.html
-  await page.locator(".qz-s3-viewtoggle button", { hasText: "Overview" }).first().click();
-  await page.waitForTimeout(600);
-  ok("Overview renders one card per question", (await page.locator(".qz-s3-card").count()) === 3);
+  // 17 ── one-line-chrome: the ✎/▦ toggle is RETIRED — Logic is a separate
+  // funnel STAGE. Drive the REAL affordance: the bar's Continue posts the
+  // to-logic intent; the loader revalidates into the logic-mode shell.
+  ok("in-shell ✎/▦ view toggle retired", (await page.locator(".qz-s3-viewtoggle").count()) === 0);
+  await page.locator(".qz-topbar-continue").click();
+  await page.waitForSelector(".qz-s3-ledger", { timeout: 15000 });
+  await page.waitForTimeout(500);
+  ok('to-logic persisted (build_session.stage "logic")',
+    (await draftDoc())?.build_session?.stage === "logic");
+  ok("Questions panel unmounted on the Logic stage",
+    (await page.locator(".qz-qs-panel").count()) === 0);
   const lvGeo = await page.locator(".qz-s3-logicview").evaluate((el) => {
     const r = el.getBoundingClientRect();
     return { w: r.width, left: r.left, right: window.innerWidth - r.right };
   });
-  ok("Overview column is the mock's centered ≤1076px wrap",
+  ok("Logic column stays the centered ≤1076px wrap",
     lvGeo.w <= 1078 && Math.abs(lvGeo.left - lvGeo.right) < 4,
     `w${lvGeo.w} L${lvGeo.left} R${lvGeo.right}`);
-  ok("Overview flows on the PAGE (no inner scroller)",
-    await page.locator(".qz-s3-logic").evaluate((el) => getComputedStyle(el).maxHeight === "none"));
-  const chipBgs = await page.locator(".qz-s3-card .qz-s3-numchip").evaluateAll(
+
+  // 18 ── questions-full-page §1: ONE connected LEDGER, not floating cards
+  ok("ONE connected ledger container", (await page.locator(".qz-s3-ledger").count()) === 1);
+  ok("one ledger row per question (3 rows / 3 cards)",
+    (await page.locator(".qz-s3-ledger .qz-s3-ledgerrow").count()) === 3 &&
+    (await page.locator(".qz-s3-ledger .qz-s3-card").count()) === 3);
+  const rowGeo = await page.locator(".qz-s3-ledger .qz-s3-card").evaluateAll((els) =>
+    els.map((el) => {
+      const cs = getComputedStyle(el);
+      const r = el.getBoundingClientRect();
+      return {
+        radius: cs.borderRadius, bottom: cs.borderBottomWidth,
+        side: cs.borderLeftWidth, top: r.top, bot: r.bottom,
+      };
+    }));
+  ok("rows are square-cornered + side-borderless (the container owns the frame)",
+    rowGeo.every((g) => g.radius === "0px" && g.side === "0px"),
+    rowGeo.map((g) => `${g.radius}/${g.side}`).join(" "));
+  ok("1px hairline between rows, none after the last",
+    rowGeo.slice(0, -1).every((g) => g.bottom === "1px") && rowGeo.at(-1).bottom === "0px",
+    rowGeo.map((g) => g.bottom).join(" "));
+  ok("rows sit FLUSH (inserters ride the hairline — zero gaps)",
+    rowGeo.slice(1).every((g, i) => Math.abs(g.top - rowGeo[i].bot) <= 1.5),
+    rowGeo.slice(1).map((g, i) => (g.top - rowGeo[i].bot).toFixed(1)).join(" "));
+
+  // §1.1 — the right column is defined ONCE (--rcol: 226px): header AND body
+  // grids end in the same 226px track, and the settings divider (border-left
+  // of .qz-s3-card-type / .qz-s3-card-set) sits on ONE vertical line.
+  const colGeo = await page.locator(".qz-s3-ledger .qz-s3-card").evaluateAll((els) =>
+    els.map((el) => {
+      const lastTrack = (n) => {
+        const t = getComputedStyle(n).gridTemplateColumns.trim().split(/\s+/);
+        return parseFloat(t[t.length - 1]);
+      };
+      const typeL = el.querySelector(".qz-s3-card-type")?.getBoundingClientRect().left ?? NaN;
+      const setL = el.querySelector(".qz-s3-card-set")?.getBoundingClientRect().left ?? NaN;
+      return {
+        head: lastTrack(el.querySelector(".qz-s3-card-head")),
+        body: lastTrack(el.querySelector(".qz-s3-card-body")),
+        delta: Math.abs(typeL - setL),
+      };
+    }));
+  ok("right column is the spec's 226px on EVERY head + body grid",
+    colGeo.every((g) => Math.abs(g.head - 226) < 1 && Math.abs(g.body - 226) < 1),
+    colGeo.map((g) => `${g.head}/${g.body}`).join(" "));
+  ok("§1.1 — settings divider runs ONE vertical line down the ledger",
+    colGeo.every((g) => g.delta < 1), colGeo.map((g) => g.delta.toFixed(1)).join(" "));
+
+  // N+1 ＋ inserters INSIDE the ledger (leading + one per row), riding the
+  // dividers; the capture terminal stays OUTSIDE the ledger, below it.
+  ok("N+1 inserters inside the ledger (4 for 3 questions)",
+    (await page.locator(".qz-s3-ledger .qz-s3-divider").count()) === 4);
+  ok("the leading inserter is the ledger's first child",
+    await page.locator(".qz-s3-ledger > :first-child").evaluate(
+      (el) => el.classList.contains("qz-s3-divider")));
+  ok("capture terminal OUTSIDE the ledger (map's last module)",
+    (await page.locator(".qz-s3-ledger .qz-s3-capmod").count()) === 0 &&
+    (await page.locator(".qz-s3-logic .qz-s3-capmod").count()) === 1);
+
+  // decider guards carried into the ledger: solid-accent numchip (no gold),
+  // hover-reveal delete disabled on the deciding row.
+  const chipBgs = await page.locator(".qz-s3-ledger .qz-s3-card .qz-s3-numchip").evaluateAll(
     (els) => els.map((el) => getComputedStyle(el).backgroundColor));
   ok("decider numchip is SOLID ACCENT (no gold anywhere)",
     chipBgs.includes("rgb(109, 90, 230)") && !chipBgs.some((c) => c === "rgb(140, 109, 31)"),
     chipBgs.join(" | "));
-  ok("answer chips are accent-wash (mock .alist counters)",
-    await page.locator(".qz-s3-card .qz-s3-aletter").first().evaluate(
-      (el) => getComputedStyle(el).backgroundColor === "rgb(237, 235, 252)"));
-  const typeW = await page.locator(".qz-s3-card-type .qz-s3-typetagbtn").first()
-    .evaluate((el) => el.getBoundingClientRect().width);
-  ok("type control fills the mock's 238px right column", typeW > 200, `${typeW}`);
-  ok("N+1 inserters (incl. the leading one above card 1)",
-    (await page.locator(".qz-s3-divider").count()) === 4);
-  const mvGeo = await page.locator(".qz-s3-card .qz-s3-mvb").first().evaluate((el) => {
-    const r = el.getBoundingClientRect();
-    return { w: r.width, h: r.height, o: getComputedStyle(el.parentElement).opacity };
-  });
-  ok("movers are the mock's always-visible 22×17 squares",
-    Math.abs(mvGeo.w - 22) < 2 && Math.abs(mvGeo.h - 17) < 2 && mvGeo.o === "1",
-    JSON.stringify(mvGeo));
-  await page.screenshot({ path: `${SHOTS}/6-overview-cards.png`, fullPage: true });
-  // back to ✎ so the trailing checks (if any grow later) see the Content view
-  await page.locator(".qz-s3-viewtoggle button", { hasText: "Questions" }).first().click();
-  await page.waitForTimeout(300);
+  ok("decider row's ledger delete (.qz-s3-cdel) is DISABLED",
+    await page.locator(".qz-s3-ledger .qz-s3-card").first().locator(".qz-s3-cdel").isDisabled());
+  await page.screenshot({ path: `${SHOTS}/6-logic-ledger.png`, fullPage: true });
+
+  // 19 ── the bar's ‹ back = the goto-stage intent (backwards-only) → the
+  // Questions stage again, so the walk proves both directions of the seam.
+  await page.locator(".qz-topbar-back").click();
+  await page.waitForSelector(".qz-qs-panel", { timeout: 15000 });
+  await page.waitForTimeout(500);
+  ok('goto-stage back persisted (build_session.stage "question_builder")',
+    (await draftDoc())?.build_session?.stage === "question_builder");
 
   ok("zero page errors", out.pageErrors.length === 0, out.pageErrors.join(" | "));
   await browser.close();

@@ -169,6 +169,7 @@ export function RecommendationBucketsStage({
     setActiveTab(type);
     setSearch("");
     if (clear) {
+      setApplied(null); // a manual restart invalidates the Applied/Undo state
       // Optimistically empty the selection (mark every current id removed).
       setOverlay(() => {
         const next = new Map<string, BucketCard | null>();
@@ -185,6 +186,61 @@ export function RecommendationBucketsStage({
   const dismissTip = () => {
     setDismissed(true);
     if (typeof window !== "undefined") sessionStorage.setItem(`qz-rb-nb-${data.quizId}`, "1");
+  };
+
+  // Owner correction (2026-08-01) — the tip KEEPS its apply action: "Use
+  // this" applies the concrete recommended set in one click (referenced
+  // selections still warn first); the pill morphs to Applied + Undo.
+  // Optimistic cards resolve names/counts from the already-loaded catalog.
+  const [applied, setApplied] = useState<{
+    prior: { type: BucketType | null; keys: string[]; tab: BucketType };
+  } | null>(null);
+  const cardFor = (type: BucketType, key: string): BucketCard => {
+    if (type === "product") {
+      const p = data.catalog.products.find((x) => x.id === key);
+      return { key, type, name: p?.title ?? key, count: 1, thumbnailUrl: p?.imageUrl ?? null };
+    }
+    const src = type === "tag" ? data.catalog.tags : data.catalog.collections;
+    const g = src.find((x) => x.key === key);
+    return { key, type, name: g?.label ?? key, count: g?.count ?? 0, thumbnailUrl: null };
+  };
+  const setSelection = (type: BucketType, keys: string[]) => {
+    setSearch("");
+    setActiveTab(type);
+    setOverlay(() => {
+      const next = new Map<string, BucketCard | null>();
+      for (const c of selected.values()) next.set(idOf(c.type, c.key), null);
+      for (const k of keys) next.set(idOf(type, k), cardFor(type, k));
+      return next;
+    });
+    fetcher.submit({ intent: "set-buckets", type, keys: keys.join(",") }, { method: "post" });
+  };
+  const useThis = () => {
+    const apply = data.suggestion.apply;
+    if (!apply) return;
+    const current = [...selected.values()];
+    const run = () => {
+      setApplied({
+        prior: { type: current[0]?.type ?? null, keys: current.map((c) => c.key), tab: activeTab },
+      });
+      setSelection(apply.type, apply.keys);
+    };
+    // Applying removes every current selection NOT in the recommended set —
+    // warn first when any of those are referenced by the draft's questions
+    // (the server keeps ids for keys present in BOTH sets, so those survive).
+    const applySet = new Set(apply.keys.map((k) => idOf(apply.type, k)));
+    const leavingReferenced = current.filter(
+      (c) => referencedSet.has(idOf(c.type, c.key)) && !applySet.has(idOf(c.type, c.key)),
+    );
+    if (leavingReferenced.length > 0) setBulkWarn({ count: leavingReferenced.length, run });
+    else run();
+  };
+  const undoApply = () => {
+    const prior = applied?.prior;
+    setApplied(null);
+    if (!prior) return;
+    if (prior.type) setSelection(prior.type, prior.keys);
+    else setSelection(prior.tab, []); // empty prior: clear + land back on the pre-apply tab
   };
 
   const switchTab = (type: BucketType) => {
@@ -354,11 +410,35 @@ export function RecommendationBucketsStage({
         <h2 className="qz-h2" style={{ margin: 0 }}>
           What can your quiz recommend?
         </h2>
-        {showTip ? (
+        {showTip && applied ? (
+          <div className="qz-rb-tip is-applied" role="status">
+            <span className="qz-rb-tip-star" aria-hidden><Check size={13} strokeWidth={2.8} /></span>
+            <span className="qz-rb-tip-label">Tip</span>
+            <strong className="qz-rb-tip-sug">
+              Applied — {data.suggestion.message.replace(/^Use |^Start with /, "using ")}
+            </strong>
+            <button type="button" className="qz-rb-tip-use" onClick={undoApply}>
+              Undo
+            </button>
+            <button
+              type="button"
+              className="qz-rb-tip-x"
+              aria-label="Dismiss tip"
+              onClick={dismissTip}
+            >
+              <X size={12} aria-hidden />
+            </button>
+          </div>
+        ) : showTip ? (
           <div className="qz-rb-tip">
             <span className="qz-rb-tip-star" aria-hidden>✦</span>
             <span className="qz-rb-tip-label">Tip</span>
             <strong className="qz-rb-tip-sug">{data.suggestion.message}</strong>
+            {data.suggestion.apply ? (
+              <button type="button" className="qz-rb-tip-use" onClick={useThis}>
+                Use this
+              </button>
+            ) : null}
             <button
               type="button"
               className="qz-rb-tip-x"

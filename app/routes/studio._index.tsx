@@ -15,9 +15,13 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   await requireStudioAccess(request);
   const shop = await resolveStudioShop();
 
+  // Owner correction (2026-08-01) — mid-funnel drafts (buildState "step1")
+  // are VISIBLE in the lists now: a quiz abandoned before the last step used
+  // to vanish, making it impossible to pick the work back up. Their rows
+  // route back into the funnel (below) instead of the builder.
   const quizzes = await prisma.quiz.findMany({
-    where: { shopId: shop.id, OR: [{ buildState: null }, { buildState: { not: "step1" } }] },
-    select: { id: true, name: true, status: true, updatedAt: true },
+    where: { shopId: shop.id },
+    select: { id: true, name: true, status: true, updatedAt: true, buildState: true },
     orderBy: { updatedAt: "desc" },
   });
   const quizIds = quizzes.map((q) => q.id);
@@ -74,6 +78,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       id: q.id,
       name: q.name,
       status: q.status,
+      buildState: q.buildState,
       updatedAt: q.updatedAt.toISOString(),
     })),
   });
@@ -228,7 +233,9 @@ export default function StudioHome() {
               {recent.map((q, i) => (
                 <Link
                   key={q.id}
-                  to={`/studio/${q.id}`}
+                  // A mid-funnel draft resumes the setup flow where it left
+                  // off; everything else opens the builder.
+                  to={q.buildState === "step1" ? `/studio/onboarding/${q.id}` : `/studio/${q.id}`}
                   className="qz-row qz-row-between qz-recent-row"
                   style={{ textDecoration: "none", color: "inherit", borderTop: i === 0 ? "none" : "1px solid var(--qz-rule-2)" }}
                 >
@@ -236,7 +243,9 @@ export default function StudioHome() {
                     <div style={{ fontSize: 14.5, fontWeight: 600, letterSpacing: "-0.01em", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{q.name}</div>
                     <div className="qz-dim" style={{ fontSize: 12 }}>updated {formatDate(q.updatedAt)}</div>
                   </div>
-                  <QzBadge tone={q.status === "published" ? "ok" : "draft"}>{q.status}</QzBadge>
+                  <QzBadge tone={q.status === "published" ? "ok" : "draft"}>
+                    {q.buildState === "step1" ? "in setup" : q.status}
+                  </QzBadge>
                 </Link>
               ))}
             </div>

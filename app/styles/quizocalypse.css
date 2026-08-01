@@ -1903,6 +1903,22 @@ body[data-qz] ::selection { background: var(--qz-ink); color: var(--qz-cream); }
   font-size: 13px; font-weight: 600; color: var(--qz-ink); min-width: 0;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
+/* Owner correction — the tip keeps its APPLY action: a compact accent "Use
+   this" inside the pill; once applied the pill flips to the ok wash + Undo. */
+.qz-rb-tip-use {
+  flex: none; border: none; background: var(--qz-accent); color: #fff;
+  font-size: 11.5px; font-weight: 600; padding: 4px 10px; border-radius: 999px;
+  cursor: pointer; font-family: inherit; transition: background .15s ease;
+}
+.qz-rb-tip-use:hover { background: var(--qz-accent-2); }
+.qz-rb-tip-use:focus-visible { outline: 2px solid var(--qz-accent); outline-offset: 2px; }
+.qz-rb-tip.is-applied {
+  border-color: color-mix(in srgb, var(--qz-ok) 32%, var(--qz-rule));
+  background: color-mix(in srgb, var(--qz-ok) 6%, var(--qz-paper));
+}
+.qz-rb-tip.is-applied .qz-rb-tip-star { color: var(--qz-ok); display: grid; place-items: center; }
+.qz-rb-tip.is-applied .qz-rb-tip-use { background: var(--qz-paper); color: var(--qz-ink-3); border: 1px solid var(--qz-rule); }
+.qz-rb-tip.is-applied .qz-rb-tip-use:hover { background: var(--qz-cream-2); }
 .qz-rb-tip-x {
   flex: none; display: grid; place-items: center; border: none; background: transparent;
   color: var(--qz-ink-25); cursor: pointer; padding: 6px 8px; border-radius: 999px; line-height: 1;
