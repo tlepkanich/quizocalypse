@@ -13,7 +13,7 @@ import { RecommendationBucketsStage } from "./stages/RecommendationBucketsStage"
 import { ShapeStage } from "./stages/ShapeStage";
 import { DesignStage } from "./stages/DesignStage";
 import { RecPageStage } from "./stages/RecPageStage";
-import { Step4Results } from "./stages/Step4Results";
+import { ResultsGuided } from "./resultsGuided/ResultsGuided";
 import { FUNNEL_STAGES, type ActionResult, type FunnelData } from "./stages/stagesShared";
 
 // BIC-2 C2 — the loader shape (and the other cross-stage types) moved to
@@ -303,12 +303,14 @@ export function Step1Funnel({ data }: { data: FunnelData }) {
         <ClientOnly fallback={<BuilderSkeleton />}>
           {() =>
             data.recPage!.doc.logic_model === "decider" ? (
-              <Step4Results
+              /* Results-guided handoff (UPDATE AREA 3) — the six-step guided
+                 flow supersedes the Step4Results light surface for deciders. */
+              <ResultsGuided
                 quizId={data.quizId}
                 initialDoc={data.recPage!.doc}
-                categories={data.recPage!.categories}
                 productIndex={data.recPage!.productIndex}
                 designTokens={data.designTokens}
+                onContinueToDesign={() => fetcher.submit({ intent: "to-design" }, { method: "post" })}
               />
             ) : (
               <RecommendationStage

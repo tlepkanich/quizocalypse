@@ -1245,6 +1245,37 @@ export const DiscountConfig = z.object({
   title: z.string().default("Quiz reward"),
   // Generated at publish (e.g. "QUIZ-AB12CD"); present once created.
   code: z.string().optional(),
+  // ── Results-guided handoff (master.md §4 step 3 / §9) — the full editor's
+  // extra dimensions. ALL .optional(); absent = today's publish-time behavior.
+  // code_mode "dynamic" = a per-shopper code minted server-side on email
+  // submit (the ONLY mode the discount-unlock placement accepts — the
+  // published doc is public, so a doc-level code cannot gate anything).
+  code_mode: z.enum(["dynamic", "static", "existing"]).optional(),
+  code_prefix: z.string().optional(),
+  static_code: z.string().optional(),
+  existing_code: z.string().optional(),
+  auto_apply: z.boolean().optional(),
+  eligibility: z.enum(["all", "first", "segment"]).optional(),
+  segment: z.string().optional(),
+  // "hours" = expires N hours after the shopper finishes the quiz (needs the
+  // dynamic per-shopper mint); "date" uses ends_at above.
+  expiry_mode: z.enum(["none", "hours", "date"]).optional(),
+  expiry_hours: z.number().int().min(1).optional(),
+  scope: z.enum(["all", "top", "collections"]).optional(),
+  exclude_sale: z.boolean().optional(),
+  // Shopify never combines by default; absent key = unanswered.
+  combines: z
+    .object({
+      product: z.boolean().optional(),
+      order: z.boolean().optional(),
+      shipping: z.boolean().optional(),
+    })
+    .optional(),
+  purchase: z.enum(["onetime", "sub", "both"]).optional(),
+  recurring_limit: z.number().int().min(1).optional(),
+  deliver_on_page: z.boolean().optional(),
+  deliver_klaviyo: z.boolean().optional(),
+  deliver_rivo: z.boolean().optional(),
 });
 export type DiscountConfig = z.infer<typeof DiscountConfig>;
 
@@ -1690,6 +1721,44 @@ export const RecPageGlobal = z.object({
   // §8.2 (L2-11) — the merchant LOCKED this why-copy: config-time ✦ regenerate
   // refuses to overwrite it, and the L2-12 runtime layer must never replace it.
   whyCopyLocked: z.boolean().optional(),
+  // ── Results-guided handoff (master.md, UPDATE AREA 3) — the guided Results
+  // step's settings. ALL .optional() (never .default() — the parse-round-trip
+  // discipline); absent = today's exact behavior. Fields the runtime does not
+  // consume yet are flagged in the builder UI as "not connected yet" and
+  // enumerated in docs — no silent dead ends.
+  // The matches (§4 step 2):
+  perRow: z.number().int().min(1).max(4).optional(),
+  showVerified: z.boolean().optional(),
+  // Per-product description overrides, keyed by product_id; absent/blank rows
+  // fall back to the product's own store description.
+  descOverrides: z.record(z.string(), z.string()).optional(),
+  // The ask (§4 step 4). capturePlacement is the one decision everything else
+  // hangs off; captureEmail stays the runtime's wired gate switch and is kept
+  // in sync by the builder (before → true, none → false).
+  capturePlacement: z.enum(["before", "inline", "discount", "none"]).optional(),
+  captureRequired: z.boolean().optional(),
+  captureCta: z.string().optional(),
+  captureSkipLabel: z.string().optional(),
+  // Consent (§4 step 4 · Consent tab): marketing consent + separately-pointed
+  // terms/privacy links ({terms}/{privacy} tokens in captureTermsText).
+  consentOn: z.boolean().optional(),
+  consentCopy: z.string().optional(),
+  termsLabel: z.string().optional(),
+  termsUrl: z.string().optional(),
+  privacyLabel: z.string().optional(),
+  privacyUrl: z.string().optional(),
+  // Loading screen (§4 step 4 · Loading tab) — off by default at read time.
+  loadingOn: z.boolean().optional(),
+  loadingMs: z.number().int().min(1000).max(5000).optional(),
+  loadingNamed: z.boolean().optional(),
+  loadingSteps: z.array(z.string()).optional(),
+  // Extra picks (§4 step 5) — the "you might also like" shelf on the NORMAL
+  // reveal (distinct from GlobalFallback, the no-match pool).
+  extrasOn: z.boolean().optional(),
+  extrasHeading: z.string().optional(),
+  extrasCopy: z.string().optional(),
+  extrasCount: z.number().int().min(1).max(6).optional(),
+  extrasProductIds: z.array(z.string()).optional(),
 });
 export type RecPageGlobal = z.infer<typeof RecPageGlobal>;
 
