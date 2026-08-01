@@ -1,10 +1,18 @@
 import { useRef, useState } from "react";
 import type { DragEvent, MouseEvent } from "react";
-import type { OrderedQuestion } from "../../../lib/questionOrder";
+import type { OrderedFlowStep } from "../../../lib/questionOrder";
 import { EditableText } from "./content/EditableText";
 import { TYPE_CHIP_LABEL } from "./content/TypeChipSelector";
 import { IconGrip, IconMail, IconTarget, IconTrash, IconUp, IconDown } from "./icons";
 import type { RegenApi } from "./Step3Shell";
+
+/** questions-full-page §3 — the mock's cMeta vocabulary for content steps. */
+export const CONTENT_META: Record<string, string> = {
+  message: "◆ Message",
+  product_cards: "◆ Product cards",
+  ask_ai: "◆ Ask AI",
+  integration: "◆ Integration",
+};
 
 /* questions-full-page.html — the Questions tab's NAV RAIL (mock .navcol):
    header "Flow · N questions", one compact row per question (mono number —
@@ -33,7 +41,7 @@ export const REVEAL_ID = "__reveal__";
 const TEXT_MAX = 150; // the shared question-text cap
 
 export function LeftRail({
-  questions,
+  steps,
   deciderId,
   activeId,
   captureOn,
@@ -43,8 +51,10 @@ export function LeftRail({
   onReorder,
   onDelete,
   onAdd,
+  onAddContent,
 }: {
-  questions: OrderedQuestion[];
+  /** §2 — the FULL flow, content steps included, numbered 1..N. */
+  steps: OrderedFlowStep[];
   deciderId: string | null;
   activeId: string;
   /** Mirrors the phone walk: the ✉ row renders only when the capture screen exists. */
@@ -52,16 +62,20 @@ export function LeftRail({
   /** The stage's per-question AI-regenerate bracket (active-row strip). */
   regen: RegenApi;
   onSelect: (id: string) => void;
-  /** Mock inline wording edit (contenteditable ncq). */
+  /** Mock inline wording edit (contenteditable ncq); message titles too. */
   onRename: (id: string, text: string) => void;
   /** Mock reorder — drag, ↑↓ movers, and the number's renumber input all
-   *  land here: move the question to the 0-based index. */
+   *  land here: move the step to the 0-based position in the FULL flow. */
   onReorder: (id: string, toIndex: number) => void;
   /** Mock hover-trash delete (shell confirms + deletes via deleteNode). */
   onDelete: (id: string) => void;
   /** Mock .navadd — insert a question at the end of the flow. */
   onAdd: () => void;
+  /** §3 — insert a content page (message step) at the end of the flow. */
+  onAddContent: () => void;
 }) {
+  const nQuestions = steps.filter((s) => s.kind === "question").length;
+  const nContent = steps.length - nQuestions;
   // Whole-question drag-to-reorder (mock dnd on #navbody) — armed on the grip.
   const [armed, setArmed] = useState<string | null>(null);
   const from = useRef<number | null>(null);
@@ -93,22 +107,34 @@ export function LeftRail({
   return (
     <div className="qz-qf-navcol">
       <div className="qz-qf-navhd">
-        Flow · {questions.length} question{questions.length === 1 ? "" : "s"}
+        Flow · {nQuestions} question{nQuestions === 1 ? "" : "s"}
+        {nContent ? ` · ${nContent} content` : ""}
       </div>
       <div className="qz-qf-navbody" aria-label="Quiz flow">
-        {questions.map((q, i) => {
+        {steps.map((s, i) => {
+          const q = s;
+          const isContent = s.kind === "content";
           const isDecider = q.node.id === deciderId;
           const active = activeId === q.node.id;
-          const canDelete = questions.length > 1 && !isDecider;
-          const typeLabel = TYPE_CHIP_LABEL[q.node.data.question_type] ?? q.node.data.question_type;
+          const canDelete = isContent || (steps.filter((x) => x.kind === "question").length > 1 && !isDecider);
+          const typeLabel = isContent
+            ? CONTENT_META[q.node.type] ?? q.node.type
+            : TYPE_CHIP_LABEL[(q.node as { data: { question_type: string } }).data.question_type] ??
+              "";
+          const title = isContent
+            ? q.node.type === "message"
+              ? ((q.node.data as { text?: string }).text ?? "Message")
+              : (CONTENT_META[q.node.type] ?? q.node.type).replace("◆ ", "")
+            : (q.node.data as { text: string }).text;
           const regenHere =
-            regen.regeneratingId === q.node.id ||
-            regen.undoNodeId === q.node.id ||
-            regen.regenError?.nodeId === q.node.id;
+            !isContent &&
+            (regen.regeneratingId === q.node.id ||
+              regen.undoNodeId === q.node.id ||
+              regen.regenError?.nodeId === q.node.id);
           return (
             <div
               key={q.node.id}
-              className={`qz-qf-navrow${active ? " is-on" : ""}${isDecider ? " is-dec" : ""}${dropIdx === i ? " is-drophi" : ""}`}
+              className={`qz-qf-navrow${active ? " is-on" : ""}${isDecider ? " is-dec" : ""}${isContent ? " is-content" : ""}${dropIdx === i ? " is-drophi" : ""}`}
               draggable={armed === q.node.id}
               onDragStart={(e: DragEvent<HTMLDivElement>) => {
                 from.current = i;
@@ -125,7 +151,7 @@ export function LeftRail({
                 e.preventDefault();
                 const f = from.current;
                 if (f !== null && f !== i) {
-                  const moving = questions[f];
+                  const moving = steps[f];
                   if (moving) onReorder(moving.node.id, i);
                 }
                 endDrag();
@@ -135,7 +161,7 @@ export function LeftRail({
                 className="qz-qf-cell"
                 role="button"
                 tabIndex={0}
-                title={q.node.data.text}
+                title={title}
                 onMouseDown={(e) => onCellMouseDown(e, q.node.id)}
                 onKeyDown={(e) => {
                   if (e.target !== e.currentTarget) return;
@@ -144,7 +170,12 @@ export function LeftRail({
                   onSelect(q.node.id);
                 }}
               >
-                {renumbering === q.node.id ? (
+                {/* §2 — content shows its number in the muted style and is
+                    identified by the ◆ meta line, not by a missing number;
+                    only question numbers are click-to-renumber (mock). */}
+                {isContent ? (
+                  <span className="qz-qf-ncn is-c">{i + 1}</span>
+                ) : renumbering === q.node.id ? (
                   <span className="qz-qf-ncn">
                     <input
                       className="qz-qf-ncninput"
@@ -152,7 +183,7 @@ export function LeftRail({
                       min={1}
                       defaultValue={i + 1}
                       autoFocus
-                      aria-label={`Move question ${i + 1} to position`}
+                      aria-label={`Move step ${i + 1} to position`}
                       onKeyDown={(e) => {
                         if (e.key === "Enter") {
                           e.preventDefault();
@@ -184,13 +215,17 @@ export function LeftRail({
                       if (!active) onSelect(q.node.id);
                     }}
                   >
-                    <EditableText
-                      value={q.node.data.text}
-                      onCommit={(text) => onRename(q.node.id, text)}
-                      maxLength={TEXT_MAX}
-                      ariaLabel={`Question ${i + 1} wording`}
-                      className="qz-qf-ncq"
-                    />
+                    {isContent && q.node.type !== "message" ? (
+                      <span className="qz-qf-ncq is-ro">{title}</span>
+                    ) : (
+                      <EditableText
+                        value={title}
+                        onCommit={(text) => onRename(q.node.id, text)}
+                        maxLength={TEXT_MAX}
+                        ariaLabel={`Step ${i + 1} wording`}
+                        className="qz-qf-ncq"
+                      />
+                    )}
                   </span>
                   <span className="qz-qf-nct">
                     {typeLabel}
@@ -212,10 +247,12 @@ export function LeftRail({
                     type="button"
                     className="qz-qf-tool"
                     disabled={!canDelete}
-                    aria-label="Delete question"
+                    aria-label={isContent ? "Delete content page" : "Delete question"}
                     title={
                       canDelete
-                        ? "Delete this question"
+                        ? isContent
+                          ? "Delete this content page"
+                          : "Delete this question"
                         : isDecider
                           ? "This question decides the result — make another question the decider first"
                           : "A quiz needs at least one question"
@@ -245,9 +282,9 @@ export function LeftRail({
                   <button
                     type="button"
                     className="qz-qf-nmvb"
-                    disabled={i === questions.length - 1}
+                    disabled={i === steps.length - 1}
                     title="Move down"
-                    aria-label={`Move question ${i + 1} down`}
+                    aria-label={`Move step ${i + 1} down`}
                     onClick={(e) => {
                       e.stopPropagation();
                       onReorder(q.node.id, i + 1);
@@ -300,9 +337,15 @@ export function LeftRail({
           );
         })}
       </div>
-      <button type="button" className="qz-qf-navadd" onClick={onAdd}>
-        + Add question
-      </button>
+      {/* mock .navadd "+ Add question or content" — both inserts, spelled out. */}
+      <div className="qz-qf-navaddrow">
+        <button type="button" className="qz-qf-navadd" onClick={onAdd}>
+          + Add question
+        </button>
+        <button type="button" className="qz-qf-navadd is-content" onClick={onAddContent}>
+          + Add content
+        </button>
+      </div>
       {captureOn ? (
         <button
           type="button"

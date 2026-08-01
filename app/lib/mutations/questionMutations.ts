@@ -101,6 +101,26 @@ export function insertQuestionRelative(
   return spliceQuestion(doc, blank, refId, where);
 }
 
+// questions-full-page §2/§3 — insert a CONTENT step (a message page) into the
+// straight-through chain, same splice semantics as insertQuestionRelative
+// (never the fork-style canvas add — the anchor keeps one outgoing edge).
+export function insertContentRelative(
+  doc: QuizDoc,
+  refId: string,
+  where: "above" | "below",
+): QuizDoc {
+  const node: QuizNodeDoc = {
+    id: uid("m"),
+    type: "message",
+    position: nextPosition(doc, refId),
+    data: {
+      text: "A quick note before your results.",
+      supports_merge_tags: true,
+    },
+  };
+  return spliceQuestion(doc, node, refId, where);
+}
+
 // Question-Builder spec (Question Bank) — append a pre-built library question to the
 // END of the spine (after the last question, before the result), with fresh ids +
 // edge handles. Mappings start empty; the merchant maps in the right panel. Pure.

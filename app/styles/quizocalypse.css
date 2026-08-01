@@ -8262,3 +8262,74 @@ html[data-theme="dark"] {
   .qz-qf-navcol { border-right: none; border-bottom: 1px solid var(--qz-rule-2); }
   .qz-qf-resizer { display: none; }
 }
+
+/* ── questions-full-page §2/§3 — CONTENT STEPS in the flow ─────────────────
+   Every step takes a position number, content blocks included: the nav rail
+   and the ▦ Overview ledger number 1..N across the whole flow. A content row
+   is identified by its ◆ Content tag and the muted number style — never by a
+   missing number. */
+.qz-qf-ncn.is-c { color: var(--qz-accent-ink); cursor: default; }
+.qz-qf-navrow.is-content .qz-qf-nct { color: var(--qz-accent-ink); }
+.qz-qf-ncq.is-ro { cursor: default; }
+.qz-qf-ncq.is-ro:hover { background: transparent; }
+.qz-qf-navaddrow { display: flex; }
+.qz-qf-navaddrow .qz-qf-navadd { width: auto; flex: 1; }
+.qz-qf-navaddrow .qz-qf-navadd.is-content { flex: none; }
+
+/* the Overview ledger's content row (mock .v2card.content — single row) */
+.qz-s3-ledger .qz-s3-card.is-content { background: color-mix(in srgb, var(--qz-accent) 2%, var(--qz-paper)); }
+.qz-s3-ledger .qz-s3-card.is-content:hover { background: color-mix(in srgb, var(--qz-accent) 4%, var(--qz-paper)); }
+.qz-s3-card.is-content .qz-s3-card-head { padding: 7px 14px; }
+.qz-s3-numchip.is-c { background: var(--qz-cream-2); color: var(--qz-ink-3); cursor: default; }
+.qz-qf-ovcontent {
+  font-family: var(--qz-font-mono); font-size: 10px; font-weight: 600; text-transform: uppercase;
+  color: var(--qz-accent-ink); background: var(--qz-accent-tint); padding: 4px 8px; border-radius: 6px; flex: none;
+}
+.qz-qf-v2q.is-content { flex: 0 1 auto; }
+.qz-qf-v2q.is-ro { cursor: default; }
+.qz-qf-v2q.is-ro:hover { background: transparent; }
+.qz-qf-cmeta {
+  font-size: 11.5px; color: var(--qz-ink-25); white-space: nowrap; overflow: hidden;
+  text-overflow: ellipsis; flex: 1; min-width: 0; padding-left: 2px;
+}
+.qz-qf-setbtn {
+  display: inline-flex; align-items: center; gap: 7px; flex: 1; justify-content: center;
+  border: 1px solid var(--qz-rule); background: var(--qz-paper); color: var(--qz-ink-3);
+  font-size: 12px; font-weight: 600; padding: 5px 10px; border-radius: 9px; cursor: pointer; font-family: inherit;
+}
+.qz-qf-setbtn:hover:not(:disabled) { background: var(--qz-cream-2); }
+.qz-qf-setbtn:disabled { opacity: .5; cursor: default; }
+.qz-qf-omrow { display: grid; grid-template-columns: 78px 1fr; align-items: start; gap: 12px; margin-bottom: 12px; }
+.qz-qf-oml {
+  font-family: var(--qz-font-mono); font-size: 9.5px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: .03em; color: var(--qz-ink-4); padding-top: 8px;
+}
+
+/* the two-option inserter menu (mock .ins-menu) */
+.qz-qf-ins { position: relative; }
+.qz-qf-insmenu {
+  position: absolute; top: calc(100% - 2px); z-index: 6; background: var(--qz-paper);
+  border: 1px solid var(--qz-rule); border-radius: 11px; box-shadow: var(--qz-lift-2);
+  padding: 5px; min-width: 186px; display: flex; flex-direction: column; gap: 2px;
+}
+.qz-qf-insmenu button {
+  display: flex; align-items: center; gap: 9px; width: 100%; border: none; background: transparent;
+  border-radius: 8px; padding: 9px 11px; font-size: 13px; color: var(--qz-ink); cursor: pointer;
+  text-align: left; font-family: inherit;
+}
+.qz-qf-insmenu button:hover { background: var(--qz-cream-2); }
+.qz-qf-ins.is-open .qz-s3-divider-btn { opacity: 1; transform: rotate(45deg); background: var(--qz-accent); border-color: var(--qz-accent); color: var(--qz-paper); }
+
+/* the content step's phone surface (story card) */
+.qz-qf-story { display: flex; flex-direction: column; gap: 8px; }
+.qz-qf-storykick {
+  font-family: var(--qz-font-mono); font-size: 9.5px; font-weight: 700; letter-spacing: .09em;
+  text-transform: uppercase; opacity: .6;
+}
+.qz-qf-storynote { margin: 0; font-size: 13px; opacity: .65; line-height: 1.5; }
+
+/* BUGFIX (owner report) — the type popover was clipped by the panel's
+   overflow:hidden when it hung past the phone column's right edge. Open it
+   fully to the LEFT of the tag, over the device, so it always sits inside
+   the panel regardless of viewport width. */
+.qz-qs-pv .qz-s3-typetag .qz-s3-typepop { left: auto; right: calc(100% + 8px); top: 0; }

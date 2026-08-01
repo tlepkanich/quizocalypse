@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import type { CSSProperties, ReactNode } from "react";
 import type { Quiz as QuizDoc, DesignTokens } from "../../../../lib/quizSchema";
-import type { OrderedQuestion } from "../../../../lib/questionOrder";
+import type { OrderedQuestion, OrderedFlowStep } from "../../../../lib/questionOrder";
 import {
   resolveDesignTokens,
   tokensToCssVars,
@@ -40,7 +40,7 @@ type DeviceMode = keyof typeof DEVICE_DIMS;
 
 export function PhoneCanvas({
   doc,
-  questions,
+  steps,
   activeId,
   captureOn,
   designTokens,
@@ -48,8 +48,9 @@ export function PhoneCanvas({
   onCommit,
 }: {
   doc: QuizDoc;
-  questions: OrderedQuestion[];
-  /** A question node id, CAPTURE_ID, or REVEAL_ID (validated by the shell). */
+  /** questions-full-page §2 — the FULL flow walk (content steps included). */
+  steps: OrderedFlowStep[];
+  /** A flow-step node id, CAPTURE_ID, or REVEAL_ID (validated by the shell). */
   activeId: string;
   captureOn: boolean;
   designTokens: DesignTokens | null | undefined;
@@ -69,32 +70,28 @@ export function PhoneCanvas({
   );
   const ctaText = suggestContrastText(resolved.colors?.primary ?? "");
 
-  // The walk order: every flow-ordered question, then the termini.
+  // The walk order: every flow-ordered step (content included), then the
+  // termini. questions-full-page §2 — the counter runs across the WHOLE flow.
   const positions = useMemo(() => {
-    const ids = questions.map((q) => q.node.id);
+    const ids = steps.map((s) => s.node.id);
     if (captureOn) ids.push(CAPTURE_ID);
     ids.push(REVEAL_ID);
     return ids;
-  }, [questions, captureOn]);
+  }, [steps, captureOn]);
   const posIndex = Math.max(0, positions.indexOf(activeId));
-  // AUDIT-23 — the mock's stepn/fbar count QUESTIONS only ("1/6"): the
-  // counter hides on the capture/reveal screens (which the mock doesn't
-  // draw a top bar for) and the progress bar reads full there.
-  const qIndex = questions.findIndex((q) => q.node.id === activeId);
-  const stepLabel = qIndex >= 0 ? `${qIndex + 1}/${questions.length}` : "";
-  const progress =
-    qIndex >= 0 && questions.length > 0 ? (qIndex + 1) / questions.length : 1;
+  const stepIdx = steps.findIndex((s) => s.node.id === activeId);
+  const stepLabel = stepIdx >= 0 ? `${stepIdx + 1}/${steps.length}` : "";
+  const progress = stepIdx >= 0 && steps.length > 0 ? (stepIdx + 1) / steps.length : 1;
 
+  const activeStep = steps.find((s) => s.node.id === activeId) ?? steps[0];
   const position: ScreenPosition =
     activeId === CAPTURE_ID
       ? { kind: "capture" }
-      : activeId === REVEAL_ID
+      : activeId === REVEAL_ID || !activeStep
         ? { kind: "reveal" }
-        : {
-            kind: "question",
-            question:
-              questions.find((q) => q.node.id === activeId) ?? questions[0]!,
-          };
+        : activeStep.kind === "content"
+          ? { kind: "content", node: activeStep.node }
+          : { kind: "question", question: { node: activeStep.node, qIndex: activeStep.qIndex ?? 1 } as OrderedQuestion };
 
   const artDirection = resolved.art_direction;
   const alpine = artDirection?.id === "alpine-afterglow";

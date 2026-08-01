@@ -4,9 +4,14 @@ import type { Quiz as QuizDoc, DesignTokens } from "../../../lib/quizSchema";
 import type { BuilderCategory, BuilderCollection } from "../../builder/stepProps";
 import type { IndexedProduct } from "../../../lib/recommendationEngine";
 import { buildTier1Report, type Tier1Link } from "../../../lib/pathReport";
-import { deleteNode, insertQuestionRelative, moveStep } from "../../../lib/quizMutations";
+import {
+  deleteNode,
+  insertQuestionRelative,
+  insertContentRelative,
+  moveStep,
+} from "../../../lib/quizMutations";
 import { updateNodeData } from "../../studio/studioDoc";
-import { orderedQuestions, deciderQuestion } from "../../../lib/questionOrder";
+import { orderedQuestions, orderedFlowSteps, deciderQuestion } from "../../../lib/questionOrder";
 import { QuestionBankDrawer } from "../../studio/QuestionBankDrawer";
 import { useFunnelBar, FunnelSaveChip, type FunnelBarOverride } from "../funnelChrome";
 import { pillPresentation } from "./HealthPill";
@@ -89,6 +94,10 @@ export function Step3Shell({
   regen: RegenApi;
 }) {
   const questions = useMemo(() => orderedQuestions(doc), [doc]);
+  // questions-full-page §2 — the FULL flow (content steps included): the nav
+  // rail, the Overview ledger, and the phone walk all run over this; the
+  // logic surfaces stay question-only.
+  const flowSteps = useMemo(() => orderedFlowSteps(doc), [doc]);
   const decider = useMemo(() => deciderQuestion(doc), [doc]);
   // The live health verdict — pure + cheap by design, memoized per doc change
   // (powers the pill now, the popover and the Continue gate in P4).
@@ -127,12 +136,12 @@ export function Step3Shell({
   // Valid canvas positions; a stale selection (deleted question, capture
   // toggled off) falls back derived-style — no effect needed.
   const activeId = useMemo(() => {
-    const valid = new Set(questions.map((q) => q.node.id));
+    const valid = new Set(flowSteps.map((s) => s.node.id));
     if (captureOn) valid.add(CAPTURE_ID);
     valid.add(REVEAL_ID);
     if (selectedId && valid.has(selectedId)) return selectedId;
-    return questions[0]?.node.id ?? REVEAL_ID;
-  }, [selectedId, questions, captureOn]);
+    return flowSteps[0]?.node.id ?? REVEAL_ID;
+  }, [selectedId, flowSteps, captureOn]);
 
   // "+ New question" — insert below the LAST question (insertQuestionRelative
   // anchors on a movable step, never the terminal — the add-anchor lesson).
@@ -170,12 +179,13 @@ export function Step3Shell({
     [doc, questions, onCommit],
   );
 
-  // AUDIT-22 — the questions-simple list's whole-row drag-to-reorder: move
-  // the question to the 0-based index (mock splice(from,1) → splice(to,0)
-  // semantics), through the same pure moveStep mutation.
+  // questions-full-page §2 — renumber/drag moves the step to that OVERALL
+  // position in the FULL flow (content included), through the pure moveStep
+  // mutation. "The old implementation filtered to questions only, which
+  // desynced the displayed number from the real index."
   const reorderQuestion = useCallback(
     (id: string, toIndex: number) => {
-      const ids = questions.map((q) => q.node.id);
+      const ids = flowSteps.map((s) => s.node.id);
       const from = ids.indexOf(id);
       if (from < 0) return;
       const target = Math.max(0, Math.min(ids.length - 1, toIndex));
@@ -183,8 +193,20 @@ export function Step3Shell({
       const beforeId = from < target ? ids[target + 1] ?? null : ids[target]!;
       onCommit(moveStep(doc, id, beforeId));
     },
-    [doc, questions, onCommit],
+    [doc, flowSteps, onCommit],
   );
+
+  // "+ Add content page" — splice a message step below the LAST flow step
+  // (a movable step, never the terminal — the add-anchor lesson).
+  const addContent = useCallback(() => {
+    const ref = flowSteps[flowSteps.length - 1]?.node.id;
+    if (!ref) return;
+    const before = new Set(doc.nodes.map((n) => n.id));
+    const next = insertContentRelative(doc, ref, "below");
+    const newId = next.nodes.find((n) => !before.has(n.id))?.id ?? null;
+    onCommit(next);
+    if (newId) setSelectedId(newId);
+  }, [doc, flowSteps, onCommit]);
 
   // AUDIT-22 — the list row's inline wording edit (mock contenteditable qtext).
   const renameQuestion = useCallback(
@@ -196,12 +218,12 @@ export function Step3Shell({
 
   // AUDIT-22 — the list row's hover-trash delete (mock qdel + confirm).
   // deleteNode re-stitches the straight-through chain so the flow never
-  // strands. The decider row's delete is disabled in the list (deviation:
-  // deleting the deciding question would orphan every mapping — move the
-  // role first).
+  // strands. Works for questions AND content steps (§2 — every step is a
+  // first-class row). The decider row's delete stays disabled in the list.
   const deleteQuestion = useCallback(
     (id: string) => {
-      if (typeof window !== "undefined" && !window.confirm("Delete this question?")) return;
+      const kind = doc.nodes.find((n) => n.id === id)?.type === "question" ? "question" : "content page";
+      if (typeof window !== "undefined" && !window.confirm(`Delete this ${kind}?`)) return;
       onCommit(deleteNode(doc, id));
       if (selectedId === id) setSelectedId(null);
     },
@@ -315,7 +337,7 @@ export function Step3Shell({
                 style={{ "--navw": `${navw}px` } as CSSProperties}
               >
                 <LeftRail
-                  questions={questions}
+                  steps={flowSteps}
                   deciderId={decider?.id ?? null}
                   activeId={activeId}
                   captureOn={captureOn}
@@ -325,6 +347,7 @@ export function Step3Shell({
                   onReorder={reorderQuestion}
                   onDelete={deleteQuestion}
                   onAdd={addQuestion}
+                  onAddContent={addContent}
                 />
                 {/* mock .resizer — drag to resize the nav column (232..max). */}
                 <div
@@ -352,7 +375,7 @@ export function Step3Shell({
                 />
                 <PhoneCanvas
                   doc={doc}
-                  questions={questions}
+                  steps={flowSteps}
                   activeId={activeId}
                   captureOn={captureOn}
                   designTokens={designTokens}
@@ -364,7 +387,7 @@ export function Step3Shell({
           ) : (
             <OverviewLedger
               doc={doc}
-              questions={questions}
+              steps={flowSteps}
               deciderId={decider?.id ?? null}
               onCommit={onCommit}
               onReorder={reorderQuestion}

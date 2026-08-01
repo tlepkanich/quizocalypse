@@ -1,13 +1,19 @@
 import { useState } from "react";
 import type { Quiz as QuizDoc } from "../../../lib/quizSchema";
 import { isFreeformType } from "../../../lib/quizSchema";
-import type { OrderedQuestion } from "../../../lib/questionOrder";
-import { addAnswer, insertQuestionRelative, removeAnswer } from "../../../lib/quizMutations";
+import type { OrderedQuestion, OrderedFlowStep } from "../../../lib/questionOrder";
+import {
+  addAnswer,
+  insertQuestionRelative,
+  insertContentRelative,
+  removeAnswer,
+} from "../../../lib/quizMutations";
 import { updateNodeData } from "../../studio/studioDoc";
+import { QzModal } from "../../qz-overlays";
 import { EditableText } from "./content/EditableText";
 import { TypeChipSelector } from "./content/TypeChipSelector";
-import { AddQuestionDivider } from "./logic/AddQuestionDivider";
-import { IconUp, IconDown, IconTrash } from "./icons";
+import { CONTENT_META } from "./LeftRail";
+import { IconUp, IconDown, IconTrash, IconPlus } from "./icons";
 
 /* questions-full-page.html §1 — the Questions step's ▦ Overview tab: the
    merchant's bulk-editing LEDGER. One bordered rounded container; each
@@ -61,21 +67,151 @@ function Stepper({
   );
 }
 
+/* §3 — a CONTENT step is a SINGLE row, no body: [movers][muted n][◆ Content]
+   [title][meta] | [Edit settings][🗑]. The Edit-settings button occupies the
+   same right-hand slot the type dropdown occupies on a question row, so the
+   two row types share geometry. */
+function ContentRow({
+  doc,
+  step,
+  index,
+  total,
+  onCommit,
+  onReorder,
+  onDelete,
+}: {
+  doc: QuizDoc;
+  step: OrderedFlowStep;
+  index: number;
+  total: number;
+  onCommit: (doc: QuizDoc) => void;
+  onReorder: (id: string, toIndex: number) => void;
+  onDelete: (id: string) => void;
+}) {
+  const { node } = step;
+  const isMessage = node.type === "message";
+  const text = isMessage ? ((node.data as { text?: string }).text ?? "") : "";
+  const title = isMessage ? text || "Message" : (CONTENT_META[node.type] ?? node.type).replace("◆ ", "");
+  const meta = CONTENT_META[node.type] ?? node.type;
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  return (
+    <section className="qz-s3-card is-content" aria-label={`Content step ${index + 1}`}>
+      <div className="qz-s3-card-head">
+        <div className="qz-s3-card-headl">
+          <span className="qz-s3-mv">
+            <button
+              type="button"
+              className="qz-s3-mvb"
+              disabled={index === 0}
+              aria-label="Move step up"
+              onClick={() => onReorder(node.id, index - 1)}
+            >
+              <IconUp />
+            </button>
+            <button
+              type="button"
+              className="qz-s3-mvb"
+              disabled={index === total - 1}
+              aria-label="Move step down"
+              onClick={() => onReorder(node.id, index + 1)}
+            >
+              <IconDown />
+            </button>
+          </span>
+          <span className="qz-s3-numchip is-c" title={`Step ${index + 1}`}>
+            {index + 1}
+          </span>
+          <span className="qz-qf-ovcontent">◆ Content</span>
+          {isMessage ? (
+            <EditableText
+              value={title}
+              onCommit={(t) => {
+                const v = t.trim().slice(0, 300);
+                if (v) onCommit(updateNodeData(doc, node.id, { text: v }));
+              }}
+              maxLength={300}
+              ariaLabel={`Content step ${index + 1} title`}
+              className="qz-qf-v2q is-content"
+            />
+          ) : (
+            <span className="qz-qf-v2q is-content is-ro">{title}</span>
+          )}
+          <span className="qz-qf-cmeta">{meta.replace("◆ ", "")}</span>
+        </div>
+        <div className="qz-s3-card-type">
+          <button
+            type="button"
+            className="qz-qf-setbtn"
+            disabled={!isMessage}
+            title={isMessage ? "Edit this content page" : "Configured in the main builder"}
+            onClick={() => setSettingsOpen(true)}
+          >
+            ⚙ Edit settings
+          </button>
+          <button
+            type="button"
+            className="qz-s3-cdel"
+            title="Delete content page"
+            aria-label={`Delete content step ${index + 1}`}
+            onClick={() => onDelete(node.id)}
+          >
+            <IconTrash />
+          </button>
+        </div>
+      </div>
+      {settingsOpen && isMessage ? (
+        <QzModal
+          open
+          onClose={() => setSettingsOpen(false)}
+          size="sm"
+          title="Content page"
+          footer={
+            <button type="button" className="qz-btn qz-btn-accent" onClick={() => setSettingsOpen(false)}>
+              Done
+            </button>
+          }
+        >
+          <div className="qz-qf-omrow">
+            <span className="qz-qf-oml">Message</span>
+            <textarea
+              className="qz-input"
+              rows={3}
+              defaultValue={text}
+              aria-label="Content page message"
+              onBlur={(e) => {
+                const v = e.target.value.trim().slice(0, 300);
+                if (v && v !== text) onCommit(updateNodeData(doc, node.id, { text: v }));
+              }}
+            />
+          </div>
+          <p className="qz-dim" style={{ margin: 0, fontSize: 12 }}>
+            Shown between two steps as its own page, with a Continue button.
+          </p>
+        </QzModal>
+      ) : null}
+    </section>
+  );
+}
+
 function LedgerRow({
   doc,
   question,
   index,
   total,
   isDecider,
+  onlyQuestion,
   onCommit,
   onReorder,
   onDelete,
 }: {
   doc: QuizDoc;
   question: OrderedQuestion;
+  /** Position in the FULL flow (content included) — §2 numbering. */
   index: number;
   total: number;
   isDecider: boolean;
+  /** The last remaining question can't be deleted (a quiz needs one). */
+  onlyQuestion: boolean;
   onCommit: (doc: QuizDoc) => void;
   onReorder: (id: string, toIndex: number) => void;
   onDelete: (id: string) => void;
@@ -180,11 +316,11 @@ function LedgerRow({
           <button
             type="button"
             className="qz-s3-cdel"
-            disabled={isDecider || total <= 1}
+            disabled={isDecider || onlyQuestion}
             title={
               isDecider
                 ? "This question decides the result — move the role first (Logic step), then delete"
-                : total <= 1
+                : onlyQuestion
                   ? "A quiz needs at least one question"
                   : "Delete question"
             }
@@ -338,44 +474,115 @@ function LedgerRow({
   );
 }
 
+/* Mock .ins — the inserter riding the divider, with the two-option menu:
+   "Add a question here" / "Add a content block". */
+function AddStepDivider({
+  onAddQuestion,
+  onAddContent,
+}: {
+  onAddQuestion: () => void;
+  onAddContent: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className={`qz-s3-divider qz-qf-ins${open ? " is-open" : ""}`}>
+      <button
+        type="button"
+        className="qz-s3-divider-btn"
+        aria-label="Add a step here"
+        aria-expanded={open}
+        title="Add a question or content block here"
+        onClick={() => setOpen((v) => !v)}
+      >
+        <IconPlus />
+      </button>
+      {open ? (
+        <div className="qz-qf-insmenu" role="menu">
+          <button
+            type="button"
+            role="menuitem"
+            onClick={() => {
+              setOpen(false);
+              onAddQuestion();
+            }}
+          >
+            ＋ Add a question here
+          </button>
+          <button
+            type="button"
+            role="menuitem"
+            onClick={() => {
+              setOpen(false);
+              onAddContent();
+            }}
+          >
+            ◆ Add a content block
+          </button>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 export function OverviewLedger({
   doc,
-  questions,
+  steps,
   deciderId,
   onCommit,
   onReorder,
   onDelete,
 }: {
   doc: QuizDoc;
-  questions: OrderedQuestion[];
+  /** §2 — the FULL flow, content steps included, numbered 1..N. */
+  steps: OrderedFlowStep[];
   deciderId: string | null;
   onCommit: (doc: QuizDoc) => void;
   onReorder: (id: string, toIndex: number) => void;
   onDelete: (id: string) => void;
 }) {
-  // Divider inserts anchor on MOVABLE questions (the add-anchor lesson).
+  // Divider inserts anchor on MOVABLE steps (the add-anchor lesson).
   const addBelow = (refId: string) => onCommit(insertQuestionRelative(doc, refId, "below"));
-  const addAboveFirst = () => {
-    const refId = questions[0]?.node.id;
-    if (refId) onCommit(insertQuestionRelative(doc, refId, "above"));
-  };
+  const addContentBelow = (refId: string) => onCommit(insertContentRelative(doc, refId, "below"));
+  const first = steps[0]?.node.id;
+  const nQuestions = steps.filter((s) => s.kind === "question").length;
 
   return (
     <div className="qz-s3-ledger">
-      {questions.length > 0 ? <AddQuestionDivider onAdd={addAboveFirst} /> : null}
-      {questions.map((q, i) => (
-        <div key={q.node.id} className="qz-s3-ledgerrow">
-          <LedgerRow
-            doc={doc}
-            question={q}
-            index={i}
-            total={questions.length}
-            isDecider={q.node.id === deciderId}
-            onCommit={onCommit}
-            onReorder={onReorder}
-            onDelete={onDelete}
+      {first ? (
+        <AddStepDivider
+          onAddQuestion={() => onCommit(insertQuestionRelative(doc, first, "above"))}
+          onAddContent={() => onCommit(insertContentRelative(doc, first, "above"))}
+        />
+      ) : null}
+      {steps.map((s, i) => (
+        <div key={s.node.id} className="qz-s3-ledgerrow">
+          {s.kind === "content" ? (
+            <ContentRow
+              doc={doc}
+              step={s}
+              index={i}
+              total={steps.length}
+              onCommit={onCommit}
+              onReorder={onReorder}
+              onDelete={onDelete}
+            />
+          ) : (
+            <LedgerRow
+              doc={doc}
+              question={{ node: s.node, qIndex: s.qIndex ?? 1 } as OrderedQuestion}
+              index={i}
+              total={steps.length}
+              isDecider={s.node.id === deciderId}
+              onlyQuestion={nQuestions <= 1}
+              onCommit={onCommit}
+              onReorder={onReorder}
+              onDelete={onDelete}
+            />
+          )}
+          <AddStepDivider
+            onAddQuestion={() => addBelow(s.node.id)}
+            onAddContent={() => addContentBelow(s.node.id)}
           />
-          <AddQuestionDivider onAdd={() => addBelow(q.node.id)} />
         </div>
       ))}
     </div>

@@ -9,6 +9,7 @@ import {
   deleteNode,
   duplicateQuestionNode,
   insertQuestionRelative,
+  insertContentRelative,
   moveAnswer,
   moveStep,
   routeAnswerToEnd,
@@ -127,6 +128,17 @@ describe("duplicateQuestionNode / insertQuestionRelative (Question-Builder spec)
     const newId = run[run.indexOf("q2") - 1]!;
     expect(["q1", "q2", "q3"]).not.toContain(newId);
     expect(run).toEqual(["q1", newId, "q2", "q3"]);
+  });
+
+  it("insertContentRelative splices a MESSAGE step into the chain (questions-full-page §3)", () => {
+    const next = insertContentRelative(linearQuestionsDoc(), "q2", "below");
+    const run = runOf(next);
+    const newId = run[run.indexOf("q2") + 1]!;
+    expect(run).toEqual(["q1", "q2", newId, "q3"]);
+    const node = next.nodes.find((n) => n.id === newId);
+    expect(node?.type).toBe("message");
+    // splice, not fork: the anchor keeps exactly ONE plain outgoing edge
+    expect(next.edges.filter((e) => e.source === "q2" && !e.source_handle).length).toBe(1);
   });
 
   it("insert below places a new question after the reference", () => {

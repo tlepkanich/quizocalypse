@@ -27,8 +27,57 @@ import { IconGrip, IconX } from "../icons";
 
 export type ScreenPosition =
   | { kind: "question"; question: OrderedQuestion }
+  | { kind: "content"; node: QuizDoc["nodes"][number] }
   | { kind: "capture" }
   | { kind: "reveal" };
+
+/* questions-full-page §3 — a CONTENT step's phone surface: the story card.
+   Message pages edit their text inline; the other content types (product
+   cards / ask-AI / integration) are configured in the main builder, so the
+   card says so instead of pretending to edit them here. */
+function ContentSurface({
+  doc,
+  node,
+  onCommit,
+}: {
+  doc: QuizDoc;
+  node: QuizDoc["nodes"][number];
+  onCommit: (doc: QuizDoc) => void;
+}) {
+  const isMessage = node.type === "message";
+  const label =
+    node.type === "message"
+      ? "A quick note"
+      : node.type === "product_cards"
+        ? "Product cards"
+        : node.type === "ask_ai"
+          ? "Ask AI"
+          : "Integration";
+  return (
+    <div className="qz-s3-qbody qz-qf-story">
+      <span className="qz-qf-storykick">{label}</span>
+      {isMessage ? (
+        <h2 className="qz-s3-qtitle is-edit">
+          <EditableText
+            value={(node.data as { text?: string }).text ?? ""}
+            onCommit={(text) => {
+              const v = text.trim().slice(0, 300);
+              if (v) onCommit(updateNodeData(doc, node.id, { text: v }));
+            }}
+            maxLength={300}
+            ariaLabel="Content page text"
+            className="qz-qf-qtitleedit"
+          />
+        </h2>
+      ) : (
+        <>
+          <h2 className="qz-s3-qtitle">{label} step</h2>
+          <p className="qz-qf-storynote">Configured in the main builder.</p>
+        </>
+      )}
+    </div>
+  );
+}
 
 const ANSWER_MAX = 60;
 
@@ -373,6 +422,8 @@ export function PhoneScreen({
           question={position.question}
           onCommit={onCommit}
         />
+      ) : position.kind === "content" ? (
+        <ContentSurface key={position.node.id} doc={doc} node={position.node} onCommit={onCommit} />
       ) : position.kind === "capture" ? (
         <CaptureSurface doc={doc} onCommit={onCommit} />
       ) : (

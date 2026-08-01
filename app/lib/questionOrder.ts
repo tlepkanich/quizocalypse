@@ -41,6 +41,54 @@ export function orderedQuestions(doc: QuizDoc): OrderedQuestion[] {
   return ids.map((id, i) => ({ node: byId.get(id) as QuestionNode, qIndex: i + 1 }));
 }
 
+// ── questions-full-page §2 — the FULL flow, content steps included ──────────
+// "Every step takes a position number, content blocks included." The nav rail
+// and the ▦ Overview ledger number 1..N across questions AND content steps
+// (message / product-cards / ask-AI / integration nodes sitting in the run);
+// renumber = move to that OVERALL position. The logic surfaces keep their
+// question-only qIndex — rules and mappings never reference content steps.
+export const CONTENT_STEP_TYPES = new Set<QuizNode["type"]>([
+  "message",
+  "product_cards",
+  "ask_ai",
+  "integration",
+]);
+
+export interface OrderedFlowStep {
+  node: QuizNode;
+  /** 1-based position across the WHOLE flow (content included). */
+  n: number;
+  kind: "question" | "content";
+  /** The question-only index (Q1, Q2 …) when kind === "question". */
+  qIndex?: number;
+}
+
+export function orderedFlowSteps(doc: QuizDoc): OrderedFlowStep[] {
+  const flow = orderFlow(doc);
+  const byId = new Map(doc.nodes.map((n) => [n.id, n] as const));
+  const ids: string[] = [];
+  const seen = new Set<string>();
+  const push = (id: string) => {
+    if (seen.has(id)) return;
+    const n = byId.get(id);
+    if (n && (n.type === "question" || CONTENT_STEP_TYPES.has(n.type))) {
+      seen.add(id);
+      ids.push(id);
+    }
+  };
+  for (const s of flow.steps) push(s.nodeId);
+  for (const lane of flow.branches) for (const s of lane.steps) push(s.nodeId);
+  for (const n of doc.nodes) if (n.type === "question") push(n.id);
+
+  let q = 0;
+  return ids.map((id, i) => {
+    const node = byId.get(id)!;
+    const isQ = node.type === "question";
+    if (isQ) q += 1;
+    return { node, n: i + 1, kind: isQ ? "question" : "content", ...(isQ ? { qIndex: q } : {}) };
+  });
+}
+
 // The single category id an answer maps to under DIRECT scoring (first points
 // key), or null when unmapped. The inline answer-row pill is direct-only.
 export function answerBucketId(answer: Answer): string | null {
