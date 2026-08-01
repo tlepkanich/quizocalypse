@@ -68,6 +68,11 @@ export const LogicScroll = forwardRef<
     onActiveChange: (nodeId: string) => void;
     /** questions-full-page mock — the overview cards' ↑/↓ movers. */
     onMove: (id: string, dir: -1 | 1) => void;
+    /** questions-full-page §2 — the number chip's click-to-renumber (moves
+     *  the question to that 0-based position in the flow). */
+    onReorder: (id: string, toIndex: number) => void;
+    /** mock .cdel — delete a question row (confirm lives in the shell). */
+    onDelete: (id: string) => void;
     onCommit: (doc: QuizDoc) => void;
   }
 >(function LogicScroll(
@@ -82,6 +87,8 @@ export const LogicScroll = forwardRef<
     activeId,
     onActiveChange,
     onMove,
+    onReorder,
+    onDelete,
     onCommit,
   },
   handleRef,
@@ -329,36 +336,43 @@ export const LogicScroll = forwardRef<
   return (
     <div className="qz-s3-logicbody">
       <div className="qz-s3-logic" ref={rootRef} aria-label="Logic map">
-        {questions.length > 0 ? <AddQuestionDivider onAdd={addAboveFirst} /> : null}
-        {questions.map((q, qi) => (
-          <div key={q.node.id} className="qz-s3-secwrap">
-            <QuestionSection
-              doc={doc}
-              question={q}
-              isDecider={q.node.id === deciderId}
-              hasCurrentDecider={deciderId !== null}
-              colorKey={sectionColors.get(q.node.id) ?? "green"}
-              categories={categories}
-              productIndex={productIndex}
-              skipOptions={skipOptions}
-              isRevisitTarget={isRevisitTarget}
-              chipsByAnswer={layout.chipsByAnswer}
-              inRulesCount={rulesReferencing.get(q.node.id) ?? 0}
-              flashWarn={flashSectionId === q.node.id}
-              active={activeId === q.node.id}
-              expanded={cardExpanded(q.node.id)}
-              canUp={qi > 0}
-              canDown={qi < questions.length - 1}
-              onMove={(dir) => onMove(q.node.id, dir)}
-              onToggleExpanded={() => toggleCard(q.node.id)}
-              onCommit={onCommit}
-              onChipClick={scrollToRule}
-              onStartDraft={setDraftHome}
-              registerSection={registerSection}
-            />
-            <AddQuestionDivider onAdd={() => addBelow(q.node.id)} />
-          </div>
-        ))}
+        {/* questions-full-page §1 — ONE connected ledger: rows separated by
+            hairlines inside one bordered container; the ＋ inserters ride the
+            dividers (negative margins) so rows stay flush. */}
+        <div className="qz-s3-ledger">
+          {questions.length > 0 ? <AddQuestionDivider onAdd={addAboveFirst} /> : null}
+          {questions.map((q, qi) => (
+            <div key={q.node.id} className="qz-s3-ledgerrow">
+              <QuestionSection
+                doc={doc}
+                question={q}
+                isDecider={q.node.id === deciderId}
+                hasCurrentDecider={deciderId !== null}
+                colorKey={sectionColors.get(q.node.id) ?? "green"}
+                categories={categories}
+                productIndex={productIndex}
+                skipOptions={skipOptions}
+                isRevisitTarget={isRevisitTarget}
+                chipsByAnswer={layout.chipsByAnswer}
+                inRulesCount={rulesReferencing.get(q.node.id) ?? 0}
+                flashWarn={flashSectionId === q.node.id}
+                active={activeId === q.node.id}
+                expanded={cardExpanded(q.node.id)}
+                canUp={qi > 0}
+                canDown={qi < questions.length - 1}
+                onMove={(dir) => onMove(q.node.id, dir)}
+                onReorder={(toIndex) => onReorder(q.node.id, toIndex)}
+                onDelete={() => onDelete(q.node.id)}
+                onToggleExpanded={() => toggleCard(q.node.id)}
+                onCommit={onCommit}
+                onChipClick={scrollToRule}
+                onStartDraft={setDraftHome}
+                registerSection={registerSection}
+              />
+              <AddQuestionDivider onAdd={() => addBelow(q.node.id)} />
+            </div>
+          ))}
+        </div>
         {/* QZY-2 (owner supplement) — the map pre-populates the capture as
             the LAST step: "Email Capture / End Quiz" instead of a bare end. */}
         <CaptureModule doc={doc} captureOn={captureOn} onCommit={onCommit} />

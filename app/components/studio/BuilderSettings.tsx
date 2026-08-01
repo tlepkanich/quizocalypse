@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { Link } from "@remix-run/react";
 import type { Quiz } from "../../lib/quizSchema";
-import { moveStep } from "../../lib/quizMutations";
+import { deleteNode, moveStep } from "../../lib/quizMutations";
 import { LogicView } from "../logic/LogicView";
 import { PathTester } from "../logic/PathTester";
 import { LogicScroll } from "../onboarding/questionsLogicV3/logic/LogicScroll";
@@ -120,6 +120,21 @@ export function BuilderLogicView({
               if (dir === -1 && idx === 0) return;
               if (dir === 1 && idx === questions.length - 1) return;
               commit(moveStep(doc, id, beforeId));
+            }}
+            // questions-full-page §2/§6 — the ledger's renumber + delete,
+            // through the same pure mutations the funnel shell uses.
+            onReorder={(id, toIndex) => {
+              const ids = questions.map((q) => q.node.id);
+              const from = ids.indexOf(id);
+              if (from < 0) return;
+              const target = Math.max(0, Math.min(ids.length - 1, toIndex));
+              if (target === from) return;
+              const beforeId = from < target ? ids[target + 1] ?? null : ids[target]!;
+              commit(moveStep(doc, id, beforeId));
+            }}
+            onDelete={(id) => {
+              if (typeof window !== "undefined" && !window.confirm("Delete this question?")) return;
+              commit(deleteNode(doc, id));
             }}
             onCommit={commit}
           />

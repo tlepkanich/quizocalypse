@@ -355,6 +355,8 @@ export function Step3Shell({
             activeId={activeId}
             onActiveChange={setSelectedId}
             onMove={moveQuestion}
+            onReorder={reorderQuestion}
+            onDelete={deleteQuestion}
             onCommit={onCommit}
           />
         </div>

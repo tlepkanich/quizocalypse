@@ -1,3 +1,4 @@
+import { useState } from "react";
 import type { Quiz as QuizDoc } from "../../../../lib/quizSchema";
 import { isFreeformType } from "../../../../lib/quizSchema";
 import type { BuilderCategory } from "../../../builder/stepProps";
@@ -10,7 +11,7 @@ import type { RuleRef } from "../ruleHomes";
 import type { SectionColorKey } from "../sectionPalette";
 import { AnswerTableRow } from "./AnswerTableRow";
 import { TypeChipSelector } from "../content/TypeChipSelector";
-import { IconUp, IconDown } from "../icons";
+import { IconUp, IconDown, IconTrash } from "../icons";
 
 /* quiz-step3 v3 §5.2 → QZY-2 (quiz-logic dev-handoff v1.2 §3/§4 + owner
    supplement) — the MAP CARD. Collapsed is the default scannable state:
@@ -80,6 +81,8 @@ export function QuestionSection({
   canUp,
   canDown,
   onMove,
+  onReorder,
+  onDelete,
   onToggleExpanded,
   onCommit,
   onChipClick,
@@ -107,6 +110,11 @@ export function QuestionSection({
   canUp: boolean;
   canDown: boolean;
   onMove: (dir: -1 | 1) => void;
+  /** questions-full-page §2 — renumber: move this question to the 0-based
+   *  flow position (the number chip's inline input commits here). */
+  onReorder: (toIndex: number) => void;
+  /** mock .cdel — delete this question (confirm lives in the shell). */
+  onDelete: () => void;
   onToggleExpanded: () => void;
   onCommit: (doc: QuizDoc) => void;
   onChipClick: (ruleId: string) => void;
@@ -173,6 +181,17 @@ export function QuestionSection({
   // machinery keeps compiling (it simply no-ops now).
   void expanded;
   void onToggleExpanded;
+
+  // questions-full-page §2 — click the number chip → inline <input
+  // type=number> → renumber (move to that overall position). Enter commits,
+  // Escape cancels, blur commits.
+  const [renumbering, setRenumbering] = useState(false);
+  const commitRenumber = (raw: string, ok: boolean) => {
+    setRenumbering(false);
+    if (!ok) return;
+    const v = parseInt(raw, 10);
+    if (!Number.isNaN(v)) onReorder(v - 1);
+  };
   const rating = node.data.question_type === "rating";
   const scaleMin = node.data.scale_config?.min ?? 1;
   const scaleMax = node.data.scale_config?.max ?? 5;
@@ -214,7 +233,36 @@ export function QuestionSection({
               <IconDown />
             </button>
           </span>
-          <span className={`qz-s3-numchip${isDecider ? " is-decider" : ""}`}>{qIndex}</span>
+          {renumbering ? (
+            <span className={`qz-s3-numchip is-editing${isDecider ? " is-decider" : ""}`}>
+              <input
+                className="qz-s3-numinput"
+                type="number"
+                min={1}
+                defaultValue={qIndex}
+                autoFocus
+                aria-label={`Move question ${qIndex} to position`}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    commitRenumber((e.target as HTMLInputElement).value, true);
+                  } else if (e.key === "Escape") {
+                    commitRenumber("", false);
+                  }
+                }}
+                onBlur={(e) => commitRenumber(e.target.value, true)}
+              />
+            </span>
+          ) : (
+            <button
+              type="button"
+              className={`qz-s3-numchip is-edit${isDecider ? " is-decider" : ""}`}
+              title="Click to renumber — moves this question to that position"
+              onClick={() => setRenumbering(true)}
+            >
+              {qIndex}
+            </button>
+          )}
           <input
             className="qz-s3-sec-titleinput"
             defaultValue={node.data.text}
@@ -233,6 +281,19 @@ export function QuestionSection({
         </div>
         <div className="qz-s3-card-type">
           <TypeChipSelector doc={doc} node={node} onCommit={onCommit} />
+          {/* mock .cdel — hover-reveal delete in the type column. The decider
+              row's delete is disabled (deleting the deciding question would
+              orphan every mapping — move the role first; AUDIT-22 deviation). */}
+          <button
+            type="button"
+            className="qz-s3-cdel"
+            disabled={isDecider}
+            title={isDecider ? "Move the deciding role first, then delete" : "Delete question"}
+            aria-label={`Delete question ${qIndex}`}
+            onClick={onDelete}
+          >
+            <IconTrash />
+          </button>
         </div>
       </div>
 
@@ -318,14 +379,9 @@ export function QuestionSection({
             </div>
           )}
           {freeform || rating ? null : (
+            /* §4 — Add-answer sits at the END of the answers column so it
+               lands on the settings divider line (mock .addans geometry). */
             <div className="qz-s3-sec-foot">
-              <button
-                type="button"
-                className="qz-s3-sec-footbtn is-add"
-                onClick={() => onCommit(addAnswer(doc, node.id))}
-              >
-                ＋ Add answer
-              </button>
               <button
                 type="button"
                 className="qz-s3-sec-footbtn"
@@ -338,6 +394,13 @@ export function QuestionSection({
                 onClick={() => onStartDraft(node.id)}
               >
                 λ Add rule
+              </button>
+              <button
+                type="button"
+                className="qz-s3-sec-footbtn is-add"
+                onClick={() => onCommit(addAnswer(doc, node.id))}
+              >
+                ＋ Add answer
               </button>
             </div>
           )}
@@ -417,9 +480,6 @@ export function QuestionSection({
                   onChange={(v) => patchScale({ max: v })}
                 />
               </div>
-              <span className="qz-s3-set-hint">
-                Scale runs {scaleMin} → {scaleMax}. End labels are edited on the left.
-              </span>
             </>
           ) : null}
         </div>

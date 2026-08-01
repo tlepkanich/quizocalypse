@@ -276,12 +276,16 @@ export function PhoneCanvas({
           </button>
         </span>
         <span className="qz-s3-pvsp" />
+        {/* questions-full-page §5 — Expand is icon-only (title + aria-label
+            retained); behavior unchanged. */}
         <button
           type="button"
-          className="qz-s3-expandbtn"
+          className="qz-s3-expandbtn is-icon"
+          title="Expand"
+          aria-label="Expand preview"
           onClick={() => setExpanded(true)}
         >
-          <IconExpand /> Expand
+          <IconExpand />
         </button>
       </div>
 

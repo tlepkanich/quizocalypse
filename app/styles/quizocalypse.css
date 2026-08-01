@@ -4495,6 +4495,9 @@ textarea.qz-sm-inp { resize: vertical; min-height: 62px; line-height: 1.5; }
 }
 .qz-s3-expandbtn:hover { background: var(--qz-cream-2); }
 .qz-s3-expandbtn svg { width: 13px; height: 13px; }
+/* questions-full-page §5 — icon-only Expand (label dropped, title/aria kept) */
+.qz-s3-expandbtn.is-icon { padding: 6px; width: 30px; height: 30px; justify-content: center; gap: 0; }
+.qz-s3-expandbtn.is-icon svg { width: 14px; height: 14px; }
 .qz-s3-stage { flex: 1 1 auto; min-height: 320px; width: 100%; position: relative; align-self: stretch; }
 .qz-s3-device {
   --vw: 390px; --vh: 844px; --s: 0.62;
@@ -7102,20 +7105,47 @@ textarea.qz-s4-inp { resize: vertical; min-height: 56px; line-height: 1.5; }
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
-   Step-3 ▦ Overview — EXACT to overview-cards.html ("Refined", bundle 07-13)
-   Card anatomy: header grid (question | 238px type column) over a body grid
-   (answers | 238px settings column) so the settings hairline runs straight
-   up through the type control. Roomier answer rows w/ hover-reveal ✕, dashed
-   ＋ Add answer, scale number-squares + end labels on the left, hairline ＋
-   inserters. Overrides the earlier .qz-s3-sec/.qz-s3-arow rules by cascade.
+   Step-3 Logic (the former ▦ Overview) — questions-full-page.html §1: ONE
+   connected LEDGER instead of floating cards. One bordered rounded container;
+   each step is a row separated by a hairline — no gaps, no per-row shadows or
+   rounded corners. The right-hand column is defined ONCE (--rcol/--rgap) and
+   reused by header and body alike, so the divider and everything after it sit
+   on one vertical line down the whole ledger (§1.1 — the alignment rule).
+   Overrides the earlier .qz-s3-sec/.qz-s3-arow rules by cascade.
    ═══════════════════════════════════════════════════════════════════════════ */
+
+.qz-s3-ledger {
+  --rcol: 226px; --rgap: 18px;
+  display: flex; flex-direction: column;
+  border: 1px solid var(--qz-rule); border-radius: 12px; overflow: hidden;
+  background: var(--qz-paper); box-shadow: var(--qz-lift-1);
+}
+.qz-s3-ledgerrow { display: flex; flex-direction: column; }
+.qz-s3-ledger .qz-s3-card {
+  border: none; border-bottom: 1px solid var(--qz-rule); border-radius: 0;
+  position: relative; overflow: hidden; background: var(--qz-paper);
+}
+.qz-s3-ledgerrow:last-child .qz-s3-card { border-bottom: none; }
+.qz-s3-ledger .qz-s3-card:hover { background: color-mix(in srgb, var(--qz-accent) 2%, var(--qz-paper)); }
 
 .qz-s3-card { padding: 0; border-radius: 14px; border: 1px solid var(--qz-rule); }
 .qz-s3-card-head {
-  display: grid; grid-template-columns: minmax(0, 1fr) 238px; gap: 26px;
-  align-items: center; padding: 11px 16px;
+  display: grid; grid-template-columns: minmax(0, 1fr) var(--rcol, 226px); gap: var(--rgap, 18px);
+  align-items: center; padding: 6px 14px;
 }
-.qz-s3-card-headl { display: flex; align-items: center; gap: 13px; min-width: 0; }
+.qz-s3-card-headl { display: flex; align-items: center; gap: 10px; min-width: 0; }
+/* §2 — click-to-renumber number chip + its inline input */
+.qz-s3-numchip.is-edit { border: none; cursor: pointer; padding: 0; }
+.qz-s3-numchip.is-edit:hover { box-shadow: 0 0 0 2px var(--qz-accent-wash); }
+.qz-s3-numchip.is-editing { padding: 0; }
+.qz-s3-numinput {
+  width: 100%; height: 100%; border: none; background: transparent; text-align: center;
+  font-family: var(--qz-font-mono); font-size: 11px; font-weight: 700;
+  color: var(--qz-accent-ink); outline: none; padding: 0;
+  -moz-appearance: textfield; appearance: textfield;
+}
+.qz-s3-numinput::-webkit-outer-spin-button,
+.qz-s3-numinput::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
 .qz-s3-card .qz-s3-sec-titleinput {
   flex: 1; min-width: 0; font-size: 14.5px; font-weight: 600; line-height: 1.4;
   color: var(--qz-ink); border: 1px solid transparent; border-radius: 7px;
@@ -7126,29 +7156,41 @@ textarea.qz-s4-inp { resize: vertical; min-height: 56px; line-height: 1.5; }
   outline: none; background: var(--qz-paper);
   border-color: var(--qz-accent); box-shadow: 0 0 0 2px var(--qz-accent-wash);
 }
-.qz-s3-card-type { align-self: center; padding-left: 11px; border-left: 1px solid var(--qz-rule-2); }
+/* §1.1 — identical inset after the rule, header and body alike (14px). */
+.qz-s3-card-type { align-self: center; padding-left: 14px; border-left: 1px solid var(--qz-rule-2); display: flex; align-items: center; gap: 8px; }
 .qz-s3-card-type select { width: 100%; }
+.qz-s3-card-type .qz-s3-typetagwrap, .qz-s3-card-type > :first-child { flex: 1; min-width: 0; }
+/* mock .cdel — hover-reveal delete in the type column */
+.qz-s3-cdel {
+  opacity: 0; flex: none; margin-left: auto; border: none; background: transparent;
+  color: var(--qz-ink-25); cursor: pointer; width: 28px; height: 28px; border-radius: 7px;
+  display: grid; place-items: center; transition: opacity .12s; padding: 0;
+}
+.qz-s3-card:hover .qz-s3-cdel, .qz-s3-cdel:focus-visible { opacity: 1; }
+.qz-s3-cdel:hover:not(:disabled) { background: var(--qz-crit-tint); color: var(--qz-crit); }
+.qz-s3-cdel:disabled { cursor: default; }
+.qz-s3-cdel svg { width: 15px; height: 15px; }
 
 .qz-s3-card-body {
-  display: grid; grid-template-columns: minmax(0, 1fr) 238px; gap: 26px;
-  border-top: 1px solid var(--qz-rule-2); padding: 16px 16px 18px;
+  display: grid; grid-template-columns: minmax(0, 1fr) var(--rcol, 226px); gap: var(--rgap, 18px);
+  border-top: 1px solid var(--qz-rule-2); padding: 8px 14px 10px;
 }
-.qz-s3-card-ans { padding-left: 54px; min-width: 0; }
+.qz-s3-card-ans { padding-left: 46px; min-width: 0; }
 .qz-s3-card .qz-s3-sec-freeform { margin: 2px 0; font-size: 13px; color: var(--qz-ink-3); line-height: 1.55; }
 
 /* settings column (mock .v2set) — one consistent panel for every type */
-.qz-s3-card-set { border-left: 1px solid var(--qz-rule-2); padding-left: 22px; display: flex; flex-direction: column; gap: 10px; align-items: flex-start; }
-.qz-s3-card-set .qz-s3-set-kicker { font-size: 9px; color: var(--qz-ink-25); }
+.qz-s3-card-set { border-left: 1px solid var(--qz-rule-2); padding-left: 14px; display: flex; flex-direction: column; gap: 6px; align-items: flex-start; }
+.qz-s3-card-set .qz-s3-set-kicker { font-size: 9px; font-weight: 700; color: var(--qz-ink-25); }
 .qz-s3-set-r { display: grid; grid-template-columns: 70px 1fr; align-items: center; gap: 10px; width: 100%; }
 .qz-s3-set-r .qz-s3-rolesel { width: 100%; }
 .qz-s3-set-hint { font-size: 10.5px; color: var(--qz-ink-25); line-height: 1.45; margin-top: 2px; }
 
-/* answers — bigger, more visible (mock .alist) */
-.qz-s3-card .qz-s3-atable { margin-top: 0; gap: 3px; }
+/* answers — FLUSH list (§4: gap 0, tight padding; not chips) */
+.qz-s3-card .qz-s3-atable { margin-top: 0; gap: 0; }
 .qz-s3-card .qz-s3-atable-head { border-bottom: none; padding: 0 8px 2px; font-size: 9px; color: var(--qz-ink-25); }
 .qz-s3-card .qz-s3-arow {
-  border-bottom: none; border: 1px solid transparent; border-radius: 8px;
-  padding: 5px 8px; margin: 0 -8px 0 -8px;
+  border-bottom: none; border: 1px solid transparent; border-radius: 7px;
+  padding: 2px 8px; margin: 0 -8px 0 -8px;
 }
 .qz-s3-card .qz-s3-arow:hover { background: color-mix(in srgb, var(--qz-accent) 2%, var(--qz-paper)); }
 .qz-s3-card .qz-s3-aletter { width: 19px; height: 19px; border-radius: 5px; font-size: 11px; }
@@ -7156,12 +7198,15 @@ textarea.qz-s4-inp { resize: vertical; min-height: 56px; line-height: 1.5; }
 .qz-s3-card .qz-s3-arow:hover .qz-s3-adel,
 .qz-s3-card .qz-s3-adel:focus-visible { opacity: 1; }
 
-/* ＋ Add answer relocated: quiet dashed action at the foot (mock .addans) */
-.qz-s3-card .qz-s3-sec-foot { padding: 10px 0 0; }
+/* §4 — the foot: λ Add rule left; ＋ Add answer right-aligned so its right
+   edge lands exactly on the settings divider (the ledger's vertical line). */
+.qz-s3-card .qz-s3-sec-foot {
+  padding: 6px 0 0; display: flex; align-items: center; justify-content: space-between; gap: 10px;
+}
 .qz-s3-card .qz-s3-sec-footbtn.is-add {
-  display: inline-flex; align-items: center; gap: 7px;
-  border: 1px dashed var(--qz-rule); background: transparent; color: var(--qz-accent-ink);
-  font-size: 12.5px; font-weight: 600; padding: 8px 12px; border-radius: 9px;
+  display: inline-flex; align-items: center; gap: 5px;
+  border: 1px solid var(--qz-rule); background: var(--qz-paper); color: var(--qz-ink-4);
+  font-size: 12px; font-weight: 600; padding: 6px 11px; border-radius: 8px;
 }
 .qz-s3-card .qz-s3-sec-footbtn.is-add:hover { background: var(--qz-accent-tint); border-color: var(--qz-accent-wash); color: var(--qz-accent-ink); }
 
@@ -7190,8 +7235,13 @@ textarea.qz-s4-inp { resize: vertical; min-height: 56px; line-height: 1.5; }
 .qz-s3-slab:focus { outline: none; border-color: var(--qz-accent); box-shadow: 0 0 0 2px var(--qz-accent-wash); }
 .qz-s3-slab::placeholder { color: var(--qz-ink-25); }
 
-/* between-card inserter — hairline + quiet circular ＋ (mock .ins) */
+/* between-row inserter — rides the divider so rows stay flush (mock .ins:
+   16px tall with -8px margins inside the ledger; the leading/trailing ones
+   keep their height without the pull). */
 .qz-s3-divider { position: relative; height: 22px; display: flex; align-items: center; justify-content: center; padding: 0; }
+.qz-s3-ledger .qz-s3-divider { height: 16px; margin: -8px 0; z-index: 4; }
+.qz-s3-ledger > .qz-s3-divider:first-child { height: 8px; margin: 0; }
+.qz-s3-ledgerrow:last-child .qz-s3-divider { height: 10px; margin: 0; }
 .qz-s3-divider::before {
   content: ""; position: absolute; left: 8px; right: 8px; top: 50%; height: 1px;
   background: var(--qz-rule); opacity: 0; transition: opacity .12s; transform: none; width: auto;
@@ -7900,7 +7950,8 @@ html[data-theme="dark"] {
 /* ── ✎ Questions: the preview pane (mock .pv{padding:14px 0}) — the phone's
    gutters come from the device scale (mock --s:.80 → 312px in the 340px
    column), not pane padding. ── */
-.qz-qs-pv.qz-s3-canvas { padding: 14px 0 22px; }
+/* questions-full-page §5 — the phone sits HIGHER: 4px top (was 14/18). */
+.qz-qs-pv.qz-s3-canvas { padding: 4px 0 14px; gap: 5px; }
 .qz-qs-pv .qz-s3-pvbar { width: auto; align-self: stretch; padding: 0 14px; }
 
 /* ── ✎ Questions: phone-screen geometry exact to mock .scr (topbar mb 18 ·
