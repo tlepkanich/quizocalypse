@@ -19,6 +19,11 @@
 export const FUNNEL_STEPS = [
   { stage: "grouping", label: "Recommendations", short: "Recommendations" },
   { stage: "question_builder", label: "Question Builder", short: "Questions" },
+  // One-line-chrome handoff — Logic is its own visible step after Questions:
+  // the decider Step-3 shell's former in-shell ▦ Overview view, promoted to a
+  // persisted stage so navigation, resume, and the goto-stage trapdoor all
+  // treat it like any other step.
+  { stage: "logic", label: "Logic", short: "Logic" },
   { stage: "rec_page", label: "Results", short: "Results" },
   { stage: "design", label: "Design", short: "Design" },
 ] as const;
@@ -30,6 +35,7 @@ const STAGE_TO_STEP: Record<string, FunnelStep> = {
   // visible steps (identity)
   grouping: "grouping",
   question_builder: "question_builder",
+  logic: "logic",
   rec_page: "rec_page",
   design: "design",
   // The RETIRED Shape family — the legacy picker stages ("shape"/"types"/

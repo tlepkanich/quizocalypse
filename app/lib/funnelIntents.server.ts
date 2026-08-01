@@ -54,6 +54,7 @@ import { parseBrandGuidelinesSafe } from "./brandGuidelines";
 import { buildScopedIndex } from "./catalogIndex";
 import { mergeRegeneratedAnswers } from "./regenerateMerge";
 import { toGroupingProduct, loadBucketInputs } from "./bucketPersist.server";
+import { FUNNEL_STEPS, stepIndex, type FunnelStep } from "./funnelStages";
 import {
   MIN_GOAL_CHARS,
   loadFunnelDraft,
@@ -1263,6 +1264,51 @@ async function runStep1FunnelActionImpl(
       return json({ intent, ok: false, error: "No template selected." }, { status: 400 });
     }
     await writeDoc(quiz.id, { ...doc, build_session: { ...session, stage: "design" } });
+    return json({ intent, ok: true });
+  }
+
+  // One-line-chrome §1.4 — Questions "Continue": advance to the Logic step
+  // (the decider shell's map/rules view, now a persisted stage). Same
+  // credential as to-rec-page: a picked template or a built decider doc.
+  if (intent === "to-logic") {
+    if (!session.picked_template && !(doc.logic_model === "decider" && session.built)) {
+      return json({ intent, ok: false, error: "No template selected." }, { status: 400 });
+    }
+    await writeDoc(quiz.id, { ...doc, build_session: { ...session, stage: "logic" } });
+    return json({ intent, ok: true });
+  }
+
+  // One-line-chrome §1.4 — the step-flow's backwards navigation: clicking a
+  // finished step (or the bar's ‹ back) jumps straight there, no confirm.
+  // BACKWARDS ONLY, enforced here — forward movement keeps going through each
+  // step's own Continue intent so its guard still runs. A disabled button is
+  // not the guard; this is.
+  if (intent === "goto-stage") {
+    const target = String(form.get("stage") ?? "");
+    const valid = FUNNEL_STEPS.some((s) => s.stage === target);
+    if (!valid) {
+      return json({ intent, ok: false, error: "Unknown step." }, { status: 400 });
+    }
+    // A running detached generation job (typing/templating) would be stranded
+    // by a jump — the client makes the nodes inert; the server rejects too.
+    if (session.stage === "typing" || session.stage === "templating") {
+      return json(
+        { intent, ok: false, error: "Generation is still running — wait for it to finish." },
+        { status: 400 },
+      );
+    }
+    // Resolve the draft's current VISIBLE step the way the client does, then
+    // allow strictly-backwards moves only.
+    if (stepIndex(target) >= stepIndex(session.stage)) {
+      return json(
+        { intent, ok: false, error: "Only finished steps can be jumped to." },
+        { status: 400 },
+      );
+    }
+    await writeDoc(quiz.id, {
+      ...doc,
+      build_session: { ...session, stage: target as FunnelStep },
+    });
     return json({ intent, ok: true });
   }
 

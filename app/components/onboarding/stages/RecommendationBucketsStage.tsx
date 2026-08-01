@@ -2,15 +2,15 @@
 // a PURE MOVE: identical JSX/props/hooks, plus this stage's private overlays
 // (intercept modal, tab-lock/remove/bulk warns, the results-preview drawer, the
 // AI banner). Only the imports are new.
-import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties, KeyboardEvent as ReactKeyboardEvent } from "react";
 import { Link } from "@remix-run/react";
 import type { useFetcher } from "@remix-run/react";
-import { Box, Check, FolderOpen, Play, RotateCcw, Sparkles, Tag, X } from "lucide-react";
-import { QzCard, QzBadge, QzInput, QzTooltip } from "../../qz";
+import { Box, Check, FolderOpen, Play, RotateCcw, Tag, X } from "lucide-react";
+import { QzCard, QzBadge, QzInput } from "../../qz";
 import { QzModal, QzDrawer } from "../../qz-overlays";
+import { useFunnelBar, type FunnelBarOverride } from "../funnelChrome";
 import type { DesignTokens } from "../../../lib/quizSchema";
-import type { BucketSuggestion } from "../../../lib/bucketDetect";
 import { resolveDesignTokens, tokensToCssVars, suggestContrastText } from "../../../lib/designTokens";
 import { googleFontsUrl } from "../../runtime/runtimeStyles";
 import {
@@ -81,26 +81,14 @@ export function RecommendationBucketsStage({
   result: ActionResult | null;
 }) {
   const [activeTab, setActiveTab] = useState<BucketType>(data.activeTab);
-  // §4 — "Not now"/Hide dismisses the banner for THIS SESSION only
+  // One-line-chrome §2.3 — the tip's ✕ dismisses for THIS SESSION only
   // (sessionStorage, no server write); a legacy persisted dismissal is still
-  // honored. HANDOFF §3 first-visit rule: the tip renders EXPANDED exactly once
-  // (a localStorage seen-flag), collapsed to the ✦ AI TIP pill thereafter.
+  // honored. Dismiss is the tip's only control.
   const [dismissed, setDismissed] = useState(data.bannerDismissed);
   useEffect(() => {
     if (typeof window === "undefined") return;
-    const seenKey = `qz-rb-tip-seen-${data.quizId}`;
-    if (sessionStorage.getItem(`qz-rb-nb-${data.quizId}`) || localStorage.getItem(seenKey)) {
-      setDismissed(true);
-    } else {
-      localStorage.setItem(seenKey, "1");
-    }
+    if (sessionStorage.getItem(`qz-rb-nb-${data.quizId}`)) setDismissed(true);
   }, [data.quizId]);
-  // §4 — the auto-apply Applied state; `prior` is what Undo restores (the
-  // selection is always homogeneous, so one type + keys captures it; `tab`
-  // restores the pre-apply picker tab when the prior selection was empty).
-  const [applied, setApplied] = useState<{
-    prior: { type: BucketType | null; keys: string[]; tab: BucketType };
-  } | null>(null);
   const [search, setSearch] = useState("");
   const q = useDeferredValue(search).trim().toLowerCase();
   // Overlays: the switch-confirm (a type change with selections) + the §5
@@ -181,7 +169,6 @@ export function RecommendationBucketsStage({
     setActiveTab(type);
     setSearch("");
     if (clear) {
-      setApplied(null); // a manual restart invalidates the Applied/Undo state
       // Optimistically empty the selection (mark every current id removed).
       setOverlay(() => {
         const next = new Map<string, BucketCard | null>();
@@ -195,61 +182,7 @@ export function RecommendationBucketsStage({
     );
   };
 
-  // §4 auto-apply — "Use this" clears any current selection, selects the
-  // recommended set, and locks the type; the banner morphs to Applied + Undo.
-  // Optimistic cards resolve names/counts from the already-loaded catalog.
-  const cardFor = (type: BucketType, key: string): BucketCard => {
-    if (type === "product") {
-      const p = data.catalog.products.find((x) => x.id === key);
-      return { key, type, name: p?.title ?? key, count: 1, thumbnailUrl: p?.imageUrl ?? null };
-    }
-    const src = type === "tag" ? data.catalog.tags : data.catalog.collections;
-    const g = src.find((x) => x.key === key);
-    return { key, type, name: g?.label ?? key, count: g?.count ?? 0, thumbnailUrl: null };
-  };
-
-  const setSelection = (type: BucketType, keys: string[]) => {
-    setSearch("");
-    setActiveTab(type);
-    setOverlay(() => {
-      const next = new Map<string, BucketCard | null>();
-      for (const c of selected.values()) next.set(idOf(c.type, c.key), null);
-      for (const k of keys) next.set(idOf(type, k), cardFor(type, k));
-      return next;
-    });
-    fetcher.submit({ intent: "set-buckets", type, keys: keys.join(",") }, { method: "post" });
-  };
-
-  const useThis = () => {
-    const apply = data.suggestion.apply;
-    if (!apply) return;
-    const current = [...selected.values()];
-    const run = () => {
-      setApplied({
-        prior: { type: current[0]?.type ?? null, keys: current.map((c) => c.key), tab: activeTab },
-      });
-      setSelection(apply.type, apply.keys);
-    };
-    // Applying removes every current selection NOT in the recommended set —
-    // warn first when any of those are referenced by the draft's questions
-    // (the server keeps ids for keys present in BOTH sets, so those survive).
-    const applySet = new Set(apply.keys.map((k) => idOf(apply.type, k)));
-    const leavingReferenced = current.filter(
-      (c) => referencedSet.has(idOf(c.type, c.key)) && !applySet.has(idOf(c.type, c.key)),
-    );
-    if (leavingReferenced.length > 0) setBulkWarn({ count: leavingReferenced.length, run });
-    else run();
-  };
-
-  const undoApply = () => {
-    const prior = applied?.prior;
-    setApplied(null);
-    if (!prior) return;
-    if (prior.type) setSelection(prior.type, prior.keys);
-    else setSelection(prior.tab, []); // empty prior: clear + land back on the pre-apply tab
-  };
-
-  const notNow = () => {
+  const dismissTip = () => {
     setDismissed(true);
     if (typeof window !== "undefined") sessionStorage.setItem(`qz-rb-nb-${data.quizId}`, "1");
   };
@@ -361,16 +294,85 @@ export function RecommendationBucketsStage({
   const lockedType = count > 0 ? selectedList[0]?.type ?? null : null;
   const typeChip = lockedType ? TAB_META.find((t) => t.type === lockedType)?.label ?? null : null;
 
+  // One-line-chrome §1.3 — the step's Continue lives in the bar; publish the
+  // gate (≥1 recommendation), the flow-specific label, and the intercept
+  // behavior through the funnel-chrome bridge. Handlers ride a ref so they
+  // stay referentially stable (the bridge's publish contract); the OPTIMISTIC
+  // count drives the gate, so the button enables on the first pick.
+  const fetcherRef = useRef(fetcher);
+  fetcherRef.current = fetcher;
+  const hasGoalFirst = Boolean(goalFirst);
+  const hasTemplateFirst = Boolean(templateFirst);
+  const barContinue = useCallback(() => {
+    if (hasGoalFirst) fetcherRef.current.submit({ intent: "flow1-confirm" }, { method: "post" });
+    else if (hasTemplateFirst) fetcherRef.current.submit({ intent: "flow3-confirm" }, { method: "post" });
+    else if (isDecider) setInterceptOpen(true);
+    else fetcherRef.current.submit({ intent: "continue-buckets" }, { method: "post" });
+  }, [hasGoalFirst, hasTemplateFirst, isDecider]);
+  const continueBusy =
+    continuing ||
+    prepickBusy ||
+    pendingIntent === "flow1-confirm" ||
+    pendingIntent === "flow3-confirm" ||
+    pendingIntent === "shape-goal-build" ||
+    pendingIntent === "manual-build";
+  const continueLabel =
+    continuing || pendingIntent === "flow1-confirm" || pendingIntent === "flow3-confirm"
+      ? "Saving…"
+      : hasGoalFirst || hasTemplateFirst
+        ? "Generate my quiz →"
+        : "Continue →";
+  const barOverride = useMemo<FunnelBarOverride>(
+    () => ({
+      continueSpec: {
+        label: continueLabel,
+        onClick: barContinue,
+        disabled: count === 0 || continueBusy,
+        title: count === 0 ? "Add at least one recommendation to continue." : undefined,
+      },
+    }),
+    [continueLabel, barContinue, count, continueBusy],
+  );
+  useFunnelBar(barOverride);
+
+  // One-line-chrome §2.3 — the tip earns its place only when the grouping
+  // choice is genuinely ambiguous: ≥20 products AND more than one viable
+  // grouping (≥2 collections or ≥5 tags). For a small store it states the
+  // obvious and costs trust — render the title row alone.
+  const tipEligible =
+    data.catalog.products.length >= 20 &&
+    (data.catalog.collections.length >= 2 || data.catalog.tags.length >= 5);
+  const showTip =
+    tipEligible && !dismissed && !goalFirst && !templateFirst && Boolean(data.suggestion.message);
+
   return (
     <div className="qz-rb">
-      <div className="qz-rb-head">
+      {/* §2.3 — title and tip share ONE row; the modules start directly under
+          them. The tip states one thing; the merchant acts on it themselves —
+          no "Use this", no expand/collapse, dismiss is the only control. */}
+      <div className="qz-rb-titlerow">
         <h2 className="qz-h2" style={{ margin: 0 }}>
           What can your quiz recommend?
         </h2>
+        {showTip ? (
+          <div className="qz-rb-tip">
+            <span className="qz-rb-tip-star" aria-hidden>✦</span>
+            <span className="qz-rb-tip-label">Tip</span>
+            <strong className="qz-rb-tip-sug">{data.suggestion.message}</strong>
+            <button
+              type="button"
+              className="qz-rb-tip-x"
+              aria-label="Dismiss tip"
+              onClick={dismissTip}
+            >
+              <X size={12} aria-hidden />
+            </button>
+          </div>
+        ) : null}
       </div>
 
-      {/* §4 — AI recommendation banner (an action, not advice). FLOW-1 drafts
-          swap it for the goal pre-pick's lifecycle banner. */}
+      {/* FLOW-1/FLOW-3 lifecycle banners — functional status (the pre-pick /
+          template narration), not advice; they stay. */}
       {goalFirst ? (
         <GoalFirstBanner
           state={goalFirst}
@@ -393,24 +395,7 @@ export function RecommendationBucketsStage({
             </p>
           </div>
         </div>
-      ) : applied ? (
-        <div className="qz-rb-banner is-applied">
-          <span className="qz-rb-banner-icon" aria-hidden><Check size={17} strokeWidth={2.6} /></span>
-          <div className="qz-rb-banner-body">
-            <div className="qz-rb-banner-head">
-              <strong>Applied — {data.suggestion.message.replace(/^Use |^Start with /, "using ")}</strong>
-            </div>
-            <p className="qz-dim" style={{ margin: 0, fontSize: 13 }}>
-              You can adjust the set below, or undo to get your previous selection back.
-            </p>
-          </div>
-          <button type="button" className="qz-btn qz-btn-ghost qz-btn-sm" onClick={undoApply}>
-            Undo
-          </button>
-        </div>
-      ) : (
-        <RbBanner suggestion={data.suggestion} collapsed={dismissed} onUse={useThis} onHide={notNow} onExpand={() => setDismissed(false)} />
-      )}
+      ) : null}
 
       <div className="qz-rb-split">
         <div className="qz-rb-main">
@@ -478,12 +463,21 @@ export function RecommendationBucketsStage({
               const on = isOn(c.type, c.key);
               const price = activeTab === "product" ? priceById.get(c.key) ?? null : null;
               return (
-                <button
+                // §2.4 markup note — a picker row is role="checkbox", NOT a
+                // <button>: it contains the "N products →" button, and nested
+                // interactive elements break the parser and screen readers.
+                <div
                   key={c.key}
-                  type="button"
+                  role="checkbox"
+                  tabIndex={0}
+                  aria-checked={on}
                   className={`qz-rb-card${on ? " is-on" : ""}`}
-                  aria-pressed={on}
                   onClick={() => toggle(c)}
+                  onKeyDown={(event) => {
+                    if (event.key !== "Enter" && event.key !== " ") return;
+                    event.preventDefault();
+                    toggle(c);
+                  }}
                 >
                   <span className={`qz-rb-thumb${c.thumbnailUrl ? "" : " is-placeholder"}`}>
                     {c.thumbnailUrl ? (
@@ -507,36 +501,27 @@ export function RecommendationBucketsStage({
                       {price != null ? `$${price.toFixed(2)}` : "—"}
                     </span>
                   ) : (
-                    <span
-                      role="button"
-                      tabIndex={0}
+                    <button
+                      type="button"
                       className="qz-rb-count-link"
                       onClick={(event) => {
                         event.stopPropagation();
                         setBucketPreview(c);
                       }}
-                      onKeyDown={(event) => {
-                        if (event.key !== "Enter" && event.key !== " ") return;
-                        event.preventDefault();
-                        event.stopPropagation();
-                        setBucketPreview(c);
-                      }}
                     >
                       {c.count} product{c.count === 1 ? "" : "s"} <span aria-hidden>→</span>
-                    </span>
+                    </button>
                   )}
-                </button>
+                </div>
               );
             })}
           </div>
         )}
       </QzCard>
 
-          {/* Mock underrow: quiet accent-ink text links (← Back · ↻ Refresh catalog). */}
+          {/* Mock underrow: quiet accent-ink text link (↻ Refresh catalog).
+              §1.5 — the step-level ← Back is gone; the bar's ‹ owns it. */}
           <div className="qz-rb-underrow">
-            <Link to={data.backHref} className="qz-rb-underlink">
-              ← Back
-            </Link>
             <button
               type="button"
               className="qz-rb-underlink"
@@ -608,6 +593,7 @@ export function RecommendationBucketsStage({
               the quiz can actually differentiate.
             </p>
           ) : null}
+          {/* §2.4 — the rail foot keeps Preview; Continue moved to the bar. */}
           <div className="qz-rb-rail-foot">
             <button
               type="button"
@@ -617,41 +603,6 @@ export function RecommendationBucketsStage({
             >
               <Play size={14} aria-hidden /> Preview results page
             </button>
-            {count === 0 ? (
-              <QzTooltip content="Add at least one recommendation to continue.">
-                <button type="button" className="qz-btn qz-btn-accent" disabled>
-                  {goalFirst || templateFirst ? "Generate my quiz →" : "Continue →"}
-                </button>
-              </QzTooltip>
-            ) : (
-              <button
-                type="button"
-                className="qz-btn qz-btn-accent"
-                onClick={() =>
-                  goalFirst
-                    ? fetcher.submit({ intent: "flow1-confirm" }, { method: "post" })
-                    : templateFirst
-                      ? fetcher.submit({ intent: "flow3-confirm" }, { method: "post" })
-                      : isDecider
-                        ? setInterceptOpen(true)
-                        : fetcher.submit({ intent: "continue-buckets" }, { method: "post" })
-                }
-                disabled={
-                  continuing ||
-                  prepickBusy ||
-                  pendingIntent === "flow1-confirm" ||
-                  pendingIntent === "flow3-confirm" ||
-                  pendingIntent === "shape-goal-build" ||
-                  pendingIntent === "manual-build"
-                }
-              >
-                {continuing || pendingIntent === "flow1-confirm" || pendingIntent === "flow3-confirm"
-                  ? "Saving…"
-                  : goalFirst || templateFirst
-                    ? "Generate my quiz →"
-                    : "Continue →"}
-              </button>
-            )}
           </div>
         </aside>
       </div>
@@ -1208,56 +1159,3 @@ function GoalFirstBanner({
   );
 }
 
-function RbBanner({
-  suggestion,
-  collapsed,
-  onUse,
-  onHide,
-  onExpand,
-}: {
-  suggestion: BucketSuggestion;
-  collapsed: boolean;
-  onUse: () => void;
-  onHide: () => void;
-  onExpand: () => void;
-}) {
-  if (collapsed) {
-    return (
-      <button type="button" className="qz-rb-ai-pill" onClick={onExpand}>
-        <span className="qz-rb-ai-spark" aria-hidden><Sparkles size={14} /></span>
-        <span>AI TIP</span>
-      </button>
-    );
-  }
-  return (
-    <div className="qz-rb-ai-tip">
-      <span className="qz-rb-ai-icon" aria-hidden><Sparkles size={16} /></span>
-      <div className="qz-rb-banner-body">
-        {/* Mock lead-row: the mono AI-TIP label sits INLINE with the headline. */}
-        <span className="qz-rb-ai-lead">
-          <span className="qz-rb-ai-label">AI TIP</span>
-          <strong className="qz-rb-ai-title">{suggestion.message}</strong>
-        </span>
-        <p className="qz-rb-ai-reason">{suggestion.reason}</p>
-        {suggestion.counts.products > 0 ? (
-          <div className="qz-rb-ai-based">
-            <span>Based on</span>
-            <span>{suggestion.counts.products} products</span>
-            <span>{suggestion.counts.collections} collections</span>
-            <span>{suggestion.counts.tags} tags</span>
-          </div>
-        ) : null}
-      </div>
-      <div className="qz-rb-banner-actions">
-        {suggestion.apply ? (
-          <button type="button" className="qz-btn qz-btn-accent qz-btn-sm" onClick={onUse}>
-            Use this
-          </button>
-        ) : null}
-        <button type="button" className="qz-rb-ai-hide" onClick={onHide}>
-          Hide
-        </button>
-      </div>
-    </div>
-  );
-}

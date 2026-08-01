@@ -1461,6 +1461,9 @@ export const BuildSession = z.object({
       // (app/lib/funnelStages.ts maps every stage to its visible step).
       "shape",
       "question_builder",
+      // One-line-chrome handoff — Logic is its own visible step after
+      // Questions (decider docs; the Step-3 shell's former in-shell view).
+      "logic",
       "rec_page",
       "design",
       "overview",

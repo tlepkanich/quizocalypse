@@ -26,6 +26,7 @@ type RegenError = { nodeId: string; message: string; credits: boolean };
 
 export function QuestionBuilderStage({
   quizId,
+  mode = "questions",
   initialDoc,
   categories,
   productIndex,
@@ -35,6 +36,11 @@ export function QuestionBuilderStage({
   designTokens,
 }: {
   quizId: string;
+  /** One-line-chrome — which funnel step this mount serves: "questions" (the
+   *  content editing surface) or "logic" (the decider map/rules view, its own
+   *  stage now). Legacy points/ladder docs render QuestionsLogicLayout — one
+   *  combined surface — for either value. */
+  mode?: "questions" | "logic";
   initialDoc: Quiz;
   categories: BuilderCategory[];
   productIndex: IndexedProduct[];
@@ -52,7 +58,21 @@ export function QuestionBuilderStage({
   // QuestionsLogicLayout surface unchanged.
   const useV3 = doc.logic_model === "decider";
   const navigating =
-    pendingIntent === "to-rec-page" || pendingIntent === "back-to-types";
+    pendingIntent === "to-rec-page" ||
+    pendingIntent === "to-logic" ||
+    pendingIntent === "goto-stage" ||
+    pendingIntent === "back-to-types";
+
+  // The bar's Continue is published through the funnel-chrome bridge, whose
+  // contract needs referentially STABLE handlers — the fetcher rides in a ref.
+  const fetcherRef = useRef(fetcher);
+  fetcherRef.current = fetcher;
+  // Questions → Logic; Logic → Results. Legacy docs keep the one combined
+  // step, so their Continue always heads to the Results step.
+  const continueIntent = useV3 && mode === "questions" ? "to-logic" : "to-rec-page";
+  const submitContinue = useCallback(() => {
+    fetcherRef.current.submit({ intent: continueIntent }, { method: "post" });
+  }, [continueIntent]);
 
   const [regeneratingId, setRegeneratingId] = useState<string | null>(null);
   const [undoNodeId, setUndoNodeId] = useState<string | null>(null);
@@ -128,6 +148,7 @@ export function QuestionBuilderStage({
       <Step3Shell
         doc={doc}
         quizId={quizId}
+        mode={mode === "logic" ? "logic" : "content"}
         onCommit={commit}
         onFlush={flushSave}
         isSaving={isSaving}
@@ -138,7 +159,7 @@ export function QuestionBuilderStage({
         collections={collections}
         productIndex={productIndex}
         navigating={navigating}
-        onContinue={() => fetcher.submit({ intent: "to-rec-page" }, { method: "post" })}
+        onContinue={submitContinue}
         designTokens={designTokens}
         regen={{
           regeneratingId,
@@ -162,8 +183,7 @@ export function QuestionBuilderStage({
       onRetry={retrySave}
       categories={categories}
       navigating={navigating}
-      onBack={() => fetcher.submit({ intent: "back-to-types" }, { method: "post" })}
-      onContinue={() => fetcher.submit({ intent: "to-rec-page" }, { method: "post" })}
+      onContinue={submitContinue}
       regeneratingId={regeneratingId}
       undoNodeId={undoNodeId}
       regenError={regenError}

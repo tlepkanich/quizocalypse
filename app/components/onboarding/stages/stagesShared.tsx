@@ -16,6 +16,7 @@ import type {
 import type { BuilderCategory } from "../../builder/stepProps";
 import type { IndexedProduct } from "../../../lib/recommendationEngine";
 import type { BucketSuggestion } from "../../../lib/bucketDetect";
+import { FUNNEL_STEPS } from "../../../lib/funnelStages";
 
 // Recommendation Buckets (RB Step 1) — the three browser tabs / bucket kinds.
 export type BucketType = "product" | "tag" | "collection";
@@ -159,22 +160,15 @@ export const OOS_LABEL: Record<RecDefaults["oos_behavior"], string> = {
   fallback: "Fallback",
 };
 
-// The funnel's visible step order — shared by the top-bar step pills AND the
+// The funnel's visible step order — shared by the top-bar step flow AND the
 // Step-N-of-M stepper inside each stage, so the "of N" count can't drift.
-// FLOW-3 (funnel-reconfig) — Shape is RETIRED from the visible map: every flow
-// resolves "what type of quiz" BEFORE the builder (the goal/template front
-// doors), so the rail is the 4-step Recommendations → Questions → Results →
-// Design. Drafts still parked at a shape-family stage (legacy in-flight + the
-// transient typing/templating AI passes) fold FORWARD onto Questions — see
-// visibleStageKey in Step1Funnel.tsx and app/lib/funnelStages.ts.
-// Step-1 spec §1 — "bucket" is dead in merchant UI: Step 1 is "Recommendations"
-// and the Results step keeps its canonical short label.
-export const FUNNEL_STAGES: Array<{ key: string; label: string }> = [
-  { key: "grouping", label: "Recommendations" },
-  { key: "question_builder", label: "Questions" },
-  { key: "rec_page", label: "Results" },
-  { key: "design", label: "Design" },
-];
+// One-line-chrome handoff §1.9 — FUNNEL_STEPS (app/lib/funnelStages.ts) is the
+// single source for step order and labels; this is a projection, not a copy.
+// The bar renders the SHORT labels (the form that fits between 1080–1280px).
+export const FUNNEL_STAGES: Array<{ key: string; label: string }> = FUNNEL_STEPS.map((s) => ({
+  key: s.stage,
+  label: s.short,
+}));
 
 // The shared write-a-goal form (the intercept modal's second screen + Shape's
 // escape-link card). Prefilled with the store-derived suggestion so it's an

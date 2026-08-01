@@ -257,8 +257,10 @@ export async function loadStep1FunnelData(
       ),
     };
   });
+  // The Logic step (one-line-chrome handoff) renders the same decider shell
+  // over the same draft — it needs the identical payload.
   const questionBuilder =
-    session.stage === "question_builder"
+    session.stage === "question_builder" || session.stage === "logic"
       ? { doc, categories: builderCategories, productIndex: builderProductIndex }
       : null;
 

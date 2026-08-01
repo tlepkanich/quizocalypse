@@ -187,15 +187,21 @@ export function QzSelect(props: React.SelectHTMLAttributes<HTMLSelectElement>) {
 export function QzPage({
   children,
   wide = false,
+  funnel = false,
   width = "comfortable",
 }: {
   children: ReactNode;
-  /** Legacy full-bleed (funnel / workspace surfaces). Prefer `width`. */
+  /** Legacy full-bleed (workspace surfaces). Prefer `width`. */
   wide?: boolean;
+  /** One-line-chrome §2.1 — the funnel's working area: capped at 1000px and
+   *  centred (chrome stays full-bleed; content never stretches to the edges).
+   *  A separate modifier on purpose — do NOT reuse `wide`, the builder /
+   *  workspace surfaces need full bleed. */
+  funnel?: boolean;
   /** P3 Edit 3 — centered max-width token: narrow 680 · comfortable 960 · wide 1280. */
   width?: "narrow" | "comfortable" | "wide";
 }) {
-  const cls = wide ? "qz-page is-wide" : `qz-page pw-${width}`;
+  const cls = funnel ? "qz-page is-funnel" : wide ? "qz-page is-wide" : `qz-page pw-${width}`;
   return <div className={cls}>{children}</div>;
 }
 

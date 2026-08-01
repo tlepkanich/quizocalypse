@@ -10,14 +10,15 @@ import {
 } from "./funnelStages";
 
 describe("funnelStages", () => {
-  it("declares the 4-step order (Shape retired — FLOW-3)", () => {
+  it("declares the 5-step order (Shape retired — FLOW-3; Logic added — one-line-chrome)", () => {
     expect(FUNNEL_STEPS.map((s) => s.stage)).toEqual([
       "grouping",
       "question_builder",
+      "logic",
       "rec_page",
       "design",
     ]);
-    expect(TOTAL_STEPS).toBe(4);
+    expect(TOTAL_STEPS).toBe(5);
   });
 
   it("maps visible stages to themselves", () => {
@@ -53,10 +54,11 @@ describe("funnelStages", () => {
     expect(stepNumber("question_builder")).toBe(2);
     expect(stepNumber("types")).toBe(2); // shape family folds to Questions
     expect(stepNumber("typing")).toBe(2);
-    expect(stepNumber("rec_page")).toBe(3);
-    expect(stepNumber("design")).toBe(4);
-    expect(stepNumber("overview")).toBe(4); // folds to design (last step)
-    expect(stepNumber("generate")).toBe(4);
+    expect(stepNumber("logic")).toBe(3);
+    expect(stepNumber("rec_page")).toBe(4);
+    expect(stepNumber("design")).toBe(5);
+    expect(stepNumber("overview")).toBe(5); // folds to design (last step)
+    expect(stepNumber("generate")).toBe(5);
   });
 
   it("resolves labels through the fold", () => {
@@ -67,11 +69,13 @@ describe("funnelStages", () => {
 
   it("navigates between visible steps and stops at the ends", () => {
     expect(nextStep("grouping")).toBe("question_builder");
-    expect(nextStep("question_builder")).toBe("rec_page");
+    expect(nextStep("question_builder")).toBe("logic");
+    expect(nextStep("logic")).toBe("rec_page");
     expect(nextStep("design")).toBeNull(); // design is the last step
-    expect(nextStep("configuring")).toBe("rec_page"); // folds to Questions first
+    expect(nextStep("configuring")).toBe("logic"); // folds to Questions first
     expect(prevStep("grouping")).toBeNull();
     expect(prevStep("question_builder")).toBe("grouping");
-    expect(prevStep("rec_page")).toBe("question_builder");
+    expect(prevStep("logic")).toBe("question_builder");
+    expect(prevStep("rec_page")).toBe("logic");
   });
 });

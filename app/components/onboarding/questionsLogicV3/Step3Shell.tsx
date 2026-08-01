@@ -7,7 +7,7 @@ import { deleteNode, insertQuestionRelative, moveStep } from "../../../lib/quizM
 import { updateNodeData } from "../../studio/studioDoc";
 import { orderedQuestions, deciderQuestion } from "../../../lib/questionOrder";
 import { QuestionBankDrawer } from "../../studio/QuestionBankDrawer";
-import { TopBar3 } from "./TopBar3";
+import { useFunnelBar, FunnelSaveChip, type FunnelBarOverride } from "../funnelChrome";
 import { pillPresentation } from "./HealthPill";
 import { LeftRail, CAPTURE_ID, REVEAL_ID } from "./LeftRail";
 import { PhoneCanvas } from "./content/PhoneCanvas";
@@ -16,16 +16,22 @@ import { LogicScroll, type LogicScrollHandle } from "./logic/LogicScroll";
 import { DiagnoseModal, type DiagnoseTab } from "./logic/DiagnoseModal";
 
 /* ════════════════════════════════════════════════════════════════════════════
-   quiz-step3 v3 — Step3Shell: the two-view (Content · Logic) Step-3 rebuild
-   for DECIDER docs, mounted UNCONDITIONALLY by QuestionBuilderStage since the
-   QL3-P5 flip (legacy points/ladder docs keep QuestionsLogicLayout). P1 shell
-   + rail + phone canvas, P2 inline editing, P3 the Logic view, P4 the live
-   health surface: ONE memoized Tier-1 report feeds the pill, the popover's
-   check list, AND the Continue gate — the legacy decider ContinueGuard dialog
-   was superseded by this gating and its wiring retired in P5.
+   quiz-step3 v3 — Step3Shell: the decider editing shell, mounted by
+   QuestionBuilderStage (legacy points/ladder docs keep QuestionsLogicLayout).
+   One-line-chrome — the former in-shell Content·Logic toggle is now TWO
+   funnel steps: `mode` ("content" = the Questions step, "logic" = the Logic
+   step) is stage-driven; the shared funnel bar owns navigation, and this
+   shell publishes its save chip / health pill / tri-state Continue through
+   the funnel-chrome bridge (TopBar3 is retired). ONE memoized Tier-1 report
+   still feeds the pill, the diagnose list, AND the Continue gate.
    ════════════════════════════════════════════════════════════════════════════ */
 
 export type Step3View = "content" | "logic";
+
+// A rule jump-link fired from the Questions step lands in the Logic STEP now —
+// a stage change remounts this shell, so the target parks module-side (client
+// state, same JS session) until the Logic mount picks it up.
+let pendingRuleJumpStash: string | null = null;
 
 /** The stage's existing per-question AI-regenerate bracket (startRegenerate +
     pendingId + the 10s undo snapshot), threaded down to the canvas chip —
@@ -42,6 +48,7 @@ export type RegenApi = {
 export function Step3Shell({
   doc,
   quizId,
+  mode,
   onCommit,
   onFlush,
   isSaving,
@@ -58,6 +65,8 @@ export function Step3Shell({
 }: {
   doc: QuizDoc;
   quizId: string;
+  /** Which funnel step this mount serves — stage-driven, replaces setView. */
+  mode: Step3View;
   onCommit: (doc: QuizDoc) => void;
   /** useQuizDraft.flushSave — the Tier-2 review flushes BEFORE hashing. */
   onFlush: () => void;
@@ -71,7 +80,8 @@ export function Step3Shell({
   collections: BuilderCollection[];
   productIndex: IndexedProduct[];
   navigating: boolean;
-  /** Fires the existing to-rec-page intent (the fetcher lives in the stage). */
+  /** The step's forward intent (the fetcher lives in the stage): to-logic on
+   *  the Questions step, to-rec-page on the Logic step. STABLE by contract. */
   onContinue: () => void;
   designTokens: DesignTokens | null | undefined;
   regen: RegenApi;
@@ -87,7 +97,8 @@ export function Step3Shell({
 
   const captureOn = doc.rec_page_settings?.global?.captureEmail !== false;
 
-  const [view, setView] = useState<Step3View>("content");
+  // One-line-chrome — the view IS the funnel step now; no in-shell toggle.
+  const view = mode;
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [libraryOpen, setLibraryOpen] = useState(false);
   // QZY-2 (spec §10) — the ONE diagnose/preview modal; the Fix-N-issues
@@ -96,10 +107,16 @@ export function Step3Shell({
     open: false,
     tab: "diagnostics",
   });
-  // A rule jump-link fired from the Content view: LogicScroll isn't mounted
-  // until the view flips, so the target parks here for one render.
-  const [pendingRuleJump, setPendingRuleJump] = useState<string | null>(null);
   const logicRef = useRef<LogicScrollHandle>(null);
+
+  // A rule jump stashed by the Questions step lands here once the Logic step
+  // mounts (scrollToRule parks unknown ids until the card exists).
+  useEffect(() => {
+    if (mode !== "logic" || !pendingRuleJumpStash) return;
+    const target = pendingRuleJumpStash;
+    pendingRuleJumpStash = null;
+    logicRef.current?.scrollToRule(target);
+  }, [mode]);
 
   // Valid canvas positions; a stale selection (deleted question, capture
   // toggled off) falls back derived-style — no effect needed.
@@ -185,30 +202,11 @@ export function Step3Shell({
     [doc, onCommit, selectedId],
   );
 
-  // P4 tri-state Continue — Content: pure view switch (no server intent);
-  // Logic + healthy: the stage's existing to-rec-page intent; Logic +
-  // blocking: open the health popover instead of advancing. The gate is the
-  // SAME report instance the pill and popover render — `verdict.blocking`
-  // folds validateQuiz via S1, so "advance enabled" ⇒ the publish gate is
-  // clean and the three surfaces cannot disagree.
-  const handleContinue = useCallback(() => {
-    if (view === "content") {
-      setView("logic");
-      return;
-    }
-    if (report.verdict.blocking > 0) {
-      setDiagnose({ open: true, tab: "diagnostics" });
-      return;
-    }
-    onContinue();
-  }, [view, report.verdict.blocking, onContinue]);
-
-  // P4 health jump-links. Question findings: Logic view scrolls the section
-  // in with a warn-wash flash; Content view selects the node in the rail —
-  // the phone canvas shows it (the simpler correct behavior: the finding is
-  // about the question, and the rail selection is the Content view's focus
-  // primitive). Rule findings live only in the Logic view — switch first if
-  // needed (the jump parks until LogicScroll mounts).
+  // P4 health jump-links. Question findings: Logic step scrolls the section
+  // in with a warn-wash flash; Questions step selects the node in the rail —
+  // the phone canvas shows it. Rule findings live only in the Logic step —
+  // from Questions, stash the target and advance (onContinue = to-logic; the
+  // Logic mount picks the stash up).
   const handleHealthNavigate = useCallback(
     (link: Tier1Link) => {
       setDiagnose((d) => ({ ...d, open: false }));
@@ -221,61 +219,54 @@ export function Step3Shell({
         if (view === "logic") {
           logicRef.current?.scrollToRule(link.ruleId);
         } else {
-          setView("logic");
-          setPendingRuleJump(link.ruleId);
+          pendingRuleJumpStash = link.ruleId;
+          onContinue();
         }
       }
     },
-    [view],
+    [view, onContinue],
   );
 
-  useEffect(() => {
-    if (view !== "logic" || !pendingRuleJump) return;
-    logicRef.current?.scrollToRule(pendingRuleJump);
-    setPendingRuleJump(null);
-  }, [view, pendingRuleJump]);
-
-  // QZY-2 (spec §2) — ONE status control top-right: the Fix-N-issues pill
-  // (or the healthy/review verdict) opening the diagnose modal's
-  // Diagnostics tab. No separate popover chip anymore.
+  // The bar (one-line-chrome §1.3) — save chip · Fix-N-issues health pill ·
+  // the tri-state Continue, published through the funnel-chrome bridge.
+  // Questions: always advanceable (to-logic). Logic + healthy: to-rec-page.
+  // Logic + blocking: "Fix N issues to continue" stays CLICKABLE and opens
+  // the diagnose modal — the gate is the SAME report instance the pill and
+  // modal render, so the surfaces cannot disagree.
   const pill = pillPresentation(report.verdict);
-  const fixControl = (
-    <button
-      type="button"
-      className={`qz-s3-healthpill is-${pill.state}`}
-      aria-haspopup="dialog"
-      title={report.verdict.label}
-      onClick={() => setDiagnose({ open: true, tab: "diagnostics" })}
-    >
-      <span className="qz-s3-healthdot" aria-hidden />
-      {report.verdict.blocking > 0
-        ? `Fix ${report.verdict.blocking} issue${report.verdict.blocking === 1 ? "" : "s"}`
-        : pill.text}
-    </button>
-  );
+  const blocking = report.verdict.blocking;
+  const verdictLabel = report.verdict.label;
+  const barOverride = useMemo<FunnelBarOverride>(() => {
+    const fixLabel = `Fix ${blocking} issue${blocking === 1 ? "" : "s"}`;
+    const openDiagnose = () => setDiagnose({ open: true, tab: "diagnostics" });
+    return {
+      saveChip: (
+        <FunnelSaveChip isSaving={isSaving} savedAt={savedAt} saveError={saveError} onRetry={onRetry} />
+      ),
+      healthPill: (
+        <button
+          type="button"
+          className={`qz-s3-healthpill is-${pill.state}`}
+          aria-haspopup="dialog"
+          title={verdictLabel}
+          onClick={openDiagnose}
+        >
+          <span className="qz-s3-healthdot" aria-hidden />
+          {blocking > 0 ? fixLabel : pill.text}
+        </button>
+      ),
+      continueSpec:
+        mode === "logic" && blocking > 0
+          ? { label: `${fixLabel} to continue`, blocked: true, disabled: navigating, onClick: openDiagnose }
+          : { label: "Continue →", disabled: navigating, onClick: onContinue },
+    };
+  }, [mode, blocking, verdictLabel, pill.state, pill.text, isSaving, savedAt, saveError, onRetry, navigating, onContinue]);
+  useFunnelBar(barOverride);
 
   return (
     <div className="qz-s3">
-      <TopBar3
-        view={view}
-        verdict={report.verdict}
-        healthPill={fixControl}
-        isSaving={isSaving}
-        savedAt={savedAt}
-        saveError={saveError}
-        onRetry={onRetry}
-        navigating={navigating}
-        onContinue={handleContinue}
-      />
-
       {view === "content" ? (
         <div className="qz-s3-contentview">
-          <div className="qz-s3-subhead qz-s3-subhead--questions">
-            <div className="qz-s3-viewtoggle" role="group" aria-label="Questions or Overview view">
-              <button type="button" aria-pressed onClick={() => setView("content")}>✎ Questions</button>
-              <button type="button" aria-pressed={false} onClick={() => setView("logic")}>▦ Overview</button>
-            </div>
-          </div>
           {/* questions-simple (AUDIT-22) — ONE panel: toolbar (title · mono
               count · + New question; the library entry rides along as a quiet
               toolbar action) over the list | 340px live-preview split. */}
@@ -321,18 +312,11 @@ export function Step3Shell({
         </div>
       ) : (
         <div className="qz-s3-logicview">
-          {/* Spec §2 — the sub-header: Content-Logic toggle (Logic active) +
-              the "+ Diagnose / Preview" entry. No question rail here — the
-              map IS the list. */}
+          {/* Spec §2 — the sub-header: the "+ Diagnose / Preview" entry and
+              quick add/library actions. No view toggle anymore — Questions
+              and Logic are separate funnel steps navigated from the bar. No
+              question rail here — the map IS the list. */}
           <div className="qz-s3-subhead">
-            <div className="qz-s3-viewtoggle" role="group" aria-label="Questions or Overview view">
-              <button type="button" aria-pressed={false} onClick={() => setView("content")}>
-                ✎ Questions
-              </button>
-              <button type="button" aria-pressed onClick={() => setView("logic")}>
-                ▦ Overview
-              </button>
-            </div>
             <button
               type="button"
               className="qz-btn qz-btn-ghost qz-btn-sm"
@@ -387,11 +371,7 @@ export function Step3Shell({
         productIndex={productIndex}
         onCommit={onCommit}
         onFlush={onFlush}
-        onNavigate={(link) => {
-          // Jump-links land in the LOGIC view's map.
-          if (view !== "logic") setView("logic");
-          handleHealthNavigate(link);
-        }}
+        onNavigate={handleHealthNavigate}
       />
 
       {libraryOpen ? (

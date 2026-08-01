@@ -18,6 +18,7 @@ import { GLOBAL_WHY_COPY_KEY } from "../../../lib/whyCopyMeta";
 import { resolveDesignTokens, tokensToCssVars } from "../../../lib/designTokens";
 import type { BuilderCategory } from "../../builder/stepProps";
 import { useQuizDraft } from "../../studio/useQuizDraft";
+import { useFunnelBar, FunnelSaveChip } from "../funnelChrome";
 import { ScrubNumber } from "../../controls/ScrubNumber";
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -82,6 +83,16 @@ export function Step4Results({
 }) {
   const { doc, commit, isSaving, savedAt } = useQuizDraft(initialDoc);
   const cfg = resolveRecPageGlobal(doc.rec_page_settings);
+
+  // One-line-chrome — the autosave chip lives in the shared funnel bar (the
+  // step's Continue stays the bar's fetcher-driven to-design default).
+  const barOverride = useMemo(
+    () => ({
+      saveChip: <FunnelSaveChip isSaving={isSaving} savedAt={savedAt} saveError={null} onRetry={() => {}} />,
+    }),
+    [isSaving, savedAt],
+  );
+  useFunnelBar(barOverride);
 
   // Sparse writes: a value equal to its read-time default clears the key, so
   // stored docs only carry what the merchant actually changed.
@@ -182,17 +193,6 @@ export function Step4Results({
           </div>
           <h2 style={{ margin: 0, fontSize: 21, letterSpacing: "-.02em" }}>Design the reveal</h2>
         </div>
-        <span className="qz-save-status" aria-live="polite">
-          {isSaving ? (
-            <span className="qz-save-chip is-saving">
-              <span className="qz-save-dot" aria-hidden /> Saving…
-            </span>
-          ) : savedAt ? (
-            <span key={savedAt} className="qz-save-chip is-saved">
-              <span aria-hidden>✓</span> Saved
-            </span>
-          ) : null}
-        </span>
       </header>
 
       <div className="qz-s4-split">

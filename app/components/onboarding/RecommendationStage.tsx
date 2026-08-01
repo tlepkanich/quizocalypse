@@ -5,6 +5,7 @@ import { stepNumber, TOTAL_STEPS } from "../../lib/funnelStages";
 import type { IndexedProduct } from "../../lib/recommendationEngine";
 import type { BuilderCategory, BuilderCollection } from "../builder/stepProps";
 import { useQuizDraft } from "../studio/useQuizDraft";
+import { useFunnelBar, FunnelSaveChip } from "./funnelChrome";
 import { ResultSettingsPanel } from "../builder/ResultSettingsPanel";
 import { RecPageDiagram } from "../studio/RecPageDiagram";
 import { RecPagePreview } from "./RecPagePreview";
@@ -52,6 +53,15 @@ export function RecommendationStage({
 }) {
   const { doc, commit, isSaving, savedAt } = useQuizDraft(initialDoc);
 
+  // One-line-chrome — the autosave chip lives in the shared funnel bar.
+  const barOverride = useMemo(
+    () => ({
+      saveChip: <FunnelSaveChip isSaving={isSaving} savedAt={savedAt} saveError={null} onRetry={() => {}} />,
+    }),
+    [isSaving, savedAt],
+  );
+  useFunnelBar(barOverride);
+
   // LOGIC v2 — decider docs get the target-based Step-4 surface (ONE global
   // config + sparse per-target overrides, rec-page-spec-V2 §2/§3) instead of
   // the legacy per-result-node panel. Legacy docs render exactly as before.
@@ -90,17 +100,6 @@ export function RecommendationStage({
             edit. Collapse the settings to see the full page.
           </p>
         </div>
-        <span className="qz-save-status" aria-live="polite">
-          {isSaving ? (
-            <span className="qz-save-chip is-saving">
-              <span className="qz-save-dot" aria-hidden /> Saving…
-            </span>
-          ) : savedAt ? (
-            <span key={savedAt} className="qz-save-chip is-saved">
-              <span aria-hidden>✓</span> Saved
-            </span>
-          ) : null}
-        </span>
       </header>
 
       {deciderMode ? (

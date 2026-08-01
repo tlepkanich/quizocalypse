@@ -21,6 +21,7 @@ import UpgradeDeciderModal from "./UpgradeDeciderModal";
 import { TableView } from "./TableView";
 import { ContinueGuard } from "./ContinueGuard";
 import { QuestionBankDrawer } from "../../studio/QuestionBankDrawer";
+import { useFunnelBar, FunnelSaveChip } from "../funnelChrome";
 import { LogicFlowMap } from "../../logic/LogicFlowMap";
 import type { TableFilter } from "./tableFilters";
 import type { SkipOption } from "./AnswerRow";
@@ -34,16 +35,6 @@ const NODE_TYPE_LABEL: Record<string, string> = {
   integration: "Integration",
   branch: "Branch",
 };
-
-// `savedAt` is an ISO string from the CLIENT autosave fetcher — it's null on the
-// server + initial hydration (the chip never server-renders) and only set after a
-// client-side save completes, so formatting it in the merchant's LOCAL time here is
-// NOT subject to the SSR date-hydration landmine ([[ssr-unsafe-locale-dates]]).
-function savedTimeLabel(iso: string): string {
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return "";
-  return d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
-}
 
 // Questions & Logic spec — the two-panel page shell (260px left + scrolling main).
 // Owns the Builder/Table view toggle, the active-question highlight, and the
@@ -60,7 +51,6 @@ export function QuestionsLogicLayout({
   onRetry,
   categories,
   navigating,
-  onBack,
   onContinue,
   regeneratingId,
   undoNodeId,
@@ -77,7 +67,6 @@ export function QuestionsLogicLayout({
   onRetry: () => void;
   categories: BuilderCategory[];
   navigating: boolean;
-  onBack: () => void;
   onContinue: () => void;
   regeneratingId: string | null;
   undoNodeId: string | null;
@@ -274,19 +263,25 @@ export function QuestionsLogicLayout({
     else cardEls.current.delete(id);
   };
 
+  // One-line-chrome — Back, the save chip, and Continue live in the shared
+  // funnel bar now; this layout publishes its chip + guarded Continue there.
+  // The ContinueGuard still fires from the bar — it's a quality gate, not a
+  // navigation confirm.
+  const barOverride = useMemo(
+    () => ({
+      saveChip: (
+        <FunnelSaveChip isSaving={isSaving} savedAt={savedAt} saveError={saveError} onRetry={onRetry} />
+      ),
+      continueSpec: { label: "Continue →", onClick: handleContinue, disabled: navigating },
+    }),
+    [isSaving, savedAt, saveError, onRetry, handleContinue, navigating],
+  );
+  useFunnelBar(barOverride);
+
   return (
     <div className="qz-ql">
-      {/* ── Topbar ── */}
+      {/* ── Topbar (legacy-only controls; navigation moved to the funnel bar) ── */}
       <header className="qz-ql-topbar">
-        <button
-          type="button"
-          className="qz-btn qz-btn-ghost qz-btn-sm"
-          disabled={navigating}
-          onClick={onBack}
-          title="Back to Shape Your Quiz (your work is saved)"
-        >
-          ← Back
-        </button>
         <div className="qz-ql-steplabel">
           Step {stepNumber("question_builder")} of {TOTAL_STEPS} · Questions &amp; Logic
         </div>
@@ -320,24 +315,6 @@ export function QuestionsLogicLayout({
         >
           ↑ Upgrade to Decider logic
         </button>
-        <span className="qz-save-status" aria-live="polite">
-          {isSaving ? (
-            <span className="qz-save-chip is-saving">
-              <span className="qz-save-dot" aria-hidden /> Saving…
-            </span>
-          ) : saveError ? (
-            <span className="qz-save-chip is-error">
-              <span aria-hidden>⚠</span> {saveError} ·{" "}
-              <button type="button" className="qz-ql-retry" onClick={onRetry}>
-                Retry
-              </button>
-            </span>
-          ) : savedAt ? (
-            <span key={savedAt} className="qz-save-chip is-saved">
-              <span aria-hidden>✓</span> Saved {savedTimeLabel(savedAt)}
-            </span>
-          ) : null}
-        </span>
         <button
           type="button"
           className="qz-btn qz-btn-ghost qz-btn-sm"
@@ -345,14 +322,6 @@ export function QuestionsLogicLayout({
           title="Preview opens after you publish the quiz"
         >
           Preview
-        </button>
-        <button
-          type="button"
-          className="qz-btn qz-btn-accent qz-btn-sm"
-          disabled={navigating}
-          onClick={handleContinue}
-        >
-          Continue →
         </button>
       </header>
 

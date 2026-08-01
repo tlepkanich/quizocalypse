@@ -1,12 +1,14 @@
 import { useEffect, useState } from "react";
 import { Check } from "lucide-react";
 
-/* Design-system-V2 §7.6 — step-nav pills. Present ONLY inside the quiz-creation
-   flow. Mono step number + name, hairline connectors between pills:
-   · upcoming — muted, not clickable (gated by the flow's own Continue rule)
-   · done     — deeper ink + a green ✓, clickable (returns to that step)
-   · current  — the violet-wash pill with a leading accent dot (the position
-                beacon; Soft Pastel §7 progress-dot motif — no gold, no diamond)
+/* One-line-chrome §1.2 — the funnel's step flow: dot + label nodes joined by
+   flexible hairlines. Lives in the top bar's centre zone, which owns all free
+   width and stretches with the window.
+   · upcoming — muted, `disabled` (gated by each step's own Continue rule)
+   · done     — the accent-tint pill (the always-on "this is a button" signal;
+                don't reduce it to hover-only), clickable when the host passes
+                onStepClick (jumps straight there — no confirm, §1.5)
+   · current  — solid accent dot with the wash halo + the one-shot ignite
    Render-only: the host decides step states and handles navigation. */
 export type StepState = "done" | "current" | "upcoming";
 
@@ -36,15 +38,24 @@ export function StepNav({
     return () => window.clearTimeout(timeout);
   }, [currentId]);
 
+  const currentIdx = steps.findIndex((s) => s.state === "current");
+
   return (
-    <nav className="qz-stepnav" aria-label="Setup steps">
+    <nav className="qz-stepnav" aria-label="Quiz setup steps">
       {steps.map((step, index) => {
         const clickable = step.state === "done" && Boolean(onStepClick);
+        // §1.4 — every node names what a click (or the block) means.
+        const title =
+          step.state === "current"
+            ? `You are here — ${step.label}`
+            : step.state === "done"
+              ? `Go back to ${step.label}`
+              : `${step.label} — finish the steps before it first`;
         return (
           <span key={step.id} className="qz-stepnav-segment">
             {index > 0 ? (
               <span
-                className={`qz-stepnav-link${index <= steps.findIndex((s) => s.state === "current") ? " is-done" : ""}`}
+                className={`qz-stepnav-link${index <= currentIdx ? " is-done" : ""}`}
                 aria-hidden
               />
             ) : null}
@@ -54,6 +65,7 @@ export function StepNav({
                 className={`qz-stepnav-pill is-${step.state}`}
                 disabled={!clickable && step.state !== "current"}
                 aria-current={step.state === "current" ? "step" : undefined}
+                title={title}
                 onClick={clickable ? () => onStepClick?.(step.id) : undefined}
               >
                 <span className="qz-stepnav-dot">

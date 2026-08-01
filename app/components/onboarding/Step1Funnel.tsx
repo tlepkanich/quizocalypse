@@ -1,7 +1,9 @@
-import { lazy, Suspense, useEffect, useState } from "react";
+import { lazy, Suspense, useEffect, useMemo, useState } from "react";
 import { Link, useFetcher, useRevalidator } from "@remix-run/react";
-import { QzPage, QzCard, QzBanner } from "../qz";
+import { ChevronLeft } from "lucide-react";
+import { QzPage, QzCard, QzBanner, QzTooltip } from "../qz";
 import { QzModal } from "../qz-overlays";
+import { FunnelBarContext, type FunnelBarOverride, type FunnelContinueSpec } from "./funnelChrome";
 import { QuestionBuilderStage } from "./QuestionBuilderStage";
 import { RecommendationStage } from "./RecommendationStage";
 import { TopBar } from "../chrome/TopBar";
@@ -46,18 +48,16 @@ export function Step1Funnel({ data }: { data: FunnelData }) {
   const result = fetcher.state === "idle" ? fetcher.data ?? null : null;
   const errorMsg = result && result.ok === false ? result.error : null;
 
-  // The brand identity is a tap-to-open overlay (kept out of the header so the
-  // page leads with the actual task, not a paragraph of summary).
-  const [showIdentity, setShowIdentity] = useState(false);
-  const [leaveSetupOpen, setLeaveSetupOpen] = useState(false);
+  // One-line-chrome §1.6 — the ONE confirm in the flow: leaving the builder
+  // (logo click, or back from step 1). Everything else navigates freely.
+  const [leaveOpen, setLeaveOpen] = useState(false);
 
-  // QL3-P5 — the Step-3 v3 shell is active for EVERY decider doc on the
-  // question_builder stage (the ?step3=v3 flag is retired). It renders its OWN
-  // floating top bar (TopBar3, same wordmark + step pills), so the standard
-  // sticky bar steps aside — the spec's Step-3 has exactly one bar.
-  const step3V3Active =
-    data.stage === "question_builder" &&
-    data.questionBuilder?.doc.logic_model === "decider";
+  // One-line-chrome — the bar is owned here (chrome stays full-bleed while the
+  // page is capped); the autosaving editing stages publish their save chip /
+  // health pill / Continue through this bridge instead of mounting their own
+  // bars (TopBar3 is retired).
+  const [barOverride, setBarOverride] = useState<FunnelBarOverride | null>(null);
+  const barBridge = useMemo(() => ({ publish: setBarOverride }), []);
 
   // Poll the loader while a detached generation job runs (typing/templating);
   // the job writes the next stage, the revalidate picks it up, the poll stops.
@@ -77,118 +77,120 @@ export function Step1Funnel({ data }: { data: FunnelData }) {
     return () => clearInterval(t);
   }, [isGenerating, revalidator]);
 
-  // §7.6 — the bar's right zone carries the PRIMARY Continue. Step-3 adopted
-  // this with TopBar3 (◆ Continue, destination-named); steps 4 and 5 had kept
-  // their pre-DS in-page footers (a bottom-left ← Back · Continue row that
-  // scrolled out of view, and step 5's said "Open builder →"). Their primary
-  // action moves here — same anatomy as step 3's — and the footers retire.
   const navBusy = fetcher.state !== "idle";
-  // FLOW-3 — Shape is retired from the visible map (visibleStageKey folds its
-  // family onto Questions), so the "in the Shape zone" chrome (← Homepage +
-  // leave-setup confirm) keys on the RAW stages that used to fold there.
-  const shapeVisible =
-    data.stage === "types" ||
-    data.stage === "typing" ||
-    data.stage === "templates" ||
-    data.stage === "shape" ||
-    data.stage === "goal";
-  const stageNav =
-    data.stage === "rec_page" ? (
-      <>
-        <button
-          type="button"
-          className="qz-btn qz-btn-ghost qz-btn-sm"
-          disabled={navBusy}
-          onClick={() => fetcher.submit({ intent: "to-question-builder" }, { method: "post" })}
-        >
-          ← Back
-        </button>
-        <button
-          type="button"
-          className="qz-btn qz-btn-sm qz-s3-continue qz-btn-accent"
-          disabled={navBusy}
-          onClick={() => fetcher.submit({ intent: "to-design" }, { method: "post" })}
-        >
-          {pendingIntent === "to-design" ? "Saving…" : "◆ Continue to Design"}
-        </button>
-      </>
-    ) : data.stage === "design" ? (
-      <>
-        <button
-          type="button"
-          className="qz-btn qz-btn-ghost qz-btn-sm"
-          disabled={navBusy}
-          onClick={() => fetcher.submit({ intent: "to-rec-page" }, { method: "post" })}
-        >
-          ← Back
-        </button>
-        <button
-          type="button"
-          className="qz-btn qz-btn-sm qz-s3-continue qz-btn-accent"
-          disabled={navBusy}
-          onClick={() => fetcher.submit({ intent: "generate-build" }, { method: "post" })}
-        >
-          {pendingIntent === "generate-build" ? "Opening builder…" : "◆ Open builder"}
-        </button>
-      </>
-    ) : null;
+  const visibleKey = visibleStageKey(data.stage);
+  const visibleIdx = FUNNEL_STAGES.findIndex((s) => s.key === visibleKey);
+
+  // §1.4 — finished steps are navigation: goto-stage jumps straight there, no
+  // confirm (§1.5 — every step autosaves, so there is nothing to ask about).
+  // Backwards-only is enforced server-side; while a generation job runs the
+  // done nodes and back are inert (jumping would strand the detached job).
+  const canJump = !isGenerating && !navBusy;
+  const gotoStage = (stage: string) =>
+    fetcher.submit({ intent: "goto-stage", stage }, { method: "post" });
+
+  // §1.3 — back goes ONE step back; from step 1 it leaves the builder (the
+  // one confirm). The label always names the destination.
+  const backStep = visibleIdx > 0 ? FUNNEL_STAGES[visibleIdx - 1]! : null;
+  const backLabel = backStep ? `Back to ${backStep.label}` : "Leave the builder";
+
+  // The step's primary Continue — same place on every step. The editing
+  // stages publish their own spec (autosave gates, intercepts, the Logic
+  // step's fix-N-issues state); rec_page/design are fetcher-driven here, and
+  // the fallback covers transient stages + the pre-hydration frame.
+  const defaultContinue: FunnelContinueSpec =
+    visibleKey === "rec_page" && !isGenerating
+      ? {
+          label: pendingIntent === "to-design" ? "Saving…" : "Continue",
+          onClick: () => fetcher.submit({ intent: "to-design" }, { method: "post" }),
+          disabled: navBusy,
+        }
+      : visibleKey === "design"
+        ? {
+            label: pendingIntent === "generate-build" ? "Opening builder…" : "Open builder",
+            onClick: () => fetcher.submit({ intent: "generate-build" }, { method: "post" }),
+            disabled: navBusy,
+          }
+        : { label: "Continue", onClick: () => {}, disabled: true };
+  const cont = barOverride?.continueSpec ?? defaultContinue;
+
+  const continueBtn = (
+    <button
+      type="button"
+      className={`qz-topbar-continue${cont.disabled ? " is-off" : ""}${cont.blocked ? " is-blocked" : ""}`}
+      disabled={cont.disabled}
+      aria-haspopup={cont.blocked ? "dialog" : undefined}
+      onClick={cont.disabled ? undefined : cont.onClick}
+    >
+      {cont.label}
+    </button>
+  );
 
   return (
-    <>
-      {/* Design-system-V2 §7.6 — the creation flow's sticky top bar: wordmark ·
-          step-nav pills · ancillary actions + the stage's primary Continue.
-          Replaces the old QzPageHeader + FunnelProgress dots (each stage
-          renders its own page-title zone). Hidden while the Step-3 v3 shell
-          renders its own floating bar. */}
-      {step3V3Active ? null : (
+    <FunnelBarContext.Provider value={barBridge}>
+      {/* One-line-chrome §1 — ONE bar on all five steps: logo (home, confirms)
+          · the step flow owning the free width · save chip + back + Continue.
+          Replaces the two-row funnel chrome AND Step-3's floating TopBar3. */}
       <TopBar
-        nav={<FunnelStepNav stage={data.stage} />}
+        nav={<FunnelStepNav stage={data.stage} onStepClick={canJump ? gotoStage : undefined} />}
+        onHomeClick={(e) => {
+          e.preventDefault();
+          setLeaveOpen(true);
+        }}
         right={
           <>
-            {data.identitySummary && !shapeVisible ? (
-              <button
-                type="button"
-                className="qz-btn qz-btn-ghost qz-btn-sm"
-                onClick={() => setShowIdentity(true)}
-              >
-                ✦ Brand identity
-              </button>
-            ) : null}
-            {shapeVisible ? (
-              <button type="button" className="qz-btn qz-btn-ghost qz-btn-sm" onClick={() => setLeaveSetupOpen(true)}>
-                ← Homepage
-              </button>
-            ) : (
-              <Link to="/studio" className="qz-btn qz-btn-ghost qz-btn-sm">
-                ← All quizzes
-              </Link>
+            {barOverride?.saveChip ?? (
+              <span className="qz-save-status" aria-live="polite">
+                <span className={`qz-save-chip ${navBusy ? "is-saving" : "is-saved"}`}>
+                  {navBusy ? (
+                    <>
+                      <span className="qz-save-dot" aria-hidden /> Saving…
+                    </>
+                  ) : (
+                    <>
+                      <span aria-hidden>✓</span> Saved
+                    </>
+                  )}
+                </span>
+              </span>
             )}
-            {stageNav}
+            {barOverride?.healthPill ?? null}
+            <button
+              type="button"
+              className="qz-topbar-back"
+              disabled={isGenerating || navBusy}
+              title={backLabel}
+              aria-label={backLabel}
+              onClick={() => (backStep ? gotoStage(backStep.key) : setLeaveOpen(true))}
+            >
+              <ChevronLeft size={18} strokeWidth={2} aria-hidden />
+            </button>
+            {cont.disabled && cont.title ? (
+              <QzTooltip content={cont.title}>{continueBtn}</QzTooltip>
+            ) : (
+              continueBtn
+            )}
           </>
         }
       />
-      )}
-    <QzPage wide>
-      {showIdentity && data.identitySummary ? (
-        <BrandIdentityModal summary={data.identitySummary} onClose={() => setShowIdentity(false)} />
-      ) : null}
-      {leaveSetupOpen ? (
+    <QzPage funnel>
+      {leaveOpen ? (
         <QzModal
           open
-          onClose={() => setLeaveSetupOpen(false)}
+          onClose={() => setLeaveOpen(false)}
           size="sm"
-          title="Leave setup?"
+          title="Leave the builder?"
           footer={
             <>
-              <button type="button" className="qz-btn qz-btn-ghost" onClick={() => setLeaveSetupOpen(false)}>Stay here</button>
-              <Link to="/studio" className="qz-btn qz-btn-accent">Go to homepage</Link>
+              <button type="button" className="qz-btn qz-btn-ghost" onClick={() => setLeaveOpen(false)}>Stay here</button>
+              <Link to="/studio" className="qz-btn qz-btn-accent">Leave →</Link>
             </>
           }
         >
-          {/* shape-decider mock copy (EXACT) */}
+          {/* one-line-chrome §1.6 copy (EXACT) */}
           <p className="qz-dim" style={{ margin: 0 }}>
-            Your quiz is saved as a draft — you can pick up right here anytime. Head back to
-            your quizzes?
+            Everything is saved — this quiz will be waiting exactly as you left it in your
+            quizzes list.
           </p>
         </QzModal>
       ) : null}
@@ -265,14 +267,17 @@ export function Step1Funnel({ data }: { data: FunnelData }) {
         />
       ) : null}
 
-      {/* Question Builder — the pre-config editing step. Client-only: it composes
-          the heavy builder panels (FlowRail / ContextPanel / live preview) which
-          throw hydration errors when SSR'd (the admin-builder lesson). */}
-      {data.stage === "question_builder" && data.questionBuilder ? (
+      {/* Question Builder + Logic — the pre-config editing steps over the SAME
+          draft payload. One-line-chrome: Logic is the decider shell's former
+          ▦ Overview view promoted to its own stage; `mode` picks the surface.
+          Client-only: the heavy builder panels throw hydration errors when
+          SSR'd (the admin-builder lesson). */}
+      {(data.stage === "question_builder" || data.stage === "logic") && data.questionBuilder ? (
         <ClientOnly fallback={<BuilderSkeleton />}>
           {() => (
             <QuestionBuilderStage
               quizId={data.quizId}
+              mode={data.stage === "logic" ? "logic" : "questions"}
               initialDoc={data.questionBuilder!.doc}
               categories={data.questionBuilder!.categories}
               productIndex={data.questionBuilder!.productIndex}
@@ -321,7 +326,7 @@ export function Step1Funnel({ data }: { data: FunnelData }) {
       ) : null}
 
     </QzPage>
-    </>
+    </FunnelBarContext.Provider>
   );
 }
 
@@ -346,11 +351,16 @@ function visibleStageKey(stage: FunnelData["stage"]): string {
   return stage;
 }
 
-// The top bar's step pills (V2 §7.6): done ✓ · current gold-wash ◆ · upcoming
-// muted. Renders through the shared StepNav; navigation stays with each
-// stage's own Back/Continue intents for now (done-pill jumps are a later
-// wiring — StepNav simply omits onStepClick so done pills are inert).
-function FunnelStepNav({ stage }: { stage: FunnelData["stage"] }) {
+// The top bar's step flow (one-line-chrome §1.2): done ✓ tint pills · current
+// accent dot · upcoming muted. Finished steps navigate through onStepClick
+// (goto-stage); StepNav gates clicks to done nodes itself.
+function FunnelStepNav({
+  stage,
+  onStepClick,
+}: {
+  stage: FunnelData["stage"];
+  onStepClick?: (id: string) => void;
+}) {
   const activeIdx = FUNNEL_STAGES.findIndex((s) => s.key === visibleStageKey(stage));
   const steps: StepNavStep[] = FUNNEL_STAGES.map((s, i) => ({
     id: s.key,
@@ -358,33 +368,7 @@ function FunnelStepNav({ stage }: { stage: FunnelData["stage"] }) {
     number: i + 1,
     state: i < activeIdx ? "done" : i === activeIdx ? "current" : "upcoming",
   }));
-  return <StepNav steps={steps} />;
-}
-
-// The brand identity summary, opened on demand from the funnel header so the page
-// leads with the task instead of a paragraph of summary. Read-only here — the full
-// view/edit lives on the Brand Identity tab.
-function BrandIdentityModal({ summary, onClose }: { summary: string; onClose: () => void }) {
-  return (
-    <QzModal
-      open
-      onClose={onClose}
-      size="md"
-      title="Current brand identity"
-      footer={
-        <Link to="/studio/brand" className="qz-btn qz-btn-ghost qz-btn-sm">
-          View &amp; edit full identity →
-        </Link>
-      }
-    >
-      <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-        <p style={{ margin: 0, fontSize: 13.5, lineHeight: 1.6 }}>{summary}</p>
-        <p className="qz-dim" style={{ margin: 0, fontSize: 12 }}>
-          The AI uses this to tailor every quiz it builds.
-        </p>
-      </div>
-    </QzModal>
-  );
+  return <StepNav steps={steps} onStepClick={onStepClick} />;
 }
 
 // ══ Step 2 ══════════════════════════════════════════════════════════════════

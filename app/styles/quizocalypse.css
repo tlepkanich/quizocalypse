@@ -769,6 +769,10 @@ body[data-qz] :focus-visible {
    default stretch — without an explicit width the page shrink-wraps to its
    content's fit-content width (each stage a different width). */
 .qz-page.is-wide { max-width: none; width: 100%; }
+/* One-line-chrome §2.1 — the funnel's working area: capped and centred (the
+   chrome above stays full-bleed). Do NOT fold into .is-wide — the builder /
+   workspace surfaces need full bleed. */
+.qz-page.is-funnel { max-width: 1000px; margin: 0 auto; padding: 28px 24px 72px; width: 100%; }
 .qz-page-header { margin-bottom: 36px; }
 
 /* — Funnel two-panel editor split (config left · live preview right) with a
@@ -1879,52 +1883,36 @@ body[data-qz] ::selection { background: var(--qz-ink); color: var(--qz-cream); }
 
 /* ── Recommendation Buckets (RB Step 1) ──────────────────────────────────── */
 .qz-rb { display: flex; flex-direction: column; gap: 16px; }
-.qz-rb-head { display: flex; flex-direction: column; gap: 6px; }
 
-/* step1-final-page mock (EXACT): light lavender card, 34px wash icon tile,
-   AI-TIP label INLINE with the headline, horizontal Use-this/Hide actions. */
-.qz-rb-ai-tip {
-  display: flex; align-items: flex-start; gap: 13px; padding: 12px 14px;
-  border: 1px solid color-mix(in srgb, var(--qz-accent) 14%, var(--qz-rule));
-  border-radius: 13px;
+/* One-line-chrome §2.3 (mock .titlerow/.tip, EXACT) — title and tip share one
+   row; the tip is ONE line: ✦ TIP · the suggestion · ✕. Nothing else. */
+.qz-rb-titlerow { display: flex; align-items: center; gap: 20px; flex-wrap: wrap; margin-bottom: 2px; }
+.qz-rb-titlerow .qz-h2 { flex: none; }
+.qz-rb-tip {
+  display: inline-flex; align-items: center; gap: 8px; flex: none; min-width: 0;
+  border: 1px solid color-mix(in srgb, var(--qz-accent) 18%, var(--qz-rule));
   background: color-mix(in srgb, var(--qz-accent) 3%, var(--qz-paper));
+  border-radius: 999px; padding: 5px 6px 5px 13px;
 }
-.qz-rb-ai-icon {
-  width: 34px; height: 34px; flex: none; display: grid; place-items: center;
-  border-radius: 10px; color: var(--qz-accent-ink); background: var(--qz-accent-wash);
+.qz-rb-tip-star { color: var(--qz-accent); font-size: 13px; flex: none; }
+.qz-rb-tip-label {
+  font: 500 10.5px/1.2 var(--qz-font-mono); text-transform: uppercase;
+  letter-spacing: .07em; color: var(--qz-accent-ink); flex: none;
 }
-.qz-rb-ai-icon svg, .qz-rb-ai-spark svg { animation: qz-ai-tip-pulse 2.6s ease-in-out infinite; }
-.qz-rb-ai-lead { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
-.qz-rb-ai-title { font-size: 14px; font-weight: 600; color: var(--qz-ink); }
-.qz-rb-ai-reason { margin: 0; font-size: 12.5px; color: var(--qz-ink-3); line-height: 1.5; }
-.qz-rb-ai-hide {
-  border: none; background: transparent; color: var(--qz-accent-ink);
-  font-size: 12px; cursor: pointer; font-family: inherit; padding: 8px 10px; border-radius: 8px;
+.qz-rb-tip-sug {
+  font-size: 13px; font-weight: 600; color: var(--qz-ink); min-width: 0;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
-.qz-rb-ai-hide:hover { background: var(--qz-cream-2); }
-.qz-rb-ai-label { font: 500 11px/1.2 var(--qz-font-mono); text-transform: uppercase; letter-spacing: .06em; color: var(--qz-accent-ink); }
-.qz-rb-ai-based { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-top: 3px; color: var(--qz-ink-4); font-size: 11.5px; }
-.qz-rb-ai-based span:not(:first-child) { padding: 3px 7px; border-radius: 999px; background: color-mix(in srgb, var(--qz-paper) 68%, transparent); border: 1px solid var(--qz-rule); }
-/* Collapsed mini pill (ai-tip-collapse mock, EXACT): the tip card's own colors
-   shrunk to a pill — 22px wash icon tile + the mono AI-TIP label only; hover =
-   tint fill + wash border. */
-.qz-rb-ai-pill {
-  align-self: flex-start; display: inline-flex; align-items: center; gap: 7px;
-  padding: 5px 13px 5px 6px;
-  border: 1px solid color-mix(in srgb, var(--qz-accent) 14%, var(--qz-rule));
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--qz-accent) 3%, var(--qz-paper));
-  color: var(--qz-accent-ink);
-  cursor: pointer; font: 600 10.5px/1.2 var(--qz-font-mono);
-  letter-spacing: .06em; text-transform: uppercase;
+.qz-rb-tip-x {
+  flex: none; display: grid; place-items: center; border: none; background: transparent;
+  color: var(--qz-ink-25); cursor: pointer; padding: 6px 8px; border-radius: 999px; line-height: 1;
 }
-.qz-rb-ai-pill:hover { background: var(--qz-accent-tint); border-color: var(--qz-accent-wash); }
-.qz-rb-ai-spark {
-  width: 22px; height: 22px; flex: none; display: grid; place-items: center;
-  border-radius: 7px; background: var(--qz-accent-wash); color: var(--qz-accent-ink);
+.qz-rb-tip-x:hover { background: var(--qz-cream-2); color: var(--qz-ink-3); }
+.qz-rb-tip-x:focus-visible { outline: 2px solid var(--qz-accent); outline-offset: 2px; }
+@media (max-width: 820px) {
+  .qz-rb-titlerow { gap: 12px; }
+  .qz-rb-tip-sug { max-width: 52vw; }
 }
-@keyframes qz-ai-tip-pulse { 0%, 100% { transform: scale(1) rotate(0); opacity: .9; } 50% { transform: scale(1.2) rotate(15deg); opacity: 1; } }
-@media (prefers-reduced-motion: reduce) { .qz-rb-ai-icon svg, .qz-rb-ai-spark svg { animation: none; } }
 
 /* AI suggestion banner */
 .qz-rb-banner {
@@ -3324,11 +3312,16 @@ body[data-qz] ::selection { background: var(--qz-ink); color: var(--qz-cream); }
    "Your recommendations" rail, auto-apply banner states, and the results-page
    preview drawer. qz tokens throughout (the owner kept the current design
    system; only the spec's structure/behavior lands here). ─────────────────── */
+/* One-line-chrome §2.2 — the rail is a FIXED 320px on purpose: the summary
+   column has a natural size, so the page cap (not a ratio) decides the picker
+   width and neither module stretches on a big monitor. The 44px gutter
+   separates "what you're working in" from "what you've picked". Measured at
+   ≥1000px: picker 588 · gutter 44 · rail 320. */
 .qz-rb-split {
-  display: grid; grid-template-columns: minmax(0, 1.9fr) minmax(320px, 1fr);
-  gap: 16px; align-items: start;
+  display: grid; grid-template-columns: minmax(0, 1fr) 320px;
+  gap: 44px; align-items: start;
 }
-@media (max-width: 900px) { .qz-rb-split { grid-template-columns: 1fr; } }
+@media (max-width: 980px) { .qz-rb-split { grid-template-columns: 1fr; } }
 .qz-rb-main { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
 /* Mock underrow (EXACT): quiet accent-ink text links, not ghost buttons. */
 .qz-rb-underrow { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; font-size: 12.5px; }
@@ -3346,7 +3339,8 @@ body[data-qz] ::selection { background: var(--qz-ink); color: var(--qz-cream); }
 .qz-rb-tab.is-muted { opacity: .55; }
 
 .qz-rb-rail {
-  position: sticky; top: 16px;
+  /* §2.2 — clear the 58px sticky bar (58 + 16). */
+  position: sticky; top: 74px;
   display: flex; flex-direction: column; gap: 10px; padding: 16px;
   border: 1px solid color-mix(in srgb, var(--qz-accent) 18%, var(--qz-rule)); border-radius: var(--qz-radius);
   background: var(--qz-paper); box-shadow: 0 14px 34px -24px color-mix(in srgb, var(--qz-accent) 42%, transparent);
@@ -3953,95 +3947,93 @@ textarea.qz-sm-inp { resize: vertical; min-height: 62px; line-height: 1.5; }
 .qz-topbar-left { padding-right: 16px; border-right: 1px solid var(--qz-rule); }
 .qz-topbar-center { flex: 1 1 auto; justify-content: center; padding: 0 16px; min-width: 0; }
 .qz-topbar-right { padding-left: 16px; border-left: 1px solid var(--qz-rule); }
-/* step1 handoff §1 — the TWO-ROW funnel chrome. Row 1: wordmark left, ghost
-   actions + the stage's primary right — no zone dividers (the mock's barrow).
-   Row 2: the progress-line step nav on its own full-width row below the logo,
-   separated by a hairline (the mock's stepline). */
-.qz-topbar--tworow {
-  height: auto;
-  flex-direction: column;
-  align-items: stretch;
-  padding: 0;
+/* One-line-chrome §1 — the funnel bar: ONE line, three zones. The centre flow
+   OWNS the free width and stretches with the window (the only uncapped thing
+   on the page); left (logo) and right (save · back · Continue) stay fixed.
+   The 10px padding / -10px margin is load-bearing: it keeps the current dot's
+   ignite halo from being clipped by overflow-x without growing the bar. */
+.qz-topbar--flow { padding: 0 18px; }
+.qz-topbar--flow .qz-topbar-left { border-right: 1px solid var(--qz-rule-2); padding-right: 14px; }
+.qz-topbar--flow .qz-topbar-right { border-left: 1px solid var(--qz-rule-2); gap: 10px; }
+.qz-topbar-flow {
+  flex: 1 1 auto; min-width: 0; align-self: center;
+  overflow-x: auto; overflow-y: hidden;
+  padding: 10px 16px; margin: -10px 0;
+  scrollbar-width: none;
 }
-.qz-topbar-row {
-  height: 58px;
-  display: flex; align-items: center; justify-content: space-between;
-  padding: 0 24px;
-}
-.qz-topbar--tworow .qz-topbar-left { padding-right: 0; border-right: none; }
-.qz-topbar--tworow .qz-topbar-right { padding-left: 0; border-left: none; }
-.qz-topbar-nav {
-  display: flex; justify-content: center;
-  padding: 13px 24px 15px;
-  border-top: 1px solid var(--qz-rule-2);
-  min-width: 0;
-}
-/* step1-final-page + shape-decider mocks (EXACT): inside the two-row funnel
-   chrome the stepper is the mock's PROGRESS LINE — 24px numbered dot ABOVE the
-   label (104px column nodes), 2px full-width flexed connectors aligned to the
-   dot centers. This replaces the inline segmented-pill remnant. Scoped to the
-   nav row so TopBar3's single-row floating bar keeps the compact inline form. */
-.qz-topbar-nav .qz-stepnav { width: 100%; }
-.qz-topbar-nav .qz-stepnav-segment,
-.qz-topbar-nav .qz-stepnav-item { display: contents; }
-.qz-topbar-nav .qz-stepnav-link { flex: 1 1 auto; width: auto; height: 2px; margin-top: -22px; }
-.qz-topbar-nav .qz-stepnav-pill {
-  flex-direction: column; gap: 7px; flex: none; width: 104px; padding: 0;
-}
-.qz-topbar-nav .qz-stepnav-dot { width: 24px; height: 24px; }
-.qz-topbar-nav .qz-stepnav-num { font-size: 11px; font-weight: 600; }
-@media (max-width: 720px) {
-  /* Only the current node keeps its label (base rule below) → column heights
-     differ, so top-align and re-seat the connectors on the 24px dot centers. */
-  .qz-topbar-nav .qz-stepnav { align-items: flex-start; }
-  .qz-topbar-nav .qz-stepnav-link { margin-top: 11px; }
-  .qz-topbar-nav .qz-stepnav-pill { width: auto; min-width: 34px; }
-}
+.qz-topbar-flow::-webkit-scrollbar { display: none; }
 
-/* The Step-3 floating variant (quiz-step3 spec §2): rounded card, pinned. */
-.qz-topbar--floating {
-  top: 10px; margin: 10px 14px 0;
-  border-radius: var(--qz-radius-lg);
-  border-bottom: none;
-  background: color-mix(in srgb, var(--qz-paper) 92%, transparent);
-  box-shadow: var(--qz-lift-2);
+/* §1.3 — back: borderless 32px icon button; always names its destination. */
+.qz-topbar-back {
+  width: 32px; height: 32px; flex: none; display: grid; place-items: center; padding: 0;
+  border: none; border-radius: 10px; background: transparent; color: var(--qz-ink-3);
+  cursor: pointer;
+  transition: background .15s ease, color .15s ease;
 }
+.qz-topbar-back:hover:not(:disabled) { background: var(--qz-cream-2); color: var(--qz-ink); }
+.qz-topbar-back:disabled { color: var(--qz-ink-25); cursor: default; }
+.qz-topbar-back svg { width: 18px; height: 18px; }
+.qz-topbar-back:focus-visible { outline: 2px solid var(--qz-accent); outline-offset: 2px; }
 
-/* — Shared funnel stepper: progress line + one-shot current-step ignite — */
+/* §1.3 — the step's primary Continue: same place on every step. */
+.qz-topbar-continue {
+  border: none; background: var(--qz-accent); color: #fff; font: inherit;
+  font-size: 13px; font-weight: 500; padding: 9px 18px; border-radius: 10px;
+  cursor: pointer; white-space: nowrap; transition: background .15s ease;
+}
+.qz-topbar-continue:hover { background: var(--qz-accent-2); }
+.qz-topbar-continue.is-off { background: var(--qz-cream-2); color: var(--qz-ink-25); cursor: default; }
+.qz-topbar-continue.is-off:hover { background: var(--qz-cream-2); }
+/* Logic's "Fix N issues to continue" — disabled LOOK, still clickable (opens
+   the diagnose surface); mirrors the retired .qz-s3-continue.is-blocked. */
+.qz-topbar-continue.is-blocked { background: var(--qz-crit-tint); color: var(--qz-crit); }
+.qz-topbar-continue.is-blocked:hover { background: color-mix(in srgb, var(--qz-crit) 16%, var(--qz-paper)); }
+.qz-topbar-continue:focus-visible { outline: 2px solid var(--qz-accent); outline-offset: 2px; }
+
+/* — Shared funnel stepper (§1.2): dot + label nodes joined by FLEXIBLE
+   hairlines; the flow stretches with the viewport. One-shot ignite on the
+   current node. — */
 .qz-stepnav {
-  display: flex; align-items: center; justify-content: center;
-  width: 100%; min-width: 0; overflow-x: auto;
-  padding: 10px; margin: -10px;
+  display: flex; align-items: center;
+  width: 100%; min-width: 0;
 }
-.qz-stepnav-segment { display: flex; align-items: center; min-width: 0; }
-.qz-stepnav-item { display: flex; min-width: 0; }
+.qz-stepnav-segment { display: flex; align-items: center; min-width: 0; flex: 1 1 auto; }
+.qz-stepnav-segment:first-child { flex: none; }
+.qz-stepnav-item { display: flex; min-width: 0; flex: none; }
 .qz-stepnav-link {
-  width: clamp(14px, 2.6vw, 44px); height: 1px; flex: 0 0 auto;
+  flex: 1 1 auto; min-width: 10px; height: 2px; border-radius: 2px;
   background: var(--qz-rule); transition: background var(--qz-dur) var(--qz-ease);
 }
 .qz-stepnav-link.is-done { background: var(--qz-accent-wash); }
 .qz-stepnav-pill {
-  display: inline-flex; align-items: center; gap: 8px;
-  min-width: 0; padding: 5px 4px; border: none; background: transparent;
-  cursor: default; font: inherit; font-size: 12px; font-weight: 500;
+  display: inline-flex; align-items: center; gap: 9px;
+  min-width: 0; padding: 5px 13px 5px 5px; border: none; border-radius: 999px;
+  background: transparent;
+  cursor: default; font: inherit; font-size: 12.5px; font-weight: 500;
   color: var(--qz-ink-4); white-space: nowrap;
+  transition: background .15s ease, color .15s ease;
 }
 .qz-stepnav-dot {
-  position: relative; width: 26px; height: 26px; flex: 0 0 auto;
+  position: relative; width: 24px; height: 24px; flex: 0 0 auto;
   display: inline-grid; place-items: center; border-radius: 999px;
   background: var(--qz-cream-2); color: var(--qz-ink-4);
   transition: color 180ms ease, background 180ms ease, box-shadow 180ms ease;
 }
-.qz-stepnav-num { font-family: var(--qz-font-mono); font-size: 9.5px; line-height: 1; }
+.qz-stepnav-num { font-family: var(--qz-font-mono); font-size: 11px; font-weight: 600; line-height: 1; }
 .qz-stepnav-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .qz-stepnav-check { color: var(--qz-accent-ink); }
-.qz-stepnav-pill.is-done { color: var(--qz-ink-4); cursor: pointer; }
+/* §1.2 — the done pill's tint is deliberate: the only always-on signal that a
+   finished step is a button. Don't reduce it to hover-only. */
+.qz-stepnav-pill.is-done { background: var(--qz-accent-tint); color: var(--qz-accent-ink); cursor: pointer; }
 .qz-stepnav-pill.is-done .qz-stepnav-dot { background: var(--qz-accent-wash); color: var(--qz-accent-ink); }
-.qz-stepnav-pill.is-done:hover { color: var(--qz-ink); }
-.qz-stepnav-pill.is-current { color: var(--qz-ink); font-weight: 650; }
+.qz-stepnav-pill.is-done:hover { background: var(--qz-accent-wash); }
+.qz-stepnav-pill.is-done:active { transform: translateY(.5px); }
+.qz-stepnav-pill.is-current { color: var(--qz-ink); font-weight: 600; }
 .qz-stepnav-pill.is-current .qz-stepnav-dot {
   color: #fff; background: var(--qz-accent); box-shadow: 0 0 0 4px var(--qz-accent-wash);
+  overflow: visible;
 }
+.qz-stepnav-pill:focus-visible { outline: 2px solid var(--qz-accent); outline-offset: 2px; }
 .qz-stepnav-sparks { position: absolute; inset: -10px; pointer-events: none; }
 .qz-stepnav-sparks i { position: absolute; width: 4px; height: 4px; border-radius: 1px; background: var(--qz-accent); opacity: 0; }
 .qz-stepnav-sparks i:nth-child(1) { top: 0; right: 3px; transform: rotate(45deg); }
@@ -4070,9 +4062,20 @@ textarea.qz-sm-inp { resize: vertical; min-height: 62px; line-height: 1.5; }
   .qz-stepnav-item.is-igniting .qz-stepnav-dot::after,
   .qz-stepnav-item.is-igniting .qz-stepnav-sparks i { animation: none; display: none; }
 }
-@media (max-width: 720px) {
+/* §1.7 — responsive: ≤1080 only the current step keeps its label (title
+   carries the name); ≤640 all labels hide, bar padding tightens, and the flow
+   scrolls horizontally if it still doesn't fit. The bar stays sticky at every
+   width, so Continue is always reachable — no bottom action bar on mobile. */
+@media (max-width: 1080px) {
   .qz-stepnav-pill:not(.is-current) .qz-stepnav-name { display: none; }
-  .qz-stepnav-link { width: 12px; }
+  .qz-stepnav-pill:not(.is-current) { padding: 5px 6px; }
+}
+@media (max-width: 640px) {
+  .qz-topbar--flow { padding: 0 12px; }
+  .qz-topbar--flow .qz-topbar-left { padding-right: 10px; }
+  .qz-topbar--flow .qz-topbar-right { padding-left: 10px; }
+  .qz-topbar-flow { padding: 10px 10px; }
+  .qz-stepnav-pill.is-current .qz-stepnav-name { display: none; }
 }
 
 /* — Modal (§7.5) — */

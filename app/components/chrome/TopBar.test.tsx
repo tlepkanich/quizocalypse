@@ -9,21 +9,22 @@ function render(ui: React.ReactElement): string {
   return renderToString(<RouterProvider router={router} />);
 }
 
-describe("TopBar — step1 handoff §1 two-row funnel chrome", () => {
+describe("TopBar — one-line-chrome funnel bar", () => {
   it("without nav renders the classic three-zone single row", () => {
     const html = render(<TopBar center={<span>pills</span>} right={<span>actions</span>} />);
     expect(html).toContain("qz-topbar-center");
-    expect(html).not.toContain("qz-topbar--tworow");
-    expect(html).not.toContain("qz-topbar-nav");
+    expect(html).not.toContain("qz-topbar--flow");
   });
 
-  it("with nav renders two rows: wordmark+actions row, then the nav row", () => {
+  it("with nav renders ONE line: logo · flow · right zone", () => {
     const html = render(<TopBar nav={<span>stepper</span>} right={<span>actions</span>} />);
-    expect(html).toContain("qz-topbar--tworow");
-    // Row 1 carries the actions; the stepper sits in its own row below.
-    expect(html).toMatch(/qz-topbar-row[\s\S]*actions[\s\S]*qz-topbar-nav[\s\S]*stepper/);
-    // The center zone (and its dividers) is gone in the two-row variant.
+    expect(html).toContain("qz-topbar--flow");
+    // The flow sits between the left (logo) zone and the right (actions) zone.
+    expect(html).toMatch(/qz-topbar-left[\s\S]*qz-topbar-flow[\s\S]*stepper[\s\S]*qz-topbar-right[\s\S]*actions/);
+    // The center zone (and its dividers) is gone in the flow variant, and the
+    // logo renders compact — the tile alone, no product name (§1.1).
     expect(html).not.toContain("qz-topbar-center");
+    expect(html).not.toContain("qz-wordmark-name");
   });
 
   it("nav wins over center — the stepper never renders twice", () => {
