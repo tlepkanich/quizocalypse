@@ -12,6 +12,7 @@ import { googleFontsUrl } from "../../../runtime/runtimeStyles";
 import { CAPTURE_ID, REVEAL_ID } from "../LeftRail";
 import { IconDesktop, IconExpand, IconMobile, IconX } from "../icons";
 import { PhoneScreen, type ScreenPosition } from "./PhoneScreen";
+import { TypeChipSelector } from "./TypeChipSelector";
 
 /* questions-simple mock + phone-preview SPEC (AUDIT-22) — the ✎ Questions
    tab's 340px preview pane: the mock's centered "Live preview · your brand"
@@ -296,6 +297,15 @@ export function PhoneCanvas({
           style={deviceStyle}
         >
           <div className="qz-s3-holder">{renderFrame(true)}</div>
+          {/* questions-full-page — the floating TYPE TAG beside the phone
+              (its original home, back from the AUDIT-22 in-row detour):
+              click opens the type/settings popover for the shown question.
+              Hidden on the capture/reveal screens. */}
+          {position.kind === "question" ? (
+            <div className="qz-s3-typetag">
+              <TypeChipSelector doc={doc} node={position.question.node} onCommit={onCommit} />
+            </div>
+          ) : null}
         </div>
       </div>
 

@@ -1,43 +1,72 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
+import type { DragEvent } from "react";
 import type { Quiz as QuizDoc, RecPageGlobal } from "../../../../lib/quizSchema";
 import { isFreeformType } from "../../../../lib/quizSchema";
 import type { OrderedQuestion } from "../../../../lib/questionOrder";
+import { addAnswer, moveAnswer, removeAnswer } from "../../../../lib/quizMutations";
+import { updateNodeData } from "../../../studio/studioDoc";
 import { resolveRecPageGlobal } from "../../../../lib/recommendDecider";
 import { computeFitStep, isTitleLong } from "../fitSteps";
 import { EditableText } from "./EditableText";
+import { IconGrip, IconX } from "../icons";
 
-/* questions-simple mock (AUDIT-22) — the phone SCREEN contents inside the
+/* questions-full-page mock — the phone SCREEN contents inside the
    brand-themed frame: one `.qz-s3-scr` column (the screen itself scrolls),
    top chrome (‹ Back pill — HIDDEN at the first step per the mock, not
    disabled · progress bar · step counter), then one of three surfaces. The
-   QUESTION surface is now a pure live preview of the selected question
-   (editing happens in the list): the 4-line-clamped title, the option cards
-   (2-line clamp, tap moves the shopper-style preview selection — the mock
-   renders the first one hot), then the Next button 20px below. Per-type
-   truthfulness is kept as a functionality-preserving deviation from the
-   mock's render-everything-as-cards: multi-select shows "Select up to N" +
-   checkbox semantics, rating renders the scale bar with endpoint labels,
-   freeform types show the input mock. No emoji anywhere (mock rule) — answer
-   icon glyphs are not rendered, and the reveal card's image slot is a styled
-   placeholder. The capture screen STAYS a full editable step (QZY-3 —
-   heading/description/terms inline-edit + SMS/terms toggles; the list has no
-   home for it), and the reveal mock stays read-only. */
+   QUESTION surface is the EDITOR now ("Click any text on the phone to edit
+   it"): contenteditable title, option cards with contenteditable text +
+   hover ⠿ drag / ✕ delete (min 2) and a dashed "+ Add answer", while a tap
+   elsewhere on a card still moves the shopper-style preview selection.
+   Per-type truthfulness is kept as a functionality-preserving deviation from
+   the mock's render-everything-as-cards: multi-select shows "Select up to N"
+   + checkbox semantics, rating renders the scale bar (its point count + end
+   labels edit in the floating type tag), freeform types show the input mock.
+   No emoji anywhere (mock rule). The capture screen STAYS a full editable
+   step (QZY-3), and the reveal mock stays read-only. */
 
 export type ScreenPosition =
   | { kind: "question"; question: OrderedQuestion }
   | { kind: "capture" }
   | { kind: "reveal" };
 
-function QuestionSurface({ question }: { question: OrderedQuestion }) {
+const ANSWER_MAX = 60;
+
+function QuestionSurface({
+  doc,
+  question,
+  onCommit,
+}: {
+  doc: QuizDoc;
+  question: OrderedQuestion;
+  onCommit: (doc: QuizDoc) => void;
+}) {
   const { node } = question;
   const answers = node.data.answers;
   const type = node.data.question_type;
   const freeform = isFreeformType(type);
   const multi = type === "multi_select";
   const rating = type === "rating";
+  const canDelete = answers.length > 2; // card types must keep ≥2
   const maxSelections = multi
     ? Math.max(1, Math.min(node.data.max_selections ?? answers.length, answers.length))
     : 1;
+
+  const setAnswerText = (answerId: string, text: string) => {
+    const next = answers.map((a) => (a.id === answerId ? { ...a, text } : a));
+    onCommit(updateNodeData(doc, node.id, { answers: next }));
+  };
+
+  // ⠿ drag-to-reorder (mock dnd on #popts) — armed on the grip so dragging
+  // never fights the contenteditable answer text.
+  const [dragArmed, setDragArmed] = useState<string | null>(null);
+  const dragFrom = useRef<number | null>(null);
+  const [dropIdx, setDropIdx] = useState<number | null>(null);
+  const endDrag = () => {
+    dragFrom.current = null;
+    setDragArmed(null);
+    setDropIdx(null);
+  };
 
   // Shopper-style PREVIEW selection (mock opt.hot — first hot on load) —
   // local state only, never persisted. Remounts per question (key=node.id).
@@ -106,17 +135,88 @@ function QuestionSurface({ question }: { question: OrderedQuestion }) {
         {multi ? <p className="qz-s3-subcap">Select up to {maxSelections}</p> : null}
         <div className="qz-s3-achips">
           {answers.map((a, i) => (
-            <button
+            <div
               key={a.id}
-              type="button"
-              className={`qz-s3-achip${isHot(i) ? " is-hot" : ""}`}
+              className={`qz-s3-achip is-edit${isHot(i) ? " is-hot" : ""}${dropIdx === i ? " is-drophi" : ""}`}
+              role="button"
+              tabIndex={0}
               aria-pressed={isHot(i)}
-              onClick={() => toggleSel(i)}
+              draggable={dragArmed === a.id}
+              onDragStart={(e: DragEvent<HTMLDivElement>) => {
+                dragFrom.current = i;
+                e.dataTransfer.effectAllowed = "move";
+              }}
+              onDragEnd={endDrag}
+              onDragOver={(e: DragEvent<HTMLDivElement>) => {
+                if (dragFrom.current === null) return;
+                e.preventDefault();
+                setDropIdx(i);
+              }}
+              onDragLeave={() => setDropIdx((d) => (d === i ? null : d))}
+              onDrop={(e: DragEvent<HTMLDivElement>) => {
+                e.preventDefault();
+                const f = dragFrom.current;
+                if (f !== null && f !== i) {
+                  const moving = answers[f];
+                  if (moving) onCommit(moveAnswer(doc, node.id, moving.id, i));
+                }
+                endDrag();
+              }}
+              onClick={(e) => {
+                const t = e.target as HTMLElement;
+                if (t.closest(".qz-qf-otext, .qz-qf-odel, .qz-qf-odrag")) return;
+                toggleSel(i);
+              }}
+              onKeyDown={(e) => {
+                if (e.target !== e.currentTarget) return;
+                if (e.key !== "Enter" && e.key !== " ") return;
+                e.preventDefault();
+                toggleSel(i);
+              }}
             >
-              {a.text}
-            </button>
+              <span
+                className="qz-qf-odrag"
+                title="Drag to reorder"
+                onPointerDown={() => setDragArmed(a.id)}
+                onPointerUp={() => setDragArmed(null)}
+              >
+                <IconGrip />
+              </span>
+              <EditableText
+                value={a.text}
+                onCommit={(text) => setAnswerText(a.id, text)}
+                maxLength={ANSWER_MAX}
+                ariaLabel={`Answer ${i + 1} text`}
+                className="qz-qf-otext"
+              />
+              <button
+                type="button"
+                className="qz-qf-odel"
+                disabled={!canDelete}
+                aria-label={`Delete answer ${i + 1}`}
+                title={
+                  canDelete
+                    ? "Delete this answer (its mapping and routing go with it)"
+                    : "Questions need at least 2 answers"
+                }
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (canDelete) onCommit(removeAnswer(doc, node.id, a.id));
+                }}
+              >
+                <IconX />
+              </button>
+            </div>
           ))}
         </div>
+        <button
+          type="button"
+          className="qz-qf-addopt"
+          title="Add an answer to this question"
+          onClick={() => onCommit(addAnswer(doc, node.id))}
+        >
+          + Add answer
+        </button>
       </>
     );
   }
@@ -127,9 +227,20 @@ function QuestionSurface({ question }: { question: OrderedQuestion }) {
       data-fit={computeFitStep(freeform || rating ? 0 : answers.length)}
       data-title-long={isTitleLong(node.data.text) || undefined}
     >
-      {/* Mock q-scr — the plain 4-line-clamped question title (editing lives
-          in the list; the clamp is in the stylesheet). */}
-      <h2 className="qz-s3-qtitle">{node.data.text}</h2>
+      {/* Mock q-scr — the contenteditable question title ("Click any text on
+          the phone to edit it"); the clamp un-clamps on focus (CSS). */}
+      <h2 className="qz-s3-qtitle is-edit">
+        <EditableText
+          value={node.data.text}
+          onCommit={(text) => {
+            const v = text.trim().slice(0, 150);
+            if (v && v !== node.data.text) onCommit(updateNodeData(doc, node.id, { text: v }));
+          }}
+          maxLength={150}
+          ariaLabel="Question wording"
+          className="qz-qf-qtitleedit"
+        />
+      </h2>
       {body}
     </div>
   );
@@ -256,7 +367,12 @@ export function PhoneScreen({
       </div>
 
       {position.kind === "question" ? (
-        <QuestionSurface key={position.question.node.id} question={position.question} />
+        <QuestionSurface
+          key={position.question.node.id}
+          doc={doc}
+          question={position.question}
+          onCommit={onCommit}
+        />
       ) : position.kind === "capture" ? (
         <CaptureSurface doc={doc} onCommit={onCommit} />
       ) : (

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { CSSProperties } from "react";
 import type { Quiz as QuizDoc, DesignTokens } from "../../../lib/quizSchema";
 import type { BuilderCategory, BuilderCollection } from "../../builder/stepProps";
 import type { IndexedProduct } from "../../../lib/recommendationEngine";
@@ -10,6 +11,7 @@ import { QuestionBankDrawer } from "../../studio/QuestionBankDrawer";
 import { useFunnelBar, FunnelSaveChip, type FunnelBarOverride } from "../funnelChrome";
 import { pillPresentation } from "./HealthPill";
 import { LeftRail, CAPTURE_ID, REVEAL_ID } from "./LeftRail";
+import { OverviewLedger } from "./OverviewLedger";
 import { PhoneCanvas } from "./content/PhoneCanvas";
 import { IconPlus } from "./icons";
 import { LogicScroll, type LogicScrollHandle } from "./logic/LogicScroll";
@@ -97,8 +99,12 @@ export function Step3Shell({
 
   const captureOn = doc.rec_page_settings?.global?.captureEmail !== false;
 
-  // One-line-chrome — the view IS the funnel step now; no in-shell toggle.
+  // One-line-chrome — the view IS the funnel step now (Questions vs Logic).
   const view = mode;
+  // questions-full-page — the Questions STEP's own tab pair (✎ Questions /
+  // ▦ Overview) + the mock's draggable nav-column width (min 232).
+  const [contentTab, setContentTab] = useState<"questions" | "overview">("questions");
+  const [navw, setNavw] = useState(304);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [libraryOpen, setLibraryOpen] = useState(false);
   // QZY-2 (spec §10) — the ONE diagnose/preview modal; the Fix-N-issues
@@ -267,48 +273,104 @@ export function Step3Shell({
     <div className="qz-s3">
       {view === "content" ? (
         <div className="qz-s3-contentview">
-          {/* questions-simple (AUDIT-22) — ONE panel: toolbar (title · mono
-              count · + New question; the library entry rides along as a quiet
-              toolbar action) over the list | 340px live-preview split. */}
-          <div className="qz-qs-panel">
-            <div className="qz-qs-tool">
-              <span className="qz-qs-ttitle">Questions</span>
-              <span className="qz-qs-tcount">
-                {questions.length} question{questions.length === 1 ? "" : "s"}
-              </span>
-              <span className="qz-qs-tsp" />
-              <button type="button" className="qz-qs-tlib" onClick={() => setLibraryOpen(true)}>
-                Question library
+          {/* questions-full-page — the Questions STEP's own ✎/▦ tab pair
+              (Questions = nav rail + resizer + phone editor; Overview = the
+              bulk-editing content ledger), the mock's hint line, and the
+              add/library actions in the sub-head. */}
+          <div className="qz-qf-subhead">
+            <div className="qz-s3-viewtoggle" role="group" aria-label="Questions or Overview view">
+              <button
+                type="button"
+                aria-pressed={contentTab === "questions"}
+                onClick={() => setContentTab("questions")}
+              >
+                ✎ Questions
               </button>
-              <button type="button" className="qz-qs-tbtn" onClick={addQuestion}>
-                <IconPlus /> New question
+              <button
+                type="button"
+                aria-pressed={contentTab === "overview"}
+                onClick={() => setContentTab("overview")}
+              >
+                ▦ Overview
               </button>
             </div>
-            <div className="qz-qs-split">
-              <LeftRail
-                doc={doc}
-                questions={questions}
-                deciderId={decider?.id ?? null}
-                activeId={activeId}
-                captureOn={captureOn}
-                regen={regen}
-                onSelect={(id) => setSelectedId(id)}
-                onRename={renameQuestion}
-                onReorder={reorderQuestion}
-                onDelete={deleteQuestion}
-                onCommit={onCommit}
-              />
-              <PhoneCanvas
-                doc={doc}
-                questions={questions}
-                activeId={activeId}
-                captureOn={captureOn}
-                designTokens={designTokens}
-                onNavigate={setSelectedId}
-                onCommit={onCommit}
-              />
-            </div>
+            <span className="qz-qf-sp" />
+            <span className="qz-qf-hint">
+              {contentTab === "questions"
+                ? "Click any text on the phone to edit it"
+                : "Edit any cell inline"}
+            </span>
+            <button type="button" className="qz-qs-tlib" onClick={() => setLibraryOpen(true)}>
+              Question library
+            </button>
+            <button type="button" className="qz-qs-tbtn" onClick={addQuestion}>
+              <IconPlus /> Add
+            </button>
           </div>
+
+          {contentTab === "questions" ? (
+            <div className="qz-qf-panel">
+              <div
+                className="qz-qf-view"
+                style={{ "--navw": `${navw}px` } as CSSProperties}
+              >
+                <LeftRail
+                  questions={questions}
+                  deciderId={decider?.id ?? null}
+                  activeId={activeId}
+                  captureOn={captureOn}
+                  regen={regen}
+                  onSelect={(id) => setSelectedId(id)}
+                  onRename={renameQuestion}
+                  onReorder={reorderQuestion}
+                  onDelete={deleteQuestion}
+                  onAdd={addQuestion}
+                />
+                {/* mock .resizer — drag to resize the nav column (232..max). */}
+                <div
+                  className="qz-qf-resizer"
+                  role="separator"
+                  aria-orientation="vertical"
+                  aria-label="Resize the question list"
+                  onPointerDown={(e) => {
+                    const grid = (e.currentTarget as HTMLElement).parentElement;
+                    if (!grid) return;
+                    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+                    const startX = e.clientX;
+                    const startW = navw;
+                    const max = grid.clientWidth - 360;
+                    const move = (ev: PointerEvent) => {
+                      setNavw(Math.max(232, Math.min(max, startW + (ev.clientX - startX))));
+                    };
+                    const up = () => {
+                      document.removeEventListener("pointermove", move);
+                      document.removeEventListener("pointerup", up);
+                    };
+                    document.addEventListener("pointermove", move);
+                    document.addEventListener("pointerup", up);
+                  }}
+                />
+                <PhoneCanvas
+                  doc={doc}
+                  questions={questions}
+                  activeId={activeId}
+                  captureOn={captureOn}
+                  designTokens={designTokens}
+                  onNavigate={setSelectedId}
+                  onCommit={onCommit}
+                />
+              </div>
+            </div>
+          ) : (
+            <OverviewLedger
+              doc={doc}
+              questions={questions}
+              deciderId={decider?.id ?? null}
+              onCommit={onCommit}
+              onReorder={reorderQuestion}
+              onDelete={deleteQuestion}
+            />
+          )}
         </div>
       ) : (
         <div className="qz-s3-logicview">

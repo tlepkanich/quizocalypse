@@ -33,8 +33,9 @@ const CHIP_TYPE_OPTIONS: { value: PickValue; label: string }[] = [
   { value: "rating", label: "Scale" },
 ];
 
-/** Labels for stored types outside the quick picks (so the current value renders). */
-const TYPE_CHIP_LABEL: Record<string, string> = {
+/** Labels for stored types outside the quick picks (so the current value renders).
+ *  Exported for the nav rail's mono type line (questions-full-page .nct). */
+export const TYPE_CHIP_LABEL: Record<string, string> = {
   single_select: "Single select",
   multi_select: "Multi-select",
   image_tile: "Image select",
