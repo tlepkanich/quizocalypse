@@ -403,53 +403,56 @@ export function RecommendationBucketsStage({
 
   return (
     <div className="qz-rb">
-      {/* §2.3 — title and tip share ONE row; the modules start directly under
-          them. The tip states one thing; the merchant acts on it themselves —
-          no "Use this", no expand/collapse, dismiss is the only control. */}
+      {/* Owner edit (2026-08-02) — the tip moved OUT of the title row to its
+          own row directly under the heading; the title stands alone. */}
       <div className="qz-rb-titlerow">
         <h2 className="qz-h2" style={{ margin: 0 }}>
-          What can your quiz recommend?
+          What products should your quiz recommend?
         </h2>
-        {showTip && applied ? (
-          <div className="qz-rb-tip is-applied" role="status">
-            <span className="qz-rb-tip-star" aria-hidden><Check size={13} strokeWidth={2.8} /></span>
-            <span className="qz-rb-tip-label">Tip</span>
-            <strong className="qz-rb-tip-sug">
-              Applied — {data.suggestion.message.replace(/^Use |^Start with /, "using ")}
-            </strong>
-            <button type="button" className="qz-rb-tip-use" onClick={undoApply}>
-              Undo
-            </button>
-            <button
-              type="button"
-              className="qz-rb-tip-x"
-              aria-label="Dismiss tip"
-              onClick={dismissTip}
-            >
-              <X size={12} aria-hidden />
-            </button>
-          </div>
-        ) : showTip ? (
-          <div className="qz-rb-tip">
-            <span className="qz-rb-tip-star" aria-hidden>✦</span>
-            <span className="qz-rb-tip-label">Tip</span>
-            <strong className="qz-rb-tip-sug">{data.suggestion.message}</strong>
-            {data.suggestion.apply ? (
-              <button type="button" className="qz-rb-tip-use" onClick={useThis}>
-                Use this
-              </button>
-            ) : null}
-            <button
-              type="button"
-              className="qz-rb-tip-x"
-              aria-label="Dismiss tip"
-              onClick={dismissTip}
-            >
-              <X size={12} aria-hidden />
-            </button>
-          </div>
-        ) : null}
       </div>
+      {showTip ? (
+        <div className="qz-rb-tiprow">
+          {applied ? (
+            <div className="qz-rb-tip is-applied" role="status">
+              <span className="qz-rb-tip-star" aria-hidden><Check size={13} strokeWidth={2.8} /></span>
+              <span className="qz-rb-tip-label">Tip</span>
+              <strong className="qz-rb-tip-sug">
+                Applied — {data.suggestion.message.replace(/^Use |^Start with /, "using ")}
+              </strong>
+              <button type="button" className="qz-rb-tip-use" onClick={undoApply}>
+                Undo
+              </button>
+              <button
+                type="button"
+                className="qz-rb-tip-x"
+                aria-label="Dismiss tip"
+                onClick={dismissTip}
+              >
+                <X size={12} aria-hidden />
+              </button>
+            </div>
+          ) : (
+            <div className="qz-rb-tip">
+              <span className="qz-rb-tip-star" aria-hidden>✦</span>
+              <span className="qz-rb-tip-label">Tip</span>
+              <strong className="qz-rb-tip-sug">{data.suggestion.message}</strong>
+              {data.suggestion.apply ? (
+                <button type="button" className="qz-rb-tip-use" onClick={useThis}>
+                  Use this
+                </button>
+              ) : null}
+              <button
+                type="button"
+                className="qz-rb-tip-x"
+                aria-label="Dismiss tip"
+                onClick={dismissTip}
+              >
+                <X size={12} aria-hidden />
+              </button>
+            </div>
+          )}
+        </div>
+      ) : null}
 
       {/* FLOW-1/FLOW-3 lifecycle banners — functional status (the pre-pick /
           template narration), not advice; they stay. */}

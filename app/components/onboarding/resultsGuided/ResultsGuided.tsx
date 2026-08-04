@@ -171,7 +171,7 @@ export function ResultsGuided({
   onContinueToDesign: () => void;
 }) {
   void quizId;
-  const { doc, commit, isSaving, savedAt } = useQuizDraft(initialDoc);
+  const { doc, commit, isSaving, savedAt, saveError, retrySave } = useQuizDraft(initialDoc);
   const cfg = resolveGuided(doc);
   const disc = resolveDiscount(doc);
   const offerOn = doc.discount_config?.enabled === true;
@@ -276,14 +276,15 @@ export function ResultsGuided({
     setOpenSec(sec);
   };
 
-  // the bar: save chip via the funnel bridge (the mock's save pill)
+  // the bar: save chip via the funnel bridge — error-only since the owner's
+  // 2026-08-02 edit (silent when healthy; a failed autosave must surface).
   const barOverride = useMemo<FunnelBarOverride>(
     () => ({
       saveChip: (
-        <FunnelSaveChip isSaving={isSaving} savedAt={savedAt} saveError={null} onRetry={() => {}} />
+        <FunnelSaveChip isSaving={isSaving} savedAt={savedAt} saveError={saveError} onRetry={retrySave} />
       ),
     }),
-    [isSaving, savedAt],
+    [isSaving, savedAt, saveError, retrySave],
   );
   useFunnelBar(barOverride);
 

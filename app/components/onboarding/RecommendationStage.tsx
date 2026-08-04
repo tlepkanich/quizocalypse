@@ -51,14 +51,15 @@ export function RecommendationStage({
   productIndex: IndexedProduct[];
   collections: BuilderCollection[];
 }) {
-  const { doc, commit, isSaving, savedAt } = useQuizDraft(initialDoc);
+  const { doc, commit, isSaving, savedAt, saveError, retrySave } = useQuizDraft(initialDoc);
 
-  // One-line-chrome — the autosave chip lives in the shared funnel bar.
+  // One-line-chrome — the autosave chip lives in the shared funnel bar
+  // (error-only since the owner's 2026-08-02 edit).
   const barOverride = useMemo(
     () => ({
-      saveChip: <FunnelSaveChip isSaving={isSaving} savedAt={savedAt} saveError={null} onRetry={() => {}} />,
+      saveChip: <FunnelSaveChip isSaving={isSaving} savedAt={savedAt} saveError={saveError} onRetry={retrySave} />,
     }),
-    [isSaving, savedAt],
+    [isSaving, savedAt, saveError, retrySave],
   );
   useFunnelBar(barOverride);
 

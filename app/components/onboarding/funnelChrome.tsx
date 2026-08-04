@@ -45,19 +45,13 @@ export function useFunnelBar(override: FunnelBarOverride) {
   }, [ctx, override]);
 }
 
-// `savedAt` is an ISO string from the CLIENT autosave fetcher — never
-// server-rendered, so local-time formatting is safe ([[ssr-unsafe-locale-dates]]).
-function savedTimeLabel(iso: string): string {
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return "";
-  return d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
-}
-
-/* §1.3 — the bar's save chip (autosave truth: the reason nothing asks you to
-   confirm navigation). Reuses the builder's .qz-save-chip states. */
+/* §1.3, amended by owner edit (2026-08-02): autosave is silent when healthy —
+   no "Saving…"/"Saved" chip in the bar (the step flow owns that width).
+   The chip materializes ONLY on a save error, because a failing autosave is
+   the one state the merchant must see (it is the truth behind never asking
+   to confirm navigation). `isSaving`/`savedAt` stay in the signature so the
+   stages' publish contracts are untouched. */
 export function FunnelSaveChip({
-  isSaving,
-  savedAt,
   saveError,
   onRetry,
 }: {
@@ -66,24 +60,15 @@ export function FunnelSaveChip({
   saveError: string | null;
   onRetry: () => void;
 }) {
+  if (!saveError) return null;
   return (
     <span className="qz-save-status" aria-live="polite">
-      {isSaving ? (
-        <span className="qz-save-chip is-saving">
-          <span className="qz-save-dot" aria-hidden /> Saving…
-        </span>
-      ) : saveError ? (
-        <span className="qz-save-chip is-error">
-          <span aria-hidden>⚠</span> {saveError} ·{" "}
-          <button type="button" className="qz-ql-retry" onClick={onRetry}>
-            Retry
-          </button>
-        </span>
-      ) : savedAt ? (
-        <span key={savedAt} className="qz-save-chip is-saved">
-          <span aria-hidden>✓</span> Saved {savedTimeLabel(savedAt)}
-        </span>
-      ) : null}
+      <span className="qz-save-chip is-error">
+        <span aria-hidden>⚠</span> {saveError} ·{" "}
+        <button type="button" className="qz-ql-retry" onClick={onRetry}>
+          Retry
+        </button>
+      </span>
     </span>
   );
 }

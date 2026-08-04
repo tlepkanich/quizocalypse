@@ -1888,6 +1888,8 @@ body[data-qz] ::selection { background: var(--qz-ink); color: var(--qz-cream); }
    row; the tip is ONE line: ✦ TIP · the suggestion · ✕. Nothing else. */
 .qz-rb-titlerow { display: flex; align-items: center; gap: 20px; flex-wrap: wrap; margin-bottom: 2px; }
 .qz-rb-titlerow .qz-h2 { flex: none; }
+/* Owner edit (2026-08-02) — the tip sits on its own row under the heading. */
+.qz-rb-tiprow { display: flex; margin: 6px 0 2px; }
 .qz-rb-tip {
   display: inline-flex; align-items: center; gap: 8px; flex: none; min-width: 0;
   border: 1px solid color-mix(in srgb, var(--qz-accent) 18%, var(--qz-rule));

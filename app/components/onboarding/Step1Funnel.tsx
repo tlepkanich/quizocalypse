@@ -139,21 +139,11 @@ export function Step1Funnel({ data }: { data: FunnelData }) {
         }}
         right={
           <>
-            {barOverride?.saveChip ?? (
-              <span className="qz-save-status" aria-live="polite">
-                <span className={`qz-save-chip ${navBusy ? "is-saving" : "is-saved"}`}>
-                  {navBusy ? (
-                    <>
-                      <span className="qz-save-dot" aria-hidden /> Saving…
-                    </>
-                  ) : (
-                    <>
-                      <span aria-hidden>✓</span> Saved
-                    </>
-                  )}
-                </span>
-              </span>
-            )}
+            {/* Owner edit (2026-08-02) — no ambient "Saved" chip anywhere in
+                the funnel; the step flow owns that width. Stages still publish
+                saveChip, but FunnelSaveChip only materializes on a save ERROR
+                (autosave stays silent-when-healthy, loud-when-not). */}
+            {barOverride?.saveChip ?? null}
             {barOverride?.healthPill ?? null}
             <button
               type="button"

@@ -81,16 +81,17 @@ export function Step4Results({
   productIndex: IndexedProduct[];
   designTokens?: DesignTokens | null;
 }) {
-  const { doc, commit, isSaving, savedAt } = useQuizDraft(initialDoc);
+  const { doc, commit, isSaving, savedAt, saveError, retrySave } = useQuizDraft(initialDoc);
   const cfg = resolveRecPageGlobal(doc.rec_page_settings);
 
   // One-line-chrome — the autosave chip lives in the shared funnel bar (the
-  // step's Continue stays the bar's fetcher-driven to-design default).
+  // step's Continue stays the bar's fetcher-driven to-design default;
+  // error-only since the owner's 2026-08-02 edit).
   const barOverride = useMemo(
     () => ({
-      saveChip: <FunnelSaveChip isSaving={isSaving} savedAt={savedAt} saveError={null} onRetry={() => {}} />,
+      saveChip: <FunnelSaveChip isSaving={isSaving} savedAt={savedAt} saveError={saveError} onRetry={retrySave} />,
     }),
-    [isSaving, savedAt],
+    [isSaving, savedAt, saveError, retrySave],
   );
   useFunnelBar(barOverride);
 

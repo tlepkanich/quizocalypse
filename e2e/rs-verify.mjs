@@ -66,7 +66,7 @@ ok("loader emits referencedKeys (empty on a fresh draft)", Array.isArray(fd.refe
 const url = `${BASE}/studio/onboarding/${draftId}`;
 await page.goto(url, { waitUntil: "domcontentloaded" });
 await page.waitForTimeout(1000);
-ok("H1 renders", await page.getByText("What can your quiz recommend?").first().isVisible().catch(() => false));
+ok("H1 renders", await page.getByText("What products should your quiz recommend?").first().isVisible().catch(() => false));
 // FLOW-3/FLOW-2 — the funnel is the 4-step map (Shape retired); the top bar's
 // step pills carry the labels now (no "Step 1 of 5" header line).
 ok("step pills show Recommendations, no Shape pill", await page.getByText("Recommendations", { exact: true }).first().isVisible().catch(() => false) && !(await page.getByText("Shape", { exact: true }).first().isVisible().catch(() => false)));
