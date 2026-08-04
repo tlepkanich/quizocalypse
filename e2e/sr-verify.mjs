@@ -84,7 +84,7 @@ await page.waitForTimeout(500);
 // FLOW-2 (funnel-reconfig Phase 3) — the pop-up is single-screen, manual-flow
 // only; row labels are the AUDIT-5 mock's, and Write-your-goal is a LINK to
 // the Flow-1 /studio/goal page (the in-modal brief screen is retired).
-ok("Continue opens the intercept modal (no navigation)", await page.getByText("How do you want to start?").first().isVisible().catch(() => false));
+ok("Continue opens the intercept modal (no navigation)", await page.getByText("What is your goal for the quiz?").first().isVisible().catch(() => false));
 ok("route (a) Generate with AI present", await page.getByText("Generate with AI").first().isVisible().catch(() => false));
 ok("route (b) Write your goal links /studio/goal", (await page.locator('a.qz-sm-row[href="/studio/goal"]').count()) === 1);
 ok("route (c) Start from blank present", await page.getByText("Start from blank").first().isVisible().catch(() => false));
@@ -95,7 +95,7 @@ ok("modal dismissal is side-effect-free (stage still grouping)", fd.stage === "g
 // Esc closes
 await page.keyboard.press("Escape");
 await page.waitForTimeout(300);
-ok("Esc closes the modal", !(await page.getByText("How do you want to start?").first().isVisible().catch(() => false)));
+ok("Esc closes the modal", !(await page.getByText("What is your goal for the quiz?").first().isVisible().catch(() => false)));
 
 // ── §1.2 manual-build (no AI) ────────────────────────────────────────────────
 await page.locator(".qz-rb-rail-foot .qz-btn-accent").first().click();

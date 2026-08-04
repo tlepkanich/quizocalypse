@@ -233,10 +233,12 @@ export function Step1Funnel({ data }: { data: FunnelData }) {
         </Suspense>
       ) : null}
 
-      {data.stage === "typing" ? (
+      {/* Owner edit (2026-08-02) — ONE load screen across the whole chain:
+          typing and templating share a single mounted GeneratingScreen (the
+          ring + a rotating caption), so the typing→templating hop doesn't
+          swap screens or reset the rotation mid-generation. */}
+      {data.stage === "typing" || data.stage === "templating" ? (
         <GeneratingScreen
-          kind="typing"
-          progress={data.genProgress}
           stalled={data.genStalled && !data.genError}
           retrying={pendingIntent === "retry-gen"}
           onRetry={() => fetcher.submit({ intent: "retry-gen" }, { method: "post" })}
@@ -245,16 +247,6 @@ export function Step1Funnel({ data }: { data: FunnelData }) {
 
       {data.stage === "types" ? (
         <ShapeStage data={data} fetcher={fetcher} pendingIntent={pendingIntent} />
-      ) : null}
-
-      {data.stage === "templating" ? (
-        <GeneratingScreen
-          kind="templating"
-          progress={data.genProgress}
-          stalled={data.genStalled && !data.genError}
-          retrying={pendingIntent === "retry-gen"}
-          onRetry={() => fetcher.submit({ intent: "retry-gen" }, { method: "post" })}
-        />
       ) : null}
 
       {/* Question Builder + Logic — the pre-config editing steps over the SAME
@@ -365,53 +357,38 @@ function FunnelStepNav({
 
 // ══ Step 2 ══════════════════════════════════════════════════════════════════
 
-const TYPING_BEATS = ["Researching your category", "Reading your catalog", "Drafting tailored quiz types"];
-const TEMPLATING_BEATS = ["Reading your brand identity", "Designing template variations", "Tuning the design dials"];
+// Owner edit (2026-08-02) — ONE load screen for the whole generation chain
+// (typing AND templating): just the breathing ignite ring with a single
+// rotating update line under it. The per-stage titles, subtitles, beat
+// checklists, and the fast/slow layout split are all retired; the caption
+// loops so the screen stays alive however long the chain runs.
+const GEN_ROTATION = [
+  "Drafting your quiz questions",
+  "Mapping out the logic",
+  "Tuning the results",
+];
 
-// FAST F3 — map the jobs' REAL gen_progress checkpoints onto the beat indexes.
-// typing: "research" = the live web-research pass; "types" = the type cards
-// are being drafted. templating: "templates" = the battle-card pass;
-// "questions" = the long question build. Unknown/absent → timed fallback.
-const PROGRESS_BEAT: Record<"typing" | "templating", Record<string, number>> = {
-  typing: { research: 0, types: 2 },
-  templating: { templates: 1, questions: 2 },
-};
-
-// The "AI in flight" screen for the detached typing/templating jobs. The parent
-// polls the loader; this just animates the staged beats while we wait.
-// FAST F3 — when the loader reports a real gen_progress checkpoint, it drives
-// the active beat; the timed cycle stays as the fallback for old in-flight
-// sessions (and for the window before the first checkpoint lands).
-// generating-states mock (EXACT). Three visual states around the breathing
-// ignite ring: FAST (research cached — small ring, nothing to narrate),
-// SLOW (the real research pass — big ring + centered beats + honest copy),
-// STALLED (halted grey ring + ◷, Try again + the template escape). The FAILED
-// state stays the banner above the restored stage — the Gap-1 fix resets the
-// stage on failure, so there is no generating screen left to park it on; the
-// banner carries the mock's copy + actions.
+// The "AI in flight" screen for the detached typing/templating jobs. The
+// parent polls the loader; this just breathes while we wait. STALLED keeps
+// its dedicated state (halted grey ring + ◷, Try again + the template
+// escape). The FAILED state stays the banner above the restored stage — the
+// Gap-1 fix resets the stage on failure, so there is no generating screen
+// left to park it on; the banner carries the mock's copy + actions.
 function GeneratingScreen({
-  kind,
-  progress,
   stalled,
   retrying,
   onRetry,
 }: {
-  kind: "typing" | "templating";
-  progress: string | null;
   stalled: boolean;
   retrying: boolean;
   onRetry: () => void;
 }) {
-  const beats = kind === "typing" ? TYPING_BEATS : TEMPLATING_BEATS;
-  const progressBeat = progress !== null ? (PROGRESS_BEAT[kind][progress] ?? null) : null;
-  const [timedActive, setTimedActive] = useState(0);
+  const [rotIx, setRotIx] = useState(0);
   useEffect(() => {
-    if (timedActive >= beats.length - 1) return;
-    const t = setTimeout(() => setTimedActive((b) => b + 1), kind === "typing" ? 18000 : 12000);
-    return () => clearTimeout(t);
-  }, [timedActive, beats.length, kind]);
-  // A real checkpoint never moves backwards; once seen it wins over the timer.
-  const active = progressBeat ?? timedActive;
+    if (stalled) return;
+    const t = setInterval(() => setRotIx((i) => (i + 1) % GEN_ROTATION.length), 5000);
+    return () => clearInterval(t);
+  }, [stalled]);
 
   if (stalled) {
     return (
@@ -445,36 +422,6 @@ function GeneratingScreen({
     );
   }
 
-  // typing with the "research" checkpoint = the real web-research pass (slow
-  // layout, beats worth narrating); anything else — research prefetched/cached,
-  // the run takes seconds — is the fast state. Templating always narrates.
-  const fast = kind === "typing" && progress !== "research";
-  if (fast) {
-    return (
-      <QzCard style={{ padding: 0 }}>
-        <div className="qz-gen">
-          <div className="qz-gen-ringwrap is-sm" aria-hidden>
-            <span className="qz-gen-glow" />
-            <span className="qz-gen-ring" />
-            <i className="qz-gen-sp qz-gen-sp1">✦</i>
-            <i className="qz-gen-sp qz-gen-sp2">✦</i>
-            <i className="qz-gen-sp qz-gen-sp3">✦</i>
-          </div>
-          <h2 className="qz-gen-title">Drafting your quiz types</h2>
-          <div className="qz-gen-foot">This page refreshes itself — no need to reload.</div>
-        </div>
-      </QzCard>
-    );
-  }
-
-  const title =
-    kind === "typing"
-      ? "Researching the best quiz types for your brand"
-      : "Designing your templates";
-  const sub =
-    kind === "typing"
-      ? "Pulling real best-practices for your category, then shaping a few directions around the collections you picked."
-      : "Drafting a few distinct template directions for the type you picked, then building your questions.";
   return (
     <QzCard style={{ padding: 0 }}>
       <div className="qz-gen">
@@ -486,23 +433,10 @@ function GeneratingScreen({
           <i className="qz-gen-sp qz-gen-sp3">✦</i>
           <i className="qz-gen-sp qz-gen-sp4">✦</i>
         </div>
-        <h2 className="qz-gen-title">{title}</h2>
-        <p className="qz-gen-sub">{sub}</p>
-        {kind === "typing" ? (
-          <p className="qz-gen-slowline">Larger catalogs take a little longer.</p>
-        ) : null}
-        <div className="qz-gen-beats">
-          {beats.map((label, i) => (
-            <div
-              key={label}
-              className={`qz-gen-beat${i < active ? " is-done" : ""}${i === active ? " is-now" : ""}`}
-            >
-              <span className="qz-gen-dot" aria-hidden>✓</span>
-              {label}
-            </div>
-          ))}
-        </div>
-        <div className="qz-gen-foot">This page refreshes itself — no need to reload.</div>
+        {/* keyed by caption so each rotation re-runs the fade-in */}
+        <p key={rotIx} className="qz-gen-rot" aria-live="polite">
+          {GEN_ROTATION[rotIx]}
+        </p>
       </div>
     </QzCard>
   );

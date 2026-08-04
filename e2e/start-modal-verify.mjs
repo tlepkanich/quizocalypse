@@ -59,7 +59,7 @@ await cont.click();
 await page.waitForSelector(".qz-sm-title", { timeout: 5000 }).catch(() => {});
 
 // ── The single screen — stacked rows ────────────────────────────────────────
-check("modal title", (await page.locator(".qz-sm-title").textContent())?.trim() === "How do you want to start?");
+check("modal title", (await page.locator(".qz-sm-title").textContent())?.trim() === "What is your goal for the quiz?");
 const rows = page.locator(".qz-sm-row");
 check("three stacked rows", (await rows.count()) === 3);
 const labels = await page.locator(".qz-sm-row h3").allTextContents();

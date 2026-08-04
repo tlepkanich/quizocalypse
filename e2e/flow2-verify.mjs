@@ -6,7 +6,7 @@
 //
 // Asserts (per docs/funnel-reconfig.md Flow 2 + the Phase-3 cleanup):
 //   • A MANUAL decider draft (neither goal_first nor template_first) still
-//     sees the "How do you want to start?" pop-up — screen 1 only.
+//     sees the "What is your goal for the quiz?" pop-up — screen 1 only.
 //   • Its three choices route correctly:
 //       Generate with AI → continue-buckets → HEADLESS typing/templating chain
 //         (never stage "types"/Shape) → the Questions step.
@@ -156,7 +156,7 @@ try {
   await page.waitForSelector(".qz-sm-title", { timeout: 8000 });
   check(
     "pop-up opens for the manual flow",
-    (await page.locator(".qz-sm-title").textContent())?.trim() === "How do you want to start?",
+    (await page.locator(".qz-sm-title").textContent())?.trim() === "What is your goal for the quiz?",
   );
   const rowLabels = await page.locator(".qz-sm-row h3").allTextContents();
   check(

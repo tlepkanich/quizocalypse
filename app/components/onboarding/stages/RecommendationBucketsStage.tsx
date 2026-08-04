@@ -832,7 +832,8 @@ function StartInterceptModal({
   return (
     // Mock modal envelope: min(560px, 100%) — narrower than the DS md (640).
     <QzModal open onClose={onClose} size="md" width={560}>
-      <h2 className="qz-sm-title">How do you want to start?</h2>
+      {/* Owner edit (2026-08-02) — wording. */}
+      <h2 className="qz-sm-title">What is your goal for the quiz?</h2>
       <div className="qz-sm-rows">
         <button type="button" className="qz-sm-row is-pri" onClick={onAiTemplates}>
           <span className="qz-sm-ico" aria-hidden><i>✦</i></span>
