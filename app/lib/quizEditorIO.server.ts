@@ -131,6 +131,8 @@ export async function loadQuizEditorDataForShop(shop: Shop, id: string, origin: 
     quizId: quiz.id,
     name: quiz.name,
     status: quiz.status,
+    // Embed panel: powers the one-click "Add to theme" deep link.
+    shopDomain: shop.shopDomain,
     version: quiz.version,
     valid: parsed.success,
     issues: parsed.success

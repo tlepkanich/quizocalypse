@@ -7,6 +7,7 @@ import prisma from "../db.server";
 import { Quiz } from "../lib/quizSchema";
 import { qrDataUrl } from "../lib/qrCode.server";
 import { QzPage, QzPageHeader, QzCard, QzBanner, QzBadge } from "../components/qz";
+import { isShopifyShopDomain, themeEditorAddBlockUrl } from "../lib/themeEditorLink";
 
 // QD-7 — the standalone "Share & embed" surface. Quizell-style front door for
 // getting a published quiz onto ANY website (not just a Shopify theme): the
@@ -49,6 +50,9 @@ export const loader = async ({ params, request }: LoaderFunctionArgs) => {
     origin,
     publicUrl,
     qr,
+    // Real Shopify shops get the one-click theme-editor deep link; the
+    // standalone studio may run with a synthetic shop record (no link).
+    shopDomain: shop.shopDomain,
   });
 };
 
@@ -162,6 +166,30 @@ export default function StudioEmbed() {
           alignItems: "start",
         }}
       >
+        {isShopifyShopDomain(data.shopDomain) ? (
+          <QzCard>
+            <h2 className="qz-h2" style={{ marginTop: 0 }}>
+              Shopify theme
+            </h2>
+            <p className="qz-muted" style={{ marginTop: 4 }}>
+              One click adds the Wiskr quiz block to your live theme — then
+              paste the Quiz ID into the block's settings.
+            </p>
+            <div style={{ marginTop: 16 }}>
+              <CopyField label="Quiz ID" value={data.quizId} />
+            </div>
+            <a
+              href={themeEditorAddBlockUrl(data.shopDomain)}
+              target="_blank"
+              rel="noreferrer"
+              className="qz-btn qz-btn-primary qz-btn-sm"
+              style={{ marginTop: 12 }}
+            >
+              Add to theme ↗
+            </a>
+          </QzCard>
+        ) : null}
+
         <QzCard>
           <h2 className="qz-h2" style={{ marginTop: 0 }}>
             Direct link

@@ -43,6 +43,7 @@ import {
   useContainerBreakpoint,
   PAGE_PAD_DESKTOP_TOP_PX,
 } from "./runtimeStyles";
+import { useIframeHeightBridge } from "./heightBridge";
 import { BlockRenderer, type BlockRenderCtx } from "./BlockRenderer";
 import { screenBackgroundCss, screenOverlayAlpha, screenOverlayBg, videoLayer } from "../../lib/screenBackground";
 import {
@@ -245,6 +246,9 @@ export function QuizRuntime(props: QuizRuntimeProps) {
     aiCopyEnabled = false,
   } = props;
   const isPreview = mode === "preview";
+  // Iframe auto-resize for the storefront app block (no-op in preview and
+  // outside an iframe; client-only, so /q SSR bytes are untouched).
+  useIframeHeightBridge(!isPreview);
   // LOGIC v2 — decider docs take the capture→loading→reveal result flow below.
   // Gated on a field NO legacy doc possesses, so everything else is unchanged.
   const isDecider = doc.logic_model === "decider";

@@ -84,11 +84,11 @@ merchant who picks "Pop-up" gets a full-width inline block. The schema comment
 
 ## Suggested order of attack
 
-| Step | Win | Effort |
+| Step | Win | Status |
 |---|---|---|
-| Theme-editor deep link in the embed panel | Removes the "find the block" hunt | Hours |
-| Default `app_url` + rename block to Wiskr | Kills the worst copy-paste + the naming drift | Hours |
-| `qz:height` auto-resize | Kills the min-height guess | ~1 day |
-| Placement propagation (popup/product_widget in quiz.liquid) | Makes the builder's promise true | Days |
-| Publish-race fix in legacy editor | Silent stale-publish bug | Hours |
-| Async publish AI passes | Timeout cliff | ~1 day |
+| Theme-editor deep link in the embed panel | Removes the "find the block" hunt | **DONE 2026-08** (`app/lib/themeEditorLink.ts`; EmbedSnippet + studio embed page) |
+| Default `app_url` + rename block to Wiskr | Kills the worst copy-paste + the naming drift | **DONE 2026-08** (quiz.liquid schema; needs `npm run deploy` to ship the extension) |
+| `qz:height` auto-resize | Kills the min-height guess | **DONE 2026-08** (`app/components/runtime/heightBridge.ts` + quiz.liquid listener; grow-only within a session by design) |
+| Publish-race fix in legacy editor | Silent stale-publish bug | **DONE 2026-08** (`app.quizzes.$id.tsx` sends the live doc) |
+| Placement propagation (popup/product_widget in quiz.liquid) | Makes the builder's promise true | Days — open |
+| Async publish AI passes | Timeout cliff | ~1 day — open |

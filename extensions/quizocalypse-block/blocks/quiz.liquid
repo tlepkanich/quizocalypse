@@ -1,7 +1,7 @@
 {% comment %}
-  Quizocalypse Quiz — App Block.
+  Wiskr Quiz — App Block.
   Renders the merchant's published quiz inline via iframe.
-  Configure Quiz ID + App URL in the theme editor.
+  Configure the Quiz ID in the theme editor (the App URL is prefilled).
 {% endcomment %}
 
 {%- assign clean_url = block.settings.app_url | strip | replace: ' ', '' -%}
@@ -10,6 +10,7 @@
 <div class="quizocalypse-block" {{ block.shopify_attributes }}>
   {%- if quiz_id != blank and clean_url != blank -%}
     <iframe
+      id="qz-frame-{{ block.id }}"
       src="{{ clean_url }}/q/{{ quiz_id }}?locale={{ request.locale.iso_code }}"
       title="{{ block.settings.iframe_title | default: 'Product finder quiz' }}"
       loading="lazy"
@@ -34,10 +35,24 @@
           document.body.appendChild(t);
           setTimeout(function () { t.remove(); }, 2500);
         }
+        var frame = document.getElementById("qz-frame-{{ block.id }}");
+        var MIN_H = {{ block.settings.min_height | default: 720 }};
         window.addEventListener("message", function (e) {
           if (appOrigin && e.origin !== appOrigin) return;
           var d = e.data;
-          if (!d || d.type !== "qz:add-to-cart" || !d.variantId) return;
+          if (!d) return;
+          // Auto-resize: the quiz reports its content height so the iframe
+          // never shows an inner scrollbar or a block of dead whitespace.
+          // min_height stays the floor; 4000px is a runaway cap. Only OUR
+          // iframe's messages count (a page can host several quiz blocks).
+          if (d.type === "qz:height" && frame && e.source === frame.contentWindow) {
+            var h = Number(d.height);
+            if (isFinite(h) && h > 0) {
+              frame.style.height = Math.min(4000, Math.max(MIN_H, Math.ceil(h))) + "px";
+            }
+            return;
+          }
+          if (d.type !== "qz:add-to-cart" || !d.variantId) return;
           // Ack on RECEIPT so the quiz cancels its permalink fallback (avoids a
           // double-add if the cart write is slow). Post :fail only if it errors.
           function reply(type) {
@@ -60,16 +75,16 @@
     </script>
   {%- else -%}
     <div class="quizocalypse-block__empty" role="status">
-      <strong>Quizocalypse block</strong><br/>
-      Open this block's settings in the theme editor and set:<br/>
-      <em>Quiz ID</em> (from the Quizocalypse admin) and <em>App URL</em> (your Quizocalypse app's public URL).
+      <strong>Wiskr quiz block</strong><br/>
+      Open this block's settings in the theme editor and paste your
+      <em>Quiz ID</em> (copy it from the quiz's Embed panel in the Wiskr admin).
     </div>
   {%- endif -%}
 </div>
 
 {% schema %}
 {
-  "name": "Quizocalypse Quiz",
+  "name": "Wiskr Quiz",
   "target": "section",
   "stylesheet": "block.css",
   "settings": [
@@ -81,13 +96,14 @@
       "type": "text",
       "id": "quiz_id",
       "label": "Quiz ID",
-      "info": "Open the published quiz in the Quizocalypse admin and copy the ID from the URL (the part after /app/quizzes/)."
+      "info": "Copy it from the quiz's Embed panel in the Wiskr admin."
     },
     {
       "type": "url",
       "id": "app_url",
       "label": "App URL",
-      "info": "The public URL of your Quizocalypse install (e.g. https://your-tunnel.trycloudflare.com in dev, or your production domain)."
+      "default": "https://quizocalypse-studio.fly.dev",
+      "info": "Prefilled with the Wiskr app URL — only change this if support tells you to (e.g. a dev tunnel)."
     },
     {
       "type": "header",

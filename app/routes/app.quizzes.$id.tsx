@@ -72,6 +72,7 @@ import {
 } from "../lib/quizMutations";
 import { autoLayout } from "../lib/autoLayout";
 import { validateQuiz, type NodeIssue } from "../lib/quizValidation";
+import { isShopifyShopDomain, themeEditorAddBlockUrl } from "../lib/themeEditorLink";
 import type { z } from "zod";
 
 type QuizDoc = z.infer<typeof Quiz>;
@@ -4771,9 +4772,11 @@ function AiTab({
 function EmbedSnippet({
   quizId,
   previewUrl,
+  shopDomain,
 }: {
   quizId: string;
   previewUrl: string;
+  shopDomain?: string;
 }) {
   const appOrigin = new URL(previewUrl).origin;
   return (
@@ -4785,11 +4788,25 @@ function EmbedSnippet({
       }}
     >
       <div className="qz-label" style={{ marginBottom: 6 }}>
-        Theme block settings
+        Add to your theme
       </div>
-      <p className="qz-muted" style={{ fontSize: 13, margin: "0 0 8px" }}>
-        When adding the Wiskr block to a storefront section, paste:
-      </p>
+      {isShopifyShopDomain(shopDomain) ? (
+        <p className="qz-muted" style={{ fontSize: 13, margin: "0 0 8px" }}>
+          <a
+            href={themeEditorAddBlockUrl(shopDomain)}
+            target="_blank"
+            rel="noreferrer"
+          >
+            Open the theme editor with the Wiskr block added ↗
+          </a>{" "}
+          — then paste the Quiz ID into the block's settings (the App URL is
+          prefilled).
+        </p>
+      ) : (
+        <p className="qz-muted" style={{ fontSize: 13, margin: "0 0 8px" }}>
+          When adding the Wiskr block to a storefront section, paste:
+        </p>
+      )}
       <div
         className="qz-mono"
         style={{ fontSize: 12, color: "var(--qz-ink-2)" }}
@@ -4807,9 +4824,15 @@ export default function QuizEditor() {
   const data = useLoaderData<typeof loader>();
   const saveFetcher = useFetcher<{ ok: boolean; savedAt?: string; error?: string }>();
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // The doc the merchant is LOOKING at, updated synchronously on every edit —
+  // publish sends it with the intent so a publish inside the 800ms autosave
+  // debounce can't bake the previous draft (the UnifiedWorkspace pattern; the
+  // action persists it before publishQuiz runs).
+  const lastDocRef = useRef<QuizDoc | null>(null);
 
   const triggerSave = useCallback(
     (next: QuizDoc) => {
+      lastDocRef.current = next;
       if (saveTimer.current) clearTimeout(saveTimer.current);
       saveTimer.current = setTimeout(() => {
         saveFetcher.submit(JSON.stringify({ doc: next }), {
@@ -4832,6 +4855,9 @@ export default function QuizEditor() {
   const handlePublish = useCallback(() => {
     const form = new FormData();
     form.set("intent", "publish");
+    // Beat the autosave race: send the live doc (absent → server publishes the
+    // stored draft, back-compat).
+    if (lastDocRef.current) form.set("doc", JSON.stringify(lastDocRef.current));
     publishFetcher.submit(form, { method: "POST" });
   }, [publishFetcher]);
 
@@ -5014,7 +5040,11 @@ export default function QuizEditor() {
                 </a>{" "}
                 — share this link, or embed via the Wiskr theme block.
               </p>
-              <EmbedSnippet quizId={data.quizId} previewUrl={previewUrl} />
+              <EmbedSnippet
+                quizId={data.quizId}
+                previewUrl={previewUrl}
+                shopDomain={data.shopDomain}
+              />
             </div>
           </QzBanner>
         )}
