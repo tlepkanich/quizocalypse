@@ -12,10 +12,6 @@
       "hex": 4,
       "boxShadow": 0
     },
-    "app/components/builder/preview/DeviceFrame.tsx": {
-      "hex": 5,
-      "boxShadow": 1
-    },
     "app/components/builder/preview/ReskinSwitcher.tsx": {
       "hex": 11,
       "boxShadow": 0

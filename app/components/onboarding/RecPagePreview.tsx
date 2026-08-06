@@ -6,12 +6,19 @@ import type { Quiz, QuizNode } from "../../lib/quizSchema";
 import type { IndexedProduct } from "../../lib/recommendationEngine";
 import type { BuilderCategory } from "../builder/stepProps";
 import { DeviceFrame } from "../builder/preview/DeviceFrame";
-import { DEVICE_PRESETS, breakpointForWidth } from "../builder/preview/previewWidth";
+import { QzSegmented } from "../qz";
+import {
+  DEFAULT_TIER,
+  DEVICE_TIERS,
+  TIER_BREAKPOINT,
+  TIER_LABEL,
+  type DeviceTier,
+} from "../builder/preview/previewWidth";
 
 // ───────────────────────────────────────────────────────────────────────────
 // RecPagePreview — the funnel Rec Page's LIVE preview: a real, focused render
 // of the selected result page exactly as shoppers see it (headline · "why we
-// recommend" copy · ⭐ hero card · product grid), inside a faux-browser frame.
+// recommend" copy · ⭐ hero card · product grid), inside the fixed device frame.
 //
 // It reuses the main builder's proven recipe (Step5Preview): bake the draft's
 // `category_product_ids_map` from the live buckets — a PUBLISH-time field a
@@ -38,7 +45,7 @@ export function RecPagePreview({
   categories: BuilderCategory[];
   quizId: string;
 }) {
-  const [frameW, setFrameW] = useState<number>(DEVICE_PRESETS.desktop);
+  const [tier, setTier] = useState<DeviceTier>(DEFAULT_TIER);
 
   // Bake category_product_ids_map from the live buckets (identical to
   // Step5Preview / RecPageDiagram) so category-bound sections resolve real
@@ -56,10 +63,21 @@ export function RecPagePreview({
     [doc, categories],
   );
 
-  const breakpoint = breakpointForWidth(frameW);
+  // A1 — the tier prop, not the frame's pixel width, drives the quiz layout.
+  const breakpoint = TIER_BREAKPOINT[tier];
 
   return (
-    <DeviceFrame width={frameW} onWidthChange={setFrameW} urlLabel="yourstore.com/quiz/results">
+    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+      <div className="qz-row" style={{ justifyContent: "flex-end" }}>
+        <QzSegmented<DeviceTier>
+          ariaLabel="Device"
+          value={tier}
+          onChange={setTier}
+          options={DEVICE_TIERS.map((t) => ({ value: t, label: TIER_LABEL[t] }))}
+        />
+      </div>
+      {/* This column is auto-height, so the frame needs an explicit pane. */}
+      <DeviceFrame tier={tier} paneHeight="min(760px, calc(100vh - 260px))">
       <QuizRuntime
         // Remount when the selected bucket changes so the runtime jumps cleanly
         // to that result node (no stale path state).
@@ -81,6 +99,7 @@ export function RecPagePreview({
         breakpoint={breakpoint}
         focusNodeId={node.id}
       />
-    </DeviceFrame>
+      </DeviceFrame>
+    </div>
   );
 }

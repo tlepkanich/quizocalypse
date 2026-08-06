@@ -71,6 +71,7 @@ export function PreviewChip({
   onAdd?: (product: RecommendedProduct, position: number) => void;
 }) {
   const [open, setOpen] = useState(false);
+  const isPreviewMode = useContext(RuntimePreviewContext);
   return (
     <>
       <button
@@ -78,6 +79,11 @@ export function PreviewChip({
         className="qz-preview-chip"
         onClick={() => setOpen((o) => !o)}
         style={{
+          // Containment (viewport/2026-08 C1) — stays `fixed` on purpose, in
+          // preview too. The DeviceFrame carries a transform + contain:paint,
+          // so `fixed` resolves to the FRAME's visible box (correct pinned
+          // behaviour, unaffected by the screen's own scroll). Forking to
+          // `absolute` would anchor to the runtime root and scroll away.
           position: "fixed",
           top: 16,
           right: 16,
@@ -118,7 +124,12 @@ export function PreviewChip({
               borderTopLeftRadius: 16,
               borderTopRightRadius: 16,
               padding: 20,
-              maxHeight: "70vh",
+              // C2.3 — vh asks the merchant's WINDOW; in preview the sheet must
+              // measure the frame. A percentage max-height on a fixed element
+              // resolves against its containing block: the DeviceFrame in
+              // preview (definite px), so 70% is the frame-relative version of
+              // the same cap. Live keeps 70vh byte-identical.
+              maxHeight: isPreviewMode ? "70%" : "70vh",
               overflowY: "auto",
               boxShadow: "0 -8px 32px rgba(0,0,0,0.2)",
             }}

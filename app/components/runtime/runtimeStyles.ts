@@ -77,11 +77,20 @@ export const stylesFor = (
   // card-less centered content, big bold headline, grey answer chips (single
   // column), no card shadow/border.
   chrome: "classic" | "minimal" = "classic",
+  // viewport/2026-08 B1 — the page's height unit. Live (`false`, the default)
+  // keeps `100vh`: the quiz IS the window, and the string must stay
+  // byte-identical or every published /q re-renders. Preview (`true`) measures
+  // against the DeviceFrame instead, whose height is a fixed pixel value — so
+  // `100%` resolves through a definite chain (frame → screen → root → page).
+  // min-height, NOT height: short content fills the frame so
+  // justify-content:center centres it; tall content grows past 100% and the
+  // frame's screen scrolls.
+  isPreview = false,
 ) => {
   const minimal = chrome === "minimal";
   return ({
   page: {
-    minHeight: "100vh",
+    minHeight: isPreview ? "100%" : "100vh",
     // FIX-3 — minimal chrome is CARD-LESS: the merchant's Background token IS
     // the page, so paint it here. The hard-coded #FAFAFA backdrop otherwise
     // sits at 100vh over the root's var(--qz-color-bg) and hides the merchant

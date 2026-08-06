@@ -1,36 +1,80 @@
-// Device presets + width→breakpoint mapping for the resizable preview frame.
-// Pure (no DOM access) so it's unit-testable.
+// The two FIXED preview viewports, and the tier→breakpoint mapping the builder
+// preview shares with the live runtime. Pure (no DOM access) so it's unit-testable.
+//
+// Contract: GLOBAL-VIEWPORT.md — `viewport/2026-08`. The device never changes
+// size; only the room it is shown in does. There is no width state anywhere in
+// the preview stack.
 import { BREAKPOINT_PX } from "../../runtime/runtimeStyles";
 
-export type DevicePreset = "mobile" | "tablet" | "desktop";
+// A3 — ONE definition of the device geometry, both axes, because the fit rule
+// needs height as well as width. Both are BROWSER VIEWPORTS, not device
+// screens: 745 is what iPhone Safari gives a shopper with toolbars collapsed
+// (390 × 844 is the screen — a different measurement, and why the old phone
+// frame looked unusually long). 1128 × 640 reads as a laptop browser window
+// (~16:9) and is the narrowest desktop at which nothing renders smaller than
+// designed.
+//
+// Do NOT add a tablet tier: the quiz switches layouts at BREAKPOINT_PX (900),
+// so a 768px "tablet" would render the phone layout and the button would be
+// lying about what it shows.
+export const DEVICES = {
+  phone: { w: 390, h: 745 },
+  desktop: { w: 1128, h: 640 },
+} as const;
 
-// Preset widths. Mobile resolves to the runtime's "mobile" breakpoint; tablet +
-// desktop resolve to "desktop" (so the two cross the 900px line correctly).
-export const DEVICE_PRESETS: Record<DevicePreset, number> = {
-  mobile: 390,
-  tablet: 768,
-  desktop: 1280,
+export type DeviceTier = keyof typeof DEVICES;
+
+// Display order for every tier toggle in the product. Iterate it; never index
+// it positionally (tsconfig has noUncheckedIndexedAccess).
+export const DEVICE_TIERS: readonly DeviceTier[] = ["phone", "desktop"];
+
+export const TIER_LABEL: Record<DeviceTier, string> = {
+  phone: "Phone",
+  desktop: "Desktop",
 };
 
-export const MIN_FRAME_W = 320;
-export const MAX_FRAME_W = 1440;
+// B2 — the toggle is session-scoped per surface and resets to this. One place,
+// so "which tier does a surface open on" is a one-line change forever.
+export const DEFAULT_TIER: DeviceTier = "phone";
 
-// Same constant the live runtime measures its container against (Unified P1),
-// so the in-builder frame crosses to mobile tokens at the EXACT same width
-// the live quiz does.
+// A1 — the LOAD-BEARING map. QuizRuntime short-circuits container measurement
+// in preview mode, so the frame's pixel width does NOT tell the quiz which
+// layout to render — this prop does. Every preview host must pass
+// TIER_BREAKPOINT[tier] as QuizRuntime's `breakpoint`. Pinned against
+// breakpointForWidth() in previewWidth.test.ts so the two cannot drift.
+export const TIER_BREAKPOINT: Record<DeviceTier, "desktop" | "mobile"> = {
+  phone: "mobile",
+  desktop: "desktop",
+};
+
+// The same 900px constant the live runtime measures its container against
+// (runtimeStyles.ts BREAKPOINT_PX). No component calls this any more — it is
+// kept as the independent second opinion that pins TIER_BREAKPOINT in the unit
+// test. NOTE: the live hook adds 16px of hysteresis and this function
+// deliberately has none. That difference is inert: both device widths sit far
+// outside the 884–900 band.
 export function breakpointForWidth(w: number): "desktop" | "mobile" {
   return w < BREAKPOINT_PX ? "mobile" : "desktop";
 }
 
-export function clampFrameWidth(w: number, max: number = MAX_FRAME_W): number {
-  return Math.max(MIN_FRAME_W, Math.min(max, Math.round(w)));
+// The fit rule — fit both axes, show the whole device, never upscale past 1:1.
+//   scale = min(paneW / deviceW, paneH / deviceH, 1)
+// A non-positive pane (unmeasured, display:none, SSR) yields 1: the frame is
+// then clipped by its pane's overflow, never blown up.
+export function fitScale(tier: DeviceTier, paneW: number, paneH: number): number {
+  const { w, h } = DEVICES[tier];
+  if (!(paneW > 0) || !(paneH > 0)) return 1;
+  return Math.min(paneW / w, paneH / h, 1);
 }
 
-// The preset whose width matches `w` exactly, else null (= a custom width).
-export function presetForWidth(w: number): DevicePreset | null {
-  return (
-    (Object.keys(DEVICE_PRESETS) as DevicePreset[]).find(
-      (k) => DEVICE_PRESETS[k] === w,
-    ) ?? null
-  );
+// Which axis is doing the constraining, for the footer readout
+// ("height-limited: 612px of pane for a 745px phone"). "none" = actual size.
+export function fitConstraint(
+  tier: DeviceTier,
+  paneW: number,
+  paneH: number,
+): "width" | "height" | "none" {
+  if (fitScale(tier, paneW, paneH) >= 1) return "none";
+  const { w, h } = DEVICES[tier];
+  return paneW / w <= paneH / h ? "width" : "height";
 }

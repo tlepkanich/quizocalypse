@@ -7,22 +7,25 @@ import { resolveDesignTokens, type DesignTokensT } from "../../lib/designTokens"
 import { bakeResultPages } from "../../lib/quizPublish";
 import { draftDeciderBake } from "../../lib/draftDeciderBake";
 import type { StepProps } from "./stepProps";
-import { DeviceFrame } from "./preview/DeviceFrame";
+import { DeviceFrame, type FrameFit } from "./preview/DeviceFrame";
 import { ReskinSwitcher } from "./preview/ReskinSwitcher";
 import { LAYOUT_VARIANTS, applyLayoutVariant, detectLayoutVariant } from "../../lib/layoutVariants";
 import {
-  DEVICE_PRESETS,
-  breakpointForWidth,
-  presetForWidth,
-  type DevicePreset,
+  DEFAULT_TIER,
+  DEVICES,
+  DEVICE_TIERS,
+  TIER_BREAKPOINT,
+  TIER_LABEL,
+  type DeviceTier,
 } from "./preview/previewWidth";
 
 type Launcher = StepProps["doc"]["launcher_config"];
 
 // Step 4 — "Preview & publish". A LIVE, interactive preview: the real quiz
-// runtime (mode="preview", no side-effects) runs inside a resizable device
-// frame, with instant theme reskins. The "Open live" link still tests the
-// published version on the storefront.
+// runtime (mode="preview", no side-effects) runs inside one of two FIXED
+// device viewports (viewport/2026-08), scaled to fit, with instant theme
+// reskins. The "Open live" link still tests the published version on the
+// storefront.
 
 export function Step5Preview({
   doc,
@@ -34,23 +37,30 @@ export function Step5Preview({
   quizId,
   onInspect,
   inspectedTarget,
-  frameW: frameWProp,
-  onFrameWChange,
+  tier: tierProp,
+  onTierChange,
+  zoom,
+  paneHeight,
   focusNodeId,
   onNodeShown,
   chromeless = false,
   platform = "shopify",
-  expand = false,
 }: StepProps & {
   // Editor revamp P2: click-to-inspect pass-through (AI editor only — the
   // 4-step builder doesn't pass these, so its preview behaves as before).
   onInspect?: (target: InspectTarget) => void;
   inspectedTarget?: InspectTarget | null;
-  // Unified P2: optional CONTROLLED frame width — the UnifiedWorkspace lifts it
+  // Unified P2: optional CONTROLLED device tier — the UnifiedWorkspace lifts it
   // so the ContextPanel's design-layer selector can follow the device frame
   // ("edit what you see"). Omit both for the classic uncontrolled behavior.
-  frameW?: number;
-  onFrameWChange?: (w: number) => void;
+  tier?: DeviceTier;
+  onTierChange?: (t: DeviceTier) => void;
+  // C4 — the standalone builder's zoom stepper, a CEILING on the fit scale
+  // (never a multiplier). Omitted → 100 (the fit rule alone decides).
+  zoom?: number;
+  // Forwarded to DeviceFrame. Required from any host whose container is
+  // auto-height, or the fit rule's height axis measures 0.
+  paneHeight?: number | string;
   // Unified P3: preview-only selection sync (rail ↔ runtime) pass-through.
   focusNodeId?: string | null;
   onNodeShown?: (nodeId: string) => void;
@@ -61,13 +71,11 @@ export function Step5Preview({
   // QB-5: the standalone builder passes "standalone" so the preview shows the
   // "Build with wiskr.ai" badge (matching the published quiz).
   platform?: "shopify" | "standalone";
-  // phone-preview SPEC Expand — this mount lives inside the dimmed overlay:
-  // the device frame floors mobile at true 1:1 / fits desktop to the host.
-  expand?: boolean;
 }) {
-  const [frameWState, setFrameWState] = useState<number>(DEVICE_PRESETS.desktop);
-  const frameW = frameWProp ?? frameWState;
-  const setFrameW = onFrameWChange ?? setFrameWState;
+  const [tierState, setTierState] = useState<DeviceTier>(DEFAULT_TIER);
+  const tier = tierProp ?? tierState;
+  const setTier = onTierChange ?? setTierState;
+  const [fit, setFit] = useState<FrameFit | null>(null);
   const [tryOnId, setTryOnId] = useState<string | null>(null);
   const [restartKey, setRestartKey] = useState(0);
   // SPEC — "scroll position resets when the previewed step changes": track the
@@ -108,8 +116,9 @@ export function Step5Preview({
     return preset ? (resolveDesignTokens(preset.tokens) as DesignTokensT) : null;
   }, [tryOnId]);
 
-  const activePreset = presetForWidth(frameW);
-  const breakpoint = breakpointForWidth(frameW);
+  // A1 — this prop, not the frame's pixel width, is what makes the quiz render
+  // its phone layout: QuizRuntime ignores container measurement in preview.
+  const breakpoint = TIER_BREAKPOINT[tier];
 
   const applyTheme = () => {
     const preset = tryOnId ? getPreset(tryOnId) : undefined;
@@ -134,7 +143,7 @@ export function Step5Preview({
               Preview &amp; publish
             </h2>
             <p className="qz-dim" style={{ marginTop: 4 }}>
-              Your live quiz — click through it, resize the device, try a theme. Changes here are
+              Your live quiz — click through it, switch device, try a theme. Changes here are
               your draft; <strong>Publish</strong> pushes them live.
             </p>
           </div>
@@ -149,19 +158,20 @@ export function Step5Preview({
       {!chromeless && (
       <div className="qz-row qz-row-between" style={{ alignItems: "center", gap: 12, flexWrap: "wrap" }}>
         <div className="qz-row" style={{ gap: 10, alignItems: "center" }}>
-          <QzSegmented<DevicePreset>
-            ariaLabel="Device size"
-            value={activePreset ?? "desktop"}
-            onChange={(d) => setFrameW(DEVICE_PRESETS[d])}
-            options={[
-              { value: "mobile", label: "Mobile" },
-              { value: "tablet", label: "Tablet" },
-              { value: "desktop", label: "Desktop" },
-            ]}
+          <QzSegmented<DeviceTier>
+            ariaLabel="Device"
+            value={tier}
+            onChange={setTier}
+            options={DEVICE_TIERS.map((t) => ({ value: t, label: TIER_LABEL[t] }))}
           />
+          {/* The readout: a fact you can check, not a control to think about. */}
           <span className="qz-dim" style={{ fontSize: 12, fontVariantNumeric: "tabular-nums" }}>
-            {activePreset ? `${activePreset} · ` : "Custom · "}
-            {frameW}px · {breakpoint}
+            {TIER_LABEL[tier]} · {DEVICES[tier].w} × {DEVICES[tier].h}
+            {fit
+              ? fit.constrainedBy === "none"
+                ? " · actual size"
+                : ` · ${Math.round(fit.scale * 100)}%`
+              : ""}
           </span>
         </div>
         <QzButton size="sm" variant="ghost" onClick={() => setRestartKey((k) => k + 1)}>
@@ -242,12 +252,12 @@ export function Step5Preview({
 
       {/* The live device frame */}
       <DeviceFrame
-        width={frameW}
-        onWidthChange={setFrameW}
-        bare={chromeless}
+        tier={tier}
+        zoom={zoom}
+        paneHeight={paneHeight}
         placement={chromeless ? previewDoc.placement ?? "page" : undefined}
         resetKey={shownNodeId}
-        expand={expand}
+        onFit={setFit}
       >
         <QuizRuntime
           key={restartKey}

@@ -1,246 +1,179 @@
-import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
-import { clampFrameWidth, breakpointForWidth } from "./previewWidth";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { DEVICES, fitConstraint, fitScale, type DeviceTier } from "./previewWidth";
 
-// A polished, resizable device bezel. The frame is centered, so dragging the
-// right-edge handle moves both edges → the width delta counts double. Pointer
-// capture keeps the drag alive when the cursor leaves the handle; arrow keys
-// nudge ±10px for keyboard a11y.
+// Layout effects must not run during SSR (same alias runtimeStyles.ts uses).
+const useIsoLayoutEffect = typeof window === "undefined" ? useEffect : useLayoutEffect;
+
+export type FrameFit = {
+  scale: number;
+  constrainedBy: "width" | "height" | "none";
+  paneW: number;
+  paneH: number;
+};
+
+/**
+ * DeviceFrame — one of two FIXED browser viewports (previewWidth.DEVICES),
+ * always shown whole, scaled down to fit the pane it is given.
+ * Contract: GLOBAL-VIEWPORT.md — `viewport/2026-08`.
+ *
+ * There is no width prop and no drag handle: the device never changes size,
+ * only the room it is shown in does. "Expand" is NOT a mode of this component —
+ * the host renders the same <DeviceFrame> inside a window-sized overlay and the
+ * identical fit rule produces the bigger result (never past 1:1).
+ *
+ * Borderless: hairline + radius + soft shadow (.qz-devframe in the admin
+ * sheet). No bezel, no notch, no browser chrome, no device metaphor. The
+ * scale/size readout lives in the host.
+ */
 export function DeviceFrame({
-  width,
-  onWidthChange,
+  tier,
   children,
-  bare = false,
-  urlLabel,
   placement,
   resetKey,
-  expand = false,
+  zoom = 100,
+  paneHeight = "100%",
+  onFit,
 }: {
-  width: number;
-  onWidthChange: (w: number) => void;
+  tier: DeviceTier;
   children: ReactNode;
-  // QB-7 — the standalone Quizell builder renders the preview as a large, clean
-  // card (no faux-browser bar, no grey box, no fixed-height scroll window): the
-  // device toggle lives in the top bar, so the canvas just shows the quiz big.
-  bare?: boolean;
-  // Optional storefront URL shown in the faux browser bar (e.g. the funnel Rec
-  // Page preview shows "yourstore.com/quiz/results"). Absent → just the width.
-  urlLabel?: string;
-  // build-tab handoff §4 — desktop frame dims FOLLOW PLACEMENT, and pop-up
-  // renders as a real modal envelope on a dark backdrop (not a tiny toast in a
-  // huge page): full = 1200×760 full-bleed · pop-up ≈ modal + margin · inline
-  // = contained card (content + 200 × 720). Absent → today's sizing (other
-  // mounts unchanged). Bare-desktop only; mobile always fits the phone.
+  // Placement picks the CONTAINER INSIDE the viewport (the device toggle picks
+  // the viewport itself): pop-up renders a modal envelope on a dark backdrop,
+  // inline/product_widget a contained card on a neutral host page. Desktop tier
+  // only; the phone viewport always shows the quiz page full-bleed.
   placement?: "page" | "popup" | "inline" | "product_widget";
-  // phone-preview SPEC — "scroll position resets when the previewed step
-  // changes, not on every keystroke": the host passes the shown node's id and
-  // the frame's screen scrolls back to the top when it changes.
+  // "Scroll position resets when the previewed step changes, not on every
+  // keystroke": the host passes the shown node's id.
   resetKey?: string | null;
-  // phone-preview SPEC Expand — rendered inside the dimmed overlay: mobile is
-  // FLOORED at true 1:1 (always visibly bigger than the inline fit) and capped
-  // at 1.4×; desktop fits both axes of the ~90%-viewport host (may upscale).
-  expand?: boolean;
+  // C4 — zoom CLAMPS the fit scale, it does not multiply it. 100 means "as big
+  // as fits" (the fit rule wins); 50 means "no bigger than half actual size".
+  // Multiplying would compound with the fit scale and make the readout a lie on
+  // any pane that is already scaling.
+  zoom?: number;
+  // The pane's height. Defaults to filling a definite-height host. A host whose
+  // container is auto-height MUST pass a definite value or the height axis of
+  // the fit rule measures 0 and the frame stops shrinking vertically.
+  paneHeight?: number | string;
+  // Reports the current fit so the host can render the size/scale readout.
+  // Fired from an effect, never during render, and read through a ref so an
+  // inline lambda from the host cannot loop.
+  onFit?: (fit: FrameFit) => void;
 }) {
-  const containerRef = useRef<HTMLDivElement | null>(null);
-  const fitRef = useRef<HTMLDivElement | null>(null);
-  const dragRef = useRef<{ startX: number; startW: number } | null>(null);
-  const scrollRef = useRef<HTMLDivElement | null>(null);
-  const [dragging, setDragging] = useState(false);
-  const [fitBounds, setFitBounds] = useState({ width: 0, height: 0 });
-
-  // SPEC scroll affordance — a subtle bottom fade on the phone screen that
-  // disappears at the end of the scroll (and when nothing overflows). Desktop
-  // hides the fade (build-tab prototype: `.device.desktop .fade{display:none}`).
+  const paneRef = useRef<HTMLDivElement | null>(null);
+  const screenRef = useRef<HTMLDivElement | null>(null);
+  const [pane, setPane] = useState({ w: 0, h: 0 });
   const [fadeVisible, setFadeVisible] = useState(false);
-  const contentRef = useRef<HTMLDivElement | null>(null);
+
+  useIsoLayoutEffect(() => {
+    const el = paneRef.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    const apply = () => setPane({ w: el.clientWidth, h: el.clientHeight });
+    apply();
+    const ro = new ResizeObserver(apply);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
+  const { w, h } = DEVICES[tier];
+  const fit = fitScale(tier, pane.w, pane.h);
+  const scale = Math.min(fit, zoom / 100);
+  const constrainedBy = fitConstraint(tier, pane.w, pane.h);
+
+  const onFitRef = useRef(onFit);
+  useEffect(() => {
+    onFitRef.current = onFit;
+  });
+  useEffect(() => {
+    onFitRef.current?.({ scale, constrainedBy, paneW: pane.w, paneH: pane.h });
+  }, [scale, constrainedBy, pane.w, pane.h]);
+
+  // Scroll affordance — a soft bottom fade on the screen that disappears at the
+  // end of the scroll (and when nothing overflows). Re-read after every render:
+  // content height changes whenever the step or the tier does; setState with an
+  // unchanged value bails out, so the dep-less effect cannot loop.
   const updateFade = useCallback(() => {
-    const el = scrollRef.current;
+    const el = screenRef.current;
     if (!el) return;
     setFadeVisible(el.scrollHeight - el.clientHeight - el.scrollTop > 8);
   }, []);
+  useIsoLayoutEffect(updateFade);
 
-  // §4 — content sits at a stable top offset across formats: reset the frame's
-  // internal scroll whenever the placement (or the device size) switches, so a
-  // format change never lands the merchant mid-page ("preview lost to the
-  // bottom"). SPEC: also when the previewed STEP changes (resetKey).
+  // Reset the screen's scroll when the previewed step, tier or placement
+  // changes — a switch never lands the merchant mid-page.
   useEffect(() => {
-    if (scrollRef.current) scrollRef.current.scrollTop = 0;
+    if (screenRef.current) screenRef.current.scrollTop = 0;
     updateFade();
-  }, [placement, width, resetKey, updateFade]);
+  }, [tier, placement, resetKey, updateFade]);
 
-  // Content growing/shrinking (blocks added, answers edited) re-evaluates the
-  // fade without a scroll event.
-  useEffect(() => {
-    const el = contentRef.current;
-    if (!el) return;
-    const observer = new ResizeObserver(updateFade);
-    observer.observe(el);
-    return () => observer.disconnect();
-  }, [updateFade, width]);
+  const isPopup = tier === "desktop" && placement === "popup";
+  const isContained =
+    tier === "desktop" && (placement === "inline" || placement === "product_widget");
 
-  useEffect(() => {
-    const host = fitRef.current;
-    if (!host) return;
-    const measure = () => setFitBounds({ width: host.clientWidth, height: host.clientHeight });
-    measure();
-    const observer = new ResizeObserver(measure);
-    observer.observe(host);
-    return () => observer.disconnect();
-  }, [width]);
-
-  const onPointerDown = (e: React.PointerEvent) => {
-    e.preventDefault();
-    (e.target as HTMLElement).setPointerCapture(e.pointerId);
-    dragRef.current = { startX: e.clientX, startW: width };
-    setDragging(true);
-  };
-  const onPointerMove = (e: React.PointerEvent) => {
-    if (!dragRef.current) return;
-    const max = containerRef.current?.clientWidth ?? undefined;
-    const next = clampFrameWidth(
-      dragRef.current.startW + (e.clientX - dragRef.current.startX) * 2,
-      max,
-    );
-    onWidthChange(next);
-  };
-  const endDrag = (e: React.PointerEvent) => {
-    dragRef.current = null;
-    setDragging(false);
-    try {
-      (e.target as HTMLElement).releasePointerCapture(e.pointerId);
-    } catch {
-      /* capture may already be released */
-    }
-  };
-  const onKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === "ArrowLeft") {
-      e.preventDefault();
-      onWidthChange(clampFrameWidth(width - 10));
-    } else if (e.key === "ArrowRight") {
-      e.preventDefault();
-      onWidthChange(clampFrameWidth(width + 10));
-    }
-  };
-
-  // QB-8 / QP-3 — bare mode: the quiz at the chosen device width, framed as a
-  // single Quizell-style card (rounded + soft shadow, NO faux-browser bar, NO
-  // fixed-height scroll window). The quiz paints its own background inside, so
-  // the card surface IS the quiz bg — an intentional elevated card on the grey
-  // canvas, not the mismatched-bg "white box". overflow:hidden only rounds the
-  // corners (the card is content-height; the canvas scrolls tall pages).
-  if (bare) {
-    // Phone-preview SPEC primitive — a TRUE 390×844 viewport with a MINIMAL
-    // bezel: no notch, no hardware chrome, rounded corners + soft shadow only
-    // (the funnel's qz-s3-frame geometry, so every surface shares one look).
-    // The frame is fixed; the SCREEN scrolls (overscroll contained) under a
-    // bottom fade that disappears at the end of the scroll. Fit-the-pane never
-    // upscales past 1:1 inline; the Expand overlay floors at 1, caps at 1.4.
-    if (breakpointForWidth(width) === "mobile") {
-      const logicalWidth = width;
-      const logicalHeight = 844;
-      const fitBoth = fitBounds.width > 0 && fitBounds.height > 0
-        ? Math.min(fitBounds.width / logicalWidth, fitBounds.height / logicalHeight)
-        : 1;
-      const scale = expand ? Math.max(1, Math.min(1.4, fitBoth)) : Math.min(1, fitBoth);
-      return (
-        <div ref={fitRef} className="qz-device-fit-mobile">
-          <div style={{ width: logicalWidth * scale, height: logicalHeight * scale, position: "relative", flex: "0 0 auto" }}>
-            <div
-              // BLD-3 — the mock's .device chrome (radius 46, deep drop
-              // shadow + a 1px hairline ring) lives in .qz-devframe-mock.
-              className="qz-devframe qz-devframe-mock"
-              style={{
-                width: logicalWidth,
-                height: logicalHeight,
-                position: "absolute",
-                top: 0,
-                left: 0,
-                transform: `scale(${scale})`,
-                transformOrigin: "top left",
-              }}
-            >
-              <div
-                className="qz-devscreen"
-                ref={scrollRef}
-                onScroll={updateFade}
-                style={{
-                  width: "100%",
-                  height: "100%",
-                  overflowY: "auto",
-                  overscrollBehavior: "contain",
-                }}
-              >
-                {/* FIX-2 — .qz-devfill: the quiz row stretches to the frame's
-                    full logical height so the doc's own background paints
-                    edge-to-edge (build-tab.html: .canvas{min-height:100%} on
-                    the --b-bg device). Without it a short step left the rest
-                    of the 844px screen as dead admin-paper white. */}
-                <div ref={contentRef} className="qz-devfill">{children}</div>
-              </div>
-              <span
-                className="qz-devfade"
-                aria-hidden
-                style={{
-                  position: "absolute",
-                  left: 0,
-                  right: 0,
-                  bottom: 0,
-                  height: 52,
-                  pointerEvents: "none",
-                  background: "linear-gradient(to bottom, transparent, var(--qz-paper))",
-                  borderRadius: "0 0 46px 46px",
-                  opacity: fadeVisible ? 1 : 0,
-                  transition: "opacity 160ms var(--qz-ease, ease)",
-                }}
-              />
-            </div>
-          </div>
-        </div>
-      );
-    }
-    // §4 — placement drives the desktop frame. Undefined placement keeps the
-    // pre-existing draggable-width frame (RecPagePreview etc. unchanged).
-    const logicalWidth =
-      placement === "page" ? 1200 : placement === "popup" ? 1000 : placement ? 920 : width;
-    const logicalHeight = placement === "page" ? 760 : placement === "popup" ? 760 : 720;
-    // Inline: top-anchored, WIDTH-fit, never upscale (§4). Expand overlay:
-    // fit both axes of the ~90%-viewport host (may upscale — funnel parity).
-    const scale = expand
-      ? fitBounds.width > 0 && fitBounds.height > 0
-        ? Math.min(fitBounds.width / logicalWidth, fitBounds.height / logicalHeight)
-        : 1
-      : fitBounds.width > 0
-        ? Math.min(1, fitBounds.width / logicalWidth)
-        : 1;
-    const isPopup = placement === "popup";
-    const isContained = placement === "inline" || placement === "product_widget";
-    return (
-      <div ref={fitRef} className="qz-device-fit-desktop">
+  return (
+    <div
+      ref={paneRef}
+      className={`qz-vp-pane qz-device-fit-${tier === "phone" ? "mobile" : "desktop"}`}
+      style={{
+        position: "relative",
+        flex: "1 1 auto",
+        width: "100%",
+        height: paneHeight,
+        minWidth: 0,
+        minHeight: 0,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        overflow: "hidden",
+      }}
+    >
+      {/* The scaled FOOTPRINT. `transform` does not change layout size, so this
+          slot carries the on-screen dimensions and the flex centring above
+          stays honest at every scale — a 1128px frame in a 600px pane would
+          otherwise overflow the start edge and become un-centrable. */}
+      <div
+        style={{
+          position: "relative",
+          flex: "0 0 auto",
+          width: Math.round(w * scale),
+          height: Math.round(h * scale),
+        }}
+      >
         <div
+          className="qz-devframe"
+          data-qz-tier={tier}
           style={{
-            width: logicalWidth * scale,
-            height: logicalHeight * scale,
-            position: "relative",
-            flex: "0 0 auto",
+            position: "absolute",
+            top: 0,
+            left: 0,
+            width: w,
+            height: h,
+            // A2 — ALWAYS a transform, `scale(1)` and never undefined/none.
+            // Together with `contain: paint` this makes the frame the
+            // containing block for the runtime's position:fixed chip / scrim /
+            // sheet AND clips them to the frame. Drop either and they anchor to
+            // the merchant's browser window and float over the whole admin.
+            transform: `scale(${scale})`,
+            transformOrigin: "top left",
+            contain: "paint",
           }}
         >
+          {/* Frame fixed, screen scrolls. The definite pixel height above is
+              what lets the runtime's preview height chain (root height:100% →
+              page min-height:100%) resolve instead of collapsing to 0. */}
           <div
-            className="qz-canvas-card"
+            className="qz-devscreen"
+            ref={screenRef}
+            onScroll={updateFade}
             style={{
-              position: "absolute",
-              inset: 0,
-              width: logicalWidth,
-              height: logicalHeight,
-              overflow: isPopup ? "hidden" : "auto",
-              transform: `scale(${scale})`,
-              transformOrigin: "top left",
-              background: isContained ? "var(--qz-cream-2)" : "var(--qz-paper)",
+              width: "100%",
+              height: "100%",
+              overflowY: "auto",
+              overflowX: "hidden",
+              overscrollBehavior: "contain",
             }}
-            ref={scrollRef}
           >
             {isPopup ? (
-              // BLD-3 — the mock's .dpop: an OPAQUE #3a3743 stage behind a
-              // centered modal (width ~660–760 logical, radius 20, deep
-              // shadow, max-height frame−64); internal scroll in the modal.
+              // Pop-up placement: an opaque stage behind a centered modal —
+              // the container a shopper's window shows, inside our viewport.
               <div
                 className="qz-dpop-backdrop"
                 style={{
@@ -252,7 +185,7 @@ export function DeviceFrame({
                 }}
               >
                 <div
-                  className="qz-devfill qz-dpop-modal"
+                  className="qz-dpop-modal"
                   style={{
                     width: "min(76%, 760px)",
                     maxWidth: "calc(100% - 64px)",
@@ -263,124 +196,27 @@ export function DeviceFrame({
                 </div>
               </div>
             ) : isContained ? (
-              // Inline: a contained card on a neutral host page (content + 200).
-              // BLD-3 — mock .dinline: radius 20 card, 40px top padding.
+              // Inline / product widget: a contained card on a neutral page.
               <div style={{ padding: "40px 100px", minHeight: "100%" }}>
                 <div className="qz-dinline-card">{children}</div>
               </div>
             ) : (
-              // Full page: the quiz IS the page — fill the whole 1200×760
-              // frame so the doc background paints full-bleed (FIX-2; the
-              // prototype's `.device.desktop.dfull{background:var(--b-bg)}`).
-              <div className="qz-devfill">{children}</div>
+              children
             )}
           </div>
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div
-      ref={containerRef}
-      style={{
-        width: "100%",
-        display: "flex",
-        justifyContent: "center",
-        background: "var(--qz-rule-2, #efece6)",
-        borderRadius: 14,
-        padding: "24px 18px",
-      }}
-    >
-      <div style={{ position: "relative", width, maxWidth: "100%", flex: "0 0 auto" }}>
-        <div
-          className="qz-card"
-          style={{
-            width: "100%",
-            overflow: "hidden",
-            borderRadius: "var(--qz-radius-lg, 14px)",
-            boxShadow: "var(--qz-shadow-lg, 0 14px 44px rgba(27,26,23,.10))",
-            transition: dragging ? "none" : "box-shadow 160ms var(--qz-ease, ease)",
-          }}
-        >
-          {/* faux browser bar */}
-          <div
+          {/* Soft bottom fade, gone once you reach the end of the scroll. */}
+          <span
+            className="qz-devfade"
+            aria-hidden
             style={{
-              height: 34,
-              display: "flex",
-              alignItems: "center",
-              gap: 6,
-              padding: "0 12px",
-              borderBottom: "1px solid var(--qz-rule)",
-              background: "var(--qz-paper, #faf8f3)",
-            }}
-          >
-            <span style={DOT} />
-            <span style={DOT} />
-            <span style={DOT} />
-            <div style={{ flex: 1 }} />
-            {urlLabel ? (
-              <span
-                className="qz-dim"
-                style={{
-                  fontSize: 11,
-                  padding: "2px 12px",
-                  borderRadius: 999,
-                  background: "var(--qz-cream-2)",
-                  border: "1px solid var(--qz-rule)",
-                  maxWidth: "60%",
-                  overflow: "hidden",
-                  textOverflow: "ellipsis",
-                  whiteSpace: "nowrap",
-                }}
-              >
-                {urlLabel}
-              </span>
-            ) : null}
-            <div style={{ flex: 1 }} />
-            <span className="qz-dim" style={{ fontSize: 11, fontVariantNumeric: "tabular-nums" }}>
-              {width}px
-            </span>
-          </div>
-          {/* scrollable viewport — tall pages scroll inside the frame */}
-          <div style={{ height: "min(70vh, 760px)", overflow: "auto", background: "#fff" }}>
-            {children}
-          </div>
-        </div>
-        {/* right-edge drag handle */}
-        <div
-          role="slider"
-          tabIndex={0}
-          aria-label="Resize preview width"
-          aria-valuenow={width}
-          aria-valuemin={320}
-          aria-valuemax={1440}
-          onPointerDown={onPointerDown}
-          onPointerMove={onPointerMove}
-          onPointerUp={endDrag}
-          onPointerCancel={endDrag}
-          onKeyDown={onKeyDown}
-          style={{
-            position: "absolute",
-            top: 0,
-            bottom: 0,
-            right: -12,
-            width: 14,
-            cursor: "ew-resize",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            touchAction: "none",
-            borderRadius: 8,
-          }}
-        >
-          <div
-            style={{
-              width: 4,
+              position: "absolute",
+              left: 0,
+              right: 0,
+              bottom: 0,
               height: 48,
-              borderRadius: 999,
-              background: dragging ? "var(--qz-accent, #e8623c)" : "var(--qz-ink-3, #b9b3a8)",
-              transition: "background 120ms",
+              pointerEvents: "none",
+              opacity: fadeVisible ? 1 : 0,
+              transition: "opacity 160ms var(--qz-ease, ease)",
             }}
           />
         </div>
@@ -388,11 +224,3 @@ export function DeviceFrame({
     </div>
   );
 }
-
-const DOT: React.CSSProperties = {
-  width: 9,
-  height: 9,
-  borderRadius: "50%",
-  background: "var(--qz-rule)",
-  flex: "0 0 auto",
-};

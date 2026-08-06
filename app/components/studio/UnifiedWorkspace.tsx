@@ -20,7 +20,7 @@ import type { StepProps } from "../builder/stepProps";
 import { Step5Preview } from "../builder/Step5Preview";
 import { Step1Products } from "../builder/Step1Products";
 import { LogicView } from "../logic/LogicView";
-import { DEVICE_PRESETS, breakpointForWidth } from "../builder/preview/previewWidth";
+import { DEFAULT_TIER, TIER_BREAKPOINT, TIER_LABEL, type DeviceTier } from "../builder/preview/previewWidth";
 import type { InspectTarget } from "../runtime/QuizRuntime";
 import { useQuizDraft } from "./useQuizDraft";
 import { FlowRail, type WorkspaceView } from "./FlowRail";
@@ -266,10 +266,10 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
   // context, never a destination tab). Opens the existing chat + enrich
   // panels in a right-side drawer; the full Assist design is DEFERRED.
   const [assistOpen, setAssistOpen] = useState(false);
-  // Device-frame width lifted from Step5Preview so the Design tab's layer
-  // selector can follow it ("edit what you see"). BLD-3: the mock's default
-  // device is MOBILE (build-tab.html seed: device:'mobile').
-  const [frameW, setFrameW] = useState<number>(DEVICE_PRESETS.mobile);
+  // Device tier lifted from Step5Preview so the Design tab's layer selector
+  // can follow it ("edit what you see"). viewport/2026-08 B2: session-scoped,
+  // resets to DEFAULT_TIER (phone).
+  const [tier, setTier] = useState<DeviceTier>(DEFAULT_TIER);
   // QD-6 → QZY-6: the Build view's focused left panel (standalone only).
   // "theme" is the rail's Design section (the canvas stays visible); the old
   // ai/code tools moved to the Assist drawer + the Settings section.
@@ -653,35 +653,31 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
   // FIX-4 — visible in BOTH canvas modes; the segs are single-screen
   // controls, so using one from All-screens flips back to This-screen.
   const deviceToggle = (
-    <div className="qz-bt-seg" role="group" aria-label="Device size">
+    <div className="qz-bt-seg" role="group" aria-label="Device">
       {([
         {
-          bp: "mobile" as const,
-          w: DEVICE_PRESETS.mobile,
-          label: "Mobile",
+          tier: "phone" as const,
           icon: <><rect x="7" y="3" width="10" height="18" rx="2.5" /><path d="M11 18h2" /></>,
         },
         {
-          bp: "desktop" as const,
-          w: DEVICE_PRESETS.desktop,
-          label: "Desktop",
+          tier: "desktop" as const,
           icon: <><rect x="3" y="4" width="18" height="12" rx="2" /><path d="M8 20h8M12 16v4" /></>,
         },
       ]).map((d) => (
         <button
-          key={d.bp}
+          key={d.tier}
           type="button"
-          aria-pressed={breakpointForWidth(frameW) === d.bp}
-          aria-label={d.label}
+          aria-pressed={tier === d.tier}
+          aria-label={TIER_LABEL[d.tier]}
           onClick={() => {
-            setFrameW(d.w);
+            setTier(d.tier);
             setCanvasMode("screen");
           }}
         >
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
             {d.icon}
           </svg>
-          {d.label}
+          {TIER_LABEL[d.tier]}
         </button>
       ))}
     </div>
@@ -876,8 +872,10 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
               {...stepProps}
               onInspect={editMode ? onInspect : undefined}
               inspectedTarget={inspectTarget}
-              frameW={frameW}
-              onFrameWChange={setFrameW}
+              tier={tier}
+              onTierChange={setTier}
+              // This column is auto-height, so the frame needs an explicit pane.
+              paneHeight="min(760px, calc(100vh - 240px))"
               focusNodeId={selectedId}
               onNodeShown={setLiveNodeId}
             />
@@ -892,7 +890,7 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
                 products={data.productIndex}
                 productIndex={data.productIndex}
                 categories={data.categories}
-                frameBreakpoint={breakpointForWidth(frameW)}
+                frameBreakpoint={TIER_BREAKPOINT[tier]}
                 onOpenLogic={() => setView("logic")}
                 regen={regenApi}
               />
@@ -1182,7 +1180,7 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
         {/* BLD-3 — the health pill is stage-scoped chrome here (the mock's
             top bar has no slot for it; "Fix N issues" opens its popover). */}
         {healthPill}
-        {!allScreensMode && breakpointForWidth(frameW) === "desktop" ? showAsToggle : null}
+        {!allScreensMode && tier === "desktop" ? showAsToggle : null}
         {/* phone-preview SPEC — Expand: inspect the same screen big. */}
         {allScreensMode ? null : (
           <>
@@ -1282,7 +1280,7 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
           products={data.productIndex}
           productIndex={data.productIndex}
           categories={data.categories}
-          frameBreakpoint={breakpointForWidth(frameW)}
+          frameBreakpoint={TIER_BREAKPOINT[tier]}
           onOpenLogic={() => setView("logic")}
           regen={regenApi}
           inspectTarget={inspectTarget}
@@ -1581,19 +1579,19 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
                     onDragLeave={onCanvasDragLeave}
                     onDrop={onCanvasDrop}
                   >
-                    <div
-                      style={{
-                        width: "100%",
-                        transform: zoom !== 100 ? `scale(${zoom / 100})` : undefined,
-                        transformOrigin: "top center",
-                      }}
-                    >
+                    {/* C4 — no transform here, ever: the DeviceFrame owns the
+                        one transform (zoom clamps its fit scale). A wrapper
+                        transform would multiply with it, and emitting
+                        `undefined` at 100% would drop the containing block the
+                        runtime's position:fixed overlays rely on. */}
+                    <div style={{ width: "100%", height: "100%", minHeight: 0 }}>
                       <Step5Preview
                         {...stepProps}
                         onInspect={editMode ? onInspect : undefined}
                         inspectedTarget={inspectTarget}
-                        frameW={frameW}
-                        onFrameWChange={setFrameW}
+                        tier={tier}
+                        onTierChange={setTier}
+                        zoom={zoom}
                         focusNodeId={selectedId}
                         onNodeShown={setLiveNodeId}
                         chromeless
@@ -1752,11 +1750,11 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
                 <div className="qz-builder-expandhost">
                   <Step5Preview
                     {...stepProps}
-                    frameW={frameW}
+                    tier={tier}
+                    onTierChange={setTier}
                     focusNodeId={selectedId ?? liveNodeId}
                     chromeless
                     platform="standalone"
-                    expand
                   />
                 </div>
               </div>,

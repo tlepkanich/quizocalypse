@@ -441,8 +441,8 @@ export function QuizRuntime(props: QuizRuntimeProps) {
     [resolved.chrome, platform],
   );
   const styles = useMemo(
-    () => stylesFor(resolved, breakpoint, chromeVariant),
-    [resolved, breakpoint, chromeVariant],
+    () => stylesFor(resolved, breakpoint, chromeVariant, isPreview),
+    [resolved, breakpoint, chromeVariant, isPreview],
   );
   const cssVars = useMemo(
     () => tokensToCssVars(resolved, fluidSource) as React.CSSProperties,
@@ -693,11 +693,21 @@ export function QuizRuntime(props: QuizRuntimeProps) {
     // painted on the root or the content floats with no backdrop (a light-text
     // theme then vanishes on the builder's grey canvas). Paint it whenever the
     // chrome is minimal, in preview too — not only when fillBackground is asked.
+    // viewport/2026-08 B1 — live keeps `min-height:100vh` (the quiz IS the
+    // page, byte-identical for every published /q). Preview instead FILLS the
+    // DeviceFrame: the frame carries a fixed pixel height and the screen is
+    // height:100% of it, so `height:100%` here is definite — which is what
+    // lets .qz-runtime-page's `min-height:100%` resolve to the frame instead
+    // of 0. The old 480px collapse guard is deleted with it: it existed only
+    // because the root could previously be handed no height.
     ...(!isPreview
       ? { background: "var(--qz-color-bg)", minHeight: "100vh" }
-      : fillBackground || chromeVariant === "minimal"
-        ? { background: "var(--qz-color-bg)", minHeight: 480 }
-        : {}),
+      : {
+          height: "100%",
+          ...(fillBackground || chromeVariant === "minimal"
+            ? { background: "var(--qz-color-bg)" }
+            : {}),
+        }),
   };
   // K2: prop entries win over English defaults; identity-stable per locale.
   const chromeTable = useMemo(
@@ -1923,7 +1933,13 @@ export function QuizRuntime(props: QuizRuntimeProps) {
             only when a video background exists). */}
         {screenBgVideo ? (
           <div className="qz-screenbg" aria-hidden data-mobile={screenBgVideo.mobilePlays ? "play" : "poster"}>
-            <style>{`.qz-screenbg{position:absolute;inset:0;pointer-events:none}.qz-screenbg video,.qz-screenbg img{width:100%;height:100%;object-fit:cover;object-position:${(screenBg?.focal_x ?? 50)}% ${(screenBg?.focal_y ?? 50)}%}.qz-screenbg img{display:none}@media (max-width:640px){.qz-screenbg[data-mobile="poster"] video{display:none}.qz-screenbg[data-mobile="poster"] img{display:block}}`}</style>
+            {/* Containment (viewport/2026-08 C2.1) — in PREVIEW the media query
+                must ask the FRAME, not the merchant's browser window: a
+                merchant who sets "show poster on mobile" would otherwise watch
+                the video play inside the 390px phone frame. @container resolves
+                against the runtime root (container-type: inline-size). Live
+                keeps @media so /q stays byte-identical. */}
+            <style>{`.qz-screenbg{position:absolute;inset:0;pointer-events:none}.qz-screenbg video,.qz-screenbg img{width:100%;height:100%;object-fit:cover;object-position:${(screenBg?.focal_x ?? 50)}% ${(screenBg?.focal_y ?? 50)}%}.qz-screenbg img{display:none}${isPreview ? "@container" : "@media"} (max-width:640px){.qz-screenbg[data-mobile="poster"] video{display:none}.qz-screenbg[data-mobile="poster"] img{display:block}}`}</style>
             <video
               src={screenBgVideo.url}
               poster={screenBgVideo.poster}

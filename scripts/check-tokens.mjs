@@ -98,6 +98,37 @@ const totals = Object.values(current).reduce(
   { hex: 0, boxShadow: 0 },
 );
 
+// ── Reverse containment (viewport/2026-08 C5.5): no admin-sheet selector may
+// style the runtime's own DOM. Word-boundary match — a bare substring test
+// false-positives on legitimate admin classes (.qz-inspo-*, .qz-insp-more).
+// Deliberately NOT listed: qz-runtime-page (one background-transparent rule is
+// a documented, test-covered exception — QB-10) and qz-inline-editing (applied
+// imperatively by the builder; its rule move is tracked separately).
+const RUNTIME_CLASSES = [
+  "qz-runtime-shell",
+  "qz-runtime-content",
+  "qz-bp-desktop",
+  "qz-bp-mobile",
+  "qz-preview-rail",
+  "qz-preview-chip",
+  "qz-screenbg",
+];
+const adminCss = stripComments(readFileSync(join(ROOT, "app/styles/quizocalypse.css"), "utf8"));
+const cssLeaks = RUNTIME_CLASSES.filter((c) => new RegExp(`\\.${c}(?![\\w-])`).test(adminCss));
+// The exact regression this pass removed: an admin rule forcing a min-height
+// onto the runtime page collapses the preview's centring chain.
+if (/\.qz-runtime-page[^{}]*\{[^}]*min-height/.test(adminCss)) {
+  cssLeaks.push("qz-runtime-page (min-height override)");
+}
+if (cssLeaks.length) {
+  console.error(
+    "check-tokens: quizocalypse.css styles runtime class(es): " +
+      cssLeaks.map((c) => "." + c).join(", ") +
+      "\nAdmin styles must not reach inside the quiz preview (viewport/2026-08 §C).",
+  );
+  process.exit(1);
+}
+
 if (UPDATE || !existsSync(BASELINE_PATH)) {
   writeFileSync(BASELINE_PATH, JSON.stringify({ files: sortedCurrent }, null, 2) + "\n");
   console.log(
