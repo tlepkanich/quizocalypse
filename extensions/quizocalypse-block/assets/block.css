@@ -8,6 +8,71 @@
   background: transparent;
 }
 
+/* Placement propagation — pop-up / product-widget launcher + modal. The modal
+   mirrors the floating launcher's proven geometry (720 max width, 90vh capped
+   at 800). Neutral dark button: the block CSS can't read the quiz's brand
+   tokens, and neutral reads fine on any theme. */
+.quizocalypse-block__launch {
+  display: block;
+  margin: 0 auto;
+  border: 0;
+  border-radius: 999px;
+  padding: 16px 28px;
+  background: rgb(24 24 27);
+  color: #fff;
+  font: 600 15px/1.2 system-ui, sans-serif;
+  cursor: pointer;
+  box-shadow: 0 4px 16px rgb(0 0 0 / 18%);
+  transition: transform 150ms ease;
+}
+.quizocalypse-block__launch:hover { transform: scale(1.04); }
+.quizocalypse-block__launch--compact {
+  width: 100%;
+  border-radius: 10px;
+  padding: 13px 18px;
+  font-size: 14px;
+  box-shadow: 0 2px 8px rgb(0 0 0 / 12%);
+}
+.quizocalypse-block__modal {
+  position: fixed;
+  inset: 0;
+  z-index: 199;
+  background: rgb(0 0 0 / 45%);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+.quizocalypse-block__modal.open { display: flex; }
+.quizocalypse-block__modal-frame {
+  width: 100%;
+  max-width: 720px;
+  height: 90vh;
+  max-height: 800px;
+  background: #fff;
+  border: 0;
+  border-radius: 12px;
+  box-shadow: 0 12px 40px rgb(0 0 0 / 32%);
+}
+.quizocalypse-block__modal-close {
+  position: absolute;
+  top: 24px;
+  right: 24px;
+  width: 36px;
+  height: 36px;
+  border: 0;
+  border-radius: 999px;
+  background: rgb(255 255 255 / 95%);
+  font-size: 18px;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgb(0 0 0 / 18%);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .quizocalypse-block__launch { transition: none; }
+  .quizocalypse-block__launch:hover { transform: none; }
+}
+
 .quizocalypse-block__toast {
   position: fixed;
   z-index: 200;

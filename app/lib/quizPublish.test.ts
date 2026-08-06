@@ -6,6 +6,8 @@ import {
   bakeResultPages,
   collectRecommendableProductIds,
   publishQuiz,
+  boundedAiCall,
+  AI_COPY_TIMEOUT_MS,
   shortDescription,
   stripPublicDoc,
   stripPublicJsonPayload,
@@ -690,5 +692,41 @@ describe("publishQuiz — decider target bake (L2-3)", () => {
     await expect(publishQuiz(prisma, { quizId: "qrow", shopId: "s1" })).rejects.toThrow(
       /bucket no longer exists/i,
     );
+  });
+});
+
+// Gap 7b — the publish AI passes are wall-clock bounded so publish can't ride
+// a slow model call into the ~60s edge-proxy timeout. A timeout degrades
+// EXACTLY like an AI failure: fallback value + the aiCopyDegraded flag.
+describe("boundedAiCall", () => {
+  it("resolves the work's value when it beats the clock", async () => {
+    let timedOut = false;
+    const v = await boundedAiCall(Promise.resolve(["a"]), [], () => {
+      timedOut = true;
+    });
+    expect(v).toEqual(["a"]);
+    expect(timedOut).toBe(false);
+  });
+
+  it("resolves the fallback and flags degrade on timeout", async () => {
+    vi.useFakeTimers();
+    let timedOut = false;
+    const never = new Promise<string[]>(() => {});
+    const p = boundedAiCall(never, ["fallback"], () => {
+      timedOut = true;
+    });
+    await vi.advanceTimersByTimeAsync(AI_COPY_TIMEOUT_MS + 1);
+    expect(await p).toEqual(["fallback"]);
+    expect(timedOut).toBe(true);
+    vi.useRealTimers();
+  });
+
+  it("treats a rejection as a degrade (fallback, flag, no throw)", async () => {
+    let timedOut = false;
+    const v = await boundedAiCall(Promise.reject(new Error("model down")), "fb", () => {
+      timedOut = true;
+    });
+    expect(v).toBe("fb");
+    expect(timedOut).toBe(true);
   });
 });

@@ -33,9 +33,9 @@ export const PLACEMENTS: Array<{ value: Placement; label: string; hint: string }
   // build-tab handoff §7 — ONE placement vocabulary everywhere: Settings and
   // the desktop stage-bar "Show as" mirror these labels.
   { value: "page", label: "Full page", hint: "share the link above, or add the App Block to any page." },
-  { value: "popup", label: "Pop-up", hint: "add the Wiskr App Block and set it to open as a modal." },
+  { value: "popup", label: "Pop-up", hint: "the App Block shows a button that opens the quiz in a modal — publish to update." },
   { value: "inline", label: "Inline", hint: "drop the App Block into a page section to embed it in-flow." },
-  { value: "product_widget", label: "Product page widget", hint: "add the App Block to your product template as a compact launcher." },
+  { value: "product_widget", label: "Product page widget", hint: "the App Block renders a compact launch button — add it to your product template." },
 ];
 
 // ── BLD-2 — inline canvas text editing (the DOM half) ────────────────────────

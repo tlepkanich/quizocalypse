@@ -24,6 +24,8 @@
       // (e.g. add failed), the quiz falls back to a cart permalink.
       (function () {
         var APP = {{ clean_url | json }};
+        var QUIZ_ID = {{ quiz_id | json }};
+        var BTN_LABEL = {{ block.settings.button_label | default: 'Take the quiz' | json }};
         var appOrigin = null;
         try { appOrigin = new URL(APP).origin; } catch (e) {}
         function toast(msg) {
@@ -71,6 +73,65 @@
             })
             .catch(function () { reply("qz:add-to-cart:fail"); });
         });
+
+        // Placement propagation — the placement the merchant picked in the
+        // builder now drives the storefront: "popup" swaps the inline iframe
+        // for a launch button + centered modal (the launcher's proven
+        // geometry: 720 max width, 90vh capped at 800); "product_widget"
+        // renders the compact variant of the same launcher. Read from the
+        // public quiz JSON (CORS-open, 60s-cached, no auth). Anything else —
+        // page, inline, absent placement, a failed fetch — keeps the inline
+        // iframe exactly as before, so this can never produce a dead block.
+        function toLauncher(compact) {
+          if (!frame || !frame.parentElement) return;
+          var host = frame.parentElement;
+          var src = frame.src;
+          var frameTitle = frame.title;
+          frame.remove();
+          var btn = document.createElement("button");
+          btn.type = "button";
+          btn.className =
+            "quizocalypse-block__launch" +
+            (compact ? " quizocalypse-block__launch--compact" : "");
+          btn.textContent = BTN_LABEL;
+          var modal = document.createElement("div");
+          modal.className = "quizocalypse-block__modal";
+          modal.setAttribute("role", "dialog");
+          modal.setAttribute("aria-modal", "true");
+          modal.setAttribute("aria-label", frameTitle || BTN_LABEL);
+          var mFrame = document.createElement("iframe");
+          mFrame.className = "quizocalypse-block__modal-frame";
+          mFrame.title = frameTitle || BTN_LABEL;
+          mFrame.setAttribute("allow", "clipboard-write");
+          var closeBtn = document.createElement("button");
+          closeBtn.type = "button";
+          closeBtn.className = "quizocalypse-block__modal-close";
+          closeBtn.setAttribute("aria-label", "Close");
+          closeBtn.textContent = "×";
+          modal.appendChild(mFrame);
+          modal.appendChild(closeBtn);
+          function openModal() {
+            if (!mFrame.src) mFrame.src = src; // load the quiz on first open
+            modal.classList.add("open");
+          }
+          function closeModal() { modal.classList.remove("open"); }
+          btn.addEventListener("click", openModal);
+          closeBtn.addEventListener("click", closeModal);
+          modal.addEventListener("click", function (e) { if (e.target === modal) closeModal(); });
+          document.addEventListener("keydown", function (e) { if (e.key === "Escape") closeModal(); });
+          host.appendChild(btn);
+          host.appendChild(modal);
+        }
+        try {
+          fetch(APP + "/q/" + QUIZ_ID + ".json")
+            .then(function (r) { return r.ok ? r.json() : null; })
+            .then(function (doc) {
+              var p = doc && doc.placement;
+              if (p === "popup") toLauncher(false);
+              else if (p === "product_widget") toLauncher(true);
+            })
+            .catch(function () { /* keep the inline iframe */ });
+        } catch (e) { /* keep the inline iframe */ }
       })();
     </script>
   {%- else -%}
@@ -125,6 +186,13 @@
       "label": "Accessibility title",
       "default": "Product finder quiz",
       "info": "Used as the iframe's title attribute for screen readers."
+    },
+    {
+      "type": "text",
+      "id": "button_label",
+      "label": "Launch button label",
+      "default": "Take the quiz",
+      "info": "Shown when the quiz's placement is Pop-up or Product page widget (set in the Wiskr builder)."
     }
   ]
 }

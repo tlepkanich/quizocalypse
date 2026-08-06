@@ -267,6 +267,37 @@ export function bakeResultPages(
   return [...legacy, ...fromNodes];
 }
 
+// Gap 7b — publish runs inside ONE HTTP request behind an edge proxy that
+// times out around 60s, and the two AI copy passes below are its only
+// unbounded work (everything else is Prisma + one Shopify fetch). Cap each
+// call: on timeout the pass degrades exactly like an AI failure does —
+// `aiCopyDegraded` flips, the publish banner offers "regenerate", and a
+// re-publish retries only the still-empty fields. Pure + exported for tests.
+export const AI_COPY_TIMEOUT_MS = 10_000;
+export function boundedAiCall<T>(
+  work: Promise<T>,
+  fallback: T,
+  onTimeout: () => void,
+  timeoutMs: number = AI_COPY_TIMEOUT_MS,
+): Promise<T> {
+  return new Promise<T>((resolve) => {
+    const timer = setTimeout(() => {
+      onTimeout();
+      resolve(fallback);
+    }, timeoutMs);
+    work
+      .then((v) => {
+        clearTimeout(timer);
+        resolve(v);
+      })
+      .catch(() => {
+        clearTimeout(timer);
+        onTimeout();
+        resolve(fallback);
+      });
+  });
+}
+
 export async function publishQuiz(
   prisma: PrismaClient,
   args: { quizId: string; shopId: string },
@@ -564,14 +595,17 @@ export async function publishQuiz(
               : []),
           ]);
         if (features.length === 0) return node;
-        const bullets = await translateFeaturesToBenefits({
-          features: features.slice(0, 6),
-          ...(toneSample ? { brandVoiceSample: toneSample } : {}),
-          ...(brandGuidelines ? { brandGuidelines } : {}),
-        }).catch(() => {
-          aiCopyDegraded = true;
-          return [] as string[];
-        });
+        const bullets = await boundedAiCall(
+          translateFeaturesToBenefits({
+            features: features.slice(0, 6),
+            ...(toneSample ? { brandVoiceSample: toneSample } : {}),
+            ...(brandGuidelines ? { brandGuidelines } : {}),
+          }),
+          [] as string[],
+          () => {
+            aiCopyDegraded = true;
+          },
+        );
         return bullets.length > 0
           ? { ...node, data: { ...node.data, why_bullets: bullets } }
           : node;
@@ -580,14 +614,17 @@ export async function publishQuiz(
       // so merchant/AI-authored tooltips are preserved.
       if (node.type === "question") {
         if (node.data.answers.every((a) => a.tooltip_text)) return node;
-        const tips = await generateAnswerTooltips({
-          answers: node.data.answers.map((a) => ({ id: a.id, text: a.text })),
-          context: node.data.text,
-          ...(brandGuidelines ? { brandGuidelines } : {}),
-        }).catch(() => {
-          aiCopyDegraded = true;
-          return {} as Record<string, string>;
-        });
+        const tips = await boundedAiCall(
+          generateAnswerTooltips({
+            answers: node.data.answers.map((a) => ({ id: a.id, text: a.text })),
+            context: node.data.text,
+            ...(brandGuidelines ? { brandGuidelines } : {}),
+          }),
+          {} as Record<string, string>,
+          () => {
+            aiCopyDegraded = true;
+          },
+        );
         if (Object.keys(tips).length === 0) return node;
         return {
           ...node,
