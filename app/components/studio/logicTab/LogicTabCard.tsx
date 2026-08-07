@@ -82,7 +82,7 @@ export function LogicTabCard({
     () => new Map(questions.map((q) => [q.node.id, q.qIndex])),
     [questions],
   );
-  const rules = doc.decision_rules ?? [];
+  const rules = useMemo(() => doc.decision_rules ?? [], [doc.decision_rules]);
   // §3.3 — a freshly created rule gets a brief highlight for 1800 ms.
   const [freshRuleId, setFreshRuleId] = useState<string | null>(null);
   const knownRuleIds = useRef<Set<string> | null>(null);
