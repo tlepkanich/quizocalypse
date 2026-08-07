@@ -93,6 +93,7 @@ export function BuilderLogicView({
             collections={data.collections}
             productIndex={data.productIndex}
             commit={commit}
+            quizId={data.quizId}
           />
           {/* PathTester renders its own "Try a path" header. */}
           <PathTester doc={doc} productIndex={data.productIndex} categories={data.categories} />

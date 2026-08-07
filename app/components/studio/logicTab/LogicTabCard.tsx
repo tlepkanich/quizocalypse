@@ -14,6 +14,7 @@ import {
   RouteMenuButton,
   StartingSetMenuButton,
 } from "./LogicTabMenus";
+import { CreateRuleModal } from "./CreateRuleModal";
 
 // ════════════════════════════════════════════════════════════════════════════
 // Logic tab (docs/design/logic-tab/HANDOFF.md §2/§3/§5 + DECISIONS.md) — the
@@ -64,6 +65,7 @@ export function LogicTabCard({
   collections,
   productIndex,
   commit,
+  quizId,
 }: {
   doc: QuizDoc;
   questions: OrderedQuestion[];
@@ -72,8 +74,21 @@ export function LogicTabCard({
   productIndex: IndexedProduct[];
   /** P3+ — the editing seam. Absent = read-only (previews, tests). */
   commit?: (doc: QuizDoc) => void;
+  /** P5 — enables + Create rule (the ensure-targets endpoint needs it). */
+  quizId?: string;
 }) {
-  const catById = useMemo(() => new Map(categories.map((c) => [c.id, c])), [categories]);
+  // P5 — categories materialized by the create-rule modal, merged until the
+  // route loader's next pass returns them (autosave revalidation).
+  const [extraCats, setExtraCats] = useState<BuilderCategory[]>([]);
+  const [createOpen, setCreateOpen] = useState(false);
+  const allCategories = useMemo(() => {
+    const seen = new Set(categories.map((c) => c.id));
+    return [...categories, ...extraCats.filter((c) => !seen.has(c.id))];
+  }, [categories, extraCats]);
+  const catById = useMemo(
+    () => new Map(allCategories.map((c) => [c.id, c])),
+    [allCategories],
+  );
   const colTitleById = useMemo(
     () => new Map(collections.map((c) => [c.collectionId, c.title])),
     [collections],
@@ -106,7 +121,30 @@ export function LogicTabCard({
     <section className="qz-ltab" data-testid="logic-tab-card">
       <header className="qz-ltab-hd">
         <h2>Rules</h2>
+        {commit && quizId ? (
+          <button
+            type="button"
+            className="qz-btn qz-btn-primary qz-ltab-create"
+            onClick={() => setCreateOpen(true)}
+          >
+            + Create rule
+          </button>
+        ) : null}
       </header>
+      {commit && quizId ? (
+        <CreateRuleModal
+          doc={doc}
+          questions={questions}
+          categories={allCategories}
+          collections={collections}
+          productIndex={productIndex}
+          quizId={quizId}
+          open={createOpen}
+          onClose={() => setCreateOpen(false)}
+          commit={commit}
+          onCategoriesCreated={(cats) => setExtraCats((prev) => [...prev, ...cats])}
+        />
+      ) : null}
       {rules.length === 0 ? (
         <p className="qz-ltab-empty">
           <span className="qz-ltab-muted">—</span>{" "}
@@ -205,7 +243,7 @@ export function LogicTabCard({
               doc={doc}
               q={q}
               questions={questions}
-              categories={categories}
+              categories={allCategories}
               catById={catById}
               collections={collections}
               colTitleById={colTitleById}
