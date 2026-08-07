@@ -407,10 +407,11 @@ ok(
   "Reset to template restores the default",
   (await page.locator(".qz-builder-canvas hr").count()) === 0,
 );
-// ── BLD-4: Logic view = LogicScroll + Try-a-path ────────────────────────────
+// ── BLD-4 → Logic-tab migration: Logic view = the one card + Try-a-path ────
 await page.locator(".qz-builder-rail-item", { hasText: "Logic" }).click();
 await page.waitForTimeout(600);
-ok("LogicScroll rules strip present", (await page.locator("text=/first match wins/").count()) > 0);
+ok("the one Logic card present (Rules above Questions)",
+  (await page.locator('[data-testid="logic-tab-card"]').count()) === 1);
 ok("Try a path present", (await page.locator("text=/Try a path/i").count()) > 0);
 ok("settings-dump tabs gone", (await page.locator(".qz-settings-tab").count()) === 0);
 

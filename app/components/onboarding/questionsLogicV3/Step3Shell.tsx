@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import type { CSSProperties } from "react";
 import type { Quiz as QuizDoc, DesignTokens } from "../../../lib/quizSchema";
 import type { BuilderCategory, BuilderCollection } from "../../builder/stepProps";
@@ -19,7 +19,12 @@ import { LeftRail, CAPTURE_ID, REVEAL_ID } from "./LeftRail";
 import { OverviewLedger } from "./OverviewLedger";
 import { PhoneCanvas } from "./content/PhoneCanvas";
 import { IconPlus } from "./icons";
-import { LogicScroll, type LogicScrollHandle } from "./logic/LogicScroll";
+// Logic-tab migration — the funnel's Logic step renders the SAME one-card
+// view as the studio builder (docs/design/logic-tab/HANDOFF.md); the
+// safety-net config keeps its own section below the card.
+import { LogicTabCard } from "../../studio/logicTab/LogicTabCard";
+import { FallbackSection } from "./logic/FallbackSection";
+import { CaptureModule } from "./logic/CaptureModule";
 import { DiagnoseModal, type DiagnoseTab } from "./logic/DiagnoseModal";
 
 /* ════════════════════════════════════════════════════════════════════════════
@@ -122,16 +127,24 @@ export function Step3Shell({
     open: false,
     tab: "diagnostics",
   });
-  const logicRef = useRef<LogicScrollHandle>(null);
+  // Jump-links against the one-card view: scroll the question's table row
+  // (data-node-id) into view, or the card itself (rules live at its top).
+  const scrollLogicTo = useCallback((nodeId?: string) => {
+    if (typeof document === "undefined") return;
+    const card = document.querySelector('[data-testid="logic-tab-card"]');
+    const el = nodeId
+      ? card?.querySelector(`[data-node-id="${CSS.escape(nodeId)}"]`)
+      : card;
+    el?.scrollIntoView({ behavior: "smooth", block: "center" });
+  }, []);
 
   // A rule jump stashed by the Questions step lands here once the Logic step
-  // mounts (scrollToRule parks unknown ids until the card exists).
+  // mounts — rules sit at the top of the card, so the card top IS the target.
   useEffect(() => {
     if (mode !== "logic" || !pendingRuleJumpStash) return;
-    const target = pendingRuleJumpStash;
     pendingRuleJumpStash = null;
-    logicRef.current?.scrollToRule(target);
-  }, [mode]);
+    scrollLogicTo();
+  }, [mode, scrollLogicTo]);
 
   // Valid canvas positions; a stale selection (deleted question, capture
   // toggled off) falls back derived-style — no effect needed.
@@ -154,30 +167,10 @@ export function Step3Shell({
     onCommit(next);
     if (newId) {
       setSelectedId(newId);
-      // Logic view: glide the new section in once it mounts (scrollToSection
-      // parks unknown ids until the card exists).
-      if (view === "logic") logicRef.current?.scrollToSection(newId);
+      // Logic view: glide the new question's table row in once it mounts.
+      if (view === "logic") setTimeout(() => scrollLogicTo(newId), 60);
     }
-  }, [doc, questions, onCommit, view]);
-
-  // The ▦ Overview's ↑/↓ movers (LogicScroll), via the pure moveStep
-  // mutation (rebuilds the straight-through chain; branch/lane edges
-  // untouched). Up = before the previous question; down = before the one two
-  // ahead (or the run end).
-  const moveQuestion = useCallback(
-    (id: string, dir: -1 | 1) => {
-      const idx = questions.findIndex((q) => q.node.id === id);
-      if (idx < 0) return;
-      const beforeId =
-        dir === -1
-          ? questions[idx - 1]?.node.id ?? null
-          : questions[idx + 2]?.node.id ?? null;
-      if (dir === -1 && idx === 0) return;
-      if (dir === 1 && idx === questions.length - 1) return;
-      onCommit(moveStep(doc, id, beforeId));
-    },
-    [doc, questions, onCommit],
-  );
+  }, [doc, questions, onCommit, view, scrollLogicTo]);
 
   // questions-full-page §2 — renumber/drag moves the step to that OVERALL
   // position in the FULL flow (content included), through the pure moveStep
@@ -240,19 +233,19 @@ export function Step3Shell({
       setDiagnose((d) => ({ ...d, open: false }));
       if (link.kind === "question" && link.nodeId) {
         setSelectedId(link.nodeId);
-        if (view === "logic") logicRef.current?.scrollToSection(link.nodeId, { flashWarn: true });
+        if (view === "logic") scrollLogicTo(link.nodeId);
         return;
       }
       if (link.kind === "rule" && link.ruleId) {
         if (view === "logic") {
-          logicRef.current?.scrollToRule(link.ruleId);
+          scrollLogicTo(); // rules sit at the top of the card
         } else {
           pendingRuleJumpStash = link.ruleId;
           onContinue();
         }
       }
     },
-    [view, onContinue],
+    [view, onContinue, scrollLogicTo],
   );
 
   // The bar (one-line-chrome §1.3) — save chip · Fix-N-issues health pill ·
@@ -428,22 +421,24 @@ export function Step3Shell({
           {/* Spec §2 — the collapsible "How this quiz resolves" explainer. */}
           <ExplainerStrip />
 
-          <LogicScroll
-            ref={logicRef}
+          <LogicTabCard
             doc={doc}
             questions={questions}
-            deciderId={decider?.id ?? null}
             categories={categories}
             collections={collections}
             productIndex={productIndex}
-            captureOn={captureOn}
-            activeId={activeId}
-            onActiveChange={setSelectedId}
-            onMove={moveQuestion}
-            onReorder={reorderQuestion}
-            onDelete={deleteQuestion}
+            commit={onCommit}
+            quizId={quizId}
+          />
+          {/* The safety-net + quiz-ending configs keep their own sections —
+              they were part of the old scroll, not of the card design. */}
+          <FallbackSection
+            doc={doc}
+            collections={collections}
+            productIndex={productIndex}
             onCommit={onCommit}
           />
+          <CaptureModule doc={doc} captureOn={captureOn} onCommit={onCommit} />
         </div>
       )}
 

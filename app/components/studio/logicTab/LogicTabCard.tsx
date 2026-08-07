@@ -393,7 +393,7 @@ function QuestionRows({
   // role pill must stay reachable from this tab (review L2-8).
   if (answers.length === 0) {
     return (
-      <tr className="qz-ltab-qstart">
+      <tr className="qz-ltab-qstart" data-node-id={q.node.id}>
         <td className="qz-ltab-qcell">
           <div className="qz-ltab-qlabel" title={q.node.data.text}>
             <span className="qz-ltab-qnum">Q{q.qIndex}</span> {q.node.data.text}
@@ -425,7 +425,11 @@ function QuestionRows({
         );
         const route = <RouteCell doc={doc} q={q} answer={a} qIndexByNodeId={qIndexByNodeId} />;
         return (
-          <tr key={a.id} className={i === 0 ? "qz-ltab-qstart" : undefined}>
+          <tr
+            key={a.id}
+            className={i === 0 ? "qz-ltab-qstart" : undefined}
+            data-node-id={i === 0 ? q.node.id : undefined}
+          >
             {i === 0 ? (
               <td className="qz-ltab-qcell" rowSpan={answers.length}>
                 <div className="qz-ltab-qlabel" title={q.node.data.text}>

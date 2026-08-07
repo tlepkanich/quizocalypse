@@ -29,7 +29,8 @@
 //
 // ONE-LINE-CHROME stage seam (unchanged, still asserted): the bar's Continue
 // posts to-logic (build_session.stage persists to "logic") and the Logic
-// stage renders the LogicScroll LEDGER — ONE connected bordered container of
+// stage renders the shared ONE-CARD Logic view (logic-tab migration; it
+// previously rendered the LogicScroll LEDGER — ONE connected container of
 // flush hairline rows, the right column defined ONCE (--rcol: 226px) so the
 // settings divider runs one vertical line through header AND body (§1.1),
 // N+1 ＋ inserters riding the dividers, capture terminal OUTSIDE the ledger,
@@ -253,7 +254,9 @@ try {
   ok("first row's ↑ mover disabled, ↓ enabled",
     (await page.locator(".qz-qf-navrow").first().locator(".qz-qf-nmvb").first().isDisabled()) &&
     !(await page.locator(".qz-qf-navrow").first().locator(".qz-qf-nmvb").nth(1).isDisabled()));
-  ok("+ Add question rail foot", await page.locator(".qz-qf-navadd").isVisible());
+  // 051eceb added a second navadd (+ Add content) — target the question one.
+  ok("+ Add question rail foot",
+    await page.locator(".qz-qf-navadd:not(.is-content)").isVisible());
   ok("two quiet termini rows", (await page.locator(".qz-qf-navterm").count()) === 2);
   ok('capture terminus "Email capture" / "Optional lead step"',
     ((await page.locator(".qz-qf-navterm").first().locator(".qz-qf-tlabel").textContent()) ?? "").trim() === "Email capture" &&
@@ -564,74 +567,30 @@ try {
     lvGeo.w <= 1078 && Math.abs(lvGeo.left - lvGeo.right) < 4,
     `w${lvGeo.w} L${lvGeo.left} R${lvGeo.right}`);
 
-  // 19 ── questions-full-page §1: ONE connected LEDGER, not floating cards
-  ok("ONE connected ledger container", (await page.locator(".qz-s3-ledger").count()) === 1);
-  ok("one ledger row per question (3 rows / 3 cards)",
-    (await page.locator(".qz-s3-ledger .qz-s3-ledgerrow").count()) === 3 &&
-    (await page.locator(".qz-s3-ledger .qz-s3-card").count()) === 3);
-  const rowGeo = await page.locator(".qz-s3-ledger .qz-s3-card").evaluateAll((els) =>
-    els.map((el) => {
-      const cs = getComputedStyle(el);
-      const r = el.getBoundingClientRect();
-      return {
-        radius: cs.borderRadius, bottom: cs.borderBottomWidth,
-        side: cs.borderLeftWidth, top: r.top, bot: r.bottom,
-      };
-    }));
-  ok("rows are square-cornered + side-borderless (the container owns the frame)",
-    rowGeo.every((g) => g.radius === "0px" && g.side === "0px"),
-    rowGeo.map((g) => `${g.radius}/${g.side}`).join(" "));
-  ok("1px hairline between rows, none after the last",
-    rowGeo.slice(0, -1).every((g) => g.bottom === "1px") && rowGeo.at(-1).bottom === "0px",
-    rowGeo.map((g) => g.bottom).join(" "));
-  ok("rows sit FLUSH (inserters ride the hairline — zero gaps)",
-    rowGeo.slice(1).every((g, i) => Math.abs(g.top - rowGeo[i].bot) <= 1.5),
-    rowGeo.slice(1).map((g, i) => (g.top - rowGeo[i].bot).toFixed(1)).join(" "));
-
-  // §1.1 — the right column is defined ONCE (--rcol: 226px): header AND body
-  // grids end in the same 226px track, and the settings divider (border-left
-  // of .qz-s3-card-type / .qz-s3-card-set) sits on ONE vertical line.
-  const colGeo = await page.locator(".qz-s3-ledger .qz-s3-card").evaluateAll((els) =>
-    els.map((el) => {
-      const lastTrack = (n) => {
-        const t = getComputedStyle(n).gridTemplateColumns.trim().split(/\s+/);
-        return parseFloat(t[t.length - 1]);
-      };
-      const typeL = el.querySelector(".qz-s3-card-type")?.getBoundingClientRect().left ?? NaN;
-      const setL = el.querySelector(".qz-s3-card-set")?.getBoundingClientRect().left ?? NaN;
-      return {
-        head: lastTrack(el.querySelector(".qz-s3-card-head")),
-        body: lastTrack(el.querySelector(".qz-s3-card-body")),
-        delta: Math.abs(typeL - setL),
-      };
-    }));
-  ok("right column is the spec's 226px on EVERY head + body grid",
-    colGeo.every((g) => Math.abs(g.head - 226) < 1 && Math.abs(g.body - 226) < 1),
-    colGeo.map((g) => `${g.head}/${g.body}`).join(" "));
-  ok("§1.1 — settings divider runs ONE vertical line down the ledger",
-    colGeo.every((g) => g.delta < 1), colGeo.map((g) => g.delta.toFixed(1)).join(" "));
-
-  // N+1 ＋ inserters INSIDE the ledger (leading + one per row), riding the
-  // dividers; the capture terminal stays OUTSIDE the ledger, below it.
-  ok("N+1 inserters inside the ledger (4 for 3 questions)",
-    (await page.locator(".qz-s3-ledger .qz-s3-divider").count()) === 4);
-  ok("the leading inserter is the ledger's first child",
-    await page.locator(".qz-s3-ledger > :first-child").evaluate(
-      (el) => el.classList.contains("qz-s3-divider")));
-  ok("capture terminal OUTSIDE the ledger (map's last module)",
-    (await page.locator(".qz-s3-ledger .qz-s3-capmod").count()) === 0 &&
-    (await page.locator(".qz-s3-logic .qz-s3-capmod").count()) === 1);
-
-  // decider guards carried into the ledger: solid-accent numchip (no gold),
-  // hover-reveal delete disabled on the deciding row.
-  const chipBgs = await page.locator(".qz-s3-ledger .qz-s3-card .qz-s3-numchip").evaluateAll(
-    (els) => els.map((el) => getComputedStyle(el).backgroundColor));
-  ok("decider numchip is SOLID ACCENT (no gold anywhere)",
-    chipBgs.includes("rgb(109, 90, 230)") && !chipBgs.some((c) => c === "rgb(140, 109, 31)"),
-    chipBgs.join(" | "));
-  ok("decider row's ledger delete (.qz-s3-cdel) is DISABLED",
-    await page.locator(".qz-s3-ledger .qz-s3-card").first().locator(".qz-s3-cdel").isDisabled());
-  await page.screenshot({ path: `${SHOTS}/6-logic-ledger.png`, fullPage: true });
+  // 19 ── Logic-tab migration (docs/design/logic-tab/HANDOFF.md): the funnel
+  // Logic stage renders the SAME one-card view as the studio builder — Rules
+  // above Questions on one card — with the safety-net + quiz-ending configs
+  // keeping their own sections below it. (The pre-migration LogicScroll
+  // ledger assertions lived here; the ledger DOM is gone by design.)
+  const ltab = page.locator('[data-testid="logic-tab-card"]');
+  ok("the ONE Logic card renders", (await ltab.count()) === 1);
+  ok("Rules + Questions headers on the one card",
+    (await ltab.locator("h2", { hasText: "Rules" }).count()) === 1 &&
+    (await ltab.locator("h2", { hasText: "Questions" }).count()) === 1);
+  ok("one table row-group per question (3 label cells)",
+    (await ltab.locator(".qz-ltab-qcell").count()) === 3);
+  ok("exactly one ◆ Starting set pill (decider guard carried over)",
+    (await ltab.locator(".qz-ltab-pill.is-start").count()) === 1);
+  ok("+ Create rule present on the funnel card",
+    (await ltab.locator(".qz-ltab-create").count()) === 1);
+  ok("every question row routes somewhere (Then-go-to column live)",
+    (await ltab.locator("tbody td:last-child").evaluateAll(
+      (tds) => tds.every((td) => td.textContent.trim().length > 0))));
+  ok("safety-net section keeps its own module below the card",
+    (await page.locator(".qz-s3-logicview .qz-s3-fallback").count()) === 1);
+  ok("capture terminal keeps its own module below the card",
+    (await page.locator(".qz-s3-logicview .qz-s3-capmod").count()) === 1);
+  await page.screenshot({ path: `${SHOTS}/6-logic-card.png`, fullPage: true });
 
   // 20 ── the bar's ‹ back = the goto-stage intent (backwards-only) → the
   // Questions stage again, so the walk proves both directions of the seam.
