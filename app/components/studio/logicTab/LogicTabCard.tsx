@@ -6,6 +6,13 @@ import type { OrderedQuestion } from "../../../lib/questionOrder";
 import { answerNextNode } from "../../../lib/pathAnalyzer";
 import { answerFilterValues, filterAnswerMatchCount } from "../../../lib/filterMatching";
 import { ruleTargets } from "../../../lib/recommendDecider";
+import {
+  NarrowsMenuButton,
+  ProductCountButton,
+  RoleMenuButton,
+  RouteMenuButton,
+  StartingSetMenuButton,
+} from "./LogicTabMenus";
 
 // ════════════════════════════════════════════════════════════════════════════
 // Logic tab (docs/design/logic-tab/HANDOFF.md §2/§3/§5 + DECISIONS.md) — the
@@ -55,12 +62,15 @@ export function LogicTabCard({
   categories,
   collections,
   productIndex,
+  commit,
 }: {
   doc: QuizDoc;
   questions: OrderedQuestion[];
   categories: BuilderCategory[];
   collections: BuilderCollection[];
   productIndex: IndexedProduct[];
+  /** P3+ — the editing seam. Absent = read-only (previews, tests). */
+  commit?: (doc: QuizDoc) => void;
 }) {
   const catById = useMemo(() => new Map(categories.map((c) => [c.id, c])), [categories]);
   const colTitleById = useMemo(
@@ -144,10 +154,14 @@ export function LogicTabCard({
               key={q.node.id}
               doc={doc}
               q={q}
+              questions={questions}
+              categories={categories}
               catById={catById}
+              collections={collections}
               colTitleById={colTitleById}
               productIndex={productIndex}
               qIndexByNodeId={qIndexByNodeId}
+              commit={commit}
             />
           ))}
         </tbody>
@@ -214,67 +228,135 @@ function RuleSentence({
 function QuestionRows({
   doc,
   q,
+  questions,
+  categories,
   catById,
+  collections,
   colTitleById,
   productIndex,
   qIndexByNodeId,
+  commit,
 }: {
   doc: QuizDoc;
   q: OrderedQuestion;
+  questions: OrderedQuestion[];
+  categories: BuilderCategory[];
   catById: Map<string, BuilderCategory>;
+  collections: BuilderCollection[];
   colTitleById: Map<string, string>;
   productIndex: IndexedProduct[];
   qIndexByNodeId: Map<string, number>;
+  commit?: (doc: QuizDoc) => void;
 }) {
   const role = q.node.data.role;
   const answers = q.node.data.answers;
   const total = productIndex.length;
   const keys = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
 
-  // §5.1 — the role pill under the question label.
-  const pill =
-    role === "decides" ? (
-      <span className="qz-ltab-pill is-start">◆ Starting set</span>
-    ) : role === "filter" ? (
-      <span className="qz-ltab-pill is-narrow">
-        Narrows · {q.node.data.narrow_field ? narrowFieldLabel(q.node.data.narrow_field) : "Anything"}
-      </span>
-    ) : (
-      <span className="qz-ltab-pill">Info only</span>
-    );
+  // §5.1 — the role pill under the question label. With a commit seam it
+  // opens the §6.1 role menu; read-only hosts get the static pill.
+  const pill = commit ? (
+    <RoleMenuButton
+      doc={doc}
+      q={q}
+      questions={questions}
+      productIndex={productIndex}
+      commit={commit}
+    />
+  ) : role === "decides" ? (
+    <span className="qz-ltab-pill is-start">◆ Starting set</span>
+  ) : role === "filter" ? (
+    <span className="qz-ltab-pill is-narrow">
+      Narrows · {q.node.data.narrow_field ? narrowFieldLabel(q.node.data.narrow_field) : "Anything"}
+    </span>
+  ) : (
+    <span className="qz-ltab-pill">Info only</span>
+  );
 
   return (
     <>
-      {answers.map((a, i) => (
-        <tr key={a.id} className={i === 0 ? "qz-ltab-qstart" : undefined}>
-          {i === 0 ? (
-            <td className="qz-ltab-qcell" rowSpan={answers.length}>
-              <div className="qz-ltab-qlabel" title={q.node.data.text}>
-                <span className="qz-ltab-qnum">Q{q.qIndex}</span> {q.node.data.text}
-              </div>
-              {pill}
+      {answers.map((a, i) => {
+        const mapping = (
+          <MappingCell role={role} answer={a} catById={catById} colTitleById={colTitleById} />
+        );
+        const count = (
+          <ProductsCell
+            role={role}
+            answer={a}
+            catById={catById}
+            count={filterAnswerMatchCount(a, productIndex)}
+            total={total}
+          />
+        );
+        const route = <RouteCell doc={doc} q={q} answer={a} qIndexByNodeId={qIndexByNodeId} />;
+        return (
+          <tr key={a.id} className={i === 0 ? "qz-ltab-qstart" : undefined}>
+            {i === 0 ? (
+              <td className="qz-ltab-qcell" rowSpan={answers.length}>
+                <div className="qz-ltab-qlabel" title={q.node.data.text}>
+                  <span className="qz-ltab-qnum">Q{q.qIndex}</span> {q.node.data.text}
+                </div>
+                {pill}
+              </td>
+            ) : null}
+            <td className="qz-ltab-key">{keys[i] ?? i + 1}</td>
+            <td className="qz-ltab-answer" title={a.text}>
+              {a.text}
             </td>
-          ) : null}
-          <td className="qz-ltab-key">{keys[i] ?? i + 1}</td>
-          <td className="qz-ltab-answer" title={a.text}>
-            {a.text}
-          </td>
-          <td>
-            <MappingCell
-              role={role}
-              answer={a}
-              catById={catById}
-              colTitleById={colTitleById}
-            />
-          </td>
-          <td className="qz-ltab-count">
-            <ProductsCell role={role} answer={a} catById={catById} count={filterAnswerMatchCount(a, productIndex)} total={total} />
-          </td>
-          <td>
-            <RouteCell doc={doc} q={q} answer={a} qIndexByNodeId={qIndexByNodeId} />
-          </td>
-        </tr>
-      ))}
+            <td>
+              {commit && role === "decides" ? (
+                <StartingSetMenuButton
+                  doc={doc}
+                  q={q}
+                  answer={a}
+                  categories={categories}
+                  commit={commit}
+                />
+              ) : commit && role === "filter" ? (
+                <NarrowsMenuButton
+                  doc={doc}
+                  q={q}
+                  answer={a}
+                  collections={collections}
+                  productIndex={productIndex}
+                  commit={commit}
+                >
+                  {mapping}
+                </NarrowsMenuButton>
+              ) : (
+                mapping
+              )}
+            </td>
+            <td className="qz-ltab-count">
+              {commit && (role === "decides" || role === "filter") ? (
+                <ProductCountButton
+                  answer={a}
+                  role={role}
+                  catById={catById}
+                  productIndex={productIndex}
+                  label={count}
+                />
+              ) : (
+                count
+              )}
+            </td>
+            <td>
+              {commit ? (
+                <RouteMenuButton
+                  doc={doc}
+                  q={q}
+                  answer={a}
+                  questions={questions}
+                  commit={commit}
+                  label={route}
+                />
+              ) : (
+                route
+              )}
+            </td>
+          </tr>
+        );
+      })}
     </>
   );
 }

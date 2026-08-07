@@ -90,6 +90,18 @@ export function filterAnswerMatchCount(
   return n;
 }
 
+/** Logic tab (HANDOFF §6.4) — the products BEHIND a filter answer's count,
+ *  for the product-list popover. Same predicate as the count (they can never
+ *  disagree); null for pass-through answers. */
+export function filterAnswerMatchingProducts(
+  a: AnswerT,
+  productIndex: readonly IndexedProduct[],
+): IndexedProduct[] | null {
+  const v = answerFilterValues(a);
+  if (!v) return null;
+  return productIndex.filter((p) => productMatches(p, v));
+}
+
 /** All questions carrying the filter role, in node order. */
 export function filterQuestions(doc: Pick<QuizDoc, "nodes">) {
   return doc.nodes.filter(

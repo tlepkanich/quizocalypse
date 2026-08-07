@@ -7067,6 +7067,63 @@ tr.qz-ltab-qstart td { border-top: 2px solid var(--qz-rule); }
 .qz-ltab-count { font-variant-numeric: tabular-nums; }
 .qz-ltab-route-next { color: var(--qz-ink-25); }
 
+/* ── P3 — the five popovers (§6) + interactive cells ── */
+.qz-ltab-pill-btn, .qz-ltab-chip-btn, .qz-ltab-cellbtn {
+  font: inherit; cursor: pointer; border: none; background: none; padding: 0;
+  text-align: left;
+}
+.qz-ltab-pill-btn { font-size: 10px; font-weight: 700; }
+.qz-ltab-chip-btn { font-size: 11.5px; }
+.qz-ltab-pill-btn:hover, .qz-ltab-chip-btn:hover { filter: brightness(0.96); }
+.qz-ltab-cellbtn { display: block; width: 100%; border-radius: 6px; padding: 1px 4px; margin: -1px -4px; }
+.qz-ltab-cellbtn:hover { background: var(--qz-cream-2); }
+.qz-ltab-menu { display: flex; flex-direction: column; gap: 1px; padding: 6px; min-width: 240px; max-height: min(52vh, 460px); overflow-y: auto; }
+.qz-ltab-menu-title {
+  font-size: 11px; font-weight: 700; color: var(--qz-ink-3);
+  padding: 4px 8px 6px; border-bottom: 1px solid var(--qz-cream-2); margin-bottom: 3px;
+}
+.qz-ltab-menu-row {
+  font: inherit; display: flex; align-items: baseline; justify-content: space-between;
+  gap: 10px; width: 100%; text-align: left; background: none; border: none;
+  cursor: pointer; padding: 5px 8px; border-radius: 8px; font-size: 12.5px;
+  color: var(--qz-ink);
+}
+.qz-ltab-menu-row:hover { background: var(--qz-cream-2); }
+.qz-ltab-menu-row.is-current { background: var(--qz-accent-wash); color: var(--qz-accent-ink); }
+.qz-ltab-menu-row.is-indent { padding-left: 22px; }
+.qz-ltab-menu-row:disabled { color: var(--qz-ink-25); cursor: default; }
+.qz-ltab-menu-row:disabled:hover { background: none; }
+.qz-ltab-menu-row-main { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.qz-ltab-menu-row-sub { flex: 0 0 auto; font-size: 11px; color: var(--qz-ink-4); font-variant-numeric: tabular-nums; }
+.qz-ltab-menu-section { display: flex; flex-direction: column; gap: 1px; border-top: 1px solid var(--qz-cream-2); padding-top: 4px; margin-top: 3px; }
+.qz-ltab-menu-chips { display: flex; gap: 4px; padding: 4px 8px; }
+.qz-ltab-menu-chip {
+  font: inherit; font-size: 10.5px; font-weight: 600; cursor: pointer;
+  border: 1px solid var(--qz-rule); background: none; color: var(--qz-ink-3);
+  padding: 2px 9px; border-radius: var(--qz-radius-pill);
+}
+.qz-ltab-menu-chip.is-on { background: var(--qz-ink); color: var(--qz-paper); border-color: var(--qz-ink); }
+.qz-ltab-menu-search {
+  font: inherit; font-size: 12px; margin: 4px 8px; padding: 5px 9px;
+  border: 1px solid var(--qz-rule); border-radius: 8px; background: var(--qz-cream-2);
+  color: var(--qz-ink);
+}
+.qz-ltab-menu-search:focus { outline: 2px solid var(--qz-accent); outline-offset: 0; }
+.qz-ltab-menu-group {
+  font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em;
+  color: var(--qz-ink-4); padding: 6px 8px 2px;
+}
+.qz-ltab-menu-none { font-size: 11.5px; color: var(--qz-ink-4); padding: 6px 8px; }
+.qz-ltab-menu-products { display: flex; flex-direction: column; gap: 2px; }
+.qz-ltab-menu-product {
+  display: flex; align-items: center; gap: 8px; font-size: 12px; padding: 3px 8px;
+}
+.qz-ltab-menu-product img { border-radius: 4px; object-fit: cover; flex: 0 0 auto; }
+.qz-ltab-menu-swatch {
+  width: 22px; height: 22px; border-radius: 4px; background: var(--qz-cream-2);
+  flex: 0 0 auto;
+}
+
 /* ═══════════════════════════════════════════════════════════════════════════
    QZY-R8 — Logic view: Map · Paths · Table tab shell + the Paths lanes (LV1/LV3).
    Builder-only (admin sheet); status accents (gold decider / indigo ruled /

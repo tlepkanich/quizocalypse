@@ -44,10 +44,8 @@ export function BuilderLogicView({
   const decider = useMemo(() => deciderQuestion(doc), [doc]);
   // Logic tab v2 (docs/design/logic-tab/HANDOFF.md + DECISIONS.md) — the ONE
   // card replaces the Map · Table chrome and the global rules bar. Paths stays
-  // as a diagnostics tab (DECISIONS "surface fate"); commit is unused until
-  // the editing phases (P3-P5) wire the menus/modal.
+  // as a diagnostics tab (DECISIONS "surface fate").
   const [logicTab, setLogicTab] = useState<"logic" | "paths">("logic");
-  void commit;
 
   if (!isDecider) {
     // Legacy scoring docs: the existing mapping surface (it embeds its own
@@ -94,6 +92,7 @@ export function BuilderLogicView({
             categories={data.categories}
             collections={data.collections}
             productIndex={data.productIndex}
+            commit={commit}
           />
           {/* PathTester renders its own "Try a path" header. */}
           <PathTester doc={doc} productIndex={data.productIndex} categories={data.categories} />
