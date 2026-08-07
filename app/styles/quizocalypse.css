@@ -7001,6 +7001,73 @@ textarea.qz-s4-inp { resize: vertical; min-height: 56px; line-height: 1.5; }
 .qz-layers-grip { font-size: 12px; line-height: 1; flex: 0 0 auto; }
 
 /* ═══════════════════════════════════════════════════════════════════════════
+   Logic tab v2 (docs/design/logic-tab/HANDOFF.md §2/§3/§5/§11) — the ONE-card
+   design: Rules above Questions, shared row metrics (12.5px / 1.45), fixed
+   table layout ("the map never reflows"). Mock tokens map onto the repo
+   system: --line2 → --qz-cream-2 · --bar → --qz-rule · bad → --qz-crit.
+   ═══════════════════════════════════════════════════════════════════════════ */
+.qz-ltab {
+  background: var(--qz-paper); border: 1px solid var(--qz-rule);
+  border-radius: var(--qz-radius); overflow: hidden;
+}
+.qz-ltab-hd {
+  display: flex; align-items: center; gap: 10px;
+  padding: 9px 16px 9px 22px; border-bottom: 1px solid var(--qz-rule);
+}
+.qz-ltab-hd h2 { font-size: 14.5px; font-weight: 700; letter-spacing: -0.01em; margin: 0; }
+.qz-ltab-div { border-top: 1px solid var(--qz-rule); }
+.qz-ltab-empty { font-size: 12.5px; line-height: 1.45; color: var(--qz-ink-3); padding: 10px 22px; margin: 0; }
+.qz-ltab-rules { list-style: none; margin: 0; padding: 0; }
+.qz-ltab-rrow {
+  display: flex; gap: 10px; align-items: baseline;
+  font-size: 12.5px; line-height: 1.45; padding: 7px 22px;
+  border-bottom: 1px solid var(--qz-cream-2);
+}
+.qz-ltab-rrow:last-child { border-bottom: none; }
+.qz-ltab-rnum { color: var(--qz-ink-25); font-variant-numeric: tabular-nums; flex: 0 0 auto; min-width: 14px; }
+.qz-ltab-sentence { min-width: 0; }
+.qz-ltab-join { color: var(--qz-ink-4); }
+.qz-ltab-tbl {
+  width: 100%; border-collapse: collapse; table-layout: fixed;
+  font-size: 12.5px; line-height: 1.45;
+}
+.qz-ltab-tbl th {
+  text-align: left; font-size: 10.5px; font-weight: 600;
+  text-transform: uppercase; letter-spacing: 0.06em; color: var(--qz-ink-4);
+  padding: 8px 10px; border-bottom: 1px solid var(--qz-rule);
+}
+.qz-ltab-tbl th:first-child, .qz-ltab-tbl td:first-child { padding-left: 22px; }
+.qz-ltab-tbl td {
+  padding: 7px 10px; border-bottom: 1px solid var(--qz-cream-2);
+  vertical-align: top; overflow: hidden; text-overflow: ellipsis;
+}
+/* §2 — the divide between questions is the heaviest line in the table. */
+tr.qz-ltab-qstart td { border-top: 2px solid var(--qz-rule); }
+.qz-ltab-qcell { border-right: 2px solid var(--qz-rule); }
+.qz-ltab-qlabel { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.qz-ltab-qnum { color: var(--qz-ink-4); font-weight: 700; margin-right: 2px; }
+.qz-ltab-key { color: var(--qz-ink-25); font-weight: 600; }
+.qz-ltab-answer { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.qz-ltab-pill {
+  display: inline-flex; align-items: center; gap: 4px; margin-top: 4px;
+  font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em;
+  padding: 2px 8px; border-radius: var(--qz-radius-pill);
+  background: var(--qz-cream-2); color: var(--qz-ink-3);
+}
+.qz-ltab-pill.is-start { background: var(--qz-accent-wash); color: var(--qz-accent-ink); }
+.qz-ltab-pill.is-narrow { background: var(--qz-pal-teal-wash); color: var(--qz-src-col); }
+.qz-ltab-chip {
+  display: inline-block; margin: 1px 4px 1px 0; padding: 1px 7px;
+  font-size: 11.5px; border-radius: 6px;
+  background: var(--qz-cream-2); color: var(--qz-ink);
+}
+.qz-ltab-muted { color: var(--qz-ink-25); }
+.qz-ltab-soft { color: var(--qz-ink-4); }
+.qz-ltab-bad { color: var(--qz-crit); font-weight: 600; }
+.qz-ltab-count { font-variant-numeric: tabular-nums; }
+.qz-ltab-route-next { color: var(--qz-ink-25); }
+
+/* ═══════════════════════════════════════════════════════════════════════════
    QZY-R8 — Logic view: Map · Paths · Table tab shell + the Paths lanes (LV1/LV3).
    Builder-only (admin sheet); status accents (gold decider / indigo ruled /
    amber dead-end / green ok) are semantic and intentionally literal.

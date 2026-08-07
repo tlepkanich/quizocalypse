@@ -1,13 +1,10 @@
 import { useMemo, useState } from "react";
 import { Link } from "@remix-run/react";
 import type { Quiz } from "../../lib/quizSchema";
-import { deleteNode, moveStep } from "../../lib/quizMutations";
 import { LogicView } from "../logic/LogicView";
 import { PathTester } from "../logic/PathTester";
-import { LogicScroll } from "../onboarding/questionsLogicV3/logic/LogicScroll";
 import { LogicPathsTab } from "./LogicPathsTab";
-import { LogicTableTab } from "./LogicTableTab";
-import { LogicRulesBar } from "./LogicRulesBar";
+import { LogicTabCard } from "./logicTab/LogicTabCard";
 import {
   deciderQuestion,
   orderedQuestions,
@@ -45,10 +42,12 @@ export function BuilderLogicView({
   const isDecider = doc.logic_model === "decider";
   const questions = useMemo(() => orderedQuestions(doc), [doc]);
   const decider = useMemo(() => deciderQuestion(doc), [doc]);
-  const [activeId, setActiveId] = useState<string>("");
-  // QZY-R8 (LV1) — Map · Paths · Table tabs over ONE dataset (the doc). Map owns
-  // add/remove structure; Paths/Table are live projections (R1's engine).
-  const [logicTab, setLogicTab] = useState<"map" | "paths" | "table">("map");
+  // Logic tab v2 (docs/design/logic-tab/HANDOFF.md + DECISIONS.md) — the ONE
+  // card replaces the Map · Table chrome and the global rules bar. Paths stays
+  // as a diagnostics tab (DECISIONS "surface fate"); commit is unused until
+  // the editing phases (P3-P5) wire the menus/modal.
+  const [logicTab, setLogicTab] = useState<"logic" | "paths">("logic");
+  void commit;
 
   if (!isDecider) {
     // Legacy scoring docs: the existing mapping surface (it embeds its own
@@ -65,22 +64,13 @@ export function BuilderLogicView({
     );
   }
 
-  const tabs: Array<{ key: "map" | "paths" | "table"; label: string }> = [
-    { key: "map", label: "Map" },
+  const tabs: Array<{ key: "logic" | "paths"; label: string }> = [
+    { key: "logic", label: "Logic" },
     { key: "paths", label: "Paths" },
-    { key: "table", label: "Table" },
   ];
 
   return (
     <div style={{ display: "grid", gap: 16 }}>
-      {/* BLD-3 — the page header now comes from the host's mock .tphd. */}
-      {/* QZY-R8-2 — the global rules stack, shared above all three tabs. */}
-      <LogicRulesBar
-        doc={doc}
-        questions={questions}
-        categories={data.categories}
-        onManage={() => setLogicTab("map")}
-      />
       <div className="qz-logic-tabs" role="tablist" aria-label="Logic views">
         {tabs.map((t) => (
           <button
@@ -96,47 +86,14 @@ export function BuilderLogicView({
         ))}
       </div>
 
-      {logicTab === "map" ? (
+      {logicTab === "logic" ? (
         <>
-          <LogicScroll
+          <LogicTabCard
             doc={doc}
             questions={questions}
-            deciderId={decider?.id ?? null}
             categories={data.categories}
             collections={data.collections}
             productIndex={data.productIndex}
-            captureOn={doc.rec_page_settings?.global?.captureEmail !== false}
-            activeId={activeId}
-            onActiveChange={setActiveId}
-            onMove={(id, dir) => {
-              // Same ↑/↓ semantics as the funnel shell: reorder within the
-              // straight-through run via the pure moveStep mutation.
-              const idx = questions.findIndex((q) => q.node.id === id);
-              if (idx < 0) return;
-              const beforeId =
-                dir === -1
-                  ? questions[idx - 1]?.node.id ?? null
-                  : questions[idx + 2]?.node.id ?? null;
-              if (dir === -1 && idx === 0) return;
-              if (dir === 1 && idx === questions.length - 1) return;
-              commit(moveStep(doc, id, beforeId));
-            }}
-            // questions-full-page §2/§6 — the ledger's renumber + delete,
-            // through the same pure mutations the funnel shell uses.
-            onReorder={(id, toIndex) => {
-              const ids = questions.map((q) => q.node.id);
-              const from = ids.indexOf(id);
-              if (from < 0) return;
-              const target = Math.max(0, Math.min(ids.length - 1, toIndex));
-              if (target === from) return;
-              const beforeId = from < target ? ids[target + 1] ?? null : ids[target]!;
-              commit(moveStep(doc, id, beforeId));
-            }}
-            onDelete={(id) => {
-              if (typeof window !== "undefined" && !window.confirm("Delete this question?")) return;
-              commit(deleteNode(doc, id));
-            }}
-            onCommit={commit}
           />
           {/* PathTester renders its own "Try a path" header. */}
           <PathTester doc={doc} productIndex={data.productIndex} categories={data.categories} />
@@ -149,16 +106,6 @@ export function BuilderLogicView({
           questions={questions}
           deciderId={decider?.id ?? null}
           categories={data.categories}
-          onSelectNode={onSelectNode}
-        />
-      ) : null}
-
-      {logicTab === "table" ? (
-        <LogicTableTab
-          doc={doc}
-          questions={questions}
-          categories={data.categories}
-          commit={commit}
           onSelectNode={onSelectNode}
         />
       ) : null}
