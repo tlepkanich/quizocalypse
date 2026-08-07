@@ -1,9 +1,10 @@
-import { useMemo } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { Quiz, Answer } from "../../../lib/quizSchema";
 import type { BuilderCategory, BuilderCollection } from "../../builder/stepProps";
 import type { IndexedProduct } from "../../../lib/recommendationEngine";
 import type { OrderedQuestion } from "../../../lib/questionOrder";
 import { answerNextNode } from "../../../lib/pathAnalyzer";
+import { moveDecisionRule, removeDecisionRule } from "../../../lib/quizMutations";
 import { answerFilterValues, filterAnswerMatchCount } from "../../../lib/filterMatching";
 import { ruleTargets } from "../../../lib/recommendDecider";
 import {
@@ -82,6 +83,20 @@ export function LogicTabCard({
     [questions],
   );
   const rules = doc.decision_rules ?? [];
+  // §3.3 — a freshly created rule gets a brief highlight for 1800 ms.
+  const [freshRuleId, setFreshRuleId] = useState<string | null>(null);
+  const knownRuleIds = useRef<Set<string> | null>(null);
+  useEffect(() => {
+    const ids = new Set(rules.map((r) => r.id));
+    const prev = knownRuleIds.current;
+    knownRuleIds.current = ids;
+    if (!prev) return;
+    const added = rules.find((r) => !prev.has(r.id));
+    if (!added) return;
+    setFreshRuleId(added.id);
+    const t = setTimeout(() => setFreshRuleId(null), 1800);
+    return () => clearTimeout(t);
+  }, [rules]);
   // §3.2 — "switched on" = role is not Info only (Starting set counts).
   const switchedOn = questions.filter(
     (q) => q.node.data.role === "decides" || q.node.data.role === "filter",
@@ -111,7 +126,10 @@ export function LogicTabCard({
       ) : (
         <ol className="qz-ltab-rules">
           {rules.map((rule, i) => (
-            <li key={rule.id} className="qz-ltab-rrow">
+            <li
+              key={rule.id}
+              className={`qz-ltab-rrow${rule.id === freshRuleId ? " is-fresh" : ""}`}
+            >
               <span className="qz-ltab-rnum">{i + 1}</span>
               <span className="qz-ltab-sentence">
                 <RuleSentence
@@ -120,6 +138,38 @@ export function LogicTabCard({
                   catById={catById}
                 />
               </span>
+              {commit ? (
+                <span className="qz-ltab-ractions">
+                  {/* §3.3 — order IS priority; explicit reorder (DECISIONS). */}
+                  <button
+                    type="button"
+                    className="qz-ltab-rbtn"
+                    aria-label="Move rule up"
+                    disabled={i === 0}
+                    onClick={() => commit(moveDecisionRule(doc, rule.id, i - 1))}
+                  >
+                    ↑
+                  </button>
+                  <button
+                    type="button"
+                    className="qz-ltab-rbtn"
+                    aria-label="Move rule down"
+                    disabled={i === rules.length - 1}
+                    onClick={() => commit(moveDecisionRule(doc, rule.id, i + 1))}
+                  >
+                    ↓
+                  </button>
+                  {/* Delete looks the rule up BY ID, never by row index. */}
+                  <button
+                    type="button"
+                    className="qz-ltab-rbtn is-del"
+                    aria-label="Delete rule"
+                    onClick={() => commit(removeDecisionRule(doc, rule.id))}
+                  >
+                    ✕
+                  </button>
+                </span>
+              ) : null}
             </li>
           ))}
         </ol>

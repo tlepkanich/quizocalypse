@@ -7025,7 +7025,19 @@ textarea.qz-s4-inp { resize: vertical; min-height: 56px; line-height: 1.5; }
 }
 .qz-ltab-rrow:last-child { border-bottom: none; }
 .qz-ltab-rnum { color: var(--qz-ink-25); font-variant-numeric: tabular-nums; flex: 0 0 auto; min-width: 14px; }
-.qz-ltab-sentence { min-width: 0; }
+.qz-ltab-sentence { min-width: 0; flex: 1 1 auto; }
+/* P4 — reorder/delete actions; §3.3 fresh-rule highlight (1800 ms). */
+.qz-ltab-ractions { display: flex; gap: 2px; flex: 0 0 auto; opacity: 0; }
+.qz-ltab-rrow:hover .qz-ltab-ractions, .qz-ltab-ractions:focus-within { opacity: 1; }
+.qz-ltab-rbtn {
+  font: inherit; font-size: 11px; line-height: 1; cursor: pointer;
+  border: none; background: none; color: var(--qz-ink-4);
+  padding: 3px 5px; border-radius: 6px;
+}
+.qz-ltab-rbtn:hover { background: var(--qz-cream-2); color: var(--qz-ink); }
+.qz-ltab-rbtn:disabled { color: var(--qz-ink-25); cursor: default; background: none; }
+.qz-ltab-rbtn.is-del:hover { color: var(--qz-crit); }
+.qz-ltab-rrow.is-fresh { background: var(--qz-accent-wash); transition: background 0.4s ease; }
 .qz-ltab-join { color: var(--qz-ink-4); }
 .qz-ltab-tbl {
   width: 100%; border-collapse: collapse; table-layout: fixed;
