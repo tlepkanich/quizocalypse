@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import type { Quiz } from "../../../lib/quizSchema";
 import type { BuilderCategory, BuilderCollection } from "../../builder/stepProps";
@@ -78,6 +78,54 @@ export function CreateRuleModal({
   const [query, setQuery] = useState("");
   const [kindChip, setKindChip] = useState<"all" | "set" | "tag" | "collection" | "product">("all");
   const [busy, setBusy] = useState(false);
+  // §4.5/G10 — the impact line, computed server-side (pathEnumeration, cap
+  // 2 000 with truncated → "(sampled)"). Debounced; errors just hide the line.
+  const [impact, setImpact] = useState<
+    | null
+    | { loading: true }
+    | { notEstimable: true }
+    | { fires: number; total: number; truncated: boolean }
+  >(null);
+
+  const conditionsKey = JSON.stringify(picks);
+  useEffect(() => {
+    if (!open) return;
+    const conditions = Object.entries(picks).flatMap(([qid, aids]) =>
+      aids.map((aid) => ({ question_id: qid, answer_id: aid, op: "is" as const })),
+    );
+    if (conditions.length === 0) {
+      setImpact(null);
+      return;
+    }
+    let alive = true;
+    setImpact({ loading: true });
+    const t = setTimeout(async () => {
+      try {
+        const res = await fetch("/api/quizzes/rule-impact", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ quizId, conditions }),
+        });
+        const j = (await res.json()) as
+          | { ok: true; notEstimable?: boolean; fires?: number; total?: number; truncated?: boolean }
+          | { ok: false };
+        if (!alive) return;
+        if (!j.ok) setImpact(null);
+        else if (j.notEstimable) setImpact({ notEstimable: true });
+        else if (typeof j.fires === "number" && typeof j.total === "number")
+          setImpact({ fires: j.fires, total: j.total, truncated: Boolean(j.truncated) });
+        else setImpact(null);
+      } catch {
+        if (alive) setImpact(null);
+      }
+    }, 350);
+    return () => {
+      alive = false;
+      clearTimeout(t);
+    };
+    // conditionsKey stringifies picks — the real dependency.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [conditionsKey, open, quizId]);
 
   // ── the one resource index (§4.3) ─────────────────────────────────────────
   const index = useMemo(() => {
@@ -452,6 +500,17 @@ export function CreateRuleModal({
               ))
             )}
             .
+            {impact ? (
+              <span className="qz-crm-impact">
+                {"loading" in impact
+                  ? "…"
+                  : "notEstimable" in impact
+                    ? "Needs multi-answer shoppers — not estimable yet"
+                    : impact.truncated
+                      ? `≈${impact.total ? Math.round((impact.fires / impact.total) * 100) : 0}% of shoppers (sampled)`
+                      : `Fires on ${impact.fires.toLocaleString()} of ${impact.total.toLocaleString()} paths`}
+              </span>
+            ) : null}
           </p>
           <button type="button" className="qz-btn" onClick={onClose}>
             Cancel

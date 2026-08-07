@@ -7129,6 +7129,82 @@ textarea.qz-s4-inp { resize: vertical; min-height: 56px; line-height: 1.5; }
   padding: 10px 18px; border-top: 1px solid var(--qz-rule);
 }
 .qz-crm-sentence { flex: 1 1 auto; font-size: 12.5px; line-height: 1.45; margin: 0; }
+.qz-crm-impact { display: block; font-size: 11px; color: var(--qz-ink-4); margin-top: 3px; font-variant-numeric: tabular-nums; }
+
+/* ── P6 — the ✦ How it works pills + explainer sheets (§7) ── */
+.qz-ltab-how {
+  font: inherit; font-size: 10.5px; font-weight: 600; cursor: pointer;
+  border: 1px solid var(--qz-rule); background: none; color: var(--qz-ink-3);
+  padding: 3px 10px 3px 8px; border-radius: var(--qz-radius-pill);
+}
+.qz-ltab-how:hover { background: var(--qz-cream-2); color: var(--qz-ink); }
+.qz-xpl {
+  display: flex; flex-direction: column;
+  width: min(900px, 94vw); max-height: 92vh;
+  background: var(--qz-paper); border-radius: var(--qz-radius-lg);
+  box-shadow: var(--qz-lift-3); overflow: hidden;
+}
+.qz-xpl-hd { display: flex; align-items: center; justify-content: space-between; padding: 14px 20px 6px; }
+.qz-xpl-hd h2 { font-size: 15px; font-weight: 700; margin: 0; }
+.qz-xpl-progress { display: flex; align-items: center; justify-content: center; gap: 22px; padding: 8px 0 2px; }
+.qz-xpl-progress::before { content: none; }
+.qz-xpl-dot {
+  font: inherit; font-size: 11px; font-weight: 700; cursor: pointer;
+  width: 26px; height: 26px; border-radius: 50%;
+  border: 1px solid var(--qz-rule); background: var(--qz-paper); color: var(--qz-ink-3);
+}
+.qz-xpl-dot.is-on { border-color: var(--qz-accent); background: var(--qz-accent-wash); color: var(--qz-accent-ink); }
+.qz-xpl-dot.is-done { border-color: var(--qz-ok); color: var(--qz-ok); }
+/* §7 — one 680px column, centred; prose capped; fixed height for step
+   continuity (simplified from the mock's measured lock). */
+.qz-xpl-body {
+  width: min(680px, 100%); margin: 0 auto; padding: 14px 20px 10px;
+  height: min(440px, calc(92vh - 170px)); overflow-y: auto;
+  display: flex; flex-direction: column; gap: 12px; align-items: flex-start;
+}
+.qz-xpl-body h3 { font-size: 16px; font-weight: 700; margin: 0; }
+.qz-xpl-body p { font-size: 13px; line-height: 1.55; margin: 0; max-width: 68ch; color: var(--qz-ink-3); }
+.qz-xpl-grid3 {
+  display: grid; grid-template-columns: 1.2fr 0.6fr 1fr; gap: 6px 14px;
+  width: 100%; font-size: 12.5px; line-height: 1.45;
+  border: 1px solid var(--qz-rule); border-radius: 12px; padding: 12px 14px;
+}
+.qz-xpl-grid3-head {
+  font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em;
+  color: var(--qz-ink-4);
+}
+.qz-xpl-ledger { width: 100%; border: 1px solid var(--qz-rule); border-radius: 12px; overflow: hidden; }
+.qz-xpl-lrow {
+  display: flex; align-items: baseline; gap: 10px; font-size: 12.5px; line-height: 1.45;
+  padding: 6px 12px; border-bottom: 1px solid var(--qz-cream-2); color: var(--qz-ink-4);
+}
+.qz-xpl-lrow:last-child { border-bottom: none; }
+.qz-xpl-lrow.is-lit { color: var(--qz-ink); background: var(--qz-accent-tint); }
+.qz-xpl-lsent { flex: 1 1 auto; }
+.qz-xpl-ltag { flex: 0 0 auto; font-size: 10.5px; font-weight: 600; color: var(--qz-ink-25); }
+.qz-xpl-ltag.is-ok { color: var(--qz-ok); }
+.qz-xpl-cards { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; width: 100%; }
+.qz-xpl-card {
+  display: flex; flex-direction: column; gap: 6px;
+  border: 1px solid var(--qz-rule); border-radius: 12px; padding: 14px;
+  font-size: 12.5px; line-height: 1.5;
+}
+.qz-xpl-card span { color: var(--qz-ink-3); }
+.qz-xpl-pipe {
+  display: flex; align-items: center; flex-wrap: wrap; gap: 10px;
+  font-size: 13px; border: 1px solid var(--qz-rule); border-radius: 12px;
+  padding: 16px 18px; width: 100%; justify-content: center;
+}
+.qz-xpl-pipe > span[aria-hidden] { color: var(--qz-ink-25); }
+.qz-xpl-cross {
+  font: inherit; font-size: 12px; font-weight: 600; cursor: pointer;
+  border: none; background: none; color: var(--qz-accent); padding: 0;
+}
+.qz-xpl-ft {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 10px 20px 14px; border-top: 1px solid var(--qz-rule);
+}
+.qz-xpl-ft-btns { display: flex; gap: 8px; }
 .qz-ltab-join { color: var(--qz-ink-4); }
 .qz-ltab-tbl {
   width: 100%; border-collapse: collapse; table-layout: fixed;

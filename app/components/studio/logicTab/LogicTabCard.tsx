@@ -15,6 +15,7 @@ import {
   StartingSetMenuButton,
 } from "./LogicTabMenus";
 import { CreateRuleModal } from "./CreateRuleModal";
+import { ExplainerSheet, type ExplainerKind } from "./Explainers";
 
 // ════════════════════════════════════════════════════════════════════════════
 // Logic tab (docs/design/logic-tab/HANDOFF.md §2/§3/§5 + DECISIONS.md) — the
@@ -81,6 +82,8 @@ export function LogicTabCard({
   // route loader's next pass returns them (autosave revalidation).
   const [extraCats, setExtraCats] = useState<BuilderCategory[]>([]);
   const [createOpen, setCreateOpen] = useState(false);
+  // §7 — the stepped explainer sheets; null = closed.
+  const [explainer, setExplainer] = useState<ExplainerKind | null>(null);
   const allCategories = useMemo(() => {
     const seen = new Set(categories.map((c) => c.id));
     return [...categories, ...extraCats.filter((c) => !seen.has(c.id))];
@@ -121,6 +124,14 @@ export function LogicTabCard({
     <section className="qz-ltab" data-testid="logic-tab-card">
       <header className="qz-ltab-hd">
         <h2>Rules</h2>
+        {/* §3.1 — the same label string on both headers (equal pill width). */}
+        <button
+          type="button"
+          className="qz-ltab-how"
+          onClick={() => setExplainer("rules")}
+        >
+          ✦ How it works
+        </button>
         {commit && quizId ? (
           <button
             type="button"
@@ -215,7 +226,20 @@ export function LogicTabCard({
 
       <header className="qz-ltab-hd qz-ltab-div">
         <h2>Questions</h2>
+        <button
+          type="button"
+          className="qz-ltab-how"
+          onClick={() => setExplainer("questions")}
+        >
+          ✦ How it works
+        </button>
       </header>
+      <ExplainerSheet
+        kind={explainer ?? "rules"}
+        open={explainer !== null}
+        onClose={() => setExplainer(null)}
+        onSwap={setExplainer}
+      />
       <table className="qz-ltab-tbl">
         <colgroup>
           <col style={{ width: "17%" }} />
