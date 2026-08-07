@@ -24,7 +24,8 @@ type AnswerT = z.infer<typeof Answer>;
 //
 // Variant-derived attributes (size/color "automatic — no setup", §7) are a
 // flagged dependency: the baked product index carries tags / collections /
-// metafields but not per-variant options, so v1 matches tags + collection.
+// metafields but not per-variant options, so matching covers tags +
+// collections + metafields (the last added by the Logic tab, HANDOFF G5).
 //
 // Everything here is pure. No legacy doc carries role:"filter", so no
 // existing quiz's resolution changes byte-one until a merchant assigns the
@@ -34,8 +35,12 @@ type AnswerT = z.infer<typeof Answer>;
 export interface AnswerFilterValues {
   /** Lowercased tag values this answer matches. */
   tags: string[];
-  /** Optional collection membership constraint. */
-  collectionId: string | null;
+  /** Collection membership constraints (any-of). Unions the legacy single
+   *  collection_filter with the Logic-tab collection_filters (HANDOFF G8). */
+  collectionIds: string[];
+  /** Metafield constraints (any-of): the baked metafield `key` equals `value`,
+   *  case-insensitively (HANDOFF G5). Values pre-lowercased. */
+  metafields: Array<{ key: string; value: string }>;
 }
 
 /** The attribute values a filter answer maps to, or null when the answer is
@@ -44,16 +49,29 @@ export interface AnswerFilterValues {
 export function answerFilterValues(a: AnswerT): AnswerFilterValues | null {
   if (a.no_preference) return null;
   const tags = a.tags.map((t) => t.trim().toLowerCase()).filter(Boolean);
-  const collectionId = a.collection_filter ?? null;
-  if (tags.length === 0 && !collectionId) return null;
-  return { tags, collectionId };
+  const collectionIds = [
+    ...(a.collection_filter ? [a.collection_filter] : []),
+    ...(a.collection_filters ?? []),
+  ].filter((c, i, all) => c && all.indexOf(c) === i);
+  const metafields = (a.metafield_filters ?? [])
+    .map((m) => ({ key: m.key.trim(), value: m.value.trim().toLowerCase() }))
+    .filter((m) => m.key && m.value);
+  if (tags.length === 0 && collectionIds.length === 0 && metafields.length === 0)
+    return null;
+  return { tags, collectionIds, metafields };
 }
 
 function productMatches(p: IndexedProduct, v: AnswerFilterValues): boolean {
-  if (v.collectionId && p.collection_ids.includes(v.collectionId)) return true;
+  if (v.collectionIds.some((c) => p.collection_ids.includes(c))) return true;
   if (v.tags.length) {
     const ptags = p.tags.map((t) => t.toLowerCase());
     if (v.tags.some((t) => ptags.includes(t))) return true;
+  }
+  if (v.metafields.length && p.metafields) {
+    for (const m of v.metafields) {
+      const raw = p.metafields[m.key];
+      if (raw !== undefined && raw.trim().toLowerCase() === m.value) return true;
+    }
   }
   return false;
 }

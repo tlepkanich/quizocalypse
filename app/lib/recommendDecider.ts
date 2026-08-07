@@ -33,6 +33,10 @@ export type TargetShape = "product" | "collection" | "tag";
 
 export interface ResolvedTarget {
   targetId: string;
+  /** Logic tab (HANDOFF G1) — set ONLY when a replace rule carries several
+   *  targets: the full ordered list (targetId === targetIds[0], the config/
+   *  persona anchor). The pool is the union of every entry's members. */
+  targetIds?: string[];
   /** The rule that overrode the direct mapping, or null when the deciding
    *  answer's own mapping produced the target. */
   matchedRuleId: string | null;
@@ -42,6 +46,18 @@ export interface ResolvedTarget {
   // rule's own target. Absent/null = the legacy replace-target rule.
   ruleAction?: "show" | "hide" | "prioritize" | null;
   ruleTargetId?: string | null;
+  /** Multi-target action rules (HANDOFF G1): every rule target; the action's
+   *  member set is the union. ruleTargetId === ruleTargetIds[0]. */
+  ruleTargetIds?: string[];
+}
+
+/** Logic tab (HANDOFF G1) — a rule's full target list. `target_ids` (when
+ *  present) is authoritative; `target_id` is the parse-forever single-target
+ *  mirror of its first entry. */
+export function ruleTargets(
+  rule: Pick<DecisionRuleT, "target_id" | "target_ids">,
+): string[] {
+  return rule.target_ids?.length ? rule.target_ids : [rule.target_id];
 }
 
 /** Rec-page-spec-V2 §3.1 — the spec defaults, applied at READ time so stored
@@ -186,7 +202,12 @@ export function resolveTarget(
     if (rule.conditions.length === 0) continue; // half-built — never fires (V9)
     if (!ruleMatches(rule, selected)) continue;
     if (!rule.action) {
-      return { targetId: rule.target_id, matchedRuleId: rule.id };
+      const targets = ruleTargets(rule);
+      return {
+        targetId: targets[0]!,
+        ...(targets.length > 1 ? { targetIds: targets } : {}),
+        matchedRuleId: rule.id,
+      };
     }
     actionRule = rule;
     break;
@@ -202,18 +223,24 @@ export function resolveTarget(
   const baseTargetId = picked?.target_id ?? null;
 
   if (actionRule) {
+    const targets = ruleTargets(actionRule);
     if (baseTargetId) {
       return {
         targetId: baseTargetId,
         matchedRuleId: actionRule.id,
         ruleAction: actionRule.action ?? null,
-        ruleTargetId: actionRule.target_id,
+        ruleTargetId: targets[0]!,
+        ...(targets.length > 1 ? { ruleTargetIds: targets } : {}),
       };
     }
     // No base mapping to act on: show/prioritize degrade to the rule's own
     // target (something must render); a bare hide has nothing to hide from.
     if (actionRule.action === "hide") return null;
-    return { targetId: actionRule.target_id, matchedRuleId: actionRule.id };
+    return {
+      targetId: targets[0]!,
+      ...(targets.length > 1 ? { targetIds: targets } : {}),
+      matchedRuleId: actionRule.id,
+    };
   }
 
   if (!baseTargetId) return null;

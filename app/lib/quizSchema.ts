@@ -115,6 +115,18 @@ export const Answer = z.object({
   reveal_position: z.enum(["beside", "above"]).optional(),
   tags: z.array(z.string()).default([]),
   collection_filter: z.string().optional(),
+  // Logic tab (logic-tab HANDOFF G8) — "Anything" mode lets one filter answer
+  // match SEVERAL collections. Additive: collection_filter stays parsed forever
+  // as the single-collection form; matching unions both. Absent on every
+  // legacy doc.
+  collection_filters: z.array(z.string()).optional(),
+  // Logic tab (logic-tab HANDOFF G5) — metafield narrowing: this answer
+  // matches products whose baked metafield `key` equals `value`
+  // (case-insensitive; filterMatching.productMatches branch). Additive —
+  // absent on every legacy doc.
+  metafield_filters: z
+    .array(z.object({ key: z.string().min(1), value: z.string().min(1) }))
+    .optional(),
   // QZY-1 (quiz-logic spec §5) — "No preference" as a FIRST-CLASS state on a
   // filter answer: an intentional pass-through that does not narrow the pool
   // (vs. an accidentally-empty tags[]). Never blocking; the Logic map renders
@@ -327,6 +339,13 @@ export const QuestionDataObject = z.object({
   // filter = "Filters results", qualifier = "Info only" (stored value stays
   // `qualifier` forever — parse-forever rule; do not migrate docs).
   role: z.enum(["decides", "qualifier", "filter"]).optional(),
+  // Logic tab (logic-tab HANDOFF §6.1) — which ONE field a filter question
+  // narrows by ("field mode": every answer draws its values from one list).
+  // Namespaced:  "mf:<key>" → a product metafield key;  "tag:<family>" → a
+  // tag family (values are "<family>:<value>" tags). Absent = "Anything" mode
+  // (each answer picks its own mix). UI semantics only — the engine reads the
+  // answers' stored values, never this field. Additive/optional.
+  narrow_field: z.string().optional(),
 });
 
 export const QuestionData = QuestionDataObject.refine(
@@ -1634,6 +1653,12 @@ export const DecisionRule = z.object({
   // collection, or a tag bucket, matching quiz-logic spec §6.2's "tag/
   // collection OR a specific product").
   target_id: z.string().min(1),
+  // Logic tab (logic-tab HANDOFF G1) — multi-target rules ("exclude these
+  // three tags"). Additive: target_id is parsed FOREVER as the single-target
+  // form and writers keep it mirroring target_ids[0], so single-target readers
+  // (publish baking, ruleSummary, pathAnalyzer) stay correct. The engine
+  // unions the members; the FIRST entry anchors config/persona lookup.
+  target_ids: z.array(z.string().min(1)).min(1).optional(),
   // QZY-1 (quiz-logic spec §6.1) — what the winning rule DOES with its
   // target on the resolved ranked list:
   //   absent   → legacy semantics: the rule's target REPLACES the base

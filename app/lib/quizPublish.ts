@@ -129,7 +129,11 @@ export function collectDeciderTargetIds(doc: QuizDoc): Set<string> {
     if (n.type !== "question" || n.data.role !== "decides") continue;
     for (const a of n.data.answers) if (a.target_id) ids.add(a.target_id);
   }
-  for (const rule of doc.decision_rules ?? []) ids.add(rule.target_id);
+  for (const rule of doc.decision_rules ?? []) {
+    ids.add(rule.target_id);
+    // Logic tab (HANDOFF G1) — multi-target rules: every target must bake.
+    for (const t of rule.target_ids ?? []) ids.add(t);
+  }
   return ids;
 }
 

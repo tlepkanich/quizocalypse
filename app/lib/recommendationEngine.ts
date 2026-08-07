@@ -387,7 +387,18 @@ export function recommendForResultExplained(
     // fallback). Path-aware by construction: only the shopper's selected
     // answers on filter-role questions narrow the target's pool; no legacy
     // doc carries the role, so pre-QZY docs resolve byte-identically.
-    const baseIds = input.targetProductIdsMap?.[resolved.targetId] ?? [];
+    // Logic tab (HANDOFF G1) — a multi-target replace rule pools the UNION of
+    // its targets' members (ordered, first-occurrence dedup). Single-target
+    // resolutions read the map entry directly, byte-identical to before.
+    const baseIds = resolved.targetIds
+      ? [
+          ...new Set(
+            resolved.targetIds.flatMap(
+              (id) => input.targetProductIdsMap?.[id] ?? [],
+            ),
+          ),
+        ]
+      : (input.targetProductIdsMap?.[resolved.targetId] ?? []);
     const hasFilters = filterQuestions(quiz).length > 0;
     const narrowed = hasFilters
       ? narrowIdsByFilters(
@@ -403,19 +414,24 @@ export function recommendForResultExplained(
     let poolIds =
       narrowed && narrowed.applied.length > 0 ? narrowed.ids : baseIds;
     if (resolved.ruleAction && resolved.ruleTargetId) {
-      poolIds = applyRuleAction(
-        poolIds,
-        input.targetProductIdsMap?.[resolved.ruleTargetId] ?? [],
-        resolved.ruleAction,
-      );
+      // Multi-target action rules (HANDOFF G1): the action's member set is
+      // the union of every rule target's members.
+      const memberIds = (resolved.ruleTargetIds ?? [resolved.ruleTargetId])
+        .flatMap((id) => input.targetProductIdsMap?.[id] ?? []);
+      poolIds = applyRuleAction(poolIds, [...new Set(memberIds)], resolved.ruleAction);
     }
     const poolAdjusted =
       poolIds !== baseIds ||
       (narrowed !== null && narrowed.applied.length > 0) ||
-      Boolean(resolved.ruleAction);
+      Boolean(resolved.ruleAction) ||
+      Boolean(resolved.targetIds);
     const split = targetProducts({
       targetId: resolved.targetId,
-      targetShape: input.targetIndex?.[resolved.targetId]?.type,
+      // A multi-target union never takes the `product` hero-only shape — the
+      // union is a pool, so undefined (treated as collection) is correct.
+      targetShape: resolved.targetIds
+        ? undefined
+        : input.targetIndex?.[resolved.targetId]?.type,
       config,
       productIndex: sellable,
       targetProductIdsMap: poolAdjusted

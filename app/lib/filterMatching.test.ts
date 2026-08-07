@@ -58,7 +58,38 @@ describe("answerFilterValues (§5 pass-through states)", () => {
   it("lowercases tag values (Shopify tags are mixed-case)", () => {
     expect(answerFilterValues(answer("a", ["SoFt"]) as never)).toEqual({
       tags: ["soft"],
-      collectionId: null,
+      collectionIds: [],
+      metafields: [],
+    });
+  });
+  // Logic tab (HANDOFF G8) — collection_filters unions with the legacy single
+  // collection_filter, deduped, order preserved.
+  it("unions collection_filter + collection_filters (G8)", () => {
+    expect(
+      answerFilterValues(
+        answer("a", [], {
+          collection_filter: "c-sale",
+          collection_filters: ["c-new", "c-sale"],
+        }) as never,
+      ),
+    ).toEqual({ tags: [], collectionIds: ["c-sale", "c-new"], metafields: [] });
+  });
+  // Logic tab (HANDOFF G5) — metafield values lowercase for matching; blank
+  // key/value entries are dropped; metafields alone make the answer narrow.
+  it("carries metafield_filters, lowercased, blanks dropped (G5)", () => {
+    expect(
+      answerFilterValues(
+        answer("a", [], {
+          metafield_filters: [
+            { key: "custom.gender", value: "WoMen" },
+            { key: " ", value: "x" },
+          ],
+        }) as never,
+      ),
+    ).toEqual({
+      tags: [],
+      collectionIds: [],
+      metafields: [{ key: "custom.gender", value: "women" }],
     });
   });
 });
@@ -132,6 +163,46 @@ describe("narrowIdsByFilters (§7 intersection · §1 path-aware)", () => {
     expect(narrowIdsByFilters(["p2", "p1"], byId, doc as never, ["a-wide"]).ids).toEqual([
       "p2",
       "p1",
+    ]);
+  });
+
+  // Logic tab (HANDOFF G5) — the metafield branch matches against the BAKED
+  // product metafields, case-insensitively, and ANDs across questions like
+  // every other constraint.
+  it("metafield answers narrow by baked metafield equality (G5)", () => {
+    const metaProducts = [
+      P("m1", [], []),
+      { ...P("m2", [], []), metafields: { "custom.gender": "Women" } },
+      { ...P("m3", [], []), metafields: { "custom.gender": "men" } },
+    ];
+    const metaById = new Map(metaProducts.map((p) => [p.product_id, p]));
+    const doc = {
+      nodes: [
+        filterQ("q1", [
+          answer("a-women", [], {
+            metafield_filters: [{ key: "custom.gender", value: "women" }],
+          }),
+        ]),
+      ],
+    };
+    const r = narrowIdsByFilters(
+      metaProducts.map((p) => p.product_id),
+      metaById,
+      doc as never,
+      ["a-women"],
+    );
+    expect(r.ids).toEqual(["m2"]);
+  });
+
+  it("multi-collection answers match any-of (G8)", () => {
+    const doc = {
+      nodes: [
+        filterQ("q1", [answer("a-c", [], { collection_filters: ["c-sale", "c-none"] })]),
+      ],
+    };
+    expect(narrowIdsByFilters(allIds, byId, doc as never, ["a-c"]).ids).toEqual([
+      "p3",
+      "p4",
     ]);
   });
 

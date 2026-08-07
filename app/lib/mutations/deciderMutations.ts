@@ -187,27 +187,170 @@ export function moveDecisionRule(doc: QuizDoc, ruleId: string, toIndex: number):
   return { ...doc, decision_rules: rules };
 }
 
-/** Patch a rule's conditions and/or target. The UI builds the whole conditions
- *  array (dropdown-built, §4.1 — never free text), so one setter suffices. An
- *  empty-string target patch is ignored (schema requires min(1)). */
+/** Patch a rule's conditions, target(s) and/or action. The UI builds the whole
+ *  conditions array (dropdown-built, §4.1 — never free text), so one setter
+ *  suffices. An empty-string target patch is ignored (schema requires min(1)).
+ *
+ *  Logic tab (HANDOFF G1/G4/G7):
+ *  - `target_ids` (non-empty) writes the multi-target form and mirrors its
+ *    first entry into `target_id` (parse-forever single-target readers);
+ *    a plain `target_id` write drops any stored `target_ids` (back to the
+ *    single-target form). An empty `target_ids` array is ignored.
+ *  - `action` uses PRESENCE semantics: `{ action: "show" | "hide" |
+ *    "prioritize" }` sets it, `{ action: undefined }` CLEARS it (the UI verb
+ *    "Show" = replace = action absent). Omitting the key leaves it untouched. */
 export function updateDecisionRule(
   doc: QuizDoc,
   ruleId: string,
-  patch: Partial<Pick<DecisionRule, "conditions" | "target_id">>,
+  patch: Partial<Pick<DecisionRule, "conditions" | "target_id" | "target_ids" | "action">>,
 ): QuizDoc {
   if (doc.logic_model !== "decider") return doc;
   const rules = doc.decision_rules ?? [];
   if (!rules.some((r) => r.id === ruleId)) return doc;
   return {
     ...doc,
-    decision_rules: rules.map((r) =>
-      r.id === ruleId
+    decision_rules: rules.map((r) => {
+      if (r.id !== ruleId) return r;
+      const next: DecisionRule = { ...r };
+      if (patch.conditions) next.conditions = patch.conditions;
+      if (patch.target_ids?.length) {
+        next.target_ids = patch.target_ids;
+        next.target_id = patch.target_ids[0]!;
+      } else if (patch.target_id) {
+        next.target_id = patch.target_id;
+        delete next.target_ids;
+      }
+      if ("action" in patch) {
+        if (patch.action) next.action = patch.action;
+        else delete next.action;
+      }
+      return next;
+    }),
+  };
+}
+
+/** Logic tab (HANDOFF §4) — create a COMPLETE rule from the modal in one
+ *  commit, appended at the bottom (lowest priority). Guards enforce the
+ *  modal's own gate (§4.5): ≥1 condition AND ≥1 target, so a half-built or
+ *  targetless rule can never be authored this way (zero-condition rules never
+ *  fire — V9). `target_id` mirrors `target_ids[0]`; single-target rules store
+ *  only `target_id` (the parse-forever form). */
+export function createDecisionRule(
+  doc: QuizDoc,
+  init: {
+    conditions: DecisionRule["conditions"];
+    target_ids: string[];
+    action?: "show" | "hide" | "prioritize";
+  },
+): QuizDoc {
+  if (doc.logic_model !== "decider") return doc;
+  const targets = init.target_ids.filter(Boolean);
+  if (init.conditions.length === 0 || targets.length === 0) return doc;
+  const rule: DecisionRule = {
+    id: uid("rule"),
+    conditions: init.conditions,
+    target_id: targets[0]!,
+    ...(targets.length > 1 ? { target_ids: targets } : {}),
+    ...(init.action ? { action: init.action } : {}),
+  };
+  return { ...doc, decision_rules: [...(doc.decision_rules ?? []), rule] };
+}
+
+// ── Logic tab (HANDOFF §5/§6) — filter-question mapping mutations ───────────
+
+/** The complete filter-value state the set/value menus write for one answer.
+ *  FULL-SET semantics: every call writes the answer's whole mapping — absent
+ *  keys CLEAR that storage (the menus always know the complete selection).
+ *  `no_preference: true` ("Keeps everything") clears every value; values
+ *  clear `no_preference`. Empty everything = "not mapped yet" (pass-through
+ *  either way — an unmapped answer never narrows). */
+export function setAnswerFilterValues(
+  doc: QuizDoc,
+  questionNodeId: string,
+  answerId: string,
+  values: {
+    tags?: string[];
+    collection_filters?: string[];
+    metafield_filters?: Array<{ key: string; value: string }>;
+    no_preference?: boolean;
+  },
+): QuizDoc {
+  if (doc.logic_model !== "decider") return doc;
+  const node = doc.nodes.find((n) => n.id === questionNodeId);
+  if (!node || node.type !== "question") return doc;
+  return {
+    ...doc,
+    nodes: doc.nodes.map((n) =>
+      n.id === questionNodeId && n.type === "question"
         ? {
-            ...r,
-            ...(patch.conditions ? { conditions: patch.conditions } : {}),
-            ...(patch.target_id ? { target_id: patch.target_id } : {}),
+            ...n,
+            data: {
+              ...n.data,
+              answers: n.data.answers.map((a) => {
+                if (a.id !== answerId) return a;
+                const {
+                  collection_filter: _cf,
+                  collection_filters: _cfs,
+                  metafield_filters: _mf,
+                  no_preference: _np,
+                  ...rest
+                } = a;
+                const noPref = values.no_preference === true;
+                return {
+                  ...rest,
+                  tags: noPref ? [] : (values.tags ?? []),
+                  ...(!noPref && values.collection_filters?.length
+                    ? { collection_filters: values.collection_filters }
+                    : {}),
+                  ...(!noPref && values.metafield_filters?.length
+                    ? { metafield_filters: values.metafield_filters }
+                    : {}),
+                  ...(noPref ? { no_preference: true } : {}),
+                };
+              }),
+            },
           }
-        : r,
+        : n,
     ),
+  };
+}
+
+/** Logic tab (HANDOFF §6.1) — set which field a Narrows question draws its
+ *  values from ("mf:<key>" | "tag:<family>"; null = "Anything" mode). Choosing
+ *  a DIFFERENT field clears every answer's values — the old values are
+ *  meaningless against a new field (the caller toasts "map its answers").
+ *  Clearing to Anything (null) keeps the values: they are still an arbitrary
+ *  mix, which is exactly what Anything stores. */
+export function setQuestionNarrowField(
+  doc: QuizDoc,
+  nodeId: string,
+  field: string | null,
+): QuizDoc {
+  if (doc.logic_model !== "decider") return doc;
+  const node = doc.nodes.find((n) => n.id === nodeId);
+  if (!node || node.type !== "question") return doc;
+  const prev = node.data.narrow_field ?? null;
+  if (prev === field) return doc;
+  const clearsValues = field !== null;
+  return {
+    ...doc,
+    nodes: doc.nodes.map((n) => {
+      if (n.id !== nodeId || n.type !== "question") return n;
+      const data = { ...n.data };
+      if (field) data.narrow_field = field;
+      else delete data.narrow_field;
+      if (clearsValues) {
+        data.answers = data.answers.map((a) => {
+          const {
+            collection_filter: _cf,
+            collection_filters: _cfs,
+            metafield_filters: _mf,
+            ...rest
+          } = a;
+          return { ...rest, tags: [] };
+        });
+      }
+      return { ...n, data };
+    }),
   };
 }

@@ -26,6 +26,9 @@ import {
   removeDecisionRule,
   moveDecisionRule,
   updateDecisionRule,
+  createDecisionRule,
+  setAnswerFilterValues,
+  setQuestionNarrowField,
   setRecPageGlobal,
   setRecPageOverride,
   removeRecPageOverride,
@@ -899,6 +902,156 @@ describe("LOGIC v2 role/target mutations (setQuestionRole / setAnswerTarget)", (
       expect(removeDecisionRule(legacy, "r1")).toBe(legacy);
       expect(moveDecisionRule(legacy, "r1", 0)).toBe(legacy);
       expect(updateDecisionRule(legacy, "r1", { target_id: "x" })).toBe(legacy);
+    });
+
+    // Logic tab (HANDOFF G1/G4/G7) — the widened patch surface.
+    it("updateDecisionRule: target_ids writes multi-target + mirrors [0] into target_id (G1)", () => {
+      let doc = addDecisionRule(deciderDoc(), "cat_a");
+      const id = doc.decision_rules![0]!.id;
+      doc = updateDecisionRule(doc, id, { target_ids: ["cat_x", "cat_y"] });
+      expect(doc.decision_rules![0]!.target_ids).toEqual(["cat_x", "cat_y"]);
+      expect(doc.decision_rules![0]!.target_id).toBe("cat_x"); // the mirror
+      // A plain target_id write returns to the single-target form.
+      doc = updateDecisionRule(doc, id, { target_id: "cat_z" });
+      expect(doc.decision_rules![0]!.target_id).toBe("cat_z");
+      expect(
+        Object.prototype.hasOwnProperty.call(doc.decision_rules![0], "target_ids"),
+      ).toBe(false);
+      // Empty target_ids ignored.
+      const kept = updateDecisionRule(doc, id, { target_ids: [] });
+      expect(kept.decision_rules![0]!.target_id).toBe("cat_z");
+      expect(() => Quiz.parse(doc)).not.toThrow();
+    });
+
+    it("updateDecisionRule: action uses PRESENCE semantics — set, clear, untouched (G4/G7)", () => {
+      let doc = addDecisionRule(deciderDoc(), "cat_a");
+      const id = doc.decision_rules![0]!.id;
+      doc = updateDecisionRule(doc, id, { action: "hide" }); // UI "Exclude"
+      expect(doc.decision_rules![0]!.action).toBe("hide");
+      // Omitting the key leaves it untouched…
+      doc = updateDecisionRule(doc, id, { target_id: "cat_b" });
+      expect(doc.decision_rules![0]!.action).toBe("hide");
+      // …while an explicit undefined CLEARS it (UI "Show" = replace = absent).
+      doc = updateDecisionRule(doc, id, { action: undefined });
+      expect(
+        Object.prototype.hasOwnProperty.call(doc.decision_rules![0], "action"),
+      ).toBe(false);
+      expect(() => Quiz.parse(doc)).not.toThrow();
+    });
+
+    it("createDecisionRule builds a complete rule; blocks zero conditions / zero targets (§4.5)", () => {
+      const base = deciderDoc();
+      const doc = createDecisionRule(base, {
+        conditions: [cond("q1", "q1_a1")],
+        target_ids: ["cat_a", "cat_b"],
+        action: "show", // UI "Highlight"
+      });
+      expect(doc.decision_rules).toHaveLength(1);
+      const r = doc.decision_rules![0]!;
+      expect(r.conditions).toHaveLength(1);
+      expect(r.target_id).toBe("cat_a");
+      expect(r.target_ids).toEqual(["cat_a", "cat_b"]);
+      expect(r.action).toBe("show");
+      // Single-target stores ONLY target_id (the parse-forever form).
+      const single = createDecisionRule(base, {
+        conditions: [cond("q1", "q1_a1")],
+        target_ids: ["cat_a"],
+      });
+      const sr = single.decision_rules![0]!;
+      expect(sr.target_id).toBe("cat_a");
+      expect(Object.prototype.hasOwnProperty.call(sr, "target_ids")).toBe(false);
+      expect(Object.prototype.hasOwnProperty.call(sr, "action")).toBe(false);
+      // The modal's gate, enforced at the mutation layer too.
+      expect(createDecisionRule(base, { conditions: [], target_ids: ["cat_a"] })).toBe(base);
+      expect(
+        createDecisionRule(base, { conditions: [cond("q1", "q1_a1")], target_ids: [] }),
+      ).toBe(base);
+      const legacy = linearQuestionsDoc();
+      expect(
+        createDecisionRule(legacy, {
+          conditions: [cond("q1", "q1_a1")],
+          target_ids: ["cat_a"],
+        }),
+      ).toBe(legacy); // legacy no-op — identity
+
+      expect(() => Quiz.parse(doc)).not.toThrow();
+    });
+  });
+
+  // Logic tab (HANDOFF §5/§6) — filter-question mapping mutations.
+  describe("setAnswerFilterValues / setQuestionNarrowField", () => {
+    const answersOf = (doc: ReturnType<typeof linearQuestionsDoc>, q: string) => {
+      const n = doc.nodes.find((x) => x.id === q);
+      if (n?.type !== "question") throw new Error("not a question");
+      return n.data.answers;
+    };
+
+    it("setAnswerFilterValues is a FULL-SET write: absent keys clear their storage", () => {
+      let doc = setQuestionRole(deciderDoc(), "q2", "filter");
+      doc = setAnswerFilterValues(doc, "q2", "q2_a1", {
+        tags: ["soft"],
+        collection_filters: ["c1", "c2"],
+        metafield_filters: [{ key: "custom.fit", value: "slim" }],
+      });
+      let a = answersOf(doc, "q2").find((x) => x.id === "q2_a1")!;
+      expect(a.tags).toEqual(["soft"]);
+      expect(a.collection_filters).toEqual(["c1", "c2"]);
+      expect(a.metafield_filters).toEqual([{ key: "custom.fit", value: "slim" }]);
+      // Now write tags only — the other stores must CLEAR (key-absent).
+      doc = setAnswerFilterValues(doc, "q2", "q2_a1", { tags: ["stiff"] });
+      a = answersOf(doc, "q2").find((x) => x.id === "q2_a1")!;
+      expect(a.tags).toEqual(["stiff"]);
+      expect(Object.prototype.hasOwnProperty.call(a, "collection_filters")).toBe(false);
+      expect(Object.prototype.hasOwnProperty.call(a, "metafield_filters")).toBe(false);
+      expect(() => Quiz.parse(doc)).not.toThrow();
+    });
+
+    it("no_preference: true ('Keeps everything') clears every value; values clear it back", () => {
+      let doc = setQuestionRole(deciderDoc(), "q2", "filter");
+      doc = setAnswerFilterValues(doc, "q2", "q2_a1", { tags: ["soft"] });
+      doc = setAnswerFilterValues(doc, "q2", "q2_a1", { no_preference: true });
+      let a = answersOf(doc, "q2").find((x) => x.id === "q2_a1")!;
+      expect(a.no_preference).toBe(true);
+      expect(a.tags).toEqual([]);
+      doc = setAnswerFilterValues(doc, "q2", "q2_a1", { tags: ["wide"] });
+      a = answersOf(doc, "q2").find((x) => x.id === "q2_a1")!;
+      expect(Object.prototype.hasOwnProperty.call(a, "no_preference")).toBe(false);
+      expect(a.tags).toEqual(["wide"]);
+    });
+
+    it("setQuestionNarrowField: choosing a DIFFERENT field clears every answer's values (§6.1)", () => {
+      let doc = setQuestionRole(deciderDoc(), "q2", "filter");
+      doc = setAnswerFilterValues(doc, "q2", "q2_a1", {
+        tags: ["fit:slim"],
+        collection_filters: ["c1"],
+      });
+      doc = setQuestionNarrowField(doc, "q2", "tag:fit");
+      const q2 = doc.nodes.find((n) => n.id === "q2");
+      expect(q2?.type === "question" && q2.data.narrow_field).toBe("tag:fit");
+      // Same field again — identity (values kept).
+      expect(setQuestionNarrowField(doc, "q2", "tag:fit")).toBe(doc);
+      // Switch fields → values wiped.
+      doc = setAnswerFilterValues(doc, "q2", "q2_a1", { tags: ["fit:slim"] });
+      doc = setQuestionNarrowField(doc, "q2", "mf:custom.gender");
+      const a = answersOf(doc, "q2").find((x) => x.id === "q2_a1")!;
+      expect(a.tags).toEqual([]);
+      expect(Object.prototype.hasOwnProperty.call(a, "collection_filters")).toBe(false);
+      // Clearing to Anything (null) KEEPS values (they're a valid arbitrary mix)…
+      doc = setAnswerFilterValues(doc, "q2", "q2_a1", { tags: ["soft"] });
+      doc = setQuestionNarrowField(doc, "q2", null);
+      const q2b = doc.nodes.find((n) => n.id === "q2");
+      expect(
+        q2b?.type === "question" &&
+          Object.prototype.hasOwnProperty.call(q2b.data, "narrow_field"),
+      ).toBe(false);
+      expect(answersOf(doc, "q2").find((x) => x.id === "q2_a1")!.tags).toEqual(["soft"]);
+      expect(() => Quiz.parse(doc)).not.toThrow();
+    });
+
+    it("both no-op on a LEGACY doc (byte-stability)", () => {
+      const legacy = linearQuestionsDoc();
+      expect(setAnswerFilterValues(legacy, "q1", "q1_a1", { tags: ["x"] })).toBe(legacy);
+      expect(setQuestionNarrowField(legacy, "q1", "tag:fit")).toBe(legacy);
     });
   });
 

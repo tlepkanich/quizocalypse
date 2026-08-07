@@ -187,6 +187,62 @@ describe("resolveTarget — rules → deciding mapping → null (§2)", () => {
       matchedRuleId: null,
     });
   });
+
+  // Logic tab (HANDOFF G1) — multi-target rules. target_id always mirrors
+  // target_ids[0]; the first entry anchors targetId, the full list rides in
+  // targetIds (replace) / ruleTargetIds (action).
+  it("a multi-target replace rule resolves its first target + the full list (G1)", () => {
+    const doc = deciderDoc({
+      decision_rules: [
+        {
+          id: "r_multi",
+          conditions: [{ question_id: "q2", answer_id: "park", op: "is" }],
+          target_id: "cat_a",
+          target_ids: ["cat_a", "cat_b"],
+        },
+      ],
+    });
+    expect(resolveTarget(["park"], doc)).toEqual({
+      targetId: "cat_a",
+      targetIds: ["cat_a", "cat_b"],
+      matchedRuleId: "r_multi",
+    });
+  });
+
+  it("a multi-target ACTION rule carries ruleTargetIds; single-target docs are unchanged shape (G1)", () => {
+    const doc = deciderDoc({
+      decision_rules: [
+        {
+          id: "r_hide",
+          conditions: [{ question_id: "q2", answer_id: "park", op: "is" }],
+          target_id: "cat_a",
+          target_ids: ["cat_a", "cat_b"],
+          action: "hide",
+        },
+      ],
+    });
+    expect(resolveTarget(["park"], doc)).toEqual({
+      targetId: "cat_park", // base mapping still resolves the pool target
+      matchedRuleId: "r_hide",
+      ruleAction: "hide",
+      ruleTargetId: "cat_a",
+      ruleTargetIds: ["cat_a", "cat_b"],
+    });
+    // Single-target rules must keep the EXACT pre-G1 result shape (no new keys).
+    const single = deciderDoc({
+      decision_rules: [
+        {
+          id: "r_one",
+          conditions: [{ question_id: "q2", answer_id: "park", op: "is" }],
+          target_id: "cat_a",
+        },
+      ],
+    });
+    expect(resolveTarget(["park"], single)).toEqual({
+      targetId: "cat_a",
+      matchedRuleId: "r_one",
+    });
+  });
 });
 
 // ── settings resolution (§2.2/§3) ───────────────────────────────────────────
@@ -365,6 +421,54 @@ describe("recommendForResultExplained dispatch — decider docs bypass the ladde
     });
     expect(ruled.rungUsed).toBe("decider_rule");
     expect(ruled.products.map((p) => p.product_id)).toEqual(["c"]);
+  });
+
+  // Logic tab (HANDOFF G1) — engine-level union semantics for multi-target
+  // rules. The union is ordered, first-occurrence deduped, and never takes
+  // the `product` hero-only shape.
+  it("a multi-target replace rule pools the UNION of its targets' members (G1)", () => {
+    const doc = deciderDoc({
+      decision_rules: [
+        {
+          id: "r_multi",
+          conditions: [{ question_id: "q1", answer_id: "advanced", op: "is" }],
+          target_id: "cat_pro",
+          target_ids: ["cat_pro", "cat_park"],
+        },
+      ],
+    });
+    const out = recommendForResultExplained({
+      quiz: doc, productIndex: index, selectedAnswerIds: ["advanced", "park"],
+      resultNodeId: "r1",
+      targetProductIdsMap: { cat_park: ["a", "b"], cat_pro: ["c", "a"] },
+      // cat_pro is a `product` target — the union must still render a grid.
+      targetIndex: { cat_park: { type: "collection" }, cat_pro: { type: "product" } },
+    });
+    expect(out.rungUsed).toBe("decider_rule");
+    // Union order: cat_pro's members first (anchor target), deduped.
+    expect(out.products.map((p) => p.product_id)).toEqual(["c", "a", "b"]);
+    expect(out.decider!.targetId).toBe("cat_pro");
+  });
+
+  it("a multi-target hide rule removes the union of members (G1)", () => {
+    const doc = deciderDoc({
+      decision_rules: [
+        {
+          id: "r_hide",
+          conditions: [{ question_id: "q2", answer_id: "park", op: "is" }],
+          target_id: "cat_x",
+          target_ids: ["cat_x", "cat_y"],
+          action: "hide",
+        },
+      ],
+    });
+    const out = recommendForResultExplained({
+      quiz: doc, productIndex: index, selectedAnswerIds: ["park"],
+      resultNodeId: "r1",
+      targetProductIdsMap: { cat_park: ["a", "b", "c"], cat_x: ["a"], cat_y: ["c"] },
+      targetIndex: { cat_park: { type: "collection" } },
+    });
+    expect(out.products.map((p) => p.product_id)).toEqual(["b"]);
   });
 
   it("an unresolved decider path returns empty (the fallback layer's case)", () => {
