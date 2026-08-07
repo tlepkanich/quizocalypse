@@ -920,6 +920,17 @@ describe("LOGIC v2 role/target mutations (setQuestionRole / setAnswerTarget)", (
       // Empty target_ids ignored.
       const kept = updateDecisionRule(doc, id, { target_ids: [] });
       expect(kept.decision_rules![0]!.target_id).toBe("cat_z");
+      // Length-1 normalizes to the single-target byte-form (one canonical
+      // representation — same as createDecisionRule).
+      const one = updateDecisionRule(
+        updateDecisionRule(doc, id, { target_ids: ["cat_x", "cat_y"] }),
+        id,
+        { target_ids: ["cat_w"] },
+      );
+      expect(one.decision_rules![0]!.target_id).toBe("cat_w");
+      expect(
+        Object.prototype.hasOwnProperty.call(one.decision_rules![0], "target_ids"),
+      ).toBe(false);
       expect(() => Quiz.parse(doc)).not.toThrow();
     });
 

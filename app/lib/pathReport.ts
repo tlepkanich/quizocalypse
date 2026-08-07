@@ -13,6 +13,7 @@ import { validateQuiz, validateQuizWarnings } from "./quizValidation";
 import { filterAnswerMatchCount } from "./filterMatching";
 import { bandCoverage, sliderBandAnswers } from "./sliderBands";
 import { isSellable, type IndexedProduct } from "./recommendationEngine";
+import { ruleTargets } from "./recommendDecider";
 
 type QuizDoc = z.infer<typeof Quiz>;
 
@@ -186,10 +187,13 @@ export function buildTier1Report(
     }
   }
 
-  // V5 — no rule references a deleted bucket. BLOCK.
+  // V5 — no rule references a deleted bucket. BLOCK. Covers EVERY target of
+  // a multi-target rule (target_ids, Logic-tab G1) — publish's DB check
+  // already blocks on any of them, so the health pill must agree (review
+  // L1-2: a dangling target_ids[1] previously read "safe to publish").
   const v5: Tier1Finding[] = rules
     .map((r, i) => ({ r, i }))
-    .filter(({ r }) => !bucketIds.has(r.target_id))
+    .filter(({ r }) => ruleTargets(r).some((t) => !bucketIds.has(t)))
     .map(({ r, i }) => ({
       message: `Rule ${i + 1} recommends a deleted bucket — pick a new result.`,
       link: { kind: "rule" as const, ruleId: r.id },

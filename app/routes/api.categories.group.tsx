@@ -271,8 +271,16 @@ export async function action({ request }: ActionFunctionArgs) {
   try {
     await prisma.$transaction([
       // Scope the wipe to the same quiz (or the shop-global set when quizId
-      // is null) so other quizzes' buckets survive a re-group.
-      prisma.category.deleteMany({ where: { shopId: shop.id, quizId } }),
+      // is null) so other quizzes' buckets survive a re-group. Logic-tab rule
+      // targets (discoveryRunId "logic-tab-*") also survive — deleting them
+      // would dangle rules and hard-block publish (review L2-1).
+      prisma.category.deleteMany({
+        where: {
+          shopId: shop.id,
+          quizId,
+          NOT: { discoveryRunId: { startsWith: "logic-tab-" } },
+        },
+      }),
       prisma.category.createMany({ data: rowsData }),
     ]);
   } catch (err) {

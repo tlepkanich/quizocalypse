@@ -60,7 +60,10 @@ export async function action({ request }: ActionFunctionArgs) {
   });
   if (!ownedQuiz) return json({ ok: false, error: "Quiz not found" }, { status: 404 });
 
-  const products = await prisma.product.findMany({ where: { shopId: shop.id } });
+  const products = await prisma.product.findMany({
+    where: { shopId: shop.id },
+    select: { productId: true, tags: true, collectionIds: true },
+  });
   const resolvable: ResolvableProduct[] = products.map((p) => ({
     id: p.productId,
     tags: p.tags,
@@ -70,7 +73,9 @@ export async function action({ request }: ActionFunctionArgs) {
 
   const out = [];
   for (const r of resources) {
-    // Reuse before create — quiz-scoped first, then shop-global.
+    // Reuse before create — quiz-scoped first, then shop-global. Postgres
+    // sorts NULLS FIRST on a plain desc, which would invert the precedence
+    // (review L2-2) — nulls: "last" keeps the quiz-scoped row winning.
     const existing = await prisma.category.findFirst({
       where: {
         shopId: shop.id,
@@ -78,7 +83,7 @@ export async function action({ request }: ActionFunctionArgs) {
         sourceRef: r.ref,
         OR: [{ quizId }, { quizId: null }],
       },
-      orderBy: { quizId: "desc" },
+      orderBy: { quizId: { sort: "desc", nulls: "last" } },
     });
     if (existing) {
       out.push(existing);

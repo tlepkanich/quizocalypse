@@ -53,9 +53,11 @@ export function answerFilterValues(a: AnswerT): AnswerFilterValues | null {
     ...(a.collection_filter ? [a.collection_filter] : []),
     ...(a.collection_filters ?? []),
   ].filter((c, i, all) => c && all.indexOf(c) === i);
+  // Key stays EXACT (productMatches looks it up raw against the baked
+  // metafields map — trimming here could silently never match; review L1-9).
   const metafields = (a.metafield_filters ?? [])
-    .map((m) => ({ key: m.key.trim(), value: m.value.trim().toLowerCase() }))
-    .filter((m) => m.key && m.value);
+    .map((m) => ({ key: m.key, value: m.value.trim().toLowerCase() }))
+    .filter((m) => m.key.trim() && m.value);
   if (tags.length === 0 && collectionIds.length === 0 && metafields.length === 0)
     return null;
   return { tags, collectionIds, metafields };

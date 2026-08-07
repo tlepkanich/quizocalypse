@@ -82,6 +82,9 @@ export function LogicTabCard({
   // route loader's next pass returns them (autosave revalidation).
   const [extraCats, setExtraCats] = useState<BuilderCategory[]>([]);
   const [createOpen, setCreateOpen] = useState(false);
+  // Latest-doc seam for the modal's post-await commit (review L2-5).
+  const docRef = useRef(doc);
+  docRef.current = doc;
   // §7 — the stepped explainer sheets; null = closed.
   const [explainer, setExplainer] = useState<ExplainerKind | null>(null);
   const allCategories = useMemo(() => {
@@ -154,6 +157,7 @@ export function LogicTabCard({
           onClose={() => setCreateOpen(false)}
           commit={commit}
           onCategoriesCreated={(cats) => setExtraCats((prev) => [...prev, ...cats])}
+          getLatestDoc={() => docRef.current}
         />
       ) : null}
       {rules.length === 0 ? (
@@ -384,6 +388,25 @@ function QuestionRows({
   ) : (
     <span className="qz-ltab-pill">Info only</span>
   );
+
+  // A question with no answers (freeform types) still needs its row — the
+  // role pill must stay reachable from this tab (review L2-8).
+  if (answers.length === 0) {
+    return (
+      <tr className="qz-ltab-qstart">
+        <td className="qz-ltab-qcell">
+          <div className="qz-ltab-qlabel" title={q.node.data.text}>
+            <span className="qz-ltab-qnum">Q{q.qIndex}</span> {q.node.data.text}
+          </div>
+          {pill}
+        </td>
+        <td className="qz-ltab-key" />
+        <td className="qz-ltab-muted" colSpan={4}>
+          no answer options
+        </td>
+      </tr>
+    );
+  }
 
   return (
     <>

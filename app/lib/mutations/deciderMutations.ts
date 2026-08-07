@@ -214,8 +214,15 @@ export function updateDecisionRule(
       const next: DecisionRule = { ...r };
       if (patch.conditions) next.conditions = patch.conditions;
       if (patch.target_ids?.length) {
-        next.target_ids = patch.target_ids;
-        next.target_id = patch.target_ids[0]!;
+        // Length-1 normalizes to the single-target byte-form (one canonical
+        // representation — createDecisionRule does the same; review L1-5).
+        if (patch.target_ids.length === 1) {
+          next.target_id = patch.target_ids[0]!;
+          delete next.target_ids;
+        } else {
+          next.target_ids = patch.target_ids;
+          next.target_id = patch.target_ids[0]!;
+        }
       } else if (patch.target_id) {
         next.target_id = patch.target_id;
         delete next.target_ids;

@@ -55,6 +55,28 @@ The one card **replaces** `BuilderLogicView`'s Map · Paths · Table chrome and
 to the same shared component in a follow-up phase. Legacy
 `app/components/onboarding/questionsLogic/` (points model) is untouched.
 
+## Review outcomes (2026-08-07, pre-ship 2-lens adversarial pass)
+
+Fixed before ship: re-group/clear `deleteMany` now excludes Logic-tab rule
+targets (`discoveryRunId: logic-tab-*`); ensure-targets reuse ordering is
+`nulls: "last"` (Postgres NULLS FIRST inverted the quiz-scoped precedence);
+the funnel RuleRow renders multi-target rules read-only ("N targets — edit in
+the Logic tab") instead of collapsing them via its single-target select;
+Tier-1 V5 checks every `ruleTargets()` entry; `updateDecisionRule` normalizes
+length-1 `target_ids` to the single-target byte-form; metafield keys stored
+exact (no trim) to match the raw baked-map lookup; the modal keys tags
+EXACT-case (resolveMembership matches exact-case); ensure-targets failures
+toast; Esc is a document-level listener on both modals; the modal commits
+against the latest doc after its awaits; zero-answer questions render a row.
+
+Accepted risks (deliberate, revisit on demand): no `@@unique` backs the
+ensure-targets reuse check (concurrent creates can duplicate a row — row
+pollution only); multi-target replace rules anchor why-copy grounding and
+path grouping on the FIRST target (same approximation the filter-narrowed
+pool already has); residual metafield values on an Anything-mode answer are
+removable only via "Clear this answer"; `LogicRulesBar.tsx`/`LogicTableTab.tsx`
+are orphaned but kept per the repo's conservative-deletion culture.
+
 ## Mock sources
 
 `docs/design/logic-tab/rules-tab/…` never existed in this repo or its history;

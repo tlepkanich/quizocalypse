@@ -7039,6 +7039,8 @@ textarea.qz-s4-inp { resize: vertical; min-height: 56px; line-height: 1.5; }
 .qz-ltab-rbtn.is-del:hover { color: var(--qz-crit); }
 .qz-ltab-rrow.is-fresh { background: var(--qz-accent-wash); transition: background 0.4s ease; }
 .qz-ltab-create { margin-left: auto; font-size: 11.5px; padding: 6px 12px; border-radius: 8px; }
+/* Funnel RuleRow's read-only multi-target badge (review L1-1). */
+.qz-s3-rr-multi { font-size: 12px; color: var(--qz-ink-4); font-style: italic; }
 
 /* ── P5 — the create-a-rule modal (§4): three columns, draft-safe scrim ── */
 .qz-crm {

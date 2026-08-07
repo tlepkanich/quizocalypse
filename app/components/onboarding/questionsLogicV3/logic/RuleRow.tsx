@@ -129,6 +129,15 @@ export function RuleRow({
           <div className="qz-s3-rr-target">
             <span aria-hidden>→</span>
             <span>recommend</span>
+            {/* Logic-tab multi-target rules (target_ids, G1): this select is
+                single-target and a target_id write DROPS the extra targets
+                (updateDecisionRule's collapse semantics) — render read-only
+                instead of silently destroying them (review L1-1). */}
+            {(rule.target_ids?.length ?? 0) > 1 ? (
+              <span className="qz-s3-rr-multi">
+                {rule.target_ids!.length} targets — edit in the Logic tab
+              </span>
+            ) : (
             <select
               value={categories.some((c) => c.id === rule.target_id) ? rule.target_id : ""}
               aria-label={`Rule ${no} result target`}
@@ -148,6 +157,7 @@ export function RuleRow({
                 </option>
               ))}
             </select>
+            )}
           </div>
 
           <div className="qz-s3-rr-actions">

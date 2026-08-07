@@ -54,7 +54,12 @@ export async function persistConfirmedGroups(
     discoveryRunId: runId,
   }));
   await prisma.$transaction([
-    prisma.category.deleteMany({ where: { shopId, quizId } }),
+    // Logic-tab rule targets (ensure-targets rows, discoveryRunId
+    // "logic-tab-*") survive a re-group — deleting them would dangle every
+    // rule that targets them and hard-block publish (review L2-1).
+    prisma.category.deleteMany({
+      where: { shopId, quizId, NOT: { discoveryRunId: { startsWith: "logic-tab-" } } },
+    }),
     ...(rows.length ? [prisma.category.createMany({ data: rows })] : []),
   ]);
   if (!rows.length) return [];
@@ -126,8 +131,11 @@ export async function removeBuckets(
 }
 
 // Clear the quiz's entire bucket set (tab-lock confirm → switch dimensions).
+// Logic-tab rule targets survive (see the re-group transaction above).
 export async function clearBuckets(shopId: string, quizId: string): Promise<void> {
-  await prisma.category.deleteMany({ where: { shopId, quizId } });
+  await prisma.category.deleteMany({
+    where: { shopId, quizId, NOT: { discoveryRunId: { startsWith: "logic-tab-" } } },
+  });
 }
 
 // The confirmed buckets for the generation stage: the quiz's persisted Category

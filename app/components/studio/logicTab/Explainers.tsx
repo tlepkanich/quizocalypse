@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import type { ReactNode } from "react";
 import { useFocusTrap } from "../../qz-overlays";
@@ -238,6 +238,20 @@ export function ExplainerSheet({
   const [step, setStep] = useState(0);
   useFocusTrap(boxRef, open);
 
+  // Document-level Esc — a scrim onKeyDown dies once focus lands on a
+  // non-focusable region (review L2-4).
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        setStep(0);
+        onClose();
+      }
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [open, onClose]);
+
   if (!open || typeof document === "undefined") return null;
   const steps = kind === "rules" ? rulesSteps() : questionsSteps();
   const cur = steps[step]!;
@@ -252,7 +266,6 @@ export function ExplainerSheet({
     <div
       className="qz-modal-scrim"
       onMouseDown={(e) => e.target === e.currentTarget && close()}
-      onKeyDown={(e) => e.key === "Escape" && close()}
     >
       <div
         ref={boxRef}

@@ -56,6 +56,7 @@ export function CreateRuleModal({
   onClose,
   commit,
   onCategoriesCreated,
+  getLatestDoc,
 }: {
   doc: QuizDoc;
   questions: OrderedQuestion[];
@@ -67,10 +68,26 @@ export function CreateRuleModal({
   onClose: () => void;
   commit: (doc: QuizDoc) => void;
   onCategoriesCreated: (cats: BuilderCategory[]) => void;
+  /** Latest-doc seam: commit builds on the CURRENT doc, not the render-time
+   *  snapshot captured before the ensure-targets await (review L2-5). */
+  getLatestDoc?: () => QuizDoc;
 }) {
   const toast = useQzToast();
   const boxRef = useRef<HTMLDivElement>(null);
   useFocusTrap(boxRef, open);
+
+  // §4.5 — Esc closes from anywhere. A scrim onKeyDown dies once focus lands
+  // on a non-focusable region (keydown targets <body>, an ancestor of the
+  // scrim, so it never bubbles here) — document-level listener instead
+  // (review L2-4).
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [open, onClose]);
 
   const [picks, setPicks] = useState<Record<string, string[]>>({});
   const [verb, setVerb] = useState<Verb>("exclude"); // §4.2 blank-draft default
@@ -134,11 +151,14 @@ export function CreateRuleModal({
     for (const p of productIndex) {
       for (const c of p.collection_ids) colCounts.set(c, (colCounts.get(c) ?? 0) + 1);
       for (const t of p.tags) {
-        const k = t.trim().toLowerCase();
+        // EXACT-case keying: resolveMembership matches tags exact-case, so a
+        // case-folded merge would show a count the materialized category
+        // can't deliver (review L2-6). Distinct casings stay distinct rows.
+        const k = t.trim();
         if (!k) continue;
         const e = tagCounts.get(k);
         if (e) e.count++;
-        else tagCounts.set(k, { name: t.trim(), count: 1 });
+        else tagCounts.set(k, { name: k, count: 1 });
       }
     }
     const rows: SelectedResource[] = [
@@ -200,9 +220,9 @@ export function CreateRuleModal({
       if (s.kind === "product") ids.add(s.ref);
       if (s.kind === "collection") for (const id of byCol.get(s.ref) ?? []) ids.add(id);
       if (s.kind === "tag") {
-        const t = s.ref.toLowerCase();
+        // Exact-case, matching resolveMembership (review L2-6).
         for (const p of productIndex)
-          if (p.tags.some((x) => x.toLowerCase() === t)) ids.add(p.product_id);
+          if (p.tags.some((x) => x.trim() === s.ref)) ids.add(p.product_id);
       }
     }
     return ids.size;
@@ -250,21 +270,25 @@ export function CreateRuleModal({
       const raw = sel.filter((s) => s.kind !== "set");
       const createdByKey = new Map<string, string>();
       if (raw.length) {
-        const res = await fetch("/api/categories/ensure-targets", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            quizId,
-            resources: raw.map((r) => ({ kind: r.kind, ref: r.ref, name: r.name })),
-          }),
-        });
-        const j = (await res.json()) as {
-          ok: boolean;
-          categories?: BuilderCategory[];
-        };
+        // Explicit failure surface — a network error must toast, never escape
+        // as an unhandled rejection (review L1-3).
+        let j: { ok: boolean; categories?: BuilderCategory[] };
+        try {
+          const res = await fetch("/api/categories/ensure-targets", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              quizId,
+              resources: raw.map((r) => ({ kind: r.kind, ref: r.ref, name: r.name })),
+            }),
+          });
+          j = (await res.json()) as { ok: boolean; categories?: BuilderCategory[] };
+        } catch {
+          toast("Couldn't reach the server — the rule wasn't created");
+          return;
+        }
         if (!j.ok || !j.categories) {
           toast("Couldn't save those targets — try again");
-          setBusy(false);
           return;
         }
         onCategoriesCreated(j.categories);
@@ -278,7 +302,10 @@ export function CreateRuleModal({
         .filter((id): id is string => Boolean(id));
       const action =
         verb === "exclude" ? ("hide" as const) : verb === "highlight" ? ("show" as const) : undefined;
-      commit(createDecisionRule(doc, { conditions, target_ids, ...(action ? { action } : {}) }));
+      // Commit against the LATEST doc, not the render-time snapshot captured
+      // before the await (review L2-5).
+      const base = getLatestDoc ? getLatestDoc() : doc;
+      commit(createDecisionRule(base, { conditions, target_ids, ...(action ? { action } : {}) }));
       toast("✓ Rule created — checked top down, first match applies");
       reset();
       onClose();
@@ -296,13 +323,9 @@ export function CreateRuleModal({
   const verbWord = verb === "show" ? "show" : verb === "highlight" ? "highlight" : "exclude";
 
   return createPortal(
-    <div
-      className="qz-modal-scrim"
-      onKeyDown={(e) => {
-        // §4.5 — Esc closes; the scrim deliberately does NOT (draft-safe).
-        if (e.key === "Escape") onClose();
-      }}
-    >
+    // §4.5 — the scrim deliberately does NOT close (draft-safe); Esc is a
+    // document-level listener above.
+    <div className="qz-modal-scrim">
       <div ref={boxRef} className="qz-crm" role="dialog" aria-modal="true" aria-label="Create a rule">
         <header className="qz-crm-hd">
           <h2>Create a rule</h2>
