@@ -5,7 +5,7 @@ import type { BuilderCategory, BuilderCollection } from "../../builder/stepProps
 import type { IndexedProduct } from "../../../lib/recommendationEngine";
 import type { OrderedQuestion } from "../../../lib/questionOrder";
 import { createDecisionRule } from "../../../lib/quizMutations";
-import { useFocusTrap } from "../../qz-overlays";
+import { QzPopover, useFocusTrap } from "../../qz-overlays";
 import { useQzToast } from "../../qz-toast";
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -33,10 +33,80 @@ type Verb = "show" | "highlight" | "exclude";
 
 interface SelectedResource {
   key: string;
-  kind: "set" | "tag" | "collection" | "product";
+  kind: "set" | "tag" | "collection" | "product" | "metafield";
   ref: string;
   name: string;
   count: number;
+}
+
+const KIND_LABEL: Record<SelectedResource["kind"], string> = {
+  set: "Set",
+  tag: "Tag",
+  collection: "Coll",
+  metafield: "Meta",
+  product: "Prod",
+};
+
+// §4.3 — a resource row: [KIND] Name [N products ▾] ✓. The count is its OWN
+// button opening a product-list popover; it must NOT toggle selection.
+// Clicking anywhere else on the row toggles.
+function ResourceRow({
+  r,
+  on,
+  onToggle,
+  resolveResource,
+}: {
+  r: SelectedResource;
+  on: boolean;
+  onToggle: () => void;
+  resolveResource: (s: SelectedResource) => IndexedProduct[];
+}) {
+  const [listOpen, setListOpen] = useState(false);
+  return (
+    <span className={`qz-crm-res${on ? " is-on" : ""}`}>
+      <button type="button" className="qz-crm-resmain" onClick={onToggle}>
+        <span className={`qz-crm-kind is-${r.kind}`}>{KIND_LABEL[r.kind]}</span>
+        <span className="qz-crm-resname">{r.name}</span>
+      </button>
+      <QzPopover
+        open={listOpen}
+        onOpenChange={setListOpen}
+        maxWidth={300}
+        trigger={
+          <button type="button" className="qz-crm-rescount" aria-label={`${r.count} products in ${r.name}`}>
+            {r.count} {r.count === 1 ? "product" : "products"}
+          </button>
+        }
+        content={
+          <div className="qz-ltab-menu">
+            <div className="qz-ltab-menu-title">
+              {r.name} — {r.count} {r.count === 1 ? "product" : "products"}
+            </div>
+            <div className="qz-ltab-menu-products">
+              {resolveResource(r)
+                .slice(0, 24)
+                .map((p) => (
+                  <div key={p.product_id} className="qz-ltab-menu-product">
+                    {p.image_url ? (
+                      <img src={p.image_url} alt="" width={22} height={22} loading="lazy" />
+                    ) : (
+                      <span className="qz-ltab-menu-swatch" aria-hidden />
+                    )}
+                    <span>{p.title}</span>
+                  </div>
+                ))}
+              {r.count > 24 ? (
+                <div className="qz-ltab-menu-none">+{r.count - 24} more</div>
+              ) : null}
+            </div>
+          </div>
+        }
+      />
+      <span className="qz-crm-rescheck" aria-hidden>
+        {on ? "✓" : ""}
+      </span>
+    </span>
+  );
 }
 
 const VERBS: Array<{ verb: Verb; name: string; hint: string }> = [
@@ -93,7 +163,9 @@ export function CreateRuleModal({
   const [verb, setVerb] = useState<Verb>("exclude"); // §4.2 blank-draft default
   const [sel, setSel] = useState<SelectedResource[]>([]);
   const [query, setQuery] = useState("");
-  const [kindChip, setKindChip] = useState<"all" | "set" | "tag" | "collection" | "product">("all");
+  const [kindChip, setKindChip] = useState<
+    "all" | "set" | "tag" | "collection" | "metafield" | "product"
+  >("all");
   const [busy, setBusy] = useState(false);
   // §4.5/G10 — the impact line, computed server-side (pathEnumeration, cap
   // 2 000 with truncated → "(sampled)"). Debounced; errors just hide the line.
@@ -148,6 +220,7 @@ export function CreateRuleModal({
   const index = useMemo(() => {
     const colCounts = new Map<string, number>();
     const tagCounts = new Map<string, { name: string; count: number }>();
+    const mfCounts = new Map<string, { name: string; count: number }>();
     for (const p of productIndex) {
       for (const c of p.collection_ids) colCounts.set(c, (colCounts.get(c) ?? 0) + 1);
       for (const t of p.tags) {
@@ -159,6 +232,16 @@ export function CreateRuleModal({
         const e = tagCounts.get(k);
         if (e) e.count++;
         else tagCounts.set(k, { name: k, count: 1 });
+      }
+      for (const [k, v] of Object.entries(p.metafields ?? {})) {
+        // Metafield VALUES, keyed by the membership convention "key: value"
+        // (resolveMembership matches metafieldValuesOf output exact).
+        // Internal ranking keys + structured JSON values are not pickable.
+        if (k.startsWith("__") || !v || v.trim().startsWith("{")) continue;
+        const ref = `${k}: ${v}`;
+        const e = mfCounts.get(ref);
+        if (e) e.count++;
+        else mfCounts.set(ref, { name: `${k.split(".").pop()}: ${v}`, count: 1 });
       }
     }
     const rows: SelectedResource[] = [
@@ -183,6 +266,13 @@ export function CreateRuleModal({
         name: c.title,
         count: colCounts.get(c.collectionId) ?? 0,
       })),
+      ...[...mfCounts.entries()].map(([ref, e]) => ({
+        key: `metafield:${ref}`,
+        kind: "metafield" as const,
+        ref,
+        name: e.name,
+        count: e.count,
+      })),
       ...productIndex.map((p) => ({
         key: `product:${p.product_id}`,
         kind: "product" as const,
@@ -194,39 +284,75 @@ export function CreateRuleModal({
     return rows;
   }, [categories, collections, productIndex]);
 
+  // §4.3 nothing-typed + All: the curated sets PLUS the tags the quiz
+  // already uses (filter answers' stored tags).
+  const quizTagRefs = useMemo(() => {
+    const used = new Set<string>();
+    for (const n of doc.nodes) {
+      if (n.type !== "question") continue;
+      for (const a of n.data.answers) for (const t of a.tags) used.add(t.trim());
+    }
+    return used;
+  }, [doc]);
+
   const qlc = query.trim().toLowerCase();
-  const shown = useMemo(() => {
+  const { shown, overflow, foundLine } = useMemo(() => {
     let rows = index;
     if (kindChip !== "all") rows = rows.filter((r) => r.kind === kindChip);
-    if (qlc) rows = rows.filter((r) => r.name.toLowerCase().includes(qlc));
-    else if (kindChip === "all") rows = rows.filter((r) => r.kind === "set"); // §4.3 nothing typed + All
-    return rows.slice(0, 40);
-  }, [index, kindChip, qlc]);
+    if (qlc) {
+      rows = rows.filter((r) => r.name.toLowerCase().includes(qlc));
+      // §4.3 typed → one group per kind, 12 rows each, with the found-line.
+      const kinds = [...new Set(rows.map((r) => r.kind))];
+      const grouped = kinds.flatMap((k) => rows.filter((r) => r.kind === k).slice(0, 12));
+      return {
+        shown: grouped,
+        overflow: rows.length - grouped.length,
+        foundLine: `Found ${rows.length} across ${kinds.length} ${kinds.length === 1 ? "type" : "types"}`,
+      };
+    }
+    if (kindChip === "all") {
+      const dflt = index.filter(
+        (r) => r.kind === "set" || (r.kind === "tag" && quizTagRefs.has(r.ref)),
+      );
+      return { shown: dflt.slice(0, 40), overflow: Math.max(0, dflt.length - 40), foundLine: null };
+    }
+    return { shown: rows.slice(0, 40), overflow: Math.max(0, rows.length - 40), foundLine: null };
+  }, [index, kindChip, qlc, quizTagRefs]);
 
   const pickedCount = Object.values(picks).reduce((n, a) => n + a.length, 0);
+  // ONE resolver for both the tray total and each row's product popover —
+  // they can never disagree. Exact-case matching throughout (mirrors
+  // resolveMembership; review L2-6).
+  const resolveResource = useMemo(() => {
+    const byId = new Map(productIndex.map((p) => [p.product_id, p]));
+    const catById = new Map(categories.map((c) => [c.id, c]));
+    return (s: SelectedResource): IndexedProduct[] => {
+      if (s.kind === "set")
+        return (catById.get(s.ref)?.productIds ?? [])
+          .map((id) => byId.get(id))
+          .filter((p): p is IndexedProduct => p !== undefined);
+      if (s.kind === "product") {
+        const p = byId.get(s.ref);
+        return p ? [p] : [];
+      }
+      if (s.kind === "collection")
+        return productIndex.filter((p) => p.collection_ids.includes(s.ref));
+      if (s.kind === "tag")
+        return productIndex.filter((p) => p.tags.some((x) => x.trim() === s.ref));
+      // metafield — ref is the membership "key: value" convention.
+      const i = s.ref.indexOf(": ");
+      if (i <= 0) return [];
+      const key = s.ref.slice(0, i);
+      const value = s.ref.slice(i + 2);
+      return productIndex.filter((p) => p.metafields?.[key] === value);
+    };
+  }, [categories, productIndex]);
+
   const selProducts = useMemo(() => {
     const ids = new Set<string>();
-    const byCol = new Map<string, string[]>();
-    for (const p of productIndex) {
-      for (const c of p.collection_ids) {
-        const arr = byCol.get(c) ?? [];
-        arr.push(p.product_id);
-        byCol.set(c, arr);
-      }
-    }
-    const catById = new Map(categories.map((c) => [c.id, c]));
-    for (const s of sel) {
-      if (s.kind === "set") for (const id of catById.get(s.ref)?.productIds ?? []) ids.add(id);
-      if (s.kind === "product") ids.add(s.ref);
-      if (s.kind === "collection") for (const id of byCol.get(s.ref) ?? []) ids.add(id);
-      if (s.kind === "tag") {
-        // Exact-case, matching resolveMembership (review L2-6).
-        for (const p of productIndex)
-          if (p.tags.some((x) => x.trim() === s.ref)) ids.add(p.product_id);
-      }
-    }
+    for (const s of sel) for (const p of resolveResource(s)) ids.add(p.product_id);
     return ids.size;
-  }, [sel, categories, productIndex]);
+  }, [sel, resolveResource]);
 
   const toggleAnswer = (q: OrderedQuestion, answerId: string) => {
     setPicks((prev) => {
@@ -360,7 +486,9 @@ export function CreateRuleModal({
                   <div key={q.node.id} className={`qz-crm-qblock${cur.length ? " is-used" : ""}`}>
                     <div className="qz-crm-qhead">
                       <span className="qz-crm-qnum">Q{q.qIndex}</span>
-                      <span className="qz-crm-qlabel">{q.node.data.text.slice(0, 40)}</span>
+                      {/* §4.1 — the numeral is what a merchant scans by; the
+                          label (20 chars) is the reminder. */}
+                      <span className="qz-crm-qlabel">{q.node.data.text.slice(0, 20)}</span>
                       {multi ? <span className="qz-crm-qtag">multi-select</span> : null}
                     </div>
                     <div className="qz-crm-chips">
@@ -417,11 +545,13 @@ export function CreateRuleModal({
               onChange={(e) => setQuery(e.target.value)}
             />
             <div className="qz-ltab-menu-chips">
+              {/* §4.3 fixed chip order (Variants DECIDED-out per G5). */}
               {(
                 [
                   ["all", "All"],
                   ["tag", "Tags"],
                   ["collection", "Collections"],
+                  ["metafield", "Metafields"],
                   ["product", "Products"],
                   ["set", "Sets"],
                 ] as const
@@ -440,32 +570,30 @@ export function CreateRuleModal({
               {!qlc && kindChip === "all" ? (
                 <div className="qz-ltab-menu-group">This quiz already recommends</div>
               ) : null}
+              {foundLine ? <div className="qz-ltab-menu-none">{foundLine}</div> : null}
               {shown.length === 0 ? (
                 <div className="qz-ltab-menu-none">
                   Nothing matches{query ? ` "${query}"` : ""}.
                 </div>
               ) : (
-                shown.map((r) => {
-                  const on = sel.some((s) => s.key === r.key);
-                  return (
-                    <button
-                      key={r.key}
-                      type="button"
-                      className={`qz-crm-res${on ? " is-on" : ""}`}
-                      onClick={() => toggleResource(r)}
-                    >
-                      <span className={`qz-crm-kind is-${r.kind}`}>
-                        {r.kind === "set" ? "Set" : r.kind === "tag" ? "Tag" : r.kind === "collection" ? "Coll" : "Prod"}
-                      </span>
-                      <span className="qz-crm-resname">{r.name}</span>
-                      <span className="qz-crm-rescount">
-                        {r.count} {r.count === 1 ? "product" : "products"}
-                      </span>
-                      {on ? <span aria-hidden>✓</span> : null}
-                    </button>
-                  );
-                })
+                shown.map((r, i) => (
+                  <span key={r.key}>
+                    {/* §4.3 typed → one group header per kind. */}
+                    {qlc && (i === 0 || shown[i - 1]!.kind !== r.kind) ? (
+                      <div className="qz-ltab-menu-group">{KIND_LABEL[r.kind]}s</div>
+                    ) : null}
+                    <ResourceRow
+                      r={r}
+                      on={sel.some((s) => s.key === r.key)}
+                      onToggle={() => toggleResource(r)}
+                      resolveResource={resolveResource}
+                    />
+                  </span>
+                ))
               )}
+              {overflow > 0 ? (
+                <div className="qz-ltab-menu-none">+{overflow} more — type to narrow</div>
+              ) : null}
             </div>
           </section>
         </div>

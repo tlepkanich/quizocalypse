@@ -55,7 +55,7 @@ function rulesSteps(): Step[] {
       body: (
         <>
           Checked top down. The first rule that matches applies — the rest are
-          skipped. Drag a rule higher to give it the final word.
+          skipped. Move a rule higher to give it the final word.
         </>
       ),
       figure: (
@@ -283,15 +283,20 @@ export function ExplainerSheet({
         {/* Clickable numbered progress; done steps get ✓. */}
         <div className="qz-xpl-progress">
           {steps.map((s, i) => (
-            <button
-              key={s.title}
-              type="button"
-              className={`qz-xpl-dot${i === step ? " is-on" : ""}${i < step ? " is-done" : ""}`}
-              aria-label={`Step ${i + 1}: ${s.title}`}
-              onClick={() => setStep(i)}
-            >
-              {i < step ? "✓" : i + 1}
-            </button>
+            <span key={s.title} className="qz-xpl-seg">
+              {/* §7 — done steps get a green connector to the next dot. */}
+              {i > 0 ? (
+                <span className={`qz-xpl-conn${i <= step ? " is-done" : ""}`} aria-hidden />
+              ) : null}
+              <button
+                type="button"
+                className={`qz-xpl-dot${i === step ? " is-on" : ""}${i < step ? " is-done" : ""}`}
+                aria-label={`Step ${i + 1}: ${s.title}`}
+                onClick={() => setStep(i)}
+              >
+                {i < step ? "✓" : i + 1}
+              </button>
+            </span>
           ))}
         </div>
         <div className="qz-xpl-body">

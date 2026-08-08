@@ -231,7 +231,8 @@ export function RoleMenuButton({
                     key={f.field}
                     indent
                     current={role === "filter" && narrowField === f.field}
-                    sub={`${f.coverage}/${productIndex.length}`}
+                    // §6.1 — the field's source key + coverage ("custom.gender · 23/23").
+                    sub={`${f.field.replace(/^(mf|tag):/, "")} · ${f.coverage}/${productIndex.length}`}
                     onClick={() => {
                       const changed = narrowField !== f.field;
                       let next = setQuestionRole(doc, q.node.id, "filter");
@@ -250,6 +251,11 @@ export function RoleMenuButton({
                   </MenuRow>
                 ))
               )}
+              {shownFields.length > 24 ? (
+                <div className="qz-ltab-menu-none">
+                  +{shownFields.length - 24} more — keep typing
+                </div>
+              ) : null}
             </div>
           ) : null}
         </MenuShell>
@@ -498,6 +504,32 @@ export function NarrowsMenuButton({
             value={query}
             onChange={(e) => setQuery(e.target.value)}
           />
+          {/* §6.2 — the Selected group pins to the top. */}
+          {!query && (selectedCols.length || selectedTags.length) ? (
+            <>
+              <div className="qz-ltab-menu-group">Selected</div>
+              {selectedCols.map((cid) => (
+                <MenuRow
+                  key={`sel-c:${cid}`}
+                  current
+                  onClick={() => writeAnything(answer.tags, selectedCols.filter((x) => x !== cid))}
+                >
+                  {collections.find((c) => c.collectionId === cid)?.title ?? cid}
+                </MenuRow>
+              ))}
+              {answer.tags.map((t) => (
+                <MenuRow
+                  key={`sel-t:${t}`}
+                  current
+                  onClick={() =>
+                    writeAnything(answer.tags.filter((x) => x !== t), selectedCols)
+                  }
+                >
+                  {t}
+                </MenuRow>
+              ))}
+            </>
+          ) : null}
           {shownCols.length ? <div className="qz-ltab-menu-group">Collections</div> : null}
           {shownCols.slice(0, 12).map((c) => {
             const on = selectedCols.includes(c.collectionId);

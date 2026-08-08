@@ -59,6 +59,15 @@ function narrowFieldLabel(field: string): string {
   return last || bare;
 }
 
+// §11 — the per-field chip palette is ASSIGNED BY HASHING the field key
+// (there is no fixed list of merchant fields). Six hues from the repo's
+// pastel system (.qz-ltab-chip.hue-0..5).
+function fieldHue(field: string): number {
+  let h = 0;
+  for (let i = 0; i < field.length; i++) h = (h * 31 + field.charCodeAt(i)) | 0;
+  return Math.abs(h) % 6;
+}
+
 export function LogicTabCard({
   doc,
   questions,
@@ -412,7 +421,13 @@ function QuestionRows({
     <>
       {answers.map((a, i) => {
         const mapping = (
-          <MappingCell role={role} answer={a} catById={catById} colTitleById={colTitleById} />
+          <MappingCell
+            role={role}
+            answer={a}
+            catById={catById}
+            colTitleById={colTitleById}
+            narrowField={q.node.data.narrow_field ?? null}
+          />
         );
         const count = (
           <ProductsCell
@@ -506,11 +521,13 @@ function MappingCell({
   answer,
   catById,
   colTitleById,
+  narrowField,
 }: {
   role: "decides" | "qualifier" | "filter" | undefined;
   answer: Answer;
   catById: Map<string, BuilderCategory>;
   colTitleById: Map<string, string>;
+  narrowField?: string | null;
 }) {
   if (role === "decides") {
     if (!answer.target_id)
@@ -526,12 +543,21 @@ function MappingCell({
     if (answer.no_preference)
       return <span className="qz-ltab-soft">keeps everything</span>;
     const v = answerFilterValues(answer);
-    if (!v) return <span className="qz-ltab-bad">not mapped yet</span>;
+    // §5.2 — Anything mode invites "pick anything"; field mode flags
+    // "not mapped yet" (the field is chosen, the values aren't).
+    if (!v)
+      return narrowField ? (
+        <span className="qz-ltab-bad">not mapped yet</span>
+      ) : (
+        <span className="qz-ltab-bad">pick anything</span>
+      );
+    // §11 — field-mode value chips take the field's hashed hue.
+    const hue = narrowField ? ` hue-${fieldHue(narrowField)}` : "";
     return (
       <>
         {answer.tags.map((t) => (
-          <span key={`t:${t}`} className="qz-ltab-chip">
-            {t}
+          <span key={`t:${t}`} className={`qz-ltab-chip${hue}`}>
+            {narrowField ? t.replace(/^[^:]+:/, "") : t}
           </span>
         ))}
         {v.collectionIds.map((cid) => (
@@ -540,7 +566,7 @@ function MappingCell({
           </span>
         ))}
         {(answer.metafield_filters ?? []).map((m) => (
-          <span key={`m:${m.key}:${m.value}`} className="qz-ltab-chip">
+          <span key={`m:${m.key}:${m.value}`} className={`qz-ltab-chip${hue}`}>
             {m.value}
           </span>
         ))}

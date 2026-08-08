@@ -77,6 +77,29 @@ pool already has); residual metafield values on an Anything-mode answer are
 removable only via "Clear this answer"; `LogicRulesBar.tsx`/`LogicTableTab.tsx`
 are orphaned but kept per the repo's conservative-deletion culture.
 
+## Completeness-audit outcomes (2026-08-08)
+
+A post-ship section-by-section audit against HANDOFF §2-§7/§11 closed these
+gaps: metafield rule-targets end-to-end (modal chip + index rows keyed by the
+membership "key: value" convention + ensure-targets kind); the modal resource
+row's count is its own button opening a product-list popover (never toggles);
+"+N more — type to narrow" overflow rows (modal 40-cap, role-menu field 24-cap);
+typed-state "Found N across M types" + one group per kind (12 rows each);
+nothing-typed+All lists the sets PLUS the tags the quiz already uses;
+"pick anything" vs "not mapped yet" placeholders split by mode; role-menu
+field rows show the source key; §11 hashed per-field chip palette
+(fieldHue → 6 pastel hues); explainer progress green connectors; "Move a rule
+higher" copy (matches the ↑/↓ affordance); dashed next-question; 20-char
+modal question labels; Selected group pinned atop the Anything set menu.
+
+Deliberately NOT built (rationale): "Add it as a one-off product" on no-hits
+— the index already contains every catalog product, so a no-hit cannot be a
+recommendable product; tag-family chips inside the set menu (search covers
+it); product rows' home-set sub-line; Collections as a FIELD-mode kind
+(Anything mode covers collections); the measured both-sheet height lock
+(fixed 440px height meets the continuity intent); §7.2's 6th ledger row (the
+running counts match at 5).
+
 ## Mock sources
 
 `docs/design/logic-tab/rules-tab/…` never existed in this repo or its history;

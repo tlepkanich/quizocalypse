@@ -23,10 +23,26 @@ import {
 // ════════════════════════════════════════════════════════════════════════════
 
 const ResourceSchema = z.object({
-  kind: z.enum(["tag", "collection", "product"]),
+  // "metafield" refs use the membership convention "key: value" (the same
+  // string metafieldValuesOf produces — groupMembership matches exact).
+  kind: z.enum(["tag", "collection", "product", "metafield"]),
   ref: z.string().min(1).max(500),
   name: z.string().min(1).max(200),
 });
+
+// The membership metafield-value convention (studio.groups' metafieldValuesOf).
+function metafieldValuesOf(mf: unknown): string[] {
+  if (!mf || typeof mf !== "object") return [];
+  const out: string[] = [];
+  for (const [k, v] of Object.entries(mf as Record<string, unknown>)) {
+    const val =
+      v && typeof v === "object" && "value" in (v as object)
+        ? String((v as { value: unknown }).value)
+        : String(v);
+    out.push(`${k}: ${val}`);
+  }
+  return out;
+}
 
 const BodySchema = z.object({
   quizId: z.string().min(1),
@@ -62,13 +78,13 @@ export async function action({ request }: ActionFunctionArgs) {
 
   const products = await prisma.product.findMany({
     where: { shopId: shop.id },
-    select: { productId: true, tags: true, collectionIds: true },
+    select: { productId: true, tags: true, collectionIds: true, metafields: true },
   });
   const resolvable: ResolvableProduct[] = products.map((p) => ({
     id: p.productId,
     tags: p.tags,
     collectionIds: p.collectionIds,
-    metafieldValues: [],
+    metafieldValues: metafieldValuesOf(p.metafields),
   }));
 
   const out = [];
@@ -92,7 +108,7 @@ export async function action({ request }: ActionFunctionArgs) {
     const membership: Membership = {
       tags: r.kind === "tag" ? [r.ref] : [],
       collections: r.kind === "collection" ? [r.ref] : [],
-      metafields: [],
+      metafields: r.kind === "metafield" ? [r.ref] : [],
       manual: r.kind === "product" ? [r.ref] : [],
     };
     const productIds = resolveMembership(membership, resolvable);

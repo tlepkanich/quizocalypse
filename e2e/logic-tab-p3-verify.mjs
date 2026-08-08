@@ -64,7 +64,10 @@ await page.waitForTimeout(300);
 const narrowsPill = card.locator(".qz-ltab-pill-btn", { hasText: "Narrows · Anything" });
 ok("pill flips to Narrows · Anything", (await narrowsPill.count()) === 1);
 // Mapping cells on that question now show the filter states.
-ok("filter answers show not-mapped / keeps-everything states",
+// §5.2 — Anything mode invites "pick anything"; field mode flags
+// "not mapped yet"; no_preference reads "keeps everything".
+ok("filter answers show pick-anything / not-mapped / keeps-everything states",
+  (await card.locator(".qz-ltab-bad", { hasText: "pick anything" }).count()) > 0 ||
   (await card.locator(".qz-ltab-bad", { hasText: "not mapped yet" }).count()) > 0 ||
   (await card.locator(".qz-ltab-soft", { hasText: "keeps everything" }).count()) > 0);
 await page.screenshot({ path: `${SHOTS}/narrows-flipped.png` });

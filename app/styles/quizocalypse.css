@@ -7097,13 +7097,26 @@ textarea.qz-s4-inp { resize: vertical; min-height: 56px; line-height: 1.5; }
 .qz-crm-verb.is-on { border-color: var(--qz-accent); background: var(--qz-accent-wash); }
 .qz-crm-verb.is-on.is-highlight { border-color: var(--qz-ok); background: var(--qz-ok-tint); }
 .qz-crm-verb.is-on.is-exclude { border-color: var(--qz-crit); background: var(--qz-crit-tint); }
+/* §4.3 — the row's main area toggles; the count is its OWN button. */
 .qz-crm-res {
-  font: inherit; display: flex; align-items: center; gap: 8px; width: 100%;
-  text-align: left; cursor: pointer; border: none; background: none;
-  color: var(--qz-ink); font-size: 12px; padding: 5px 6px; border-radius: 8px;
+  display: flex; align-items: center; gap: 4px; width: 100%;
+  border-radius: 8px; font-size: 12px; color: var(--qz-ink);
 }
 .qz-crm-res:hover { background: var(--qz-cream-2); }
 .qz-crm-res.is-on { background: var(--qz-accent-wash); }
+.qz-crm-resmain {
+  font: inherit; display: flex; align-items: center; gap: 8px; flex: 1 1 auto;
+  min-width: 0; text-align: left; cursor: pointer; border: none;
+  background: none; color: inherit; padding: 5px 6px; border-radius: 8px;
+}
+.qz-crm-rescount.qz-crm-rescount {
+  font: inherit; font-size: 10.5px; cursor: pointer; border: none;
+  background: none; color: var(--qz-ink-4); font-variant-numeric: tabular-nums;
+  padding: 3px 6px; border-radius: 6px; flex: 0 0 auto;
+}
+.qz-crm-rescount:hover { background: var(--qz-paper); color: var(--qz-accent-ink); text-decoration: underline; }
+.qz-crm-rescheck { flex: 0 0 auto; width: 14px; color: var(--qz-accent-ink); }
+.qz-crm-kind.is-metafield { background: var(--qz-src-meta-bg); color: var(--qz-src-meta); }
 .qz-crm-kind {
   flex: 0 0 auto; font-size: 9px; font-weight: 700; text-transform: uppercase;
   letter-spacing: 0.04em; padding: 1px 6px; border-radius: 5px;
@@ -7148,8 +7161,11 @@ textarea.qz-s4-inp { resize: vertical; min-height: 56px; line-height: 1.5; }
 }
 .qz-xpl-hd { display: flex; align-items: center; justify-content: space-between; padding: 14px 20px 6px; }
 .qz-xpl-hd h2 { font-size: 15px; font-weight: 700; margin: 0; }
-.qz-xpl-progress { display: flex; align-items: center; justify-content: center; gap: 22px; padding: 8px 0 2px; }
-.qz-xpl-progress::before { content: none; }
+.qz-xpl-progress { display: flex; align-items: center; justify-content: center; padding: 8px 0 2px; }
+.qz-xpl-seg { display: flex; align-items: center; }
+/* §7 — connectors between dots; done segments go green. */
+.qz-xpl-conn { width: 34px; height: 2px; background: var(--qz-rule); margin: 0 6px; border-radius: 1px; }
+.qz-xpl-conn.is-done { background: var(--qz-ok); }
 .qz-xpl-dot {
   font: inherit; font-size: 11px; font-weight: 700; cursor: pointer;
   width: 26px; height: 26px; border-radius: 50%;
@@ -7246,7 +7262,19 @@ tr.qz-ltab-qstart td { border-top: 2px solid var(--qz-rule); }
 .qz-ltab-soft { color: var(--qz-ink-4); }
 .qz-ltab-bad { color: var(--qz-crit); font-weight: 600; }
 .qz-ltab-count { font-variant-numeric: tabular-nums; }
-.qz-ltab-route-next { color: var(--qz-ink-25); }
+/* §5.4 — muted AND dashed. */
+.qz-ltab-route-next {
+  color: var(--qz-ink-25);
+  text-decoration: underline dashed; text-underline-offset: 3px;
+  text-decoration-color: var(--qz-ink-25);
+}
+/* §11 — per-field chip palette, hash-assigned (.hue-N from fieldHue). */
+.qz-ltab-chip.hue-0 { background: var(--qz-pastel-violet); color: var(--qz-pastel-violet-ink); }
+.qz-ltab-chip.hue-1 { background: var(--qz-pastel-mint); color: var(--qz-pastel-mint-ink); }
+.qz-ltab-chip.hue-2 { background: var(--qz-pastel-amber); color: var(--qz-pastel-amber-ink); }
+.qz-ltab-chip.hue-3 { background: var(--qz-pastel-rose); color: var(--qz-pastel-rose-ink); }
+.qz-ltab-chip.hue-4 { background: var(--qz-pal-teal-wash); color: var(--qz-src-col); }
+.qz-ltab-chip.hue-5 { background: var(--qz-pal-blue-wash); color: var(--qz-pal-blue); }
 
 /* ── P3 — the five popovers (§6) + interactive cells ── */
 .qz-ltab-pill-btn, .qz-ltab-chip-btn, .qz-ltab-cellbtn {
