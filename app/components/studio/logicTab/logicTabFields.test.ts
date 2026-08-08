@@ -53,6 +53,35 @@ describe("narrowFieldOptions (§6.1)", () => {
   });
 });
 
+describe("G5 widening — variant options + product type as fields", () => {
+  const widened = [
+    { ...P("w1"), variant_options: { Size: ["Small", "Large"] }, product_type: "Snowboard" },
+    { ...P("w2"), variant_options: { Size: ["Large"] }, product_type: "Bindings" },
+  ];
+  it("derives vo:<name> and ptype fields with coverage", () => {
+    const fields = narrowFieldOptions(widened);
+    const size = fields.find((f) => f.field === "vo:Size");
+    expect(size).toMatchObject({ kind: "variant", coverage: 2, valueCount: 2 });
+    const pt = fields.find((f) => f.field === "ptype");
+    expect(pt).toMatchObject({ kind: "ptype", coverage: 2, valueCount: 2 });
+  });
+  it("vo/ptype values + write/read round-trips", () => {
+    expect(fieldValues(widened, "vo:Size").map((v) => v.value)).toEqual(["large", "small"]);
+    expect(fieldValues(widened, "ptype").map((v) => v.value).sort()).toEqual([
+      "bindings",
+      "snowboard",
+    ]);
+    const wv = writeValuesForField("vo:Size", ["large"]);
+    expect(wv).toEqual({ variant_filters: [{ name: "Size", value: "large" }] });
+    const a = { id: "a", text: "A", tags: [], edge_handle_id: "h", ...wv } as never;
+    expect(answerValuesForField(a, "vo:Size")).toEqual(["large"]);
+    const wt = writeValuesForField("ptype", ["snowboard"]);
+    expect(wt).toEqual({ product_type_filters: ["snowboard"] });
+    const b = { id: "b", text: "B", tags: [], edge_handle_id: "h", ...wt } as never;
+    expect(answerValuesForField(b, "ptype")).toEqual(["snowboard"]);
+  });
+});
+
 describe("fieldValues (§6.3)", () => {
   it("tag family values with counts, case-insensitive, count-sorted", () => {
     expect(fieldValues(index, "tag:fit")).toEqual([

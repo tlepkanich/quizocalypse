@@ -279,6 +279,8 @@ export function setAnswerFilterValues(
     tags?: string[];
     collection_filters?: string[];
     metafield_filters?: Array<{ key: string; value: string }>;
+    variant_filters?: Array<{ name: string; value: string }>;
+    product_type_filters?: string[];
     no_preference?: boolean;
   },
 ): QuizDoc {
@@ -299,6 +301,8 @@ export function setAnswerFilterValues(
                   collection_filter: _cf,
                   collection_filters: _cfs,
                   metafield_filters: _mf,
+                  variant_filters: _vf,
+                  product_type_filters: _ptf,
                   no_preference: _np,
                   ...rest
                 } = a;
@@ -311,6 +315,12 @@ export function setAnswerFilterValues(
                     : {}),
                   ...(!noPref && values.metafield_filters?.length
                     ? { metafield_filters: values.metafield_filters }
+                    : {}),
+                  ...(!noPref && values.variant_filters?.length
+                    ? { variant_filters: values.variant_filters }
+                    : {}),
+                  ...(!noPref && values.product_type_filters?.length
+                    ? { product_type_filters: values.product_type_filters }
                     : {}),
                   ...(noPref ? { no_preference: true } : {}),
                 };
@@ -352,6 +362,8 @@ export function setQuestionNarrowField(
             collection_filter: _cf,
             collection_filters: _cfs,
             metafield_filters: _mf,
+            variant_filters: _vf,
+            product_type_filters: _ptf,
             ...rest
           } = a;
           return { ...rest, tags: [] };

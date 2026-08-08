@@ -127,6 +127,14 @@ export const Answer = z.object({
   metafield_filters: z
     .array(z.object({ key: z.string().min(1), value: z.string().min(1) }))
     .optional(),
+  // G5 widening (logic-tab HANDOFF §13.1) — variant-option + product-type
+  // narrowing. This answer matches products whose baked variant_options carry
+  // {name: value}, or whose product_type is in the list (case-insensitive).
+  // Additive; absent on every legacy doc.
+  variant_filters: z
+    .array(z.object({ name: z.string().min(1), value: z.string().min(1) }))
+    .optional(),
+  product_type_filters: z.array(z.string().min(1)).optional(),
   // QZY-1 (quiz-logic spec §5) — "No preference" as a FIRST-CLASS state on a
   // filter answer: an intentional pass-through that does not narrow the pool
   // (vs. an accidentally-empty tags[]). Never blocking; the Logic map renders

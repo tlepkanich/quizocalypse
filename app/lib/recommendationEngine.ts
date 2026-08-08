@@ -37,6 +37,10 @@ export interface IndexedProduct {
   // v3 ranking inputs (optional — baked when available).
   updated_at?: string; // ISO; used by ranking="newest"
   metafields?: Record<string, string>; // used by ranking + metafield strategy
+  // G5 widening (logic-tab §13.3) — narrowing sources, baked when present.
+  // Only NEW publishes carry them (the pinned legacy doc never republishes).
+  product_type?: string;
+  variant_options?: Record<string, string[]>; // option name → distinct values
   // First in-stock (else first) variant gid, baked at publish — powers
   // add-to-cart cart permalinks. Absent when the product has no variants.
   default_variant_id?: string;

@@ -7,6 +7,7 @@ import { toneSampleFromCatalog } from "./catalogIndex";
 import { parseBrandGuidelinesSafe } from "./brandGuidelines";
 import { computeAnswerWeights } from "./answerPerformance";
 import { StoredMembershipSchema } from "./groupMembership";
+import { flattenMetafields, variantOptionsOf } from "./productIndexing";
 import {
   BrandTokens,
   resolveDesignTokens,
@@ -498,20 +499,10 @@ export async function publishQuiz(
           (v) => typeof v.inventoryQuantity === "number" && v.inventoryQuantity > 0,
         ) ?? variants[0];
       // Flatten metafields into a simple key→string map for v3 ranking +
-      // the metafield match strategy. Source shape is { "ns.key": { value,
-      // type } } from catalog sync.
-      const rawMeta = (p.metafields ?? {}) as Record<
-        string,
-        { value?: unknown } | unknown
-      >;
-      const metafields: Record<string, string> = {};
-      for (const [k, v] of Object.entries(rawMeta)) {
-        const val =
-          v && typeof v === "object" && "value" in v
-            ? (v as { value?: unknown }).value
-            : v;
-        if (val != null) metafields[k] = String(val);
-      }
+      // the metafield match strategy (shared derivation — productIndexing.ts).
+      const metafields = flattenMetafields(p.metafields);
+      // G5 widening — narrowing sources baked from already-synced data.
+      const variantOptions = variantOptionsOf(p.variants);
       // Variant list for the result-card selector — title is the Shopify
       // variant title ("Small / Red"); availability from inventory.
       const variantList = variants
@@ -537,6 +528,10 @@ export async function publishQuiz(
         updated_at: p.updatedAt ? p.updatedAt.toISOString() : undefined,
         ...(p.url ? { url: p.url } : {}),
         ...(Object.keys(metafields).length > 0 ? { metafields } : {}),
+        ...(p.productType ? { product_type: p.productType } : {}),
+        ...(Object.keys(variantOptions).length > 0
+          ? { variant_options: variantOptions }
+          : {}),
         ...(defaultVariant?.id ? { default_variant_id: defaultVariant.id } : {}),
         ...(variantList.length > 1 ? { variants: variantList } : {}),
       };

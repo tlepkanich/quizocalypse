@@ -15,11 +15,11 @@ type AnswerT = z.infer<typeof Answer>;
 // ════════════════════════════════════════════════════════════════════════════
 
 export interface NarrowFieldOption {
-  /** Namespaced field key ("tag:fit" | "mf:custom.gender"). */
+  /** Namespaced field key ("tag:fit" | "mf:custom.gender" | "vo:Size" | "ptype"). */
   field: string;
-  /** Display label ("Fit" | "gender"). */
+  /** Display label ("Fit" | "gender" | "Size" | "Product type"). */
   label: string;
-  kind: "tag" | "metafield";
+  kind: "tag" | "metafield" | "variant" | "ptype";
   /** Products carrying ANY value of this field. */
   coverage: number;
   /** Distinct values. */
@@ -37,6 +37,8 @@ export function narrowFieldOptions(
 ): NarrowFieldOption[] {
   const tagFamilies = new Map<string, { products: Set<string>; values: Set<string> }>();
   const metafields = new Map<string, { products: Set<string>; values: Set<string> }>();
+  const variantOpts = new Map<string, { products: Set<string>; values: Set<string> }>();
+  const ptype = { products: new Set<string>(), values: new Set<string>() };
   for (const p of productIndex) {
     for (const t of p.tags) {
       const i = t.indexOf(":");
@@ -56,6 +58,17 @@ export function narrowFieldOptions(
       e.products.add(p.product_id);
       e.values.add(v.trim().toLowerCase());
       metafields.set(k, e);
+    }
+    // G5 widening — variant options + product type as fields.
+    for (const [name, values] of Object.entries(p.variant_options ?? {})) {
+      const e = variantOpts.get(name) ?? { products: new Set(), values: new Set() };
+      e.products.add(p.product_id);
+      for (const val of values) e.values.add(val.trim().toLowerCase());
+      variantOpts.set(name, e);
+    }
+    if (p.product_type) {
+      ptype.products.add(p.product_id);
+      ptype.values.add(p.product_type.trim().toLowerCase());
     }
   }
   const out: NarrowFieldOption[] = [];
@@ -77,6 +90,25 @@ export function narrowFieldOptions(
       kind: "metafield",
       coverage: e.products.size,
       valueCount: e.values.size,
+    });
+  }
+  for (const [name, e] of variantOpts) {
+    if (e.values.size < 2) continue;
+    out.push({
+      field: `vo:${name}`,
+      label: name,
+      kind: "variant",
+      coverage: e.products.size,
+      valueCount: e.values.size,
+    });
+  }
+  if (ptype.values.size >= 2) {
+    out.push({
+      field: "ptype",
+      label: "Product type",
+      kind: "ptype",
+      coverage: ptype.products.size,
+      valueCount: ptype.values.size,
     });
   }
   return out.sort((a, b) => b.coverage - a.coverage || a.label.localeCompare(b.label));
@@ -121,6 +153,16 @@ export function fieldValues(
       const v = p.metafields?.[key];
       if (v) bump(v);
     }
+  } else if (field.startsWith("vo:")) {
+    const name = field.slice(3);
+    for (const p of productIndex) {
+      const values = new Set(p.variant_options?.[name] ?? []);
+      for (const v of values) bump(v);
+    }
+  } else if (field === "ptype") {
+    for (const p of productIndex) {
+      if (p.product_type) bump(p.product_type);
+    }
   }
   return [...seen.entries()]
     .map(([value, e]) => ({ value, label: e.label, count: e.count }))
@@ -146,6 +188,15 @@ export function answerValuesForField(a: AnswerT, field: string): string[] {
       .filter((m) => m.key === key)
       .map((m) => m.value.trim().toLowerCase());
   }
+  if (field.startsWith("vo:")) {
+    const name = field.slice(3);
+    return (a.variant_filters ?? [])
+      .filter((v) => v.name === name)
+      .map((v) => v.value.trim().toLowerCase());
+  }
+  if (field === "ptype") {
+    return (a.product_type_filters ?? []).map((t) => t.trim().toLowerCase());
+  }
   return [];
 }
 
@@ -153,7 +204,12 @@ export function answerValuesForField(a: AnswerT, field: string): string[] {
 export function writeValuesForField(
   field: string,
   values: readonly string[],
-): { tags?: string[]; metafield_filters?: Array<{ key: string; value: string }> } {
+): {
+  tags?: string[];
+  metafield_filters?: Array<{ key: string; value: string }>;
+  variant_filters?: Array<{ name: string; value: string }>;
+  product_type_filters?: string[];
+} {
   if (values.length === 0) return {};
   if (field.startsWith("tag:")) {
     const family = field.slice(4).toLowerCase();
@@ -162,6 +218,13 @@ export function writeValuesForField(
   if (field.startsWith("mf:")) {
     const key = field.slice(3);
     return { metafield_filters: values.map((v) => ({ key, value: v })) };
+  }
+  if (field.startsWith("vo:")) {
+    const name = field.slice(3);
+    return { variant_filters: values.map((v) => ({ name, value: v })) };
+  }
+  if (field === "ptype") {
+    return { product_type_filters: [...values] };
   }
   return {};
 }

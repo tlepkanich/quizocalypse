@@ -60,6 +60,8 @@ describe("answerFilterValues (§5 pass-through states)", () => {
       tags: ["soft"],
       collectionIds: [],
       metafields: [],
+      variantOptions: [],
+      productTypes: [],
     });
   });
   // Logic tab (HANDOFF G8) — collection_filters unions with the legacy single
@@ -72,7 +74,13 @@ describe("answerFilterValues (§5 pass-through states)", () => {
           collection_filters: ["c-new", "c-sale"],
         }) as never,
       ),
-    ).toEqual({ tags: [], collectionIds: ["c-sale", "c-new"], metafields: [] });
+    ).toEqual({
+      tags: [],
+      collectionIds: ["c-sale", "c-new"],
+      metafields: [],
+      variantOptions: [],
+      productTypes: [],
+    });
   });
   // Logic tab (HANDOFF G5) — metafield values lowercase for matching; blank
   // key/value entries are dropped; metafields alone make the answer narrow.
@@ -90,6 +98,8 @@ describe("answerFilterValues (§5 pass-through states)", () => {
       tags: [],
       collectionIds: [],
       metafields: [{ key: "custom.gender", value: "women" }],
+      variantOptions: [],
+      productTypes: [],
     });
   });
 });
@@ -204,6 +214,43 @@ describe("narrowIdsByFilters (§7 intersection · §1 path-aware)", () => {
       "p3",
       "p4",
     ]);
+  });
+
+  // G5 widening — variant-option + product-type branches.
+  it("variant-option answers narrow by baked option values (G5 widening)", () => {
+    const vp = [
+      { ...P("v1", [], []), variant_options: { Size: ["Small", "Large"] } },
+      { ...P("v2", [], []), variant_options: { Size: ["XL"] } },
+      { ...P("v3", [], []) },
+    ];
+    const vById = new Map(vp.map((p) => [p.product_id, p]));
+    const doc = {
+      nodes: [
+        filterQ("q1", [
+          answer("a-xl", [], { variant_filters: [{ name: "Size", value: "xl" }] }),
+        ]),
+      ],
+    };
+    expect(
+      narrowIdsByFilters(vp.map((p) => p.product_id), vById, doc as never, ["a-xl"]).ids,
+    ).toEqual(["v2"]);
+  });
+
+  it("product-type answers narrow case-insensitively (G5 widening)", () => {
+    const tp = [
+      { ...P("t1", [], []), product_type: "Snowboard" },
+      { ...P("t2", [], []), product_type: "Bindings" },
+      { ...P("t3", [], []) },
+    ];
+    const tById = new Map(tp.map((p) => [p.product_id, p]));
+    const doc = {
+      nodes: [
+        filterQ("q1", [answer("a-sb", [], { product_type_filters: ["snowboard"] })]),
+      ],
+    };
+    expect(
+      narrowIdsByFilters(tp.map((p) => p.product_id), tById, doc as never, ["a-sb"]).ids,
+    ).toEqual(["t1"]);
   });
 
   it("docs with no filter roles narrow nothing (dual-model byte-safety)", () => {

@@ -41,6 +41,12 @@ export interface AnswerFilterValues {
   /** Metafield constraints (any-of): the baked metafield `key` equals `value`,
    *  case-insensitively (HANDOFF G5). Values pre-lowercased. */
   metafields: Array<{ key: string; value: string }>;
+  /** G5 widening — variant-option constraints (any-of): the baked
+   *  variant_options[name] includes value, case-insensitively. Values
+   *  pre-lowercased; names EXACT (baked option names). */
+  variantOptions: Array<{ name: string; value: string }>;
+  /** G5 widening — product-type constraints (any-of), pre-lowercased. */
+  productTypes: string[];
 }
 
 /** The attribute values a filter answer maps to, or null when the answer is
@@ -58,9 +64,21 @@ export function answerFilterValues(a: AnswerT): AnswerFilterValues | null {
   const metafields = (a.metafield_filters ?? [])
     .map((m) => ({ key: m.key, value: m.value.trim().toLowerCase() }))
     .filter((m) => m.key.trim() && m.value);
-  if (tags.length === 0 && collectionIds.length === 0 && metafields.length === 0)
+  const variantOptions = (a.variant_filters ?? [])
+    .map((v) => ({ name: v.name, value: v.value.trim().toLowerCase() }))
+    .filter((v) => v.name.trim() && v.value);
+  const productTypes = (a.product_type_filters ?? [])
+    .map((t) => t.trim().toLowerCase())
+    .filter(Boolean);
+  if (
+    tags.length === 0 &&
+    collectionIds.length === 0 &&
+    metafields.length === 0 &&
+    variantOptions.length === 0 &&
+    productTypes.length === 0
+  )
     return null;
-  return { tags, collectionIds, metafields };
+  return { tags, collectionIds, metafields, variantOptions, productTypes };
 }
 
 function productMatches(p: IndexedProduct, v: AnswerFilterValues): boolean {
@@ -74,6 +92,15 @@ function productMatches(p: IndexedProduct, v: AnswerFilterValues): boolean {
       const raw = p.metafields[m.key];
       if (raw !== undefined && raw.trim().toLowerCase() === m.value) return true;
     }
+  }
+  if (v.variantOptions.length && p.variant_options) {
+    for (const vo of v.variantOptions) {
+      const values = p.variant_options[vo.name];
+      if (values?.some((x) => x.trim().toLowerCase() === vo.value)) return true;
+    }
+  }
+  if (v.productTypes.length && p.product_type) {
+    if (v.productTypes.includes(p.product_type.trim().toLowerCase())) return true;
   }
   return false;
 }

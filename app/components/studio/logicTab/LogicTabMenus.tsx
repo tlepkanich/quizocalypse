@@ -89,7 +89,9 @@ export function RoleMenuButton({
   const [open, setOpen] = useState(false);
   const [narrowsOpen, setNarrowsOpen] = useState(false);
   const [fieldQuery, setFieldQuery] = useState("");
-  const [kindFilter, setKindFilter] = useState<"all" | "tag" | "metafield">("all");
+  const [kindFilter, setKindFilter] = useState<
+    "all" | "tag" | "metafield" | "variant" | "ptype"
+  >("all");
 
   const role = q.node.data.role;
   const narrowField = q.node.data.narrow_field ?? null;
@@ -200,11 +202,14 @@ export function RoleMenuButton({
                 Anything
               </MenuRow>
               <div className="qz-ltab-menu-chips">
+                {/* G5 widening — variant options + product type now match. */}
                 {(
                   [
                     ["all", "All"],
                     ["tag", "Tags"],
                     ["metafield", "Metafields"],
+                    ["variant", "Variant options"],
+                    ["ptype", "Type"],
                   ] as const
                 ).map(([k, l]) => (
                   <button

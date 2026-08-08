@@ -26,6 +26,7 @@ import { mergeRegeneratedAnswers } from "./regenerateMerge";
 import { parseBrandGuidelinesSafe } from "./brandGuidelines";
 import { buildScopedIndex, toneSampleFromCatalog } from "./catalogIndex";
 import type { IndexedProduct } from "./recommendationEngine";
+import { flattenMetafields, variantOptionsOf } from "./productIndexing";
 
 // ───────────────────────────────────────────────────────────────────────────
 // Shared loader/action for the quiz editor — consumed by BOTH the React Flow
@@ -73,6 +74,11 @@ export async function loadQuizEditorDataForShop(shop: Shop, id: string, origin: 
     const variants = (p.variants ?? []) as Array<{
       inventoryQuantity?: number | null;
     }>;
+    // G5 widening — the builder's index carries the SAME narrowing sources
+    // publish bakes (metafields were previously missing here, so draft-time
+    // field menus could never offer them). Shared derivations, no drift.
+    const metafields = flattenMetafields(p.metafields);
+    const variantOptions = variantOptionsOf(p.variants);
     return {
       product_id: p.productId,
       title: p.title,
@@ -84,6 +90,11 @@ export async function loadQuizEditorDataForShop(shop: Shop, id: string, origin: 
       inventory_in_stock: variants.some(
         (v) => typeof v.inventoryQuantity === "number" && v.inventoryQuantity > 0,
       ),
+      ...(Object.keys(metafields).length > 0 ? { metafields } : {}),
+      ...(p.productType ? { product_type: p.productType } : {}),
+      ...(Object.keys(variantOptions).length > 0
+        ? { variant_options: variantOptions }
+        : {}),
     };
   });
   const catalogTags = [...new Set(products.flatMap((p) => p.tags))].sort((a, b) =>
