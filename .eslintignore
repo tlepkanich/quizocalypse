@@ -6,3 +6,4 @@ shopify-app-remix
 .shopify
 # Vitest coverage output (BIC-2 D4) — generated report, never lint it
 coverage
+docs/design/
