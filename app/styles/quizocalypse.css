@@ -6008,7 +6008,7 @@ textarea.qz-s4-inp { resize: vertical; min-height: 56px; line-height: 1.5; }
   cursor: pointer;
   padding: 0 2px;
 }
-.qz-screens-del:hover { color: var(--qz-danger, currentColor); }
+.qz-screens-del:hover { color: var(--qz-crit); }
 .qz-screens-confirm {
   position: absolute;
   bottom: calc(100% + 4px);
@@ -6037,7 +6037,7 @@ textarea.qz-s4-inp { resize: vertical; min-height: 56px; line-height: 1.5; }
   cursor: pointer;
 }
 .qz-screens-confirm .qz-screens-confirm-yes {
-  background: var(--qz-danger, var(--qz-ink-1));
+  background: var(--qz-crit);
   color: var(--qz-paper);
   border-color: transparent;
   font-weight: 600;
@@ -6545,7 +6545,7 @@ textarea.qz-s4-inp { resize: vertical; min-height: 56px; line-height: 1.5; }
 }
 
 .qz-insp-foot { display: flex; gap: 6px; margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--qz-rule); }
-.qz-insp-foot-del { margin-left: auto; color: var(--qz-danger, currentColor); }
+.qz-insp-foot-del { margin-left: auto; color: var(--qz-crit); }
 
 /* QZY-9 — the answer-display picker (build-tab §5). */
 .qz-ads-modes { display: grid; grid-template-columns: repeat(5, 1fr); gap: 4px; }
