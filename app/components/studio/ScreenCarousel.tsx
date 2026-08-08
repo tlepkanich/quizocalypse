@@ -16,7 +16,7 @@ import { hasBackgroundOverride } from "../../lib/screenBackground";
 //
 // Screen delete lives here too (the FlowRail rows left the Build panel): the
 // ✕ on the active thumbnail ARMS a two-step confirm that names the impact
-// ("in N rules — mappings will be removed", spec §3) before deleting.
+// ("used in N rules · N mappings will be removed", spec §3) before deleting.
 // ════════════════════════════════════════════════════════════════════════════
 
 type QuizDoc = Quiz;
@@ -54,10 +54,12 @@ export function deleteImpactCopy(doc: QuizDoc, node: QuizNode): string {
     r.conditions.some((c) => c.question_id === node.id),
   ).length;
   const mapped = node.data.answers.filter((a) => a.target_id).length;
+  // Each part is a self-contained clause so any subset joins grammatically
+  // after the shared "Delete?" stem.
   const parts: string[] = [];
-  if (ruleCount > 0) parts.push(`in ${ruleCount} rule${ruleCount === 1 ? "" : "s"}`);
+  if (ruleCount > 0) parts.push(`This question is used in ${ruleCount} rule${ruleCount === 1 ? "" : "s"}`);
   if (mapped > 0) parts.push(`${mapped} mapping${mapped === 1 ? "" : "s"} will be removed`);
-  return parts.length ? `Delete? This question is ${parts.join(" · ")}.` : "Delete this question?";
+  return parts.length ? `Delete? ${parts.join(" · ")}.` : "Delete this question?";
 }
 
 export function ScreenCarousel({
