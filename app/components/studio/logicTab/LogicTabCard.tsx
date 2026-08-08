@@ -7,15 +7,11 @@ import { answerNextNode } from "../../../lib/pathAnalyzer";
 import { moveDecisionRule, removeDecisionRule } from "../../../lib/quizMutations";
 import { answerFilterValues, filterAnswerMatchCount } from "../../../lib/filterMatching";
 import { ruleTargets } from "../../../lib/recommendDecider";
-import {
-  NarrowsMenuButton,
-  ProductCountButton,
-  RoleMenuButton,
-  RouteMenuButton,
-  StartingSetMenuButton,
-} from "./LogicTabMenus";
+import { ProductCountButton, RouteMenuButton } from "./LogicTabMenus";
 import { CreateRuleModal } from "./CreateRuleModal";
+import { QuestionWindow } from "./QuestionWindow";
 import { ExplainerSheet, type ExplainerKind } from "./Explainers";
+import { derivedNarrowLabel, fieldHue } from "./logicTabFields";
 
 // ════════════════════════════════════════════════════════════════════════════
 // Logic tab (docs/design/logic-tab/HANDOFF.md §2/§3/§5 + DECISIONS.md) — the
@@ -52,22 +48,6 @@ function targetKind(cat: BuilderCategory | undefined): string | null {
   return null;
 }
 
-// §6.1 field naming — "mf:custom.gender" → "gender", "tag:fit" → "fit".
-function narrowFieldLabel(field: string): string {
-  const bare = field.replace(/^(mf|tag):/, "");
-  const last = bare.split(".").pop();
-  return last || bare;
-}
-
-// §11 — the per-field chip palette is ASSIGNED BY HASHING the field key
-// (there is no fixed list of merchant fields). Six hues from the repo's
-// pastel system (.qz-ltab-chip.hue-0..5).
-function fieldHue(field: string): number {
-  let h = 0;
-  for (let i = 0; i < field.length; i++) h = (h * 31 + field.charCodeAt(i)) | 0;
-  return Math.abs(h) % 6;
-}
-
 export function LogicTabCard({
   doc,
   questions,
@@ -91,6 +71,9 @@ export function LogicTabCard({
   // route loader's next pass returns them (autosave revalidation).
   const [extraCats, setExtraCats] = useState<BuilderCategory[]>([]);
   const [createOpen, setCreateOpen] = useState(false);
+  // UNIFIED one-window — the question window: ONE window element, two
+  // contents (unified/_v.js render): opening one closes the other.
+  const [qwin, setQwin] = useState<{ nodeId: string; answerId: string | null } | null>(null);
   // Latest-doc seam for the modal's post-await commit (review L2-5).
   const docRef = useRef(doc);
   docRef.current = doc;
@@ -148,7 +131,10 @@ export function LogicTabCard({
           <button
             type="button"
             className="qz-btn qz-btn-primary qz-ltab-create"
-            onClick={() => setCreateOpen(true)}
+            onClick={() => {
+              setQwin(null);
+              setCreateOpen(true);
+            }}
           >
             + Create rule
           </button>
@@ -169,6 +155,25 @@ export function LogicTabCard({
           getLatestDoc={() => docRef.current}
         />
       ) : null}
+      {commit && qwin
+        ? (() => {
+            const wq = questions.find((x) => x.node.id === qwin.nodeId);
+            return wq ? (
+              <QuestionWindow
+                key={`${qwin.nodeId}:${qwin.answerId ?? ""}`}
+                doc={doc}
+                q={wq}
+                questions={questions}
+                categories={allCategories}
+                collections={collections}
+                productIndex={productIndex}
+                initialAnswerId={qwin.answerId}
+                onClose={() => setQwin(null)}
+                commit={commit}
+              />
+            ) : null;
+          })()
+        : null}
       {rules.length === 0 ? (
         <p className="qz-ltab-empty">
           <span className="qz-ltab-muted">—</span>{" "}
@@ -280,13 +285,19 @@ export function LogicTabCard({
               doc={doc}
               q={q}
               questions={questions}
-              categories={allCategories}
               catById={catById}
-              collections={collections}
               colTitleById={colTitleById}
               productIndex={productIndex}
               qIndexByNodeId={qIndexByNodeId}
               commit={commit}
+              onOpenWindow={
+                commit
+                  ? (nodeId, answerId) => {
+                      setCreateOpen(false);
+                      setQwin({ nodeId, answerId });
+                    }
+                  : undefined
+              }
             />
           ))}
         </tbody>
@@ -354,48 +365,52 @@ function QuestionRows({
   doc,
   q,
   questions,
-  categories,
   catById,
-  collections,
   colTitleById,
   productIndex,
   qIndexByNodeId,
   commit,
+  onOpenWindow,
 }: {
   doc: QuizDoc;
   q: OrderedQuestion;
   questions: OrderedQuestion[];
-  categories: BuilderCategory[];
   catById: Map<string, BuilderCategory>;
-  collections: BuilderCollection[];
   colTitleById: Map<string, string>;
   productIndex: IndexedProduct[];
   qIndexByNodeId: Map<string, number>;
   commit?: (doc: QuizDoc) => void;
+  /** UNIFIED — opens the question window (pill + every mapping cell). */
+  onOpenWindow?: (nodeId: string, answerId: string | null) => void;
 }) {
   const role = q.node.data.role;
   const answers = q.node.data.answers;
   const total = productIndex.length;
   const keys = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
 
-  // §5.1 — the role pill under the question label. With a commit seam it
-  // opens the §6.1 role menu; read-only hosts get the static pill.
-  const pill = commit ? (
-    <RoleMenuButton
-      doc={doc}
-      q={q}
-      questions={questions}
-      productIndex={productIndex}
-      commit={commit}
-    />
-  ) : role === "decides" ? (
-    <span className="qz-ltab-pill is-start">◆ Starting set</span>
-  ) : role === "filter" ? (
-    <span className="qz-ltab-pill is-narrow">
-      Narrows · {q.node.data.narrow_field ? narrowFieldLabel(q.node.data.narrow_field) : "Anything"}
-    </span>
+  // UNIFIED — the pill is DERIVED (never stored: narrow_field is no longer
+  // written anywhere; the label falls out of the answers' own values) and
+  // opens the question window focused on the first answer.
+  const pillLabel =
+    role === "decides" ? (
+      <>◆ Starting set</>
+    ) : role === "filter" ? (
+      <>Narrows · {derivedNarrowLabel(answers)}</>
+    ) : (
+      <>Info only</>
+    );
+  const pillClass =
+    role === "decides" ? " is-start" : role === "filter" ? " is-narrow" : "";
+  const pill = onOpenWindow ? (
+    <button
+      type="button"
+      className={`qz-ltab-pill${pillClass} qz-ltab-pill-btn`}
+      onClick={() => onOpenWindow(q.node.id, answers[0]?.id ?? null)}
+    >
+      {pillLabel} ▾
+    </button>
   ) : (
-    <span className="qz-ltab-pill">Info only</span>
+    <span className={`qz-ltab-pill${pillClass}`}>{pillLabel}</span>
   );
 
   // A question with no answers (freeform types) still needs its row — the
@@ -421,13 +436,7 @@ function QuestionRows({
     <>
       {answers.map((a, i) => {
         const mapping = (
-          <MappingCell
-            role={role}
-            answer={a}
-            catById={catById}
-            colTitleById={colTitleById}
-            narrowField={q.node.data.narrow_field ?? null}
-          />
+          <MappingCell role={role} answer={a} catById={catById} colTitleById={colTitleById} />
         );
         const count = (
           <ProductsCell
@@ -458,25 +467,19 @@ function QuestionRows({
               {a.text}
             </td>
             <td>
-              {commit && role === "decides" ? (
-                <StartingSetMenuButton
-                  doc={doc}
-                  q={q}
-                  answer={a}
-                  categories={categories}
-                  commit={commit}
-                />
-              ) : commit && role === "filter" ? (
-                <NarrowsMenuButton
-                  doc={doc}
-                  q={q}
-                  answer={a}
-                  collections={collections}
-                  productIndex={productIndex}
-                  commit={commit}
+              {/* UNIFIED — every Shows/narrows cell is the same door: it opens
+                  the question window focused on this answer. Info-only cells
+                  are buttons too, at reduced opacity. */}
+              {onOpenWindow ? (
+                <button
+                  type="button"
+                  className={`qz-ltab-cellbtn qz-qwin-mapcell${
+                    role !== "decides" && role !== "filter" ? " qz-qwin-dimcell" : ""
+                  }`}
+                  onClick={() => onOpenWindow(q.node.id, a.id)}
                 >
                   {mapping}
-                </NarrowsMenuButton>
+                </button>
               ) : (
                 mapping
               )}
@@ -515,19 +518,20 @@ function QuestionRows({
   );
 }
 
-// §5.2 — the "Shows / narrows" cell per role.
+// §5.2 (UNIFIED deltas) — the "Shows / narrows" cell per role. Up to 3 chips
+// + a "+N" overflow; field-value chips keep their per-field colour so the
+// table reads as before; the "pick anything" invite is gone (unset filter
+// cells read "not mapped yet" — the window is the one editor now).
 function MappingCell({
   role,
   answer,
   catById,
   colTitleById,
-  narrowField,
 }: {
   role: "decides" | "qualifier" | "filter" | undefined;
   answer: Answer;
   catById: Map<string, BuilderCategory>;
   colTitleById: Map<string, string>;
-  narrowField?: string | null;
 }) {
   if (role === "decides") {
     if (!answer.target_id)
@@ -543,33 +547,36 @@ function MappingCell({
     if (answer.no_preference)
       return <span className="qz-ltab-soft">keeps everything</span>;
     const v = answerFilterValues(answer);
-    // §5.2 — Anything mode invites "pick anything"; field mode flags
-    // "not mapped yet" (the field is chosen, the values aren't).
-    if (!v)
-      return narrowField ? (
-        <span className="qz-ltab-bad">not mapped yet</span>
-      ) : (
-        <span className="qz-ltab-bad">pick anything</span>
-      );
-    // §11 — field-mode value chips take the field's hashed hue.
-    const hue = narrowField ? ` hue-${fieldHue(narrowField)}` : "";
+    if (!v) return <span className="qz-ltab-bad">not mapped yet</span>;
+    // §11 — each FIELD-shaped value takes its own field's hashed hue; plain
+    // tags and collections stay neutral (the field is derived, never stored).
+    const chips: Array<{ key: string; hue: number | null; label: string }> = [];
+    for (const t of answer.tags) {
+      const i = t.indexOf(":");
+      if (i > 0 && i < t.length - 1)
+        chips.push({
+          key: `t:${t}`,
+          hue: fieldHue(`tag:${t.slice(0, i).trim().toLowerCase()}`),
+          label: t.slice(i + 1),
+        });
+      else chips.push({ key: `t:${t}`, hue: null, label: t });
+    }
+    for (const cid of v.collectionIds)
+      chips.push({ key: `c:${cid}`, hue: null, label: colTitleById.get(cid) ?? cid });
+    for (const m of answer.metafield_filters ?? [])
+      chips.push({ key: `m:${m.key}:${m.value}`, hue: fieldHue(`mf:${m.key}`), label: m.value });
+    for (const vf of answer.variant_filters ?? [])
+      chips.push({ key: `v:${vf.name}:${vf.value}`, hue: fieldHue(`vo:${vf.name}`), label: vf.value });
+    for (const pt of answer.product_type_filters ?? [])
+      chips.push({ key: `p:${pt}`, hue: fieldHue("ptype"), label: pt });
     return (
       <>
-        {answer.tags.map((t) => (
-          <span key={`t:${t}`} className={`qz-ltab-chip${hue}`}>
-            {narrowField ? t.replace(/^[^:]+:/, "") : t}
+        {chips.slice(0, 3).map((c) => (
+          <span key={c.key} className={`qz-ltab-chip${c.hue === null ? "" : ` hue-${c.hue}`}`}>
+            {c.label}
           </span>
         ))}
-        {v.collectionIds.map((cid) => (
-          <span key={`c:${cid}`} className="qz-ltab-chip">
-            {colTitleById.get(cid) ?? cid}
-          </span>
-        ))}
-        {(answer.metafield_filters ?? []).map((m) => (
-          <span key={`m:${m.key}:${m.value}`} className={`qz-ltab-chip${hue}`}>
-            {m.value}
-          </span>
-        ))}
+        {chips.length > 3 ? <span className="qz-ltab-soft">+{chips.length - 3}</span> : null}
       </>
     );
   }

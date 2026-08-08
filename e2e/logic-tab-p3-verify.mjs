@@ -1,12 +1,13 @@
-// Logic tab P3 live-verify — the five §6 popovers wired to real mutations,
-// against a LOCAL production build. Fixture: draft cmr7khgd50001vkhscvox8dgt
+// Logic tab live-verify (UNIFIED one-window) — the question window replaces
+// the role/set/narrows popovers; route menu + product-count popover remain.
+// Against a LOCAL production build. Fixture: draft cmr7khgd50001vkhscvox8dgt
 // (decider, local DB — not the deploy DB, never the byte-pinned doc).
 //
 // Interactions are LIVE CLICKS (a pointer-trapped overlay renders fine and is
 // unclickable — repo landmine). The one real mutation is a role round-trip
-// (Info only → Narrows·Anything → Info only) verified by READING THE DRAFT
-// BACK through the builder UI state; the doc ends role:"qualifier" on a
-// question that renders Info only either way.
+// (Info only → Narrows → Info only, driven through the WINDOW SPINE) verified
+// by READING THE DRAFT BACK through the builder UI state; the doc ends
+// role:"qualifier" on a question that renders Info only either way.
 import { chromium } from "playwright";
 import { mkdirSync } from "node:fs";
 
@@ -37,45 +38,52 @@ await page.waitForTimeout(1500);
 await page.locator(".qz-builder-rail-item", { hasText: "Logic" }).click();
 await page.waitForSelector('[data-testid="logic-tab-card"]', { timeout: 10000 });
 const card = page.locator('[data-testid="logic-tab-card"]');
+const win = page.locator(".qz-crm.qz-qwin");
 
-// ── §6.1 role menu opens on a LIVE click (portal, not pointer-trapped) ──────
+// ── UNIFIED — the role pill opens the question window (portal, live click) ──
 await card.locator(".qz-ltab-pill-btn").first().click();
-const menu = page.locator(".qz-popover .qz-ltab-menu");
-ok("role menu opens in a body portal", (await menu.count()) === 1);
-ok("role menu title is the question text", (await menu.locator(".qz-ltab-menu-title").innerText()).length > 3);
-const rows = await menu.locator(".qz-ltab-menu-row").allInnerTexts();
-ok("three jobs, one flat list", /Starting set/.test(rows[0] ?? "") && /Info only/.test(rows[1] ?? "") && /Narrows/.test(rows[2] ?? ""), JSON.stringify(rows.slice(0, 3)));
-
-// Expand Narrows in place: Anything + kind chips + field search.
-await menu.locator(".qz-ltab-menu-row", { hasText: "Narrows" }).click();
-ok("Narrows expands in place (Anything row)", (await menu.locator(".qz-ltab-menu-row", { hasText: "Anything" }).count()) === 1);
-ok("field search present", (await menu.locator(".qz-ltab-menu-search").count()) === 1);
-await page.screenshot({ path: `${SHOTS}/role-menu.png` });
+ok("pill opens the question window in a body portal", (await win.count()) === 1);
+ok("window title is the question text", (await win.locator("h2").innerText()).length > 3);
+ok("three panels (answers · spine · bank)", (await win.locator(".qz-crm-col").count()) === 3);
+const jobs = await win.locator(".qz-crm-verb").allInnerTexts();
+ok(
+  "spine shows the three jobs",
+  /Starting set/.test(jobs[0] ?? "") && /Narrows/.test(jobs[1] ?? "") && /Info only/.test(jobs[2] ?? ""),
+  JSON.stringify(jobs.map((j) => j.split("\n")[0])),
+);
+await page.screenshot({ path: `${SHOTS}/question-window.png` });
 await page.keyboard.press("Escape");
-ok("Esc closes the menu", (await menu.count()) === 0);
+ok("Esc closes the window", (await win.count()) === 0);
 
-// ── real mutation round-trip: Info only → Narrows·Anything → Info only ──────
-const infoPill = card.locator(".qz-ltab-pill-btn", { hasText: "Info only" }).first();
-ok("an Info-only pill exists to flip", (await infoPill.count()) === 1);
+// ── real mutation round-trip via the SPINE: Info only → Narrows → Info only ──
+const infoPills = card.locator(".qz-ltab-pill-btn", { hasText: "Info only" });
+const infoCount0 = await infoPills.count();
+const infoPill = infoPills.first();
+ok("an Info-only pill exists to flip", infoCount0 >= 1, `${infoCount0}`);
 await infoPill.click();
-await menu.locator(".qz-ltab-menu-row", { hasText: "Narrows" }).click();
-await menu.locator(".qz-ltab-menu-row.is-indent", { hasText: "Anything" }).click();
+ok("info window shows the not-used message", (await win.locator(".qz-qwin-infomsg").count()) === 1);
+await win.locator(".qz-crm-verb", { hasText: "Narrows" }).click();
 await page.waitForTimeout(300);
-const narrowsPill = card.locator(".qz-ltab-pill-btn", { hasText: "Narrows · Anything" });
-ok("pill flips to Narrows · Anything", (await narrowsPill.count()) === 1);
-// Mapping cells on that question now show the filter states.
-// §5.2 — Anything mode invites "pick anything"; field mode flags
-// "not mapped yet"; no_preference reads "keeps everything".
-ok("filter answers show pick-anything / not-mapped / keeps-everything states",
-  (await card.locator(".qz-ltab-bad", { hasText: "pick anything" }).count()) > 0 ||
-  (await card.locator(".qz-ltab-bad", { hasText: "not mapped yet" }).count()) > 0 ||
-  (await card.locator(".qz-ltab-soft", { hasText: "keeps everything" }).count()) > 0);
+const narrowsPill = card.locator(".qz-ltab-pill-btn", { hasText: "Narrows ·" });
+ok("pill flips to the derived Narrows label", (await narrowsPill.count()) === 1);
+ok("spine shows the derived readout", (await win.locator(".qz-qwin-derived").count()) === 1);
 await page.screenshot({ path: `${SHOTS}/narrows-flipped.png` });
-// Flip back.
-await narrowsPill.click();
-await menu.locator(".qz-ltab-menu-row", { hasText: "Info only" }).click();
+// Mapping cells on that question now show the filter states.
+// UNIFIED deltas — unset filter answers read "not mapped yet" ("pick
+// anything" is gone); no_preference reads "keeps everything".
+ok(
+  "filter answers show not-mapped / keeps-everything states",
+  (await card.locator(".qz-ltab-bad", { hasText: "not mapped yet" }).count()) > 0 ||
+    (await card.locator(".qz-ltab-soft", { hasText: "keeps everything" }).count()) > 0,
+);
+// Flip back through the same window.
+await win.locator(".qz-crm-verb", { hasText: "Info only" }).click();
+await page.waitForTimeout(300);
+ok("pill restores to Info only",
+  (await card.locator(".qz-ltab-pill-btn", { hasText: "Info only" }).count()) === infoCount0);
+await win.locator(".qz-btn-primary", { hasText: "Done" }).click();
+ok("Done closes the window", (await win.count()) === 0);
 await page.waitForTimeout(900); // autosave debounce settle
-ok("pill restores to Info only", (await card.locator(".qz-ltab-pill-btn", { hasText: "Info only" }).count()) === 1);
 
 // ── reload: the round-trip PERSISTED through the autosave PUT ───────────────
 await page.reload({ waitUntil: "domcontentloaded" });
@@ -83,35 +91,63 @@ await page.waitForSelector(".qz-builder", { timeout: 15000 });
 await page.waitForTimeout(1200);
 await page.locator(".qz-builder-rail-item", { hasText: "Logic" }).click();
 await page.waitForSelector('[data-testid="logic-tab-card"]', { timeout: 10000 });
-ok("after reload the question is still Info only (draft read-back)",
-  (await card.locator(".qz-ltab-pill-btn", { hasText: "Info only" }).count()) === 1);
+ok(
+  "after reload the question is still Info only (draft read-back)",
+  (await card.locator(".qz-ltab-pill-btn", { hasText: "Info only" }).count()) === infoCount0,
+);
 
-// ── §6.2 set menu on the Starting-set row ───────────────────────────────────
-const chipBtn = card.locator(".qz-ltab-chip-btn").first();
-await chipBtn.click();
-ok("set menu opens with a search + category rows",
-  (await menu.locator(".qz-ltab-menu-search").count()) === 1 &&
-  (await menu.locator(".qz-ltab-menu-row").count()) > 0);
-const currentRow = menu.locator(".qz-ltab-menu-row.is-current");
-ok("current target is marked", (await currentRow.count()) === 1);
-// Re-pick the SAME target — a commit that changes nothing (restore-free).
-await currentRow.click();
+// ── UNIFIED — a mapping cell opens the window FOCUSED on that answer ────────
+const mapRows = card.locator("tbody tr").filter({ has: page.locator(".qz-qwin-mapcell") });
+const mapRow = mapRows.nth(Math.min(1, (await mapRows.count()) - 1));
+const answerText = (await mapRow.locator(".qz-ltab-answer").innerText()).trim();
+await mapRow.locator(".qz-qwin-mapcell").click();
+ok("mapping cell opens the window", (await win.count()) === 1);
+ok(
+  "window is focused on the clicked answer",
+  (await win.locator(".qz-qwin-arow.is-on .qz-qwin-atext").innerText()).trim() === answerText,
+  answerText,
+);
+await win.locator(".qz-btn-primary", { hasText: "Done" }).click();
+await page.waitForTimeout(400); // let the previous window unmount
+
+// ── UNIFIED — the Starting-set window: single-target Set pick (G9) ──────────
+const startPill = card.locator(".qz-ltab-pill-btn", { hasText: "Starting set" }).first();
+await startPill.click();
+await win.waitFor({ state: "visible", timeout: 5000 });
 await page.waitForTimeout(300);
-ok("re-picking the current target keeps the chip", (await card.locator(".qz-ltab-chip-btn").first().count()) === 1);
+ok(
+  "decides window banks read Answers / What it opens",
+  /What it opens/i.test(await win.locator(".qz-crm-col").last().innerText()),
+);
+// Focus a MAPPED answer (its left-bank row carries a target chip) so the
+// bank shows its selected Set.
+const mappedRow = win.locator(".qz-qwin-arow").filter({ has: page.locator(".qz-ltab-chip") }).first();
+if ((await mappedRow.count()) > 0) await mappedRow.click();
+ok(
+  "the current target is marked in the set list",
+  (await win.locator(".qz-crm-res.is-on").count()) >= 1,
+);
+await page.screenshot({ path: `${SHOTS}/starting-set-window.png` });
+await win.locator(".qz-btn-primary", { hasText: "Done" }).click();
 
-// ── §6.4 product popover behind the count ───────────────────────────────────
+// ── §6.4 product popover behind the count (unchanged) ───────────────────────
+const menu = page.locator(".qz-popover .qz-ltab-menu");
 await card.locator(".qz-ltab-count .qz-ltab-cellbtn").first().click();
-ok("product popover opens (rows or the safety-net empty copy)",
+ok(
+  "product popover opens (rows or the safety-net empty copy)",
   (await menu.locator(".qz-ltab-menu-product").count()) > 0 ||
-  (await menu.locator(".qz-ltab-menu-none").count()) > 0);
+    (await menu.locator(".qz-ltab-menu-none").count()) > 0,
+);
 await page.keyboard.press("Escape");
 
-// ── §6.5 route menu — forward-only options ──────────────────────────────────
+// ── §6.5 route menu — forward-only options (unchanged) ──────────────────────
 await card.locator("tbody td:last-child .qz-ltab-cellbtn").first().click();
 const routeRows = await menu.locator(".qz-ltab-menu-row").allInnerTexts();
-ok("route menu: next question first, results last",
+ok(
+  "route menu: next question first, results last",
   /next question/i.test(routeRows[0] ?? "") && /results/i.test(routeRows[routeRows.length - 1] ?? ""),
-  JSON.stringify(routeRows));
+  JSON.stringify(routeRows),
+);
 // "The next question" for an answer already on the default = no-op commit.
 await menu.locator(".qz-ltab-menu-row").first().click();
 await page.waitForTimeout(300);

@@ -7146,6 +7146,48 @@ textarea.qz-s4-inp { resize: vertical; min-height: 56px; line-height: 1.5; }
 .qz-crm-sentence { flex: 1 1 auto; font-size: 12.5px; line-height: 1.45; margin: 0; }
 .qz-crm-impact { display: block; font-size: 11px; color: var(--qz-ink-4); margin-top: 3px; font-variant-numeric: tabular-nums; }
 
+/* ── P10 — the UNIFIED question window (unified/_v.js): the qz-crm shell,
+   60px shorter. Answers bank left · the three jobs in the spine · the one
+   resource index right. New classes are qz-qwin-*, tokens only. ── */
+.qz-qwin { height: min(660px, 86vh); }
+.qz-qwin-arow {
+  font: inherit; display: flex; align-items: center; gap: 8px; width: 100%;
+  cursor: pointer; border: 1px solid transparent; background: none; color: var(--qz-ink);
+  text-align: left; padding: 6px 8px; border-radius: 10px; font-size: 12.5px;
+}
+.qz-qwin-arow:hover { background: var(--qz-cream-2); }
+.qz-qwin-arow.is-on { background: var(--qz-accent-tint); border-color: var(--qz-accent); }
+.qz-qwin-akey { flex: 0 0 auto; width: 14px; font-size: 11px; font-weight: 700; color: var(--qz-ink-4); }
+.qz-qwin-atext { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
+.qz-qwin-amap {
+  flex: 1 1 auto; min-width: 0; display: flex; align-items: center; gap: 3px;
+  overflow: hidden; white-space: nowrap; font-size: 11px; color: var(--qz-ink-4);
+}
+.qz-qwin-acount { flex: 0 0 auto; font-size: 10.5px; color: var(--qz-ink-4); font-variant-numeric: tabular-nums; }
+.qz-qwin-acount.is-bad { color: var(--qz-crit); font-weight: 600; }
+/* The derived readout — narrows by <field>. A readout, never a control. */
+.qz-qwin-derived { font-size: 11.5px; color: var(--qz-ink-3); text-align: center; padding: 6px 4px 0; }
+.qz-qwin-automap {
+  font: inherit; font-size: 11.5px; cursor: pointer; margin-top: 8px;
+  border: 1px dashed var(--qz-rule); background: none; color: var(--qz-accent-ink);
+  padding: 6px 8px; border-radius: 8px;
+}
+.qz-qwin-automap:hover { background: var(--qz-accent-wash); border-color: var(--qz-accent); }
+/* The dashed "Any" row — Keeps everything (filter role only). */
+.qz-qwin-any {
+  font: inherit; display: flex; align-items: center; gap: 8px; width: 100%;
+  cursor: pointer; border: 1px dashed var(--qz-rule); background: none; color: var(--qz-ink);
+  text-align: left; padding: 5px 6px; border-radius: 8px; font-size: 12px; margin-bottom: 4px;
+}
+.qz-qwin-any:hover { background: var(--qz-cream-2); }
+.qz-qwin-any.is-on { border-style: solid; border-color: var(--qz-accent); background: var(--qz-accent-wash); }
+.qz-qwin-anysub { flex: 1 1 auto; font-size: 10.5px; color: var(--qz-ink-4); }
+.qz-qwin-infomsg { font-size: 12.5px; line-height: 1.5; color: var(--qz-ink-3); padding: 10px 6px; }
+.qz-qwin-note { font-size: 11px; color: var(--qz-ink-4); padding: 8px 6px; }
+.qz-qwin-chipn { opacity: 0.65; margin-left: 4px; font-size: 10px; font-variant-numeric: tabular-nums; }
+/* Info-only mapping cells stay readable but visibly inert (opacity .55). */
+.qz-qwin-dimcell { opacity: 0.55; }
+
 /* ── P6 — the ✦ How it works pills + explainer sheets (§7) ── */
 .qz-ltab-how {
   font: inherit; font-size: 10.5px; font-weight: 600; cursor: pointer;

@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import type { IndexedProduct } from "../../../lib/recommendationEngine";
 import {
   answerValuesForField,
+  derivedNarrowLabel,
+  guessAnswerMappings,
   fieldValues,
   narrowFieldOptions,
   writeValuesForField,
@@ -122,5 +124,67 @@ describe("answerValuesForField ↔ writeValuesForField round-trip", () => {
 
   it("empty selection writes nothing (the 'not mapped yet' state)", () => {
     expect(writeValuesForField("tag:fit", [])).toEqual({});
+  });
+});
+
+// ── UNIFIED one-window helpers ──────────────────────────────────────────────
+
+describe("derivedNarrowLabel (unified §2 — never stored)", () => {
+  const a = (id: string, extra: Record<string, unknown> = {}) =>
+    ({ id, text: id, tags: [], edge_handle_id: "h", ...extra }) as never;
+  it("one field → its label; two fields → mixed", () => {
+    expect(derivedNarrowLabel([a("x", { tags: ["fit:slim"] })])).toBe("fit");
+    expect(
+      derivedNarrowLabel([
+        a("x", { tags: ["fit:slim"] }),
+        a("y", { metafield_filters: [{ key: "custom.gender", value: "women" }] }),
+      ]),
+    ).toBe("mixed");
+  });
+  it("plain selections → anything; none → nothing yet; nopref ignored", () => {
+    expect(derivedNarrowLabel([a("x", { tags: ["plain"] })])).toBe("anything");
+    expect(derivedNarrowLabel([a("x"), a("y")])).toBe("nothing yet");
+    expect(derivedNarrowLabel([a("x", { no_preference: true, tags: ["fit:slim"] })])).toBe(
+      "nothing yet",
+    );
+  });
+  it("vo/ptype fields label correctly", () => {
+    expect(
+      derivedNarrowLabel([a("x", { variant_filters: [{ name: "Size", value: "xl" }] })]),
+    ).toBe("Size");
+    expect(derivedNarrowLabel([a("x", { product_type_filters: ["boards"] })])).toBe(
+      "Product type",
+    );
+  });
+});
+
+describe("guessAnswerMappings (unified §3 — deterministic map-for-me)", () => {
+  const gp = [
+    P("g1", ["fit:Slim"], { "custom.gender": "Women" }),
+    P("g2", ["fit:Relaxed"], { "custom.gender": "Men" }),
+  ];
+  const a = (id: string, text: string, extra: Record<string, unknown> = {}) =>
+    ({ id, text, tags: [], edge_handle_id: "h", ...extra }) as never;
+  it("exact value match wins; word-boundary hits; substrings never match", () => {
+    const guesses = guessAnswerMappings(
+      [a("a1", "Slim"), a("a2", "For women"), a("a3", "Womenswear")],
+      gp,
+    );
+    expect(guesses.find((g) => g.answerId === "a1")).toMatchObject({
+      field: "tag:fit",
+      value: "slim",
+    });
+    expect(guesses.find((g) => g.answerId === "a2")).toMatchObject({
+      value: "women",
+    });
+    // "Womenswear" must NOT substring-match "women".
+    expect(guesses.find((g) => g.answerId === "a3")).toBeUndefined();
+  });
+  it("skips mapped and no-preference answers", () => {
+    const guesses = guessAnswerMappings(
+      [a("a1", "Slim", { tags: ["fit:slim"] }), a("a2", "Slim", { no_preference: true })],
+      gp,
+    );
+    expect(guesses).toEqual([]);
   });
 });

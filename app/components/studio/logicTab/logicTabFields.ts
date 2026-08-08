@@ -200,6 +200,102 @@ export function answerValuesForField(a: AnswerT, field: string): string[] {
   return [];
 }
 
+// ── UNIFIED one-window (unified/_v.js) — derived pill + map-for-me ─────────
+
+/** §11 — the per-field chip palette is ASSIGNED BY HASHING the field key
+ *  (there is no fixed list of merchant fields). Six hues from the repo's
+ *  pastel system (.qz-ltab-chip.hue-0..5). Shared by the card and the
+ *  question window so a field's colour never disagrees between them. */
+export function fieldHue(field: string): number {
+  let h = 0;
+  for (let i = 0; i < field.length; i++) h = (h * 31 + field.charCodeAt(i)) | 0;
+  return Math.abs(h) % 6;
+}
+
+/** The field an answer's stored values draw from, or null for a plain mix.
+ *  Tag values only count as a FIELD when family-shaped ("fit:slim"). */
+function answerFields(a: AnswerT): string[] {
+  const out = new Set<string>();
+  for (const t of a.tags) {
+    const i = t.indexOf(":");
+    if (i > 0 && i < t.length - 1) out.add(`tag:${t.slice(0, i).trim().toLowerCase()}`);
+    else if (t.trim()) out.add("");
+  }
+  for (const m of a.metafield_filters ?? []) out.add(`mf:${m.key}`);
+  for (const v of a.variant_filters ?? []) out.add(`vo:${v.name}`);
+  if (a.product_type_filters?.length) out.add("ptype");
+  if (a.collection_filter || a.collection_filters?.length) out.add("");
+  return [...out];
+}
+
+/** unified §2 — the NARROWS pill label, PURELY COMPUTED (never stored):
+ *  one field → its label · several → "mixed" · non-field selections →
+ *  "anything" · none → "nothing yet". */
+export function derivedNarrowLabel(answers: readonly AnswerT[]): string {
+  // Mock-exact (narrowLabel, unified/_v.js): count distinct FIELDS across
+  // all answers' selections; plain (non-field) selections count only toward
+  // "any selection at all".
+  const fields = new Set<string>();
+  let anySelection = false;
+  for (const a of answers) {
+    if (a.no_preference) continue;
+    const fs = answerFields(a);
+    if (fs.length) anySelection = true;
+    for (const f of fs) if (f) fields.add(f);
+  }
+  if (fields.size > 1) return "mixed";
+  if (fields.size === 1) {
+    const field = [...fields][0]!;
+    if (field === "ptype") return "Product type";
+    const bare = field.replace(/^(mf|tag|vo):/, "");
+    return bare.split(".").pop() || bare;
+  }
+  return anySelection ? "anything" : "nothing yet";
+}
+
+export interface MapGuess {
+  answerId: string;
+  field: string;
+  value: string;
+  label: string;
+}
+
+/** unified §3 — deterministic map-for-me: for each unmapped answer, the best
+ *  field VALUE guess by name match (exact value 100 · word-boundary hit 70;
+ *  substring deliberately never matches — "Men" must not match "Women");
+ *  ties break on product count. Returns one guess per mappable answer. */
+export function guessAnswerMappings(
+  answers: readonly AnswerT[],
+  productIndex: readonly IndexedProduct[],
+): MapGuess[] {
+  const fields = narrowFieldOptions(productIndex);
+  const candidates = fields.flatMap((f) =>
+    fieldValues(productIndex, f.field).map((v) => ({ field: f.field, ...v })),
+  );
+  const out: MapGuess[] = [];
+  for (const a of answers) {
+    if (a.no_preference) continue;
+    if (answerFields(a).length) continue; // already mapped
+    const text = a.text.trim().toLowerCase();
+    if (!text) continue;
+    let best: (typeof candidates)[number] | null = null;
+    let bestScore = 0;
+    for (const c of candidates) {
+      let score = 0;
+      if (c.value === text) score = 100;
+      else if (new RegExp(`\\b${c.value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`).test(text))
+        score = 70;
+      if (score > bestScore || (score === bestScore && score > 0 && c.count > (best?.count ?? 0))) {
+        best = c;
+        bestScore = score;
+      }
+    }
+    if (best && bestScore >= 70)
+      out.push({ answerId: a.id, field: best.field, value: best.value, label: best.label });
+  }
+  return out;
+}
+
 /** The setAnswerFilterValues payload storing `values` under `field`. */
 export function writeValuesForField(
   field: string,
