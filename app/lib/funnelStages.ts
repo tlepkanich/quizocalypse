@@ -24,8 +24,12 @@ export const FUNNEL_STEPS = [
   // persisted stage so navigation, resume, and the goto-stage trapdoor all
   // treat it like any other step.
   { stage: "logic", label: "Logic", short: "Logic" },
+  // DESIGN IS RETIRED as a funnel step (owner, 2026-08-08): the look is
+  // inherited from the brand at generation (DGN-1 derived_tokens) and edited
+  // in the builder's Design rail afterward. Results is the last step; its
+  // Continue opens the builder (generate-build). The "design" STAGE VALUE
+  // stays parsed forever (drafts parked there resolve onto Results).
   { stage: "rec_page", label: "Results", short: "Results" },
-  { stage: "design", label: "Design", short: "Design" },
 ] as const;
 
 export type FunnelStep = (typeof FUNNEL_STEPS)[number]["stage"];
@@ -37,7 +41,8 @@ const STAGE_TO_STEP: Record<string, FunnelStep> = {
   question_builder: "question_builder",
   logic: "logic",
   rec_page: "rec_page",
-  design: "design",
+  // Retired visible step — parked drafts fold onto Results (the last step).
+  design: "rec_page",
   // The RETIRED Shape family — the legacy picker stages ("shape"/"types"/
   // "goal"/"templates"/"configuring") and the transient AI-in-flight passes
   // ("typing"/"templating") all route FORWARD onto Questions: their flows'
@@ -49,12 +54,12 @@ const STAGE_TO_STEP: Record<string, FunnelStep> = {
   templating: "question_builder",
   configuring: "question_builder",
   templates: "question_builder",
-  // legacy terminal stages (Overview/Generate retired) → Design, the last
-  // visible step, so an in-flight draft parked there still resolves on the bar.
-  overview: "design",
-  generate: "design",
-  generating: "design",
-  done: "design",
+  // legacy terminal stages (Overview/Generate/Design retired) → Results, the
+  // last visible step, so an in-flight draft parked there still resolves.
+  overview: "rec_page",
+  generate: "rec_page",
+  generating: "rec_page",
+  done: "rec_page",
 };
 
 export const TOTAL_STEPS = FUNNEL_STEPS.length;

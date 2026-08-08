@@ -10,15 +10,14 @@ import {
 } from "./funnelStages";
 
 describe("funnelStages", () => {
-  it("declares the 5-step order (Shape retired — FLOW-3; Logic added — one-line-chrome)", () => {
+  it("declares the 4-step order (Shape + Design retired; Logic added)", () => {
     expect(FUNNEL_STEPS.map((s) => s.stage)).toEqual([
       "grouping",
       "question_builder",
       "logic",
       "rec_page",
-      "design",
     ]);
-    expect(TOTAL_STEPS).toBe(5);
+    expect(TOTAL_STEPS).toBe(4);
   });
 
   it("maps visible stages to themselves", () => {
@@ -38,11 +37,13 @@ describe("funnelStages", () => {
     expect(stepForStage("templating")).toBe("question_builder");
     expect(stepForStage("configuring")).toBe("question_builder"); // battle card
     expect(stepForStage("templates")).toBe("question_builder");
-    // Overview + Generate are retired → they fold onto Design (terminal step).
-    expect(stepForStage("overview")).toBe("design");
-    expect(stepForStage("generate")).toBe("design");
-    expect(stepForStage("done")).toBe("design");
-    expect(stepForStage("generating")).toBe("design");
+    // Overview + Generate + DESIGN are retired → they fold onto Results (the
+    // terminal step; the look is brand-inherited, edited in the builder).
+    expect(stepForStage("design")).toBe("rec_page");
+    expect(stepForStage("overview")).toBe("rec_page");
+    expect(stepForStage("generate")).toBe("rec_page");
+    expect(stepForStage("done")).toBe("rec_page");
+    expect(stepForStage("generating")).toBe("rec_page");
   });
 
   it("defaults an unknown stage to the first step", () => {
@@ -56,22 +57,23 @@ describe("funnelStages", () => {
     expect(stepNumber("typing")).toBe(2);
     expect(stepNumber("logic")).toBe(3);
     expect(stepNumber("rec_page")).toBe(4);
-    expect(stepNumber("design")).toBe(5);
-    expect(stepNumber("overview")).toBe(5); // folds to design (last step)
-    expect(stepNumber("generate")).toBe(5);
+    expect(stepNumber("design")).toBe(4); // retired — folds to Results
+    expect(stepNumber("overview")).toBe(4); // folds to Results (last step)
+    expect(stepNumber("generate")).toBe(4);
   });
 
   it("resolves labels through the fold", () => {
     expect(labelForStage("grouping")).toBe("Recommendations");
     expect(labelForStage("configuring")).toBe("Question Builder");
-    expect(labelForStage("done")).toBe("Design");
+    expect(labelForStage("done")).toBe("Results");
   });
 
   it("navigates between visible steps and stops at the ends", () => {
     expect(nextStep("grouping")).toBe("question_builder");
     expect(nextStep("question_builder")).toBe("logic");
     expect(nextStep("logic")).toBe("rec_page");
-    expect(nextStep("design")).toBeNull(); // design is the last step
+    expect(nextStep("rec_page")).toBeNull(); // Results is the last step
+    expect(nextStep("design")).toBeNull(); // retired stage folds onto it
     expect(nextStep("configuring")).toBe("logic"); // folds to Questions first
     expect(prevStep("grouping")).toBeNull();
     expect(prevStep("question_builder")).toBe("grouping");

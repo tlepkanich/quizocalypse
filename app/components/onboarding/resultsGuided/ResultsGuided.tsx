@@ -21,7 +21,8 @@ import {
 
 /* Results-guided handoff (master.md, UPDATE AREA 3) — the Results step as a
    SIX-STEP GUIDED FLOW: one question per screen, a live phone preview beside
-   it, and an Overview that hands off to Design. §5 completion model: done =
+   it, and an Overview that hands off to the builder (Design-step retired;
+   the look is brand-inherited). §5 completion model: done =
    the merchant has been through the step (moved past it with Next); blocked =
    on but cannot render. The bar carries progress only (no amber); Overview
    rows read the ACTUAL settings back. §3: no Back on step 1 (absent, not
@@ -161,14 +162,15 @@ export function ResultsGuided({
   initialDoc,
   productIndex,
   designTokens,
-  onContinueToDesign,
+  onOpenBuilder,
 }: {
   quizId: string;
   initialDoc: Quiz;
   productIndex: IndexedProduct[];
   designTokens?: DesignTokens | null;
-  /** Step 6's "Continue to Design →" (the funnel's to-design intent). */
-  onContinueToDesign: () => void;
+  /** Step 6's "Open the builder →" (the funnel's generate-build intent —
+   *  Design-step retired; the look is brand-inherited). */
+  onOpenBuilder: () => void;
 }) {
   void quizId;
   const { doc, commit, isSaving, savedAt, saveError, retrySave } = useQuizDraft(initialDoc);
@@ -257,7 +259,7 @@ export function ResultsGuided({
   const next = () => {
     if (step.g) setSeen((s) => ({ ...s, [step.g as string]: true }));
     if (stepIx < FLOW.length - 1) gotoStep(stepIx + 1);
-    else onContinueToDesign();
+    else onOpenBuilder();
   };
 
   // panel interactions narrow the preview highlight to the touched control
@@ -999,7 +1001,7 @@ export function ResultsGuided({
             ) : null}
             <span className="qz-rg-fsp" />
             <button type="button" className="qz-rg-btn2 is-pri" onClick={next}>
-              {stepIx === FLOW.length - 1 ? "Continue to Design →" : "Next →"}
+              {stepIx === FLOW.length - 1 ? "Open the builder →" : "Next →"}
             </button>
           </div>
         </div>

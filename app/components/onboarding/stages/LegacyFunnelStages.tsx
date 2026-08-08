@@ -474,10 +474,10 @@ function BattleCardStage({
         onToggleGroup={toggleGroup}
         onToggleProduct={toggleProduct}
         onPick={() => fetcher.submit({ intent: "pick-template", templateId: expanded.id }, { method: "post" })}
-        onGenerate={() => fetcher.submit({ intent: "to-design" }, { method: "post" })}
+        onGenerate={() => fetcher.submit({ intent: "generate-build" }, { method: "post" })}
         onDeepDive={(dial) => setModuleTarget({ dial, module: 2 })}
         picking={pendingIntent === "pick-template"}
-        generating={pendingIntent === "to-design"}
+        generating={pendingIntent === "generate-build"}
       />
 
       {moduleTarget ? (

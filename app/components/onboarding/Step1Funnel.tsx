@@ -11,7 +11,6 @@ import { StepNav, type StepNavStep } from "../chrome/StepNav";
 import { ClientOnly, BuilderSkeleton } from "../studio/ClientOnly";
 import { RecommendationBucketsStage } from "./stages/RecommendationBucketsStage";
 import { ShapeStage } from "./stages/ShapeStage";
-import { DesignStage } from "./stages/DesignStage";
 import { RecPageStage } from "./stages/RecPageStage";
 import { ResultsGuided } from "./resultsGuided/ResultsGuided";
 import { FUNNEL_STAGES, type ActionResult, type FunnelData } from "./stages/stagesShared";
@@ -96,22 +95,19 @@ export function Step1Funnel({ data }: { data: FunnelData }) {
 
   // The step's primary Continue — same place on every step. The editing
   // stages publish their own spec (autosave gates, intercepts, the Logic
-  // step's fix-N-issues state); rec_page/design are fetcher-driven here, and
-  // the fallback covers transient stages + the pre-hydration frame.
+  // step's fix-N-issues state); rec_page is fetcher-driven here, and the
+  // fallback covers transient stages + the pre-hydration frame.
+  // Design-step retirement: Results is the LAST step — its Continue opens
+  // the builder directly (the look is brand-inherited; edited in the
+  // builder's Design rail).
   const defaultContinue: FunnelContinueSpec =
     visibleKey === "rec_page" && !isGenerating
       ? {
-          label: pendingIntent === "to-design" ? "Saving…" : "Continue",
-          onClick: () => fetcher.submit({ intent: "to-design" }, { method: "post" }),
+          label: pendingIntent === "generate-build" ? "Opening builder…" : "Open builder",
+          onClick: () => fetcher.submit({ intent: "generate-build" }, { method: "post" }),
           disabled: navBusy,
         }
-      : visibleKey === "design"
-        ? {
-            label: pendingIntent === "generate-build" ? "Opening builder…" : "Open builder",
-            onClick: () => fetcher.submit({ intent: "generate-build" }, { method: "post" }),
-            disabled: navBusy,
-          }
-        : { label: "Continue", onClick: () => {}, disabled: true };
+      : { label: "Continue", onClick: () => {}, disabled: true };
   const cont = barOverride?.continueSpec ?? defaultContinue;
 
   const continueBtn = (
@@ -273,15 +269,13 @@ export function Step1Funnel({ data }: { data: FunnelData }) {
       ) : null}
 
 
-      {data.stage === "design" ? (
-        <DesignStage data={data} fetcher={fetcher} pendingIntent={pendingIntent} />
-      ) : null}
-
       {/* Results reveal — QZY-5: decider drafts get the LIGHT step-4 surface
           (quiz-results-step4 v1.0); legacy built drafts keep the heavy
           RecommendationStage (now the dashboard-class advanced editor), and
-          unbuilt legacy drafts the lean RecPageStage. All client-only. */}
-      {data.stage === "rec_page" && data.recPage ? (
+          unbuilt legacy drafts the lean RecPageStage. All client-only.
+          Design-step retirement: drafts parked at the retired terminals
+          (design/overview/generate/done) fold onto Results here too. */}
+      {visibleStageKey(data.stage) === "rec_page" && data.recPage ? (
         <ClientOnly fallback={<BuilderSkeleton />}>
           {() =>
             data.recPage!.doc.logic_model === "decider" ? (
@@ -292,7 +286,7 @@ export function Step1Funnel({ data }: { data: FunnelData }) {
                 initialDoc={data.recPage!.doc}
                 productIndex={data.recPage!.productIndex}
                 designTokens={data.designTokens}
-                onContinueToDesign={() => fetcher.submit({ intent: "to-design" }, { method: "post" })}
+                onOpenBuilder={() => fetcher.submit({ intent: "generate-build" }, { method: "post" })}
               />
             ) : (
               <RecommendationStage
@@ -305,7 +299,7 @@ export function Step1Funnel({ data }: { data: FunnelData }) {
             )
           }
         </ClientOnly>
-      ) : data.stage === "rec_page" ? (
+      ) : visibleStageKey(data.stage) === "rec_page" ? (
         <RecPageStage data={data} fetcher={fetcher} pendingIntent={pendingIntent} />
       ) : null}
 
@@ -319,7 +313,8 @@ export function Step1Funnel({ data }: { data: FunnelData }) {
 // at "types"/"shape"/"goal"/"templates" and the transient typing/templating
 // AI passes) routes FORWARD onto Questions, the step their flows land on.
 // This also kills FLOW-1's known cosmetic (the rail highlighting Shape during
-// the headless passes). `overview`/`generate`/`done` stay folded onto Design.
+// the headless passes). Design-step retirement: `design` + the older
+// `overview`/`generate`/`done` terminals fold onto Results (the last step).
 function visibleStageKey(stage: FunnelData["stage"]): string {
   if (
     stage === "typing" ||
@@ -331,7 +326,13 @@ function visibleStageKey(stage: FunnelData["stage"]): string {
     stage === "configuring"
   )
     return "question_builder";
-  if (stage === "overview" || stage === "done" || stage === "generate") return "design";
+  if (
+    stage === "design" ||
+    stage === "overview" ||
+    stage === "done" ||
+    stage === "generate"
+  )
+    return "rec_page";
   return stage;
 }
 

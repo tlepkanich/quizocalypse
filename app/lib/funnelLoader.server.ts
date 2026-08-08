@@ -272,8 +272,18 @@ export async function loadStep1FunnelData(
   // applies one recOverride to all). Null → no result nodes yet (a legacy in-flight
   // draft) → RecPageStage falls back to editing picked_template.
   const firstResult = doc.nodes.find((n) => n.type === "result");
+  // Design-step retirement: drafts PARKED at the retired terminal stages
+  // ("design" + the older overview/generate/generating/done) fold onto
+  // Results — serve them the rec_page payload so they render, not a blank.
+  const atResults =
+    session.stage === "rec_page" ||
+    session.stage === "design" ||
+    session.stage === "overview" ||
+    session.stage === "generate" ||
+    session.stage === "generating" ||
+    session.stage === "done";
   const recNodeDefaults =
-    session.stage === "rec_page" && firstResult && firstResult.type === "result"
+    atResults && firstResult && firstResult.type === "result"
       ? {
           max_products: firstResult.data.max_products ?? 3,
           oos_behavior: firstResult.data.oos_behavior,
@@ -285,7 +295,7 @@ export async function loadStep1FunnelData(
   // doc + catalog shapes too — emitted only when a result node exists (a built
   // draft). Null → legacy in-flight draft → RecPageStage edits picked_template.
   const recPage =
-    session.stage === "rec_page" && firstResult && firstResult.type === "result"
+    atResults && firstResult && firstResult.type === "result"
       ? { doc, categories: builderCategories, productIndex: builderProductIndex }
       : null;
 
