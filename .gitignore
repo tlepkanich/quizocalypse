@@ -40,3 +40,5 @@ scripts/audit/
 wf-audit-*.mjs
 wf-*.png
 wf-*.mjs
+docs/design/logic-tab/logic-rules-map-3.html
+docs/design/logic-tab/logic-one-window.html

@@ -102,9 +102,21 @@ running counts match at 5).
 
 ## Mock sources
 
-`docs/design/logic-tab/rules-tab/…` never existed in this repo or its history;
-the only design artifact is the claude.ai link in HANDOFF.md. HANDOFF.md's
-copy strings, metrics and token table are the buildable spec. Its mock token
+The owner delivered the full mock package on 2026-08-08. It now lives here:
+`rules-tab/` (the primary mock's source), `unified/` (a LATER, streamlined
+variant — see below), `bands/_core.js`, `rule-create/_tags.js`, `build.sh`,
+`README.md`. Run `./build.sh` in this folder to build both mocks; the built
+`.html` files are generated and stay uncommitted. HANDOFF.md is the newer
+revision: §G5 now records that variant-option DATA exists
+(`catalogSync.ts:393`) but is not baked, and §13 is a full work breakdown.
+A cross-check of §13 against the shipped program found it satisfied except:
+variant-options/product-type bake (G5 scope decision), the publish blocks for
+a target-less starting-set answer and a 0-match narrowing answer, the
+"parked mapping restore" on role flips, and a server-side cached resource
+index (ours is client-derived from the scoped productIndex — equivalent at
+current catalogue sizes). The `unified/` variant (logic-one-window) replaces
+the set/value/product popovers with ONE three-panel window opened from any
+table cell, derives the NARROWS pill from the answers (MIXED state), and adds
+"Map N answers for me" — adopting it is an OPEN owner decision. Mock token
 names (`--ac`, `--ink`, `--s1..s6`) map onto the repo system: `--ac` →
-`--qz-accent`, good/bad → the repo's ok/danger tokens; no hex literals in new
-`.tsx` (check-tokens gate).
+`--qz-accent`; no hex literals in new `.tsx` (check-tokens gate).

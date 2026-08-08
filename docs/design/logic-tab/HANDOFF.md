@@ -559,8 +559,9 @@ and nothing else. The role menu offers more than the engine can honour:
 | Tags | ✅ works |
 | Collections | ✅ works |
 | Metafields | ⚠️ `IndexedProduct.metafields` **is** baked, but `productMatches` never reads it. Small engine change: extend `AnswerFilterValues` with `{ key, value }` and add a branch. |
-| Variant options | ❌ not baked into the product index at all. Needs publish-time work — `filterMatching.ts` already flags this as a known dependency. |
-| Product type / Computed (price bands) | ❌ not baked as filterable. |
+| Variant options | ⚠️ the **data exists** — `catalogSync.ts:393` stores `variants[].options: [{name,value}]` on `Product` — but `IndexedProduct` never carries it, so publish must bake it and `productMatches` must read it. `filterMatching.ts` flags this as a known dependency. Not blocked on Shopify. |
+| Product type | ⚠️ `Product.productType` is synced; not baked into `IndexedProduct`. Same shape of fix as variant options. |
+| Computed (price bands) | ❌ `priceMin`/`priceMax` are on `Product`, but "band" is a merchant-defined concept with no storage anywhere. Design work, not just plumbing. |
 
 **Decision needed:** ship v1 with Tags + Collections only (and hide the rest of
 the category chips), or fund the metafield branch now. Do not ship a menu that
@@ -656,16 +657,107 @@ index is prefixed (`set:C_work`), reconciled by `normId`.
 
 ---
 
-## 13. Build order
+## 13. Work breakdown
 
-1. **Read-only questions table** against a real decider doc — roles, mappings,
-   counts, routing. No editing. Proves the data is all reachable.
-2. **Role menu + mapping menus**, wired to `setQuestionRole` / `setAnswerTarget`
-   and new filter-mapping mutations. Resolve [G5](#g5-narrowing-sources-tags--collections-only-today) and [G8](#g8-anything-mode-needs-a-storage-shape) first.
-3. **Rules list** (read + delete + reorder) on `decision_rules`.
-4. **Create-a-rule modal.** Resolve [G1](#g1-a-rule-has-one-target-the-modal-picks-many)–[G4](#g4-verb-semantics-do-not-map-name-to-name-blocker) first; widen `updateDecisionRule` ([G7](#g7-updatedecisionrule-cannot-write-action)).
-5. **Explainers** — static content, no engine dependency; can land any time.
-6. **The modal's impact line**, computed server-side ([G10](#g10-coverage-numbers-are-expensive)).
+Everything below is what it takes to get this design into the shipping product.
+Layers are ordered so each one is verifiable before the next depends on it.
+
+### 13.0 Decisions to lock first (blocking — no code until answered)
+
+- [ ] **Verb→action wiring** ([G4](#g4-verb-semantics-do-not-map-name-to-name-blocker)). Confirm Show = no `action`, Highlight = `action:"show"`, Exclude = `action:"hide"`. Decide whether `prioritize` gets a fourth verb or stays unexposed.
+- [ ] **One target or many per rule** ([G1](#g1-a-rule-has-one-target-the-modal-picks-many)) — widen the schema, or have the modal emit N rules.
+- [ ] **AND-only for v1?** ([G2](#g2-or-between-conditions-has-no-storage), [G3](#g3-any-of--all-of-has-no-storage)) — if yes, the `and`/`or` joiner and the any-of/all-of control come out of the modal.
+- [ ] **Which narrowing sources ship in v1** ([G5](#g5-narrowing-sources-tags--collections-only-today)) — tags + collections only, or fund metafields (small) and variant options / product type (bake + match) now.
+- [ ] **"Anything" mode storage** ([G8](#g8-anything-mode-needs-a-storage-shape)) — widen `collection_filter` to a list, and decide whether products/variants are pickable as narrowing targets.
+- [ ] **Starting-set answers: one target** ([G9](#g9-starting-set-answers-pointing-at-several-things)) — confirm; "several things" routes to Group creation instead.
+
+### 13.1 Schema (`app/lib/quizSchema.ts`)
+
+- [ ] Any widening the decisions above imply — `DecisionRule.target_ids?`, `condition_groups?`, `Answer.collection_filters?`, per-answer metafield/variant-option constraints.
+- [ ] Every new field `.optional()`, **never `.default()`**. Old fields stay parsed forever.
+- [ ] Nothing new on legacy docs: assert `Quiz.parse` on a legacy fixture produces a byte-identical re-serialisation.
+
+### 13.2 Engine (pure, server, fully unit-testable before any UI)
+
+- [ ] `filterMatching.ts` — extend `AnswerFilterValues` + `productMatches` for whichever sources ship. Keep the existing contract: OR within a question, AND across questions, pass-through never narrows.
+- [ ] `recommendDecider.ts` — if rules gain multiple targets, `applyRuleAction` takes the union of member ids.
+- [ ] Confirm pipeline order stays **rules(replace) → decider → filters → rule action → fallback** — the explainer's "Both together" step teaches exactly this.
+- [ ] Tests for each new match source, plus a regression that a doc with `logic_model !== "decider"` never reaches any of it.
+
+### 13.3 Publish / bake (`app/lib/quizPublish.ts`)
+
+- [ ] Bake whatever new match sources need: variant options and `productType` onto `IndexedProduct` (data already synced — `catalogSync.ts:393`), metafields already baked but unread.
+- [ ] Keep `target_product_ids_map` / `target_index` behaviour unchanged.
+- [ ] **Byte pin holds**: `/q/cmqqcb0ao004mqvkwjug7t0ya.json` still starts `c02ccaec98a0fe9e`.
+- [ ] Validation gate: block publish on a starting-set answer with no target, and on a narrowing answer that matches 0 products. A half-built rule (0 conditions) never fires — either block it or label it.
+
+### 13.4 Mutations (`app/lib/mutations/deciderMutations.ts`)
+
+Existing and reusable: `setQuestionRole`, `setAnswerTarget`, `moveDecider`,
+`addDecisionRule`, `removeDecisionRule`, `moveDecisionRule`, `updateDecisionRule`.
+
+- [ ] Widen `updateDecisionRule`'s patch to include `action` ([G7](#g7-updatedecisionrule-cannot-write-action)) — today it only accepts `conditions` and `target_id`.
+- [ ] New: create a whole rule from the modal draft in one op (conditions + verb + targets), so autosave sees one document change, not four.
+- [ ] New: set an answer's narrowing values (tags / collection / metafield / variant option), and clear them when the question's field changes.
+- [ ] New: set an answer's route (`edge_handle_id` + the `QuizEdge`), forward-only — reuse `edgeMutations` rather than hand-writing edges.
+- [ ] Preserve the mock's **"nothing is ever deleted"** promise: flipping a question to Info only and back must restore its mapping. Decide whether that state lives on the doc (a parked field) or in client-only session state.
+- [ ] Every mutation early-returns unchanged when `logic_model !== "decider"`. Unit test each.
+
+### 13.5 Data for the pickers (new server work — the largest unbuilt piece)
+
+The resource index (261 items in the mock) has no equivalent today.
+
+- [ ] A loader that returns the shop's **tags, collections, metafield keys+values, variant option names+values, products, variants**, each with a product count. `Product` carries all of it (`tags`, `collectionIds`, `metafields`, `variants`); nothing new needs syncing.
+- [ ] Counts must be computed server-side over the quiz's scoped catalogue, not the whole shop.
+- [ ] Paginate or cap — the mock hard-caps at 40 rows per group with `+N more — keep typing`.
+- [ ] Cache per shop; invalidate on catalog sync.
+- [ ] The `N products` popover needs the member list for one resource — same loader, one id.
+
+### 13.6 UI (`app/components/logic/`)
+
+- [ ] `RulesCard` — header, empty state, rule rows, delete-by-id, fresh-row flash.
+- [ ] `QuestionsTable` — fixed layout, 36% narrows column, 2px question dividers, shared row metrics with the rule rows.
+- [ ] `CreateRuleModal` — three columns, condition bank, verb column, resource index, tray, live sentence, impact line. Scrim click must not discard.
+- [ ] `Popover` — one component, five contents (role / set / value / product / route), with the flip-up-when-no-room placement and measured-width clamping.
+- [ ] `ExplainerSheet` — stepper, progress bar, locked height across all steps of both explainers, 680px centred column, cross-links.
+- [ ] Tokens: the mock's `--t-<dim>` chip palette must be **hashed from the field key** — there is no fixed list of merchant fields. Run `node scripts/check-tokens.mjs`.
+- [ ] Keyboard + focus: `Esc` closes sheet → menu → modal in that order; visible focus states; `prefers-reduced-motion`.
+- [ ] Mobile: the table scrolls in its own container; the page body never scrolls sideways.
+
+### 13.7 Integration into the app
+
+- [ ] Replace the current Logic tab content. Today: `BuilderChrome.tsx:41` defines the tab, `UnifiedWorkspace.tsx` switches on `view === "logic"` and renders `app/components/logic/LogicView.tsx`.
+- [ ] Decider-gate it: `UnifiedWorkspace.tsx:348` already computes `isDecider`. Legacy docs keep the existing surface — do not touch `app/components/questionsLogic/`.
+- [ ] Both admin surfaces get it — standalone `/studio` and embedded `/app` — via the shared `*ForShop` server functions, not per-surface copies.
+- [ ] Decide the relationship with the funnel's step-3 logic screen (`app/components/onboarding/questionsLogicV3/`): does it adopt these components, stay as-is, or get retired? It has its own rules widget, target picker and health popover that overlap this design.
+- [ ] Audit the three studio Logic components for overlap/retirement: `LogicTableTab.tsx` (324 lines), `LogicPathsTab.tsx` (226), `LogicRulesBar.tsx` (59).
+- [ ] Wire autosave through `useQuizDraft` (700 ms debounce, whole-doc PUT). No direct fetches from the tab.
+
+### 13.8 Numbers
+
+- [ ] Answer product counts — reuse `filterAnswerMatchCount` (`filterMatching.ts:64`); it already returns `null` for pass-through so a bare `0` never renders for "keeps everything".
+- [ ] The modal's impact line — server-side via `pathEnumeration.ts` / `pathQuality.server.ts`. Cap enumeration and **print `(sampled)`** when you sample, as the mock does.
+- [ ] Do not port `paths()` from the mock.
+
+### 13.9 Verification
+
+- [ ] Gate chain, unpiped, before every commit: `npm run typecheck && npm test -- --run && npm run build && npm run lint && node scripts/check-tokens.mjs`
+- [ ] 2-lens adversarial self-review, written — this touches persistence and the runtime engine.
+- [ ] Screenshots for every interactive state (menus, modal, explainer steps). A 200 plus DOM markers is not proof for popovers.
+- [ ] Byte pin after every deploy.
+- [ ] e2e: author a rule end-to-end and assert the published JSON's `decision_rules` matches, then that `/q` resolves the expected products for a chosen path.
+
+### 13.10 Build order
+
+1. Read-only questions table against a real decider doc — proves the data is reachable.
+2. Resource-index loader (13.5) — everything else depends on it.
+3. Role menu + mapping menus, wired to the mutations.
+4. Rules list: read, delete, reorder.
+5. Create-a-rule modal.
+6. Explainers — no engine dependency; can land any time.
+7. Impact line, server-side.
+
+Ship 1–4 behind the decider gate before touching 5.
 
 ### Not in scope — present in the mock source, deliberately unused
 
@@ -677,7 +769,3 @@ under a global on/off switch), `paneC()` (a Coverage / Map segmented control),
 `expQ` state they use. The `data-seed` handler survives from `paneC`'s
 "Write a rule for this" button; keep it only if you add another entry point that
 pre-seeds a condition.
-
-Ship 1–3 behind the decider gate before touching 4. Every step needs the
-byte-pin check from `CLAUDE.md` after deploy — the legacy published doc must
-stay `c02ccaec98a0fe9e`.
