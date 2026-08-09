@@ -7006,6 +7006,13 @@ textarea.qz-s4-inp { resize: vertical; min-height: 56px; line-height: 1.5; }
    table layout ("the map never reflows"). Mock tokens map onto the repo
    system: --line2 → --qz-cream-2 · --bar → --qz-rule · bad → --qz-crit.
    ═══════════════════════════════════════════════════════════════════════════ */
+/* UNIFIED — the teaching banner above the card (mock .vnote/NOTE). */
+.qz-ltab-note {
+  background: var(--qz-accent-wash); border-radius: 10px;
+  padding: 10px 16px; font-size: 12.5px; line-height: 1.55;
+  color: var(--qz-ink); text-align: center; margin: 0 0 12px;
+}
+.qz-ltab-note b { color: var(--qz-accent-ink); }
 .qz-ltab {
   background: var(--qz-paper); border: 1px solid var(--qz-rule);
   border-radius: var(--qz-radius); overflow: hidden;
@@ -7201,19 +7208,40 @@ textarea.qz-s4-inp { resize: vertical; min-height: 56px; line-height: 1.5; }
   background: var(--qz-paper); border-radius: var(--qz-radius-lg);
   box-shadow: var(--qz-lift-3); overflow: hidden;
 }
-.qz-xpl-hd { display: flex; align-items: center; justify-content: space-between; padding: 14px 20px 6px; }
-.qz-xpl-hd h2 { font-size: 15px; font-weight: 700; margin: 0; }
-.qz-xpl-progress { display: flex; align-items: center; justify-content: center; padding: 8px 0 2px; }
-.qz-xpl-seg { display: flex; align-items: center; }
-/* §7 — connectors between dots; done segments go green. */
-.qz-xpl-conn { width: 34px; height: 2px; background: var(--qz-rule); margin: 0 6px; border-radius: 1px; }
-.qz-xpl-conn.is-done { background: var(--qz-ok); }
-.qz-xpl-dot {
-  font: inherit; font-size: 11px; font-weight: 700; cursor: pointer;
-  width: 26px; height: 26px; border-radius: 50%;
-  border: 1px solid var(--qz-rule); background: var(--qz-paper); color: var(--qz-ink-3);
+.qz-xpl-hd { display: flex; align-items: center; gap: 10px; padding: 14px 20px 6px; }
+.qz-xpl-hd h2 { font-size: 15px; font-weight: 700; margin: 0; flex: 1 1 auto; }
+/* UNIFIED — the ✦ Explainer badge (mock .sh .badge). */
+.qz-xpl-badge {
+  font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em;
+  background: var(--qz-accent-wash); color: var(--qz-accent-ink);
+  border-radius: var(--qz-radius-pill); padding: 4px 11px; flex: 0 0 auto;
 }
-.qz-xpl-dot.is-on { border-color: var(--qz-accent); background: var(--qz-accent-wash); color: var(--qz-accent-ink); }
+/* UNIFIED — the titled progress rail (mock .prog/.pstep): named clickable
+   pills with numbered dots; done steps get ✓ and a green connector. */
+.qz-xpl-progress {
+  display: flex; align-items: center; justify-content: center;
+  padding: 9px 20px 10px; border-bottom: 1px solid var(--qz-rule);
+  background: var(--qz-cream-2); overflow-x: auto; scrollbar-width: none;
+}
+.qz-xpl-progress::-webkit-scrollbar { display: none; }
+.qz-xpl-seg { display: flex; align-items: center; flex: 0 0 auto; }
+.qz-xpl-conn { width: 20px; height: 2px; background: var(--qz-rule); margin: 0 4px; border-radius: 1px; flex: 0 0 auto; }
+.qz-xpl-conn.is-done { background: var(--qz-ok); }
+.qz-xpl-pstep {
+  font: inherit; font-size: 11.5px; font-weight: 700; cursor: pointer;
+  display: inline-flex; align-items: center; gap: 7px; white-space: nowrap;
+  border: none; background: none; color: var(--qz-ink-25);
+  padding: 4px 9px; border-radius: var(--qz-radius-pill);
+}
+.qz-xpl-pstep:hover { color: var(--qz-ink-3); }
+.qz-xpl-pstep.is-done { color: var(--qz-ink-3); }
+.qz-xpl-pstep.is-on { color: var(--qz-accent-ink); background: var(--qz-accent-wash); }
+.qz-xpl-dot {
+  font-size: 10px; font-weight: 700; width: 19px; height: 19px; border-radius: 50%;
+  display: grid; place-items: center; flex: 0 0 auto;
+  background: var(--qz-paper); color: var(--qz-ink-25); border: 1px solid var(--qz-rule);
+}
+.qz-xpl-dot.is-on { border-color: var(--qz-accent); background: var(--qz-accent); color: var(--qz-paper); }
 .qz-xpl-dot.is-done { border-color: var(--qz-ok); color: var(--qz-ok); }
 /* §7 — one 680px column, centred; prose capped; fixed height for step
    continuity (simplified from the mock's measured lock). */
@@ -7224,42 +7252,139 @@ textarea.qz-s4-inp { resize: vertical; min-height: 56px; line-height: 1.5; }
 }
 .qz-xpl-body h3 { font-size: 16px; font-weight: 700; margin: 0; }
 .qz-xpl-body p { font-size: 13px; line-height: 1.55; margin: 0; max-width: 68ch; color: var(--qz-ink-3); }
-.qz-xpl-grid3 {
-  display: grid; grid-template-columns: 1.2fr 0.6fr 1fr; gap: 6px 14px;
-  width: 100%; font-size: 12.5px; line-height: 1.45;
-  border: 1px solid var(--qz-rule); border-radius: 12px; padding: 12px 14px;
+/* The rules sheet's lede (mock .lede — rides with step 1). */
+.qz-xpl-lede { font-size: 15px; line-height: 1.5; font-weight: 600; max-width: 60ch; margin: 0; }
+.qz-xpl-lede b { color: var(--qz-accent-ink); }
+/* Figure wash (mock .fig). */
+.qz-xpl-fig {
+  width: 100%; background: var(--qz-cream-2); border: 1px solid var(--qz-cream-2);
+  border-radius: 12px; padding: 12px; overflow-x: auto;
 }
-.qz-xpl-grid3-head {
-  font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em;
-  color: var(--qz-ink-4);
+/* UNIFIED — the three-part path figure (mock .paths/.chunk): when → verb →
+   target, one row per example rule. */
+.qz-xpl-paths {
+  display: grid; grid-template-columns: 1fr 14px auto 14px 1fr; gap: 6px;
+  align-items: center; min-width: 520px;
 }
+.qz-xpl-plab {
+  font-size: 9.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em;
+  color: var(--qz-ink-25);
+}
+.qz-xpl-sarw { color: var(--qz-ink-25); font-size: 14px; text-align: center; }
+.qz-xpl-chunk {
+  display: block; font-size: 12.5px; font-weight: 700; line-height: 1.3;
+  border-radius: 9px; padding: 7px 11px;
+  border: 1.5px solid var(--qz-rule); background: var(--qz-paper);
+}
+.qz-xpl-chunk.v-show { border-color: var(--qz-accent); box-shadow: 0 0 0 3px var(--qz-accent-wash); color: var(--qz-accent-ink); }
+.qz-xpl-chunk.v-inc { border-color: var(--qz-ok); box-shadow: 0 0 0 3px var(--qz-ok-tint); color: var(--qz-ok); }
+.qz-xpl-chunk.v-exc { border-color: var(--qz-crit); box-shadow: 0 0 0 3px var(--qz-crit-tint); color: var(--qz-crit); }
+.qz-xpl-j { color: var(--qz-ink-4); font-weight: 600; }
+.qz-xpl-ty {
+  display: block; font-style: normal; font-size: 10px; font-weight: 700;
+  color: var(--qz-ink-25); margin-bottom: 3px; letter-spacing: 0.04em;
+  font-variant-numeric: tabular-nums;
+}
+.qz-xpl-ty.is-mt { margin-top: 8px; }
+/* The wins/skipped rule list (mock .rulelist/.rl). */
 .qz-xpl-ledger { width: 100%; border: 1px solid var(--qz-rule); border-radius: 12px; overflow: hidden; }
 .qz-xpl-lrow {
   display: flex; align-items: baseline; gap: 10px; font-size: 12.5px; line-height: 1.45;
-  padding: 6px 12px; border-bottom: 1px solid var(--qz-cream-2); color: var(--qz-ink-4);
+  padding: 7px 12px; border-bottom: 1px solid var(--qz-cream-2); color: var(--qz-ink);
 }
 .qz-xpl-lrow:last-child { border-bottom: none; }
-.qz-xpl-lrow.is-lit { color: var(--qz-ink); background: var(--qz-accent-tint); }
+.qz-xpl-lrow.is-lit { background: var(--qz-ok-tint); box-shadow: inset 3px 0 0 var(--qz-ok); }
+.qz-xpl-lrow.is-dim { opacity: 0.5; }
 .qz-xpl-lsent { flex: 1 1 auto; }
-.qz-xpl-ltag { flex: 0 0 auto; font-size: 10.5px; font-weight: 600; color: var(--qz-ink-25); }
+.qz-xpl-ltag { flex: 0 0 auto; font-size: 10.5px; font-weight: 600; color: var(--qz-ink-25); font-variant-numeric: tabular-nums; }
 .qz-xpl-ltag.is-ok { color: var(--qz-ok); }
-.qz-xpl-cards { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; width: 100%; }
-.qz-xpl-card {
-  display: flex; flex-direction: column; gap: 6px;
-  border: 1px solid var(--qz-rule); border-radius: 12px; padding: 14px;
-  font-size: 12.5px; line-height: 1.5;
+/* UNIFIED — the verb-pill ledger (mock .qlist/.qb/.vp/.mth): number · when ·
+   verb pill · data source · running math. */
+.qz-xpl-qlist { display: grid; gap: 8px; width: 100%; }
+.qz-xpl-qb {
+  display: grid; grid-template-columns: 20px 1fr 108px 1fr; gap: 10px;
+  align-items: center; background: var(--qz-paper); border: 1px solid var(--qz-rule);
+  border-radius: 9px; padding: 8px 11px; font-size: 12.5px; line-height: 1.4;
 }
-.qz-xpl-card span { color: var(--qz-ink-3); }
-.qz-xpl-pipe {
-  display: flex; align-items: center; flex-wrap: wrap; gap: 10px;
-  font-size: 13px; border: 1px solid var(--qz-rule); border-radius: 12px;
-  padding: 16px 18px; width: 100%; justify-content: center;
+.qz-xpl-qb.has-math { grid-template-columns: 20px 1fr 108px 1fr 80px; }
+.qz-xpl-qn {
+  width: 20px; height: 20px; border-radius: 6px; background: var(--qz-cream-2);
+  color: var(--qz-ink-4); font-size: 10px; font-weight: 700;
+  display: grid; place-items: center;
 }
-.qz-xpl-pipe > span[aria-hidden] { color: var(--qz-ink-25); }
+.qz-xpl-qb.is-startrow { box-shadow: inset 3px 0 0 var(--qz-accent); }
+.qz-xpl-qb.is-startrow .qz-xpl-qn { background: var(--qz-accent-wash); color: var(--qz-accent-ink); }
+.qz-xpl-tg { color: var(--qz-ink-3); min-width: 0; }
+.qz-xpl-tg i { font-style: normal; font-size: 10px; color: var(--qz-ink-25); font-variant-numeric: tabular-nums; }
+.qz-xpl-vp {
+  display: inline-block; text-align: center; border-radius: var(--qz-radius-pill);
+  padding: 4px 8px; font-size: 10.5px; font-weight: 700; white-space: nowrap;
+}
+.qz-xpl-vp.v-show, .qz-xpl-vp.v-nar { background: var(--qz-accent-wash); color: var(--qz-accent-ink); }
+.qz-xpl-vp.v-inc { background: var(--qz-ok-tint); color: var(--qz-ok); }
+.qz-xpl-vp.v-exc { background: var(--qz-crit-tint); color: var(--qz-crit); }
+.qz-xpl-vp.v-ask { background: var(--qz-cream-2); color: var(--qz-ink-4); }
+.qz-xpl-vp.v-set { background: var(--qz-accent); color: var(--qz-paper); }
+.qz-xpl-mth { font-size: 11px; color: var(--qz-ink-3); text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.qz-xpl-mth b { color: var(--qz-ink); }
+.qz-xpl-mth em { font-style: normal; color: var(--qz-crit); font-weight: 700; }
+.qz-xpl-tot {
+  margin-top: 2px; width: 100%; background: var(--qz-cream-2); border: 1px solid var(--qz-cream-2);
+  border-radius: 9px; padding: 9px 12px; font-size: 12.5px; color: var(--qz-ink-3); line-height: 1.5;
+}
+.qz-xpl-tot b { color: var(--qz-ink); }
+/* UNIFIED — the top-to-bottom pipeline flow (mock .flow/.fcol/.node): the
+   stage name beside its box, arrows between. */
+.qz-xpl-flow { display: grid; gap: 0; width: 100%; }
+.qz-xpl-fcol { display: grid; grid-template-columns: 146px 1fr; gap: 14px; align-items: center; }
+.qz-xpl-flab {
+  text-align: right; font-size: 11px; font-weight: 700; letter-spacing: 0.1em;
+  text-transform: uppercase; color: var(--qz-ink-3); line-height: 1.3;
+}
+.qz-xpl-fcol.is-start .qz-xpl-flab { color: var(--qz-accent-ink); }
+.qz-xpl-fcol.is-end .qz-xpl-flab { color: var(--qz-ok); }
+.qz-xpl-node {
+  background: var(--qz-paper); border: 1.5px solid var(--qz-rule); border-radius: 9px;
+  padding: 8px 11px; font-size: 13px; font-weight: 700; line-height: 1.3;
+}
+.qz-xpl-node.is-start { border-color: var(--qz-accent); box-shadow: 0 0 0 3px var(--qz-accent-wash); }
+.qz-xpl-node.is-end { border-color: var(--qz-ok); box-shadow: 0 0 0 3px var(--qz-ok-tint); color: var(--qz-ok); }
+.qz-xpl-nsrc {
+  display: block; font-size: 10px; font-weight: 700; letter-spacing: 0.02em;
+  color: var(--qz-ink-25); margin-bottom: 5px; font-variant-numeric: tabular-nums;
+}
+.qz-xpl-node.is-start .qz-xpl-nsrc { color: var(--qz-accent); }
+.qz-xpl-nsub { display: block; font-size: 11px; font-weight: 600; color: var(--qz-ink-4); margin-top: 4px; }
+.qz-xpl-node.is-end .qz-xpl-nsub { color: var(--qz-ink-4); }
+.qz-xpl-nsub em { font-style: normal; color: var(--qz-crit); font-weight: 700; }
+.qz-xpl-farw { color: var(--qz-ink-25); font-size: 14px; margin-left: 160px; padding: 2px 0; }
+/* UNIFIED — the closing comparison cards (mock .split/.sc): diagram left,
+   RULES/QUESTIONS said loudly, cross-link in the card. */
+.qz-xpl-split { display: grid; gap: 8px; width: 100%; }
+.qz-xpl-sc {
+  display: grid; grid-template-columns: 132px 1fr; column-gap: 18px; row-gap: 0;
+  grid-template-areas: "fig k2" "fig h5" "fig p" "fig lnk";
+  align-content: center; border: 1px solid var(--qz-rule); border-left: 3px solid var(--qz-rule);
+  border-radius: 10px; padding: 13px 15px; font-size: 12.5px; line-height: 1.5;
+}
+.qz-xpl-sc svg { grid-area: fig; align-self: center; width: 132px; height: auto; }
+.qz-xpl-k2 {
+  grid-area: k2; margin: 0 0 6px; font-size: 11.5px; font-weight: 800;
+  letter-spacing: 0.14em; text-transform: uppercase; color: var(--qz-ink);
+}
+.qz-xpl-sc h5 { grid-area: h5; margin: 0 0 3px; font-size: 14px; font-weight: 700; }
+.qz-xpl-sc p { grid-area: p; margin: 0; font-size: 12.5px; color: var(--qz-ink-4); max-width: none; }
+.qz-xpl-sc .qz-xpl-cross { grid-area: lnk; margin: 7px 0 0; justify-self: start; }
+.qz-xpl-sc.is-r { border-left-color: var(--qz-ok); }
+.qz-xpl-sc.is-q { border-left-color: var(--qz-accent); }
+.qz-xpl-sc.is-r .qz-xpl-k2 { color: var(--qz-ok); }
+.qz-xpl-sc.is-q .qz-xpl-k2 { color: var(--qz-accent-ink); }
 .qz-xpl-cross {
-  font: inherit; font-size: 12px; font-weight: 600; cursor: pointer;
-  border: none; background: none; color: var(--qz-accent); padding: 0;
+  font: inherit; font-size: 12px; font-weight: 700; cursor: pointer;
+  border: none; background: none; color: var(--qz-accent-ink); padding: 0;
+  text-decoration: underline; text-underline-offset: 3px;
 }
+.qz-xpl-cross:hover { color: var(--qz-accent); }
 .qz-xpl-ft {
   display: flex; align-items: center; justify-content: space-between;
   padding: 10px 20px 14px; border-top: 1px solid var(--qz-rule);
@@ -7365,6 +7490,8 @@ tr.qz-ltab-qstart td { border-top: 2px solid var(--qz-rule); }
   color: var(--qz-ink-4); padding: 6px 8px 2px;
 }
 .qz-ltab-menu-none { font-size: 11.5px; color: var(--qz-ink-4); padding: 6px 8px; }
+/* Mock .msep — the divider before "Straight to the results". */
+.qz-ltab-menu-sep { height: 1px; background: var(--qz-cream-2); margin: 4px 2px; }
 .qz-ltab-menu-products { display: flex; flex-direction: column; gap: 2px; }
 .qz-ltab-menu-product {
   display: flex; align-items: center; gap: 8px; font-size: 12px; padding: 3px 8px;

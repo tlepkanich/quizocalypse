@@ -18,6 +18,7 @@ import { useQzToast } from "../../qz-toast";
 import {
   fieldHue,
   guessAnswerMappings,
+  guessAnswerTargets,
   derivedNarrowLabel,
   fieldValues,
   narrowFieldOptions,
@@ -429,9 +430,12 @@ export function QuestionWindow({
       ? Boolean(x.target_id)
       : x.no_preference === true || answerSelection(x).length > 0;
   const mapped = answers.filter(isMapped).length;
-  const unmapped = answers.filter(
-    (x) => !x.no_preference && answerSelection(x).length === 0,
-  ).length;
+  // Mock jobSpine — the automap offer counts UNMAPPED answers per role:
+  // decides = no target (G9); filter = no values and not "keeps everything".
+  const unmapped =
+    role === "decides"
+      ? answers.filter((x) => !x.target_id).length
+      : answers.filter((x) => !x.no_preference && answerSelection(x).length === 0).length;
 
   const focusedCount = (() => {
     if (!a) return 0;
@@ -479,18 +483,29 @@ export function QuestionWindow({
     commit(setQuestionRole(doc, q.node.id, job === "filter" ? "filter" : "qualifier"));
   };
   const autoMap = () => {
-    // Deterministic map-for-me (no AI): one best field-value guess per
-    // unmapped answer; no undo — everything stays editable.
-    const guesses = guessAnswerMappings(answers, productIndex);
-    if (guesses.length === 0) {
+    // Deterministic map-for-me (no AI): one best guess per unmapped answer;
+    // no undo — everything stays editable. Mock autoMapAll runs for BOTH
+    // non-info roles: decides guesses a Set by name (G9 — one target),
+    // filter guesses a field value.
+    let n = 0;
+    let next = doc;
+    if (role === "decides") {
+      for (const g of guessAnswerTargets(answers, categories)) {
+        next = setAnswerTarget(next, q.node.id, g.answerId, g.categoryId);
+        n++;
+      }
+    } else {
+      for (const g of guessAnswerMappings(answers, productIndex)) {
+        next = setAnswerFilterValues(next, q.node.id, g.answerId, writeValuesForField(g.field, [g.value]));
+        n++;
+      }
+    }
+    if (n === 0) {
       toast("Nothing obvious to map — pick them yourself");
       return;
     }
-    let next = doc;
-    for (const g of guesses)
-      next = setAnswerFilterValues(next, q.node.id, g.answerId, writeValuesForField(g.field, [g.value]));
     commit(next);
-    toast(`${guesses.length} answer${guesses.length === 1 ? "" : "s"} mapped — check them and change anything`);
+    toast(`${n} answer${n === 1 ? "" : "s"} mapped — check them and change anything`);
   };
 
   // ── left bank ─────────────────────────────────────────────────────────────
@@ -878,7 +893,8 @@ export function QuestionWindow({
                 narrows by <b>{derivedNarrowLabel(answers)}</b>
               </div>
             ) : null}
-            {role === "filter" && unmapped > 0 ? (
+            {/* Mock jobSpine — offered for every non-info role. */}
+            {!infoRole && unmapped > 0 ? (
               <button type="button" className="qz-qwin-automap" onClick={autoMap}>
                 Map {unmapped} answer{unmapped === 1 ? "" : "s"} for me
               </button>

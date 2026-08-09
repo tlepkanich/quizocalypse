@@ -8,6 +8,7 @@ import { moveDecisionRule, removeDecisionRule } from "../../../lib/quizMutations
 import { answerFilterValues, filterAnswerMatchCount } from "../../../lib/filterMatching";
 import { ruleTargets } from "../../../lib/recommendDecider";
 import { ProductCountButton, RouteMenuButton } from "./LogicTabMenus";
+import { useQzToast } from "../../qz-toast";
 import { CreateRuleModal } from "./CreateRuleModal";
 import { QuestionWindow } from "./QuestionWindow";
 import { ExplainerSheet, type ExplainerKind } from "./Explainers";
@@ -67,6 +68,7 @@ export function LogicTabCard({
   /** P5 — enables + Create rule (the ensure-targets endpoint needs it). */
   quizId?: string;
 }) {
+  const toast = useQzToast();
   // P5 — categories materialized by the create-rule modal, merged until the
   // route loader's next pass returns them (autosave revalidation).
   const [extraCats, setExtraCats] = useState<BuilderCategory[]>([]);
@@ -116,6 +118,16 @@ export function LogicTabCard({
   ).length;
 
   return (
+    <>
+      {/* UNIFIED (unified/_v.js NOTE, the banner above the card): role flips
+          never delete a mapping — setQuestionRole leaves the answers' values
+          in place, so flipping back restores them. */}
+      <p className="qz-ltab-note">
+        Each question below says what it does right now. Switch one on and it
+        starts ruling products out; switch it off and it is still asked, it
+        just stops deciding. <b>Nothing is ever deleted</b> — flip it back and
+        the mapping is where you left it.
+      </p>
     <section className="qz-ltab" data-testid="logic-tab-card">
       <header className="qz-ltab-hd">
         <h2>Rules</h2>
@@ -231,7 +243,11 @@ export function LogicTabCard({
                     type="button"
                     className="qz-ltab-rbtn is-del"
                     aria-label="Delete rule"
-                    onClick={() => commit(removeDecisionRule(doc, rule.id))}
+                    onClick={() => {
+                      commit(removeDecisionRule(doc, rule.id));
+                      // UNIFIED (unified/_v.js data-del) — deletion toasts.
+                      toast("Rule deleted");
+                    }}
                   >
                     ✕
                   </button>
@@ -303,6 +319,7 @@ export function LogicTabCard({
         </tbody>
       </table>
     </section>
+    </>
   );
 }
 
@@ -602,7 +619,9 @@ function ProductsCell({
     if (!cat) return <span className="qz-ltab-muted">·</span>;
     const n = cat.productIds.length;
     return (
-      <span className={n === 0 ? "qz-ltab-bad" : undefined}>{n} products</span>
+      <span className={n === 0 ? "qz-ltab-bad" : undefined}>
+        {n} {n === 1 ? "product" : "products"}
+      </span>
     );
   }
   if (role === "filter") {

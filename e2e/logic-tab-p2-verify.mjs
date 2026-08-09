@@ -48,6 +48,11 @@ await page.waitForTimeout(400);
 // ── the one card ────────────────────────────────────────────────────────────
 const card = page.locator('[data-testid="logic-tab-card"]');
 ok("the one card renders", (await card.count()) === 1);
+// UNIFIED — the teaching banner rides above the card (mock .vnote/NOTE).
+const note = page.locator(".qz-ltab-note");
+ok("the nothing-is-ever-deleted note renders above the card",
+  (await note.count()) === 1 &&
+    /nothing is ever deleted/i.test((await note.innerText()).replace(/\n/g, " ")));
 ok("Rules header present", (await card.locator("h2", { hasText: "Rules" }).count()) === 1);
 ok("Questions header present", (await card.locator("h2", { hasText: "Questions" }).count()) === 1);
 

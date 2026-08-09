@@ -4,54 +4,290 @@ import type { ReactNode } from "react";
 import { useFocusTrap } from "../../qz-overlays";
 
 // ════════════════════════════════════════════════════════════════════════════
-// Logic tab (HANDOFF §7 + DECISIONS "copy corrections") — the two stepped
-// explainer sheets. Static content, no engine dependency. Four steps each,
-// clickable numbered progress, N of 4 · Back · Next/Done footer, and a
-// cross-link on each closing step that swaps the sheet and resets to step 1.
+// Logic tab — the two stepped explainer sheets, ported from the UNIFIED mock
+// (docs/design/logic-tab/unified/_x.js — byte-identical to rules-tab/_x.js).
+// Static content, no engine dependency. Four steps each, a clickable titled
+// progress rail (done steps get ✓ + a green connector), N of 4 · Back ·
+// Next/Done footer, and a cross-link on each closing split-card that swaps
+// the sheet and resets to step 1.
 //
-// Copy corrections (engine-is-right): step "Top rule wins" teaches strict
-// first-match-wins (at most ONE rule applies — never "excludes always
-// apply"); "Both together" teaches that Show replaces the STARTING SET and
-// Narrows still apply.
+// Copy corrections (DECISIONS.md, engine-is-right — the mock copy must NOT
+// ship where it disagrees):
+// - "Top rule wins" teaches strict first-match-wins (at most ONE rule applies
+//   — never "excludes and pins always apply"); the figure's rule 3 is
+//   therefore "skipped", not the mock's "also applies".
+// - The mock's "Always include" verb chunk renders as the tab's locked verb
+//   "Highlight" (under first-match-wins nothing "always" applies).
+// - "Both together" teaches that Show replaces the STARTING SET and Narrows
+//   still apply.
 // ════════════════════════════════════════════════════════════════════════════
 
 export type ExplainerKind = "rules" | "questions";
 
 interface Step {
   title: string;
-  body: ReactNode;
+  body: ReactNode | null;
   figure: ReactNode;
 }
 
-function rulesSteps(): Step[] {
+// ── the little in/out diagram on both closing cards (mock inOutSVG) ─────────
+function InOutSvg({ dir }: { dir: "in" | "out" }) {
+  const isIn = dir === "in";
+  const col = isIn ? "var(--qz-ok)" : "var(--qz-crit)";
+  const markerId = `qz-xpl-m-${dir}`;
+  return (
+    <svg viewBox="0 0 170 46" xmlns="http://www.w3.org/2000/svg" aria-hidden>
+      <defs>
+        <marker
+          id={markerId}
+          viewBox="0 0 8 8"
+          refX="7"
+          refY="4"
+          markerWidth="5.5"
+          markerHeight="5.5"
+          orient="auto"
+        >
+          <path d="M0 0 L8 4 L0 8 z" fill={col} />
+        </marker>
+      </defs>
+      <rect x="1" y="4" width="106" height="38" rx="11" fill="none" stroke="var(--qz-rule)" strokeWidth="1.4" />
+      {[16, 38, 60].map((x) => (
+        <rect key={x} x={x} y="14" width="17" height="17" rx="5.5" fill="var(--qz-rule)" />
+      ))}
+      {isIn ? (
+        <>
+          <rect x="82" y="14" width="17" height="17" rx="5.5" fill="var(--qz-ok)" />
+          <line x1="166" y1="23" x2="112" y2="23" stroke={col} strokeWidth="1.8" markerEnd={`url(#${markerId})`} />
+        </>
+      ) : (
+        <>
+          <rect
+            x="82"
+            y="14"
+            width="17"
+            height="17"
+            rx="5.5"
+            fill="none"
+            stroke="var(--qz-ink-25)"
+            strokeWidth="1.5"
+            strokeDasharray="3 3"
+          />
+          <line x1="116" y1="23" x2="166" y2="23" stroke={col} strokeWidth="1.8" markerEnd={`url(#${markerId})`} />
+        </>
+      )}
+    </svg>
+  );
+}
+
+// The two comparison cards (mock .sc r / .sc q). `crossTo` renders the mock's
+// in-card cross-link on the card naming the OTHER sheet.
+function SplitCards({
+  order,
+  onCross,
+}: {
+  order: ExplainerKind; // which sheet is showing (its own card leads)
+  onCross: (kind: ExplainerKind) => void;
+}) {
+  const rules = (withLink: boolean) => (
+    <div className="qz-xpl-sc is-r">
+      <InOutSvg dir="in" />
+      <div className="qz-xpl-k2">Rules</div>
+      <h5>Name products in</h5>
+      <p>You choose them, by name. Best for hero sets and exceptions.</p>
+      {withLink ? (
+        <button type="button" className="qz-xpl-cross" onClick={() => onCross("rules")}>
+          How rules work →
+        </button>
+      ) : null}
+    </div>
+  );
+  const questions = (withLink: boolean) => (
+    <div className="qz-xpl-sc is-q">
+      <InOutSvg dir="out" />
+      <div className="qz-xpl-k2">Questions</div>
+      <h5>Rule products out</h5>
+      <p>
+        Your data does the work. Start with a bigger set of products, then narrow with tags,
+        metafields and the rest.
+      </p>
+      {withLink ? (
+        <button type="button" className="qz-xpl-cross" onClick={() => onCross("questions")}>
+          How questions work →
+        </button>
+      ) : null}
+    </div>
+  );
+  return (
+    <div className="qz-xpl-split">
+      {order === "rules" ? (
+        <>
+          {rules(false)}
+          {questions(true)}
+        </>
+      ) : (
+        <>
+          {questions(false)}
+          {rules(true)}
+        </>
+      )}
+    </div>
+  );
+}
+
+// One cell of the three-part path figure (mock chunk()).
+function Chunk({
+  variant,
+  ty,
+  children,
+}: {
+  variant?: "show" | "inc" | "exc";
+  ty?: ReactNode;
+  children: ReactNode;
+}) {
+  return (
+    <span className={`qz-xpl-chunk${variant ? ` v-${variant}` : ""}`}>
+      {ty ? <i className="qz-xpl-ty">{ty}</i> : null}
+      {children}
+    </span>
+  );
+}
+
+const J = ({ children }: { children: ReactNode }) => (
+  <span className="qz-xpl-j">{children}</span>
+);
+
+// The verb pills of the ledger figures (mock VERB map; "Always include" is
+// corrected to the locked verb "Highlight").
+const VERB_PILL: Record<string, { cls: string; label: string }> = {
+  show: { cls: "v-show", label: "Show these" },
+  inc: { cls: "v-inc", label: "Highlight" },
+  exc: { cls: "v-exc", label: "Exclude" },
+  nar: { cls: "v-nar", label: "Narrowing" },
+  ask: { cls: "v-ask", label: "Asked only" },
+  set: { cls: "v-set", label: "Starting set" },
+};
+
+function LedgerRow({
+  n,
+  when,
+  verb,
+  ty,
+  target,
+  math,
+  rowClass,
+  withMath,
+}: {
+  n: ReactNode;
+  when: ReactNode;
+  verb: keyof typeof VERB_PILL;
+  ty?: string;
+  target: ReactNode;
+  math?: ReactNode;
+  rowClass?: string;
+  withMath?: boolean;
+}) {
+  const v = VERB_PILL[verb]!;
+  return (
+    <div className={`qz-xpl-qb${withMath ? " has-math" : ""}${rowClass ? ` ${rowClass}` : ""}`}>
+      <span className="qz-xpl-qn">{n}</span>
+      <span className="qz-xpl-qwhen">{when}</span>
+      <span className={`qz-xpl-vp ${v.cls}`}>{v.label}</span>
+      <span className="qz-xpl-tg">
+        {ty ? <i>{ty}: </i> : null}
+        {target}
+      </span>
+      {withMath ? <span className="qz-xpl-mth">{math}</span> : null}
+    </div>
+  );
+}
+
+const Drop = ({ n, left }: { n: number; left: number }) => (
+  <>
+    <em>−{n}</em> · <b>{left}</b>
+  </>
+);
+
+// One stage of the top-to-bottom flow figure (mock node()).
+function FlowNode({
+  label,
+  variant,
+  src,
+  value,
+  sub,
+}: {
+  label: string;
+  variant?: "start" | "end";
+  src?: string;
+  value: ReactNode;
+  sub: ReactNode;
+}) {
+  return (
+    <div className={`qz-xpl-fcol${variant ? ` is-${variant}` : ""}`}>
+      <span className="qz-xpl-flab">{label}</span>
+      <span className={`qz-xpl-node${variant ? ` is-${variant}` : ""}`}>
+        {src ? <span className="qz-xpl-nsrc">{src}</span> : null}
+        {value}
+        <span className="qz-xpl-nsub">{sub}</span>
+      </span>
+    </div>
+  );
+}
+
+const FlowArrow = () => (
+  <div className="qz-xpl-farw" aria-hidden>
+    ↓
+  </div>
+);
+
+function rulesSteps(onCross: (kind: ExplainerKind) => void): Step[] {
   return [
     {
       title: "One sentence, three parts",
-      body: (
-        <>
-          Every rule reads the same way: who it applies to, what it does, and
-          what it acts on.
-        </>
-      ),
+      body: null,
       figure: (
-        <div className="qz-xpl-grid3">
-          <div className="qz-xpl-grid3-head">When they answer</div>
-          <div className="qz-xpl-grid3-head">Do this</div>
-          <div className="qz-xpl-grid3-head">To these</div>
-          <div>Women <i>and</i> Smart</div>
-          <div><b>Show</b></div>
-          <div>Workwear Capsule</div>
-          <div>Relaxed</div>
-          <div><b>Exclude</b></div>
-          <div>Wool Trousers</div>
-          <div>Training kit <i>and</i> Under $60</div>
-          <div><b>Highlight</b></div>
-          <div>Performance Set</div>
+        <div className="qz-xpl-fig">
+          <div className="qz-xpl-paths">
+            <div className="qz-xpl-plab">When they answer</div>
+            <div />
+            <div className="qz-xpl-plab">Do this</div>
+            <div />
+            <div className="qz-xpl-plab">To these</div>
+
+            <Chunk>
+              Oily <J>and</J> Sensitive
+            </Chunk>
+            <span className="qz-xpl-sarw" aria-hidden>→</span>
+            <Chunk variant="show">Show these</Chunk>
+            <span className="qz-xpl-sarw" aria-hidden>→</span>
+            <Chunk ty="tag">quiz-gentle</Chunk>
+
+            <Chunk>
+              Polos <J>or</J> Beachwear <J>and</J> Slim Fit
+            </Chunk>
+            <span className="qz-xpl-sarw" aria-hidden>→</span>
+            <Chunk variant="exc">Exclude</Chunk>
+            <span className="qz-xpl-sarw" aria-hidden>→</span>
+            <Chunk ty="collection">Plus Size Streetwear</Chunk>
+
+            <Chunk>
+              Lemon Flavor <J>and</J> Hydration <J>and</J> Powder
+            </Chunk>
+            <span className="qz-xpl-sarw" aria-hidden>→</span>
+            <Chunk variant="inc">Highlight</Chunk>
+            <span className="qz-xpl-sarw" aria-hidden>→</span>
+            <Chunk ty="product">
+              IV Hydration
+              <i className="qz-xpl-ty is-mt">collection</i>
+              Tropical Variation Pack
+            </Chunk>
+          </div>
         </div>
       ),
     },
     {
       title: "Top rule wins",
+      // DECISIONS copy correction 1 — strict first-match-wins, never the
+      // mock's "excludes and pins always apply".
       body: (
         <>
           Checked top down. The first rule that matches applies — the rest are
@@ -61,16 +297,17 @@ function rulesSteps(): Step[] {
       figure: (
         <div className="qz-xpl-ledger">
           {[
-            ["1", "When they pick Women and Smart, show Workwear Capsule.", "applies"],
-            ["2", "When they pick Relaxed, exclude Wool Trousers.", "skipped"],
-            ["3", "When they pick Training kit, show Performance Set.", "skipped"],
-            ["4", "When they pick Under $60, highlight Sale.", "skipped"],
-            ["5", "When they pick Gifts, show Gift Guide.", "skipped"],
-          ].map(([n, s, tag]) => (
-            <div key={n} className={`qz-xpl-lrow${tag === "applies" ? " is-lit" : ""}`}>
+            ["1", <>Low energy <b>and</b> Vegan → show <b>supp-iron-vegan</b></>, "wins", "is-lit"],
+            ["2", <>Low energy → show <b>supp-b12</b></>, "skipped", "is-dim"],
+            // Mock says "also applies" — engine-corrected: one rule per shopper.
+            ["3", <>Pregnant → exclude <b>supp-herbal</b></>, "skipped", "is-dim"],
+            ["4", <>Athlete → show <b>supp-electrolyte</b></>, "skipped", "is-dim"],
+            ["5", <>Sleep support → show <b>supp-magnesium</b></>, "skipped", "is-dim"],
+          ].map(([n, s, tag, cls]) => (
+            <div key={n as string} className={`qz-xpl-lrow ${cls as string}`}>
               <span className="qz-ltab-rnum">{n}</span>
               <span className="qz-xpl-lsent">{s}</span>
-              <span className={`qz-xpl-ltag${tag === "applies" ? " is-ok" : ""}`}>{tag}</span>
+              <span className={`qz-xpl-ltag${tag === "wins" ? " is-ok" : ""}`}>{tag}</span>
             </div>
           ))}
         </div>
@@ -86,66 +323,68 @@ function rulesSteps(): Step[] {
         </>
       ),
       figure: (
-        <div className="qz-xpl-ledger">
-          {[
-            "When they pick Women, show Women's Edit.",
-            "When they pick Men, show Men's Edit.",
-            "When they pick Gifting and Under $60, show Small Gifts.",
-            "When they pick Gifting and No budget, show Signature Gifts.",
-            "When they pick New here, show Bestsellers.",
-            "When they pick Just browsing, show New Arrivals.",
-          ].map((s, i) => (
-            <div key={i} className="qz-xpl-lrow">
-              <span className="qz-ltab-rnum">{i + 1}</span>
-              <span className="qz-xpl-lsent">{s}</span>
-            </div>
-          ))}
+        <div className="qz-xpl-qlist">
+          <LedgerRow n="1" when={<>Petite <b>and</b> Slim fit</>} verb="show" ty="tag" target="fit-petite-slim" />
+          <LedgerRow
+            n="2"
+            when={<>Women&rsquo;s <b>and</b> Slim fit <b>and</b> Petite <b>and</b> Under $80</>}
+            verb="show"
+            ty="products"
+            target="Field Trouser · Weekend Jean · Easy Chino"
+          />
+          <LedgerRow
+            n="3"
+            when={<>Wide leg <b>or</b> Relaxed <b>or</b> Straight <b>and</b> Tall</>}
+            verb="show"
+            ty="tag"
+            target="fit-roomy"
+          />
+          <LedgerRow n="4" when="Sensitive skin" verb="exc" ty="tag" target="fabric-wool" />
+          <LedgerRow n="5" when="Vegan" verb="exc" ty="products" target="Shearling Coat · Leather Belt" />
+          <LedgerRow n="6" when="First order" verb="inc" ty="product" target="Starter Tee" />
         </div>
       ),
     },
     {
       title: "Rules vs. Questions",
-      body: <>Two ways to say the same kind of thing — pick per situation.</>,
-      figure: (
-        <div className="qz-xpl-cards">
-          <div className="qz-xpl-card">
-            <b>Rules</b>
-            <span>
-              Name products <i>in</i>. Best for hero sets, curated capsules and
-              exceptions you can say out loud.
-            </span>
-          </div>
-          <div className="qz-xpl-card">
-            <b>Questions</b>
-            <span>
-              Rule products <i>out</i>. Your data does the work — tags,
-              collections and fields narrow what survives.
-            </span>
-          </div>
-        </div>
-      ),
+      body: null,
+      figure: <SplitCards order="rules" onCross={onCross} />,
     },
   ];
 }
 
-function questionsSteps(): Step[] {
+function questionsSteps(onCross: (kind: ExplainerKind) => void): Step[] {
   return [
     {
       title: "One question, three parts",
       body: (
         <>
-          A narrowing question is a matcher: the answer they pick, the field it
-          is matched against, and what survives.
+          A question that narrows does one thing: it matches the answer against
+          a piece of your product data and keeps only what matches.
         </>
       ),
       figure: (
-        <div className="qz-xpl-grid3">
-          <div className="qz-xpl-grid3-head">The answer they pick</div>
-          <div className="qz-xpl-grid3-head">Matched against</div>
-          <div className="qz-xpl-grid3-head">What survives</div>
-          <div><b>Women's</b></div>
-          <div>metafield · custom.gender</div>
-          <div>18 of 32</div>
+        <div className="qz-xpl-flow">
+          <FlowNode
+            label="The answer they pick"
+            variant="start"
+            value={<>Women&rsquo;s</>}
+            sub={<>one answer on &ldquo;Who is it for?&rdquo;</>}
+          />
+          <FlowArrow />
+          <FlowNode
+            label="Matched against"
+            src="metafield"
+            value="custom.gender"
+            sub="a metafield your products already carry"
+          />
+          <FlowArrow />
+          <FlowNode
+            label="What survives"
+            variant="end"
+            value="18 of 32"
+            sub="the other 14 are gone for this shopper"
+          />
         </div>
       ),
     },
@@ -153,53 +392,85 @@ function questionsSteps(): Step[] {
       title: "What each question narrows by",
       body: (
         <>
-          Each switched-on question removes what doesn't match. The count only
-          ever goes down — until your rules act on what's left.
+          One shopper answering down the list. Every switched-on question is
+          wired to one piece of your product data, and the count on the right
+          is what is left after it has had its turn.
         </>
       ),
       figure: (
-        <div className="qz-xpl-ledger">
-          {[
-            ["Who is it for?", "custom.gender", "18"],
-            ["How do they like it to fit?", "fit tags", "12"],
-            ["What size?", "Size option", "9"],
-            ["Which fabrics?", "fabric tags", "6"],
-            ["What's the budget?", "price", "4"],
-          ].map(([q, dim, n], i) => (
-            <div key={i} className="qz-xpl-lrow">
-              <span className="qz-xpl-lsent">
-                {q} <span className="qz-ltab-join">· {dim}</span>
-              </span>
-              <span className="qz-xpl-ltag">→ {n}</span>
-            </div>
-          ))}
-        </div>
+        <>
+          <div className="qz-xpl-qlist">
+            <LedgerRow
+              n="◆"
+              when="Electrolyte Range"
+              verb="set"
+              ty="collection"
+              target="18 products"
+              rowClass="is-startrow"
+              withMath
+              math={<b>18</b>}
+            />
+            <LedgerRow
+              n="1"
+              when="What are you using it for?"
+              verb="nar"
+              ty="metafield"
+              target="custom.use_case"
+              withMath
+              math={<Drop n={6} left={12} />}
+            />
+            <LedgerRow
+              n="2"
+              when="Any flavours to avoid?"
+              verb="nar"
+              ty="tag"
+              target="flavor:*"
+              withMath
+              math={<Drop n={3} left={9} />}
+            />
+            <LedgerRow
+              n="3"
+              when="Powder or ready-to-drink?"
+              verb="nar"
+              ty="variant option"
+              target="Format"
+              withMath
+              math={<Drop n={3} left={6} />}
+            />
+            <LedgerRow
+              n="4"
+              when="Caffeine or caffeine-free?"
+              verb="nar"
+              ty="metafield"
+              target="custom.caffeine"
+              withMath
+              math={<Drop n={2} left={4} />}
+            />
+            <LedgerRow
+              n="5"
+              when="How did you hear about us?"
+              verb="ask"
+              target="collects the answer, changes nothing"
+              withMath
+              math={<b>4</b>}
+            />
+          </div>
+          <div className="qz-xpl-tot">
+            This shopper reaches the results with <b>4 products</b> — and that
+            is what your rules then work with.
+          </div>
+        </>
       ),
     },
     {
       title: "Questions vs. Rules",
-      body: <>The same two cards, from the other side.</>,
-      figure: (
-        <div className="qz-xpl-cards">
-          <div className="qz-xpl-card">
-            <b>Questions</b>
-            <span>
-              Rule products <i>out</i>. Your data does the work — tags,
-              collections and fields narrow what survives.
-            </span>
-          </div>
-          <div className="qz-xpl-card">
-            <b>Rules</b>
-            <span>
-              Name products <i>in</i>. Best for hero sets, curated capsules and
-              exceptions you can say out loud.
-            </span>
-          </div>
-        </div>
-      ),
+      body: null,
+      figure: <SplitCards order="questions" onCross={onCross} />,
     },
     {
       title: "Both together",
+      // Mock copy + DECISIONS correction 2 — Show replaces the starting set,
+      // so Narrows still apply to it.
       body: (
         <>
           Questions cut the catalogue down. Your rules then decide what to show
@@ -208,14 +479,29 @@ function questionsSteps(): Step[] {
         </>
       ),
       figure: (
-        <div className="qz-xpl-pipe">
-          <span>Starting set</span>
-          <span aria-hidden>→</span>
-          <span>Questions narrow</span>
-          <span aria-hidden>→</span>
-          <span>Rules decide</span>
-          <span aria-hidden>→</span>
-          <b>Results</b>
+        <div className="qz-xpl-flow">
+          <FlowNode
+            label="Starting set"
+            variant="start"
+            src="collection"
+            value="Summer Skincare"
+            sub="24 products"
+          />
+          <FlowArrow />
+          <FlowNode
+            label="Questions narrow"
+            src="metafield · custom.skin_type + tag · concern-*"
+            value="Oily · Sensitive"
+            sub={
+              <>
+                <em>−15</em> · 9 left
+              </>
+            }
+          />
+          <FlowArrow />
+          <FlowNode label="Rules decide" src="rule 1" value="Show quiz-gentle" sub="out of those 9" />
+          <FlowArrow />
+          <FlowNode label="Results" variant="end" value="7 products" sub="what this shopper sees" />
         </div>
       ),
     },
@@ -253,9 +539,13 @@ export function ExplainerSheet({
   }, [open, onClose]);
 
   if (!open || typeof document === "undefined") return null;
-  const steps = kind === "rules" ? rulesSteps() : questionsSteps();
+
+  const swap = (next: ExplainerKind) => {
+    setStep(0);
+    onSwap(next);
+  };
+  const steps = kind === "rules" ? rulesSteps(swap) : questionsSteps(swap);
   const cur = steps[step]!;
-  const other: ExplainerKind = kind === "rules" ? "questions" : "rules";
 
   const close = () => {
     setStep(0);
@@ -275,46 +565,48 @@ export function ExplainerSheet({
         aria-label={kind === "rules" ? "How rules work" : "How questions work"}
       >
         <header className="qz-xpl-hd">
+          <span className="qz-xpl-badge">✦ Explainer</span>
           <h2>{kind === "rules" ? "How rules work" : "How questions work"}</h2>
           <button type="button" className="qz-ltab-rbtn" aria-label="Close" onClick={close}>
             ✕
           </button>
         </header>
-        {/* Clickable numbered progress; done steps get ✓. */}
+        {/* The titled progress rail (mock progBar): every step is a named,
+            clickable pill; done steps get ✓ and a green connector. */}
         <div className="qz-xpl-progress">
           {steps.map((s, i) => (
             <span key={s.title} className="qz-xpl-seg">
-              {/* §7 — done steps get a green connector to the next dot. */}
               {i > 0 ? (
                 <span className={`qz-xpl-conn${i <= step ? " is-done" : ""}`} aria-hidden />
               ) : null}
               <button
                 type="button"
-                className={`qz-xpl-dot${i === step ? " is-on" : ""}${i < step ? " is-done" : ""}`}
+                className={`qz-xpl-pstep${i === step ? " is-on" : ""}${i < step ? " is-done" : ""}`}
                 aria-label={`Step ${i + 1}: ${s.title}`}
                 onClick={() => setStep(i)}
               >
-                {i < step ? "✓" : i + 1}
+                <span
+                  className={`qz-xpl-dot${i === step ? " is-on" : ""}${i < step ? " is-done" : ""}`}
+                  aria-hidden
+                >
+                  {i < step ? "✓" : i + 1}
+                </span>
+                <span className="qz-xpl-ptitle">{s.title}</span>
               </button>
             </span>
           ))}
         </div>
         <div className="qz-xpl-body">
-          <h3>{cur.title}</h3>
-          <p>{cur.body}</p>
-          {cur.figure}
-          {step === steps.length - 1 ? (
-            <button
-              type="button"
-              className="qz-xpl-cross"
-              onClick={() => {
-                setStep(0);
-                onSwap(other);
-              }}
-            >
-              {other === "rules" ? "How rules work →" : "How questions work →"}
-            </button>
+          {/* The rules sheet's lede rides with step 1 (mock: lede on xI===0). */}
+          {kind === "rules" && step === 0 ? (
+            <p className="qz-xpl-lede">
+              A rule is one sentence:{" "}
+              <b>when they answer this, do that to these products.</b>
+            </p>
           ) : null}
+          <h3>{cur.title}</h3>
+          {cur.body ? <p>{cur.body}</p> : null}
+          {cur.figure}
         </div>
         <footer className="qz-xpl-ft">
           <span className="qz-ltab-soft">

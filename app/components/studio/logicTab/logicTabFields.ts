@@ -296,6 +296,47 @@ export function guessAnswerMappings(
   return out;
 }
 
+export interface TargetGuess {
+  answerId: string;
+  categoryId: string;
+}
+
+const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+/** unified §3 (decides role) — deterministic map-for-me over the SETS: for
+ *  each unmapped deciding answer, the best category-name guess (exact 100 ·
+ *  word-boundary 70; substrings deliberately never match). One target per
+ *  answer (G9). */
+export function guessAnswerTargets(
+  answers: readonly AnswerT[],
+  categories: readonly { id: string; name: string }[],
+): TargetGuess[] {
+  const out: TargetGuess[] = [];
+  for (const a of answers) {
+    if (a.target_id) continue; // already mapped
+    const text = a.text.trim().toLowerCase();
+    if (!text) continue;
+    const words = text.split(/[^a-z0-9]+/).filter((w) => w.length > 2);
+    let best: { id: string; score: number } | null = null;
+    for (const c of categories) {
+      const name = c.name.trim().toLowerCase();
+      if (!name) continue;
+      let score = 0;
+      if (name === text) score = 100;
+      else if (new RegExp(`(^|[^a-z0-9])${escapeRe(text)}([^a-z0-9]|$)`).test(name)) score = 70;
+      else {
+        const hits = words.filter((w) =>
+          new RegExp(`(^|[^a-z0-9])${escapeRe(w)}([^a-z0-9]|$)`).test(name),
+        ).length;
+        if (hits) score = 35 + hits * 10;
+      }
+      if (score > (best?.score ?? 0)) best = { id: c.id, score };
+    }
+    if (best && best.score >= 70) out.push({ answerId: a.id, categoryId: best.id });
+  }
+  return out;
+}
+
 /** The setAnswerFilterValues payload storing `values` under `field`. */
 export function writeValuesForField(
   field: string,

@@ -5,6 +5,7 @@ import { isFreeformType } from "../../../lib/quizSchema";
 import type { BuilderCategory, BuilderCollection } from "../../builder/stepProps";
 import type { IndexedProduct } from "../../../lib/recommendationEngine";
 import type { OrderedQuestion } from "../../../lib/questionOrder";
+import { answerNextNode } from "../../../lib/pathAnalyzer";
 import {
   moveDecider,
   setAnswerFilterValues,
@@ -619,7 +620,12 @@ export function ProductCountButton({
       maxWidth={320}
       trigger={<button type="button" className="qz-ltab-cellbtn">{label}</button>}
       content={
-        <MenuShell title={`${answer.text} — ${products.length} products`}>
+        // Mock prodMenu title: “Answer” — N product(s).
+        <MenuShell
+          title={`“${answer.text}” — ${products.length} ${
+            products.length === 1 ? "product" : "products"
+          }`}
+        >
           {products.length === 0 ? (
             <div className="qz-ltab-menu-none">
               Nothing carries this yet. Everyone who lands here reaches your
@@ -669,6 +675,24 @@ export function RouteMenuButton({
   const nextQ = questions.find((x) => x.qIndex === q.qIndex + 1);
   const later = questions.filter((x) => x.qIndex > q.qIndex + 1);
   const resultNode = doc.nodes.find((n) => n.type === "result");
+  // UNIFIED (mock routeMenu) — the current destination is marked. Resolved
+  // the same way the route CELL resolves it: walk past content steps to the
+  // next question / results.
+  const current = useMemo((): "next" | "results" | string | null => {
+    let nextId = answerNextNode(doc, q.node.id, answer.edge_handle_id);
+    const qByNode = new Map(questions.map((x) => [x.node.id, x.qIndex]));
+    for (let hops = 0; nextId && hops < 24; hops++) {
+      const cur = nextId;
+      if (qByNode.has(cur)) break;
+      const node = doc.nodes.find((n) => n.id === cur);
+      if (!node || node.type === "result" || node.type === "end") break;
+      nextId = doc.edges.find((e) => e.source === cur)?.target ?? null;
+    }
+    if (!nextId) return null;
+    const nq = qByNode.get(nextId);
+    if (nq === undefined) return "results";
+    return nq === q.qIndex + 1 ? "next" : nextId;
+  }, [doc, q, answer, questions]);
   return (
     <QzPopover
       open={open}
@@ -676,9 +700,12 @@ export function RouteMenuButton({
       maxWidth={320}
       trigger={<button type="button" className="qz-ltab-cellbtn">{label}</button>}
       content={
-        <MenuShell title={`${answer.text} → then…`}>
+        <MenuShell title={`${answer.text} · goes to`}>
           <MenuRow
-            sub={nextQ ? truncate(nextQ.node.data.text, 34) : undefined}
+            current={current === "next"}
+            sub={
+              nextQ ? truncate(nextQ.node.data.text, 34) : "straight to the results"
+            }
             onClick={() => {
               commit(setAnswerRoute(doc, q.node.id, answer.id, null));
               setOpen(false);
@@ -689,6 +716,7 @@ export function RouteMenuButton({
           {later.map((x) => (
             <MenuRow
               key={x.node.id}
+              current={current === x.node.id}
               sub={`skips ${x.qIndex - q.qIndex - 1} question${
                 x.qIndex - q.qIndex - 1 === 1 ? "" : "s"
               }`}
@@ -697,18 +725,22 @@ export function RouteMenuButton({
                 setOpen(false);
               }}
             >
-              Q{x.qIndex} {truncate(x.node.data.text, 28)}
+              Q{x.qIndex} — {truncate(x.node.data.text, 28)}
             </MenuRow>
           ))}
           {resultNode ? (
-            <MenuRow
-              onClick={() => {
-                commit(setAnswerRoute(doc, q.node.id, answer.id, resultNode.id));
-                setOpen(false);
-              }}
-            >
-              Straight to the results
-            </MenuRow>
+            <>
+              <div className="qz-ltab-menu-sep" aria-hidden />
+              <MenuRow
+                current={current === "results"}
+                onClick={() => {
+                  commit(setAnswerRoute(doc, q.node.id, answer.id, resultNode.id));
+                  setOpen(false);
+                }}
+              >
+                Straight to the results
+              </MenuRow>
+            </>
           ) : null}
         </MenuShell>
       }

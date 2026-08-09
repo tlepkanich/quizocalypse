@@ -140,13 +140,27 @@ ok(
 );
 await page.keyboard.press("Escape");
 
-// ── §6.5 route menu — forward-only options (unchanged) ──────────────────────
+// ── §6.5 route menu — forward-only options + UNIFIED parity ─────────────────
 await card.locator("tbody td:last-child .qz-ltab-cellbtn").first().click();
 const routeRows = await menu.locator(".qz-ltab-menu-row").allInnerTexts();
 ok(
   "route menu: next question first, results last",
   /next question/i.test(routeRows[0] ?? "") && /results/i.test(routeRows[routeRows.length - 1] ?? ""),
   JSON.stringify(routeRows),
+);
+// UNIFIED (mock routeMenu) — title is "<answer> · goes to"; the current
+// destination is marked; a separator sits before "Straight to the results".
+ok(
+  "route menu title says · goes to",
+  /· goes to/i.test((await menu.locator(".qz-ltab-menu-title").innerText()) ?? ""),
+);
+ok(
+  "the current destination is marked",
+  (await menu.locator(".qz-ltab-menu-row.is-current").count()) >= 1,
+);
+ok(
+  "results row sits under a separator",
+  (await menu.locator(".qz-ltab-menu-sep").count()) === 1,
 );
 // "The next question" for an answer already on the default = no-op commit.
 await menu.locator(".qz-ltab-menu-row").first().click();
