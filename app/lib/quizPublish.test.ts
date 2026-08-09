@@ -693,6 +693,74 @@ describe("publishQuiz — decider target bake (L2-3)", () => {
       /bucket no longer exists/i,
     );
   });
+
+  // Logic tab (HANDOFF §13.3) — the two hard gates.
+  it("BLOCKS publish when a Starting-set answer has no target", async () => {
+    const draft = deciderDraft();
+    const q1 = draft.nodes.find((n) => n.id === "q1")!;
+    delete (q1 as { data: { answers: Array<{ target_id?: string }> } }).data
+      .answers[1]!.target_id;
+    const { prisma } = mockDeciderPrisma(draft, CATEGORY_ROWS);
+    // validateQuiz already blocks this upstream ("Fix all validation
+    // issues"); the §13.3 gate is defense-in-depth behind it. Either
+    // message is a hard block.
+    await expect(publishQuiz(prisma, { quizId: "qrow", shopId: "s1" })).rejects.toThrow(
+      /Starting-set answer has no target|validation issues/i,
+    );
+  });
+
+  it("BLOCKS publish when a narrowing answer matches 0 products; pass-throughs never block", async () => {
+    const zeroDraft = deciderDraft();
+    zeroDraft.nodes.splice(2, 0, {
+      id: "q2",
+      type: "question",
+      position: { x: 1.5, y: 0 },
+      data: {
+        text: "Fit?",
+        question_type: "single_select",
+        role: "filter",
+        answers: [
+          // Mapped values over an EMPTY product index → 0 matches → block.
+          { id: "f1", text: "Velvet", tags: ["velvet"], edge_handle_id: "h3" },
+          { id: "f2", text: "Any", tags: [], no_preference: true, edge_handle_id: "h4" },
+        ],
+      },
+    } as never);
+    zeroDraft.edges = [
+      { id: "e1", source: "intro", target: "q1" },
+      { id: "e2", source: "q1", target: "q2" },
+      { id: "e3", source: "q2", target: "r1" },
+    ];
+    const { prisma } = mockDeciderPrisma(zeroDraft, CATEGORY_ROWS);
+    await expect(publishQuiz(prisma, { quizId: "qrow", shopId: "s1" })).rejects.toThrow(
+      /matches 0 products/i,
+    );
+
+    // Pass-through (no_preference → count null) publishes fine.
+    const passDraft = deciderDraft();
+    passDraft.nodes.splice(2, 0, {
+      id: "q2",
+      type: "question",
+      position: { x: 1.5, y: 0 },
+      data: {
+        text: "Fit?",
+        question_type: "single_select",
+        role: "filter",
+        answers: [
+          { id: "f1", text: "No preference", tags: [], no_preference: true, edge_handle_id: "h3" },
+          { id: "f2", text: "Unmapped", tags: [], edge_handle_id: "h4" },
+        ],
+      },
+    } as never);
+    passDraft.edges = [
+      { id: "e1", source: "intro", target: "q1" },
+      { id: "e2", source: "q1", target: "q2" },
+      { id: "e3", source: "q2", target: "r1" },
+    ];
+    const ok = mockDeciderPrisma(passDraft, CATEGORY_ROWS);
+    const result = await publishQuiz(ok.prisma, { quizId: "qrow", shopId: "s1" });
+    expect(result).toBeTruthy();
+  });
 });
 
 // Gap 7b — the publish AI passes are wall-clock bounded so publish can't ride

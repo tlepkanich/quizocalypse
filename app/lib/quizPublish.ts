@@ -1,13 +1,14 @@
 import type { PrismaClient } from "@prisma/client";
 import { Quiz } from "./quizSchema";
 import { validateQuiz } from "./quizValidation";
-import type { IndexedProduct } from "./recommendationEngine";
+import { isSellable, type IndexedProduct } from "./recommendationEngine";
 import { translateFeaturesToBenefits, generateAnswerTooltips } from "./claude";
 import { toneSampleFromCatalog } from "./catalogIndex";
 import { parseBrandGuidelinesSafe } from "./brandGuidelines";
 import { computeAnswerWeights } from "./answerPerformance";
 import { StoredMembershipSchema } from "./groupMembership";
 import { flattenMetafields, variantOptionsOf } from "./productIndexing";
+import { filterAnswerMatchCount } from "./filterMatching";
 import {
   BrandTokens,
   resolveDesignTokens,
@@ -420,6 +421,26 @@ export async function publishQuiz(
         missing.map((id) => ({ path: id, message: "Referenced bucket was deleted." })),
       );
     }
+    // Logic tab (HANDOFF §13.3) — two more hard gates:
+    // 1. A Starting-set answer with NO target strands every shopper who picks
+    //    it on the fallback. Block, name the answers.
+    const untargeted: Array<{ path: string; message: string }> = [];
+    for (const n of doc.nodes) {
+      if (n.type !== "question" || n.data.role !== "decides") continue;
+      for (const a of n.data.answers) {
+        if (!a.target_id)
+          untargeted.push({
+            path: a.id,
+            message: `“${a.text || "Untitled answer"}” opens nothing — pick what it opens.`,
+          });
+      }
+    }
+    if (untargeted.length > 0) {
+      throw new PublishError(
+        "A Starting-set answer has no target — map it before publishing.",
+        untargeted,
+      );
+    }
     // Ordered membership: collection-sourced targets try the merchant's real
     // Shopify collection sort via the injected fetcher; anything else (or a
     // failed fetch) keeps the synced membership order.
@@ -536,6 +557,32 @@ export async function publishQuiz(
         ...(variantList.length > 1 ? { variants: variantList } : {}),
       };
     });
+
+  // Logic tab (HANDOFF §13.3) — the second hard gate, now that the index
+  // exists: a narrowing answer whose values match ZERO sellable products
+  // silently dead-ends the pool (in the doc it looks identical to matching
+  // everything). Pass-throughs (no_preference / unmapped → count null) never
+  // block. Decider docs only.
+  if (doc.logic_model === "decider") {
+    const sellableIndex = productIndex.filter(isSellable);
+    const zeroMatch: Array<{ path: string; message: string }> = [];
+    for (const n of doc.nodes) {
+      if (n.type !== "question" || n.data.role !== "filter") continue;
+      for (const a of n.data.answers) {
+        if (filterAnswerMatchCount(a, sellableIndex) === 0)
+          zeroMatch.push({
+            path: a.id,
+            message: `“${a.text || "Untitled answer"}” matches 0 products — remap it or set it to keep everything.`,
+          });
+      }
+    }
+    if (zeroMatch.length > 0) {
+      throw new PublishError(
+        "A narrowing answer matches 0 products — fix the mapping before publishing.",
+        zeroMatch,
+      );
+    }
+  }
 
   // Resolve the design-token cascade: shop brand → quiz overrides → defaults.
   // Per-node overrides remain in doc.design_overrides and are resolved at
