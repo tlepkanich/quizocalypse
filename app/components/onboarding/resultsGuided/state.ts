@@ -26,7 +26,9 @@ export const GUIDED_DEFAULTS = {
   loadingNamed: true,
   loadingSteps: ["Reading your answers", "Scoring products", "Picking your best matches"],
   extrasOn: true,
-  extrasHeading: "You might also like",
+  // QRTZ-S6 (mock .q-alt-head) — read-time default only; a doc that stored
+  // its own heading keeps it.
+  extrasHeading: "Also worth a look",
   extrasCopy: "Popular with riders like you.",
   extrasCount: 3,
   extrasProductIds: [] as string[],

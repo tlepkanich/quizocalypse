@@ -116,6 +116,11 @@ export function LogicTabCard({
   const switchedOn = questions.filter(
     (q) => q.node.data.role === "decides" || q.node.data.role === "filter",
   ).length;
+  // QRTZ-S6 — rule drag-reorder (mock s14 "Drag a rule up"; Layers-tab BT4
+  // pattern: dragId + hover index, drop-line class). The ↑/↓ buttons stay as
+  // the keyboard/a11y path; both routes end in the same moveDecisionRule.
+  const [dragRuleId, setDragRuleId] = useState<string | null>(null);
+  const [overRuleIx, setOverRuleIx] = useState<number | null>(null);
 
   return (
     <>
@@ -131,6 +136,10 @@ export function LogicTabCard({
     <section className="qz-ltab" data-testid="logic-tab-card">
       <header className="qz-ltab-hd">
         <h2>Rules</h2>
+        {/* QRTZ-S6 — mock s14 .card-meta, verbatim (no vocabulary clash). */}
+        <p className="qz-ltab-hdmeta">
+          Run first, in order. A rule that matches overrides the questions below.
+        </p>
         {/* §3.1 — the same label string on both headers (equal pill width). */}
         <button
           type="button"
@@ -207,8 +216,57 @@ export function LogicTabCard({
           {rules.map((rule, i) => (
             <li
               key={rule.id}
-              className={`qz-ltab-rrow${rule.id === freshRuleId ? " is-fresh" : ""}`}
+              className={`qz-ltab-rrow${rule.id === freshRuleId ? " is-fresh" : ""}${
+                dragRuleId === rule.id ? " is-dragging" : ""
+              }${
+                overRuleIx === i && dragRuleId && dragRuleId !== rule.id
+                  ? " is-drop-target"
+                  : ""
+              }`}
+              draggable={commit ? true : undefined}
+              onDragStart={
+                commit
+                  ? (e) => {
+                      setDragRuleId(rule.id);
+                      e.dataTransfer.effectAllowed = "move";
+                    }
+                  : undefined
+              }
+              onDragOver={
+                commit
+                  ? (e) => {
+                      if (!dragRuleId) return;
+                      e.preventDefault();
+                      e.dataTransfer.dropEffect = "move";
+                      if (overRuleIx !== i) setOverRuleIx(i);
+                    }
+                  : undefined
+              }
+              onDrop={
+                commit
+                  ? (e) => {
+                      e.preventDefault();
+                      if (dragRuleId && dragRuleId !== rule.id)
+                        commit(moveDecisionRule(doc, dragRuleId, i));
+                      setDragRuleId(null);
+                      setOverRuleIx(null);
+                    }
+                  : undefined
+              }
+              onDragEnd={
+                commit
+                  ? () => {
+                      setDragRuleId(null);
+                      setOverRuleIx(null);
+                    }
+                  : undefined
+              }
             >
+              {commit ? (
+                <span className="qz-ltab-rgrip" aria-hidden title="Drag to reorder">
+                  ⠿
+                </span>
+              ) : null}
               <span className="qz-ltab-rnum">{i + 1}</span>
               <span className="qz-ltab-sentence">
                 <RuleSentence
@@ -260,6 +318,12 @@ export function LogicTabCard({
 
       <header className="qz-ltab-hd qz-ltab-div">
         <h2>Questions</h2>
+        {/* QRTZ-S6 — mock s14 .card-meta, in the product's locked vocabulary
+            (owner call 8c: "starting set", never "picks the result"). */}
+        <p className="qz-ltab-hdmeta">
+          Each question either picks the starting set or narrows on one product
+          attribute.
+        </p>
         <button
           type="button"
           className="qz-ltab-how"
@@ -509,6 +573,7 @@ function QuestionRows({
                   catById={catById}
                   productIndex={productIndex}
                   label={count}
+                  answerKey={keys[i] ?? String(i + 1)}
                 />
               ) : (
                 count
