@@ -17,8 +17,12 @@ import {
 import { Wordmark } from "./Wordmark";
 
 /* Design-system-V2 §7.7 — the left nav rail for the standalone /studio shell.
-   Expanded 240px / collapsed 60px; width animates 300ms var(--qz-ease), labels
-   fade 140ms (out first on collapse, in after expand — CSS transition delays).
+   QRTZ-S1 restyled it to the Quartz Rail mock (_src/quartz.mjs +
+   _src/shared.mjs rail): 224px labelled rail, 9px 12px nav rows, active =
+   accent-wash fill + accent-ink text + the 3px leading accent bar, hover =
+   cream-2 fill + ink text. Expanded 224px / collapsed 60px; the manual
+   collapse mechanism is unchanged, and below --qz-bp-md (1024px) the rail
+   force-collapses to icons via CSS (the Quartz breakpoint contract).
    Collapse preference persists in localStorage ("qz-rail-collapsed"), read in
    a mount effect so SSR always renders the expanded default (no hydration
    mismatch). Collapsed items expose their label via the `title` attribute —
@@ -96,7 +100,7 @@ export function Rail() {
               className="qz-rail-item"
               title={collapsed ? item.label : undefined}
             >
-              <Icon size={20} strokeWidth={1.5} aria-hidden="true" className="qz-rail-icon" />
+              <Icon size={17} strokeWidth={1.5} aria-hidden="true" className="qz-rail-icon" />
               <span className="qz-rail-label">{item.label}</span>
               {item.soon ? <span className="qz-rail-soon">Soon</span> : null}
             </NavLink>
@@ -145,7 +149,7 @@ export function Rail() {
               textAlign: "left",
             }}
           >
-            <LogOut size={20} strokeWidth={1.5} aria-hidden="true" className="qz-rail-icon" />
+            <LogOut size={17} strokeWidth={1.5} aria-hidden="true" className="qz-rail-icon" />
             <span className="qz-rail-label">Sign out</span>
           </button>
         </Form>

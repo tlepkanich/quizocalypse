@@ -86,9 +86,11 @@ export default function StudioGoal() {
   const facOk = factors.trim().length > 2;
   const lenOk = length !== null;
   const done = [goalOk, audOk, facOk, lenOk].filter(Boolean).length;
-  const ready = goalOk && lenOk;
+  // QRTZ-S1 (mock s09 rule) — the goal alone is enough to draft: audience,
+  // factors AND length are optional and never block the draft.
+  const ready = goalOk;
   const note = !ready
-    ? "Add your goal and pick a length"
+    ? "Add your goal to start"
     : done < 4
       ? "Optional — but the rest sharpens the questions"
       : "Ready to go";
@@ -106,16 +108,16 @@ export default function StudioGoal() {
   ];
 
   const start = () => {
-    if (!ready || length === null) return;
-    submit(
-      {
-        goal: goal.trim(),
-        audience: audience.trim(),
-        factors: factors.trim(),
-        length: String(length),
-      },
-      { method: "post" },
-    );
+    if (!ready) return;
+    const fields: Record<string, string> = {
+      goal: goal.trim(),
+      audience: audience.trim(),
+      factors: factors.trim(),
+    };
+    // Length only travels when picked — the action nulls a missing value
+    // (AI decides), so an unset radiogroup never blocks the draft.
+    if (length !== null) fields.length = String(length);
+    submit(fields, { method: "post" });
   };
 
   return (
@@ -199,7 +201,7 @@ export default function StudioGoal() {
           </div>
           <div className="qz-sm-field">
             <span className="qz-sm-flabel">Length</span>
-            <span className="qz-sm-fhint">How many questions.</span>
+            <span className="qz-sm-fhint">How many questions. Optional — it never blocks the draft.</span>
             <div className="qz-sm-seg" ref={segRef} role="radiogroup" aria-label="How many questions">
               {[3, 4, 5, 6, 7].map((n) => (
                 <button
