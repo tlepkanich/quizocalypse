@@ -9,6 +9,8 @@ import {
   suggestContrastText,
 } from "../../../lib/designTokens";
 import { googleFontsUrl } from "../../runtime/runtimeStyles";
+import { DeviceFrame, type FrameFit } from "../../builder/preview/DeviceFrame";
+import { DEVICES, TIER_LABEL, type DeviceTier } from "../../builder/preview/previewWidth";
 import {
   resolveGuided,
   resolveDiscount,
@@ -17,16 +19,18 @@ import {
   type GuidedConfig,
 } from "./state";
 
-/* Results-guided handoff §6 — the preview. A phone (390×844) or desktop
-   (1180×740) frame, scaled to fit, top-aligned, view controls stacked in its
-   own corner. THE PREVIEW FOLLOWS THE STEP: the gate screen for the email
-   ask (placement = before), the loading screen for the Loading tab, the
-   results page for everything else. Highlighting (§6/§7): opening a section
-   soft-rings the region it owns; focusing a control rings the ONE element it
-   changes; rings fade after 2.6s. data-part is PER-ELEMENT — never one part
-   for a whole screen. Themed with the draft's resolved design tokens (the
-   same tokens the published quiz renders with), real products from the
-   catalog index. */
+/* Results-guided handoff §6 — the preview. QRTZ-S3: rendered through the
+   shared DeviceFrame (the canonical 390×745 phone / 960×700 inline band of
+   previewWidth.DEVICES — this file used to hardcode 390×844 / 1180×740 and
+   its own fit math), scaled to fit, view controls stacked in the corner with
+   the applied-scale readout. THE PREVIEW FOLLOWS THE STEP: the gate screen
+   for the email ask (placement = before), the loading screen for the Loading
+   tab, the results page for everything else. Highlighting (§6/§7): opening a
+   section soft-rings the region it owns; focusing a control rings the ONE
+   element it changes; rings fade after 2.6s. data-part is PER-ELEMENT —
+   never one part for a whole screen. Themed with the draft's resolved design
+   tokens (the same tokens the published quiz renders with), real products
+   from the catalog index. */
 
 export type PreviewScreen = "results" | "gate" | "loading";
 
@@ -94,36 +98,17 @@ export function GuidedPreview({
   );
   const ctaText = suggestContrastText(resolved.colors?.primary ?? "");
 
-  const [view, setView] = useState<"phone" | "desktop">("phone");
+  const [view, setView] = useState<DeviceTier>("phone");
   const [expanded, setExpanded] = useState(false);
+  // QRTZ-S3 — the fit lives in DeviceFrame (previewWidth.fitScale); this is
+  // its report back, and the readout below prints the APPLIED scale from it.
+  const [fit, setFit] = useState<FrameFit | null>(null);
 
   // real products — the matches pool + the extras shelf's own picks
   const pool = productIndex.slice(0, 8);
   const extrasPool = cfg.extrasProductIds.length
     ? productIndex.filter((p) => cfg.extrasProductIds.includes(p.product_id))
     : [];
-
-  // ── fit the pane: scale the pixels, never the layout, never upscale ───────
-  const stageRef = useRef<HTMLDivElement>(null);
-  const deviceRef = useRef<HTMLDivElement>(null);
-  const dims = view === "desktop" ? { vw: 1180, vh: 740 } : { vw: 390, vh: 844 };
-  useEffect(() => {
-    const stage = stageRef.current;
-    const dev = deviceRef.current;
-    if (!stage || !dev) return;
-    const fit = () => {
-      const cs = getComputedStyle(stage);
-      const w = stage.clientWidth - parseFloat(cs.paddingRight || "0");
-      const h = stage.clientHeight;
-      if (w < 2 || h < 2) return;
-      const s = Math.min((w - 16) / dims.vw, (h - 16) / dims.vh, 1);
-      dev.style.setProperty("--s", Math.max(s, 0.2).toFixed(4));
-    };
-    fit();
-    const ro = new ResizeObserver(fit);
-    ro.observe(stage);
-    return () => ro.disconnect();
-  }, [dims.vw, dims.vh]);
 
   // ── §6 highlight engine: soft ring the open region, solid ring the focused
   //    part; fade after 2.6s unless an Overview jump asked it to hold. ──────
@@ -457,14 +442,20 @@ export function GuidedPreview({
     );
   }
 
-  const frameVars = {
-    ["--vw" as string]: `${dims.vw}px`,
-    ["--vh" as string]: `${dims.vh}px`,
-  } as CSSProperties;
-
   return (
     <div className="qz-rg-pvwrap">
       <div className="qz-rg-pvctl">
+        {/* The readout: a fact you can check, not a control to think about.
+            Prints the APPLIED scale DeviceFrame reports (onFit), never a
+            requested number (Step5Preview pattern). */}
+        <span className="qz-dim" style={{ fontSize: 12, fontVariantNumeric: "tabular-nums" }}>
+          {TIER_LABEL[view]} · {DEVICES[view].w} × {DEVICES[view].h}
+          {fit
+            ? fit.constrainedBy === "none"
+              ? " · actual size"
+              : ` · ${Math.round(fit.scale * 100)}%`
+            : ""}
+        </span>
         <span className="qz-s3-segbtns" role="group" aria-label="Preview device">
           <button
             type="button"
@@ -497,35 +488,15 @@ export function GuidedPreview({
           ⛶
         </button>
       </div>
-      <div className="qz-rg-pv" ref={stageRef}>
-        <div
-          className={`qz-s3-device${view === "desktop" ? " is-desktop" : ""}`}
-          ref={deviceRef}
-          style={frameVars}
-        >
-          <div className="qz-s3-holder">
-            <div className="qz-rg-frame" style={cssVars}>
-              {fontUrl ? <link rel="stylesheet" href={fontUrl} /> : null}
-              {view === "desktop" ? (
-                <div className="qz-rg-dchrome" aria-hidden>
-                  <div className="qz-rg-dbar">
-                    <span className="qz-rg-ddots">
-                      <i />
-                      <i />
-                      <i />
-                    </span>
-                    <span className="qz-rg-durl" />
-                  </div>
-                  <div className="qz-rg-dprog" />
-                </div>
-              ) : null}
-              <div className="qz-rg-screen" ref={screenRef}>
-                {screenBody}
-              </div>
-              <span className="qz-rg-fadeout" aria-hidden />
+      <div className="qz-rg-pv">
+        <DeviceFrame tier={view} onFit={setFit} resetKey={screen}>
+          <div className="qz-rg-frame" style={cssVars}>
+            {fontUrl ? <link rel="stylesheet" href={fontUrl} /> : null}
+            <div className="qz-rg-screen" ref={screenRef}>
+              {screenBody}
             </div>
           </div>
-        </div>
+        </DeviceFrame>
       </div>
       {expanded && typeof document !== "undefined"
         ? createPortal(
@@ -546,15 +517,15 @@ export function GuidedPreview({
               >
                 ✕
               </button>
-              <div
-                className={`qz-s3-device is-expand${view === "desktop" ? " is-desktop" : ""}`}
-                style={{ ...frameVars, ["--s" as string]: view === "desktop" ? "0.8" : "1" }}
-              >
-                <div className="qz-s3-holder">
+              {/* Expand is a bigger pane, not a zoom: the same DeviceFrame
+                  measures this window-sized host and the same fit rule
+                  produces the bigger result (never past 1:1). */}
+              <div style={{ width: "92vw", height: "90vh" }}>
+                <DeviceFrame tier={view}>
                   <div className="qz-rg-frame" style={cssVars}>
                     <div className="qz-rg-screen">{screenBody}</div>
                   </div>
-                </div>
+                </DeviceFrame>
               </div>
             </div>,
             document.body,

@@ -7,19 +7,26 @@
 import { BREAKPOINT_PX } from "../../runtime/runtimeStyles";
 
 // A3 — ONE definition of the device geometry, both axes, because the fit rule
-// needs height as well as width. Both are BROWSER VIEWPORTS, not device
-// screens: 745 is what iPhone Safari gives a shopper with toolbars collapsed
-// (390 × 844 is the screen — a different measurement, and why the old phone
-// frame looked unusually long). 1128 × 640 reads as a laptop browser window
-// (~16:9) and is the narrowest desktop at which nothing renders smaller than
-// designed.
+// needs height as well as width. Both are the CONTAINERS a shopper actually
+// gets, not browser windows (Quartz frames spec,
+// docs/design/brand-2026/reference/quartz-preview-frames.html):
+//   phone   390 × 745 — the viewport iPhone Safari gives a shopper with
+//           toolbars collapsed (390 × 844 is the screen — a different
+//           measurement, and why the old phone frame looked unusually long).
+//   desktop 960 × 700 — the INLINE embed band: 960 wide sits above the 900px
+//           breakpoint so it genuinely renders desktop tokens, below the
+//           runtime shell's 1100px cap; 700 tall reads as a block, not a
+//           letterbox (1128 × 640 was the stretched one).
+// The launcher modal (720 × 620) is a real embed mode but NOT a preview tier —
+// its geometry stays recorded here so a modal preview can be added without
+// re-deriving it. (720 < 900: the launcher modal renders MOBILE tokens.)
 //
 // Do NOT add a tablet tier: the quiz switches layouts at BREAKPOINT_PX (900),
 // so a 768px "tablet" would render the phone layout and the button would be
 // lying about what it shows.
 export const DEVICES = {
   phone: { w: 390, h: 745 },
-  desktop: { w: 1128, h: 640 },
+  desktop: { w: 960, h: 700 },
 } as const;
 
 export type DeviceTier = keyof typeof DEVICES;

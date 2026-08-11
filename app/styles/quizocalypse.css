@@ -1793,20 +1793,25 @@ body[data-qz] ::selection { background: var(--qz-ink); color: var(--qz-cream); }
 .qz-stagebar-sp { flex: 1 1 auto; }
 .qz-builder-canvas > div { min-height: 0; height: 100%; }
 .qz-step5-chromeless { min-height: 0; height: 100%; width: 100%; }
-/* viewport/2026-08 — the fixed preview viewport's chrome. Borderless: a
-   hairline ring (an INSET shadow, not a border — a 1px border would shrink the
-   content box to 388×743 and break the usable-height arithmetic), a radius per
-   tier, a soft shadow. Geometry, transform and contain:paint live inline in
-   DeviceFrame.tsx (the transform is dynamic and the containment contract is
-   unit-tested against the inline style). */
+/* viewport/2026-08 + QRTZ-S3 — the fixed preview viewport's chrome, per the
+   Quartz frames mock (_src/base.mjs .devbox). The phone is BORDERLESS: a
+   solid screen with the device radius (--qz-phone-r) and a soft elevation —
+   no bezel, no hairline, no fade. The desktop inline band is a real
+   container and keeps its frame: a hairline ring drawn as an INSET shadow,
+   not a border (a 1px border would shrink the content box to 958×698 and
+   break the usable-height arithmetic). Geometry, transform and contain:paint
+   live inline in DeviceFrame.tsx (the transform is dynamic and the
+   containment contract is unit-tested against the inline style). */
 .qz-devframe {
   overflow: hidden;
   background: var(--qz-paper, #fff);
-  box-shadow: inset 0 0 0 1px rgba(17, 17, 17, .08), 0 1px 2px rgba(17, 17, 17, .04), 0 18px 48px rgba(17, 17, 17, .10);
+  box-shadow: 0 10px 30px -14px rgba(32, 28, 46, .42), 0 2px 6px -2px rgba(32, 28, 46, .10);
 }
-.qz-devframe[data-qz-tier="phone"] { border-radius: 26px; }
-.qz-devframe[data-qz-tier="desktop"] { border-radius: 14px; }
-.qz-devfade { background: linear-gradient(to bottom, rgba(17, 17, 17, 0), rgba(17, 17, 17, .10)); }
+.qz-devframe[data-qz-tier="phone"] { border-radius: var(--qz-phone-r, 20px); }
+.qz-devframe[data-qz-tier="desktop"] {
+  border-radius: var(--qz-radius);
+  box-shadow: inset 0 0 0 1px var(--qz-rule), 0 10px 30px -14px rgba(32, 28, 46, .42), 0 2px 6px -2px rgba(32, 28, 46, .10);
+}
 /* phone-preview SPEC Expand — the overlay's preview host: ~90% of the
    viewport, centered (reuses the funnel's .qz-s3-phscrim scrim + ✕). The
    device frame measures this box and the same fit rule produces the bigger
@@ -9297,3 +9302,41 @@ html[data-theme="dark"] {
 .qz-rg-xtag { font-size: 9px; font-weight: 800; text-transform: uppercase; letter-spacing: .06em; opacity: .6; background: color-mix(in srgb, currentColor 10%, transparent); border-radius: 999px; padding: 2px 7px; }
 .qz-rg-extras > p { font-size: 12.5px; opacity: .65; margin: 0 0 12px; line-height: 1.45; }
 .qz-rg-note { font-size: 11.5px; }
+
+/* ═══ QRTZ-S3 — preview frames ═══
+   Quartz frames spec (docs/design/brand-2026/reference/quartz-preview-frames
+   .html, _src/base.mjs + frames.mjs): phone 390×745 borderless-solid with the
+   fold marker; Desktop = the 960×700 INLINE embed band; the launcher modal
+   (720×620) stays declared in previewWidth.ts but is never offered as a
+   preview. Frame chrome itself lives in the .qz-devframe block (~line 1796,
+   also QRTZ-S3-owned). */
+
+/* The mock's fold marker (_src/base.mjs .fold, tokens mapped: --line-strong→
+   --qz-rule-strong, --ink-3→--qz-ink-4, --fw-semi→600). bottom:78px marks
+   where the 667px small-phone viewport (iPhone SE) cuts the 745px frame.
+   pointer-events:none is ours: the mock is static, this preview is live. */
+.qz-devfold {
+  position: absolute; left: 0; right: 0; bottom: 78px;
+  border-top: 1px dashed var(--qz-rule-strong);
+  font-size: 9.5px; letter-spacing: .08em; text-transform: uppercase;
+  color: var(--qz-ink-4); text-align: right; padding: 3px 10px 0;
+  font-weight: 600; pointer-events: none;
+}
+
+/* GuidedPreview renders through DeviceFrame now: the devframe owns geometry,
+   radius and elevation, so the guided frame becomes a full-bleed skin (its
+   own 42px bezel radius + lift + hairline would double the frame chrome). */
+.qz-devframe .qz-rg-frame {
+  width: 100%; height: 100%;
+  border-radius: 0; box-shadow: none;
+}
+
+/* The guided desktop band, per the mock (_src/base.mjs .embed-frame): the
+   merchant's background fills the whole 960 band, only the CONTENT column is
+   capped — 760, centred. (Replaces the retired .qz-s3-device.is-desktop
+   rules, which keyed off the wrapper GuidedPreview no longer renders.)
+   Scoped to the preview wrapper only — never the runtime. */
+.qz-devframe[data-qz-tier="desktop"] .qz-rg-scr {
+  padding: 48px 48px 80px; width: 100%; max-width: 760px; margin: 0 auto;
+}
+.qz-devframe[data-qz-tier="desktop"] .qz-rg-gwrap { max-width: 420px; margin: 0 auto; }

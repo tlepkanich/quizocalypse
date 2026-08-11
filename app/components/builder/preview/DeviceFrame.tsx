@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { DEVICES, fitConstraint, fitScale, type DeviceTier } from "./previewWidth";
 
 // Layout effects must not run during SSR (same alias runtimeStyles.ts uses).
@@ -21,9 +21,13 @@ export type FrameFit = {
  * the host renders the same <DeviceFrame> inside a window-sized overlay and the
  * identical fit rule produces the bigger result (never past 1:1).
  *
- * Borderless: hairline + radius + soft shadow (.qz-devframe in the admin
- * sheet). No bezel, no notch, no browser chrome, no device metaphor. The
- * scale/size readout lives in the host.
+ * QRTZ-S3 (Quartz frames spec): the phone is BORDERLESS — a solid screen,
+ * device radius (--qz-phone-r), soft elevation; no bezel, no notch, no
+ * browser chrome, no bottom fade. The desktop tier is the 960×700 inline
+ * embed band and keeps a hairline frame (.qz-devframe in the admin sheet).
+ * The phone also draws the mock's "fold" marker: a dashed line 78px above
+ * the bottom edge — where the 667px small-phone viewport (iPhone SE) cuts
+ * the 745px frame. The scale/size readout lives in the host, fed by onFit.
  */
 export function DeviceFrame({
   tier,
@@ -61,7 +65,6 @@ export function DeviceFrame({
   const paneRef = useRef<HTMLDivElement | null>(null);
   const screenRef = useRef<HTMLDivElement | null>(null);
   const [pane, setPane] = useState({ w: 0, h: 0 });
-  const [fadeVisible, setFadeVisible] = useState(false);
 
   useIsoLayoutEffect(() => {
     const el = paneRef.current;
@@ -86,23 +89,11 @@ export function DeviceFrame({
     onFitRef.current?.({ scale, constrainedBy, paneW: pane.w, paneH: pane.h });
   }, [scale, constrainedBy, pane.w, pane.h]);
 
-  // Scroll affordance — a soft bottom fade on the screen that disappears at the
-  // end of the scroll (and when nothing overflows). Re-read after every render:
-  // content height changes whenever the step or the tier does; setState with an
-  // unchanged value bails out, so the dep-less effect cannot loop.
-  const updateFade = useCallback(() => {
-    const el = screenRef.current;
-    if (!el) return;
-    setFadeVisible(el.scrollHeight - el.clientHeight - el.scrollTop > 8);
-  }, []);
-  useIsoLayoutEffect(updateFade);
-
   // Reset the screen's scroll when the previewed step, tier or placement
   // changes — a switch never lands the merchant mid-page.
   useEffect(() => {
     if (screenRef.current) screenRef.current.scrollTop = 0;
-    updateFade();
-  }, [tier, placement, resetKey, updateFade]);
+  }, [tier, placement, resetKey]);
 
   const isPopup = tier === "desktop" && placement === "popup";
   const isContained =
@@ -162,7 +153,6 @@ export function DeviceFrame({
           <div
             className="qz-devscreen"
             ref={screenRef}
-            onScroll={updateFade}
             style={{
               width: "100%",
               height: "100%",
@@ -204,21 +194,14 @@ export function DeviceFrame({
               children
             )}
           </div>
-          {/* Soft bottom fade, gone once you reach the end of the scroll. */}
-          <span
-            className="qz-devfade"
-            aria-hidden
-            style={{
-              position: "absolute",
-              left: 0,
-              right: 0,
-              bottom: 0,
-              height: 48,
-              pointerEvents: "none",
-              opacity: fadeVisible ? 1 : 0,
-              transition: "opacity 160ms var(--qz-ease, ease)",
-            }}
-          />
+          {/* The mock's "fold" marker (_src/shared.mjs:660, base.mjs .fold):
+              a dashed line 78px up — where the 667px small-phone viewport
+              cuts this 745px frame. Phone tier only; never intercepts input. */}
+          {tier === "phone" ? (
+            <span className="qz-devfold" aria-hidden>
+              fold
+            </span>
+          ) : null}
         </div>
       </div>
     </div>

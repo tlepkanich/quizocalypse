@@ -14,10 +14,12 @@ import {
 } from "../../runtime/runtimeStyles";
 
 describe("DEVICES", () => {
-  it("is the two fixed viewports of viewport/2026-08 and nothing else", () => {
+  it("is the two fixed viewports of the Quartz frames spec and nothing else", () => {
     expect(Object.keys(DEVICES).sort()).toEqual(["desktop", "phone"]);
     expect(DEVICES.phone).toEqual({ w: 390, h: 745 });
-    expect(DEVICES.desktop).toEqual({ w: 1128, h: 640 });
+    // QRTZ-S3 — the inline embed band, not a browser window: above the 900
+    // breakpoint, below the shell's 1100 cap, squarer than a letterbox.
+    expect(DEVICES.desktop).toEqual({ w: 960, h: 700 });
     // No tablet: 768 would render the phone layout, so the button would lie.
     expect(DEVICE_TIERS).toEqual(["phone", "desktop"]);
   });
@@ -26,7 +28,7 @@ describe("DEVICES", () => {
     // Phone: frame minus the runtime page's default padding (24 top + 24 bottom).
     expect(DEVICES.phone.h - PAGE_PAD_DEFAULT_PX - PAGE_PAD_DEFAULT_PX).toBe(697);
     // Desktop: the desktop-shell rule swaps padding-top for its own default.
-    expect(DEVICES.desktop.h - PAGE_PAD_DESKTOP_TOP_PX - PAGE_PAD_DEFAULT_PX).toBe(568);
+    expect(DEVICES.desktop.h - PAGE_PAD_DESKTOP_TOP_PX - PAGE_PAD_DEFAULT_PX).toBe(628);
   });
 });
 
@@ -67,19 +69,19 @@ describe("fitScale", () => {
   it("takes the smaller axis ratio", () => {
     // Width-limited: 195/390 = 0.5 beats 745/745 = 1.
     expect(fitScale("phone", 195, 745)).toBeCloseTo(0.5, 10);
-    // Height-limited: 320/640 = 0.5 beats 1128/1128 = 1.
-    expect(fitScale("desktop", 1128, 320)).toBeCloseTo(0.5, 10);
+    // Height-limited: 350/700 = 0.5 beats 960/960 = 1.
+    expect(fitScale("desktop", 960, 350)).toBeCloseTo(0.5, 10);
   });
 
   it("returns 1 for an unmeasured or zero-size pane (SSR / display:none)", () => {
     expect(fitScale("phone", 0, 0)).toBe(1);
-    expect(fitScale("desktop", 1128, 0)).toBe(1);
+    expect(fitScale("desktop", 960, 0)).toBe(1);
   });
 
-  it("reaches actual size at the Expand window sizes the contract names", () => {
-    // GLOBAL-VIEWPORT §4: 422 × 777 phone, 1160 × 672 desktop.
+  it("reaches actual size in a pane slightly roomier than the device", () => {
+    // A pane a few px larger on both axes shows the device 1:1 (Expand case).
     expect(fitScale("phone", 422, 777)).toBe(1);
-    expect(fitScale("desktop", 1160, 672)).toBe(1);
+    expect(fitScale("desktop", 1000, 720)).toBe(1);
   });
 });
 
@@ -88,6 +90,6 @@ describe("fitConstraint", () => {
     expect(fitConstraint("phone", 900, 1000)).toBe("none");
     expect(fitConstraint("phone", 195, 745)).toBe("width");
     expect(fitConstraint("phone", 390, 612)).toBe("height");
-    expect(fitConstraint("desktop", 1128, 320)).toBe("height");
+    expect(fitConstraint("desktop", 960, 350)).toBe("height");
   });
 });
