@@ -15,6 +15,7 @@ import {
   setQuestionRole,
 } from "../../../lib/quizMutations";
 import { filterAnswerMatchingProducts } from "../../../lib/filterMatching";
+import { formatMoney } from "../../../lib/formatMoney";
 import { QzPopover } from "../../qz-overlays";
 import { useQzToast } from "../../qz-toast";
 import {
@@ -34,11 +35,21 @@ import {
 type QuizDoc = Quiz;
 type Commit = (doc: QuizDoc) => void;
 
-function MenuShell({ title, children }: { title?: string; children: ReactNode }) {
+function MenuShell({
+  title,
+  footer,
+  children,
+}: {
+  title?: ReactNode;
+  /** QRTZ-S6 — mock .pop-foot/.pp-foot: a quiet teaching sentence at the end. */
+  footer?: ReactNode;
+  children: ReactNode;
+}) {
   return (
     <div className="qz-ltab-menu">
       {title ? <div className="qz-ltab-menu-title">{title}</div> : null}
       {children}
+      {footer ? <div className="qz-ltab-menu-foot">{footer}</div> : null}
     </div>
   );
 }
@@ -50,6 +61,7 @@ function MenuRow({
   children,
   sub,
   indent,
+  detail,
 }: {
   onClick?: () => void;
   current?: boolean;
@@ -57,16 +69,21 @@ function MenuRow({
   children: ReactNode;
   sub?: ReactNode;
   indent?: boolean;
+  /** QRTZ-S6 — mock .ap-vals: a full-width example-values second line. */
+  detail?: ReactNode;
 }) {
   return (
     <button
       type="button"
-      className={`qz-ltab-menu-row${current ? " is-current" : ""}${indent ? " is-indent" : ""}`}
+      className={`qz-ltab-menu-row${current ? " is-current" : ""}${indent ? " is-indent" : ""}${
+        detail ? " has-vals" : ""
+      }`}
       onClick={onClick}
       disabled={disabled}
     >
       <span className="qz-ltab-menu-row-main">{children}</span>
       {sub ? <span className="qz-ltab-menu-row-sub">{sub}</span> : null}
+      {detail ? <span className="qz-ltab-menu-row-vals">{detail}</span> : null}
     </button>
   );
 }
@@ -107,11 +124,59 @@ export function RoleMenuButton({
       (kindFilter === "all" || f.kind === kindFilter) &&
       (!fieldQuery || f.label.toLowerCase().includes(fieldQuery.toLowerCase())),
   );
+  // QRTZ-S6 (mock .ap) — per-kind tab counts, example values per field, and a
+  // select-then-Use commit: a row click only HIGHLIGHTS; Use commits, Cancel
+  // abandons. `field: null` = the "Anything" mode pending.
+  const [pendingNarrow, setPendingNarrow] = useState<{ field: string | null } | null>(
+    null,
+  );
+  const kindCounts = useMemo(() => {
+    const counts: Record<"tag" | "metafield" | "variant" | "ptype", number> = {
+      tag: 0,
+      metafield: 0,
+      variant: 0,
+      ptype: 0,
+    };
+    for (const f of fields) counts[f.kind]++;
+    return counts;
+  }, [fields]);
+  const fieldSamples = useMemo(() => {
+    const samples = new Map<string, string>();
+    for (const f of fields) {
+      samples.set(
+        f.field,
+        fieldValues(productIndex, f.field)
+          .slice(0, 4)
+          .map((v) => v.label)
+          .join(" · "),
+      );
+    }
+    return samples;
+  }, [fields, productIndex]);
 
   const close = () => {
     setOpen(false);
     setNarrowsOpen(false);
     setFieldQuery("");
+    setPendingNarrow(null);
+  };
+
+  // Use — the one commit for the picker (mock .ap-foot). Same writes the old
+  // click-commit rows made; the toast still marks a changed field.
+  const commitNarrow = () => {
+    if (!pendingNarrow) return;
+    const field = pendingNarrow.field;
+    const changed = !(role === "filter" && narrowField === field);
+    let next = setQuestionRole(doc, q.node.id, "filter");
+    next = setQuestionNarrowField(next, q.node.id, field);
+    commit(next);
+    if (changed && field) {
+      const opt = fields.find((f) => f.field === field);
+      toast(
+        `"${truncate(q.node.data.text)}" now narrows by ${opt?.label ?? field} — map its answers`,
+      );
+    }
+    close();
   };
 
   const fieldLabel = (field: string | null) =>
@@ -139,7 +204,17 @@ export function RoleMenuButton({
       trigger={pill}
       maxWidth={380}
       content={
-        <MenuShell title={q.node.data.text}>
+        <MenuShell
+          title={q.node.data.text}
+          // QRTZ-S6 (mock .pop-foot) — the one-decider rule, in the product's
+          // locked vocabulary ("starting set", never "picks the result").
+          footer={
+            <>
+              One question picks the starting set. Every other narrows on a
+              single product attribute.
+            </>
+          }
+        >
           <MenuRow
             current={role === "decides"}
             disabled={cannotDecide}
@@ -188,38 +263,39 @@ export function RoleMenuButton({
           </MenuRow>
           {narrowsOpen ? (
             <div className="qz-ltab-menu-section">
-              {/* §6.1 — "Anything" is the ABSENCE of a field, not a rival mode. */}
+              {/* §6.1 — "Anything" is the ABSENCE of a field, not a rival mode.
+                  QRTZ-S6 — rows only select; the footer's Use commits. */}
               <MenuRow
                 indent
-                current={role === "filter" && !narrowField}
+                current={
+                  pendingNarrow
+                    ? pendingNarrow.field === null
+                    : role === "filter" && !narrowField
+                }
                 sub="each answer picks its own"
-                onClick={() => {
-                  let next = setQuestionRole(doc, q.node.id, "filter");
-                  next = setQuestionNarrowField(next, q.node.id, null);
-                  commit(next);
-                  close();
-                }}
+                onClick={() => setPendingNarrow({ field: null })}
               >
                 Anything
               </MenuRow>
               <div className="qz-ltab-menu-chips">
-                {/* G5 widening — variant options + product type now match. */}
+                {/* G5 widening — variant options + product type now match.
+                    QRTZ-S6 (mock .seg-count) — per-kind field counts. */}
                 {(
                   [
-                    ["all", "All"],
-                    ["tag", "Tags"],
-                    ["metafield", "Metafields"],
-                    ["variant", "Variant options"],
-                    ["ptype", "Type"],
+                    ["all", "All", fields.length],
+                    ["tag", "Tags", kindCounts.tag],
+                    ["metafield", "Metafields", kindCounts.metafield],
+                    ["variant", "Variant options", kindCounts.variant],
+                    ["ptype", "Type", kindCounts.ptype],
                   ] as const
-                ).map(([k, l]) => (
+                ).map(([k, l, n]) => (
                   <button
                     key={k}
                     type="button"
                     className={`qz-ltab-menu-chip${kindFilter === k ? " is-on" : ""}`}
                     onClick={() => setKindFilter(k)}
                   >
-                    {l}
+                    {l} <span className="qz-ltab-menu-chipcount">{n}</span>
                   </button>
                 ))}
               </div>
@@ -232,36 +308,67 @@ export function RoleMenuButton({
               {shownFields.length === 0 ? (
                 <div className="qz-ltab-menu-none">No fields found.</div>
               ) : (
-                shownFields.slice(0, 24).map((f) => (
-                  <MenuRow
-                    key={f.field}
-                    indent
-                    current={role === "filter" && narrowField === f.field}
-                    // §6.1 — the field's source key + coverage ("custom.gender · 23/23").
-                    sub={`${f.field.replace(/^(mf|tag):/, "")} · ${f.coverage}/${productIndex.length}`}
-                    onClick={() => {
-                      const changed = narrowField !== f.field;
-                      let next = setQuestionRole(doc, q.node.id, "filter");
-                      next = setQuestionNarrowField(next, q.node.id, f.field);
-                      commit(next);
-                      // §6.1 — the old values are meaningless against a new
-                      // field; say so, don't silently keep them.
-                      if (changed)
-                        toast(
-                          `"${truncate(q.node.data.text)}" now narrows by ${f.label} — map its answers`,
-                        );
-                      close();
-                    }}
-                  >
-                    {f.label}
-                  </MenuRow>
-                ))
+                shownFields.slice(0, 24).map((f) => {
+                  // QRTZ-S6 (mock .is-thin) — an attribute most products lack
+                  // silently drops the rest from every result; flag it.
+                  const thin =
+                    productIndex.length > 0 &&
+                    f.coverage / productIndex.length < 0.5;
+                  return (
+                    <MenuRow
+                      key={f.field}
+                      indent
+                      current={
+                        pendingNarrow
+                          ? pendingNarrow.field === f.field
+                          : role === "filter" && narrowField === f.field
+                      }
+                      // §6.1 — the field's source key + coverage ("custom.gender · 23/23").
+                      sub={
+                        <span className={thin ? "qz-ltab-menu-covthin" : undefined}>
+                          {f.field.replace(/^(mf|tag):/, "")} · {f.coverage}/
+                          {productIndex.length}
+                        </span>
+                      }
+                      // QRTZ-S6 (mock .ap-vals) — example values, best first.
+                      detail={fieldSamples.get(f.field) || undefined}
+                      onClick={() => setPendingNarrow({ field: f.field })}
+                    >
+                      {f.label}
+                      {thin ? (
+                        <span className="qz-ltab-menu-thin">low coverage</span>
+                      ) : null}
+                    </MenuRow>
+                  );
+                })
               )}
               {shownFields.length > 24 ? (
                 <div className="qz-ltab-menu-none">
                   +{shownFields.length - 24} more — keep typing
                 </div>
               ) : null}
+              {/* QRTZ-S6 (mock .ap-foot) — the explicit commit + the lesson. */}
+              <div className="qz-ltab-menu-apfoot">
+                <span className="qz-ltab-menu-apnote">
+                  <b>Coverage matters:</b> a question can only narrow by data
+                  your products actually have.
+                </span>
+                <button
+                  type="button"
+                  className="qz-btn qz-btn-ghost qz-btn-sm"
+                  onClick={close}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  className="qz-btn qz-btn-primary qz-btn-sm"
+                  disabled={!pendingNarrow}
+                  onClick={commitNarrow}
+                >
+                  Use
+                </button>
+              </div>
             </div>
           ) : null}
         </MenuShell>
@@ -586,18 +693,61 @@ export function NarrowsMenuButton({
 
 // ── §6.4 the product menu — behind every count ──────────────────────────────
 
+// QRTZ-S6 — the popover's kind, for the title chip + the footer sentence
+// (mock .pp-title's `tag is-col` + .pp-foot). Decides answers take their
+// target's source; narrows answers only get a kind when the selection is
+// unambiguous (one kind of value), else no chip.
+function popoverKind(
+  role: "decides" | "qualifier" | "filter" | undefined,
+  answer: Answer,
+  catById: Map<string, BuilderCategory>,
+): { label: string; chipClass: string } | null {
+  if (role === "decides") {
+    const cat = answer.target_id ? catById.get(answer.target_id) : undefined;
+    if (!cat) return null;
+    if (cat.source === "collection") return { label: "collection", chipClass: " is-collection" };
+    if (cat.source === "tag") return { label: "tag", chipClass: " is-tag" };
+    if (cat.source === "metafield") return { label: "metafield", chipClass: " is-metafield" };
+    return { label: "group", chipClass: "" };
+  }
+  if (role === "filter") {
+    const kinds = new Set<string>();
+    if (answer.tags.length) kinds.add("tag");
+    if (answer.collection_filter || answer.collection_filters?.length)
+      kinds.add("collection");
+    if (answer.metafield_filters?.length) kinds.add("metafield");
+    if (answer.variant_filters?.length) kinds.add("variant option");
+    if (answer.product_type_filters?.length) kinds.add("type");
+    if (kinds.size !== 1) return null;
+    const label = [...kinds][0]!;
+    const chipClass =
+      label === "collection"
+        ? " is-collection"
+        : label === "tag"
+          ? " is-tag"
+          : label === "metafield"
+            ? " is-metafield"
+            : "";
+    return { label, chipClass };
+  }
+  return null;
+}
+
 export function ProductCountButton({
   answer,
   role,
   catById,
   productIndex,
   label,
+  answerKey,
 }: {
   answer: Answer;
   role: "decides" | "qualifier" | "filter" | undefined;
   catById: Map<string, BuilderCategory>;
   productIndex: IndexedProduct[];
   label: ReactNode;
+  /** QRTZ-S6 — the row's A/B/C key, for the mock's .pp-foot sentence. */
+  answerKey?: string;
 }) {
   const [open, setOpen] = useState(false);
   const products = useMemo(() => {
@@ -612,6 +762,7 @@ export function ProductCountButton({
     if (role === "filter") return filterAnswerMatchingProducts(answer, productIndex) ?? [];
     return [];
   }, [answer, role, catById, productIndex]);
+  const kind = popoverKind(role, answer, catById);
 
   return (
     <QzPopover
@@ -620,12 +771,39 @@ export function ProductCountButton({
       maxWidth={320}
       trigger={<button type="button" className="qz-ltab-cellbtn">{label}</button>}
       content={
-        // Mock prodMenu title: “Answer” — N product(s).
+        // QRTZ-S6 (mock .pp) — kind chip in the title, the count as its own
+        // line, price + stock on every product row, foot sentence. No
+        // "synced from Shopify" line (no sync timestamp reaches this surface)
+        // and no "Open in Shopify" (no shop domain reaches it either).
         <MenuShell
-          title={`“${answer.text}” — ${products.length} ${
-            products.length === 1 ? "product" : "products"
-          }`}
+          title={
+            <>
+              “{answer.text}”
+              {kind ? (
+                <span className={`qz-crm-kind${kind.chipClass}`}>{kind.label}</span>
+              ) : null}
+            </>
+          }
+          footer={
+            answerKey && products.length > 0 ? (
+              role === "decides" ? (
+                <>
+                  Answer <b>{answerKey} · {answer.text}</b> shows this{" "}
+                  {kind?.label ?? "group"}.
+                </>
+              ) : (
+                <>
+                  Answer <b>{answerKey} · {answer.text}</b> narrows to these
+                  products.
+                </>
+              )
+            ) : undefined
+          }
         >
+          <div className="qz-ltab-menu-countline">
+            <b>{products.length}</b>{" "}
+            {products.length === 1 ? "product" : "products"} matched
+          </div>
           {products.length === 0 ? (
             <div className="qz-ltab-menu-none">
               Nothing carries this yet. Everyone who lands here reaches your
@@ -640,7 +818,19 @@ export function ProductCountButton({
                   ) : (
                     <span className="qz-ltab-menu-swatch" aria-hidden />
                   )}
-                  <span>{p.title}</span>
+                  <span className="qz-ltab-menu-pmain">
+                    <span className="qz-ltab-menu-pname">{p.title}</span>
+                    <span className="qz-ltab-menu-pmeta">
+                      {p.price ? <span>{formatMoney(p.price)}</span> : null}
+                      <span
+                        className={`qz-ltab-menu-stock ${
+                          p.inventory_in_stock ? "is-ok" : "is-out"
+                        }`}
+                      >
+                        {p.inventory_in_stock ? "In stock" : "Out of stock"}
+                      </span>
+                    </span>
+                  </span>
                 </div>
               ))}
               {products.length > 24 ? (

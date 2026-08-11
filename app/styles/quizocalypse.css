@@ -9340,3 +9340,58 @@ html[data-theme="dark"] {
   padding: 48px 48px 80px; width: 100%; max-width: 760px; margin: 0 auto;
 }
 .qz-devframe[data-qz-tier="desktop"] .qz-rg-gwrap { max-width: 420px; margin: 0 auto; }
+
+/* ═══ QRTZ-S6 — logic + results ═══ */
+/* s14 card-head meta sentences (mock .card-meta: 12.5px, ink-3, flex:1). */
+.qz-ltab-hdmeta {
+  flex: 1 1 auto; min-width: 0; margin: 0;
+  font-size: 12.5px; font-weight: 400; color: var(--qz-ink-3);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+/* Rule drag-reorder (Layers-tab BT4 pattern; ↑/↓ stay the a11y path). */
+.qz-ltab-rgrip {
+  flex: 0 0 auto; align-self: center; font-size: 12px; line-height: 1;
+  color: var(--qz-ink-25); cursor: grab; user-select: none;
+}
+.qz-ltab-rrow.is-dragging { opacity: 0.4; }
+.qz-ltab-rrow.is-drop-target { box-shadow: inset 0 2px 0 0 var(--qz-accent); }
+/* Products popover (mock .pp): count line · price + stock pill · footer. */
+.qz-ltab-menu-countline { padding: 2px 8px 6px; font-size: 12px; color: var(--qz-ink-3); }
+.qz-ltab-menu-countline b { color: var(--qz-ink); font-variant-numeric: tabular-nums; }
+.qz-ltab-menu-pmain { min-width: 0; display: grid; gap: 1px; }
+.qz-ltab-menu-pname { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.qz-ltab-menu-pmeta {
+  display: flex; gap: 7px; font-size: 11px; color: var(--qz-ink-4);
+  font-variant-numeric: tabular-nums;
+}
+.qz-ltab-menu-stock { font-size: 10.5px; font-weight: 600; }
+.qz-ltab-menu-stock.is-ok { color: var(--qz-ok); }
+.qz-ltab-menu-stock.is-out { color: var(--qz-crit); }
+.qz-ltab-menu-title .qz-crm-kind { margin-left: 7px; vertical-align: 1px; }
+/* Popover foot sentences (mock .pop-foot / .pp-foot). */
+.qz-ltab-menu-foot {
+  margin-top: 6px; padding: 10px 8px 4px; border-top: 1px solid var(--qz-rule);
+  font-size: 12px; color: var(--qz-ink-3); line-height: 1.5;
+}
+.qz-ltab-menu-foot b { color: var(--qz-ink); font-weight: 600; }
+/* Attribute picker (mock .ap): per-kind tab counts · example values ·
+   low-coverage flag · explicit Cancel/Use commit. */
+.qz-ltab-menu-chipcount { font-size: 10px; opacity: 0.7; font-variant-numeric: tabular-nums; }
+.qz-ltab-menu-row.has-vals { flex-wrap: wrap; }
+.qz-ltab-menu-row-vals {
+  width: 100%; font-size: 11px; color: var(--qz-ink-4);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.qz-ltab-menu-thin {
+  display: inline-block; margin-left: 7px; padding: 0 6px; border-radius: 5px;
+  background: var(--qz-warn-wash); color: var(--qz-warn);
+  border: 1px solid color-mix(in srgb, var(--qz-warn) 30%, transparent);
+  font-size: 10px; font-weight: 600; vertical-align: 1px;
+}
+.qz-ltab-menu-covthin { color: var(--qz-warn); font-weight: 600; }
+.qz-ltab-menu-apfoot {
+  display: flex; align-items: center; gap: 10px;
+  margin-top: 6px; padding: 9px 8px 4px; border-top: 1px solid var(--qz-rule);
+}
+.qz-ltab-menu-apnote { flex: 1 1 auto; font-size: 11.5px; color: var(--qz-ink-3); line-height: 1.45; }
+.qz-ltab-menu-apnote b { color: var(--qz-ink); font-weight: 600; }

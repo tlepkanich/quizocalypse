@@ -30,34 +30,49 @@ import {
    Design →". Owner rule (no dead ends): settings the runtime does not consume
    yet carry a quiet "not connected yet" tag — see WIRED in state.ts. */
 
+// QRTZ-S6 (mock s15) — `name` feeds the eyebrow ("Step 1 of 6 · The page
+// copy") and the forward button ("Next: the matches" names its destination).
 const FLOW = [
   {
     g: "says",
+    name: "The page copy",
     title: "What does the page say?",
     sub: "The first thing a shopper reads after answering. Name the outcome they get, not the quiz they took.",
   },
   {
     g: "shows",
+    name: "The matches",
     title: "How do the matches look?",
     sub: "How many products they see, how those are arranged, and what each card carries.",
   },
   {
     g: "disc",
+    name: "The offer",
     title: "Do you want to make an offer?",
     sub: "Optional. Leave it off if you would rather protect margin than push conversion.",
   },
   {
     g: "keep",
+    name: "Email capture",
     title: "Do you want their email?",
     sub: "And if so, where you ask for it. This is the single biggest lever on the page.",
   },
   {
     g: "edge",
+    name: "Extra picks",
     title: "Anything after the matches?",
     sub: "A “you might also like” shelf under the results. An AOV lever worth testing.",
   },
-  { g: null, title: "Overview", sub: "Everything you have set. Next you will style it in Design." },
+  {
+    g: null,
+    name: "Overview",
+    title: "Overview",
+    sub: "Everything you have set. Next you will style it in Design.",
+  },
 ] as const;
+
+// "Next: the matches" — sentence-case the section name after the colon.
+const lcFirst = (s: string) => s.charAt(0).toLowerCase() + s.slice(1);
 
 const GROUPS: Array<{ id: string; band: "before" | "page"; ic: string; name: string }> = [
   { id: "keep", band: "before", ic: "✉", name: "Email capture" },
@@ -322,7 +337,7 @@ export function ResultsGuided({
           onChange={(e) => patch({ headline: e.target.value })}
         />
         <div className="qz-rg-sugg">
-          <div className="qz-rg-sl">Suggestions</div>
+          <div className="qz-rg-sl">Try</div>
           <div className="qz-rg-srow">
             <button type="button" className="qz-rg-arw" aria-label="Previous suggestions" onClick={() => setRot((r) => ({ ...r, h: r.h - 1 }))}>
               ‹
@@ -350,7 +365,7 @@ export function ResultsGuided({
           onChange={(e) => patch({ whyCopy: e.target.value })}
         />
         <div className="qz-rg-sugg">
-          <div className="qz-rg-sl">Suggestions</div>
+          <div className="qz-rg-sl">Try</div>
           <div className="qz-rg-srow">
             <button type="button" className="qz-rg-arw" aria-label="Previous suggestions" onClick={() => setRot((r) => ({ ...r, w: r.w - 1 }))}>
               ‹
@@ -985,7 +1000,8 @@ export function ResultsGuided({
               })}
             </div>
             <div className="qz-rg-stepno">
-              Step {stepIx + 1} of {FLOW.length}
+              {/* QRTZ-S6 (mock .eyebrow) — the section name rides the count. */}
+              Step {stepIx + 1} of {FLOW.length} · {step.name}
               {allReviewed ? <span className="qz-rg-allrev">✓ All reviewed</span> : null}
             </div>
             <h2 className="qz-rg-title">{step.title}</h2>
@@ -1001,7 +1017,11 @@ export function ResultsGuided({
             ) : null}
             <span className="qz-rg-fsp" />
             <button type="button" className="qz-rg-btn2 is-pri" onClick={next}>
-              {stepIx === FLOW.length - 1 ? "Open the builder →" : "Next →"}
+              {/* QRTZ-S6 (mock .edit-foot) — the forward button NAMES its
+                  destination; the last keeps the product's builder handoff. */}
+              {stepIx === FLOW.length - 1
+                ? "Open the builder →"
+                : `Next: ${lcFirst(FLOW[stepIx + 1]!.name)}`}
             </button>
           </div>
         </div>
