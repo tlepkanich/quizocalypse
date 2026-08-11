@@ -1,7 +1,6 @@
 import type { ReactNode } from "react";
 import { Fragment } from "react";
 import { Wordmark } from "../chrome/Wordmark";
-import { ThemeToggle } from "./ThemeToggle";
 
 // ════════════════════════════════════════════════════════════════════════════
 // BLD-3 — the standalone builder's chrome, a structural port of
@@ -103,7 +102,7 @@ export function BuilderNavRail({
         </Fragment>
       ))}
       <div className="qz-builder-rail-spacer" />
-      <ThemeToggle />
+      {/* Quartz: dark mode is CUT (owner, 2026-08-09) — theme toggle removed. */}
     </nav>
   );
 }

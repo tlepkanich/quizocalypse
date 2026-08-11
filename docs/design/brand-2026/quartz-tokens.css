@@ -1,0 +1,220 @@
+/* =====================================================================
+   QUARTZ — dev handoff token map.  Figtree · violet-only accent · squared.
+
+   HOW TO USE THIS
+   The admin already defines 99 `--qz-*` tokens in app/styles/quizocalypse.css.
+   Their NAMES stay; only their VALUES change. That is how the last redesign
+   shipped (see the header comment in that file) and it means every existing
+   component follows without being touched. Paste this block over the `:root`
+   block in quizocalypse.css, swap the @font-face for Figtree, then work the
+   four DECISIONS at the bottom — those are the only places a value swap is
+   not enough.
+
+   Contrast is measured, not asserted. Every pair called out below was checked
+   against WCAG 2.2 §1.4.3 (4.5:1 text) and §1.4.11 (3:1 control boundaries);
+   the numbers are in docs/design/brand-2026/quartz-1-rail.html §03.
+   ===================================================================== */
+
+/* — Self-hosted, same pattern as the current Quicksand face. Variable woff2,
+     latin subset, OFL. Put the file in public/fonts and preload from root.tsx. */
+@font-face {
+  font-family: "Figtree";
+  src: url("/fonts/Figtree.woff2") format("woff2");
+  font-weight: 300 900;
+  font-style: normal;
+  font-display: swap;
+}
+
+:root {
+  /* ── Surfaces ─────────────────────────────────────────────────────── */
+  --qz-cream:    #FFFFFF;   /* page background */
+  --qz-cream-2:  #F5F4F8;   /* the ONE inset wash — table heads, segment tracks */
+  --qz-paper:    #FFFFFF;   /* card surface (same as page; the border separates) */
+  --qz-stage:    #F5F4F8;   /* builder/canvas backdrop */
+
+  /* ── Ink ladder — warm violet-grey, biased toward the accent ─────── */
+  --qz-ink:      #201C2E;   /* headings, figures, values            17.4:1 */
+  --qz-ink-2:    #201C2E;   /* legacy slot, collapsed into ink              */
+  --qz-ink-3:    #4E4860;   /* body copy                             8.7:1 */
+  --qz-ink-4:    #645E78;   /* meta, counts, labels                  5.6:1 */
+  --qz-ink-25:   #B4AFC4;   /* disabled only — NEVER text you must read     */
+  --qz-rule:     #E4E1EC;   /* hairline: row + card separators              */
+  --qz-rule-2:   #EFEDF4;   /* lighter hairline, inside components          */
+  --qz-scrim:    rgba(32, 28, 46, 0.45);
+
+  /* NEW TOKEN — there is no 3:1 boundary token today, and WCAG 1.4.11
+     requires one for anything you can click or type into. Inputs,
+     checkboxes, radios and outline-button borders must use this, not
+     --qz-rule (which is 1.29:1 and decorative only). */
+  --qz-rule-strong: #948EA6;                             /* 3.14:1 on white */
+
+  /* ── The one accent ───────────────────────────────────────────────── */
+  /* Deepened one step from #6D5AE6 so white on a button clears AA (6.43:1).
+     Spend it on THREE things only: primary action, current selection,
+     focused field. Never a heading, chip, tag, chart bar or icon. */
+  --qz-accent:      #5B45D6;
+  --qz-accent-2:    #4A36B8;   /* hover / pressed */
+  --qz-accent-ink:  #4A36B8;   /* accent TEXT on light — 7.2:1 on the wash */
+  --qz-accent-wash: #EFECFD;   /* selected rows, active nav, focus tint */
+  --qz-accent-grad: #5B45D6;   /* Quartz has no gradients — flat on purpose */
+  --qz-accent-line: #D5CDF8;   /* border on accent-washed surfaces */
+  --qz-graphite:    #4E4860;   /* editing selection ring, brand-agnostic */
+
+  /* ── State — never brand, never decorative ───────────────────────── */
+  --qz-ok:          #0F6B45;
+  --qz-warn:        #8A5300;
+  --qz-crit:        #A5241C;
+  --qz-draft-wash:  #F5F4F8;  --qz-draft-ink:  #645E78;
+  --qz-live-wash:   #E7F3ED;  --qz-live-ink:   #0F6B45;
+
+  /* Derived tints — one source of truth, unchanged formulas */
+  --qz-ok-tint:     color-mix(in srgb, var(--qz-ok)     9%,  var(--qz-paper));
+  --qz-warn-tint:   color-mix(in srgb, var(--qz-warn)   9%,  var(--qz-paper));
+  --qz-crit-tint:   color-mix(in srgb, var(--qz-crit)   9%,  var(--qz-paper));
+  --qz-accent-tint: color-mix(in srgb, var(--qz-accent) 10%, var(--qz-paper));
+  --qz-ok-edge:     color-mix(in srgb, var(--qz-ok)     28%, transparent);
+  --qz-warn-edge:   color-mix(in srgb, var(--qz-warn)   28%, transparent);
+  --qz-crit-edge:   color-mix(in srgb, var(--qz-crit)   28%, transparent);
+
+  /* ── Type ─────────────────────────────────────────────────────────── */
+  --qz-font-display: "Figtree", -apple-system, "Segoe UI", "Helvetica Neue", sans-serif;
+  --qz-font-body:    "Figtree", -apple-system, "Segoe UI", "Helvetica Neue", sans-serif;
+  /* DECISION 3 below. Quartz has no monospace; this alias exists so the 35
+     current call sites keep compiling while they are migrated. */
+  --qz-font-mono:    "Figtree", -apple-system, "Segoe UI", sans-serif;
+  --qz-lh-tight: 1.15;
+  --qz-lh:       1.6;
+
+  /* Ramp — sizes are set at call sites, but these are the seven roles:
+     page title 42/700 · figure 38/800 tabular · section 26/700 ·
+     card title 16.5/700 · body 14.5/400 · UI 14/500-600 · label 11/700 +.09em */
+
+  /* ── Shape — squared. Nothing is a full pill except a spinner. ────── */
+  --qz-radius:       6px;   /* buttons, fields, chips, tags, pills   (197 uses) */
+  --qz-radius-sm:    4px;   /* ticks, swatches, small badges                    */
+  --qz-radius-lg:    8px;   /* cards, panels, sheets                            */
+  --qz-radius-toast: 6px;
+  --qz-radius-pill:  6px;   /* DELIBERATE: pills become rounded rects (37 uses) */
+
+  /* ── Space — one 4px unit ─────────────────────────────────────────── */
+  --qz-space-1: 4px;
+  --qz-space-2: 8px;
+  --qz-space-3: 12px;
+  --qz-space-4: 16px;
+  --qz-space-5: 24px;
+  --qz-space-6: 32px;
+  --qz-space-7: 48px;
+  --qz-pad-card: 18px;
+  --qz-pad-gap:  18px;
+
+  /* ── Depth — content is flat; only overlays cast ──────────────────── */
+  --qz-lift-1: 0 1px 2px rgba(32, 28, 46, 0.05);                                   /* cards: a whisper */
+  --qz-lift-2: 0 12px 30px -10px rgba(32, 28, 46, 0.26), 0 1px 2px rgba(32, 28, 46, 0.07); /* menus, popovers */
+  --qz-lift-3: 0 24px 56px -16px rgba(32, 28, 46, 0.34), 0 2px 4px rgba(32, 28, 46, 0.08); /* modals, drawers */
+  --qz-shadow-sm: var(--qz-lift-1);
+  --qz-shadow-md: var(--qz-lift-2);
+  --qz-shadow-lg: var(--qz-lift-3);
+  --qz-shadow-focus: 0 0 0 3px color-mix(in srgb, var(--qz-accent) 28%, transparent);
+
+  /* ── Motion — one curve, three durations ─────────────────────────── */
+  --qz-ease:       cubic-bezier(0.2, 0.7, 0.3, 1);
+  --qz-dur-fast:   110ms;
+  --qz-dur:        130ms;
+  --qz-dur-slow:   200ms;
+  --qz-dur-xslow:  320ms;   /* AI drafting state only */
+
+  /* ── Breakpoints ──────────────────────────────────────────────────── */
+  /* The admin currently branches at 720 / 760 / 900 / 1023 / 1024 / 1080 /
+     1100 / 1499px — eight ad-hoc points. Quartz defines three. Everything
+     should be migrated onto these; they are here so they are greppable. */
+  --qz-bp-sm:  720px;   /* stack: one column, chrome collapses            */
+  --qz-bp-md:  1024px;  /* two columns, rail collapses to icons           */
+  --qz-bp-lg:  1440px;  /* full: rail + content + inspector               */
+
+  /* ── Retired colour — see DECISION 1 and 2 ───────────────────────── */
+  /* Quartz has one accent. The gold signature, the pastel set and the
+     per-template palettes are all "spend colour everywhere" tokens it
+     removes. They are aliased to neutrals so the 53 existing call sites
+     degrade quietly instead of throwing; each needs a real decision. */
+  --qz-gold:        var(--qz-ink-4);
+  --qz-gold-bright: var(--qz-ink-3);
+  --qz-gold-wash:   var(--qz-cream-2);
+  --qz-gold-line:   var(--qz-rule);
+
+  --qz-pastel-violet: var(--qz-accent-wash);  --qz-pastel-violet-ink: var(--qz-accent-ink);
+  --qz-pastel-rose:   var(--qz-cream-2);      --qz-pastel-rose-ink:   var(--qz-ink-3);
+  --qz-pastel-mint:   var(--qz-cream-2);      --qz-pastel-mint-ink:   var(--qz-ink-3);
+  --qz-pastel-amber:  var(--qz-cream-2);      --qz-pastel-amber-ink:  var(--qz-ink-3);
+  --qz-pastel-sky:    var(--qz-cream-2);
+
+  --qz-pal-green:  var(--qz-ok);      --qz-pal-green-wash:  var(--qz-live-wash);
+  --qz-pal-coral:  var(--qz-warn);    --qz-pal-coral-wash:  var(--qz-cream-2);
+  --qz-pal-blue:   var(--qz-accent);  --qz-pal-blue-wash:   var(--qz-accent-wash);
+  --qz-pal-pink:   var(--qz-ink-3);   --qz-pal-pink-wash:   var(--qz-cream-2);
+  --qz-pal-purple: var(--qz-accent);  --qz-pal-purple-wash: var(--qz-accent-wash);
+  --qz-pal-teal:   var(--qz-ink-3);   --qz-pal-teal-wash:   var(--qz-cream-2);
+  --qz-pal-amber:  var(--qz-warn);    --qz-pal-amber-wash:  var(--qz-cream-2);
+
+  --qz-priority:      var(--qz-warn);
+  --qz-priority-wash: color-mix(in srgb, var(--qz-warn) 8%, var(--qz-paper));
+
+  /* Source-accent taxonomy — kept, re-pointed at the neutral ladder */
+  --qz-src-tag:  var(--qz-accent-ink);  --qz-src-tag-bg:  var(--qz-accent-wash);
+  --qz-src-col:  var(--qz-ink-3);       --qz-src-col-bg:  var(--qz-cream-2);
+  --qz-src-meta: var(--qz-ink-3);       --qz-src-meta-bg: var(--qz-cream-2);
+  --qz-src-man:  var(--qz-ink-3);       --qz-src-man-bg:  var(--qz-cream-2);
+}
+
+/* =====================================================================
+   THE EDITOR STANDS DOWN
+   Inside the builder the merchant is looking at THEIR brand. A violet
+   selection ring beside their terracotta button is two brands arguing over
+   one screen. So the editor surface re-points the accent at the ink ladder:
+   selection, focus, active section and the primary action all go neutral,
+   and the only saturated colour left is the design being made.
+   Scope this to whatever wraps the builder (today: the studio workspace
+   shell). It is a token swap on one surface, NOT a second theme — no
+   component changes.
+   ===================================================================== */
+[data-qz-surface="editor"] {
+  --qz-accent:      var(--qz-ink);
+  --qz-accent-2:    var(--qz-ink);
+  --qz-accent-ink:  var(--qz-ink);
+  --qz-accent-wash: var(--qz-cream-2);
+  --qz-accent-line: var(--qz-rule-strong);
+  --qz-accent-grad: var(--qz-ink);
+  --qz-shadow-focus: 0 0 0 3px rgba(32, 28, 46, 0.14);
+}
+
+/* =====================================================================
+   THREE OPEN DECISIONS — the only places a value swap is not enough.
+   (A fourth, dark mode, was closed on 2026-08-09; see the note below.)
+
+   1. THE GOLD SIGNATURE — 22 call sites.
+      The gold ◆ has five canonical moments today (wordmark, recommended
+      template, decider question, loading mark, primary-CTA inline). Quartz
+      has one accent and no gold. Either those five moments move to the
+      violet, or the gold survives as a sixth colour and the "one accent"
+      rule is dead. Recommend: move them to violet, drop the ◆ glyph.
+
+   2. THE PASTEL SET — 24 call sites, plus 7 on the per-template palettes.
+      These drive the four pastel stat cards and the category surfaces.
+      Quartz replaces the stat cards with one tone and a big figure. The
+      category surfaces still need SOME way to differ — recommend shape and
+      label, not hue, but that is a product call, not a CSS one.
+
+   3. --qz-font-mono — 35 call sites.
+      This is the typewriter look. It cannot be swapped blind: the sites that
+      used mono for ALIGNMENT (counts, prices, ratios, IDs) need
+      `font-variant-numeric: tabular-nums` added, and the sites that used it
+      as a LABEL style just become Figtree 700 uppercase +.09em. Two
+      different fixes; someone has to look at all 35.
+
+   CLOSED — DARK MODE. Cut by the owner on 2026-08-09. The mocks no longer
+      emit a `prefers-color-scheme: dark` block or a `[data-theme="dark"]`
+      block, and each declares `color-scheme: light` so a viewer whose OS is
+      dark gets the design as drawn rather than a browser-inverted
+      approximation. Nothing below needs a dark counterpart. If it is ever
+      revived, note that it was never contrast-audited against the real 99
+      call sites — only against the mocks.
+   ===================================================================== */

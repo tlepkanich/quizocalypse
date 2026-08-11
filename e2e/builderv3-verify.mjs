@@ -424,18 +424,20 @@ ok("no 'Step N of 4' wizard copy", !(await page.locator("text=/Step \\d of 4/").
 await page.locator(".qz-builder-rail-item", { hasText: "Build" }).click();
 await page.waitForTimeout(400);
 
-// ── BLD-6: dark toggle + axe ────────────────────────────────────────────────
+// ── BLD-6 (revised for Quartz): light-only + axe ────────────────────────────
+// Dark mode was CUT (owner, 2026-08-09): the theme toggle is removed and
+// html[data-theme] is never set. Assert the pinned-light state instead.
 await page.locator(".qz-builder-rail-item", { hasText: "Build" }).click();
 await page.waitForTimeout(400);
 await page.screenshot({ path: `${SHOTS}/build-light.png`, fullPage: false });
-await page.locator('button[aria-label*="dark mode"]').click();
-await page.waitForTimeout(400);
 ok(
-  "dark toggle flips html[data-theme]",
-  (await page.evaluate(() => document.documentElement.getAttribute("data-theme"))) === "dark",
+  "theme toggle removed (dark mode cut)",
+  (await page.locator('button[aria-label*="dark mode"], button[aria-label*="light mode"]').count()) === 0,
 );
-await page.screenshot({ path: `${SHOTS}/build-dark.png`, fullPage: false });
-await page.locator('button[aria-label*="light mode"]').click();
+ok(
+  "html[data-theme] never set (admin pinned light)",
+  (await page.evaluate(() => document.documentElement.getAttribute("data-theme"))) === null,
+);
 
 const axeSource = readFileSync("node_modules/axe-core/axe.min.js", "utf8");
 await page.evaluate(axeSource);

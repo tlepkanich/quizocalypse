@@ -15,12 +15,11 @@ import qzStyles from "./quizocalypse.css?url";
 // Adding a new studio_./app_. de-nested document route? It needs these links
 // too, or it renders unstyled.
 export const adminStyleLinks: LinkDescriptor[] = [
-  // Self-hosted fonts: preload so the swap window is one paint, not a fetch
-  // round-trip. crossOrigin is required for font preloads. Quicksand is the
-  // Soft-Pastel admin typeface (leads --qz-font-*); Mona Sans is its metrics-
-  // close fallback during the swap window; JetBrains Mono is the eyebrow label.
-  { rel: "preload", href: "/fonts/Quicksand.woff2", as: "font", type: "font/woff2", crossOrigin: "anonymous" },
-  { rel: "preload", href: "/fonts/MonaSans.woff2", as: "font", type: "font/woff2", crossOrigin: "anonymous" },
-  { rel: "preload", href: "/fonts/JetBrainsMono-Medium.woff2", as: "font", type: "font/woff2", crossOrigin: "anonymous" },
+  // Self-hosted font: preload so the swap window is one paint, not a fetch
+  // round-trip. crossOrigin is required for font preloads. Figtree is the
+  // Quartz admin typeface (leads every --qz-font-* stack, mono included).
+  // Mona Sans stays on disk + in the sheet's @font-face for embedded quiz
+  // previews (quiz-runtime.css names it) but is loaded on demand, not here.
+  { rel: "preload", href: "/fonts/Figtree.woff2", as: "font", type: "font/woff2", crossOrigin: "anonymous" },
   { rel: "stylesheet", href: qzStyles },
 ];

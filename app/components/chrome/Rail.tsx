@@ -15,7 +15,6 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { Wordmark } from "./Wordmark";
-import { ThemeToggle } from "../studio/ThemeToggle";
 
 /* Design-system-V2 §7.7 — the left nav rail for the standalone /studio shell.
    Expanded 240px / collapsed 60px; width animates 300ms var(--qz-ease), labels
@@ -126,7 +125,8 @@ export function Rail() {
             M
           </span>
           <span className="qz-rail-label">My account</span>
-          <ThemeToggle className="qz-rail-theme" />
+          {/* Quartz: dark mode is CUT (owner, 2026-08-09) — the theme toggle
+              that sat here was removed; the admin is pinned to light. */}
         </div>
         {/* BIC-2 A2(b) — sign out (POST /studio/logout clears both studio
             cookies). Reuses the nav item styling; the inline resets only strip

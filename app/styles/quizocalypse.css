@@ -1,45 +1,36 @@
 /* =====================================================================
    Wiskr (wiskr.ai) — admin design system. Filename kept as quizocalypse.css for import stability.
-   Implements the Quizzy Master Design System v0.3 — "Soft Pastel"
-   (docs/design-rules.md): white surfaces, a warm violet-grey ink ladder,
-   ONE accent (violet #6D5AE6), a global pastel set used as fills, soft
-   low-contrast violet-tinted elevation, and one Spring motion language.
-   Typeface Quicksand (admin); no pictorial brand mark. Token VALUES carry
-   the system — components consume --qz-* and follow. Light + dark (dark
-   kept by owner decision; dark-mode-for-v1 is a design open item).
-   NOTE: token *names* are inherited from the prior V2 sheet (--qz-cream,
-   --qz-ink-3, --qz-lift-*, etc.); only their values changed, so every
-   existing consumer keeps working. Admin chrome ONLY — gated by
-   body[data-qz]; the shopper runtime (/q) overrides its own --qz-color-*
-   on its subtree, so it's unaffected. Loaded via the admin route trees'
-   links(). ===================================================================== */
+   QUARTZ (docs/design/brand-2026/quartz-tokens.css): Figtree, violet-only
+   accent, squared shape, flat depth, white ground. Token VALUES carry the
+   system — components consume --qz-* and follow; token *names* are
+   inherited from the prior sheets (--qz-cream, --qz-ink-3, --qz-lift-*,
+   etc.), only their values changed, so every existing consumer keeps
+   working. LIGHT ONLY — dark mode was cut by the owner on 2026-08-09; the
+   html[data-theme="dark"] blocks below are inert dead code (nothing sets
+   the attribute any more) and are slated for deletion in a later phase.
+   Admin chrome ONLY — gated by body[data-qz]; the shopper runtime (/q)
+   overrides its own --qz-color-* on its subtree, so it's unaffected.
+   Loaded via the admin route trees' links(). ========================== */
 
-/* — Fonts — self-hosted (public/fonts). Mona Sans = variable (wght; we use
-   500–800 only per the V2 weight ladder); JetBrains Mono = static 400/500/600.
-   Preloaded from root.tsx links(). — */
+/* — Fonts — self-hosted (public/fonts). Figtree = the Quartz admin face
+   (variable woff2, wght 400–800, latin subset, OFL); preloaded from the
+   admin route trees' links() (app/styles/adminLinks.ts). Mona Sans + its
+   metrics shim stay ONLY because app/styles/quiz-runtime.css:33 still
+   names them for the runtime shell — embedded quiz previews on admin
+   pages resolve the family through these faces (loaded on demand, not
+   preloaded). — */
+@font-face {
+  font-family: "Figtree";
+  src: url("/fonts/Figtree.woff2") format("woff2");
+  font-weight: 400 800;
+  font-style: normal;
+  font-display: swap;
+}
 @font-face {
   font-family: "Mona Sans";
   src: url("/fonts/MonaSans.woff2") format("woff2");
   font-weight: 200 900;
   font-style: normal;
-  font-display: swap;
-}
-@font-face {
-  font-family: "JetBrains Mono";
-  src: url("/fonts/JetBrainsMono-Regular.woff2") format("woff2");
-  font-weight: 400;
-  font-display: swap;
-}
-@font-face {
-  font-family: "JetBrains Mono";
-  src: url("/fonts/JetBrainsMono-Medium.woff2") format("woff2");
-  font-weight: 500;
-  font-display: swap;
-}
-@font-face {
-  font-family: "JetBrains Mono";
-  src: url("/fonts/JetBrainsMono-SemiBold.woff2") format("woff2");
-  font-weight: 600;
   font-display: swap;
 }
 /* Metrics-adjusted local fallback — keeps layout close while the display font loads. */
@@ -52,97 +43,68 @@
   size-adjust: 102%;
 }
 
-/* Quizzy Master Design System v0.3 — admin typeface is Quicksand (400–700), a
-   rounded geometric sans carrying the "Soft Pastel" personality (design-rules.md
-   §3). Self-hosted variable woff2 (latin subset, OFL) in public/fonts; leads the
-   --qz-font-* stacks, with Mona Sans as the metrics-close fallback while it
-   loads. */
-@font-face {
-  font-family: "Quicksand";
-  src: url("/fonts/Quicksand.woff2") format("woff2");
-  font-weight: 400 700;
-  font-style: normal;
-  font-display: swap;
-}
-
 :root {
-  /* ============ V2 spec-name → token mapping (keep names, V2 values) ============
-     paper→--qz-cream (page bg) · surface→--qz-paper · ink→--qz-ink ·
-     ink-70→--qz-ink-3 · ink-45→--qz-ink-4 · ink-25→--qz-ink-25 · rule→--qz-rule ·
-     link→--qz-accent (+ --qz-accent-wash) · warn→--qz-warn · err→--qz-crit ·
-     ok→--qz-ok · scrim→--qz-scrim · gold*→--qz-gold* · lift-1/2/3→--qz-lift-*
-     (aliased by the legacy --qz-shadow-sm/md/lg) · palettes→--qz-pal-*        */
+  /* ============ QUARTZ token map (docs/design/brand-2026/quartz-tokens.css)
+     Names stay; values are Quartz. Repo-only tokens the sheet does not
+     mention (--qz-t-*, --qz-spring, --qz-z-*, --qz-warn-wash, --qz-src-*)
+     are kept and re-pointed at the new base tokens where they hardcoded
+     old-palette literals. Dead tokens (grep-verified zero references)
+     were deleted, not ported: --qz-stage, --qz-graphite,
+     --qz-pal-purple-wash, --qz-space-1/2/6/7, --qz-t-small,
+     --qz-z-sticky/subheader/dropdown, --qz-bt-backdrop (variable). */
 
-  /* Core neutrals (design-rules.md §2.1) — white surfaces; warm violet-grey
-     ink ladder; depth via shadow, not tone. Names kept; Soft Pastel values. */
-  --qz-cream:    #FFFFFF;   /* Surface — page background, cards, editor chrome */
-  --qz-cream-2:  #F2F1F5;   /* Neutral wash — search, segments, hovers (warm grey) */
-  --qz-paper:    #FFFFFF;   /* Surface — card surface (same as page BY DESIGN) */
-  --qz-stage:    #F4F4F7;   /* Stage — neutral canvas backdrop (builder, §2.1/§9.1) */
-  --qz-ink:      #2E2740;   /* Ink — primary text & structure */
-  --qz-ink-2:    #2E2740;   /* legacy slot — collapsed into Ink */
-  --qz-ink-3:    #5A5470;   /* Ink-2 — strong secondary text */
-  --qz-ink-4:    #7C7791;   /* Muted — labels, secondary text */
-  --qz-ink-25:   #B6B0C8;   /* Faint — meta, disabled */
-  --qz-rule:     #E9E7EF;   /* Line — hairline dividers & borders */
-  --qz-rule-2:   #F1EFF6;   /* lighter line — inside-component hairlines */
-  --qz-scrim:    rgba(46, 39, 64, 0.45);   /* Ink @ 45% */
+  /* Dark mode is CUT (owner, 2026-08-09) — the admin is light-only, drawn
+     as designed even when the viewer's OS is dark. */
+  color-scheme: light;
 
-  /* The gold ◆ signature (V2 §3.2) — FIVE canonical moments ONLY:
-     wordmark · recommended-template ribbon · decider question · loading/
-     celebration mark · (optional) primary-CTA inline ◆. Anything else = defect. */
-  --qz-gold:        #8C6D1F;
-  --qz-gold-bright: #C79A2B;
-  --qz-gold-wash:   #FDF6E0;
-  --qz-gold-line:   #E8D8A6;
+  /* ── Surfaces ─────────────────────────────────────────────────────── */
+  --qz-cream:    #FFFFFF;   /* page background */
+  --qz-cream-2:  #F5F4F8;   /* the ONE inset wash — table heads, segment tracks */
+  --qz-paper:    #FFFFFF;   /* card surface (same as page; the border separates) */
+  --qz-home-ground: #F5F4F8; /* NEW — the one tinted page in the product (Home) */
 
-  /* Accent & editing (design-rules.md §2.2) — violet is the ONE accent */
-  --qz-accent:      #6D5AE6;  /* Violet — links, active, primary actions, focus rings */
-  --qz-accent-2:    #6B4FD8;  /* Violet-deep — gradients, hover */
-  --qz-accent-ink:  #3C3489;  /* Violet-ink — accent TEXT on light (prototype --brand-ink; deep, ≈9:1) */
-  --qz-accent-wash: #EDEBFC;  /* Violet pastel — active-nav wash, selected tints (prototype --brand-bg) */
-  --qz-accent-grad: linear-gradient(135deg, #6D5AE6 0%, #6B4FD8 100%); /* primary button */
-  --qz-graphite:    #4A4560;  /* editing selection ring (brand-agnostic; builder only) */
-  /* §A4 — coral "priority" accent: the ONE act-now / money item per surface
-     (soft tint gradient + coral border/CTA). Same restraint as violet. */
-  --qz-priority:      #D4537E;
-  --qz-priority-wash: #FBEAF2;
-  --qz-ok:          #158A5A;  /* legible success text (kept; §2.4 Live fill below) */
-  --qz-warn:        #B04A2E;  /* terracotta — non-destructive warnings */
-  --qz-crit:        #C53B32;  /* true red — destructive confirms only */
+  /* ── Ink ladder — warm violet-grey, biased toward the accent ─────── */
+  --qz-ink:      #201C2E;   /* headings, figures, values            17.4:1 */
+  --qz-ink-2:    #201C2E;   /* legacy slot, collapsed into ink (sheet ruling) */
+  --qz-ink-3:    #4E4860;   /* body copy                             8.7:1 */
+  --qz-ink-4:    #645E78;   /* meta, counts, labels                  5.6:1 */
+  --qz-ink-25:   #B4AFC4;   /* disabled only — NEVER text you must read     */
+  --qz-rule:     #E4E1EC;   /* hairline: row + card separators              */
+  --qz-rule-2:   #EFEDF4;   /* lighter hairline, inside components          */
+  --qz-scrim:    rgba(32, 28, 46, 0.45);
 
-  /* Status (design-rules.md §2.4) — Draft grey · Live green. FILL + text/dot. */
-  --qz-draft-wash:  #F0EDF5;  --qz-draft-ink:  #8B85A0;
-  --qz-live-wash:   #E0F5EE;  --qz-live-ink:   #3FAE86;
+  /* NEW TOKEN — there is no 3:1 boundary token today, and WCAG 1.4.11
+     requires one for anything you can click or type into. Inputs,
+     checkboxes, radios and outline-button borders must use this, not
+     --qz-rule (which is 1.29:1 and decorative only). */
+  --qz-rule-strong: #948EA6;                             /* 3.14:1 on white */
 
-  /* Soft Pastel set (design-rules.md §2.3) — GLOBAL tokens. Expressive surfaces
-     use these as fills (stat cards, category surfaces); each pastel has a light
-     fill and a matching darker tone for its number/label. Focused mode renders
-     them as quiet greys (mode-level, not here). */
-  --qz-pastel-violet: #E6DDFE;  --qz-pastel-violet-ink: #5B4A8F;
-  --qz-pastel-rose:   #FDE4EF;  --qz-pastel-rose-ink:   #8F4A70;
-  --qz-pastel-mint:   #D7F2EC;  --qz-pastel-mint-ink:   #3A7D6D;
-  --qz-pastel-amber:  #FDEED7;  --qz-pastel-amber-ink:  #8F6A3A;
-  --qz-pastel-sky:    #A8C9FB;  /* secondary use */
+  /* ── The one accent ───────────────────────────────────────────────── */
+  /* Deepened one step from #6D5AE6 so white on a button clears AA (6.43:1).
+     Spend it on THREE things only: primary action, current selection,
+     focused field. Never a heading, chip, tag, chart bar or icon. */
+  --qz-accent:      #5B45D6;
+  --qz-accent-2:    #4A36B8;   /* hover / pressed */
+  --qz-accent-ink:  #4A36B8;   /* accent TEXT on light — 7.2:1 on the wash */
+  --qz-accent-wash: #EFECFD;   /* selected rows, active nav, focus tint */
+  --qz-accent-grad: #5B45D6;   /* Quartz has no gradients — flat on purpose */
+  --qz-accent-line: #D5CDF8;   /* border on accent-washed surfaces */
+  /* Trap (a) — --qz-color-primary was referenced 42× in this sheet and never
+     defined; every site fell back to a hardcoded literal that would NOT move
+     with the accent. Defined here as the accent alias; preview subtrees still
+     override it inline via tokensToCssVars (quiz design tokens win). */
+  --qz-color-primary: var(--qz-accent);
 
-  /* Per-template palettes (legacy V2 §3.3) — still consumed by --qz-pal-* call
-     sites; reconciled onto the Soft Pastel set in the studio-shell pass. */
-  --qz-pal-green:  #22A06B;  --qz-pal-green-wash:  #E4F4EC;
-  --qz-pal-coral:  #FF6B5B;  --qz-pal-coral-wash:  #FFECE8;
-  --qz-pal-blue:   #3E7BFA;  --qz-pal-blue-wash:   #E6EEFF;
-  --qz-pal-pink:   #F472B6;  --qz-pal-pink-wash:   #FDE7F1;
-  --qz-pal-purple: #8B5CF6;  --qz-pal-purple-wash: #EFE9FE;
-  --qz-pal-teal:   #0D9488;  --qz-pal-teal-wash:   #E1F4F1;
-  --qz-pal-amber:  #F59E0B;  --qz-pal-amber-wash:  #FFF3DC;
+  /* ── State — never brand, never decorative ───────────────────────── */
+  --qz-ok:          #0F6B45;
+  --qz-warn:        #8A5300;
+  --qz-crit:        #A5241C;
+  --qz-draft-wash:  #F5F4F8;  --qz-draft-ink:  #645E78;
+  --qz-live-wash:   #E7F3ED;  --qz-live-ink:   #0F6B45;
+  /* repo-only derived wash (was an additive :root patch further down) */
+  --qz-warn-wash:   color-mix(in srgb, var(--qz-warn) 14%, var(--qz-paper));
 
-  /* Source-accent tokens (P3 Edit 6 / §2.5) — TAXONOMY ONLY (group membership
-     chips + icons). Each is a legible text/icon color over its wash. */
-  --qz-src-tag:  var(--qz-accent-ink);  --qz-src-tag-bg:  var(--qz-accent-wash);
-  --qz-src-col:  #0B6E64;               --qz-src-col-bg:  var(--qz-pal-teal-wash);
-  --qz-src-meta: #8A5A12;               --qz-src-meta-bg: var(--qz-pal-amber-wash);
-  --qz-src-man:  #9D3567;               --qz-src-man-bg:  var(--qz-pal-pink-wash);
-
-  /* Semantic tints — derived from the colors above (one source of truth) */
+  /* Derived tints — one source of truth, unchanged formulas */
   --qz-ok-tint:     color-mix(in srgb, var(--qz-ok)     9%,  var(--qz-paper));
   --qz-warn-tint:   color-mix(in srgb, var(--qz-warn)   9%,  var(--qz-paper));
   --qz-crit-tint:   color-mix(in srgb, var(--qz-crit)   9%,  var(--qz-paper));
@@ -151,75 +113,128 @@
   --qz-warn-edge:   color-mix(in srgb, var(--qz-warn)   28%, transparent);
   --qz-crit-edge:   color-mix(in srgb, var(--qz-crit)   28%, transparent);
 
-  /* Type (design-rules.md §3) — admin typeface Quicksand (400–700), a rounded
-     geometric sans. Quicksand leads the stack; Mona Sans is the immediate
-     fallback until the woff2 lands (see @font-face note above), so the admin
-     stays intentional either way. Mono stays JetBrains for the eyebrow labels. */
-  --qz-font-display: "Quicksand", "Mona Sans", "Mona Sans Fallback", -apple-system, "Segoe UI", "Helvetica Neue", sans-serif;
-  --qz-font-body:    "Quicksand", "Mona Sans", "Mona Sans Fallback", -apple-system, "Segoe UI", "Helvetica Neue", sans-serif;
-  --qz-font-mono:    "JetBrains Mono", ui-monospace, monospace;
+  /* ── Retired colour — quartz-tokens.css DECISIONS 1 and 2 ────────── */
+  /* Quartz has one accent. The gold signature, the pastel set and the
+     per-template palettes are all "spend colour everywhere" tokens it
+     removes. They are aliased to neutrals so the existing call sites
+     degrade quietly instead of throwing; each needs a real decision. */
+  --qz-gold:        var(--qz-ink-4);
+  --qz-gold-bright: var(--qz-ink-3);
+  --qz-gold-wash:   var(--qz-cream-2);
+  --qz-gold-line:   var(--qz-rule);
 
-  /* Sizes (design-rules.md §3) — H1 page 24 · H2 panel 16–17 · body 14 ·
-     meta 11.5–12.5 · label 10–11 · stat 28–30. Names kept, values re-scaled. */
-  --qz-t-display: 30px;   /* Stat number / hero metric (top of 28–30) */
+  --qz-pastel-violet: var(--qz-accent-wash);  --qz-pastel-violet-ink: var(--qz-accent-ink);
+  --qz-pastel-rose:   var(--qz-cream-2);      --qz-pastel-rose-ink:   var(--qz-ink-3);
+  --qz-pastel-mint:   var(--qz-cream-2);      --qz-pastel-mint-ink:   var(--qz-ink-3);
+  --qz-pastel-amber:  var(--qz-cream-2);      --qz-pastel-amber-ink:  var(--qz-ink-3);
+  --qz-pastel-sky:    var(--qz-cream-2);
+
+  /* NOTE: the green/coral washes look dead to a static grep but are LIVE —
+     sectionPalette.ts builds `var(--qz-pal-${key}-wash)` for all six
+     PaletteKey hues. Only the purple wash (not a PaletteKey) was dead. */
+  --qz-pal-green:  var(--qz-ok);      --qz-pal-green-wash:  var(--qz-live-wash);
+  --qz-pal-coral:  var(--qz-warn);    --qz-pal-coral-wash:  var(--qz-cream-2);
+  --qz-pal-blue:   var(--qz-accent);  --qz-pal-blue-wash:   var(--qz-accent-wash);
+  --qz-pal-pink:   var(--qz-ink-3);   --qz-pal-pink-wash:   var(--qz-cream-2);
+  --qz-pal-purple: var(--qz-accent);
+  --qz-pal-teal:   var(--qz-ink-3);   --qz-pal-teal-wash:   var(--qz-cream-2);
+  --qz-pal-amber:  var(--qz-warn);    --qz-pal-amber-wash:  var(--qz-cream-2);
+
+  --qz-priority:      var(--qz-warn);
+  --qz-priority-wash: color-mix(in srgb, var(--qz-warn) 8%, var(--qz-paper));
+
+  /* Source-accent taxonomy — kept, re-pointed at the neutral ladder */
+  --qz-src-tag:  var(--qz-accent-ink);  --qz-src-tag-bg:  var(--qz-accent-wash);
+  --qz-src-col:  var(--qz-ink-3);       --qz-src-col-bg:  var(--qz-cream-2);
+  --qz-src-meta: var(--qz-ink-3);       --qz-src-meta-bg: var(--qz-cream-2);
+  --qz-src-man:  var(--qz-ink-3);       --qz-src-man-bg:  var(--qz-cream-2);
+
+  /* ── Type ─────────────────────────────────────────────────────────── */
+  --qz-font-display: "Figtree", -apple-system, "Segoe UI", "Helvetica Neue", sans-serif;
+  --qz-font-body:    "Figtree", -apple-system, "Segoe UI", "Helvetica Neue", sans-serif;
+  /* DECISION 3 (quartz-tokens.css). Quartz has no monospace; this alias
+     exists so the current call sites keep compiling while they are
+     migrated (alignment sites need tabular-nums; label sites become
+     Figtree 700 uppercase +.09em). */
+  --qz-font-mono:    "Figtree", -apple-system, "Segoe UI", sans-serif;
+
+  /* Sizes — repo-only ramp (Quartz sets sizes at call sites); names kept. */
+  --qz-t-display: 30px;   /* Stat number / hero metric */
   --qz-t-h1: 24px;        /* H1 — page greeting */
-  --qz-t-h2: 17px;        /* H2 — panel header (16–17) */
+  --qz-t-h2: 17px;        /* H2 — panel header */
   --qz-t-h3: 15px;        /* small subhead */
   --qz-t-body: 14px;      /* Body — default text */
-  --qz-t-small: 12.5px;   /* Meta — timestamps, sublabels */
-  --qz-t-mono: 11px;      /* Label — uppercase eyebrow (10–11) */
+  --qz-t-mono: 11px;      /* Label — uppercase eyebrow */
   --qz-lh-tight: 1.15;
-  --qz-lh: 1.55;
+  --qz-lh: 1.6;
 
-  /* Spacing scale (V2 §2.1: 4·8·12·16·20·24·32·40·56·72·100) */
-  --qz-space-1: 4px;
-  --qz-space-2: 8px;
+  /* ── Shape — squared. Nothing is a full pill except a spinner. ────── */
+  --qz-radius:       6px;   /* buttons, fields, chips, tags, pills */
+  --qz-radius-sm:    4px;   /* ticks, swatches, small badges */
+  --qz-radius-lg:    8px;   /* cards, panels, sheets */
+  --qz-radius-toast: 6px;
+  --qz-radius-pill:  6px;   /* DELIBERATE: pills become rounded rects */
+  --qz-phone-r:      20px;  /* NEW — phone-preview corner; device geometry,
+                               deliberately not on the --radius scale */
+
+  /* ── Space — one 4px unit ─────────────────────────────────────────── */
   --qz-space-3: 12px;
   --qz-space-4: 16px;
   --qz-space-5: 24px;
-  --qz-space-6: 32px;
-  --qz-space-7: 56px;
-  --qz-pad-card: 24px;
-  --qz-pad-gap: 20px;
+  --qz-pad-card: 18px;
+  --qz-pad-gap:  18px;
 
-  /* Radius (design-rules.md §4) — cards/panels 18–24 · buttons/chips/inputs/
-     icon-tiles 12–16 · pills 100. */
-  --qz-radius:    20px;   /* cards / panels (18–24) */
-  --qz-radius-sm: 14px;   /* buttons, chips, inputs, icon tiles (12–16) */
-  --qz-radius-lg: 24px;   /* hero cards, modals, drawers */
-  --qz-radius-toast: 12px;
-  --qz-radius-pill: 999px;
-
-  /* Elevation (design-rules.md §4) — soft, low-contrast, violet-grey tinted.
-     Resting = lift-1, raised (hover) = lift-2. The faint 0 0 0 1px head of each
-     stack keeps the card edge (the system uses shadow, not borders). */
-  --qz-lift-1: 0 0 0 1px rgba(120, 110, 150, 0.06), 0 6px 18px rgba(120, 110, 150, 0.13);
-  --qz-lift-2: 0 0 0 1px rgba(120, 110, 150, 0.07), 0 12px 30px rgba(120, 110, 150, 0.16);
-  --qz-lift-3: 0 0 0 1px rgba(120, 110, 150, 0.08), 0 24px 60px rgba(120, 110, 150, 0.22);
-  /* Legacy aliases — old consumers keep working, one source of truth */
+  /* ── Depth — content is flat; only overlays cast ──────────────────── */
+  --qz-lift-1: 0 1px 2px rgba(32, 28, 46, 0.05);                                   /* cards: a whisper */
+  --qz-lift-2: 0 12px 30px -10px rgba(32, 28, 46, 0.26), 0 1px 2px rgba(32, 28, 46, 0.07); /* menus, popovers */
+  --qz-lift-3: 0 24px 56px -16px rgba(32, 28, 46, 0.34), 0 2px 4px rgba(32, 28, 46, 0.08); /* modals, drawers */
   --qz-shadow-sm: var(--qz-lift-1);
   --qz-shadow-md: var(--qz-lift-2);
   --qz-shadow-lg: var(--qz-lift-3);
   --qz-shadow-focus: 0 0 0 3px color-mix(in srgb, var(--qz-accent) 28%, transparent);
 
-  /* Motion (design-rules.md §5.1) — two curves: Ease for color/shadow/fades,
-     Spring for movement (lift, press, sliding pills / knobs / underlines). */
-  --qz-ease: cubic-bezier(0.3, 0.7, 0.3, 1);
-  --qz-spring: cubic-bezier(0.34, 1.4, 0.6, 1);
-  --qz-dur-fast: 140ms;
-  --qz-dur: 220ms;
-  --qz-dur-slow: 300ms;
-  --qz-dur-xslow: 500ms;
+  /* ── Motion — one curve, three durations ─────────────────────────── */
+  --qz-ease:       cubic-bezier(0.2, 0.7, 0.3, 1);
+  --qz-spring:     cubic-bezier(0.34, 1.4, 0.6, 1); /* repo-only, kept for its call sites */
+  --qz-dur-fast:   110ms;
+  --qz-dur:        130ms;
+  --qz-dur-slow:   200ms;
+  --qz-dur-xslow:  320ms;   /* AI drafting state only */
 
-  /* Z-index ladder (V2 §7.5) — content 0-10 · sub-header 30 · top bar 40 ·
-     drawer 80 · modal 120 · toast 200. Legacy names kept, mapped into the ladder. */
-  --qz-z-sticky: 20;
-  --qz-z-subheader: 30;
+  /* ── Breakpoints ──────────────────────────────────────────────────── */
+  /* The admin currently branches at ad-hoc max-width points (640–1366px).
+     Quartz defines three. Everything should be migrated onto these; they
+     are here so they are greppable. */
+  --qz-bp-sm:  720px;   /* stack: one column, chrome collapses            */
+  --qz-bp-md:  1024px;  /* two columns, rail collapses to icons           */
+  --qz-bp-lg:  1440px;  /* full: rail + content + inspector               */
+
+  /* ── Z-index ladder — dead steps deleted; live names kept ─────────── */
   --qz-z-topbar: 40;
-  --qz-z-dropdown: 70;
   --qz-z-drawer: 80;
   --qz-z-modal: 120;
   --qz-z-toast: 200;
+}
+
+/* =====================================================================
+   THE EDITOR STANDS DOWN
+   Inside the builder the merchant is looking at THEIR brand. A violet
+   selection ring beside their terracotta button is two brands arguing over
+   one screen. So the editor surface re-points the accent at the ink ladder:
+   selection, focus, active section and the primary action all go neutral,
+   and the only saturated colour left is the design being made.
+   Scope this to whatever wraps the builder (today: the studio workspace
+   shell). It is a token swap on one surface, NOT a second theme — no
+   component changes.
+   ===================================================================== */
+[data-qz-surface="editor"] {
+  --qz-accent:      var(--qz-ink);
+  --qz-accent-2:    var(--qz-ink);
+  --qz-accent-ink:  var(--qz-ink);
+  --qz-accent-wash: var(--qz-cream-2);
+  --qz-accent-line: var(--qz-rule-strong);
+  --qz-accent-grad: var(--qz-ink);
+  --qz-shadow-focus: 0 0 0 3px rgba(32, 28, 46, 0.14);
 }
 
 /* — Scope: wrap your admin app in <body data-qz="1"> to opt in
@@ -254,10 +269,12 @@ body[data-qz] *, body[data-qz] *::before, body[data-qz] *::after { box-sizing: b
 }
 .qz-skip-link:focus { transform: translateY(0); }
 
-/* — Dark mode — admin chrome only. The FOUC-safe inline script in root.tsx
-     sets html[data-theme="dark"] from localStorage before paint; the toggle
-     (ThemeToggle) flips it + persists. Only re-declares token VALUES on the
-     admin body, so /q (its own --qz-color-* subtree) is untouched. — */
+/* — Dark mode — INERT DEAD CODE since Quartz (owner cut, 2026-08-09).
+     Nothing sets html[data-theme="dark"] any more (the root.tsx cookie
+     loader and ThemeToggle were removed; :root declares color-scheme:
+     light), so this block and the html[data-theme="dark"] rules below it
+     never apply. Kept untouched for a later deletion phase — do NOT port
+     Quartz values into them. — */
 html[data-theme="dark"] body[data-qz] {
   /* Hand-derived dark counterparts of the V2 tokens (owner decision: dark
      stays — the V2 spec is light-first). On dark, the 1px ring at the head of
@@ -281,8 +298,6 @@ html[data-theme="dark"] body[data-qz] {
   --qz-accent-2:    #C4B7FA;
   --qz-accent-ink:  #C4B7FA;  /* accent text reads light on dark */
   --qz-accent-wash: color-mix(in srgb, #A996F8 16%, var(--qz-paper));
-  --qz-stage:       #16141C;  /* neutral builder stage, dark */
-  --qz-graphite:    #6E6884;  /* editing ring, lightened for dark */
   --qz-priority:      #E97DA6;  /* coral priority, lightened for dark */
   --qz-priority-wash: color-mix(in srgb, #E97DA6 16%, var(--qz-paper));
   --qz-ok:       #34C08B;
@@ -292,7 +307,6 @@ html[data-theme="dark"] body[data-qz] {
   --qz-pal-coral-wash:  color-mix(in srgb, var(--qz-pal-coral)  18%, var(--qz-paper));
   --qz-pal-blue-wash:   color-mix(in srgb, var(--qz-pal-blue)   18%, var(--qz-paper));
   --qz-pal-pink-wash:   color-mix(in srgb, var(--qz-pal-pink)   18%, var(--qz-paper));
-  --qz-pal-purple-wash: color-mix(in srgb, var(--qz-pal-purple) 18%, var(--qz-paper));
   --qz-pal-teal-wash:   color-mix(in srgb, var(--qz-pal-teal)   18%, var(--qz-paper));
   --qz-pal-amber-wash:  color-mix(in srgb, var(--qz-pal-amber)  18%, var(--qz-paper));
   --qz-lift-1: 0 0 0 1px rgba(255, 255, 255, 0.07), 0 1px 2px rgba(0, 0, 0, 0.35), 0 4px 12px -2px rgba(0, 0, 0, 0.40), 0 20px 40px -12px rgba(0, 0, 0, 0.50);
@@ -3497,7 +3511,7 @@ body[data-qz] ::selection { background: var(--qz-ink); color: var(--qz-cream); }
 .qz-rb-pv-price { font-weight: 700; font-size: 14px; }
 .qz-rb-pv-cta {
   padding: 8px 14px; border-radius: 999px; font-size: 12.5px; font-weight: 600;
-  background: var(--qz-color-primary, #111); color: #fff;
+  background: var(--qz-color-primary); color: #fff;
 }
 .qz-rb-pv-multi { display: flex; flex-direction: column; gap: 8px; min-height: 0; }
 .qz-rb-pvgrid {
@@ -3791,7 +3805,7 @@ textarea.qz-sm-inp { resize: vertical; min-height: 62px; line-height: 1.5; }
    brand-radial backdrop, cross-fading question ↔ recommendations. */
 .qz-shape-filmwrap {
   display: grid; place-items: center; padding: 10px 0 4px; border-radius: 12px;
-  background: radial-gradient(120% 90% at 50% 0%, color-mix(in srgb, var(--qz-color-primary, #5563de) 7%, #fff) 0%, transparent 70%);
+  background: radial-gradient(120% 90% at 50% 0%, color-mix(in srgb, var(--qz-color-primary) 7%, #fff) 0%, transparent 70%);
 }
 .qz-shape-film {
   position: relative; width: min(272px, 100%); aspect-ratio: 3 / 4; max-height: 392px;
@@ -3806,7 +3820,7 @@ textarea.qz-sm-inp { resize: vertical; min-height: 62px; line-height: 1.5; }
 .qz-shape-film-screen > strong { font-family: var(--qz-font-heading, inherit); font-size: 14.5px; font-weight: 700; line-height: 1.25; }
 .qz-shape-film-heading > strong { font-family: var(--qz-font-heading, inherit); font-size: 14px; font-weight: 700; line-height: 1.15; }
 .qz-shape-film-progress { display: block; flex: none; height: 5px; border-radius: 999px; overflow: hidden; background: rgba(0,0,0,.08); }
-.qz-shape-film-progress i { display: block; width: 32%; height: 100%; border-radius: 999px; background: var(--qz-color-primary, #5563de); }
+.qz-shape-film-progress i { display: block; width: 32%; height: 100%; border-radius: 999px; background: var(--qz-color-primary); }
 .qz-shape-film-screen.is-results .qz-shape-film-progress i { width: 100%; }
 .qz-shape-film-answers { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; flex: 1; min-height: 0; }
 .qz-shape-film-answer {
@@ -3819,13 +3833,13 @@ textarea.qz-sm-inp { resize: vertical; min-height: 62px; line-height: 1.5; }
 }
 .qz-shape-film-answer > svg {
   position: absolute; top: 6px; right: 6px; padding: 2px; width: 17px; height: 17px;
-  border-radius: 50%; color: white; background: var(--qz-color-primary, #5563de);
+  border-radius: 50%; color: white; background: var(--qz-color-primary);
 }
 .qz-shape-film-answer.is-selected {
-  border: 1.5px solid var(--qz-color-primary, #5563de);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--qz-color-primary, #5563de) 16%, transparent);
+  border: 1.5px solid var(--qz-color-primary);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--qz-color-primary) 16%, transparent);
 }
-.qz-shape-film-answer.is-selected > span:nth-child(2) { color: var(--qz-color-primary, #5563de); }
+.qz-shape-film-answer.is-selected > span:nth-child(2) { color: var(--qz-color-primary); }
 .qz-shape-film-image { flex: 1 1 auto; min-height: 0; display: grid; place-items: center; overflow: hidden; background: rgba(0,0,0,.06); color: color-mix(in srgb, currentColor 36%, transparent); }
 .qz-shape-film-image img, .qz-shape-film-product-image img, .qz-shape-film-avatar img { width: 100%; height: 100%; object-fit: cover; }
 .qz-shape-film-heading { display: flex; flex-direction: column; gap: 2px; }
@@ -3837,24 +3851,24 @@ textarea.qz-sm-inp { resize: vertical; min-height: 62px; line-height: 1.5; }
 }
 .qz-shape-film-avatar { width: 40px; height: 40px; border-radius: 11px; flex: none; overflow: hidden; display: grid; place-items: center; background: rgba(0,0,0,.06); color: color-mix(in srgb, currentColor 36%, transparent); }
 .qz-shape-persona-copy { min-width: 0; display: flex; flex-direction: column; }
-.qz-shape-persona-copy > span { font: 700 8.5px/1.2 var(--qz-font-mono); letter-spacing: .08em; text-transform: uppercase; color: var(--qz-color-primary, #5563de); margin-bottom: 1px; }
+.qz-shape-persona-copy > span { font: 700 8.5px/1.2 var(--qz-font-mono); letter-spacing: .08em; text-transform: uppercase; color: var(--qz-color-primary); margin-bottom: 1px; }
 .qz-shape-persona-copy strong { font-family: var(--qz-font-heading, inherit); font-size: 13px; font-weight: 700; line-height: 1.15; }
 .qz-shape-persona-copy small { font-size: 10px; color: #6a6b66; line-height: 1.3; margin-top: 2px; }
 .qz-shape-persona-sub { font-family: var(--qz-font-heading, inherit); font-size: 12px; font-weight: 700; }
 .qz-shape-film-products { display: flex; flex-direction: column; gap: 7px; flex: 1; min-height: 0; }
 .qz-shape-film-product { position: relative; display: flex; align-items: center; gap: 10px; padding: 7px 8px; border: 1px solid rgba(0,0,0,.08); border-radius: 11px; background: #fff; }
-.qz-shape-film-product.is-top { border: 1.5px solid var(--qz-color-primary, #5563de); }
+.qz-shape-film-product.is-top { border: 1.5px solid var(--qz-color-primary); }
 .qz-shape-film-product-image { width: 50px; height: 50px; flex: none; display: grid; place-items: center; overflow: hidden; border-radius: 8px; background: rgba(0,0,0,.06); }
 .qz-shape-film-product-copy { min-width: 0; flex: 1; display: flex; flex-direction: column; gap: 2px; }
 .qz-shape-film-product-copy strong { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; font-size: 11.5px; font-weight: 600; color: #20211F; line-height: 1.2; }
 .qz-shape-film-product-copy small { font-size: 11px; font-weight: 600; color: #6a6b66; }
 .qz-shape-film-product > b {
   flex: none; margin-left: auto; padding: 2px 7px; border-radius: 999px;
-  color: #fff; background: var(--qz-color-primary, #5563de);
+  color: #fff; background: var(--qz-color-primary);
   font: 700 8px/1.4 var(--qz-font-body, inherit); text-transform: uppercase; letter-spacing: .05em;
 }
-.qz-shape-film-cta { flex: none; margin-top: auto; padding: 8px; border-radius: 9px; text-align: center; color: white; background: var(--qz-color-primary, #5563de); font-size: 11px; font-weight: 700; }
-.qz-shape-film-next { flex: none; margin-top: auto; padding: 9px; border-radius: 10px; text-align: center; color: white; background: var(--qz-color-primary, #5563de); font-size: 12px; font-weight: 700; }
+.qz-shape-film-cta { flex: none; margin-top: auto; padding: 8px; border-radius: 9px; text-align: center; color: white; background: var(--qz-color-primary); font-size: 11px; font-weight: 700; }
+.qz-shape-film-next { flex: none; margin-top: auto; padding: 9px; border-radius: 10px; text-align: center; color: white; background: var(--qz-color-primary); font-size: 12px; font-weight: 700; }
 @media (prefers-reduced-motion: reduce) { .qz-shape-film-screen { transition: none; } }
 @media (max-width: 720px) {
   .qz-shape-page { max-width: 420px; }
@@ -3878,7 +3892,7 @@ textarea.qz-sm-inp { resize: vertical; min-height: 62px; line-height: 1.5; }
 }
 .qz-shape-thumb-bar > span {
   display: block; height: 100%; border-radius: 2px;
-  background: var(--qz-color-primary, #5563de);
+  background: var(--qz-color-primary);
 }
 .qz-shape-thumb-q { font-size: 11.5px; font-weight: 700; line-height: 1.25; }
 .qz-shape-thumb-answers { display: flex; flex-direction: column; gap: 4px; }
@@ -3902,16 +3916,16 @@ textarea.qz-sm-inp { resize: vertical; min-height: 62px; line-height: 1.5; }
 /* P2 Edit 7 — selected chip matches the runtime's §10 selection: brand ring + check. */
 .qz-tpl-chip.is-on {
   border-color: transparent;
-  box-shadow: inset 0 0 0 2px var(--qz-color-primary, #5563de);
-  background: color-mix(in srgb, var(--qz-color-primary, #5563de) 12%, transparent);
+  box-shadow: inset 0 0 0 2px var(--qz-color-primary);
+  background: color-mix(in srgb, var(--qz-color-primary) 12%, transparent);
 }
 .qz-tpl-chip.is-on::after {
   content: "✓"; margin-left: auto;
-  color: var(--qz-color-primary, #5563de); font-weight: 700; font-size: 12px;
+  color: var(--qz-color-primary); font-weight: 700; font-size: 12px;
 }
 .qz-tpl-next {
   margin-top: auto; padding: 9px 12px; font-size: 13px; font-weight: 600; cursor: pointer;
-  background: var(--qz-color-primary, #5563de); border: none; border-radius: 8px;
+  background: var(--qz-color-primary); border: none; border-radius: 8px;
 }
 .qz-tpl-next:disabled { opacity: .4; cursor: default; }
 .qz-tpl-next.is-restart {
@@ -4564,7 +4578,7 @@ textarea.qz-sm-inp { resize: vertical; min-height: 62px; line-height: 1.5; }
 .qz-s3-dprog { height: 6px; width: 100%; background: color-mix(in srgb, var(--qz-ink) 8%, transparent); }
 .qz-s3-dprogfill {
   display: block; height: 100%;
-  background: var(--qz-color-primary, var(--qz-accent));
+  background: var(--qz-color-primary);
   transition: width var(--qz-dur) var(--qz-ease);
 }
 .qz-s3-device.is-desktop .qz-s3-screen-top { display: none; }
@@ -4830,7 +4844,7 @@ textarea.qz-sm-inp { resize: vertical; min-height: 62px; line-height: 1.5; }
 }
 .qz-s3-progressbar > span {
   display: block; width: 100%; height: 100%; border-radius: 2px;
-  background: var(--qz-color-primary, var(--qz-accent));
+  background: var(--qz-color-primary);
   transform-origin: left center;
   transition: transform var(--qz-dur) var(--qz-ease);
 }
@@ -4871,10 +4885,10 @@ textarea.qz-sm-inp { resize: vertical; min-height: 62px; line-height: 1.5; }
   cursor: pointer;
 }
 .qz-s3-achip.is-hot {
-  border: 1.5px solid var(--qz-color-primary, currentColor);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--qz-color-primary, currentColor) 15%, transparent);
+  border: 1.5px solid var(--qz-color-primary);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--qz-color-primary) 15%, transparent);
 }
-.qz-s3-achip.is-drophi { box-shadow: inset 0 2px 0 var(--qz-color-primary, currentColor); }
+.qz-s3-achip.is-drophi { box-shadow: inset 0 2px 0 var(--qz-color-primary); }
 .qz-s3-odrag {
   opacity: 0; flex: none;
   display: grid; place-items: center;
@@ -4890,8 +4904,8 @@ textarea.qz-sm-inp { resize: vertical; min-height: 62px; line-height: 1.5; }
   border: 1.5px solid color-mix(in srgb, currentColor 28%, transparent);
 }
 .qz-s3-achip.is-hot .qz-s3-oradio {
-  border-color: var(--qz-color-primary, currentColor);
-  box-shadow: inset 0 0 0 4px var(--qz-color-primary, currentColor);
+  border-color: var(--qz-color-primary);
+  box-shadow: inset 0 0 0 4px var(--qz-color-primary);
 }
 .qz-s3-obox {
   width: 19px; height: 19px; flex: none;
@@ -4899,8 +4913,8 @@ textarea.qz-sm-inp { resize: vertical; min-height: 62px; line-height: 1.5; }
   border: 1.5px solid color-mix(in srgb, currentColor 28%, transparent);
 }
 .qz-s3-achip.is-hot .qz-s3-obox {
-  border-color: var(--qz-color-primary, currentColor);
-  background: var(--qz-color-primary, currentColor);
+  border-color: var(--qz-color-primary);
+  background: var(--qz-color-primary);
 }
 .qz-s3-otext { flex: 1; min-width: 0; font-size: 15px; line-height: 1.3; }
 .qz-s3-omore {
@@ -4956,7 +4970,7 @@ textarea.qz-sm-inp { resize: vertical; min-height: 62px; line-height: 1.5; }
 }
 .qz-s3-sbtrack span {
   display: block; height: 100%;
-  background: var(--qz-color-primary, currentColor);
+  background: var(--qz-color-primary);
   border-radius: var(--qz-radius-pill);
   transition: width var(--qz-dur-fast) var(--qz-ease);
 }
@@ -4970,10 +4984,10 @@ textarea.qz-sm-inp { resize: vertical; min-height: 62px; line-height: 1.5; }
   color: inherit; cursor: pointer;
 }
 .qz-s3-sbn.is-on {
-  border-color: var(--qz-color-primary, currentColor);
-  background: var(--qz-color-primary, currentColor);
+  border-color: var(--qz-color-primary);
+  background: var(--qz-color-primary);
   color: var(--qz-color-bg, var(--qz-paper));
-  box-shadow: 0 3px 9px color-mix(in srgb, var(--qz-color-primary, currentColor) 40%, transparent);
+  box-shadow: 0 3px 9px color-mix(in srgb, var(--qz-color-primary) 40%, transparent);
 }
 .qz-s3-scalelab {
   display: flex; justify-content: space-between;
@@ -5036,14 +5050,14 @@ textarea.qz-sm-inp { resize: vertical; min-height: 62px; line-height: 1.5; }
 .qz-s3-prodprice { font-weight: 700; font-size: 13.5px; }
 .qz-s3-prodcta {
   padding: 7px 13px; border-radius: var(--qz-radius-pill);
-  background: var(--qz-color-primary, var(--qz-accent));
+  background: var(--qz-color-primary);
   font-size: 12px; font-weight: 600;
 }
 .qz-s3-next {
   margin-top: auto; flex: none;
   padding: 12px; border: none;
   border-radius: var(--qz-radius, 10px);
-  background: var(--qz-color-primary, var(--qz-accent));
+  background: var(--qz-color-primary);
   font: inherit; font-size: 13.5px; font-weight: 600; cursor: pointer;
 }
 .qz-s3-next.is-restart {
@@ -5884,7 +5898,7 @@ textarea.qz-s4-inp { resize: vertical; min-height: 56px; line-height: 1.5; }
 .qz-s4p-herowrap { margin: 0 0 10px; }
 .qz-s4p-badge {
   display: inline-block; margin-bottom: 6px; padding: 2px 10px; border-radius: 999px;
-  background: var(--qz-color-primary, var(--qz-accent)); color: var(--qz-color-bg, var(--qz-paper));
+  background: var(--qz-color-primary); color: var(--qz-color-bg, var(--qz-paper));
   font-size: 10.5px; font-weight: 700;
 }
 .qz-s4p-items { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
@@ -5914,10 +5928,10 @@ textarea.qz-s4-inp { resize: vertical; min-height: 56px; line-height: 1.5; }
 }
 .qz-s4p-pwhy {
   display: flex; align-items: flex-start; gap: 5px; font-size: 10px; line-height: 1.35;
-  background: color-mix(in srgb, var(--qz-color-primary, var(--qz-accent)) 10%, var(--qz-color-bg, var(--qz-paper)));
+  background: color-mix(in srgb, var(--qz-color-primary) 10%, var(--qz-color-bg, var(--qz-paper)));
   border-radius: 7px; padding: 5px 7px; margin-top: 3px;
 }
-.qz-s4p-pwhy b { color: var(--qz-color-primary, var(--qz-accent)); flex: none; font-weight: 600; }
+.qz-s4p-pwhy b { color: var(--qz-color-primary); flex: none; font-weight: 600; }
 .qz-s4p-atc {
   display: block; width: 100%; box-sizing: border-box; margin-top: 6px; text-align: center;
   background: var(--qz-color-text, var(--qz-ink)); color: var(--qz-color-bg, var(--qz-paper));
@@ -5925,7 +5939,7 @@ textarea.qz-s4-inp { resize: vertical; min-height: 56px; line-height: 1.5; }
 }
 .qz-s4p-addall {
   margin-top: 11px; padding: 9px 12px; text-align: center; border-radius: 9px;
-  background: var(--qz-color-primary, var(--qz-accent)); color: var(--qz-color-bg, var(--qz-paper));
+  background: var(--qz-color-primary); color: var(--qz-color-bg, var(--qz-paper));
   font-size: 11.5px; font-weight: 600;
 }
 .qz-s4p-fb {
@@ -6857,7 +6871,7 @@ textarea.qz-s4-inp { resize: vertical; min-height: 56px; line-height: 1.5; }
 .qz-pex-chip {
   display: inline-flex; align-items: center; justify-content: center;
   width: 26px; height: 26px; border-radius: 7px;
-  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-family: var(--qz-font-mono);
   font-size: 13px; font-weight: 600;
   color: var(--qz-accent-ink); background: var(--qz-accent-wash);
   animation:
@@ -7618,10 +7632,8 @@ tr.qz-ltab-qstart td { border-top: 2px solid var(--qz-rule); }
 }
 
 
-/* Audit fix — --qz-warn-wash was undefined on both branches (qz-eng warn chip). */
-:root {
-  --qz-warn-wash: color-mix(in srgb, var(--qz-warn) 14%, var(--qz-paper));
-}
+/* (--qz-warn-wash now lives in the main :root — the audit-fix patch block
+   that used to sit here was folded up during the Quartz swap.) */
 
 /* ═══════════════════════════════════════════════════════════════════════════
    Step-3 Logic (the former ▦ Overview) — questions-full-page.html §1: ONE
@@ -8072,11 +8084,11 @@ tr.qz-ltab-qstart td { border-top: 2px solid var(--qz-rule); }
    Overrides earlier builder rules by cascade order on purpose.
    ═══════════════════════════════════════════════════════════════════════════ */
 :root {
-  --qz-bt-backdrop: #EDECF1; /* mock --backdrop */
+  /* --qz-bt-backdrop (the VARIABLE) was defined here too — deleted as dead
+     (zero references; the .qz-bt-backdrop CLASS below is unrelated and live). */
   --qz-bt-pane: #FBFAFC;     /* mock --pane (stage) */
 }
 html[data-theme="dark"] {
-  --qz-bt-backdrop: #0E0F12;
   --qz-bt-pane: #17181C;
 }
 
@@ -8492,7 +8504,7 @@ html[data-theme="dark"] {
   border-radius: 14px;
 }
 .qz-s3-phone-screen:not(.is-alpine-art) .qz-s3-achip.is-hot {
-  border: 1.5px solid var(--qz-color-primary, currentColor);
+  border: 1.5px solid var(--qz-color-primary);
 }
 .qz-s3-phone-screen[data-screen-kind="question"]:not(.is-alpine-art) .qz-s3-next {
   border-radius: 13px;
@@ -9221,7 +9233,7 @@ html[data-theme="dark"] {
 .qz-rg-capform h4 { margin: 0 0 4px; font-family: var(--qz-font-heading, Georgia, serif); font-size: 16px; font-weight: 600; }
 .qz-rg-capform p { margin: 0 0 11px; font-size: 12.5px; opacity: .65; line-height: 1.45; }
 .qz-rg-capform input { width: 100%; border: 1px solid color-mix(in srgb, currentColor 14%, transparent); border-radius: 9px; padding: 11px; font-size: 12.5px; margin-bottom: 8px; background: var(--qz-color-card, #fff); color: inherit; font-family: inherit; }
-.qz-rg-capform button { width: 100%; background: var(--qz-color-primary, #0E7C6B); color: #fff; border: none; border-radius: 9px; padding: 12px; font-size: 13px; font-weight: 700; cursor: pointer; font-family: inherit; }
+.qz-rg-capform button { width: 100%; background: var(--qz-color-primary); color: #fff; border: none; border-radius: 9px; padding: 12px; font-size: 13px; font-weight: 700; cursor: pointer; font-family: inherit; }
 .qz-rg-capform.is-pending > *:not(.qz-rg-pendlbl) { filter: blur(3px); opacity: .5; pointer-events: none; user-select: none; }
 .qz-rg-pendlbl {
   position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); z-index: 2; white-space: nowrap;
@@ -9240,10 +9252,10 @@ html[data-theme="dark"] {
 .qz-rg-gatescr, .qz-rg-loadscr { justify-content: center; min-height: 100%; text-align: center; }
 .qz-rg-gwrap { display: flex; flex-direction: column; gap: 14px; align-items: stretch; width: 100%; }
 .qz-s3-device.is-desktop .qz-rg-gwrap { max-width: 420px; margin: 0 auto; }
-.qz-rg-gicon { width: 44px; height: 44px; border-radius: 13px; background: color-mix(in srgb, currentColor 8%, transparent); color: var(--qz-color-primary, #0E7C6B); display: grid; place-items: center; font-size: 19px; margin: 0 auto 2px; }
+.qz-rg-gicon { width: 44px; height: 44px; border-radius: 13px; background: color-mix(in srgb, currentColor 8%, transparent); color: var(--qz-color-primary); display: grid; place-items: center; font-size: 19px; margin: 0 auto 2px; }
 .qz-rg-gskip { font-size: 12px; opacity: .65; text-decoration: underline; margin: 0; cursor: pointer; }
 .qz-rg-lbar { height: 6px; border-radius: 999px; background: color-mix(in srgb, currentColor 12%, transparent); overflow: hidden; max-width: 240px; width: 100%; margin: 6px auto; }
-.qz-rg-lbar i { display: block; height: 100%; width: 62%; background: var(--qz-color-primary, #0E7C6B); border-radius: 999px; animation: qz-rg-lgrow 2.2s ease-in-out infinite; }
+.qz-rg-lbar i { display: block; height: 100%; width: 62%; background: var(--qz-color-primary); border-radius: 999px; animation: qz-rg-lgrow 2.2s ease-in-out infinite; }
 @keyframes qz-rg-lgrow { 0% { width: 12%; } 100% { width: 92%; } }
 @media (prefers-reduced-motion: reduce) { .qz-rg-lbar i { animation: none; } }
 .qz-rg-lplain { display: flex; flex-direction: column; align-items: center; gap: 5px; margin: 2px 0 4px; }
@@ -9252,7 +9264,7 @@ html[data-theme="dark"] {
 .qz-rg-lsecs { font-family: var(--qz-font-mono); font-size: 10.5px; opacity: .6; margin: 0; }
 .qz-rg-hero { border: 1px solid color-mix(in srgb, currentColor 12%, transparent); border-radius: 16px; overflow: hidden; background: var(--qz-color-card, #fff); position: relative; }
 .qz-rg-himg { width: 100%; aspect-ratio: 16/12; position: relative; overflow: hidden; display: block; background-size: cover; background-position: center; background-color: color-mix(in srgb, currentColor 8%, transparent); }
-.qz-rg-ftop { position: absolute; top: 11px; left: 11px; z-index: 2; font-size: 9.5px; font-weight: 800; text-transform: uppercase; letter-spacing: .06em; color: #fff; background: var(--qz-color-primary, #0E7C6B); border-radius: 999px; padding: 4px 10px; }
+.qz-rg-ftop { position: absolute; top: 11px; left: 11px; z-index: 2; font-size: 9.5px; font-weight: 800; text-transform: uppercase; letter-spacing: .06em; color: #fff; background: var(--qz-color-primary); border-radius: 999px; padding: 4px 10px; }
 .qz-rg-hbody { padding: 14px; }
 .qz-rg-hn { font-family: var(--qz-font-heading, Georgia, serif); font-size: 18px; font-weight: 600; line-height: 1.25; margin-bottom: 5px; }
 .qz-rg-stars { display: flex; align-items: center; gap: 4px; font-size: 11px; color: #E0A33A; margin-bottom: 5px; }
@@ -9262,7 +9274,7 @@ html[data-theme="dark"] {
 .qz-rg-prow { display: flex; align-items: baseline; gap: 7px; margin-bottom: 10px; }
 .qz-rg-fp { font-size: 15px; font-weight: 800; }
 .qz-rg-was { opacity: .55; font-weight: 500; text-decoration: line-through; margin-right: 4px; }
-.qz-rg-now { color: var(--qz-color-primary, #0E7C6B); }
+.qz-rg-now { color: var(--qz-color-primary); }
 .qz-rg-wcode { display: inline-block; font-size: 9px; font-weight: 800; text-transform: uppercase; letter-spacing: .04em; opacity: .65; background: color-mix(in srgb, currentColor 10%, transparent); border-radius: 4px; padding: 1px 5px; margin-left: 5px; vertical-align: 1px; }
 .qz-rg-cta { width: 100%; background: var(--qz-color-text, #241E14); border: none; border-radius: 10px; padding: 13px; font-size: 13.5px; font-weight: 700; cursor: pointer; font-family: inherit; }
 .qz-rg-rows { display: grid; gap: 10px; grid-template-columns: 1fr; min-width: 0; }
