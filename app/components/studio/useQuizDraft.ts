@@ -39,6 +39,10 @@ export function useQuizDraft(initial: QuizDoc) {
   // rebase base), and whether a request is currently in flight (autosave paused).
   const aiBase = useRef<QuizDoc | null>(null);
   const aiInFlight = useRef(false);
+  // QRTZ-S2 — reactive read-only mirror of aiInFlight so chrome can draw the
+  // "Paused while AI edits" chip (a ref alone can't trigger a re-render). The
+  // ref stays the guard; this state changes nothing about the pause seam.
+  const [isAiPaused, setIsAiPaused] = useState(false);
 
   const submitSave = useCallback(
     (next: QuizDoc) => {
@@ -83,6 +87,7 @@ export function useQuizDraft(initial: QuizDoc) {
     const base = docRef.current;
     aiBase.current = base;
     aiInFlight.current = true;
+    setIsAiPaused(true);
     return base;
   }, [submitSave]);
 
@@ -94,6 +99,7 @@ export function useQuizDraft(initial: QuizDoc) {
       const base = aiBase.current;
       aiBase.current = null;
       aiInFlight.current = false;
+      setIsAiPaused(false);
       const next = base ? reconcileDraft(base, aiDoc, docRef.current) : aiDoc;
       docRef.current = next;
       setDoc(next);
@@ -108,6 +114,7 @@ export function useQuizDraft(initial: QuizDoc) {
   const endAiEdit = useCallback(() => {
     aiBase.current = null;
     aiInFlight.current = false;
+    setIsAiPaused(false);
     triggerSave(docRef.current);
   }, [triggerSave]);
 
@@ -141,6 +148,7 @@ export function useQuizDraft(initial: QuizDoc) {
     isSaving,
     savedAt,
     saveError,
+    isAiPaused,
     retrySave,
     flushSave,
     beginAiEdit,

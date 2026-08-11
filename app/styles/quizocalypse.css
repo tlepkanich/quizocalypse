@@ -379,8 +379,11 @@ body[data-qz] :focus-visible {
 .qz-h1 { font-family: var(--qz-font-display); font-weight: 700; font-size: var(--qz-t-h1); line-height: var(--qz-lh-tight); letter-spacing: -0.025em; margin: 0; }
 .qz-h2 { font-family: var(--qz-font-display); font-weight: 700; font-size: var(--qz-t-h2); line-height: 1.3; letter-spacing: -0.02em; margin: 0; }
 .qz-h3 { font-family: var(--qz-font-body); font-weight: 700; font-size: var(--qz-t-h3); letter-spacing: -0.01em; margin: 0; }
-.qz-label { font-family: var(--qz-font-mono); font-size: 11px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.06em; color: var(--qz-ink-4); }
-.qz-mono { font-family: var(--qz-font-mono); font-size: var(--qz-t-mono); }
+/* QRTZ-S2 mono triage (closed decision 3 — no monospace): labels are Figtree
+   700 uppercase +.09em; figures are Figtree + tabular-nums. .qz-mono is kept
+   as a legacy name whose meaning is now "data figure". */
+.qz-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.09em; color: var(--qz-ink-4); }
+.qz-mono { font-family: var(--qz-font-body); font-size: var(--qz-t-mono); font-variant-numeric: tabular-nums; }
 .qz-muted { color: var(--qz-ink-3); }
 .qz-dim { color: var(--qz-ink-4); }
 .qz-serif-italic { font-family: var(--qz-font-display); font-style: italic; }
@@ -407,38 +410,50 @@ body[data-qz] :focus-visible {
 }
 .qz-card.qz-interactive:hover { box-shadow: var(--qz-lift-2); transform: translateY(-4px); }
 
-/* — Button (V2 §7.1) — pills, one canonical size (11px 22px · 14px/600).
-   Primary = ink · secondary (default) = white w/ inset-ring · ghost · the old
-   accent variant is mapped to the ink primary look (V2: primary actions are
-   ink, never a color). Hover = 1px lift + deepened shadow, no color change. — */
-/* Buttons (design-rules.md §7 + states §5.2). Primary = violet gradient (the one
-   bold moment); Secondary (base) = neutral wash + violet-ink; Ghost = violet
-   text. Movement runs on the Spring: hover pops (lift 2–5px), press dips + squishes
-   (scale .97); color/shadow run on the Ease. Radius per §4 (buttons 12–16). */
+/* — Button (QRTZ-S2 — Quartz base.mjs §Buttons + handoff STATES §Button) —
+   squared (--qz-radius, 6px), mock geometry (9px 17px · 14/600). Colour moves
+   on hover; geometry does NOT — no lift, no scale, no shadow language.
+   · Primary (.qz-btn-primary/.qz-btn-accent) = the one violet fill; hover
+     deepens to --qz-accent-2; active adds the inset dip.
+   · Secondary (base .qz-btn) = mock .btn-quiet: paper + ink + rule-strong
+     control border (WCAG 1.4.11 — a control boundary needs 3:1).
+   · Ghost = transparent + ink-3, hover cream-2 + ink.
+   · Focus = --qz-shadow-focus ring — never removed, never colour alone.
+   · Disabled = cream-2 fill + ink-3 text (a disabled control stays readable),
+     cursor default. Declared LAST so it wins over variant hovers.
+   · Loading = .is-loading + a <span class="qz-btn-ring"/> replacing the
+     leading glyph (see the QRTZ-S2 section at the end of this sheet). — */
 .qz-btn {
   display: inline-flex; align-items: center; justify-content: center; gap: 8px;
-  padding: 11px 22px;
-  background: var(--qz-cream-2); color: var(--qz-accent-ink);
-  border: none; border-radius: var(--qz-radius-sm);
+  padding: 9px 17px;
+  background: var(--qz-paper); color: var(--qz-ink);
+  border: 1px solid var(--qz-rule-strong); border-radius: var(--qz-radius);
   box-shadow: none;
   font-size: 14px; font-weight: 600;
   font-family: var(--qz-font-body);
   line-height: 1;
   cursor: pointer;
-  transition: box-shadow var(--qz-dur-fast) var(--qz-ease), background var(--qz-dur-fast) var(--qz-ease), color var(--qz-dur-fast) var(--qz-ease), transform var(--qz-dur) var(--qz-spring);
+  transition: background var(--qz-dur-fast) var(--qz-ease), border-color var(--qz-dur-fast) var(--qz-ease), color var(--qz-dur-fast) var(--qz-ease), box-shadow var(--qz-dur-fast) var(--qz-ease);
   white-space: nowrap;
 }
-.qz-btn:hover { transform: translateY(-3px); box-shadow: var(--qz-lift-2); }
-.qz-btn:active { transform: translateY(0) scale(0.97); }
-.qz-btn[disabled], .qz-btn[aria-disabled="true"] { opacity: 0.6; cursor: not-allowed; box-shadow: none; transform: none; }
-.qz-btn-primary, .qz-btn-accent { background: var(--qz-accent-grad); color: #fff; box-shadow: var(--qz-lift-1); }
-.qz-btn-primary:hover, .qz-btn-accent:hover { background: var(--qz-accent-grad); box-shadow: var(--qz-lift-2); }
-.qz-btn-ghost { background: transparent; box-shadow: none; color: var(--qz-accent-ink); }
-.qz-btn-ghost:hover { background: var(--qz-cream-2); box-shadow: none; transform: none; text-decoration: underline; }
-/* Legacy size modifiers — V2 wants ONE size; keep the paddings close so old
-   call sites stay sane (sm for dense toolbars only). */
-.qz-btn-sm { padding: 7px 14px; font-size: 13px; }
-.qz-btn-lg { padding: 13px 26px; font-size: 15px; }
+.qz-btn:hover { background: var(--qz-cream-2); }
+.qz-btn:active { box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.12); }
+/* Scoped under body[data-qz] to out-specify the global §6.4 outline (0,2,1);
+   the focus indicator is REPLACED by the spec's ring, never removed. */
+body[data-qz] .qz-btn:focus-visible { outline: none; box-shadow: var(--qz-shadow-focus); }
+.qz-btn-primary, .qz-btn-accent { background: var(--qz-accent); border-color: transparent; color: #fff; }
+.qz-btn-primary:hover, .qz-btn-accent:hover { background: var(--qz-accent-2); }
+.qz-btn-primary:active, .qz-btn-accent:active { background: var(--qz-accent-2); box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.18); }
+.qz-btn-ghost { background: transparent; border-color: transparent; box-shadow: none; color: var(--qz-ink-3); }
+.qz-btn-ghost:hover { background: var(--qz-cream-2); color: var(--qz-ink); }
+/* Disabled — after the variants so it wins regardless of variant class. */
+.qz-btn[disabled], .qz-btn[aria-disabled="true"] {
+  background: var(--qz-cream-2); color: var(--qz-ink-3);
+  border-color: transparent; box-shadow: none; cursor: default;
+}
+/* Legacy size modifiers — mock --btn-pad-sm (sm for dense toolbars only). */
+.qz-btn-sm { padding: 6px 12px; font-size: 12.5px; }
+.qz-btn-lg { padding: 12px 22px; font-size: 15px; }
 
 /* — Segmented control (e.g. Build / Optimize) — */
 .qz-segmented {
@@ -447,15 +462,19 @@ body[data-qz] :focus-visible {
   border: 1px solid var(--qz-rule); border-radius: var(--qz-radius-pill);
 }
 .qz-segmented button {
-  border: none; background: transparent;
+  border: 1px solid transparent; background: transparent;
   height: 28px; padding: 0 14px; border-radius: var(--qz-radius-pill);
   font-family: var(--qz-font-body); font-size: 13px; font-weight: 500;
   color: var(--qz-ink-3); cursor: pointer;
-  /* §5.3 — the active pill settles on the Spring (label color eases muted→ink) */
-  transition: background var(--qz-dur-slow) var(--qz-spring), color var(--qz-dur) var(--qz-ease), box-shadow var(--qz-dur-slow) var(--qz-spring);
+  transition: background var(--qz-dur) var(--qz-ease), color var(--qz-dur) var(--qz-ease), border-color var(--qz-dur) var(--qz-ease), box-shadow var(--qz-dur) var(--qz-ease);
 }
 .qz-segmented button:hover { color: var(--qz-ink); }
-.qz-segmented button[aria-pressed="true"] { background: var(--qz-paper); color: var(--qz-ink); box-shadow: var(--qz-lift-1); }
+/* QRTZ-S2 — mock seg-on: paper tile + hairline + the whisper shadow (Quartz
+   has no springy pill slide; the on-state simply IS). */
+.qz-segmented button[aria-pressed="true"] {
+  background: var(--qz-paper); color: var(--qz-ink); font-weight: 600;
+  border-color: var(--qz-rule); box-shadow: 0 1px 1px rgba(32, 28, 46, 0.07);
+}
 
 /* Fill variant for narrow containers (the FlowRail view switcher): buttons
    share the row equally and compress instead of overflowing. */
@@ -470,7 +489,8 @@ body[data-qz] :focus-visible {
 .qz-badge {
   display: inline-flex; align-items: center; gap: 6px;
   height: 22px; padding: 0 9px;
-  font-family: var(--qz-font-mono); font-size: 11px; font-weight: 500;
+  /* QRTZ-S2 mono triage — status pill is a label: Figtree 700 uppercase. */
+  font-size: 11px; font-weight: 700;
   letter-spacing: 0.06em; text-transform: uppercase;
   border-radius: var(--qz-radius-pill); background: var(--qz-rule-2);
   color: var(--qz-ink-2);
@@ -528,11 +548,11 @@ body[data-qz] :focus-visible {
 /* The mock's `.btn.sec` action inside the strip: paper button + rule border
    (a cream-2 secondary would vanish against the cream-2 strip). */
 .qz-banner-quiet .qz-btn {
-  background: var(--qz-paper); border: 1px solid var(--qz-rule);
+  background: var(--qz-paper); border: 1px solid var(--qz-rule-strong);
   color: var(--qz-ink-3); font-weight: 500; box-shadow: none;
 }
 .qz-banner-quiet .qz-btn:hover {
-  background: var(--qz-cream-2); transform: none; box-shadow: none; text-decoration: none;
+  background: var(--qz-cream-2); box-shadow: none; text-decoration: none;
 }
 
 /* — Stat — */
@@ -554,7 +574,7 @@ body[data-qz] :focus-visible {
   transform-origin: left center;
   transition: transform var(--qz-dur) var(--qz-spring);
 }
-.qz-stat-delta { font-family: var(--qz-font-mono); font-size: 11.5px; color: var(--qz-ink-3); }
+.qz-stat-delta { font-family: var(--qz-font-body); font-size: 11.5px; color: var(--qz-ink-3); font-variant-numeric: tabular-nums; }
 .qz-stat-delta.up   { color: var(--qz-ok); }
 .qz-stat-delta.down { color: var(--qz-crit); }
 
@@ -601,8 +621,9 @@ body[data-qz] :focus-visible {
 .qz-table { width: 100%; border-collapse: collapse; }
 .qz-table thead th {
   text-align: left; padding: 12px 20px;
-  font-family: var(--qz-font-mono); font-size: 10.5px; font-weight: 500;
-  text-transform: uppercase; letter-spacing: 0.06em;
+  /* QRTZ-S2 mono triage — column head is a label (Figtree 700 +.09em). */
+  font-size: 10.5px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: 0.09em;
   color: var(--qz-ink-4);
   border-bottom: 1px solid var(--qz-rule);
 }
@@ -616,7 +637,8 @@ body[data-qz] :focus-visible {
 .qz-table tbody tr:last-child td { border-bottom: 0; }
 .qz-table tbody tr { transition: background var(--qz-dur-fast) var(--qz-ease); }
 .qz-table tbody tr.qz-clickable { cursor: pointer; }
-.qz-table tbody tr.qz-clickable:hover { background: var(--qz-rule-2); }
+/* QRTZ-S2 — STATES §Row: hover is the one recess wash (cream-2). */
+.qz-table tbody tr.qz-clickable:hover { background: var(--qz-cream-2); }
 .qz-table .qz-cell-name { font-weight: 500; }
 .qz-table .qz-cell-sub { color: var(--qz-ink-3); font-size: 12.5px; margin-top: 2px; }
 .qz-table .qz-cell-actions { text-align: right; }
@@ -624,26 +646,43 @@ body[data-qz] :focus-visible {
 /* — Field — */
 .qz-field { display: flex; flex-direction: column; gap: 8px; }
 .qz-field-label {
-  font-family: var(--qz-font-mono); font-size: 11px; font-weight: 500;
-  text-transform: uppercase; letter-spacing: 0.12em; color: var(--qz-ink-3);
+  /* QRTZ-S2 mono triage — label style is Figtree 700 uppercase +.09em
+     (meld.mjs ramp), never the typewriter face. */
+  font-size: 11px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: 0.09em; color: var(--qz-ink-3);
 }
 .qz-field-hint { font-size: 12.5px; color: var(--qz-ink-3); }
-/* Inputs (V2 §7.4): inset-shadow border (not a border), 9px radius, indigo
-   focus ring + deepened inset on hover/focus. */
+/* QRTZ-S2 — the error message the STATES spec REQUIRES beside a crit border
+   (never colour alone). Render it under the control, aria-described. */
+.qz-field-error { font-size: 12.5px; color: var(--qz-crit); }
+/* Inputs (QRTZ-S2 — handoff STATES §Input): rest boundary is
+   --qz-rule-strong (3.14:1 — a hairline at --qz-rule fails WCAG 1.4.11 for a
+   control); focus = accent border + the focus ring; error = crit border +
+   .qz-field-error message; disabled = cream-2 fill + ink-3 text. */
 .qz-input, .qz-textarea, .qz-select {
   background: var(--qz-paper); color: var(--qz-ink);
   border: none; border-radius: var(--qz-radius-sm);
-  box-shadow: inset 0 0 0 1px var(--qz-rule);
+  box-shadow: inset 0 0 0 1px var(--qz-rule-strong);
   padding: 11px 16px; font-size: 14px; line-height: 1.4;
   width: 100%; outline: none;
   font-family: inherit;
   transition: box-shadow var(--qz-dur-fast) var(--qz-ease);
 }
 .qz-input:hover, .qz-textarea:hover, .qz-select:hover {
-  box-shadow: inset 0 0 0 1px var(--qz-ink-25);
+  box-shadow: inset 0 0 0 1px var(--qz-ink-4);
 }
 .qz-input:focus, .qz-textarea:focus, .qz-select:focus {
   box-shadow: inset 0 0 0 1px var(--qz-accent), var(--qz-shadow-focus);
+}
+.qz-input[aria-invalid="true"], .qz-textarea[aria-invalid="true"], .qz-select[aria-invalid="true"] {
+  box-shadow: inset 0 0 0 1px var(--qz-crit);
+}
+.qz-input[aria-invalid="true"]:focus, .qz-textarea[aria-invalid="true"]:focus, .qz-select[aria-invalid="true"]:focus {
+  box-shadow: inset 0 0 0 1px var(--qz-crit), 0 0 0 3px color-mix(in srgb, var(--qz-crit) 28%, transparent);
+}
+.qz-input:disabled, .qz-textarea:disabled, .qz-select:disabled {
+  background: var(--qz-cream-2); color: var(--qz-ink-3);
+  box-shadow: inset 0 0 0 1px var(--qz-rule);
 }
 .qz-textarea { resize: vertical; min-height: 96px; max-height: 240px; }
 
@@ -771,7 +810,7 @@ body[data-qz] :focus-visible {
 .qz-picklist { display: flex; flex-direction: column; gap: 2px; max-height: 46vh; overflow-y: auto; }
 .qz-prow { display: flex; align-items: center; gap: 11px; padding: 9px; border: none; border-radius: 9px; background: none; cursor: pointer; text-align: left; font: inherit; color: inherit; }
 .qz-prow:hover { background: var(--qz-cream-2); }
-.qz-prow-cb { width: 20px; height: 20px; border-radius: 6px; border: 1.5px solid var(--qz-rule); flex: none; display: inline-flex; align-items: center; justify-content: center; color: #fff; font-size: 13px; }
+.qz-prow-cb { width: 20px; height: 20px; border-radius: 6px; border: 1.5px solid var(--qz-rule-strong); flex: none; display: inline-flex; align-items: center; justify-content: center; color: #fff; font-size: 13px; }
 .qz-prow.is-sel .qz-prow-cb { background: var(--qz-accent); border-color: var(--qz-accent); }
 .qz-prow-img { width: 36px; height: 36px; border-radius: 7px; object-fit: cover; flex: none; background: var(--qz-cream-2); display: inline-flex; align-items: center; justify-content: center; color: var(--qz-ink-4); }
 .qz-prow-label { font-size: 13px; font-weight: 600; }
@@ -1300,7 +1339,7 @@ body[data-qz] ::selection { background: var(--qz-ink); color: var(--qz-cream); }
   appearance: none; font: inherit; cursor: pointer;
   font-size: 12px; line-height: 1.2;
   padding: 5px 10px;
-  border: 1px solid var(--qz-rule); border-radius: var(--qz-radius-pill);
+  border: 1px solid var(--qz-rule-strong); border-radius: var(--qz-radius-pill);
   background: var(--qz-cream); color: var(--qz-ink-3);
   transition: border-color var(--qz-dur) var(--qz-ease), background var(--qz-dur) var(--qz-ease), color var(--qz-dur) var(--qz-ease);
 }
@@ -1772,11 +1811,11 @@ body[data-qz] ::selection { background: var(--qz-ink); color: var(--qz-cream); }
 .qz-ps-link.is-on { color: var(--qz-accent); border-color: var(--qz-accent); background: var(--qz-accent-tint); }
 .qz-ps-color {
   display: flex; align-items: center; gap: 8px;
-  border: 1px solid var(--qz-rule); border-radius: 9px; padding: 5px 8px; background: var(--qz-paper);
+  border: 1px solid var(--qz-rule-strong); border-radius: 9px; padding: 5px 8px; background: var(--qz-paper);
 }
 .qz-ps-color input[type="color"] {
   width: 28px; height: 28px; padding: 0; flex: 0 0 auto; cursor: pointer;
-  border: 1px solid var(--qz-rule); border-radius: 6px; background: none;
+  border: 1px solid var(--qz-rule-strong); border-radius: 6px; background: none;
 }
 .qz-ps-color input[type="text"] {
   flex: 1 1 auto; min-width: 0; border: none; background: none; outline: none;
@@ -1789,7 +1828,7 @@ body[data-qz] ::selection { background: var(--qz-ink); color: var(--qz-cream); }
 }
 .qz-ps-pad-input {
   width: 56px; height: 34px; text-align: center; font: inherit; font-size: 13px; font-weight: 500;
-  border: 1px solid var(--qz-rule); border-radius: 8px; background: var(--qz-paper); color: var(--qz-ink);
+  border: 1px solid var(--qz-rule-strong); border-radius: 8px; background: var(--qz-paper); color: var(--qz-ink);
   font-variant-numeric: tabular-nums; -moz-appearance: textfield;
   transition: border-color var(--qz-dur-fast) var(--qz-ease);
 }
@@ -2682,7 +2721,7 @@ body[data-qz] ::selection { background: var(--qz-ink); color: var(--qz-cream); }
   font-size: 12.5px;
   padding: 6px 8px;
   border-radius: 8px;
-  border: 1px solid var(--qz-rule, #e3ddd2);
+  border: 1px solid var(--qz-rule-strong);
   background: var(--qz-paper, #fff);
 }
 .qz-rp2-check { flex-direction: row; align-items: flex-start; gap: 8px; cursor: pointer; }
@@ -3598,11 +3637,11 @@ body[data-qz] ::selection { background: var(--qz-ink); color: var(--qz-cream); }
 .qz-sm-field { margin-bottom: 15px; }
 .qz-sm-flabel { display: block; font-size: 13px; font-weight: 600; margin-bottom: 3px; }
 .qz-sm-fhint { display: block; font-size: 11.5px; color: var(--qz-ink-4); margin-bottom: 7px; }
-.qz-sm-inp { width: 100%; font-family: inherit; font-size: 13px; color: var(--qz-ink); background: var(--qz-paper); border: 1px solid var(--qz-rule); border-radius: 10px; padding: 10px 12px; outline: none; }
+.qz-sm-inp { width: 100%; font-family: inherit; font-size: 13px; color: var(--qz-ink); background: var(--qz-paper); border: 1px solid var(--qz-rule-strong); border-radius: 10px; padding: 10px 12px; outline: none; }
 .qz-sm-inp:focus { border-color: var(--qz-accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--qz-accent) 14%, transparent); }
 textarea.qz-sm-inp { resize: vertical; min-height: 62px; line-height: 1.5; }
 .qz-sm-seg { display: flex; gap: 6px; }
-.qz-sm-segb { border: 1px solid var(--qz-rule); background: var(--qz-paper); color: var(--qz-ink-3); font-size: 13px; font-weight: 500; padding: 8px 15px; border-radius: 9px; cursor: pointer; font-family: inherit; }
+.qz-sm-segb { border: 1px solid var(--qz-rule-strong); background: var(--qz-paper); color: var(--qz-ink-3); font-size: 13px; font-weight: 500; padding: 8px 15px; border-radius: 9px; cursor: pointer; font-family: inherit; }
 .qz-sm-segb.is-on { background: var(--qz-accent); color: #fff; border-color: var(--qz-accent); }
 .qz-sm-foot { display: flex; align-items: center; gap: 10px; margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--qz-rule-2); }
 .qz-sm-gen { border: none; background: var(--qz-accent); color: #fff; font-size: 13px; font-weight: 500; padding: 11px 20px; border-radius: 10px; cursor: pointer; font-family: inherit; }
@@ -3974,7 +4013,7 @@ textarea.qz-sm-inp { resize: vertical; min-height: 62px; line-height: 1.5; }
   background: var(--qz-cream-2); color: var(--qz-ink-4);
   transition: color 180ms ease, background 180ms ease, box-shadow 180ms ease;
 }
-.qz-stepnav-num { font-family: var(--qz-font-mono); font-size: 11px; font-weight: 600; line-height: 1; }
+.qz-stepnav-num { font-family: var(--qz-font-body); font-variant-numeric: tabular-nums; font-size: 11px; font-weight: 600; line-height: 1; }
 .qz-stepnav-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .qz-stepnav-check { color: var(--qz-accent-ink); }
 /* §1.2 — the done pill's tint is deliberate: the only always-on signal that a
@@ -4127,7 +4166,9 @@ textarea.qz-sm-inp { resize: vertical; min-height: 62px; line-height: 1.5; }
   cursor: pointer;
   transition: background var(--qz-dur-fast) var(--qz-ease), color var(--qz-dur-fast) var(--qz-ease);
 }
-.qz-menu-item:hover:not(:disabled) { background: var(--qz-accent-wash); color: var(--qz-accent-ink); }
+/* QRTZ-S2 — STATES §Row: hover = cream-2 recess. Accent-wash is reserved for
+   SELECTION, and a menu hover is not a selection (accent discipline). */
+.qz-menu-item:hover:not(:disabled) { background: var(--qz-cream-2); color: var(--qz-ink); }
 .qz-menu-item:disabled { opacity: .5; cursor: default; }
 .qz-menu-item-crit { color: var(--qz-crit); }
 .qz-menu-item-crit:hover:not(:disabled) { background: var(--qz-crit-tint); color: var(--qz-crit); }
@@ -4333,7 +4374,7 @@ textarea.qz-sm-inp { resize: vertical; min-height: 62px; line-height: 1.5; }
   border: none; padding: 0;
   display: grid; place-items: center;
   border-radius: 8px;
-  font-family: var(--qz-font-mono); font-size: 11.5px; font-weight: 600;
+  font-family: var(--qz-font-body); font-variant-numeric: tabular-nums; font-size: 11.5px; font-weight: 600;
   background: var(--qz-paper); color: var(--qz-ink-3);
   box-shadow: inset 0 0 0 1px var(--qz-rule);
 }
@@ -4349,7 +4390,7 @@ textarea.qz-sm-inp { resize: vertical; min-height: 62px; line-height: 1.5; }
   background: var(--qz-paper);
   box-shadow: 0 0 0 2px var(--qz-accent-wash);
   border-radius: 4px; text-align: center; outline: none;
-  font-family: var(--qz-font-mono); font-size: 10.5px; font-weight: 600;
+  font-family: var(--qz-font-body); font-variant-numeric: tabular-nums; font-size: 10.5px; font-weight: 600;
   color: var(--qz-accent-ink);
   -moz-appearance: textfield; appearance: textfield;
 }
@@ -4607,11 +4648,11 @@ textarea.qz-sm-inp { resize: vertical; min-height: 62px; line-height: 1.5; }
 .qz-s3-stepper button:disabled { opacity: .35; cursor: default; }
 .qz-s3-stepval {
   min-width: 26px; text-align: center;
-  font-family: var(--qz-font-mono); font-size: 12.5px; font-weight: 600;
+  font-family: var(--qz-font-body); font-variant-numeric: tabular-nums; font-size: 12.5px; font-weight: 600;
 }
 .qz-s3-lblinput {
   flex: 1 1 66px; min-width: 0;
-  border: 1px solid var(--qz-rule); border-radius: 8px;
+  border: 1px solid var(--qz-rule-strong); border-radius: 8px;
   padding: 6px 9px;
   font: inherit; font-size: 12px; color: var(--qz-ink);
 }
@@ -5319,7 +5360,7 @@ body[data-qz] .qz-s3-editable:focus-visible {
 .qz-s3-rr-target select {
   max-width: 200px;
   padding: 4px 6px; border-radius: 7px;
-  border: 1px solid var(--qz-rule); background: var(--qz-paper);
+  border: 1px solid var(--qz-rule-strong); background: var(--qz-paper);
   font: inherit; font-size: 12px; color: var(--qz-ink); cursor: pointer;
 }
 .qz-s3-cond select:disabled { color: var(--qz-ink-3); cursor: default; }
@@ -5392,10 +5433,10 @@ body[data-qz] .qz-s3-editable:focus-visible {
 .qz-s3-stepper button { border: none; background: var(--qz-paper); width: 26px; height: 28px; cursor: pointer; color: var(--qz-ink-3); font-size: 14px; font-family: inherit; }
 .qz-s3-stepper button:hover:not(:disabled) { background: var(--qz-cream-2); }
 .qz-s3-stepper button:disabled { opacity: .35; cursor: default; }
-.qz-s3-stepper-val { min-width: 26px; text-align: center; font: 600 12.5px/1 var(--qz-font-mono); }
+.qz-s3-stepper-val { min-width: 26px; text-align: center; font: 600 12.5px/1 var(--qz-font-body); font-variant-numeric: tabular-nums; }
 .qz-s3-set-input {
   flex: none; width: 112px;
-  border: 1px solid var(--qz-rule); border-radius: 8px;
+  border: 1px solid var(--qz-rule-strong); border-radius: 8px;
   padding: 6px 9px; font-size: 12px; font-family: inherit;
   color: var(--qz-ink); background: var(--qz-paper);
 }
@@ -5500,7 +5541,7 @@ body[data-qz] .qz-s3-editable:focus-visible {
 .qz-s3-fb-opt { display: flex; align-items: flex-start; gap: 8px; cursor: pointer; }
 .qz-s3-fb-opt.is-dim { opacity: .5; }
 .qz-s3-fb-hint { color: var(--qz-ink-4); font-style: normal; font-size: 11.5px; }
-.qz-s3-fb-select { font: inherit; font-size: 12.5px; padding: 6px 8px; border: 1px solid var(--qz-rule); border-radius: 8px; background: var(--qz-paper); }
+.qz-s3-fb-select { font: inherit; font-size: 12.5px; padding: 6px 8px; border: 1px solid var(--qz-rule-strong); border-radius: 8px; background: var(--qz-paper); }
 .qz-s3-fb-featured { display: flex; flex-direction: column; gap: 6px; }
 .qz-s3-fb-picked, .qz-s3-fb-results { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 3px; }
 .qz-s3-fb-picked li { display: flex; align-items: center; gap: 6px; font-size: 12px; }
@@ -5537,7 +5578,7 @@ body[data-qz] .qz-s3-editable:focus-visible {
 .qz-s3-sec-coverage.is-dim { background: var(--qz-cream-2); color: var(--qz-ink-4); }
 .qz-s3-rolesel {
   flex: 0 0 auto; font: inherit; font-size: 11.5px; font-weight: 600;
-  padding: 4px 6px; border: 1px solid var(--qz-rule); border-radius: 8px;
+  padding: 4px 6px; border: 1px solid var(--qz-rule-strong); border-radius: 8px;
   background: var(--qz-paper); color: var(--qz-ink-2); cursor: pointer; max-width: 168px;
 }
 .qz-s3-rolesel.is-decider { border-color: var(--qz-gold-line); background: var(--qz-gold-wash); color: var(--qz-gold); }
@@ -5564,7 +5605,7 @@ body[data-qz] .qz-s3-editable:focus-visible {
   font-size: 12px;
 }
 .qz-s3-matchpop-row { display: flex; align-items: center; gap: 7px; cursor: pointer; }
-.qz-s3-matchpop-tags { font: inherit; font-size: 12px; padding: 6px 8px; border: 1px solid var(--qz-rule); border-radius: 8px; }
+.qz-s3-matchpop-tags { font: inherit; font-size: 12px; padding: 6px 8px; border: 1px solid var(--qz-rule-strong); border-radius: 8px; }
 .qz-s3-matchpop-hint { color: var(--qz-ink-4); font-size: 11px; }
 .qz-s3-matchpop-done {
   appearance: none; cursor: pointer; font: inherit; align-self: flex-end;
@@ -5662,7 +5703,7 @@ body[data-qz] .qz-s3-editable:focus-visible {
 .qz-s4-inp {
   width: 100%; box-sizing: border-box; font-family: inherit; font-size: 13px;
   color: var(--qz-ink); background: var(--qz-paper);
-  border: 1px solid var(--qz-rule); border-radius: 10px; padding: 9px 11px; outline: none;
+  border: 1px solid var(--qz-rule-strong); border-radius: 10px; padding: 9px 11px; outline: none;
 }
 .qz-s4-inp:focus { border-color: var(--qz-accent); box-shadow: var(--qz-shadow-focus); }
 textarea.qz-s4-inp { resize: vertical; min-height: 56px; line-height: 1.5; }
@@ -6161,7 +6202,7 @@ textarea.qz-s4-inp { resize: vertical; min-height: 56px; line-height: 1.5; }
   font: inherit;
   font-size: 12.5px;
   padding: 5px 7px;
-  border: 1px solid var(--qz-rule);
+  border: 1px solid var(--qz-rule-strong);
   border-radius: 6px;
   background: var(--qz-paper);
   color: var(--qz-ink);
@@ -6176,7 +6217,7 @@ textarea.qz-s4-inp { resize: vertical; min-height: 56px; line-height: 1.5; }
   font: inherit;
   font-size: 12.5px;
   padding: 6px 8px;
-  border: 1px solid var(--qz-rule);
+  border: 1px solid var(--qz-rule-strong);
   border-radius: 6px;
   background: var(--qz-paper);
   color: var(--qz-ink);
@@ -6242,7 +6283,7 @@ textarea.qz-s4-inp { resize: vertical; min-height: 56px; line-height: 1.5; }
 .qz-numctl-exact { display: inline-flex; align-items: center; gap: 3px; }
 .qz-numctl-exact input {
   width: 58px; font: inherit; font-size: 12px; padding: 3px 6px; text-align: right;
-  border: 1px solid var(--qz-rule); border-radius: var(--qz-radius, 8px);
+  border: 1px solid var(--qz-rule-strong); border-radius: var(--qz-radius, 8px);
   background: var(--qz-bg); color: var(--qz-ink-1); font-variant-numeric: tabular-nums;
 }
 .qz-numctl-suffix { font-size: 10.5px; color: var(--qz-ink-4); }
@@ -6481,7 +6522,7 @@ textarea.qz-s4-inp { resize: vertical; min-height: 56px; line-height: 1.5; }
 .qz-insp-scope-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .qz-insp-scope select {
   font: inherit; font-size: 12.5px; padding: 6px 8px;
-  border: 1px solid var(--qz-rule); border-radius: var(--qz-radius, 8px);
+  border: 1px solid var(--qz-rule-strong); border-radius: var(--qz-radius, 8px);
   background: var(--qz-paper); color: var(--qz-ink-1);
 }
 
@@ -6497,7 +6538,7 @@ textarea.qz-s4-inp { resize: vertical; min-height: 56px; line-height: 1.5; }
 }
 .qz-ads-modes button.is-active { border-color: var(--qz-accent); color: var(--qz-ink-1); font-weight: 600; box-shadow: 0 0 0 1px var(--qz-accent) inset; }
 .qz-ads-color { display: inline-flex; align-items: center; gap: 6px; font-size: 11.5px; color: var(--qz-ink-3); }
-.qz-ads-color input[type="color"] { width: 28px; height: 22px; padding: 0; border: 1px solid var(--qz-rule); border-radius: 6px; background: transparent; cursor: pointer; }
+.qz-ads-color input[type="color"] { width: 28px; height: 22px; padding: 0; border: 1px solid var(--qz-rule-strong); border-radius: 6px; background: transparent; cursor: pointer; }
 
 /* QZY-12 — the slider range-band chip on Logic map rows. */
 .qz-s3-bandchip {
@@ -7425,7 +7466,7 @@ tr.qz-ltab-qstart td { border-top: 2px solid var(--qz-rule); }
 .qz-ltab-menu-chip.is-on { background: var(--qz-ink); color: var(--qz-paper); border-color: var(--qz-ink); }
 .qz-ltab-menu-search {
   font: inherit; font-size: 12px; margin: 4px 8px; padding: 5px 9px;
-  border: 1px solid var(--qz-rule); border-radius: 8px; background: var(--qz-cream-2);
+  border: 1px solid var(--qz-rule-strong); border-radius: 8px; background: var(--qz-cream-2);
   color: var(--qz-ink);
 }
 .qz-ltab-menu-search:focus { outline: 2px solid var(--qz-accent); outline-offset: 0; }
@@ -7546,7 +7587,7 @@ tr.qz-ltab-qstart td { border-top: 2px solid var(--qz-rule); }
 .qz-ltable-path:hover .qz-ltable-override { opacity: 1; }
 .qz-ltable-override-pop { display: inline-flex; align-items: center; gap: 4px; }
 .qz-ltable-select {
-  font: inherit; font-size: 11.5px; padding: 3px 6px; border: 1px solid var(--qz-rule);
+  font: inherit; font-size: 11.5px; padding: 3px 6px; border: 1px solid var(--qz-rule-strong);
   border-radius: 6px; background: var(--qz-paper); color: var(--qz-ink); max-width: 160px;
 }
 .qz-ltable-apply {
@@ -7598,7 +7639,7 @@ tr.qz-ltab-qstart td { border-top: 2px solid var(--qz-rule); }
 .qz-s3-numchip.is-editing { padding: 0; }
 .qz-s3-numinput {
   width: 100%; height: 100%; border: none; background: transparent; text-align: center;
-  font-family: var(--qz-font-mono); font-size: 11px; font-weight: 700;
+  font-family: var(--qz-font-body); font-variant-numeric: tabular-nums; font-size: 11px; font-weight: 700;
   color: var(--qz-accent-ink); outline: none; padding: 0;
   -moz-appearance: textfield; appearance: textfield;
 }
@@ -7746,7 +7787,7 @@ tr.qz-ltab-qstart td { border-top: 2px solid var(--qz-rule); }
   border-bottom: 1px solid var(--qz-rule-2);
 }
 .qz-qs-ttitle { font-size: 14px; font-weight: 600; }
-.qz-qs-tcount { font-size: 12px; color: var(--qz-ink-25); font-family: var(--qz-font-mono); }
+.qz-qs-tcount { font-size: 12px; color: var(--qz-ink-25); font-family: var(--qz-font-body); font-variant-numeric: tabular-nums; }
 .qz-qs-tsp { flex: 1; }
 .qz-qs-tlib {
   border: none; background: transparent; cursor: pointer; font: inherit;
@@ -8181,7 +8222,7 @@ html[data-theme="dark"] {
   width: 14px; height: 14px; color: var(--qz-ink-25); pointer-events: none;
 }
 .qz-bt-search input {
-  width: 100%; border: 1px solid var(--qz-rule); border-radius: 8px;
+  width: 100%; border: 1px solid var(--qz-rule-strong); border-radius: 8px;
   padding: 7px 9px 7px 28px; font: 500 12px var(--qz-font-body); color: var(--qz-ink);
   background: var(--qz-paper);
 }
@@ -8239,7 +8280,7 @@ html[data-theme="dark"] {
 .qz-bt-zoom { display: inline-flex; align-items: center; gap: 4px; }
 .qz-bt-zoom .qz-bt-iconbtn { width: 24px; height: 24px; border: none; background: transparent; }
 .qz-bt-zoom .qz-bt-iconbtn:hover:not(:disabled) { background: var(--qz-cream-2); }
-.qz-bt-zoom .qz-bt-zlabel { font-family: var(--qz-font-mono); min-width: 38px; text-align: center; font-size: 11px; }
+.qz-bt-zoom .qz-bt-zlabel { font-family: var(--qz-font-body); font-variant-numeric: tabular-nums; min-width: 38px; text-align: center; font-size: 11px; }
 .qz-stagebar .qz-bt-tbtn { padding: 6px 11px; font-size: 11.5px; }
 
 /* ── inspector (mock .insp / .insphd / .sec) ── */
@@ -8567,7 +8608,7 @@ html[data-theme="dark"] {
 .qz-qf-navrow:hover .qz-qf-cell { background: color-mix(in srgb, var(--qz-accent) 2%, var(--qz-paper)); }
 .qz-qf-navrow.is-on .qz-qf-cell { background: var(--qz-accent-tint); box-shadow: inset 2.5px 0 0 var(--qz-accent); }
 .qz-qf-ncn {
-  font-family: var(--qz-font-mono); font-size: 10.5px; font-weight: 600; color: var(--qz-ink-25);
+  font-family: var(--qz-font-body); font-variant-numeric: tabular-nums; font-size: 10.5px; font-weight: 600; color: var(--qz-ink-25);
   flex: none; min-width: 15px; padding-top: 1px; border: none; background: transparent; text-align: left;
 }
 .qz-qf-ncn.is-edit { cursor: pointer; border-radius: 4px; padding: 0 2px; margin: 0 -2px; }
@@ -8575,7 +8616,7 @@ html[data-theme="dark"] {
 .qz-qf-navrow.is-dec .qz-qf-ncn { color: var(--qz-accent); }
 .qz-qf-ncninput {
   width: 24px; border: none; background: var(--qz-paper); box-shadow: 0 0 0 2px var(--qz-accent-wash);
-  border-radius: 4px; text-align: center; font-family: var(--qz-font-mono); font-size: 10.5px;
+  border-radius: 4px; text-align: center; font-family: var(--qz-font-body); font-variant-numeric: tabular-nums; font-size: 10.5px;
   font-weight: 600; color: var(--qz-accent-ink); outline: none; padding: 1px 0;
   -moz-appearance: textfield; appearance: textfield;
 }
@@ -9065,7 +9106,7 @@ html[data-theme="dark"] {
 .qz-rg-ck input { accent-color: var(--qz-accent); margin-top: 2px; }
 .qz-rg-ck em { font-weight: 500; color: var(--qz-ink-4); font-size: 11px; display: block; margin-top: 1px; font-style: normal; }
 .qz-rg-codeline { margin-top: 15px; font-size: 11.5px; color: var(--qz-ink-4); }
-.qz-rg-codeline b { font-family: var(--qz-font-mono); font-weight: 700; color: var(--qz-ink); }
+.qz-rg-codeline b { font-family: var(--qz-font-body); font-variant-numeric: tabular-nums; font-weight: 700; color: var(--qz-ink); }
 .qz-rg-advlink { color: var(--qz-accent-ink); font-weight: 650; cursor: pointer; border: none; background: none; font-size: 11.5px; padding: 0; font-family: inherit; }
 .qz-rg-advlink:hover { text-decoration: underline; }
 .qz-rg-exprow { display: flex; align-items: center; gap: 8px; }
@@ -9085,7 +9126,7 @@ html[data-theme="dark"] {
 .qz-rg-sumh { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: var(--qz-ink-25); margin-bottom: 9px; }
 .qz-rg-sumsent { font-size: 12px; color: var(--qz-ink-3); line-height: 1.6; background: var(--qz-paper); border: 1px solid var(--qz-rule-2); border-radius: 9px; padding: 10px; margin-bottom: 10px; }
 .qz-rg-sumsent b { color: var(--qz-ink); }
-.qz-rg-sumcode { font-family: var(--qz-font-mono); font-size: 11.5px; font-weight: 700; background: var(--qz-cream-2); padding: 2px 6px; border-radius: 5px; }
+.qz-rg-sumcode { font-family: var(--qz-font-body); font-variant-numeric: tabular-nums; font-size: 11.5px; font-weight: 700; background: var(--qz-cream-2); padding: 2px 6px; border-radius: 5px; }
 .qz-rg-sumwarn { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--qz-rule-2); }
 .qz-rg-sw2 { display: flex; gap: 6px; font-size: 11px; line-height: 1.45; margin-bottom: 6px; }
 .qz-rg-sw2.is-err { color: var(--qz-crit); }
@@ -9113,7 +9154,7 @@ html[data-theme="dark"] {
 .qz-rg-pi b { display: block; font-size: 12.5px; font-weight: 600; }
 .qz-rg-pi span { display: block; font-size: 10.5px; color: var(--qz-ink-25); margin-top: 1px; }
 .qz-rg-ck2 {
-  width: 18px; height: 18px; border: 1.5px solid var(--qz-rule); border-radius: 5px; flex: none;
+  width: 18px; height: 18px; border: 1.5px solid var(--qz-rule-strong); border-radius: 5px; flex: none;
   display: grid; place-items: center; font-size: 11px; color: transparent; font-weight: 800;
 }
 .qz-rg-prow2.is-on .qz-rg-ck2 { background: var(--qz-accent); border-color: var(--qz-accent); color: #fff; }
@@ -9155,7 +9196,7 @@ html[data-theme="dark"] {
   display: flex; align-items: center; gap: 8px; background: var(--qz-color-text, #241E14);
   color: var(--qz-color-background, #fff); border-radius: 11px; padding: 10px 13px; font-size: 12.5px;
 }
-.qz-rg-offer b { font-family: var(--qz-font-mono); font-size: 11px; background: rgba(255,255,255,.16); padding: 3px 7px; border-radius: 6px; margin-left: auto; }
+.qz-rg-offer b { font-family: var(--qz-font-body); font-variant-numeric: tabular-nums; font-size: 11px; background: rgba(255,255,255,.16); padding: 3px 7px; border-radius: 6px; margin-left: auto; }
 .qz-rg-capform { border: 1px solid color-mix(in srgb, currentColor 14%, transparent); border-radius: 14px; background: var(--qz-color-card, #fff); padding: 15px; position: relative; }
 .qz-rg-capform h4 { margin: 0 0 4px; font-family: var(--qz-font-heading, Georgia, serif); font-size: 16px; font-weight: 600; }
 .qz-rg-capform p { margin: 0 0 11px; font-size: 12.5px; opacity: .65; line-height: 1.45; }
@@ -9758,3 +9799,80 @@ html[data-theme="dark"] {
 }
 .qz-xpl-qlist { gap: 6px; }
 .qz-xpl-qb { padding: 6px 11px; }
+/* ═══ QRTZ-S2 — component states ═══
+   Sources: docs/design/brand-2026/_src/states.mjs (sv-/gs-/pb-/mt- patterns)
+   + _src/handoff-content.mjs STATES. Values are copied from the mock; mock
+   variables map to repo tokens per AGENT-BRIEF (--surface→--qz-paper ·
+   --surface-2→--qz-cream-2 · --ink-3→--qz-ink-4 · --crit-wash→--qz-crit-tint
+   · --r-sm→--qz-radius-sm · --btn-r→--qz-radius). */
+
+/* — Autosave chip: four states, one component (states.mjs .sv → .qz-sv).
+   Saving… appears only while the debounced PUT is in flight; "Not saved ·
+   Retry" persists until a retry succeeds — never auto-dismiss, never fade;
+   "Paused while AI edits" surfaces useQuizDraft's pause seam. — */
+.qz-sv {
+  display: inline-flex; align-items: center; gap: 7px;
+  font-size: 13px; font-weight: 500; color: var(--qz-ink-4);
+  white-space: nowrap;
+}
+.qz-sv svg { width: 14px; height: 14px; flex: none; }
+.qz-sv.is-saved { color: var(--qz-ok); }
+/* Deviation from states.mjs: the mock's transform-origin 12px 12px is viewBox
+   coordinates, but CSS transforms on an inline <svg> use the 14px border box —
+   copied verbatim it wobbles. Center origin is the intent. */
+.qz-sv.is-saving .qz-sv-spin { animation: qz-sv-rot 900ms linear infinite; transform-origin: 50% 50%; }
+@keyframes qz-sv-rot { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .qz-sv.is-saving .qz-sv-spin { animation: none; } }
+.qz-sv.is-error { color: var(--qz-crit); }
+.qz-sv-retry {
+  margin-left: 2px; padding: 3px 9px; border-radius: var(--qz-radius-sm);
+  border: 1px solid var(--qz-crit); background: var(--qz-paper); color: var(--qz-crit);
+  font-family: inherit; font-size: 12px; font-weight: 600; cursor: pointer;
+}
+.qz-sv-retry:hover { background: var(--qz-crit-tint); }
+.qz-sv.is-paused { color: var(--qz-accent-ink); }
+
+/* — Button loading (STATES §Button·Loading): the label holds its width and a
+   14px ring replaces the leading GLYPH — the button must not resize and the
+   label must not change ("Saving…"-style swaps move everything beside it).
+   Usage (funnel + editor share this): add .is-loading to the button and swap
+   its leading glyph for <span class="qz-btn-ring" aria-hidden/>; buttons
+   without a glyph should keep the ring slot mounted to avoid a width jump. — */
+.qz-btn-ring {
+  width: 14px; height: 14px; flex: none; border-radius: 50%;
+  border: 2px solid color-mix(in srgb, currentColor 30%, transparent);
+  border-top-color: currentColor;
+  animation: qz-btn-ring 700ms linear infinite;
+}
+@keyframes qz-btn-ring { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .qz-btn-ring { animation: none; } }
+.qz-btn.is-loading, .qz-topbar-continue.is-loading { pointer-events: none; }
+.qz-topbar-continue.is-loading { display: inline-flex; align-items: center; gap: 8px; }
+
+/* The funnel bar's primary joins the STATES §Button contract (its rest/hover
+   block predates this phase and lives with the funnel chrome): active dip,
+   never-removed focus ring, and a disabled label that stays readable
+   (ink-3 — ink-25 is decoration, never text you must read). */
+.qz-topbar-continue:active:not(.is-off):not(:disabled) { background: var(--qz-accent-2); box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.18); }
+body[data-qz] .qz-topbar-continue:focus-visible { outline: none; box-shadow: var(--qz-shadow-focus); }
+.qz-topbar-continue.is-off { color: var(--qz-ink-3); }
+
+/* — Empty states (states.mjs .mt → .qz-mt): icon tile + one-line title +
+   ≤30ch body + ONE quiet action. Zero-state ≠ no-results: no-results names
+   the query and its action CLEARS the filter, never creates. — */
+.qz-mt { display: grid; justify-items: center; gap: 9px; text-align: center; padding: 42px 24px; }
+.qz-mt-ico {
+  width: 34px; height: 34px; display: grid; place-items: center;
+  border-radius: var(--qz-radius); background: var(--qz-paper);
+  border: 1px solid var(--qz-rule); color: var(--qz-ink-4);
+}
+.qz-mt-ico svg { width: 17px; height: 17px; }
+.qz-mt b { font-size: 13.5px; font-weight: 600; color: var(--qz-ink); }
+.qz-mt p { margin: 0; font-size: 12.5px; line-height: 1.5; color: var(--qz-ink-4); max-width: 30ch; }
+.qz-mt-btn {
+  margin-top: 3px; padding: 7px 13px; border-radius: var(--qz-radius);
+  border: 1px solid var(--qz-rule-strong); background: var(--qz-paper);
+  font-family: inherit; font-size: 13px; font-weight: 600; color: var(--qz-ink);
+  cursor: pointer; text-decoration: none;
+}
+.qz-mt-btn:hover { background: var(--qz-cream-2); }

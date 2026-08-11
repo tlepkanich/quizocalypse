@@ -354,7 +354,7 @@ export default function StudioProducts() {
               name="csv"
               rows={7}
               placeholder={"title,price,tags,url\nHydrating Serum,29,dry-skin|serum,https://store.com/serum"}
-              style={{ fontFamily: "var(--qz-font-mono)", fontSize: 12.5 }}
+              style={{ fontVariantNumeric: "tabular-nums", fontSize: 12.5 }}
             />
             <button type="submit" className="qz-btn qz-btn-accent" disabled={busy} style={{ alignSelf: "flex-start" }}>
               {busy ? "Importing…" : "Import CSV"}

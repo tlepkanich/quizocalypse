@@ -6,19 +6,15 @@ import { useEffect, useState } from "react";
 // optional max-wait timeout surfaces "still working…" + retry so a wait never
 // dead-hangs. Reused by every indeterminate loading/interstitial state.
 
-// Locked message rotation (functional + friendly, mixed).
+// QRTZ-S2 — Quartz retune: the rotation states what the work IS, calmly.
+// The jokey interstitials ("grab a coffee ☕", "hi :)") are off-spec for
+// Quartz — the mock's loading surfaces carry no jokey tone.
 export const QZ_LOADING_MESSAGES = [
   "Reading your catalog…",
-  "hi :)",
   "Matching your products…",
-  "hope your day’s going well",
   "Drafting your questions…",
-  "small pause, big payoff",
   "Shaping your results…",
-  "grab a coffee ☕",
   "Adding the finishing touches…",
-  "making it nice",
-  "nearly ready for you",
 ];
 
 export function QzLoadingRing({
