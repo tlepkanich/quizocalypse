@@ -3,7 +3,7 @@ import type { DragEvent, MouseEvent } from "react";
 import type { OrderedFlowStep } from "../../../lib/questionOrder";
 import { EditableText } from "./content/EditableText";
 import { TYPE_CHIP_LABEL } from "./content/TypeChipSelector";
-import { IconGrip, IconMail, IconTarget, IconTrash, IconUp, IconDown } from "./icons";
+import { IconGrip, IconMail, IconTarget, IconTrash } from "./icons";
 import type { RegenApi } from "./Step3Shell";
 
 /** questions-full-page §3 — the mock's cMeta vocabulary for content steps. */
@@ -15,10 +15,12 @@ export const CONTENT_META: Record<string, string> = {
 };
 
 /* questions-full-page.html — the Questions tab's NAV RAIL (mock .navcol):
-   header "Flow · N questions", one compact row per question (mono number —
-   CLICK TO RENUMBER via an inline number input · 2-line-clamped editable
-   wording · mono uppercase type line · hover tools: ⠿ drag / ↑↓ movers /
-   trash), "+ Add question" foot, then the quiet termini rows (✉ Email
+   header "Flow · N questions · N extra steps", one compact row per question
+   (mono number — CLICK TO RENUMBER via an inline number input ·
+   2-line-clamped editable wording · mono uppercase type line · hover tools:
+   ⠿ drag / trash — QRTZ-S5 retired the stacked ↑/↓ per the mock; the grip
+   is the one reorder affordance and carries arrow-key reorder for keyboard
+   users), "+ Add question" foot, then the quiet termini rows (✉ Email
    capture · ◎ Result reveal). Answers are edited ON THE PHONE now (mock
    model: the rail is structure, the phone is content) — the AUDIT-22 inline
    answer expansion is retired.
@@ -64,8 +66,9 @@ export function LeftRail({
   onSelect: (id: string) => void;
   /** Mock inline wording edit (contenteditable ncq); message titles too. */
   onRename: (id: string, text: string) => void;
-  /** Mock reorder — drag, ↑↓ movers, and the number's renumber input all
-   *  land here: move the step to the 0-based position in the FULL flow. */
+  /** Mock reorder — drag, the grip's arrow keys, and the number's renumber
+   *  input all land here: move the step to the 0-based position in the FULL
+   *  flow. */
   onReorder: (id: string, toIndex: number) => void;
   /** Mock hover-trash delete (shell confirms + deletes via deleteNode). */
   onDelete: (id: string) => void;
@@ -106,9 +109,11 @@ export function LeftRail({
 
   return (
     <div className="qz-qf-navcol">
+      {/* QRTZ-S5 (mock .qflow-head) — content pages + termini are "extra
+          steps" in the head's vocabulary. */}
       <div className="qz-qf-navhd">
         Flow · {nQuestions} question{nQuestions === 1 ? "" : "s"}
-        {nContent ? ` · ${nContent} content` : ""}
+        {nContent ? ` · ${nContent} extra step${nContent === 1 ? "" : "s"}` : ""}
       </div>
       <div className="qz-qf-navbody" aria-label="Quiz flow">
         {steps.map((s, i) => {
@@ -233,13 +238,33 @@ export function LeftRail({
                   </span>
                 </span>
                 <span className="qz-qf-tools">
+                  {/* QRTZ-S5 — the grip is the ONE reorder affordance (the
+                      mock retires the stacked ↑/↓). Keyboard: the grip is
+                      focusable (hover/focus reveals the tools) and ArrowUp/
+                      ArrowDown move the step; focus is restored after React
+                      re-inserts the moved row. */}
                   <button
                     type="button"
                     className="qz-qf-tool is-drag"
-                    title="Drag to reorder"
-                    aria-label={`Drag question ${i + 1} to reorder`}
+                    data-grip-for={q.node.id}
+                    title="Drag to reorder — or focus and use the arrow keys"
+                    aria-label={`Reorder step ${i + 1} of ${steps.length} — use the arrow keys to move it`}
                     onPointerDown={() => setArmed(q.node.id)}
                     onPointerUp={() => setArmed(null)}
+                    onKeyDown={(e) => {
+                      if (e.key !== "ArrowUp" && e.key !== "ArrowDown") return;
+                      e.preventDefault();
+                      e.stopPropagation();
+                      const to = e.key === "ArrowUp" ? i - 1 : i + 1;
+                      if (to < 0 || to > steps.length - 1) return;
+                      onReorder(q.node.id, to);
+                      const id = q.node.id;
+                      requestAnimationFrame(() => {
+                        document
+                          .querySelector<HTMLButtonElement>(`[data-grip-for="${CSS.escape(id)}"]`)
+                          ?.focus();
+                      });
+                    }}
                   >
                     <IconGrip />
                   </button>
@@ -263,34 +288,6 @@ export function LeftRail({
                     }}
                   >
                     <IconTrash />
-                  </button>
-                </span>
-                <span className="qz-qf-nmv">
-                  <button
-                    type="button"
-                    className="qz-qf-nmvb"
-                    disabled={i === 0}
-                    title="Move up"
-                    aria-label={`Move question ${i + 1} up`}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onReorder(q.node.id, i - 1);
-                    }}
-                  >
-                    <IconUp />
-                  </button>
-                  <button
-                    type="button"
-                    className="qz-qf-nmvb"
-                    disabled={i === steps.length - 1}
-                    title="Move down"
-                    aria-label={`Move step ${i + 1} down`}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onReorder(q.node.id, i + 1);
-                    }}
-                  >
-                    <IconDown />
                   </button>
                 </span>
               </div>

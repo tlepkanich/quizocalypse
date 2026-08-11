@@ -280,6 +280,32 @@ export function RecommendationBucketsStage({
     [data.catalog.products],
   );
 
+  // QRTZ-S5 (mock s10 .facts) — pool-health facts computed ONLY from the
+  // already-loaded catalog: the distinct products the current selection
+  // resolves to, how many carry an image, and the price span. The mock's
+  // "In stock" row and out-of-stock note are SKIPPED — the loaded catalog
+  // shape carries no stock field to be honest about.
+  const poolFacts = useMemo(() => {
+    const ids = new Set<string>();
+    for (const c of selected.values()) {
+      if (c.type === "product") ids.add(c.key);
+      else if (c.type === "tag") {
+        for (const p of data.catalog.products) if (p.tagKeys.includes(c.key)) ids.add(p.id);
+      } else {
+        for (const p of data.catalog.products) if (p.collectionIds.includes(c.key)) ids.add(p.id);
+      }
+    }
+    const pool = data.catalog.products.filter((p) => ids.has(p.id));
+    const withImages = pool.filter((p) => p.imageUrl).length;
+    const prices = pool.map((p) => p.price).filter((v): v is number => v != null);
+    return {
+      total: pool.length,
+      withImages,
+      priceMin: prices.length ? Math.min(...prices) : null,
+      priceMax: prices.length ? Math.max(...prices) : null,
+    };
+  }, [selected, data.catalog.products]);
+
   const cardsForTab = (type: BucketType): BucketCard[] => {
     if (type === "product")
       return data.catalog.products.map((p) => ({
@@ -406,8 +432,9 @@ export function RecommendationBucketsStage({
       {/* Owner edit (2026-08-02) — the tip moved OUT of the title row to its
           own row directly under the heading; the title stands alone. */}
       <div className="qz-rb-titlerow">
+        {/* QRTZ-S5 — mock s10 step title, verbatim. */}
         <h2 className="qz-h2" style={{ margin: 0 }}>
-          What products should your quiz recommend?
+          What should this quiz recommend?
         </h2>
       </div>
       {showTip ? (
@@ -670,6 +697,27 @@ export function RecommendationBucketsStage({
               ))}
             </div>
           )}
+          {/* QRTZ-S5 (mock s10 .facts) — quiet dt/dd rows on hairlines. */}
+          {count > 0 && poolFacts.total > 0 ? (
+            <dl className="qz-rb-facts">
+              <div>
+                <dt>With images</dt>
+                <dd>
+                  {poolFacts.withImages} of {poolFacts.total}
+                </dd>
+              </div>
+              {poolFacts.priceMin != null && poolFacts.priceMax != null ? (
+                <div>
+                  <dt>Price range</dt>
+                  <dd>
+                    {poolFacts.priceMin === poolFacts.priceMax
+                      ? `$${poolFacts.priceMin.toFixed(2)}`
+                      : `$${poolFacts.priceMin.toFixed(2)} – $${poolFacts.priceMax.toFixed(2)}`}
+                  </dd>
+                </div>
+              ) : null}
+            </dl>
+          ) : null}
           {count === 1 ? (
             <p className="qz-rb-warn">
               One recommendation means every shopper sees the same products. Add a few more so
@@ -1162,6 +1210,9 @@ function GoalFirstBanner({
 }) {
   const goalLine = goalText.split("\n")[0] ?? "";
   const excerpt = goalLine.length > 110 ? `${goalLine.slice(0, 110)}…` : goalLine;
+  // QRTZ-S5 (mock s10 "Why these?") — the AI rationale is on-demand, not
+  // ambient: a quiet button reveals it (ready state only).
+  const [showWhy, setShowWhy] = useState(false);
 
   if (state.prepick === "picking" && stalled) {
     return (
@@ -1233,9 +1284,21 @@ function GoalFirstBanner({
               ? `AI picked ${count} recommendation${count === 1 ? "" : "s"} for your goal`
               : "AI picked recommendations for your goal"}
           </strong>
+          {state.rationale ? (
+            <button
+              type="button"
+              className="qz-rb-why"
+              aria-expanded={showWhy}
+              onClick={() => setShowWhy((v) => !v)}
+            >
+              Why these?
+            </button>
+          ) : null}
         </div>
+        {showWhy && state.rationale ? (
+          <p className="qz-dim" style={{ margin: 0, fontSize: 13 }}>{state.rationale}</p>
+        ) : null}
         <p className="qz-dim" style={{ margin: 0, fontSize: 13 }}>
-          {state.rationale ? `${state.rationale} ` : ""}
           Refine the selection below, then generate your quiz.
         </p>
       </div>

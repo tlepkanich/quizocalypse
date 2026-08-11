@@ -187,20 +187,41 @@ export function Step1Funnel({ data }: { data: FunnelData }) {
         </QzBanner>
       ) : null}
 
-      {/* An AI generation job failed (e.g. the AI is unavailable). Surface it
-          honestly with a template fallback instead of silently stranding the
-          merchant on a stage that won't advance. FLOW-2 — the escape targets
-          /studio/templates (the Flow-3 template front door): /studio/new is a
-          redirect-gated bounce back into this funnel, not a template surface. */}
+      {/* QRTZ-S5 — an AI generation job failed (e.g. the AI is unavailable).
+          The mock's centred empty-state card (states.mjs .mt): blame-free copy
+          that never names a raw error, with the server's own curated notice as
+          a quiet secondary line. Try again re-runs the WHOLE chain via
+          shape-regenerate — hidden on the blank-Questions landing, where the
+          draft below may already carry manual work a regenerate would replace
+          ("build it yourself" is the honest path there). FLOW-2 — the escape
+          targets /studio/templates (the Flow-3 template front door):
+          /studio/new is a redirect-gated bounce back into this funnel. */}
       {data.genError ? (
-        <QzBanner tone="warn" title="AI generation didn't finish">
-          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-            <span>{data.genError}</span>
-            <Link to="/studio/templates" className="qz-btn qz-btn-accent qz-btn-sm" style={{ alignSelf: "flex-start" }}>
-              Start from a template →
-            </Link>
+        <QzCard style={{ padding: 0 }}>
+          <div className="qz-genfail" role="status">
+            <span className="qz-genfail-ico" aria-hidden>!</span>
+            <b className="qz-genfail-title">We could not draft this one</b>
+            <p className="qz-genfail-sub">
+              Nothing was lost — your goal is still here. Try again, or build it yourself.
+            </p>
+            <p className="qz-genfail-detail">{data.genError}</p>
+            <div className="qz-genfail-actions">
+              {data.stage !== "question_builder" ? (
+                <button
+                  type="button"
+                  className="qz-btn"
+                  disabled={pendingIntent === "shape-regenerate"}
+                  onClick={() => fetcher.submit({ intent: "shape-regenerate" }, { method: "post" })}
+                >
+                  {pendingIntent === "shape-regenerate" ? "Restarting…" : "Try again"}
+                </button>
+              ) : null}
+              <Link to="/studio/templates" className="qz-btn qz-btn-ghost">
+                Start from a template →
+              </Link>
+            </div>
           </div>
-        </QzBanner>
+        </QzCard>
       ) : null}
 
       {/* Stalled is now a full generating-screen state (generating-states
@@ -238,6 +259,8 @@ export function Step1Funnel({ data }: { data: FunnelData }) {
           stalled={data.genStalled && !data.genError}
           retrying={pendingIntent === "retry-gen"}
           onRetry={() => fetcher.submit({ intent: "retry-gen" }, { method: "post" })}
+          progress={data.genProgress}
+          stage={data.stage}
         />
       ) : null}
 
@@ -358,38 +381,49 @@ function FunnelStepNav({
 
 // ══ Step 2 ══════════════════════════════════════════════════════════════════
 
-// Owner edit (2026-08-02) — ONE load screen for the whole generation chain
-// (typing AND templating): just the breathing ignite ring with a single
-// rotating update line under it. The per-stage titles, subtitles, beat
-// checklists, and the fast/slow layout split are all retired; the caption
-// loops so the screen stays alive however long the chain runs.
-const GEN_ROTATION = [
-  "Drafting your quiz questions",
-  "Mapping out the logic",
-  "Tuning the results",
-];
+// QRTZ-S5 (mock s11) — ONE load screen for the whole generation chain, driven
+// by the server's REAL gen_progress checkpoints instead of a decorative timed
+// rotation: the title IS the current checkpoint, and the 4-row checklist under
+// it shows done ✓ / now / todo — so the wait has a shape and a merchant can
+// tell a slow job from a stuck one. Checkpoint → row: research=0,
+// types/templates=1 (both passes draft the quiz's shape), questions=2,
+// products=3. null (an old in-flight session) falls back on the stage: typing
+// starts the chain (row 0), templating is mid-write (row 2).
+const GEN_CHECKLIST = [
+  "Reading your catalog",
+  "Drafting tailored quiz types",
+  "Writing your questions",
+  "Building your results page",
+] as const;
+const GEN_PROGRESS_ROW: Record<NonNullable<FunnelData["genProgress"]>, number> = {
+  research: 0,
+  types: 1,
+  templates: 1,
+  questions: 2,
+  products: 3,
+};
 
 // The "AI in flight" screen for the detached typing/templating jobs. The
-// parent polls the loader; this just breathes while we wait. STALLED keeps
-// its dedicated state (halted grey ring + ◷, Try again + the template
-// escape). The FAILED state stays the banner above the restored stage — the
+// parent polls the loader (which re-reads gen_progress); this renders the
+// checkpoint state while we wait — no escape on the healthy arm. STALLED
+// keeps its dedicated state (halted grey ring + ◷, Try again + the template
+// escape). The FAILED state stays the card above the restored stage — the
 // Gap-1 fix resets the stage on failure, so there is no generating screen
-// left to park it on; the banner carries the mock's copy + actions.
+// left to park it on; the card carries the mock's copy + actions.
 function GeneratingScreen({
   stalled,
   retrying,
   onRetry,
+  progress,
+  stage,
 }: {
   stalled: boolean;
   retrying: boolean;
   onRetry: () => void;
+  progress: FunnelData["genProgress"];
+  stage: "typing" | "templating";
 }) {
-  const [rotIx, setRotIx] = useState(0);
-  useEffect(() => {
-    if (stalled) return;
-    const t = setInterval(() => setRotIx((i) => (i + 1) % GEN_ROTATION.length), 5000);
-    return () => clearInterval(t);
-  }, [stalled]);
+  const current = progress != null ? GEN_PROGRESS_ROW[progress] : stage === "typing" ? 0 : 2;
 
   if (stalled) {
     return (
@@ -434,10 +468,23 @@ function GeneratingScreen({
           <i className="qz-gen-sp qz-gen-sp3">✦</i>
           <i className="qz-gen-sp qz-gen-sp4">✦</i>
         </div>
-        {/* keyed by caption so each rotation re-runs the fade-in */}
-        <p key={rotIx} className="qz-gen-rot" aria-live="polite">
-          {GEN_ROTATION[rotIx]}
-        </p>
+        {/* The title IS the current checkpoint (mock .gen-title). */}
+        <h2 className="qz-gen-title" aria-live="polite">
+          {GEN_CHECKLIST[current]}
+        </h2>
+        <ol className="qz-gen-steps">
+          {GEN_CHECKLIST.map((label, i) => {
+            const st = i < current ? "done" : i === current ? "now" : "todo";
+            return (
+              <li key={label} className={`qz-gen-step is-${st}`}>
+                <span className="qz-gen-dot" aria-hidden>
+                  {st === "done" ? "✓" : ""}
+                </span>
+                {label}
+              </li>
+            );
+          })}
+        </ol>
       </div>
     </QzCard>
   );

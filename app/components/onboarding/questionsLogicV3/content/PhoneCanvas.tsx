@@ -28,8 +28,11 @@ import { TypeChipSelector } from "./TypeChipSelector";
    close. The screen stays brand-themed by inlining resolveDesignTokens →
    tokensToCssVars. Back/Next drive the REAL walk Q1 → … → Qn → capture →
    reveal; the shell owns `activeId`. Editing moved to the question list
-   (questions-simple): the phone is the live preview — the floating type tag,
-   the answer-budget banner, and the under-phone regen row left this file. */
+   (questions-simple): the phone is the live preview — the answer-budget
+   banner and the under-phone regen row left this file. QRTZ-S5 (mock
+   .qedit-bar): the pv-bar names the shown step ("Question 1") and carries
+   the answer-type control; the AUDIT-17 floating tag beside the phone is
+   retired on the mock's authority (nothing floats over the preview). */
 
 const DEVICE_DIMS = {
   mobile: { vw: 390, vh: 844 },
@@ -251,6 +254,25 @@ export function PhoneCanvas({
       ) : null}
 
       <div className="qz-s3-pvbar">
+        {/* QRTZ-S5 (mock .qedit-bar) — the bar names the shown step and, for
+            questions, carries the answer-type control (moved here from the
+            floating tag beside the phone — nothing floats over the shopper
+            preview). NOTE: this reverses the AUDIT-17 floating-tag placement
+            on the mock's authority. */}
+        <span className="qz-s3-pvlabel">
+          {activeId === CAPTURE_ID
+            ? "Email capture"
+            : activeId === REVEAL_ID
+              ? "Result reveal"
+              : position.kind === "content"
+                ? `Step ${posIndex + 1}`
+                : `Question ${posIndex + 1}`}
+        </span>
+        {position.kind === "question" ? (
+          <span className="qz-s3-pvtype">
+            <TypeChipSelector doc={doc} node={position.question.node} onCommit={onCommit} />
+          </span>
+        ) : null}
         <span className="qz-s3-segbtns" role="group" aria-label="Preview device">
           <button
             type="button"
@@ -294,15 +316,6 @@ export function PhoneCanvas({
           style={deviceStyle}
         >
           <div className="qz-s3-holder">{renderFrame(true)}</div>
-          {/* questions-full-page — the floating TYPE TAG beside the phone
-              (its original home, back from the AUDIT-22 in-row detour):
-              click opens the type/settings popover for the shown question.
-              Hidden on the capture/reveal screens. */}
-          {position.kind === "question" ? (
-            <div className="qz-s3-typetag">
-              <TypeChipSelector doc={doc} node={position.question.node} onCommit={onCommit} />
-            </div>
-          ) : null}
         </div>
       </div>
 
