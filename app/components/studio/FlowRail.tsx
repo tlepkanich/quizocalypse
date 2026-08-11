@@ -100,6 +100,20 @@ export function nodeTitle(node: QuizNode): string {
   }
 }
 
+// QRTZ-S4 — the mock tree's per-step sub-label (shared.mjs `tree-sub`, e.g.
+// Results carrying "2 pages"). Derived from the doc, never guessed: a
+// multi-stage result names its page count; a screen with an explicit
+// node_layouts composition names its block count; template screens (no
+// explicit layout) stay unlabeled.
+function stepSubLabel(doc: QuizDoc, node: QuizNode): string | null {
+  if (node.type === "result" && node.data.stages.length > 1) {
+    return `${node.data.stages.length} pages`;
+  }
+  const blocks = doc.node_layouts[node.id]?.length ?? 0;
+  if (blocks > 0) return `${blocks} block${blocks === 1 ? "" : "s"}`;
+  return null;
+}
+
 // The data field nodeTitle reads for each node type — i.e. what an inline rename
 // writes back. Mirror of nodeTitle so the displayed name round-trips.
 function titleField(type: QuizNode["type"]): string {
@@ -235,6 +249,7 @@ export function FlowRail({
     const sel = selectedId === nodeId;
     const issues = issuesByNode.get(nodeId)?.length ?? 0;
     const movable = runIndex.has(nodeId) && node.type !== "intro";
+    const sub = stepSubLabel(doc, node);
     return (
       <div key={nodeId} style={{ marginLeft: indent ? 14 : 0 }}>
         <div
@@ -310,6 +325,7 @@ export function FlowRail({
               title={`${nodeTitle(node)} — double-click to rename`}
             >
               {nodeTitle(node)}
+              {sub ? <span className="qz-flowrail-sub"> {sub}</span> : null}
             </span>
           )}
           {issues > 0 ? (
@@ -464,6 +480,7 @@ export function FlowRail({
           ? " is-reveal"
           : "";
     const armed = confirmDeleteId === nodeId;
+    const sub = stepSubLabel(doc, node);
     const selectRow = () => {
       onConfirmDelete(null);
       onSelect(sel ? null : nodeId);
@@ -519,6 +536,7 @@ export function FlowRail({
               title={`${nodeTitle(node)} — double-click to rename`}
             >
               {nodeTitle(node)}
+              {sub ? <span className="qz-flowrail-sub"> {sub}</span> : null}
             </span>
           )}
           {issues > 0 ? (

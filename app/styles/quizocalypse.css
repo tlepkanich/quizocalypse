@@ -235,6 +235,22 @@
   --qz-accent-line: var(--qz-rule-strong);
   --qz-accent-grad: var(--qz-ink);
   --qz-shadow-focus: 0 0 0 3px rgba(32, 28, 46, 0.14);
+  /* QRTZ-S4 — BAKED-TOKEN FIX. An unregistered custom property substitutes
+     its inner var()s on the element it is DECLARED on (the dark-mode block
+     below documents the same trap), so every :root property that DERIVES
+     from the accent has the violet baked in and ignores the re-pointing
+     above. Re-declare each one here so it resolves against this scope's
+     neutralized accent. Audit source: every :root line whose value contains
+     var(--qz-accent*) — color-mix() formulas AND plain aliases both bake. */
+  --qz-accent-tint: color-mix(in srgb, var(--qz-accent) 10%, var(--qz-paper));
+  --qz-color-primary: var(--qz-accent);
+  --qz-pastel-violet: var(--qz-accent-wash);
+  --qz-pastel-violet-ink: var(--qz-accent-ink);
+  --qz-pal-blue: var(--qz-accent);
+  --qz-pal-blue-wash: var(--qz-accent-wash);
+  --qz-pal-purple: var(--qz-accent);
+  --qz-src-tag: var(--qz-accent-ink);
+  --qz-src-tag-bg: var(--qz-accent-wash);
 }
 
 /* — Scope: wrap your admin app in <body data-qz="1"> to opt in
@@ -9876,3 +9892,128 @@ body[data-qz] .qz-topbar-continue:focus-visible { outline: none; box-shadow: var
   cursor: pointer; text-decoration: none;
 }
 .qz-mt-btn:hover { background: var(--qz-cream-2); }
+/* ═══ QRTZ-S4 — editor ═══
+   The Quartz editor port (mock shared.mjs s16 + states.mjs), scoped to the
+   builder shell. Values are read off the mock CSS through the locked token
+   map (--ink→--qz-ink · --ink-2→--qz-ink-3 · --ink-3→--qz-ink-4 ·
+   --line→--qz-rule · --surface-2→--qz-cream-2 · --r-*→--qz-radius-* ·
+   --e-*→--qz-lift-*). */
+
+/* ── mock .crumbs — "Quizzes / {title}"; the leaf keeps EditableTitle.
+   (Value deviation: mock 14px → 13.5px to sit on the existing top-bar type
+   size; everything else verbatim.) ── */
+.qz-bt-crumbs { display: flex; align-items: center; gap: 8px; font-size: 13.5px; color: var(--qz-ink-4); min-width: 0; flex: 0 1 auto; }
+.qz-bt-crumbs > a { color: var(--qz-ink-4); text-decoration: none; flex: none; }
+.qz-bt-crumbs > a:hover { color: var(--qz-ink); }
+.qz-bt-crumbsep { color: var(--qz-ink-4); flex: none; }
+.qz-bt-crumbs .qz-bt-qtitle { color: var(--qz-ink); }
+
+/* ── mock .pill.is-draft — the honest version has no unpublished COUNT ── */
+.qz-bt-draftpill {
+  flex: none; padding: 4px 10px; border-radius: var(--qz-radius-pill);
+  font-size: 11.5px; font-weight: 600; white-space: nowrap;
+  background: var(--qz-cream-2); color: var(--qz-ink-3); border: 1px solid var(--qz-rule);
+}
+
+/* ── states.mjs "Publishing…" — the button holds width AND label; only a
+   leading 14px ring appears. The host pins the captured resting width
+   inline; the tightened padding makes ring + label fit inside it. Shared
+   pattern name (.qz-btn-loading) — a sibling lands the same class; the
+   combine dedupes. ── */
+.qz-btn-loading { position: relative; justify-content: center; padding-left: 6px; padding-right: 6px; }
+.qz-btn-loading::before {
+  content: ""; width: 14px; height: 14px; flex: none; border-radius: 50%;
+  border: 2px solid currentColor; border-right-color: transparent;
+  animation: qz-btnring 700ms linear infinite;
+}
+@keyframes qz-btnring { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) {
+  .qz-btn-loading::before { animation: none; border-right-color: currentColor; opacity: .5; }
+}
+
+/* ── states.mjs .pb — publish blocked: crit-bordered card, one row per
+   issue, uppercase path labels, each row deep-links, foot sentence. ── */
+.qz-pb { border: 1px solid var(--qz-crit); border-radius: var(--qz-radius-lg); background: var(--qz-paper); overflow: hidden; margin: 10px 0 4px; }
+.qz-pb-top {
+  display: flex; align-items: center; gap: 9px; padding: 11px 14px;
+  background: var(--qz-crit-tint); border-bottom: 1px solid var(--qz-crit);
+  font-size: 13.5px; font-weight: 600; color: var(--qz-crit);
+}
+.qz-pb-top svg { width: 16px; height: 16px; flex: none; }
+.qz-pb ul { list-style: none; margin: 0; padding: 4px 0; }
+.qz-pb li + li { border-top: 1px solid var(--qz-rule); }
+.qz-pb-row {
+  display: grid; grid-template-columns: auto 1fr; gap: 9px; align-items: baseline;
+  width: 100%; padding: 8px 14px; font-size: 12.5px; line-height: 1.5;
+  color: var(--qz-ink-3); text-align: left; font-family: inherit;
+  border: 0; background: transparent;
+}
+button.qz-pb-row { cursor: pointer; }
+button.qz-pb-row:hover { background: var(--qz-cream-2); }
+.qz-pb-row b {
+  font-size: 11px; font-weight: 700; letter-spacing: .05em;
+  text-transform: uppercase; color: var(--qz-ink-4); white-space: nowrap;
+}
+.qz-pb-foot { margin: 0; padding: 10px 14px; border-top: 1px solid var(--qz-rule); font-size: 12.5px; color: var(--qz-ink-4); }
+
+/* ── mock .stage-tools — the floating block toolbar (portaled to body,
+   OUTSIDE the editor token scope, so neutrals are named directly: the
+   stand-down must hold here too). ── */
+.qz-blocktools {
+  position: fixed; z-index: 1000;
+  display: grid; gap: 2px; padding: 4px; border-radius: var(--qz-radius);
+  background: var(--qz-ink); box-shadow: var(--qz-lift-2);
+}
+.qz-blocktools button {
+  width: 26px; height: 26px; display: grid; place-items: center;
+  border: 0; border-radius: var(--qz-radius-sm); background: transparent;
+  color: #FFFFFF; font: inherit; font-size: 12px; opacity: .8; cursor: pointer;
+}
+.qz-blocktools button:hover:not(:disabled) { background: rgba(255, 255, 255, .16); opacity: 1; }
+.qz-blocktools button:disabled { opacity: .3; cursor: default; }
+.qz-blocksel-ring {
+  position: fixed; z-index: 999; pointer-events: none;
+  border: 1px solid var(--qz-ink); border-radius: var(--qz-radius-sm);
+}
+
+/* ── mock .tree-sub — per-step sub-label in the flow rail ── */
+.qz-flowrail-sub { color: var(--qz-ink-4); font-weight: 400; font-size: 12px; }
+
+/* ── mock .insp — inspector groups (s16: Space · Alignment · Type · Colour) ── */
+.qz-insp-group { padding: 14px 0 0; border-top: 1px solid var(--qz-rule); display: grid; gap: 9px; }
+.qz-insp-title {
+  margin: 0; font-size: 11px; letter-spacing: .09em; text-transform: uppercase;
+  color: var(--qz-ink-4); font-weight: 700;
+}
+.qz-insp-seg { display: flex; width: 100%; background: var(--qz-cream-2); border-radius: 8px; padding: 3px; gap: 2px; }
+.qz-insp-seg button {
+  flex: 1; display: inline-flex; align-items: center; justify-content: center;
+  border: 0; background: transparent; color: var(--qz-ink-4);
+  font: 600 12px var(--qz-font-body); padding: 6px 8px; border-radius: 6px; cursor: pointer;
+}
+.qz-insp-seg button:hover { color: var(--qz-ink-3); }
+.qz-insp-seg button[aria-pressed="true"] { background: var(--qz-paper); color: var(--qz-accent-ink); box-shadow: var(--qz-lift-1); }
+.qz-insp-ctl { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.qz-insp-ctl-label { flex: none; width: 46px; font-size: 12.5px; color: var(--qz-ink-3); }
+.qz-insp-sw {
+  width: 20px; height: 20px; flex: none; padding: 0; cursor: pointer;
+  border: 1px solid var(--qz-rule-strong); border-radius: var(--qz-radius-sm); background: none;
+}
+.qz-insp-sw::-webkit-color-swatch-wrapper { padding: 0; }
+.qz-insp-sw::-webkit-color-swatch { border: none; border-radius: 3px; }
+.qz-insp-sw::-moz-color-swatch { border: none; border-radius: 3px; }
+.qz-insp-ctl-val {
+  flex: 1; min-width: 0; padding: 5px 8px; font-family: inherit;
+  border: 1px solid var(--qz-rule-strong); border-radius: var(--qz-radius-sm);
+  font-size: 12.5px; font-variant-numeric: tabular-nums; color: var(--qz-ink);
+  background: var(--qz-paper);
+}
+.qz-insp-hint { margin: 0; font-size: 12px; color: var(--qz-ink-4); line-height: 1.5; }
+/* A DS input dropped into a ctl row (StyleTab's hex field) must shrink with
+   the 320px inspector — flex items default to min-width:auto and overflow. */
+.qz-insp-ctl > .qz-input, .qz-insp-ctl > input:not([type="color"]) { flex: 1 1 auto; min-width: 0; width: auto; }
+
+/* ── stand-down closers — literal violets that bypass the token swap
+   (additive overrides; the source blocks belong to earlier phases) ── */
+[data-qz-surface="editor"] .qz-bt-seg button[aria-pressed="true"] { box-shadow: 0 1px 2px rgba(32, 28, 46, .10); }
+[data-qz-surface="editor"] .qz-bt-comp:hover:not(:disabled) { box-shadow: 0 2px 8px rgba(32, 28, 46, .10); }

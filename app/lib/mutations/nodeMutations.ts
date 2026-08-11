@@ -401,3 +401,23 @@ export function setNodePosition(
     nodes: doc.nodes.map((n) => (n.id === nodeId ? { ...n, position: pos } : n)),
   };
 }
+
+// QRTZ-S4 — duplicate ONE block inside a node's EXPLICIT layout (the floating
+// block toolbar's ⧉). Pure: deep-copies the block with a fresh id and splices
+// it right after the original. Deliberately does NOT synthesize a layout for
+// an on-template node (the setNodeLayout synthesized→explicit drift trap) —
+// no explicit node_layouts entry ⇒ no-op.
+export function duplicateLayoutBlock(
+  doc: QuizDoc,
+  nodeId: string,
+  blockId: string,
+): QuizDoc {
+  const layout = doc.node_layouts[nodeId];
+  if (!layout) return doc;
+  const i = layout.findIndex((b) => b.id === blockId);
+  if (i < 0) return doc;
+  const copy = JSON.parse(JSON.stringify(layout[i]!)) as (typeof layout)[number];
+  copy.id = uid("blk");
+  const next = [...layout.slice(0, i + 1), copy, ...layout.slice(i + 1)];
+  return { ...doc, node_layouts: { ...doc.node_layouts, [nodeId]: next } };
+}

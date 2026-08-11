@@ -2,6 +2,7 @@ import { useMemo } from "react";
 import type { Quiz as QuizDoc } from "../../../lib/quizSchema";
 import type { Tier1Link, Tier1Report } from "../../../lib/pathReport";
 import { outcomeTable } from "../../../lib/pathAnalyzer";
+import { straightThroughRun } from "../../../lib/quizMutations";
 import { Tier1CheckList } from "../../shared/health/Tier1CheckList";
 import { usePathQuality } from "../../shared/health/usePathQuality";
 
@@ -15,6 +16,10 @@ import { usePathQuality } from "../../shared/health/usePathQuality";
    The report arrives as a PROP (Step3Shell's single memoized instance) —
    this component never calls buildTier1Report itself. */
 
+// QRTZ-S4 — number-word header per the states.mjs pb card ("Two things to
+// fix before publishing"); numerals past nine keep the sentence honest.
+const COUNT_WORDS = ["One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine"];
+
 export function HealthPopover({
   report,
   doc,
@@ -24,6 +29,7 @@ export function HealthPopover({
   onNavigate,
   tier2 = true,
   showOutcomes = true,
+  publishBlocked = false,
 }: {
   report: Tier1Report;
   doc: QuizDoc;
@@ -40,6 +46,12 @@ export function HealthPopover({
    *  (default) for every decider surface. */
   tier2?: boolean;
   showOutcomes?: boolean;
+  /** QRTZ-S4 — the BUILDER's publish gate opts in: blocking findings render
+   *  as the states.mjs pb card (crit-bordered, one row per issue, uppercase
+   *  path labels, each row deep-links) with the foot sentence. Default off so
+   *  the funnel surface (where the gate is Continue, not Publish) is
+   *  byte-identical. */
+  publishBlocked?: boolean;
 }) {
   const {
     report: aiReport,
@@ -65,6 +77,63 @@ export function HealthPopover({
     };
   }, [doc]);
 
+  // QRTZ-S4 — the pb card's rows: every finding of a failing BLOCKING check,
+  // with an uppercase path label derived from its deep link (Q-number for
+  // questions in flow order, node kind otherwise, rule index for rules).
+  const blockingFindings = useMemo(() => {
+    if (!publishBlocked) return [];
+    return report.checks
+      .filter((c) => c.severity === "block" && c.status === "fail")
+      .flatMap((c) => c.findings);
+  }, [publishBlocked, report]);
+  const pathLabel = useMemo(() => {
+    const byId = new Map(doc.nodes.map((n) => [n.id, n]));
+    const qNum = new Map<string, number>();
+    let q = 0;
+    for (const id of straightThroughRun(doc).run) {
+      if (byId.get(id)?.type === "question") qNum.set(id, ++q);
+    }
+    const kindNames: Record<string, string> = {
+      intro: "Intro",
+      email_gate: "Email",
+      result: "Results",
+      end: "End",
+      message: "Message",
+      ask_ai: "Ask AI",
+      integration: "Integration",
+      branch: "Branch",
+      product_cards: "Products",
+    };
+    return (link?: Tier1Link): string => {
+      if (!link) return "Quiz";
+      if (link.kind === "rule") {
+        const idx = (doc.decision_rules ?? []).findIndex((r) => r.id === link.ruleId);
+        return idx >= 0 ? `Rule ${idx + 1}` : "Rule";
+      }
+      const node = link.nodeId ? byId.get(link.nodeId) : undefined;
+      if (!node) return "Quiz";
+      if (node.type === "question") {
+        const n = qNum.get(node.id);
+        return n ? `Q${n}` : "Question";
+      }
+      return kindNames[node.type] ?? "Step";
+    };
+  }, [doc]);
+  // With the pb card listing the blocking findings, the checklist below keeps
+  // only passes / warnings / info — the same issue never renders twice.
+  const checklistReport = useMemo(
+    () =>
+      blockingFindings.length > 0
+        ? {
+            ...report,
+            checks: report.checks.filter(
+              (c) => !(c.severity === "block" && c.status === "fail"),
+            ),
+          }
+        : report,
+    [blockingFindings.length, report],
+  );
+
   return (
     <div className="qz-s3-health" aria-label="Quiz health report">
       <div className="qz-s3-health-head">
@@ -75,7 +144,43 @@ export function HealthPopover({
         </span>
       </div>
 
-      <Tier1CheckList report={report} onNavigate={onNavigate} showOutcomes={showOutcomes} />
+      {blockingFindings.length > 0 ? (
+        <div className="qz-pb" role="group" aria-label="Publish blocked">
+          <div className="qz-pb-top">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M12 8v5" />
+              <circle cx="12" cy="16.5" r=".9" fill="currentColor" stroke="none" />
+              <path d="M10.3 3.9 2.7 17.2A2 2 0 0 0 4.4 20.2h15.2a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z" />
+            </svg>
+            {COUNT_WORDS[blockingFindings.length - 1] ?? blockingFindings.length}{" "}
+            {blockingFindings.length === 1 ? "thing" : "things"} to fix before publishing
+          </div>
+          <ul>
+            {blockingFindings.map((f, i) => (
+              <li key={i}>
+                {f.link ? (
+                  <button
+                    type="button"
+                    className="qz-pb-row"
+                    onClick={() => onNavigate(f.link!)}
+                  >
+                    <b>{pathLabel(f.link)}</b>
+                    <span>{f.message}</span>
+                  </button>
+                ) : (
+                  <span className="qz-pb-row">
+                    <b>{pathLabel(f.link)}</b>
+                    <span>{f.message}</span>
+                  </span>
+                )}
+              </li>
+            ))}
+          </ul>
+          <p className="qz-pb-foot">Publishing stays disabled until these are resolved.</p>
+        </div>
+      ) : null}
+
+      <Tier1CheckList report={checklistReport} onNavigate={onNavigate} showOutcomes={showOutcomes} />
 
       {!tier2 ? null : (
         <>
