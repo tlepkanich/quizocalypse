@@ -38,14 +38,18 @@ export function StyleTab({
     mergeTokens(doc.design_tokens ?? {}, layer ?? {}),
   );
 
+  // QRTZ-S4 — the mock's colour-control anatomy (.ctl: label · 20px swatch
+  // chip · value). Same writes as before; only the presentation moved onto
+  // the shared .qz-insp-ctl classes.
   const color = (key: "primary" | "background" | "text", label: string) => (
     <QzField label={label} key={key}>
-      <div className="qz-row" style={{ gap: 8, alignItems: "center" }}>
+      <div className="qz-insp-ctl">
         <input
           type="color"
+          className="qz-insp-sw"
+          aria-label={`${label} swatch`}
           value={colors[key] ?? "#000000"}
           onChange={(e) => onCommit(setDesignLayer(doc, node.id, mode, { colors: { [key]: e.target.value } }))}
-          style={{ width: 36, height: 30, border: "none", background: "none" }}
         />
         <QzInput
           value={colors[key] ?? ""}

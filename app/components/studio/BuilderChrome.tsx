@@ -17,6 +17,7 @@ export type BuilderNavKey =
   | "products"
   | "logic"
   | "design"
+  | "analytics"
   | "settings";
 
 /** The mock's SVG symbol paths (build-tab.html <symbol> defs), 24px viewBox. */
@@ -60,6 +61,11 @@ export const MOCK_ICONS: Record<BuilderNavKey, ReactNode> = {
   design: (
     <path d="M12 3a9 9 0 000 18c1 0 1.7-.8 1.7-1.8 0-.5-.2-.9-.5-1.2-.3-.3-.5-.7-.5-1.2 0-1 .8-1.8 1.8-1.8H16a5 5 0 005-5c0-3.9-4-7-9-7z" />
   ),
+  // QRTZ-S4 — the mock's #chart bars (shared.mjs icon "chart"), scaled to the
+  // 24px viewBox this rail draws at.
+  analytics: (
+    <path d="M4 19v-8.5M9.4 19V4.8M14.7 19v-6M20 19V7.8" />
+  ),
   settings: (
     <>
       <circle cx="12" cy="12" r="3" />
@@ -68,11 +74,16 @@ export const MOCK_ICONS: Record<BuilderNavKey, ReactNode> = {
   ),
 };
 
+// QRTZ-S4 — Analytics joins per the mock rail list (shared.mjs EDITOR_NAV:
+// Build/Design/Products/Logic/Analytics/Settings). The product keeps its own
+// "Theme" label and "Set up" divider (brief ruling); Analytics slots before
+// Settings, matching the mock's relative order.
 const NAV: Array<{ key: BuilderNavKey; label: string; ruleAbove?: boolean }> = [
   { key: "build", label: "Build" },
   { key: "products", label: "Products", ruleAbove: true },
   { key: "logic", label: "Logic" },
   { key: "design", label: "Theme" },
+  { key: "analytics", label: "Analytics" },
   { key: "settings", label: "Settings" },
 ];
 

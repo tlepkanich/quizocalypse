@@ -189,6 +189,81 @@ function BlockRow({
   );
 }
 
+// QRTZ-S4 — the mock inspector's segmented control (base.mjs .insp-seg):
+// full-width, equal segments. `undefined` = no override; clicking the active
+// segment clears back to the theme default (the select's old "Default" row,
+// kept reachable without a fourth segment the mock doesn't draw).
+function InspSeg<T extends string | number>({
+  label,
+  options,
+  value,
+  onChange,
+}: {
+  label: string;
+  options: Array<{ v: T; label: string }>;
+  value: T | undefined;
+  onChange: (next: T | undefined) => void;
+}) {
+  return (
+    <div className="qz-insp-seg" role="group" aria-label={label}>
+      {options.map((o) => (
+        <button
+          key={String(o.v)}
+          type="button"
+          aria-pressed={value === o.v}
+          title={value === o.v ? "Click again for the theme default" : undefined}
+          onClick={() => onChange(value === o.v ? undefined : o.v)}
+        >
+          {o.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+// QRTZ-S4 — the mock's colour control row (.ctl: label · swatch chip · value).
+// No brand-palette name source exists in the doc model, so the middle slot is
+// the hex value (the mock's "else swatch + hex" fallback).
+function ColorCtl({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: string | undefined;
+  onChange: (next: string | undefined) => void;
+}) {
+  const hex = value && /^#[0-9a-fA-F]{6}$/.test(value) ? value : SWATCH_FALLBACK;
+  return (
+    <div className="qz-insp-ctl">
+      <span className="qz-insp-ctl-label">{label}</span>
+      <input
+        type="color"
+        className="qz-insp-sw"
+        aria-label={`${label} swatch`}
+        value={hex}
+        onChange={(e) => onChange(e.target.value)}
+      />
+      <input
+        className="qz-insp-ctl-val"
+        aria-label={`${label} colour`}
+        value={value ?? ""}
+        placeholder="theme"
+        onChange={(e) => onChange(e.target.value || undefined)}
+      />
+      <button
+        type="button"
+        className="qz-btn qz-btn-ghost qz-btn-sm"
+        disabled={value === undefined}
+        onClick={() => onChange(undefined)}
+        title="Clear (theme default)"
+      >
+        ✕
+      </button>
+    </div>
+  );
+}
+
 function BlockFields({
   block,
   onChange,
@@ -791,37 +866,37 @@ function BlockFields({
           {colorField("Color", block.color, "color")}
         </div>
       ) : null}
-      <QzField label="Alignment">
-        <QzSelect
-          value={block.style.align ?? ""}
-          onChange={(e) =>
-            onChange({
-              style: { ...block.style, align: (e.target.value || undefined) as never },
-            } as Partial<ContentBlock>)
-          }
-        >
-          <option value="">Default</option>
-          <option value="left">Left</option>
-          <option value="center">Center</option>
-          <option value="right">Right</option>
-        </QzSelect>
-      </QzField>
-      {/* Editor revamp P5 — the BlockStyle sizing/color fields existed in the
-          schema since 2A but were never exposed. A compact grid: blank = theme
-          default (undefined strips the override). */}
-      <div style={{ display: "grid", gap: 8 }}>
-        {/* QZY-8 §2 — every numeric = a linked range+number pair; blank exact
-            input = theme default (undefined strips the override). */}
+      {/* ── QRTZ-S4 — the mock inspector's grouped anatomy (shared.mjs s16:
+          Space · Alignment · Type · Colour), each an uppercase-titled
+          .insp-group over the SAME BlockStyle fields as before (blank/unset
+          = theme default; undefined strips the override). "Each side on its
+          own" is NOT built — BlockStyle stores one uniform `padding`, so
+          per-side values would be schema surgery (+ a runtime blockStyle.ts
+          change, which is off-limits). ── */}
+      <div className="qz-insp-group">
+        <p className="qz-insp-title">Space</p>
         <NumericControl
-          label="Font size"
-          value={block.style.font_size}
-          min={8}
-          max={72}
-          fallback={16}
+          label="Above"
+          value={block.style.margin_top}
+          min={0}
+          max={160}
+          fallback={0}
           allowEmpty
           suffix="px"
           onChange={(n) =>
-            onChange({ style: { ...block.style, font_size: n } } as Partial<ContentBlock>)
+            onChange({ style: { ...block.style, margin_top: n } } as Partial<ContentBlock>)
+          }
+        />
+        <NumericControl
+          label="Below"
+          value={block.style.margin_bottom}
+          min={0}
+          max={160}
+          fallback={0}
+          allowEmpty
+          suffix="px"
+          onChange={(n) =>
+            onChange({ style: { ...block.style, margin_bottom: n } } as Partial<ContentBlock>)
           }
         />
         <NumericControl
@@ -849,8 +924,38 @@ function BlockFields({
             onChange({ style: { ...block.style, max_width: n } } as Partial<ContentBlock>)
           }
         />
+      </div>
+      <div className="qz-insp-group">
+        <p className="qz-insp-title">Alignment</p>
+        <InspSeg
+          label="Alignment"
+          value={block.style.align}
+          options={[
+            { v: "left" as const, label: "Left" },
+            { v: "center" as const, label: "Centre" },
+            { v: "right" as const, label: "Right" },
+          ]}
+          onChange={(v) =>
+            onChange({ style: { ...block.style, align: v } } as Partial<ContentBlock>)
+          }
+        />
+      </div>
+      <div className="qz-insp-group">
+        <p className="qz-insp-title">Type</p>
         <NumericControl
-          label="Letter spacing"
+          label="Size"
+          value={block.style.font_size}
+          min={8}
+          max={72}
+          fallback={16}
+          allowEmpty
+          suffix="px"
+          onChange={(n) =>
+            onChange({ style: { ...block.style, font_size: n } } as Partial<ContentBlock>)
+          }
+        />
+        <NumericControl
+          label="Spacing"
           value={block.style.letter_spacing}
           min={-2}
           max={10}
@@ -862,46 +967,52 @@ function BlockFields({
             onChange({ style: { ...block.style, letter_spacing: n } } as Partial<ContentBlock>)
           }
         />
+        <InspSeg
+          label="Weight"
+          value={block.style.font_weight}
+          options={[
+            { v: 400, label: "Regular" },
+            { v: 500, label: "Medium" },
+            { v: 700, label: "Bold" },
+          ]}
+          onChange={(v) =>
+            onChange({ style: { ...block.style, font_weight: v } } as Partial<ContentBlock>)
+          }
+        />
       </div>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-        <QzField label="Corners">
-          <QzSelect
-            value={block.style.radius ?? ""}
-            onChange={(e) =>
-              onChange({
-                style: { ...block.style, radius: (e.target.value || undefined) as never },
-              } as Partial<ContentBlock>)
-            }
-          >
-            <option value="">Default</option>
-            <option value="square">Square</option>
-            <option value="rounded">Rounded</option>
-            <option value="pill">Pill</option>
-          </QzSelect>
-        </QzField>
-        <QzField label="Text color">
-          <QzInput
-            value={block.style.text_color ?? ""}
-            placeholder="#1b1a17"
-            onChange={(e) =>
-              onChange({
-                style: { ...block.style, text_color: e.target.value || undefined },
-              } as Partial<ContentBlock>)
-            }
-          />
-        </QzField>
-        <QzField label="Background">
-          <QzInput
-            value={block.style.background ?? ""}
-            placeholder="transparent"
-            onChange={(e) =>
-              onChange({
-                style: { ...block.style, background: e.target.value || undefined },
-              } as Partial<ContentBlock>)
-            }
-          />
-        </QzField>
+      <div className="qz-insp-group">
+        <p className="qz-insp-title">Colour</p>
+        <ColorCtl
+          label="Text"
+          value={block.style.text_color}
+          onChange={(v) =>
+            onChange({ style: { ...block.style, text_color: v } } as Partial<ContentBlock>)
+          }
+        />
+        <ColorCtl
+          label="Fill"
+          value={block.style.background}
+          onChange={(v) =>
+            onChange({ style: { ...block.style, background: v } } as Partial<ContentBlock>)
+          }
+        />
+        <p className="qz-insp-hint">Change it here and only this block changes.</p>
       </div>
+      <QzField label="Corners">
+        <QzSelect
+          value={block.style.radius ?? ""}
+          onChange={(e) =>
+            onChange({
+              style: { ...block.style, radius: (e.target.value || undefined) as never },
+            } as Partial<ContentBlock>)
+          }
+        >
+          <option value="">Default</option>
+          <option value="square">Square</option>
+          <option value="rounded">Rounded</option>
+          <option value="pill">Pill</option>
+        </QzSelect>
+      </QzField>
     </div>
   );
 }

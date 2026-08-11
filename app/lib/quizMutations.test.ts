@@ -33,6 +33,7 @@ import {
   setRecPageOverride,
   removeRecPageOverride,
   convertQuestionToMessage,
+  duplicateLayoutBlock,
 } from "./quizMutations";
 import { insertModule } from "../components/studio/studioDoc";
 import { orderFlow } from "./flowOrder";
@@ -1208,5 +1209,49 @@ describe("convertQuestionToMessage", () => {
   it("refuses on the deciding question (single-decider invariant)", () => {
     const d = doc();
     expect(convertQuestionToMessage(d, "qd")).toBe(d);
+  });
+});
+
+describe("duplicateLayoutBlock (QRTZ-S4 — floating block toolbar)", () => {
+  const withLayout = () => {
+    const base = linearQuestionsDoc();
+    return Quiz.parse({
+      ...base,
+      node_layouts: {
+        intro: [
+          { id: "b1", type: "heading", level: "h2", bind: "none", text: "Hi", style: {} },
+          { id: "b2", type: "text", bind: "none", text: "Body", supports_merge_tags: false, style: { margin_top: 18 } },
+          { id: "b3", type: "button", label: "Start", variant: "primary", style: {} },
+        ],
+      },
+    });
+  };
+
+  it("splices a deep copy with a fresh id right after the original", () => {
+    const next = duplicateLayoutBlock(withLayout(), "intro", "b2");
+    const layout = next.node_layouts["intro"]!;
+    expect(layout.length).toBe(4);
+    const copy = layout[2]!;
+    expect(layout.map((b) => b.id).slice(0, 2)).toEqual(["b1", "b2"]);
+    expect(layout[3]!.id).toBe("b3");
+    expect(copy.id).not.toBe("b2");
+    expect(copy.type).toBe("text");
+    expect(copy.type === "text" && copy.text).toBe("Body");
+    expect(copy.style.margin_top).toBe(18);
+    // Deep copy — mutating the clone's style must not touch the original.
+    expect(copy.style).not.toBe(layout[1]!.style);
+    // Result still parses as a valid Quiz doc.
+    expect(() => Quiz.parse(next)).not.toThrow();
+  });
+
+  it("is a no-op on an on-template node (never synthesizes a layout)", () => {
+    const d = withLayout();
+    expect(duplicateLayoutBlock(d, "q1", "b1")).toBe(d);
+    expect(d.node_layouts["q1"]).toBeUndefined();
+  });
+
+  it("is a no-op for an unknown block id", () => {
+    const d = withLayout();
+    expect(duplicateLayoutBlock(d, "intro", "nope")).toBe(d);
   });
 });

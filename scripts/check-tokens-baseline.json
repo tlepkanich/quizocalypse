@@ -144,10 +144,6 @@
       "hex": 0,
       "boxShadow": 1
     },
-    "app/components/studio/panels/LayoutTab.tsx": {
-      "hex": 1,
-      "boxShadow": 0
-    },
     "app/components/studio/panels/StyleTab.tsx": {
       "hex": 2,
       "boxShadow": 0

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { Link, useFetcher, useSearchParams } from "@remix-run/react";
+import { Link, useFetcher, useNavigate, useSearchParams } from "@remix-run/react";
 import { TitleBar } from "@shopify/app-bridge-react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { QzPage, QzPageHeader, QzButton, QzBanner } from "../qz";
@@ -10,6 +10,7 @@ import { orderFlow } from "../../lib/flowOrder";
 import { reconcileBucketsToResultNodes } from "../../lib/bucketReconcile";
 import {
   deleteNode,
+  duplicateLayoutBlock,
   duplicateQuestionNode,
   setQuestionType,
   straightThroughRun,
@@ -29,7 +30,15 @@ import type { RegenApi } from "./panels/ContentTab";
 import { AiChatPanel } from "./AiChatPanel";
 import { ReviewEnrichPanel } from "./ReviewEnrichPanel";
 import { EditableTitle, PLACEMENTS, startInlineTextEdit, type StudioBuilderData } from "./studioShared";
-import { applyInspectText, INLINE_EDITABLE_PARTS, insertModule, PALETTE_BLOCKS } from "./studioDoc";
+import {
+  applyInspectText,
+  blockMove,
+  blockRemove,
+  INLINE_EDITABLE_PARTS,
+  insertModule,
+  PALETTE_BLOCKS,
+  setNodeLayout,
+} from "./studioDoc";
 import { BuilderNavRail, BuilderTopBar, MOCK_ICONS, type BuilderNavKey } from "./BuilderChrome";
 import { hasBackgroundOverride } from "../../lib/screenBackground";
 import { HealthPill } from "../onboarding/questionsLogicV3/HealthPill";
@@ -146,9 +155,16 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
     past: [],
     future: [],
   });
+  // QRTZ-S4 — the honest "Unpublished changes" signal: any doc write this
+  // session (commit / AI apply / undo / redo) marks the draft newer than the
+  // published version; a successful publish clears it. Cross-SESSION
+  // unpublished changes are not detectable here (the editor loader exposes no
+  // publishedAt/updatedAt pair), so a clean load shows no pill.
+  const [dirtySincePublish, setDirtySincePublish] = useState(false);
   const commit = useCallback(
     (next: QuizDoc) => {
       setHistory((h) => ({ past: [...h.past, doc].slice(-50), future: [] }));
+      setDirtySincePublish(true);
       rawCommit(next);
     },
     [doc, rawCommit],
@@ -160,6 +176,7 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
   const applyAi = useCallback(
     (aiDoc: QuizDoc) => {
       setHistory((h) => ({ past: [...h.past, doc].slice(-50), future: [] }));
+      setDirtySincePublish(true);
       applyAiResult(aiDoc);
     },
     [doc, applyAiResult],
@@ -168,12 +185,14 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
     if (history.past.length === 0) return;
     const prev = history.past[history.past.length - 1]!;
     setHistory({ past: history.past.slice(0, -1), future: [doc, ...history.future].slice(0, 50) });
+    setDirtySincePublish(true);
     rawCommit(prev);
   }, [history, doc, rawCommit]);
   const redo = useCallback(() => {
     if (history.future.length === 0) return;
     const next = history.future[0]!;
     setHistory({ past: [...history.past, doc].slice(-50), future: history.future.slice(1) });
+    setDirtySincePublish(true);
     rawCommit(next);
   }, [history, doc, rawCommit]);
   const canUndo = history.past.length > 0;
@@ -231,6 +250,26 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
   }, [undo, redo]);
   // QB-2 — preview zoom (a CSS scale on the canvas frame), 50–100%.
   const [zoom, setZoom] = useState(100);
+  // QRTZ-S4 (F5) — ZOOM TRUTH: the stagebar readout must print the APPLIED
+  // scale, not the requested ceiling (zoom CLAMPS DeviceFrame's fit scale, so
+  // "100%" can render at 62%). Step5Preview keeps DeviceFrame's onFit to
+  // itself (preview files are a sibling's — not edited), so the applied scale
+  // is measured from the canvas DOM instead: the .qz-devframe carries the one
+  // transform, so rect.width / offsetWidth IS the applied scale. Re-measured
+  // via a ResizeObserver on the frame's scaled footprint slot (its size is
+  // exactly round(w × scale), so every scale change resizes it).
+  const canvasHostRef = useRef<HTMLDivElement | null>(null);
+  const [appliedZoomPct, setAppliedZoomPct] = useState<number | null>(null);
+  // QRTZ-S4 — floating block toolbar over the canvas selection (mock
+  // shared.mjs stage-tools): the clicked [data-qz-block] element (an explicit
+  // node_layouts block) + its viewport rect for the portal overlay.
+  const [blockSel, setBlockSel] = useState<{ nodeId: string; blockId: string } | null>(null);
+  const [blockRect, setBlockRect] = useState<{
+    top: number;
+    left: number;
+    width: number;
+    height: number;
+  } | null>(null);
   const publishFetcher = useFetcher<{
     ok: boolean;
     version?: number;
@@ -244,6 +283,13 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
     aiCopyDegraded?: boolean;
   }>();
   const renameFetcher = useFetcher<{ ok: boolean; name?: string }>();
+  const navigate = useNavigate();
+
+  // QRTZ-S4 — a successful publish ships the live doc, so at that moment the
+  // draft and the published version agree again.
+  useEffect(() => {
+    if (publishFetcher.data?.ok) setDirtySincePublish(false);
+  }, [publishFetcher.data]);
 
   // Selection drives the ContextPanel; the optional inspect target carries the
   // exact element clicked in the preview (for its outline highlight).
@@ -290,6 +336,42 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
   // same screen, bigger, in a dimmed overlay. Esc / ✕ / click-outside close.
   const [previewExpanded, setPreviewExpanded] = useState(false);
 
+  // QRTZ-S4 — track the selected block's viewport rect for the floating
+  // toolbar + ring overlay (portaled to body — the builder-overlay-portal
+  // trap: the canvas's transforms would pointer-trap an in-flow layer).
+  // Scroll is listened in CAPTURE so the frame's INNER scroller re-positions
+  // the overlay too; a vanished element (deleted / step change / re-render)
+  // clears the selection.
+  useEffect(() => {
+    if (!blockSel) {
+      setBlockRect(null);
+      return;
+    }
+    const host = canvasHostRef.current;
+    if (!host) {
+      setBlockSel(null);
+      return;
+    }
+    const measure = () => {
+      const el = host.querySelector<HTMLElement>(
+        `[data-qz-block="${blockSel.blockId}"]`,
+      );
+      if (!el) {
+        setBlockSel(null);
+        return;
+      }
+      const r = el.getBoundingClientRect();
+      setBlockRect({ top: r.top, left: r.left, width: r.width, height: r.height });
+    };
+    measure();
+    window.addEventListener("scroll", measure, true);
+    window.addEventListener("resize", measure);
+    return () => {
+      window.removeEventListener("scroll", measure, true);
+      window.removeEventListener("resize", measure);
+    };
+  }, [blockSel, doc, zoom, tier, canvasMode, editMode]);
+
   // build-tab handoff §7 — "[" toggles the left library panel (never while
   // typing: inputs, textareas, selects, and contenteditable are exempt).
   useEffect(() => {
@@ -325,11 +407,12 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
       if (upgradeOpen) return; // the wizard modal owns Escape while open
       if (previewExpanded) setPreviewExpanded(false);
       else if (confirmDeleteId) setConfirmDeleteId(null);
+      else if (blockSel) setBlockSel(null); // QRTZ-S4 — block toolbar first
       else select(null);
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [select, confirmDeleteId, upgradeOpen, previewExpanded]);
+  }, [select, confirmDeleteId, upgradeOpen, previewExpanded, blockSel]);
 
   // Delete / Backspace on the selected step ARMS its two-step delete confirm in
   // the rail (never deletes outright — the actual delete is a second explicit
@@ -403,6 +486,39 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
     [view, doc, commit, data.categories, setParams],
   );
 
+  // QRTZ-S4 — measure the applied preview scale off the canvas's .qz-devframe
+  // (see the state comment above). Deps re-query on every input that can move
+  // the fit; the ResizeObserver on the footprint slot catches pane resizes.
+  useEffect(() => {
+    const host = canvasHostRef.current;
+    if (!host) {
+      setAppliedZoomPct(null);
+      return;
+    }
+    const measure = () => {
+      const frame = host.querySelector<HTMLElement>(".qz-devframe");
+      if (!frame || frame.offsetWidth === 0) {
+        setAppliedZoomPct(null);
+        return;
+      }
+      const applied = frame.getBoundingClientRect().width / frame.offsetWidth;
+      setAppliedZoomPct(Math.round(applied * 100));
+    };
+    measure();
+    const frame = host.querySelector<HTMLElement>(".qz-devframe");
+    let ro: ResizeObserver | null = null;
+    if (typeof ResizeObserver !== "undefined") {
+      ro = new ResizeObserver(measure);
+      ro.observe(host);
+      if (frame?.parentElement) ro.observe(frame.parentElement);
+    }
+    window.addEventListener("resize", measure);
+    return () => {
+      ro?.disconnect();
+      window.removeEventListener("resize", measure);
+    };
+  }, [zoom, tier, canvasMode, editMode, view, tool, libraryCollapsed]);
+
   const allIssues = useMemo<NodeIssue[]>(() => validateQuiz(doc), [doc]);
   const suggestions = useMemo(() => validateQuizWarnings(doc), [doc]);
   const issuesByNode = useMemo(() => {
@@ -465,6 +581,12 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
     [setView, select],
   );
   const isPublishing = publishFetcher.state !== "idle";
+  // QRTZ-S4 — the loading Publish button must hold its resting width (the
+  // states.mjs rule: width + label held, only a leading ring appears). The
+  // resting width is captured at click time and pinned as an inline width for
+  // the duration of the submit.
+  const publishBtnRef = useRef<HTMLButtonElement | null>(null);
+  const publishBtnW = useRef<number | null>(null);
   const placement = doc.placement ?? "page";
   const currentPlacement = PLACEMENTS.find((p) => p.value === placement) ?? PLACEMENTS[0]!;
 
@@ -708,12 +830,24 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
   );
 
   // BLD-3 — the mock's zoom cluster (borderless 24px steppers + mono label).
+  // QRTZ-S4 (F5) — the label reads the APPLIED scale measured off the frame
+  // (zoom is a ceiling on the fit, so the requested number can be a lie);
+  // requested zoom is the fallback until the first measurement lands.
   const zoomStepper = (
     <span className="qz-bt-zoom">
       <button type="button" className="qz-bt-iconbtn" aria-label="Zoom out" title="Zoom out" onClick={() => setZoom((z) => Math.max(50, z - 10))}>
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" style={{ width: 14, height: 14 }} aria-hidden="true"><path d="M5 12h14" /></svg>
       </button>
-      <span className="qz-bt-zlabel">{zoom}%</span>
+      <span
+        className="qz-bt-zlabel"
+        title={
+          appliedZoomPct !== null && appliedZoomPct < zoom
+            ? `Showing ${appliedZoomPct}% — the whole screen is kept in view (requested ${zoom}%)`
+            : "Preview scale"
+        }
+      >
+        {appliedZoomPct ?? zoom}%
+      </span>
       <button type="button" className="qz-bt-iconbtn" aria-label="Zoom in" title="Zoom in" onClick={() => setZoom((z) => Math.min(100, z + 10))}>
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" style={{ width: 14, height: 14 }} aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg>
       </button>
@@ -1005,6 +1139,49 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
       select(dropTarget.id); // open the inspector on the step that grew a block
     };
 
+    // QRTZ-S4 — floating block toolbar (mock shared.mjs stage-tools: ↑ ↓
+    // duplicate ✕). A CAPTURE-phase click listener on the canvas runs before
+    // the runtime's own capture handlers (root→target order), so their
+    // stopPropagation cannot hide the click; the nearest [data-qz-block]
+    // wrapper is the selection. Only explicit node_layouts compositions render
+    // block wrappers (template screens draw none), so on-template screens
+    // never show the toolbar — and nothing here synthesizes a layout (the
+    // setNodeLayout drift trap). Move/delete are the SAME studioDoc ops the
+    // Layers tab uses; duplicate is the new pure duplicateLayoutBlock.
+    const onCanvasClickCapture = (e: React.MouseEvent) => {
+      if (!editMode) return;
+      const el = (e.target as HTMLElement).closest?.("[data-qz-block]");
+      const clickedBlockId =
+        el instanceof HTMLElement ? el.getAttribute("data-qz-block") : null;
+      if (clickedBlockId) {
+        const owner = Object.keys(doc.node_layouts).find((nid) =>
+          doc.node_layouts[nid]?.some((b) => b.id === clickedBlockId),
+        );
+        if (owner) {
+          setBlockSel({ nodeId: owner, blockId: clickedBlockId });
+          return;
+        }
+      }
+      setBlockSel(null);
+    };
+    const selBlocks = blockSel ? doc.node_layouts[blockSel.nodeId] ?? [] : [];
+    const selBlockIndex = blockSel
+      ? selBlocks.findIndex((b) => b.id === blockSel.blockId)
+      : -1;
+    const blockToolbarMove = (dir: -1 | 1) => {
+      if (!blockSel) return;
+      commit(setNodeLayout(doc, blockSel.nodeId, blockMove(selBlocks, blockSel.blockId, dir)));
+    };
+    const blockToolbarDuplicate = () => {
+      if (!blockSel) return;
+      commit(duplicateLayoutBlock(doc, blockSel.nodeId, blockSel.blockId));
+    };
+    const blockToolbarDelete = () => {
+      if (!blockSel) return;
+      commit(setNodeLayout(doc, blockSel.nodeId, blockRemove(selBlocks, blockSel.blockId)));
+      setBlockSel(null);
+    };
+
     // QZY-7 (build-tab §3) — the palette's question tiles: on a question
     // screen they SWITCH the input type (choice ↔ slider confirms, naming the
     // mapping impact — §9); elsewhere they add a NEW question screen after
@@ -1146,6 +1323,10 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
             onNavigate={onHealthNavigate}
             tier2={isDecider}
             showOutcomes={isDecider}
+            // QRTZ-S4 — this popover IS the builder's publish gate: blocking
+            // findings render as the states.mjs pb card with the foot
+            // sentence; each row keeps its deep link.
+            publishBlocked
           />
         }
       />
@@ -1399,6 +1580,9 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
     // and opens the health popover with the jump-links — it never publishes
     // while blocking > 0 (same gate as canPublish; S1 folds validateQuiz).
     // BLD-3: both states wear the mock's .tbtn anatomy (.primary when clean).
+    // QRTZ-S4 — loading holds width + label ("Publishing…" resized the button,
+    // the exact forbidden thing): the resting width is captured on click and
+    // pinned inline; .qz-btn-loading draws the leading 14px ring.
     const blocking = healthReport.verdict.blocking;
     const publishBtnV2 =
       blocking > 0 ? (
@@ -1412,14 +1596,40 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
         </button>
       ) : (
         <button
+          ref={publishBtnRef}
           type="button"
-          className="qz-bt-tbtn is-primary"
+          className={`qz-bt-tbtn is-primary${isPublishing ? " qz-btn-loading" : ""}`}
+          style={
+            isPublishing && publishBtnW.current
+              ? { width: publishBtnW.current }
+              : undefined
+          }
           disabled={isPublishing}
-          onClick={publish}
+          aria-busy={isPublishing || undefined}
+          onClick={() => {
+            publishBtnW.current = publishBtnRef.current?.offsetWidth ?? null;
+            publish();
+          }}
         >
-          {isPublishing ? "Publishing…" : "Publish"}
+          Publish
         </button>
       );
+
+    // QRTZ-S4 — the mock's "Draft · 10 unpublished" pill, built honestly: the
+    // product has no unpublished-change COUNT anywhere, so the pill names the
+    // state, not a number. Never published (version 0) → "Draft"; published +
+    // edited this session → "Unpublished changes"; published + no session
+    // edits → no pill (cross-session drift is not client-detectable).
+    const effectiveVersion =
+      publishFetcher.data?.ok && publishFetcher.data.version
+        ? publishFetcher.data.version
+        : data.version;
+    const draftPill =
+      effectiveVersion === 0 ? (
+        <span className="qz-bt-draftpill">Draft</span>
+      ) : dirtySincePublish ? (
+        <span className="qz-bt-draftpill">Unpublished changes</span>
+      ) : null;
 
     // Transient outcomes only — validation + suggestions live in the pill now,
     // so a merely-unfinished quiz shows a clean canvas, not a nag banner.
@@ -1468,14 +1678,24 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
               ? " is-libhidden"
               : "");
     return (
-      <div className="qz-bt-backdrop">
+      // QRTZ-S4 — THE STAND-DOWN: data-qz-surface="editor" scopes the token
+      // swap (quizocalypse.css) to the whole builder shell, so selection,
+      // focus, active nav and the primary action re-point at the ink ladder
+      // and the only saturated colour left is the merchant's design.
+      <div className="qz-bt-backdrop" data-qz-surface="editor">
       <div className="qz-bt-wrap">
       <div className="qz-builder">
         {/* BLD-3 — the mock's .top: one ordered row. */}
         <BuilderTopBar>
-          <div className="qz-bt-qtitle qz-builder-titlewrap">
-            <EditableTitle name={data.name} onRename={renameQuiz} />
-          </div>
+          {/* QRTZ-S4 — mock .crumbs: "Quizzes / {title}", Quizzes links out;
+              the leaf keeps the click-to-rename EditableTitle. */}
+          <nav className="qz-bt-crumbs" aria-label="Breadcrumb">
+            <Link to="/studio/quizzes">Quizzes</Link>
+            <span className="qz-bt-crumbsep" aria-hidden="true">/</span>
+            <span className="qz-bt-qtitle qz-builder-titlewrap">
+              <EditableTitle name={data.name} onRename={renameQuiz} />
+            </span>
+          </nav>
           <span className="qz-tbadge">{XTYPE_LABEL[experienceTypeOf(doc)]}</span>
           {isDecider ? (
             <span
@@ -1521,6 +1741,8 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M10 13a5 5 0 007 0l2-2a5 5 0 00-7-7l-1 1" /><path d="M14 11a5 5 0 00-7 0l-2 2a5 5 0 007 7l1-1" /></svg>
             Preview live
           </a>
+          {/* QRTZ-S4 — mock order: the draft pill leads the Publish button. */}
+          {draftPill}
           {publishBtnV2}
         </BuilderTopBar>
         <div className={bodyCls}>
@@ -1533,6 +1755,9 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
               } else if (key === "build") {
                 setTool("editor");
                 setView("build");
+              } else if (key === "analytics") {
+                // QRTZ-S4 — Analytics is a real route, not a workspace view.
+                navigate(`/studio/${data.quizId}/analytics`);
               } else {
                 setView(key);
               }
@@ -1574,6 +1799,8 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
                 ) : (
                   <div
                     className={`qz-builder-canvas${blockDropActive ? " is-blockdrop" : ""}`}
+                    ref={canvasHostRef}
+                    onClickCapture={onCanvasClickCapture}
                     onDoubleClick={onCanvasDoubleClick}
                     onDragOver={onCanvasDragOver}
                     onDragLeave={onCanvasDragLeave}
@@ -1722,6 +1949,74 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
           />
         ) : null}
         {upgradeModal}
+        {/* QRTZ-S4 — the floating block toolbar + selection ring, portaled to
+            document.body (the builder-overlay-portal trap: the canvas's
+            container-type/zoom transforms pointer-trap in-flow fixed layers).
+            Positioned from the selected block's measured viewport rect; the
+            toolbar hangs at the block's top edge, left of the frame when
+            there is room, else inside its left edge. The mock's selection-
+            ring TYPE TAG (.sel-tag) stays unbuilt — it belongs to the
+            runtime's selection markup, which is off-limits. */}
+        {blockSel && blockRect && editMode && !allScreensMode && typeof document !== "undefined"
+          ? createPortal(
+              <>
+                <div
+                  className="qz-blocksel-ring"
+                  aria-hidden
+                  style={{
+                    top: blockRect.top - 1,
+                    left: blockRect.left - 1,
+                    width: blockRect.width + 2,
+                    height: blockRect.height + 2,
+                  }}
+                />
+                <div
+                  className="qz-blocktools"
+                  role="toolbar"
+                  aria-label="Selected block"
+                  style={{
+                    top: Math.max(8, blockRect.top),
+                    left:
+                      blockRect.left - 44 >= 8
+                        ? blockRect.left - 44
+                        : blockRect.left + 6,
+                  }}
+                >
+                  <button
+                    type="button"
+                    aria-label="Move block up"
+                    disabled={selBlockIndex <= 0}
+                    onClick={() => blockToolbarMove(-1)}
+                  >
+                    ↑
+                  </button>
+                  <button
+                    type="button"
+                    aria-label="Move block down"
+                    disabled={selBlockIndex < 0 || selBlockIndex >= selBlocks.length - 1}
+                    onClick={() => blockToolbarMove(1)}
+                  >
+                    ↓
+                  </button>
+                  <button
+                    type="button"
+                    aria-label="Duplicate block"
+                    onClick={blockToolbarDuplicate}
+                  >
+                    ⧉
+                  </button>
+                  <button
+                    type="button"
+                    aria-label="Delete block"
+                    onClick={blockToolbarDelete}
+                  >
+                    ✕
+                  </button>
+                </div>
+              </>,
+              document.body,
+            )
+          : null}
         {/* SPEC Expand — the dimmed overlay (portal to body: the builder-
             overlay-portal lesson — the stage's transforms would pointer-trap
             an in-flow fixed layer). A second preview mount pinned to the
@@ -1789,6 +2084,10 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
   }
 
   return (
+    // QRTZ-S4 — THE STAND-DOWN, embedded surface: QzPage takes no extra
+    // props, so a display:contents wrapper (no box, custom properties still
+    // inherit through it) carries the editor token scope.
+    <div data-qz-surface="editor" style={{ display: "contents" }}>
     <QzPage>
       {chrome === "embedded" ? <TitleBar title={`Studio · ${data.name}`} /> : null}
       <QzPageHeader
@@ -1827,5 +2126,6 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
       {body}
       {upgradeModal}
     </QzPage>
+    </div>
   );
 }
