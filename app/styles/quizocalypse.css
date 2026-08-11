@@ -1326,28 +1326,30 @@ body[data-qz] ::selection { background: var(--qz-ink); color: var(--qz-cream); }
   font-weight: 700; font-size: 17px; line-height: 1;
 }
 
-/* The rail: full-height sticky paper column. Width animates 300ms; labels
+/* The rail — QRTZ-S1, restyled to the Quartz mock (_src/quartz.mjs:
+   --rail-w 224px, --rail-pad 16px 10px; brand pad 4px 8px 20px, no divider
+   under it). Full-height sticky paper column; width animates 300ms; labels
    fade 140ms — out immediately on collapse (then visibility-hidden after the
    fade), in after a 160ms delay on expand so the width has mostly settled.
-   Collapsed horizontal padding drops to 10px so the 40×40 rows fit in 60px. */
+   Collapsed horizontal padding stays 10px so the 40px rows fit in 60px. */
 .qz-rail {
-  width: 240px; flex: 0 0 auto;
+  width: 224px; flex: 0 0 auto;
   position: sticky; top: 0; align-self: flex-start;
   height: 100vh;
   display: flex; flex-direction: column;
   background: var(--qz-paper);
   border-right: 1px solid var(--qz-rule);
-  padding: 14px 12px;
+  padding: 16px 10px;
   overflow: hidden;
   transition: width var(--qz-dur-slow) var(--qz-ease), padding var(--qz-dur-slow) var(--qz-ease);
 }
 .qz-rail.is-collapsed { width: 60px; padding-left: 10px; padding-right: 10px; }
 
-/* Header slot: wordmark, 16px gap, then the hairline divider. */
+/* Header slot: the brand lockup; the mock has no divider under it — the
+   20px bottom padding is the separation. */
 .qz-rail-head {
   display: flex; align-items: center;
-  padding: 4px 8px 16px;
-  border-bottom: 1px solid var(--qz-rule);
+  padding: 4px 8px 20px;
 }
 .qz-rail.is-collapsed .qz-rail-head { justify-content: center; padding-left: 0; padding-right: 0; }
 
@@ -1372,28 +1374,31 @@ body[data-qz] ::selection { background: var(--qz-ink); color: var(--qz-cream); }
 
 .qz-rail-nav {
   display: flex; flex-direction: column; gap: 2px;
-  margin-top: 8px; flex: 1 1 auto;
+  flex: 1 1 auto;
   overflow-y: auto; overflow-x: hidden;
 }
+/* Nav rows — mock metrics: --nav-pad 9px 12px, --nav-r 6px, --nav-size 14px,
+   gap 11px; hover = cream-2 fill + ink text; active = accent-wash fill +
+   accent-ink text + the 3px leading accent bar (meld.mjs:28-32). */
 .qz-rail-item {
   position: relative;
-  display: flex; align-items: center; gap: 12px; flex: none;
-  height: 40px; padding: 0 10px; border-radius: 10px;
+  display: flex; align-items: center; gap: 11px; flex: none;
+  padding: 9px 12px; border-radius: var(--qz-radius);
   color: var(--qz-ink-3); text-decoration: none;
   font-size: 14px; font-weight: 500; line-height: 1;
   overflow: hidden;
   transition: background var(--qz-dur-fast) var(--qz-ease), color var(--qz-dur-fast) var(--qz-ease);
 }
-.qz-rail.is-collapsed .qz-rail-item { width: 40px; padding: 0; gap: 0; justify-content: center; }
-.qz-rail-icon { flex: 0 0 auto; }
+.qz-rail.is-collapsed .qz-rail-item { width: 40px; height: 40px; padding: 0; gap: 0; justify-content: center; }
+.qz-rail-icon { flex: 0 0 auto; opacity: 0.85; }
 .qz-rail-item:hover {
-  background: color-mix(in srgb, var(--qz-ink) 4%, transparent);
+  background: var(--qz-cream-2);
   color: var(--qz-ink);
 }
 .qz-rail-item[aria-current="page"] {
-  /* P2 Edit 5 — active item reads by weight, not just color. */
-  background: var(--qz-accent-wash); color: var(--qz-accent); font-weight: 700;
+  background: var(--qz-accent-wash); color: var(--qz-accent-ink); font-weight: 600;
 }
+.qz-rail-item[aria-current="page"] .qz-rail-icon { opacity: 1; }
 /* P3 Edit 5 — "Soon" tag on v1 placeholder nav items. */
 .qz-rail-soon {
   margin-left: auto; flex: none;
@@ -1403,9 +1408,11 @@ body[data-qz] ::selection { background: var(--qz-ink); color: var(--qz-cream); }
 }
 .qz-rail.is-collapsed .qz-rail-soon { display: none; }
 .qz-rail-item[aria-current="page"]::before {
-  content: ""; position: absolute; left: 0; top: 8px; bottom: 8px; width: 3px;
+  content: ""; position: absolute; left: 0; top: 6px; bottom: 6px; width: 3px;
   border-radius: 0 2px 2px 0; background: var(--qz-accent);
 }
+/* Icon-only rows drop the bar (mock rail-icons: the wash alone marks it). */
+.qz-rail.is-collapsed .qz-rail-item[aria-current="page"]::before { display: none; }
 
 /* Collapse toggle: bottom-right of the rail, above the account divider. */
 .qz-rail-collapse {
@@ -1424,111 +1431,26 @@ body[data-qz] ::selection { background: var(--qz-ink); color: var(--qz-cream); }
 
 /* Footer: divider, then the account row. Collapsed, the row stacks so the
    theme toggle sits icon-only below the avatar. */
-.qz-rail-foot { border-top: 1px solid var(--qz-rule); padding-top: 12px; }
+.qz-rail-foot { border-top: 1px solid var(--qz-rule); padding-top: 14px; }
 .qz-rail-account { display: flex; align-items: center; gap: 10px; padding: 0 2px; }
 .qz-rail-account > .qz-rail-label { flex: 1 1 auto; font-size: 13.5px; font-weight: 500; }
+/* Avatar — mock: 22px, squared (--r-sm), accent fill, 11/700. */
 .qz-rail-avatar {
-  width: 28px; height: 28px; flex: 0 0 auto; border-radius: 50%;
+  width: 22px; height: 22px; flex: 0 0 auto; border-radius: var(--qz-radius-sm);
   display: inline-flex; align-items: center; justify-content: center;
   background: var(--qz-accent); color: #fff;
-  font-size: 12px; font-weight: 600; line-height: 1;
+  font-size: 11px; font-weight: 700; line-height: 1;
 }
 .qz-rail.is-collapsed .qz-rail-account { flex-direction: column; gap: 8px; padding: 0; }
 /* The account label would still hold flex space when merely invisible, so it
    is display-removed in the collapsed column (no fade — pragmatic). */
 .qz-rail.is-collapsed .qz-rail-account > .qz-rail-label { display: none; }
 
-/* ── QD-3 — Home front door: big action cards + inspiration gallery ────────── */
-.qz-action-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 16px; }
-.qz-action-card {
-  display: flex; flex-direction: column; gap: 11px;
-  padding: 26px; text-decoration: none; color: inherit; min-height: 172px;
-}
-.qz-action-icon {
-  width: 52px; height: 52px; border-radius: 14px; margin-bottom: 2px;
-  display: inline-flex; align-items: center; justify-content: center;
-  background: var(--qz-accent-tint); color: var(--qz-accent);
-}
-.qz-inspo-row { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 14px; }
-.qz-inspo-card { display: flex; flex-direction: column; gap: 10px; padding: 12px; text-decoration: none; color: inherit; }
-.qz-inspo-thumb { display: block; height: 116px; border-radius: 9px; border: 1px solid var(--qz-rule); }
-
-/* ── P2 Edit 6/12 — Home dashboard ─────────────────────────────────────── */
-.qz-quick { display: flex; flex-direction: column; gap: 9px; padding: 18px; }
-/* P3 Edit 5 — "Soon" placeholder action card (not clickable, no hover-lift). */
-.qz-soon-tag {
-  font-size: 9.5px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase;
-  padding: 2px 7px; border-radius: 999px;
-  background: var(--qz-cream-2); color: var(--qz-ink-4);
-}
-.qz-quick.is-soon { opacity: 0.72; cursor: default; }
-.qz-quick.is-soon:hover { transform: none; box-shadow: var(--qz-lift-1); }
-.qz-quick-icon {
-  width: 42px; height: 42px; border-radius: 12px; color: var(--qz-accent-ink);
-  display: inline-flex; align-items: center; justify-content: center;
-}
-.qz-hero-banner {
-  position: relative; overflow: hidden;
-  display: flex; align-items: center; min-height: 168px;
-  background: linear-gradient(120deg, var(--qz-pastel-violet), color-mix(in srgb, var(--qz-pastel-sky) 55%, var(--qz-paper)));
-  background-size: 180% 180%;
-  animation: qz-hero-banner-drift 11s ease-in-out infinite;
-}
-@keyframes qz-hero-banner-drift { 0%, 100% { background-position: 0% 50%; } 50% { background-position: 100% 50%; } }
-.qz-hero-art { position: absolute; right: 16px; top: 0; height: 100%; width: 244px; pointer-events: none; z-index: 0; filter: blur(0.5px); }
-@media (max-width: 760px) { .qz-hero-art { display: none; } }
-/* Decorative shapes drift + swell so the banner feels lively. */
-.qz-heroart-a { transform-box: fill-box; transform-origin: center; animation: qz-heroart-drift-a 8s ease-in-out infinite; }
-.qz-heroart-b { transform-box: fill-box; transform-origin: center; animation: qz-heroart-drift-b 10s ease-in-out infinite; }
-.qz-heroart-card { transform-box: fill-box; transform-origin: center; animation: qz-heroart-bob 6.5s ease-in-out infinite; }
-@keyframes qz-heroart-drift-a { 0%, 100% { transform: translate(0, 0) scale(1); } 50% { transform: translate(-8px, 6px) scale(1.06); } }
-@keyframes qz-heroart-drift-b { 0%, 100% { transform: translate(0, 0) scale(1); } 50% { transform: translate(8px, -7px) scale(1.12); } }
-@keyframes qz-heroart-bob { 0%, 100% { transform: translate(0, 0) rotate(0deg); } 50% { transform: translate(2px, -5px) rotate(-1.5deg); } }
-/* A ✨ that runs across the banner every ~8s to pull the eye. */
-.qz-hero-spark { position: absolute; z-index: 2; left: -5%; top: 55%; font-size: 22px; pointer-events: none; opacity: 0; animation: qz-hero-spark-run 8s ease-in-out infinite; }
-@keyframes qz-hero-spark-run {
-  0% { left: -5%; opacity: 0; transform: translateY(10px) scale(.4) rotate(0deg); }
-  5% { opacity: 1; }
-  14% { transform: translateY(-64px) scale(1.15) rotate(160deg); }
-  26% { left: 104%; opacity: 0; transform: translateY(-18px) scale(.5) rotate(300deg); }
-  100% { left: 104%; opacity: 0; }
-}
-/* A faint diagonal shine sweeping with the sparkle. */
-.qz-hero-banner::after { content: ""; position: absolute; inset: 0; z-index: 1; pointer-events: none; background: linear-gradient(105deg, transparent 44%, color-mix(in srgb, white 42%, transparent) 50%, transparent 56%); transform: translateX(-150%); animation: qz-hero-shine 8s ease-in-out infinite; }
-@keyframes qz-hero-shine { 0% { transform: translateX(-150%); } 20%, 100% { transform: translateX(150%); } }
-@media (prefers-reduced-motion: reduce) {
-  .qz-hero-banner, .qz-heroart-a, .qz-heroart-b, .qz-heroart-card, .qz-hero-banner::after { animation: none; }
-  .qz-hero-spark { display: none; }
-}
-
-/* Home welcome intro — pops in, emoji waves, then collapses so the page slides up. */
-.qz-home-welcome {
-  overflow: hidden; max-height: 90px;
-  animation: qz-home-welcome-in 560ms var(--qz-spring, cubic-bezier(.2,.8,.2,1)) both;
-  transition: max-height 600ms var(--qz-ease), opacity 400ms var(--qz-ease);
-}
-.qz-home-welcome.is-gone { max-height: 0; opacity: 0; }
-@keyframes qz-home-welcome-in { 0% { opacity: 0; transform: translateY(-10px) scale(.97); } 100% { opacity: 1; transform: none; } }
-.qz-home-wave { display: inline-block; transform-origin: 72% 78%; animation: qz-home-wave 1.5s ease-in-out .35s 2; }
-@keyframes qz-home-wave {
-  0%, 55%, 100% { transform: rotate(0deg); }
-  8% { transform: rotate(16deg); } 18% { transform: rotate(-10deg); }
-  28% { transform: rotate(16deg); } 38% { transform: rotate(-6deg); } 48% { transform: rotate(12deg); }
-}
-@media (prefers-reduced-motion: reduce) {
-  .qz-home-welcome { animation: none; transition: none; }
-  .qz-home-wave { animation: none; }
-}
-.qz-recent-row { gap: 12px; padding: 12px 2px; }
-.qz-recent-row:hover { background: var(--qz-rule-2); border-radius: 8px; }
-.qz-weekchart { display: flex; align-items: flex-end; gap: 8px; height: 132px; padding-top: 8px; }
-.qz-weekchart-col { flex: 1 1 0; height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; gap: 6px; }
-.qz-weekchart-bar {
-  width: 58%; min-height: 4px; border-radius: 6px 6px 3px 3px;
-  background: linear-gradient(var(--qz-accent), var(--qz-accent-2));
-  transition: height var(--qz-dur-slow) var(--qz-spring);
-}
-.qz-weekchart-label { font-size: 11px; color: var(--qz-ink-4); }
+/* ── QD-3 / P2 Edit 6+12 Home CSS — REMOVED (QRTZ-S1, 2026-08-11) ──────────
+   The old Home dashboard (action cards, inspiration gallery, hero banner +
+   art + sparkle, welcome intro, recent-row, week chart) was replaced by the
+   Quartz composer page (mock s09); its styles live in the QRTZ-S1 section at
+   the end of this sheet. Grep-verified: no other screen used these classes. */
 
 /* ── P3 Edit 1 (§15.7) — per-quiz analytics modules ────────────────────────── */
 /* §R-1 — per-quiz analytics modules (prototype-v4): full-width white cards,
@@ -9297,3 +9219,223 @@ html[data-theme="dark"] {
 .qz-rg-xtag { font-size: 9px; font-weight: 800; text-transform: uppercase; letter-spacing: .06em; opacity: .6; background: color-mix(in srgb, currentColor 10%, transparent); border-radius: 999px; padding: 2px 7px; }
 .qz-rg-extras > p { font-size: 12.5px; opacity: .65; margin: 0 0 12px; line-height: 1.45; }
 .qz-rg-note { font-size: 11.5px; }
+
+/* ═══ QRTZ-S1 — rail + home ═══════════════════════════════════════════════
+   Ported from docs/design/brand-2026/_src (home.mjs markup, base.mjs
+   HOME_CSS, quartz.mjs rail vocabulary, meld.mjs stat order). Mock→repo
+   token map per AGENT-BRIEF: --surface→--qz-paper · --surface-2→--qz-cream-2
+   · --ink→--qz-ink · --ink-2→--qz-ink-3 · --ink-3→--qz-ink-4 ·
+   --line→--qz-rule · --line-strong→--qz-rule-strong · --accent*→--qz-accent*
+   · --r-md/lg→--qz-radius/--qz-radius-lg. ═══════════════════════════════ */
+
+/* — Rail: below --qz-bp-md (1024px) the rail force-collapses to icons —
+   the Quartz breakpoint contract. Mirrors the .is-collapsed presentation;
+   the manual toggle is hidden because the width is no longer a choice. */
+@media (max-width: 1024px) {
+  .qz-rail { width: 60px; padding-left: 10px; padding-right: 10px; }
+  .qz-rail .qz-rail-head { justify-content: center; padding-left: 0; padding-right: 0; }
+  .qz-rail .qz-wordmark-name { display: none; }
+  .qz-rail .qz-rail-label { opacity: 0; visibility: hidden; max-width: 0; }
+  .qz-rail .qz-rail-item { width: 40px; height: 40px; padding: 0; gap: 0; justify-content: center; }
+  .qz-rail .qz-rail-item[aria-current="page"]::before { display: none; }
+  .qz-rail .qz-rail-soon { display: none; }
+  .qz-rail .qz-rail-collapse { display: none; }
+  .qz-rail .qz-rail-account { flex-direction: column; gap: 8px; padding: 0; }
+  .qz-rail .qz-rail-account > .qz-rail-label { display: none; }
+}
+
+/* — QzStat: meld stat order (meld.mjs MELD_SCALE) — the figure leads at
+   38/800 tabular (markup order changed in qz.tsx), label 9px under, delta
+   5px under that. Deltas drop the retired mono alias; only .up takes tone. */
+.qz-stat { gap: 0; }
+.qz-stat-value { font-weight: 800; font-size: 38px; letter-spacing: -0.035em; }
+.qz-stat .qz-label { margin-top: 9px; }
+.qz-stat-delta { margin-top: 5px; font-family: var(--qz-font-body); font-size: 12px; color: var(--qz-ink-4); }
+.qz-stat-delta.up { color: var(--qz-ok); font-weight: 500; }
+
+/* — QzSectionHeader count chip (mock hm-count: "4 to do"). — */
+.qz-section-count { font-size: 12.5px; color: var(--qz-ink-4); }
+
+/* ── Studio home — the composer page, two states (home.mjs / HOME_CSS) ──
+   Everything is prefixed `hm-`; the sheet already owns .qz-stat, .qz-card
+   and chip families, so prefixing is what lets this drop in safely.
+   The composer is the anchor: identical in both states. It keeps two
+   scoped departures from the system — a 14px radius and a real shadow —
+   because it is the one thing on the page you are meant to type into. */
+
+/* The ONE tinted page in the product. Everything else is white paper. */
+.home2 {
+  flex: 1 1 auto; display: flex; flex-direction: column;
+  padding: 0; background: var(--qz-home-ground);
+}
+.home2 .hm-col { max-width: 640px; margin: 0 auto; width: 100%; }
+.home2 .hm-top { text-align: center; }
+
+/* Empty: the composer sits optically centred — heavier padding below than
+   above, so it lands slightly high, which is where the eye expects it. */
+.home2.is-none { justify-content: center; min-height: 620px; }
+.home2.is-none .hm-top { padding: 28px 30px 84px; }
+.home2.is-has  .hm-top { padding: 46px 30px 0; }
+
+/* Size is a function of state, not a setting: 37px is a welcome on a blank
+   page; the same 37px above a checklist would shout over its own content. */
+.home2 .hm-h1 { max-width: 720px; margin: 0 auto; text-wrap: balance; }
+.home2.is-none .hm-h1 { font-size: 37px; line-height: 1.14; letter-spacing: -0.031em; font-weight: 700; }
+.home2.is-has  .hm-h1 { font-size: 27px; line-height: 1.2; letter-spacing: -0.022em; font-weight: 600; }
+
+.home2 .hm-composer {
+  margin-top: 20px; text-align: left; background: var(--qz-paper);
+  border: 1px solid var(--qz-rule); border-radius: 14px;
+  box-shadow: 0 1px 2px rgba(32,28,46,.05), 0 10px 28px -12px rgba(32,28,46,.20);
+  transition: box-shadow 200ms var(--qz-ease), border-color 130ms var(--qz-ease);
+}
+.home2 .hm-composer:focus-within {
+  border-color: var(--qz-accent);
+  box-shadow: 0 1px 2px rgba(32,28,46,.05), 0 16px 40px -14px rgba(32,28,46,.26);
+}
+.home2 .hm-composer textarea {
+  display: block; width: 100%; border: 0; background: none; resize: none;
+  padding: 18px 18px 2px; font: inherit; font-size: 16px; line-height: 1.5;
+  color: var(--qz-ink); outline: none; min-height: 56px; font-family: var(--qz-font-body);
+}
+.home2 .hm-composer textarea::placeholder { color: var(--qz-ink-4); }
+.home2 .hm-bar { display: flex; align-items: center; gap: 10px; padding: 8px 9px 9px 11px; }
+.home2 .hm-grow { margin-left: auto; }
+
+.home2 .hm-addmore {
+  display: inline-flex; align-items: center; gap: 6px; border: 1px solid transparent;
+  background: none; border-radius: var(--qz-radius); padding: 7px 9px; font-size: 13px;
+  font-weight: 500; color: var(--qz-ink-4); cursor: pointer; font-family: inherit;
+}
+.home2 .hm-addmore:hover { background: var(--qz-cream-2); color: var(--qz-ink); }
+.home2 .hm-addmore svg { width: 14px; height: 14px; flex: none; }
+.home2 .hm-chev { transition: transform 200ms var(--qz-ease); }
+.home2 .hm-addmore[aria-expanded="true"] .hm-chev { transform: rotate(180deg); }
+
+/* The brief is collapsed by default — the goal alone is enough to draft. */
+.home2 .hm-brief { display: none; border-top: 1px solid var(--qz-rule); padding: 14px 18px 0; gap: 13px; }
+.home2 .hm-brief.is-open { display: grid; }
+.home2 .hm-brief-row { display: grid; gap: 5px; }
+.home2 .hm-brief-row label {
+  font-size: 11px; font-weight: 700; letter-spacing: .09em;
+  text-transform: uppercase; color: var(--qz-ink-4);
+}
+.home2 .hm-brief-row input {
+  border: 1px solid var(--qz-rule-strong); border-radius: var(--qz-radius);
+  background: var(--qz-paper); padding: 9px 11px; font: inherit; font-size: 14px;
+  color: var(--qz-ink); outline: none; font-family: var(--qz-font-body);
+}
+.home2 .hm-brief-row input:focus { border-color: var(--qz-accent); box-shadow: 0 0 0 3px var(--qz-accent-wash); }
+.home2 .hm-brief-note { font-size: 12.5px; color: var(--qz-ink-4); margin: 1px 0 0; }
+
+/* Idle until there is something to send — the button reports state rather
+   than inviting a click that cannot do anything. */
+.home2 .hm-go {
+  flex: none; width: 34px; height: 34px; display: grid; place-items: center;
+  border: 1px solid var(--qz-rule); border-radius: var(--qz-radius-lg);
+  background: var(--qz-cream-2); color: var(--qz-ink-4); cursor: pointer;
+}
+.home2 .hm-go svg { width: 16px; height: 16px; }
+.home2 .hm-go.is-ready { background: var(--qz-accent); border-color: var(--qz-accent); color: #FFFFFF; }
+.home2 .hm-go.is-ready:hover { background: var(--qz-accent-2); border-color: var(--qz-accent-2); }
+.home2 .hm-go:disabled { opacity: .6; cursor: default; }
+
+/* The action's 400 (goal too short) surfaces here — not in the mock, but
+   the contract can reject and silence would strand the merchant. */
+.home2 .hm-error { margin: 10px 2px 0; font-size: 13px; color: var(--qz-crit); text-align: left; }
+
+/* The other ways in — weightless, so the composer keeps the page. */
+.home2 .hm-modes { margin-top: 15px; display: flex; justify-content: center; flex-wrap: wrap; gap: 3px; }
+.home2 .hm-mode {
+  display: inline-flex; align-items: center; gap: 7px; padding: 7px 11px;
+  border: 1px solid transparent; background: none; border-radius: var(--qz-radius);
+  font-size: 13.5px; font-weight: 500; color: var(--qz-ink-4); cursor: pointer;
+  text-decoration: none;
+}
+.home2 .hm-mode:hover { color: var(--qz-ink); background: var(--qz-paper); border-color: var(--qz-rule); }
+.home2 .hm-mode svg { width: 14px; height: 14px; flex: none; }
+
+/* Empty state only — once the checklist exists, global design is a row in
+   it, and this line would be the same prompt twice. */
+.home2 .hm-nudge {
+  display: inline-flex; align-items: center; gap: 7px; margin-top: 22px;
+  border: 0; background: none; padding: 7px 11px; border-radius: var(--qz-radius);
+  font-size: 13.5px; font-weight: 500; color: var(--qz-accent-ink); cursor: pointer;
+  text-decoration: none;
+}
+.home2 .hm-nudge:hover { background: var(--qz-accent-wash); }
+.home2 .hm-nudge svg { width: 15px; height: 15px; flex: none; }
+
+.home2 .hm-below { padding: 0 30px 56px; }
+.home2 .hm-section { padding-top: 26px; margin-top: 26px; border-top: 1px solid var(--qz-rule); }
+
+/* Section heads ride QzSectionHeader (with the new count slot), styled to
+   the mock's hm-sec-head: 11px uppercase label + count + trailing link. */
+.home2 .qz-section-head { justify-content: flex-start; align-items: baseline; gap: 12px; margin-bottom: 12px; }
+.home2 .qz-section-head .qz-h2 {
+  margin: 0; font-size: 11px; font-weight: 700; letter-spacing: .1em;
+  text-transform: uppercase; color: var(--qz-ink-4);
+}
+.home2 .qz-section-action { margin-left: auto; }
+.home2 .qz-section-action a { font-size: 13px; font-weight: 500; color: var(--qz-accent-ink); text-decoration: none; }
+.home2 .qz-section-action a:hover { text-decoration: underline; }
+
+.home2 .hm-card { background: var(--qz-paper); border: 1px solid var(--qz-rule); border-radius: var(--qz-radius-lg); overflow: hidden; }
+
+.home2 .hm-todo {
+  display: flex; align-items: center; gap: 12px; width: 100%; text-align: left;
+  padding: 13px 15px; border: 0; border-bottom: 1px solid var(--qz-rule);
+  background: none; cursor: pointer; text-decoration: none; color: inherit;
+}
+.home2 .hm-todo:last-child { border-bottom: 0; }
+.home2 .hm-todo:hover { background: var(--qz-cream-2); }
+.home2 .hm-todo-ico {
+  flex: none; width: 30px; height: 30px; display: grid; place-items: center;
+  border-radius: var(--qz-radius); background: var(--qz-cream-2);
+  border: 1px solid var(--qz-rule); color: var(--qz-ink-3);
+}
+.home2 .hm-todo-ico svg { width: 15px; height: 15px; }
+.home2 .hm-todo-main { min-width: 0; display: grid; gap: 1px; }
+.home2 .hm-todo-main b { font-size: 14px; font-weight: 600; color: var(--qz-ink);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.home2 .hm-todo-main span { font-size: 12.5px; line-height: 1.45; color: var(--qz-ink-4); }
+.home2 .hm-todo-chev { flex: none; margin-left: auto; color: var(--qz-ink-4); }
+.home2 .hm-todo:hover .hm-todo-chev { transform: translateX(2px); }
+
+/* Stat tiles — QzStat in the meld order, framed as the mock's hairline grid. */
+.home2 .hm-stats {
+  display: grid; grid-template-columns: repeat(4, 1fr); border: 1px solid var(--qz-rule);
+  border-radius: var(--qz-radius-lg); background: var(--qz-paper); overflow: hidden;
+}
+.home2 .hm-stats .qz-stat { padding: 14px 15px; border-right: 1px solid var(--qz-rule); background: var(--qz-paper); box-shadow: none; }
+.home2 .hm-stats .qz-stat:last-child { border-right: 0; }
+.home2 .hm-stats .qz-stat-value { font-size: 27px; line-height: 1; }
+.home2 .hm-stats .qz-stat .qz-label { margin-top: 6px; font-size: 10px; letter-spacing: .08em; color: var(--qz-ink-4); }
+.home2 .hm-stats .qz-stat-delta { margin-top: 6px; }
+
+.home2 .hm-qrow {
+  display: flex; align-items: center; gap: 12px; padding: 12px 15px;
+  border-bottom: 1px solid var(--qz-rule); text-decoration: none; color: inherit;
+}
+.home2 .hm-qrow:last-child { border-bottom: 0; }
+.home2 .hm-qrow:hover { background: var(--qz-cream-2); }
+.home2 .hm-qrow-main { min-width: 0; display: grid; gap: 1px; }
+.home2 .hm-qrow-main b { font-size: 14px; font-weight: 600; color: var(--qz-ink);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.home2 .hm-qrow-main span { font-size: 12.5px; color: var(--qz-ink-4); }
+.home2 .hm-chip {
+  margin-left: auto; flex: none; padding: 3px 8px; border-radius: var(--qz-radius); font-size: 10px;
+  font-weight: 700; letter-spacing: .07em; text-transform: uppercase;
+  border: 1px solid var(--qz-rule); background: var(--qz-cream-2); color: var(--qz-ink-4);
+}
+.home2 .hm-chip.is-live { background: var(--qz-live-wash); border-color: color-mix(in srgb, var(--qz-ok) 30%, var(--qz-paper)); color: var(--qz-ok); }
+.home2 .hm-chip.is-setup { background: var(--qz-accent-wash); border-color: var(--qz-accent-line); color: var(--qz-accent-ink); }
+
+@media (max-width: 760px) {
+  .home2.is-none .hm-top { padding: 20px 16px 56px; }
+  .home2.is-has .hm-top { padding: 28px 16px 0; }
+  .home2 .hm-below { padding: 0 16px 44px; }
+  .home2.is-none .hm-h1 { font-size: 27px; }
+  .home2.is-has .hm-h1 { font-size: 22px; }
+  .home2 .hm-stats { grid-template-columns: 1fr 1fr; }
+}

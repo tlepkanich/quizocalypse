@@ -138,10 +138,12 @@ export function QzStat({
   ]
     .filter(Boolean)
     .join(" ");
+  // QRTZ-S1 — meld stat order (docs/design/brand-2026/_src/meld.mjs): the
+  // figure leads, label underneath, trend under that. Same props/API.
   return (
     <div className={cls}>
-      <span className="qz-label">{label}</span>
       <span className="qz-stat-value">{value}</span>
+      <span className="qz-label">{label}</span>
       {delta && (
         <span className={`qz-stat-delta${deltaTone ? " " + deltaTone : ""}`}>{delta}</span>
       )}
@@ -232,16 +234,21 @@ export function QzEmpty({
 
 // P2 Edit 6 — the ONE standardized section/panel title. Stop hand-styling
 // section headers per page; use this everywhere (title + optional right action).
+// QRTZ-S1 — optional `count` chip slot (mock hm-count: "4 to do" beside the
+// head). Omitting it renders exactly the old markup — API is backward-compatible.
 export function QzSectionHeader({
   title,
+  count,
   action,
 }: {
   title: ReactNode;
+  count?: ReactNode;
   action?: ReactNode;
 }) {
   return (
     <div className="qz-section-head">
       <h2 className="qz-h2">{title}</h2>
+      {count != null ? <span className="qz-section-count">{count}</span> : null}
       {action ? <div className="qz-section-action">{action}</div> : null}
     </div>
   );
