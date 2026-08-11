@@ -416,7 +416,8 @@ body[data-qz] :focus-visible {
      cards opt out below. */
   transition: box-shadow var(--qz-dur) var(--qz-ease), transform var(--qz-dur) var(--qz-spring);
 }
-.qz-card:not(.qz-dash):hover { box-shadow: var(--qz-lift-2); transform: translateY(-2px); }
+/* QRTZ-C: card hover-lift removed — Quartz depth rule: content is flat, only
+   overlays cast (quartz-tokens.css §Depth). Interactive rows wash instead. */
 .qz-card.qz-flush { padding: 0; }
 .qz-card.qz-dash { border: 1px dashed var(--qz-ink-25); background: transparent; box-shadow: none; }
 /* Opt-in lift for clickable cards (gallery tiles, etc.) — V2: lift 4-6px */
@@ -3586,15 +3587,8 @@ body[data-qz] ::selection { background: var(--qz-ink); color: var(--qz-cream); }
   border-radius: 9px; padding: 9px 13px; max-width: 420px; line-height: 1.5;
 }
 .qz-gen-foot { margin-top: 28px; font-size: 12px; color: var(--qz-ink-25); }
-/* Owner edit (2026-08-02) — the ONE load screen's rotating update line:
-   sits under the ring, fades in on each caption change (keyed remount). */
-.qz-gen-rot {
-  margin: 0; font-size: 16px; font-weight: 600; letter-spacing: -.01em;
-  color: var(--qz-ink); animation: qz-gen-rotin .45s ease both;
-}
-@keyframes qz-gen-rotin { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
 @media (prefers-reduced-motion: reduce) {
-  .qz-gen-ring, .qz-gen-glow, .qz-gen-ring::after, .qz-gen-sp, .qz-gen-beat.is-now .qz-gen-dot, .qz-gen-rot { animation: none !important; }
+  .qz-gen-ring, .qz-gen-glow, .qz-gen-ring::after, .qz-gen-sp, .qz-gen-beat.is-now .qz-gen-dot { animation: none !important; }
 }
 
 /* ── Step-1 start modal (start-modal-flow.html mock, EXACT) — stacked
@@ -8660,15 +8654,6 @@ html[data-theme="dark"] {
 .qz-qf-tool:hover:not(:disabled) { background: var(--qz-cream-2); color: var(--qz-ink-3); }
 .qz-qf-tool.is-drag { cursor: grab; }
 .qz-qf-tool:disabled { opacity: .35; cursor: default; }
-.qz-qf-nmv { display: inline-flex; flex-direction: column; gap: 2px; flex: none; opacity: .55; transition: opacity .12s; }
-.qz-qf-navrow:hover .qz-qf-nmv, .qz-qf-navrow.is-on .qz-qf-nmv { opacity: 1; }
-.qz-qf-nmvb {
-  width: 19px; height: 14px; border: 1px solid var(--qz-rule); background: var(--qz-paper);
-  border-radius: 4px; display: grid; place-items: center; cursor: pointer; color: var(--qz-ink-4); padding: 0;
-}
-.qz-qf-nmvb svg { width: 9px; height: 9px; }
-.qz-qf-nmvb:hover:not(:disabled) { background: var(--qz-accent-tint); border-color: var(--qz-accent-wash); color: var(--qz-accent-ink); }
-.qz-qf-nmvb:disabled { opacity: .3; cursor: default; }
 .qz-qf-regenrow { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 0 13px 9px 41px; }
 .qz-qf-regenbusy { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--qz-ink-3); }
 .qz-qf-navadd {
@@ -9186,17 +9171,8 @@ html[data-theme="dark"] {
   border-radius: 42px; box-shadow: var(--qz-lift-3), 0 0 0 1px var(--qz-rule); position: relative;
   font-family: var(--qz-font-body, inherit);
 }
-.qz-s3-device.is-desktop .qz-rg-frame { border-radius: 12px; }
-.qz-rg-dchrome { flex: none; background: #F3F1F4; border-bottom: 1px solid var(--qz-rule); }
-.qz-rg-dbar { display: flex; align-items: center; gap: 14px; padding: 11px 16px; }
-.qz-rg-ddots { display: flex; gap: 7px; }
-.qz-rg-ddots i { width: 11px; height: 11px; border-radius: 50%; background: #D8D4DE; }
-.qz-rg-durl { flex: 1; height: 24px; border-radius: 7px; background: #E7E4EC; }
-.qz-rg-dprog { height: 6px; background: var(--qz-accent); width: 42%; }
 .qz-rg-screen { width: 100%; flex: 1; overflow-y: auto; position: relative; scroll-behavior: smooth; min-height: 0; }
-.qz-rg-fadeout { position: absolute; left: 0; right: 0; bottom: 0; height: 46px; pointer-events: none; background: linear-gradient(to bottom, transparent, var(--qz-color-background, #FBF6EF)); }
 .qz-rg-scr { padding: 28px 24px 48px; font-size: 16px; position: relative; display: flex; flex-direction: column; gap: 22px; }
-.qz-s3-device.is-desktop .qz-rg-scr { padding: 48px 48px 80px; max-width: 1080px; margin: 0 auto; }
 .qz-rg-shead { display: flex; flex-direction: column; gap: 7px; }
 .qz-rg-h1 { font-family: var(--qz-font-heading, Georgia, serif); font-size: 27px; line-height: 1.15; font-weight: 600; margin: 0; }
 .qz-rg-why { font-size: 14px; opacity: .65; line-height: 1.55; margin: 0; max-width: 60ch; }
@@ -9235,7 +9211,6 @@ html[data-theme="dark"] {
 .qz-rg-terms u { text-decoration: underline; }
 .qz-rg-gatescr, .qz-rg-loadscr { justify-content: center; min-height: 100%; text-align: center; }
 .qz-rg-gwrap { display: flex; flex-direction: column; gap: 14px; align-items: stretch; width: 100%; }
-.qz-s3-device.is-desktop .qz-rg-gwrap { max-width: 420px; margin: 0 auto; }
 .qz-rg-gicon { width: 44px; height: 44px; border-radius: 13px; background: color-mix(in srgb, currentColor 8%, transparent); color: var(--qz-color-primary); display: grid; place-items: center; font-size: 19px; margin: 0 auto 2px; }
 .qz-rg-gskip { font-size: 12px; opacity: .65; text-decoration: underline; margin: 0; cursor: pointer; }
 .qz-rg-lbar { height: 6px; border-radius: 999px; background: color-mix(in srgb, currentColor 12%, transparent); overflow: hidden; max-width: 240px; width: 100%; margin: 6px auto; }

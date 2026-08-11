@@ -11,7 +11,7 @@
 //     and its painted box never exceeds the pane (scale ≤ 1).
 //  2. The height chain resolves: screen = root = page = 745 on a short step,
 //     page padding 24/24, content vertically CENTRED (symmetric gaps).
-//  3. Desktop frame is exactly 1128×640, runtime renders qz-bp-desktop with
+//  3. Desktop frame is exactly 960×700, runtime renders qz-bp-desktop with
 //     padding-top 48.
 //  4. Zoom clamps the fit scale (80% → scale ≤ 0.8), never multiplies.
 //  5. Expand: same frame in the overlay host, scale ≤ 1 (never upscales).
@@ -133,7 +133,7 @@ const desk = await page.evaluate(() => {
 });
 ok("desktop frame exists", !!desk);
 if (desk) {
-  ok("desktop layout box is exactly 1128×640", desk.frameW === 1128 && desk.frameH === 640, `${desk.frameW}×${desk.frameH}`);
+  ok("desktop layout box is exactly 960×700", desk.frameW === 960 && desk.frameH === 700, `${desk.frameW}×${desk.frameH}`);
   ok("desktop transform present", desk.transform !== "none", desk.transform);
   ok("runtime got the desktop breakpoint", desk.rootClass.includes("qz-bp-desktop"));
   ok("desktop padding-top 48 (shell rule)", desk.padTop === "48px", desk.padTop);
@@ -164,7 +164,7 @@ const expand = await page.evaluate(() => {
   const m = new DOMMatrix(getComputedStyle(frame).transform);
   return { w: frame.offsetWidth, h: frame.offsetHeight, scale: m.a, tier: frame.dataset.qzTier };
 });
-ok("expand renders the same fixed frame", !!expand && expand.w === 1128 && expand.h === 640, expand ? `${expand.w}×${expand.h}` : "missing");
+ok("expand renders the same fixed frame", !!expand && expand.w === 960 && expand.h === 700, expand ? `${expand.w}×${expand.h}` : "missing");
 ok("expand never upscales past 1:1", !!expand && expand.scale <= 1.001, `scale ${expand?.scale?.toFixed(3)}`);
 await page.screenshot({ path: `${SHOTS}/03-expand.png` });
 await page.keyboard.press("Escape");
