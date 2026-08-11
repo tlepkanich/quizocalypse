@@ -310,10 +310,11 @@ export function Step3Shell({
               </button>
             </div>
             <span className="qz-qf-sp" />
+            {/* QRTZ-S5 — hint copy verbatim from the mock's qtab-bar. */}
             <span className="qz-qf-hint">
               {contentTab === "questions"
-                ? "Click any text on the phone to edit it"
-                : "Edit any cell inline"}
+                ? "Click any text in the preview to edit it"
+                : "Click any question or answer to edit it"}
             </span>
             <button type="button" className="qz-qs-tlib" onClick={() => setLibraryOpen(true)}>
               Question library

@@ -9536,3 +9536,225 @@ html[data-theme="dark"] {
   .home2.is-has .hm-h1 { font-size: 22px; }
   .home2 .hm-stats { grid-template-columns: 1fr 1fr; }
 }
+
+/* ═══ QRTZ-S5 — funnel screens ═══════════════════════════════════════════
+   s10 build pool (facts + Why these?) · s11 generating checklist + failed
+   card · s12 questions flow bar + Overview grid · s13 explainer no-scroll.
+   Values from docs/design/brand-2026/_src (shared.mjs markup, base.mjs CSS,
+   states.mjs .mt); mock→repo token map per AGENT-BRIEF. ═══════════════════ */
+
+/* — s11 · the gen_progress checklist (mock .gen-steps): the title above is
+   the current checkpoint; these four rows show done ✓ / now / todo. The
+   ring + sparks keep their existing block untouched. — */
+.qz-gen-steps {
+  list-style: none; padding: 0;
+  margin: 22px auto 0; display: grid; gap: 2px; text-align: left;
+  width: max-content; max-width: 100%;
+}
+.qz-gen-step {
+  display: flex; align-items: center; gap: 11px; padding: 9px 12px;
+  border-radius: var(--qz-radius); font-size: 13.5px; color: var(--qz-ink-4);
+}
+.qz-gen-step.is-done { color: var(--qz-ink-3); }
+.qz-gen-step.is-now {
+  background: var(--qz-accent-wash); color: var(--qz-accent-ink); font-weight: 600;
+}
+.qz-gen-dot {
+  flex: none; width: 17px; height: 17px; border-radius: var(--qz-radius-sm);
+  display: grid; place-items: center;
+  border: 1px solid var(--qz-rule-strong); font-size: 10px; font-weight: 700;
+}
+.qz-gen-step.is-done .qz-gen-dot {
+  background: var(--qz-ok-tint);
+  border-color: color-mix(in srgb, var(--qz-ok) 32%, transparent);
+  color: var(--qz-ok);
+}
+.qz-gen-step.is-now .qz-gen-dot {
+  background: var(--qz-accent); border-color: var(--qz-accent); color: var(--qz-paper);
+}
+.qz-gen-step.is-now .qz-gen-dot::after {
+  content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--qz-paper);
+  animation: qz-gen-steppulse 1.2s ease-in-out infinite;
+}
+@keyframes qz-gen-steppulse { 0%, 100% { opacity: .35; } 50% { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) {
+  .qz-gen-step.is-now .qz-gen-dot::after { animation: none; }
+}
+
+/* — s11/s17 · generation FAILED — the centred empty-state card (mock .mt):
+   blame-free copy; the server's curated notice is the quiet secondary line. — */
+.qz-genfail {
+  display: grid; justify-items: center; gap: 9px; text-align: center;
+  padding: 34px 24px 30px;
+}
+.qz-genfail-ico {
+  width: 34px; height: 34px; display: grid; place-items: center;
+  border-radius: var(--qz-radius); background: var(--qz-paper);
+  border: 1px solid var(--qz-rule); color: var(--qz-warn);
+  font-size: 15px; font-weight: 700;
+}
+.qz-genfail-title { font-size: 13.5px; font-weight: 600; }
+.qz-genfail-sub {
+  margin: 0; font-size: 12.5px; line-height: 1.5; color: var(--qz-ink-4); max-width: 40ch;
+}
+.qz-genfail-detail {
+  margin: 0; font-size: 11.5px; line-height: 1.5; color: var(--qz-ink-25); max-width: 52ch;
+}
+.qz-genfail-actions {
+  margin-top: 3px; display: flex; align-items: center; justify-content: center;
+  gap: 10px; flex-wrap: wrap;
+}
+
+/* — s10 · pool facts (mock .facts): quiet dt/dd rows on hairlines, figures
+   tabular. The "In stock" row + OOS note are deliberately absent — the
+   loaded catalog shape carries no stock data. — */
+.qz-rb-facts { display: grid; gap: 0; margin: 0; }
+.qz-rb-facts > div {
+  display: flex; justify-content: space-between; gap: 12px; padding: 9px 0;
+  border-bottom: 1px solid var(--qz-rule); font-size: 13px;
+}
+.qz-rb-facts dt { color: var(--qz-ink-4); }
+.qz-rb-facts dd {
+  margin: 0; color: var(--qz-ink); font-weight: 500; font-variant-numeric: tabular-nums;
+}
+
+/* — s10 · "Why these?" (mock .ai-note .btn-quiet) — the rationale reveal. — */
+.qz-rb-why {
+  flex: none; margin-left: auto; border: 1px solid var(--qz-rule);
+  background: var(--qz-paper); color: var(--qz-ink-3);
+  font: inherit; font-size: 12px; font-weight: 600;
+  padding: 4px 10px; border-radius: var(--qz-radius); cursor: pointer;
+}
+.qz-rb-why:hover { border-color: var(--qz-rule-strong); color: var(--qz-ink); }
+.qz-rb-why[aria-expanded="true"] { background: var(--qz-cream-2); }
+
+/* — s12 upper · the edit bar names the step (mock .qedit-label) and carries
+   the answer-type control (mock .qedit-type; the popover is a body portal,
+   so the bar needs no anchoring rules). — */
+.qz-s3-pvlabel { flex: none; font-size: 13px; font-weight: 600; color: var(--qz-ink); }
+.qz-s3-pvtype { flex: 0 1 auto; min-width: 0; display: inline-flex; }
+.qz-s3-pvtype .qz-s3-typetagwrap { display: inline-flex; min-width: 0; }
+
+/* — s12 lower · the Overview GRID (mock .ovw): sticky column header
+   # · Question · Answers · Type (NO role column — owner call §8b), rows on
+   firm rules, hover cream-2, the answers list filling its column. The
+   ledger container keeps its border/radius; overflow becomes `clip` so the
+   sticky header keeps tracking the page scroll (overflow:hidden would make
+   the clipped box the sticky root and kill it). — */
+.qz-ovw { overflow: clip; }
+.qz-ovw-head, .qz-ovw-row {
+  display: grid;
+  grid-template-columns: 42px minmax(210px, 1fr) minmax(280px, 1.45fr) 168px;
+  gap: 20px; align-items: start;
+}
+.qz-ovw-head {
+  padding: 10px 20px; background: var(--qz-cream-2);
+  border-bottom: 1px solid var(--qz-rule-strong);
+  font-size: 11px; letter-spacing: .08em; text-transform: uppercase;
+  color: var(--qz-ink-4); font-weight: 600;
+  position: sticky; top: 58px; z-index: 5;
+}
+.qz-ovw-row {
+  padding: 16px 20px; background: var(--qz-paper);
+  border-bottom: 1px solid var(--qz-rule); position: relative;
+}
+.qz-ovw .qz-s3-ledgerrow:last-of-type .qz-ovw-row { border-bottom: none; }
+.qz-ovw-row:hover { background: var(--qz-cream-2); }
+.qz-ovw-row.is-content { background: color-mix(in srgb, var(--qz-accent) 2%, var(--qz-paper)); }
+.qz-ovw-row.is-content:hover { background: var(--qz-cream-2); }
+
+/* Number cell — mock .ovw-n: 24px square, hairline; the decider fills
+   accent. Renumber keeps the existing chip/input behaviors (content rows
+   are renumberable here too — the movers left with the card layout). */
+.qz-ovw-ncell { display: flex; }
+.qz-ovw .qz-s3-numchip {
+  width: 24px; height: 24px; border-radius: var(--qz-radius-sm);
+  background: var(--qz-cream-2); border: 1px solid var(--qz-rule);
+  color: var(--qz-ink-4); font-size: 11.5px; font-weight: 600;
+  font-variant-numeric: tabular-nums; box-shadow: none;
+  display: grid; place-items: center;
+}
+.qz-ovw .qz-s3-numchip.is-decider {
+  background: var(--qz-accent); border-color: var(--qz-accent); color: var(--qz-paper);
+}
+.qz-ovw .qz-s3-numchip.is-edit { cursor: pointer; }
+.qz-ovw .qz-s3-numchip.is-edit:hover {
+  background: var(--qz-accent-wash); color: var(--qz-accent-ink); box-shadow: none;
+}
+.qz-ovw .qz-s3-numchip.is-edit.is-decider:hover {
+  background: var(--qz-accent); color: var(--qz-paper);
+  box-shadow: 0 0 0 2px var(--qz-accent-wash);
+}
+.qz-ovw .qz-s3-numchip.is-c { background: var(--qz-cream-2); color: var(--qz-ink-3); }
+
+/* Question cell — mock .ovw-text values ride the existing editable. */
+.qz-ovw-qcell { min-width: 0; display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.qz-ovw-qcell .qz-qf-v2q { line-height: 1.45; }
+
+/* Answers cell — mock .ovw-answers: the list fills its column; quiet
+   cream-2 tiles that flip to paper when the row is hovered. */
+.qz-ovw-anscell { min-width: 0; display: grid; gap: 4px; align-content: start; }
+.qz-ovw .qz-qf-alist { gap: 4px; }
+.qz-ovw .qz-qf-alist li {
+  margin: 0; padding: 6px 9px; background: var(--qz-cream-2);
+  border: none; border-radius: var(--qz-radius-sm);
+  font-size: 13px; color: var(--qz-ink-3);
+}
+.qz-ovw-row:hover .qz-qf-alist li { background: var(--qz-paper); }
+.qz-ovw .qz-qf-atx { flex: 1 1 auto; }
+.qz-ovw-add {
+  border: 1px dashed var(--qz-rule-strong); background: transparent;
+  color: var(--qz-ink-3); padding: 5px 11px; border-radius: var(--qz-radius-sm);
+  font-family: inherit; font-size: 12.5px; width: 100%; cursor: pointer; margin-top: 2px;
+}
+.qz-ovw-add:hover {
+  border-style: solid; border-color: var(--qz-accent);
+  color: var(--qz-accent-ink); background: var(--qz-accent-wash);
+}
+
+/* Type cell — mock .ovw-type: a stacked start-aligned grid. The type
+   control reads as a full-width bordered select (popover keeps every
+   capability); Min/Max + scale settings stack under it; delete reveals on
+   row hover. */
+.qz-ovw-typecell { min-width: 0; display: grid; gap: 9px; justify-items: start; align-content: start; }
+.qz-ovw-typecell .qz-s3-typetagwrap { display: block; position: relative; width: 100%; }
+.qz-ovw-typecell .qz-s3-typetagbtn {
+  width: 100%; justify-content: space-between;
+  border-radius: var(--qz-radius); padding: 7px 10px;
+  font-size: 12.5px; font-weight: 400; color: var(--qz-ink); box-shadow: none;
+}
+.qz-ovw-typecell .qz-s3-typetagbtn .qz-s3-tt-type { color: var(--qz-ink); font-weight: 400; }
+.qz-ovw-set {
+  display: grid; grid-template-columns: auto auto; gap: 6px 8px; align-items: center;
+}
+.qz-ovw-typecell .qz-s3-cdel { opacity: 0; margin-left: 0; }
+.qz-ovw-row:hover .qz-s3-cdel,
+.qz-ovw-row .qz-s3-cdel:focus-visible { opacity: 1; }
+
+/* Truncation — mock .ovw-more. */
+.qz-ovw-more {
+  width: 100%; padding: 14px; border: none; border-top: 1px solid var(--qz-rule);
+  background: var(--qz-paper); font-family: inherit;
+  font-size: 13.5px; font-weight: 600; color: var(--qz-accent-ink); cursor: pointer;
+}
+.qz-ovw-more:hover { background: var(--qz-accent-wash); }
+
+/* — s13 · explainers: ONE fixed body height, nothing scrolls (the mock's
+   stated rule; its own remedy is "the chains that used to run vertically
+   now run horizontally"). The two vertical pipeline figures were the
+   overflow — they go horizontal here — and the verb-pill ledgers compact
+   one notch. The body's overflow-y:auto stays ONLY as a short-viewport
+   backstop; at the design size (440px body) no panel reaches the fold. — */
+.qz-xpl-body { gap: 10px; }
+.qz-xpl-flow { display: flex; align-items: stretch; gap: 8px; }
+.qz-xpl-fcol {
+  grid-template-columns: 1fr; grid-template-rows: auto 1fr; gap: 6px;
+  flex: 1 1 0; min-width: 0; align-items: start;
+}
+.qz-xpl-flab { text-align: left; }
+.qz-xpl-farw {
+  margin: 0; padding: 0; align-self: center; flex: none;
+  transform: rotate(-90deg);
+}
+.qz-xpl-qlist { gap: 6px; }
+.qz-xpl-qb { padding: 6px 11px; }

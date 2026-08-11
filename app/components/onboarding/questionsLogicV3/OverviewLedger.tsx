@@ -13,22 +13,28 @@ import { QzModal } from "../../qz-overlays";
 import { EditableText } from "./content/EditableText";
 import { TypeChipSelector } from "./content/TypeChipSelector";
 import { CONTENT_META } from "./LeftRail";
-import { IconUp, IconDown, IconTrash, IconPlus } from "./icons";
+import { IconTrash, IconPlus } from "./icons";
 
-/* questions-full-page.html §1 — the Questions step's ▦ Overview tab: the
-   merchant's bulk-editing LEDGER. One bordered rounded container; each
-   question is a row separated by a hairline (no gaps, no per-row shadows);
-   the right column is defined once (--rcol) so the divider and everything
-   after it sit on one vertical line. Row anatomy: ↑↓ movers · number chip
-   (CLICK TO RENUMBER) · contenteditable question · type control + hover 🗑 |
-   body: FLUSH numbered answers (hover ✕, min 2) + "+ Add answer" landing on
-   the divider · settings column (multi Min/Max, scale Max — the numeric
-   controls; scale end labels edit beside the number squares). CONTENT here
-   is plain editing — the decider logic (Maps to / roles / rules) lives on
-   the Logic STEP, not in this tab. */
+/* QRTZ-S5 (mock s12 lower, _src/shared.mjs screenOverview) — the Questions
+   step's ▦ Overview tab is a REAL GRID: a sticky column header (# · Question ·
+   Answers · Type — NO role column; roles live on the Logic step, owner call
+   PORT-INVENTORY §8b), one grid row per step on firm rules, row hover cream-2,
+   the answers list filling its own column, and a "Show the other N questions"
+   truncation after the first four rows. Everything that already worked is
+   kept: click-to-renumber number chips (extended to content rows — they lost
+   their ↑/↓ movers with the card layout, and renumber is the keyboard-friendly
+   replacement), contenteditable question/answer text, add-answer in the
+   answers column, the content-page settings modal, and the divider inserter
+   between rows. The mock's stacked movers are gone with the cards; reorder =
+   renumber here, drag/arrow-keys in the ✎ Questions rail. Multi/scale
+   settings (Min/Max steppers, scale end labels) stay — stacked under the type
+   control in the Type column. */
 
 const TEXT_MAX = 150;
 const ANSWER_MAX = 60;
+
+/** Mock .ovw truncation — rows shown before "Show the other N questions". */
+const OVW_LIMIT = 4;
 
 /** Mock stepper: − value + in one bordered pill. */
 function Stepper({
@@ -67,15 +73,76 @@ function Stepper({
   );
 }
 
-/* §3 — a CONTENT step is a SINGLE row, no body: [movers][muted n][◆ Content]
-   [title][meta] | [Edit settings][🗑]. The Edit-settings button occupies the
-   same right-hand slot the type dropdown occupies on a question row, so the
-   two row types share geometry. */
+/** The number cell: click-to-renumber chip → inline number input (Enter
+    commits, Escape cancels, blur commits). Shared by question AND content
+    rows — renumber is the Overview's one reorder affordance. */
+function NumberCell({
+  id,
+  index,
+  isDecider,
+  isContent,
+  noun,
+  onReorder,
+}: {
+  id: string;
+  index: number;
+  isDecider: boolean;
+  isContent: boolean;
+  noun: string;
+  onReorder: (id: string, toIndex: number) => void;
+}) {
+  const [renumbering, setRenumbering] = useState(false);
+  const commit = (raw: string, ok: boolean) => {
+    setRenumbering(false);
+    if (!ok) return;
+    const v = parseInt(raw, 10);
+    if (!Number.isNaN(v)) onReorder(id, v - 1);
+  };
+  if (renumbering) {
+    return (
+      <span
+        className={`qz-s3-numchip is-editing${isDecider ? " is-decider" : ""}${isContent ? " is-c" : ""}`}
+      >
+        <input
+          className="qz-s3-numinput"
+          type="number"
+          min={1}
+          defaultValue={index + 1}
+          autoFocus
+          aria-label={`Move ${noun} ${index + 1} to position`}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              commit((e.target as HTMLInputElement).value, true);
+            } else if (e.key === "Escape") {
+              commit("", false);
+            }
+          }}
+          onBlur={(e) => commit(e.target.value, true)}
+        />
+      </span>
+    );
+  }
+  return (
+    <button
+      type="button"
+      className={`qz-s3-numchip is-edit${isDecider ? " is-decider" : ""}${isContent ? " is-c" : ""}`}
+      title={`Click to renumber — moves this ${noun} to that position`}
+      onClick={() => setRenumbering(true)}
+    >
+      {index + 1}
+    </button>
+  );
+}
+
+/* A CONTENT step rides the same grid: muted number · ◆ Content + editable
+   title in the Question column · its meta line in the Answers column · the
+   Edit-settings button + delete in the Type column (same geometry as a
+   question row's type control). */
 function ContentRow({
   doc,
   step,
   index,
-  total,
   onCommit,
   onReorder,
   onDelete,
@@ -83,7 +150,6 @@ function ContentRow({
   doc: QuizDoc;
   step: OrderedFlowStep;
   index: number;
-  total: number;
   onCommit: (doc: QuizDoc) => void;
   onReorder: (id: string, toIndex: number) => void;
   onDelete: (id: string) => void;
@@ -95,69 +161,56 @@ function ContentRow({
   const meta = CONTENT_META[node.type] ?? node.type;
   const [settingsOpen, setSettingsOpen] = useState(false);
   return (
-    <section className="qz-s3-card is-content" aria-label={`Content step ${index + 1}`}>
-      <div className="qz-s3-card-head">
-        <div className="qz-s3-card-headl">
-          <span className="qz-s3-mv">
-            <button
-              type="button"
-              className="qz-s3-mvb"
-              disabled={index === 0}
-              aria-label="Move step up"
-              onClick={() => onReorder(node.id, index - 1)}
-            >
-              <IconUp />
-            </button>
-            <button
-              type="button"
-              className="qz-s3-mvb"
-              disabled={index === total - 1}
-              aria-label="Move step down"
-              onClick={() => onReorder(node.id, index + 1)}
-            >
-              <IconDown />
-            </button>
-          </span>
-          <span className="qz-s3-numchip is-c" title={`Step ${index + 1}`}>
-            {index + 1}
-          </span>
-          <span className="qz-qf-ovcontent">◆ Content</span>
-          {isMessage ? (
-            <EditableText
-              value={title}
-              onCommit={(t) => {
-                const v = t.trim().slice(0, 300);
-                if (v) onCommit(updateNodeData(doc, node.id, { text: v }));
-              }}
-              maxLength={300}
-              ariaLabel={`Content step ${index + 1} title`}
-              className="qz-qf-v2q is-content"
-            />
-          ) : (
-            <span className="qz-qf-v2q is-content is-ro">{title}</span>
-          )}
-          <span className="qz-qf-cmeta">{meta.replace("◆ ", "")}</span>
-        </div>
-        <div className="qz-s3-card-type">
-          <button
-            type="button"
-            className="qz-qf-setbtn"
-            disabled={!isMessage}
-            title={isMessage ? "Edit this content page" : "Configured in the main builder"}
-            onClick={() => setSettingsOpen(true)}
-          >
-            ⚙ Edit settings
-          </button>
-          <button
-            type="button"
-            className="qz-s3-cdel"
-            title="Delete content page"
-            aria-label={`Delete content step ${index + 1}`}
-            onClick={() => onDelete(node.id)}
-          >
-            <IconTrash />
-          </button>
-        </div>
+    <section className="qz-ovw-row is-content" aria-label={`Content step ${index + 1}`}>
+      <span className="qz-ovw-ncell">
+        <NumberCell
+          id={node.id}
+          index={index}
+          isDecider={false}
+          isContent
+          noun="step"
+          onReorder={onReorder}
+        />
+      </span>
+      <div className="qz-ovw-qcell">
+        <span className="qz-qf-ovcontent">◆ Content</span>
+        {isMessage ? (
+          <EditableText
+            value={title}
+            onCommit={(t) => {
+              const v = t.trim().slice(0, 300);
+              if (v) onCommit(updateNodeData(doc, node.id, { text: v }));
+            }}
+            maxLength={300}
+            ariaLabel={`Content step ${index + 1} title`}
+            className="qz-qf-v2q is-content"
+          />
+        ) : (
+          <span className="qz-qf-v2q is-content is-ro">{title}</span>
+        )}
+      </div>
+      <div className="qz-ovw-anscell">
+        <span className="qz-qf-cmeta">{meta.replace("◆ ", "")}</span>
+      </div>
+      <div className="qz-ovw-typecell">
+        <button
+          type="button"
+          className="qz-qf-setbtn"
+          disabled={!isMessage}
+          title={isMessage ? "Edit this content page" : "Configured in the main builder"}
+          onClick={() => setSettingsOpen(true)}
+        >
+          ⚙ Edit settings
+        </button>
+        <button
+          type="button"
+          className="qz-s3-cdel"
+          title="Delete content page"
+          aria-label={`Delete content step ${index + 1}`}
+          onClick={() => onDelete(node.id)}
+        >
+          <IconTrash />
+        </button>
       </div>
       {settingsOpen && isMessage ? (
         <QzModal
@@ -197,7 +250,6 @@ function LedgerRow({
   doc,
   question,
   index,
-  total,
   isDecider,
   onlyQuestion,
   onCommit,
@@ -208,7 +260,6 @@ function LedgerRow({
   question: OrderedQuestion;
   /** Position in the FULL flow (content included) — §2 numbering. */
   index: number;
-  total: number;
   isDecider: boolean;
   /** The last remaining question can't be deleted (a quiz needs one). */
   onlyQuestion: boolean;
@@ -222,15 +273,6 @@ function LedgerRow({
   const rating = node.data.question_type === "rating";
   const answers = node.data.answers;
   const canDeleteAnswer = answers.length > 2;
-  const hasSettings = multi || rating;
-
-  const [renumbering, setRenumbering] = useState(false);
-  const commitRenumber = (raw: string, ok: boolean) => {
-    setRenumbering(false);
-    if (!ok) return;
-    const v = parseInt(raw, 10);
-    if (!Number.isNaN(v)) onReorder(node.id, v - 1);
-  };
 
   const setAnswerText = (answerId: string, text: string) => {
     const next = answers.map((a) => (a.id === answerId ? { ...a, text } : a));
@@ -247,228 +289,173 @@ function LedgerRow({
     );
 
   return (
-    <section className="qz-s3-card" aria-label={`Question ${index + 1}`}>
-      <div className="qz-s3-card-head">
-        <div className="qz-s3-card-headl">
-          <span className="qz-s3-mv">
-            <button
-              type="button"
-              className="qz-s3-mvb"
-              disabled={index === 0}
-              aria-label="Move question up"
-              onClick={() => onReorder(node.id, index - 1)}
-            >
-              <IconUp />
-            </button>
-            <button
-              type="button"
-              className="qz-s3-mvb"
-              disabled={index === total - 1}
-              aria-label="Move question down"
-              onClick={() => onReorder(node.id, index + 1)}
-            >
-              <IconDown />
-            </button>
-          </span>
-          {renumbering ? (
-            <span className={`qz-s3-numchip is-editing${isDecider ? " is-decider" : ""}`}>
-              <input
-                className="qz-s3-numinput"
-                type="number"
-                min={1}
-                defaultValue={index + 1}
-                autoFocus
-                aria-label={`Move question ${index + 1} to position`}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") {
-                    e.preventDefault();
-                    commitRenumber((e.target as HTMLInputElement).value, true);
-                  } else if (e.key === "Escape") {
-                    commitRenumber("", false);
-                  }
-                }}
-                onBlur={(e) => commitRenumber(e.target.value, true)}
-              />
-            </span>
-          ) : (
-            <button
-              type="button"
-              className={`qz-s3-numchip is-edit${isDecider ? " is-decider" : ""}`}
-              title="Click to renumber — moves this question to that position"
-              onClick={() => setRenumbering(true)}
-            >
-              {index + 1}
-            </button>
-          )}
-          <EditableText
-            value={node.data.text}
-            onCommit={(text) => {
-              const v = text.trim().slice(0, TEXT_MAX);
-              if (v && v !== node.data.text) onCommit(updateNodeData(doc, node.id, { text: v }));
-            }}
-            maxLength={TEXT_MAX}
-            ariaLabel={`Question ${index + 1} text`}
-            className="qz-qf-v2q"
-          />
-        </div>
-        <div className={`qz-s3-card-type${hasSettings ? "" : " is-noline"}`}>
-          <TypeChipSelector doc={doc} node={node} onCommit={onCommit} />
-          <button
-            type="button"
-            className="qz-s3-cdel"
-            disabled={isDecider || onlyQuestion}
-            title={
-              isDecider
-                ? "This question decides the result — move the role first (Logic step), then delete"
-                : onlyQuestion
-                  ? "A quiz needs at least one question"
-                  : "Delete question"
-            }
-            aria-label={`Delete question ${index + 1}`}
-            onClick={() => onDelete(node.id)}
-          >
-            <IconTrash />
-          </button>
-        </div>
+    <section
+      className={`qz-ovw-row${isDecider ? " is-decider" : ""}`}
+      aria-label={`Question ${index + 1}`}
+    >
+      <span className="qz-ovw-ncell">
+        <NumberCell
+          id={node.id}
+          index={index}
+          isDecider={isDecider}
+          isContent={false}
+          noun="question"
+          onReorder={onReorder}
+        />
+      </span>
+      <div className="qz-ovw-qcell">
+        <EditableText
+          value={node.data.text}
+          onCommit={(text) => {
+            const v = text.trim().slice(0, TEXT_MAX);
+            if (v && v !== node.data.text) onCommit(updateNodeData(doc, node.id, { text: v }));
+          }}
+          maxLength={TEXT_MAX}
+          ariaLabel={`Question ${index + 1} text`}
+          className="qz-qf-v2q"
+        />
       </div>
-
-      <div className={`qz-s3-card-body${hasSettings ? "" : " is-noset"}`}>
-        <div className="qz-s3-card-ans">
-          {freeform ? (
-            <p className="qz-qf-ovmeta" role="note">
-              Open text answer — respondents type their own reply.
-            </p>
-          ) : rating ? (
-            <div className="qz-s3-scaleprev">
-              <div className="qz-s3-scalenums" aria-hidden>
-                {Array.from({ length: Math.max(0, scaleMax - scaleMin + 1) }, (_, i) => scaleMin + i).map(
-                  (v) => (
-                    <span
-                      key={v}
-                      className={`qz-s3-sn${v === scaleMin || v === scaleMax ? " is-end" : ""}`}
-                    >
-                      {v}
-                    </span>
-                  ),
-                )}
-              </div>
-              <div className="qz-s3-scaleends">
-                <label className="qz-s3-se">
-                  <span className="qz-s3-sek" aria-hidden>{scaleMin}</span>
-                  <input
-                    className="qz-s3-slab"
-                    defaultValue={node.data.scale_config?.endpoint_label_min ?? ""}
-                    key={`min-${node.data.scale_config?.endpoint_label_min ?? ""}`}
-                    maxLength={40}
-                    placeholder={`Label for ${scaleMin} (optional)`}
-                    aria-label="Scale start label"
-                    onBlur={(e) => patchScale({ endpoint_label_min: e.target.value.trim() || undefined })}
-                  />
-                </label>
-                <label className="qz-s3-se">
-                  <span className="qz-s3-sek" aria-hidden>{scaleMax}</span>
-                  <input
-                    className="qz-s3-slab"
-                    defaultValue={node.data.scale_config?.endpoint_label_max ?? ""}
-                    key={`max-${node.data.scale_config?.endpoint_label_max ?? ""}`}
-                    maxLength={40}
-                    placeholder={`Label for ${scaleMax} (optional)`}
-                    aria-label="Scale end label"
-                    onBlur={(e) => patchScale({ endpoint_label_max: e.target.value.trim() || undefined })}
-                  />
-                </label>
-              </div>
+      <div className="qz-ovw-anscell">
+        {freeform ? (
+          <p className="qz-qf-ovmeta" role="note">
+            Open text answer — respondents type their own reply.
+          </p>
+        ) : rating ? (
+          <div className="qz-s3-scaleprev">
+            <div className="qz-s3-scalenums" aria-hidden>
+              {Array.from({ length: Math.max(0, scaleMax - scaleMin + 1) }, (_, i) => scaleMin + i).map(
+                (v) => (
+                  <span
+                    key={v}
+                    className={`qz-s3-sn${v === scaleMin || v === scaleMax ? " is-end" : ""}`}
+                  >
+                    {v}
+                  </span>
+                ),
+              )}
             </div>
-          ) : (
-            <>
-              {/* §4 — FLUSH numbered answers; ✕ follows the text, hover-reveal. */}
-              <ul className="qz-qf-alist">
-                {answers.map((a, i) => (
-                  <li key={a.id}>
-                    <span className="qz-qf-anum" aria-hidden>{i + 1}</span>
-                    <EditableText
-                      value={a.text}
-                      onCommit={(text) => setAnswerText(a.id, text)}
-                      maxLength={ANSWER_MAX}
-                      ariaLabel={`Answer ${i + 1} text`}
-                      className="qz-qf-atx"
-                    />
-                    <button
-                      type="button"
-                      className="qz-qf-adel"
-                      disabled={!canDeleteAnswer}
-                      aria-label={`Delete answer ${i + 1}`}
-                      title={
-                        canDeleteAnswer
-                          ? "Delete this answer"
-                          : "Questions need at least 2 answers"
-                      }
-                      onClick={() => {
-                        if (canDeleteAnswer) onCommit(removeAnswer(doc, node.id, a.id));
-                      }}
-                    >
-                      ✕
-                    </button>
-                  </li>
-                ))}
-              </ul>
-              {/* §4 — Add-answer sits at the END of the answers column so its
-                  right edge lands on the settings divider. */}
-              <div className="qz-s3-sec-foot">
-                <span />
-                <button
-                  type="button"
-                  className="qz-s3-sec-footbtn is-add"
-                  onClick={() => onCommit(addAnswer(doc, node.id))}
-                >
-                  ＋ Add answer
-                </button>
-              </div>
-            </>
-          )}
-        </div>
-
-        {hasSettings ? (
-          <div className="qz-s3-card-set">
-            <span className="qz-s3-set-kicker">Settings</span>
-            {multi ? (
-              <>
-                <div className="qz-s3-set-r">
-                  <span className="qz-s3-set-lbl">Min</span>
-                  <Stepper
-                    value={node.data.min_selections ?? 1}
-                    min={1}
-                    max={node.data.max_selections ?? answers.length}
-                    onChange={(v) => onCommit(updateNodeData(doc, node.id, { min_selections: v }))}
-                    label="minimum selections"
-                  />
-                </div>
-                <div className="qz-s3-set-r">
-                  <span className="qz-s3-set-lbl">Max</span>
-                  <Stepper
-                    value={node.data.max_selections ?? answers.length}
-                    min={node.data.min_selections ?? 1}
-                    max={Math.max(answers.length, 1)}
-                    onChange={(v) => onCommit(updateNodeData(doc, node.id, { max_selections: v }))}
-                    label="maximum selections"
-                  />
-                </div>
-              </>
-            ) : null}
-            {rating ? (
-              <div className="qz-s3-set-r">
-                <span className="qz-s3-set-lbl">Max</span>
-                <Stepper
-                  value={scaleMax}
-                  min={scaleMin + 1}
-                  max={10}
-                  onChange={(v) => patchScale({ max: v })}
-                  label="scale points"
+            <div className="qz-s3-scaleends">
+              <label className="qz-s3-se">
+                <span className="qz-s3-sek" aria-hidden>{scaleMin}</span>
+                <input
+                  className="qz-s3-slab"
+                  defaultValue={node.data.scale_config?.endpoint_label_min ?? ""}
+                  key={`min-${node.data.scale_config?.endpoint_label_min ?? ""}`}
+                  maxLength={40}
+                  placeholder={`Label for ${scaleMin} (optional)`}
+                  aria-label="Scale start label"
+                  onBlur={(e) => patchScale({ endpoint_label_min: e.target.value.trim() || undefined })}
                 />
-              </div>
-            ) : null}
+              </label>
+              <label className="qz-s3-se">
+                <span className="qz-s3-sek" aria-hidden>{scaleMax}</span>
+                <input
+                  className="qz-s3-slab"
+                  defaultValue={node.data.scale_config?.endpoint_label_max ?? ""}
+                  key={`max-${node.data.scale_config?.endpoint_label_max ?? ""}`}
+                  maxLength={40}
+                  placeholder={`Label for ${scaleMax} (optional)`}
+                  aria-label="Scale end label"
+                  onBlur={(e) => patchScale({ endpoint_label_max: e.target.value.trim() || undefined })}
+                />
+              </label>
+            </div>
+          </div>
+        ) : (
+          <>
+            {/* §4 — FLUSH numbered answers; ✕ follows the text, hover-reveal. */}
+            <ul className="qz-qf-alist">
+              {answers.map((a, i) => (
+                <li key={a.id}>
+                  <span className="qz-qf-anum" aria-hidden>{i + 1}</span>
+                  <EditableText
+                    value={a.text}
+                    onCommit={(text) => setAnswerText(a.id, text)}
+                    maxLength={ANSWER_MAX}
+                    ariaLabel={`Answer ${i + 1} text`}
+                    className="qz-qf-atx"
+                  />
+                  <button
+                    type="button"
+                    className="qz-qf-adel"
+                    disabled={!canDeleteAnswer}
+                    aria-label={`Delete answer ${i + 1}`}
+                    title={
+                      canDeleteAnswer
+                        ? "Delete this answer"
+                        : "Questions need at least 2 answers"
+                    }
+                    onClick={() => {
+                      if (canDeleteAnswer) onCommit(removeAnswer(doc, node.id, a.id));
+                    }}
+                  >
+                    ✕
+                  </button>
+                </li>
+              ))}
+            </ul>
+            {/* Mock .ovw-add — a dashed full-width button ending the answers
+                column, so the list visibly "fills its column". */}
+            <button
+              type="button"
+              className="qz-ovw-add"
+              onClick={() => onCommit(addAnswer(doc, node.id))}
+            >
+              ＋ Add answer
+            </button>
+          </>
+        )}
+      </div>
+      <div className="qz-ovw-typecell">
+        <TypeChipSelector doc={doc} node={node} onCommit={onCommit} />
+        {multi ? (
+          <div className="qz-ovw-set">
+            <span className="qz-s3-set-lbl">Min</span>
+            <Stepper
+              value={node.data.min_selections ?? 1}
+              min={1}
+              max={node.data.max_selections ?? answers.length}
+              onChange={(v) => onCommit(updateNodeData(doc, node.id, { min_selections: v }))}
+              label="minimum selections"
+            />
+            <span className="qz-s3-set-lbl">Max</span>
+            <Stepper
+              value={node.data.max_selections ?? answers.length}
+              min={node.data.min_selections ?? 1}
+              max={Math.max(answers.length, 1)}
+              onChange={(v) => onCommit(updateNodeData(doc, node.id, { max_selections: v }))}
+              label="maximum selections"
+            />
           </div>
         ) : null}
+        {rating ? (
+          <div className="qz-ovw-set">
+            <span className="qz-s3-set-lbl">Max</span>
+            <Stepper
+              value={scaleMax}
+              min={scaleMin + 1}
+              max={10}
+              onChange={(v) => patchScale({ max: v })}
+              label="scale points"
+            />
+          </div>
+        ) : null}
+        <button
+          type="button"
+          className="qz-s3-cdel"
+          disabled={isDecider || onlyQuestion}
+          title={
+            isDecider
+              ? "This question decides the result — move the role first (Logic step), then delete"
+              : onlyQuestion
+                ? "A quiz needs at least one question"
+                : "Delete question"
+          }
+          aria-label={`Delete question ${index + 1}`}
+          onClick={() => onDelete(node.id)}
+        >
+          <IconTrash />
+        </button>
       </div>
     </section>
   );
@@ -546,22 +533,42 @@ export function OverviewLedger({
   const first = steps[0]?.node.id;
   const nQuestions = steps.filter((s) => s.kind === "question").length;
 
+  // Mock .ovw-more — the grid opens on the first four rows; the rest sit
+  // behind one full-width reveal (renumber still addresses ANY position —
+  // the mutation runs over the full flow, not the visible slice).
+  const [showAll, setShowAll] = useState(false);
+  const visible = showAll ? steps : steps.slice(0, OVW_LIMIT);
+  const hidden = steps.slice(visible.length);
+  const hiddenAllQuestions = hidden.every((s) => s.kind === "question");
+  const moreNoun = hiddenAllQuestions ? "question" : "step";
+  const moreLabel =
+    hidden.length === 1
+      ? `Show the other ${moreNoun}`
+      : `Show the other ${hidden.length} ${moreNoun}s`;
+
   return (
-    <div className="qz-s3-ledger">
+    <div className="qz-s3-ledger qz-ovw">
+      {/* QRTZ-S5 (mock .ovw-head) — the sticky column header. NO role
+          column: roles live on the Logic step (owner call §8b). */}
+      <div className="qz-ovw-head">
+        <span>#</span>
+        <span>Question</span>
+        <span>Answers</span>
+        <span>Type</span>
+      </div>
       {first ? (
         <AddStepDivider
           onAddQuestion={() => onCommit(insertQuestionRelative(doc, first, "above"))}
           onAddContent={() => onCommit(insertContentRelative(doc, first, "above"))}
         />
       ) : null}
-      {steps.map((s, i) => (
+      {visible.map((s, i) => (
         <div key={s.node.id} className="qz-s3-ledgerrow">
           {s.kind === "content" ? (
             <ContentRow
               doc={doc}
               step={s}
               index={i}
-              total={steps.length}
               onCommit={onCommit}
               onReorder={onReorder}
               onDelete={onDelete}
@@ -571,7 +578,6 @@ export function OverviewLedger({
               doc={doc}
               question={{ node: s.node, qIndex: s.qIndex ?? 1 } as OrderedQuestion}
               index={i}
-              total={steps.length}
               isDecider={s.node.id === deciderId}
               onlyQuestion={nQuestions <= 1}
               onCommit={onCommit}
@@ -585,6 +591,11 @@ export function OverviewLedger({
           />
         </div>
       ))}
+      {hidden.length > 0 ? (
+        <button type="button" className="qz-ovw-more" onClick={() => setShowAll(true)}>
+          {moreLabel}
+        </button>
+      ) : null}
     </div>
   );
 }
