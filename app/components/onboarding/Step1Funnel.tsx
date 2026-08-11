@@ -103,9 +103,12 @@ export function Step1Funnel({ data }: { data: FunnelData }) {
   const defaultContinue: FunnelContinueSpec =
     visibleKey === "rec_page" && !isGenerating
       ? {
-          label: pendingIntent === "generate-build" ? "Opening builder…" : "Open builder",
+          // QRTZ-S2 (STATES §Button·Loading): the label holds — a ring joins
+          // it instead of an "Opening builder…" swap resizing the button.
+          label: "Open builder",
           onClick: () => fetcher.submit({ intent: "generate-build" }, { method: "post" }),
           disabled: navBusy,
+          loading: pendingIntent === "generate-build",
         }
       : { label: "Continue", onClick: () => {}, disabled: true };
   const cont = barOverride?.continueSpec ?? defaultContinue;
@@ -113,11 +116,13 @@ export function Step1Funnel({ data }: { data: FunnelData }) {
   const continueBtn = (
     <button
       type="button"
-      className={`qz-topbar-continue${cont.disabled ? " is-off" : ""}${cont.blocked ? " is-blocked" : ""}`}
+      className={`qz-topbar-continue${cont.disabled ? " is-off" : ""}${cont.blocked ? " is-blocked" : ""}${cont.loading ? " is-loading" : ""}`}
       disabled={cont.disabled}
+      aria-busy={cont.loading || undefined}
       aria-haspopup={cont.blocked ? "dialog" : undefined}
       onClick={cont.disabled ? undefined : cont.onClick}
     >
+      {cont.loading ? <span className="qz-btn-ring" aria-hidden /> : null}
       {cont.label}
     </button>
   );

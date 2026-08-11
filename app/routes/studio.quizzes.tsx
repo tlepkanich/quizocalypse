@@ -274,21 +274,21 @@ export default function StudioQuizzes() {
       />
 
       {quizzes.length === 0 ? (
-        <QzCard dashed style={{ display: "flex", flexDirection: "column", gap: 10, alignItems: "flex-start" }}>
-          <div className="qz-label">No quizzes yet</div>
-          <p className="qz-dim" style={{ margin: 0 }}>
-            Create your first quiz — write your goal and our AI picks the products and builds the
-            questions for you.
-          </p>
-          <div className="qz-row" style={{ gap: 8, flexWrap: "wrap" }}>
-            <Link to="/studio/goal" className="qz-btn qz-btn-accent qz-btn-sm">
-              ✎ Write your goal →
-            </Link>
-            <Link to="/studio/templates" className="qz-btn qz-btn-ghost qz-btn-sm">
-              ✦ Generate quiz templates
-            </Link>
-            <Link to="/studio/onboarding" className="qz-btn qz-btn-ghost qz-btn-sm">
-              ✨ Build with AI
+        /* QRTZ-S2 — states.mjs mt- pattern (zero-quizzes): icon tile, one-line
+           title, ≤30ch body, ONE action. Copy verbatim from the mock. The
+           other create paths stay reachable in the page header. */
+        <QzCard>
+          <div className="qz-mt">
+            <span className="qz-mt-ico">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                <rect x="3.5" y="5.5" width="17" height="13" rx="2" />
+                <path d="M3.5 10h17" />
+              </svg>
+            </span>
+            <b>No quizzes yet</b>
+            <p>Describe a decision your shoppers have to make and we will draft one.</p>
+            <Link to="/studio/goal" className="qz-mt-btn">
+              Start a quiz
             </Link>
           </div>
         </QzCard>
@@ -323,7 +323,37 @@ export default function StudioQuizzes() {
           </div>
 
           {shown.length === 0 ? (
-            <p className="qz-dim" style={{ fontSize: 13 }}>No quizzes match your filters.</p>
+            /* QRTZ-S2 — states.mjs mt- pattern (no-results): a filter matching
+               nothing is NOT the same as having nothing — it NAMES the query,
+               and its action CLEARS the filter rather than creating anything. */
+            <div className="qz-mt">
+              <span className="qz-mt-ico">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                  <circle cx="11" cy="11" r="6.5" />
+                  <path d="m16 16 4.5 4.5" />
+                </svg>
+              </span>
+              <b>
+                {query.trim()
+                  ? `No quizzes match “${query.trim()}”`
+                  : `No ${status === "live" ? "live" : "draft"} quizzes`}
+              </b>
+              <p>
+                {query.trim()
+                  ? "Try a shorter word, or clear the search."
+                  : "Clear the filter to see every quiz."}
+              </p>
+              <button
+                type="button"
+                className="qz-mt-btn"
+                onClick={() => {
+                  setQuery("");
+                  setStatus("all");
+                }}
+              >
+                {query.trim() ? "Clear search" : "Clear filter"}
+              </button>
+            </div>
           ) : view === "grid" ? (
             <div className="qz-qcard-grid">
               {shown.map((q) => (

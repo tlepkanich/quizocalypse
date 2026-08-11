@@ -496,7 +496,7 @@ function IntegrationNodeView({ data }: NodeProps) {
           style={{
             fontSize: 10,
             color: "var(--qz-ink-2)",
-            fontFamily: "var(--qz-font-mono)",
+            fontVariantNumeric: "tabular-nums",
             padding: "2px 6px",
             background: "var(--qz-cream-2)",
             borderRadius: 3,
@@ -649,12 +649,11 @@ function NodeShell({
       )}
       <div
         style={{
-          fontFamily: "var(--qz-font-mono)",
           fontSize: 10,
           color: accent,
           textTransform: "uppercase",
-          fontWeight: 600,
-          letterSpacing: "0.1em",
+          fontWeight: 700,
+          letterSpacing: ".09em",
           marginBottom: 8,
           display: "flex",
           justifyContent: "space-between",
@@ -728,13 +727,13 @@ function NodeField({
     >
       <span
         style={{
-          fontFamily: "var(--qz-font-mono)",
           fontSize: 10,
+          fontWeight: 700,
           color: "var(--qz-ink-3)",
           display: "block",
           marginBottom: 2,
           textTransform: "uppercase",
-          letterSpacing: "0.08em",
+          letterSpacing: ".09em",
         }}
       >
         {label}
@@ -790,12 +789,12 @@ const btnGhost: React.CSSProperties = {
   padding: "5px 10px",
   cursor: "pointer",
   fontSize: 11,
-  fontFamily: "var(--qz-font-mono)",
+  fontWeight: 700,
   color: "var(--qz-ink-3)",
   width: "100%",
   marginTop: 8,
   textTransform: "uppercase",
-  letterSpacing: "0.06em",
+  letterSpacing: ".09em",
 };
 
 // ---------- Builder component ----------
@@ -1404,8 +1403,10 @@ function NodeDrawer({
               border: "none",
               color: "var(--qz-ink-3)",
               cursor: "pointer",
-              fontSize: 13,
-              fontFamily: "var(--qz-font-mono)",
+              fontSize: 11,
+              fontWeight: 700,
+              textTransform: "uppercase",
+              letterSpacing: ".09em",
             }}
           >
             close ×
@@ -1545,7 +1546,6 @@ function BreakpointToggle({
               padding: "5px 12px",
               borderRadius: "var(--qz-radius)",
               fontSize: 12,
-              fontFamily: "var(--qz-font-mono)",
               fontWeight: on ? 600 : 500,
               color: on ? "var(--qz-ink)" : "var(--qz-ink-3)",
               cursor: "pointer",
@@ -2696,8 +2696,10 @@ function ContentTab({
                     border: "none",
                     color: "var(--qz-crit)",
                     cursor: "pointer",
-                    fontSize: 12,
-                    fontFamily: "var(--qz-font-mono)",
+                    fontSize: 11,
+                    fontWeight: 700,
+                    textTransform: "uppercase",
+                    letterSpacing: ".09em",
                   }}
                 >
                   remove
@@ -3312,7 +3314,9 @@ function ConditionalRulesEditor({
               color: "var(--qz-crit)",
               cursor: "pointer",
               fontSize: 11,
-              fontFamily: "var(--qz-font-mono)",
+              fontWeight: 700,
+              textTransform: "uppercase",
+              letterSpacing: ".09em",
             }}
           >
             remove rule
@@ -3422,8 +3426,10 @@ function BranchEditor({
                     border: "none",
                     color: "var(--qz-crit)",
                     cursor: "pointer",
-                    fontSize: 12,
-                    fontFamily: "var(--qz-font-mono)",
+                    fontSize: 11,
+                    fontWeight: 700,
+                    textTransform: "uppercase",
+                    letterSpacing: ".09em",
                   }}
                 >
                   remove
@@ -3719,7 +3725,7 @@ function AnswerPointsEditor({
           color: "var(--qz-ink-3)",
           cursor: "pointer",
           fontSize: 12,
-          fontFamily: "var(--qz-font-mono)",
+          fontVariantNumeric: "tabular-nums",
         }}
       >
         {open ? "▾" : "▸"} Points{hasPoints ? ` (${entries.length})` : ""}
@@ -3947,7 +3953,7 @@ function Chip({
         background: "var(--qz-rule-2)",
         borderRadius: 100,
         fontSize: 12,
-        fontFamily: "var(--qz-font-mono)",
+        fontVariantNumeric: "tabular-nums",
         color: "var(--qz-ink-2)",
       }}
     >
@@ -4055,7 +4061,7 @@ function DesignTab({
                 value={value ?? ""}
                 placeholder="(inherit)"
                 onChange={(e) => setColor(role.key, e.target.value || null)}
-                style={{ fontFamily: "var(--qz-font-mono)", fontSize: 12 }}
+                style={{ fontVariantNumeric: "tabular-nums", fontSize: 12 }}
               />
             </div>
             {value && (
@@ -4066,9 +4072,11 @@ function DesignTab({
                   background: "transparent",
                   border: "none",
                   color: "var(--qz-ink-3)",
-                  fontSize: 12,
+                  fontSize: 11,
+                  fontWeight: 700,
+                  textTransform: "uppercase",
+                  letterSpacing: ".09em",
                   cursor: "pointer",
-                  fontFamily: "var(--qz-font-mono)",
                 }}
               >
                 clear
@@ -4511,13 +4519,16 @@ function QuizSettingsModal({
                   />
                 </QzField>
                 <QzField label="Snippet to embed (publish first)">
+                  {/* QRTZ-S2 mono triage — decision 3 says no monospace; the
+                      family is set explicitly because <pre> would otherwise
+                      fall back to the UA's monospace default. */}
                   <pre
                     style={{
                       background: "var(--qz-cream-2)",
                       padding: 10,
                       borderRadius: "var(--qz-radius)",
                       fontSize: 11,
-                      fontFamily: "var(--qz-font-mono)",
+                      fontFamily: "var(--qz-font-body)",
                       overflowX: "auto",
                       margin: 0,
                     }}

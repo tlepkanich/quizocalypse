@@ -367,13 +367,15 @@ function WhatsNewCard({ releases }: { releases: Release[] }) {
         style={{ alignItems: "baseline", marginBottom: 12 }}
       >
         <div className="qz-label">What&apos;s new</div>
+        {/* QRTZ-S2 mono triage — a see-all link is the mock's .link role
+            (Figtree 13/600, accent-ink), not a typewriter label. */}
         <Link
           to="/app/releases"
           prefetch="intent"
           style={{
-            fontSize: 11,
-            fontFamily: "var(--qz-font-mono)",
-            color: "var(--qz-ink-3)",
+            fontSize: 13,
+            fontWeight: 600,
+            color: "var(--qz-accent-ink)",
             textDecoration: "none",
           }}
         >

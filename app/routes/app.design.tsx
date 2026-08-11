@@ -527,7 +527,7 @@ function ColorRow({
         <QzInput
           value={value}
           onChange={(e) => onChange(e.target.value)}
-          style={{ fontFamily: "var(--qz-font-mono)", fontSize: 13 }}
+          style={{ fontVariantNumeric: "tabular-nums", fontSize: 13 }}
         />
       </div>
     </div>
@@ -837,8 +837,10 @@ function BrandGuidelinesCard({
                 border: "none",
                 color: "var(--qz-ink-3)",
                 cursor: "pointer",
-                fontSize: 12,
-                fontFamily: "var(--qz-font-mono)",
+                fontSize: 11,
+                fontWeight: 700,
+                textTransform: "uppercase",
+                letterSpacing: ".09em",
               }}
             >
               change voice
@@ -883,8 +885,10 @@ function BrandGuidelinesCard({
               border: "none",
               color: "var(--qz-crit)",
               cursor: "pointer",
-              fontSize: 12,
-              fontFamily: "var(--qz-font-mono)",
+              fontSize: 11,
+              fontWeight: 700,
+              textTransform: "uppercase",
+              letterSpacing: ".09em",
             }}
           >
             remove guidelines

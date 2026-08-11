@@ -23,6 +23,10 @@ export type FunnelContinueSpec = {
   blocked?: boolean;
   /** Tooltip carried on the wrapper when disabled (why it's off). */
   title?: string;
+  /** QRTZ-S2 (handoff STATES §Button·Loading): submit in flight. The label
+   *  MUST stay constant — a 14px ring joins it instead of the copy changing
+   *  ("Opening builder…"-style label swaps resize the button mid-action). */
+  loading?: boolean;
 };
 
 export type FunnelBarOverride = {
@@ -45,30 +49,97 @@ export function useFunnelBar(override: FunnelBarOverride) {
   }, [ctx, override]);
 }
 
-/* §1.3, amended by owner edit (2026-08-02): autosave is silent when healthy —
-   no "Saving…"/"Saved" chip in the bar (the step flow owns that width).
-   The chip materializes ONLY on a save error, because a failing autosave is
-   the one state the merchant must see (it is the truth behind never asking
-   to confirm navigation). `isSaving`/`savedAt` stay in the signature so the
-   stages' publish contracts are untouched. */
+/* Quartz states.mjs icon vocabulary (24-viewBox, 1.8 stroke). */
+function SvIcon({ spin, children }: { spin?: boolean; children: ReactNode }) {
+  return (
+    <svg
+      className={spin ? "qz-sv-spin" : undefined}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.8}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+    >
+      {children}
+    </svg>
+  );
+}
+
+/* QRTZ-S2 (owner-call 8a resolved: the 2026-08-09 mock wins over the
+   2026-08-02 error-only edit) — the chip draws all FOUR autosave states from
+   the states.mjs sv- pattern:
+     Saving…  isSaving — the fetcher is busy, i.e. ONLY after the 700ms
+              debounce fired, so typing never flickers the chip.
+     Saved    savedAt set — ✓ in the ok tone.
+     Not saved · Retry
+              saveError — persists, never fades, until a retry succeeds
+              (the merchant's work is only in the tab).
+     Paused while AI edits
+              isAiPaused — useQuizDraft suspended autosave so a debounced PUT
+              cannot land a stale doc mid-AI-call. Accent-ink tone. */
 export function FunnelSaveChip({
+  isSaving,
+  savedAt,
   saveError,
   onRetry,
+  isAiPaused = false,
 }: {
   isSaving: boolean;
   savedAt: string | null;
   saveError: string | null;
   onRetry: () => void;
+  /** useQuizDraft().isAiPaused — optional so existing call sites are untouched. */
+  isAiPaused?: boolean;
 }) {
-  if (!saveError) return null;
-  return (
-    <span className="qz-save-status" aria-live="polite">
-      <span className="qz-save-chip is-error">
-        <span aria-hidden>⚠</span> {saveError} ·{" "}
-        <button type="button" className="qz-ql-retry" onClick={onRetry}>
+  let body: ReactNode = null;
+  if (saveError) {
+    body = (
+      <span className="qz-sv is-error">
+        <SvIcon>
+          <path d="M12 8v5" />
+          <circle cx="12" cy="16.5" r=".9" fill="currentColor" stroke="none" />
+          <path d="M10.3 3.9 2.7 17.2A2 2 0 0 0 4.4 20.2h15.2a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z" />
+        </SvIcon>
+        Not saved
+        <button type="button" className="qz-sv-retry" onClick={onRetry}>
           Retry
         </button>
       </span>
+    );
+  } else if (isAiPaused) {
+    body = (
+      <span className="qz-sv is-paused">
+        <SvIcon>
+          <path d="M9 5v14M15 5v14" />
+        </SvIcon>
+        Paused while AI edits
+      </span>
+    );
+  } else if (isSaving) {
+    body = (
+      <span className="qz-sv is-saving">
+        <SvIcon spin>
+          <path d="M12 3a9 9 0 1 0 9 9" />
+        </SvIcon>
+        Saving…
+      </span>
+    );
+  } else if (savedAt) {
+    body = (
+      <span className="qz-sv is-saved">
+        <SvIcon>
+          <path d="m4.5 12.5 5 5 10-11" />
+        </SvIcon>
+        Saved
+      </span>
+    );
+  }
+  if (!body) return null;
+  return (
+    <span className="qz-save-status" aria-live="polite">
+      {body}
     </span>
   );
 }
