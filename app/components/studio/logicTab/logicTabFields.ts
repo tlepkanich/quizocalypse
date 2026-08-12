@@ -428,3 +428,26 @@ export function writeValuesForField(
   }
   return {};
 }
+
+// ════════════════════════════════════════════════════════════════════════════
+// QRTZ-OB1 (GAPS §A item 7, owner call 2026-08-12) — the mock's Logic
+// vocabulary replaces the product's locked set. ONE source for every surface
+// (QuestionWindow spine, Logic-tab pills, Overview role column) so the role
+// names can never drift apart again. Mock sources (_src/shared.mjs):
+//   "Picks the result"  — QGROUPS role, line 316 + role popover line 446
+//   "Narrows"           — QGROUPS role, line 327 (attr on its own slot)
+//   "Asked only"        — the non-deciding badge, explainer line 1034
+// "Starting set" survives ONLY in the pool sense (the initial product set a
+// quiz narrows from — the mock's own explainer badge, shared.mjs ~1032);
+// it is no longer a question ROLE name.
+// ════════════════════════════════════════════════════════════════════════════
+
+export const ROLE_JOBS = [
+  { k: "decides" as const, n: "Picks the result", hint: "each answer opens a group of products" },
+  { k: "filter" as const, n: "Narrows", hint: "each answer keeps only what matches" },
+  { k: "info" as const, n: "Asked only", hint: "asked, but never touches products" },
+];
+
+/** Mock .pop-foot (shared.mjs line 451), verbatim — the one-decider rule. */
+export const ROLE_FOOT =
+  "One question picks the result. Every other question narrows on a single attribute.";

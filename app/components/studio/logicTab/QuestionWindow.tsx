@@ -23,6 +23,8 @@ import {
   fieldValues,
   narrowFieldOptions,
   writeValuesForField,
+  ROLE_JOBS,
+  ROLE_FOOT,
 } from "./logicTabFields";
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -236,11 +238,9 @@ function WinRow({
   );
 }
 
-const JOBS = [
-  { k: "decides" as const, n: "Starting set", hint: "each answer opens a group of products" },
-  { k: "filter" as const, n: "Narrows", hint: "each answer keeps only what matches" },
-  { k: "info" as const, n: "Info only", hint: "asked, but never touches products" },
-];
+// QRTZ-OB1 — the role vocabulary is shared (logicTabFields.ROLE_JOBS) so the
+// spine, the Logic pills and the Overview role column can never drift.
+const JOBS = ROLE_JOBS;
 
 export function QuestionWindow({
   doc,
@@ -474,7 +474,7 @@ export function QuestionWindow({
       commit(moveDecider(doc, q.node.id));
       if (prev && prev.node.id !== q.node.id)
         toast(
-          `Starting set moved from "${stripQ(prev.node.data.text)}" to "${stripQ(q.node.data.text)}"`,
+          `"${stripQ(q.node.data.text)}" now picks the result (was "${stripQ(prev.node.data.text)}")`,
         );
       return;
     }
@@ -912,10 +912,8 @@ export function QuestionWindow({
                   disabled={j.k === "decides" && cannotDecide}
                   onClick={() => setJob(j.k)}
                 >
-                  <b>
-                    {j.k === "decides" ? "◆ " : ""}
-                    {j.n}
-                  </b>
+                  {/* QRTZ-OB1 — the ◆ glyph is gone with the vocabulary. */}
+                  <b>{j.n}</b>
                   <span>{j.k === "decides" && cannotDecide ? "needs single-answer choices" : sub}</span>
                 </button>
               );
@@ -923,7 +921,7 @@ export function QuestionWindow({
             {role === "filter" ? (
               // A readout, never a control — the field is DERIVED, not chosen.
               <div className="qz-qwin-derived">
-                narrows by <b>{derivedNarrowLabel(answers)}</b>
+                narrows on <b>{derivedNarrowLabel(answers)}</b>
               </div>
             ) : null}
             {/* Mock jobSpine — offered for every non-info role. */}
@@ -932,13 +930,8 @@ export function QuestionWindow({
                 Map {unmapped} answer{unmapped === 1 ? "" : "s"} for me
               </button>
             ) : null}
-            {/* QRTZ-D2 (mock .pop-foot; GAPS §C1) — the one-decider rule in
-                the product's locked vocabulary, re-homed from the orphaned S6
-                role menu. */}
-            <div className="qz-qwin-rolefoot">
-              One question picks the starting set. Every other narrows on a
-              single product attribute.
-            </div>
+            {/* QRTZ-OB1 — mock .pop-foot verbatim (shared.mjs line 451). */}
+            <div className="qz-qwin-rolefoot">{ROLE_FOOT}</div>
           </section>
 
           {/* ── right: the one index, per role ── */}
@@ -961,8 +954,8 @@ export function QuestionWindow({
             {infoRole ? (
               <div className="qz-qwin-infomsg">
                 This question is asked and recorded, but it never touches the products. Switch it
-                to <b>Narrows</b> or <b>Starting set</b> in the middle column and everything you
-                mapped before comes back.
+                to <b>Narrows</b> or <b>Picks the result</b> in the middle column and everything
+                you mapped before comes back.
               </div>
             ) : (
               <>

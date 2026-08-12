@@ -49,7 +49,7 @@ ok("Create disabled until conditions + targets",
   (await modal.locator("header button:disabled", { hasText: "Create rule" }).count()) === 1);
 ok("Exclude is the blank-draft default (§4.2)",
   (await modal.locator(".qz-crm-verb.is-on", { hasText: "Exclude" }).count()) === 1);
-ok("every question is listed, Info-only included (§4.1)",
+ok("every question is listed, Asked-only included (§4.1)",
   (await modal.locator(".qz-crm-qblock").count()) >= 2);
 
 // ── conditions: single-select replace semantics (DECISIONS G3) ──────────────

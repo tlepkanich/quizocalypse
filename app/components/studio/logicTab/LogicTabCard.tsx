@@ -28,8 +28,10 @@ import { derivedNarrowLabel, fieldHue } from "./logicTabFields";
 
 type QuizDoc = Quiz;
 
-// Locked vocabulary (HANDOFF §1): Starting set / Narrows / Info only;
-// Show / Highlight / Exclude. Never: decider, bucket, boost, weight, score.
+// Vocabulary (QRTZ-OB1, GAPS §A item 7 — the mock's set replaced HANDOFF §1's):
+// Picks the result / Narrows / Asked only; Show / Highlight / Exclude.
+// Never: decider, bucket, boost, weight, score. Role names live in
+// logicTabFields.ROLE_JOBS — every surface reads them from there.
 // G4 wiring: action absent = Show (replace) · "show" = Highlight · "hide" =
 // Exclude. "prioritize" has no verb in this design (unexposed; render plainly
 // if an old doc carries it).
@@ -119,7 +121,7 @@ export function LogicTabCard({
     const t = setTimeout(() => setFreshRuleId(null), 1800);
     return () => clearTimeout(t);
   }, [rules]);
-  // §3.2 — "switched on" = role is not Info only (Starting set counts).
+  // §3.2 — "switched on" = role is not Asked only (Picks-the-result counts).
   const switchedOn = questions.filter(
     (q) => q.node.data.role === "decides" || q.node.data.role === "filter",
   ).length;
@@ -325,10 +327,10 @@ export function LogicTabCard({
 
       <header className="qz-ltab-hd qz-ltab-div">
         <h2>Questions</h2>
-        {/* QRTZ-S6 — mock s14 .card-meta, in the product's locked vocabulary
-            (owner call 8c: "starting set", never "picks the result"). */}
+        {/* QRTZ-OB1 — mock s14 .card-meta verbatim (shared.mjs line 374;
+            GAPS §A item 7 reversed owner call 8c). */}
         <p className="qz-ltab-hdmeta">
-          Each question either picks the starting set or narrows on one product
+          Each question either picks the result or narrows on one product
           attribute.
         </p>
         <button
@@ -350,7 +352,7 @@ export function LogicTabCard({
           <col style={{ width: "17%" }} />
           <col style={{ width: "4%" }} />
           <col style={{ width: "17%" }} />
-          {/* §2 — "Shows / narrows" pinned at 36%; the map never reflows. */}
+          {/* §2 — "Maps to" pinned at 36%; the map never reflows. */}
           <col style={{ width: "36%" }} />
           <col style={{ width: "13%" }} />
           <col style={{ width: "13%" }} />
@@ -360,7 +362,8 @@ export function LogicTabCard({
             <th scope="col">Question</th>
             <th scope="col" aria-label="Answer key" />
             <th scope="col">Answer</th>
-            <th scope="col">Shows / narrows</th>
+            {/* QRTZ-OB1 — mock ltable head, verbatim (shared.mjs line 384). */}
+            <th scope="col">Maps to</th>
             <th scope="col">Products</th>
             <th scope="col">Then go to</th>
           </tr>
@@ -483,16 +486,19 @@ function QuestionRows({
   const total = productIndex.length;
   const keys = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
 
-  // UNIFIED — the pill is DERIVED (never stored: narrow_field is no longer
-  // written anywhere; the label falls out of the answers' own values) and
-  // opens the question window focused on the first answer.
+  // QRTZ-OB1 (GAPS §A item 7) — the mock's role vocabulary: "Picks the
+  // result" (◆ gone, shared.mjs line 316) · "Narrows" with the DERIVED
+  // attribute on its own line under the pill (the mock's role-stack + attr-
+  // slot form, lines 398–401 — a pill can't hold a real metafield key) ·
+  // "Asked only" (line 1034). The pill opens the question window focused on
+  // the first answer; the attribute stays a readout (derived, never stored).
   const pillLabel =
     role === "decides" ? (
-      <>◆ Starting set</>
+      <>Picks the result</>
     ) : role === "filter" ? (
-      <>Narrows · {derivedNarrowLabel(answers)}</>
+      <>Narrows</>
     ) : (
-      <>Info only</>
+      <>Asked only</>
     );
   const pillClass =
     role === "decides" ? " is-start" : role === "filter" ? " is-narrow" : "";
@@ -507,6 +513,12 @@ function QuestionRows({
   ) : (
     <span className={`qz-ltab-pill${pillClass}`}>{pillLabel}</span>
   );
+  const attrLine =
+    role === "filter" ? (
+      <span className="qz-ltab-attr" title={`narrows on ${derivedNarrowLabel(answers)}`}>
+        narrows on <b>{derivedNarrowLabel(answers)}</b>
+      </span>
+    ) : null;
 
   // A question with no answers (freeform types) still needs its row — the
   // role pill must stay reachable from this tab (review L2-8).
@@ -518,6 +530,7 @@ function QuestionRows({
             <span className="qz-ltab-qnum">Q{q.qIndex}</span> {q.node.data.text}
           </div>
           {pill}
+          {attrLine}
         </td>
         <td className="qz-ltab-key" />
         <td className="qz-ltab-muted" colSpan={4}>
@@ -555,6 +568,7 @@ function QuestionRows({
                   <span className="qz-ltab-qnum">Q{q.qIndex}</span> {q.node.data.text}
                 </div>
                 {pill}
+                {attrLine}
               </td>
             ) : null}
             <td className="qz-ltab-key">{keys[i] ?? i + 1}</td>
@@ -562,8 +576,8 @@ function QuestionRows({
               {a.text}
             </td>
             <td>
-              {/* UNIFIED — every Shows/narrows cell is the same door: it opens
-                  the question window focused on this answer. Info-only cells
+              {/* UNIFIED — every Maps-to cell is the same door: it opens
+                  the question window focused on this answer. Asked-only cells
                   are buttons too, at reduced opacity. */}
               {onOpenWindow ? (
                 <button
@@ -616,7 +630,7 @@ function QuestionRows({
   );
 }
 
-// §5.2 (UNIFIED deltas) — the "Shows / narrows" cell per role. Up to 3 chips
+// §5.2 (UNIFIED deltas) — the "Maps to" cell per role. Up to 3 chips
 // + a "+N" overflow; field-value chips keep their per-field colour so the
 // table reads as before; the "pick anything" invite is gone (unset filter
 // cells read "not mapped yet" — the window is the one editor now).

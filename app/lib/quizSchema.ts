@@ -343,8 +343,8 @@ export const QuestionDataObject = z.object({
   // absent on every legacy doc.
   // QZY-1 (quiz-logic spec §3) adds "filter": narrows the pool by an
   // attribute value per answer (tags/collection_filter — the machinery the
-  // engine already reads). UI vocabulary: decides = "Picks the result",
-  // filter = "Filters results", qualifier = "Info only" (stored value stays
+  // engine already reads). UI vocabulary (QRTZ-OB1): decides = "Picks the
+  // result", filter = "Narrows", qualifier = "Asked only" (stored value stays
   // `qualifier` forever — parse-forever rule; do not migrate docs).
   role: z.enum(["decides", "qualifier", "filter"]).optional(),
   // Logic tab (logic-tab HANDOFF §6.1) — which ONE field a filter question

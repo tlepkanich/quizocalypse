@@ -477,7 +477,7 @@ export function CreateRuleModal({
               </span>
             </div>
             <div className="qz-crm-scroll">
-              {/* §4.1 — EVERY question is listed, Info-only included: on a
+              {/* §4.1 — EVERY question is listed, Asked-only included: on a
                   rules-only quiz those are the only conditions there are. */}
               {questions.map((q) => {
                 const cur = picks[q.node.id] ?? [];

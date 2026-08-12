@@ -9989,3 +9989,32 @@ button.qz-pb-row:hover { background: var(--qz-cream-2); }
 }
 .qz-s3-card[data-qz-cat="teal"]::before { width: 1.5px; border-radius: 0; background: currentColor; }
 .qz-s3-card[data-qz-cat="gold"]::before { color: var(--qz-accent); background: currentColor; }
+/* ═══ QRTZ-OB1 — mock vocabulary + the Overview "Type & role" column ═══
+   GAPS §A items 6 + 7 (owner calls 2026-08-12). The role NAMES live in
+   logicTabFields.ROLE_JOBS; below is only the new chrome. ══════════════ */
+/* The derived-attribute readout under a Narrows role (mock role-stack +
+   attr-slot, shared.mjs 398–401: the attribute is a separate line because
+   a pill can't hold a real metafield key). Shared by the Logic table's
+   question cell and the Overview's role stack. */
+.qz-ltab-attr {
+  display: block; margin-top: 3px; max-width: 100%;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font-size: 11px; color: var(--qz-ink-4); letter-spacing: 0.005em;
+}
+.qz-ltab-attr b { font-weight: 600; color: var(--qz-ink-3); }
+/* The Overview role stack (mock .role-stack: role above attribute). */
+.qz-ovw-rolestack { display: grid; gap: 3px; justify-items: start; min-width: 0; max-width: 100%; }
+/* The Overview role tag (mock .role-tag, base.mjs 1088–1093 values). */
+.qz-ovw-role {
+  font: inherit; display: inline-flex; align-items: center; gap: 6px; cursor: pointer;
+  padding: 4px 9px; border-radius: var(--qz-radius-sm);
+  font-size: 11px; font-weight: 600; letter-spacing: 0.04em; line-height: 1.35;
+  background: var(--qz-cream-2); color: var(--qz-ink-3); border: 1px solid var(--qz-rule);
+  white-space: nowrap;
+}
+.qz-ovw-role:hover { border-color: var(--qz-rule-strong); color: var(--qz-ink); }
+.qz-ovw-role.is-decider {
+  background: var(--qz-accent-wash); color: var(--qz-accent-ink);
+  border-color: var(--qz-accent-line);
+}
+.qz-ovw-role-caret { flex: none; font-size: 8px; opacity: 0.65; }
