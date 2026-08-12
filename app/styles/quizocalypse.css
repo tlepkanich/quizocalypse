@@ -762,8 +762,11 @@ body[data-qz] .qz-btn:focus-visible { outline: none; box-shadow: var(--qz-shadow
 .qz-chip-x:hover { opacity: 1; }
 .qz-wpreview { background: var(--qz-cream-2); border-radius: 11px; padding: 14px; margin-top: 4px; }
 .qz-wtoggle { display: inline-flex; align-items: center; gap: 10px; background: none; border: none; font: inherit; font-size: 14px; cursor: pointer; color: inherit; }
-.qz-wswitch { width: 40px; height: 22px; border-radius: 999px; background: var(--qz-ink-25); position: relative; flex: none; transition: background var(--qz-dur) var(--qz-ease); }
-.qz-wswitch::after { content: ""; position: absolute; top: 2px; left: 2px; width: 18px; height: 18px; border-radius: 50%; background: #fff; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2); transition: transform var(--qz-dur) var(--qz-ease); }
+/* QRTZ-F1 — Quartz switch: squared track (--qz-radius) + squared knob
+   (--qz-radius-sm), 2px inset, --qz-ease/--qz-dur. Same geometry at all four
+   switch sites (.qz-wswitch, .qz-s4-sw, .qz-eng-tg, .qz-rg-sw). */
+.qz-wswitch { width: 40px; height: 22px; border-radius: var(--qz-radius); background: var(--qz-ink-25); position: relative; flex: none; transition: background var(--qz-dur) var(--qz-ease); }
+.qz-wswitch::after { content: ""; position: absolute; top: 2px; left: 2px; width: 18px; height: 18px; border-radius: var(--qz-radius-sm); background: #fff; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2); transition: transform var(--qz-dur) var(--qz-ease); }
 .qz-wtoggle.is-on .qz-wswitch { background: var(--qz-accent); }
 .qz-wtoggle.is-on .qz-wswitch::after { transform: translateX(18px); }
 .qz-picklist { display: flex; flex-direction: column; gap: 2px; max-height: 46vh; overflow-y: auto; }
@@ -1968,8 +1971,13 @@ body[data-qz] .qz-rb-tip-x:focus-visible { outline: 2px solid var(--qz-accent); 
   color: var(--qz-accent-ink); font-size: 12px; font-weight: 500;
   padding: 7px 12px; border-radius: 9px; cursor: pointer; white-space: nowrap;
 }
-.qz-rb-count-link:hover, .qz-rb-count-link:focus-visible {
-  background: var(--qz-accent-tint); border-color: var(--qz-accent-wash); outline: none;
+.qz-rb-count-link:hover {
+  background: var(--qz-accent-tint); border-color: var(--qz-accent-wash);
+}
+/* ═══ QRTZ-F1 ═══ real focus treatment (wash + ring), scoped to win (D1). */
+body[data-qz] .qz-rb-count-link:focus-visible {
+  background: var(--qz-accent-tint); border-color: var(--qz-accent-wash);
+  outline: none; box-shadow: var(--qz-shadow-focus);
 }
 /* Mock railEmpty: dashed lavender box, glyph, quiet copy. */
 .qz-rb-rail-empty {
@@ -5697,13 +5705,14 @@ textarea.qz-s4-inp { resize: vertical; min-height: 56px; line-height: 1.5; }
 .qz-s4-tog.is-on { border-color: var(--qz-accent); background: var(--qz-accent-tint); }
 .qz-s4-tog.is-static { cursor: default; }
 .qz-s4-tog.is-static:hover { border-color: var(--qz-rule); }
+/* QRTZ-F1 — squared Quartz switch geometry (see .qz-wswitch). */
 .qz-s4-sw {
-  width: 34px; height: 20px; border-radius: 999px; background: var(--qz-rule);
-  position: relative; flex: none; transition: background .2s;
+  width: 34px; height: 20px; border-radius: var(--qz-radius); background: var(--qz-rule);
+  position: relative; flex: none; transition: background var(--qz-dur) var(--qz-ease);
 }
 .qz-s4-sw::after {
   content: ''; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px;
-  border-radius: 50%; background: var(--qz-paper); transition: transform .2s;
+  border-radius: var(--qz-radius-sm); background: var(--qz-paper); transition: transform var(--qz-dur) var(--qz-ease);
   box-shadow: 0 1px 3px color-mix(in srgb, var(--qz-ink) 15%, transparent);
 }
 .qz-s4-tog.is-on .qz-s4-sw { background: var(--qz-accent); }
@@ -6539,9 +6548,10 @@ body[data-qz] .qz-allcard-add:focus-visible { outline: 2px solid var(--qz-accent
 .qz-eng-subrow { display: flex; align-items: center; gap: 8px; padding: 7px 0; }
 .qz-eng-chipbtn { font: inherit; font-size: 12.5px; padding: 6px 12px; border-radius: var(--qz-radius-pill); border: 1px solid var(--qz-rule); background: var(--qz-paper); color: var(--qz-ink-3); cursor: pointer; }
 .qz-eng-chipbtn.is-on { background: var(--qz-accent-wash); color: var(--qz-accent-ink); border-color: var(--qz-accent); }
-.qz-eng-tg { width: 40px; height: 22px; border-radius: 999px; background: var(--qz-ink-25); border: none; position: relative; cursor: pointer; flex: none; transition: background var(--qz-dur) var(--qz-ease); }
+/* QRTZ-F1 — squared Quartz switch geometry (see .qz-wswitch). */
+.qz-eng-tg { width: 40px; height: 22px; border-radius: var(--qz-radius); background: var(--qz-ink-25); border: none; position: relative; cursor: pointer; flex: none; transition: background var(--qz-dur) var(--qz-ease); }
 .qz-eng-tg.is-on { background: var(--qz-accent); }
-.qz-eng-knob { position: absolute; top: 2px; left: 2px; width: 18px; height: 18px; border-radius: 50%; background: #fff; box-shadow: 0 1px 2px rgba(0,0,0,.2); transition: transform var(--qz-dur) var(--qz-ease); }
+.qz-eng-knob { position: absolute; top: 2px; left: 2px; width: 18px; height: 18px; border-radius: var(--qz-radius-sm); background: #fff; box-shadow: 0 1px 2px rgba(0,0,0,.2); transition: transform var(--qz-dur) var(--qz-ease); }
 .qz-eng-tg.is-on .qz-eng-knob { transform: translateX(18px); }
 
 /* §R-7 — Quizzes library (operate): search · status · sort · grid/list, then a
@@ -6632,23 +6642,25 @@ body[data-qz] .qz-allcard-add:focus-visible { outline: 2px solid var(--qz-accent
 .qz-cust-table th { text-align: left; padding: 8px 12px; border-bottom: 1px solid var(--qz-rule); font-size: 12px; color: var(--qz-ink-3); font-weight: 600; white-space: nowrap; }
 .qz-cust-table td { padding: 10px 12px; border-bottom: 1px solid var(--qz-rule-2); font-size: 13.5px; vertical-align: middle; }
 .qz-cust-row { cursor: pointer; transition: background var(--qz-dur) var(--qz-ease); }
-.qz-cust-row:hover, .qz-cust-row:focus-visible { background: var(--qz-accent-wash); outline: none; }
+.qz-cust-row:hover { background: var(--qz-accent-wash); }
+/* ═══ QRTZ-F1 ═══ real focus treatment (wash + inset accent outline — a
+   box-shadow does not paint reliably on a border-collapse <tr>), scoped to
+   win (D1). Negative offset keeps the ring inside the card's scroll clip. */
+body[data-qz] .qz-cust-row:focus-visible {
+  background: var(--qz-accent-wash);
+  outline: 2px solid var(--qz-accent); outline-offset: -2px;
+}
 /* §S — channel status pills */
 .qz-chanrow { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 22px; }
 .qz-chan { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; padding: 7px 12px; border-radius: var(--qz-radius-pill); border: 0.5px solid var(--qz-rule); color: var(--qz-ink-3); text-decoration: none; transition: border-color var(--qz-dur) var(--qz-ease), color var(--qz-dur) var(--qz-ease); }
 .qz-chan:hover { border-color: var(--qz-accent); color: var(--qz-accent-ink); }
 .qz-chan::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--qz-ink-25); }
 .qz-chan:hover::before { background: var(--qz-accent); }
-/* §S — suggested play card */
-/* The top graphic uses the homepage purple (pastel violet → sky) with a slow
-   sheen sweep that passes across it from time to time. */
-.qz-play { position: relative; overflow: hidden; display: flex; align-items: center; gap: 16px; padding: 15px 18px; margin-bottom: 24px; border-radius: 14px; border: 0.5px solid color-mix(in srgb, var(--qz-pastel-violet-ink) 28%, transparent); background: linear-gradient(120deg, var(--qz-pastel-violet), color-mix(in srgb, var(--qz-pastel-sky) 55%, var(--qz-paper))); box-shadow: var(--qz-lift-1); }
-.qz-play > * { position: relative; z-index: 1; }
-.qz-play::before { content: ""; position: absolute; inset: 0; z-index: 0; pointer-events: none; background: linear-gradient(105deg, transparent 38%, color-mix(in srgb, white 42%, transparent) 50%, transparent 62%); transform: translateX(-130%); animation: qz-play-sheen 7s ease-in-out infinite; }
-@keyframes qz-play-sheen { 0% { transform: translateX(-130%); } 60%, 100% { transform: translateX(130%); } }
-@media (prefers-reduced-motion: reduce) { .qz-play::before { animation: none; display: none; } }
+/* §S — suggested play card. QRTZ-F1: flat accent-wash surface + accent-line
+   hairline (was a pastel gradient with an animated sheen — no gradients). */
+.qz-play { display: flex; align-items: center; gap: 16px; padding: 15px 18px; margin-bottom: 24px; border-radius: 14px; border: 0.5px solid var(--qz-accent-line); background: var(--qz-accent-wash); box-shadow: var(--qz-lift-1); }
 .qz-play-ic { width: 40px; height: 40px; flex: none; border-radius: 11px; background: var(--qz-paper); display: flex; align-items: center; justify-content: center; font-size: 20px; box-shadow: var(--qz-lift-1); }
-.qz-play-eyebrow { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--qz-pastel-violet-ink); }
+.qz-play-eyebrow { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--qz-accent-ink); }
 
 /* Collapsible segment filter toggle. */
 .qz-segfilter-toggle { display: inline-flex; align-items: center; gap: 8px; border: 0.5px solid var(--qz-rule); background: var(--qz-paper); border-radius: var(--qz-radius-pill); padding: 7px 15px; font: inherit; font-size: 12.5px; font-weight: 600; color: var(--qz-ink-2); cursor: pointer; margin-bottom: 16px; box-shadow: var(--qz-lift-1); transition: border-color var(--qz-dur) var(--qz-ease); }
@@ -6713,10 +6725,12 @@ body[data-qz] .qz-allcard-add:focus-visible { outline: 2px solid var(--qz-accent
 .qz-segcard-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 14px; margin-bottom: 18px; }
 .qz-segcard { border: 0.5px solid var(--qz-rule); border-radius: 12px; padding: 14px; background: var(--qz-paper); box-shadow: var(--qz-lift-1); cursor: pointer; transition: box-shadow var(--qz-dur) var(--qz-ease), border-color var(--qz-dur) var(--qz-ease); }
 .qz-segcard:hover { box-shadow: var(--qz-lift-2); }
-.qz-segcard.is-hot { border-color: var(--qz-priority); background: linear-gradient(135deg, var(--qz-priority-wash), var(--qz-paper) 70%); }
-/* Each smart segment is a pastel that fades to white (the hot card is coral above). */
-.qz-segcard-grid .qz-segcard:nth-child(2) { background: linear-gradient(135deg, color-mix(in srgb, var(--qz-pal-blue) 24%, var(--qz-paper)), var(--qz-paper) 72%); }
-.qz-segcard-grid .qz-segcard:nth-child(3) { background: linear-gradient(135deg, color-mix(in srgb, var(--qz-pal-teal) 24%, var(--qz-paper)), var(--qz-paper) 72%); }
+/* QRTZ-F1: flat Quartz surfaces (were pastel fade-to-white gradients; the hot
+   card was coral/warn). Hot = the flagship audience → accent wash; the other
+   segments sit one step back on cream-2. Hue never carries the meaning. */
+.qz-segcard.is-hot { border-color: var(--qz-accent-line); background: var(--qz-accent-wash); }
+.qz-segcard-grid .qz-segcard:nth-child(2) { background: var(--qz-cream-2); }
+.qz-segcard-grid .qz-segcard:nth-child(3) { background: var(--qz-cream-2); }
 .qz-segcard.is-active { border-color: var(--qz-accent); box-shadow: 0 0 0 1px var(--qz-accent); }
 .qz-segcard-label { font-size: 13px; font-weight: 700; }
 .qz-segcard-count { font-size: 26px; font-weight: 700; margin: 4px 0; letter-spacing: -0.02em; }
@@ -6724,7 +6738,9 @@ body[data-qz] .qz-allcard-add:focus-visible { outline: 2px solid var(--qz-accent
 .qz-segacts { display: flex; gap: 6px; flex-wrap: wrap; }
 .qz-segact { font: inherit; font-size: 11px; font-weight: 600; padding: 5px 9px; border-radius: 7px; border: 0.5px solid var(--qz-rule); background: var(--qz-paper); color: var(--qz-ink-2); cursor: pointer; text-decoration: none; }
 .qz-segact:hover { border-color: var(--qz-accent); color: var(--qz-accent-ink); }
-.qz-segact.is-pri { background: var(--qz-priority); color: white; border-color: var(--qz-priority); }
+/* QRTZ-F1: the Win-back chip is an action → accent family (was warn/brown). */
+.qz-segact.is-pri { background: var(--qz-accent); color: #fff; border-color: transparent; }
+.qz-segact.is-pri:hover { background: var(--qz-accent-2); color: #fff; }
 .qz-segcard-note { font-size: 10px; color: var(--qz-ink-3); margin-top: 8px; }
 .qz-segpills { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 22px; }
 .qz-segpill { font: inherit; font-size: 12px; font-weight: 600; padding: 5px 12px; border-radius: var(--qz-radius-pill); border: none; background: var(--qz-accent-wash); color: var(--qz-accent-ink); cursor: pointer; }
@@ -8862,14 +8878,15 @@ tr.qz-ltab-qstart td { border-top: 2px solid var(--qz-rule); }
 .qz-rg-tog { display: flex; align-items: center; gap: 10px; padding: 9px 0; border-bottom: 1px solid var(--qz-rule-2); }
 .qz-rg-tog:last-child { border-bottom: none; }
 .qz-rg-tog.is-on .qz-rg-t { color: var(--qz-ink); }
+/* QRTZ-F1 — squared Quartz switch geometry (see .qz-wswitch). */
 .qz-rg-sw {
-  width: 32px; height: 19px; border-radius: 999px; background: var(--qz-accent-wash);
+  width: 32px; height: 19px; border-radius: var(--qz-radius); background: var(--qz-accent-wash);
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--qz-accent) 30%, var(--qz-rule));
-  position: relative; flex: none; border: none; cursor: pointer; transition: background .18s; padding: 0;
+  position: relative; flex: none; border: none; cursor: pointer; transition: background var(--qz-dur) var(--qz-ease); padding: 0;
 }
 .qz-rg-sw::after {
-  content: ""; position: absolute; top: 2px; left: 2px; width: 15px; height: 15px; border-radius: 50%;
-  background: var(--qz-paper); transition: transform .18s; box-shadow: 0 1px 3px rgba(46,39,64,.25);
+  content: ""; position: absolute; top: 2px; left: 2px; width: 15px; height: 15px; border-radius: var(--qz-radius-sm);
+  background: var(--qz-paper); transition: transform var(--qz-dur) var(--qz-ease); box-shadow: 0 1px 3px rgba(46,39,64,.25);
 }
 .qz-rg-sw.is-on { background: var(--qz-accent); box-shadow: none; }
 .qz-rg-sw.is-on::after { transform: translateX(13px); }

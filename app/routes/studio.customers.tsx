@@ -133,7 +133,8 @@ export default function StudioCustomers() {
       <div className="qz-kpi5-row">
         <div className="qz-kpi5"><div className="l">Total contacts</div><div className="n">{total}</div></div>
         <div className="qz-kpi5"><div className="l">With phone</div><div className="n">{withPhone}</div></div>
-        <div className="qz-kpi5"><div className="l">Consented</div><div className="n" style={{ color: "var(--qz-ok)" }}>{consented}</div></div>
+        {/* QRTZ-F1: one-tone big-figure tiles — no decorative state color. */}
+        <div className="qz-kpi5"><div className="l">Consented</div><div className="n">{consented}</div></div>
         <div className="qz-kpi5"><div className="l">% purchased</div><div className="n">{purchasedPct != null ? `${purchasedPct}%` : "—"}</div></div>
         <div className="qz-kpi5"><div className="l">Attributed rev</div><div className="n">{revenue ?? "—"}</div></div>
       </div>
