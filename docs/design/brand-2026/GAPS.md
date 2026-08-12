@@ -3,7 +3,20 @@
 Written 2026-08-12 at the QRTZ combine, from the six screen agents' verified
 reports. Companion to PORT-INVENTORY.md (the full element-level checklist).
 
-## A. Owner decisions (need a call; nothing below blocks)
+## A. Owner decisions — CALLED by the owner 2026-08-12 (build = QRTZ-O phase)
+
+> 1 gold → violet + drop ◆ (recommendation taken) · 2 pastels → shape + label,
+> not hue (recommendation taken) · 3 mono leftovers → NO call given, stays
+> open · 4 shopper progress bar → **Chapters** (clarified in chat; decider
+> docs only — legacy docs lack chapter structure and stay byte-identical) ·
+> 5 autosave chip → newer edits win; the restored four-state chip STAYS
+> (already shipped, closed) · 6 → ADOPT THE MOCK: Overview gets the role
+> column back, the Build inspector gets a Rules tab (deliberate reversal of
+> the LOGIC-TAB split) · 7 → ADOPT THE MOCK's vocabulary ("Maps to",
+> "Picks the result") replacing "Shows / narrows / Starting set / Info only";
+> string-pinned probes update alongside.
+
+Original items, for the record:
 
 1. **The gold signature** (handoff §18.1). Aliased to neutrals by the token
    swap — the five gold moments now render grey. The handoff recommends:
