@@ -4,7 +4,7 @@ import type { InspectTarget } from "../runtime/QuizRuntime";
 import { QzBadge, QzButton, QzCard, QzField, QzInput, QzSegmented, QzSelect } from "../qz";
 import { getPreset } from "../../lib/themePresets";
 import { resolveDesignTokens, type DesignTokensT } from "../../lib/designTokens";
-import { bakeResultPages } from "../../lib/quizPublish";
+import { bakeResultPages, withDraftChapters } from "../../lib/quizPublish";
 import { draftDeciderBake } from "../../lib/draftDeciderBake";
 import type { StepProps } from "./stepProps";
 import { DeviceFrame, type FrameFit } from "./preview/DeviceFrame";
@@ -98,7 +98,10 @@ export function Step5Preview({
   // category-intersection resolves cleanly.
   const previewDoc = useMemo(() => {
     const byId = new Map(categories.map((c) => [c.id, c.productIds]));
-    return { ...doc, results_pages: bakeResultPages(doc, byId) };
+    // QRTZ-F2 — withDraftChapters: the Chapters analog of the bake above (same
+    // deriveChapters + gating as publish), so the preview's progress bar
+    // matches published /q. Legacy drafts pass through untouched.
+    return withDraftChapters({ ...doc, results_pages: bakeResultPages(doc, byId) });
   }, [doc, categories]);
 
   // LOGIC v2 (L2-10a) — the decider analog of the bake above: derive the

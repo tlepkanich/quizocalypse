@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { QuizRuntime } from "../runtime/QuizRuntime";
-import { bakeResultPages } from "../../lib/quizPublish";
+import { bakeResultPages, withDraftChapters } from "../../lib/quizPublish";
 import { draftDeciderBake } from "../../lib/draftDeciderBake";
 import type { Quiz, QuizNode } from "../../lib/quizSchema";
 import type { IndexedProduct } from "../../lib/recommendationEngine";
@@ -52,7 +52,10 @@ export function RecPagePreview({
   // membership without a re-publish.
   const previewDoc = useMemo(() => {
     const byId = new Map(categories.map((c) => [c.id, c.productIds]));
-    return { ...doc, results_pages: bakeResultPages(doc, byId) };
+    // QRTZ-F2 — withDraftChapters: same deriveChapters + gating as publish, so
+    // this preview's progress bar (all-full on the result screen) matches
+    // published /q. Legacy drafts pass through untouched.
+    return withDraftChapters({ ...doc, results_pages: bakeResultPages(doc, byId) });
   }, [doc, categories]);
 
   // LOGIC v2 (L2-10a) — the decider analog: derive the publish-time target map

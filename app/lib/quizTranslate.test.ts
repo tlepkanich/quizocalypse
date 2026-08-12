@@ -30,6 +30,7 @@ const doc = () =>
           text: "What terrain?",
           question_type: "single_select",
           education_card_before: "Terrain shapes flex.",
+          section_label: "Your riding",
           answers: [
             { id: "a1", text: "Powder", tags: ["powder"], edge_handle_id: "h1", tooltip_text: "Deep snow" },
             { id: "a2", text: "Park", tags: ["park"], edge_handle_id: "h2" },
@@ -73,6 +74,9 @@ describe("extractTranslatableStrings", () => {
     const keys = new Map(extractTranslatableStrings(doc()).map((s) => [s.key, s.text]));
     expect(keys.get("node.intro.headline")).toBe("Find your board");
     expect(keys.get("node.q1.education_card_before")).toBe("Terrain shapes flex.");
+    // QRTZ-F2 — section_label IS extracted (the chapter-label translation fix;
+    // this pin keeps it from regressing out of the translatable set).
+    expect(keys.get("node.q1.section_label")).toBe("Your riding");
     expect(keys.get("answer.q1.a1.text")).toBe("Powder");
     expect(keys.get("answer.q1.a1.tooltip_text")).toBe("Deep snow");
     expect(keys.get("bullets.r1.0")).toBe("Forgiving flex");
@@ -119,6 +123,99 @@ describe("applyTranslations", () => {
     });
     const msg2 = good.nodes.find((n) => n.id === "msg")!;
     expect(msg2.type === "message" && msg2.data.text).toContain("Merci @name");
+  });
+});
+
+describe("applyTranslations — baked Chapters re-label (QRTZ-F2)", () => {
+  // A published decider doc as the /q loader parses it: two labeled question
+  // groups + the publish-baked `chapters` field (labels = first-question
+  // section_labels, per deriveChapters).
+  const publishedDoc = () =>
+    Quiz.parse({
+      quiz_id: "qz_ch_i18n",
+      scope: { collection_ids: [] },
+      logic_model: "decider",
+      nodes: [
+        {
+          id: "q1",
+          type: "question",
+          position: { x: 0, y: 0 },
+          data: {
+            text: "Skin type?",
+            question_type: "single_select",
+            section_label: "Your skin",
+            answers: [
+              { id: "a1", text: "Dry", tags: [], edge_handle_id: "h1" },
+              { id: "a2", text: "Oily", tags: [], edge_handle_id: "h2" },
+            ],
+          },
+        },
+        {
+          id: "q2",
+          type: "question",
+          position: { x: 1, y: 0 },
+          data: {
+            text: "Morning or night?",
+            question_type: "single_select",
+            section_label: "Routine",
+            answers: [
+              { id: "a1", text: "AM", tags: [], edge_handle_id: "h1" },
+              { id: "a2", text: "PM", tags: [], edge_handle_id: "h2" },
+            ],
+          },
+        },
+        {
+          id: "r1",
+          type: "result",
+          position: { x: 2, y: 0 },
+          data: { headline: "Match", fallback_collection_id: "gid://c/1" },
+        },
+      ],
+      edges: [
+        { id: "e1", source: "q1", target: "q2" },
+        { id: "e2", source: "q2", target: "r1" },
+      ],
+      chapters: [
+        { label: "Your skin", question_ids: ["q1"] },
+        { label: "Routine", question_ids: ["q2"] },
+      ],
+    });
+
+  it("re-labels a baked chapter from its first question's translated section_label", () => {
+    const out = applyTranslations(publishedDoc(), {
+      "node.q1.section_label": "Votre peau",
+      // q2's label deliberately untranslated → baked English stays.
+    });
+    expect(out.chapters).toEqual([
+      { label: "Votre peau", question_ids: ["q1"] },
+      { label: "Routine", question_ids: ["q2"] },
+    ]);
+    // The live node render (ProgressTrail eyebrow) gets the same overlay.
+    const q1 = out.nodes.find((n) => n.id === "q1")!;
+    expect(q1.type === "question" && q1.data.section_label).toBe("Votre peau");
+    // Only re-labeled — never re-derived (question_ids untouched).
+    expect(out.chapters!.map((c) => c.question_ids)).toEqual([["q1"], ["q2"]]);
+  });
+
+  it("keeps every baked label when the table has no section_label keys (untranslated fallback)", () => {
+    const out = applyTranslations(publishedDoc(), {
+      "node.q1.text": "Type de peau ?",
+    });
+    expect(out.chapters).toEqual(publishedDoc().chapters);
+  });
+
+  it("passes a chaptered doc WITHOUT translations through the new code path unchanged (deep-equal)", () => {
+    const d = publishedDoc();
+    expect(applyTranslations(d, {})).toEqual(d);
+  });
+
+  it("adds no chapters key to a doc that has none baked (legacy/draft shape)", () => {
+    const out = applyTranslations(doc(), { "node.q1.section_label": "Votre style" });
+    expect("chapters" in out && out.chapters !== undefined).toBe(false);
+    expect(out).toEqual({ ...doc(), nodes: out.nodes }); // only node copy moved
+    // ...and the node overlay itself still applied.
+    const q1 = out.nodes.find((n) => n.id === "q1")!;
+    expect(q1.type === "question" && q1.data.section_label).toBe("Votre style");
   });
 });
 
