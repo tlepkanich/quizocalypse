@@ -5,6 +5,7 @@ import {
   collectReferencedCategoryIds,
   bakeResultPages,
   collectRecommendableProductIds,
+  deriveChapters,
   publishQuiz,
   boundedAiCall,
   AI_COPY_TIMEOUT_MS,
@@ -455,6 +456,8 @@ describe("publishQuiz — byte-stability when net-new optional fields are unset"
       // LOGIC v2 (L2-3) — the publish-time target bake, decider docs only.
       "target_product_ids_map",
       "target_index",
+      // QRTZ-O5 — the Chapters bake, decider docs only.
+      "chapters",
     ]) {
       expect(wire, `root.${key} must be absent when unset`).not.toHaveProperty(key);
     }
@@ -760,6 +763,322 @@ describe("publishQuiz — decider target bake (L2-3)", () => {
     const ok = mockDeciderPrisma(passDraft, CATEGORY_ROWS);
     const result = await publishQuiz(ok.prisma, { quizId: "qrow", shopId: "s1" });
     expect(result).toBeTruthy();
+  });
+});
+
+// ════════════════════════════════════════════════════════════════════════════
+// QRTZ-O5 (GAPS §A.4) — the Chapters bake: section_label grouping → baked
+// `chapters`, decider docs only. Legacy publishes must stay byte-identical.
+// ════════════════════════════════════════════════════════════════════════════
+describe("deriveChapters (QRTZ-O5 Chapters bake)", () => {
+  type DraftQuestion = {
+    id: string;
+    label?: string;
+    role?: "decides";
+  };
+  // intro → q… (straight chain) → r1. First question defaults to the decider
+  // (role decides + targets) so the doc is a well-formed decider draft.
+  function draft(questions: DraftQuestion[], logicModel?: "decider") {
+    const nodes: unknown[] = [
+      { id: "intro", type: "intro", position: { x: 0, y: 0 }, data: { headline: "Hi" } },
+      ...questions.map((q, i) => ({
+        id: q.id,
+        type: "question",
+        position: { x: i + 1, y: 0 },
+        data: {
+          text: `Q ${q.id}?`,
+          question_type: "single_select",
+          ...(q.role ? { role: q.role } : {}),
+          ...(q.label !== undefined ? { section_label: q.label } : {}),
+          answers: [
+            {
+              id: `${q.id}a1`,
+              text: "A",
+              tags: [],
+              edge_handle_id: `${q.id}h1`,
+              ...(q.role === "decides" ? { target_id: "cat_col" } : {}),
+            },
+            {
+              id: `${q.id}a2`,
+              text: "B",
+              tags: [],
+              edge_handle_id: `${q.id}h2`,
+              ...(q.role === "decides" ? { target_id: "cat_tag" } : {}),
+            },
+          ],
+        },
+      })),
+      {
+        id: "r1",
+        type: "result",
+        position: { x: questions.length + 1, y: 0 },
+        data: { headline: "Match", fallback_collection_id: "gid://shopify/Collection/fb" },
+      },
+    ];
+    const chain = ["intro", ...questions.map((q) => q.id), "r1"];
+    const edges = chain.slice(0, -1).map((source, i) => ({
+      id: `e${i}`,
+      source,
+      target: chain[i + 1]!,
+    }));
+    return Quiz.parse({
+      quiz_id: "q_ch",
+      scope: { collection_ids: [] },
+      ...(logicModel ? { logic_model: logicModel } : {}),
+      nodes,
+      edges,
+    });
+  }
+
+  it("groups consecutive spine questions by section_label, in flow order", () => {
+    const doc = draft(
+      [
+        { id: "q1", role: "decides", label: "Your skin" },
+        { id: "q2", label: "Your skin" },
+        { id: "q3", label: "Routine" },
+        { id: "q4", label: "Routine" },
+      ],
+      "decider",
+    );
+    expect(deriveChapters(doc)).toEqual([
+      { label: "Your skin", question_ids: ["q1", "q2"] },
+      { label: "Routine", question_ids: ["q3", "q4"] },
+    ]);
+  });
+
+  it("folds an unlabeled question into the current chapter (the header holds)", () => {
+    const doc = draft(
+      [
+        { id: "q1", role: "decides", label: "Your skin" },
+        { id: "q2" }, // continues "Your skin"
+        { id: "q3", label: "Routine" },
+        { id: "q4" }, // continues "Routine"
+      ],
+      "decider",
+    );
+    expect(deriveChapters(doc)).toEqual([
+      { label: "Your skin", question_ids: ["q1", "q2"] },
+      { label: "Routine", question_ids: ["q3", "q4"] },
+    ]);
+  });
+
+  it("returns undefined for a legacy doc even when labels exist (decider-gated)", () => {
+    const doc = draft([
+      { id: "q1", label: "Your skin" },
+      { id: "q2", label: "Routine" },
+    ]);
+    expect(doc.logic_model).toBeUndefined();
+    expect(deriveChapters(doc)).toBeUndefined();
+  });
+
+  it("bails when the FIRST spine question is unlabeled (no chapter home)", () => {
+    const doc = draft(
+      [
+        { id: "q1", role: "decides" },
+        { id: "q2", label: "Routine" },
+        { id: "q3", label: "Your match" },
+      ],
+      "decider",
+    );
+    expect(deriveChapters(doc)).toBeUndefined();
+  });
+
+  it("bails on a single chapter (<2)", () => {
+    const doc = draft(
+      [
+        { id: "q1", role: "decides", label: "Basics" },
+        { id: "q2", label: "Basics" },
+      ],
+      "decider",
+    );
+    expect(deriveChapters(doc)).toBeUndefined();
+  });
+
+  it("bails past 6 chapters (unreadable at phone width)", () => {
+    const doc = draft(
+      [
+        { id: "q1", role: "decides", label: "C1" },
+        ...Array.from({ length: 6 }, (_, i) => ({ id: `qx${i}`, label: `C${i + 2}` })),
+      ],
+      "decider",
+    );
+    expect(deriveChapters(doc)).toBeUndefined();
+  });
+
+  it("bails on non-consecutive label reuse (two same-named chapters)", () => {
+    const doc = draft(
+      [
+        { id: "q1", role: "decides", label: "Skin" },
+        { id: "q2", label: "Routine" },
+        { id: "q3", label: "Skin" },
+      ],
+      "decider",
+    );
+    expect(deriveChapters(doc)).toBeUndefined();
+  });
+});
+
+describe("publishQuiz — Chapters bake (QRTZ-O5)", () => {
+  // The decider harness draft from L2-3, with a labeled second question so a
+  // clean 2-chapter grouping exists.
+  function chapteredDeciderDraft() {
+    return {
+      quiz_id: "q_chapters",
+      scope: { collection_ids: [] },
+      logic_model: "decider",
+      nodes: [
+        { id: "intro", type: "intro", position: { x: 0, y: 0 }, data: { headline: "Hi" } },
+        {
+          id: "q1",
+          type: "question",
+          position: { x: 1, y: 0 },
+          data: {
+            text: "Pick one",
+            question_type: "single_select",
+            role: "decides",
+            section_label: "Your skin",
+            answers: [
+              { id: "a1", text: "A", tags: [], edge_handle_id: "h1", target_id: "cat_col" },
+              { id: "a2", text: "B", tags: [], edge_handle_id: "h2", target_id: "cat_tag" },
+            ],
+          },
+        },
+        {
+          id: "q2",
+          type: "question",
+          position: { x: 2, y: 0 },
+          data: {
+            text: "Routine?",
+            question_type: "single_select",
+            section_label: "Routine",
+            answers: [
+              { id: "b1", text: "A", tags: [], edge_handle_id: "h3" },
+              { id: "b2", text: "B", tags: [], edge_handle_id: "h4" },
+            ],
+          },
+        },
+        {
+          id: "r1",
+          type: "result",
+          position: { x: 3, y: 0 },
+          data: {
+            headline: "Your match",
+            fallback_collection_id: "gid://shopify/Collection/fallback",
+          },
+        },
+      ],
+      edges: [
+        { id: "e1", source: "intro", target: "q1" },
+        { id: "e2", source: "q1", target: "q2" },
+        { id: "e3", source: "q2", target: "r1" },
+      ],
+    };
+  }
+
+  const ROWS = [
+    {
+      id: "cat_col",
+      productIds: ["p1"],
+      source: "collection",
+      sourceRef: "gid://shopify/Collection/77",
+      name: "Snowboards",
+    },
+    { id: "cat_tag", productIds: ["p4"], source: "tag", sourceRef: "powder", name: "Powder" },
+  ];
+
+  function mockPrisma(draftJson: unknown) {
+    let captured: unknown;
+    const prisma = {
+      quiz: {
+        findFirst: async () => ({ id: "qrow", version: 1, draftJson }),
+        update: (args: { data: { publishedJson: unknown } }) => {
+          captured = args.data.publishedJson;
+          return { __op: "quiz.update" };
+        },
+      },
+      category: { findMany: async () => ROWS },
+      product: { findMany: async () => [] },
+      shop: {
+        findUnique: async () => ({
+          brandTokens: null,
+          shopDomain: "test.myshopify.com",
+          brandGuidelines: null,
+          source: "shopify",
+        }),
+      },
+      quizSession: { findMany: async () => [] },
+      quizVersion: { create: () => ({ __op: "v" }), findMany: async () => [] },
+      $transaction: (ops: ReadonlyArray<unknown>) => Promise.all(ops),
+    };
+    return { prisma: prisma as unknown as PrismaClient, getCaptured: () => captured };
+  }
+
+  it("bakes chapters onto a decider publish with clean section_label grouping", async () => {
+    const { prisma, getCaptured } = mockPrisma(chapteredDeciderDraft());
+    const result = await publishQuiz(prisma, { quizId: "qrow", shopId: "s1" });
+    expect(result.ok).toBe(true);
+    const wire = JSON.parse(JSON.stringify(getCaptured())) as PublishedQuiz;
+    expect(wire.chapters).toEqual([
+      { label: "Your skin", question_ids: ["q1"] },
+      { label: "Routine", question_ids: ["q2"] },
+    ]);
+  });
+
+  it("omits chapters on a decider publish without section_labels (fallback path)", async () => {
+    const unlabeled = chapteredDeciderDraft();
+    for (const n of unlabeled.nodes) {
+      if (n.type === "question") delete (n.data as { section_label?: string }).section_label;
+    }
+    const { prisma, getCaptured } = mockPrisma(unlabeled);
+    const result = await publishQuiz(prisma, { quizId: "qrow", shopId: "s1" });
+    expect(result.ok).toBe(true);
+    const wire = JSON.parse(JSON.stringify(getCaptured())) as PublishedQuiz;
+    expect(wire).not.toHaveProperty("chapters");
+  });
+
+  it("strips a hand-written draft `chapters` from a LEGACY publish (publish-owned; byte-identical)", async () => {
+    // Pre-QRTZ-O5, Quiz.safeParse stripped an unknown `chapters` key from the
+    // draft at publish; now that the schema knows the field, the explicit
+    // destructure in publishQuiz must preserve that exact behavior.
+    const legacy = {
+      quiz_id: "q_legacy_ch",
+      scope: { collection_ids: [] },
+      chapters: [{ label: "Stale", question_ids: ["q1"] }],
+      nodes: [
+        { id: "intro", type: "intro", position: { x: 0, y: 0 }, data: { headline: "Hi" } },
+        {
+          id: "q1",
+          type: "question",
+          position: { x: 1, y: 0 },
+          data: {
+            text: "Pick one",
+            question_type: "single_select",
+            answers: [
+              { id: "a1", text: "A", tags: [], edge_handle_id: "h1" },
+              { id: "a2", text: "B", tags: [], edge_handle_id: "h2" },
+            ],
+          },
+        },
+        {
+          id: "r1",
+          type: "result",
+          position: { x: 2, y: 0 },
+          data: {
+            headline: "Match",
+            fallback_collection_id: "gid://shopify/Collection/fallback",
+          },
+        },
+      ],
+      edges: [
+        { id: "e1", source: "intro", target: "q1" },
+        { id: "e2", source: "q1", target: "r1" },
+      ],
+    };
+    const { prisma, getCaptured } = mockPrisma(legacy);
+    const result = await publishQuiz(prisma, { quizId: "qrow", shopId: "s1" });
+    expect(result.ok).toBe(true);
+    const wire = JSON.parse(JSON.stringify(getCaptured())) as PublishedQuiz;
+    expect(wire).not.toHaveProperty("chapters");
   });
 });
 

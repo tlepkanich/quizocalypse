@@ -1,7 +1,13 @@
 import { useContext, useMemo } from "react";
-import type { Quiz } from "../../../lib/quizSchema";
+import type { PublishedChapter, Quiz } from "../../../lib/quizSchema";
 import type { PathStep } from "../../../lib/mergeTags";
-import { progressPct, reachableQuestionCount } from "../../../lib/progress";
+import {
+  chapterFills,
+  chaptersForRender,
+  currentChapterIndex,
+  progressPct,
+  reachableQuestionCount,
+} from "../../../lib/progress";
 import { useChrome } from "../chromeStrings";
 import { RuntimeChromeContext } from "../runtimeContexts";
 
@@ -32,6 +38,23 @@ export function ProgressBar({
   const onQuestion = node?.type === "question";
   const answered = path.length + (onQuestion ? 1 : 0);
   const pct = onResult ? 100 : progressPct(total, answered);
+
+  // QRTZ-O5 (GAPS §A.4, owner call 2026-08-12) — Chapters. Gated hard:
+  // decider doc AND publish-baked chapters (≥2) AND the default "bar" style
+  // (an explicit merchant dots/steps pick wins). Legacy docs and chapterless
+  // decider docs fall through to the exact code paths below, unchanged.
+  const chapters = chaptersForRender(doc, barStyle);
+  if (chapters) {
+    return (
+      <ChaptersBar
+        chapters={chapters}
+        answeredIds={path.map((s) => s.questionNodeId)}
+        currentQuestionId={onQuestion ? currentNodeId : null}
+        onResult={onResult}
+        minimal={minimal}
+      />
+    );
+  }
 
   // §4 dots / steps — N markers, filled up to the current question. Caps at a
   // reasonable count so a long quiz doesn't overflow (falls back to the bar).
@@ -105,6 +128,52 @@ export function ProgressBar({
         }}
       />
     </div>
+  );
+}
+
+// QRTZ-O5 — the Chapters bar (mock base.mjs .pg-phases): one column per
+// chapter — a tiny uppercase label over a 5px track with a per-chapter fill.
+// THE COLOR RULE: the fill is the merchant's own CTA color
+// (--qz-color-primary), NEVER the Wiskr accent — progress is a shopper
+// feeling. Styled by the .qz-chapters section of quiz-runtime.css. Visible
+// labels + aria-current beat the classic bar's aria-hidden div.
+function ChaptersBar({
+  chapters,
+  answeredIds,
+  currentQuestionId,
+  onResult,
+  minimal,
+}: {
+  chapters: readonly PublishedChapter[];
+  answeredIds: readonly string[];
+  currentQuestionId: string | null;
+  onResult: boolean;
+  minimal: boolean;
+}) {
+  const tc = useChrome();
+  const fills = chapterFills(chapters, answeredIds, currentQuestionId, onResult);
+  const now = currentChapterIndex(chapters, currentQuestionId, fills, onResult);
+  return (
+    <ol
+      className="qz-chapters"
+      aria-label={tc("aria_quiz_progress")}
+      style={{ marginBottom: minimal ? 26 : 12 }}
+    >
+      {chapters.map((c, i) => (
+        <li
+          key={`${c.label}-${i}`}
+          className={i === now ? "is-now" : undefined}
+          aria-current={i === now ? "step" : undefined}
+        >
+          <span>{c.label}</span>
+          <i>
+            {/* scaleX over width: compositor-only, matching the classic bar
+                (the track's overflow:hidden clips the cap identically). */}
+            <b style={{ transform: `scaleX(${fills[i] ?? 0})` }} />
+          </i>
+        </li>
+      ))}
+    </ol>
   );
 }
 
