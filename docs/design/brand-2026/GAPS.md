@@ -190,3 +190,35 @@ Original items, for the record:
   loads quiz-runtime.css — keep the two blocks in sync). The funnel's
   PhoneCanvas/PhoneScreen is a bespoke mock (no QuizRuntime, no runtime
   progress bar) — no injection needed there.
+
+## FINAL STATE — QRTZ-F close (2026-08-13)
+
+Every design-spec item in the plan is BUILT and live. This section is the
+authoritative closing ledger; strike-lists above record the history.
+
+Built in the F wave: Quartz-conformant switches (shape rule applied — knob
+r4 nests in track r6 at 2px inset) · compliant focus treatments on the two
+colour-alone rules · Customer Engagement colour pass (0 gradients, 0
+wrong-family tokens) · chapter-label locale overlays through
+applyTranslations · preview-side chapters parity (Step5Preview +
+RecPagePreview) · per-side padding end-to-end (schema/runtime/inspector,
+byte-order-pinned) · edit-mode selection type tag (4-link static gate;
+quiz-runtime.css untouched) · honest unpublished-change count (publish-
+strip-aware doc diff) · 134 off-scale radii onto the 6/4/8 scale (54 kept:
+shopper-mimic, device geometry, and the mock's own deliberate composer
+14px) · persona SEO pages onto the deepened brand violet.
+
+NOT design-spec items (require product-data systems the plan never
+specified; the mock draws sample DATA for them, not the systems):
+- Revenue tile + "9 orders" (Home s09): needs quiz→order attribution.
+  The plan's own inventory recorded "no order attribution exists; a future
+  analytics phase owns this."
+- "Low stock" pill (s14 popover): needs inventory QUANTITIES; the Shopify
+  sync stores a boolean. A sync-schema widening + resync is product-data
+  work, not a design port.
+- Home todos "See all" link: the mock draws the link with no destination;
+  with at most 4 derivable todos the link is dead chrome — omitted as the
+  truthful reading.
+- Post-failure regenerate on the blank-Questions landing: S5's safety
+  decision stands (a regenerate there could clobber manual work); the
+  mock's fail card does not draw that specific landing.
