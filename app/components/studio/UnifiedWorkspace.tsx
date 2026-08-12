@@ -157,10 +157,20 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
   });
   // QRTZ-S4 — the honest "Unpublished changes" signal: any doc write this
   // session (commit / AI apply / undo / redo) marks the draft newer than the
-  // published version; a successful publish clears it. Cross-SESSION
-  // unpublished changes are not detectable here (the editor loader exposes no
-  // publishedAt/updatedAt pair), so a clean load shows no pill.
-  const [dirtySincePublish, setDirtySincePublish] = useState(false);
+  // published version; a successful publish clears it. QRTZ-B2 — SEEDED from
+  // the loader's publishedAt/draftUpdatedAt pair, so an edited-then-abandoned
+  // draft shows the pill on a fresh load too. Publish itself rewrites the quiz
+  // row moments AFTER stamping published_at (draft persist + the version
+  // transaction bump updatedAt), so a small grace window keeps a
+  // just-published, untouched draft from reading as changed. No polling —
+  // this is a load-time seed only; the session-scoped writes sit on top.
+  const [dirtySincePublish, setDirtySincePublish] = useState(() => {
+    if (!data.publishedAt || !data.draftUpdatedAt) return false;
+    const published = new Date(data.publishedAt).getTime();
+    const drafted = new Date(data.draftUpdatedAt).getTime();
+    if (Number.isNaN(published) || Number.isNaN(drafted)) return false;
+    return drafted - published > 10_000;
+  });
   const commit = useCallback(
     (next: QuizDoc) => {
       setHistory((h) => ({ past: [...h.past, doc].slice(-50), future: [] }));

@@ -36,3 +36,24 @@ export function formatDateTime(input: string | number | Date | null | undefined)
   const mm = String(d.getUTCMinutes()).padStart(2, "0");
   return `${formatDate(d)}, ${h12}:${mm} ${period}`;
 }
+
+/** QRTZ-B2 — "4 minutes ago" / "3 hours ago" / "2 days ago". Timezone-safe (a
+ *  difference of instants), but "now"-RELATIVE — so render it only in
+ *  client-side-only surfaces (popovers, post-interaction UI). SSR'ing it risks
+ *  the very server/client text mismatch the UTC helpers above exist to avoid.
+ *  `now` is injectable for tests; future/skewed timestamps read "just now". */
+export function formatTimeAgo(
+  input: string | number | Date | null | undefined,
+  now: number = Date.now(),
+): string {
+  const d = toDate(input);
+  if (!d) return "";
+  const ms = now - d.getTime();
+  if (ms < 60_000) return "just now";
+  const minutes = Math.floor(ms / 60_000);
+  if (minutes < 60) return minutes === 1 ? "1 minute ago" : `${minutes} minutes ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return hours === 1 ? "1 hour ago" : `${hours} hours ago`;
+  const days = Math.floor(hours / 24);
+  return days === 1 ? "1 day ago" : `${days} days ago`;
+}

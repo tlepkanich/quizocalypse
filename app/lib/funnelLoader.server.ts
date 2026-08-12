@@ -39,7 +39,18 @@ export async function loadStep1FunnelData(
   const [products, collections, shopRow, categories, savedTemplates, starterTemplates] = await Promise.all([
     prisma.product.findMany({ where: { shopId: shop.id } }),
     prisma.collection.findMany({ where: { shopId: shop.id } }),
-    prisma.shop.findUnique({ where: { id: shop.id }, select: { brandIdentity: true } }),
+    prisma.shop.findUnique({
+      where: { id: shop.id },
+      // QRTZ-B2 — lastSyncAt/source/shopifyConnectDomain widen this read-only
+      // select for the Logic step's products popover (sync freshness + the
+      // "Open in Shopify" link). Additive; brandIdentity untouched.
+      select: {
+        brandIdentity: true,
+        lastSyncAt: true,
+        source: true,
+        shopifyConnectDomain: true,
+      },
+    }),
     prisma.category.findMany({
       where: { shopId: shop.id, quizId: quiz.id },
       select: {
@@ -303,6 +314,14 @@ export async function loadStep1FunnelData(
     questionBuilder,
     recNodeDefaults,
     recPage,
+    // QRTZ-B2 — additive sync-freshness + admin-link feeds for the Logic
+    // step's products popover. A standalone workspace's shopDomain is
+    // synthetic — its real Shopify admin is the connector domain (or none).
+    lastSyncAt: shopRow?.lastSyncAt?.toISOString() ?? null,
+    shopifyAdminDomain:
+      shopRow?.source === "standalone"
+        ? shopRow?.shopifyConnectDomain ?? null
+        : shop.shopDomain,
     designTokens: doc.design_tokens,
     designLinked: doc.design_linked ?? true,
     recPageDesign: doc.rec_page_design ?? null,

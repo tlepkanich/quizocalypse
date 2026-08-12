@@ -74,6 +74,8 @@ export function Step3Shell({
   onContinue,
   designTokens,
   regen,
+  lastSyncAt,
+  shopifyAdminDomain,
 }: {
   doc: QuizDoc;
   quizId: string;
@@ -97,6 +99,9 @@ export function Step3Shell({
   onContinue: () => void;
   designTokens: DesignTokens | null | undefined;
   regen: RegenApi;
+  /** QRTZ-B2 — threaded to the Logic card's products popover. */
+  lastSyncAt?: string | null;
+  shopifyAdminDomain?: string | null;
 }) {
   const questions = useMemo(() => orderedQuestions(doc), [doc]);
   // questions-full-page §2 — the FULL flow (content steps included): the nav
@@ -430,6 +435,8 @@ export function Step3Shell({
             productIndex={productIndex}
             commit={onCommit}
             quizId={quizId}
+            lastSyncAt={lastSyncAt}
+            shopifyAdminDomain={shopifyAdminDomain}
           />
           {/* The safety-net + quiz-ending configs keep their own sections —
               they were part of the old scroll, not of the card design. */}

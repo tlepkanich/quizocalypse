@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { formatDate, formatDateTime } from "./formatDate";
+import { formatDate, formatDateTime, formatTimeAgo } from "./formatDate";
 
 describe("formatDate", () => {
   it("formats an ISO string as M/D/YYYY in UTC", () => {
@@ -18,6 +18,28 @@ describe("formatDate", () => {
     expect(formatDate(null)).toBe("");
     expect(formatDate(undefined)).toBe("");
     expect(formatDate("not-a-date")).toBe("");
+  });
+});
+
+describe("formatTimeAgo", () => {
+  const now = Date.UTC(2026, 5, 23, 12, 0, 0); // 2026-06-23T12:00:00Z
+  it("reads minutes, hours, and days at coarse steps", () => {
+    expect(formatTimeAgo("2026-06-23T11:56:00Z", now)).toBe("4 minutes ago");
+    expect(formatTimeAgo("2026-06-23T09:00:00Z", now)).toBe("3 hours ago");
+    expect(formatTimeAgo("2026-06-21T11:00:00Z", now)).toBe("2 days ago");
+  });
+  it("singularizes 1 minute / 1 hour / 1 day", () => {
+    expect(formatTimeAgo("2026-06-23T11:59:00Z", now)).toBe("1 minute ago");
+    expect(formatTimeAgo("2026-06-23T11:00:00Z", now)).toBe("1 hour ago");
+    expect(formatTimeAgo("2026-06-22T11:00:00Z", now)).toBe("1 day ago");
+  });
+  it("reads sub-minute and future (clock-skewed) instants as just now", () => {
+    expect(formatTimeAgo("2026-06-23T11:59:30Z", now)).toBe("just now");
+    expect(formatTimeAgo("2026-06-23T12:05:00Z", now)).toBe("just now");
+  });
+  it("returns empty string for null/invalid input", () => {
+    expect(formatTimeAgo(null, now)).toBe("");
+    expect(formatTimeAgo("not-a-date", now)).toBe("");
   });
 });
 

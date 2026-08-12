@@ -34,6 +34,8 @@ export function QuestionBuilderStage({
   fetcher,
   pendingIntent,
   designTokens,
+  lastSyncAt,
+  shopifyAdminDomain,
 }: {
   quizId: string;
   /** One-line-chrome — which funnel step this mount serves: "questions" (the
@@ -50,6 +52,10 @@ export function QuestionBuilderStage({
   // QL3 — the draft's design tokens (FunnelData.designTokens), threaded to the
   // v3 phone canvas so the preview wears the merchant brand.
   designTokens?: DesignTokens | null;
+  // QRTZ-B2 — sync freshness + the Shopify ADMIN domain, threaded to the Logic
+  // card's products popover (FunnelData.lastSyncAt / .shopifyAdminDomain).
+  lastSyncAt?: string | null;
+  shopifyAdminDomain?: string | null;
 }) {
   const { doc, commit, isSaving, savedAt, saveError, retrySave, flushSave, beginAiEdit, applyAiResult, endAiEdit } =
     useQuizDraft(initialDoc);
@@ -161,6 +167,8 @@ export function QuestionBuilderStage({
         navigating={navigating}
         onContinue={submitContinue}
         designTokens={designTokens}
+        lastSyncAt={lastSyncAt}
+        shopifyAdminDomain={shopifyAdminDomain}
         regen={{
           regeneratingId,
           undoNodeId,

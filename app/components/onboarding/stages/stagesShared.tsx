@@ -140,6 +140,11 @@ export interface FunnelData {
   // DGN-1 — the shop's brand-derived token pack, offered as a "Your brand" card
   // in the Design stage. null when there's no usable brand design.
   brandDerivedTokens: DesignTokens | null;
+  // QRTZ-B2 — additive (optional so older payload shapes stay assignable):
+  // catalog sync freshness + the Shopify ADMIN domain (null on an unconnected
+  // standalone workspace), for the Logic step's products popover.
+  lastSyncAt?: string | null;
+  shopifyAdminDomain?: string | null;
 }
 
 export type ActionResult =

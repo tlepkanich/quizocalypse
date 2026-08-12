@@ -290,6 +290,8 @@ export function Step1Funnel({ data }: { data: FunnelData }) {
               fetcher={fetcher}
               pendingIntent={pendingIntent}
               designTokens={data.designTokens}
+              lastSyncAt={data.lastSyncAt ?? null}
+              shopifyAdminDomain={data.shopifyAdminDomain ?? null}
             />
           )}
         </ClientOnly>
