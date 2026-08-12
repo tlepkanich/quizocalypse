@@ -574,6 +574,33 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
     },
     [editMode, inspectTarget, commit],
   );
+  // QRTZ-OB2 — the Rules tab's "Open in Logic" deep link: land the Logic view
+  // scrolled to that question's row. The LogicTabCard renders data-node-id
+  // scroll targets (LOGIC-TAB program); the embedded twin's legacy LogicView
+  // has none, so the query no-ops there and the plain view switch stands.
+  const [logicFocusId, setLogicFocusId] = useState<string | null>(null);
+  useEffect(() => {
+    if (view !== "logic" || !logicFocusId) return;
+    const id = logicFocusId;
+    // One frame is not enough: BuilderLogicView mounts on this commit and the
+    // card's rows land with it, but give layout a beat before scrolling.
+    const t = window.setTimeout(() => {
+      setLogicFocusId(null);
+      document
+        .querySelector(
+          `[data-testid="logic-tab-card"] [data-node-id="${CSS.escape(id)}"]`,
+        )
+        ?.scrollIntoView({ behavior: "smooth", block: "center" });
+    }, 150);
+    return () => window.clearTimeout(t);
+  }, [view, logicFocusId]);
+  const openLogicAt = useCallback(
+    (focusNodeId?: string) => {
+      setLogicFocusId(focusNodeId ?? null);
+      setView("logic");
+    },
+    [setView],
+  );
   // Health popover jump-links: a question/node finding focuses that node in
   // the Build view's editor; a rule finding lives in the Logic view (BLD-4
   // will deep-scroll it — landing the view is the useful move today).
@@ -1034,8 +1061,9 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
                 products={data.productIndex}
                 productIndex={data.productIndex}
                 categories={data.categories}
+                collections={data.collections}
                 frameBreakpoint={TIER_BREAKPOINT[tier]}
-                onOpenLogic={() => setView("logic")}
+                onOpenLogic={openLogicAt}
                 regen={regenApi}
               />
             ) : (
@@ -1471,8 +1499,9 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
           products={data.productIndex}
           productIndex={data.productIndex}
           categories={data.categories}
+          collections={data.collections}
           frameBreakpoint={TIER_BREAKPOINT[tier]}
-          onOpenLogic={() => setView("logic")}
+          onOpenLogic={openLogicAt}
           regen={regenApi}
           inspectTarget={inspectTarget}
           onClearScope={() => setInspectTarget(null)}

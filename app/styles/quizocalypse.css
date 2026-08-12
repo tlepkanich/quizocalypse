@@ -9944,3 +9944,60 @@ button.qz-pb-row:hover { background: var(--qz-cream-2); }
   color: var(--qz-ink-3); text-decoration: none; white-space: nowrap;
 }
 .qz-ltab-menu-shoplink:hover { color: var(--qz-ink); text-decoration: underline; }
+
+/* ═══ QRTZ-OB2 ═══ Build-inspector Rules tab (owner reversal 2026-08-12,
+   GAPS §A item 6 — mock ed-tabs, shared.mjs:667). Read-only summary of the
+   selected question's role + answer→target mapping; editing stays in Logic.
+   Sized for the inspector's ~294 content px. ═══════════════════════════ */
+.qz-obr { display: flex; flex-direction: column; gap: 12px; }
+.qz-obr-role { display: flex; flex-direction: column; gap: 3px; }
+/* Role read-out: card-title weight at panel scale ("Picks the result"). */
+.qz-obr-rolev { font-size: 13.5px; font-weight: 700; color: var(--qz-ink); }
+.qz-obr-info { margin: 0; font-size: 12px; line-height: 1.5; color: var(--qz-ink-3); }
+/* "Maps to" header row — label left, quiet unit right (mock ltable th). */
+.qz-obr-maphd {
+  display: flex; align-items: baseline; justify-content: space-between;
+  gap: 8px; margin-bottom: 5px;
+}
+.qz-obr-maphd-n { font-size: 10.5px; color: var(--qz-ink-4); }
+.qz-obr-rows { display: flex; flex-direction: column; }
+/* One answer row: key · text · chips · count, hairline-divided like the
+   mock's question table rows. */
+.qz-obr-row {
+  display: grid; grid-template-columns: 16px minmax(72px, 1fr) auto auto;
+  gap: 6px; align-items: center; padding: 5px 0;
+  border-top: 1px solid var(--qz-rule); font-size: 12px;
+}
+.qz-obr-row:first-child { border-top: 0; padding-top: 0; }
+.qz-obr-akey {
+  font-size: 10.5px; font-weight: 700; color: var(--qz-ink-4);
+  text-align: center;
+}
+.qz-obr-atext {
+  min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  color: var(--qz-ink);
+}
+.qz-obr-chips {
+  display: flex; flex-wrap: wrap; gap: 3px; justify-content: flex-end;
+  max-width: 45%; margin-left: auto;
+}
+/* Mapping chips: squared, neutral — data, not state (accent discipline). */
+.qz-obr-chip {
+  padding: 1px 6px; border-radius: var(--qz-radius-sm);
+  background: var(--qz-cream-2); border: 1px solid var(--qz-rule);
+  font-size: 11px; font-weight: 600; color: var(--qz-ink);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 110px;
+}
+.qz-obr-none { font-size: 11px; color: var(--qz-ink-4); white-space: nowrap; }
+.qz-obr-more { font-size: 11px; color: var(--qz-ink-4); }
+/* Product count: the data style — 13/600 tabular. */
+.qz-obr-count {
+  min-width: 22px; text-align: right; font-size: 13px; font-weight: 600;
+  font-variant-numeric: tabular-nums; color: var(--qz-ink-3);
+}
+.qz-obr-count.is-bad { color: var(--qz-crit); }
+/* The one-decider sentence (mock .pop-foot: border-top, quiet). */
+.qz-obr-foot {
+  margin: 0; padding-top: 9px; border-top: 1px solid var(--qz-cream-2);
+  font-size: 11.5px; line-height: 1.5; color: var(--qz-ink-4);
+}

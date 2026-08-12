@@ -1,8 +1,9 @@
 import { useState } from "react";
-import type { Quiz, QuizNode } from "../../lib/quizSchema";
+import type { ReactNode } from "react";
+import type { Answer, Quiz, QuizNode } from "../../lib/quizSchema";
 import { isFreeformType } from "../../lib/quizSchema";
 import type { IndexedProduct } from "../../lib/recommendationEngine";
-import type { BuilderCategory } from "../builder/stepProps";
+import type { BuilderCategory, BuilderCollection } from "../builder/stepProps";
 import type { DesignLayerMode } from "../../lib/designLayers";
 import { reachedBy, routingConflicts } from "../../lib/routeTrace";
 import {
@@ -16,6 +17,11 @@ import {
 } from "../../lib/quizMutations";
 import { updateNodeData } from "./studioDoc";
 import type { InspectTarget } from "../runtime/QuizRuntime";
+import { filterAnswerMatchCount } from "../../lib/filterMatching";
+// QRTZ-OB2 — import-only (logicTab/** is the Logic surface's own code): the
+// derived narrows-attribute label, so the Rules tab and the question window
+// can never disagree about what a question narrows on.
+import { derivedNarrowLabel } from "./logicTab/logicTabFields";
 import { computeBucketCoverage, type CoverageLevel } from "../../lib/bucketCoverage";
 import { StepPreview } from "../runtime/StepPreview";
 import { PathTester } from "../logic/PathTester";
@@ -37,13 +43,18 @@ import { copyOptionMediaToAll } from "../../lib/answerDisplay";
 // ════════════════════════════════════════════════════════════════════════════
 
 type QuizDoc = Quiz;
-type Tab = "content" | "design" | "routing";
+type Tab = "content" | "design" | "routing" | "rules";
 type QuestionNode = Extract<QuizNode, { type: "question" }>;
 
-// build-tab v2.0 §1/§10 — the Build inspector is DESIGN-ONLY. Roles, result
-// mapping and routing live exclusively in the Logic view; the old inline gold
-// Logic section (role dropdown + per-answer mapping) was removed here. A single
-// one-line pointer to Logic is all that remains (see DeciderInspectorBody).
+// build-tab v2.0 §1/§10 made the decider Build inspector DESIGN-ONLY (roles,
+// result mapping and routing lived exclusively in the Logic view; only a
+// one-line pointer remained). REVERSED 2026-08-12 by owner call (QRTZ-OB2;
+// GAPS.md §A item 6 — adopt the mock): the decider inspector is tabbed
+// Content · Design · Rules per the mock's ed-tabs, where Rules (question
+// nodes only) is a READ-ONLY role + answer-mapping summary with an
+// "Open in Logic" deep link. EDITING still happens only in the Logic view —
+// the target_ids one-write-path invariant is untouched. Legacy docs keep
+// their original Content/Design/Routing inspector byte-identically.
 
 /** QZY-8 (build-tab §5.1) — single-option scope: clicking one answer on the
  *  canvas scopes the inspector to THAT option; "Style all options" returns to
@@ -158,8 +169,9 @@ function AnswerScopePanel({
           ) : null}
         </div>
       </details>
-      {/* build-tab v2.0 §1 — design-only: this option's result mapping / filter
-          match lives in the Logic view, never here. */}
+      {/* This option's result mapping / filter match is EDITED in the Logic
+          view only (one write path); since the 2026-08-12 reversal (QRTZ-OB2)
+          the question-level Rules tab SUMMARIZES it, read-only. */}
       <p className="qz-dim" style={{ fontSize: 11.5, margin: 0 }}>
         Layout &amp; option styling apply to every option — set them under Answer display.
       </p>
@@ -175,6 +187,7 @@ export function ContextPanel({
   products,
   productIndex,
   categories,
+  collections,
   frameBreakpoint,
   onOpenLogic,
   regen,
@@ -189,11 +202,17 @@ export function ContextPanel({
   products?: PickerProduct[];
   productIndex: IndexedProduct[];
   categories: BuilderCategory[];
+  // QRTZ-OB2 — collection titles for the Rules tab's mapping chips (a
+  // collection-filter id alone is unreadable). Optional: absent = ids elided.
+  collections?: BuilderCollection[];
   // The device-frame's current breakpoint — the Design tab's layer selector
   // defaults to it ("edit what you see"); synced stays one click away.
   frameBreakpoint: "desktop" | "mobile";
   // Jump to the Logic view (full recommendation mapping lives there).
-  onOpenLogic?: () => void;
+  // QRTZ-OB2 — the Rules tab passes the question's nodeId so the caller can
+  // land the Logic view scrolled to that question's row; existing callers
+  // that ignore the argument keep working unchanged.
+  onOpenLogic?: (focusNodeId?: string) => void;
   // Optional per-question AI regenerate plumbing (studio only).
   regen?: RegenApi;
   // QZY-8 — the exact canvas element clicked (single-option scoping).
@@ -226,6 +245,7 @@ export function ContextPanel({
       products={products}
       productIndex={productIndex}
       categories={categories}
+      collections={collections}
       frameBreakpoint={frameBreakpoint}
       onOpenLogic={onOpenLogic}
       regen={regen}
@@ -858,20 +878,188 @@ function LayerSelector({
   );
 }
 
-// ── Decider inspector (build-tab v2.0) — the CORRECTED right panel: purely
-// selection-driven DESIGN. No tabs, no logic, no page-background (that lives in
-// the left Background tab). Content + style for the selected element, then a
-// single one-line pointer to the Logic view. Legacy docs keep the old tabbed
-// ContextPanelBody untouched. (Element-granular per-element control sets are
-// R7; this phase makes the panel tab-less and logic-free.)
+// ═══ QRTZ-OB2 — the Rules tab (owner reversal 2026-08-12, GAPS.md §A item 6:
+// "the Build inspector gets a Rules tab" per the mock's ed-tabs). READ-ONLY on
+// purpose: the summary mirrors what the Logic view's question window edits, so
+// there is exactly ONE write path for roles/targets (the target_ids mirror
+// invariant); "Open in Logic" deep-links to that question's row. The mock's
+// QuestionWindow controls are a three-column modal (qz-crm grid, portaled,
+// focus-trapped) sized for the full viewport — they cannot render in this
+// panel's ~294 content px, so this is the honest compact summary instead.
+// Vocabulary is the mock's (GAPS §A item 7): "Picks the result" / "Narrows
+// on …" / "Maps to". Display strings are written HERE, not imported from
+// logicTab (whose rename ships separately).
+export function RulesTabBody({
+  node,
+  categories,
+  collections,
+  productIndex,
+  onOpenLogic,
+}: {
+  node: QuestionNode;
+  categories: BuilderCategory[];
+  collections?: BuilderCollection[];
+  productIndex: IndexedProduct[];
+  onOpenLogic?: (focusNodeId?: string) => void;
+}) {
+  const role = node.data.role;
+  const answers = node.data.answers;
+  const total = productIndex.length;
+  const catById = new Map(categories.map((c) => [c.id, c]));
+  const colTitleById = new Map((collections ?? []).map((c) => [c.collectionId, c.title]));
+  const infoRole = role !== "decides" && role !== "filter";
+
+  // The role read-out in the mock's vocabulary. The narrows attribute is the
+  // same derived (never stored) label the question window computes.
+  const narrowLabel = role === "filter" ? derivedNarrowLabel(answers) : null;
+  const roleLine =
+    role === "decides"
+      ? "Picks the result"
+      : role === "filter"
+        ? narrowLabel === "nothing yet"
+          ? "Narrows — nothing mapped yet"
+          : narrowLabel === "mixed"
+            ? "Narrows on mixed attributes"
+            : narrowLabel === "anything"
+              ? "Narrows the products"
+              : `Narrows on ${narrowLabel}`
+        : "Info only";
+
+  // Chip labels for a narrowing answer, from the answer's RAW fields (keeps
+  // the merchant's casing; family tags "Fit:Slim" read as their value).
+  const mappingLabels = (a: Answer): string[] => {
+    const out: string[] = [];
+    for (const t of a.tags) {
+      const i = t.indexOf(":");
+      const s = i > 0 && i < t.length - 1 ? t.slice(i + 1) : t;
+      if (s.trim()) out.push(s.trim());
+    }
+    for (const c of [
+      ...(a.collection_filter ? [a.collection_filter] : []),
+      ...(a.collection_filters ?? []),
+    ])
+      out.push(colTitleById.get(c) ?? "a collection");
+    for (const m of a.metafield_filters ?? []) if (m.value.trim()) out.push(m.value.trim());
+    for (const v of a.variant_filters ?? []) if (v.value.trim()) out.push(v.value.trim());
+    for (const t of a.product_type_filters ?? []) if (t.trim()) out.push(t.trim());
+    return out;
+  };
+
+  const answerRow = (a: Answer, i: number) => {
+    const keys = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+    let chips: ReactNode;
+    let count: { text: string; bad: boolean };
+    if (role === "decides") {
+      const cat = a.target_id ? catById.get(a.target_id) : undefined;
+      const n = cat?.productIds.length ?? 0;
+      chips = a.target_id ? (
+        <span className="qz-obr-chip">{cat?.name ?? "(deleted target)"}</span>
+      ) : (
+        <span className="qz-obr-none">Not mapped yet</span>
+      );
+      count = { text: `${n}`, bad: n === 0 };
+    } else if (a.no_preference) {
+      chips = <span className="qz-obr-none">No filter</span>;
+      count = { text: `${total}`, bad: false };
+    } else {
+      const labels = mappingLabels(a);
+      const n = filterAnswerMatchCount(a, productIndex);
+      chips =
+        labels.length === 0 ? (
+          <span className="qz-obr-none">Not mapped yet</span>
+        ) : (
+          <>
+            {labels.slice(0, 3).map((l, j) => (
+              <span key={j} className="qz-obr-chip">
+                {l}
+              </span>
+            ))}
+            {labels.length > 3 ? <span className="qz-obr-more">+{labels.length - 3}</span> : null}
+          </>
+        );
+      count = n === null ? { text: "—", bad: true } : { text: `${n}`, bad: n === 0 };
+    }
+    return (
+      <div key={a.id} className="qz-obr-row">
+        <span className="qz-obr-akey" aria-hidden>
+          {keys[i] ?? i + 1}
+        </span>
+        <span className="qz-obr-atext" title={a.text}>
+          {a.text}
+        </span>
+        <span className="qz-obr-chips">{chips}</span>
+        <span className={`qz-obr-count${count.bad ? " is-bad" : ""}`}>{count.text}</span>
+      </div>
+    );
+  };
+
+  return (
+    <div className="qz-obr">
+      <div className="qz-obr-role">
+        <span className="qz-label" style={{ fontSize: 11 }}>
+          This question
+        </span>
+        <span className="qz-obr-rolev">{roleLine}</span>
+      </div>
+      {infoRole ? (
+        <p className="qz-obr-info">
+          Asked and recorded — its answers never pick or narrow products.
+        </p>
+      ) : (
+        <div>
+          <div className="qz-obr-maphd">
+            <span className="qz-label" style={{ fontSize: 11 }}>
+              Maps to
+            </span>
+            <span className="qz-obr-maphd-n" aria-hidden>
+              products
+            </span>
+          </div>
+          <div className="qz-obr-rows">{answers.map(answerRow)}</div>
+        </div>
+      )}
+      <p className="qz-obr-foot">
+        One question picks the result. Every other question narrows on a single
+        attribute.
+      </p>
+      {onOpenLogic ? (
+        <div className="qz-row qz-row-between" style={{ gap: 8, alignItems: "center" }}>
+          <span className="qz-dim" style={{ fontSize: 11.5 }}>
+            Edit the role and mapping in Logic.
+          </span>
+          <button
+            type="button"
+            className="qz-btn qz-btn-ghost qz-btn-sm"
+            onClick={() => onOpenLogic(node.id)}
+          >
+            Open in Logic →
+          </button>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+// ── Decider inspector — since the 2026-08-12 reversal (QRTZ-OB2, GAPS.md §A
+// item 6) this is the mock's TABBED right panel: Content · Design · Rules
+// (ed-tabs, shared.mjs:667). Design stays the default (build-tab §1 — blocks
+// arrive pre-populated with AI content, styling is the dominant remaining
+// task; also the mock's selected tab). Rules renders for question nodes only;
+// other nodes show Content · Design. Still no page-background here (that
+// lives in the left Background tab). Legacy docs keep the old tabbed
+// ContextPanelBody untouched.
 function DeciderInspectorBody({
   doc,
   node,
+  tab,
   layer,
   layerOverride,
   setLayerOverride,
   onCommit,
   products,
+  productIndex,
+  categories,
+  collections,
   regen,
   scopedAnswerId,
   onClearScope,
@@ -879,15 +1067,20 @@ function DeciderInspectorBody({
 }: {
   doc: QuizDoc;
   node: QuizNode;
+  /** The coerced decider tab (see deciderTab in ContextPanelBody). */
+  tab: "content" | "design" | "rules";
   layer: DesignLayerMode;
   layerOverride: DesignLayerMode | null;
   setLayerOverride: (m: DesignLayerMode | null) => void;
   onCommit: (doc: QuizDoc) => void;
   products?: PickerProduct[];
+  productIndex: IndexedProduct[];
+  categories: BuilderCategory[];
+  collections?: BuilderCollection[];
   regen?: RegenApi;
   scopedAnswerId: string | null;
   onClearScope?: () => void;
-  onOpenLogic?: () => void;
+  onOpenLogic?: (focusNodeId?: string) => void;
 }) {
   // Single-option scope (build-tab §5.1): the option's own label + media only.
   if (scopedAnswerId && node.type === "question" && onClearScope) {
@@ -902,14 +1095,25 @@ function DeciderInspectorBody({
       />
     );
   }
+  if (tab === "rules" && node.type === "question") {
+    return (
+      <RulesTabBody
+        node={node}
+        categories={categories}
+        collections={collections}
+        productIndex={productIndex}
+        onOpenLogic={onOpenLogic}
+      />
+    );
+  }
+  if (tab === "content") {
+    return <ContentTab doc={doc} node={node} onCommit={onCommit} products={products} regen={regen} />;
+  }
   return (
     <>
-      {/* build-tab handoff §1 — DESIGN FIRST (blocks arrive pre-populated with
-          AI content; styling is the dominant remaining task), content second. */}
       <LayerSelector layer={layer} layerOverride={layerOverride} setLayerOverride={setLayerOverride} />
       {/* §1 — hideBackground: the screen background lives ONLY in the left tab. */}
       <StyleTab doc={doc} node={node} mode={layer} onCommit={onCommit} hideBackground />
-      <ContentTab doc={doc} node={node} onCommit={onCommit} products={products} regen={regen} />
       <details style={{ flex: "0 0 auto" }}>
         <summary style={{ cursor: "pointer", fontSize: 12.5, fontWeight: 600 }}>Layout blocks</summary>
         <div style={{ marginTop: 8 }}>
@@ -922,28 +1126,6 @@ function DeciderInspectorBody({
           <CssTab doc={doc} node={node} onCommit={onCommit} />
         </div>
       </details>
-      {/* §1/§10 — the ONE allowed line of logic on this page: a pointer, not UI. */}
-      {node.type === "question" ? (
-        <div
-          className="qz-row qz-row-between"
-          style={{
-            gap: 8,
-            alignItems: "center",
-            padding: "8px 10px",
-            borderRadius: 8,
-            border: "1px solid var(--qz-rule)",
-          }}
-        >
-          <span className="qz-dim" style={{ fontSize: 11.5 }}>
-            Roles, result mapping &amp; routing live in the Logic view.
-          </span>
-          {onOpenLogic ? (
-            <button type="button" className="qz-btn qz-btn-ghost qz-btn-sm" onClick={onOpenLogic}>
-              Open Logic →
-            </button>
-          ) : null}
-        </div>
-      ) : null}
     </>
   );
 }
@@ -961,6 +1143,7 @@ function ContextPanelBody({
   products,
   productIndex,
   categories,
+  collections,
   frameBreakpoint,
   onOpenLogic,
   regen,
@@ -980,8 +1163,9 @@ function ContextPanelBody({
   products?: PickerProduct[];
   productIndex: IndexedProduct[];
   categories: BuilderCategory[];
+  collections?: BuilderCollection[];
   frameBreakpoint: "desktop" | "mobile";
-  onOpenLogic?: () => void;
+  onOpenLogic?: (focusNodeId?: string) => void;
   regen?: RegenApi;
   inspectTarget?: InspectTarget | null;
   onClearScope?: () => void;
@@ -997,6 +1181,16 @@ function ContextPanelBody({
       ? inspectTarget.answerId
       : null;
   const isDecider = doc.logic_model === "decider";
+  // QRTZ-OB2 — the decider tab set: Content · Design (· Rules on question
+  // nodes), per the mock's ed-tabs. Coerced at render time (never setState):
+  // legacy's "routing" value can't be selected on a decider doc, and "rules"
+  // falls back to Design when the selection moves to a non-question node.
+  const deciderTab: "content" | "design" | "rules" =
+    tab === "content"
+      ? "content"
+      : tab === "rules" && node.type === "question"
+        ? "rules"
+        : "design";
 
   // QZY-8 — footer move/delete (§2): reorder within the straight-through run;
   // delete arms the carousel's impact-naming confirm.
@@ -1023,9 +1217,28 @@ function ContextPanelBody({
           <small>{node.type.replace("_", " ")}</small>
         </div>
         <div className="qz-row" style={{ gap: 6, alignItems: "center", marginLeft: "auto" }}>
-          {/* build-tab v2.0 §1 — decider docs have NO tab bar (design-only,
-              selection-driven). Legacy docs keep Content/Design/Routing. */}
-          {!isDecider ? (
+          {/* QRTZ-OB2 (owner reversal 2026-08-12, GAPS.md §A item 6) — decider
+              docs now carry the mock's ed-tabs: Content · Design · Rules, the
+              Rules segment gated to question nodes (build-tab v2.0 §1 had made
+              this panel tab-less and design-only). Legacy docs keep their
+              Design/Content/Routing bar byte-identically. */}
+          {isDecider ? (
+            <div className="qz-segmented" role="group" aria-label="Panel tab">
+              {/* Mock tab order (shared.mjs:667); Design stays the DEFAULT
+                  (§1 design-first + the mock's selected segment). */}
+              <button type="button" aria-pressed={deciderTab === "content"} onClick={() => setTab("content")}>
+                Content
+              </button>
+              <button type="button" aria-pressed={deciderTab === "design"} onClick={() => setTab("design")}>
+                Design
+              </button>
+              {node.type === "question" ? (
+                <button type="button" aria-pressed={deciderTab === "rules"} onClick={() => setTab("rules")}>
+                  Rules
+                </button>
+              ) : null}
+            </div>
+          ) : (
             <div className="qz-segmented" role="group" aria-label="Panel tab">
               {/* §1 — Design first (default), Content second. Routing stays as
                   legacy's owning-surface embed (it is not a "Settings" tab). */}
@@ -1039,7 +1252,7 @@ function ContextPanelBody({
                 Routing
               </button>
             </div>
-          ) : null}
+          )}
           <button className="qz-btn qz-btn-ghost qz-btn-sm" onClick={onClose} title="Close (Esc)">
             Done
           </button>
@@ -1072,11 +1285,15 @@ function ContextPanelBody({
           <DeciderInspectorBody
             doc={doc}
             node={node}
+            tab={deciderTab}
             layer={layer}
             layerOverride={layerOverride}
             setLayerOverride={setLayerOverride}
             onCommit={onCommit}
             products={products}
+            productIndex={productIndex}
+            categories={categories}
+            collections={collections}
             regen={regen}
             scopedAnswerId={scopedAnswerId}
             onClearScope={onClearScope}

@@ -159,17 +159,28 @@ await page.locator(".qz-screens-confirm-yes").click();
 await page.waitForTimeout(700);
 ok("confirm deletes the screen (net-zero)", (await thumbs.count()) === thumbCount);
 
-// ── BLD-3 → QZY-R2: decider inspector is TAB-LESS + logic-free (build-tab
-// v2.0 §1). No Content/Design/Routing bar; roles/mapping/routing live only in
-// the Logic view (one pointer remains). Deep R2 coverage: e2e/qzy-r2-verify.mjs.
+// ── BLD-3 → QZY-R2 → QRTZ-OB2 (owner reversal 2026-08-12, GAPS §A item 6):
+// the decider inspector carries the mock's ed-tabs — Content · Design · Rules
+// (Rules gated to question nodes; Design stays the default). Rules is a
+// READ-ONLY role + mapping summary with an "Open in Logic" deep link; editing
+// stays in the Logic view. Deep coverage: e2e/qzy-r2-verify.mjs (updated).
 await q1Thumb.locator(".qz-screens-thumb").click();
 await page.waitForTimeout(400);
 const insp = page.locator(".qz-builder-inspector");
 ok("right-side inspector present", (await insp.count()) === 1);
-ok("no Content/Design/Routing tab bar (v2.0 §1)",
-  (await insp.locator('.qz-segmented[aria-label="Panel tab"]').count()) === 0);
-ok("one-line 'Open Logic →' pointer present (the only logic allowance)",
-  (await insp.locator("button", { hasText: "Open Logic" }).count()) === 1);
+const panelTabs = insp.locator('.qz-segmented[aria-label="Panel tab"]');
+ok("Content/Design/Rules tab bar on a question node (QRTZ-OB2 — no Routing)",
+  (await panelTabs.count()) === 1 &&
+  (await panelTabs.locator("button", { hasText: "Rules" }).count()) === 1 &&
+  (await panelTabs.locator("button", { hasText: "Routing" }).count()) === 0);
+await panelTabs.locator("button", { hasText: "Rules" }).click();
+await page.waitForTimeout(300);
+ok("Rules tab: role read-out present (mock vocabulary)",
+  (await insp.locator(".qz-obr-rolev").count()) === 1);
+ok("Rules tab: 'Open in Logic →' deep link present",
+  (await insp.locator("button", { hasText: "Open in Logic" }).count()) === 1);
+await panelTabs.locator("button", { hasText: "Design" }).click();
+await page.waitForTimeout(300);
 ok("no page-background control on the right (v2.0 §1)",
   (await insp.getByText("Background", { exact: true }).count()) === 0);
 
@@ -209,6 +220,9 @@ await page.locator("button", { hasText: "Style all options" }).click();
 await page.waitForTimeout(300);
 ok("'Style all options' returns to question scope",
   (await page.locator(".qz-insp-scope").count()) === 0);
+// QRTZ-OB2 — content controls live under the Content tab now.
+await panelTabs.locator("button", { hasText: "Content" }).click();
+await page.waitForTimeout(300);
 ok("More options disclosure in Content tab",
   (await page.locator(".qz-builder-inspector .qz-insp-more > summary", { hasText: "More options" }).count()) === 1);
 // This fixture's lone question dangles (no outbound edge), so it sits outside
@@ -221,7 +235,9 @@ ok("footer delete arms the carousel confirm",
   (await page.locator(".qz-screens-confirm").count()) === 1);
 await page.locator(".qz-screens-confirm button", { hasText: "Keep" }).click();
 await page.waitForTimeout(200);
-// Decider inspector has NO Design tab — Layout blocks is directly present.
+// QRTZ-OB2 — Layout blocks live under the Design tab (the default).
+await panelTabs.locator("button", { hasText: "Design" }).click();
+await page.waitForTimeout(300);
 await page.locator(".qz-builder-inspector summary", { hasText: "Layout blocks" }).click();
 await page.waitForTimeout(300);
 // A template-rendered step must be broken into blocks first (BLD-7's final
@@ -245,6 +261,9 @@ await page.waitForTimeout(200);
 // ── QZY-9: answer display modes — picker, live canvas, lossless switch ──────
 await q1Thumb.locator(".qz-screens-thumb").click();
 await page.waitForTimeout(500);
+// QRTZ-OB2 — the answer-display picker sits in ContentTab → Content tab.
+await panelTabs.locator("button", { hasText: "Content" }).click();
+await page.waitForTimeout(300);
 ok("Answer display mode picker present (4 structural modes — Icon retired, R5b §3.1)",
   (await page.locator(".qz-ads-modes button").count()) === 4);
 const canvasAnswerCount = await page.locator(".qz-builder-canvas button.qz-insp").count();
@@ -392,7 +411,9 @@ await page.evaluate(() => {
   c.dispatchEvent(new DragEvent("drop", { dataTransfer: dt, bubbles: true, cancelable: true }));
 });
 await page.waitForTimeout(600);
-// Decider inspector has NO Design tab — Layout blocks is directly present.
+// QRTZ-OB2 — Layout blocks live under the Design tab now.
+await panelTabs.locator("button", { hasText: "Design" }).click();
+await page.waitForTimeout(300);
 await page.locator(".qz-builder-inspector summary", { hasText: "Layout blocks" }).click();
 await page.waitForTimeout(300);
 const xBtns = page.locator(".qz-builder-inspector button", { hasText: "✕" });
