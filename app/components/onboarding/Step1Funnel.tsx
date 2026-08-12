@@ -116,13 +116,12 @@ export function Step1Funnel({ data }: { data: FunnelData }) {
   const continueBtn = (
     <button
       type="button"
-      className={`qz-topbar-continue${cont.disabled ? " is-off" : ""}${cont.blocked ? " is-blocked" : ""}${cont.loading ? " is-loading" : ""}`}
+      className={`qz-topbar-continue${cont.disabled ? " is-off" : ""}${cont.blocked ? " is-blocked" : ""}${cont.loading ? " qz-btn-loading" : ""}`}
       disabled={cont.disabled}
       aria-busy={cont.loading || undefined}
       aria-haspopup={cont.blocked ? "dialog" : undefined}
       onClick={cont.disabled ? undefined : cont.onClick}
     >
-      {cont.loading ? <span className="qz-btn-ring" aria-hidden /> : null}
       {cont.label}
     </button>
   );

@@ -6,7 +6,7 @@ import { grantStudioSession } from "../lib/studioAccess.server";
 import { consumeMagicLink } from "../lib/studioMagicLink.server";
 
 // BIC-2 B1 — de-nested route (studio_ prefix escapes the studio.tsx layout),
-// so it must link the admin sheet itself (body reset + Mona Sans).
+// so it must link the admin sheet itself (body reset + Figtree).
 export const links: LinksFunction = () => adminStyleLinks;
 
 // Magic-link landing route: consumes the single-use token from the email and

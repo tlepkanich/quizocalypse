@@ -362,7 +362,7 @@ export function QzTooltip({
             position: "absolute",
             top: "calc(100% + 6px)",
             left: 0,
-            zIndex: 40, // --qz-z-dropdown
+            zIndex: 40, // topbar tier (--qz-z-topbar); the old --qz-z-dropdown token was deleted
             background: "var(--qz-ink)",
             color: "var(--qz-paper)",
             padding: "10px 12px",
