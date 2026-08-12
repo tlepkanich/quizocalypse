@@ -69,12 +69,18 @@ Original items, for the record:
   fourth Build-panel tab (Add · Layers · Background · Templates) in
   `UnifiedWorkspace.tsx`; `VibeTemplateSelector` applies wholesale through
   the same validated writeTokens seam as BuilderDesignPanel (quiz scope).
-- **Selection-ring type tag** ("Text" tag on the selected block): needs an
-  edit-mode change under app/components/runtime/inspect.ts — runtime-frozen
-  in this program. Prove shopper DOM unaffected before building.
-- **Per-side spacing** ("Each side on its own", s16 inspector): BlockStyle
-  stores ONE uniform padding; per-side needs schema surgery + a
-  runtime/blockStyle.ts change.
+- ~~**Selection-ring type tag** ("Text" tag on the selected block)~~ —
+  **BUILT (QRTZ-F3, 2026-08-12)**: `inspectAttrs` adds `data-qz-sel-tag`
+  only when onInspect is present AND the target is selected (returns `{}`
+  on /q); the tag renders via `[data-qz-sel-tag]::after` in quizocalypse.css
+  (admin sheet — /q loads quiz-runtime.css alone), names from
+  `INSPECT_PART_NAME` (PALETTE_BLOCKS vocabulary).
+- ~~**Per-side spacing** ("Each side on its own", s16 inspector)~~ —
+  **BUILT (QRTZ-F3, 2026-08-12)**: optional `padding_top/bottom/left/right`
+  on BlockStyle (never defaulted); per-side wins over uniform `padding` in
+  blockStyleToCss (absent = byte-identical, pinned by a frozen-legacy
+  equality test); LayoutTab's Space group grew the "Each side on its own"
+  disclosure over the existing setNodeLayout write path.
 - **Draft pill count** ("Draft · 10 unpublished"): no unpublished-change
   count exists. Shipped the honest version (Draft / Unpublished changes,
   session-scoped). Cross-session detection needs publishedAt/updatedAt in

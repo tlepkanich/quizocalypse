@@ -271,6 +271,16 @@ function BlockFields({
   block: ContentBlock;
   onChange: (patch: Partial<ContentBlock>) => void;
 }) {
+  // QRTZ-F3 — "Each side on its own" (mock shared.mjs 681): the Space group's
+  // disclosure revealing four per-side padding inputs. Opens itself when a
+  // per-side override already exists so saved values are never hidden.
+  const [perSideOpen, setPerSideOpen] = useState<boolean>(
+    () =>
+      block.style.padding_top !== undefined ||
+      block.style.padding_bottom !== undefined ||
+      block.style.padding_left !== undefined ||
+      block.style.padding_right !== undefined,
+  );
   // R7-1 — a labeled color input + clear (divider/progress colors already exist
   // in the schema; this exposes them).
   const colorField = (label: string, value: string | undefined, key: string) => (
@@ -869,10 +879,11 @@ function BlockFields({
       {/* ── QRTZ-S4 — the mock inspector's grouped anatomy (shared.mjs s16:
           Space · Alignment · Type · Colour), each an uppercase-titled
           .insp-group over the SAME BlockStyle fields as before (blank/unset
-          = theme default; undefined strips the override). "Each side on its
-          own" is NOT built — BlockStyle stores one uniform `padding`, so
-          per-side values would be schema surgery (+ a runtime blockStyle.ts
-          change, which is off-limits). ── */}
+          = theme default; undefined strips the override). QRTZ-F3 added the
+          mock's "Each side on its own" disclosure: "Sides" is the uniform
+          `padding`, and the four revealed inputs write the per-side
+          padding_* overrides (each side wins over the uniform value at
+          render; blockStyle.ts). ── */}
       <div className="qz-insp-group">
         <p className="qz-insp-title">Space</p>
         <NumericControl
@@ -900,7 +911,7 @@ function BlockFields({
           }
         />
         <NumericControl
-          label="Padding"
+          label="Sides"
           value={block.style.padding}
           min={0}
           max={80}
@@ -911,6 +922,66 @@ function BlockFields({
             onChange({ style: { ...block.style, padding: n } } as Partial<ContentBlock>)
           }
         />
+        <button
+          type="button"
+          className="qz-insp-more-btn"
+          aria-expanded={perSideOpen}
+          onClick={() => setPerSideOpen((o) => !o)}
+        >
+          Each side on its own
+        </button>
+        {perSideOpen ? (
+          <>
+            <NumericControl
+              label="Top"
+              value={block.style.padding_top}
+              min={0}
+              max={80}
+              fallback={block.style.padding ?? 0}
+              allowEmpty
+              suffix="px"
+              onChange={(n) =>
+                onChange({ style: { ...block.style, padding_top: n } } as Partial<ContentBlock>)
+              }
+            />
+            <NumericControl
+              label="Bottom"
+              value={block.style.padding_bottom}
+              min={0}
+              max={80}
+              fallback={block.style.padding ?? 0}
+              allowEmpty
+              suffix="px"
+              onChange={(n) =>
+                onChange({ style: { ...block.style, padding_bottom: n } } as Partial<ContentBlock>)
+              }
+            />
+            <NumericControl
+              label="Left"
+              value={block.style.padding_left}
+              min={0}
+              max={80}
+              fallback={block.style.padding ?? 0}
+              allowEmpty
+              suffix="px"
+              onChange={(n) =>
+                onChange({ style: { ...block.style, padding_left: n } } as Partial<ContentBlock>)
+              }
+            />
+            <NumericControl
+              label="Right"
+              value={block.style.padding_right}
+              min={0}
+              max={80}
+              fallback={block.style.padding ?? 0}
+              allowEmpty
+              suffix="px"
+              onChange={(n) =>
+                onChange({ style: { ...block.style, padding_right: n } } as Partial<ContentBlock>)
+              }
+            />
+          </>
+        ) : null}
         <NumericControl
           label="Max width"
           value={block.style.max_width}

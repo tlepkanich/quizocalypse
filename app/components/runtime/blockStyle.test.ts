@@ -67,6 +67,110 @@ describe("blockStyleToCss", () => {
   });
 });
 
+// ── QRTZ-F3 — per-side padding ──────────────────────────────────────────────
+describe("blockStyleToCss per-side padding", () => {
+  it("maps each side and wins over the uniform value (longhand after shorthand)", () => {
+    const css = blockStyleToCss({
+      padding: 8,
+      padding_top: 20,
+      padding_bottom: 4,
+      padding_left: 12,
+      padding_right: 16,
+    });
+    expect(css.padding).toBe(8);
+    expect(css.paddingTop).toBe(20);
+    expect(css.paddingBottom).toBe(4);
+    expect(css.paddingLeft).toBe(12);
+    expect(css.paddingRight).toBe(16);
+    // Longhand keys must FOLLOW the shorthand so they win in React's
+    // insertion-order application and in the SSR style string.
+    const keys = Object.keys(css);
+    expect(keys.indexOf("padding")).toBeLessThan(keys.indexOf("paddingTop"));
+  });
+  it("a single side works without the uniform value", () => {
+    const css = blockStyleToCss({ padding_left: 24 });
+    expect(css.paddingLeft).toBe(24);
+    expect(css.padding).toBeUndefined();
+  });
+  it("counts as a visible effect for isEmptyBlockStyle", () => {
+    expect(isEmptyBlockStyle({ padding_top: 2 })).toBe(false);
+  });
+});
+
+// QRTZ-F3 equality pin — the dual-model invariant made checkable at the
+// mapping level: for any BlockStyle WITHOUT per-side fields, blockStyleToCss
+// must return an object deep-equal to the pre-QRTZ-F3 implementation's output
+// with the SAME key order (SSR serializes the style object in key order, so
+// order IS bytes). `legacy` below is a frozen copy of the mapping as it stood
+// before per-side padding landed — do not "sync" it with the live function.
+describe("blockStyleToCss legacy equality pin (docs without per-side fields)", () => {
+  function legacy(s: Parameters<typeof blockStyleToCss>[0]): Record<string, unknown> {
+    const out: Record<string, unknown> = {};
+    if (!s) return out;
+    if (s.align) out.textAlign = s.align;
+    if (typeof s.margin_top === "number") out.marginTop = s.margin_top;
+    if (typeof s.margin_bottom === "number") out.marginBottom = s.margin_bottom;
+    if (typeof s.padding === "number") out.padding = s.padding;
+    if (typeof s.max_width === "number") {
+      out.maxWidth = s.max_width;
+      if (s.margin_top === undefined && s.margin_bottom === undefined) {
+        out.marginLeft = "auto";
+        out.marginRight = "auto";
+      }
+    }
+    const color = sanitizeHexColor(s.text_color);
+    if (color) out.color = color;
+    const bg = sanitizeHexColor(s.background);
+    if (bg) out.background = bg;
+    if (typeof s.font_size === "number") out.fontSize = s.font_size;
+    if (typeof s.font_weight === "number") out.fontWeight = s.font_weight;
+    if (s.radius) out.borderRadius = s.radius === "square" ? "0px" : s.radius === "pill" ? "999px" : "10px";
+    if (typeof s.letter_spacing === "number") out.letterSpacing = s.letter_spacing;
+    return out;
+  }
+
+  const cases: Parameters<typeof blockStyleToCss>[0][] = [
+    undefined,
+    {},
+    { align: "center" },
+    { padding: 0 },
+    { padding: 8 },
+    { margin_top: 12, margin_bottom: 4, padding: 8 },
+    { max_width: 480 },
+    { max_width: 480, margin_top: 6 },
+    { text_color: "#222", background: "#fafafa" },
+    { text_color: "notacolor" },
+    { font_size: 18, font_weight: 700, letter_spacing: 0.5 },
+    { radius: "square" },
+    { radius: "rounded" },
+    { radius: "pill" },
+    {
+      align: "right",
+      margin_top: 1,
+      margin_bottom: 2,
+      padding: 3,
+      max_width: 300,
+      text_color: "#abc",
+      background: "#def",
+      font_size: 14,
+      font_weight: 500,
+      radius: "rounded",
+      letter_spacing: -1,
+    },
+  ];
+
+  it("output is deep-equal to the frozen pre-change mapping", () => {
+    for (const s of cases) {
+      expect(blockStyleToCss(s)).toEqual(legacy(s));
+    }
+  });
+  it("key ORDER matches the frozen pre-change mapping (SSR byte order)", () => {
+    for (const s of cases) {
+      expect(Object.keys(blockStyleToCss(s))).toEqual(Object.keys(legacy(s)));
+    }
+  });
+});
+
 describe("isEmptyBlockStyle", () => {
   it("true for empty/undefined", () => {
     expect(isEmptyBlockStyle(undefined)).toBe(true);
