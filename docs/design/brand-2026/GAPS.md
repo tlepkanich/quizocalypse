@@ -167,3 +167,12 @@ Original items, for the record:
   shell; the standalone builder (.qz-bt-*) keeps three regions at 1280 ✓.
 - quartz-tokens.css line ~127's "eight ad-hoc points" prose is now stale —
   the twelve widths were migrated to 720/1024(/1023 gate)/1439-below-lg.
+
+### Noted at the QRTZ-O5 combine (2026-08-12)
+
+- Chapter labels skip `?locale=` overlays — pre-existing parity
+  (`section_label` was never in extractTranslatableStrings); follow-up: add
+  it to the translatable fields and re-derive labels from live nodes.
+- Builder preview shows the classic bar while published /q shows Chapters
+  (draft has no bake) — same drift class as the target-map bakes; a
+  render-time derivation in the preview would close it.
