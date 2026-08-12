@@ -4,7 +4,7 @@ import { Link, useFetcher, useNavigate, useSearchParams } from "@remix-run/react
 import { TitleBar } from "@shopify/app-bridge-react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { QzPage, QzPageHeader, QzButton, QzBanner } from "../qz";
-import { experienceTypeOf, type Quiz, type ContentBlockType } from "../../lib/quizSchema";
+import { DesignTokens, experienceTypeOf, type Quiz, type ContentBlockType } from "../../lib/quizSchema";
 import { validateQuiz, validateQuizWarnings, type NodeIssue } from "../../lib/quizValidation";
 import { orderFlow } from "../../lib/flowOrder";
 import { reconcileBucketsToResultNodes } from "../../lib/bucketReconcile";
@@ -50,6 +50,8 @@ import { ExperiencePanel } from "./ExperiencePanel";
 import { QzDrawer } from "../qz-overlays";
 import { BuilderLogicView, QuizSettingsView } from "./BuilderSettings";
 import { BuilderDesignPanel } from "./BuilderDesignPanel";
+import { VibeTemplateSelector } from "./VibeTemplateSelector";
+import type { VibeTemplate } from "../../lib/vibeTemplates";
 import { BLOCK_DRAG_MIME, BlockIcon, BuilderBlocksPalette, currentLayout, insertBlock } from "./BuilderBlocksPalette";
 import { BuilderBackgroundTab } from "./BuilderBackgroundTab";
 import { BuilderLayersTab } from "./BuilderLayersTab";
@@ -331,9 +333,10 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
   // ai/code tools moved to the Assist drawer + the Settings section.
   const [tool, setTool] = useState<"editor" | "theme">("editor");
   // QB-4b → QZY-7: the Build tab's left panel (build-tab spec §2) — Add
-  // (palette) · Layers (current screen's blocks) · Background. The step LIST
-  // left this panel: the screen carousel under the canvas is the navigator.
-  const [editorSubtab, setEditorSubtab] = useState<"add" | "layers" | "background">("add");
+  // (palette) · Layers (current screen's blocks) · Background · Templates
+  // (QRTZ-O6, mock s16 ed-tabs). The step LIST left this panel: the screen
+  // carousel under the canvas is the navigator.
+  const [editorSubtab, setEditorSubtab] = useState<"add" | "layers" | "background" | "templates">("add");
   // BLD-3 — the mock's libhd search (host-rendered; filters the Add palette).
   const [libQuery, setLibQuery] = useState("");
   // BLD-1 — the Build view's canvas mode (standalone only): "screen" is the
@@ -1416,6 +1419,17 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
       </div>
     );
 
+    // QRTZ-O6 — mock s16 ed-tabs: the Templates panel tab applies a vibe
+    // template wholesale through the SAME validated seam the Theme view's
+    // BuilderDesignPanel uses (safeParse, then whole-doc commit →
+    // useQuizDraft autosave). Quiz scope only — the rec-page scope stays a
+    // Theme-view concern. Never commit an invalid token set (SSR 500s).
+    const onApplyVibeTemplate = (t: VibeTemplate) => {
+      const parsed = DesignTokens.safeParse(t.tokens);
+      if (!parsed.success) return;
+      commit({ ...doc, design_tokens: parsed.data as Quiz["design_tokens"] });
+    };
+
     // BLD-3 — the mock's .lib anatomy: a .libhd (Add · Layers · Background
     // tabs over the search field) above a scrolling .libbody. The mock's
     // search lives in the header and filters the component palette.
@@ -1431,6 +1445,9 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
             </button>
             <button type="button" aria-pressed={editorSubtab === "background"} onClick={() => setEditorSubtab("background")}>
               Background
+            </button>
+            <button type="button" aria-pressed={editorSubtab === "templates"} onClick={() => setEditorSubtab("templates")}>
+              Templates
             </button>
           </div>
           <div className="qz-bt-search">
@@ -1461,6 +1478,13 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
               node={blockTarget}
               commit={commit}
               onSelectNode={select}
+            />
+          ) : editorSubtab === "templates" ? (
+            // QRTZ-O6 — mock s16 ed-tabs: the vibe-template cards, applied
+            // wholesale via the validated design-apply seam above.
+            <VibeTemplateSelector
+              currentTokens={doc.design_tokens}
+              onApply={onApplyVibeTemplate}
             />
           ) : (
             // QZY-11 — PER-SCREEN backgrounds (§8); the quiz-wide default

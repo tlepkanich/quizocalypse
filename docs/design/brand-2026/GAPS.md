@@ -45,6 +45,11 @@ Original items, for the record:
    sheet went 69 → 50 refs. The ~45 leftover label-style refs sit inside
    sibling screen sections (list in the QRTZ-S2 commit) — retuning them to
    the 700/uppercase/+.09em label style is a per-screen design pass.
+   → **BUILT (QRTZ-O6, 2026-08-12)**: all 51 remaining refs retuned —
+   label sites to Figtree 700 / +.09em / uppercase (sizes kept), numeric
+   sites (number chips, ords, counts, the blurred URL, the discount code,
+   seconds) to --qz-font-body + font-variant-numeric: tabular-nums. The
+   --qz-font-mono token is DELETED (zero refs anywhere incl. runtime).
 4. **The shopper progress bar** (§18.4). Five variants built in the handoff,
    none chosen. Runtime surface — deliberately NOT touched. The handoff
    recommends Chapters.
@@ -60,8 +65,10 @@ Original items, for the record:
 
 ## B. Unported features (exist in the mock, not built — for future agents)
 
-- **Editor Templates panel tab** (s16): mock's third panel tab. The product
-  keeps Add/Layers/Background; `VibeTemplateSelector.tsx` exists unwired.
+- ~~**Editor Templates panel tab** (s16)~~ — **BUILT (QRTZ-O6, 2026-08-12)**:
+  fourth Build-panel tab (Add · Layers · Background · Templates) in
+  `UnifiedWorkspace.tsx`; `VibeTemplateSelector` applies wholesale through
+  the same validated writeTokens seam as BuilderDesignPanel (quiz scope).
 - **Selection-ring type tag** ("Text" tag on the selected block): needs an
   edit-mode change under app/components/runtime/inspect.ts — runtime-frozen
   in this program. Prove shopper DOM unaffected before building.
@@ -153,9 +160,9 @@ Original items, for the record:
 - Builder route has no viewport gate and horizontally overflows below ~760px
   — PRE-EXISTING (overflows both stacked and unstacked, so not the boundary
   move); consider extending the `.qz-viewport-notice` gate to `studio_.$id`.
-- The funnel tip's "Use this" primary renders FILLED violet; the mock's
-  `.tip .btn-primary` is outlined (surface bg, accent-ink text, accent
-  border) — one-rule polish for the O phase.
+- ~~The funnel tip's "Use this" primary renders FILLED violet~~ — **BUILT
+  (QRTZ-O6)**: restyled to the mock's outlined `.tip .btn-primary` (paper
+  bg, accent-ink text, accent border, hover accent-wash).
 - `.qz-unified`'s below-lg panel drop applies to the embedded /app twin's
   shell; the standalone builder (.qz-bt-*) keeps three regions at 1280 ✓.
 - quartz-tokens.css line ~127's "eight ad-hoc points" prose is now stale —

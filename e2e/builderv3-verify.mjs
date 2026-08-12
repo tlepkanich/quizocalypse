@@ -307,6 +307,12 @@ ok("hide marks the row (kept, not deleted)",
 await page.locator('.qz-layers-actions button[aria-label="Show block"]').first().click();
 await page.waitForTimeout(400);
 ok("show restores it", (await page.locator(".qz-layers-row.is-hidden").count()) === 0);
+// ── QRTZ-O6: Templates panel tab (mock s16 ed-tabs) — cards render; NOT
+// clicked (an apply would rewrite the fixture's design_tokens). ─────────────
+await page.locator('[aria-label="Build panel"] button', { hasText: "Templates" }).click();
+await page.waitForTimeout(300);
+ok("Templates tab renders the 4 vibe-template cards",
+  (await page.locator('.qz-builder-panel button[aria-label$=" theme"], .qz-builder-panel button[aria-label*=" theme,"]').count()) === 4);
 await page.locator('[aria-label="Build panel"] button', { hasText: "Background" }).click();
 await page.waitForTimeout(300);
 ok("Background tab renders the page settings",
