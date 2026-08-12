@@ -43,7 +43,11 @@ export interface TranslatableString {
 // Per-node-type single text fields (mirrors the runtime's render surface).
 const NODE_TEXT_FIELDS: Record<string, readonly string[]> = {
   intro: ["headline", "subtext", "button_label"],
-  question: ["text", "education_card_before"],
+  // section_label: QRTZ-F2 — shopper-visible twice (the ProgressTrail's chapter
+  // eyebrow reads it live off the node; the Chapters bar reads the labels BAKED
+  // into `chapters` — re-labeled below from these same keys). Additive: existing
+  // translation tables simply gain the key on their next translation run.
+  question: ["text", "education_card_before", "section_label"],
   email_gate: ["headline", "subtext"],
   result: ["headline", "subtext", "cta_label"],
   message: ["text"],
@@ -216,10 +220,31 @@ export function applyTranslations(
     (doc.launcher_config as { label?: unknown })?.label,
   );
 
+  // QRTZ-F2 — re-label the publish-baked Chapters (QRTZ-O5) through the SAME
+  // overlay the question nodes' section_label gets. A chapter's label is, by
+  // construction (quizPublish.deriveChapters), the trimmed section_label of
+  // its FIRST question, so the translated label is that node's translated
+  // section_label. Never re-derives chapters — only re-labels the baked ones;
+  // a missing/empty/tag-broken translation keeps the baked English label
+  // PER-CHAPTER. Docs without baked chapters (every legacy doc, every draft)
+  // skip this entirely — the key stays absent and the doc passes through
+  // deep-equal unchanged.
+  const chapters = doc.chapters?.map((c) => {
+    const firstId = c.question_ids[0];
+    const node = firstId ? doc.nodes.find((n) => n.id === firstId) : undefined;
+    const source =
+      node?.type === "question" ? node.data.section_label : undefined;
+    const translated = firstId
+      ? pick(`node.${firstId}.section_label`, source)?.trim()
+      : undefined;
+    return translated ? { ...c, label: translated } : c;
+  });
+
   return {
     ...doc,
     nodes,
     node_layouts,
+    ...(chapters ? { chapters } : {}),
     ...(launcherLabel !== undefined
       ? { launcher_config: { ...doc.launcher_config, label: launcherLabel } }
       : {}),

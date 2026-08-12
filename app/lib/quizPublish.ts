@@ -215,6 +215,24 @@ export function deriveChapters(doc: QuizDoc): PublishedChapter[] | undefined {
   return chapters;
 }
 
+// QRTZ-F2 — the DRAFT-time analog of the Chapters bake (the draftDeciderBake /
+// bakeResultPages pattern): builder previews feed QuizRuntime a draft doc that
+// lacks the publish-time `chapters` field, so published /q showed the Chapters
+// bar while the preview showed the classic bar. This closes that drift with
+// gating IDENTICAL to publish: same deriveChapters (decider-only, ≥2 chapters,
+// every bail), same strip-then-re-derive (a stale draft-side `chapters` value
+// can never leak into the preview, mirroring publishQuiz). Legacy drafts pass
+// through by REFERENCE — chapters stays absent by construction. Pure +
+// preview-only; never persisted.
+export function withDraftChapters(doc: QuizDoc): QuizDoc {
+  const chapters = deriveChapters(doc);
+  if (chapters) return { ...doc, chapters };
+  if (doc.chapters === undefined) return doc;
+  const { chapters: _stale, ...rest } = doc;
+  void _stale;
+  return rest;
+}
+
 // Cap a plain-text product description for the result card (spec §2). Collapses
 // whitespace and trims to a sentence-ish length so cards stay scannable.
 export function shortDescription(text: string, maxChars = 200): string {

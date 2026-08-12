@@ -170,9 +170,17 @@ Original items, for the record:
 
 ### Noted at the QRTZ-O5 combine (2026-08-12)
 
-- Chapter labels skip `?locale=` overlays — pre-existing parity
-  (`section_label` was never in extractTranslatableStrings); follow-up: add
-  it to the translatable fields and re-derive labels from live nodes.
-- Builder preview shows the classic bar while published /q shows Chapters
-  (draft has no bake) — same drift class as the target-map bakes; a
-  render-time derivation in the preview would close it.
+- ~~Chapter labels skip `?locale=` overlays~~ — **BUILT (QRTZ-F2)**:
+  `section_label` joined extractTranslatableStrings (additive — tables gain
+  the key on their next translation run), and applyTranslations now re-labels
+  baked `chapters[].label` from the FIRST question's translated section_label
+  (per-chapter English fallback; docs without baked chapters pass through
+  deep-equal — never re-derives, only re-labels).
+- ~~Builder preview shows the classic bar while published /q shows Chapters~~
+  — **BUILT (QRTZ-F2)**: `withDraftChapters` (quizPublish) injects the
+  draft-derived bake into Step5Preview + RecPagePreview's preview docs (same
+  deriveChapters + bails as publish, stale-draft strip included), and the
+  `.qz-chapters` rules are mirrored into quizocalypse.css (the canvas never
+  loads quiz-runtime.css — keep the two blocks in sync). The funnel's
+  PhoneCanvas/PhoneScreen is a bespoke mock (no QuizRuntime, no runtime
+  progress bar) — no injection needed there.

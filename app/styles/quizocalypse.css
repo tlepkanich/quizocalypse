@@ -10107,3 +10107,39 @@ button.qz-pb-row:hover { background: var(--qz-cream-2); }
   margin: 0; padding-top: 9px; border-top: 1px solid var(--qz-cream-2);
   font-size: 11.5px; line-height: 1.5; color: var(--qz-ink-4);
 }
+
+/* ═══ QRTZ-F2 — Chapters bar inside ADMIN previews ═══ */
+/* Step5Preview / RecPagePreview now inject draft-derived `chapters` into the
+   preview doc (withDraftChapters), so the runtime's ChaptersBar renders inside
+   the builder canvas — which loads THIS sheet, never quiz-runtime.css (BIC-2
+   B1). These rules MIRROR quiz-runtime.css's .qz-chapters block verbatim
+   (keep the two in sync); they match zero elements on every other admin
+   screen. Merchant runtime tokens on purpose: the canvas shows the shopper's
+   quiz, so the fill stays the merchant CTA color, never the Wiskr accent. */
+.qz-chapters {
+  display: flex; gap: 10px;
+  list-style: none; margin: 0; padding: 0;
+  width: 100%; max-width: 640px;
+}
+.qz-chapters li { flex: 1; display: grid; gap: 6px; min-width: 0; }
+.qz-chapters span {
+  font-size: 9.5px; letter-spacing: .04em; text-transform: uppercase;
+  font-weight: 700; font-family: var(--qz-font-body, inherit);
+  color: var(--qz-color-muted, #666); opacity: .55;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  text-align: left;
+}
+.qz-chapters li.is-now span { opacity: 1; color: var(--qz-color-text, inherit); }
+.qz-chapters i {
+  display: block; height: 5px; border-radius: 3px; overflow: hidden;
+  background: color-mix(in srgb, var(--qz-color-text, #1F1F1F) 18%, transparent);
+}
+.qz-chapters b {
+  display: block; width: 100%; height: 100%; border-radius: 3px;
+  background: var(--qz-color-primary);
+  transform-origin: left center;
+  transition: transform var(--qz-dur, 170ms) var(--qz-ease, ease);
+}
+@media (prefers-reduced-motion: reduce) {
+  .qz-chapters b { transition: none; }
+}

@@ -6,6 +6,7 @@ import {
   bakeResultPages,
   collectRecommendableProductIds,
   deriveChapters,
+  withDraftChapters,
   publishQuiz,
   boundedAiCall,
   AI_COPY_TIMEOUT_MS,
@@ -915,6 +916,46 @@ describe("deriveChapters (QRTZ-O5 Chapters bake)", () => {
       "decider",
     );
     expect(deriveChapters(doc)).toBeUndefined();
+  });
+
+  describe("withDraftChapters (QRTZ-F2 preview parity)", () => {
+    it("injects derived chapters into a decider draft (what the preview doc carries)", () => {
+      const doc = draft(
+        [
+          { id: "q1", role: "decides", label: "Your skin" },
+          { id: "q2", label: "Routine" },
+        ],
+        "decider",
+      );
+      const preview = withDraftChapters(doc);
+      expect(preview.chapters).toEqual([
+        { label: "Your skin", question_ids: ["q1"] },
+        { label: "Routine", question_ids: ["q2"] },
+      ]);
+      expect(preview.nodes).toBe(doc.nodes); // injection only — nothing else moves
+    });
+
+    it("returns a legacy draft by REFERENCE with chapters absent", () => {
+      const doc = draft([
+        { id: "q1", label: "Your skin" },
+        { id: "q2", label: "Routine" },
+      ]);
+      const preview = withDraftChapters(doc);
+      expect(preview).toBe(doc);
+      expect(preview.chapters).toBeUndefined();
+    });
+
+    it("strips a stale draft-side chapters value when nothing derives (publish parity)", () => {
+      const doc = draft([{ id: "q1", role: "decides" }], "decider"); // no labels → bail
+      const stale = {
+        ...doc,
+        chapters: [
+          { label: "Ghost", question_ids: ["q1"] },
+          { label: "Ghost 2", question_ids: ["q1"] },
+        ],
+      };
+      expect(withDraftChapters(stale).chapters).toBeUndefined();
+    });
   });
 });
 
