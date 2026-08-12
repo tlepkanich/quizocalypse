@@ -7438,14 +7438,13 @@ tr.qz-ltab-qstart td { border-top: 2px solid var(--qz-rule); }
 .qz-ltab-chip.hue-4 { background: var(--qz-pal-teal-wash); color: var(--qz-src-col); }
 .qz-ltab-chip.hue-5 { background: var(--qz-pal-blue-wash); color: var(--qz-pal-blue); }
 
-/* ── P3 — the five popovers (§6) + interactive cells ── */
-.qz-ltab-pill-btn, .qz-ltab-chip-btn, .qz-ltab-cellbtn {
+/* ── P3 — the cell popovers (§6.4/§6.5) + interactive cells ── */
+.qz-ltab-pill-btn, .qz-ltab-cellbtn {
   font: inherit; cursor: pointer; border: none; background: none; padding: 0;
   text-align: left;
 }
 .qz-ltab-pill-btn { font-size: 10px; font-weight: 700; }
-.qz-ltab-chip-btn { font-size: 11.5px; }
-.qz-ltab-pill-btn:hover, .qz-ltab-chip-btn:hover { filter: brightness(0.96); }
+.qz-ltab-pill-btn:hover { filter: brightness(0.96); }
 .qz-ltab-cellbtn { display: block; width: 100%; border-radius: 6px; padding: 1px 4px; margin: -1px -4px; }
 .qz-ltab-cellbtn:hover { background: var(--qz-cream-2); }
 .qz-ltab-menu { display: flex; flex-direction: column; gap: 1px; padding: 6px; min-width: 240px; max-height: min(52vh, 460px); overflow-y: auto; }
@@ -7461,12 +7460,8 @@ tr.qz-ltab-qstart td { border-top: 2px solid var(--qz-rule); }
 }
 .qz-ltab-menu-row:hover { background: var(--qz-cream-2); }
 .qz-ltab-menu-row.is-current { background: var(--qz-accent-wash); color: var(--qz-accent-ink); }
-.qz-ltab-menu-row.is-indent { padding-left: 22px; }
-.qz-ltab-menu-row:disabled { color: var(--qz-ink-25); cursor: default; }
-.qz-ltab-menu-row:disabled:hover { background: none; }
 .qz-ltab-menu-row-main { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .qz-ltab-menu-row-sub { flex: 0 0 auto; font-size: 11px; color: var(--qz-ink-4); font-variant-numeric: tabular-nums; }
-.qz-ltab-menu-section { display: flex; flex-direction: column; gap: 1px; border-top: 1px solid var(--qz-cream-2); padding-top: 4px; margin-top: 3px; }
 .qz-ltab-menu-chips { display: flex; flex-wrap: wrap; gap: 4px; padding: 4px 8px; }
 .qz-ltab-menu-chip {
   font: inherit; font-size: 10.5px; font-weight: 600; cursor: pointer;
@@ -9328,14 +9323,8 @@ html[data-theme="dark"] {
   font-size: 12px; color: var(--qz-ink-3); line-height: 1.5;
 }
 .qz-ltab-menu-foot b { color: var(--qz-ink); font-weight: 600; }
-/* Attribute picker (mock .ap): per-kind tab counts · example values ·
-   low-coverage flag · explicit Cancel/Use commit. */
-.qz-ltab-menu-chipcount { font-size: 10px; opacity: 0.7; font-variant-numeric: tabular-nums; }
-.qz-ltab-menu-row.has-vals { flex-wrap: wrap; }
-.qz-ltab-menu-row-vals {
-  width: 100%; font-size: 11px; color: var(--qz-ink-4);
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-}
+/* Attribute picker (mock .ap): low-coverage flag + coverage note — re-homed
+   into the question window by QRTZ-D2 (field group headers + bank footer). */
 .qz-ltab-menu-thin {
   display: inline-block; margin-left: 7px; padding: 0 6px; border-radius: 5px;
   background: var(--qz-warn-wash); color: var(--qz-warn);
@@ -9343,10 +9332,6 @@ html[data-theme="dark"] {
   font-size: 10px; font-weight: 600; vertical-align: 1px;
 }
 .qz-ltab-menu-covthin { color: var(--qz-warn); font-weight: 600; }
-.qz-ltab-menu-apfoot {
-  display: flex; align-items: center; gap: 10px;
-  margin-top: 6px; padding: 9px 8px 4px; border-top: 1px solid var(--qz-rule);
-}
 .qz-ltab-menu-apnote { flex: 1 1 auto; font-size: 11.5px; color: var(--qz-ink-3); line-height: 1.45; }
 .qz-ltab-menu-apnote b { color: var(--qz-ink); font-weight: 600; }
 /* ═══ QRTZ-S1 — rail + home ═══════════════════════════════════════════════
@@ -9992,3 +9977,26 @@ button.qz-pb-row:hover { background: var(--qz-cream-2); }
    (additive overrides; the source blocks belong to earlier phases) ── */
 [data-qz-surface="editor"] .qz-bt-seg button[aria-pressed="true"] { box-shadow: 0 1px 2px rgba(32, 28, 46, .10); }
 [data-qz-surface="editor"] .qz-bt-comp:hover:not(:disabled) { box-shadow: 0 2px 8px rgba(32, 28, 46, .10); }
+
+/* ═══ QRTZ-D2 — S6 re-home: role footer + coverage in the question window ═══
+   GAPS §C1 — the S6 role-popover/attribute-picker enrichments landed in
+   LogicTabMenus components orphaned by LOGIC-TAB P10/P11 (now deleted); the
+   live surface is QuestionWindow. Reuses the S6 classes .qz-ltab-menu-thin /
+   -covthin / -apnote; below are only the new holders. ═══════════════════ */
+/* The spine's one-decider sentence (mock .pop-foot: border-top, quiet). */
+.qz-qwin-rolefoot {
+  margin-top: 10px; padding: 9px 2px 0; border-top: 1px solid var(--qz-cream-2);
+  font-size: 11.5px; color: var(--qz-ink-4); line-height: 1.5; text-align: center;
+}
+/* The filter bank's pinned footer (mock .ap-foot, informational — the
+   window click-commits, so no Cancel/Use pair). */
+.qz-qwin-covfoot {
+  flex: 0 0 auto; margin-top: 6px; padding: 8px 2px 0;
+  border-top: 1px solid var(--qz-rule);
+}
+/* Field group headers: source key + coverage read as data, not label. */
+.qz-qwin-covkey {
+  margin-left: 7px; text-transform: none; letter-spacing: 0; font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+.qz-ltab-menu-group .qz-ltab-menu-thin { text-transform: none; letter-spacing: 0; }

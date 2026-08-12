@@ -673,12 +673,45 @@ export function QuestionWindow({
       const restingCols = colRows.filter((r) => !shown.has(r.key));
       const rest =
         plainTagRows.length + Math.max(0, restingFv.length - 40) + Math.max(0, restingCols.length - 40);
+      // QRTZ-D2 (mock .ap; GAPS §C1) — the resting field values group PER
+      // FIELD, so the header teaches coverage at the moment of choice: source
+      // key · covered/total · the low-coverage flag (<50% — an attribute most
+      // products lack silently drops the rest from every result). Same rows,
+      // same toggles, same 40-row budget as the old flat "Field values" group.
+      const fieldGroups: ReactNode[] = [];
+      let fvBudget = 40;
+      for (const f of fields) {
+        if (fvBudget <= 0) break;
+        const list = restingFv.filter((r) => r.field === f.field);
+        if (list.length === 0) continue;
+        const take = list.slice(0, fvBudget);
+        fvBudget -= take.length;
+        const thin = total > 0 && f.coverage / total < 0.5;
+        const key = f.field === "ptype" ? null : f.field.replace(/^(mf|tag|vo):/, "");
+        const showKey = key && key.toLowerCase() !== f.label.toLowerCase() ? key : null;
+        fieldGroups.push(
+          <span key={f.field}>
+            {renderGroup(
+              <>
+                {f.label}
+                <span className={`qz-qwin-covkey${thin ? " qz-ltab-menu-covthin" : ""}`}>
+                  {showKey ? `${showKey} · ` : ""}
+                  {f.coverage}/{total}
+                </span>
+                {thin ? <span className="qz-ltab-menu-thin">low coverage</span> : null}
+              </>,
+              take,
+              take.length,
+            )}
+          </span>,
+        );
+      }
       return (
         <>
           {anyRow}
           {selectedGroup}
           {renderGroup(`Suggested for "${a.text}"`, suggested, 8)}
-          {renderGroup("Field values", restingFv, 40)}
+          {fieldGroups}
           {renderGroup("Collections", restingCols, 40)}
           {rest > 0 ? (
             <div className="qz-qwin-note">Type to search {rest} more — every tag.</div>
@@ -899,6 +932,13 @@ export function QuestionWindow({
                 Map {unmapped} answer{unmapped === 1 ? "" : "s"} for me
               </button>
             ) : null}
+            {/* QRTZ-D2 (mock .pop-foot; GAPS §C1) — the one-decider rule in
+                the product's locked vocabulary, re-homed from the orphaned S6
+                role menu. */}
+            <div className="qz-qwin-rolefoot">
+              One question picks the starting set. Every other narrows on a
+              single product attribute.
+            </div>
           </section>
 
           {/* ── right: the one index, per role ── */}
@@ -959,6 +999,16 @@ export function QuestionWindow({
                 <div className="qz-crm-scroll">
                   {role === "decides" ? decidesBank() : filterBank()}
                 </div>
+                {/* QRTZ-D2 (mock .ap-foot; GAPS §C1) — informational only:
+                    the window click-commits, so no Cancel/Use pair. */}
+                {role === "filter" ? (
+                  <div className="qz-qwin-covfoot">
+                    <span className="qz-ltab-menu-apnote">
+                      <b>Coverage matters:</b> a question can only narrow by
+                      data your products actually have.
+                    </span>
+                  </div>
+                ) : null}
               </>
             )}
           </section>
