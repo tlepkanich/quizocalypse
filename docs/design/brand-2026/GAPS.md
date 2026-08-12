@@ -66,31 +66,48 @@ reports. Companion to PORT-INVENTORY.md (the full element-level checklist).
   (`RoleMenuButton`/`StartingSetMenuButton`/`NarrowsMenuButton` are orphaned;
   `ProductCountButton`/`RouteMenuButton` in the same file ARE live and did
   ship). The popover work is written and tested — it needs re-homing.
-- **Dark-mode CSS deletion phase**: 5 inert blocks (the big
-  `html[data-theme="dark"]` token block ~line 276, three banner one-liners,
-  the bt-pane dark block) + historical dark comments.
-- **79 hardcoded `999px` pill literals** in quizocalypse.css stay round while
-  tokenized pills squared to 6px — a call-site sweep.
-- **13 `var(--qz-ink-1)` sites** (undefined token, pre-existing) → --qz-ink.
 - **Breakpoint migration**: 26 max-width queries at 12 ad-hoc widths →
   the three Quartz breakpoints (--qz-bp-sm/md/lg). Locations greppable.
-- **`--qz-spring` bounce curve** survives at 13 sites against the one-curve
-  rule; `body[data-qz]` is still font-weight 500 vs Quartz's 400 body.
-- **Two loading-button patterns** coexist: `.is-loading`+`.qz-btn-ring`
-  (span, S2) and `.qz-btn-loading::before` (pseudo, S4). Unify on one.
-- **Sticky Overview header offset** is a hardcoded 58px; should read a
-  `--qz-topbar-h` token.
-- **Latent focus-visible specificity trap**: pre-existing bare
-  `.class:focus-visible` rules (e.g. `.qz-ql-adel`, ~css:3094) are
-  out-specified by `body[data-qz] :focus-visible` — same bug S2 fixed for
-  buttons.
+  Deliberately deferred past QRTZ-D1 — needs per-screen visual verification.
 - **Weight segmented control** maps 400/500/700 only; an AI-written 600
   shows no active segment.
 - **Mona Sans + shim + MonaSans.woff2** can be deleted the day
   quiz-runtime.css:33 changes its shell stack (runtime-frozen here).
-- Stale comments: `qz.tsx:358` names deleted `--qz-z-dropdown`;
-  studio_.login/verify comments still say Mona Sans; "GLOBAL-VIEWPORT §4"
-  comments describe the old 1160×672 expand.
+- **Customer Engagement (/studio/customers) keeps page-local hardcoded
+  colors** — the brown Win-back chip + gradient segment washes — never in
+  the mock's eight screens; needs its own Quartz pass.
+- **Toggle-switch tracks stay round** (four sites: `.qz-wswitch`,
+  `.qz-s4-sw`, `.qz-eng-tg`, `.qz-rg-sw`) — the mock draws no switch, and a
+  6px track around a 50% knob mismatches; squaring them is a design call,
+  not a sweep.
+- **Colour-alone focus rules left unscoped on purpose** (`.qz-rb-count-link`,
+  `.qz-cust-row`): their payload is `outline: none` + a wash — scoping them
+  above the global would strip the a11y ring. They need a real focus
+  treatment before the specificity fix applies.
+
+### Done in QRTZ-D1 (2026-08-12)
+
+- ~~Dark-mode CSS deletion phase~~ — all 5 inert `html[data-theme="dark"]`
+  blocks + historical dark comments deleted.
+- ~~79 hardcoded `999px` pill literals~~ — swept: 59 admin-chrome sites →
+  `var(--qz-radius-pill)`; 15 shopper-mimic preview sites keep the literal
+  (marked `/* shopper-mimic: stays round */`); 4 toggle tracks kept (above).
+- ~~13 `var(--qz-ink-1)` sites~~ — 12 sheet sites → `--qz-ink`; the 2 inline
+  TSX sites (BrandIdentityPanel/BuilderDesignPanel) carry explicit `#111111`
+  fallbacks and were left as-is.
+- ~~`--qz-spring` + 500 body~~ — 9 remaining spring sites → `--qz-ease`,
+  definition deleted; body is 400 per the Quartz ramp (segment-control rest
+  states re-pinned at 500 — the one inheritance the mock draws heavier).
+- ~~Two loading-button patterns~~ — unified on `.qz-btn-loading::before`;
+  the `.qz-btn-ring` span + keyframe deleted, funnel primary migrated.
+- ~~Sticky Overview header offset~~ — `--qz-topbar-h: 58px` added; the
+  Overview sticky head, the topbar height, and the rec-rail 74px offset
+  read it.
+- ~~Latent focus-visible specificity trap~~ — 14 bare losing rules scoped
+  under `body[data-qz]` (see the colour-alone exception above).
+- ~~Stale comments~~ — qz.tsx `--qz-z-dropdown`, studio_.login/verify
+  "Mona Sans" fixed; the "GLOBAL-VIEWPORT §4" 1160×672 comments were already
+  gone (removed by an earlier phase).
 
 ## D. Known minor behaviors (accepted at combine)
 

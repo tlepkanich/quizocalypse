@@ -8,7 +8,7 @@ import { hasStudioAccess } from "../lib/studioAccess.server";
 import { requestMagicLink } from "../lib/studioMagicLink.server";
 
 // BIC-2 B1 — de-nested route (studio_ prefix escapes the studio.tsx layout),
-// so it must link the admin sheet itself (body reset + Mona Sans).
+// so it must link the admin sheet itself (body reset + Figtree).
 export const links: LinksFunction = () => adminStyleLinks;
 
 // Magic-link login for the standalone /studio surface. The `studio_` filename
