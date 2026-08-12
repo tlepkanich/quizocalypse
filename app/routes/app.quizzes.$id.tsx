@@ -590,7 +590,7 @@ function HandlePlus({
         transform: top === undefined ? "translateY(-50%)" : "none",
         width: 18,
         height: 18,
-        borderRadius: 9,
+        borderRadius: "var(--qz-radius)",
         border: "1px solid var(--qz-rule)",
         background: "var(--qz-paper)",
         color: "var(--qz-ink)",
@@ -3128,7 +3128,7 @@ function ResultLogicEditor({
             style={{
               background: "var(--qz-cream-2)",
               border: "1px solid var(--qz-rule)",
-              borderRadius: 999,
+              borderRadius: "var(--qz-radius-pill)",
               padding: "3px 10px",
               fontSize: 11,
               cursor: "pointer",

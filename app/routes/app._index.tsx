@@ -442,7 +442,7 @@ export function ReleaseFeatures({ features }: { features: ReleaseFeature[] }) {
             style={{
               background: "var(--qz-cream-2)",
               border: "1px solid var(--qz-rule)",
-              borderRadius: 999,
+              borderRadius: "var(--qz-radius-pill)",
               padding: "4px 10px",
               fontSize: 11,
               fontFamily: "var(--qz-font-body)",

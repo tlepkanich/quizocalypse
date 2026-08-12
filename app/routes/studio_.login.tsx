@@ -59,7 +59,7 @@ const styles: Record<string, CSSProperties> = {
     width: 36,
     height: 36,
     flex: "none",
-    borderRadius: 10,
+    borderRadius: "var(--qz-radius-lg)",
     display: "inline-flex",
     alignItems: "center",
     justifyContent: "center",
