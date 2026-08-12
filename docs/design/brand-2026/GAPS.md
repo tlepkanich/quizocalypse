@@ -131,3 +131,16 @@ Original items, for the record:
 - Figtree is the standard Google latin subset — extended-latin scripts fall
   back to system faces (same posture as the old Quicksand setup).
 - GuidedPreview lost its ad-hoc 0.2 scale floor (canonical fit rule wins).
+
+### Noted at the QRTZ-B boundary pass (2026-08-12)
+
+- Builder route has no viewport gate and horizontally overflows below ~760px
+  — PRE-EXISTING (overflows both stacked and unstacked, so not the boundary
+  move); consider extending the `.qz-viewport-notice` gate to `studio_.$id`.
+- The funnel tip's "Use this" primary renders FILLED violet; the mock's
+  `.tip .btn-primary` is outlined (surface bg, accent-ink text, accent
+  border) — one-rule polish for the O phase.
+- `.qz-unified`'s below-lg panel drop applies to the embedded /app twin's
+  shell; the standalone builder (.qz-bt-*) keeps three regions at 1280 ✓.
+- quartz-tokens.css line ~127's "eight ad-hoc points" prose is now stale —
+  the twelve widths were migrated to 720/1024(/1023 gate)/1439-below-lg.
