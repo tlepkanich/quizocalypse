@@ -3,8 +3,9 @@
 // per the Grid Notebook redesign. Counts come from the app-route loader so
 // they stay live across screens.
 //
-// Mobile: under 900px the sidebar collapses to a horizontally-scrolling top
-// strip and the layout switches from row to column. The styles use
+// Mobile: at and under --qz-bp-md (1024px, the Quartz md breakpoint — this
+// surface's rail-collapse) the sidebar collapses to a horizontally-scrolling
+// top strip and the layout switches from row to column. The styles use
 // !important because the markup carries inline `style={...}` props inherited
 // from when this was desktop-only — easier than re-plumbing every callsite.
 
@@ -14,7 +15,7 @@ import type { ReactNode } from "react";
 import { FoxMark } from "./chrome/FoxMark";
 
 const SIDEBAR_MOBILE_CSS = `
-@media (max-width: 899px) {
+@media (max-width: 1024px) { /* --qz-bp-md */
   .qz-sidebar-layout {
     flex-direction: column !important;
   }
