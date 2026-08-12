@@ -493,7 +493,7 @@ function ExplainerStrip() {
           <span className="qz-s3-explainer-chips" aria-hidden>
             <span className="qz-s3-expchip">Rules</span>
             <span className="qz-s3-exparrow">→</span>
-            <span className="qz-s3-expchip is-gold">Picks the result ◆</span>
+            <span className="qz-s3-expchip is-decider">Picks the result</span>
             <span className="qz-s3-exparrow">→</span>
             <span className="qz-s3-expchip">Filters</span>
             <span className="qz-s3-exparrow">→</span>

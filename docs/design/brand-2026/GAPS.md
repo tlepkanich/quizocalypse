@@ -21,10 +21,26 @@ Original items, for the record:
 1. **The gold signature** (handoff §18.1). Aliased to neutrals by the token
    swap — the five gold moments now render grey. The handoff recommends:
    move them to violet, drop the ◆ glyph. The ◆ glyphs still render (as ink).
+   → **BUILT (QRTZ-OA, 2026-08-12)**: --qz-gold* re-pointed at the accent
+   family per role (text→accent-ink, fill sites→accent at the site,
+   wash/line→the washed pair) + re-declared under `[data-qz-surface=
+   "editor"]` (baked-token rule, so the stand-down still neutralizes them);
+   two mis-tagged WARN sites (.qz-rb-warn, .qz-gen-haltglyph.is-warn) moved
+   to the warn pair instead; preview review stars pinned amber
+   (shopper-mimic). ◆/◇ dropped from all owned markup; the logicTab/**,
+   OverviewLedger and ContextPanel occurrences stay for their owning
+   siblings (Decision 7 vocabulary).
 2. **The pastel set** (§18.2). Aliased to neutrals. Home's stat cards are now
    the mock's one-tone big-figure tiles. The category surfaces
    (sectionPalette.ts hues) degrade to the neutral ladder — the handoff
    recommends differentiating by shape and label, not hue.
+   → **BUILT (QRTZ-OA, 2026-08-12)**: sectionPalette keys are positional
+   slots on ONE neutral tone; step-3 cards carry `data-qz-cat` and draw a
+   6-way left-edge marker (solid / dashed / double rail / dot column /
+   end caps / hairline — QRTZ-OA CSS section); the decider keeps the
+   accent (solid accent bar). Nine zero-reference --qz-pal-* tokens
+   deleted (green/coral/pink/amber pairs + purple); blue/teal pairs and
+   all --qz-pastel-* keep live call sites and stay.
 3. **--qz-font-mono leftovers** (§18.3). All 19 inline sites triaged; the
    sheet went 69 → 50 refs. The ~45 leftover label-style refs sit inside
    sibling screen sections (list in the QRTZ-S2 commit) — retuning them to

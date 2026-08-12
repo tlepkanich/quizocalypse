@@ -39,9 +39,11 @@ describe("assignSectionColors (§5.3 — fixed order, gold = decider only)", () 
     expect([...m.values()]).not.toContain("gold");
   });
 
-  it("sectionColorVars maps keys onto the token families", () => {
-    expect(sectionColorVars("gold")).toEqual({ color: "var(--qz-gold)", wash: "var(--qz-gold-wash)" });
-    expect(sectionColorVars("teal")).toEqual({ color: "var(--qz-pal-teal)", wash: "var(--qz-pal-teal-wash)" });
+  it("sectionColorVars (QRTZ-OA): decider = accent pair; qualifiers share ONE neutral tone", () => {
+    expect(sectionColorVars("gold")).toEqual({ color: "var(--qz-accent-ink)", wash: "var(--qz-accent-wash)" });
+    expect(sectionColorVars("teal")).toEqual({ color: "var(--qz-ink-3)", wash: "var(--qz-cream-2)" });
+    // Hue differentiation is retired — every qualifier slot gets the same pair.
+    expect(sectionColorVars("green")).toEqual(sectionColorVars("pink"));
   });
 });
 

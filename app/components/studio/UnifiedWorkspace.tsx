@@ -681,7 +681,7 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
   // B7 — scoring-model badge/toggle (parity with the funnel Question Builder
   // header). Both models are saved; clicking swaps active↔alt. Rendered in both
   // the standalone Quizell top bar and the embedded QzPageHeader.
-  // LOGIC v2 (L2-10f): decider docs REPLACE it with the ◆ badge — the scoring
+  // LOGIC v2 (L2-10f): decider docs REPLACE it with the Decider badge — the scoring
   // swap writes scoring_model, a legacy field decider docs must not grow —
   // and legacy docs gain the explicit per-quiz "↑ Upgrade" wizard entry.
   const scoringBadge =
@@ -690,7 +690,7 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
         className="qz-ql-modelbadge"
         title="One deciding question picks the result; advanced rules can override it"
       >
-        ◆ Decider logic
+        Decider logic
       </span>
     ) : (
       (() => {

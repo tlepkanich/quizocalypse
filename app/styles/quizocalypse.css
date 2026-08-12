@@ -112,14 +112,17 @@
   --qz-crit-edge:   color-mix(in srgb, var(--qz-crit)   28%, transparent);
 
   /* ── Retired colour — quartz-tokens.css DECISIONS 1 and 2 ────────── */
-  /* Quartz has one accent. The gold signature, the pastel set and the
-     per-template palettes are all "spend colour everywhere" tokens it
-     removes. They are aliased to neutrals so the existing call sites
-     degrade quietly instead of throwing; each needs a real decision. */
-  --qz-gold:        var(--qz-ink-4);
-  --qz-gold-bright: var(--qz-ink-3);
-  --qz-gold-wash:   var(--qz-cream-2);
-  --qz-gold-line:   var(--qz-rule);
+  /* Quartz has one accent. QRTZ-OA (owner call 2026-08-12, GAPS §A.1):
+     the gold signature moves to the violet accent family per role —
+     gold=accent TEXT, bright=accent FILL, wash/line=the washed pair.
+     Fill-role call sites (solid decider chips) override at the site with
+     --qz-accent so text-role aliasing can stay accent-ink. The ◆ glyph is
+     DROPPED, not recolored. These derive from --qz-accent*, so they are
+     ALSO re-declared inside [data-qz-surface="editor"] (baked-token rule). */
+  --qz-gold:        var(--qz-accent-ink);
+  --qz-gold-bright: var(--qz-accent);
+  --qz-gold-wash:   var(--qz-accent-wash);
+  --qz-gold-line:   var(--qz-accent-line);
 
   --qz-pastel-violet: var(--qz-accent-wash);  --qz-pastel-violet-ink: var(--qz-accent-ink);
   --qz-pastel-rose:   var(--qz-cream-2);      --qz-pastel-rose-ink:   var(--qz-ink-3);
@@ -127,16 +130,14 @@
   --qz-pastel-amber:  var(--qz-cream-2);      --qz-pastel-amber-ink:  var(--qz-ink-3);
   --qz-pastel-sky:    var(--qz-cream-2);
 
-  /* NOTE: the green/coral washes look dead to a static grep but are LIVE —
-     sectionPalette.ts builds `var(--qz-pal-${key}-wash)` for all six
-     PaletteKey hues. Only the purple wash (not a PaletteKey) was dead. */
-  --qz-pal-green:  var(--qz-ok);      --qz-pal-green-wash:  var(--qz-live-wash);
-  --qz-pal-coral:  var(--qz-warn);    --qz-pal-coral-wash:  var(--qz-cream-2);
+  /* QRTZ-OA (Decision 2): sectionPalette.ts no longer builds
+     `var(--qz-pal-${key})` — categories differentiate by shape, not hue —
+     so the pal-* family was grep-swept. Deleted at zero references:
+     green(-wash), coral(-wash), pink(-wash), amber(-wash), purple. The
+     survivors below keep real static call sites (.qz-segcard-grid,
+     .qz-ltab-pill.is-narrow, .qz-ltab-chip.hue-4/5). */
   --qz-pal-blue:   var(--qz-accent);  --qz-pal-blue-wash:   var(--qz-accent-wash);
-  --qz-pal-pink:   var(--qz-ink-3);   --qz-pal-pink-wash:   var(--qz-cream-2);
-  --qz-pal-purple: var(--qz-accent);
   --qz-pal-teal:   var(--qz-ink-3);   --qz-pal-teal-wash:   var(--qz-cream-2);
-  --qz-pal-amber:  var(--qz-warn);    --qz-pal-amber-wash:  var(--qz-cream-2);
 
   --qz-priority:      var(--qz-warn);
   --qz-priority-wash: color-mix(in srgb, var(--qz-warn) 8%, var(--qz-paper));
@@ -246,9 +247,13 @@
   --qz-pastel-violet-ink: var(--qz-accent-ink);
   --qz-pal-blue: var(--qz-accent);
   --qz-pal-blue-wash: var(--qz-accent-wash);
-  --qz-pal-purple: var(--qz-accent);
   --qz-src-tag: var(--qz-accent-ink);
   --qz-src-tag-bg: var(--qz-accent-wash);
+  /* QRTZ-OA — the gold aliases now derive from the accent family too. */
+  --qz-gold:        var(--qz-accent-ink);
+  --qz-gold-bright: var(--qz-accent);
+  --qz-gold-wash:   var(--qz-accent-wash);
+  --qz-gold-line:   var(--qz-accent-line);
 }
 
 /* — Scope: wrap your admin app in <body data-qz="1"> to opt in
@@ -1998,10 +2003,11 @@ body[data-qz] .qz-rb-tip-x:focus-visible { outline: 2px solid var(--qz-accent); 
 }
 .qz-rb-chip-x:hover { color: var(--qz-ink); background: var(--qz-cream-2); }
 /* Mock rwarn (EXACT): the amber one-recommendation warning. Mock amber hexes
-   (#FAEEDA / #854F0B) → the DS gold pair. */
+   (#FAEEDA / #854F0B) → the DS warn pair (QRTZ-OA: this is a WARNING, not a
+   gold-signature moment — it must not follow the gold→violet re-point). */
 .qz-rb-warn {
-  margin: 0; font-size: 11.5px; line-height: 1.45; color: var(--qz-gold);
-  background: var(--qz-gold-wash); border-radius: 9px; padding: 8px 11px;
+  margin: 0; font-size: 11.5px; line-height: 1.45; color: var(--qz-warn);
+  background: var(--qz-warn-wash); border-radius: 9px; padding: 8px 11px;
 }
 
 /* Stepper */
@@ -2485,7 +2491,7 @@ body[data-qz] .qz-ql-target:focus-visible {
   grid-template-columns: 22px minmax(0, 1fr) 130px 24px;
 }
 .qz-ql-ahead.is-qualifier .qz-ql-ahead-skip { grid-column: 3; }
-/* Left-list gold ◆ marker on the decider. */
+/* Left-list decider marker (QRTZ-OA: the ◆ glyph is dropped — the dot alone). */
 .qz-ql-dot.is-decider {
   background: var(--ql-gold-bg);
   color: var(--ql-gold);
@@ -2496,11 +2502,12 @@ body[data-qz] .qz-ql-target:focus-visible {
   font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.3px;
-  /* Fallbacks: the badge also renders OUTSIDE the .qz-ql scope (the builder
-     top bar, L2-10f) where the --ql-gold trio is undefined. */
-  color: var(--ql-gold, #a16207);
-  background: var(--ql-gold-bg, #fefce8);
-  border: 1px solid var(--ql-gold-border, #eab308);
+  /* QRTZ-OA — the badge is a decider marker (gold moment): accent family.
+     It renders in the builder top bar, inside [data-qz-surface="editor"],
+     so the stand-down resolves it neutral there by design. */
+  color: var(--qz-accent-ink);
+  background: var(--qz-accent-wash);
+  border: 1px solid var(--qz-accent-line);
   border-radius: var(--qz-radius-pill);
   padding: 3px 10px;
   white-space: nowrap;
@@ -2615,15 +2622,16 @@ body[data-qz] .qz-ql-target:focus-visible {
   padding: 6px 8px;
   border-bottom: 1px solid #f3f4f6;
 }
-/* LOGIC v2 — the Flow map's gold decider marker (role only exists on v2 docs). */
+/* LOGIC v2 — the Flow map's decider marker (role only exists on v2 docs).
+   QRTZ-OA: gold moment → accent family (neutralized inside the editor scope). */
 .qz-lfm-decider {
   margin-left: 8px;
   font-size: 10.5px;
   font-weight: 800;
   letter-spacing: 0.3px;
-  color: #a16207;
-  background: #fefce8;
-  border: 1px solid #eab308;
+  color: var(--qz-accent-ink);
+  background: var(--qz-accent-wash);
+  border: 1px solid var(--qz-accent-line);
   border-radius: var(--qz-radius-pill);
   padding: 2px 8px;
   vertical-align: 2px;
@@ -3503,7 +3511,7 @@ body[data-qz] .qz-ql-adel:focus-visible { outline: none; box-shadow: var(--qz-sh
 .qz-gen-ring.is-halt::before { border-color: var(--qz-rule); }
 .qz-gen-ring.is-halt::after { opacity: 0; }
 .qz-gen-haltglyph { position: absolute; font-size: 26px; color: var(--qz-ink-25); }
-.qz-gen-haltglyph.is-warn { color: var(--qz-gold); }
+.qz-gen-haltglyph.is-warn { color: var(--qz-warn); } /* QRTZ-OA: warn state, not a gold moment */
 .qz-gen-title { margin: 0 0 8px; font-size: 20px; font-weight: 600; letter-spacing: -.02em; }
 .qz-gen-sub { margin: 0; font-size: 13.5px; color: var(--qz-ink-3); line-height: 1.55; max-width: 430px; }
 .qz-gen-slowline { margin-top: 10px; font-size: 12px; color: var(--qz-ink-25); }
@@ -3651,7 +3659,8 @@ textarea.qz-sm-inp { resize: vertical; min-height: 62px; line-height: 1.5; }
 .qz-shape-card.is-active .qz-shape-pick { background: var(--qz-accent); border-color: var(--qz-accent); color: #fff; }
 .qz-shape-card.is-active .qz-shape-pick:hover:not(:disabled) { background: color-mix(in srgb, var(--qz-accent) 88%, #000); }
 .qz-shape-pick:disabled { opacity: .6; cursor: default; }
-/* DS-3b — gold moment #2: the AI's top pick wears the ◆ Recommended ribbon. */
+/* DS-3b — signature moment #2: the AI's top pick wears the accent-washed
+   Recommended ribbon (QRTZ-OA: violet family, no glyph). */
 .qz-ribbon-recommended {
   position: absolute; top: 12px; right: 12px; z-index: 1;
   display: inline-flex; align-items: center; gap: 5px;
@@ -4329,13 +4338,13 @@ body[data-qz] .qz-stepnav-pill:focus-visible { outline: 2px solid var(--qz-accen
   background: var(--qz-paper); color: var(--qz-ink-3);
   box-shadow: inset 0 0 0 1px var(--qz-rule);
 }
-.qz-s3-numchip.is-decider { background: var(--qz-gold); color: var(--qz-cream); box-shadow: none; }
+.qz-s3-numchip.is-decider { background: var(--qz-accent); color: var(--qz-cream); box-shadow: none; } /* QRTZ-OA: solid fill = accent, not accent-ink */
 .qz-s3-numchip.is-capture { background: var(--qz-accent-wash); color: var(--qz-accent); box-shadow: none; }
 .qz-s3-numchip.is-reveal { background: var(--qz-gold-wash); color: var(--qz-gold); box-shadow: inset 0 0 0 1px var(--qz-gold-line); }
 /* AUDIT-17 — the mock's click-to-renumber chip (ncn-edit + ncninput). */
 .qz-s3-numchip.is-edit { cursor: pointer; }
 .qz-s3-numchip.is-edit:hover { background: var(--qz-accent-wash); color: var(--qz-accent-ink); box-shadow: none; }
-.qz-s3-numchip.is-edit.is-decider:hover { background: var(--qz-gold); color: var(--qz-cream); box-shadow: 0 0 0 2px var(--qz-gold-wash); }
+.qz-s3-numchip.is-edit.is-decider:hover { background: var(--qz-accent-2); color: var(--qz-cream); box-shadow: 0 0 0 2px var(--qz-gold-wash); } /* QRTZ-OA: hover darkens like every accent fill */
 .qz-s3-ncninput {
   width: 24px; border: none; padding: 1px 0;
   background: var(--qz-paper);
@@ -5162,7 +5171,7 @@ body[data-qz] .qz-s3-editable:focus-visible {
   font-family: var(--qz-font-mono); font-size: 10.5px; font-weight: 700;
   letter-spacing: 0.04em; text-transform: uppercase; line-height: 1.2;
 }
-.qz-s3-flag.is-decider { background: var(--qz-gold); color: var(--qz-cream); }
+.qz-s3-flag.is-decider { background: var(--qz-accent); color: var(--qz-cream); } /* QRTZ-OA: solid fill = accent */
 .qz-s3-flag.is-ghost {
   background: var(--qz-paper); color: var(--qz-ink-4);
   box-shadow: inset 0 0 0 1px var(--qz-rule);
@@ -5176,7 +5185,7 @@ body[data-qz] .qz-s3-editable:focus-visible {
 
 .qz-s3-sec-head { display: flex; align-items: flex-start; gap: 10px; }
 .qz-s3-sec .qz-s3-numchip { background: var(--sec-wash); color: var(--sec-color); box-shadow: none; }
-.qz-s3-sec .qz-s3-numchip.is-decider { background: var(--qz-gold); color: var(--qz-cream); }
+.qz-s3-sec .qz-s3-numchip.is-decider { background: var(--qz-accent); color: var(--qz-cream); } /* QRTZ-OA: solid fill = accent */
 .qz-s3-sec-title {
   margin: 0; flex: 1 1 auto; min-width: 0;
   font-size: 15px; font-weight: 600; line-height: 1.35; padding-top: 3px;
@@ -5441,7 +5450,7 @@ body[data-qz] .qz-s3-editable:focus-visible {
   background: var(--qz-cream-2); color: var(--qz-ink-3);
   font-size: 11.5px; font-weight: 600;
 }
-.qz-s3-expchip.is-gold { background: var(--qz-gold-wash); color: var(--qz-gold); box-shadow: inset 0 0 0 1px var(--qz-gold-line); }
+.qz-s3-expchip.is-decider { background: var(--qz-gold-wash); color: var(--qz-gold); box-shadow: inset 0 0 0 1px var(--qz-gold-line); } /* QRTZ-OA: was .is-gold — accent-washed decider chip */
 .qz-s3-exparrow { color: var(--qz-ink-4); font-size: 11px; }
 .qz-s3-explainer-sentence { flex-basis: 100%; margin: 2px 0 0 24px; color: var(--qz-ink-3); font-size: 12.5px; }
 
@@ -5838,7 +5847,7 @@ body[data-qz] .qz-s4-phone3d:focus-visible { outline: 2px solid var(--qz-accent)
 .qz-s4p-card.is-row { flex-direction: row; align-items: center; gap: 8px; }
 .qz-s4p-card.is-row img, .qz-s4p-card.is-row .qz-s4p-noimg { width: 56px; flex-shrink: 0; margin-bottom: 0; }
 .qz-s4p-body { display: flex; flex-direction: column; gap: 3px; min-width: 0; flex: 1; }
-.qz-s4p-stars { display: flex; align-items: center; gap: 4px; font-size: 10px; color: var(--qz-gold, #E0A33A); }
+.qz-s4p-stars { display: flex; align-items: center; gap: 4px; font-size: 10px; color: #E0A33A; } /* shopper-mimic: review stars stay amber (QRTZ-OA — not a gold-signature moment) */
 .qz-s4p-stars span:last-child { color: var(--qz-color-muted, var(--qz-ink-4)); font-size: 9.5px; }
 .qz-s4p-title { font-family: var(--qz-font-heading, Georgia, serif); font-size: 12.5px; font-weight: 600; line-height: 1.3; }
 .qz-s4p-price { font-size: 12px; color: var(--qz-color-text, var(--qz-ink)); font-weight: 600; }
@@ -6644,7 +6653,7 @@ body[data-qz] .qz-allcard-add:focus-visible { outline: 2px solid var(--qz-accent
 .qz-onsite-top { background: var(--qz-accent-wash); color: var(--qz-accent-ink); padding: 12px; text-align: center; }
 .qz-onsite-btm { padding: 10px; font-size: 11px; color: var(--qz-ink-2); }
 .qz-onsite-copy { flex: 1; min-width: 220px; font-size: 12px; color: var(--qz-ink-2); line-height: 1.7; }
-/* §3.2 — Logic Paths view: flow of question nodes, decider ◆, dead-ends flagged. */
+/* §3.2 — Logic Paths view: flow of question nodes, decider ring, dead-ends flagged. */
 .qz-paths { display: flex; flex-direction: column; align-items: stretch; max-width: 760px; }
 .qz-paths-legend { display: flex; align-items: center; gap: 10px; font-size: 11.5px; color: var(--qz-ink-3); margin-bottom: 14px; flex-wrap: wrap; }
 .qz-paths-diamond { color: var(--qz-accent); font-size: 13px; }
@@ -7487,7 +7496,7 @@ tr.qz-ltab-qstart td { border-top: 2px solid var(--qz-rule); }
   cursor: pointer; display: inline-flex; gap: 5px; align-items: center; white-space: nowrap;
 }
 .qz-path-chip:hover { border-color: var(--qz-ink-3); }
-/* The decider chip carries the canonical gold ◆ signature (V2 §3.2). */
+/* The decider chip carries the canonical accent ring (QRTZ-OA: was gold ◆). */
 .qz-path-chip.is-decider { border-color: var(--qz-gold-bright); box-shadow: inset 0 0 0 1px var(--qz-gold-bright); }
 .qz-path-chip.is-branch { border-style: dashed; }
 .qz-path-chip.is-deadend { border-color: var(--qz-warn); color: var(--qz-warn); cursor: default; }
@@ -9944,3 +9953,39 @@ button.qz-pb-row:hover { background: var(--qz-cream-2); }
   color: var(--qz-ink-3); text-decoration: none; white-space: nowrap;
 }
 .qz-ltab-menu-shoplink:hover { color: var(--qz-ink); text-decoration: underline; }
+
+/* ═══ QRTZ-OA — owner decisions 1+2 (gold→violet · category shape markers) ═══ */
+/* GAPS §A.2 — category surfaces differentiate by SHAPE AND LABEL, not hue.
+   Each step-3 section card carries data-qz-cat (sectionPalette PaletteKey —
+   a positional slot, not a hue) and draws a compact left-edge marker: one
+   neutral stroke (--qz-ink-3), 4px column, inset past the rounded corners
+   and the −19px flag tab. The 6-way vocabulary (documented in
+   sectionPalette.ts too):
+
+     green → solid bar     coral → dashed bar    blue  → double rail
+     amber → dot column    pink  → end caps      teal  → hairline
+
+   The decider (data-qz-cat="gold" — legacy key name) is the selection-
+   critical category and keeps the accent: a solid accent bar, per
+   Decision 1's gold→violet move. */
+.qz-s3-card[data-qz-cat]::before {
+  content: ""; position: absolute; left: 0; top: 16px; bottom: 16px;
+  width: 4px; border-radius: 0 2px 2px 0; color: var(--qz-ink-3);
+  pointer-events: none;
+}
+.qz-s3-card[data-qz-cat="green"]::before { background: currentColor; }
+.qz-s3-card[data-qz-cat="coral"]::before {
+  background: repeating-linear-gradient(to bottom, currentColor 0 9px, transparent 9px 16px);
+}
+.qz-s3-card[data-qz-cat="blue"]::before {
+  border-left: 1.5px solid currentColor; border-right: 1.5px solid currentColor;
+  border-radius: 0;
+}
+.qz-s3-card[data-qz-cat="amber"]::before {
+  background: radial-gradient(circle 1.6px at 2px 4px, currentColor 98%, transparent) top left / 4px 10px repeat-y;
+}
+.qz-s3-card[data-qz-cat="pink"]::before {
+  background: linear-gradient(to bottom, currentColor 0 20px, transparent 20px calc(100% - 20px), currentColor calc(100% - 20px) 100%);
+}
+.qz-s3-card[data-qz-cat="teal"]::before { width: 1.5px; border-radius: 0; background: currentColor; }
+.qz-s3-card[data-qz-cat="gold"]::before { color: var(--qz-accent); background: currentColor; }

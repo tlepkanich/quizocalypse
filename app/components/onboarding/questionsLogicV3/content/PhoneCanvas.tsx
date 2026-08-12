@@ -249,7 +249,7 @@ export function PhoneCanvas({
       </div>
       {alpine ? (
         <p className="qz-s3-caption is-art-directed">
-          <span aria-hidden>◆</span> Art direction · {artDirection?.name}
+          Art direction · {artDirection?.name}
         </p>
       ) : null}
 

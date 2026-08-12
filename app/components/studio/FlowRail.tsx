@@ -444,7 +444,7 @@ export function FlowRail({
   };
 
   // ── BLD-2 — the v3 row: 26px mono number chip (gold when the question
-  // decides the result, ✉/◆ tints for capture/result termini), 2-line-clamped
+  // decides the result, ✉/result tints for capture/result termini), 2-line-clamped
   // title, red issue dot, and ONE ⋯ menu (QzPopover → document.body, so the
   // scrollable panel can't clip it — the overlay-portal lesson) holding the
   // actions the classic row crammed inline (＋↑ ＋↓ ⧉ ✕ truncated the title).

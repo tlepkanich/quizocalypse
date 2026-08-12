@@ -38,7 +38,7 @@ export function QuestionList({
   activeId: string | null;
   onSelect: (nodeId: string) => void;
   onRowAction: (nodeId: string, action: RowAction) => void;
-  /** LOGIC v2 — rows gain a gold ◆ on the decider; "!" means unmapped TARGETS
+  /** LOGIC v2 — rows gain a marker dot on the decider; "!" means unmapped TARGETS
    *  (decider only — qualifiers assign nothing, so they can never be unmapped). */
   deciderMode?: boolean;
 }) {
@@ -74,9 +74,7 @@ export function QuestionList({
                       className="qz-ql-dot is-decider"
                       title="Decides the result"
                       aria-label="Decides the result"
-                    >
-                      ◆
-                    </span>
+                    />
                   ) : null}
                   {node.data.ai_generated ? (
                     <span className="qz-ql-dot is-ai" title="AI-generated" aria-label="AI-generated">

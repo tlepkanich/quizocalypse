@@ -3,8 +3,9 @@ import { QzModal } from "../../../qz-overlays";
 
 /* quiz-step3 v3 §5.4 — the decider flag tab hanging off each section card
    (spec geometry: −19px top / 20px left, styled in .qz-s3-flag). The decider
-   wears the solid gold ◆; every qualifier shows the ghost ◇ ALWAYS (moving
-   the decider must never require discovering a hover state). Clicking a
+   wears the solid accent tab (QRTZ-OA: gold + the ◆/◇ glyph pair dropped);
+   every qualifier shows the ghost tab ALWAYS (moving the decider must never
+   require discovering a hover state). Clicking a
    ghost opens the §5.4 confirm dialog — its copy states the locked
    consequences: the current decider's answer MAPPINGS ARE CLEARED, advanced
    RULES ARE KEPT. Multi-select / open-text questions can't decide (§2.2) —
@@ -32,7 +33,7 @@ export function FlagTab({
   if (isDecider) {
     return (
       <span className="qz-s3-flag is-decider" title="This question decides the result">
-        <span aria-hidden>◆</span> Decider
+        Decider
       </span>
     );
   }
@@ -46,7 +47,7 @@ export function FlagTab({
         title={blockedReason ?? "Make this the deciding question"}
         onClick={() => setConfirming(true)}
       >
-        <span aria-hidden>◇</span> Make decider
+        Make decider
       </button>
 
       <QzModal
@@ -73,7 +74,7 @@ export function FlagTab({
                 onConfirm();
               }}
             >
-              ◆ Make it the decider
+              Make it the decider
             </button>
           </>
         }

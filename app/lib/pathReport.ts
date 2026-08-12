@@ -123,7 +123,7 @@ export function buildTier1Report(
         ? [
             {
               message:
-                "No question decides the result yet — promote one with the ◇ Make decider toggle.",
+                "No question decides the result yet — promote one with the Make decider toggle.",
             },
           ]
         : deciders.slice(1).map((d) => ({

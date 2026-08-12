@@ -35,7 +35,7 @@ const TYPE_OPTIONS: { value: QuestionType; label: string }[] = [
 // for the "stored as customer data, not scored" note.
 //
 // LOGIC v2 (`deciderMode` — doc.logic_model === "decider"): the card gains a
-// role toggle (◆ Decides / qualifier — exclusive, §2.1), a gold treatment +
+// role toggle (Decides / qualifier — exclusive, §2.1), a marker treatment +
 // banner on the ONE deciding question, a LOCKED Required pill on the decider
 // (V3), and role-aware answer rows (decider → target dropdown; qualifier → no
 // mapping column). Legacy docs pass deciderMode=false and render byte-identically.
@@ -154,7 +154,7 @@ export function QuestionCard({
     >
       {isDecider ? (
         <div className="qz-ql-decider-banner">
-          <span aria-hidden>◆</span> This question decides the result — each answer points
+          This question decides the result — each answer points
           straight at a recommendation.
         </div>
       ) : null}
@@ -193,7 +193,7 @@ export function QuestionCard({
               onCommit(setQuestionRole(doc, node.id, isDecider ? "qualifier" : "decides"))
             }
           >
-            {isDecider ? "◆ Decides the result" : "◇ Make decider"}
+            {isDecider ? "Decides the result" : "Make decider"}
           </button>
         ) : null}
         <button

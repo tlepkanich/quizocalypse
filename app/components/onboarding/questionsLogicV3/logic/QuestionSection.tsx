@@ -18,7 +18,7 @@ import { IconUp, IconDown, IconTrash } from "../icons";
    number chip · INLINE-EDITABLE question title (no more "Edit content" —
    everything edits here and saves to the same doc as the Content view) ·
    type chip · in-N-rules badge · coverage badge · ROLE dropdown (Picks the
-   result ◆ / Filters results / Info only — single-decider enforcement
+   result / Filters results / Info only — single-decider enforcement
    auto-reverts the prior decider, visibly, no dialog) · expand chevron.
    Expanded adds the answer drill-down (ANSWER · MAPS TO/MATCHES · THEN GO
    TO) and the + Add answer / λ Add rule footer (the rule draft lands in
@@ -124,11 +124,11 @@ export function QuestionSection({
   const { node, qIndex } = question;
   const freeform = isFreeformType(node.data.question_type);
   const multi = node.data.question_type === "multi_select";
-  // AUDIT-23 (overview-cards mock) — the card is accent-family everywhere:
-  // the per-section palette is NOT inlined any more (the .qz-s3-card CSS
-  // supplies --sec-color/--sec-wash = accent); colorKey stays accepted so
-  // LogicScroll's palette machinery keeps compiling.
-  void colorKey;
+  // AUDIT-23 (overview-cards mock) — the card stays accent-family for its
+  // selection/edit states (the .qz-s3-card CSS supplies --sec-color/--sec-wash
+  // = accent). QRTZ-OA (GAPS §A.2): colorKey now feeds the SHAPE system —
+  // data-qz-cat draws the neutral left-edge category marker per slot
+  // (decider = solid accent bar); see sectionPalette.ts for the vocabulary.
   const minAnswers = freeform ? 1 : 2;
   const role: Role = isDecider ? "decides" : node.data.role === "filter" ? "filter" : "qualifier";
 
@@ -165,7 +165,7 @@ export function QuestionSection({
   };
 
   // Spec §3/§11 — role changes are direct + visible, no dialog. Picking
-  // "Picks the result ◆" MOVES the decider (the prior one auto-reverts and
+  // "Picks the result" MOVES the decider (the prior one auto-reverts and
   // its stale mappings clear — the safe, locked v3 semantics).
   const setRole = (next: Role) => {
     if (next === role) return;
@@ -207,6 +207,7 @@ export function QuestionSection({
       className={`qz-s3-sec qz-s3-card${isDecider ? " is-decider" : ""}${active ? " is-active" : ""}${flashWarn ? " is-flashwarn" : ""}`}
       ref={(el) => registerSection(node.id, el)}
       data-node-id={node.id}
+      data-qz-cat={colorKey}
       aria-label={`Question ${qIndex} logic`}
     >
       {/* header — question on the left; the type control sits in the SAME
@@ -420,7 +421,7 @@ export function QuestionSection({
               onChange={(e) => setRole(e.target.value as Role)}
             >
               <option value="decides" disabled={deciderBlocked}>
-                {deciderBlocked ? "Picks the result (needs single-pick)" : "Picks the result ◆"}
+                {deciderBlocked ? "Picks the result (needs single-pick)" : "Picks the result"}
               </option>
               <option value="filter">Filters results</option>
               <option value="qualifier">Info only</option>

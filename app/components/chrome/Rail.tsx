@@ -41,8 +41,8 @@ interface RailItem {
 }
 
 /* Same 10 destinations as the old StudioSidebar. Icon rules (§7.7): lucide
-   20px stroke 1.5; never a diamond/gem glyph (◆ is the wordmark's), and
-   Sparkles only for AI (✦ is reserved for AI moments). */
+   20px stroke 1.5; never a diamond/gem glyph (the ◆ mark is retired,
+   QRTZ-OA), and Sparkles only for AI (✦ is reserved for AI moments). */
 const NAV: RailItem[] = [
   { to: "/studio", label: "Home", icon: Home, end: true },
   { to: "/studio/quizzes", label: "Quizzes", icon: Layers },

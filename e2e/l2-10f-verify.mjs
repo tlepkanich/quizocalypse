@@ -94,7 +94,7 @@ ok("EXACTLY ONE deciding question, required, all answers targeted",
 ok("result pages merged to ONE", upgraded.nodes.filter((n) => n.type === "result").length === 1);
 ok("per-target headline overrides seeded", Object.keys(upgraded.rec_page_settings?.overrides ?? {}).length >= 1);
 ok("loader validates the upgraded draft (validateQuiz clean)", loaded.valid === true, JSON.stringify(loaded.issues ?? []).slice(0, 120));
-ok("topbar shows the ◆ Decider badge", await page.getByText("◆ Decider logic").first().isVisible().catch(() => false));
+ok("topbar shows the Decider badge", await page.getByText("Decider logic").first().isVisible().catch(() => false));
 ok("scoring toggle GONE for the decider doc", !(await page.getByRole("button", { name: /Weighted scoring|→ Direct mapping/ }).first().isVisible().catch(() => false)));
 
 // ── 4. one-step UNDO restores the legacy draft byte-identically ─────────────

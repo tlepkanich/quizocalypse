@@ -6,12 +6,14 @@ import { TYPE_CHIP_LABEL } from "./content/TypeChipSelector";
 import { IconGrip, IconMail, IconTarget, IconTrash } from "./icons";
 import type { RegenApi } from "./Step3Shell";
 
-/** questions-full-page §3 — the mock's cMeta vocabulary for content steps. */
+/** questions-full-page §3 — the mock's cMeta vocabulary for content steps.
+    QRTZ-OA: the ◆ prefix is dropped (GAPS §A.1 — the glyph is retired);
+    downstream `.replace("◆ ", "")` strippers become harmless no-ops. */
 export const CONTENT_META: Record<string, string> = {
-  message: "◆ Message",
-  product_cards: "◆ Product cards",
-  ask_ai: "◆ Ask AI",
-  integration: "◆ Integration",
+  message: "Message",
+  product_cards: "Product cards",
+  ask_ai: "Ask AI",
+  integration: "Integration",
 };
 
 /* questions-full-page.html — the Questions tab's NAV RAIL (mock .navcol):
@@ -129,7 +131,7 @@ export function LeftRail({
           const title = isContent
             ? q.node.type === "message"
               ? ((q.node.data as { text?: string }).text ?? "Message")
-              : (CONTENT_META[q.node.type] ?? q.node.type).replace("◆ ", "")
+              : CONTENT_META[q.node.type] ?? q.node.type
             : (q.node.data as { text: string }).text;
           const regenHere =
             !isContent &&
@@ -176,8 +178,8 @@ export function LeftRail({
                 }}
               >
                 {/* §2 — content shows its number in the muted style and is
-                    identified by the ◆ meta line, not by a missing number;
-                    only question numbers are click-to-renumber (mock). */}
+                    identified by the content meta line, not by a missing
+                    number; only question numbers are click-to-renumber. */}
                 {isContent ? (
                   <span className="qz-qf-ncn is-c">{i + 1}</span>
                 ) : renumbering === q.node.id ? (
