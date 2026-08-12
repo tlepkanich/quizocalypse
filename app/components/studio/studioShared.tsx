@@ -35,6 +35,11 @@ export interface StudioBuilderData {
   shopifyAdminDomain?: string | null;
   publishedAt?: string | null;
   draftUpdatedAt?: string | null;
+  // QRTZ-F4 — the honest unpublished-change count (load-time pure doc-diff of
+  // draft vs publishedJson, see app/lib/unpublishedChanges.ts). null =
+  // unknowable (never published / unparseable) → the pill falls back to the
+  // timestamp-seeded plain "Unpublished changes".
+  unpublishedChangeCount?: number | null;
 }
 
 type Placement = NonNullable<Quiz["placement"]>;

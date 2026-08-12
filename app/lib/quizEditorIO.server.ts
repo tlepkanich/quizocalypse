@@ -7,6 +7,8 @@ import { checkAiBudget, withAiSpendRecording } from "./aiBudget.server";
 import { Quiz, DesignTokens } from "./quizSchema";
 import type { Quiz as QuizDoc } from "./quizSchema";
 import { publishQuiz, PublishError, collectDeciderTargetIds } from "./quizPublish";
+import { countUnpublishedChanges } from "./unpublishedChanges";
+import { BrandTokens } from "./designTokens";
 import { resolveCollectionOrders } from "./collectionOrder.server";
 import { qrDataUrl } from "./qrCode.server";
 import { ensureQuizDiscount } from "./discount.server";
@@ -157,6 +159,27 @@ export async function loadQuizEditorDataForShop(shop: Shop, id: string, origin: 
   const shopifyAdminDomain =
     shop.source === "standalone" ? shop.shopifyConnectDomain ?? null : shop.shopDomain;
 
+  // QRTZ-F4 — the honest unpublished-change COUNT (mock s16 "Draft · 10
+  // unpublished"): a pure diff of the draft against publishedJson, both
+  // already in hand (no extra fetch). Quiz.safeParse of publishedJson drops
+  // the bake-only fields (product_index, published_at, version, shop_domain,
+  // target maps, …) exactly like the runtime loaders do; the diff itself
+  // tolerates the in-schema bake rewrites (see unpublishedChanges.ts). null =
+  // unknowable (never published, or either doc fails the parse) — the client
+  // falls back to the QRTZ-B2 timestamp seed's plain "Unpublished changes".
+  let unpublishedChangeCount: number | null = null;
+  if (parsed.success && quiz.publishedJson) {
+    const publishedParsed = Quiz.safeParse(quiz.publishedJson);
+    if (publishedParsed.success) {
+      const shopBrand = BrandTokens.safeParse(shop.brandTokens ?? {});
+      unpublishedChangeCount = countUnpublishedChanges(
+        parsed.data,
+        publishedParsed.data,
+        { shopBrandTokens: shopBrand.success ? shopBrand.data : null },
+      );
+    }
+  }
+
   return {
     quizId: quiz.id,
     name: quiz.name,
@@ -185,6 +208,8 @@ export async function loadQuizEditorDataForShop(shop: Shop, id: string, origin: 
     shopifyAdminDomain,
     publishedAt,
     draftUpdatedAt: quiz.updatedAt.toISOString(),
+    // QRTZ-F4 — additive (see above).
+    unpublishedChangeCount,
   };
 }
 
