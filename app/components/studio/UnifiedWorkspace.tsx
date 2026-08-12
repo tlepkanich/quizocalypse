@@ -173,10 +173,22 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
     if (Number.isNaN(published) || Number.isNaN(drafted)) return false;
     return drafted - published > 10_000;
   });
+  // QRTZ-F4 — the loader's honest unpublished-change COUNT (pure doc-diff of
+  // draft vs publishedJson at load; null = unknowable). The number is a
+  // LOAD-TIME truth only: any session write can raise OR lower the real count
+  // (an edit can revert a counted change), so once this session edits the doc
+  // the pill DROPS the number rather than show one it knows may be stale
+  // ("Unpublished changes", the QRTZ-B2 string) — the fresh count returns on
+  // the next load. A successful publish resets it to 0.
+  const [changeCount, setChangeCount] = useState<number | null>(
+    data.unpublishedChangeCount ?? null,
+  );
+  const [countStale, setCountStale] = useState(false);
   const commit = useCallback(
     (next: QuizDoc) => {
       setHistory((h) => ({ past: [...h.past, doc].slice(-50), future: [] }));
       setDirtySincePublish(true);
+      setCountStale(true);
       rawCommit(next);
     },
     [doc, rawCommit],
@@ -189,6 +201,7 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
     (aiDoc: QuizDoc) => {
       setHistory((h) => ({ past: [...h.past, doc].slice(-50), future: [] }));
       setDirtySincePublish(true);
+      setCountStale(true);
       applyAiResult(aiDoc);
     },
     [doc, applyAiResult],
@@ -198,6 +211,7 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
     const prev = history.past[history.past.length - 1]!;
     setHistory({ past: history.past.slice(0, -1), future: [doc, ...history.future].slice(0, 50) });
     setDirtySincePublish(true);
+    setCountStale(true);
     rawCommit(prev);
   }, [history, doc, rawCommit]);
   const redo = useCallback(() => {
@@ -205,6 +219,7 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
     const next = history.future[0]!;
     setHistory({ past: [...history.past, doc].slice(-50), future: history.future.slice(1) });
     setDirtySincePublish(true);
+    setCountStale(true);
     rawCommit(next);
   }, [history, doc, rawCommit]);
   const canUndo = history.past.length > 0;
@@ -298,9 +313,14 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
   const navigate = useNavigate();
 
   // QRTZ-S4 — a successful publish ships the live doc, so at that moment the
-  // draft and the published version agree again.
+  // draft and the published version agree again. QRTZ-F4 — the change count
+  // resets to 0 with it (and is fresh again, not stale).
   useEffect(() => {
-    if (publishFetcher.data?.ok) setDirtySincePublish(false);
+    if (publishFetcher.data?.ok) {
+      setDirtySincePublish(false);
+      setChangeCount(0);
+      setCountStale(false);
+    }
   }, [publishFetcher.data]);
 
   // Selection drives the ContextPanel; the optional inspect target carries the
@@ -1678,11 +1698,15 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
         </button>
       );
 
-    // QRTZ-S4 — the mock's "Draft · 10 unpublished" pill, built honestly: the
-    // product has no unpublished-change COUNT anywhere, so the pill names the
-    // state, not a number. Never published (version 0) → "Draft"; published +
-    // edited this session → "Unpublished changes"; published + no session
-    // edits → no pill (cross-session drift is not client-detectable).
+    // QRTZ-S4/F4 — the mock's "Draft · 10 unpublished" pill, built honestly.
+    // Never published (version 0) → "Draft". Published: the loader's pure
+    // doc-diff count (unpublishedChanges.ts) renders the mock string
+    // "Draft · N unpublished" — but ONLY while it is load-fresh. A session
+    // write can raise or LOWER the true count (an edit can revert a counted
+    // change), so the first write drops the number for the plain
+    // "Unpublished changes" (never show a number known to be stale; the fresh
+    // count returns on the next load). Count unknowable (null) → fall back to
+    // the QRTZ-B2 timestamp seed. Publish success resets to 0 → no pill.
     const effectiveVersion =
       publishFetcher.data?.ok && publishFetcher.data.version
         ? publishFetcher.data.version
@@ -1690,7 +1714,11 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
     const draftPill =
       effectiveVersion === 0 ? (
         <span className="qz-bt-draftpill">Draft</span>
-      ) : dirtySincePublish ? (
+      ) : countStale ? (
+        <span className="qz-bt-draftpill">Unpublished changes</span>
+      ) : changeCount !== null && changeCount > 0 ? (
+        <span className="qz-bt-draftpill">Draft · {changeCount} unpublished</span>
+      ) : changeCount === null && dirtySincePublish ? (
         <span className="qz-bt-draftpill">Unpublished changes</span>
       ) : null;
 
