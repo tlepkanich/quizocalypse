@@ -10090,3 +10090,31 @@ button.qz-pb-row:hover { background: var(--qz-cream-2); }
   margin: 0; padding-top: 9px; border-top: 1px solid var(--qz-cream-2);
   font-size: 11.5px; line-height: 1.5; color: var(--qz-ink-4);
 }
+
+/* ═══ QRTZ-F3 — per-side spacing disclosure + selection-ring type tag ═══ */
+
+/* The Space group's "Each side on its own" disclosure (mock base.mjs
+   .insp-more, values verbatim; --accent-ink → --qz-accent-ink). Named
+   -more-btn because .qz-insp-more is already a <details> primitive. */
+.qz-insp-more-btn {
+  justify-self: start; align-self: start; border: 0; background: transparent;
+  padding: 2px 0; font-size: 12.5px; color: var(--qz-accent-ink);
+  font-weight: 600; cursor: pointer;
+}
+.qz-insp-more-btn:hover { text-decoration: underline; text-underline-offset: 3px; }
+
+/* Selection-ring type tag (mock base.mjs .sel-tag, values verbatim;
+   --accent → --qz-accent, --on-accent → #fff per the repo's on-accent
+   convention). BUILDER-ONLY BY CONSTRUCTION: the data-qz-sel-tag attribute
+   is written by runtime/inspect.ts exclusively when the builder passes
+   onInspect (never on /q), and this sheet is the admin chain (BIC-2 B1 —
+   /q loads quiz-runtime.css alone), so the shopper surface renders neither
+   the attribute nor the rule. */
+[data-qz-sel-tag] { position: relative; }
+[data-qz-sel-tag]::after {
+  content: attr(data-qz-sel-tag);
+  position: absolute; top: -9px; left: 8px; padding: 1px 6px; border-radius: 3px;
+  background: var(--qz-accent); color: #fff; font-size: 9.5px; font-weight: 600;
+  letter-spacing: .05em; text-transform: uppercase; line-height: 1.4;
+  pointer-events: none;
+}

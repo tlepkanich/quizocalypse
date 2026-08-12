@@ -1001,6 +1001,14 @@ export const BlockStyle = z
     margin_top: z.number().int().min(0).max(160),
     margin_bottom: z.number().int().min(0).max(160),
     padding: z.number().int().min(0).max(160),
+    // QRTZ-F3 (mock s16 "Each side on its own") — per-side padding overrides.
+    // Each side wins over the uniform `padding` when present; all four are
+    // optional (the whole object is .partial()) so docs without them are
+    // byte-identical through parse → save round-trips.
+    padding_top: z.number().int().min(0).max(160),
+    padding_bottom: z.number().int().min(0).max(160),
+    padding_left: z.number().int().min(0).max(160),
+    padding_right: z.number().int().min(0).max(160),
     max_width: z.number().int().min(80).max(1200),
     text_color: z.string(),
     background: z.string(),

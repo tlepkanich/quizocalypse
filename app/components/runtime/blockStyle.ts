@@ -32,6 +32,16 @@ export function blockStyleToCss(s: BlockStyle | undefined | null): CSSProperties
   if (typeof s.margin_top === "number") out.marginTop = s.margin_top;
   if (typeof s.margin_bottom === "number") out.marginBottom = s.margin_bottom;
   if (typeof s.padding === "number") out.padding = s.padding;
+  // QRTZ-F3 — per-side padding wins over the uniform value when present. The
+  // longhand keys are inserted AFTER `padding`, so they win in both React's
+  // style application (insertion order) and the SSR style-string serialization
+  // (later declaration wins in CSS). When all four are absent, no key is
+  // added — the output object stays deep-equal (same keys, same order) to the
+  // pre-QRTZ-F3 mapping, which the equality-pin test locks in.
+  if (typeof s.padding_top === "number") out.paddingTop = s.padding_top;
+  if (typeof s.padding_bottom === "number") out.paddingBottom = s.padding_bottom;
+  if (typeof s.padding_left === "number") out.paddingLeft = s.padding_left;
+  if (typeof s.padding_right === "number") out.paddingRight = s.padding_right;
   if (typeof s.max_width === "number") {
     out.maxWidth = s.max_width;
     // A max-width only reads as "centered" when the box can shrink; pair it
