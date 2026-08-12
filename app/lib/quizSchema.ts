@@ -1679,6 +1679,21 @@ export const DecisionRule = z.object({
 });
 export type DecisionRule = z.infer<typeof DecisionRule>;
 
+// QRTZ-O5 (GAPS §A.4, owner call 2026-08-12) — the Chapters shopper progress
+// bar's baked data: flow-ordered chapter groups over the spine's question
+// nodes, derived at PUBLISH TIME from `section_label` grouping (E3 chapters).
+// Written EXCLUSIVELY by quizPublish's decider-only bake into publishedJson —
+// never on drafts, never by any legacy publish. The runtime renders the
+// Chapters bar only when logic_model === "decider" AND ≥2 chapters are baked;
+// everything else falls back to the classic bar unchanged.
+export const PublishedChapter = z.object({
+  // Shopper-facing label (section_label, ≤40 chars at the source).
+  label: z.string().min(1),
+  // The chapter's question node ids, in flow (spine) order.
+  question_ids: z.array(z.string().min(1)).min(1),
+});
+export type PublishedChapter = z.infer<typeof PublishedChapter>;
+
 // Rec-page-spec-V2 §3.1 — the ONE global rec-page config. Every field is
 // optional in the schema; spec defaults ("Your perfect match", heroLogic
 // collection_order, gridMax 3, …) are applied at READ time by the consumers
@@ -1887,6 +1902,13 @@ export const Quiz = z.object({
   // legacy docs keep ResultData untouched). Only read when logic_model is
   // "decider".
   rec_page_settings: RecPageSettings.optional(),
+  // QRTZ-O5 — the Chapters progress bar's publish-time bake (see
+  // PublishedChapter above). In the schema (not a raw publish-only field like
+  // product_index) so it survives the /q loader's Quiz.safeParse and reaches
+  // the runtime through `doc` with zero prop plumbing. .optional() NEVER
+  // .default() (the translations-field hazard); publishQuiz strips any
+  // draft-side value and re-derives it, so the field is publish-owned.
+  chapters: z.array(PublishedChapter).optional(),
   // §8.2 (L2-11) — config-time provenance for AI-generated why-copy, keyed
   // "__global__" | Category id: when it was drafted + a membership hash so the
   // panel can flag STALE copy after the bucket's products change. Draft-only

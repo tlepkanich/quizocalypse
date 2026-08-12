@@ -1,5 +1,6 @@
 import type { PrismaClient } from "@prisma/client";
-import { Quiz } from "./quizSchema";
+import { Quiz, type PublishedChapter } from "./quizSchema";
+import { orderFlow } from "./flowOrder";
 import { validateQuiz } from "./quizValidation";
 import { isSellable, type IndexedProduct } from "./recommendationEngine";
 import { translateFeaturesToBenefits, generateAnswerTooltips } from "./claude";
@@ -169,6 +170,49 @@ export function collectReferencedCategoryIds(doc: QuizDoc): Set<string> {
     }
   }
   return ids;
+}
+
+// QRTZ-O5 (GAPS §A.4) — derive the Chapters progress bar's baked data from the
+// draft's ONLY genuine chapter grouping: `section_label` on question nodes
+// ("consecutive questions sharing a section_label group under one chapter
+// header" — quizSchema E3). Walks the flow SPINE's question steps (the same
+// set reachableQuestionCount uses as the progress denominator) and groups
+// consecutive runs by label; an unlabeled question CONTINUES the current
+// chapter (the header holds until a new one appears). DECIDER DOCS ONLY.
+//
+// Conservative bails — each returns undefined so the runtime falls back to
+// today's bar unchanged:
+//  - legacy doc (logic_model !== "decider") or no spine questions;
+//  - the FIRST spine question is unlabeled (no chapter home; guessing a label
+//    would put internal jargon in front of shoppers);
+//  - fewer than 2 chapters (a single chapter is just the classic bar);
+//  - more than 6 chapters (9.5px uppercase labels in flex:1 columns collapse
+//    to ~3 characters each on a 320px phone);
+//  - a label reused non-consecutively (two same-named chapters read broken).
+// Pure + exported for tests.
+export function deriveChapters(doc: QuizDoc): PublishedChapter[] | undefined {
+  if (doc.logic_model !== "decider") return undefined;
+  const spine = orderFlow(doc).steps.filter((s) => s.type === "question");
+  if (spine.length === 0) return undefined;
+  const nodeById = new Map(doc.nodes.map((n) => [n.id, n]));
+  const chapters: PublishedChapter[] = [];
+  for (const step of spine) {
+    const node = nodeById.get(step.nodeId);
+    const label =
+      node?.type === "question" ? node.data.section_label?.trim() : undefined;
+    const last = chapters[chapters.length - 1];
+    if (label && label.length > 0) {
+      if (last && last.label === label) last.question_ids.push(step.nodeId);
+      else chapters.push({ label, question_ids: [step.nodeId] });
+    } else {
+      if (!last) return undefined; // leading unlabeled question — bail
+      last.question_ids.push(step.nodeId);
+    }
+  }
+  if (chapters.length < 2 || chapters.length > 6) return undefined;
+  if (new Set(chapters.map((c) => c.label)).size !== chapters.length)
+    return undefined;
+  return chapters;
 }
 
 // Cap a plain-text product description for the result card (spec §2). Collapses
@@ -726,13 +770,23 @@ export async function publishQuiz(
   //    the panel reads it from the DRAFT; shoppers never need it.
   //  - path_report_ai: L2-12c advisory AI path-quality rows — the panel reads it
   //    from the DRAFT; shoppers never need it, and it never gates publish.
+  //  - chapters: QRTZ-O5 — publish-owned. Before the field existed in the
+  //    schema, Quiz.safeParse stripped any draft-side `chapters` here; the
+  //    explicit strip + re-derive below preserves that exactly (a stale or
+  //    hand-written draft value can never leak; legacy publishes stay
+  //    byte-identical because deriveChapters is decider-gated).
   const {
     build_session: _build_session,
     review_enrichment_sources: _review_sources,
     why_copy_meta: _why_copy_meta,
     path_report_ai: _path_report_ai,
+    chapters: _draft_chapters,
     ...docWithoutSession
   } = doc;
+  void _draft_chapters;
+  // QRTZ-O5 — the Chapters bake (decider docs only; undefined on every legacy
+  // publish → the key is absent → byte-identical).
+  const bakedChapters = deriveChapters(doc);
   const publishedJson: PublishedQuiz = {
     ...docWithoutSession,
     nodes: bakedNodes,
@@ -756,6 +810,9 @@ export async function publishQuiz(
     ...(targetBake
       ? { target_product_ids_map: targetBake.map, target_index: targetBake.index }
       : {}),
+    // QRTZ-O5 — the Chapters bake (decider docs with clean section_label
+    // grouping only; absent otherwise → byte-identical).
+    ...(bakedChapters ? { chapters: bakedChapters } : {}),
   };
 
   await prisma.$transaction([
