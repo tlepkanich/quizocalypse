@@ -1,6 +1,8 @@
 import type { z } from "zod";
 import type { Answer } from "../../../lib/quizSchema";
 import type { IndexedProduct } from "../../../lib/recommendationEngine";
+import type { BuilderCategory } from "../../builder/stepProps";
+import { numericId } from "../../../lib/cartLink";
 
 type AnswerT = z.infer<typeof Answer>;
 
@@ -335,6 +337,67 @@ export function guessAnswerTargets(
     if (best && best.score >= 70) out.push({ answerId: a.id, categoryId: best.id });
   }
   return out;
+}
+
+/** QRTZ-B2 — the products popover's "Open in Shopify" destination (mock
+ *  .pp-foot button), derived from the SAME data the popover already lists.
+ *  Only kinds with a reliable admin URL get a link:
+ *    collection → /admin/collections/{numeric id from the gid}
+ *    tag        → /admin/products?tag={ref} (the admin's tag-filtered list)
+ *    product    → /admin/products/{numeric id} (single-product groups only)
+ *  Metafield-, variant-, and type-shaped selections have no stable admin URL
+ *  → null (no link). Mixed filter selections are ambiguous → null. The legacy
+ *  {domain}/admin/... form redirects into admin.shopify.com, so the myshopify
+ *  domain is all we need. Pure — unit-tested. */
+export function popoverShopifyUrl(
+  adminDomain: string | null | undefined,
+  role: "decides" | "qualifier" | "filter" | undefined,
+  answer: AnswerT,
+  cat: BuilderCategory | undefined,
+): string | null {
+  if (!adminDomain) return null;
+  const admin = `https://${adminDomain}/admin`;
+  if (role === "decides") {
+    if (!cat) return null;
+    if (cat.source === "collection" || cat.source === "smart_collection") {
+      const n = numericId(cat.sourceRef);
+      return n ? `${admin}/collections/${n}` : null;
+    }
+    if (cat.source === "tag" && cat.sourceRef) {
+      return `${admin}/products?tag=${encodeURIComponent(cat.sourceRef)}`;
+    }
+    if (cat.source === "product") {
+      const ref =
+        cat.sourceRef ?? (cat.productIds.length === 1 ? cat.productIds[0]! : null);
+      const n = numericId(ref);
+      return n ? `${admin}/products/${n}` : null;
+    }
+    return null;
+  }
+  if (role === "filter") {
+    const collections = [
+      ...new Set([
+        ...(answer.collection_filter ? [answer.collection_filter] : []),
+        ...(answer.collection_filters ?? []),
+      ]),
+    ];
+    const kindCount =
+      (collections.length ? 1 : 0) +
+      (answer.tags.length ? 1 : 0) +
+      (answer.metafield_filters?.length ? 1 : 0) +
+      (answer.variant_filters?.length ? 1 : 0) +
+      (answer.product_type_filters?.length ? 1 : 0);
+    if (kindCount !== 1) return null; // mixed or empty → no single destination
+    if (collections.length === 1) {
+      const n = numericId(collections[0]);
+      return n ? `${admin}/collections/${n}` : null;
+    }
+    if (answer.tags.length === 1) {
+      return `${admin}/products?tag=${encodeURIComponent(answer.tags[0]!)}`;
+    }
+    return null;
+  }
+  return null;
 }
 
 /** The setAnswerFilterValues payload storing `values` under `field`. */

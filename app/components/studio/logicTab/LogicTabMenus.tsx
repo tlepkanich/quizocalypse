@@ -8,6 +8,8 @@ import { answerNextNode } from "../../../lib/pathAnalyzer";
 import { setAnswerRoute } from "../../../lib/quizMutations";
 import { filterAnswerMatchingProducts } from "../../../lib/filterMatching";
 import { formatMoney } from "../../../lib/formatMoney";
+import { formatTimeAgo } from "../../../lib/formatDate";
+import { popoverShopifyUrl } from "./logicTabFields";
 import { QzPopover } from "../../qz-overlays";
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -116,6 +118,8 @@ export function ProductCountButton({
   productIndex,
   label,
   answerKey,
+  lastSyncAt,
+  shopifyAdminDomain,
 }: {
   answer: Answer;
   role: "decides" | "qualifier" | "filter" | undefined;
@@ -124,6 +128,12 @@ export function ProductCountButton({
   label: ReactNode;
   /** QRTZ-S6 — the row's A/B/C key, for the mock's .pp-foot sentence. */
   answerKey?: string;
+  /** QRTZ-B2 — Shop.lastSyncAt (ISO), for the mock's "synced from Shopify X
+   *  ago" line. Absent/null → the count-only line. */
+  lastSyncAt?: string | null;
+  /** QRTZ-B2 — the Shopify ADMIN domain (null on an unconnected standalone
+   *  workspace), for the mock's "Open in Shopify" footer link. */
+  shopifyAdminDomain?: string | null;
 }) {
   const [open, setOpen] = useState(false);
   const products = useMemo(() => {
@@ -139,6 +149,28 @@ export function ProductCountButton({
     return [];
   }, [answer, role, catById, productIndex]);
   const kind = popoverKind(role, answer, catById);
+  // QRTZ-B2 — the mock's .pp-foot "Open in Shopify": derived from the SAME
+  // target the popover lists; kinds without a reliable admin URL get no link.
+  const shopUrl = popoverShopifyUrl(
+    shopifyAdminDomain,
+    role,
+    answer,
+    role === "decides" && answer.target_id ? catById.get(answer.target_id) : undefined,
+  );
+  const footSentence =
+    answerKey && products.length > 0 ? (
+      role === "decides" ? (
+        <>
+          Answer <b>{answerKey} · {answer.text}</b> shows this{" "}
+          {kind?.label ?? "group"}.
+        </>
+      ) : (
+        <>
+          Answer <b>{answerKey} · {answer.text}</b> narrows to these
+          products.
+        </>
+      )
+    ) : null;
 
   return (
     <QzPopover
@@ -148,9 +180,9 @@ export function ProductCountButton({
       trigger={<button type="button" className="qz-ltab-cellbtn">{label}</button>}
       content={
         // QRTZ-S6 (mock .pp) — kind chip in the title, the count as its own
-        // line, price + stock on every product row, foot sentence. No
-        // "synced from Shopify" line (no sync timestamp reaches this surface)
-        // and no "Open in Shopify" (no shop domain reaches it either).
+        // line, price + stock on every product row, foot sentence. QRTZ-B2
+        // adds the mock's sync-freshness line + "Open in Shopify" footer link
+        // (lastSyncAt / shopifyAdminDomain now reach this surface).
         <MenuShell
           title={
             <>
@@ -161,24 +193,29 @@ export function ProductCountButton({
             </>
           }
           footer={
-            answerKey && products.length > 0 ? (
-              role === "decides" ? (
-                <>
-                  Answer <b>{answerKey} · {answer.text}</b> shows this{" "}
-                  {kind?.label ?? "group"}.
-                </>
-              ) : (
-                <>
-                  Answer <b>{answerKey} · {answer.text}</b> narrows to these
-                  products.
-                </>
-              )
+            footSentence || shopUrl ? (
+              <span className="qz-ltab-menu-foot-row">
+                <span>{footSentence}</span>
+                {shopUrl ? (
+                  <a
+                    className="qz-ltab-menu-shoplink"
+                    href={shopUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    Open in Shopify ↗
+                  </a>
+                ) : null}
+              </span>
             ) : undefined
           }
         >
           <div className="qz-ltab-menu-countline">
             <b>{products.length}</b>{" "}
             {products.length === 1 ? "product" : "products"} matched
+            {lastSyncAt
+              ? ` · synced from Shopify ${formatTimeAgo(lastSyncAt)}`
+              : ""}
           </div>
           {products.length === 0 ? (
             <div className="qz-ltab-menu-none">

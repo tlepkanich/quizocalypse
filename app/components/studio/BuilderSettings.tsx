@@ -94,6 +94,8 @@ export function BuilderLogicView({
             productIndex={data.productIndex}
             commit={commit}
             quizId={data.quizId}
+            lastSyncAt={data.lastSyncAt ?? null}
+            shopifyAdminDomain={data.shopifyAdminDomain ?? null}
           />
           {/* PathTester renders its own "Try a path" header. */}
           <PathTester doc={doc} productIndex={data.productIndex} categories={data.categories} />

@@ -1,11 +1,13 @@
 import { describe, expect, it } from "vitest";
 import type { IndexedProduct } from "../../../lib/recommendationEngine";
+import type { BuilderCategory } from "../../builder/stepProps";
 import {
   answerValuesForField,
   derivedNarrowLabel,
   guessAnswerMappings,
   fieldValues,
   narrowFieldOptions,
+  popoverShopifyUrl,
   writeValuesForField,
 } from "./logicTabFields";
 
@@ -186,5 +188,77 @@ describe("guessAnswerMappings (unified §3 — deterministic map-for-me)", () =>
       gp,
     );
     expect(guesses).toEqual([]);
+  });
+});
+
+describe("popoverShopifyUrl (QRTZ-B2 — the popover's Open-in-Shopify link)", () => {
+  const a = (extra: Record<string, unknown> = {}) =>
+    ({ id: "a", text: "A", tags: [], edge_handle_id: "h", ...extra }) as never;
+  const cat = (extra: Partial<BuilderCategory>): BuilderCategory => ({
+    id: "c1",
+    name: "Cat",
+    description: "",
+    tags: [],
+    productIds: [],
+    source: "collection",
+    sourceRef: null,
+    quizId: null,
+    ...extra,
+  });
+  const D = "test.myshopify.com";
+
+  it("decides → collection/smart_collection targets link the collection admin page", () => {
+    expect(
+      popoverShopifyUrl(D, "decides", a(), cat({ sourceRef: "gid://shopify/Collection/42" })),
+    ).toBe("https://test.myshopify.com/admin/collections/42");
+    expect(
+      popoverShopifyUrl(
+        D,
+        "decides",
+        a(),
+        cat({ source: "smart_collection", sourceRef: "77" }),
+      ),
+    ).toBe("https://test.myshopify.com/admin/collections/77");
+  });
+  it("decides → tag targets link the tag-filtered products list (encoded)", () => {
+    expect(
+      popoverShopifyUrl(D, "decides", a(), cat({ source: "tag", sourceRef: "work wear" })),
+    ).toBe("https://test.myshopify.com/admin/products?tag=work%20wear");
+  });
+  it("decides → single-product groups link the product; metafield groups get no link", () => {
+    expect(
+      popoverShopifyUrl(
+        D,
+        "decides",
+        a(),
+        cat({ source: "product", sourceRef: "gid://shopify/Product/9" }),
+      ),
+    ).toBe("https://test.myshopify.com/admin/products/9");
+    expect(
+      popoverShopifyUrl(D, "decides", a(), cat({ source: "metafield", sourceRef: "x.y:z" })),
+    ).toBeNull();
+  });
+  it("filter → a single unambiguous collection or tag links; mixed selections do not", () => {
+    expect(
+      popoverShopifyUrl(D, "filter", a({ collection_filter: "gid://shopify/Collection/5" }), undefined),
+    ).toBe("https://test.myshopify.com/admin/collections/5");
+    expect(popoverShopifyUrl(D, "filter", a({ tags: ["fit:slim"] }), undefined)).toBe(
+      "https://test.myshopify.com/admin/products?tag=fit%3Aslim",
+    );
+    expect(
+      popoverShopifyUrl(
+        D,
+        "filter",
+        a({ tags: ["fit:slim"], collection_filter: "gid://shopify/Collection/5" }),
+        undefined,
+      ),
+    ).toBeNull();
+    expect(popoverShopifyUrl(D, "filter", a({ tags: ["a", "b"] }), undefined)).toBeNull();
+  });
+  it("no admin domain (unconnected standalone) or no role → no link", () => {
+    expect(
+      popoverShopifyUrl(null, "decides", a(), cat({ sourceRef: "gid://shopify/Collection/42" })),
+    ).toBeNull();
+    expect(popoverShopifyUrl(D, undefined, a(), undefined)).toBeNull();
   });
 });

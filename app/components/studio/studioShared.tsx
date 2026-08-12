@@ -26,6 +26,15 @@ export interface StudioBuilderData {
   // PNG data URL of a QR code for previewUrl (Phase E shareable surface).
   qrCode?: string | null;
   abAnalytics: Record<string, Record<string, FunnelCounts>>;
+  // QRTZ-B2 — additive loader feeds (optional so older payload shapes stay
+  // assignable): catalog sync freshness + the Shopify ADMIN domain (null on an
+  // unconnected standalone workspace) for the Logic tab's products popover,
+  // and the publish/draft stamps that seed the cross-session
+  // "Unpublished changes" pill.
+  lastSyncAt?: string | null;
+  shopifyAdminDomain?: string | null;
+  publishedAt?: string | null;
+  draftUpdatedAt?: string | null;
 }
 
 type Placement = NonNullable<Quiz["placement"]>;

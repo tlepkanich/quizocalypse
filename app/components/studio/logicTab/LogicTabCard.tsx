@@ -57,6 +57,8 @@ export function LogicTabCard({
   productIndex,
   commit,
   quizId,
+  lastSyncAt,
+  shopifyAdminDomain,
 }: {
   doc: QuizDoc;
   questions: OrderedQuestion[];
@@ -67,6 +69,11 @@ export function LogicTabCard({
   commit?: (doc: QuizDoc) => void;
   /** P5 — enables + Create rule (the ensure-targets endpoint needs it). */
   quizId?: string;
+  /** QRTZ-B2 — Shop.lastSyncAt (ISO) for the products popover's sync line. */
+  lastSyncAt?: string | null;
+  /** QRTZ-B2 — the Shopify ADMIN domain for the popover's Open-in-Shopify
+   *  link (null on an unconnected standalone workspace → no link). */
+  shopifyAdminDomain?: string | null;
 }) {
   const toast = useQzToast();
   // P5 — categories materialized by the create-rule modal, merged until the
@@ -370,6 +377,8 @@ export function LogicTabCard({
               productIndex={productIndex}
               qIndexByNodeId={qIndexByNodeId}
               commit={commit}
+              lastSyncAt={lastSyncAt}
+              shopifyAdminDomain={shopifyAdminDomain}
               onOpenWindow={
                 commit
                   ? (nodeId, answerId) => {
@@ -451,6 +460,8 @@ function QuestionRows({
   productIndex,
   qIndexByNodeId,
   commit,
+  lastSyncAt,
+  shopifyAdminDomain,
   onOpenWindow,
 }: {
   doc: QuizDoc;
@@ -461,6 +472,9 @@ function QuestionRows({
   productIndex: IndexedProduct[];
   qIndexByNodeId: Map<string, number>;
   commit?: (doc: QuizDoc) => void;
+  /** QRTZ-B2 — threaded to the products popover (sync line + admin link). */
+  lastSyncAt?: string | null;
+  shopifyAdminDomain?: string | null;
   /** UNIFIED — opens the question window (pill + every mapping cell). */
   onOpenWindow?: (nodeId: string, answerId: string | null) => void;
 }) {
@@ -574,6 +588,8 @@ function QuestionRows({
                   productIndex={productIndex}
                   label={count}
                   answerKey={keys[i] ?? String(i + 1)}
+                  lastSyncAt={lastSyncAt}
+                  shopifyAdminDomain={shopifyAdminDomain}
                 />
               ) : (
                 count

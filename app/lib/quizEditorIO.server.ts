@@ -138,6 +138,25 @@ export async function loadQuizEditorDataForShop(shop: Shop, id: string, origin: 
 
   const brandVoiceName = parseBrandGuidelinesSafe(shop.brandGuidelines)?.name ?? null;
 
+  // QRTZ-B2 — three small ADDITIVE feeds (never reshape existing fields; probes
+  // post against this route's payload):
+  //  • lastSyncAt / shopifyAdminDomain — the Logic tab's products popover line
+  //    ("synced from Shopify X ago") + its "Open in Shopify" link. A standalone
+  //    workspace's shopDomain is synthetic (studio.local) — its REAL Shopify
+  //    admin is the connector domain, or nothing when not connected.
+  //  • publishedAt / draftUpdatedAt — the top bar's cross-session "Unpublished
+  //    changes" seed. publishedAt is the bake stamp inside publishedJson (there
+  //    is no column); read leniently, no full parse.
+  const publishedAt =
+    quiz.publishedJson &&
+    typeof quiz.publishedJson === "object" &&
+    !Array.isArray(quiz.publishedJson) &&
+    typeof (quiz.publishedJson as { published_at?: unknown }).published_at === "string"
+      ? (quiz.publishedJson as { published_at: string }).published_at
+      : null;
+  const shopifyAdminDomain =
+    shop.source === "standalone" ? shop.shopifyConnectDomain ?? null : shop.shopDomain;
+
   return {
     quizId: quiz.id,
     name: quiz.name,
@@ -161,6 +180,11 @@ export async function loadQuizEditorDataForShop(shop: Shop, id: string, origin: 
     brandVoiceName,
     previewUrl,
     qrCode,
+    // QRTZ-B2 — additive (see above).
+    lastSyncAt: shop.lastSyncAt?.toISOString() ?? null,
+    shopifyAdminDomain,
+    publishedAt,
+    draftUpdatedAt: quiz.updatedAt.toISOString(),
   };
 }
 
