@@ -293,7 +293,7 @@ function ContentRow({
         />
       </span>
       <div className="qz-ovw-qcell">
-        <span className="qz-qf-ovcontent">◆ Content</span>
+        <span className="qz-qf-ovcontent">Content</span>
         {isMessage ? (
           <EditableText
             value={title}
@@ -635,7 +635,7 @@ function AddStepDivider({
               onAddContent();
             }}
           >
-            ◆ Add a content block
+            Add a content block
           </button>
         </div>
       ) : null}

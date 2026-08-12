@@ -401,7 +401,7 @@ function AnswerMappingSection({
     return (
       <div className="qz-card" style={{ padding: 10 }}>
         <div className="qz-label" style={{ fontSize: 11, marginBottom: 4 }}>
-          ◆ Decider logic
+          Decider logic
         </div>
         <p className="qz-dim" style={{ fontSize: 12, margin: 0 }}>
           This quiz picks results with one deciding question (plus optional rules), not
@@ -923,7 +923,7 @@ export function RulesTabBody({
             : narrowLabel === "anything"
               ? "Narrows the products"
               : `Narrows on ${narrowLabel}`
-        : "Info only";
+        : "Asked only";
 
   // Chip labels for a narrowing answer, from the answer's RAW fields (keeps
   // the merchant's casing; family tags "Fit:Slim" read as their value).

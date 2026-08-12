@@ -362,12 +362,12 @@ export function GuidedPreview({
         </header>
         {openSec === "offer" && !offerOn ? (
           <div className="qz-rg-empty" data-jump="offer">
-            ◇ No discount yet. Build one and it appears as a bar at the top of the page.
+            No discount yet. Build one and it appears as a bar at the top of the page.
           </div>
         ) : null}
         {openSec === "reveal" && !cfg.loadingOn ? (
           <div className="qz-rg-empty" data-jump="reveal">
-            ◇ No loading screen. The results appear the moment the last answer lands.
+            No loading screen. The results appear the moment the last answer lands.
           </div>
         ) : null}
         {offerBarNode}

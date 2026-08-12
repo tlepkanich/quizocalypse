@@ -96,7 +96,7 @@ describe("RulesTabBody (QRTZ-OB2)", () => {
     expect(el.textContent).toContain("No filter");
   });
 
-  it("non-deciding role reads 'Info only' with no mapping rows", () => {
+  it("non-deciding role reads 'Asked only' with no mapping rows", () => {
     const el = render(
       createElement(RulesTabBody, {
         node: questionNode("qualifier", [{}]),
@@ -105,7 +105,7 @@ describe("RulesTabBody (QRTZ-OB2)", () => {
         productIndex,
       }),
     );
-    expect(el.querySelector(".qz-obr-rolev")?.textContent).toBe("Info only");
+    expect(el.querySelector(".qz-obr-rolev")?.textContent).toBe("Asked only");
     expect(el.querySelectorAll(".qz-obr-row").length).toBe(0);
   });
 

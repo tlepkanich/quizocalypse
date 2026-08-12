@@ -405,7 +405,7 @@ function questionsSteps(onCross: (kind: ExplainerKind) => void): Step[] {
         <>
           <div className="qz-xpl-qlist">
             <LedgerRow
-              n="◆"
+              n="✦"
               when="Electrolyte Range"
               verb="set"
               ty="collection"

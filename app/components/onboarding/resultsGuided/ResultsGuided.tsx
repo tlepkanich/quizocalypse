@@ -705,7 +705,7 @@ export function ResultsGuided({
         <Toggle on={!!cfg.loadingOn} onClick={() => patch({ loadingOn: !cfg.loadingOn })} label="Show a loading screen" />
       </div>
       <div className="qz-rg-note">
-        ◇ <b>Best practice:</b> a short 2–3 second “working on it” screen.
+        <b>Best practice:</b> a short 2–3 second “working on it” screen.
       </div>
       <div className="qz-rg-inline">
         <span className="qz-rg-t">Duration</span>
