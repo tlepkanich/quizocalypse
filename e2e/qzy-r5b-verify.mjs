@@ -35,6 +35,10 @@ await page.waitForSelector(".qz-builder", { timeout: 20000 });
 await page.waitForTimeout(1600);
 await page.locator(".qz-screens-item", { hasText: "Q1" }).first().locator(".qz-screens-thumb").click();
 await page.waitForTimeout(600);
+// QRTZ-OB2 — the decider inspector is tabbed now; the answer-display controls
+// (ContentTab) live under the Content tab.
+await page.locator('.qz-builder-inspector .qz-segmented[aria-label="Panel tab"] button', { hasText: "Content" }).click();
+await page.waitForTimeout(300);
 
 const modes = page.locator(".qz-ads-modes button");
 // §3.1 — Icon is retired as a layout mode → four structural modes.
