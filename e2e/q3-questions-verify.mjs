@@ -492,36 +492,70 @@ try {
   ok("▦ swaps the panel for the content ledger",
     (await page.locator(".qz-qf-view").count()) === 0 &&
     (await page.locator(".qz-s3-ledger").count()) === 1);
-  ok('▦ hint "Edit any cell inline"',
-    (await page.locator(".qz-qf-hint").textContent())?.trim() === "Edit any cell inline");
-  ok("3 ledger cards with editable question cells (.qz-qf-v2q)",
-    (await page.locator(".qz-s3-ledger .qz-s3-card").count()) === 3 &&
+  // QRTZ-S5 rebase — the Overview is the mock's GRID (.qz-ovw-row rows under
+  // a sticky .qz-ovw-head; the old .qz-s3-card DOM is gone) + QRTZ-OB1: the
+  // role column is back ("Type & role", GAPS §A item 6).
+  ok('▦ hint "Click any question or answer to edit it"',
+    (await page.locator(".qz-qf-hint").textContent())?.trim() ===
+      "Click any question or answer to edit it");
+  ok("3 grid rows with editable question cells (.qz-qf-v2q)",
+    (await page.locator(".qz-s3-ledger .qz-ovw-row").count()) === 3 &&
     (await page.locator(".qz-qf-v2q").count()) === 3);
+  ok("sticky header reads # · Question · Answers · Type & role",
+    /type & role/i.test((await page.locator(".qz-ovw-head span").nth(3).innerText()) ?? ""));
   ok("decider numchip carries is-decider; its delete is DISABLED",
     (await page.locator(".qz-s3-ledger .qz-s3-numchip.is-decider").count()) === 1 &&
-    (await page.locator(".qz-s3-ledger .qz-s3-card").first().locator(".qz-s3-cdel").isDisabled()));
-  ok("qualifier card's delete is enabled",
-    !(await page.locator(".qz-s3-ledger .qz-s3-card").nth(1).locator(".qz-s3-cdel").isDisabled()));
+    (await page.locator(".qz-s3-ledger .qz-ovw-row").first().locator(".qz-s3-cdel").isDisabled()));
+  ok("qualifier row's delete is enabled",
+    !(await page.locator(".qz-s3-ledger .qz-ovw-row").nth(1).locator(".qz-s3-cdel").isDisabled()));
   ok("FLUSH answer lists (2 + 4 rows, numbered)",
-    (await page.locator(".qz-s3-card").first().locator(".qz-qf-alist li").count()) === 2 &&
-    (await page.locator(".qz-s3-card").nth(1).locator(".qz-qf-alist li").count()) === 4 &&
+    (await page.locator(".qz-ovw-row").first().locator(".qz-qf-alist li").count()) === 2 &&
+    (await page.locator(".qz-ovw-row").nth(1).locator(".qz-qf-alist li").count()) === 4 &&
     (await page.locator(".qz-qf-anum").first().textContent())?.trim() === "1");
-  ok("answer ✕ disabled at the 2-floor (card 1), enabled on card 2",
-    (await page.locator(".qz-s3-card").first().locator(".qz-qf-adel").first().isDisabled()) &&
-    !(await page.locator(".qz-s3-card").nth(1).locator(".qz-qf-adel").first().isDisabled()));
-  ok("N+1 inserters inside the ledger (4 for 3 questions, leading first)",
+  ok("answer ✕ disabled at the 2-floor (row 1), enabled on row 2",
+    (await page.locator(".qz-ovw-row").first().locator(".qz-qf-adel").first().isDisabled()) &&
+    !(await page.locator(".qz-ovw-row").nth(1).locator(".qz-qf-adel").first().isDisabled()));
+  ok("N+1 inserters inside the ledger (4 for 3 questions, leading under the header)",
     (await page.locator(".qz-s3-ledger .qz-s3-divider").count()) === 4 &&
-    (await page.locator(".qz-s3-ledger > :first-child").evaluate((el) => el.classList.contains("qz-s3-divider"))));
-  ok("settings column: multi has Min/Max steppers, single has none",
-    (await page.locator(".qz-s3-card").nth(1).locator(".qz-s3-card-set .qz-s3-stepper").count()) === 2 &&
-    (await page.locator(".qz-s3-card").first().locator(".qz-s3-card-set").count()) === 0 &&
-    (await page.locator(".qz-s3-card").first().locator(".qz-s3-card-body.is-noset").count()) === 1);
-  ok("rating card: scale preview + endpoint label inputs",
-    (await page.locator(".qz-s3-card").nth(2).locator(".qz-s3-scaleprev").count()) === 1 &&
-    (await page.locator(".qz-s3-card").nth(2).locator(".qz-s3-slab").count()) === 2);
+    (await page.locator(".qz-s3-ledger > :nth-child(2)").evaluate((el) => el.classList.contains("qz-s3-divider"))));
+  ok("type column: multi has Min/Max steppers, single has none",
+    (await page.locator(".qz-ovw-row").nth(1).locator(".qz-ovw-set .qz-s3-stepper").count()) === 2 &&
+    (await page.locator(".qz-ovw-row").first().locator(".qz-ovw-set").count()) === 0);
+  ok("rating row: scale preview + endpoint label inputs",
+    (await page.locator(".qz-ovw-row").nth(2).locator(".qz-s3-scaleprev").count()) === 1 &&
+    (await page.locator(".qz-ovw-row").nth(2).locator(".qz-s3-slab").count()) === 2);
 
-  // inline cell edit persists (card 2, answer 2)
-  await page.locator(".qz-s3-card").nth(1).locator(".qz-qf-atx").nth(1).click();
+  // QRTZ-OB1 — the role column: every question row carries a role tag; the
+  // decider's reads "Picks the result" (mock vocabulary, ◆ gone).
+  ok("every question row carries a role tag; decider reads Picks the result",
+    (await page.locator(".qz-ovw-role").count()) === 3 &&
+    /picks the result/i.test(
+      (await page.locator(".qz-ovw-row").first().locator(".qz-ovw-role").innerText()) ?? ""));
+  // The role menu is the mock's popover (shared.mjs 443–452) and edits ride
+  // the SAME barrel mutation as the Logic window (setQuestionRole) — proven
+  // by a round-trip read back through the draft.
+  const q2role0 = (await draftDoc())?.nodes?.find((n) => n.id === "q2")?.data?.role ?? "qualifier";
+  await page.locator(".qz-ovw-row").nth(1).locator(".qz-ovw-role").click();
+  const roleMenu = page.locator(".qz-popover .qz-ltab-menu");
+  ok("role menu: mock vocabulary, one-decider foot, multi can't decide",
+    /Question 2 does/.test((await roleMenu.locator(".qz-ltab-menu-title").innerText()) ?? "") &&
+    (await roleMenu.locator(".qz-ltab-menu-row").count()) === 3 &&
+    /One question picks the result/.test((await roleMenu.innerText()) ?? "") &&
+    (await roleMenu.locator(".qz-ltab-menu-row:disabled", { hasText: "Picks the result" }).count()) === 1);
+  const q2flipLabel = q2role0 === "filter" ? "Asked only" : "Narrows";
+  const q2flipRole = q2role0 === "filter" ? "qualifier" : "filter";
+  await roleMenu.locator(".qz-ltab-menu-row", { hasText: q2flipLabel }).click();
+  ok("Overview role edit persisted through setQuestionRole (draft read-back)",
+    await waitDraft((d) => d?.nodes?.find((n) => n.id === "q2")?.data?.role === q2flipRole));
+  await page.locator(".qz-ovw-row").nth(1).locator(".qz-ovw-role").click();
+  await roleMenu
+    .locator(".qz-ltab-menu-row", { hasText: q2flipRole === "filter" ? "Asked only" : "Narrows" })
+    .click();
+  ok("role restored (round-trip leaves the fixture as found)",
+    await waitDraft((d) => d?.nodes?.find((n) => n.id === "q2")?.data?.role === (q2role0 === "filter" ? "filter" : "qualifier")));
+
+  // inline cell edit persists (row 2, answer 2)
+  await page.locator(".qz-ovw-row").nth(1).locator(".qz-qf-atx").nth(1).click();
   await page.keyboard.press("ControlOrMeta+a");
   await page.keyboard.type("Grippy edges", { delay: 20 });
   await page.keyboard.press("Enter");
@@ -579,7 +613,7 @@ try {
     (await ltab.locator("h2", { hasText: "Questions" }).count()) === 1);
   ok("one table row-group per question (3 label cells)",
     (await ltab.locator(".qz-ltab-qcell").count()) === 3);
-  ok("exactly one ◆ Starting set pill (decider guard carried over)",
+  ok("exactly one Picks-the-result pill (decider guard carried over)",
     (await ltab.locator(".qz-ltab-pill.is-start").count()) === 1);
   ok("+ Create rule present on the funnel card",
     (await ltab.locator(".qz-ltab-create").count()) === 1);

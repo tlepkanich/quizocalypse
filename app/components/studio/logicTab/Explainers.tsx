@@ -157,12 +157,16 @@ const J = ({ children }: { children: ReactNode }) => (
 );
 
 // The verb pills of the ledger figures (mock VERB map; "Always include" is
-// corrected to the locked verb "Highlight").
+// corrected to the locked verb "Highlight"). QRTZ-OB1: "nar" reads "Narrows"
+// (the mock's ex-badge, shared.mjs line 1031). "set" KEEPS "Starting set" —
+// here it names the POOL the questions narrow from (the mock's own is-start
+// badge, shared.mjs ~1032), not a question role; the role is "Picks the
+// result" (ROLE_JOBS).
 const VERB_PILL: Record<string, { cls: string; label: string }> = {
   show: { cls: "v-show", label: "Show these" },
   inc: { cls: "v-inc", label: "Highlight" },
   exc: { cls: "v-exc", label: "Exclude" },
-  nar: { cls: "v-nar", label: "Narrowing" },
+  nar: { cls: "v-nar", label: "Narrows" },
   ask: { cls: "v-ask", label: "Asked only" },
   set: { cls: "v-set", label: "Starting set" },
 };
@@ -389,7 +393,7 @@ function questionsSteps(onCross: (kind: ExplainerKind) => void): Step[] {
       ),
     },
     {
-      title: "What each question narrows by",
+      title: "What each question narrows on",
       body: (
         <>
           One shopper answering down the list. Every switched-on question is

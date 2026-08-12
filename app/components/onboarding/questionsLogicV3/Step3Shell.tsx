@@ -493,9 +493,11 @@ function ExplainerStrip() {
           <span className="qz-s3-explainer-chips" aria-hidden>
             <span className="qz-s3-expchip">Rules</span>
             <span className="qz-s3-exparrow">→</span>
-            <span className="qz-s3-expchip is-gold">Picks the result ◆</span>
+            {/* QRTZ-OB1 — ◆ gone with the vocabulary; "Filters" reads as the
+                role name "Narrows" so no surface disagrees with the pills. */}
+            <span className="qz-s3-expchip is-gold">Picks the result</span>
             <span className="qz-s3-exparrow">→</span>
-            <span className="qz-s3-expchip">Filters</span>
+            <span className="qz-s3-expchip">Narrows</span>
             <span className="qz-s3-exparrow">→</span>
             <span className="qz-s3-expchip">Fallback</span>
           </span>
@@ -513,7 +515,7 @@ function ExplainerStrip() {
       {!collapsed && showInfo ? (
         <p className="qz-s3-explainer-sentence">
           Rules run first (top to bottom, first match wins), then the question that picks the
-          result chooses the recommendation, filter questions narrow it to what fits, and the
+          result chooses the recommendation, narrowing questions cut it to what fits, and the
           fallback covers a shopper nothing matches.
         </p>
       ) : null}

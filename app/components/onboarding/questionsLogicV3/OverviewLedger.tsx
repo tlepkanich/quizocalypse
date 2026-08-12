@@ -6,10 +6,18 @@ import {
   addAnswer,
   insertQuestionRelative,
   insertContentRelative,
+  moveDecider,
   removeAnswer,
+  setQuestionRole,
 } from "../../../lib/quizMutations";
 import { updateNodeData } from "../../studio/studioDoc";
-import { QzModal } from "../../qz-overlays";
+import { QzModal, QzPopover } from "../../qz-overlays";
+import { useQzToast } from "../../qz-toast";
+import {
+  derivedNarrowLabel,
+  ROLE_FOOT,
+  ROLE_JOBS,
+} from "../../studio/logicTab/logicTabFields";
 import { EditableText } from "./content/EditableText";
 import { TypeChipSelector } from "./content/TypeChipSelector";
 import { CONTENT_META } from "./LeftRail";
@@ -17,10 +25,11 @@ import { IconTrash, IconPlus } from "./icons";
 
 /* QRTZ-S5 (mock s12 lower, _src/shared.mjs screenOverview) — the Questions
    step's ▦ Overview tab is a REAL GRID: a sticky column header (# · Question ·
-   Answers · Type — NO role column; roles live on the Logic step, owner call
-   PORT-INVENTORY §8b), one grid row per step on firm rules, row hover cream-2,
-   the answers list filling its own column, and a "Show the other N questions"
-   truncation after the first four rows. Everything that already worked is
+   Answers · Type & role — QRTZ-OB1 restored the mock's role dimension, GAPS
+   §A item 6 reversing owner call §8b; it folds into the Type column exactly
+   as the mock folds them), one grid row per step on firm rules, row hover
+   cream-2, the answers list filling its own column, and a "Show the other N
+   questions" truncation after the first four rows. Everything that already worked is
    kept: click-to-renumber number chips (extended to content rows — they lost
    their ↑/↓ movers with the card layout, and renumber is the keyboard-friendly
    replacement), contenteditable question/answer text, add-answer in the
@@ -132,6 +141,117 @@ function NumberCell({
     >
       {index + 1}
     </button>
+  );
+}
+
+const stripQ = (s: string) => s.replace(/\s*\?\s*$/, "");
+
+/* QRTZ-OB1 (mock .ovw-type role-stack + role popover, shared.mjs 443–452;
+   GAPS §A item 6) — the Overview's role control. The menu is the mock's role
+   popover on the shared vocabulary (logicTabFields.ROLE_JOBS), and every
+   write is the SAME barrel mutation the Logic window commits — moveDecider /
+   setQuestionRole — so the target_ids mirror invariant has exactly one write
+   path. The attribute under a Narrows role is the DERIVED readout (never
+   stored), exactly like the Logic pill's attr line. */
+function RoleControl({
+  doc,
+  node,
+  qIndex,
+  deciderQIndex,
+  onCommit,
+}: {
+  doc: QuizDoc;
+  node: OrderedQuestion["node"];
+  qIndex: number;
+  /** The current decider's question number (for "now on QN"), null if none. */
+  deciderQIndex: number | null;
+  onCommit: (doc: QuizDoc) => void;
+}) {
+  const toast = useQzToast();
+  const [open, setOpen] = useState(false);
+  const role = node.data.role;
+  const isDecider = role === "decides";
+  const isFilter = role === "filter";
+  const cannotDecide =
+    node.data.question_type === "multi_select" || isFreeformType(node.data.question_type);
+  const label = isDecider ? "Picks the result" : isFilter ? "Narrows" : "Asked only";
+
+  // Mirrors QuestionWindow's setJob byte-for-byte in semantics: promote via
+  // moveDecider (one decider per quiz), demote via setQuestionRole.
+  const setJob = (job: (typeof ROLE_JOBS)[number]["k"]) => {
+    setOpen(false);
+    if (job === "decides") {
+      if (isDecider) return;
+      const prev = doc.nodes.find(
+        (n) => n.type === "question" && n.data.role === "decides",
+      );
+      onCommit(moveDecider(doc, node.id));
+      if (prev && prev.id !== node.id && prev.type === "question")
+        toast(
+          `"${stripQ(node.data.text)}" now picks the result (was "${stripQ(prev.data.text)}")`,
+        );
+      return;
+    }
+    if (job === "filter" && isFilter) return;
+    if (job === "info" && !isDecider && !isFilter) return;
+    onCommit(setQuestionRole(doc, node.id, job === "filter" ? "filter" : "qualifier"));
+  };
+
+  return (
+    <div className="qz-ovw-rolestack">
+      <QzPopover
+        open={open}
+        onOpenChange={setOpen}
+        maxWidth={300}
+        trigger={
+          <button
+            type="button"
+            className={`qz-ovw-role${isDecider ? " is-decider" : ""}`}
+            aria-label={`Question ${qIndex} role: ${label}`}
+          >
+            {label} <span className="qz-ovw-role-caret" aria-hidden>▾</span>
+          </button>
+        }
+        content={
+          <div className="qz-ltab-menu">
+            {/* Mock .pop-head ("Question 1 does", shared.mjs line 444). */}
+            <div className="qz-ltab-menu-title">Question {qIndex} does</div>
+            {ROLE_JOBS.map((j) => {
+              const on =
+                j.k === "decides" ? isDecider : j.k === "filter" ? isFilter : !isDecider && !isFilter;
+              const sub =
+                j.k === "decides" && cannotDecide
+                  ? "needs single-answer choices"
+                  : j.k === "decides" && deciderQIndex !== null && !isDecider
+                    ? `now on Q${deciderQIndex}`
+                    : j.hint;
+              return (
+                <button
+                  key={j.k}
+                  type="button"
+                  className={`qz-ltab-menu-row${on ? " is-current" : ""}`}
+                  disabled={j.k === "decides" && cannotDecide}
+                  onClick={() => setJob(j.k)}
+                >
+                  <span className="qz-ltab-menu-row-main">{j.n}</span>
+                  <span className="qz-ltab-menu-row-sub">{sub}</span>
+                </button>
+              );
+            })}
+            {/* Mock .pop-foot verbatim (shared.mjs line 451). */}
+            <div className="qz-qwin-rolefoot">{ROLE_FOOT}</div>
+          </div>
+        }
+      />
+      {isFilter ? (
+        <span
+          className="qz-ltab-attr"
+          title={`narrows on ${derivedNarrowLabel(node.data.answers)}`}
+        >
+          narrows on <b>{derivedNarrowLabel(node.data.answers)}</b>
+        </span>
+      ) : null}
+    </div>
   );
 }
 
@@ -251,6 +371,7 @@ function LedgerRow({
   question,
   index,
   isDecider,
+  deciderQIndex,
   onlyQuestion,
   onCommit,
   onReorder,
@@ -261,6 +382,8 @@ function LedgerRow({
   /** Position in the FULL flow (content included) — §2 numbering. */
   index: number;
   isDecider: boolean;
+  /** QRTZ-OB1 — the current decider's question number (role menu hint). */
+  deciderQIndex: number | null;
   /** The last remaining question can't be deleted (a quiz needs one). */
   onlyQuestion: boolean;
   onCommit: (doc: QuizDoc) => void;
@@ -408,6 +531,15 @@ function LedgerRow({
       </div>
       <div className="qz-ovw-typecell">
         <TypeChipSelector doc={doc} node={node} onCommit={onCommit} />
+        {/* QRTZ-OB1 — the mock's role-stack rides under the type control
+            ("Type & role" folds the two, mock .ovw-type). */}
+        <RoleControl
+          doc={doc}
+          node={node}
+          qIndex={question.qIndex}
+          deciderQIndex={deciderQIndex}
+          onCommit={onCommit}
+        />
         {multi ? (
           <div className="qz-ovw-set">
             <span className="qz-s3-set-lbl">Min</span>
@@ -446,7 +578,7 @@ function LedgerRow({
           disabled={isDecider || onlyQuestion}
           title={
             isDecider
-              ? "This question decides the result — move the role first (Logic step), then delete"
+              ? "This question picks the result — give the role to another question first, then delete"
               : onlyQuestion
                 ? "A quiz needs at least one question"
                 : "Delete question"
@@ -532,6 +664,8 @@ export function OverviewLedger({
   const addContentBelow = (refId: string) => onCommit(insertContentRelative(doc, refId, "below"));
   const first = steps[0]?.node.id;
   const nQuestions = steps.filter((s) => s.kind === "question").length;
+  // QRTZ-OB1 — the decider's question number for the role menu's "now on QN".
+  const deciderQIndex = steps.find((s) => s.node.id === deciderId)?.qIndex ?? null;
 
   // Mock .ovw-more — the grid opens on the first four rows; the rest sit
   // behind one full-width reveal (renumber still addresses ANY position —
@@ -548,13 +682,14 @@ export function OverviewLedger({
 
   return (
     <div className="qz-s3-ledger qz-ovw">
-      {/* QRTZ-S5 (mock .ovw-head) — the sticky column header. NO role
-          column: roles live on the Logic step (owner call §8b). */}
+      {/* QRTZ-S5 (mock .ovw-head) — the sticky column header. QRTZ-OB1:
+          "Type & role" per the mock (shared.mjs line 858) — the role folds
+          into the Type column, GAPS §A item 6. */}
       <div className="qz-ovw-head">
         <span>#</span>
         <span>Question</span>
         <span>Answers</span>
-        <span>Type</span>
+        <span>Type &amp; role</span>
       </div>
       {first ? (
         <AddStepDivider
@@ -579,6 +714,7 @@ export function OverviewLedger({
               question={{ node: s.node, qIndex: s.qIndex ?? 1 } as OrderedQuestion}
               index={i}
               isDecider={s.node.id === deciderId}
+              deciderQIndex={deciderQIndex}
               onlyQuestion={nQuestions <= 1}
               onCommit={onCommit}
               onReorder={onReorder}

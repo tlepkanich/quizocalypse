@@ -84,12 +84,13 @@ const heads = (await card.locator(".qz-ltab-tbl th").allInnerTexts()).map((h) =>
 ok("six columns, spec order",
   heads.length === 6 &&
     heads[0] === "question" && heads[2] === "answer" &&
-    heads[3] === "shows / narrows" && heads[4] === "products" && heads[5] === "then go to",
+    // QRTZ-OB1 — the mock's column head (shared.mjs line 384).
+    heads[3] === "maps to" && heads[4] === "products" && heads[5] === "then go to",
   JSON.stringify(heads));
 
 const qCells = await card.locator(".qz-ltab-qcell").count();
 ok("every question renders a label cell", qCells > 0, `${qCells} questions`);
-ok("exactly one ◆ Starting set pill (one decider per quiz)",
+ok("exactly one Picks-the-result pill (one decider per quiz)",
   (await card.locator(".qz-ltab-pill.is-start").count()) === 1);
 const pills = await card.locator(".qz-ltab-pill").count();
 ok("every question carries a role pill", pills === qCells, `${pills} pills / ${qCells} questions`);
