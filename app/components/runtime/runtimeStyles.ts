@@ -292,6 +292,11 @@ export type RuntimeStyles = ReturnType<typeof stylesFor>;
 // (container-measured below) and the builder preview (previewWidth.ts), so
 // the two can never drift.
 export const BREAKPOINT_PX = 900;
+// The desktop shell's terminal width — the quiz NEVER renders wider than this
+// (QuizRuntime's .qz-runtime-shell max-width); past it, extra viewport becomes
+// centered backdrop. Shared with previewWidth.ts so the desktop preview frame
+// is provably wide enough to show the quiz at this cap (its true max size).
+export const SHELL_MAX_PX = 1100;
 // Flip up at ≥900 but back down only below 884: a classic-scrollbar appearing
 // when the mobile layout grows taller would otherwise narrow the container
 // ~15px and oscillate the breakpoint right at the boundary.

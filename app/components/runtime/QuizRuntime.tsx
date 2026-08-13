@@ -42,6 +42,7 @@ import {
   googleFontsUrl,
   useContainerBreakpoint,
   PAGE_PAD_DESKTOP_TOP_PX,
+  SHELL_MAX_PX,
 } from "./runtimeStyles";
 import { useIframeHeightBridge } from "./heightBridge";
 import { BlockRenderer, type BlockRenderCtx } from "./BlockRenderer";
@@ -1898,7 +1899,7 @@ export function QuizRuntime(props: QuizRuntimeProps) {
            class on the root. Preview sets it from the DeviceFrame width prop;
            live sets it from the container-measured breakpoint. */
         .qz-bp-desktop .qz-runtime-page { align-items: center !important; justify-content: center !important; padding-top: var(--qz-pp-top, ${PAGE_PAD_DESKTOP_TOP_PX}px) !important; }
-        .qz-bp-desktop .qz-runtime-shell { flex-direction: row; align-items: flex-start; max-width: 1100px; gap: 40px; }
+        .qz-bp-desktop .qz-runtime-shell { flex-direction: row; align-items: flex-start; max-width: ${SHELL_MAX_PX}px; gap: 40px; }
         .qz-bp-desktop .qz-runtime-content { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: center; }
         .qz-bp-desktop .qz-preview-rail { flex: 0 0 320px; position: sticky; top: 64px; }
         .qz-bp-desktop .qz-preview-chip { display: none !important; }
@@ -1912,7 +1913,7 @@ export function QuizRuntime(props: QuizRuntimeProps) {
            keep the coherent mobile-first default. */
         @container (min-width: 900px) {
           .qz-unmeasured .qz-runtime-page { align-items: center !important; justify-content: center !important; padding-top: var(--qz-pp-top, ${PAGE_PAD_DESKTOP_TOP_PX}px) !important; }
-          .qz-unmeasured .qz-runtime-shell { flex-direction: row; align-items: flex-start; max-width: 1100px; gap: 40px; }
+          .qz-unmeasured .qz-runtime-shell { flex-direction: row; align-items: flex-start; max-width: ${SHELL_MAX_PX}px; gap: 40px; }
           .qz-unmeasured .qz-runtime-content { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: center; }
           .qz-unmeasured .qz-preview-rail { flex: 0 0 320px; position: sticky; top: 64px; }
           .qz-unmeasured .qz-preview-chip { display: none !important; }

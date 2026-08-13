@@ -1,5 +1,11 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
-import { DEVICES, fitConstraint, fitScale, type DeviceTier } from "./previewWidth";
+import {
+  DEVICES,
+  INLINE_BAND_PX,
+  fitConstraint,
+  fitScale,
+  type DeviceTier,
+} from "./previewWidth";
 
 // Layout effects must not run during SSR (same alias runtimeStyles.ts uses).
 const useIsoLayoutEffect = typeof window === "undefined" ? useEffect : useLayoutEffect;
@@ -23,8 +29,11 @@ export type FrameFit = {
  *
  * QRTZ-S3 (Quartz frames spec): the phone is BORDERLESS — a solid screen,
  * device radius (--qz-phone-r), soft elevation; no bezel, no notch, no
- * browser chrome, no bottom fade. The desktop tier is the 960×700 inline
- * embed band and keeps a hairline frame (.qz-devframe in the admin sheet).
+ * browser chrome, no bottom fade. The desktop tier is a full 1280×800
+ * browser viewport — wide enough to show the quiz at its terminal shell
+ * width (previewWidth.DESKTOP_TERMINAL_PX) — and keeps a hairline frame
+ * (.qz-devframe in the admin sheet). The 960 inline band survives as the
+ * inline/product_widget PLACEMENT inside it, not as the frame itself.
  * The phone also draws the mock's "fold" marker: a dashed line 78px above
  * the bottom edge — where the 667px small-phone viewport (iPhone SE) cuts
  * the 745px frame. The scale/size readout lives in the host, fed by onFit.
@@ -191,8 +200,15 @@ export function DeviceFrame({
                 </div>
               </div>
             ) : isContained ? (
-              // Inline / product widget: a contained card on a neutral page.
-              <div style={{ padding: "40px 100px", minHeight: "100%" }}>
+              // Inline / product widget: a contained card on a neutral page,
+              // centered at the inline band width a typical theme column gives
+              // an embedded quiz — NOT the full viewport.
+              <div
+                style={{
+                  padding: `40px ${(DEVICES.desktop.w - INLINE_BAND_PX) / 2}px`,
+                  minHeight: "100%",
+                }}
+              >
                 <div className="qz-dinline-card">{children}</div>
               </div>
             ) : (

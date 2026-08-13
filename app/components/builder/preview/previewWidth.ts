@@ -4,19 +4,23 @@
 // Contract: GLOBAL-VIEWPORT.md — `viewport/2026-08`. The device never changes
 // size; only the room it is shown in does. There is no width state anywhere in
 // the preview stack.
-import { BREAKPOINT_PX } from "../../runtime/runtimeStyles";
+import { BREAKPOINT_PX, PAGE_PAD_DEFAULT_PX, SHELL_MAX_PX } from "../../runtime/runtimeStyles";
 
 // A3 — ONE definition of the device geometry, both axes, because the fit rule
-// needs height as well as width. Both are the CONTAINERS a shopper actually
-// gets, not browser windows (Quartz frames spec,
-// docs/design/brand-2026/reference/quartz-preview-frames.html):
+// needs height as well as width:
 //   phone   390 × 745 — the viewport iPhone Safari gives a shopper with
 //           toolbars collapsed (390 × 844 is the screen — a different
 //           measurement, and why the old phone frame looked unusually long).
-//   desktop 960 × 700 — the INLINE embed band: 960 wide sits above the 900px
-//           breakpoint so it genuinely renders desktop tokens, below the
-//           runtime shell's 1100px cap; 700 tall reads as a block, not a
-//           letterbox (1128 × 640 was the stretched one).
+//   desktop 1280 × 800 — a real laptop browser viewport, wide enough that the
+//           quiz has hit its terminal size (the shell stops growing at
+//           SHELL_MAX_PX + the page's side padding = 1148): the merchant sees
+//           the quiz AT its max width plus the centered backdrop, exactly as a
+//           shopper on a large monitor does. The previous 960 × 700 frame was
+//           the inline embed band — the quiz never reached its cap in it, so
+//           padding tuned there was tuned against a size full-page desktop
+//           never renders (owner request, 2026-08-13). The inline band lives
+//           on INSIDE this viewport as the inline/product_widget placement
+//           (DeviceFrame pads the host page to a 960 content column).
 // The launcher modal (720 × 620) is a real embed mode but NOT a preview tier —
 // its geometry stays recorded here so a modal preview can be added without
 // re-deriving it. (720 < 900: the launcher modal renders MOBILE tokens.)
@@ -26,8 +30,21 @@ import { BREAKPOINT_PX } from "../../runtime/runtimeStyles";
 // lying about what it shows.
 export const DEVICES = {
   phone: { w: 390, h: 745 },
-  desktop: { w: 960, h: 700 },
+  desktop: { w: 1280, h: 800 },
 } as const;
+
+// The width past which the desktop quiz stops growing: the shell cap plus the
+// page's default side padding. The desktop frame must be at least this wide or
+// the preview is showing a mid-resize width, not the max — pinned in the unit
+// test so DEVICES.desktop and the runtime shell can never drift apart again.
+export const DESKTOP_TERMINAL_PX = SHELL_MAX_PX + PAGE_PAD_DEFAULT_PX * 2;
+
+// The inline embed band (Quartz frames spec, quartz-preview-frames.html): the
+// content column a typical theme gives an inline quiz. DeviceFrame's inline /
+// product_widget placements center a column of this width inside the desktop
+// viewport, so those placements stay truthful now that the frame itself is a
+// full browser window.
+export const INLINE_BAND_PX = 960;
 
 export type DeviceTier = keyof typeof DEVICES;
 

@@ -21,7 +21,7 @@ import { TypeChipSelector } from "./TypeChipSelector";
    (step name · answer-type control · Mobile/Desktop segmented control ·
    icon-only Expand), then the SHARED preview primitive. QRTZ-G2: the device
    is the canonical DeviceFrame (previewWidth.DEVICES — phone 390×745,
-   desktop 960×700; this file used to hardcode 390×844 / 1180×740 with its
+   desktop 1280×800; this file used to hardcode 390×844 / 1180×740 with its
    own fit math that never height-capped the phone, so short viewports cut
    it off). The fit contract is DeviceFrame's — scale = min(paneW/w, paneH/h,
    1), whole frame always visible, never upscaled past 1:1 — and the HOST

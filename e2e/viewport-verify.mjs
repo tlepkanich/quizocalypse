@@ -11,8 +11,10 @@
 //     and its painted box never exceeds the pane (scale ≤ 1).
 //  2. The height chain resolves: screen = root = page = 745 on a short step,
 //     page padding 24/24, content vertically CENTRED (symmetric gaps).
-//  3. Desktop frame is exactly 960×700, runtime renders qz-bp-desktop with
-//     padding-top 48.
+//  3. Desktop frame is exactly 1280×800 (a real laptop viewport, past the
+//     1100px shell cap so the quiz previews AT its terminal size), runtime
+//     renders qz-bp-desktop with padding-top 48, and the shell inside is
+//     width-capped (not viewport-limited).
 //  4. Zoom clamps the fit scale (80% → scale ≤ 0.8), never multiplies.
 //  5. Expand: same frame in the overlay host, scale ≤ 1 (never upscales).
 // Screenshots land in /tmp/vp-shots/.
@@ -122,6 +124,7 @@ const desk = await page.evaluate(() => {
   if (!frame || !root || !pageEl) return null;
   const cs = getComputedStyle(frame);
   const pcs = getComputedStyle(pageEl);
+  const shell = frame.querySelector(".qz-runtime-shell");
   return {
     tier: frame.dataset.qzTier,
     frameW: frame.offsetWidth,
@@ -129,14 +132,18 @@ const desk = await page.evaluate(() => {
     transform: cs.transform,
     rootClass: root.className,
     padTop: pcs.paddingTop,
+    shellW: shell ? shell.offsetWidth : null,
   };
 });
 ok("desktop frame exists", !!desk);
 if (desk) {
-  ok("desktop layout box is exactly 960×700", desk.frameW === 960 && desk.frameH === 700, `${desk.frameW}×${desk.frameH}`);
+  ok("desktop layout box is exactly 1280×800", desk.frameW === 1280 && desk.frameH === 800, `${desk.frameW}×${desk.frameH}`);
   ok("desktop transform present", desk.transform !== "none", desk.transform);
   ok("runtime got the desktop breakpoint", desk.rootClass.includes("qz-bp-desktop"));
   ok("desktop padding-top 48 (shell rule)", desk.padTop === "48px", desk.padTop);
+  // The point of the 1280 frame: the shell has hit its 1100 cap instead of
+  // being squeezed by the viewport — the preview shows the TRUE max size.
+  ok("shell is width-capped at 1100 (terminal size, not viewport-limited)", desk.shellW === 1100, `shell ${desk.shellW}px`);
 }
 await page.screenshot({ path: `${SHOTS}/02-desktop.png` });
 
@@ -164,7 +171,7 @@ const expand = await page.evaluate(() => {
   const m = new DOMMatrix(getComputedStyle(frame).transform);
   return { w: frame.offsetWidth, h: frame.offsetHeight, scale: m.a, tier: frame.dataset.qzTier };
 });
-ok("expand renders the same fixed frame", !!expand && expand.w === 960 && expand.h === 700, expand ? `${expand.w}×${expand.h}` : "missing");
+ok("expand renders the same fixed frame", !!expand && expand.w === 1280 && expand.h === 800, expand ? `${expand.w}×${expand.h}` : "missing");
 ok("expand never upscales past 1:1", !!expand && expand.scale <= 1.001, `scale ${expand?.scale?.toFixed(3)}`);
 await page.screenshot({ path: `${SHOTS}/03-expand.png` });
 await page.keyboard.press("Escape");

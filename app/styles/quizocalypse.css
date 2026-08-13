@@ -4472,7 +4472,7 @@ body[data-qz] .qz-stepnav-pill:focus-visible { outline: 2px solid var(--qz-accen
    .qz-s3-holder + the 390×844/1180×740 scale math, the 44px bezel, the
    bottom fade and the faux desktop browser chrome) are RETIRED: the funnel
    preview renders through the shared DeviceFrame (previewWidth.DEVICES —
-   phone 390×745 / desktop 960×700, min(paneW/w, paneH/h, 1) fit, Quartz
+   phone 390×745 / desktop 1280×800, min(paneW/w, paneH/h, 1) fit, Quartz
    frame chrome). The .qz-s3-frame skin + the .qz-g2-stage host clamp live
    in the QRTZ-G2 section at the end of this sheet. */
 /* — Expand overlay (portal to body; z above every builder layer) — */
@@ -9203,7 +9203,9 @@ tr.qz-ltab-qstart td { border-top: 2px solid var(--qz-rule); }
 /* ═══ QRTZ-S3 — preview frames ═══
    Quartz frames spec (docs/design/brand-2026/reference/quartz-preview-frames
    .html, _src/base.mjs + frames.mjs): phone 390×745 borderless-solid with the
-   fold marker; Desktop = the 960×700 INLINE embed band; the launcher modal
+   fold marker; Desktop = a 1280×800 laptop viewport (past the 1100px shell
+   cap, so the quiz previews at its terminal size; the 960 inline band lives
+   on as the inline/product_widget placement); the launcher modal
    (720×620) stays declared in previewWidth.ts but is never offered as a
    preview. Frame chrome itself lives in the .qz-devframe block (~line 1796,
    also QRTZ-S3-owned). */
@@ -10157,7 +10159,7 @@ button.qz-pb-row:hover { background: var(--qz-cream-2); }
 /* ═══ QRTZ-G2 — funnel questions preview through DeviceFrame ═══
    Owner feedback: "the phone should never be cut off and must keep a
    min/max size". The device is the shared DeviceFrame (previewWidth.DEVICES
-   — phone 390×745, desktop 960×700; fit = min(paneW/w, paneH/h, 1), whole
+   — phone 390×745, desktop 1280×800; fit = min(paneW/w, paneH/h, 1), whole
    frame always visible, never past 1:1). The HOST clamps the room:
 
    .qz-g2-stage height = clamp(410px, 100vh − 232px, 800px)
