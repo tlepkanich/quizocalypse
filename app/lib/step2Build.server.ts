@@ -285,7 +285,10 @@ export type GenFailMode = "shape" | "blank_questions";
 // FLOW-1 — `notice` lets the goal-first budget refusal land honest limit copy
 // (the four-outcome standard's limit_reached class); absent → today's default,
 // so every pre-existing caller is byte-identical.
-async function failToBlankQuestions(
+// QRTZ-G1 — exported for the speculative chain's COMMITTED-failure path
+// (specBuild.server.ts): once the merchant attached, a speculative failure is
+// merchant-visible work and lands the same honest blank-Questions notice.
+export async function failToBlankQuestions(
   shopId: string,
   quizId: string,
   notice?: string,
@@ -621,7 +624,10 @@ export function initPickedTemplate(
 // designTokens, and rec_defaults → recOverride, then kicks the detached AI build.
 // Returns the runAiOnboardingBuild promise so each caller attaches its OWN
 // completion handling (the legacy buildState overlay vs the funnel's stage flip).
-async function buildQuizFromPicked(
+// QRTZ-G1 — exported for the speculative chain (specBuild.server.ts), which
+// runs it in `captureDoc` mode: the build's output is RETURNED, never
+// persisted, so the merchant's draft stays untouched while they browse.
+export async function buildQuizFromPicked(
   shopId: string,
   quizId: string,
   rich: RichTemplateOption,
@@ -631,6 +637,8 @@ async function buildQuizFromPicked(
   // FAST F2 — optional prep started concurrently with template generation.
   // Absent (legacy/wizard/retry callers) → the build queries inline as today.
   prefetchedCatalog?: Promise<PrefetchedBuildCatalog | undefined>,
+  // QRTZ-G1 — capture mode (see OnboardingBuildInput.captureDoc).
+  captureDoc?: boolean,
 ): Promise<OnboardingBuildResult> {
   const cats = await prisma.category.findMany({
     where: { shopId, quizId },
@@ -730,6 +738,7 @@ async function buildQuizFromPicked(
         fallback_collection_id: picked.rec_defaults.fallback_collection_id,
       },
       ...(prefetched ? { prefetchedCatalog: prefetched } : {}),
+      ...(captureDoc ? { captureDoc: true } : {}),
     }),
   );
 }
