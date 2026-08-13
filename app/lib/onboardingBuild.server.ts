@@ -117,6 +117,13 @@ export interface OnboardingBuildInput {
   // websiteUrl, so its builds ingest nothing either way — this seam exists for
   // callers that do pass websiteUrl and want the fetch off the critical path.
   prefetchedWebsiteText?: string;
+  // QRTZ-G1 — capture mode for the speculative prefetch: the build NEVER
+  // writes draftJson (every persist path below is skipped) and instead
+  // returns the finished doc in the result (`doc`). A degraded outcome
+  // returns `degraded` with NO doc and NOTHING persisted — the speculative
+  // caller discards it silently. Requires `quizId` (capture never creates
+  // rows). ABSENT → behavior is byte-identical to before.
+  captureDoc?: boolean;
 }
 
 // FAST F2 — the shape of the prefetched catalog inputs (mirrors the catalog
@@ -132,6 +139,9 @@ export interface OnboardingBuildResult {
   // Present when AI couldn't complete the full build; the merchant still gets a
   // valid (possibly partial) draft + this human-readable explanation.
   degraded?: string;
+  // QRTZ-G1 — captureDoc mode only: the finished doc that WOULD have been
+  // persisted. Absent in every other mode, and absent on degraded captures.
+  doc?: QuizDoc;
 }
 
 const STARTED_BLANK = "we created a blank quiz to start";
@@ -236,14 +246,15 @@ export async function runAiOnboardingBuild(
             ? { collect_email_on_result: input.collectEmailOnResult }
             : {}),
         };
+        if (input.captureDoc) return { quizId, doc: finalDoc };
         await persist(quizId, finalDoc);
         return { quizId };
       }
-      await persist(quizId, seedDoc);
+      if (!input.captureDoc) await persist(quizId, seedDoc);
       return { quizId, degraded: "AI built a draft but it needs a tweak in the builder." };
     } catch (err) {
       reportError(err, { scope: "onboardingBuild", msg: "question write failed (degraded draft)", shopId, quizId });
-      await persist(quizId, seedDoc);
+      if (!input.captureDoc) await persist(quizId, seedDoc);
       return { quizId, degraded: "AI couldn't write questions — add them in the builder." };
     }
   }
@@ -315,7 +326,7 @@ export async function runAiOnboardingBuild(
       if (node) smartBuckets.push({ id: b.id, name: b.name, tags: b.tags, resultNodeId: node.id });
     }
     if (smartBuckets.length === 0) {
-      await persist(quizId, doc);
+      if (!input.captureDoc) await persist(quizId, doc);
       return { quizId, degraded: "We set up your result pages — add questions in the builder." };
     }
   }
@@ -373,7 +384,7 @@ export async function runAiOnboardingBuild(
     });
   } catch (err) {
     reportError(err, { scope: "onboardingBuild", msg: "question flow build failed (degraded draft)", shopId, quizId });
-    await persist(quizId, doc);
+    if (!input.captureDoc) await persist(quizId, doc);
     return {
       quizId,
       degraded: "AI set up your products and pages but couldn't write questions — add them in the builder.",
@@ -403,7 +414,7 @@ export async function runAiOnboardingBuild(
           buckets.map((b) => ({ id: b.id, name: b.name })),
           firstCollection,
         );
-    await persist(quizId, fallback);
+    if (!input.captureDoc) await persist(quizId, fallback);
     return { quizId, degraded: "AI built a draft but it needs a tweak in the builder." };
   }
 
@@ -430,6 +441,9 @@ export async function runAiOnboardingBuild(
         brandIdentity: parseBrandIdentitySafe(shop?.brandIdentity),
       })
     : configuredDoc;
+  // QRTZ-G1 — capture mode holds the finished doc for the speculative caller
+  // instead of persisting it; the merchant's draft stays untouched.
+  if (input.captureDoc) return { quizId, doc: finalDoc };
   await prisma.quiz.update({ where: { id: quizId }, data: { draftJson: finalDoc as never } });
   return { quizId };
 }

@@ -100,6 +100,45 @@ Original items, for the record:
   400s once failure resets the stage; a safe re-kick needs a server branch
   that regenerates headless without clobbering manual edits.
 
+### Proposal (QRTZ-G1, 2026-08-13) — robust question bank: curated
+### per-vertical instant drafts (NOT built; owner green-light needed)
+
+The product feedback behind the speculative prefetch ("this step takes a
+lotttt of time") has a second, complementary answer: stop generating the
+first draft at all. A **question bank** — curated, per-vertical question
+flows that install INSTANTLY as the draft the merchant lands on, with AI
+demoted to a personalization pass that can run after the merchant is already
+editing. The PORT-10 global starter templates (8 `shopId=NULL` SavedTemplate
+rows on `/studio/templates`) are the embryo of this; what's missing:
+
+- **Content curation.** Each vertical needs a reviewed flow of 5-7 questions
+  with answer sets, tone variants, and per-answer mapping INTENT (e.g.
+  "maps to the eligibility-narrowing bucket", not concrete cuids) — written
+  and QA'd like product copy, not generated. Roughly 15-25 flows to cover
+  the common verticals; each is a day of writing + review, and they need an
+  owner for freshness.
+- **Vertical taxonomy.** A stable mapping from what we know about a shop
+  (brand identity `positioning.industry`/`vertical`, catalog product types,
+  §I2 keyword mappings when ported) onto bank entries, with an honest
+  general-commerce fallback — the taxonomy decides whether the bank feels
+  "made for me" or "template-y".
+- **Personalization pass.** Bank questions ground in the vertical, not the
+  catalog: a cheap post-install pass must (a) resolve mapping intents onto
+  the merchant's actual Category rows (the decider `target_ids` mirror
+  invariant), (b) rewrite answer copy toward the real product vocabulary
+  (MODEL_SPEED-class work), and (c) mark everything `ai_generated` so the
+  existing per-question regenerate affordances apply. Steps (a)+(install)
+  are instant and AI-free — the merchant edits a real draft in <2s; (b)
+  streams in behind them.
+
+Why it needs a green-light rather than a build: the curation cost is a
+content-program commitment (not a code task), it overlaps the §I2/§K8
+showcase-seed work (handoff-bundle remainder), and the owner may prefer
+extending the 8 starters incrementally over a taxonomy-driven bank. The
+speculative prefetch (QRTZ-G1) is orthogonal: the bank kills the wait for
+merchants who accept a curated start; the prefetch kills it for merchants
+who want generation from THEIR pool.
+
 ## C. Code follow-ups (mechanical, safe to hand to any agent)
 
 - **Port the role-popover footer + Coverage-matters treatment into

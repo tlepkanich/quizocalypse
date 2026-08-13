@@ -11,7 +11,7 @@ import {
 } from "@remix-run/node";
 import prisma from "../db.server";
 import { logFor } from "./log.server";
-import { withAiSpendRecording } from "./aiBudget.server";
+import { checkAiBudget, withAiSpendRecording } from "./aiBudget.server";
 import { Quiz, DesignDials, RecDefaults, DesignTokens, QuizType } from "./quizSchema";
 import type { BuildSession } from "./quizSchema";
 import { parseBrandIdentitySafe } from "./brandIdentity";
@@ -39,6 +39,12 @@ import {
 } from "./step2Build.server";
 import { saveTemplate, loadSavedTemplate } from "./savedTemplates.server";
 import { startGoalPrepick } from "./goalPrepick.server";
+import {
+  resolveSpecInputs,
+  startSpeculativeBuild,
+  applySpeculativeReady,
+} from "./specBuild.server";
+import { specContinueDecision, specStartDecision } from "./specPrefetch";
 import { applyManualDeciderSkeleton } from "./smartBuild";
 import {
   MAX_LOGO_BYTES,
@@ -333,6 +339,43 @@ async function runStep1FunnelActionImpl(
     return json({ intent, ok: true });
   }
 
+  // QRTZ-G1 — the speculative question-gen prefetch's settle ping. The buckets
+  // stage fires this once the chosen pool sits unchanged for ~5s; NOTHING here
+  // is merchant-visible — the stage machine is untouched, the response never
+  // carries an error, and a refused/failed speculation is indistinguishable
+  // from no speculation (Continue just runs the normal path). Guards:
+  //  • decider + grouping-stage + speculable flow only (resolveSpecInputs —
+  //    legacy docs and FLOW-3 return null and are never speculated);
+  //  • the SAME merchant aiBudget ceiling every gen job checks at kick —
+  //    over-budget → silent skip, no marker, no gen_error;
+  //  • one live speculation at a time (specStartDecision): a same-signature
+  //    run/result/tombstone skips; a different signature supersedes — the old
+  //    chain halts at its next pass boundary; a stale marker (killed job) may
+  //    be restarted.
+  if (intent === "speculate") {
+    if (session.stage !== "grouping") return json({ intent, ok: true, spec: "skipped" });
+    const specInputs = await resolveSpecInputs(shop.id, quiz.id, doc, session);
+    if (!specInputs) return json({ intent, ok: true, spec: "skipped" });
+    if (specStartDecision(session.speculative, specInputs.signature, new Date()) !== "start") {
+      return json({ intent, ok: true, spec: "cached" });
+    }
+    const budget = await checkAiBudget(shop.id, "merchant");
+    if (!budget.allowed) return json({ intent, ok: true, spec: "skipped" });
+    await writeDoc(quiz.id, {
+      ...doc,
+      build_session: {
+        ...session,
+        speculative: {
+          signature: specInputs.signature,
+          status: "running",
+          started_at: new Date().toISOString(),
+        },
+      },
+    });
+    startSpeculativeBuild(shop.id, quiz.id, specInputs);
+    return json({ intent, ok: true, spec: "started" });
+  }
+
   // Continue → advance to the goal stage (relabeled "Step 2" in the UI). The
   // bucket rows ARE the confirmed grouping; dimension reflects the active tab.
   if (intent === "continue-buckets") {
@@ -377,14 +420,60 @@ async function runStep1FunnelActionImpl(
     // suggestion grounds the generation exactly as the old typing kick did.
     // Legacy drafts keep the byte-identical Shape route below.
     if (doc.logic_model === "decider") {
+      const grouping = {
+        dimension: dimension as "tag" | "collection" | "all",
+        confirmed_category_ids: cats.map((c) => c.id),
+        detected_rationale: "Selected in the recommendation buckets browser.",
+      };
+      // QRTZ-G1 — a settled-pool speculation may already have run (or be
+      // running) this exact headless chain. Signature-checked through the SAME
+      // derivation the settle ping used: any drift in pool rows/membership or
+      // the derived goal falls through to the fresh path below, whose write
+      // clears the marker (halting a superseded chain at its next boundary).
+      const specInputs = await resolveSpecInputs(shop.id, quiz.id, doc, session);
+      const specDecision = specContinueDecision(
+        session.speculative,
+        specInputs?.signature ?? "",
+        new Date(),
+      );
+      if (specDecision === "apply" && session.speculative) {
+        const applied = await applySpeculativeReady(quiz.id, session.speculative, {
+          grouping,
+          goal: { goal_text: suggestedGoal, struggle_text: session.goal?.struggle_text ?? "" },
+          ai_generate: true,
+        });
+        // The held questions land instantly — the merchant skips the
+        // generating screen entirely. An unusable held result (parse failure)
+        // silently runs the fresh chain instead.
+        if (applied) return json({ intent, ok: true });
+      }
+      if (specDecision === "attach" && session.speculative) {
+        // The chain is mid-flight for this exact pool: park the merchant on
+        // the SAME generating screen the fresh chain uses (its existing poll
+        // + stall backstop take over), mark the speculation committed, and
+        // let its completion apply. If the job silently died, genStalled →
+        // retry-gen re-kicks the normal chain (which clears the marker).
+        const next: BuildSession = {
+          ...session,
+          stage: "typing",
+          grouping,
+          goal: { goal_text: suggestedGoal, struggle_text: session.goal?.struggle_text ?? "" },
+          gen_error: undefined,
+          ai_generate: true,
+          quiz_types: [],
+          picked_type_id: undefined,
+          rich_templates: [],
+          picked_template: undefined,
+          built: undefined,
+          speculative: { ...session.speculative, committed: true },
+        };
+        await writeDoc(quiz.id, { ...doc, scoring_model: "direct", build_session: next });
+        return json({ intent, ok: true });
+      }
       const next: BuildSession = {
         ...session,
         stage: "typing",
-        grouping: {
-          dimension,
-          confirmed_category_ids: cats.map((c) => c.id),
-          detected_rationale: "Selected in the recommendation buckets browser.",
-        },
+        grouping,
         goal: { goal_text: suggestedGoal, struggle_text: session.goal?.struggle_text ?? "" },
         gen_error: undefined,
         ai_generate: true,
@@ -396,6 +485,9 @@ async function runStep1FunnelActionImpl(
         rich_templates: [],
         picked_template: undefined,
         built: undefined,
+        // QRTZ-G1 — a non-matching/failed speculation is discarded here; a
+        // still-running superseded chain halts at its next pass boundary.
+        speculative: undefined,
       };
       await writeDoc(quiz.id, { ...doc, scoring_model: "direct", build_session: next });
       const buckets = await loadConfirmedBuckets(shop.id, quiz.id);
@@ -648,6 +740,10 @@ async function runStep1FunnelActionImpl(
             rich_templates: [],
             picked_template: undefined,
             ai_generate: undefined,
+            // QRTZ-G1 — the write-a-goal route supersedes any settled-pool
+            // speculation (its goal differs by construction): discard the
+            // marker; a running chain halts at its next pass boundary.
+            speculative: undefined,
           }
         : {}),
     };
@@ -707,14 +803,55 @@ async function runStep1FunnelActionImpl(
     }
     const tabDim = session.bucket_browser?.active_tab;
     const struggle = session.goal?.struggle_text ?? "";
+    const flow1Grouping = {
+      dimension: (tabDim === "tag" ? "tag" : tabDim === "collection" ? "collection" : "all") as
+        | "tag"
+        | "collection"
+        | "all",
+      confirmed_category_ids: cats.map((c) => c.id),
+      detected_rationale: "Confirmed on the goal-first recommendations step.",
+    };
+    // QRTZ-G1 — a settled-pool speculation may already have run (or be
+    // running) this exact goal-first chain (same goal, same length pin, same
+    // pool — the signature proves it). Any drift falls through to the fresh
+    // path below, whose write clears the marker.
+    const specInputs = await resolveSpecInputs(shop.id, quiz.id, doc, session);
+    const specDecision = specContinueDecision(
+      session.speculative,
+      specInputs?.signature ?? "",
+      new Date(),
+    );
+    if (specDecision === "apply" && session.speculative) {
+      const applied = await applySpeculativeReady(quiz.id, session.speculative, {
+        grouping: flow1Grouping,
+        ai_generate: undefined,
+      });
+      if (applied) return json({ intent, ok: true });
+    }
+    if (specDecision === "attach" && session.speculative) {
+      // Mid-flight for this exact confirm: park on the generating screen
+      // (existing poll + stall backstop), mark committed, let the chain's
+      // completion apply. A dead job recovers via genStalled → retry-gen.
+      const next: BuildSession = {
+        ...session,
+        stage: "typing",
+        grouping: flow1Grouping,
+        gen_error: undefined,
+        quiz_types: [],
+        picked_type_id: undefined,
+        rich_templates: [],
+        picked_template: undefined,
+        ai_generate: undefined,
+        built: undefined,
+        speculative: { ...session.speculative, committed: true },
+      };
+      await writeDoc(quiz.id, { ...doc, scoring_model: "direct", build_session: next });
+      return json({ intent, ok: true });
+    }
     const next: BuildSession = {
       ...session,
       stage: "typing",
-      grouping: {
-        dimension: tabDim === "tag" ? "tag" : tabDim === "collection" ? "collection" : "all",
-        confirmed_category_ids: cats.map((c) => c.id),
-        detected_rationale: "Confirmed on the goal-first recommendations step.",
-      },
+      grouping: flow1Grouping,
       gen_error: undefined,
       // A retried/re-confirmed flow starts a FRESH headless chain — stale
       // template artifacts would misroute retry-gen (the shape-goal-build
@@ -730,6 +867,9 @@ async function runStep1FunnelActionImpl(
       // MID-generation (built reads as "finished"). The build's completion
       // sets it honestly.
       built: undefined,
+      // QRTZ-G1 — discard any non-matching/failed speculation; a superseded
+      // running chain halts at its next pass boundary.
+      speculative: undefined,
     };
     await writeDoc(quiz.id, { ...doc, scoring_model: "direct", build_session: next });
     startStep2Types(
@@ -820,6 +960,8 @@ async function runStep1FunnelActionImpl(
         // marker is cleared — template_first owns this chain.
         built: undefined,
         ai_generate: undefined,
+        // QRTZ-G1 — FLOW-3 is never speculated: discard any leftover marker.
+        speculative: undefined,
       };
       await writeDoc(quiz.id, {
         ...doc,
@@ -853,6 +995,8 @@ async function runStep1FunnelActionImpl(
       gen_error: undefined,
       built: undefined,
       ai_generate: undefined,
+      // QRTZ-G1 — FLOW-3 is never speculated: discard any leftover marker.
+      speculative: undefined,
     };
     await writeDoc(quiz.id, {
       ...doc,
@@ -927,6 +1071,10 @@ async function runStep1FunnelActionImpl(
       rich_templates: [],
       picked_template: undefined,
       ai_generate: undefined,
+      // QRTZ-G1 — the merchant chose blank: discard any speculation (a
+      // running chain halts at its next pass boundary; a READY result must
+      // never survive to clobber their manual work on a later Continue).
+      speculative: undefined,
     };
     await writeDoc(quiz.id, { ...skeleton, scoring_model: "direct", build_session: next });
     return json({ intent, ok: true });
@@ -995,7 +1143,13 @@ async function runStep1FunnelActionImpl(
     }
     if (session.stage === "typing") {
       const retryBuckets = await loadConfirmedBuckets(shop.id, quiz.id);
-      await writeDoc(quiz.id, { ...doc, build_session: { ...session, gen_error: undefined } });
+      // QRTZ-G1 — a retry means the prior chain (speculative-attached or
+      // normal) is presumed dead: clear the marker so a zombie speculative
+      // completion can never race the fresh chain kicked below.
+      await writeDoc(quiz.id, {
+        ...doc,
+        build_session: { ...session, gen_error: undefined, speculative: undefined },
+      });
       startStep2Types(
         shop.id,
         quiz.id,
@@ -1029,7 +1183,11 @@ async function runStep1FunnelActionImpl(
           where: { shopId: shop.id, quizId: quiz.id },
           select: { id: true, name: true, tags: true },
         });
-        await writeDoc(quiz.id, { ...doc, build_session: { ...session, gen_error: undefined } });
+        // QRTZ-G1 — same zombie-marker clear as the typing branch.
+        await writeDoc(quiz.id, {
+          ...doc,
+          build_session: { ...session, gen_error: undefined, speculative: undefined },
+        });
         startStep2Templates(
           shop.id,
           quiz.id,
@@ -1062,7 +1220,11 @@ async function runStep1FunnelActionImpl(
           (t) => t.id === session.picked_template?.template_id,
         );
         if (retryRich && session.picked_template) {
-          await writeDoc(quiz.id, { ...doc, build_session: { ...session, gen_error: undefined } });
+          // QRTZ-G1 — same zombie-marker clear as the typing branch.
+          await writeDoc(quiz.id, {
+            ...doc,
+            build_session: { ...session, gen_error: undefined, speculative: undefined },
+          });
           await startQuestionBuild(
             shop.id,
             quiz.id,
@@ -1147,6 +1309,9 @@ async function runStep1FunnelActionImpl(
           rich_templates: [richForDraft],
           picked_template: picked,
           gen_error: undefined,
+          // QRTZ-G1 — a saved-template build supersedes any speculation; a
+          // READY result must never survive to clobber this build later.
+          speculative: undefined,
         },
       });
       await startQuestionBuild(shop.id, quiz.id, richForDraft, picked, goal, struggle);

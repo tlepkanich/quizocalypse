@@ -1641,6 +1641,33 @@ export const BuildSession = z.object({
       banner_dismissed: z.boolean().default(false),
     })
     .optional(),
+  // QRTZ-G1 — the speculative question-gen prefetch's DRAFT-SIDE holding
+  // field. While the merchant sits on the buckets step with a settled pool,
+  // a background chain may pre-run the exact generation their Continue would
+  // kick; everything it produces is HELD here — the visible funnel stage is
+  // never advanced by speculation. Keyed by `signature` (specPrefetch.ts:
+  // sorted pool row ids+members + goal/struggle/length + flow) so Continue
+  // only ever uses a byte-equivalent match. `committed` is set when Continue
+  // ATTACHES to an in-flight run (the chain's completion then applies).
+  // `doc` is the captured built quiz doc (runAiOnboardingBuild captureDoc
+  // mode) — parsed at apply time, never trusted raw. OPTIONAL WITHOUT
+  // DEFAULT (the translations-field discipline): absent round-trips absent,
+  // so legacy docs and every non-speculating flow stay byte-identical.
+  // Draft-only by construction: build_session is stripped at publish.
+  speculative: z
+    .object({
+      signature: z.string(),
+      status: z.enum(["running", "ready", "failed"]),
+      started_at: z.string(),
+      committed: z.boolean().optional(),
+      quiz_types: z.array(QuizType).optional(),
+      picked_type_id: z.string().optional(),
+      rich_templates: z.array(RichTemplateOption).optional(),
+      picked_template: PickedTemplate.optional(),
+      web_research_summary: z.string().optional(),
+      doc: z.unknown().optional(),
+    })
+    .optional(),
 });
 export type BuildSession = z.infer<typeof BuildSession>;
 

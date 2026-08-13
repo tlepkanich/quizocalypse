@@ -4,8 +4,7 @@
 // AI banner). Only the imports are new.
 import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties, KeyboardEvent as ReactKeyboardEvent } from "react";
-import { Link } from "@remix-run/react";
-import type { useFetcher } from "@remix-run/react";
+import { Link, useFetcher } from "@remix-run/react";
 import { Box, Check, FolderOpen, Play, RotateCcw, Tag, X } from "lucide-react";
 import { QzCard, QzBadge, QzInput } from "../../qz";
 import { QzModal, QzDrawer } from "../../qz-overlays";
@@ -416,6 +415,34 @@ export function RecommendationBucketsStage({
     [continueLabel, barContinue, count, continueBusy],
   );
   useFunnelBar(barOverride);
+
+  // QRTZ-G1 — speculative question-gen prefetch: once the chosen pool SETTLES
+  // (≥1 recommendation, the shared mutation fetcher idle, and no pool change
+  // for 5s), ping the server's `speculate` intent. Fire-and-forget: the server
+  // owns every decision (signature, budget, one-at-a-time, supersede) and
+  // nothing about it is visible here — Continue simply lands faster when the
+  // speculation hit. A SEPARATE fetcher so a settle ping can never cancel an
+  // in-flight bucket write (one Remix fetcher = one in-flight submission).
+  // Decider-only, and only on flows whose Continue chain is deterministic at
+  // settle time: goal-first (pre-pick ready) and the plain flow (whose pop-up
+  // "Generate with AI" runs the derived-goal chain). FLOW-3 keeps the normal
+  // path. Re-arms only when the pool identity changes, so an idle merchant
+  // never generates repeat pings (the server would skip them anyway).
+  const specFetcher = useFetcher();
+  const specFetcherRef = useRef(specFetcher);
+  specFetcherRef.current = specFetcher;
+  const specEligible =
+    isDecider && !templateFirst && (!goalFirst || goalFirst.prepick === "ready");
+  const poolKey = useMemo(() => [...selected.keys()].sort().join("|"), [selected]);
+  const poolCount = selected.size;
+  const mutationState = fetcher.state;
+  useEffect(() => {
+    if (!specEligible || poolCount === 0 || mutationState !== "idle") return;
+    const t = window.setTimeout(() => {
+      specFetcherRef.current.submit({ intent: "speculate" }, { method: "post" });
+    }, 5000);
+    return () => window.clearTimeout(t);
+  }, [poolKey, poolCount, mutationState, specEligible]);
 
   // One-line-chrome §2.3 — the tip earns its place only when the grouping
   // choice is genuinely ambiguous: ≥20 products AND more than one viable
