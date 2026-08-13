@@ -20,8 +20,8 @@ import {
 } from "./state";
 
 /* Results-guided handoff §6 — the preview. QRTZ-S3: rendered through the
-   shared DeviceFrame (the canonical 390×745 phone / 1280×800 desktop viewport
-   of previewWidth.DEVICES — this file used to hardcode 390×844 / 1180×740 and
+   shared DeviceFrame (the canonical 390×745 phone / 960×700 inline band of
+   previewWidth.DEVICES — this file used to hardcode 390×844 / 1180×740 and
    its own fit math), scaled to fit. QRTZ-G45 (owner reversal of F5 on THIS
    surface only): no size/scale readout and no fold marker here — the view
    controls sit in a plain bar above the frame; the builder keeps both.

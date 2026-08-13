@@ -21,7 +21,7 @@
 // .qz-qf-odel (2-floor) · dashed .qz-qf-addopt) with the answer-type control
 // IN the pv-bar (.qz-s3-pvtype — QRTZ-S5 retired the floating tag; hidden on
 // capture/reveal) plus Mobile/Desktop + icon-only Expand, over the shared
-// DeviceFrame (QRTZ-G2 — canonical 390×745 phone / 1280×800 desktop viewport,
+// DeviceFrame (QRTZ-G2 — canonical 390×745 phone / 960×700 desktop band,
 // fit = min(paneW/w, paneH/h, 1), host floor .55 via the .qz-g2-stage
 // clamp). ▦ tab: the content OverviewLedger — the SAME connected
 // .qz-s3-ledger container as the Logic map, but bulk CONTENT editing
@@ -469,18 +469,16 @@ try {
     ((await page.locator(".qz-s3-scalelab").textContent()) ?? "").includes("Beginner"));
   ok("Back pill visible mid-walk", (await page.locator(".qz-s3-backpill").count()) === 1);
 
-  // 14 ── desktop toggle: the canonical 1280×800 laptop viewport (QRTZ-G2 —
-  // no faux browser chrome; the in-screen top bar shows like the live
-  // runtime; 1280 sits past the 1100px shell cap so the quiz previews at its
-  // terminal size — owner ask 2026-08-13)
+  // 14 ── desktop toggle: the canonical 960×700 inline band (QRTZ-G2 — no
+  // faux browser chrome; the in-screen top bar shows like the live runtime)
   await page.locator(".qz-s3-segbtns button").nth(1).click();
   await page.waitForTimeout(400);
   const dgeo = await page.locator(".qz-g2-stage .qz-devframe").evaluate((el) => {
     const cs = getComputedStyle(el);
     return { w: cs.width, h: cs.height };
   });
-  ok("desktop frame is the canonical 1280 logical px (was 960)", dgeo.w === "1280px", dgeo.w);
-  ok("desktop frame is 800 logical px tall", dgeo.h === "800px", dgeo.h);
+  ok("desktop band is the canonical 960 logical px (was 1180)", dgeo.w === "960px", dgeo.w);
+  ok("desktop band is 700 logical px tall", dgeo.h === "700px", dgeo.h);
   ok("faux browser chrome retired", (await page.locator(".qz-s3-dchrome").count()) === 0);
   ok("in-screen top bar SHOWS on desktop (like the live runtime)",
     await page.locator(".qz-s3-screen-top").first().evaluate((el) => getComputedStyle(el).display !== "none"));

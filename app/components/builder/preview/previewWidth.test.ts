@@ -1,12 +1,17 @@
 import { describe, expect, it } from "vitest";
 import {
   breakpointForWidth,
+  clampPreviewWidth,
   fitConstraint,
   fitScale,
+  tierForWidth,
   DESKTOP_TERMINAL_PX,
   DEVICES,
   DEVICE_TIERS,
   INLINE_BAND_PX,
+  PRESET_WIDTH,
+  PREVIEW_MAX_PX,
+  PREVIEW_MIN_PX,
   TIER_BREAKPOINT,
 } from "./previewWidth";
 import {
@@ -16,33 +21,56 @@ import {
   SHELL_MAX_PX,
 } from "../../runtime/runtimeStyles";
 
-describe("DEVICES", () => {
-  it("is the two fixed viewports and nothing else", () => {
+describe("DEVICES (the funnel walkthroughs' fixed frames)", () => {
+  it("is the two fixed viewports of the Quartz frames spec and nothing else", () => {
     expect(Object.keys(DEVICES).sort()).toEqual(["desktop", "phone"]);
     expect(DEVICES.phone).toEqual({ w: 390, h: 745 });
-    // A real laptop viewport, past the shell cap (see the terminal-size pin
-    // below) — the merchant designs against the quiz's TRUE max size.
-    expect(DEVICES.desktop).toEqual({ w: 1280, h: 800 });
+    // QRTZ-S3 — the inline embed band, not a browser window: above the 900
+    // breakpoint, squarer than a letterbox. Max-size truth is the builder
+    // canvas's resizable viewport's job, not this frame's.
+    expect(DEVICES.desktop).toEqual({ w: 960, h: 700 });
     // No tablet: 768 would render the phone layout, so the button would lie.
     expect(DEVICE_TIERS).toEqual(["phone", "desktop"]);
-  });
-
-  it("shows the desktop quiz AT its terminal size, never mid-resize (owner ask 2026-08-13)", () => {
-    // The quiz stops growing once the viewport clears the shell cap plus the
-    // page's side padding. A desktop frame below this line previews a width
-    // the quiz never renders full-page — the exact bug the 960 band had.
-    expect(DESKTOP_TERMINAL_PX).toBe(SHELL_MAX_PX + PAGE_PAD_DEFAULT_PX * 2);
-    expect(DEVICES.desktop.w).toBeGreaterThanOrEqual(DESKTOP_TERMINAL_PX);
-    // The inline band survives as a placement INSIDE the viewport and must
-    // still fit with room for the host page's own margins.
-    expect(INLINE_BAND_PX).toBeLessThan(DEVICES.desktop.w);
   });
 
   it("states the usable content heights the steps design against", () => {
     // Phone: frame minus the runtime page's default padding (24 top + 24 bottom).
     expect(DEVICES.phone.h - PAGE_PAD_DEFAULT_PX - PAGE_PAD_DEFAULT_PX).toBe(697);
     // Desktop: the desktop-shell rule swaps padding-top for its own default.
-    expect(DEVICES.desktop.h - PAGE_PAD_DESKTOP_TOP_PX - PAGE_PAD_DEFAULT_PX).toBe(728);
+    expect(DEVICES.desktop.h - PAGE_PAD_DESKTOP_TOP_PX - PAGE_PAD_DEFAULT_PX).toBe(628);
+  });
+});
+
+describe("drag/2026-08 — the builder viewport's width presets", () => {
+  it("Desktop lands AT the quiz's terminal size, never mid-resize (owner ask 2026-08-13)", () => {
+    // The quiz stops growing once the viewport clears the shell cap plus the
+    // page's side padding. A desktop preset below this line would land on a
+    // width the quiz never renders full-page — the exact bug the old fixed
+    // 960 desktop frame had.
+    expect(DESKTOP_TERMINAL_PX).toBe(SHELL_MAX_PX + PAGE_PAD_DEFAULT_PX * 2);
+    expect(PRESET_WIDTH.desktop).toBeGreaterThanOrEqual(DESKTOP_TERMINAL_PX);
+    expect(PRESET_WIDTH.desktop).toBeLessThanOrEqual(PREVIEW_MAX_PX);
+    // Phone = the canonical 390 viewport, and both presets honestly sit on
+    // the side of the 900 line their button names.
+    expect(PRESET_WIDTH.phone).toBe(DEVICES.phone.w);
+    expect(tierForWidth(PRESET_WIDTH.phone)).toBe("phone");
+    expect(tierForWidth(PRESET_WIDTH.desktop)).toBe("desktop");
+    // The inline band renders INSIDE the viewport at the desktop preset.
+    expect(INLINE_BAND_PX).toBeLessThan(PRESET_WIDTH.desktop);
+  });
+
+  it("clampPreviewWidth bounds the drag and rounds to whole px", () => {
+    expect(clampPreviewWidth(10)).toBe(PREVIEW_MIN_PX);
+    expect(clampPreviewWidth(99999)).toBe(PREVIEW_MAX_PX);
+    expect(clampPreviewWidth(899.6)).toBe(900);
+    expect(clampPreviewWidth(1024)).toBe(1024);
+  });
+
+  it("tierForWidth mirrors the runtime's 900px line exactly", () => {
+    expect(tierForWidth(899)).toBe("phone");
+    expect(tierForWidth(900)).toBe("desktop");
+    expect(tierForWidth(BREAKPOINT_PX - 1)).toBe("phone");
+    expect(tierForWidth(BREAKPOINT_PX)).toBe("desktop");
   });
 });
 
@@ -83,8 +111,8 @@ describe("fitScale", () => {
   it("takes the smaller axis ratio", () => {
     // Width-limited: 195/390 = 0.5 beats 745/745 = 1.
     expect(fitScale("phone", 195, 745)).toBeCloseTo(0.5, 10);
-    // Height-limited: 400/800 = 0.5 beats 1280/1280 = 1.
-    expect(fitScale("desktop", 1280, 400)).toBeCloseTo(0.5, 10);
+    // Height-limited: 350/700 = 0.5 beats 960/960 = 1.
+    expect(fitScale("desktop", 960, 350)).toBeCloseTo(0.5, 10);
   });
 
   it("returns 1 for an unmeasured or zero-size pane (SSR / display:none)", () => {
@@ -95,7 +123,7 @@ describe("fitScale", () => {
   it("reaches actual size in a pane slightly roomier than the device", () => {
     // A pane a few px larger on both axes shows the device 1:1 (Expand case).
     expect(fitScale("phone", 422, 777)).toBe(1);
-    expect(fitScale("desktop", 1312, 832)).toBe(1);
+    expect(fitScale("desktop", 1000, 720)).toBe(1);
   });
 });
 

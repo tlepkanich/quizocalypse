@@ -21,7 +21,15 @@ import type { StepProps } from "../builder/stepProps";
 import { Step5Preview } from "../builder/Step5Preview";
 import { Step1Products } from "../builder/Step1Products";
 import { LogicView } from "../logic/LogicView";
-import { DEFAULT_TIER, TIER_BREAKPOINT, TIER_LABEL, type DeviceTier } from "../builder/preview/previewWidth";
+import {
+  DEFAULT_TIER,
+  DESKTOP_TERMINAL_PX,
+  PRESET_WIDTH,
+  TIER_BREAKPOINT,
+  TIER_LABEL,
+  tierForWidth,
+  type DeviceTier,
+} from "../builder/preview/previewWidth";
 import type { InspectTarget } from "../runtime/QuizRuntime";
 import { useQuizDraft } from "./useQuizDraft";
 import { FlowRail, type WorkspaceView } from "./FlowRail";
@@ -275,18 +283,14 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [undo, redo]);
-  // QB-2 — preview zoom (a CSS scale on the canvas frame), 50–100%.
-  const [zoom, setZoom] = useState(100);
-  // QRTZ-S4 (F5) — ZOOM TRUTH: the stagebar readout must print the APPLIED
-  // scale, not the requested ceiling (zoom CLAMPS DeviceFrame's fit scale, so
-  // "100%" can render at 62%). Step5Preview keeps DeviceFrame's onFit to
-  // itself (preview files are a sibling's — not edited), so the applied scale
-  // is measured from the canvas DOM instead: the .qz-devframe carries the one
-  // transform, so rect.width / offsetWidth IS the applied scale. Re-measured
-  // via a ResizeObserver on the frame's scaled footprint slot (its size is
-  // exactly round(w × scale), so every scale change resizes it).
+  // drag/2026-08 — the canvas viewport's width (replaces the QB-2 zoom: the
+  // frame is 1:1 now, so there is no scale to control). null = fill the pane
+  // ("what the browser shows"); the edge handles / device presets set numbers.
+  const [previewWidthPx, setPreviewWidthPx] = useState<number | null>(null);
+  // The RENDERED width, reported by the viewport (pane-sized in fill mode) —
+  // this is what the readout prints and what the mode derives from.
+  const [previewLiveWidth, setPreviewLiveWidth] = useState<number | null>(null);
   const canvasHostRef = useRef<HTMLDivElement | null>(null);
-  const [appliedZoomPct, setAppliedZoomPct] = useState<number | null>(null);
   // QRTZ-S4 — floating block toolbar over the canvas selection (mock
   // shared.mjs stage-tools): the clicked [data-qz-block] element (an explicit
   // node_layouts block) + its viewport rect for the portal overlay.
@@ -344,10 +348,16 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
   // context, never a destination tab). Opens the existing chat + enrich
   // panels in a right-side drawer; the full Assist design is DEFERRED.
   const [assistOpen, setAssistOpen] = useState(false);
-  // Device tier lifted from Step5Preview so the Design tab's layer selector
-  // can follow it ("edit what you see"). viewport/2026-08 B2: session-scoped,
-  // resets to DEFAULT_TIER (phone).
+  // Device tier for the CLASSIC (non-chromeless) Step5Preview surface only —
+  // lifted so that surface's ContextPanel layer selector can follow its frame.
+  // viewport/2026-08 B2: session-scoped, resets to DEFAULT_TIER (phone).
   const [tier, setTier] = useState<DeviceTier>(DEFAULT_TIER);
+  // drag/2026-08 — the BUILD view's tier is DERIVED from the viewport's
+  // rendered width (same 900px line as the runtime): the device toggle
+  // highlights whichever side of the line the dragged width sits on, and the
+  // Design tab's layer selector follows it ("edit what you see").
+  const buildTier: DeviceTier =
+    previewLiveWidth != null ? tierForWidth(previewLiveWidth) : DEFAULT_TIER;
   // QD-6 → QZY-6: the Build view's focused left panel (standalone only).
   // "theme" is the rail's Design section (the canvas stays visible); the old
   // ai/code tools moved to the Assist drawer + the Settings section.
@@ -403,7 +413,7 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
       window.removeEventListener("scroll", measure, true);
       window.removeEventListener("resize", measure);
     };
-  }, [blockSel, doc, zoom, tier, canvasMode, editMode]);
+  }, [blockSel, doc, previewWidthPx, previewLiveWidth, canvasMode, editMode]);
 
   // build-tab handoff §7 — "[" toggles the left library panel (never while
   // typing: inputs, textareas, selects, and contenteditable are exempt).
@@ -519,38 +529,9 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
     [view, doc, commit, data.categories, setParams],
   );
 
-  // QRTZ-S4 — measure the applied preview scale off the canvas's .qz-devframe
-  // (see the state comment above). Deps re-query on every input that can move
-  // the fit; the ResizeObserver on the footprint slot catches pane resizes.
-  useEffect(() => {
-    const host = canvasHostRef.current;
-    if (!host) {
-      setAppliedZoomPct(null);
-      return;
-    }
-    const measure = () => {
-      const frame = host.querySelector<HTMLElement>(".qz-devframe");
-      if (!frame || frame.offsetWidth === 0) {
-        setAppliedZoomPct(null);
-        return;
-      }
-      const applied = frame.getBoundingClientRect().width / frame.offsetWidth;
-      setAppliedZoomPct(Math.round(applied * 100));
-    };
-    measure();
-    const frame = host.querySelector<HTMLElement>(".qz-devframe");
-    let ro: ResizeObserver | null = null;
-    if (typeof ResizeObserver !== "undefined") {
-      ro = new ResizeObserver(measure);
-      ro.observe(host);
-      if (frame?.parentElement) ro.observe(frame.parentElement);
-    }
-    window.addEventListener("resize", measure);
-    return () => {
-      ro?.disconnect();
-      window.removeEventListener("resize", measure);
-    };
-  }, [zoom, tier, canvasMode, editMode, view, tool, libraryCollapsed]);
+  // (QRTZ-S4's applied-scale measurement is retired with the zoom cluster:
+  // the drag/2026-08 frame renders 1:1, and the width readout prints the
+  // number the viewport itself reports — no DOM measurement needed.)
 
   const allIssues = useMemo<NodeIssue[]>(() => validateQuiz(doc), [doc]);
   const suggestions = useMemo(() => validateQuizWarnings(doc), [doc]);
@@ -834,8 +815,11 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
   // BLD-3 — the mock's .devseg: Mobile first (icon + label), then Desktop.
   // FIX-4 — visible in BOTH canvas modes; the segs are single-screen
   // controls, so using one from All-screens flips back to This-screen.
+  // drag/2026-08 — the buttons are WIDTH PRESETS now (390 / 1280): the frame
+  // renders 1:1 and the highlight follows the dragged width across the 900px
+  // line, so the toggle reports the truth instead of picking a fake device.
   const deviceToggle = (
-    <div className="qz-bt-seg" role="group" aria-label="Device">
+    <div className="qz-bt-seg" role="group" aria-label="Device width preset">
       {([
         {
           tier: "phone" as const,
@@ -849,10 +833,11 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
         <button
           key={d.tier}
           type="button"
-          aria-pressed={tier === d.tier}
-          aria-label={TIER_LABEL[d.tier]}
+          aria-pressed={buildTier === d.tier}
+          aria-label={`${TIER_LABEL[d.tier]} (${PRESET_WIDTH[d.tier]}px)`}
+          title={`Set the preview ${PRESET_WIDTH[d.tier]}px wide`}
           onClick={() => {
-            setTier(d.tier);
+            setPreviewWidthPx(PRESET_WIDTH[d.tier]);
             setCanvasMode("screen");
           }}
         >
@@ -889,28 +874,18 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
     </div>
   );
 
-  // BLD-3 — the mock's zoom cluster (borderless 24px steppers + mono label).
-  // QRTZ-S4 (F5) — the label reads the APPLIED scale measured off the frame
-  // (zoom is a ceiling on the fit, so the requested number can be a lie);
-  // requested zoom is the fallback until the first measurement lands.
-  const zoomStepper = (
-    <span className="qz-bt-zoom">
-      <button type="button" className="qz-bt-iconbtn" aria-label="Zoom out" title="Zoom out" onClick={() => setZoom((z) => Math.max(50, z - 10))}>
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" style={{ width: 14, height: 14 }} aria-hidden="true"><path d="M5 12h14" /></svg>
-      </button>
-      <span
-        className="qz-bt-zlabel"
-        title={
-          appliedZoomPct !== null && appliedZoomPct < zoom
-            ? `Showing ${appliedZoomPct}% — the whole screen is kept in view (requested ${zoom}%)`
-            : "Preview scale"
-        }
-      >
-        {appliedZoomPct ?? zoom}%
+  // drag/2026-08 — the width readout (replaces the BLD-3 zoom cluster: the
+  // frame is always 1:1, so the honest number is the WIDTH, not a scale).
+  // A fact you can check, not a control to think about — resizing happens on
+  // the frame's edge handles and the device presets.
+  const widthReadout = (
+    <span
+      className="qz-bt-zoom"
+      title={`Preview width — drag the frame's edges to resize (double-click them to fit the pane). The layout flips at 900px; the quiz stops growing at ${DESKTOP_TERMINAL_PX}px.`}
+    >
+      <span className="qz-bt-zlabel" style={{ minWidth: 52 }}>
+        {previewLiveWidth != null ? `${previewLiveWidth}px` : "…"}
       </span>
-      <button type="button" className="qz-bt-iconbtn" aria-label="Zoom in" title="Zoom in" onClick={() => setZoom((z) => Math.min(100, z + 10))}>
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" style={{ width: 14, height: 14 }} aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg>
-      </button>
     </span>
   );
 
@@ -1333,10 +1308,11 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
     const allScreensMode = view === "build" && canvasMode === "all";
 
     // FIX-2 (build-tab.html .stagebar) — stage-scoped controls live on a slim
-    // bar OVER the canvas (step name · Show-as on desktop · Expand · zoom),
-    // exactly where the prototype puts them. Moving Show-as (~370px) + Expand
-    // + zoom out of the top bar also stops the bar overflowing at 1280 (the
-    // Publish button was pushed off-screen; badges overlapped Design AI).
+    // bar OVER the canvas (step name · Show-as on desktop · Expand · width
+    // readout), exactly where the prototype puts them. Moving Show-as
+    // (~370px) + Expand + the readout out of the top bar also stops the bar
+    // overflowing at 1280 (the Publish button was pushed off-screen; badges
+    // overlapped Design AI).
     const stageNode =
       doc.nodes.find((n) => n.id === (selectedId ?? liveNodeId)) ?? null;
     let stageStepName = "Screen";
@@ -1422,7 +1398,7 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
         {/* BLD-3 — the health pill is stage-scoped chrome here (the mock's
             top bar has no slot for it; "Fix N issues" opens its popover). */}
         {healthPill}
-        {!allScreensMode && tier === "desktop" ? showAsToggle : null}
+        {!allScreensMode && buildTier === "desktop" ? showAsToggle : null}
         {/* phone-preview SPEC — Expand: inspect the same screen big. */}
         {allScreensMode ? null : (
           <>
@@ -1433,7 +1409,7 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
             >
               Expand
             </button>
-            {zoomStepper}
+            {widthReadout}
           </>
         )}
       </div>
@@ -1544,7 +1520,7 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
           productIndex={data.productIndex}
           categories={data.categories}
           collections={data.collections}
-          frameBreakpoint={TIER_BREAKPOINT[tier]}
+          frameBreakpoint={TIER_BREAKPOINT[buildTier]}
           onOpenLogic={openLogicAt}
           regen={regenApi}
           inspectTarget={inspectTarget}
@@ -1869,7 +1845,8 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
               </aside>
               <div className="qz-builder-stage">
                 {/* FIX-2 — the build-tab stagebar (step name · Show-as ·
-                    Expand · zoom) sits over the canvas, spec geometry. */}
+                    Expand · width readout) sits over the canvas, spec
+                    geometry. */}
                 {stagebar}
                 {/* QB-8 — slim notices strip (transient publish/reconcile results
                     only); empty = 0 height, so the canvas is just the live quiz. */}
@@ -1897,19 +1874,18 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
                     onDragLeave={onCanvasDragLeave}
                     onDrop={onCanvasDrop}
                   >
-                    {/* C4 — no transform here, ever: the DeviceFrame owns the
-                        one transform (zoom clamps its fit scale). A wrapper
-                        transform would multiply with it, and emitting
-                        `undefined` at 100% would drop the containing block the
-                        runtime's position:fixed overlays rely on. */}
+                    {/* C4 — no transform here, ever: the viewport frame owns
+                        the one transform (scale(1), the containing block for
+                        the runtime's position:fixed overlays). A wrapper
+                        transform would break that contract. */}
                     <div style={{ width: "100%", height: "100%", minHeight: 0 }}>
                       <Step5Preview
                         {...stepProps}
                         onInspect={editMode ? onInspect : undefined}
                         inspectedTarget={inspectTarget}
-                        tier={tier}
-                        onTierChange={setTier}
-                        zoom={zoom}
+                        viewportWidth={previewWidthPx}
+                        onViewportWidthChange={setPreviewWidthPx}
+                        onViewportWidth={setPreviewLiveWidth}
                         focusNodeId={selectedId}
                         onNodeShown={setLiveNodeId}
                         chromeless
@@ -2134,10 +2110,14 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
                   <IconX />
                 </button>
                 <div className="qz-builder-expandhost">
+                  {/* Shares the canvas's width state (a preset/dragged width
+                      carries into the overlay; drags here carry back). No
+                      onViewportWidth: the readout + derived tier stay driven
+                      by the canvas instance, which remains mounted below. */}
                   <Step5Preview
                     {...stepProps}
-                    tier={tier}
-                    onTierChange={setTier}
+                    viewportWidth={previewWidthPx}
+                    onViewportWidthChange={setPreviewWidthPx}
                     focusNodeId={selectedId ?? liveNodeId}
                     chromeless
                     platform="standalone"

@@ -1,11 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
-import {
-  DEVICES,
-  INLINE_BAND_PX,
-  fitConstraint,
-  fitScale,
-  type DeviceTier,
-} from "./previewWidth";
+import { DEVICES, fitConstraint, fitScale, type DeviceTier } from "./previewWidth";
 
 // Layout effects must not run during SSR (same alias runtimeStyles.ts uses).
 const useIsoLayoutEffect = typeof window === "undefined" ? useEffect : useLayoutEffect;
@@ -27,13 +21,16 @@ export type FrameFit = {
  * the host renders the same <DeviceFrame> inside a window-sized overlay and the
  * identical fit rule produces the bigger result (never past 1:1).
  *
+ * drag/2026-08: this fixed-frame component serves the FUNNEL walkthrough
+ * surfaces (q3 canvas, guided Results, rec-page preview). The builder canvas
+ * moved to ResizableViewport (1:1, draggable width) — the placement
+ * envelopes (popup / inline) moved with it, since only the builder passed
+ * them.
+ *
  * QRTZ-S3 (Quartz frames spec): the phone is BORDERLESS — a solid screen,
  * device radius (--qz-phone-r), soft elevation; no bezel, no notch, no
- * browser chrome, no bottom fade. The desktop tier is a full 1280×800
- * browser viewport — wide enough to show the quiz at its terminal shell
- * width (previewWidth.DESKTOP_TERMINAL_PX) — and keeps a hairline frame
- * (.qz-devframe in the admin sheet). The 960 inline band survives as the
- * inline/product_widget PLACEMENT inside it, not as the frame itself.
+ * browser chrome, no bottom fade. The desktop tier is the 960×700 inline
+ * embed band and keeps a hairline frame (.qz-devframe in the admin sheet).
  * The phone also draws the mock's "fold" marker: a dashed line 78px above
  * the bottom edge — where the 667px small-phone viewport (iPhone SE) cuts
  * the 745px frame. The scale/size readout lives in the host, fed by onFit.
@@ -41,7 +38,6 @@ export type FrameFit = {
 export function DeviceFrame({
   tier,
   children,
-  placement,
   resetKey,
   zoom = 100,
   paneHeight = "100%",
@@ -50,11 +46,6 @@ export function DeviceFrame({
 }: {
   tier: DeviceTier;
   children: ReactNode;
-  // Placement picks the CONTAINER INSIDE the viewport (the device toggle picks
-  // the viewport itself): pop-up renders a modal envelope on a dark backdrop,
-  // inline/product_widget a contained card on a neutral host page. Desktop tier
-  // only; the phone viewport always shows the quiz page full-bleed.
-  placement?: "page" | "popup" | "inline" | "product_widget";
   // "Scroll position resets when the previewed step changes, not on every
   // keystroke": the host passes the shown node's id.
   resetKey?: string | null;
@@ -103,15 +94,11 @@ export function DeviceFrame({
     onFitRef.current?.({ scale, constrainedBy, paneW: pane.w, paneH: pane.h });
   }, [scale, constrainedBy, pane.w, pane.h]);
 
-  // Reset the screen's scroll when the previewed step, tier or placement
-  // changes — a switch never lands the merchant mid-page.
+  // Reset the screen's scroll when the previewed step or tier changes — a
+  // switch never lands the merchant mid-page.
   useEffect(() => {
     if (screenRef.current) screenRef.current.scrollTop = 0;
-  }, [tier, placement, resetKey]);
-
-  const isPopup = tier === "desktop" && placement === "popup";
-  const isContained =
-    tier === "desktop" && (placement === "inline" || placement === "product_widget");
+  }, [tier, resetKey]);
 
   return (
     <div
@@ -175,45 +162,7 @@ export function DeviceFrame({
               overscrollBehavior: "contain",
             }}
           >
-            {isPopup ? (
-              // Pop-up placement: an opaque stage behind a centered modal —
-              // the container a shopper's window shows, inside our viewport.
-              <div
-                className="qz-dpop-backdrop"
-                style={{
-                  position: "absolute",
-                  inset: 0,
-                  display: "grid",
-                  placeItems: "center",
-                  padding: 32,
-                }}
-              >
-                <div
-                  className="qz-dpop-modal"
-                  style={{
-                    width: "min(76%, 760px)",
-                    maxWidth: "calc(100% - 64px)",
-                    maxHeight: "calc(100% - 64px)",
-                  }}
-                >
-                  {children}
-                </div>
-              </div>
-            ) : isContained ? (
-              // Inline / product widget: a contained card on a neutral page,
-              // centered at the inline band width a typical theme column gives
-              // an embedded quiz — NOT the full viewport.
-              <div
-                style={{
-                  padding: `40px ${(DEVICES.desktop.w - INLINE_BAND_PX) / 2}px`,
-                  minHeight: "100%",
-                }}
-              >
-                <div className="qz-dinline-card">{children}</div>
-              </div>
-            ) : (
-              children
-            )}
+            {children}
           </div>
           {/* The mock's "fold" marker (_src/shared.mjs:660, base.mjs .fold):
               a dashed line 78px up — where the 667px small-phone viewport

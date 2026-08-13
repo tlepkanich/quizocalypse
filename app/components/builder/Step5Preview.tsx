@@ -8,6 +8,7 @@ import { bakeResultPages, withDraftChapters } from "../../lib/quizPublish";
 import { draftDeciderBake } from "../../lib/draftDeciderBake";
 import type { StepProps } from "./stepProps";
 import { DeviceFrame, type FrameFit } from "./preview/DeviceFrame";
+import { ResizableViewport } from "./preview/ResizableViewport";
 import { ReskinSwitcher } from "./preview/ReskinSwitcher";
 import { LAYOUT_VARIANTS, applyLayoutVariant, detectLayoutVariant } from "../../lib/layoutVariants";
 import {
@@ -16,16 +17,19 @@ import {
   DEVICE_TIERS,
   TIER_BREAKPOINT,
   TIER_LABEL,
+  breakpointForWidth,
   type DeviceTier,
 } from "./preview/previewWidth";
 
 type Launcher = StepProps["doc"]["launcher_config"];
 
 // Step 4 — "Preview & publish". A LIVE, interactive preview: the real quiz
-// runtime (mode="preview", no side-effects) runs inside one of two FIXED
-// device viewports (viewport/2026-08), scaled to fit, with instant theme
-// reskins. The "Open live" link still tests the published version on the
-// storefront.
+// runtime (mode="preview", no side-effects) with instant theme reskins.
+// CHROMELESS (the standalone builder canvas) renders the drag/2026-08
+// ResizableViewport — a 1:1 browser window whose width the merchant drags,
+// flipping layouts at 900px exactly like live. The classic (non-chromeless)
+// surface keeps the two FIXED scaled viewports (viewport/2026-08). The
+// "Open live" link still tests the published version on the storefront.
 
 export function Step5Preview({
   doc,
@@ -40,6 +44,9 @@ export function Step5Preview({
   tier: tierProp,
   onTierChange,
   zoom,
+  viewportWidth,
+  onViewportWidthChange,
+  onViewportWidth,
   paneHeight,
   focusNodeId,
   onNodeShown,
@@ -55,9 +62,16 @@ export function Step5Preview({
   // ("edit what you see"). Omit both for the classic uncontrolled behavior.
   tier?: DeviceTier;
   onTierChange?: (t: DeviceTier) => void;
-  // C4 — the standalone builder's zoom stepper, a CEILING on the fit scale
-  // (never a multiplier). Omitted → 100 (the fit rule alone decides).
+  // C4 — the classic surface's zoom, a CEILING on the fit scale (never a
+  // multiplier). Omitted → 100. Ignored in chromeless mode (always 1:1).
   zoom?: number;
+  // drag/2026-08 (chromeless only) — the resizable viewport's width, lifted
+  // by the host: null = fill the pane; a number = dragged/preset width.
+  viewportWidth?: number | null;
+  onViewportWidthChange?: (w: number | null) => void;
+  // Reports the RENDERED width (pane-sized in fill mode) so the host can
+  // derive the mode for its device toggle / readout / design-layer selector.
+  onViewportWidth?: (w: number) => void;
   // Forwarded to DeviceFrame. Required from any host whose container is
   // auto-height, or the fit rule's height axis measures 0.
   paneHeight?: number | string;
@@ -119,9 +133,25 @@ export function Step5Preview({
     return preset ? (resolveDesignTokens(preset.tokens) as DesignTokensT) : null;
   }, [tryOnId]);
 
-  // A1 — this prop, not the frame's pixel width, is what makes the quiz render
-  // its phone layout: QuizRuntime ignores container measurement in preview.
-  const breakpoint = TIER_BREAKPOINT[tier];
+  // drag/2026-08 — chromeless derives the breakpoint from the viewport's
+  // RENDERED width with the runtime's own 900px function, so dragging across
+  // the line flips the layout exactly as a live browser resize would.
+  const [vpRenderedW, setVpRenderedW] = useState<number | null>(null);
+  const handleViewportWidth = useCallback(
+    (w: number) => {
+      setVpRenderedW(w);
+      onViewportWidth?.(w);
+    },
+    [onViewportWidth],
+  );
+
+  // A1 (classic surfaces) — this prop, not the frame's pixel width, is what
+  // makes the quiz render its phone layout: QuizRuntime ignores container
+  // measurement in preview. Chromeless: width-derived (0 → mobile, matching
+  // the pre-measurement SSR default).
+  const breakpoint = chromeless
+    ? breakpointForWidth(vpRenderedW ?? viewportWidth ?? 0)
+    : TIER_BREAKPOINT[tier];
 
   const applyTheme = () => {
     const preset = tryOnId ? getPreset(tryOnId) : undefined;
@@ -136,6 +166,35 @@ export function Step5Preview({
   const lc = doc.launcher_config;
   const setLauncher = (patch: Partial<Launcher>) =>
     onCommit({ ...doc, launcher_config: { ...lc, ...patch } });
+
+  // ONE runtime element for both frame kinds — the frame is presentation,
+  // the quiz inside must be identical either way.
+  const runtime = (
+    <QuizRuntime
+      key={restartKey}
+      mode="preview"
+      doc={previewDoc}
+      productIndex={productIndex}
+      designTokens={previewDoc.design_tokens ?? null}
+      designOverrides={previewDoc.design_overrides}
+      breakpointOverrides={previewDoc.breakpoint_overrides}
+      resultLayoutMode={previewDoc.result_layout_mode}
+      designLinked={previewDoc.design_linked ?? true}
+      recPageDesign={previewDoc.rec_page_design ?? null}
+      quizId={quizId}
+      version={0}
+      shopDomain=""
+      platform={platform}
+      targetProductIdsMap={deciderBake?.targetProductIdsMap ?? null}
+      targetIndex={deciderBake?.targetIndex ?? null}
+      tokensOverride={tryOnTokens}
+      breakpoint={breakpoint}
+      onInspect={onInspect}
+      inspectedTarget={inspectedTarget}
+      focusNodeId={focusNodeId}
+      onNodeShown={handleNodeShown}
+    />
+  );
 
   return (
     <div className={chromeless ? "qz-step5-chromeless" : undefined} style={{ display: "flex", flexDirection: "column", gap: 16 }}>
@@ -253,40 +312,31 @@ export function Step5Preview({
       </QzCard>
       )}
 
-      {/* The live device frame */}
-      <DeviceFrame
-        tier={tier}
-        zoom={zoom}
-        paneHeight={paneHeight}
-        placement={chromeless ? previewDoc.placement ?? "page" : undefined}
-        resetKey={shownNodeId}
-        onFit={setFit}
-      >
-        <QuizRuntime
-          key={restartKey}
-          mode="preview"
-          doc={previewDoc}
-          productIndex={productIndex}
-          designTokens={previewDoc.design_tokens ?? null}
-          designOverrides={previewDoc.design_overrides}
-          breakpointOverrides={previewDoc.breakpoint_overrides}
-          resultLayoutMode={previewDoc.result_layout_mode}
-          designLinked={previewDoc.design_linked ?? true}
-          recPageDesign={previewDoc.rec_page_design ?? null}
-          quizId={quizId}
-          version={0}
-          shopDomain=""
-          platform={platform}
-          targetProductIdsMap={deciderBake?.targetProductIdsMap ?? null}
-          targetIndex={deciderBake?.targetIndex ?? null}
-          tokensOverride={tryOnTokens}
-          breakpoint={breakpoint}
-          onInspect={onInspect}
-          inspectedTarget={inspectedTarget}
-          focusNodeId={focusNodeId}
-          onNodeShown={handleNodeShown}
-        />
-      </DeviceFrame>
+      {/* The live frame: chromeless = the drag/2026-08 resizable browser
+          window (1:1, width lifted by the host); classic = the fixed scaled
+          DeviceFrame. Both host the SAME runtime children below. */}
+      {chromeless ? (
+        <ResizableViewport
+          widthPx={viewportWidth ?? null}
+          onWidthPx={(w) => onViewportWidthChange?.(w)}
+          onEffectiveWidth={handleViewportWidth}
+          paneHeight={paneHeight}
+          placement={previewDoc.placement ?? "page"}
+          resetKey={shownNodeId}
+        >
+          {runtime}
+        </ResizableViewport>
+      ) : (
+        <DeviceFrame
+          tier={tier}
+          zoom={zoom}
+          paneHeight={paneHeight}
+          resetKey={shownNodeId}
+          onFit={setFit}
+        >
+          {runtime}
+        </DeviceFrame>
+      )}
 
       {!chromeless && ordered.orphans.length > 0 ? (
         <QzBadge tone="warn">

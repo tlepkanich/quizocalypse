@@ -1,22 +1,24 @@
-// viewport/2026-08 live-verify — the fixed two-viewport preview contract
-// (GLOBAL-VIEWPORT.md) against a LOCAL production build (BASE env, default
-// http://localhost:3000).
+// drag/2026-08 live-verify — the builder canvas's RESIZABLE 1:1 viewport
+// contract against a LOCAL production build (BASE env, default
+// http://localhost:3000). Owner decision 2026-08-13: the preview is a
+// browser window, not a scaled device mock.
 //
 // Fixture: draft cmr7khgd50001vkhscvox8dgt (decider). READ-ONLY — every
-// interaction is device-toggle / zoom / expand / scroll; no doc commit fires.
+// interaction is preset / drag / expand / scroll; no doc commit fires.
 //
 // Asserts:
-//  1. Phone frame is EXACTLY 390×745 layout px (a browser viewport, not the
-//     844px device screen), carries a transform (never none) + contain:paint,
-//     and its painted box never exceeds the pane (scale ≤ 1).
-//  2. The height chain resolves: screen = root = page = 745 on a short step,
-//     page padding 24/24, content vertically CENTRED (symmetric gaps).
-//  3. Desktop frame is exactly 1280×800 (a real laptop viewport, past the
-//     1100px shell cap so the quiz previews AT its terminal size), runtime
-//     renders qz-bp-desktop with padding-top 48, and the shell inside is
-//     width-capped (not viewport-limited).
-//  4. Zoom clamps the fit scale (80% → scale ≤ 0.8), never multiplies.
-//  5. Expand: same frame in the overlay host, scale ≤ 1 (never upscales).
+//  1. Default is FILL: the frame tracks the pane (minus the handle rails),
+//     renders at EXACTLY 1:1 (transform scale(1), contain:paint), and the
+//     width readout prints the frame's real width.
+//  2. The Desktop preset sets 1280px: the runtime renders qz-bp-desktop,
+//     the shell inside is width-capped at 1100 (terminal size), padding-top
+//     48, still 1:1 — the pane scrolls horizontally instead of scaling.
+//  3. The Phone preset sets 390px: qz-bp-mobile, height capped at the 745
+//     phone viewport, page padding 24/24.
+//  4. DRAGGING the edge handle resizes symmetrically (2·dx) and crossing
+//     the 900 line flips the layout live.
+//  5. Double-clicking a handle resets to fill.
+//  6. Expand hosts the same viewport at the same width state.
 // Screenshots land in /tmp/vp-shots/.
 import { chromium } from "playwright";
 import { mkdirSync } from "node:fs";
@@ -47,133 +49,138 @@ await page.goto(`${BASE}/studio/${QUIZ}?key=${KEY}`, { waitUntil: "domcontentloa
 await page.waitForSelector(".qz-builder", { timeout: 15000 });
 await page.waitForTimeout(1500);
 
-// ── 1+2: the phone viewport (DEFAULT_TIER — should already be selected) ─────
-const phonePressed = await page
-  .locator('button[aria-label="Phone"]')
-  .first()
-  .getAttribute("aria-pressed");
-ok("phone is the default tier", phonePressed === "true");
-await page.waitForSelector(".qz-device-fit-mobile .qz-devframe", { timeout: 5000 });
+// Reads the canvas viewport's full state in one evaluate.
+const readState = () =>
+  page.evaluate(() => {
+    const pane = document.querySelector(".qz-builder-canvas .qz-rsvp");
+    const frame = pane?.querySelector(".qz-rsvp-frame");
+    const screen = frame?.querySelector(".qz-devscreen");
+    const root = screen?.querySelector(".qz-bp-mobile, .qz-bp-desktop");
+    const pageEl = root?.querySelector(".qz-runtime-page");
+    const shell = pageEl?.querySelector(".qz-runtime-shell");
+    const readout = document.querySelector(".qz-bt-zlabel");
+    if (!pane || !frame || !screen || !root || !pageEl) return null;
+    const cs = getComputedStyle(frame);
+    const pcs = getComputedStyle(pageEl);
+    return {
+      paneW: pane.clientWidth,
+      paneH: pane.clientHeight,
+      paneScrollW: pane.scrollWidth,
+      frameW: frame.offsetWidth,
+      frameH: frame.offsetHeight,
+      paintedW: frame.getBoundingClientRect().width,
+      mode: frame.dataset.qzMode,
+      transform: cs.transform,
+      contain: cs.contain,
+      rootClass: root.className,
+      shellW: shell ? shell.offsetWidth : null,
+      padTop: pcs.paddingTop,
+      padBottom: pcs.paddingBottom,
+      scrollTop: screen.scrollTop,
+      readout: readout ? readout.textContent : null,
+      handles: pane.querySelectorAll(".qz-rsvp-handle").length,
+    };
+  });
+
+// ── 1: default = fill, 1:1 ──────────────────────────────────────────────────
+await page.waitForSelector(".qz-builder-canvas .qz-rsvp-frame", { timeout: 5000 });
 await page.waitForTimeout(400);
-
-const phone = await page.evaluate(() => {
-  const pane = document.querySelector(".qz-builder-canvas .qz-vp-pane");
-  const frame = pane?.querySelector(".qz-devframe");
-  const screen = frame?.querySelector(".qz-devscreen");
-  const root = screen?.querySelector(".qz-bp-mobile, .qz-bp-desktop");
-  const pageEl = root?.querySelector(".qz-runtime-page");
-  const shell = pageEl?.querySelector(".qz-runtime-shell");
-  if (!pane || !frame || !screen || !root || !pageEl) return null;
-  const cs = getComputedStyle(frame);
-  const pcs = getComputedStyle(pageEl);
-  const fr = frame.getBoundingClientRect();
-  const pr = pane.getBoundingClientRect();
-  const pg = pageEl.getBoundingClientRect();
-  const sh = shell?.getBoundingClientRect() ?? null;
-  return {
-    tier: frame.dataset.qzTier,
-    frameW: frame.offsetWidth,
-    frameH: frame.offsetHeight,
-    transform: cs.transform,
-    contain: cs.contain,
-    screenH: screen.offsetHeight,
-    rootH: root.offsetHeight,
-    rootClass: root.className,
-    pageH: pageEl.offsetHeight,
-    padTop: pcs.paddingTop,
-    padBottom: pcs.paddingBottom,
-    scrollTop: screen.scrollTop,
-    paintedInPane:
-      fr.width <= pr.width + 1 &&
-      fr.height <= pr.height + 1 &&
-      fr.left >= pr.left - 1 &&
-      fr.top >= pr.top - 1,
-    centreDelta: sh ? Math.abs(sh.top - pg.top - (pg.bottom - sh.bottom)) : null,
-  };
-});
-
-ok("phone frame exists", !!phone);
-if (phone) {
-  ok("phone layout box is exactly 390×745", phone.frameW === 390 && phone.frameH === 745, `${phone.frameW}×${phone.frameH}`);
-  ok("frame always carries a transform", phone.transform !== "none", phone.transform);
-  ok("frame contains paint", phone.contain.includes("paint"), phone.contain);
-  ok("tier stamped on the frame", phone.tier === "phone");
-  ok("runtime got the mobile breakpoint", phone.rootClass.includes("qz-bp-mobile"));
-  ok("height chain: screen fills the frame", phone.screenH === 745, `screen ${phone.screenH}`);
-  ok("height chain: root fills the screen", phone.rootH === 745, `root ${phone.rootH}`);
-  ok("height chain: page fills the root (or grows)", phone.pageH >= 745, `page ${phone.pageH}`);
-  ok("page padding 24/24", phone.padTop === "24px" && phone.padBottom === "24px", `${phone.padTop}/${phone.padBottom}`);
-  ok("not pre-scrolled on load", phone.scrollTop === 0);
-  ok("painted frame stays inside the pane (scale ≤ 1, whole device visible)", phone.paintedInPane);
-  if (phone.pageH === 745 && phone.centreDelta !== null) {
-    ok("content vertically centred (symmetric gaps)", phone.centreDelta < 2, `delta ${phone.centreDelta?.toFixed(1)}px`);
-  }
+const fill = await readState();
+ok("viewport renders (frame + runtime + readout)", !!fill);
+if (fill) {
+  ok("fill mode: frame tracks the pane minus the handle rails", Math.abs(fill.frameW - (fill.paneW - 28)) <= 1, `frame ${fill.frameW}, pane ${fill.paneW}`);
+  ok("EXACTLY 1:1 — painted width equals layout width", Math.abs(fill.paintedW - fill.frameW) < 0.5, `painted ${fill.paintedW}`);
+  ok("frame carries transform scale(1)", fill.transform === "matrix(1, 0, 0, 1, 0, 0)", fill.transform);
+  ok("frame contains paint", fill.contain.includes("paint"), fill.contain);
+  ok("readout prints the frame's real width", fill.readout === `${fill.frameW}px`, `${fill.readout} vs ${fill.frameW}`);
+  ok("mode matches the width's side of the 900 line", fill.mode === (fill.frameW < 900 ? "mobile" : "desktop"), `${fill.frameW}px → ${fill.mode}`);
+  ok("runtime breakpoint agrees with the mode", fill.rootClass.includes(`qz-bp-${fill.mode}`), fill.rootClass);
+  ok("both edge handles present", fill.handles === 2);
+  ok("not pre-scrolled on load", fill.scrollTop === 0);
 }
-await page.screenshot({ path: `${SHOTS}/01-phone.png` });
+await page.screenshot({ path: `${SHOTS}/01-fill.png` });
 
-// ── 3: the desktop viewport ─────────────────────────────────────────────────
-await page.locator('button[aria-label="Desktop"]').first().click();
-await page.waitForSelector(".qz-device-fit-desktop .qz-devframe", { timeout: 5000 });
+// ── 2: the Desktop preset — terminal size, 1:1, horizontal scroll ──────────
+await page.locator('button[aria-label^="Desktop"]').first().click();
 await page.waitForTimeout(400);
-
-const desk = await page.evaluate(() => {
-  const frame = document.querySelector(".qz-builder-canvas .qz-devframe");
-  const screen = frame?.querySelector(".qz-devscreen");
-  const root = screen?.querySelector(".qz-bp-mobile, .qz-bp-desktop");
-  const pageEl = root?.querySelector(".qz-runtime-page");
-  if (!frame || !root || !pageEl) return null;
-  const cs = getComputedStyle(frame);
-  const pcs = getComputedStyle(pageEl);
-  const shell = frame.querySelector(".qz-runtime-shell");
-  return {
-    tier: frame.dataset.qzTier,
-    frameW: frame.offsetWidth,
-    frameH: frame.offsetHeight,
-    transform: cs.transform,
-    rootClass: root.className,
-    padTop: pcs.paddingTop,
-    shellW: shell ? shell.offsetWidth : null,
-  };
-});
-ok("desktop frame exists", !!desk);
+const desk = await readState();
+ok("desktop preset applied", !!desk);
 if (desk) {
-  ok("desktop layout box is exactly 1280×800", desk.frameW === 1280 && desk.frameH === 800, `${desk.frameW}×${desk.frameH}`);
-  ok("desktop transform present", desk.transform !== "none", desk.transform);
+  ok("frame is exactly 1280 wide", desk.frameW === 1280, `${desk.frameW}`);
+  ok("still 1:1 (never scaled to fit)", Math.abs(desk.paintedW - 1280) < 0.5, `painted ${desk.paintedW}`);
+  ok("readout prints 1280px", desk.readout === "1280px", desk.readout ?? "");
   ok("runtime got the desktop breakpoint", desk.rootClass.includes("qz-bp-desktop"));
   ok("desktop padding-top 48 (shell rule)", desk.padTop === "48px", desk.padTop);
-  // The point of the 1280 frame: the shell has hit its 1100 cap instead of
-  // being squeezed by the viewport — the preview shows the TRUE max size.
-  ok("shell is width-capped at 1100 (terminal size, not viewport-limited)", desk.shellW === 1100, `shell ${desk.shellW}px`);
+  // The point of 1280: the shell has hit its 1100 cap instead of being
+  // squeezed — the merchant designs against the TRUE max size.
+  ok("shell is width-capped at 1100 (terminal size)", desk.shellW === 1100, `shell ${desk.shellW}px`);
+  ok("pane scrolls horizontally instead of scaling", desk.paneScrollW > desk.paneW, `scrollW ${desk.paneScrollW}, pane ${desk.paneW}`);
+  ok("Desktop toggle highlighted", (await page.locator('button[aria-label^="Desktop"]').first().getAttribute("aria-pressed")) === "true");
 }
-await page.screenshot({ path: `${SHOTS}/02-desktop.png` });
+await page.screenshot({ path: `${SHOTS}/02-desktop-preset.png` });
 
-// ── 4: zoom clamps, never multiplies ────────────────────────────────────────
-await page.locator('button[aria-label="Zoom out"]').click();
-await page.locator('button[aria-label="Zoom out"]').click(); // 100 → 80
-await page.waitForTimeout(300);
-const zoomScale = await page.evaluate(() => {
-  const frame = document.querySelector(".qz-builder-canvas .qz-devframe");
-  if (!frame) return null;
-  const m = new DOMMatrix(getComputedStyle(frame).transform);
-  return m.a;
-});
-ok("zoom 80% clamps the scale (≤ 0.8, > 0)", zoomScale !== null && zoomScale <= 0.801 && zoomScale > 0, `scale ${zoomScale?.toFixed(3)}`);
-await page.locator('button[aria-label="Zoom in"]').click();
-await page.locator('button[aria-label="Zoom in"]').click(); // back to 100
+// ── 3: the Phone preset ─────────────────────────────────────────────────────
+await page.locator('button[aria-label^="Phone"]').first().click();
+await page.waitForTimeout(400);
+const phone = await readState();
+ok("phone preset applied", !!phone);
+if (phone) {
+  ok("frame is exactly 390 wide at 1:1", phone.frameW === 390 && Math.abs(phone.paintedW - 390) < 0.5, `${phone.frameW}`);
+  ok("runtime got the mobile breakpoint", phone.rootClass.includes("qz-bp-mobile"));
+  ok("height caps at the 745 phone viewport", phone.frameH === Math.min(phone.paneH, 745), `frame ${phone.frameH}, pane ${phone.paneH}`);
+  ok("page padding 24/24", phone.padTop === "24px" && phone.padBottom === "24px", `${phone.padTop}/${phone.padBottom}`);
+  ok("Phone toggle highlighted", (await page.locator('button[aria-label^="Phone"]').first().getAttribute("aria-pressed")) === "true");
+}
+await page.screenshot({ path: `${SHOTS}/03-phone-preset.png` });
 
-// ── 5: Expand — a bigger pane, not a zoom ───────────────────────────────────
+// ── 4: dragging resizes symmetrically and flips the layout at 900 ──────────
+const handle = page.locator('.qz-builder-canvas .qz-rsvp-handle[data-side="right"]');
+const hb = await handle.boundingBox();
+ok("right handle is visible", !!hb);
+if (hb) {
+  // From the 390 preset, drag +140px → width 390 + 2·140 = 670 (still mobile).
+  await page.mouse.move(hb.x + hb.width / 2, hb.y + hb.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(hb.x + hb.width / 2 + 140, hb.y + hb.height / 2, { steps: 8 });
+  await page.mouse.up();
+  await page.waitForTimeout(300);
+  let d = await readState();
+  ok("drag grows the width symmetrically (2·dx)", d?.frameW === 670, `${d?.frameW}`);
+  ok("still mobile below 900", d?.rootClass.includes("qz-bp-mobile"), `${d?.frameW}px`);
+
+  // Keep dragging past the 900 line → the layout flips to desktop LIVE.
+  const hb2 = await handle.boundingBox();
+  await page.mouse.move(hb2.x + hb2.width / 2, hb2.y + hb2.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(hb2.x + hb2.width / 2 + 160, hb2.y + hb2.height / 2, { steps: 8 });
+  await page.mouse.up();
+  await page.waitForTimeout(300);
+  d = await readState();
+  ok("drag crosses 900 → width 990", d?.frameW === 990, `${d?.frameW}`);
+  ok("…and the layout flips to desktop LIVE", d?.rootClass.includes("qz-bp-desktop"), d?.rootClass ?? "");
+  ok("…and the Desktop toggle follows the drag", (await page.locator('button[aria-label^="Desktop"]').first().getAttribute("aria-pressed")) === "true");
+  await page.screenshot({ path: `${SHOTS}/04-dragged-990.png` });
+
+  // ── 5: double-click resets to fill ────────────────────────────────────────
+  await handle.dblclick();
+  await page.waitForTimeout(300);
+  d = await readState();
+  ok("double-click resets to fill", d != null && Math.abs(d.frameW - (d.paneW - 28)) <= 1, `frame ${d?.frameW}, pane ${d?.paneW}`);
+}
+
+// ── 6: Expand hosts the same viewport, same width state ────────────────────
+await page.locator('button[aria-label^="Desktop"]').first().click();
+await page.waitForTimeout(200);
 await page.locator("button.qz-s3-expandbtn").click();
-await page.waitForSelector(".qz-builder-expandhost .qz-devframe", { timeout: 5000 });
+await page.waitForSelector(".qz-builder-expandhost .qz-rsvp-frame", { timeout: 5000 });
 await page.waitForTimeout(400);
 const expand = await page.evaluate(() => {
-  const frame = document.querySelector(".qz-builder-expandhost .qz-devframe");
+  const frame = document.querySelector(".qz-builder-expandhost .qz-rsvp-frame");
   if (!frame) return null;
-  const m = new DOMMatrix(getComputedStyle(frame).transform);
-  return { w: frame.offsetWidth, h: frame.offsetHeight, scale: m.a, tier: frame.dataset.qzTier };
+  return { w: frame.offsetWidth, painted: frame.getBoundingClientRect().width };
 });
-ok("expand renders the same fixed frame", !!expand && expand.w === 1280 && expand.h === 800, expand ? `${expand.w}×${expand.h}` : "missing");
-ok("expand never upscales past 1:1", !!expand && expand.scale <= 1.001, `scale ${expand?.scale?.toFixed(3)}`);
-await page.screenshot({ path: `${SHOTS}/03-expand.png` });
+ok("expand renders the shared width at 1:1", !!expand && expand.w === 1280 && Math.abs(expand.painted - 1280) < 0.5, expand ? `${expand.w}` : "missing");
+await page.screenshot({ path: `${SHOTS}/05-expand.png` });
 await page.keyboard.press("Escape");
 
 ok("no page errors", pageErrors.length === 0, pageErrors.join(" | "));

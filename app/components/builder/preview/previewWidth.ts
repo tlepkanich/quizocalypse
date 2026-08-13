@@ -6,21 +6,21 @@
 // the preview stack.
 import { BREAKPOINT_PX, PAGE_PAD_DEFAULT_PX, SHELL_MAX_PX } from "../../runtime/runtimeStyles";
 
-// A3 — ONE definition of the device geometry, both axes, because the fit rule
-// needs height as well as width:
+// A3 — ONE definition of the FIXED device geometry, both axes, because the
+// fit rule needs height as well as width. Since drag/2026-08 these fixed
+// frames serve the FUNNEL walkthrough surfaces only (q3 canvas, guided
+// Results, rec-page preview) — the BUILDER canvas is the resizable 1:1
+// viewport below (ResizableViewport), owner decision 2026-08-13. Both are
+// the CONTAINERS a shopper actually gets (Quartz frames spec,
+// docs/design/brand-2026/reference/quartz-preview-frames.html):
 //   phone   390 × 745 — the viewport iPhone Safari gives a shopper with
 //           toolbars collapsed (390 × 844 is the screen — a different
 //           measurement, and why the old phone frame looked unusually long).
-//   desktop 1280 × 800 — a real laptop browser viewport, wide enough that the
-//           quiz has hit its terminal size (the shell stops growing at
-//           SHELL_MAX_PX + the page's side padding = 1148): the merchant sees
-//           the quiz AT its max width plus the centered backdrop, exactly as a
-//           shopper on a large monitor does. The previous 960 × 700 frame was
-//           the inline embed band — the quiz never reached its cap in it, so
-//           padding tuned there was tuned against a size full-page desktop
-//           never renders (owner request, 2026-08-13). The inline band lives
-//           on INSIDE this viewport as the inline/product_widget placement
-//           (DeviceFrame pads the host page to a 960 content column).
+//   desktop 960 × 700 — the INLINE embed band: 960 wide sits above the 900px
+//           breakpoint so it genuinely renders desktop tokens; a compact
+//           block that keeps funnel walkthroughs readable near 1:1. (It sits
+//           BELOW the shell's 1100 cap — max-size truth is the builder
+//           canvas's job, not the funnel's.)
 // The launcher modal (720 × 620) is a real embed mode but NOT a preview tier —
 // its geometry stays recorded here so a modal preview can be added without
 // re-deriving it. (720 < 900: the launcher modal renders MOBILE tokens.)
@@ -30,20 +30,52 @@ import { BREAKPOINT_PX, PAGE_PAD_DEFAULT_PX, SHELL_MAX_PX } from "../../runtime/
 // lying about what it shows.
 export const DEVICES = {
   phone: { w: 390, h: 745 },
-  desktop: { w: 1280, h: 800 },
+  desktop: { w: 960, h: 700 },
 } as const;
 
+// ── drag/2026-08 — the builder canvas viewport contract ─────────────────────
+// The builder canvas renders the quiz at 100% scale, ALWAYS — no fit rule, no
+// transform scaling. The frame behaves like a browser window: its width is
+// draggable, the layout flips at BREAKPOINT_PX exactly as live, and the
+// mobile/desktop "modes" are nothing but sides of that line. Owner decision
+// 2026-08-13 (replaces the fixed scaled frames for this surface).
+
 // The width past which the desktop quiz stops growing: the shell cap plus the
-// page's default side padding. The desktop frame must be at least this wide or
-// the preview is showing a mid-resize width, not the max — pinned in the unit
-// test so DEVICES.desktop and the runtime shell can never drift apart again.
+// page's default side padding. The desktop PRESET must be at least this wide
+// or "Desktop" would land on a mid-resize width, not the max — pinned in the
+// unit test so the preset and the runtime shell can never drift apart.
 export const DESKTOP_TERMINAL_PX = SHELL_MAX_PX + PAGE_PAD_DEFAULT_PX * 2;
 
+// What the Phone / Desktop buttons mean now: WIDTH PRESETS, not devices.
+// Phone = the canonical 390 viewport; Desktop = a real laptop width past the
+// terminal size, so it shows the quiz at max width plus centered backdrop.
+export const PRESET_WIDTH: Record<DeviceTier, number> = {
+  phone: 390,
+  desktop: 1280,
+};
+
+// Drag clamp. 320 = the smallest real phone the runtime supports; 1600 keeps
+// the frame inside any sane pane's scroll range.
+export const PREVIEW_MIN_PX = 320;
+export const PREVIEW_MAX_PX = 1600;
+
+// Mobile-mode frames never grow taller than the canonical phone viewport —
+// past 745 the preview would show more above the fold than any phone does.
+export const PHONE_VIEWPORT_H_PX = 745;
+
+export function clampPreviewWidth(w: number): number {
+  return Math.min(PREVIEW_MAX_PX, Math.max(PREVIEW_MIN_PX, Math.round(w)));
+}
+
+// Width → the tier the toggle should highlight (same 900 line as the runtime).
+export function tierForWidth(w: number): DeviceTier {
+  return breakpointForWidth(w) === "mobile" ? "phone" : "desktop";
+}
+
 // The inline embed band (Quartz frames spec, quartz-preview-frames.html): the
-// content column a typical theme gives an inline quiz. DeviceFrame's inline /
-// product_widget placements center a column of this width inside the desktop
-// viewport, so those placements stay truthful now that the frame itself is a
-// full browser window.
+// content column a typical theme gives an inline quiz. The inline /
+// product_widget placements center a column of this width inside the
+// resizable viewport, so those placements stay truthful at any frame width.
 export const INLINE_BAND_PX = 960;
 
 export type DeviceTier = keyof typeof DEVICES;

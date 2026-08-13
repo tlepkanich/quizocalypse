@@ -1746,6 +1746,36 @@ body[data-qz] ::selection { background: var(--qz-ink); color: var(--qz-cream); }
    device frame measures this box and the same fit rule produces the bigger
    result — Expand is a bigger pane, not a zoom. */
 .qz-builder-expandhost { width: 92vw; height: 90vh; display: flex; align-items: center; justify-content: center; }
+
+/* ── drag/2026-08 — the builder canvas's resizable 1:1 viewport ──────────────
+   The frame is a browser window, not a device: one neutral hairline skin in
+   both modes (the mode is just which side of 900px the width sits on). The
+   edge handles are 14px rails with a grip pill — quiet until hovered/focused,
+   never intercepting the quiz itself. */
+.qz-rsvp-frame {
+  border-radius: var(--qz-radius);
+  box-shadow: inset 0 0 0 1px var(--qz-rule), 0 10px 30px -14px rgba(32, 28, 46, .42), 0 2px 6px -2px rgba(32, 28, 46, .10);
+}
+.qz-rsvp-handle {
+  flex: 0 0 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: ew-resize;
+  touch-action: none;
+  border-radius: 7px;
+}
+.qz-rsvp-handle > span {
+  width: 4px;
+  height: 36px;
+  border-radius: 2px;
+  background: var(--qz-ink-3);
+  opacity: .35;
+  transition: opacity .12s ease, background .12s ease;
+}
+.qz-rsvp-handle:hover > span,
+.qz-rsvp-handle:focus-visible > span { opacity: 1; background: var(--qz-accent); }
+.qz-rsvp-handle:focus-visible { outline: 2px solid var(--qz-accent); outline-offset: -2px; }
 /* QB-10 — the standalone preview shows JUST the quiz. The runtime page wrapper
    hardcodes a #FAFAFA backdrop (an inline style → needs !important), which read
    as a "white box" around the quiz card. Strip it here only (scoped to the
@@ -4472,7 +4502,7 @@ body[data-qz] .qz-stepnav-pill:focus-visible { outline: 2px solid var(--qz-accen
    .qz-s3-holder + the 390×844/1180×740 scale math, the 44px bezel, the
    bottom fade and the faux desktop browser chrome) are RETIRED: the funnel
    preview renders through the shared DeviceFrame (previewWidth.DEVICES —
-   phone 390×745 / desktop 1280×800, min(paneW/w, paneH/h, 1) fit, Quartz
+   phone 390×745 / desktop 960×700, min(paneW/w, paneH/h, 1) fit, Quartz
    frame chrome). The .qz-s3-frame skin + the .qz-g2-stage host clamp live
    in the QRTZ-G2 section at the end of this sheet. */
 /* — Expand overlay (portal to body; z above every builder layer) — */
@@ -9203,9 +9233,9 @@ tr.qz-ltab-qstart td { border-top: 2px solid var(--qz-rule); }
 /* ═══ QRTZ-S3 — preview frames ═══
    Quartz frames spec (docs/design/brand-2026/reference/quartz-preview-frames
    .html, _src/base.mjs + frames.mjs): phone 390×745 borderless-solid with the
-   fold marker; Desktop = a 1280×800 laptop viewport (past the 1100px shell
-   cap, so the quiz previews at its terminal size; the 960 inline band lives
-   on as the inline/product_widget placement); the launcher modal
+   fold marker; Desktop = the 960×700 INLINE embed band (funnel walkthroughs
+   only — the builder canvas is the drag/2026-08 resizable 1:1 viewport,
+   .qz-rsvp-* above); the launcher modal
    (720×620) stays declared in previewWidth.ts but is never offered as a
    preview. Frame chrome itself lives in the .qz-devframe block (~line 1796,
    also QRTZ-S3-owned). */
@@ -10159,7 +10189,7 @@ button.qz-pb-row:hover { background: var(--qz-cream-2); }
 /* ═══ QRTZ-G2 — funnel questions preview through DeviceFrame ═══
    Owner feedback: "the phone should never be cut off and must keep a
    min/max size". The device is the shared DeviceFrame (previewWidth.DEVICES
-   — phone 390×745, desktop 1280×800; fit = min(paneW/w, paneH/h, 1), whole
+   — phone 390×745, desktop 960×700; fit = min(paneW/w, paneH/h, 1), whole
    frame always visible, never past 1:1). The HOST clamps the room:
 
    .qz-g2-stage height = clamp(410px, 100vh − 232px, 800px)
