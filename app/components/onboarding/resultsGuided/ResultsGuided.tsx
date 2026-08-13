@@ -28,7 +28,13 @@ import {
    rows read the ACTUAL settings back. §3: no Back on step 1 (absent, not
    disabled); Next always reads "Next →"; the last button is "Continue to
    Design →". Owner rule (no dead ends): settings the runtime does not consume
-   yet carry a quiet "not connected yet" tag — see WIRED in state.ts. */
+   yet carry a quiet "not connected yet" tag — see WIRED in state.ts.
+   QRTZ-G45 (owner): the builder stays closed until the merchant has at least
+   RUN THROUGH every step — a visited-set gates BOTH "Open the builder"
+   buttons (the Overview foot primary and the funnel bar's Continue, via the
+   funnelChrome continueSpec seam). Visited = landed on the step; blockers do
+   not gate ("completed, or at least ran through"). Client-side UX only — the
+   stage machine is untouched. */
 
 // QRTZ-S6 (mock s15) — `name` feeds the eyebrow ("Step 1 of 6 · The page
 // copy") and the forward button ("Next: the matches" names its destination).
@@ -73,6 +79,10 @@ const FLOW = [
 
 // "Next: the matches" — sentence-case the section name after the colon.
 const lcFirst = (s: string) => s.charAt(0).toLowerCase() + s.slice(1);
+
+// QRTZ-G45 — referentially stable no-op for the gated bar Continue (the
+// funnelChrome publish contract forbids fresh handlers per render).
+const GATE_NOOP = () => {};
 
 const GROUPS: Array<{ id: string; band: "before" | "page"; ic: string; name: string }> = [
   { id: "keep", band: "before", ic: "✉", name: "Email capture" },
@@ -196,6 +206,10 @@ export function ResultsGuided({
   // ── §5 completion model ────────────────────────────────────────────────────
   const [stepIx, setStepIx] = useState(0);
   const [seen, setSeen] = useState<Record<string, boolean>>({});
+  // QRTZ-G45 — the visited-set behind the open-builder gate: a step counts
+  // the moment the merchant LANDS on it (Next, Back, Overview row or preview
+  // jump), which is the owner's "completed, or at least ran through".
+  const [visited, setVisited] = useState<Record<number, boolean>>({ 0: true });
   const [openSec, setOpenSec] = useState<string>("head");
   const [focusPart, setFocusPart] = useState<string | null>(null);
   const [holdSel, setHoldSel] = useState(false);
@@ -260,6 +274,7 @@ export function ResultsGuided({
   const gotoStep = (i: number) => {
     const next = Math.max(0, Math.min(FLOW.length - 1, i));
     setStepIx(next);
+    setVisited((v) => (v[next] ? v : { ...v, [next]: true }));
     setFocusPart(null);
     setHoldSel(false);
     const f = FLOW[next]!;
@@ -271,10 +286,15 @@ export function ResultsGuided({
     else setOpenSec("");
     if (f.g === null) setSeen((s) => ({ ...s, __ovw: true }));
   };
+  // QRTZ-G45 — the gate: every step visited before the builder opens. The
+  // guard in next() makes a programmatic click no-op while gated; the button
+  // below wears aria-disabled + a title that says why (never color alone).
+  const allVisited = FLOW.every((_, i) => visited[i] === true);
+  const gateClosed = stepIx === FLOW.length - 1 && !allVisited;
   const next = () => {
     if (step.g) setSeen((s) => ({ ...s, [step.g as string]: true }));
     if (stepIx < FLOW.length - 1) gotoStep(stepIx + 1);
-    else onOpenBuilder();
+    else if (allVisited) onOpenBuilder();
   };
 
   // panel interactions narrow the preview highlight to the touched control
@@ -293,15 +313,28 @@ export function ResultsGuided({
     setOpenSec(sec);
   };
 
-  // the bar: save chip via the funnel bridge — error-only since the owner's
-  // 2026-08-02 edit (silent when healthy; a failed autosave must surface).
+  // The bar (QRTZ-G45): the save chip moved off the bar into the edit-foot
+  // beside the primary (the artifact's .edit-foot — button · Saved side by
+  // side). What the bar carries now is the GATE: while any step is unvisited,
+  // the funnel bar's own "Open builder" Continue (Step1Funnel's rec_page
+  // default, which fires generate-build directly) is published disabled with
+  // the same explanation — otherwise it would bypass the guided gate. Once
+  // every step is visited the override clears and the default (with its
+  // loading ring) takes back over. Publish contract: memoized on the one
+  // boolean; the noop is module-stable.
   const barOverride = useMemo<FunnelBarOverride>(
-    () => ({
-      saveChip: (
-        <FunnelSaveChip isSaving={isSaving} savedAt={savedAt} saveError={saveError} onRetry={retrySave} />
-      ),
-    }),
-    [isSaving, savedAt, saveError, retrySave],
+    () =>
+      allVisited
+        ? {}
+        : {
+            continueSpec: {
+              label: "Open builder",
+              onClick: GATE_NOOP,
+              disabled: true,
+              title: "Finish the steps above first",
+            },
+          },
+    [allVisited],
   );
   useFunnelBar(barOverride);
 
@@ -1008,6 +1041,8 @@ export function ResultsGuided({
             <p className="qz-rg-stepsub">{step.sub}</p>
           </div>
           <div className="qz-rg-panel">{body}</div>
+          {/* QRTZ-G45 — the mock's .edit-foot: Back · primary · Saved chip
+              side by side, left-aligned (no spacer, no rule above). */}
           <div className="qz-rg-stepfoot">
             {/* §3 — no Back on step 1: absent, not disabled. */}
             {stepIx > 0 ? (
@@ -1015,14 +1050,26 @@ export function ResultsGuided({
                 ← Back
               </button>
             ) : null}
-            <span className="qz-rg-fsp" />
-            <button type="button" className="qz-rg-btn2 is-pri" onClick={next}>
+            <button
+              type="button"
+              className={`qz-rg-btn2 is-pri${gateClosed ? " is-disabled" : ""}`}
+              aria-disabled={gateClosed || undefined}
+              title={gateClosed ? "Finish the steps above first" : undefined}
+              onClick={next}
+            >
               {/* QRTZ-S6 (mock .edit-foot) — the forward button NAMES its
-                  destination; the last keeps the product's builder handoff. */}
+                  destination; the last keeps the product's builder handoff,
+                  gated (QRTZ-G45) until every step has been run through. */}
               {stepIx === FLOW.length - 1
                 ? "Open the builder →"
                 : `Next: ${lcFirst(FLOW[stepIx + 1]!.name)}`}
             </button>
+            <FunnelSaveChip
+              isSaving={isSaving}
+              savedAt={savedAt}
+              saveError={saveError}
+              onRetry={retrySave}
+            />
           </div>
         </div>
         <GuidedPreview

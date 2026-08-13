@@ -67,6 +67,14 @@ try {
   ok('Results Continue reads "Open builder" (generate-build)', /open builder/i.test(label), label);
   ok("Results surface renders (guided flow or rec stage)",
     (await page.locator(".qz-rg, .qz-s4, .qz-recstage, .qz-page").count()) > 0);
+  // QRTZ-G45 — on the guided flow the builder stays closed until every step
+  // has been run through: on arrival the bar Continue is published disabled.
+  if ((await page.locator(".qz-rg").count()) > 0) {
+    ok("Continue is GATED on arrival (steps not yet run through)",
+      await page.locator(".qz-topbar-continue").isDisabled());
+    ok("guided foot primary starts un-gated (not the last step)",
+      (await page.locator(".qz-rg-stepfoot .qz-rg-btn2.is-pri").getAttribute("aria-disabled")) === null);
+  }
   await page.screenshot({ path: `${SHOTS}/four-step-bar.png` });
 
   // ── parked at the RETIRED "design" stage → folds onto Results ─────────────
