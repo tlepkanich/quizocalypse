@@ -66,21 +66,20 @@ await infoPill.click();
 ok("info window shows the not-used message", (await win.locator(".qz-qwin-infomsg").count()) === 1);
 await win.locator(".qz-crm-verb", { hasText: "Narrows" }).click();
 await page.waitForTimeout(300);
-// QRTZ-OB1 — the pill reads "Narrows"; the derived attribute moved to its
-// own .qz-ltab-attr line under it (the mock's role-stack form).
+// QRTZ-H3 — the pill reads "Narrows"; the attribute rides the mock's
+// .attr-slot beneath it (the qz-ap-slot form; empty = "Choose attribute").
 const narrowsPill = card.locator(".qz-ltab-pill-btn", { hasText: "Narrows" });
-ok("pill flips to Narrows with the derived attr line",
+ok("pill flips to Narrows with the attr slot",
   (await narrowsPill.count()) === 1 &&
-  (await card.locator(".qz-ltab-attr").count()) === 1);
+  (await card.locator(".qz-ap-slot").count()) === 1);
 ok("spine shows the derived readout", (await win.locator(".qz-qwin-derived").count()) === 1);
 await page.screenshot({ path: `${SHOTS}/narrows-flipped.png` });
-// Mapping cells on that question now show the filter states.
-// UNIFIED deltas — unset filter answers read "not mapped yet" ("pick
-// anything" is gone); no_preference reads "keeps everything".
+// Mapping cells on that question now show the mock's only empty-state form
+// (QRTZ-H3): the bordered is-none "No filter" tag — covering both unset and
+// no-preference answers ("not mapped yet"/"keeps everything" are retired).
 ok(
-  "filter answers show not-mapped / keeps-everything states",
-  (await card.locator(".qz-ltab-bad", { hasText: "not mapped yet" }).count()) > 0 ||
-    (await card.locator(".qz-ltab-soft", { hasText: "keeps everything" }).count()) > 0,
+  "filter answers show the No-filter is-none tag",
+  (await card.locator(".qz-ltab-tag.is-none", { hasText: "No filter" }).count()) > 0,
 );
 // Flip back through the same window.
 await win.locator(".qz-crm-verb", { hasText: "Asked only" }).click();
@@ -105,7 +104,8 @@ ok(
 // ── UNIFIED — a mapping cell opens the window FOCUSED on that answer ────────
 const mapRows = card.locator("tbody tr").filter({ has: page.locator(".qz-qwin-mapcell") });
 const mapRow = mapRows.nth(Math.min(1, (await mapRows.count()) - 1));
-const answerText = (await mapRow.locator(".qz-ltab-answer").innerText()).trim();
+// QRTZ-H3 — the key sits inside the Answer cell now; read only the text span.
+const answerText = (await mapRow.locator(".qz-ltab-atext").innerText()).trim();
 await mapRow.locator(".qz-qwin-mapcell").click();
 ok("mapping cell opens the window", (await win.count()) === 1);
 ok(
@@ -136,13 +136,18 @@ ok(
 await page.screenshot({ path: `${SHOTS}/starting-set-window.png` });
 await win.locator(".qz-btn-primary", { hasText: "Done" }).click();
 
-// ── §6.4 product popover behind the count (unchanged) ───────────────────────
+// ── §6.4 product popover behind the count — QRTZ-H3: the mock's .pp grid ────
 const menu = page.locator(".qz-popover .qz-ltab-menu");
-await card.locator(".qz-ltab-count .qz-ltab-cellbtn").first().click();
+const pp = page.locator(".qz-popover .qz-pp");
+await card.locator(".qz-ltab-count .qz-ltab-countbtn").first().click();
 ok(
-  "product popover opens (rows or the safety-net empty copy)",
-  (await menu.locator(".qz-ltab-menu-product").count()) > 0 ||
-    (await menu.locator(".qz-ltab-menu-none").count()) > 0,
+  "product popover opens the pp grid (cards or the safety-net empty copy)",
+  (await pp.locator(".qz-pp-card").count()) > 0 ||
+    (await pp.locator(".qz-pp-none").count()) > 0,
+);
+ok(
+  "pp head carries the count·sync sub line",
+  /products? matched/.test((await pp.locator(".qz-pp-sub").innerText()) ?? ""),
 );
 await page.keyboard.press("Escape");
 

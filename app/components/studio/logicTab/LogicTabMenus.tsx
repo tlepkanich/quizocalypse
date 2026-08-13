@@ -71,22 +71,24 @@ const truncate = (s: string, n = 24) => (s.length > n ? `${s.slice(0, n - 1)}…
 
 // ── §6.4 the product menu — behind every count ──────────────────────────────
 
-// QRTZ-S6 — the popover's kind, for the title chip + the footer sentence
+// QRTZ-S6/H3 — the popover's kind, for the title tag + the footer sentence
 // (mock .pp-title's `tag is-col` + .pp-foot). Decides answers take their
 // target's source; narrows answers only get a kind when the selection is
-// unambiguous (one kind of value), else no chip.
+// unambiguous (one kind of value), else no tag. The tone rides the mock's
+// tag set: collections keep is-col; other kinds (no mock drawing) take the
+// quartz neutral tone.
 function popoverKind(
   role: "decides" | "qualifier" | "filter" | undefined,
   answer: Answer,
   catById: Map<string, BuilderCategory>,
-): { label: string; chipClass: string } | null {
+): { label: string; tone: "is-col" | "is-a" } | null {
   if (role === "decides") {
     const cat = answer.target_id ? catById.get(answer.target_id) : undefined;
     if (!cat) return null;
-    if (cat.source === "collection") return { label: "collection", chipClass: " is-collection" };
-    if (cat.source === "tag") return { label: "tag", chipClass: " is-tag" };
-    if (cat.source === "metafield") return { label: "metafield", chipClass: " is-metafield" };
-    return { label: "group", chipClass: "" };
+    if (cat.source === "collection") return { label: "collection", tone: "is-col" };
+    if (cat.source === "tag") return { label: "tag", tone: "is-a" };
+    if (cat.source === "metafield") return { label: "metafield", tone: "is-a" };
+    return { label: "group", tone: "is-a" };
   }
   if (role === "filter") {
     const kinds = new Set<string>();
@@ -98,15 +100,7 @@ function popoverKind(
     if (answer.product_type_filters?.length) kinds.add("type");
     if (kinds.size !== 1) return null;
     const label = [...kinds][0]!;
-    const chipClass =
-      label === "collection"
-        ? " is-collection"
-        : label === "tag"
-          ? " is-tag"
-          : label === "metafield"
-            ? " is-metafield"
-            : "";
-    return { label, chipClass };
+    return { label, tone: label === "collection" ? "is-col" : "is-a" };
   }
   return null;
 }
@@ -145,10 +139,21 @@ export function ProductCountButton({
         .map((id) => byId.get(id))
         .filter((p): p is IndexedProduct => p !== undefined);
     }
-    if (role === "filter") return filterAnswerMatchingProducts(answer, productIndex) ?? [];
+    if (role === "filter")
+      // QRTZ-H3 — a no-preference answer keeps everything: the popover lists
+      // the whole pool, matching its "N products" count.
+      return answer.no_preference
+        ? [...productIndex]
+        : (filterAnswerMatchingProducts(answer, productIndex) ?? []);
     return [];
   }, [answer, role, catById, productIndex]);
   const kind = popoverKind(role, answer, catById);
+  // QRTZ-H3 (mock .pp-title) — the title is the TARGET's name where one
+  // exists (decides); a narrows selection has no single name (no mock
+  // drawing) and keeps the answer text.
+  const targetCat =
+    role === "decides" && answer.target_id ? catById.get(answer.target_id) : undefined;
+  const ppTitle = targetCat?.name ?? answer.text;
   // QRTZ-B2 — the mock's .pp-foot "Open in Shopify": derived from the SAME
   // target the popover lists; kinds without a reliable admin URL get no link.
   const shopUrl = popoverShopifyUrl(
@@ -176,82 +181,97 @@ export function ProductCountButton({
     <QzPopover
       open={open}
       onOpenChange={setOpen}
-      maxWidth={320}
-      trigger={<button type="button" className="qz-ltab-cellbtn">{label}</button>}
+      maxWidth={720}
+      trigger={
+        <button type="button" className="qz-ltab-countbtn">
+          {label}
+        </button>
+      }
       content={
-        // QRTZ-S6 (mock .pp) — kind chip in the title, the count as its own
-        // line, price + stock on every product row, foot sentence. QRTZ-B2
-        // adds the mock's sync-freshness line + "Open in Shopify" footer link
-        // (lastSyncAt / shopifyAdminDomain now reach this surface).
-        <MenuShell
-          title={
-            <>
-              “{answer.text}”
-              {kind ? (
-                <span className={`qz-crm-kind${kind.chipClass}`}>{kind.label}</span>
-              ) : null}
-            </>
-          }
-          footer={
-            footSentence || shopUrl ? (
-              <span className="qz-ltab-menu-foot-row">
-                <span>{footSentence}</span>
-                {shopUrl ? (
-                  <a
-                    className="qz-ltab-menu-shoplink"
-                    href={shopUrl}
-                    target="_blank"
-                    rel="noreferrer"
-                  >
-                    Open in Shopify ↗
-                  </a>
+        // QRTZ-H3 (owner's exact-match order) — the mock's .pp card layout
+        // (shared.mjs 419–441): head with target name + kind tag + the
+        // count·sync sub line, the 4-across pp-grid of image · name · price ·
+        // stock pill, and the teaching foot with QRTZ-B2's Open-in-Shopify
+        // link (owner-approved additions that slot into the mock's foot).
+        <div className="qz-pp">
+          <header className="qz-pp-head">
+            <div className="qz-pp-headmain">
+              <p className="qz-pp-title">
+                {ppTitle}
+                {kind ? (
+                  <span className={`qz-ltab-tag ${kind.tone}`}>{kind.label}</span>
                 ) : null}
-              </span>
-            ) : undefined
-          }
-        >
-          <div className="qz-ltab-menu-countline">
-            <b>{products.length}</b>{" "}
-            {products.length === 1 ? "product" : "products"} matched
-            {lastSyncAt
-              ? ` · synced from Shopify ${formatTimeAgo(lastSyncAt)}`
-              : ""}
-          </div>
+              </p>
+              <p className="qz-pp-sub">
+                <b>{products.length}</b>{" "}
+                {products.length === 1 ? "product" : "products"} matched
+                {lastSyncAt ? (
+                  <> · synced from Shopify {formatTimeAgo(lastSyncAt)}</>
+                ) : null}
+              </p>
+            </div>
+            <button
+              type="button"
+              className="qz-pp-close"
+              aria-label="Close"
+              onClick={() => setOpen(false)}
+            >
+              ×
+            </button>
+          </header>
           {products.length === 0 ? (
-            <div className="qz-ltab-menu-none">
+            <div className="qz-pp-none">
               Nothing carries this yet. Everyone who lands here reaches your
               safety net instead.
             </div>
           ) : (
-            <div className="qz-ltab-menu-products">
+            <div className="qz-pp-grid">
               {products.slice(0, 24).map((p) => (
-                <div key={p.product_id} className="qz-ltab-menu-product">
+                <article key={p.product_id} className="qz-pp-card">
                   {p.image_url ? (
-                    <img src={p.image_url} alt="" width={22} height={22} loading="lazy" />
+                    <img
+                      className="qz-pp-img"
+                      src={p.image_url}
+                      alt=""
+                      loading="lazy"
+                    />
                   ) : (
-                    <span className="qz-ltab-menu-swatch" aria-hidden />
+                    <span className="qz-pp-img" aria-hidden />
                   )}
-                  <span className="qz-ltab-menu-pmain">
-                    <span className="qz-ltab-menu-pname">{p.title}</span>
-                    <span className="qz-ltab-menu-pmeta">
-                      {p.price ? <span>{formatMoney(p.price)}</span> : null}
-                      <span
-                        className={`qz-ltab-menu-stock ${
-                          p.inventory_in_stock ? "is-ok" : "is-out"
-                        }`}
-                      >
-                        {p.inventory_in_stock ? "In stock" : "Out of stock"}
-                      </span>
+                  <p className="qz-pp-name">{p.title}</p>
+                  <p className="qz-pp-meta">
+                    {p.price ? <span>{formatMoney(p.price)}</span> : null}
+                    <span
+                      className={`qz-pp-stock ${
+                        p.inventory_in_stock ? "is-ok" : "is-out"
+                      }`}
+                    >
+                      {p.inventory_in_stock ? "In stock" : "Out of stock"}
                     </span>
-                  </span>
-                </div>
+                  </p>
+                </article>
               ))}
               {products.length > 24 ? (
-                <div className="qz-ltab-menu-none">+{products.length - 24} more</div>
+                <div className="qz-pp-more">+{products.length - 24} more</div>
               ) : null}
             </div>
           )}
-        </MenuShell>
+          {footSentence || shopUrl ? (
+            <footer className="qz-pp-foot">
+              <span>{footSentence}</span>
+              {shopUrl ? (
+                <a
+                  className="qz-btn qz-btn-sm"
+                  href={shopUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  Open in Shopify
+                </a>
+              ) : null}
+            </footer>
+          ) : null}
+        </div>
       }
     />
   );

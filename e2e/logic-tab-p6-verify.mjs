@@ -33,8 +33,12 @@ await page.waitForSelector('[data-testid="logic-tab-card"]', { timeout: 10000 })
 const card = page.locator('[data-testid="logic-tab-card"]');
 
 // ── explainers (§7) ─────────────────────────────────────────────────────────
-ok("both headers carry the same ✦ How it works pill",
-  (await card.locator(".qz-ltab-how").count()) === 2);
+// QRTZ-H3 — per-card labels (mock shared.mjs 357/375); the shared-label
+// equal-width ruling is overruled by the owner's exact-match order.
+ok("the two ✦ explain buttons carry the mock's per-card labels",
+  (await card.locator(".qz-ltab-how").count()) === 2 &&
+  /How rules work/.test(await card.locator(".qz-ltab-how").first().innerText()) &&
+  /How questions work/.test(await card.locator(".qz-ltab-how").nth(1).innerText()));
 await card.locator(".qz-ltab-how").first().click();
 const sheet = page.locator(".qz-xpl");
 ok("rules explainer opens", (await sheet.count()) === 1);
