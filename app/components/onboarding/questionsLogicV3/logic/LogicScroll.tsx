@@ -19,7 +19,9 @@ import { computeRuleLayout } from "../ruleHomes";
 import { QuestionSection } from "./QuestionSection";
 import { AddQuestionDivider } from "./AddQuestionDivider";
 import { RulesWidget } from "./RulesWidget";
-import { FallbackSection } from "./FallbackSection";
+// QRTZ-G3 — FallbackSection moved to the guided Results flow (its honest
+// home); this orphaned scroll keeps compiling against the relocated file.
+import { FallbackSection } from "../../resultsGuided/FallbackSection";
 import { CaptureModule } from "./CaptureModule";
 
 /* quiz-step3 v3 §5 → QZY-2 (quiz-logic dev-handoff v1.2 §2) — the Logic

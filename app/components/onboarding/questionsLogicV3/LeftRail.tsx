@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import type { DragEvent, MouseEvent } from "react";
+import type { DragEvent, MouseEvent, ReactNode } from "react";
 import type { OrderedFlowStep } from "../../../lib/questionOrder";
 import { EditableText } from "./content/EditableText";
 import { TYPE_CHIP_LABEL } from "./content/TypeChipSelector";
@@ -34,7 +34,10 @@ export const CONTENT_META: Record<string, string> = {
    — the per-question AI regenerate / undo / error bracket renders as a slim
      strip under the ACTIVE row (the mock has no regenerate);
    — the termini stay clickable (they are real phone-canvas positions here);
-     the ✉ row renders only while the capture step exists in the walk;
+     the ✉ row ALWAYS renders (QRTZ-G3 — it is the capture CONFIG surface
+     now, so it must stay reachable while capture is off to switch it back
+     on; its sub-label reads "Off" then) and hosts the relocated capture
+     config panel while selected;
    — the decider row keeps its accent number + disabled delete (deleting the
      deciding question would orphan every mapping — move the role first). */
 
@@ -56,12 +59,13 @@ export function LeftRail({
   onDelete,
   onAdd,
   onAddContent,
+  capturePanel,
 }: {
   /** §2 — the FULL flow, content steps included, numbered 1..N. */
   steps: OrderedFlowStep[];
   deciderId: string | null;
   activeId: string;
-  /** Mirrors the phone walk: the ✉ row renders only when the capture screen exists. */
+  /** Whether the capture step is switched on — drives the row's sub-label. */
   captureOn: boolean;
   /** The stage's per-question AI-regenerate bracket (active-row strip). */
   regen: RegenApi;
@@ -78,6 +82,9 @@ export function LeftRail({
   onAdd: () => void;
   /** §3 — insert a content page (message step) at the end of the flow. */
   onAddContent: () => void;
+  /** QRTZ-G3 — the capture config (the relocated CaptureModule), rendered
+   *  under the Email-capture row while that row is the selection. */
+  capturePanel?: ReactNode;
 }) {
   const nQuestions = steps.filter((s) => s.kind === "question").length;
   const nContent = steps.length - nQuestions;
@@ -345,20 +352,25 @@ export function LeftRail({
           + Add content
         </button>
       </div>
-      {captureOn ? (
-        <button
-          type="button"
-          className={`qz-qf-navterm${activeId === CAPTURE_ID ? " is-on" : ""}`}
-          title="Email capture — edit its heading, description, SMS and terms on the phone"
-          onClick={() => onSelect(CAPTURE_ID)}
-        >
-          <span className="qz-qf-tc" aria-hidden>
-            <IconMail />
-          </span>
-          <span className="qz-qf-tlabel">Email capture</span>
-          <span className="qz-qf-ts">Optional lead step</span>
-        </button>
-      ) : null}
+      {/* QRTZ-G3 — the row always renders: it is the capture CONFIG surface
+          (the relocated CaptureModule opens beneath it while selected). */}
+      <button
+        type="button"
+        className={`qz-qf-navterm${activeId === CAPTURE_ID ? " is-on" : ""}${captureOn ? "" : " is-off"}`}
+        title={
+          captureOn
+            ? "Email capture — edit its heading, description, SMS and terms on the phone; settings below"
+            : "Email capture is off — open to switch it back on"
+        }
+        onClick={() => onSelect(CAPTURE_ID)}
+      >
+        <span className="qz-qf-tc" aria-hidden>
+          <IconMail />
+        </span>
+        <span className="qz-qf-tlabel">Email capture</span>
+        <span className="qz-qf-ts">{captureOn ? "Optional lead step" : "Off"}</span>
+      </button>
+      {capturePanel ? <div className="qz-qf-cappanel">{capturePanel}</div> : null}
       <button
         type="button"
         className={`qz-qf-navterm${activeId === REVEAL_ID ? " is-on" : ""}`}

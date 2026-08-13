@@ -1,15 +1,17 @@
-// Logic tab P2 live-verify — the read-only one-card Logic view
-// (docs/design/logic-tab/HANDOFF.md §2/§3/§5, build order §13.1) against a
-// LOCAL production build (BASE env, default http://localhost:3000).
+// Logic tab P2 live-verify — the Logic view (docs/design/logic-tab/HANDOFF.md
+// §2/§3/§5 + QRTZ-G3 two-card form) against a LOCAL production build
+// (BASE env, default http://localhost:3000).
 //
-// Fixture: draft cmr7khgd50001vkhscvox8dgt (decider). READ-ONLY — the card has
-// no editing affordances in P2, so nothing to restore.
+// Fixture: draft cmr7khgd50001vkhscvox8dgt (decider). READ-ONLY — nothing to
+// restore.
 //
-// Asserts: the Logic view renders the ONE card (Rules above Questions) · the
-// Map/Table tabs and the global rules bar are GONE (Logic | Paths only) · the
-// six-column questions table with role pills, mapping cells, product counts
-// and route labels · rules render as sentences (or the §3.2 empty state with
-// the switched-on count) · Paths tab still reachable · zero page errors.
+// Asserts (QRTZ-G3): the Logic view renders the artifact's TWO stacked cards
+// (Rules, then Questions) and nothing else — the teaching note, the
+// Logic|Paths tab pair, the Map/Table chrome and the global rules bar are all
+// GONE · the six-column questions table with role pills, mapping cells,
+// product counts and route labels · rules render as sentences (or the §3.2
+// empty state with the switched-on count) · Paths still reachable behind the
+// quiet "Explore every path →" link · zero page errors.
 import { chromium } from "playwright";
 import { mkdirSync } from "node:fs";
 
@@ -45,21 +47,21 @@ await page.locator(".qz-builder-rail-item", { hasText: "Logic" }).click();
 await page.waitForSelector('[data-testid="logic-tab-card"]', { timeout: 10000 });
 await page.waitForTimeout(400);
 
-// ── the one card ────────────────────────────────────────────────────────────
+// ── the two cards (QRTZ-G3 — the artifact's Rules + Questions, stacked) ─────
 const card = page.locator('[data-testid="logic-tab-card"]');
-ok("the one card renders", (await card.count()) === 1);
-// UNIFIED — the teaching banner rides above the card (mock .vnote/NOTE).
-const note = page.locator(".qz-ltab-note");
-ok("the nothing-is-ever-deleted note renders above the card",
-  (await note.count()) === 1 &&
-    /nothing is ever deleted/i.test((await note.innerText()).replace(/\n/g, " ")));
-ok("Rules header present", (await card.locator("h2", { hasText: "Rules" }).count()) === 1);
-ok("Questions header present", (await card.locator("h2", { hasText: "Questions" }).count()) === 1);
+ok("the card stack renders", (await card.count()) === 1);
+ok("two stacked cards inside the stack",
+  (await card.locator("section.qz-ltab").count()) === 2);
+ok("Rules header on the FIRST card",
+  (await card.locator("section.qz-ltab").first().locator("h2", { hasText: "Rules" }).count()) === 1);
+ok("Questions header on the SECOND card",
+  (await card.locator("section.qz-ltab").nth(1).locator("h2", { hasText: "Questions" }).count()) === 1);
+// QRTZ-G3 — the teaching note is retired (the card meta sentences teach now).
+ok("the nothing-is-ever-deleted note is gone",
+  (await page.locator(".qz-ltab-note").count()) === 0);
 
-// Old chrome gone: Logic | Paths only, no Map/Table tabs, no rules bar.
-const tabLabels = await page.locator(".qz-logic-tab").allInnerTexts();
-ok("tabs are Logic | Paths only", JSON.stringify(tabLabels) === JSON.stringify(["Logic", "Paths"]),
-  JSON.stringify(tabLabels));
+// Old chrome gone: NO tabs at all (QRTZ-G3), no Map/Table chrome, no rules bar.
+ok("the Logic|Paths tab pair is gone", (await page.locator(".qz-logic-tab").count()) === 0);
 ok("global rules bar is gone", (await page.locator(".qz-logic-rules").count()) === 0);
 
 // ── rules half: sentences or the §3.2 empty state ───────────────────────────
@@ -112,10 +114,12 @@ ok("every answer row routes somewhere", routeable === answerRows, `${routeable}/
 
 await page.screenshot({ path: `${SHOTS}/logic-card.png`, fullPage: true });
 
-// ── Paths diagnostics tab still reachable ───────────────────────────────────
-await page.locator(".qz-logic-tab", { hasText: "Paths" }).click();
+// ── Paths still reachable behind the quiet link (QRTZ-G3 — no tabs) ─────────
+const pathsLink = page.locator(".qz-ltab-pathslink");
+ok("the quiet path-explorer link renders below the cards", (await pathsLink.count()) === 1);
+await pathsLink.click();
 await page.waitForTimeout(600);
-ok("Paths tab renders the paths projection", (await page.locator(".qz-paths").count()) > 0);
+ok("the link opens the paths projection", (await page.locator(".qz-paths").count()) > 0);
 
 ok("zero page errors", pageErrors.length === 0, pageErrors.slice(0, 3).join(" | "));
 

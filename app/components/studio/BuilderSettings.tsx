@@ -2,7 +2,6 @@ import { useMemo, useState } from "react";
 import { Link } from "@remix-run/react";
 import type { Quiz } from "../../lib/quizSchema";
 import { LogicView } from "../logic/LogicView";
-import { PathTester } from "../logic/PathTester";
 import { LogicPathsTab } from "./LogicPathsTab";
 import { LogicTabCard } from "./logicTab/LogicTabCard";
 import {
@@ -17,8 +16,10 @@ import { PLACEMENTS, type StudioBuilderData } from "./studioShared";
 // ════════════════════════════════════════════════════════════════════════════
 // BLD-4 → QZY-6 — the never-was-logic surfaces:
 //   • BuilderLogicView — the Logic workspace view. Decider docs get the
-//     questionsLogicV3 LogicScroll (sections per question, distributed rules)
-//     with the Try-a-path tester below; legacy docs keep LogicView.
+//     artifact's two stacked cards (Rules, Questions — QRTZ-G3); Paths keeps
+//     a quiet link below them (probe-covered path exploration); legacy docs
+//     keep LogicView. Try-a-path left this view (ContextPanel and the
+//     diagnose modal still mount PathTester).
 //   • QuizSettingsView — the rail's Settings SECTION (build-tab spec §1:
 //     "Integrations/embed/code live in Settings"): Experience & scoring ·
 //     placement · Share & embed · Translation · per-step Custom CSS (the old
@@ -42,10 +43,10 @@ export function BuilderLogicView({
   const isDecider = doc.logic_model === "decider";
   const questions = useMemo(() => orderedQuestions(doc), [doc]);
   const decider = useMemo(() => deciderQuestion(doc), [doc]);
-  // Logic tab v2 (docs/design/logic-tab/HANDOFF.md + DECISIONS.md) — the ONE
-  // card replaces the Map · Table chrome and the global rules bar. Paths stays
-  // as a diagnostics tab (DECISIONS "surface fate").
-  const [logicTab, setLogicTab] = useState<"logic" | "paths">("logic");
+  // QRTZ-G3 — the artifact draws no tabs on the Logic screen: the Logic|Paths
+  // pair is gone. Paths (probe-covered path exploration, DECISIONS "surface
+  // fate") stays reachable behind a quiet toggle link below the cards.
+  const [showPaths, setShowPaths] = useState(false);
 
   if (!isDecider) {
     // Legacy scoring docs: the existing mapping surface (it embeds its own
@@ -62,47 +63,32 @@ export function BuilderLogicView({
     );
   }
 
-  const tabs: Array<{ key: "logic" | "paths"; label: string }> = [
-    { key: "logic", label: "Logic" },
-    { key: "paths", label: "Paths" },
-  ];
-
   return (
     <div style={{ display: "grid", gap: 16 }}>
-      <div className="qz-logic-tabs" role="tablist" aria-label="Logic views">
-        {tabs.map((t) => (
-          <button
-            key={t.key}
-            type="button"
-            role="tab"
-            aria-selected={logicTab === t.key}
-            className={`qz-logic-tab${logicTab === t.key ? " is-active" : ""}`}
-            onClick={() => setLogicTab(t.key)}
-          >
-            {t.label}
-          </button>
-        ))}
+      <LogicTabCard
+        doc={doc}
+        questions={questions}
+        categories={data.categories}
+        collections={data.collections}
+        productIndex={data.productIndex}
+        commit={commit}
+        quizId={data.quizId}
+        lastSyncAt={data.lastSyncAt ?? null}
+        shopifyAdminDomain={data.shopifyAdminDomain ?? null}
+      />
+
+      {/* QRTZ-G3 — Paths behind a quiet secondary affordance (no tabs). */}
+      <div className="qz-ltab-pathsrow">
+        <button
+          type="button"
+          className="qz-ltab-pathslink"
+          aria-expanded={showPaths}
+          onClick={() => setShowPaths((v) => !v)}
+        >
+          {showPaths ? "Hide the path explorer" : "Explore every path →"}
+        </button>
       </div>
-
-      {logicTab === "logic" ? (
-        <>
-          <LogicTabCard
-            doc={doc}
-            questions={questions}
-            categories={data.categories}
-            collections={data.collections}
-            productIndex={data.productIndex}
-            commit={commit}
-            quizId={data.quizId}
-            lastSyncAt={data.lastSyncAt ?? null}
-            shopifyAdminDomain={data.shopifyAdminDomain ?? null}
-          />
-          {/* PathTester renders its own "Try a path" header. */}
-          <PathTester doc={doc} productIndex={data.productIndex} categories={data.categories} />
-        </>
-      ) : null}
-
-      {logicTab === "paths" ? (
+      {showPaths ? (
         <LogicPathsTab
           doc={doc}
           questions={questions}

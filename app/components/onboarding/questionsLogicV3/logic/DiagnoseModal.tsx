@@ -11,9 +11,10 @@ import { PathTester } from "../../../logic/PathTester";
 type QuizDoc = z.infer<typeof Quiz>;
 
 /* QZY-2 (quiz-logic dev-handoff v1.2 §10) — ONE modal combining automated
-   diagnostics and manual path testing. Launched from the sub-header's
-   "+ Diagnose / Preview" button AND the top-right Fix-N-issues control
-   (which opens straight onto Diagnostics). The Diagnostics tab reuses the
+   diagnostics and manual path testing. QRTZ-G3 removed its Logic-view
+   sub-header entry (the artifact's Logic screen is the two cards only); the
+   bar's Fix-N-issues health pill and a blocked Continue are its doors now,
+   both opening straight onto Diagnostics. The Diagnostics tab reuses the
    whole health body (Tier-1 checklist with click-to-jump + the ✦ Tier-2
    advisory); Test a path reuses PathTester, which walks the REAL routing
    via tracePath and resolves through the production engine — a branched
