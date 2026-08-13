@@ -3879,19 +3879,20 @@ textarea.qz-sm-inp { resize: vertical; min-height: 62px; line-height: 1.5; }
   padding: 6px; margin: -6px; /* invisible hit-target padding */
   text-decoration: none; color: var(--qz-ink);
 }
-/* BRAND-3 — the studio-violet fox tile: solid accent ground, cream FoxMark,
-   features punched out in the accent itself (the board's "studio violet"). */
+/* QRTZ-G6 — the violet fox tile is retired on admin chrome: the Quartz cat
+   mark (CatMark, mock shared.mjs mark("solid")) sits bare in ink, eyes
+   knocked out to paper (`.brand { --mark-eye: var(--rail-bg) }` → the
+   component's knockout default). Mock `.brand .mark` = 28px. */
 .qz-wordmark-mono {
   flex: none;
   display: inline-flex; align-items: center; justify-content: center;
-  width: 28px; height: 28px; border-radius: var(--qz-radius);
-  background: var(--qz-accent); color: var(--qz-accent-ink);
-  font-family: var(--qz-font-display); font-weight: 700; font-size: 16px;
-  line-height: 1; letter-spacing: -0.02em;
+  width: 28px; height: 28px;
+  color: var(--qz-ink);
 }
+/* Mock .brand-name: display face, 17/700, −0.015em. */
 .qz-wordmark-name {
   font-family: var(--qz-font-display);
-  font-size: 14.5px; font-weight: 700; letter-spacing: -0.02em;
+  font-size: 17px; font-weight: 700; letter-spacing: -0.015em;
 }
 
 /* — Sticky top bar (§7.6): paper + blur, hairline, 3 zones w/ dividers — */
@@ -8066,11 +8067,11 @@ tr.qz-ltab-qstart td { border-top: 2px solid var(--qz-rule); }
 }
 .qz-bt-top .qz-wordmark { padding: 0; margin: 0; flex: none; }
 .qz-bt-top .qz-wordmark-mono {
-  /* mock .brandmark: 26px, radius 7, solid accent, white glyph */
-  width: 26px; height: 26px; border-radius: 7px;
-  background: var(--qz-accent); color: #fff;
-  font-weight: 800; font-size: 14px;
+  /* QRTZ-G6 — the cat mark replaces the violet brandmark tile; keeps the
+     bar's 26px footprint, ink on paper like everywhere else. */
+  width: 26px; height: 26px;
 }
+.qz-bt-top .qz-wordmark-mono svg { width: 26px; height: 26px; }
 .qz-bt-qtitle {
   font-weight: 600; font-size: 13.5px; letter-spacing: -.01em;
   min-width: 40px; max-width: 420px; flex: 0 1 auto;
@@ -9473,8 +9474,9 @@ tr.qz-ltab-qstart td { border-top: 2px solid var(--qz-rule); }
   text-transform: uppercase; color: var(--qz-ink-4);
 }
 .home2 .qz-section-action { margin-left: auto; }
-.home2 .qz-section-action a { font-size: 13px; font-weight: 500; color: var(--qz-accent-ink); text-decoration: none; }
-.home2 .qz-section-action a:hover { text-decoration: underline; }
+/* Mock .link: 13/semi, accent ink, underline on hover offset 3px. */
+.home2 .qz-section-action a { font-size: 13px; font-weight: 600; color: var(--qz-accent-ink); text-decoration: none; }
+.home2 .qz-section-action a:hover { text-decoration: underline; text-underline-offset: 3px; }
 
 .home2 .hm-card { background: var(--qz-paper); border: 1px solid var(--qz-rule); border-radius: var(--qz-radius-lg); overflow: hidden; }
 
@@ -9498,15 +9500,19 @@ tr.qz-ltab-qstart td { border-top: 2px solid var(--qz-rule); }
 .home2 .hm-todo-chev { flex: none; margin-left: auto; color: var(--qz-ink-4); }
 .home2 .hm-todo:hover .hm-todo-chev { transform: translateX(2px); }
 
-/* Stat tiles — QzStat in the meld order, framed as the mock's hairline grid. */
+/* Stat tiles — the mock's hairline grid, in the mock's hm-stat anatomy:
+   label on top (10/700/.08em uppercase), the 27px figure 6px under it,
+   delta 6px under that (home.mjs hm-stat-label → hm-stat-value →
+   hm-stat-delta). QzStat's global meld order is figure-first, so the label
+   is re-ordered to the top here — QRTZ-G6. */
 .home2 .hm-stats {
   display: grid; grid-template-columns: repeat(4, 1fr); border: 1px solid var(--qz-rule);
   border-radius: var(--qz-radius-lg); background: var(--qz-paper); overflow: hidden;
 }
 .home2 .hm-stats .qz-stat { padding: 14px 15px; border-right: 1px solid var(--qz-rule); background: var(--qz-paper); box-shadow: none; }
 .home2 .hm-stats .qz-stat:last-child { border-right: 0; }
-.home2 .hm-stats .qz-stat-value { font-size: 27px; line-height: 1; }
-.home2 .hm-stats .qz-stat .qz-label { margin-top: 6px; font-size: 10px; letter-spacing: .08em; color: var(--qz-ink-4); }
+.home2 .hm-stats .qz-stat-value { font-size: 27px; line-height: 1; margin-top: 6px; }
+.home2 .hm-stats .qz-stat .qz-label { order: -1; margin-top: 0; font-size: 10px; letter-spacing: .08em; color: var(--qz-ink-4); }
 .home2 .hm-stats .qz-stat-delta { margin-top: 6px; }
 
 .home2 .hm-qrow {
@@ -9527,7 +9533,7 @@ tr.qz-ltab-qstart td { border-top: 2px solid var(--qz-rule); }
 .home2 .hm-chip.is-live { background: var(--qz-live-wash); border-color: color-mix(in srgb, var(--qz-ok) 30%, var(--qz-paper)); color: var(--qz-ok); }
 .home2 .hm-chip.is-setup { background: var(--qz-accent-wash); border-color: var(--qz-accent-line); color: var(--qz-accent-ink); }
 
-@media (max-width: 720px) { /* --qz-bp-sm */
+@media (max-width: 760px) { /* mock HOME_CSS breakpoint (QRTZ-G6: was 720) */
   .home2.is-none .hm-top { padding: 20px 16px 56px; }
   .home2.is-has .hm-top { padding: 28px 16px 0; }
   .home2 .hm-below { padding: 0 16px 44px; }

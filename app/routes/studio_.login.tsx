@@ -3,7 +3,7 @@ import type { ActionFunctionArgs, LinksFunction, LoaderFunctionArgs, MetaFunctio
 import { json, redirect } from "@remix-run/node";
 import { adminStyleLinks } from "../styles/adminLinks";
 import { Form, useActionData, useNavigation } from "@remix-run/react";
-import { FoxMark } from "../components/chrome/FoxMark";
+import { CatMark } from "../components/chrome/CatMark";
 import { hasStudioAccess } from "../lib/studioAccess.server";
 import { requestMagicLink } from "../lib/studioMagicLink.server";
 
@@ -55,20 +55,16 @@ const styles: Record<string, CSSProperties> = {
   },
   card: { width: 360, display: "flex", flexDirection: "column", gap: 14 },
   brand: { display: "flex", alignItems: "center", gap: 10, marginBottom: 2 },
+  /* QRTZ-G6 — the cat mark sits bare in ink (no violet tile); eyes knock
+     out to the paper card it sits on (CatMark's knockout default). */
   mono: {
     width: 36,
     height: 36,
     flex: "none",
-    borderRadius: "var(--qz-radius-lg)",
     display: "inline-flex",
     alignItems: "center",
     justifyContent: "center",
-    background: "var(--qz-accent)",
-    color: "var(--qz-accent-ink)",
-    fontFamily: "var(--qz-font-display)",
-    fontWeight: 700,
-    fontSize: 20,
-    lineHeight: 1,
+    color: "var(--qz-ink)",
   },
   h1: {
     fontFamily: "var(--qz-font-display)",
@@ -91,7 +87,7 @@ export default function StudioLogin() {
         <div className="qz-card" style={styles.card}>
           <div style={styles.brand}>
             <span style={styles.mono} aria-hidden>
-              <FoxMark size={27} variant="cream" feature="var(--qz-accent)" />
+              <CatMark size={36} />
             </span>
             <h1 style={styles.h1}>Check your email</h1>
           </div>
@@ -104,7 +100,7 @@ export default function StudioLogin() {
         <Form method="post" className="qz-card" style={styles.card}>
           <div style={styles.brand}>
             <span style={styles.mono} aria-hidden>
-              <FoxMark size={27} variant="cream" feature="var(--qz-accent)" />
+              <CatMark size={36} />
             </span>
             <h1 style={styles.h1}>Wiskr Studio</h1>
           </div>

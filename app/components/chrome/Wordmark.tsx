@@ -1,10 +1,12 @@
 import { Link } from "@remix-run/react";
 
-import { FoxMark } from "./FoxMark";
+import { CatMark } from "./CatMark";
 
-/* BRAND-2 closes the §14 "final logo lockup" open item: the wiskr fox sits in
-   the rounded tile, with the product name in the display face (Quicksand).
-   `compact` renders the tile alone (collapsed rail / small-scale contexts).
+/* QRTZ-G6 — the Quartz brand block (mock _src/shared.mjs `.brand`): the solid
+   cat mark in ink with paper-knockout eyes, bare on the rail ground — the
+   violet fox tile is retired on admin chrome (the shopper runtime badge keeps
+   FoxMark, frozen). Name sits at 17/700/−.015em per the mock `.brand-name`.
+   `compact` renders the mark alone (collapsed rail / small-scale contexts).
    `onClick` (one-line-chrome §1.1) lets the funnel intercept the home click
    with its leave-confirm dialog (preventDefault + open). */
 export function Wordmark({
@@ -21,7 +23,7 @@ export function Wordmark({
   return (
     <Link to={to} className="qz-wordmark" aria-label={`${name} — home`} onClick={onClick}>
       <span className="qz-wordmark-mono" aria-hidden="true">
-        <FoxMark size={22} variant="cream" feature="var(--qz-accent)" />
+        <CatMark size={28} />
       </span>
       {compact ? null : <span className="qz-wordmark-name">{name}</span>}
     </Link>
