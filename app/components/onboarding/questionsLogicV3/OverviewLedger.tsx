@@ -1,23 +1,31 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import type { Quiz as QuizDoc } from "../../../lib/quizSchema";
 import { isFreeformType } from "../../../lib/quizSchema";
 import type { OrderedQuestion, OrderedFlowStep } from "../../../lib/questionOrder";
+import type { IndexedProduct } from "../../../lib/recommendationEngine";
 import {
   addAnswer,
   insertQuestionRelative,
   insertContentRelative,
   moveDecider,
   removeAnswer,
+  setAnswerFilterValues,
   setQuestionRole,
 } from "../../../lib/quizMutations";
 import { updateNodeData } from "../../studio/studioDoc";
 import { QzModal, QzPopover } from "../../qz-overlays";
 import { useQzToast } from "../../qz-toast";
 import {
+  answerHasSelection,
+  derivedNarrowField,
   derivedNarrowLabel,
+  guessAnswerValuesForField,
+  narrowFieldOptions,
+  writeValuesForField,
   ROLE_FOOT,
   ROLE_JOBS,
 } from "../../studio/logicTab/logicTabFields";
+import { AttributePickerDialog } from "../../studio/logicTab/AttributePickerDialog";
 import { EditableText } from "./content/EditableText";
 import { TypeChipSelector } from "./content/TypeChipSelector";
 import { CONTENT_META } from "./LeftRail";
@@ -146,18 +154,38 @@ function NumberCell({
 
 const stripQ = (s: string) => s.replace(/\s*\?\s*$/, "");
 
+/** The attr-slot / toast label for a field key — derivedNarrowLabel's exact
+    naming ("mf:custom.gender" → "gender", "ptype" → "Product type") so the
+    toast can never disagree with the slot's readout. */
+const fieldSlotLabel = (field: string): string => {
+  if (field === "ptype") return "Product type";
+  const bare = field.replace(/^(mf|tag|vo):/, "");
+  return bare.split(".").pop() || bare;
+};
+
 /* QRTZ-OB1 (mock .ovw-type role-stack + role popover, shared.mjs 443–452;
    GAPS §A item 6) — the Overview's role control. The menu is the mock's role
    popover on the shared vocabulary (logicTabFields.ROLE_JOBS), and every
    write is the SAME barrel mutation the Logic window commits — moveDecider /
    setQuestionRole — so the target_ids mirror invariant has exactly one write
    path. The attribute under a Narrows role is the DERIVED readout (never
-   stored), exactly like the Logic pill's attr line. */
+   stored), exactly like the Logic pill's attr line.
+
+   QRTZ-H2 (mock .ap + .attr-slot) — flipping an UNMAPPED question to Narrows
+   opens the attribute dialog instead of writing the role: role + field +
+   seeded values commit TOGETHER on Use, so Cancel leaves zero half-state
+   (there is no role write to revert — reverting a decides→filter flip would
+   have to run moveDecider back, which wipes the decider's answer targets).
+   The derived-attribute line becomes the mock's attr-slot: a picker that
+   reopens the dialog to change the field. Values ride the SAME seam the
+   Logic window writes — setAnswerFilterValues + writeValuesForField. */
 function RoleControl({
   doc,
   node,
   qIndex,
   deciderQIndex,
+  productIndex,
+  hasNarrowFields,
   onCommit,
 }: {
   doc: QuizDoc;
@@ -165,16 +193,21 @@ function RoleControl({
   qIndex: number;
   /** The current decider's question number (for "now on QN"), null if none. */
   deciderQIndex: number | null;
+  productIndex: IndexedProduct[];
+  /** narrowFieldOptions(productIndex).length > 0, memoized ONCE in the grid. */
+  hasNarrowFields: boolean;
   onCommit: (doc: QuizDoc) => void;
 }) {
   const toast = useQzToast();
   const [open, setOpen] = useState(false);
+  const [pickerOpen, setPickerOpen] = useState(false);
   const role = node.data.role;
   const isDecider = role === "decides";
   const isFilter = role === "filter";
   const cannotDecide =
     node.data.question_type === "multi_select" || isFreeformType(node.data.question_type);
   const label = isDecider ? "Picks the result" : isFilter ? "Narrows" : "Asked only";
+  const derivedField = derivedNarrowField(node.data.answers);
 
   // Mirrors QuestionWindow's setJob byte-for-byte in semantics: promote via
   // moveDecider (one decider per quiz), demote via setQuestionRole.
@@ -194,7 +227,56 @@ function RoleControl({
     }
     if (job === "filter" && isFilter) return;
     if (job === "info" && !isDecider && !isFilter) return;
+    if (job === "filter") {
+      // QRTZ-H2 — a freshly-flipped Narrows question narrows by NOTHING when
+      // no answer carries a selection. With fields to offer, the dialog opens
+      // INSTEAD of the role write (Use applies both; Cancel writes nothing).
+      // With no narrowable fields the plain role write keeps today's
+      // behavior — the Logic window's "anything" mode stays reachable.
+      const hasMapping = node.data.answers.some(
+        (a) => a.no_preference === true || answerHasSelection(a),
+      );
+      if (!hasMapping && hasNarrowFields) {
+        setPickerOpen(true);
+        return;
+      }
+    }
     onCommit(setQuestionRole(doc, node.id, job === "filter" ? "filter" : "qualifier"));
+  };
+
+  // The dialog's Use — ONE commit through the QuestionWindow seam: the role
+  // write (when flipping) + one setAnswerFilterValues per answer, each built
+  // by writeValuesForField (the field derives back from the values; the
+  // legacy narrow_field key stays unwritten, exactly like QuestionWindow).
+  const applyField = (field: string) => {
+    setPickerOpen(false);
+    // Re-picking the current field is a no-op — re-seeding would overwrite
+    // hand-tuned per-answer values with guesses.
+    if (isFilter && field === derivedField) return;
+    let next = doc;
+    if (!isFilter) next = setQuestionRole(next, node.id, "filter");
+    const answers = node.data.answers;
+    const guesses = guessAnswerValuesForField(answers, productIndex, field);
+    const byId = new Map(guesses.map((g) => [g.answerId, g]));
+    for (const a of answers) {
+      if (a.no_preference) continue;
+      const g = byId.get(a.id);
+      if (g)
+        next = setAnswerFilterValues(next, node.id, a.id, writeValuesForField(field, [g.value]));
+      else if (answerHasSelection(a))
+        // Changing field: old values are meaningless against the new one
+        // (setQuestionNarrowField's locked semantic) — clear, don't keep.
+        next = setAnswerFilterValues(next, node.id, a.id, {});
+    }
+    onCommit(next);
+    const eligible = answers.filter((a) => !a.no_preference).length;
+    const unmatched = eligible - guesses.length;
+    const name = fieldSlotLabel(field);
+    toast(
+      unmatched > 0
+        ? `"${stripQ(node.data.text)}" now narrows by ${name} — map ${unmatched} answer${unmatched === 1 ? "" : "s"} on the Logic step`
+        : `"${stripQ(node.data.text)}" now narrows by ${name} — ${guesses.length} answer${guesses.length === 1 ? "" : "s"} mapped, check them`,
+    );
   };
 
   return (
@@ -202,7 +284,7 @@ function RoleControl({
       <QzPopover
         open={open}
         onOpenChange={setOpen}
-        maxWidth={300}
+        maxWidth={340}
         trigger={
           <button
             type="button"
@@ -213,7 +295,10 @@ function RoleControl({
           </button>
         }
         content={
-          <div className="qz-ltab-menu">
+          // QRTZ-H2 — the owner-reported cutoff was the row LABELS: the sub
+          // hint's flex:0 0 auto squeezed the main ("Narrows" → "Narro…").
+          // The scoped class flips the shrink side (see the H2 CSS section).
+          <div className="qz-ltab-menu qz-h2-rolemenu">
             {/* Mock .pop-head ("Question 1 does", shared.mjs line 444). */}
             <div className="qz-ltab-menu-title">Question {qIndex} does</div>
             {ROLE_JOBS.map((j) => {
@@ -244,12 +329,48 @@ function RoleControl({
         }
       />
       {isFilter ? (
-        <span
-          className="qz-ltab-attr"
-          title={`narrows on ${derivedNarrowLabel(node.data.answers)}`}
-        >
-          narrows on <b>{derivedNarrowLabel(node.data.answers)}</b>
-        </span>
+        hasNarrowFields ? (
+          // QRTZ-H2 (mock .attr-slot, base.mjs 603–618) — the derived line is
+          // a PICKER now: click reopens the dialog to change the field. The
+          // unmapped state is the mock's dashed "Choose attribute" slot.
+          derivedNarrowLabel(node.data.answers) === "nothing yet" ? (
+            <button
+              type="button"
+              className="qz-ap-slot is-empty"
+              title="Choose the attribute this question narrows by"
+              onClick={() => setPickerOpen(true)}
+            >
+              Choose attribute
+            </button>
+          ) : (
+            <button
+              type="button"
+              className="qz-ap-slot"
+              title={`narrows on ${derivedNarrowLabel(node.data.answers)} — change the attribute`}
+              onClick={() => setPickerOpen(true)}
+            >
+              <span>
+                narrows on <b>{derivedNarrowLabel(node.data.answers)}</b>
+              </span>
+            </button>
+          )
+        ) : (
+          <span
+            className="qz-ltab-attr"
+            title={`narrows on ${derivedNarrowLabel(node.data.answers)}`}
+          >
+            narrows on <b>{derivedNarrowLabel(node.data.answers)}</b>
+          </span>
+        )
+      ) : null}
+      {pickerOpen ? (
+        <AttributePickerDialog
+          qIndex={qIndex}
+          productIndex={productIndex}
+          currentField={isFilter ? derivedField : null}
+          onCancel={() => setPickerOpen(false)}
+          onUse={applyField}
+        />
       ) : null}
     </div>
   );
@@ -372,6 +493,8 @@ function LedgerRow({
   index,
   isDecider,
   deciderQIndex,
+  productIndex,
+  hasNarrowFields,
   onlyQuestion,
   onCommit,
   onReorder,
@@ -384,6 +507,9 @@ function LedgerRow({
   isDecider: boolean;
   /** QRTZ-OB1 — the current decider's question number (role menu hint). */
   deciderQIndex: number | null;
+  /** QRTZ-H2 — the attribute dialog's field inventory source. */
+  productIndex: IndexedProduct[];
+  hasNarrowFields: boolean;
   /** The last remaining question can't be deleted (a quiz needs one). */
   onlyQuestion: boolean;
   onCommit: (doc: QuizDoc) => void;
@@ -538,6 +664,8 @@ function LedgerRow({
           node={node}
           qIndex={question.qIndex}
           deciderQIndex={deciderQIndex}
+          productIndex={productIndex}
+          hasNarrowFields={hasNarrowFields}
           onCommit={onCommit}
         />
         {multi ? (
@@ -647,6 +775,7 @@ export function OverviewLedger({
   doc,
   steps,
   deciderId,
+  productIndex,
   onCommit,
   onReorder,
   onDelete,
@@ -655,10 +784,18 @@ export function OverviewLedger({
   /** §2 — the FULL flow, content steps included, numbered 1..N. */
   steps: OrderedFlowStep[];
   deciderId: string | null;
+  /** QRTZ-H2 — the attribute dialog derives its field inventory from here. */
+  productIndex: IndexedProduct[];
   onCommit: (doc: QuizDoc) => void;
   onReorder: (id: string, toIndex: number) => void;
   onDelete: (id: string) => void;
 }) {
+  // QRTZ-H2 — one inventory sweep for the whole grid (the rows only need the
+  // boolean; the dialog recomputes rows itself, and only while open).
+  const hasNarrowFields = useMemo(
+    () => narrowFieldOptions(productIndex).length > 0,
+    [productIndex],
+  );
   // Divider inserts anchor on MOVABLE steps (the add-anchor lesson).
   const addBelow = (refId: string) => onCommit(insertQuestionRelative(doc, refId, "below"));
   const addContentBelow = (refId: string) => onCommit(insertContentRelative(doc, refId, "below"));
@@ -715,6 +852,8 @@ export function OverviewLedger({
               index={i}
               isDecider={s.node.id === deciderId}
               deciderQIndex={deciderQIndex}
+              productIndex={productIndex}
+              hasNarrowFields={hasNarrowFields}
               onlyQuestion={nQuestions <= 1}
               onCommit={onCommit}
               onReorder={onReorder}

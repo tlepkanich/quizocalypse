@@ -2,9 +2,12 @@ import { describe, expect, it } from "vitest";
 import type { IndexedProduct } from "../../../lib/recommendationEngine";
 import type { BuilderCategory } from "../../builder/stepProps";
 import {
+  answerHasSelection,
   answerValuesForField,
+  derivedNarrowField,
   derivedNarrowLabel,
   guessAnswerMappings,
+  guessAnswerValuesForField,
   fieldValues,
   narrowFieldOptions,
   popoverShopifyUrl,
@@ -188,6 +191,93 @@ describe("guessAnswerMappings (unified §3 — deterministic map-for-me)", () =>
       gp,
     );
     expect(guesses).toEqual([]);
+  });
+});
+
+describe("QRTZ-H2 — answerHasSelection / derivedNarrowField / guessAnswerValuesForField", () => {
+  const a = (id: string, text: string, extra: Record<string, unknown> = {}) =>
+    ({ id, text, tags: [], edge_handle_id: "h", ...extra }) as never;
+  const gp = [
+    P("g1", ["fit:Slim"], { "custom.gender": "Women" }),
+    P("g2", ["fit:Relaxed"], { "custom.gender": "Men" }),
+  ];
+
+  it("answerHasSelection sees every storage kind; blank tags don't count", () => {
+    expect(answerHasSelection(a("x", "x"))).toBe(false);
+    expect(answerHasSelection(a("x", "x", { tags: ["  "] }))).toBe(false);
+    expect(answerHasSelection(a("x", "x", { tags: ["fit:slim"] }))).toBe(true);
+    expect(answerHasSelection(a("x", "x", { collection_filters: ["c1"] }))).toBe(true);
+    expect(answerHasSelection(a("x", "x", { collection_filter: "c1" }))).toBe(true);
+    expect(
+      answerHasSelection(a("x", "x", { metafield_filters: [{ key: "k", value: "v" }] })),
+    ).toBe(true);
+    expect(
+      answerHasSelection(a("x", "x", { variant_filters: [{ name: "Size", value: "xl" }] })),
+    ).toBe(true);
+    expect(answerHasSelection(a("x", "x", { product_type_filters: ["boards"] }))).toBe(true);
+    // no_preference is NOT a selection (the dialog's callers test it apart).
+    expect(answerHasSelection(a("x", "x", { no_preference: true }))).toBe(false);
+  });
+
+  it("derivedNarrowField mirrors derivedNarrowLabel: one field → its key, else null", () => {
+    expect(derivedNarrowField([a("x", "x", { tags: ["fit:slim"] })])).toBe("tag:fit");
+    expect(
+      derivedNarrowField([
+        a("x", "x", { metafield_filters: [{ key: "custom.gender", value: "women" }] }),
+      ]),
+    ).toBe("mf:custom.gender");
+    // mixed → null; anything (plain picks only) → null; nothing → null.
+    expect(
+      derivedNarrowField([
+        a("x", "x", { tags: ["fit:slim"] }),
+        a("y", "y", { product_type_filters: ["boards"] }),
+      ]),
+    ).toBe(null);
+    expect(derivedNarrowField([a("x", "x", { tags: ["plain"] })])).toBe(null);
+    expect(derivedNarrowField([a("x", "x")])).toBe(null);
+    // A plain pick ALONGSIDE one field doesn't break the single-field read
+    // (derivedNarrowLabel counts the same way).
+    expect(
+      derivedNarrowField([a("x", "x", { tags: ["fit:slim", "plain"] })]),
+    ).toBe("tag:fit");
+  });
+
+  it("guessAnswerValuesForField seeds within ONE field, re-guessing mapped answers", () => {
+    const guesses = guessAnswerValuesForField(
+      [
+        a("a1", "Slim"), // exact value
+        a("a2", "Relaxed cut"), // word-boundary
+        a("a3", "Womenswear"), // substring — must NOT match
+        a("a4", "Slim", { tags: ["fit:relaxed"] }), // mapped — re-guessed anyway
+        a("a5", "Slim", { no_preference: true }), // deliberate keep-everything
+      ],
+      gp,
+      "tag:fit",
+    );
+    expect(guesses.find((g) => g.answerId === "a1")).toMatchObject({
+      field: "tag:fit",
+      value: "slim",
+    });
+    expect(guesses.find((g) => g.answerId === "a2")).toMatchObject({ value: "relaxed" });
+    expect(guesses.find((g) => g.answerId === "a3")).toBeUndefined();
+    expect(guesses.find((g) => g.answerId === "a4")).toMatchObject({ value: "slim" });
+    expect(guesses.find((g) => g.answerId === "a5")).toBeUndefined();
+    // Constrained to the chosen field: gender values never surface for fit.
+    expect(guesses.every((g) => g.field === "tag:fit")).toBe(true);
+  });
+
+  it("guessAnswerValuesForField against the OTHER field finds only its values", () => {
+    const guesses = guessAnswerValuesForField(
+      [a("a1", "Slim"), a("a2", "For women")],
+      gp,
+      "mf:custom.gender",
+    );
+    expect(guesses).toHaveLength(1);
+    expect(guesses[0]).toMatchObject({
+      answerId: "a2",
+      field: "mf:custom.gender",
+      value: "women",
+    });
   });
 });
 

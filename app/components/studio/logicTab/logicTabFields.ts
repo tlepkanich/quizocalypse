@@ -298,6 +298,71 @@ export function guessAnswerMappings(
   return out;
 }
 
+/** QRTZ-H2 — does this answer carry ANY stored filter selection (field
+ *  values, plain tags, or collections)? The Overview's role control uses it
+ *  to decide whether flipping to Narrows needs the attribute dialog: a
+ *  freshly-flipped question with nothing stored narrows by nothing. */
+export function answerHasSelection(a: AnswerT): boolean {
+  return (
+    a.tags.some((t) => t.trim().length > 0) ||
+    Boolean(a.collection_filter) ||
+    (a.collection_filters?.length ?? 0) > 0 ||
+    (a.metafield_filters?.length ?? 0) > 0 ||
+    (a.variant_filters?.length ?? 0) > 0 ||
+    (a.product_type_filters?.length ?? 0) > 0
+  );
+}
+
+/** QRTZ-H2 — the single FIELD key the question's stored values draw from,
+ *  or null ("anything", "mixed", or nothing yet). Mirrors derivedNarrowLabel's
+ *  counting exactly (plain picks don't count as a field; no_preference
+ *  answers are skipped) so the dialog's preselected radio can never disagree
+ *  with the derived label. */
+export function derivedNarrowField(answers: readonly AnswerT[]): string | null {
+  const fields = new Set<string>();
+  for (const a of answers) {
+    if (a.no_preference) continue;
+    for (const f of answerFields(a)) if (f) fields.add(f);
+  }
+  return fields.size === 1 ? [...fields][0]! : null;
+}
+
+/** QRTZ-H2 — the attribute dialog's seed pass: one best VALUE guess per
+ *  answer, constrained to the CHOSEN field (exact 100 · word-boundary 70 ·
+ *  threshold ≥70; substrings deliberately never match — the same scoring as
+ *  guessAnswerMappings on one field's value list). Unlike guessAnswerMappings
+ *  this re-guesses already-mapped answers — the dialog REPLACES a question's
+ *  field, so old values are meaningless — skipping only no_preference
+ *  ("keeps everything" is a deliberate choice, never overwritten). */
+export function guessAnswerValuesForField(
+  answers: readonly AnswerT[],
+  productIndex: readonly IndexedProduct[],
+  field: string,
+): MapGuess[] {
+  const candidates = fieldValues(productIndex, field);
+  const out: MapGuess[] = [];
+  for (const a of answers) {
+    if (a.no_preference) continue;
+    const text = a.text.trim().toLowerCase();
+    if (!text) continue;
+    let best: FieldValue | null = null;
+    let bestScore = 0;
+    for (const c of candidates) {
+      let score = 0;
+      if (c.value === text) score = 100;
+      else if (new RegExp(`(^|[^a-z0-9])${escapeRe(c.value)}([^a-z0-9]|$)`).test(text))
+        score = 70;
+      if (score > bestScore || (score === bestScore && score > 0 && c.count > (best?.count ?? 0))) {
+        best = c;
+        bestScore = score;
+      }
+    }
+    if (best && bestScore >= 70)
+      out.push({ answerId: a.id, field, value: best.value, label: best.label });
+  }
+  return out;
+}
+
 export interface TargetGuess {
   answerId: string;
   categoryId: string;

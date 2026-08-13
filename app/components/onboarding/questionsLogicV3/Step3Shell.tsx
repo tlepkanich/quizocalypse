@@ -397,6 +397,7 @@ export function Step3Shell({
               doc={doc}
               steps={flowSteps}
               deciderId={decider?.id ?? null}
+              productIndex={productIndex}
               onCommit={onCommit}
               onReorder={reorderQuestion}
               onDelete={deleteQuestion}

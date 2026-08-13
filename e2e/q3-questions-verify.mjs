@@ -570,6 +570,7 @@ try {
   // the SAME barrel mutation as the Logic window (setQuestionRole) — proven
   // by a round-trip read back through the draft.
   const q2role0 = (await draftDoc())?.nodes?.find((n) => n.id === "q2")?.data?.role ?? "qualifier";
+  ok("q2 starts Asked only (seed contract)", q2role0 === "qualifier");
   await page.locator(".qz-ovw-row").nth(1).locator(".qz-ovw-role").click();
   const roleMenu = page.locator(".qz-popover .qz-ltab-menu");
   ok("role menu: mock vocabulary, one-decider foot, multi can't decide",
@@ -577,17 +578,113 @@ try {
     (await roleMenu.locator(".qz-ltab-menu-row").count()) === 3 &&
     /One question picks the result/.test((await roleMenu.innerText()) ?? "") &&
     (await roleMenu.locator(".qz-ltab-menu-row:disabled", { hasText: "Picks the result" }).count()) === 1);
-  const q2flipLabel = q2role0 === "filter" ? "Asked only" : "Narrows";
-  const q2flipRole = q2role0 === "filter" ? "qualifier" : "filter";
-  await roleMenu.locator(".qz-ltab-menu-row", { hasText: q2flipLabel }).click();
-  ok("Overview role edit persisted through setQuestionRole (draft read-back)",
-    await waitDraft((d) => d?.nodes?.find((n) => n.id === "q2")?.data?.role === q2flipRole));
+  // QRTZ-H2 — the owner-reported cutoff: the sub hint's flex squeezed the
+  // main label ("Narrows" → "Narro…"). Fixed side + a viewport geometry pin.
+  ok("role-menu labels are never cut off (QRTZ-H2 label fix)",
+    await roleMenu.locator(".qz-ltab-menu-row-main").evaluateAll(
+      (els) => els.every((el) => el.scrollWidth <= el.clientWidth + 1)));
+  ok("role menu fully inside the viewport (portaled, fixed)",
+    await page.locator(".qz-popover").evaluate((el) => {
+      const r = el.getBoundingClientRect();
+      return r.top >= 0 && r.left >= 0 && r.bottom <= window.innerHeight && r.right <= window.innerWidth;
+    }));
+
+  // ── QRTZ-H2: flipping an UNMAPPED question to Narrows opens the attribute
+  // dialog (mock .ap) INSTEAD of writing the role — role + field + seeded
+  // values commit together on Use; Cancel writes NOTHING (no half-state).
+  const beforeDialog = JSON.stringify(await draftDoc());
+  await roleMenu.locator(".qz-ltab-menu-row", { hasText: "Narrows" }).click();
+  const ap = page.locator(".qz-ap");
+  await page.waitForTimeout(300);
+  ok("flip-to-Narrows opens the attribute dialog (no immediate role write)",
+    (await ap.count()) === 1);
+  ok('dialog copy: title "How should question 2 narrow?" + sub + coverage foot',
+    /How should question 2 narrow\?/.test((await ap.locator(".qz-ap-title").innerText()) ?? "") &&
+    /matched against one product attribute/.test((await ap.locator(".qz-ap-sub").innerText()) ?? "") &&
+    /Coverage matters\./.test((await ap.locator(".qz-ap-foot").innerText()) ?? ""));
+  const tabCount = await ap.locator(".qz-ap-tab").count();
+  const rowCount = await ap.locator(".qz-ap-row").count();
+  ok("kind tabs carry real counts; rows carry radio · key · values · kind · coverage",
+    tabCount >= 1 && rowCount >= 1 &&
+    (await ap.locator(".qz-ap-tab .qz-ap-tabn").first().innerText()).trim().match(/^\d+$/) !== null &&
+    (await ap.locator(".qz-ap-row").first().locator(".qz-ap-radio").count()) === 1 &&
+    /\d+ of \d+/.test((await ap.locator(".qz-ap-row").first().locator(".qz-ap-cov").innerText()) ?? ""),
+    `${tabCount} tabs · ${rowCount} rows`);
+  ok("Use is disabled until a field is picked (select-then-commit)",
+    await ap.locator(".qz-ap-foot .qz-btn-primary").isDisabled());
+  // Read the first row — the seed round renames q2's answers to ITS values,
+  // so the probe stays deterministic against ANY catalog.
+  const first = ap.locator(".qz-ap-row").first();
+  const apKey = await first.locator(".qz-ap-key").evaluate((el) => el.childNodes[0]?.textContent?.trim() ?? "");
+  const apKind = (await first.locator(".qz-ap-kind").innerText()).trim();
+  const apVals = ((await first.locator(".qz-ap-vals").innerText()) ?? "").split("·").map((s) => s.trim()).filter(Boolean);
+  console.log(`  dialog first row: ${apKind} "${apKey}" — values ${apVals.join(" | ")}`);
+  await ap.locator(".qz-ap-foot .qz-btn:not(.qz-btn-primary)").click(); // Cancel
+  await page.waitForTimeout(1600); // an erroneous write would autosave in 700ms
+  ok("Cancel leaves the doc UNCHANGED (draft byte read-back)",
+    (await ap.count()) === 0 && JSON.stringify(await draftDoc()) === beforeDialog);
+
+  // Rename q2's first two answers to the field's own values, reopen, pick
+  // the row, Use — then read the seeded storage back from the draft.
+  const val1 = apVals[0] ?? "";
+  const val2 = apVals[1] ?? apVals[0] ?? "";
+  for (const [i, v] of [[0, val1], [1, val2]]) {
+    await page.locator(".qz-ovw-row").nth(1).locator(".qz-qf-atx").nth(i).click();
+    await page.keyboard.press("ControlOrMeta+a");
+    await page.keyboard.type(v, { delay: 15 });
+    await page.keyboard.press("Enter");
+    await page.waitForTimeout(200);
+  }
+  ok("answers renamed to the field's values (seed setup persisted)",
+    await waitDraft((d) => {
+      const q2 = d?.nodes?.find((n) => n.id === "q2");
+      return q2?.data?.answers?.[0]?.text === val1 && q2?.data?.answers?.[1]?.text === val2;
+    }));
   await page.locator(".qz-ovw-row").nth(1).locator(".qz-ovw-role").click();
-  await roleMenu
-    .locator(".qz-ltab-menu-row", { hasText: q2flipRole === "filter" ? "Asked only" : "Narrows" })
-    .click();
-  ok("role restored (round-trip leaves the fixture as found)",
-    await waitDraft((d) => d?.nodes?.find((n) => n.id === "q2")?.data?.role === (q2role0 === "filter" ? "filter" : "qualifier")));
+  await roleMenu.locator(".qz-ltab-menu-row", { hasText: "Narrows" }).click();
+  await page.waitForTimeout(300);
+  await ap.locator(".qz-ap-row").first().click();
+  ok("radio select marks the row (is-on)",
+    (await ap.locator(".qz-ap-row.is-on").count()) === 1);
+  await ap.locator(".qz-ap-foot .qz-btn-primary").click();
+  // ONE commit: setQuestionRole + per-answer setAnswerFilterValues through
+  // writeValuesForField — the SAME seam QuestionWindow writes.
+  const carriesField = (ans) => {
+    if (apKind === "Tag") return (ans?.tags ?? []).some((t) => t.toLowerCase().startsWith(`${apKey.toLowerCase()}:`));
+    if (apKind === "Metafield") return (ans?.metafield_filters ?? []).some((m) => m.key === apKey);
+    if (apKind === "Option") return (ans?.variant_filters ?? []).some((v) => v.name === apKey);
+    return (ans?.product_type_filters ?? []).length > 0;
+  };
+  ok("Use writes role=filter + seeds the renamed answers' values (draft read-back)",
+    await waitDraft((d) => {
+      const q2 = d?.nodes?.find((n) => n.id === "q2");
+      if (q2?.data?.role !== "filter") return false;
+      const a = q2?.data?.answers ?? [];
+      return carriesField(a[0]) && carriesField(a[1]);
+    }));
+  // The derived line is the mock's attr-slot now: a PICKER that reopens the
+  // dialog with the current field preselected; Esc discards (role stays).
+  const slot = page.locator(".qz-ovw-row").nth(1).locator(".qz-ap-slot");
+  ok("attr slot shows the derived field and is clickable",
+    (await slot.count()) === 1 && /narrows on/.test((await slot.innerText()) ?? "") &&
+    !/nothing yet/.test((await slot.innerText()) ?? ""));
+  await slot.click();
+  await page.waitForTimeout(300);
+  ok("attr slot reopens the dialog with the current field preselected",
+    (await ap.count()) === 1 && (await ap.locator(".qz-ap-row.is-on").count()) === 1);
+  await page.screenshot({ path: `${SHOTS}/4b-attribute-dialog.png` });
+  await page.keyboard.press("Escape");
+  await page.waitForTimeout(400);
+  ok("Esc closes the dialog without writes (role stays filter)",
+    (await ap.count()) === 0 &&
+    (await draftDoc())?.nodes?.find((n) => n.id === "q2")?.data?.role === "filter");
+  // Restore the role (Asked only writes directly — no dialog on demote). The
+  // seeded values stay on the answers, QuestionWindow parity ("everything you
+  // mapped before comes back"); the finally-restore returns the exact bytes.
+  await page.locator(".qz-ovw-row").nth(1).locator(".qz-ovw-role").click();
+  await roleMenu.locator(".qz-ltab-menu-row", { hasText: "Asked only" }).click();
+  ok("role restored (Asked only round-trip through setQuestionRole)",
+    await waitDraft((d) => d?.nodes?.find((n) => n.id === "q2")?.data?.role === "qualifier"));
 
   // inline cell edit persists (row 2, answer 2)
   await page.locator(".qz-ovw-row").nth(1).locator(".qz-qf-atx").nth(1).click();

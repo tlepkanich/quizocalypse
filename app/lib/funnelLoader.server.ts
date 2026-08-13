@@ -15,6 +15,7 @@ import { prefetchShopWebResearch } from "./shopWebResearch.server";
 import { normalizeTags } from "./enrichTags";
 import { inverseCollectionIndex } from "./categoryGrouping";
 import { toGroupingProduct } from "./bucketPersist.server";
+import { flattenMetafields, variantOptionsOf } from "./productIndexing";
 import { MIN_GOAL_CHARS, loadFunnelDraft, type FunnelShop } from "./funnelDraft.server";
 
 // The loader payload (serialized to FunnelData on the client). Pure data — the
@@ -255,6 +256,13 @@ export async function loadStep1FunnelData(
   }));
   const builderProductIndex = products.map((p) => {
     const variants = (p.variants ?? []) as Array<{ inventoryQuantity?: number | null }>;
+    // QRTZ-H2 — the G5 widening the studio editor already ships
+    // (quizEditorIO.server.ts): the funnel's index carries the SAME narrowing
+    // sources publish bakes, or the decider shell's field surfaces (the
+    // Logic window's field bank, the Overview's attribute dialog) sit empty
+    // on this surface. Shared derivations (productIndexing), no drift.
+    const metafields = flattenMetafields(p.metafields);
+    const variantOptions = variantOptionsOf(p.variants);
     return {
       product_id: p.productId,
       title: p.title,
@@ -266,6 +274,11 @@ export async function loadStep1FunnelData(
       inventory_in_stock: variants.some(
         (v) => typeof v.inventoryQuantity === "number" && v.inventoryQuantity > 0,
       ),
+      ...(Object.keys(metafields).length > 0 ? { metafields } : {}),
+      ...(p.productType ? { product_type: p.productType } : {}),
+      ...(Object.keys(variantOptions).length > 0
+        ? { variant_options: variantOptions }
+        : {}),
     };
   });
   // The Logic step (one-line-chrome handoff) renders the same decider shell

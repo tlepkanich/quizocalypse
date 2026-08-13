@@ -10221,3 +10221,144 @@ button.qz-pb-row:hover { background: var(--qz-cream-2); }
   border: 1px solid var(--qz-rule); border-radius: var(--qz-radius);
   box-shadow: none;
 }
+
+/* ═══ QRTZ-H2 — the attribute picker (mock .ap, base.mjs 622–671) + the
+   Overview role-menu label fix + the clickable attr-slot (base.mjs
+   603–618). Values are the mock's, colors on repo tokens. ═══════════════ */
+
+/* The owner-reported "Narrows renders cut off": .qz-ltab-menu-row gives the
+   sub hint flex:0 0 auto, so at popover width the MAIN label ellipsized
+   ("Narro…", "Asked on…"). Scoped to the Overview's role menu: the main
+   keeps its words, the hint is the shrinking side. */
+.qz-h2-rolemenu .qz-ltab-menu-row-main { flex: none; overflow: visible; }
+.qz-h2-rolemenu .qz-ltab-menu-row-sub {
+  flex: 1 1 auto; min-width: 0; text-align: right;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+
+/* The chosen attribute is a value, not a heading — so the slot sits quiet:
+   the wash, a hairline, normal weight, secondary ink (mock .attr-slot). */
+.qz-ap-slot {
+  display: inline-flex; align-items: center; gap: 5px; max-width: 100%; min-width: 0;
+  margin-top: 3px; padding: 4px 8px; cursor: pointer;
+  border-radius: var(--qz-radius-sm); border: 1px solid var(--qz-rule);
+  background: var(--qz-cream-2); color: var(--qz-ink-3); text-align: left;
+  font-family: inherit; font-size: 11.5px; font-weight: 400; letter-spacing: 0.005em;
+  line-height: 1.35;
+}
+.qz-ap-slot:hover { border-color: var(--qz-rule-strong); background: var(--qz-paper); color: var(--qz-ink); }
+.qz-ap-slot > span {
+  min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.qz-ap-slot b { font-weight: 600; color: inherit; }
+.qz-ap-slot.is-empty {
+  padding: 3px 8px; border-style: dashed; border-color: var(--qz-rule-strong);
+  background: transparent; color: var(--qz-ink-4);
+}
+.qz-ap-slot.is-empty:hover {
+  border-style: solid; border-color: var(--qz-accent);
+  color: var(--qz-accent-ink); background: var(--qz-accent-wash);
+}
+
+/* — The dialog card (mock .ap): 620px, lg radius, strong hairline, lift — */
+.qz-ap {
+  width: min(620px, 100%); max-height: calc(100vh - 48px);
+  display: flex; flex-direction: column;
+  border-radius: var(--qz-radius-lg); background: var(--qz-paper);
+  border: 1px solid var(--qz-rule-strong); box-shadow: var(--qz-lift-2);
+  overflow: hidden; text-align: left;
+}
+.qz-ap-head { display: flex; align-items: flex-start; gap: 14px; padding: 16px 18px 14px; }
+.qz-ap-title { margin: 0; font-size: 15.5px; font-weight: 600; color: var(--qz-ink); }
+.qz-ap-sub {
+  margin: 4px 0 0; font-size: 12.5px; color: var(--qz-ink-4);
+  line-height: 1.5; max-width: 52ch;
+}
+/* The mock's .icon-btn close, on the repo's quiet-hover language. */
+.qz-ap-x {
+  flex: none; margin-left: auto; width: 26px; height: 26px;
+  display: grid; place-items: center; cursor: pointer;
+  border: none; border-radius: var(--qz-radius-sm); background: transparent;
+  color: var(--qz-ink-4); font-size: 15px; line-height: 1;
+}
+.qz-ap-x:hover { background: var(--qz-cream-2); color: var(--qz-ink); }
+.qz-ap-search {
+  display: flex; align-items: center; gap: 9px; margin: 0 18px 12px; flex: none;
+  padding: 9px 12px; border: 1px solid var(--qz-rule-strong); border-radius: var(--qz-radius);
+  background: var(--qz-paper);
+}
+.qz-ap-search .qz-ap-ico { width: 16px; height: 16px; color: var(--qz-ink-4); flex: none; }
+.qz-ap-search input {
+  border: 0; background: transparent; width: 100%; min-width: 0;
+  font-family: inherit; font-size: 13.5px; color: var(--qz-ink);
+}
+.qz-ap-search input:focus { outline: 0; }
+/* Kind tabs — the mock's .seg.seg-sm (quartz seg tokens) with real counts. */
+.qz-ap-tabs {
+  display: inline-flex; gap: 2px; margin: 0 18px 10px; padding: 3px; flex: none;
+  align-self: flex-start;
+  background: var(--qz-cream-2); border: 1px solid var(--qz-rule);
+  border-radius: var(--qz-radius);
+}
+.qz-ap-tab {
+  display: inline-flex; align-items: center; gap: 6px; cursor: pointer;
+  padding: 5px 10px; border: 1px solid transparent; border-radius: var(--qz-radius-sm);
+  background: transparent; color: var(--qz-ink-3);
+  font-family: inherit; font-size: 12px; font-weight: 500;
+  transition: background var(--qz-dur-fast) var(--qz-ease), color var(--qz-dur-fast) var(--qz-ease);
+}
+.qz-ap-tab:hover { color: var(--qz-ink); }
+.qz-ap-tab.is-on {
+  background: var(--qz-paper); color: var(--qz-ink); font-weight: 600;
+  border-color: var(--qz-rule-strong); box-shadow: 0 1px 1px rgba(32, 28, 46, 0.07);
+}
+.qz-ap-tabn { font-size: 11px; opacity: 0.7; font-variant-numeric: tabular-nums; }
+/* — The rows — */
+.qz-ap-list {
+  margin: 0; padding: 0 10px 10px; list-style: none;
+  max-height: 260px; overflow-y: auto; display: grid; gap: 2px;
+}
+.qz-ap-row {
+  width: 100%; display: flex; align-items: center; gap: 11px;
+  padding: 9px 10px; border: none; border-radius: var(--qz-radius);
+  background: transparent; cursor: pointer; font-family: inherit; text-align: left;
+}
+.qz-ap-row:hover { background: var(--qz-cream-2); }
+.qz-ap-row.is-on { background: var(--qz-accent-wash); }
+.qz-ap-radio {
+  width: 15px; height: 15px; flex: none; border-radius: 50%;
+  border: 1.5px solid var(--qz-rule-strong); background: transparent;
+}
+.qz-ap-row.is-on .qz-ap-radio {
+  border-color: var(--qz-accent); background: var(--qz-accent);
+  box-shadow: inset 0 0 0 3px var(--qz-paper);
+}
+.qz-ap-main { flex: 1; min-width: 0; display: grid; gap: 2px; }
+.qz-ap-key {
+  font-size: 13.5px; font-weight: 600; color: var(--qz-ink);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.qz-ap-row.is-on .qz-ap-key { color: var(--qz-accent-ink); }
+/* The reused low-coverage chip rides the key line (QRTZ-D2's class). */
+.qz-ap-key .qz-ltab-menu-thin { margin-left: 8px; vertical-align: 1px; }
+.qz-ap-vals {
+  font-size: 11.5px; color: var(--qz-ink-4);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.qz-ap-kind {
+  flex: none; padding: 2px 7px; border-radius: var(--qz-radius-sm);
+  font-size: 10.5px; font-weight: 600;
+  background: var(--qz-cream-2); color: var(--qz-ink-4); border: 1px solid var(--qz-rule);
+}
+.qz-ap-cov {
+  flex: none; width: 62px; text-align: right;
+  font-size: 12px; color: var(--qz-ink-3); font-variant-numeric: tabular-nums;
+}
+.qz-ap-cov.is-thin { color: var(--qz-warn); font-weight: 600; }
+.qz-ap-none { padding: 14px 10px; font-size: 12.5px; color: var(--qz-ink-4); line-height: 1.5; }
+/* — The footer: the coverage note + Cancel / Use — */
+.qz-ap-foot {
+  display: flex; align-items: center; gap: 12px; padding: 12px 18px; flex: none;
+  border-top: 1px solid var(--qz-rule); background: var(--qz-cream-2);
+}
+.qz-ap-foot .qz-ltab-menu-apnote { font-size: 12px; }
