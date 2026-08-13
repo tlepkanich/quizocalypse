@@ -54,8 +54,7 @@ import { VibeTemplateSelector } from "./VibeTemplateSelector";
 import type { VibeTemplate } from "../../lib/vibeTemplates";
 import { BLOCK_DRAG_MIME, BlockIcon, BuilderBlocksPalette, currentLayout, insertBlock } from "./BuilderBlocksPalette";
 import { BuilderBackgroundTab } from "./BuilderBackgroundTab";
-import { BuilderLayersTab } from "./BuilderLayersTab";
-import { ScreenCarousel } from "./ScreenCarousel";
+import { BuilderFlowTab } from "./BuilderFlowTab";
 import { DesignAiButton, type DesignAiApi } from "./DesignAiButton";
 import { AllScreensGrid, GlobalStylesPanel } from "./AllScreensView";
 import UpgradeDeciderModal from "../onboarding/questionsLogic/UpgradeDeciderModal";
@@ -352,11 +351,12 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
   // "theme" is the rail's Design section (the canvas stays visible); the old
   // ai/code tools moved to the Assist drawer + the Settings section.
   const [tool, setTool] = useState<"editor" | "theme">("editor");
-  // QB-4b → QZY-7: the Build tab's left panel (build-tab spec §2) — Add
-  // (palette) · Layers (current screen's blocks) · Background · Templates
-  // (QRTZ-O6, mock s16 ed-tabs). The step LIST left this panel: the screen
-  // carousel under the canvas is the navigator.
-  const [editorSubtab, setEditorSubtab] = useState<"add" | "layers" | "background" | "templates">("add");
+  // QB-4b → QZY-7 → QRTZ-H4: the Build tab's left panel is the mock s16
+  // ed-tabs — Flow · Add · Templates (shared.mjs 606–610). Flow is the
+  // default (the mock's is-on tab) and IS the screen switcher + layer tree;
+  // the filmstrip and the Layers/Background tabs are retired (Background's
+  // content lives in the inspector's Background row).
+  const [editorSubtab, setEditorSubtab] = useState<"flow" | "add" | "templates">("flow");
   // BLD-3 — the mock's libhd search (host-rendered; filters the Add palette).
   const [libQuery, setLibQuery] = useState("");
   // BLD-1 — the Build view's canvas mode (standalone only): "screen" is the
@@ -431,6 +431,16 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
     setInspectTarget(t);
     setConfirmDeleteId(null);
   }, []);
+  // QRTZ-H4 — arming a delete surfaces the Flow tab's confirm strip (the
+  // filmstrip that used to render it is retired): flip the panel to Flow and
+  // reopen it so the two-step confirm is always visible when armed.
+  const armDelete = useCallback((nodeId: string | null) => {
+    setConfirmDeleteId(nodeId);
+    if (nodeId) {
+      setEditorSubtab("flow");
+      setLibraryCollapsed(false);
+    }
+  }, []);
 
   // Esc backs out one level: close the Expand overlay first, then disarm a
   // pending delete, else clear selection.
@@ -468,11 +478,11 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
       const node = doc.nodes.find((n) => n.id === selectedId);
       if (!node || node.type === "intro") return;
       e.preventDefault();
-      setConfirmDeleteId(selectedId);
+      armDelete(selectedId);
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [selectedId, doc]);
+  }, [selectedId, doc, armDelete]);
 
   // View (Build / Products / Results / Logic). State is the source of truth — a
   // plain useState so a tab click ALWAYS switches, even when client-side routing
@@ -831,11 +841,11 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
     </>
   );
 
-  // BLD-3 — the mock's .devseg: Mobile first (icon + label), then Desktop.
-  // FIX-4 — visible in BOTH canvas modes; the segs are single-screen
-  // controls, so using one from All-screens flips back to This-screen.
+  // QRTZ-H4 — the mock canvas-bar's device seg (shared.mjs 635, aria-label
+  // "Preview device"): Phone first, then Desktop. FIX-4 — visible in BOTH
+  // canvas modes; using one from All-screens flips back to One-screen.
   const deviceToggle = (
-    <div className="qz-bt-seg" role="group" aria-label="Device">
+    <div className="qz-bt-seg" role="group" aria-label="Preview device">
       {([
         {
           tier: "phone" as const,
@@ -1229,6 +1239,16 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
     const selBlockIndex = blockSel
       ? selBlocks.findIndex((b) => b.id === blockSel.blockId)
       : -1;
+    // QRTZ-H4 — the mock's .insp-head for a selected BLOCK ("Text block"):
+    // the inspector head names the block kind while a block is selected;
+    // screen-level naming stands when the selection is the screen itself.
+    const selBlockType =
+      selBlockIndex >= 0 ? selBlocks[selBlockIndex]!.type : null;
+    const selBlockKindLabel = (() => {
+      if (!selBlockType) return null;
+      const lbl = PALETTE_BLOCKS.find((p) => p.type === selBlockType)?.label ?? selBlockType;
+      return /block$/i.test(lbl) ? lbl : `${lbl} block`;
+    })();
     const blockToolbarMove = (dir: -1 | 1) => {
       if (!blockSel) return;
       commit(setNodeLayout(doc, blockSel.nodeId, blockMove(selBlocks, blockSel.blockId, dir)));
@@ -1312,21 +1332,24 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
     // panel; a card click focuses that screen and flips back here.
     // BLD-3 — housed on the stagebar (the mock's top bar has no home for it;
     // the stagebar is the stage-scoped control strip).
+    // QRTZ-H4 — the mock canvas-bar's third seg (shared.mjs 637): "One
+    // screen" leads (the mock's labels + order; was "All screens | This
+    // screen").
     const canvasModeToggle = (
       <div className="qz-bt-seg" role="group" aria-label="Canvas mode">
+        <button
+          type="button"
+          aria-pressed={canvasMode === "screen"}
+          onClick={() => setCanvasMode("screen")}
+        >
+          One screen
+        </button>
         <button
           type="button"
           aria-pressed={canvasMode === "all"}
           onClick={() => setCanvasMode("all")}
         >
           All screens
-        </button>
-        <button
-          type="button"
-          aria-pressed={canvasMode === "screen"}
-          onClick={() => setCanvasMode("screen")}
-        >
-          This screen
         </button>
       </div>
     );
@@ -1394,6 +1417,13 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
     );
 
 
+    // QRTZ-H4 — the mock's .canvas-bar arrangement (shared.mjs 634–637):
+    // step name (margin-right auto) · Phone/Desktop · Edit/Preview · One
+    // screen/All screens. The device + Edit/Preview segs moved HERE from the
+    // top bar (the S4 relocation is overruled — the mock wins). Zoom, Expand
+    // and the health pill are owner-approved live additions the mock never
+    // draws — slotted at the bar's end; Design AI + Show-as keep their
+    // stagebar homes.
     const stagebar = (
       <div className="qz-stagebar">
         {/* mock .libshow — the reopen chip leads the bar when the panel is
@@ -1413,14 +1443,12 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
         <span className="qz-stagebar-name">
           {allScreensMode ? "All screens" : stageStepName}
         </span>
-        {/* BLD-1 canvas mode + BLD-2 Design AI — stagebar-housed (the mock's
-            top bar has no home for either; this is the stage control strip).
-            Preview mode strips them (mock .previewing keeps only the basics). */}
+        {deviceToggle}
+        {modeToggle}
         {editMode ? canvasModeToggle : null}
         {editMode ? <DesignAiButton api={designAiApi} /> : null}
-        <span className="qz-stagebar-sp" aria-hidden />
         {/* BLD-3 — the health pill is stage-scoped chrome here (the mock's
-            top bar has no slot for it; "Fix N issues" opens its popover). */}
+            bar draws no health; "Fix N issues" opens its popover). */}
         {healthPill}
         {!allScreensMode && tier === "desktop" ? showAsToggle : null}
         {/* phone-preview SPEC — Expand: inspect the same screen big. */}
@@ -1450,68 +1478,84 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
       commit({ ...doc, design_tokens: parsed.data as Quiz["design_tokens"] });
     };
 
-    // BLD-3 — the mock's .lib anatomy: a .libhd (Add · Layers · Background
-    // tabs over the search field) above a scrolling .libbody. The mock's
-    // search lives in the header and filters the component palette.
+    // QRTZ-H4 — the mock's .ed-panel (shared.mjs 605–630): the ed-tabs seg
+    // (Flow · Add · Templates) directly over the tab's content — no libhd
+    // header split, no filmstrip. Flow IS the screen switcher + layer tree;
+    // the search field is a live functional addition the mock predates,
+    // kept inside the Add tab it filters.
     const toolPanel = (
       <>
-        <div className="qz-bt-libhd">
-          <div className="qz-bt-seg" role="group" aria-label="Build panel">
-            <button type="button" aria-pressed={editorSubtab === "add"} onClick={() => setEditorSubtab("add")}>
-              Add
-            </button>
-            <button type="button" aria-pressed={editorSubtab === "layers"} onClick={() => setEditorSubtab("layers")}>
-              Layers
-            </button>
-            <button type="button" aria-pressed={editorSubtab === "background"} onClick={() => setEditorSubtab("background")}>
-              Background
-            </button>
-            <button type="button" aria-pressed={editorSubtab === "templates"} onClick={() => setEditorSubtab("templates")}>
-              Templates
-            </button>
-          </div>
-          <div className="qz-bt-search">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-              <circle cx="11" cy="11" r="7" />
-              <path d="M21 21l-4-4" />
-            </svg>
-            <input
-              placeholder="Search components"
-              aria-label="Search components"
-              value={libQuery}
-              onChange={(e) => setLibQuery(e.target.value)}
-            />
-          </div>
+        <div className="qz-bt-seg qz-bt-edtabs" role="group" aria-label="Build panel">
+          <button type="button" aria-pressed={editorSubtab === "flow"} onClick={() => setEditorSubtab("flow")}>
+            Flow
+          </button>
+          <button type="button" aria-pressed={editorSubtab === "add"} onClick={() => setEditorSubtab("add")}>
+            Add
+          </button>
+          <button type="button" aria-pressed={editorSubtab === "templates"} onClick={() => setEditorSubtab("templates")}>
+            Templates
+          </button>
         </div>
-        <div className="qz-bt-libbody">
-          {editorSubtab === "add" ? (
-            <BuilderBlocksPalette
-              doc={doc}
-              node={blockTarget}
-              commit={commit}
-              onQuestionTile={onQuestionTile}
-              query={libQuery}
-            />
-          ) : editorSubtab === "layers" ? (
-            <BuilderLayersTab
-              doc={doc}
-              node={blockTarget}
-              commit={commit}
-              onSelectNode={select}
-            />
-          ) : editorSubtab === "templates" ? (
-            // QRTZ-O6 — mock s16 ed-tabs: the vibe-template cards, applied
-            // wholesale via the validated design-apply seam above.
+        {editorSubtab === "flow" ? (
+          <BuilderFlowTab
+            doc={doc}
+            ordered={ordered}
+            issuesByNode={issuesByNode}
+            activeId={selectedId ?? liveNodeId}
+            selectedBlockId={blockSel?.blockId ?? null}
+            onSelectScreen={select}
+            onSelectBlock={(nodeId, blockId) => {
+              select(nodeId);
+              setBlockSel({ nodeId, blockId });
+            }}
+            commit={commit}
+            fallbackCollection={fallbackCollection}
+            confirmDeleteId={confirmDeleteId}
+            onConfirmDelete={setConfirmDeleteId}
+            onDelete={(nodeId) => {
+              commit(deleteNode(doc, nodeId));
+              setConfirmDeleteId(null);
+              select(null);
+            }}
+            onDuplicate={(nodeId) => {
+              const next = duplicateQuestionNode(doc, nodeId);
+              if (next !== doc) commit(next);
+            }}
+          />
+        ) : editorSubtab === "add" ? (
+          <>
+            <div className="qz-bt-search">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <circle cx="11" cy="11" r="7" />
+                <path d="M21 21l-4-4" />
+              </svg>
+              <input
+                placeholder="Search components"
+                aria-label="Search components"
+                value={libQuery}
+                onChange={(e) => setLibQuery(e.target.value)}
+              />
+            </div>
+            <div className="qz-bt-libbody">
+              <BuilderBlocksPalette
+                doc={doc}
+                node={blockTarget}
+                commit={commit}
+                onQuestionTile={onQuestionTile}
+                query={libQuery}
+              />
+            </div>
+          </>
+        ) : (
+          // QRTZ-O6 — mock s16 ed-tabs: the vibe-template cards, applied
+          // wholesale via the validated design-apply seam above.
+          <div className="qz-bt-libbody">
             <VibeTemplateSelector
               currentTokens={doc.design_tokens}
               onApply={onApplyVibeTemplate}
             />
-          ) : (
-            // QZY-11 — PER-SCREEN backgrounds (§8); the quiz-wide default
-            // stays reachable in a disclosure inside.
-            <BuilderBackgroundTab doc={doc} node={blockTarget} commit={commit} />
-          )}
-        </div>
+          </div>
+        )}
       </>
     );
 
@@ -1549,7 +1593,8 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
           regen={regenApi}
           inspectTarget={inspectTarget}
           onClearScope={() => setInspectTarget(null)}
-          onArmDelete={setConfirmDeleteId}
+          onArmDelete={armDelete}
+          blockHead={selBlockKindLabel}
         />
       </div>
     ) : stageNode ? (
@@ -1604,27 +1649,16 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
               Screens are named by their role in the flow (Intro · Q1 · Email · Result).
             </div>
           </InspSec>
+          {/* QRTZ-H4 — the Background TAB retired (mock ed-tabs are Flow ·
+              Add · Templates); its full content — per-screen background
+              types, media picker, This-screen/All-screens scope, the
+              quiz-wide default — lives HERE, inside the inspector's
+              Background row (nothing orphaned). */}
           <InspSec
             title="Background"
             value={hasBackgroundOverride(doc, stageNode.id) ? "Custom" : "Brand default"}
           >
-            <button
-              type="button"
-              className="qz-bt-deeplink"
-              onClick={() => {
-                setTool("editor");
-                setEditorSubtab("background");
-                setLibraryCollapsed(false);
-              }}
-            >
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{MOCK_ICONS.design}</svg>
-              <span>
-                Edit in the <b>Background</b> tab (left panel)
-              </span>
-              <span className="qz-bt-dlarrow" aria-hidden="true">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" style={{ width: 13, height: 13 }}><path d="M9 6l6 6-6 6" /></svg>
-              </span>
-            </button>
+            <BuilderBackgroundTab doc={doc} node={stageNode} commit={commit} />
           </InspSec>
         </div>
       </>
@@ -1637,8 +1671,9 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
       </div>
     );
 
-    // BLD-3 — the mock's .savedpill (check + "Saved"); Saving…/error states
-    // reuse the same quiet pill anatomy.
+    // QRTZ-H4 — the mock's .saved (shared.mjs 587: "All changes saved", ✓
+    // prefix, ok-green, beside the crumbs); Saving…/error states keep the
+    // same quiet anatomy — honesty over the static mock's single state.
     const saveStatusV2 = (
       <span className="qz-bt-savedpill qz-save-status" aria-live="polite" title={savedAt ? `Saved ${savedTimeLabel(savedAt)}` : undefined}>
         {isSaving ? (
@@ -1653,7 +1688,7 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
         ) : savedAt ? (
           <span key={savedAt} className="qz-save-chip is-saved">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M5 12l5 5L20 6" /></svg>{" "}
-            Saved
+            All changes saved
           </span>
         ) : null}
       </span>
@@ -1776,7 +1811,14 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
       <div className="qz-bt-backdrop" data-qz-surface="editor">
       <div className="qz-bt-wrap">
       <div className="qz-builder">
-        {/* BLD-3 — the mock's .top: one ordered row. */}
+        {/* QRTZ-H4 — the mock's .ed-top exactly (shared.mjs 583–594):
+            breadcrumb · "All changes saved" · [end:] undo/redo · ✦ Assist
+            (the product's owner-pinned name for the mock's Ask Wiskr) ·
+            draft pill · Publish. The experience-type + Decider badges left
+            the bar (the mock draws none — the info lives in Settings); the
+            device/mode segs moved to the canvas bar; "Preview live" is a
+            functional affordance the static mock predates, slotted before
+            Publish. */}
         <BuilderTopBar>
           {/* QRTZ-S4 — mock .crumbs: "Quizzes / {title}", Quizzes links out;
               the leaf keeps the click-to-rename EditableTitle. */}
@@ -1787,30 +1829,10 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
               <EditableTitle name={data.name} onRename={renameQuiz} />
             </span>
           </nav>
-          <span className="qz-tbadge">{XTYPE_LABEL[experienceTypeOf(doc)]}</span>
-          {isDecider ? (
-            <span
-              className="qz-tbadge is-dec"
-              title="One deciding question picks the result; advanced rules can override it"
-            >
-              Decider logic
-            </span>
-          ) : (
-            scoringBadge
-          )}
+          {/* mock .saved sits by the crumbs, not in the end group. */}
+          {saveStatusV2}
           <span className="qz-bt-sp" />
-          {/* FIX-4 — the device/mode segs stay in BOTH canvas modes (the
-              owner-reported regression stripped them in All-screens);
-              interacting with either flips back to This-screen. */}
-          {onBuild ? (
-            <>
-              {deviceToggle}
-              {modeToggle}
-              <span className="qz-bt-topdiv" />
-            </>
-          ) : null}
           {undoRedo}
-          <span className="qz-bt-topdiv" />
           {/* QZY-6 — AI is a persistent top-bar companion, never a tab. */}
           <button
             type="button"
@@ -1821,7 +1843,8 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M12 3l1.8 4.9L19 9.7l-5.2 1.8L12 16l-1.8-4.5L5 9.7l5.2-1.8z" /></svg>
             Assist
           </button>
-          {saveStatusV2}
+          {/* QRTZ-S4 — mock order: the draft pill leads the Publish button. */}
+          {draftPill}
           <a
             href={data.previewUrl}
             target="_blank"
@@ -1832,8 +1855,6 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M10 13a5 5 0 007 0l2-2a5 5 0 00-7-7l-1 1" /><path d="M14 11a5 5 0 00-7 0l-2 2a5 5 0 007 7l1-1" /></svg>
             Preview live
           </a>
-          {/* QRTZ-S4 — mock order: the draft pill leads the Publish button. */}
-          {draftPill}
           {publishBtnV2}
         </BuilderTopBar>
         <div className={bodyCls}>
@@ -1996,6 +2017,7 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
                     commit={commit}
                     onSelectNode={select}
                     selectedNodeId={selectedId}
+                    onUpgradeDecider={() => setUpgradeOpen(true)}
                   />
                 ) : view === "logic" ? (
                   // BLD-4 — the Logic view: LogicScroll for decider docs,
@@ -2015,30 +2037,8 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
             </div>
           )}
         </div>
-        {/* BLD-3 — mock .strip: the filmstrip is APP-level (full width, under
-            the whole body row), Build tab only. */}
-        {onBuild ? (
-          <ScreenCarousel
-            doc={doc}
-            ordered={ordered}
-            activeId={selectedId ?? liveNodeId}
-            onSelect={select}
-            onAddScreen={() => addQuestionScreen("single_select")}
-            confirmDeleteId={confirmDeleteId}
-            onConfirmDelete={setConfirmDeleteId}
-            onDelete={(nodeId) => {
-              commit(deleteNode(doc, nodeId));
-              setConfirmDeleteId(null);
-              select(null);
-            }}
-            onDuplicate={(nodeId) => {
-              const next = duplicateQuestionNode(doc, nodeId);
-              if (next !== doc) commit(next);
-            }}
-            productIndex={data.productIndex}
-            categories={data.categories}
-          />
-        ) : null}
+        {/* QRTZ-H4 — the bottom filmstrip is RETIRED (the mock never draws
+            it): the Flow tab is the screen switcher. */}
         {upgradeModal}
         {/* QRTZ-S4 — the floating block toolbar + selection ring, portaled to
             document.body (the builder-overlay-portal trap: the canvas's

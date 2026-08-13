@@ -49,7 +49,7 @@ await page.waitForSelector(".qz-builder", { timeout: 15000 });
 await page.waitForTimeout(1500);
 
 // ── 1: the mobile primitive ─────────────────────────────────────────────────
-await page.locator('button[aria-label="Mobile"]').click();
+await page.locator('button[aria-label="Phone"]').click();
 await page.waitForSelector(".qz-device-fit-mobile", { timeout: 5000 });
 await page.waitForTimeout(400);
 
@@ -99,7 +99,8 @@ await page.screenshot({ path: `${SHOTS}/01-mobile-primitive.png` });
 // ── 2 + 3: fade affordance + step-change scroll reset ───────────────────────
 // Walk the screen carousel looking for a step whose content overflows 844.
 const screenSel = ".qz-builder-canvas .qz-devscreen";
-const cards = page.locator(".qz-screens-thumb");
+// QRTZ-H4 — the Flow tab's rows replaced the filmstrip as the switcher.
+const cards = page.locator(".qz-ftree-row");
 const cardCount = await cards.count();
 let overflowFound = false;
 for (let i = 0; i < Math.min(cardCount, 8) && !overflowFound; i++) {

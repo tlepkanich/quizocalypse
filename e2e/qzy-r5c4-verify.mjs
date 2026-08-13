@@ -15,7 +15,7 @@ page.on("pageerror", (e) => errs.push(String(e.message).split("\n")[0]));
 await page.goto(`${BASE}/studio/${QUIZ}?key=${KEY}`, { waitUntil: "domcontentloaded" });
 await page.waitForSelector(".qz-builder", { timeout: 20000 });
 await page.waitForTimeout(1600);
-await page.locator(".qz-screens-item", { hasText: "Q1" }).first().locator(".qz-screens-thumb").click();
+await page.locator(".qz-ftree-row", { hasText: "Q1" }).first().click(); // QRTZ-H4 — Flow tab nav
 await page.waitForTimeout(600);
 // QRTZ-OB2 — the decider inspector is tabbed now; the answer-display controls
 // (ContentTab) live under the Content tab.

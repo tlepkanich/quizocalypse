@@ -8,12 +8,12 @@
 // screen), and restores draftJson BYTE-FOR-BYTE in `finally`. Screenshots
 // land in /tmp/bld1-shots.
 //
-// Asserts: segmented "All screens | This screen" (aria-pressed) · grid renders
+// Asserts: segmented "One screen | All screens" (aria-pressed, QRTZ-H4 mock labels) · grid renders
 // one live card per reachable screen + the dashed New-screen card · Global
 // panel kickers/hints · brand color, button softness and content padding edits
 // repaint ≥2 DIFFERENT cards (getComputedStyle) AND persist through the
-// autosave PUT (prisma read-back) · filmstrip stays and highlights follow ·
-// card click focuses the screen + flips to This-screen · + New screen adds a
+// autosave PUT (prisma read-back) · filmstrip retired (QRTZ-H4) ·
+// card click focuses the screen + flips to One-screen · + New screen adds a
 // question BEFORE the terminal (the add-anchor rule) · zero page errors.
 // FIX-4 layout assertions (the BLD-3 grid regression shipped past the DOM
 // checks): the stage track really holds the cards, the inspector is the
@@ -94,9 +94,9 @@ try {
   const modeGroup = page.locator('[role=group][aria-label="Canvas mode"]');
   ok("canvas-mode segmented control in the top bar", (await modeGroup.count()) === 1);
   const allBtn = modeGroup.locator("button", { hasText: "All screens" });
-  const oneBtn = modeGroup.locator("button", { hasText: "This screen" });
+  const oneBtn = modeGroup.locator("button", { hasText: "One screen" });
   ok(
-    "defaults to This screen (aria-pressed)",
+    "defaults to One screen (aria-pressed)",
     (await oneBtn.getAttribute("aria-pressed")) === "true" &&
       (await allBtn.getAttribute("aria-pressed")) === "false",
   );
@@ -131,12 +131,13 @@ try {
   // FIX-4 — the device/mode segs STAY in All-screens (the BLD-3 regression
   // stripped them); the stage-scoped Expand/zoom cluster still steps aside.
   ok(
-    "top-bar segs stay in All-screens mode (Device size + Preview mode)",
-    (await page.locator('[role=group][aria-label="Device size"]').count()) === 1 &&
+    "canvas-bar segs stay in All-screens mode (Preview device + Preview mode)",
+    (await page.locator('[role=group][aria-label="Preview device"]').count()) === 1 &&
       (await page.locator('[role=group][aria-label="Preview mode"]').count()) === 1 &&
       (await page.locator(".qz-s3-expandbtn").count()) === 0,
   );
-  ok("filmstrip stays in All-screens mode", (await page.locator(".qz-screens").count()) === 1);
+  // QRTZ-H4 — the filmstrip is retired; the grid cards ARE the switcher here.
+  ok("filmstrip retired (QRTZ-H4)", (await page.locator(".qz-screens").count()) === 0);
 
   // ── FIX-4 layout assertions (the BLD-3 grid regression: the stage fell
   //    into the is-libhidden 0-width track and the inspector into the 1fr
@@ -247,35 +248,27 @@ try {
     }),
   );
 
-  // ── filmstrip highlight follows grid selection ────────────────────────────
-  await page.locator(".qz-screens-thumb").nth(1).click();
-  await page.waitForTimeout(400);
-  ok(
-    "filmstrip click highlights the matching grid card (still All-screens)",
-    (await page.locator(".qz-allcard.is-active").count()) === 1 &&
-      (await page.locator(".qz-screens-item.is-active").count()) === 1 &&
-      (await allBtn.getAttribute("aria-pressed")) === "true",
-  );
-
-  // ── card click → focus + flip to This screen ──────────────────────────────
+  // ── card click → focus + flip to One screen (QRTZ-H4: the filmstrip is
+  //    gone; the grid cards are the All-screens switcher, the Flow tab the
+  //    single-screen one) ──────────────────────────────────────────────────
   const targetTitle = (await page.locator(".qz-allcard-title").nth(2).textContent()) ?? "";
   await page.locator(".qz-allcard").nth(2).click();
   await page.waitForTimeout(800);
   ok(
-    "card click flips to This screen",
+    "card click flips to One screen",
     (await oneBtn.getAttribute("aria-pressed")) === "true" &&
       (await page.locator(".qz-allscreens").count()) === 0 &&
       (await page.locator(".qz-builder-canvas").count()) === 1,
   );
   ok(
-    "…and focuses that screen (filmstrip highlight follows)",
-    (await page.locator(".qz-screens-item.is-active").count()) === 1,
+    "…and focuses that screen (the Flow tab's open row follows)",
+    (await page.locator(".qz-ftree-row.is-open").count()) === 1,
     `opened: ${targetTitle}`,
   );
   ok(
     "single-screen stage controls return (Expand)",
     (await page.locator(".qz-s3-expandbtn").count()) === 1 &&
-      (await page.locator('[role=group][aria-label="Device size"]').count()) === 1,
+      (await page.locator('[role=group][aria-label="Preview device"]').count()) === 1,
   );
   await page.screenshot({ path: `${SHOTS}/bld1-this-screen-after-card-click.png` });
 
