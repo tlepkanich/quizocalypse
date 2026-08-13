@@ -261,3 +261,14 @@ specified; the mock draws sample DATA for them, not the systems):
 - Post-failure regenerate on the blank-Questions landing: S5's safety
   decision stands (a regenerate there could clobber manual work); the
   mock's fail card does not draw that specific landing.
+
+### Noted at the QRTZ-H3/H4 parity close (2026-08-14)
+
+- Attr-slot behavioral fork: the Overview's slot opens the H2 attribute
+  dialog; the Logic table's opens the QuestionWindow. Visual form identical;
+  unifying on one is an owner call (candidate: the dialog everywhere).
+- The builder ed-body grid keeps 60/244/320 vs the mock's 76/244/288 —
+  column widths were outside H4's ordered deltas; one CSS change if wanted.
+- Canvas-bar segs carry icons; the mock draws text-only (BLD-3-era).
+- e2e/l2-10f re-pointed at ?view=settings (deploy-only probe — verify at the
+  next deploy pass).
