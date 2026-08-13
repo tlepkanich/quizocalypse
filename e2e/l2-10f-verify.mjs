@@ -58,11 +58,14 @@ const pubShaLegacy = sha(await (await ctx.request.get(`${BASE}/q/${FIXTURE}.json
 ok("published legacy sha snapshotted", Boolean(pubShaLegacy), pubShaLegacy);
 
 // ── 2. builder: legacy affordances + the modal (REAL clicks) ────────────────
-await page.goto(`${BASE}/studio/${FIXTURE}`, { waitUntil: "domcontentloaded" });
+// QRTZ-H4 — the scoring/upgrade cluster moved off the top bar into the
+// Settings view's "Experience & scoring" section (the mock's .ed-top draws
+// no badges); navigate there first.
+await page.goto(`${BASE}/studio/${FIXTURE}?view=settings`, { waitUntil: "domcontentloaded" });
 await page.waitForTimeout(2000);
 const upgradeBtn = page.getByRole("button", { name: "↑ Upgrade to Decider logic" }).first();
-ok("legacy topbar shows the Upgrade button", await upgradeBtn.isVisible().catch(() => false));
-ok("legacy topbar keeps the scoring toggle", await page.getByRole("button", { name: /Direct mapping|Weighted scoring/ }).first().isVisible().catch(() => false));
+ok("legacy Settings shows the Upgrade button", await upgradeBtn.isVisible().catch(() => false));
+ok("legacy Settings keeps the scoring toggle", await page.getByRole("button", { name: /Direct mapping|Weighted scoring/ }).first().isVisible().catch(() => false));
 
 await upgradeBtn.click();
 await page.waitForTimeout(500);
@@ -94,7 +97,7 @@ ok("EXACTLY ONE deciding question, required, all answers targeted",
 ok("result pages merged to ONE", upgraded.nodes.filter((n) => n.type === "result").length === 1);
 ok("per-target headline overrides seeded", Object.keys(upgraded.rec_page_settings?.overrides ?? {}).length >= 1);
 ok("loader validates the upgraded draft (validateQuiz clean)", loaded.valid === true, JSON.stringify(loaded.issues ?? []).slice(0, 120));
-ok("topbar shows the Decider badge", await page.getByText("Decider logic").first().isVisible().catch(() => false));
+ok("Settings shows the Decider logic read-out (QRTZ-H4 home)", await page.getByText("Decider logic").first().isVisible().catch(() => false));
 ok("scoring toggle GONE for the decider doc", !(await page.getByRole("button", { name: /Weighted scoring|→ Direct mapping/ }).first().isVisible().catch(() => false)));
 
 // ── 4. one-step UNDO restores the legacy draft byte-identically ─────────────

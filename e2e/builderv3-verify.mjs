@@ -78,7 +78,8 @@ if (/blocking/.test(pillText)) {
 // ── BLD-1 → QZY-6: the FIVE-section rail, exactly one active per view ───────
 const railActive = () =>
   page.locator(".qz-builder-rail-item.is-active").allTextContents();
-ok("rail has 5 items (QZY-6)", (await page.locator(".qz-builder-rail-item").count()) === 5);
+// QRTZ-S4 — Analytics joined the rail (mock EDITOR_NAV order): 6 items now.
+ok("rail has 6 items (QZY-6 + QRTZ-S4 Analytics)", (await page.locator(".qz-builder-rail-item").count()) === 6);
 for (const label of ["Products", "Logic", "Theme", "Settings", "Build"]) {
   await page.locator(".qz-builder-rail-item", { hasText: label }).click();
   await page.waitForTimeout(300);
@@ -93,7 +94,8 @@ ok("no Results / Design / AI / Code rail items",
   (await page.locator(".qz-builder-rail-item", { hasText: "AI" }).count()) === 0 &&
   (await page.locator(".qz-builder-rail-item", { hasText: "Code" }).count()) === 0);
 ok("old view-tab strip is gone", (await page.locator(".qz-builder-views").count()) === 0);
-ok("filmstrip is gone", (await page.locator(".qz-builder-filmstrip, .qz-film-card").count()) === 0);
+// QRTZ-H4 — BOTH filmstrip generations are gone (the Flow tab switches).
+ok("filmstrip is gone", (await page.locator(".qz-builder-filmstrip, .qz-film-card, .qz-screens").count()) === 0);
 
 // QZY-6: the top-bar Assist companion (never a rail tab) opens the chat drawer.
 ok("✦ Assist button in the top bar",
@@ -117,54 +119,68 @@ ok("Settings: experience/placement/embed/translation/CSS sections render",
 await page.locator(".qz-builder-rail-item", { hasText: "Build" }).click();
 await page.waitForTimeout(300);
 
-// ── QZY-7: the screen carousel is the navigator (center column only) ────────
-const thumbs = page.locator(".qz-screens-thumb");
-const thumbCount = await thumbs.count();
-ok("carousel renders the screens", thumbCount >= 2, `${thumbCount} thumbs`);
-// BLD-3 — the strip is APP-level now (mock .strip: full width under the body).
-ok("carousel is the app-level strip (BLD-3 — not inside a column)",
-  (await page.locator(".qz-builder > .qz-screens").count()) === 1 &&
-  (await page.locator(".qz-builder-panel .qz-screens").count()) === 0 &&
-  (await page.locator(".qz-builder-inspector .qz-screens").count()) === 0);
-ok("+ add-screen tile present", (await page.locator(".qz-screens-add").count()) === 1);
-ok("carousel labels render (Intro + Q1)",
-  (await page.locator(".qz-screens-label", { hasText: "Intro" }).count()) === 1 &&
-  (await page.locator(".qz-screens-label", { hasText: "Q1" }).count()) >= 1);
-const q1Thumb = page.locator(".qz-screens-item", { hasText: "Q1" }).first();
-await q1Thumb.locator(".qz-screens-thumb").click();
+// ── QRTZ-H4: the Flow tab is the navigator (mock s16 ed-panel tree) ─────────
+const panelTab = (label) =>
+  page.locator('[aria-label="Build panel"] button', { hasText: label }).click();
+const flowRows = page.locator(".qz-ftree-row");
+const rowCount = await flowRows.count();
+ok("Flow tab is the default and renders the screen rows", rowCount >= 2, `${rowCount} rows`);
+ok("panel tabs are the mock ed-tabs (Flow · Add · Templates — Layers/Background retired)",
+  (await page.locator('[aria-label="Build panel"] button').count()) === 3 &&
+  (await page.locator('[aria-label="Build panel"] button', { hasText: "Layers" }).count()) === 0 &&
+  (await page.locator('[aria-label="Build panel"] button', { hasText: "Background" }).count()) === 0);
+ok("Add-a-step foot button present (mock .add-step)",
+  (await page.locator(".qz-ftree-addstep").count()) === 1);
+ok("rows carry the mock vocabulary (Intro page + Q1 ·)",
+  (await page.locator(".qz-ftree-row", { hasText: "Intro page" }).count()) === 1 &&
+  (await page.locator(".qz-ftree-row", { hasText: "Q1" }).count()) >= 1);
+const q1Row = page.locator(".qz-ftree-row", { hasText: "Q1" }).first();
+await q1Row.click();
 await page.waitForTimeout(600);
-ok("thumb click activates the screen",
-  ((await page.locator(".qz-screens-item.is-active .qz-screens-label").textContent()) ?? "").includes("Q1"));
+ok("row click activates (opens) the screen",
+  ((await page.locator(".qz-ftree-row.is-open").textContent()) ?? "").includes("Q1"));
 
 // One-question-per-screen (build-tab §3): the palette question tile on a
 // question screen switches type (same type = no-op, never a 2nd question);
-// on Intro it creates a NEW screen; the carousel confirm deletes it again.
+// on Intro it creates a NEW screen; the Flow confirm deletes it again.
+// (The palette lives on the Add tab now; row counts read on the Flow tab.)
+await panelTab("Add");
+await page.waitForTimeout(300);
 ok("palette Questions section present",
   (await page.locator(".qz-bt-comp", { hasText: "Choice" }).count()) === 1);
 await page.locator(".qz-bt-comp", { hasText: "Choice" }).first().click();
 await page.waitForTimeout(500);
+await panelTab("Flow");
+await page.waitForTimeout(300);
 ok("question tile on a question screen adds NO screen",
-  (await thumbs.count()) === thumbCount);
-await page.locator(".qz-screens-item", { hasText: "Intro" }).locator(".qz-screens-thumb").click();
+  (await flowRows.count()) === rowCount);
+await page.locator(".qz-ftree-row", { hasText: "Intro page" }).click();
 await page.waitForTimeout(400);
+await panelTab("Add");
+await page.waitForTimeout(300);
 await page.locator(".qz-bt-comp", { hasText: "Choice" }).first().click();
 await page.waitForTimeout(700);
-ok("question tile elsewhere creates a NEW question screen",
-  (await thumbs.count()) === thumbCount + 1);
-await page.locator('.qz-screens-del[aria-label^="Delete"]').click();
+await panelTab("Flow");
 await page.waitForTimeout(300);
-ok("✕ arms a confirm naming the impact",
-  (await page.locator(".qz-screens-confirm").count()) === 1);
-await page.locator(".qz-screens-confirm-yes").click();
+ok("question tile elsewhere creates a NEW question screen",
+  (await flowRows.count()) === rowCount + 1);
+// The new screen is selected → its row is open; delete it via the ⋯ menu.
+await page.locator(".qz-ftree-row.is-open .qz-railmenu-btn").click();
+await page.waitForTimeout(300);
+await page.locator(".qz-railmenu-item", { hasText: "Delete…" }).click();
+await page.waitForTimeout(300);
+ok("Delete… arms a confirm naming the impact",
+  (await page.locator(".qz-ftree-confirm").count()) === 1);
+await page.locator(".qz-ftree-confirm-yes").click();
 await page.waitForTimeout(700);
-ok("confirm deletes the screen (net-zero)", (await thumbs.count()) === thumbCount);
+ok("confirm deletes the screen (net-zero)", (await flowRows.count()) === rowCount);
 
 // ── BLD-3 → QZY-R2 → QRTZ-OB2 (owner reversal 2026-08-12, GAPS §A item 6):
 // the decider inspector carries the mock's ed-tabs — Content · Design · Rules
 // (Rules gated to question nodes; Design stays the default). Rules is a
 // READ-ONLY role + mapping summary with an "Open in Logic" deep link; editing
 // stays in the Logic view. Deep coverage: e2e/qzy-r2-verify.mjs (updated).
-await q1Thumb.locator(".qz-screens-thumb").click();
+await q1Row.click();
 await page.waitForTimeout(400);
 const insp = page.locator(".qz-builder-inspector");
 ok("right-side inspector present", (await insp.count()) === 1);
@@ -188,7 +204,7 @@ ok("no page-background control on the right (v2.0 §1)",
 // Inline HEADING edit on the intro — its headline is an inline-editable element
 // (a template question screen edits its text via the panel, not inline, so pick
 // the intro where the heading is inspectable).
-await page.locator(".qz-screens-item", { hasText: "Intro" }).locator(".qz-screens-thumb").click();
+await page.locator(".qz-ftree-row", { hasText: "Intro page" }).click();
 await page.waitForTimeout(400);
 const canvasHead = page.locator(".qz-builder-canvas h1, .qz-builder-canvas h2").first();
 await canvasHead.click();
@@ -208,7 +224,7 @@ if (await selEl.count()) {
 
 // ── QZY-8 → QZY-R2: option scope, footer, numeric pairs (inline logic REMOVED
 // per build-tab v2.0 §1 — asserted absent here; relocated to the Logic view).
-await q1Thumb.locator(".qz-screens-thumb").click();
+await q1Row.click();
 await page.waitForTimeout(500);
 ok("inline gold Logic section is GONE (v2.0 §1)",
   (await page.locator(".qz-insp-logic, .qz-insp-logic-role").count()) === 0);
@@ -231,9 +247,9 @@ ok("footer: Delete step present (Move only inside a reorderable run)",
   (await page.locator(".qz-insp-foot button", { hasText: "Delete step" }).count()) === 1);
 await page.locator(".qz-insp-foot button", { hasText: "Delete step" }).click();
 await page.waitForTimeout(300);
-ok("footer delete arms the carousel confirm",
-  (await page.locator(".qz-screens-confirm").count()) === 1);
-await page.locator(".qz-screens-confirm button", { hasText: "Keep" }).click();
+ok("footer delete arms the Flow tab's confirm (QRTZ-H4 — flips the panel to Flow)",
+  (await page.locator(".qz-ftree-confirm").count()) === 1);
+await page.locator(".qz-ftree-confirm button", { hasText: "Keep" }).click();
 await page.waitForTimeout(200);
 // QRTZ-OB2 — Layout blocks live under the Design tab (the default).
 await panelTabs.locator("button", { hasText: "Design" }).click();
@@ -259,7 +275,7 @@ await page.locator(".qz-builder-inspector summary", { hasText: "Layout blocks" }
 await page.waitForTimeout(200);
 
 // ── QZY-9: answer display modes — picker, live canvas, lossless switch ──────
-await q1Thumb.locator(".qz-screens-thumb").click();
+await q1Row.click();
 await page.waitForTimeout(500);
 // QRTZ-OB2 — the answer-display picker sits in ContentTab → Content tab.
 await panelTabs.locator("button", { hasText: "Content" }).click();
@@ -292,31 +308,36 @@ ok("scoped option panel carries the shared MediaPicker (R4 §8; +reveal picker R
 await page.locator("button", { hasText: "Style all options" }).click();
 await page.waitForTimeout(300);
 
-// ── QZY-7: Layers + Background tabs (AFTER the inline-edit check — the
-// hide/show round-trip materializes an explicit layout; BLD-7's final
-// "Reset to template" clears it again). ──────────────────────────────────────
-await q1Thumb.locator(".qz-screens-thumb").click();
+// ── QZY-7 → QRTZ-H4: the Flow tab's kid rows are the layer tree (AFTER the
+// inline-edit check — the hide/show round-trip materializes an explicit
+// layout; BLD-7's final "Reset to template" clears it again). ────────────────
+await q1Row.click();
 await page.waitForTimeout(400);
-await page.locator('[aria-label="Build panel"] button', { hasText: "Layers" }).click();
-await page.waitForTimeout(400);
-ok("Layers lists the screen's blocks", (await page.locator(".qz-layers-row").count()) >= 1);
-await page.locator('.qz-layers-actions button[aria-label="Hide block"]').first().click();
+ok("the open Flow row lists the screen's blocks (mock .tree-kids)",
+  (await page.locator(".qz-ftree-kid").count()) >= 1);
+await page.locator('.qz-ftree-kidact button[aria-label="Hide block"]').first().click();
 await page.waitForTimeout(400);
 ok("hide marks the row (kept, not deleted)",
-  (await page.locator(".qz-layers-row.is-hidden").count()) === 1);
-await page.locator('.qz-layers-actions button[aria-label="Show block"]').first().click();
+  (await page.locator(".qz-ftree-kid.is-hidden").count()) === 1);
+await page.locator('.qz-ftree-kidact button[aria-label="Show block"]').first().click();
 await page.waitForTimeout(400);
-ok("show restores it", (await page.locator(".qz-layers-row.is-hidden").count()) === 0);
+ok("show restores it", (await page.locator(".qz-ftree-kid.is-hidden").count()) === 0);
 // ── QRTZ-O6: Templates panel tab (mock s16 ed-tabs) — cards render; NOT
 // clicked (an apply would rewrite the fixture's design_tokens). ─────────────
-await page.locator('[aria-label="Build panel"] button', { hasText: "Templates" }).click();
+await panelTab("Templates");
 await page.waitForTimeout(300);
 ok("Templates tab renders the 4 vibe-template cards",
   (await page.locator('.qz-builder-panel button[aria-label$=" theme"], .qz-builder-panel button[aria-label*=" theme,"]').count()) === 4);
-await page.locator('[aria-label="Build panel"] button', { hasText: "Background" }).click();
+// ── QRTZ-H4: the Background TAB retired — its full content lives in the step
+// inspector's Background row (clear the selection first: Done). ─────────────
+await panelTab("Flow");
+await page.waitForTimeout(200);
+await page.locator(".qz-builder-inspector button", { hasText: "Done" }).click();
+await page.waitForTimeout(400);
+await page.locator(".qz-bt-sechd", { hasText: "Background" }).click();
 await page.waitForTimeout(300);
-ok("Background tab renders the page settings",
-  (await page.locator(".qz-builder-panel").textContent())?.includes("Background"));
+ok("inspector Background row hosts the page settings",
+  (await page.locator(".qz-builder-inspector").textContent())?.includes("Background"));
 
 // ── QZY-11: per-screen backgrounds — type picker, live canvas, hint ─────────
 // R6-1 six + build-tab §6's Split & Quadrant (AUDIT-12) = 8 types.
@@ -336,11 +357,11 @@ await page.locator('[aria-label="Background type"] button', { hasText: "Image" }
 await page.waitForTimeout(300);
 // R4 §8 — the image is chosen via the shared MediaPicker: switch to the URL
 // source, paste, and Use.
-await page.locator('.qz-builder-panel [aria-label="Media source"] button', { hasText: "URL" }).click();
+await page.locator('.qz-builder-inspector [aria-label="Media source"] button', { hasText: "URL" }).click();
 await page.waitForTimeout(200);
-await page.locator('.qz-builder-panel input[placeholder="https://…"]').first()
+await page.locator('.qz-builder-inspector input[placeholder="https://…"]').first()
   .fill("https://cdn.shopify.com/example.jpg");
-await page.locator(".qz-builder-panel button", { hasText: "Use" }).click();
+await page.locator(".qz-builder-inspector button", { hasText: "Use" }).click();
 await page.waitForTimeout(800);
 ok("image background applies to the LIVE canvas page",
   /example\.jpg/.test(
@@ -354,7 +375,7 @@ ok("image background applies to the LIVE canvas page",
 // low-contrast nudge (overlay < 20) does NOT fire by default; lowering the
 // overlay below 20 brings it back.
 ok("image auto-applies a readability overlay (no low-contrast nudge by default)",
-  (await page.locator(".qz-builder-panel [role=note]").count()) === 0);
+  (await page.locator(".qz-builder-inspector [role=note]").count()) === 0);
 ok("quiz-wide default reachable via the All-screens scope (R3 §5.3)",
   (await page.locator('[aria-label="Background applies to"] button', { hasText: "All screens" }).count()) === 1);
 await page.locator('[aria-label="Background type"] button', { hasText: "None" }).click();
@@ -439,7 +460,9 @@ await page.locator(".qz-builder-rail-item", { hasText: "Logic" }).click();
 await page.waitForTimeout(600);
 ok("the one Logic card present (Rules above Questions)",
   (await page.locator('[data-testid="logic-tab-card"]').count()) === 1);
-ok("Try a path present", (await page.locator("text=/Try a path/i").count()) > 0);
+// QRTZ-G3 — Try-a-path left this view; path exploration sits behind the
+// quiet paths affordance below the card.
+ok("path exploration affordance present", (await page.locator("text=/path/i").count()) > 0);
 ok("settings-dump tabs gone", (await page.locator(".qz-settings-tab").count()) === 0);
 
 // ── BLD-5 → QZY-6: Results left the rail; ?view=results stays deep-linkable ─

@@ -28,30 +28,31 @@ await page.route(`**/studio/${QUIZ}**`, (route) => {
   return route.continue();
 });
 
-const names = () => page.locator(".qz-layers-row .qz-layers-name").allInnerTexts();
+// QRTZ-H4 — the Layers tab folded into the Flow tab: kid rows under the
+// OPEN (active) step row carry the same drag-to-reorder.
+const names = () => page.locator(".qz-ftree-kid .qz-ftree-kidname").allInnerTexts();
 
 await page.goto(`${BASE}/studio/${QUIZ}?key=${KEY}`, { waitUntil: "domcontentloaded" });
 await page.waitForSelector(".qz-builder", { timeout: 20000 });
 await page.waitForTimeout(1600);
-await page.locator(".qz-screens-item").first().locator(".qz-screens-thumb").click();
-await page.waitForTimeout(300);
-await page.locator('[aria-label="Build panel"] button', { hasText: "Layers" }).click();
-await page.waitForTimeout(300);
+await page.locator(".qz-ftree-row").first().click(); // Intro — opens its kids
+await page.waitForTimeout(400);
 
 const before = await names();
-ok("intro lists 2 draggable rows with grips",
-  before.length === 2 && (await page.locator(".qz-layers-grip").count()) === 2,
+ok("intro's open row lists its draggable kid rows (mock H/T/B)",
+  before.length >= 2 &&
+    (await page.locator(".qz-ftree-kid[draggable]").count()) === before.length,
   before.join(" | "));
 
 // Drag row 2 up onto row 1 → order flips in the live builder.
-await page.locator(".qz-layers-row").nth(1).dragTo(page.locator(".qz-layers-row").nth(0));
+await page.locator(".qz-ftree-kid").nth(1).dragTo(page.locator(".qz-ftree-kid").nth(0));
 await page.waitForTimeout(400);
 const flipped = await names();
 ok("drag reordered the live rows (real handler ran)",
   flipped[0] === before[1] && flipped[1] === before[0], flipped.join(" | "));
 
 // Drag it back → the reorder is faithful in both directions.
-await page.locator(".qz-layers-row").nth(1).dragTo(page.locator(".qz-layers-row").nth(0));
+await page.locator(".qz-ftree-kid").nth(1).dragTo(page.locator(".qz-ftree-kid").nth(0));
 await page.waitForTimeout(400);
 const back = await names();
 ok("drag back restores the order (bidirectional)",

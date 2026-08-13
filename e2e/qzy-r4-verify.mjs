@@ -37,11 +37,13 @@ await page.goto(`${BASE}/studio/${QUIZ}?key=${KEY}`, { waitUntil: "domcontentloa
 await page.waitForSelector(".qz-builder", { timeout: 20000 });
 await page.waitForTimeout(1600);
 
-// Select a screen, open the left Background panel, choose the Image type.
-const q1 = page.locator(".qz-screens-item", { hasText: "Q1" }).first();
-await q1.locator(".qz-screens-thumb").click();
+// QRTZ-H4 — Background lives in the step inspector's Background row now:
+// select the screen via the Flow tab, Done to clear selection, open the row.
+await page.locator(".qz-ftree-row", { hasText: "Q1" }).first().click();
 await page.waitForTimeout(500);
-await page.locator('[aria-label="Build panel"] button', { hasText: "Background" }).click();
+await page.locator(".qz-builder-inspector button", { hasText: "Done" }).click();
+await page.waitForTimeout(400);
+await page.locator(".qz-bt-sechd", { hasText: "Background" }).click();
 await page.waitForTimeout(400);
 await page.locator('[aria-label="Background type"] button', { hasText: "Image" }).click();
 await page.waitForTimeout(400);
@@ -55,20 +57,20 @@ ok("URL source present",
   (await picker.locator("button", { hasText: "URL" }).count()) === 1);
 
 // Upload tab is the default → a real file input scoped to images.
-const fileInput = page.locator('.qz-builder-panel input[type="file"]');
+const fileInput = page.locator('.qz-builder-inspector input[type="file"]');
 ok("Upload exposes a real <input type=file> accepting images",
   (await fileInput.count()) === 1 &&
     /image|\.png|\.jpg/.test((await fileInput.first().getAttribute("accept")) ?? ""));
 ok("doc-bloat guidance shown (keep images small / 2 MB cap)",
-  (await page.locator(".qz-builder-panel", { hasText: "Max 2 MB" }).count()) >= 1);
+  (await page.locator(".qz-builder-inspector", { hasText: "Max 2 MB" }).count()) >= 1);
 
 // URL source still accepts a pasted https asset.
 await picker.locator("button", { hasText: "URL" }).click();
 await page.waitForTimeout(250);
 ok("URL source offers a paste field",
-  (await page.locator('.qz-builder-panel input[placeholder="https://…"]').count()) >= 1);
+  (await page.locator('.qz-builder-inspector input[placeholder="https://…"]').count()) >= 1);
 
-await page.locator(".qz-builder-panel").screenshot({ path: `${SHOTS}/media-picker.png` }).catch(() => {});
+await page.locator(".qz-builder-inspector").screenshot({ path: `${SHOTS}/media-picker.png` }).catch(() => {});
 
 // ── net-zero cleanup ────────────────────────────────────────────────────────
 await page.locator('[aria-label="Background type"] button', { hasText: "None" }).click();

@@ -194,6 +194,7 @@ export function ContextPanel({
   inspectTarget,
   onClearScope,
   onArmDelete,
+  blockHead,
 }: {
   doc: QuizDoc;
   nodeId: string;
@@ -218,8 +219,12 @@ export function ContextPanel({
   // QZY-8 — the exact canvas element clicked (single-option scoping).
   inspectTarget?: InspectTarget | null;
   onClearScope?: () => void;
-  // QZY-8 — footer delete arms the carousel's two-step confirm.
+  // QZY-8 — footer delete arms the Flow tab's two-step confirm.
   onArmDelete?: (nodeId: string) => void;
+  // QRTZ-H4 — when a canvas BLOCK is selected, the inspector head names the
+  // block kind (mock .insp-head "Text block") + the mock's one-line note;
+  // null keeps the screen-level naming.
+  blockHead?: string | null;
 }) {
   // build-tab handoff §1 — DESIGN-FIRST is deliberate: blocks arrive
   // pre-populated with AI content, so styling is the dominant remaining task.
@@ -252,6 +257,7 @@ export function ContextPanel({
       inspectTarget={inspectTarget}
       onClearScope={onClearScope}
       onArmDelete={onArmDelete}
+      blockHead={blockHead}
     />
   );
 }
@@ -1150,6 +1156,7 @@ function ContextPanelBody({
   inspectTarget,
   onClearScope,
   onArmDelete,
+  blockHead,
 }: {
   doc: QuizDoc;
   node: QuizNode;
@@ -1170,6 +1177,7 @@ function ContextPanelBody({
   inspectTarget?: InspectTarget | null;
   onClearScope?: () => void;
   onArmDelete?: (nodeId: string) => void;
+  blockHead?: string | null;
 }) {
   // QZY-8 — single-option scope: a canvas click on ONE answer scopes the
   // Content tab to that option (build-tab §5.1).
@@ -1193,7 +1201,7 @@ function ContextPanelBody({
         : "design";
 
   // QZY-8 — footer move/delete (§2): reorder within the straight-through run;
-  // delete arms the carousel's impact-naming confirm.
+  // delete arms the Flow tab's impact-naming confirm.
   const run = straightThroughRun(doc).run;
   const runIdx = run.indexOf(node.id);
   const movable = runIdx >= 0;
@@ -1213,7 +1221,11 @@ function ContextPanelBody({
           </svg>
         </div>
         <div className="qz-bt-tt">
-          <b>{NODE_LABEL[node.type]}</b>
+          {/* QRTZ-H4 — block selection: the head reads the block kind
+              (mock .insp-head "Text block"); screen selections keep the
+              screen-level naming. The mock's one-line note renders as its
+              own line below the head (it cannot share this crowded row). */}
+          <b>{blockHead ?? NODE_LABEL[node.type]}</b>
           <small>{node.type.replace("_", " ")}</small>
         </div>
         <div className="qz-row" style={{ gap: 6, alignItems: "center", marginLeft: "auto" }}>
@@ -1258,6 +1270,12 @@ function ContextPanelBody({
           </button>
         </div>
       </div>
+
+      {/* QRTZ-H4 — the mock's .insp-note under a block head (base.mjs:
+          12.5px, ink-3, 1.5), verbatim sentence. */}
+      {blockHead ? (
+        <p className="qz-insp-note">One layout, and everything about it is below.</p>
+      ) : null}
 
       {/* Live thumbnail of the selected step — renders from the same draft
           every keystroke commits to (the StepCard dual-pane pattern). */}
@@ -1404,7 +1422,7 @@ function ContextPanelBody({
               type="button"
               className="qz-btn qz-btn-ghost qz-btn-sm qz-insp-foot-del"
               onClick={() => onArmDelete(node.id)}
-              title="Arms the confirm in the screen strip below"
+              title="Arms the confirm in the Flow tab (left panel)"
             >
               Delete step…
             </button>

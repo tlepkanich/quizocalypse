@@ -43,8 +43,9 @@ await page.waitForSelector(".qz-builder", { timeout: 20000 });
 await page.waitForTimeout(1600);
 
 // Select the first question screen.
-const q1 = page.locator(".qz-screens-item", { hasText: "Q1" }).first();
-await q1.locator(".qz-screens-thumb").click();
+// QRTZ-H4 — the Flow tab (left panel) is the screen switcher now.
+const q1 = page.locator(".qz-ftree-row", { hasText: "Q1" }).first();
+await q1.click();
 await page.waitForTimeout(700);
 
 const insp = page.locator(".qz-builder-inspector");
@@ -64,7 +65,7 @@ ok("no inline gold Logic section (QZY-R2 removal stands)",
   (await insp.locator(".qz-insp-logic").count()) === 0);
 ok("no role dropdown in the design surface",
   (await insp.locator(".qz-insp-logic-role").count()) === 0);
-ok("no page-background control on the right (lives in the left Background tab)",
+ok("no page-background control on the right (lives in the inspector Background row)",
   (await insp.getByText("Background", { exact: true }).count()) === 0);
 
 // ── the design surface survives on its tab ──────────────────────────────────

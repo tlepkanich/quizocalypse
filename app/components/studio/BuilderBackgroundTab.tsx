@@ -48,7 +48,7 @@ export function BuilderBackgroundTab({
     return (
       <div className="qz-card" style={{ padding: 14 }}>
         <p className="qz-dim" style={{ fontSize: 12.5, margin: 0 }}>
-          Select a screen in the carousel below to set its background.
+          Select a screen in the Flow tab to set its background.
         </p>
       </div>
     );

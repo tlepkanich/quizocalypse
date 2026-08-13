@@ -1,8 +1,9 @@
 import { describe, expect, it } from "vitest";
 import type { Quiz, QuizNode } from "../../lib/quizSchema";
-import { deleteImpactCopy } from "./ScreenCarousel";
+import { deleteImpactCopy } from "./BuilderFlowTab";
 
-// Screen delete confirm (build-tab spec §3) — the warning names the impact and
+// Screen delete confirm (build-tab spec §3, now the Flow tab's strip — QRTZ-H4)
+// — the warning names the impact and
 // must read as a sentence whichever subset of parts (rules / mappings) exists.
 
 const questionNode = (id: string, mappedCount: number): QuizNode =>
