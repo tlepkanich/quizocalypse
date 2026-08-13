@@ -8715,16 +8715,34 @@ tr.qz-ltab-qstart td { border-top: 2px solid var(--qz-rule); }
    merchant's actual settings back. qz tokens throughout.
    ═══════════════════════════════════════════════════════════════════════════ */
 .qz-rg { min-width: 0; }
-.qz-rg-split { display: grid; grid-template-columns: minmax(0, 400px) minmax(0, 1fr); gap: 30px; align-items: start; }
-@media (max-width: 1024px) { /* --qz-bp-md */ .qz-rg-split { grid-template-columns: 1fr; } }
+/* QRTZ-G45 — the mock's .split (base.mjs 781–792): compact by design. The
+   editing column is capped and the pair sits CENTRED, not pinned left. */
+.qz-rg-split {
+  display: grid; grid-template-columns: minmax(0, 460px) minmax(0, 420px);
+  gap: 44px; align-items: start; justify-content: center;
+  max-width: 960px; margin: 0 auto;
+}
+/* Switching to Desktop gives the preview the room instead of shrinking it
+   (the inline band is 960 wide). Capped by .qz-page.is-funnel at ~952. */
+.qz-rg-split:has(.qz-rg-pvwrap[data-device="desktop"]) {
+  grid-template-columns: minmax(0, 340px) minmax(0, 700px);
+  gap: 32px; max-width: 1072px;
+}
+@media (max-width: 1024px) { /* --qz-bp-md */
+  .qz-rg-split,
+  .qz-rg-split:has(.qz-rg-pvwrap[data-device="desktop"]) { grid-template-columns: 1fr; max-width: none; }
+}
 
 .qz-rg-stepcol { display: flex; flex-direction: column; min-width: 0; }
-.qz-rg-stepwrap { margin-bottom: 12px; }
-.qz-rg-spine { position: relative; display: flex; align-items: center; gap: 5px; margin-bottom: 11px; min-height: 10px; }
-.qz-rg-spine > i { flex: 1; height: 4px; border-radius: var(--qz-radius-pill); background: var(--qz-rule-2); transition: height .2s var(--qz-ease); }
+.qz-rg-stepwrap { margin-bottom: 14px; }
+/* QRTZ-G45 — the mock's 6-pip .progress row (base.mjs 794–796): 3px pips,
+   2px radius, gap 4, capped at 260. Colour carries the states now — grey
+   ahead, green done, accent HERE (accent wins on a revisited done step). */
+.qz-rg-spine { position: relative; display: flex; gap: 4px; margin-bottom: 14px; max-width: 260px; }
+.qz-rg-spine > i { flex: 1; height: 3px; border-radius: 2px; background: var(--qz-rule); }
 .qz-rg-spine > i.is-done { background: var(--qz-ok); }
-.qz-rg-spine > i.is-now { height: 9px; background: var(--qz-accent); }
-.qz-rg-spine > i.is-done.is-now { background: var(--qz-ok); }
+.qz-rg-spine > i.is-now { background: var(--qz-accent); }
+.qz-rg-spine > i.is-done.is-now { background: var(--qz-accent); }
 .qz-rg-spine.is-party > i { animation: qz-rg-segfill .55s cubic-bezier(.34,1.56,.64,1); }
 @keyframes qz-rg-segfill { 0% { transform: scaleY(1); } 45% { transform: scaleY(2.6); } 100% { transform: scaleY(1); } }
 .qz-rg-confetti { position: absolute; inset: 0; pointer-events: none; overflow: visible; }
@@ -8735,41 +8753,60 @@ tr.qz-ltab-qstart td { border-top: 2px solid var(--qz-rule); }
   100% { opacity: 0; transform: translate(var(--dx,0), var(--dy,-18px)) rotate(var(--r,90deg)) scale(1); }
 }
 @media (prefers-reduced-motion: reduce) { .qz-rg-spine.is-party > i { animation: none; } .qz-rg-confetti { display: none; } }
+/* QRTZ-G45 — the mock's .eyebrow (base.mjs 331): 11px/600, .08em, ink-3. */
 .qz-rg-stepno {
   display: flex; align-items: center; gap: 10px;
-  font-size: 10px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase;
-  color: var(--qz-ink-25); margin-bottom: 5px;
+  font-size: 11px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase;
+  color: var(--qz-ink-4); margin-bottom: 12px;
 }
 .qz-rg-allrev {
   display: inline-flex; align-items: center; gap: 6px; letter-spacing: normal; text-transform: none;
   font-size: 11.5px; font-weight: 700; color: var(--qz-accent-ink); background: var(--qz-accent-wash);
   border: 1px solid color-mix(in srgb, var(--qz-accent) 30%, var(--qz-rule)); border-radius: var(--qz-radius-pill); padding: 3px 10px;
 }
-.qz-rg-title { margin: 0; font-size: 20px; font-weight: 700; letter-spacing: -.02em; }
-.qz-rg-stepsub { margin: 5px 0 0; font-size: 12.5px; color: var(--qz-ink-4); line-height: 1.5; }
+/* QRTZ-G45 — the mock's step title/sub on this screen (base.mjs 797–798):
+   h1−5px = 24px, 1.12, −.025em; sub 14px ink-2 at 1.6, 44ch. */
+.qz-rg-title { margin: 0; font-size: 24px; line-height: 1.12; font-weight: 700; letter-spacing: -.025em; }
+.qz-rg-stepsub { margin: 10px 0 0; font-size: 14px; color: var(--qz-ink-3); line-height: 1.6; max-width: 44ch; }
 
-/* the drilled settings card (§ Drilled in — one surface, one job) */
-.qz-rg-panel {
-  background: var(--qz-paper); border: 1px solid var(--qz-rule); border-radius: 16px;
-  padding: 16px 18px 20px; box-shadow: var(--qz-lift-1); min-height: 0;
-}
-.qz-rg-stepfoot { display: flex; align-items: center; gap: 10px; padding: 14px 2px 2px; margin-top: 10px; border-top: 1px solid var(--qz-rule-2); }
-.qz-rg-fsp { flex: 1; }
+/* QRTZ-G45 — the mock draws NO card around the editing column (s15): the
+   fields sit straight on the page. The card chrome is gone; the class stays
+   as the step body's seam. */
+.qz-rg-panel { min-height: 0; }
+/* QRTZ-G45 — the mock's .edit-foot (base.mjs 807): Back · primary · Saved
+   side by side, left-aligned, gap 14, no rule above. The funnelChrome save
+   chip sits snug (its top-bar min-width/right-alignment doesn't apply). */
+.qz-rg-stepfoot { display: flex; align-items: center; gap: 14px; margin-top: 16px; }
+.qz-rg-stepfoot .qz-save-status { min-width: 0; justify-content: flex-start; }
+/* QRTZ-G45 — the mock's .btn (build.mjs tokens): 14px/600, 9×17, r-md;
+   quiet = paper + control edge; primary hover = accent-ink. */
 .qz-rg-btn2 {
-  border: 1px solid var(--qz-rule); background: var(--qz-paper); color: var(--qz-ink-3);
-  font-size: 12.5px; font-weight: 650; padding: 9px 16px; border-radius: 10px; cursor: pointer; font-family: inherit;
+  border: 1px solid var(--qz-rule-strong); background: var(--qz-paper); color: var(--qz-ink);
+  font-size: 14px; font-weight: 600; padding: 9px 17px; border-radius: var(--qz-radius); cursor: pointer; font-family: inherit;
 }
-.qz-rg-btn2:hover { border-color: var(--qz-accent-wash); color: var(--qz-accent-ink); }
+.qz-rg-btn2:hover { background: var(--qz-cream-2); }
 .qz-rg-btn2.is-pri { background: var(--qz-accent); border-color: var(--qz-accent); color: #fff; }
-.qz-rg-btn2.is-pri:hover { background: var(--qz-accent-2); }
+.qz-rg-btn2.is-pri:hover { background: var(--qz-accent-ink); }
+/* QRTZ-G45 — the states-spec disabled treatment (base.mjs .btn-primary
+   [disabled]) for the gated "Open the builder": cream-2 field, ink-4 label,
+   hairline edge, not-allowed cursor — plus the title/aria-disabled reason on
+   the button itself, so the state is never colour alone. */
+.qz-rg-btn2.is-pri.is-disabled,
+.qz-rg-btn2.is-pri.is-disabled:hover {
+  background: var(--qz-cream-2); border-color: var(--qz-rule); color: var(--qz-ink-4);
+  cursor: not-allowed;
+}
 
 /* fields, toggles, inline rows, notes (mock .fld/.tog/.inline/.note) */
 .qz-rg-fld { margin: 13px 0; }
-.qz-rg-fl { font-size: 13px; font-weight: 700; color: var(--qz-ink); margin-bottom: 7px; letter-spacing: -.01em; }
+/* QRTZ-G45 — the mock's .field-label (base.mjs 436): 12.5px/600, ink-2. */
+.qz-rg-fl { font-size: 12.5px; font-weight: 600; color: var(--qz-ink-3); margin-bottom: 6px; }
 .qz-rg-cap { font-size: 11px; color: var(--qz-ink-25); margin-top: 7px; line-height: 1.45; }
-.qz-rg-sugg { margin-top: 8px; }
-.qz-rg-sl { font-size: 10.5px; color: var(--qz-ink-25); margin-bottom: 5px; }
-.qz-rg-srow { display: flex; gap: 6px; align-items: center; }
+/* QRTZ-G45 — the mock's .sugg row (base.mjs 800–806): the "Try" label rides
+   INLINE with the chips (uppercase label vocabulary), dashed chip treatment. */
+.qz-rg-sugg { display: flex; align-items: center; gap: 6px; margin-top: 7px; min-width: 0; }
+.qz-rg-sl { flex: none; font-size: 10.5px; letter-spacing: .07em; text-transform: uppercase; font-weight: 600; color: var(--qz-ink-4); }
+.qz-rg-srow { display: flex; gap: 6px; align-items: center; flex: 1; min-width: 0; }
 .qz-rg-arw {
   border: 1px solid var(--qz-rule); background: var(--qz-paper); color: var(--qz-ink-4);
   width: 24px; height: 26px; border-radius: 7px; cursor: pointer; flex: none; display: grid; place-items: center; font-size: 12px;
@@ -8780,12 +8817,14 @@ tr.qz-ltab-qstart td { border-top: 2px solid var(--qz-rule); }
   -webkit-mask: linear-gradient(90deg, #000 calc(100% - 22px), transparent);
   mask: linear-gradient(90deg, #000 calc(100% - 22px), transparent);
 }
+/* QRTZ-G45 — the mock's .sugg-btn: dashed control edge on transparent,
+   12.5px ink-2; hover solidifies the border into the accent + wash. */
 .qz-rg-pchip {
-  border: 1px solid var(--qz-rule); background: var(--qz-paper); color: var(--qz-ink-4);
-  font-size: 11px; font-weight: 500; padding: 5px 10px; border-radius: var(--qz-radius-pill); cursor: pointer;
+  border: 1px dashed var(--qz-rule-strong); background: transparent; color: var(--qz-ink-3);
+  font-size: 12.5px; font-weight: 500; padding: 4px 10px; border-radius: var(--qz-radius-pill); cursor: pointer;
   white-space: nowrap; flex: none; max-width: 100%; overflow: hidden; text-overflow: ellipsis; font-family: inherit;
 }
-.qz-rg-pchip:hover { border-color: var(--qz-accent-wash); color: var(--qz-accent-ink); }
+.qz-rg-pchip:hover { border-style: solid; border-color: var(--qz-accent); color: var(--qz-accent-ink); background: var(--qz-accent-wash); }
 .qz-rg-inline { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 9px 0; border-bottom: 1px solid var(--qz-rule-2); }
 .qz-rg-inline:last-child { border-bottom: none; }
 .qz-rg-t { flex: 1; min-width: 0; font-size: 12.5px; font-weight: 600; color: var(--qz-ink-3); }
@@ -9054,10 +9093,17 @@ tr.qz-ltab-qstart td { border-top: 2px solid var(--qz-rule); }
 .qz-rg-prow2.is-on .qz-rg-ck2 { background: var(--qz-accent); border-color: var(--qz-accent); color: #fff; }
 .qz-rg-termspv { margin: 0; font-size: 11px; color: var(--qz-ink-4); line-height: 1.5; }
 
-/* ── the guided PREVIEW (brand-themed frame; §6) ── */
-.qz-rg-pvwrap { position: relative; min-width: 0; }
-.qz-rg-pvctl { position: absolute; top: 0; right: 0; z-index: 5; display: flex; align-items: center; gap: 8px; }
-.qz-rg-pv { display: grid; justify-items: center; align-items: start; min-height: 480px; height: calc(100vh - 220px); max-height: 900px; overflow: hidden; padding-right: 96px; }
+/* ── the guided PREVIEW (brand-themed frame; §6) ──
+   QRTZ-G45 — the mock's .preview column (base.mjs 817–823, 853): a plain
+   control bar ABOVE the frame (no size/scale readout — owner cut it) and the
+   whole column sticky under the top bar while the editor scrolls. */
+.qz-rg-pvwrap {
+  position: sticky; top: calc(var(--qz-topbar-h) + 16px);
+  align-self: start; min-width: 0;
+}
+.qz-rg-pvctl { display: flex; align-items: center; gap: 8px; width: 100%; margin-bottom: 12px; }
+.qz-rg-pvctl .qz-s3-expandbtn { margin-left: auto; }
+.qz-rg-pv { display: grid; justify-items: center; align-items: start; min-height: 480px; height: calc(100vh - 220px); max-height: 900px; overflow: hidden; }
 .qz-rg-frame {
   width: var(--vw, 390px); height: var(--vh, 844px); overflow: hidden; display: flex; flex-direction: column;
   background: var(--qz-color-background, #FBF6EF); color: var(--qz-color-text, #241E14);

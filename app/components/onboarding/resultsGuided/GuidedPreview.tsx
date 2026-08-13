@@ -9,8 +9,8 @@ import {
   suggestContrastText,
 } from "../../../lib/designTokens";
 import { googleFontsUrl } from "../../runtime/runtimeStyles";
-import { DeviceFrame, type FrameFit } from "../../builder/preview/DeviceFrame";
-import { DEVICES, TIER_LABEL, type DeviceTier } from "../../builder/preview/previewWidth";
+import { DeviceFrame } from "../../builder/preview/DeviceFrame";
+import type { DeviceTier } from "../../builder/preview/previewWidth";
 import {
   resolveGuided,
   resolveDiscount,
@@ -22,8 +22,10 @@ import {
 /* Results-guided handoff §6 — the preview. QRTZ-S3: rendered through the
    shared DeviceFrame (the canonical 390×745 phone / 960×700 inline band of
    previewWidth.DEVICES — this file used to hardcode 390×844 / 1180×740 and
-   its own fit math), scaled to fit, view controls stacked in the corner with
-   the applied-scale readout. THE PREVIEW FOLLOWS THE STEP: the gate screen
+   its own fit math), scaled to fit. QRTZ-G45 (owner reversal of F5 on THIS
+   surface only): no size/scale readout and no fold marker here — the view
+   controls sit in a plain bar above the frame; the builder keeps both.
+   THE PREVIEW FOLLOWS THE STEP: the gate screen
    for the email ask (placement = before), the loading screen for the Loading
    tab, the results page for everything else. Highlighting (§6/§7): opening a
    section soft-rings the region it owns; focusing a control rings the ONE
@@ -100,9 +102,6 @@ export function GuidedPreview({
 
   const [view, setView] = useState<DeviceTier>("phone");
   const [expanded, setExpanded] = useState(false);
-  // QRTZ-S3 — the fit lives in DeviceFrame (previewWidth.fitScale); this is
-  // its report back, and the readout below prints the APPLIED scale from it.
-  const [fit, setFit] = useState<FrameFit | null>(null);
 
   // real products — the matches pool + the extras shelf's own picks
   const pool = productIndex.slice(0, 8);
@@ -443,19 +442,10 @@ export function GuidedPreview({
   }
 
   return (
-    <div className="qz-rg-pvwrap">
+    <div className="qz-rg-pvwrap" data-device={view}>
+      {/* QRTZ-G45 — the mock's .preview-bar: device toggle left, nothing
+          else. The owner cut the size/scale readout from this surface. */}
       <div className="qz-rg-pvctl">
-        {/* The readout: a fact you can check, not a control to think about.
-            Prints the APPLIED scale DeviceFrame reports (onFit), never a
-            requested number (Step5Preview pattern). */}
-        <span className="qz-dim" style={{ fontSize: 12, fontVariantNumeric: "tabular-nums" }}>
-          {TIER_LABEL[view]} · {DEVICES[view].w} × {DEVICES[view].h}
-          {fit
-            ? fit.constrainedBy === "none"
-              ? " · actual size"
-              : ` · ${Math.round(fit.scale * 100)}%`
-            : ""}
-        </span>
         <span className="qz-s3-segbtns" role="group" aria-label="Preview device">
           <button
             type="button"
@@ -489,7 +479,7 @@ export function GuidedPreview({
         </button>
       </div>
       <div className="qz-rg-pv">
-        <DeviceFrame tier={view} onFit={setFit} resetKey={screen}>
+        <DeviceFrame tier={view} resetKey={screen} showFold={false}>
           <div className="qz-rg-frame" style={cssVars}>
             {fontUrl ? <link rel="stylesheet" href={fontUrl} /> : null}
             <div className="qz-rg-screen" ref={screenRef}>
@@ -521,7 +511,7 @@ export function GuidedPreview({
                   measures this window-sized host and the same fit rule
                   produces the bigger result (never past 1:1). */}
               <div style={{ width: "92vw", height: "90vh" }}>
-                <DeviceFrame tier={view}>
+                <DeviceFrame tier={view} showFold={false}>
                   <div className="qz-rg-frame" style={cssVars}>
                     <div className="qz-rg-screen">{screenBody}</div>
                   </div>

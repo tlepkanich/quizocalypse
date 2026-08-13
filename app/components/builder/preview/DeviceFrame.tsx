@@ -36,6 +36,7 @@ export function DeviceFrame({
   resetKey,
   zoom = 100,
   paneHeight = "100%",
+  showFold = true,
   onFit,
 }: {
   tier: DeviceTier;
@@ -57,6 +58,10 @@ export function DeviceFrame({
   // container is auto-height MUST pass a definite value or the height axis of
   // the fit rule measures 0 and the frame stops shrinking vertically.
   paneHeight?: number | string;
+  // QRTZ-G45 (owner reversal on the Results surface): the phone tier's "fold"
+  // marker is on by default — a surface passes false to opt out. The marker
+  // itself stays; the builder keeps it.
+  showFold?: boolean;
   // Reports the current fit so the host can render the size/scale readout.
   // Fired from an effect, never during render, and read through a ref so an
   // inline lambda from the host cannot loop.
@@ -196,8 +201,9 @@ export function DeviceFrame({
           </div>
           {/* The mock's "fold" marker (_src/shared.mjs:660, base.mjs .fold):
               a dashed line 78px up — where the 667px small-phone viewport
-              cuts this 745px frame. Phone tier only; never intercepts input. */}
-          {tier === "phone" ? (
+              cuts this 745px frame. Phone tier only; never intercepts input.
+              Suppressible per surface via showFold (QRTZ-G45). */}
+          {tier === "phone" && showFold ? (
             <span className="qz-devfold" aria-hidden>
               fold
             </span>
