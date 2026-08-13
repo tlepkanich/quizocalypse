@@ -349,7 +349,14 @@ function Composer({ minGoalChars }: { minGoalChars: number }) {
   };
 
   const draft = () => {
-    if (!ready || busy) return;
+    if (busy) return;
+    // The mock's rule: the composer never silently blocks. Empty → point at
+    // the field; short → submit anyway and let the action's honest 400 copy
+    // ("Add a little more detail…") render in the hm-error line below.
+    if (!goal.trim()) {
+      taRef.current?.focus();
+      return;
+    }
     const fields: Record<string, string> = {
       goal: goal.trim(),
       audience: audience.trim(),
@@ -377,6 +384,13 @@ function Composer({ minGoalChars }: { minGoalChars: number }) {
           onChange={(e) => {
             setGoal(e.target.value);
             grow();
+          }}
+          onKeyDown={(e) => {
+            // The 1-row composer submits on Enter (Shift+Enter for a newline).
+            if (e.key === "Enter" && !e.shiftKey) {
+              e.preventDefault();
+              draft();
+            }
           }}
         />
         <div className={briefOpen ? "hm-brief is-open" : "hm-brief"}>
@@ -426,13 +440,14 @@ function Composer({ minGoalChars }: { minGoalChars: number }) {
           </button>
           <span className="hm-grow" />
           <button
-            className={ready ? "hm-go is-ready" : "hm-go"}
+            className={busy ? "hm-go is-ready is-busy" : ready ? "hm-go is-ready" : "hm-go"}
             type="button"
-            aria-label="Draft my quiz"
+            aria-label={busy ? "Drafting your quiz…" : "Draft my quiz"}
+            aria-busy={busy}
             disabled={busy}
             onClick={draft}
           >
-            <HmIcon d={I.arrow} />
+            {busy ? <span className="hm-go-ring" aria-hidden /> : <HmIcon d={I.arrow} />}
           </button>
         </div>
       </div>

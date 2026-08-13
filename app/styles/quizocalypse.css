@@ -9401,6 +9401,18 @@ tr.qz-ltab-qstart td { border-top: 2px solid var(--qz-rule); }
 .home2 .hm-go.is-ready { background: var(--qz-accent); border-color: var(--qz-accent); color: #FFFFFF; }
 .home2 .hm-go.is-ready:hover { background: var(--qz-accent-2); border-color: var(--qz-accent-2); }
 .home2 .hm-go:disabled { opacity: .6; cursor: default; }
+/* QRTZ-H — the drafting round-trip gets visible feedback: the arrow becomes
+   a ring while the goal action runs (the click used to look like a no-op). */
+.home2 .hm-go .hm-go-ring {
+  width: 14px; height: 14px; border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, .35); border-top-color: #FFFFFF;
+  animation: hm-go-spin 700ms linear infinite;
+}
+.home2 .hm-go.is-busy { opacity: 1; }
+@keyframes hm-go-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) {
+  .home2 .hm-go .hm-go-ring { animation: none; border-top-color: rgba(255, 255, 255, .35); }
+}
 
 /* The action's 400 (goal too short) surfaces here — not in the mock, but
    the contract can reject and silence would strand the merchant. */

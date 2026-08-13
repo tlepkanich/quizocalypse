@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <!-- The Wiskr cat (docs/design/brand-2026/_src/shared.mjs mark "solid").
+       Ink head, knocked-out eyes/nose; flips to paper in dark tab bars. -->
+  <style>
+    .head { fill: #201C2E; }
+    .eye { fill: #FFFFFF; }
+    @media (prefers-color-scheme: dark) {
+      .head { fill: #F5F4F8; }
+      .eye { fill: #201C2E; }
+    }
+  </style>
+  <path class="head" d="M6 13V4.5L13 9z"/>
+  <path class="head" d="M26 13V4.5L19 9z"/>
+  <rect class="head" x="5" y="9" width="22" height="18" rx="9"/>
+  <circle class="eye" cx="12.4" cy="17" r="1.9"/>
+  <circle class="eye" cx="19.6" cy="17" r="1.9"/>
+  <path class="eye" d="M14.4 21.2h3.2L16 23z"/>
+</svg>
