@@ -5443,30 +5443,8 @@ body[data-qz] .qz-s3-editable:focus-visible {
 /* AUDIT-23 — overview-cards page geometry: the mock's .wrap is a CENTERED
    1080px column (1036px of content after its 22px gutters). */
 .qz-s3-logicview { display: flex; flex-direction: column; gap: 12px; padding: 16px 20px 40px; max-width: 1076px; width: 100%; margin: 0 auto; }
-.qz-s3-subhead { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
-.qz-s3-subhead .qz-s3-viewtoggle { margin-right: 6px; }
-
-.qz-s3-explainer {
-  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
-  padding: 9px 13px; border-radius: var(--qz-radius-lg);
-  background: var(--qz-paper); box-shadow: var(--qz-lift-1);
-  font-size: 12.5px;
-}
-.qz-s3-explainer-caret, .qz-s3-explainer-info {
-  appearance: none; border: none; background: none; cursor: pointer; font: inherit;
-  color: var(--qz-ink-3); padding: 2px 4px; border-radius: 6px;
-}
-.qz-s3-explainer-caret:hover, .qz-s3-explainer-info:hover { color: var(--qz-ink); background: var(--qz-cream-2); }
-.qz-s3-explainer-title { font-weight: 700; font-size: 12px; }
-.qz-s3-explainer-chips { display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap; }
-.qz-s3-expchip {
-  padding: 3px 10px; border-radius: var(--qz-radius-pill);
-  background: var(--qz-cream-2); color: var(--qz-ink-3);
-  font-size: 11.5px; font-weight: 600;
-}
-.qz-s3-expchip.is-decider { background: var(--qz-gold-wash); color: var(--qz-gold); box-shadow: inset 0 0 0 1px var(--qz-gold-line); } /* QRTZ-OA: was .is-gold — accent-washed decider chip */
-.qz-s3-exparrow { color: var(--qz-ink-4); font-size: 11px; }
-.qz-s3-explainer-sentence { flex-basis: 100%; margin: 2px 0 0 24px; color: var(--qz-ink-3); font-size: 12.5px; }
+/* QRTZ-G3 — the sub-header + "How this quiz resolves" explainer strip are
+   retired: the artifact's Logic screen is the two cards and nothing else. */
 
 /* Two columns: map + 356px sticky rules column (spec §2, fits at 1024). */
 /* logic-page-v4 — single-column stacked (Rules → map → Fallback), not a
@@ -6976,13 +6954,8 @@ body[data-qz] .qz-cust-row:focus-visible {
    table layout ("the map never reflows"). Mock tokens map onto the repo
    system: --line2 → --qz-cream-2 · --bar → --qz-rule · bad → --qz-crit.
    ═══════════════════════════════════════════════════════════════════════════ */
-/* UNIFIED — the teaching banner above the card (mock .vnote/NOTE). */
-.qz-ltab-note {
-  background: var(--qz-accent-wash); border-radius: var(--qz-radius);
-  padding: 10px 16px; font-size: 12.5px; line-height: 1.55;
-  color: var(--qz-ink); text-align: center; margin: 0 0 12px;
-}
-.qz-ltab-note b { color: var(--qz-accent-ink); }
+/* QRTZ-G3 — the teaching banner (.qz-ltab-note) and the in-card divider
+   (.qz-ltab-div) are retired: the view is TWO stacked cards now. */
 .qz-ltab {
   background: var(--qz-paper); border: 1px solid var(--qz-rule);
   border-radius: var(--qz-radius); overflow: hidden;
@@ -6992,7 +6965,6 @@ body[data-qz] .qz-cust-row:focus-visible {
   padding: 9px 16px 9px 22px; border-bottom: 1px solid var(--qz-rule);
 }
 .qz-ltab-hd h2 { font-size: 14.5px; font-weight: 700; letter-spacing: -0.01em; margin: 0; }
-.qz-ltab-div { border-top: 1px solid var(--qz-rule); }
 .qz-ltab-empty { font-size: 12.5px; line-height: 1.45; color: var(--qz-ink-3); padding: 10px 22px; margin: 0; }
 .qz-ltab-rules { list-style: none; margin: 0; padding: 0; }
 .qz-ltab-rrow {
@@ -10169,4 +10141,36 @@ button.qz-pb-row:hover { background: var(--qz-cream-2); }
   background: var(--qz-accent); color: #fff; font-size: 9.5px; font-weight: 600;
   letter-spacing: .05em; text-transform: uppercase; line-height: 1.4;
   pointer-events: none;
+}
+
+/* ═══ QRTZ-G3 — Logic two-card view + relocated capture/fallback ═══ */
+/* The artifact's Logic screen (shared.mjs screenLogic) is two cards, Rules
+   then Questions, stacked. The wrapper carries the historical testid. */
+.qz-ltab-stack { display: flex; flex-direction: column; gap: 16px; }
+
+/* Paths kept behind a quiet secondary affordance (the artifact has no tabs). */
+.qz-ltab-pathsrow { display: flex; }
+.qz-ltab-pathslink {
+  appearance: none; border: none; background: none; cursor: pointer; font: inherit;
+  padding: 2px 0; font-size: 12.5px; font-weight: 600; color: var(--qz-ink-3);
+}
+.qz-ltab-pathslink:hover { color: var(--qz-ink); text-decoration: underline; text-underline-offset: 3px; }
+
+/* The Email-capture rail row is the capture CONFIG surface now: it always
+   renders (an off state must stay reachable to switch capture back on) and
+   hosts the relocated CaptureModule inline while selected. */
+.qz-qf-navterm.is-off .qz-qf-tc,
+.qz-qf-navterm.is-off .qz-qf-tlabel { opacity: 0.55; }
+.qz-qf-navterm.is-off .qz-qf-ts { color: var(--qz-ink-4); }
+.qz-qf-cappanel { padding: 0 10px 10px; }
+.qz-qf-cappanel .qz-s3-capmod {
+  border: 1px solid var(--qz-rule); border-radius: var(--qz-radius);
+  background: var(--qz-paper); box-shadow: none; padding: 12px 12px;
+}
+
+/* The relocated no-match fallback sits flat inside the guided Results
+   panel — a hairline card, not a floating one. */
+.qz-rg-panel .qz-s3-fallback {
+  border: 1px solid var(--qz-rule); border-radius: var(--qz-radius);
+  box-shadow: none;
 }

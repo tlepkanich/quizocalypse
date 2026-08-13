@@ -4,12 +4,14 @@ import { resolveRecPageGlobal } from "../../../../lib/recommendDecider";
 
 type QuizDoc = z.infer<typeof Quiz>;
 
-/* QZY-2 (owner supplement) — the map's TERMINAL module: instead of a bare
+/* QZY-2 (owner supplement) — the flow's TERMINAL config: instead of a bare
    "End quiz", the flow ends at "Email Capture / End Quiz". Pre-populated,
    always last, and editable in place at the settings level (email / SMS /
-   terms toggles — the same RecPageGlobal fields the Content view's capture
-   step edits, so both sub-views save to one place). Copy editing lives on
-   the Content view's capture screen. */
+   terms toggles — the same RecPageGlobal fields the phone's capture screen
+   edits, so both surfaces save to one place). QRTZ-G3 relocated its mount
+   from the Logic step to the Questions step's Email-capture rail row
+   (LeftRail capturePanel) — the component itself is unchanged. Copy editing
+   lives on the phone's capture screen. */
 
 export function CaptureModule({
   doc,

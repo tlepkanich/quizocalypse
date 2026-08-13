@@ -16,14 +16,14 @@ import { derivedNarrowLabel, fieldHue } from "./logicTabFields";
 
 // ════════════════════════════════════════════════════════════════════════════
 // Logic tab (docs/design/logic-tab/HANDOFF.md §2/§3/§5 + DECISIONS.md) — the
-// ONE-card design: Rules above Questions (engine order), divided by a header
-// row, sharing row metrics so the two halves read as one list. Decider docs
-// only — legacy docs never reach this component (BuilderLogicView dispatch).
-//
-// Phase 2 = READ-ONLY (build order §13.1): every datum the tab needs — roles,
-// mappings, counts, routing — rendered from the live draft. Editing arrives
-// with the role/mapping menus (P3), rule delete/reorder (P4) and the
-// create-rule modal (P5).
+// Rules-then-Questions view. QRTZ-G3 (owner feedback on the Quartz artifact,
+// shared.mjs screenLogic): TWO stacked cards — a Rules card above a Questions
+// card, exactly as the artifact draws them — replacing the earlier one-card
+// form with its internal divider. The wrapper keeps the historical
+// `data-testid="logic-tab-card"` so health/publish deep links and probes
+// (`[data-testid="logic-tab-card"] [data-node-id]`) resolve unchanged.
+// Decider docs only — legacy docs never reach this component
+// (BuilderLogicView dispatch).
 // ════════════════════════════════════════════════════════════════════════════
 
 type QuizDoc = Quiz;
@@ -132,17 +132,10 @@ export function LogicTabCard({
   const [overRuleIx, setOverRuleIx] = useState<number | null>(null);
 
   return (
-    <>
-      {/* UNIFIED (unified/_v.js NOTE, the banner above the card): role flips
-          never delete a mapping — setQuestionRole leaves the answers' values
-          in place, so flipping back restores them. */}
-      <p className="qz-ltab-note">
-        Each question below says what it does right now. Switch one on and it
-        starts ruling products out; switch it off and it is still asked, it
-        just stops deciding. <b>Nothing is ever deleted</b> — flip it back and
-        the mapping is where you left it.
-      </p>
-    <section className="qz-ltab" data-testid="logic-tab-card">
+    // QRTZ-G3 — the artifact's two cards, stacked, and nothing else (the
+    // role-flip teaching note is retired; the card meta sentences teach now).
+    <div className="qz-ltab-stack" data-testid="logic-tab-card">
+    <section className="qz-ltab">
       <header className="qz-ltab-hd">
         <h2>Rules</h2>
         {/* QRTZ-S6 — mock s14 .card-meta, verbatim (no vocabulary clash). */}
@@ -325,7 +318,10 @@ export function LogicTabCard({
         </ol>
       )}
 
-      <header className="qz-ltab-hd qz-ltab-div">
+    </section>
+
+    <section className="qz-ltab">
+      <header className="qz-ltab-hd">
         <h2>Questions</h2>
         {/* QRTZ-OB1 — mock s14 .card-meta verbatim (shared.mjs line 374;
             GAPS §A item 7 reversed owner call 8c). */}
@@ -395,7 +391,7 @@ export function LogicTabCard({
         </tbody>
       </table>
     </section>
-    </>
+    </div>
   );
 }
 

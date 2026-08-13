@@ -19,11 +19,12 @@ import { LeftRail, CAPTURE_ID, REVEAL_ID } from "./LeftRail";
 import { OverviewLedger } from "./OverviewLedger";
 import { PhoneCanvas } from "./content/PhoneCanvas";
 import { IconPlus } from "./icons";
-// Logic-tab migration — the funnel's Logic step renders the SAME one-card
-// view as the studio builder (docs/design/logic-tab/HANDOFF.md); the
-// safety-net config keeps its own section below the card.
+// Logic-tab migration — the funnel's Logic step renders the SAME two-card
+// view as the studio builder (docs/design/logic-tab/HANDOFF.md + QRTZ-G3:
+// the artifact's Rules card + Questions card, nothing else). The fallback
+// config moved to the Results step (resultsGuided); the capture config moved
+// to the Questions step's Email-capture rail row.
 import { LogicTabCard } from "../../studio/logicTab/LogicTabCard";
-import { FallbackSection } from "./logic/FallbackSection";
 import { CaptureModule } from "./logic/CaptureModule";
 import { DiagnoseModal, type DiagnoseTab } from "./logic/DiagnoseModal";
 
@@ -126,8 +127,10 @@ export function Step3Shell({
   const [navw, setNavw] = useState(304);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [libraryOpen, setLibraryOpen] = useState(false);
-  // QZY-2 (spec §10) — the ONE diagnose/preview modal; the Fix-N-issues
-  // control and a blocked Continue open it on the Diagnostics tab.
+  // QZY-2 (spec §10) — the diagnose/preview modal. QRTZ-G3: its Logic-view
+  // subhead entry is gone (the artifact draws none); the Fix-N-issues health
+  // pill and a blocked Continue are its remaining doors, both landing on the
+  // Diagnostics tab (Test-a-path stays reachable inside the modal).
   const [diagnose, setDiagnose] = useState<{ open: boolean; tab: DiagnoseTab }>({
     open: false,
     tab: "diagnostics",
@@ -151,15 +154,17 @@ export function Step3Shell({
     scrollLogicTo();
   }, [mode, scrollLogicTo]);
 
-  // Valid canvas positions; a stale selection (deleted question, capture
-  // toggled off) falls back derived-style — no effect needed.
+  // Valid canvas positions; a stale selection (deleted question) falls back
+  // derived-style — no effect needed. QRTZ-G3: CAPTURE_ID is always valid —
+  // the Email-capture rail row is the capture CONFIG surface now, so it must
+  // stay selectable even while capture is switched off (to switch it back on).
   const activeId = useMemo(() => {
     const valid = new Set(flowSteps.map((s) => s.node.id));
-    if (captureOn) valid.add(CAPTURE_ID);
+    valid.add(CAPTURE_ID);
     valid.add(REVEAL_ID);
     if (selectedId && valid.has(selectedId)) return selectedId;
     return flowSteps[0]?.node.id ?? REVEAL_ID;
-  }, [selectedId, flowSteps, captureOn]);
+  }, [selectedId, flowSteps]);
 
   // "+ New question" — insert below the LAST question (insertQuestionRelative
   // anchors on a movable step, never the terminal — the add-anchor lesson).
@@ -170,12 +175,8 @@ export function Step3Shell({
     const next = insertQuestionRelative(doc, ref, "below");
     const newId = next.nodes.find((n) => !before.has(n.id))?.id ?? null;
     onCommit(next);
-    if (newId) {
-      setSelectedId(newId);
-      // Logic view: glide the new question's table row in once it mounts.
-      if (view === "logic") setTimeout(() => scrollLogicTo(newId), 60);
-    }
-  }, [doc, questions, onCommit, view, scrollLogicTo]);
+    if (newId) setSelectedId(newId);
+  }, [doc, questions, onCommit]);
 
   // questions-full-page §2 — renumber/drag moves the step to that OVERALL
   // position in the FULL flow (content included), through the pure moveStep
@@ -347,6 +348,14 @@ export function Step3Shell({
                   onDelete={deleteQuestion}
                   onAdd={addQuestion}
                   onAddContent={addContent}
+                  capturePanel={
+                    /* QRTZ-G3 — the capture CONFIG (formerly the Logic
+                       step's CaptureModule, unchanged) opens under the
+                       Email-capture row while that row is selected. */
+                    activeId === CAPTURE_ID ? (
+                      <CaptureModule doc={doc} captureOn={captureOn} onCommit={onCommit} />
+                    ) : null
+                  }
                 />
                 {/* mock .resizer — drag to resize the nav column (232..max). */}
                 <div
@@ -396,37 +405,13 @@ export function Step3Shell({
         </div>
       ) : (
         <div className="qz-s3-logicview">
-          {/* Spec §2 — the sub-header: the "+ Diagnose / Preview" entry and
-              quick add/library actions. No view toggle anymore — Questions
-              and Logic are separate funnel steps navigated from the bar. No
-              question rail here — the map IS the list. */}
-          <div className="qz-s3-subhead">
-            <button
-              type="button"
-              className="qz-btn qz-btn-ghost qz-btn-sm"
-              onClick={() => setDiagnose({ open: true, tab: "test" })}
-            >
-              + Diagnose / Preview
-            </button>
-            <button
-              type="button"
-              className="qz-btn qz-btn-ghost qz-btn-sm"
-              onClick={addQuestion}
-            >
-              + Add question
-            </button>
-            <button
-              type="button"
-              className="qz-btn qz-btn-ghost qz-btn-sm"
-              onClick={() => setLibraryOpen(true)}
-            >
-              Question library
-            </button>
-          </div>
-
-          {/* Spec §2 — the collapsible "How this quiz resolves" explainer. */}
-          <ExplainerStrip />
-
+          {/* QRTZ-G3 — the artifact's Logic screen is EXACTLY two cards,
+              Rules then Questions (shared.mjs screenLogic), nothing else.
+              The subhead entries, the "How this quiz resolves" strip, the
+              fallback and capture modules are gone from this surface: the
+              fallback config lives on the Results step (resultsGuided), the
+              capture config on the Questions step's Email-capture rail row.
+              Diagnose stays reachable through the bar's health pill. */}
           <LogicTabCard
             doc={doc}
             questions={questions}
@@ -438,15 +423,6 @@ export function Step3Shell({
             lastSyncAt={lastSyncAt}
             shopifyAdminDomain={shopifyAdminDomain}
           />
-          {/* The safety-net + quiz-ending configs keep their own sections —
-              they were part of the old scroll, not of the card design. */}
-          <FallbackSection
-            doc={doc}
-            collections={collections}
-            productIndex={productIndex}
-            onCommit={onCommit}
-          />
-          <CaptureModule doc={doc} captureOn={captureOn} onCommit={onCommit} />
         </div>
       )}
 
@@ -471,55 +447,3 @@ export function Step3Shell({
   );
 }
 
-/* QZY-2 (spec §2) — "How this quiz resolves": pipeline chips on load, an
-   info reveal with the plain-English sentence, a chevron collapse. */
-function ExplainerStrip() {
-  const [collapsed, setCollapsed] = useState(false);
-  const [showInfo, setShowInfo] = useState(false);
-  return (
-    <div className="qz-s3-explainer">
-      <button
-        type="button"
-        className="qz-s3-explainer-caret"
-        aria-expanded={!collapsed}
-        aria-label={collapsed ? "Expand the resolution explainer" : "Collapse the resolution explainer"}
-        onClick={() => setCollapsed((c) => !c)}
-      >
-        {collapsed ? "▸" : "▾"}
-      </button>
-      <span className="qz-s3-explainer-title">How this quiz resolves</span>
-      {collapsed ? null : (
-        <>
-          <span className="qz-s3-explainer-chips" aria-hidden>
-            <span className="qz-s3-expchip">Rules</span>
-            <span className="qz-s3-exparrow">→</span>
-            {/* QRTZ-OB1 — ◆ gone with the vocabulary; "Filters" reads as the
-                role name "Narrows" so no surface disagrees with the pills.
-                (class renamed is-gold → is-decider by QRTZ-OA) */}
-            <span className="qz-s3-expchip is-decider">Picks the result</span>
-            <span className="qz-s3-exparrow">→</span>
-            <span className="qz-s3-expchip">Narrows</span>
-            <span className="qz-s3-exparrow">→</span>
-            <span className="qz-s3-expchip">Fallback</span>
-          </span>
-          <button
-            type="button"
-            className="qz-s3-explainer-info"
-            aria-expanded={showInfo}
-            aria-label="What does this mean?"
-            onClick={() => setShowInfo((v) => !v)}
-          >
-            ⓘ
-          </button>
-        </>
-      )}
-      {!collapsed && showInfo ? (
-        <p className="qz-s3-explainer-sentence">
-          Rules run first (top to bottom, first match wins), then the question that picks the
-          result chooses the recommendation, narrowing questions cut it to what fits, and the
-          fallback covers a shopper nothing matches.
-        </p>
-      ) : null}
-    </div>
-  );
-}

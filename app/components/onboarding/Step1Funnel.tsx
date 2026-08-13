@@ -314,6 +314,7 @@ export function Step1Funnel({ data }: { data: FunnelData }) {
                 quizId={data.quizId}
                 initialDoc={data.recPage!.doc}
                 productIndex={data.recPage!.productIndex}
+                collections={data.collections}
                 designTokens={data.designTokens}
                 onOpenBuilder={() => fetcher.submit({ intent: "generate-build" }, { method: "post" })}
               />

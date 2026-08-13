@@ -2,10 +2,12 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import type { Quiz, DesignTokens, RecPageGlobal } from "../../../lib/quizSchema";
 import type { IndexedProduct } from "../../../lib/recommendationEngine";
+import type { BuilderCollection } from "../../builder/stepProps";
 import { useQuizDraft } from "../../studio/useQuizDraft";
 import { useFunnelBar, FunnelSaveChip, type FunnelBarOverride } from "../funnelChrome";
 import { GuidedPreview, type PreviewScreen } from "./GuidedPreview";
 import { DiscountEditor } from "./DiscountEditor";
+import { FallbackSection } from "./FallbackSection";
 import { TermsModal, DescriptionsModal, ExtrasPickerModal } from "./modals";
 import {
   resolveGuided,
@@ -176,12 +178,15 @@ export function ResultsGuided({
   quizId,
   initialDoc,
   productIndex,
+  collections,
   designTokens,
   onOpenBuilder,
 }: {
   quizId: string;
   initialDoc: Quiz;
   productIndex: IndexedProduct[];
+  /** QRTZ-G3 — the relocated fallback chooser's collection picker. */
+  collections: BuilderCollection[];
   designTokens?: DesignTokens | null;
   /** Step 6's "Open the builder →" (the funnel's generate-build intent —
    *  Design-step retired; the look is brand-inherited). */
@@ -470,6 +475,13 @@ export function ResultsGuided({
           <Toggle on={!!cfg.showAddAll} onClick={() => patch({ showAddAll: !cfg.showAddAll })} label="Add all to cart" />
         </div>
       </div>
+      {/* QRTZ-G3 — the no-match fallback (relocated from the Logic step):
+          what shows when a shopper's answers match zero products is part of
+          how the matches behave, so it lives on this step now. */}
+      <div className="qz-rg-fl" style={{ marginTop: 14 }}>
+        When nothing matches
+      </div>
+      <FallbackSection doc={doc} collections={collections} productIndex={productIndex} onCommit={commit} />
     </>
   );
 

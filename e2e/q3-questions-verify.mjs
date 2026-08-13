@@ -19,7 +19,7 @@
 // the phone to edit it": contenteditable title .qz-qf-qtitleedit · answer
 // chips .qz-s3-achip.is-edit w/ ⠿ .qz-qf-odrag / text .qz-qf-otext / ✕
 // .qz-qf-odel (2-floor) · dashed .qz-qf-addopt) with the floating
-// .qz-s3-typetag BESIDE the phone (type popover + decider guard; hidden on
+// .qz-s3-typetagwrap BESIDE the phone (type popover + decider guard; hidden on
 // capture/reveal) and the pv-bar (Mobile/Desktop + icon-only Expand) over the
 // TRUE 390×844 frame. ▦ tab: the content OverviewLedger — the SAME connected
 // .qz-s3-ledger container as the Logic map, but bulk CONTENT editing
@@ -212,8 +212,9 @@ try {
   ok('"✎ Questions" pressed by default',
     (await toggle.locator("button").first().getAttribute("aria-pressed")) === "true" &&
     (await toggle.locator("button").nth(1).getAttribute("aria-pressed")) === "false");
-  ok('✎ hint "Click any text on the phone to edit it"',
-    (await page.locator(".qz-qf-hint").textContent())?.trim() === "Click any text on the phone to edit it");
+  // QRTZ-S5 hint copy (mock qtab-bar verbatim) — was "…on the phone…".
+  ok('✎ hint "Click any text in the preview to edit it"',
+    (await page.locator(".qz-qf-hint").textContent())?.trim() === "Click any text in the preview to edit it");
   ok("Question library sub-head entry", await page.locator(".qz-qs-tlib").isVisible());
   ok("+ Add sub-head button", await page.locator(".qz-qs-tbtn", { hasText: "Add" }).isVisible());
 
@@ -244,16 +245,19 @@ try {
     (await page.locator(".qz-qf-nct").first().textContent())?.trim() === "Single select · decides");
   ok('rating type line "Scale"',
     (await page.locator(".qz-qf-nct").nth(2).textContent())?.trim() === "Scale");
+  // QRTZ-T accent — Quartz violet #5B45D6 (was the pre-Quartz #6D5AE6).
   ok("decider number renders ACCENT",
     await page.locator(".qz-qf-navrow.is-dec .qz-qf-ncn").evaluate(
-      (el) => getComputedStyle(el).color === "rgb(109, 90, 230)"));
+      (el) => getComputedStyle(el).color === "rgb(91, 69, 214)"));
   ok("decider row's hover-trash is DISABLED",
     await page.locator(".qz-qf-navrow").first().locator(".qz-qf-tool:not(.is-drag)").isDisabled());
   ok("qualifier row's hover-trash is enabled",
     !(await page.locator(".qz-qf-navrow").nth(1).locator(".qz-qf-tool:not(.is-drag)").isDisabled()));
-  ok("first row's ↑ mover disabled, ↓ enabled",
-    (await page.locator(".qz-qf-navrow").first().locator(".qz-qf-nmvb").first().isDisabled()) &&
-    !(await page.locator(".qz-qf-navrow").first().locator(".qz-qf-nmvb").nth(1).isDisabled()));
+  // QRTZ-S5 — grip-only reorder: the stacked ↑/↓ movers (.qz-qf-nmvb) are
+  // retired; the ⠿ grip is the one reorder affordance per row.
+  ok("grip-only reorder (⠿ per row, stacked ↑/↓ movers gone)",
+    (await page.locator(".qz-qf-navrow .qz-qf-tool.is-drag").count()) === 3 &&
+    (await page.locator(".qz-qf-nmvb").count()) === 0);
   // 051eceb added a second navadd (+ Add content) — target the question one.
   ok("+ Add question rail foot",
     await page.locator(".qz-qf-navadd:not(.is-content)").isVisible());
@@ -307,8 +311,9 @@ try {
   ok("dashed + Add answer under the chips", await page.locator(".qz-qf-addopt").isVisible());
 
   // 5 ── the floating type tag beside the phone: popover + decider guard
-  ok("floating type tag beside the phone", (await page.locator(".qz-s3-typetag").count()) === 1);
-  await page.locator(".qz-s3-typetag .qz-s3-typetagbtn").click();
+  // (2c0b1f1 — the popover portals to body; the wrap is .qz-s3-typetagwrap)
+  ok("floating type tag beside the phone", (await page.locator(".qz-s3-typetagwrap").count()) === 1);
+  await page.locator(".qz-s3-typetagbtn").click();
   ok("tag click opens the type popover (4 radios)", (await page.locator(".qz-s3-tp-type").count()) === 4);
   ok("current type radio marked", await page.locator(".qz-s3-tp-type.is-on", { hasText: "Single select" }).isVisible());
   await page.screenshot({ path: `${SHOTS}/2-typepop.png` });
@@ -339,7 +344,7 @@ try {
   ok('multi subcap "Select up to 2" on the phone',
     (await page.locator(".qz-s3-subcap").textContent())?.trim() === "Select up to 2");
   ok('type tag follows ("Multi-select")',
-    (await page.locator(".qz-s3-typetag .qz-s3-tt-type").textContent())?.trim() === "Multi-select");
+    (await page.locator(".qz-s3-typetagwrap .qz-s3-tt-type").textContent())?.trim() === "Multi-select");
 
   // 8 ── answer edits ON THE PHONE persist: wording, + add, ✕ delete
   await page.locator(".qz-qf-otext").first().click();
@@ -401,7 +406,13 @@ try {
   ok("✉ terminus shows the capture surface (rail is-on)",
     (await page.locator(".qz-s3-capture").count()) === 1 &&
     (await page.locator(".qz-qf-navterm").first().evaluate((el) => el.classList.contains("is-on"))));
-  ok("type tag hidden on the capture screen", (await page.locator(".qz-s3-typetag").count()) === 0);
+  ok("type tag hidden on the capture screen", (await page.locator(".qz-s3-typetagbtn").count()) === 0);
+  // QRTZ-G3 — the relocated capture CONFIG (formerly the Logic step's
+  // CaptureModule) opens inline under the selected ✉ row.
+  ok("capture config panel opens under the ✉ row (relocated CaptureModule)",
+    (await page.locator(".qz-qf-cappanel .qz-s3-capmod").count()) === 1);
+  ok("capture config keeps its master toggle + SMS/terms toggles",
+    (await page.locator(".qz-qf-cappanel .qz-s3-capmod-toggle").count()) === 3);
   await page.locator(".qz-qf-navterm").nth(1).click();
   await page.waitForTimeout(300);
   ok("◎ terminus shows the reveal mock + Start over",
@@ -601,16 +612,17 @@ try {
     lvGeo.w <= 1078 && Math.abs(lvGeo.left - lvGeo.right) < 4,
     `w${lvGeo.w} L${lvGeo.left} R${lvGeo.right}`);
 
-  // 19 ── Logic-tab migration (docs/design/logic-tab/HANDOFF.md): the funnel
-  // Logic stage renders the SAME one-card view as the studio builder — Rules
-  // above Questions on one card — with the safety-net + quiz-ending configs
-  // keeping their own sections below it. (The pre-migration LogicScroll
-  // ledger assertions lived here; the ledger DOM is gone by design.)
+  // 19 ── QRTZ-G3: the funnel Logic stage is the artifact's TWO stacked
+  // cards (Rules, then Questions — shared.mjs screenLogic) and NOTHING else:
+  // no subhead entries, no explainer strip, no fallback/capture modules (the
+  // fallback config moved to the guided Results step; the capture config to
+  // the Questions step's ✉ rail row — asserted at #12 above).
   const ltab = page.locator('[data-testid="logic-tab-card"]');
-  ok("the ONE Logic card renders", (await ltab.count()) === 1);
-  ok("Rules + Questions headers on the one card",
-    (await ltab.locator("h2", { hasText: "Rules" }).count()) === 1 &&
-    (await ltab.locator("h2", { hasText: "Questions" }).count()) === 1);
+  ok("the Logic card stack renders", (await ltab.count()) === 1);
+  ok("two stacked cards: Rules, then Questions",
+    (await ltab.locator("section.qz-ltab").count()) === 2 &&
+    (await ltab.locator("section.qz-ltab").first().locator("h2", { hasText: "Rules" }).count()) === 1 &&
+    (await ltab.locator("section.qz-ltab").nth(1).locator("h2", { hasText: "Questions" }).count()) === 1);
   ok("one table row-group per question (3 label cells)",
     (await ltab.locator(".qz-ltab-qcell").count()) === 3);
   ok("exactly one Picks-the-result pill (decider guard carried over)",
@@ -620,11 +632,31 @@ try {
   ok("every question row routes somewhere (Then-go-to column live)",
     (await ltab.locator("tbody td:last-child").evaluateAll(
       (tds) => tds.every((td) => td.textContent.trim().length > 0))));
-  ok("safety-net section keeps its own module below the card",
-    (await page.locator(".qz-s3-logicview .qz-s3-fallback").count()) === 1);
-  ok("capture terminal keeps its own module below the card",
-    (await page.locator(".qz-s3-logicview .qz-s3-capmod").count()) === 1);
+  ok("nothing else on the Logic surface (subhead/explainer/fallback/capture gone)",
+    (await page.locator(
+      ".qz-s3-logicview .qz-s3-subhead, .qz-s3-logicview .qz-s3-explainer, .qz-s3-logicview .qz-s3-fallback, .qz-s3-logicview .qz-s3-capmod, .qz-s3-logicview .qz-ltab-note",
+    ).count()) === 0);
   await page.screenshot({ path: `${SHOTS}/6-logic-card.png`, fullPage: true });
+
+  // 19b ── QRTZ-G3: the relocated no-match fallback lives on the guided
+  // Results flow's "The matches" step now (mutation seam unchanged —
+  // doc.global_fallback). Continue → rec_page, walk to step 2, smoke it.
+  await page.locator(".qz-topbar-continue").click();
+  await page.waitForSelector(".qz-rg", { timeout: 15000 });
+  await page.waitForTimeout(400);
+  await page.locator(".qz-rg-btn2.is-pri").click(); // "Next: the matches"
+  await page.waitForTimeout(300);
+  ok("relocated fallback renders on the matches step",
+    (await page.locator(".qz-rg-panel .qz-s3-fallback .qz-s3-fb-head").count()) === 1);
+  await page.locator(".qz-rg-panel .qz-s3-fb-head").click();
+  await page.waitForTimeout(200);
+  ok("fallback chooser keeps its three modes (seam intact)",
+    (await page.locator(".qz-rg-panel .qz-s3-fb-opt.is-radio").count()) === 3);
+  await page.screenshot({ path: `${SHOTS}/7-results-fallback.png`, fullPage: true });
+  // back to the Logic stage before the #20 walk (goto-stage backwards-only)
+  await page.locator(".qz-topbar-back").click();
+  await page.waitForSelector(".qz-s3-logicview", { timeout: 15000 });
+  await page.waitForTimeout(300);
 
   // 20 ── the bar's ‹ back = the goto-stage intent (backwards-only) → the
   // Questions stage again, so the walk proves both directions of the seam.

@@ -1,8 +1,8 @@
 import { useMemo, useState } from "react";
 import type { z } from "zod";
-import type { Quiz } from "../../../../lib/quizSchema";
-import type { IndexedProduct } from "../../../../lib/recommendationEngine";
-import type { BuilderCollection } from "../../../builder/stepProps";
+import type { Quiz } from "../../../lib/quizSchema";
+import type { IndexedProduct } from "../../../lib/recommendationEngine";
+import type { BuilderCollection } from "../../builder/stepProps";
 
 type QuizDoc = z.infer<typeof Quiz>;
 type Mode = "best_sellers" | "collection" | "featured";
@@ -13,7 +13,13 @@ type Mode = "best_sellers" | "collection" | "featured";
    pill. Boundaries (spec): OOS handling lives in Settings; results
    PRESENTATION lives in step 04 — neither is configurable here. Writes
    doc.global_fallback (QZY-1 mode chooser; the engine's zero-match path
-   resolves it). */
+   resolves it).
+
+   QRTZ-G3 — relocated from the Logic step (questionsLogicV3/logic/) into the
+   guided Results flow's "The matches" step: what shows when nothing matches
+   is a results concern, and the artifact's Logic screen draws only the Rules
+   and Questions cards. The mutation seam (doc.global_fallback via onCommit)
+   is unchanged. */
 
 const MODE_LABEL: Record<Mode, string> = {
   best_sellers: "Best sellers",
