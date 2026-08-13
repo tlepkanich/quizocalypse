@@ -9,37 +9,37 @@ import {
   suggestContrastText,
 } from "../../../../lib/designTokens";
 import { googleFontsUrl } from "../../../runtime/runtimeStyles";
+import { DeviceFrame } from "../../../builder/preview/DeviceFrame";
+import { DEFAULT_TIER, type DeviceTier } from "../../../builder/preview/previewWidth";
 import { CAPTURE_ID, REVEAL_ID } from "../LeftRail";
 import { IconDesktop, IconExpand, IconMobile, IconX } from "../icons";
 import { PhoneScreen, type ScreenPosition } from "./PhoneScreen";
 import { TypeChipSelector } from "./TypeChipSelector";
 
-/* questions-simple mock + phone-preview SPEC (AUDIT-22) — the ✎ Questions
-   tab's 340px preview pane: the mock's centered "Live preview · your brand"
-   chip (blinking ok dot), the SPEC's pv-bar (Mobile/Desktop segmented
-   control · Expand), then the shared preview primitive — a TRUE-viewport
-   device (mobile 390×844, desktop 1180×740) laid out at logical size and
-   scaled to fit the pane (`--s = min(paneW/vw, viewportH-fit/vh, 1)`, never
-   upscaling past 1:1), minimal bezel (radius 44 + soft shadow), a scrollable
-   screen with a bottom scroll fade, and the desktop frame's faux browser
-   chrome (dots + blurred URL + top progress). Expand opens the same screen
-   in a dimmed overlay (portal to body — the builder-overlay-portal lesson),
-   scaled ≥1 for mobile so it is always visibly bigger; Esc/✕/click-outside
+/* questions-simple mock + questions-full-page — the ✎ Questions tab's live
+   preview pane: the centered "Live preview · your brand" chip, the pv-bar
+   (step name · answer-type control · Mobile/Desktop segmented control ·
+   icon-only Expand), then the SHARED preview primitive. QRTZ-G2: the device
+   is the canonical DeviceFrame (previewWidth.DEVICES — phone 390×745,
+   desktop 960×700; this file used to hardcode 390×844 / 1180×740 with its
+   own fit math that never height-capped the phone, so short viewports cut
+   it off). The fit contract is DeviceFrame's — scale = min(paneW/w, paneH/h,
+   1), whole frame always visible, never upscaled past 1:1 — and the HOST
+   clamps the room it offers: .qz-g2-stage's height tracks the viewport
+   between a 410px floor (745 × .55, the readable minimum — below it the
+   page scrolls instead of shrinking the phone further) and an 800px cap
+   (745 at 1:1 + breathing room). The Quartz frame chrome (borderless phone,
+   --qz-phone-r, fold marker; hairline desktop band) comes with DeviceFrame;
+   the old faux browser chrome + bottom fade are retired — the in-screen top
+   bar now shows on desktop too, the way the live runtime does. Expand is a
+   bigger pane, not a zoom: the same DeviceFrame measures a 92vw×90vh host
+   (portal to body — the builder-overlay-portal lesson); Esc/✕/click-outside
    close. The screen stays brand-themed by inlining resolveDesignTokens →
    tokensToCssVars. Back/Next drive the REAL walk Q1 → … → Qn → capture →
-   reveal; the shell owns `activeId`. Editing moved to the question list
-   (questions-simple): the phone is the live preview — the answer-budget
-   banner and the under-phone regen row left this file. QRTZ-S5 (mock
-   .qedit-bar): the pv-bar names the shown step ("Question 1") and carries
-   the answer-type control; the AUDIT-17 floating tag beside the phone is
-   retired on the mock's authority (nothing floats over the preview). */
-
-const DEVICE_DIMS = {
-  mobile: { vw: 390, vh: 844 },
-  desktop: { vw: 1180, vh: 740 },
-} as const;
-
-type DeviceMode = keyof typeof DEVICE_DIMS;
+   reveal; the shell owns `activeId`. Editing lives on the phone and in the
+   question list; QRTZ-S5 (mock .qedit-bar): the pv-bar names the shown step
+   ("Question 1") and carries the answer-type control (nothing floats over
+   the preview). */
 
 export function PhoneCanvas({
   doc,
@@ -108,108 +108,32 @@ export function PhoneCanvas({
       }
     : cssVars;
 
-  // — SPEC "fit the pane": scale off the pane width (the split's fixed 340px
-  //   column) capped by the viewport height — scale the pixels, never the
-  //   layout. —
-  const [device, setDevice] = useState<DeviceMode>("mobile");
+  const [tier, setTier] = useState<DeviceTier>(DEFAULT_TIER);
   const [expanded, setExpanded] = useState(false);
-  const stageRef = useRef<HTMLDivElement>(null);
-  const deviceRef = useRef<HTMLDivElement>(null);
   const screenRef = useRef<HTMLDivElement>(null);
-  const exDeviceRef = useRef<HTMLDivElement>(null);
-  const dims = DEVICE_DIMS[device];
-
-  useEffect(() => {
-    const stage = stageRef.current;
-    const dev = deviceRef.current;
-    if (!stage || !dev) return;
-    const fit = () => {
-      // AUDIT-23 — the width fit leaves the mock's gutters (the 340px pane
-      // holds a 312px device: --s .80), so 28px stays around the frame. The
-      // MOBILE device keeps the mock's fixed-scale behavior (the page
-      // scrolls, exactly like the mock at short viewports); only the wide
-      // desktop frame still caps by viewport height.
-      const maxH = Math.max(320, window.innerHeight - 210);
-      const hFit = device === "desktop" ? maxH / dims.vh : 1;
-      const s = Math.max(
-        0.2,
-        Math.min((stage.clientWidth - 28) / dims.vw, hFit, 1),
-      );
-      dev.style.setProperty("--s", s.toFixed(3));
-    };
-    fit();
-    const ro = new ResizeObserver(fit);
-    ro.observe(stage);
-    window.addEventListener("resize", fit);
-    return () => {
-      ro.disconnect();
-      window.removeEventListener("resize", fit);
-    };
-  }, [dims, device]);
 
   // Scroll resets when the previewed step changes, not on every keystroke.
   useEffect(() => {
     if (screenRef.current) screenRef.current.scrollTop = 0;
   }, [activeId]);
 
-  // — Expand overlay sizing (SPEC): mobile floored at 1:1, capped 1.4×vh-fit;
-  //   desktop fits 90% of the viewport. Esc closes. —
+  // Expand: Esc closes (✕ and click-outside live on the scrim below).
   useEffect(() => {
     if (!expanded) return;
-    const fitExpand = () => {
-      const dev = exDeviceRef.current;
-      if (!dev) return;
-      let s: number;
-      if (device === "desktop") {
-        s = Math.min((window.innerWidth * 0.9) / dims.vw, (window.innerHeight * 0.9) / dims.vh);
-      } else {
-        s = Math.max(1, Math.min(1.4, (window.innerHeight * 0.9) / dims.vh));
-      }
-      dev.style.setProperty("--s", s.toFixed(3));
-    };
-    fitExpand();
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") setExpanded(false);
     };
-    window.addEventListener("resize", fitExpand);
     window.addEventListener("keydown", onKey);
-    return () => {
-      window.removeEventListener("resize", fitExpand);
-      window.removeEventListener("keydown", onKey);
-    };
-  }, [expanded, device, dims]);
-
-  const deviceStyle = {
-    "--vw": `${dims.vw}px`,
-    "--vh": `${dims.vh}px`,
-  } as CSSProperties;
+    return () => window.removeEventListener("keydown", onKey);
+  }, [expanded]);
 
   const renderFrame = (withScreenRef: boolean): ReactNode => (
-    // The brand vars ride the FRAME so the frame background, the desktop
-    // chrome's progress fill, and the scroll fade all read the merchant
-    // brand — not the admin fallbacks (the screen re-inlines them plus the
-    // alpine art background).
+    // The brand vars ride the FRAME so the frame background reads the
+    // merchant brand — not the admin fallbacks (the screen re-inlines them
+    // plus the alpine art background). DeviceFrame owns geometry, radius and
+    // elevation; this wrapper is a full-bleed skin (the GuidedPreview
+    // .qz-rg-frame pattern).
     <div className="qz-s3-frame" style={cssVars}>
-      {device === "desktop" ? (
-        <div className="qz-s3-dhead">
-          <div className="qz-s3-dchrome">
-            <span className="qz-s3-ddots" aria-hidden>
-              <i />
-              <i />
-              <i />
-            </span>
-            <span className="qz-s3-durl" aria-hidden>
-              yourstore.com/pages/quiz
-            </span>
-          </div>
-          <span className="qz-s3-dprog" aria-hidden>
-            <span
-              className="qz-s3-dprogfill"
-              style={{ width: `${(progress * 100).toFixed(1)}%` }}
-            />
-          </span>
-        </div>
-      ) : null}
       <div
         className={`qz-s3-phone-screen${alpine ? " is-alpine-art" : ""}`}
         data-screen-kind={position.kind}
@@ -232,11 +156,10 @@ export function PhoneCanvas({
           onCommit={onCommit}
         />
       </div>
-      <span className="qz-s3-fade" aria-hidden />
     </div>
   );
 
-  const setDeviceMode = useCallback((mode: DeviceMode) => setDevice(mode), []);
+  const setDeviceTier = useCallback((next: DeviceTier) => setTier(next), []);
 
   return (
     <aside className="qz-s3-canvas qz-qs-pv">
@@ -276,21 +199,21 @@ export function PhoneCanvas({
         <span className="qz-s3-segbtns" role="group" aria-label="Preview device">
           <button
             type="button"
-            className={device === "mobile" ? "is-on" : ""}
-            aria-pressed={device === "mobile"}
+            className={tier === "phone" ? "is-on" : ""}
+            aria-pressed={tier === "phone"}
             title="Mobile"
             aria-label="Mobile preview"
-            onClick={() => setDeviceMode("mobile")}
+            onClick={() => setDeviceTier("phone")}
           >
             <IconMobile />
           </button>
           <button
             type="button"
-            className={device === "desktop" ? "is-on" : ""}
-            aria-pressed={device === "desktop"}
+            className={tier === "desktop" ? "is-on" : ""}
+            aria-pressed={tier === "desktop"}
             title="Desktop"
             aria-label="Desktop preview"
-            onClick={() => setDeviceMode("desktop")}
+            onClick={() => setDeviceTier("desktop")}
           >
             <IconDesktop />
           </button>
@@ -309,14 +232,10 @@ export function PhoneCanvas({
         </button>
       </div>
 
-      <div className="qz-s3-stage" ref={stageRef}>
-        <div
-          className={`qz-s3-device${device === "desktop" ? " is-desktop" : ""}`}
-          ref={deviceRef}
-          style={deviceStyle}
-        >
-          <div className="qz-s3-holder">{renderFrame(true)}</div>
-        </div>
+      <div className="qz-g2-stage">
+        <DeviceFrame tier={tier} resetKey={activeId}>
+          {renderFrame(true)}
+        </DeviceFrame>
       </div>
 
       {expanded && typeof document !== "undefined"
@@ -338,12 +257,11 @@ export function PhoneCanvas({
               >
                 <IconX />
               </button>
-              <div
-                className={`qz-s3-device is-expand${device === "desktop" ? " is-desktop" : ""}`}
-                ref={exDeviceRef}
-                style={deviceStyle}
-              >
-                <div className="qz-s3-holder">{renderFrame(false)}</div>
+              {/* Expand is a bigger pane, not a zoom: the same DeviceFrame
+                  measures this window-sized host and the same fit rule
+                  produces the bigger result (never past 1:1). */}
+              <div style={{ width: "92vw", height: "90vh" }}>
+                <DeviceFrame tier={tier}>{renderFrame(false)}</DeviceFrame>
               </div>
             </div>,
             document.body,

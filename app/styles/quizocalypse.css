@@ -4464,64 +4464,13 @@ body[data-qz] .qz-stepnav-pill:focus-visible { outline: 2px solid var(--qz-accen
 /* questions-full-page §5 — icon-only Expand (label dropped, title/aria kept) */
 .qz-s3-expandbtn.is-icon { padding: 6px; width: 30px; height: 30px; justify-content: center; gap: 0; }
 .qz-s3-expandbtn.is-icon svg { width: 14px; height: 14px; }
-.qz-s3-stage { flex: 1 1 auto; min-height: 320px; width: 100%; position: relative; align-self: stretch; }
-.qz-s3-device {
-  --vw: 390px; --vh: 844px; --s: 0.62;
-  position: absolute; top: 50%; left: 50%;
-  transform: translate(-50%, -50%);
-}
-.qz-s3-device.is-expand { position: relative; top: auto; left: auto; transform: none; }
-.qz-s3-holder {
-  width: calc(var(--vw) * var(--s));
-  height: calc(var(--vh) * var(--s));
-  position: relative;
-}
-.qz-s3-frame {
-  width: var(--vw); height: var(--vh);
-  position: absolute; top: 0; left: 0;
-  transform-origin: top left; transform: scale(var(--s));
-  overflow: hidden;
-  display: flex; flex-direction: column;
-  background: var(--qz-color-bg, var(--qz-paper));
-  border-radius: 44px;
-  box-shadow: 0 26px 62px -22px color-mix(in srgb, var(--qz-ink) 30%, transparent), 0 0 0 1px var(--qz-rule);
-}
-.qz-s3-fade {
-  position: absolute; left: 0; right: 0; bottom: 0; height: 52px;
-  pointer-events: none;
-  background: linear-gradient(to bottom, transparent, var(--qz-color-bg, var(--qz-paper)));
-  border-radius: 0 0 44px 44px;
-}
-/* — desktop frame: faux browser chrome (dots · blurred URL) + top progress;
-   the in-screen top bar hides and the content centers in a 600px column — */
-.qz-s3-device.is-desktop .qz-s3-frame { border-radius: 16px; }
-.qz-s3-device.is-desktop .qz-s3-fade { border-radius: 0 0 16px 16px; }
-.qz-s3-dhead { display: flex; flex: none; flex-direction: column; }
-.qz-s3-dchrome {
-  display: flex; align-items: center; gap: 11px;
-  padding: 10px 15px;
-  background: var(--qz-cream-2);
-  border-bottom: 1px solid var(--qz-rule);
-}
-.qz-s3-ddots { display: flex; gap: 6px; flex: none; }
-.qz-s3-ddots i { width: 9px; height: 9px; border-radius: var(--qz-radius-pill); background: var(--qz-ink-25); }
-.qz-s3-durl {
-  flex: 1; min-width: 0;
-  background: var(--qz-paper); border: 1px solid var(--qz-rule);
-  border-radius: 8px; padding: 6px 13px;
-  font-family: var(--qz-font-body); font-variant-numeric: tabular-nums;
-  font-size: 11.5px; color: var(--qz-ink-4);
-  white-space: nowrap; overflow: hidden;
-  filter: blur(1.7px); user-select: none;
-}
-.qz-s3-dprog { height: 6px; width: 100%; background: color-mix(in srgb, var(--qz-ink) 8%, transparent); }
-.qz-s3-dprogfill {
-  display: block; height: 100%;
-  background: var(--qz-color-primary);
-  transition: width var(--qz-dur) var(--qz-ease);
-}
-.qz-s3-device.is-desktop .qz-s3-screen-top { display: none; }
-.qz-s3-device.is-desktop .qz-s3-scr { max-width: 600px; margin: 0 auto; width: 100%; padding-top: 34px; }
+/* QRTZ-G2 — the old true-viewport wrappers (.qz-s3-stage/.qz-s3-device/
+   .qz-s3-holder + the 390×844/1180×740 scale math, the 44px bezel, the
+   bottom fade and the faux desktop browser chrome) are RETIRED: the funnel
+   preview renders through the shared DeviceFrame (previewWidth.DEVICES —
+   phone 390×745 / desktop 960×700, min(paneW/w, paneH/h, 1) fit, Quartz
+   frame chrome). The .qz-s3-frame skin + the .qz-g2-stage host clamp live
+   in the QRTZ-G2 section at the end of this sheet. */
 /* — Expand overlay (portal to body; z above every builder layer) — */
 .qz-s3-phscrim {
   position: fixed; inset: 0; z-index: 1200;
@@ -7983,15 +7932,9 @@ tr.qz-ltab-qstart td { border-top: 2px solid var(--qz-rule); }
 }
 @keyframes qz-qs-blink { 0%, 100% { opacity: 1; } 50% { opacity: .35; } }
 @media (prefers-reduced-motion: reduce) { .qz-qs-livedot { animation: none; } }
-/* The device sits IN-FLOW here (the pane is width-constrained; the fit
-   effect caps by viewport height) — not the old absolute-centered stage. */
-.qz-qs-pv .qz-s3-stage {
-  flex: none; align-self: auto; min-height: 0; width: 100%;
-  position: static;
-  display: grid; justify-items: center; align-items: start;
-}
-/* relative (not static): the floating type tag anchors off the device. */
-.qz-qs-pv .qz-s3-device { position: relative; top: auto; left: auto; transform: none; }
+/* QRTZ-G2 — the .qz-qs-pv .qz-s3-stage/.qz-s3-device overrides that lived
+   here are retired with the wrappers themselves; the preview stage is now
+   .qz-g2-stage through the shared DeviceFrame (see the QRTZ-G2 section). */
 
 /* — phone screen, questions-simple geometry (mock .scr/.q-scr/.opt/.fnext) — */
 .qz-s3-qbody .qz-s3-qtitle {
@@ -10176,3 +10119,40 @@ button.qz-pb-row:hover { background: var(--qz-cream-2); }
   letter-spacing: .05em; text-transform: uppercase; line-height: 1.4;
   pointer-events: none;
 }
+
+/* ═══ QRTZ-G2 — funnel questions preview through DeviceFrame ═══
+   Owner feedback: "the phone should never be cut off and must keep a
+   min/max size". The device is the shared DeviceFrame (previewWidth.DEVICES
+   — phone 390×745, desktop 960×700; fit = min(paneW/w, paneH/h, 1), whole
+   frame always visible, never past 1:1). The HOST clamps the room:
+
+   .qz-g2-stage height = clamp(410px, 100vh − 232px, 800px)
+   · 410px  = 745 × .55 — the readable floor. At .55 the phone renders
+     215×410 and its 15px body type ≈ 8px on screen — the smallest size the
+     preview still reads at. Under shorter viewports the PAGE scrolls (the
+     funnel is a normal document) instead of shrinking the phone further.
+   · 100vh − 232px — the funnel chrome above the stage (top bar + sub-head +
+     live chip + pv-bar + paddings), so the frame fits on screen with no
+     page scroll on ordinary windows.
+   · 800px  = 745 at 1:1 + breathing room — past actual size extra height
+     is dead space (fitScale never upscales anyway).
+   The width axis never binds the phone floor (the preview column is ≥340px
+   → 340/390 = .87). The desktop band keeps the pure fit on width, like
+   every other DeviceFrame surface — a horizontal-scroll floor inside the
+   fixed grid column would reintroduce cropping. */
+.qz-g2-stage { width: 100%; padding: 0 14px; height: clamp(410px, calc(100vh - 232px), 800px); }
+
+/* The frame content is a full-bleed skin inside DeviceFrame (the
+   GuidedPreview .qz-rg-frame pattern): DeviceFrame owns geometry, radius,
+   elevation and clipping; this carries the brand background + the column. */
+.qz-s3-frame {
+  width: 100%; height: 100%;
+  display: flex; flex-direction: column;
+  background: var(--qz-color-bg, var(--qz-paper));
+}
+
+/* The desktop band centers the walk in a 600px column (the questions-simple
+   value, kept from the retired .qz-s3-device.is-desktop rule — the faux
+   browser chrome is gone and the in-screen top bar shows like the live
+   runtime). Scoped to the preview wrapper only — never the runtime. */
+.qz-devframe[data-qz-tier="desktop"] .qz-s3-scr { max-width: 600px; margin: 0 auto; width: 100%; }

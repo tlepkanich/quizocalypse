@@ -18,10 +18,12 @@
 // (.qz-qf-resizer, --navw 232..max) | the EDITABLE phone ("Click any text on
 // the phone to edit it": contenteditable title .qz-qf-qtitleedit · answer
 // chips .qz-s3-achip.is-edit w/ ⠿ .qz-qf-odrag / text .qz-qf-otext / ✕
-// .qz-qf-odel (2-floor) · dashed .qz-qf-addopt) with the floating
-// .qz-s3-typetag BESIDE the phone (type popover + decider guard; hidden on
-// capture/reveal) and the pv-bar (Mobile/Desktop + icon-only Expand) over the
-// TRUE 390×844 frame. ▦ tab: the content OverviewLedger — the SAME connected
+// .qz-qf-odel (2-floor) · dashed .qz-qf-addopt) with the answer-type control
+// IN the pv-bar (.qz-s3-pvtype — QRTZ-S5 retired the floating tag; hidden on
+// capture/reveal) plus Mobile/Desktop + icon-only Expand, over the shared
+// DeviceFrame (QRTZ-G2 — canonical 390×745 phone / 960×700 desktop band,
+// fit = min(paneW/w, paneH/h, 1), host floor .55 via the .qz-g2-stage
+// clamp). ▦ tab: the content OverviewLedger — the SAME connected
 // .qz-s3-ledger container as the Logic map, but bulk CONTENT editing
 // (.qz-qf-v2q question cells, FLUSH .qz-qf-alist answers w/ hover ✕, per-type
 // settings column, N+1 ＋ inserters, renumber numchips, decider-guarded
@@ -212,8 +214,8 @@ try {
   ok('"✎ Questions" pressed by default',
     (await toggle.locator("button").first().getAttribute("aria-pressed")) === "true" &&
     (await toggle.locator("button").nth(1).getAttribute("aria-pressed")) === "false");
-  ok('✎ hint "Click any text on the phone to edit it"',
-    (await page.locator(".qz-qf-hint").textContent())?.trim() === "Click any text on the phone to edit it");
+  ok('✎ hint "Click any text in the preview to edit it"',
+    (await page.locator(".qz-qf-hint").textContent())?.trim() === "Click any text in the preview to edit it");
   ok("Question library sub-head entry", await page.locator(".qz-qs-tlib").isVisible());
   ok("+ Add sub-head button", await page.locator(".qz-qs-tbtn", { hasText: "Add" }).isVisible());
 
@@ -244,16 +246,15 @@ try {
     (await page.locator(".qz-qf-nct").first().textContent())?.trim() === "Single select · decides");
   ok('rating type line "Scale"',
     (await page.locator(".qz-qf-nct").nth(2).textContent())?.trim() === "Scale");
-  ok("decider number renders ACCENT",
+  ok("decider number renders ACCENT (Quartz violet #5B45D6)",
     await page.locator(".qz-qf-navrow.is-dec .qz-qf-ncn").evaluate(
-      (el) => getComputedStyle(el).color === "rgb(109, 90, 230)"));
+      (el) => getComputedStyle(el).color === "rgb(91, 69, 214)"));
   ok("decider row's hover-trash is DISABLED",
     await page.locator(".qz-qf-navrow").first().locator(".qz-qf-tool:not(.is-drag)").isDisabled());
   ok("qualifier row's hover-trash is enabled",
     !(await page.locator(".qz-qf-navrow").nth(1).locator(".qz-qf-tool:not(.is-drag)").isDisabled()));
-  ok("first row's ↑ mover disabled, ↓ enabled",
-    (await page.locator(".qz-qf-navrow").first().locator(".qz-qf-nmvb").first().isDisabled()) &&
-    !(await page.locator(".qz-qf-navrow").first().locator(".qz-qf-nmvb").nth(1).isDisabled()));
+  ok("↑↓ movers retired (⠿ drag + click-to-renumber cover reordering)",
+    (await page.locator(".qz-qf-nmvb").count()) === 0);
   // 051eceb added a second navadd (+ Add content) — target the question one.
   ok("+ Add question rail foot",
     await page.locator(".qz-qf-navadd:not(.is-content)").isVisible());
@@ -306,9 +307,12 @@ try {
     await page.locator(".qz-qf-odel").first().isDisabled());
   ok("dashed + Add answer under the chips", await page.locator(".qz-qf-addopt").isVisible());
 
-  // 5 ── the floating type tag beside the phone: popover + decider guard
-  ok("floating type tag beside the phone", (await page.locator(".qz-s3-typetag").count()) === 1);
-  await page.locator(".qz-s3-typetag .qz-s3-typetagbtn").click();
+  // 5 ── the answer-type control in the pv-bar (QRTZ-S5 — the floating tag
+  // beside the phone is retired on the mock's authority): popover + guard
+  ok("type control lives in the pv-bar (floating tag retired)",
+    (await page.locator(".qz-s3-pvtype .qz-s3-typetagwrap").count()) === 1 &&
+    (await page.locator(".qz-s3-typetag").count()) === 0);
+  await page.locator(".qz-s3-pvtype .qz-s3-typetagbtn").click();
   ok("tag click opens the type popover (4 radios)", (await page.locator(".qz-s3-tp-type").count()) === 4);
   ok("current type radio marked", await page.locator(".qz-s3-tp-type.is-on", { hasText: "Single select" }).isVisible());
   await page.screenshot({ path: `${SHOTS}/2-typepop.png` });
@@ -338,8 +342,8 @@ try {
     (await page.locator(".qz-s3-achip.is-edit").count()) === 4);
   ok('multi subcap "Select up to 2" on the phone',
     (await page.locator(".qz-s3-subcap").textContent())?.trim() === "Select up to 2");
-  ok('type tag follows ("Multi-select")',
-    (await page.locator(".qz-s3-typetag .qz-s3-tt-type").textContent())?.trim() === "Multi-select");
+  ok('type control follows ("Multi-select")',
+    (await page.locator(".qz-s3-pvtype .qz-s3-tt-type").textContent())?.trim() === "Multi-select");
 
   // 8 ── answer edits ON THE PHONE persist: wording, + add, ✕ delete
   await page.locator(".qz-qf-otext").first().click();
@@ -401,7 +405,7 @@ try {
   ok("✉ terminus shows the capture surface (rail is-on)",
     (await page.locator(".qz-s3-capture").count()) === 1 &&
     (await page.locator(".qz-qf-navterm").first().evaluate((el) => el.classList.contains("is-on"))));
-  ok("type tag hidden on the capture screen", (await page.locator(".qz-s3-typetag").count()) === 0);
+  ok("type control hidden on the capture screen", (await page.locator(".qz-s3-pvtype").count()) === 0);
   await page.locator(".qz-qf-navterm").nth(1).click();
   await page.waitForTimeout(300);
   ok("◎ terminus shows the reveal mock + Start over",
@@ -418,18 +422,32 @@ try {
   ok("pv-bar: icon-only Expand control",
     await page.locator(".qz-s3-expandbtn.is-icon").isVisible() &&
     (await page.locator(".qz-s3-expandbtn").getAttribute("aria-label")) === "Expand preview");
-  const frame = page.locator(".qz-s3-device:not(.is-expand) .qz-s3-frame");
+  // QRTZ-G2 — the device is the shared DeviceFrame (previewWidth.DEVICES:
+  // phone 390×745), Quartz chrome (borderless, --qz-phone-r, fold marker),
+  // fit = min(paneW/w, paneH/h, 1). The old 844 frame / 44px bezel / fade /
+  // faux desktop chrome are retired.
+  const frame = page.locator(".qz-g2-stage .qz-devframe");
   const geo = await frame.evaluate((el) => {
     const cs = getComputedStyle(el);
-    return { w: cs.width, h: cs.height, transform: cs.transform, radius: cs.borderRadius };
+    const r = el.getBoundingClientRect();
+    const pane = el.closest(".qz-vp-pane").getBoundingClientRect();
+    return {
+      w: cs.width, h: cs.height, transform: cs.transform, radius: cs.borderRadius,
+      inPane: r.top >= pane.top - 1 && r.bottom <= pane.bottom + 1 &&
+        r.left >= pane.left - 1 && r.right <= pane.right + 1,
+      aspect: r.width / r.height,
+    };
   });
-  ok("frame is a TRUE 390px viewport", geo.w === "390px", geo.w);
-  ok("frame is 844 logical px tall", geo.h === "844px", geo.h);
+  ok("frame is the canonical 390px phone viewport", geo.w === "390px", geo.w);
+  ok("frame is 745 logical px tall (Quartz phone, was 844)", geo.h === "745px", geo.h);
   ok("frame scales via transform (not layout)", geo.transform.startsWith("matrix("), geo.transform);
   const scale = Number(geo.transform.match(/matrix\(([\d.]+)/)?.[1] ?? 0);
-  ok("fit-the-pane scale ≤ 1 (never upscales)", scale > 0.2 && scale <= 1, `s=${scale}`);
-  ok("minimal bezel (44px radius)", geo.radius.includes("44px"), geo.radius);
-  ok("scroll fade present", (await page.locator(".qz-s3-device:not(.is-expand) .qz-s3-fade").count()) === 1);
+  ok("fit clamps: readable floor ≤ s ≤ 1 (never upscales)", scale >= 0.549 && scale <= 1, `s=${scale}`);
+  ok("frame fully inside its pane (never cut off)", geo.inPane);
+  ok("aspect stays 390:745 exact", Math.abs(geo.aspect - 390 / 745) < 0.005, `${geo.aspect}`);
+  ok("Quartz borderless phone (20px device radius)", geo.radius.includes("20px"), geo.radius);
+  ok("fold marker on the phone tier", (await page.locator(".qz-g2-stage .qz-devfold").count()) === 1);
+  ok("old fade retired", (await page.locator(".qz-s3-fade").count()) === 0);
 
   // rating preview stays truthful (select the rating row)
   await page.locator(".qz-qf-navrow").nth(2).locator(".qz-qf-cell").click();
@@ -439,28 +457,33 @@ try {
     ((await page.locator(".qz-s3-scalelab").textContent()) ?? "").includes("Beginner"));
   ok("Back pill visible mid-walk", (await page.locator(".qz-s3-backpill").count()) === 1);
 
-  // 14 ── desktop toggle: 1180 frame, browser chrome, hidden top bar, 600px col
+  // 14 ── desktop toggle: the canonical 960×700 inline band (QRTZ-G2 — no
+  // faux browser chrome; the in-screen top bar shows like the live runtime)
   await page.locator(".qz-s3-segbtns button").nth(1).click();
   await page.waitForTimeout(400);
-  const dgeo = await page.locator(".qz-s3-device:not(.is-expand) .qz-s3-frame").evaluate((el) => {
+  const dgeo = await page.locator(".qz-g2-stage .qz-devframe").evaluate((el) => {
     const cs = getComputedStyle(el);
-    return { w: cs.width };
+    return { w: cs.width, h: cs.height };
   });
-  ok("desktop frame is 1180 logical px", dgeo.w === "1180px", dgeo.w);
-  ok("desktop browser chrome (dots + blurred URL)", await page.locator(".qz-s3-dchrome").isVisible());
-  ok("in-screen top bar hidden on desktop",
-    await page.locator(".qz-s3-screen-top").first().evaluate((el) => getComputedStyle(el).display === "none"));
+  ok("desktop band is the canonical 960 logical px (was 1180)", dgeo.w === "960px", dgeo.w);
+  ok("desktop band is 700 logical px tall", dgeo.h === "700px", dgeo.h);
+  ok("faux browser chrome retired", (await page.locator(".qz-s3-dchrome").count()) === 0);
+  ok("in-screen top bar SHOWS on desktop (like the live runtime)",
+    await page.locator(".qz-s3-screen-top").first().evaluate((el) => getComputedStyle(el).display !== "none"));
   ok("desktop content centers in a 600px column",
     await page.locator(".qz-s3-scr").first().evaluate((el) => getComputedStyle(el).maxWidth === "600px"));
 
-  // 15 ── Expand overlay (back on mobile): scale ≥ 1, Esc closes
+  // 15 ── Expand overlay (back on mobile): a bigger PANE, same fit rule —
+  // at this 950px-tall viewport the 745 phone reaches exactly 1:1 (never past)
   await page.locator(".qz-s3-segbtns button").nth(0).click();
   await page.locator(".qz-s3-expandbtn").click();
   await page.waitForTimeout(400);
   ok("Expand overlay opens", await page.locator(".qz-s3-phscrim").isVisible());
-  const exScale = await page.locator(".qz-s3-device.is-expand").evaluate((el) =>
-    Number(getComputedStyle(el).getPropertyValue("--s")));
-  ok("Expand floors mobile at TRUE 1:1", exScale >= 1, `s=${exScale}`);
+  const exScale = await page.locator(".qz-s3-phscrim .qz-devframe").evaluate((el) => {
+    const m = getComputedStyle(el).transform.match(/matrix\(([\d.]+)/);
+    return Number(m?.[1] ?? 0);
+  });
+  ok("Expand shows the phone at TRUE 1:1 (fit rule, never past)", exScale === 1, `s=${exScale}`);
   await page.screenshot({ path: `${SHOTS}/3-expand.png` });
   await page.keyboard.press("Escape");
   await page.waitForTimeout(200);
