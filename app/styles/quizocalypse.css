@@ -788,6 +788,10 @@ body[data-qz] .qz-btn:focus-visible { outline: none; box-shadow: var(--qz-shadow
    chrome above stays full-bleed). Do NOT fold into .is-wide — the builder /
    workspace surfaces need full bleed. */
 .qz-page.is-funnel { max-width: 1000px; margin: 0 auto; padding: 28px 24px 72px; width: 100%; }
+/* QRTZ-G (combine): the Results step's desktop-preview flip wants the mock's
+   340/700 columns at max 1072 (base.mjs 789–792) — the 1000px funnel cap was
+   clamping the preview to 580. Scoped to that state only. */
+.qz-page.is-funnel:has(.qz-rg-pvwrap[data-device="desktop"]) { max-width: 1104px; }
 .qz-page-header { margin-bottom: 36px; }
 
 /* — Funnel two-panel editor split (config left · live preview right) with a
