@@ -7,15 +7,25 @@
 // the device/placement toggles, and restores draftJson BYTE-FOR-BYTE in
 // `finally`. Screenshots land in /tmp/fix2-shots/probe.
 //
-// Asserts (the build-tab.html page geometry + the frame-fill fix):
+// Ported 2026-08-14 to drag/2026-08 (ResizableViewport, owner 2026-08-13):
+// the old fill-chain classes (.qz-devfill, .qz-canvas-card) and the 844/760
+// frame heights are GONE, and so is the interim fixed 390×745/960×700
+// DeviceFrame on this surface. The builder canvas is a resizable 1:1 browser
+// viewport (.qz-rsvp-frame): Phone/Desktop are WIDTH PRESETS (390 / 1280),
+// the zoom cluster is retired for a width readout, and the definite height
+// chain (screen → root → page) replaced the old fill divs.
+//
+// Asserts (the build-tab.html page geometry + the resizable viewport):
 //  1. Chrome columns at spec: rail 60 · library 244 · inspector 320.
-//  2. Canvas padding 24px 16px 16px (spec .stage), centered, top-anchored.
-//  3. The stagebar exists (step name · Show-as on desktop · Expand · zoom) and
-//     those controls are OFF the top bar.
-//  4. Mobile frame fill: the runtime root stretches to the full 844px logical
-//     screen and paints a non-transparent background (no dead-white region).
-//  5. Desktop full-page fill: the fill chain spans the full 760px frame.
-//  6. Pop-up: the modal's quiz fills the modal envelope.
+//  2. Canvas padding 24px 16px 16px (spec .stage), centered, stretch-anchored.
+//  3. The stagebar exists (step name · Show-as on desktop · Expand · width
+//     readout) and those controls are OFF the top bar.
+//  4. Phone preset: a 390px browser window at 1:1; the runtime root fills
+//     the (≤745-capped) screen.
+//  5. Desktop preset: 1280px at 1:1 with the browser-chrome bar; the root
+//     fills the screen under it.
+//  6. Pop-up: the launcher modal over the dimmed mock storefront; the quiz
+//     fills the .qz-dpop-modal envelope.
 //  7. Filmstrip RETIRED (QRTZ-H4): the Flow tab renders the screen rows.
 //  8. Panel ed-tabs clear the collapse chevron. 9. Zero page errors.
 //
@@ -98,41 +108,56 @@ try {
     (await page.locator(".qz-stagebar-name").textContent()) ?? "",
   );
   ok("Expand lives on the stagebar", (await bar.locator(".qz-s3-expandbtn").count()) === 1);
-  ok("zoom lives on the stagebar", (await bar.locator('[aria-label="Zoom in"]').count()) === 1);
+  // drag/2026-08: the zoom cluster is RETIRED (the frame is always 1:1) —
+  // the stagebar carries the width readout instead (updated 2026-08-14).
+  ok("width readout lives on the stagebar", (await bar.locator(".qz-bt-zlabel").count()) === 1);
   ok(
     "top bar carries neither Expand nor Show-as",
     (await page.locator(".qz-topbar .qz-s3-expandbtn").count()) === 0 &&
       (await page.locator('.qz-topbar [aria-label="Show as"]').count()) === 0,
   );
 
-  // ── 4: mobile frame fill ──────────────────────────────────────────────────
-  await page.locator('button[aria-label="Phone"]').click();
+  // ── 4: the Phone preset (drag/2026-08) ────────────────────────────────────
+  // .qz-devfill is GONE (rewritten 2026-08-14) and the interim fixed 390×745
+  // frame retired: the Phone button is now a 390px WIDTH PRESET on the 1:1
+  // .qz-rsvp-frame (height caps at the 745 phone viewport). The runtime root
+  // is the direct child of .qz-devscreen; the definite height chain fills it.
+  // The old "paints its own background" check stays retired — the QB-10
+  // canvas rule strips the page backdrop on purpose.
+  await page.locator('button[aria-label^="Phone"]').first().click();
   await page.waitForSelector(".qz-device-fit-mobile", { timeout: 5000 });
   await page.waitForTimeout(500);
   const mobileFill = await page.evaluate(() => {
-    const screen = document.querySelector(".qz-builder-canvas .qz-devscreen");
-    const fill = screen?.querySelector(".qz-devfill");
-    const root = fill?.querySelector(":scope > div");
-    if (!screen || !fill || !root) return null;
-    const bg = getComputedStyle(root).backgroundColor;
+    const frame = document.querySelector(".qz-builder-canvas .qz-rsvp-frame");
+    const screen = frame?.querySelector(".qz-devscreen");
+    const root = screen?.querySelector(":scope > div");
+    if (!frame || !screen || !root) return null;
     return {
+      frameW: frame.offsetWidth,
+      painted: frame.getBoundingClientRect().width,
       screenH: screen.clientHeight,
-      fillH: fill.getBoundingClientRect().height / (new DOMMatrix(getComputedStyle(document.querySelector(".qz-devframe")).transform).a || 1),
-      rootH: root.getBoundingClientRect().height / (new DOMMatrix(getComputedStyle(document.querySelector(".qz-devframe")).transform).a || 1),
-      rootBgOpaque: bg !== "rgba(0, 0, 0, 0)" && bg !== "transparent",
+      rootH: root.offsetHeight,
     };
   });
-  ok("mobile: fill chain present", !!mobileFill);
+  ok("phone: viewport chain present (frame → screen → root)", !!mobileFill);
   ok(
-    "mobile: quiz stretches to the full 844 screen",
-    !!mobileFill && mobileFill.rootH >= mobileFill.screenH - 2,
-    mobileFill ? `root=${mobileFill.rootH.toFixed(1)} screen=${mobileFill.screenH}` : "",
+    "phone preset: a 390px browser window at 1:1",
+    !!mobileFill && mobileFill.frameW === 390 && Math.abs(mobileFill.painted - 390) < 0.5,
+    mobileFill ? `w=${mobileFill.frameW} painted=${mobileFill.painted}` : "",
   );
-  ok("mobile: quiz paints its own background (no dead white)", !!mobileFill?.rootBgOpaque);
+  ok(
+    "phone: quiz fills the (≤745-capped) screen",
+    !!mobileFill && mobileFill.rootH >= mobileFill.screenH - 2,
+    mobileFill ? `root=${mobileFill.rootH} screen=${mobileFill.screenH}` : "",
+  );
   await page.screenshot({ path: `${SHOTS}/mobile-fill.png` });
 
-  // ── 5: desktop full-page fill ─────────────────────────────────────────────
-  await page.locator('button[aria-label="Desktop"]').click();
+  // ── 5: the Desktop preset (drag/2026-08) ──────────────────────────────────
+  // .qz-canvas-card is GONE and the interim fixed 960×700 frame retired
+  // (rewritten 2026-08-14): Desktop is a 1280px WIDTH PRESET at 1:1 — wider
+  // than the pane, which scrolls instead of scaling — with the browser-chrome
+  // bar on top; the root fills the screen under it.
+  await page.locator('button[aria-label^="Desktop"]').first().click();
   await page.waitForSelector(".qz-device-fit-desktop", { timeout: 5000 });
   await page.waitForTimeout(700);
   ok(
@@ -140,30 +165,46 @@ try {
     (await bar.locator('[aria-label="Show as"]').count()) === 1,
   );
   const deskFill = await page.evaluate(() => {
-    const card = document.querySelector(".qz-device-fit-desktop .qz-canvas-card");
-    const fill = card?.querySelector(":scope > .qz-devfill");
-    const root = fill?.querySelector(":scope > div");
-    if (!card || !fill || !root) return null;
-    return { cardH: card.clientHeight, rootH: root.getBoundingClientRect().height / (new DOMMatrix(getComputedStyle(card).transform).a || 1) };
+    const frame = document.querySelector(".qz-builder-canvas .qz-rsvp-frame");
+    const screen = frame?.querySelector(".qz-devscreen");
+    const root = screen?.querySelector(":scope > div");
+    if (!frame || !screen || !root) return null;
+    return {
+      frameW: frame.offsetWidth,
+      painted: frame.getBoundingClientRect().width,
+      chrome: !!frame.querySelector(".qz-rsvp-chrome"),
+      screenH: screen.clientHeight,
+      rootH: root.offsetHeight,
+    };
   });
-  ok("desktop full page: fill chain present", !!deskFill);
+  ok("desktop: viewport chain present (frame → screen → root)", !!deskFill);
   ok(
-    "desktop full page: quiz spans the full 760 frame",
-    !!deskFill && deskFill.rootH >= deskFill.cardH - 2,
-    deskFill ? `root=${deskFill.rootH.toFixed(1)} card=${deskFill.cardH}` : "",
+    "desktop preset: 1280px at 1:1 with the browser-chrome bar",
+    !!deskFill && deskFill.frameW === 1280 && Math.abs(deskFill.painted - 1280) < 0.5 && deskFill.chrome,
+    deskFill ? `w=${deskFill.frameW} painted=${deskFill.painted} chrome=${deskFill.chrome}` : "",
+  );
+  ok(
+    "desktop full page: quiz fills the screen under the chrome bar",
+    !!deskFill && deskFill.rootH >= deskFill.screenH - 2,
+    deskFill ? `root=${deskFill.rootH} screen=${deskFill.screenH}` : "",
   );
   await page.screenshot({ path: `${SHOTS}/desktop-fill.png` });
 
   // ── 6: pop-up modal fill (writes doc.placement; restored in finally) ──────
   await bar.locator('[aria-label="Show as"] button', { hasText: "Pop-up" }).click();
   await page.waitForTimeout(1600); // let the autosave PUT settle before restore
+  // Pop-up placement (rewritten 2026-08-14, drag/2026-08): the screen renders
+  // the launcher modal OVER the dimmed mock storefront — .qz-mockstore behind,
+  // .qz-dpop-backdrop > .qz-dpop-modal > quiz root (ResizableViewport.tsx).
   const popFill = await page.evaluate(() => {
-    const modal = document.querySelector(".qz-device-fit-desktop .qz-canvas-card .qz-devfill");
+    const screen = document.querySelector(".qz-builder-canvas .qz-rsvp-frame .qz-devscreen");
+    const store = screen?.querySelector(".qz-mockstore");
+    const modal = screen?.querySelector(".qz-dpop-modal");
     const root = modal?.querySelector(":scope > div");
-    if (!modal || !root) return null;
+    if (!store || !modal || !root) return null;
     return { modalH: modal.clientHeight, rootH: root.scrollHeight };
   });
-  ok("pop-up: modal fill chain present", !!popFill);
+  ok("pop-up: launcher modal over the dimmed mock storefront", !!popFill);
   ok(
     "pop-up: quiz fills the modal envelope",
     !!popFill && popFill.rootH >= popFill.modalH - 2,
