@@ -1776,6 +1776,71 @@ body[data-qz] ::selection { background: var(--qz-ink); color: var(--qz-cream); }
 .qz-rsvp-handle:hover > span,
 .qz-rsvp-handle:focus-visible > span { opacity: 1; background: var(--qz-accent); }
 .qz-rsvp-handle:focus-visible { outline: 2px solid var(--qz-accent); outline-offset: -2px; }
+
+/* The browser chrome (desktop widths only): dots + address. What makes the
+   frame read as "your website in a browser" at a glance. */
+.qz-rsvp-chrome {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 34px;
+  padding: 0 12px;
+  background: var(--qz-cream-2);
+  border-bottom: 1px solid var(--qz-rule);
+}
+.qz-rsvp-dots { display: inline-flex; gap: 5px; }
+.qz-rsvp-dots i { width: 9px; height: 9px; border-radius: 50%; background: var(--qz-ink-3); opacity: .35; }
+.qz-rsvp-url {
+  flex: 0 1 auto;
+  margin: 0 auto;
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
+  max-width: 60%;
+  padding: 3px 14px;
+  border-radius: var(--qz-radius-pill);
+  background: var(--qz-paper);
+  border: 1px solid var(--qz-rule);
+  font-family: var(--font-num, inherit);
+  font-size: 11px;
+  letter-spacing: .02em;
+  color: var(--qz-ink-2);
+  white-space: nowrap;
+  overflow: hidden;
+}
+.qz-rsvp-url em { font-style: normal; color: var(--qz-ink-3); }
+
+/* The mock storefront (theme-editor-style skeleton): generic on purpose —
+   gray blocks say "your page", the quiz's own tokens say whose. Every piece
+   is aria-hidden decoration; nothing is interactive. */
+.qz-mockstore { min-height: 100%; background: var(--qz-paper); }
+.qz-mockstore i { display: block; border-radius: 4px; background: var(--qz-cream-2); }
+.qz-mockstore-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 28px;
+  border-bottom: 1px solid var(--qz-rule);
+}
+.qz-mockstore-logo { width: 22px; height: 22px; border-radius: 50%; background: var(--qz-ink-3); opacity: .5; }
+.qz-mockstore-name { width: 84px; height: 10px; border-radius: 4px; background: var(--qz-ink-3); opacity: .45; }
+.qz-mockstore-nav { display: inline-flex; gap: 14px; margin-left: auto; }
+.qz-mockstore-nav i { width: 44px; height: 8px; }
+.qz-mockstore-cart { width: 16px; height: 16px; border-radius: 4px; background: var(--qz-cream-2); }
+.qz-mockstore-hero { display: grid; gap: 10px; padding: 26px 28px 8px; }
+.qz-mockstore-hero i { height: 12px; max-width: 420px; }
+.qz-mockstore-hero i.is-short { max-width: 260px; }
+.qz-mockstore-product { display: flex; gap: 24px; padding: 26px 28px 8px; }
+.qz-mockstore-img { flex: 0 0 38%; max-width: 340px; aspect-ratio: 1; border-radius: 8px; background: var(--qz-cream-2); }
+.qz-mockstore-pcol { flex: 1; display: grid; gap: 10px; align-content: start; padding-top: 6px; }
+.qz-mockstore-pcol i { height: 10px; max-width: 300px; }
+.qz-mockstore-pcol i.is-title { height: 16px; max-width: 240px; background: var(--qz-ink-3); opacity: .35; }
+.qz-mockstore-pcol i.is-price { height: 12px; max-width: 90px; background: var(--qz-ink-3); opacity: .3; }
+.qz-mockstore-body { padding: 18px 24px; }
+.qz-mockstore-foot { display: grid; gap: 8px; padding: 8px 28px 30px; }
+.qz-mockstore-foot i { height: 9px; max-width: 480px; }
+.qz-mockstore-foot i.is-short { max-width: 300px; }
 /* QB-10 — the standalone preview shows JUST the quiz. The runtime page wrapper
    hardcodes a #FAFAFA backdrop (an inline style → needs !important), which read
    as a "white box" around the quiz card. Strip it here only (scoped to the

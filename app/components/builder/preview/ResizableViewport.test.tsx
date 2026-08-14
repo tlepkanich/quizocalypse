@@ -112,6 +112,17 @@ describe("ResizableViewport", () => {
     expect(clamped).toHaveBeenLastCalledWith(PREVIEW_MAX_PX);
   });
 
+  it("shows the browser chrome at desktop widths only (phone stays borderless)", () => {
+    renderViewport(PRESET_WIDTH.desktop);
+    const chrome = document.querySelector<HTMLElement>(".qz-rsvp-chrome");
+    expect(chrome).not.toBeNull();
+    expect(chrome?.textContent).toContain("yourstore.com");
+    cleanup();
+
+    renderViewport(PRESET_WIDTH.phone);
+    expect(document.querySelector(".qz-rsvp-chrome")).toBeNull();
+  });
+
   it("double-clicking a handle resets to fill (null)", () => {
     const onWidthPx = vi.fn();
     renderViewport(700, onWidthPx);

@@ -79,6 +79,7 @@ const readState = () =>
       scrollTop: screen.scrollTop,
       readout: readout ? readout.textContent : null,
       handles: pane.querySelectorAll(".qz-rsvp-handle").length,
+      chrome: frame.querySelector(".qz-rsvp-chrome")?.textContent ?? null,
     };
   });
 
@@ -115,6 +116,7 @@ if (desk) {
   // squeezed — the merchant designs against the TRUE max size.
   ok("shell is width-capped at 1100 (terminal size)", desk.shellW === 1100, `shell ${desk.shellW}px`);
   ok("pane scrolls horizontally instead of scaling", desk.paneScrollW > desk.paneW, `scrollW ${desk.paneScrollW}, pane ${desk.paneW}`);
+  ok("browser chrome present at desktop widths", desk.chrome != null && desk.chrome.includes("yourstore.com"), desk.chrome ?? "missing");
   ok("Desktop toggle highlighted", (await page.locator('button[aria-label^="Desktop"]').first().getAttribute("aria-pressed")) === "true");
 }
 await page.screenshot({ path: `${SHOTS}/02-desktop-preset.png` });
@@ -129,6 +131,7 @@ if (phone) {
   ok("runtime got the mobile breakpoint", phone.rootClass.includes("qz-bp-mobile"));
   ok("height caps at the 745 phone viewport", phone.frameH === Math.min(phone.paneH, 745), `frame ${phone.frameH}, pane ${phone.paneH}`);
   ok("page padding 24/24", phone.padTop === "24px" && phone.padBottom === "24px", `${phone.padTop}/${phone.padBottom}`);
+  ok("no browser chrome on phone (borderless screen)", phone.chrome === null);
   ok("Phone toggle highlighted", (await page.locator('button[aria-label^="Phone"]').first().getAttribute("aria-pressed")) === "true");
 }
 await page.screenshot({ path: `${SHOTS}/03-phone-preset.png` });

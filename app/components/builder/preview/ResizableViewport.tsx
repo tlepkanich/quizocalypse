@@ -12,6 +12,64 @@ const useIsoLayoutEffect = typeof window === "undefined" ? useEffect : useLayout
 // The edge handles' rail width (must match .qz-rsvp-handle flex-basis).
 const HANDLE_W = 14;
 
+// The browser-bar address per placement — generic on purpose (no shop
+// identity lives in a draft doc); it says "this is your website", the quiz's
+// own tokens say whose.
+const MOCK_PATH: Record<string, string> = {
+  page: "/quiz",
+  popup: "/",
+  inline: "/pages/quiz",
+  product_widget: "/products/your-product",
+};
+
+// A deliberately-generic storefront skeleton (theme-editor style): a header
+// with a logo dot + nav lines and a few content blocks, so the contained
+// placements read as "the quiz embedded ON YOUR PAGE" instead of a card
+// floating in a void. Token-colored — never competes with the quiz.
+function MockStorefront({
+  kind,
+  children,
+}: {
+  kind: "inline" | "product_widget";
+  children: ReactNode;
+}) {
+  return (
+    <div className="qz-mockstore">
+      <div className="qz-mockstore-head" aria-hidden>
+        <span className="qz-mockstore-logo" />
+        <span className="qz-mockstore-name" />
+        <span className="qz-mockstore-nav">
+          <i />
+          <i />
+          <i />
+        </span>
+        <span className="qz-mockstore-cart" />
+      </div>
+      {kind === "product_widget" ? (
+        <div className="qz-mockstore-product" aria-hidden>
+          <span className="qz-mockstore-img" />
+          <span className="qz-mockstore-pcol">
+            <i className="is-title" />
+            <i className="is-price" />
+            <i />
+            <i />
+          </span>
+        </div>
+      ) : (
+        <div className="qz-mockstore-hero" aria-hidden>
+          <i />
+          <i className="is-short" />
+        </div>
+      )}
+      <div className="qz-mockstore-body">{children}</div>
+      <div className="qz-mockstore-foot" aria-hidden>
+        <i />
+        <i className="is-short" />
+      </div>
+    </div>
+  );
+}
+
 /**
  * ResizableViewport — the builder canvas's browser-window preview
  * (drag/2026-08, owner decision 2026-08-13; replaces the fixed scaled
@@ -189,56 +247,87 @@ export function ResizableViewport({
             transform: "scale(1)",
             transformOrigin: "top left",
             contain: "paint",
+            display: "flex",
+            flexDirection: "column",
           }}
         >
+          {/* The browser chrome (desktop widths only — the phone screen stays
+              borderless per the Quartz frames spec): three dots + the address.
+              This is what makes the frame READ as "your website in a browser"
+              instead of an abstract rectangle. */}
+          {mode === "desktop" ? (
+            <div className="qz-rsvp-chrome" aria-hidden>
+              <span className="qz-rsvp-dots">
+                <i />
+                <i />
+                <i />
+              </span>
+              <span className="qz-rsvp-url">
+                yourstore.com
+                <em>{MOCK_PATH[placement ?? "page"] ?? "/quiz"}</em>
+              </span>
+            </div>
+          ) : null}
           {/* Frame fixed, screen scrolls — exactly a browser window. */}
           <div
             className="qz-devscreen"
             ref={screenRef}
             style={{
               width: "100%",
-              height: "100%",
+              flex: "1 1 auto",
+              minHeight: 0,
               overflowY: "auto",
               overflowX: "hidden",
               overscrollBehavior: "contain",
             }}
           >
             {isPopup ? (
-              // Pop-up placement: an opaque stage behind a centered modal —
-              // the container a shopper's window shows, inside our viewport.
-              <div
-                className="qz-dpop-backdrop"
-                style={{
-                  position: "absolute",
-                  inset: 0,
-                  display: "grid",
-                  placeItems: "center",
-                  padding: 32,
-                }}
-              >
+              // Pop-up placement: the launcher modal over YOUR PAGE — the
+              // mock storefront sits dimmed behind the centered modal,
+              // exactly what a shopper's window shows. The stage is a fixed,
+              // non-scrolling snapshot so the scrim never scrolls away.
+              <div style={{ position: "relative", height: "100%", overflow: "hidden" }}>
+                <MockStorefront kind="inline">
+                  <div className="qz-mockstore-hero" aria-hidden>
+                    <i />
+                    <i />
+                    <i className="is-short" />
+                  </div>
+                </MockStorefront>
                 <div
-                  className="qz-dpop-modal"
+                  className="qz-dpop-backdrop"
                   style={{
-                    width: "min(76%, 760px)",
-                    maxWidth: "calc(100% - 64px)",
-                    maxHeight: "calc(100% - 64px)",
+                    position: "absolute",
+                    inset: 0,
+                    display: "grid",
+                    placeItems: "center",
+                    padding: 32,
                   }}
                 >
-                  {children}
+                  <div
+                    className="qz-dpop-modal"
+                    style={{
+                      width: "min(76%, 760px)",
+                      maxWidth: "calc(100% - 64px)",
+                      maxHeight: "calc(100% - 64px)",
+                    }}
+                  >
+                    {children}
+                  </div>
                 </div>
               </div>
             ) : isContained ? (
-              // Inline / product widget: a contained card on a neutral host
-              // page, capped at the 960 inline band a typical theme column
-              // gives an embedded quiz — width-truthful at any frame size.
-              <div style={{ padding: "40px 24px", minHeight: "100%" }}>
+              // Inline / product widget: the quiz embedded in the mock
+              // storefront page, capped at the 960 inline band a typical
+              // theme column gives it — width-truthful at any frame size.
+              <MockStorefront kind={placement === "product_widget" ? "product_widget" : "inline"}>
                 <div
                   className="qz-dinline-card"
                   style={{ maxWidth: INLINE_BAND_PX, margin: "0 auto" }}
                 >
                   {children}
                 </div>
-              </div>
+              </MockStorefront>
             ) : (
               children
             )}
