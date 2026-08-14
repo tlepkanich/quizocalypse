@@ -289,6 +289,13 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
   // The RENDERED width, reported by the viewport (pane-sized in fill mode) —
   // this is what the readout prints and what the mode derives from.
   const [previewLiveWidth, setPreviewLiveWidth] = useState<number | null>(null);
+  // The viewport's fit scale (1 = 1:1; <1 = scaled down to show the whole
+  // frame, e.g. the 1280 desktop preset inside a narrower pane).
+  const [previewScale, setPreviewScale] = useState(1);
+  const onViewportWidth = useCallback((w: number, scale?: number) => {
+    setPreviewLiveWidth(w);
+    setPreviewScale(scale ?? 1);
+  }, []);
   const canvasHostRef = useRef<HTMLDivElement | null>(null);
   // QRTZ-S4 — floating block toolbar over the canvas selection (mock
   // shared.mjs stage-tools): the clicked [data-qz-block] element (an explicit
@@ -701,6 +708,7 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
     ordered,
     previewUrl: data.previewUrl,
     goToStep: () => {},
+    shopBrandTokens: data.shopBrandTokens ?? null,
   };
 
   // Autosave status chip — a legible "Saving…" (pulsing dot) / "Saved" (green
@@ -797,9 +805,10 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
     </div>
   );
 
-  // build-tab handoff §7 — the desktop stage-bar "Show as": ONE source of
-  // truth (it writes doc.placement, exactly like Settings) and mirrors the
-  // Settings labels. Desktop-only — mobile always previews the phone.
+  // build-tab handoff §7 — the stage-bar "Show as": ONE source of truth (it
+  // writes doc.placement, exactly like Settings) and mirrors the Settings
+  // labels. Shown at every preview width since drag/2026-08 — the placement
+  // mocks are width-truthful, so phones preview Pop-up/Inline/Widget too.
   // BLD-3: the mock's dtwctl anatomy — a mono "Show as" label + a compact seg.
   const showAsToggle = (
     <>
@@ -894,7 +903,11 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
       title={`Preview width — drag the frame's edges to resize (double-click them to fit the pane). The layout flips at 900px; the quiz stops growing at ${DESKTOP_TERMINAL_PX}px.`}
     >
       <span className="qz-bt-zlabel" style={{ minWidth: 52 }}>
-        {previewLiveWidth != null ? `${previewLiveWidth}px` : "…"}
+        {previewLiveWidth != null
+          ? `${previewLiveWidth}px${
+              previewScale < 1 ? ` · ${Math.round(previewScale * 100)}%` : ""
+            }`
+          : "…"}
       </span>
     </span>
   );
@@ -1426,7 +1439,11 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
         {/* BLD-3 — the health pill is stage-scoped chrome here (the mock's
             bar draws no health; "Fix N issues" opens its popover). */}
         {healthPill}
-        {!allScreensMode && buildTier === "desktop" ? showAsToggle : null}
+        {/* Placement options at EVERY width — hiding them on phone silently
+            dropped the Pop-up/Inline/Widget previews the moment the merchant
+            selected mobile (the placement mocks are width-truthful, so they
+            render fine at 390 too). */}
+        {!allScreensMode ? showAsToggle : null}
         {/* phone-preview SPEC — Expand: inspect the same screen big. */}
         {allScreensMode ? null : (
           <>
@@ -1906,7 +1923,7 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
                         inspectedTarget={inspectTarget}
                         viewportWidth={previewWidthPx}
                         onViewportWidthChange={setPreviewWidthPx}
-                        onViewportWidth={setPreviewLiveWidth}
+                        onViewportWidth={onViewportWidth}
                         focusNodeId={selectedId}
                         onNodeShown={setLiveNodeId}
                         chromeless

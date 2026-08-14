@@ -1,7 +1,10 @@
-// drag/2026-08 live-verify — the builder canvas's RESIZABLE 1:1 viewport
+// drag/2026-08 live-verify — the builder canvas's RESIZABLE viewport
 // contract against a LOCAL production build (BASE env, default
 // http://localhost:3000). Owner decision 2026-08-13: the preview is a
-// browser window, not a scaled device mock.
+// browser window, not a scaled device mock. Owner refinement 2026-08-14:
+// a frame WIDER than the pane scales DOWN to fit (fitPreviewScale) so the
+// whole page always shows — 1:1 whenever it fits; the layout width (and
+// the breakpoint) never lies.
 //
 // Fixture: draft cmr7khgd50001vkhscvox8dgt (decider). READ-ONLY — every
 // interaction is preset / drag / expand / scroll; no doc commit fires.
@@ -10,9 +13,10 @@
 //  1. Default is FILL: the frame tracks the pane (minus the handle rails),
 //     renders at EXACTLY 1:1 (transform scale(1), contain:paint), and the
 //     width readout prints the frame's real width.
-//  2. The Desktop preset sets 1280px: the runtime renders qz-bp-desktop,
-//     the shell inside is width-capped at 1100 (terminal size), padding-top
-//     48, still 1:1 — the pane scrolls horizontally instead of scaling.
+//  2. The Desktop preset sets a 1280px LAYOUT: the runtime renders
+//     qz-bp-desktop, the shell inside is width-capped at 1100 (terminal
+//     size), padding-top 48, and the frame scales down to show the whole
+//     page (readout appends the fit %; the pane never crops or scrolls).
 //  3. The Phone preset sets 390px: qz-bp-mobile, height capped at the 745
 //     phone viewport, page padding 24/24.
 //  4. DRAGGING the edge handle resizes symmetrically (2·dx) and crossing
@@ -101,21 +105,31 @@ if (fill) {
 }
 await page.screenshot({ path: `${SHOTS}/01-fill.png` });
 
-// ── 2: the Desktop preset — terminal size, 1:1, horizontal scroll ──────────
+// ── 2: the Desktop preset — terminal LAYOUT size, scaled to FIT the pane ────
+// (owner ask 2026-08-14: the canvas must show the WHOLE page as the shopper
+// sees it — a 1280 layout in a ~950 pane scales down instead of cropping.)
 await page.locator('button[aria-label^="Desktop"]').first().click();
 await page.waitForTimeout(400);
 const desk = await readState();
 ok("desktop preset applied", !!desk);
 if (desk) {
   ok("frame is exactly 1280 wide", desk.frameW === 1280, `${desk.frameW}`);
-  ok("still 1:1 (never scaled to fit)", Math.abs(desk.paintedW - 1280) < 0.5, `painted ${desk.paintedW}`);
-  ok("readout prints 1280px", desk.readout === "1280px", desk.readout ?? "");
+  // Fit rule: painted = layout × min(1, avail/layout) — the whole page shows.
+  const expectScale = Math.min(1, (desk.paneW - 28) / 1280);
+  ok(
+    "painted width = layout × fit scale (whole page visible)",
+    Math.abs(desk.paintedW - 1280 * expectScale) < 1.5,
+    `painted ${desk.paintedW}, expected ${(1280 * expectScale).toFixed(1)}`,
+  );
+  const wantReadout =
+    expectScale < 1 ? `1280px · ${Math.round(expectScale * 100)}%` : "1280px";
+  ok("readout prints the width (+ scale when fitted)", desk.readout === wantReadout, `${desk.readout} vs ${wantReadout}`);
   ok("runtime got the desktop breakpoint", desk.rootClass.includes("qz-bp-desktop"));
   ok("desktop padding-top 48 (shell rule)", desk.padTop === "48px", desk.padTop);
   // The point of 1280: the shell has hit its 1100 cap instead of being
   // squeezed — the merchant designs against the TRUE max size.
   ok("shell is width-capped at 1100 (terminal size)", desk.shellW === 1100, `shell ${desk.shellW}px`);
-  ok("pane scrolls horizontally instead of scaling", desk.paneScrollW > desk.paneW, `scrollW ${desk.paneScrollW}, pane ${desk.paneW}`);
+  ok("no horizontal crop — the pane never scrolls sideways", desk.paneScrollW <= desk.paneW, `scrollW ${desk.paneScrollW}, pane ${desk.paneW}`);
   ok("browser chrome present at desktop widths", desk.chrome != null && desk.chrome.includes("yourstore.com"), desk.chrome ?? "missing");
   ok("Desktop toggle highlighted", (await page.locator('button[aria-label^="Desktop"]').first().getAttribute("aria-pressed")) === "true");
 }

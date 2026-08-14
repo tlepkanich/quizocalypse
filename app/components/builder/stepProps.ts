@@ -2,6 +2,7 @@ import type { Quiz as QuizDoc } from "../../lib/quizSchema";
 import type { IndexedProduct } from "../../lib/recommendationEngine";
 import type { NodeIssue } from "../../lib/quizValidation";
 import type { OrderedFlow } from "../../lib/flowOrder";
+import type { DesignTokensT } from "../../lib/designTokens";
 
 // Shared prop contract every step screen of the 5-step guided builder consumes.
 // The shell (BuilderShell in app.quizzes.$id.studio.tsx) owns the doc + autosave
@@ -37,4 +38,8 @@ export interface StepProps {
   ordered: OrderedFlow;
   previewUrl: string;
   goToStep: (n: number) => void;
+  // WYSIWYG parity — the shop brand token layer publish resolves UNDER the
+  // quiz's own design_tokens. Optional: hosts without it (embedded /app AI
+  // editor) keep the previous draft-tokens-only preview.
+  shopBrandTokens?: DesignTokensT | null;
 }

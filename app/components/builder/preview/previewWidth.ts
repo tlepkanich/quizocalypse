@@ -67,6 +67,17 @@ export function clampPreviewWidth(w: number): number {
   return Math.min(PREVIEW_MAX_PX, Math.max(PREVIEW_MIN_PX, Math.round(w)));
 }
 
+// drag/2026-08 fit rule — the frame renders its LAYOUT at the chosen width
+// (the breakpoint stays honest), but when that width exceeds the pane the
+// frame scales DOWN to fit so the merchant always sees the whole page — a
+// 1280 desktop preset inside a ~950px pane must show the full desktop
+// layout, never a cropped slice. Never upscales past 1:1. Non-positive
+// inputs (unmeasured pane, SSR) yield 1 — the old behavior.
+export function fitPreviewScale(frameW: number, availW: number): number {
+  if (!(frameW > 0) || !(availW > 0)) return 1;
+  return Math.min(1, availW / frameW);
+}
+
 // Width → the tier the toggle should highlight (same 900 line as the runtime).
 export function tierForWidth(w: number): DeviceTier {
   return breakpointForWidth(w) === "mobile" ? "phone" : "desktop";

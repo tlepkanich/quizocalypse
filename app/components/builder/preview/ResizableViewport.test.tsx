@@ -6,17 +6,22 @@ import { act, createElement } from "react";
 import { ResizableViewport } from "./ResizableViewport";
 import { PREVIEW_MIN_PX, PREVIEW_MAX_PX, PRESET_WIDTH } from "./previewWidth";
 
-/* drag/2026-08 — the builder canvas's resizable 1:1 viewport. What these
-   tests pin:
+/* drag/2026-08 — the builder canvas's resizable viewport (layout at the
+   chosen width; scales DOWN to fit the pane so the whole page always shows).
+   What these tests pin:
    1. The containment contract carried over from DeviceFrame (A2): the frame
-      ALWAYS has transform scale(1) + contain:paint, or the runtime's
-      position:fixed chip / scrim / sheet float over the whole admin.
-   2. Width honesty: the rendered width IS widthPx (clamped), and the mode
-      attribute flips at the 900 line — the toggle can never lie.
+      ALWAYS has a transform (scale(s), s = the fit scale, 1 when the frame
+      fits) + contain:paint, or the runtime's position:fixed chip / scrim /
+      sheet float over the whole admin.
+   2. Width honesty: the LAYOUT width IS widthPx (clamped), and the mode
+      attribute flips at the 900 line — the toggle can never lie. The fit
+      scale itself is pure math, pinned in previewWidth.test.ts
+      (fitPreviewScale).
    3. The resize affordances write back through onWidthPx: keyboard arrows
       step ±10 (±50 with shift) clamped, double-click resets to fill (null).
-   jsdom has no ResizeObserver, so the pane measures 0 — the explicit-width
-   cases are unaffected (they never read the pane). */
+   jsdom has no ResizeObserver, so the pane measures 0 — the fit scale is 1
+   here (unmeasured pane = 1:1) and the explicit-width cases never read the
+   pane. */
 
 (globalThis as Record<string, unknown>).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -59,9 +64,11 @@ function renderViewport(
 }
 
 describe("ResizableViewport", () => {
-  it("always carries the containment contract (transform scale(1) + contain paint)", () => {
+  it("always carries the containment contract (a transform + contain paint)", () => {
     for (const w of [null, 390, 1280]) {
       const frame = renderViewport(w);
+      // A2 — ALWAYS a scale() transform, never undefined/none. In jsdom the
+      // pane is unmeasured, so the fit scale is exactly 1 for every width.
       expect(frame.style.transform).toBe("scale(1)");
       expect(frame.style.contain).toBe("paint");
       cleanup();

@@ -41,6 +41,7 @@ export function Step5Preview({
   quizId,
   onInspect,
   inspectedTarget,
+  shopBrandTokens,
   tier: tierProp,
   onTierChange,
   zoom,
@@ -69,9 +70,10 @@ export function Step5Preview({
   // by the host: null = fill the pane; a number = dragged/preset width.
   viewportWidth?: number | null;
   onViewportWidthChange?: (w: number | null) => void;
-  // Reports the RENDERED width (pane-sized in fill mode) so the host can
-  // derive the mode for its device toggle / readout / design-layer selector.
-  onViewportWidth?: (w: number) => void;
+  // Reports the RENDERED width (pane-sized in fill mode) plus the fit scale
+  // (1 = shown 1:1) so the host can derive the mode for its device toggle /
+  // readout / design-layer selector and label a scaled-to-fit frame.
+  onViewportWidth?: (w: number, scale?: number) => void;
   // Forwarded to DeviceFrame. Required from any host whose container is
   // auto-height, or the fit rule's height axis measures 0.
   paneHeight?: number | string;
@@ -112,11 +114,39 @@ export function Step5Preview({
   // category-intersection resolves cleanly.
   const previewDoc = useMemo(() => {
     const byId = new Map(categories.map((c) => [c.id, c.productIds]));
+    // WYSIWYG parity — resolve the SAME design-token cascade publish bakes
+    // (shop brand → quiz overrides → schema defaults, quizPublish.ts). The
+    // draft's design_tokens are SPARSE; feeding them raw made the canvas
+    // render publish-default typography/spacing the shopper never sees
+    // (e.g. brand scale 1.2 vs default 1.25 → question headlines wrapped
+    // differently at 390px than any real phone). Render-only: commits still
+    // write the merchant's own sparse `doc`, never this resolution.
+    const resolvedTokens = resolveDesignTokens(
+      shopBrandTokens ?? null,
+      doc.design_tokens,
+    ) as DesignTokensT;
+    // FIX-1 mirror (quizPublish.ts) — decider docs publish with the card-less
+    // "minimal" chrome baked in unless the doc says otherwise.
+    if (doc.logic_model === "decider" && !resolvedTokens.chrome) {
+      resolvedTokens.chrome = "minimal";
+    }
     // QRTZ-F2 — withDraftChapters: the Chapters analog of the bake above (same
     // deriveChapters + gating as publish), so the preview's progress bar
     // matches published /q. Legacy drafts pass through untouched.
-    return withDraftChapters({ ...doc, results_pages: bakeResultPages(doc, byId) });
-  }, [doc, categories]);
+    return withDraftChapters({
+      ...doc,
+      results_pages: bakeResultPages(doc, byId),
+      design_tokens: resolvedTokens as typeof doc.design_tokens,
+      ...(doc.design_linked === false && doc.rec_page_design
+        ? {
+            rec_page_design: resolveDesignTokens(
+              shopBrandTokens ?? null,
+              doc.rec_page_design,
+            ) as typeof doc.rec_page_design,
+          }
+        : {}),
+    });
+  }, [doc, categories, shopBrandTokens]);
 
   // LOGIC v2 (L2-10a) — the decider analog of the bake above: derive the
   // publish-time target map from the live buckets so a decider draft's reveal
@@ -133,14 +163,29 @@ export function Step5Preview({
     return preset ? (resolveDesignTokens(preset.tokens) as DesignTokensT) : null;
   }, [tryOnId]);
 
+  // Position-true jumps — hand the runtime the spine's question prefix for
+  // the focused step, so the counter + progress bar show the step's REAL
+  // position (live shows "Question 2 of 3" on the second question; the
+  // canvas previously always said "Question 1"). Spine only: a node not on
+  // the main run (branch lane / orphan) falls back to the old clean jump.
+  const focusPath = useMemo(() => {
+    if (!focusNodeId) return null;
+    const idx = ordered.steps.findIndex((s) => s.nodeId === focusNodeId);
+    if (idx < 0) return null;
+    return ordered.steps
+      .slice(0, idx)
+      .filter((s) => s.type === "question")
+      .map((s) => ({ questionNodeId: s.nodeId, answerIds: [] as string[] }));
+  }, [focusNodeId, ordered.steps]);
+
   // drag/2026-08 — chromeless derives the breakpoint from the viewport's
   // RENDERED width with the runtime's own 900px function, so dragging across
   // the line flips the layout exactly as a live browser resize would.
   const [vpRenderedW, setVpRenderedW] = useState<number | null>(null);
   const handleViewportWidth = useCallback(
-    (w: number) => {
+    (w: number, scale: number) => {
       setVpRenderedW(w);
-      onViewportWidth?.(w);
+      onViewportWidth?.(w, scale);
     },
     [onViewportWidth],
   );
@@ -192,6 +237,7 @@ export function Step5Preview({
       onInspect={onInspect}
       inspectedTarget={inspectedTarget}
       focusNodeId={focusNodeId}
+      focusPath={focusPath}
       onNodeShown={handleNodeShown}
     />
   );

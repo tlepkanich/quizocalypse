@@ -137,6 +137,11 @@ export interface QuizRuntimeProps {
   // onNodeShown reports every step the runtime lands on (walkthrough advance)
   // so the rail can highlight it. Both are ignored entirely in live mode.
   focusNodeId?: string | null;
+  // PREVIEW-ONLY companion to focusNodeId: the spine's question prefix for
+  // the focused step (empty answers), so a jump lands with the step's TRUE
+  // position — counter/progress/Back match what a shopper sees there.
+  // Absent/null → the old clean-jump reset. Ignored in live mode.
+  focusPath?: PathStep[] | null;
   onNodeShown?: (nodeId: string) => void;
   // Phase J — baked conversion weights from publishedJson.answer_weights
   // (absent on drafts/previews → neutral scoring).
@@ -237,6 +242,7 @@ export function QuizRuntime(props: QuizRuntimeProps) {
     onInspect,
     inspectedTarget = null,
     focusNodeId = null,
+    focusPath = null,
     onNodeShown,
     answerWeights = null,
     chrome = null,
@@ -363,7 +369,10 @@ export function QuizRuntime(props: QuizRuntimeProps) {
   useEffect(() => {
     if (!isPreview || !focusNodeId || focusNodeId === currentNodeId) return;
     if (!doc.nodes.some((n) => n.id === focusNodeId)) return;
-    setPath([]);
+    // Position-true jump: the host may pass the spine's question prefix so
+    // the counter/progress/Back reflect the step's real place in the flow
+    // (what a shopper sees there). Absent → the original clean reset.
+    setPath(focusPath ?? []);
     setCurrentNodeId(focusNodeId);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [focusNodeId, isPreview]);

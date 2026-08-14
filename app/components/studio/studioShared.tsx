@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import type { Quiz } from "../../lib/quizSchema";
 import type { BuilderCollection, BuilderCategory } from "../builder/stepProps";
+import type { DesignTokensT } from "../../lib/designTokens";
 import type { IndexedProduct } from "../../lib/recommendationEngine";
 import type { FunnelCounts } from "../../lib/abAnalytics";
 
@@ -40,6 +41,9 @@ export interface StudioBuilderData {
   // unknowable (never published / unparseable) → the pill falls back to the
   // timestamp-seeded plain "Unpublished changes".
   unpublishedChangeCount?: number | null;
+  // WYSIWYG parity — the shop brand token layer publish resolves under the
+  // draft's design_tokens (optional: older payloads stay assignable).
+  shopBrandTokens?: DesignTokensT | null;
 }
 
 type Placement = NonNullable<Quiz["placement"]>;

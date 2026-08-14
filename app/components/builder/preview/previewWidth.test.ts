@@ -3,6 +3,7 @@ import {
   breakpointForWidth,
   clampPreviewWidth,
   fitConstraint,
+  fitPreviewScale,
   fitScale,
   tierForWidth,
   DESKTOP_TERMINAL_PX,
@@ -71,6 +72,20 @@ describe("drag/2026-08 — the builder viewport's width presets", () => {
     expect(tierForWidth(900)).toBe("desktop");
     expect(tierForWidth(BREAKPOINT_PX - 1)).toBe("phone");
     expect(tierForWidth(BREAKPOINT_PX)).toBe("desktop");
+  });
+
+  it("fitPreviewScale shows the whole frame: shrink-to-fit, never upscale", () => {
+    // The headline case: the 1280 desktop preset in a ~950px pane renders
+    // the WHOLE desktop layout scaled down, not a cropped slice.
+    expect(fitPreviewScale(1280, 950)).toBeCloseTo(950 / 1280, 5);
+    // Fits the pane → exactly 1:1.
+    expect(fitPreviewScale(390, 950)).toBe(1);
+    expect(fitPreviewScale(950, 950)).toBe(1);
+    // Never upscales past actual size.
+    expect(fitPreviewScale(390, 2000)).toBe(1);
+    // Unmeasured pane / SSR (0 or negative) keeps the old 1:1 behavior.
+    expect(fitPreviewScale(1280, 0)).toBe(1);
+    expect(fitPreviewScale(0, 950)).toBe(1);
   });
 });
 

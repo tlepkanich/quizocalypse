@@ -4,6 +4,7 @@ import {
   PHONE_VIEWPORT_H_PX,
   breakpointForWidth,
   clampPreviewWidth,
+  fitPreviewScale,
 } from "./previewWidth";
 
 // Layout effects must not run during SSR (same alias runtimeStyles.ts uses).
@@ -75,14 +76,15 @@ function MockStorefront({
  * (drag/2026-08, owner decision 2026-08-13; replaces the fixed scaled
  * DeviceFrame on this surface).
  *
- * The quiz renders at 100% scale, always. The frame IS a browser window:
- * `widthPx` is its width (null = fill the pane, "what the browser shows"),
- * the edge handles drag it, and crossing BREAKPOINT_PX (900) flips the
- * mobile/desktop layout live — the merchant WATCHES the flip instead of
- * being told about it. Wider than the pane → the pane scrolls horizontally
- * (the `margin: auto` centering keeps both edges reachable). Height fills
- * the pane; mobile-mode frames cap at the canonical 745 phone viewport and
- * keep the fold marker when the full 745 fits.
+ * The quiz LAYS OUT at the chosen width, always — the breakpoint can never
+ * lie. The frame IS a browser window: `widthPx` is its width (null = fill
+ * the pane, "what the browser shows"), the edge handles drag it, and
+ * crossing BREAKPOINT_PX (900) flips the mobile/desktop layout live — the
+ * merchant WATCHES the flip instead of being told about it. Wider than the
+ * pane → the frame scales DOWN to fit (fitPreviewScale) so the merchant
+ * always sees the WHOLE page — never a cropped slice; 1:1 whenever it fits.
+ * Height fills the pane; mobile-mode frames cap at the canonical 745 phone
+ * viewport and keep the fold marker when the full 745 fits.
  *
  * Width state lives in the HOST (UnifiedWorkspace lifts it so the device
  * presets, the width readout, and the design-layer selector all read the
@@ -103,8 +105,9 @@ export function ResizableViewport({
   // Drag / keyboard resize writes back through this (never called with null —
   // a double-click on either handle resets to fill, which does pass null).
   onWidthPx: (w: number | null) => void;
-  // Reports the RENDERED width whenever it changes (pane width in fill mode).
-  onEffectiveWidth?: (w: number) => void;
+  // Reports the RENDERED width whenever it changes (pane width in fill mode)
+  // plus the applied fit scale (1 whenever the frame fits the pane 1:1).
+  onEffectiveWidth?: (w: number, scale: number) => void;
   // The container INSIDE the viewport (same meanings as the old DeviceFrame):
   // pop-up = modal envelope on a dark backdrop; inline/product_widget = a
   // contained card (capped at the 960 inline band) on a neutral host page.
@@ -136,14 +139,18 @@ export function ResizableViewport({
   const effectiveW =
     widthPx != null ? clampPreviewWidth(widthPx) : Math.max(0, pane.w - HANDLE_W * 2);
   const mode = breakpointForWidth(effectiveW || 0);
+  // Fit rule (previewWidth.fitPreviewScale) — the layout renders AT
+  // effectiveW (breakpoint honesty) but scales down to fit the pane, so the
+  // 1280 desktop preset shows the WHOLE page instead of a cropped slice.
+  const scale = fitPreviewScale(effectiveW, Math.max(0, pane.w - HANDLE_W * 2));
 
   const onEffRef = useRef(onEffectiveWidth);
   useEffect(() => {
     onEffRef.current = onEffectiveWidth;
   });
   useEffect(() => {
-    if (effectiveW > 0) onEffRef.current?.(effectiveW);
-  }, [effectiveW]);
+    if (effectiveW > 0) onEffRef.current?.(effectiveW, scale);
+  }, [effectiveW, scale]);
 
   // Reset the screen's scroll when the previewed step or placement changes —
   // a switch never lands the merchant mid-page.
@@ -182,10 +189,17 @@ export function ResizableViewport({
 
   const isPopup = placement === "popup";
   const isContained = placement === "inline" || placement === "product_widget";
-  // Mobile frames never show more above the fold than a phone does.
-  const frameH =
-    mode === "mobile" && pane.h > 0 ? Math.min(pane.h, PHONE_VIEWPORT_H_PX) : "100%";
-  const foldVisible = mode === "mobile" && frameH === PHONE_VIEWPORT_H_PX;
+  // LAYOUT height — the unscaled height the frame renders at; its VISUAL
+  // height is layoutH · scale, sized to fill the pane. Mobile frames never
+  // show more above the fold than a phone does (the 745 cap).
+  const layoutH =
+    pane.h > 0
+      ? mode === "mobile"
+        ? Math.min(pane.h / scale, PHONE_VIEWPORT_H_PX)
+        : pane.h / scale
+      : null;
+  const visualH = layoutH != null ? layoutH * scale : null;
+  const foldVisible = mode === "mobile" && layoutH === PHONE_VIEWPORT_H_PX;
 
   const handle = (dir: 1 | -1) => (
     <div
@@ -228,23 +242,43 @@ export function ResizableViewport({
     >
       <div
         className="qz-rsvp-row"
-        style={{ margin: "auto", flex: "0 0 auto", display: "flex", alignItems: "stretch", height: frameH }}
+        style={{
+          margin: "auto",
+          flex: "0 0 auto",
+          display: "flex",
+          alignItems: "stretch",
+          height: visualH ?? "100%",
+        }}
       >
         {handle(-1)}
+        {/* The scale box reserves the frame's VISUAL footprint (layout size ×
+            fit scale) so the handles hug the scaled edges and the row never
+            overflows the pane. At scale 1 it is a no-op wrapper. */}
+        <div
+          className="qz-rsvp-scalebox"
+          style={{
+            position: "relative",
+            width: effectiveW > 0 ? effectiveW * scale : "100%",
+            height: "100%",
+            overflow: "hidden",
+            flex: "0 0 auto",
+          }}
+        >
         <div
           className="qz-rsvp-frame qz-devframe"
           data-qz-mode={mode}
           style={{
             position: "relative",
             width: effectiveW > 0 ? effectiveW : "100%",
-            height: "100%",
-            // A2 (carried from DeviceFrame) — ALWAYS a transform, `scale(1)`
-            // and never undefined/none. Together with `contain: paint` this
-            // makes the frame the containing block for the runtime's
-            // position:fixed chip / scrim / sheet AND clips them to the frame.
-            // Drop either and they anchor to the merchant's browser window
-            // and float over the whole admin.
-            transform: "scale(1)",
+            height: layoutH != null ? layoutH : "100%",
+            // A2 (carried from DeviceFrame) — ALWAYS a transform, scale(s)
+            // and never undefined/none (s is the fit scale, 1 when the frame
+            // fits the pane). Together with `contain: paint` this makes the
+            // frame the containing block for the runtime's position:fixed
+            // chip / scrim / sheet AND clips them to the frame. Drop either
+            // and they anchor to the merchant's browser window and float
+            // over the whole admin.
+            transform: `scale(${scale})`,
             transformOrigin: "top left",
             contain: "paint",
             display: "flex",
@@ -301,15 +335,18 @@ export function ResizableViewport({
                     inset: 0,
                     display: "grid",
                     placeItems: "center",
-                    padding: 32,
+                    // Phones give a modal almost the whole screen — mirror it.
+                    padding: mode === "mobile" ? 12 : 32,
                   }}
                 >
                   <div
                     className="qz-dpop-modal"
                     style={{
-                      width: "min(76%, 760px)",
-                      maxWidth: "calc(100% - 64px)",
-                      maxHeight: "calc(100% - 64px)",
+                      width: mode === "mobile" ? "100%" : "min(76%, 760px)",
+                      maxWidth:
+                        mode === "mobile" ? "calc(100% - 8px)" : "calc(100% - 64px)",
+                      maxHeight:
+                        mode === "mobile" ? "calc(100% - 16px)" : "calc(100% - 64px)",
                     }}
                   >
                     {children}
@@ -340,6 +377,7 @@ export function ResizableViewport({
               fold
             </span>
           ) : null}
+        </div>
         </div>
         {handle(1)}
       </div>

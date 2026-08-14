@@ -167,15 +167,20 @@ export async function loadQuizEditorDataForShop(shop: Shop, id: string, origin: 
   // tolerates the in-schema bake rewrites (see unpublishedChanges.ts). null =
   // unknowable (never published, or either doc fails the parse) — the client
   // falls back to the QRTZ-B2 timestamp seed's plain "Unpublished changes".
+  // WYSIWYG parity — the canvas preview must resolve the SAME token cascade
+  // publish bakes (shop brand → quiz overrides → defaults), so the shop layer
+  // ships to the client. Parsed once here; also reused for the change count.
+  const shopBrandParsed = BrandTokens.safeParse(shop.brandTokens ?? {});
+  const shopBrandTokens = shopBrandParsed.success ? shopBrandParsed.data : null;
+
   let unpublishedChangeCount: number | null = null;
   if (parsed.success && quiz.publishedJson) {
     const publishedParsed = Quiz.safeParse(quiz.publishedJson);
     if (publishedParsed.success) {
-      const shopBrand = BrandTokens.safeParse(shop.brandTokens ?? {});
       unpublishedChangeCount = countUnpublishedChanges(
         parsed.data,
         publishedParsed.data,
-        { shopBrandTokens: shopBrand.success ? shopBrand.data : null },
+        { shopBrandTokens },
       );
     }
   }
@@ -210,6 +215,9 @@ export async function loadQuizEditorDataForShop(shop: Shop, id: string, origin: 
     draftUpdatedAt: quiz.updatedAt.toISOString(),
     // QRTZ-F4 — additive (see above).
     unpublishedChangeCount,
+    // WYSIWYG parity — additive: the shop brand layer the preview must
+    // resolve under the draft tokens, exactly as publish does.
+    shopBrandTokens,
   };
 }
 
