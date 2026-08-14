@@ -2,28 +2,30 @@ import type { LoaderFunctionArgs } from "@remix-run/node";
 import { beforeEach, describe, expect, it, vi, type Mock } from "vitest";
 import prisma from "../db.server";
 import { Quiz } from "./quizSchema";
-import { ANALYTICS_EVENT_WINDOW } from "./analyticsWindow";
+import type { QuizAnalyticsData } from "./quizAnalytics.server";
 import { loader as analyticsLoader } from "../routes/studio.$id_.analytics";
 
-// BIC-2 D2 — the studio analytics dashboard loader, driven end-to-end over a
-// crafted prisma fixture. The pure aggregation libs each have their own unit
-// suites; what was UNpinned is the loader's wiring: distinct-session funnel
-// semantics, revenue dedupe by order_id, leaderboard CTR bounds, the hotspot
-// cliff, the B2a truncation flag, and ?from/?to narrowing the prisma reads.
-// Lives in app/lib per the publicWriteGuards precedent.
+// ANALYTICS P0 — the per-quiz analytics loader driven end-to-end over a
+// crafted prisma fixture, through the SHARED seam (quizAnalytics.server.ts).
+// The pure libs (stepLedger, answerDistribution, confidence, insights) have
+// their own unit suites; what's pinned here is the seam's WIRING: session
+// cohorting (events fetched by sessionId, not by ts), distinct-session
+// dedupe, order_id revenue dedupe, capture-session dedupe (W10), the preview
+// impression filter (W4), confidence gating on thin n, auto-widen, and the
+// 404 guard.
 
 vi.mock("../db.server", () => ({
   default: {
     quiz: { findFirst: vi.fn() },
-    event: { findMany: vi.fn() },
+    event: { findMany: vi.fn(), findFirst: vi.fn() },
     quizSession: { findMany: vi.fn(), groupBy: vi.fn() },
-    emailCapture: { count: vi.fn() },
+    emailCapture: { findMany: vi.fn() },
     product: { findMany: vi.fn() },
+    backInStockRequest: { findMany: vi.fn() },
+    category: { findMany: vi.fn() },
   },
 }));
 
-// Auth + shop resolution are the studioAccessFlow suite's territory — stubbed
-// here so the loader math is what's under test.
 vi.mock("./studioAccess.server", () => ({
   requireStudioAccess: vi.fn(async () => undefined),
   resolveStudioShop: vi.fn(async () => ({ id: "s1", shopDomain: "studio.local" })),
@@ -31,22 +33,25 @@ vi.mock("./studioAccess.server", () => ({
 
 const p = prisma as unknown as {
   quiz: { findFirst: Mock };
-  event: { findMany: Mock };
+  event: { findMany: Mock; findFirst: Mock };
   quizSession: { findMany: Mock; groupBy: Mock };
-  emailCapture: { count: Mock };
+  emailCapture: { findMany: Mock };
   product: { findMany: Mock };
+  backInStockRequest: { findMany: Mock };
+  category: { findMany: Mock };
 };
 
-// Two-question product-match doc so the loader has flow-ordered questions.
+// Linear intro → q1 → q2 → result spine so the step ledger reconciles.
 const DOC = Quiz.parse({
   quiz_id: "qz1",
   status: "published",
   scope: { collection_ids: [] },
   nodes: [
+    { id: "i1", type: "intro", position: { x: 0, y: 0 }, data: { headline: "Welcome" } },
     {
       id: "q1",
       type: "question",
-      position: { x: 0, y: 0 },
+      position: { x: 1, y: 0 },
       data: {
         text: "Skin type?",
         question_type: "single_select",
@@ -59,7 +64,7 @@ const DOC = Quiz.parse({
     {
       id: "q2",
       type: "question",
-      position: { x: 1, y: 0 },
+      position: { x: 2, y: 0 },
       data: {
         text: "Budget?",
         question_type: "single_select",
@@ -72,9 +77,14 @@ const DOC = Quiz.parse({
     {
       id: "r1",
       type: "result",
-      position: { x: 2, y: 0 },
+      position: { x: 3, y: 0 },
       data: { headline: "Match", fallback_collection_id: "c1" },
     },
+  ],
+  edges: [
+    { id: "e1", source: "i1", target: "q1" },
+    { id: "e2", source: "q1", target: "q2" },
+    { id: "e3", source: "q2", target: "r1" },
   ],
 });
 
@@ -82,61 +92,71 @@ interface EventRow {
   sessionId: string;
   eventType: string;
   payload: unknown;
+  ts: Date;
 }
 
-const ev = (sessionId: string, eventType: string, payload: unknown = {}): EventRow => ({
+const T0 = new Date("2026-08-01T12:00:00Z");
+const ev = (sessionId: string, eventType: string, payload: unknown = {}, ts = T0): EventRow => ({
   sessionId,
   eventType,
   payload,
+  ts,
 });
 
-// s1 + s2 complete (s1 all the way to cart + an attributed order); s3 abandons
-// after q1. Deliberate poison: duplicated events per session (distinct-session
-// semantics) and the SAME order attributed to two sessions (order_id dedupe).
-const FIXTURE_EVENTS: EventRow[] = [
-  ev("s1", "quiz_started"),
-  ev("s1", "quiz_started"), // duplicate — must not double-count
-  ev("s2", "quiz_started"),
-  ev("s3", "quiz_started"),
+// s1 completes with an order; s2 SKIPS q2 and completes; s3 leaves after q1.
+// Poison built in: duplicate events (distinct-session semantics), the same
+// order on two sessions (order_id dedupe), a preview-stage impression (W4),
+// and two capture ROWS for one session (W10).
+const COHORT_EVENTS: EventRow[] = [
   ev("s1", "quiz_engaged"),
+  ev("s1", "quiz_engaged"), // duplicate — must not double-count
   ev("s2", "quiz_engaged"),
   ev("s3", "quiz_engaged"),
-  ev("s1", "question_answered", { question_id: "q1" }),
-  ev("s2", "question_answered", { question_id: "q1" }),
-  ev("s3", "question_answered", { question_id: "q1" }),
-  ev("s1", "question_answered", { question_id: "q2" }),
-  ev("s2", "question_answered", { question_id: "q2" }),
+  ev("s1", "question_answered", { question_id: "q1", answer_ids: ["a1"] }),
+  ev("s2", "question_answered", { question_id: "q1", answer_ids: ["a1b"] }),
+  ev("s3", "question_answered", { question_id: "q1", answer_ids: ["a1"] }),
+  ev("s1", "question_answered", { question_id: "q2", answer_ids: ["a2"] }),
+  ev("s2", "question_answered", { question_id: "q2", answer_ids: [] }), // an explicit SKIP
   ev("s1", "quiz_completed"),
   ev("s2", "quiz_completed"),
   ev("s1", "recommendation_viewed", { product_ids: ["p1", "p2"] }),
   ev("s2", "recommendation_viewed", { product_ids: ["p1"] }),
+  // W4 poison — a mid-quiz preview impression must NOT count.
+  ev("s3", "recommendation_viewed", { stage: "preview", product_ids: ["p1"] }),
   ev("s1", "recommendation_clicked", { product_id: "p1" }),
   ev("s1", "recommendation_clicked", { product_id: "p1" }), // duplicate click
   ev("s1", "add_to_cart", { product_id: "p1" }),
-  // One real order, written against BOTH winning sessions → counts once.
   ev("s1", "order_attributed", { order_id: "o1", total_price: "50.00", currency: "USD" }),
   ev("s2", "order_attributed", { order_id: "o1", total_price: "50.00", currency: "USD" }),
 ];
 
-function args(query = ""): LoaderFunctionArgs {
+const ENGAGE_ROWS = [{ sessionId: "s1" }, { sessionId: "s2" }, { sessionId: "s3" }];
+
+/** Dispatch the three event.findMany shapes the seam issues. */
+function installEventDispatch(opts?: { engaged?: Array<{ sessionId: string }>; events?: EventRow[] }) {
+  p.event.findMany.mockImplementation((q: { where: Record<string, unknown> }) => {
+    const where = q.where;
+    if (where.eventType === "quiz_engaged" && !("sessionId" in where)) {
+      return Promise.resolve(opts?.engaged ?? ENGAGE_ROWS);
+    }
+    if (typeof where.eventType === "object" && where.eventType !== null) {
+      return Promise.resolve([]); // prior-period delta query
+    }
+    if ("sessionId" in where) {
+      return Promise.resolve(opts?.events ?? COHORT_EVENTS);
+    }
+    return Promise.resolve([]);
+  });
+}
+
+function args(query = "?r=90d"): LoaderFunctionArgs {
   const request = new Request(`https://studio.example/studio/qz1/analytics${query}`);
   return { request, params: { id: "qz1" }, context: {} } as unknown as LoaderFunctionArgs;
 }
 
-interface LoaderData {
-  funnel: Record<string, number>;
-  dropoff: Array<{ questionId: string; answered: number }>;
-  hotspots: Array<{ questionId: string; severity: string; pctLostHere: number }>;
-  conversion: { completed: number; converted: number; rate: number };
-  captureCount: number;
-  revenue: { formatted: string; orders: number };
-  truncated: boolean;
-  topProducts: Array<{ productId: string; title: string; impressions: number; clicks: number; ctr: number; atcRate: number }>;
-}
-
-async function runLoader(query = ""): Promise<LoaderData> {
+async function runLoader(query = "?r=90d"): Promise<QuizAnalyticsData> {
   const res = await analyticsLoader(args(query));
-  return (await res.json()) as LoaderData;
+  return ((await res.json()) as { data: QuizAnalyticsData }).data;
 }
 
 beforeEach(() => {
@@ -148,121 +168,145 @@ beforeEach(() => {
     publishedJson: DOC,
     draftJson: null,
   });
-  p.event.findMany.mockResolvedValue(FIXTURE_EVENTS);
-  p.quizSession.findMany.mockResolvedValue([{ converted: true }, { converted: false }]);
+  installEventDispatch();
+  p.event.findFirst.mockResolvedValue(null);
+  p.quizSession.findMany.mockResolvedValue([]);
   p.quizSession.groupBy.mockResolvedValue([]);
-  p.emailCapture.count.mockResolvedValue(1);
+  // W10 poison — two rows, ONE session: back-nav resubmit added a row.
+  p.emailCapture.findMany.mockResolvedValue([
+    { id: "c1", sessionId: "s1", email: "amy@example.com", capturedAt: T0 },
+    { id: "c2", sessionId: "s1", email: "amy@example.com", capturedAt: T0 },
+  ]);
   p.product.findMany.mockResolvedValue([
     { productId: "p1", title: "Hydra Cream", imageUrl: null, handle: "hydra-cream" },
   ]);
+  p.backInStockRequest.findMany.mockResolvedValue([]);
+  p.category.findMany.mockResolvedValue([]);
 });
 
-describe("funnel + revenue + leaderboard math", () => {
-  it("funnel counts DISTINCT sessions per stage (duplicates don't inflate)", async () => {
-    const data = await runLoader();
-    expect(data.funnel).toEqual({
-      started: 3,
-      engaged: 3,
-      answered: 3,
-      completed: 2,
-      viewed: 2,
-      addToCart: 1,
-      clicked: 1,
-    });
-  });
-
-  it("revenue dedupes by order_id — one order across two sessions counts once", async () => {
-    const data = await runLoader();
-    expect(data.revenue.orders).toBe(1);
-    expect(data.revenue.formatted).toBe("50.00 USD");
-  });
-
-  it("conversion uses the event-based completed denominator + the session converted flag", async () => {
-    const data = await runLoader();
-    expect(data.conversion).toEqual({ completed: 2, converted: 1, rate: 0.5 });
-  });
-
-  it("product leaderboard: distinct-session CTR stays ≤ 100% despite duplicate clicks, and a product without catalog meta still surfaces", async () => {
-    const data = await runLoader();
-    const p1 = data.topProducts.find((r) => r.productId === "p1");
-    expect(p1).toMatchObject({ title: "Hydra Cream", impressions: 2, clicks: 1, ctr: 0.5 });
-    for (const row of data.topProducts) {
-      expect(row.ctr).toBeLessThanOrEqual(1);
-      expect(row.atcRate).toBeLessThanOrEqual(1);
-    }
-    // p2 was shown (s1) but never synced into the Product table — still listed.
-    const p2 = data.topProducts.find((r) => r.productId === "p2");
-    expect(p2).toMatchObject({ impressions: 1, clicks: 0 });
-  });
-
-  it("per-question drop-off in flow order + no hotspot noise below the traffic floor", async () => {
-    const data = await runLoader();
-    expect(data.dropoff.map((d) => [d.questionId, d.answered])).toEqual([
-      ["q1", 3],
-      ["q2", 2],
-    ]);
-    // 3 starts < HOTSPOT_MIN_STARTED — a 1-of-3 drop is not a trend.
-    expect(data.hotspots).toEqual([]);
-    expect(data.captureCount).toBe(1);
-  });
-});
-
-describe("hotspot detection on a real cliff", () => {
-  it("20 start, all answer q1, 5 answer q2 → one crit hotspot at q2", async () => {
-    const sessions = Array.from({ length: 20 }, (_, i) => `s${i}`);
-    p.event.findMany.mockResolvedValue([
-      ...sessions.map((s) => ev(s, "quiz_started")),
-      ...sessions.map((s) => ev(s, "question_answered", { question_id: "q1" })),
-      ...sessions.slice(0, 5).map((s) => ev(s, "question_answered", { question_id: "q2" })),
-    ]);
-    const data = await runLoader();
-    expect(data.hotspots).toHaveLength(1);
-    expect(data.hotspots[0]).toMatchObject({ questionId: "q2", severity: "crit" });
-    expect(data.hotspots[0]!.pctLostHere).toBeCloseTo(0.75);
-  });
-});
-
-describe("B2a window + date range", () => {
-  it("truncated=true when the fetch returns more than ANALYTICS_EVENT_WINDOW rows (and the extra row is dropped)", async () => {
-    p.event.findMany.mockResolvedValue(
-      Array.from({ length: ANALYTICS_EVENT_WINDOW + 1 }, (_, i) => ev(`s${i}`, "quiz_started")),
+describe("cohorting", () => {
+  it("fetches cohort events by sessionId with NO ts filter — a session's late events stay in its range", async () => {
+    await runLoader();
+    const cohortCall = p.event.findMany.mock.calls.find(
+      (c) => "sessionId" in (c[0] as { where: Record<string, unknown> }).where,
     );
-    const data = await runLoader();
-    expect(data.truncated).toBe(true);
-    expect(data.funnel.started).toBe(ANALYTICS_EVENT_WINDOW);
-  });
-
-  it("exactly at the window → not truncated", async () => {
-    p.event.findMany.mockResolvedValue(
-      Array.from({ length: ANALYTICS_EVENT_WINDOW }, (_, i) => ev(`s${i}`, "quiz_started")),
-    );
-    expect((await runLoader()).truncated).toBe(false);
-  });
-
-  it("?from/?to narrows every timestamped read; `to` is inclusive end-of-day", async () => {
-    await runLoader("?from=2026-01-01&to=2026-01-31");
-    const eventWhere = (p.event.findMany.mock.calls[0]![0] as { where: { ts: { gte: Date; lte: Date } } })
-      .where;
-    expect(eventWhere.ts.gte).toEqual(new Date("2026-01-01"));
-    expect(eventWhere.ts.lte).toEqual(new Date("2026-01-31T23:59:59.999Z"));
-    const sessionWhere = (
-      p.quizSession.findMany.mock.calls[0]![0] as { where: { startedAt: { gte: Date } } }
-    ).where;
-    expect(sessionWhere.startedAt.gte).toEqual(new Date("2026-01-01"));
-    const captureWhere = (
-      p.emailCapture.count.mock.calls[0]![0] as { where: { capturedAt: { gte: Date } } }
-    ).where;
-    expect(captureWhere.capturedAt.gte).toEqual(new Date("2026-01-01"));
-  });
-
-  it("an invalid date param is ignored (no ts constraint) rather than corrupting the query", async () => {
-    await runLoader("?from=not-a-date");
-    const where = (p.event.findMany.mock.calls[0]![0] as { where: Record<string, unknown> }).where;
+    expect(cohortCall).toBeTruthy();
+    const where = (cohortCall![0] as { where: Record<string, unknown> }).where;
+    expect(where.sessionId).toEqual({ in: ["s1", "s2", "s3"] });
     expect("ts" in where).toBe(false);
   });
+
+  it("distinct sessions per stage — duplicates don't inflate; completed ≤ engaged holds", async () => {
+    const data = await runLoader();
+    expect(data.kpis.engaged).toBe(3);
+    expect(data.kpis.completed).toBe(2);
+  });
 });
 
-describe("guards", () => {
+describe("KPI honesty", () => {
+  it("completion at n=3 is SUPPRESSED (gate 50), never a confident percentage", async () => {
+    const data = await runLoader();
+    expect(data.kpis.completion.state).toBe("suppressed");
+    expect(data.kpis.completion.showsAt).toBe(50);
+  });
+
+  it("captures count DISTINCT SESSIONS, not rows (W10)", async () => {
+    const data = await runLoader();
+    expect(data.kpis.captureSessions).toBe(1);
+  });
+
+  it("the contacts table lists one row per SHOPPER — a duplicate capture row can't list them twice", async () => {
+    const data = await runLoader();
+    expect(data.contacts.rows).toHaveLength(1);
+    expect(data.contacts.counts.all).toBe(1);
+    // On-screen the address is masked; only the export carries it in full.
+    expect(data.contacts.rows[0]!.emailMasked).not.toContain("amy@");
+  });
+
+  it("captures are fetched BY COHORT SESSION, not by capturedAt", async () => {
+    await runLoader();
+    const where = (p.emailCapture.findMany.mock.calls[0]![0] as { where: Record<string, unknown> }).where;
+    expect(where.sessionId).toEqual({ in: ["s1", "s2", "s3"] });
+    expect("capturedAt" in where).toBe(false);
+  });
+
+  it("revenue dedupes by order_id across sessions", async () => {
+    const data = await runLoader();
+    expect(data.kpis.revenue.orders).toBe(1);
+    expect(data.kpis.revenue.formatted).toBe("50.00 USD");
+    // One shared order across two sessions = ONE buyer, never two.
+    expect(data.kpis.buyers).toBe(1);
+  });
+});
+
+describe("preview impression filter (W4)", () => {
+  it("a stage:'preview' recommendation_viewed adds no impression", async () => {
+    const data = await runLoader();
+    const p1 = data.products.find((r) => r.productId === "p1");
+    expect(p1).toMatchObject({ impressions: 2, clicks: 1 });
+    // p2 was shown but never synced into the Product table — still listed.
+    expect(data.products.find((r) => r.productId === "p2")).toMatchObject({ impressions: 1 });
+  });
+});
+
+describe("step ledger", () => {
+  it("reconciles: reached = continued + skipped + left on the linear spine, with the [] answer as a skip", async () => {
+    const data = await runLoader();
+    const q1 = data.ledger!.steps.find((s) => s.nodeId === "q1")!;
+    const q2 = data.ledger!.steps.find((s) => s.nodeId === "q2")!;
+    expect(q1).toMatchObject({ reached: 3, continued: 2, skipped: 0, left: 1 });
+    expect(q1.reached).toBe(q1.continued! + q1.skipped! + q1.left!);
+    expect(q2).toMatchObject({ reached: 2, continued: 1, skipped: 1, left: 0 });
+    expect(data.ledger!.steepestNodeId).toBe("q1");
+  });
+
+  it("answer distributions bucket the skip separately", async () => {
+    const data = await runLoader();
+    const q2 = data.answers.find((a) => a.questionId === "q2")!;
+    expect(q2.answered).toBe(1);
+    expect(q2.skipped).toBe(1);
+  });
+});
+
+describe("range + widen", () => {
+  it("?r=90d sends a ts range on the ENGAGE query only", async () => {
+    await runLoader();
+    const engageCall = p.event.findMany.mock.calls[0]![0] as { where: Record<string, unknown> };
+    expect("ts" in engageCall.where).toBe(true);
+  });
+
+  it("a thin DEFAULT window auto-widens to all time and says so", async () => {
+    let calls = 0;
+    p.event.findMany.mockImplementation((q: { where: Record<string, unknown> }) => {
+      const where = q.where;
+      if (where.eventType === "quiz_engaged" && !("sessionId" in where)) {
+        calls += 1;
+        // First (ranged) fetch: 1 session. Widened (unranged) fetch: all 3.
+        return Promise.resolve(calls === 1 ? [{ sessionId: "s1" }] : ENGAGE_ROWS);
+      }
+      if (typeof where.eventType === "object" && where.eventType !== null) return Promise.resolve([]);
+      if ("sessionId" in where) return Promise.resolve(COHORT_EVENTS);
+      return Promise.resolve([]);
+    });
+    const data = await runLoader(""); // no ?r → default preset, widen allowed
+    expect(data.range.widened).toBe(true);
+    expect(data.kpis.engaged).toBe(3);
+  });
+
+  it("an explicit ?r never widens", async () => {
+    installEventDispatch({ engaged: [{ sessionId: "s1" }] });
+    const data = await runLoader("?r=90d");
+    expect(data.range.widened).toBe(false);
+    expect(data.kpis.engaged).toBe(1);
+  });
+});
+
+describe("insights + guards", () => {
+  it("a live quiz under 200 sessions gets the traffic-starved card", async () => {
+    const data = await runLoader();
+    expect(data.insights.cards.some((c) => c.id === "traffic-starved")).toBe(true);
+  });
+
   it("unknown quiz → 404 Response thrown", async () => {
     p.quiz.findFirst.mockResolvedValue(null);
     await expect(analyticsLoader(args())).rejects.toMatchObject({ status: 404 });
