@@ -267,6 +267,14 @@ specified; the mock draws sample DATA for them, not the systems):
 - Attr-slot behavioral fork: the Overview's slot opens the H2 attribute
   dialog; the Logic table's opens the QuestionWindow. Visual form identical;
   unifying on one is an owner call (candidate: the dialog everywhere).
+  **CLOSED by QRTZ-H5 (owner call, 2026-08-14):** the dialog everywhere.
+  One shared `QuestionRoleControl` (LogicTabMenus) renders the role pill +
+  the mock's role popover + the attr-slot + the AttributePickerDialog on
+  BOTH surfaces; the apply composition (role + field + seeded values in one
+  commit) lives in `logicTabFields.applyNarrowField` — the single write
+  path. The Logic table's pill opens the role menu now (the mock's own
+  drawing, shared.mjs 443–452); the QuestionWindow stays the one answer-
+  MAPPING editor, reached through the mapping cells.
 - The builder ed-body grid keeps 60/244/320 vs the mock's 76/244/288 —
   column widths were outside H4's ordered deltas; one CSS change if wanted.
 - Canvas-bar segs carry icons; the mock draws text-only (BLD-3-era).

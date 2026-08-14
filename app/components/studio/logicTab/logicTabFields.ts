@@ -1,7 +1,8 @@
 import type { z } from "zod";
-import type { Answer } from "../../../lib/quizSchema";
+import type { Answer, Quiz } from "../../../lib/quizSchema";
 import type { IndexedProduct } from "../../../lib/recommendationEngine";
 import type { BuilderCategory } from "../../builder/stepProps";
+import { setAnswerFilterValues, setQuestionRole } from "../../../lib/quizMutations";
 import { numericId } from "../../../lib/cartLink";
 
 type AnswerT = z.infer<typeof Answer>;
@@ -492,6 +493,87 @@ export function writeValuesForField(
     return { product_type_filters: [...values] };
   }
   return {};
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// QRTZ-H5 (owner unification call 2026-08-14) — the ONE apply seam behind the
+// attribute dialog. Every surface that lets a merchant pick "what this
+// question narrows by" (the Overview's RoleControl, the Logic table's role
+// menu + attr-slot) commits through applyNarrowField — the role write, the
+// field choice and the seeded values compose HERE and nowhere else, so the
+// open-first/apply-together contract (Cancel writes nothing; Use writes
+// everything at once) can never drift between surfaces.
+// ════════════════════════════════════════════════════════════════════════════
+
+/** The attr-slot / toast label for a field key — derivedNarrowLabel's exact
+    naming ("mf:custom.gender" → "gender", "ptype" → "Product type") so the
+    toast can never disagree with the slot's readout. */
+export const fieldSlotLabel = (field: string): string => {
+  if (field === "ptype") return "Product type";
+  const bare = field.replace(/^(mf|tag|vo):/, "");
+  return bare.split(".").pop() || bare;
+};
+
+export interface AppliedNarrowField {
+  doc: Quiz;
+  /** Answers that received a seeded value guess. */
+  mapped: number;
+  /** Eligible (non-no_preference) answers left unmapped for the field. */
+  unmatched: number;
+}
+
+/** QRTZ-H5 — apply a picked narrow-field to a question: ONE composition of
+ *  the role write (when flipping) + one setAnswerFilterValues per answer,
+ *  each built by writeValuesForField (the field derives back from the
+ *  values; the legacy narrow_field key stays unwritten, exactly like
+ *  QuestionWindow). H2's exact rules hold:
+ *    - re-picking the current derived field returns null (no-op — re-seeding
+ *      would overwrite hand-tuned per-answer values with guesses);
+ *    - on a field change, mapped answers are re-guessed against the NEW
+ *      field and unmatched old values are cleared (setQuestionNarrowField's
+ *      locked semantic — old values are meaningless against the new field);
+ *    - no_preference answers are never touched ("keeps everything" is a
+ *      deliberate choice).
+ *  Pure doc→doc (composes barrel mutations only); null = nothing to write. */
+export function applyNarrowField(
+  doc: Quiz,
+  nodeId: string,
+  productIndex: readonly IndexedProduct[],
+  field: string,
+): AppliedNarrowField | null {
+  const node = doc.nodes.find((n) => n.id === nodeId);
+  if (!node || node.type !== "question") return null;
+  const answers = node.data.answers;
+  const isFilter = node.data.role === "filter";
+  if (isFilter && field === derivedNarrowField(answers)) return null;
+  let next = doc;
+  if (!isFilter) next = setQuestionRole(next, nodeId, "filter");
+  const guesses = guessAnswerValuesForField(answers, productIndex, field);
+  const byId = new Map(guesses.map((g) => [g.answerId, g]));
+  for (const a of answers) {
+    if (a.no_preference) continue;
+    const g = byId.get(a.id);
+    if (g)
+      next = setAnswerFilterValues(next, nodeId, a.id, writeValuesForField(field, [g.value]));
+    else if (answerHasSelection(a)) next = setAnswerFilterValues(next, nodeId, a.id, {});
+  }
+  const eligible = answers.filter((a) => !a.no_preference).length;
+  return { doc: next, mapped: guesses.length, unmatched: eligible - guesses.length };
+}
+
+/** QRTZ-H5 — the one toast for an applied field, shared verbatim by every
+ *  surface (the Overview's H2 copy, unchanged). */
+export function narrowAppliedToast(
+  questionText: string,
+  field: string,
+  mapped: number,
+  unmatched: number,
+): string {
+  const q = questionText.replace(/\s*\?\s*$/, "");
+  const name = fieldSlotLabel(field);
+  return unmatched > 0
+    ? `"${q}" now narrows by ${name} — map ${unmatched} answer${unmatched === 1 ? "" : "s"} on the Logic step`
+    : `"${q}" now narrows by ${name} — ${mapped} answer${mapped === 1 ? "" : "s"} mapped, check them`;
 }
 
 // ════════════════════════════════════════════════════════════════════════════
