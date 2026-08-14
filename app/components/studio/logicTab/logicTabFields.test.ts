@@ -4,11 +4,14 @@ import type { BuilderCategory } from "../../builder/stepProps";
 import {
   answerHasSelection,
   answerValuesForField,
+  applyNarrowField,
   derivedNarrowField,
   derivedNarrowLabel,
+  fieldSlotLabel,
   guessAnswerMappings,
   guessAnswerValuesForField,
   fieldValues,
+  narrowAppliedToast,
   narrowFieldOptions,
   popoverShopifyUrl,
   writeValuesForField,
@@ -278,6 +281,100 @@ describe("QRTZ-H2 — answerHasSelection / derivedNarrowField / guessAnswerValue
       field: "mf:custom.gender",
       value: "women",
     });
+  });
+});
+
+describe("QRTZ-H5 — applyNarrowField (the ONE apply seam behind the dialog)", () => {
+  const a = (id: string, text: string, extra: Record<string, unknown> = {}) => ({
+    id,
+    text,
+    tags: [] as string[],
+    edge_handle_id: `h_${id}`,
+    ...extra,
+  });
+  const gp = [
+    P("g1", ["fit:Slim"], { "custom.gender": "Women" }),
+    P("g2", ["fit:Relaxed"], { "custom.gender": "Men" }),
+  ];
+  const doc = (role: string, answers: ReturnType<typeof a>[]) =>
+    ({
+      quiz_id: "qz",
+      status: "draft",
+      logic_model: "decider",
+      nodes: [
+        {
+          id: "n1",
+          type: "question",
+          position: { x: 0, y: 0 },
+          data: { text: "Fit?", question_type: "single_select", required: true, role, answers },
+        },
+      ],
+      edges: [],
+    }) as never;
+  const q1 = (d: unknown) =>
+    (d as { nodes: Array<{ id: string; data: { role?: string; answers: never[] } }> }).nodes.find(
+      (n) => n.id === "n1",
+    )!.data;
+
+  it("fresh flip: writes role=filter + seeds matches, skips no_preference, counts unmatched", () => {
+    const applied = applyNarrowField(
+      doc("qualifier", [
+        a("a1", "Slim"),
+        a("a2", "Something else"),
+        a("a3", "Any", { no_preference: true }),
+      ]),
+      "n1",
+      gp,
+      "tag:fit",
+    );
+    expect(applied).not.toBeNull();
+    const data = q1(applied!.doc);
+    expect(data.role).toBe("filter");
+    expect(data.answers[0]).toMatchObject({ tags: ["fit:slim"] });
+    // Unmatched with NO prior selection stays untouched (nothing to clear).
+    expect(answerHasSelection(data.answers[1]!)).toBe(false);
+    // no_preference is a deliberate choice — never overwritten.
+    expect(data.answers[2]).toMatchObject({ no_preference: true });
+    expect(applied).toMatchObject({ mapped: 1, unmatched: 1 });
+  });
+
+  it("re-picking the current derived field is a no-op (null — guesses never clobber hand-tuning)", () => {
+    const d = doc("filter", [a("a1", "Whatever", { tags: ["fit:slim"] })]);
+    expect(applyNarrowField(d, "n1", gp, "tag:fit")).toBeNull();
+  });
+
+  it("changing field re-guesses mapped answers and CLEARS unmatched old values", () => {
+    const applied = applyNarrowField(
+      doc("filter", [
+        a("a1", "Men", { tags: ["fit:slim"] }), // re-guessed onto the new field
+        a("a2", "Slim", { tags: ["fit:slim"] }), // no gender match → cleared
+      ]),
+      "n1",
+      gp,
+      "mf:custom.gender",
+    );
+    const data = q1(applied!.doc);
+    expect(data.role).toBe("filter");
+    expect(data.answers[0]).toMatchObject({
+      tags: [],
+      metafield_filters: [{ key: "custom.gender", value: "men" }],
+    });
+    expect(answerHasSelection(data.answers[1]!)).toBe(false);
+    expect(applied).toMatchObject({ mapped: 1, unmatched: 1 });
+  });
+
+  it("missing / non-question node → null", () => {
+    expect(applyNarrowField(doc("qualifier", []), "nope", gp, "tag:fit")).toBeNull();
+  });
+
+  it("narrowAppliedToast keeps H2's exact copy on both branches", () => {
+    expect(narrowAppliedToast("Which fit?", "mf:custom.gender", 1, 2)).toBe(
+      '"Which fit" now narrows by gender — map 2 answers on the Logic step',
+    );
+    expect(narrowAppliedToast("Which fit?", "tag:fit", 2, 0)).toBe(
+      '"Which fit" now narrows by fit — 2 answers mapped, check them',
+    );
+    expect(fieldSlotLabel("ptype")).toBe("Product type");
   });
 });
 

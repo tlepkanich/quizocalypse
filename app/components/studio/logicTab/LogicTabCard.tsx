@@ -7,12 +7,12 @@ import { answerNextNode } from "../../../lib/pathAnalyzer";
 import { moveDecisionRule, removeDecisionRule } from "../../../lib/quizMutations";
 import { answerFilterValues, filterAnswerMatchCount } from "../../../lib/filterMatching";
 import { ruleTargets } from "../../../lib/recommendDecider";
-import { ProductCountButton, RouteMenuButton } from "./LogicTabMenus";
+import { ProductCountButton, QuestionRoleControl, RouteMenuButton } from "./LogicTabMenus";
 import { useQzToast } from "../../qz-toast";
 import { CreateRuleModal } from "./CreateRuleModal";
 import { QuestionWindow } from "./QuestionWindow";
 import { ExplainerSheet, type ExplainerKind } from "./Explainers";
-import { derivedNarrowLabel } from "./logicTabFields";
+import { derivedNarrowLabel, narrowFieldOptions } from "./logicTabFields";
 
 // ════════════════════════════════════════════════════════════════════════════
 // Logic tab (docs/design/logic-tab/HANDOFF.md §2/§3/§5 + DECISIONS.md) — the
@@ -129,6 +129,15 @@ export function LogicTabCard({
   const switchedOn = questions.filter(
     (q) => q.node.data.role === "decides" || q.node.data.role === "filter",
   ).length;
+  // QRTZ-H5 — one inventory sweep for the whole table (the role control only
+  // needs the boolean; the dialog recomputes rows itself, and only while
+  // open) + the decider's question number for the role menu's "now on QN".
+  const hasNarrowFields = useMemo(
+    () => narrowFieldOptions(productIndex).length > 0,
+    [productIndex],
+  );
+  const deciderQIndex =
+    questions.find((q) => q.node.data.role === "decides")?.qIndex ?? null;
   // QRTZ-S6 — rule drag-reorder (mock s14 "Drag a rule up"; Layers-tab BT4
   // pattern: dragId + hover index, drop-line class). The ↑/↓ buttons stay as
   // the keyboard/a11y path; both routes end in the same moveDecisionRule.
@@ -390,6 +399,8 @@ export function LogicTabCard({
               productIndex={productIndex}
               qIndexByNodeId={qIndexByNodeId}
               commit={commit}
+              deciderQIndex={deciderQIndex}
+              hasNarrowFields={hasNarrowFields}
               lastSyncAt={lastSyncAt}
               shopifyAdminDomain={shopifyAdminDomain}
               onOpenWindow={
@@ -502,6 +513,8 @@ function QuestionRows({
   productIndex,
   qIndexByNodeId,
   commit,
+  deciderQIndex,
+  hasNarrowFields,
   lastSyncAt,
   shopifyAdminDomain,
   onOpenWindow,
@@ -514,10 +527,13 @@ function QuestionRows({
   productIndex: IndexedProduct[];
   qIndexByNodeId: Map<string, number>;
   commit?: (doc: QuizDoc) => void;
+  /** QRTZ-H5 — the role menu's "now on QN" hint + dialog gating. */
+  deciderQIndex: number | null;
+  hasNarrowFields: boolean;
   /** QRTZ-B2 — threaded to the products popover (sync line + admin link). */
   lastSyncAt?: string | null;
   shopifyAdminDomain?: string | null;
-  /** UNIFIED — opens the question window (pill + every mapping cell). */
+  /** UNIFIED — opens the question window (every mapping cell). */
   onOpenWindow?: (nodeId: string, answerId: string | null) => void;
 }) {
   const role = q.node.data.role;
@@ -528,9 +544,11 @@ function QuestionRows({
   // QRTZ-OB1 (GAPS §A item 7) — the mock's role vocabulary: "Picks the
   // result" (◆ gone, shared.mjs line 316) · "Narrows" with the DERIVED
   // attribute in the mock's .attr-slot beneath (role-stack, lines 398–401)
-  // · "Asked only" (line 1034). QRTZ-H3: the pill takes the mock .role form
-  // (bordered, caret span); the slot takes H2's qz-ap-slot form and opens
-  // the question window — the Logic page's one mapping editor (UNIFIED).
+  // · "Asked only" (line 1034). QRTZ-H5 (owner unification): the pill opens
+  // the SHARED role menu (the mock's role popover — QuestionRoleControl,
+  // identical to the Overview's) and the attr-slot opens the SHARED
+  // attribute dialog, never the QuestionWindow. The window stays the Logic
+  // page's one answer-MAPPING editor, reached through the mapping cells.
   const pillLabel =
     role === "decides" ? (
       <>Picks the result</>
@@ -540,60 +558,37 @@ function QuestionRows({
       <>Asked only</>
     );
   const pillClass = role === "decides" ? " is-start" : "";
-  const pill = onOpenWindow ? (
-    <button
-      type="button"
-      className={`qz-ltab-pill${pillClass} qz-ltab-pill-btn`}
-      onClick={() => onOpenWindow(q.node.id, answers[0]?.id ?? null)}
-    >
-      {pillLabel}{" "}
-      <span className="qz-ltab-caret" aria-hidden>
-        ▾
-      </span>
-    </button>
-  ) : (
-    <span className={`qz-ltab-pill${pillClass}`}>{pillLabel}</span>
-  );
   const narrowLabel = role === "filter" ? derivedNarrowLabel(answers) : null;
-  const attrLine =
-    narrowLabel === null ? null : onOpenWindow ? (
-      narrowLabel === "nothing yet" ? (
-        <button
-          type="button"
-          className="qz-ap-slot is-empty"
-          title="Choose what this question narrows by"
-          onClick={() => onOpenWindow(q.node.id, answers[0]?.id ?? null)}
-        >
-          Choose attribute
-        </button>
-      ) : (
-        <button
-          type="button"
-          className="qz-ap-slot"
-          title={`narrows on ${narrowLabel}`}
-          onClick={() => onOpenWindow(q.node.id, answers[0]?.id ?? null)}
-        >
+  const roleStack = commit ? (
+    <QuestionRoleControl
+      variant="table"
+      doc={doc}
+      node={q.node}
+      qIndex={q.qIndex}
+      deciderQIndex={deciderQIndex}
+      productIndex={productIndex}
+      hasNarrowFields={hasNarrowFields}
+      onCommit={commit}
+    />
+  ) : (
+    // Read-only (previews, tests) — the same stack as static spans.
+    <div className="qz-ltab-rolestack">
+      <span className={`qz-ltab-pill${pillClass}`}>{pillLabel}</span>
+      {narrowLabel === null ? null : (
+        <span className="qz-ap-slot" title={`narrows on ${narrowLabel}`}>
           <span>
             narrows on <b>{narrowLabel}</b>
           </span>
-        </button>
-      )
-    ) : (
-      <span className="qz-ap-slot" title={`narrows on ${narrowLabel}`}>
-        <span>
-          narrows on <b>{narrowLabel}</b>
         </span>
-      </span>
-    );
+      )}
+    </div>
+  );
   const qcell = (rowSpan: number) => (
     <th scope="rowgroup" rowSpan={rowSpan} className="qz-ltab-qcell">
       <span className="qz-ltab-qtext" title={q.node.data.text}>
         {q.node.data.text}
       </span>
-      <div className="qz-ltab-rolestack">
-        {pill}
-        {attrLine}
-      </div>
+      {roleStack}
     </th>
   );
 
