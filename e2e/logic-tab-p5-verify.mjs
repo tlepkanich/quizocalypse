@@ -104,7 +104,8 @@ await openLogic();
 ok("rule persisted through autosave", (await card.locator(".qz-ltab-rrow").count()) === rulesBefore + 1);
 const delRow = card.locator(".qz-ltab-rrow").last();
 await delRow.hover();
-await delRow.locator(".qz-ltab-rbtn.is-del").click();
+// QRTZ-H3 — delete is the mock's hover-revealed × icon button.
+await delRow.locator(".qz-ltab-ricon").click();
 await page.waitForTimeout(1000);
 ok("✕ deletes the rule", (await card.locator(".qz-ltab-rrow").count()) === rulesBefore ||
   (rulesBefore === 0 && (await card.locator(".qz-ltab-empty").count()) === 1));

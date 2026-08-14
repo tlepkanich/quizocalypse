@@ -5931,116 +5931,9 @@ body[data-qz] .qz-s4-phone3d:focus-visible { outline: 2px solid var(--qz-accent)
 .qz-s4p-fb-heading { margin-top: 8px; font-size: 13px; font-weight: 600; font-family: var(--qz-font-heading, Georgia, serif); }
 .qz-s4p-fb .qz-s4p-items { margin-top: 8px; }
 
-/* ═══════════════════════════════════════════════════════════════════════════
-   QZY-7 — Build tab core (build-tab spec §2/§3)
-   Screen carousel (center column only) + Layers tab rows.
-   ═══════════════════════════════════════════════════════════════════════════ */
-
-/* FIX-2 — build-tab.html .strip geometry: 7px 12px 8px padding, 62×78 thumbs
-   (spec .stepcard), 8px gap. The old 84×118 + fat paddings made a 163px-tall
-   strip that ate ~52px of canvas height. */
-.qz-screens {
-  display: flex;
-  gap: 8px;
-  align-items: flex-start;
-  padding: 7px 12px 8px;
-  border-top: 1px solid var(--qz-rule);
-  overflow-x: auto;
-  flex: 0 0 auto;
-}
-.qz-screens-item { display: flex; flex-direction: column; gap: 4px; flex: 0 0 auto; }
-.qz-screens-thumb {
-  width: 62px;
-  height: 78px;
-  padding: 0;
-  overflow: hidden;
-  position: relative;
-  border: 1px solid var(--qz-rule);
-  border-radius: 7px;
-  background: var(--qz-paper);
-  cursor: pointer;
-}
-.qz-screens-item.is-active .qz-screens-thumb {
-  border-color: var(--qz-accent);
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--qz-accent) 35%, transparent);
-}
-.qz-screens-scale {
-  /* 62 / 375 — the thumb width over the mobile preview's logical width. */
-  width: 375px;
-  transform: scale(0.165);
-  transform-origin: top left;
-  pointer-events: none;
-}
-.qz-screens-caption {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 5px;
-  min-height: 15px;
-  /* FIX-2 — spec .stepcard .tl: 600 8.5px. */
-  font-size: 8.5px;
-  font-weight: 600;
-  color: var(--qz-ink-3);
-  position: relative;
-}
-/* FIX-2 — spec .stepcard.on .tl is accent-ink (var(--qz-ink-1) was undefined
-   repo-wide, so the active label silently inherited the dim caption color). */
-.qz-screens-item.is-active .qz-screens-label { color: var(--qz-accent); font-weight: 700; }
-.qz-screens-del {
-  border: none;
-  background: transparent;
-  color: var(--qz-ink-4);
-  font-size: 10px;
-  cursor: pointer;
-  padding: 0 2px;
-}
-.qz-screens-del:hover { color: var(--qz-crit); }
-.qz-screens-confirm {
-  position: absolute;
-  bottom: calc(100% + 4px);
-  left: 50%;
-  transform: translateX(-50%);
-  z-index: 30;
-  width: 220px;
-  padding: 8px 10px;
-  border: 1px solid var(--qz-rule);
-  border-radius: 8px;
-  background: var(--qz-paper);
-  box-shadow: var(--qz-lift-2, none);
-  font-size: 11px;
-  color: var(--qz-ink-2);
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-.qz-screens-confirm button {
-  font: inherit;
-  font-size: 11px;
-  padding: 2px 10px;
-  border-radius: var(--qz-radius-pill);
-  border: 1px solid var(--qz-rule);
-  background: var(--qz-paper);
-  cursor: pointer;
-}
-.qz-screens-confirm .qz-screens-confirm-yes {
-  background: var(--qz-crit);
-  color: var(--qz-paper);
-  border-color: transparent;
-  font-weight: 600;
-}
-/* FIX-2 — spec .addstep: 38×78. */
-.qz-screens-add {
-  flex: 0 0 auto;
-  width: 38px;
-  height: 78px;
-  border: 1.5px dashed var(--qz-rule);
-  border-radius: 7px;
-  background: transparent;
-  color: var(--qz-ink-3);
-  font-size: 18px;
-  cursor: pointer;
-}
-.qz-screens-add:hover { border-color: var(--qz-accent); color: var(--qz-accent); }
+/* QZY-7's screen carousel (.qz-screens-*) RETIRED by QRTZ-H4 — the Flow tab
+   (mock s16 ed-panel) is the screen switcher; its styles live in the QRTZ-H4
+   section at the end of this sheet. */
 
 /* ═══════════════════════════════════════════════════════════════════════════
    BLD-1 — All-screens canvas + simplified Global styles panel
@@ -6231,52 +6124,8 @@ body[data-qz] .qz-allcard-add:focus-visible { outline: 2px solid var(--qz-accent
 }
 .qz-gsp-note { margin: 0; font-size: 11.5px; color: var(--qz-ink-4); line-height: 1.45; }
 
-/* Layers tab */
-.qz-layers { display: flex; flex-direction: column; gap: 4px; }
-.qz-layers-row {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 4px 6px;
-  border: 1px solid var(--qz-rule);
-  border-radius: 8px;
-  background: var(--qz-paper);
-}
-.qz-layers-row.is-hidden { opacity: 0.55; }
-/* §O2.2 — drag-reorder + lock affordances. */
-.qz-layers-row.is-dragging { opacity: 0.4; }
-.qz-layers-row.is-dragover { border-color: var(--qz-accent); box-shadow: 0 -2px 0 var(--qz-accent) inset; }
-.qz-layers-row.is-locked { background: var(--qz-cream-2); }
-.qz-layers-grip { flex: 0 0 auto; display: flex; align-items: center; color: var(--qz-ink-25); cursor: grab; }
-.qz-layers-row.is-locked .qz-layers-grip { cursor: not-allowed; opacity: 0.4; }
-.qz-layers-main {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex: 1 1 auto;
-  min-width: 0;
-  border: none;
-  background: transparent;
-  font: inherit;
-  font-size: 12px;
-  color: var(--qz-ink);
-  cursor: pointer;
-  text-align: left;
-  padding: 2px 0;
-}
-.qz-layers-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.qz-layers-actions { display: flex; gap: 2px; flex: 0 0 auto; }
-.qz-layers-actions button {
-  border: none;
-  background: transparent;
-  cursor: pointer;
-  font-size: 11px;
-  color: var(--qz-ink-3);
-  padding: 2px 4px;
-  border-radius: 4px;
-}
-.qz-layers-actions button:hover:not(:disabled) { background: var(--qz-accent-tint, transparent); color: var(--qz-ink); }
-.qz-layers-actions button:disabled { opacity: 0.35; cursor: default; }
+/* The Layers tab (.qz-layers-*) RETIRED by QRTZ-H4 — its block rows folded
+   into the Flow tab's .qz-ftree-kid rows (QRTZ-H4 section, end of sheet). */
 
 /* ═══════════════════════════════════════════════════════════════════════════
    QZY-8 — Inspector v2 (build-tab spec §2/§4/§5.1/§10)
@@ -6559,6 +6408,50 @@ body[data-qz] .qz-allcard-add:focus-visible { outline: 2px solid var(--qz-accent
   color: var(--qz-ink-3);
   background: var(--qz-bg);
 }
+
+/* R5c-2 (build-tab §6.1) — answer-option hover + motion, mirrored from
+   quiz-runtime.css (§A6 motion presets) so the builder canvas previews the
+   same states the shopper sees (opt-in via .qz-answer-opt + data attrs; unset
+   options are unaffected). Keep the hover values in sync with quiz-runtime.css
+   — the shopper sheet is the source of truth. */
+.qz-answer-opt {
+  transition: transform 0.18s ease, box-shadow 0.18s ease,
+    background-color 0.15s ease, border-color 0.15s ease, opacity 0.2s ease;
+}
+.qz-answer-opt[data-qz-hover]:hover {
+  background: var(--qz-opt-hover-bg);
+  border-color: var(--qz-opt-hover-border);
+}
+.qz-answer-opt[data-qz-motion="pop"]:hover { transform: scale(1.03); }
+.qz-answer-opt[data-qz-motion="lift"]:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.12);
+}
+.qz-answer-opt[data-qz-motion="fade"]:hover { opacity: 0.82; }
+@media (hover: none) {
+  .qz-answer-opt[data-qz-motion]:hover { transform: none; box-shadow: none; opacity: 1; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .qz-answer-opt { transition: none; }
+  .qz-answer-opt[data-qz-motion]:hover { transform: none; box-shadow: none; opacity: 1; }
+}
+/* R5c-4 (build-tab §6.1) — reveal-on-interaction: a per-option image shown on
+   hover or select, beside/above the option. Hidden by default; opt-in via the
+   .qz-opt-wrap wrapper (only present when an option has a reveal image). */
+.qz-reveal {
+  display: none;
+  position: absolute;
+  z-index: 3;
+  max-width: 160px;
+  max-height: 160px;
+  border-radius: 8px;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.18);
+  pointer-events: none;
+}
+.qz-reveal[data-qz-reveal-pos="beside"] { left: 100%; top: 0; margin-left: 8px; }
+.qz-reveal[data-qz-reveal-pos="above"] { bottom: 100%; left: 0; margin-bottom: 8px; }
+.qz-opt-wrap:hover .qz-reveal,
+.qz-opt-wrap[data-qz-selected] .qz-reveal { display: block; }
 
 /* §L Layer 2 — Engagement settings panel (studio). */
 .qz-eng-sec { border: 1px solid var(--qz-rule); border-radius: var(--qz-radius-lg); margin-bottom: 12px; overflow: hidden; }
@@ -6991,11 +6884,7 @@ body[data-qz] .qz-cust-row:focus-visible {
 }
 
 /* ═══ post-fork main additions (QZY-R era), carried over the design merge ═══ */
-/* BT4 drag-to-reorder — the dragged row dims; the hovered target shows a top
-   drop-line so the merchant sees where the block will land. */
-.qz-layers-row.is-dragging { opacity: 0.4; }
-.qz-layers-row.is-drop-target { box-shadow: inset 0 2px 0 0 var(--qz-accent, var(--qz-ink)); }
-.qz-layers-grip { font-size: 12px; line-height: 1; flex: 0 0 auto; }
+/* BT4 drag-to-reorder moved onto the Flow tab's kid rows (QRTZ-H4 section). */
 
 /* ═══════════════════════════════════════════════════════════════════════════
    Logic tab v2 (docs/design/logic-tab/HANDOFF.md §2/§3/§5/§11) — the ONE-card
@@ -7004,39 +6893,91 @@ body[data-qz] .qz-cust-row:focus-visible {
    system: --line2 → --qz-cream-2 · --bar → --qz-rule · bad → --qz-crit.
    ═══════════════════════════════════════════════════════════════════════════ */
 /* QRTZ-G3 — the teaching banner (.qz-ltab-note) and the in-card divider
-   (.qz-ltab-div) are retired: the view is TWO stacked cards now. */
+   (.qz-ltab-div) are retired: the view is TWO stacked cards now.
+   QRTZ-H3 — the whole screen is mock-EXACT (owner order 2026-08-13):
+   values below are quartz-1-rail's own (quartz.mjs tokens + base.mjs Logic
+   CSS). Four quartz literals have no repo token and ride scoped custom
+   props (--qz-h3-*), declared on the stack root AND on the portalled
+   products popover. */
+.qz-ltab-stack, .qz-pp {
+  --qz-h3-group-rule: 1.5px solid #CFCADD; /* quartz --group-rule */
+  --qz-h3-qcell-bg: #FBFAFD;               /* quartz --qcell-bg */
+  --qz-h3-tag-bg: #F2F1F6;                 /* quartz --tag-a/b-bg */
+  --qz-h3-tag-ink: #453F58;                /* quartz --tag-a/b-ink */
+  --qz-h3-tag-line: #E1DEEA;               /* quartz --tag-a/b-line */
+}
 .qz-ltab {
   background: var(--qz-paper); border: 1px solid var(--qz-rule);
-  border-radius: var(--qz-radius); overflow: hidden;
+  border-radius: var(--qz-radius-lg); overflow: hidden;
 }
+/* Mock .card-head on a .block card: 18px pad, hairline below; title 16/600;
+   meta 12.5 ink-3(→qz-ink-4) taking the middle. */
 .qz-ltab-hd {
-  display: flex; align-items: center; gap: 10px;
-  padding: 9px 16px 9px 22px; border-bottom: 1px solid var(--qz-rule);
+  display: flex; align-items: center; gap: 12px;
+  padding: 18px; border-bottom: 1px solid var(--qz-rule);
 }
-.qz-ltab-hd h2 { font-size: 14.5px; font-weight: 700; letter-spacing: -0.01em; margin: 0; }
-.qz-ltab-empty { font-size: 12.5px; line-height: 1.45; color: var(--qz-ink-3); padding: 10px 22px; margin: 0; }
-.qz-ltab-rules { list-style: none; margin: 0; padding: 0; }
+.qz-ltab-hd h2 { font-size: 16px; font-weight: 600; letter-spacing: -0.01em; margin: 0; }
+.qz-ltab-empty { font-size: 12.5px; line-height: 1.45; color: var(--qz-ink-3); padding: 10px 18px; margin: 0; }
+/* Mock .rules / .rule (base.mjs 550–556): list pads 6/18/18, rows 11px 0
+   with hairlines, the 22px boxed number, 14px/1.7 copy. */
+.qz-ltab-rules { list-style: none; margin: 0; padding: 6px 18px 18px; }
 .qz-ltab-rrow {
-  display: flex; gap: 10px; align-items: baseline;
-  font-size: 12.5px; line-height: 1.45; padding: 7px 22px;
-  border-bottom: 1px solid var(--qz-cream-2);
+  display: flex; gap: 12px; align-items: flex-start;
+  padding: 11px 0; border-bottom: 1px solid var(--qz-rule);
 }
 .qz-ltab-rrow:last-child { border-bottom: none; }
-.qz-ltab-rnum { color: var(--qz-ink-25); font-variant-numeric: tabular-nums; flex: 0 0 auto; min-width: 14px; }
-.qz-ltab-sentence { min-width: 0; flex: 1 1 auto; }
-/* P4 — reorder/delete actions; §3.3 fresh-rule highlight (1800 ms). */
-.qz-ltab-ractions { display: flex; gap: 2px; flex: 0 0 auto; opacity: 0; }
-.qz-ltab-rrow:hover .qz-ltab-ractions, .qz-ltab-ractions:focus-within { opacity: 1; }
-.qz-ltab-rbtn {
-  font: inherit; font-size: 11px; line-height: 1; cursor: pointer;
-  border: none; background: none; color: var(--qz-ink-4);
-  padding: 3px 5px; border-radius: 6px;
+.qz-ltab-rnum {
+  flex: none; width: 22px; height: 22px; display: grid; place-items: center;
+  border-radius: var(--qz-radius-sm); font-size: 11px; color: var(--qz-ink-4);
+  background: var(--qz-cream-2); border: 1px solid var(--qz-rule);
+  font-variant-numeric: tabular-nums;
 }
-.qz-ltab-rbtn:hover { background: var(--qz-cream-2); color: var(--qz-ink); }
-.qz-ltab-rbtn:disabled { color: var(--qz-ink-25); cursor: default; background: none; }
-.qz-ltab-rbtn.is-del:hover { color: var(--qz-crit); }
+/* Drag rides the row (mock .rule draws NO grip); the number is the handle. */
+.qz-ltab-rrow[draggable="true"] .qz-ltab-rnum { cursor: grab; }
+.qz-ltab-sentence {
+  min-width: 0; flex: 1 1 auto; margin: 0;
+  font-size: 14px; line-height: 1.7; color: var(--qz-ink-3);
+}
+.qz-ltab-rwhen { color: var(--qz-ink-4); }
+.qz-ltab-arrow { color: var(--qz-ink-4); padding: 0 3px; }
+.qz-ltab-ans {
+  font-weight: 600; color: var(--qz-ink); background: var(--qz-cream-2);
+  border: 1px solid var(--qz-rule); border-radius: var(--qz-radius-sm);
+  padding: 1px 6px;
+}
+.qz-ltab-op {
+  font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.07em;
+  color: var(--qz-ink-4); padding: 0 2px;
+}
+.qz-ltab-verb { font-weight: 600; }
+.qz-ltab-verb.is-show, .qz-ltab-verb.is-highlight { color: var(--qz-ok); }
+.qz-ltab-verb.is-exclude { color: var(--qz-crit); }
+.qz-ltab-rkind { font-size: 10.5px; color: var(--qz-ink-4); }
+/* P4 — delete (mock .icon-btn, hover-revealed) + the visually-hidden
+   keyboard reorder pair (a11y — hidden visually, never from the tree);
+   §3.3 fresh-rule highlight (1800 ms). */
+.qz-ltab-ractions { display: flex; align-items: center; gap: 2px; flex: 0 0 auto; }
+.qz-ltab-ricon {
+  width: 26px; height: 26px; flex: none; display: grid; place-items: center;
+  font: inherit; font-size: 16px; line-height: 1; cursor: pointer;
+  border: 0; background: transparent; color: var(--qz-ink-4);
+  border-radius: var(--qz-radius-sm); opacity: 0;
+}
+.qz-ltab-rrow:hover .qz-ltab-ricon, .qz-ltab-ricon:focus-visible { opacity: 1; }
+.qz-ltab-ricon:hover { background: var(--qz-cream-2); color: var(--qz-ink); }
+.qz-ltab-rmove {
+  position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0;
+  border: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap;
+}
+.qz-ltab-rmove:focus-visible {
+  position: static; width: auto; height: auto; margin: 0; padding: 3px 6px;
+  overflow: visible; clip: auto; white-space: normal;
+  font: inherit; font-size: 11px; line-height: 1; cursor: pointer;
+  background: var(--qz-cream-2); color: var(--qz-ink);
+  border-radius: var(--qz-radius-sm);
+}
 .qz-ltab-rrow.is-fresh { background: var(--qz-accent-wash); transition: background 0.4s ease; }
-.qz-ltab-create { margin-left: auto; font-size: 11.5px; padding: 6px 12px; border-radius: 8px; }
+.qz-ltab-create { margin-left: auto; }
 /* Funnel RuleRow's read-only multi-target badge (review L1-1). */
 .qz-s3-rr-multi { font-size: 12px; color: var(--qz-ink-4); font-style: italic; }
 
@@ -7189,13 +7130,18 @@ body[data-qz] .qz-cust-row:focus-visible {
 /* Info-only mapping cells stay readable but visibly inert (opacity .55). */
 .qz-qwin-dimcell { opacity: 0.55; }
 
-/* ── P6 — the ✦ How it works pills + explainer sheets (§7) ── */
+/* ── P6/H3 — the per-card explain buttons + explainer sheets (§7).
+   Mock .explain-btn (base.mjs 1392–1399): accent-washed, 12.5/600,
+   the ✦ icon at 11px. ── */
 .qz-ltab-how {
-  font: inherit; font-size: 10.5px; font-weight: 600; cursor: pointer;
-  border: 1px solid var(--qz-rule); background: none; color: var(--qz-ink-3);
-  padding: 3px 10px 3px 8px; border-radius: var(--qz-radius-pill);
+  font: inherit; display: inline-flex; align-items: center; gap: 7px;
+  font-size: 12.5px; font-weight: 600; cursor: pointer; white-space: nowrap;
+  border: 1px solid var(--qz-accent-line); background: var(--qz-accent-wash);
+  color: var(--qz-accent-ink);
+  padding: 6px 12px; border-radius: var(--qz-radius);
 }
-.qz-ltab-how:hover { background: var(--qz-cream-2); color: var(--qz-ink); }
+.qz-ltab-how:hover { background: var(--qz-paper); border-color: var(--qz-accent); }
+.qz-ltab-how-ico { font-size: 11px; }
 .qz-xpl {
   display: flex; flex-direction: column;
   width: min(900px, 94vw); max-height: 92vh;
@@ -7384,66 +7330,149 @@ body[data-qz] .qz-cust-row:focus-visible {
   padding: 10px 20px 14px; border-top: 1px solid var(--qz-rule);
 }
 .qz-xpl-ft-btns { display: flex; gap: 8px; }
-.qz-ltab-join { color: var(--qz-ink-4); }
+/* QRTZ-H3 — the questions table is the mock's .ltable, value for value
+   (base.mjs 567–701 through the token map): 13.5px, min-width 780 inside a
+   scroll wrap, sticky washed thead over a line-strong rule, td pad 10/14,
+   the 210px tinted question rowgroup cell, the 1.5px group rule (border-
+   collapse lets it win over row hairlines), and the FIVE-column anatomy —
+   the answer key lives INSIDE the Answer cell. */
+.qz-ltab-tblwrap { overflow-x: auto; }
 .qz-ltab-tbl {
-  width: 100%; border-collapse: collapse; table-layout: fixed;
-  font-size: 12.5px; line-height: 1.45;
+  width: 100%; border-collapse: collapse; min-width: 780px;
+  font-size: 13.5px;
 }
-.qz-ltab-tbl th {
-  text-align: left; font-size: 10.5px; font-weight: 600;
-  text-transform: uppercase; letter-spacing: 0.06em; color: var(--qz-ink-4);
-  padding: 8px 10px; border-bottom: 1px solid var(--qz-rule);
+.qz-ltab-tbl thead th {
+  position: sticky; top: 0; z-index: 1; text-align: left;
+  padding: 9px 14px; background: var(--qz-cream-2);
+  font-size: 10.5px; font-weight: 500; letter-spacing: 0.07em;
+  text-transform: uppercase; color: var(--qz-ink-4);
+  border-bottom: 1px solid var(--qz-rule-strong); white-space: nowrap;
 }
-.qz-ltab-tbl th:first-child, .qz-ltab-tbl td:first-child { padding-left: 22px; }
-.qz-ltab-tbl td {
-  padding: 7px 10px; border-bottom: 1px solid var(--qz-cream-2);
-  vertical-align: top; overflow: hidden; text-overflow: ellipsis;
+.qz-ltab-tbl td, .qz-ltab-tbl tbody th {
+  padding: 10px 14px; border-bottom: 1px solid var(--qz-rule);
+  vertical-align: middle; text-align: left;
 }
-/* §2 — the divide between questions is the heaviest line in the table. */
-tr.qz-ltab-qstart td { border-top: 2px solid var(--qz-rule); }
-.qz-ltab-qcell { border-right: 2px solid var(--qz-rule); }
-.qz-ltab-qlabel { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.qz-ltab-qnum { color: var(--qz-ink-4); font-weight: 700; margin-right: 2px; }
-.qz-ltab-key { color: var(--qz-ink-25); font-weight: 600; }
-.qz-ltab-answer { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.qz-ltab-qgroup + .qz-ltab-qgroup > tr:first-child > td,
+.qz-ltab-qgroup + .qz-ltab-qgroup > tr:first-child > th { border-top: var(--qz-h3-group-rule); }
+.qz-ltab-qgroup > tr:last-child > td,
+.qz-ltab-qgroup > tr:last-child > th { border-bottom: 0; }
+/* The rowspan question cell lives in tr:first-child, so the reset above
+   cannot reach it — without this the last group leaves a 1px stub under
+   the Question column and nowhere else (mock's own fix, base.mjs 580). */
+.qz-ltab-tbl .qz-ltab-qgroup:last-child > tr:first-child > .qz-ltab-qcell { border-bottom: 0; }
+/* Scoped under .qz-ltab-tbl so vertical-align:top OUTRANKS the tbody-th
+   middle rule above (the mock's .ltable .qcell does the same). */
+.qz-ltab-tbl .qz-ltab-qcell {
+  width: 210px; vertical-align: top; font-weight: 400;
+  background: var(--qz-h3-qcell-bg); border-right: 1px solid var(--qz-rule);
+}
+.qz-ltab-qtext {
+  display: block; font-size: 14px; font-weight: 600; line-height: 1.35;
+  margin-bottom: 9px; color: var(--qz-ink);
+}
+.qz-ltab-rolestack { display: grid; gap: 5px; justify-items: start; min-width: 0; max-width: 100%; }
+.qz-ltab-rolestack .qz-ap-slot { margin-top: 0; }
+.qz-ltab-answer { font-weight: 500; }
+.qz-ltab-akey {
+  display: inline-block; width: 18px; margin-right: 10px;
+  font-size: 11px; font-weight: 600; color: var(--qz-ink-4);
+  font-variant-numeric: tabular-nums;
+}
 .qz-ltab-pill {
-  display: inline-flex; align-items: center; gap: 4px; margin-top: 4px;
-  font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em;
-  padding: 2px 8px; border-radius: var(--qz-radius-pill);
-  background: var(--qz-cream-2); color: var(--qz-ink-3);
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: 10.5px; font-weight: 400; text-transform: uppercase;
+  letter-spacing: 0.05em; white-space: nowrap;
+  padding: 3px 8px; border-radius: var(--qz-radius-pill);
+  border: 1px solid var(--qz-rule);
+  background: var(--qz-paper); color: var(--qz-ink-4);
 }
-.qz-ltab-pill.is-start { background: var(--qz-accent-wash); color: var(--qz-accent-ink); }
-.qz-ltab-pill.is-narrow { background: var(--qz-pal-teal-wash); color: var(--qz-src-col); }
+.qz-ltab-pill.is-start {
+  background: var(--qz-accent-wash); border-color: var(--qz-accent-line);
+  color: var(--qz-accent-ink); font-weight: 600;
+}
+.qz-ltab-caret { flex: none; font-size: 8px; opacity: 0.7; }
+/* Mock .tag — the mapcell tag set: one quartz value tone (tag-a ≡ tag-b),
+   the accent is-col for collections, the bordered is-none "No filter"
+   (quartz --tag-none-style: normal — not italic). */
+.qz-ltab-tag {
+  display: inline-block; padding: 3px 8px; border-radius: var(--qz-radius-sm);
+  font-size: 12px; font-weight: 500; border: 1px solid transparent; margin: 1px 0;
+}
+.qz-ltab-tag.is-col {
+  background: var(--qz-accent-wash); color: var(--qz-accent-ink);
+  border-color: var(--qz-accent-line);
+}
+.qz-ltab-tag.is-a, .qz-ltab-tag.is-b {
+  background: var(--qz-h3-tag-bg); color: var(--qz-h3-tag-ink);
+  border-color: var(--qz-h3-tag-line);
+}
+.qz-ltab-tag.is-none {
+  background: transparent; color: var(--qz-ink-4);
+  border-color: var(--qz-rule); font-style: normal;
+}
+.qz-ltab-acts { width: 34%; }
+.qz-ltab-muted { color: var(--qz-ink-25); }
+.qz-ltab-soft { color: var(--qz-ink-4); }
+.qz-ltab-bad { color: var(--qz-crit); font-weight: 600; }
+.qz-ltab-num { text-align: right; white-space: nowrap; }
+.qz-ltab-count { font-variant-numeric: tabular-nums; }
+/* Mock .count-btn — the count is a control that opens the products behind
+   the trigger; the word rides a smaller muted span. */
+.qz-ltab-countbtn, .qz-ltab-countval {
+  display: inline-flex; align-items: baseline; gap: 5px;
+  font-size: 14px; font-weight: 600; font-variant-numeric: tabular-nums;
+  color: var(--qz-ink); padding: 4px 9px; border-radius: var(--qz-radius-sm);
+}
+.qz-ltab-countbtn {
+  font-family: inherit; line-height: inherit; cursor: pointer;
+  border: 1px solid transparent; background: transparent; text-align: left;
+}
+.qz-ltab-countword { font-size: 11.5px; font-weight: 400; color: var(--qz-ink-4); }
+.qz-ltab-countbtn:hover {
+  background: var(--qz-accent-wash); border-color: var(--qz-accent-line);
+  color: var(--qz-accent-ink);
+}
+.qz-ltab-countbtn:hover .qz-ltab-countword { color: var(--qz-accent-ink); }
+/* Mock .goto-val — the destination with its ::before arrow. */
+.qz-ltab-goto { width: 158px; }
+.qz-ltab-gotoval {
+  display: inline-flex; align-items: center; gap: 6px; white-space: nowrap;
+  font-size: 12.5px; color: var(--qz-ink-4);
+}
+.qz-ltab-gotoval::before { content: "→"; color: var(--qz-rule-strong); }
+
+/* Retained for sibling surfaces — the Logic TABLE now draws .qz-ltab-tag
+   (QRTZ-H3), but QuestionWindow keeps its chips + hue palette (§11),
+   QuestionWindow/CreateRuleModal keep .qz-ltab-join sentence joiners, and
+   Explainers keeps the .qz-ltab-rbtn close button. */
+.qz-ltab-join { color: var(--qz-ink-4); }
 .qz-ltab-chip {
   display: inline-block; margin: 1px 4px 1px 0; padding: 1px 7px;
   font-size: 11.5px; border-radius: 6px;
   background: var(--qz-cream-2); color: var(--qz-ink);
 }
-.qz-ltab-muted { color: var(--qz-ink-25); }
-.qz-ltab-soft { color: var(--qz-ink-4); }
-.qz-ltab-bad { color: var(--qz-crit); font-weight: 600; }
-.qz-ltab-count { font-variant-numeric: tabular-nums; }
-/* §5.4 — muted AND dashed. */
-.qz-ltab-route-next {
-  color: var(--qz-ink-25);
-  text-decoration: underline dashed; text-underline-offset: 3px;
-  text-decoration-color: var(--qz-ink-25);
-}
-/* §11 — per-field chip palette, hash-assigned (.hue-N from fieldHue). */
 .qz-ltab-chip.hue-0 { background: var(--qz-pastel-violet); color: var(--qz-pastel-violet-ink); }
 .qz-ltab-chip.hue-1 { background: var(--qz-pastel-mint); color: var(--qz-pastel-mint-ink); }
 .qz-ltab-chip.hue-2 { background: var(--qz-pastel-amber); color: var(--qz-pastel-amber-ink); }
 .qz-ltab-chip.hue-3 { background: var(--qz-pastel-rose); color: var(--qz-pastel-rose-ink); }
 .qz-ltab-chip.hue-4 { background: var(--qz-pal-teal-wash); color: var(--qz-src-col); }
 .qz-ltab-chip.hue-5 { background: var(--qz-pal-blue-wash); color: var(--qz-pal-blue); }
+.qz-ltab-rbtn {
+  font: inherit; font-size: 11px; line-height: 1; cursor: pointer;
+  border: none; background: none; color: var(--qz-ink-4);
+  padding: 3px 5px; border-radius: 6px;
+}
+.qz-ltab-rbtn:hover { background: var(--qz-cream-2); color: var(--qz-ink); }
+.qz-ltab-rbtn:disabled { color: var(--qz-ink-25); cursor: default; background: none; }
 
 /* ── P3 — the cell popovers (§6.4/§6.5) + interactive cells ── */
-.qz-ltab-pill-btn, .qz-ltab-cellbtn {
-  font: inherit; cursor: pointer; border: none; background: none; padding: 0;
-  text-align: left;
-}
-.qz-ltab-pill-btn { font-size: 10px; font-weight: 700; }
-.qz-ltab-pill-btn:hover { filter: brightness(0.96); }
+.qz-ltab-pill-btn, .qz-ltab-cellbtn { font: inherit; cursor: pointer; text-align: left; }
+.qz-ltab-cellbtn { border: none; background: none; padding: 0; }
+/* The pill button keeps .qz-ltab-pill's own border/padding (mock .role);
+   hover per base.mjs 588. */
+.qz-ltab-pill-btn { font-size: 10.5px; }
+.qz-ltab-pill-btn:hover { border-color: var(--qz-rule-strong); color: var(--qz-ink-3); }
+.qz-ltab-pill-btn.is-start:hover { border-color: var(--qz-accent-line); color: var(--qz-accent-ink); }
 .qz-ltab-cellbtn { display: block; width: 100%; border-radius: 6px; padding: 1px 4px; margin: -1px -4px; }
 .qz-ltab-cellbtn:hover { background: var(--qz-cream-2); }
 .qz-ltab-menu { display: flex; flex-direction: column; gap: 1px; padding: 6px; min-width: 240px; max-height: min(52vh, 460px); overflow-y: auto; }
@@ -8092,15 +8121,10 @@ tr.qz-ltab-qstart td { border-top: 2px solid var(--qz-rule); }
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 .qz-bt-qtitle .qz-inline-title { font-size: 13.5px; font-weight: 600; }
-.qz-tbadge {
-  flex: 0 1 auto;
-  font: 600 10px var(--qz-font-body);
-  color: var(--qz-ink-4); background: var(--qz-cream-2);
-  padding: 3px 8px; border-radius: var(--qz-radius-pill); line-height: 1.3;
-}
-.qz-tbadge.is-dec { color: var(--qz-accent-ink); background: var(--qz-accent-wash); }
+/* .qz-tbadge RETIRED by QRTZ-H4 — the mock .ed-top draws no badges; the
+   experience/scoring info lives in Settings now. */
 .qz-bt-sp { flex: 1 1 0; min-width: 0; }
-.qz-bt-topdiv { width: 1px; height: 20px; background: var(--qz-rule); flex: none; margin: 0 3px; }
+/* .qz-bt-topdiv RETIRED by QRTZ-H4 — the mock .ed-top-end has no dividers. */
 
 /* mock .modeseg / .devseg — flatter + squarer than the DS pill segmented */
 .qz-bt-seg {
@@ -8211,9 +8235,9 @@ tr.qz-ltab-qstart td { border-top: 2px solid var(--qz-rule); }
   display: flex; flex-direction: column;
   border-right: 1px solid var(--qz-rule-2);
 }
-.qz-bt-libhd { padding: 11px 12px 9px; border-bottom: 1px solid var(--qz-rule-2); flex: 0 0 auto; }
-.qz-bt-libhd .qz-bt-seg { display: flex; margin: 0 24px 9px 0; border-radius: 8px; }
-.qz-bt-libhd .qz-bt-seg button { flex: 1 1 0; padding: 5px 2px; font-size: 10.5px; border-radius: 6px; justify-content: center; }
+/* .qz-bt-libhd RETIRED by QRTZ-H4 — the mock ed-panel has no header split;
+   the ed-tabs seg (.qz-bt-edtabs, QRTZ-H4 section) sits straight in the
+   panel flow. */
 .qz-bt-search { position: relative; }
 .qz-bt-search svg {
   position: absolute; left: 9px; top: 50%; transform: translateY(-50%);
@@ -8347,16 +8371,8 @@ tr.qz-ltab-qstart td { border-top: 2px solid var(--qz-rule); }
 .qz-bt-arow .qz-bt-arow-chev svg { width: 13px; height: 13px; }
 .qz-bt-hint { font-size: 11px; color: var(--qz-ink-4); line-height: 1.4; }
 /* mock .deeplink */
-.qz-bt-deeplink {
-  appearance: none; font: inherit; cursor: pointer; width: 100%; text-align: left;
-  display: flex; align-items: center; gap: 7px;
-  background: var(--qz-rule-2); border: 1px solid var(--qz-rule); border-radius: var(--qz-radius);
-  padding: 9px 11px; font: 600 12px var(--qz-font-body); color: var(--qz-ink-3);
-}
-.qz-bt-deeplink:hover { border-color: var(--qz-accent); color: var(--qz-accent-ink); background: var(--qz-accent-tint); }
-.qz-bt-deeplink .qz-bt-dlarrow { margin-left: auto; color: var(--qz-ink-25); display: inline-flex; }
-.qz-bt-deeplink:hover .qz-bt-dlarrow { color: var(--qz-accent); }
-.qz-bt-deeplink svg { width: 14px; height: 14px; flex: none; }
+/* .qz-bt-deeplink RETIRED by QRTZ-H4 — the Background row hosts the full
+   background editor inline (no deep link). */
 /* the selected-node ContextPanel drops its card chrome inside the inspector */
 .qz-bt-inspbody > .qz-card { border: none; box-shadow: none; padding: 0; margin: 0; background: transparent; }
 
@@ -8365,10 +8381,7 @@ tr.qz-ltab-qstart td { border-top: 2px solid var(--qz-rule); }
   background: var(--qz-paper);
   align-items: center;
 }
-.qz-bt-striplbl {
-  font: 700 8.5px var(--qz-font-body); text-transform: uppercase; letter-spacing: .09em;
-  color: var(--qz-ink-25); flex: none; margin-right: 2px; align-self: center;
-}
+/* .qz-bt-striplbl RETIRED by QRTZ-H4 (filmstrip gone). */
 .qz-screens-item { width: 64px; align-items: center; }
 .qz-screens-thumb { border-width: 1.5px; }
 
@@ -8399,7 +8412,6 @@ tr.qz-ltab-qstart td { border-top: 2px solid var(--qz-rule); }
    and the canvas stops fitting (the frame overflowed behind the strip). */
 .qz-builder-body > * { min-height: 0; min-width: 0; }
 /* mock parity nits */
-.qz-bt-striplbl { white-space: nowrap; }
 .qz-builder-rail-label { white-space: nowrap; }
 /* mock 1280 squeeze: the bar tightens instead of clipping Publish */
 @media (max-width: 1439px) { /* below --qz-bp-lg (1440) */
@@ -9336,32 +9348,19 @@ tr.qz-ltab-qstart td { border-top: 2px solid var(--qz-rule); }
 .qz-devframe[data-qz-tier="desktop"] .qz-rg-gwrap { max-width: 420px; margin: 0 auto; }
 
 /* ═══ QRTZ-S6 — logic + results ═══ */
-/* s14 card-head meta sentences (mock .card-meta: 12.5px, ink-3, flex:1). */
+/* s14 card-head meta sentences (mock .card-meta: 12.5px, ink-3→qz-ink-4,
+   flex:1; the mock lets it wrap — no ellipsis). */
 .qz-ltab-hdmeta {
   flex: 1 1 auto; min-width: 0; margin: 0;
-  font-size: 12.5px; font-weight: 400; color: var(--qz-ink-3);
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font-size: 12.5px; font-weight: 400; color: var(--qz-ink-4);
 }
-/* Rule drag-reorder (Layers-tab BT4 pattern; ↑/↓ stay the a11y path). */
-.qz-ltab-rgrip {
-  flex: 0 0 auto; align-self: center; font-size: 12px; line-height: 1;
-  color: var(--qz-ink-25); cursor: grab; user-select: none;
-}
+/* Rule drag-reorder (row is the handle — QRTZ-H3: the mock draws no grip;
+   the visually-hidden ↑/↓ pair stays the keyboard path). */
 .qz-ltab-rrow.is-dragging { opacity: 0.4; }
 .qz-ltab-rrow.is-drop-target { box-shadow: inset 0 2px 0 0 var(--qz-accent); }
-/* Products popover (mock .pp): count line · price + stock pill · footer. */
-.qz-ltab-menu-countline { padding: 2px 8px 6px; font-size: 12px; color: var(--qz-ink-3); }
-.qz-ltab-menu-countline b { color: var(--qz-ink); font-variant-numeric: tabular-nums; }
-.qz-ltab-menu-pmain { min-width: 0; display: grid; gap: 1px; }
-.qz-ltab-menu-pname { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.qz-ltab-menu-pmeta {
-  display: flex; gap: 7px; font-size: 11px; color: var(--qz-ink-4);
-  font-variant-numeric: tabular-nums;
-}
-.qz-ltab-menu-stock { font-size: 10.5px; font-weight: 600; }
-.qz-ltab-menu-stock.is-ok { color: var(--qz-ok); }
-.qz-ltab-menu-stock.is-out { color: var(--qz-crit); }
-.qz-ltab-menu-title .qz-crm-kind { margin-left: 7px; vertical-align: 1px; }
+/* (QRTZ-H3: the compact popover product-list rules — countline/pmain/pname/
+   pmeta/stock — are retired; the popover is the mock's .pp grid now, styled
+   in the QRTZ-H3 section.) */
 /* Popover foot sentences (mock .pop-foot / .pp-foot). */
 .qz-ltab-menu-foot {
   margin-top: 6px; padding: 10px 8px 4px; border-top: 1px solid var(--qz-rule);
@@ -10053,19 +10052,8 @@ button.qz-pb-row:hover { background: var(--qz-cream-2); }
 }
 .qz-ltab-menu-group .qz-ltab-menu-thin { text-transform: none; letter-spacing: 0; }
 
-/* ═══ QRTZ-B2 — products popover: foot row + Open-in-Shopify link ═══ */
-/* Mock .pp-foot: the teaching sentence and the quiet Shopify link share one
-   row. The row lives INSIDE the existing .qz-ltab-menu-foot (its border/
-   padding untouched), so a link-less foot renders byte-identically. */
-.qz-ltab-menu-foot-row {
-  display: flex; align-items: center; justify-content: space-between; gap: 10px;
-}
-.qz-ltab-menu-foot-row > span:first-child { min-width: 0; }
-.qz-ltab-menu-shoplink {
-  flex: 0 0 auto; font-size: 11.5px; font-weight: 600;
-  color: var(--qz-ink-3); text-decoration: none; white-space: nowrap;
-}
-.qz-ltab-menu-shoplink:hover { color: var(--qz-ink); text-decoration: underline; }
+/* ═══ QRTZ-B2 — products popover foot: superseded by QRTZ-H3's .qz-pp-foot
+   (the mock's own foot form carries the sentence + Open-in-Shopify now). ═══ */
 
 /* ═══ QRTZ-OA — owner decisions 1+2 (gold→violet · category shape markers) ═══ */
 /* GAPS §A.2 — category surfaces differentiate by SHAPE AND LABEL, not hue.
@@ -10459,3 +10447,213 @@ button.qz-pb-row:hover { background: var(--qz-cream-2); }
   border-top: 1px solid var(--qz-rule); background: var(--qz-cream-2);
 }
 .qz-ap-foot .qz-ltab-menu-apnote { font-size: 12px; }
+
+/* ═══ QRTZ-H3 — Logic exact-match: the products popover is the mock's .pp ═══
+   (owner order 2026-08-13; shared.mjs 419–441 + base.mjs 705–746 through the
+   token map). The card chrome — radius, lift, hairline — is QzPopover's own
+   (.qz-popover); .qz-pp bleeds its 14/16 padding so the head, grid and foot
+   own their edges exactly as the mock draws them. The QRTZ-B2 count + sync
+   line rides the mock's .pp-sub slot; the Open-in-Shopify link sits in the
+   .pp-foot as the mock's quiet button. */
+.qz-pp { margin: -14px -16px; width: min(720px, calc(100vw - 16px)); }
+.qz-pp-head {
+  display: flex; align-items: flex-start; gap: 14px;
+  padding: 16px 18px; border-bottom: 1px solid var(--qz-rule);
+}
+.qz-pp-headmain { min-width: 0; }
+.qz-pp-title {
+  margin: 0; font-size: 15.5px; font-weight: 600;
+  display: flex; align-items: center; gap: 9px;
+}
+.qz-pp-title .qz-ltab-tag { flex: none; }
+.qz-pp-sub { margin: 4px 0 0; font-size: 12.5px; color: var(--qz-ink-4); }
+.qz-pp-sub b { color: var(--qz-ink-3); font-weight: 600; font-variant-numeric: tabular-nums; }
+/* Mock .icon-btn (base.mjs 354–358). */
+.qz-pp-close {
+  width: 26px; height: 26px; flex: none; margin-left: auto;
+  display: grid; place-items: center; font: inherit; font-size: 16px;
+  line-height: 1; cursor: pointer; border: 0; background: transparent;
+  color: var(--qz-ink-4); border-radius: var(--qz-radius-sm);
+}
+.qz-pp-close:hover { background: var(--qz-cream-2); color: var(--qz-ink); }
+.qz-pp-grid {
+  display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px;
+  padding: 16px 18px; max-height: 340px; overflow-y: auto;
+}
+.qz-pp-card { min-width: 0; }
+.qz-pp-img {
+  display: block; width: 100%; aspect-ratio: 1; object-fit: cover;
+  border-radius: var(--qz-radius); border: 1px solid var(--qz-rule);
+  background: var(--qz-cream-2); overflow: hidden;
+}
+.qz-pp-name {
+  margin: 8px 0 0; font-size: 12.5px; font-weight: 600; line-height: 1.35;
+  overflow: hidden; text-overflow: ellipsis; display: -webkit-box;
+  -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+}
+.qz-pp-meta {
+  margin: 3px 0 0; font-size: 11.5px; color: var(--qz-ink-4);
+  display: grid; gap: 3px; font-variant-numeric: tabular-nums;
+}
+.qz-pp-stock { font-size: 10.5px; font-weight: 600; }
+.qz-pp-stock.is-ok { color: var(--qz-ok); }
+.qz-pp-stock.is-out { color: var(--qz-crit); }
+.qz-pp-none { padding: 16px 18px; font-size: 12.5px; color: var(--qz-ink-4); line-height: 1.5; }
+.qz-pp-more { grid-column: 1 / -1; font-size: 11.5px; color: var(--qz-ink-4); }
+.qz-pp-foot {
+  display: flex; align-items: center; gap: 14px;
+  padding: 12px 18px; border-top: 1px solid var(--qz-rule);
+  background: var(--qz-cream-2); font-size: 12.5px; color: var(--qz-ink-4);
+}
+.qz-pp-foot b { color: var(--qz-ink-3); font-weight: 600; }
+.qz-pp-foot > span:first-child { min-width: 0; }
+.qz-pp-foot .qz-btn { margin-left: auto; flex: none; text-decoration: none; }
+/* ═══════════════════════════════════════════════════════════════════════════
+   QRTZ-H4 — the editor mock-exact (s16: shared.mjs 580–708 + base.mjs
+   1200–1385). Owner order: the builder matches the artifact's editor — the
+   panel is the mock's ed-panel (ed-tabs Flow · Add · Templates over the ONE
+   flow tree), the canvas bar carries the mock's three segs, the top bar is
+   the mock's .ed-top row, the stage ground is the mock's surface-2. Values
+   are read off the mock through the locked token map (--surface-2 →
+   --qz-cream-2 · --ink-2 → --qz-ink-3 · --ink-3 → --qz-ink-4 · --line →
+   --qz-rule · --line-strong → --qz-rule-strong · --nav-r/--btn-r → 8px).
+   Inside [data-qz-surface="editor"] the accent family is already stood down
+   to the ink ladder (the mock's own .editor token swap), so every accent
+   reference below resolves neutral in the builder.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── the panel is the mock .ed-panel: gap 10, padding 12px 10px, tabs
+   directly over the content (the libhd header split is retired) ── */
+.qz-builder-panel { padding: 12px 10px; gap: 10px; }
+.qz-builder-body.is-libhidden .qz-builder-panel { padding: 0; }
+/* mock .ed-tabs — the seg spans the panel; 24px clears the collapse chevron
+   (a live affordance the mock predates). */
+.qz-bt-edtabs { display: flex; margin-right: 24px; flex: none; border-radius: 8px; }
+.qz-bt-edtabs button { flex: 1 1 0; justify-content: center; padding: 5px 10px; font-size: 12px; border-radius: 6px; }
+/* the Add tab's scroller sheds the old libbody padding (the panel pads now) */
+.qz-builder-panel .qz-bt-libbody { padding: 0 1px 2px; }
+
+/* ── mock .tree — the Flow tab ── */
+.qz-flowtab { display: flex; flex-direction: column; gap: 10px; flex: 1 1 auto; min-height: 0; min-width: 0; }
+.qz-ftree {
+  list-style: none; margin: 0; padding: 0;
+  display: grid; gap: 1px; align-content: start; min-width: 0;
+  flex: 1 1 auto; min-height: 0; overflow-y: auto;
+}
+.qz-ftree > li { min-width: 0; }
+.qz-ftree-row {
+  display: flex; align-items: center; gap: 8px; padding: 8px 8px; border-radius: 8px;
+  font-size: 13.5px; min-width: 0; cursor: pointer; position: relative;
+}
+.qz-ftree-row:hover { background: var(--qz-cream-2); }
+.qz-ftree-row.is-open { background: var(--qz-cream-2); }
+/* the row's ONE interactive area (twisty · number · name) — an unstyled
+   button so the ⋯ menu beside it never nests interactives (axe). */
+.qz-ftree-rowmain {
+  display: flex; align-items: center; gap: 8px; flex: 1 1 auto; min-width: 0;
+  border: 0; background: transparent; font: inherit; color: inherit;
+  padding: 0; cursor: pointer; text-align: left;
+}
+.qz-ftree-tw { font-size: 8px; color: var(--qz-ink-4); width: 8px; flex: none; }
+.qz-ftree-n {
+  flex: none; width: 17px; height: 17px; display: grid; place-items: center; border-radius: 3px;
+  font-size: 10px; font-weight: 600; color: var(--qz-ink-4); background: var(--qz-paper);
+  border: 1px solid var(--qz-rule); font-variant-numeric: tabular-nums;
+}
+.qz-ftree-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500; }
+.qz-ftree-sub { color: var(--qz-ink-4); font-weight: 400; font-size: 12px; }
+.qz-ftree-flag { width: 7px; height: 7px; border-radius: 50%; background: var(--qz-warn); flex: none; }
+/* the hover-revealed ⋯ (a live affordance — the mock's static rows carry the
+   step actions this menu holds); reuses the FlowRail v3 menu primitives. */
+.qz-ftree-rowact { flex: none; display: flex; align-items: center; }
+.qz-ftree-row:hover .qz-railmenu-btn,
+.qz-ftree-row.is-open .qz-railmenu-btn { opacity: 1; }
+
+/* mock .tree-kids / .tree-kid */
+.qz-ftree-kids { list-style: none; margin: 0; display: grid; gap: 1px; padding: 2px 0 2px 30px; min-width: 0; }
+.qz-ftree-kid {
+  display: flex; align-items: center; gap: 9px; padding: 6px 8px; border-radius: 8px;
+  font-size: 13px; color: var(--qz-ink-3); min-width: 0;
+}
+.qz-ftree-kid:hover { background: var(--qz-cream-2); }
+.qz-ftree-kid.is-sel { background: var(--qz-accent-wash); color: var(--qz-accent-ink); font-weight: 600; }
+.qz-ftree-kid.is-hidden { opacity: .55; }
+.qz-ftree-kid.is-dragging { opacity: .4; }
+.qz-ftree-kid.is-drop-target { box-shadow: inset 0 2px 0 0 var(--qz-accent); }
+.qz-ftree-kidmain {
+  display: flex; align-items: center; gap: 9px; flex: 1 1 auto; min-width: 0;
+  border: 0; background: transparent; font: inherit; color: inherit; font-weight: inherit;
+  padding: 0; cursor: pointer; text-align: left;
+}
+.qz-ftree-kidg { width: 15px; flex: none; font-size: 10px; font-weight: 600; color: var(--qz-ink-4); text-align: center; }
+.qz-ftree-kid.is-sel .qz-ftree-kidg { color: var(--qz-accent-ink); }
+.qz-ftree-kidname { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* kept Layers capabilities on the kid rows: hide / reorder / delete reveal on
+   hover (opacity so they stay actionable to keyboard + automation). */
+.qz-ftree-kidact { display: flex; gap: 1px; flex: none; opacity: 0; }
+.qz-ftree-kid:hover .qz-ftree-kidact,
+.qz-ftree-kid:focus-within .qz-ftree-kidact,
+.qz-ftree-kid.is-sel .qz-ftree-kidact { opacity: 1; }
+.qz-ftree-kidact button {
+  border: 0; background: transparent; cursor: pointer; font-size: 10.5px;
+  color: var(--qz-ink-3); padding: 1px 3px; border-radius: 4px;
+}
+.qz-ftree-kidact button:hover:not(:disabled) { background: var(--qz-paper); color: var(--qz-ink); }
+.qz-ftree-kidact button:disabled { opacity: .35; cursor: default; }
+
+/* the two-step delete confirm, inline under its row (was the filmstrip's) */
+.qz-ftree-confirm {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 6px;
+  margin: 2px 0 4px 16px; padding: 8px 10px;
+  border: 1px solid var(--qz-rule); border-radius: 8px; background: var(--qz-paper);
+  box-shadow: var(--qz-lift-1); font-size: 11px; color: var(--qz-ink-3);
+}
+.qz-ftree-confirm button {
+  font: inherit; font-size: 11px; padding: 2px 10px;
+  border-radius: var(--qz-radius-sm); border: 1px solid var(--qz-rule);
+  background: var(--qz-paper); cursor: pointer;
+}
+.qz-ftree-confirm .qz-ftree-confirm-yes {
+  background: var(--qz-crit); color: var(--qz-paper); border-color: transparent; font-weight: 600;
+}
+
+/* the Add-a-step chooser (INSERTABLE_MODULES) */
+.qz-ftree-adder { display: flex; flex-wrap: wrap; gap: 4px; flex: none; }
+
+/* mock .add-step — dashed foot button, margin-top auto */
+.qz-ftree-addstep {
+  margin-top: auto; flex: none; padding: 9px;
+  border: 1px dashed var(--qz-rule-strong); border-radius: 8px;
+  background: transparent; color: var(--qz-ink-3);
+  font: 500 13px var(--qz-font-body); cursor: pointer;
+}
+.qz-ftree-addstep:hover {
+  border-style: solid; border-color: var(--qz-accent);
+  color: var(--qz-accent-ink); background: var(--qz-accent-wash);
+}
+
+/* ── mock .canvas-bar — name (margin-right auto) then the segs; the mock's
+   10px 16px padding, paper ground, --line rule ── */
+.qz-stagebar {
+  padding: 10px 16px; gap: 10px; flex-wrap: wrap;
+  background: var(--qz-paper); border-bottom: 1px solid var(--qz-rule);
+}
+.qz-stagebar-name { font-size: 13.5px; font-weight: 600; color: var(--qz-ink); margin-right: auto; }
+
+/* ── delta 4: the stage ground is the mock's .ed-canvas surface-2 (the old
+   --qz-bt-pane #FBFAFC was the build-tab prototype's, never the s16 tint) ── */
+.qz-builder-stage { background: var(--qz-cream-2); }
+
+/* ── mock .saved — "All changes saved", 12.5px, ok green, by the crumbs ── */
+.qz-bt-savedpill .qz-save-chip.is-saved { font: 400 12.5px var(--qz-font-body); color: var(--qz-ok); }
+.qz-bt-savedpill .qz-save-chip.is-saved svg { color: var(--qz-ok); }
+
+/* mock .insp-note — the block head's one-line note (own line under the head) */
+.qz-insp-note { margin: 0 0 6px; font-size: 12.5px; color: var(--qz-ink-4); line-height: 1.5; }
+
+/* The insphd row must WRAP at the 320px inspector: the OB2 tab seg + Done
+   overflowed the title into invisibility (the head's b had ~0 width). On a
+   tight row the tabs drop to their own right-aligned line; wide panels keep
+   the one-row anatomy. */
+.qz-bt-insphd { flex-wrap: wrap; row-gap: 7px; }
+.qz-bt-insphd .qz-bt-tt { flex: 1 1 120px; }

@@ -18,7 +18,7 @@ await page.waitForSelector(".qz-builder", { timeout: 20000 });
 await page.waitForTimeout(1600);
 
 // Open the Design rail — the BuilderDesignPanel with the shape/button controls.
-await page.locator(".qz-builder-rail button", { hasText: "Design" }).click();
+await page.locator(".qz-builder-rail button", { hasText: "Theme" }).click();
 await page.waitForTimeout(500);
 
 // §7.2 — the Next-button size + radius scrubbers exist alongside the shape row.
@@ -45,7 +45,7 @@ await page.waitForTimeout(1100);
 await page.reload({ waitUntil: "domcontentloaded" });
 await page.waitForSelector(".qz-builder", { timeout: 20000 });
 await page.waitForTimeout(1400);
-await page.locator(".qz-builder-rail button", { hasText: "Design" }).click();
+await page.locator(".qz-builder-rail button", { hasText: "Theme" }).click();
 await page.waitForTimeout(500);
 ok("button radius persisted across reload (24px)",
   (await page.locator("text=24px").count()) >= 1);
@@ -54,8 +54,12 @@ ok("button size persisted across reload (1.20×)",
 ok("the persisted radius slider carries the value",
   (await page.locator('input[aria-label="Next button radius"]').inputValue()) === "24");
 
-// The runtime honours it: the intro's primary button renders border-radius 24px.
-await page.locator(".qz-screens-item").first().locator(".qz-screens-thumb").click().catch(() => {});
+// The runtime honours it: the intro's primary button renders border-radius
+// 24px. The Theme view is a tab panel (no canvas) since BLD-3 — return to
+// Build first, then pick the intro in the Flow tab (QRTZ-H4 nav).
+await page.locator(".qz-builder-rail button", { hasText: "Build" }).click();
+await page.waitForTimeout(400);
+await page.locator(".qz-ftree-row").first().click().catch(() => {});
 await page.waitForTimeout(700);
 const btnRadii = await page.locator(".qz-builder-canvas button").evaluateAll((els) =>
   els.map((el) => getComputedStyle(el).borderTopLeftRadius));
@@ -63,7 +67,7 @@ ok("a canvas primary button renders 24px radius",
   btnRadii.includes("24px"), btnRadii.slice(0, 6).join(", "));
 
 // ── net-zero — Reset clears both tokens (doc back to theme-only, byte-safe) ──
-await page.locator(".qz-builder-rail button", { hasText: "Design" }).click();
+await page.locator(".qz-builder-rail button", { hasText: "Theme" }).click();
 await page.waitForTimeout(400);
 await page.locator("button", { hasText: "Reset button size to theme" }).click();
 await page.waitForTimeout(1100);

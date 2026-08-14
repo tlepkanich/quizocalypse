@@ -16,9 +16,12 @@ page.on("pageerror", (e) => errs.push(String(e.message).split("\n")[0]));
 await page.goto(`${BASE}/studio/${QUIZ}?key=${KEY}`, { waitUntil: "domcontentloaded" });
 await page.waitForSelector(".qz-builder", { timeout: 20000 });
 await page.waitForTimeout(1600);
-await page.locator(".qz-screens-item", { hasText: "Q1" }).first().locator(".qz-screens-thumb").click();
+// QRTZ-H4 — Background lives in the step inspector's Background row now.
+await page.locator(".qz-ftree-row", { hasText: "Q1" }).first().click();
 await page.waitForTimeout(500);
-await page.locator('[aria-label="Build panel"] button', { hasText: "Background" }).click();
+await page.locator(".qz-builder-inspector button", { hasText: "Done" }).click();
+await page.waitForTimeout(400);
+await page.locator(".qz-bt-sechd", { hasText: "Background" }).click();
 await page.waitForTimeout(400);
 
 // §4 — the type set now includes Partial.
@@ -31,7 +34,7 @@ await page.waitForTimeout(300);
 ok("gradient offers Linear / Radial shape (§4)",
   (await page.locator('[aria-label="Gradient shape"] button').count()) === 2);
 ok("gradient offers a 3rd stop (Third)",
-  (await page.locator(".qz-builder-panel", { hasText: "Third" }).count()) >= 1);
+  (await page.locator(".qz-builder-inspector", { hasText: "Third" }).count()) >= 1);
 await page.locator('[aria-label="Gradient shape"] button', { hasText: "Radial" }).click();
 await page.waitForTimeout(300);
 ok("radial gradient selectable (renders once the two colours are set)",
@@ -42,12 +45,12 @@ await page.locator('[aria-label="Background type"] button', { hasText: "Partial"
 await page.waitForTimeout(300);
 ok("partial offers Band (Left/Top/Right) + Coverage + Fill",
   (await page.locator('[aria-label="Partial image band"] button').count()) === 3 &&
-    (await page.locator(".qz-builder-panel", { hasText: "Coverage" }).count()) >= 1 &&
-    (await page.locator(".qz-builder-panel", { hasText: "Fill" }).count()) >= 1);
-await page.locator('.qz-builder-panel [aria-label="Media source"] button', { hasText: "URL" }).click();
+    (await page.locator(".qz-builder-inspector", { hasText: "Coverage" }).count()) >= 1 &&
+    (await page.locator(".qz-builder-inspector", { hasText: "Fill" }).count()) >= 1);
+await page.locator('.qz-builder-inspector [aria-label="Media source"] button', { hasText: "URL" }).click();
 await page.waitForTimeout(150);
-await page.locator('.qz-builder-panel input[placeholder="https://…"]').first().fill("https://cdn.example.com/p.png");
-await page.locator(".qz-builder-panel button", { hasText: "Use" }).click();
+await page.locator('.qz-builder-inspector input[placeholder="https://…"]').first().fill("https://cdn.example.com/p.png");
+await page.locator(".qz-builder-inspector button", { hasText: "Use" }).click();
 await page.waitForTimeout(700);
 const part = await page.locator(".qz-builder-canvas .qz-runtime-page").first()
   .evaluate((el) => getComputedStyle(el).backgroundSize).catch(() => "");

@@ -78,17 +78,19 @@ if (emptyState) {
   ok("rule row is a sentence (When they pick …)", /When they pick/.test(first), first.slice(0, 80));
 }
 
-// ── questions half: the six-column table ────────────────────────────────────
+// ── questions half: the mock's FIVE-column table (QRTZ-H3) ──────────────────
 // CSS text-transform reflects into innerText — compare case-insensitively.
-const heads = (await card.locator(".qz-ltab-tbl th").allInnerTexts()).map((h) =>
+const heads = (await card.locator(".qz-ltab-tbl thead th").allInnerTexts()).map((h) =>
   h.trim().toLowerCase(),
 );
-ok("six columns, spec order",
-  heads.length === 6 &&
-    heads[0] === "question" && heads[2] === "answer" &&
-    // QRTZ-OB1 — the mock's column head (shared.mjs line 384).
-    heads[3] === "maps to" && heads[4] === "products" && heads[5] === "then go to",
+ok("five columns, mock order (shared.mjs 379–387)",
+  heads.length === 5 &&
+    heads[0] === "question" && heads[1] === "answer" &&
+    heads[2] === "maps to" && heads[3] === "products" && heads[4] === "then go to",
   JSON.stringify(heads));
+// QRTZ-H3 — the A/B/C key renders INSIDE the Answer cell (mock .akey).
+ok("answer keys render inside the answer cells",
+  (await card.locator(".qz-ltab-answer .qz-ltab-akey").count()) > 0);
 
 const qCells = await card.locator(".qz-ltab-qcell").count();
 ok("every question renders a label cell", qCells > 0, `${qCells} questions`);
@@ -97,9 +99,10 @@ ok("exactly one Picks-the-result pill (one decider per quiz)",
 const pills = await card.locator(".qz-ltab-pill").count();
 ok("every question carries a role pill", pills === qCells, `${pills} pills / ${qCells} questions`);
 
-// Mapping cells: the decider row shows target chips or a flagged gap.
-const startRowChip = await card.locator(".qz-ltab-chip").count();
-ok("mapping cells render chips somewhere", startRowChip > 0, `${startRowChip} chips`);
+// Mapping cells: the mock's .tag treatment (QRTZ-H3) — is-col / value tags /
+// the is-none "No filter" form.
+const startRowTag = await card.locator(".qz-ltab-tag").count();
+ok("mapping cells render mock tags somewhere", startRowTag > 0, `${startRowTag} tags`);
 
 // Products column: at least one count cell with content.
 const countTexts = (await card.locator(".qz-ltab-count").allInnerTexts()).filter((t) => t.trim());

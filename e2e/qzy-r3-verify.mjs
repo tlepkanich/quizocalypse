@@ -36,11 +36,14 @@ await page.goto(`${BASE}/studio/${QUIZ}?key=${KEY}`, { waitUntil: "domcontentloa
 await page.waitForSelector(".qz-builder", { timeout: 20000 });
 await page.waitForTimeout(1600);
 
-// Select a question screen, then open the left Background panel tab.
-const q1 = page.locator(".qz-screens-item", { hasText: "Q1" }).first();
-await q1.locator(".qz-screens-thumb").click();
+// QRTZ-H4 — the Background TAB retired: its content lives in the step
+// inspector's Background row. Select a question screen via the Flow tab,
+// clear the selection (Done) so the step inspector renders, open the row.
+await page.locator(".qz-ftree-row", { hasText: "Q1" }).first().click();
 await page.waitForTimeout(500);
-await page.locator('[aria-label="Build panel"] button', { hasText: "Background" }).click();
+await page.locator(".qz-builder-inspector button", { hasText: "Done" }).click();
+await page.waitForTimeout(400);
+await page.locator(".qz-bt-sechd", { hasText: "Background" }).click();
 await page.waitForTimeout(400);
 
 // ── §5.3 — the scope control exists ─────────────────────────────────────────
@@ -53,10 +56,10 @@ ok("scope control 'This screen / All screens' present (§5.3)",
 // ── set a background on THIS screen → Custom badge + apply-all appear ────────
 await page.locator('[aria-label="Background type"] button', { hasText: "Color" }).click();
 await page.waitForTimeout(500);
-ok("setting a background raises the carousel Custom badge (§5.3)",
-  (await page.locator('.qz-screens-item.is-active [aria-label="Custom background"]').count()) === 1);
+ok("setting a background raises the Custom read-out (§5.3 badge, QRTZ-H4 home)",
+  ((await page.locator(".qz-bt-sechd", { hasText: "Background" }).locator(".qz-bt-sv").textContent()) ?? "").trim() === "Custom");
 ok("'Apply to all screens…' affordance appears with a background set",
-  (await page.locator(".qz-builder-panel button", { hasText: "Apply to all screens" }).count()) === 1);
+  (await page.locator(".qz-builder-inspector button", { hasText: "Apply to all screens" }).count()) === 1);
 
 // ── switch to All-screens with a custom screen → toast + master surface ─────
 await scope.locator("button", { hasText: "All screens" }).click();
@@ -64,17 +67,17 @@ await page.waitForTimeout(400);
 ok("toast provider is wired (a toast renders on the scope switch)",
   (await page.locator(".qz-toast").count()) >= 1);
 ok("All-screens scope surfaces the quiz-wide default + the 'won't change' count",
-  (await page.locator(".qz-builder-panel [role=note]").count()) >= 1);
+  (await page.locator(".qz-builder-inspector [role=note]").count()) >= 1);
 
 // ── net-zero cleanup: back to This screen, clear to None ────────────────────
 await scope.locator("button", { hasText: "This screen" }).click();
 await page.waitForTimeout(300);
 await page.locator('[aria-label="Background type"] button', { hasText: "None" }).click();
 await page.waitForTimeout(500);
-ok("clearing to None removes the Custom badge (net-zero)",
-  (await page.locator('.qz-screens-item.is-active [aria-label="Custom background"]').count()) === 0);
+ok("clearing to None removes the Custom read-out (net-zero)",
+  ((await page.locator(".qz-bt-sechd", { hasText: "Background" }).locator(".qz-bt-sv").textContent()) ?? "").trim() === "Brand default");
 
-await page.locator(".qz-builder-panel").screenshot({ path: `${SHOTS}/background-scope.png` }).catch(() => {});
+await page.locator(".qz-builder-inspector").screenshot({ path: `${SHOTS}/background-scope.png` }).catch(() => {});
 ok("zero page errors", pageErrors.length === 0, pageErrors.slice(0, 3).join(" | "));
 
 await browser.close();

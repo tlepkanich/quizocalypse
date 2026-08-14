@@ -16,8 +16,8 @@
 //     screen and paints a non-transparent background (no dead-white region).
 //  5. Desktop full-page fill: the fill chain spans the full 760px frame.
 //  6. Pop-up: the modal's quiz fills the modal envelope.
-//  7. Filmstrip at spec: 62×78 thumbs, strip ≤ 125px tall.
-//  8. Library tabs clear the collapse chevron. 9. Zero page errors.
+//  7. Filmstrip RETIRED (QRTZ-H4): the Flow tab renders the screen rows.
+//  8. Panel ed-tabs clear the collapse chevron. 9. Zero page errors.
 //
 // Run:  set -a; source .env; set +a; node e2e/fix2-verify.mjs
 import { chromium } from "playwright";
@@ -81,9 +81,11 @@ try {
   ok("library is 244px (spec col 2)", geo.panel === 244, `${geo.panel}`);
   ok("inspector is 320px (spec col 4)", geo.inspector === 320, `${geo.inspector}`);
   ok("canvas padding 24px 16px 16px (spec .stage)", geo.canvasPad === "24px 16px 16px", geo.canvasPad);
+  // viewport/2026-08 — align-items is STRETCH now (the DeviceFrame fit rule
+  // needs a definite height axis); centered on the inline axis stands.
   ok(
-    "canvas centered + top-anchored",
-    geo.canvasJustify === "center" && geo.canvasAlign === "flex-start",
+    "canvas centered + stretch-anchored (viewport/2026-08)",
+    geo.canvasJustify === "center" && geo.canvasAlign === "stretch",
     `${geo.canvasJustify}/${geo.canvasAlign}`,
   );
 
@@ -104,7 +106,7 @@ try {
   );
 
   // ── 4: mobile frame fill ──────────────────────────────────────────────────
-  await page.locator('button[aria-label="Mobile"]').click();
+  await page.locator('button[aria-label="Phone"]').click();
   await page.waitForSelector(".qz-device-fit-mobile", { timeout: 5000 });
   await page.waitForTimeout(500);
   const mobileFill = await page.evaluate(() => {
@@ -169,23 +171,17 @@ try {
   );
   await page.screenshot({ path: `${SHOTS}/popup-fill.png` });
 
-  // ── 7: filmstrip at spec ──────────────────────────────────────────────────
-  const strip = await page.evaluate(() => {
-    const t = document.querySelector(".qz-screens-thumb")?.getBoundingClientRect();
-    const s = document.querySelector(".qz-screens")?.getBoundingClientRect();
-    return t && s ? { tw: t.width, th: t.height, sh: s.height } : null;
-  });
+  // ── 7: the filmstrip is RETIRED (QRTZ-H4 — the Flow tab is the switcher) ──
   ok(
-    "filmstrip thumbs are 62×78 (spec .stepcard)",
-    !!strip && Math.round(strip.tw) === 62 && Math.round(strip.th) === 78,
-    strip ? `${strip.tw}×${strip.th}` : "",
+    "filmstrip retired (no .qz-screens; the Flow tab renders rows)",
+    (await page.locator(".qz-screens").count()) === 0 &&
+      (await page.locator(".qz-ftree-row").count()) >= 2,
   );
-  ok("filmstrip strip ≤ 125px tall (was 163)", !!strip && strip.sh <= 125, `${strip?.sh}`);
 
-  // ── 8: library tabs clear the collapse chevron ────────────────────────────
+  // ── 8: panel tabs clear the collapse chevron ──────────────────────────────
   const lib = await page.evaluate(() => {
-    // BLD-3 — the tabs live in the mock's .libhd now (.qz-bt-libhd > .qz-bt-seg).
-    const seg = document.querySelector(".qz-builder-panel .qz-bt-libhd .qz-bt-seg")?.getBoundingClientRect();
+    // QRTZ-H4 — the tabs are the mock's ed-tabs seg (.qz-bt-edtabs).
+    const seg = document.querySelector(".qz-builder-panel .qz-bt-edtabs")?.getBoundingClientRect();
     const chev = document.querySelector(".qz-builder-panel-collapse")?.getBoundingClientRect();
     return seg && chev ? { segRight: seg.right, chevLeft: chev.left } : null;
   });

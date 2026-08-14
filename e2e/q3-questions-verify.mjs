@@ -748,8 +748,8 @@ try {
     (await ltab.locator(".qz-ltab-qcell").count()) === 3);
   ok("exactly one Picks-the-result pill (decider guard carried over)",
     (await ltab.locator(".qz-ltab-pill.is-start").count()) === 1);
-  ok("+ Create rule present on the funnel card",
-    (await ltab.locator(".qz-ltab-create").count()) === 1);
+  ok("Add rule present on the funnel card (QRTZ-H3 label)",
+    (await ltab.locator(".qz-ltab-create", { hasText: "Add rule" }).count()) === 1);
   ok("every question row routes somewhere (Then-go-to column live)",
     (await ltab.locator("tbody td:last-child").evaluateAll(
       (tds) => tds.every((td) => td.textContent.trim().length > 0))));

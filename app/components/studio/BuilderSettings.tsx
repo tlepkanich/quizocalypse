@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { Link } from "@remix-run/react";
 import type { Quiz } from "../../lib/quizSchema";
+import { swapScoringModel } from "../../lib/quizMutations";
 import { LogicView } from "../logic/LogicView";
 import { LogicPathsTab } from "./LogicPathsTab";
 import { LogicTabCard } from "./logicTab/LogicTabCard";
@@ -107,6 +108,7 @@ export function QuizSettingsView({
   commit,
   onSelectNode,
   selectedNodeId,
+  onUpgradeDecider,
 }: {
   data: StudioBuilderData;
   doc: QuizDoc;
@@ -114,6 +116,10 @@ export function QuizSettingsView({
   onSelectNode: (nodeId: string | null) => void;
   /** Pre-selects the Custom-CSS step picker (the Build view's selection). */
   selectedNodeId?: string | null;
+  /** QRTZ-H4 — opens the legacy→decider upgrade wizard (host-owned modal).
+   *  The scoring/decider cluster moved here from the top bar (the mock's
+   *  .ed-top draws no badges — the info lives in Settings). */
+  onUpgradeDecider?: () => void;
 }) {
   const placement = doc.placement ?? "page";
   // The old Code rail tool, folded in: per-step scoped custom CSS.
@@ -130,6 +136,45 @@ export function QuizSettingsView({
           Experience &amp; scoring
         </div>
         <ExperiencePanel doc={doc} onCommit={commit} onSelectNode={onSelectNode} />
+        {/* QRTZ-H4 — the top-bar badges retired (the mock draws none): the
+            scoring model + decider info live here. Decider docs read their
+            one line; legacy docs keep the model swap + the explicit upgrade
+            wizard entry (L2-10f), byte-identical behavior. */}
+        {doc.logic_model === "decider" ? (
+          <p className="qz-dim" style={{ fontSize: 12.5, margin: "10px 0 0" }}>
+            <strong>Decider logic</strong> — one deciding question picks the
+            result; advanced rules can override it.
+          </p>
+        ) : (
+          (() => {
+            const m = doc.scoring_model ?? "direct";
+            const other = m === "direct" ? "weighted" : "direct";
+            return (
+              <div className="qz-row" style={{ gap: 8, marginTop: 10, flexWrap: "wrap" }}>
+                <button
+                  type="button"
+                  className="qz-btn qz-btn-ghost qz-btn-sm"
+                  style={{ fontSize: 12 }}
+                  title={`Scoring: ${m === "direct" ? "Direct mapping" : "Weighted scoring"} — click to switch (both models are saved)`}
+                  onClick={() => commit(swapScoringModel(doc, other))}
+                >
+                  {m === "direct" ? "Direct mapping" : "Weighted scoring"}
+                </button>
+                {onUpgradeDecider ? (
+                  <button
+                    type="button"
+                    className="qz-btn qz-btn-ghost qz-btn-sm"
+                    style={{ fontSize: 12 }}
+                    title="Convert this draft to Decider logic — one deciding question, rule overrides, a single configurable results page"
+                    onClick={onUpgradeDecider}
+                  >
+                    ↑ Upgrade to Decider logic
+                  </button>
+                ) : null}
+              </div>
+            );
+          })()
+        )}
       </section>
 
       <section>
