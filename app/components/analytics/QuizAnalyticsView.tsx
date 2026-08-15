@@ -52,6 +52,7 @@ export function GatedTile({
   detail,
   hero,
   unit,
+  deltaPoints,
 }: {
   label: ReactNode;
   gated: GatedRate;
@@ -59,6 +60,8 @@ export function GatedTile({
   detail?: ReactNode;
   hero?: boolean;
   unit: string;
+  /** Period-over-period movement in POINTS (rates never move in percent). */
+  deltaPoints?: number | null;
 }) {
   if (gated.state === "suppressed") {
     const pct = Math.min(100, Math.round((gated.n / gated.showsAt) * 100));
@@ -81,9 +84,16 @@ export function GatedTile({
       <div className="l">{label}</div>
       {gated.state === "provisional" ? (
         <div className="d">a range until {gated.confidentAt} {unit} — {gated.n} so far</div>
-      ) : detail ? (
-        <div className="d">{detail}</div>
-      ) : null}
+      ) : (
+        <div className="d">
+          {deltaPoints != null ? (
+            <span className={deltaPoints >= 0 ? "qz-anup" : "qz-andown"}>
+              {deltaPoints >= 0 ? "▲" : "▼"} {Math.abs(deltaPoints)} points{detail ? " · " : ""}
+            </span>
+          ) : null}
+          {detail}
+        </div>
+      )}
     </div>
   );
 }
@@ -121,6 +131,8 @@ export function InsightCardView({
   evidence,
   basis,
   action,
+  action2,
+  math,
 }: {
   severity: InsightCard["severity"];
   headline: string;
@@ -128,7 +140,11 @@ export function InsightCardView({
   evidence: Array<{ label: string; value: string }>;
   basis: string;
   action?: { label: string; href: string } | null;
+  action2?: { label: string; href: string } | null;
+  /** "Show the math" — counts only, never a currency amount (§7.4). */
+  math?: string;
 }) {
+  const [mathOpen, setMathOpen] = useState(false);
   return (
     <div className={`qz-insight is-${severity}`}>
       <div className="qz-insight-sev">{SEV_LABEL[severity]}</div>
@@ -141,8 +157,19 @@ export function InsightCardView({
           </span>
         ))}
       </div>
+      {math && mathOpen ? <p className="qz-insight-math">{math}</p> : null}
       <div className="qz-insight-foot">
         <span className="qz-insight-basis">{basis}</span>
+        {math ? (
+          <button type="button" className="qz-linkbtn" onClick={() => setMathOpen((v) => !v)}>
+            {mathOpen ? "Hide the math" : "Show the math"}
+          </button>
+        ) : null}
+        {action2 ? (
+          <Link to={action2.href} className="qz-link">
+            {action2.label} →
+          </Link>
+        ) : null}
         {action ? (
           <Link to={action.href} className="qz-link">
             {action.label} →
@@ -305,13 +332,29 @@ export function QuizAnalyticsView({
         <>
           <div className="qz-antiles">
             <GatedTile
-              label={<>Completion rate</>}
+              label={<>Completion rate <MethodInfo onClick={() => setMethodOpen(true)} /></>}
               gated={kpis.completion}
               unit="sessions"
               hero
+              deltaPoints={kpis.deltas.completionPoints}
               detail={`${kpis.completed} of ${kpis.engaged} who started`}
             />
-            <CountTile label="Reached recommendations" value={kpis.completed} detail={`of ${kpis.engaged} who started`} />
+            <CountTile
+              label="Reached recommendations"
+              value={kpis.completed.toLocaleString()}
+              detail={
+                kpis.deltas.sessionsPct != null ? (
+                  <>
+                    <span className={kpis.deltas.sessionsPct >= 0 ? "qz-anup" : "qz-andown"}>
+                      {kpis.deltas.sessionsPct >= 0 ? "▲" : "▼"} {Math.abs(kpis.deltas.sessionsPct)}% sessions
+                    </span>{" "}
+                    · of {kpis.engaged.toLocaleString()} who started
+                  </>
+                ) : (
+                  `of ${kpis.engaged.toLocaleString()} who started`
+                )
+              }
+            />
             <GatedTile
               label="Email capture"
               gated={kpis.capture}
@@ -406,7 +449,16 @@ function InsightList({
           body={card.body}
           evidence={card.evidence}
           basis={card.basis}
+          math={card.math}
           action={{ label: card.action.label, href: insightHref(card, surface, data.quiz.id, searchParams) }}
+          action2={
+            card.action2
+              ? {
+                  label: card.action2.label,
+                  href: insightHref({ ...card, action: card.action2 }, surface, data.quiz.id, searchParams),
+                }
+              : null
+          }
         />
       ))}
       {more > 0 ? (
@@ -421,14 +473,64 @@ function InsightList({
 
 // ── Sections ───────────────────────────────────────────────────────────────
 
+type Grain = "day" | "week" | "month";
+
+interface RevBucket { key: string; label: string; total: number; orders: number; finishers: number; currency: string }
+
+/** Roll daily buckets up to the chosen grain — every grain sums to the same
+ *  total, and switching costs no round-trip. */
+function rollUp(days: QuizAnalyticsData["revenueDays"], grain: Grain): RevBucket[] {
+  const out = new Map<string, RevBucket>();
+  for (const d of days) {
+    const date = new Date(`${d.day}T00:00:00Z`);
+    let key = d.day;
+    if (grain === "week") {
+      // ISO-ish week start (Monday) so buckets are stable across renders.
+      const dow = (date.getUTCDay() + 6) % 7;
+      key = new Date(+date - dow * 86_400_000).toISOString().slice(0, 10);
+    } else if (grain === "month") {
+      key = d.day.slice(0, 7);
+    }
+    const prev = out.get(key);
+    if (prev) {
+      prev.total += d.total;
+      prev.orders += d.orders;
+      prev.finishers += d.finishers;
+      prev.currency = prev.currency || d.currency;
+    } else {
+      out.set(key, {
+        key,
+        label:
+          grain === "month"
+            ? new Date(`${key}-01T00:00:00Z`).toLocaleDateString("en-US", { month: "short", year: "numeric", timeZone: "UTC" })
+            : new Date(`${key}T00:00:00Z`).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" }),
+        total: d.total,
+        orders: d.orders,
+        finishers: d.finishers,
+        currency: d.currency,
+      });
+    }
+  }
+  return [...out.values()].sort((a, b) => a.key.localeCompare(b.key));
+}
+
+function money(v: number, currency: string): string {
+  return `${v.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}${currency ? ` ${currency}` : ""}`;
+}
+
 function RevenueSection({ data, onMethod }: { data: QuizAnalyticsData; onMethod: () => void }) {
   const { kpis } = data;
+  const [grain, setGrain] = useState<Grain>("week");
   if (data.attribution === "none") {
     return (
       <QzEmpty title="Order attribution isn't measurable on this workspace — there is no Shopify order feed to read." />
     );
   }
-  const maxWeek = Math.max(1, ...data.revenueWeeks.map((w) => w.total));
+  const buckets = rollUp(data.revenueDays, grain);
+  const maxTotal = Math.max(1, ...buckets.map((b) => b.total));
+  const maxOrders = Math.max(1, ...buckets.map((b) => b.orders));
+  const grainName: Record<Grain, string> = { day: "day", week: "week", month: "month" };
+
   return (
     <>
       <div className="qz-antiles">
@@ -436,47 +538,96 @@ function RevenueSection({ data, onMethod }: { data: QuizAnalyticsData; onMethod:
           label={<>Order value influenced <MethodInfo onClick={onMethod} /></>}
           value={kpis.revenue.formatted}
           hero
-          detail={data.range.label.toLowerCase()}
+          detail={
+            kpis.deltas.revenuePct != null ? (
+              <span className={kpis.deltas.revenuePct >= 0 ? "qz-anup" : "qz-andown"}>
+                {kpis.deltas.revenuePct >= 0 ? "▲" : "▼"} {Math.abs(kpis.deltas.revenuePct)}% vs previous period
+              </span>
+            ) : (
+              data.range.label.toLowerCase()
+            )
+          }
         />
         <CountTile label="Attributed orders" value={kpis.revenue.orders} detail={`of ${kpis.completed} finishers`} />
         <GatedTile label="Finishers who bought" gated={kpis.conversion} unit="finishers" />
-        <CountTile label="Revenue per finisher" value={kpis.revenue.perFinisher ?? "—"} detail={kpis.revenue.perFinisher ? `${kpis.revenue.formatted} ÷ ${kpis.completed}` : "needs a single currency"} />
+        <CountTile
+          label="Revenue per finisher"
+          value={kpis.revenue.perFinisher ?? "—"}
+          detail={
+            kpis.revenue.perFinisher
+              ? `${kpis.revenue.formatted} ÷ ${kpis.completed}`
+              : "needs a single currency"
+          }
+        />
       </div>
-      {data.revenueWeeks.length > 0 ? (
+
+      {buckets.length > 0 ? (
         <>
-          <SectionHead title="Revenue by week" />
+          <div className="qz-anhead">
+            <h2 className="qz-h1">Revenue by {grainName[grain]}</h2>
+            <div className="qz-anseg" role="group" aria-label="Chart grain">
+              {(["day", "week", "month"] as const).map((g) => (
+                <button
+                  key={g}
+                  type="button"
+                  className={grain === g ? "is-on" : ""}
+                  aria-pressed={grain === g}
+                  onClick={() => setGrain(g)}
+                >
+                  {g[0]!.toUpperCase() + g.slice(1)}
+                </button>
+              ))}
+            </div>
+            <span className="qz-anattr">{data.attributionDays}-day attribution</span>
+          </div>
           <QzCard flush>
-            <div className="qz-anweeks">
-              {data.revenueWeeks.map((w) => (
-                <div key={w.label} className="qz-anweek">
-                  <div className="qz-anweek-col" role="presentation">
-                    <span style={{ height: `${Math.max(4, Math.round((w.total / maxWeek) * 100))}%` }} />
+            <div className="qz-anlegend">
+              <span className="qz-anlegend-bar" aria-hidden /> Order value influenced
+              <span className="qz-anlegend-dot" aria-hidden /> Attributed orders
+            </div>
+            <div className="qz-anchart">
+              {buckets.map((b) => (
+                <div key={b.key} className="qz-anbucket">
+                  <div className="qz-anbucket-col" role="presentation">
+                    <span className="qz-anbucket-fill" style={{ height: `${Math.max(3, Math.round((b.total / maxTotal) * 100))}%` }} />
+                    {b.orders > 0 ? (
+                      <i
+                        className="qz-anbucket-dot"
+                        style={{ bottom: `${Math.min(96, Math.round((b.orders / maxOrders) * 92))}%` }}
+                        title={`${b.orders} order${b.orders === 1 ? "" : "s"}`}
+                      />
+                    ) : null}
                   </div>
-                  <div className="qz-anweek-l">{w.label}</div>
+                  <div className="qz-anbucket-l">{b.label}</div>
                 </div>
               ))}
             </div>
-            <table className="qz-table">
-              <thead>
-                <tr>
-                  <th>Week of</th>
-                  <th>Orders</th>
-                  <th>Order value</th>
-                </tr>
-              </thead>
-              <tbody>
-                {data.revenueWeeks.map((w) => (
-                  <tr key={w.label}>
-                    <td>{w.label}</td>
-                    <td className="qz-mono qz-tnum">{w.orders}</td>
-                    <td className="qz-mono qz-tnum">
-                      {w.total.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                      {w.currency ? ` ${w.currency}` : ""}
-                    </td>
+            <div style={{ overflowX: "auto" }}>
+              <table className="qz-table">
+                <thead>
+                  <tr>
+                    <th>{grain === "day" ? "Day" : grain === "week" ? "Week of" : "Month"}</th>
+                    <th>Finishers</th>
+                    <th>Orders</th>
+                    <th>Order value</th>
+                    <th>Per finisher</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {[...buckets].reverse().map((b) => (
+                    <tr key={b.key}>
+                      <td>{b.label}</td>
+                      <td className="qz-mono qz-tnum">{b.finishers}</td>
+                      <td className="qz-mono qz-tnum">{b.orders}</td>
+                      <td className="qz-mono qz-tnum">{money(b.total, b.currency)}</td>
+                      <td className="qz-mono qz-tnum">
+                        {b.finishers > 0 ? money(b.total / b.finishers, b.currency) : "—"}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </QzCard>
         </>
       ) : (
@@ -484,7 +635,7 @@ function RevenueSection({ data, onMethod }: { data: QuizAnalyticsData; onMethod:
       )}
       <p className="qz-dim" style={{ fontSize: 12.5, marginTop: 12 }}>
         These are whole order totals, not just the products we recommended.{" "}
-        <button type="button" className="qz-link" style={{ background: "none", border: 0, padding: 0, cursor: "pointer" }} onClick={onMethod}>
+        <button type="button" className="qz-linkbtn" onClick={onMethod}>
           How we count this →
         </button>
       </p>
@@ -534,6 +685,54 @@ function AnswersSection({ data }: { data: QuizAnalyticsData }) {
           </QzCard>
         ))}
       </div>
+      {data.responses.rows.length > 0 ? (
+        <>
+          <SectionHead
+            title="Individual responses"
+            sub={`1–${data.responses.rows.length} of ${data.responses.total.toLocaleString()}`}
+          />
+          <QzCard flush>
+            <div style={{ overflowX: "auto" }}>
+              <table className="qz-table">
+                <thead>
+                  <tr>
+                    <th>Shopper</th>
+                    <th>When</th>
+                    {data.answers.map((q) => (
+                      <th key={q.questionId}>{q.text.length > 22 ? `${q.text.slice(0, 21)}…` : q.text}</th>
+                    ))}
+                    <th>Result</th>
+                    <th>Bought</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {data.responses.rows.map((r) => (
+                    <tr key={r.sessionId}>
+                      <td className="qz-mono qz-dim">{r.short}</td>
+                      <td style={{ whiteSpace: "nowrap" }} className="qz-dim">{formatDate(r.when)}</td>
+                      {data.answers.map((q) => {
+                        const a = r.answers.find((x) => x.questionId === q.questionId);
+                        return (
+                          <td key={q.questionId} className={a ? undefined : "qz-andash"}>
+                            {a ? a.text : "—"}
+                          </td>
+                        );
+                      })}
+                      <td>{r.result ?? <span className="qz-dim">{r.leftAt ?? "—"}</span>}</td>
+                      <td>{r.bought ? "Yes" : <span className="qz-andash">—</span>}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </QzCard>
+          <p className="qz-dim" style={{ fontSize: 12, marginTop: 10 }}>
+            Includes shoppers who left partway — their row stops where they did. Shopper ids are shortened; the
+            export carries the full session and contact details.
+          </p>
+        </>
+      ) : null}
+
       {data.outcomes.length > 0 ? (
         <>
           <SectionHead title="Where shoppers ended up" sub={`${data.kpis.completed} finishers`} />
@@ -566,18 +765,26 @@ const PRODUCT_STATE_LABEL: Record<string, { label: string; tone: "ok" | "warn" |
 };
 
 function ProductsSection({ data }: { data: QuizAnalyticsData }) {
+  const [open, setOpen] = useState<string | null>(null);
   if (data.products.length === 0) {
     return <QzEmpty title="No product activity in this range yet — impressions appear once shoppers see recommendations." />;
   }
+  const ec = data.effectiveCatalog;
   return (
     <>
       <SectionHead
         title="What your quiz recommends"
-        sub={data.productMeta ? `${data.productMeta.mapped} mapped products · ${data.productMeta.unreachable} unreachable` : undefined}
+        sub={
+          ec
+            ? `effectively ${ec.effective} of ${ec.mapped} products`
+            : data.productMeta
+              ? `${data.productMeta.mapped} mapped · ${data.productMeta.unreachable} unreachable`
+              : undefined
+        }
       />
       <QzCard flush>
         <div style={{ overflowX: "auto" }}>
-          <table className="qz-table">
+          <table className="qz-table qz-anprod">
             <thead>
               <tr>
                 <th>Product</th>
@@ -592,40 +799,124 @@ function ProductsSection({ data }: { data: QuizAnalyticsData }) {
             <tbody>
               {data.products.map((p) => {
                 const st = PRODUCT_STATE_LABEL[p.state] ?? PRODUCT_STATE_LABEL["no-data"]!;
-                return (
-                  <tr key={p.productId}>
-                    <td className="qz-cell-name">{p.title}</td>
-                    <td className="qz-mono qz-tnum">{p.impressions}</td>
-                    <td className="qz-mono qz-tnum">{p.share != null ? `${Math.round(p.share * 100)}%` : "—"}</td>
-                    <td className="qz-mono qz-tnum">{p.clicks}</td>
+                const expandable = p.paths.length > 0;
+                const isOpen = open === p.productId;
+                return [
+                  <tr
+                    key={p.productId}
+                    className={expandable ? "qz-anprod-row" : undefined}
+                    onClick={expandable ? () => setOpen(isOpen ? null : p.productId) : undefined}
+                  >
+                    <td className="qz-cell-name">
+                      {expandable ? <span className="qz-anprod-caret" aria-hidden>{isOpen ? "▾" : "▸"}</span> : null}
+                      {p.title}
+                    </td>
+                    <td className="qz-mono qz-tnum">{p.impressions || "—"}</td>
+                    <td className="qz-mono qz-tnum">{p.share != null && p.impressions > 0 ? `${Math.round(p.share * 100)}%` : "—"}</td>
+                    <td className="qz-mono qz-tnum">{p.impressions > 0 ? p.clicks : "—"}</td>
                     <td className="qz-mono qz-tnum">{p.impressions > 0 ? `${(p.ctr * 100).toFixed(1)}%` : "—"}</td>
-                    <td className="qz-mono qz-tnum">{p.addToCart}</td>
+                    <td className="qz-mono qz-tnum">{p.impressions > 0 ? p.addToCart : "—"}</td>
                     <td><QzBadge tone={st.tone}>{st.label}</QzBadge></td>
-                  </tr>
-                );
+                  </tr>,
+                  isOpen ? (
+                    <tr key={`${p.productId}-paths`} className="qz-anprod-detail">
+                      <td colSpan={7}>
+                        <div className="qz-anpaths-h">How shoppers reach this product</div>
+                        {p.paths.map((path, i) => (
+                          <div key={i} className="qz-anpath">
+                            <span className="qz-anpath-q">{path.question}</span>
+                            <span className="qz-anpath-a">{path.answer}</span>
+                            <span aria-hidden>→</span>
+                            <span className="qz-anpath-t">{path.target}</span>
+                          </div>
+                        ))}
+                        {p.groupCount > 1 ? (
+                          <p className="qz-dim" style={{ margin: "8px 0 0", fontSize: 12.5 }}>
+                            It appears in {p.groupCount} of your result groups, which is why its share is so high.
+                          </p>
+                        ) : null}
+                      </td>
+                    </tr>
+                  ) : null,
+                ];
               })}
             </tbody>
           </table>
         </div>
       </QzCard>
       <p className="qz-dim" style={{ fontSize: 12.5, marginTop: 12 }}>
-        Only products your quiz has shown (or mapped) appear here. <b>Unreachable</b> means the product is
-        mapped but no combination of answers can produce it — read from your quiz&rsquo;s own logic, not from
-        traffic. Mid-quiz preview impressions are excluded from every count.
+        Click a product to see which answers lead to it. Only products your quiz has shown or mapped appear here.
+        <b> Unreachable</b> means the product is mapped but no combination of answers can produce it — read from your
+        quiz&rsquo;s own logic, not from traffic. Mid-quiz preview impressions are excluded from every count.
+        We can&rsquo;t yet show which products were <i>bought</i>: the order webhook doesn&rsquo;t keep line items.
       </p>
     </>
   );
 }
 
+function stepKindLabel(kind: string, i: number, laneLabel: string | null): string {
+  if (laneLabel) return `${laneLabel}`;
+  switch (kind) {
+    case "intro": return "Start";
+    case "branch": return "Branch";
+    case "email_gate": return "Email gate";
+    case "result": return "Result";
+    default: return `Question ${i}`;
+  }
+}
+
 function FlowSection({ data }: { data: QuizAnalyticsData }) {
   const ledger = data.ledger;
   if (!ledger || ledger.steps.length === 0) return <QzEmpty title="No flow to show yet." />;
+
+  let questionNo = 0;
+  const nodes = ledger.steps.map((s) => {
+    if (s.kind === "question" && !s.laneLabel) questionNo += 1;
+    return { step: s, eyebrow: stepKindLabel(s.kind, questionNo, s.laneLabel) };
+  });
+
   return (
     <>
       <SectionHead
         title="How shoppers move through your quiz"
         sub="drop-off is % of who reached each step — a worst-case figure (see How we count this)"
       />
+
+      {/* The diagram: a node per step, the loss stated ON the edge between two
+          nodes. A branch is a fork labelled "splits by answer", never a drop —
+          routing a shopper is not losing one. */}
+      <div className="qz-anflow">
+        {nodes.map(({ step, eyebrow }, i) => {
+          const next = nodes[i + 1]?.step;
+          const showEdge = step.left != null && step.dropoff != null;
+          return (
+            <div key={step.nodeId} className={step.laneLabel ? "qz-anflow-lane" : undefined}>
+              <div
+                className={`qz-anflow-node${step.nodeId === ledger.steepestNodeId ? " is-worst" : ""}${step.splits ? " is-branch" : ""}`}
+              >
+                <div className="qz-anflow-eyebrow">
+                  {eyebrow}
+                  {step.nodeId === ledger.steepestNodeId ? <b> · steepest drop</b> : null}
+                  {step.kind === "email_gate" ? <span className="qz-dim"> · skippable</span> : null}
+                </div>
+                <div className="qz-anflow-label">{step.label}</div>
+                <div className="qz-anflow-n">{step.reached != null ? step.reached.toLocaleString() : "—"}</div>
+              </div>
+              {step.splits ? (
+                <div className="qz-anflow-edge is-split">splits by answer</div>
+              ) : showEdge && next ? (
+                <div className="qz-anflow-edge">
+                  {step.left!.toLocaleString()} left · {(step.dropoff! * 100).toFixed(1)}%
+                </div>
+              ) : i < nodes.length - 1 ? (
+                <div className="qz-anflow-edge is-quiet" aria-hidden />
+              ) : null}
+            </div>
+          );
+        })}
+      </div>
+
+      <SectionHead title="Step by step" />
       <QzCard flush>
         <div style={{ overflowX: "auto" }}>
           <table className="qz-table">
@@ -694,8 +985,11 @@ function CustomersSection({
   setCohort: (c: "all" | "purchased" | "didntBuy" | "noMatch" | "backInStock") => void;
   exportBase: string | null;
 }) {
-  const { counts, rows } = data.contacts;
-  const filtered =
+  const { counts, rows, filterOptions } = data.contacts;
+  const [resultFilter, setResultFilter] = useState("");
+  const [productFilter, setProductFilter] = useState("");
+
+  const byCohort =
     cohort === "all"
       ? rows
       : cohort === "purchased"
@@ -705,6 +999,16 @@ function CustomersSection({
           : cohort === "noMatch"
             ? rows.filter((r) => r.noMatch)
             : rows.filter((r) => r.backInStock);
+  // Result + Recommended narrow ON TOP of the cohort (§06), and the export
+  // follows the same scope — what you see is what downloads.
+  const filtered = byCohort.filter(
+    (r) => (!resultFilter || r.result === resultFilter) && (!productFilter || r.recommended === productFilter),
+  );
+  const filtersOn = Boolean(resultFilter || productFilter);
+  const exportHref = exportBase
+    ? `${exportBase}?quiz=${data.quiz.id}&segment=${exportSegment(cohort)}`
+    : null;
+
   return (
     <>
       <div className="qz-antiles">
@@ -712,15 +1016,23 @@ function CustomersSection({
           label="Contacts captured"
           value={counts.all}
           hero
-          detail={data.kpis.completed > 0 ? `${Math.round((data.kpis.captureSessions / Math.max(1, data.kpis.completed)) * 100)}% of finishers` : undefined}
+          detail={
+            data.kpis.completed > 0
+              ? `${Math.round((data.kpis.captureSessions / Math.max(1, data.kpis.completed)) * 100)}% of finishers`
+              : undefined
+          }
+        />
+        <CountTile
+          label="Finished without an email"
+          value={counts.noEmail}
+          detail={`of ${data.kpis.completed} finishers`}
         />
         <CountTile label="Went on to buy" value={counts.purchased} detail={`of ${counts.all} contacts`} />
-        <CountTile label="Saw no match" value={counts.noMatch} detail="finished, gave an email, got fallback products" />
         <CountTile label="Back-in-stock requests" value={counts.backInStock} />
       </div>
 
       <SectionHead title="Contacts" sub={`${filtered.length} of ${counts.all}`} />
-      <div className="qz-segpills" style={{ marginBottom: 14 }}>
+      <div className="qz-segpills" style={{ marginBottom: 10 }}>
         {(
           [
             ["all", counts.all],
@@ -739,15 +1051,54 @@ function CustomersSection({
             {cohortLabel(key)} · {n}
           </button>
         ))}
-        {exportBase ? (
-          <a className="qz-btn qz-btn-ghost qz-btn-sm" style={{ marginLeft: "auto" }} href={`${exportBase}?quiz=${data.quiz.id}&segment=${exportSegment(cohort)}`}>
+        {exportHref ? (
+          <a className="qz-btn qz-btn-ghost qz-btn-sm" style={{ marginLeft: "auto" }} href={exportHref}>
             Export this cohort (CSV)
           </a>
         ) : null}
       </div>
 
+      <div className="qz-anfilters">
+        <label>
+          <span className="qz-dim">Result</span>
+          <select value={resultFilter} onChange={(e) => setResultFilter(e.target.value)} className="qz-anselect">
+            <option value="">All results</option>
+            {filterOptions.results.map((r) => (
+              <option key={r} value={r}>{r}</option>
+            ))}
+          </select>
+        </label>
+        <label>
+          <span className="qz-dim">Recommended</span>
+          <select value={productFilter} onChange={(e) => setProductFilter(e.target.value)} className="qz-anselect">
+            <option value="">All products</option>
+            {filterOptions.products.map((r) => (
+              <option key={r} value={r}>{r}</option>
+            ))}
+          </select>
+        </label>
+        {filtersOn ? (
+          <button
+            type="button"
+            className="qz-linkbtn"
+            onClick={() => {
+              setResultFilter("");
+              setProductFilter("");
+            }}
+          >
+            Clear filters
+          </button>
+        ) : null}
+      </div>
+
       {filtered.length === 0 ? (
-        <QzEmpty title="No contacts in this cohort yet — captures land here the moment a shopper submits an email." />
+        <QzEmpty
+          title={
+            filtersOn
+              ? "No contacts match these filters."
+              : "No contacts in this cohort yet — captures land here the moment a shopper submits an email."
+          }
+        />
       ) : (
         <QzCard flush>
           <div style={{ overflowX: "auto" }}>
@@ -791,19 +1142,73 @@ function CustomersSection({
         </QzCard>
       )}
       <p className="qz-dim" style={{ fontSize: 12, marginTop: 12 }}>
-        Emails are masked on screen to keep the table scannable. Exports include them in full. Contacts opted
-        in by sharing their details in the quiz.
+        Emails are masked on screen to keep the table scannable. Exports include them in full and follow the cohort
+        you have selected. Contacts opted in by sharing their details in the quiz.
       </p>
     </>
   );
 }
 
+const COMPARE_METRICS = [
+  { key: "engaged", label: "Started" },
+  { key: "completed", label: "Finished" },
+  { key: "completion", label: "Completion" },
+  { key: "captures", label: "Contacts" },
+  { key: "revenueNumeric", label: "Revenue" },
+] as const;
+
+type CompareMetric = (typeof COMPARE_METRICS)[number]["key"];
+
 function CompareSection({ data }: { data: QuizAnalyticsData }) {
-  if (data.months.length === 0) return <QzEmpty title="No monthly history in this range yet — widen the range to compare months." />;
+  const [metric, setMetric] = useState<CompareMetric>("engaged");
+  if (data.months.length === 0) {
+    return <QzEmpty title="No monthly history in this range yet — widen the range to compare months." />;
+  }
+  // Oldest → newest for the chart; the table reads newest first.
+  const chron = [...data.months].reverse();
+  const valueOf = (m: (typeof data.months)[number]): number | null => {
+    if (metric === "completion") return m.engaged >= 20 ? (m.completed / m.engaged) * 100 : null;
+    return m[metric] as number;
+  };
+  const max = Math.max(1, ...chron.map((m) => valueOf(m) ?? 0));
+
   return (
     <>
-      <SectionHead title="Metrics by month" sub="rates are recomputed per month, never averaged across months" />
+      <div className="qz-anhead">
+        <h2 className="qz-h1">Metrics by month</h2>
+        <div className="qz-anseg" role="group" aria-label="Metric">
+          {COMPARE_METRICS.map((m) => (
+            <button
+              key={m.key}
+              type="button"
+              className={metric === m.key ? "is-on" : ""}
+              aria-pressed={metric === m.key}
+              onClick={() => setMetric(m.key)}
+            >
+              {m.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
       <QzCard flush>
+        <div className="qz-anchart">
+          {chron.map((m) => {
+            const v = valueOf(m);
+            return (
+              <div key={m.key} className="qz-anbucket">
+                <div className="qz-anbucket-col" role="presentation">
+                  <span
+                    className={`qz-anbucket-fill${m.partial ? " is-partial" : ""}`}
+                    style={{ height: `${Math.max(3, Math.round(((v ?? 0) / max) * 100))}%` }}
+                    title={v == null ? "too few sessions to rate" : String(Math.round(v))}
+                  />
+                </div>
+                <div className="qz-anbucket-l">{m.label.replace(" ", "\u00a0")}</div>
+              </div>
+            );
+          })}
+        </div>
         <div style={{ overflowX: "auto" }}>
           <table className="qz-table">
             <thead>
@@ -815,6 +1220,7 @@ function CompareSection({ data }: { data: QuizAnalyticsData }) {
                 <th>Contacts</th>
                 <th>Orders</th>
                 <th>Revenue</th>
+                <th>Per finisher</th>
               </tr>
             </thead>
             <tbody>
@@ -827,11 +1233,12 @@ function CompareSection({ data }: { data: QuizAnalyticsData }) {
                   <td className="qz-mono qz-tnum">{m.engaged}</td>
                   <td className="qz-mono qz-tnum">{m.completed}</td>
                   <td className="qz-mono qz-tnum">
-                    {m.engaged >= 20 ? `${Math.round((m.completed / m.engaged) * 100)}%` : "—"}
+                    {m.engaged >= 20 ? `${Math.round((m.completed / m.engaged) * 100)}%` : <span className="qz-andash">—</span>}
                   </td>
                   <td className="qz-mono qz-tnum">{m.captures}</td>
                   <td className="qz-mono qz-tnum">{m.orders}</td>
                   <td className="qz-mono qz-tnum">{m.revenue}</td>
+                  <td className="qz-mono qz-tnum">{m.perFinisher ?? <span className="qz-andash">—</span>}</td>
                 </tr>
               ))}
             </tbody>
@@ -839,7 +1246,9 @@ function CompareSection({ data }: { data: QuizAnalyticsData }) {
         </div>
       </QzCard>
       <p className="qz-dim" style={{ fontSize: 12.5, marginTop: 12 }}>
-        The current month is partial and carries no change figure. A month under 20 sessions shows counts only.
+        Rates are recomputed per month, never averaged across them — averaging rates weights a quiet month the same
+        as a busy one. The current month is partial and carries no change figure; a month under 20 sessions shows
+        counts only.
       </p>
     </>
   );

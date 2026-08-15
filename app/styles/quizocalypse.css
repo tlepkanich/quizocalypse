@@ -10718,12 +10718,6 @@ button.qz-pb-row:hover { background: var(--qz-cream-2); }
 .qz-anbar { height: 10px; border-radius: var(--qz-radius-pill); background: var(--qz-cream-2); overflow: hidden; }
 .qz-anbar span { display: block; height: 100%; border-radius: inherit; background: var(--qz-accent); opacity: 0.75; min-width: 2px; }
 
-/* Revenue by week — CSS bars, no chart library. */
-.qz-anweeks { display: flex; align-items: flex-end; gap: 14px; padding: 20px 20px 12px; border-bottom: 1px solid var(--qz-rule); min-height: 120px; }
-.qz-anweek { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 6px; min-width: 0; }
-.qz-anweek-col { height: 84px; width: 100%; max-width: 46px; display: flex; align-items: flex-end; }
-.qz-anweek-col span { display: block; width: 100%; border-radius: var(--qz-radius-sm) var(--qz-radius-sm) 0 0; background: var(--qz-accent); opacity: 0.8; }
-.qz-anweek-l { font-size: 10.5px; color: var(--qz-ink-3); white-space: nowrap; }
 
 /* Step ledger — the steepest drop gets a quiet flag, not a red table. */
 .qz-anworst td { background: var(--qz-warn-tint); }
@@ -10789,3 +10783,56 @@ button.qz-pb-row:hover { background: var(--qz-cream-2); }
 .qz-anneeds { font-size: 11.5px; color: var(--qz-ink-3); font-weight: 500; }
 .qz-anqlink { color: var(--qz-accent-ink); font-weight: 600; text-decoration: none; border-bottom: 1px solid transparent; }
 .qz-anqlink:hover { border-bottom-color: var(--qz-accent-line); }
+
+/* ── Analytics Screen 2: chart, flow diagram, product paths, filters ───────
+   Charts are CSS bars + positioned dots — no chart library, so the admin
+   bundle doesn't grow for four sections that draw a dozen rectangles. */
+.qz-anattr { font-size: 11.5px; color: var(--qz-ink-3); margin-left: auto; }
+.qz-anlegend { display: flex; align-items: center; gap: 8px; padding: 14px 20px 0; font-size: 11.5px; color: var(--qz-ink-3); }
+.qz-anlegend-bar { width: 10px; height: 10px; border-radius: 2px; background: var(--qz-accent); opacity: 0.8; }
+.qz-anlegend-dot { width: 8px; height: 8px; border-radius: var(--qz-radius-pill); background: var(--qz-ink); margin-left: 10px; }
+.qz-anchart { display: flex; align-items: flex-end; gap: 10px; padding: 14px 20px 12px; border-bottom: 1px solid var(--qz-rule); min-height: 128px; overflow-x: auto; }
+.qz-anbucket { flex: 1 0 34px; display: flex; flex-direction: column; align-items: center; gap: 6px; min-width: 34px; }
+.qz-anbucket-col { position: relative; height: 92px; width: 100%; max-width: 42px; display: flex; align-items: flex-end; }
+.qz-anbucket-fill { display: block; width: 100%; border-radius: var(--qz-radius-sm) var(--qz-radius-sm) 0 0; background: var(--qz-accent); opacity: 0.8; }
+/* The partial month is hatched, so a short bar reads as "not finished yet"
+   rather than as a collapse. */
+.qz-anbucket-fill.is-partial { opacity: 0.4; }
+.qz-anbucket-dot { position: absolute; left: 50%; width: 7px; height: 7px; margin-left: -3.5px; border-radius: var(--qz-radius-pill); background: var(--qz-ink); }
+.qz-anbucket-l { font-size: 10.5px; color: var(--qz-ink-3); white-space: nowrap; }
+
+/* Flow diagram — a node per step, the loss stated on the edge between them. */
+.qz-anflow { margin-bottom: 26px; }
+.qz-anflow-node { border: 1px solid var(--qz-rule); border-radius: var(--qz-radius-lg); background: var(--qz-paper); padding: 12px 16px; display: flex; align-items: baseline; gap: 12px; }
+.qz-anflow-node.is-worst { border-color: var(--qz-warn); background: var(--qz-warn-tint); }
+.qz-anflow-node.is-branch { border-style: dashed; }
+.qz-anflow-eyebrow { font-size: 10.5px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--qz-ink-3); font-weight: 600; flex: none; min-width: 96px; }
+.qz-anflow-node.is-worst .qz-anflow-eyebrow { color: var(--qz-warn); }
+.qz-anflow-label { font-size: 13.5px; color: var(--qz-ink); flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.qz-anflow-n { font-family: var(--qz-font-heading); font-size: 16px; font-weight: 700; font-variant-numeric: tabular-nums; color: var(--qz-ink); }
+.qz-anflow-edge { display: flex; align-items: center; justify-content: center; gap: 8px; font-size: 11.5px; color: var(--qz-ink-3); padding: 5px 0; position: relative; min-height: 26px; }
+.qz-anflow-edge::before { content: ""; position: absolute; left: 30px; top: 0; bottom: 0; width: 1px; background: var(--qz-rule-strong); }
+.qz-anflow-edge.is-quiet { min-height: 14px; }
+.qz-anflow-edge.is-split { color: var(--qz-accent-ink); font-weight: 600; }
+.qz-anflow-lane { margin-left: 28px; }
+
+/* Product reach paths (expand a row). */
+.qz-anprod-row { cursor: pointer; }
+.qz-anprod-row:hover { background: var(--qz-cream-2); }
+.qz-anprod-caret { display: inline-block; width: 14px; color: var(--qz-ink-3); }
+.qz-anprod-detail td { background: var(--qz-cream-2); }
+.qz-anpaths-h { font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--qz-ink-3); font-weight: 700; margin-bottom: 8px; }
+.qz-anpath { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 12.5px; padding: 3px 0; color: var(--qz-ink-2); }
+.qz-anpath-q { color: var(--qz-ink-3); }
+.qz-anpath-a { font-weight: 600; color: var(--qz-ink); background: var(--qz-paper); border: 1px solid var(--qz-rule); border-radius: var(--qz-radius-sm); padding: 1px 7px; }
+.qz-anpath-t { font-weight: 600; color: var(--qz-accent-ink); }
+
+/* Contacts narrowing filters. */
+.qz-anfilters { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; margin-bottom: 14px; font-size: 12.5px; }
+.qz-anfilters label { display: inline-flex; align-items: center; gap: 7px; }
+.qz-anselect { font: inherit; font-size: 12.5px; padding: 5px 9px; border-radius: var(--qz-radius-sm); border: 1px solid var(--qz-rule); background: var(--qz-paper); color: var(--qz-ink); max-width: 200px; }
+
+/* A button that reads as a link (method disclosure, clear filters). */
+.qz-linkbtn { font: inherit; font-size: 12.5px; background: none; border: 0; padding: 0; color: var(--qz-accent-ink); font-weight: 600; cursor: pointer; }
+.qz-linkbtn:hover { text-decoration: underline; }
+.qz-insight-math { font-size: 12.5px; line-height: 1.55; color: var(--qz-ink-2); background: var(--qz-cream-2); border-radius: var(--qz-radius-sm); padding: 10px 12px; margin: 0 0 10px; }

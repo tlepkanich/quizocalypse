@@ -115,27 +115,57 @@ export function buildStepLedger(
 
   const sessionsAt = (qid: string): Map<string, AnswerFact> => answers.get(qid) ?? new Map();
 
-  // Linear spine: cumulative reach from the tail. reached(k) = answered(k) ∪
-  // reached(k+1); the tail seeds from completion (measured, not inferred).
-  const spineQuestionIds = flow.steps
-    .filter((s) => s.type === "question")
-    .map((s) => s.nodeId);
-
-  const reachedSets = new Map<string, Set<string>>();
-  if (!branching) {
-    let tail = new Set<string>(); // sessions known to be past the last question
-    // Seed with completed sessions via quiz_completed events.
-    for (const e of events) {
-      if (e.eventType === "quiz_completed") tail.add(e.sessionId);
-    }
-    for (let i = spineQuestionIds.length - 1; i >= 0; i--) {
-      const qid = spineQuestionIds[i]!;
-      const set = new Set(tail);
-      for (const sid of sessionsAt(qid).keys()) set.add(sid);
-      reachedSets.set(qid, set);
-      tail = set;
+  // A branch mid-quiz does NOT disable drop-off for the questions before it.
+  // The spec's own example is a linear spine, then a branch, then lanes — and
+  // its spine steps reconcile. Only per-LANE questions are counts-only,
+  // because two lanes are alternatives: a shopper who took lane A did not
+  // "leave" lane B.
+  //
+  // Depth order: spine questions in flow order, with each branch's lane
+  // questions SHARING the slot immediately after their branch. A session that
+  // answered a lane question has necessarily passed every spine step before
+  // the branch, which is what makes reach correct on a branching doc.
+  const depthOf = new Map<string, number>();
+  {
+    let depth = 0;
+    for (const step of flow.steps) {
+      if (step.type === "question") {
+        depthOf.set(step.nodeId, depth++);
+      } else if (step.type === "branch") {
+        for (const lane of flow.branches.filter((l) => l.branchNodeId === step.nodeId)) {
+          for (const laneStep of lane.steps) {
+            if (laneStep.type === "question") depthOf.set(laneStep.nodeId, depth);
+          }
+        }
+        depth += 1;
+      }
     }
   }
+  const maxDepth = Math.max(...[...depthOf.values(), -1]) + 1;
+
+  // Per session, the deepest step it is known to have reached. A completion
+  // puts it past the end, so a shopper who completes without answering still
+  // counts as having reached every step.
+  const sessionDepth = new Map<string, number>();
+  const bump = (sid: string, d: number) => {
+    const prev = sessionDepth.get(sid);
+    if (prev == null || d > prev) sessionDepth.set(sid, d);
+  };
+  for (const [qid, perSession] of answers) {
+    const d = depthOf.get(qid);
+    if (d == null) continue;
+    for (const sid of perSession.keys()) bump(sid, d);
+  }
+  for (const e of events) {
+    if (e.eventType === "quiz_completed") bump(e.sessionId, maxDepth);
+  }
+
+  /** Sessions whose known depth reached at least `d`. */
+  const reachedAt = (d: number): number => {
+    let n = 0;
+    for (const depth of sessionDepth.values()) if (depth >= d) n += 1;
+    return n;
+  };
 
   const steps: LedgerStep[] = [];
 
@@ -144,17 +174,21 @@ export function buildStepLedger(
   // reach claim here — the outcome distribution section owns that split.
   const resultCount = doc.nodes.filter((n) => n.type === "result").length;
 
-  // Intro row — engage is measured (clicked Start).
+  // Intro row — engage is measured (clicked Start). Its loss is the gap to the
+  // first question, so the diagram accounts for shoppers who start and then
+  // bail before answering anything.
   if (flow.introId) {
+    const firstReached = reachedAt(0);
+    const introLeft = Math.max(0, engaged - firstReached);
     steps.push({
       nodeId: flow.introId,
       kind: "intro",
       label: nodeLabel(doc, flow.introId),
       reached: engaged,
-      continued: null,
+      continued: firstReached,
       skipped: null,
-      left: null,
-      dropoff: null,
+      left: introLeft,
+      dropoff: engaged > 0 ? introLeft / engaged : null,
       splits: false,
       laneLabel: null,
     });
@@ -162,8 +196,9 @@ export function buildStepLedger(
 
   const pushQuestion = (nodeId: string, laneLabel: string | null): void => {
     const perSession = sessionsAt(nodeId);
-    if (branching || laneLabel) {
-      // Branch rendering: answered counts only — no reach inference across lanes.
+    if (laneLabel) {
+      // Inside a branch: answer counts only — the shoppers who took the other
+      // lane were routed, not lost, so no drop-off claim is honest here.
       let skipped = 0;
       for (const f of perSession.values()) if (f.skipped) skipped += 1;
       steps.push({
@@ -180,29 +215,25 @@ export function buildStepLedger(
       });
       return;
     }
-    const idx = spineQuestionIds.indexOf(nodeId);
-    const reached = reachedSets.get(nodeId) ?? new Set<string>();
-    const nextQid = spineQuestionIds[idx + 1];
-    // The pool past this step: the next question's reach, or completions after
-    // the last question.
-    const nextReached: Set<string> = nextQid
-      ? reachedSets.get(nextQid) ?? new Set()
-      : new Set(events.filter((e) => e.eventType === "quiz_completed").map((e) => e.sessionId));
+    const d = depthOf.get(nodeId) ?? 0;
+    const reachedN = reachedAt(d);
+    const nextReachedN = reachedAt(d + 1);
+    // A skip still continues; count skips only among those who moved on.
     let skipped = 0;
     for (const [sid, f] of perSession) {
-      if (f.skipped && nextReached.has(sid)) skipped += 1;
+      if (f.skipped && (sessionDepth.get(sid) ?? -1) >= d + 1) skipped += 1;
     }
-    const left = Math.max(0, reached.size - nextReached.size);
-    const continued = Math.max(0, nextReached.size - skipped);
+    const left = Math.max(0, reachedN - nextReachedN);
+    const continued = Math.max(0, nextReachedN - skipped);
     steps.push({
       nodeId,
       kind: "question",
       label: nodeLabel(doc, nodeId),
-      reached: reached.size,
+      reached: reachedN,
       continued,
       skipped,
       left,
-      dropoff: reached.size > 0 ? left / reached.size : null,
+      dropoff: reachedN > 0 ? left / reachedN : null,
       splits: false,
       laneLabel: null,
     });
