@@ -13,11 +13,13 @@ import { useMemo, useState } from "react";
 import { Link } from "@remix-run/react";
 import { QzCard, QzEmpty } from "../qz";
 import type { ShopAnalyticsData, ShopQuizRow } from "../../lib/quizAnalytics.server";
-import { formatPct, formatPctRange } from "../../lib/analyticsConfidence";
+import { formatPct } from "../../lib/analyticsConfidence";
 import { CountTile, GatedTile, InsightCardView } from "./QuizAnalyticsView";
 import {
   AnalyticsControlBar,
   DashCell,
+  isLowConfidence,
+  LowConfidence,
   MethodDrawer,
   MethodInfo,
   QuizStatePill,
@@ -37,7 +39,9 @@ function sortValue(row: ShopQuizRow, key: SortKey): number | string | null {
     case "starts":
       return row.starts;
     case "rate":
-      return row.completion && row.completion.state !== "suppressed" ? row.completion.rate : null;
+      // Every rate is shown, so every rate sorts. Drafts (no completion at
+      // all) are the only nulls, and nulls still sink to the bottom.
+      return row.completion ? row.completion.rate : null;
     case "contacts":
       return row.contacts;
     case "orders":
@@ -52,17 +56,24 @@ function sortValue(row: ShopQuizRow, key: SortKey): number | string | null {
 function completionCell(row: ShopQuizRow) {
   if (!row.completion) return null;
   const c = row.completion;
-  if (c.state === "suppressed") {
-    return (
-      <span
-        className="qz-anneeds"
-        title={`A completion rate at ${c.n} session${c.n === 1 ? "" : "s"} would swing on luck. We show it at ${c.showsAt}.`}
-      >
-        needs {c.showsAt}
-      </span>
-    );
-  }
-  return c.state === "provisional" ? formatPctRange(c.interval) : formatPct(c.rate);
+  // No sessions ⇒ no rate. "0.0%" here would be a fabricated number, not a
+  // thin one, and the em-dash already means "no data" everywhere else.
+  if (c.n === 0) return null;
+  return (
+    <>
+      {formatPct(c.rate)}
+      {isLowConfidence(c.state) ? (
+        <LowConfidence
+          n={c.n}
+          showsAt={c.showsAt}
+          confidentAt={c.confidentAt}
+          unit="sessions"
+          lo={c.interval.lo}
+          hi={c.interval.hi}
+        />
+      ) : null}
+    </>
+  );
 }
 
 export function AnalyticsHomeView({
@@ -174,9 +185,22 @@ export function AnalyticsHomeView({
           label="Contacts captured"
           value={tiles.contacts.toLocaleString()}
           detail={
-            tiles.finished > 0 && tiles.captureOfFinishers.state !== "suppressed"
-              ? `${tiles.captureOfFinishers.state === "provisional" ? formatPctRange(tiles.captureOfFinishers.interval) : formatPct(tiles.captureOfFinishers.rate)} of finishers`
-              : undefined
+            tiles.finished > 0 ? (
+              <>
+                {formatPct(tiles.captureOfFinishers.rate)}
+                {isLowConfidence(tiles.captureOfFinishers.state) ? (
+                  <LowConfidence
+                    n={tiles.captureOfFinishers.n}
+                    showsAt={tiles.captureOfFinishers.showsAt}
+                    confidentAt={tiles.captureOfFinishers.confidentAt}
+                    unit="finishers"
+                    lo={tiles.captureOfFinishers.interval.lo}
+                    hi={tiles.captureOfFinishers.interval.hi}
+                  />
+                ) : null}{" "}
+                of finishers
+              </>
+            ) : undefined
           }
         />
         <CountTile
@@ -209,9 +233,13 @@ export function AnalyticsHomeView({
               type="button"
               className={status === key ? "is-on" : ""}
               aria-pressed={status === key}
+              aria-label={`${label} — ${n} ${n === 1 ? "quiz" : "quizzes"}`}
               onClick={() => setStatus(key)}
             >
-              {label} <span className="qz-anseg-n">{n}</span>
+              {label}{" "}
+              {/* Bracketed + italic so the number reads as a COUNT OF QUIZZES
+                  rather than as part of the label. */}
+              <span className="qz-anseg-n">({n})</span>
             </button>
           ))}
         </div>

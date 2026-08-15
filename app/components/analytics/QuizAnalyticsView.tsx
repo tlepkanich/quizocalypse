@@ -4,9 +4,10 @@
 // with zero surface-specific imports. Sections are URL-driven (?s=…) so links
 // share; the range is ?r= (server-resolved).
 //
-// Honesty contract carried in the markup: a suppressed rate never renders "—"
-// alone or a fake 0.0% — it states its threshold and progress (§7.3.1). Every
-// count states its denominator.
+// Honesty contract carried in the markup: every rate is SHOWN, and a rate that
+// rests on a thin sample carries an asterisk whose hover states the sample size
+// and the real swing (owner decision 2026-08-15, superseding the research doc's
+// hard gates). Every count states its denominator.
 
 import { useState, type ReactNode } from "react";
 import { Link, useSearchParams } from "@remix-run/react";
@@ -15,7 +16,7 @@ import { formatPct, formatPctRange, type GatedRate } from "../../lib/analyticsCo
 import type { QuizAnalyticsData, ContactRow } from "../../lib/quizAnalytics.server";
 import type { InsightCard } from "../../lib/quizInsights";
 import { formatDate } from "../../lib/formatDate";
-import { AnalyticsControlBar, MethodDrawer, MethodInfo } from "./AnalyticsControls";
+import { AnalyticsControlBar, isLowConfidence, LowConfidence, MethodDrawer, MethodInfo } from "./AnalyticsControls";
 
 export type AnalyticsSurface = "studio" | "app";
 
@@ -63,37 +64,52 @@ export function GatedTile({
   /** Period-over-period movement in POINTS (rates never move in percent). */
   deltaPoints?: number | null;
 }) {
-  if (gated.state === "suppressed") {
-    const pct = Math.min(100, Math.round((gated.n / gated.showsAt) * 100));
+  // Owner decision 2026-08-15: always show the figure. A thin sample earns an
+  // asterisk and a hover that says how thin — never a withheld number.
+  // ZERO sessions is the one exception: there is no rate to show, and "0.0%"
+  // would be a fabricated number rather than a thin one.
+  if (gated.n === 0) {
     return (
-      <div className={`qz-antile is-gated${hero ? " is-hero" : ""}`}>
+      <div className={`qz-antile${hero ? " is-hero" : ""}`}>
+        <div className="n qz-andash">—</div>
         <div className="l">{label}</div>
-        <div className="qz-antile-gate">
-          <div className="g">Unlocks at {gated.showsAt} {unit}</div>
-          <div className="qz-antile-bar" role="presentation">
-            <span style={{ width: `${pct}%` }} />
-          </div>
-          <div className="g2">{gated.n} so far</div>
-        </div>
+        <div className="d">no {unit} in this range yet</div>
       </div>
     );
   }
+  const low = isLowConfidence(gated.state);
   return (
     <div className={`qz-antile${hero ? " is-hero" : ""}`}>
-      <div className="n">{gated.state === "provisional" ? formatPctRange(gated.interval) : formatPct(gated.rate)}</div>
+      <div className="n">
+        {formatPct(gated.rate)}
+        {low ? (
+          <LowConfidence
+            n={gated.n}
+            showsAt={gated.showsAt}
+            confidentAt={gated.confidentAt}
+            unit={unit}
+            lo={gated.interval.lo}
+            hi={gated.interval.hi}
+          />
+        ) : null}
+      </div>
       <div className="l">{label}</div>
-      {gated.state === "provisional" ? (
-        <div className="d">a range until {gated.confidentAt} {unit} — {gated.n} so far</div>
-      ) : (
-        <div className="d">
-          {deltaPoints != null ? (
-            <span className={deltaPoints >= 0 ? "qz-anup" : "qz-andown"}>
-              {deltaPoints >= 0 ? "▲" : "▼"} {Math.abs(deltaPoints)} points{detail ? " · " : ""}
-            </span>
-          ) : null}
-          {detail}
-        </div>
-      )}
+      <div className="d">
+        {low ? (
+          <>
+            {gated.n} {unit} so far · could be {formatPctRange(gated.interval)}
+          </>
+        ) : (
+          <>
+            {deltaPoints != null ? (
+              <span className={deltaPoints >= 0 ? "qz-anup" : "qz-andown"}>
+                {deltaPoints >= 0 ? "▲" : "▼"} {Math.abs(deltaPoints)} points{detail ? " · " : ""}
+              </span>
+            ) : null}
+            {detail}
+          </>
+        )}
+      </div>
     </div>
   );
 }
@@ -362,13 +378,13 @@ export function QuizAnalyticsView({
               detail={`${kpis.captureSessions} of ${kpis.completed} finished`}
             />
             {data.attribution === "none" ? (
-              <div className="qz-antile is-gated">
-                <div className="l">Revenue influenced</div>
-                <div className="qz-antile-gate">
-                  <div className="g">Not measurable</div>
-                  <div className="g2">No Shopify order feed on this workspace.</div>
-                </div>
-              </div>
+              // NOT the same as a thin sample: attribution is structurally
+              // impossible here (W6), so there is no figure to disclose.
+              <CountTile
+                label="Revenue influenced"
+                value={<span className="qz-annotmeas">Not measurable</span>}
+                detail="No Shopify order feed on this workspace."
+              />
             ) : (
               <CountTile
                 label={<>Revenue influenced <MethodInfo onClick={() => setMethodOpen(true)} /></>}

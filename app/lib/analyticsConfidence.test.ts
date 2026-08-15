@@ -1,7 +1,12 @@
 import { describe, expect, it } from "vitest";
 import { wilson, ruleOfThree, separated, gateRate, formatPct, formatPctRange } from "./analyticsConfidence";
 
-// ANALYTICS P0 — §7.2 confidence primitives + the §7.3 hard gates.
+// ANALYTICS P0 — §7.2 confidence primitives + the §7.3 thresholds.
+//
+// NOTE (owner, 2026-08-15): the thresholds no longer HIDE a rate. Every rate
+// renders; `state` now drives whether the figure carries a low-confidence
+// asterisk and what its hover says. The maths below is unchanged — only the
+// consumer's rendering rule moved.
 
 describe("wilson", () => {
   it("stays inside [0,1] and keeps width at the extremes (x=0 and x=n)", () => {
@@ -36,7 +41,7 @@ describe("ruleOfThree + separated", () => {
   });
 });
 
-describe("gateRate — the three-state renderer contract", () => {
+describe("gateRate — drives the asterisk, no longer hides the number", () => {
   it("completion: <50 suppressed · 50–200 provisional · ≥200 confident", () => {
     expect(gateRate("completion_rate", 20, 40).state).toBe("suppressed");
     expect(gateRate("completion_rate", 60, 100).state).toBe("provisional");

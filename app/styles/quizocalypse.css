@@ -10681,11 +10681,6 @@ button.qz-pb-row:hover { background: var(--qz-cream-2); }
 .qz-antile .l { font-size: 12px; font-weight: 600; color: var(--qz-ink-3); margin-top: 2px; }
 .qz-antile .d { font-size: 11.5px; color: var(--qz-ink-3); margin-top: 6px; }
 .qz-antile.is-hero { border-color: var(--qz-accent-line); background: var(--qz-accent-tint); }
-/* §7.3.1 — the suppressed-rate tile: metric, gate, distance. Never "—" alone,
-   never 0.0%. */
-.qz-antile.is-gated .qz-antile-gate { margin-top: 4px; }
-.qz-antile.is-gated .g { font-size: 13px; font-weight: 600; color: var(--qz-ink-2); }
-.qz-antile.is-gated .g2 { font-size: 11.5px; color: var(--qz-ink-3); margin-top: 5px; }
 .qz-antile-bar { height: 6px; border-radius: var(--qz-radius-pill); background: var(--qz-cream-2); margin-top: 8px; overflow: hidden; }
 .qz-antile-bar span { display: block; height: 100%; border-radius: inherit; background: var(--qz-ink-25); }
 
@@ -10756,7 +10751,9 @@ button.qz-pb-row:hover { background: var(--qz-cream-2); }
 .qz-anseg button { font: inherit; font-size: 12px; font-weight: 500; padding: 5px 11px; border: 1px solid transparent; border-radius: var(--qz-radius-sm); background: transparent; color: var(--qz-ink-3); cursor: pointer; transition: background var(--qz-dur-fast) var(--qz-ease), color var(--qz-dur-fast) var(--qz-ease); }
 .qz-anseg button:hover { color: var(--qz-ink); }
 .qz-anseg button.is-on { background: var(--qz-paper); color: var(--qz-ink); font-weight: 600; border-color: var(--qz-rule); }
-.qz-anseg-n { font-variant-numeric: tabular-nums; color: var(--qz-ink-3); margin-left: 3px; }
+/* The chip's number is a COUNT OF QUIZZES, not part of the label — bracketed
+   and italic so it reads as an aside rather than as a name. */
+.qz-anseg-n { font-variant-numeric: tabular-nums; font-style: italic; font-weight: 400; color: var(--qz-ink-3); margin-left: 2px; }
 .qz-anseg button.is-on .qz-anseg-n { color: var(--qz-accent-ink); }
 
 .qz-ansearch { display: inline-flex; align-items: center; gap: 7px; padding: 5px 11px; border: 1px solid var(--qz-rule); border-radius: var(--qz-radius-sm); background: var(--qz-paper); color: var(--qz-ink-3); margin-left: auto; }
@@ -10780,7 +10777,6 @@ button.qz-pb-row:hover { background: var(--qz-cream-2); }
 .qz-antable th:first-child button, .qz-antable th:nth-child(2) button { text-align: left; }
 /* No data is not the same as zero. */
 .qz-andash { color: var(--qz-ink-25); text-align: right; }
-.qz-anneeds { font-size: 11.5px; color: var(--qz-ink-3); font-weight: 500; }
 .qz-anqlink { color: var(--qz-accent-ink); font-weight: 600; text-decoration: none; border-bottom: 1px solid transparent; }
 .qz-anqlink:hover { border-bottom-color: var(--qz-accent-line); }
 
@@ -10836,3 +10832,9 @@ button.qz-pb-row:hover { background: var(--qz-cream-2); }
 .qz-linkbtn { font: inherit; font-size: 12.5px; background: none; border: 0; padding: 0; color: var(--qz-accent-ink); font-weight: 600; cursor: pointer; }
 .qz-linkbtn:hover { text-decoration: underline; }
 .qz-insight-math { font-size: 12.5px; line-height: 1.55; color: var(--qz-ink-2); background: var(--qz-cream-2); border-radius: var(--qz-radius-sm); padding: 10px 12px; margin: 0 0 10px; }
+
+/* Low-confidence marker: the rate is always shown; the asterisk says the
+   sample is thin and the hover says how thin (owner, 2026-08-15). */
+.qz-anlow { text-decoration: none; border: 0; color: var(--qz-warn); font-weight: 700; cursor: help; margin-left: 1px; font-size: 0.7em; vertical-align: super; }
+.qz-anlow:hover { color: var(--qz-ink); }
+.qz-annotmeas { font-size: 15px; font-weight: 600; color: var(--qz-ink-2); }
