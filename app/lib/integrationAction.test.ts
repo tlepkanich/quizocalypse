@@ -78,10 +78,18 @@ function publishedDoc(actions: ActionsInput, continueOnError?: boolean) {
   });
 }
 
+// Every request gets its OWN client IP. The route is rate-limited at 15/min
+// per IP against a process-global limiter, and this file makes exactly 15
+// calls — sharing one IP (the "unknown" fallback) tripped the limiter on the
+// last few cases, so they asserted a 400/404 and got a 429. A unique IP per
+// request keeps each case independent of how many ran before it, and of the
+// order vitest happens to schedule them in.
+let ipSeq = 0;
 function args(body: unknown, init?: { method?: string; raw?: string }): ActionFunctionArgs {
+  ipSeq += 1;
   const request = new Request("https://shop.example/q/q1/integration", {
     method: init?.method ?? "POST",
-    headers: { "content-type": "application/json" },
+    headers: { "content-type": "application/json", "fly-client-ip": `203.0.113.${ipSeq}` },
     ...(init?.method === "GET" ? {} : { body: init?.raw ?? JSON.stringify(body) }),
   });
   return { request, params: { id: "q1" }, context: {} } as unknown as ActionFunctionArgs;
