@@ -1,3 +1,5 @@
+import { apiUrl } from "../../../lib/apiBase";
+
 // Persist a server-side QuizSession on completion (Dev Spec §7.2). Fire-and-
 // forget; a failure never affects the shopper. The caller preview-gates this.
 export function postQuizSession(args: {
@@ -8,7 +10,7 @@ export function postQuizSession(args: {
   productIds: string[];
 }) {
   if (!args.quizId || !args.sessionId) return;
-  void fetch("/sessions", {
+  void fetch(apiUrl("/sessions"), {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({

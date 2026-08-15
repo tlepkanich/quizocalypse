@@ -9,6 +9,32 @@
 
 <div class="quizocalypse-block" {{ block.shopify_attributes }}>
   {%- if quiz_id != blank and clean_url != blank -%}
+    {%- if block.settings.render_mode == 'dom' -%}
+      {%- comment -%}
+        DOM mode: the quiz mounts directly into this document instead of a
+        cross-origin iframe. The runtime becomes same-origin with the cart, so
+        add-to-cart drops the postMessage bridge below, and the block's height
+        is simply its content height (no qz:height listener, no min_height
+        guess). localStorage stops being partitioned, so save/resume survives.
+
+        The script is served from the app origin, not as a theme asset, so a
+        runtime fix reaches every storefront on our next deploy with no theme
+        edit and no extension release — the same update loop the iframe has.
+
+        `defer` matters: the bundle carries React, and a blocking script here
+        would sit on the merchant's LCP. It self-initialises on DOMContentLoaded
+        and re-initialises on shopify:section:load for the theme editor.
+
+        IFRAME REMAINS THE DEFAULT and the rollback: flip this setting back and
+        the block returns to the proven path with no deploy.
+      {%- endcomment -%}
+      <div
+        data-wiskr-quiz
+        data-quiz-id="{{ quiz_id }}"
+        data-locale="{{ request.locale.iso_code }}"
+      ></div>
+      <script defer src="{{ clean_url }}/embed/wiskr-embed.js"></script>
+    {%- else -%}
     <iframe
       id="qz-frame-{{ block.id }}"
       src="{{ clean_url }}/q/{{ quiz_id }}?locale={{ request.locale.iso_code }}"
@@ -134,6 +160,7 @@
         } catch (e) { /* keep the inline iframe */ }
       })();
     </script>
+    {%- endif -%}
   {%- else -%}
     <div class="quizocalypse-block__empty" role="status">
       <strong>Wiskr quiz block</strong><br/>
@@ -169,6 +196,17 @@
     {
       "type": "header",
       "content": "Display"
+    },
+    {
+      "type": "select",
+      "id": "render_mode",
+      "label": "Rendering",
+      "options": [
+        { "value": "iframe", "label": "Iframe (default)" },
+        { "value": "dom", "label": "Inline in your theme (beta)" }
+      ],
+      "default": "iframe",
+      "info": "Inline lets the quiz inherit your theme's fonts and add to cart without leaving the page. Switch back to Iframe at any time if anything looks wrong."
     },
     {
       "type": "range",

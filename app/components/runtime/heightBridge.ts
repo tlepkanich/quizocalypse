@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+import { isEmbedMode } from "../../lib/embedMode";
 
 // qz:height — the auto-resize half of the theme-app-extension bridge. The
 // storefront app block (extensions/quizocalypse-block/blocks/quiz.liquid)
@@ -21,6 +22,13 @@ import { useEffect } from "react";
 export function useIframeHeightBridge(enabled: boolean) {
   useEffect(() => {
     if (!enabled || typeof window === "undefined") return;
+    // DOM embed: the quiz is a normal block in the merchant's flow, so its
+    // height is just its height — nothing to report and nothing to resize.
+    // Explicit rather than relying on the parent check below, because a
+    // storefront can itself be framed (Shopify's theme editor preview does
+    // exactly that), and posting qz:height at THAT parent would resize the
+    // editor chrome.
+    if (isEmbedMode()) return;
     if (window.parent === window) return;
     let raf = 0;
     let last = 0;

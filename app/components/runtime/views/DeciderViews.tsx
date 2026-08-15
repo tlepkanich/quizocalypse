@@ -28,6 +28,7 @@ import { goToCartPermalink } from "../addToCart";
 import { SaveResultsLink, BuddyRow } from "../bits/resultLinks";
 import { ProductCard } from "./ProductCard";
 import { postQuizSession } from "./postQuizSession";
+import { apiUrl } from "../../../lib/apiBase";
 
 // ════════════════════════════════════════════════════════════════════════════
 // LOGIC v2 (L2-9) — the decider flow's capture → loading → reveal views.
@@ -223,7 +224,7 @@ export function DeciderCaptureView({
       // /captures requires an email; a name/phone-only config (email off) has
       // nothing to persist server-side. Preview never POSTs.
       if (!isPreviewMode && emailValid) {
-        await fetch("/captures", {
+        await fetch(apiUrl("/captures"), {
           method: "POST",
           headers: { "content-type": "application/json" },
           body: JSON.stringify({

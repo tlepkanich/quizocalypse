@@ -5,6 +5,7 @@ import { useChrome } from "../chromeStrings";
 import { RuntimeChromeContext, RuntimePreviewContext } from "../runtimeContexts";
 import type { InspectPart } from "../inspect";
 import { MinimalNav } from "../bits/nav";
+import { apiUrl } from "../../../lib/apiBase";
 
 type QuizDoc = Quiz;
 
@@ -44,7 +45,7 @@ export function EmailGateView({
     setSubmitting(true);
     try {
       if (isPreviewMode) return; // preview: no /captures POST (finally still advances)
-      await fetch("/captures", {
+      await fetch(apiUrl("/captures"), {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({

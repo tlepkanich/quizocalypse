@@ -74,6 +74,7 @@ import { EmailGateView } from "./views/EmailGateView";
 import { AskAIView } from "./views/AskAIView";
 import { IntegrationView } from "./views/IntegrationView";
 import { ProductCardsView } from "./views/ProductCardsView";
+import { apiUrl } from "../../lib/apiBase";
 import {
   ALPINE_ART_DIRECTION_CSS,
   GENERATED_ART_DIRECTION_CSS,
@@ -532,7 +533,7 @@ export function QuizRuntime(props: QuizRuntimeProps) {
       controller.abort();
       settle();
     }, 5000);
-    fetch(`/q/${quizId}/rec-copy`, {
+    fetch(apiUrl(`/q/${quizId}/rec-copy`), {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
@@ -2152,7 +2153,7 @@ async function fetchLiveInventory(
 ): Promise<Record<string, number>> {
   if (!quizId || productIds.length === 0) return {};
   try {
-    const res = await fetch(`/q/${quizId}/inventory`, {
+    const res = await fetch(apiUrl(`/q/${quizId}/inventory`), {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ product_ids: productIds }),

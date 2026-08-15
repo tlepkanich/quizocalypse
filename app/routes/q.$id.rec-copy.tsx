@@ -10,10 +10,14 @@ import { parseBrandGuidelinesSafe } from "../lib/brandGuidelines";
 import { rateLimit } from "../lib/rateLimiters";
 import { recCopyCacheKey, resolveRecCopy } from "../lib/recCopyCache.server";
 import { checkAiBudget, withAiSpendRecording } from "../lib/aiBudget.server";
+import { corsPreflight, withCors } from "../lib/publicCors";
 
 // LOGIC v2 L2-12b — the per-shopper runtime rec-copy endpoint (rec-page-spec-V2
-// §8.3). POST-only, SAME-ORIGIN (the theme-extension iframe + hosted /q are both
-// on the app domain, so no CORS is needed and no preflight fires). ALL prompt
+// §8.3). POST-only. CORS-open (DOM-embed work): the theme-extension iframe and
+// hosted /q are same-origin, but a DOM embed calls this from the merchant's own
+// storefront origin. Not a widened attack surface — the endpoint was already
+// unauthenticated and curl-able; rate limiting + the per-shop AI budget below
+// are the actual spend controls. ALL prompt
 // text is derived SERVER-SIDE from publishedJson — the client sends only
 // {sessionId, answerIds}, closing prompt injection. Guarded by the per-shop kill
 // switch (checked live, before the cache) and rate-limited (the spend bound,
@@ -26,7 +30,14 @@ function no(code: string, status = 200) {
   return json({ ok: false, code }, { status });
 }
 
-export async function action({ request, params }: ActionFunctionArgs) {
+export const loader = async () => corsPreflight();
+
+export async function action(args: ActionFunctionArgs) {
+  if (args.request.method === "OPTIONS") return corsPreflight();
+  return withCors(await actionImpl(args));
+}
+
+async function actionImpl({ request, params }: ActionFunctionArgs) {
   if (request.method !== "POST") return no("method", 405);
 
   const rl = rateLimit(request, "rec-copy", RATE);

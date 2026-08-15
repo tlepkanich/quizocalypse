@@ -1,6 +1,7 @@
 import { useContext, useState } from "react";
 import { useChrome } from "../chromeStrings";
 import { RuntimePreviewContext } from "../runtimeContexts";
+import { apiUrl } from "../../../lib/apiBase";
 
 const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
 
@@ -38,7 +39,7 @@ export function NotifyMeForm({
           return;
         }
         try {
-          await fetch(`/q/${quizId}/notify`, {
+          await fetch(apiUrl(`/q/${quizId}/notify`), {
             method: "POST",
             headers: { "content-type": "application/json" },
             body: JSON.stringify({ email, product_id: productId ?? null, session_id: sessionId ?? null }),

@@ -4,6 +4,7 @@ import type { PathStep } from "../../../lib/mergeTags";
 import type { stylesFor } from "../runtimeStyles";
 import { useChrome } from "../chromeStrings";
 import { RuntimePreviewContext } from "../runtimeContexts";
+import { apiUrl } from "../../../lib/apiBase";
 
 type QuizDoc = Quiz;
 
@@ -46,7 +47,7 @@ export function IntegrationView({
     let cancelled = false;
     (async () => {
       try {
-        const res = await fetch(`/q/${quizId}/integration`, {
+        const res = await fetch(apiUrl(`/q/${quizId}/integration`), {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({

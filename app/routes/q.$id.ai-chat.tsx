@@ -6,6 +6,7 @@ import { runAskAIChat, type AskAIMessage } from "../lib/claude";
 import { parseBrandGuidelinesSafe } from "../lib/brandGuidelines";
 import { rateLimit } from "../lib/rateLimiters";
 import { checkAiBudget, withAiSpendRecording } from "../lib/aiBudget.server";
+import { corsPreflight, withCors } from "../lib/publicCors";
 import { reportError } from "../lib/log.server";
 import type { IndexedProduct } from "../lib/recommendationEngine";
 import { formatMoney } from "../lib/formatMoney";
@@ -27,14 +28,23 @@ interface ChatRequestBody {
 // prompts. Mirrors typical chat input affordances.
 const MAX_USER_MESSAGE_CHARS = 1200;
 
-export async function action({ params, request }: ActionFunctionArgs) {
+export const loader = async () => corsPreflight();
+
+export async function action(args: ActionFunctionArgs) {
+  if (args.request.method === "OPTIONS") return corsPreflight();
+  return withCors(await actionImpl(args));
+}
+
+async function actionImpl({ params, request }: ActionFunctionArgs) {
   const { id } = params;
   if (!id) return json({ error: "Missing quiz id" }, { status: 400 });
   if (request.method !== "POST") {
     return json({ error: "Method not allowed" }, { status: 405 });
   }
   // 10/min/IP — the only public endpoint where abuse costs real money (one
-  // Claude call per request). Same-origin POSTs from the runtime, no CORS.
+  // Claude call per request). CORS-open for the DOM embed (the merchant's
+  // storefront origin is not ours), so this limit + the per-shop AI budget
+  // are the whole spend defence; CORS never was one.
   const rl = rateLimit(request, "ai-chat", 10);
   if (!rl.ok) {
     return json(

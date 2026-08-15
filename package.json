@@ -5,7 +5,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "remix vite:build",
+    "build": "remix vite:build && npm run build:embed",
     "dev": "shopify app dev",
     "sync-tunnel": "./scripts/sync-tunnel.sh",
     "config:link": "shopify app config link",
@@ -28,7 +28,8 @@
     "shopify": "shopify",
     "prisma": "prisma",
     "graphql-codegen": "graphql-codegen",
-    "vite": "vite"
+    "vite": "vite",
+    "build:embed": "vite build --config vite.embed.config.ts"
   },
   "engines": {
     "node": ">=20.19"

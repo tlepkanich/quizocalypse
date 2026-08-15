@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { apiUrl } from "./apiBase";
 
 // Shared schemas for the public POST /events and POST /captures endpoints.
 // The storefront runtime is the only producer right now, but treating these
@@ -96,11 +97,17 @@ export function createAnalyticsClient(args: {
     const events = queue.splice(0, queue.length);
     const body = JSON.stringify({ events });
     if (useBeacon && typeof navigator !== "undefined" && "sendBeacon" in navigator) {
-      const blob = new Blob([body], { type: "application/json" });
-      navigator.sendBeacon("/events", blob);
+      // text/plain keeps the beacon inside the CORS "simple request" set.
+      // An application/json content-type forces a preflight, and sendBeacon
+      // CANNOT preflight — cross-origin (the DOM embed) the unload flush
+      // would be dropped silently, losing every exit event with no error
+      // anywhere. Harmless same-origin: /events parses with request.json(),
+      // which ignores the declared content-type (events.tsx:37).
+      const blob = new Blob([body], { type: "text/plain;charset=UTF-8" });
+      navigator.sendBeacon(apiUrl("/events"), blob);
       return;
     }
-    void fetch("/events", {
+    void fetch(apiUrl("/events"), {
       method: "POST",
       headers: { "content-type": "application/json" },
       body,

@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import type { ResolvedEngagement } from "../../../lib/engagementSchema";
+import { apiUrl } from "../../../lib/apiBase";
 
 // §M6 — the referrer's give-get share block on the result. Mints a stable share
 // token from /referral (intent=mint) and shows "you and a friend both get X" +
@@ -30,7 +31,7 @@ export function ReferralShare({
   useEffect(() => {
     if (preview) return;
     let live = true;
-    fetch("/referral", {
+    fetch(apiUrl("/referral"), {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ intent: "mint", quiz_id: quizId, session_id: sessionId }),

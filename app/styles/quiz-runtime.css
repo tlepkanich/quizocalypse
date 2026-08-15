@@ -66,6 +66,61 @@ body[data-qz] :focus-visible {
    their light values (ink-on-paper selection, as served before the split). */
 body[data-qz] ::selection { background: #0E0F11; color: #FFFFFF; }
 
+/* ---- DOM-embed root -------------------------------------------------------
+
+   Everything above is scoped to `body[data-qz]` or `:root`. Neither matches
+   when the runtime is mounted into a MERCHANT's document rather than served
+   as our own /q page:
+
+     - `body[data-qz]` — the merchant owns <body>; we must never restyle it
+       (margin/background there would reflow their whole storefront).
+     - `:root` — does not match inside a shadow root at all, so a shadow-DOM
+       embed would silently lose the motion tokens and fall back to the
+       170ms/ease literals baked into the runtime's var() defaults.
+
+   So the mount wrapper `.qz-embed-root` carries the same declarations. These
+   are ADDITIVE selectors: `.qz-embed-root` appears nowhere on /q, so the
+   served /q DOM and CSSOM are untouched. Values are duplicated rather than
+   shared via a selector list on purpose — a `body[data-qz], .qz-embed-root`
+   list would rewrite the existing rules' bytes, and the /q path is proven by
+   byte comparison.
+
+   Deliberately NOT copied: nothing. The embed root is a block-level div, so
+   `margin: 0` scopes to our own wrapper and `background` reproduces the white
+   surface the iframe gives shoppers today. A merchant who wants the quiz to
+   sit on their own page background overrides it from the block settings. */
+.qz-embed-root {
+  --qz-ease: cubic-bezier(0.2, 0.7, 0.3, 1);
+  --qz-dur: 220ms;
+  margin: 0;
+  font-family: "Mona Sans", "Mona Sans Fallback", -apple-system, "Segoe UI", "Helvetica Neue", sans-serif;
+  font-size: 16px;
+  font-weight: 500;
+  color: #0E0F11;
+  background: #FFFFFF;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  line-height: 1.55;
+}
+.qz-embed-root *, .qz-embed-root *::before, .qz-embed-root *::after { box-sizing: border-box; }
+
+.qz-embed-root :focus-visible {
+  outline: 3px solid var(--qz-color-primary, #5B47E5);
+  outline-offset: 2px;
+  box-shadow: none;
+  border-radius: 9px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .qz-embed-root *, .qz-embed-root *::before, .qz-embed-root *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+.qz-embed-root ::selection { background: #0E0F11; color: #FFFFFF; }
+
 /* .qz-dim — the EducationCard hint text (QuizRuntime) is the one admin CLASS a
    live shopper surface consumes. var(--qz-ink-4) frozen: #84878C is the ink-4
    value in BOTH light and dark ("mid-gray reads on both modes"). */

@@ -10,6 +10,7 @@ import {
 } from "../lib/recommendationEngine";
 import { assertPublicHttpsUrl } from "../lib/ssrfGuard.server";
 import { webhookSignatureHeader } from "../lib/webhookSignature.server";
+import { corsPreflight, withCors } from "../lib/publicCors";
 
 // Integration node executor. When the storefront runtime reaches an
 // integration node it POSTs here with the session payload; we fire every
@@ -89,7 +90,14 @@ function resolveRecommendedProducts(
 // the shopper's flow. Each action gets its own fetch with this timeout.
 const WEBHOOK_TIMEOUT_MS = 5000;
 
-export async function action({ params, request }: ActionFunctionArgs) {
+export const loader = async () => corsPreflight();
+
+export async function action(args: ActionFunctionArgs) {
+  if (args.request.method === "OPTIONS") return corsPreflight();
+  return withCors(await actionImpl(args));
+}
+
+async function actionImpl({ params, request }: ActionFunctionArgs) {
   const { id } = params;
   if (!id) return json({ error: "Missing quiz id" }, { status: 400 });
   if (request.method !== "POST") {

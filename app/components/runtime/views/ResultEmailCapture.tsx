@@ -3,6 +3,7 @@ import type { createAnalyticsClient } from "../../../lib/analytics";
 import type { stylesFor } from "../runtimeStyles";
 import { useChrome } from "../chromeStrings";
 import { RuntimePreviewContext } from "../runtimeContexts";
+import { apiUrl } from "../../../lib/apiBase";
 
 // Inline email capture on the result page (Dev Spec §5), gated by
 // Quiz.collect_email_on_result. Mirrors EmailGateView: preview mode does not
@@ -30,7 +31,7 @@ export function ResultEmailCapture({
     setSubmitting(true);
     try {
       if (!isPreviewMode) {
-        await fetch("/captures", {
+        await fetch(apiUrl("/captures"), {
           method: "POST",
           headers: { "content-type": "application/json" },
           body: JSON.stringify({ quiz_id: quizId, session_id: sessionId, email }),

@@ -1,3 +1,5 @@
+import { isEmbedMode } from "../../lib/embedMode";
+
 // Add-to-cart from the quiz (Phase 5). The quiz runs in a cross-origin iframe,
 // so we first ask the parent storefront (the Theme App Extension listener) to
 // add via the same-origin AJAX cart and ack — that's the In-Quiz Add-On
@@ -27,8 +29,40 @@ export function addToCartFromQuiz(cartUrl: string, variantId: string | null, has
     }
   };
   // A discount can only be applied via the cart permalink (the AJAX cart can't
-  // carry a code), so go straight there. Also when not embedded / no variant.
-  if (hasDiscount || !variantId || window.parent === window) {
+  // carry a code), so go straight there. Also when there's no variant.
+  //
+  // NOTE this is the ONE iframe cost the DOM embed does NOT remove: a
+  // discounted add still navigates the shopper away. That is a Shopify
+  // constraint (no discount code on /cart/add.js), not a framing one.
+  if (hasDiscount || !variantId) {
+    goToCart();
+    return;
+  }
+
+  // DOM embed: we ARE the storefront document, so the AJAX cart is plainly
+  // same-origin. No postMessage, no ack protocol, no 1200ms race — the whole
+  // bridge below exists only because a cross-origin iframe cannot do this.
+  // `cart:refresh` is the event Shopify themes listen on to re-render the
+  // cart drawer; the iframe path gets it from quiz.liquid's listener instead.
+  if (isEmbedMode()) {
+    void fetch("/cart/add.js", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ items: [{ id: Number(variantId), quantity: 1 }] }),
+    })
+      .then((res) => {
+        if (!res.ok) throw new Error("add failed");
+        try {
+          document.dispatchEvent(new CustomEvent("cart:refresh"));
+        } catch {
+          // A theme without the event contract still got the item.
+        }
+      })
+      .catch(goToCart); // same permalink fallback the bridge path uses
+    return;
+  }
+
+  if (window.parent === window) {
     goToCart();
     return;
   }

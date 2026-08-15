@@ -1,5 +1,6 @@
 import { useState } from "react";
 import type { ResolvedEngagement } from "../../../lib/engagementSchema";
+import { apiUrl } from "../../../lib/apiBase";
 
 // §M3/§L L3 — the shopper-facing reward reveal. Renders only when the merchant
 // enabled a reward (gated at the call site). Claims a SINGLE-USE code from
@@ -38,7 +39,7 @@ export function RewardReveal({
     setState("loading");
     setErr(null);
     try {
-      const res = await fetch("/reward", {
+      const res = await fetch(apiUrl("/reward"), {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ quiz_id: quizId, session_id: sessionId, ...(email ? { email } : {}) }),

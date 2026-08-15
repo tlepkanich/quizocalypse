@@ -1,5 +1,6 @@
 import { useState } from "react";
 import type { ResolvedEngagement } from "../../../lib/engagementSchema";
+import { apiUrl } from "../../../lib/apiBase";
 
 // §L L2/L3 — post-result feedback. Thumbs or 1–5 stars (+ optional open text),
 // one submission per session → POST /feedback (202, fire-and-forget). Never
@@ -24,7 +25,7 @@ export function FeedbackWidget({
     setPicked(rating);
     setSent(true);
     try {
-      void fetch("/feedback", {
+      void fetch(apiUrl("/feedback"), {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({

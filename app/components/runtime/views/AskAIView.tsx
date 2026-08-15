@@ -5,6 +5,7 @@ import type { stylesFor } from "../runtimeStyles";
 import { useChrome } from "../chromeStrings";
 import { RuntimeLocaleContext, RuntimePreviewContext } from "../runtimeContexts";
 import type { InspectPart } from "../inspect";
+import { apiUrl } from "../../../lib/apiBase";
 
 type QuizDoc = Quiz;
 
@@ -80,7 +81,7 @@ export function AskAIView({
       return;
     }
     try {
-      const res = await fetch(`/q/${quizId}/ai-chat`, {
+      const res = await fetch(apiUrl(`/q/${quizId}/ai-chat`), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
