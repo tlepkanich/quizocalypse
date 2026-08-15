@@ -23,11 +23,26 @@ Blocked requests get `429` with a `Retry-After` header (seconds).
 | `POST /q/:id/ai-chat` | 10 |
 | `GET /q/:id/results` | 30 |
 
-The `/captures`, `/sessions`, `/events`, `/q/:id/inventory`, `/q/:id/notify`
-endpoints are CORS-open (`access-control-allow-origin: *`) and answer
-`OPTIONS` preflights with `204`. `/q/:id/rec-copy` and `/q/:id/ai-chat` are
-same-origin only (no CORS headers — the runtime calls them from the app
-domain).
+`POST /q/:id/integration` is **not** in that table because it currently has no
+rate limiter — the only public endpoint without one, and it makes outbound
+HTTP to a merchant-configured URL (SSRF-guarded by `ssrfGuard.server.ts`).
+Pre-existing, tracked separately; listed here so the omission reads as known
+rather than as coverage.
+
+**CORS: every endpoint on this page is now open**
+(`access-control-allow-origin: *`), answering `OPTIONS` preflights with `204`.
+`/q/:id/rec-copy`, `/q/:id/ai-chat` and `/q/:id/integration` were the last
+same-origin-only holdouts — they were written when the Theme App Extension's
+iframe made every runtime call same-origin. The DOM embed (EMBED-1) calls them
+from the *merchant's* storefront origin, so they were opened via the shared
+`app/lib/publicCors.ts` seam.
+
+This is **not** a widening of the attack surface, and should not be read as
+one. CORS only governs whether *browser JavaScript on another origin* may READ
+a response; it has never prevented a server-side request, and these endpoints
+were already unauthenticated and reachable with `curl` from anywhere. The real
+controls are the per-IP rate limits above and — on the two endpoints that
+spend money — the per-shop AI budget (`AI_BUDGET_RUNTIME_DAILY_USD`).
 
 ---
 
@@ -65,6 +80,54 @@ only — `target_product_ids_map` + `target_index`.
 
 This payload is **byte-stable per publish**: it only ever changes when the
 merchant republishes.
+
+> One published quiz's response here is **byte-pinned** as a regression check
+> on the dual-model invariant — see the root `CLAUDE.md`. Do not change this
+> route's shape without understanding that pin.
+
+## GET /q/:id.embed.json — runtime props for the DOM embed
+
+CORS-open, same caching as `/q/:id.json`
+(`public, max-age=60, stale-while-revalidate=300`). `404` when the quiz
+doesn't exist or isn't published, as a CORS'd JSON body rather than a bare
+framework response — a cross-origin caller must be able to read *why*.
+
+Serves the exact props the `/q/:id` loader feeds `<QuizRuntime>` (20 keys;
+19 reach the runtime, `name` is used only for page metadata), assembled by the
+shared seam `app/lib/runtimePayload.server.ts`. Because `/q` and this route
+read the same function, the iframe and DOM surfaces cannot drift.
+
+- `?locale=<tag>` — same semantics as `/q/:id`: resolved server-side, applied
+  to the doc, and the raw `translations` maps stripped before sending.
+- `?buddy=<session_id>` — format-gated capability token, as on `/q/:id`.
+
+**This is deliberately not `/q/:id.json`.** That route serves a different
+(smaller) shape — the published document — and is byte-pinned. This one serves
+resolved *runtime props*. They are not interchangeable, and merging them would
+break the pin.
+
+## GET /embed/wiskr-embed.js — the DOM embed bundle
+
+Self-contained IIFE (~420 KB, ~119 KB gzipped) carrying React and the shopper
+runtime. Built by `vite.embed.config.ts` into `build/client/embed/` and served
+statically from the app origin, so a runtime fix reaches every storefront on
+our next deploy — no theme edit, no Shopify extension release.
+
+Mounts into any `[data-wiskr-quiz]` element:
+
+```html
+<div data-wiskr-quiz data-quiz-id="QUIZ_ID" data-locale="en"></div>
+<script defer src="https://quizocalypse-studio.fly.dev/embed/wiskr-embed.js"></script>
+```
+
+- Discovers the app origin from its own `<script src>` — no configuration.
+- Renders into a **shadow root**, so the host theme's CSS cannot restyle the
+  quiz while inherited properties still cascade in.
+- Re-initialises on `shopify:section:load`; `window.Wiskr.mountAll()` forces a
+  re-scan. Mounting is idempotent per host element.
+- Calls `/cart/add.js` directly (same-origin with the storefront). A
+  *discounted* add still navigates to the cart permalink — the AJAX cart
+  cannot carry a discount code.
 
 ## POST /captures — email capture
 
@@ -131,9 +194,10 @@ otherwise). Stores a `BackInStockRequest`; if the published doc configures
 
 ## POST /q/:id/rec-copy — per-shopper AI recommendation copy
 
-Same-origin. Decider-model quizzes only. The client sends **only**
-identifiers — all prompt text is derived server-side from the published doc
-(prompt-injection boundary):
+CORS-open (was same-origin until EMBED-1). Decider-model quizzes only. The
+client sends **only** identifiers — all prompt text is derived server-side
+from the published doc (prompt-injection boundary), which is what makes it
+safe to accept this call from any origin:
 
 ```json
 { "sessionId": "8-64 chars [A-Za-z0-9_-]", "answerIds": ["…"] }
@@ -162,8 +226,10 @@ baked copy:
 
 ## POST /q/:id/ai-chat — the Ask-AI node
 
-Same-origin. `{nodeId, path, history, userMessage (≤1200 chars), locale?}` →
-the assistant's reply. 10/min/IP (each request is a real model call).
+CORS-open (was same-origin until EMBED-1).
+`{nodeId, path, history, userMessage (≤1200 chars), locale?}` → the
+assistant's reply. 10/min/IP (each request is a real model call) plus the
+per-shop daily AI budget; those two, not CORS, are the spend controls.
 
 ## GET /q/:id/results?session_id=… — saved "My Results" page
 
@@ -184,8 +250,12 @@ quiz in a full-screen modal iframe. Only served when the published doc's
 ```
 
 Note the **dot** before `launcher.js` — the URL is a single path segment
-(`/q/:id.launcher.js`), same pattern as `/q/:id.json`. An inline embed is a
-plain iframe: `<iframe src="https://<app-origin>/q/<quiz-id>" …></iframe>`.
+(`/q/:id.launcher.js`), same pattern as `/q/:id.json`.
+
+For an inline embed there are now two options: a plain iframe
+(`<iframe src="https://<app-origin>/q/<quiz-id>" …></iframe>`), or the DOM
+embed via `/embed/wiskr-embed.js` above. The launcher itself is still
+iframe-based.
 
 ---
 
