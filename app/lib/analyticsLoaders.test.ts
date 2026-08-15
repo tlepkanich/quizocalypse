@@ -312,3 +312,73 @@ describe("insights + guards", () => {
     await expect(analyticsLoader(args())).rejects.toMatchObject({ status: 404 });
   });
 });
+
+// ── Decider-only surfaces ──────────────────────────────────────────────────
+// No decider doc is published in the local fixture DB, so the product-reach
+// paths and reachability states are pinned here rather than by screenshot.
+describe("product reach paths (decider docs)", () => {
+  const DECIDER = {
+    ...JSON.parse(JSON.stringify(DOC)),
+    logic_model: "decider",
+    nodes: [
+      { id: "i1", type: "intro", position: { x: 0, y: 0 }, data: { headline: "Hi", subtext: "", button_label: "Start" } },
+      {
+        id: "q1",
+        type: "question",
+        position: { x: 1, y: 0 },
+        data: {
+          text: "Skin type?",
+          question_type: "single_select",
+          required: true,
+          role: "decides",
+          answers: [
+            { id: "a1", text: "Dry", tags: [], edge_handle_id: "h1", target_id: "t1" },
+            { id: "a2", text: "Oily", tags: [], edge_handle_id: "h2", target_id: "t2" },
+          ],
+        },
+      },
+      { id: "r1", type: "result", position: { x: 2, y: 0 }, data: { headline: "Match", fallback_collection_id: "c1" } },
+    ],
+    product_index: [
+      { product_id: "p1", title: "Serum", collection_ids: [] },
+      { product_id: "p2", title: "Cream", collection_ids: [] },
+      { product_id: "p9", title: "Orphan", collection_ids: [] },
+    ],
+    // p1 sits in BOTH groups (the over-shown explanation); p9 in neither.
+    target_product_ids_map: { t1: ["p1", "p2"], t2: ["p1"] },
+    target_index: { t1: { type: "collection", name: "Dry & Sensitive" }, t2: { type: "collection", name: "Oily" } },
+  };
+
+  beforeEach(() => {
+    p.quiz.findFirst.mockResolvedValue({
+      id: "qz1",
+      name: "Skin quiz",
+      status: "published",
+      publishedJson: DECIDER,
+      draftJson: null,
+    });
+  });
+
+  it("derives 'how shoppers reach this product' from the answer→target map", async () => {
+    const data = await runLoader();
+    const p1 = data.products.find((r) => r.productId === "p1")!;
+    expect(p1.groupCount).toBe(2);
+    expect(p1.paths.map((x) => `${x.answer}→${x.target}`).sort()).toEqual([
+      "Dry→Dry & Sensitive",
+      "Oily→Oily",
+    ]);
+  });
+
+  it("a product in no group is UNREACHABLE and still listed, with no paths", async () => {
+    const data = await runLoader();
+    const orphan = data.products.find((r) => r.productId === "p9")!;
+    expect(orphan.state).toBe("unreachable");
+    expect(orphan.paths).toEqual([]);
+    expect(orphan.impressions).toBe(0);
+  });
+
+  it("reports the mapped/unreachable counts for the section header", async () => {
+    const data = await runLoader();
+    expect(data.productMeta).toEqual({ mapped: 3, unreachable: 1 });
+  });
+});

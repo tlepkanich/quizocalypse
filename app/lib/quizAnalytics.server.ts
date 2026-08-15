@@ -91,6 +91,9 @@ export function resolveAnalyticsRange(searchParams: URLSearchParams, now = new D
  *  disclose truncation rather than silently sample (W15). */
 export const ANALYTICS_SESSION_CAP = 5000;
 
+/** Attribution look-back, printed beside every revenue figure (§6.5). */
+export const ATTRIBUTION_WINDOW_DAYS = 7;
+
 interface CohortEventRow {
   sessionId: string;
   eventType: string;
@@ -142,6 +145,14 @@ export interface ProductRow extends ProductPerfRow {
   state: "over-shown" | "healthy" | "never-clicked" | "unreachable" | "no-data";
   /** impressions ÷ finishers (exposure share). */
   share: number | null;
+  /**
+   * "How shoppers reach this product" (§04) — the answer that routes to each
+   * result group holding it. Doc-static on decider docs: it is the quiz's own
+   * logic, so it is right at zero traffic. Empty on legacy docs.
+   */
+  paths: Array<{ answer: string; question: string; target: string }>;
+  /** How many result groups hold this product — the over-shown explanation. */
+  groupCount: number;
 }
 
 export interface QuizAnalyticsData {
@@ -162,6 +173,17 @@ export interface QuizAnalyticsData {
     conversion: GatedRate;
     revenue: { formatted: string; orders: number; perFinisher: string | null };
     prior: { engaged: number; completed: number } | null;
+    /**
+     * Period-over-period movement. Rates move in POINTS, counts and money in
+     * percent (§7.3 rule 4: colour is goodness, not direction). Null whenever
+     * the prior period is too thin to compare — we never print a delta whose
+     * interval includes zero.
+     */
+    deltas: {
+      completionPoints: number | null;
+      sessionsPct: number | null;
+      revenuePct: number | null;
+    };
   };
   insights: InsightsResult;
   ledger: StepLedger | null;
@@ -171,9 +193,37 @@ export interface QuizAnalyticsData {
   productMeta: { mapped: number; unreachable: number } | null;
   contacts: {
     rows: ContactRow[];
-    counts: { all: number; purchased: number; didntBuy: number; noMatch: number; backInStock: number };
+    counts: {
+      all: number;
+      purchased: number;
+      didntBuy: number;
+      noMatch: number;
+      backInStock: number;
+      /** Finishers who never gave an email — measurable without the P2 gate event. */
+      noEmail: number;
+    };
+    /** Distinct result names + products, for the two narrowing filters (§06). */
+    filterOptions: { results: string[]; products: string[] };
   };
-  revenueWeeks: Array<{ label: string; total: number; orders: number; currency: string }>;
+  /** Daily revenue buckets; the view rolls them up to week/month on demand. */
+  revenueDays: Array<{ day: string; total: number; orders: number; finishers: number; currency: string }>;
+  /** Attribution window in days, printed beside the chart. */
+  attributionDays: number;
+  /** Per-shopper response log (spec §03 "Individual responses"). */
+  responses: {
+    rows: Array<{
+      sessionId: string;
+      short: string;
+      when: string;
+      answers: Array<{ questionId: string; text: string }>;
+      result: string | null;
+      bought: boolean;
+      leftAt: string | null;
+    }>;
+    total: number;
+  };
+  /** Effective catalogue size — exp(entropy) over impression share (§04). */
+  effectiveCatalog: { effective: number; mapped: number } | null;
   months: Array<{
     key: string;
     label: string;
@@ -182,6 +232,8 @@ export interface QuizAnalyticsData {
     captures: number;
     orders: number;
     revenue: string;
+    revenueNumeric: number;
+    perFinisher: string | null;
     partial: boolean;
   }>;
   abTests: Array<{
@@ -363,6 +415,39 @@ export async function quizAnalyticsForShop(
     { limit: 50 },
   );
   const reachability = published ? computeReachability(quiz.publishedJson) : null;
+
+  // productId → the (question, answer) pairs whose target group holds it.
+  // Decider-only: it reads the deciding question's answer→target mapping
+  // against the baked membership, so it needs no traffic at all.
+  const pathsByProduct = new Map<string, Array<{ answer: string; question: string; target: string }>>();
+  const groupsByProduct = new Map<string, Set<string>>();
+  {
+    const baked = asRecord(quiz.publishedJson)?.target_product_ids_map as
+      | Record<string, string[]>
+      | undefined;
+    const targetIndex = asRecord(quiz.publishedJson)?.target_index as
+      | Record<string, { name?: string }>
+      | undefined;
+    if (doc?.logic_model === "decider" && baked) {
+      for (const n of doc.nodes) {
+        if (n.type !== "question" || n.data.role !== "decides") continue;
+        for (const a of n.data.answers) {
+          if (!a.target_id) continue;
+          const members = baked[a.target_id] ?? [];
+          const targetName = targetIndex?.[a.target_id]?.name ?? a.target_id;
+          for (const pid of members) {
+            const arr = pathsByProduct.get(pid) ?? [];
+            if (arr.length < 4) arr.push({ answer: a.text, question: n.data.text, target: targetName });
+            pathsByProduct.set(pid, arr);
+            const g = groupsByProduct.get(pid) ?? new Set<string>();
+            g.add(a.target_id);
+            groupsByProduct.set(pid, g);
+          }
+        }
+      }
+    }
+  }
+
   const products: ProductRow[] = perfRows.map((p) => {
     const unreachable = reachability?.stateById.get(p.productId) === "unreachable";
     const share = completed > 0 ? p.impressions / completed : null;
@@ -371,7 +456,13 @@ export async function quizAnalyticsForShop(
     else if (p.impressions >= 100 && p.clicks === 0) state = "never-clicked";
     else if (share != null && share >= 0.4 && p.impressions >= 30) state = "over-shown";
     else if (p.impressions > 0) state = "healthy";
-    return { ...p, state, share };
+    return {
+      ...p,
+      state,
+      share,
+      paths: pathsByProduct.get(p.productId) ?? [],
+      groupCount: groupsByProduct.get(p.productId)?.size ?? 0,
+    };
   });
   // Unreachable products with zero events still belong in the table.
   if (reachability) {
@@ -390,6 +481,8 @@ export async function quizAnalyticsForShop(
         atcRate: 0,
         state: "unreachable",
         share: null,
+        paths: [],
+        groupCount: 0,
       });
     }
   }
@@ -452,31 +545,49 @@ export async function quizAnalyticsForShop(
     didntBuy: contactRows.filter((c) => c.status !== "bought").length,
     noMatch: contactRows.filter((c) => c.noMatch).length,
     backInStock: contactRows.filter((c) => c.backInStock).length,
+    // The spec's "skipped the gate" needs an email_gate_skipped event that
+    // doesn't exist yet (P2). What IS measurable today: finishers who never
+    // gave an email. Labelled for what it is, not for what we wish it were.
+    noEmail: Math.max(0, completed - captureSessions.size),
+  };
+  const contactFilterOptions = {
+    results: [...new Set(contactRows.map((c) => c.result).filter((v): v is string => !!v))].sort(),
+    products: [...new Set(contactRows.map((c) => c.recommended).filter((v): v is string => !!v))].sort(),
   };
 
-  // Revenue by week — bucketed server-side; deduped by order_id inside
-  // totalRevenue per bucket.
-  const weekMs = 7 * 86_400_000;
-  const weekBuckets = new Map<number, CohortEventRow[]>();
-  for (const e of orderEvents) {
-    const idx = Math.floor((+range.to - +e.ts) / weekMs);
-    if (idx < 0 || idx > 26) continue;
-    const arr = weekBuckets.get(idx) ?? [];
-    arr.push(e);
-    weekBuckets.set(idx, arr);
+  // Revenue by DAY — bucketed server-side (never ship 5,000 rows to draw 13
+  // bars). The view rolls days up to week/month for the grain toggle, so
+  // switching grain costs no round-trip and every grain sums the same total.
+  const dayKey = (d: Date) => d.toISOString().slice(0, 10);
+  const dayBuckets = new Map<string, { orders: CohortEventRow[]; finishers: Set<string> }>();
+  const dayOf = (k: string) => {
+    let b = dayBuckets.get(k);
+    if (!b) {
+      b = { orders: [], finishers: new Set() };
+      dayBuckets.set(k, b);
+    }
+    return b;
+  };
+  for (const e of orderEvents) dayOf(dayKey(e.ts)).orders.push(e);
+  // Finishers land on the day the session ENGAGED, matching the cohort basis —
+  // otherwise per-finisher revenue divides two different populations.
+  const engageDay = new Map<string, string>();
+  for (const e of events) {
+    if (e.eventType !== "quiz_engaged") continue;
+    const prev = engageDay.get(e.sessionId);
+    const k = dayKey(e.ts);
+    if (!prev || k < prev) engageDay.set(e.sessionId, k);
   }
-  const revenueWeeks = [...weekBuckets.entries()]
-    .sort((a, b) => b[0] - a[0])
-    .map(([idx, rows]) => {
-      const rev = totalRevenue(rows);
+  for (const sid of completedSet) {
+    const k = engageDay.get(sid);
+    if (k) dayOf(k).finishers.add(sid);
+  }
+  const revenueDays = [...dayBuckets.entries()]
+    .sort((a, b) => a[0].localeCompare(b[0]))
+    .map(([day, b]) => {
+      const rev = totalRevenue(b.orders);
       const [cur, amt] = Object.entries(rev.totalsByCurrency)[0] ?? ["", 0];
-      const start = new Date(+range.to - (idx + 1) * weekMs);
-      return {
-        label: `${start.toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" })}`,
-        total: amt,
-        orders: rev.orders,
-        currency: cur,
-      };
+      return { day, total: amt, orders: rev.orders, finishers: b.finishers.size, currency: cur };
     });
 
   // Month-by-month compare — recomputed per month, never averaged (§ spec 07).
@@ -524,14 +635,22 @@ export async function quizAnalyticsForShop(
         year: "numeric",
         timeZone: "UTC",
       });
+      const entries = Object.entries(rev.totalsByCurrency);
+      const revTotal = entries.reduce((sum, [, amt]) => sum + amt, 0);
+      const finishers = b.completed.size;
       return {
         key: k,
         label,
         engaged: b.engaged.size,
-        completed: b.completed.size,
+        completed: finishers,
         captures: captureMonth.get(k) ?? 0,
         orders: rev.orders,
         revenue: formatRevenue(rev),
+        revenueNumeric: revTotal,
+        perFinisher:
+          finishers > 0 && entries.length === 1
+            ? formatRevenue({ orders: 0, totalsByCurrency: { [entries[0]![0]]: revTotal / finishers } })
+            : null,
         partial: k === nowKey,
       };
     });
@@ -575,8 +694,116 @@ export async function quizAnalyticsForShop(
           range.days ||
           Math.max(1, Math.round((+range.to - +(publishedAt ? new Date(publishedAt) : range.to)) / 86_400_000)),
         published,
+        contactsNoMatch: contactCounts.noMatch,
+        contactsTotal: contactCounts.all,
+        contactsNoMatchBought: contactRows.filter((c) => c.noMatch && c.status === "bought").length,
       })
     : { cards: [], more: 0, clean: true };
+
+  // Period-over-period deltas. Rates move in POINTS, counts in percent. We
+  // suppress a delta whenever either side is too thin to mean anything —
+  // a "+40%" off 5 sessions is noise dressed as a result (§7.3 rule 1).
+  const DELTA_MIN = 30;
+  const priorCompletion =
+    prior && prior.engaged > 0 ? prior.completed / prior.engaged : null;
+  const deltas = {
+    completionPoints:
+      prior && prior.engaged >= DELTA_MIN && engaged >= DELTA_MIN && priorCompletion != null
+        ? Math.round((completed / Math.max(1, engaged) - priorCompletion) * 1000) / 10
+        : null,
+    sessionsPct:
+      prior && prior.engaged >= DELTA_MIN
+        ? Math.round(((engaged - prior.engaged) / prior.engaged) * 100)
+        : null,
+    revenuePct: null as number | null,
+  };
+
+  // Per-shopper response log (§03). Sessions rows only exist for shoppers who
+  // reached a result, so reading QuizSession alone drops the ~30% who left —
+  // the log unions the cohort's ANSWER events with the session facts.
+  const answerBySession = new Map<string, Map<string, string[]>>();
+  const lastTs = new Map<string, Date>();
+  for (const e of events) {
+    if (e.eventType !== "question_answered") continue;
+    const pl = asRecord(e.payload);
+    const qid = typeof pl?.question_id === "string" ? pl.question_id : null;
+    if (!qid) continue;
+    const ids = Array.isArray(pl?.answer_ids)
+      ? pl.answer_ids.filter((v): v is string => typeof v === "string")
+      : [];
+    let per = answerBySession.get(e.sessionId);
+    if (!per) {
+      per = new Map();
+      answerBySession.set(e.sessionId, per);
+    }
+    per.set(qid, ids);
+    const prevTs = lastTs.get(e.sessionId);
+    if (!prevTs || e.ts > prevTs) lastTs.set(e.sessionId, e.ts);
+  }
+  // Answer id → label, and question order, straight from the doc.
+  const answerLabel = new Map<string, string>();
+  const questionOrder: string[] = [];
+  if (doc) {
+    for (const n of doc.nodes) {
+      if (n.type !== "question") continue;
+      questionOrder.push(n.id);
+      for (const a of n.data.answers) answerLabel.set(a.id, a.text);
+    }
+  }
+  const RESPONSE_PAGE = 100;
+  const orderedSessions = [...answerBySession.keys()].sort(
+    (a, b) => (+(lastTs.get(b) ?? 0)) - (+(lastTs.get(a) ?? 0)),
+  );
+  const buyerSessions = buyersSet;
+  const sessionFacts = cohortIds.length
+    ? await prisma.quizSession.findMany({
+        where: { quizId, sessionId: { in: orderedSessions.slice(0, RESPONSE_PAGE) } },
+        select: { sessionId: true, outcomeId: true },
+      })
+    : [];
+  const outcomeBySession = new Map(sessionFacts.map((f) => [f.sessionId, f.outcomeId]));
+  const responseRows = orderedSessions.slice(0, RESPONSE_PAGE).map((sid) => {
+    const per = answerBySession.get(sid)!;
+    const finished = completedSet.has(sid);
+    // Where an unfinished shopper stopped — the last question they answered.
+    let lastAnswered: string | null = null;
+    for (const qid of questionOrder) if (per.has(qid)) lastAnswered = qid;
+    const labelOf = (qid: string) =>
+      (per.get(qid) ?? []).map((id) => answerLabel.get(id) ?? "—").join(", ") || "skipped";
+    const outcomeId = outcomeBySession.get(sid) ?? null;
+    return {
+      sessionId: sid,
+      // Sessions ids are opaque already; show a short form so the column stays
+      // scannable and no full identifier is pasted around.
+      short: `${sid.slice(0, 4)}…${sid.slice(-3)}`,
+      when: (lastTs.get(sid) ?? range.to).toISOString(),
+      answers: questionOrder.filter((qid) => per.has(qid)).map((qid) => ({ questionId: qid, text: labelOf(qid) })),
+      result: finished ? (outcomeId ? catName.get(outcomeId) ?? null : null) : null,
+      bought: buyerSessions.has(sid),
+      leftAt: finished
+        ? null
+        : lastAnswered
+          ? `left at ${questionOrder.indexOf(lastAnswered) + 1 <= questionOrder.length ? `Q${questionOrder.indexOf(lastAnswered) + 1}` : "the end"}`
+          : "left at the start",
+    };
+  });
+
+  // Effective catalogue size — exp(Shannon entropy) over impression share.
+  // "You map 84 products but effectively recommend 4.2 of them" is the honest
+  // read of concentration; a raw count of shown products is not.
+  let effectiveCatalog: { effective: number; mapped: number } | null = null;
+  {
+    const totalImp = products.reduce((sum, p) => sum + p.impressions, 0);
+    if (totalImp > 0 && reachability) {
+      let h = 0;
+      for (const p of products) {
+        if (p.impressions <= 0) continue;
+        const share = p.impressions / totalImp;
+        h -= share * Math.log(share);
+      }
+      effectiveCatalog = { effective: Math.round(Math.exp(h) * 10) / 10, mapped: reachability.mapped };
+    }
+  }
 
   // W6 — standalone workspaces have no Shopify order feed; a confident "0.0%"
   // conversion rate there is a category error, not a measurement.
@@ -610,6 +837,7 @@ export async function quizAnalyticsForShop(
       conversion: gateRate("conversion_rate", buyers, completed),
       revenue: { formatted: formatRevenue(revenue), orders: revenue.orders, perFinisher },
       prior,
+      deltas,
     },
     insights,
     ledger,
@@ -617,8 +845,11 @@ export async function quizAnalyticsForShop(
     outcomes,
     products,
     productMeta: reachability ? { mapped: reachability.mapped, unreachable: reachability.unreachable.length } : null,
-    contacts: { rows: contactRows, counts: contactCounts },
-    revenueWeeks,
+    contacts: { rows: contactRows, counts: contactCounts, filterOptions: contactFilterOptions },
+    revenueDays,
+    attributionDays: ATTRIBUTION_WINDOW_DAYS,
+    responses: { rows: responseRows, total: orderedSessions.length },
+    effectiveCatalog,
     months,
     abTests,
   };
@@ -626,25 +857,28 @@ export async function quizAnalyticsForShop(
 
 // ── Shop-level home (Screen 1) ─────────────────────────────────────────────
 
+/**
+ * One row per quiz — live AND draft in the SAME table (spec Screen 1). A
+ * draft's metrics are `null`, never 0: it has no data, which is not the same
+ * as having none, and the table renders an em-dash for the difference.
+ */
 export interface ShopQuizRow {
   id: string;
   name: string;
-  starts: number;
-  completion: GatedRate;
-  contacts: number;
-  orders: number;
-  revenue: string;
-  revenueNumeric: number;
+  live: boolean;
+  /** Short structural warning for the Status cell ("1 result only"). */
+  flag: string | null;
+  starts: number | null;
+  completion: GatedRate | null;
+  contacts: number | null;
+  orders: number | null;
+  revenue: string | null;
+  /** Sort keys — the formatted strings above aren't orderable. */
+  revenueNumeric: number | null;
   perFinisher: string | null;
   perFinisherNumeric: number | null;
-}
-
-export interface ShopDraftRow {
-  id: string;
-  name: string;
   questions: number;
   outcomes: number;
-  findings: number;
 }
 
 export interface ShopAnalyticsData {
@@ -660,8 +894,8 @@ export interface ShopAnalyticsData {
     orders: number;
     perFinisher: string | null;
   };
-  live: ShopQuizRow[];
-  drafts: ShopDraftRow[];
+  rows: ShopQuizRow[];
+  counts: { all: number; live: number; draft: number };
   findings: Array<{
     quizId: string;
     quizName: string;
@@ -769,8 +1003,7 @@ export async function shopAnalyticsForShop(
     capturesByQuiz.set(c.quizId, s);
   }
 
-  const live: ShopQuizRow[] = [];
-  const drafts: ShopDraftRow[] = [];
+  const rows: ShopQuizRow[] = [];
   const findings: ShopAnalyticsData["findings"] = [];
 
   let totalEngaged = 0;
@@ -784,7 +1017,9 @@ export async function shopAnalyticsForShop(
     const doc = parsed.success ? parsed.data : null;
     const isLive = q.status === "published";
 
-    // Doc-static findings run on every quiz — drafts especially (Screen 1/3).
+    // Doc-static findings run on EVERY quiz, drafts included — they read the
+    // quiz's own logic, so they need no traffic (spec Screen 1/3).
+    let flag: string | null = null;
     if (doc) {
       const reachability = isLive ? computeReachability(q.publishedJson) : null;
       const r = buildQuizInsights({
@@ -796,7 +1031,8 @@ export async function shopAnalyticsForShop(
         rangeDays: range.days,
         published: isLive,
       });
-      for (const card of r.cards.filter((c) => c.tier === "A")) {
+      const tierA = r.cards.filter((c) => c.tier === "A");
+      for (const card of tierA) {
         findings.push({
           quizId: q.id,
           quizName: q.name,
@@ -807,19 +1043,9 @@ export async function shopAnalyticsForShop(
           basis: card.basis,
         });
       }
-      if (!isLive) {
-        drafts.push({
-          id: q.id,
-          name: q.name,
-          questions: doc.nodes.filter((n) => n.type === "question").length,
-          outcomes: distinctOutcomes(doc),
-          findings: r.cards.filter((c) => c.tier === "A").length,
-        });
-        continue;
-      }
-    } else if (!isLive) {
-      drafts.push({ id: q.id, name: q.name, questions: 0, outcomes: 0, findings: 0 });
-      continue;
+      // The Status cell carries the worst structural finding as a short chip,
+      // so a broken quiz is visible in the list without opening it.
+      flag = tierA.find((c) => c.chip)?.chip ?? null;
     }
 
     const a = aggOf(q.id);
@@ -832,34 +1058,44 @@ export async function shopAnalyticsForShop(
     const revEntries = Object.entries(rev.totalsByCurrency);
     const revTotal = revEntries.reduce((s, [, amt]) => s + amt, 0);
     const perFinisherNumeric = completedN > 0 && revEntries.length === 1 ? revTotal / completedN : null;
-    live.push({
+    const contacts = capturesByQuiz.get(q.id)?.size ?? 0;
+
+    rows.push({
       id: q.id,
       name: q.name,
-      starts: a.engaged.size,
-      completion: gateRate("completion_rate", completedN, a.engaged.size),
-      contacts: capturesByQuiz.get(q.id)?.size ?? 0,
-      orders: rev.orders,
-      revenue: formatRevenue(rev),
-      revenueNumeric: revTotal,
+      live: isLive,
+      flag,
+      questions: doc ? doc.nodes.filter((n) => n.type === "question").length : 0,
+      outcomes: doc ? distinctOutcomes(doc) : 0,
+      // A draft's metrics are null, never 0 — it has no data, which is not the
+      // same as having none. The table renders an em-dash for the difference.
+      starts: isLive ? a.engaged.size : null,
+      completion: isLive ? gateRate("completion_rate", completedN, a.engaged.size) : null,
+      contacts: isLive ? contacts : null,
+      orders: isLive ? rev.orders : null,
+      revenue: isLive ? formatRevenue(rev) : null,
+      revenueNumeric: isLive ? revTotal : null,
       perFinisher:
-        perFinisherNumeric != null && revEntries.length === 1
+        isLive && perFinisherNumeric != null && revEntries.length === 1
           ? formatRevenue({ orders: 0, totalsByCurrency: { [revEntries[0]![0]]: perFinisherNumeric } })
           : null,
-      perFinisherNumeric,
+      perFinisherNumeric: isLive ? perFinisherNumeric : null,
     });
 
+    if (!isLive) continue;
     totalEngaged += a.engaged.size;
     totalCompleted += completedN;
-    totalContacts += capturesByQuiz.get(q.id)?.size ?? 0;
+    totalContacts += contacts;
     totalOrders += rev.orders;
     for (const [cur, amt] of revEntries) totalRevenueByCur[cur] = (totalRevenueByCur[cur] ?? 0) + amt;
   }
 
-  // Rank: revenue per finisher desc (the comparison column), then starts.
-  live.sort(
+  // Default order: revenue desc (the mock's default sort). Drafts have no
+  // number to rank, so they keep together at the bottom, alphabetically.
+  rows.sort(
     (a, b) =>
-      (b.perFinisherNumeric ?? -1) - (a.perFinisherNumeric ?? -1) ||
-      b.starts - a.starts ||
+      (b.revenueNumeric ?? -1) - (a.revenueNumeric ?? -1) ||
+      (b.starts ?? -1) - (a.starts ?? -1) ||
       a.name.localeCompare(b.name),
   );
   findings.sort((a, b) => SEV_ORDER[a.severity] - SEV_ORDER[b.severity]);
@@ -893,8 +1129,12 @@ export async function shopAnalyticsForShop(
       orders: totalOrders,
       perFinisher,
     },
-    live,
-    drafts,
+    rows,
+    counts: {
+      all: rows.length,
+      live: rows.filter((r) => r.live).length,
+      draft: rows.filter((r) => !r.live).length,
+    },
     findings: findings.slice(0, 3),
   };
 }

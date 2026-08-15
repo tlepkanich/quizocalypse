@@ -27,6 +27,7 @@ export default function StudioAnalytics() {
         quizHref={(id) => `/studio/${id}`}
         analyticsHref={(id) => `/studio/${id}/analytics`}
         createHref="/studio/onboarding"
+        exportBase="/studio/customers/export"
       />
     </QzPage>
   );

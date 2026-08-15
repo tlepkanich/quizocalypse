@@ -33,6 +33,7 @@ export default function AggregateAnalytics() {
         quizHref={(id) => `/app/quizzes/${id}/studio`}
         analyticsHref={(id) => `/app/quizzes/${id}/analytics`}
         createHref="/app/quizzes"
+        exportBase={null}
       />
     </QzPage>
   );

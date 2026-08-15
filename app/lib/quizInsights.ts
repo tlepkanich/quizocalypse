@@ -37,8 +37,21 @@ export interface InsightCard {
   /** How the finding was read — the trust line under the evidence. */
   basis: string;
   action: InsightAction;
+  /** Optional second action — some findings have two honest next moves. */
+  action2?: InsightAction;
+  /**
+   * "Show the math" disclosure: the counts behind a shopper figure. Never a
+   * currency amount (§7.4) — it discloses n, the rates and the window.
+   */
+  math?: string;
   /** Ranking key: shoppers affected (0 for doc-static findings). */
   excess: number;
+  /**
+   * Very short label for a list cell ("1 result only") — set on the structural
+   * findings worth seeing WITHOUT opening the quiz. Absent = don't surface in
+   * the Status column.
+   */
+  chip?: string;
 }
 
 export interface InsightsResult {
@@ -62,6 +75,10 @@ export interface InsightInputs {
   /** Days covered by the active range (for "about N shoppers a month"). */
   rangeDays: number;
   published: boolean;
+  /** Contacts who finished, gave an email, and got the fallback (§ Overview). */
+  contactsNoMatch?: number;
+  contactsTotal?: number;
+  contactsNoMatchBought?: number;
 }
 
 function words(s: string): number {
@@ -99,6 +116,7 @@ export function buildQuizInsights(input: InsightInputs): InsightsResult {
       basis: "Read from the quiz logic — no traffic needed",
       action: { label: "Open the logic", kind: "logic" },
       excess: 0,
+      chip: "1 result only",
     });
   }
 
@@ -119,6 +137,7 @@ export function buildQuizInsights(input: InsightInputs): InsightsResult {
       basis: "Read from the product mapping — no traffic needed",
       action: { label: "See the products", kind: "products" },
       excess: 0,
+      chip: `${reach.unreachable.length} unreachable`,
     });
   }
 
@@ -143,6 +162,7 @@ export function buildQuizInsights(input: InsightInputs): InsightsResult {
         basis: "Read from the quiz logic — no traffic needed",
         action: { label: "Open the logic", kind: "logic" },
         excess: 0,
+        chip: `${enumd.deadEnds.length}${enumd.truncated ? "+" : ""} dead ends`,
       });
     }
   }
@@ -162,6 +182,7 @@ export function buildQuizInsights(input: InsightInputs): InsightsResult {
       basis: "Read from the quiz structure — no traffic needed",
       action: { label: "Review the flow", kind: "flow" },
       excess: 0,
+      chip: `${questions.length} questions`,
     });
   }
 
@@ -232,10 +253,39 @@ export function buildQuizInsights(input: InsightInputs): InsightsResult {
             : [{ label: "Reached", value: String(n) }],
           basis: "Read from per-question answer events against the quiz's own step order",
           action: { label: "See it in the flow", kind: "flow", nodeId: target.nodeId },
+          math: exact
+            ? `${n} shoppers reached this step. ${Math.round(drop * 100)}% left here, against ${Math.round(median * 100)}% at every other step — so about ${excess} more shoppers left than the rest of the quiz would predict, across ${input.rangeDays} days. This is an estimate of how many shoppers are affected, not a measurement of lost sales.`
+            : undefined,
           excess,
         });
       }
     }
+  }
+
+  // EMAIL_NO_MATCH — the most expensive drop-off there is: they finished, handed
+  // over a contact, and the logic had nothing to recommend. You already paid for
+  // the lead. Traffic-based but count-only, so it needs no rate gate.
+  const noMatch = input.contactsNoMatch ?? 0;
+  if (noMatch > 0 && (input.contactsTotal ?? 0) > 0) {
+    const share = noMatch / (input.contactsTotal ?? 1);
+    cards.push({
+      id: "email-no-match",
+      tier: "B",
+      severity: share >= 0.05 ? "crit" : "warn",
+      headline: `${noMatch} shopper${noMatch === 1 ? "" : "s"} gave you their email and saw no match`,
+      body: "They finished the quiz, handed over a contact, and your logic had nothing to recommend — so they got the fallback products. That is the most expensive drop-off you have, because you already paid for the lead.",
+      evidence: [
+        { label: "Contacts affected", value: String(noMatch) },
+        { label: "Of contacts", value: `${Math.round(share * 100)}%` },
+        ...(input.contactsNoMatchBought != null
+          ? [{ label: "Bought since", value: String(input.contactsNoMatchBought) }]
+          : []),
+      ],
+      basis: "Read from captured contacts whose finished session resolved to no products",
+      action: { label: `Open these ${noMatch} contacts`, kind: "contacts" },
+      action2: { label: "Fix the mapping", kind: "logic" },
+      excess: noMatch,
+    });
   }
 
   // B10 TRAFFIC_STARVED — fires when the quiz is live but the sample is thin.

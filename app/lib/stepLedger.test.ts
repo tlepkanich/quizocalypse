@@ -170,6 +170,34 @@ describe("branching docs", () => {
     ],
   });
 
+  it("a branch does NOT disable drop-off for the spine questions before it", () => {
+    // 10 answer q1; 6 go on into the lane; the rest leave at q1.
+    const events = [
+      ...Array.from({ length: 10 }, (_, i) => ans(`s${i}`, "q1", ["a1"])),
+      ...Array.from({ length: 6 }, (_, i) => ans(`s${i}`, "q2", ["b1"])),
+      ...Array.from({ length: 6 }, (_, i) => done(`s${i}`)),
+    ];
+    const ledger = buildStepLedger(BRANCHED, events, 10, 6);
+    const q1 = ledger.steps.find((s) => s.nodeId === "q1")!;
+    // q1 is on the shared spine, so its drop-off is real and reconciles.
+    expect(q1.reached).toBe(10);
+    expect(q1.left).toBe(4);
+    expect(q1.dropoff).toBeCloseTo(0.4);
+    expect(q1.reached).toBe(q1.continued! + q1.skipped! + q1.left!);
+    // The lane question still refuses a drop-off claim.
+    expect(ledger.steps.find((s) => s.nodeId === "q2")!.dropoff).toBeNull();
+  });
+
+  it("the intro row carries the shoppers who start and never answer", () => {
+    const events = [ans("s1", "q1", ["a1"]), done("s1")];
+    const ledger = buildStepLedger(BRANCHED, events, 4, 1);
+    const intro = ledger.steps[0]!;
+    expect(intro.kind).toBe("intro");
+    expect(intro.reached).toBe(4);
+    expect(intro.left).toBe(3); // 4 engaged, only 1 ever answered
+    expect(intro.dropoff).toBeCloseTo(0.75);
+  });
+
   it("renders per-lane counts with NO drop-off claims, and flags the split", () => {
     const events = [ans("s1", "q1", ["a1"]), ans("s1", "q2", ["b1"]), done("s1")];
     const ledger = buildStepLedger(BRANCHED, events, 1, 1);
