@@ -78,10 +78,26 @@ function publishedDoc(actions: ActionsInput, continueOnError?: boolean) {
   });
 }
 
-function args(body: unknown, init?: { method?: string; raw?: string }): ActionFunctionArgs {
+// The route is rate-limited per IP (15/min) and this file makes well over 15
+// calls, so every request gets its own client IP. Without it the limiter's
+// process-global window is shared across the whole file and tests start
+// 429-ing partway through — an order-dependent failure that looks like a bug
+// in whatever test happens to be 16th. clientIp() treats the header as an
+// opaque map key, so a counter is fine and cannot overflow an octet.
+//
+// A test that wants to exercise the limiter pins a fixed ip via `init.ip`.
+let ipSeq = 0;
+
+function args(
+  body: unknown,
+  init?: { method?: string; raw?: string; ip?: string },
+): ActionFunctionArgs {
   const request = new Request("https://shop.example/q/q1/integration", {
     method: init?.method ?? "POST",
-    headers: { "content-type": "application/json" },
+    headers: {
+      "content-type": "application/json",
+      "fly-client-ip": init?.ip ?? `test-ip-${++ipSeq}`,
+    },
     ...(init?.method === "GET" ? {} : { body: init?.raw ?? JSON.stringify(body) }),
   });
   return { request, params: { id: "q1" }, context: {} } as unknown as ActionFunctionArgs;
@@ -344,5 +360,31 @@ describe("validation / method matrix (4xx, never 5xx)", () => {
     const res = await integrationAction(args({ nodeId: "int1", path: [] }));
     expect(res.status).toBe(404);
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  // The actions loop is sequential and unbounded, each action a 5s-timeout
+  // outbound fetch — so an unlimited endpoint let one IP occupy the single
+  // machine for actions x 5s. 15/min/IP bounds that.
+  it("rate limits at 15/min/IP, with retry-after, before parsing the body", async () => {
+    const ip = "203.0.113.200"; // pinned: this test IS the limiter test
+    const statuses: number[] = [];
+    for (let i = 0; i < 17; i++) {
+      const res = await integrationAction(args({ nodeId: "qn1", path: [] }, { ip }));
+      statuses.push(res.status);
+    }
+    // First 15 get through the limiter (400 from validation below it).
+    expect(statuses.slice(0, 15).every((s) => s === 400)).toBe(true);
+    expect(statuses[15]).toBe(429);
+    expect(statuses[16]).toBe(429);
+
+    const blocked = await integrationAction(args({ nodeId: "qn1", path: [] }, { ip }));
+    expect(blocked.headers.get("retry-after")).toBeTruthy();
+    // The withCors wrapper must cover the 429 too — without it a cross-origin
+    // DOM embed cannot read WHY it was refused.
+    expect(blocked.headers.get("access-control-allow-origin")).toBe("*");
+
+    // Per-IP, not global: a different caller is unaffected.
+    const other = await integrationAction(args({ nodeId: "qn1", path: [] }));
+    expect(other.status).toBe(400);
   });
 });
