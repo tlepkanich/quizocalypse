@@ -22,12 +22,11 @@ Blocked requests get `429` with a `Retry-After` header (seconds).
 | `POST /q/:id/rec-copy` | 5 |
 | `POST /q/:id/ai-chat` | 10 |
 | `GET /q/:id/results` | 30 |
+| `POST /q/:id/integration` | 15 |
 
-`POST /q/:id/integration` is **not** in that table because it currently has no
-rate limiter — the only public endpoint without one, and it makes outbound
-HTTP to a merchant-configured URL (SSRF-guarded by `ssrfGuard.server.ts`).
-Pre-existing, tracked separately; listed here so the omission reads as known
-rather than as coverage.
+`POST /q/:id/integration` is checked **before** its body is parsed, because
+its actions loop is sequential and unbounded — one request can occupy the
+single machine for `actions × 5 s`. Every public endpoint now has a limiter.
 
 **CORS: every endpoint on this page is now open**
 (`access-control-allow-origin: *`), answering `OPTIONS` preflights with `204`.

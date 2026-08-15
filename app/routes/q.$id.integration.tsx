@@ -11,6 +11,7 @@ import {
 import { assertPublicHttpsUrl } from "../lib/ssrfGuard.server";
 import { webhookSignatureHeader } from "../lib/webhookSignature.server";
 import { corsPreflight, withCors } from "../lib/publicCors";
+import { rateLimit } from "../lib/rateLimiters";
 
 // Integration node executor. When the storefront runtime reaches an
 // integration node it POSTs here with the session payload; we fire every
@@ -90,6 +91,23 @@ function resolveRecommendedProducts(
 // the shopper's flow. Each action gets its own fetch with this timeout.
 const WEBHOOK_TIMEOUT_MS = 5000;
 
+// 15/min/IP. This endpoint was the last public route with no limiter, which
+// mattered more than the others: the actions loop below is SEQUENTIAL and
+// unbounded (`for (const act of node.data.actions)`), each action its own
+// outbound fetch with the 5 s timeout above — so a single request can occupy
+// the one always-on machine for actions × 5 s.
+//
+// 15 rather than ai-chat's 10 because the traffic SHAPE matches /captures and
+// /q/:id/notify (15 each): a shopper trips this about once per completed quiz,
+// and mobile-carrier NAT puts many real shoppers behind one IP. Blocking a
+// legitimate call here silently costs the merchant a Klaviyo signup or an
+// email capture, so the failure is expensive in the other direction too.
+//
+// Not an amplifier against third parties — assertPublicHttpsUrl (ssrfGuard)
+// pins targets to the merchant's own configured URL. The risk this bounds is
+// self-DoS of the app.
+const RATE = 15;
+
 export const loader = async () => corsPreflight();
 
 export async function action(args: ActionFunctionArgs) {
@@ -102,6 +120,17 @@ async function actionImpl({ params, request }: ActionFunctionArgs) {
   if (!id) return json({ error: "Missing quiz id" }, { status: 400 });
   if (request.method !== "POST") {
     return json({ error: "Method not allowed" }, { status: 405 });
+  }
+
+  // Before the body is even parsed, so a flood costs us nothing but the check.
+  // The CORS headers on this 429 come from the withCors() wrapper on `action`
+  // — without them a cross-origin embed could not read WHY it was refused.
+  const rl = rateLimit(request, "integration", RATE);
+  if (!rl.ok) {
+    return json(
+      { error: "rate limited" },
+      { status: 429, headers: { "retry-after": String(rl.retryAfterS) } },
+    );
   }
 
   // BIC-2 D2 — malformed input is a client error, not a server crash: invalid
