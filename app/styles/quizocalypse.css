@@ -10657,3 +10657,78 @@ button.qz-pb-row:hover { background: var(--qz-cream-2); }
    the one-row anatomy. */
 .qz-bt-insphd { flex-wrap: wrap; row-gap: 7px; }
 .qz-bt-insphd .qz-bt-tt { flex: 1 1 120px; }
+
+/* ══ ANALYTICS P0 — the Analytics tab (spec Screens 1–3) ═══════════════════
+   One shared view across /studio + /app (and later the Main Builder). Content
+   column caps at 1320 left-aligned — unbounded table width is what makes a
+   row a head-turn. Honesty contract: a suppressed rate renders its gate and
+   progress, never a fake number. */
+.qz-anwrap { max-width: 1320px; }
+.qz-anbar-row { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; flex-wrap: wrap; }
+.qz-andate { font: inherit; font-size: 12px; padding: 4px 6px; border-radius: var(--qz-radius-sm); border: 1px solid var(--qz-rule); background: var(--qz-paper); color: var(--qz-ink); }
+
+/* Section tabs — URL-driven links, not buttons. */
+.qz-antabs { display: flex; gap: 2px; margin: 0 0 18px; border-bottom: 1px solid var(--qz-rule); flex-wrap: wrap; }
+.qz-antabs a { font-size: 13px; font-weight: 600; color: var(--qz-ink-3); text-decoration: none; padding: 8px 12px 9px; border-bottom: 2px solid transparent; margin-bottom: -1px; }
+.qz-antabs a:hover { color: var(--qz-ink); }
+.qz-antabs a.is-active { color: var(--qz-accent-ink); border-bottom-color: var(--qz-accent); }
+.qz-antab-n { font-size: 11px; font-weight: 700; margin-left: 6px; padding: 1px 7px; border-radius: var(--qz-radius-pill); background: var(--qz-accent-wash); color: var(--qz-accent-ink); }
+
+/* KPI tiles — figure leads, label under, delta under that. */
+.qz-antiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 14px; margin-bottom: 26px; }
+.qz-antile { background: var(--qz-paper); border: 1px solid var(--qz-rule); border-radius: var(--qz-radius-lg); padding: 16px 18px; min-height: 104px; }
+.qz-antile .n { font-family: var(--qz-font-heading); font-size: 26px; font-weight: 700; letter-spacing: -0.02em; color: var(--qz-ink); font-variant-numeric: tabular-nums; }
+.qz-antile .l { font-size: 12px; font-weight: 600; color: var(--qz-ink-3); margin-top: 2px; }
+.qz-antile .d { font-size: 11.5px; color: var(--qz-ink-3); margin-top: 6px; }
+.qz-antile.is-hero { border-color: var(--qz-accent-line); background: var(--qz-accent-tint); }
+/* §7.3.1 — the suppressed-rate tile: metric, gate, distance. Never "—" alone,
+   never 0.0%. */
+.qz-antile.is-gated .qz-antile-gate { margin-top: 4px; }
+.qz-antile.is-gated .g { font-size: 13px; font-weight: 600; color: var(--qz-ink-2); }
+.qz-antile.is-gated .g2 { font-size: 11.5px; color: var(--qz-ink-3); margin-top: 5px; }
+.qz-antile-bar { height: 6px; border-radius: var(--qz-radius-pill); background: var(--qz-cream-2); margin-top: 8px; overflow: hidden; }
+.qz-antile-bar span { display: block; height: 100%; border-radius: inherit; background: var(--qz-ink-25); }
+
+.qz-anhead { display: flex; align-items: baseline; gap: 12px; margin: 4px 0 14px; }
+
+/* Insight cards — severity stripe, evidence row, deep link. */
+.qz-insight { position: relative; background: var(--qz-paper); border: 1px solid var(--qz-rule); border-radius: var(--qz-radius-lg); padding: 16px 18px 14px 22px; overflow: hidden; }
+.qz-insight::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 4px; background: var(--qz-ink-25); }
+.qz-insight.is-crit::before { background: var(--qz-crit); }
+.qz-insight.is-warn::before { background: var(--qz-warn); }
+.qz-insight-sev { font-size: 10.5px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--qz-ink-3); }
+.qz-insight.is-crit .qz-insight-sev { color: var(--qz-crit); }
+.qz-insight.is-warn .qz-insight-sev { color: var(--qz-warn); }
+.qz-insight-h { font-family: var(--qz-font-heading); font-size: 17px; font-weight: 700; margin: 6px 0 4px; color: var(--qz-ink); }
+.qz-insight-b { font-size: 13.5px; line-height: 1.5; color: var(--qz-ink-2); margin: 0 0 10px; }
+.qz-insight-ev { display: flex; gap: 16px; flex-wrap: wrap; font-size: 12.5px; color: var(--qz-ink-2); margin-bottom: 10px; }
+.qz-insight-ev b { font-weight: 600; color: var(--qz-ink-3); }
+.qz-insight-foot { display: flex; align-items: baseline; gap: 16px; flex-wrap: wrap; }
+.qz-insight-basis { font-size: 11.5px; color: var(--qz-ink-4); }
+.qz-insight-foot .qz-link { margin-left: auto; font-size: 13px; }
+
+/* The all-clear state. */
+.qz-anclean { display: flex; align-items: center; gap: 14px; padding: 18px 20px; border: 1px dashed var(--qz-rule-strong); border-radius: var(--qz-radius-lg); margin-bottom: 26px; }
+.qz-anclean-ic { width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; background: var(--qz-ok-tint); color: var(--qz-ok); font-weight: 700; flex: none; }
+
+/* Answer / outcome distribution rows. */
+.qz-anopt { display: grid; grid-template-columns: minmax(120px, 220px) 1fr 90px; gap: 12px; align-items: center; padding: 5px 0; font-size: 13px; }
+.qz-anopt-l { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.qz-anopt-n { text-align: right; color: var(--qz-ink-2); font-size: 12.5px; }
+.qz-anbar { height: 10px; border-radius: var(--qz-radius-pill); background: var(--qz-cream-2); overflow: hidden; }
+.qz-anbar span { display: block; height: 100%; border-radius: inherit; background: var(--qz-accent); opacity: 0.75; min-width: 2px; }
+
+/* Revenue by week — CSS bars, no chart library. */
+.qz-anweeks { display: flex; align-items: flex-end; gap: 14px; padding: 20px 20px 12px; border-bottom: 1px solid var(--qz-rule); min-height: 120px; }
+.qz-anweek { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 6px; min-width: 0; }
+.qz-anweek-col { height: 84px; width: 100%; max-width: 46px; display: flex; align-items: flex-end; }
+.qz-anweek-col span { display: block; width: 100%; border-radius: var(--qz-radius-sm) var(--qz-radius-sm) 0 0; background: var(--qz-accent); opacity: 0.8; }
+.qz-anweek-l { font-size: 10.5px; color: var(--qz-ink-3); white-space: nowrap; }
+
+/* Step ledger — the steepest drop gets a quiet flag, not a red table. */
+.qz-anworst td { background: var(--qz-warn-tint); }
+.qz-anworst-tag { font-size: 10.5px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: var(--qz-warn); margin-left: 8px; }
+
+/* Launch checklist (published, no responses yet). */
+.qz-anchecklist { list-style: none; margin: 10px 0 0; padding: 0; display: flex; flex-direction: column; gap: 6px; font-size: 13.5px; color: var(--qz-ink-2); }
+.qz-anchecklist .is-done { color: var(--qz-ok); }

@@ -231,7 +231,9 @@ export default function StudioQuizzes() {
     { label: "Preview", onSelect: () => window.open(`/q/${q.id}`, "_blank", "noopener") },
     { label: "Share", onSelect: () => navigate(`/studio/${q.id}/embed`) },
     { label: "Duplicate", onSelect: () => act("duplicate", q.id) },
-    { label: "Analytics", onSelect: () => navigate(`/studio/analytics#quiz-${q.id}`) },
+    // ANALYTICS P0 — deep-link straight to the quiz's own analytics page (the
+    // home is a comparison table now; the old #quiz- anchors are gone).
+    { label: "Analytics", onSelect: () => navigate(`/studio/${q.id}/analytics`) },
     // Ported engagement surface (§L) — kept through the design merge.
     { label: "Engagement", onSelect: () => navigate(`/studio/${q.id}/engagement`) },
     q.status === "published"

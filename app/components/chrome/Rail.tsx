@@ -11,7 +11,6 @@ import {
   Palette,
   Plug,
   Settings,
-  Users,
   type LucideIcon,
 } from "lucide-react";
 import { Wordmark } from "./Wordmark";
@@ -52,7 +51,9 @@ const NAV: RailItem[] = [
   // live; only the nav entries are hidden. Restore by un-commenting (re-add the Boxes/FlaskConical/Sparkles lucide imports).
   // { to: "/studio/groups", label: "Personas & Groups", icon: Boxes },
   { to: "/studio/brand", label: "Brand Identity", icon: Palette },
-  { to: "/studio/customers", label: "Customer Engagement", icon: Users },
+  // ANALYTICS P0 (owner, 2026-08-14) — Customer Engagement tab retired; its
+  // pieces (contacts, cohorts, CSV export) live in Analytics → Customers.
+  // /studio/customers redirects there; the export resource route survives.
   { to: "/studio/integrations", label: "Integrations", icon: Plug },
   { to: "/studio/settings", label: "Settings", icon: Settings },
   { to: "/studio/email", label: "Email Automation", icon: Mail },

@@ -21,10 +21,21 @@ export interface HubContact {
 }
 
 export async function loadCustomerContacts(shopId: string): Promise<HubContact[]> {
-  const captures = await prisma.emailCapture.findMany({
+  const captureRows = await prisma.emailCapture.findMany({
     where: { quiz: { shopId } },
     orderBy: { capturedAt: "desc" },
     include: { quiz: { select: { id: true, name: true } } },
+  });
+  // ANALYTICS P0 (W10) — EmailCapture has no unique constraint, so the gate,
+  // the result-page form and a back-nav resubmit each write a row for ONE
+  // shopper. Collapse to one row per (quiz, session) — latest first — so the
+  // export matches the contact count the Analytics tab shows.
+  const seen = new Set<string>();
+  const captures = captureRows.filter((c) => {
+    const key = `${c.quizId}:${c.sessionId}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
   });
 
   const quizIds = [...new Set(captures.map((c) => c.quizId))];
@@ -79,7 +90,10 @@ export async function loadCustomerContacts(shopId: string): Promise<HubContact[]
 }
 
 function csvCell(v: string): string {
-  return /[",\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v;
+  // Formula-injection guard: Excel/Sheets execute cells that start with = + - @.
+  // Prefix with ' so a hostile shopper-typed value stays a literal string.
+  const guarded = /^[=+\-@]/.test(v) ? `'${v}` : v;
+  return /[",\n]/.test(guarded) ? `"${guarded.replace(/"/g, '""')}"` : guarded;
 }
 
 export function contactsToCsv(contacts: HubContact[], segment: string): string {
