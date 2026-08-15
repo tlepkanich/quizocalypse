@@ -164,6 +164,37 @@ export function MethodDrawer({ open, onClose }: { open: boolean; onClose: () => 
   );
 }
 
+/**
+ * Low-confidence marker (owner decision 2026-08-15, supersedes the research
+ * doc's hard gates). The rate is ALWAYS shown; an asterisk marks that it rests
+ * on a thin sample and the hover says how thin. Disclose, don't withhold.
+ */
+export function LowConfidence({ n, showsAt, confidentAt, unit, lo, hi }: {
+  n: number;
+  showsAt: number;
+  confidentAt: number;
+  unit: string;
+  /** Wilson bounds, so the hover can state the real swing. */
+  lo: number;
+  hi: number;
+}) {
+  const band = `${Math.round(lo * 100)}–${Math.round(hi * 100)}%`;
+  const title =
+    n < showsAt
+      ? `Based on just ${n} ${unit}. At this volume the true figure could sit anywhere between ${band}, so read it as a hint rather than a measurement — it settles around ${confidentAt}.`
+      : `Based on ${n} ${unit}. The true figure is likely between ${band}; it firms up at ${confidentAt}.`;
+  return (
+    <abbr className="qz-anlow" title={title} aria-label={title}>
+      *
+    </abbr>
+  );
+}
+
+/** True when a rate rests on a thin sample and should carry the asterisk. */
+export function isLowConfidence(state: "confident" | "provisional" | "suppressed"): boolean {
+  return state !== "confident";
+}
+
 /** Colour-coded status pill for a quiz row (spec Screen 1 `.state`). */
 export function QuizStatePill({ live, flag }: { live: boolean; flag: string | null }) {
   if (live) return <span className="qz-anstate is-ok">Live</span>;

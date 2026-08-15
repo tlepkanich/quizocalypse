@@ -109,12 +109,27 @@ describe("home rows", () => {
     expect(data.rows.find((r) => r.id === "draft2")!.flag).toBeNull();
   });
 
-  it("a live quiz reports real counts and a gated completion rate", async () => {
+  it("a live quiz reports real counts and a low-confidence completion rate", async () => {
     const data = await run();
     const live = data.rows.find((r) => r.id === "live1")!;
     expect(live.starts).toBe(2);
     expect(live.contacts).toBe(1);
-    expect(live.completion!.state).toBe("suppressed"); // n=2 is far below 50
+    // The rate is COMPUTED and shown; `state` only drives the asterisk.
+    expect(live.completion!.rate).toBeCloseTo(0.5);
+    expect(live.completion!.state).toBe("suppressed"); // n=2 → asterisk + hover
+    expect(live.completion!.n).toBe(2);
+  });
+
+  it("a live quiz with zero sessions carries n=0, so the view can dash it", async () => {
+    p.event.findMany.mockImplementation((q: { where: Record<string, unknown> }) => {
+      const et = q.where.eventType;
+      if (typeof et === "object" && et !== null) return Promise.resolve([]);
+      return Promise.resolve([]);
+    });
+    const data = await run();
+    const live = data.rows.find((r) => r.id === "live1")!;
+    expect(live.starts).toBe(0);
+    expect(live.completion!.n).toBe(0);
   });
 
   it("drafts contribute nothing to the roll-up tiles", async () => {
