@@ -10732,3 +10732,60 @@ button.qz-pb-row:hover { background: var(--qz-cream-2); }
 /* Launch checklist (published, no responses yet). */
 .qz-anchecklist { list-style: none; margin: 10px 0 0; padding: 0; display: flex; flex-direction: column; gap: 6px; font-size: 13.5px; color: var(--qz-ink-2); }
 .qz-anchecklist .is-done { color: var(--qz-ok); }
+
+/* ── Analytics home: control bar, status pills, filter, sortable table ─────
+   Spec Screen 1. The Status column is the fast read of the list, so it is a
+   colour-coded pill, and a draft carrying a structural finding shows WHAT is
+   wrong in amber rather than a neutral "Draft". */
+.qz-anrange { font: inherit; font-size: 12.5px; font-weight: 600; display: inline-flex; align-items: center; gap: 6px; padding: 6px 11px; border-radius: var(--qz-radius-sm); border: 1px solid var(--qz-rule); background: var(--qz-paper); color: var(--qz-ink); cursor: pointer; transition: border-color var(--qz-dur-fast) var(--qz-ease), background var(--qz-dur-fast) var(--qz-ease); }
+.qz-anrange:hover { border-color: var(--qz-rule-strong); background: var(--qz-cream-2); }
+.qz-anresolved { font-size: 12px; color: var(--qz-ink-3); }
+.qz-anwiden { font-size: 11.5px; color: var(--qz-warn); }
+.qz-anbar-push { margin-left: auto; display: flex; gap: 8px; align-items: center; }
+.qz-ancustom { display: flex; gap: 8px; align-items: center; font-size: 12px; margin: 0 0 14px; }
+
+/* The "i" affordance, only on figures whose counting is genuinely contested. */
+.qz-aninfo { width: 16px; height: 16px; border-radius: var(--qz-radius-pill); border: 1px solid var(--qz-rule); background: var(--qz-paper); color: var(--qz-ink-3); font-size: 10px; font-weight: 700; display: inline-grid; place-items: center; cursor: pointer; vertical-align: middle; padding: 0; }
+.qz-aninfo:hover { background: var(--qz-ink); border-color: var(--qz-ink); color: var(--qz-paper); }
+
+.qz-anup { color: var(--qz-ok); font-weight: 600; }
+.qz-andown { color: var(--qz-crit); font-weight: 600; }
+
+/* Status pill. */
+.qz-anstate { display: inline-block; font-size: 9.5px; letter-spacing: 0.07em; text-transform: uppercase; padding: 3px 8px; border-radius: var(--qz-radius-pill); font-weight: 700; white-space: nowrap; }
+.qz-anstate.is-ok { background: var(--qz-ok-tint); color: var(--qz-ok); }
+.qz-anstate.is-warn { background: var(--qz-warn-tint); color: var(--qz-warn); }
+.qz-anstate.is-dim { background: var(--qz-cream-2); color: var(--qz-ink-3); }
+
+/* Small segmented status filter with counts. */
+.qz-anseg { display: inline-flex; gap: 2px; padding: 2px; border-radius: var(--qz-radius-sm); background: var(--qz-cream-2); }
+.qz-anseg button { font: inherit; font-size: 12px; font-weight: 500; padding: 5px 11px; border: 1px solid transparent; border-radius: var(--qz-radius-sm); background: transparent; color: var(--qz-ink-3); cursor: pointer; transition: background var(--qz-dur-fast) var(--qz-ease), color var(--qz-dur-fast) var(--qz-ease); }
+.qz-anseg button:hover { color: var(--qz-ink); }
+.qz-anseg button.is-on { background: var(--qz-paper); color: var(--qz-ink); font-weight: 600; border-color: var(--qz-rule); }
+.qz-anseg-n { font-variant-numeric: tabular-nums; color: var(--qz-ink-3); margin-left: 3px; }
+.qz-anseg button.is-on .qz-anseg-n { color: var(--qz-accent-ink); }
+
+.qz-ansearch { display: inline-flex; align-items: center; gap: 7px; padding: 5px 11px; border: 1px solid var(--qz-rule); border-radius: var(--qz-radius-sm); background: var(--qz-paper); color: var(--qz-ink-3); margin-left: auto; }
+.qz-ansearch:focus-within { border-color: var(--qz-accent); }
+.qz-ansearch input { font: inherit; font-size: 12.5px; border: 0; outline: 0; background: none; color: var(--qz-ink); width: 132px; }
+
+/* Sortable headers — the arrow appears only on the column actually sorting. */
+.qz-ansrt { padding: 0; }
+.qz-ansrt button { font: inherit; font-size: inherit; font-weight: inherit; letter-spacing: inherit; text-transform: inherit; color: inherit; background: none; border: 0; padding: 12px 14px; width: 100%; text-align: left; cursor: pointer; white-space: nowrap; }
+.qz-ansrt.is-num button { text-align: right; }
+.qz-ansrt button:hover { color: var(--qz-ink); }
+.qz-ansrt button::after { content: ""; margin-left: 5px; font-size: 8px; opacity: 0; }
+.qz-ansrt.is-asc button::after { content: "▲"; opacity: 0.75; }
+.qz-ansrt.is-desc button::after { content: "▼"; opacity: 0.75; }
+/* The comparison only works if a row reads on ONE line — the container
+   scrolls horizontally rather than letting names wrap to three lines. */
+.qz-antable { min-width: 920px; }
+.qz-antable th:first-child, .qz-antable td:first-child { min-width: 260px; }
+.qz-antable td { white-space: nowrap; }
+.qz-antable td:not(:first-child):not(:nth-child(2)) { text-align: right; }
+.qz-antable th:first-child button, .qz-antable th:nth-child(2) button { text-align: left; }
+/* No data is not the same as zero. */
+.qz-andash { color: var(--qz-ink-25); text-align: right; }
+.qz-anneeds { font-size: 11.5px; color: var(--qz-ink-3); font-weight: 500; }
+.qz-anqlink { color: var(--qz-accent-ink); font-weight: 600; text-decoration: none; border-bottom: 1px solid transparent; }
+.qz-anqlink:hover { border-bottom-color: var(--qz-accent-line); }

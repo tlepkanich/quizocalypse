@@ -39,6 +39,12 @@ export interface InsightCard {
   action: InsightAction;
   /** Ranking key: shoppers affected (0 for doc-static findings). */
   excess: number;
+  /**
+   * Very short label for a list cell ("1 result only") — set on the structural
+   * findings worth seeing WITHOUT opening the quiz. Absent = don't surface in
+   * the Status column.
+   */
+  chip?: string;
 }
 
 export interface InsightsResult {
@@ -99,6 +105,7 @@ export function buildQuizInsights(input: InsightInputs): InsightsResult {
       basis: "Read from the quiz logic — no traffic needed",
       action: { label: "Open the logic", kind: "logic" },
       excess: 0,
+      chip: "1 result only",
     });
   }
 
@@ -119,6 +126,7 @@ export function buildQuizInsights(input: InsightInputs): InsightsResult {
       basis: "Read from the product mapping — no traffic needed",
       action: { label: "See the products", kind: "products" },
       excess: 0,
+      chip: `${reach.unreachable.length} unreachable`,
     });
   }
 
@@ -143,6 +151,7 @@ export function buildQuizInsights(input: InsightInputs): InsightsResult {
         basis: "Read from the quiz logic — no traffic needed",
         action: { label: "Open the logic", kind: "logic" },
         excess: 0,
+        chip: `${enumd.deadEnds.length}${enumd.truncated ? "+" : ""} dead ends`,
       });
     }
   }
@@ -162,6 +171,7 @@ export function buildQuizInsights(input: InsightInputs): InsightsResult {
       basis: "Read from the quiz structure — no traffic needed",
       action: { label: "Review the flow", kind: "flow" },
       excess: 0,
+      chip: `${questions.length} questions`,
     });
   }
 

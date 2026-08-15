@@ -1,0 +1,207 @@
+// ANALYTICS P0 — the control bar and method disclosure, shared by the
+// Analytics home and the per-quiz view (spec Band 0). Both pages carry the
+// SAME range picker and Export menu; building it twice is how the two admin
+// surfaces drifted in the first place.
+
+import { useState, type ReactNode } from "react";
+import { useSearchParams } from "@remix-run/react";
+import { QzDrawer, QzMenu } from "../qz-overlays";
+import { formatDate } from "../../lib/formatDate";
+import type { RangePreset } from "../../lib/quizAnalytics.server";
+
+export const RANGE_PRESETS: Array<{ value: RangePreset; label: string }> = [
+  { value: "7d", label: "Last 7 days" },
+  { value: "30d", label: "Last 30 days" },
+  { value: "90d", label: "Last 90 days" },
+  { value: "6m", label: "Last 6 months" },
+  { value: "12m", label: "Last 12 months" },
+  { value: "all", label: "Since published" },
+];
+
+/** Replace the range while keeping every other param (section, embedded host). */
+export function rangeSearch(searchParams: URLSearchParams, r: RangePreset): string {
+  const next = new URLSearchParams(searchParams);
+  next.set("r", r);
+  next.delete("from");
+  next.delete("to");
+  return `?${next.toString()}`;
+}
+
+export interface ExportItem {
+  label: string;
+  href: string;
+}
+
+export function AnalyticsControlBar({
+  rangeLabel,
+  from,
+  to,
+  widened,
+  exports,
+  onMethod,
+  extra,
+}: {
+  rangeLabel: string;
+  from: string | null;
+  to: string;
+  widened: boolean;
+  exports: ExportItem[];
+  onMethod: () => void;
+  /** Optional right-side slot (e.g. a Publish button on a draft). */
+  extra?: ReactNode;
+}) {
+  const [searchParams] = useSearchParams();
+  const [customOpen, setCustomOpen] = useState(searchParams.get("r") === "custom");
+
+  return (
+    <>
+      <div className="qz-anbar-row">
+        <QzMenu
+          trigger={
+            <button type="button" className="qz-anrange">
+              {rangeLabel}
+              <span aria-hidden>▾</span>
+            </button>
+          }
+          items={[
+            ...RANGE_PRESETS.map((p) => ({
+              label: p.label,
+              onSelect: () => {
+                window.location.search = rangeSearch(searchParams, p.value);
+              },
+            })),
+            { label: "Custom range…", onSelect: () => setCustomOpen((v) => !v) },
+          ]}
+        />
+        <span className="qz-anresolved">
+          {from ? `${formatDate(from)} – ${formatDate(to)}` : "All activity"}
+        </span>
+        {widened ? (
+          <span className="qz-anwiden">widened — too little data in the last 90 days</span>
+        ) : null}
+        <span className="qz-anbar-push">
+          {extra}
+          {exports.length > 0 ? (
+            <QzMenu
+              trigger={
+                <button type="button" className="qz-anrange">
+                  Export<span aria-hidden>▾</span>
+                </button>
+              }
+              items={exports.map((e) => ({
+                label: e.label,
+                onSelect: () => {
+                  window.location.href = e.href;
+                },
+              }))}
+            />
+          ) : null}
+          <button type="button" className="qz-anrange" onClick={onMethod}>
+            How we count this
+          </button>
+        </span>
+      </div>
+      {customOpen ? (
+        <form method="get" className="qz-ancustom">
+          <input type="hidden" name="r" value="custom" />
+          {[...searchParams.entries()]
+            .filter(([k]) => k !== "r" && k !== "from" && k !== "to")
+            .map(([k, v], i) => (
+              <input key={`${k}-${i}`} type="hidden" name={k} value={v} />
+            ))}
+          <span className="qz-dim">From</span>
+          <input type="date" name="from" defaultValue={from ? from.slice(0, 10) : ""} className="qz-andate" />
+          <span className="qz-dim">to</span>
+          <input type="date" name="to" defaultValue={to.slice(0, 10)} className="qz-andate" />
+          <button type="submit" className="qz-btn qz-btn-ghost qz-btn-sm">Apply this range</button>
+        </form>
+      ) : null}
+    </>
+  );
+}
+
+/** The small "i" affordance beside a figure whose counting is contested. */
+export function MethodInfo({ onClick }: { onClick: () => void }) {
+  return (
+    <button type="button" className="qz-aninfo" onClick={onClick} aria-label="How we count this">
+      i
+    </button>
+  );
+}
+
+export function MethodDrawer({ open, onClose }: { open: boolean; onClose: () => void }) {
+  return (
+    <QzDrawer open={open} onClose={onClose} title="How we count this">
+      <div className="qz-col qz-gap-16" style={{ fontSize: 13.5, lineHeight: 1.55 }}>
+        <p style={{ margin: 0 }}>
+          Every number here comes from shoppers who actually used your quiz. Nothing is modelled or adjusted.
+        </p>
+        <div>
+          <h3 className="qz-h2" style={{ marginBottom: 6 }}>Why this won&rsquo;t match Shopify</h3>
+          <p style={{ margin: 0 }}>
+            Shopify credits the last marketing click a shopper made, looking back 30 days. We credit a completed
+            quiz, looking back 7. Both are right — they answer different questions. Klaviyo, Meta and Google each
+            use their own model too, so adding them together counts the same order several times.
+          </p>
+        </div>
+        <div>
+          <h3 className="qz-h2" style={{ marginBottom: 6 }}>What &ldquo;reached&rdquo; means</h3>
+          <p style={{ margin: 0 }}>
+            We know a shopper reached a question because they answered it. So someone who saw a question and left
+            without answering isn&rsquo;t counted as having reached it — which makes drop-off a worst-case figure,
+            not an exact one. We say so rather than round it away.
+          </p>
+        </div>
+        <div>
+          <h3 className="qz-h2" style={{ marginBottom: 6 }}>What we can&rsquo;t see</h3>
+          <p style={{ margin: 0 }}>
+            Purchases on another device or in a private window. Orders placed after the window closes. Orders
+            awaiting payment aren&rsquo;t counted.
+          </p>
+        </div>
+      </div>
+    </QzDrawer>
+  );
+}
+
+/** Colour-coded status pill for a quiz row (spec Screen 1 `.state`). */
+export function QuizStatePill({ live, flag }: { live: boolean; flag: string | null }) {
+  if (live) return <span className="qz-anstate is-ok">Live</span>;
+  // A draft carrying a structural finding says WHAT is wrong, in amber — the
+  // point of the column is to spot a broken quiz without opening it.
+  if (flag) return <span className="qz-anstate is-warn">{flag}</span>;
+  return <span className="qz-anstate is-dim">Draft</span>;
+}
+
+/** Sortable table header cell. */
+export function SortTh({
+  label,
+  sortKey,
+  active,
+  dir,
+  onSort,
+  numeric,
+}: {
+  label: string;
+  sortKey: string;
+  active: boolean;
+  dir: 1 | -1;
+  onSort: (key: string) => void;
+  numeric?: boolean;
+}) {
+  return (
+    <th
+      className={`qz-ansrt${active ? (dir === 1 ? " is-asc" : " is-desc") : ""}${numeric ? " is-num" : ""}`}
+      aria-sort={active ? (dir === 1 ? "ascending" : "descending") : "none"}
+    >
+      <button type="button" onClick={() => onSort(sortKey)}>
+        {label}
+      </button>
+    </th>
+  );
+}
+
+/** An em-dash cell: no data is not the same as zero. */
+export function DashCell({ children }: { children: ReactNode }) {
+  return children == null ? <td className="qz-andash">—</td> : <td className="qz-mono qz-tnum">{children}</td>;
+}

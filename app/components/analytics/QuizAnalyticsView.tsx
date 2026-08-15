@@ -11,11 +11,11 @@
 import { useState, type ReactNode } from "react";
 import { Link, useSearchParams } from "@remix-run/react";
 import { QzCard, QzBadge, QzEmpty } from "../qz";
-import { QzDrawer, QzMenu } from "../qz-overlays";
 import { formatPct, formatPctRange, type GatedRate } from "../../lib/analyticsConfidence";
-import type { QuizAnalyticsData, ContactRow, RangePreset } from "../../lib/quizAnalytics.server";
+import type { QuizAnalyticsData, ContactRow } from "../../lib/quizAnalytics.server";
 import type { InsightCard } from "../../lib/quizInsights";
 import { formatDate } from "../../lib/formatDate";
+import { AnalyticsControlBar, MethodDrawer, MethodInfo } from "./AnalyticsControls";
 
 export type AnalyticsSurface = "studio" | "app";
 
@@ -31,15 +31,6 @@ export const ANALYTICS_SECTIONS = [
 
 export type SectionKey = (typeof ANALYTICS_SECTIONS)[number]["key"];
 
-const RANGE_PRESETS: Array<{ value: RangePreset; label: string }> = [
-  { value: "7d", label: "Last 7 days" },
-  { value: "30d", label: "Last 30 days" },
-  { value: "90d", label: "Last 90 days" },
-  { value: "6m", label: "Last 6 months" },
-  { value: "12m", label: "Last 12 months" },
-  { value: "all", label: "Since published" },
-];
-
 function builderHref(surface: AnalyticsSurface, quizId: string): string {
   return surface === "studio" ? `/studio/${quizId}` : `/app/quizzes/${quizId}/studio`;
 }
@@ -51,14 +42,6 @@ function sectionSearch(searchParams: URLSearchParams, s: SectionKey): string {
   else next.set("s", s);
   const str = next.toString();
   return str ? `?${str}` : "?";
-}
-
-function rangeSearch(searchParams: URLSearchParams, r: RangePreset): string {
-  const next = new URLSearchParams(searchParams);
-  next.set("r", r);
-  next.delete("from");
-  next.delete("to");
-  return `?${next.toString()}`;
 }
 
 // ── Small pieces ───────────────────────────────────────────────────────────
@@ -196,43 +179,6 @@ function Bar({ share }: { share: number }) {
   );
 }
 
-// ── Method drawer copy (ships verbatim from the spec) ──────────────────────
-
-function MethodDrawer({ open, onClose }: { open: boolean; onClose: () => void }) {
-  return (
-    <QzDrawer open={open} onClose={onClose} title="How we count this">
-      <div className="qz-col qz-gap-16" style={{ fontSize: 13.5, lineHeight: 1.55 }}>
-        <p style={{ margin: 0 }}>
-          Every number here comes from shoppers who actually used your quiz. Nothing is modelled or adjusted.
-        </p>
-        <div>
-          <h3 className="qz-h2" style={{ marginBottom: 6 }}>Why this won&rsquo;t match Shopify</h3>
-          <p style={{ margin: 0 }}>
-            Shopify credits the last marketing click a shopper made, looking back 30 days. We credit a completed
-            quiz, looking back 7. Both are right — they answer different questions. Klaviyo, Meta and Google each
-            use their own model too, so adding them together counts the same order several times.
-          </p>
-        </div>
-        <div>
-          <h3 className="qz-h2" style={{ marginBottom: 6 }}>What &ldquo;reached&rdquo; means</h3>
-          <p style={{ margin: 0 }}>
-            We know a shopper reached a question because they answered it. So someone who saw a question and left
-            without answering isn&rsquo;t counted as having reached it — which makes drop-off a worst-case figure,
-            not an exact one. We say so rather than round it away.
-          </p>
-        </div>
-        <div>
-          <h3 className="qz-h2" style={{ marginBottom: 6 }}>What we can&rsquo;t see</h3>
-          <p style={{ margin: 0 }}>
-            Purchases on another device or in a private window. Orders placed after the window closes. Orders
-            awaiting payment aren&rsquo;t counted.
-          </p>
-        </div>
-      </div>
-    </QzDrawer>
-  );
-}
-
 // ── The view ───────────────────────────────────────────────────────────────
 
 export function QuizAnalyticsView({
@@ -251,70 +197,30 @@ export function QuizAnalyticsView({
     ? rawSection
     : "overview") as SectionKey;
   const [methodOpen, setMethodOpen] = useState(false);
-  const [customOpen, setCustomOpen] = useState(data.range.preset === "custom");
   const [cohort, setCohort] = useState<"all" | "purchased" | "didntBuy" | "noMatch" | "backInStock">("all");
 
   const { kpis, dataState } = data;
 
-  // ── Control bar ──────────────────────────────────────────────────────────
+  // ── Control bar (the SHARED one — same component the home page mounts) ───
   const controlBar = (
-    <div className="qz-anbar-row">
-      <QzMenu
-        trigger={
-          <button type="button" className="qz-btn qz-btn-ghost qz-btn-sm">
-            {data.range.label} ▾
-          </button>
-        }
-        items={[
-          ...RANGE_PRESETS.map((p) => ({
-            label: p.label,
-            onSelect: () => {
-              window.location.search = rangeSearch(searchParams, p.value);
-            },
-          })),
-          { label: "Custom range…", onSelect: () => setCustomOpen(true) },
-        ]}
-      />
-      <span className="qz-dim" style={{ fontSize: 12 }}>
-        {data.range.from ? `${formatDate(data.range.from)} – ${formatDate(data.range.to)}` : "All activity"}
-        {data.range.widened ? " · widened — too little data in the last 90 days" : ""}
-      </span>
-      <span style={{ marginLeft: "auto", display: "flex", gap: 8 }}>
-        {exportBase ? (
-          <QzMenu
-            trigger={
-              <button type="button" className="qz-btn qz-btn-ghost qz-btn-sm">
-                Export ▾
-              </button>
-            }
-            items={[
+    <AnalyticsControlBar
+      rangeLabel={data.range.label}
+      from={data.range.from}
+      to={data.range.to}
+      widened={data.range.widened}
+      exports={
+        exportBase
+          ? [
               {
                 label: `Contacts .csv (${cohortLabel(cohort)})`,
-                onSelect: () => {
-                  window.location.href = `${exportBase}?quiz=${data.quiz.id}&segment=${exportSegment(cohort)}`;
-                },
+                href: `${exportBase}?quiz=${data.quiz.id}&segment=${exportSegment(cohort)}`,
               },
-            ]}
-          />
-        ) : null}
-        <button type="button" className="qz-btn qz-btn-ghost qz-btn-sm" onClick={() => setMethodOpen(true)}>
-          How we count this
-        </button>
-      </span>
-    </div>
+            ]
+          : []
+      }
+      onMethod={() => setMethodOpen(true)}
+    />
   );
-
-  const customRange = customOpen ? (
-    <form method="get" className="qz-row" style={{ gap: 8, alignItems: "center", fontSize: 12, marginBottom: 14 }}>
-      <input type="hidden" name="r" value="custom" />
-      {section !== "overview" ? <input type="hidden" name="s" value={section} /> : null}
-      <span className="qz-dim">From</span>
-      <input type="date" name="from" defaultValue={data.range.from ? data.range.from.slice(0, 10) : ""} className="qz-andate" />
-      <span className="qz-dim">to</span>
-      <input type="date" name="to" defaultValue={data.range.to.slice(0, 10)} className="qz-andate" />
-      <button type="submit" className="qz-btn qz-btn-ghost qz-btn-sm">Apply this range</button>
-    </form>
-  ) : null;
 
   // ── Section tabs ─────────────────────────────────────────────────────────
   const tabs = (
@@ -382,7 +288,6 @@ export function QuizAnalyticsView({
   return (
     <div className="qz-anwrap">
       {controlBar}
-      {customRange}
       {tabs}
       {data.truncated ? (
         <p className="qz-dim" style={{ fontSize: 12, margin: "0 0 14px" }}>
@@ -423,7 +328,7 @@ export function QuizAnalyticsView({
               </div>
             ) : (
               <CountTile
-                label="Revenue influenced"
+                label={<>Revenue influenced <MethodInfo onClick={() => setMethodOpen(true)} /></>}
                 value={kpis.revenue.formatted}
                 detail={kpis.revenue.orders > 0 ? `${kpis.revenue.orders} orders · 7-day window` : "no attributed orders yet"}
               />
@@ -527,7 +432,12 @@ function RevenueSection({ data, onMethod }: { data: QuizAnalyticsData; onMethod:
   return (
     <>
       <div className="qz-antiles">
-        <CountTile label="Order value influenced" value={kpis.revenue.formatted} hero detail={`${data.range.label.toLowerCase()}`} />
+        <CountTile
+          label={<>Order value influenced <MethodInfo onClick={onMethod} /></>}
+          value={kpis.revenue.formatted}
+          hero
+          detail={data.range.label.toLowerCase()}
+        />
         <CountTile label="Attributed orders" value={kpis.revenue.orders} detail={`of ${kpis.completed} finishers`} />
         <GatedTile label="Finishers who bought" gated={kpis.conversion} unit="finishers" />
         <CountTile label="Revenue per finisher" value={kpis.revenue.perFinisher ?? "—"} detail={kpis.revenue.perFinisher ? `${kpis.revenue.formatted} ÷ ${kpis.completed}` : "needs a single currency"} />

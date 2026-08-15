@@ -626,25 +626,28 @@ export async function quizAnalyticsForShop(
 
 // ── Shop-level home (Screen 1) ─────────────────────────────────────────────
 
+/**
+ * One row per quiz — live AND draft in the SAME table (spec Screen 1). A
+ * draft's metrics are `null`, never 0: it has no data, which is not the same
+ * as having none, and the table renders an em-dash for the difference.
+ */
 export interface ShopQuizRow {
   id: string;
   name: string;
-  starts: number;
-  completion: GatedRate;
-  contacts: number;
-  orders: number;
-  revenue: string;
-  revenueNumeric: number;
+  live: boolean;
+  /** Short structural warning for the Status cell ("1 result only"). */
+  flag: string | null;
+  starts: number | null;
+  completion: GatedRate | null;
+  contacts: number | null;
+  orders: number | null;
+  revenue: string | null;
+  /** Sort keys — the formatted strings above aren't orderable. */
+  revenueNumeric: number | null;
   perFinisher: string | null;
   perFinisherNumeric: number | null;
-}
-
-export interface ShopDraftRow {
-  id: string;
-  name: string;
   questions: number;
   outcomes: number;
-  findings: number;
 }
 
 export interface ShopAnalyticsData {
@@ -660,8 +663,8 @@ export interface ShopAnalyticsData {
     orders: number;
     perFinisher: string | null;
   };
-  live: ShopQuizRow[];
-  drafts: ShopDraftRow[];
+  rows: ShopQuizRow[];
+  counts: { all: number; live: number; draft: number };
   findings: Array<{
     quizId: string;
     quizName: string;
@@ -769,8 +772,7 @@ export async function shopAnalyticsForShop(
     capturesByQuiz.set(c.quizId, s);
   }
 
-  const live: ShopQuizRow[] = [];
-  const drafts: ShopDraftRow[] = [];
+  const rows: ShopQuizRow[] = [];
   const findings: ShopAnalyticsData["findings"] = [];
 
   let totalEngaged = 0;
@@ -784,7 +786,9 @@ export async function shopAnalyticsForShop(
     const doc = parsed.success ? parsed.data : null;
     const isLive = q.status === "published";
 
-    // Doc-static findings run on every quiz — drafts especially (Screen 1/3).
+    // Doc-static findings run on EVERY quiz, drafts included — they read the
+    // quiz's own logic, so they need no traffic (spec Screen 1/3).
+    let flag: string | null = null;
     if (doc) {
       const reachability = isLive ? computeReachability(q.publishedJson) : null;
       const r = buildQuizInsights({
@@ -796,7 +800,8 @@ export async function shopAnalyticsForShop(
         rangeDays: range.days,
         published: isLive,
       });
-      for (const card of r.cards.filter((c) => c.tier === "A")) {
+      const tierA = r.cards.filter((c) => c.tier === "A");
+      for (const card of tierA) {
         findings.push({
           quizId: q.id,
           quizName: q.name,
@@ -807,19 +812,9 @@ export async function shopAnalyticsForShop(
           basis: card.basis,
         });
       }
-      if (!isLive) {
-        drafts.push({
-          id: q.id,
-          name: q.name,
-          questions: doc.nodes.filter((n) => n.type === "question").length,
-          outcomes: distinctOutcomes(doc),
-          findings: r.cards.filter((c) => c.tier === "A").length,
-        });
-        continue;
-      }
-    } else if (!isLive) {
-      drafts.push({ id: q.id, name: q.name, questions: 0, outcomes: 0, findings: 0 });
-      continue;
+      // The Status cell carries the worst structural finding as a short chip,
+      // so a broken quiz is visible in the list without opening it.
+      flag = tierA.find((c) => c.chip)?.chip ?? null;
     }
 
     const a = aggOf(q.id);
@@ -832,34 +827,44 @@ export async function shopAnalyticsForShop(
     const revEntries = Object.entries(rev.totalsByCurrency);
     const revTotal = revEntries.reduce((s, [, amt]) => s + amt, 0);
     const perFinisherNumeric = completedN > 0 && revEntries.length === 1 ? revTotal / completedN : null;
-    live.push({
+    const contacts = capturesByQuiz.get(q.id)?.size ?? 0;
+
+    rows.push({
       id: q.id,
       name: q.name,
-      starts: a.engaged.size,
-      completion: gateRate("completion_rate", completedN, a.engaged.size),
-      contacts: capturesByQuiz.get(q.id)?.size ?? 0,
-      orders: rev.orders,
-      revenue: formatRevenue(rev),
-      revenueNumeric: revTotal,
+      live: isLive,
+      flag,
+      questions: doc ? doc.nodes.filter((n) => n.type === "question").length : 0,
+      outcomes: doc ? distinctOutcomes(doc) : 0,
+      // A draft's metrics are null, never 0 — it has no data, which is not the
+      // same as having none. The table renders an em-dash for the difference.
+      starts: isLive ? a.engaged.size : null,
+      completion: isLive ? gateRate("completion_rate", completedN, a.engaged.size) : null,
+      contacts: isLive ? contacts : null,
+      orders: isLive ? rev.orders : null,
+      revenue: isLive ? formatRevenue(rev) : null,
+      revenueNumeric: isLive ? revTotal : null,
       perFinisher:
-        perFinisherNumeric != null && revEntries.length === 1
+        isLive && perFinisherNumeric != null && revEntries.length === 1
           ? formatRevenue({ orders: 0, totalsByCurrency: { [revEntries[0]![0]]: perFinisherNumeric } })
           : null,
-      perFinisherNumeric,
+      perFinisherNumeric: isLive ? perFinisherNumeric : null,
     });
 
+    if (!isLive) continue;
     totalEngaged += a.engaged.size;
     totalCompleted += completedN;
-    totalContacts += capturesByQuiz.get(q.id)?.size ?? 0;
+    totalContacts += contacts;
     totalOrders += rev.orders;
     for (const [cur, amt] of revEntries) totalRevenueByCur[cur] = (totalRevenueByCur[cur] ?? 0) + amt;
   }
 
-  // Rank: revenue per finisher desc (the comparison column), then starts.
-  live.sort(
+  // Default order: revenue desc (the mock's default sort). Drafts have no
+  // number to rank, so they keep together at the bottom, alphabetically.
+  rows.sort(
     (a, b) =>
-      (b.perFinisherNumeric ?? -1) - (a.perFinisherNumeric ?? -1) ||
-      b.starts - a.starts ||
+      (b.revenueNumeric ?? -1) - (a.revenueNumeric ?? -1) ||
+      (b.starts ?? -1) - (a.starts ?? -1) ||
       a.name.localeCompare(b.name),
   );
   findings.sort((a, b) => SEV_ORDER[a.severity] - SEV_ORDER[b.severity]);
@@ -893,8 +898,12 @@ export async function shopAnalyticsForShop(
       orders: totalOrders,
       perFinisher,
     },
-    live,
-    drafts,
+    rows,
+    counts: {
+      all: rows.length,
+      live: rows.filter((r) => r.live).length,
+      draft: rows.filter((r) => !r.live).length,
+    },
     findings: findings.slice(0, 3),
   };
 }
