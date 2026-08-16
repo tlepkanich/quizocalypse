@@ -222,7 +222,7 @@ export function AnswerTableRow({
           ) : null}
         </span>
       ) : (
-        <span className="qz-s3-nomap" title="Info-only questions assign nothing — routing and context only" aria-hidden>
+        <span className="qz-s3-nomap" title="Asked-only questions assign nothing — routing and context only" aria-hidden>
           —
         </span>
       )}

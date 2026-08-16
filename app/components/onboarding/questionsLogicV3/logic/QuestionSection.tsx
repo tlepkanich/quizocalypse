@@ -18,7 +18,7 @@ import { IconUp, IconDown, IconTrash } from "../icons";
    number chip · INLINE-EDITABLE question title (no more "Edit content" —
    everything edits here and saves to the same doc as the Content view) ·
    type chip · in-N-rules badge · coverage badge · ROLE dropdown (Picks the
-   result / Filters results / Info only — single-decider enforcement
+   result / Narrows / Asked only — single-decider enforcement
    auto-reverts the prior decider, visibly, no dialog) · expand chevron.
    Expanded adds the answer drill-down (ANSWER · MAPS TO/MATCHES · THEN GO
    TO) and the + Add answer / λ Add rule footer (the rule draft lands in
@@ -423,8 +423,8 @@ export function QuestionSection({
               <option value="decides" disabled={deciderBlocked}>
                 {deciderBlocked ? "Picks the result (needs single-pick)" : "Picks the result"}
               </option>
-              <option value="filter">Filters results</option>
-              <option value="qualifier">Info only</option>
+              <option value="filter">Narrows</option>
+              <option value="qualifier">Asked only</option>
             </select>
           </div>
           <div className="qz-s3-set-r">
