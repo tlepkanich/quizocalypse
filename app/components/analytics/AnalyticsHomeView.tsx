@@ -152,12 +152,12 @@ export function AnalyticsHomeView({
   return (
     <div className="qz-anwrap">
       <AnalyticsControlBar
+        title="Analytics"
         rangeLabel={data.range.label}
         from={data.range.from}
         to={data.range.to}
         widened={false}
         exports={exportBase ? [{ label: "Contacts .csv (all quizzes)", href: `${exportBase}?segment=all` }] : []}
-        onMethod={() => setMethodOpen(true)}
       />
 
       <div className="qz-antiles">
@@ -256,7 +256,7 @@ export function AnalyticsHomeView({
       </div>
 
       <QzCard flush style={{ marginBottom: 28 }}>
-        <div style={{ overflowX: "auto" }}>
+        <div className="qz-antablewrap">
           <table className="qz-table qz-antable">
             <thead>
               <tr>

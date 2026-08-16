@@ -3,7 +3,7 @@ import { json } from "@remix-run/node";
 import { useLoaderData } from "@remix-run/react";
 import { requireStudioAccess, resolveStudioShop } from "../lib/studioAccess.server";
 import { shopAnalyticsForShop } from "../lib/quizAnalytics.server";
-import { QzPage, QzPageHeader } from "../components/qz";
+import { QzPage } from "../components/qz";
 import { AnalyticsHomeView } from "../components/analytics/AnalyticsHomeView";
 
 // ANALYTICS P0 (spec Screen 1) — the all-quiz Analytics home. The per-quiz
@@ -21,7 +21,6 @@ export default function StudioAnalytics() {
   const { data } = useLoaderData<typeof loader>();
   return (
     <QzPage width="wide">
-      <QzPageHeader title="Analytics" subtitle="Every number reconciles: the tiles are the sum of the table." />
       <AnalyticsHomeView
         data={data}
         quizHref={(id) => `/studio/${id}`}

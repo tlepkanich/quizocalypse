@@ -1,9 +1,9 @@
 import type { LoaderFunctionArgs } from "@remix-run/node";
 import { json } from "@remix-run/node";
-import { Link, useLoaderData } from "@remix-run/react";
+import { useLoaderData } from "@remix-run/react";
 import { requireStudioAccess, resolveStudioShop } from "../lib/studioAccess.server";
 import { quizAnalyticsForShop } from "../lib/quizAnalytics.server";
-import { QzPage, QzPageHeader, QzBadge } from "../components/qz";
+import { QzPage } from "../components/qz";
 import { QuizAnalyticsView } from "../components/analytics/QuizAnalyticsView";
 
 // ANALYTICS P0 (spec Screen 2/3) — one quiz in seven sections. This route is a
@@ -24,19 +24,6 @@ export default function StudioQuizAnalytics() {
   const { data } = useLoaderData<typeof loader>();
   return (
     <QzPage width="wide">
-      <QzPageHeader
-        eyebrow={
-          <Link to={`/studio/${data.quiz.id}`} className="qz-link">
-            ← {data.quiz.name}
-          </Link>
-        }
-        title="Analytics"
-        actions={
-          <QzBadge tone={data.quiz.status === "published" ? "ok" : "draft"}>
-            {data.quiz.status === "published" ? "Live" : "Draft"}
-          </QzBadge>
-        }
-      />
       <QuizAnalyticsView data={data} surface="studio" exportBase="/studio/customers/export" />
     </QzPage>
   );

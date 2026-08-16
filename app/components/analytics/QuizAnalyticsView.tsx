@@ -247,6 +247,16 @@ export function QuizAnalyticsView({
   // ── Control bar (the SHARED one — same component the home page mounts) ───
   const controlBar = (
     <AnalyticsControlBar
+      title={
+        <Link to={builderHref(surface, data.quiz.id)} className="qz-anback">
+          <span aria-hidden>←</span> {data.quiz.name}
+        </Link>
+      }
+      extra={
+        <QzBadge tone={data.quiz.status === "published" ? "ok" : "draft"}>
+          {data.quiz.status === "published" ? "Live" : "Draft"}
+        </QzBadge>
+      }
       rangeLabel={data.range.label}
       from={data.range.from}
       to={data.range.to}
@@ -261,7 +271,6 @@ export function QuizAnalyticsView({
             ]
           : []
       }
-      onMethod={() => setMethodOpen(true)}
     />
   );
 
@@ -618,7 +627,7 @@ function RevenueSection({ data, onMethod }: { data: QuizAnalyticsData; onMethod:
                 </div>
               ))}
             </div>
-            <div style={{ overflowX: "auto" }}>
+            <div className="qz-antablewrap">
               <table className="qz-table">
                 <thead>
                   <tr>
@@ -708,7 +717,7 @@ function AnswersSection({ data }: { data: QuizAnalyticsData }) {
             sub={`1–${data.responses.rows.length} of ${data.responses.total.toLocaleString()}`}
           />
           <QzCard flush>
-            <div style={{ overflowX: "auto" }}>
+            <div className="qz-antablewrap">
               <table className="qz-table">
                 <thead>
                   <tr>
@@ -799,7 +808,7 @@ function ProductsSection({ data }: { data: QuizAnalyticsData }) {
         }
       />
       <QzCard flush>
-        <div style={{ overflowX: "auto" }}>
+        <div className="qz-antablewrap">
           <table className="qz-table qz-anprod">
             <thead>
               <tr>
@@ -934,7 +943,7 @@ function FlowSection({ data }: { data: QuizAnalyticsData }) {
 
       <SectionHead title="Step by step" />
       <QzCard flush>
-        <div style={{ overflowX: "auto" }}>
+        <div className="qz-antablewrap">
           <table className="qz-table">
             <thead>
               <tr>
@@ -1117,7 +1126,7 @@ function CustomersSection({
         />
       ) : (
         <QzCard flush>
-          <div style={{ overflowX: "auto" }}>
+          <div className="qz-antablewrap">
             <table className="qz-table">
               <thead>
                 <tr>
@@ -1225,7 +1234,7 @@ function CompareSection({ data }: { data: QuizAnalyticsData }) {
             );
           })}
         </div>
-        <div style={{ overflowX: "auto" }}>
+        <div className="qz-antablewrap">
           <table className="qz-table">
             <thead>
               <tr>

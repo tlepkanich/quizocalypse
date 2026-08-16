@@ -10664,43 +10664,67 @@ button.qz-pb-row:hover { background: var(--qz-cream-2); }
    row a head-turn. Honesty contract: a suppressed rate renders its gate and
    progress, never a fake number. */
 .qz-anwrap { max-width: 1320px; }
-.qz-anbar-row { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; flex-wrap: wrap; }
+
+/* Bar 1 — one 56px row, hairline under, no boxed container and no shadow.
+   Page identity left, the range control (the page's controlling input, so it
+   carries accent weight) beside it, Export pushed right. */
+.qz-anbar-row { display: flex; align-items: center; gap: 14px; min-height: 56px; margin-bottom: 20px; padding-bottom: 12px; border-bottom: 1px solid var(--qz-rule); flex-wrap: wrap; }
+.qz-anbar-title { flex: none; display: inline-flex; align-items: center; gap: 8px; font-size: 17px; font-weight: 600; letter-spacing: -0.01em; color: var(--qz-ink); }
+.qz-anback { color: var(--qz-ink); text-decoration: none; display: inline-flex; align-items: center; gap: 7px; }
+.qz-anback:hover { color: var(--qz-accent-ink); }
+.qz-anbtn { font: inherit; font-size: 12.5px; font-weight: 600; display: inline-flex; align-items: center; gap: 6px; padding: 7px 13px; border-radius: var(--qz-radius-sm); border: 1px solid var(--qz-rule); background: var(--qz-paper); color: var(--qz-ink-2); cursor: pointer; transition: border-color var(--qz-dur-fast) var(--qz-ease), color var(--qz-dur-fast) var(--qz-ease); }
+.qz-anbtn:hover { border-color: var(--qz-ink-25); color: var(--qz-ink); }
+.qz-anbtn.is-primary { background: var(--qz-accent-wash); border-color: var(--qz-accent-line); color: var(--qz-accent-ink); padding: 8px 14px; }
+.qz-anbtn.is-primary:hover { border-color: var(--qz-accent); color: var(--qz-accent-ink); }
+.qz-anbtn.is-primary svg { opacity: 0.8; }
+.qz-anbtn-car { font-size: 9px; opacity: 0.6; }
+.qz-anresolved { font-size: 12px; color: var(--qz-ink-3); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.qz-anwiden { font-size: 11.5px; color: var(--qz-warn); }
+.qz-anbar-push { margin-left: auto; display: flex; gap: 10px; align-items: center; }
+.qz-ancustom { display: flex; gap: 8px; align-items: center; font-size: 12px; margin: -8px 0 18px; }
 .qz-andate { font: inherit; font-size: 12px; padding: 4px 6px; border-radius: var(--qz-radius-sm); border: 1px solid var(--qz-rule); background: var(--qz-paper); color: var(--qz-ink); }
 
-/* Section tabs — URL-driven links, not buttons. */
-.qz-antabs { display: flex; gap: 2px; margin: 0 0 18px; border-bottom: 1px solid var(--qz-rule); flex-wrap: wrap; }
-.qz-antabs a { font-size: 13px; font-weight: 600; color: var(--qz-ink-3); text-decoration: none; padding: 8px 12px 9px; border-bottom: 2px solid transparent; margin-bottom: -1px; }
-.qz-antabs a:hover { color: var(--qz-ink); }
-.qz-antabs a.is-active { color: var(--qz-accent-ink); border-bottom-color: var(--qz-accent); }
-.qz-antab-n { font-size: 11px; font-weight: 700; margin-left: 6px; padding: 1px 7px; border-radius: var(--qz-radius-pill); background: var(--qz-accent-wash); color: var(--qz-accent-ink); }
+/* The "i" affordance, only on figures whose counting is genuinely contested. */
+.qz-aninfo { width: 16px; height: 16px; border-radius: var(--qz-radius-pill); border: 1px solid var(--qz-rule); background: var(--qz-paper); color: var(--qz-ink-3); font-size: 10px; font-weight: 700; display: inline-grid; place-items: center; cursor: pointer; vertical-align: middle; padding: 0; }
+.qz-aninfo:hover { background: var(--qz-ink); border-color: var(--qz-ink); color: var(--qz-paper); }
 
-/* KPI tiles — figure leads, label under, delta under that. */
-.qz-antiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 14px; margin-bottom: 26px; }
-.qz-antile { background: var(--qz-paper); border: 1px solid var(--qz-rule); border-radius: var(--qz-radius-lg); padding: 16px 18px; min-height: 104px; }
-.qz-antile .n { font-family: var(--qz-font-heading); font-size: 26px; font-weight: 700; letter-spacing: -0.02em; color: var(--qz-ink); font-variant-numeric: tabular-nums; }
-.qz-antile .l { font-size: 12px; font-weight: 600; color: var(--qz-ink-3); margin-top: 2px; }
-.qz-antile .d { font-size: 11.5px; color: var(--qz-ink-3); margin-top: 6px; }
-.qz-antile.is-hero { border-color: var(--qz-accent-line); background: var(--qz-accent-tint); }
-.qz-antile-bar { height: 6px; border-radius: var(--qz-radius-pill); background: var(--qz-cream-2); margin-top: 8px; overflow: hidden; }
-.qz-antile-bar span { display: block; height: 100%; border-radius: inherit; background: var(--qz-ink-25); }
+.qz-anup { color: var(--qz-ok); }
+.qz-andown { color: var(--qz-warn); }
 
-.qz-anhead { display: flex; align-items: baseline; gap: 12px; margin: 4px 0 14px; }
+/* Stat tiles — figure leads, label under, delta under that. The ONE accent
+   tile per view fills with accent-wash and turns its figure accent-ink. */
+.qz-antiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(186px, 1fr)); gap: 12px; margin-bottom: 26px; }
+.qz-antile { display: grid; padding: 18px; background: var(--qz-paper); border: 1px solid var(--qz-rule); border-radius: var(--qz-radius-lg); }
+.qz-antile .n { order: 1; font-family: var(--qz-font-heading); font-size: 38px; line-height: 1; letter-spacing: -0.035em; font-weight: 700; font-variant-numeric: tabular-nums; color: var(--qz-ink); }
+.qz-antile .l { order: 2; margin-top: 9px; font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--qz-ink-3); font-weight: 600; display: flex; align-items: center; gap: 6px; }
+.qz-antile .d { order: 3; margin-top: 5px; font-size: 12px; color: var(--qz-ink-3); font-variant-numeric: tabular-nums; }
+.qz-antile.is-hero { background: var(--qz-accent-wash); border-color: var(--qz-accent-line); }
+.qz-antile.is-hero .n { color: var(--qz-accent-ink); }
 
-/* Insight cards — severity stripe, evidence row, deep link. */
-.qz-insight { position: relative; background: var(--qz-paper); border: 1px solid var(--qz-rule); border-radius: var(--qz-radius-lg); padding: 16px 18px 14px 22px; overflow: hidden; }
-.qz-insight::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 4px; background: var(--qz-ink-25); }
-.qz-insight.is-crit::before { background: var(--qz-crit); }
-.qz-insight.is-warn::before { background: var(--qz-warn); }
-.qz-insight-sev { font-size: 10.5px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--qz-ink-3); }
-.qz-insight.is-crit .qz-insight-sev { color: var(--qz-crit); }
-.qz-insight.is-warn .qz-insight-sev { color: var(--qz-warn); }
-.qz-insight-h { font-family: var(--qz-font-heading); font-size: 17px; font-weight: 700; margin: 6px 0 4px; color: var(--qz-ink); }
-.qz-insight-b { font-size: 13.5px; line-height: 1.5; color: var(--qz-ink-2); margin: 0 0 10px; }
-.qz-insight-ev { display: flex; gap: 16px; flex-wrap: wrap; font-size: 12.5px; color: var(--qz-ink-2); margin-bottom: 10px; }
+/* Section head — title, then the note pushed to the far right. */
+.qz-anhead { display: flex; align-items: baseline; gap: 12px; margin: 4px 0 14px; flex-wrap: wrap; }
+.qz-anhead h2 { font-size: 15px; font-weight: 600; letter-spacing: -0.005em; }
+.qz-anhead > .qz-dim:last-child { margin-left: auto; }
+
+/* Insight cards — severity stripe, and a crit card tints its whole surface so
+   the worst finding is visible before you read a word of it. */
+.qz-insight { background: var(--qz-paper); border: 1px solid var(--qz-rule); border-left: 3px solid var(--qz-ink-25); border-radius: var(--qz-radius-lg); padding: 14px 16px; display: flex; flex-direction: column; gap: 8px; }
+/* --qz-crit-wash does not exist repo-wide; crit-tint is the defined token. */
+.qz-insight.is-crit { background: var(--qz-crit-tint); border-color: transparent; border-left-color: var(--qz-crit); }
+.qz-insight.is-warn { border-left-color: var(--qz-warn); }
+.qz-insight.is-info { border-left-color: var(--qz-accent); }
+.qz-insight-sev { align-self: flex-start; font-size: 9.5px; letter-spacing: 0.1em; text-transform: uppercase; padding: 3px 7px; border-radius: var(--qz-radius-pill); font-weight: 700; color: var(--qz-ink-3); background: var(--qz-cream-2); }
+.qz-insight.is-crit .qz-insight-sev { background: var(--qz-crit); color: var(--qz-paper); }
+.qz-insight.is-warn .qz-insight-sev { background: var(--qz-warn-tint); color: var(--qz-warn); }
+.qz-insight.is-info .qz-insight-sev { background: var(--qz-accent-wash); color: var(--qz-accent-ink); }
+.qz-insight-h { font-size: 14px; font-weight: 600; margin: 0; color: var(--qz-ink); }
+.qz-insight-b { font-size: 13px; line-height: 1.5; color: var(--qz-ink-2); margin: 0; }
+.qz-insight-ev { display: flex; gap: 16px; flex-wrap: wrap; font-size: 12.5px; color: var(--qz-ink-2); }
 .qz-insight-ev b { font-weight: 600; color: var(--qz-ink-3); }
 .qz-insight-foot { display: flex; align-items: baseline; gap: 16px; flex-wrap: wrap; }
 .qz-insight-basis { font-size: 11.5px; color: var(--qz-ink-4); }
-.qz-insight-foot .qz-link { margin-left: auto; font-size: 13px; }
+.qz-insight-foot .qz-link { font-size: 13px; }
+.qz-insight-foot .qz-link:last-child { margin-left: auto; }
 
 /* The all-clear state. */
 .qz-anclean { display: flex; align-items: center; gap: 14px; padding: 18px 20px; border: 1px dashed var(--qz-rule-strong); border-radius: var(--qz-radius-lg); margin-bottom: 26px; }
@@ -10712,6 +10736,22 @@ button.qz-pb-row:hover { background: var(--qz-cream-2); }
 .qz-anopt-n { text-align: right; color: var(--qz-ink-2); font-size: 12.5px; }
 .qz-anbar { height: 10px; border-radius: var(--qz-radius-pill); background: var(--qz-cream-2); overflow: hidden; }
 .qz-anbar span { display: block; height: 100%; border-radius: inherit; background: var(--qz-accent); opacity: 0.75; min-width: 2px; }
+
+/* Step ledger — the steepest drop gets a quiet flag, not a red table. */
+.qz-anworst td { background: var(--qz-warn-tint); }
+.qz-anworst-tag { font-size: 10.5px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: var(--qz-warn); margin-left: 8px; }
+
+/* Launch checklist (published, no responses yet). */
+.qz-anchecklist { list-style: none; margin: 10px 0 0; padding: 0; display: flex; flex-direction: column; gap: 6px; font-size: 13.5px; color: var(--qz-ink-2); }
+.qz-anchecklist .is-done { color: var(--qz-ok); }
+
+/* Section tabs — URL-driven links, not buttons. */
+.qz-antabs { display: flex; gap: 2px; margin: 0 0 18px; border-bottom: 1px solid var(--qz-rule); flex-wrap: wrap; }
+.qz-antabs a { font-size: 13px; font-weight: 600; color: var(--qz-ink-3); text-decoration: none; padding: 8px 12px 9px; border-bottom: 2px solid transparent; margin-bottom: -1px; }
+.qz-antabs a:hover { color: var(--qz-ink); }
+.qz-antabs a.is-active { color: var(--qz-accent-ink); border-bottom-color: var(--qz-accent); }
+.qz-antab-n { font-size: 11px; font-weight: 700; margin-left: 6px; padding: 1px 7px; border-radius: var(--qz-radius-pill); background: var(--qz-accent-wash); color: var(--qz-accent-ink); }
+
 
 
 /* Step ledger — the steepest drop gets a quiet flag, not a red table. */
@@ -10838,3 +10878,17 @@ button.qz-pb-row:hover { background: var(--qz-cream-2); }
 .qz-anlow { text-decoration: none; border: 0; color: var(--qz-warn); font-weight: 700; cursor: help; margin-left: 1px; font-size: 0.7em; vertical-align: super; }
 .qz-anlow:hover { color: var(--qz-ink); }
 .qz-annotmeas { font-size: 15px; font-weight: 600; color: var(--qz-ink-2); }
+
+/* Analytics tables — 44px rows, 9/14 header cells, numbers right-aligned and
+   the name column left + semibold. The wrapper owns the border and radius so
+   a wide table scrolls INSIDE its own frame. */
+.qz-antablewrap { overflow-x: auto; border: 1px solid var(--qz-rule); border-radius: var(--qz-radius-lg); }
+.qz-antablewrap .qz-table thead th { padding: 9px 14px; background: var(--qz-cream-2); border-bottom: 1px solid var(--qz-rule); text-align: right; font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--qz-ink-3); font-weight: 600; white-space: nowrap; }
+.qz-antablewrap .qz-table thead th:first-child { text-align: left; }
+.qz-antablewrap .qz-table tbody td { padding: 10px 14px; border-bottom: 1px solid var(--qz-rule-2); text-align: right; height: 44px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.qz-antablewrap .qz-table tbody td:first-child { text-align: left; font-weight: 600; }
+.qz-antablewrap .qz-table tbody tr:last-child td { border-bottom: 0; }
+/* Sortable header buttons inherit the header cell's alignment. */
+.qz-antablewrap .qz-ansrt { padding: 0; }
+.qz-antablewrap .qz-ansrt button { padding: 9px 14px; text-align: right; width: 100%; }
+.qz-antablewrap .qz-ansrt:first-child button { text-align: left; }

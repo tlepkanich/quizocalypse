@@ -32,22 +32,38 @@ export interface ExportItem {
   href: string;
 }
 
+/** The calendar glyph on the range control (spec bar-1). */
+function CalendarIcon() {
+  return (
+    <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true">
+      <rect x="2" y="3" width="12" height="11" rx="2" />
+      <path d="M2 6.5h12M5.5 2v2M10.5 2v2" />
+    </svg>
+  );
+}
+
+/**
+ * Bar 1 (spec): ONE 56px row — page identity on the left, the range control
+ * carrying accent weight beside it, and Export pushed right. Two bars maximum,
+ * a hairline under each, no boxed container and no shadow.
+ */
 export function AnalyticsControlBar({
+  title,
   rangeLabel,
   from,
   to,
   widened,
   exports,
-  onMethod,
   extra,
 }: {
+  /** Page identity — "Analytics", or "← Quiz name" on a single quiz. */
+  title: ReactNode;
   rangeLabel: string;
   from: string | null;
   to: string;
   widened: boolean;
   exports: ExportItem[];
-  onMethod: () => void;
-  /** Optional right-side slot (e.g. a Publish button on a draft). */
+  /** Optional right-side slot (e.g. the Live/Draft badge). */
   extra?: ReactNode;
 }) {
   const [searchParams] = useSearchParams();
@@ -56,11 +72,15 @@ export function AnalyticsControlBar({
   return (
     <>
       <div className="qz-anbar-row">
+        <div className="qz-anbar-title">{title}</div>
+        {/* The range is the page's controlling input, so it carries accent
+            weight; Export stays a plain action. */}
         <QzMenu
           trigger={
-            <button type="button" className="qz-anrange">
+            <button type="button" className="qz-anbtn is-primary">
+              <CalendarIcon />
               {rangeLabel}
-              <span aria-hidden>▾</span>
+              <span className="qz-anbtn-car" aria-hidden>▾</span>
             </button>
           }
           items={[
@@ -81,11 +101,14 @@ export function AnalyticsControlBar({
         ) : null}
         <span className="qz-anbar-push">
           {extra}
+          {/* No "How we count this" button up here — the spec reaches the
+              method drawer from the "i" beside the contested figures and from
+              the disclosure line under the revenue chart. */}
           {exports.length > 0 ? (
             <QzMenu
               trigger={
-                <button type="button" className="qz-anrange">
-                  Export<span aria-hidden>▾</span>
+                <button type="button" className="qz-anbtn">
+                  Export<span className="qz-anbtn-car" aria-hidden>▾</span>
                 </button>
               }
               items={exports.map((e) => ({
@@ -96,9 +119,6 @@ export function AnalyticsControlBar({
               }))}
             />
           ) : null}
-          <button type="button" className="qz-anrange" onClick={onMethod}>
-            How we count this
-          </button>
         </span>
       </div>
       {customOpen ? (
