@@ -218,6 +218,13 @@ export interface ContactRow {
 }
 
 export interface ProductRow extends ProductPerfRow {
+  /**
+   * Distinct ATTRIBUTED ORDERS whose line items contained this product (E7).
+   * null on a doc whose orders predate line-item capture — an honest "we
+   * can't know", not a zero. Counted per ORDER, deduped by order_id: one
+   * order can win several sessions (W2), and each win writes its own event.
+   */
+  bought: number | null;
   state: "over-shown" | "healthy" | "never-clicked" | "unreachable" | "no-data";
   /** impressions ÷ finishers (exposure share). */
   share: number | null;
@@ -494,6 +501,31 @@ export async function quizAnalyticsForShop(
   );
   const reachability = published ? computeReachability(quiz.publishedJson) : null;
 
+  // productId → how many distinct attributed ORDERS contained it (E7).
+  // Deduped by order_id first: one order can win several sessions and each win
+  // writes its own event, so counting rows would multiply every purchase.
+  // `anyLineItems` distinguishes "no orders bought it" from "these orders
+  // predate line-item capture", which must not both render as 0.
+  const boughtByProduct = new Map<string, number>();
+  let anyLineItems = false;
+  {
+    const seenOrders = new Set<string>();
+    for (const e of orderEvents) {
+      const pl = asRecord(e.payload);
+      const orderId = typeof pl?.order_id === "string" ? pl.order_id : null;
+      if (orderId) {
+        if (seenOrders.has(orderId)) continue;
+        seenOrders.add(orderId);
+      }
+      const ids = Array.isArray(pl?.line_item_product_ids)
+        ? pl.line_item_product_ids.filter((v): v is string => typeof v === "string")
+        : null;
+      if (ids === null) continue;
+      anyLineItems = true;
+      for (const pid of new Set(ids)) boughtByProduct.set(pid, (boughtByProduct.get(pid) ?? 0) + 1);
+    }
+  }
+
   // productId → the (question, answer) pairs whose target group holds it.
   // Decider-only: it reads the deciding question's answer→target mapping
   // against the baked membership, so it needs no traffic at all.
@@ -536,6 +568,7 @@ export async function quizAnalyticsForShop(
     else if (p.impressions > 0) state = "healthy";
     return {
       ...p,
+      bought: anyLineItems ? boughtByProduct.get(p.productId) ?? 0 : null,
       state,
       share,
       paths: pathsByProduct.get(p.productId) ?? [],
@@ -557,6 +590,7 @@ export async function quizAnalyticsForShop(
         addToCart: 0,
         ctr: 0,
         atcRate: 0,
+        bought: anyLineItems ? 0 : null,
         state: "unreachable",
         share: null,
         paths: [],

@@ -419,3 +419,81 @@ describe("dismissal filtering (14-day snooze)", () => {
     expect(data.dismissed).toHaveLength(all.length);
   });
 });
+
+
+// ── E7: line items → the Bought column ─────────────────────────────────────
+describe("Bought (order line items)", () => {
+  const withItems = (ids: string[], orderId: string, sessionId: string) =>
+    ev(sessionId, "order_attributed", {
+      order_id: orderId,
+      total_price: "50.00",
+      currency: "USD",
+      line_item_product_ids: ids,
+    });
+
+  it("counts an order ONCE per product even when it won several sessions", async () => {
+    installEventDispatch({
+      events: [
+        ev("s1", "quiz_engaged"),
+        ev("s2", "quiz_engaged"),
+        ev("s1", "recommendation_viewed", { product_ids: ["p1"] }),
+        // ONE order (o1) that won BOTH sessions — two event rows, one purchase.
+        withItems(["p1"], "o1", "s1"),
+        withItems(["p1"], "o1", "s2"),
+      ],
+    });
+    const data = await runLoader();
+    expect(data.products.find((p) => p.productId === "p1")!.bought).toBe(1);
+  });
+
+  it("counts distinct orders, and a product in two orders scores two", async () => {
+    installEventDispatch({
+      events: [
+        ev("s1", "quiz_engaged"),
+        ev("s1", "recommendation_viewed", { product_ids: ["p1", "p2"] }),
+        withItems(["p1", "p2"], "o1", "s1"),
+        withItems(["p1"], "o2", "s1"),
+      ],
+    });
+    const data = await runLoader();
+    expect(data.products.find((p) => p.productId === "p1")!.bought).toBe(2);
+    expect(data.products.find((p) => p.productId === "p2")!.bought).toBe(1);
+  });
+
+  it("a duplicated product id within ONE order is still one purchase", async () => {
+    installEventDispatch({
+      events: [
+        ev("s1", "quiz_engaged"),
+        ev("s1", "recommendation_viewed", { product_ids: ["p1"] }),
+        withItems(["p1", "p1", "p1"], "o1", "s1"),
+      ],
+    });
+    const data = await runLoader();
+    expect(data.products.find((p) => p.productId === "p1")!.bought).toBe(1);
+  });
+
+  it("a shown-but-unbought product reads 0, not null, once ANY order carries line items", async () => {
+    installEventDispatch({
+      events: [
+        ev("s1", "quiz_engaged"),
+        ev("s1", "recommendation_viewed", { product_ids: ["p1", "p2"] }),
+        withItems(["p1"], "o1", "s1"),
+      ],
+    });
+    const data = await runLoader();
+    expect(data.products.find((p) => p.productId === "p2")!.bought).toBe(0);
+  });
+
+  it("orders PREDATING line-item capture report null — the honest 'we can't know'", async () => {
+    installEventDispatch({
+      events: [
+        ev("s1", "quiz_engaged"),
+        ev("s1", "recommendation_viewed", { product_ids: ["p1"] }),
+        // No line_item_product_ids key at all — an old event.
+        ev("s1", "order_attributed", { order_id: "o1", total_price: "50.00", currency: "USD" }),
+      ],
+    });
+    const data = await runLoader();
+    expect(data.products.find((p) => p.productId === "p1")!.bought).toBeNull();
+  });
+});
