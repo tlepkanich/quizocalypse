@@ -886,6 +886,7 @@ function ProductsSection({ data }: { data: QuizAnalyticsData }) {
                 <th>Clicks</th>
                 <th>Click rate</th>
                 <th>Added</th>
+                <th>Bought</th>
                 <th>State</th>
               </tr>
             </thead>
@@ -909,11 +910,18 @@ function ProductsSection({ data }: { data: QuizAnalyticsData }) {
                     <td className="qz-mono qz-tnum">{p.impressions > 0 ? p.clicks : "—"}</td>
                     <td className="qz-mono qz-tnum">{p.impressions > 0 ? `${(p.ctr * 100).toFixed(1)}%` : "—"}</td>
                     <td className="qz-mono qz-tnum">{p.impressions > 0 ? p.addToCart : "—"}</td>
+                    {/* null = these orders predate line-item capture, which is
+                        NOT the same as "nobody bought it". */}
+                    {p.bought == null ? (
+                      <td className="qz-andash" title="Orders from before we started recording line items — we can't tell.">—</td>
+                    ) : (
+                      <td className="qz-mono qz-tnum">{p.bought}</td>
+                    )}
                     <td><QzBadge tone={st.tone}>{st.label}</QzBadge></td>
                   </tr>,
                   isOpen ? (
                     <tr key={`${p.productId}-paths`} className="qz-anprod-detail">
-                      <td colSpan={7}>
+                      <td colSpan={8}>
                         <div className="qz-anpaths-h">How shoppers reach this product</div>
                         {p.paths.map((path, i) => (
                           <div key={i} className="qz-anpath">
@@ -941,7 +949,8 @@ function ProductsSection({ data }: { data: QuizAnalyticsData }) {
         Click a product to see which answers lead to it. Only products your quiz has shown or mapped appear here.
         <b> Unreachable</b> means the product is mapped but no combination of answers can produce it — read from your
         quiz&rsquo;s own logic, not from traffic. Mid-quiz preview impressions are excluded from every count.
-        We can&rsquo;t yet show which products were <i>bought</i>: the order webhook doesn&rsquo;t keep line items.
+        <b> Bought</b> counts attributed orders whose line items contained the product, one per order however many
+        sessions that order won.
       </p>
     </>
   );
