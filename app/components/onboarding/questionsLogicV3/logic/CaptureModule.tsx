@@ -5,7 +5,7 @@ import { resolveRecPageGlobal } from "../../../../lib/recommendDecider";
 type QuizDoc = z.infer<typeof Quiz>;
 
 /* QZY-2 (owner supplement) — the flow's TERMINAL config: instead of a bare
-   "End quiz", the flow ends at "Email Capture / End Quiz". Pre-populated,
+   "End quiz", the flow ends at "Email capture / End quiz". Pre-populated,
    always last, and editable in place at the settings level (email / SMS /
    terms toggles — the same RecPageGlobal fields the phone's capture screen
    edits, so both surfaces save to one place). QRTZ-G3 relocated its mount
@@ -39,7 +39,7 @@ export function CaptureModule({
           ✉
         </span>
         <h3 className="qz-s3-capmod-title">
-          {captureOn ? "Email Capture / End Quiz" : "End Quiz"}
+          {captureOn ? "Email capture / End quiz" : "End quiz"}
         </h3>
         <span className="qz-s3-capmod-note">always the last step</span>
       </div>

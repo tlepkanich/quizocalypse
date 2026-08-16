@@ -2129,7 +2129,7 @@ function nodeLabel(node: QuizNodeDoc): string {
     case "end":
       return `End · ${node.data.headline}`;
     case "email_gate":
-      return `Email gate`;
+      return `Email capture`;
     case "result":
       return `Result · ${node.data.headline}`;
     case "branch":
@@ -4260,7 +4260,7 @@ function ModulePickerPopover({
     { kind: "product_cards", label: "Product cards", hint: "Hand-pick products to showcase mid-flow" },
     { kind: "branch", label: "Branch", hint: "Rules-based routing or A/B variant split" },
     { kind: "integration", label: "Integration", hint: "Fire outbound webhooks server-side then auto-advance" },
-    { kind: "email_gate", label: "Email gate", hint: "Capture email before results" },
+    { kind: "email_gate", label: "Email capture", hint: "Capture email before results" },
     { kind: "result", label: "Result", hint: "Show recommended products" },
     { kind: "end", label: "End", hint: "Final screen with optional CTA" },
   ];

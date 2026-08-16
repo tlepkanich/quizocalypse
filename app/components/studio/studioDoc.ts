@@ -42,7 +42,7 @@ export const INSERTABLE_MODULES: ModuleMeta[] = [
   { kind: "question", label: "Question", glyph: "?", hint: "Ask the shopper something" },
   { kind: "message", label: "Message", glyph: "“", hint: "A chat-style note" },
   { kind: "branch", label: "Branch", glyph: "⑂", hint: "Route by answer or A/B split" },
-  { kind: "email_gate", label: "Email gate", glyph: "✉", hint: "Capture an email before results" },
+  { kind: "email_gate", label: "Email capture", glyph: "✉", hint: "Capture an email before results" },
   { kind: "ask_ai", label: "Ask AI", glyph: "✶", hint: "Conversational follow-up" },
   { kind: "product_cards", label: "Products", glyph: "▦", hint: "Showcase picked products" },
   { kind: "integration", label: "Integration", glyph: "⇄", hint: "Fire a webhook / Klaviyo" },

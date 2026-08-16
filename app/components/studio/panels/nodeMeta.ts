@@ -5,7 +5,7 @@ import type { QuizNode } from "../../../lib/quizSchema";
 export const NODE_LABEL: Record<QuizNode["type"], string> = {
   intro: "Intro",
   question: "Question",
-  email_gate: "Email gate",
+  email_gate: "Email capture",
   result: "Result",
   message: "Message",
   end: "End",

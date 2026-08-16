@@ -28,7 +28,7 @@ import { CaptureModule } from "./CaptureModule";
    sub-view BODY: a two-column layout. LEFT is the map — one collapsible
    QuestionSection card per question in flow order (collapsed is the default
    scannable state), slim add-question dividers, and the capture terminal
-   module ("Email Capture / End Quiz") at the bottom. RIGHT is the sticky
+   module ("Email capture / End quiz") at the bottom. RIGHT is the sticky
    RulesWidget (ONE global rule list, open on load — every rule's editable
    band lives there now; map cards keep per-answer λ chips + the pre-scoped
    "λ Add rule" shortcut whose draft LANDS in the widget) above the §9
@@ -45,7 +45,7 @@ export interface LogicScrollHandle {
 
 const NODE_TYPE_LABEL: Record<string, string> = {
   message: "Message step",
-  email_gate: "Email gate",
+  email_gate: "Email capture",
   ask_ai: "Ask-AI step",
   product_cards: "Product cards",
   integration: "Integration step",
@@ -376,7 +376,7 @@ export const LogicScroll = forwardRef<
           ))}
         </div>
         {/* QZY-2 (owner supplement) — the map pre-populates the capture as
-            the LAST step: "Email Capture / End Quiz" instead of a bare end. */}
+            the LAST step: "Email capture / End quiz" instead of a bare end. */}
         <CaptureModule doc={doc} captureOn={captureOn} onCommit={onCommit} />
       </div>
 

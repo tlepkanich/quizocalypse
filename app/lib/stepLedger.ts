@@ -89,7 +89,7 @@ function nodeLabel(doc: QuizDoc, nodeId: string): string {
     case "question":
       return n.data.text;
     case "email_gate":
-      return n.data.headline || "Email gate";
+      return n.data.headline || "Email capture";
     case "branch":
       return n.data.label || "Branch";
     case "result":

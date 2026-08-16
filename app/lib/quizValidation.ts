@@ -363,7 +363,7 @@ export function validateQuizWarnings(doc: QuizDoc): QuizSuggestion[] {
         nodeId: pin?.id ?? "quiz",
         kind: "missing_capture",
         message:
-          "This lead-capture experience has no email gate or integration step — nothing is being captured.",
+          "This lead-capture experience has no Email capture or Integration step — nothing is being captured.",
       });
     }
   }

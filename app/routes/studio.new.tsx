@@ -218,7 +218,7 @@ export default function StudioNew() {
             {xtype === "survey"
               ? "An intro + one starter question. Add questions and an end screen — no products needed."
               : xtype === "lead_capture"
-                ? "An intro + one starter question. Add an email gate to start capturing."
+                ? "An intro + one starter question. Add an Email capture step to start capturing."
                 : "An intro + one starter question. Group products in Step 1, then build the flow."}
           </div>
         </div>

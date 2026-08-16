@@ -15,7 +15,7 @@ import { QzSelect } from "../qz";
 const TYPE_META: Record<ExperienceType, { label: string; blurb: string }> = {
   product_match: { label: "Product match", blurb: "Recommends from your catalog — results required." },
   personality: { label: "Personality", blurb: "Persona reveal + products — results required." },
-  lead_capture: { label: "Lead capture", blurb: "Qualify, then capture — an email gate is the point." },
+  lead_capture: { label: "Lead capture", blurb: "Qualify, then capture — the Email capture step is the point." },
   survey: { label: "Survey", blurb: "Answers are the outcome — no products needed." },
 };
 
@@ -172,7 +172,7 @@ export function ExperiencePanel({
                 )
               : null}
             {xtype === "lead_capture"
-              ? checkRow(stats.hasCapture, "Capture step (email gate or integration)", {
+              ? checkRow(stats.hasCapture, "Capture step (Email capture or Integration)", {
                   text: "View →",
                   nodeId: doc.nodes.find((n) => n.type === "intro")?.id,
                 })

@@ -53,7 +53,7 @@ export function deleteImpactCopy(doc: QuizDoc, node: QuizNode): string {
 }
 
 /** The mock tree's role vocabulary (FLOW_TREE: "Intro page" · "Q1 · Skin
- *  type" · "Email signup" · "Results"). Questions carry their text. */
+ *  type" · "Email capture" · "Results"). Questions carry their text. */
 function screenName(node: QuizNode, qNum: number | null): string {
   switch (node.type) {
     case "intro":
@@ -63,7 +63,7 @@ function screenName(node: QuizNode, qNum: number | null): string {
       return t ? `Q${qNum ?? "?"} · ${t}` : `Q${qNum ?? "?"}`;
     }
     case "email_gate":
-      return "Email signup";
+      return "Email capture";
     case "result":
       return "Results";
     case "end":

@@ -884,7 +884,7 @@ function stepKindLabel(kind: string, i: number, laneLabel: string | null): strin
   switch (kind) {
     case "intro": return "Start";
     case "branch": return "Branch";
-    case "email_gate": return "Email gate";
+    case "email_gate": return "Email capture";
     case "result": return "Result";
     default: return `Question ${i}`;
   }

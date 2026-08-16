@@ -41,7 +41,7 @@ import { nodeTitle } from "./FlowRail";
 type QuizDoc = Quiz;
 type Tokens = Quiz["design_tokens"];
 
-// Short mono kicker per node type (EMAIL, not "Email gate" — the card head is
+// Short mono kicker per node type (EMAIL, not "Email capture" — the card head is
 // a type stamp, not the full merchant label).
 const KICKER: Record<QuizNode["type"], string> = {
   intro: "INTRO",

@@ -739,7 +739,7 @@ export function applyEditOps(doc: QuizDoc, ops: EditOp[]): ApplyEditResult {
               ? node
               : working.nodes.find((n) => n.type === "email_gate");
           if (!gate) {
-            warnings.push("set_flag: collect_phone needs an email gate step");
+            warnings.push("set_flag: collect_phone needs an Email capture step");
             break;
           }
           working = {
