@@ -1,7 +1,7 @@
 import type { LoaderFunctionArgs } from "@remix-run/node";
 import { json } from "@remix-run/node";
 import { Link, useLoaderData } from "@remix-run/react";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { requireStudioAccess, resolveStudioShop } from "../lib/studioAccess.server";
 import prisma from "../db.server";
 import { Quiz } from "../lib/quizSchema";
@@ -11,9 +11,17 @@ import { isShopifyShopDomain, themeEditorAddBlockUrl } from "../lib/themeEditorL
 
 // QD-7 — the standalone "Share & embed" surface. Quizell-style front door for
 // getting a published quiz onto ANY website (not just a Shopify theme): the
-// public link, a copy-paste <script> floating launcher, an inline <iframe>,
-// and a QR code. `$id_` de-nests it from the builder route (the analytics
-// precedent). Platform-neutral by construction — every snippet is a plain URL.
+// public link, a copy-paste <script> floating launcher, an inline embed
+// (EMBED-1 DOM mount or an <iframe>), and a QR code. `$id_` de-nests it from
+// the builder route (the analytics precedent). Platform-neutral by
+// construction — every snippet is a plain URL.
+//
+// The DOM snippet is offered here because /embed/wiskr-embed.js is served
+// from our origin and works on any site TODAY. The Shopify theme block's
+// equivalent "Rendering" setting is deliberately NOT mentioned in the theme
+// card: that ships with the theme app extension (`npm run deploy`), so until
+// that release lands a merchant would go looking for a setting they cannot
+// see.
 export const loader = async ({ params, request }: LoaderFunctionArgs) => {
   await requireStudioAccess(request);
   const shop = await resolveStudioShop();
@@ -61,13 +69,35 @@ function CopyField({
   value,
   hint,
   multiline,
+  // The DOM snippet is two long lines that wrap; 2 rows would make it scroll
+  // inside the box, which reads as truncated rather than copyable.
+  rows = 2,
 }: {
   label: string;
   value: string;
   hint?: string;
   multiline?: boolean;
+  rows?: number;
 }) {
   const [copied, setCopied] = useState(false);
+  // Size the box to its content. A fixed `rows` cannot be right: these cards
+  // sit in an auto-fit grid, so how many lines a snippet wraps to depends on
+  // the viewport — the same value that fits at 1600px clips at 1100px, and a
+  // clipped copy-paste field reads as truncated rather than scrollable.
+  // `rows` remains the pre-hydration/no-JS floor.
+  const taRef = useRef<HTMLTextAreaElement>(null);
+  useEffect(() => {
+    const el = taRef.current;
+    if (!el) return;
+    const fit = () => {
+      el.style.height = "auto";
+      el.style.height = `${el.scrollHeight}px`;
+    };
+    fit();
+    window.addEventListener("resize", fit);
+    return () => window.removeEventListener("resize", fit);
+  }, [value]);
+
   const copy = async () => {
     try {
       await navigator.clipboard.writeText(value);
@@ -88,11 +118,12 @@ function CopyField({
       </div>
       {multiline ? (
         <textarea
+          ref={taRef}
           readOnly
           value={value}
           onFocus={(e) => e.currentTarget.select()}
           className="qz-mono"
-          rows={2}
+          rows={rows}
           style={{
             width: "100%",
             resize: "none",
@@ -134,6 +165,10 @@ export default function StudioEmbed() {
   const data = useLoaderData<typeof loader>();
   const scriptSnippet = `<script async src="${data.origin}/q/${data.quizId}.launcher.js"></script>`;
   const iframeSnippet = `<iframe src="${data.publicUrl}" title="${data.name}" style="width:100%;min-height:640px;border:0" loading="lazy"></iframe>`;
+  // EMBED-1 — mounts the runtime into the page's own DOM (shadow root), no
+  // iframe. The script discovers our origin from its own src, so the only
+  // thing the merchant configures is the quiz id.
+  const domSnippet = `<div data-wiskr-quiz data-quiz-id="${data.quizId}"></div>\n<script defer src="${data.origin}/embed/wiskr-embed.js"></script>`;
 
   return (
     <QzPage>
@@ -223,6 +258,7 @@ export default function StudioEmbed() {
               label="Paste before &lt;/body&gt;"
               value={scriptSnippet}
               multiline
+              rows={3}
               hint={
                 data.launcherEnabled
                   ? "Works on any HTML page — no plugins needed."
@@ -237,10 +273,27 @@ export default function StudioEmbed() {
             Inline embed
           </h2>
           <p className="qz-muted" style={{ marginTop: 4 }}>
-            Drop the quiz straight into a page — it sizes to its container.
+            Drop the quiz straight into a page. If your site strips
+            &lt;script&gt; tags, use the iframe; otherwise the DOM embed is the
+            better one.
           </p>
-          <div style={{ marginTop: 16 }}>
-            <CopyField label="Paste where you want the quiz" value={iframeSnippet} multiline />
+          <div
+            style={{ marginTop: 16, display: "flex", flexDirection: "column", gap: 18 }}
+          >
+            <CopyField
+              label="DOM embed"
+              value={domSnippet}
+              multiline
+              rows={4}
+              hint="Renders inside your page, so it grows to fit its content, adds to cart without sending the shopper away, and remembers where they left off. Your theme's styling can't reach it."
+            />
+            <CopyField
+              label="Iframe"
+              value={iframeSnippet}
+              multiline
+              rows={3}
+              hint="Works anywhere an iframe does, including page builders that block scripts. Sits at a fixed minimum height, and adding to cart sends the shopper to the cart page."
+            />
           </div>
         </QzCard>
 

@@ -39,6 +39,20 @@ storefront is no longer iframe-only. Both corrected in place.*
      first-party so save/resume survives Safari's partitioned storage.
    Settings the merchant fills by hand: `quiz_id`, `app_url` (defaulted),
    `render_mode`, `min_height` (iframe only), `iframe_title`, `button_label`.
+
+   > ⚠️ **`render_mode` is IN THE REPO BUT NOT DEPLOYED** (as of 2026-08-16).
+   > The Liquid above ships only with the theme app extension
+   > (`npm run deploy` → a Shopify app release), which is deliberately
+   > deferred. Every merchant's installed block is still the iframe-only
+   > version, and the "Rendering" dropdown does not exist in their theme
+   > editor. Do not write merchant-facing copy that references it until the
+   > extension ships. Nothing is broken by the gap: `render_mode` defaults to
+   > `iframe`, so the deployed and repo versions behave identically.
+   >
+   > The DOM embed is reachable today WITHOUT the extension — the Share &
+   > embed panel's snippet pasted into a **Custom Liquid** section, the theme
+   > code editor, or any non-Shopify page. The extension only adds the
+   > one-click toggle.
 5. **Alternate embed** — `/q/:id.launcher.js` serves a generated floating
    launcher script (gated on `launcher_config.enabled`, which requires a
    republish to take effect). Iframe-based, like the block's default mode.
@@ -116,6 +130,7 @@ republish + the 60 s cache window, with no theme edit.
 | Publish-race fix in legacy editor | Silent stale-publish bug | **DONE 2026-08** (`app.quizzes.$id.tsx` sends the live doc) |
 | Placement propagation (popup/product_widget in quiz.liquid) | Makes the builder's promise true | **DONE 2026-08** (`quiz.liquid` `toLauncher`, reads `placement` from `/q/:id.json`) |
 | DOM embed (`render_mode: dom`) | Kills the iframe's cart bridge, height bridge and partitioned storage | **DONE 2026-08-15** (`afd5424`, EMBED-1 — opt-in; iframe stays the default and the rollback) |
+| Ship `render_mode` to merchants' theme editors | Turns the copy-paste snippet into a dropdown | **DEFERRED** — needs `npm run deploy` (a Shopify app release). Not blocking: the DOM embed already works via Custom Liquid / the theme code editor. |
 | Async publish AI passes | Timeout cliff | ~1 day — open |
 | Unpublish / restore-version wire | Publish becomes reversible | open |
 
