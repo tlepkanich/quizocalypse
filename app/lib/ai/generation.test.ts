@@ -6,6 +6,7 @@ import type * as ClientModule from "./client";
 import {
   QUESTION_WRITING_RULES,
   stripEmoji,
+  stripAnswerEmDash,
   generateQuestionFlow,
   regenerateQuestion,
 } from "./generation";
@@ -65,6 +66,34 @@ describe("stripEmoji — deterministic pictograph sanitizer", () => {
   });
 });
 
+describe("stripAnswerEmDash — deterministic answer-gloss backstop (GEN-COPY)", () => {
+  it("rewrites the em-dash gloss to a comma", () => {
+    expect(stripAnswerEmDash("Oily — shiny by midday, enlarged pores")).toBe(
+      "Oily, shiny by midday, enlarged pores",
+    );
+    expect(stripAnswerEmDash("Comfortable — not oily, not dry")).toBe(
+      "Comfortable, not oily, not dry",
+    );
+    expect(stripAnswerEmDash("Dry—tight and flaky")).toBe("Dry, tight and flaky");
+  });
+
+  it("collapses doubled separators and strips leading/trailing dashes", () => {
+    expect(stripAnswerEmDash("Balanced, — lacking radiance")).toBe("Balanced, lacking radiance");
+    expect(stripAnswerEmDash("— Not sure")).toBe("Not sure");
+    expect(stripAnswerEmDash("Not sure —")).toBe("Not sure");
+  });
+
+  it("keeps en dashes (ranges), hyphens, and dash-free text untouched", () => {
+    expect(stripAnswerEmDash("10–20 minutes a day")).toBe("10–20 minutes a day");
+    expect(stripAnswerEmDash("Non-greasy gel")).toBe("Non-greasy gel");
+    expect(stripAnswerEmDash("Park & freestyle")).toBe("Park & freestyle");
+  });
+
+  it("never collapses to empty", () => {
+    expect(stripAnswerEmDash("—")).toBe("—");
+  });
+});
+
 const toolResponse = (name: string, input: unknown) => ({
   content: [{ type: "tool_use", id: "t1", name, input }],
 });
@@ -103,6 +132,41 @@ describe("generation parse boundary — emoji-laden AI output lands clean", () =
     expect(q.answers.map((a) => a.text)).toEqual(["Carving groomers", "Park & freestyle"]);
     // Routing data is untouched by the sanitizer.
     expect(q.answers[0]?.tags).toEqual(["carve"]);
+  });
+
+  it("generateQuestionFlow rewrites em-dash answer glosses; question copy keeps its em dash", async () => {
+    createMessageMock.mockResolvedValueOnce(
+      toolResponse("emit_question_flow", {
+        questions: [
+          {
+            text: "A few hours after cleansing — no products on — how does your skin feel?",
+            question_type: "single_select",
+            answers: [
+              { text: "Oily — shiny by midday, enlarged pores", tags: ["oily-skin"] },
+              { text: "Tight, rough, or flaky", tags: ["dry-skin"] },
+            ],
+          },
+        ],
+      }),
+    );
+    const flow = await generateQuestionFlow({
+      goalPrompt: "match routines",
+      questionCount: 1,
+      catalogSummary: "tags: oily-skin, dry-skin",
+      buckets: [{ id: "b1", name: "Oily", tags: ["oily-skin"] }],
+      flow: { welcome_message: false, email_gate: false, mixed_input_types: false },
+      tone: "friendly",
+      logicModel: "decider",
+    });
+    const q = flow.questions[0];
+    if (!q) throw new Error("no question emitted");
+    // Question text is NOT rewritten — only answer options carry the ban.
+    expect(q.text).toBe("A few hours after cleansing — no products on — how does your skin feel?");
+    expect(q.answers.map((a) => a.text)).toEqual([
+      "Oily, shiny by midday, enlarged pores",
+      "Tight, rough, or flaky",
+    ]);
+    expect(q.answers[0]?.tags).toEqual(["oily-skin"]);
   });
 
   it("regenerateQuestion strips emoji from the regenerated copy", async () => {

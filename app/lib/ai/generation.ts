@@ -100,6 +100,22 @@ export function stripEmoji(text: string): string {
   return cleaned.length > 0 ? cleaned : text;
 }
 
+// GEN-COPY (owner 2026-08-16) — deterministic backstop for the ANSWER FORMAT
+// rule: answer options never carry an em dash (the "Label — explanation"
+// gloss). Applied to ANSWER text only at the same parse boundaries as
+// stripEmoji — question copy may legitimately use one, and en dashes
+// (ranges like 10–20) are untouched.
+export function stripAnswerEmDash(text: string): string {
+  if (!text.includes("—")) return text;
+  const cleaned = text
+    .replace(/\s*—\s*/g, ", ")
+    .replace(/,\s*,/g, ", ")
+    .replace(/^[,\s]+/, "")
+    .replace(/[,\s]+$/, "")
+    .replace(/ {2,}/g, " ");
+  return cleaned.length > 0 ? cleaned : text;
+}
+
 const REGEN_SYSTEM_PROMPT =
   "You are regenerating ONE question in an existing Shopify product quiz. " +
   "Use the catalog summary for tag accuracy — only use tags that exist in the " +
@@ -246,7 +262,7 @@ export async function regenerateQuestion(
           ? { max_selections: parsed.data.max_selections }
           : {}),
         answers: parsed.data.answers.map((a) => ({
-          text: stripEmoji(a.text),
+          text: stripAnswerEmDash(stripEmoji(a.text)),
           tags: a.tags,
           ...(a.collection_filter ? { collection_filter: a.collection_filter } : {}),
           ...(a.image_url ? { image_url: a.image_url } : {}),
@@ -529,7 +545,7 @@ export async function generateQuestionFlow(
           ...(q.max_selections !== undefined ? { max_selections: q.max_selections } : {}),
           ...(q.education_card_before ? { education_card_before: q.education_card_before } : {}),
           answers: q.answers.map((a) => ({
-            text: stripEmoji(a.text),
+            text: stripAnswerEmDash(stripEmoji(a.text)),
             tags: a.tags,
             ...(a.collection_filter ? { collection_filter: a.collection_filter } : {}),
             ...(a.image_url ? { image_url: a.image_url } : {}),
