@@ -10892,3 +10892,14 @@ button.qz-pb-row:hover { background: var(--qz-cream-2); }
 .qz-antablewrap .qz-ansrt { padding: 0; }
 .qz-antablewrap .qz-ansrt button { padding: 9px 14px; text-align: right; width: 100%; }
 .qz-antablewrap .qz-ansrt:first-child button { text-align: left; }
+
+/* Dismiss / restore a finding (14-day snooze). The control is deliberately
+   quiet — dismissing is not the primary action on a card. */
+.qz-insight-dismiss { display: inline; }
+.qz-linkbtn.is-quiet { color: var(--qz-ink-3); font-weight: 500; }
+.qz-linkbtn.is-quiet:hover { color: var(--qz-ink); }
+.qz-andismissed { border: 1px dashed var(--qz-rule-strong); border-radius: var(--qz-radius-lg); padding: 6px 14px; margin-top: 12px; }
+.qz-andismissed-row { display: flex; align-items: baseline; gap: 12px; padding: 8px 0; font-size: 12.5px; border-bottom: 1px solid var(--qz-rule-2); }
+.qz-andismissed-row:last-child { border-bottom: 0; }
+.qz-andismissed-h { color: var(--qz-ink-2); flex: 1; min-width: 0; }
+.qz-andismissed-row form { margin-left: auto; }

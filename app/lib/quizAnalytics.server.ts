@@ -20,7 +20,7 @@ import { findAbBranches, aggregateVariantFunnel } from "./abAnalytics";
 import { buildStepLedger, type StepLedger } from "./stepLedger";
 import { answerDistributions, type QuestionDistribution } from "./answerDistribution";
 import { computeReachability } from "./quizReachability";
-import { buildQuizInsights, distinctOutcomes, type InsightsResult } from "./quizInsights";
+import { buildQuizInsights, distinctOutcomes, INSIGHT_SNOOZE_DAYS, type InsightsResult } from "./quizInsights";
 import { gateRate, type GatedRate } from "./analyticsConfidence";
 
 // ── Range ──────────────────────────────────────────────────────────────────
@@ -123,6 +123,82 @@ export function maskEmail(email: string): string {
   return `${head}${"•".repeat(Math.max(2, Math.min(6, user.length - 1)))}@${domain}`;
 }
 
+// ── Insight dismissal (14-day snooze) ──────────────────────────────────────
+
+export interface DismissalState {
+  /** cardIds currently snoozed — hidden from the list. */
+  active: Set<string>;
+  /** cardId → when the snooze lapses, for the "Show dismissed" list. */
+  until: Map<string, Date>;
+}
+
+/** Load a quiz's dismissals, splitting live snoozes from lapsed ones. */
+export async function loadDismissals(quizIds: string[], now = new Date()): Promise<Map<string, DismissalState>> {
+  const byQuiz = new Map<string, DismissalState>();
+  if (quizIds.length === 0) return byQuiz;
+  const rows = await prisma.insightDismissal.findMany({
+    where: { quizId: { in: quizIds } },
+    select: { quizId: true, cardId: true, snoozedUntil: true },
+  });
+  for (const r of rows) {
+    let st = byQuiz.get(r.quizId);
+    if (!st) {
+      st = { active: new Set(), until: new Map() };
+      byQuiz.set(r.quizId, st);
+    }
+    // A LAPSED row is deliberately not "active": the finding comes back on its
+    // own if it was never actually fixed.
+    if (r.snoozedUntil > now) st.active.add(r.cardId);
+    st.until.set(r.cardId, r.snoozedUntil);
+  }
+  return byQuiz;
+}
+
+/**
+ * Snooze or restore a card. Shared by both admin surfaces so the two can't
+ * drift; the caller has already authenticated and resolved the shop, and the
+ * quizId is re-checked against that shop here so a foreign id writes nothing.
+ */
+export async function setInsightDismissal(
+  shopId: string,
+  quizId: string,
+  cardId: string,
+  action: "dismiss" | "restore",
+  now = new Date(),
+): Promise<{ ok: boolean }> {
+  const owned = await prisma.quiz.findFirst({ where: { id: quizId, shopId }, select: { id: true } });
+  if (!owned) return { ok: false };
+  if (action === "restore") {
+    await prisma.insightDismissal.deleteMany({ where: { quizId, cardId } });
+    return { ok: true };
+  }
+  const snoozedUntil = new Date(+now + INSIGHT_SNOOZE_DAYS * 86_400_000);
+  // The unique key makes a re-dismissal an UPDATE — one row per (quiz, card),
+  // however many times it is dismissed.
+  await prisma.insightDismissal.upsert({
+    where: { quizId_cardId: { quizId, cardId } },
+    create: { quizId, cardId, snoozedUntil },
+    update: { snoozedUntil },
+  });
+  return { ok: true };
+}
+
+/** Parse + apply a dismissal POST. Returns null when the form isn't one. */
+export async function handleInsightDismissForm(
+  shopId: string,
+  form: FormData,
+  now = new Date(),
+): Promise<{ ok: boolean } | null> {
+  const intent = form.get("intent");
+  if (intent !== "dismiss-insight" && intent !== "restore-insight") return null;
+  const quizId = form.get("quizId");
+  const cardId = form.get("cardId");
+  if (typeof quizId !== "string" || typeof cardId !== "string" || !quizId || !cardId) {
+    return { ok: false };
+  }
+  return setInsightDismissal(shopId, quizId, cardId, intent === "dismiss-insight" ? "dismiss" : "restore", now);
+}
+
 // ── Per-quiz analytics ─────────────────────────────────────────────────────
 
 export type AnalyticsDataState = "draft" | "no-data" | "low" | "healthy";
@@ -186,6 +262,8 @@ export interface QuizAnalyticsData {
     };
   };
   insights: InsightsResult;
+  /** Snoozed findings, so "Show dismissed" can list them with their return date. */
+  dismissed: Array<{ id: string; headline: string; severity: "info" | "warn" | "crit"; until: string }>;
   ledger: StepLedger | null;
   answers: QuestionDistribution[];
   outcomes: Array<{ label: string; count: number }>;
@@ -682,8 +760,14 @@ export async function quizAnalyticsForShop(
     dataState = any ? "low" : "no-data";
   } else dataState = engaged < 30 ? "low" : "healthy";
 
+  // Dismissals — a snoozed card is hidden until its 14 days lapse.
+  const dismissalState = (await loadDismissals([quizId], now)).get(quizId) ?? {
+    active: new Set<string>(),
+    until: new Map<string, Date>(),
+  };
+
   // Insights — doc-static rules always run; traffic rules gate themselves.
-  const insights: InsightsResult = doc
+  const insightsRaw: InsightsResult = doc
     ? buildQuizInsights({
         doc,
         reachability,
@@ -699,6 +783,23 @@ export async function quizAnalyticsForShop(
         contactsNoMatchBought: contactRows.filter((c) => c.noMatch && c.status === "bought").length,
       })
     : { cards: [], more: 0, clean: true };
+
+  // Filter AFTER ranking so the 3-card cap fills with the next real finding
+  // rather than leaving a hole where a dismissed one sat.
+  const visibleCards = insightsRaw.cards.filter((c) => !dismissalState.active.has(c.id));
+  const insights: InsightsResult = {
+    cards: visibleCards,
+    more: insightsRaw.more,
+    clean: visibleCards.length === 0,
+  };
+  const dismissed = insightsRaw.cards
+    .filter((c) => dismissalState.active.has(c.id))
+    .map((c) => ({
+      id: c.id,
+      headline: c.headline,
+      severity: c.severity,
+      until: (dismissalState.until.get(c.id) ?? now).toISOString(),
+    }));
 
   // Period-over-period deltas. Rates move in POINTS, counts in percent. We
   // suppress a delta whenever either side is too thin to mean anything —
@@ -840,6 +941,7 @@ export async function quizAnalyticsForShop(
       deltas,
     },
     insights,
+    dismissed,
     ledger,
     answers,
     outcomes,
@@ -899,12 +1001,16 @@ export interface ShopAnalyticsData {
   findings: Array<{
     quizId: string;
     quizName: string;
+    /** Stable card id — the dismissal key. */
+    cardId: string;
     severity: InsightSeverityLike;
     headline: string;
     body: string;
     evidence: Array<{ label: string; value: string }>;
     basis: string;
   }>;
+  /** How many findings are currently snoozed across the shop. */
+  dismissedCount: number;
 }
 
 type InsightSeverityLike = "info" | "warn" | "crit";
@@ -1005,6 +1111,8 @@ export async function shopAnalyticsForShop(
 
   const rows: ShopQuizRow[] = [];
   const findings: ShopAnalyticsData["findings"] = [];
+  const dismissals = await loadDismissals(quizIds, now);
+  let dismissedCount = 0;
 
   let totalEngaged = 0;
   let totalCompleted = 0;
@@ -1033,9 +1141,14 @@ export async function shopAnalyticsForShop(
       });
       const tierA = r.cards.filter((c) => c.tier === "A");
       for (const card of tierA) {
+        if (dismissals.get(q.id)?.active.has(card.id)) {
+          dismissedCount += 1;
+          continue;
+        }
         findings.push({
           quizId: q.id,
           quizName: q.name,
+          cardId: card.id,
           severity: card.severity,
           headline: card.headline,
           body: card.body,
@@ -1136,6 +1249,7 @@ export async function shopAnalyticsForShop(
       draft: rows.filter((r) => !r.live).length,
     },
     findings: findings.slice(0, 3),
+    dismissedCount,
   };
 }
 
