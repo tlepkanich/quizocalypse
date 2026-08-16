@@ -1,11 +1,11 @@
 import type { LoaderFunctionArgs } from "@remix-run/node";
 import { json } from "@remix-run/node";
-import { Link, useLoaderData } from "@remix-run/react";
+import { useLoaderData } from "@remix-run/react";
 import { TitleBar } from "@shopify/app-bridge-react";
 import { authenticate } from "../shopify.server";
 import prisma from "../db.server";
 import { quizAnalyticsForShop } from "../lib/quizAnalytics.server";
-import { QzPage, QzPageHeader, QzBadge } from "../components/qz";
+import { QzPage } from "../components/qz";
 import { QuizAnalyticsView } from "../components/analytics/QuizAnalyticsView";
 
 // ANALYTICS P0 — the embedded twin of /studio/:id/analytics. Both surfaces
@@ -31,19 +31,6 @@ export default function QuizAnalytics() {
   return (
     <QzPage width="wide">
       <TitleBar title="Analytics" />
-      <QzPageHeader
-        eyebrow={
-          <Link to={`/app/quizzes/${data.quiz.id}/studio`} style={{ color: "inherit", textDecoration: "none" }}>
-            ← {data.quiz.name}
-          </Link>
-        }
-        title="Analytics"
-        actions={
-          <QzBadge tone={data.quiz.status === "published" ? "ok" : "draft"}>
-            {data.quiz.status === "published" ? "Live" : "Draft"}
-          </QzBadge>
-        }
-      />
       <QuizAnalyticsView data={data} surface="app" exportBase={null} />
     </QzPage>
   );

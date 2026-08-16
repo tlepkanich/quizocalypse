@@ -5,7 +5,7 @@ import { TitleBar } from "@shopify/app-bridge-react";
 import { authenticate } from "../shopify.server";
 import prisma from "../db.server";
 import { shopAnalyticsForShop } from "../lib/quizAnalytics.server";
-import { QzPage, QzPageHeader } from "../components/qz";
+import { QzPage } from "../components/qz";
 import { AnalyticsHomeView } from "../components/analytics/AnalyticsHomeView";
 
 // ANALYTICS P0 — the embedded twin of /studio/analytics: same seam, same home
@@ -27,7 +27,6 @@ export default function AggregateAnalytics() {
   return (
     <QzPage width="wide">
       <TitleBar title="Analytics" />
-      <QzPageHeader title="Analytics" subtitle="Every number reconciles: the tiles are the sum of the table." />
       <AnalyticsHomeView
         data={data}
         quizHref={(id) => `/app/quizzes/${id}/studio`}
