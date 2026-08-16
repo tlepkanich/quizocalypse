@@ -67,12 +67,24 @@ The DOM-embed lock (EMBED-1). `runtime-smoke` covers `/q` — the **iframe**
 path — so without this a broken embed bundle could ship and auto-rollback
 would never fire. Needs no studio token; runs everywhere.
 
-- **Genuinely cross-origin.** `page.route()` fulfils a fake storefront at
-  `https://wiskr-embed-smoke.test/`; the `<script src>` inside it is NOT
-  intercepted, so it hits the real deploy. Loading our own origin and
-  injecting the script would be same-origin and would prove nothing — the
-  CORS on `/q/:id.embed.json` and the script-src origin discovery are exactly
-  what break in the real world.
+- **Genuinely cross-origin, via a REAL listener.** The spec starts a throwaway
+  `node:http` server on an ephemeral loopback port and navigates to it; the
+  `<script src>` points at the app under test. Different port = different
+  origin, which is the property being tested — loading our own origin and
+  injecting the script would be same-origin and would prove nothing.
+- **Do not "simplify" that back to `page.route()`.** The first version fulfilled
+  a fake `https://wiskr-embed-smoke.test/`. That passes against the deploy and
+  *silently cannot work* against a local build:
+
+      Access to script at 'http://localhost:3111/embed/wiskr-embed.js' …
+      blocked by CORS policy: Permission was denied for this request to
+      access the `loopback` address space.
+
+  Private Network Access. A fulfilled page never came from the network, so
+  Chromium doesn't classify it as loopback and won't let it pull subresources
+  from loopback — true even when the fake origin is spelled `localhost`. The
+  two DOM tests then fail for reasons unrelated to the code, which is how a
+  mutation test run against a local build got silently invalidated once.
 - **The hostile-CSS control.** The fake storefront carries
   `button{background:#c0392b!important}` (the rules that really did recolour
   the Start button when this was built light-DOM) plus a **control button
@@ -88,9 +100,23 @@ would never fire. Needs no studio token; runs everywhere.
 - **Idempotent re-init.** Fires `shopify:section:load` + `Wiskr.mountAll()`
   and asserts exactly one `.qz-embed-root`; the theme editor re-runs section
   JS on every settings change.
-- **Mutation-tested 2026-08-15:** disabling `attachShadow` in the entry fails
-  2 of the 5 tests (the bundle-served and CORS tests correctly stay green).
-  If you change this spec, re-verify it can still fail.
+- **Cache-header assert.** The bundle sits at a STABLE path, so it must never
+  be `immutable`. It shipped from `build/client/` first, where remix-serve
+  stamps `max-age=31536000, immutable` — right for hashed `/assets/*`, and
+  fatal here: a shopper who loaded it once would be pinned to that build for
+  a year. It is now served by `app/routes/embed.wiskr-embed[.]js.tsx` with a
+  5-minute revalidating cache. A fresh browser context never notices the bug,
+  which is why the assert reads headers rather than behaviour.
+- **Mutation-tested 2026-08-16, against a LOCAL build with the real-listener
+  harness** (the earlier 2026-08-15 run was invalid — see the PNA note above;
+  its "failures" were the harness, not the mutation):
+  - disable `attachShadow` → the 2 DOM tests fail, the other 4 stay green
+  - inject a fake `DATABASE_URL` into the entry → the leak test fails
+  - point the cache assert at a deploy still serving `immutable` → it fails
+
+  Baseline on the same harness is 6/6 in ~2s. If you change this spec,
+  re-verify it can still fail — and check the baseline passes locally first,
+  or you will "prove" whatever the harness is already breaking.
 - `SMOKE_EMBED_QUIZ` overrides the fixture (default
   `cmq566eof0001qvky8ze2qcwn`). Point it at a LOCAL published quiz together
   with `SMOKE_BASE=http://localhost:3111` to exercise a local build.

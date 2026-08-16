@@ -14,6 +14,7 @@ import { Link } from "@remix-run/react";
 import { QzCard, QzEmpty } from "../qz";
 import type { ShopAnalyticsData, ShopQuizRow } from "../../lib/quizAnalytics.server";
 import { formatPct } from "../../lib/analyticsConfidence";
+import { INSIGHT_SNOOZE_DAYS } from "../../lib/quizInsights";
 import { CountTile, GatedTile, InsightCardView } from "./QuizAnalyticsView";
 import {
   AnalyticsControlBar,
@@ -93,6 +94,7 @@ export function AnalyticsHomeView({
   exportBase: string | null;
 }) {
   const { tiles, rows, counts, findings } = data;
+  const dismissedCount = data.dismissedCount;
   const [methodOpen, setMethodOpen] = useState(false);
   const [status, setStatus] = useState<StatusFilter>("all");
   const [search, setSearch] = useState("");
@@ -308,6 +310,9 @@ export function AnalyticsHomeView({
           {findings.length > 0
             ? `${findings.length} finding${findings.length === 1 ? "" : "s"} · checked after every publish`
             : "checked after every publish"}
+          {dismissedCount > 0
+            ? ` · ${dismissedCount} dismissed, back within ${INSIGHT_SNOOZE_DAYS} days`
+            : ""}
         </span>
       </div>
       {findings.length === 0 ? (
@@ -330,6 +335,7 @@ export function AnalyticsHomeView({
               body={f.body}
               evidence={f.evidence}
               basis={f.basis}
+              onDismiss={{ quizId: f.quizId, cardId: f.cardId }}
               action={{ label: "Open the quiz", href: quizHref(f.quizId) }}
             />
           ))}

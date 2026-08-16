@@ -240,6 +240,7 @@ model Quiz {
   sessions QuizSession[]
   backInStockRequests BackInStockRequest[]
   feedback QuizFeedback[]
+  insightDismissals InsightDismissal[]
   rewards QuizReward[]
   referralTokens ReferralToken[]
   referrals Referral[]
@@ -327,6 +328,30 @@ model BackInStockRequest {
 // §L L2 — post-result feedback ("Was this helpful?"). One submission per session
 // (enforced by the unique index). Pseudonymous: keyed by sessionId, no email
 // (open text is PII-stripped before egress). Powers quiz-optimization signals.
+// ANALYTICS — a dismissed "What to fix" card. Keyed on the OBJECT the finding
+// is about (quizInsights' stable card id: "leak:<nodeId>", "unreachable-
+// products", …), never on the wording, so re-phrasing a card does not
+// resurrect a dismissal and a card about a DIFFERENT object is unaffected.
+//
+// snoozedUntil is a 14-day snooze (owner, 2026-08-16): the finding comes back
+// on its own if the merchant never fixes it, which is the honest default — a
+// permanent mute would let a real problem disappear silently. A row is kept
+// after it lapses so "Show dismissed" can still explain what happened and the
+// next dismissal is an update, not a pile of rows.
+model InsightDismissal {
+  id           String   @id @default(cuid())
+  quizId       String
+  // Stable per-object card id from quizInsights.ts.
+  cardId       String
+  snoozedUntil DateTime
+  createdAt    DateTime @default(now())
+
+  quiz Quiz @relation(fields: [quizId], references: [id], onDelete: Cascade)
+
+  @@unique([quizId, cardId])
+  @@index([quizId, snoozedUntil])
+}
+
 model QuizFeedback {
   id        String   @id @default(cuid())
   quizId    String

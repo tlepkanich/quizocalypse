@@ -6,10 +6,20 @@ import tsconfigPaths from "vite-tsconfig-paths";
 // route graph.
 //
 // Runs AFTER `remix vite:build` (see package.json "build") and writes into
-// build/client/embed/, which Remix serves statically — so the bundle ships
-// from OUR origin and a runtime fix reaches every storefront on the next
-// deploy, with no theme edit and no Shopify extension release. That preserves
-// the update loop the iframe gives us today.
+// build/embed/ — deliberately OUTSIDE build/client/.
+//
+// It lived in build/client/embed/ first, which remix-serve serves statically.
+// That looked right and was wrong: remix-serve stamps EVERYTHING under
+// build/client with `cache-control: public, max-age=31536000, immutable`.
+// Correct for /assets/*, whose filenames are content-hashed, and actively
+// harmful for a STABLE path like /embed/wiskr-embed.js — a browser that
+// loaded the bundle once would keep it for a year and never revalidate, so a
+// runtime fix would never reach that shopper. That silently destroys the one
+// property this hosting choice exists for.
+//
+// So the bundle is served by a resource route instead
+// (app/routes/embed.wiskr-embed[.]js.tsx), which sets a short revalidating
+// cache. Static files win over routes in remix-serve, hence "outside".
 //
 // IIFE (not ES module) so the theme can load it with a plain
 // <script defer src="..."> and `document.currentScript` resolves at module
@@ -32,8 +42,9 @@ export default defineConfig({
     "process.env.NODE_ENV": JSON.stringify("production"),
   },
   build: {
-    outDir: "build/client/embed",
-    // Remix has already populated build/client by the time this runs.
+    outDir: "build/embed",
+    // `remix vite:build` runs first and clears build/client; this directory
+    // is written afterwards and must not be wiped by its own re-runs either.
     emptyOutDir: false,
     cssCodeSplit: false,
     lib: {

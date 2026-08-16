@@ -10,11 +10,11 @@
 // hard gates). Every count states its denominator.
 
 import { useState, type ReactNode } from "react";
-import { Link, useSearchParams } from "@remix-run/react";
+import { Link, useFetcher, useSearchParams } from "@remix-run/react";
 import { QzCard, QzBadge, QzEmpty } from "../qz";
 import { formatPct, formatPctRange, type GatedRate } from "../../lib/analyticsConfidence";
 import type { QuizAnalyticsData, ContactRow } from "../../lib/quizAnalytics.server";
-import type { InsightCard } from "../../lib/quizInsights";
+import { INSIGHT_SNOOZE_DAYS, type InsightCard } from "../../lib/quizInsights";
 import { formatDate } from "../../lib/formatDate";
 import { AnalyticsControlBar, isLowConfidence, LowConfidence, MethodDrawer, MethodInfo } from "./AnalyticsControls";
 
@@ -149,6 +149,7 @@ export function InsightCardView({
   action,
   action2,
   math,
+  onDismiss,
 }: {
   severity: InsightCard["severity"];
   headline: string;
@@ -159,8 +160,15 @@ export function InsightCardView({
   action2?: { label: string; href: string } | null;
   /** "Show the math" — counts only, never a currency amount (§7.4). */
   math?: string;
+  /** Snooze this finding for 14 days. Omitted where dismissal isn't offered. */
+  onDismiss?: { quizId: string; cardId: string } | null;
 }) {
   const [mathOpen, setMathOpen] = useState(false);
+  const fetcher = useFetcher();
+  // Optimistic: the card leaves the list the moment you click, rather than
+  // sitting there looking un-dismissed until the round-trip lands.
+  const dismissing = fetcher.state !== "idle";
+  if (dismissing) return null;
   return (
     <div className={`qz-insight is-${severity}`}>
       <div className="qz-insight-sev">{SEV_LABEL[severity]}</div>
@@ -191,7 +199,49 @@ export function InsightCardView({
             {action.label} →
           </Link>
         ) : null}
+        {onDismiss ? (
+          <fetcher.Form method="post" className="qz-insight-dismiss">
+            <input type="hidden" name="intent" value="dismiss-insight" />
+            <input type="hidden" name="quizId" value={onDismiss.quizId} />
+            <input type="hidden" name="cardId" value={onDismiss.cardId} />
+            <button
+              type="submit"
+              className="qz-linkbtn is-quiet"
+              title={`Hides this finding for ${INSIGHT_SNOOZE_DAYS} days. If it isn't fixed, it comes back.`}
+            >
+              Dismiss
+            </button>
+          </fetcher.Form>
+        ) : null}
       </div>
+    </div>
+  );
+}
+
+/** The lapsed-and-live snoozes, revealed by "Show dismissed". */
+export function DismissedList({
+  quizId,
+  items,
+}: {
+  quizId: string;
+  items: Array<{ id: string; headline: string; severity: InsightCard["severity"]; until: string }>;
+}) {
+  const fetcher = useFetcher();
+  if (items.length === 0) return null;
+  return (
+    <div className="qz-andismissed">
+      {items.map((d) => (
+        <div key={d.id} className="qz-andismissed-row">
+          <span className="qz-andismissed-h">{d.headline}</span>
+          <span className="qz-dim">back on {formatDate(d.until)}</span>
+          <fetcher.Form method="post">
+            <input type="hidden" name="intent" value="restore-insight" />
+            <input type="hidden" name="quizId" value={quizId} />
+            <input type="hidden" name="cardId" value={d.id} />
+            <button type="submit" className="qz-linkbtn">Restore</button>
+          </fetcher.Form>
+        </div>
+      ))}
     </div>
   );
 }
@@ -453,15 +503,28 @@ function InsightList({
   emptyCopy: string;
 }) {
   const { cards, more, clean } = data.insights;
+  const [showDismissed, setShowDismissed] = useState(false);
+  const dismissed = data.dismissed;
+  const dismissedToggle =
+    dismissed.length > 0 ? (
+      <button type="button" className="qz-linkbtn" onClick={() => setShowDismissed((v) => !v)}>
+        {showDismissed ? "Hide dismissed" : `Show dismissed (${dismissed.length})`}
+      </button>
+    ) : null;
+
   if (clean) {
     return (
-      <div className="qz-anclean">
-        <span className="qz-anclean-ic" aria-hidden>✓</span>
-        <div>
-          <div style={{ fontWeight: 600 }}>Nothing needs attention</div>
-          <div className="qz-dim" style={{ fontSize: 13 }}>{emptyCopy}</div>
+      <>
+        <div className="qz-anclean">
+          <span className="qz-anclean-ic" aria-hidden>✓</span>
+          <div>
+            <div style={{ fontWeight: 600 }}>Nothing needs attention</div>
+            <div className="qz-dim" style={{ fontSize: 13 }}>{emptyCopy}</div>
+          </div>
+          {dismissedToggle ? <span style={{ marginLeft: "auto" }}>{dismissedToggle}</span> : null}
         </div>
-      </div>
+        {showDismissed ? <DismissedList quizId={data.quiz.id} items={dismissed} /> : null}
+      </>
     );
   }
   return (
@@ -475,6 +538,7 @@ function InsightList({
           evidence={card.evidence}
           basis={card.basis}
           math={card.math}
+          onDismiss={{ quizId: data.quiz.id, cardId: card.id }}
           action={{ label: card.action.label, href: insightHref(card, surface, data.quiz.id, searchParams) }}
           action2={
             card.action2
@@ -486,12 +550,16 @@ function InsightList({
           }
         />
       ))}
-      {more > 0 ? (
-        <p className="qz-dim" style={{ fontSize: 12.5, margin: 0 }}>
-          {more} more finding{more === 1 ? " is" : "s are"} waiting — we show three at a time so the list stays
-          worth reading.
-        </p>
-      ) : null}
+      <div className="qz-row" style={{ gap: 16, alignItems: "baseline", flexWrap: "wrap" }}>
+        {more > 0 ? (
+          <p className="qz-dim" style={{ fontSize: 12.5, margin: 0 }}>
+            {more} more finding{more === 1 ? " is" : "s are"} waiting — we show three at a time so the list
+            stays worth reading.
+          </p>
+        ) : null}
+        {dismissedToggle ? <span style={{ marginLeft: "auto" }}>{dismissedToggle}</span> : null}
+      </div>
+      {showDismissed ? <DismissedList quizId={data.quiz.id} items={dismissed} /> : null}
     </div>
   );
 }
