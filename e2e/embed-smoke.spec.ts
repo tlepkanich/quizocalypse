@@ -1,4 +1,6 @@
 import { test, expect } from "@playwright/test";
+import { createServer } from "node:http";
+import type { AddressInfo } from "node:net";
 
 // Post-deploy smoke for the DOM embed (EMBED-1). runtime-smoke.spec.ts covers
 // /q — the iframe path — and knew nothing about this one, so a broken embed
@@ -17,8 +19,50 @@ import { test, expect } from "@playwright/test";
 // the regression test for the shadow root.
 
 const QUIZ_ID = process.env.SMOKE_EMBED_QUIZ || "cmq566eof0001qvky8ze2qcwn";
-const STOREFRONT = "https://wiskr-embed-smoke.test/";
 const THEME_RED = "rgb(192, 57, 43)"; // #c0392b, what the hostile CSS forces
+
+/**
+ * A REAL http server for the fake storefront, on an ephemeral loopback port.
+ *
+ * The obvious design — page.route() fulfilling a made-up origin — works
+ * against the deploy and silently cannot work against a local build.
+ * Chromium refuses it with:
+ *
+ *   Access to script at 'http://localhost:3111/embed/wiskr-embed.js' from
+ *   origin '…' has been blocked by CORS policy: Permission was denied for
+ *   this request to access the `loopback` address space.
+ *
+ * Private Network Access. A fulfilled page never came from the network, so it
+ * is not classified as loopback and may not pull subresources from loopback —
+ * true even when the fake origin is itself spelled "localhost". The bundle
+ * never loaded, and the two DOM tests below failed for a reason that had
+ * nothing to do with the code under test. A mutation test run against a local
+ * build was invalidated by exactly this.
+ *
+ * A genuine listener is classified loopback, so local→local passes, and
+ * loopback→https-public is a normal upgrade. Different port = different
+ * origin, so the cross-origin property this suite exists to prove still holds
+ * in both environments.
+ */
+const openStorefronts: Array<() => Promise<void>> = [];
+
+// Every listener started by a test is closed here, so a failing assert can
+// never leave a port bound and wedge the rest of the run.
+test.afterEach(async () => {
+  while (openStorefronts.length) await openStorefronts.pop()!();
+});
+
+async function startStorefront(html: string) {
+  const server = createServer((_req, res) => {
+    res.writeHead(200, { "content-type": "text/html; charset=utf-8" });
+    res.end(html);
+  });
+  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+  const { port } = server.address() as AddressInfo;
+  const close = () => new Promise<void>((resolve) => server.close(() => resolve()));
+  openStorefronts.push(close);
+  return { url: `http://127.0.0.1:${port}/`, close };
+}
 
 function storefrontHtml(appOrigin: string, quizId: string): string {
   return `<!doctype html>
@@ -46,6 +90,34 @@ test("embed bundle is served with a JS content-type", async ({ request, baseURL 
   expect(res.headers()["content-type"]).toContain("javascript");
   // Guards against an empty/truncated artifact being served as 200.
   expect((await res.body()).byteLength).toBeGreaterThan(100_000);
+});
+
+// Merchants paste ONE stable URL, so this bundle must stay revalidatable.
+// It originally shipped from build/client/, where remix-serve stamps
+// `max-age=31536000, immutable` — correct for content-hashed /assets/*, and
+// silently fatal here: every shopper who loaded it once would be pinned to
+// that build for a year and no runtime fix would ever reach them. A fresh
+// browser context (like this suite) would never notice, which is exactly why
+// it needs an explicit header assert rather than a behavioural one.
+test("embed bundle is cacheable but NOT immutable", async ({ request, baseURL }) => {
+  const res = await request.get(`${baseURL}/embed/wiskr-embed.js`);
+  const cacheControl = res.headers()["cache-control"] ?? "";
+  const etag = res.headers()["etag"];
+
+  expect(cacheControl, "a stable-path bundle must never be immutable").not.toContain(
+    "immutable",
+  );
+  const maxAge = Number(cacheControl.match(/max-age=(\d+)/)?.[1] ?? "0");
+  expect(maxAge, `max-age too long for a stable path: ${cacheControl}`).toBeLessThanOrEqual(
+    3600,
+  );
+  expect(etag, "no ETag — every revalidation would re-download ~420KB").toBeTruthy();
+
+  // And the ETag must actually work, or the short max-age just costs bandwidth.
+  const revalidated = await request.get(`${baseURL}/embed/wiskr-embed.js`, {
+    headers: { "If-None-Match": etag! },
+  });
+  expect(revalidated.status()).toBe(304);
 });
 
 // The embed bundle is PUBLIC — anyone can GET it. Its import graph reaches
@@ -109,14 +181,8 @@ test("DOM embed mounts cross-origin into a shadow root, immune to theme CSS", as
   });
   page.on("pageerror", (e) => consoleErrors.push(String(e)));
 
-  await page.route(STOREFRONT, (route) =>
-    route.fulfill({
-      status: 200,
-      contentType: "text/html",
-      body: storefrontHtml(baseURL!, QUIZ_ID),
-    }),
-  );
-  await page.goto(STOREFRONT);
+  const storefront = await startStorefront(storefrontHtml(baseURL!, QUIZ_ID));
+  await page.goto(storefront.url);
 
   // The runtime mounts after fetching embed.json, so wait on the rendered
   // tree rather than a fixed timeout.
@@ -180,14 +246,8 @@ test("embed survives a re-init without double-mounting", async ({ page, baseURL 
   // Themes re-run section JS on every theme-editor settings change, and the
   // entry re-scans on shopify:section:load. Mounting must be idempotent or a
   // merchant editing their theme ends up with two quizzes stacked.
-  await page.route(STOREFRONT, (route) =>
-    route.fulfill({
-      status: 200,
-      contentType: "text/html",
-      body: storefrontHtml(baseURL!, QUIZ_ID),
-    }),
-  );
-  await page.goto(STOREFRONT);
+  const storefront = await startStorefront(storefrontHtml(baseURL!, QUIZ_ID));
+  await page.goto(storefront.url);
   await page.waitForFunction(
     () => !!document.querySelector("[data-wiskr-quiz]")?.shadowRoot?.querySelector("button"),
     undefined,
