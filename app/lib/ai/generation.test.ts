@@ -24,6 +24,12 @@ describe("QUESTION_WRITING_RULES — anti-slop copy standards in the prompt", ()
     expect(QUESTION_WRITING_RULES).toContain("never Title Case");
   });
 
+  it("bans the em-dash answer gloss (GEN-COPY, owner 2026-08-16)", () => {
+    expect(QUESTION_WRITING_RULES).toContain("em-dash gloss");
+    expect(QUESTION_WRITING_RULES).toContain('"Label — explanation"');
+    expect(QUESTION_WRITING_RULES).toContain("Never use an em dash inside an answer option");
+  });
+
   it("keeps the AUDIT-21 survey-methodology rules intact (additive, not a rewrite)", () => {
     expect(QUESTION_WRITING_RULES).toContain("double-barreled");
     expect(QUESTION_WRITING_RULES).toContain("mutually exclusive and collectively exhaustive");

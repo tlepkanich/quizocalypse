@@ -63,7 +63,15 @@ export const QUESTION_WRITING_RULES =
   "plain, confident, declarative copy. Use sentence case for questions and " +
   "answers: capitalize only the first word and proper nouns, never Title Case. " +
   "Skip filler superlatives (\"amazing\", \"perfect\", \"incredible\") — say " +
-  "what the thing is.";
+  "what the thing is." +
+  // GEN-COPY (owner 2026-08-16) — the owner's complaint: answer options kept
+  // arriving as "Label — explanation" em-dash glosses. Same seam as FIX-1:
+  // binds the two AUTHORING prompts only.
+  "\nANSWER FORMAT (always apply): answer options are short, self-contained " +
+  "phrases. NEVER the \"Label — explanation\" em-dash gloss (\"Oily — shiny by " +
+  "midday, enlarged pores\" is banned): say the observable thing itself " +
+  "(\"Shiny by midday\") or move the clarifier into helper_text. Never use an " +
+  "em dash inside an answer option; keep em dashes rare in question copy too.";
 
 // FIX-1 — deterministic anti-slop backstop at the generation PARSE boundary.
 // Strips emoji / pictograph sequences (ZWJ chains, variation selectors, skin
@@ -414,11 +422,16 @@ function experienceAddendum(t?: string): string {
 export function deciderAddendum(m?: "decider"): string {
   if (m !== "decider") return "";
   return (
-    "\nLOGIC MODEL: ONE-DECIDER. Exactly ONE question (prefer an early one) should " +
-    "directly ask WHICH outcome bucket fits the shopper — single_select, roughly one " +
-    "answer per bucket, each answer's tags matching that bucket's routing tags so it " +
-    "maps 1:1 to a bucket. Every OTHER question is a qualifier that refines the " +
-    "recommendation but must NOT try to route — keep qualifier answers' tags light. " +
+    "\nLOGIC MODEL: ONE-DECIDER. Exactly ONE question (prefer an early one) decides " +
+    "the outcome — single_select, roughly one answer per bucket, each answer's tags " +
+    "matching that bucket's routing tags so it maps 1:1 to a bucket. Phrase the " +
+    "deciding question DIAGNOSTICALLY: probe a concrete behavior, feeling, or " +
+    "situation the shopper can observe (\"How does your skin feel a few hours after " +
+    "cleansing?\"), never a self-classification that recites the bucket names " +
+    "(\"How would you describe your skin?\"). Each answer describes the observable " +
+    "experience and still maps cleanly to exactly one bucket. Every OTHER question " +
+    "is a qualifier that refines the recommendation but must NOT try to route — " +
+    "keep qualifier answers' tags light. " +
     "Do NOT include email_gate copy: the results page has its own capture screen."
   );
 }

@@ -89,6 +89,10 @@ describe("deciderAddendum — prompt byte-stability", () => {
   it("decider flag returns a non-empty addendum", () => {
     expect(deciderAddendum("decider")).toContain("ONE-DECIDER");
   });
+  it("steers the deciding question diagnostic, not self-classification (GEN-COPY)", () => {
+    expect(deciderAddendum("decider")).toContain("DIAGNOSTICALLY");
+    expect(deciderAddendum("decider")).toContain("self-classification");
+  });
 });
 
 // AUDIT-21 — the strategy build-rules folded onto the authoring prompts.
