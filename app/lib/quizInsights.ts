@@ -19,6 +19,14 @@ import { GATES } from "./analyticsConfidence";
 
 export type InsightSeverity = "info" | "warn" | "crit";
 
+/**
+ * How long a dismissed finding stays hidden (owner, 2026-08-16). A dismissal
+ * SNOOZES rather than mutes: if the merchant never actually fixes it, the
+ * finding returns on its own. Lives here, not in the .server seam, so the
+ * client view can render the affordance's copy without importing server code.
+ */
+export const INSIGHT_SNOOZE_DAYS = 14;
+
 /** Where a card's action should land — the view maps kinds to surface hrefs. */
 export interface InsightAction {
   label: string;

@@ -20,6 +20,7 @@ vi.mock("../db.server", () => ({
     event: { findMany: vi.fn(), findFirst: vi.fn() },
     quizSession: { findMany: vi.fn(), groupBy: vi.fn() },
     emailCapture: { findMany: vi.fn() },
+    insightDismissal: { findMany: vi.fn() },
     product: { findMany: vi.fn() },
     backInStockRequest: { findMany: vi.fn() },
     category: { findMany: vi.fn() },
@@ -36,6 +37,7 @@ const p = prisma as unknown as {
   event: { findMany: Mock; findFirst: Mock };
   quizSession: { findMany: Mock; groupBy: Mock };
   emailCapture: { findMany: Mock };
+  insightDismissal: { findMany: Mock };
   product: { findMany: Mock };
   backInStockRequest: { findMany: Mock };
   category: { findMany: Mock };
@@ -177,6 +179,7 @@ beforeEach(() => {
     { id: "c1", sessionId: "s1", email: "amy@example.com", capturedAt: T0 },
     { id: "c2", sessionId: "s1", email: "amy@example.com", capturedAt: T0 },
   ]);
+  p.insightDismissal.findMany.mockResolvedValue([]);
   p.product.findMany.mockResolvedValue([
     { productId: "p1", title: "Hydra Cream", imageUrl: null, handle: "hydra-cream" },
   ]);
@@ -380,5 +383,39 @@ describe("product reach paths (decider docs)", () => {
   it("reports the mapped/unreachable counts for the section header", async () => {
     const data = await runLoader();
     expect(data.productMeta).toEqual({ mapped: 3, unreachable: 1 });
+  });
+});
+
+describe("dismissal filtering (14-day snooze)", () => {
+  it("a snoozed card leaves the list and appears under `dismissed` with its return date", async () => {
+    const until = new Date("2026-09-01T12:00:00Z");
+    p.insightDismissal.findMany.mockResolvedValue([
+      { quizId: "qz1", cardId: "traffic-starved", snoozedUntil: until },
+    ]);
+    const data = await runLoader();
+    expect(data.insights.cards.some((c) => c.id === "traffic-starved")).toBe(false);
+    expect(data.dismissed.map((d) => d.id)).toContain("traffic-starved");
+    expect(data.dismissed[0]!.until).toBe(until.toISOString());
+  });
+
+  it("a LAPSED snooze does not hide the card — an unfixed finding comes back", async () => {
+    p.insightDismissal.findMany.mockResolvedValue([
+      { quizId: "qz1", cardId: "traffic-starved", snoozedUntil: new Date("2020-01-01T00:00:00Z") },
+    ]);
+    const data = await runLoader();
+    expect(data.insights.cards.some((c) => c.id === "traffic-starved")).toBe(true);
+    expect(data.dismissed).toEqual([]);
+  });
+
+  it("with every card snoozed the section reads CLEAN rather than empty-and-broken", async () => {
+    const until = new Date("2026-09-01T12:00:00Z");
+    const all = (await runLoader()).insights.cards.map((c) => c.id);
+    p.insightDismissal.findMany.mockResolvedValue(
+      all.map((cardId) => ({ quizId: "qz1", cardId, snoozedUntil: until })),
+    );
+    const data = await runLoader();
+    expect(data.insights.cards).toEqual([]);
+    expect(data.insights.clean).toBe(true);
+    expect(data.dismissed).toHaveLength(all.length);
   });
 });

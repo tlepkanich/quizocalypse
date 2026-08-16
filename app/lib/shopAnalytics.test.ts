@@ -12,6 +12,7 @@ vi.mock("../db.server", () => ({
     quiz: { findMany: vi.fn() },
     event: { findMany: vi.fn() },
     emailCapture: { findMany: vi.fn() },
+    insightDismissal: { findMany: vi.fn() },
   },
 }));
 
@@ -19,6 +20,7 @@ const p = prisma as unknown as {
   quiz: { findMany: Mock };
   event: { findMany: Mock };
   emailCapture: { findMany: Mock };
+  insightDismissal: { findMany: Mock };
 };
 
 function doc(questions: number, results: number) {
@@ -77,6 +79,7 @@ beforeEach(() => {
     return Promise.resolve([]);
   });
   p.emailCapture.findMany.mockResolvedValue([{ quizId: "live1", sessionId: "s1" }]);
+  p.insightDismissal.findMany.mockResolvedValue([]);
 });
 
 async function run() {

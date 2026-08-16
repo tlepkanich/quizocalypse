@@ -1,10 +1,10 @@
-import type { LoaderFunctionArgs } from "@remix-run/node";
+import type { ActionFunctionArgs, LoaderFunctionArgs } from "@remix-run/node";
 import { json } from "@remix-run/node";
 import { useLoaderData } from "@remix-run/react";
 import { TitleBar } from "@shopify/app-bridge-react";
 import { authenticate } from "../shopify.server";
 import prisma from "../db.server";
-import { shopAnalyticsForShop } from "../lib/quizAnalytics.server";
+import { shopAnalyticsForShop, handleInsightDismissForm } from "../lib/quizAnalytics.server";
 import { QzPage } from "../components/qz";
 import { AnalyticsHomeView } from "../components/analytics/AnalyticsHomeView";
 
@@ -20,6 +20,16 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   if (!shop) throw new Response("Shop not found", { status: 404 });
   const url = new URL(request.url);
   return json({ data: await shopAnalyticsForShop(shop, url.searchParams) });
+};
+
+// Dismiss / restore a "What to fix" card (14-day snooze) — the embedded twin
+// of the studio action, over the same shared writer.
+export const action = async ({ request }: ActionFunctionArgs) => {
+  const { session } = await authenticate.admin(request);
+  const shop = await prisma.shop.findUnique({ where: { shopDomain: session.shop }, select: { id: true } });
+  if (!shop) throw new Response("Shop not found", { status: 404 });
+  const result = await handleInsightDismissForm(shop.id, await request.formData());
+  return json(result ?? { ok: false }, { status: result?.ok ? 200 : 400 });
 };
 
 export default function AggregateAnalytics() {
