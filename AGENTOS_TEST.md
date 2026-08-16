@@ -1,0 +1,1 @@
+AgentOS repo wiring verified.
