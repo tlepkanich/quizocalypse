@@ -38,6 +38,7 @@ import {
   startStep2Build,
 } from "./step2Build.server";
 import { saveTemplate, loadSavedTemplate } from "./savedTemplates.server";
+import { runConnectedSync } from "./shopifyConnect.server";
 import { startGoalPrepick } from "./goalPrepick.server";
 import {
   resolveSpecInputs,
@@ -150,8 +151,26 @@ async function runStep1FunnelActionImpl(
   const intent = String(form.get("intent") ?? "");
 
   if (intent === "resync") {
-    const res = await resyncCatalogForShop(shop.shopDomain);
-    return json({ intent, ...res });
+    // "Refresh catalog" must resolve the RIGHT admin for the workspace type. A
+    // standalone workspace's own shopDomain is the synthetic studio.local — the
+    // Shopify SDK rejects it ("Received invalid shop argument") — so its catalog
+    // is reachable only through the connected store (Shop.shopifyConnectDomain +
+    // token). Awaited on purpose: the underrow confirms inline, no status poll.
+    const shopRow = await prisma.shop.findUnique({
+      where: { id: shop.id },
+      select: { source: true, shopifyConnectDomain: true },
+    });
+    if (shopRow?.source === "standalone") {
+      if (!shopRow.shopifyConnectDomain) {
+        return json({
+          intent,
+          ok: false,
+          error: "No Shopify store is connected — connect one on the Products page first.",
+        });
+      }
+      return json({ intent, ...(await runConnectedSync(shop.id)) });
+    }
+    return json({ intent, ...(await resyncCatalogForShop(shop.shopDomain)) });
   }
 
   if (intent === "confirm-grouping") {

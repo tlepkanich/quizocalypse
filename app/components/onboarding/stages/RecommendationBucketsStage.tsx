@@ -669,7 +669,9 @@ export function RecommendationBucketsStage({
             </button>
             {resyncResult ? (
               <span className="qz-dim" style={{ fontSize: 12 }}>
-                {resyncResult.ok ? "Catalog refreshed." : "Couldn't refresh from here."}
+                {resyncResult.ok
+                  ? "Catalog refreshed."
+                  : resyncResult.error ?? "Couldn't refresh from here."}
               </span>
             ) : null}
           </div>

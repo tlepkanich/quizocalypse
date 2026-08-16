@@ -45,7 +45,10 @@ export function Step1Funnel({ data }: { data: FunnelData }) {
   const pendingIntent =
     fetcher.state !== "idle" ? String(fetcher.formData?.get("intent") ?? "") : null;
   const result = fetcher.state === "idle" ? fetcher.data ?? null : null;
-  const errorMsg = result && result.ok === false ? result.error : null;
+  // A failed "Refresh catalog" reports inline in its own underrow — keep the
+  // crit banner for every other intent so the same error isn't shown twice.
+  const errorMsg =
+    result && result.ok === false && result.intent !== "resync" ? result.error : null;
 
   // One-line-chrome §1.6 — the ONE confirm in the flow: leaving the builder
   // (logo click, or back from step 1). Everything else navigates freely.
