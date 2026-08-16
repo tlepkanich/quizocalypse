@@ -8,9 +8,16 @@ import type { PrismaClient } from "@prisma/client";
 //   • QuizReward — email attached to an issued reward code (§M3).
 //   • ReferralToken / Referral — referrer + redeemer emails (§M6).
 // All are email-keyed and shop-scoped via their quiz relation.
+//
+// ORDER data is the exception: it is keyed by ORDER ID, not email, and arrives
+// on the same webhook as `orders_to_redact`. The only order data this app
+// holds is the `order_attributed` Event (payload.order_id + the order total)
+// written by webhooks.orders.create, plus the QuizSession.converted flag
+// derived from it. redactOrders() below erases both — see its comment for why
+// `converted` is cleared only when no OTHER order still backs it.
 // NOT shopper PII: Session / StudioLoginToken are MERCHANT auth (covered by
-// shop/redact); QuizSession / Event / QuizFeedback are pseudonymous (sessionId,
-// no email). Future §M stores (saved-results profiles, referral records) plug in here.
+// shop/redact); QuizSession / QuizFeedback and non-order Event rows are
+// pseudonymous (sessionId, no email). Future §M stores plug in here.
 
 export interface CustomerData {
   captures: Array<{
@@ -87,6 +94,93 @@ export async function redactCustomer(
     prisma.referral.updateMany({ where: { redeemerEmail: email, quiz: { shopId: shop.id } }, data: { redeemerEmail: null } }),
   ]);
   return { captures: c.count, backInStock: b.count, rewards: r.count, referrals: rt.count + rd.count };
+}
+
+/**
+ * customers/redact — the `orders_to_redact` half. Shopify sends the order ids
+ * alongside the customer, and requires that we delete or de-identify anything
+ * we hold ABOUT those orders. This app holds exactly two things:
+ *
+ *   1. the `order_attributed` Event (payload.order_id + the order total), and
+ *   2. QuizSession.converted, a flag DERIVED from that event.
+ *
+ * Both go. The flag is cleared only for sessions left with no OTHER attributed
+ * order — a shopper with two orders who redacts one is still, truthfully, a
+ * converter, and blanking that would corrupt the merchant's analytics beyond
+ * what the request asked for.
+ *
+ * Deleting the events does move revenue figures. That is correct: the numbers
+ * must stop reflecting data we were told to erase.
+ *
+ * Order ids are stored as STRINGS by the orders webhook (`String(order.id)`)
+ * while the webhook payload sends numbers, so every id is stringified here.
+ * Returns the counts for the audit log. No-op on an unknown shop or empty list.
+ */
+export async function redactOrders(
+  prisma: PrismaClient,
+  shopDomain: string,
+  orderIds: Array<string | number>,
+): Promise<{ orderEvents: number; sessionsUnconverted: number }> {
+  // Blank ids are dropped, NOT stringified into "" — the orders webhook writes
+  // `String(order.id ?? "")`, so an empty id would otherwise match those rows
+  // and erase orders nobody asked about.
+  const ids = [...new Set(orderIds.map((v) => String(v).trim()).filter(Boolean))];
+  if (ids.length === 0) return { orderEvents: 0, sessionsUnconverted: 0 };
+  const shop = await prisma.shop.findUnique({ where: { shopDomain } });
+  if (!shop) return { orderEvents: 0, sessionsUnconverted: 0 };
+
+  // Scope on the QUIZ relation, not Event.shopId — that column is nullable, so
+  // relation-scoping is the one that can't silently miss rows.
+  const match = {
+    eventType: "order_attributed",
+    quiz: { shopId: shop.id },
+    OR: ids.map((id) => ({ payload: { path: ["order_id"], equals: id } })),
+  };
+
+  // Read the touched sessions BEFORE deleting — afterwards there is nothing
+  // left to say which sessions the orders belonged to.
+  const touched = await prisma.event.findMany({
+    where: match,
+    select: { quizId: true, sessionId: true },
+  });
+  const pairs = [...new Map(touched.map((t) => [`${t.quizId}:${t.sessionId}`, t])).values()];
+
+  // Which of those sessions keep an order that is NOT being redacted? One
+  // grouped read rather than a count per session: a single order can win
+  // unboundedly many sessions (W2), so the per-session loop this replaces
+  // could fan out badly on exactly the request we must not drop.
+  const survivorPairs = new Set<string>();
+  if (pairs.length > 0) {
+    const survivors = await prisma.event.findMany({
+      where: {
+        eventType: "order_attributed",
+        quiz: { shopId: shop.id },
+        sessionId: { in: [...new Set(pairs.map((x) => x.sessionId))] },
+        NOT: { OR: ids.map((id) => ({ payload: { path: ["order_id"], equals: id } })) },
+      },
+      select: { quizId: true, sessionId: true },
+    });
+    for (const s of survivors) survivorPairs.add(`${s.quizId}:${s.sessionId}`);
+  }
+  const toUnconvert = pairs.filter((x) => !survivorPairs.has(`${x.quizId}:${x.sessionId}`));
+
+  // Atomic: a crash between the delete and the flag clear would leave
+  // `converted` asserting a purchase whose evidence we just erased, and the
+  // Shopify retry could not detect it — the events it would look for are gone.
+  const [deleted, ...updates] = await prisma.$transaction([
+    prisma.event.deleteMany({ where: match }),
+    ...toUnconvert.map((x) =>
+      prisma.quizSession.updateMany({
+        where: { quizId: x.quizId, sessionId: x.sessionId, converted: true },
+        data: { converted: false },
+      }),
+    ),
+  ]);
+
+  return {
+    orderEvents: deleted.count,
+    sessionsUnconverted: updates.reduce((n, u) => n + (u as { count: number }).count, 0),
+  };
 }
 
 /** shop/redact — full erasure of a shop's data (~48h after uninstall). The Shop
