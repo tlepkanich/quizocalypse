@@ -16,6 +16,7 @@ import {
   discoverAndPersistBuckets,
   BucketDiscoveryError,
 } from "./bucketDiscovery.server";
+import { loadGenerationBuckets } from "./bucketPersist.server";
 import { CategoryDiscoveryError } from "./categoryDiscover";
 import { reconcileBucketsToResultNodes } from "./bucketReconcile";
 import { generateQuestionFlow, type QuizTone } from "./claude";
@@ -339,10 +340,11 @@ export async function runAiOnboardingBuild(
   // products. scopeCatalogToChosen falls back to the full catalog when the quiz has
   // no buckets or the ids are stale, so this never starves generation (and is
   // byte-identical to the prior full-catalog behavior in the no-bucket case).
+  // loadGenerationBuckets drops invisible ai-discovery leftovers whenever the
+  // merchant has curated rows of their own, so a narrowed selection actually
+  // narrows this scope.
   const chosenProductIds = new Set(
-    (
-      await prisma.category.findMany({ where: { shopId, quizId }, select: { productIds: true } })
-    ).flatMap((c) => c.productIds),
+    (await loadGenerationBuckets(shopId, quizId)).flatMap((c) => c.productIds),
   );
   const chosenScope = scopeCatalogToChosen(allProducts, allCollections, chosenProductIds);
   const indexed = buildScopedIndex(

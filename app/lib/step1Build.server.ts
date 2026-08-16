@@ -9,6 +9,7 @@ import {
   type BucketType,
   type BucketRow,
 } from "./bucketPersist";
+import { loadGenerationBuckets, refreshBucketMembership } from "./bucketPersist.server";
 import type { TemplateOption, BuildSession } from "./quizSchema";
 import type { DesignTokensT } from "./designTokens";
 import { GENERIC_BUILD_ERROR } from "./step2Build.server";
@@ -145,11 +146,7 @@ export async function loadConfirmedBuckets(
   shopId: string,
   quizId: string,
 ): Promise<Array<{ name: string; tags: string[] }>> {
-  const rows = await prisma.category.findMany({
-    where: { shopId, quizId },
-    orderBy: { createdAt: "asc" },
-    select: { name: true, tags: true },
-  });
+  const rows = await loadGenerationBuckets(shopId, quizId);
   return rows.map((r) => ({ name: r.name, tags: r.tags }));
 }
 
@@ -173,11 +170,9 @@ export async function startStep1Build(
   // pages via category_id). Empty when the merchant chose "all products"; in that
   // case omit preResolvedBuckets so the build discovers buckets rather than
   // produce a single undifferentiated page (a better quiz than the literal read).
-  const cats = await prisma.category.findMany({
-    where: { shopId, quizId },
-    select: { id: true, name: true, tags: true },
-    orderBy: { createdAt: "asc" },
-  });
+  // Membership refreshes against the live catalog first (stale-snapshot fix).
+  await refreshBucketMembership(shopId, quizId);
+  const cats = await loadGenerationBuckets(shopId, quizId);
 
   // DGN-1 — thread the draft's design_tokens (which now carry the shop's brand
   // seed from draft creation) into the build; without this the re-seed falls

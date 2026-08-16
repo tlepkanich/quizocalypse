@@ -10,6 +10,7 @@ import { publishQuiz, PublishError, collectDeciderTargetIds } from "./quizPublis
 import { countUnpublishedChanges } from "./unpublishedChanges";
 import { BrandTokens } from "./designTokens";
 import { resolveCollectionOrders } from "./collectionOrder.server";
+import { refreshBucketMembership } from "./bucketPersist.server";
 import { qrDataUrl } from "./qrCode.server";
 import { ensureQuizDiscount } from "./discount.server";
 import { regenerateQuestion, generateQuestionFlow, editQuiz, enrichFromReviews, translateQuiz, generateDesignRestyle } from "./claude";
@@ -412,6 +413,11 @@ async function handleQuizEditorActionImpl(
         }
       }
 
+      // Stale-snapshot fix — re-resolve collection/tag bucket membership against
+      // the live catalog BEFORE the bake reads Category.productIds into
+      // target_product_ids_map, so a catalog resync between build and publish
+      // never ships outdated recommendations. Best-effort (never throws).
+      await refreshBucketMembership(shop.id, id);
       const result = await publishQuiz(
         prisma,
         { quizId: id, shopId: shop.id },

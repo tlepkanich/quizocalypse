@@ -53,6 +53,69 @@ export function bucketRowFor(
   };
 }
 
+// ── Generation-scope hygiene ─────────────────────────────────────────────────
+
+// Merchant-curated rows beat AI-discovery leftovers. `source: "ai"` rows come
+// only from whole-catalog archetype discovery (bucketDiscovery.server.ts) and
+// the bucket browser cannot display them — so when a quiz carries BOTH ai rows
+// and curated rows (browser picks, wizard grouping, manual groups, logic-tab
+// targets), the ai rows are invisible dead weight that would silently widen the
+// generation scope back to the full catalog. Drop them. A pure-discovery quiz
+// (ai rows only) keeps them: they ARE its grounding.
+export function curatedBucketRows<T extends { source: string | null }>(rows: T[]): T[] {
+  const curated = rows.filter((r) => r.source !== "ai");
+  return curated.length > 0 ? curated : rows;
+}
+
+// Order-insensitive id-set equality (product ids are unique within a row).
+export function sameIdSet(a: readonly string[], b: readonly string[]): boolean {
+  const setA = new Set(a);
+  const setB = new Set(b);
+  if (setA.size !== setB.size) return false;
+  for (const id of setB) if (!setA.has(id)) return false;
+  return true;
+}
+
+export interface RefreshableBucketRow {
+  id: string;
+  source: string | null;
+  sourceRef: string | null;
+  tags: string[];
+  productIds: string[];
+}
+
+// Re-resolve collection/tag-sourced rows against the LIVE catalog. Bucket rows
+// snapshot productIds at selection time and go stale when the catalog resyncs
+// (a reseeded store once left every pre-sync quiz grounded in products that no
+// longer belonged to its collections). Returns only rows whose membership
+// actually changed. product/manual/ai rows have no external source of truth and
+// are never touched; a sourceRef that no longer resolves (deleted collection,
+// vanished tag) keeps its snapshot — a stale scope beats an empty one.
+export function computeBucketMembershipRefresh(
+  rows: RefreshableBucketRow[],
+  products: GroupingProduct[],
+  collections: GroupingCollection[],
+): Array<{ id: string; productIds: string[]; tags: string[] }> {
+  const updates: Array<{ id: string; productIds: string[]; tags: string[] }> = [];
+  for (const row of rows) {
+    if (!row.sourceRef) continue;
+    const source =
+      row.source === "smart_collection" || row.source === "collection"
+        ? ("collection" as const)
+        : row.source === "tag"
+          ? ("tag" as const)
+          : null;
+    if (!source) continue;
+    const [group] = resolveGroupsBySource(source, products, collections, {
+      sourceRef: row.sourceRef,
+    });
+    if (!group || group.productIds.length === 0) continue;
+    if (sameIdSet(group.productIds, row.productIds) && sameIdSet(group.tags, row.tags)) continue;
+    updates.push({ id: row.id, productIds: group.productIds, tags: group.tags });
+  }
+  return updates;
+}
+
 // Resolve a batch of selections (Select-All), dropping any that don't resolve.
 export function bucketRowsFor(
   selections: Array<{ type: BucketType; key: string }>,

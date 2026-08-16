@@ -26,6 +26,8 @@ import {
 import type { DesignTokensT } from "./designTokens";
 import type { GroupingProduct } from "./categoryGrouping";
 import type { QuizType, RichTemplateOption, Quiz as QuizDocT } from "./quizSchema";
+import { loadGenerationBuckets, refreshBucketMembership } from "./bucketPersist.server";
+import { sameIdSet } from "./bucketPersist";
 
 // ════════════════════════════════════════════════════════════════════════════
 // Step 2 — server orchestration for the two-tier template generation. Tier 1
@@ -50,6 +52,10 @@ const toGroupingProduct = (p: {
 });
 
 async function loadStep2Context(shopId: string, quizId?: string) {
+  // Re-resolve collection/tag bucket snapshots against the live catalog BEFORE
+  // reading them — a resynced catalog otherwise leaves the shape framing
+  // grounded in stale membership. Best-effort (never throws).
+  if (quizId) await refreshBucketMembership(shopId, quizId);
   const [products, collections, shop] = await Promise.all([
     prisma.product.findMany({ where: { shopId } }),
     prisma.collection.findMany({ where: { shopId } }),
@@ -63,11 +69,7 @@ async function loadStep2Context(shopId: string, quizId?: string) {
   // answers are written later in the question-flow build, which scopes the same way
   // (onboardingBuild.server.ts, via scopeCatalogToChosen).
   const chosenProductIds = quizId
-    ? new Set(
-        (
-          await prisma.category.findMany({ where: { shopId, quizId }, select: { productIds: true } })
-        ).flatMap((c) => c.productIds),
-      )
+    ? new Set((await loadGenerationBuckets(shopId, quizId)).flatMap((c) => c.productIds))
     : new Set<string>();
   const scope = scopeCatalogToChosen(products, collections, chosenProductIds);
   const indexed = buildScopedIndex(scope.products, scope.collections, []);
@@ -500,11 +502,7 @@ export function startStep2Templates(
       const tTemplates = Date.now();
       const templates = await generateStep2Templates(shopId, quizId, chosenType, input);
       logFor("step2").info({ quizId, ms: Date.now() - tTemplates }, "templates took");
-      const cats = await prisma.category.findMany({
-        where: { shopId, quizId },
-        select: { id: true, name: true, productIds: true },
-        orderBy: { createdAt: "asc" },
-      });
+      const cats = await loadGenerationBuckets(shopId, quizId);
       const top = templates[0];
       const picked = top
         ? initPickedTemplate(
@@ -640,16 +638,22 @@ export async function buildQuizFromPicked(
   // QRTZ-G1 — capture mode (see OnboardingBuildInput.captureDoc).
   captureDoc?: boolean,
 ): Promise<OnboardingBuildResult> {
-  const cats = await prisma.category.findMany({
-    where: { shopId, quizId },
-    select: { id: true, name: true, tags: true },
-  });
+  // Snapshot membership BEFORE the refresh: the working copy's product_ids were
+  // seeded from these pre-refresh rows, so comparing against them tells apart
+  // "the merchant narrowed this group" (their subset wins) from "the working
+  // copy just echoes the seed" (the refreshed live membership wins). Without
+  // this, an untouched working copy would write stale pre-resync ids straight
+  // back over the refresh.
+  const preRefresh = await loadGenerationBuckets(shopId, quizId);
+  const preRefreshIds = new Map(preRefresh.map((c) => [c.id, c.productIds]));
+  await refreshBucketMembership(shopId, quizId);
+  const cats = await loadGenerationBuckets(shopId, quizId);
   const overrideById = new Map(picked.recommended_groups.map((g) => [g.group_id, g]));
   const enabledBuckets: Array<{ id: string; name: string; tags: string[] }> = [];
   for (const c of cats) {
     const o = overrideById.get(c.id);
     if (o && !o.enabled) continue; // disabled group → no result page for it
-    if (o && o.enabled) {
+    if (o && o.enabled && !sameIdSet(o.product_ids, preRefreshIds.get(c.id) ?? [])) {
       // narrow the bucket to the merchant's kept products
       await prisma.category.update({ where: { id: c.id }, data: { productIds: o.product_ids } });
     }

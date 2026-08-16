@@ -10,6 +10,7 @@ import { QzMenu, QzModal } from "../components/qz-overlays";
 import { computeBenchmarks } from "../lib/quizBenchmarks";
 import { quizCardFacts, type QuizCardThumb } from "../lib/quizLibraryCard";
 import { publishQuiz } from "../lib/quizPublish";
+import { refreshBucketMembership } from "../lib/bucketPersist.server";
 import { formatDate } from "../lib/formatDate";
 import { SHOW_OTHER_BUILD_PATHS } from "../lib/studioFlags";
 
@@ -120,6 +121,10 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   }
   if (intent === "publish") {
     try {
+      // Stale-snapshot fix — same pre-publish membership refresh as the editor's
+      // publish seam (quizEditorIO), so the quiz-list relaunch path never bakes
+      // outdated collection membership into target_product_ids_map.
+      await refreshBucketMembership(shop.id, id);
       await publishQuiz(prisma, { quizId: id, shopId: shop.id });
       return json({ ok: true });
     } catch (e) {
