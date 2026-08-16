@@ -1,7 +1,7 @@
 import prisma from "../db.server";
 import type { GroupingDimension } from "./groupingDetect";
 import { runAiOnboardingBuild } from "./onboardingBuild.server";
-import { syncCatalog } from "../jobs/catalogSync";
+import { syncCatalog, GENERIC_SYNC_ERROR } from "../jobs/catalogSync";
 import type { ProposedGroup } from "./categoryGrouping";
 import {
   bucketRowFor,
@@ -259,6 +259,9 @@ export async function resyncCatalogForShop(
     await syncCatalog(admin, shopDomain);
     return { ok: true };
   } catch (err) {
-    return { ok: false, error: err instanceof Error ? err.message : String(err) };
+    // Curated copy only — the returned string renders verbatim in the funnel's
+    // refresh underrow; session/SDK/network guts go to the log seam.
+    reportError(err, { scope: "step1", msg: "catalog resync failed", shopDomain });
+    return { ok: false, error: GENERIC_SYNC_ERROR };
   }
 }

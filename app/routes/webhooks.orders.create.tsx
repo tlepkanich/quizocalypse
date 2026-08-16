@@ -110,6 +110,17 @@ export const action = async ({ request }: ActionFunctionArgs) => {
             order_id: String(order.id ?? ""),
             total_price: order.total_price ?? null,
             currency: order.currency ?? null,
+            // E7 — which products the order actually contained, so the
+            // analytics Products table can answer "was this ever bought?".
+            // Already GIDs (product_index's format) and deduped: a single
+            // order carrying two variants of one product is ONE purchase of
+            // it. Ids only, no titles or prices — the catalogue already has
+            // those, and Event rows are the highest-volume table we write.
+            //
+            // Redaction-safe by construction: this rides INSIDE the
+            // order_attributed event, which redactOrders() deletes wholesale
+            // for an orders_to_redact request. No second store to forget.
+            line_item_product_ids: [...new Set(productIds)],
           } as never,
         })),
       });

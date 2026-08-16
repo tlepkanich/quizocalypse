@@ -1,5 +1,33 @@
-import { describe, it, expect, vi, afterEach } from "vitest";
-import { normalizeShopDomain, adminClientFromToken } from "./shopifyConnect.server";
+import { describe, it, expect, vi, afterEach, beforeEach, type Mock } from "vitest";
+import {
+  normalizeShopDomain,
+  adminClientFromToken,
+  runConnectedSync,
+} from "./shopifyConnect.server";
+import prisma from "../db.server";
+import { GENERIC_SYNC_ERROR, syncCatalogForShopId } from "../jobs/catalogSync";
+import { reportError } from "./log.server";
+
+vi.mock("../db.server", () => ({
+  default: {
+    shop: { findUnique: vi.fn(), update: vi.fn() },
+  },
+}));
+
+vi.mock("../jobs/catalogSync", async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  syncCatalogForShopId: vi.fn(),
+}));
+
+vi.mock("./crypto", () => ({
+  encrypt: vi.fn((v: string) => v),
+  decrypt: vi.fn(() => "shpat_decrypted"),
+}));
+
+vi.mock("./log.server", () => ({
+  logFor: () => ({ warn: vi.fn(), info: vi.fn(), error: vi.fn() }),
+  reportError: vi.fn(),
+}));
 
 describe("normalizeShopDomain", () => {
   it("appends .myshopify.com to a bare handle", () => {
@@ -46,5 +74,74 @@ describe("adminClientFromToken", () => {
       query: "{ shop { name } }",
       variables: { x: 1 },
     });
+  });
+});
+
+// The funnel's "Refresh catalog" awaits this and renders the returned error
+// verbatim in the underrow — it must be curated copy, never a raw upstream
+// message (BIC-2 A2(f) mirror of the catalogSync scrub).
+describe("runConnectedSync", () => {
+  const p = prisma as unknown as { shop: { findUnique: Mock; update: Mock } };
+  const syncMock = syncCatalogForShopId as unknown as Mock;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    p.shop.update.mockResolvedValue({});
+  });
+
+  it("returns curated copy when no store is connected, and persists the status", async () => {
+    p.shop.findUnique.mockResolvedValue({ shopifyConnectDomain: null, shopifyConnectToken: null });
+
+    const res = await runConnectedSync("shop-1");
+
+    expect(res).toEqual({ ok: false, error: "Not connected to Shopify." });
+    expect(p.shop.update).toHaveBeenCalledWith({
+      where: { id: "shop-1" },
+      data: { lastSyncStatus: "error", lastSyncError: "Not connected to Shopify." },
+    });
+    expect(syncMock).not.toHaveBeenCalled();
+  });
+
+  it("syncs with the token-shim admin and returns ok", async () => {
+    p.shop.findUnique.mockResolvedValue({
+      shopifyConnectDomain: "acme.myshopify.com",
+      shopifyConnectToken: "enc-token",
+    });
+    syncMock.mockResolvedValue({ productCount: 3 });
+
+    const res = await runConnectedSync("shop-1");
+
+    expect(res).toEqual({ ok: true });
+    expect(syncMock).toHaveBeenCalledWith(expect.anything(), "shop-1", {
+      storefrontDomain: "acme.myshopify.com",
+    });
+  });
+
+  it("returns AND persists the GENERIC copy on a sync failure — never the raw message", async () => {
+    const raw = new Error("GraphqlQueryError: Throttled (token hint: shpat_…)");
+    p.shop.findUnique.mockResolvedValue({
+      shopifyConnectDomain: "acme.myshopify.com",
+      shopifyConnectToken: "enc-token",
+    });
+    syncMock.mockRejectedValue(raw);
+
+    const res = await runConnectedSync("shop-1");
+
+    expect(res).toEqual({ ok: false, error: GENERIC_SYNC_ERROR });
+    expect(res.error).not.toContain("Throttled");
+    // A2(f) — lastSyncError reaches app._index and studio.products verbatim:
+    // the persisted string must be the curated copy, the raw error must be
+    // routed to the log seam in full.
+    expect(p.shop.update).toHaveBeenCalledWith({
+      where: { id: "shop-1" },
+      data: expect.objectContaining({
+        lastSyncStatus: "error",
+        lastSyncError: GENERIC_SYNC_ERROR,
+      }),
+    });
+    expect(reportError).toHaveBeenCalledWith(
+      raw,
+      expect.objectContaining({ scope: "shopifyConnect", shopId: "shop-1" }),
+    );
   });
 });

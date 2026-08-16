@@ -1,7 +1,8 @@
 import type { AdminApiContext } from "@shopify/shopify-app-remix/server";
 import prisma from "../db.server";
 import { encrypt, decrypt } from "./crypto";
-import { syncCatalogForShopId } from "../jobs/catalogSync";
+import { syncCatalogForShopId, GENERIC_SYNC_ERROR } from "../jobs/catalogSync";
+import { reportError } from "./log.server";
 
 // shopify.server is dynamically imported (not a top-level import) so this module
 // stays loadable in contexts that haven't configured the Shopify app — the pure
@@ -254,38 +255,51 @@ async function adminForConnectedShop(domain: string, encToken: string | null): P
 }
 
 /**
- * Detached catalog sync for a connected standalone shop. Builds the admin (token
+ * Awaited catalog sync for a connected standalone shop. Builds the admin (token
  * shim OR the installed app's OAuth session) and pulls the catalog into this shop
  * with the storefront domain so product "Shop now" URLs resolve. Sets lastSyncStatus.
+ * The RETURNED error is curated copy only — it renders verbatim in the funnel's
+ * "Refresh catalog" underrow; the raw upstream error stays in the log seam
+ * (syncCatalogForShopId's reportError) and in lastSyncStatus polling.
  */
-export function startConnectedSync(shopId: string): void {
-  void (async () => {
-    try {
-      const shop = await prisma.shop.findUnique({
-        where: { id: shopId },
-        select: { shopifyConnectDomain: true, shopifyConnectToken: true },
-      });
-      if (!shop?.shopifyConnectDomain) {
-        await prisma.shop.update({
-          where: { id: shopId },
-          data: { lastSyncStatus: "error", lastSyncError: "Not connected to Shopify." },
-        });
-        return;
-      }
-      const admin = await adminForConnectedShop(shop.shopifyConnectDomain, shop.shopifyConnectToken);
-      // syncCatalogForShopId writes lastSyncStatus ok/error itself.
-      await syncCatalogForShopId(admin, shopId, { storefrontDomain: shop.shopifyConnectDomain });
-    } catch (err) {
+export async function runConnectedSync(shopId: string): Promise<{ ok: boolean; error?: string }> {
+  try {
+    const shop = await prisma.shop.findUnique({
+      where: { id: shopId },
+      select: { shopifyConnectDomain: true, shopifyConnectToken: true },
+    });
+    if (!shop?.shopifyConnectDomain) {
       await prisma.shop.update({
         where: { id: shopId },
-        data: {
-          lastSyncAt: new Date(),
-          lastSyncStatus: "error",
-          lastSyncError: (err instanceof Error ? err.message : String(err)).slice(0, 500),
-        },
+        data: { lastSyncStatus: "error", lastSyncError: "Not connected to Shopify." },
       });
+      return { ok: false, error: "Not connected to Shopify." };
     }
-  })();
+    const admin = await adminForConnectedShop(shop.shopifyConnectDomain, shop.shopifyConnectToken);
+    // syncCatalogForShopId writes lastSyncStatus ok/error itself.
+    await syncCatalogForShopId(admin, shopId, { storefrontDomain: shop.shopifyConnectDomain });
+    return { ok: true };
+  } catch (err) {
+    // BIC-2 A2(f) — Shop.lastSyncError renders verbatim in app._index and
+    // studio.products, so ONLY curated copy may be persisted; the raw error
+    // (which can carry hosts, GraphQL guts, or token hints) goes to the log
+    // seam. This also stops a sync failure from overwriting the scrubbed
+    // string syncCatalogForShopId just wrote with the raw rethrown message.
+    reportError(err, { scope: "shopifyConnect", msg: "connected sync failed", shopId });
+    await prisma.shop.update({
+      where: { id: shopId },
+      data: { lastSyncAt: new Date(), lastSyncStatus: "error", lastSyncError: GENERIC_SYNC_ERROR },
+    });
+    return { ok: false, error: GENERIC_SYNC_ERROR };
+  }
+}
+
+/**
+ * Detached wrapper — the connect/install flows fire it and let the page poll
+ * lastSyncStatus instead of holding the request open.
+ */
+export function startConnectedSync(shopId: string): void {
+  void runConnectedSync(shopId);
 }
 
 /** Re-sync an already-connected shop on demand. */
