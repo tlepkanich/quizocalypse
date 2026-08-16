@@ -6,6 +6,7 @@ import {
 } from "./shopifyConnect.server";
 import prisma from "../db.server";
 import { GENERIC_SYNC_ERROR, syncCatalogForShopId } from "../jobs/catalogSync";
+import { reportError } from "./log.server";
 
 vi.mock("../db.server", () => ({
   default: {
@@ -21,6 +22,11 @@ vi.mock("../jobs/catalogSync", async (importOriginal) => ({
 vi.mock("./crypto", () => ({
   encrypt: vi.fn((v: string) => v),
   decrypt: vi.fn(() => "shpat_decrypted"),
+}));
+
+vi.mock("./log.server", () => ({
+  logFor: () => ({ warn: vi.fn(), info: vi.fn(), error: vi.fn() }),
+  reportError: vi.fn(),
 }));
 
 describe("normalizeShopDomain", () => {
@@ -111,7 +117,7 @@ describe("runConnectedSync", () => {
     });
   });
 
-  it("returns the GENERIC copy on a sync failure — never the raw message", async () => {
+  it("returns AND persists the GENERIC copy on a sync failure — never the raw message", async () => {
     const raw = new Error("GraphqlQueryError: Throttled (token hint: shpat_…)");
     p.shop.findUnique.mockResolvedValue({
       shopifyConnectDomain: "acme.myshopify.com",
@@ -123,5 +129,19 @@ describe("runConnectedSync", () => {
 
     expect(res).toEqual({ ok: false, error: GENERIC_SYNC_ERROR });
     expect(res.error).not.toContain("Throttled");
+    // A2(f) — lastSyncError reaches app._index and studio.products verbatim:
+    // the persisted string must be the curated copy, the raw error must be
+    // routed to the log seam in full.
+    expect(p.shop.update).toHaveBeenCalledWith({
+      where: { id: "shop-1" },
+      data: expect.objectContaining({
+        lastSyncStatus: "error",
+        lastSyncError: GENERIC_SYNC_ERROR,
+      }),
+    });
+    expect(reportError).toHaveBeenCalledWith(
+      raw,
+      expect.objectContaining({ scope: "shopifyConnect", shopId: "shop-1" }),
+    );
   });
 });

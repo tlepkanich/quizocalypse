@@ -2,6 +2,7 @@ import type { AdminApiContext } from "@shopify/shopify-app-remix/server";
 import prisma from "../db.server";
 import { encrypt, decrypt } from "./crypto";
 import { syncCatalogForShopId, GENERIC_SYNC_ERROR } from "../jobs/catalogSync";
+import { reportError } from "./log.server";
 
 // shopify.server is dynamically imported (not a top-level import) so this module
 // stays loadable in contexts that haven't configured the Shopify app — the pure
@@ -279,13 +280,15 @@ export async function runConnectedSync(shopId: string): Promise<{ ok: boolean; e
     await syncCatalogForShopId(admin, shopId, { storefrontDomain: shop.shopifyConnectDomain });
     return { ok: true };
   } catch (err) {
+    // BIC-2 A2(f) — Shop.lastSyncError renders verbatim in app._index and
+    // studio.products, so ONLY curated copy may be persisted; the raw error
+    // (which can carry hosts, GraphQL guts, or token hints) goes to the log
+    // seam. This also stops a sync failure from overwriting the scrubbed
+    // string syncCatalogForShopId just wrote with the raw rethrown message.
+    reportError(err, { scope: "shopifyConnect", msg: "connected sync failed", shopId });
     await prisma.shop.update({
       where: { id: shopId },
-      data: {
-        lastSyncAt: new Date(),
-        lastSyncStatus: "error",
-        lastSyncError: (err instanceof Error ? err.message : String(err)).slice(0, 500),
-      },
+      data: { lastSyncAt: new Date(), lastSyncStatus: "error", lastSyncError: GENERIC_SYNC_ERROR },
     });
     return { ok: false, error: GENERIC_SYNC_ERROR };
   }
