@@ -31,6 +31,7 @@ never cross.
 | `SMOKE_QUIZZES` | Override the two published walk fixtures (`label:id,label:id`). |
 | `SMOKE_PP_QUIZ` | Product-analytics leaderboard quiz (default `cmqwbjef4001gqvl1gpr2hrzx`). |
 | `SMOKE_RT_QUIZ` | Round-trip fixture (default `cmr9gir030026oml1e0v5rwij`, live deploy). |
+| `SMOKE_EMBED_QUIZ` | DOM-embed fixture for `embed-smoke.spec.ts` (default `cmq566eof0001qvky8ze2qcwn`). |
 | `SMOKE_SHOTS=1` | Turn ON screenshot regression asserts in `runtime-smoke.spec.ts`. |
 | `RT_LOCAL=1` | Opt into the full create→delete lifecycle test (local prod build + local DB only). |
 | `RT_BOOTSTRAP=1` | One-time round-trip fixture bootstrap (manual; see below). |
@@ -60,6 +61,39 @@ rollback.
   uploads `e2e/runtime-smoke.spec.ts-snapshots/*-linux.png` as artifacts),
   commit those, then add `SMOKE_SHOTS: "1"` to the post-deploy smoke step's
   env. Until both halves are done, CI runs the walk without image compares.
+
+### embed-smoke.spec.ts
+The DOM-embed lock (EMBED-1). `runtime-smoke` covers `/q` — the **iframe**
+path — so without this a broken embed bundle could ship and auto-rollback
+would never fire. Needs no studio token; runs everywhere.
+
+- **Genuinely cross-origin.** `page.route()` fulfils a fake storefront at
+  `https://wiskr-embed-smoke.test/`; the `<script src>` inside it is NOT
+  intercepted, so it hits the real deploy. Loading our own origin and
+  injecting the script would be same-origin and would prove nothing — the
+  CORS on `/q/:id.embed.json` and the script-src origin discovery are exactly
+  what break in the real world.
+- **The hostile-CSS control.** The fake storefront carries
+  `button{background:#c0392b!important}` (the rules that really did recolour
+  the Start button when this was built light-DOM) plus a **control button
+  outside the shadow root** that the test asserts IS red. Without the control,
+  "the quiz button isn't red" would also pass if the CSS silently stopped
+  applying — a vacuous green.
+- **Public-bundle leak check.** Asserts the SERVED bundle contains no
+  `PrismaClient` / `DATABASE_URL` / `sk-ant-` / `STUDIO_*` / `SHOPIFY_API_SECRET`
+  etc. The embed's import graph reaches into `app/lib`, which also holds
+  server-only modules; this is the tripwire for a refactor that drags one in.
+  It checks what is *served*, not what built locally — only the served copy
+  can leak.
+- **Idempotent re-init.** Fires `shopify:section:load` + `Wiskr.mountAll()`
+  and asserts exactly one `.qz-embed-root`; the theme editor re-runs section
+  JS on every settings change.
+- **Mutation-tested 2026-08-15:** disabling `attachShadow` in the entry fails
+  2 of the 5 tests (the bundle-served and CORS tests correctly stay green).
+  If you change this spec, re-verify it can still fail.
+- `SMOKE_EMBED_QUIZ` overrides the fixture (default
+  `cmq566eof0001qvky8ze2qcwn`). Point it at a LOCAL published quiz together
+  with `SMOKE_BASE=http://localhost:3111` to exercise a local build.
 
 ### builder-roundtrip.spec.ts
 The create→edit→publish→serve regression lock (BIC-2 D1).
