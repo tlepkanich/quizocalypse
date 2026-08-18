@@ -180,10 +180,6 @@
       "hex": 13,
       "boxShadow": 0
     },
-    "app/routes/studio.$id_.analytics.tsx": {
-      "hex": 6,
-      "boxShadow": 0
-    },
     "app/routes/studio.$id_.embed.tsx": {
       "hex": 1,
       "boxShadow": 0
