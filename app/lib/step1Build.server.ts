@@ -12,7 +12,8 @@ import {
 import type { TemplateOption, BuildSession } from "./quizSchema";
 import type { DesignTokensT } from "./designTokens";
 import { GENERIC_BUILD_ERROR } from "./step2Build.server";
-import { reportError } from "./log.server";
+import { directionMatchesGrounding } from "./groundingGuard";
+import { reportError, logFor } from "./log.server";
 
 // Re-export the pure bucket resolver so callers can import the whole bucket
 // API (pure resolve + IO persist) from one place.
@@ -193,16 +194,42 @@ export async function startStep1Build(
   const struggle = session.goal?.struggle_text?.trim();
   const goalPrompt = struggle ? `${goal}\n\nShoppers struggle with: ${struggle}` : goal;
 
+  // GEN-GROUND — same off-catalog guard as buildQuizFromPicked: a direction
+  // card whose text shares no topical vocabulary with the confirmed buckets
+  // (+ the merchant's OWN goal — never the angle fallback, which would match
+  // itself) must not name the quiz or steer the build. The build grounds in
+  // the confirmed buckets either way.
+  const merchantGoal = session.goal?.goal_text?.trim() ?? "";
+  const directionOk =
+    cats.length === 0 ||
+    directionMatchesGrounding(
+      `${picked.title} ${picked.angle}`,
+      [...cats.map((c) => c.name), ...cats.flatMap((c) => c.tags), merchantGoal].join(" "),
+    );
+  const quizName = directionOk ? picked.title : `${cats[0]?.name ?? "Catalog"} Finder`;
+  if (!directionOk) {
+    logFor("step1").warn(
+      { quizId, cardTitle: picked.title, buckets: cats.map((c) => c.name) },
+      "picked direction is off-catalog — bucket-derived name, card angle dropped",
+    );
+  }
+  // With no merchant goal, `goal` above fell back to the card's angle — which
+  // an off-catalog card must not supply either. Neutral bucket-derived goal.
+  const effectiveGoalPrompt =
+    directionOk || merchantGoal
+      ? goalPrompt
+      : `Help shoppers find the right ${cats[0]?.name ?? "product"} for their needs.`;
+
   await prisma.quiz.update({
     where: { id: quizId },
-    data: { name: picked.title, buildState: "building" },
+    data: { name: quizName, buildState: "building" },
   });
 
   void runAiOnboardingBuild({
     shopId,
     quizId,
-    name: picked.title,
-    goalPrompt,
+    name: quizName,
+    goalPrompt: effectiveGoalPrompt,
     questionCount: 6,
     tone: "friendly",
     flow: {
@@ -212,8 +239,9 @@ export async function startStep1Build(
     },
     experienceType: picked.experience_type,
     ...(cats.length ? { preResolvedBuckets: cats } : {}),
-    directionAngle: picked.angle,
-    sampleQuestionSeeds: picked.sample_questions,
+    ...(directionOk
+      ? { directionAngle: picked.angle, sampleQuestionSeeds: picked.sample_questions }
+      : {}),
     designTokens: draftTokens,
   })
     // ai-fallbacks Gap 1 — runAiOnboardingBuild swallows its own AI failure and

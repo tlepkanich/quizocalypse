@@ -17,6 +17,7 @@ import {
 import { Quiz, BuildSession, PickedTemplate, QuizType as QuizTypeSchema } from "./quizSchema";
 import { applyManualDeciderSkeleton } from "./smartBuild";
 import { dialsToBuildDirectives, autoQuizName } from "./dialDirectives";
+import { directionMatchesGrounding } from "./groundingGuard";
 import { industryGuidanceText } from "./industryTemplates";
 import {
   runAiOnboardingBuild,
@@ -125,6 +126,9 @@ export async function generateStep2Types(
           vertical: ctx.positioning.vertical,
           priceTier: ctx.positioning.price_tier,
           demographic: ctx.positioning.demographic,
+          // GEN-GROUND — research about the products THIS quiz routes to.
+          quizGoal: input.goal,
+          bucketNames: buckets.map((b) => b.name),
         }));
 
   const types = await generateQuizTypes({
@@ -371,10 +375,23 @@ export function startStep2Types(
       // an in-flight prefetch is awaited (single-flight); a cold cache runs the
       // identical inline research as before. FAST F3 — only announce the
       // "research" checkpoint when we genuinely have to wait for research.
-      const cachedResearch = await peekFreshShopWebResearch(shopId);
+      // GEN-GROUND — the typing job knows the quiz (goal + confirmed buckets),
+      // so it asks for FOCUSED research: a cached brand-level record serves
+      // only when it topically covers these buckets; otherwise research
+      // re-runs about the right products (the pet-cache-on-outdoor-quiz fix).
+      const focusBuckets =
+        input.buckets ??
+        (
+          await prisma.category.findMany({
+            where: { shopId, quizId },
+            select: { name: true, tags: true },
+          })
+        ).map((c) => ({ name: c.name, tags: c.tags }));
+      const focus = { goal: input.goal, bucket_names: focusBuckets.map((b) => b.name) };
+      const cachedResearch = await peekFreshShopWebResearch(shopId, focus);
       if (cachedResearch === null) await writeGenProgress(quizId, "research");
       const tResearch = Date.now();
-      const webResearchText = cachedResearch ?? (await getOrStartShopWebResearch(shopId));
+      const webResearchText = cachedResearch ?? (await getOrStartShopWebResearch(shopId, focus));
       logFor("step2").info({ quizId, ms: Date.now() - tResearch }, "research took");
 
       await writeGenProgress(quizId, "types");
@@ -659,6 +676,35 @@ export async function buildQuizFromPicked(
   const goalPrompt = struggle ? `${goal}\n\nShoppers struggle with: ${struggle}` : goal;
   const { tokenPatch, promptDirectives } = dialsToBuildDirectives(picked.design_dials);
 
+  // GEN-GROUND (owner incident 2026-08-16) — the picked card's title becomes
+  // the quiz NAME and its angle + sample questions steer the question build,
+  // all unvalidated. When the card's text shares NO topical vocabulary with
+  // the confirmed buckets (names + routing tags + the merchant's goal), the
+  // card was drafted off-catalog: fall back to a bucket-derived name and drop
+  // the card's angle/seeds so they can't steer generation off-catalog too.
+  // The build itself already grounds in the confirmed buckets either way.
+  const primaryBucket = enabledBuckets[0];
+  const directionOk =
+    !primaryBucket ||
+    directionMatchesGrounding(
+      `${rich.title} ${rich.angle}`,
+      [
+        ...enabledBuckets.map((b) => b.name),
+        ...enabledBuckets.flatMap((b) => b.tags),
+        goal,
+      ].join(" "),
+    );
+  const buildName = directionOk
+    ? picked.quiz_name
+    : autoQuizName(`${primaryBucket?.name ?? "Catalog"} Finder`, new Date());
+  if (!directionOk) {
+    logFor("step2").warn(
+      { quizId, cardTitle: rich.title, buckets: enabledBuckets.map((b) => b.name) },
+      "picked direction is off-catalog — bucket-derived name, card angle/seeds dropped",
+    );
+    await prisma.quiz.update({ where: { id: quizId }, data: { name: buildName } });
+  }
+
   // The merchant's Design-step theme lives on the draft doc; thread it into the
   // build as the base tokens (the dial tokenPatch still overlays on top). Absent
   // (unedited draft) → null → the build falls back to the seed's house tokens.
@@ -710,7 +756,7 @@ export async function buildQuizFromPicked(
     runAiOnboardingBuild({
       shopId,
       quizId,
-      name: picked.quiz_name,
+      name: buildName,
       goalPrompt,
       questionCount: picked.question_count,
       tone: "friendly",
@@ -723,8 +769,9 @@ export async function buildQuizFromPicked(
       ...(logicModel ? { logicModel } : {}),
       ...(recPageSettings ? { recPageSettings } : {}),
       ...(enabledBuckets.length ? { preResolvedBuckets: enabledBuckets } : {}),
-      directionAngle: rich.angle,
-      sampleQuestionSeeds: rich.sample_questions,
+      ...(directionOk
+        ? { directionAngle: rich.angle, sampleQuestionSeeds: rich.sample_questions }
+        : {}),
       // PORT-10 — a global industry starter carries structured metadata; render
       // it into prompt guidance. AI-generated / merchant-saved templates have
       // no `industry` block → nothing is added (byte-identical goal context).

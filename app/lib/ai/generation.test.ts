@@ -5,6 +5,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type * as ClientModule from "./client";
 import {
   QUESTION_WRITING_RULES,
+  QUIZ_TYPES_SYSTEM_PROMPT,
+  RICH_TEMPLATES_SYSTEM_PROMPT,
   stripEmoji,
   stripAnswerEmDash,
   generateQuestionFlow,
@@ -63,6 +65,19 @@ describe("stripEmoji — deterministic pictograph sanitizer", () => {
 
   it("never collapses an all-emoji string to empty", () => {
     expect(stripEmoji("🎉🎉")).toBe("🎉🎉");
+  });
+});
+
+describe("Haiku card prompts — catalog grounding (GEN-GROUND)", () => {
+  it("the types pass grounds in buckets/catalog and treats identity+research as form-only", () => {
+    expect(QUIZ_TYPES_SYSTEM_PROMPT).toContain("GROUND EVERY TYPE");
+    expect(QUIZ_TYPES_SYSTEM_PROMPT).toContain("IGNORE those categories");
+    expect(QUIZ_TYPES_SYSTEM_PROMPT).toContain("no em dashes");
+  });
+
+  it("the templates pass carries the same grounding rule (its title names the quiz)", () => {
+    expect(RICH_TEMPLATES_SYSTEM_PROMPT).toContain("GROUND EVERY TEMPLATE");
+    expect(RICH_TEMPLATES_SYSTEM_PROMPT).toContain("no em dashes");
   });
 });
 

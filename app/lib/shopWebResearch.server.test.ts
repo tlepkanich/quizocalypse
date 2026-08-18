@@ -1,11 +1,14 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import {
   positioningHash,
+  focusHash,
+  recordServesFocus,
   parseWebResearchRecord,
   isFreshWebResearch,
   resolveShopWebResearch,
   WEB_RESEARCH_TTL_MS,
   __resetShopWebResearch,
+  type ResearchFocus,
   type ShopWebResearchIO,
   type ShopWebResearchRecord,
 } from "./shopWebResearch.server";
@@ -210,5 +213,69 @@ describe("resolveShopWebResearch", () => {
     const { io, calls } = makeIO({ loadShop: async () => null });
     expect(await resolveShopWebResearch("shop-gone", io)).toBe("");
     expect(calls.research).toBe(0);
+  });
+});
+
+// GEN-GROUND — focus-aware resolution: the 2026-08-16 incident fix (a cached
+// pet-nutrition research record must not serve an outdoor-gear quiz).
+describe("focus-aware research (GEN-GROUND)", () => {
+  const OUTDOOR_FOCUS: ResearchFocus = {
+    goal: "Help shoppers gear up across your Northbound Supply collections.",
+    bucket_names: ["Northbound Supply"],
+  };
+  const PET_TEXT =
+    "Quiz best practices: Pet Nutrition. Lead with species and life stage; pet food finders run 4-6 questions.";
+  const OUTDOOR_TEXT =
+    "Quiz best practices: outdoor gear. Hiking, backpacking and supply checklists convert with 5-7 questions.";
+
+  it("recordServesFocus: exact focus match serves; different focus never serves", () => {
+    const rec = freshRecord({ text: PET_TEXT, focus_hash: focusHash(OUTDOOR_FOCUS) });
+    expect(recordServesFocus(rec, OUTDOOR_FOCUS)).toBe(true);
+    expect(
+      recordServesFocus(rec, { goal: "dog food", bucket_names: ["Puppy"] }),
+    ).toBe(false);
+  });
+
+  it("a brand-level record that does NOT cover the focus triggers focused research", async () => {
+    const { io, calls } = makeIO({ record: freshRecord({ text: PET_TEXT }) });
+    const seen: Array<ResearchFocus | undefined> = [];
+    io.runResearch = async (_p, focus) => {
+      calls.research += 1;
+      seen.push(focus);
+      return OUTDOOR_TEXT;
+    };
+    expect(await resolveShopWebResearch("shop-focus-miss", io, OUTDOOR_FOCUS)).toBe(OUTDOOR_TEXT);
+    expect(calls.research).toBe(1);
+    expect(seen[0]).toEqual(OUTDOOR_FOCUS);
+    // The new record is stamped with the focus hash.
+    expect(calls.saved[0]?.focus_hash).toBe(focusHash(OUTDOOR_FOCUS));
+  });
+
+  it("a brand-level record that DOES cover the focus is reused — no research run", async () => {
+    const { io, calls } = makeIO({ record: freshRecord({ text: OUTDOOR_TEXT }) });
+    expect(await resolveShopWebResearch("shop-focus-hit", io, OUTDOOR_FOCUS)).toBe(OUTDOOR_TEXT);
+    expect(calls.research).toBe(0);
+  });
+
+  it("a focused record with the SAME focus is a plain cache hit", async () => {
+    const { io, calls } = makeIO({
+      record: freshRecord({ text: OUTDOOR_TEXT, focus_hash: focusHash(OUTDOOR_FOCUS) }),
+    });
+    expect(await resolveShopWebResearch("shop-focus-same", io, OUTDOOR_FOCUS)).toBe(OUTDOOR_TEXT);
+    expect(calls.research).toBe(0);
+  });
+
+  it("focusless callers keep today's behavior with any fresh record", async () => {
+    const { io, calls } = makeIO({
+      record: freshRecord({ text: PET_TEXT, focus_hash: focusHash(OUTDOOR_FOCUS) }),
+    });
+    expect(await resolveShopWebResearch("shop-focusless", io)).toBe(PET_TEXT);
+    expect(calls.research).toBe(0);
+  });
+
+  it("parseWebResearchRecord round-trips focus_hash and tolerates its absence", () => {
+    const rec = freshRecord({ focus_hash: "deadbeef" });
+    expect(parseWebResearchRecord(rec)?.focus_hash).toBe("deadbeef");
+    expect(parseWebResearchRecord(freshRecord())?.focus_hash).toBeUndefined();
   });
 });

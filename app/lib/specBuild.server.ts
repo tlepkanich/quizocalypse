@@ -256,10 +256,16 @@ export function startSpeculativeBuild(
       if (!(await specAlive(quizId, signature))) return;
 
       // Research — the FAST F1 shop-level cache (prefetched at funnel entry)
-      // makes this instant in the common case.
-      const cachedResearch = await peekFreshShopWebResearch(shopId);
+      // makes this instant in the common case. GEN-GROUND — focused on this
+      // quiz's goal + buckets, same as the typing job.
+      const specFocus = {
+        goal: inputs.goal,
+        bucket_names: inputs.cats.map((c) => c.name),
+      };
+      const cachedResearch = await peekFreshShopWebResearch(shopId, specFocus);
       if (cachedResearch === null) await writeGenProgress(quizId, "research");
-      const webResearchText = cachedResearch ?? (await getOrStartShopWebResearch(shopId));
+      const webResearchText =
+        cachedResearch ?? (await getOrStartShopWebResearch(shopId, specFocus));
 
       if (!(await specAlive(quizId, signature))) return;
       await writeGenProgress(quizId, "types");
