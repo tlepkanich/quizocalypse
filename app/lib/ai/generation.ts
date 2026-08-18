@@ -749,13 +749,26 @@ export async function runWebResearchForQuizTypes(input: {
   vertical: string;
   priceTier: string;
   demographic: string[];
+  // GEN-GROUND — the quiz's own context, when the caller has it. The research
+  // then targets the products THIS quiz routes to, not just the brand's
+  // positioning (a multi-category store's positioning can describe a different
+  // product line than the one the merchant picked).
+  quizGoal?: string;
+  bucketNames?: string[];
 }): Promise<string> {
   try {
     const audience = input.demographic.join(", ") || "general shoppers";
+    const focusLine =
+      input.bucketNames?.length || input.quizGoal
+        ? ` This specific quiz recommends from: ${(input.bucketNames ?? []).join(", ") || "(see goal)"}.` +
+          (input.quizGoal ? ` Its goal: ${input.quizGoal.slice(0, 300)}.` : "") +
+          " Research quiz practices for THESE products' category, not other categories the brand may also sell."
+        : "";
     const query =
       `Research best practices for ${input.industry} ${input.vertical} product-recommendation quizzes. ` +
       `Focus on: typical question counts, proven quiz types/formats, and what drives conversion for ` +
-      `${input.priceTier} brands targeting ${audience}.`;
+      `${input.priceTier} brands targeting ${audience}.` +
+      focusLine;
     const res = await createMessage({
       model: MODEL,
       max_tokens: 1536,
@@ -827,9 +840,22 @@ const QUIZ_TYPES_TOOL_SCHEMA = {
   },
 } as const;
 
-const QUIZ_TYPES_SYSTEM_PROMPT =
+export const QUIZ_TYPES_SYSTEM_PROMPT =
   "You propose 2-3 DISTINCT quiz TYPES for a Shopify brand, each tailored to the " +
   "brand's positioning AND real-world best practices for the category. Rules:\n" +
+  // GEN-GROUND (owner incident 2026-08-16) — a pet-nutrition research cache +
+  // brand digest once steered every card pet-ward while the merchant's chosen
+  // buckets were outdoor gear. The catalog summary and buckets are the ground
+  // truth; identity/research advise on form only.
+  "- GROUND EVERY TYPE in the outcome buckets and catalog summary provided: " +
+  "the quiz is about THOSE products. The brand summary, positioning, and web " +
+  "research inform tone, format, and question-count norms ONLY — when they " +
+  "mention product categories that do not appear in the catalog summary or " +
+  "buckets, IGNORE those categories entirely. Never propose a quiz about " +
+  "products the catalog summary does not contain; name each type after what " +
+  "the catalog actually sells.\n" +
+  "- Names are plain product names in plain words — no em dashes, no colon " +
+  "taglines, no subtitle suffixes.\n" +
   // QZY-4 (owner supplement) — fixed archetype mix, so the two cards read as
   // genuinely different products (a matcher vs a persona reveal).
   "- The set MUST contain 1-2 product_match types and EXACTLY 1 personality type.\n" +
@@ -1020,9 +1046,16 @@ const RICH_TEMPLATES_TOOL_SCHEMA = {
   },
 } as const;
 
-const RICH_TEMPLATES_SYSTEM_PROMPT =
+export const RICH_TEMPLATES_SYSTEM_PROMPT =
   "You generate 2-3 DISTINCT template configurations for a chosen quiz type — each " +
   "a full 'battle card'. Rules:\n" +
+  // GEN-GROUND — same ground-truth rule as the types pass; the template title
+  // becomes the quiz's NAME, so an off-catalog title is merchant-visible.
+  "- GROUND EVERY TEMPLATE in the outcome buckets and catalog summary provided: " +
+  "titles, angles, and sample questions must be about THOSE products. Ignore any " +
+  "product category from the brand summary that the catalog summary does not " +
+  "contain. Titles are plain names in plain words — no em dashes, no colon " +
+  "taglines.\n" +
   "- Each template: a title, a one-line angle, a rationale, 2-3 sample question " +
   "texts (never budget / price-range questions — brands don't ask that), exactly 3 feature_notes that distinguish THIS template (e.g. 'Opens with " +
   "a visual mood question'), design dials (imagery/graphics/word_forward high|medium|" +
