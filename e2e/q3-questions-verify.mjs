@@ -8,10 +8,10 @@
 // restore byte-for-byte in the finally.
 //
 // The questions-full-page surface (the AUDIT-22/23 questions-simple list is
-// RETIRED): the step owns a ✎ Questions / ▦ Overview tab pair
-// (.qz-s3-viewtoggle back, but INSIDE the step — Logic stays its own funnel
-// stage) in the .qz-qf-subhead (tab-aware hint · Question library · + Add).
-// ✎ tab: a NAV RAIL (.qz-qf-navcol — "Flow · N questions" head, compact rows
+// RETIRED; owner 2026-08-18: the ✎/▦ tab pair is retired TOO — the step is
+// the ✎ view only, .qz-s3-viewtoggle gone, OverviewLedger parked for the
+// main builder) in the .qz-qf-subhead (hint · Question library · + Add).
+// The view: a NAV RAIL (.qz-qf-navcol — "Flow · N questions" head, compact rows
 // w/ click-to-renumber number (.qz-qf-ncn → inline number input), 2-line
 // editable wording, mono type line, hover ⠿/trash tools + ↑↓ movers,
 // "+ Add question" foot, quiet ✉/◎ termini .qz-qf-navterm) | a drag RESIZER
@@ -23,11 +23,7 @@
 // capture/reveal) plus Mobile/Desktop + icon-only Expand, over the shared
 // DeviceFrame (QRTZ-G2 — canonical 390×745 phone / 960×700 desktop band,
 // fit = min(paneW/w, paneH/h, 1), host floor .55 via the .qz-g2-stage
-// clamp). ▦ tab: the content OverviewLedger — the SAME connected
-// .qz-s3-ledger container as the Logic map, but bulk CONTENT editing
-// (.qz-qf-v2q question cells, FLUSH .qz-qf-alist answers w/ hover ✕, per-type
-// settings column, N+1 ＋ inserters, renumber numchips, decider-guarded
-// delete). No logic here — Maps-to/rules live on the Logic STAGE.
+// clamp). The former ▦ OverviewLedger surface is parked (see section 17).
 //
 // ONE-LINE-CHROME stage seam (unchanged, still asserted): the bar's Continue
 // posts to-logic (build_session.stage persists to "logic") and the Logic
@@ -208,14 +204,12 @@ try {
   ok("older rails retired too (.qz-s3-resizer/.qz-s3-rail/.qz-s3-navterm)",
     (await page.locator(".qz-s3-resizer, .qz-s3-rail, .qz-s3-navterm").count()) === 0);
   ok("one questions-full-page panel", (await page.locator(".qz-qf-panel").count()) === 1);
-  const toggle = page.locator(".qz-qf-subhead .qz-s3-viewtoggle");
-  ok("✎/▦ tab pair lives in the sub-head", (await toggle.count()) === 1 &&
-    (await toggle.locator("button").count()) === 2);
-  ok('"✎ Questions" pressed by default',
-    (await toggle.locator("button").first().getAttribute("aria-pressed")) === "true" &&
-    (await toggle.locator("button").nth(1).getAttribute("aria-pressed")) === "false");
+  // Owner 2026-08-18 — the ✎/▦ tab pair is retired: no toggle, no ledger.
+  ok("✎/▦ tab pair retired (no .qz-s3-viewtoggle, no .qz-s3-ledger)",
+    (await page.locator(".qz-s3-viewtoggle").count()) === 0 &&
+    (await page.locator(".qz-s3-ledger").count()) === 0);
   // QRTZ-S5 hint copy (mock qtab-bar verbatim) — was "…on the phone…".
-  ok('✎ hint "Click any text in the preview to edit it"',
+  ok('hint "Click any text in the preview to edit it"',
     (await page.locator(".qz-qf-hint").textContent())?.trim() === "Click any text in the preview to edit it");
   ok("Question library sub-head entry", await page.locator(".qz-qs-tlib").isVisible());
   ok("+ Add sub-head button", await page.locator(".qz-qs-tbtn", { hasText: "Add" }).isVisible());
@@ -521,197 +515,10 @@ try {
   ok("delete persisted (3 question nodes, flow re-stitched)",
     (afterDel?.nodes ?? []).filter((n) => n.type === "question").length === 3);
 
-  // 17 ── the ▦ Overview tab: the content LEDGER (bulk editing, no logic)
-  await toggle.locator("button").nth(1).click();
-  await page.waitForTimeout(400);
-  ok("▦ swaps the panel for the content ledger",
-    (await page.locator(".qz-qf-view").count()) === 0 &&
-    (await page.locator(".qz-s3-ledger").count()) === 1);
-  // QRTZ-S5 rebase — the Overview is the mock's GRID (.qz-ovw-row rows under
-  // a sticky .qz-ovw-head; the old .qz-s3-card DOM is gone) + QRTZ-OB1: the
-  // role column is back ("Type & role", GAPS §A item 6).
-  ok('▦ hint "Click any question or answer to edit it"',
-    (await page.locator(".qz-qf-hint").textContent())?.trim() ===
-      "Click any question or answer to edit it");
-  ok("3 grid rows with editable question cells (.qz-qf-v2q)",
-    (await page.locator(".qz-s3-ledger .qz-ovw-row").count()) === 3 &&
-    (await page.locator(".qz-qf-v2q").count()) === 3);
-  ok("sticky header reads # · Question · Answers · Type & role",
-    /type & role/i.test((await page.locator(".qz-ovw-head span").nth(3).innerText()) ?? ""));
-  ok("decider numchip carries is-decider; its delete is DISABLED",
-    (await page.locator(".qz-s3-ledger .qz-s3-numchip.is-decider").count()) === 1 &&
-    (await page.locator(".qz-s3-ledger .qz-ovw-row").first().locator(".qz-s3-cdel").isDisabled()));
-  ok("qualifier row's delete is enabled",
-    !(await page.locator(".qz-s3-ledger .qz-ovw-row").nth(1).locator(".qz-s3-cdel").isDisabled()));
-  ok("FLUSH answer lists (2 + 4 rows, numbered)",
-    (await page.locator(".qz-ovw-row").first().locator(".qz-qf-alist li").count()) === 2 &&
-    (await page.locator(".qz-ovw-row").nth(1).locator(".qz-qf-alist li").count()) === 4 &&
-    (await page.locator(".qz-qf-anum").first().textContent())?.trim() === "1");
-  ok("answer ✕ disabled at the 2-floor (row 1), enabled on row 2",
-    (await page.locator(".qz-ovw-row").first().locator(".qz-qf-adel").first().isDisabled()) &&
-    !(await page.locator(".qz-ovw-row").nth(1).locator(".qz-qf-adel").first().isDisabled()));
-  ok("N+1 inserters inside the ledger (4 for 3 questions, leading under the header)",
-    (await page.locator(".qz-s3-ledger .qz-s3-divider").count()) === 4 &&
-    (await page.locator(".qz-s3-ledger > :nth-child(2)").evaluate((el) => el.classList.contains("qz-s3-divider"))));
-  ok("type column: multi has Min/Max steppers, single has none",
-    (await page.locator(".qz-ovw-row").nth(1).locator(".qz-ovw-set .qz-s3-stepper").count()) === 2 &&
-    (await page.locator(".qz-ovw-row").first().locator(".qz-ovw-set").count()) === 0);
-  ok("rating row: scale preview + endpoint label inputs",
-    (await page.locator(".qz-ovw-row").nth(2).locator(".qz-s3-scaleprev").count()) === 1 &&
-    (await page.locator(".qz-ovw-row").nth(2).locator(".qz-s3-slab").count()) === 2);
-
-  // QRTZ-OB1 — the role column: every question row carries a role tag; the
-  // decider's reads "Picks the result" (mock vocabulary, ◆ gone).
-  ok("every question row carries a role tag; decider reads Picks the result",
-    (await page.locator(".qz-ovw-role").count()) === 3 &&
-    /picks the result/i.test(
-      (await page.locator(".qz-ovw-row").first().locator(".qz-ovw-role").innerText()) ?? ""));
-  // The role menu is the mock's popover (shared.mjs 443–452) and edits ride
-  // the SAME barrel mutation as the Logic window (setQuestionRole) — proven
-  // by a round-trip read back through the draft.
-  const q2role0 = (await draftDoc())?.nodes?.find((n) => n.id === "q2")?.data?.role ?? "qualifier";
-  ok("q2 starts Asked only (seed contract)", q2role0 === "qualifier");
-  await page.locator(".qz-ovw-row").nth(1).locator(".qz-ovw-role").click();
-  const roleMenu = page.locator(".qz-popover .qz-ltab-menu");
-  ok("role menu: mock vocabulary, one-decider foot, multi can't decide",
-    /Question 2 does/.test((await roleMenu.locator(".qz-ltab-menu-title").innerText()) ?? "") &&
-    (await roleMenu.locator(".qz-ltab-menu-row").count()) === 3 &&
-    /One question picks the result/.test((await roleMenu.innerText()) ?? "") &&
-    (await roleMenu.locator(".qz-ltab-menu-row:disabled", { hasText: "Picks the result" }).count()) === 1);
-  // QRTZ-H2 — the owner-reported cutoff: the sub hint's flex squeezed the
-  // main label ("Narrows" → "Narro…"). Fixed side + a viewport geometry pin.
-  ok("role-menu labels are never cut off (QRTZ-H2 label fix)",
-    await roleMenu.locator(".qz-ltab-menu-row-main").evaluateAll(
-      (els) => els.every((el) => el.scrollWidth <= el.clientWidth + 1)));
-  ok("role menu fully inside the viewport (portaled, fixed)",
-    await page.locator(".qz-popover").evaluate((el) => {
-      const r = el.getBoundingClientRect();
-      return r.top >= 0 && r.left >= 0 && r.bottom <= window.innerHeight && r.right <= window.innerWidth;
-    }));
-
-  // ── QRTZ-H2: flipping an UNMAPPED question to Narrows opens the attribute
-  // dialog (mock .ap) INSTEAD of writing the role — role + field + seeded
-  // values commit together on Use; Cancel writes NOTHING (no half-state).
-  const beforeDialog = JSON.stringify(await draftDoc());
-  await roleMenu.locator(".qz-ltab-menu-row", { hasText: "Narrows" }).click();
-  const ap = page.locator(".qz-ap");
-  await page.waitForTimeout(300);
-  ok("flip-to-Narrows opens the attribute dialog (no immediate role write)",
-    (await ap.count()) === 1);
-  ok('dialog copy: title "How should question 2 narrow?" + sub + coverage foot',
-    /How should question 2 narrow\?/.test((await ap.locator(".qz-ap-title").innerText()) ?? "") &&
-    /matched against one product attribute/.test((await ap.locator(".qz-ap-sub").innerText()) ?? "") &&
-    /Coverage matters\./.test((await ap.locator(".qz-ap-foot").innerText()) ?? ""));
-  const tabCount = await ap.locator(".qz-ap-tab").count();
-  const rowCount = await ap.locator(".qz-ap-row").count();
-  ok("kind tabs carry real counts; rows carry radio · key · values · kind · coverage",
-    tabCount >= 1 && rowCount >= 1 &&
-    (await ap.locator(".qz-ap-tab .qz-ap-tabn").first().innerText()).trim().match(/^\d+$/) !== null &&
-    (await ap.locator(".qz-ap-row").first().locator(".qz-ap-radio").count()) === 1 &&
-    /\d+ of \d+/.test((await ap.locator(".qz-ap-row").first().locator(".qz-ap-cov").innerText()) ?? ""),
-    `${tabCount} tabs · ${rowCount} rows`);
-  ok("Use is disabled until a field is picked (select-then-commit)",
-    await ap.locator(".qz-ap-foot .qz-btn-primary").isDisabled());
-  // Read the first row — the seed round renames q2's answers to ITS values,
-  // so the probe stays deterministic against ANY catalog.
-  const first = ap.locator(".qz-ap-row").first();
-  const apKey = await first.locator(".qz-ap-key").evaluate((el) => el.childNodes[0]?.textContent?.trim() ?? "");
-  const apKind = (await first.locator(".qz-ap-kind").innerText()).trim();
-  const apVals = ((await first.locator(".qz-ap-vals").innerText()) ?? "").split("·").map((s) => s.trim()).filter(Boolean);
-  console.log(`  dialog first row: ${apKind} "${apKey}" — values ${apVals.join(" | ")}`);
-  await ap.locator(".qz-ap-foot .qz-btn:not(.qz-btn-primary)").click(); // Cancel
-  await page.waitForTimeout(1600); // an erroneous write would autosave in 700ms
-  ok("Cancel leaves the doc UNCHANGED (draft byte read-back)",
-    (await ap.count()) === 0 && JSON.stringify(await draftDoc()) === beforeDialog);
-
-  // Rename q2's first two answers to the field's own values, reopen, pick
-  // the row, Use — then read the seeded storage back from the draft.
-  const val1 = apVals[0] ?? "";
-  const val2 = apVals[1] ?? apVals[0] ?? "";
-  for (const [i, v] of [[0, val1], [1, val2]]) {
-    await page.locator(".qz-ovw-row").nth(1).locator(".qz-qf-atx").nth(i).click();
-    await page.keyboard.press("ControlOrMeta+a");
-    await page.keyboard.type(v, { delay: 15 });
-    await page.keyboard.press("Enter");
-    await page.waitForTimeout(200);
-  }
-  ok("answers renamed to the field's values (seed setup persisted)",
-    await waitDraft((d) => {
-      const q2 = d?.nodes?.find((n) => n.id === "q2");
-      return q2?.data?.answers?.[0]?.text === val1 && q2?.data?.answers?.[1]?.text === val2;
-    }));
-  await page.locator(".qz-ovw-row").nth(1).locator(".qz-ovw-role").click();
-  await roleMenu.locator(".qz-ltab-menu-row", { hasText: "Narrows" }).click();
-  await page.waitForTimeout(300);
-  await ap.locator(".qz-ap-row").first().click();
-  ok("radio select marks the row (is-on)",
-    (await ap.locator(".qz-ap-row.is-on").count()) === 1);
-  await ap.locator(".qz-ap-foot .qz-btn-primary").click();
-  // ONE commit: setQuestionRole + per-answer setAnswerFilterValues through
-  // writeValuesForField — the SAME seam QuestionWindow writes.
-  const carriesField = (ans) => {
-    if (apKind === "Tag") return (ans?.tags ?? []).some((t) => t.toLowerCase().startsWith(`${apKey.toLowerCase()}:`));
-    if (apKind === "Metafield") return (ans?.metafield_filters ?? []).some((m) => m.key === apKey);
-    if (apKind === "Option") return (ans?.variant_filters ?? []).some((v) => v.name === apKey);
-    return (ans?.product_type_filters ?? []).length > 0;
-  };
-  ok("Use writes role=filter + seeds the renamed answers' values (draft read-back)",
-    await waitDraft((d) => {
-      const q2 = d?.nodes?.find((n) => n.id === "q2");
-      if (q2?.data?.role !== "filter") return false;
-      const a = q2?.data?.answers ?? [];
-      return carriesField(a[0]) && carriesField(a[1]);
-    }));
-  // The derived line is the mock's attr-slot now: a PICKER that reopens the
-  // dialog with the current field preselected; Esc discards (role stays).
-  const slot = page.locator(".qz-ovw-row").nth(1).locator(".qz-ap-slot");
-  ok("attr slot shows the derived field and is clickable",
-    (await slot.count()) === 1 && /narrows on/.test((await slot.innerText()) ?? "") &&
-    !/nothing yet/.test((await slot.innerText()) ?? ""));
-  await slot.click();
-  await page.waitForTimeout(300);
-  ok("attr slot reopens the dialog with the current field preselected",
-    (await ap.count()) === 1 && (await ap.locator(".qz-ap-row.is-on").count()) === 1);
-  await page.screenshot({ path: `${SHOTS}/4b-attribute-dialog.png` });
-  await page.keyboard.press("Escape");
-  await page.waitForTimeout(400);
-  ok("Esc closes the dialog without writes (role stays filter)",
-    (await ap.count()) === 0 &&
-    (await draftDoc())?.nodes?.find((n) => n.id === "q2")?.data?.role === "filter");
-  // Restore the role (Asked only writes directly — no dialog on demote). The
-  // seeded values stay on the answers, QuestionWindow parity ("everything you
-  // mapped before comes back"); the finally-restore returns the exact bytes.
-  await page.locator(".qz-ovw-row").nth(1).locator(".qz-ovw-role").click();
-  await roleMenu.locator(".qz-ltab-menu-row", { hasText: "Asked only" }).click();
-  ok("role restored (Asked only round-trip through setQuestionRole)",
-    await waitDraft((d) => d?.nodes?.find((n) => n.id === "q2")?.data?.role === "qualifier"));
-
-  // inline cell edit persists (row 2, answer 2)
-  await page.locator(".qz-ovw-row").nth(1).locator(".qz-qf-atx").nth(1).click();
-  await page.keyboard.press("ControlOrMeta+a");
-  await page.keyboard.type("Grippy edges", { delay: 20 });
-  await page.keyboard.press("Enter");
-  ok("ledger answer edit persisted (prisma)",
-    await waitDraft((d) => d?.nodes?.find((n) => n.id === "q2")?.data?.answers?.[1]?.text === "Grippy edges"));
-  // the Max stepper writes max_selections
-  await page.locator('button[aria-label="Increase maximum selections"]').click();
-  ok("Max stepper persisted (max_selections 2 → 3)",
-    await waitDraft((d) => d?.nodes?.find((n) => n.id === "q2")?.data?.max_selections === 3));
-  // numchip renumber affordance opens; Escape cancels
-  await page.locator(".qz-s3-numchip.is-edit").first().click();
-  ok("numchip click opens the renumber input", await page.locator(".qz-s3-numinput").isVisible());
-  await page.keyboard.press("Escape");
-  await page.waitForTimeout(200);
-  ok("Escape cancels the renumber (order intact)",
-    (await page.locator(".qz-s3-numinput").count()) === 0 &&
-    edgeChain(await draftDoc()).includes("q1→q2"));
-  await page.screenshot({ path: `${SHOTS}/4-overview-ledger.png`, fullPage: true });
-
-  // back to ✎ — the rail + phone return
-  await toggle.locator("button").first().click();
-  await page.waitForTimeout(300);
-  ok("✎ restores the rail + phone view",
-    (await page.locator(".qz-qf-view").count()) === 1 && (await page.locator(".qz-s3-ledger").count()) === 0);
+  // 17 ── (RETIRED 2026-08-18) the ▦ Overview ledger left the funnel — its
+  // bulk-editing surface (role menu, attribute dialog, steppers, renumber)
+  // is parked in OverviewLedger.tsx for the main builder. Asserted absent in
+  // section 1; the role/attribute seams stay covered by the Logic step.
   await page.screenshot({ path: `${SHOTS}/5-full-tab.png`, fullPage: true });
 
   // 18 ── one-line-chrome stage seam: the bar's Continue posts the to-logic
@@ -723,8 +530,6 @@ try {
     (await draftDoc())?.build_session?.stage === "logic");
   ok("Questions panel unmounted on the Logic stage",
     (await page.locator(".qz-qf-panel").count()) === 0);
-  ok("✎/▦ tab pair is Questions-step-only (absent on Logic)",
-    (await page.locator(".qz-s3-viewtoggle").count()) === 0);
   const lvGeo = await page.locator(".qz-s3-logicview").evaluate((el) => {
     const r = el.getBoundingClientRect();
     return { w: r.width, left: r.left, right: window.innerWidth - r.right };
