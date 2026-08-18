@@ -131,10 +131,12 @@ Mounts into any `[data-wiskr-quiz]` element:
 ## POST /captures — email capture
 
 ```json
-{ "quiz_id": "…", "session_id": "…", "email": "a@b.co", "first_name": "?", "phone": "?" }
+{ "quiz_id": "…", "session_id": "…", "email": "a@b.co", "first_name": "?", "phone": "?", "marketing_consent": true }
 ```
 
-Zod-validated (`email` ≤254 chars, `first_name` ≤100, `phone` ≤40). Returns
+Zod-validated (`email` ≤254 chars, `first_name` ≤100, `phone` ≤40;
+`marketing_consent` optional boolean — sent only when the quiz shows the
+marketing-consent checkbox, stored as null when the quiz never asked). Returns
 **`202 {"ok":true}`** — the write is accepted for the merchant's dashboard;
 callers are fire-and-forget. `400` invalid payload (first 3 Zod issues
 echoed), `404` unknown quiz, `429` limited, `500` controlled JSON on DB

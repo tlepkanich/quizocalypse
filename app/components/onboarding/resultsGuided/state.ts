@@ -8,24 +8,30 @@ import { setRecPageGlobal } from "../../../lib/quizMutations";
    discipline or a whole-key discount_config replace. */
 
 // ── read-time defaults for the guided-only fields (mock §4) ─────────────────
+// rg-wiring (2026-08-18): the defaults now MATCH the shipped runtime's
+// absent-field behavior (capture is mandatory, no consent row, a default
+// loading interstitial plays, no verified tag, no extras shelf). The sparse
+// patch clears default-valued keys, so "default in the UI" and "absent in
+// the doc" must mean the same live behavior — before this, the UI showed
+// best-practice defaults the runtime never rendered.
 export const GUIDED_DEFAULTS = {
   perRow: 2,
-  showVerified: true,
+  showVerified: false,
   capturePlacement: "before" as NonNullable<RecPageGlobal["capturePlacement"]>,
-  captureRequired: false,
+  captureRequired: true,
   captureCta: "Show my results",
   captureSkipLabel: "No thanks, just show my results",
-  consentOn: true,
+  consentOn: false,
   consentCopy: "Email me offers and updates. Unsubscribe anytime.",
   termsLabel: "Terms & Conditions",
   termsUrl: "/policies/terms-of-service",
   privacyLabel: "Privacy Policy",
   privacyUrl: "/policies/privacy-policy",
-  loadingOn: false,
+  loadingOn: true,
   loadingMs: 2000,
   loadingNamed: true,
   loadingSteps: ["Reading your answers", "Scoring products", "Picking your best matches"],
-  extrasOn: true,
+  extrasOn: false,
   // QRTZ-S6 (mock .q-alt-head) — read-time default only; a doc that stored
   // its own heading keeps it.
   extrasHeading: "Also worth a look",
@@ -151,17 +157,22 @@ export const combinesUnset = (d: GuidedDiscount): boolean =>
    by the published runtime / main builder yet. Anything false here renders a
    quiet "not connected yet" tag beside its control so it gets wired rather
    than silently dropped. Update this map as the runtime seams land. */
+// rg-wiring (2026-08-18): the client-runtime seams landed — an explicit
+// non-default value now renders on the published page. Still false: the
+// three that need SERVER work (inline/discount placements need the on-submit
+// code mint; advanced discount needs eligibility/expiry enforcement and
+// Klaviyo/Rivo delivery integrations).
 export const WIRED: Record<string, boolean> = {
   headline: true,
   whyCopy: true,
   layout: true,
   gridMax: true,
-  perRow: false, // runtime grid is its own responsive rule today
+  perRow: true, // explicit value pins the grid columns; default keeps the responsive rule
   showStars: true,
-  showVerified: false,
+  showVerified: true,
   showAtc: true,
   showDesc: true,
-  descOverrides: false,
+  descOverrides: true,
   showAddAll: true,
   discount_basic: true, // enabled/kind/value/limits → publish-time code (quizPublish)
   discount_advanced: false, // code_mode/eligibility/expiry-hours/scope/combines/purchase/deliver
@@ -169,10 +180,10 @@ export const WIRED: Record<string, boolean> = {
   placement_none: true,
   placement_inline: false,
   placement_discount: false, // needs the server-side mint on submit (discount.server seam exists)
-  captureRequired: false,
-  captureWording: true, // captureHeadline/Subtext wired; cta/skip labels are NOT
-  captureCtaSkip: false,
-  consent: false, // captureTermsOn/Text wired; marketing-consent row + split links are NOT
-  loading: false,
-  extras: false,
+  captureRequired: true,
+  captureWording: true,
+  captureCtaSkip: true,
+  consent: true, // marketing-consent row + split links + /captures marketing_consent
+  loading: true,
+  extras: true,
 };

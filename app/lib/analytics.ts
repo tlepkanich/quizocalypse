@@ -49,6 +49,8 @@ export const CapturePayload = z.object({
   email: z.string().email().max(254),
   first_name: z.string().max(100).optional(),
   phone: z.string().max(40).optional(),
+  // rg-wiring (2026-08-18) — the guided flow's marketing-consent checkbox.
+  marketing_consent: z.boolean().optional(),
 });
 
 // §L L2 — post-result feedback. rating: thumbs (1 up / 0 down) or stars (1–5).

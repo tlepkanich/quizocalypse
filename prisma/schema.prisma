@@ -298,6 +298,9 @@ model EmailCapture {
   email      String
   firstName  String?
   phone      String?
+  // rg-wiring (2026-08-18) — the guided flow's marketing-consent checkbox:
+  // null = the quiz never asked; true/false = the shopper's explicit answer.
+  marketingConsent Boolean?
   capturedAt DateTime @default(now())
 
   quiz Quiz @relation(fields: [quizId], references: [id], onDelete: Cascade)

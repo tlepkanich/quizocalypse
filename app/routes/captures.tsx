@@ -84,6 +84,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         email: parsed.data.email,
         firstName: parsed.data.first_name ?? null,
         phone: parsed.data.phone ?? null,
+        marketingConsent: parsed.data.marketing_consent ?? null,
       },
     });
   } catch (err) {

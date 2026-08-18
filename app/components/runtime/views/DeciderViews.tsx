@@ -185,9 +185,11 @@ export function DeciderLoadingView({
 
 // §7.1 — the pre-reveal capture screen. Renders only the fields the merchant
 // enabled (email is default-ON via REC_PAGE_DEFAULTS and MANDATORY when on —
-// no skip link, the spec's deliberate delta from the legacy gate). All-off
-// never mounts this (the caller skips the screen). Preview never POSTs; the
-// finally block always reveals, so a capture failure can't strand the shopper.
+// the spec's deliberate delta from the legacy gate; rg-wiring 2026-08-18:
+// an EXPLICIT captureRequired:false from the guided Results flow now adds
+// the skip link — absent keeps the mandatory posture). All-off never mounts
+// this (the caller skips the screen). Preview never POSTs; the finally
+// block always reveals, so a capture failure can't strand the shopper.
 export function DeciderCaptureView({
   config,
   styles,
@@ -210,6 +212,9 @@ export function DeciderCaptureView({
   // QZY-3 — the optional terms & conditions consent: when the merchant turns
   // it on, the box must be TICKED before the reveal unlocks.
   const [termsChecked, setTermsChecked] = useState(false);
+  // rg-wiring — the guided flow's marketing consent: OPT-IN (starts
+  // unchecked) and never gates the reveal; the answer rides the capture POST.
+  const [marketingChecked, setMarketingChecked] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const emailValid = /^\S+@\S+\.\S+$/.test(email);
   const canSubmit =
@@ -233,6 +238,8 @@ export function DeciderCaptureView({
             email,
             ...(name.trim() ? { first_name: name.trim() } : {}),
             ...(phone.trim() ? { phone: phone.trim() } : {}),
+            // Only when the quiz ASKED — null-vs-answered stays meaningful.
+            ...(config.consentOn === true ? { marketing_consent: marketingChecked } : {}),
           }),
           keepalive: true,
         });
@@ -348,6 +355,33 @@ export function DeciderCaptureView({
             </span>
           </label>
         )}
+        {/* rg-wiring — the guided flow's marketing-consent row: opt-in,
+            never blocks the reveal (distinct from the blocking terms box
+            above). Renders only on an explicit consentOn:true. */}
+        {config.consentOn === true && (
+          <label
+            style={{
+              display: "flex",
+              alignItems: "flex-start",
+              gap: 10,
+              fontSize: "calc(var(--qz-base-size) * 0.85)",
+              fontFamily: "var(--qz-font-body)",
+              color: "var(--qz-color-muted)",
+              cursor: "pointer",
+              textAlign: "left",
+            }}
+          >
+            <input
+              type="checkbox"
+              checked={marketingChecked}
+              onChange={(e) => setMarketingChecked(e.target.checked)}
+              style={{ marginTop: 3 }}
+            />
+            <span>
+              {config.consentCopy || "Email me offers and updates. Unsubscribe anytime."}
+            </span>
+          </label>
+        )}
       </div>
       <button
         style={{
@@ -360,8 +394,64 @@ export function DeciderCaptureView({
         disabled={!canSubmit}
         onClick={handleSubmit}
       >
-        {submitting ? "…" : tc("continue")}
+        {/* rg-wiring — a merchant-written CTA (guided "The ask") wins. */}
+        {submitting ? "…" : config.captureCta?.trim() || tc("continue")}
       </button>
+      {/* rg-wiring — the guided flow's optional-capture skip: renders only
+          on an EXPLICIT captureRequired:false (absent = mandatory, the
+          shipped posture). Skipping reveals without a POST. */}
+      {config.captureRequired === false && (
+        <button
+          type="button"
+          onClick={() => onDone()}
+          style={{
+            marginTop: 12,
+            border: "none",
+            background: "transparent",
+            color: "var(--qz-color-muted)",
+            fontSize: "calc(var(--qz-base-size) * 0.85)",
+            fontFamily: "var(--qz-font-body)",
+            textDecoration: "underline",
+            cursor: "pointer",
+          }}
+        >
+          {config.captureSkipLabel?.trim() || "No thanks, just show my results"}
+        </button>
+      )}
+      {/* rg-wiring — split policy links (guided "Consent" tab): render only
+          the links the merchant explicitly set. */}
+      {(config.termsUrl || config.privacyUrl) && (
+        <p
+          style={{
+            marginTop: 14,
+            fontSize: "calc(var(--qz-base-size) * 0.78)",
+            fontFamily: "var(--qz-font-body)",
+            color: "var(--qz-color-muted)",
+          }}
+        >
+          {config.termsUrl ? (
+            <a
+              href={config.termsUrl}
+              target="_blank"
+              rel="noreferrer"
+              style={{ color: "inherit", textDecoration: "underline" }}
+            >
+              {config.termsLabel || "Terms & Conditions"}
+            </a>
+          ) : null}
+          {config.termsUrl && config.privacyUrl ? " · " : null}
+          {config.privacyUrl ? (
+            <a
+              href={config.privacyUrl}
+              target="_blank"
+              rel="noreferrer"
+              style={{ color: "inherit", textDecoration: "underline" }}
+            >
+              {config.privacyLabel || "Privacy Policy"}
+            </a>
+          ) : null}
+        </p>
+      )}
     </div>
   );
 }
@@ -385,6 +475,7 @@ export function DeciderResultView({
   aiWhyCopy,
   engagement,
   answerLabels,
+  extras,
   onReset,
 }: {
   decider: NonNullable<ExplainedRecommendation["decider"]>;
@@ -409,6 +500,10 @@ export function DeciderResultView({
   // caller from the doc, only when cfg.showPerWhy is on): grounds the
   // per-product "Because you chose …" chips. Absent → chips never render.
   answerLabels?: string[];
+  // rg-wiring (2026-08-18) — the guided flow's "Also worth a look" shelf,
+  // resolved by the caller from the baked product_index (only when the
+  // merchant explicitly turned extras on). Absent → nothing renders.
+  extras?: { heading: string; copy?: string; products: RecommendedProduct[] };
   onReset: () => void;
 }) {
   const artDirection = useContext(RuntimeArtDirectionContext);
@@ -487,14 +582,21 @@ export function DeciderResultView({
     </div>
   ) : null;
 
+  // rg-wiring — an EXPLICIT perRow (guided "The matches") pins the grid's
+  // column count; absent keeps the shipped responsive rule byte-identical.
+  const perRowCols: React.CSSProperties | null =
+    cfg.perRow != null
+      ? { gridTemplateColumns: `repeat(${cfg.perRow}, minmax(0, 1fr))` }
+      : null;
   const gridStyle: React.CSSProperties = minimal
     ? {
         marginTop: 20,
         display: "grid",
         gap: 16,
         gridTemplateColumns: "repeat(auto-fit, minmax(190px, 1fr))",
+        ...(perRowCols ?? {}),
       }
-    : { marginTop: 20, ...styles.productGrid };
+    : { marginTop: 20, ...styles.productGrid, ...(perRowCols ?? {}) };
   // QZY-5 — "list" stacks full-width horizontal rows instead of the grid.
   const isList = cfg.layout === "list";
   const bodyStyle: React.CSSProperties = isList
@@ -535,7 +637,13 @@ export function DeciderResultView({
   const card = (p: RecommendedProduct, position: number, extra?: Record<string, unknown>) => (
     <ProductCard
       key={p.product_id}
-      product={p}
+      // rg-wiring — a per-product description override (guided "The
+      // matches" → Edit descriptions) replaces the baked description.
+      product={
+        cfg.descOverrides?.[p.product_id]?.trim()
+          ? { ...p, description: cfg.descOverrides[p.product_id]!.trim() }
+          : p
+      }
       position={position}
       vertical={isList ? false : minimal}
       ctaLabel={tc("shop_now")}
@@ -549,6 +657,7 @@ export function DeciderResultView({
       imgAspect={cardAspectCss}
       imgRadius={cfg.cardRadius}
       rating={cfg.showStars ? productRating(p) : undefined}
+      verified={cfg.showVerified === true}
       reasons={
         cfg.showPerWhy && answerLabels && answerLabels.length > 0
           ? answerLabels.slice(0, 2)
@@ -677,6 +786,28 @@ export function DeciderResultView({
         </div>
       ) : null}
       {cfg.incentivePos === "bottom" ? incentiveChip : null}
+      {/* rg-wiring — the "Also worth a look" shelf (guided "Extra picks"):
+          renders only when the caller resolved extras (explicit opt-in). */}
+      {extras && extras.products.length > 0 ? (
+        <div className="qz-rev-3" style={{ marginTop: 28 }}>
+          <h3
+            style={{
+              margin: 0,
+              fontFamily: "var(--qz-font-heading)",
+              fontSize: "calc(var(--qz-base-size) * 1.15)",
+              color: "var(--qz-color-text)",
+            }}
+          >
+            {extras.heading}
+          </h3>
+          {extras.copy?.trim() ? (
+            <p style={{ ...styles.muted, marginTop: 6 }}>{extras.copy}</p>
+          ) : null}
+          <div style={gridStyle}>
+            {extras.products.map((p, i) => card(p, 100 + i, { extras: true }))}
+          </div>
+        </div>
+      ) : null}
       {/* §L L3 — engagement widgets (present only when the merchant opted in). */}
       {engagement?.reward.enabled && quizId && sessionId ? (
         <RewardReveal config={engagement.reward} quizId={quizId} sessionId={sessionId} />

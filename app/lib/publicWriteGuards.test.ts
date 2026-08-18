@@ -72,7 +72,7 @@ describe("captures.tsx write guard", () => {
     // payload; absent first_name/phone → null). Guards against the try/catch
     // wrap silently altering what gets persisted.
     expect(p.emailCapture.create).toHaveBeenCalledWith({
-      data: { quizId: "q1", shopId: "s1", sessionId: "sess1", email: "a@b.co", firstName: null, phone: null },
+      data: { quizId: "q1", shopId: "s1", sessionId: "sess1", email: "a@b.co", firstName: null, phone: null, marketingConsent: null },
     });
   });
 

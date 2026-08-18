@@ -1571,6 +1571,31 @@ export function QuizRuntime(props: QuizRuntimeProps) {
           // opt-in `engagement` block, so the loading/result views stay
           // byte- and DOM-identical for existing quizzes).
           const engagement = doc.engagement ? resolveEngagement(doc.engagement) : undefined;
+          // rg-wiring (2026-08-18) — the guided "Extra picks" shelf, resolved
+          // from the baked product_index: explicit picks win, else the first
+          // N indexed products NOT already shown. Renders only on an explicit
+          // extrasOn:true, so every existing doc is untouched.
+          const extras = (() => {
+            if (cfg.extrasOn !== true) return undefined;
+            const dec = explained.decider!;
+            const shownIds = new Set([
+              ...(dec.hero ? [dec.hero.product_id] : []),
+              ...dec.grid.map((p) => p.product_id),
+            ]);
+            const count = Math.max(1, Math.min(6, cfg.extrasCount ?? 3));
+            const picks = cfg.extrasProductIds?.length
+              ? cfg.extrasProductIds
+                  .map((id) => productIndex.find((p) => p.product_id === id))
+                  .filter((p): p is (typeof productIndex)[number] => Boolean(p))
+              : productIndex.filter((p) => !shownIds.has(p.product_id)).slice(0, count);
+            const products = picks.slice(0, count).map((p) => ({ ...p, score: 0 }));
+            if (products.length === 0) return undefined;
+            return {
+              heading: cfg.extrasHeading?.trim() || "Also worth a look",
+              copy: cfg.extrasCopy,
+              products,
+            };
+          })();
           content = (
             <DeciderResultView
               decider={explained.decider}
@@ -1590,6 +1615,7 @@ export function QuizRuntime(props: QuizRuntimeProps) {
               answerLabels={
                 cfg.showPerWhy ? pickedAnswerLabels(doc, selectedAnswerIds) : undefined
               }
+              extras={extras}
               onReset={reset}
             />
           );
@@ -1597,8 +1623,33 @@ export function QuizRuntime(props: QuizRuntimeProps) {
           // (cheap, pure); loading/capture render INSTEAD until done. Assigned
           // in reverse priority so capture wins over loading. Reduced-motion
           // skips the interstitial (the legacy reveal's posture).
+          // rg-wiring (2026-08-18) — the guided "Loading" settings reach the
+          // runtime: an EXPLICIT loadingOn:false skips the interstitial
+          // entirely; any present loading field synthesizes an interstitial
+          // override (the engagement block's own, when opted in, still wins).
+          // Absent fields → the exact legacy beats, DOM-identical.
+          const guidedLoading =
+            cfg.loadingMs != null ||
+            cfg.loadingNamed != null ||
+            (cfg.loadingSteps?.length ?? 0) > 0 ||
+            cfg.loadingOn === true
+              ? {
+                  enabled: true,
+                  delayMs: cfg.loadingMs ?? 2000,
+                  style:
+                    (cfg.loadingNamed ?? true) && (cfg.loadingSteps?.length ?? 0) > 0
+                      ? ("stepped" as const)
+                      : ("progress" as const),
+                  steps:
+                    (cfg.loadingNamed ?? true)
+                      ? (cfg.loadingSteps ?? []).filter((s) => s.trim())
+                      : [],
+                  headline: "",
+                }
+              : undefined;
           const wantLoading =
             !loadingDone &&
+            cfg.loadingOn !== false &&
             !(typeof window !== "undefined" &&
               window.matchMedia?.("(prefers-reduced-motion: reduce)").matches);
           if (wantLoading) {
@@ -1606,7 +1657,7 @@ export function QuizRuntime(props: QuizRuntimeProps) {
               <DeciderLoadingView
                 poolSize={explained.poolSize}
                 onDone={() => setBeatsDone(true)}
-                interstitial={engagement?.interstitial}
+                interstitial={engagement?.interstitial ?? guidedLoading}
               />
             );
           }

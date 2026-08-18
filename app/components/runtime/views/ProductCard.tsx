@@ -41,6 +41,7 @@ export function ProductCard({
   sessionId,
   blurb,
   rating,
+  verified = false,
 }: {
   product: RecommendedProduct;
   position: number;
@@ -87,6 +88,9 @@ export function ProductCard({
   // Results-page redesign — a REAL baked review rating (productRating()); the
   // card renders a star row above the title only when this is present.
   rating?: { value: number; count?: number } | null;
+  // rg-wiring (2026-08-18) — the guided flow's "Verified buyers" marker:
+  // a quiet tag beside the rating count (renders only WITH a rating).
+  verified?: boolean;
 }) {
   const tc = useChrome();
   const isPreviewMode = useContext(RuntimePreviewContext);
@@ -189,6 +193,11 @@ export function ProductCard({
               {rating.value.toFixed(1)}
               {rating.count != null ? ` (${rating.count})` : ""}
             </span>
+            {verified ? (
+              <span style={{ color: "var(--qz-color-muted)", fontSize: 11 }}>
+                ✓ Verified buyers
+              </span>
+            ) : null}
           </div>
         ) : null}
         <div style={{ fontWeight: 600 }}>{product.title}</div>
