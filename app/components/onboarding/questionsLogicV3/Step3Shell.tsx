@@ -254,12 +254,15 @@ export function Step3Shell({
     [view, onContinue, scrollLogicTo],
   );
 
-  // The bar (one-line-chrome §1.3) — save chip · Fix-N-issues health pill ·
-  // the tri-state Continue, published through the funnel-chrome bridge.
-  // Questions: always advanceable (to-logic). Logic + healthy: to-rec-page.
-  // Logic + blocking: "Fix N issues to continue" stays CLICKABLE and opens
-  // the diagnose modal — the gate is the SAME report instance the pill and
-  // modal render, so the surfaces cannot disagree.
+  // The bar (one-line-chrome §1.3) — save chip (error-only) · the tri-state
+  // Continue, published through the funnel-chrome bridge. Owner 2026-08-18:
+  // the ambient "Logic valid" health pill is GONE from the nav — the pill
+  // renders only in its Fix-N-issues state (a functional door into the
+  // diagnose modal, not status decoration). Questions: always advanceable
+  // (to-logic). Logic + healthy: to-rec-page. Logic + blocking: "Fix N
+  // issues to continue" stays CLICKABLE and opens the diagnose modal — the
+  // gate is the SAME report instance the pill and modal render, so the
+  // surfaces cannot disagree.
   const pill = pillPresentation(report.verdict);
   const blocking = report.verdict.blocking;
   const verdictLabel = report.verdict.label;
@@ -270,24 +273,25 @@ export function Step3Shell({
       saveChip: (
         <FunnelSaveChip isSaving={isSaving} savedAt={savedAt} saveError={saveError} onRetry={onRetry} />
       ),
-      healthPill: (
-        <button
-          type="button"
-          className={`qz-s3-healthpill is-${pill.state}`}
-          aria-haspopup="dialog"
-          title={verdictLabel}
-          onClick={openDiagnose}
-        >
-          <span className="qz-s3-healthdot" aria-hidden />
-          {blocking > 0 ? fixLabel : pill.text}
-        </button>
-      ),
+      healthPill:
+        blocking > 0 ? (
+          <button
+            type="button"
+            className={`qz-s3-healthpill is-${pill.state}`}
+            aria-haspopup="dialog"
+            title={verdictLabel}
+            onClick={openDiagnose}
+          >
+            <span className="qz-s3-healthdot" aria-hidden />
+            {fixLabel}
+          </button>
+        ) : undefined,
       continueSpec:
         mode === "logic" && blocking > 0
           ? { label: `${fixLabel} to continue`, blocked: true, disabled: navigating, onClick: openDiagnose }
           : { label: "Continue →", disabled: navigating, onClick: onContinue },
     };
-  }, [mode, blocking, verdictLabel, pill.state, pill.text, isSaving, savedAt, saveError, onRetry, navigating, onContinue]);
+  }, [mode, blocking, verdictLabel, pill.state, isSaving, savedAt, saveError, onRetry, navigating, onContinue]);
   useFunnelBar(barOverride);
 
   return (

@@ -232,7 +232,8 @@ export function GuidedPreview({
       </div>
     );
   } else if (screen === "loading") {
-    const secs = ((cfg.loadingMs ?? 2000) / 1000).toFixed(1);
+    // Owner 2026-08-18 — the delay readout ("2.0s") left the visual screen;
+    // the duration is configured in the panel only.
     const steps = cfg.loadingSteps.filter((s) => s.trim());
     screenBody = (
       <div className="qz-rg-scr qz-rg-loadscr">
@@ -254,9 +255,6 @@ export function GuidedPreview({
                   ))}
                 </div>
               ) : null}
-              <p className="qz-rg-lsecs" data-jump="reveal">
-                {secs}s
-              </p>
             </>
           ) : (
             <p className="qz-rg-why">The results appear the instant the last answer lands.</p>

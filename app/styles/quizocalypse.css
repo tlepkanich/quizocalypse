@@ -4107,34 +4107,9 @@ body[data-qz] .qz-topbar-continue:focus-visible { outline: 2px solid var(--qz-ac
   overflow: visible;
 }
 body[data-qz] .qz-stepnav-pill:focus-visible { outline: 2px solid var(--qz-accent); outline-offset: 2px; }
-.qz-stepnav-sparks { position: absolute; inset: -10px; pointer-events: none; }
-.qz-stepnav-sparks i { position: absolute; width: 4px; height: 4px; border-radius: 1px; background: var(--qz-accent); opacity: 0; }
-.qz-stepnav-sparks i:nth-child(1) { top: 0; right: 3px; transform: rotate(45deg); }
-.qz-stepnav-sparks i:nth-child(2) { top: 9px; left: -2px; }
-.qz-stepnav-sparks i:nth-child(3) { bottom: -1px; right: 0; transform: rotate(45deg); }
-.qz-stepnav-item.is-igniting .qz-stepnav-dot::before {
-  content: ""; position: absolute; inset: -6px; border-radius: inherit;
-  border: 1px solid color-mix(in srgb, var(--qz-accent) 50%, transparent);
-  animation: qz-step-halo 1.15s ease-in-out infinite;
-}
-.qz-stepnav-item.is-igniting .qz-stepnav-dot::after {
-  content: ""; position: absolute; inset: -5px; border-radius: inherit;
-  background: conic-gradient(from 30deg, transparent 0 65%, var(--qz-accent) 76%, transparent 88%);
-  -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 2px), #000 0);
-  mask: radial-gradient(farthest-side, transparent calc(100% - 2px), #000 0);
-  animation: qz-step-spin 1.5s linear infinite;
-}
-.qz-stepnav-item.is-igniting .qz-stepnav-sparks i { animation: qz-step-twinkle 1.4s ease-in-out infinite; }
-.qz-stepnav-item.is-igniting .qz-stepnav-sparks i:nth-child(2) { animation-delay: .28s; }
-.qz-stepnav-item.is-igniting .qz-stepnav-sparks i:nth-child(3) { animation-delay: .62s; }
-@keyframes qz-step-halo { 50% { transform: scale(1.12); opacity: .25; } }
-@keyframes qz-step-spin { to { transform: rotate(360deg); } }
-@keyframes qz-step-twinkle { 0%, 65%, 100% { opacity: 0; transform: scale(.5) rotate(45deg); } 28% { opacity: 1; transform: scale(1) rotate(45deg); } }
-@media (prefers-reduced-motion: reduce) {
-  .qz-stepnav-item.is-igniting .qz-stepnav-dot::before,
-  .qz-stepnav-item.is-igniting .qz-stepnav-dot::after,
-  .qz-stepnav-item.is-igniting .qz-stepnav-sparks i { animation: none; display: none; }
-}
+/* owner 2026-08-18 — the one-shot ignite ring + sparkle graphic on the
+   current step dot is retired; the solid dot + wash halo above is the whole
+   current-state drawing. */
 /* §1.7 — responsive: ≤--qz-bp-md only the current step keeps its label (title
    carries the name); ≤--qz-bp-sm all labels hide, bar padding tightens, and
    the flow scrolls horizontally if it still doesn't fit. The bar stays sticky
@@ -5502,7 +5477,10 @@ body[data-qz] .qz-s3-editable:focus-visible {
    MATCHES cell + its popover editor · the capture terminal module. ── */
 /* AUDIT-23 — overview-cards page geometry: the mock's .wrap is a CENTERED
    1080px column (1036px of content after its 22px gutters). */
-.qz-s3-logicview { display: flex; flex-direction: column; gap: 12px; padding: 16px 20px 40px; max-width: 1076px; width: 100%; margin: 0 auto; }
+/* Owner 2026-08-18 — "make the entire answers section wider": the Logic view
+   widens from 1076 to the Questions card's 1248 rhythm; the table's Answer
+   column (the flexible cell) absorbs the extra width. */
+.qz-s3-logicview { display: flex; flex-direction: column; gap: 12px; padding: 16px 20px 40px; max-width: 1248px; width: 100%; margin: 0 auto; }
 /* QRTZ-G3 — the sub-header + "How this quiz resolves" explainer strip are
    retired: the artifact's Logic screen is the two cards and nothing else. */
 
@@ -10881,6 +10859,9 @@ button.qz-pb-row:hover { background: var(--qz-cream-2); }
   transition: max-width .3s cubic-bezier(.22, .61, .36, 1);
 }
 .qz-page.is-funnel:has(.qz-qf-panel .qz-devframe[data-qz-tier="desktop"]) { max-width: 1448px; }
+/* Owner 2026-08-18 — the Logic step's answers table gets the same room: the
+   page cap lifts so .qz-s3-logicview's 1248 wrap (its own cap) can bind. */
+.qz-page.is-funnel:has(.qz-s3-logicview) { max-width: 1296px; }
 @media (prefers-reduced-motion: reduce) {
   .qz-page.is-funnel:has(.qz-qf-panel) { transition: none; }
 }
@@ -10976,3 +10957,11 @@ button.qz-pb-row:hover { background: var(--qz-cream-2); }
   position: absolute; bottom: 6px; right: 16px; font-size: 11px;
   color: var(--qz-ink-4); font-variant-numeric: tabular-nums;
 }
+
+/* Owner 2026-08-18 — the guided Results foot's back control is the bare ‹
+   chevron, drawn like the top nav's back button (.qz-topbar-back). */
+.qz-rg-btn2.is-backico {
+  width: 36px; padding: 0; display: grid; place-items: center;
+  font-size: 20px; line-height: 1; color: var(--qz-ink-3);
+}
+.qz-rg-btn2.is-backico:hover { background: var(--qz-cream-2); color: var(--qz-ink); }

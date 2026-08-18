@@ -1,4 +1,3 @@
-import { useEffect, useState } from "react";
 import { Check } from "lucide-react";
 
 /* One-line-chrome §1.2 — the funnel's step flow: dot + label nodes joined by
@@ -8,7 +7,8 @@ import { Check } from "lucide-react";
    · done     — the accent-tint pill (the always-on "this is a button" signal;
                 don't reduce it to hover-only), clickable when the host passes
                 onStepClick (jumps straight there — no confirm, §1.5)
-   · current  — solid accent dot with the wash halo + the one-shot ignite
+   · current  — solid accent dot with the wash halo (owner 2026-08-18: the
+                one-shot ignite ring + sparkle graphic is retired)
    Render-only: the host decides step states and handles navigation. */
 export type StepState = "done" | "current" | "upcoming";
 
@@ -28,16 +28,6 @@ export function StepNav({
   steps: StepNavStep[];
   onStepClick?: (id: string) => void;
 }) {
-  const currentId = steps.find((step) => step.state === "current")?.id ?? null;
-  const [ignitingId, setIgnitingId] = useState<string | null>(currentId);
-
-  useEffect(() => {
-    if (!currentId) return;
-    setIgnitingId(currentId);
-    const timeout = window.setTimeout(() => setIgnitingId(null), 3000);
-    return () => window.clearTimeout(timeout);
-  }, [currentId]);
-
   const currentIdx = steps.findIndex((s) => s.state === "current");
 
   return (
@@ -59,7 +49,7 @@ export function StepNav({
                 aria-hidden
               />
             ) : null}
-            <span className={`qz-stepnav-item${ignitingId === step.id ? " is-igniting" : ""}`}>
+            <span className="qz-stepnav-item">
               <button
                 type="button"
                 className={`qz-stepnav-pill is-${step.state}`}
@@ -74,11 +64,6 @@ export function StepNav({
                   ) : (
                     <span className="qz-stepnav-num">{String(step.number).padStart(2, "0")}</span>
                   )}
-                  {step.state === "current" ? (
-                    <span className="qz-stepnav-sparks" aria-hidden>
-                      <i /><i /><i />
-                    </span>
-                  ) : null}
                 </span>
                 <span className="qz-stepnav-name">{step.label}</span>
               </button>

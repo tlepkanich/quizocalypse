@@ -87,13 +87,9 @@ describe("StepNav", () => {
     expect(pillByLabel("Buckets").querySelector('[aria-label="done"]')).toBeTruthy();
   });
 
-  it("ignites only the current step, then settles after three seconds", () => {
-    vi.useFakeTimers();
+  it("never renders the retired ignite/sparkle decoration (owner 2026-08-18)", () => {
     mount(createElement(StepNav, { steps: STEPS }));
-    const current = pillByLabel("Shape").closest(".qz-stepnav-item");
-    expect(current?.classList.contains("is-igniting")).toBe(true);
-    expect(pillByLabel("Design").closest(".qz-stepnav-item")?.classList.contains("is-igniting")).toBe(false);
-    act(() => vi.advanceTimersByTime(3000));
-    expect(current?.classList.contains("is-igniting")).toBe(false);
+    expect(document.querySelector(".qz-stepnav-sparks")).toBeNull();
+    expect(document.querySelector(".is-igniting")).toBeNull();
   });
 });

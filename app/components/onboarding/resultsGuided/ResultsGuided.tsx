@@ -7,7 +7,6 @@ import { useQuizDraft } from "../../studio/useQuizDraft";
 import { useFunnelBar, FunnelSaveChip, type FunnelBarOverride } from "../funnelChrome";
 import { GuidedPreview, type PreviewScreen } from "./GuidedPreview";
 import { DiscountEditor } from "./DiscountEditor";
-import { FallbackSection } from "./FallbackSection";
 import { TermsModal, DescriptionsModal, ExtrasPickerModal } from "./modals";
 import {
   resolveGuided,
@@ -78,9 +77,6 @@ const FLOW = [
     sub: "Everything you have set. Next you will style it in Design.",
   },
 ] as const;
-
-// "Next: the matches" — sentence-case the section name after the colon.
-const lcFirst = (s: string) => s.charAt(0).toLowerCase() + s.slice(1);
 
 // QRTZ-G45 — referentially stable no-op for the gated bar Continue (the
 // funnelChrome publish contract forbids fresh handlers per render).
@@ -195,7 +191,8 @@ export function ResultsGuided({
   quizId: string;
   initialDoc: Quiz;
   productIndex: IndexedProduct[];
-  /** QRTZ-G3 — the relocated fallback chooser's collection picker. */
+  /** Kept for the call site — the fallback chooser left this surface
+   *  (owner 2026-08-18); nothing here reads the catalog collections now. */
   collections: BuilderCollection[];
   designTokens?: DesignTokens | null;
   /** Step 6's "Open the builder →" (the funnel's generate-build intent —
@@ -203,6 +200,7 @@ export function ResultsGuided({
   onOpenBuilder: () => void;
 }) {
   void quizId;
+  void collections;
   const { doc, commit, isSaving, savedAt, saveError, retrySave } = useQuizDraft(initialDoc);
   const cfg = resolveGuided(doc);
   const disc = resolveDiscount(doc);
@@ -222,7 +220,8 @@ export function ResultsGuided({
   const [wordOpen, setWordOpen] = useState(false);
   const [xMoreOpen, setXMoreOpen] = useState(false);
   const [ddOpen, setDdOpen] = useState(false);
-  const [gateTab, setGateTab] = useState<"gate" | "reveal" | "consent">("gate");
+  // Owner 2026-08-18 — Loading is the first sub-tab, so it is the landing tab.
+  const [gateTab, setGateTab] = useState<"gate" | "reveal" | "consent">("reveal");
   const [modal, setModal] = useState<null | "discount" | "terms" | "descs" | "extras">(null);
   const [deferredUnlock, setDeferredUnlock] = useState(false);
   const [returnToAsk, setReturnToAsk] = useState(false);
@@ -508,13 +507,9 @@ export function ResultsGuided({
           <Toggle on={!!cfg.showAddAll} onClick={() => patch({ showAddAll: !cfg.showAddAll })} label="Add all to cart" />
         </div>
       </div>
-      {/* QRTZ-G3 — the no-match fallback (relocated from the Logic step):
-          what shows when a shopper's answers match zero products is part of
-          how the matches behave, so it lives on this step now. */}
-      <div className="qz-rg-fl" style={{ marginTop: 14 }}>
-        When nothing matches
-      </div>
-      <FallbackSection doc={doc} collections={collections} productIndex={productIndex} onCommit={commit} />
+      {/* Owner 2026-08-18 — the no-match FallbackSection left this step (it
+          is configured elsewhere); the matches step is layout + card
+          content only. FallbackSection.tsx stays on disk. */}
     </>
   );
 
@@ -992,10 +987,11 @@ export function ResultsGuided({
   // keep — the three sub-tabs (mock stabs)
   const keepTabs = (
     <div className="qz-rg-stabs" role="tablist" aria-label="Email capture sections">
+      {/* Owner 2026-08-18 — tab order and naming: Loading > Email > Consent. */}
       {(
         [
-          ["gate", "The ask"],
           ["reveal", "Loading"],
+          ["gate", "Email"],
           ["consent", "Consent"],
         ] as const
       ).map(([id, label]) => (
@@ -1056,10 +1052,18 @@ export function ResultsGuided({
           {/* QRTZ-G45 — the mock's .edit-foot: Back · primary · Saved chip
               side by side, left-aligned (no spacer, no rule above). */}
           <div className="qz-rg-stepfoot">
-            {/* §3 — no Back on step 1: absent, not disabled. */}
+            {/* §3 — no Back on step 1: absent, not disabled. Owner
+                2026-08-18: the back control is the bare ‹ chevron, matching
+                the top nav's back button. */}
             {stepIx > 0 ? (
-              <button type="button" className="qz-rg-btn2" onClick={() => gotoStep(stepIx - 1)}>
-                ← Back
+              <button
+                type="button"
+                className="qz-rg-btn2 is-backico"
+                title="Back"
+                aria-label="Back"
+                onClick={() => gotoStep(stepIx - 1)}
+              >
+                ‹
               </button>
             ) : null}
             <button
@@ -1069,12 +1073,11 @@ export function ResultsGuided({
               title={gateClosed ? "Finish the steps above first" : undefined}
               onClick={next}
             >
-              {/* QRTZ-S6 (mock .edit-foot) — the forward button NAMES its
-                  destination; the last keeps the product's builder handoff,
-                  gated (QRTZ-G45) until every step has been run through. */}
-              {stepIx === FLOW.length - 1
-                ? "Open the builder →"
-                : `Next: ${lcFirst(FLOW[stepIx + 1]!.name)}`}
+              {/* Owner 2026-08-18 — the forward button reads "Continue"
+                  (destination naming retired); the last keeps the product's
+                  builder handoff, gated (QRTZ-G45) until every step has been
+                  run through. */}
+              {stepIx === FLOW.length - 1 ? "Open the builder →" : "Continue"}
             </button>
             <FunnelSaveChip
               isSaving={isSaving}

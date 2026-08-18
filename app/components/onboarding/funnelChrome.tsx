@@ -67,18 +67,17 @@ function SvIcon({ spin, children }: { spin?: boolean; children: ReactNode }) {
   );
 }
 
-/* QRTZ-S2 (owner-call 8a resolved: the 2026-08-09 mock wins over the
-   2026-08-02 error-only edit) — the chip draws all FOUR autosave states from
-   the states.mjs sv- pattern:
-     Saving…  isSaving — the fetcher is busy, i.e. ONLY after the 700ms
-              debounce fired, so typing never flickers the chip.
-     Saved    savedAt set — ✓ in the ok tone.
+/* Owner 2026-08-18 (reverses QRTZ-S2's owner-call 8a BACK to the 2026-08-02
+   error-only ruling): autosave is silent-when-healthy — no ambient "Saved" /
+   "Saving…" chip anywhere. The chip materializes only when the merchant must
+   act or wait:
      Not saved · Retry
               saveError — persists, never fades, until a retry succeeds
               (the merchant's work is only in the tab).
      Paused while AI edits
               isAiPaused — useQuizDraft suspended autosave so a debounced PUT
-              cannot land a stale doc mid-AI-call. Accent-ink tone. */
+              cannot land a stale doc mid-AI-call. Accent-ink tone.
+   isSaving/savedAt stay in the signature so call sites are untouched. */
 export function FunnelSaveChip({
   isSaving,
   savedAt,
@@ -117,25 +116,10 @@ export function FunnelSaveChip({
         Paused while AI edits
       </span>
     );
-  } else if (isSaving) {
-    body = (
-      <span className="qz-sv is-saving">
-        <SvIcon spin>
-          <path d="M12 3a9 9 0 1 0 9 9" />
-        </SvIcon>
-        Saving…
-      </span>
-    );
-  } else if (savedAt) {
-    body = (
-      <span className="qz-sv is-saved">
-        <SvIcon>
-          <path d="m4.5 12.5 5 5 10-11" />
-        </SvIcon>
-        Saved
-      </span>
-    );
   }
+  // Healthy states (saving / saved) render NOTHING — silent-when-healthy.
+  void isSaving;
+  void savedAt;
   if (!body) return null;
   return (
     <span className="qz-save-status" aria-live="polite">

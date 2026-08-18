@@ -554,8 +554,10 @@ try {
     const r = el.getBoundingClientRect();
     return { w: r.width, left: r.left, right: window.innerWidth - r.right };
   });
-  ok("Logic column stays the centered ≤1076px wrap",
-    lvGeo.w <= 1078 && Math.abs(lvGeo.left - lvGeo.right) < 4,
+  // Owner 2026-08-18 — the answers section widened: 1248 wrap (page cap
+  // 1296), so the table's Answer column gets the extra room.
+  ok("Logic column is the widened centered 1248px wrap",
+    lvGeo.w > 1078 && lvGeo.w <= 1250 && Math.abs(lvGeo.left - lvGeo.right) < 4,
     `w${lvGeo.w} L${lvGeo.left} R${lvGeo.right}`);
 
   // 19 ── QRTZ-G3: the funnel Logic stage is the artifact's TWO stacked
@@ -584,21 +586,21 @@ try {
     ).count()) === 0);
   await page.screenshot({ path: `${SHOTS}/6-logic-card.png`, fullPage: true });
 
-  // 19b ── QRTZ-G3: the relocated no-match fallback lives on the guided
-  // Results flow's "The matches" step now (mutation seam unchanged —
-  // doc.global_fallback). Continue → rec_page, walk to step 2, smoke it.
+  // 19b ── owner 2026-08-18: the no-match FallbackSection left the guided
+  // Results "matches" step (configured elsewhere); assert it GONE, the foot's
+  // forward button reads "Continue", and back is the bare ‹ chevron.
   await page.locator(".qz-topbar-continue").click();
   await page.waitForSelector(".qz-rg", { timeout: 15000 });
   await page.waitForTimeout(400);
-  await page.locator(".qz-rg-btn2.is-pri").click(); // "Next: the matches"
+  ok('guided foot forward button reads "Continue"',
+    ((await page.locator(".qz-rg-btn2.is-pri").textContent()) ?? "").trim() === "Continue");
+  await page.locator(".qz-rg-btn2.is-pri").click(); // → the matches step
   await page.waitForTimeout(300);
-  ok("relocated fallback renders on the matches step",
-    (await page.locator(".qz-rg-panel .qz-s3-fallback .qz-s3-fb-head").count()) === 1);
-  await page.locator(".qz-rg-panel .qz-s3-fb-head").click();
-  await page.waitForTimeout(200);
-  ok("fallback chooser keeps its three modes (seam intact)",
-    (await page.locator(".qz-rg-panel .qz-s3-fb-opt.is-radio").count()) === 3);
-  await page.screenshot({ path: `${SHOTS}/7-results-fallback.png`, fullPage: true });
+  ok("fallback section GONE from the matches step",
+    (await page.locator(".qz-rg-panel .qz-s3-fallback").count()) === 0);
+  ok("guided foot back is the bare ‹ chevron",
+    ((await page.locator(".qz-rg-btn2.is-backico").textContent()) ?? "").trim() === "‹");
+  await page.screenshot({ path: `${SHOTS}/7-results-matches.png`, fullPage: true });
   // back to the Logic stage before the #20 walk (goto-stage backwards-only)
   await page.locator(".qz-topbar-back").click();
   await page.waitForSelector(".qz-s3-logicview", { timeout: 15000 });
