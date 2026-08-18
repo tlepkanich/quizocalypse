@@ -9,8 +9,8 @@ import {
   suggestContrastText,
 } from "../../../../lib/designTokens";
 import { googleFontsUrl } from "../../../runtime/runtimeStyles";
-import { DeviceFrame } from "../../../builder/preview/DeviceFrame";
-import { DEFAULT_TIER, type DeviceTier } from "../../../builder/preview/previewWidth";
+import { DeviceFrame, type FrameFit } from "../../../builder/preview/DeviceFrame";
+import { DEFAULT_TIER, DEVICES, type DeviceTier } from "../../../builder/preview/previewWidth";
 import { CAPTURE_ID, REVEAL_ID } from "../LeftRail";
 import { IconDesktop, IconExpand, IconMobile, IconX } from "../icons";
 import { PhoneScreen, type ScreenPosition } from "./PhoneScreen";
@@ -110,6 +110,13 @@ export function PhoneCanvas({
 
   const [tier, setTier] = useState<DeviceTier>(DEFAULT_TIER);
   const [expanded, setExpanded] = useState(false);
+  // questions-artifact (mock .stage-tag) — the size · scale readout under the
+  // frame, fed by DeviceFrame's onFit report.
+  const [fitScalePct, setFitScalePct] = useState(100);
+  const onFit = useCallback(
+    (fit: FrameFit) => setFitScalePct(Math.round(fit.scale * 100)),
+    [],
+  );
   const screenRef = useRef<HTMLDivElement>(null);
 
   // Scroll resets when the previewed step changes, not on every keystroke.
@@ -163,13 +170,8 @@ export function PhoneCanvas({
 
   return (
     <aside className="qz-s3-canvas qz-qs-pv">
-      {/* questions-simple — the centered live chip above the phone. */}
-      <div className="qz-qs-pvhead">
-        <span className="qz-qs-livechip">
-          <span className="qz-qs-livedot" aria-hidden />
-          Live preview · your brand
-        </span>
-      </div>
+      {/* questions-artifact — the "Live preview · your brand" chip is retired;
+          the pv-bar below is the card's header line (mock .qedit-bar). */}
       {alpine ? (
         <p className="qz-s3-caption is-art-directed">
           Art direction · {artDirection?.name}
@@ -196,6 +198,7 @@ export function PhoneCanvas({
             <TypeChipSelector doc={doc} node={position.question.node} onCommit={onCommit} />
           </span>
         ) : null}
+        <span className="qz-s3-pvsp" />
         <span className="qz-s3-segbtns" role="group" aria-label="Preview device">
           <button
             type="button"
@@ -218,7 +221,6 @@ export function PhoneCanvas({
             <IconDesktop />
           </button>
         </span>
-        <span className="qz-s3-pvsp" />
         {/* questions-full-page §5 — Expand is icon-only (title + aria-label
             retained); behavior unchanged. */}
         <button
@@ -233,9 +235,14 @@ export function PhoneCanvas({
       </div>
 
       <div className="qz-g2-stage">
-        <DeviceFrame tier={tier} resetKey={activeId}>
+        <DeviceFrame tier={tier} resetKey={activeId} onFit={onFit}>
           {renderFrame(true)}
         </DeviceFrame>
+        {/* questions-artifact (mock .stage-tag) — logical size · fit scale,
+            quiet, bottom-right of the stage. */}
+        <span className="qz-qf-stagetag" aria-hidden>
+          {DEVICES[tier].w} × {DEVICES[tier].h} · {fitScalePct}%
+        </span>
       </div>
 
       {expanded && typeof document !== "undefined"

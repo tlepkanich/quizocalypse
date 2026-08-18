@@ -10,7 +10,9 @@
 // The questions-full-page surface (the AUDIT-22/23 questions-simple list is
 // RETIRED; owner 2026-08-18: the ✎/▦ tab pair is retired TOO — the step is
 // the ✎ view only, .qz-s3-viewtoggle gone, OverviewLedger parked for the
-// main builder) in the .qz-qf-subhead (hint · Question library · + Add).
+// main builder). questions-artifact 2026-08-18: the sub-head is GONE —
+// no hint; Question library + both inserts live in the rail's sticky foot;
+// the card runs 1200px (1400 in desktop preview) toward the fold.
 // The view: a NAV RAIL (.qz-qf-navcol — "Flow · N questions" head, compact rows
 // w/ click-to-renumber number (.qz-qf-ncn → inline number input), 2-line
 // editable wording, mono type line, hover ⠿/trash tools + ↑↓ movers,
@@ -208,14 +210,16 @@ try {
   ok("✎/▦ tab pair retired (no .qz-s3-viewtoggle, no .qz-s3-ledger)",
     (await page.locator(".qz-s3-viewtoggle").count()) === 0 &&
     (await page.locator(".qz-s3-ledger").count()) === 0);
-  // QRTZ-S5 hint copy (mock qtab-bar verbatim) — was "…on the phone…".
-  ok('hint "Click any text in the preview to edit it"',
-    (await page.locator(".qz-qf-hint").textContent())?.trim() === "Click any text in the preview to edit it");
-  ok("Question library sub-head entry", await page.locator(".qz-qs-tlib").isVisible());
-  ok("+ Add sub-head button", await page.locator(".qz-qs-tbtn", { hasText: "Add" }).isVisible());
+  // questions-artifact — the sub-head is GONE; the library + inserts live
+  // in the rail's sticky foot.
+  ok("sub-head retired (no .qz-qf-subhead / hint / .qz-qs-tlib)",
+    (await page.locator(".qz-qf-subhead, .qz-qf-hint, .qz-qs-tlib, .qz-qs-tbtn").count()) === 0);
+  ok("rail foot: + Add question · + Add content · Question library",
+    (await page.locator(".qz-qf-navaddrow .qz-qf-navadd").count()) === 3 &&
+    await page.locator(".qz-qf-navadd.is-library", { hasText: "Question library" }).isVisible());
 
-  // 1b ── one-line-chrome: the panel fills the capped 1000px funnel column
-  // (952px content at 24px side padding) and stays centered.
+  // 1b ── questions-artifact: the card fills the widened 1248px funnel
+  // column (1200px content at 24px side padding) and stays centered.
   const panelGeo = await page.locator(".qz-qf-panel").evaluate((el) => {
     const r = el.getBoundingClientRect();
     const pg = el.closest(".qz-page");
@@ -224,27 +228,30 @@ try {
       parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
     return { w: r.width, left: r.left, right: window.innerWidth - r.right, content };
   });
-  ok("panel fills the capped 1000px funnel column (952 content)",
-    Math.abs(panelGeo.w - panelGeo.content) < 2 && Math.abs(panelGeo.w - 952) < 3,
+  ok("panel fills the widened 1248px funnel column (1200 content)",
+    Math.abs(panelGeo.w - panelGeo.content) < 2 && Math.abs(panelGeo.w - 1200) < 3,
     `${panelGeo.w} vs content ${panelGeo.content}`);
   ok("panel is CENTERED (equal side margins)",
     Math.abs(panelGeo.left - panelGeo.right) < 4, `L${panelGeo.left} R${panelGeo.right}`);
 
-  // 2 ── the nav rail: head, rows, decider accent, type lines, tools, termini
-  ok('rail head "Flow · 3 questions"',
-    (await page.locator(".qz-qf-navhd").textContent())?.trim() === "Flow · 3 questions");
+  // 2 ── the nav rail: rows, decider accent chip, meta lines, tools, termini
+  ok("rail head retired (no .qz-qf-navhd — the list starts at the top)",
+    (await page.locator(".qz-qf-navhd").count()) === 0);
   ok("3 nav rows", (await page.locator(".qz-qf-navrow").count()) === 3);
   ok("first row is the decider (is-dec) and active (is-on)",
     await page.locator(".qz-qf-navrow").first().evaluate(
       (el) => el.classList.contains("is-dec") && el.classList.contains("is-on")));
-  ok('decider type line "Single select · decides"',
-    (await page.locator(".qz-qf-nct").first().textContent())?.trim() === "Single select · decides");
-  ok('rating type line "Scale"',
+  // questions-artifact — meta is "N answers" (answer-less rating keeps its
+  // type label so the line never reads "0 answers").
+  ok('decider meta "2 answers"',
+    (await page.locator(".qz-qf-nct").first().textContent())?.trim() === "2 answers");
+  ok('rating meta "Scale" (no answers → type label)',
     (await page.locator(".qz-qf-nct").nth(2).textContent())?.trim() === "Scale");
-  // QRTZ-T accent — Quartz violet #5B45D6 (was the pre-Quartz #6D5AE6).
-  ok("decider number renders ACCENT",
+  // QRTZ-T accent — Quartz violet #5B45D6; the artifact marks the decider
+  // on the number CHIP (accent fill), not on a type line.
+  ok("decider number chip renders ACCENT fill",
     await page.locator(".qz-qf-navrow.is-dec .qz-qf-ncn").evaluate(
-      (el) => getComputedStyle(el).color === "rgb(91, 69, 214)"));
+      (el) => getComputedStyle(el).backgroundColor === "rgb(91, 69, 214)"));
   ok("decider row's hover-trash is DISABLED",
     await page.locator(".qz-qf-navrow").first().locator(".qz-qf-tool:not(.is-drag)").isDisabled());
   ok("qualifier row's hover-trash is enabled",
@@ -256,20 +263,22 @@ try {
     (await page.locator(".qz-qf-nmvb").count()) === 0);
   // 051eceb added a second navadd (+ Add content) — target the question one.
   ok("+ Add question rail foot",
-    await page.locator(".qz-qf-navadd:not(.is-content)").isVisible());
+    await page.locator(".qz-qf-navadd:not(.is-content):not(.is-library)").isVisible());
   ok("two quiet termini rows", (await page.locator(".qz-qf-navterm").count()) === 2);
-  ok('capture terminus "Email capture" / "Optional lead step"',
+  // questions-artifact — the termini are quiet icon+label rows; the
+  // decorative sub-labels are gone (only a functional "Off" would render).
+  ok('capture terminus "Email capture", no sub-label while on',
     ((await page.locator(".qz-qf-navterm").first().locator(".qz-qf-tlabel").textContent()) ?? "").trim() === "Email capture" &&
-    ((await page.locator(".qz-qf-navterm").first().locator(".qz-qf-ts").textContent()) ?? "").trim() === "Optional lead step");
-  ok('reveal terminus "Result reveal" / "Step 4 · Results"',
+    (await page.locator(".qz-qf-navterm").first().locator(".qz-qf-ts").count()) === 0);
+  ok('reveal terminus "Result reveal", no sub-label',
     ((await page.locator(".qz-qf-navterm").nth(1).locator(".qz-qf-tlabel").textContent()) ?? "").trim() === "Result reveal" &&
-    ((await page.locator(".qz-qf-navterm").nth(1).locator(".qz-qf-ts").textContent()) ?? "").trim() === "Step 4 · Results");
+    (await page.locator(".qz-qf-navterm").nth(1).locator(".qz-qf-ts").count()) === 0);
 
   // 3 ── split geometry + the drag resizer (--navw, min-clamp 232)
   const firstCol = () =>
     page.locator(".qz-qf-view").evaluate(
       (el) => parseFloat(getComputedStyle(el).gridTemplateColumns.split(/\s+/)[0]));
-  ok("nav column opens at the mock's 304px", Math.abs((await firstCol()) - 304) < 2,
+  ok("nav column opens at the artifact's 340px", Math.abs((await firstCol()) - 340) < 2,
     `${await firstCol()}`);
   const rb = await page.locator(".qz-qf-resizer").boundingBox();
   const rx = rb.x + rb.width / 2;
@@ -422,8 +431,10 @@ try {
   await page.locator(".qz-qf-navrow").first().locator(".qz-qf-cell").click();
   await page.waitForTimeout(300);
   ok("Back pill HIDDEN at the first step", (await page.locator(".qz-s3-backpill").count()) === 0);
-  ok('live chip "Live preview · your brand"',
-    ((await page.locator(".qz-qs-livechip").textContent()) ?? "").includes("Live preview · your brand"));
+  ok("live chip retired (questions-artifact)",
+    (await page.locator(".qz-qs-livechip").count()) === 0);
+  ok('stage readout "390 × 745 · N%" (mock .stage-tag)',
+    /^390 × 745 · \d+%$/.test(((await page.locator(".qz-qf-stagetag").textContent()) ?? "").trim()));
   ok("pv-bar: Mobile/Desktop segmented control", (await page.locator(".qz-s3-segbtns button").count()) === 2);
   ok("pv-bar: icon-only Expand control",
     await page.locator(".qz-s3-expandbtn.is-icon").isVisible() &&
@@ -472,6 +483,14 @@ try {
     return { w: cs.width, h: cs.height };
   });
   ok("desktop band is the canonical 960 logical px (was 1180)", dgeo.w === "960px", dgeo.w);
+  // questions-artifact — the card widens for the desktop band (1400 content
+  // via the .qz-page :has() rule; 1448 cap minus 48 padding).
+  // (the 1448 cap can clamp to the viewport minus padding — assert it grew
+  // well past the 1200 resting width and let the transition settle first)
+  await page.waitForTimeout(450);
+  ok("card widens past 1300 on desktop (1448 cap or viewport-clamped)",
+    await page.locator(".qz-qf-panel").evaluate((el) =>
+      el.getBoundingClientRect().width > 1300));
   ok("desktop band is 700 logical px tall", dgeo.h === "700px", dgeo.h);
   ok("faux browser chrome retired", (await page.locator(".qz-s3-dchrome").count()) === 0);
   ok("in-screen top bar SHOWS on desktop (like the live runtime)",
@@ -495,14 +514,15 @@ try {
   await page.waitForTimeout(200);
   ok("Esc closes the Expand overlay", (await page.locator(".qz-s3-phscrim").count()) === 0);
 
-  // 16 ── + Add (sub-head) → appended + selected + persisted; trash delete
-  await page.locator(".qz-qs-tbtn").click();
+  // 16 ── + Add question (rail foot) → appended + selected + persisted;
+  // trash delete
+  await page.locator(".qz-qf-navadd:not(.is-content):not(.is-library)").click();
   await page.waitForTimeout(1600);
   ok("+ Add appends a 4th rail row", (await page.locator(".qz-qf-navrow").count()) === 4);
   ok("the new question is selected (is-on)",
     await page.locator(".qz-qf-navrow").nth(3).evaluate((el) => el.classList.contains("is-on")));
-  ok('rail head follows ("Flow · 4 questions")',
-    (await page.locator(".qz-qf-navhd").textContent())?.trim() === "Flow · 4 questions");
+  ok("rail follows (4 question rows)",
+    (await page.locator(".qz-qf-navrow:not(.is-content)").count()) === 4);
   const afterAdd = await draftDoc();
   ok("add persisted (4 question nodes)",
     (afterAdd?.nodes ?? []).filter((n) => n.type === "question").length === 4);

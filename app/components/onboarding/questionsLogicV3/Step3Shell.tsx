@@ -20,7 +20,6 @@ import { LeftRail, CAPTURE_ID, REVEAL_ID } from "./LeftRail";
 // The ▦ Overview tab is retired HERE but ./OverviewLedger.tsx stays parked:
 // it is earmarked for the main builder later. Do not delete it.
 import { PhoneCanvas } from "./content/PhoneCanvas";
-import { IconPlus } from "./icons";
 // Logic-tab migration — the funnel's Logic step renders the SAME two-card
 // view as the studio builder (docs/design/logic-tab/HANDOFF.md + QRTZ-G3:
 // the artifact's Rules card + Questions card, nothing else). The fallback
@@ -123,8 +122,9 @@ export function Step3Shell({
 
   // One-line-chrome — the view IS the funnel step now (Questions vs Logic).
   const view = mode;
-  // questions-full-page — the mock's draggable nav-column width (min 232).
-  const [navw, setNavw] = useState(304);
+  // questions-full-page — the mock's draggable nav-column width (min 232;
+  // questions-artifact starts at the artifact's ~24vw resting width).
+  const [navw, setNavw] = useState(340);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [libraryOpen, setLibraryOpen] = useState(false);
   // QZY-2 (spec §10) — the diagnose/preview modal. QRTZ-G3: its Logic-view
@@ -294,22 +294,12 @@ export function Step3Shell({
     <div className="qz-s3">
       {view === "content" ? (
         <div className="qz-s3-contentview">
-          {/* questions-full-page sub-head — hint line + the add/library
-              actions. Owner decision (2026-08-18): the ✎/▦ tab pair is gone —
-              this step is the nav rail + resizer + phone editor only; the
-              Overview ledger is parked for the main builder. */}
-          <div className="qz-qf-subhead">
-            <span className="qz-qf-sp" />
-            {/* QRTZ-S5 — hint copy verbatim from the mock's qtab-bar. */}
-            <span className="qz-qf-hint">Click any text in the preview to edit it</span>
-            <button type="button" className="qz-qs-tlib" onClick={() => setLibraryOpen(true)}>
-              Question library
-            </button>
-            <button type="button" className="qz-qs-tbtn" onClick={addQuestion}>
-              <IconPlus /> Add
-            </button>
-          </div>
-
+          {/* questions-artifact (owner, 2026-08-18) — the step IS the card:
+              no sub-head above it (the hint is gone; Question library and the
+              add actions live in the rail's sticky foot), the ✎/▦ tab pair is
+              retired (OverviewLedger stays parked for the main builder), and
+              the card runs bigger — 1200px resting, 1400px while the desktop
+              preview is on (the .qz-page.is-funnel :has() rules). */}
           <div className="qz-qf-panel">
             <div
               className="qz-qf-view"
@@ -327,6 +317,7 @@ export function Step3Shell({
                 onDelete={deleteQuestion}
                 onAdd={addQuestion}
                 onAddContent={addContent}
+                onOpenLibrary={() => setLibraryOpen(true)}
                 capturePanel={
                   /* QRTZ-G3 — the capture CONFIG (formerly the Logic
                      step's CaptureModule, unchanged) opens under the

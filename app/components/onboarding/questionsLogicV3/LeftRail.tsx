@@ -47,6 +47,19 @@ export const REVEAL_ID = "__reveal__";
 
 const TEXT_MAX = 150; // the shared question-text cap
 
+/** questions-artifact — types whose answers are real CHOICES, where the
+    "N answers" meta line is honest. Input/scale types (rating carries its
+    scale points as answers) keep their type label instead. */
+const ANSWER_META_TYPES = new Set([
+  "single_select",
+  "multi_select",
+  "image_tile",
+  "searchable",
+  "image_picker",
+  "dropdown",
+  "swatch",
+]);
+
 export function LeftRail({
   steps,
   deciderId,
@@ -59,6 +72,7 @@ export function LeftRail({
   onDelete,
   onAdd,
   onAddContent,
+  onOpenLibrary,
   capturePanel,
 }: {
   /** §2 — the FULL flow, content steps included, numbered 1..N. */
@@ -82,12 +96,13 @@ export function LeftRail({
   onAdd: () => void;
   /** §3 — insert a content page (message step) at the end of the flow. */
   onAddContent: () => void;
+  /** questions-artifact (2026-08-18) — the Question library moved from the
+   *  retired sub-head into the rail's sticky foot (mock .fq-foot). */
+  onOpenLibrary: () => void;
   /** QRTZ-G3 — the capture config (the relocated CaptureModule), rendered
    *  under the Email-capture row while that row is the selection. */
   capturePanel?: ReactNode;
 }) {
-  const nQuestions = steps.filter((s) => s.kind === "question").length;
-  const nContent = steps.length - nQuestions;
   // Whole-question drag-to-reorder (mock dnd on #navbody) — armed on the grip.
   const [armed, setArmed] = useState<string | null>(null);
   const from = useRef<number | null>(null);
@@ -118,12 +133,8 @@ export function LeftRail({
 
   return (
     <div className="qz-qf-navcol">
-      {/* QRTZ-S5 (mock .qflow-head) — content pages + termini are "extra
-          steps" in the head's vocabulary. */}
-      <div className="qz-qf-navhd">
-        Flow · {nQuestions} question{nQuestions === 1 ? "" : "s"}
-        {nContent ? ` · ${nContent} extra step${nContent === 1 ? "" : "s"}` : ""}
-      </div>
+      {/* questions-artifact — the "Flow · N questions" head is retired: with
+          the ✎/▦ toggle gone the list starts at the top of the card. */}
       <div className="qz-qf-navbody" aria-label="Quiz flow">
         {steps.map((s, i) => {
           const q = s;
@@ -131,10 +142,21 @@ export function LeftRail({
           const isDecider = q.node.id === deciderId;
           const active = activeId === q.node.id;
           const canDelete = isContent || (steps.filter((x) => x.kind === "question").length > 1 && !isDecider);
+          // questions-artifact — the row meta is "N answers" (the type/role
+          // description left the rail; the decider is marked on the number).
+          // Only choice types count answers; input/scale types keep their
+          // type label (rating carries its scale points as answers).
+          const questionType = isContent
+            ? ""
+            : (q.node as { data: { question_type: string } }).data.question_type;
+          const answerCount = isContent
+            ? 0
+            : ((q.node.data as { answers?: unknown[] }).answers ?? []).length;
           const typeLabel = isContent
             ? CONTENT_META[q.node.type] ?? q.node.type
-            : TYPE_CHIP_LABEL[(q.node as { data: { question_type: string } }).data.question_type] ??
-              "";
+            : ANSWER_META_TYPES.has(questionType) && answerCount > 0
+              ? `${answerCount} answer${answerCount === 1 ? "" : "s"}`
+              : TYPE_CHIP_LABEL[questionType] ?? "";
           const title = isContent
             ? q.node.type === "message"
               ? ((q.node.data as { text?: string }).text ?? "Message")
@@ -241,10 +263,7 @@ export function LeftRail({
                       />
                     )}
                   </span>
-                  <span className="qz-qf-nct">
-                    {typeLabel}
-                    {isDecider ? " · decides" : ""}
-                  </span>
+                  <span className="qz-qf-nct">{typeLabel}</span>
                 </span>
                 <span className="qz-qf-tools">
                   {/* QRTZ-S5 — the grip is the ONE reorder affordance (the
@@ -343,15 +362,6 @@ export function LeftRail({
           );
         })}
       </div>
-      {/* mock .navadd "+ Add question or content" — both inserts, spelled out. */}
-      <div className="qz-qf-navaddrow">
-        <button type="button" className="qz-qf-navadd" onClick={onAdd}>
-          + Add question
-        </button>
-        <button type="button" className="qz-qf-navadd is-content" onClick={onAddContent}>
-          + Add content
-        </button>
-      </div>
       {/* QRTZ-G3 — the row always renders: it is the capture CONFIG surface
           (the relocated CaptureModule opens beneath it while selected). */}
       <button
@@ -368,7 +378,9 @@ export function LeftRail({
           <IconMail />
         </span>
         <span className="qz-qf-tlabel">Email capture</span>
-        <span className="qz-qf-ts">{captureOn ? "Optional lead step" : "Off"}</span>
+        {/* questions-artifact — the termini are quiet icon+label rows; only
+            the functional Off state keeps a sub-label. */}
+        {captureOn ? null : <span className="qz-qf-ts">Off</span>}
       </button>
       {capturePanel ? <div className="qz-qf-cappanel">{capturePanel}</div> : null}
       <button
@@ -381,8 +393,20 @@ export function LeftRail({
           <IconTarget />
         </span>
         <span className="qz-qf-tlabel">Result reveal</span>
-        <span className="qz-qf-ts">Step 4 · Results</span>
       </button>
+      {/* questions-artifact (mock .fq-foot) — the sticky foot carries both
+          inserts plus the relocated Question library (right, muted). */}
+      <div className="qz-qf-navaddrow">
+        <button type="button" className="qz-qf-navadd" onClick={onAdd}>
+          + Add question
+        </button>
+        <button type="button" className="qz-qf-navadd is-content" onClick={onAddContent}>
+          + Add content
+        </button>
+        <button type="button" className="qz-qf-navadd is-library" onClick={onOpenLibrary}>
+          Question library
+        </button>
+      </div>
     </div>
   );
 }

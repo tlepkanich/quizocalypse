@@ -7834,21 +7834,6 @@ body[data-qz] .qz-cust-row:focus-visible {
 .qz-qs-ttitle { font-size: 14px; font-weight: 600; }
 .qz-qs-tcount { font-size: 12px; color: var(--qz-ink-25); font-family: var(--qz-font-body); font-variant-numeric: tabular-nums; }
 .qz-qs-tsp { flex: 1; }
-.qz-qs-tlib {
-  border: none; background: transparent; cursor: pointer; font: inherit;
-  font-size: 12.5px; color: var(--qz-ink-4);
-  padding: 7px 10px; border-radius: var(--qz-radius);
-}
-.qz-qs-tlib:hover { background: var(--qz-cream-2); color: var(--qz-ink-3); }
-.qz-qs-tbtn {
-  display: inline-flex; align-items: center; gap: 6px;
-  border: none; background: var(--qz-accent); color: var(--qz-paper);
-  font-family: inherit; font-size: 12.5px; font-weight: 600;
-  padding: 8px 14px; border-radius: var(--qz-radius); cursor: pointer;
-}
-.qz-qs-tbtn:hover { background: color-mix(in srgb, var(--qz-accent) 90%, var(--qz-ink)); }
-.qz-qs-tbtn svg { width: 12px; height: 12px; }
-
 /* — split: list | 340px preview (mock .split) — */
 .qz-qs-split { display: grid; grid-template-columns: minmax(0, 1fr) 340px; align-items: stretch; }
 .qz-qs-left { display: flex; flex-direction: column; min-width: 0; }
@@ -8028,21 +8013,6 @@ body[data-qz] .qz-cust-row:focus-visible {
   background: color-mix(in srgb, var(--qz-accent) 1.5%, var(--qz-paper));
   padding: 14px 12px 22px;
 }
-.qz-qs-pvhead { display: flex; align-items: center; justify-content: center; gap: 8px; }
-.qz-qs-livechip {
-  display: inline-flex; align-items: center; gap: 6px;
-  font-size: 11px; font-weight: 600; color: var(--qz-ok);
-  background: color-mix(in srgb, var(--qz-ok) 12%, var(--qz-paper));
-  padding: 4px 10px; border-radius: var(--qz-radius-pill);
-}
-.qz-qs-livedot {
-  width: 6px; height: 6px; flex: none;
-  border-radius: var(--qz-radius-pill);
-  background: var(--qz-ok);
-  animation: qz-qs-blink 1.6s ease-in-out infinite;
-}
-@keyframes qz-qs-blink { 0%, 100% { opacity: 1; } 50% { opacity: .35; } }
-@media (prefers-reduced-motion: reduce) { .qz-qs-livedot { animation: none; } }
 /* QRTZ-G2 — the .qz-qs-pv .qz-s3-stage/.qz-s3-device overrides that lived
    here are retired with the wrappers themselves; the preview stage is now
    .qz-g2-stage through the shared DeviceFrame (see the QRTZ-G2 section). */
@@ -8596,11 +8566,6 @@ body[data-qz] .qz-cust-row:focus-visible {
    for this surface.
    ═══════════════════════════════════════════════════════════════════════════ */
 
-/* — sub-head: tabs · hint · actions (mock .subhead) — */
-.qz-qf-subhead { display: flex; align-items: center; gap: 12px; margin-bottom: 13px; flex-wrap: wrap; }
-.qz-qf-sp { flex: 1; }
-.qz-qf-hint { font-size: 12px; color: var(--qz-ink-4); }
-
 /* — the bordered page panel + 3-column grid (mock .panel/.qview) — */
 .qz-qf-panel { border: 1px solid var(--qz-rule); border-radius: var(--qz-radius-lg); overflow: hidden; background: var(--qz-paper); }
 .qz-qf-view { display: grid; grid-template-columns: var(--navw, 304px) 9px minmax(340px, 1fr); min-height: 600px; }
@@ -8617,11 +8582,6 @@ body[data-qz] .qz-cust-row:focus-visible {
 /* Rows, the + Add foot, and the termini stack TIGHT under the list (the
    mock's navcol is a plain flow — no flex push-to-bottom). */
 .qz-qf-navcol { border-right: 1px solid var(--qz-rule-2); min-width: 0; overflow: hidden; }
-.qz-qf-navhd {
-  font-family: var(--qz-font-body); font-size: 9px; font-weight: 700; text-transform: uppercase;
-  letter-spacing: .09em; color: var(--qz-ink-25); padding: 11px 13px 8px;
-  border-bottom: 1px solid var(--qz-rule-2); flex: none;
-}
 .qz-qf-navbody { min-height: 0; }
 .qz-qf-navrow { cursor: pointer; border-bottom: 1px solid var(--qz-rule-2); }
 .qz-qf-navrow.is-drophi { box-shadow: inset 0 2px 0 var(--qz-accent); }
@@ -10901,3 +10861,118 @@ button.qz-pb-row:hover { background: var(--qz-cream-2); }
 .qz-andismissed-row:last-child { border-bottom: 0; }
 .qz-andismissed-h { color: var(--qz-ink-2); flex: 1; min-width: 0; }
 .qz-andismissed-row form { margin-left: auto; }
+
+/* ═══ questions-artifact (owner, 2026-08-18) — the funnel Questions step to
+   the "Wiskr — build: questions, overview, logic" artifact
+   (docs/design/questions/build-questions-overview-logic.artifact.html),
+   MINUS its ✎/▦ toggle (retired; OverviewLedger parked for the main
+   builder) and its step-flow nav (kept as shipped). Values read off the
+   artifact CSS through the locked token map (--surface-2→--qz-cream(-2),
+   --line→--qz-rule, --ink-3→--qz-ink-3, --accent→--qz-accent, on-accent→
+   --qz-paper). APPENDED so the cascade wins over the questions-full-page
+   blocks above. ═══ */
+
+/* The card runs bigger — 1200px resting, 1400px while the desktop preview
+   is on (artifact --wsw), via the same .qz-page :has() pattern as the
+   Results desktop flip. The 72px funnel bottom pad drops to 28 so the card
+   reads full-screen. */
+.qz-page.is-funnel:has(.qz-qf-panel) {
+  max-width: 1248px; padding-bottom: 28px;
+  transition: max-width .3s cubic-bezier(.22, .61, .36, 1);
+}
+.qz-page.is-funnel:has(.qz-qf-panel .qz-devframe[data-qz-tier="desktop"]) { max-width: 1448px; }
+@media (prefers-reduced-motion: reduce) {
+  .qz-page.is-funnel:has(.qz-qf-panel) { transition: none; }
+}
+.qz-s3-contentview { max-width: none; }
+
+/* — rail (mock .qflow): padded ROUNDED rows on a flex column — the hairline
+     row dividers are gone; the list scrolls inside the card and the foot
+     pins to the bottom. — */
+.qz-qf-view { grid-template-columns: var(--navw, 340px) 9px minmax(340px, 1fr); }
+.qz-qf-navcol {
+  display: flex; flex-direction: column; min-height: 0; overflow-y: auto;
+  padding: 8px 8px 0;
+}
+.qz-qf-navbody { display: grid; gap: 2px; align-content: start; }
+.qz-qf-navrow { border-bottom: none; border-radius: 8px; overflow: hidden; }
+.qz-qf-cell { padding: 11px 10px; gap: 12px; }
+.qz-qf-navrow:hover .qz-qf-cell { background: var(--qz-cream-2); }
+
+/* number CHIP (mock .fq-n 22×22) — the decider and the active row mark on
+   the number now that the type/role line is gone. */
+.qz-qf-ncn, .qz-qf-ncn.is-edit {
+  width: 22px; height: 22px; min-width: 0; flex: none; padding: 0; margin: 0;
+  display: grid; place-items: center; border-radius: 6px;
+  background: var(--qz-cream-2); border: 1px solid var(--qz-rule);
+  font-size: 11.5px; color: var(--qz-ink-3); text-align: center; margin-top: 2px;
+}
+.qz-qf-ncn.is-edit:hover { background: var(--qz-accent-wash); color: var(--qz-accent-ink); }
+.qz-qf-navrow.is-dec .qz-qf-ncn,
+.qz-qf-navrow.is-on .qz-qf-ncn {
+  background: var(--qz-accent); border-color: var(--qz-accent); color: var(--qz-paper);
+}
+.qz-qf-ncn .qz-qf-ncninput { width: 100%; height: 100%; box-shadow: none; background: transparent; }
+
+/* row text 17px / clamp 3 (mock .fq-text); meta "N answers" in sentence
+   case (mock .fq-meta) — the mono uppercase type line is retired. */
+.qz-qf-ncq { font-size: 17px; font-weight: 500; line-height: 1.32; -webkit-line-clamp: 3; }
+.qz-qf-nct {
+  font-family: inherit; font-size: 12px; font-weight: 400; letter-spacing: 0;
+  text-transform: none; color: var(--qz-ink-3); margin-top: 2px;
+}
+.qz-qf-navrow.is-content .qz-qf-nct { color: var(--qz-accent-ink); }
+
+/* termini as quiet rows in the same list (mock .fq-step). */
+.qz-qf-navterm {
+  border-top: none; border-radius: 8px; padding: 10px; margin-top: 2px;
+  font-size: 15px; color: var(--qz-ink-2); flex: none;
+}
+.qz-qf-navterm:hover { background: var(--qz-cream-2); }
+.qz-qf-tc {
+  width: 22px; height: 22px; border-radius: 6px;
+  background: var(--qz-cream-2); border: 1px solid var(--qz-rule);
+}
+
+/* sticky foot (mock .fq-foot): both inserts + the relocated Question
+   library (right, muted). Last child of the rail column — margin-top:auto
+   pins it when the list is short, sticky keeps it while the list scrolls. */
+.qz-qf-navaddrow {
+  margin-top: auto; position: sticky; bottom: 0; z-index: 1;
+  background: var(--qz-paper); border-top: 1px solid var(--qz-rule);
+  padding: 8px 2px; gap: 4px; flex-wrap: wrap; flex: none;
+}
+.qz-qf-navaddrow .qz-qf-navadd,
+.qz-qf-navaddrow .qz-qf-navadd.is-content,
+.qz-qf-navaddrow .qz-qf-navadd.is-library {
+  flex: none; width: auto; padding: 6px 9px; border-radius: 8px; font-size: 12.5px;
+}
+.qz-qf-navadd.is-library { margin-left: auto; color: var(--qz-ink-3); }
+.qz-qf-navadd.is-library:hover { background: var(--qz-cream-2); color: var(--qz-ink); }
+
+/* — the header line (mock .qhead-r/.qedit-bar): ~50px, label + type hard
+     left, device controls hard right, and it SHARES the stage's ground so
+     the header and canvas read as one field. — */
+.qz-qs-pv.qz-s3-canvas {
+  padding: 0 0 12px; gap: 0; align-items: stretch;
+  background: var(--qz-cream);
+}
+.qz-qs-pv .qz-s3-pvbar { min-height: 50px; padding: 0 10px 0 16px; }
+.qz-s3-pvlabel { font-size: 13.5px; font-weight: 600; }
+.qz-qs-pv .qz-s3-caption.is-art-directed { align-self: center; margin: 8px 0 0; }
+
+/* — the stage: taller (the card runs toward the fold), the device parks at
+     the TOP (artifact: deliberate — asked for), and a quiet size · scale
+     readout sits bottom-right (mock .stage-tag). The height clamp keeps the
+     QRTZ-G2 contract: readable floor, page scrolls under short viewports,
+     never past 1:1 + breathing room. — */
+.qz-g2-stage {
+  position: relative; padding: 6px 10px 12px;
+  height: clamp(480px, calc(100vh - 178px), 920px);
+}
+/* DeviceFrame centers its pane inline, so the top-park needs weight. */
+.qz-qs-pv .qz-vp-pane { align-items: flex-start !important; }
+.qz-qf-stagetag {
+  position: absolute; bottom: 6px; right: 16px; font-size: 11px;
+  color: var(--qz-ink-4); font-variant-numeric: tabular-nums;
+}
