@@ -8,6 +8,7 @@ import { Link, useFetcher } from "@remix-run/react";
 import { Box, Check, FolderOpen, Play, RotateCcw, Tag, X } from "lucide-react";
 import { QzCard, QzBadge, QzInput } from "../../qz";
 import { QzModal, QzDrawer } from "../../qz-overlays";
+import { DeviceFrame } from "../../builder/preview/DeviceFrame";
 import { useFunnelBar, type FunnelBarOverride } from "../funnelChrome";
 import type { DesignTokens } from "../../../lib/quizSchema";
 import { resolveDesignTokens, tokensToCssVars, suggestContrastText } from "../../../lib/designTokens";
@@ -279,32 +280,6 @@ export function RecommendationBucketsStage({
     [data.catalog.products],
   );
 
-  // QRTZ-S5 (mock s10 .facts) — pool-health facts computed ONLY from the
-  // already-loaded catalog: the distinct products the current selection
-  // resolves to, how many carry an image, and the price span. The mock's
-  // "In stock" row and out-of-stock note are SKIPPED — the loaded catalog
-  // shape carries no stock field to be honest about.
-  const poolFacts = useMemo(() => {
-    const ids = new Set<string>();
-    for (const c of selected.values()) {
-      if (c.type === "product") ids.add(c.key);
-      else if (c.type === "tag") {
-        for (const p of data.catalog.products) if (p.tagKeys.includes(c.key)) ids.add(p.id);
-      } else {
-        for (const p of data.catalog.products) if (p.collectionIds.includes(c.key)) ids.add(p.id);
-      }
-    }
-    const pool = data.catalog.products.filter((p) => ids.has(p.id));
-    const withImages = pool.filter((p) => p.imageUrl).length;
-    const prices = pool.map((p) => p.price).filter((v): v is number => v != null);
-    return {
-      total: pool.length,
-      withImages,
-      priceMin: prices.length ? Math.min(...prices) : null,
-      priceMax: prices.length ? Math.max(...prices) : null,
-    };
-  }, [selected, data.catalog.products]);
-
   const cardsForTab = (type: BucketType): BucketCard[] => {
     if (type === "product")
       return data.catalog.products.map((p) => ({
@@ -397,12 +372,12 @@ export function RecommendationBucketsStage({
     pendingIntent === "flow3-confirm" ||
     pendingIntent === "shape-goal-build" ||
     pendingIntent === "manual-build";
+  // Owner edit (2026-08-18) — one label for every flow; the goal/template
+  // flows no longer say "Generate my quiz".
   const continueLabel =
     continuing || pendingIntent === "flow1-confirm" || pendingIntent === "flow3-confirm"
       ? "Saving…"
-      : hasGoalFirst || hasTemplateFirst
-        ? "Generate my quiz →"
-        : "Continue →";
+      : "Continue →";
   const barOverride = useMemo<FunnelBarOverride>(
     () => ({
       continueSpec: {
@@ -726,27 +701,6 @@ export function RecommendationBucketsStage({
               ))}
             </div>
           )}
-          {/* QRTZ-S5 (mock s10 .facts) — quiet dt/dd rows on hairlines. */}
-          {count > 0 && poolFacts.total > 0 ? (
-            <dl className="qz-rb-facts">
-              <div>
-                <dt>With images</dt>
-                <dd>
-                  {poolFacts.withImages} of {poolFacts.total}
-                </dd>
-              </div>
-              {poolFacts.priceMin != null && poolFacts.priceMax != null ? (
-                <div>
-                  <dt>Price range</dt>
-                  <dd>
-                    {poolFacts.priceMin === poolFacts.priceMax
-                      ? `$${poolFacts.priceMin.toFixed(2)}`
-                      : `$${poolFacts.priceMin.toFixed(2)} – $${poolFacts.priceMax.toFixed(2)}`}
-                  </dd>
-                </div>
-              ) : null}
-            </dl>
-          ) : null}
           {count === 1 ? (
             <p className="qz-rb-warn">
               One recommendation means every shopper sees the same products. Add a few more so
@@ -1136,8 +1090,19 @@ function ResultsPreviewDrawer({
           Themed with your brand identity · real product data.
         </p>
 
-        <div className="qz-rb-phone">
-          <div className="qz-rb-phone-screen" style={cssVars}>
+        {/* viewport/2026-08 — the canonical DeviceFrame phone (390×745, always
+            whole, scaled to fit), replacing this drawer's old bespoke 300×500
+            frame. showFold={false} per QRTZ-G45 (Results surfaces hide the
+            fold marker); resetKey resets scroll when the previewed pick
+            changes. The screen skin (.qz-rb-pvscreen) paints the brand vars —
+            the devframe owns geometry, radius and elevation. */}
+        <DeviceFrame
+          tier="phone"
+          resetKey={idOf(sel.type, sel.key)}
+          paneHeight="min(745px, calc(100vh - 260px))"
+          showFold={false}
+        >
+          <div className="qz-rb-pvscreen" style={cssVars}>
             {isProduct ? (
               hero ? (
                 <div className="qz-rb-pv-single">
@@ -1199,7 +1164,7 @@ function ResultsPreviewDrawer({
               </div>
             )}
           </div>
-        </div>
+        </DeviceFrame>
 
         <div className="qz-rb-pvfoot">
           <span className="qz-dim" style={{ fontSize: 12, minWidth: 0 }}>
