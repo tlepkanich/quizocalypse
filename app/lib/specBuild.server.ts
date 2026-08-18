@@ -43,6 +43,7 @@ import {
   peekFreshShopWebResearch,
 } from "./shopWebResearch.server";
 import { poolSignature } from "./specPrefetch";
+import { loadGenerationBuckets, refreshBucketMembership } from "./bucketPersist.server";
 import { MIN_GOAL_CHARS } from "./funnelDraft.server";
 
 type SpeculativeState = NonNullable<BuildSession["speculative"]>;
@@ -102,11 +103,13 @@ export async function resolveSpecInputs(
     // derives it — deterministic given the identity + the pool's names.
     flow = "ai_generate";
   }
-  const cats = await prisma.category.findMany({
-    where: { shopId, quizId },
-    select: { id: true, name: true, tags: true, productIds: true },
-    orderBy: { createdAt: "asc" },
-  });
+  // Refresh collection/tag membership snapshots BEFORE deriving the pool
+  // signature, so settle-time and Continue-time both sign the LIVE membership —
+  // otherwise a catalog resync mid-browse would guarantee a signature mismatch
+  // and waste every speculation. loadGenerationBuckets keeps invisible
+  // ai-discovery leftovers out of the pool, matching the Continue intents.
+  await refreshBucketMembership(shopId, quizId);
+  const cats = await loadGenerationBuckets(shopId, quizId);
   if (cats.length === 0) return null;
   if (flow === "ai_generate") {
     const shopRow = await prisma.shop.findUnique({

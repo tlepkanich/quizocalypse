@@ -60,7 +60,7 @@ import { regenerateQuestion } from "./claude";
 import { parseBrandGuidelinesSafe } from "./brandGuidelines";
 import { buildScopedIndex } from "./catalogIndex";
 import { mergeRegeneratedAnswers } from "./regenerateMerge";
-import { toGroupingProduct, loadBucketInputs } from "./bucketPersist.server";
+import { toGroupingProduct, loadBucketInputs, loadGenerationBuckets } from "./bucketPersist.server";
 import { FUNNEL_STEPS, stepIndex, type FunnelStep } from "./funnelStages";
 import {
   MIN_GOAL_CHARS,
@@ -398,11 +398,9 @@ async function runStep1FunnelActionImpl(
   // Continue → advance to the goal stage (relabeled "Step 2" in the UI). The
   // bucket rows ARE the confirmed grouping; dimension reflects the active tab.
   if (intent === "continue-buckets") {
-    const cats = await prisma.category.findMany({
-      where: { shopId: shop.id, quizId: quiz.id },
-      select: { id: true, name: true },
-      orderBy: { createdAt: "asc" },
-    });
+    // loadGenerationBuckets: the merchant's curated rows only — invisible
+    // ai-discovery leftovers must not be confirmed (or ground the goal) here.
+    const cats = await loadGenerationBuckets(shop.id, quiz.id);
     if (cats.length === 0) {
       return json(
         { intent, ok: false, error: "Add at least one recommendation to continue." },
@@ -607,10 +605,7 @@ async function runStep1FunnelActionImpl(
     if (!chosen) return json({ intent, ok: false, error: "That type is no longer available." }, { status: 400 });
     const goal = session.goal?.goal_text ?? "";
     const struggle = session.goal?.struggle_text ?? "";
-    const cats = await prisma.category.findMany({
-      where: { shopId: shop.id, quizId: quiz.id },
-      select: { id: true, name: true, tags: true },
-    });
+    const cats = await loadGenerationBuckets(shop.id, quiz.id);
     const next: BuildSession = { ...session, stage: "templating", picked_type_id: typeId, gen_error: undefined };
     await writeDoc(quiz.id, { ...doc, build_session: next });
     startStep2Templates(shop.id, quiz.id, chosen, {
@@ -647,10 +642,7 @@ async function runStep1FunnelActionImpl(
     if (!chosen) return json({ intent, ok: false, error: "That type is no longer available." }, { status: 400 });
     const goal = session.goal?.goal_text ?? "";
     const struggle = session.goal?.struggle_text ?? "";
-    const cats = await prisma.category.findMany({
-      where: { shopId: shop.id, quizId: quiz.id },
-      select: { id: true, name: true, tags: true },
-    });
+    const cats = await loadGenerationBuckets(shop.id, quiz.id);
     const next: BuildSession = { ...session, stage: "templating", picked_type_id: typeId, gen_error: undefined };
     await writeDoc(quiz.id, {
       ...doc,
@@ -705,10 +697,7 @@ async function runStep1FunnelActionImpl(
         : String(form.get("scoring") ?? "") === "direct"
           ? ("direct" as const)
           : ("weighted" as const);
-    const cats = await prisma.category.findMany({
-      where: { shopId: shop.id, quizId: quiz.id },
-      select: { id: true, name: true, tags: true },
-    });
+    const cats = await loadGenerationBuckets(shop.id, quiz.id);
     // Start-routing spec §1 — the intercept modal fires this straight from the
     // Recommendations step (Shape is SKIPPED on the write-a-goal route), so a
     // decider goal build needs selections to map onto.
@@ -809,11 +798,7 @@ async function runStep1FunnelActionImpl(
     if (goal.trim().length < MIN_GOAL_CHARS) {
       return json({ intent, ok: false, error: "Write your goal first." }, { status: 400 });
     }
-    const cats = await prisma.category.findMany({
-      where: { shopId: shop.id, quizId: quiz.id },
-      select: { id: true, name: true, tags: true },
-      orderBy: { createdAt: "asc" },
-    });
+    const cats = await loadGenerationBuckets(shop.id, quiz.id);
     if (cats.length === 0) {
       return json(
         { intent, ok: false, error: "Add at least one recommendation to continue." },
@@ -924,11 +909,7 @@ async function runStep1FunnelActionImpl(
     if (doc.logic_model !== "decider" || !session.template_first?.picked) {
       return json({ intent, ok: false, error: "This flow isn't available for this quiz." }, { status: 400 });
     }
-    const cats = await prisma.category.findMany({
-      where: { shopId: shop.id, quizId: quiz.id },
-      select: { id: true, name: true, tags: true, productIds: true },
-      orderBy: { createdAt: "asc" },
-    });
+    const cats = await loadGenerationBuckets(shop.id, quiz.id);
     if (cats.length === 0) {
       return json(
         { intent, ok: false, error: "Add at least one recommendation to continue." },
@@ -1053,11 +1034,7 @@ async function runStep1FunnelActionImpl(
       await prisma.quiz.update({ where: { id: quiz.id }, data: { buildState: null } });
       return redirect(opts.builderPath(quiz.id));
     }
-    const cats = await prisma.category.findMany({
-      where: { shopId: shop.id, quizId: quiz.id },
-      select: { id: true },
-      orderBy: { createdAt: "asc" },
-    });
+    const cats = await loadGenerationBuckets(shop.id, quiz.id);
     if (cats.length === 0) {
       return json(
         { intent, ok: false, error: "Add at least one recommendation to continue." },
@@ -1198,10 +1175,7 @@ async function runStep1FunnelActionImpl(
     if (session.stage === "templating") {
       const retryType = session.quiz_types.find((t) => t.id === session.picked_type_id);
       if (retryType) {
-        const retryCats = await prisma.category.findMany({
-          where: { shopId: shop.id, quizId: quiz.id },
-          select: { id: true, name: true, tags: true },
-        });
+        const retryCats = await loadGenerationBuckets(shop.id, quiz.id);
         // QRTZ-G1 — same zombie-marker clear as the typing branch.
         await writeDoc(quiz.id, {
           ...doc,
@@ -1268,11 +1242,7 @@ async function runStep1FunnelActionImpl(
     const templateId = String(form.get("templateId") ?? "");
     const rich = session.rich_templates.find((t) => t.id === templateId);
     if (!rich) return json({ intent, ok: false, error: "That template is no longer available." }, { status: 400 });
-    const cats = await prisma.category.findMany({
-      where: { shopId: shop.id, quizId: quiz.id },
-      select: { id: true, name: true, productIds: true },
-      orderBy: { createdAt: "asc" },
-    });
+    const cats = await loadGenerationBuckets(shop.id, quiz.id);
     const picked = initPickedTemplate(
       rich,
       cats.map((c) => ({ id: c.id, name: c.name, product_ids: c.productIds })),
@@ -1292,11 +1262,7 @@ async function runStep1FunnelActionImpl(
     const templateId = String(form.get("templateId") ?? "");
     const rich = await loadSavedTemplate(shop.id, templateId);
     if (!rich) return json({ intent, ok: false, error: "That saved template is no longer available." }, { status: 400 });
-    const cats = await prisma.category.findMany({
-      where: { shopId: shop.id, quizId: quiz.id },
-      select: { id: true, name: true, productIds: true },
-      orderBy: { createdAt: "asc" },
-    });
+    const cats = await loadGenerationBuckets(shop.id, quiz.id);
     if (doc.logic_model === "decider") {
       // recommended_bucket_ids are the SOURCE quiz's Category cuids — on this
       // draft they match nothing, so initPickedTemplate would disable EVERY
