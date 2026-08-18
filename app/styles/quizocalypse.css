@@ -10965,3 +10965,50 @@ button.qz-pb-row:hover { background: var(--qz-cream-2); }
   font-size: 20px; line-height: 1; color: var(--qz-ink-3);
 }
 .qz-rg-btn2.is-backico:hover { background: var(--qz-cream-2); color: var(--qz-ink); }
+
+/* ═══ questions-artifact — the CONDENSED funnel nav (mock .topbar/.steps,
+   owner follow-up 2026-08-18). The step flow no longer stretches across the
+   free width: it clusters LEFT beside the logo with fixed 22px hairline
+   connectors, and the free width sits between the flow and the right
+   cluster. 48px bar; 18px CIRCLE chips (done = green ✓, current = accent
+   fill inside the accent-wash pill). ≤1120px non-current labels hide (the
+   mock's own media rule; §1.7's tighter tiers still apply below that). ═══ */
+/* The var (not a raw height) so every sticky offset reading --qz-topbar-h
+   stays in sync with the shorter funnel bar. */
+body:has(.qz-topbar--flow) { --qz-topbar-h: 48px; }
+.qz-topbar-flow { flex: 0 1 auto; margin-right: auto; padding-left: 8px; padding-right: 8px; }
+.qz-stepnav { width: auto; }
+.qz-stepnav-segment { flex: none; }
+.qz-stepnav-link,
+.qz-stepnav-link.is-done {
+  flex: none; width: 22px; height: 1px; border-radius: 0; margin: 0 2px;
+  background: var(--qz-rule-strong); opacity: .45;
+}
+.qz-stepnav-pill {
+  padding: 4px 9px; gap: 7px; font-size: 13px; color: var(--qz-ink-3);
+  border-radius: 6px;
+}
+.qz-stepnav-dot {
+  width: 18px; height: 18px; border-radius: 50%;
+  background: var(--qz-cream-2); box-shadow: inset 0 0 0 1px var(--qz-rule);
+}
+.qz-stepnav-num { font-size: 9.5px; font-weight: 700; }
+/* done — quiet transparent pill, green ✓ circle (replaces the accent tint) */
+.qz-stepnav-pill.is-done { background: transparent; color: var(--qz-ink-2); }
+.qz-stepnav-pill.is-done:hover { background: var(--qz-cream-2); }
+.qz-stepnav-pill.is-done .qz-stepnav-dot {
+  background: var(--qz-ok-tint);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--qz-ok) 32%, transparent);
+}
+.qz-stepnav-pill.is-done .qz-stepnav-check { color: var(--qz-ok); width: 11px; height: 11px; }
+/* current — accent-wash pill, solid accent circle, no halo ring */
+.qz-stepnav-pill.is-current {
+  background: var(--qz-accent-wash); color: var(--qz-accent-ink); font-weight: 600;
+}
+.qz-stepnav-pill.is-current .qz-stepnav-dot {
+  color: var(--qz-paper); background: var(--qz-accent); box-shadow: none;
+}
+@media (max-width: 1120px) {
+  .qz-stepnav-pill:not(.is-current) .qz-stepnav-name { display: none; }
+  .qz-stepnav-link, .qz-stepnav-link.is-done { width: 14px; }
+}
