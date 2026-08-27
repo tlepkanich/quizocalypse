@@ -3,13 +3,23 @@ import type { Quiz, Answer } from "../../../lib/quizSchema";
 import type { BuilderCategory, BuilderCollection } from "../../builder/stepProps";
 import type { IndexedProduct } from "../../../lib/recommendationEngine";
 import type { OrderedQuestion } from "../../../lib/questionOrder";
-import { answerNextNode } from "../../../lib/pathAnalyzer";
-import { moveDecisionRule, removeDecisionRule } from "../../../lib/quizMutations";
+import {
+  answerNextNode,
+  deadRules,
+  halfBuiltRules,
+  shadowedRules,
+} from "../../../lib/pathAnalyzer";
+import {
+  duplicateDecisionRule,
+  moveDecisionRule,
+  removeDecisionRule,
+} from "../../../lib/quizMutations";
 import { answerFilterValues, filterAnswerMatchCount } from "../../../lib/filterMatching";
 import { ruleTargets } from "../../../lib/recommendDecider";
 import { ProductCountButton, QuestionRoleControl, RouteMenuButton } from "./LogicTabMenus";
 import { useQzToast } from "../../qz-toast";
 import { CreateRuleModal } from "./CreateRuleModal";
+import { PasteRulesModal } from "./PasteRulesModal";
 import { QuestionWindow } from "./QuestionWindow";
 import { ExplainerSheet, type ExplainerKind } from "./Explainers";
 import { derivedNarrowLabel, narrowFieldOptions } from "./logicTabFields";
@@ -32,18 +42,16 @@ import { derivedNarrowLabel, narrowFieldOptions } from "./logicTabFields";
 
 type QuizDoc = Quiz;
 
-// Vocabulary (QRTZ-OB1, GAPS §A item 7 — the mock's set replaced HANDOFF §1's):
-// Picks the result / Narrows / Asked only; Show / Highlight / Exclude.
-// Never: decider, bucket, boost, weight, score. Role names live in
-// logicTabFields.ROLE_JOBS — every surface reads them from there.
-// G4 wiring: action absent = Show (replace) · "show" = Highlight · "hide" =
-// Exclude. "prioritize" has no verb in this design (unexposed; render plainly
-// if an old doc carries it).
+// Vocabulary — logic-step handoff §4 (supersedes QRTZ-OB1's verb set):
+// Show ("these become the results") = action "show" · Pin ("these move to
+// the top") = action "prioritize" · Hide ("these never show") = action
+// "hide". Absent action = the legacy REPLACE rule: parsed forever, never
+// written by new UI — it reads as "show" with a replaces hint.
+// Role names still live in logicTabFields.ROLE_JOBS.
 function ruleVerb(action: "show" | "hide" | "prioritize" | undefined): string {
-  if (!action) return "show";
-  if (action === "show") return "highlight";
-  if (action === "hide") return "exclude";
-  return "prioritize";
+  if (!action) return "show"; // legacy replace — reads as show
+  if (action === "prioritize") return "pin";
+  return action;
 }
 
 // §3.3 — a target that is not a product gets a trailing muted kind.
@@ -86,6 +94,11 @@ export function LogicTabCard({
   // route loader's next pass returns them (autosave revalidation).
   const [extraCats, setExtraCats] = useState<BuilderCategory[]>([]);
   const [createOpen, setCreateOpen] = useState(false);
+  // Logic-step §12 — Edit opens the SAME builder pre-filled against the
+  // existing rule id (same modal, same storage, no second code path).
+  const [editRuleId, setEditRuleId] = useState<string | null>(null);
+  // Logic-step §6 — "+ Paste rules" beside "+ Add rule" (its own entry point).
+  const [pasteOpen, setPasteOpen] = useState(false);
   // UNIFIED one-window — the question window: ONE window element, two
   // contents (unified/_v.js render): opening one closes the other.
   const [qwin, setQwin] = useState<{ nodeId: string; answerId: string | null } | null>(null);
@@ -143,6 +156,22 @@ export function LogicTabCard({
   // the keyboard/a11y path; both routes end in the same moveDecisionRule.
   const [dragRuleId, setDragRuleId] = useState<string | null>(null);
   const [overRuleIx, setOverRuleIx] = useState<number | null>(null);
+  // Logic-step §11/mock 09 — per-rule never-fires flags (checked top down,
+  // first match wins): definite shadowing (V8), dead conditions (V7), and
+  // half-built zero-condition rules (V9). Same analyzers the Tier-1 report
+  // runs, memoized per doc — the ledger and the checker cannot disagree.
+  const ruleFlags = useMemo(() => {
+    const flags = new Map<string, string>();
+    for (const f of halfBuiltRules(doc)) flags.set(f.ruleId, f.message);
+    for (const f of deadRules(doc)) {
+      if (!flags.has(f.ruleId)) flags.set(f.ruleId, f.message);
+    }
+    for (const f of shadowedRules(doc)) {
+      if (!flags.has(f.ruleId)) flags.set(f.ruleId, f.message);
+    }
+    return flags;
+  }, [doc]);
+  const neverFireCount = rules.filter((r) => ruleFlags.has(r.id)).length;
 
   return (
     // QRTZ-G3 — the artifact's two cards, stacked, and nothing else (the
@@ -151,9 +180,10 @@ export function LogicTabCard({
     <section className="qz-ltab">
       <header className="qz-ltab-hd">
         <h2>Rules</h2>
-        {/* QRTZ-S6 — mock s14 .card-meta, verbatim (no vocabulary clash). */}
+        {/* Logic-step §3 — first match wins is semantic; the meta says so. */}
         <p className="qz-ltab-hdmeta">
-          Run first, in order. A rule that matches overrides the questions below.
+          Checked top down — the first rule that matches wins. A rule that
+          matches overrides the questions below.
         </p>
         {/* QRTZ-H3 — mock .explain-btn per card (shared.mjs 357/375): the
             owner's exact-match order overrules §3.1's equal-width ruling. */}
@@ -168,18 +198,44 @@ export function LogicTabCard({
           How rules work
         </button>
         {commit && quizId ? (
-          <button
-            type="button"
-            className="qz-btn qz-btn-primary qz-btn-sm qz-ltab-create"
-            onClick={() => {
-              setQwin(null);
-              setCreateOpen(true);
-            }}
-          >
-            Add rule
-          </button>
+          <>
+            {/* Logic-step §6 — paste is its own entry point, beside Add rule,
+                never a tab inside the modal. */}
+            <button
+              type="button"
+              className="qz-btn qz-btn-sm qz-ltab-paste"
+              onClick={() => {
+                setQwin(null);
+                setCreateOpen(false);
+                setPasteOpen(true);
+              }}
+            >
+              Paste rules
+            </button>
+            <button
+              type="button"
+              className="qz-btn qz-btn-primary qz-btn-sm qz-ltab-create"
+              onClick={() => {
+                setQwin(null);
+                setEditRuleId(null);
+                setCreateOpen(true);
+              }}
+            >
+              Add rule
+            </button>
+          </>
         ) : null}
       </header>
+      {/* Mock module 09 — the banner above the list counting rules that will
+          not fire (unset/broken/shadowed/half-built). */}
+      {neverFireCount > 0 ? (
+        <p className="qz-ltab-rulebanner" role="status">
+          {neverFireCount === 1
+            ? "1 rule below can never fire"
+            : `${neverFireCount} rules below can never fire`}{" "}
+          — each one says why on its row.
+        </p>
+      ) : null}
       {commit && quizId ? (
         <CreateRuleModal
           doc={doc}
@@ -189,9 +245,24 @@ export function LogicTabCard({
           productIndex={productIndex}
           quizId={quizId}
           open={createOpen}
-          onClose={() => setCreateOpen(false)}
+          editRule={
+            editRuleId ? rules.find((r) => r.id === editRuleId) ?? null : null
+          }
+          onClose={() => {
+            setCreateOpen(false);
+            setEditRuleId(null);
+          }}
           commit={commit}
           onCategoriesCreated={(cats) => setExtraCats((prev) => [...prev, ...cats])}
+          getLatestDoc={() => docRef.current}
+        />
+      ) : null}
+      {commit && quizId && pasteOpen ? (
+        <PasteRulesModal
+          questions={questions}
+          categories={allCategories}
+          onClose={() => setPasteOpen(false)}
+          commit={commit}
           getLatestDoc={() => docRef.current}
         />
       ) : null}
@@ -290,15 +361,27 @@ export function LogicTabCard({
                 className="qz-ltab-rnum"
                 title={commit ? "Drag to reorder" : undefined}
               >
-                {i + 1}
+                {/* Mock module 09 — rules number as λ1, λ2… (rule identity,
+                    distinct from the questions' Q numbers). */}
+                λ{i + 1}
               </span>
-              <p className="qz-ltab-sentence">
-                <RuleSentence
-                  rule={rule}
-                  questions={questions}
-                  catById={catById}
-                />
-              </p>
+              <span className="qz-ltab-rbody">
+                <p className="qz-ltab-sentence">
+                  <RuleSentence
+                    rule={rule}
+                    questions={questions}
+                    qIndexByNodeId={qIndexByNodeId}
+                    catById={catById}
+                  />
+                </p>
+                {/* §11 — "flags a rule that can never be reached". */}
+                {ruleFlags.has(rule.id) ? (
+                  <p className="qz-ltab-rflag">
+                    <span className="qz-ltab-rflagchip">never fires</span>{" "}
+                    {ruleFlags.get(rule.id)}
+                  </p>
+                ) : null}
+              </span>
               {commit ? (
                 <span className="qz-ltab-ractions">
                   {/* §3.3 — order IS priority; keyboard reorder (DECISIONS). */}
@@ -319,6 +402,37 @@ export function LogicTabCard({
                     onClick={() => commit(moveDecisionRule(doc, rule.id, i + 1))}
                   >
                     ↓
+                  </button>
+                  {/* Logic-step §12 — Edit opens the same builder pre-filled
+                      (same modal, same storage, no second code path). */}
+                  {quizId ? (
+                    <button
+                      type="button"
+                      className="qz-ltab-ricon"
+                      aria-label={`Edit rule ${i + 1}`}
+                      title="Edit"
+                      onClick={() => {
+                        setQwin(null);
+                        setEditRuleId(rule.id);
+                        setCreateOpen(true);
+                      }}
+                    >
+                      ✎
+                    </button>
+                  ) : null}
+                  {/* §12 — Duplicate inserts the copy DIRECTLY BELOW (position
+                      is priority; appending would change which rule wins). */}
+                  <button
+                    type="button"
+                    className="qz-ltab-ricon"
+                    aria-label={`Duplicate rule ${i + 1}`}
+                    title="Duplicate"
+                    onClick={() => {
+                      commit(duplicateDecisionRule(doc, rule.id));
+                      toast("Rule duplicated — the copy sits directly below");
+                    }}
+                  >
+                    ⧉
                   </button>
                   {/* Delete looks the rule up BY ID, never by row index.
                       Mock .icon-btn × (215), revealed on row hover. */}
@@ -420,18 +534,23 @@ export function LogicTabCard({
   );
 }
 
-// QRTZ-H3 sentence grammar — the mock's row copy, exactly (shared.mjs 350,
-// 364): "When they pick" (muted) · answer CHIPS (.ans) joined by the small-
-// caps AND (.op) · the → arrow · the coloured verb · plain comma-joined
-// targets · one trailing muted kind. AND-only v1 (DECISIONS G2); is_not
-// renders in the .op form ("not" — no mock drawing; kept from the product).
+// Logic-step mock module 09 sentence grammar — "When" · condition chips
+// ([Qn] answer) · join words that mirror the rule's OWN operators (§3: or
+// within an any_of column, and within an all-of column, and the rule's
+// match join between questions — "the join word between condition chips is
+// the rule's own operator, so a ledger row reads the same way the builder
+// wrote it") · the → arrow · the coloured verb (show / pin / hide, §4) ·
+// comma-joined targets · one trailing muted kind. is_not renders as a "not"
+// prefix inside the chip.
 function RuleSentence({
   rule,
   questions,
+  qIndexByNodeId,
   catById,
 }: {
   rule: NonNullable<QuizDoc["decision_rules"]>[number];
   questions: OrderedQuestion[];
+  qIndexByNodeId: Map<string, number>;
   catById: Map<string, BuilderCategory>;
 }) {
   const answerLabel = (questionId: string, answerId: string) => {
@@ -449,31 +568,58 @@ function RuleSentence({
     kinds.length > 0 && kinds[0] !== null && kinds.every((k) => k === kinds[0])
       ? kinds[0]
       : null;
+  // Group conditions by question (first-appearance order) so the join words
+  // can mirror the engine's grouped semantics.
+  const groups: { questionId: string; conds: typeof rule.conditions }[] = [];
+  for (const c of rule.conditions) {
+    const g = groups.find((x) => x.questionId === c.question_id);
+    if (g) g.conds.push(c);
+    else groups.push({ questionId: c.question_id, conds: [c] });
+  }
+  const anyOf = new Set(rule.any_of ?? []);
+  const acrossOp = rule.match === "any" ? "or" : "and";
   return (
     <>
       <span className="qz-ltab-rwhen">When they pick</span>{" "}
-      {rule.conditions.map((c, i) => {
-        const label = answerLabel(c.question_id, c.answer_id);
+      {groups.map((g, gi) => {
+        const withinOp = anyOf.has(g.questionId) ? "or" : "and";
+        const qn = qIndexByNodeId.get(g.questionId);
         return (
-          <Fragment key={`${c.question_id}:${c.answer_id}:${i}`}>
-            {i > 0 ? (
+          <Fragment key={g.questionId}>
+            {gi > 0 ? (
               <>
                 {" "}
-                <span className="qz-ltab-op">and</span>{" "}
+                <span className="qz-ltab-op">{acrossOp}</span>{" "}
               </>
             ) : null}
-            {c.op === "is_not" ? (
-              <>
-                <span className="qz-ltab-op">not</span>{" "}
-              </>
-            ) : null}
-            {label ? (
-              <b className="qz-ltab-ans">{label}</b>
-            ) : (
-              // Dangling reference (DECISIONS "additions") — flagged, never
-              // silently dropped.
-              <b className="qz-ltab-bad">(deleted answer)</b>
-            )}
+            {g.conds.map((c, i) => {
+              const label = answerLabel(c.question_id, c.answer_id);
+              return (
+                <Fragment key={`${c.answer_id}:${i}`}>
+                  {i > 0 ? (
+                    <>
+                      {" "}
+                      <span className="qz-ltab-op">{withinOp}</span>{" "}
+                    </>
+                  ) : null}
+                  <span className="qz-ltab-cchip">
+                    {qn != null ? (
+                      <span className="qz-ltab-qn" aria-hidden>
+                        Q{qn}
+                      </span>
+                    ) : null}
+                    {c.op === "is_not" ? <span className="qz-ltab-op">not</span> : null}
+                    {label ? (
+                      <b className="qz-ltab-ans">{label}</b>
+                    ) : (
+                      // Dangling reference (DECISIONS "additions") — flagged,
+                      // never silently dropped.
+                      <b className="qz-ltab-bad">(deleted answer)</b>
+                    )}
+                  </span>
+                </Fragment>
+              );
+            })}
           </Fragment>
         );
       })}{" "}

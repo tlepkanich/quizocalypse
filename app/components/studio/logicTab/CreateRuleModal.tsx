@@ -4,21 +4,24 @@ import type { Quiz } from "../../../lib/quizSchema";
 import type { BuilderCategory, BuilderCollection } from "../../builder/stepProps";
 import type { IndexedProduct } from "../../../lib/recommendationEngine";
 import type { OrderedQuestion } from "../../../lib/questionOrder";
-import { createDecisionRule } from "../../../lib/quizMutations";
+import { createDecisionRule, updateDecisionRule } from "../../../lib/quizMutations";
 import { QzPopover, useFocusTrap } from "../../qz-overlays";
 import { useQzToast } from "../../qz-toast";
 
 // ════════════════════════════════════════════════════════════════════════════
-// Logic tab (HANDOFF §4 + DECISIONS G1-G4/G9) — the create-a-rule modal.
+// Logic tab (HANDOFF §4) + logic-step handoff §3/§4/§12 — the rule builder.
 // Three columns: WHEN THEY ANSWER · THEN · WHAT IT ACTS ON.
 //
-// v1 scoping locked in DECISIONS.md:
-// - AND-only; the and/or joiner is not rendered (G2a).
-// - One chip per single-select question (picking a second REPLACES it) — two
-//   ANDed `is` conditions on a single-select can never fire (G3). Multi-select
-//   questions may carry several chips (all-of; the engine's semantics).
-// - Verbs wire per G4: Show → action absent · Highlight → "show" ·
-//   Exclude → "hide". Default on a blank draft: Exclude.
+// Logic-step rework (supersedes DECISIONS G2a/G3/G4 where they conflict):
+// - Verbs per §4: Show → action "show" · Pin → "prioritize" · Hide → "hide".
+//   The legacy REPLACE rule (action absent) is parsed forever but never
+//   written by new UI; editing one keeps it absent unless the verb changes.
+// - §3 operators, one control per scope: picking several answers of ONE
+//   question is "any of" by default (or between the chips; all of is a
+//   per-question toggle, meaningful on multi-select); an is / is not toggle
+//   per question column; ONE and ⇄ or join across questions per rule.
+// - §12 — Edit opens this same modal pre-filled against the existing rule
+//   id (same storage, no second code path). Duplicate lives on the ledger.
 // - The tray is multi-target (G1, `target_ids`); raw tag/collection/product
 //   picks are materialized as Category rows via /api/categories/ensure-targets
 //   at Create time (a rule target must be a Category id — publish blocks on
@@ -28,8 +31,9 @@ import { useQzToast } from "../../qz-toast";
 // ════════════════════════════════════════════════════════════════════════════
 
 type QuizDoc = Quiz;
+type DecisionRuleT = NonNullable<Quiz["decision_rules"]>[number];
 
-type Verb = "show" | "highlight" | "exclude";
+type Verb = "show" | "pin" | "hide";
 
 interface SelectedResource {
   key: string;
@@ -109,11 +113,23 @@ function ResourceRow({
   );
 }
 
+// Logic-step §4 — the verb map: Show → "show", Pin → "prioritize" (rename
+// only), Hide → "hide". Absent action (legacy replace) is never offered.
 const VERBS: Array<{ verb: Verb; name: string; hint: string }> = [
-  { verb: "show", name: "Show", hint: "replaces the starting set — Narrows still apply" },
-  { verb: "highlight", name: "Highlight", hint: "adds these in, even if a filter would drop them" },
-  { verb: "exclude", name: "Exclude", hint: "takes these away for those shoppers" },
+  { verb: "show", name: "Show", hint: "these become the results" },
+  { verb: "pin", name: "Pin", hint: "these move to the top" },
+  { verb: "hide", name: "Hide", hint: "these never show" },
 ];
+const VERB_TO_ACTION: Record<Verb, "show" | "prioritize" | "hide"> = {
+  show: "show",
+  pin: "prioritize",
+  hide: "hide",
+};
+const ACTION_TO_VERB: Record<"show" | "prioritize" | "hide", Verb> = {
+  show: "show",
+  prioritize: "pin",
+  hide: "hide",
+};
 
 export function CreateRuleModal({
   doc,
@@ -123,6 +139,7 @@ export function CreateRuleModal({
   productIndex,
   quizId,
   open,
+  editRule,
   onClose,
   commit,
   onCategoriesCreated,
@@ -135,6 +152,9 @@ export function CreateRuleModal({
   productIndex: IndexedProduct[];
   quizId: string;
   open: boolean;
+  /** Logic-step §12 — non-null puts the modal in EDIT mode, pre-filled from
+   *  this rule; saving patches it in place (updateDecisionRule). */
+  editRule?: DecisionRuleT | null;
   onClose: () => void;
   commit: (doc: QuizDoc) => void;
   onCategoriesCreated: (cats: BuilderCategory[]) => void;
@@ -160,13 +180,82 @@ export function CreateRuleModal({
   }, [open, onClose]);
 
   const [picks, setPicks] = useState<Record<string, string[]>>({});
-  const [verb, setVerb] = useState<Verb>("exclude"); // §4.2 blank-draft default
+  const [verb, setVerb] = useState<Verb>("hide"); // §4.2 blank-draft default
   const [sel, setSel] = useState<SelectedResource[]>([]);
   const [query, setQuery] = useState("");
   const [kindChip, setKindChip] = useState<
     "all" | "set" | "tag" | "collection" | "metafield" | "product"
   >("all");
   const [busy, setBusy] = useState(false);
+  // Logic-step §3 — the per-scope operator state, one control each:
+  //   notCols[qid]  — the column's is / is not toggle (is_not = none of).
+  //   allCols[qid]  — the column's all-of toggle (default any-of; only
+  //                   meaningful on multi-select, forced any on single).
+  //   matchMode     — THE one cross-question join (and ⇄ or).
+  const [notCols, setNotCols] = useState<Record<string, boolean>>({});
+  const [allCols, setAllCols] = useState<Record<string, boolean>>({});
+  const [matchMode, setMatchMode] = useState<"all" | "any">("all");
+  // §12 — editing a LEGACY replace rule (action absent) keeps it absent
+  // unless the merchant actively changes the verb.
+  const [legacyReplace, setLegacyReplace] = useState(false);
+
+  // §12 — seed the draft from the rule under edit each time the modal opens.
+  const editId = editRule?.id ?? null;
+  useEffect(() => {
+    if (!open) return;
+    if (!editRule) {
+      setPicks({});
+      setVerb("hide");
+      setSel([]);
+      setNotCols({});
+      setAllCols({});
+      setMatchMode("all");
+      setLegacyReplace(false);
+      return;
+    }
+    const seededPicks: Record<string, string[]> = {};
+    const seededNot: Record<string, boolean> = {};
+    const isCount: Record<string, number> = {};
+    for (const c of editRule.conditions) {
+      (seededPicks[c.question_id] ??= []).push(c.answer_id);
+      if (c.op === "is_not") seededNot[c.question_id] = true;
+      else isCount[c.question_id] = (isCount[c.question_id] ?? 0) + 1;
+    }
+    const anyOf = new Set(editRule.any_of ?? []);
+    const seededAll: Record<string, boolean> = {};
+    for (const [qid, n] of Object.entries(isCount)) {
+      // Stored absence of any_of on a multi-pick is-column = all-of (§3).
+      if (n > 1 && !anyOf.has(qid)) seededAll[qid] = true;
+    }
+    setPicks(seededPicks);
+    setNotCols(seededNot);
+    setAllCols(seededAll);
+    setMatchMode(editRule.match === "any" ? "any" : "all");
+    setVerb(editRule.action ? ACTION_TO_VERB[editRule.action] : "show");
+    setLegacyReplace(!editRule.action);
+    const targetIds = editRule.target_ids?.length
+      ? editRule.target_ids
+      : [editRule.target_id];
+    setSel(
+      targetIds.flatMap((tid) => {
+        const cat = categories.find((c) => c.id === tid);
+        return cat
+          ? [
+              {
+                key: `set:${cat.id}`,
+                kind: "set" as const,
+                ref: cat.id,
+                name: cat.name,
+                count: cat.productIds.length,
+              },
+            ]
+          : [];
+      }),
+    );
+    // categories is a lookup only — reseeding on its refresh would clobber
+    // in-progress edits.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, editId]);
   // §4.5/G10 — the impact line, computed server-side (pathEnumeration, cap
   // 2 000 with truncated → "(sampled)"). Debounced; errors just hide the line.
   const [impact, setImpact] = useState<
@@ -176,12 +265,41 @@ export function CreateRuleModal({
     | { fires: number; total: number; truncated: boolean }
   >(null);
 
-  const conditionsKey = JSON.stringify(picks);
+  // ── §3 — the ONE derivation of the draft's stored shape ───────────────────
+  // conditions (per-column op), any_of (an is-column with several picks left
+  // on "any of"; single-select is FORCED any — two ANDed is on a single-
+  // select can match nobody), match ("any" only when >1 question is used).
+  const multiById = useMemo(
+    () =>
+      new Map(
+        questions.map((q) => [q.node.id, q.node.data.question_type === "multi_select"]),
+      ),
+    [questions],
+  );
+  const draft = useMemo(() => {
+    const conditions: DecisionRuleT["conditions"] = [];
+    const any_of: string[] = [];
+    let usedQuestions = 0;
+    for (const q of questions) {
+      const qid = q.node.id;
+      const aids = picks[qid] ?? [];
+      if (aids.length === 0) continue;
+      usedQuestions++;
+      const op = notCols[qid] ? ("is_not" as const) : ("is" as const);
+      for (const aid of aids) conditions.push({ question_id: qid, answer_id: aid, op });
+      if (op === "is" && aids.length > 1) {
+        const forcedAny = !multiById.get(qid);
+        if (forcedAny || !allCols[qid]) any_of.push(qid);
+      }
+    }
+    const match = matchMode === "any" && usedQuestions > 1 ? ("any" as const) : undefined;
+    return { conditions, any_of, match, usedQuestions };
+  }, [questions, picks, notCols, allCols, matchMode, multiById]);
+
+  const conditionsKey = JSON.stringify([picks, notCols, allCols, matchMode]);
   useEffect(() => {
     if (!open) return;
-    const conditions = Object.entries(picks).flatMap(([qid, aids]) =>
-      aids.map((aid) => ({ question_id: qid, answer_id: aid, op: "is" as const })),
-    );
+    const { conditions, any_of, match } = draft;
     if (conditions.length === 0) {
       setImpact(null);
       return;
@@ -193,7 +311,12 @@ export function CreateRuleModal({
         const res = await fetch("/api/quizzes/rule-impact", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ quizId, conditions }),
+          body: JSON.stringify({
+            quizId,
+            conditions,
+            ...(match ? { match } : {}),
+            ...(any_of.length ? { any_of } : {}),
+          }),
         });
         const j = (await res.json()) as
           | { ok: true; notEstimable?: boolean; fires?: number; total?: number; truncated?: boolean }
@@ -354,16 +477,14 @@ export function CreateRuleModal({
     return ids.size;
   }, [sel, resolveResource]);
 
+  // §3 — several chips on ONE question is now expressible (any-of / all-of),
+  // so every question type ACCUMULATES; single-select columns are forced
+  // any-of at derivation time (G3's replace behavior is retired).
   const toggleAnswer = (q: OrderedQuestion, answerId: string) => {
     setPicks((prev) => {
       const cur = prev[q.node.id] ?? [];
       const on = cur.includes(answerId);
-      const multi = q.node.data.question_type === "multi_select";
-      const next = on
-        ? cur.filter((x) => x !== answerId)
-        : multi
-          ? [...cur, answerId]
-          : [answerId]; // DECISIONS G3 — single-select: replace, never AND
+      const next = on ? cur.filter((x) => x !== answerId) : [...cur, answerId];
       return { ...prev, [q.node.id]: next };
     });
   };
@@ -378,19 +499,21 @@ export function CreateRuleModal({
 
   const reset = () => {
     setPicks({});
-    setVerb("exclude");
+    setVerb("hide");
     setSel([]);
     setQuery("");
     setKindChip("all");
+    setNotCols({});
+    setAllCols({});
+    setMatchMode("all");
+    setLegacyReplace(false);
   };
 
   const canCreate = pickedCount > 0 && sel.length > 0 && !busy;
 
   const handleCreate = async () => {
     if (!canCreate) return;
-    const conditions = Object.entries(picks).flatMap(([qid, aids]) =>
-      aids.map((aid) => ({ question_id: qid, answer_id: aid, op: "is" as const })),
-    );
+    const { conditions, any_of, match } = draft;
     setBusy(true);
     try {
       const raw = sel.filter((s) => s.kind !== "set");
@@ -426,13 +549,36 @@ export function CreateRuleModal({
       const target_ids = sel
         .map((s) => (s.kind === "set" ? s.ref : createdByKey.get(s.key)))
         .filter((id): id is string => Boolean(id));
-      const action =
-        verb === "exclude" ? ("hide" as const) : verb === "highlight" ? ("show" as const) : undefined;
+      // §4 — new rules always carry an action; a legacy replace rule under
+      // edit keeps action ABSENT unless the merchant changed the verb.
+      const keepLegacyReplace = editRule && legacyReplace && verb === "show";
+      const action = keepLegacyReplace ? undefined : VERB_TO_ACTION[verb];
       // Commit against the LATEST doc, not the render-time snapshot captured
       // before the await (review L2-5).
       const base = getLatestDoc ? getLatestDoc() : doc;
-      commit(createDecisionRule(base, { conditions, target_ids, ...(action ? { action } : {}) }));
-      toast("✓ Rule created — checked top down, first match applies");
+      if (editRule) {
+        commit(
+          updateDecisionRule(base, editRule.id, {
+            conditions,
+            target_ids,
+            action,
+            match,
+            any_of,
+          }),
+        );
+        toast("✓ Rule updated");
+      } else {
+        commit(
+          createDecisionRule(base, {
+            conditions,
+            target_ids,
+            ...(action ? { action } : {}),
+            ...(match ? { match } : {}),
+            ...(any_of.length ? { any_of } : {}),
+          }),
+        );
+        toast("✓ Rule created — checked top down, first match applies");
+      }
       reset();
       onClose();
     } finally {
@@ -446,15 +592,16 @@ export function CreateRuleModal({
     const q = questions.find((x) => x.node.id === qid);
     return q?.node.data.answers.find((a) => a.id === aid)?.text ?? "";
   };
-  const verbWord = verb === "show" ? "show" : verb === "highlight" ? "highlight" : "exclude";
+  const verbWord = verb;
+  const modalTitle = editRule ? "Edit rule" : "Create a rule";
 
   return createPortal(
     // §4.5 — the scrim deliberately does NOT close (draft-safe); Esc is a
     // document-level listener above.
     <div className="qz-modal-scrim">
-      <div ref={boxRef} className="qz-crm" role="dialog" aria-modal="true" aria-label="Create a rule">
+      <div ref={boxRef} className="qz-crm" role="dialog" aria-modal="true" aria-label={modalTitle}>
         <header className="qz-crm-hd">
-          <h2>Create a rule</h2>
+          <h2>{modalTitle}</h2>
           <span className="qz-crm-hint">
             Who it applies to on the left · what happens on the right
           </span>
@@ -464,7 +611,7 @@ export function CreateRuleModal({
             disabled={!canCreate}
             onClick={handleCreate}
           >
-            {busy ? "Creating…" : "Create rule"}
+            {busy ? "Saving…" : editRule ? "Save rule" : "Create rule"}
           </button>
         </header>
         <div className="qz-crm-cols">
@@ -503,13 +650,72 @@ export function CreateRuleModal({
                         </button>
                       ))}
                     </div>
-                    {multi && cur.length > 1 ? (
-                      <div className="qz-crm-qnote">shopper picked all of these</div>
+                    {/* §3 — the column's own operators: is / is not, and the
+                        any-of / all-of footer (all-of only means something on
+                        a multi-select; single-select is forced any-of). */}
+                    {cur.length > 0 ? (
+                      <div className="qz-crm-colops">
+                        <button
+                          type="button"
+                          className={`qz-crm-colop${notCols[q.node.id] ? " is-not" : ""}`}
+                          title={
+                            notCols[q.node.id]
+                              ? "Matches shoppers who picked NONE of these"
+                              : "Matches shoppers who picked these"
+                          }
+                          onClick={() =>
+                            setNotCols((prev) => ({
+                              ...prev,
+                              [q.node.id]: !prev[q.node.id],
+                            }))
+                          }
+                        >
+                          {notCols[q.node.id] ? "is not" : "is"} ⇄
+                        </button>
+                        {cur.length > 1 && !notCols[q.node.id] ? (
+                          multi ? (
+                            <button
+                              type="button"
+                              className="qz-crm-colop"
+                              title="any of — one pick is enough · all of — every one must be picked"
+                              onClick={() =>
+                                setAllCols((prev) => ({
+                                  ...prev,
+                                  [q.node.id]: !prev[q.node.id],
+                                }))
+                              }
+                            >
+                              {allCols[q.node.id] ? "all of" : "any of"} {cur.length} ⇄
+                            </button>
+                          ) : (
+                            <span className="qz-crm-colnote">any of {cur.length}</span>
+                          )
+                        ) : null}
+                        {notCols[q.node.id] && cur.length > 1 ? (
+                          <span className="qz-crm-colnote">none of {cur.length}</span>
+                        ) : null}
+                      </div>
                     ) : null}
                   </div>
                 );
               })}
             </div>
+            {/* §3 — ONE cross-question join per rule (the mock's and ⇆ under
+                the columns): and = every question must match, or = any one. */}
+            {draft.usedQuestions > 1 ? (
+              <div className="qz-crm-joinbar">
+                <span>Questions join with</span>
+                <button
+                  type="button"
+                  className={`qz-crm-colop${matchMode === "any" ? " is-or" : ""}`}
+                  onClick={() =>
+                    setMatchMode((m) => (m === "all" ? "any" : "all"))
+                  }
+                >
+                  {matchMode === "all" ? "and — all must match" : "or — any can match"} ⇄
+                </button>
+              </div>
+            ) : null}
           </section>
 
           {/* ── middle: THEN ── */}
@@ -520,7 +726,7 @@ export function CreateRuleModal({
                 key={v.verb}
                 type="button"
                 className={`qz-crm-verb${verb === v.verb ? " is-on" : ""}${
-                  v.verb === "exclude" ? " is-exclude" : v.verb === "highlight" ? " is-highlight" : ""
+                  v.verb === "hide" ? " is-exclude" : v.verb === "pin" ? " is-pin" : " is-highlight"
                 }`}
                 onClick={() => setVerb(v.verb)}
               >
@@ -528,6 +734,14 @@ export function CreateRuleModal({
                 <span>{v.hint}</span>
               </button>
             ))}
+            {/* §12 — an edited legacy rule that stays on Show keeps its
+                original replace behavior; say so rather than hiding it. */}
+            {editRule && legacyReplace && verb === "show" ? (
+              <p className="qz-crm-qnote">
+                This older rule replaces the results outright — saving on Show
+                keeps that behavior.
+              </p>
+            ) : null}
           </section>
 
           {/* ── right: WHAT IT ACTS ON ── */}
@@ -628,15 +842,37 @@ export function CreateRuleModal({
             {pickedCount === 0 ? (
               <span className="qz-ltab-muted">pick answers</span>
             ) : (
-              Object.entries(picks)
-                .flatMap(([qid, aids]) => aids.map((aid) => answerLabel(qid, aid)))
-                .filter(Boolean)
-                .map((label, i) => (
-                  <span key={`${label}:${i}`}>
-                    {i > 0 ? <span className="qz-ltab-join"> and </span> : null}
-                    <b>{label}</b>
-                  </span>
-                ))
+              // §3 read-back — the sentence uses the rule's OWN operators:
+              // within a column "or" (any-of) / "and" (all-of) / "none of"
+              // (is not); between columns the one rule join.
+              questions
+                .filter((q) => (picks[q.node.id] ?? []).length > 0)
+                .map((q, gi) => {
+                  const qid = q.node.id;
+                  const aids = picks[qid] ?? [];
+                  const isNot = Boolean(notCols[qid]);
+                  const withinWord =
+                    isNot ? "nor" : allCols[qid] && multiById.get(qid) ? "and" : "or";
+                  return (
+                    <span key={qid}>
+                      {gi > 0 ? (
+                        <span className="qz-ltab-join">
+                          {" "}
+                          {matchMode === "any" ? "or" : "and"}{" "}
+                        </span>
+                      ) : null}
+                      {isNot ? <span className="qz-ltab-join">not </span> : null}
+                      {aids.map((aid, i) => (
+                        <span key={aid}>
+                          {i > 0 ? (
+                            <span className="qz-ltab-join"> {withinWord} </span>
+                          ) : null}
+                          <b>{answerLabel(qid, aid)}</b>
+                        </span>
+                      ))}
+                    </span>
+                  );
+                })
             )}
             <span className="qz-ltab-join">, </span>
             {verbWord}{" "}

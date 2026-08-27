@@ -317,8 +317,11 @@ export async function failToBlankQuestions(
       stage: "question_builder",
       built: true,
       gen_error:
+        // Pairs with the notice card's "We could not draft this one" title —
+        // consequence + the two honest paths, no restated failure. Must keep
+        // the word "blank" (flow1-verify.mjs asserts it persisted).
         notice ??
-        "We couldn't generate from your goal — starting blank. Build your questions below, or go back and try again.",
+        "Your goal is saved — we set you up with a blank quiz instead. Build your questions below, or start from a template.",
       gen_progress: undefined,
     });
     await prisma.quiz.update({

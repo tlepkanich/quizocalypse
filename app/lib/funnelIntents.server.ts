@@ -1428,6 +1428,28 @@ async function runStep1FunnelActionImpl(
     return json({ intent, ok: true });
   }
 
+  // Logic-step handoff §2 — the style chooser's write. build_session is
+  // server-owned (the JSON autosave never touches it), so the chooser picks
+  // its style through an intent like every other session field. Lossless by
+  // construction: nothing else on the doc is touched, so switching styles
+  // never strips an answer's filter values — flipping back restores the
+  // mapping. "points" is deliberately NOT accepted: the Point based card
+  // renders and does nothing (inert) until that path is built.
+  if (intent === "set-logic-style") {
+    const style = String(form.get("style") ?? "");
+    if (style !== "rules" && style !== "attributes") {
+      return json({ intent, ok: false, error: "Unknown logic style." }, { status: 400 });
+    }
+    if (doc.logic_model !== "decider") {
+      return json({ intent, ok: false, error: "Not a decider quiz." }, { status: 400 });
+    }
+    await writeDoc(quiz.id, {
+      ...doc,
+      build_session: { ...session, logic_style: style },
+    });
+    return json({ intent, ok: true });
+  }
+
   // One-line-chrome §1.4 — the step-flow's backwards navigation: clicking a
   // finished step (or the bar's ‹ back) jumps straight there, no confirm.
   // BACKWARDS ONLY, enforced here — forward movement keeps going through each

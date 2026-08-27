@@ -8,6 +8,8 @@ import {
   productRating,
   resolveRecPageGlobal,
   resolveTarget,
+  // Logic-step handoff §3 — the ONE shared rule predicate.
+  ruleConditionsMatch,
   // QZY-5 (results-step4 v1.0) — the archetype lineup.
   revealLineup,
   settingsForTarget,
@@ -898,5 +900,126 @@ describe("productRating — real review metafields only", () => {
     const g = resolveRecPageGlobal(undefined);
     expect(g.showStars).toBe(false);
     expect(g.showPerWhy).toBe(false);
+  });
+});
+
+// ── ruleConditionsMatch (logic-step handoff §3) ─────────────────────────────
+
+describe("ruleConditionsMatch — grouped is/is_not with match + any_of (§3)", () => {
+  const rule = (
+    conditions: { question_id: string; answer_id: string; op: "is" | "is_not" }[],
+    extra: { match?: "all" | "any"; any_of?: string[] } = {},
+  ) => ({ conditions, ...extra });
+  const sel = (...ids: string[]) => new Set(ids);
+
+  it("zero conditions never match (half-built, V9)", () => {
+    expect(ruleConditionsMatch(rule([]), sel("a"))).toBe(false);
+  });
+
+  it("legacy flat semantics are unchanged when match/any_of are absent", () => {
+    const r = rule([
+      { question_id: "q1", answer_id: "a", op: "is" },
+      { question_id: "q2", answer_id: "x", op: "is_not" },
+    ]);
+    expect(ruleConditionsMatch(r, sel("a"))).toBe(true);
+    expect(ruleConditionsMatch(r, sel("a", "x"))).toBe(false);
+    expect(ruleConditionsMatch(r, sel("b"))).toBe(false);
+  });
+
+  it("two is on one question WITHOUT any_of stay all-of (the shipped multi-select behavior)", () => {
+    const r = rule([
+      { question_id: "q1", answer_id: "a", op: "is" },
+      { question_id: "q1", answer_id: "b", op: "is" },
+    ]);
+    expect(ruleConditionsMatch(r, sel("a"))).toBe(false);
+    expect(ruleConditionsMatch(r, sel("a", "b"))).toBe(true);
+  });
+
+  it("any_of relaxes ONE question's is-group to at-least-one", () => {
+    const r = rule(
+      [
+        { question_id: "q1", answer_id: "a", op: "is" },
+        { question_id: "q1", answer_id: "b", op: "is" },
+        { question_id: "q2", answer_id: "c", op: "is" },
+      ],
+      { any_of: ["q1"] },
+    );
+    expect(ruleConditionsMatch(r, sel("a", "c"))).toBe(true);
+    expect(ruleConditionsMatch(r, sel("b", "c"))).toBe(true);
+    expect(ruleConditionsMatch(r, sel("a"))).toBe(false); // q2 group still required
+    expect(ruleConditionsMatch(r, sel("c"))).toBe(false); // q1 group still required
+  });
+
+  it("match any fires when ANY question group is satisfied", () => {
+    const r = rule(
+      [
+        { question_id: "q1", answer_id: "a", op: "is" },
+        { question_id: "q2", answer_id: "c", op: "is" },
+      ],
+      { match: "any" },
+    );
+    expect(ruleConditionsMatch(r, sel("a"))).toBe(true);
+    expect(ruleConditionsMatch(r, sel("c"))).toBe(true);
+    expect(ruleConditionsMatch(r, sel("z"))).toBe(false);
+  });
+
+  it("is_not group = none of the listed answers (skipped question satisfies it)", () => {
+    const r = rule([
+      { question_id: "q1", answer_id: "a", op: "is_not" },
+      { question_id: "q1", answer_id: "b", op: "is_not" },
+    ]);
+    expect(ruleConditionsMatch(r, sel())).toBe(true);
+    expect(ruleConditionsMatch(r, sel("z"))).toBe(true);
+    expect(ruleConditionsMatch(r, sel("a"))).toBe(false);
+    expect(ruleConditionsMatch(r, sel("b"))).toBe(false);
+  });
+
+  it("mixed is + is_not on one question: is_not always vetoes", () => {
+    const r = rule(
+      [
+        { question_id: "q1", answer_id: "a", op: "is" },
+        { question_id: "q1", answer_id: "b", op: "is" },
+        { question_id: "q1", answer_id: "x", op: "is_not" },
+      ],
+      { any_of: ["q1"] },
+    );
+    expect(ruleConditionsMatch(r, sel("a"))).toBe(true);
+    expect(ruleConditionsMatch(r, sel("a", "x"))).toBe(false);
+  });
+
+  it("match any + a vacuously-true is_not group fires (skipped question)", () => {
+    const r = rule(
+      [
+        { question_id: "q1", answer_id: "a", op: "is" },
+        { question_id: "q2", answer_id: "x", op: "is_not" },
+      ],
+      { match: "any" },
+    );
+    expect(ruleConditionsMatch(r, sel())).toBe(true); // q2 group vacuously true
+    expect(ruleConditionsMatch(r, sel("x"))).toBe(false); // both groups fail
+  });
+
+  it("resolveTarget honors match/any_of through the first-match-wins loop", () => {
+    const doc = deciderDoc({
+      decision_rules: [
+        {
+          id: "r_any",
+          conditions: [
+            { question_id: "q1", answer_id: "beginner", op: "is" },
+            { question_id: "q1", answer_id: "advanced", op: "is" },
+          ],
+          any_of: ["q1"],
+          target_id: "cat_any",
+        },
+      ],
+    });
+    expect(resolveTarget(["beginner", "park"], doc)).toEqual({
+      targetId: "cat_any",
+      matchedRuleId: "r_any",
+    });
+    expect(resolveTarget(["advanced", "park"], doc)).toEqual({
+      targetId: "cat_any",
+      matchedRuleId: "r_any",
+    });
   });
 });

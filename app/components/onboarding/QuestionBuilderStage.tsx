@@ -79,6 +79,11 @@ export function QuestionBuilderStage({
   const submitContinue = useCallback(() => {
     fetcherRef.current.submit({ intent: continueIntent }, { method: "post" });
   }, [continueIntent]);
+  // Logic-step §2 — the style chooser's persist. build_session is server-owned,
+  // so the pick rides an intent (never the JSON autosave). Stable via the ref.
+  const submitLogicStyle = useCallback((style: "rules" | "attributes") => {
+    fetcherRef.current.submit({ intent: "set-logic-style", style }, { method: "post" });
+  }, []);
 
   const [regeneratingId, setRegeneratingId] = useState<string | null>(null);
   const [undoNodeId, setUndoNodeId] = useState<string | null>(null);
@@ -166,6 +171,7 @@ export function QuestionBuilderStage({
         productIndex={productIndex}
         navigating={navigating}
         onContinue={submitContinue}
+        onPickLogicStyle={submitLogicStyle}
         designTokens={designTokens}
         lastSyncAt={lastSyncAt}
         shopifyAdminDomain={shopifyAdminDomain}

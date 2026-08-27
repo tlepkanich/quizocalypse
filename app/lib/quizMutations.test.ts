@@ -27,6 +27,7 @@ import {
   moveDecisionRule,
   updateDecisionRule,
   createDecisionRule,
+  duplicateDecisionRule,
   setAnswerFilterValues,
   setQuestionNarrowField,
   setRecPageGlobal,
@@ -987,6 +988,71 @@ describe("LOGIC v2 role/target mutations (setQuestionRole / setAnswerTarget)", (
       ).toBe(legacy); // legacy no-op — identity
 
       expect(() => Quiz.parse(doc)).not.toThrow();
+    });
+
+    // Logic-step handoff §3 — match / any_of, canonical-absent discipline.
+    it("match/any_of: canonical defaults stay ABSENT; presence semantics on update", () => {
+      const base = deciderDoc();
+      const plain = createDecisionRule(base, {
+        conditions: [cond("q1", "q1_a1")],
+        target_ids: ["cat_a"],
+        match: "all", // canonical default → must not be stored
+        any_of: [],
+      });
+      const pr = plain.decision_rules![0]!;
+      expect(Object.prototype.hasOwnProperty.call(pr, "match")).toBe(false);
+      expect(Object.prototype.hasOwnProperty.call(pr, "any_of")).toBe(false);
+
+      const rich = createDecisionRule(base, {
+        conditions: [cond("q1", "q1_a1"), cond("q1", "q1_a2")],
+        target_ids: ["cat_a"],
+        match: "any",
+        any_of: ["q1"],
+      });
+      const rr = rich.decision_rules![0]!;
+      expect(rr.match).toBe("any");
+      expect(rr.any_of).toEqual(["q1"]);
+      expect(() => Quiz.parse(rich)).not.toThrow();
+
+      // update: set, then clear back to the absent byte-form.
+      let doc = updateDecisionRule(rich, rr.id, { match: undefined, any_of: [] });
+      expect(Object.prototype.hasOwnProperty.call(doc.decision_rules![0], "match")).toBe(false);
+      expect(Object.prototype.hasOwnProperty.call(doc.decision_rules![0], "any_of")).toBe(false);
+      doc = updateDecisionRule(doc, rr.id, { match: "any", any_of: ["q1"] });
+      expect(doc.decision_rules![0]!.match).toBe("any");
+      expect(doc.decision_rules![0]!.any_of).toEqual(["q1"]);
+      // Omitting the keys leaves them untouched.
+      doc = updateDecisionRule(doc, rr.id, { target_id: "cat_b" });
+      expect(doc.decision_rules![0]!.match).toBe("any");
+      expect(() => Quiz.parse(doc)).not.toThrow();
+    });
+
+    // Logic-step handoff §12 — duplicate inserts DIRECTLY BELOW the original.
+    it("duplicateDecisionRule: copy directly below, fresh id, deep-cloned arrays", () => {
+      let doc = addDecisionRule(deciderDoc(), "cat_a");
+      doc = addDecisionRule(doc, "cat_b");
+      const [r1] = doc.decision_rules!;
+      doc = updateDecisionRule(doc, r1!.id, {
+        conditions: [cond("q1", "q1_a1"), cond("q1", "q1_a2")],
+        target_ids: ["cat_x", "cat_y"],
+        any_of: ["q1"],
+      });
+      const dup = duplicateDecisionRule(doc, r1!.id);
+      expect(dup.decision_rules).toHaveLength(3);
+      const [orig, copy, tail] = dup.decision_rules!;
+      expect(copy!.id).not.toBe(orig!.id);
+      expect(tail!.target_id).toBe("cat_b"); // the copy sits at index 1, not the end
+      expect(copy!.conditions).toEqual(orig!.conditions);
+      expect(copy!.conditions).not.toBe(orig!.conditions);
+      expect(copy!.target_ids).toEqual(orig!.target_ids);
+      expect(copy!.target_ids).not.toBe(orig!.target_ids);
+      expect(copy!.any_of).toEqual(orig!.any_of);
+      expect(copy!.any_of).not.toBe(orig!.any_of);
+      expect(() => Quiz.parse(dup)).not.toThrow();
+      // Unknown id / legacy doc → identity no-op.
+      expect(duplicateDecisionRule(doc, "nope")).toBe(doc);
+      const legacy = linearQuestionsDoc();
+      expect(duplicateDecisionRule(legacy, "r1")).toBe(legacy);
     });
   });
 

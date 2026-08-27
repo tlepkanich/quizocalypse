@@ -5484,6 +5484,73 @@ body[data-qz] .qz-s3-editable:focus-visible {
 /* QRTZ-G3 — the sub-header + "How this quiz resolves" explainer strip are
    retired: the artifact's Logic screen is the two cards and nothing else. */
 
+/* ── Logic-step §2 (mock module 01) — the style chooser ─────────────────────
+   Three cards, Attributes + Rules recommended (accent wash), Point based
+   inert (dashed, "Coming soon"). Quartz: no card shadow, 8px radius. */
+.qz-lsc { display: flex; flex-direction: column; gap: 16px; padding: 8px 0 0; }
+.qz-lsc-hd h2 { margin: 0; font-size: 20px; letter-spacing: -0.012em; }
+.qz-lsc-scan { margin: 6px 0 0; font-size: 13px; color: var(--qz-ink-4); }
+.qz-lsc-cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; align-items: stretch; }
+@media (max-width: 900px) { .qz-lsc-cards { grid-template-columns: 1fr; } }
+.qz-lsc-card {
+  appearance: none; font: inherit; text-align: left; cursor: pointer;
+  display: flex; flex-direction: column; gap: 6px;
+  border: 1px solid var(--qz-rule); border-radius: var(--qz-radius-lg);
+  background: var(--qz-paper); color: var(--qz-ink); padding: 16px;
+}
+.qz-lsc-card:hover { border-color: var(--qz-rule-strong); }
+.qz-lsc-card.is-rec { border-color: var(--qz-accent-line); background: var(--qz-accent-wash); }
+.qz-lsc-card.is-rec:hover { border-color: var(--qz-accent); }
+.qz-lsc-card.is-soon { border-style: dashed; background: var(--qz-cream-2); cursor: default; }
+.qz-lsc-cardhead { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.qz-lsc-cardtitle { font-size: 15.5px; font-weight: 700; }
+.qz-lsc-badge {
+  font-size: 9.5px; letter-spacing: .05em; text-transform: uppercase; font-weight: 700;
+  padding: 3px 8px; border-radius: var(--qz-radius-sm, 4px);
+  background: var(--qz-accent); color: #fff;
+}
+.qz-lsc-badge.is-soon { background: var(--qz-cream-2); color: var(--qz-ink-4); border: 1px solid var(--qz-rule); }
+.qz-lsc-sub { font-size: 12px; color: var(--qz-ink-4); font-weight: 600; }
+.qz-lsc-desc { font-size: 12.5px; color: var(--qz-ink-3); line-height: 1.5; }
+.qz-lsc-syn {
+  margin-top: 8px; padding: 11px; border-radius: 6px; display: grid; gap: 6px;
+  background: var(--qz-cream-2); border: 1px solid var(--qz-rule);
+}
+.qz-lsc-card.is-rec .qz-lsc-syn { background: var(--qz-paper); }
+.qz-lsc-synline { display: flex; align-items: center; gap: 5px; flex-wrap: wrap; font-size: 11.5px; }
+.qz-lsc-chip {
+  display: inline-flex; align-items: center; padding: 2px 8px; border-radius: 4px;
+  font-size: 11.5px; border: 1px dashed var(--qz-rule-strong);
+  background: var(--qz-paper); color: var(--qz-ink-4);
+}
+.qz-lsc-chip.is-cat { border-color: var(--qz-ok-edge); background: var(--qz-ok-tint); color: var(--qz-ok); }
+.qz-lsc-chip.is-act { border-color: var(--qz-warn-edge); background: var(--qz-warn-tint); color: var(--qz-warn); }
+.qz-lsc-op { color: var(--qz-ink-4); font-size: 11px; }
+.qz-lsc-go {
+  margin-top: auto; padding: 8px; border-radius: 6px; text-align: center;
+  font-size: 13px; font-weight: 600;
+  border: 1px solid var(--qz-accent); background: var(--qz-paper); color: var(--qz-accent-ink);
+}
+.qz-lsc-card.is-rec .qz-lsc-go { background: var(--qz-accent); color: #fff; }
+.qz-lsc-card.is-soon .qz-lsc-go { background: var(--qz-cream-2); color: var(--qz-ink-4); border-color: var(--qz-rule-strong); }
+
+/* ── Logic-step §2/§3 (mock module 03) — the style bar ──────────────────────
+   One quiet line: chosen style · lossless Switch · the Logic Checker door. */
+.qz-lsb {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  padding: 10px 14px; border: 1px solid var(--qz-rule); border-radius: var(--qz-radius-lg);
+  background: var(--qz-cream-2); font-size: 13px; color: var(--qz-ink-3);
+}
+.qz-lsb-label { font-size: 10.5px; letter-spacing: .05em; text-transform: uppercase; color: var(--qz-ink-4); font-weight: 600; }
+.qz-lsb-style { font-weight: 700; color: var(--qz-ink); }
+.qz-lsb-switch, .qz-lsb-check {
+  appearance: none; font: inherit; cursor: pointer; font-size: 12.5px; font-weight: 600;
+  padding: 5px 11px; border-radius: 6px; border: 1px solid var(--qz-rule-strong);
+  background: var(--qz-paper); color: var(--qz-ink-3);
+}
+.qz-lsb-switch:hover, .qz-lsb-check:hover { color: var(--qz-accent-ink); border-color: var(--qz-accent); }
+.qz-lsb-check { margin-left: auto; }
+
 /* Two columns: map + 356px sticky rules column (spec §2, fits at 1024). */
 /* logic-page-v4 — single-column stacked (Rules → map → Fallback), not a
    two-column map|rules grid. */
@@ -6940,7 +7007,9 @@ body[data-qz] .qz-cust-row:focus-visible {
 }
 .qz-ltab-verb { font-weight: 600; }
 .qz-ltab-verb.is-show, .qz-ltab-verb.is-highlight { color: var(--qz-ok); }
-.qz-ltab-verb.is-exclude { color: var(--qz-crit); }
+.qz-ltab-verb.is-exclude, .qz-ltab-verb.is-hide { color: var(--qz-crit); }
+/* Logic-step §4 — Pin (action "prioritize") joins the verb set. */
+.qz-ltab-verb.is-pin { color: var(--qz-accent-ink); }
 .qz-ltab-rkind { font-size: 10.5px; color: var(--qz-ink-4); }
 /* P4 — delete (mock .icon-btn, hover-revealed) + the visually-hidden
    keyboard reorder pair (a11y — hidden visually, never from the tree);
@@ -6967,6 +7036,33 @@ body[data-qz] .qz-cust-row:focus-visible {
 }
 .qz-ltab-rrow.is-fresh { background: var(--qz-accent-wash); transition: background 0.4s ease; }
 .qz-ltab-create { margin-left: auto; }
+/* Logic-step §6 — the Paste-rules entry sits beside Add rule; only Add rule
+   keeps the auto left margin. */
+.qz-ltab-paste { margin-left: auto; }
+.qz-ltab-paste + .qz-ltab-create { margin-left: 0; }
+/* Logic-step mock 09 — the λ row body (sentence + optional flag line), the
+   [Qn answer] condition chips, and the never-fires surfaces. */
+.qz-ltab-rbody { min-width: 0; flex: 1 1 auto; display: flex; flex-direction: column; gap: 2px; }
+.qz-ltab-rnum { width: auto; min-width: 22px; padding: 0 5px; }
+.qz-ltab-cchip {
+  display: inline-flex; align-items: baseline; gap: 5px;
+  background: var(--qz-cream-2); border: 1px solid var(--qz-rule);
+  border-radius: var(--qz-radius-sm); padding: 1px 6px;
+}
+.qz-ltab-cchip .qz-ltab-ans { background: none; border: none; padding: 0; }
+.qz-ltab-cchip .qz-ltab-op { padding: 0; }
+.qz-ltab-qn { font-size: 10px; color: var(--qz-ink-4); font-variant-numeric: tabular-nums; }
+.qz-ltab-rflag { margin: 0; font-size: 12px; color: var(--qz-ink-4); }
+.qz-ltab-rflagchip {
+  display: inline-block; font-size: 10px; font-weight: 700; letter-spacing: 0.05em;
+  text-transform: uppercase; padding: 1px 6px; border-radius: var(--qz-radius-sm);
+  background: var(--qz-warn-wash); color: var(--qz-warn); border: 1px solid var(--qz-warn-edge);
+}
+.qz-ltab-rulebanner {
+  margin: 0 0 4px; padding: 8px 12px; font-size: 12.5px; color: var(--qz-warn);
+  background: var(--qz-warn-tint); border: 1px solid var(--qz-warn-edge);
+  border-radius: var(--qz-radius);
+}
 /* Funnel RuleRow's read-only multi-target badge (review L1-1). */
 .qz-s3-rr-multi { font-size: 12px; color: var(--qz-ink-4); font-style: italic; }
 
@@ -6977,6 +7073,45 @@ body[data-qz] .qz-cust-row:focus-visible {
   background: var(--qz-paper); border-radius: var(--qz-radius-lg);
   box-shadow: var(--qz-lift-3); overflow: hidden;
 }
+/* ── Logic-step §6 — the Paste-rules modal (a compact .qz-crm variant) ──── */
+.qz-prm { width: min(760px, 95vw); height: auto; max-height: min(680px, 88vh); }
+.qz-prm-close {
+  appearance: none; border: 0; background: transparent; cursor: pointer;
+  font: inherit; font-size: 18px; line-height: 1; color: var(--qz-ink-4);
+  width: 28px; height: 28px; display: grid; place-items: center;
+  border-radius: var(--qz-radius-sm);
+}
+.qz-prm-close:hover { background: var(--qz-cream-2); color: var(--qz-ink); }
+.qz-prm-body { display: flex; flex-direction: column; gap: 12px; padding: 14px 18px 18px; overflow: auto; }
+.qz-prm-input {
+  font: inherit; font-size: 13.5px; line-height: 1.6; resize: vertical;
+  min-height: 120px; padding: 10px 12px; color: var(--qz-ink);
+  border: 1px solid var(--qz-rule-strong); border-radius: var(--qz-radius);
+  background: var(--qz-paper);
+}
+.qz-prm-input:focus-visible { outline: 2px solid var(--qz-accent); outline-offset: 1px; }
+.qz-prm-empty { margin: 0; font-size: 12.5px; color: var(--qz-ink-4); line-height: 1.55; }
+.qz-prm-parse { display: flex; flex-direction: column; gap: 12px; }
+.qz-prm-oklist { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.qz-prm-okline { display: flex; align-items: center; gap: 5px; flex-wrap: wrap; font-size: 12.5px; }
+/* §6/mock 18 — every recognised part is tinted by what it resolved to:
+   answers = authored (accent wash), verb = rule (warn wash), target =
+   catalog (ok wash), keywords/connectors muted. */
+.qz-prm-seg { display: inline-flex; align-items: center; padding: 2px 8px; border-radius: var(--qz-radius-sm); }
+.qz-prm-seg.is-keyword, .qz-prm-seg.is-connector {
+  padding: 2px 2px; color: var(--qz-ink-4); font-size: 10.5px;
+  text-transform: uppercase; letter-spacing: 0.06em;
+}
+.qz-prm-seg.is-answer { background: var(--qz-accent-wash); color: var(--qz-accent-ink); border: 1px solid var(--qz-accent-line); }
+.qz-prm-seg.is-verb { background: var(--qz-warn-wash); color: var(--qz-warn); border: 1px solid var(--qz-warn-edge); font-weight: 600; }
+.qz-prm-seg.is-target { background: var(--qz-ok-tint); color: var(--qz-ok); border: 1px solid var(--qz-ok-edge); }
+.qz-prm-bad { border: 1px solid var(--qz-warn-edge); background: var(--qz-warn-tint); border-radius: var(--qz-radius); padding: 10px 12px; }
+.qz-prm-badhd { margin: 0 0 6px; font-size: 12.5px; font-weight: 600; color: var(--qz-warn); }
+.qz-prm-bad ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 5px; }
+.qz-prm-badline { display: flex; flex-direction: column; gap: 1px; font-size: 12px; }
+.qz-prm-badno { font-size: 10px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--qz-ink-4); }
+.qz-prm-badtext { color: var(--qz-ink-3); font-style: italic; }
+.qz-prm-badwhy { color: var(--qz-warn); }
 .qz-crm-hd {
   display: flex; align-items: center; gap: 12px;
   padding: 12px 18px; border-bottom: 1px solid var(--qz-rule);
@@ -7017,6 +7152,23 @@ body[data-qz] .qz-cust-row:focus-visible {
 }
 .qz-crm-chip.is-on { background: var(--qz-accent-wash); border-color: var(--qz-accent); color: var(--qz-accent-ink); font-weight: 600; }
 .qz-crm-qnote { font-size: 10.5px; color: var(--qz-ink-4); margin-top: 4px; }
+/* Logic-step §3 — per-column operator controls + the one rule join bar. */
+.qz-crm-colops { display: flex; align-items: center; gap: 6px; margin-top: 6px; }
+.qz-crm-colop {
+  appearance: none; font: inherit; cursor: pointer; font-size: 10.5px;
+  font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase;
+  padding: 2px 8px; border-radius: var(--qz-radius-sm);
+  border: 1px solid var(--qz-rule-strong); background: var(--qz-paper);
+  color: var(--qz-ink-3);
+}
+.qz-crm-colop:hover { border-color: var(--qz-accent); color: var(--qz-accent-ink); }
+.qz-crm-colop.is-not { border-color: var(--qz-crit); color: var(--qz-crit); background: var(--qz-crit-tint); }
+.qz-crm-colop.is-or { border-color: var(--qz-accent); color: var(--qz-accent-ink); background: var(--qz-accent-wash); }
+.qz-crm-colnote { font-size: 10.5px; color: var(--qz-ink-4); text-transform: uppercase; letter-spacing: 0.04em; }
+.qz-crm-joinbar {
+  display: flex; align-items: center; gap: 8px; padding: 8px 12px;
+  border-top: 1px solid var(--qz-rule); font-size: 11.5px; color: var(--qz-ink-4);
+}
 .qz-crm-verbs { gap: 8px; justify-content: center; }
 .qz-crm-verb {
   font: inherit; display: flex; flex-direction: column; gap: 3px; text-align: center;
@@ -7028,6 +7180,8 @@ body[data-qz] .qz-cust-row:focus-visible {
 .qz-crm-verb.is-on { border-color: var(--qz-accent); background: var(--qz-accent-wash); }
 .qz-crm-verb.is-on.is-highlight { border-color: var(--qz-ok); background: var(--qz-ok-tint); }
 .qz-crm-verb.is-on.is-exclude { border-color: var(--qz-crit); background: var(--qz-crit-tint); }
+/* Logic-step §4 — Pin (action "prioritize"). */
+.qz-crm-verb.is-on.is-pin { border-color: var(--qz-accent); background: var(--qz-accent-wash); }
 /* §4.3 — the row's main area toggles; the count is its OWN button. */
 .qz-crm-res {
   display: flex; align-items: center; gap: 4px; width: 100%;
@@ -9631,6 +9785,22 @@ body[data-qz] .qz-cust-row:focus-visible {
 .qz-genfail-actions {
   margin-top: 3px; display: flex; align-items: center; justify-content: center;
   gap: 10px; flex-wrap: wrap;
+}
+/* — §1.3 blank-Questions landing — the SAME failure rendered as a slim
+   non-blocking notice above the working builder (the centred .qz-genfail card
+   stays for Shape, where the failure is the page's whole content). — */
+.qz-genfail-note {
+  display: grid; grid-template-columns: auto 1fr auto;
+  column-gap: 14px; row-gap: 2px; align-items: center;
+  padding: 14px 18px; text-align: left;
+}
+.qz-genfail-note .qz-genfail-ico { grid-row: 1 / 3; width: 30px; height: 30px; font-size: 14px; }
+.qz-genfail-note .qz-genfail-title { grid-column: 2; font-size: 13px; }
+.qz-genfail-note .qz-genfail-sub { grid-column: 2; max-width: none; }
+.qz-genfail-note-cta { grid-row: 1 / 3; grid-column: 3; white-space: nowrap; }
+@media (max-width: 560px) {
+  .qz-genfail-note { grid-template-columns: auto 1fr; }
+  .qz-genfail-note-cta { grid-row: auto; grid-column: 2; justify-self: start; margin-top: 6px; }
 }
 
 /* — s10 · "Why these?" (mock .ai-note .btn-quiet) — the rationale reveal. — */
