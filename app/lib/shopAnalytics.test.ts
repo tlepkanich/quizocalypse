@@ -149,12 +149,18 @@ describe("home rows", () => {
     expect(data.findings[0]!.quizName).toBe("Skill & Terrain Match");
   });
 
-  it("asks the DB for only the 10 most recently updated quizzes", async () => {
+  it("asks the DB for only the 10 most recently updated LIVE quizzes", async () => {
     // Every cost on this page scales with quiz count × doc size, so the cap
     // in the query itself (not a post-fetch slice) is the load-time guarantee.
+    // Live-only because analytics are about what's earning — drafts pile up
+    // far faster than published quizzes and were crowding them out.
     await run();
     expect(p.quiz.findMany).toHaveBeenCalledWith(
-      expect.objectContaining({ take: 10, orderBy: { updatedAt: "desc" } }),
+      expect.objectContaining({
+        take: 10,
+        orderBy: { updatedAt: "desc" },
+        where: expect.objectContaining({ status: "published" }),
+      }),
     );
   });
 });

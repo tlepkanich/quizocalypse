@@ -1050,10 +1050,11 @@ export interface ShopAnalyticsData {
 type InsightSeverityLike = "info" | "warn" | "crit";
 
 /**
- * The page shows only the most recently updated quizzes. Every cost on this
- * page scales with quiz count × doc size (full draft+published JSON fetched,
- * Zod-parsed, and run through the insights engine per quiz), so the cap is
- * what keeps the loader flat as a shop accumulates drafts.
+ * The page shows only the most recently updated LIVE quizzes — analytics are
+ * about what's earning, and a shop's drafts pile up far faster than its
+ * published quizzes. Every cost on this page scales with quiz count × doc
+ * size (full draft+published JSON fetched, Zod-parsed, and run through the
+ * insights engine per quiz), so the cap is what keeps the loader flat.
  */
 const SHOP_ANALYTICS_QUIZ_LIMIT = 10;
 
@@ -1064,7 +1065,11 @@ export async function shopAnalyticsForShop(
 ): Promise<ShopAnalyticsData> {
   const range = resolveAnalyticsRange(searchParams, now);
   const quizzes = await prisma.quiz.findMany({
-    where: { shopId: shop.id, OR: [{ buildState: null }, { buildState: { not: "step1" } }] },
+    where: {
+      shopId: shop.id,
+      status: "published",
+      OR: [{ buildState: null }, { buildState: { not: "step1" } }],
+    },
     select: { id: true, name: true, status: true, draftJson: true, publishedJson: true },
     orderBy: { updatedAt: "desc" },
     take: SHOP_ANALYTICS_QUIZ_LIMIT,
