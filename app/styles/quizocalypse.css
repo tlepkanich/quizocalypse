@@ -9154,16 +9154,17 @@ body[data-qz] .qz-cust-row:focus-visible {
 .qz-rg-termspv { margin: 0; font-size: 11px; color: var(--qz-ink-4); line-height: 1.5; }
 
 /* ── the guided PREVIEW (brand-themed frame; §6) ──
-   QRTZ-G45 — the mock's .preview column (base.mjs 817–823, 853): a plain
-   control bar ABOVE the frame (no size/scale readout — owner cut it) and the
-   whole column sticky under the top bar while the editor scrolls. */
+   The mock's .preview column (base.mjs 817–823, 853): a control bar ABOVE
+   the frame and the whole column sticky under the top bar while the editor
+   scrolls. Owner 2026-08-27 — the bar matches the Questions-step pv-bar
+   (SVG device toggle + expand clustered right via the .qz-s3-pvsp spacer)
+   and the size · scale stage tag is back, bottom-right of the stage. */
 .qz-rg-pvwrap {
   position: sticky; top: calc(var(--qz-topbar-h) + 16px);
   align-self: start; min-width: 0;
 }
-.qz-rg-pvctl { display: flex; align-items: center; gap: 8px; width: 100%; margin-bottom: 12px; }
-.qz-rg-pvctl .qz-s3-expandbtn { margin-left: auto; }
-.qz-rg-pv { display: grid; justify-items: center; align-items: start; min-height: 480px; height: calc(100vh - 220px); max-height: 900px; overflow: hidden; }
+.qz-rg-pvctl { display: flex; align-items: center; gap: 10px; width: 100%; margin-bottom: 12px; }
+.qz-rg-pv { position: relative; display: grid; justify-items: center; align-items: start; min-height: 480px; height: calc(100vh - 220px); max-height: 900px; overflow: hidden; }
 .qz-rg-frame {
   width: var(--vw, 390px); height: var(--vh, 844px); overflow: hidden; display: flex; flex-direction: column;
   background: var(--qz-color-background, #FBF6EF); color: var(--qz-color-text, #241E14);
