@@ -9632,6 +9632,22 @@ body[data-qz] .qz-cust-row:focus-visible {
   margin-top: 3px; display: flex; align-items: center; justify-content: center;
   gap: 10px; flex-wrap: wrap;
 }
+/* — §1.3 blank-Questions landing — the SAME failure rendered as a slim
+   non-blocking notice above the working builder (the centred .qz-genfail card
+   stays for Shape, where the failure is the page's whole content). — */
+.qz-genfail-note {
+  display: grid; grid-template-columns: auto 1fr auto;
+  column-gap: 14px; row-gap: 2px; align-items: center;
+  padding: 14px 18px; text-align: left;
+}
+.qz-genfail-note .qz-genfail-ico { grid-row: 1 / 3; width: 30px; height: 30px; font-size: 14px; }
+.qz-genfail-note .qz-genfail-title { grid-column: 2; font-size: 13px; }
+.qz-genfail-note .qz-genfail-sub { grid-column: 2; max-width: none; }
+.qz-genfail-note-cta { grid-row: 1 / 3; grid-column: 3; white-space: nowrap; }
+@media (max-width: 560px) {
+  .qz-genfail-note { grid-template-columns: auto 1fr; }
+  .qz-genfail-note-cta { grid-row: auto; grid-column: 2; justify-self: start; margin-top: 6px; }
+}
 
 /* — s10 · "Why these?" (mock .ai-note .btn-quiet) — the rationale reveal. — */
 .qz-rb-why {
