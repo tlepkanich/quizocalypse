@@ -195,15 +195,32 @@ export function Step1Funnel({ data }: { data: FunnelData }) {
       ) : null}
 
       {/* QRTZ-S5 — an AI generation job failed (e.g. the AI is unavailable).
-          The mock's centred empty-state card (states.mjs .mt): blame-free copy
-          that never names a raw error, with the server's own curated notice as
-          a quiet secondary line. Try again re-runs the WHOLE chain via
-          shape-regenerate — hidden on the blank-Questions landing, where the
-          draft below may already carry manual work a regenerate would replace
-          ("build it yourself" is the honest path there). FLOW-2 — the escape
-          targets /studio/templates (the Flow-3 template front door):
-          /studio/new is a redirect-gated bounce back into this funnel. */}
-      {data.genError ? (
+          Two renders off ONE gen_error:
+          - Shape (and every non-Questions stage): the mock's centred
+            empty-state card (states.mjs .mt) — the failure IS the page's
+            content there. Blame-free copy that never names a raw error, with
+            the server's curated notice as the quiet secondary line; Try again
+            re-runs the WHOLE chain via shape-regenerate.
+          - The §1.3 blank-Questions landing: the working builder below is the
+            real content, so the same failure renders as a slim non-blocking
+            notice — server notice only (the card's "Try again" sub would
+            promise a button this landing hides: the draft below may already
+            carry manual work a regenerate would replace).
+          FLOW-2 — the escape targets /studio/templates (the Flow-3 template
+          front door): /studio/new is a redirect-gated bounce back into this
+          funnel. */}
+      {data.genError && data.stage === "question_builder" ? (
+        <QzCard style={{ padding: 0 }}>
+          <div className="qz-genfail-note" role="status">
+            <span className="qz-genfail-ico" aria-hidden>!</span>
+            <b className="qz-genfail-title">We could not draft this one</b>
+            <p className="qz-genfail-sub">{data.genError}</p>
+            <Link to="/studio/templates" className="qz-btn qz-btn-ghost qz-genfail-note-cta">
+              Start from a template →
+            </Link>
+          </div>
+        </QzCard>
+      ) : data.genError ? (
         <QzCard style={{ padding: 0 }}>
           <div className="qz-genfail" role="status">
             <span className="qz-genfail-ico" aria-hidden>!</span>
@@ -213,16 +230,14 @@ export function Step1Funnel({ data }: { data: FunnelData }) {
             </p>
             <p className="qz-genfail-detail">{data.genError}</p>
             <div className="qz-genfail-actions">
-              {data.stage !== "question_builder" ? (
-                <button
-                  type="button"
-                  className="qz-btn"
-                  disabled={pendingIntent === "shape-regenerate"}
-                  onClick={() => fetcher.submit({ intent: "shape-regenerate" }, { method: "post" })}
-                >
-                  {pendingIntent === "shape-regenerate" ? "Restarting…" : "Try again"}
-                </button>
-              ) : null}
+              <button
+                type="button"
+                className="qz-btn"
+                disabled={pendingIntent === "shape-regenerate"}
+                onClick={() => fetcher.submit({ intent: "shape-regenerate" }, { method: "post" })}
+              >
+                {pendingIntent === "shape-regenerate" ? "Restarting…" : "Try again"}
+              </button>
               <Link to="/studio/templates" className="qz-btn qz-btn-ghost">
                 Start from a template →
               </Link>

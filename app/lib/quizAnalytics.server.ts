@@ -1049,6 +1049,14 @@ export interface ShopAnalyticsData {
 
 type InsightSeverityLike = "info" | "warn" | "crit";
 
+/**
+ * The page shows only the most recently updated quizzes. Every cost on this
+ * page scales with quiz count × doc size (full draft+published JSON fetched,
+ * Zod-parsed, and run through the insights engine per quiz), so the cap is
+ * what keeps the loader flat as a shop accumulates drafts.
+ */
+const SHOP_ANALYTICS_QUIZ_LIMIT = 10;
+
 export async function shopAnalyticsForShop(
   shop: { id: string; source?: string },
   searchParams: URLSearchParams,
@@ -1059,6 +1067,7 @@ export async function shopAnalyticsForShop(
     where: { shopId: shop.id, OR: [{ buildState: null }, { buildState: { not: "step1" } }] },
     select: { id: true, name: true, status: true, draftJson: true, publishedJson: true },
     orderBy: { updatedAt: "desc" },
+    take: SHOP_ANALYTICS_QUIZ_LIMIT,
   });
   const quizIds = quizzes.map((q) => q.id);
   const tsFilter = range.from ? { ts: { gte: range.from, lte: range.to } } : { ts: { lte: range.to } };

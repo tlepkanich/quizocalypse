@@ -9308,16 +9308,17 @@ body[data-qz] .qz-cust-row:focus-visible {
 .qz-rg-termspv { margin: 0; font-size: 11px; color: var(--qz-ink-4); line-height: 1.5; }
 
 /* ── the guided PREVIEW (brand-themed frame; §6) ──
-   QRTZ-G45 — the mock's .preview column (base.mjs 817–823, 853): a plain
-   control bar ABOVE the frame (no size/scale readout — owner cut it) and the
-   whole column sticky under the top bar while the editor scrolls. */
+   The mock's .preview column (base.mjs 817–823, 853): a control bar ABOVE
+   the frame and the whole column sticky under the top bar while the editor
+   scrolls. Owner 2026-08-27 — the bar matches the Questions-step pv-bar
+   (SVG device toggle + expand clustered right via the .qz-s3-pvsp spacer)
+   and the size · scale stage tag is back, bottom-right of the stage. */
 .qz-rg-pvwrap {
   position: sticky; top: calc(var(--qz-topbar-h) + 16px);
   align-self: start; min-width: 0;
 }
-.qz-rg-pvctl { display: flex; align-items: center; gap: 8px; width: 100%; margin-bottom: 12px; }
-.qz-rg-pvctl .qz-s3-expandbtn { margin-left: auto; }
-.qz-rg-pv { display: grid; justify-items: center; align-items: start; min-height: 480px; height: calc(100vh - 220px); max-height: 900px; overflow: hidden; }
+.qz-rg-pvctl { display: flex; align-items: center; gap: 10px; width: 100%; margin-bottom: 12px; }
+.qz-rg-pv { position: relative; display: grid; justify-items: center; align-items: start; min-height: 480px; height: calc(100vh - 220px); max-height: 900px; overflow: hidden; }
 .qz-rg-frame {
   width: var(--vw, 390px); height: var(--vh, 844px); overflow: hidden; display: flex; flex-direction: column;
   background: var(--qz-color-background, #FBF6EF); color: var(--qz-color-text, #241E14);
@@ -9784,6 +9785,22 @@ body[data-qz] .qz-cust-row:focus-visible {
 .qz-genfail-actions {
   margin-top: 3px; display: flex; align-items: center; justify-content: center;
   gap: 10px; flex-wrap: wrap;
+}
+/* — §1.3 blank-Questions landing — the SAME failure rendered as a slim
+   non-blocking notice above the working builder (the centred .qz-genfail card
+   stays for Shape, where the failure is the page's whole content). — */
+.qz-genfail-note {
+  display: grid; grid-template-columns: auto 1fr auto;
+  column-gap: 14px; row-gap: 2px; align-items: center;
+  padding: 14px 18px; text-align: left;
+}
+.qz-genfail-note .qz-genfail-ico { grid-row: 1 / 3; width: 30px; height: 30px; font-size: 14px; }
+.qz-genfail-note .qz-genfail-title { grid-column: 2; font-size: 13px; }
+.qz-genfail-note .qz-genfail-sub { grid-column: 2; max-width: none; }
+.qz-genfail-note-cta { grid-row: 1 / 3; grid-column: 3; white-space: nowrap; }
+@media (max-width: 560px) {
+  .qz-genfail-note { grid-template-columns: auto 1fr; }
+  .qz-genfail-note-cta { grid-row: auto; grid-column: 2; justify-self: start; margin-top: 6px; }
 }
 
 /* — s10 · "Why these?" (mock .ai-note .btn-quiet) — the rationale reveal. — */
@@ -11119,50 +11136,3 @@ button.qz-pb-row:hover { background: var(--qz-cream-2); }
   font-size: 20px; line-height: 1; color: var(--qz-ink-3);
 }
 .qz-rg-btn2.is-backico:hover { background: var(--qz-cream-2); color: var(--qz-ink); }
-
-/* ═══ questions-artifact — the CONDENSED funnel nav (mock .topbar/.steps,
-   owner follow-up 2026-08-18). The step flow no longer stretches across the
-   free width: it clusters LEFT beside the logo with fixed 22px hairline
-   connectors, and the free width sits between the flow and the right
-   cluster. 48px bar; 18px CIRCLE chips (done = green ✓, current = accent
-   fill inside the accent-wash pill). ≤1120px non-current labels hide (the
-   mock's own media rule; §1.7's tighter tiers still apply below that). ═══ */
-/* The var (not a raw height) so every sticky offset reading --qz-topbar-h
-   stays in sync with the shorter funnel bar. */
-body:has(.qz-topbar--flow) { --qz-topbar-h: 48px; }
-.qz-topbar-flow { flex: 0 1 auto; margin-right: auto; padding-left: 8px; padding-right: 8px; }
-.qz-stepnav { width: auto; }
-.qz-stepnav-segment { flex: none; }
-.qz-stepnav-link,
-.qz-stepnav-link.is-done {
-  flex: none; width: 22px; height: 1px; border-radius: 0; margin: 0 2px;
-  background: var(--qz-rule-strong); opacity: .45;
-}
-.qz-stepnav-pill {
-  padding: 4px 9px; gap: 7px; font-size: 13px; color: var(--qz-ink-3);
-  border-radius: 6px;
-}
-.qz-stepnav-dot {
-  width: 18px; height: 18px; border-radius: 50%;
-  background: var(--qz-cream-2); box-shadow: inset 0 0 0 1px var(--qz-rule);
-}
-.qz-stepnav-num { font-size: 9.5px; font-weight: 700; }
-/* done — quiet transparent pill, green ✓ circle (replaces the accent tint) */
-.qz-stepnav-pill.is-done { background: transparent; color: var(--qz-ink-2); }
-.qz-stepnav-pill.is-done:hover { background: var(--qz-cream-2); }
-.qz-stepnav-pill.is-done .qz-stepnav-dot {
-  background: var(--qz-ok-tint);
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--qz-ok) 32%, transparent);
-}
-.qz-stepnav-pill.is-done .qz-stepnav-check { color: var(--qz-ok); width: 11px; height: 11px; }
-/* current — accent-wash pill, solid accent circle, no halo ring */
-.qz-stepnav-pill.is-current {
-  background: var(--qz-accent-wash); color: var(--qz-accent-ink); font-weight: 600;
-}
-.qz-stepnav-pill.is-current .qz-stepnav-dot {
-  color: var(--qz-paper); background: var(--qz-accent); box-shadow: none;
-}
-@media (max-width: 1120px) {
-  .qz-stepnav-pill:not(.is-current) .qz-stepnav-name { display: none; }
-  .qz-stepnav-link, .qz-stepnav-link.is-done { width: 14px; }
-}

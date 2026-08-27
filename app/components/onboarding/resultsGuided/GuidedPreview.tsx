@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import type { CSSProperties, ReactNode } from "react";
 import type { Quiz, DesignTokens } from "../../../lib/quizSchema";
@@ -9,8 +9,9 @@ import {
   suggestContrastText,
 } from "../../../lib/designTokens";
 import { googleFontsUrl } from "../../runtime/runtimeStyles";
-import { DeviceFrame } from "../../builder/preview/DeviceFrame";
-import type { DeviceTier } from "../../builder/preview/previewWidth";
+import { DeviceFrame, type FrameFit } from "../../builder/preview/DeviceFrame";
+import { DEVICES, type DeviceTier } from "../../builder/preview/previewWidth";
+import { IconDesktop, IconExpand, IconMobile, IconX } from "../questionsLogicV3/icons";
 import {
   resolveGuided,
   resolveDiscount,
@@ -22,9 +23,10 @@ import {
 /* Results-guided handoff §6 — the preview. QRTZ-S3: rendered through the
    shared DeviceFrame (the canonical 390×745 phone / 960×700 inline band of
    previewWidth.DEVICES — this file used to hardcode 390×844 / 1180×740 and
-   its own fit math), scaled to fit. QRTZ-G45 (owner reversal of F5 on THIS
-   surface only): no size/scale readout and no fold marker here — the view
-   controls sit in a plain bar above the frame; the builder keeps both.
+   its own fit math), scaled to fit. Owner 2026-08-27 (partial re-reversal of
+   QRTZ-G45): this surface matches the Questions-step pv-bar — the shared SVG
+   device/expand icons clustered right and the size · scale stage tag are
+   back; the fold marker and the step-name label stay off here.
    THE PREVIEW FOLLOWS THE STEP: the gate screen
    for the email ask (placement = before), the loading screen for the Loading
    tab, the results page for everything else. Highlighting (§6/§7): opening a
@@ -102,6 +104,10 @@ export function GuidedPreview({
 
   const [view, setView] = useState<DeviceTier>("phone");
   const [expanded, setExpanded] = useState(false);
+  // questions-artifact (mock .stage-tag) — the size · scale readout on the
+  // stage, fed by DeviceFrame's onFit report (the PhoneCanvas pattern).
+  const [fitScalePct, setFitScalePct] = useState(100);
+  const onFit = useCallback((fit: FrameFit) => setFitScalePct(Math.round(fit.scale * 100)), []);
 
   // real products — the matches pool + the extras shelf's own picks
   const pool = productIndex.slice(0, 8);
@@ -441,9 +447,11 @@ export function GuidedPreview({
 
   return (
     <div className="qz-rg-pvwrap" data-device={view}>
-      {/* QRTZ-G45 — the mock's .preview-bar: device toggle left, nothing
-          else. The owner cut the size/scale readout from this surface. */}
+      {/* Owner 2026-08-27 — the Questions-step pv-bar controls: the shared
+          SVG segmented device toggle + icon-only Expand, clustered right (no
+          step-name label on this surface). */}
       <div className="qz-rg-pvctl">
+        <span className="qz-s3-pvsp" />
         <span className="qz-s3-segbtns" role="group" aria-label="Preview device">
           <button
             type="button"
@@ -453,7 +461,7 @@ export function GuidedPreview({
             aria-label="Mobile preview"
             onClick={() => setView("phone")}
           >
-            📱
+            <IconMobile />
           </button>
           <button
             type="button"
@@ -463,7 +471,7 @@ export function GuidedPreview({
             aria-label="Desktop preview"
             onClick={() => setView("desktop")}
           >
-            🖥
+            <IconDesktop />
           </button>
         </span>
         <button
@@ -473,11 +481,11 @@ export function GuidedPreview({
           aria-label="Expand preview"
           onClick={() => setExpanded(true)}
         >
-          ⛶
+          <IconExpand />
         </button>
       </div>
       <div className="qz-rg-pv">
-        <DeviceFrame tier={view} resetKey={screen} showFold={false}>
+        <DeviceFrame tier={view} resetKey={screen} showFold={false} onFit={onFit}>
           <div className="qz-rg-frame" style={cssVars}>
             {fontUrl ? <link rel="stylesheet" href={fontUrl} /> : null}
             <div className="qz-rg-screen" ref={screenRef}>
@@ -485,6 +493,11 @@ export function GuidedPreview({
             </div>
           </div>
         </DeviceFrame>
+        {/* questions-artifact (mock .stage-tag) — logical size · fit scale,
+            quiet, bottom-right of the stage. */}
+        <span className="qz-qf-stagetag" aria-hidden>
+          {DEVICES[view].w} × {DEVICES[view].h} · {fitScalePct}%
+        </span>
       </div>
       {expanded && typeof document !== "undefined"
         ? createPortal(
@@ -503,7 +516,7 @@ export function GuidedPreview({
                 aria-label="Close the expanded preview"
                 onClick={() => setExpanded(false)}
               >
-                ✕
+                <IconX />
               </button>
               {/* Expand is a bigger pane, not a zoom: the same DeviceFrame
                   measures this window-sized host and the same fit rule

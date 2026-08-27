@@ -148,4 +148,13 @@ describe("home rows", () => {
     expect(data.findings[0]!.severity).toBe("crit");
     expect(data.findings[0]!.quizName).toBe("Skill & Terrain Match");
   });
+
+  it("asks the DB for only the 10 most recently updated quizzes", async () => {
+    // Every cost on this page scales with quiz count × doc size, so the cap
+    // in the query itself (not a post-fetch slice) is the load-time guarantee.
+    await run();
+    expect(p.quiz.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ take: 10, orderBy: { updatedAt: "desc" } }),
+    );
+  });
 });
