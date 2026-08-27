@@ -54,7 +54,10 @@ function stripComments(src) {
     .replace(/^\s*\/\/[^\n]*/gm, (m) => m.replace(/[^\n]/g, " "));
 }
 
-const HEX_RE = /#(?:[0-9a-fA-F]{8}|[0-9a-fA-F]{6}|[0-9a-fA-F]{4}|[0-9a-fA-F]{3})(?![0-9a-zA-Z])/g;
+// `(?<!&)` — an HTML numeric character reference in JSX (`&#8209;`, the
+// non-breaking hyphen) is not a hex color, even when its digits happen to
+// form a valid 3/4-digit one.
+const HEX_RE = /(?<!&)#(?:[0-9a-fA-F]{8}|[0-9a-fA-F]{6}|[0-9a-fA-F]{4}|[0-9a-fA-F]{3})(?![0-9a-zA-Z])/g;
 // Inline box-shadow values carrying raw px offsets/blur (should be --qz-lift-*
 // or another shadow token). Matches JSX style objects and CSS-in-string forms.
 const BOX_SHADOW_RE = /(?:boxShadow\s*:\s*|box-shadow\s*:\s*)["'`]?[^;"'`\n]*\d+px/g;
