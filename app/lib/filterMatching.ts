@@ -90,7 +90,18 @@ function productMatches(p: IndexedProduct, v: AnswerFilterValues): boolean {
   if (v.metafields.length && p.metafields) {
     for (const m of v.metafields) {
       const raw = p.metafields[m.key];
-      if (raw !== undefined && raw.trim().toLowerCase() === m.value) return true;
+      if (raw === undefined) continue;
+      if (raw.trim().toLowerCase() === m.value) return true;
+      // Logic-step §7 bug 1 — list-typed metafields bake comma-joined
+      // (productIndexing.flattenMetafields), so a mapped value must match
+      // any single member. Strictly widening: whole-string equality above
+      // keeps every pre-fix match.
+      if (
+        raw.includes(",") &&
+        raw.split(",").some((x) => x.trim().toLowerCase() === m.value)
+      ) {
+        return true;
+      }
     }
   }
   if (v.variantOptions.length && p.variant_options) {

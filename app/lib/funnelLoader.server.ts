@@ -211,7 +211,13 @@ export async function loadStep1FunnelData(
   for (const e of doc.edges) {
     if (e.condition?.points_category) referencedCategoryIds.add(e.condition.points_category);
   }
-  for (const r of doc.decision_rules ?? []) referencedCategoryIds.add(r.target_id);
+  for (const r of doc.decision_rules ?? []) {
+    referencedCategoryIds.add(r.target_id);
+    // Multi-target rules (logic-tab G1): every member is referenced, not
+    // just the mirror — missing this rendered "(deleted target)" for
+    // categories that exist.
+    for (const t of r.target_ids ?? []) referencedCategoryIds.add(t);
+  }
   const referencedKeys = categories
     .filter((c) => c.sourceRef && referencedCategoryIds.has(c.id))
     .map(
@@ -276,6 +282,8 @@ export async function loadStep1FunnelData(
       ),
       ...(Object.keys(metafields).length > 0 ? { metafields } : {}),
       ...(p.productType ? { product_type: p.productType } : {}),
+      // Logic-step §7 bug 2 — same derivation as publish, no drift.
+      ...(p.status ? { status: p.status } : {}),
       ...(Object.keys(variantOptions).length > 0
         ? { variant_options: variantOptions }
         : {}),

@@ -1,16 +1,21 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import type { Quiz } from "../../../lib/quizSchema";
 import type { BuilderCategory, BuilderCollection } from "../../builder/stepProps";
 import type { IndexedProduct } from "../../../lib/recommendationEngine";
 import type { OrderedQuestion } from "../../../lib/questionOrder";
 import { createDecisionRule, updateDecisionRule } from "../../../lib/quizMutations";
-import { QzPopover, useFocusTrap } from "../../qz-overlays";
+import { useFocusTrap } from "../../qz-overlays";
 import { useQzToast } from "../../qz-toast";
 
 // ════════════════════════════════════════════════════════════════════════════
-// Logic tab (HANDOFF §4) + logic-step handoff §3/§4/§12 — the rule builder.
-// Three columns: WHEN THEY ANSWER · THEN · WHAT IT ACTS ON.
+// Logic tab (HANDOFF §4) + logic-step handoff §3/§4/§12 — the rule builder,
+// rendered to the Live · Made By Mary artifact's three bands:
+//   1 WHEN THEY ANSWER — question COLUMNS (answer chips, or/and links,
+//     is / is-not), the match all ⇄ match any toggle, the "Fires on" path
+//     readout, and + Qn chips for questions not yet opened as columns.
+//   2 THEN — Show / Pin / Hide verb cards.
+//   3 WHAT THE QUIZ SHOWS — kind-count chips + search + target tiles.
 //
 // Logic-step rework (supersedes DECISIONS G2a/G3/G4 where they conflict):
 // - Verbs per §4: Show → action "show" · Pin → "prioritize" · Hide → "hide".
@@ -43,76 +48,6 @@ interface SelectedResource {
   count: number;
 }
 
-const KIND_LABEL: Record<SelectedResource["kind"], string> = {
-  set: "Set",
-  tag: "Tag",
-  collection: "Coll",
-  metafield: "Meta",
-  product: "Prod",
-};
-
-// §4.3 — a resource row: [KIND] Name [N products ▾] ✓. The count is its OWN
-// button opening a product-list popover; it must NOT toggle selection.
-// Clicking anywhere else on the row toggles.
-function ResourceRow({
-  r,
-  on,
-  onToggle,
-  resolveResource,
-}: {
-  r: SelectedResource;
-  on: boolean;
-  onToggle: () => void;
-  resolveResource: (s: SelectedResource) => IndexedProduct[];
-}) {
-  const [listOpen, setListOpen] = useState(false);
-  return (
-    <span className={`qz-crm-res${on ? " is-on" : ""}`}>
-      <button type="button" className="qz-crm-resmain" onClick={onToggle}>
-        <span className={`qz-crm-kind is-${r.kind}`}>{KIND_LABEL[r.kind]}</span>
-        <span className="qz-crm-resname">{r.name}</span>
-      </button>
-      <QzPopover
-        open={listOpen}
-        onOpenChange={setListOpen}
-        maxWidth={300}
-        trigger={
-          <button type="button" className="qz-crm-rescount" aria-label={`${r.count} products in ${r.name}`}>
-            {r.count} {r.count === 1 ? "product" : "products"}
-          </button>
-        }
-        content={
-          <div className="qz-ltab-menu">
-            <div className="qz-ltab-menu-title">
-              {r.name} — {r.count} {r.count === 1 ? "product" : "products"}
-            </div>
-            <div className="qz-ltab-menu-products">
-              {resolveResource(r)
-                .slice(0, 24)
-                .map((p) => (
-                  <div key={p.product_id} className="qz-ltab-menu-product">
-                    {p.image_url ? (
-                      <img src={p.image_url} alt="" width={22} height={22} loading="lazy" />
-                    ) : (
-                      <span className="qz-ltab-menu-swatch" aria-hidden />
-                    )}
-                    <span>{p.title}</span>
-                  </div>
-                ))}
-              {r.count > 24 ? (
-                <div className="qz-ltab-menu-none">+{r.count - 24} more</div>
-              ) : null}
-            </div>
-          </div>
-        }
-      />
-      <span className="qz-crm-rescheck" aria-hidden>
-        {on ? "✓" : ""}
-      </span>
-    </span>
-  );
-}
-
 // Logic-step §4 — the verb map: Show → "show", Pin → "prioritize" (rename
 // only), Hide → "hide". Absent action (legacy replace) is never offered.
 const VERBS: Array<{ verb: Verb; name: string; hint: string }> = [
@@ -130,6 +65,16 @@ const ACTION_TO_VERB: Record<"show" | "prioritize" | "hide", Verb> = {
   prioritize: "pin",
   hide: "hide",
 };
+
+// Live artifact band-3 chip order: Products · Sets · Collections · Tags ·
+// Metafields, each with a live count.
+const KIND_CHIPS: Array<{ kind: SelectedResource["kind"]; label: string }> = [
+  { kind: "product", label: "Products" },
+  { kind: "set", label: "Sets" },
+  { kind: "collection", label: "Collections" },
+  { kind: "tag", label: "Tags" },
+  { kind: "metafield", label: "Metafields" },
+];
 
 export function CreateRuleModal({
   doc,
@@ -195,15 +140,45 @@ export function CreateRuleModal({
   const [notCols, setNotCols] = useState<Record<string, boolean>>({});
   const [allCols, setAllCols] = useState<Record<string, boolean>>({});
   const [matchMode, setMatchMode] = useState<"all" | "any">("all");
+  // Live caption D — questions that already act on products (decides/filter)
+  // open as COLUMNS; info-only ones wait below as + chips. Whatever the
+  // merchant adds or drops holds for the session (until the next open).
+  const [activeCols, setActiveCols] = useState<string[]>([]);
   // §12 — editing a LEGACY replace rule (action absent) keeps it absent
   // unless the merchant actively changes the verb.
   const [legacyReplace, setLegacyReplace] = useState(false);
+  // Audit fix (mixed-op flattening) — the column op toggle is per QUESTION,
+  // but the schema allows per-CONDITION ops on one question ("Q1 is A and
+  // Q1 is_not B", built by the older inline editor). Re-deriving such a
+  // column from the toggle would silently rewrite every condition to one op.
+  // So: an edited column the merchant never touched keeps its ORIGINAL
+  // conditions verbatim; only touched columns re-derive.
+  const seededGroups = useRef<Record<string, DecisionRuleT["conditions"]>>({});
+  const [dirtyCols, setDirtyCols] = useState<Set<string>>(new Set());
+  const touchCol = (qid: string) =>
+    setDirtyCols((prev) => {
+      if (prev.has(qid)) return prev;
+      const next = new Set(prev);
+      next.add(qid);
+      return next;
+    });
 
   // §12 — seed the draft from the rule under edit each time the modal opens.
   const editId = editRule?.id ?? null;
   useEffect(() => {
     if (!open) return;
+    seededGroups.current = {};
+    setDirtyCols(new Set());
+    // Live caption D — the default column set: every question whose role
+    // already acts on products, in quiz order. Rules-only quizzes (no roles)
+    // start with no columns — every question is a + chip.
+    const defaultActive = questions
+      .filter(
+        (q) => q.node.data.role === "decides" || q.node.data.role === "filter",
+      )
+      .map((q) => q.node.id);
     if (!editRule) {
+      setActiveCols(defaultActive);
       setPicks({});
       setVerb("hide");
       setSel([]);
@@ -218,6 +193,7 @@ export function CreateRuleModal({
     const isCount: Record<string, number> = {};
     for (const c of editRule.conditions) {
       (seededPicks[c.question_id] ??= []).push(c.answer_id);
+      (seededGroups.current[c.question_id] ??= []).push({ ...c });
       if (c.op === "is_not") seededNot[c.question_id] = true;
       else isCount[c.question_id] = (isCount[c.question_id] ?? 0) + 1;
     }
@@ -227,6 +203,14 @@ export function CreateRuleModal({
       // Stored absence of any_of on a multi-pick is-column = all-of (§3).
       if (n > 1 && !anyOf.has(qid)) seededAll[qid] = true;
     }
+    // EDIT — the questions the rule constrains open as columns, on top of
+    // the defaults, in quiz order.
+    const defaults = new Set(defaultActive);
+    setActiveCols(
+      questions
+        .filter((q) => defaults.has(q.node.id) || seededPicks[q.node.id])
+        .map((q) => q.node.id),
+    );
     setPicks(seededPicks);
     setNotCols(seededNot);
     setAllCols(seededAll);
@@ -285,6 +269,17 @@ export function CreateRuleModal({
       const aids = picks[qid] ?? [];
       if (aids.length === 0) continue;
       usedQuestions++;
+      // Untouched edited column → the original conditions, byte-for-byte
+      // (mixed per-condition ops survive; the toggle can't express them).
+      const seeded = seededGroups.current[qid];
+      if (seeded && !dirtyCols.has(qid)) {
+        conditions.push(...seeded);
+        const isConds = seeded.filter((c) => c.op === "is");
+        if (isConds.length > 1 && (editRule?.any_of ?? []).includes(qid)) {
+          any_of.push(qid);
+        }
+        continue;
+      }
       const op = notCols[qid] ? ("is_not" as const) : ("is" as const);
       for (const aid of aids) conditions.push({ question_id: qid, answer_id: aid, op });
       if (op === "is" && aids.length > 1) {
@@ -294,7 +289,7 @@ export function CreateRuleModal({
     }
     const match = matchMode === "any" && usedQuestions > 1 ? ("any" as const) : undefined;
     return { conditions, any_of, match, usedQuestions };
-  }, [questions, picks, notCols, allCols, matchMode, multiById]);
+  }, [questions, picks, notCols, allCols, matchMode, multiById, dirtyCols, editRule]);
 
   const conditionsKey = JSON.stringify([picks, notCols, allCols, matchMode]);
   useEffect(() => {
@@ -442,10 +437,16 @@ export function CreateRuleModal({
     return { shown: rows.slice(0, 40), overflow: Math.max(0, rows.length - 40), foundLine: null };
   }, [index, kindChip, qlc, quizTagRefs]);
 
+  // Live band-3 chip counts, from the same index the grid reads.
+  const kindCounts = useMemo(() => {
+    const counts = new Map<SelectedResource["kind"], number>();
+    for (const r of index) counts.set(r.kind, (counts.get(r.kind) ?? 0) + 1);
+    return counts;
+  }, [index]);
+
   const pickedCount = Object.values(picks).reduce((n, a) => n + a.length, 0);
-  // ONE resolver for both the tray total and each row's product popover —
-  // they can never disagree. Exact-case matching throughout (mirrors
-  // resolveMembership; review L2-6).
+  // ONE resolver for the tiles' product thumbs and anything counting a
+  // selection — mirrors resolveMembership, exact-case (review L2-6).
   const resolveResource = useMemo(() => {
     const byId = new Map(productIndex.map((p) => [p.product_id, p]));
     const catById = new Map(categories.map((c) => [c.id, c]));
@@ -471,16 +472,11 @@ export function CreateRuleModal({
     };
   }, [categories, productIndex]);
 
-  const selProducts = useMemo(() => {
-    const ids = new Set<string>();
-    for (const s of sel) for (const p of resolveResource(s)) ids.add(p.product_id);
-    return ids.size;
-  }, [sel, resolveResource]);
-
   // §3 — several chips on ONE question is now expressible (any-of / all-of),
   // so every question type ACCUMULATES; single-select columns are forced
   // any-of at derivation time (G3's replace behavior is retired).
   const toggleAnswer = (q: OrderedQuestion, answerId: string) => {
+    touchCol(q.node.id);
     setPicks((prev) => {
       const cur = prev[q.node.id] ?? [];
       const on = cur.includes(answerId);
@@ -497,6 +493,30 @@ export function CreateRuleModal({
     );
   };
 
+  // Live caption D — the × on a column header returns the question to the
+  // chip row and clears its picks; a + chip opens it as a column.
+  const removeCol = (qid: string) => {
+    touchCol(qid);
+    setActiveCols((prev) => prev.filter((x) => x !== qid));
+    setPicks((prev) => {
+      const next = { ...prev };
+      delete next[qid];
+      return next;
+    });
+    setNotCols((prev) => {
+      const next = { ...prev };
+      delete next[qid];
+      return next;
+    });
+    setAllCols((prev) => {
+      const next = { ...prev };
+      delete next[qid];
+      return next;
+    });
+  };
+  const addCol = (qid: string) =>
+    setActiveCols((prev) => (prev.includes(qid) ? prev : [...prev, qid]));
+
   const reset = () => {
     setPicks({});
     setVerb("hide");
@@ -510,6 +530,41 @@ export function CreateRuleModal({
   };
 
   const canCreate = pickedCount > 0 && sel.length > 0 && !busy;
+
+  // Live band 1 — the "Fires on" answer-path readout, pure client-side (the
+  // server impact line stays in the footer). Only under match all, and only
+  // once at least one enumerable column (picked, not is-not) exists. An
+  // or-column contributes each picked answer; an all-of multi column ONE
+  // combined path; an all-of single-select column ZERO paths (dead state);
+  // an is-not column is skipped from enumeration.
+  const paths = useMemo(() => {
+    if (matchMode !== "all") return null;
+    const sets: string[][] = [];
+    for (const qid of activeCols) {
+      const aids = picks[qid] ?? [];
+      if (aids.length === 0 || notCols[qid]) continue;
+      const q = questions.find((x) => x.node.id === qid);
+      if (!q) continue;
+      const texts = q.node.data.answers
+        .filter((a) => aids.includes(a.id))
+        .map((a) => a.text);
+      if (allCols[qid]) {
+        if (!multiById.get(qid)) sets.push([]);
+        else sets.push([texts.join(" + ")]);
+      } else {
+        sets.push(texts);
+      }
+    }
+    if (sets.length === 0) return null;
+    let out: string[][] = [[]];
+    for (const set of sets) {
+      const next: string[][] = [];
+      for (const acc of out) for (const t of set) next.push([...acc, t]);
+      out = next;
+      if (out.length === 0) break;
+    }
+    return out.map((p) => p.join(" + "));
+  }, [matchMode, activeCols, picks, notCols, allCols, questions, multiById]);
 
   const handleCreate = async () => {
     if (!canCreate) return;
@@ -594,314 +649,386 @@ export function CreateRuleModal({
   };
   const verbWord = verb;
   const modalTitle = editRule ? "Edit rule" : "Create a rule";
+  const columns = activeCols
+    .map((qid) => questions.find((q) => q.node.id === qid))
+    .filter((q): q is OrderedQuestion => q !== undefined);
+  const unused = questions.filter((q) => !activeCols.includes(q.node.id));
 
   return createPortal(
     // §4.5 — the scrim deliberately does NOT close (draft-safe); Esc is a
     // document-level listener above.
     <div className="qz-modal-scrim">
-      <div ref={boxRef} className="qz-crm" role="dialog" aria-modal="true" aria-label={modalTitle}>
-        <header className="qz-crm-hd">
+      <div
+        ref={boxRef}
+        className="qz-lm qz-lm-builder"
+        role="dialog"
+        aria-modal="true"
+        aria-label={modalTitle}
+      >
+        <header className="qz-lm-h">
           <h2>{modalTitle}</h2>
-          <span className="qz-crm-hint">
-            Who it applies to on the left · what happens on the right
-          </span>
-          <button
-            type="button"
-            className="qz-btn qz-btn-primary"
-            disabled={!canCreate}
-            onClick={handleCreate}
-          >
-            {busy ? "Saving…" : editRule ? "Save rule" : "Create rule"}
+          <button type="button" className="qz-lm-close" aria-label="Close" onClick={onClose}>
+            ×
           </button>
         </header>
-        <div className="qz-crm-cols">
-          {/* ── left: WHEN THEY ANSWER ── */}
-          <section className="qz-crm-col">
-            <div className="qz-crm-colhd">
-              When they answer
-              <span className={`qz-crm-count${pickedCount ? "" : " is-zero"}`}>
-                {pickedCount} picked
-              </span>
-            </div>
-            <div className="qz-crm-scroll">
-              {/* §4.1 — EVERY question is listed, Asked-only included: on a
-                  rules-only quiz those are the only conditions there are. */}
-              {questions.map((q) => {
-                const cur = picks[q.node.id] ?? [];
-                const multi = q.node.data.question_type === "multi_select";
-                return (
-                  <div key={q.node.id} className={`qz-crm-qblock${cur.length ? " is-used" : ""}`}>
-                    <div className="qz-crm-qhead">
-                      <span className="qz-crm-qnum">Q{q.qIndex}</span>
-                      {/* §4.1 — the numeral is what a merchant scans by; the
-                          label (20 chars) is the reminder. */}
-                      <span className="qz-crm-qlabel">{q.node.data.text.slice(0, 20)}</span>
-                      {multi ? <span className="qz-crm-qtag">multi-select</span> : null}
-                    </div>
-                    <div className="qz-crm-chips">
-                      {q.node.data.answers.map((a) => (
-                        <button
-                          key={a.id}
-                          type="button"
-                          className={`qz-crm-chip${cur.includes(a.id) ? " is-on" : ""}`}
-                          onClick={() => toggleAnswer(q, a.id)}
-                        >
-                          {a.text}
-                        </button>
-                      ))}
-                    </div>
-                    {/* §3 — the column's own operators: is / is not, and the
-                        any-of / all-of footer (all-of only means something on
-                        a multi-select; single-select is forced any-of). */}
-                    {cur.length > 0 ? (
-                      <div className="qz-crm-colops">
-                        <button
-                          type="button"
-                          className={`qz-crm-colop${notCols[q.node.id] ? " is-not" : ""}`}
-                          title={
-                            notCols[q.node.id]
-                              ? "Matches shoppers who picked NONE of these"
-                              : "Matches shoppers who picked these"
-                          }
-                          onClick={() =>
-                            setNotCols((prev) => ({
-                              ...prev,
-                              [q.node.id]: !prev[q.node.id],
-                            }))
-                          }
-                        >
-                          {notCols[q.node.id] ? "is not" : "is"} ⇄
-                        </button>
-                        {cur.length > 1 && !notCols[q.node.id] ? (
-                          multi ? (
-                            <button
-                              type="button"
-                              className="qz-crm-colop"
-                              title="any of — one pick is enough · all of — every one must be picked"
-                              onClick={() =>
-                                setAllCols((prev) => ({
-                                  ...prev,
-                                  [q.node.id]: !prev[q.node.id],
-                                }))
-                              }
-                            >
-                              {allCols[q.node.id] ? "all of" : "any of"} {cur.length} ⇄
-                            </button>
-                          ) : (
-                            <span className="qz-crm-colnote">any of {cur.length}</span>
-                          )
-                        ) : null}
-                        {notCols[q.node.id] && cur.length > 1 ? (
-                          <span className="qz-crm-colnote">none of {cur.length}</span>
-                        ) : null}
-                      </div>
-                    ) : null}
-                  </div>
-                );
-              })}
-            </div>
-            {/* §3 — ONE cross-question join per rule (the mock's and ⇆ under
-                the columns): and = every question must match, or = any one. */}
-            {draft.usedQuestions > 1 ? (
-              <div className="qz-crm-joinbar">
-                <span>Questions join with</span>
-                <button
-                  type="button"
-                  className={`qz-crm-colop${matchMode === "any" ? " is-or" : ""}`}
-                  onClick={() =>
-                    setMatchMode((m) => (m === "all" ? "any" : "all"))
-                  }
-                >
-                  {matchMode === "all" ? "and — all must match" : "or — any can match"} ⇄
-                </button>
+
+        <div className="qz-lm-b">
+          <div className="qz-lm-bands">
+            {/* ── band 1: WHEN THEY ANSWER ── */}
+            <section className="qz-lm-band">
+              <div className="qz-lm-bh">
+                <span className="qz-lm-bn">1</span>
+                <span className="qz-lm-bt">When they answer</span>
+                {activeCols.length > 1 ? (
+                  <span className="qz-lm-right">
+                    {/* §3 — THE one cross-question join, stated once. */}
+                    <span className="qz-lm-seg">
+                      <button
+                        type="button"
+                        aria-pressed={matchMode === "all"}
+                        onClick={() => setMatchMode("all")}
+                      >
+                        match all
+                      </button>
+                      <button
+                        type="button"
+                        aria-pressed={matchMode === "any"}
+                        onClick={() => setMatchMode("any")}
+                      >
+                        match any
+                      </button>
+                    </span>
+                  </span>
+                ) : null}
               </div>
-            ) : null}
-          </section>
-
-          {/* ── middle: THEN ── */}
-          <section className="qz-crm-col qz-crm-verbs">
-            <div className="qz-crm-colhd">Then</div>
-            {VERBS.map((v) => (
-              <button
-                key={v.verb}
-                type="button"
-                className={`qz-crm-verb${verb === v.verb ? " is-on" : ""}${
-                  v.verb === "hide" ? " is-exclude" : v.verb === "pin" ? " is-pin" : " is-highlight"
-                }`}
-                onClick={() => setVerb(v.verb)}
-              >
-                <b>{v.name}</b>
-                <span>{v.hint}</span>
-              </button>
-            ))}
-            {/* §12 — an edited legacy rule that stays on Show keeps its
-                original replace behavior; say so rather than hiding it. */}
-            {editRule && legacyReplace && verb === "show" ? (
-              <p className="qz-crm-qnote">
-                This older rule replaces the results outright — saving on Show
-                keeps that behavior.
-              </p>
-            ) : null}
-          </section>
-
-          {/* ── right: WHAT IT ACTS ON ── */}
-          <section className="qz-crm-col">
-            <div className="qz-crm-colhd">
-              What it acts on
-              <span className={`qz-crm-count${sel.length ? "" : " is-zero"}`}>
-                {selProducts} products
-              </span>
-            </div>
-            <input
-              className="qz-ltab-menu-search"
-              placeholder="Search…"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-            />
-            <div className="qz-ltab-menu-chips">
-              {/* §4.3 fixed chip order (Variants DECIDED-out per G5). */}
-              {(
-                [
-                  ["all", "All"],
-                  ["tag", "Tags"],
-                  ["collection", "Collections"],
-                  ["metafield", "Metafields"],
-                  ["product", "Products"],
-                  ["set", "Sets"],
-                ] as const
-              ).map(([k, l]) => (
-                <button
-                  key={k}
-                  type="button"
-                  className={`qz-ltab-menu-chip${kindChip === k ? " is-on" : ""}`}
-                  onClick={() => setKindChip(k)}
-                >
-                  {l}
-                </button>
-              ))}
-            </div>
-            <div className="qz-crm-scroll">
-              {!qlc && kindChip === "all" ? (
-                <div className="qz-ltab-menu-group">This quiz already recommends</div>
+              <div className="qz-lm-condzone">
+                <div className="qz-lm-condrow">
+                  {columns.map((q) => {
+                    const qid = q.node.id;
+                    const aids = picks[qid] ?? [];
+                    const multi = q.node.data.question_type === "multi_select";
+                    const isNot = Boolean(notCols[qid]);
+                    const isAnd = multi && Boolean(allCols[qid]);
+                    // "or" renders between PICKED chips — after every picked
+                    // chip except the last picked one, in display order.
+                    const pickedOrder = q.node.data.answers
+                      .filter((a) => aids.includes(a.id))
+                      .map((a) => a.id);
+                    const lastPicked = pickedOrder[pickedOrder.length - 1];
+                    return (
+                      <div key={qid} className={`qz-lm-qcol${aids.length ? " is-has" : ""}`}>
+                        <div className="qz-lm-qch">
+                          <span className="qz-lm-qlabel">
+                            <span className="qz-lm-qn">Q{q.qIndex}</span>{" "}
+                            {q.node.data.text.replace(/\?$/, "")}
+                            {multi ? <span className="qz-lm-multibadge">multi</span> : null}
+                          </span>
+                          {/* Handoff §3 — the is / is-not affordance the mock
+                              omits; kept deliberately, seated in the header. */}
+                          <button
+                            type="button"
+                            className={`qz-lm-qcf${isNot ? " is-not" : ""}`}
+                            title={
+                              isNot
+                                ? "Matches shoppers who picked NONE of these"
+                                : "Matches shoppers who picked these"
+                            }
+                            onClick={() => {
+                              touchCol(qid);
+                              setNotCols((prev) => ({ ...prev, [qid]: !prev[qid] }));
+                            }}
+                          >
+                            {isNot ? "is not" : "is"}
+                          </button>
+                          <button
+                            type="button"
+                            className="qz-lm-qdrop"
+                            title="Remove — returns it to the chips below"
+                            aria-label={`Remove Q${q.qIndex} from the rule`}
+                            onClick={() => removeCol(qid)}
+                          >
+                            ×
+                          </button>
+                        </div>
+                        <div className="qz-lm-qcb">
+                          {q.node.data.answers.map((a) => {
+                            const on = aids.includes(a.id);
+                            const showOr =
+                              pickedOrder.length > 1 && on && a.id !== lastPicked;
+                            return (
+                              <Fragment key={a.id}>
+                                <button
+                                  type="button"
+                                  className={`qz-lm-qchip${on ? " is-on" : ""}`}
+                                  aria-pressed={on}
+                                  onClick={() => toggleAnswer(q, a.id)}
+                                >
+                                  {a.text}
+                                </button>
+                                {showOr ? (
+                                  multi ? (
+                                    // §3 — only a multi-select can mean "all
+                                    // of"; there the or is a control.
+                                    <button
+                                      type="button"
+                                      className={`qz-lm-orlink is-live${isAnd ? " is-and" : ""}`}
+                                      title={`Click to switch to ${isAnd ? "or" : "all of"}`}
+                                      onClick={() => {
+                                        touchCol(qid);
+                                        setAllCols((prev) => ({
+                                          ...prev,
+                                          [qid]: !prev[qid],
+                                        }));
+                                      }}
+                                    >
+                                      {isAnd ? "and" : "or"}
+                                    </button>
+                                  ) : (
+                                    // Single-select: stated, not offered —
+                                    // "all of" would match nobody.
+                                    <span className="qz-lm-orlink">or</span>
+                                  )
+                                ) : null}
+                              </Fragment>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+                {paths ? (
+                  paths.length === 0 ? (
+                    <div className="qz-lm-paths is-dead">
+                      <span className="qz-lm-paths-l">Fires on</span>
+                      <b>no answer path</b>
+                      <span className="qz-lm-paths-n">
+                        A shopper answers each question once, so <em>all of</em> on
+                        a single-select question can never be true.
+                      </span>
+                    </div>
+                  ) : paths.length <= 8 ? (
+                    <div className="qz-lm-paths">
+                      <span className="qz-lm-paths-l">Fires on</span>
+                      <b>
+                        {paths.length} answer {paths.length === 1 ? "path" : "paths"}
+                      </b>
+                      <span className="qz-lm-paths-p">
+                        {paths.map((p, i) => (
+                          <span key={i}>{p}</span>
+                        ))}
+                      </span>
+                    </div>
+                  ) : (
+                    <div className="qz-lm-paths">
+                      <span className="qz-lm-paths-l">Fires on</span>
+                      <b>{paths.length} answer paths</b>
+                      <span className="qz-lm-paths-n">
+                        Too many to list — narrow a column to see them.
+                      </span>
+                    </div>
+                  )
+                ) : null}
+              </div>
+              {unused.length ? (
+                <div className="qz-lm-addwrap">
+                  <div className="qz-lm-addrow">
+                    {unused.map((q) => (
+                      <button
+                        key={q.node.id}
+                        type="button"
+                        className="qz-lm-addcond"
+                        onClick={() => addCol(q.node.id)}
+                      >
+                        <span className="qz-lm-acp">+</span>
+                        <span className="qz-lm-acn">Q{q.qIndex}</span>{" "}
+                        {q.node.data.text.replace(/\?$/, "")}
+                      </button>
+                    ))}
+                  </div>
+                </div>
               ) : null}
-              {foundLine ? <div className="qz-ltab-menu-none">{foundLine}</div> : null}
+            </section>
+
+            {/* ── band 2: THEN ── */}
+            <section className="qz-lm-band is-inline">
+              <div className="qz-lm-bh">
+                <span className="qz-lm-bn">2</span>
+                <span className="qz-lm-bt">Then</span>
+              </div>
+              <div className="qz-lm-verbrow">
+                {VERBS.map((v) => (
+                  <button
+                    key={v.verb}
+                    type="button"
+                    className={`qz-lm-vcard${verb === v.verb ? " is-on" : ""}`}
+                    aria-pressed={verb === v.verb}
+                    onClick={() => setVerb(v.verb)}
+                  >
+                    <span className="qz-lm-vn">{v.name}</span>
+                    <span className="qz-lm-vd">{v.hint}</span>
+                  </button>
+                ))}
+              </div>
+              {/* §12 — an edited legacy rule that stays on Show keeps its
+                  original replace behavior; say so rather than hiding it. */}
+              {editRule && legacyReplace && verb === "show" ? (
+                <p className="qz-lm-legacynote">
+                  This older rule replaces the results outright — saving on Show
+                  keeps that behavior.
+                </p>
+              ) : null}
+            </section>
+
+            {/* ── band 3: WHAT THE QUIZ SHOWS ── */}
+            <section className="qz-lm-band">
+              <div className="qz-lm-bh">
+                <span className="qz-lm-bn">3</span>
+                <span className="qz-lm-bt">What the quiz shows</span>
+              </div>
+              <div className="qz-lm-actbar">
+                <span className="qz-lm-tfilt">
+                  {KIND_CHIPS.map(({ kind, label }) => (
+                    <button
+                      key={kind}
+                      type="button"
+                      className={`qz-lm-tf${kindChip === kind ? " is-on" : ""}`}
+                      aria-pressed={kindChip === kind}
+                      onClick={() => setKindChip((k) => (k === kind ? "all" : kind))}
+                    >
+                      {label}{" "}
+                      <span className="qz-lm-tfc">{kindCounts.get(kind) ?? 0}</span>
+                    </button>
+                  ))}
+                </span>
+                <input
+                  className="qz-lm-actsearch"
+                  placeholder="Search products, sets, tags…"
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                />
+              </div>
+              {foundLine ? <div className="qz-lm-more">{foundLine}</div> : null}
               {shown.length === 0 ? (
-                <div className="qz-ltab-menu-none">
+                <div className="qz-lm-more">
                   Nothing matches{query ? ` "${query}"` : ""}.
                 </div>
               ) : (
-                shown.map((r, i) => (
-                  <span key={r.key}>
-                    {/* §4.3 typed → one group header per kind. */}
-                    {qlc && (i === 0 || shown[i - 1]!.kind !== r.kind) ? (
-                      <div className="qz-ltab-menu-group">{KIND_LABEL[r.kind]}s</div>
-                    ) : null}
-                    <ResourceRow
-                      r={r}
-                      on={sel.some((s) => s.key === r.key)}
-                      onToggle={() => toggleResource(r)}
-                      resolveResource={resolveResource}
-                    />
+                <div className="qz-lm-tgrid">
+                  {shown.map((r) => {
+                    const on = sel.some((s) => s.key === r.key);
+                    const img =
+                      r.kind === "product"
+                        ? resolveResource(r)[0]?.image_url ?? null
+                        : null;
+                    return (
+                      <button
+                        key={r.key}
+                        type="button"
+                        className={`qz-lm-tcard${on ? " is-on" : ""}`}
+                        aria-pressed={on}
+                        onClick={() => toggleResource(r)}
+                      >
+                        <span
+                          className={`qz-lm-pthumb${img ? " has-img" : ""}`}
+                          aria-hidden
+                        >
+                          {img ? <img src={img} alt="" loading="lazy" /> : null}
+                        </span>
+                        <span className="qz-lm-tn2">{r.name}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+              {overflow > 0 ? (
+                <div className="qz-lm-more">+{overflow} more — type to narrow</div>
+              ) : null}
+            </section>
+          </div>
+        </div>
+
+        {/* ── footer: the live sentence + the actions (§4.5) ── */}
+        <footer className="qz-lm-f">
+          {pickedCount === 0 ? (
+            <span className="qz-lm-dimf">
+              Pick an answer in at least one column to start the rule
+            </span>
+          ) : (
+            <p>
+              When a shopper picks{" "}
+              {
+                // §3 read-back — the sentence uses the rule's OWN operators:
+                // within a column "or" (any-of) / "and" (all-of) / "none of"
+                // (is not); between columns the one rule join.
+                questions
+                  .filter((q) => (picks[q.node.id] ?? []).length > 0)
+                  .map((q, gi) => {
+                    const qid = q.node.id;
+                    const aids = picks[qid] ?? [];
+                    const isNot = Boolean(notCols[qid]);
+                    const withinWord =
+                      isNot ? "nor" : allCols[qid] && multiById.get(qid) ? "and" : "or";
+                    return (
+                      <span key={qid}>
+                        {gi > 0 ? (
+                          <span className="qz-ltab-join">
+                            {" "}
+                            {matchMode === "any" ? "or" : "and"}{" "}
+                          </span>
+                        ) : null}
+                        {isNot ? <span className="qz-ltab-join">not </span> : null}
+                        {aids.map((aid, i) => (
+                          <span key={aid}>
+                            {i > 0 ? (
+                              <span className="qz-ltab-join"> {withinWord} </span>
+                            ) : null}
+                            <b>{answerLabel(qid, aid)}</b>
+                          </span>
+                        ))}
+                      </span>
+                    );
+                  })
+              }
+              <span className="qz-ltab-join">, </span>
+              {verbWord}{" "}
+              {sel.length === 0 ? (
+                <span className="qz-ltab-muted">pick what it acts on</span>
+              ) : (
+                sel.map((s, i) => (
+                  <span key={s.key}>
+                    {i > 0 ? <span className="qz-ltab-join"> and </span> : null}
+                    <b>{s.name}</b>
                   </span>
                 ))
               )}
-              {overflow > 0 ? (
-                <div className="qz-ltab-menu-none">+{overflow} more — type to narrow</div>
-              ) : null}
-            </div>
-          </section>
-        </div>
-
-        {/* ── tray (§4.4) ── */}
-        {sel.length ? (
-          <div className="qz-crm-tray">
-            <span className="qz-crm-traylabel">Acts on</span>
-            {sel.map((s) => (
-              <button
-                key={s.key}
-                type="button"
-                className="qz-crm-traychip"
-                onClick={() => toggleResource(s)}
-              >
-                {s.name} <span aria-hidden>✕</span>
-              </button>
-            ))}
-            <span className="qz-crm-traymeta">
-              {selProducts} products
-              {sel.some((s) => s.kind !== "product" && s.kind !== "set")
-                ? " · updates as the catalogue changes"
-                : ""}
-            </span>
-          </div>
-        ) : null}
-
-        {/* ── footer (§4.5): the live sentence ── */}
-        <footer className="qz-crm-ft">
-          <p className="qz-crm-sentence">
-            When a shopper picks{" "}
-            {pickedCount === 0 ? (
-              <span className="qz-ltab-muted">pick answers</span>
-            ) : (
-              // §3 read-back — the sentence uses the rule's OWN operators:
-              // within a column "or" (any-of) / "and" (all-of) / "none of"
-              // (is not); between columns the one rule join.
-              questions
-                .filter((q) => (picks[q.node.id] ?? []).length > 0)
-                .map((q, gi) => {
-                  const qid = q.node.id;
-                  const aids = picks[qid] ?? [];
-                  const isNot = Boolean(notCols[qid]);
-                  const withinWord =
-                    isNot ? "nor" : allCols[qid] && multiById.get(qid) ? "and" : "or";
-                  return (
-                    <span key={qid}>
-                      {gi > 0 ? (
-                        <span className="qz-ltab-join">
-                          {" "}
-                          {matchMode === "any" ? "or" : "and"}{" "}
-                        </span>
-                      ) : null}
-                      {isNot ? <span className="qz-ltab-join">not </span> : null}
-                      {aids.map((aid, i) => (
-                        <span key={aid}>
-                          {i > 0 ? (
-                            <span className="qz-ltab-join"> {withinWord} </span>
-                          ) : null}
-                          <b>{answerLabel(qid, aid)}</b>
-                        </span>
-                      ))}
-                    </span>
-                  );
-                })
-            )}
-            <span className="qz-ltab-join">, </span>
-            {verbWord}{" "}
-            {sel.length === 0 ? (
-              <span className="qz-ltab-muted">pick what it acts on</span>
-            ) : (
-              sel.map((s, i) => (
-                <span key={s.key}>
-                  {i > 0 ? <span className="qz-ltab-join"> and </span> : null}
-                  <b>{s.name}</b>
+              .
+              {impact ? (
+                <span className="qz-lm-impact">
+                  {"loading" in impact
+                    ? "…"
+                    : "notEstimable" in impact
+                      ? "Needs multi-answer shoppers — not estimable yet"
+                      : impact.truncated
+                        ? `≈${impact.total ? Math.round((impact.fires / impact.total) * 100) : 0}% of shoppers (sampled)`
+                        : `Fires on ${impact.fires.toLocaleString()} of ${impact.total.toLocaleString()} paths`}
                 </span>
-              ))
-            )}
-            .
-            {impact ? (
-              <span className="qz-crm-impact">
-                {"loading" in impact
-                  ? "…"
-                  : "notEstimable" in impact
-                    ? "Needs multi-answer shoppers — not estimable yet"
-                    : impact.truncated
-                      ? `≈${impact.total ? Math.round((impact.fires / impact.total) * 100) : 0}% of shoppers (sampled)`
-                      : `Fires on ${impact.fires.toLocaleString()} of ${impact.total.toLocaleString()} paths`}
-              </span>
-            ) : null}
-          </p>
-          <button type="button" className="qz-btn" onClick={onClose}>
-            Cancel
-          </button>
+              ) : null}
+            </p>
+          )}
+          <span className="qz-lm-fright">
+            <button type="button" className="qz-btn" onClick={onClose}>
+              Cancel
+            </button>
+            <button
+              type="button"
+              className="qz-btn qz-btn-primary"
+              disabled={!canCreate}
+              onClick={handleCreate}
+            >
+              {busy ? "Saving…" : editRule ? "Save rule" : "Create rule"}
+            </button>
+          </span>
         </footer>
       </div>
     </div>,

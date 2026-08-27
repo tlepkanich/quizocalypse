@@ -95,6 +95,8 @@ export async function loadQuizEditorDataForShop(shop: Shop, id: string, origin: 
       ),
       ...(Object.keys(metafields).length > 0 ? { metafields } : {}),
       ...(p.productType ? { product_type: p.productType } : {}),
+      // Logic-step §7 bug 2 — same derivation as publish, no drift.
+      ...(p.status ? { status: p.status } : {}),
       ...(Object.keys(variantOptions).length > 0
         ? { variant_options: variantOptions }
         : {}),

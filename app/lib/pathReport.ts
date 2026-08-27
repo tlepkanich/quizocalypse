@@ -10,7 +10,7 @@ import {
   shadowedRules,
 } from "./pathAnalyzer";
 import { validateQuiz, validateQuizWarnings } from "./quizValidation";
-import { filterAnswerMatchCount } from "./filterMatching";
+import { answerFilterValues, filterAnswerMatchCount } from "./filterMatching";
 import { bandCoverage, sliderBandAnswers } from "./sliderBands";
 import { isSellable, type IndexedProduct } from "./recommendationEngine";
 import { ruleTargets } from "./recommendDecider";
@@ -45,7 +45,24 @@ export interface Tier1Finding {
 }
 
 export interface Tier1Check {
-  id: "V1" | "V2" | "V3" | "V4" | "V5" | "V6" | "V7" | "V8" | "V9" | "V10" | "V11" | "V12" | "S1" | "S2";
+  id:
+    | "V1"
+    | "V2"
+    | "V3"
+    | "V4"
+    | "V5"
+    | "V6"
+    | "V7"
+    | "V8"
+    | "V9"
+    | "V10"
+    | "V11"
+    | "V12"
+    | "V13"
+    | "V14"
+    | "V15"
+    | "S1"
+    | "S2";
   severity: CheckSeverity;
   status: CheckStatus;
   title: string;
@@ -287,6 +304,60 @@ export function buildTier1Report(
     }
   }
 
+  // Logic-step module 15 (Live M) — the three gates the shipped set lacked.
+  // V13 (WARN): an unmapped narrowing answer never narrows — the shopper's
+  // choice is silently ignored. Pass-through stays first-class (§5), so this
+  // warns rather than blocks; "No preference" is deliberate and exempt.
+  const v13: Tier1Finding[] = [];
+  for (const q of questions) {
+    if (q.type !== "question" || q.data.role !== "filter") continue;
+    for (const a of q.data.answers) {
+      if (a.no_preference === true) continue;
+      if (answerFilterValues(a) === null) {
+        v13.push({
+          message: `${qLabel(q.id)} “${q.data.text}” → answer “${a.text}” maps to nothing — it never narrows, so that choice is silently ignored. Map it or set it to no preference.`,
+          link: { kind: "question", nodeId: q.id },
+        });
+      }
+    }
+  }
+  // V14 (INFO): not-live products. isSellable now drops non-active products
+  // (§7 bug 2 root fix), so they can never reach a shopper — this reports
+  // the count rather than blocking.
+  const v14: Tier1Finding[] = [];
+  if (productIndex) {
+    const notLive = productIndex.filter(
+      (p) => p.status !== undefined && p.status.toLowerCase() !== "active",
+    ).length;
+    if (notLive > 0) {
+      v14.push({
+        message: `${notLive} of ${productIndex.length} products are not live (draft or archived) — they are excluded from every recommendation.`,
+      });
+    }
+  }
+  // V15 (WARN): weak narrowing — one answer keeps >90% of the catalog, so
+  // most shoppers land in the same bucket. Allowed, but worth knowing.
+  const v15: Tier1Finding[] = [];
+  if (productIndex) {
+    const sellable = productIndex.filter(isSellable);
+    if (sellable.length >= 5) {
+      for (const q of questions) {
+        if (q.type !== "question" || q.data.role !== "filter") continue;
+        const counts = q.data.answers
+          .map((a) => filterAnswerMatchCount(a, sellable))
+          .filter((n): n is number => n !== null && n > 0);
+        if (counts.length === 0) continue;
+        const largest = Math.max(...counts);
+        if (largest > 0.9 * sellable.length) {
+          v15.push({
+            message: `${qLabel(q.id)} “${q.data.text}” narrows weakly — its biggest answer keeps ${largest} of ${sellable.length} products, so most shoppers land in the same place.`,
+            link: { kind: "question", nodeId: q.id },
+          });
+        }
+      }
+    }
+  }
+
   const checks: Tier1Check[] = [
     check("V1", "block", "Exactly one deciding question", v1),
     check("V2", "block", "Every path reaches the decider", v2),
@@ -303,6 +374,13 @@ export function buildTier1Report(
       : []),
     check("V12", "block", "Slider bands cover the whole range", v12),
     check("V12", "warn", "Slider bands don't overlap", v12warn),
+    check("V13", "warn", "Every narrowing answer is mapped", v13),
+    ...(productIndex
+      ? [
+          check("V14", "info", "Every product in scope is live", v14),
+          check("V15", "warn", "Narrowing questions split the catalog", v15),
+        ]
+      : []),
     check("S1", "block", "Structure (orphans, dead ends, routing)", s1),
   ];
 

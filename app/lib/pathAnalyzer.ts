@@ -298,6 +298,33 @@ export function shadowedRules(doc: QuizDoc): RuleFinding[] {
   return findings;
 }
 
+/** Advisory (audit 2026-08-28) — a match:"any" rule carrying a question
+ *  group made ONLY of `is_not` conditions is vacuously satisfied by every
+ *  shopper who skips or answers that question differently — the rule fires
+ *  for nearly everyone, and first-match-wins means it swallows every rule
+ *  below it. V7/V8 deliberately look away from any-rules (§11), so this is
+ *  the one flag that watches them. WARN-shaped; never blocks. */
+export function overbroadRules(doc: QuizDoc): RuleFinding[] {
+  const findings: RuleFinding[] = [];
+  for (const rule of doc.decision_rules ?? []) {
+    if (rule.match !== "any" || rule.conditions.length === 0) continue;
+    const groups = new Map<string, { hasIs: boolean }>();
+    for (const c of rule.conditions) {
+      const g = groups.get(c.question_id) ?? { hasIs: false };
+      if (c.op === "is") g.hasIs = true;
+      groups.set(c.question_id, g);
+    }
+    if ([...groups.values()].some((g) => !g.hasIs)) {
+      findings.push({
+        ruleId: rule.id,
+        message:
+          'An "is not" column under match any is satisfied by anyone who answers differently or skips — this rule fires for nearly every shopper and everything below it never runs.',
+      });
+    }
+  }
+  return findings;
+}
+
 /** §4.3 — a rough uniform-independence estimate of the share of shoppers a
  *  rule matches. Per question group: Π 1/answerCount over all-of `is` chips,
  *  k/answerCount for an any_of group of k chips, Π (1−1/count) for `is_not`.

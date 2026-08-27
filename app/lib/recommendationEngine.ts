@@ -40,6 +40,10 @@ export interface IndexedProduct {
   // G5 widening (logic-tab §13.3) — narrowing sources, baked when present.
   // Only NEW publishes carry them (the pinned legacy doc never republishes).
   product_type?: string;
+  // Logic-step handoff §7 bug 2 — Shopify product status ("active" | "draft"
+  // | "archived"), baked when present so the not-live gate and the catalog
+  // strip can count non-active products. Absent on older bakes.
+  status?: string;
   variant_options?: Record<string, string[]>; // option name → distinct values
   // First in-stock (else first) variant gid, baked at publish — powers
   // add-to-cart cart permalinks. Absent when the product has no variants.
@@ -110,7 +114,17 @@ interface LadderConfig {
 // i.e. placeholder / test fixtures like "$0, out of stock" — so they never get
 // recommended. Real out-of-stock items (with a price) stay and are governed by
 // oos_behavior; in-stock free items stay too.
-export function isSellable(p: { inventory_in_stock: boolean; price: string | null }): boolean {
+//
+// Logic-step §7 bug 2 — a DRAFT or ARCHIVED product carries a real price and
+// used to pass this check, so it could reach a shopper. Indexes that bake
+// `status` (new publishes) now require "active"; older bakes have no status
+// field and keep their exact pre-fix behavior (parse-forever discipline).
+export function isSellable(p: {
+  inventory_in_stock: boolean;
+  price: string | null;
+  status?: string;
+}): boolean {
+  if (p.status !== undefined && p.status.toLowerCase() !== "active") return false;
   return p.inventory_in_stock || (p.price != null && Number(p.price) > 0);
 }
 

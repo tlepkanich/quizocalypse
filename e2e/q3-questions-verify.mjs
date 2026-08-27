@@ -559,7 +559,10 @@ try {
   // restore in `finally` reverts it byte-for-byte).
   const clickThroughChooser = async () => {
     if ((await page.locator('[data-testid="logic-style-chooser"]').count()) === 0) return;
-    await page.locator(".qz-lsc-card.is-rec").click();
+    // Click the card's "Use …" go label, NOT the card center — the center
+    // lands on the "Show more" <details>, which stopPropagation()s on
+    // purpose so expanding the example can't pick the style.
+    await page.locator(".qz-lsc-card.is-rec .qz-lsc-go").click();
     await page.waitForSelector('[data-testid="logic-style-bar"]', { timeout: 8000 });
     await page.waitForTimeout(400);
   };
@@ -576,26 +579,51 @@ try {
     lvGeo.w > 1078 && lvGeo.w <= 1250 && Math.abs(lvGeo.left - lvGeo.right) < 4,
     `w${lvGeo.w} L${lvGeo.left} R${lvGeo.right}`);
 
-  // 19 ── QRTZ-G3: the funnel Logic stage is the artifact's TWO stacked
-  // cards (Rules, then Questions — shared.mjs screenLogic) and NOTHING else:
-  // no subhead entries, no explainer strip, no fallback/capture modules (the
-  // fallback config moved to the guided Results step; the capture config to
-  // the Questions step's ✉ rail row — asserted at #12 above).
+  // 19 ── LW: the funnel Logic stage is the Live artifact's WORKSPACE (mock-
+  // live screenWorkspace): the style bar, the .qz-lw-grid (questions rail +
+  // ONE detail panel), the .qz-lw-rzone rules ledger BELOW the grid in the
+  // Attributes + Rules style — and NOTHING else: no subhead entries, no
+  // explainer strip, no fallback/capture modules (the fallback config moved
+  // to the guided Results step; the capture config to the Questions step's
+  // ✉ rail row — asserted at #12 above).
   const ltab = page.locator('[data-testid="logic-tab-card"]');
   ok("the Logic card stack renders", (await ltab.count()) === 1);
-  ok("two stacked cards: Rules, then Questions",
-    (await ltab.locator("section.qz-ltab").count()) === 2 &&
-    (await ltab.locator("section.qz-ltab").first().locator("h2", { hasText: "Rules" }).count()) === 1 &&
-    (await ltab.locator("section.qz-ltab").nth(1).locator("h2", { hasText: "Questions" }).count()) === 1);
-  ok("one table row-group per question (3 label cells)",
-    (await ltab.locator(".qz-ltab-qcell").count()) === 3);
+  ok("style bar present above the workspace",
+    (await page.locator('[data-testid="logic-style-bar"]').count()) === 1);
+  ok("ledger rzone with the Rules heading",
+    (await ltab.locator(".qz-lw-rzone h4", { hasText: "Rules" }).count()) === 1);
+  ok("Add rule present in the rzone head (LW label)",
+    (await ltab.locator(".qz-ltab-create", { hasText: "Add rule" }).count()) === 1);
+  ok("attributes style: the lgrid leads, the ledger follows (resolution order)",
+    await ltab.evaluate((el) => {
+      const grid = el.querySelector(".qz-lw-grid");
+      const rz = el.querySelector(".qz-lw-rzone");
+      return Boolean(grid && rz &&
+        grid.compareDocumentPosition(rz) & Node.DOCUMENT_POSITION_FOLLOWING);
+    }));
+  ok("lgrid renders one rail row per question (3)",
+    (await ltab.locator(".qz-lw-qi").count()) === 3);
+  ok("ONE detail panel, showing the selected (first) question's 2 rows",
+    (await ltab.locator(".qz-lw-panel").count()) === 1 &&
+    (await ltab.locator(".qz-lw-panel .qz-lw-ar").count()) === 2);
   ok("exactly one Picks-the-result pill (decider guard carried over)",
     (await ltab.locator(".qz-ltab-pill.is-start").count()) === 1);
-  ok("Add rule present on the funnel card (QRTZ-H3 label)",
-    (await ltab.locator(".qz-ltab-create", { hasText: "Add rule" }).count()) === 1);
-  ok("every question row routes somewhere (Then-go-to column live)",
-    (await ltab.locator("tbody td:last-child").evaluateAll(
-      (tds) => tds.every((td) => td.textContent.trim().length > 0))));
+  ok("route column live on every detail row (Then-go-to KEPT)",
+    (await ltab.locator(".qz-lw-ar .qz-lw-aroute").evaluateAll(
+      (cells) => cells.length > 0 &&
+        cells.every((c) => c.textContent.trim().length > 0))));
+  // every rail row selects — click row 2 (the multi question, 4 answers)
+  await ltab.locator(".qz-lw-qi").nth(1).click();
+  await page.waitForTimeout(200);
+  ok("rail row selects — the panel now shows the multi question (4 rows)",
+    (await ltab.locator(".qz-lw-qi").nth(1).getAttribute("class"))?.includes("is-on") &&
+    (await ltab.locator(".qz-lw-panel .qz-lw-ar").count()) === 4);
+  await ltab.locator(".qz-lw-qi").nth(2).click();
+  await page.waitForTimeout(200);
+  ok("…and row 3 too (the rating question, 5 rows)",
+    (await ltab.locator(".qz-lw-panel .qz-lw-ar").count()) === 5);
+  await ltab.locator(".qz-lw-qi").first().click();
+  await page.waitForTimeout(200);
   ok("nothing else on the Logic surface (subhead/explainer/fallback/capture gone)",
     (await page.locator(
       ".qz-s3-logicview .qz-s3-subhead, .qz-s3-logicview .qz-s3-explainer, .qz-s3-logicview .qz-s3-fallback, .qz-s3-logicview .qz-s3-capmod, .qz-s3-logicview .qz-ltab-note",

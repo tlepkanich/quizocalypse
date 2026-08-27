@@ -12,6 +12,7 @@
 import type { Quiz as QuizDoc } from "./quizSchema";
 import { outcomeTable } from "./pathAnalyzer";
 import { settingsForTarget } from "./recommendDecider";
+import { describeRuleConditions } from "./ruleSummary";
 
 /** One outcome handed to the AI — everything server-derived, no client input. */
 export interface PathQualityOutcome {
@@ -89,11 +90,12 @@ function resolveRuleConditions(
 ): string {
   const rule = (doc.decision_rules ?? []).find((r) => r.id === ruleId);
   if (!rule || rule.conditions.length === 0) return "(rule)";
-  return rule.conditions
-    .map((c) => {
-      const q = questionText.get(c.question_id) ?? "a question";
-      const a = answerText.get(c.answer_id) ?? "an answer";
-      return c.op === "is" ? `${q} is “${a}”` : `${q} is not “${a}”`;
-    })
-    .join(" and ");
+  // Logic-step §3 — grouped join words (or within an any_of column, the
+  // rule's match join between questions), so the reviewer model never
+  // reads a match:any rule as a conjunction.
+  return describeRuleConditions(rule, (c) => {
+    const q = questionText.get(c.question_id) ?? "a question";
+    const a = answerText.get(c.answer_id) ?? "an answer";
+    return c.op === "is" ? `${q} is “${a}”` : `${q} is not “${a}”`;
+  });
 }

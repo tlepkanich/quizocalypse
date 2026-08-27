@@ -30,10 +30,21 @@ function outcomeKey(row: OutcomeRow): string {
   return `${row.kind}␟${row.id}␟${row.targetId ?? ""}`;
 }
 
-/** Hash the outcome-table STRUCTURE the advisory rows judged. */
+/** Hash the outcome-table STRUCTURE the advisory rows judged. Logic-step §3
+ *  widened rule semantics (conditions, match, any_of) — a semantics-only rule
+ *  edit changes routing without changing any outcomeKey, so the rules' own
+ *  matching shape joins the digest (a stale AI review must be marked stale). */
 export function pathReportHash(doc: QuizDoc): string {
   const canonical = outcomeTable(doc).map(outcomeKey).sort().join("\n");
-  return fnv1a(canonical);
+  const ruleShapes = (doc.decision_rules ?? [])
+    .map(
+      (r) =>
+        `${r.id}␟${r.match ?? "all"}␟${(r.any_of ?? []).join(",")}␟` +
+        r.conditions.map((c) => `${c.question_id} ${c.answer_id} ${c.op}`).join("|"),
+    )
+    .sort()
+    .join("\n");
+  return fnv1a(`${canonical}\n␞\n${ruleShapes}`);
 }
 
 /** Stale = a report snapshot exists but the current outcome-structure hash no

@@ -5,6 +5,7 @@ import { logFor } from "../lib/log.server";
 import { Quiz } from "../lib/quizSchema";
 import type { IndexedProduct } from "../lib/recommendationEngine";
 import { resolveTarget, settingsForTarget } from "../lib/recommendDecider";
+import { describeRuleConditions } from "../lib/ruleSummary";
 import { generateRuntimeRecCopy, QuizGenerationError } from "../lib/claude";
 import { parseBrandGuidelinesSafe } from "../lib/brandGuidelines";
 import { rateLimit } from "../lib/rateLimiters";
@@ -157,13 +158,13 @@ async function actionImpl({ request, params }: ActionFunctionArgs) {
   if (resolved.matchedRuleId) {
     const rule = (doc.decision_rules ?? []).find((r) => r.id === resolved.matchedRuleId);
     if (rule && rule.conditions.length > 0) {
-      matchedRuleText = rule.conditions
-        .map((c) => {
-          const at = answerText.get(c.answer_id) ?? "that option";
-          const qt = questionOfAnswer.get(c.answer_id) ?? "a question";
-          return c.op === "is" ? `${qt}: ${at}` : `${qt}: not ${at}`;
-        })
-        .join(" and ");
+      // Logic-step §3 — grouped join words: a match:any rule must not read
+      // as a conjunction to the copy model.
+      matchedRuleText = describeRuleConditions(rule, (c) => {
+        const at = answerText.get(c.answer_id) ?? "that option";
+        const qt = questionOfAnswer.get(c.answer_id) ?? "a question";
+        return c.op === "is" ? `${qt}: ${at}` : `${qt}: not ${at}`;
+      });
     }
   }
 

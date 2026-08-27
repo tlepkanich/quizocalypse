@@ -28,7 +28,11 @@ import { PhoneCanvas } from "./content/PhoneCanvas";
 import { LogicTabCard } from "../../studio/logicTab/LogicTabCard";
 import { CaptureModule } from "./logic/CaptureModule";
 import { DiagnoseModal, type DiagnoseTab } from "./logic/DiagnoseModal";
-import { LogicStyleChooser, type LogicStyle } from "./logic/LogicStyleChooser";
+import {
+  LogicStyleChooser,
+  buildChooserScan,
+  type LogicStyle,
+} from "./logic/LogicStyleChooser";
 
 /* ════════════════════════════════════════════════════════════════════════════
    quiz-step3 v3 — Step3Shell: the decider editing shell, mounted by
@@ -148,6 +152,17 @@ export function Step3Shell({
       onPickLogicStyle(style);
     },
     [onPickLogicStyle],
+  );
+  // Live .lbar's computed line + the chooser's scan (§10 read-out; the
+  // strong counts arrive once buildAttributeReadout is wired — until then
+  // the scan degrades to the product count, which the chooser handles).
+  const narrowCount = useMemo(
+    () => questions.filter((q) => q.node.data.role === "filter").length,
+    [questions],
+  );
+  const chooserScan = useMemo(
+    () => buildChooserScan(productIndex),
+    [productIndex],
   );
 
   // One-line-chrome — the view IS the funnel step now (Questions vs Logic).
@@ -399,40 +414,85 @@ export function Step3Shell({
         </div>
       ) : logicStyle === null ? (
         <div className="qz-s3-logicview">
-          {/* Logic-step §2 — first entry lands on the style chooser, once per
-              quiz. Point based is inert; both live picks land on the same
-              workspace below (they are the same logic_model). */}
-          <LogicStyleChooser productCount={productIndex.length} onPick={pickLogicStyle} />
+          {/* Logic-step §2 / Live screen A — first entry lands on the style
+              chooser, once per quiz. Point based is inert; both live picks
+              land on the same workspace below (the same logic_model). */}
+          <LogicStyleChooser scan={chooserScan} onPick={pickLogicStyle} />
         </div>
       ) : (
         <div className="qz-s3-logicview">
-          {/* Logic-step §2/§3 — a quiet strip above the card: the chosen
-              style + its lossless Switch (mock module 03), and the Logic
-              Checker's always-available door (owner ask — the ambient nav
-              pill stays retired, so the checker's home is IN the step body;
-              the nav is untouched). Same DiagnoseModal the Fix-N pill opens. */}
+          {/* Live screen B/K — the workspace's own heading + the one
+              collapsible explainer (onboarding: useful once, noise on the
+              tenth visit). */}
+          <h1 className="qz-ls-h1">What should each answer do?</h1>
+          <details className="qz-ls-ledebox" open>
+            <summary>How this works</summary>
+            <p className="qz-ls-lede">
+              {logicStyle === "rules" ? (
+                <>
+                  <b>Every outcome is a rule you write</b> — it says which products
+                  to recommend, based on how someone answered.
+                  <span className="qz-ls-ll is-ex">
+                    If they answer <b>an answer</b> and <b>another</b>, show{" "}
+                    <b>a result</b>.
+                  </span>
+                </>
+              ) : (
+                <>
+                  <b>First</b> pick which question decides how to prioritize your
+                  set of products.
+                  <span className="qz-ls-ll">
+                    <b>Some</b> narrow that set by matching answers to values
+                    already in your catalog.
+                  </span>
+                  <span className="qz-ls-ll">
+                    <b>The rest</b> just collect an answer and leave the products
+                    alone.
+                  </span>
+                  <span className="qz-ls-ll">
+                    <b>Rules</b> at the bottom cover anything those three cannot
+                    say.
+                  </span>
+                </>
+              )}
+            </p>
+          </details>
+          {/* Live .lbar — Style · name · the computed line · Switch (right).
+              "✓ Check my logic" stays: the revived Logic Checker door (owner
+              ask; the nav stays untouched). Same DiagnoseModal as the pill. */}
           <div className="qz-lsb" data-testid="logic-style-bar">
             <span className="qz-lsb-label">Style</span>
             <span className="qz-lsb-style">
               {logicStyle === "attributes" ? "Attributes + Rules" : "Rules only"}
             </span>
-            <button
-              type="button"
-              className="qz-lsb-switch"
-              onClick={() =>
-                pickLogicStyle(logicStyle === "attributes" ? "rules" : "attributes")
-              }
-            >
-              Switch to {logicStyle === "attributes" ? "rules only" : "attributes + rules"}
-            </button>
-            <button
-              type="button"
-              className="qz-lsb-check"
-              aria-haspopup="dialog"
-              onClick={() => setDiagnose({ open: true, tab: "diagnostics" })}
-            >
-              ✓ Check my logic
-            </button>
+            <span className="qz-lsb-note">
+              ·{" "}
+              {logicStyle === "rules"
+                ? "no question narrows — rules decide everything"
+                : `${narrowCount} question${narrowCount === 1 ? "" : "s"} narrow${
+                    narrowCount === 1 ? "s" : ""
+                  } the catalog`}
+            </span>
+            <span className="qz-lsb-right">
+              <button
+                type="button"
+                className="qz-lsb-check"
+                aria-haspopup="dialog"
+                onClick={() => setDiagnose({ open: true, tab: "diagnostics" })}
+              >
+                ✓ Check my logic
+              </button>
+              <button
+                type="button"
+                className="qz-lsb-switch"
+                onClick={() =>
+                  pickLogicStyle(logicStyle === "attributes" ? "rules" : "attributes")
+                }
+              >
+                Switch to{" "}
+                {logicStyle === "attributes" ? "rules only" : "attributes + rules"}
+              </button>
+            </span>
           </div>
           {/* QRTZ-G3 — the artifact's Logic screen is EXACTLY two cards,
               Rules then Questions (shared.mjs screenLogic), nothing else.
@@ -451,6 +511,7 @@ export function Step3Shell({
             quizId={quizId}
             lastSyncAt={lastSyncAt}
             shopifyAdminDomain={shopifyAdminDomain}
+            logicStyle={logicStyle}
           />
         </div>
       )}
