@@ -29,7 +29,8 @@ import { TypeChipSelector } from "./TypeChipSelector";
    between a 410px floor (745 × .55, the readable minimum — below it the
    page scrolls instead of shrinking the phone further) and an 800px cap
    (745 at 1:1 + breathing room). The Quartz frame chrome (borderless phone,
-   --qz-phone-r, fold marker; hairline desktop band) comes with DeviceFrame;
+   --qz-phone-r; hairline desktop band) comes with DeviceFrame — the fold
+   marker is suppressed here (showFold={false}, owner 2026-08-27);
    the old faux browser chrome + bottom fade are retired — the in-screen top
    bar now shows on desktop too, the way the live runtime does. Expand is a
    bigger pane, not a zoom: the same DeviceFrame measures a 92vw×90vh host
@@ -235,7 +236,10 @@ export function PhoneCanvas({
       </div>
 
       <div className="qz-g2-stage">
-        <DeviceFrame tier={tier} resetKey={activeId} onFit={onFit}>
+        {/* Owner 2026-08-27 — the fold marker is off on this surface too (it
+            was already off on the guided Results preview); the builder canvas
+            keeps its own (ResizableViewport). */}
+        <DeviceFrame tier={tier} resetKey={activeId} onFit={onFit} showFold={false}>
           {renderFrame(true)}
         </DeviceFrame>
         {/* questions-artifact (mock .stage-tag) — logical size · fit scale,
@@ -268,7 +272,9 @@ export function PhoneCanvas({
                   measures this window-sized host and the same fit rule
                   produces the bigger result (never past 1:1). */}
               <div style={{ width: "92vw", height: "90vh" }}>
-                <DeviceFrame tier={tier}>{renderFrame(false)}</DeviceFrame>
+                <DeviceFrame tier={tier} showFold={false}>
+                  {renderFrame(false)}
+                </DeviceFrame>
               </div>
             </div>,
             document.body,

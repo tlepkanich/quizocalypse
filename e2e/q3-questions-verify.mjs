@@ -463,7 +463,9 @@ try {
   ok("frame fully inside its pane (never cut off)", geo.inPane);
   ok("aspect stays 390:745 exact", Math.abs(geo.aspect - 390 / 745) < 0.005, `${geo.aspect}`);
   ok("Quartz borderless phone (20px device radius)", geo.radius.includes("20px"), geo.radius);
-  ok("fold marker on the phone tier", (await page.locator(".qz-g2-stage .qz-devfold").count()) === 1);
+  // Owner 2026-08-27 — the fold marker is OFF on the Questions surface
+  // (showFold={false}, matching the guided Results preview).
+  ok("fold marker off on this surface", (await page.locator(".qz-g2-stage .qz-devfold").count()) === 0);
   ok("old fade retired", (await page.locator(".qz-s3-fade").count()) === 0);
 
   // rating preview stays truthful (select the rating row)
