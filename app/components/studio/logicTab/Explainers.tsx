@@ -255,7 +255,7 @@ function rulesSteps(onCross: (kind: ExplainerKind) => void): Step[] {
       body: (
         <>
           Between answers of one question, <b>or</b> means any of them
-          (multi&#8209;selects can ask for <b>all of</b>). Between questions the
+          (multi‑selects can ask for <b>all of</b>). Between questions the
           rule keeps ONE join — <b>and</b> or <b>or</b> — so it reads exactly
           as it runs.
         </>
