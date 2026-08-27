@@ -16,10 +16,13 @@ import { useFocusTrap } from "../../qz-overlays";
 // - "Top rule wins" teaches strict first-match-wins (at most ONE rule applies
 //   — never "excludes and pins always apply"); the figure's rule 3 is
 //   therefore "skipped", not the mock's "also applies".
-// - The mock's "Always include" verb chunk renders as the tab's locked verb
-//   "Highlight" (under first-match-wins nothing "always" applies).
-// - "Both together" teaches that Show replaces the STARTING SET and Narrows
-//   still apply.
+// - Logic-step handoff §4 (supersedes the earlier Show/Highlight/Exclude
+//   set): the verbs are Show (these become the results), Pin (move to the
+//   top) and Hide (never show). The legacy replace rule is not taught — new
+//   UI never writes it.
+// - "Both together" teaches that questions narrow first and the winning
+//   rule then edits what is left (§3 operators: or within a question,
+//   one and ⇄ or between questions).
 // ════════════════════════════════════════════════════════════════════════════
 
 export type ExplainerKind = "rules" | "questions";
@@ -156,16 +159,16 @@ const J = ({ children }: { children: ReactNode }) => (
   <span className="qz-xpl-j">{children}</span>
 );
 
-// The verb pills of the ledger figures (mock VERB map; "Always include" is
-// corrected to the locked verb "Highlight"). QRTZ-OB1: "nar" reads "Narrows"
-// (the mock's ex-badge, shared.mjs line 1031). "set" KEEPS "Starting set" —
-// here it names the POOL the questions narrow from (the mock's own is-start
-// badge, shared.mjs ~1032), not a question role; the role is "Picks the
-// result" (ROLE_JOBS).
+// The verb pills of the ledger figures — logic-step §4 vocabulary: Show /
+// Pin / Hide (the keys keep their historical names so the row markup and
+// CSS classes stand). QRTZ-OB1: "nar" reads "Narrows" (the mock's ex-badge,
+// shared.mjs line 1031). "set" KEEPS "Starting set" — here it names the
+// POOL the questions narrow from (the mock's own is-start badge, shared.mjs
+// ~1032), not a question role; the role is "Picks the result" (ROLE_JOBS).
 const VERB_PILL: Record<string, { cls: string; label: string }> = {
-  show: { cls: "v-show", label: "Show these" },
-  inc: { cls: "v-inc", label: "Highlight" },
-  exc: { cls: "v-exc", label: "Exclude" },
+  show: { cls: "v-show", label: "Show" },
+  inc: { cls: "v-inc", label: "Pin" },
+  exc: { cls: "v-exc", label: "Hide" },
   nar: { cls: "v-nar", label: "Narrows" },
   ask: { cls: "v-ask", label: "Asked only" },
   set: { cls: "v-set", label: "Starting set" },
@@ -247,7 +250,16 @@ function rulesSteps(onCross: (kind: ExplainerKind) => void): Step[] {
   return [
     {
       title: "One sentence, three parts",
-      body: null,
+      // Logic-step §3 — the operator story in one line: or within a
+      // question, one and ⇄ or between questions, no brackets anywhere.
+      body: (
+        <>
+          Between answers of one question, <b>or</b> means any of them
+          (multi&#8209;selects can ask for <b>all of</b>). Between questions the
+          rule keeps ONE join — <b>and</b> or <b>or</b> — so it reads exactly
+          as it runs.
+        </>
+      ),
       figure: (
         <div className="qz-xpl-fig">
           <div className="qz-xpl-paths">
@@ -261,7 +273,7 @@ function rulesSteps(onCross: (kind: ExplainerKind) => void): Step[] {
               Oily <J>and</J> Sensitive
             </Chunk>
             <span className="qz-xpl-sarw" aria-hidden>→</span>
-            <Chunk variant="show">Show these</Chunk>
+            <Chunk variant="show">Show</Chunk>
             <span className="qz-xpl-sarw" aria-hidden>→</span>
             <Chunk ty="tag">quiz-gentle</Chunk>
 
@@ -269,7 +281,7 @@ function rulesSteps(onCross: (kind: ExplainerKind) => void): Step[] {
               Polos <J>or</J> Beachwear <J>and</J> Slim Fit
             </Chunk>
             <span className="qz-xpl-sarw" aria-hidden>→</span>
-            <Chunk variant="exc">Exclude</Chunk>
+            <Chunk variant="exc">Hide</Chunk>
             <span className="qz-xpl-sarw" aria-hidden>→</span>
             <Chunk ty="collection">Plus Size Streetwear</Chunk>
 
@@ -277,7 +289,7 @@ function rulesSteps(onCross: (kind: ExplainerKind) => void): Step[] {
               Lemon Flavor <J>and</J> Hydration <J>and</J> Powder
             </Chunk>
             <span className="qz-xpl-sarw" aria-hidden>→</span>
-            <Chunk variant="inc">Highlight</Chunk>
+            <Chunk variant="inc">Pin</Chunk>
             <span className="qz-xpl-sarw" aria-hidden>→</span>
             <Chunk ty="product">
               IV Hydration
@@ -304,7 +316,7 @@ function rulesSteps(onCross: (kind: ExplainerKind) => void): Step[] {
             ["1", <>Low energy <b>and</b> Vegan → show <b>supp-iron-vegan</b></>, "wins", "is-lit"],
             ["2", <>Low energy → show <b>supp-b12</b></>, "skipped", "is-dim"],
             // Mock says "also applies" — engine-corrected: one rule per shopper.
-            ["3", <>Pregnant → exclude <b>supp-herbal</b></>, "skipped", "is-dim"],
+            ["3", <>Pregnant → hide <b>supp-herbal</b></>, "skipped", "is-dim"],
             ["4", <>Athlete → show <b>supp-electrolyte</b></>, "skipped", "is-dim"],
             ["5", <>Sleep support → show <b>supp-magnesium</b></>, "skipped", "is-dim"],
           ].map(([n, s, tag, cls]) => (
@@ -473,13 +485,14 @@ function questionsSteps(onCross: (kind: ExplainerKind) => void): Step[] {
     },
     {
       title: "Both together",
-      // Mock copy + DECISIONS correction 2 — Show replaces the starting set,
-      // so Narrows still apply to it.
+      // Logic-step §4 — questions narrow first; the ONE winning rule then
+      // edits what is left: Show forces its products in, Pin moves them to
+      // the top, Hide takes them out.
       body: (
         <>
-          Questions cut the catalogue down. Your rules then decide what to show
-          out of what is left — and a <b>Show</b> rule replaces the starting
-          set, so your Narrows still apply to it.
+          Questions cut the catalogue down. The first rule that matches then
+          edits what is left — <b>Show</b> forces its products in, <b>Pin</b>{" "}
+          moves them to the top, <b>Hide</b> takes them out.
         </>
       ),
       figure: (
@@ -503,7 +516,16 @@ function questionsSteps(onCross: (kind: ExplainerKind) => void): Step[] {
             }
           />
           <FlowArrow />
-          <FlowNode label="Rules decide" src="rule 1" value="Show quiz-gentle" sub="out of those 9" />
+          <FlowNode
+            label="Rules edit"
+            src="rule 1"
+            value="Hide fragranced"
+            sub={
+              <>
+                <em>−2</em> of those 9
+              </>
+            }
+          />
           <FlowArrow />
           <FlowNode label="Results" variant="end" value="7 products" sub="what this shopper sees" />
         </div>

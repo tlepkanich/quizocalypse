@@ -552,6 +552,20 @@ try {
     (await draftDoc())?.build_session?.stage === "logic");
   ok("Questions panel unmounted on the Logic stage",
     (await page.locator(".qz-qf-panel").count()) === 0);
+  // Logic-step §2 — a FRESH quiz (no rules, no filter roles, logic_style
+  // unset) lands on the style chooser first. Click through the recommended
+  // card so the workspace assertions below run; the pick writes
+  // build_session.logic_style via the set-logic-style intent (the fixture
+  // restore in `finally` reverts it byte-for-byte).
+  const clickThroughChooser = async () => {
+    if ((await page.locator('[data-testid="logic-style-chooser"]').count()) === 0) return;
+    await page.locator(".qz-lsc-card.is-rec").click();
+    await page.waitForSelector('[data-testid="logic-style-bar"]', { timeout: 8000 });
+    await page.waitForTimeout(400);
+  };
+  await clickThroughChooser();
+  ok("style chooser answered — the style bar renders",
+    (await page.locator('[data-testid="logic-style-bar"]').count()) === 1);
   const lvGeo = await page.locator(".qz-s3-logicview").evaluate((el) => {
     const r = el.getBoundingClientRect();
     return { w: r.width, left: r.left, right: window.innerWidth - r.right };
@@ -607,6 +621,9 @@ try {
   await page.locator(".qz-topbar-back").click();
   await page.waitForSelector(".qz-s3-logicview", { timeout: 15000 });
   await page.waitForTimeout(300);
+  // The persisted logic_style should skip the chooser on re-entry; the
+  // guard stays for a slow intent write (never a wrong-order failure).
+  await clickThroughChooser();
 
   // 20 ── the bar's ‹ back = the goto-stage intent (backwards-only) → the
   // Questions stage again, so the walk proves both directions of the seam.
