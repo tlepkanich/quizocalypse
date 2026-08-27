@@ -28,6 +28,7 @@ import { PhoneCanvas } from "./content/PhoneCanvas";
 import { LogicTabCard } from "../../studio/logicTab/LogicTabCard";
 import { CaptureModule } from "./logic/CaptureModule";
 import { DiagnoseModal, type DiagnoseTab } from "./logic/DiagnoseModal";
+import { LogicStyleChooser, type LogicStyle } from "./logic/LogicStyleChooser";
 
 /* ════════════════════════════════════════════════════════════════════════════
    quiz-step3 v3 — Step3Shell: the decider editing shell, mounted by
@@ -74,6 +75,7 @@ export function Step3Shell({
   productIndex,
   navigating,
   onContinue,
+  onPickLogicStyle,
   designTokens,
   regen,
   lastSyncAt,
@@ -99,6 +101,9 @@ export function Step3Shell({
   /** The step's forward intent (the fetcher lives in the stage): to-logic on
    *  the Questions step, to-rec-page on the Logic step. STABLE by contract. */
   onContinue: () => void;
+  /** Logic-step §2 — persists the chooser's pick (set-logic-style intent).
+   *  STABLE by contract, same as onContinue. */
+  onPickLogicStyle: (style: LogicStyle) => void;
   designTokens: DesignTokens | null | undefined;
   regen: RegenApi;
   /** QRTZ-B2 — threaded to the Logic card's products popover. */
@@ -119,6 +124,31 @@ export function Step3Shell({
   );
 
   const captureOn = doc.rec_page_settings?.global?.captureEmail !== false;
+
+  // ── Logic-step §2 — the style chooser, once per quiz ──────────────────────
+  // The persisted pick (server-owned build_session) wins; a just-clicked card
+  // shows the workspace immediately while the intent lands (localStyle); and
+  // a quiz that ALREADY has logic work infers its style rather than asking a
+  // question it has effectively answered (rules or filter roles predate the
+  // chooser — interrupting them would be noise, and the style bar's Switch
+  // stays available). A genuinely fresh Logic step resolves to null → chooser.
+  const [localStyle, setLocalStyle] = useState<LogicStyle | null>(null);
+  const sessionStyle = doc.build_session?.logic_style ?? null;
+  const logicStyle = useMemo<LogicStyle | null>(() => {
+    if (sessionStyle) return sessionStyle;
+    if (localStyle) return localStyle;
+    const hasFilter = questions.some((q) => q.node.data.role === "filter");
+    if (hasFilter) return "attributes";
+    if ((doc.decision_rules ?? []).length > 0) return "rules";
+    return null;
+  }, [sessionStyle, localStyle, questions, doc.decision_rules]);
+  const pickLogicStyle = useCallback(
+    (style: LogicStyle) => {
+      setLocalStyle(style);
+      onPickLogicStyle(style);
+    },
+    [onPickLogicStyle],
+  );
 
   // One-line-chrome — the view IS the funnel step now (Questions vs Logic).
   const view = mode;
@@ -367,8 +397,43 @@ export function Step3Shell({
             </div>
           </div>
         </div>
+      ) : logicStyle === null ? (
+        <div className="qz-s3-logicview">
+          {/* Logic-step §2 — first entry lands on the style chooser, once per
+              quiz. Point based is inert; both live picks land on the same
+              workspace below (they are the same logic_model). */}
+          <LogicStyleChooser productCount={productIndex.length} onPick={pickLogicStyle} />
+        </div>
       ) : (
         <div className="qz-s3-logicview">
+          {/* Logic-step §2/§3 — a quiet strip above the card: the chosen
+              style + its lossless Switch (mock module 03), and the Logic
+              Checker's always-available door (owner ask — the ambient nav
+              pill stays retired, so the checker's home is IN the step body;
+              the nav is untouched). Same DiagnoseModal the Fix-N pill opens. */}
+          <div className="qz-lsb" data-testid="logic-style-bar">
+            <span className="qz-lsb-label">Style</span>
+            <span className="qz-lsb-style">
+              {logicStyle === "attributes" ? "Attributes + Rules" : "Rules only"}
+            </span>
+            <button
+              type="button"
+              className="qz-lsb-switch"
+              onClick={() =>
+                pickLogicStyle(logicStyle === "attributes" ? "rules" : "attributes")
+              }
+            >
+              Switch to {logicStyle === "attributes" ? "rules only" : "attributes + rules"}
+            </button>
+            <button
+              type="button"
+              className="qz-lsb-check"
+              aria-haspopup="dialog"
+              onClick={() => setDiagnose({ open: true, tab: "diagnostics" })}
+            >
+              ✓ Check my logic
+            </button>
+          </div>
           {/* QRTZ-G3 — the artifact's Logic screen is EXACTLY two cards,
               Rules then Questions (shared.mjs screenLogic), nothing else.
               The subhead entries, the "How this quiz resolves" strip, the

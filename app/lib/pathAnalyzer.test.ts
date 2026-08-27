@@ -267,6 +267,64 @@ describe("rule diagnostics (V7/V8/V9)", () => {
     expect(shadowedRules(doc).map((f) => f.ruleId)).toEqual(["r_low"]);
   });
 
+  // Logic-step handoff §11 — the ALL subset test must never run against an
+  // any-rule, and V7's co-occurrence heuristic no longer applies to one.
+  it("V8: a match:any lower rule is never flagged by the ALL subset test (§11)", () => {
+    const c1 = { question_id: "q2", answer_id: "a_pow", op: "is" };
+    const c2 = { question_id: "q1", answer_id: "a_adv", op: "is" };
+    const doc = makeDoc({
+      decision_rules: [
+        rule("r_high", [c1]),
+        { ...rule("r_low_any", [c1, c2]), match: "any" }, // fires on c2 alone — NOT shadowed
+        { ...rule("r_low_anyof", [c1, { question_id: "q2", answer_id: "a_park", op: "is" }]), any_of: ["q2"] },
+        rule("r_low_all", [c1, c2]), // still conjunctive — still shadowed
+      ],
+    });
+    // r_low_all is flagged twice — by r_high AND by r_low_any (a match:any
+    // higher rule fires whenever every one of its conditions holds, so it
+    // shadows a conjunctive lower with a superset of its conditions).
+    expect(shadowedRules(doc).map((f) => f.ruleId)).toEqual(["r_low_all", "r_low_all"]);
+  });
+
+  it("V7: match:any rules are skipped — one dead group no longer kills the rule (§11)", () => {
+    const doc = makeDoc({
+      decision_rules: [
+        {
+          ...rule("r_any_ghost", [
+            { question_id: "q_gone", answer_id: "x", op: "is" },
+            { question_id: "q1", answer_id: "a_adv", op: "is" },
+          ]),
+          match: "any",
+        },
+      ],
+    });
+    expect(deadRules(doc)).toEqual([]);
+  });
+
+  it("§4.3: estimates honor any_of (k/n) and match any (1 − Π(1−p))", () => {
+    const doc = makeDoc({
+      decision_rules: [
+        {
+          ...rule("r_anyof", [
+            { question_id: "q1", answer_id: "a_adv", op: "is" },
+            { question_id: "q1", answer_id: "a_beg", op: "is" },
+          ]),
+          any_of: ["q1"],
+        },
+        {
+          ...rule("r_matchany", [
+            { question_id: "q1", answer_id: "a_adv", op: "is" },
+            { question_id: "q2", answer_id: "a_pow", op: "is" },
+          ]),
+          match: "any",
+        },
+      ],
+    });
+    const est = ruleMatchEstimates(doc);
+    expect(est.get("r_anyof")).toBeCloseTo(1); // 2 of 2 answers
+    expect(est.get("r_matchany")).toBeCloseTo(1 - 0.5 * 0.5);
+  });
+
   it("§9: brokenRuleRefs flags deleted-question/answer conditions, with op-aware severity copy", () => {
     const doc = makeDoc({
       decision_rules: [

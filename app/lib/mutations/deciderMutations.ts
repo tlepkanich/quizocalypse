@@ -202,7 +202,12 @@ export function moveDecisionRule(doc: QuizDoc, ruleId: string, toIndex: number):
 export function updateDecisionRule(
   doc: QuizDoc,
   ruleId: string,
-  patch: Partial<Pick<DecisionRule, "conditions" | "target_id" | "target_ids" | "action">>,
+  patch: Partial<
+    Pick<
+      DecisionRule,
+      "conditions" | "target_id" | "target_ids" | "action" | "match" | "any_of"
+    >
+  >,
 ): QuizDoc {
   if (doc.logic_model !== "decider") return doc;
   const rules = doc.decision_rules ?? [];
@@ -213,6 +218,17 @@ export function updateDecisionRule(
       if (r.id !== ruleId) return r;
       const next: DecisionRule = { ...r };
       if (patch.conditions) next.conditions = patch.conditions;
+      // Handoff §3 fields — PRESENCE semantics like `action`: passing the key
+      // with a falsy/canonical-default value deletes it, so "all"/no-relaxation
+      // round-trips as the absent (legacy byte-form) field, never stored.
+      if ("match" in patch) {
+        if (patch.match === "any") next.match = "any";
+        else delete next.match;
+      }
+      if ("any_of" in patch) {
+        if (patch.any_of?.length) next.any_of = patch.any_of;
+        else delete next.any_of;
+      }
       if (patch.target_ids?.length) {
         // Length-1 normalizes to the single-target byte-form (one canonical
         // representation — createDecisionRule does the same; review L1-5).
@@ -248,6 +264,8 @@ export function createDecisionRule(
     conditions: DecisionRule["conditions"];
     target_ids: string[];
     action?: "show" | "hide" | "prioritize";
+    match?: "all" | "any";
+    any_of?: string[];
   },
 ): QuizDoc {
   if (doc.logic_model !== "decider") return doc;
@@ -259,8 +277,34 @@ export function createDecisionRule(
     target_id: targets[0]!,
     ...(targets.length > 1 ? { target_ids: targets } : {}),
     ...(init.action ? { action: init.action } : {}),
+    // §3 fields canonicalize to ABSENT for the legacy defaults ("all", no
+    // relaxation) so a plain rule keeps the pre-§3 byte-form.
+    ...(init.match === "any" ? { match: "any" as const } : {}),
+    ...(init.any_of?.length ? { any_of: init.any_of } : {}),
   };
   return { ...doc, decision_rules: [...(doc.decision_rules ?? []), rule] };
+}
+
+/** Logic-step handoff §12 — duplicate a rule and insert the copy DIRECTLY
+ *  BELOW the original (position is priority: appending to the end would
+ *  silently change which rule wins). The copy is deep enough to be
+ *  independently editable (fresh id; conditions/targets/any_of cloned). */
+export function duplicateDecisionRule(doc: QuizDoc, ruleId: string): QuizDoc {
+  if (doc.logic_model !== "decider") return doc;
+  const rules = doc.decision_rules ?? [];
+  const at = rules.findIndex((r) => r.id === ruleId);
+  if (at < 0) return doc;
+  const source = rules[at]!;
+  const copy: DecisionRule = {
+    ...source,
+    id: uid("rule"),
+    conditions: source.conditions.map((c) => ({ ...c })),
+    ...(source.target_ids ? { target_ids: [...source.target_ids] } : {}),
+    ...(source.any_of ? { any_of: [...source.any_of] } : {}),
+  };
+  const next = [...rules];
+  next.splice(at + 1, 0, copy);
+  return { ...doc, decision_rules: next };
 }
 
 // ── Logic tab (HANDOFF §5/§6) — filter-question mapping mutations ───────────

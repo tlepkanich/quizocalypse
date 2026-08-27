@@ -193,13 +193,18 @@ export function halfBuiltRules(doc: QuizDoc): RuleFinding[] {
  *  the ancestor/descendant test; parallel branch lanes are the classic case).
  *  `is_not` conditions are satisfiable without visiting the question (skipped
  *  = "answer is not X"), so they never dead-rule. Heuristic: rare topologies
- *  can slip through — acceptable because V7 never blocks. */
+ *  can slip through — acceptable because V7 never blocks.
+ *
+ *  match:"any" rules are SKIPPED (handoff §11 discipline): one dead group no
+ *  longer kills the rule, so both tests above would be false warnings. A
+ *  false "never fires" on a working rule is worse than a missed warning. */
 export function deadRules(doc: QuizDoc): RuleFinding[] {
   const intro = introId(doc);
   const reachable = intro ? reachableNodeIds(doc, intro) : new Set<string>();
   const findings: RuleFinding[] = [];
 
   for (const rule of doc.decision_rules ?? []) {
+    if (rule.match === "any") continue;
     const isQuestions = [
       ...new Set(
         rule.conditions.filter((c) => c.op === "is").map((c) => c.question_id),
@@ -237,9 +242,35 @@ export function deadRules(doc: QuizDoc): RuleFinding[] {
   return findings;
 }
 
+/** A rule whose match is effectively "every condition must hold": not
+ *  match:"any", and no any_of relaxation actually in play (any_of on a group
+ *  with a single `is` chip is a no-op). Only such rules give the V8 subset
+ *  test its "lower matched ⇒ every lower condition holds" premise. */
+function effectivelyConjunctive(rule: {
+  conditions: { question_id: string; op: string }[];
+  match?: "all" | "any";
+  any_of?: string[];
+}): boolean {
+  if (rule.match === "any") return false;
+  const anyOf = new Set(rule.any_of ?? []);
+  if (anyOf.size === 0) return true;
+  const isCount = new Map<string, number>();
+  for (const c of rule.conditions) {
+    if (c.op !== "is") continue;
+    isCount.set(c.question_id, (isCount.get(c.question_id) ?? 0) + 1);
+  }
+  return ![...isCount.entries()].some(([qid, n]) => n > 1 && anyOf.has(qid));
+}
+
 /** V8 (WARN) — a HIGHER rule fully shadows a LOWER one when the higher's
  *  condition set is a subset of the lower's: any path matching the lower also
- *  matches the higher, and the higher fires first (first-match-wins). */
+ *  matches the higher, and the higher fires first (first-match-wins).
+ *
+ *  The subset premise needs the LOWER rule to be effectively conjunctive
+ *  (handoff §11 — an any-rule matches MORE as it gains conditions, so the
+ *  ALL test must never run against one). When every condition of the higher
+ *  rule holds, the higher fires under any match/any_of, so the higher side
+ *  needs no gate. Deliberately conservative: definite shadowing only. */
 export function shadowedRules(doc: QuizDoc): RuleFinding[] {
   const rules = doc.decision_rules ?? [];
   const key = (c: { question_id: string; answer_id: string; op: string }) =>
@@ -252,6 +283,7 @@ export function shadowedRules(doc: QuizDoc): RuleFinding[] {
     for (let lo = hi + 1; lo < rules.length; lo++) {
       const lower = rules[lo]!;
       if (lower.conditions.length === 0) continue;
+      if (!effectivelyConjunctive(lower)) continue;
       const subset = [...higherSet].every((k) =>
         lower.conditions.some((c) => key(c) === k),
       );
@@ -267,9 +299,11 @@ export function shadowedRules(doc: QuizDoc): RuleFinding[] {
 }
 
 /** §4.3 — a rough uniform-independence estimate of the share of shoppers a
- *  rule matches (Π 1/answerCount for `is`; Π (1−1/count) for `is_not`).
- *  Explicitly an ESTIMATE for the Rules-tab match-% column + the fall-through
- *  note; never used for validation. */
+ *  rule matches. Per question group: Π 1/answerCount over all-of `is` chips,
+ *  k/answerCount for an any_of group of k chips, Π (1−1/count) for `is_not`.
+ *  Groups multiply under match all; under match any they combine as
+ *  1 − Π(1−p). Explicitly an ESTIMATE for the Rules-tab match-% column + the
+ *  fall-through note; never used for validation. */
 export function ruleMatchEstimates(doc: QuizDoc): Map<string, number> {
   const answerCount = new Map<string, number>();
   for (const n of doc.nodes) {
@@ -281,15 +315,42 @@ export function ruleMatchEstimates(doc: QuizDoc): Map<string, number> {
       out.set(rule.id, 0);
       continue;
     }
-    let p = 1;
+    const anyOf = new Set(rule.any_of ?? []);
+    const groups = new Map<string, typeof rule.conditions>();
     for (const c of rule.conditions) {
-      const count = answerCount.get(c.question_id) ?? 0;
+      const list = groups.get(c.question_id);
+      if (list) list.push(c);
+      else groups.set(c.question_id, [c]);
+    }
+    const groupPs: number[] = [];
+    let broken = false;
+    for (const [qid, conds] of groups) {
+      const count = answerCount.get(qid) ?? 0;
       if (count === 0) {
-        p = 0;
+        broken = true;
         break;
       }
-      p *= c.op === "is" ? 1 / count : 1 - 1 / count;
+      const isConds = conds.filter((c) => c.op === "is");
+      let p = 1;
+      for (const c of conds) {
+        if (c.op === "is_not") p *= 1 - 1 / count;
+      }
+      if (isConds.length > 0) {
+        p *=
+          anyOf.has(qid) && isConds.length > 1
+            ? Math.min(1, isConds.length / count)
+            : isConds.reduce((acc) => acc / count, 1);
+      }
+      groupPs.push(p);
     }
+    if (broken) {
+      out.set(rule.id, 0);
+      continue;
+    }
+    const p =
+      rule.match === "any"
+        ? 1 - groupPs.reduce((acc, g) => acc * (1 - g), 1)
+        : groupPs.reduce((acc, g) => acc * g, 1);
     out.set(rule.id, p);
   }
   return out;
@@ -335,7 +396,7 @@ export function outcomeTable(doc: QuizDoc): OutcomeRow[] {
       id: rule.id,
       label: rule.conditions
         .map((c) => `${c.question_id} ${c.op === "is" ? "is" : "is not"} ${c.answer_id}`)
-        .join(" AND "),
+        .join(rule.match === "any" ? " OR " : " AND "),
       targetId: rule.target_id,
       reachable: !deadIds.has(rule.id) && !halfIds.has(rule.id) && !shadowIds.has(rule.id),
     });

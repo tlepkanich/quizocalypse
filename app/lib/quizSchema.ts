@@ -1668,6 +1668,17 @@ export const BuildSession = z.object({
       doc: z.unknown().optional(),
     })
     .optional(),
+  // Logic-step chooser (logic-step handoff §2) — the merchant's picked logic
+  // style, set once on first entry to the Logic stage via the set-logic-style
+  // intent (build_session is server-owned; the JSON autosave never writes it).
+  //   "rules"      → Rules only: every outcome comes from decision_rules.
+  //   "attributes" → Attributes + Rules: one decides question + filter roles.
+  // Both are the SAME logic_model ("decider"); switching is lossless — answer
+  // filter values are kept on the doc and ignored, never stripped, so
+  // flipping back restores the mapping. OPTIONAL WITHOUT DEFAULT (the
+  // translations-field discipline): absent round-trips absent. Absent =
+  // chooser not yet answered → the Logic stage shows the style chooser.
+  logic_style: z.enum(["rules", "attributes"]).optional(),
 });
 export type BuildSession = z.infer<typeof BuildSession>;
 
@@ -1677,11 +1688,23 @@ export type BuildSession = z.infer<typeof BuildSession>;
 // whose logic_model is "decider"; legacy docs never carry any of these fields.
 // ════════════════════════════════════════════════════════════════════════════
 
-// §4 — an AND-rule that OVERRIDES the deciding question's direct mapping.
+// §4 — a rule that OVERRIDES the deciding question's direct mapping.
 // Rules evaluate top→bottom in array order (priority = position); the first
-// rule whose conditions ALL match wins and evaluation stops. Conditions are
+// rule whose conditions match wins and evaluation stops. Conditions are
 // dropdown-built [Question] is / is_not [Answer] — no free text. A rule with
 // zero conditions is "half-built" (V9 warns; it never fires).
+//
+// Matching model (logic-step handoff §3). Conditions group by question_id:
+//   · "is_not" conditions on a question require NONE of the listed answers
+//     to be selected (unchanged — this has always been the AND semantics).
+//   · "is" conditions on a question require ALL listed answers by default
+//     (the shipped multi-select "shopper picked all of these" behavior);
+//     listing the question_id in `any_of` relaxes its "is" group to
+//     at-least-one — the builder's per-column "any of".
+//   · Across questions the groups join with AND by default; `match: "any"`
+//     makes the rule fire when ANY question group is satisfied.
+// Both fields are OPTIONAL WITHOUT DEFAULT: an absent field round-trips
+// absent and preserves the pre-§3 semantics byte-for-byte.
 export const DecisionRuleCondition = z.object({
   question_id: z.string().min(1),
   answer_id: z.string().min(1),
@@ -1692,6 +1715,11 @@ export type DecisionRuleCondition = z.infer<typeof DecisionRuleCondition>;
 export const DecisionRule = z.object({
   id: z.string().min(1),
   conditions: z.array(DecisionRuleCondition).default([]),
+  // Handoff §3 — the rule's ONE cross-question join. Absent = "all" (legacy).
+  match: z.enum(["all", "any"]).optional(),
+  // Handoff §3 — question_ids whose "is" conditions join with OR ("any of"
+  // between the chips of one column). Absent from the list = all-of (legacy).
+  any_of: z.array(z.string().min(1)).optional(),
   // The recommendation target (a Category id — an individual product, a
   // collection, or a tag bucket, matching quiz-logic spec §6.2's "tag/
   // collection OR a specific product").

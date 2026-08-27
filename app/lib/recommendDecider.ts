@@ -272,10 +272,48 @@ export function applyRuleAction(
   return [...poolIds, ...missing];
 }
 
+/** Handoff §3 — THE rule predicate. Every surface that decides "does this
+ *  rule fire for these selections" must call this (runtime, rule-impact,
+ *  paste preview); the semantics live nowhere else.
+ *
+ *  Conditions group by question_id. Within a group, "is_not" conditions
+ *  require none of their answers selected; "is" conditions require all of
+ *  them (the shipped multi-select behavior) unless the question_id is listed
+ *  in `any_of`, which relaxes the "is" set to at-least-one. Groups join with
+ *  AND unless `match: "any"`. Absent `match`/`any_of` reproduce the pre-§3
+ *  behavior exactly (each group of one condition degenerates to the old
+ *  flat conditions.every). */
+export function ruleConditionsMatch(
+  rule: Pick<DecisionRuleT, "conditions" | "match" | "any_of">,
+  selected: ReadonlySet<string>,
+): boolean {
+  if (rule.conditions.length === 0) return false;
+  const groups = new Map<string, DecisionRuleT["conditions"]>();
+  for (const c of rule.conditions) {
+    const list = groups.get(c.question_id);
+    if (list) list.push(c);
+    else groups.set(c.question_id, [c]);
+  }
+  const anyOf = new Set(rule.any_of ?? []);
+  const groupOk = (questionId: string, conds: DecisionRuleT["conditions"]) => {
+    const isConds = conds.filter((c) => c.op === "is");
+    const noneSelected = conds.every(
+      (c) => c.op === "is" || !selected.has(c.answer_id),
+    );
+    if (!noneSelected) return false;
+    if (isConds.length === 0) return true;
+    return anyOf.has(questionId)
+      ? isConds.some((c) => selected.has(c.answer_id))
+      : isConds.every((c) => selected.has(c.answer_id));
+  };
+  const entries = [...groups.entries()];
+  return rule.match === "any"
+    ? entries.some(([qid, conds]) => groupOk(qid, conds))
+    : entries.every(([qid, conds]) => groupOk(qid, conds));
+}
+
 function ruleMatches(rule: DecisionRuleT, selected: ReadonlySet<string>): boolean {
-  return rule.conditions.every((c) =>
-    c.op === "is" ? selected.has(c.answer_id) : !selected.has(c.answer_id),
-  );
+  return ruleConditionsMatch(rule, selected);
 }
 
 // ── Target → products (§4 hero & grid, §5 OOS) ─────────────────────────────
