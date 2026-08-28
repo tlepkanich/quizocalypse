@@ -33,6 +33,7 @@ import {
   buildChooserScan,
   type LogicStyle,
 } from "./logic/LogicStyleChooser";
+import { CatalogStrip } from "./logic/CatalogStrip";
 
 /* ════════════════════════════════════════════════════════════════════════════
    quiz-step3 v3 — Step3Shell: the decider editing shell, mounted by
@@ -139,8 +140,14 @@ export function Step3Shell({
   const [localStyle, setLocalStyle] = useState<LogicStyle | null>(null);
   const sessionStyle = doc.build_session?.logic_style ?? null;
   const logicStyle = useMemo<LogicStyle | null>(() => {
-    if (sessionStyle) return sessionStyle;
+    // The in-session click WINS over the persisted value: the client doc's
+    // build_session never refreshes mid-session (server-owned; the autosave
+    // echoes the server's copy), so after the style bar's Switch the stale
+    // sessionStyle would otherwise override the click until a full reload —
+    // the owner-reported "Switch does nothing" bug. Every localStyle set
+    // also fires the set-logic-style intent, so the server catches up.
     if (localStyle) return localStyle;
+    if (sessionStyle) return sessionStyle;
     const hasFilter = questions.some((q) => q.node.data.role === "filter");
     if (hasFilter) return "attributes";
     if ((doc.decision_rules ?? []).length > 0) return "rules";
@@ -457,6 +464,13 @@ export function Step3Shell({
               )}
             </p>
           </details>
+          {/* Module 02 — the Catalog strip, always at the top of the
+              workspace, directly above the style bar. */}
+          <CatalogStrip
+            productIndex={productIndex}
+            attributeCount={chooserScan.strongCount}
+            rulesOnly={logicStyle === "rules"}
+          />
           {/* Live .lbar — Style · name · the computed line · Switch (right).
               "✓ Check my logic" stays: the revived Logic Checker door (owner
               ask; the nav stays untouched). Same DiagnoseModal as the pill. */}

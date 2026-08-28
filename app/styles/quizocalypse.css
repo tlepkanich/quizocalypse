@@ -11681,3 +11681,144 @@ button.qz-pb-row:hover { background: var(--qz-cream-2); }
 }
 .qz-lm-aadd:hover { border-color: var(--qz-accent-line); color: var(--qz-accent-ink); }
 .qz-lm-ratingnote { font-size: 12.5px; color: var(--qz-ink-4); line-height: 1.5; }
+
+/* ═════════════════════════════════════════════════════════════════════
+   LCS — Logic-step module 02: the Catalog strip (mock .strip/.lbl/.flag
+   through the token map). Always at the top of the Logic workspace,
+   directly above the style bar. The .qz-lcs-s chips mirror the mock's .s
+   shorthand chips (base = dashed line-2 on surface; .cat keeps the dash
+   with ok colors; .comp goes solid on surface-2).
+   ═════════════════════════════════════════════════════════════════════ */
+.qz-lcs {
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  padding: 10px 14px; background: var(--qz-cream-2);
+  border: 1px solid var(--qz-rule); border-radius: var(--qz-radius-lg);
+  font-size: 13px; color: var(--qz-ink-3);
+}
+.qz-lcs-lbl {
+  font-size: 10.5px; letter-spacing: .05em; text-transform: uppercase;
+  color: var(--qz-ink-4); font-weight: 600;
+}
+.qz-lcs-item { display: inline-flex; align-items: center; gap: 5px; }
+.qz-lcs-s {
+  display: inline-flex; align-items: center; padding: 2px 8px;
+  border-radius: var(--qz-radius-sm); font-size: 12px;
+  border: 1px dashed var(--qz-ls-line2); background: var(--qz-paper);
+  color: var(--qz-ink-4); font-variant-numeric: tabular-nums;
+}
+.qz-lcs-s.is-cat {
+  border-color: var(--qz-ls-ok-line); background: var(--qz-live-wash);
+  color: var(--qz-ok);
+}
+.qz-lcs-s.is-comp {
+  border-style: solid; border-color: var(--qz-rule);
+  background: var(--qz-cream-2); color: var(--qz-ink-4);
+}
+.qz-lcs-flag {
+  display: inline-flex; align-items: center; gap: 5px; padding: 2px 9px;
+  border-radius: var(--qz-radius-pill); font-size: 12px; font-weight: 600;
+}
+.qz-lcs-flag.is-warn {
+  background: var(--qz-ls-warn-wash); color: var(--qz-warn);
+  border: 1px solid var(--qz-ls-warn-line);
+}
+.qz-lcs-flag.is-good {
+  background: var(--qz-live-wash); color: var(--qz-ok);
+  border: 1px solid var(--qz-ls-ok-line);
+}
+.qz-lcs-muted { color: var(--qz-ink-4); }
+
+/* ═════════════════════════════════════════════════════════════════════
+   LRS — Logic-step module 12: the Rules-only setup scaffold (mock .setup
+   through the token map). Inside the ledger zone, replacing the empty
+   state. The target selects wear the mock's .tchip / .tchip.unset dress
+   (the deliberate deviation: a select instead of the "?" chip, so Create
+   never guesses a target).
+   ═════════════════════════════════════════════════════════════════════ */
+.qz-lrs {
+  margin: 12px 15px 15px; padding: 18px;
+  border: 1px solid var(--qz-accent-line); background: var(--qz-accent-wash);
+  border-radius: var(--qz-radius-lg);
+}
+.qz-lrs-h { margin: 0; font-size: 15.5px; font-weight: 600; color: var(--qz-ink); }
+.qz-lrs-sub { margin: 7px 0 0; font-size: 13px; color: var(--qz-ink-3); max-width: 62ch; }
+.qz-lrs-row {
+  display: flex; align-items: center; gap: 9px; margin-top: 13px;
+  flex-wrap: wrap; font-size: 13px; color: var(--qz-ink-4);
+}
+.qz-lrs-qsel {
+  font: inherit; font-size: 13.5px; font-weight: 500; padding: 4px 10px;
+  max-width: 100%; border: 1px dashed var(--qz-accent-line);
+  border-radius: var(--qz-radius-sm); background: var(--qz-paper);
+  color: var(--qz-accent-ink); cursor: pointer;
+}
+.qz-lrs-prev {
+  margin-top: 12px; padding: 12px; border-radius: var(--qz-radius);
+  background: var(--qz-paper); border: 1px solid var(--qz-rule);
+  display: grid; gap: 7px;
+}
+.qz-lrs-pl { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; font-size: 12px; }
+.qz-lrs-rn {
+  flex: none; font-size: 11px; font-weight: 700; color: var(--qz-warn);
+  background: var(--qz-ls-warn-wash); border: 1px solid var(--qz-ls-warn-line);
+  padding: 3px 7px; border-radius: var(--qz-radius-sm);
+  font-variant-numeric: tabular-nums;
+}
+.qz-lrs-op { color: var(--qz-ink-4); font-size: 11px; }
+.qz-lrs-cchip {
+  display: inline-flex; align-items: center; gap: 6px; padding: 3px 9px;
+  border-radius: var(--qz-radius-sm); font-size: 12px; font-weight: 500;
+  background: var(--qz-accent-wash); color: var(--qz-accent-ink);
+  border: 1px solid var(--qz-accent-line); min-width: 0;
+}
+.qz-lrs-qn { font-size: 10px; opacity: .75; font-variant-numeric: tabular-nums; }
+.qz-lrs-tsel {
+  font: inherit; font-size: 12.5px; font-weight: 500; padding: 3px 10px;
+  max-width: 240px; border-radius: var(--qz-radius-sm); cursor: pointer;
+  background: var(--qz-live-wash); color: var(--qz-ok);
+  border: 1px solid var(--qz-ls-ok-line);
+}
+.qz-lrs-tsel.is-unset {
+  background: var(--qz-ls-warn-wash); color: var(--qz-warn);
+  border-color: var(--qz-ls-warn-line); border-style: dashed;
+}
+.qz-lrs-foot { display: flex; align-items: center; gap: 12px; margin-top: 14px; flex-wrap: wrap; }
+.qz-lrs-avail { font-size: 11.5px; color: var(--qz-ink-4); }
+
+/* ═════════════════════════════════════════════════════════════════════
+   LCOV — Logic-step module 14: the Coverage sidebar (mock .qref through
+   the token map). Rules-only ONLY: the ledger + a 296px sidebar in a
+   two-column row (single column under 900px, matching the .qz-lw-grid
+   breakpoint); the questions grid keeps the full width below.
+   ═════════════════════════════════════════════════════════════════════ */
+.qz-lcov-row {
+  display: grid; grid-template-columns: minmax(0, 1fr) 296px;
+  gap: 16px; align-items: start;
+}
+@media (max-width: 900px) {
+  .qz-lcov-row { grid-template-columns: 1fr; }
+}
+.qz-lcov {
+  border: 1px solid var(--qz-rule); border-radius: var(--qz-radius-lg);
+  background: var(--qz-paper); overflow: hidden;
+}
+.qz-lcov-h {
+  padding: 12px 14px; border-bottom: 1px solid var(--qz-rule);
+  background: var(--qz-cream-2); font-size: 13.5px; font-weight: 600;
+}
+.qz-lcov-l { padding: 9px; display: grid; gap: 4px; }
+.qz-lcov-r { padding: 9px 10px; border-radius: var(--qz-radius); }
+.qz-lcov-r.is-unused { background: var(--qz-cream-2); }
+.qz-lcov-t { font-size: 12.5px; font-weight: 500; color: var(--qz-ink); }
+.qz-lcov-u { font-size: 11.5px; color: var(--qz-ink-4); margin-top: 3px; }
+.qz-lcov-u b { color: var(--qz-warn); font-weight: 600; }
+.qz-lcov-cov { display: flex; align-items: center; gap: 10px; margin-top: 10px; padding: 0 10px 9px; }
+.qz-lcov-bar {
+  flex: 1; height: 6px; border-radius: var(--qz-radius-pill);
+  background: var(--qz-cream-2); border: 1px solid var(--qz-rule); overflow: hidden;
+}
+.qz-lcov-fill { display: block; height: 100%; background: var(--qz-accent); }
+.qz-lcov-n {
+  font-size: 11.5px; color: var(--qz-ink-4); white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}

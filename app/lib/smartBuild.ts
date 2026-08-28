@@ -32,6 +32,9 @@ export interface GeneratedAnswerSpec {
 export interface GeneratedQuestionSpec {
   text: string;
   question_type: QuestionType;
+  // Logic-step §5 — the generation model's role marking. "narrows" maps to
+  // the doc's role "filter"; absent behaves exactly as before (qualifier).
+  role?: "decides" | "narrows" | "info";
   required?: boolean;
   max_selections?: number;
   answers: GeneratedAnswerSpec[];
@@ -433,7 +436,11 @@ export function applyDeciderQuestionFlow(
         question_type: q.question_type,
         // The deciding question is REQUIRED (V3); qualifiers keep the spec's own choice.
         required: isDecider ? true : q.required ?? true,
-        role: isDecider ? "decides" : "qualifier",
+        // Logic-step §5 — the model can mark narrowing questions (role
+        // "narrows" → the doc's "filter"); everything else stays qualifier.
+        // The ONE decider is still chosen deterministically here (deciderIdx)
+        // — a stray model "decides" on another question never wins.
+        role: isDecider ? "decides" : q.role === "narrows" ? "filter" : "qualifier",
         ...(i === eduIdx && q.education_card_before
           ? { education_card_before: q.education_card_before.trim() }
           : {}),

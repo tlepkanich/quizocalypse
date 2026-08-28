@@ -30,6 +30,8 @@ import { QuestionWindow } from "./QuestionWindow";
 import { ExplainerSheet, type ExplainerKind } from "./Explainers";
 import { answerHasSelection, narrowFieldOptions } from "./logicTabFields";
 import { ValuePickerPopover, type FilterValueSet } from "./ValuePickerPopover";
+import { RulesSetupScaffold } from "./RulesSetupScaffold";
+import { CoverageSidebar } from "./CoverageSidebar";
 
 // ════════════════════════════════════════════════════════════════════════════
 // Logic tab — the Live artifact's workspace (mock-live screenWorkspace, owner
@@ -319,6 +321,21 @@ export function LogicTabCard({
         </p>
       ) : null}
       {rules.length === 0 ? (
+        rulesOnly && commit && quizId ? (
+          /* Module 12 — the Rules-only setup scaffold replaces the empty
+             state (rules-only, editable surfaces only). */
+          <RulesSetupScaffold
+            questions={questions}
+            categories={allCategories}
+            commit={commit}
+            getLatestDoc={() => docRef.current}
+            onWriteByHand={() => {
+              setQwin(null);
+              setEditRuleId(null);
+              setCreateOpen(true);
+            }}
+          />
+        ) : (
         <p className="qz-ltab-empty">
           <span className="qz-ltab-muted">—</span>{" "}
           {switchedOn === 0 ? (
@@ -334,6 +351,7 @@ export function LogicTabCard({
             </>
           )}
         </p>
+        )
       ) : (
         <ol className="qz-lw-rlist">
           {rules.map((rule, i) => (
@@ -605,7 +623,14 @@ export function LogicTabCard({
     <div className="qz-ltab-stack" data-testid="logic-tab-card">
       {rulesOnly ? (
         <>
-          {ledger}
+          {/* Module 14 — the Coverage sidebar rides RIGHT of the ledger in a
+              two-column row (single column under 900px); the questions grid
+              keeps the full width below. Attributes style renders none of
+              this. */}
+          <div className="qz-lcov-row">
+            {ledger}
+            <CoverageSidebar questions={questions} rules={rules} />
+          </div>
           {grid}
         </>
       ) : (

@@ -314,6 +314,15 @@ const questionFlowToolJsonSchema = {
             type: "string",
             enum: ["single_select", "multi_select", "image_tile", "searchable", "image_picker"],
           },
+          // Logic-step handoff §5 — the model can now mark a question as
+          // NARROWING; before this field existed no code path ever wrote
+          // role "filter", so every AI-built quiz arrived role-less.
+          role: {
+            type: "string",
+            enum: ["decides", "narrows", "info"],
+            description:
+              "What the question does to the product pool: 'decides' picks the outcome (exactly one per quiz), 'narrows' cuts the pool by a real catalog attribute (its answers carry accurate catalog values), 'info' only collects the answer.",
+          },
           required: { type: "boolean" },
           max_selections: { type: "number" },
           education_card_before: { type: "string" },
@@ -355,6 +364,7 @@ const QuestionFlowSchema = z.object({
       z.object({
         text: z.string().min(1),
         question_type: QuestionDataObject.shape.question_type,
+        role: z.enum(["decides", "narrows", "info"]).optional(),
         required: z.boolean().optional(),
         max_selections: z.number().int().positive().optional(),
         education_card_before: z.string().optional(),
@@ -445,9 +455,17 @@ export function deciderAddendum(m?: "decider"): string {
     "situation the shopper can observe (\"How does your skin feel a few hours after " +
     "cleansing?\"), never a self-classification that recites the bucket names " +
     "(\"How would you describe your skin?\"). Each answer describes the observable " +
-    "experience and still maps cleanly to exactly one bucket. Every OTHER question " +
-    "is a qualifier that refines the recommendation but must NOT try to route — " +
-    "keep qualifier answers' tags light. " +
+    "experience and still maps cleanly to exactly one bucket. Mark it role \"decides\". " +
+    // Logic-step handoff §5 — the old "keep qualifier answers' tags light"
+    // instruction actively worked against narrowing; narrowing answers want
+    // ACCURATE catalog values, not light tags.
+    "Every OTHER question is either NARROWING (role \"narrows\") or INFO (role \"info\"). " +
+    "A narrowing question cuts the product pool on ONE real catalog attribute " +
+    "(a tag family, metafield, variant option like size or color, or product type): " +
+    "each of its answers carries the accurate catalog value(s) it matches, taken " +
+    "from the supplied catalog summary — never invented, never deliberately light. " +
+    "Prefer 1-2 narrowing questions when the catalog has attributes that split it. " +
+    "An info question only collects the answer: empty tags [], role \"info\". " +
     "Do NOT include email_gate copy: the results page has its own capture screen."
   );
 }

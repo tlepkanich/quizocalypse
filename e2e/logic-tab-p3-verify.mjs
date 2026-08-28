@@ -1,3 +1,10 @@
+// RETIRED (logic-step live-exact rebuild, 2026-08-28, commit b8cf66f): this
+// probe asserts the two-card Rules/Questions table structure that the Live-
+// pane workspace (rail + one-question detail panel) replaced. Kept per the
+// conservative-deletion culture; the canonical suite is q3-questions-verify.
+console.log("RETIRED probe — superseded by the logic-step Live rebuild (see e2e/q3-questions-verify.mjs). Exiting 0.");
+process.exit(0);
+
 // Logic tab live-verify (UNIFIED one-window + QRTZ-H5 unification) — the
 // question window is the answer-MAPPING editor (reached through the mapping
 // cells); the role pill opens the SHARED role menu (the mock's role popover,

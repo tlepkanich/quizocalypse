@@ -61,6 +61,7 @@ export interface Tier1Check {
     | "V13"
     | "V14"
     | "V15"
+    | "V16"
     | "S1"
     | "S2";
   severity: CheckSeverity;
@@ -91,7 +92,10 @@ const ANSWER_ADVISORY_LEN = 60;
  *  publish re-checks against the DB rows). */
 export function buildTier1Report(
   doc: QuizDoc,
-  buckets: Array<{ id: string; name: string }>,
+  // `productIds` is optional-per-bucket: hosts that have it (the funnel and
+  // builder pass full Category rows) unlock the Live-M starting-set
+  // coverage check; hosts that don't simply omit it.
+  buckets: Array<{ id: string; name: string; productIds?: string[] }>,
   // QZY-1 (quiz-logic spec §5/§8) — pass the product index to enable the V11
   // filter dead-end check (a filter answer matching 0 products is BLOCKING).
   // Absent (some hosts have no catalog handy) → the check is omitted, never
@@ -358,6 +362,23 @@ export function buildTier1Report(
     }
   }
 
+  // V16 (INFO, Live-M gate 4): "The starting set covers the catalog" —
+  // every sellable product should belong to at least one result set, or a
+  // shopper routed there can never be shown it. Runs only when the host
+  // supplies bucket memberships AND the doc actually references buckets.
+  const v16: Tier1Finding[] = [];
+  const bucketsWithMembers = buckets.filter((b) => Array.isArray(b.productIds));
+  if (productIndex && bucketsWithMembers.length > 0) {
+    const inAnySet = new Set(bucketsWithMembers.flatMap((b) => b.productIds ?? []));
+    const sellable = productIndex.filter(isSellable);
+    const uncovered = sellable.filter((p) => !inAnySet.has(p.product_id)).length;
+    if (uncovered > 0) {
+      v16.push({
+        message: `${uncovered} of ${sellable.length} products belong to no result set — shoppers can never be shown them through the starting sets (rules and narrowing can't reach a product outside every set).`,
+      });
+    }
+  }
+
   const checks: Tier1Check[] = [
     check("V1", "block", "Exactly one deciding question", v1),
     check("V2", "block", "Every path reaches the decider", v2),
@@ -380,6 +401,9 @@ export function buildTier1Report(
           check("V14", "info", "Every product in scope is live", v14),
           check("V15", "warn", "Narrowing questions split the catalog", v15),
         ]
+      : []),
+    ...(productIndex && bucketsWithMembers.length > 0
+      ? [check("V16", "info", "The starting set covers the catalog", v16)]
       : []),
     check("S1", "block", "Structure (orphans, dead ends, routing)", s1),
   ];

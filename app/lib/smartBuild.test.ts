@@ -627,6 +627,65 @@ describe("applyDeciderQuestionFlow — review-hardened edges", () => {
     const out = applyDeciderQuestionFlow(seed, generated as never, deciderBuckets, FB);
     expect(out.rec_page_settings?.global).toEqual({ capturePhone: true });
   });
+
+  // Logic-step handoff §5 — the model can mark narrowing questions; "narrows"
+  // maps to role "filter", "info"/absent stay qualifier, and a stray model
+  // "decides" on a non-chosen question NEVER wins over deciderIdx.
+  it('model role "narrows" → filter; "info"/absent → qualifier; stray "decides" never wins', () => {
+    const seed = Quiz.parse({ ...buildSeedQuiz("Roles"), logic_model: "decider" });
+    const generated = {
+      questions: [
+        {
+          text: "What's your skin type?",
+          question_type: "single_select" as const,
+          role: "decides" as const,
+          answers: [
+            { text: "Dry", tags: ["dry"] },
+            { text: "Oily", tags: ["oily"] },
+          ],
+        },
+        {
+          text: "Which finish do you prefer?",
+          question_type: "single_select" as const,
+          role: "narrows" as const,
+          answers: [
+            { text: "Matte", tags: ["finish:matte"] },
+            { text: "Dewy", tags: ["finish:dewy"] },
+          ],
+        },
+        {
+          text: "How did you hear about us?",
+          question_type: "single_select" as const,
+          role: "info" as const,
+          answers: [
+            { text: "A friend", tags: [] },
+            { text: "Search", tags: [] },
+          ],
+        },
+        {
+          // A hallucinated second "decides" — must land as qualifier.
+          text: "Pick a vibe",
+          question_type: "single_select" as const,
+          role: "decides" as const,
+          answers: [
+            { text: "Calm", tags: [] },
+            { text: "Bold", tags: [] },
+          ],
+        },
+      ],
+    };
+    const out = applyDeciderQuestionFlow(seed, generated as never, deciderBuckets, FB);
+    expect(() => Quiz.parse(out)).not.toThrow();
+    const roles = out.nodes
+      .filter((n) => n.type === "question")
+      .map((n) => (n.type === "question" ? [n.data.text, n.data.role] : []));
+    expect(roles).toEqual([
+      ["What's your skin type?", "decides"],
+      ["Which finish do you prefer?", "filter"],
+      ["How did you hear about us?", "qualifier"],
+      ["Pick a vibe", "qualifier"],
+    ]);
+  });
 });
 
 describe("applyManualDeciderSkeleton (SR — blank/failed-goal decider drafts)", () => {
