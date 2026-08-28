@@ -281,13 +281,16 @@ export function QzPageHeader({
 
 // Pill-style segmented toggle (e.g. Build / Optimize). Single-select; the
 // active option is marked aria-pressed and styled via .qz-segmented in CSS.
+// Quizzes-Quartz — optional per-option `count` slot ("All 190"): a tabular
+// figure beside the label (.qz-lib-count, a DIRECT child of the button so the
+// [aria-pressed] > selector can recolor it). Omitting it renders the old markup.
 export function QzSegmented<T extends string>({
   options,
   value,
   onChange,
   ariaLabel,
 }: {
-  options: { value: T; label: ReactNode; title?: string }[];
+  options: { value: T; label: ReactNode; title?: string; count?: ReactNode }[];
   value: T;
   onChange: (value: T) => void;
   ariaLabel?: string;
@@ -303,6 +306,7 @@ export function QzSegmented<T extends string>({
           onClick={() => onChange(o.value)}
         >
           {o.label}
+          {o.count != null ? <span className="qz-lib-count">{o.count}</span> : null}
         </button>
       ))}
     </div>

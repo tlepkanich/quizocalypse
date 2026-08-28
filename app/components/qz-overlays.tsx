@@ -91,6 +91,7 @@ export function QzModal({
   footer,
   destructive = false,
   initialFocusRef,
+  className,
   children,
 }: {
   open: boolean;
@@ -106,12 +107,18 @@ export function QzModal({
   footer?: ReactNode;
   destructive?: boolean;
   initialFocusRef?: React.RefObject<HTMLElement | null>;
+  /** Extra class on the .qz-modal box (a mock-specified placement, e.g. the
+      create-quiz dialog opening 8vh from the top). */
+  className?: string;
   children?: ReactNode;
 }) {
   const ready = usePortalReady();
   const boxRef = useRef<HTMLDivElement>(null);
   const labelId = useId();
-  useFocusTrap(boxRef, open);
+  // Trap only once the portal content exists: a modal mounted with open=true
+  // runs this effect before `ready` flips, when boxRef is still null — gating
+  // on `ready` re-arms it after the portal mounts so initial focus lands.
+  useFocusTrap(boxRef, open && ready, initialFocusRef);
 
   useEffect(() => {
     if (!open || destructive) return;
@@ -133,7 +140,7 @@ export function QzModal({
     >
       <div
         ref={boxRef}
-        className={`qz-modal qz-modal--${size}`}
+        className={`qz-modal qz-modal--${size}${className ? " " + className : ""}`}
         style={width ? { width: `min(${width}px, 100%)` } : undefined}
         role={destructive ? "alertdialog" : "dialog"}
         aria-modal="true"
