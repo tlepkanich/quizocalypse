@@ -4010,18 +4010,19 @@ textarea.qz-sm-inp { resize: vertical; min-height: 62px; line-height: 1.5; }
   padding: 6px; margin: -6px; /* invisible hit-target padding */
   text-decoration: none; color: var(--qz-ink);
 }
-/* BRAND-3 (2026-08 rebrand) — the purple fox mark (FoxMark, full-color inline
-   fills) sits bare on the chrome ground; it replaced the Quartz cat and its
-   knockout-eye contract. Mock `.brand .mark` footprint stays 28px. */
+/* BRAND-3 (2026-08 rebrand) — the purple fox mark (FoxMark: the exact owner
+   art embedded via brandAssets.ts) sits bare on the chrome ground; it
+   replaced the Quartz cat and its knockout-eye contract. Mock `.brand .mark`
+   footprint stays 28px. */
 .qz-wordmark-mono {
   flex: none;
   display: inline-flex; align-items: center; justify-content: center;
   width: 28px; height: 28px;
   color: var(--qz-ink);
 }
-/* BRAND-3 — the drawn "wiskr" logotype (an SVG in Wordmark.tsx; letters
-   inherit ink via currentColor, sized by the component — replaces the
-   typeset 17/700 name). */
+/* BRAND-3 — the "wiskr" logotype (the exact owner art, embedded in
+   Wordmark.tsx and sized by the component — replaces the typeset
+   17/700 name). */
 .qz-wordmark-name {
   display: block;
 }
