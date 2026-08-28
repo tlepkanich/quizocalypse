@@ -5,11 +5,12 @@ import {
   Scripts,
   ScrollRestoration,
 } from "@remix-run/react";
-// QRTZ-H — the cat favicon links live in the ADMIN trees' links()
-// (app/styles/adminLinks.ts), NOT here: root links() would add head tags to
-// /q documents too, and the shopper HTML stays byte-clean by policy. Shopper
-// tabs still get the cat — browsers auto-fetch /favicon.ico, whose bytes are
-// the new mark.
+// QRTZ-H / BRAND-3 — the full favicon trio (svg + ico + apple-touch) links
+// live in the ADMIN trees' links() (app/styles/adminLinks.ts), NOT here: root
+// links() would add head tags to /q documents too, and the shopper HTML stays
+// byte-clean by policy. Shopper tabs get the same purple fox via the inline
+// /wiskr-fox.svg icon link below (same cut as /favicon.svg since the 2026-08
+// rebrand) plus the browsers' auto /favicon.ico fetch.
 
 // BIC-2 B1 — no root-level stylesheet: the admin sheet (quizocalypse.css) +
 // font preloads moved to the admin route trees' links() (app/styles/

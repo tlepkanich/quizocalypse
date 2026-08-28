@@ -3,7 +3,7 @@ import type { ActionFunctionArgs, LinksFunction, LoaderFunctionArgs, MetaFunctio
 import { json, redirect } from "@remix-run/node";
 import { adminStyleLinks } from "../styles/adminLinks";
 import { Form, useActionData, useNavigation } from "@remix-run/react";
-import { CatMark } from "../components/chrome/CatMark";
+import { FoxMark } from "../components/chrome/FoxMark";
 import { hasStudioAccess } from "../lib/studioAccess.server";
 import { requestMagicLink } from "../lib/studioMagicLink.server";
 
@@ -55,8 +55,8 @@ const styles: Record<string, CSSProperties> = {
   },
   card: { width: 360, display: "flex", flexDirection: "column", gap: 14 },
   brand: { display: "flex", alignItems: "center", gap: 10, marginBottom: 2 },
-  /* QRTZ-G6 — the cat mark sits bare in ink (no violet tile); eyes knock
-     out to the paper card it sits on (CatMark's knockout default). */
+  /* BRAND-3 — the purple fox mark sits bare on the paper card (full-color;
+     the detailed faceted cut is legible at this 36px scale). */
   mono: {
     width: 36,
     height: 36,
@@ -87,7 +87,7 @@ export default function StudioLogin() {
         <div className="qz-card" style={styles.card}>
           <div style={styles.brand}>
             <span style={styles.mono} aria-hidden>
-              <CatMark size={36} />
+              <FoxMark size={36} detailed />
             </span>
             <h1 style={styles.h1}>Check your email</h1>
           </div>
@@ -100,7 +100,7 @@ export default function StudioLogin() {
         <Form method="post" className="qz-card" style={styles.card}>
           <div style={styles.brand}>
             <span style={styles.mono} aria-hidden>
-              <CatMark size={36} />
+              <FoxMark size={36} detailed />
             </span>
             <h1 style={styles.h1}>Wiskr Studio</h1>
           </div>

@@ -25,7 +25,7 @@
       "boxShadow": 0
     },
     "app/components/chrome/FoxMark.tsx": {
-      "hex": 7,
+      "hex": 10,
       "boxShadow": 0
     },
     "app/components/logic/AbTestCard.tsx": {

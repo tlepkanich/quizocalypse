@@ -22,10 +22,10 @@ export const adminStyleLinks: LinkDescriptor[] = [
   // previews (quiz-runtime.css names it) but is loaded on demand, not here.
   { rel: "preload", href: "/fonts/Figtree.woff2", as: "font", type: "font/woff2", crossOrigin: "anonymous" },
   { rel: "stylesheet", href: qzStyles },
-  // QRTZ-H — the Wiskr cat favicon (brand-2026 mark): dark-tab-aware SVG +
-  // the PNG-based .ico fallback + apple-touch. Admin trees only — /q's HTML
-  // stays byte-clean; shopper tabs get the cat via the auto /favicon.ico
-  // fetch (the .ico bytes are the new mark).
+  // QRTZ-H / BRAND-3 — the Wiskr purple-fox favicon (full-color, reads on
+  // light and dark tabs): SVG + the PNG-based .ico fallback + apple-touch.
+  // Admin trees only — /q's HTML stays byte-clean; shopper tabs get the same
+  // fox via root.tsx's /wiskr-fox.svg link and the auto /favicon.ico fetch.
   { rel: "icon", href: "/favicon.svg", type: "image/svg+xml" },
   { rel: "icon", href: "/favicon.ico", sizes: "32x32" },
   { rel: "apple-touch-icon", href: "/apple-touch-icon.png" },

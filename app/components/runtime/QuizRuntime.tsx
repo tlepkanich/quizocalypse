@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ChromeContext, CHROME_TOKENS, useChrome, type ChromeToken } from "./chromeStrings";
-import { FoxMark } from "../chrome/FoxMark";
+import { FOX_PURPLE, FoxMark } from "../chrome/FoxMark";
 import { tagToAnswerText, reasonsForProduct } from "../../lib/matchReasons";
 import type { Quiz } from "../../lib/quizSchema";
 import { resolveEngagement } from "../../lib/engagementSchema";
@@ -2174,7 +2174,7 @@ export function QuizRuntime(props: QuizRuntimeProps) {
               width: 16,
               height: 16,
               borderRadius: 4,
-              background: "#E8590C",
+              background: FOX_PURPLE,
             }}
           >
             <FoxMark size={13} variant="cream" />

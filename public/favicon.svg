@@ -1,18 +1,18 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
-  <!-- The Wiskr cat (docs/design/brand-2026/_src/shared.mjs mark "solid").
-       Ink head, knocked-out eyes/nose; flips to paper in dark tab bars. -->
-  <style>
-    .head { fill: #201C2E; }
-    .eye { fill: #FFFFFF; }
-    @media (prefers-color-scheme: dark) {
-      .head { fill: #F5F4F8; }
-      .eye { fill: #201C2E; }
-    }
-  </style>
-  <path class="head" d="M6 13V4.5L13 9z"/>
-  <path class="head" d="M26 13V4.5L19 9z"/>
-  <rect class="head" x="5" y="9" width="22" height="18" rx="9"/>
-  <circle class="eye" cx="12.4" cy="17" r="1.9"/>
-  <circle class="eye" cx="19.6" cy="17" r="1.9"/>
-  <path class="eye" d="M14.4 21.2h3.2L16 23z"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- The Wiskr fox (2026-08 rebrand; FoxMark.tsx holds the same cut).
+       Full-color purple mark — reads on light and dark tab bars alike. -->
+  <g fill="none" stroke="#2E1065" stroke-width="24" stroke-linecap="round">
+    <path d="M198 372 C148 354 92 346 34 354"/>
+    <path d="M200 420 C154 428 108 448 72 480"/>
+    <path d="M314 372 C364 354 420 346 478 354"/>
+    <path d="M312 420 C358 428 404 448 440 480"/>
+  </g>
+  <path d="M80 238 L144 34 L266 150 Z" fill="#7C3AED"/>
+  <path d="M432 238 L368 34 L246 150 Z" fill="#7C3AED"/>
+  <path d="M256 142 L110 186 L70 296 L180 402 L256 468 L332 402 L442 296 L398 186 Z" fill="#7C3AED"/>
+  <path d="M70 296 L180 402 L256 468 L208 390 Z" fill="#E9E1FB"/>
+  <path d="M442 296 L332 402 L256 468 L304 390 Z" fill="#DFD3F8"/>
+  <path d="M112 310 C130 262 198 258 234 296 C208 272 146 278 122 314 Z" fill="#2E1065" stroke="#2E1065" stroke-width="16" stroke-linejoin="round"/>
+  <path d="M400 310 C382 262 314 258 278 296 C304 272 366 278 390 314 Z" fill="#2E1065" stroke="#2E1065" stroke-width="16" stroke-linejoin="round"/>
+  <path d="M256 444 C238 428 224 410 224 397 C224 384 238 378 256 378 C274 378 288 384 288 397 C288 410 274 428 256 444 Z" fill="#2E1065"/>
 </svg>

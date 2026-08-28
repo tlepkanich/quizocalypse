@@ -12,7 +12,7 @@
 import { Link, useLocation } from "@remix-run/react";
 import type { ReactNode } from "react";
 
-import { CatMark } from "./chrome/CatMark";
+import { FoxMark } from "./chrome/FoxMark";
 
 const SIDEBAR_MOBILE_CSS = `
 @media (max-width: 1024px) { /* --qz-bp-md */
@@ -136,10 +136,9 @@ export function Sidebar({
         }}
       >
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          {/* QRTZ-G6 — cat mark in ink (admin chrome swap; runtime badge keeps
-              FoxMark). Knockout = this rail's cream-2 ground (mock contract:
-              --mark-eye is the ground the mark sits on). */}
-          <CatMark size={18} knockout="var(--qz-cream-2)" />
+          {/* BRAND-3 — the purple fox mark (full-color; replaced the Quartz
+              cat, which knocked its eyes out to this rail's ground). */}
+          <FoxMark size={18} />
           <div className="qz-label">Wiskr</div>
         </div>
         <div

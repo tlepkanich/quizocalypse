@@ -34,7 +34,7 @@ Quizzy runs on one design system with two surface modes. Everything behaves the 
 
 3. **Focused mode.** The builder / editor canvas. Color-restrained: neutral chrome, gray stage, violet only on app actions. The one real color is the merchant’s brand, and it lives inside the quiz — because the purpose of that screen is to see the quiz being customized.
 
-**There is no pictorial brand mark.** Identity comes from the type, the pastel-plus-one-accent color system, and the motion. (The earlier diamond glyph has been removed.) The interim mark is a **typographic “Q” monogram** — a rounded violet-wash tile with the initial in Quicksand (shipped: `Wordmark`/`.qz-wordmark-mono`). A final logo lockup is still open (§14.1).
+**The pictorial brand mark is the purple fox** (2026-08 rebrand; superseding this document’s earlier “no pictorial mark” stance, the interim “Q” monogram, and the Quartz cat). Shipped: `FoxMark` (full-color inline fills) inside `Wordmark`/`.qz-wordmark-mono`, beside the drawn lowercase “wiskr” logotype with the whisker-flame accent over the i. The lockup is resolved (§14.1).
 
 **Companion reference:** the Device Preview & Module Templates spec covers the full frame spec, module templates, and edge cases in depth. This document is the global source of truth and holds the essentials.
 
@@ -434,7 +434,7 @@ Deliberately NOT decided (remain open, §14): dark mode, final logo lockup, illu
 
 Each item below carries a ⟶ **Proposed** resolution grounded in the shipped system. Proposals are **pending owner sign-off** — not yet locked.
 
-**14.1 Final logo lockup / wordmark.** ⟶ **Proposed:** keep it purely typographic (consistent with "no pictorial mark"): the shipped “Q” monogram tile as the standalone/favicon mark; wordmark = "quizzy" in Quicksand 600, −0.02em, ink. Open sub-decision: does the tile persist beside the wordmark, or stand alone? Needs a designer optical-spacing pass before locking.
+**14.1 Final logo lockup / wordmark.** ⟶ **RESOLVED (2026-08 rebrand):** the purple fox mark (`FoxMark`; closed eyes, long whiskers) beside the drawn lowercase “wiskr” logotype (`Wordmark`), whisker-flame accent over the dotless i in brand purple. Standalone/favicon mark = the simplified fox cut (`public/favicon.svg` / `public/wiskr-fox.svg`).
 
 **14.2 Icon library.** ⟶ **Proposed:** lock **Lucide** (`lucide-react`, already a dependency; rounded caps/joins, single weight per §6). Inventory to export: nav (home, quizzes, analytics, products, brand, integrations, settings) · builder tools (build, products, logic, design) · actions (publish, assist/AI ✦, add, layers, background) · state (check, chevron, info, close). Freeze that subset.
 

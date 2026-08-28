@@ -3,23 +3,27 @@ import { homeBody } from "./home.mjs";
 // Same product screens in every file — the CSS is what differs, so the five
 // can be compared on identical content.
 
+// BRAND-3 (2026-08 rebrand) — the fox replaces the cat, same contract:
+// currentColor body, `.eye` features knocked out to the ground the mark sits
+// on. The shipped full-color cut lives in app/components/chrome/FoxMark.tsx
+// and public/favicon.svg; this monochrome cut keeps the mock brand-agnostic.
 export const mark = (variant = "solid") => {
   if (variant === "line")
     return `<svg class="mark" viewBox="0 0 32 32" aria-hidden="true">
-      <path d="M7.5 12.5V6l5.5 3.6" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
-      <path d="M24.5 12.5V6L19 9.6" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
-      <rect x="6.5" y="9.5" width="19" height="16.5" rx="8.25" fill="none" stroke="currentColor" stroke-width="2"/>
-      <circle cx="12.5" cy="17" r="1.4" fill="currentColor"/>
-      <circle cx="19.5" cy="17" r="1.4" fill="currentColor"/>
-      <path d="M14.6 21h2.8l-1.4 1.6z" fill="currentColor"/>
+      <path d="M5.5 14.5 L9 3.5 L15.5 9.7" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+      <path d="M26.5 14.5 L23 3.5 L16.5 9.7" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+      <path d="M16 9.2 L7.2 11.8 L4.8 18.4 L11.4 24.7 L16 28.7 L20.6 24.7 L27.2 18.4 L24.8 11.8 Z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+      <path d="M8 19.4 C9.2 16.8 12.6 16.6 14.4 18.4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+      <path d="M24 19.4 C22.8 16.8 19.4 16.6 17.6 18.4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+      <path d="M16 25.2 C15.2 24.4 14.6 23.6 14.6 23.1 C14.6 22.6 15.2 22.3 16 22.3 C16.8 22.3 17.4 22.6 17.4 23.1 C17.4 23.6 16.8 24.4 16 25.2 Z" fill="currentColor"/>
     </svg>`;
   return `<svg class="mark" viewBox="0 0 32 32" aria-hidden="true">
-      <path d="M6 13V4.5L13 9z" fill="currentColor"/>
-      <path d="M26 13V4.5L19 9z" fill="currentColor"/>
-      <rect x="5" y="9" width="22" height="18" rx="9" fill="currentColor"/>
-      <circle cx="12.4" cy="17" r="1.9" class="eye"/>
-      <circle cx="19.6" cy="17" r="1.9" class="eye"/>
-      <path d="M14.4 21.2h3.2L16 23z" class="eye"/>
+      <path d="M5 14.9 L9 2.1 L16.6 9.4 Z" fill="currentColor"/>
+      <path d="M27 14.9 L23 2.1 L15.4 9.4 Z" fill="currentColor"/>
+      <path d="M16 8.9 L6.9 11.6 L4.4 18.5 L11.3 25.1 L16 29.3 L20.8 25.1 L27.6 18.5 L24.9 11.6 Z" fill="currentColor"/>
+      <path d="M7 20 C8.2 16.2 13.2 15.9 14.8 18.6 C13.2 17.4 9.4 17.8 7 20 Z" class="eye"/>
+      <path d="M25 20 C23.8 16.2 18.8 15.9 17.2 18.6 C18.8 17.4 22.6 17.8 25 20 Z" class="eye"/>
+      <path d="M16 27.8 C14.9 26.8 14 25.6 14 24.8 C14 24 14.9 23.6 16 23.6 C17.1 23.6 18 24 18 24.8 C18 25.6 17.1 26.8 16 27.8 Z" class="eye"/>
     </svg>`;
 };
 
