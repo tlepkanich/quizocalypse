@@ -35,9 +35,6 @@ export default function StudioLayout() {
         <main className="qz-shell-main" id="main-content" tabIndex={-1}>
           <Outlet />
         </main>
-        <div className="qz-viewport-notice">
-          This workspace is designed for larger screens — please use a desktop browser.
-        </div>
       </div>
     </QzToastProvider>
   );

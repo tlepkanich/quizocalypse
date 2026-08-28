@@ -339,18 +339,6 @@ body[data-qz] :focus-visible {
   animation: qz-skeleton-pulse 1.4s var(--qz-ease) infinite;
 }
 
-/* Desktop-only admin (V2 §2.1): below 1024px show the notice, hide the app.
-   Mount <div class="qz-viewport-notice">…</div> once per shell (DS-4). */
-.qz-viewport-notice { display: none; }
-@media (max-width: 1023px) { /* below --qz-bp-md — exclusive side: notice <1024, app (rail-collapsed) at ≥1024 */
-  .qz-viewport-notice {
-    display: flex; align-items: center; justify-content: center; gap: 12px;
-    position: fixed; inset: 0; z-index: 300;
-    background: var(--qz-cream); color: var(--qz-ink);
-    padding: 40px; text-align: center; font-size: 16px;
-  }
-}
-
 /* — Typography helpers — */
 /* V2 §4.2 roles: .qz-display = H1 44/700/-0.03 · .qz-h1 = H2 28/700/-0.025 ·
    .qz-h2 = H3/card 20/700/-0.02 · .qz-h3 = small subhead 16/700 */

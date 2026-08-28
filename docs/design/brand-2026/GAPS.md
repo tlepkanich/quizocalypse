@@ -204,7 +204,9 @@ who want generation from THEIR pool.
 
 - Builder route has no viewport gate and horizontally overflows below ~760px
   — PRE-EXISTING (overflows both stacked and unstacked, so not the boundary
-  move); consider extending the `.qz-viewport-notice` gate to `studio_.$id`.
+  move). The `.qz-viewport-notice` gate was later removed entirely (2026-08-28,
+  small screens no longer blocked), so the whole admin now renders on narrow
+  viewports as-is.
 - ~~The funnel tip's "Use this" primary renders FILLED violet~~ — **BUILT
   (QRTZ-O6)**: restyled to the mock's outlined `.tip .btn-primary` (paper
   bg, accent-ink text, accent border, hover accent-wash).
