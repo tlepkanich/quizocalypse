@@ -1,51 +1,147 @@
 // ════════════════════════════════════════════════════════════════════════════
-// Logic-step handoff §2 + the artifact's Live pane (screen A) — the style
-// chooser, mock-exact. First entry to Logic, once per quiz: h1, the scan
-// line, three cards, one of them inert.
+// Onboarding step 03 · module 01 — the Logic style chooser, rebuilt to the
+// "Chooser Rebuild Handoff" (artifact c1368ca1) against the reference build
+// (artifact 1e1ceaeb). First entry to Logic, once per quiz: the step title
+// and three engine ROWS, one of them inert.
 //
 //   Rules only          → logic_style "rules"      (decider doc, no filter roles)
-//   Attributes + Rules  → logic_style "attributes" (recommended; ch-why line)
-//   Point based         → NOTHING. The card renders and is clickable; clicking
-//                         does nothing and stays on the page (§2 "inert").
+//   Attributes + Rules  → logic_style "attributes"
+//   Point based         → NOTHING is written. The row renders and is clickable;
+//                         the click fires a toast so the control never lies
+//                         (handoff open decision 2).
 //
-// Live-exact details: the worked example sits behind a "Show more" details
-// (three open at once made the cards hard to compare); each card carries a
-// "Best for" line; the recommended card cites the scan ("Your N products
-// carry N attributes that split them cleanly"). The scan line and ch-why
-// read from the §10 attribute read-out when the caller supplies it.
+// Each row is one <button> of spans: name + "Best when…" line | the mechanic
+// diagram (trigger → outcome, arrows in one subgrid column) | the commit
+// label. Nothing on the page interpolates catalog facts any more — the only
+// decision is recommendEngine(), which picks the row that renders first and
+// carries the wash, the badge and the solid button.
 // ════════════════════════════════════════════════════════════════════════════
+
+import { useState } from "react";
 
 import type { IndexedProduct } from "../../../../lib/recommendationEngine";
 import { buildAttributeReadout } from "../../../../lib/attributeClustering";
+import { useQzToast } from "../../../qz-toast";
 
 export type LogicStyle = "rules" | "attributes";
+type Engine = LogicStyle | "points";
+type Confidence = "strong" | "thin";
 
 export interface ChooserScan {
   productCount: number;
   /** Attributes graded "splits well" (§10e "good"). */
   strongCount: number;
-  /** Top three splitting attribute names, grade order. */
-  strongNames: string[];
 }
 
 /** The chooser's scan over the catalog — the §10 attribute read-out
- *  (buildAttributeReadout) behind the Live scan line and the rec card's
- *  ch-why. Pure + memoized by the caller. */
+ *  (buildAttributeReadout). Pure + memoized by the caller. */
 export function buildChooserScan(index: readonly IndexedProduct[]): ChooserScan {
   const readout = buildAttributeReadout(index);
-  return {
-    productCount: index.length,
-    strongCount: readout.strongCount,
-    strongNames: readout.strongNames,
-  };
+  return { productCount: index.length, strongCount: readout.strongCount };
 }
 
-function SynLine({ parts }: { parts: Array<[cls: string, text: string]> }) {
+/** The only decision on the page (handoff §04). `engine` decides which row
+ *  is first and which one gets the wash, the badge and the solid button;
+ *  `confidence` decides which badge. It never disables anything — both live
+ *  engines stay one click away in every state. An empty catalog needs no
+ *  branch: strongCount is 0, so it lands on rules, the only engine that
+ *  works without product data anyway. */
+export function recommendEngine({ productCount, strongCount }: ChooserScan): {
+  engine: LogicStyle;
+  confidence: Confidence;
+} {
+  if (strongCount === 0) return { engine: "rules", confidence: "strong" };
+  if (productCount < 25) return { engine: "rules", confidence: "strong" };
+  if (strongCount === 1) return { engine: "attributes", confidence: "thin" };
+  return { engine: "attributes", confidence: "strong" };
+}
+
+type TokKind = "q" | "v" | "r" | "op";
+type Tok = [kind: TokKind, text: string];
+interface Line {
+  lhs: Tok[];
+  rhs: Tok[];
+}
+
+// The three engines are fixed copy; only the order and the badge move.
+const ENGINES: Record<Engine, { name: string; when: string; mech: Line[] }> = {
+  attributes: {
+    name: "Attributes + Rules",
+    when: "Best when your catalog is already well tagged",
+    mech: [
+      { lhs: [["q", "Q1"]], rhs: [["v", "picks the starting set"]] },
+      { lhs: [["q", "Q2, Q3"]], rhs: [["v", "narrow by tags & attributes"]] },
+      { lhs: [["r", "λ rules"]], rhs: [["v", "handle the exceptions"]] },
+    ],
+  },
+  rules: {
+    name: "Rules only",
+    when: "Best when you can list every outcome yourself",
+    mech: [
+      {
+        lhs: [
+          ["q", "Q1 = A"],
+          ["op", "and"],
+          ["q", "Q2 = B"],
+        ],
+        rhs: [["v", "show these products"]],
+      },
+      { lhs: [["q", "Q1 = C"]], rhs: [["v", "show those products"]] },
+      { lhs: [["op", "nothing matches"]], rhs: [["v", "your fallback"]] },
+    ],
+  },
+  points: {
+    name: "Point based",
+    when: "Best when answers overlap across several questions",
+    mech: [
+      {
+        lhs: [["q", "Q1 = A"]],
+        rhs: [
+          ["r", "+2 Everyday"],
+          ["r", "+1 Statement"],
+        ],
+      },
+      { lhs: [["q", "Q2 = B"]], rhs: [["r", "+3 Statement"]] },
+      { lhs: [["op", "highest total"]], rhs: [["v", "wins"]] },
+    ],
+  },
+};
+
+const ENGINE_ORDER: readonly Engine[] = ["attributes", "rules", "points"];
+
+const TOK_CLASS: Record<TokKind, string> = {
+  q: "qz-tok-q",
+  v: "qz-tok-v",
+  r: "qz-tok-r",
+  op: "qz-lsc-op",
+};
+
+function Toks({ toks }: { toks: Tok[] }) {
   return (
-    <span className="qz-lsc-synline">
-      {parts.map(([cls, text], i) => (
-        <span key={i} className={cls}>
+    <>
+      {toks.map(([kind, text], i) => (
+        <span key={i} className={TOK_CLASS[kind]}>
           {text}
+        </span>
+      ))}
+    </>
+  );
+}
+
+function Mechanic({ lines }: { lines: Line[] }) {
+  return (
+    <span className="qz-lsc-mech">
+      {lines.map((line, i) => (
+        <span key={i} className="qz-lsc-ml">
+          <span className="qz-lsc-lhs">
+            <Toks toks={line.lhs} />
+          </span>
+          <span className="qz-lsc-arw" aria-hidden="true">
+            →
+          </span>
+          <span className="qz-lsc-rhs">
+            <Toks toks={line.rhs} />
+          </span>
         </span>
       ))}
     </span>
@@ -59,165 +155,73 @@ export function LogicStyleChooser({
   scan: ChooserScan;
   onPick: (style: LogicStyle) => void;
 }) {
-  const { productCount, strongCount, strongNames } = scan;
+  const toast = useQzToast();
+  const rec = recommendEngine(scan);
+  // Commit state: the click writes build_session.logic_style through the
+  // set-logic-style intent while Step3Shell renders the workspace from its
+  // local pick. Between those two the merchant could click a second engine,
+  // so the row takes the click visibly and the other rows disable.
+  const [busy, setBusy] = useState<LogicStyle | null>(null);
+
+  const order: Engine[] = [rec.engine, ...ENGINE_ORDER.filter((e) => e !== rec.engine)];
+
+  const pick = (engine: Engine) => {
+    if (engine === "points") {
+      toast("Point based isn't available yet.");
+      return;
+    }
+    if (busy) return;
+    setBusy(engine);
+    onPick(engine);
+  };
+
   return (
     <section className="qz-lsc" data-testid="logic-style-chooser">
-      <h1 className="qz-lsc-h1">How should this quiz pick results?</h1>
-      {/* Live .scanline — one fact, never capped to a measure. */}
-      <p className="qz-lsc-scanline">
-        <span className="qz-lsc-dotk" aria-hidden />
-        We scanned your catalog: <b>{productCount}</b>{" "}
-        {productCount === 1 ? "product" : "products"}
-        {strongCount > 0 ? (
-          <>
-            , <b>{strongCount}</b> attribute{strongCount === 1 ? "" : "s"} that split
-            them well{strongNames.length ? <> — {strongNames.join(", ")}</> : null}.
-          </>
-        ) : (
-          <>.</>
-        )}
-      </p>
-      <div className="qz-lsc-cards">
-        <button type="button" className="qz-lsc-card" onClick={() => onPick("rules")}>
-          <span className="qz-lsc-cardhead">
-            <span className="qz-lsc-cardtitle">Rules only</span>
-          </span>
-          <span className="qz-lsc-sub">Typically smaller catalogs</span>
-          <span className="qz-lsc-desc">
-            You decide what each combination of answers shows. Nothing is read from
-            your product data.
-          </span>
-          <details className="qz-lsc-more" onClick={(e) => e.stopPropagation()}>
-            <summary>Show more</summary>
-            <span className="qz-lsc-syn">
-              <SynLine
-                parts={[
-                  ["qz-lsc-synq", "Q1 = A"],
-                  ["qz-lsc-op", "and"],
-                  ["qz-lsc-synq", "Q2 = B"],
-                  ["qz-lsc-op", "→"],
-                  ["qz-lsc-synv", "show these products"],
-                ]}
-              />
-              <SynLine
-                parts={[
-                  ["qz-lsc-synq", "Q1 = C"],
-                  ["qz-lsc-op", "→"],
-                  ["qz-lsc-synv", "show those products"],
-                ]}
-              />
-              <span className="qz-lsc-synnote">
-                You write every outcome. Nothing is read from your catalog.
+      <h1 className="qz-h2">How should this quiz pick results?</h1>
+      <div className="qz-lsc-engs">
+        {order.map((engine) => {
+          const e = ENGINES[engine];
+          const isRec = engine === rec.engine;
+          const isBusy = busy === engine;
+          const className = [
+            "qz-lsc-eng",
+            isRec ? "is-rec" : "",
+            isBusy ? "is-busy" : "",
+          ]
+            .filter(Boolean)
+            .join(" ");
+          return (
+            <button
+              key={engine}
+              type="button"
+              className={className}
+              data-pick={engine}
+              disabled={busy !== null && !isBusy}
+              onClick={() => pick(engine)}
+            >
+              <span className="qz-lsc-head">
+                {isRec ? (
+                  <span className={`qz-lsc-badge${rec.confidence === "thin" ? " is-soft" : ""}`}>
+                    {rec.confidence === "thin" ? "Probably right" : "Recommended"}
+                  </span>
+                ) : null}
+                <span className="qz-lsc-nm">{e.name}</span>
+                <span className="qz-lsc-q">{e.when}</span>
               </span>
-            </span>
-          </details>
-          <span className="qz-lsc-best">
-            <b>Best for</b> under ~25 products, or a catalog without useful tags.
-          </span>
-          <span className="qz-lsc-go">Use rules only</span>
-        </button>
-
-        <button
-          type="button"
-          className="qz-lsc-card is-rec"
-          onClick={() => onPick("attributes")}
-        >
-          <span className="qz-lsc-cardhead">
-            <span className="qz-lsc-cardtitle">Attributes + Rules</span>
-            <span className="qz-lsc-badge">Recommended</span>
-          </span>
-          <span className="qz-lsc-sub">Typically bigger catalogs</span>
-          {strongCount > 0 ? (
-            <span className="qz-lsc-why">
-              Your {productCount} products carry {strongCount} attribute
-              {strongCount === 1 ? "" : "s"} that split them cleanly.
-            </span>
-          ) : null}
-          <span className="qz-lsc-desc">
-            One question maps to your catalog and picks the starting set. Other
-            questions narrow it using tags and attributes. Rules cover the
-            exceptions.
-          </span>
-          <details className="qz-lsc-more" onClick={(e) => e.stopPropagation()}>
-            <summary>Show more</summary>
-            <span className="qz-lsc-syn">
-              <SynLine
-                parts={[
-                  ["qz-lsc-synq", "Q1"],
-                  ["qz-lsc-op", "→"],
-                  ["qz-lsc-synv", "picks the starting set"],
-                ]}
-              />
-              <SynLine
-                parts={[
-                  ["qz-lsc-synq", "Q2, Q3"],
-                  ["qz-lsc-op", "→"],
-                  ["qz-lsc-synv", "narrow by tags & attributes"],
-                ]}
-              />
-              <SynLine
-                parts={[
-                  ["qz-lsc-synr", "λ rules"],
-                  ["qz-lsc-op", "→"],
-                  ["qz-lsc-synv", "handle the exceptions"],
-                ]}
-              />
-              <span className="qz-lsc-synnote">
-                Add products later and they are covered without touching the quiz.
+              <Mechanic lines={e.mech} />
+              <span className={`qz-lsc-go${isRec ? "" : " is-secondary"}`}>
+                {isBusy ? (
+                  <>
+                    <span className="qz-lsc-spin" aria-hidden="true" />
+                    Setting up…
+                  </>
+                ) : (
+                  `Use ${e.name.toLowerCase()}`
+                )}
               </span>
-            </span>
-          </details>
-          <span className="qz-lsc-best">
-            <b>Best for</b> ~25+ products that differ in ways you have already
-            recorded.
-          </span>
-          <span className="qz-lsc-go">Use attributes + rules</span>
-        </button>
-
-        {/* §2 — inert on purpose: renders, is clickable, does nothing. */}
-        <button
-          type="button"
-          className="qz-lsc-card is-soon"
-          aria-disabled="true"
-          title="Point based logic is coming later."
-        >
-          <span className="qz-lsc-cardhead">
-            <span className="qz-lsc-cardtitle">Point based</span>
-          </span>
-          <span className="qz-lsc-sub">Personality &amp; archetype quizzes</span>
-          <span className="qz-lsc-desc">
-            Every answer adds points to one or more results. The highest score wins,
-            so no single answer decides the outcome on its own.
-          </span>
-          <details className="qz-lsc-more" onClick={(e) => e.stopPropagation()}>
-            <summary>Show more</summary>
-            <span className="qz-lsc-syn">
-              <SynLine
-                parts={[
-                  ["qz-lsc-synq", "Q1 = A"],
-                  ["qz-lsc-op", "→"],
-                  ["qz-lsc-synr", "+2 Everyday"],
-                  ["qz-lsc-synr", "+1 Statement"],
-                ]}
-              />
-              <SynLine
-                parts={[
-                  ["qz-lsc-synq", "Q2 = B"],
-                  ["qz-lsc-op", "→"],
-                  ["qz-lsc-synr", "+3 Statement"],
-                ]}
-              />
-              <span className="qz-lsc-synnote">
-                Highest total wins, so no single answer decides the outcome.
-              </span>
-            </span>
-          </details>
-          <span className="qz-lsc-best">
-            <b>Best for</b> personality quizzes, archetypes, and &ldquo;which one
-            are you&rdquo; formats.
-          </span>
-          <span className="qz-lsc-go">Use point based</span>
-        </button>
+            </button>
+          );
+        })}
       </div>
     </section>
   );

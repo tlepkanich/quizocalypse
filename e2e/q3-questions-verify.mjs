@@ -559,10 +559,12 @@ try {
   // restore in `finally` reverts it byte-for-byte).
   const clickThroughChooser = async () => {
     if ((await page.locator('[data-testid="logic-style-chooser"]').count()) === 0) return;
-    // Click the card's "Use …" go label, NOT the card center — the center
-    // lands on the "Show more" <details>, which stopPropagation()s on
-    // purpose so expanding the example can't pick the style.
-    await page.locator(".qz-lsc-card.is-rec .qz-lsc-go").click();
+    // Click the Attributes + Rules ROW explicitly (module 01 rebuild: the
+    // whole row is the button, and recommendEngine() decides which row is
+    // recommended from the catalog scan — on a catalog without strong
+    // attributes Rules only leads, and the sections below assert the
+    // attributes workspace, so never click ".is-rec" here).
+    await page.locator('.qz-lsc-eng[data-pick="attributes"] .qz-lsc-go').click();
     await page.waitForSelector('[data-testid="logic-style-bar"]', { timeout: 8000 });
     await page.waitForTimeout(400);
   };

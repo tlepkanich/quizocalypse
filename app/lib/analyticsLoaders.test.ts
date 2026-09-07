@@ -388,7 +388,7 @@ describe("product reach paths (decider docs)", () => {
 
 describe("dismissal filtering (14-day snooze)", () => {
   it("a snoozed card leaves the list and appears under `dismissed` with its return date", async () => {
-    const until = new Date("2026-09-01T12:00:00Z");
+    const until = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
     p.insightDismissal.findMany.mockResolvedValue([
       { quizId: "qz1", cardId: "traffic-starved", snoozedUntil: until },
     ]);
@@ -408,7 +408,7 @@ describe("dismissal filtering (14-day snooze)", () => {
   });
 
   it("with every card snoozed the section reads CLEAN rather than empty-and-broken", async () => {
-    const until = new Date("2026-09-01T12:00:00Z");
+    const until = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
     const all = (await runLoader()).insights.cards.map((c) => c.id);
     p.insightDismissal.findMany.mockResolvedValue(
       all.map((cardId) => ({ quizId: "qz1", cardId, snoozedUntil: until })),

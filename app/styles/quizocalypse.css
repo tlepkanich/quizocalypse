@@ -5494,81 +5494,82 @@ body[data-qz] .qz-s3-editable:focus-visible {
 /* QRTZ-G3 — the sub-header + "How this quiz resolves" explainer strip are
    retired: the artifact's Logic screen is the two cards and nothing else. */
 
-/* ── Logic-step Live screen A (mock chooserCard/screenChooser) — the style
-   chooser, mock-exact: h1 · scanline with the ok dot · three .chc cards
-   (rec = accent wash + badge + ch-why; soon = dashed + inert) with sub,
-   body, Show-more synopsis, Best-for, and the go button. ── */
-.qz-lsc { display: flex; flex-direction: column; padding: 12px 0 0; }
-.qz-lsc-h1 { margin: 0; font-size: 32px; letter-spacing: -0.02em; line-height: 1.1; }
-.qz-lsc-scanline {
-  display: flex; align-items: center; gap: 9px; margin: 16px 0 0; flex-wrap: wrap;
-  font-size: 15.5px; color: var(--qz-ink-3);
-}
-.qz-lsc-scanline b { color: var(--qz-ink); font-weight: 600; font-variant-numeric: tabular-nums; }
-.qz-lsc-dotk { width: 7px; height: 7px; border-radius: 50%; background: var(--qz-ok); flex: none; }
-.qz-lsc-cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-top: 26px; align-items: start; }
-@media (max-width: 900px) { .qz-lsc-cards { grid-template-columns: 1fr; } }
-.qz-lsc-card {
-  appearance: none; font: inherit; text-align: left; cursor: pointer;
-  display: flex; flex-direction: column;
+/* ── Onboarding step 03 · module 01 — the style chooser (Chooser Rebuild
+   Handoff, reference build 1e1ceaeb): the step title (.qz-h2, like every
+   other funnel step) and three engine ROWS of one shape — head 216 |
+   mechanic diagram | commit 176. Arrows stack in their own subgrid column so
+   the three lines of a diagram line up. One breakpoint, on the row. ── */
+.qz-lsc { display: flex; flex-direction: column; }
+.qz-lsc-engs { display: grid; gap: 10px; margin: 18px 0 0; max-width: 860px; }
+.qz-lsc-eng {
+  appearance: none; display: grid; grid-template-columns: 216px minmax(0, 1fr) 176px;
+  gap: 20px; align-items: center; width: 100%; text-align: left; font: inherit;
+  color: var(--qz-ink); cursor: pointer;
   border: 1px solid var(--qz-rule); border-radius: var(--qz-radius-lg);
-  background: var(--qz-paper); color: var(--qz-ink); padding: 16px;
+  background: var(--qz-paper); padding: 14px 16px;
+  transition: border-color 120ms ease, box-shadow 120ms ease;
 }
-.qz-lsc-card:hover { border-color: var(--qz-rule-strong); }
-.qz-lsc-card.is-rec { border-color: var(--qz-accent-line); background: var(--qz-accent-wash); }
-.qz-lsc-card.is-rec:hover { border-color: var(--qz-accent); }
-.qz-lsc-card.is-soon { border-style: dashed; border-color: var(--qz-ls-line2); background: var(--qz-cream-2); cursor: default; }
-.qz-lsc-cardhead { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 6px; }
-.qz-lsc-cardtitle { font-size: 17px; font-weight: 700; }
+.qz-lsc-eng:hover { border-color: var(--qz-rule-strong); }
+.qz-lsc-eng:focus-visible { outline: 2px solid var(--qz-accent); outline-offset: 2px; }
+.qz-lsc-eng.is-rec { border-color: var(--qz-accent-line); background: var(--qz-accent-wash); padding: 18px 16px; }
+.qz-lsc-eng.is-rec:hover { border-color: var(--qz-accent); }
+.qz-lsc-eng.is-busy { cursor: progress; }
+.qz-lsc-eng:disabled { cursor: default; }
+.qz-lsc-eng:disabled:hover { border-color: var(--qz-rule); }
+.qz-lsc-eng.is-rec:disabled:hover { border-color: var(--qz-accent-line); }
+.qz-lsc-head { display: block; min-width: 0; }
 .qz-lsc-badge {
-  font-size: 9.5px; letter-spacing: .05em; text-transform: uppercase; font-weight: 700;
-  padding: 3px 8px; border-radius: var(--qz-radius-sm);
+  display: inline-block; font-size: 9.5px; font-weight: 700; letter-spacing: .05em;
+  text-transform: uppercase; padding: 3px 8px; border-radius: var(--qz-radius-sm);
   background: var(--qz-accent); color: var(--qz-on-accent, #fff);
 }
-.qz-lsc-sub { font-size: 12px; color: var(--qz-ink-4); font-weight: 600; margin-bottom: 8px; }
-.qz-lsc-why { font-size: 12.5px; color: var(--qz-accent-ink); font-weight: 600; margin-bottom: 6px; }
-.qz-lsc-desc { font-size: 13.5px; color: var(--qz-ink-3); line-height: 1.5; }
-.qz-lsc-more { margin-top: 12px; }
-.qz-lsc-more > summary {
-  display: inline-flex; align-items: center; gap: 6px; cursor: pointer; list-style: none;
-  font-size: 12px; font-weight: 600; color: var(--qz-accent-ink); padding: 5px 0;
+.qz-lsc-badge.is-soft { background: var(--qz-accent-wash); color: var(--qz-accent-ink); border: 1px solid var(--qz-accent-line); }
+.qz-lsc-nm { display: block; font-size: 16px; font-weight: 700; letter-spacing: -0.01em; color: var(--qz-ink); }
+.qz-lsc-eng.is-rec .qz-lsc-nm { font-size: 18px; margin-top: 7px; }
+.qz-lsc-q { display: block; font-size: 12px; color: var(--qz-ink-4); margin-top: 4px; line-height: 1.4; }
+/* the mechanic: trigger | arrow | outcome, arrows in one column */
+.qz-lsc-mech {
+  background: var(--qz-paper); border: 1px solid var(--qz-rule); border-radius: var(--qz-radius);
+  padding: 10px 12px; display: grid; grid-template-columns: auto 16px minmax(0, 1fr); gap: 6px 7px;
 }
-.qz-lsc-more > summary::-webkit-details-marker { display: none; }
-.qz-lsc-more > summary::after { content: "▾"; font-size: 10px; }
-.qz-lsc-more > summary:hover { text-decoration: underline; }
-.qz-lsc-syn {
-  padding: 11px; border-radius: var(--qz-radius); display: grid; gap: 6px;
-  background: var(--qz-cream-2); border: 1px solid var(--qz-rule);
-}
-.qz-lsc-card.is-rec .qz-lsc-syn { background: var(--qz-paper); }
-.qz-lsc-synline { display: flex; align-items: center; gap: 5px; flex-wrap: wrap; font-size: 11.5px; }
-.qz-lsc-synq {
-  padding: 2px 7px; border-radius: var(--qz-radius-sm); background: var(--qz-accent-wash);
-  color: var(--qz-accent-ink); border: 1px solid var(--qz-accent-line); white-space: nowrap; font-weight: 500;
-}
-.qz-lsc-synv {
-  padding: 2px 7px; border-radius: var(--qz-radius-sm); background: var(--qz-live-wash);
-  color: var(--qz-ok); border: 1px solid var(--qz-ls-ok-line); white-space: nowrap;
-}
-.qz-lsc-synr {
-  padding: 2px 7px; border-radius: var(--qz-radius-sm); background: var(--qz-ls-warn-wash);
-  color: var(--qz-warn); border: 1px solid var(--qz-ls-warn-line); white-space: nowrap;
-}
-.qz-lsc-synnote { font-size: 11.5px; color: var(--qz-ink-4); padding-top: 4px; border-top: 1px dashed var(--qz-ls-line2); }
-.qz-lsc-op { color: var(--qz-ink-4); font-size: 11px; }
-.qz-lsc-best { margin-top: 14px; font-size: 12.5px; color: var(--qz-ink-4); }
-.qz-lsc-best b { color: var(--qz-ink-3); font-weight: 600; }
+.qz-lsc-eng.is-rec .qz-lsc-mech { border-color: var(--qz-accent-line); }
+.qz-lsc-ml { display: grid; grid-template-columns: subgrid; grid-column: 1 / -1; align-items: center; font-size: 12px; }
+.qz-lsc-lhs, .qz-lsc-rhs { display: flex; gap: 5px; flex-wrap: wrap; align-items: center; }
+.qz-lsc-arw { color: var(--qz-ink-4); font-size: 12px; text-align: center; }
+.qz-tok-q, .qz-tok-v, .qz-tok-r { padding: 2px 8px; border-radius: var(--qz-radius-sm); white-space: nowrap; font-size: 12px; }
+.qz-tok-q { background: var(--qz-accent-wash); color: var(--qz-accent-ink); border: 1px solid var(--qz-accent-line); font-weight: 600; }
+.qz-tok-v { background: var(--qz-live-wash); color: var(--qz-ok); border: 1px solid var(--qz-ls-ok-line); }
+.qz-tok-r { background: var(--qz-ls-warn-wash); color: var(--qz-warn); border: 1px solid var(--qz-ls-warn-line); }
+.qz-lsc-op { color: var(--qz-ink-4); font-size: 11.5px; }
+/* commit controls (spans: the whole row is the button) */
 .qz-lsc-go {
-  margin-top: 14px; padding: 8px; border-radius: var(--qz-radius); text-align: center;
-  font-size: 13px; font-weight: 600;
-  border: 1px solid var(--qz-accent); background: var(--qz-paper); color: var(--qz-accent-ink);
+  display: block; width: 100%; text-align: center; font-size: 13.5px; font-weight: 600; padding: 10px;
+  border-radius: var(--qz-radius); border: 1px solid var(--qz-accent);
+  background: var(--qz-accent); color: var(--qz-on-accent, #fff);
 }
-.qz-lsc-card.is-rec .qz-lsc-go { background: var(--qz-accent); color: var(--qz-on-accent, #fff); }
-.qz-lsc-card.is-soon .qz-lsc-go { background: var(--qz-cream-2); color: var(--qz-ink-4); border-color: var(--qz-ls-line2); }
+.qz-lsc-go.is-secondary { background: var(--qz-paper); color: var(--qz-accent-ink); }
+.qz-lsc-eng:hover:not(:disabled) .qz-lsc-go { background: var(--qz-accent-2); border-color: var(--qz-accent-2); }
+.qz-lsc-eng:hover:not(:disabled) .qz-lsc-go.is-secondary { background: var(--qz-accent-wash); border-color: var(--qz-accent); color: var(--qz-accent-ink); }
+.qz-lsc-eng.is-busy .qz-lsc-go { opacity: .72; }
+.qz-lsc-spin {
+  display: inline-block; width: 11px; height: 11px; border-radius: 50%; vertical-align: -1px;
+  margin-right: 7px; border: 2px solid rgba(255, 255, 255, .45); border-top-color: #fff;
+  animation: qz-lsc-spin .7s linear infinite;
+}
+.qz-lsc-go.is-secondary .qz-lsc-spin { border-color: var(--qz-accent-line); border-top-color: var(--qz-accent); }
+@keyframes qz-lsc-spin { to { transform: rotate(360deg); } }
+/* the row stacks before the diagram would have to shrink */
+@media (max-width: 780px) {
+  .qz-lsc-eng { grid-template-columns: 1fr; gap: 12px; align-items: stretch; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .qz-lsc-spin { animation: none; }
+  .qz-lsc-eng { transition: none; }
+}
 
 /* ── Live screens B/K chrome — the workspace h1 + the collapsible
    explainer (ledebox/stagelede) + the exact .lbar style bar. ── */
-.qz-ls-h1 { margin: 8px 0 0; font-size: 32px; letter-spacing: -0.02em; line-height: 1.1; }
+.qz-ls-h1 { margin: 8px 0 0; font-size: var(--qz-t-h2); font-weight: 700; letter-spacing: -0.02em; line-height: 1.3; }
 .qz-ls-ledebox { margin-top: 2px; }
 .qz-ls-ledebox > summary {
   display: inline-flex; align-items: center; gap: 6px; cursor: pointer; list-style: none;
@@ -11399,6 +11400,9 @@ button.qz-pb-row:hover { background: var(--qz-cream-2); }
 /* Owner 2026-08-18 — the Logic step's answers table gets the same room: the
    page cap lifts so .qz-s3-logicview's 1248 wrap (its own cap) can bind. */
 .qz-page.is-funnel:has(.qz-s3-logicview) { max-width: 1296px; }
+/* The style chooser is a decision surface, not a table: it takes step 01's
+   width. Equal specificity with the rule above, so this MUST stay after it. */
+.qz-page.is-funnel:has(.qz-lsc) { max-width: 1000px; padding: 28px 24px 72px; }
 @media (prefers-reduced-motion: reduce) {
   .qz-page.is-funnel:has(.qz-qf-panel) { transition: none; }
 }
