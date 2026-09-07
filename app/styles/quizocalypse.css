@@ -11523,7 +11523,7 @@ button.qz-pb-row:hover { background: var(--qz-cream-2); }
   border: 1px solid var(--qz-rule); border-radius: var(--qz-radius-lg);
   background: var(--qz-paper); box-shadow: var(--qz-lift-3); overflow: hidden;
 }
-.qz-lm-builder { width: min(1258px, 96vw); }   /* mock .ovblock.builder */
+.qz-lm-builder { width: min(1330px, 96vw); }   /* the approved pop-up size */
 .qz-lm-addq    { width: min(720px, 94vw);  }   /* mock .ovblock.addq    */
 .qz-lm-paste   { width: min(1200px, 95vw); }   /* mock --live-max       */
 .qz-lm-h {
@@ -11545,9 +11545,6 @@ button.qz-pb-row:hover { background: var(--qz-cream-2); }
 }
 .qz-lm-f p { margin: 0; flex: 1 1 auto; min-width: 0; font-size: 13px; line-height: 1.5; }
 .qz-lm-fright { margin-left: auto; display: flex; align-items: center; gap: 8px; flex: none; }
-.qz-lm-dimf { color: var(--qz-ink-25); font-size: 12.5px; flex: 1 1 auto; }
-.qz-lm-impact { display: block; font-size: 11px; color: var(--qz-ink-4); margin-top: 3px; font-variant-numeric: tabular-nums; }
-.qz-lm-legacynote { flex-basis: 100%; margin: 6px 0 0; font-size: 10.5px; color: var(--qz-ink-4); }
 
 /* ── bands (mock .bands / .band / .bh / .bn) ────────────────────────── */
 .qz-lm-bands { display: grid; gap: 12px; min-width: 0; max-width: 100%; }
@@ -11567,16 +11564,29 @@ button.qz-pb-row:hover { background: var(--qz-cream-2); }
   color: var(--qz-ink-4); font-weight: 600;
 }
 .qz-lm-right { margin-left: auto; }
-/* THEN is one row: label left, options beside it (mock .band.inline). */
-.qz-lm-band.is-inline { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
-.qz-lm-band.is-inline > .qz-lm-bh { flex: none; margin-bottom: 0; }
-.qz-lm-band.is-inline > .qz-lm-verbrow { flex: 1; min-width: 0; }
-@media (max-width: 720px) {
-  .qz-lm-band.is-inline { display: block; }
-  .qz-lm-band.is-inline > .qz-lm-bh { margin-bottom: 11px; }
+/* ═════════════════════════════════════════════════════════════════════
+   Create-a-rule — the ONE-SCREEN build (create-rule handoff, reference
+   artifact "One-Screen Rule Builder"; every value measured from it).
+   Shell overrides are scoped to .qz-lm-builder so the add-question and
+   paste-rules modals keep their own metrics.
+   ═════════════════════════════════════════════════════════════════════ */
+.qz-lm-builder .qz-lm-h { padding: 8px 20px; }                  /* 36px bar */
+.qz-lm-builder .qz-lm-h h2 { font-size: 13.5px; line-height: 1.2; }
+.qz-lm-builder .qz-lm-close { font-size: 15px; padding: 2px 7px; }
+.qz-lm-builder .qz-lm-b { padding: 10px 20px 12px; }
+.qz-lm-builder .qz-lm-f { padding: 11px 20px; gap: 14px; justify-content: flex-end; }
+.qz-lm-sep { height: 1px; background: var(--qz-rule); margin: 9px 0; }
+.qz-lm-fcount {
+  margin-right: auto; font-size: 12.5px; color: var(--qz-ink-4);
+  font-variant-numeric: tabular-nums;
+}
+.qz-lm-fcount b { color: var(--qz-ink); font-weight: 700; }
+.qz-lm-fghost { border-color: var(--qz-rule); color: var(--qz-ink-3); }
+.qz-lm-fghost:not([disabled]):hover {
+  border-color: var(--qz-accent-line); background: var(--qz-accent-wash); color: var(--qz-accent-ink);
 }
 
-/* ── segmented match all / match any (mock .seg.joinseg) ────────────── */
+/* ── segmented control (mock .seg) — the THEN verb picker ──────────── */
 .qz-lm-seg {
   display: flex; gap: 2px; background: #F1EFF6; padding: 2px;
   border-radius: 7px; border: 1px solid var(--qz-rule); flex: none;
@@ -11584,166 +11594,217 @@ button.qz-pb-row:hover { background: var(--qz-cream-2); }
 .qz-lm-seg button {
   padding: 4px 11px; border-radius: 5px; font-size: 11.5px; font-weight: 500;
   color: var(--qz-ink-4); border: 1px solid transparent; background: none; cursor: pointer;
+  font-family: inherit;
 }
 .qz-lm-seg button[aria-pressed="true"] {
   background: #FFFFFF; color: var(--qz-ink); border-color: #DCD8E7;
   box-shadow: 0 1px 1px rgba(32, 28, 46, .07); font-weight: 600;
 }
+.qz-lm-verbline { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; min-height: 36px; }
+.qz-lm-vseg button { padding: 6px 16px; font-size: 12.5px; font-weight: 600; }
+.qz-lm-verbhint { font-size: 11.5px; color: var(--qz-ink-4); }
+.qz-lm-legacynote { flex-basis: 100%; font-size: 10.5px; color: var(--qz-ink-4); }
 
-/* ── condition columns (mock .condzone / .condrow / .qcol) ──────────── */
-.qz-lm-condzone { width: fit-content; max-width: 100%; }
-/* One row, always — past what the row holds it scrolls sideways rather
-   than shrinking columns below their floor or wrapping (Live caption H). */
-.qz-lm-condrow {
-  display: flex; align-items: stretch; gap: 9px;
-  overflow-x: auto; padding-bottom: 4px;
+/* ── question ROWS (mock .qrows / .qrow) — one per question, always ─── */
+.qz-lm-qrows { display: flex; flex-direction: column; }
+.qz-lm-qrow {
+  display: grid; grid-template-columns: 176px minmax(0, 1fr) 124px; gap: 12px;
+  align-items: start; padding: 8px 0; border-top: 1px solid var(--qz-rule-2);
 }
-.qz-lm-qcol {
-  flex: 0 1 246px; min-width: 168px;
-  border: 1px solid var(--qz-rule); border-radius: var(--qz-radius);
-  background: var(--qz-ls-cell-bg); display: flex; flex-direction: column; overflow: hidden;
+.qz-lm-qrow:first-child { border-top: 0; padding-top: 0; }
+.qz-lm-qc { display: flex; flex-direction: column; gap: 4px; align-items: flex-start; min-width: 0; }
+.qz-lm-qmeta { display: flex; align-items: center; gap: 7px; min-width: 0; }
+.qz-lm-qn { font-size: 10.5px; font-weight: 600; color: var(--qz-ink-4); font-variant-numeric: tabular-nums; flex: none; }
+.qz-lm-qbadge {
+  flex: none; font-size: 7.5px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase;
+  color: var(--qz-accent-ink); background: var(--qz-accent-wash); border: 1px solid var(--qz-accent-line);
+  border-radius: 3px; padding: 1px 4px;
 }
-.qz-lm-qcol.is-has { border-color: var(--qz-accent-line); background: var(--qz-accent-wash); }
-.qz-lm-qch {
-  display: flex; align-items: flex-start; gap: 8px; padding: 9px 10px;
-  border-bottom: 1px solid var(--qz-rule); background: var(--qz-paper);
+/* Clamped to three lines with the full text in `title` — whatever the
+   merchant writes, a row stays ≤ 86px. */
+.qz-lm-qt {
+  font-size: 12.5px; font-weight: 600; line-height: 1.34; color: var(--qz-ink-3);
+  display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical;
+  overflow: hidden; text-overflow: ellipsis;
 }
-.qz-lm-qlabel {
-  flex: 1; display: block; font-size: 13px; font-weight: 600;
-  line-height: 1.32; color: var(--qz-ink);
-}
-.qz-lm-qlabel .qz-lm-qn { color: var(--qz-ink-4); font-weight: 500; font-size: 10px; font-variant-numeric: tabular-nums; }
-.qz-lm-qdrop {
-  flex: none; border: 0; background: none; cursor: pointer; padding: 0;
-  color: var(--qz-ink-25); font-size: 13px; line-height: 1;
-}
-.qz-lm-qdrop:hover { color: var(--qz-crit); }
-/* Handoff §3 — the per-column is / is-not affordance the mock omits;
-   styled after the mock's .qcf footers, seated in the header row. */
-.qz-lm-qcf {
-  flex: none; border: 0; background: none; cursor: pointer; padding: 0 2px;
-  font-size: 9.5px; letter-spacing: .05em; text-transform: uppercase;
-  font-weight: 700; color: var(--qz-ink-4); line-height: 1.6; white-space: nowrap;
-}
-.qz-lm-qcf.is-not { color: var(--qz-crit); }
-.qz-lm-qcb { padding: 8px; display: grid; gap: 5px; flex: 1; align-content: start; }
-.qz-lm-qchip {
-  text-align: left; padding: 9px 11px; border-radius: var(--qz-radius-sm);
-  border: 1px solid var(--qz-rule); background: var(--qz-paper);
-  font-size: 12.5px; line-height: 1.32; color: var(--qz-ink-4); cursor: pointer; font-family: inherit;
-}
-.qz-lm-qchip.is-on {
-  background: var(--qz-accent); border-color: var(--qz-accent);
-  color: #FFFFFF; font-weight: 600;
-}
-.qz-lm-multibadge {
-  display: inline-block; margin-left: 5px; padding: 1px 5px; border-radius: var(--qz-radius-sm);
-  background: var(--qz-cream-2); border: 1px solid var(--qz-rule);
-  font-size: 9px; font-weight: 700; color: var(--qz-ink-4);
-  text-transform: uppercase; letter-spacing: .05em; vertical-align: middle;
-}
-/* The OR between picked chips. Static = a fact; .is-live = a control. */
-.qz-lm-orlink {
-  display: block; width: 100%; text-align: center; padding: 1px 0;
-  font-size: 9.5px; font-weight: 700; color: var(--qz-accent);
-  text-transform: uppercase; letter-spacing: .05em;
-  cursor: default; border-radius: var(--qz-radius-sm); border: 0; background: none; font-family: inherit;
-}
-.qz-lm-orlink.is-live { cursor: pointer; }
-.qz-lm-orlink.is-live:hover { background: var(--qz-accent-wash); }
-.qz-lm-orlink.is-live::after { content: " \21C4"; font-size: 9px; opacity: .55; }
-.qz-lm-orlink.is-and { color: var(--qz-ink-3); }
-
-/* ── "Fires on" answer-path readout (mock .paths) ───────────────────── */
-.qz-lm-paths {
-  display: flex; align-items: baseline; flex-wrap: wrap; gap: 8px;
-  margin-top: 11px; padding-top: 10px; border-top: 1px dashed var(--qz-ls-line2);
-}
-.qz-lm-paths-l {
-  font-size: 10px; font-weight: 700; color: var(--qz-ink-4);
-  text-transform: uppercase; letter-spacing: .05em;
-}
-.qz-lm-paths > b { font-size: 12.5px; color: var(--qz-ink); }
-.qz-lm-paths-p { display: flex; flex-wrap: wrap; gap: 5px; }
-.qz-lm-paths-p span {
-  padding: 3px 9px; border-radius: 999px;
-  background: var(--qz-cream-2); border: 1px solid var(--qz-rule);
-  font-size: 11.5px; color: var(--qz-ink-3);
-}
-.qz-lm-paths-n { font-size: 11.5px; color: var(--qz-ink-4); }
-.qz-lm-paths.is-dead > b { color: var(--qz-crit); }
-.qz-lm-paths.is-dead { border-top-color: var(--qz-ls-crit-line); }
-
-/* ── add-a-condition chips (mock .addwrap / .addcond) ───────────────── */
-.qz-lm-addwrap { margin-top: 13px; padding-top: 12px; border-top: 1px dashed var(--qz-ls-line2); }
-.qz-lm-addlab {
-  font-size: 10.5px; font-weight: 700; color: var(--qz-ink-4);
-  text-transform: uppercase; letter-spacing: .05em; margin-bottom: 7px;
-}
-.qz-lm-addrow { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
-.qz-lm-addcond {
-  display: inline-flex; align-items: baseline; gap: 6px;
-  padding: 6px 11px 6px 9px; border: 1px solid var(--qz-rule);
-  border-radius: 999px; background: var(--qz-paper);
-  font-size: 12px; color: var(--qz-ink-3); max-width: 100%; cursor: pointer; font-family: inherit;
-}
-.qz-lm-addcond:hover { border-color: var(--qz-accent-line); }
-.qz-lm-acp { color: var(--qz-accent); font-weight: 700; }
-.qz-lm-acn { color: var(--qz-ink-25); font-variant-numeric: tabular-nums; font-size: 11px; }
-
-/* ── verb cards (mock .verbrow / .vcard) ────────────────────────────── */
-.qz-lm-verbrow { display: grid; grid-template-columns: repeat(3, 1fr); gap: 9px; }
-.qz-lm-vcard {
-  text-align: center; padding: 11px 12px; border-radius: var(--qz-radius);
-  border: 1px solid var(--qz-rule); background: var(--qz-paper);
-  cursor: pointer; font-family: inherit;
-}
-.qz-lm-vcard.is-on { background: var(--qz-accent-wash); border-color: var(--qz-accent); }
-.qz-lm-vn { display: block; font-size: 13.5px; font-weight: 700; color: var(--qz-ink); }
-.qz-lm-vcard.is-on .qz-lm-vn { color: var(--qz-accent-ink); }
-.qz-lm-vd { display: block; font-size: 11.5px; color: var(--qz-ink-4); margin-top: 3px; line-height: 1.4; }
-
-/* ── target bar + tiles (mock .actbar / .tfilt / .tgrid / .tcard) ───── */
-.qz-lm-actbar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 11px; }
-.qz-lm-tfilt { display: flex; gap: 5px; flex-wrap: wrap; margin-left: auto; }
-.qz-lm-tf {
-  display: inline-flex; align-items: center; gap: 6px; padding: 5px 10px;
-  border-radius: 5px; font-size: 12px; font-weight: 500;
-  border: 1px solid var(--qz-rule); color: var(--qz-ink-4); background: var(--qz-paper);
-  cursor: pointer; font-family: inherit;
-}
-.qz-lm-tfc { font-size: 11px; color: var(--qz-ink-25); font-variant-numeric: tabular-nums; }
-.qz-lm-tf.is-on { background: var(--qz-ink); color: #FFFFFF; border-color: var(--qz-ink); }
-.qz-lm-tf.is-on .qz-lm-tfc { color: #FFFFFF; opacity: .7; }
-.qz-lm-actsearch {
-  flex: 1; min-width: 190px; padding: 9px 12px; border: 1px solid var(--qz-rule);
-  border-radius: 6px; background: var(--qz-paper); font: inherit; font-size: 13px; color: var(--qz-ink);
-}
-.qz-lm-actsearch::placeholder { color: var(--qz-ink-4); }
-.qz-lm-actsearch:focus-visible { outline: 2px solid var(--qz-accent); outline-offset: 1px; }
-.qz-lm-tgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(152px, 1fr)); gap: 8px; }
-.qz-lm-tcard {
-  display: flex; align-items: center; gap: 9px; padding: 11px 13px;
-  border-radius: var(--qz-radius); border: 1px solid var(--qz-rule);
-  background: var(--qz-paper); font-size: 13.5px; color: var(--qz-ink);
+.qz-lm-qrow.is-on .qz-lm-qt { color: var(--qz-ink); }
+/* Fixed 130×62 answer buckets on ONE row; past ~7 answers the strip
+   scrolls sideways rather than growing the modal. */
+.qz-lm-tiles { display: flex; flex-wrap: nowrap; gap: 6px; overflow-x: auto; padding-bottom: 2px; min-width: 0; }
+.qz-lm-tile {
+  flex: 0 0 130px; height: 62px;
+  border: 1px solid var(--qz-rule); border-radius: 6px; background: var(--qz-paper);
+  padding: 8px 10px; display: flex; align-items: center; overflow: hidden;
   cursor: pointer; text-align: left; font-family: inherit;
+  transition: background .12s ease, border-color .12s ease;
+}
+.qz-lm-tx {
+  font-size: 11px; line-height: 1.28; color: var(--qz-ink-3); font-weight: 500;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+  overflow: hidden; text-overflow: ellipsis;
+}
+.qz-lm-tile:hover { border-color: var(--qz-accent-line); background: var(--qz-accent-wash); }
+.qz-lm-tile.is-on { background: var(--qz-accent); border-color: var(--qz-accent); }
+.qz-lm-tile.is-on .qz-lm-tx { color: #FFFFFF; font-weight: 600; }
+/* The operator cluster — a constant 124px column, contents flush right, so
+   "any of" appears into space the row already had and nothing reflows. */
+.qz-lm-ops { display: inline-flex; align-items: center; justify-content: flex-end; gap: 5px; flex: none; }
+.qz-lm-qcf {
+  flex: none; font-size: 11.5px; font-weight: 600; color: var(--qz-ink-3);
+  border: 1px solid var(--qz-rule); border-radius: 5px; padding: 5px 9px;
+  background: var(--qz-paper); cursor: pointer; font-family: inherit; white-space: nowrap;
+}
+.qz-lm-qcf:hover { border-color: var(--qz-accent-line); background: var(--qz-accent-wash); color: var(--qz-accent-ink); }
+.qz-lm-qcf.is-not { color: var(--qz-crit); border-color: color-mix(in srgb, var(--qz-crit) 30%, transparent); }
+.qz-lm-qcf.is-join { color: var(--qz-ink-4); }
+.qz-lm-qcf.is-join.is-fixed { cursor: default; background: var(--qz-cream-2); border-style: dashed; }
+.qz-lm-qcf.is-join.is-fixed:hover { border-color: var(--qz-rule); background: var(--qz-cream-2); color: var(--qz-ink-4); }
+
+/* ── the products band (mock .showband / .showhead / .tgrid / .tcard) ── */
+.qz-lm-showband {
+  background: var(--qz-cream-2); border: 1px solid var(--qz-rule);
+  border-radius: var(--qz-radius-lg); padding: 10px 12px 11px;
+}
+.qz-lm-showhead { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 9px; }
+.qz-lm-st { font-size: 12.5px; font-weight: 700; color: var(--qz-ink); letter-spacing: -.01em; }
+.qz-lm-tfilt { display: flex; gap: 5px; flex-wrap: wrap; }
+.qz-lm-tf {
+  display: inline-flex; gap: 6px; align-items: center; padding: 6px 10px;
+  border-radius: 6px; border: 1px solid var(--qz-rule); font-size: 12px; font-weight: 500;
+  color: var(--qz-ink-3); background: var(--qz-paper); cursor: pointer; font-family: inherit;
+}
+.qz-lm-tf:hover { border-color: var(--qz-accent-line); color: var(--qz-accent-ink); }
+.qz-lm-tfc { font-size: 11px; color: var(--qz-ink-4); font-variant-numeric: tabular-nums; }
+.qz-lm-tf.is-on { background: var(--qz-ink); border-color: var(--qz-ink); color: #FFFFFF; }
+.qz-lm-tf.is-on .qz-lm-tfc { color: #FFFFFF; opacity: .72; }
+/* 226px fixed; the border is rule-strong (3.14:1) — WCAG 1.4.11 applies
+   to anything you can type into. */
+.qz-lm-tsearch {
+  flex: 0 0 226px; min-width: 0; padding: 7px 11px; border: 1px solid var(--qz-rule-strong);
+  border-radius: 6px; background: var(--qz-paper); font: inherit; font-size: 12.5px; color: var(--qz-ink);
+}
+.qz-lm-tsearch::placeholder { color: var(--qz-ink-4); }
+.qz-lm-tsearch:focus-visible { outline: 2px solid var(--qz-accent); outline-offset: 1px; }
+.qz-lm-tgroup {
+  font-size: 9.5px; font-weight: 700; letter-spacing: .07em; text-transform: uppercase;
+  color: var(--qz-ink-4); margin: 2px 0 7px;
+}
+.qz-lm-tgrid + .qz-lm-tgroup { margin-top: 11px; }
+.qz-lm-tgroup.is-needs { color: var(--qz-warn); }
+.qz-lm-tempty { font-size: 12px; color: var(--qz-ink-4); padding: 6px 2px 2px; }
+.qz-lm-more { font-size: 12px; color: var(--qz-ink-4); padding: 4px 2px; }
+.qz-lm-tgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 6px; }
+.qz-lm-showband[data-flow="onboarding"] > .qz-lm-tgrid { grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); }
+/* The card: selection is the STRETCHED button underneath; the count and
+   the tag sit above it so the peek never toggles the target. */
+.qz-lm-tcard {
+  position: relative; display: flex; align-items: center; gap: 9px; padding: 6px 9px;
+  border-radius: 6px; border: 1px solid var(--qz-rule); background: var(--qz-paper); min-width: 0;
+}
+.qz-lm-tcard:hover { border-color: var(--qz-accent-line); }
+.qz-lm-tsel {
+  position: absolute; inset: 0; border: 0; background: none; padding: 0; margin: 0;
+  border-radius: inherit; cursor: pointer;
+}
+.qz-lm-tsel:focus-visible { outline: 2px solid var(--qz-accent); outline-offset: 1px; }
+.qz-lm-tcard .qz-lm-pthumb {
+  flex: none; width: 24px; height: 24px; border-radius: 5px; border: 1px solid var(--qz-rule);
+  background: linear-gradient(135deg, var(--qz-accent-wash) 0%, #FFFFFF 100%);
+  position: relative; overflow: hidden; pointer-events: none;
+}
+.qz-lm-pthumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.qz-lm-tmeta { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; pointer-events: none; }
+.qz-lm-tn {
+  font-size: 12.5px; font-weight: 600; color: var(--qz-ink);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.qz-lm-tsub { font-size: 10.5px; color: var(--qz-ink-4); font-variant-numeric: tabular-nums; display: flex; align-items: baseline; }
+.qz-lm-tsub .qz-popover-anchor { pointer-events: auto; position: relative; z-index: 1; }
+/* The count is its own control: it opens the product list, it never selects. */
+.qz-lm-tcount {
+  border: 0; background: none; padding: 0; font: inherit; font-size: 10.5px; color: var(--qz-ink-4);
+  font-variant-numeric: tabular-nums; cursor: pointer;
+  text-decoration: underline; text-decoration-style: dotted; text-underline-offset: 2px;
+}
+.qz-lm-tcount:hover { color: var(--qz-accent-ink); text-decoration-style: solid; }
+.qz-lm-tcount:focus-visible { outline: 2px solid var(--qz-accent); outline-offset: 1px; border-radius: 3px; }
+.qz-lm-thas { white-space: nowrap; margin-left: 4px; }
+.qz-lm-kd {
+  flex: none; font-size: 9.5px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase;
+  color: var(--qz-ink-4); background: var(--qz-cream-2); border-radius: 4px; padding: 2px 5px;
+  pointer-events: none;
 }
 .qz-lm-tcard.is-on { background: var(--qz-accent-wash); border-color: var(--qz-accent); }
-.qz-lm-tn2 { flex: 1; min-width: 0; }
-.qz-lm-pthumb {
-  flex: none; width: 30px; height: 30px; border-radius: var(--qz-radius-sm);
-  background: linear-gradient(135deg, var(--qz-accent-wash) 0%, var(--qz-cream-2) 100%);
-  border: 1px solid var(--qz-rule); position: relative; overflow: hidden;
-}
-.qz-lm-pthumb::after {
-  content: ""; position: absolute; inset: 0; margin: auto;
-  width: 13px; height: 13px; border-radius: 50%;
-  border: 2px solid var(--qz-rule-strong); opacity: .5;
-}
-.qz-lm-pthumb.has-img::after { content: none; }
-.qz-lm-pthumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.qz-lm-tcard.is-on .qz-lm-tn { color: var(--qz-accent-ink); }
+.qz-lm-tcard.is-on .qz-lm-kd { color: var(--qz-accent-ink); background: #FFFFFF; }
 .qz-lm-tcard.is-on .qz-lm-pthumb { border-color: var(--qz-accent-line); }
-.qz-lm-more { font-size: 12px; color: var(--qz-ink-4); padding: 4px 2px; }
+/* Onboarding coverage — three signals in every state (position, colour,
+   words). Selected wins over both; needs/done apply only when not picked. */
+.qz-lm-tcard.is-needs {
+  border-color: color-mix(in srgb, var(--qz-warn) 45%, var(--qz-rule));
+  background: color-mix(in srgb, var(--qz-warn) 7%, #FFFFFF);
+}
+.qz-lm-tcard.is-needs .qz-lm-pthumb { border-color: color-mix(in srgb, var(--qz-warn) 40%, var(--qz-rule)); }
+.qz-lm-tcard.is-done {
+  border-color: color-mix(in srgb, var(--qz-ok) 26%, var(--qz-rule));
+  background: color-mix(in srgb, var(--qz-ok) 5%, #FFFFFF);
+}
+.qz-lm-tcard.is-done .qz-lm-pthumb { border-color: color-mix(in srgb, var(--qz-ok) 24%, var(--qz-rule)); }
+.qz-lm-tstat {
+  flex: none; font-size: 10px; font-weight: 700; letter-spacing: .02em; border-radius: 5px;
+  padding: 3px 7px; white-space: nowrap; pointer-events: none;
+}
+.qz-lm-tstat.is-needs {
+  color: var(--qz-warn); background: color-mix(in srgb, var(--qz-warn) 13%, #FFFFFF);
+  border: 1px solid color-mix(in srgb, var(--qz-warn) 30%, transparent);
+}
+.qz-lm-tstat.is-done {
+  color: var(--qz-ok); background: var(--qz-live-wash);
+  border: 1px solid color-mix(in srgb, var(--qz-ok) 26%, transparent);
+}
+/* The onboarding headline: a plain fraction, amber while there is a gap. */
+.qz-lm-cover { display: flex; align-items: baseline; gap: 5px; font-size: 11.5px; color: var(--qz-ink-4); }
+.qz-lm-frac {
+  font-size: 12.5px; font-weight: 700; font-variant-numeric: tabular-nums;
+  color: var(--qz-warn); background: color-mix(in srgb, var(--qz-warn) 12%, #FFFFFF);
+  border: 1px solid color-mix(in srgb, var(--qz-warn) 28%, transparent);
+  border-radius: 5px; padding: 1px 7px;
+}
+.qz-lm-frac.is-done {
+  color: var(--qz-ok); background: var(--qz-live-wash);
+  border-color: color-mix(in srgb, var(--qz-ok) 26%, transparent);
+}
+.qz-lm-expand {
+  margin-left: auto; font-size: 11.5px; font-weight: 600; color: var(--qz-ink-3);
+  border: 1px dashed var(--qz-rule-strong); border-radius: 6px; padding: 5px 10px;
+  background: var(--qz-paper); cursor: pointer; font-family: inherit;
+}
+.qz-lm-expand:hover { border-color: var(--qz-accent); color: var(--qz-accent-ink); background: var(--qz-accent-wash); }
+/* "+ Add something else" reveals the catalogue UNDER the groups. */
+.qz-lm-catbar { margin-top: 11px; padding-top: 10px; border-top: 1px dashed var(--qz-rule); }
+.qz-lm-catlabel { font-size: 11.5px; color: var(--qz-ink-4); font-weight: 700; letter-spacing: .01em; }
+/* One row at rest: the rest of the list is one click away. */
+.qz-lm-tmore {
+  display: flex; align-items: center; justify-content: center; text-align: center; padding: 6px 9px;
+  border-radius: 6px; border: 1px dashed var(--qz-rule-strong); background: var(--qz-paper);
+  font-size: 11.5px; font-weight: 600; color: var(--qz-ink-3); line-height: 1.25;
+  cursor: pointer; font-family: inherit;
+}
+.qz-lm-tmore:hover { border-color: var(--qz-accent); color: var(--qz-accent-ink); background: var(--qz-accent-wash); }
+/* The peek — "Inside firming": six rows and a "+ N more" tail, in a
+   QzPopover opened upward. */
+.qz-lm-peek { padding: 0; font-size: 12px; }
+.qz-lm-peek-h {
+  font-size: 10px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase;
+  color: var(--qz-ink-4); margin-bottom: 7px;
+}
+.qz-lm-peek-row { display: flex; align-items: center; gap: 8px; padding: 3px 0; font-size: 12px; color: var(--qz-ink-3); }
+.qz-lm-peek-row img { border-radius: 4px; object-fit: cover; flex: none; }
+.qz-lm-peek-sw {
+  flex: none; width: 22px; height: 22px; border-radius: 4px; border: 1px solid var(--qz-rule);
+  background: linear-gradient(135deg, var(--qz-accent-wash) 0%, var(--qz-cream-2) 100%);
+}
+.qz-lm-peek-more { font-size: 11px; color: var(--qz-ink-4); padding-top: 5px; }
 
 /* ── paste-rules panel (mock .pastegrid / .pta / .pres …) ───────────── */
 .qz-lm-pastegrid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 22px; }

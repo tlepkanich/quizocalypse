@@ -23,7 +23,7 @@ import { buildAttributeReadout } from "../../../lib/attributeClustering";
 import type { AttributeReadout } from "../../../lib/attributeClustering";
 import { ProductCountButton, QuestionRoleControl, RouteMenuButton } from "./LogicTabMenus";
 import { useQzToast } from "../../qz-toast";
-import { CreateRuleModal } from "./CreateRuleModal";
+import { CreateRuleModal, type CreateRuleFlow } from "./CreateRuleModal";
 import { PasteRulesModal } from "./PasteRulesModal";
 import { AddQuestionModal } from "./AddQuestionModal";
 import { QuestionWindow } from "./QuestionWindow";
@@ -123,6 +123,7 @@ export function LogicTabCard({
   lastSyncAt,
   shopifyAdminDomain,
   logicStyle,
+  ruleFlow,
 }: {
   doc: QuizDoc;
   questions: OrderedQuestion[];
@@ -141,6 +142,10 @@ export function LogicTabCard({
   /** Live B/K — which workspace variant: "rules" leads with the ledger and
    *  retires the role column; null/undefined behaves as "attributes". */
   logicStyle?: "rules" | "attributes" | null;
+  /** Create-rule handoff — which products band the rule modal renders.
+   *  The funnel passes "onboarding"; the standalone Logic tab passes
+   *  nothing (builder). Changes the band only. */
+  ruleFlow?: CreateRuleFlow;
 }) {
   const toast = useQzToast();
   const rulesOnly = logicStyle === "rules";
@@ -657,6 +662,7 @@ export function LogicTabCard({
           editRule={
             editRuleId ? rules.find((r) => r.id === editRuleId) ?? null : null
           }
+          flow={ruleFlow}
           onClose={() => {
             setCreateOpen(false);
             setEditRuleId(null);

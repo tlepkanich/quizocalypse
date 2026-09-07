@@ -1,48 +1,65 @@
-import { Fragment, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import type { Quiz } from "../../../lib/quizSchema";
 import type { BuilderCategory, BuilderCollection } from "../../builder/stepProps";
 import type { IndexedProduct } from "../../../lib/recommendationEngine";
 import type { OrderedQuestion } from "../../../lib/questionOrder";
 import { createDecisionRule, updateDecisionRule } from "../../../lib/quizMutations";
-import { useFocusTrap } from "../../qz-overlays";
+import { QzPopover, useFocusTrap } from "../../qz-overlays";
 import { useQzToast } from "../../qz-toast";
+import {
+  productsWord,
+  quizUsedRefs,
+  ruleCoverage,
+  rulesWord,
+  splitRecommendationGroups,
+} from "./createRuleBand";
 
 // ════════════════════════════════════════════════════════════════════════════
-// Logic tab (HANDOFF §4) + logic-step handoff §3/§4/§12 — the rule builder,
-// rendered to the Live · Made By Mary artifact's three bands:
-//   1 WHEN THEY ANSWER — question COLUMNS (answer chips, or/and links,
-//     is / is-not), the match all ⇄ match any toggle, the "Fires on" path
-//     readout, and + Qn chips for questions not yet opened as columns.
-//   2 THEN — Show / Pin / Hide verb cards.
-//   3 WHAT THE QUIZ SHOWS — kind-count chips + search + target tiles.
+// Create-a-rule modal — the ONE-SCREEN rebuild (create-rule handoff,
+// docs/design/logic-tab/CREATE-RULE-HANDOFF.md; reference artifact
+// "One-Screen Rule Builder"). The modal opened at ~1,050px of content and the
+// products band was below the fold; this build puts every question on one
+// ROW (fixed 130×62 answer buckets, two-line clamp), a constant 124px
+// operator column, a one-row THEN, and a one-row products band.
 //
-// Logic-step rework (supersedes DECISIONS G2a/G3/G4 where they conflict):
-// - Verbs per §4: Show → action "show" · Pin → "prioritize" · Hide → "hide".
-//   The legacy REPLACE rule (action absent) is parsed forever but never
-//   written by new UI; editing one keeps it absent unless the verb changes.
-// - §3 operators, one control per scope: picking several answers of ONE
-//   question is "any of" by default (or between the chips; all of is a
-//   per-question toggle, meaningful on multi-select); an is / is not toggle
-//   per question column; ONE and ⇄ or join across questions per rule.
-// - §12 — Edit opens this same modal pre-filled against the existing rule
-//   id (same storage, no second code path). Duplicate lives on the ledger.
-// - The tray is multi-target (G1, `target_ids`); raw tag/collection/product
-//   picks are materialized as Category rows via /api/categories/ensure-targets
-//   at Create time (a rule target must be a Category id — publish blocks on
-//   missing rows).
-// - Esc closes; clicking the scrim must NOT discard the draft (§4.5) — which
-//   is why this is a bespoke shell on useFocusTrap, not QzModal.
+// Two flows, one component — `flow` changes the PRODUCTS BAND and nothing
+// else:
+//   onboarding · the quiz's recommendation groups ARE the band ("Your
+//                recommendations", a `2/3 have a rule` fraction, uncovered
+//                first and amber, covered green); the catalogue (kind tabs +
+//                search) is behind "+ Add something else".
+//   builder    · today's mixed band ("What the quiz shows"): kind tabs +
+//                search from the start, one row at rest on All, plain rule
+//                counts where rules exist and NOTHING where they don't.
+//
+// Operators (logic-step §3, unchanged fields): `is / is not` per question
+// (per-condition `op`), `any of / all of` per question once two answers are
+// picked (`any_of`; a control on multi-select only — "all of" on a single-
+// select can never fire, so there it is stated, not offered). The cross-
+// question `match any` segment is CUT from the UI: new rules never write
+// `match`; an edited rule keeps whatever it had (the key is not patched).
+//
+// Verbs per §4: Show → "show" · Pin → "prioritize" · Hide → "hide". A legacy
+// REPLACE rule (action absent) is parsed forever; editing one keeps it
+// absent unless the verb changes.
+//
+// Esc closes; clicking the scrim must NOT discard the draft (§4.5) — which
+// is why this is a bespoke shell on useFocusTrap, not QzModal (review L2-4).
 // ════════════════════════════════════════════════════════════════════════════
 
 type QuizDoc = Quiz;
 type DecisionRuleT = NonNullable<Quiz["decision_rules"]>[number];
 
 type Verb = "show" | "pin" | "hide";
+type Kind = "set" | "tag" | "collection" | "product" | "metafield";
+type KindFilter = "all" | Kind;
+
+export type CreateRuleFlow = "onboarding" | "builder";
 
 interface SelectedResource {
   key: string;
-  kind: "set" | "tag" | "collection" | "product" | "metafield";
+  kind: Kind;
   ref: string;
   name: string;
   count: number;
@@ -66,15 +83,137 @@ const ACTION_TO_VERB: Record<"show" | "prioritize" | "hide", Verb> = {
   hide: "hide",
 };
 
-// Live artifact band-3 chip order: Products · Sets · Collections · Tags ·
-// Metafields, each with a live count.
-const KIND_CHIPS: Array<{ kind: SelectedResource["kind"]; label: string }> = [
+// Band kind tabs, handoff order: All · Recommendations · Products ·
+// Collections · Tags · Metafields. "Recommendations" are the Category rows —
+// the groups the merchant confirmed on the Recommendations step.
+const KIND_CHIPS: Array<{ kind: Kind; label: string }> = [
+  { kind: "set", label: "Recommendations" },
   { kind: "product", label: "Products" },
-  { kind: "set", label: "Sets" },
   { kind: "collection", label: "Collections" },
   { kind: "tag", label: "Tags" },
   { kind: "metafield", label: "Metafields" },
 ];
+const KIND_TAG: Record<Kind, string> = {
+  set: "Group",
+  product: "Product",
+  collection: "Collection",
+  tag: "Tag",
+  metafield: "Metafield",
+};
+
+// One row at rest — five cards plus the dashed "+ N" tile.
+const ROW_CAP = 5;
+// A long recommendation list wraps anyway, so it splits into labelled halves.
+const SPLIT_AT = 6;
+// Catalogue safety cap (the 12-per-kind search grouping is separate).
+const LIST_CAP = 40;
+// The peek lists six products and a "+ N more" tail.
+const PEEK_ROWS = 6;
+
+const FIXED_JOIN_TITLE =
+  "A shopper answers this question once, so two answers here can only mean either of them";
+
+/* ── the target card ─────────────────────────────────────────────────────
+   Selection is the STRETCHED button (absolute, covering the card) so the
+   count can be its own sibling button: opening the group's contents must
+   never toggle the target, and a click inside the peek must never select
+   or close it (handoff §4). The peek opens UPWARD through QzPopover — this
+   band sits at the bottom of the modal and .qz-lm clips overflow. Module-
+   level so its identity is stable across renders (position holding). */
+function TargetCard({
+  r,
+  on,
+  ruleCount,
+  status,
+  img,
+  products,
+  onToggle,
+}: {
+  r: SelectedResource;
+  on: boolean;
+  ruleCount: number;
+  /** onboarding recommendation cards carry a status chip in the kind-tag
+   *  slot; every other card carries its kind tag. */
+  status: "needs" | "done" | null;
+  img: string | null;
+  products: IndexedProduct[];
+  onToggle: () => void;
+}) {
+  const showRuleCount = status === null && r.kind === "set" && ruleCount > 0;
+  const titleParts = [`${r.name} · ${productsWord(r.count)}`];
+  if (r.kind === "set") {
+    if (ruleCount) titleParts.push(`used by ${rulesWord(ruleCount)}`);
+    else if (status === "needs") titleParts.push("no rule points at it yet");
+  }
+  const state = on ? " is-on" : status === "needs" ? " is-needs" : status === "done" ? " is-done" : "";
+  const cardRef = useRef<HTMLDivElement>(null);
+  return (
+    <div ref={cardRef} className={`qz-lm-tcard${state}`}>
+      <button
+        type="button"
+        className="qz-lm-tsel"
+        aria-pressed={on}
+        aria-label={r.name}
+        title={titleParts.join(" · ")}
+        onClick={onToggle}
+      />
+      <span className={`qz-lm-pthumb${img ? " has-img" : ""}`} aria-hidden>
+        {img ? <img src={img} alt="" loading="lazy" /> : null}
+      </span>
+      <span className="qz-lm-tmeta">
+        <span className="qz-lm-tn" title={r.name}>
+          {r.name}
+        </span>
+        <span className="qz-lm-tsub">
+          <QzPopover
+            placement="top"
+            maxWidth={260}
+            anchorRef={cardRef}
+            trigger={
+              <button
+                type="button"
+                className="qz-lm-tcount"
+                title="See what is in this group"
+                aria-label={`${productsWord(r.count)} in ${r.name}`}
+              >
+                {productsWord(r.count)}
+              </button>
+            }
+            content={
+              <div className="qz-lm-peek">
+                <div className="qz-lm-peek-h">Inside {r.name}</div>
+                {products.slice(0, PEEK_ROWS).map((p) => (
+                  <div key={p.product_id} className="qz-lm-peek-row">
+                    {p.image_url ? (
+                      <img src={p.image_url} alt="" width={22} height={22} loading="lazy" />
+                    ) : (
+                      <span className="qz-lm-peek-sw" aria-hidden />
+                    )}
+                    <span>{p.title}</span>
+                  </div>
+                ))}
+                {products.length === 0 ? (
+                  <div className="qz-lm-peek-more">No products in this group yet</div>
+                ) : null}
+                {products.length > PEEK_ROWS ? (
+                  <div className="qz-lm-peek-more">+{products.length - PEEK_ROWS} more</div>
+                ) : null}
+              </div>
+            }
+          />
+          {showRuleCount ? <span className="qz-lm-thas">· {rulesWord(ruleCount)}</span> : null}
+        </span>
+      </span>
+      {status ? (
+        <span className={`qz-lm-tstat is-${status}`}>
+          {status === "done" ? `✓ ${rulesWord(ruleCount)}` : "Needs a rule"}
+        </span>
+      ) : (
+        <span className="qz-lm-kd">{KIND_TAG[r.kind]}</span>
+      )}
+    </div>
+  );
+}
 
 export function CreateRuleModal({
   doc,
@@ -85,6 +224,7 @@ export function CreateRuleModal({
   quizId,
   open,
   editRule,
+  flow = "builder",
   onClose,
   commit,
   onCategoriesCreated,
@@ -100,6 +240,9 @@ export function CreateRuleModal({
   /** Logic-step §12 — non-null puts the modal in EDIT mode, pre-filled from
    *  this rule; saving patches it in place (updateDecisionRule). */
   editRule?: DecisionRuleT | null;
+  /** Which products band to render — the ONLY thing the flow changes. The
+   *  funnel passes "onboarding"; the Logic tab passes nothing. */
+  flow?: CreateRuleFlow;
   onClose: () => void;
   commit: (doc: QuizDoc) => void;
   onCategoriesCreated: (cats: BuilderCategory[]) => void;
@@ -109,85 +252,82 @@ export function CreateRuleModal({
 }) {
   const toast = useQzToast();
   const boxRef = useRef<HTMLDivElement>(null);
+  const bodyRef = useRef<HTMLDivElement>(null);
   useFocusTrap(boxRef, open);
 
   // §4.5 — Esc closes from anywhere. A scrim onKeyDown dies once focus lands
   // on a non-focusable region (keydown targets <body>, an ancestor of the
   // scrim, so it never bubbles here) — document-level listener instead
-  // (review L2-4).
+  // (review L2-4). An open peek popover takes Esc first (it registers its
+  // own listener after this one and closes itself).
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
+      if (e.key !== "Escape") return;
+      if (document.querySelector(".qz-popover")) return;
+      onClose();
     };
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
   }, [open, onClose]);
 
   const [picks, setPicks] = useState<Record<string, string[]>>({});
-  const [verb, setVerb] = useState<Verb>("hide"); // §4.2 blank-draft default
+  const [verb, setVerb] = useState<Verb>("show");
   const [sel, setSel] = useState<SelectedResource[]>([]);
   const [query, setQuery] = useState("");
-  const [kindChip, setKindChip] = useState<
-    "all" | "set" | "tag" | "collection" | "metafield" | "product"
-  >("all");
+  const [kindChip, setKindChip] = useState<KindFilter>("all");
   const [busy, setBusy] = useState(false);
-  // Logic-step §3 — the per-scope operator state, one control each:
-  //   notCols[qid]  — the column's is / is not toggle (is_not = none of).
-  //   allCols[qid]  — the column's all-of toggle (default any-of; only
-  //                   meaningful on multi-select, forced any on single).
-  //   matchMode     — THE one cross-question join (and ⇄ or).
-  const [notCols, setNotCols] = useState<Record<string, boolean>>({});
-  const [allCols, setAllCols] = useState<Record<string, boolean>>({});
-  const [matchMode, setMatchMode] = useState<"all" | "any">("all");
-  // Live caption D — questions that already act on products (decides/filter)
-  // open as COLUMNS; info-only ones wait below as + chips. Whatever the
-  // merchant adds or drops holds for the session (until the next open).
-  const [activeCols, setActiveCols] = useState<string[]>([]);
+  // Onboarding: "+ Add something else" reveals the catalogue UNDER the groups.
+  const [catalogueOpen, setCatalogueOpen] = useState(false);
+  // The one-row cap's "+ N" tile — opened stays open for that rule.
+  const [moreOpen, setMoreOpen] = useState(false);
+  // Logic-step §3 — the per-question operator state, one control each:
+  //   notQs[qid] — is / is not (is_not = none of these).
+  //   allQs[qid] — all-of (default any-of; a control on multi-select only,
+  //                forced any on single-select at derivation time).
+  const [notQs, setNotQs] = useState<Record<string, boolean>>({});
+  const [allQs, setAllQs] = useState<Record<string, boolean>>({});
   // §12 — editing a LEGACY replace rule (action absent) keeps it absent
   // unless the merchant actively changes the verb.
   const [legacyReplace, setLegacyReplace] = useState(false);
-  // Audit fix (mixed-op flattening) — the column op toggle is per QUESTION,
-  // but the schema allows per-CONDITION ops on one question ("Q1 is A and
-  // Q1 is_not B", built by the older inline editor). Re-deriving such a
-  // column from the toggle would silently rewrite every condition to one op.
-  // So: an edited column the merchant never touched keeps its ORIGINAL
-  // conditions verbatim; only touched columns re-derive.
+  // Audit fix (mixed-op flattening) — the op toggle is per QUESTION, but the
+  // schema allows per-CONDITION ops on one question ("Q1 is A and Q1 is_not
+  // B", built by the older inline editor). Re-deriving such a row from the
+  // toggle would silently rewrite every condition to one op. So: an edited
+  // row the merchant never touched keeps its ORIGINAL conditions verbatim;
+  // only touched rows re-derive. (Kept through the rows rebuild — this is
+  // about edit fidelity, not column lifecycle.)
   const seededGroups = useRef<Record<string, DecisionRuleT["conditions"]>>({});
-  const [dirtyCols, setDirtyCols] = useState<Set<string>>(new Set());
-  const touchCol = (qid: string) =>
-    setDirtyCols((prev) => {
+  const [dirtyQs, setDirtyQs] = useState<Set<string>>(new Set());
+  const touchQ = (qid: string) =>
+    setDirtyQs((prev) => {
       if (prev.has(qid)) return prev;
       const next = new Set(prev);
       next.add(qid);
       return next;
     });
 
+  const resetDraft = () => {
+    setPicks({});
+    setVerb("show");
+    setSel([]);
+    setQuery("");
+    setKindChip("all");
+    setNotQs({});
+    setAllQs({});
+    setLegacyReplace(false);
+    setCatalogueOpen(false);
+    setMoreOpen(false);
+    seededGroups.current = {};
+    setDirtyQs(new Set());
+  };
+
   // §12 — seed the draft from the rule under edit each time the modal opens.
   const editId = editRule?.id ?? null;
   useEffect(() => {
     if (!open) return;
-    seededGroups.current = {};
-    setDirtyCols(new Set());
-    // Live caption D — the default column set: every question whose role
-    // already acts on products, in quiz order. Rules-only quizzes (no roles)
-    // start with no columns — every question is a + chip.
-    const defaultActive = questions
-      .filter(
-        (q) => q.node.data.role === "decides" || q.node.data.role === "filter",
-      )
-      .map((q) => q.node.id);
-    if (!editRule) {
-      setActiveCols(defaultActive);
-      setPicks({});
-      setVerb("hide");
-      setSel([]);
-      setNotCols({});
-      setAllCols({});
-      setMatchMode("all");
-      setLegacyReplace(false);
-      return;
-    }
+    resetDraft();
+    if (!editRule) return;
     const seededPicks: Record<string, string[]> = {};
     const seededNot: Record<string, boolean> = {};
     const isCount: Record<string, number> = {};
@@ -200,21 +340,12 @@ export function CreateRuleModal({
     const anyOf = new Set(editRule.any_of ?? []);
     const seededAll: Record<string, boolean> = {};
     for (const [qid, n] of Object.entries(isCount)) {
-      // Stored absence of any_of on a multi-pick is-column = all-of (§3).
+      // Stored absence of any_of on a multi-pick is-row = all-of (§3).
       if (n > 1 && !anyOf.has(qid)) seededAll[qid] = true;
     }
-    // EDIT — the questions the rule constrains open as columns, on top of
-    // the defaults, in quiz order.
-    const defaults = new Set(defaultActive);
-    setActiveCols(
-      questions
-        .filter((q) => defaults.has(q.node.id) || seededPicks[q.node.id])
-        .map((q) => q.node.id),
-    );
     setPicks(seededPicks);
-    setNotCols(seededNot);
-    setAllCols(seededAll);
-    setMatchMode(editRule.match === "any" ? "any" : "all");
+    setNotQs(seededNot);
+    setAllQs(seededAll);
     setVerb(editRule.action ? ACTION_TO_VERB[editRule.action] : "show");
     setLegacyReplace(!editRule.action);
     const targetIds = editRule.target_ids?.length
@@ -240,19 +371,12 @@ export function CreateRuleModal({
     // in-progress edits.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, editId]);
-  // §4.5/G10 — the impact line, computed server-side (pathEnumeration, cap
-  // 2 000 with truncated → "(sampled)"). Debounced; errors just hide the line.
-  const [impact, setImpact] = useState<
-    | null
-    | { loading: true }
-    | { notEstimable: true }
-    | { fires: number; total: number; truncated: boolean }
-  >(null);
 
   // ── §3 — the ONE derivation of the draft's stored shape ───────────────────
-  // conditions (per-column op), any_of (an is-column with several picks left
-  // on "any of"; single-select is FORCED any — two ANDed is on a single-
-  // select can match nobody), match ("any" only when >1 question is used).
+  // conditions (per-row op), any_of (an is-row with several picks left on
+  // "any of"; single-select is FORCED any — two ANDed is on a single-select
+  // can match nobody). No `match` — the cross-question join is always AND
+  // on new rules now.
   const multiById = useMemo(
     () =>
       new Map(
@@ -263,16 +387,14 @@ export function CreateRuleModal({
   const draft = useMemo(() => {
     const conditions: DecisionRuleT["conditions"] = [];
     const any_of: string[] = [];
-    let usedQuestions = 0;
     for (const q of questions) {
       const qid = q.node.id;
       const aids = picks[qid] ?? [];
       if (aids.length === 0) continue;
-      usedQuestions++;
-      // Untouched edited column → the original conditions, byte-for-byte
+      // Untouched edited row → the original conditions, byte-for-byte
       // (mixed per-condition ops survive; the toggle can't express them).
       const seeded = seededGroups.current[qid];
-      if (seeded && !dirtyCols.has(qid)) {
+      if (seeded && !dirtyQs.has(qid)) {
         conditions.push(...seeded);
         const isConds = seeded.filter((c) => c.op === "is");
         if (isConds.length > 1 && (editRule?.any_of ?? []).includes(qid)) {
@@ -280,59 +402,15 @@ export function CreateRuleModal({
         }
         continue;
       }
-      const op = notCols[qid] ? ("is_not" as const) : ("is" as const);
+      const op = notQs[qid] ? ("is_not" as const) : ("is" as const);
       for (const aid of aids) conditions.push({ question_id: qid, answer_id: aid, op });
       if (op === "is" && aids.length > 1) {
         const forcedAny = !multiById.get(qid);
-        if (forcedAny || !allCols[qid]) any_of.push(qid);
+        if (forcedAny || !allQs[qid]) any_of.push(qid);
       }
     }
-    const match = matchMode === "any" && usedQuestions > 1 ? ("any" as const) : undefined;
-    return { conditions, any_of, match, usedQuestions };
-  }, [questions, picks, notCols, allCols, matchMode, multiById, dirtyCols, editRule]);
-
-  const conditionsKey = JSON.stringify([picks, notCols, allCols, matchMode]);
-  useEffect(() => {
-    if (!open) return;
-    const { conditions, any_of, match } = draft;
-    if (conditions.length === 0) {
-      setImpact(null);
-      return;
-    }
-    let alive = true;
-    setImpact({ loading: true });
-    const t = setTimeout(async () => {
-      try {
-        const res = await fetch("/api/quizzes/rule-impact", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            quizId,
-            conditions,
-            ...(match ? { match } : {}),
-            ...(any_of.length ? { any_of } : {}),
-          }),
-        });
-        const j = (await res.json()) as
-          | { ok: true; notEstimable?: boolean; fires?: number; total?: number; truncated?: boolean }
-          | { ok: false };
-        if (!alive) return;
-        if (!j.ok) setImpact(null);
-        else if (j.notEstimable) setImpact({ notEstimable: true });
-        else if (typeof j.fires === "number" && typeof j.total === "number")
-          setImpact({ fires: j.fires, total: j.total, truncated: Boolean(j.truncated) });
-        else setImpact(null);
-      } catch {
-        if (alive) setImpact(null);
-      }
-    }, 350);
-    return () => {
-      alive = false;
-      clearTimeout(t);
-    };
-    // conditionsKey stringifies picks — the real dependency.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [conditionsKey, open, quizId]);
+    return { conditions, any_of };
+  }, [questions, picks, notQs, allQs, multiById, dirtyQs, editRule]);
 
   // ── the one resource index (§4.3) ─────────────────────────────────────────
   const index = useMemo(() => {
@@ -402,51 +480,67 @@ export function CreateRuleModal({
     return rows;
   }, [categories, collections, productIndex]);
 
-  // §4.3 nothing-typed + All: the curated sets PLUS the tags the quiz
-  // already uses (filter answers' stored tags).
-  const quizTagRefs = useMemo(() => {
-    const used = new Set<string>();
-    for (const n of doc.nodes) {
-      if (n.type !== "question") continue;
-      for (const a of n.data.answers) for (const t of a.tags) used.add(t.trim());
-    }
-    return used;
-  }, [doc]);
-
-  const qlc = query.trim().toLowerCase();
-  const { shown, overflow, foundLine } = useMemo(() => {
-    let rows = index;
-    if (kindChip !== "all") rows = rows.filter((r) => r.kind === kindChip);
-    if (qlc) {
-      rows = rows.filter((r) => r.name.toLowerCase().includes(qlc));
-      // §4.3 typed → one group per kind, 12 rows each, with the found-line.
-      const kinds = [...new Set(rows.map((r) => r.kind))];
-      const grouped = kinds.flatMap((k) => rows.filter((r) => r.kind === k).slice(0, 12));
-      return {
-        shown: grouped,
-        overflow: rows.length - grouped.length,
-        foundLine: `Found ${rows.length} across ${kinds.length} ${kinds.length === 1 ? "type" : "types"}`,
-      };
-    }
-    if (kindChip === "all") {
-      const dflt = index.filter(
-        (r) => r.kind === "set" || (r.kind === "tag" && quizTagRefs.has(r.ref)),
-      );
-      return { shown: dflt.slice(0, 40), overflow: Math.max(0, dflt.length - 40), foundLine: null };
-    }
-    return { shown: rows.slice(0, 40), overflow: Math.max(0, rows.length - 40), foundLine: null };
-  }, [index, kindChip, qlc, quizTagRefs]);
-
-  // Live band-3 chip counts, from the same index the grid reads.
+  // Live band chip counts, from the same index the grid reads.
   const kindCounts = useMemo(() => {
-    const counts = new Map<SelectedResource["kind"], number>();
+    const counts = new Map<Kind, number>();
     for (const r of index) counts.set(r.kind, (counts.get(r.kind) ?? 0) + 1);
     return counts;
   }, [index]);
 
+  // Coverage — built ONCE per render from the doc (handoff §4): for each
+  // category id, how many rules point at it. No cache; the ledger behind the
+  // modal edits the same doc, so reopening is enough.
+  const coverage = useMemo(() => ruleCoverage(doc.decision_rules), [doc.decision_rules]);
+
+  // What the quiz already uses of each kind — the rows a kind tab shows
+  // before any search.
+  const used = useMemo(() => quizUsedRefs(doc, categories), [doc, categories]);
+  const inQuiz = (r: SelectedResource): boolean => {
+    if (r.kind === "set") return true;
+    if (r.kind === "tag") return used.tags.has(r.ref);
+    if (r.kind === "collection") return used.collections.has(r.ref);
+    if (r.kind === "metafield") return used.metafields.has(r.ref);
+    return used.products.has(r.ref);
+  };
+
+  // The quiz's OWN recommendation groups — the Category rows the merchant
+  // confirmed on the Recommendations step (quizId set). The funnel loader
+  // also passes the shop's reusable groups (quizId null); those are
+  // catalogue, reachable through the tabs and search, never the band's
+  // headline list (same split as TargetOptions).
+  const groups = useMemo(() => categories.filter((c) => c.quizId != null), [categories]);
+  const groupIds = useMemo(() => new Set(groups.map((c) => c.id)), [groups]);
+  const isGroupRow = (r: SelectedResource) => r.kind === "set" && groupIds.has(r.ref);
+
+  // A quiz with no recommendation groups has nothing to lead with — fall
+  // back to the builder band (defensive; a funnel quiz always has groups).
+  const onboarding = flow === "onboarding" && groups.length > 0;
+
+  const selKeys = useMemo(() => new Set(sel.map((s) => s.key)), [sel]);
+  const qlc = query.trim().toLowerCase();
+
+  // §4.3 typed → one group per kind, 12 rows each, with the found-line. The
+  // rule's own picks are excluded here (they render first, always).
+  const search = useMemo(() => {
+    if (!qlc) return null;
+    let rows = index.filter((r) => !selKeys.has(r.key));
+    // Onboarding: the quiz's groups are already on screen above the search.
+    if (onboarding) rows = rows.filter((r) => !isGroupRow(r));
+    if (kindChip !== "all") rows = rows.filter((r) => r.kind === kindChip);
+    rows = rows.filter((r) => r.name.toLowerCase().includes(qlc));
+    const kinds = [...new Set(rows.map((r) => r.kind))];
+    const grouped = kinds.flatMap((k) => rows.filter((r) => r.kind === k).slice(0, 12));
+    return {
+      rows: grouped,
+      overflow: rows.length - grouped.length,
+      foundLine: `Found ${rows.length} across ${kinds.length} ${kinds.length === 1 ? "type" : "types"}`,
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [qlc, index, selKeys, kindChip, onboarding, groupIds]);
+
   const pickedCount = Object.values(picks).reduce((n, a) => n + a.length, 0);
-  // ONE resolver for the tiles' product thumbs and anything counting a
-  // selection — mirrors resolveMembership, exact-case (review L2-6).
+  // ONE resolver for the tiles' product thumbs and the peek — mirrors
+  // resolveMembership, exact-case (review L2-6).
   const resolveResource = useMemo(() => {
     const byId = new Map(productIndex.map((p) => [p.product_id, p]));
     const catById = new Map(categories.map((c) => [c.id, c]));
@@ -472,16 +566,16 @@ export function CreateRuleModal({
     };
   }, [categories, productIndex]);
 
-  // §3 — several chips on ONE question is now expressible (any-of / all-of),
-  // so every question type ACCUMULATES; single-select columns are forced
-  // any-of at derivation time (G3's replace behavior is retired).
-  const toggleAnswer = (q: OrderedQuestion, answerId: string) => {
-    touchCol(q.node.id);
+  // §3 — several answers on ONE question is expressible (any-of / all-of),
+  // so every question type ACCUMULATES; single-select rows are forced
+  // any-of at derivation time. Do not "fix" this to replace on single-select.
+  const toggleAnswer = (qid: string, answerId: string) => {
+    touchQ(qid);
     setPicks((prev) => {
-      const cur = prev[q.node.id] ?? [];
+      const cur = prev[qid] ?? [];
       const on = cur.includes(answerId);
       const next = on ? cur.filter((x) => x !== answerId) : [...cur, answerId];
-      return { ...prev, [q.node.id]: next };
+      return { ...prev, [qid]: next };
     });
   };
 
@@ -493,149 +587,106 @@ export function CreateRuleModal({
     );
   };
 
-  // Live caption D — the × on a column header returns the question to the
-  // chip row and clears its picks; a + chip opens it as a column.
-  const removeCol = (qid: string) => {
-    touchCol(qid);
-    setActiveCols((prev) => prev.filter((x) => x !== qid));
-    setPicks((prev) => {
-      const next = { ...prev };
-      delete next[qid];
-      return next;
-    });
-    setNotCols((prev) => {
-      const next = { ...prev };
-      delete next[qid];
-      return next;
-    });
-    setAllCols((prev) => {
-      const next = { ...prev };
-      delete next[qid];
-      return next;
-    });
-  };
-  const addCol = (qid: string) =>
-    setActiveCols((prev) => (prev.includes(qid) ? prev : [...prev, qid]));
-
-  const reset = () => {
-    setPicks({});
-    setVerb("hide");
-    setSel([]);
-    setQuery("");
-    setKindChip("all");
-    setNotCols({});
-    setAllCols({});
-    setMatchMode("all");
-    setLegacyReplace(false);
-  };
-
   const canCreate = pickedCount > 0 && sel.length > 0 && !busy;
 
-  // Live band 1 — the "Fires on" answer-path readout, pure client-side (the
-  // server impact line stays in the footer). Only under match all, and only
-  // once at least one enumerable column (picked, not is-not) exists. An
-  // or-column contributes each picked answer; an all-of multi column ONE
-  // combined path; an all-of single-select column ZERO paths (dead state);
-  // an is-not column is skipped from enumeration.
-  const paths = useMemo(() => {
-    if (matchMode !== "all") return null;
-    const sets: string[][] = [];
-    for (const qid of activeCols) {
-      const aids = picks[qid] ?? [];
-      if (aids.length === 0 || notCols[qid]) continue;
-      const q = questions.find((x) => x.node.id === qid);
-      if (!q) continue;
-      const texts = q.node.data.answers
-        .filter((a) => aids.includes(a.id))
-        .map((a) => a.text);
-      if (allCols[qid]) {
-        if (!multiById.get(qid)) sets.push([]);
-        else sets.push([texts.join(" + ")]);
-      } else {
-        sets.push(texts);
+  /** Commits on the shared path (ensure-targets → create/update). Returns
+   *  true when the rule landed. On ANY failure the draft is left exactly as
+   *  it is — a reset on the error path destroys work that cannot be
+   *  recovered (handoff §3). */
+  const save = async (): Promise<boolean> => {
+    const { conditions, any_of } = draft;
+    const raw = sel.filter((s) => s.kind !== "set");
+    const createdByKey = new Map<string, string>();
+    if (raw.length) {
+      // Explicit failure surface — a network error must toast, never escape
+      // as an unhandled rejection (review L1-3).
+      let j: { ok: boolean; categories?: BuilderCategory[] };
+      try {
+        const res = await fetch("/api/categories/ensure-targets", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            quizId,
+            resources: raw.map((r) => ({ kind: r.kind, ref: r.ref, name: r.name })),
+          }),
+        });
+        j = (await res.json()) as { ok: boolean; categories?: BuilderCategory[] };
+      } catch {
+        toast("Couldn't reach the server — the rule wasn't saved");
+        return false;
+      }
+      if (!j.ok || !j.categories) {
+        toast("Couldn't save those targets — try again");
+        return false;
+      }
+      // The rows ensure-targets created belong to the QUIZ, not the draft —
+      // lifted before any reset so the next rule never re-creates them.
+      onCategoriesCreated(j.categories);
+      for (let i = 0; i < raw.length; i++) {
+        const cat = j.categories[i];
+        if (cat) createdByKey.set(raw[i]!.key, cat.id);
       }
     }
-    if (sets.length === 0) return null;
-    let out: string[][] = [[]];
-    for (const set of sets) {
-      const next: string[][] = [];
-      for (const acc of out) for (const t of set) next.push([...acc, t]);
-      out = next;
-      if (out.length === 0) break;
+    const target_ids = sel
+      .map((s) => (s.kind === "set" ? s.ref : createdByKey.get(s.key)))
+      .filter((id): id is string => Boolean(id));
+    // §4 — new rules always carry an action; a legacy replace rule under
+    // edit keeps action ABSENT unless the merchant changed the verb.
+    const keepLegacyReplace = editRule && legacyReplace && verb === "show";
+    const action = keepLegacyReplace ? undefined : VERB_TO_ACTION[verb];
+    // Commit against the LATEST doc, not the render-time snapshot captured
+    // before the await (review L2-5) — back-to-back "add another" saves
+    // would otherwise drop the earlier rule.
+    const base = getLatestDoc ? getLatestDoc() : doc;
+    if (editRule) {
+      // `match` is deliberately NOT in the patch: a rule saved with
+      // match: "any" keeps behaving that way (we stop writing it, never
+      // stop honouring it).
+      commit(
+        updateDecisionRule(base, editRule.id, {
+          conditions,
+          target_ids,
+          action,
+          any_of,
+        }),
+      );
+    } else {
+      commit(
+        createDecisionRule(base, {
+          conditions,
+          target_ids,
+          ...(action ? { action } : {}),
+          ...(any_of.length ? { any_of } : {}),
+        }),
+      );
     }
-    return out.map((p) => p.join(" + "));
-  }, [matchMode, activeCols, picks, notCols, allCols, questions, multiById]);
+    return true;
+  };
 
   const handleCreate = async () => {
     if (!canCreate) return;
-    const { conditions, any_of, match } = draft;
     setBusy(true);
     try {
-      const raw = sel.filter((s) => s.kind !== "set");
-      const createdByKey = new Map<string, string>();
-      if (raw.length) {
-        // Explicit failure surface — a network error must toast, never escape
-        // as an unhandled rejection (review L1-3).
-        let j: { ok: boolean; categories?: BuilderCategory[] };
-        try {
-          const res = await fetch("/api/categories/ensure-targets", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              quizId,
-              resources: raw.map((r) => ({ kind: r.kind, ref: r.ref, name: r.name })),
-            }),
-          });
-          j = (await res.json()) as { ok: boolean; categories?: BuilderCategory[] };
-        } catch {
-          toast("Couldn't reach the server — the rule wasn't created");
-          return;
-        }
-        if (!j.ok || !j.categories) {
-          toast("Couldn't save those targets — try again");
-          return;
-        }
-        onCategoriesCreated(j.categories);
-        for (let i = 0; i < raw.length; i++) {
-          const cat = j.categories[i];
-          if (cat) createdByKey.set(raw[i]!.key, cat.id);
-        }
-      }
-      const target_ids = sel
-        .map((s) => (s.kind === "set" ? s.ref : createdByKey.get(s.key)))
-        .filter((id): id is string => Boolean(id));
-      // §4 — new rules always carry an action; a legacy replace rule under
-      // edit keeps action ABSENT unless the merchant changed the verb.
-      const keepLegacyReplace = editRule && legacyReplace && verb === "show";
-      const action = keepLegacyReplace ? undefined : VERB_TO_ACTION[verb];
-      // Commit against the LATEST doc, not the render-time snapshot captured
-      // before the await (review L2-5).
-      const base = getLatestDoc ? getLatestDoc() : doc;
-      if (editRule) {
-        commit(
-          updateDecisionRule(base, editRule.id, {
-            conditions,
-            target_ids,
-            action,
-            match,
-            any_of,
-          }),
-        );
-        toast("✓ Rule updated");
-      } else {
-        commit(
-          createDecisionRule(base, {
-            conditions,
-            target_ids,
-            ...(action ? { action } : {}),
-            ...(match ? { match } : {}),
-            ...(any_of.length ? { any_of } : {}),
-          }),
-        );
-        toast("✓ Rule created — checked top down, first match applies");
-      }
-      reset();
+      if (!(await save())) return;
+      toast(editRule ? "✓ Rule updated" : "✓ Rule created");
+      resetDraft();
       onClose();
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  // Create & add another — the only place the modal SHOULD move you: commit
+  // on the same path, toast (the merchant's only confirmation while the
+  // modal stays open), reset the draft, scroll the body back to Q1.
+  const handleCreateAnother = async () => {
+    if (!canCreate || editRule) return;
+    setBusy(true);
+    try {
+      if (!(await save())) return;
+      toast("✓ Rule saved");
+      resetDraft();
+      bodyRef.current?.scrollTo({ top: 0 });
     } finally {
       setBusy(false);
     }
@@ -643,16 +694,284 @@ export function CreateRuleModal({
 
   if (!open || typeof document === "undefined") return null;
 
-  const answerLabel = (qid: string, aid: string) => {
-    const q = questions.find((x) => x.node.id === qid);
-    return q?.node.data.answers.find((a) => a.id === aid)?.text ?? "";
-  };
-  const verbWord = verb;
   const modalTitle = editRule ? "Edit rule" : "Create a rule";
-  const columns = activeCols
-    .map((qid) => questions.find((q) => q.node.id === qid))
-    .filter((q): q is OrderedQuestion => q !== undefined);
-  const unused = questions.filter((q) => !activeCols.includes(q.node.id));
+  const verbHint = VERBS.find((v) => v.verb === verb)?.hint ?? "";
+
+  const renderCard = (r: SelectedResource, status: "needs" | "done" | null) => (
+    <TargetCard
+      key={r.key}
+      r={r}
+      on={selKeys.has(r.key)}
+      ruleCount={r.kind === "set" ? coverage.get(r.ref) ?? 0 : 0}
+      status={status}
+      img={r.kind === "product" ? resolveResource(r)[0]?.image_url ?? null : null}
+      products={resolveResource(r)}
+      onToggle={() => toggleResource(r)}
+    />
+  );
+
+  const kindTab = (kind: KindFilter, label: string, count?: number) => (
+    <button
+      key={kind}
+      type="button"
+      className={`qz-lm-tf${kindChip === kind ? " is-on" : ""}`}
+      aria-pressed={kindChip === kind}
+      onClick={() => setKindChip(kind)}
+    >
+      {label}
+      {count !== undefined ? <span className="qz-lm-tfc">{count}</span> : null}
+    </button>
+  );
+
+  // ── the BUILDER band ("What the quiz shows") ──────────────────────────────
+  // One grid, always, with whatever the rule already acts on rendered FIRST
+  // regardless of the active filter — a filter can never hide part of the
+  // rule. One row at rest on All; a filtered view is never capped.
+  const builderBand = () => {
+    let grid: ReactNode;
+    let line: ReactNode = null;
+    if (search) {
+      grid = (
+        <div className="qz-lm-tgrid">
+          {sel.map((r) => renderCard(r, null))}
+          {search.rows.map((r) => renderCard(r, null))}
+        </div>
+      );
+      line = <div className="qz-lm-more">{search.foundLine}</div>;
+      if (search.rows.length === 0 && sel.length === 0)
+        grid = <div className="qz-lm-tempty">Nothing matches “{query.trim()}”.</div>;
+      if (search.overflow > 0)
+        line = (
+          <div className="qz-lm-more">
+            {search.foundLine} · +{search.overflow} more — type to narrow
+          </div>
+        );
+    } else if (kindChip === "all") {
+      // At rest: the picks, then the recommendation groups, then whatever
+      // else the quiz already uses (its tags). The catalogue is behind the
+      // tile and the tabs/search.
+      const pool = index.filter(
+        (r) => !selKeys.has(r.key) && (isGroupRow(r) || (r.kind === "tag" && used.tags.has(r.ref))),
+      );
+      const list = [...sel, ...pool];
+      const capped = !moreOpen && list.length > ROW_CAP;
+      const shown = capped ? list.slice(0, ROW_CAP) : list.slice(0, LIST_CAP);
+      grid = (
+        <div className="qz-lm-tgrid">
+          {shown.map((r) => renderCard(r, null))}
+          {capped ? (
+            <button
+              type="button"
+              className="qz-lm-tmore"
+              title="Tags, collections, products and metafields from the catalogue"
+              onClick={() => setMoreOpen(true)}
+            >
+              +{list.length - ROW_CAP} from the catalogue
+            </button>
+          ) : null}
+        </div>
+      );
+      if (!capped && list.length > LIST_CAP)
+        line = <div className="qz-lm-more">+{list.length - LIST_CAP} more — type to narrow</div>;
+    } else {
+      const pool = index.filter(
+        (r) => !selKeys.has(r.key) && r.kind === kindChip && (kindChip === "set" ? isGroupRow(r) : inQuiz(r)),
+      );
+      const meta = KIND_CHIPS.find((k) => k.kind === kindChip)!;
+      const total = kindCounts.get(kindChip) ?? 0;
+      const shown = kindChip === "set" ? pool : pool.slice(0, LIST_CAP);
+      grid =
+        sel.length === 0 && pool.length === 0 ? (
+          <div className="qz-lm-tempty">
+            Nothing of this kind is in the quiz yet — search the catalogue to add one.
+          </div>
+        ) : (
+          <div className="qz-lm-tgrid">
+            {sel.map((r) => renderCard(r, null))}
+            {shown.map((r) => renderCard(r, null))}
+          </div>
+        );
+      line = (
+        <div className="qz-lm-tgroup">
+          {kindChip === "set"
+            ? `Recommendations · all ${groups.length} groups this quiz recommends`
+            : `${meta.label} · ${pool.length} in this quiz of ${total.toLocaleString()} — search to reach the rest`}
+        </div>
+      );
+    }
+    return (
+      <section className="qz-lm-showband">
+        <div className="qz-lm-showhead">
+          <span className="qz-lm-st">What the quiz shows</span>
+          <span className="qz-lm-tfilt">
+            {kindTab("all", "All")}
+            {KIND_CHIPS.map(({ kind, label }) => kindTab(kind, label, kindCounts.get(kind) ?? 0))}
+          </span>
+          <input
+            className="qz-lm-tsearch"
+            placeholder="Search products, sets, tags…"
+            aria-label="Search what the rule acts on"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+          />
+        </div>
+        {line}
+        {grid}
+      </section>
+    );
+  };
+
+  // ── the ONBOARDING band ("Your recommendations") ──────────────────────────
+  // The groups confirmed on the Recommendations step ARE the band: uncovered
+  // first (amber, "Needs a rule"), then covered (green, "✓ N rules"), then
+  // anything the rule uses from the catalogue. Cards move between the two
+  // states only when a rule is SAVED (coverage is doc-derived), never while
+  // picking. The catalogue sits UNDER the groups behind "+ Add something
+  // else" — it adds a section, it never replaces the list.
+  const onboardingBand = () => {
+    const { needs, done } = splitRecommendationGroups(groups, coverage);
+    const asRow = (c: BuilderCategory): SelectedResource => ({
+      key: `set:${c.id}`,
+      kind: "set",
+      ref: c.id,
+      name: c.name,
+      count: c.productIds.length,
+    });
+    // Whatever the rule acts on beyond the groups — catalogue picks, or a
+    // shop-wide reusable group — renders WITH the groups so a collapsed
+    // catalogue can never hide part of the rule.
+    const chosenOther = sel.filter((s) => !isGroupRow(s));
+    const covered = done.length;
+    const allCovered = covered === groups.length;
+    const split = groups.length > SPLIT_AT;
+    // Selected wins over both states — needs/done apply only when not picked.
+    const groupCard = (c: BuilderCategory, status: "needs" | "done") =>
+      renderCard(asRow(c), selKeys.has(`set:${c.id}`) ? null : status);
+
+    let catalogueGrid: ReactNode = null;
+    let catalogueLine: ReactNode = null;
+    if (catalogueOpen) {
+      if (search) {
+        catalogueGrid =
+          search.rows.length === 0 ? (
+            <div className="qz-lm-tempty">Nothing matches “{query.trim()}”.</div>
+          ) : (
+            <div className="qz-lm-tgrid">{search.rows.map((r) => renderCard(r, null))}</div>
+          );
+        catalogueLine = (
+          <div className="qz-lm-more">
+            {search.foundLine}
+            {search.overflow > 0 ? ` · +${search.overflow} more — type to narrow` : ""}
+          </div>
+        );
+      } else {
+        // The catalogue the quiz already touches: its tags, collections,
+        // metafields and products, plus the shop's reusable groups.
+        const pool = index.filter(
+          (r) =>
+            !isGroupRow(r) &&
+            !selKeys.has(r.key) &&
+            (kindChip === "all" || r.kind === kindChip) &&
+            (r.kind === "set" || inQuiz(r)),
+        );
+        const capped = !moreOpen && pool.length > ROW_CAP + 1;
+        const shown = capped ? pool.slice(0, ROW_CAP) : pool.slice(0, LIST_CAP);
+        catalogueGrid =
+          pool.length === 0 ? (
+            <div className="qz-lm-tempty">
+              Nothing of this kind is in the quiz yet — search the catalogue to add one.
+            </div>
+          ) : (
+            <div className="qz-lm-tgrid">
+              {shown.map((r) => renderCard(r, null))}
+              {capped ? (
+                <button type="button" className="qz-lm-tmore" onClick={() => setMoreOpen(true)}>
+                  +{pool.length - ROW_CAP} more
+                </button>
+              ) : null}
+            </div>
+          );
+        if (!capped && pool.length > LIST_CAP)
+          catalogueLine = (
+            <div className="qz-lm-more">+{pool.length - LIST_CAP} more — type to narrow</div>
+          );
+      }
+    }
+
+    return (
+      <section className="qz-lm-showband" data-flow="onboarding">
+        <div className="qz-lm-showhead">
+          <span className="qz-lm-st">Your recommendations</span>
+          <span className="qz-lm-cover">
+            <b className={`qz-lm-frac${allCovered ? " is-done" : ""}`}>
+              {allCovered ? "✓ " : ""}
+              {covered}/{groups.length}
+            </b>{" "}
+            have a rule
+          </span>
+          {!catalogueOpen ? (
+            <button
+              type="button"
+              className="qz-lm-expand"
+              onClick={() => setCatalogueOpen(true)}
+            >
+              + Add something else
+            </button>
+          ) : null}
+        </div>
+        {split ? (
+          <>
+            {needs.length ? (
+              <>
+                <div className="qz-lm-tgroup is-needs">Needs a rule · {needs.length}</div>
+                <div className="qz-lm-tgrid">{needs.map((c) => groupCard(c, "needs"))}</div>
+              </>
+            ) : null}
+            {done.length ? (
+              <>
+                <div className="qz-lm-tgroup">Has rules · {done.length}</div>
+                <div className="qz-lm-tgrid">{done.map((c) => groupCard(c, "done"))}</div>
+              </>
+            ) : null}
+            {chosenOther.length ? (
+              <>
+                <div className="qz-lm-tgroup">Also in this rule · {chosenOther.length}</div>
+                <div className="qz-lm-tgrid">{chosenOther.map((r) => renderCard(r, null))}</div>
+              </>
+            ) : null}
+          </>
+        ) : (
+          <div className="qz-lm-tgrid">
+            {needs.map((c) => groupCard(c, "needs"))}
+            {done.map((c) => groupCard(c, "done"))}
+            {chosenOther.map((r) => renderCard(r, null))}
+          </div>
+        )}
+        {catalogueOpen ? (
+          <div className="qz-lm-catbar">
+            <div className="qz-lm-showhead">
+              <span className="qz-lm-st qz-lm-catlabel">From the catalogue</span>
+              <span className="qz-lm-tfilt">
+                {kindTab("all", "All")}
+                {KIND_CHIPS.filter((k) => k.kind !== "set").map(({ kind, label }) =>
+                  kindTab(kind, label, kindCounts.get(kind) ?? 0),
+                )}
+              </span>
+              <input
+                className="qz-lm-tsearch"
+                placeholder="Search products, collections, tags…"
+                aria-label="Search the catalogue"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+              />
+            </div>
+            {catalogueLine}
+            {catalogueGrid}
+          </div>
+        ) : null}
+      </section>
+    );
+  };
 
   return createPortal(
     // §4.5 — the scrim deliberately does NOT close (draft-safe); Esc is a
@@ -672,354 +991,147 @@ export function CreateRuleModal({
           </button>
         </header>
 
-        <div className="qz-lm-b">
-          <div className="qz-lm-bands">
-            {/* ── band 1: WHEN THEY ANSWER ── */}
-            <section className="qz-lm-band">
-              <div className="qz-lm-bh">
-                <span className="qz-lm-bn">1</span>
-                <span className="qz-lm-bt">When they answer</span>
-                {activeCols.length > 1 ? (
-                  <span className="qz-lm-right">
-                    {/* §3 — THE one cross-question join, stated once. */}
-                    <span className="qz-lm-seg">
-                      <button
-                        type="button"
-                        aria-pressed={matchMode === "all"}
-                        onClick={() => setMatchMode("all")}
-                      >
-                        match all
-                      </button>
-                      <button
-                        type="button"
-                        aria-pressed={matchMode === "any"}
-                        onClick={() => setMatchMode("any")}
-                      >
-                        match any
-                      </button>
+        <div className="qz-lm-b" ref={bodyRef}>
+          {/* ── when they answer: one ROW per question, every question,
+                 always. Keys are the question/answer ids, so a pick updates
+                 buttons in place — nothing remounts, scroll and focus hold. ── */}
+          <div className="qz-lm-qrows">
+            {questions.map((q) => {
+              const qid = q.node.id;
+              const aids = picks[qid] ?? [];
+              const multi = q.node.data.question_type === "multi_select";
+              const isNot = Boolean(notQs[qid]);
+              const isAll = multi && Boolean(allQs[qid]);
+              const text = q.node.data.text.replace(/\?$/, "");
+              return (
+                <div key={qid} className={`qz-lm-qrow${aids.length ? " is-on" : ""}`}>
+                  <span className="qz-lm-qc">
+                    <span className="qz-lm-qmeta">
+                      <span className="qz-lm-qn">Q{q.qIndex}</span>
+                      {multi ? <span className="qz-lm-qbadge">Multi select</span> : null}
+                    </span>
+                    <span className="qz-lm-qt" title={text}>
+                      {text}
                     </span>
                   </span>
-                ) : null}
-              </div>
-              <div className="qz-lm-condzone">
-                <div className="qz-lm-condrow">
-                  {columns.map((q) => {
-                    const qid = q.node.id;
-                    const aids = picks[qid] ?? [];
-                    const multi = q.node.data.question_type === "multi_select";
-                    const isNot = Boolean(notCols[qid]);
-                    const isAnd = multi && Boolean(allCols[qid]);
-                    // "or" renders between PICKED chips — after every picked
-                    // chip except the last picked one, in display order.
-                    const pickedOrder = q.node.data.answers
-                      .filter((a) => aids.includes(a.id))
-                      .map((a) => a.id);
-                    const lastPicked = pickedOrder[pickedOrder.length - 1];
-                    return (
-                      <div key={qid} className={`qz-lm-qcol${aids.length ? " is-has" : ""}`}>
-                        <div className="qz-lm-qch">
-                          <span className="qz-lm-qlabel">
-                            <span className="qz-lm-qn">Q{q.qIndex}</span>{" "}
-                            {q.node.data.text.replace(/\?$/, "")}
-                            {multi ? <span className="qz-lm-multibadge">multi</span> : null}
-                          </span>
-                          {/* Handoff §3 — the is / is-not affordance the mock
-                              omits; kept deliberately, seated in the header. */}
-                          <button
-                            type="button"
-                            className={`qz-lm-qcf${isNot ? " is-not" : ""}`}
-                            title={
-                              isNot
-                                ? "Matches shoppers who picked NONE of these"
-                                : "Matches shoppers who picked these"
-                            }
-                            onClick={() => {
-                              touchCol(qid);
-                              setNotCols((prev) => ({ ...prev, [qid]: !prev[qid] }));
-                            }}
-                          >
-                            {isNot ? "is not" : "is"}
-                          </button>
-                          <button
-                            type="button"
-                            className="qz-lm-qdrop"
-                            title="Remove — returns it to the chips below"
-                            aria-label={`Remove Q${q.qIndex} from the rule`}
-                            onClick={() => removeCol(qid)}
-                          >
-                            ×
-                          </button>
-                        </div>
-                        <div className="qz-lm-qcb">
-                          {q.node.data.answers.map((a) => {
-                            const on = aids.includes(a.id);
-                            const showOr =
-                              pickedOrder.length > 1 && on && a.id !== lastPicked;
-                            return (
-                              <Fragment key={a.id}>
-                                <button
-                                  type="button"
-                                  className={`qz-lm-qchip${on ? " is-on" : ""}`}
-                                  aria-pressed={on}
-                                  onClick={() => toggleAnswer(q, a.id)}
-                                >
-                                  {a.text}
-                                </button>
-                                {showOr ? (
-                                  multi ? (
-                                    // §3 — only a multi-select can mean "all
-                                    // of"; there the or is a control.
-                                    <button
-                                      type="button"
-                                      className={`qz-lm-orlink is-live${isAnd ? " is-and" : ""}`}
-                                      title={`Click to switch to ${isAnd ? "or" : "all of"}`}
-                                      onClick={() => {
-                                        touchCol(qid);
-                                        setAllCols((prev) => ({
-                                          ...prev,
-                                          [qid]: !prev[qid],
-                                        }));
-                                      }}
-                                    >
-                                      {isAnd ? "and" : "or"}
-                                    </button>
-                                  ) : (
-                                    // Single-select: stated, not offered —
-                                    // "all of" would match nobody.
-                                    <span className="qz-lm-orlink">or</span>
-                                  )
-                                ) : null}
-                              </Fragment>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-                {paths ? (
-                  paths.length === 0 ? (
-                    <div className="qz-lm-paths is-dead">
-                      <span className="qz-lm-paths-l">Fires on</span>
-                      <b>no answer path</b>
-                      <span className="qz-lm-paths-n">
-                        A shopper answers each question once, so <em>all of</em> on
-                        a single-select question can never be true.
-                      </span>
-                    </div>
-                  ) : paths.length <= 8 ? (
-                    <div className="qz-lm-paths">
-                      <span className="qz-lm-paths-l">Fires on</span>
-                      <b>
-                        {paths.length} answer {paths.length === 1 ? "path" : "paths"}
-                      </b>
-                      <span className="qz-lm-paths-p">
-                        {paths.map((p, i) => (
-                          <span key={i}>{p}</span>
-                        ))}
-                      </span>
-                    </div>
-                  ) : (
-                    <div className="qz-lm-paths">
-                      <span className="qz-lm-paths-l">Fires on</span>
-                      <b>{paths.length} answer paths</b>
-                      <span className="qz-lm-paths-n">
-                        Too many to list — narrow a column to see them.
-                      </span>
-                    </div>
-                  )
-                ) : null}
-              </div>
-              {unused.length ? (
-                <div className="qz-lm-addwrap">
-                  <div className="qz-lm-addrow">
-                    {unused.map((q) => (
-                      <button
-                        key={q.node.id}
-                        type="button"
-                        className="qz-lm-addcond"
-                        onClick={() => addCol(q.node.id)}
-                      >
-                        <span className="qz-lm-acp">+</span>
-                        <span className="qz-lm-acn">Q{q.qIndex}</span>{" "}
-                        {q.node.data.text.replace(/\?$/, "")}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              ) : null}
-            </section>
-
-            {/* ── band 2: THEN ── */}
-            <section className="qz-lm-band is-inline">
-              <div className="qz-lm-bh">
-                <span className="qz-lm-bn">2</span>
-                <span className="qz-lm-bt">Then</span>
-              </div>
-              <div className="qz-lm-verbrow">
-                {VERBS.map((v) => (
-                  <button
-                    key={v.verb}
-                    type="button"
-                    className={`qz-lm-vcard${verb === v.verb ? " is-on" : ""}`}
-                    aria-pressed={verb === v.verb}
-                    onClick={() => setVerb(v.verb)}
-                  >
-                    <span className="qz-lm-vn">{v.name}</span>
-                    <span className="qz-lm-vd">{v.hint}</span>
-                  </button>
-                ))}
-              </div>
-              {/* §12 — an edited legacy rule that stays on Show keeps its
-                  original replace behavior; say so rather than hiding it. */}
-              {editRule && legacyReplace && verb === "show" ? (
-                <p className="qz-lm-legacynote">
-                  This older rule replaces the results outright — saving on Show
-                  keeps that behavior.
-                </p>
-              ) : null}
-            </section>
-
-            {/* ── band 3: WHAT THE QUIZ SHOWS ── */}
-            <section className="qz-lm-band">
-              <div className="qz-lm-bh">
-                <span className="qz-lm-bn">3</span>
-                <span className="qz-lm-bt">What the quiz shows</span>
-              </div>
-              <div className="qz-lm-actbar">
-                <span className="qz-lm-tfilt">
-                  {KIND_CHIPS.map(({ kind, label }) => (
-                    <button
-                      key={kind}
-                      type="button"
-                      className={`qz-lm-tf${kindChip === kind ? " is-on" : ""}`}
-                      aria-pressed={kindChip === kind}
-                      onClick={() => setKindChip((k) => (k === kind ? "all" : kind))}
-                    >
-                      {label}{" "}
-                      <span className="qz-lm-tfc">{kindCounts.get(kind) ?? 0}</span>
-                    </button>
-                  ))}
-                </span>
-                <input
-                  className="qz-lm-actsearch"
-                  placeholder="Search products, sets, tags…"
-                  value={query}
-                  onChange={(e) => setQuery(e.target.value)}
-                />
-              </div>
-              {foundLine ? <div className="qz-lm-more">{foundLine}</div> : null}
-              {shown.length === 0 ? (
-                <div className="qz-lm-more">
-                  Nothing matches{query ? ` "${query}"` : ""}.
-                </div>
-              ) : (
-                <div className="qz-lm-tgrid">
-                  {shown.map((r) => {
-                    const on = sel.some((s) => s.key === r.key);
-                    const img =
-                      r.kind === "product"
-                        ? resolveResource(r)[0]?.image_url ?? null
-                        : null;
-                    return (
-                      <button
-                        key={r.key}
-                        type="button"
-                        className={`qz-lm-tcard${on ? " is-on" : ""}`}
-                        aria-pressed={on}
-                        onClick={() => toggleResource(r)}
-                      >
-                        <span
-                          className={`qz-lm-pthumb${img ? " has-img" : ""}`}
-                          aria-hidden
+                  <span className="qz-lm-tiles">
+                    {q.node.data.answers.map((a) => {
+                      const on = aids.includes(a.id);
+                      return (
+                        <button
+                          key={a.id}
+                          type="button"
+                          className={`qz-lm-tile${on ? " is-on" : ""}`}
+                          aria-pressed={on}
+                          title={a.text}
+                          onClick={() => toggleAnswer(qid, a.id)}
                         >
-                          {img ? <img src={img} alt="" loading="lazy" /> : null}
+                          <span className="qz-lm-tx">{a.text}</span>
+                        </button>
+                      );
+                    })}
+                  </span>
+                  {/* One cluster, one phrase: "Q1 is any of [these]". The
+                      column is reserved whether or not the join shows, so
+                      it appears into space the row already had. */}
+                  <span className="qz-lm-ops">
+                    <button
+                      type="button"
+                      className={`qz-lm-qcf${isNot ? " is-not" : ""}`}
+                      aria-pressed={isNot}
+                      title={
+                        isNot
+                          ? "Matches shoppers who picked NONE of these"
+                          : "Matches shoppers who picked these"
+                      }
+                      onClick={() => {
+                        touchQ(qid);
+                        setNotQs((prev) => ({ ...prev, [qid]: !prev[qid] }));
+                      }}
+                    >
+                      {isNot ? "is not" : "is"}
+                    </button>
+                    {aids.length > 1 ? (
+                      multi ? (
+                        <button
+                          type="button"
+                          className="qz-lm-qcf is-join"
+                          aria-pressed={isAll}
+                          title={`Click to switch to ${isAll ? "any of" : "all of"}`}
+                          onClick={() => {
+                            touchQ(qid);
+                            setAllQs((prev) => ({ ...prev, [qid]: !prev[qid] }));
+                          }}
+                        >
+                          {isAll ? "all of" : "any of"} ⇄
+                        </button>
+                      ) : (
+                        // Stated, not offered — "all of" on a single-select
+                        // can never fire.
+                        <span className="qz-lm-qcf is-join is-fixed" title={FIXED_JOIN_TITLE}>
+                          any of
                         </span>
-                        <span className="qz-lm-tn2">{r.name}</span>
-                      </button>
-                    );
-                  })}
+                      )
+                    ) : null}
+                  </span>
                 </div>
-              )}
-              {overflow > 0 ? (
-                <div className="qz-lm-more">+{overflow} more — type to narrow</div>
-              ) : null}
-            </section>
+              );
+            })}
           </div>
+
+          <div className="qz-lm-sep" />
+
+          {/* ── THEN: one row — label, Show | Pin | Hide, the verb's hint ── */}
+          <div className="qz-lm-verbline">
+            <span className="qz-lm-bt">Then</span>
+            <span className="qz-lm-seg qz-lm-vseg">
+              {VERBS.map((v) => (
+                <button
+                  key={v.verb}
+                  type="button"
+                  aria-pressed={verb === v.verb}
+                  onClick={() => setVerb(v.verb)}
+                >
+                  {v.name}
+                </button>
+              ))}
+            </span>
+            <span className="qz-lm-verbhint">{verbHint}</span>
+            {/* §12 — an edited legacy rule that stays on Show keeps its
+                original replace behavior; say so rather than hiding it. */}
+            {editRule && legacyReplace && verb === "show" ? (
+              <span className="qz-lm-legacynote">
+                This older rule replaces the results outright — saving on Show keeps that behavior.
+              </span>
+            ) : null}
+          </div>
+
+          <div className="qz-lm-sep" />
+
+          {onboarding ? onboardingBand() : builderBand()}
         </div>
 
-        {/* ── footer: the live sentence + the actions (§4.5) ── */}
+        {/* ── footer: [N selected] · Cancel · Create & add another · Create ── */}
         <footer className="qz-lm-f">
-          {pickedCount === 0 ? (
-            <span className="qz-lm-dimf">
-              Pick an answer in at least one column to start the rule
+          {sel.length ? (
+            <span className="qz-lm-fcount">
+              <b>{sel.length}</b> selected
             </span>
-          ) : (
-            <p>
-              When a shopper picks{" "}
-              {
-                // §3 read-back — the sentence uses the rule's OWN operators:
-                // within a column "or" (any-of) / "and" (all-of) / "none of"
-                // (is not); between columns the one rule join.
-                questions
-                  .filter((q) => (picks[q.node.id] ?? []).length > 0)
-                  .map((q, gi) => {
-                    const qid = q.node.id;
-                    const aids = picks[qid] ?? [];
-                    const isNot = Boolean(notCols[qid]);
-                    const withinWord =
-                      isNot ? "nor" : allCols[qid] && multiById.get(qid) ? "and" : "or";
-                    return (
-                      <span key={qid}>
-                        {gi > 0 ? (
-                          <span className="qz-ltab-join">
-                            {" "}
-                            {matchMode === "any" ? "or" : "and"}{" "}
-                          </span>
-                        ) : null}
-                        {isNot ? <span className="qz-ltab-join">not </span> : null}
-                        {aids.map((aid, i) => (
-                          <span key={aid}>
-                            {i > 0 ? (
-                              <span className="qz-ltab-join"> {withinWord} </span>
-                            ) : null}
-                            <b>{answerLabel(qid, aid)}</b>
-                          </span>
-                        ))}
-                      </span>
-                    );
-                  })
-              }
-              <span className="qz-ltab-join">, </span>
-              {verbWord}{" "}
-              {sel.length === 0 ? (
-                <span className="qz-ltab-muted">pick what it acts on</span>
-              ) : (
-                sel.map((s, i) => (
-                  <span key={s.key}>
-                    {i > 0 ? <span className="qz-ltab-join"> and </span> : null}
-                    <b>{s.name}</b>
-                  </span>
-                ))
-              )}
-              .
-              {impact ? (
-                <span className="qz-lm-impact">
-                  {"loading" in impact
-                    ? "…"
-                    : "notEstimable" in impact
-                      ? "Needs multi-answer shoppers — not estimable yet"
-                      : impact.truncated
-                        ? `≈${impact.total ? Math.round((impact.fires / impact.total) * 100) : 0}% of shoppers (sampled)`
-                        : `Fires on ${impact.fires.toLocaleString()} of ${impact.total.toLocaleString()} paths`}
-                </span>
-              ) : null}
-            </p>
-          )}
+          ) : null}
           <span className="qz-lm-fright">
             <button type="button" className="qz-btn" onClick={onClose}>
               Cancel
             </button>
+            {!editRule ? (
+              <button
+                type="button"
+                className="qz-btn qz-lm-fghost"
+                disabled={!canCreate}
+                onClick={handleCreateAnother}
+              >
+                Create &amp; add another
+              </button>
+            ) : null}
             <button
               type="button"
               className="qz-btn qz-btn-primary"

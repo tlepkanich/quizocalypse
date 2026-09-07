@@ -1,0 +1,1176 @@
+<title>One-Screen Rule Builder</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap">
+
+<style>
+/* ═══════════════════════════════════════════════════════════════════════
+   Page chrome &mdash; IBM Plex (commentary voice), theme-aware.
+   The mock islands are single-theme on purpose: the Wiskr admin is
+   light-only (dark mode cut 2026-08-09), so a fidelity mock in dark would
+   be a lie about the product. They carry Quartz's real token values.
+   ═══════════════════════════════════════════════════════════════════ */
+:root{
+  --ground:#F7F6FA; --panel:#FFFFFF;
+  --ink:#191725; --ink-2:#413B54; --muted:#65607A; --faint:#8F8AA3;
+  --rule:#E3E0EA; --rule-2:#EFEDF4;
+  --accent:#5B45D6; --accent-ink:#4A36B8; --accent-wash:#EFECFD;
+  --ok:#0F6B45; --warn:#8A5300; --warn-wash:#FBF0DF; --crit:#A5241C;
+  --stage:#E8E5EF;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --ground:#131118; --panel:#1C1926;
+    --ink:#EFECF7; --ink-2:#C6C0D6; --muted:#9E98B0; --faint:#7B7590;
+    --rule:#2E2A3C; --rule-2:#26222F;
+    --accent:#A492FF; --accent-ink:#BFB2FF; --accent-wash:#26203C;
+    --ok:#6FD3A6; --warn:#E0A55B; --warn-wash:#2B2013; --crit:#F09287;
+    --stage:#221E2E;
+  }
+}
+:root[data-theme="dark"]{
+  --ground:#131118; --panel:#1C1926;
+  --ink:#EFECF7; --ink-2:#C6C0D6; --muted:#9E98B0; --faint:#7B7590;
+  --rule:#2E2A3C; --rule-2:#26222F;
+  --accent:#A492FF; --accent-ink:#BFB2FF; --accent-wash:#26203C;
+  --ok:#6FD3A6; --warn:#E0A55B; --warn-wash:#2B2013; --crit:#F09287;
+  --stage:#221E2E;
+}
+
+*{box-sizing:border-box}
+body{
+  margin:0; background:var(--ground); color:var(--ink);
+  font:400 15px/1.6 "IBM Plex Sans","Helvetica Neue",Arial,sans-serif;
+  -webkit-font-smoothing:antialiased;
+}
+.wrap{max-width:1180px; margin:0 auto; padding:0 20px}
+.mono{font-family:"IBM Plex Mono",ui-monospace,Menlo,monospace; font-variant-numeric:tabular-nums}
+h1,h2,h3{text-wrap:balance; margin:0}
+code{font-family:"IBM Plex Mono",monospace; font-size:.92em}
+
+.mast{padding:46px 0 26px; border-bottom:1px solid var(--rule)}
+.eyebrow{
+  font-family:"IBM Plex Mono",monospace; font-size:11px; letter-spacing:.14em;
+  text-transform:uppercase; color:var(--faint); margin-bottom:14px;
+}
+.mast h1{font-size:38px; line-height:1.1; font-weight:600; letter-spacing:-.02em; max-width:15ch}
+.mast p{margin:14px 0 0; color:var(--ink-2); max-width:64ch; font-size:16px}
+.mast p b{font-weight:600; color:var(--ink)}
+
+section{padding:34px 0}
+.shead{display:flex; align-items:baseline; gap:12px; flex-wrap:wrap; margin-bottom:16px}
+.shead h2{font-size:22px; font-weight:600; letter-spacing:-.015em}
+.shead .note{font-size:13.5px; color:var(--muted)}
+
+.edits{display:grid; border:1px solid var(--rule); border-radius:10px; background:var(--panel); overflow:hidden}
+.edit{display:grid; grid-template-columns:200px minmax(0,1fr) auto; gap:16px; align-items:baseline;
+  padding:13px 16px; border-top:1px solid var(--rule-2)}
+.edit:first-child{border-top:0}
+.edit .what{font-weight:600; font-size:14px}
+.edit .how{color:var(--ink-2); font-size:13.5px}
+.edit .delta{font-family:"IBM Plex Mono",monospace; font-size:13px; color:var(--ok); white-space:nowrap}
+.edit .delta.up{color:var(--warn)}
+.edit .delta.zero{color:var(--faint)}
+@media (max-width:700px){ .edit{grid-template-columns:1fr; gap:4px} }
+
+.switcher{position:sticky; top:0; z-index:20; background:var(--ground);
+  border-bottom:1px solid var(--rule); padding:10px 0}
+.tabs{display:flex; gap:6px; overflow-x:auto; scrollbar-width:thin}
+.tab{flex:none; display:flex; flex-direction:column; gap:1px; align-items:flex-start;
+  padding:8px 13px; border-radius:8px; border:1px solid var(--rule);
+  background:var(--panel); color:var(--ink-2); cursor:pointer; font:inherit; text-align:left; line-height:1.25}
+.tab .t{font-size:13.5px; font-weight:600; color:var(--ink)}
+.tab .s{font-family:"IBM Plex Mono",monospace; font-size:10.5px; color:var(--faint)}
+.tab[aria-selected="true"]{border-color:var(--accent); background:var(--accent-wash)}
+.tab[aria-selected="true"] .t,.tab[aria-selected="true"] .s{color:var(--accent-ink)}
+.tab:focus-visible{outline:2px solid var(--accent); outline-offset:2px}
+
+.opt[hidden]{display:none}
+.opthead{display:grid; grid-template-columns:minmax(0,1fr) auto; gap:20px; align-items:end; padding:26px 0 16px}
+@media (max-width:760px){ .opthead{grid-template-columns:1fr; align-items:start} }
+.opthead h3{font-size:25px; font-weight:600; letter-spacing:-.02em}
+.opthead .thesis{color:var(--ink-2); margin:8px 0 0; max-width:62ch; font-size:15px}
+
+.meter{min-width:280px}
+.meter .row{display:flex; justify-content:space-between; align-items:baseline; gap:14px; margin-bottom:6px}
+.meter .h{font-family:"IBM Plex Mono",monospace; font-size:20px; font-weight:500}
+.meter .cap{font-size:11.5px; color:var(--muted); text-align:right}
+.bar{height:8px; border-radius:3px; background:var(--rule); position:relative; overflow:visible}
+.bar i{position:absolute; inset:0 auto 0 0; border-radius:3px; background:var(--ok); display:block}
+.bar.over i{background:var(--crit)}
+.bar.near i{background:var(--warn)}
+.mark{position:absolute; top:-4px; bottom:-4px; width:2px; background:var(--ink); opacity:.6}
+.mark.soft{width:1px; background:var(--muted); opacity:.75}
+.mark span{position:absolute; top:-15px; left:50%; transform:translateX(-50%);
+  font-family:"IBM Plex Mono",monospace; font-size:9px; color:var(--faint); white-space:nowrap}
+.meter .legend{font-size:11px; color:var(--faint); margin-top:9px;
+  font-family:"IBM Plex Mono",monospace; text-align:right}
+
+.specbar{display:flex; align-items:flex-end; justify-content:space-between; gap:24px;
+  flex-wrap:wrap; padding:26px 0 12px}
+.ctrlbar{display:flex; align-items:center; gap:10px; flex-wrap:wrap}
+.ctrlbar .cl{font-family:"IBM Plex Mono",monospace; font-size:10.5px; letter-spacing:.08em;
+  text-transform:uppercase; color:var(--faint)}
+.ctrl{display:flex; gap:4px}
+.ctrl button{padding:5px 11px; border-radius:6px; border:1px solid var(--rule); background:var(--panel);
+  color:var(--ink-2); font:inherit; font-size:12.5px; cursor:pointer}
+.ctrl button[aria-pressed="true"]{border-color:var(--accent); background:var(--accent-wash); color:var(--accent-ink); font-weight:600}
+.ctrl button:focus-visible{outline:2px solid var(--accent); outline-offset:2px}
+
+.stage{background:var(--stage); border:1px solid var(--rule); border-radius:10px; overflow:hidden}
+.stage .pad{padding:22px; overflow-x:auto; -webkit-overflow-scrolling:touch}
+.stage .mkscale{transform-origin:top left}
+.stagecap{display:flex; justify-content:space-between; gap:12px; flex-wrap:wrap;
+  font-size:12px; color:var(--muted); padding:8px 2px 0}
+.stagecap .mono{color:var(--faint)}
+
+.notes{display:grid; grid-template-columns:repeat(auto-fit,minmax(250px,1fr)); gap:14px; padding:20px 0 4px}
+.note{background:var(--panel); border:1px solid var(--rule); border-radius:8px; padding:14px 16px}
+.note h4{font-family:"IBM Plex Mono",monospace; font-size:10.5px; letter-spacing:.1em;
+  text-transform:uppercase; color:var(--faint); font-weight:500; margin:0 0 8px}
+.note ul{margin:0; padding-left:17px; color:var(--ink-2); font-size:13.5px; line-height:1.55}
+.note li+li{margin-top:5px}
+.note.cost{background:var(--warn-wash); border-color:color-mix(in srgb,var(--warn) 28%,transparent)}
+.note.cost h4{color:var(--warn)}
+.note.cost p{margin:0; font-size:13.5px; color:var(--ink-2)}
+
+.rec{background:var(--panel); border:1px solid var(--rule); border-left:3px solid var(--accent);
+  border-radius:8px; padding:22px 24px; margin-bottom:34px}
+.rec h2{font-size:20px; font-weight:600; margin-bottom:8px}
+.rec p{margin:0 0 10px; color:var(--ink-2); max-width:72ch}
+.rec p:last-child{margin-bottom:0}
+footer.foot{padding:26px 0 46px; border-top:1px solid var(--rule); color:var(--faint); font-size:12.5px}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   MOCK ISLAND &mdash; Quartz (app/styles/quizocalypse.css) values verbatim.
+   ═══════════════════════════════════════════════════════════════════ */
+.mk{
+  position:relative;
+  --p:#FFFFFF; --c2:#F5F4F8; --i:#201C2E; --i3:#4E4860; --i4:#645E78;
+  --i25:#B4AFC4; --r:#E4E1EC; --r2:#EFEDF4; --rs:#948EA6;
+  --ac:#5B45D6; --ac2:#4A36B8; --aci:#4A36B8; --acw:#EFECFD; --acl:#D5CDF8;
+  --crit:#A5241C; --ok:#0F6B45; --ok-wash:#E7F3ED; --warn:#8A5300;
+  --tw:130px; --th:58px; --tfs:11px; --tclamp:2; --qcol:176px;
+  font-family:"Figtree","Helvetica Neue",Arial,sans-serif;
+  font-size:13px; line-height:1.45; color:var(--i);
+  background:var(--p); border:1px solid var(--r); border-radius:8px;
+  box-shadow:0 18px 48px -18px rgba(32,28,46,.45);
+  display:flex; flex-direction:column; overflow:hidden;
+}
+:where(.mk) :where(button){font:inherit; color:inherit; background:none; border:0;
+  cursor:pointer; padding:0; text-align:left}
+:where(.mk) :where(button):focus-visible{outline:2px solid var(--ac); outline-offset:1px}
+
+.mk-h{display:flex; align-items:center; gap:12px; padding:14px 20px 13px; border-bottom:1px solid var(--r)}
+.mk-h h2{margin:0; font-size:16.5px; font-weight:700; letter-spacing:-.01em; line-height:1.2}
+.mk-h .saved{
+  font-size:11.5px; font-weight:600; color:var(--ok); background:var(--ok-wash);
+  border-radius:5px; padding:3px 8px;
+}
+.mk-h .sp{margin-left:auto; display:flex; align-items:center; gap:10px}
+.mk-x{flex:none; font-size:17px; line-height:1; color:var(--i25); padding:3px 8px; border-radius:6px}
+.mk-x:hover{background:var(--c2); color:var(--i)}
+.mk-b{padding:10px 20px 12px; display:flex; flex-direction:column}
+.mk-f{padding:11px 20px; border-top:1px solid var(--r); background:var(--c2);
+  display:flex; align-items:center; justify-content:flex-end; gap:14px; flex-wrap:wrap}
+.mk-f .acts{display:flex; gap:8px; flex:none; align-items:center}
+.btn[disabled]{opacity:.45; cursor:default}
+.mk-h .impact{font-size:11.5px; color:var(--i4); font-variant-numeric:tabular-nums}
+.btn{padding:9px 17px; border-radius:6px; font-size:13px; font-weight:600;
+  border:1px solid var(--rs); background:var(--p); color:var(--i)}
+.btn.ghost{border-color:var(--r); color:var(--i3)}
+.btn.ghost:hover{border-color:var(--acl); background:var(--acw); color:var(--aci)}
+.btn.pri{background:var(--ac); border-color:var(--ac); color:#fff}
+.btn.pri:hover{background:var(--ac2)}
+
+.lab{display:flex; align-items:center; gap:9px}
+.lab .t{font-size:10px; letter-spacing:.05em; text-transform:uppercase; color:var(--i4); font-weight:600}
+.lab .cnt{font-size:11px; color:var(--i4); font-variant-numeric:tabular-nums}
+.sep{height:1px; background:var(--r); margin:9px 0}
+
+.seg{display:flex; gap:2px; background:#F1EFF6; padding:2px; border-radius:6px; border:1px solid var(--r); flex:none}
+.seg button{padding:3px 10px; border-radius:4px; font-size:11.5px; font-weight:500; color:var(--i4)}
+.seg button[aria-pressed="true"]{background:#fff; color:var(--i); font-weight:600;
+  box-shadow:0 1px 1px rgba(32,28,46,.07)}
+
+/* ── question rows ────────────────────────────────────────────────── */
+.qrows{display:flex; flex-direction:column}
+.qrow{display:grid; grid-template-columns:var(--qcol) minmax(0,1fr) auto; gap:12px;
+  align-items:start; padding:8px 0; border-top:1px solid var(--r2)}
+.qrow:first-child{border-top:0; padding-top:0}
+.qrow .qc{display:flex; flex-direction:column; gap:4px; align-items:flex-start; min-width:0}
+/* a long quiz caps its question list instead of growing the modal */
+.mk[data-cap="on"] .qrows{max-height:var(--qmax,424px); overflow-y:auto; padding-right:8px}
+.qrow .qn{font-size:10.5px; font-weight:600; color:var(--i4); font-variant-numeric:tabular-nums; flex:none}
+.qrow .qt{font-size:12.5px; font-weight:600; line-height:1.34; color:var(--i3);
+  display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; overflow:hidden;
+  text-overflow:ellipsis}
+.qrow.on .qt{color:var(--i)}
+.qmeta{display:flex; align-items:center; gap:7px; min-width:0}
+.badge{flex:none; font-size:7.5px; font-weight:700; letter-spacing:.07em; text-transform:uppercase;
+  color:var(--i4); background:var(--c2); border:1px solid var(--r); border-radius:3px; padding:1px 4px}
+.badge.multi{color:var(--aci); background:var(--acw); border-color:var(--acl)}
+.joiner{font-size:10px; color:var(--i4); font-weight:600; letter-spacing:.02em;
+  border:1px solid var(--r); border-radius:4px; padding:2px 6px; width:fit-content; background:var(--p)}
+.ops{display:inline-flex; align-items:center; gap:5px; flex:none; vertical-align:1px}
+.qrow.opleft .ops{margin-left:6px}
+.qcf{flex:none; font-size:11.5px; font-weight:600; color:var(--i3); border:1px solid var(--r);
+  border-radius:5px; padding:5px 9px; background:var(--p)}
+.qcf:hover{border-color:var(--acl); background:var(--acw); color:var(--aci)}
+.qcf.not{color:var(--crit); border-color:color-mix(in srgb,var(--crit) 30%,transparent)}
+.qcf.join{color:var(--i4); font-weight:600}
+.qcf.join.fixed{cursor:default; background:var(--c2); border-style:dashed}
+.qcf.join.fixed:hover{border-color:var(--r); background:var(--c2); color:var(--i4)}
+/* the operator column is constant, so is / is not lines up down the panel */
+/* The operator column is a constant width, reserved whether or not the
+   join is showing - so "any of" appears into space the row already had
+   and nothing else moves. */
+.qrow{grid-template-columns:var(--qcol) minmax(0,1fr) 124px}
+.ops{justify-content:flex-end}
+
+/* title treatments: the freed height goes straight into the buckets */
+.mk[data-title="small"]{--th:62px}
+.mk[data-title="small"] .mk-h{padding:8px 20px; min-height:0}
+.mk[data-title="small"] .mk-x{font-size:15px; padding:2px 7px}
+.mk[data-title="small"] .saved{padding:2px 7px}
+.mk[data-title="small"] .mk-h h2{font-size:13.5px; font-weight:700; line-height:1.2}
+.mk[data-title="none"]{--th:66px}
+.mk[data-title="none"] .mk-h{display:none}
+.mk[data-title="none"] .mk-b{padding-top:14px}
+.mk[data-title="none"] .tcard{padding:10px 10px}
+.mk[data-title="none"] .showband{padding:14px 13px 15px}
+.mk-f .savedleft{margin-right:auto; font-size:11.5px; font-weight:600; color:var(--ok);
+  background:var(--ok-wash); border-radius:5px; padding:3px 8px}
+.mk-f .fcount{margin-right:auto; font-size:12.5px; color:var(--i4); font-variant-numeric:tabular-nums}
+.mk-f .fcount b{color:var(--i); font-weight:700}
+
+/* One row per question, buckets a fixed width so the grid rhythm holds
+   down the whole panel; a question with more answers than the row can
+   hold scrolls sideways rather than growing the modal. */
+.tiles{display:flex; flex-wrap:nowrap; gap:6px; overflow-x:auto; padding-bottom:2px}
+.tile{flex:0 0 var(--tw); height:var(--th);
+  border:1px solid var(--r); border-radius:6px; background:var(--p);
+  padding:8px 10px; display:flex; align-items:center; overflow:hidden;
+  transition:background .12s ease, border-color .12s ease}
+.tile .tx{font-size:var(--tfs); line-height:1.28; color:var(--i3); font-weight:500;
+  display:-webkit-box; -webkit-line-clamp:var(--tclamp); -webkit-box-orient:vertical;
+  overflow:hidden; text-overflow:ellipsis}
+.tile:hover{border-color:var(--acl); background:var(--acw)}
+.tile.on{background:var(--ac); border-color:var(--ac)}
+.tile.on .tx{color:#fff; font-weight:600}
+
+/* ── THEN ─────────────────────────────────────────────────────────── */
+.verbline{display:flex; align-items:center; gap:10px; flex-wrap:wrap}
+.verbline .vseg button{padding:6px 16px; font-size:12.5px; font-weight:600}
+.verbhint{font-size:11.5px; color:var(--i4)}
+.verbcards{display:grid; grid-template-columns:repeat(3,1fr); gap:8px; flex:1; min-width:0}
+.vcard{border:1px solid var(--r); border-radius:6px; background:var(--p); padding:8px 12px}
+.vcard .vn{display:block; font-size:13.5px; font-weight:700; color:var(--i)}
+.vcard .vd{display:block; font-size:11.5px; color:var(--i4); margin-top:2px}
+.vcard.on{background:var(--acw); border-color:var(--ac)}
+.vcard.on .vn{color:var(--aci)}
+
+/* ── WHAT THE QUIZ SHOWS &mdash; the payload band ───────────────────────── */
+.showband{background:var(--c2); border:1px solid var(--r); border-radius:8px; padding:10px 12px 11px}
+.showhead{display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-bottom:9px}
+.showhead .st{font-size:12.5px; font-weight:700; color:var(--i); letter-spacing:-.01em}
+.showhead .sc{font-size:11.5px; color:var(--i4); font-variant-numeric:tabular-nums}
+.tsearch{flex:0 0 226px; min-width:0; padding:7px 11px; border:1px solid var(--rs); border-radius:6px;
+  background:var(--p); font:inherit; font-size:12.5px; color:var(--i)}
+.tsearch::placeholder{color:var(--i4)}
+.tsearch:focus-visible{outline:2px solid var(--ac); outline-offset:1px}
+.tfilt{display:flex; gap:5px; flex-wrap:wrap}
+.tf{display:inline-flex; gap:6px; align-items:center; padding:6px 10px; border-radius:6px;
+  border:1px solid var(--r); font-size:12px; color:var(--i3); background:var(--p); cursor:pointer}
+.tf:hover{border-color:var(--acl); color:var(--aci)}
+.tf .c{font-size:11px; color:var(--i4); font-variant-numeric:tabular-nums}
+.tf.on{background:var(--i); border-color:var(--i); color:#FFFFFF}
+.tf.on .c{color:#FFFFFF; opacity:.72}
+.tgroup{font-size:9.5px; font-weight:700; letter-spacing:.07em; text-transform:uppercase;
+  color:var(--i4); margin:2px 0 7px}
+.tgrid + .tgroup{margin-top:11px}
+.tempty{font-size:12px; color:var(--i4); padding:6px 2px 2px}
+/* the onboarding band: the recommendation list is the content, not a filter */
+.cover{display:flex; align-items:baseline; gap:5px; font-size:11.5px; color:var(--i4)}
+.cover .frac{
+  font-size:12.5px; font-weight:700; font-variant-numeric:tabular-nums;
+  color:var(--warn); background:color-mix(in srgb, var(--warn) 12%, #FFFFFF);
+  border:1px solid color-mix(in srgb, var(--warn) 28%, transparent);
+  border-radius:5px; padding:1px 7px;
+}
+.cover .frac.done{
+  color:var(--ok); background:var(--ok-wash);
+  border-color:color-mix(in srgb, var(--ok) 26%, transparent);
+}
+.expand{
+  margin-left:auto; font-size:11.5px; font-weight:600; color:var(--i3);
+  border:1px dashed var(--rs); border-radius:6px; padding:5px 10px; background:var(--p);
+}
+.expand:hover{border-color:var(--ac); color:var(--aci); background:var(--acw)}
+.catbar{margin-top:11px; padding-top:10px; border-top:1px dashed var(--r)}
+.catlabel{font-size:11.5px !important; color:var(--i4); font-weight:700; letter-spacing:.01em}
+.tcard.needs{
+  border-color:color-mix(in srgb, var(--warn) 45%, var(--r));
+  background:color-mix(in srgb, var(--warn) 7%, #FFFFFF);
+}
+.tcard.needs .th{border-color:color-mix(in srgb, var(--warn) 40%, var(--r))}
+.tgroup.needslab{color:var(--warn)}
+.tgroup.donelab{color:var(--i4)}
+/* the status takes the slot the kind tag used - in this band every card is a
+   recommendation, so "SET" was saying nothing. */
+.tstat{
+  flex:none; font-size:10px; font-weight:700; letter-spacing:.02em; border-radius:5px;
+  padding:3px 7px; white-space:nowrap;
+}
+.tstat.needs{color:var(--warn); background:color-mix(in srgb, var(--warn) 13%, #FFFFFF);
+  border:1px solid color-mix(in srgb, var(--warn) 30%, transparent)}
+.tstat.has{color:var(--ok); background:var(--ok-wash);
+  border:1px solid color-mix(in srgb, var(--ok) 26%, transparent)}
+/* covered groups read as "done, skip" at a glance - a lighter wash than the
+   amber, because finished should be quiet. */
+.tcard.done{
+  border-color:color-mix(in srgb, var(--ok) 26%, var(--r));
+  background:color-mix(in srgb, var(--ok) 5%, #FFFFFF);
+}
+.tcard.done .th{border-color:color-mix(in srgb, var(--ok) 24%, var(--r))}
+.mk[data-flow="onboarding"] .showband > .tgrid{grid-template-columns:repeat(auto-fill,minmax(240px,1fr))}
+/* the count is its own control: it opens the product list, it never selects */
+.tcount{
+  font-size:10.5px; color:var(--i4); font-variant-numeric:tabular-nums;
+  text-decoration:underline; text-decoration-style:dotted; text-underline-offset:2px;
+}
+.tcount:hover{color:var(--aci); text-decoration-style:solid}
+.tcard{position:relative}
+.peek{
+  /* opens upward: the band sits at the bottom of the modal, and .mk clips */
+  position:absolute; z-index:5; bottom:calc(100% + 6px); left:0; width:250px;
+  background:var(--p); border:1px solid var(--r); border-radius:8px;
+  box-shadow:0 14px 30px -12px rgba(32,28,46,.4); padding:9px 10px; text-align:left; cursor:default;
+}
+.peek .ph{font-size:10px; font-weight:700; letter-spacing:.05em; text-transform:uppercase;
+  color:var(--i4); margin-bottom:7px}
+.peek .prow{display:flex; align-items:center; gap:8px; padding:3px 0; font-size:12px; color:var(--i3)}
+.peek .psw{flex:none; width:22px; height:22px; border-radius:4px; border:1px solid var(--r);
+  background:linear-gradient(135deg,var(--acw) 0%,var(--c2) 100%)}
+.peek .pmore{font-size:11px; color:var(--i4); padding-top:5px}
+/* one row at rest: the rest of the list is one click away */
+.tmore{
+  display:flex; align-items:center; justify-content:center; text-align:center; padding:6px 9px;
+  border-radius:6px; border:1px dashed var(--rs); background:var(--p); font-size:11.5px;
+  font-weight:600; color:var(--i3); line-height:1.25;
+}
+.tmore:hover{border-color:var(--ac); color:var(--aci); background:var(--acw)}
+.mk-toast{
+  position:absolute; left:50%; bottom:76px; transform:translateX(-50%); z-index:3;
+  background:var(--i); color:#FFFFFF; font-size:12.5px; font-weight:600;
+  padding:9px 15px; border-radius:6px; box-shadow:0 10px 24px -10px rgba(32,28,46,.55);
+}
+.tgrid{display:grid; grid-template-columns:repeat(auto-fill,minmax(180px,1fr)); gap:6px}
+.tcard{display:flex; align-items:center; gap:9px; padding:6px 9px; border-radius:6px;
+  border:1px solid var(--r); background:var(--p); min-width:0}
+.tcard:hover{border-color:var(--acl)}
+.tcard .th{flex:none; width:24px; height:24px; border-radius:5px; border:1px solid var(--r);
+  background:linear-gradient(135deg,var(--acw) 0%,#FFFFFF 100%)}
+.tcard .tmeta{flex:1; min-width:0; display:flex; flex-direction:column; gap:1px}
+.tcard .tn{font-size:12.5px; font-weight:600; color:var(--i); overflow:hidden;
+  text-overflow:ellipsis; white-space:nowrap}
+.tcard .tsub{font-size:10.5px; color:var(--i4); font-variant-numeric:tabular-nums}
+.tcard .norule{color:var(--warn); font-weight:600}
+.tcard .hasrule{color:var(--i4)}
+.tcard .kd{flex:none; font-size:9.5px; font-weight:700; letter-spacing:.04em; text-transform:uppercase;
+  color:var(--i4); background:var(--c2); border-radius:4px; padding:2px 5px}
+.tcard.on{background:var(--acw); border-color:var(--ac)}
+.tcard.on .kd{color:var(--aci); background:#FFFFFF}
+.tcard.on .tn{color:var(--aci)}
+
+.mk[data-bucket="62"]{--th:62px; --tclamp:3}
+</style>
+
+<div class="wrap">
+
+  <header class="mast">
+    <div class="eyebrow">Wiskr &middot; Logic step &middot; Create-a-rule modal &middot; Build reference</div>
+    <h1>Two flows, one modal</h1>
+    <p>The same rule builder, opened from two places with two different jobs. In <b>onboarding</b> the merchant
+      is finishing a list &mdash; the groups they confirmed on the Recommendations step &mdash; so those groups
+      <em>are</em> the band, with their coverage on show and the catalogue behind one button. In the
+      <b>standalone builder</b> nobody is finishing a list; the catalogue is open from the start. Everything
+      above the products band is identical in both. All measured live.</p>
+  </header>
+
+  <div class="switcher">
+    <div class="tabs" role="tablist" aria-label="Flow">
+      <button class="tab" role="tab" id="tab-a" aria-controls="opt-a" aria-selected="true"><span class="t">Onboarding</span><span class="s" data-h="a">measuring&hellip;</span></button>
+      <button class="tab" role="tab" id="tab-c" aria-controls="opt-c" aria-selected="false"><span class="t">Rule builder</span><span class="s" data-h="c">measuring&hellip;</span></button>
+      <button class="tab" role="tab" id="tab-b" aria-controls="opt-b" aria-selected="false"><span class="t">Onboarding &middot; 8 questions</span><span class="s" data-h="b">measuring&hellip;</span></button>
+    </div>
+  </div>
+
+  <div class="opt" id="opt-a" role="tabpanel" aria-labelledby="tab-a">
+    <div class="opthead">
+      <div>
+        <h3>Onboarding &mdash; finish the list</h3>
+        <p class="thesis">The band is the merchant&rsquo;s own recommendation groups and nothing else: what they
+          confirmed on step 1, how many rules each already carries, and how far through the list they are.
+          <b>firming</b> is outlined because nothing points at it yet. Add it and hit <b>Create &amp; add
+          another</b> &mdash; the meter fills and <b>acne</b> goes 2 rules &rarr; 3.</p>
+      </div>
+      <div class="meter" data-meter="a">
+        <div class="row"><span class="h mono">&mdash;</span><span class="cap">of the 850px ceiling</span></div>
+        <div class="bar"><i></i><span class="mark soft"><span>660 laptop</span></span><span class="mark"><span>850</span></span></div>
+        <div class="legend">band is the rec list</div>
+      </div>
+    </div>
+    <div class="stage"><div class="pad"><div class="mkscale"><div class="mk" data-mock="a" data-title="small" data-qs="5" data-flow="onboarding" style="width:1330px"></div></div></div></div>
+    <div class="stagecap"><span><b>+ Add something else</b> reveals the catalogue &mdash; tabs, search and all &mdash; without leaving the recommendations behind.</span><span class="mono">Figtree &middot; Quartz tokens</span></div>
+    <div class="notes">
+      <div class="note"><h4>What the band does</h4><ul>
+        <li>Titled <b>Your recommendations</b> &mdash; not a filter chip among six, the content itself</li>
+        <li>The header is a plain fraction: <b>2/3</b> have a rule, amber while there is a gap and green with a
+          tick at <b>3/3</b>. No progress graphic &mdash; the number is the fastest read there is</li>
+        <li><b>Uncovered groups sort to the front</b> and carry an amber wash, an amber border and a
+          <b>Needs a rule</b> chip. Covered ones go green &mdash; a lighter wash, a green edge and a
+          <b>&check; 2 rules</b> chip &mdash; so they read as <em>done, skip these</em> without being read at
+          all. Three signals in both cases: position, colour and words</li>
+        <li>The status takes the slot the <b>SET</b> tag used to hold &mdash; in this band every card is a
+          recommendation, so the kind tag was saying nothing. That also keeps the status on one line: cards
+          widened to 248px and the count line is just <b>9 products</b></li>
+        <li><b>The count opens the group.</b> Click <b>9 products</b> on any card for <b>Inside firming</b>
+          &mdash; the products it holds, with a <b>+ N more</b> tail. It is its own control: opening the list
+          never selects the card, and clicking inside the list never closes it</li>
+        <li>Cards move between the two states only when a rule is actually saved &mdash; never while you are
+          picking, so nothing jumps under the cursor</li>
+        <li>No kind tabs, no search, until asked for &mdash; the six controls that were sitting there are not part
+          of this job</li>
+        <li>Past six groups the list wraps anyway, so it splits into labelled <b>Needs a rule</b> and
+          <b>Has rules</b> sections; below that the ordering carries it and the labels would cost a line
+          each</li>
+      </ul></div>
+      <div class="note"><h4>Adding something else</h4><ul>
+        <li><b>+ Add something else</b> opens the catalogue under a dashed rule: tabs, search, and a one-row grid with <b>+ N more</b></li>
+        <li>The recommendation groups stay above it &mdash; expanding adds a section, it never replaces the list</li>
+        <li>Anything picked from the catalogue is pinned up with the groups, so the rule always reads in one place</li>
+      </ul></div>
+      <div class="note cost"><h4>What it costs</h4><p>A merchant who mostly targets tags has one extra click every
+        time. That is the deliberate trade: the flow is optimised for the person finishing the recommendation list,
+        which in onboarding is everyone.</p></div>
+    </div>
+  </div>
+
+  <div class="opt" id="opt-c" role="tabpanel" aria-labelledby="tab-c" hidden>
+    <div class="opthead">
+      <div>
+        <h3>Rule builder &mdash; standalone</h3>
+        <p class="thesis">Opened from the Logic tab on a quiz that already exists. Nobody is working through a
+          list, so the catalogue is open from the start: <b>All</b> by default, every kind tab and the search in
+          reach, one row of cards and <b>+ 7 from the catalogue</b> for the rest.</p>
+      </div>
+      <div class="meter" data-meter="c">
+        <div class="row"><span class="h mono">&mdash;</span><span class="cap">of the 850px ceiling</span></div>
+        <div class="bar"><i></i><span class="mark soft"><span>660 laptop</span></span><span class="mark"><span>850</span></span></div>
+        <div class="legend">catalogue open from the start</div>
+      </div>
+    </div>
+    <div class="stage"><div class="pad"><div class="mkscale"><div class="mk" data-mock="c" data-title="small" data-qs="5" data-flow="builder" style="width:1330px"></div></div></div></div>
+    <div class="stagecap"><span>Filter to <b>Recommendations</b> with a tag selected &mdash; the tag stays visible, because a filter must never hide part of the rule.</span><span class="mono">Figtree &middot; Quartz tokens</span></div>
+    <div class="notes">
+      <div class="note"><h4>What differs</h4><ul>
+        <li>Opens on <b>All</b>, not on the recommendation groups</li>
+        <li>Kind tabs and search are visible from the start &mdash; no expand step</li>
+        <li>No <b>no rule yet</b> flag and no amber outline &mdash; there is no list to finish here, so an uncovered group is not a to-do. A card that <em>does</em> have rules still says so (<b>2 rules</b>), because that is a fact rather than a task</li>
+        <li>The group line says <b>groups this quiz recommends</b>; there is no &ldquo;step 1&rdquo; to point at</li>
+      </ul></div>
+      <div class="note"><h4>What is identical</h4><ul>
+        <li>Everything above the band: rows, operators, the verb, the footer, <b>Create &amp; add another</b></li>
+        <li>Picked targets always render first, whatever the filter</li>
+        <li>One row plus <b>+ N from the catalogue</b> on the <b>All</b> view; filtered views are uncapped</li>
+      </ul></div>
+      <div class="note cost"><h4>What it costs</h4><p>Nothing that onboarding needs &mdash; but a merchant who
+        opens this on a quiz built by the funnel gets no nudge about which recommendation groups are still
+        uncovered. The coverage text is there; the goal framing is not.</p></div>
+    </div>
+  </div>
+
+  <div class="opt" id="opt-b" role="tabpanel" aria-labelledby="tab-b" hidden>
+    <div class="opthead">
+      <div>
+        <h3>Onboarding, eight questions</h3>
+        <p class="thesis">The same onboarding modal on a longer quiz &mdash; it grows and scrolls as one piece.
+          Scroll halfway, pick an answer, and you stay exactly where you were. <b>Q6</b> is 107 characters, so a
+          clipped label is visible.</p>
+      </div>
+      <div class="meter" data-meter="b">
+        <div class="row"><span class="h mono">&mdash;</span><span class="cap">of the 850px ceiling</span></div>
+        <div class="bar"><i></i><span class="mark soft"><span>660 laptop</span></span><span class="mark"><span>850</span></span></div>
+        <div class="legend">grows with the quiz</div>
+      </div>
+    </div>
+    <div class="ctrlbar" style="padding-bottom:12px">
+      <span class="cl">Question list</span>
+      <span class="ctrl" data-cap-toggle="b">
+        <button data-v="off" aria-pressed="true">Let it grow</button>
+        <button data-v="on" aria-pressed="false">Capped, scrolls inside</button>
+      </span>
+    </div>
+    <div class="stage"><div class="pad"><div class="mkscale"><div class="mk" data-mock="b" data-title="small" data-qs="8" data-cap="off" data-flow="onboarding" style="width:1330px"></div></div></div></div>
+    <div class="stagecap"><span>The capped alternative is on the toggle &mdash; kept for the day quizzes run past ten questions.</span><span class="mono">Figtree &middot; Quartz tokens</span></div>
+  </div>
+
+  <section>
+    <div class="shead">
+      <h2>The two flows, side by side</h2>
+      <span class="note">Only the products band differs</span>
+    </div>
+    <div class="edits">
+      <div class="edit"><span class="what">Default view</span>
+        <span class="how"><b>Onboarding:</b> the recommendation groups, titled and uncapped, no kind tabs and no
+          search. <b>Builder:</b> <b>All</b>, with every tab and the search in reach.</span>
+        <span class="delta zero">band only</span></div>
+      <div class="edit"><span class="what">The goal is visible &mdash; only where there is one</span>
+        <span class="how">Onboarding puts <b>2 of 3 have a rule</b> and a segment per group in the band header, and
+          outlines any group nothing points at yet. That is the merchant's actual task in the funnel. The builder
+          drops all of it: no headline, no amber, no <b>no rule yet</b> &mdash; an uncovered group there is just a
+          group. Cards that do carry rules still say <b>2 rules</b>, which is a fact rather than a
+          task.</span><span class="delta">coverage</span></div>
+      <div class="edit"><span class="what">Adding beyond the list</span>
+        <span class="how">One dashed button, <b>+ Add something else</b>, reveals the catalogue underneath the
+          groups. It adds a section rather than replacing one, so the recommendations never leave the
+          screen.</span><span class="delta zero">one click</span></div>
+      <div class="edit"><span class="what">Multiple rules per group</span>
+        <span class="how">Covered is a count, never a flag &mdash; a group with rules stays fully selectable and
+          the number goes up. Rules are checked top down and the first match applies, so several may legitimately
+          point at the same group.</span><span class="delta zero">by design</span></div>
+      <div class="edit"><span class="what">Which flag do we read?</span>
+        <span class="how">The modal already knows: the funnel surface passes the flow in, the same way it passes
+          the quiz. Everything above the band &mdash; questions, operators, verb, footer &mdash; is identical, so
+          this is one prop on one component, not two components.</span><span class="delta zero">one prop</span></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="shead">
+      <h2>Build notes</h2>
+      <span class="note">Against <code>app/components/studio/logicTab/CreateRuleModal.tsx</code></span>
+    </div>
+    <div class="edits">
+      <div class="edit"><span class="what">One prop, two bands</span>
+        <span class="how">Add a <code>flow: "onboarding" | "builder"</code> prop (default <code>"builder"</code>).
+          It changes the products band only. Onboarding renders the category list with coverage and hides
+          <code>kindChip</code> / search until <code>expanded</code>; builder renders today's band with
+          <code>kindChip</code> defaulting to <code>"all"</code>.</span><span class="delta zero">component</span></div>
+      <div class="edit"><span class="what">Coverage</span>
+        <span class="how">For each category id, count the rules in <code>doc.decision_rules</code> whose
+          <code>target_ids</code> contains it. Client-side derive, no new API. Never disable or hide a covered
+          target; a target may carry several rules.</span><span class="delta zero">derived</span></div>
+      <div class="edit"><span class="what">Not a gate</span>
+        <span class="how">Coverage is a readout. Nothing blocks saving a rule because a group is uncovered, and
+          nothing blocks publishing &mdash; the existing publish gates are unchanged. If an uncovered group should
+          warn at publish time, that belongs in the publish gate, not here.</span><span class="delta">careful</span></div>
+      <div class="edit"><span class="what">The count is its own control</span>
+        <span class="how">Clicking a card's product count opens the group's contents; it must <b>not</b> toggle
+          selection. The precedent is already in the code &mdash; <code>.qz-crm-rescount</code> in the pre-rework
+          modal was a separate button beside the row for exactly this reason. Build it as a sibling button, not a
+          span nested inside the card button (the mock nests it; React should not). The panel opens
+          <b>upward</b>: this band sits at the bottom of the modal and <code>.qz-lm</code> clips
+          overflow.</span><span class="delta zero">popover</span></div>
+      <div class="edit"><span class="what">Everything else, settled</span>
+        <span class="how">13.5px title in a 36px bar; one row per question with fixed 130&times;62 buckets, two-line
+          clamp, full text in <code>title</code>; three-line clamp on question labels; constant 124px operator
+          column carrying <code>is / is not</code> and <code>any of / all of</code>; no <code>match</code> written
+          on new rules; no read-back sentence; <b>Create &amp; add another</b> reusing the commit path then
+          resetting state; <code>activeCols</code> and the <code>+ Qn</code> chips deleted.</span>
+        <span class="delta zero">as settled</span></div>
+    </div>
+  </section>
+
+  <footer class="foot">
+    Live HTML at production fidelity &mdash; Figtree, Quartz token values, and the component metrics from
+    <code>app/styles/quizocalypse.css</code> (<code>.qz-lm-*</code>). Content is the skin quiz from the onboarding
+    screenshot; Q4 onward are stand-ins, and Q5's second answer and Q6 are deliberately long to show the clipping.
+    Heights are measured in your browser, not estimated. The same spec in text, for grepping next to the code:
+    <code>docs/design/logic-tab/CREATE-RULE-HANDOFF.md</code>. Admin light palette only &mdash; dark mode was cut
+    on 2026-08-09.
+  </footer>
+</div>
+
+<script>
+(function(){
+  "use strict";
+
+  var QS = [
+    {id:"q1", n:1, multi:false, t:"A few hours after cleansing \u2014 with no products on \u2014 how does your skin feel", a:[
+      "Tight and rough, sometimes flaky","Shiny all over, pores feel congested",
+      "Shiny in the T-zone, comfortable on the cheeks","Comfortable and balanced, no strong pull either way",
+      "Flat and lackluster, no visible glow","Easily flushed or blotchy after washing",
+      "Reactive, stings, itches, or turns red quickly"]},
+    {id:"q2", n:2, multi:false, t:"Which single concern bothers you most right now", a:[
+      "Fine lines or loss of firmness","Breakouts or congested pores","Dryness or dehydration",
+      "Persistent redness or uneven tone","Dull or uneven texture","Sensitivity or barrier damage"]},
+    {id:"q3", n:3, multi:false, t:"How does your skin usually respond to a new product in the first few days", a:[
+      "Rarely reacts, I can try most things","Occasional mild tingling that fades",
+      "Often breaks out or gets oilier","Redness or stinging for a day or two","Gets drier or feels stripped"]},
+    {id:"q4", n:4, multi:false, t:"What does your current morning routine look like", a:[
+      "Cleanse and go","Cleanser and moisturizer","Cleanser, serum, moisturizer, SPF",
+      "A full multi-step routine","Nothing consistent yet"]},
+    {id:"q5", n:5, multi:true, t:"Which areas do you want a regimen to focus on most", a:[
+      "Forehead and brows",
+      "Under-eyes \u2014 fine lines, puffiness and the dark circles that show up in the morning",
+      "Cheeks","Nose and T-zone","Jawline and chin","Neck and the skin under the jaw"]}
+  ];
+  var QS5 = QS;
+  var QS8 = QS5.concat([
+    {id:"q6", n:6, multi:false, t:"How much time are you realistically willing to spend on your routine, morning and night, on an ordinary weekday", a:[
+      "Under two minutes","Three to five minutes","Five to ten minutes","As long as it takes"]},
+    {id:"q7", n:7, multi:false, t:"Have you used a retinoid before", a:[
+      "Never","Tried one, it was too harsh","Using one now","Used to, then stopped"]},
+    {id:"q8", n:8, multi:true, t:"What matters to you in a formula", a:[
+      "Fragrance-free","Vegan","No essential oils","Refillable packaging","Reef-safe filters"]}
+  ]);
+
+  /* r = how many rules already point at this target. A target can carry
+     several rules, so this is a count, not a flag - and it never removes
+     the target from the list. */
+  var TARGETS = [
+    {k:"Set", n:"acne", c:"12 products", r:2},
+    {k:"Set", n:"firming", c:"9 products", r:0},
+    {k:"Set", n:"barrier repair", c:"14 products", r:1},
+    {k:"Tag", n:"retinoid", c:"6 products", r:0},
+    {k:"Tag", n:"peptide", c:"8 products", r:0},
+    {k:"Tag", n:"fragrance-free", c:"41 products", r:1},
+    {k:"Coll", n:"Serums", c:"22 products", r:0},
+    {k:"Coll", n:"Moisturizers", c:"18 products", r:0},
+    {k:"Coll", n:"Treatments", c:"27 products", r:0},
+    {k:"Prod", n:"Overnight Renewal Cream", c:"1 product", r:0},
+    {k:"Prod", n:"Peptide Firming Serum", c:"1 product", r:0},
+    {k:"Meta", n:"texture: rich", c:"31 products", r:1}
+  ];
+  var SETS = TARGETS.filter(function(t){ return t.k === "Set"; });
+
+  /* what is actually inside a group - the question the band cannot answer
+     otherwise. The original component had this as a popover on the count;
+     it is kept, and kept separate from selecting the card. */
+  var INSIDE = {
+    "acne": ["Clarifying Gel Cleanser", "Salicylic Daily Toner", "BHA Spot Treatment",
+             "Niacinamide 10% Serum", "Oil-Free Gel Moisturiser", "Purifying Clay Mask"],
+    "firming": ["Peptide Firming Serum", "Collagen Night Cream", "Firming Eye Balm",
+                "Retinol 0.3 Renewal Cream", "Lifting Neck Serum"],
+    "barrier repair": ["Ceramide Repair Moisturiser", "Barrier Rescue Balm", "Oat Cleansing Milk",
+                       "Squalane Face Oil", "Panthenol Soothing Serum", "Overnight Recovery Mask"]
+  };
+  var INSIDE_FALLBACK = ["Hydrating Essence", "Gentle Cream Cleanser", "Vitamin C Serum",
+                         "Mineral SPF 40", "Rich Repair Cream", "Micellar Rinse"];
+  /* "Sets" are the Category rows step 1 confirmed - the quiz's own
+     recommendation groups. Naming them after the step the merchant just
+     finished is most of the streamlining. */
+  var KINDS = [["Set","Recommendations",3],["Prod","Products",214],["Coll","Collections",22],
+               ["Tag","Tags",148],["Meta","Metafields",31]];
+  var VERBS = [
+    {v:"show", n:"Show", d:"these become the results"},
+    {v:"pin",  n:"Pin",  d:"these move to the top"},
+    {v:"hide", n:"Hide", d:"these never show"}
+  ];
+  var CEILING = 850, LAPTOP = 660;
+  var SHOW_IMPACT = false;
+  var FLOW = "onboarding";
+
+  function esc(s){ return String(s).replace(/[&<>"]/g, function(c){
+    return ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;"})[c]; }); }
+  function qById(id){ return QS.filter(function(q){ return q.id === id; })[0]; }
+
+  function ruleMap(){
+    var m = {};
+    TARGETS.forEach(function(t){ m[t.n] = t.r; });
+    return m;
+  }
+
+  function newState(){
+    return {
+      picks:{
+        q1:["Flat and lackluster, no visible glow", "Easily flushed or blotchy after washing"],
+        q2:["Fine lines or loss of firmness"]
+      },
+      not:{}, all:{}, verb:"show", targets:["acne","retinoid"], kind:"all", toast:"", rules:ruleMap()
+    };
+  }
+  function emptyState(){
+    return { picks:{}, not:{}, all:{}, verb:"show", targets:[],
+             kind:"all", toast:"", rules:ruleMap() };
+  }
+
+  function tilesFor(st, q){
+    var picked = st.picks[q.id] || [];
+    return '<span class="tiles">' + q.a.map(function(t){
+      var on = picked.indexOf(t) > -1;
+      return '<button class="tile' + (on ? " on" : "") + '" data-act="pick" data-q="' + q.id +
+             '" data-a="' + esc(t) + '" aria-pressed="' + on + '" title="' + esc(t) + '">' +
+             '<span class="tx">' + esc(t) + '</span></button>';
+    }).join("") + '</span>';
+  }
+
+  /* One cluster, one phrase: "Q1 is any of [these]". `is / is not` is the
+     negation; the join only appears once a second answer is picked, and it
+     is a control only on a multi-select - "all of" on a single-select can
+     never fire, so there it is stated, not offered. */
+  function opsFor(st, q){
+    var picks = st.picks[q.id] || [];
+    var join = "";
+    if(picks.length > 1){
+      join = q.multi
+        ? '<button class="qcf join" data-act="all" data-q="' + q.id + '">' +
+          (st.all[q.id] ? "all of" : "any of") + ' \u21c4</button>'
+        : '<span class="qcf join fixed" title="A shopper answers this question once, ' +
+          'so two answers here can only mean either of them">any of</span>';
+    }
+    return '<span class="ops"><button class="qcf' + (st.not[q.id] ? " not" : "") +
+      '" data-act="not" data-q="' + q.id + '">' + (st.not[q.id] ? "is not" : "is") +
+      '</button>' + join + '</span>';
+  }
+
+  function rows(st){
+    return '<div class="qrows">' + QS.map(function(q){
+      var picked = (st.picks[q.id] || []).length;
+      return '<div class="qrow' + (picked ? " on" : "") + '">' +
+        '<span class="qc">' +
+          '<span class="qmeta"><span class="qn">Q' + q.n + '</span>' +
+          (q.multi ? '<span class="badge multi">Multi select</span>' : "") + '</span>' +
+          '<span class="qt" title="' + esc(q.t) + '">' + esc(q.t) + '</span></span>' +
+        tilesFor(st, q) + opsFor(st, q) +
+      '</div>';
+    }).join("") + '</div>';
+  }
+
+  function verbSeg(st){
+    var cur = VERBS.filter(function(v){ return v.v === st.verb; })[0];
+    return '<div class="verbline">' +
+      '<span class="lab"><span class="t">Then</span></span>' +
+      '<span class="seg vseg">' + VERBS.map(function(v){
+        return '<button data-act="verb" data-v="' + v.v + '" aria-pressed="' +
+               (st.verb === v.v) + '">' + v.n + '</button>';
+      }).join("") + '</span>' +
+      '<span class="verbhint">' + cur.d + '</span></div>';
+  }
+
+  /* WHAT THE QUIZ SHOWS — picked targets first, so the payload of the rule
+     is always the front of the band. */
+  function peekPanel(t){
+    var list = INSIDE[t.n] || INSIDE_FALLBACK;
+    var total = parseInt(t.c, 10) || list.length;
+    /* data-act stops a click inside the list from reaching the card */
+    return '<span class="peek" data-act="peekstay"><span class="ph">Inside ' + esc(t.n) + '</span>' +
+      list.map(function(x){
+        return '<span class="prow"><span class="psw"></span>' + esc(x) + '</span>';
+      }).join("") +
+      (total > list.length ? '<span class="pmore">+' + (total - list.length) + ' more</span>' : "") +
+      '</span>';
+  }
+
+  function tcard(st, t){
+    var on = st.targets.indexOf(t.n) > -1;
+    var n = (st.rules && st.rules[t.n]) || 0;
+    /* in the onboarding band every card is a recommendation, so the kind tag
+       says nothing - the status takes that slot instead. */
+    var recBand = FLOW === "onboarding" && t.k === "Set";
+    /* "no rule yet" is only meaningful where there is a list to finish. In
+       the standalone builder an uncovered group is not a to-do, so the count
+       shows when there is one and nothing shows when there is not. */
+    var goal = FLOW === "onboarding";
+    var needs = goal && t.k === "Set" && !n && !on;
+    var done  = goal && t.k === "Set" && n > 0 && !on;
+    return '<button class="tcard' + (on ? " on" : needs ? " needs" : done ? " done" : "") +
+      '" data-act="target" data-t="' + esc(t.n) +
+      '" aria-pressed="' + on + '" title="' + esc(t.n) + ' \u00b7 ' + t.c +
+      (t.k !== "Set" ? "" : n ? ' \u00b7 used by ' + n + (n === 1 ? " rule" : " rules")
+        : goal ? ' \u00b7 no rule points at it yet' : "") + '">' +
+      '<span class="th"></span>' +
+      '<span class="tmeta"><span class="tn">' + esc(t.n) + '</span>' +
+      '<span class="tsub"><span class="tcount" data-act="peek" data-t="' + esc(t.n) +
+        '" title="See what is in this group">' + t.c + '</span>' +
+        (recBand || t.k !== "Set" ? "" : n
+          ? ' \u00b7 <span class="hasrule">' + n + (n === 1 ? " rule" : " rules") + '</span>'
+          : "") + '</span></span>' +
+      (recBand
+        ? '<span class="tstat ' + (n ? "has" : "needs") + '">' +
+          (n ? "\u2713 " + n + (n === 1 ? " rule" : " rules") : "Needs a rule") + '</span>'
+        : '<span class="kd">' + t.k + '</span>') +
+      (st.peek === t.n ? peekPanel(t) : "") + '</button>';
+  }
+
+  /* Two rules keep the chips honest: what you have picked is pinned above
+     the filter, so a filter can never hide part of your own rule, and the
+     group line says how much of that kind you are actually looking at. */
+  /* ONBOARDING - the merchant's job is to finish covering the groups step 1
+     confirmed, so those groups ARE the band: no kind tabs, no search, until
+     they ask for something else. */
+  function showBandOnboarding(st){
+    var needs = SETS.filter(function(t){ return !(st.rules[t.n] || 0); });
+    var done  = SETS.filter(function(t){ return (st.rules[t.n] || 0) > 0; });
+    var covered = done.length;
+    var SPLIT = SETS.length > 6;   /* a long list wraps anyway - label the halves */
+    var chosenOther = TARGETS.filter(function(t){
+      return t.k !== "Set" && st.targets.indexOf(t.n) > -1;
+    });
+    var pool = TARGETS.filter(function(t){
+      return t.k !== "Set" && st.targets.indexOf(t.n) < 0 &&
+             (st.kind === "all" || !st.kind || t.k === st.kind);
+    });
+    var chips = '<button class="tf' + ((st.kind || "all") === "all" ? " on" : "") +
+      '" data-act="kind" data-k="all" aria-pressed="' + ((st.kind || "all") === "all") + '">All</button>' +
+      KINDS.filter(function(k){ return k[0] !== "Set"; }).map(function(k){
+        return '<button class="tf' + (st.kind === k[0] ? " on" : "") + '" data-act="kind" data-k="' +
+          k[0] + '" aria-pressed="' + (st.kind === k[0]) + '">' + k[1] +
+          ' <span class="c">' + k[2] + '</span></button>';
+      }).join("");
+
+    return '<div class="showband">' +
+      '<div class="showhead"><span class="st">Your recommendations</span>' +
+      '<span class="cover"><b class="frac' + (covered === SETS.length ? " done" : "") + '">' +
+        (covered === SETS.length ? "\u2713 " : "") + covered + '/' + SETS.length +
+        '</b> have a rule</span>' +
+      (st.expand ? "" : '<button class="expand" data-act="expand">+ Add something else</button>') +
+      '</div>' +
+      /* Ordered by the thing the merchant is tracking: what still needs a
+         rule, then what has one, then anything else the rule uses. Cards only
+         move when a rule is actually saved, never while picking. Labelled
+         groups cost a line each, so they only appear once the list is long
+         enough to wrap anyway. */
+      (SPLIT
+        ? (needs.length
+            ? '<div class="tgroup needslab">Needs a rule \u00b7 ' + needs.length + '</div>' +
+              '<div class="tgrid">' + needs.map(function(t){ return tcard(st, t); }).join("") + '</div>'
+            : "") +
+          (done.length
+            ? '<div class="tgroup donelab">Has rules \u00b7 ' + done.length + '</div>' +
+              '<div class="tgrid">' + done.map(function(t){ return tcard(st, t); }).join("") + '</div>'
+            : "")
+        : '<div class="tgrid">' +
+            needs.concat(done, chosenOther).map(function(t){ return tcard(st, t); }).join("") +
+          '</div>') +
+      (SPLIT && chosenOther.length
+        ? '<div class="tgroup donelab">Also in this rule \u00b7 ' + chosenOther.length + '</div>' +
+          '<div class="tgrid">' + chosenOther.map(function(t){ return tcard(st, t); }).join("") + '</div>'
+        : "") +
+      (st.expand
+        ? '<div class="catbar">' +
+            /* same row treatment as the builder band: label, tabs, search */
+            '<div class="showhead"><span class="st catlabel">From the catalogue</span>' +
+            '<span class="tfilt">' + chips + '</span>' +
+            '<input class="tsearch" placeholder="Search products, collections, tags\u2026" aria-label="Search the catalogue"></div>' +
+            '<div class="tgrid">' + (function(){
+              if(!st.more && pool.length > 6){
+                return pool.slice(0, 5).map(function(t){ return tcard(st, t); }).join("") +
+                  '<button class="tmore" data-act="more">+' + (pool.length - 5) + ' more</button>';
+              }
+              return pool.map(function(t){ return tcard(st, t); }).join("");
+            })() + '</div>' +
+          '</div>'
+        : "") +
+      '</div>';
+  }
+
+  function showBand(st){
+    if(FLOW === "onboarding") return showBandOnboarding(st);
+    var kind = st.kind || "all";
+    var chosen = TARGETS.filter(function(t){ return st.targets.indexOf(t.n) > -1; });
+    var pool = TARGETS.filter(function(t){
+      return st.targets.indexOf(t.n) < 0 && (kind === "all" || t.k === kind);
+    });
+    var meta = KINDS.filter(function(k){ return k[0] === kind; })[0];
+    var uncovered = SETS.filter(function(t){ return !((st.rules && st.rules[t.n]) || 0); }).length;
+    var groupLine = kind === "all"
+      ? ""
+      : kind === "Set"
+        /* every recommendation group is already here - nothing behind search -
+           and the line doubles as the coverage readout. */
+        ? "Recommendations \u00b7 all " + SETS.length + " groups this quiz recommends"
+        : meta[1] + " \u00b7 " + pool.length + " in this quiz of " +
+          meta[2].toLocaleString() + " \u2014 search to reach the rest";
+
+    var chips = '<button class="tf' + (kind === "all" ? " on" : "") +
+      '" data-act="kind" data-k="all" aria-pressed="' + (kind === "all") + '">All</button>' +
+      KINDS.map(function(k){
+        return '<button class="tf' + (kind === k[0] ? " on" : "") + '" data-act="kind" data-k="' +
+          k[0] + '" aria-pressed="' + (kind === k[0]) + '">' + k[1] +
+          ' <span class="c">' + k[2] + '</span></button>';
+      }).join("");
+
+    return '<div class="showband">' +
+      '<div class="showhead"><span class="st">What the quiz shows</span>' +
+      '<span class="tfilt">' + chips + '</span>' +
+      '<input class="tsearch" placeholder="Search products, sets, tags\u2026" aria-label="Search what the rule acts on">' +
+      '</div>' +
+      /* One grid, always, with what the rule already acts on first - so a
+         filter can never hide part of your own rule, and no group header is
+         needed to explain the order. */
+      (groupLine ? '<div class="tgroup">' + groupLine + '</div>' : "") +
+      (true
+        ? '<div class="tgrid">' + (function(){
+            var list = chosen.concat(pool);
+            /* The one-row cap is for the catalogue mix only. A filtered view -
+               the merchant's own recommendations included - shows everything
+               that matches. */
+            if(kind !== "all") return list.map(function(t){ return tcard(st, t); }).join("");
+            /* One row at rest: whatever the rule already acts on, then the
+               recommendation groups step 1 confirmed. The catalogue - tags,
+               collections, products, metafields - is behind the tile. */
+            if(!st.more && list.length > 5){
+              return list.slice(0, 5).map(function(t){ return tcard(st, t); }).join("") +
+                '<button class="tmore" data-act="more" title="Tags, collections, products and ' +
+                'metafields from the catalogue">+' + (list.length - 5) + ' from the catalogue</button>';
+            }
+            return list.map(function(t){ return tcard(st, t); }).join("");
+          })() + '</div>'
+        : "") +
+      (!chosen.length && !pool.length
+        ? '<div class="tempty">Nothing of this kind is in the quiz yet \u2014 search the catalogue to add one.</div>'
+        : "") +
+      '</div>';
+  }
+
+  function paths(st){
+    /* Conditions across questions are ANDed - the only join there is. */
+    var counts = QS.filter(function(q){ return (st.picks[q.id] || []).length; })
+                   .map(function(q){ return st.all[q.id] && q.multi ? 1 : st.picks[q.id].length; });
+    if(!counts.length) return 0;
+    return counts.reduce(function(a,b){ return a * b; }, 1);
+  }
+
+  function shell(st, inner, mode){
+    var ready = Object.keys(st.picks).length > 0 && st.targets.length > 0;
+    var impact = "";
+    if(SHOW_IMPACT && Object.keys(st.picks).length){
+      var p = paths(st);
+      var TOTAL = QS.reduce(function(n, q){ return n * q.a.length; }, 1);
+      impact = '<span class="impact">Fires on ' + p.toLocaleString() + ' of ' +
+               TOTAL.toLocaleString() + ' answer paths</span>';
+    }
+    var head = mode === "none" ? "" :
+      '<header class="mk-h"><h2>Create a rule</h2><span class="sp">' + impact +
+      '<button class="mk-x" aria-label="Close">\u00d7</button></span></header>';
+    return head +
+      (st.toast ? '<div class="mk-toast">\u2713 ' + st.toast + '</div>' : "") +
+      '<div class="mk-b">' + inner + '</div>' +
+      '<footer class="mk-f">' +
+      (st.targets.length
+        ? '<span class="fcount"><b>' + st.targets.length + '</b> selected</span>' : "") +
+      '<span class="acts"><button class="btn">Cancel</button>' +
+      '<button class="btn ghost" data-act="another"' + (ready ? "" : " disabled") +
+        '>Create &amp; add another</button>' +
+      '<button class="btn pri"' + (ready ? "" : " disabled") + '>Create rule</button></span></footer>';
+  }
+
+  function guts(st){
+    return rows(st) + '<div class="sep"></div>' + verbSeg(st) +
+           '<div class="sep"></div>' + showBand(st);
+  }
+  var RENDER = {};
+  ["a", "b", "c"].forEach(function(k){
+    RENDER[k] = function(st){ return shell(st, guts(st), "small"); };
+  });
+
+  var mocks = {};
+  Array.prototype.forEach.call(document.querySelectorAll("[data-mock]"), function(node){
+    var key = node.getAttribute("data-mock");
+    var m = { node:node, st:newState(), key:key, qs:(node.getAttribute("data-qs") === "8" ? QS8 : QS5) };
+    mocks[key] = m;
+    draw(m);
+    node.addEventListener("click", function(ev){
+      var b = ev.target.closest("[data-act]");
+      if(!b || !node.contains(b) || b.disabled) return;
+      FLOW = node.getAttribute("data-flow") || "onboarding";
+      QS = m.qs;
+      var st = m.st;
+      var act = b.getAttribute("data-act");
+      var qid = b.getAttribute("data-q");
+      if(act === "pick"){
+        var q = qById(qid);
+        var a = b.getAttribute("data-a");
+        var cur = st.picks[qid] || [];
+        var on = cur.indexOf(a) > -1;
+        /* Several answers of ONE question are allowed whatever its type -
+           they mean "any of". Only "all of" is multi-select-only. */
+        st.picks[qid] = on ? cur.filter(function(x){ return x !== a; }) : cur.concat([a]);
+        if(!st.picks[qid].length) delete st.picks[qid];
+      }
+      else if(act === "verb"){ st.verb = b.getAttribute("data-v"); }
+      else if(act === "target"){
+        var t = b.getAttribute("data-t");
+        var i = st.targets.indexOf(t);
+        if(i > -1) st.targets.splice(i, 1); else st.targets.push(t);
+      }
+      else if(act === "not"){ st.not[qid] = !st.not[qid]; }
+      else if(act === "all"){ st.all[qid] = !st.all[qid]; }
+      else if(act === "kind"){ st.kind = b.getAttribute("data-k"); }
+      else if(act === "more"){ st.more = true; }
+      else if(act === "expand"){ st.expand = true; }
+      else if(act === "peek"){
+        /* the count is its own control - opening the list never selects */
+        var t = b.getAttribute("data-t");
+        st.peek = st.peek === t ? null : t;
+      }
+      else if(act === "another"){
+        /* the one place the modal SHOULD move you: the saved rule clears and
+           the empty one starts at Q1, with a toast to say it landed. */
+        var carried = st.rules;
+        st.targets.forEach(function(t){ carried[t] = (carried[t] || 0) + 1; });
+        m.st = emptyState();
+        m.st.rules = carried;          /* a target can carry several rules */
+        m.st.toast = "Rule saved";
+        m.reset = true;
+        clearTimeout(m.toastTimer);
+        m.toastTimer = setTimeout(function(){ m.st.toast = ""; draw(m); fit(); }, 2600);
+      }
+      draw(m);
+      QS = QS5;
+      fit();
+    });
+  });
+
+  /* A pick must never move the merchant. Re-rendering replaces the DOM, so
+     every scroll position and the focused control are captured first and put
+     back after - the scrolled question list, a sideways-scrolled answer
+     strip, the page itself, and the button that was just clicked. */
+  function snapshot(node){
+    var a = document.activeElement;
+    var focus = null;
+    if(a && node.contains(a) && a.getAttribute("data-act")){
+      focus = ["data-act", "data-q", "data-a", "data-t", "data-v"]
+        .map(function(k){ return a.getAttribute(k); });
+    }
+    var list = node.querySelector(".qrows");
+    return {
+      page: window.scrollY,
+      list: list ? list.scrollTop : 0,
+      strips: Array.prototype.map.call(node.querySelectorAll(".tiles"),
+        function(t){ return t.scrollLeft; }),
+      focus: focus
+    };
+  }
+
+  function restore(node, s){
+    var list = node.querySelector(".qrows");
+    if(list) list.scrollTop = s.list;
+    var strips = node.querySelectorAll(".tiles");
+    s.strips.forEach(function(v, i){ if(strips[i]) strips[i].scrollLeft = v; });
+    if(s.focus){
+      var sel = "[data-act=\"" + s.focus[0] + "\"]";
+      ["data-q", "data-a", "data-t", "data-v"].forEach(function(k, i){
+        if(s.focus[i + 1] !== null) sel += "[" + k + "=\"" + cssEsc(s.focus[i + 1]) + "\"]";
+      });
+      var el = node.querySelector(sel);
+      if(el) el.focus({ preventScroll:true });
+    }
+    if(window.scrollY !== s.page) window.scrollTo(0, s.page);
+  }
+
+  function cssEsc(v){ return String(v).replace(/(["\\])/g, "\\$1"); }
+
+  /* QS is the list the renderers read; each mock swaps in its own for the
+     synchronous render, then puts the default back. */
+  function draw(m){
+    var keep = snapshot(m.node);
+    FLOW = m.node.getAttribute("data-flow") || "onboarding";
+    QS = m.qs || QS5;
+    m.node.innerHTML = RENDER[m.key](m.st);
+    QS = QS5;
+    if(m.reset){
+      m.reset = false;
+      var list = m.node.querySelector(".qrows");
+      if(list) list.scrollTop = 0;      /* a new rule starts at Q1 */
+      if(window.scrollY !== keep.page) window.scrollTo(0, keep.page);
+    } else {
+      restore(m.node, keep);
+    }
+  }
+
+  /* cap the question list so the verb and products bands stay put */
+  document.querySelectorAll("[data-cap-toggle]").forEach(function(ctrl){
+    var key = ctrl.getAttribute("data-cap-toggle");
+    ctrl.addEventListener("click", function(ev){
+      var b = ev.target.closest("button[data-v]");
+      if(!b) return;
+      ctrl.querySelectorAll("button").forEach(function(x){
+        x.setAttribute("aria-pressed", x === b ? "true" : "false");
+      });
+      mocks[key].node.setAttribute("data-cap", b.getAttribute("data-v"));
+      fit();
+    });
+  });
+
+  function fit(){
+    var wrapW = document.querySelector(".wrap").clientWidth - 40;
+    Object.keys(mocks).forEach(function(k){
+      var m = mocks[k];
+      var panel = m.node.closest(".opt");
+      var wasHidden = panel && panel.hidden;
+      if(wasHidden){
+        /* a display:none panel measures 0 — reveal it out of flow, at the
+           exact width it will have in flow, long enough to measure. */
+        panel.hidden = false;
+        panel.style.cssText = "position:absolute;left:-99999px;top:0;visibility:hidden;" +
+                              "pointer-events:none;width:" + wrapW + "px";
+      }
+      var scaler = m.node.parentElement;
+      var pad = scaler.parentElement;
+      var avail = pad.clientWidth - 44;
+      var w = m.node.offsetWidth || 1;
+      /* Never shrink past 55% — below that the mock is unreadable; the
+         stage pans sideways instead (phone review). */
+      var s = Math.max(0.55, Math.min(1, avail / w));
+      scaler.style.transform = "scale(" + s + ")";
+      var h = m.node.offsetHeight;
+      scaler.style.width  = (w * s) + "px";
+      scaler.style.height = (h * s) + "px";
+      report(k, h);
+      if(wasHidden){ panel.style.cssText = ""; panel.hidden = true; }
+    });
+  }
+
+  function report(k, h){
+    var tab = document.querySelector('[data-h="' + k + '"]');
+    if(tab) tab.textContent = h + "px";
+    var meter = document.querySelector('[data-meter="' + k + '"]');
+    if(!meter) return;
+    var span = Math.max(CEILING * 1.06, h * 1.04);
+    meter.querySelector(".h").textContent = h + "px";
+    var bar = meter.querySelector(".bar");
+    bar.querySelector("i").style.width = Math.min(100, (h / span) * 100) + "%";
+    bar.classList.toggle("over", h > CEILING);
+    bar.classList.toggle("near", h <= CEILING && h > LAPTOP);
+    var marks = bar.querySelectorAll(".mark");
+    marks[0].style.left = ((LAPTOP / span) * 100) + "%";
+    marks[1].style.left = ((CEILING / span) * 100) + "%";
+    meter.querySelector(".cap").textContent = h > CEILING
+      ? ("over the 850px ceiling by " + (h - CEILING) + "px")
+      : h > LAPTOP
+        ? ((CEILING - h) + "px under the ceiling \u00b7 " + (h - LAPTOP) + "px over the laptop line")
+        : ((LAPTOP - h) + "px under the 660px laptop line too");
+  }
+
+  var tabs = Array.prototype.slice.call(document.querySelectorAll(".tab"));
+  tabs.forEach(function(t){
+    t.addEventListener("click", function(){
+      tabs.forEach(function(o){
+        var sel = o === t;
+        o.setAttribute("aria-selected", sel ? "true" : "false");
+        document.getElementById(o.getAttribute("aria-controls")).hidden = !sel;
+      });
+      fit();
+      var pnl = document.getElementById(t.getAttribute("aria-controls"));
+      window.scrollTo({ top:pnl.getBoundingClientRect().top + window.scrollY - 78, behavior:"smooth" });
+    });
+    t.addEventListener("keydown", function(e){
+      var i2 = tabs.indexOf(t);
+      if(e.key === "ArrowRight"){ tabs[(i2 + 1) % tabs.length].focus(); }
+      if(e.key === "ArrowLeft"){ tabs[(i2 - 1 + tabs.length) % tabs.length].focus(); }
+    });
+  });
+
+  window.addEventListener("resize", fit);
+  if(document.fonts && document.fonts.ready) document.fonts.ready.then(fit);
+  setTimeout(fit, 60);
+  fit();
+
+})();
+</script>
+
+</body></html>

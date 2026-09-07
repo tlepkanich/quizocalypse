@@ -8,6 +8,7 @@ import {
   useRef,
   useState,
   type ReactNode,
+  type RefObject,
 } from "react";
 import { createPortal } from "react-dom";
 import { X } from "lucide-react";
@@ -297,6 +298,7 @@ export function QzPopover({
   maxWidth = 340,
   open: controlledOpen,
   onOpenChange,
+  anchorRef: measureRef,
 }: {
   /** The trigger element; the popover wires click + aria onto a wrapper. */
   trigger: ReactNode;
@@ -306,6 +308,11 @@ export function QzPopover({
   /** Optional controlled mode (e.g. the health pill opened by Continue). */
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
+  /** Optional element to POSITION against instead of the trigger wrapper —
+   *  e.g. a card whose small count button opens a peek that should sit
+   *  above the whole card (create-rule band). Click/dismiss wiring stays
+   *  on the trigger. */
+  anchorRef?: RefObject<HTMLElement | null>;
 }) {
   const [uncontrolled, setUncontrolled] = useState(false);
   const open = controlledOpen ?? uncontrolled;
@@ -335,15 +342,16 @@ export function QzPopover({
 
   // Position: anchored 8px off the trigger, flip at viewport edges.
   useLayoutEffect(() => {
-    if (!open || !anchorRef.current) return;
-    const r = anchorRef.current.getBoundingClientRect();
+    const measured = measureRef?.current ?? anchorRef.current;
+    if (!open || !measured) return;
+    const r = measured.getBoundingClientRect();
     const estH = Math.min(popRef.current?.offsetHeight ?? 240, window.innerHeight * 0.6);
     let side: "top" | "bottom" = placement;
     if (side === "bottom" && r.bottom + 8 + estH > window.innerHeight && r.top - 8 - estH > 0) side = "top";
     if (side === "top" && r.top - 8 - estH < 0) side = "bottom";
     const left = Math.max(8, Math.min(r.left, window.innerWidth - maxWidth - 8));
     setPos({ top: side === "bottom" ? r.bottom + 8 : r.top - 8, left, side });
-  }, [open, placement, maxWidth]);
+  }, [open, placement, maxWidth, measureRef]);
 
   // Outside-click + Esc.
   useEffect(() => {

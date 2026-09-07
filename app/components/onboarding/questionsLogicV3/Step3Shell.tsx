@@ -526,6 +526,7 @@ export function Step3Shell({
             lastSyncAt={lastSyncAt}
             shopifyAdminDomain={shopifyAdminDomain}
             logicStyle={logicStyle}
+            ruleFlow="onboarding"
           />
         </div>
       )}
