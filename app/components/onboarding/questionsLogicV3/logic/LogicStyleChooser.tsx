@@ -25,7 +25,6 @@ import { useQzToast } from "../../../qz-toast";
 
 export type LogicStyle = "rules" | "attributes";
 type Engine = LogicStyle | "points";
-type Confidence = "strong" | "thin";
 
 export interface ChooserScan {
   productCount: number;
@@ -40,20 +39,16 @@ export function buildChooserScan(index: readonly IndexedProduct[]): ChooserScan 
   return { productCount: index.length, strongCount: readout.strongCount };
 }
 
-/** The only decision on the page (handoff §04). `engine` decides which row
- *  is first and which one gets the wash, the badge and the solid button;
- *  `confidence` decides which badge. It never disables anything — both live
- *  engines stay one click away in every state. An empty catalog needs no
- *  branch: strongCount is 0, so it lands on rules, the only engine that
- *  works without product data anyway. */
-export function recommendEngine({ productCount, strongCount }: ChooserScan): {
-  engine: LogicStyle;
-  confidence: Confidence;
-} {
-  if (strongCount === 0) return { engine: "rules", confidence: "strong" };
-  if (productCount < 25) return { engine: "rules", confidence: "strong" };
-  if (strongCount === 1) return { engine: "attributes", confidence: "thin" };
-  return { engine: "attributes", confidence: "strong" };
+/** The only decision on the page (handoff §04). It decides which row is
+ *  first and which one gets the wash, the badge and the solid button. It
+ *  never disables anything — both live engines stay one click away in every
+ *  state. The badge is binary (owner dropped the "Probably right" tier). An
+ *  empty catalog needs no branch: strongCount is 0, so it lands on rules,
+ *  the only engine that works without product data anyway. */
+export function recommendEngine({ productCount, strongCount }: ChooserScan): LogicStyle {
+  if (strongCount === 0) return "rules";
+  if (productCount < 25) return "rules";
+  return "attributes";
 }
 
 type TokKind = "q" | "v" | "r" | "op";
@@ -163,7 +158,7 @@ export function LogicStyleChooser({
   // so the row takes the click visibly and the other rows disable.
   const [busy, setBusy] = useState<LogicStyle | null>(null);
 
-  const order: Engine[] = [rec.engine, ...ENGINE_ORDER.filter((e) => e !== rec.engine)];
+  const order: Engine[] = [rec, ...ENGINE_ORDER.filter((e) => e !== rec)];
 
   const pick = (engine: Engine) => {
     if (engine === "points") {
@@ -181,7 +176,7 @@ export function LogicStyleChooser({
       <div className="qz-lsc-engs">
         {order.map((engine) => {
           const e = ENGINES[engine];
-          const isRec = engine === rec.engine;
+          const isRec = engine === rec;
           const isBusy = busy === engine;
           const className = [
             "qz-lsc-eng",
@@ -200,11 +195,7 @@ export function LogicStyleChooser({
               onClick={() => pick(engine)}
             >
               <span className="qz-lsc-head">
-                {isRec ? (
-                  <span className={`qz-lsc-badge${rec.confidence === "thin" ? " is-soft" : ""}`}>
-                    {rec.confidence === "thin" ? "Probably right" : "Recommended"}
-                  </span>
-                ) : null}
+                {isRec ? <span className="qz-lsc-badge">Recommended</span> : null}
                 <span className="qz-lsc-nm">{e.name}</span>
                 <span className="qz-lsc-q">{e.when}</span>
               </span>
