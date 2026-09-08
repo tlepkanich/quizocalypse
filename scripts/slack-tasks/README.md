@@ -68,7 +68,13 @@ checking Slack history first: delivery could have succeeded despite the timeout.
    canonical board. If a source message disappears, flag it for clarification;
    do not silently delete or cancel its task.
 3. Continue the building item, otherwise select the lowest-priority-number queued
-   actionable task. Respect pause. Derive acceptance criteria from the repo and
+   actionable task. Respect pause. Items with status `backlog` are owner-paused
+   and must never auto-start unless the owner explicitly reactivates them.
+   As of 8 September 2026, finish WIS-001, then retain all other existing
+   unfinished WIS-002 through WIS-023 items as backlog. New requests remain
+   eligible for automatic starts. Completed items stay completed. Merely editing
+   an old backlog item does not reactivate it; the owner must ask to start it.
+   Derive acceptance criteria from the repo and
    request; ask in Slack only for information that materially blocks execution.
    Mark blocked and proceed to another queued item when appropriate. Owner tasks
    stay tracked; never execute purchases, transfers, or legal signatures.
