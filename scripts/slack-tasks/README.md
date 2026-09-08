@@ -49,7 +49,13 @@ checking Slack history first: delivery could have succeeded despite the timeout.
 
 ## Worker procedure
 
-1. Read repository AGENTS.md and run `poll`. Inspect all changed owner messages
+1. Read repository AGENTS.md and run `poll`. Before assessing or editing code,
+   fetch origin and compare HEAD with origin/main. Inspect the latest remote
+   implementation first: another task may already have delivered the request.
+   Integrate remote work only after accounting for local edits; never overwrite
+   user work. Verify an existing implementation's CI/deploy evidence before
+   marking it completed, and credit the existing commit instead of duplicating it.
+   Inspect all changed owner messages
    and thread URLs before starting or continuing code work. Bot-token history
    does not reliably expose public-channel replies: open the returned thread URLs
    in Slack using CUA and read new owner replies. Inspect threads each run, even
