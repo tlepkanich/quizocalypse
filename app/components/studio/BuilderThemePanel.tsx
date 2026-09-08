@@ -1,7 +1,8 @@
 import { useState } from "react";
 import type { Quiz } from "../../lib/quizSchema";
 import { ReskinSwitcher } from "../builder/preview/ReskinSwitcher";
-import { getPreset } from "../../lib/themePresets";
+import { builderThemePresets } from "../../lib/quizDesignTemplates";
+import { applyBuilderTheme } from "../../lib/quizMutations";
 import { resolveDesignTokens } from "../../lib/designTokens";
 import {
   LAYOUT_VARIANTS,
@@ -26,11 +27,15 @@ export function BuilderThemePanel({
 }) {
   const [tab, setTab] = useState<"templates" | "mine">("templates");
   const [note, setNote] = useState<string | null>(null);
+  const presets = builderThemePresets(doc.logic_model);
+  const selectedTheme = doc.logic_model === "decider"
+    ? presets.find(preset => JSON.stringify(resolveDesignTokens(preset.tokens)) ===
+        JSON.stringify(resolveDesignTokens(doc.design_tokens)))?.id ?? null
+    : null;
 
   const applyTheme = (presetId: string) => {
-    const preset = getPreset(presetId);
-    if (!preset) return;
-    commit({ ...doc, design_tokens: resolveDesignTokens(preset.tokens) as QuizDoc["design_tokens"] });
+    const next = applyBuilderTheme(doc, presetId);
+    if (next !== doc) commit(next);
   };
   const currentLayout = detectLayoutVariant(doc);
 
@@ -76,7 +81,7 @@ export function BuilderThemePanel({
       </div>
 
       {tab === "templates" ? (
-        <ReskinSwitcher value={null} onSelect={applyTheme} />
+        <ReskinSwitcher value={selectedTheme} onSelect={applyTheme} presets={presets} />
       ) : (
         <p className="qz-dim" style={{ fontSize: 12.5, margin: "4px 0" }}>
           Your saved custom themes will appear here. Apply a template, then refine it in the Code

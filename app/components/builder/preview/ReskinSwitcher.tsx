@@ -1,4 +1,4 @@
-import { THEME_PRESETS } from "../../../lib/themePresets";
+import { THEME_PRESETS, type ThemePreset } from "../../../lib/themePresets";
 import { googleFontsUrl } from "../../runtime/runtimeStyles";
 
 // A gallery of theme mini-previews. Each card renders a faithful thumbnail of the
@@ -8,15 +8,6 @@ import { googleFontsUrl } from "../../runtime/runtimeStyles";
 // to the running preview, no save); a separate Apply in the toolbar persists it.
 // `value` is the currently tried-on preset id (or null = the quiz's saved theme).
 
-const ALL_FONTS = Array.from(
-  new Set(
-    THEME_PRESETS.flatMap((p) => [
-      p.tokens.typography?.heading?.family,
-      p.tokens.typography?.body?.family,
-    ]).filter((f): f is string => Boolean(f)),
-  ),
-);
-
 function radiusPx(r: string | undefined): number {
   return r === "square" ? 2 : r === "pill" ? 999 : 8;
 }
@@ -24,11 +15,16 @@ function radiusPx(r: string | undefined): number {
 export function ReskinSwitcher({
   value,
   onSelect,
+  presets = THEME_PRESETS,
 }: {
   value: string | null;
   onSelect: (presetId: string) => void;
+  presets?: readonly ThemePreset[];
 }) {
-  const fontUrl = googleFontsUrl(ALL_FONTS);
+  const fonts = Array.from(new Set(presets.flatMap(p => [
+    p.tokens.typography?.heading?.family, p.tokens.typography?.body?.family,
+  ]).filter((font): font is string => Boolean(font))));
+  const fontUrl = googleFontsUrl(fonts);
   return (
     <>
       {fontUrl && <link rel="stylesheet" href={fontUrl} />}
@@ -39,7 +35,7 @@ export function ReskinSwitcher({
           gap: 10,
         }}
       >
-        {THEME_PRESETS.map((p) => {
+        {presets.map((p) => {
           const c = p.tokens.colors ?? {};
           const active = value === p.id;
           const headingFont = p.tokens.typography?.heading?.family ?? "inherit";
