@@ -252,7 +252,7 @@ describe("proposeDeciderFromLegacy", () => {
     });
   });
 
-  it("never proposes a multi_select or freeform question", () => {
+  it("proposes and executes a multi-select decider", () => {
     const doc = legacyDoc();
     const multi = Quiz.parse({
       ...doc,
@@ -264,7 +264,10 @@ describe("proposeDeciderFromLegacy", () => {
     });
     const p = proposeDeciderFromLegacy(multi, CATS);
     expect(p).not.toBeNull();
-    expect(p!.decidingQuestionNodeId).toBe("q2"); // q1 disqualified
+    expect(p!.decidingQuestionNodeId).toBe("q1");
+    const next = executeDeciderUpgrade(multi, p!);
+    expect(next.logic_model).toBe("decider");
+    expect(next.nodes.find((n) => n.id === "q1")?.data).toMatchObject({role: "decides", question_type: "multi_select"});
   });
 });
 

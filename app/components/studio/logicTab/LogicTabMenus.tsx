@@ -435,8 +435,8 @@ export function QuestionRoleControl({
   const isDecider = role === "decides";
   const isFilter = role === "filter";
   const cannotDecide =
-    node.data.question_type === "multi_select" || isFreeformType(node.data.question_type);
-  const label = isDecider ? "Picks the result" : isFilter ? "Narrows" : "Asked only";
+    isFreeformType(node.data.question_type);
+  const label = isDecider ? "Picks results" : isFilter ? "Narrows results" : "Info only";
   const derivedField = derivedNarrowField(node.data.answers);
 
   // Mirrors QuestionWindow's setJob byte-for-byte in semantics: promote via
@@ -528,7 +528,7 @@ export function QuestionRoleControl({
                 j.k === "decides" ? isDecider : j.k === "filter" ? isFilter : !isDecider && !isFilter;
               const sub =
                 j.k === "decides" && cannotDecide
-                  ? "needs single-answer choices"
+                  ? "needs answer choices"
                   : j.k === "decides" && deciderQIndex !== null && !isDecider
                     ? `now on Q${deciderQIndex}`
                     : j.hint;
@@ -540,7 +540,7 @@ export function QuestionRoleControl({
                   disabled={j.k === "decides" && cannotDecide}
                   onClick={() => setJob(j.k)}
                 >
-                  <span className="qz-ltab-menu-row-main">{j.n}</span>
+                  <span className="qz-ltab-menu-row-main">{j.k === "info" ? "Info only" : j.k === "decides" ? "Picks results" : "Narrows results"}</span>
                   <span className="qz-ltab-menu-row-sub">{sub}</span>
                 </button>
               );

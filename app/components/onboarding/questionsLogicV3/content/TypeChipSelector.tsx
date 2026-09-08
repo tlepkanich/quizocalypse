@@ -206,7 +206,7 @@ export function TypeChipSelector({
     const storedType: QuestionType = pickValue === "rating5" ? "rating" : pickValue;
     // Intercept BEFORE the mutation: setQuestionType would auto-demote a
     // decider on multi/freeform — the spec locks that path behind a refusal.
-    if (isDecider && (storedType === "multi_select" || isFreeformType(storedType))) {
+    if (isDecider && isFreeformType(storedType)) {
       setDialog({ kind: "block", pick: storedType });
       return;
     }
@@ -395,19 +395,14 @@ export function TypeChipSelector({
         open={dialog?.kind === "block"}
         onClose={() => setDialog(null)}
         size="sm"
-        title={
-          dialog?.kind === "block" && dialog.pick === "multi_select"
-            ? "Multi-select can't decide the result"
-            : "Open text can't decide the result"
-        }
+        title="Open text can't decide the result"
         footer={
           <button type="button" className="qz-btn qz-btn-primary" onClick={() => setDialog(null)}>
             Got it
           </button>
         }
       >
-        This question decides the shopper&rsquo;s result — each answer points straight at one
-        recommendation, so shoppers must pick exactly one. Make another question the decider
+        This question needs answer choices to map to recommendations. Make another question the decider
         first, then change this one&rsquo;s type.
       </QzModal>
 

@@ -583,7 +583,7 @@ describe("applyDeciderQuestionFlow — review-hardened edges", () => {
     { id: "cat_oily", tags: ["oily"] },
   ];
 
-  it("no eligible decider → COERCES the first non-freeform question to single_select", () => {
+  it("multi-select can be elected without coercion", () => {
     const seed = Quiz.parse({ ...buildSeedQuiz("Decider"), logic_model: "decider" });
     const allMulti = {
       questions: [
@@ -600,7 +600,7 @@ describe("applyDeciderQuestionFlow — review-hardened edges", () => {
     const out = applyDeciderQuestionFlow(seed, allMulti as never, deciderBuckets, FB);
     const q = out.nodes.find((n) => n.type === "question");
     if (q?.type !== "question") throw new Error("question missing");
-    expect(q.data.question_type).toBe("single_select"); // coerced
+    expect(q.data.question_type).toBe("multi_select");
     expect(q.data.role).toBe("decides"); // elected
     expect(q.data.answers.every((a) => Boolean(a.target_id))).toBe(true);
     expect(validateQuiz(out)).toEqual([]); // V1 satisfied — never a silent publish failure

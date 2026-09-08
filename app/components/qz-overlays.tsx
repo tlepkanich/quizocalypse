@@ -299,6 +299,7 @@ export function QzPopover({
   open: controlledOpen,
   onOpenChange,
   anchorRef: measureRef,
+  fitViewport = false,
 }: {
   /** The trigger element; the popover wires click + aria onto a wrapper. */
   trigger: ReactNode;
@@ -313,6 +314,8 @@ export function QzPopover({
    *  above the whole card (create-rule band). Click/dismiss wiring stays
    *  on the trigger. */
   anchorRef?: RefObject<HTMLElement | null>;
+  /** Opt-in for mapping pickers: keep tall content inside the chosen viewport side. */
+  fitViewport?: boolean;
 }) {
   const [uncontrolled, setUncontrolled] = useState(false);
   const open = controlledOpen ?? uncontrolled;
@@ -397,6 +400,7 @@ export function QzPopover({
                 bottom: pos.side === "top" ? window.innerHeight - pos.top : undefined,
                 left: pos.left,
                 maxWidth,
+                ...(fitViewport ? { maxHeight: Math.max(80, (pos.side === "bottom" ? window.innerHeight - pos.top : pos.top) - 12), boxSizing: "border-box" as const } : {}),
               }}
             >
               {content}

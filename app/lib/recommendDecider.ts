@@ -33,7 +33,7 @@ export type TargetShape = "product" | "collection" | "tag";
 
 export interface ResolvedTarget {
   targetId: string;
-  /** Logic tab (HANDOFF G1) — set ONLY when a replace rule carries several
+  /** Logic tab (HANDOFF G1) — set when selected deciding answers or a replace rule carry several
    *  targets: the full ordered list (targetId === targetIds[0], the config/
    *  persona anchor). The pool is the union of every entry's members. */
   targetIds?: string[];
@@ -180,7 +180,7 @@ export function settingsForTarget(
   return { ...global, ...sparse };
 }
 
-/** Spec §2 — resolve the shopper's ONE target: rules top→bottom (first full
+/** Spec §2 — resolve the shopper's ordered target pool: rules top→bottom (first full
  *  AND-match wins), else the deciding answer's direct mapping, else null
  *  (→ the rec-page fallback layer; §2 "if neither produces a result").
  *
@@ -216,17 +216,24 @@ export function resolveTarget(
   const decider = doc.nodes.find(
     (n) => n.type === "question" && n.data.role === "decides",
   );
-  const picked =
+  const baseTargets =
     decider && decider.type === "question"
-      ? decider.data.answers.find((a) => selected.has(a.id) && a.target_id)
-      : undefined;
-  const baseTargetId = picked?.target_id ?? null;
+      ? [
+          ...new Set(
+            decider.data.answers.flatMap((a) =>
+              selected.has(a.id) && a.target_id ? [a.target_id] : [],
+            ),
+          ),
+        ]
+      : [];
+  const baseTargetId = baseTargets[0] ?? null;
 
   if (actionRule) {
     const targets = ruleTargets(actionRule);
     if (baseTargetId) {
       return {
         targetId: baseTargetId,
+        ...(baseTargets.length > 1 ? { targetIds: baseTargets } : {}),
         matchedRuleId: actionRule.id,
         ruleAction: actionRule.action ?? null,
         ruleTargetId: targets[0]!,
@@ -244,7 +251,11 @@ export function resolveTarget(
   }
 
   if (!baseTargetId) return null;
-  return { targetId: baseTargetId, matchedRuleId: null };
+  return {
+    targetId: baseTargetId,
+    ...(baseTargets.length > 1 ? { targetIds: baseTargets } : {}),
+    matchedRuleId: null,
+  };
 }
 
 /** QZY-1 (spec §6.1) — apply the winning rule's list action to the resolved

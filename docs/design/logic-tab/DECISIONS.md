@@ -120,3 +120,39 @@ table cell, derives the NARROWS pill from the answers (MIXED state), and adds
 "Map N answers for me" — adopting it is an OPEN owner decision. Mock token
 names (`--ac`, `--ink`, `--s1..s6`) map onto the repo system: `--ac` →
 `--qz-accent`; no hex literals in new `.tsx` (check-tokens gate).
+
+## QWIDGET / WIS-026 (2026-09-08)
+
+Source: Tyler's Slack request `1788878893.510719`, Question widget handoff
+`fa0e0bc6-eca7-4177-9388-fb0b84bd0d9f` and mock
+`67314b28-d35e-4542-8837-7a5eca92e2f9`. The handoff governs conflicts with the
+mock. Applies only to decider docs.
+
+- One deciding answer keeps exactly one `target_id`; selecting a replacement
+  replaces it, never appends. No schema or migration change.
+- Multi-select questions can decide. Selected targets dedupe in authored answer
+  order; the first is the config/persona anchor. The existing engine unions
+  products and then narrows the union. Action rules retain the full base union.
+- Routing option A: retain first-authored-selected-answer routing and show the
+  existing `routingConflicts` warning in the Question widget. Classic and minimal
+  QuestionView tests pin the route even when answers are clicked backwards.
+  This is a warning, not a new publish prohibition on existing routing.
+- Both tray and cell picker allow reuse of a recommendation across answers.
+  Their pool is this quiz's scoped categories, excluding shop-wide categories.
+  Browse all remains available without overflow. The tray measures actual card
+  wrapping with ResizeObserver, reserving space for the overflow tile.
+- Picks writes once on selection; Narrows stages until Done, Cancel writes
+  nothing. Removing one narrowing value retains every other filter family.
+  Info chips are inert. Product peeks remain reachable inside mapping chips.
+- The full-screen QuestionWindow is no longer mounted as a mapping door. Its
+  source is retained, with the old multi-select guard corrected. Rules ledger
+  and RuleSentence are unchanged apart from closing the replacement question
+  controls. STYLE is unchanged. The onboarding shell's existing disclosure is
+  reused to avoid a duplicate title; the standalone widget owns its disclosure.
+
+Known follow-ups from the handoff, not part of this release: analytics and AI
+rec-copy still use the anchor target, the grid limit remains the anchor's
+configured limit, and previews/path tools evaluate individual answers. The
+multi-select widget explains the anchor and preview limitations. Full union
+analytics, AI copy/cache changes, and combination-path enumeration remain
+unimplemented; these are not automatically reactivated backlog work.

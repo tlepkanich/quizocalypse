@@ -142,9 +142,9 @@ describe("moveDecider (quiz-step3 v3 §5.4)", () => {
     expect(() => Quiz.parse(out)).not.toThrow();
   });
 
-  it("no-ops: multi_select target, same-node, unknown node, legacy doc", () => {
+  it("multi-select promotion and unchanged invalid/legacy calls", () => {
     const doc = deciderDoc();
-    expect(moveDecider(doc, "qm")).toBe(doc); // multi cannot decide
+    expect(q(moveDecider(doc, "qm"), "qm").data.role).toBe("decides");
     expect(moveDecider(doc, "q1")).toBe(doc); // already the decider
     expect(moveDecider(doc, "nope")).toBe(doc); // unknown
     const { logic_model: _lm, ...legacyRaw } = doc;

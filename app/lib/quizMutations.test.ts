@@ -777,12 +777,12 @@ describe("LOGIC v2 role/target mutations (setQuestionRole / setAnswerTarget)", (
     expect(() => Quiz.parse(next)).not.toThrow();
   });
 
-  it("setQuestionRole('decides') no-ops on a multi-select question (§2.2)", () => {
+  it("setQuestionRole promotes a multi-select question", () => {
     let doc = deciderDoc();
     doc = setQuestionType(doc, "q2", "multi_select");
     const next = setQuestionRole(doc, "q2", "decides");
-    expect(next).toBe(doc); // identity — nothing changed
-    expect(qOf(next, "q1").data.role).toBe("decides"); // the existing decider untouched
+    expect(qOf(next, "q2").data.role).toBe("decides");
+    expect(qOf(next, "q1").data.role).toBe("qualifier");
   });
 
   it("setQuestionRole('decides') no-ops on a FREEFORM question (no discrete answers to map)", () => {
@@ -826,10 +826,11 @@ describe("LOGIC v2 role/target mutations (setQuestionRole / setAnswerTarget)", (
     expect(setAnswerTarget(doc, "intro", "q1_a1", "x")).toBe(doc);
   });
 
-  it("setQuestionType(→multi_select) auto-demotes a DECIDING question to qualifier in the same mutation", () => {
+  it("setQuestionType retains a multi-select decider and its targets", () => {
     const doc = deciderDoc();
     const next = setQuestionType(doc, "q1", "multi_select");
-    expect(qOf(next, "q1").data.role).toBe("qualifier"); // §2.2 — no decides+multi_select state ever exists
+    expect(qOf(next, "q1").data.role).toBe("decides");
+    expect(qOf(next, "q1").data.answers).toEqual(qOf(doc, "q1").data.answers);
     expect(qOf(next, "q1").data.question_type).toBe("multi_select");
     // A qualifier switching to multi_select keeps its role untouched.
     const q2Multi = setQuestionType(setQuestionRole(doc, "q2", "qualifier"), "q2", "multi_select");

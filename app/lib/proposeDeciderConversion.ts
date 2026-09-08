@@ -148,13 +148,13 @@ export function proposeDeciderFromLegacy(
   const ordered = flowOrderedNodes(doc);
   const orderedQuestions = ordered.filter((n): n is QuestionNode => n.type === "question");
 
-  // Best candidate = most DISTINCT real-signal targets among single-answer
+  // Best candidate = most DISTINCT real-signal targets among discrete-answer
   // DOMINATOR questions; strict > keeps ties on the earliest in flow order.
   let winner: QuestionNode | null = null;
   let winnerTargets: (string | null)[] = [];
   let bestScore = 0;
   for (const q of orderedQuestions) {
-    if (q.data.question_type === "multi_select" || isFreeformType(q.data.question_type)) continue;
+    if (isFreeformType(q.data.question_type)) continue;
     const targets = q.data.answers.map((a) => realTargetFor(a, categories));
     const distinct = new Set(targets.filter((t): t is string => t !== null)).size;
     if (distinct > bestScore && dominatesEveryPath(doc, q.id)) {
@@ -259,7 +259,7 @@ export function executeDeciderUpgrade(doc: QuizDoc, proposal: DeciderProposal): 
     (n): n is ResultNode => n.id === proposal.keptResultNodeId && n.type === "result",
   );
   if (!decider || !kept) return doc;
-  if (decider.data.question_type === "multi_select" || isFreeformType(decider.data.question_type)) {
+  if (isFreeformType(decider.data.question_type)) {
     return doc;
   }
 

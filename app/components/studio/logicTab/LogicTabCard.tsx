@@ -1,7 +1,10 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import type { Quiz, Answer } from "../../../lib/quizSchema";
-import type { BuilderCategory, BuilderCollection } from "../../builder/stepProps";
+import type {
+  BuilderCategory,
+  BuilderCollection,
+} from "../../builder/stepProps";
 import type { IndexedProduct } from "../../../lib/recommendationEngine";
 import type { OrderedQuestion } from "../../../lib/questionOrder";
 import {
@@ -16,17 +19,26 @@ import {
   moveDecisionRule,
   removeDecisionRule,
   setAnswerFilterValues,
+  setAnswerTarget,
 } from "../../../lib/quizMutations";
 import { filterAnswerMatchCount } from "../../../lib/filterMatching";
 import { ruleTargets } from "../../../lib/recommendDecider";
 import { buildAttributeReadout } from "../../../lib/attributeClustering";
 import type { AttributeReadout } from "../../../lib/attributeClustering";
-import { ProductCountButton, QuestionRoleControl, RouteMenuButton } from "./LogicTabMenus";
+import {
+  ProductCountButton,
+  QuestionRoleControl,
+  RouteMenuButton,
+} from "./LogicTabMenus";
 import { useQzToast } from "../../qz-toast";
 import { CreateRuleModal, type CreateRuleFlow } from "./CreateRuleModal";
 import { PasteRulesModal } from "./PasteRulesModal";
 import { AddQuestionModal } from "./AddQuestionModal";
-import { QuestionWindow } from "./QuestionWindow";
+import {
+  RecommendationPicker,
+  RecommendationTray,
+} from "./RecommendationPicker";
+import { routingConflicts } from "../../../lib/routeTrace";
 import { ExplainerSheet, type ExplainerKind } from "./Explainers";
 import { answerHasSelection, narrowFieldOptions } from "./logicTabFields";
 import { ValuePickerPopover, type FilterValueSet } from "./ValuePickerPopover";
@@ -64,13 +76,6 @@ function ruleVerb(action: "show" | "hide" | "prioritize" | undefined): string {
   if (!action) return "show"; // legacy replace — reads as show
   if (action === "prioritize") return "pin";
   return action;
-}
-
-// The λ chip's verb on an info row ("λ1 lifts Gift cards" — Live detailPanel).
-function ruleChipVerb(action: "show" | "hide" | "prioritize" | undefined): string {
-  if (action === "prioritize") return "lifts";
-  if (action === "hide") return "hides";
-  return "shows";
 }
 
 // §3.3 — a target that is not a product gets a trailing muted kind.
@@ -162,7 +167,7 @@ export function LogicTabCard({
   const [addOpen, setAddOpen] = useState(false);
   // UNIFIED one-window — the question window: ONE window element, two
   // contents (unified/_v.js render): opening one closes the other.
-  const [qwin, setQwin] = useState<{ nodeId: string; answerId: string | null } | null>(null);
+  const [questionEpoch, setQuestionEpoch] = useState(0);
   // Latest-doc seam for the modal's post-await commit (review L2-5).
   const docRef = useRef(doc);
   docRef.current = doc;
@@ -191,23 +196,10 @@ export function LogicTabCard({
   const rules = useMemo(() => doc.decision_rules ?? [], [doc.decision_rules]);
   // Live I — the §10 attribute read-out, memoized ONCE for the whole
   // workspace (rail statuses, value pickers, footer unions all read it).
-  const readout = useMemo(() => buildAttributeReadout(productIndex), [productIndex]);
-  // Info rows — which rules READ each answer (conditions referencing a.id),
-  // 1-based rule index preserved for the λN chip.
-  const rulesByAnswer = useMemo(() => {
-    const m = new Map<string, Array<{ index: number; rule: (typeof rules)[number] }>>();
-    rules.forEach((rule, i) => {
-      const seen = new Set<string>();
-      for (const c of rule.conditions) {
-        if (seen.has(c.answer_id)) continue;
-        seen.add(c.answer_id);
-        const arr = m.get(c.answer_id) ?? [];
-        arr.push({ index: i + 1, rule });
-        m.set(c.answer_id, arr);
-      }
-    });
-    return m;
-  }, [rules]);
+  const readout = useMemo(
+    () => buildAttributeReadout(productIndex),
+    [productIndex],
+  );
   // §3.3 — a freshly created rule gets a brief highlight for 1800 ms.
   const [freshRuleId, setFreshRuleId] = useState<string | null>(null);
   const knownRuleIds = useRef<Set<string> | null>(null);
@@ -247,7 +239,8 @@ export function LogicTabCard({
     const put = (ruleId: string, chip: string, message: string) => {
       if (!flags.has(ruleId)) flags.set(ruleId, { chip, message });
     };
-    for (const f of halfBuiltRules(doc)) put(f.ruleId, "never fires", f.message);
+    for (const f of halfBuiltRules(doc))
+      put(f.ruleId, "never fires", f.message);
     for (const f of deadRules(doc)) put(f.ruleId, "never fires", f.message);
     for (const f of shadowedRules(doc)) put(f.ruleId, "never fires", f.message);
     for (const r of doc.decision_rules ?? []) {
@@ -259,7 +252,8 @@ export function LogicTabCard({
         );
       }
     }
-    for (const f of overbroadRules(doc)) put(f.ruleId, "fires for everyone", f.message);
+    for (const f of overbroadRules(doc))
+      put(f.ruleId, "fires for everyone", f.message);
     return flags;
   }, [doc, catById]);
   const neverFireCount = rules.filter((r) => ruleFlags.has(r.id)).length;
@@ -293,7 +287,7 @@ export function LogicTabCard({
                 type="button"
                 className="qz-btn qz-btn-sm qz-ltab-paste"
                 onClick={() => {
-                  setQwin(null);
+                  setQuestionEpoch((n) => n + 1);
                   setCreateOpen(false);
                   setPasteOpen(true);
                 }}
@@ -304,7 +298,7 @@ export function LogicTabCard({
                 type="button"
                 className="qz-btn qz-btn-primary qz-btn-sm qz-ltab-create"
                 onClick={() => {
-                  setQwin(null);
+                  setQuestionEpoch((n) => n + 1);
                   setEditRuleId(null);
                   setCreateOpen(true);
                 }}
@@ -335,7 +329,7 @@ export function LogicTabCard({
             commit={commit}
             getLatestDoc={() => docRef.current}
             onWriteByHand={() => {
-              setQwin(null);
+              setQuestionEpoch((n) => n + 1);
               setEditRuleId(null);
               setCreateOpen(true);
             }}
@@ -467,7 +461,7 @@ export function LogicTabCard({
                       aria-label={`Edit rule ${i + 1}`}
                       title="Edit"
                       onClick={() => {
-                        setQwin(null);
+                        setQuestionEpoch((n) => n + 1);
                         setEditRuleId(rule.id);
                         setCreateOpen(true);
                       }}
@@ -491,7 +485,7 @@ export function LogicTabCard({
                       commit(next);
                       toast("Rule duplicated — the copy sits directly below");
                       if (copy && quizId) {
-                        setQwin(null);
+                        setQuestionEpoch((n) => n + 1);
                         setEditRuleId(copy.id);
                         setCreateOpen(true);
                       }
@@ -522,104 +516,107 @@ export function LogicTabCard({
 
   // ── the workspace grid (Live .lgrid — rail + ONE detail panel) ─────────────
   const grid = (
-    <div className="qz-lw-grid">
-      <div className="qz-lw-rail">
-        <div className="qz-lw-railhead">
-          <span className="qz-lw-railh">Questions</span>
-          <button
-            type="button"
-            className="qz-lw-howmini"
-            aria-label="How questions work"
-            title="How questions work"
-            onClick={() => setExplainer("questions")}
-          >
-            ✦
-          </button>
-        </div>
-        {questions.map((q) => {
-          const role = displayRole(q.node.data.role, rulesOnly);
-          const answers = q.node.data.answers;
-          let dot = "is-info";
-          let status: string = "Info only";
-          if (role === "decides") {
-            dot = "is-dec";
-            status = "Picks the result";
-          } else if (role === "filter") {
-            const mapped = answers.filter(
-              (a) => a.no_preference === true || answerHasSelection(a),
-            ).length;
-            if (mapped === 0) {
-              dot = "is-bad";
-              status = "Narrows · no effect";
-            } else {
-              dot = "is-nar";
-              status = `Narrows · ${mapped} of ${answers.length} mapped`;
+    <section className="qz-qwidget">
+      {ruleFlow !== "onboarding" ? <div className="qz-qwidget-intro">
+        <h3>What should each answer do?</h3>
+        <details>
+          <summary>How this works</summary>
+          <p>
+            <b>Picks results.</b> Each answer maps to one of the recommendations
+            you built in step 1. Exactly one question does this.
+          </p>
+          <p>
+            <b>Narrows results.</b> Each answer maps to a value already on your
+            products, such as a tag, metafield, variant option or product type,
+            to filter what is left.
+          </p>
+          <p>
+            <b>Info only.</b> Info collected as zero party data only. Does not
+            impact quiz results shown.
+          </p>
+        </details>
+      </div> : null}
+      <div className="qz-lw-grid">
+        <div className="qz-lw-rail">
+          <div className="qz-lw-railhead">
+            <span className="qz-lw-railh">Questions</span>
+          </div>
+          {questions.map((q) => {
+            const role = displayRole(q.node.data.role, rulesOnly);
+            const answers = q.node.data.answers;
+            let dot = "is-info";
+            let status: string = "Info only";
+            if (role === "decides") {
+              dot = "is-dec";
+              status = "Picks the result";
+            } else if (role === "filter") {
+              const mapped = answers.filter(
+                (a) => a.no_preference === true || answerHasSelection(a),
+              ).length;
+              if (mapped === 0) {
+                dot = "is-bad";
+                status = "Narrows · no effect";
+              } else {
+                dot = "is-nar";
+                status = `Narrows · ${mapped} of ${answers.length} mapped`;
+              }
             }
-          }
-          const on = selected?.node.id === q.node.id;
-          return (
-            <button
-              key={q.node.id}
-              type="button"
-              className={`qz-lw-qi${on ? " is-on" : ""}`}
-              data-node-id={q.node.id}
-              aria-pressed={on}
-              onClick={() => setSelectedId(q.node.id)}
-            >
-              <span className="qz-lw-qn">{q.qIndex}</span>
-              <span className="qz-lw-qbody">
-                <span className="qz-lw-qt">{q.node.data.text}</span>
-                <span className="qz-lw-qr">
-                  <span className={`qz-lw-dot ${dot}`} aria-hidden />
-                  {status}
+            const on = selected?.node.id === q.node.id;
+            return (
+              <button
+                key={q.node.id}
+                type="button"
+                className={`qz-lw-qi${on ? " is-on" : ""}`}
+                data-node-id={q.node.id}
+                aria-pressed={on}
+                onClick={() => setSelectedId(q.node.id)}
+              >
+                <span className="qz-lw-qn">{q.qIndex}</span>
+                <span className="qz-lw-qbody">
+                  <span className="qz-lw-qt">{q.node.data.text}</span>
+                  <span className="qz-lw-qr">
+                    <span className={`qz-lw-dot ${dot}`} aria-hidden />
+                    {status}
+                  </span>
                 </span>
-              </span>
+              </button>
+            );
+          })}
+          {commit && quizId ? (
+            <button
+              type="button"
+              className="qz-lw-qadd"
+              onClick={() => setAddOpen(true)}
+            >
+              + Add question
             </button>
-          );
-        })}
-        {commit && quizId ? (
-          <button
-            type="button"
-            className="qz-lw-qadd"
-            onClick={() => setAddOpen(true)}
-          >
-            + Add question
-          </button>
-        ) : null}
+          ) : null}
+        </div>
+        <div className="qz-lw-detail">
+          {selected ? (
+            <DetailPanel
+              key={`${selected.node.id}:${questionEpoch}`}
+              doc={doc}
+              q={selected}
+              questions={questions}
+              rulesOnly={rulesOnly}
+              catById={catById}
+              colTitleById={colTitleById}
+              productIndex={productIndex}
+              readout={readout}
+              qIndexByNodeId={qIndexByNodeId}
+              commit={commit}
+              deciderQIndex={deciderQIndex}
+              hasNarrowFields={hasNarrowFields}
+              lastSyncAt={lastSyncAt}
+              shopifyAdminDomain={shopifyAdminDomain}
+            />
+          ) : (
+            <p className="qz-ltab-empty">No questions yet.</p>
+          )}
+        </div>
       </div>
-      <div className="qz-lw-detail">
-        {selected ? (
-          <DetailPanel
-            key={selected.node.id}
-            doc={doc}
-            q={selected}
-            questions={questions}
-            rulesOnly={rulesOnly}
-            catById={catById}
-            colTitleById={colTitleById}
-            productIndex={productIndex}
-            readout={readout}
-            qIndexByNodeId={qIndexByNodeId}
-            commit={commit}
-            deciderQIndex={deciderQIndex}
-            hasNarrowFields={hasNarrowFields}
-            lastSyncAt={lastSyncAt}
-            shopifyAdminDomain={shopifyAdminDomain}
-            rulesByAnswer={rulesByAnswer}
-            onOpenWindow={
-              commit
-                ? (nodeId, answerId) => {
-                    setCreateOpen(false);
-                    setQwin({ nodeId, answerId });
-                  }
-                : undefined
-            }
-          />
-        ) : (
-          <p className="qz-ltab-empty">No questions yet.</p>
-        )}
-      </div>
-    </div>
+    </section>
   );
 
   return (
@@ -660,7 +657,7 @@ export function LogicTabCard({
           quizId={quizId}
           open={createOpen}
           editRule={
-            editRuleId ? rules.find((r) => r.id === editRuleId) ?? null : null
+            editRuleId ? (rules.find((r) => r.id === editRuleId) ?? null) : null
           }
           flow={ruleFlow}
           onClose={() => {
@@ -668,7 +665,9 @@ export function LogicTabCard({
             setEditRuleId(null);
           }}
           commit={commit}
-          onCategoriesCreated={(cats) => setExtraCats((prev) => [...prev, ...cats])}
+          onCategoriesCreated={(cats) =>
+            setExtraCats((prev) => [...prev, ...cats])
+          }
           getLatestDoc={() => docRef.current}
         />
       ) : null}
@@ -690,25 +689,6 @@ export function LogicTabCard({
           commit={commit}
         />
       ) : null}
-      {commit && qwin
-        ? (() => {
-            const wq = questions.find((x) => x.node.id === qwin.nodeId);
-            return wq ? (
-              <QuestionWindow
-                key={`${qwin.nodeId}:${qwin.answerId ?? ""}`}
-                doc={doc}
-                q={wq}
-                questions={questions}
-                categories={allCategories}
-                collections={collections}
-                productIndex={productIndex}
-                initialAnswerId={qwin.answerId}
-                onClose={() => setQwin(null)}
-                commit={commit}
-              />
-            ) : null;
-          })()
-        : null}
     </div>
   );
 }
@@ -841,8 +821,6 @@ function DetailPanel({
   hasNarrowFields,
   lastSyncAt,
   shopifyAdminDomain,
-  rulesByAnswer,
-  onOpenWindow,
 }: {
   doc: QuizDoc;
   q: OrderedQuestion;
@@ -858,24 +836,25 @@ function DetailPanel({
   hasNarrowFields: boolean;
   lastSyncAt?: string | null;
   shopifyAdminDomain?: string | null;
-  rulesByAnswer: Map<
-    string,
-    Array<{ index: number; rule: NonNullable<QuizDoc["decision_rules"]>[number] }>
-  >;
-  /** UNIFIED — opens the question window (the decides mapping cells). */
-  onOpenWindow?: (nodeId: string, answerId: string | null) => void;
 }) {
   const role = displayRole(q.node.data.role, rulesOnly);
   const rawRole = q.node.data.role;
   const answers = q.node.data.answers;
   const total = productIndex.length;
   const keys = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
-  // The info view's last column IS "Rules" (Live detailPanel comment).
-  const infoCols = role === "info";
+  // Arming is local to this question and effective only while it decides.
+  const [armed, setArmed] = useState<string | null>(null);
+  const armedCategory =
+    role === "decides" && armed ? catById.get(armed) : undefined;
+  const conflicts = routingConflicts(doc, q.node.id);
 
   // Read-only fallback (previews, tests) — the same pill as static spans.
   const pillLabel =
-    rawRole === "decides" ? "Picks the result" : rawRole === "filter" ? "Narrows" : "Asked only";
+    rawRole === "decides"
+      ? "Picks the result"
+      : rawRole === "filter"
+        ? "Narrows"
+        : "Asked only";
 
   return (
     <div className="qz-lw-panel" data-node-id={q.node.id}>
@@ -907,20 +886,37 @@ function DetailPanel({
       <div className="qz-lw-dhead">
         <h3>{q.node.data.text}</h3>
       </div>
+      {role === "decides" ? (
+        <RecommendationTray
+          categories={[...catById.values()].filter((c) => c.quizId === doc.quiz_id)}
+          products={productIndex}
+          armed={armedCategory?.id ?? null}
+          onArm={commit ? setArmed : undefined}
+        />
+      ) : (
+        <div className="qz-qwidget-rule" />
+      )}
+      {conflicts.map((c, i) => (
+        <p className="qz-qwidget-warning" key={i}>
+          {c.message.replaceAll(" — ", ". ")}
+          {!c.answerId && q.node.data.question_type === "multi_select"
+            ? " The first selected answer in the order above controls the route, regardless of click order."
+            : ""}
+        </p>
+      ))}
+      {q.node.data.question_type === "multi_select" && role === "decides" ? (
+        <p className="qz-qwidget-note">
+          Selected recommendations combine. The first selected answer in this
+          list sets the headline and persona. Previews and path checks show
+          answers individually.
+        </p>
+      ) : null}
       {answers.length === 0 ? (
         <p className="qz-ltab-empty">
           <span className="qz-ltab-muted">—</span> no answer options
         </p>
       ) : (
         <div className="qz-lw-at">
-          <div className="qz-lw-ah">
-            <span />
-            <span>Answer</span>
-            <span>Maps to</span>
-            <span className="is-r">{infoCols ? "Rules" : "Products"}</span>
-            {/* KEPT — the skip-logic routing surface (owner-resolved). */}
-            <span>Then go to</span>
-          </div>
           {answers.map((a, i) => (
             <AnswerRow
               key={a.id}
@@ -939,8 +935,8 @@ function DetailPanel({
               total={total}
               lastSyncAt={lastSyncAt}
               shopifyAdminDomain={shopifyAdminDomain}
-              rulesForAnswer={rulesByAnswer.get(a.id) ?? []}
-              onOpenWindow={onOpenWindow}
+              armedCategory={armedCategory}
+              onPlaced={() => setArmed(null)}
             />
           ))}
         </div>
@@ -965,8 +961,8 @@ function AnswerRow({
   total,
   lastSyncAt,
   shopifyAdminDomain,
-  rulesForAnswer,
-  onOpenWindow,
+  armedCategory,
+  onPlaced,
 }: {
   doc: QuizDoc;
   q: OrderedQuestion;
@@ -983,11 +979,8 @@ function AnswerRow({
   total: number;
   lastSyncAt?: string | null;
   shopifyAdminDomain?: string | null;
-  rulesForAnswer: Array<{
-    index: number;
-    rule: NonNullable<QuizDoc["decision_rules"]>[number];
-  }>;
-  onOpenWindow?: (nodeId: string, answerId: string | null) => void;
+  armedCategory?: BuilderCategory;
+  onPlaced: () => void;
 }) {
   const writeValues = (values: FilterValueSet) => {
     if (!commit) return;
@@ -996,50 +989,117 @@ function AnswerRow({
 
   // ── Maps-to cell (Live row states) ────────────────────────────────────────
   let mapping: ReactNode;
+  const cellKey = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    if (e.target === e.currentTarget && (e.key === "Enter" || e.key === " ")) {
+      e.preventDefault();
+      e.currentTarget.click();
+    }
+  };
   if (role === "info") {
-    // λ chips of the rules READING this answer, or the dashed no-effect chip.
-    mapping =
-      rulesForAnswer.length > 0 ? (
-        rulesForAnswer.map(({ index, rule }) => {
-          const tid = ruleTargets(rule)[0];
-          const cat = tid ? catById.get(tid) : undefined;
-          return (
-            <span key={rule.id} className="qz-lw-vchip is-rule">
-              λ{index} {ruleChipVerb(rule.action)}{" "}
-              {cat ? cat.name : "(deleted target)"}
-            </span>
-          );
-        })
-      ) : (
-        <span className="qz-lw-vchip is-all">no effect yet</span>
-      );
-  } else if (role === "decides") {
-    // Reuse the decides mapping door — the cell opens the QuestionWindow
-    // focused on this answer, exactly as before.
-    const cat = answer.target_id ? catById.get(answer.target_id) : undefined;
-    const chip = answer.target_id ? (
-      cat ? (
-        <span className="qz-lw-vchip">{cat.name}</span>
-      ) : (
-        <span className="qz-ltab-bad">(deleted target)</span>
-      )
+    const labels = [
+      ...(answer.target_id
+        ? [catById.get(answer.target_id)?.name ?? "Deleted recommendation"]
+        : []),
+      ...answer.tags.map((t) => `Tag: ${t}`),
+      ...[
+        ...(answer.collection_filter ? [answer.collection_filter] : []),
+        ...(answer.collection_filters ?? []),
+      ].map((id) => `Collection: ${colTitleById.get(id) ?? id}`),
+      ...(answer.metafield_filters ?? []).map((f) => `${f.key}: ${f.value}`),
+      ...(answer.variant_filters ?? []).map((f) => `${f.name}: ${f.value}`),
+      ...(answer.product_type_filters ?? []).map((v) => `Type: ${v}`),
+      ...(answer.no_preference ? ["Keeps everything"] : []),
+    ];
+    mapping = labels.length ? (
+      labels.map((label, i) => (
+        <span key={i} className="qz-lw-vchip is-inert">
+          {label}
+        </span>
+      ))
     ) : (
-      <span className="qz-lw-vadd is-empty">+ Map this answer</span>
+      <span className="qz-lw-dash">No mapping</span>
     );
-    mapping = onOpenWindow ? (
-      <button
-        type="button"
-        className="qz-ltab-cellbtn qz-qwin-mapcell"
-        onClick={() => onOpenWindow(q.node.id, answer.id)}
+  } else if (role === "decides") {
+    const cat = answer.target_id ? catById.get(answer.target_id) : undefined;
+    const placeLabel = armedCategory
+      ? answer.target_id
+        ? `Replace ${cat?.name ?? "deleted recommendation"} with ${armedCategory.name}`
+        : `Place ${armedCategory.name} here`
+      : undefined;
+    const chip = answer.target_id ? (
+      <span className="qz-lw-vchip">
+        <span onClick={(e) => e.stopPropagation()}>
+          <ProductCountButton
+            answer={answer}
+            role="decides"
+            catById={catById}
+            productIndex={productIndex}
+            label={
+              <>
+                {cat?.name ?? "Deleted recommendation"}{" "}
+                <b>{cat?.productIds.length ?? 0}</b>
+              </>
+            }
+            answerKey={answerKey}
+            lastSyncAt={lastSyncAt}
+            shopifyAdminDomain={shopifyAdminDomain}
+          />
+        </span>
+        {commit ? (
+          <button
+            type="button"
+            className="qz-lw-x"
+            aria-label="Clear this answer’s result"
+            onClick={(e) => {
+              e.stopPropagation();
+              commit(setAnswerTarget(doc, q.node.id, answer.id, null));
+            }}
+          >
+            ×
+          </button>
+        ) : null}
+      </span>
+    ) : (
+      <span className="qz-qwidget-placeholder">Choose a result</span>
+    );
+    const cell = (
+      <div
+        role="button"
+        tabIndex={0}
+        className={`qz-qwidget-cell${armedCategory ? " is-armed" : ""}`}
+        aria-label={placeLabel ?? `Choose a result for ${answer.text}`}
+        onKeyDown={cellKey}
+        onClick={
+          armedCategory && commit
+            ? (e) => {
+                e.stopPropagation();
+                commit(
+                  setAnswerTarget(doc, q.node.id, answer.id, armedCategory.id),
+                );
+                onPlaced();
+              }
+            : undefined
+        }
       >
         {chip}
-      </button>
+        {placeLabel ? (
+          <span className="qz-qwidget-place">{placeLabel}</span>
+        ) : null}
+      </div>
+    );
+    mapping = commit ? (
+      <RecommendationPicker
+        trigger={cell}
+        categories={[...catById.values()].filter((c) => c.quizId === doc.quiz_id)}
+        products={productIndex}
+        selectedId={answer.target_id}
+        onPick={(id) => commit(setAnswerTarget(doc, q.node.id, answer.id, id))}
+      />
     ) : (
       chip
     );
   } else if (answer.no_preference) {
-    // The dashed "Keeps everything" chip; × clears no_preference.
-    mapping = (
+    const chip = (
       <span className="qz-lw-vchip is-all">
         Keeps everything
         {commit ? (
@@ -1047,19 +1107,48 @@ function AnswerRow({
             type="button"
             className="qz-lw-x"
             aria-label="Stop keeping everything"
-            onClick={() => writeValues({ tags: [] })}
+            onClick={(e) => {
+              e.stopPropagation();
+              writeValues(baseValueSet(answer));
+            }}
           >
             ×
           </button>
         ) : null}
       </span>
     );
+    mapping = commit ? (
+      <ValuePickerPopover
+        trigger={
+          <div
+            className="qz-qwidget-cell"
+            role="button"
+            tabIndex={0}
+            aria-label={`Choose values for ${answer.text}`}
+            onKeyDown={cellKey}
+          >
+            {chip}
+          </div>
+        }
+        answer={answer}
+        siblingAnswers={q.node.data.answers}
+        readout={readout}
+        productIndex={productIndex}
+        onApply={writeValues}
+      />
+    ) : (
+      chip
+    );
   } else {
     // Narrowing answer — one chip per mapped value + the "+ value" picker.
-    const chips: Array<{ key: string; label: string; removed: FilterValueSet }> = [];
+    const chips: Array<{
+      key: string;
+      label: string;
+      removed: FilterValueSet;
+    }> = [];
     answer.tags.forEach((t, ti) => {
       const ci = t.indexOf(":");
-      const label = ci > 0 && ci < t.length - 1 ? t.slice(ci + 1) : t;
+      const label = `Tag: ${ci > 0 && ci < t.length - 1 ? t.slice(ci + 1) : t}`;
       const removed = baseValueSet(answer);
       removed.tags = answer.tags.filter((_, j) => j !== ti);
       chips.push({ key: `t:${t}:${ti}`, label, removed });
@@ -1072,52 +1161,43 @@ function AnswerRow({
       const removed = baseValueSet(answer);
       removed.collection_filters = cols.filter((c) => c !== cid);
       if (!removed.collection_filters.length) delete removed.collection_filters;
-      chips.push({ key: `c:${cid}`, label: colTitleById.get(cid) ?? cid, removed });
+      chips.push({
+        key: `c:${cid}`,
+        label: colTitleById.get(cid) ?? cid,
+        removed,
+      });
     });
     (answer.metafield_filters ?? []).forEach((m, mi) => {
       const removed = baseValueSet(answer);
       removed.metafield_filters = (answer.metafield_filters ?? []).filter(
         (_, j) => j !== mi,
       );
-      chips.push({ key: `m:${m.key}:${m.value}:${mi}`, label: m.value, removed });
+      chips.push({
+        key: `m:${m.key}:${m.value}:${mi}`,
+        label: `${m.key}: ${m.value}`,
+        removed,
+      });
     });
     (answer.variant_filters ?? []).forEach((v, vi) => {
       const removed = baseValueSet(answer);
       removed.variant_filters = (answer.variant_filters ?? []).filter(
         (_, j) => j !== vi,
       );
-      chips.push({ key: `v:${v.name}:${v.value}:${vi}`, label: v.value, removed });
+      chips.push({
+        key: `v:${v.name}:${v.value}:${vi}`,
+        label: `${v.name}: ${v.value}`,
+        removed,
+      });
     });
     (answer.product_type_filters ?? []).forEach((p, pi) => {
       const removed = baseValueSet(answer);
       removed.product_type_filters = (answer.product_type_filters ?? []).filter(
         (_, j) => j !== pi,
       );
-      chips.push({ key: `p:${p}:${pi}`, label: p, removed });
+      chips.push({ key: `p:${p}:${pi}`, label: `Type: ${p}`, removed });
     });
 
-    const picker = commit ? (
-      <ValuePickerPopover
-        trigger={
-          chips.length > 0 ? (
-            <button type="button" className="qz-lw-vadd">
-              + value
-            </button>
-          ) : (
-            <button type="button" className="qz-lw-vadd is-empty">
-              + Map this answer
-            </button>
-          )
-        }
-        answer={answer}
-        siblingAnswers={q.node.data.answers}
-        readout={readout}
-        productIndex={productIndex}
-        onApply={writeValues}
-      />
-    ) : null;
-
-    mapping = (
+    const contents = (
       <>
         {chips.map((c) => (
           <span key={c.key} className="qz-lw-vchip">
@@ -1127,15 +1207,42 @@ function AnswerRow({
                 type="button"
                 className="qz-lw-x"
                 aria-label={`Remove ${c.label}`}
-                onClick={() => writeValues(c.removed)}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  writeValues(c.removed);
+                }}
               >
                 ×
               </button>
             ) : null}
           </span>
         ))}
-        {picker}
+        {!chips.length ? (
+          <span className="qz-qwidget-placeholder">Choose a value</span>
+        ) : null}
       </>
+    );
+    mapping = commit ? (
+      <ValuePickerPopover
+        trigger={
+          <div
+            className="qz-qwidget-cell"
+            role="button"
+            tabIndex={0}
+            aria-label={`Choose values for ${answer.text}`}
+            onKeyDown={cellKey}
+          >
+            {contents}
+          </div>
+        }
+        answer={answer}
+        siblingAnswers={q.node.data.answers}
+        readout={readout}
+        productIndex={productIndex}
+        onApply={writeValues}
+      />
+    ) : (
+      contents
     );
   }
 
@@ -1143,12 +1250,7 @@ function AnswerRow({
   let countCell: ReactNode;
   let countClass = "qz-lw-acount";
   if (role === "info") {
-    countCell =
-      rulesForAnswer.length > 0 ? (
-        <>{rulesForAnswer.length === 1 ? "1 rule" : `${rulesForAnswer.length} rules`}</>
-      ) : (
-        <span className="qz-lw-dash">—</span>
-      );
+    countCell = null;
   } else if (role === "decides") {
     const cat = answer.target_id ? catById.get(answer.target_id) : undefined;
     if (!cat) {
@@ -1157,7 +1259,8 @@ function AnswerRow({
       const n = cat.productIds.length;
       const label = (
         <span className="qz-lw-cnum">
-          <b>{n}</b> <span className="qz-lw-of">{n === 1 ? "product" : "products"}</span>
+          <b>{n}</b>{" "}
+          <span className="qz-lw-of">{n === 1 ? "product" : "products"}</span>
         </span>
       );
       if (n === 0) countClass += " is-zero";
@@ -1223,7 +1326,12 @@ function AnswerRow({
 
   // ── the kept Then-go-to column ────────────────────────────────────────────
   const route = (
-    <RouteCell doc={doc} q={q} answer={answer} qIndexByNodeId={qIndexByNodeId} />
+    <RouteCell
+      doc={doc}
+      q={q}
+      answer={answer}
+      qIndexByNodeId={qIndexByNodeId}
+    />
   );
 
   return (
@@ -1232,8 +1340,12 @@ function AnswerRow({
       <span className="qz-lw-atext" title={answer.text}>
         {answer.text}
       </span>
-      <span className="qz-lw-acell">{mapping}</span>
-      <span className={countClass}>{countCell}</span>
+      <div className="qz-lw-acell">
+        {mapping}
+        {role === "filter" ? (
+          <span className={countClass}>{countCell}</span>
+        ) : null}
+      </div>
       <span className="qz-lw-aroute">
         {commit ? (
           <RouteMenuButton
@@ -1281,7 +1393,8 @@ function RouteCell({
   const nextQ = qIndexByNodeId.get(nextId);
   // Mock .goto-val — the → prefix rides the CSS ::before; labels are "Next
   // question" / "Results"; a skip route keeps the Q-number.
-  if (nextQ === undefined) return <span className="qz-ltab-gotoval">Results</span>;
+  if (nextQ === undefined)
+    return <span className="qz-ltab-gotoval">Results</span>;
   if (nextQ === q.qIndex + 1)
     return <span className="qz-ltab-gotoval">Next question</span>;
   return <span className="qz-ltab-gotoval">Q{nextQ}</span>;

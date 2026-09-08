@@ -1023,3 +1023,68 @@ describe("ruleConditionsMatch — grouped is/is_not with match + any_of (§3)", 
     });
   });
 });
+
+describe("QWIDGET multi-select deciding answers", () => {
+  it("unions in authored order, independent of click order; one target keeps its shape", () => {
+    const d = deciderDoc();
+    expect(resolveTarget(["park"], d)).toEqual({
+      targetId: "cat_park",
+      matchedRuleId: null,
+    });
+    const expected = {
+      targetId: "cat_park",
+      targetIds: ["cat_park", "cat_powder"],
+      matchedRuleId: null,
+    };
+    expect(resolveTarget(["powder", "park"], d)).toEqual(expected);
+    expect(resolveTarget(["park", "powder"], d)).toEqual(expected);
+    const n = d.nodes.find((n) => n.id === "q2");
+    if (n?.type !== "question") throw new Error("fixture");
+    n.data.answers[1]!.target_id = "cat_park";
+    expect(resolveTarget(["powder", "park"], d)).toEqual({
+      targetId: "cat_park",
+      matchedRuleId: null,
+    });
+  });
+  it.each(["show", "hide", "prioritize"] as const)(
+    "keeps the complete base union under a %s action",
+    (action) => {
+      const d = deciderDoc({
+        decision_rules: [
+          {
+            id: "action",
+            conditions: [
+              { question_id: "q1", answer_id: "beginner", op: "is" },
+            ],
+            target_id: "extra",
+            action,
+          },
+        ],
+      });
+      expect(resolveTarget(["powder", "beginner", "park"], d)).toEqual({
+        targetId: "cat_park",
+        targetIds: ["cat_park", "cat_powder"],
+        matchedRuleId: "action",
+        ruleAction: action,
+        ruleTargetId: "extra",
+      });
+    },
+  );
+});
+
+it("QWIDGET shopper pool dedupes a multi-pick union, keeps its grid, and narrows across it", () => {
+  const d = deciderDoc();
+  const decider = d.nodes.find((n) => n.id === "q2");
+  const filter = d.nodes.find((n) => n.id === "q1");
+  if (decider?.type !== "question" || filter?.type !== "question") throw new Error("fixture");
+  decider.data.question_type = "multi_select";
+  const index = [P("a", {tags:["match"]}), P("b"), P("c", {tags:["match"]})];
+  const base = {quiz:d,productIndex:index,resultNodeId:"r1",targetProductIdsMap:{cat_park:["a"],cat_powder:["b","a","c"]},targetIndex:{cat_park:{type:"product" as const},cat_powder:{type:"collection" as const}}};
+  const first = recommendForResultExplained({...base,selectedAnswerIds:["park","powder"]});
+  expect(first.products.map((p) => p.product_id)).toEqual(["a","b","c"]);
+  expect(recommendForResultExplained({...base,selectedAnswerIds:["powder","park"]})).toEqual(first);
+  filter.data.role = "filter"; filter.data.answers[0]!.tags = ["match"];
+  expect(recommendForResultExplained({...base,selectedAnswerIds:["powder","park","beginner"]}).products.map((p) => p.product_id)).toEqual(["a","c"]);
+  const legacy = Quiz.parse({...d,logic_model:undefined});
+  expect(recommendForResultExplained({...base,quiz:legacy,selectedAnswerIds:["park","powder"]}).decider).toBeUndefined();
+});

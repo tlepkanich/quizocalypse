@@ -63,19 +63,19 @@ describe("pickDeciderIndex — distinct-coverage score, earliest tie-break", () 
     expect(pickDeciderIndex([q, { ...q }], buckets)).toBe(0);
   });
 
-  it("multi_select and freeform questions are never eligible (§2.2)", () => {
+  it("multi_select is eligible; freeform remains ineligible", () => {
     const questions = [
       { question_type: "multi_select", answers: [{ tags: ["dry"] }, { tags: ["oily"] }] },
       { question_type: "text", answers: [{ tags: ["dry"] }, { tags: ["oily"] }] },
       { question_type: "rating", answers: [{ tags: ["dry"] }, { tags: ["oily"] }] },
     ];
-    expect(pickDeciderIndex(questions, buckets)).toBe(2);
+    expect(pickDeciderIndex(questions, buckets)).toBe(0);
   });
 
   it("returns -1 when nothing is eligible", () => {
     expect(
       pickDeciderIndex(
-        [{ question_type: "multi_select", answers: [{ tags: ["dry"] }] }],
+        [{ question_type: "text", answers: [{ tags: ["dry"] }] }],
         buckets,
       ),
     ).toBe(-1);

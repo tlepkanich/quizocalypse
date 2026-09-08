@@ -123,28 +123,30 @@ function pickType(value: string) {
   act(() => radio.click());
 }
 
-function buttonByText(text: string): HTMLButtonElement {
-  const btn = Array.from(document.body.querySelectorAll("button")).find(
-    (b) => b.textContent?.trim() === text,
-  );
-  if (!btn) throw new Error(`no button "${text}"`);
-  return btn;
-}
 
 describe("TypeChipSelector — decider BLOCK dialog", () => {
-  it("decider → multi-select is REFUSED: block dialog opens, onCommit is never called", () => {
+  it("decider to multi-select commits and preserves mappings and routes", () => {
     const d = doc();
     const onCommit = vi.fn();
-    mount(createElement(TypeChipSelector, { doc: d, node: questionNode(d, "q2"), onCommit }));
-
+    mount(
+      createElement(TypeChipSelector, {
+        doc: d,
+        node: questionNode(d, "q2"),
+        onCommit,
+      }),
+    );
     pickType("multi_select");
-    const dialog = document.body.querySelector('[role="dialog"]');
-    expect(dialog?.textContent).toContain("Multi-select can't decide the result");
-    expect(onCommit).not.toHaveBeenCalled();
-
-    act(() => buttonByText("Got it").click());
     expect(document.body.querySelector('[role="dialog"]')).toBeNull();
-    expect(onCommit).not.toHaveBeenCalled(); // doc untouched end to end
+    expect(onCommit).toHaveBeenCalledTimes(1);
+    const next = onCommit.mock.calls[0]![0];
+    expect(questionNode(next, "q2").data).toMatchObject({
+      role: "decides",
+      question_type: "multi_select",
+    });
+    expect(questionNode(next, "q2").data.answers).toEqual(
+      questionNode(d, "q2").data.answers,
+    );
+    expect(next.edges).toEqual(d.edges);
   });
 
   it("QZY-3 — the picker is curated: no freeform picks offered", () => {

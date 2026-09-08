@@ -49,8 +49,8 @@ export function mapAnswersToTargets(
   );
 }
 
-/** Pick the DECIDING question: among eligible questions (single-answer family —
- *  never multi_select or freeform, mirroring setQuestionRole's refusal), the
+/** Pick the DECIDING question: among questions with discrete answer choices
+ *  (including multi-select, excluding freeform), the
  *  one whose answers map to the most DISTINCT targets; ties → earliest in the
  *  flow. Returns -1 when no question is eligible. */
 export function pickDeciderIndex(
@@ -63,7 +63,7 @@ export function pickDeciderIndex(
   let bestIdx = -1;
   let bestScore = 0;
   questions.forEach((q, i) => {
-    if (q.question_type === "multi_select" || isFreeformType(q.question_type)) return;
+    if (isFreeformType(q.question_type)) return;
     const distinct = new Set(mapAnswersToTargets(q.answers, buckets)).size;
     if (distinct > bestScore) {
       bestScore = distinct;

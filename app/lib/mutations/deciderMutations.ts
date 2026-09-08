@@ -26,7 +26,7 @@ export function setQuestionRole(
   if (!node || node.type !== "question") return doc;
   if (
     role === "decides" &&
-    (node.data.question_type === "multi_select" || isFreeformType(node.data.question_type))
+    (isFreeformType(node.data.question_type))
   )
     return doc;
   return {
@@ -100,7 +100,6 @@ export function moveDecider(doc: QuizDoc, toNodeId: string): QuizDoc {
   const target = doc.nodes.find((n) => n.id === toNodeId);
   if (!target || target.type !== "question") return doc;
   if (
-    target.data.question_type === "multi_select" ||
     isFreeformType(target.data.question_type)
   )
     return doc;

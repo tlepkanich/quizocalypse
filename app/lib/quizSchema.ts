@@ -339,7 +339,7 @@ export const QuestionDataObject = z.object({
   // to targets (Answer.target_id) and it is forced Required. "qualifier":
   // assigns nothing — routing/zero-party data only (the bucket column never
   // renders on it). Only meaningful when the quiz's logic_model is "decider";
-  // multi-select questions are auto-qualifier (§2.2). Additive/optional →
+  // multi-select deciding questions union selected targets. Additive/optional →
   // absent on every legacy doc.
   // QZY-1 (quiz-logic spec §3) adds "filter": narrows the pool by an
   // attribute value per answer (tags/collection_filter — the machinery the
