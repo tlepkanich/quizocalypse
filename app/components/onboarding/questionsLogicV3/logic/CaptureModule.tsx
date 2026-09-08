@@ -1,6 +1,7 @@
 import type { z } from "zod";
 import type { Quiz, RecPageGlobal } from "../../../../lib/quizSchema";
 import { resolveRecPageGlobal } from "../../../../lib/recommendDecider";
+import { setRecPageGlobal } from "../../../../lib/quizMutations";
 
 type QuizDoc = z.infer<typeof Quiz>;
 
@@ -24,13 +25,7 @@ export function CaptureModule({
 }) {
   const cfg = resolveRecPageGlobal(doc.rec_page_settings);
   const patch = (p: Partial<RecPageGlobal>) =>
-    onCommit({
-      ...doc,
-      rec_page_settings: {
-        global: { ...(doc.rec_page_settings?.global ?? {}), ...p },
-        overrides: doc.rec_page_settings?.overrides ?? {},
-      },
-    });
+    onCommit(setRecPageGlobal(doc, p));
 
   return (
     <section className="qz-s3-capmod" aria-label="Quiz ending">

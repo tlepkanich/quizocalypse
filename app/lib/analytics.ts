@@ -51,6 +51,16 @@ export const CapturePayload = z.object({
   phone: z.string().max(40).optional(),
   // rg-wiring (2026-08-18) — the guided flow's marketing-consent checkbox.
   marketing_consent: z.boolean().optional(),
+  // WIS-025: record what was displayed and explicitly checked, separately
+  // from marketing consent. A notice is disclosure, never a checked opt-in.
+  consent: z.object({
+    terms: z.object({
+      mode: z.enum(["checkbox", "notice"]), checked: z.boolean(), text: z.string(),
+    }).strict().optional(),
+    sms: z.object({
+      mode: z.enum(["checkbox", "notice"]), checked: z.boolean(), text: z.string().max(500),
+    }).strict().optional(),
+  }).strict().refine(value => Boolean(value.terms || value.sms), "Consent evidence is empty").optional(),
 });
 
 // §L L2 — post-result feedback. rating: thumbs (1 up / 0 down) or stars (1–5).

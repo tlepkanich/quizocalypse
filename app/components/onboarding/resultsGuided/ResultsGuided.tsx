@@ -350,7 +350,10 @@ export function ResultsGuided({
     const preset = GATE_COPY[where];
     patch({
       capturePlacement: where,
-      ...(preset && !copyTouched.current
+      ...(preset && !copyTouched.current &&
+          doc.rec_page_settings?.global?.captureHeadline === undefined &&
+          doc.rec_page_settings?.global?.captureSubtext === undefined &&
+          doc.rec_page_settings?.global?.captureCta === undefined
         ? { captureHeadline: preset.headline, captureSubtext: preset.copy, captureCta: preset.cta }
         : {}),
       ...(where !== "before" ? { captureRequired: false } : {}),

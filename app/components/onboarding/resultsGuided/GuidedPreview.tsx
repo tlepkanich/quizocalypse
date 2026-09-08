@@ -8,6 +8,8 @@ import {
   tokensToCssVars,
   suggestContrastText,
 } from "../../../lib/designTokens";
+import { resolveRecPageGlobal } from "../../../lib/recommendDecider";
+import { ConsentNotice, termsCopy, SMS_CHECKBOX, SMS_NOTICE } from "../../runtime/views/ConsentNotice";
 import { googleFontsUrl } from "../../runtime/runtimeStyles";
 import { DeviceFrame, type FrameFit } from "../../builder/preview/DeviceFrame";
 import { DEVICES, type DeviceTier } from "../../builder/preview/previewWidth";
@@ -17,7 +19,6 @@ import {
   resolveDiscount,
   offerCode,
   offerLabel,
-  type GuidedConfig,
 } from "./state";
 
 /* Results-guided handoff §6 — the preview. QRTZ-S3: rendered through the
@@ -39,30 +40,6 @@ import {
 export type PreviewScreen = "results" | "gate" | "loading";
 
 const money = (n: number) => `$${n.toFixed(2)}`;
-
-/** {terms}/{privacy} tokens → links, as React nodes (no raw HTML — the copy
- *  is merchant-authored text). Dropping a token drops that link (§4). */
-function TermsLine({ cfg }: { cfg: GuidedConfig }) {
-  const template = cfg.captureTermsText || "By continuing you agree to our {terms} and {privacy}.";
-  const parts = template.split(/(\{terms\}|\{privacy\})/);
-  return (
-    <p className="qz-rg-terms" data-jump="consent" data-part="terms">
-      {parts.map((p, i) =>
-        p === "{terms}" ? (
-          <u key={i} title={cfg.termsUrl}>
-            {cfg.termsLabel}
-          </u>
-        ) : p === "{privacy}" ? (
-          <u key={i} title={cfg.privacyUrl}>
-            {cfg.privacyLabel}
-          </u>
-        ) : (
-          p
-        ),
-      )}
-    </p>
-  );
-}
 
 export function GuidedPreview({
   doc,
@@ -88,6 +65,7 @@ export function GuidedPreview({
   onJump: (sec: string) => void;
 }) {
   const cfg = resolveGuided(doc);
+  const runtimeCfg = resolveRecPageGlobal(doc.rec_page_settings);
   const disc = resolveDiscount(doc);
 
   const resolved = useMemo(() => resolveDesignTokens(designTokens ?? undefined), [designTokens]);
@@ -173,12 +151,12 @@ export function GuidedPreview({
           <i /> <span>{cfg.consentCopy}</span>
         </div>
       ) : null}
-      {cfg.capturePhone ? (
+      {cfg.capturePhone && cfg.smsConsentMode === "checkbox" ? (
         <div className="qz-rg-cons" data-jump="consent" data-part="consent">
-          <i /> <span>Text me offers. Msg &amp; data rates may apply. Reply STOP to opt out.</span>
+          <i /> <span>{cfg.smsConsentText || SMS_CHECKBOX}</span>
         </div>
       ) : null}
-      {cfg.captureTermsOn ? <TermsLine cfg={cfg} /> : null}
+      {cfg.captureTermsOn && cfg.captureTermsMode !== "notice" ? <div className="qz-rg-cons" data-jump="consent" data-part="terms"><i /><span>{termsCopy(runtimeCfg)}</span></div> : null}
     </>
   );
 
@@ -204,12 +182,14 @@ export function GuidedPreview({
             </span>
           </div>
         ) : null}
-        <h4 data-part="gcopy">{cfg.captureHeadline || "Your matches are ready"}</h4>
-        <p data-part="gcopy">{cfg.captureSubtext || "Tell us where to send them."}</p>
+        <h4 data-part="gcopy">{cfg.captureHeadline || (cfg.capturePlacement === "inline" ? "Save your details" : "Your matches are ready")}</h4>
+        <p data-part="gcopy">{cfg.captureSubtext || (cfg.capturePlacement === "inline" ? "Share your contact details with the store." : "Tell us where to send them.")}</p>
         <input placeholder="you@email.com" readOnly />
         {cfg.capturePhone ? <input placeholder="Mobile number (optional)" readOnly /> : null}
         {consentRows}
-        <button type="button">{cfg.captureCta}</button>
+        <button type="button">{doc.rec_page_settings?.global.captureCta || (cfg.capturePlacement === "inline" ? "Save my details" : cfg.captureCta)}</button>
+        {cfg.captureTermsOn && cfg.captureTermsMode === "notice" && <p className="qz-rg-terms" data-jump="consent" data-part="terms"><ConsentNotice config={runtimeCfg}/></p>}
+        {cfg.capturePhone && cfg.smsConsentMode === "notice" && <p className="qz-rg-terms" data-jump="consent">{cfg.smsConsentText || SMS_NOTICE}</p>}
       </div>
     );
   };

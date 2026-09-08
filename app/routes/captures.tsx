@@ -85,6 +85,10 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         firstName: parsed.data.first_name ?? null,
         phone: parsed.data.phone ?? null,
         marketingConsent: parsed.data.marketing_consent ?? null,
+        ...(parsed.data.consent ? {
+          consentEvidence: parsed.data.consent,
+          consentRecordedAt: new Date(),
+        } : {}),
       },
     });
   } catch (err) {

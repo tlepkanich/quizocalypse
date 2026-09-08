@@ -18,6 +18,7 @@ export interface NodeIssue {
     // Routing — per-answer result branching authored on the node but never
     // wired onto the edges (every answer falls through to a result-less path):
     | "dead_answer_routing"
+    | "decider_email_gate"
     // LOGIC v2 (quiz-questions-logic-spec §6) — decider-model BLOCK rules,
     // only ever emitted for docs with logic_model === "decider":
     | "missing_decider" // V1 — not exactly one role="decides" question
@@ -110,6 +111,12 @@ export function validateQuiz(doc: QuizDoc): NodeIssue[] {
   // byte-identical. V4/V5's DB half (targets actually exist as Category rows)
   // is enforced at publish time in quizPublish.ts, where categories are fetched.
   if (doc.logic_model === "decider") {
+    for (const node of doc.nodes) {
+      if (node.type === "email_gate") issues.push({
+        nodeId: node.id, kind: "decider_email_gate",
+        message: "Remove the inherited email gate in the builder and configure Email capture in Questions. Decider quizzes use one configured capture form.",
+      });
+    }
     const deciders = doc.nodes.filter(
       (n) => n.type === "question" && n.data.role === "decides",
     );

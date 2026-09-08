@@ -10,7 +10,8 @@ phase. Specs win over this doc; this doc wins over guesses.
 
 | Surface | Spec | Today's code |
 |---|---|---|
-| **Funnel step 3 · Questions/Logic** (Content⇄Logic toggle) | quiz-logic v1.2 | `questionsLogicV3/` (Step3Shell, PhoneCanvas, LogicScroll) |
+| **Funnel step 2 · Questions** | WIS-025 walkthrough | `questionsWalkthrough/`; phone variant retained but inactive |
+| **Funnel step 3 · Logic** | quiz-logic v1.2 + Logic workspace | `questionsLogicV3/Step3Shell` logic mode |
 | **Funnel step 4 · Results reveal (LIGHT)** | quiz-results-step4 v1.0 | `RecommendationStage.tsx` (heavy — becomes the *dashboard advanced editor*, not step 4) |
 | **Main builder** (shell + Build tab) | quiz-build-tab v1.0 | `UnifiedWorkspace` + BLD-1…7 chrome |
 

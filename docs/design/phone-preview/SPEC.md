@@ -1,3 +1,5 @@
+> WIS-025 (2026-09-08): the Questions funnel now uses the walkthrough. Its phone implementation stays inactive for future A/B testing. Results and main-builder previews still use this shared device system.
+
 # Phone preview — shared primitive spec
 
 Every builder step shows the merchant a phone. Today there are **four separate

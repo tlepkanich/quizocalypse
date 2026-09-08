@@ -3,7 +3,7 @@ import type { DragEvent } from "react";
 import type { Quiz as QuizDoc, RecPageGlobal } from "../../../../lib/quizSchema";
 import { isFreeformType } from "../../../../lib/quizSchema";
 import type { OrderedQuestion } from "../../../../lib/questionOrder";
-import { addAnswer, moveAnswer, removeAnswer } from "../../../../lib/quizMutations";
+import { addAnswer, moveAnswer, removeAnswer, setRecPageGlobal } from "../../../../lib/quizMutations";
 import { updateNodeData } from "../../../studio/studioDoc";
 import { resolveRecPageGlobal } from "../../../../lib/recommendDecider";
 import { computeFitStep, isTitleLong } from "../fitSteps";
@@ -309,13 +309,7 @@ function CaptureSurface({
 }) {
   const cfg = resolveRecPageGlobal(doc.rec_page_settings);
   const patch = (p: Partial<RecPageGlobal>) =>
-    onCommit({
-      ...doc,
-      rec_page_settings: {
-        global: { ...(doc.rec_page_settings?.global ?? {}), ...p },
-        overrides: doc.rec_page_settings?.overrides ?? {},
-      },
-    });
+    onCommit(setRecPageGlobal(doc, p));
   return (
     <div className="qz-s3-capture">
       <h2 className="qz-s3-qtitle">

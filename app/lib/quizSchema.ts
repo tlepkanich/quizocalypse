@@ -1841,6 +1841,9 @@ export const RecPageGlobal = z.object({
   captureSubtext: z.string().optional(),
   captureTermsOn: z.boolean().optional(),
   captureTermsText: z.string().optional(),
+  captureTermsMode: z.enum(["checkbox", "notice"]).optional(),
+  smsConsentMode: z.enum(["checkbox", "notice"]).optional(),
+  smsConsentText: z.string().max(500).optional(),
   // §8.2 (L2-11) — the merchant LOCKED this why-copy: config-time ✦ regenerate
   // refuses to overwrite it, and the L2-12 runtime layer must never replace it.
   whyCopyLocked: z.boolean().optional(),
@@ -1859,6 +1862,9 @@ export const RecPageGlobal = z.object({
   // hangs off; captureEmail stays the runtime's wired gate switch and is kept
   // in sync by the builder (before → true, none → false).
   capturePlacement: z.enum(["before", "inline", "discount", "none"]).optional(),
+  // Explicit opt-in from the new editor: old inline values may still carry
+  // a pre-results gate, which must not disappear merely because we deploy.
+  captureInlineOn: z.boolean().optional(),
   captureRequired: z.boolean().optional(),
   captureCta: z.string().optional(),
   captureSkipLabel: z.string().optional(),

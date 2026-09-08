@@ -176,6 +176,13 @@ export function setRecPageGlobal(doc: QuizDoc, patch: RecPageGlobalPatch): QuizD
     delete global.captureName;
     delete global.capturePhone;
   }
+  // New consent-only fields never outlive their collection switch.
+  // Preserve pre-existing terms wording for older documents.
+  if (global.capturePhone !== true) {
+    delete global.smsConsentMode;
+    delete global.smsConsentText;
+  }
+  if (global.captureTermsOn !== true) delete global.captureTermsMode;
   return packRecPageSettings(doc, global, { ...(cur?.overrides ?? {}) });
 }
 

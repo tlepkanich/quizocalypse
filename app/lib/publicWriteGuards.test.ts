@@ -61,6 +61,20 @@ beforeEach(() => {
 });
 
 describe("captures.tsx write guard", () => {
+  it("stores consent evidence with a server receipt time, independently of marketing consent", async () => {
+    const consent = { terms: { mode: "checkbox", checked: true, text: "I accept the terms." } };
+    const res = await capturesAction(postArgs("captures", { ...CAPTURE, consent, marketing_consent: false }));
+    expect(res.status).toBe(202);
+    expect(p.emailCapture.create).toHaveBeenCalledWith({ data: expect.objectContaining({
+      consentEvidence: consent, consentRecordedAt: expect.any(Date), marketingConsent: false,
+    }) });
+  });
+  it("rejects oversized SMS evidence before writing a capture", async () => {
+    const consent = { sms: { mode: "checkbox", checked: true, text: "x".repeat(501) } };
+    const res = await capturesAction(postArgs("captures", { ...CAPTURE, consent }));
+    expect(res.status).toBe(400);
+    expect(p.emailCapture.create).not.toHaveBeenCalled();
+  });
   it("202 + {ok:true} on a successful write (happy path unchanged)", async () => {
     p.emailCapture.create.mockResolvedValue({});
     const res = await capturesAction(postArgs("captures", CAPTURE));
