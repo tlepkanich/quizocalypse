@@ -78,6 +78,24 @@ export function resolveMembership(m: Membership, products: ResolvableProduct[]):
   return out;
 }
 
+// Flatten a product's metafields Json ({ "ns.key": { value } } or primitives)
+// into the "ns.key: value" condition strings the membership matcher compares
+// EXACT. One definition — the groups page, ensure-targets and the Step-1
+// wizard payload all read this, so a condition string built in one place
+// always matches a product flattened in another.
+export function metafieldValuesOf(mf: unknown): string[] {
+  if (!mf || typeof mf !== "object") return [];
+  const out: string[] = [];
+  for (const [k, v] of Object.entries(mf as Record<string, unknown>)) {
+    const val =
+      v && typeof v === "object" && "value" in (v as object)
+        ? String((v as { value: unknown }).value)
+        : String(v);
+    out.push(`${k}: ${val}`);
+  }
+  return out;
+}
+
 // Dominant source (for the Category.source enum + the accent), by priority.
 export function dominantSource(m: Membership): "tag" | "collection" | "metafield" | "manual" {
   if (m.tags.length) return "tag";

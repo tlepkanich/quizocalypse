@@ -132,8 +132,18 @@ export async function removeBuckets(
   });
 }
 
-// Clear the quiz's entire bucket set (tab-lock confirm → switch dimensions).
-// Logic-tab rule targets survive (see the re-group transaction above).
+// How many bucket rows the quiz holds (Logic-tab rule targets excluded — they
+// are rule plumbing, not the merchant's Step-1 selection). The pre-pick's
+// write gate reads this.
+export async function countBuckets(shopId: string, quizId: string): Promise<number> {
+  return prisma.category.count({
+    where: { shopId, quizId, NOT: { discoveryRunId: { startsWith: "logic-tab-" } } },
+  });
+}
+
+// Clear the quiz's entire bucket set (an Apply over an EMPTY selection, the
+// pre-pick's first write). Logic-tab rule targets survive (see the re-group
+// transaction above).
 export async function clearBuckets(shopId: string, quizId: string): Promise<void> {
   await prisma.category.deleteMany({
     where: { shopId, quizId, NOT: { discoveryRunId: { startsWith: "logic-tab-" } } },

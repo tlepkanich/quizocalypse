@@ -24,6 +24,7 @@ import {
   bucketRowsFor,
   addBuckets,
   clearBuckets,
+  countBuckets,
   type BucketType,
 } from "./step1Build.server";
 import {
@@ -32,7 +33,7 @@ import {
   writeGenProgress,
 } from "./step2Build.server";
 import { claimGoalFirstDraft, loadFunnelDraft, writeDoc } from "./funnelDraft.server";
-import { foldGoalBrief, friendlyPrepickError, resolveGoalPickRows } from "./goalPrepick";
+import { foldGoalBrief, friendlyPrepickError, prepickWritePolicy, resolveGoalPickRows } from "./goalPrepick";
 
 // Candidate-product cap for the prompt (large catalogs steer through tags /
 // collections anyway; the list is marked truncated past this).
@@ -56,10 +57,11 @@ export async function beginGoalFirstFlow(
 ): Promise<string> {
   const quizId = await claimGoalFirstDraft(shop.id);
   const { doc, session } = await loadFunnelDraft(shop.id, quizId);
-  // A re-claimed goal-first draft may carry a prior pre-pick's selections —
-  // the new goal replaces them (nothing downstream references them: the claim
-  // guarantees nothing is built).
-  await clearBuckets(shop.id, quizId);
+  // Step-1 tweaks (§02 item 4) — the pre-pick may write buckets only when the
+  // selection is EMPTY. A re-claimed draft's prior picks are the merchant's
+  // until they say otherwise; the new pick lands as "ready" and is applied
+  // from the AI Picks pill. (Formerly an unconditional clearBuckets here.)
+  if ((await countBuckets(shop.id, quizId)) === 0) await clearBuckets(shop.id, quizId);
   const goalBrief = foldGoalBrief(brief.goal, brief.audience, brief.factors);
   const next = BuildSession.parse({
     ...session,
@@ -202,10 +204,18 @@ export function startGoalPrepick(shopId: string, quizId: string): void {
         return;
       }
 
-      // Replace the draft's selections with the pick (the claim/begin step
-      // already cleared any prior set; clearing again keeps a Retry honest).
-      await clearBuckets(shopId, quizId);
-      await addBuckets(shopId, quizId, rows);
+      // Step-1 tweaks (§02 item 4) — NEVER overwrite a non-empty selection.
+      // Anything the merchant picked while the job ran (the stalled state even
+      // tells them to) is theirs; the pick is held on the session and offered
+      // through the AI Picks pill. Only an empty selection is written to.
+      // The pre-pick chooses among products / tags / collections only (its
+      // candidate lists never carry custom groups).
+      const picks = { type: strategy, keys: rows.map((r) => r.sourceRef) };
+      const wrote = prepickWritePolicy(await countBuckets(shopId, quizId)) === "write";
+      if (wrote) {
+        await clearBuckets(shopId, quizId);
+        await addBuckets(shopId, quizId, rows);
+      }
       await patchBuildSession(quizId, (s) =>
         BuildSession.parse({
           ...s,
@@ -214,16 +224,19 @@ export function startGoalPrepick(shopId: string, quizId: string): void {
             prepick: "ready",
             rationale: rationale.slice(0, 300),
             error: undefined,
+            picks,
           },
           bucket_browser: {
             banner_dismissed: s.bucket_browser?.banner_dismissed ?? false,
-            active_tab: strategy,
+            // Land the picker on the applied type only when the pick was
+            // actually written; a kept selection keeps its tab.
+            active_tab: wrote ? strategy : s.bucket_browser?.active_tab,
           },
           gen_progress: undefined,
         }),
       );
       logFor("goalPrepick").info(
-        { quizId, ms: Date.now() - t, strategy, picked: rows.length },
+        { quizId, ms: Date.now() - t, strategy, picked: rows.length, wrote },
         "goal pre-pick done",
       );
     } catch (err) {

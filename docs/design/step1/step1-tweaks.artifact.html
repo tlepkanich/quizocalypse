@@ -1,0 +1,1184 @@
+<title>Step 1 Tweaks</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Figtree:wght@300..900&display=swap">
+
+<style>
+:root{
+  color-scheme:light;   /* dark mode CUT by the owner 2026-08-09 — no dark block */
+  --paper:#FFFFFF; --cream:#FFFFFF; --cream-2:#F5F4F8; --ground:#F5F4F8;
+  --ink:#201C2E; --ink-3:#4E4860; --ink-4:#645E78; --ink-25:#B4AFC4;
+  --rule:#E4E1EC; --rule-2:#EFEDF4; --rule-strong:#948EA6; --scrim:rgba(32,28,46,.45);
+  --accent:#5B45D6; --accent-2:#4A36B8; --accent-ink:#4A36B8;
+  --accent-wash:#EFECFD; --accent-line:#D5CDF8;
+  --accent-tint:color-mix(in srgb,var(--accent) 10%,var(--paper));
+  --accent-edge:var(--accent-line);   /* quartz has no separate edge token */
+  --ok:#0F6B45; --warn:#8A5300; --crit:#A5241C;
+  --warn-wash:color-mix(in srgb,var(--warn) 9%,var(--paper));
+  /* SHAPE — squared. Nothing is a full pill except a spinner. */
+  --r-sm:4px; --r:6px; --r-lg:8px; --pill:6px;
+  /* TYPE — one family. Quartz has no monospace (DECISION 3). */
+  --font:"Figtree",-apple-system,"Segoe UI","Helvetica Neue",sans-serif;
+  /* the SHIPPED scale — origin/main quizocalypse.css:160 */
+  --t-display:30px; --t-h1:24px; --t-h2:17px; --t-h3:15px; --t-body:14px; --t-label:11px;
+  --mono:"Figtree",-apple-system,"Segoe UI",sans-serif;
+  /* DEPTH — content is flat; only overlays cast. */
+  --lift-1:0 1px 2px rgba(32,28,46,.05);
+  --lift-2:0 12px 30px -10px rgba(32,28,46,.26),0 1px 2px rgba(32,28,46,.07);
+  --lift-3:0 24px 56px -16px rgba(32,28,46,.34),0 2px 4px rgba(32,28,46,.08);
+  --sh:var(--lift-1);
+  --focus:0 0 0 3px color-mix(in srgb,var(--accent) 28%,transparent);
+  /* MOTION — one curve, three durations. */
+  --ease:cubic-bezier(.2,.7,.3,1);
+  --dur-fast:110ms; --dur:130ms; --dur-slow:200ms; --dur-xslow:320ms;
+}
+*{box-sizing:border-box}
+svg{flex:none}
+.src-h>svg{width:16px;height:16px}
+body{margin:0;background:var(--ground);color:var(--ink-3);font-family:var(--font);font-size:var(--t-body);line-height:1.6;-webkit-font-smoothing:antialiased}
+button{font-family:inherit;cursor:pointer}
+/* TWEAK 7 — focus must not imitate selection */
+:focus-visible{outline:2px solid var(--ink);outline-offset:2px;border-radius:var(--r-sm)}
+input:focus-visible,textarea:focus-visible{outline:none;border-color:var(--accent);box-shadow:var(--focus)}
+
+.mast{background:var(--ink);color:#fff;border-bottom:3px solid var(--accent)}
+.mast-in{max-width:1200px;margin:0 auto;padding:40px 24px 32px}
+.eyebrow{font-weight:700;font-size:11px;letter-spacing:.09em;text-transform:uppercase;color:var(--accent-line);margin:0 0 12px}
+.mast h1{font-weight:700;font-size:clamp(28px,5vw,40px);line-height:1.07;letter-spacing:-.03em;margin:0 0 12px;text-wrap:balance}
+.mast p{margin:0;max-width:64ch;color:#C9C4D8;font-size:16.5px}
+.hint{background:var(--ink);color:#CFCADC;padding:8px 24px;font-size:14px;border-top:1px solid rgba(255,255,255,.12)}
+.hint b{color:#fff;font-weight:700;letter-spacing:.08em;text-transform:uppercase;font-size:11px;margin-right:8px}
+.wrap{max-width:1200px;margin:0 auto;padding:0 24px 88px}
+
+/* ══ the page, as it is today ══ */
+.frame{background:var(--paper);border:1px solid var(--rule);border-radius:var(--r-lg);overflow:hidden;box-shadow:var(--lift-2);margin-top:28px}
+.top{background:var(--paper);border-bottom:1px solid var(--rule);height:64px;display:flex;align-items:center;gap:0;padding:0 0 0 16px}
+.logo{width:32px;height:32px;flex:none;color:var(--accent)}
+.logo svg{width:32px;height:32px}
+.steps{flex:1 1 auto;display:flex;align-items:center;min-width:0;overflow:hidden;padding:0 18px}
+.step{display:flex;align-items:center;gap:8px;flex:none}
+.step-n{width:24px;height:24px;border-radius:var(--r);display:grid;place-items:center;font-size:11px;font-weight:700;background:var(--cream-2);color:var(--ink-4);font-variant-numeric:tabular-nums}
+.step.cur .step-n{background:var(--accent);color:#fff}
+.step-l{font-size:14px;font-weight:600;color:var(--ink-4);white-space:nowrap}
+.step.cur .step-l{color:var(--ink);font-weight:700}
+.step-line{flex:1 1 auto;height:1px;background:var(--rule);margin:0 16px;min-width:18px}
+.topr{flex:none;display:flex;align-items:center;gap:0;border-left:1px solid var(--rule);height:100%}
+.back{width:48px;height:100%;display:grid;place-items:center;background:none;border:none;color:var(--ink-4)}
+.back svg{width:16px;height:16px}
+.btn{font-size:14px;font-weight:600;padding:8px 16px;border-radius:var(--r-sm);border:1px solid var(--rule-strong);background:var(--paper);color:var(--ink);display:inline-flex;align-items:center;justify-content:center;gap:8px}
+.btn:hover{background:var(--cream-2)}
+.btn-accent{background:var(--accent);border-color:var(--accent);color:#fff;margin:0 12px}
+.btn-accent:hover{background:var(--accent-2);border-color:var(--accent-2)}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.btn svg{width:16px;height:16px;flex:none}
+
+.page{max-width:1000px;margin:0 auto;padding:28px 24px 72px;background:var(--paper)}
+.h1{font-size:var(--t-h2);font-weight:700;line-height:1.3;letter-spacing:-.02em;color:var(--ink);margin:0 0 18px}
+
+/* TWEAK 1 — the AI, one quiet line */
+/* TWEAK 22 — the AI sits INSIDE the widget it changed, in the tab strip's corner */
+.panehd{display:flex;align-items:flex-start;gap:12px}
+.panehd .tabs{flex:1 1 auto;min-width:0}
+.aicorner{flex:none;display:flex;align-items:center;gap:8px;padding:14px 14px 0 0}
+.aibtn{display:inline-flex;align-items:center;gap:8px;font-family:inherit;font-size:14px;font-weight:700;color:var(--accent-ink);background:var(--accent-wash);border:1px solid var(--accent-line);border-radius:var(--pill);padding:8px 16px;cursor:pointer;white-space:nowrap;line-height:1}
+.aibtn:hover{background:var(--accent-tint);border-color:var(--accent)}
+.aiundo{font-family:inherit;font-size:14px;font-weight:700;color:var(--ink-3);background:none;border:none;padding:0;cursor:pointer;white-space:nowrap;
+  text-decoration:underline;text-decoration-color:var(--rule-strong);text-underline-offset:3px}
+.aiundo:hover{color:var(--accent-ink);text-decoration-color:var(--accent)}
+/* the fade is the SAME 5s as the removal, owned by one mechanism so the two
+   can never drift apart under a throttled tab */
+@media(prefers-reduced-motion:no-preference){
+  .aiundo{animation:undofade 5s linear forwards}
+  @keyframes undofade{0%,90%{opacity:1}100%{opacity:0}}
+}
+.mx{flex:none;width:32px;height:32px;margin:-3px -8px 0 0;padding:0;border:none;background:none;border-radius:var(--pill);color:var(--ink-25);display:grid;place-items:center;cursor:pointer}
+.mx:hover{background:var(--cream-2);color:var(--ink)}
+.mx svg{width:16px;height:16px}
+@media(prefers-reduced-motion:no-preference){.spk{display:inline-block;animation:sp 2.6s var(--ease) infinite}@keyframes sp{0%,100%{transform:scale(1) rotate(0)}50%{transform:scale(1.18) rotate(12deg)}}}
+
+.two{display:grid;grid-template-columns:minmax(0,1fr) 320px;gap:44px;align-items:start}
+@media(max-width:1024px){.two{grid-template-columns:1fr;gap:24px}}
+.main{display:flex;flex-direction:column;gap:12px;min-width:0}
+.pane{background:var(--paper);border:1px solid var(--rule);border-radius:var(--r);overflow:hidden}
+
+.tabs{display:flex;gap:6px;padding:14px 14px 13px;flex-wrap:wrap}
+.tab{display:inline-flex;align-items:center;gap:7px;font-size:13px;font-weight:500;color:var(--ink-3);background:var(--cream-2);border:1px solid transparent;border-radius:var(--r-sm);padding:9px 14px;line-height:1}
+.tab:hover{background:#EBE9F2}
+.tab .n{font-size:11.5px;font-weight:600;color:var(--ink-3);font-variant-numeric:tabular-nums}
+.tab.on{background:var(--paper);border-color:var(--accent);color:var(--accent-ink);font-weight:700}
+.tab.on .n{color:var(--accent-ink)}
+.tab .n b{font-weight:800;color:var(--accent-ink)}
+
+/* TWEAK 2 — the one narrowing line, group tabs only */
+.narrow{display:flex;align-items:center;gap:8px;padding:13px 14px;background:var(--cream-2);border-top:1px solid var(--rule);border-bottom:1px solid var(--rule);font-size:12.5px;color:var(--ink-4)}
+.narrow svg{width:16px;height:16px;flex:none;opacity:.6}
+.narrow a{color:var(--accent-2);font-weight:700;text-decoration:underline;text-underline-offset:2px;white-space:nowrap}
+
+.tools{display:flex;gap:8px;align-items:center;padding:13px 14px 12px}
+.srch{flex:1 1 auto;min-width:0;font-family:inherit;font-size:14px;color:var(--ink);border:1px solid var(--rule-strong);border-radius:var(--r-sm);padding:11px 16px;background:var(--paper)}
+.srch::placeholder{color:var(--ink-4)}
+.sall{flex:none;font-family:inherit;font-size:12.5px;font-weight:600;color:var(--ink-3);background:none;border:none;padding:0;margin-left:8px;white-space:nowrap;cursor:pointer;line-height:1;
+  text-decoration:underline;text-decoration-color:var(--rule-strong);text-underline-offset:3px}
+.sall:hover:not(:disabled){color:var(--accent-ink);text-decoration-color:var(--accent)}
+.sall:disabled{opacity:.4;cursor:default}
+.newgrp{display:flex;align-items:center;gap:12px;padding:10px 12px;border:1.5px dashed var(--rule-strong);border-radius:var(--r-lg);background:var(--paper);color:var(--ink);font-size:14px;font-weight:600;width:100%;font-family:inherit;cursor:pointer;text-align:left}
+.newgrp:hover{border-color:var(--accent);background:var(--accent-tint);color:var(--accent-ink)}
+.newgrp .plus{flex:none;width:42px;height:42px;border-radius:var(--r);background:var(--cream-2);color:var(--ink-4);display:grid;place-items:center;font-size:21px;font-weight:700;line-height:1}
+.newgrp .ng{flex:1 1 auto;min-width:0;display:flex;flex-direction:column;gap:2px}
+.newgrp:hover .plus,.newgrp:focus-visible .plus{background:var(--accent);color:#fff}
+.newgrp small{display:block;font-weight:400;font-size:12px;color:var(--ink-4)}
+.wz-steps{display:flex;gap:8px;padding:16px 20px 0}
+.wz-step{flex:1 1 0;height:4px;border-radius:var(--r-sm);background:var(--rule)}
+.wz-step.on{background:var(--accent)}
+.src{border:1px solid var(--rule);border-radius:var(--r-sm);overflow:hidden}
+.src-h{display:flex;align-items:center;gap:8px;padding:8px 12px;background:var(--cream-2);font-size:14px;font-weight:700;color:var(--ink)}
+.src-h>svg{color:var(--ink-4)}
+.src-h .n2{margin-left:auto;white-space:nowrap;font-size:11px;font-weight:600;color:var(--ink-4);font-variant-numeric:tabular-nums}
+/* TWEAK 28 — no max-height. A scroll box sized in pixels cuts the chip row
+   it lands on, which reads as broken rather than as "more below". The list is
+   capped by COUNT instead, so every chip on screen is a whole chip. */
+.src-b{padding:8px;display:flex;flex-wrap:wrap;gap:8px}
+.chipx.more{color:var(--accent-ink);background:var(--accent-wash);border-color:var(--accent-line);border-style:dashed}
+.chipx.more:hover{background:var(--accent-tint);border-color:var(--accent)}
+.src-q{flex:none;width:120px;min-width:0;font-family:inherit;font-size:11px;font-weight:600;color:var(--ink);
+  border:1px solid var(--rule-strong);border-radius:var(--pill);padding:4px 8px;background:var(--paper)}
+.src-q::placeholder{color:var(--ink-25);font-weight:600}
+.src-none{font-size:14px;color:var(--ink-4);padding:2px 2px 4px}
+.chipx{font-size:14px;font-weight:600;color:var(--ink-3);background:var(--paper);border:1px solid var(--rule-strong);border-radius:var(--pill);padding:4px 12px;cursor:pointer}
+.chipx:hover{border-color:var(--accent-edge)}
+.chipx.on{background:var(--accent);border-color:var(--accent);color:#fff}
+.wz-count{margin:0;font-size:14px;color:var(--ink-4)}
+.wz-count b{color:var(--ink);font-weight:800;font-variant-numeric:tabular-nums}
+.fld{display:flex;flex-direction:column;gap:4px}
+.fld label{font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-4)}
+.fld input,.fld textarea{font-family:inherit;font-size:14px;color:var(--ink);border:1px solid var(--rule-strong);border-radius:var(--r-sm);padding:8px 12px;background:var(--paper);width:100%}
+.fld textarea{resize:vertical;min-height:64px}
+.list{max-height:460px;overflow-y:auto;padding:14px;display:flex;flex-direction:column;gap:9px}
+
+.r{display:flex;align-items:center;gap:12px;padding:10px 12px;border:1px solid var(--rule);border-radius:var(--r-lg);background:var(--paper);cursor:pointer;text-align:left;width:100%;font:inherit}
+.r:hover{border-color:var(--accent-edge)}
+.r.on{border-color:var(--accent);background:var(--accent-tint)}
+.ic{flex:none;width:42px;height:42px;border-radius:var(--r);background:var(--cream-2);color:var(--ink-4);display:grid;place-items:center;overflow:hidden}
+.r.on .ic{background:#fff;color:var(--accent-ink)}
+.ic svg{width:20px;height:20px}
+.ic.pimg,.r.on .ic.pimg{background:linear-gradient(140deg,#C7BFE4,#9C8FD0)}
+.bd{flex:1 1 auto;min-width:0;display:flex;flex-direction:column;gap:2px}
+.nm{font-size:14px;font-weight:600;color:var(--ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ck{flex:none;width:24px;height:24px;border-radius:var(--r);border:1.5px solid var(--rule-strong);display:grid;place-items:center;background:var(--paper)}
+.r.on .ck{background:var(--accent);border-color:var(--accent);color:#fff}
+.ck svg{width:12px;height:12px;opacity:0}
+.r.on .ck svg{opacity:1}
+.vars{flex:none;width:196px;font-size:12px;color:var(--ink-3);white-space:nowrap;overflow:hidden;
+  background:none;border:none;padding:8px 0;font-family:inherit;text-align:right;cursor:pointer;
+  /* right-aligned, so a list too long to fit spills off the LEFT — the fade
+     goes there too, or it would sit on the flush edge doing nothing */
+  -webkit-mask-image:linear-gradient(to right,transparent,#000 26px);
+          mask-image:linear-gradient(to right,transparent,#000 26px)}
+.vars:hover{color:var(--accent-ink)}
+.vars b{font-weight:700;color:var(--ink-4)}
+.vars.none{color:var(--ink-25);cursor:default;-webkit-mask-image:none;mask-image:none}
+.vars.grp{color:var(--ink-4);cursor:default;-webkit-mask-image:none;mask-image:none}
+.vars.grp:hover{color:var(--ink-4)}
+.cntb{font:inherit;font-size:12px;font-weight:600;color:var(--ink-3);background:none;border:none;padding:0;cursor:pointer;
+  text-decoration:underline;text-decoration-color:var(--rule-strong);text-underline-offset:3px}
+.cntb:hover{color:var(--accent-ink);text-decoration-color:var(--accent)}
+@media(max-width:700px){.vars{width:120px}}
+.empty{padding:28px 16px;text-align:center;color:var(--ink-4);font-size:13.5px}
+.underrow{display:flex;align-items:center;gap:16px;font-size:12.5px;padding-left:2px}
+.underlink{background:none;border:none;padding:0;color:var(--accent-ink);font-weight:600;font-size:12.5px;display:inline-flex;align-items:center;gap:6px;cursor:pointer}
+.underlink:hover{color:var(--accent)}
+.underlink .rest{color:var(--ink-4);font-weight:500;font-variant-numeric:tabular-nums}
+/* TWEAK 35 — sort sits with the search: both narrow what you are looking at,
+   so they share a row. A native select, not a popover — it is a single-choice
+   field, it is keyboard-operable for free, and the page already has enough
+   things that open. */
+/* fixed widths: a select sizes to its CHOSEN option, so the search field
+   would jump every time the sort changed. */
+#sortsel{width:144px}
+#statsel{width:116px}
+.sortsel{flex:none;font-family:inherit;font-size:12.5px;font-weight:600;color:var(--ink-3);
+  background:var(--paper);border:1px solid var(--rule-strong);border-radius:var(--r-sm);padding:10px 10px;cursor:pointer}
+.sortsel:hover{border-color:var(--accent-edge)}
+/* The footer is PINNED to the widget, not to the page: it is the list's own
+   status bar, so it must not scroll away with the rows it is describing. */
+.listfoot{display:flex;align-items:center;gap:12px;
+  padding:11px 14px;border-top:1px solid var(--rule);background:var(--cream-2);font-size:12.5px;color:var(--ink-4);
+}
+.listfoot b{color:var(--ink-3);font-weight:700;font-variant-numeric:tabular-nums}
+/* TWEAK 36 — status is a QUALIFIER, not an ordering, so it is a badge and a
+   filter, never a sort option. */
+.stat{flex:none;font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;
+  padding:3px 7px;border-radius:var(--r-sm);border:1px solid var(--rule);background:var(--cream-2);color:var(--ink-4)}
+.stat.archived{color:var(--ink-25)}
+.archtog{background:none;border:none;padding:0;font-family:inherit;font-size:12.5px;font-weight:600;
+  color:var(--ink-4);cursor:pointer;text-decoration:underline;text-decoration-color:var(--rule-strong);text-underline-offset:3px}
+.archtog:hover{color:var(--accent-ink);text-decoration-color:var(--accent)}
+
+/* rail — title and shape unchanged */
+.rail{position:sticky;top:16px;display:flex;flex-direction:column;gap:10px;padding:16px;
+  border:1px solid color-mix(in srgb,var(--accent) 18%,var(--rule));border-radius:var(--r);
+  background:var(--paper);box-shadow:0 14px 34px -24px color-mix(in srgb,var(--accent) 42%,transparent)}
+.rhd{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.rttl{display:flex;flex-direction:column;gap:2px;min-width:0}
+.rhd strong{font-size:var(--t-h2);font-weight:700;line-height:1.3;letter-spacing:-.02em;color:var(--ink)}
+.rsub{font-size:12px;color:var(--ink-4);font-variant-numeric:tabular-nums}
+.rsub b{color:var(--ink-3);font-weight:700}
+.rr2{display:flex;align-items:center;gap:8px}
+.badge{display:inline-flex;align-items:center;gap:8px;font-weight:700;font-size:11px;letter-spacing:.06em;text-transform:uppercase;padding:4px 8px;border-radius:var(--r-sm);background:var(--cream-2);color:var(--ink-4)}
+.badge::before{content:"";width:8px;height:8px;border-radius:var(--pill);background:var(--accent)}
+.count{display:inline-grid;place-items:center;min-width:22px;height:22px;padding:0 6px;border-radius:var(--pill);font-size:12px;font-weight:600;background:var(--cream-2);color:var(--ink);font-variant-numeric:tabular-nums}
+.rlist{display:flex;flex-direction:column;gap:6px;overflow-y:auto}
+.rlist.fade{-webkit-mask-image:linear-gradient(to bottom,#000 calc(100% - 26px),transparent);mask-image:linear-gradient(to bottom,#000 calc(100% - 26px),transparent)}
+.rrow{cursor:pointer}
+.rrow:hover{border-color:var(--accent-edge);background:#FCFBFE}
+.rrow:hover .rn{color:var(--accent-ink)}
+.rrow.is-new{border-color:var(--accent);background:var(--accent-tint)}
+@media(prefers-reduced-motion:no-preference){
+  .rrow.is-new{animation:landed 1.5s var(--ease) forwards}
+  @keyframes landed{
+    0%{border-color:var(--accent);background:var(--accent-wash);box-shadow:0 0 0 3px var(--accent-tint)}
+    60%{border-color:var(--accent);background:var(--accent-tint);box-shadow:0 0 0 3px transparent}
+    100%{border-color:var(--rule);background:var(--cream);box-shadow:none}
+  }
+}
+.rrow{display:flex;align-items:center;gap:8px;flex:none;min-height:44px;padding:6px;border:1px solid var(--rule);border-radius:var(--r-sm);background:var(--cream)}
+.rsec{display:flex;align-items:baseline;justify-content:space-between;gap:8px;flex:none;padding:4px 2px 0;font-size:var(--t-label);font-weight:700;letter-spacing:.09em;text-transform:uppercase;color:var(--ink-4)}
+.rsec+.rrow{margin-top:-2px}
+.rsec span{font-variant-numeric:tabular-nums;color:var(--ink-25);letter-spacing:0}
+.rth{flex:none;width:28px;height:28px;border-radius:var(--pill);background:var(--cream-2);color:var(--ink-4);display:grid;place-items:center}
+.rth svg{width:13px;height:13px}
+.rth.pimg{background:linear-gradient(140deg,#C7BFE4,#9C8FD0)}
+.rb{flex:1 1 auto;min-width:0;display:flex;flex-direction:column;gap:0;text-align:center}
+.rn{font-size:13px;font-weight:600;color:var(--ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.rm{font-size:12px;color:var(--ink-4);font-variant-numeric:tabular-nums}
+.rx{flex:none;width:22px;height:22px;border-radius:var(--pill);border:none;background:none;color:var(--ink-25);display:grid;place-items:center}
+.rx:hover{background:var(--cream-2);color:var(--crit)}
+.rx svg{width:16px;height:16px}
+.railempty{border:1px dashed var(--accent-edge);border-radius:var(--r);background:var(--accent-tint);padding:24px 16px;text-align:center}
+.railempty div{font-size:22px;margin-bottom:8px}
+.railempty p{margin:0;font-size:12px;color:var(--ink-4);line-height:1.5}
+.rfoot .btn{width:100%;border:none;background:none;color:var(--ink);font-size:14.5px;font-weight:600;padding:8px}
+.rfoot .btn:hover{background:var(--cream-2)}
+
+/* modal */
+.scrim{position:fixed;inset:0;background:var(--scrim);display:grid;place-items:center;padding:24px;z-index:100}
+.modal{width:100%;max-width:520px;max-height:84vh;background:var(--paper);border-radius:var(--r-lg);box-shadow:var(--lift-3);display:flex;flex-direction:column;overflow:hidden}
+.mh{display:flex;align-items:flex-start;gap:12px;padding:18px 20px;border-bottom:1px solid var(--rule)}
+.mic{flex:none;width:32px;height:32px;border-radius:var(--r);background:var(--accent-wash);color:var(--accent-ink);display:grid;place-items:center}
+.mic svg{width:16px;height:16px}
+.mh strong{display:block;font-size:16.5px;color:var(--ink)}
+.mh span{font-size:14px;color:var(--ink-4)}
+.mb{padding:16px 20px;overflow-y:auto;display:flex;flex-direction:column;gap:12px}
+/* a flex child shrinks before its parent scrolls — which silently clipped every
+   source section once they were free to grow (TWEAK 28). The body scrolls; its
+   children keep their height. */
+.mb>*{flex:none}
+.mgoal{display:block;font-size:14px;font-style:italic;color:var(--ink-4);line-height:1.45}
+.mrow{display:flex;align-items:center;gap:8px;padding:8px 8px;border:1px solid var(--rule);border-radius:var(--r-sm);background:var(--cream)}
+.mrow .ic2{flex:none;width:24px;height:24px;border-radius:var(--r-sm);background:var(--accent-tint);color:var(--accent-ink);display:grid;place-items:center}
+.mrow .ic2 svg{width:12px;height:12px}
+.mrow .nm2{flex:1 1 auto;font-size:14px;font-weight:600;color:var(--ink)}
+.mrow .ct2{flex:none;font-size:11px;color:var(--ink-4);font-variant-numeric:tabular-nums}
+.mrow button.ct2{font-family:inherit;font-weight:700;color:var(--ink-3);background:none;border:none;padding:0;cursor:pointer;
+  text-decoration:underline;text-decoration-color:var(--rule-strong);text-underline-offset:3px}
+.mrow button.ct2:hover{color:var(--accent-ink);text-decoration-color:var(--accent)}
+.chain{display:flex;flex-direction:column}
+.cl{display:flex;gap:12px}
+.cbar{flex:none;width:28px;display:flex;flex-direction:column;align-items:center}
+.cd{width:28px;height:28px;border-radius:var(--pill);background:var(--accent-wash);border:1px solid var(--accent-line);color:var(--accent-ink);display:grid;place-items:center;font-size:11px;font-weight:800;font-variant-numeric:tabular-nums}
+.cd.end{background:var(--accent);border-color:var(--accent);color:#fff}
+.cn{width:2px;flex:1 1 auto;min-height:16px;background:var(--accent-line)}
+.cx{flex:1 1 auto;padding-bottom:12px;min-width:0}
+.cx b{display:block;font-size:14px;color:var(--ink)}
+.cx span{font-size:14px;color:var(--ink-4)}
+.by{display:flex;flex-wrap:wrap;gap:8px}
+.by.is-open{max-height:184px;overflow-y:auto;align-content:flex-start;padding:2px;border:1px solid var(--rule);border-radius:var(--r-sm);background:var(--cream-2)}
+.by-more{font-size:11px;font-weight:700;color:var(--accent-ink);background:var(--paper);border:1px solid var(--accent-line);border-radius:var(--pill);padding:4px 8px;cursor:pointer;font-family:inherit}
+.by-more:hover{background:var(--accent-wash)}
+.wz-caut{display:flex;gap:8px;align-items:flex-start;font-size:14px;line-height:1.45;background:var(--cream-2);border:1px solid var(--rule);border-radius:var(--r-sm);padding:8px 12px;color:var(--ink-3)}
+.wz-caut>svg{width:16px;height:16px;margin-top:2px;color:var(--warn)}
+.by-chip{font-size:11px;font-weight:600;color:var(--ink-3);background:var(--cream-2);border:1px solid var(--rule);border-radius:var(--pill);padding:4px 8px}
+.by span{font-size:11px;font-weight:600;color:var(--ink-3);background:var(--cream-2);border:1px solid var(--rule);border-radius:var(--pill);padding:4px 8px}
+.mlbl{font-size:11px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;color:var(--ink-4);margin:0}
+.mwarn{display:flex;gap:8px;align-items:flex-start;font-size:14px;line-height:1.45;background:var(--cream-2);border-top:1px solid var(--rule);padding:12px 20px;color:var(--ink-3);flex:none}
+.mwarn>svg{width:16px;height:16px;margin-top:2px;color:var(--ink-4)}
+.mf{display:flex;align-items:center;justify-content:flex-end;gap:8px;padding:16px 20px;border-top:1px solid var(--rule);background:var(--cream-2)}
+.wz-bk{margin-right:auto !important}   /* Back is navigation, not an alternative to the primary */
+
+/* changelog */
+.sec{margin-top:48px}
+.sec-hd{display:flex;flex-wrap:wrap;align-items:center;gap:12px;padding-bottom:12px;margin-bottom:18px;border-bottom:2px solid var(--ink)}
+.sec-n{font-family:var(--mono);font-size:14px;font-weight:700;color:#fff;background:var(--ink);padding:4px 8px;border-radius:var(--r-sm)}
+.sec-hd h2{flex:1 1 240px;font-weight:700;font-size:26px;letter-spacing:-.022em;color:var(--ink);margin:0}
+.card{background:var(--paper);border:1px solid var(--rule);border-radius:var(--r-lg);padding:18px;box-shadow:var(--sh)}
+.chg{display:flex;gap:16px;align-items:flex-start;padding:12px 0;border-top:1px solid var(--rule-2)}
+.chg:first-of-type{border-top:none;padding-top:0}
+.chg-n{flex:none;width:24px;height:24px;border-radius:var(--pill);background:var(--accent-wash);border:1px solid var(--accent-line);color:var(--accent-ink);display:grid;place-items:center;font-size:11px;font-weight:800;font-variant-numeric:tabular-nums}
+.chg h3{margin:0 0 2px;font-size:14.5px;font-weight:700;color:var(--ink)}
+.chg p{margin:0;font-size:14px;max-width:76ch}
+.chg code{font-family:var(--mono);font-size:.86em;background:var(--cream-2);border:1px solid var(--rule-2);border-radius:var(--r-sm);padding:1px 4px;color:var(--ink)}
+.where{display:block;margin-top:4px;font-family:var(--mono);font-size:11px;color:var(--ink-4);overflow-wrap:anywhere}
+.gap{display:flex;gap:16px;align-items:flex-start;background:var(--warn-wash);border:1px solid #E2CFAE;border-left:4px solid var(--warn);border-radius:var(--r);padding:18px 20px;margin-top:24px}
+.gap-ic{flex:none;width:24px;height:24px;border-radius:var(--pill);background:var(--warn);color:#fff;display:grid;place-items:center;font-weight:800;font-size:14px}
+.gap h3{margin:0 0 4px;font-size:14.5px;font-weight:700;color:var(--ink)}
+.gap p{margin:0 0 8px;font-size:14px}
+.gap a{color:var(--accent-2);font-weight:700}
+.states{display:flex;flex-direction:column;gap:12px}
+.st{display:flex;align-items:center;gap:12px;padding:8px 8px 8px 16px;border-radius:var(--pill);font-size:14px;flex-wrap:wrap}
+.st.ai{border:1px solid var(--accent-line);background:var(--accent-wash);color:var(--accent-ink)}
+.st.wn{border:1px solid #E2CFAE;background:var(--warn-wash);color:var(--warn)}
+.st .sp{flex:1 1 auto}
+.st b{font-weight:800}
+.st button{font-size:14px;font-weight:700;border:none;border-radius:var(--pill);padding:8px 16px;color:#fff}
+.st.ai button{background:var(--accent)}
+.st.wn button{background:var(--warn)}
+.st-k{font-family:var(--mono);font-size:11px;font-weight:700;color:var(--ink-4);width:64px;flex:none}
+.strow{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.strow > .st{flex:1 1 380px}
+.kept{background:var(--cream-2);border:1px solid var(--rule);border-radius:var(--r);padding:16px 18px;margin-top:20px}
+.kept b{display:block;font-size:11px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;color:var(--ink-4);margin-bottom:8px}
+.kept p{margin:0;font-size:14px}
+@media(max-width:640px){.page{padding:18px}.card{padding:20px 16px}.mast-in{padding:32px 20px 24px}.wrap{padding:0 16px 72px}}
+</style>
+
+<header class="mast">
+  <div class="mast-in">
+    <p class="eyebrow">Wiskr Studio &middot; Step 1</p>
+    <h1>The same page, tweaked</h1>
+    <p>Your current layout, untouched except for the changes below. The tabs are live &mdash; switch to Products and the narrowing line disappears, because a single product has nothing to narrow.</p>
+  </div>
+  <div class="hint"><b>Try it</b>Switch tabs &middot; open the <b>Custom</b> tab and create one &middot; click a recommendation on the right to preview it.</div>
+</header>
+
+<div class="wrap">
+  <div class="frame">
+    <header class="top">
+      <span class="logo" aria-hidden="true"><svg viewBox="0 0 32 32" fill="currentColor"><path d="M4 5l5 7 7-3 7 3 5-7-2 14a6 6 0 0 1-4 5l-6 3-6-3a6 6 0 0 1-4-5Z"/></svg></span>
+      <nav class="steps" aria-label="Progress">
+        <div class="step cur"><span class="step-n">01</span><span class="step-l">Recommendations</span></div>
+        <span class="step-line"></span>
+        <div class="step"><span class="step-n">02</span><span class="step-l">Questions</span></div>
+        <span class="step-line"></span>
+        <div class="step"><span class="step-n">03</span><span class="step-l">Logic</span></div>
+        <span class="step-line"></span>
+        <div class="step"><span class="step-n">04</span><span class="step-l">Results</span></div>
+      </nav>
+      <div class="topr">
+        <button class="back" aria-label="Back"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg></button>
+        <button class="btn btn-accent" id="cont">Continue &rarr;</button>
+      </div>
+    </header>
+
+    <div class="page">
+      <h2 class="h1">What should this quiz recommend?</h2>
+
+      <div class="two">
+        <div class="main">
+          <div class="pane">
+            <div class="panehd">
+              <div class="tabs" id="tabs" role="tablist" aria-label="Recommendation type"></div>
+              <div class="aicorner" id="ailine"></div>
+            </div>
+            <div id="narrowline"></div>
+            <div class="tools">
+              <input class="srch" id="srch" type="search" aria-label="Search the catalogue">
+              <select class="sortsel" id="sortsel" aria-label="Sort"></select>
+              <select class="sortsel" id="statsel" aria-label="Status"></select>
+              <button class="sall" id="sall"></button>
+            </div>
+            <div class="list" id="list"></div>
+            <div class="listfoot" id="listfoot"></div>
+          </div>
+        </div>
+        <aside class="rail" id="rail" aria-label="Results this quiz can return"></aside>
+      </div>
+    </div>
+  </div>
+
+  <section class="sec">
+    <div class="sec-hd"><span class="sec-n">Diff</span><h2>Fourteen changes</h2></div>
+    <div class="card">
+      <div class="chg"><span class="chg-n">1</span><div><h3>The AI message stops being a card</h3><p>The green card goes. Green is <code>--qz-ok</code>, reserved for done and live &mdash; firing it while work remains reads as &ldquo;finished&rdquo;. The goal, the reasoning and the picks move behind one control, and change 22 settles where that control lives.<span class="where">RecommendationBucketsStage.tsx:1194–1302 — GoalFirstBanner</span></p></div></div>
+      <div class="chg"><span class="chg-n">2</span><div><h3>One narrowing line, above the list</h3><p>&ldquo;Groups can be narrowed by a later question.&rdquo; Once, not per row, and <strong>absent on Products</strong>. This is the only genuinely new element on the page.</p>
+        <p style="margin-top:8px"><strong>It sits where the toolbar would.</strong> The tab strip ships with <code>padding: 14px 14px 0</code> &mdash; no bottom &mdash; because live&rsquo;s toolbar supplies that gap with its own 13px top padding. Insert a full-bleed strip between them and it butts straight against the tabs, and its top border reads as a line cut through them. The strip carries the 13px itself.<span class="where">RecommendationBucketsStage.tsx:~548 (below the tab strip) + a new explainer modal</span></p></div></div>
+      <div class="chg"><span class="chg-n">3</span><div><h3>A row says the outcome, not the type</h3><p><code>Tag</code> &rarr; <strong>Group of 45 products</strong>. The tab already said &ldquo;tag&rdquo;, so the row spends its words on the thing actually being chosen: how many products this puts in front of a shopper. A product says nothing at all &mdash; <em>One product</em> was the tab repeating itself. <em>Where</em> that count sits changed in change 20; what it says did not.<span class="where">RecommendationBucketsStage.tsx:44–48 — SUB_LABEL; row markup ~588</span></p></div></div>
+      <div class="chg"><span class="chg-n">4</span><div><h3>Your picks sort to the top</h3><p>The list is sorted biggest-first (<code>funnelLoader.server.ts:143</code>), which is why <em>apparel 45</em> and <em>avenor 44</em> outrank the nine tags the AI actually chose. Selected first, then alphabetical &mdash; but the order is <strong>frozen between rebuilds</strong> (load, tab change, search). Re-sorting on every toggle teleports the clicked row to the top and slides the next row into the click point.<span class="where">app/lib/funnelLoader.server.ts:143 &amp; :153 — the b.count − a.count sort</span></p></div></div>
+      <div class="chg"><span class="chg-n">5</span><div><h3>The rail stops slicing rows</h3><p><code>max-height: 44vh</code> cuts a row through the middle &mdash; visible at 7, 8 and 9 results in your screenshots. Quantise to whole rows and fade the cut edge. <strong>No count line under it</strong> &mdash; an earlier draft added <em>4 more &middot; scroll</em>, which said in words what the fade already says in pixels, and put a third number on a panel whose header is a count. The fade is the affordance; a list that looks cut off <em>is</em> the instruction to scroll. Because the sections from change 16 make the row pitch uneven, the cut is <strong>measured</strong> from the fifth real row rather than calculated.<span class="where">app/styles/quizocalypse.css:3423 — .qz-rb-rail-list</span></p></div></div>
+      <div class="chg"><span class="chg-n">6</span><div><h3>Groups get the glyph, not a photo</h3><p>The rail shows a member product&rsquo;s image for a group, which is why four tags appear to share one picture and &ldquo;dryness&rdquo; is a red square. Only real products get a photo.<span class="where">RecommendationBucketsStage.tsx:197–205 &amp; 284–295 — cardFor / cardsForTab</span></p></div></div>
+      <div class="chg"><span class="chg-n">7</span><div><h3>Focus stops imitating selection</h3><p>In your screenshot <em>apparel</em> carries both a focus ring and the selected border, reading as a double outline; earlier, Products and Tags both looked active. Focus becomes a dark outline that cannot be mistaken for the accent.<span class="where">quizocalypse.css — :focus-visible vs .qz-rb-tab.is-active</span></p></div></div>
+      <div class="chg"><span class="chg-n">8</span><div><h3>Select all admits its scope &mdash; in the dialog</h3><p>The scope has to be stated somewhere, because the label cannot carry it: the same words move the selection by 2 on Groups and by 339 on Products. It moves into the confirm, which fires on <strong>every</strong> press &mdash; see change 18. One case the dev must still guard: a search with no matches leaves nothing to act on, so the control disables rather than offering <em>Select all 0</em>.<span class="where">RecommendationBucketsStage.tsx:305–316 — selectAllVisible</span></p></div></div>
+
+      <div class="chg"><span class="chg-n">9</span><div><h3>An add confirms itself</h3><p>The rail caps at five rows, so the sixth pick and beyond land <strong>out of frame</strong> &mdash; the only signal anything happened is a small count on the far side of the screen. Now the row that just landed flashes and the rail scrolls it into its own view. Bulk actions skip the flash, and the scroll is set on the rail list directly &mdash; <code>scrollIntoView</code> would move the page too.<span class="where">RecommendationBucketsStage.tsx — the .qz-rb-rail-list render + a new is-new class</span></p></div></div>
+
+      <div class="chg"><span class="chg-n">10</span><div><h3>The rail opens the same preview</h3><p>Clicking a recommendation&rsquo;s name or count opens the same modal as <em>View</em> in the list &mdash; the merchant does not have to find the row again, and it works even when the list is filtered by a search that excludes it. The row must be a <code>div role="button"</code>, <strong>never a <code>&lt;button&gt;</code></strong>, because it contains the ✕; the ✕ keeps its own handler and resolves first. A 1:1 product row opens a single-product view rather than doing nothing.<span class="where">RecommendationBucketsStage.tsx — .qz-rb-rail-row + the existing BucketProductsModal</span></p></div></div>
+
+      <div class="chg"><span class="chg-n">11</span><div><h3>Custom groups get a tab &mdash; but the feature already exists</h3><p><strong>Do not build a group system.</strong> One is shipped: the <code>Category</code> model (quiz-scoped or shop-global via a nullable <code>quizId</code>), a <code>/studio/groups</code> page, a 3-step <code>GroupWizard</code>, and <code>groupMembership.ts</code>, whose membership is a <strong>union across four sources</strong> &mdash; tags, collections, metafields and hand-picked products &mdash; plus an optional persona layer.</p>
+        <p style="margin-top:8px">Those groups are <em>already</em> offered in the <strong>Logic and Results pickers</strong>. They are excluded from Step 1 on purpose, and the code says so: <em>&ldquo;account-level Groups offered as decider/rec-page targets in the Logic + Rec Page pickers ONLY &hellip; Kept OUT of the raw categories above so Step-1&rsquo;s own grouping is unaffected.&rdquo;</em> So the whole job is <strong>exposing an existing feature in one more place</strong>, not building one.</p>
+        <p style="margin-top:8px">The mock&rsquo;s create flow deliberately mirrors the lighter pattern being built on the Logic tab &mdash; combine sources, auto-suggest a name from the parts, show the resolved count, <em>Save &amp; add</em> &mdash; rather than inventing a third creation UX. Both entry points should call the <strong>same create action</strong>, so a group made in either place shows up in the other immediately.</p>
+        <p style="margin-top:8px"><strong>The one schema change:</strong> a bucket&rsquo;s type is <code>"product" | "tag" | "collection"</code>. It has to widen to include <code>"group"</code>, in both the bucket type and <code>bucket_browser.active_tab</code>. Widening an enum is additive, so every legacy doc still round-trips byte-identical &mdash; but the decider bake and <code>product_index</code> must resolve a group bucket through its stored <code>productIds</code>.<span class="where">prisma Category model &middot; app/lib/groupMembership.ts &middot; app/components/studio/GroupWizard.tsx &middot; app/lib/funnelLoader.server.ts:77&ndash;95 &middot; stagesShared.tsx:22 (BucketType) &middot; quizSchema.ts:1640 (active_tab)</span></p></div></div>
+
+      <div class="chg"><span class="chg-n">12</span><div><h3>Accent goes on a diet</h3><p>The stylesheet is explicit about this and we were breaking it: <em>&ldquo;Spend it on THREE things only: primary action, current selection, focused field. Never a heading, chip, tag, chart bar or icon.&rdquo;</em></p>
+        <p style="margin-top:8px">Every row was carrying a violet icon tile, a violet <em>CUSTOM</em> badge and a violet <em>View</em> button <strong>regardless of state</strong>, under a violet narrowing band and beside a violet New-group block. Six competing violets, so the one that carries meaning &mdash; <em>this row is selected</em> &mdash; had nothing to stand out against.</p>
+        <p style="margin-top:8px">Now neutral: row and rail icon tiles, the CUSTOM badge, the View button, the narrowing strip, the rail frame, and the New-group block until hover. Accent is left on the Continue button, the current tab, selected rows, the AI line, and links. Selection reads at a glance again.<span class="where">quizocalypse.css — .qz-rb-thumb / .qz-rb-count-link / .qz-rb-chip-thumb / .qz-rb-rail; the :root comment above --qz-accent states the rule</span></p></div></div>
+
+      <div class="chg"><span class="chg-n">13</span><div><h3>Review can actually apply &mdash; and undo beats a confirm</h3><p>The pop-up previously only had <em>Done</em>, so it could show the AI&rsquo;s picks but never act on them. It now carries a primary action: <strong>Apply these 9</strong>, or <strong>Replace with these 9</strong> when a selection already exists. When everything is already applied and unedited, the footer collapses back to <em>Done</em> &mdash; no action offered for a no-op.</p>
+        <p style="margin-top:8px"><strong>No second confirm.</strong> A quiet band above the footer names the cost (&ldquo;You have 10 tags selected. Applying replaces them &mdash; you can undo straight after&rdquo;), then applying is one click and the AI line becomes <em>&ldquo;Applied 9 recommendations &mdash; replaced your 10 previous picks. Undo&rdquo;</em>. One step instead of two, and reversible.</p>
+        <p style="margin-top:8px">This is not a new pattern to invent: the component already ships <code>applied</code> / <code>undoApply</code> for the &ldquo;Use this&rdquo; tip, which morphs to <em>Applied &mdash; Undo</em> exactly this way. Two rules matter &mdash; the undo snapshot is the selection <em>before</em> applying, and <strong>any manual edit clears it</strong>, so Undo can never restore a set the merchant has since moved past.<span class="where">RecommendationBucketsStage.tsx:~218 (useThis / undoApply, the existing pattern) &middot; the GoalFirstBanner ready state</span></p></div></div>
+
+      <div class="chg"><span class="chg-n">14</span><div><h3>A product row shows its variants where the price was</h3><p><strong>Yes &mdash; Shopify products carry variants, and the plumbing already exists.</strong> <code>Product.variants</code> is a Json array of <code>{options:[{name,value}]}</code>, and <code>variantOptionsOf()</code> already collapses it into <code>{Size:["S","M","L"]}</code> &mdash; correctly dropping Shopify&rsquo;s placeholder <code>Title: "Default Title"</code>, so &ldquo;has real variants&rdquo; is already a well-defined question.</p>
+        <p style="margin-top:8px"><strong>Price comes off the product row entirely.</strong> It was never the thing being decided here &mdash; the merchant is choosing what the quiz can recommend, not shopping &mdash; and a single price is actively wrong for a product spanning &pound;64&ndash;&pound;76. The slot it vacates carries <em>Size &middot; S, M, L, XL</em> instead, and a single-variant product shows <strong>nothing at all</strong> &mdash; the empty span holds the column, so alignment survives without printing a dash that looks like a broken value.</p>
+        <p style="margin-top:8px"><strong>The variant list is one column, flush to the row&rsquo;s right edge, and fades rather than wraps.</strong> Every row&rsquo;s variants <em>end</em> at the same x &mdash; a ragged edge is unscannable at 40 rows, and ending flush is what keeps a short value from leaving 70px of dead space before the border. A list too long to fit spills off the <strong>left</strong>, so the <code>mask-image</code> gradient goes there too; on the flush edge it would be doing nothing. Clicking it opens the full list with <strong>per-variant stock</strong>, which is the one place that data is visible before publish. The variant summary lives <em>only</em> in the list &mdash; the rail is a list of what the quiz will recommend, and a variant count there is noise it cannot act on. The dash on a single-variant product is inert &mdash; not a dead-looking button.</p>
+        <p style="margin-top:8px"><strong>Be straight about what this is worth:</strong> variants on a 1:1 row are for <em>scanning</em>, not logic. A shopper still picks the variant on the product page, and a narrowing question cannot reduce a one-product pool. What it buys is that a merchant can see, before publishing, that the product they picked is one SKU in five sizes &mdash; which is exactly the case the narrowing line above the list is silently lying about.</p>
+        <p style="margin-top:8px"><strong>The gaps to close:</strong> <code>catalogProducts</code> carries only <code>price</code> &mdash; it needs the variant options and per-variant availability, neither of which crosses the loader today. And <strong>the currency symbol is hardcoded to <code>$</code> in four places in this component</strong>, despite <code>Product.currency</code> existing precisely because shops differ. Price survives in the group-members modal, so a GBP or EUR shop is still shown dollar signs there; the mock renders in &pound; to prove the symbol comes from data.<span class="where">app/lib/funnelLoader.server.ts:155 (catalogProducts) &middot; RecommendationBucketsStage.tsx:613, 832, 1123, 1158 (hardcoded $) &middot; variantOptionsOf() &middot; prisma Product.variants/currency</span></p></div></div>
+
+      <div class="chg"><span class="chg-n">15</span><div><h3>Selection is stated once, not three times</h3><p>A selected row carried an accent border, an accent tint <em>and</em> a violet tick. Three signals for one binary. The tick goes; the border and tint already read unambiguously, and dropping it takes one more violet mark off a page that had too many (change 12).</p>
+        <p style="margin-top:8px"><strong>One thing to hold the dev to:</strong> that leaves selection carried by colour and colour alone, which is a WCAG 1.4.1 problem for the ~8% of men with a red-green deficiency &mdash; violet-on-white survives most of those, but not all. <code>aria-checked</code> on the row already carries it for screen readers, so the exposure is sighted-but-colour-blind merchants specifically. If it needs a second channel, make it the <strong>border weight</strong>, not a returning glyph &mdash; a 2px selected border against a 1px unselected one is non-chromatic and costs no ink.<span class="where">RecommendationBucketsStage.tsx &mdash; the row&rsquo;s is-selected branch &middot; quizocalypse.css .qz-rb-row.is-selected</span></p></div></div>
+
+      <div class="chg"><span class="chg-n">16</span><div><h3>Pick from every tab at once &mdash; the one-type rule is UI-only</h3><p><strong>Nothing below the component requires a homogeneous selection.</strong> Each bucket is one <code>Category</code> row keyed on <code>(shopId, quizId, source, sourceRef)</code>; <code>addBuckets</code> and <code>removeBuckets</code> are per-row and purely additive, and no constraint anywhere ties the rows to a shared <code>source</code>. Mixed types would persist correctly today, untouched.</p>
+        <p style="margin-top:8px"><strong>Generation never even sees the type.</strong> <code>loadConfirmedBuckets</code> ends <code>rows.map((r) =&gt; ({ name: r.name, tags: r.tags }))</code> &mdash; <code>source</code> is discarded one call before the AI is handed the scope. So the restriction buys the engine exactly nothing.</p>
+        <p style="margin-top:8px"><strong>Two places enforce it, and both are deletions, not features.</strong> <em>(a)</em> <code>switchTab</code> sees a non-empty selection, opens <code>TabLockModal</code>, and on confirm posts <code>clear=true</code>, which runs <code>clearBuckets()</code> &mdash; a wholesale delete of the quiz&rsquo;s rows. Cut the modal and the flag; a tab is a view, not a mode. <em>(b)</em> <code>set-buckets</code> computes <code>leaverIds</code> as everything not in <code>wanted</code>, and <code>wanted</code> is single-typed &mdash; so applying the AI&rsquo;s nine tags silently deletes the merchant&rsquo;s hand-picked products. Scope the delete to the type being replaced: <code>existing.filter((c) =&gt; normSource(c.source) === rawType &amp;&amp; !staysFor(c))</code>. Keep the <code>logic-tab-*</code> exemption <code>clearBuckets</code> already carries, or every rule targeting a bucket dangles and hard-blocks publish.</p>
+        <p style="margin-top:8px"><strong>Three UI consequences.</strong> A tab now states its own picks &mdash; <em>Tags <b>3</b></em> &mdash; because a selection that hides behind an unvisited tab is a selection the merchant will not know they shipped. (It carried the catalogue total too until change 32 measured the row at the real width.) The rail sections by type instead of carrying one badge, and its five-row cap is now <strong>measured</strong> from the fifth real row: section headers break any fixed-pitch arithmetic the moment a second type appears. <em>Select all</em> and <em>Clear visible</em> stay type-scoped, which they already were.<span class="where">RecommendationBucketsStage.tsx:164 (the homogeneity comment), :246–254 switchTab, TabLockModal &middot; funnelIntents.server.ts:330 (clear=true) &amp; the set-buckets leaver scope &middot; step1Build.server.ts:106 addBuckets, :137 clearBuckets, :~148 loadConfirmedBuckets</span></p></div></div>
+
+      <div class="chg"><span class="chg-n">17</span><div><h3>Overlap is a distinctness problem, not a double-render</h3><p>Mixing types makes it easy to pick a product <em>and</em> a group that contains it. Worth being precise about what that actually costs, because the obvious fear is wrong: <code>product_index</code> is a <code>findMany</code> filtered by an id <code>Set</code>, so it cannot hold a duplicate, and each bucket is its own result target &mdash; a shopper lands on one result and sees one set. Nothing renders twice.</p>
+        <p style="margin-top:8px">What it does cost is <strong>telling two results apart</strong>: one result&rsquo;s products become a strict subset of another&rsquo;s, so whichever way the quiz branches the shopper sees near-identical output. Nothing else on the page catches it: the one ceiling that used to exist counted recommendations and never looked at their membership, and change 21 removes it anyway. Note also that overlap is <strong>not new</strong>: two tags have always been able to share products. Mixing types just makes it near-certain rather than incidental.</p>
+        <p style="margin-top:8px"><strong>Specified, not rendered.</strong> An earlier draft named the first collision in the rail; change 25 takes it off this screen along with every other advisory. The detection is the useful part and it is cheap &mdash; a selected product is in a selected group or it is not &mdash; so it is written down here for whichever surface ends up carrying it. It was never a gate: a merchant may well want a hero product broken out of the group it belongs to.<span class="where">quizPublish.ts:411+ (product_index build) &middot; collectRecommendableProductIds</span></p></div></div>
+
+      <div class="chg"><span class="chg-n">18</span><div><h3>One control to the right of the search: <em>Select all</em> &harr; <em>Clear</em></h3><p><em>Select all 228</em> / <em>Clear visible</em> collapses into a single word that swaps with the state. <strong>Both halves are scoped identically</strong> &mdash; the visible rows on the current tab &mdash; so the control undoes exactly what it did, and a search narrows both directions equally rather than one of them.</p>
+        <p style="margin-top:8px"><strong>It always confirms, in both directions</strong> &mdash; superseded by change 34, where the menu itself carries the count and the dialog goes. <em>&ldquo;Add all 18 collections?&rdquo;</em>, <em>&ldquo;Remove 18 collections?&rdquo;</em>. This is the only control on the page that moves the selection by hundreds in one press, and the label cannot tell you by how many &mdash; 2 on Custom, 339 on Products &mdash; so the number belongs in a dialog that gets read rather than in a word that gets glanced at. The add counts what will actually be <em>added</em>: with 2 of 228 already picked it offers <em>Add 226</em>, never <em>Add all 228</em>. Under an active search both dialogs say so outright, because &ldquo;all&rdquo; then means the matches and not the tab.</p>
+        <p style="margin-top:8px"><strong>No separate count.</strong> An earlier draft put <em>2 selected</em> beside it; that number is already on the tab (<em>Tags 2 of 228</em>) and again in the rail, so a third copy was noise sitting in the busiest row on the page.</p>
+        <p style="margin-top:8px">It carries <strong>no button chrome</strong> &mdash; underlined text, the same treatment as the <em>3 products</em> count links in the rows (change 20). A bordered button here competed with <em>Continue</em> and <em>Apply</em> for the eye while being neither: this is a shortcut, not a step in the flow. It stays a real <code>&lt;button&gt;</code> element &mdash; the chrome is what goes, not the semantics.</p>
+        <p style="margin-top:8px">Both directions clear the undo snapshot from change 23 before they run &mdash; a bulk edit invalidates it exactly as a single toggle does.<span class="where">RecommendationBucketsStage.tsx:305&ndash;316 selectAllVisible &middot; the select-all / clear-visible intents in funnelIntents.server.ts</span></p></div></div>
+
+      <div class="chg"><span class="chg-n">19</span><div><h3><em>New group</em> lines up with the rows it sits above</h3><p>Its label was centred in the block while every row below it starts hard left, so the one control that creates something read as a banner rather than as the first item in the list. Its tile is now the row tile&rsquo;s 44px on the row&rsquo;s 16px inset with the row&rsquo;s 15px gap, so <em>New group</em> begins at the same x as <em>Gift-ready</em> &mdash; measured at 150.5px against the rows&rsquo; 150px. The dashed border stays: that is what says <em>create</em>, and it does the job without the centring.<span class="where">quizocalypse.css &mdash; the New-group affordance vs .qz-rb-row / .qz-rb-thumb geometry</span></p></div></div>
+
+      <div class="chg"><span class="chg-n">20</span><div><h3>The count takes <em>View</em>&rsquo;s slot, and the number becomes the control</h3><p>Two things fall out of moving <em>Group of 3 products</em> from under the name into the column <em>View</em> occupied. <strong>Every row is now one line</strong> &mdash; a name and a column, on all four tabs. And <strong>that column is the same column everywhere</strong>: the group count and the variant list from change 14 share one right edge on every tab, whatever their length. Scanning down a list, then across a tab switch, the eye lands in one place &mdash; and nothing is left stranded mid-row with empty space after it.</p>
+        <p style="margin-top:8px"><em>View &rarr;</em> is deleted rather than moved. It was a button whose label named no destination, sitting beside a count that named one exactly &mdash; so the count absorbs it: <strong>3 products</strong> is underlined and opens the members. That also takes the last bordered button out of the row, which is what lets the row shed its second line without reading emptier.</p>
+        <p style="margin-top:8px"><strong>Two things the dev must not get wrong.</strong> The count is a real <code>&lt;button&gt;</code> <em>inside</em> the row, and the row is a <code>div role="checkbox"</code> &mdash; never a <code>&lt;button&gt;</code>. Nesting interactive content inside a button is invalid; the parser auto-closes the outer element and the row&rsquo;s layout collapses. The component already carries a comment saying exactly this, and it is now load-bearing on every tab rather than only on Groups. Second: the click must open the members and <strong>not</strong> toggle the row &mdash; the inner handler resolves first and stops there, the same contract the &times; in the rail already has.</p>
+        <p style="margin-top:8px">One accessibility note: the visible text is <em>3 products</em>, which out of context names nothing, so the button carries <code>aria-label="View the 3 products in acne"</code>. A screen-reader user tabbing the list hears the group, not a bare number.<span class="where">RecommendationBucketsStage.tsx — row markup ~588, SUB_LABEL, .qz-rb-count-link · the existing role="checkbox" comment</span></p></div></div>
+
+      <div class="chg"><span class="chg-n">21</span><div><h3>The 25-recommendation ceiling comes out</h3><p>Delete the <code>CAP</code> constant, the rail warning it drove (<em>&ldquo;229 recommendations is more than a quiz can tell apart&rdquo;</em>) and the escalated body it added to the Select-all confirm. <strong>Count is not the signal.</strong> A shop with 2,000 products selecting broadly is running a legitimate quiz &mdash; <em>&ldquo;shop all skincare, narrowed by four questions&rdquo;</em> is a real and good design, and the narrowing pipeline this app already ships is built precisely to serve it. 25 was a guess about intent wearing the costume of a fact about quality.</p>
+        <p style="margin-top:8px"><strong>It also fired at exactly the wrong people.</strong> A ceiling on recommendations trips first for the merchants with the largest catalogues &mdash; the ones most likely to be paying &mdash; and tells them their correct setup is broken. The cost is not the sentence; it is that they learn this app&rsquo;s warnings are noise, and stop reading the ones that are right.</p>
+        <p style="margin-top:8px">The two advisories that survived this cut on merit &mdash; <em>one recommendation</em>, which is broken at any catalogue size, and the containment note from change 17 &mdash; then came off the screen anyway under change 25. The reasoning here still stands and is the reason the ceiling should not come back with them: those two read <em>state</em>, this one guessed at <em>taste</em>.</p>
+        <p style="margin-top:8px">If a real quality signal is wanted later, it is not a number of recommendations &mdash; it is whether the questions actually <em>partition</em> the pool: do two different answer paths resolve to the same products? That is computable from the baked target map, it is true regardless of catalogue size, and it belongs on the Logic tab where the paths live, not on the screen where the pool is chosen.<span class="where">RecommendationBucketsStage.tsx &mdash; the CAP constant, the rail warnline render, and the select-all confirm body</span></p></div></div>
+
+      <div class="chg"><span class="chg-n">22</span><div><h3>The AI moves into the widget&rsquo;s corner</h3><p>It was a full-width band above everything, which made it a <em>rule</em> across the layout &mdash; and a band that spans the page reads as page-level status: permanent, structural, part of the furniture. It is now a small pill in the tab strip&rsquo;s top-right, 15px inside the pane&rsquo;s edge: <strong>&#10022; AI picked 9</strong>. That puts it inside the thing it changed, beside the tabs whose counts it moved, instead of hovering above the page as an announcement.</p>
+        <p style="margin-top:8px">It also takes the single widest slab of <code>--qz-accent-wash</code> off the screen &mdash; change 12&rsquo;s argument continued. The band was competing with selected rows for the same violet at roughly ten times the area; at this size the wash is a label, not a field.</p>
+        <p style="margin-top:8px"><strong>The dialog resolves to two controls, in their conventional places.</strong> <em>Apply</em> is the footer&rsquo;s only button &mdash; <em>Cancel</em> / <em>Done</em> / <em>Replace with these 9</em> were three labels for what is really one decision, and the merchant either takes the picks or closes the sheet. Closing is the <strong>&times;</strong> in the header&rsquo;s top-right, where every dialog on the web puts it. When the picks are already applied, <em>Apply</em> disables rather than relabelling: the subhead already says <em>in your quiz now</em>, and change 13&rsquo;s rule stands &mdash; no action offered for a no-op. The replace warning stays in the body, so the simple label never hides the consequence.</p>
+        <p style="margin-top:8px"><strong>This also closes the hole flagged in the previous draft.</strong> That version let the merchant dismiss the banner outright, which stranded the AI&rsquo;s picks with no route back &mdash; a live problem in the shipped code too, since <code>banner_dismissed</code> persists per quiz. A control this small does not need dismissing, so it never disappears and <em>Review</em> is always reachable. <strong>Do not add a close affordance to it.</strong></p>
+        <p style="margin-top:8px">After applying, the pill reads <em>Applied 9</em> and <strong>Undo sits beside it as its own button</strong> &mdash; never nested inside the pill. Same trap as change 20 and the rail&rsquo;s &times;: a button inside a button is invalid and the parser closes the outer one.<span class="where">RecommendationBucketsStage.tsx:1194&ndash;1302 GoalFirstBanner &middot; the tab strip container &middot; dismissTip / banner_dismissed become unused here</span></p></div></div>
+
+      <div class="chg"><span class="chg-n">23</span><div><h3>Undo lives five seconds, the label does not</h3><p>Applying shows <em>Undo</em> beside the pill; five seconds later it fades and goes. The pill keeps saying <strong>Applied 9</strong> afterwards, because that is still true &mdash; and flips back to <em>AI picked 9</em> the moment the merchant edits the picks away. <strong>Drive the label off the applied state, not off the undo window</strong>, or the pill starts lying five seconds after every apply.</p>
+        <p style="margin-top:8px"><strong>One timer, not two.</strong> The first cut faded on a 4.6s <code>setTimeout</code> and removed on a 5s one &mdash; and in a throttled (background) tab they drifted apart: the button was still on screen at 5.3s at full opacity. The fade is now a CSS animation of the same 5s duration, so the two halves cannot desync no matter how the tab is scheduled. JS owns removal; CSS owns the fade; both start at the same instant.</p>
+        <p style="margin-top:8px"><strong>Arm it at the apply, never inside the render.</strong> <code>render()</code> runs on every click; re-arming the timer there would restart the window on any interaction and the button would never leave.</p>
+        <p style="margin-top:8px"><strong>An edit inside the window kills Undo.</strong> Undo restores a <em>snapshot</em> of the prior selection, so firing it after the merchant has added three more rows would silently discard those three. A row toggle already cleared it; <em>Select all</em> did not, and now does. This is the same class of bug as the AI overwriting picks on arrival (change 1) &mdash; stale state applied over newer intent.</p>
+        <p style="margin-top:8px"><strong>Owner&rsquo;s call &mdash; five seconds is tight.</strong> What is being undone is a change to the rail, and checking the rail to see what moved costs a couple of seconds on its own; a merchant reading the pill, glancing right, and deciding will lose the window. 8&ndash;10s, or &ldquo;until the next click anywhere&rdquo;, both cost nothing extra to implement. Five is what ships unless you say otherwise.<span class="where">RecommendationBucketsStage.tsx &mdash; the applied/undo state around useThis + undoApply</span></p></div></div>
+
+      <div class="chg"><span class="chg-n">24</span><div><h3><em>Groups</em> becomes <em>Custom</em></h3><p>The fourth tab is renamed. <em>Groups</em> collided with the word the other three tabs are already using: a tag <strong>is</strong> a group of products, and so is a collection &mdash; the rows on every tab say <em>Group of 38 products</em>. The tab is not &ldquo;the groups&rdquo;; it is <strong>the ones you built yourself</strong>, which is what <em>Custom</em> says.</p>
+        <p style="margin-top:8px">Two things follow. The per-row <strong>CUSTOM badge is deleted</strong> &mdash; with the tab named Custom it printed the same word twice on every row, and it was one more bordered pill in a row that changes 19 and 20 spent effort emptying. And the search placeholder can no longer be built from the tab label: <em>&ldquo;Search custom&hellip;&rdquo;</em> is not English. It takes the plural <strong>noun</strong> instead &mdash; <em>Search groups&hellip;</em>, <em>Search collections&hellip;</em> &mdash; which is right on all four tabs.</p>
+        <p style="margin-top:8px">The name only changes on the tab. Sentences keep saying <em>group</em>, because the things inside it are still groups: <em>&ldquo;Add all 2 groups?&rdquo;</em>, <em>New group</em>, <em>Group of 38 products</em>. <em>&ldquo;Add all 2 customs?&rdquo;</em> is what happens if the rename is done with a find-and-replace.<span class="where">RecommendationBucketsStage.tsx &mdash; TAB_META labels, TYPE_NOUN, the search placeholder, and the row&rsquo;s custom badge</span></p></div></div>
+
+      <div class="chg"><span class="chg-n">25</span><div><h3>Every advisory comes off the screen</h3><p>The rail&rsquo;s two remaining notices go: <em>one recommendation means every shopper sees the same products</em>, and the containment note from change 17. Both are still correct &mdash; that is not why they are leaving. They are leaving because a rail is a list of what the merchant chose, and a paragraph of commentary wedged under it is the wrong shape for advice: it cannot be asked a follow-up, cannot be dismissed, and competes with the thing it is commenting on for the same column. <strong>These are destined for a per-page AI surface</strong> that can hold all of them and be argued with; keeping half of them here in yellow boxes in the meantime just teaches merchants to look past that spot.</p>
+        <p style="margin-top:8px">The detection logic is not lost &mdash; it is written down in changes 17 and 21 and should be lifted intact when that surface exists. What must <strong>not</strong> come back is the ceiling change 21 removed, whatever surface is carrying the rest.</p>
+        <p style="margin-top:8px"><strong>Two amber strips are kept, and de-yellowed.</strong> The replace warning inside the AI dialog and the wizard&rsquo;s caution are not page advisories &mdash; they state the consequence of the button directly beneath them, at the moment of the click, and moving those to a chat elsewhere would hide a consequence from the person about to cause it. They stay where they are and lose the yellow, so nothing on this screen is amber any more.<span class="where">RecommendationBucketsStage.tsx &mdash; the rail warnline renders &middot; .qz-rb-warn</span></p></div></div>
+
+      <div class="chg"><span class="chg-n">26</span><div><h3>One dialog grammar: back on the left, primary on the right, close in the corner</h3><p><em>&lsaquo; Back</em> moves hard left, 20px in; <em>Save &amp; add</em> keeps the right, 20px in. Sitting them side by side made <em>Back</em> read as <strong>the other choice</strong> &mdash; the thing you press if you do not want to save. It is not an alternative to the primary, it is <em>where you are in the flow</em>, and putting it at the opposite end says so without a word of copy.</p>
+        <p style="margin-top:8px"><strong><em>Cancel</em> is deleted from step 1.</strong> The header&rsquo;s <strong>&times;</strong> is the close, exactly as in the AI dialog (change 22), so step 1&rsquo;s footer is now a single primary: <em>Next</em>. Every dialog on this screen ends up with the same grammar &mdash; close in the top-right corner, one primary bottom-right, navigation bottom-left &mdash; instead of three dialogs each inventing their own row of buttons. A merchant who learns where to close one has learned all of them.<span class="where">GroupWizard.tsx &mdash; the step footer &middot; the shared modal header</span></p></div></div>
+
+      <div class="chg"><span class="chg-n">27</span><div><h3>The rail counts <em>results</em>, and says what they are made of</h3><p><em>Your recommendations &middot; 11</em> never said what 11 meant &mdash; eleven products, or eleven sets of forty? The panel is now <strong>Results</strong>, with the count reading as what it actually is (how many different places a shopper can land), and a sub-line under it saying the composition: <em><b>9</b> groups &middot; <b>2</b> products</em>.</p>
+        <p style="margin-top:8px"><strong>That sub-line is the point, not decoration.</strong> A tag, a collection and a custom group are all <em>one result made of many products</em>; a hand-picked product is <em>one result made of one</em>. Those are the same unit &mdash; one row, one destination &mdash; and the merchant needs to see both that they are equal <em>and</em> how their nine break down. One number cannot say both; a number plus a composition line can.</p>
+        <p style="margin-top:8px"><strong>The sections regroup from four to two.</strong> They were <em>Products / Tags / Collections / Custom</em> &mdash; which is the tab a thing was picked from, a fact about the merchant&rsquo;s route rather than about the quiz. They are now <em>Groups</em> and <em>Products</em>, the same split the sub-line names, and the per-row icon still says tag, collection or custom inside the group section. Headers only render when both kinds are present: with one kind the sub-line has already said it, and a lone <em>GROUPS 9</em> above nine groups is a label for nothing.</p>
+        <p style="margin-top:8px"><strong>On the name colliding with step 04.</strong> It does, and it should. Step 1 chooses the results; step 04 designs how they look. They are the same objects, and the app calling them two different things is what was confusing &mdash; not the repetition. Do not rename this to avoid the clash.<span class="where">RecommendationBucketsStage.tsx &mdash; the rail header and .qz-rb-rail-list section grouping</span></p></div></div>
+
+      <div class="chg"><span class="chg-n">28</span><div><h3>The group wizard stops slicing its own chips</h3><p>Each source list sat in a <code>max-height: 104px</code> scroll box, and 104px does not divide into chip rows &mdash; so every section ended on a half-height row of clipped pills. That reads as <em>broken</em>, not as <em>more below</em>: the eye cannot tell a cut-off row from a rendering fault, and three of the four sections were doing it at once.</p>
+        <p style="margin-top:8px"><strong>Cap by count, not by pixels.</strong> Ten whole chips, then an inline <em>+218 more</em> chip that expands the section. No inner scrollbars at all &mdash; the section grows and the modal body scrolls, which it was already built to do. Same principle as the rail in change 5: quantise to whole items, or do not clip.</p>
+        <p style="margin-top:8px"><strong>Past twelve options a section gets its own search.</strong> An expander alone is honest but useless at the real numbers &mdash; <em>+218 more</em> on tags and <em>+329 more</em> on products is a wall, not a list, and the whole promise of this dialog is &ldquo;combine anything in your catalogue&rdquo;. Metafields (two options) gets no search, because it does not need one. <strong>Filtering re-renders, which destroys focus</strong>, so the handler puts focus and the caret back afterwards &mdash; without that the merchant types one character per click.</p>
+        <p style="margin-top:8px">Also gone: <em>&ldquo;It becomes reusable in Logic and Results too.&rdquo;</em> from step 2. It was answering a question nobody asks while naming something, and the header is stronger as a bare instruction.<span class="where">GroupWizard.tsx &mdash; the source-section bodies; .qz-gw-src-b max-height</span></p></div></div>
+
+      <div class="chg"><span class="chg-n">29</span><div><h3><em>AI Picks</em>, and a Revert that outlives the toast</h3><p>The dialog is <strong>AI Picks</strong>, and the sub-line is now <strong>Based on &ldquo;&hellip;the goal&hellip;&rdquo;</strong>. The goal was a blockquote stacked above the first row, competing with the list for the top of the body; it is <em>provenance</em>, so it belongs with the title. The line it replaces &mdash; <em>9 tags &middot; in your quiz now</em> &mdash; said two things the dialog now says better: the count is the list itself, and the applied state is the button.</p>
+        <p style="margin-top:8px"><strong>Apply becomes Applied</strong> and disables. A primary action that has already happened should say so rather than sit greyed out still reading as an instruction.</p>
+        <p style="margin-top:8px"><strong>Revert persists; it is not the five-second window.</strong> Two undo affordances at two different moments, deliberately: the pill&rsquo;s <em>Undo</em> (change 23) is for <em>immediately</em>, without reopening anything; this <em>Revert</em> is for <em>later, deliberately</em>, and it is offered for exactly as long as the AI&rsquo;s tags are still the selected tags. Edit one away and it removes itself &mdash; once the set is no longer the AI&rsquo;s set there is no coherent &ldquo;before&rdquo; to return to.</p>
+        <p style="margin-top:8px"><strong>Both run one revert path, and it is tag-scoped.</strong> It deletes the AI&rsquo;s tags and restores the tags that were selected before, leaving products, collections and custom groups alone. The first cut restored a whole-selection snapshot, which silently discarded anything added <em>since</em> the apply &mdash; the same stale-state-over-newer-intent bug as change 1 and change 23, arriving by a third route. Apply is tag-scoped (change 16), so revert has to be.</p>
+        <p style="margin-top:8px"><strong>An existing selection now blocks on a confirm</strong> &mdash; <em>&ldquo;Override and continue?&rdquo;</em> &mdash; instead of an amber strip above the button explaining what the click will destroy. Its <em>Cancel</em> returns to the AI dialog rather than closing everything: the merchant asked a question, they did not ask to leave.<span class="where">RecommendationBucketsStage.tsx &mdash; the AI modal header/footer, useThis + undoApply</span></p></div></div>
+
+      <div class="chg"><span class="chg-n">30</span><div><h3>The counts in <em>AI Picks</em> open, and a count of one shows nothing</h3><p>The dialog listed nine tags and asked the merchant to accept them on the strength of the tag name alone. The count is now the control &mdash; <strong>4 products</strong> opens that tag&rsquo;s members &mdash; using the same underlined treatment as the count links in the rows behind it (change 20), so one thing looks clickable and behaves the same way everywhere on this screen.</p>
+        <p style="margin-top:8px"><strong>A one-product tag prints nothing at all.</strong> Not <em>1 product</em>, not a dash: the row already names the only thing in it, so a preview would open a list of the row you are looking at. The mock ships <em>dullness</em> at one product so the empty state is visible rather than asserted. Same rule as the single-variant product in change 14 &mdash; where there is nothing more to see, show nothing, do not show a disabled-looking control.</p>
+        <p style="margin-top:8px"><strong>A preview opened from a dialog closes back to that dialog.</strong> The merchant was mid-decision; dropping them onto the page loses the decision. That return path has to be on <strong>both</strong> exits &mdash; the close button and <kbd>Esc</kbd>. It was on the button first and not on Esc, which is exactly the kind of split that ships: the mouse path gets tested and the keyboard one does not.<span class="where">RecommendationBucketsStage.tsx &mdash; the AI modal rows &middot; BucketProductsModal invocation &middot; the Escape handler</span></p></div></div>
+
+      <div class="chg"><span class="chg-n">31</span><div><h3>The whole mock moves onto Quartz</h3><p>Applied from <code>docs/design/brand-2026/quartz-tokens.css</code>, not from memory. The colours were already right; everything else was drifting.</p>
+        <p style="margin-top:8px"><strong>Shape &mdash; the visible one.</strong> <code>--pill</code> was <code>999px</code>; Quartz sets it to <strong>6px</strong> and says outright that nothing is a full pill except a spinner. Radii are now 4 / 6 / 8 with no literals left anywhere. Every chip, badge, tab and icon button squares off. This is the single biggest change on the page and it is the point of the system, not a side effect.</p>
+        <p style="margin-top:8px"><strong>Type &mdash; superseded by change 33.</strong> This pass collapsed fifteen ad-hoc sizes onto the seven roles written in the handoff doc&rsquo;s comment. Those roles were a <em>proposal</em>; the scale that actually shipped is different and smaller. Change 33 replaces this paragraph with the shipped values &mdash; read that one.</p>
+        <p style="margin-top:8px"><strong>Space, depth, motion.</strong> Every padding, gap and box dimension snapped to the 4px unit (18px kept &mdash; it is <code>--qz-pad-card</code>). Three lifts, content flat, only overlays cast: the rail&rsquo;s violet-tinted shadow looked off-system twice over &mdash; a violet not in the palette, on a surface that should not cast. <strong>It is shipped, and change 33 puts it back.</strong> One curve, <code>cubic-bezier(.2,.7,.3,1)</code>. Dark mode stays cut (owner, 2026-08-09) and <code>color-scheme: light</code> is declared so an OS-dark viewer gets the design as drawn.</p>
+        <p style="margin-top:8px"><strong>The editor stand-down does not apply here.</strong> <code>[data-qz-surface="editor"]</code> neutralises the accent because the merchant is looking at <em>their</em> brand. On this screen they are choosing products, not designing anything, so the violet stays. Worth stating because it is the kind of rule that gets applied too widely.</p>
+        <p style="margin-top:8px"><strong>Two places the spec collided with something already decided here.</strong> <em>(1) Focus.</em> Quartz spends the accent on &ldquo;the focused field&rdquo; and ships an accent-28% ring. On this screen a selected row is <em>already</em> accent-washed, so that ring on a row is precisely the collision change 7 removed. Split the difference: fields take the Quartz ring, selectable rows keep change 7&rsquo;s ink outline. <em>(2) DECISION 3.</em> Quartz has no monospace and aliases <code>--qz-font-mono</code> to Figtree; applied as written, so the <code>file.tsx:123</code> references throughout this page are now Figtree. <strong>That is the one call worth revisiting before it ships</strong> &mdash; this document is mostly code identifiers, which is exactly the alignment case DECISION 3 flags as needing a human. Numbers that line up already carry <code>tabular-nums</code>.</p>
+        <p style="margin-top:8px"><strong>The sweep found a real bug.</strong> The modal body is a flex column, and a flex child shrinks before its parent scrolls &mdash; so once change 28 freed the wizard&rsquo;s source sections to grow, all four were being silently clipped by 28px each while the body never scrolled. It survived the earlier check because that check measured the inner chip box, which was fine, rather than the section wrapper, which was not. <code>.mb &gt; * { flex: none }</code>.<span class="where">docs/design/brand-2026/quartz-tokens.css &middot; app/styles/quizocalypse.css :root &mdash; names stay, values change</span></p></div></div>
+
+      <div class="chg"><span class="chg-n">32</span><div><h3>Pinned to the shipped geometry &mdash; 1000 &middot; 588 &middot; 44 &middot; 320</h3><p>Every dimension now comes from <code>app/styles/quizocalypse.css</code> rather than from the mock&rsquo;s own guesses, so this drops into the real page without reflowing anything. The stylesheet states the target itself &mdash; <em>&ldquo;the rail is a FIXED 320px on purpose&hellip; Measured at &ge;1000px: picker 588 &middot; gutter 44 &middot; rail 320&rdquo;</em> &mdash; and the mock now measures exactly that.</p>
+        <p style="margin-top:8px"><strong>Taken from live:</strong> page <code>max-width 1000 &middot; padding 28/24/72</code> (<code>:779</code>); split <code>minmax(0,1fr) 320px &middot; gap 44 &middot; breaks at 980</code> (<code>:3336</code>); list <code>max-height 460 &middot; padding 14 &middot; gap 9</code>; row <code>padding 10/12 &middot; gap 12</code>; thumbnail <code>42px</code>; tab strip <code>padding 14/14/0 &middot; gap 6</code>, tab <code>padding 9/14 &middot; gap 7</code>; toolbar <code>padding 13/14/12 &middot; gap 8</code>; input <code>padding 11/16</code>; rail <code>padding 16 &middot; gap 10</code>; card <code>padding 18</code>.</p>
+        <p style="margin-top:8px"><strong>This contradicts change 31, and live wins.</strong> Quartz specifies a 4px space unit; the shipped picker is built on 9, 13, 14 and 42, none of which are on it. Geometry follows the live page because that is what ships and what was asked for; Quartz keeps shape, type, colour, depth and motion. Those four values are the whole disagreement &mdash; someone should decide whether the picker moves onto the grid or the grid admits an exception, but it is a decision, not an oversight.</p>
+        <p style="margin-top:8px"><strong>The real width exposed something the mock had been hiding.</strong> At 1200px everything fitted. At the live 588px the tab strip was <strong>52px over</strong>: four tabs each printing a catalogue total, plus the AI pill, is five numbers in one row and only one of them is actionable. The four totals go &mdash; a tab prints your picks and nothing else. Totals still live in the Select-all dialog (change 8) and in each tab&rsquo;s <code>aria-label</code>. Worst case &mdash; picks on all four tabs at once, which change 16 makes likely &mdash; now fits on one row with 21px to spare.<span class="where">app/styles/quizocalypse.css:779 .qz-page.is-funnel &middot; :3336 .qz-rb-split &middot; :1958–2010 the picker &middot; :2050 .qz-rb-shelf</span></p></div></div>
+
+      <div class="chg"><span class="chg-n">33</span><div><h3>Read off <code>origin/main</code>, not the working tree</h3><p>Change 31 was built from <code>docs/design/brand-2026/quartz-tokens.css</code> &mdash; a <strong>handoff proposal</strong> &mdash; and cross-checked against the local branch, which is <strong>137 commits behind main</strong>. That branch still has Quicksand and pre-Quartz radius literals, so it looked as though Quartz had not landed. It has. Everything below comes from <code>git show origin/main:app/styles/quizocalypse.css</code>.</p>
+        <p style="margin-top:8px"><strong>What shipping actually decided.</strong> Figtree is live. Radii are the 6 / 4 / 8 tokens with <code>--qz-radius-pill: 6px</code>. And <strong>DECISION 3 is closed</strong>: <code>--qz-font-mono</code> is deleted outright, with the note <em>&ldquo;former label sites are Figtree 700 uppercase +.09em; numeric sites are <code>--qz-font-body</code> + tabular-nums&rdquo;</em> &mdash; which is what change 31 applied, so that part was right by luck rather than by reading.</p>
+        <p style="margin-top:8px"><strong>The type scale is not the one in the doc.</strong> Shipped: <strong>30 display &middot; 24 h1 &middot; 17 h2 &middot; 15 h3 &middot; 14 body &middot; 11 label</strong>. The doc&rsquo;s comment proposed 42 / 38 / 26 / 16.5 / 14.5 / 14 / 11 &mdash; a much larger page. Every size on this screen now comes from the shipped rules, not from a role I inferred: page and panel titles <strong>17/700</strong> (<code>.qz-h2</code>, not 26), tabs <strong>13/500</strong>, tab count <strong>11.5/600</strong>, Select&nbsp;all <strong>12.5</strong>, row name <strong>14/600</strong>, row meta <strong>12</strong>, count link <strong>12/500</strong>, rail name <strong>13/600</strong>, rail meta <strong>12</strong>, rail count chip <strong>12/600</strong>, empty state <strong>13.5</strong>, under-row <strong>12.5</strong>.</p>
+        <p style="margin-top:8px"><strong>Three things change 31 got wrong by treating shipped code as drift.</strong> The rail&rsquo;s accent-tinted border and violet shadow are deliberate and shipped &mdash; restored, along with its <code>position: sticky</code>. The rail rows are 6px padding / 44px tall, not the roomier ones I had. And the split breaks at <strong>1024px</strong> (<code>--qz-bp-md</code>), not 980 &mdash; 980 was the stale branch.</p>
+        <p style="margin-top:8px">Geometry was already correct: 1000 &middot; 588 &middot; 44 &middot; 320 is identical on both branches, so change 32 stands unaltered. Both alignment invariants still hold at the shipped type sizes.<span class="where">git show origin/main:app/styles/quizocalypse.css &mdash; :152 fonts &middot; :160 scale &middot; :170 radii &middot; :2003–2120 picker &middot; :3389 split &middot; :3410 rail</span></p></div></div>
+
+      <div class="chg"><span class="chg-n">34</span><div><h3><em>Expand</em> replaces <em>Refresh catalog</em>, and the scope becomes a choice</h3><p><em>Refresh catalog</em> is gone. It sat alone under the list answering a question nobody was asking at that moment, in the one slot with a real job to do: the list is capped at 460px and there was nothing there to say so.</p>
+        <p style="margin-top:8px"><strong>Expand grows the window by ten whole rows.</strong> Scrolling stays &mdash; this is not pagination, it is a taller viewport &mdash; and the link says how many rows are still below (<em>Expand &middot; 323 more</em>), disappearing when there are none. The ten rows are measured from the pitch of a <em>real rendered row</em>, not a constant, so the cut never lands mid-row. Same rule as change 5, and the reason a constant would be wrong here is that the row height already changed twice in this document. The window resets when the tab changes.</p>
+        <p style="margin-top:8px"><strong>Select all becomes a two-option menu</strong> &mdash; reverted in change 35, which puts the scope back in the confirm dialog where it fits.</p>
+        <p style="margin-top:8px"><em>The original argument, for the record:</em> <em>Select all</em> (every row on the tab) or <em>Select visible</em> (only what the search left), and once things are picked, <em>Clear all</em> or <em>Clear visible</em>. One word cannot carry that difference, and guessing which one the merchant meant is how a search-filtered <em>Select all</em> quietly adds 339 rows.</p>
+        <p style="margin-top:8px"><strong>The second option only exists while a search is running.</strong> With no search, &ldquo;all&rdquo; and &ldquo;visible&rdquo; are the same set, and offering a distinction that does not exist is worse than offering one word.</p>
+        <p style="margin-top:8px"><strong>Each option states its own count, and that count is the confirmation.</strong> This replaces change 18&rsquo;s separate dialog: two deliberate clicks with the number in between beats a menu that then opens a dialog to ask again. The clear pair describes what is <em>picked</em>, not what the tab holds &mdash; <em>&ldquo;Clear all &middot; every product on this tab &middot; 19&rdquo;</em> was false whenever 19 of 339 were selected.</p>
+        <p style="margin-top:8px">The menu closes on an outside click and on <kbd>Esc</kbd> &mdash; both, for the reason change 30 gives. All four actions clear the undo snapshot before they run, exactly as a single toggle does.<span class="where">RecommendationBucketsStage.tsx:305&ndash;316 selectAllVisible &middot; the select-all / clear-visible intents &middot; .qz-rb-grid max-height &middot; .qz-rb-underrow</span></p></div></div>
+
+      <div class="chg"><span class="chg-n">35</span><div><h3>Search &middot; sort &middot; one button, and a list that stays on screen</h3><p><strong>Two labels, not four.</strong> The scope menu is gone: the control is <em>Select all</em> or <em>Clear all</em>, and it always confirms. The count and the scope live in the dialog &mdash; <em>&ldquo;Add all 228 tags?&rdquo;</em>, or with a search running, <em>&ldquo;Only the rows matching &lsquo;barrier&rsquo; &mdash; not the whole tab.&rdquo;</em> That is a sentence, and a sentence can hold what two words on a button cannot. Change 34 put that choice in front of the click; this puts it after, which is one fewer decision to make before you know what you are deciding.</p>
+        <p style="margin-top:8px"><strong>Sort sits with the search.</strong> Both narrow what you are looking at, so they share a row: <em>Most products &middot; Fewest products &middot; A&ndash;Z &middot; Z&ndash;A</em>. <em>Most products</em> is the default because it is what the loader already does (<code>funnelLoader.server.ts:143</code> sorts biggest-first) &mdash; the merchant has been seeing that order all along without a control to change it. <strong>Products get only A&ndash;Z and Z&ndash;A</strong>: a product has no member count, and a sort that cannot sort is worse offered than withheld. It is a native <code>&lt;select&gt;</code>, not another popover &mdash; single-choice field, keyboard-operable for free, and this page already has plenty that opens.</p>
+        <p style="margin-top:8px"><strong>Selected-first survives the sort.</strong> It is a <em>grouping</em>; the sort runs inside each group. Change the sort and a pick you just made stays at the top instead of being buried 180 rows down &mdash; which is the same reason change 4 froze the order in the first place.</p>
+        <p style="margin-top:8px"><strong>Expand loads rows; it does not grow the box.</strong> The first cut raised the list&rsquo;s <code>max-height</code> by fifty rows &mdash; 4110px &mdash; and that is self-defeating: a list taller than the screen stops being a window and becomes the page, so the widget scrolls away and takes its own footer with it. A sticky footer does not rescue it either, and it is worth knowing why: <strong>a last child flush with its parent&rsquo;s bottom edge has zero travel</strong>, so <code>position: sticky; bottom: 0</code> never engages. The answer is windowing. The list keeps live&rsquo;s 460px, rows load a window at a time (25, per change 37), the rows scroll <em>inside</em> it, and the whole widget stays 679px &mdash; on screen, footer included, at any catalogue size.</p>
+        <p style="margin-top:8px"><strong>The footer always says where you are.</strong> <em>Showing <b>25</b> of <b>228</b></em>, and by change 39 that is the whole footer: the count already answers &ldquo;is there more?&rdquo;, and the right-hand slot that used to restate it in words is gone. The window resets on a tab change, a new search, a sort change and a status change &mdash; all four change what the list means.<span class="where">RecommendationBucketsStage.tsx &mdash; .qz-rb-toolbar, .qz-rb-grid (max-height 460), selectAllVisible &middot; funnelLoader.server.ts:143 the default sort</span></p></div></div>
+
+      <div class="chg"><span class="chg-n">36</span><div><h3>Draft and archived &mdash; a badge and a filter, never a sort</h3><p><strong>Status is a qualifier, not an ordering.</strong> Sorting by it interleaves rows for a reason that has nothing to do with what is being chosen, and buries good products under bad ones. It belongs on the row and in the filter.</p>
+        <p style="margin-top:8px"><strong>The runtime already blocks them &mdash; and that was a fixed bug.</strong> <code>isSellable</code> requires <code>status === "active"</code>, under the comment <em>&ldquo;Logic-step §7 bug 2 &mdash; a DRAFT or ARCHIVED product carries a real price and used to pass this check, so it could reach a shopper.&rdquo;</em> New publishes bake <code>status</code> and enforce it; older bakes have no status field and keep their exact pre-fix behaviour. So a draft cannot reach a shopper on anything published today.</p>
+        <p style="margin-top:8px"><strong>The picker is the one surface that never says so.</strong> <code>catalogProducts</code> ships <code>id, title, imageUrl, price, description, tagKeys, collectionIds</code> &mdash; <strong>no status</strong>. The builder index carries it (<code>:286</code>) and the publish bake carries it (<code>quizPublish.ts:616</code>); Step 1 is the gap. A merchant can pick a draft, watch it land in Results looking exactly like a real recommendation, publish, and have it silently never appear. <strong>This needs a loader change, not just a UI one.</strong></p>
+        <p style="margin-top:8px"><strong>Drafts stay in the list, badged.</strong> That is the case worth protecting: building a quiz ahead of a launch and publishing the products later is a real thing merchants do, and hiding drafts makes it impossible. <strong>Archived come out by default</strong> &mdash; via the status filter change 37 adds, which replaced the footer toggle this change first shipped. Draft means <em>not yet</em>; archived means <em>retired</em>. The runtime treats them identically; the merchant&rsquo;s intent is opposite, so the UI should not.</p>
+        <p style="margin-top:8px"><strong>Collections have no equivalent, and that is not an oversight.</strong> Shopify collections are not draft/active &mdash; they are <em>published to sales channels</em>, which this app does not store. The Collections tab therefore cannot show this, and a merchant whose collection is unpublished gets no warning from either surface. Worth knowing before someone files it as a bug.</p>
+        <p style="margin-top:8px"><strong>One more, and it is the sharper one: the group counts overstate.</strong> <em>&ldquo;Group of 13 products&rdquo;</em> counts every member, drafts and archived included, but the runtime will only ever surface the active ones. A tag advertised as 13 can deliver 9, and nothing anywhere says so. <strong>That count should be of active members</strong> &mdash; it is the number the merchant is actually choosing.</p>
+        <p style="margin-top:8px">No advisory box for any of this: per change 25 the &ldquo;your picks include drafts&rdquo; sentence belongs on the AI surface. The badge and the footer count are statements of fact on the row itself, which is a different thing from commentary.<span class="where">funnelLoader.server.ts:155–169 catalogProducts (needs status) &middot; :286 builder index &middot; quizPublish.ts:616 &middot; recommendationEngine.ts:118–129 isSellable &middot; prisma Product.status</span></p></div></div>
+
+      <div class="chg"><span class="chg-n">37</span><div><h3><em>Select all</em> means what is on screen &mdash; and a status filter</h3><p><strong>The button and the list disagreed about the word &ldquo;all&rdquo;.</strong> The footer said <em>Showing 25 of 228</em> and <em>Select all</em> added 228. Now it reads the <strong>same window the footer counts</strong>: 25 rows shown, 25 added. The dialog names what is still out of reach rather than swallowing it &mdash; <em>&ldquo;That is everything currently shown &mdash; expand the list to reach the other 283.&rdquo;</em></p>
+        <p style="margin-top:8px">That also makes the pairing honest: <em>Select all</em> then <em>Clear all</em> operate on the same 25, so pressing one and then the other returns you exactly where you were. With the old scoping, clear removed 228 things you never chose.</p>
+        <p style="margin-top:8px"><strong>The window is 25, not 50.</strong> Twenty-five rows is roughly four screens of scrolling inside a 460px list &mdash; enough to browse, short enough that <em>Select all</em> is a decision a merchant can actually picture. <em>Expand 25 more</em> each press.</p>
+        <p style="margin-top:8px"><strong>Status is a filter: Active &middot; Draft &middot; Archived &middot; All statuses.</strong> <em>Active</em> is the default because it is the only state the runtime will surface (change 36). Draft is one selection away for the launch-ahead case, archived one more for the rare deliberate one, and <em>All statuses</em> exists because sometimes the honest answer to &ldquo;where did that product go?&rdquo; is to show everything. It replaces the footer&rsquo;s <em>Show 11 archived</em> toggle, which could only express one of those four.</p>
+        <p style="margin-top:8px"><strong>It appears on Products only.</strong> Tags, collections and custom groups have no Shopify status, so the control is not rendered on those tabs rather than rendered dead &mdash; the same rule the sort options follow, and the reason the search field is 338px wide there and 214px on Products.</p>
+        <p style="margin-top:8px">Both selects carry fixed widths. A <code>&lt;select&gt;</code> sizes to its <em>chosen</em> option, so without them the search field jumped every time the sort changed &mdash; measured stable at 214px across all three settings.<span class="where">RecommendationBucketsStage.tsx:305–316 selectAllVisible &middot; .qz-rb-toolbar &middot; prisma Product.status</span></p></div></div>
+
+      <div class="chg"><span class="chg-n">38</span><div><h3>The list loads as you scroll, and the footer becomes the status ledger</h3><p><strong>The Expand button is gone.</strong> Twenty-five rows load, and reaching the bottom loads twenty-five more &mdash; 25 &rarr; 50 &rarr; 75 &rarr; 100. Asking someone to press a button to keep doing the thing they are already doing is a toll, not a control. <em>Select all</em> still means the loaded total, so it grows with the scroll: all 25, then all 50, then all 75.</p>
+        <p style="margin-top:8px"><strong>Two things the dev will get wrong if they are not told.</strong> <em>(1)</em> Setting <code>innerHTML</code> resets <code>scrollTop</code> to 0. With a button that never mattered; with scroll-loading it means every single toggle yanks the merchant back to the top of a hundred-row list. The scroll position is captured before the write and restored after. <em>(2)</em> The scroll listener binds <strong>once</strong>. <code>render()</code> rewrites the list&rsquo;s <code>innerHTML</code>, not the element, so binding inside it stacks a fresh listener on every keystroke &mdash; and by the time anyone notices, one scroll event is loading two hundred rows.</p>
+        <p style="margin-top:8px"><strong>&ldquo;Where do I see Active vs Draft?&rdquo; &mdash; three places, and each is doing different work.</strong> The filter names the mode you are in. Draft and archived rows carry a badge; <strong>active rows do not</strong>, because marking the exception is legible and marking the rule is twenty-five rows all shouting ACTIVE. And the footer is the ledger: <em>Showing 25 of 308 active &middot; <u>20 draft, 11 archived not shown</u></em>.</p>
+        <p style="margin-top:8px"><strong>That ledger line is the one that actually answers the question.</strong> Filtered to Active &mdash; the default &mdash; the badge fires only on rows the merchant cannot currently see, so without the footer they would have no way to learn drafts exist at all. It is also the control: clicking it switches to <em>All statuses</em>, so the answer and the way to act on it are the same object.<span class="where">RecommendationBucketsStage.tsx &mdash; .qz-rb-grid scroll handler, the list render, .qz-rb-underrow &middot; prisma Product.status</span></p></div></div>
+
+      <div class="chg"><span class="chg-n">39</span><div><h3>The footer stops narrating the scrollbar</h3><p><em>283 more as you scroll</em> is out. <strong><em>Showing 25 of 308</em> already carries it</strong> &mdash; the gap between the two numbers <em>is</em> the answer, and restating it in prose beside the scrollbar that demonstrates it is the interface describing itself. It went in as the label on a button (change 35); once change 38 made loading automatic there was no action left for it to name, only a sentence about what the page was already doing.</p>
+        <p style="margin-top:8px"><em>All 308 shown</em> goes with it, for the same reason: when the two numbers match, they match. The footer is now one line, left-aligned &mdash; the count, the active filter, and the ledger of what is not shown.<span class="where">RecommendationBucketsStage.tsx &mdash; .qz-rb-underrow</span></p></div></div>
+
+      <div class="chg"><span class="chg-n">40</span><div><h3>Collections sort by name &mdash; and no, they do not get a status filter</h3><p><strong>Collections now offer A&ndash;Z and Z&ndash;A only.</strong> A collection is something the merchant already knows the name of &mdash; <em>Marrow Lane</em>, <em>Northbound Supply</em> &mdash; so alphabetical is how it gets found. Tags are the opposite: nobody knows their tag names, they browse them by weight, so tags keep <em>Most</em> / <em>Fewest products</em>. <strong>Worth a second look:</strong> the size sorts are not meaningless on collections, and <em>Most products</em> was the shipped default there. If sorting an 18-collection list by size turns out to be something merchants do, it is one array entry to restore.</p>
+        <p style="margin-top:8px"><strong>Status does not belong on collections, and not because the data is missing &mdash; because it would not mean anything.</strong> The <code>Collection</code> model carries <code>collectionId, shopId, title, handle, productIds</code> and nothing else; Shopify collections have no draft/active state at all, only <em>publication to a sales channel</em>, which is not synced.</p>
+        <p style="margin-top:8px">But the deeper reason is the pipeline. <strong>A collection is a selector, not a thing a shopper ever sees.</strong> <code>bucketRowFor</code> resolves it to <code>productIds</code> at pick time and publish bakes those ids into <code>target_product_ids_map</code> &mdash; the collection itself never reaches the runtime. Whether it is published to the Online Store has no bearing on whether the recommendation works. Product status is different precisely because the product <em>is</em> what gets rendered, which is why <code>isSellable</code> has to check it.</p>
+        <p style="margin-top:8px"><strong>The collections-side problem is a different one, and it is real:</strong> a collection&rsquo;s count includes its draft and archived members, and the runtime will drop them. <em>&ldquo;Avenor &middot; 44 products&rdquo;</em> can deliver 38, and nothing says so. That is change 36&rsquo;s overstated-count fix, and it matters more here than on tags because collections are where the big numbers live.<span class="where">prisma Collection (no status field) &middot; bucketPersist.ts bucketRowFor &middot; quizPublish.ts target_product_ids_map &middot; recommendationEngine.ts isSellable</span></p></div></div>
+
+      <div style="margin-top:26px;padding-top:22px;border-top:1px solid var(--rule)">
+        <h3 style="margin:0 0 4px;font-size:14.5px;font-weight:700;color:var(--ink)">Change 1 needs all four states, not just the one above</h3>
+        <p style="margin:0 0 14px;font-size:13.5px">The mock shows <em>ready</em>. <code>GoalFirstBanner</code> also renders picking, stalled and failed &mdash; all four move to the corner control of change 22, or the AI changes identity halfway through the flow.</p>
+        <div class="states">
+          <div class="strow"><span class="st-k">picking</span><span class="st ai"><span aria-hidden="true"><span class="spk">&#10022;</span></span><span>Choosing recommendations for your goal&hellip; <b>your picks are kept</b>.</span><span class="sp"></span></span></div>
+          <div class="strow"><span class="st-k">ready</span><span class="st ai"><span aria-hidden="true">&#10022;</span><span>AI picked <b>9 recommendations</b> from your goal.</span><span class="sp"></span><button>Review</button></span></div>
+          <div class="strow"><span class="st-k">stalled</span><span class="st wn"><span aria-hidden="true">&#9200;</span><span>This is taking longer than it should.</span><span class="sp"></span><button>Try again</button></span></div>
+          <div class="strow"><span class="st-k">failed</span><span class="st wn"><span aria-hidden="true">&#9888;</span><span>We couldn&rsquo;t pick these automatically &mdash; choose below.</span><span class="sp"></span><button>Try again</button></span></div>
+        </div>
+      </div>
+
+      <div class="gap">
+        <span class="gap-ic" aria-hidden="true">!</span>
+        <div>
+          <h3>This artifact is cosmetic. The data-loss bug is not fixed by any of it.</h3>
+          <p>While the AI is picking, the catalogue is live and the pre-pick opens with <code>clearBuckets()</code> &mdash; so anything the merchant selects in that window is deleted, not merged. <code>retry-gen</code> re-runs the same clear, which means the stalled banner tells them to pick their own products and then the retry destroys that work.</p>
+          <p>A quieter banner makes this <em>less</em> visible, not less real. The fix is one rule in <code>goalPrepick.server.ts</code> &mdash; never overwrite a non-empty selection &mdash; and it is specified, with the states and the reasoning, in the <a href="https://claude.ai/code/artifact/c5a0c980-598c-4dfe-b501-0ad59f188634">Step 1 handoff</a> as <strong>S1-1</strong>. Ship that with these tweaks, not after them.</p>
+        </div>
+      </div>
+
+      <div class="kept">
+        <b>Implementation note</b>
+        <p style="margin-bottom:10px">The Select-all ceiling uses an <strong>in-page modal</strong> &mdash; the existing <code>BulkWarnModal</code> &mdash; never a native <code>confirm()</code>. (<code>TabLockModal</code> is deleted outright by change 16, not ported.) A native dialog is suppressed inside a sandboxed frame, which silently swallows the click and makes the tab look broken.</p>
+        <b>Deliberately unchanged</b>
+        <p>The heading, the three tabs, the card and row styling, the rail titled <strong>Your recommendations</strong>, the <em>Preview results page</em> footer, and the modal that opens from a row. (<em>Refresh catalog</em> was on that list until change 34 removed it.) No new layout, no renamed panels, no expand-in-place &mdash; those were explorations, not this pass.</p>
+      </div>
+    </div>
+  </section>
+</div>
+
+<div id="overlay"></div>
+
+<script>
+(function(){
+"use strict";
+const I={
+ tag:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M12.6 2.7H6.3a3.6 3.6 0 0 0-3.6 3.6v6.3a1.8 1.8 0 0 0 .5 1.3l7.6 7.6a1.8 1.8 0 0 0 2.6 0l6.8-6.8a1.8 1.8 0 0 0 0-2.6l-7.6-7.6a1.8 1.8 0 0 0-1.3-.5Z"/><circle cx="7.7" cy="7.7" r="1.2" fill="currentColor" stroke="none"/></svg>',
+ collection:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M3 7.5A1.5 1.5 0 0 1 4.5 6h4l2 2.4h8A1.5 1.5 0 0 1 20 9.9v8.6a1.5 1.5 0 0 1-1.5 1.5h-14A1.5 1.5 0 0 1 3 18.5Z"/></svg>',
+ product:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M4 7.5 12 3l8 4.5v9L12 21l-8-4.5Z"/><path d="m4 7.5 8 4.5 8-4.5M12 12v9"/></svg>',
+ check:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"><path d="m5 13 4.5 4.5L19 7"/></svg>',
+ x:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>',
+ group:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><circle cx="8" cy="9" r="3.2"/><circle cx="16.5" cy="8" r="2.6"/><path d="M2.5 19c.6-3 3-4.6 5.5-4.6S12.9 16 13.5 19M15 14.6c2.2.2 4 1.7 4.5 4.4"/></svg>',
+ funnel:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linejoin="round"><path d="M3 4.5h18l-7 8.2v6.1l-4 2.2v-8.3Z"/></svg>',
+ play:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linejoin="round"><path d="m6 4 13 8-13 8Z"/></svg>'
+};
+const esc=t=>String(t).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const CONCERN=['fine-lines','acne','dryness','redness','dullness','sensitive','combination','oily','texture','dark-spots','pores','blackheads','rosacea','eczema','sun-damage','uneven-tone','puffiness','dark-circles','barrier-repair','anti-ageing','brightening','hydrating','exfoliating','soothing','clarifying','firming','fragrance-free','vegan','apparel','avenor','clairmont','Hair','halcyon','northbound-supply'];
+const ACT=['retinol','vitamin-c','niacinamide','azelaic','salicylic','glycolic','lactic','squalane','ceramide','peptide','collagen','caffeine','zinc','sulfur','urea','panthenol','allantoin','bakuchiol','resveratrol','ferulic'];
+const FORM=['serum','cream','cleanser','toner','mask','oil','gel','balm','mist','treatment'];
+const SIZES={'fine-lines':4,'acne':3,'dryness':4,'redness':4,'dullness':1,'sensitive':4,'combination':5,'oily':6,'texture':5,'apparel':45,'avenor':44,'clairmont':40,'Hair':38,'halcyon':34,'northbound-supply':34};
+const ADJ=['Gentle','Daily','Overnight','Radiance','Barrier','Calming','Clarifying','Renewing','Hydra','Velvet','Bright','Pure','Quiet','Deep','Soft','Fresh','Golden','Still'];
+const NOUN=['Cleanser','Serum','Moisturiser','Essence','Toner','Mask','Oil','Balm','Mist','Cream','Gel','Peel','Lotion','Emulsion','Concentrate','Elixir','Fluid','Butter'];
+const COLL=['Avenor','Clairmont','Halcyon','Northbound Supply','Automated Collection','Marrow Lane','Everdene','Fieldnote','Glasshouse','Harrow & Co','Ivorybrook','Juniper Row','Kestrel','Lowfield','Meridian','Norwood','Oakhurst','Pellwood'];
+const CAT={
+ group:[],
+ tag:(()=>{const o=CONCERN.slice();for(const a of ACT)for(const f of FORM)o.push(a+'-'+f);
+   return o.slice(0,228).map((k,i)=>({type:'tag',key:k,name:k,count:SIZES[k]??(2+((i*5)%14))}));})(),
+ collection:COLL.map((n,i)=>({type:'collection',key:'c'+i,name:n,count:[44,40,34,34,32,32,29,27,24,22,19,17,15,14,12,11,9,7][i]})),
+ product:Array.from({length:339},(_,i)=>({type:'product',key:'p'+i,
+   name:ADJ[i%ADJ.length]+' '+NOUN[Math.floor(i/ADJ.length)%NOUN.length]+(i>=ADJ.length*NOUN.length?' No.'+(i-ADJ.length*NOUN.length+2):''),
+   count:1,price:(12+((i*37)%78))+0.5}))};
+const CUR='\u00A3';   /* comes from Product.currency — never hardcoded */
+/* TWEAK 36 — Shopify's Product.status is ACTIVE | DRAFT | ARCHIVED, and the
+   runtime already drops anything that is not active (isSellable,
+   recommendationEngine.ts:129). The picker never showed it. */
+CAT.product.forEach((p,i)=>{
+  p.status = i%17===3 ? 'draft' : (i%29===7 ? 'archived' : 'active');
+  p.tags=[CONCERN[i%CONCERN.length], CONCERN[(i*7)%CONCERN.length]];
+  p.collections=['c'+(i%18)];
+  p.metas=['fit: '+(i%2?'slim':'relaxed')];
+  // variantOptionsOf() drops Shopify's placeholder Title/"Default Title",
+  // so a genuinely single-variant product has NO options at all.
+  p.opts = i%5===0||i%5===1 ? {Size:['S','M','L','XL']}
+         : i%5===2 ? {Shade:['Light','Medium','Deep']}
+         : {};
+  // per-variant availability — a product can read "in stock" while a size is gone
+  const on=Object.keys(p.opts)[0];
+  p.variants = on ? p.opts[on].map((v,vi)=>({name:on,value:v,available:(i+vi)%7!==0})) : [];
+  p.priceMax = Object.keys(p.opts).length ? p.price+12 : p.price;
+});
+const money=v=>CUR+v.toFixed(2);
+const priceLabel=p=>(p.priceMax&&p.priceMax>p.price)?money(p.price)+' \u2013 '+money(p.priceMax):money(p.price);
+const METAS=['fit: slim','fit: relaxed'];
+/* mirrors app/lib/groupMembership.ts resolveMembership — a UNION across all four sources */
+function resolveMembership(m){
+  const T=new Set(m.tags),C=new Set(m.collections),M=new Set(m.metafields),H=new Set(m.manual);
+  return CAT.product.filter(p=>H.has(p.key)||p.tags.some(t=>T.has(t))||p.collections.some(c=>C.has(c))||p.metas.some(v=>M.has(v))).map(p=>p.key);
+}
+let GROUPS=[
+  {key:'g1',name:'Sensitive skin starters',mem:{tags:['sensitive','fragrance-free'],collections:[],metafields:[],manual:[]}},
+  {key:'g2',name:'Gift-ready',mem:{tags:[],collections:['c0','c1'],metafields:[],manual:[]}}
+];
+function syncGroups(){ CAT.group=GROUPS.map(g=>({type:'group',key:g.key,name:g.name,count:resolveMembership(g.mem).length,mem:g.mem})); }
+syncGroups();
+const TABS=[{t:'product',l:'Products'},{t:'tag',l:'Tags'},{t:'collection',l:'Collections'},{t:'group',l:'Custom'}];
+const NOUNS={product:['product','products'],tag:['tag','tags'],collection:['collection','collections'],group:['group','groups']};
+const AI=['fine-lines','acne','dryness','redness','dullness','sensitive','combination','oily','texture'];
+const GOAL='help shoppers find the right routine for their skin concern';
+const GROUP_BIG=40;   /* a group this large needs narrowing to be a sensible result */
+const find=(t,k)=>CAT[t].find(x=>x.key===k);
+const idOf=c=>c.type+':'+c.key;
+let S={tab:'tag',sel:new Map(),q:'',modal:null,justAdded:null,undo:null,sort:'size',shown:25,stat:'active'};
+/* TWEAK 37 — Shopify's three product states, plus "all". Active is the default
+   because it is the only one the runtime will actually surface. */
+const STATS={active:'Active',draft:'Draft',archived:'Archived',all:'All statuses'};
+/* TWEAK 35 — sorts. "size" is the live default (funnelLoader sorts biggest
+   first); Products has no member count, so it falls back to A–Z there. */
+const SORTS={size:'Most products',size_asc:'Fewest products',az:'A \u2013 Z',za:'Z \u2013 A'};
+/* TWEAK 40 — Collections sort by NAME. A collection is something the merchant
+   already knows the name of ("Marrow Lane"), so alphabetical is how it gets
+   found; tags are browsed by weight, so they keep the size sorts. */
+const sortsFor=t=>(t==='product'||t==='collection')?['az','za']:['size','size_asc','az','za'];
+function cmp(mode){
+  const az=(a,b)=>a.name.localeCompare(b.name,undefined,{sensitivity:'base',numeric:true});
+  if(mode==='az') return az;
+  if(mode==='za') return (a,b)=>az(b,a);
+  if(mode==='size_asc') return (a,b)=>(a.count-b.count)||az(a,b);
+  return (a,b)=>(b.count-a.count)||az(a,b);
+}
+let WZ=null;  /* {step, mem, name, touched} */
+const emptyMem=()=>({tags:[],collections:[],metafields:[],manual:[]});
+function autoName(m){
+  const parts=[...m.tags, ...m.collections.map(c=>(CAT.collection.find(x=>x.key===c)||{}).name||c),
+    ...m.metafields, ...m.manual.map(k=>(CAT.product.find(x=>x.key===k)||{}).name||k)];
+  if(!parts.length) return '';
+  if(parts.length===1) return parts[0];
+  if(parts.length===2) return parts[0]+' + '+parts[1];
+  return parts[0]+' + '+(parts.length-1)+' more';
+}
+AI.forEach(k=>{const c=find('tag',k); if(c) S.sel.set(idOf(c),c);});
+const selOfType=t=>[...S.sel.values()].filter(c=>c.type===t);
+/* TWEAK 4 — selected-first, but the ORDER IS FROZEN between rebuilds.
+   Re-partitioning on every toggle teleports the clicked row to the top and
+   slides the next row into the click point. Rebuild only on load, tab change
+   and search change; a click marks the row where it already sits. */
+let ORDER=null;
+function rebuildOrder(){
+  /* selected-first is a GROUPING; the sort runs inside each group, so changing
+     the sort never buries a pick the merchant just made. */
+  const f=cmp(sortsFor(S.tab).includes(S.sort)?S.sort:sortsFor(S.tab)[0]);
+  const on=[],off=[];
+  for(const c of CAT[S.tab])(S.sel.has(idOf(c))?on:off).push(c);
+  ORDER=on.sort(f).concat(off.sort(f)).map(idOf);
+}
+/* Status filters only products; tags, collections and custom groups have no
+   Shopify status, so the control does not appear on those tabs at all. */
+const shownHere=c=>c.type!=='product'||S.stat==='all'||c.status===S.stat;
+/* Select all means "everything on screen", so it reads off the SAME window the
+   footer is counting — not the whole filtered set behind it. */
+const shownList=()=>visible().slice(0,S.shown);
+function visible(){
+  const q=S.q.trim().toLowerCase();
+  const f=cmp(sortsFor(S.tab).includes(S.sort)?S.sort:sortsFor(S.tab)[0]);
+  if(q) return CAT[S.tab].filter(c=>shownHere(c)&&c.name.toLowerCase().includes(q)).sort(f);
+  if(!ORDER) rebuildOrder();
+  const byId=new Map(CAT[S.tab].map(c=>[idOf(c),c]));
+  return ORDER.map(id=>byId.get(id)).filter(c=>c&&shownHere(c));
+}
+function revertAiTags(){
+  AI.forEach(k=>S.sel.delete('tag:'+k));
+  (S.aiPrior||[]).forEach(c=>S.sel.set(idOf(c),c));
+  S.aiPrior=null;
+}
+function aiApplied(){
+  const tags=selOfType('tag');   // other types are none of the AI's business
+  return tags.length===AI.length && tags.every(c=>AI.includes(c.key));
+}
+/* TWEAK 23 — the Undo window. Five seconds from the apply, then it fades
+   out and the pill keeps its (truthful) Applied label. The timers are also
+   the reason undo is armed ONCE at apply and not on every render: render()
+   runs on every click, and re-arming there would make the window immortal. */
+let UNDO_T=null;
+function clearUndo(){ clearTimeout(UNDO_T); UNDO_T=null; }
+function armUndo(){
+  clearUndo();
+  UNDO_T=setTimeout(()=>{ if(S.undo){ S.undo=null; renderAiLine(); } },5000);
+}
+function renderAiLine(){
+  const n=AI.length;
+  /* Undo is a SIBLING, never nested inside the pill \u2014 a button inside a
+     button is invalid and the parser closes the outer one. */
+  document.getElementById('ailine').innerHTML=
+    '<button class="aibtn" data-act="ai"><span class="spk" aria-hidden="true">&#10022;</span>'+
+    (aiApplied()?'Applied '+n:'AI picked '+n)+'</button>'+
+    (S.undo?'<button class="aiundo" data-act="ai-undo">Undo</button>':'');
+}
+function render(){
+  renderAiLine();
+  document.getElementById('tabs').innerHTML=TABS.map(t=>{
+    const on=t.t===S.tab, sn=selOfType(t.t).length, tot=CAT[t.t].length;
+    /* TWEAK 16 — a tab states its own PICKS, and nothing else. The catalogue
+       total is not carried here: change 8 already moved scope into the
+       Select-all dialog, and at the live picker width (588px) four tabs each
+       printing a total, plus the AI pill, does not fit on one row. Five
+       numbers, one of them actionable — the four decorative ones go. */
+    return '<button class="tab'+(on?' on':'')+'" role="tab" aria-selected="'+on+'" data-tab="'+t.t+'"'+
+      ' aria-label="'+t.l+', '+tot+' available'+(sn?', '+sn+' selected':'')+'">'+
+      t.l+(sn?' <span class="n"><b>'+sn+'</b></span>':'')+'</button>';}).join('');
+
+  /* TWEAK 2 */
+  document.getElementById('narrowline').innerHTML = S.tab==='product' ? '' :
+    '<div class="narrow">'+I.funnel+'<span>Groups can be narrowed by a later question.</span>'+
+    '<a href="#" data-act="how">How narrowing works &rarr;</a></div>';
+
+  const v=visible();
+  const selCount=v.filter(c=>S.sel.has(idOf(c))).length;
+  const newBtn = (S.tab==='group'&&!S.q)
+    ? '<button class="newgrp" data-act="newgroup"><span class="plus">+</span>'
+      +'<span class="ng">New group<small>Combine tags, collections or hand-picked products into one result</small></span></button>'
+    : '';
+  /* TWEAK 38 — the list loads as you scroll, so every re-render has to put the
+     scroll position back. Setting innerHTML resets scrollTop to 0, which would
+     yank the merchant to the top of the list on every single toggle. */
+  const listEl=document.getElementById('list');
+  const keepScroll=listEl.scrollTop;
+  listEl.innerHTML = newBtn + (!v.length
+    ? '<div class="empty">'+(S.q?'No matches.':(S.tab==='group'?'No groups yet \u2014 create one above.':'Nothing here yet.'))+'</div>'
+    : v.slice(0,S.shown).map(c=>{
+        const on=S.sel.has(idOf(c));
+        const right=c.type==='product'
+          ? (c.variants&&c.variants.length
+              ? '<button class="vars" data-peek="'+idOf(c)+'"><b>'+esc(Object.keys(c.opts)[0])+'</b> &middot; '
+                + c.variants.map(v=>esc(v.value)).join(', ')+'</button>'
+              : '<span class="vars none"></span>')
+          : '<span class="vars grp">Group of <button class="cntb" data-peek="'+idOf(c)+'" aria-label="View the '
+            +c.count+' product'+(c.count===1?'':'s')+' in '+esc(c.name)+'">'
+            +c.count+' product'+(c.count===1?'':'s')+'</button></span>';
+        const st=c.type==='product'&&c.status&&c.status!=='active'
+          ? '<span class="stat '+c.status+'">'+c.status+'</span>' : '';
+        return '<div class="r'+(on?' on':'')+'" role="checkbox" tabindex="0" aria-checked="'+on+'" data-toggle="'+idOf(c)+'">'+
+          '<span class="ic'+(c.type==='product'?' pimg':'')+'">'+(c.type==='product'?'':I[c.type])+'</span>'+
+          '<span class="bd"><span class="nm">'+esc(c.name)+'</span></span>'+st+
+          right+'</div>';
+      }).join(''));
+  listEl.scrollTop=keepScroll;
+
+  /* rail */
+  /* TWEAK 27 — the rail counts RESULTS. A group is one result and a single
+     product is one result; the tab a thing came from is not the distinction
+     that matters here, so the split is the one that does: many-products vs
+     one-product. The icons still say tag / collection / custom within it. */
+  const list=[...S.sel.values()], n=list.length;
+  const prods=list.filter(c=>c.type==='product'), grps=list.filter(c=>c.type!=='product');
+  const bits=[];
+  if(grps.length) bits.push('<b>'+grps.length+'</b> group'+(grps.length===1?'':'s'));
+  if(prods.length) bits.push('<b>'+prods.length+'</b> product'+(prods.length===1?'':'s'));
+  let h='<div class="rhd"><span class="rttl"><strong>Results</strong>'+
+    (n?'<span class="rsub">'+bits.join(' &middot; ')+'</span>':'')+'</span>'+
+    '<span class="count">'+n+'</span></div>';
+  if(!n){ h+='<div class="railempty"><div aria-hidden="true">&#128451;</div><p>Nothing added yet &mdash; click a row to add it.</p></div>'; }
+  else{
+    const secs=[{l:'Groups',items:grps},{l:'Products',items:prods}].filter(g=>g.items.length);
+    h+='<div class="rlist">'+secs.map(g=>
+      (secs.length>1?'<div class="rsec">'+g.l+'<span>'+g.items.length+'</span></div>':'')+
+      g.items.map(c=>
+      '<div class="rrow" data-row="'+idOf(c)+'" data-peek="'+idOf(c)+'" role="button" tabindex="0" aria-label="View '+esc(c.name)+'"><span class="rth'+(c.type==='product'?' pimg':'')+'">'+(c.type==='product'?'':I[c.type])+'</span>'+
+      '<span class="rb"><span class="rn">'+esc(c.name)+'</span>'+
+      (c.type==='product'?'':'<span class="rm">'+c.count+' product'+(c.count===1?'':'s')+'</span>')+'</span>'+
+      '<button class="rx" aria-label="Remove '+esc(c.name)+'" data-toggle="'+idOf(c)+'">'+I.x+'</button></div>').join('')
+    ).join('')+'</div>';
+  }
+  h+='<div class="rfoot"><button class="btn"'+(n?'':' disabled')+'>'+I.play+' Preview results page</button></div>';
+  document.getElementById('rail').innerHTML=h;
+  /* TWEAK 5 (revised) — with per-type section headers the row pitch is no
+     longer uniform, so the whole-row cap is MEASURED: cut at the bottom of
+     the 5th actual .rrow rather than at 5 x an assumed height. */
+  (()=>{
+    const rl=document.querySelector('.rlist'); if(!rl) return;
+    const rows=[...rl.querySelectorAll('.rrow')]; if(rows.length<=5) return;
+    rl.style.maxHeight=(rows[4].getBoundingClientRect().bottom-rl.getBoundingClientRect().top)+'px';
+    rl.classList.add('fade');
+  })();
+  /* TWEAK 9 — confirm the add: mark the row that just landed and bring it into
+     the rail's own frame. scrollIntoView would also move the PAGE, so the
+     scroll offset is set on the rail list directly. */
+  if(S.justAdded){
+    const el=document.querySelector('.rrow[data-row="'+S.justAdded+'"]');
+    if(el){
+      el.classList.add('is-new');
+      const list=el.parentElement;
+      // offsetTop is measured against the nearest POSITIONED ancestor, which
+      // .rlist is not — rect deltas are origin-independent and always correct.
+      const lr=list.getBoundingClientRect(), er=el.getBoundingClientRect();
+      if(er.top<lr.top) list.scrollTop+=er.top-lr.top;
+      else if(er.bottom>lr.bottom) list.scrollTop+=er.bottom-lr.bottom;
+      const id=S.justAdded;
+      setTimeout(()=>{ const n=document.querySelector('.rrow[data-row="'+id+'"]'); if(n) n.classList.remove('is-new'); },1600);
+    }
+    S.justAdded=null;
+  }
+
+  /* TWEAK 18 — one control, two states. The count it used to sit beside is
+     already on the tab ("9 of 228") and in the rail; a third copy was noise. */
+  const win=v.slice(0,S.shown);
+  const allOn=win.length>0&&win.every(c=>S.sel.has(idOf(c)));
+  const sa=document.getElementById('sall');
+  sa.textContent=allOn?'Clear all':'Select all';
+  sa.setAttribute('aria-label',(allOn?'Clear the ':'Select the ')+win.length+' '+NOUNS[S.tab][win.length===1?0:1]+' shown');
+  sa.disabled=win.length===0;
+  document.getElementById('srch').placeholder='Search '+NOUNS[S.tab][1]+'…';
+
+  /* TWEAK 35 — the sort field. Options are per-tab: Products carry no member
+     count, so size sorts are not offered there rather than offered dead. */
+  const opts=sortsFor(S.tab);
+  if(!opts.includes(S.sort)) S.sort=opts[0];
+  document.getElementById('sortsel').innerHTML=opts.map(k=>
+    '<option value="'+k+'"'+(k===S.sort?' selected':'')+'>'+SORTS[k]+'</option>').join('');
+  const statEl=document.getElementById('statsel');
+  statEl.style.display=S.tab==='product'?'':'none';
+  statEl.innerHTML=Object.keys(STATS).map(k=>
+    '<option value="'+k+'"'+(k===S.stat?' selected':'')+'>'+STATS[k]+'</option>').join('');
+
+  /* TWEAK 35 — Expand LOADS rows, it does not grow the box. A list taller than
+     the screen stops being a window and becomes the page: the widget scrolls
+     away and takes its own footer with it. The 460px height is live's, the
+     rows scroll inside it, and the footer is therefore always on screen. */
+  const shown=Math.min(v.length,S.shown);
+  /* TWEAK 38 — the footer is the status ledger. Filtered to Active (the
+     default), a merchant would otherwise have no way to know drafts exist at
+     all: the badge only fires on rows they cannot currently see. */
+  let ledger='';
+  if(S.tab==='product'){
+    const d=CAT.product.filter(c=>c.status==='draft').length;
+    const ar=CAT.product.filter(c=>c.status==='archived').length;
+    const hid=[]; if(S.stat!=='all'&&S.stat!=='draft'&&d) hid.push(d+' draft');
+    if(S.stat!=='all'&&S.stat!=='archived'&&ar) hid.push(ar+' archived');
+    if(hid.length) ledger=' &middot; <button class="archtog" data-act="showall">'+hid.join(', ')+' not shown</button>';
+  }
+  document.getElementById('listfoot').innerHTML=
+    '<span>Showing <b>'+shown+'</b> of <b>'+v.length+'</b>'+
+      (S.q?' matching':'')+(S.tab==='product'&&S.stat!=='all'?' '+STATS[S.stat].toLowerCase():'')+ledger+'</span>';
+  document.getElementById('cont').disabled=n===0;
+  renderOverlay();
+}
+function chipRow(kind,items,sel,labelOf){
+  return items.map(it=>{const k=labelOf?labelOf(it):it, id=(it&&it.key)||it;
+    return '<button class="chipx'+(sel.includes(id)?' on':'')+'" data-src="'+kind+'" data-val="'+String(id).replace(/"/g,'&quot;')+'">'+esc(k)+'</button>';}).join('');
+}
+const SRC_CAP=10, SRC_SEARCHABLE=12;
+const srcLabel=(it,labelOf)=>String(labelOf?labelOf(it):it);
+/* TWEAK 28 — a section caps at 10 whole chips. Past that it says how many it
+   is holding back; past 12 it also gets its own search, because "+218 more"
+   on a 228-tag shop is a wall, not a list. */
+function srcSection(kind,icon,label,items,sel,labelOf){
+  const q=(WZ.q[kind]||'').trim().toLowerCase();
+  const hits=q?items.filter(it=>srcLabel(it,labelOf).toLowerCase().includes(q)):items;
+  const open=!!WZ.more[kind];
+  const shown=(q||open)?hits.slice(0,60):hits.slice(0,SRC_CAP);
+  const hidden=hits.length-shown.length;
+  return '<div class="src"><div class="src-h">'+icon+' '+label+
+    (items.length>SRC_SEARCHABLE
+      ? '<input class="src-q" data-q="'+kind+'" type="search" aria-label="Search '+label.toLowerCase()+
+        '" placeholder="Search" value="'+String(WZ.q[kind]||'').replace(/"/g,'&quot;')+'">'
+      : '')+
+    '<span class="n2">'+sel.length+' selected</span></div>'+
+    '<div class="src-b">'+
+      (hits.length?chipRow(kind,shown,sel,labelOf):'<span class="src-none">No matches.</span>')+
+      (hidden>0
+        ? '<button class="chipx more" data-act="src-more" data-kind="'+kind+'">+'+hidden+' more</button>'
+        : (open&&!q?'<button class="chipx more" data-act="src-more" data-kind="'+kind+'">Show fewer</button>':''))+
+    '</div></div>';
+}
+function renderWizard(){
+  const m=WZ.mem, ids=resolveMembership(m), n=ids.length;
+  const chips=ids.slice(0,4).map(k=>{const pr=CAT.product.find(x=>x.key===k); return '<span class="by-chip">'+esc(pr?pr.name:k)+'</span>';}).join('');
+  const step1=WZ.step===1;
+  return '<div class="scrim" data-act="close-scrim"><div class="modal" role="dialog" aria-modal="true">'+
+   '<div class="mh"><span class="mic">'+I.group+'</span><div style="flex:1 1 auto"><strong>'+(step1?'Create a new recommendation group':'Name this group')+'</strong>'+
+   (step1?'<span>Combine anything in your catalogue into one result.</span>':'')+'</div>'+
+   '<button class="mx" data-act="close" aria-label="Close">'+I.x+'</button></div>'+
+   '<div class="wz-steps"><span class="wz-step on"></span><span class="wz-step'+(step1?'':' on')+'"></span></div>'+
+   '<div class="mb">'+
+   (step1
+     ? srcSection('tags',I.tag,'Tags',CAT.tag.map(t=>t.key),m.tags)+
+       srcSection('collections',I.collection,'Collections',CAT.collection,m.collections,c=>c.name)+
+       srcSection('metafields',I.product,'Metafields',METAS,m.metafields)+
+       srcSection('manual',I.product,'Hand-picked products',CAT.product,m.manual,pr=>pr.name)+
+       '<p class="wz-count"><b>'+n+'</b> product'+(n===1?'':'s')+' match so far</p>'
+     : '<div class="fld"><label for="wzname">Name this group</label>'+
+         '<input id="wzname" value="'+String(WZ.name).replace(/"/g,'&quot;')+'" autocomplete="off"></div>'+
+       '<p class="wz-count"><b>'+n+'</b> product'+(n===1?'':'s')+' in this group</p>'+
+       '<div class="by'+(WZ.expand?' is-open':'')+'">'+
+         (WZ.expand
+           ? ids.map(k=>{const pr=CAT.product.find(x=>x.key===k); return '<span class="by-chip">'+esc(pr?pr.name:k)+'</span>';}).join('')
+           : chips)+
+         (n>4?'<button class="by-more" data-act="wz-more">'+(WZ.expand?'Show fewer':'+'+(n-4)+' more')+'</button>':'')+
+       '</div>'+
+       (n>GROUP_BIG?'<div class="wz-caut">'+I.funnel+'<span><strong>'+n+' products</strong> is '+
+         Math.round(n/CAT.product.length*100)+'% of your catalogue. A shopper lands on all of them unless a later question narrows the group.</span></div>':''))+
+   '</div>'+
+   '<div class="mf">'+
+     (step1 ? '<button class="btn btn-accent" style="margin:0" data-act="wz-next"'+(n?'':' disabled')+'>Next</button>'
+            : '<button class="btn wz-bk" style="margin:0" data-act="wz-back">&lsaquo; Back</button>'+
+              '<button class="btn btn-accent" style="margin:0" data-act="wz-save">Save &amp; add</button>')+
+   '</div></div></div>';
+}
+function renderOverlay(){
+  const el=document.getElementById('overlay');
+  if(WZ){ el.innerHTML=renderWizard(); return; }
+  if(!S.modal){ el.innerHTML=''; return; }
+  if(S.modal&&S.modal.kind==='confirm'){
+    el.innerHTML='<div class="scrim" data-act="close-scrim"><div class="modal" role="dialog" aria-modal="true" style="max-width:430px">'+
+      '<div class="mh"><span class="mic">'+I.funnel+'</span><div><strong>'+esc(S.modal.title)+'</strong></div></div>'+
+      '<div class="mb"><p style="margin:0;font-size:13.5px;color:var(--ink-3)">'+esc(S.modal.body)+'</p></div>'+
+      '<div class="mf"><button class="btn" style="margin:0" data-act="close">Cancel</button>'+
+      '<button class="btn btn-accent" style="margin:0" data-act="confirm-yes">'+esc(S.modal.yes)+'</button></div></div></div>';
+    return;
+  }
+  if(S.modal==='how'){
+    el.innerHTML='<div class="scrim" data-act="close-scrim"><div class="modal" role="dialog" aria-modal="true">'+
+      '<div class="mh"><span class="mic">'+I.funnel+'</span><div><strong>How narrowing works</strong><span>A group is the starting set, not the final list.</span></div></div>'+
+      '<div class="mb"><p class="mlbl">Example &mdash; a shirt store</p><div class="chain">'+
+      '<div class="cl"><span class="cbar"><span class="cd">12</span><span class="cn"></span></span><span class="cx"><b>Result: Hawaiian Shirts</b><span>The group you pick here.</span></span></div>'+
+      '<div class="cl"><span class="cbar"><span class="cd">4</span><span class="cn"></span></span><span class="cx"><b>&ldquo;What size are you?&rdquo;</b><span>Narrows by variant option &middot; Size</span></span></div>'+
+      '<div class="cl"><span class="cbar"><span class="cd end">2</span></span><span class="cx"><b>&ldquo;Bold or muted print?&rdquo;</b><span>Narrows by tag &middot; print. The shopper sees 2, not 12.</span></span></div>'+
+      '</div><p class="mlbl">Narrow by</p><div class="by"><span>Variant option</span><span>Tag family</span><span>Product type</span><span>Metafield</span></div></div>'+
+      '<div class="mf"><button class="btn btn-accent" style="margin:0" data-act="close">Got it</button></div></div></div>';
+    return;
+  }
+  if(S.modal==='ai'){
+    const rows=AI.map(k=>find('tag',k)).filter(Boolean);
+    const applied=aiApplied(), tagN=selOfType('tag').length, otherN=S.sel.size-tagN;
+    const willReplace=tagN>0&&!applied;
+    el.innerHTML='<div class="scrim" data-act="close-scrim"><div class="modal" role="dialog" aria-modal="true">'+
+      '<div class="mh"><span class="mic"><span style="font-size:16px">&#10022;</span></span><div style="flex:1 1 auto"><strong>AI Picks</strong>'+
+        '<span class="mgoal">Based on &ldquo;'+esc(GOAL)+'&rdquo;</span></div>'+
+        '<button class="mx" data-act="close" aria-label="Close">'+I.x+'</button></div>'+
+      '<div class="mb">'+
+      rows.map(c=>'<div class="mrow"><span class="ic2">'+I.tag+'</span><span class="nm2">'+esc(c.name)+'</span>'+
+        (c.count>1
+          ? '<button class="ct2 cntb" data-peek="'+idOf(c)+'" aria-label="View the '+c.count+' products in '+esc(c.name)+'">'
+            +c.count+' products</button>'
+          : '')+'</div>').join('')+
+      '</div>'+
+      /* TWEAK 29 — Revert lives as long as the picks do, not for five seconds.
+         It is offered ONLY while the AI's tags are still the selected tags;
+         the moment the merchant edits them there is nothing coherent to
+         revert to, and the button removes itself. */
+      '<div class="mf">'+
+        (applied&&S.aiPrior?'<button class="btn wz-bk" style="margin:0" data-act="ai-revert">Revert</button>':'')+
+        '<button class="btn btn-accent" style="margin:0" data-act="ai-apply"'+
+        (applied?' disabled':'')+'>'+(applied?'Applied':'Apply')+'</button>'+
+      '</div></div></div>';
+    return;
+  }
+  const c=S.modal.card;
+  if(c.type==='product'){
+    const pr=CAT.product.find(x=>x.key===c.key)||c;
+    const vs=pr.variants||[];
+    el.innerHTML='<div class="scrim" data-act="close-scrim"><div class="modal" role="dialog" aria-modal="true">'+
+      '<div class="mh"><span class="mic">'+I.product+'</span><div><strong>'+esc(pr.name)+'</strong>'+
+      '<span>'+(vs.length?vs.length+' variants pulled in from Shopify':'One variant &mdash; no options set')+'</span></div></div>'+
+      '<div class="mb">'+(vs.length
+        ? vs.map(v=>'<div class="mrow"><span class="ic2">'+I.product+'</span><span class="nm2">'+
+            esc(v.name)+': '+esc(v.value)+'</span><span class="ct2"'+(v.available?'':' style="color:var(--crit)"')+'>'+
+            (v.available?'In stock':'Sold out')+'</span></div>').join('')
+        : '<p style="margin:0;font-size:13px;color:var(--ink-4)">This product has a single variant, so there is nothing for a later question to choose between.</p>')+
+      '</div><div class="mf"><button class="btn btn-accent" style="margin:0" data-act="close">Done</button></div></div></div>';
+    return;
+  }
+  const mem=CAT.product.slice(0,c.count);   // no truncation: the body scrolls
+  el.innerHTML='<div class="scrim" data-act="close-scrim"><div class="modal" role="dialog" aria-modal="true">'+
+    '<div class="mh"><span class="mic">'+I[c.type]+'</span><div><strong>'+esc(c.name)+'</strong><span>'+
+      (c.type==='product' ? 'One product'
+        : c.count+' product'+(c.count===1?'':'s')+' in this '+c.type)+'</span></div></div>'+
+    '<div class="mb">'+mem.map(p=>'<div class="mrow"><span class="ic2">'+I.product+'</span><span class="nm2">'+esc(p.name)+'</span><span class="ct2">'+priceLabel(p)+'</span></div>').join('')+
+
+    '</div><div class="mf"><button class="btn btn-accent" style="margin:0" data-act="close">Done</button></div></div></div>';
+}
+function toggle(id){
+  const t=id.slice(0,id.indexOf(':')), k=id.slice(id.indexOf(':')+1), c=find(t,k);
+  if(!c) return;
+  if(S.sel.has(id)){ S.sel.delete(id); S.justAdded=null; }
+  else { S.sel.set(id,c); S.justAdded=id; }   /* TWEAK 9 */
+  clearUndo(); S.undo=null;   /* an edit invalidates the snapshot undo would restore */
+  render();
+}
+document.addEventListener('click',e=>{
+  const t=e.target.closest('[data-toggle],[data-tab],[data-peek],[data-act],[data-src]');
+  if(!t) return;
+  if(t.disabled) return;   // a disabled control must not act
+  if(t.dataset.act==='close-scrim'&&e.target!==t) return;
+  if(t.dataset.peek){ e.preventDefault(); const [ty,k]=[t.dataset.peek.slice(0,t.dataset.peek.indexOf(':')),t.dataset.peek.slice(t.dataset.peek.indexOf(':')+1)];
+    /* TWEAK 30 — a preview opened FROM a dialog closes back to that dialog */
+    S.modal={card:find(ty,k), back:(S.modal==='ai'?'ai':null)}; renderOverlay(); return; }
+  if(t.dataset.toggle){ toggle(t.dataset.toggle); return; }
+  if(t.dataset.tab){
+    /* TWEAK 16 — a tab is a VIEW, not a mode. Switching keeps every pick;
+       the old confirm-and-clear is deleted outright. */
+    const target=t.dataset.tab;
+    if(target===S.tab) return;
+    S.tab=target; S.q=''; S.shown=25; document.getElementById('srch').value='';
+    rebuildOrder(); render(); return;
+  }
+  if(t.dataset.src){ const k=t.dataset.src, v=t.dataset.val, arr=WZ.mem[k];
+    const i=arr.indexOf(v); if(i<0) arr.push(v); else arr.splice(i,1);
+    if(!WZ.touched) WZ.name=autoName(WZ.mem);
+    WZ.expand=false;
+    renderOverlay(); return; }
+  const a=t.dataset.act;
+  if(a==='ai-apply'){
+    /* TWEAK 16 — the AI only has an opinion about TAGS, so applying replaces
+       the tag half and leaves products / collections / groups untouched. */
+    const priorTags=selOfType('tag');
+    const doApply=()=>{
+      S.aiPrior=priorTags;   /* kept as long as the picks stay applied */
+      const kept=[...S.sel.values()].filter(c=>c.type!=='tag');
+      S.sel=new Map(); kept.forEach(c=>S.sel.set(idOf(c),c));
+      AI.forEach(k=>{const c=find('tag',k); if(c) S.sel.set(idOf(c),c);});
+      S.tab='tag'; S.q=''; document.getElementById('srch').value='';
+      S.undo={replaced:priorTags.length}; S.modal=null; rebuildOrder(); render(); armUndo();
+    };
+    /* TWEAK 29 — an existing selection is overwritten, so it is confirmed
+       rather than explained in a strip the merchant has already scrolled past. */
+    if(priorTags.length){
+      const otherN=S.sel.size-priorTags.length;
+      S.modal={kind:'confirm', back:'ai', title:'Override and continue?',
+        body:priorTags.length+' tag'+(priorTags.length===1?' is':'s are')+' already selected, and applying replaces '
+          +(priorTags.length===1?'it':'them')+'.'
+          +(otherN?' Your '+otherN+' other recommendation'+(otherN===1?'':'s')+' stay'+(otherN===1?'s':'')+'.':'')
+          +' You can revert from this dialog afterwards.',
+        yes:'Override and continue', run:doApply};
+      renderOverlay(); return;
+    }
+    doApply(); return; }
+  if(a==='ai-revert'){ clearUndo(); revertAiTags(); S.undo=null; S.modal=null; rebuildOrder(); render(); return; }
+  if(a==='ai-undo'){ clearUndo(); revertAiTags(); S.undo=null; rebuildOrder(); render(); return; }
+  if(a==='confirm-yes'){ const m=S.modal; S.modal=null; if(m&&m.run) m.run(); renderOverlay(); return; }
+  if(a==='newgroup'){ WZ={step:1,mem:emptyMem(),name:'',touched:false,expand:false,more:{},q:{}}; renderOverlay(); return; }
+  if(a==='wz-next'){ WZ.step=2; if(!WZ.touched) WZ.name=autoName(WZ.mem); renderOverlay(); return; }
+  if(a==='wz-back'){ WZ.step=1; renderOverlay(); return; }
+  if(a==='wz-more'){ WZ.expand=!WZ.expand; renderOverlay(); return; }
+  if(a==='src-more'){ const k=t.dataset.kind; WZ.more[k]=!WZ.more[k]; renderOverlay(); return; }
+  if(a==='showall'){ S.stat='all'; S.shown=25; rebuildOrder(); render(); return; }
+
+  if(a==='wz-save'){
+    const nameEl=document.getElementById('wzname');
+    const nm=(nameEl&&nameEl.value.trim())||autoName(WZ.mem)||'Untitled group';
+    const key='g'+(GROUPS.length+1)+'_'+Date.now().toString(36);
+    GROUPS.push({key,name:nm,mem:WZ.mem}); syncGroups();
+    WZ=null; S.tab='group'; S.q=''; document.getElementById('srch').value='';
+    const c=CAT.group.find(g=>g.key===key);
+    if(c){ S.sel.set(idOf(c),c); S.justAdded=idOf(c); }
+    rebuildOrder(); render(); return; }
+  if((a==='close'||a==='close-scrim')&&WZ){ WZ=null; renderOverlay(); return; }
+  if(a==='how'){ e.preventDefault(); S.modal='how'; renderOverlay(); }
+  else if(a==='ai'){ S.modal='ai'; renderOverlay(); }
+  else if(a==='close'||a==='close-scrim'){ S.modal=(S.modal&&S.modal.back)||null; renderOverlay(); }
+});
+document.addEventListener('keydown',e=>{
+  if(e.key==='Escape'&&WZ){ WZ=null; renderOverlay(); return; }
+  if(e.key==='Escape'&&S.modal){ S.modal=(S.modal&&S.modal.back)||null; renderOverlay(); return; }
+  const r=e.target.closest&&e.target.closest('.r[data-toggle]');
+  if(r&&(e.key==='Enter'||e.key===' ')){ e.preventDefault(); toggle(r.dataset.toggle); return; }
+  const rr=e.target.closest&&e.target.closest('.rrow[data-peek]');
+  if(rr&&(e.key==='Enter'||e.key===' ')){ e.preventDefault();
+    const id=rr.dataset.peek, ty=id.slice(0,id.indexOf(':')), k=id.slice(id.indexOf(':')+1);
+    S.modal={card:find(ty,k)}; renderOverlay(); }
+});
+document.getElementById('srch').addEventListener('input',e=>{S.q=e.target.value;S.shown=25;if(!S.q)rebuildOrder();render();});
+document.addEventListener('input',e=>{
+  if(!WZ) return;
+  if(e.target.id==='wzname'){ WZ.name=e.target.value; WZ.touched=true; return; }
+  const k=e.target.dataset&&e.target.dataset.q;
+  if(!k) return;
+  /* re-rendering to filter blows away focus — put the caret back where it was */
+  const pos=e.target.selectionStart;
+  WZ.q[k]=e.target.value; WZ.more[k]=false;
+  renderOverlay();
+  const el=document.querySelector('[data-q="'+k+'"]');
+  if(el){ el.focus(); try{ el.setSelectionRange(pos,pos); }catch(_){} }
+});
+document.getElementById('sall').addEventListener('click',()=>{
+  const v=shownList(); if(!v.length) return;
+  const more=visible().length-v.length;
+  const noun=n=>NOUNS[S.tab][n===1?0:1];
+  /* TWEAK 37 — the dialog names the window, because that is what the button
+     now acts on. If rows are still unloaded it says so, rather than letting
+     "all" quietly mean "all 25 of 228". */
+  const scope=more>0?' That is everything currently shown \u2014 expand the list to reach the other '+more+'.':'';
+  const done=()=>{ clearUndo(); S.undo=null; S.justAdded=null; rebuildOrder(); render(); };
+  /* TWEAK 35 — one control, and it always confirms. The dialog is where the
+     count and the scope live, because two words on a button cannot hold
+     "all 228" and "the 19 your search left" at the same time. */
+  if(v.every(c=>S.sel.has(idOf(c)))){
+    S.modal={kind:'confirm', title:'Remove '+v.length+' '+noun(v.length)+'?',
+      body:'They stop being recommendations this quiz can return.'+scope,
+      yes:'Remove '+v.length, run:()=>{ v.forEach(c=>S.sel.delete(idOf(c))); done(); }};
+    renderOverlay(); return;
+  }
+  const pending=v.filter(c=>!S.sel.has(idOf(c)));
+  S.modal={kind:'confirm',
+    title:'Add '+pending.length+' '+noun(pending.length)+'?',
+    body:'Each one becomes a result this quiz can return.'+scope,
+    yes:'Add '+pending.length, run:()=>{ v.forEach(c=>S.sel.set(idOf(c),c)); done(); }};
+  renderOverlay();
+});
+/* TWEAK 38 — load the next 25 as the merchant reaches the bottom. Bound ONCE:
+   render() rewrites the list's innerHTML, not the element, so re-binding here
+   would stack a new listener on every keystroke. */
+document.getElementById('list').addEventListener('scroll',e=>{
+  const el=e.currentTarget;
+  if(el.scrollTop+el.clientHeight < el.scrollHeight-160) return;
+  if(S.shown>=visible().length) return;
+  S.shown+=25; render();
+});
+document.getElementById('sortsel').addEventListener('change',e=>{
+  S.sort=e.target.value; S.shown=25; rebuildOrder(); render();
+});
+document.getElementById('statsel').addEventListener('change',e=>{
+  S.stat=e.target.value; S.shown=25; rebuildOrder(); render();
+});
+render();
+})();
+</script>
+
+</body></html>

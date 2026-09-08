@@ -3,6 +3,7 @@ import {
   type GroupingProduct,
   type GroupingCollection,
 } from "./categoryGrouping";
+import { isSellable } from "./recommendationEngine";
 
 // ════════════════════════════════════════════════════════════════════════════
 // Recommendation-bucket resolution (RB Step 1) — the PURE half of the bucket
@@ -13,11 +14,29 @@ import {
 // IO half (add/remove/clear against Prisma) lives in step1Build.server.ts.
 // ════════════════════════════════════════════════════════════════════════════
 
-export type BucketType = "product" | "tag" | "collection";
+// Step-1 tweaks (§02 item 5) — the FOURTH bucket type: a shop-global Category
+// row the merchant built in the group wizard ("Custom" tab). Its bucket row is
+// `source: "group"`, `sourceRef: <that Category id>` — NEVER the group's own
+// dominantSource, or the type-scoped set-buckets delete treats it as a tag.
+export type BucketType = "product" | "tag" | "collection" | "group";
+export const BUCKET_TYPES: readonly BucketType[] = ["product", "tag", "collection", "group"];
+export function isBucketType(x: string): x is BucketType {
+  return (BUCKET_TYPES as readonly string[]).includes(x);
+}
 
 export interface BucketRow {
   source: BucketType;
-  sourceRef: string; // productId | normalized tag | collectionId
+  sourceRef: string; // productId | normalized tag | collectionId | group Category id
+  name: string;
+  tags: string[];
+  productIds: string[];
+}
+
+// A shop-global group offered on the Custom tab — the resolver copies its
+// stored membership into the quiz's bucket row (the same path a collection's
+// members take at publish: bake through productIds).
+export interface GroupSource {
+  id: string;
   name: string;
   tags: string[];
   productIds: string[];
@@ -33,11 +52,23 @@ export function bucketRowFor(
   collections: GroupingCollection[],
   productTitleById: Map<string, string>,
   collectionTitleById: Map<string, string>,
+  groups: readonly GroupSource[] = [],
 ): BucketRow | null {
   if (type === "product") {
     const title = productTitleById.get(key);
     if (!title) return null;
     return { source: "product", sourceRef: key, name: title, tags: [], productIds: [key] };
+  }
+  if (type === "group") {
+    const group = groups.find((g) => g.id === key);
+    if (!group || group.productIds.length === 0) return null;
+    return {
+      source: "group",
+      sourceRef: group.id,
+      name: group.name,
+      tags: group.tags,
+      productIds: group.productIds,
+    };
   }
   const source = type === "tag" ? "tag" : "collection";
   const [group] = resolveGroupsBySource(source, products, collections, { sourceRef: key });
@@ -123,6 +154,7 @@ export function bucketRowsFor(
   collections: GroupingCollection[],
   productTitleById: Map<string, string>,
   collectionTitleById: Map<string, string>,
+  groups: readonly GroupSource[] = [],
 ): BucketRow[] {
   const rows: BucketRow[] = [];
   for (const sel of selections) {
@@ -133,8 +165,88 @@ export function bucketRowsFor(
       collections,
       productTitleById,
       collectionTitleById,
+      groups,
     );
     if (row) rows.push(row);
   }
   return rows;
+}
+
+// ── set-buckets leaver scope (Step-1 tweaks §02 item 3) ─────────────────────
+// The bulk replace ("Apply" / its Undo / Revert) swaps ONE type's half of the
+// selection. Two live data-loss bugs lived in the old "everything not wanted
+// leaves" rule: (a) cross-type collateral — a single-typed `wanted` deleted the
+// merchant's picks of every other type; (b) Logic-tab rule targets (rows
+// stamped discoveryRunId "logic-tab-*") were leaver candidates — deleting one
+// dangles every rule that points at it and hard-blocks publish. Type-scoping
+// alone does not fix (b): a same-type Logic-tab target still left.
+export const normBucketSource = (s: string): string =>
+  s === "smart_collection" ? "collection" : s;
+
+export interface ExistingBucketRow {
+  id: string;
+  source: string;
+  sourceRef: string | null;
+  discoveryRunId: string;
+}
+
+export function isLogicTabTarget(row: Pick<ExistingBucketRow, "discoveryRunId">): boolean {
+  return row.discoveryRunId.startsWith("logic-tab-");
+}
+
+/** Rows to DELETE when the `type` half of the selection becomes `keys`. */
+export function setBucketsLeaverIds(
+  existing: readonly ExistingBucketRow[],
+  type: BucketType,
+  keys: readonly string[],
+): string[] {
+  const wanted = new Set(keys);
+  return existing
+    .filter(
+      (c) =>
+        normBucketSource(c.source) === type &&
+        !(c.sourceRef && wanted.has(c.sourceRef)) &&
+        !isLogicTabTarget(c),
+    )
+    .map((c) => c.id);
+}
+
+/** Keys of `type` already present (their rows keep their ids). */
+export function setBucketsKeptKeys(
+  existing: readonly ExistingBucketRow[],
+  type: BucketType,
+  keys: readonly string[],
+): Set<string> {
+  const wanted = new Set(keys);
+  const kept = new Set<string>();
+  for (const c of existing) {
+    if (normBucketSource(c.source) === type && c.sourceRef && wanted.has(c.sourceRef)) {
+      kept.add(c.sourceRef);
+    }
+  }
+  return kept;
+}
+
+// ── Deliverable count (Step-1 tweaks §02 item 6, decision 8) ────────────────
+// "Group of 44 products" counts every member; the runtime filters the pool
+// through isSellable, which drops non-active products (on bakes that carry
+// status) and anything out of stock at ≤0. So a group advertised as 44 can
+// deliver 38. ONE derivation, through isSellable itself — never a status test
+// alone. Rendered in the Results rail only; the picker keeps the real size.
+export interface SellableProduct {
+  inventory_in_stock: boolean;
+  price: string | null;
+  status?: string;
+}
+
+export function deliverableCount(
+  productIds: readonly string[],
+  sellableById: ReadonlyMap<string, SellableProduct>,
+): number {
+  let n = 0;
+  for (const id of productIds) {
+    const p = sellableById.get(id);
+    if (p && isSellable(p)) n++;
+  }
+  return n;
 }

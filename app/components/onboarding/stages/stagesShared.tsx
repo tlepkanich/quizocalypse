@@ -16,10 +16,13 @@ import type {
 import type { BuilderCategory } from "../../builder/stepProps";
 import type { IndexedProduct } from "../../../lib/recommendationEngine";
 import type { BucketSuggestion } from "../../../lib/bucketDetect";
+import type { CatalogProductPayload } from "../../../lib/funnelCatalogPayload";
 import { FUNNEL_STEPS } from "../../../lib/funnelStages";
 
-// Recommendation Buckets (RB Step 1) — the three browser tabs / bucket kinds.
-export type BucketType = "product" | "tag" | "collection";
+// Recommendation Buckets (RB Step 1) — the four browser tabs / bucket kinds
+// (Step-1 tweaks: "group" = a shop-global group picked on the Custom tab).
+// Mirrors app/lib/bucketPersist.ts — keep the two in step.
+export type BucketType = "product" | "tag" | "collection" | "group";
 
 // The loader's serialized shape (kept local to avoid a route⇄component type cycle).
 export interface FunnelData {
@@ -66,6 +69,8 @@ export interface FunnelData {
     error?: string;
     rationale?: string;
     question_length?: number;
+    // Step-1 tweaks — the pick itself, held whether or not it was written.
+    picks?: { type: "product" | "tag" | "collection"; keys: string[] };
   } | null;
   // FLOW-3 — the template-first pick marker (+ the picked card's name). null
   // until a card is picked on /studio/templates; presence changes the recs
@@ -84,17 +89,16 @@ export interface FunnelData {
   }>;
   // ── Recommendation Buckets (RB Step 1) ──
   catalog: {
-    products: Array<{
-      id: string;
-      title: string;
-      imageUrl: string | null;
-      price: number | null;
-      description: string | null;
-      tagKeys: string[];
-      collectionIds: string[];
-    }>;
+    products: CatalogProductPayload[];
     tags: Array<{ key: string; label: string; count: number }>;
     collections: Array<{ key: string; label: string; count: number }>;
+    // Step-1 tweaks — the shop-global groups (Custom tab), with members so the
+    // row preview and the rail resolve them client-side.
+    groups: Array<{ key: string; label: string; count: number; productIds: string[] }>;
+    // Group-wizard data: the flattened "ns.key: value" metafield conditions.
+    metafieldConditions: string[];
+    // ISO 4217 code shared by every product of the shop; null on a manual catalog.
+    currency: string | null;
   };
   suggestion: BucketSuggestion;
   buckets: Array<{
@@ -102,7 +106,10 @@ export interface FunnelData {
     type: BucketType;
     name: string;
     count: number;
+    // §02 item 6 — what the quiz will actually return (isSellable), rail only.
+    deliverableCount: number;
     thumbnailUrl: string | null;
+    productIds: string[];
   }>;
   activeTab: BucketType;
   bannerDismissed: boolean;

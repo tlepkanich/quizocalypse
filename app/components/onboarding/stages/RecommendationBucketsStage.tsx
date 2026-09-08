@@ -1,73 +1,113 @@
-// BIC-2 C2 — Stage 1 (Recommendation Buckets) extracted from Step1Funnel.tsx as
-// a PURE MOVE: identical JSX/props/hooks, plus this stage's private overlays
-// (intercept modal, tab-lock/remove/bulk warns, the results-preview drawer, the
-// AI banner). Only the imports are new.
+// Stage 1 (Recommendation Buckets) — the picker + the Results rail + the AI
+// Picks pill, rebuilt to the Step-1 tweaks handoff (rev 2, verified against
+// eaa4000; behaviour reference docs/design/step1/step1-tweaks.artifact.html).
+//
+// What changed, in one breath: four tabs (Products · Tags · Collections ·
+// Custom) that print their OWN picks; a tab is a view, not a mode (switching
+// never touches the selection — TabLockModal is gone); one-line rows with the
+// count as the control; selected-first FROZEN order; a 25-row window that
+// loads on scroll; a status filter on Products; a footer ledger; the rail is
+// "Results" with a composition sub-line, Groups/Products sections, the
+// deliverable count, a flash on add and a measured five-row fade; the AI
+// (both the heuristic tip and the goal pre-pick) is ONE pill in the tab
+// strip's corner opening the AI Picks dialog, whose Apply/Undo/Revert are
+// scoped to the suggested TYPE; and the Custom tab creates groups through
+// the shared group wizard.
+//
+// Every write is still one server intent (membership re-resolved server-side);
+// the optimistic overlay mirrors it until the fetcher settles.
 import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties, KeyboardEvent as ReactKeyboardEvent } from "react";
 import { Link, useFetcher } from "@remix-run/react";
-import { Box, Check, FolderOpen, Play, RotateCcw, Tag, X } from "lucide-react";
-import { QzCard, QzBadge, QzInput } from "../../qz";
+import { Box, Check, FolderOpen, Play, Tag, Users, X } from "lucide-react";
+import { QzCard, QzInput } from "../../qz";
 import { QzModal, QzDrawer } from "../../qz-overlays";
 import { DeviceFrame } from "../../builder/preview/DeviceFrame";
+import { GroupWizard, type GroupWizardSubmit, type WizProduct } from "../../studio/GroupWizard";
 import { useFunnelBar, type FunnelBarOverride } from "../funnelChrome";
 import type { DesignTokens } from "../../../lib/quizSchema";
 import { resolveDesignTokens, tokensToCssVars, suggestContrastText } from "../../../lib/designTokens";
 import { googleFontsUrl } from "../../runtime/runtimeStyles";
 import {
-  type ActionResult,
-  type BucketType,
-  type FunnelData,
-} from "./stagesShared";
+  SORT_LABEL,
+  STATUS_LABEL,
+  applyTyped,
+  buildOrder,
+  bulkPlan,
+  defaultSortFor,
+  deliverableCopy,
+  idOf,
+  ledgerHidden,
+  noun,
+  railComposition,
+  revertTyped,
+  sortsFor,
+  statusKeeps,
+  typedSelectionIs,
+  visibleCards,
+  type SortMode,
+  type StatusFilter,
+} from "../../../lib/bucketSelection";
+import { type ActionResult, type BucketType, type FunnelData } from "./stagesShared";
 
 // ── Stage 1 — Recommendation Buckets (the quiz's possible OUTCOMES) ───────────
-// The brand defines what the quiz can recommend: each bucket is an individual
-// product, a tag, or a collection. An AI pre-analysis (bucketDetect) suggests
-// the best bucketing strategy; selections continuously auto-save (each toggle is
-// one server write, optimistically reflected). Desktop-first; Shopify data is
-// read-only.
+type CatalogProduct = FunnelData["catalog"]["products"][number];
+
 type BucketCard = {
   key: string;
   type: BucketType;
   name: string;
   count: number;
   thumbnailUrl: string | null;
+  /** Products only — lower-cased Shopify status; null on a manual catalog. */
+  status?: CatalogProduct["status"];
+  /** Products only — the variant list on the first real option. */
+  variants?: CatalogProduct["variants"];
+  variantOption?: string | null;
+  /** §02 item 6 — what the quiz will return; only known for server buckets. */
+  deliverableCount?: number;
 };
 
-const idOf = (type: BucketType, key: string) => `${type}:${key}`;
-
-// Mock tab labels (step1-final-page): terse — "Products", not "Individual
-// products". SUB_LABEL is the per-row type line the mock shows under the name
-// on the non-leaf tabs.
+// Tab labels (§03): the Custom rename is tab-label ONLY — sentences keep
+// saying "group" (TYPE_NOUN in bucketSelection).
 const TAB_META: Array<{ type: BucketType; label: string }> = [
   { type: "product", label: "Products" },
   { type: "tag", label: "Tags" },
   { type: "collection", label: "Collections" },
+  { type: "group", label: "Custom" },
 ];
-const SUB_LABEL: Record<BucketType, string | null> = {
-  product: null,
-  tag: "Tag",
-  collection: "Collection",
-};
 
-const TYPE_BADGE: Record<BucketType, "draft" | "ok" | "warn"> = {
-  product: "draft",
-  tag: "ok",
-  collection: "warn",
-};
+// Window size (§03): 25 rows load; reaching the bottom loads 25 more.
+const WINDOW = 25;
+// The 5 s Undo (decision 2 — five ships unless the owner says otherwise).
+const UNDO_MS = 5000;
+// The rail cuts at the FIFTH real row (measured, not calculated).
+const RAIL_ROWS = 5;
+
+// The one-recommendation notice is OFF this screen (§08 advisories removed);
+// its copy is preserved verbatim for the per-page AI surface.
+export const ONE_RECOMMENDATION_NOTICE =
+  "One recommendation means every shopper sees the same products. Add a few more so the quiz can actually differentiate.";
 
 function BucketGlyph({ type, size = 18 }: { type: BucketType; size?: number }) {
-  const Icon = type === "product" ? Box : type === "tag" ? Tag : FolderOpen;
+  const Icon =
+    type === "product" ? Box : type === "tag" ? Tag : type === "collection" ? FolderOpen : Users;
   return <Icon size={size} strokeWidth={1.8} aria-hidden />;
 }
 
-// Merchant-facing nouns for the switch-confirm copy ("You have 4 collections
-// selected…") — the tab labels are display-cased/pluralized, so counts need
-// their own singular/plural forms.
-const TYPE_NOUN: Record<BucketType, [string, string]> = {
-  product: ["product", "products"],
-  tag: ["tag", "tags"],
-  collection: ["collection", "collections"],
-};
+function useMoney(currency: string | null) {
+  return useMemo(() => {
+    if (currency) {
+      try {
+        const fmt = new Intl.NumberFormat(undefined, { style: "currency", currency });
+        return (v: number) => fmt.format(v);
+      } catch {
+        /* unknown code — fall through to the bare number */
+      }
+    }
+    return (v: number) => v.toFixed(2);
+  }, [currency]);
+}
 
 export function RecommendationBucketsStage({
   data,
@@ -81,44 +121,87 @@ export function RecommendationBucketsStage({
   result: ActionResult | null;
 }) {
   const [activeTab, setActiveTab] = useState<BucketType>(data.activeTab);
-  // One-line-chrome §2.3 — the tip's ✕ dismisses for THIS SESSION only
-  // (sessionStorage, no server write); a legacy persisted dismissal is still
-  // honored. Dismiss is the tip's only control.
-  const [dismissed, setDismissed] = useState(data.bannerDismissed);
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    if (sessionStorage.getItem(`qz-rb-nb-${data.quizId}`)) setDismissed(true);
-  }, [data.quizId]);
   const [search, setSearch] = useState("");
   const q = useDeferredValue(search).trim().toLowerCase();
-  // Overlays: the switch-confirm (a type change with selections) + the §5
-  // results-page preview drawer + the §6 referenced-removal warnings (single
-  // toggle + the bulk paths — review-caught: Use-this / Clear-visible could
-  // otherwise silently remove referenced selections).
-  const [lockTarget, setLockTarget] = useState<BucketType | null>(null);
+  const [sort, setSort] = useState<SortMode>(defaultSortFor(data.activeTab));
+  const [status, setStatus] = useState<StatusFilter>("active");
+  const [shown, setShown] = useState(WINDOW);
+  // Overlays.
   const [previewOpen, setPreviewOpen] = useState(false);
   const [removeWarn, setRemoveWarn] = useState<BucketCard | null>(null);
-  const [bulkWarn, setBulkWarn] = useState<{ count: number; run: () => void } | null>(null);
-  const [bucketPreview, setBucketPreview] = useState<BucketCard | null>(null);
+  const [confirm, setConfirm] = useState<{
+    title: string;
+    body: string;
+    yes: string;
+    run: () => void;
+    /** "ai" — Cancel returns to the AI Picks dialog, not the page. */
+    back?: "ai";
+  } | null>(null);
+  const [peek, setPeek] = useState<{ card: BucketCard; back: "ai" | null } | null>(null);
+  const [aiOpen, setAiOpen] = useState(false);
+  const [howOpen, setHowOpen] = useState(false);
+  const [wizardOpen, setWizardOpen] = useState(false);
   // Start-routing spec §1 — Continue opens the "How do you want to start?"
-  // intercept (decider drafts only; legacy Continue submits directly as today).
-  // Dismissal returns here unchanged; it re-opens on the next Continue.
+  // intercept (decider drafts only). Dismissal returns here unchanged.
   const [interceptOpen, setInterceptOpen] = useState(false);
   const isDecider = data.logicModel === "decider";
-  // FLOW-1 — the goal-first flow: the merchant already wrote their goal at the
-  // front door, so Continue confirms straight into the headless build
-  // (flow1-confirm) with NO start pop-up; the pre-pick banner narrates the AI
-  // selection's lifecycle instead of the generic AI tip.
   const goalFirst = data.goalFirst;
   const prepickBusy = goalFirst?.prepick === "picking";
-  // FLOW-3 — the template-first flow: the merchant already picked a card on
-  // /studio/templates, so Continue confirms straight into the build
-  // (flow3-confirm) with NO start pop-up; a quiet banner names the pick.
   const templateFirst = data.templateFirst;
   const referencedSet = useMemo(() => new Set(data.referencedKeys), [data.referencedKeys]);
+  const money = useMoney(data.catalog.currency);
 
-  // Optimistic overlay over the server's selection: id → card (added) | null
-  // (removed). Cleared once the fetcher settles (the loader is then fresh).
+  // ── the catalog as cards ──────────────────────────────────────────────────
+  const productById = useMemo(
+    () => new Map(data.catalog.products.map((p) => [p.id, p])),
+    [data.catalog.products],
+  );
+  const groupById = useMemo(
+    () => new Map(data.catalog.groups.map((g) => [g.key, g])),
+    [data.catalog.groups],
+  );
+  const cardFor = useCallback(
+    (type: BucketType, key: string): BucketCard => {
+      if (type === "product") {
+        const p = productById.get(key);
+        return {
+          key,
+          type,
+          name: p?.title ?? key,
+          count: 1,
+          thumbnailUrl: p?.imageUrl ?? null,
+          status: p?.status ?? null,
+          variants: p?.variants ?? [],
+          variantOption: p?.variantOption ?? null,
+        };
+      }
+      if (type === "group") {
+        const g = groupById.get(key);
+        return { key, type, name: g?.label ?? key, count: g?.count ?? 0, thumbnailUrl: null };
+      }
+      const src = type === "tag" ? data.catalog.tags : data.catalog.collections;
+      const g = src.find((x) => x.key === key);
+      return { key, type, name: g?.label ?? key, count: g?.count ?? 0, thumbnailUrl: null };
+    },
+    [productById, groupById, data.catalog.tags, data.catalog.collections],
+  );
+  const cardsByTab = useMemo<Record<BucketType, BucketCard[]>>(
+    () => ({
+      product: data.catalog.products.map((p) => cardFor("product", p.id)),
+      tag: data.catalog.tags.map((t) => cardFor("tag", t.key)),
+      collection: data.catalog.collections.map((c) => cardFor("collection", c.key)),
+      group: data.catalog.groups.map((g) => cardFor("group", g.key)),
+    }),
+    [data.catalog, cardFor],
+  );
+  const totals: Record<BucketType, number> = {
+    product: cardsByTab.product.length,
+    tag: cardsByTab.tag.length,
+    collection: cardsByTab.collection.length,
+    group: cardsByTab.group.length,
+  };
+
+  // ── selection: server buckets + the optimistic overlay ────────────────────
   const [overlay, setOverlay] = useState<Map<string, BucketCard | null>>(() => new Map());
   useEffect(() => {
     if (fetcher.state === "idle") setOverlay(new Map());
@@ -126,136 +209,198 @@ export function RecommendationBucketsStage({
 
   const selected = useMemo(() => {
     const m = new Map<string, BucketCard>();
-    for (const b of data.buckets) m.set(idOf(b.type, b.key), b);
+    for (const b of data.buckets) {
+      m.set(idOf(b.type, b.key), {
+        ...cardFor(b.type, b.key),
+        name: b.name,
+        count: b.count,
+        deliverableCount: b.deliverableCount,
+        thumbnailUrl: b.type === "product" ? b.thumbnailUrl : null,
+      });
+    }
     for (const [id, card] of overlay) {
       if (card === null) m.delete(id);
       else m.set(id, card);
     }
     return m;
-  }, [data.buckets, overlay]);
-
-  const isOn = (type: BucketType, key: string) => selected.has(idOf(type, key));
+  }, [data.buckets, overlay, cardFor]);
+  const selectedList = useMemo(() => [...selected.values()], [selected]);
+  const isOn = useCallback((id: string) => selected.has(id), [selected]);
   const overlaySet = (id: string, val: BucketCard | null) =>
     setOverlay((prev) => new Map(prev).set(id, val));
+
+  // ── AI Picks (§05): ONE pill for the heuristic tip AND the goal pre-pick ──
+  // The heuristic (bucketDetect) earns its place only when the grouping choice
+  // is genuinely ambiguous; the goal pre-pick always shows (it has a lifecycle).
+  const tipEligible =
+    data.catalog.products.length >= 20 &&
+    (data.catalog.collections.length >= 2 || data.catalog.tags.length >= 5);
+  const aiPicks = useMemo<{ type: BucketType; keys: string[] } | null>(() => {
+    if (goalFirst?.picks && goalFirst.picks.keys.length) return goalFirst.picks;
+    // A pre-pick still running / failed owns the corner (its lifecycle
+    // states); a READY one from before picks were held falls back to the
+    // heuristic — the pill must not attribute those to the goal.
+    if (goalFirst && goalFirst.prepick !== "ready") return null;
+    const apply = data.suggestion.apply;
+    if (apply && tipEligible && apply.keys.length) return { type: apply.type, keys: apply.keys };
+    return null;
+  }, [goalFirst, data.suggestion.apply, tipEligible]);
+  const picksFromGoal = Boolean(goalFirst?.picks && goalFirst.picks.keys.length);
+  const aiApplied = aiPicks ? typedSelectionIs(selectedList, aiPicks.type, aiPicks.keys) : false;
+  // The prior keys of the suggested type, kept as long as the picks stay
+  // applied (Revert) — explicitly SESSION-scoped (decision: not persisted).
+  const [aiPrior, setAiPrior] = useState<{ type: BucketType; keys: string[] } | null>(null);
+  const [undoLive, setUndoLive] = useState(false);
+  const undoTimer = useRef<number | null>(null);
+  const clearUndo = useCallback(() => {
+    if (undoTimer.current != null) window.clearTimeout(undoTimer.current);
+    undoTimer.current = null;
+    setUndoLive(false);
+  }, []);
+  // Armed ONCE at the apply, never in render (an immortal window otherwise).
+  const armUndo = useCallback(() => {
+    clearUndo();
+    setUndoLive(true);
+    undoTimer.current = window.setTimeout(() => setUndoLive(false), UNDO_MS);
+  }, [clearUndo]);
+  useEffect(() => () => clearUndo(), [clearUndo]);
+
+  // ── the frozen order (§03) ────────────────────────────────────────────────
+  const [order, setOrder] = useState<string[] | null>(null);
+  const rebuildOrder = useCallback(
+    (tab: BucketType, mode: SortMode) =>
+      setOrder(buildOrder(cardsByTab[tab], isOn, mode)),
+    [cardsByTab, isOn],
+  );
+  // The order is rebuilt on load and when the CATALOG's identity changes (a
+  // resync, a group created) — never on the loader revalidation every toggle
+  // triggers, or "frozen between rebuilds" would mean nothing.
+  const catalogKey = useMemo(
+    () => (Object.keys(cardsByTab) as BucketType[]).map((t) => cardsByTab[t].map((c) => c.key).join("|")).join("\n"),
+    [cardsByTab],
+  );
+  useEffect(() => {
+    setOrder(
+      buildOrder(cardsByTab[activeTab], (id) => data.buckets.some((b) => idOf(b.type, b.key) === id), sort),
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [catalogKey]);
+
+  const [justAdded, setJustAdded] = useState<string | null>(null);
 
   // One toggle = one optimistic overlay write + one server write. The grid row
   // and the rail row share this, so removing in either place is the same op.
   const doToggle = (card: BucketCard) => {
-    const on = !isOn(card.type, card.key);
-    overlaySet(idOf(card.type, card.key), on ? card : null);
+    const id = idOf(card.type, card.key);
+    const on = !isOn(id);
+    overlaySet(id, on ? card : null);
+    setJustAdded(on ? id : null);
+    clearUndo();
     fetcher.submit(
       { intent: "toggle-bucket", type: card.type, key: card.key, on: String(on) },
       { method: "post" },
     );
   };
-
   // §6 downstream integrity — removing a selection the draft's questions/rules
-  // already reference gets a warn-first confirm (Step 3's V5/V6 still catch
-  // anything broken; this is the courtesy at the source).
+  // already reference gets a warn-first confirm.
   const toggle = (card: BucketCard) => {
-    const removing = isOn(card.type, card.key);
-    if (removing && referencedSet.has(idOf(card.type, card.key))) {
+    const id = idOf(card.type, card.key);
+    if (isOn(id) && referencedSet.has(id)) {
       setRemoveWarn(card);
       return;
     }
     doToggle(card);
   };
 
-  // Tab switch persists active_tab. Selections are homogeneous to one type, so
-  // switching with ≥1 selection prompts the switch-confirm modal first
-  // (confirm → clear all, then switch). Per §4, tab clicks no longer dismiss
-  // the AI banner — only "Not now" does.
-  const doSwitchTab = (type: BucketType, clear: boolean) => {
+  // A tab is a VIEW, not a mode: switching keeps every pick.
+  const switchTab = (type: BucketType) => {
+    if (type === activeTab) return;
+    const nextSort = sortsFor(type).includes(sort) ? sort : defaultSortFor(type);
     setActiveTab(type);
+    setSort(nextSort);
     setSearch("");
-    if (clear) {
-      setApplied(null); // a manual restart invalidates the Applied/Undo state
-      // Optimistically empty the selection (mark every current id removed).
-      setOverlay(() => {
-        const next = new Map<string, BucketCard | null>();
-        for (const c of selected.values()) next.set(idOf(c.type, c.key), null);
-        return next;
-      });
-    }
-    fetcher.submit(
-      { intent: "switch-tab", type, ...(clear ? { clear: "true" } : {}) },
-      { method: "post" },
-    );
+    resetWindow();
+    setOrder(buildOrder(cardsByTab[type], isOn, nextSort));
+    fetcher.submit({ intent: "switch-tab", type }, { method: "post" });
   };
 
-  const dismissTip = () => {
-    setDismissed(true);
-    if (typeof window !== "undefined") sessionStorage.setItem(`qz-rb-nb-${data.quizId}`, "1");
-  };
-
-  // Owner correction (2026-08-01) — the tip KEEPS its apply action: "Use
-  // this" applies the concrete recommended set in one click (referenced
-  // selections still warn first); the pill morphs to Applied + Undo.
-  // Optimistic cards resolve names/counts from the already-loaded catalog.
-  const [applied, setApplied] = useState<{
-    prior: { type: BucketType | null; keys: string[]; tab: BucketType };
-  } | null>(null);
-  const cardFor = (type: BucketType, key: string): BucketCard => {
-    if (type === "product") {
-      const p = data.catalog.products.find((x) => x.id === key);
-      return { key, type, name: p?.title ?? key, count: 1, thumbnailUrl: p?.imageUrl ?? null };
-    }
-    const src = type === "tag" ? data.catalog.tags : data.catalog.collections;
-    const g = src.find((x) => x.key === key);
-    return { key, type, name: g?.label ?? key, count: g?.count ?? 0, thumbnailUrl: null };
-  };
-  const setSelection = (type: BucketType, keys: string[]) => {
-    setSearch("");
-    setActiveTab(type);
-    setOverlay(() => {
-      const next = new Map<string, BucketCard | null>();
-      for (const c of selected.values()) next.set(idOf(c.type, c.key), null);
-      for (const k of keys) next.set(idOf(type, k), cardFor(type, k));
+  // §05 — Apply replaces ONE type's half of the selection; Undo and Revert
+  // restore that type's prior keys and leave everything else alone.
+  const setTyped = (type: BucketType, keys: string[], nextCards: BucketCard[]) => {
+    setOverlay((prev) => {
+      const next = new Map(prev);
+      for (const c of selectedList) if (c.type === type) next.set(idOf(c.type, c.key), null);
+      for (const c of nextCards) next.set(idOf(c.type, c.key), c);
       return next;
     });
     fetcher.submit({ intent: "set-buckets", type, keys: keys.join(",") }, { method: "post" });
   };
-  const useThis = () => {
-    const apply = data.suggestion.apply;
-    if (!apply) return;
-    const current = [...selected.values()];
-    const run = () => {
-      setApplied({
-        prior: { type: current[0]?.type ?? null, keys: current.map((c) => c.key), tab: activeTab },
-      });
-      setSelection(apply.type, apply.keys);
-    };
-    // Applying removes every current selection NOT in the recommended set —
-    // warn first when any of those are referenced by the draft's questions
-    // (the server keeps ids for keys present in BOTH sets, so those survive).
-    const applySet = new Set(apply.keys.map((k) => idOf(apply.type, k)));
-    const leavingReferenced = current.filter(
-      (c) => referencedSet.has(idOf(c.type, c.key)) && !applySet.has(idOf(c.type, c.key)),
+  const doApply = () => {
+    if (!aiPicks) return;
+    const prior = selectedList.filter((c) => c.type === aiPicks.type).map((c) => c.key);
+    setAiPrior({ type: aiPicks.type, keys: prior });
+    const nextCards = aiPicks.keys.map((k) => cardFor(aiPicks.type, k));
+    setTyped(aiPicks.type, aiPicks.keys, nextCards);
+    // Applying force-switches the picker to the suggested type and clears the search.
+    setActiveTab(aiPicks.type);
+    setSort(sortsFor(aiPicks.type).includes(sort) ? sort : defaultSortFor(aiPicks.type));
+    setSearch("");
+    resetWindow();
+    setOrder(
+      buildOrder(
+        cardsByTab[aiPicks.type],
+        (id) => applyTyped(selectedList, aiPicks.type, nextCards).some((c) => idOf(c.type, c.key) === id),
+        sortsFor(aiPicks.type).includes(sort) ? sort : defaultSortFor(aiPicks.type),
+      ),
     );
-    if (leavingReferenced.length > 0) setBulkWarn({ count: leavingReferenced.length, run });
-    else run();
+    setJustAdded(null);
+    setAiOpen(false);
+    armUndo();
   };
-  const undoApply = () => {
-    const prior = applied?.prior;
-    setApplied(null);
-    if (!prior) return;
-    if (prior.type) setSelection(prior.type, prior.keys);
-    else setSelection(prior.tab, []); // empty prior: clear + land back on the pre-apply tab
-  };
-
-  const switchTab = (type: BucketType) => {
-    if (type === activeTab) return;
-    if (selected.size > 0) {
-      setLockTarget(type); // confirm via the modal
+  const applyPicks = () => {
+    if (!aiPicks) return;
+    const priorOfType = selectedList.filter((c) => c.type === aiPicks.type);
+    // The Override confirm fires on an existing selection OF THE TYPE being
+    // applied — never on any selection.
+    if (priorOfType.length > 0 && !aiApplied) {
+      const otherN = selectedList.length - priorOfType.length;
+      const n = priorOfType.length;
+      const referenced = priorOfType.filter((c) => referencedSet.has(idOf(c.type, c.key))).length;
+      setAiOpen(false);
+      setConfirm({
+        title: "Override and continue?",
+        body:
+          `${n} ${noun(aiPicks.type, n)} ${n === 1 ? "is" : "are"} already selected, and applying replaces ${n === 1 ? "it" : "them"}.` +
+          (otherN ? ` Your ${otherN} other ${noun("product", otherN) === "product" ? "recommendation" : "recommendations"} stay${otherN === 1 ? "s" : ""}.` : "") +
+          (referenced ? ` ${referenced} of ${n === 1 ? "it" : "them"} ${referenced === 1 ? "is" : "are"} already used by your questions — the Questions step will flag anything that breaks.` : "") +
+          " You can revert from this dialog afterwards.",
+        yes: "Override and continue",
+        run: doApply,
+        back: "ai",
+      });
       return;
     }
-    doSwitchTab(type, false);
+    doApply();
+  };
+  const revertPicks = () => {
+    if (!aiPrior) return;
+    clearUndo();
+    const priorCards = aiPrior.keys.map((k) => cardFor(aiPrior.type, k));
+    const nextSelection = revertTyped(selectedList, aiPrior.type, priorCards);
+    setTyped(aiPrior.type, aiPrior.keys, priorCards);
+    setAiPrior(null);
+    setAiOpen(false);
+    setOrder(
+      buildOrder(
+        cardsByTab[activeTab],
+        (id) => nextSelection.some((c) => idOf(c.type, c.key) === id),
+        sort,
+      ),
+    );
   };
 
-  // H4 a11y — roving-tabindex arrow-key navigation for the bucket-source tablist
-  // (the ARIA tablist keyboard pattern). MANUAL activation: ←/→/Home/End move
-  // focus only; the tab's native Enter/Space click activates — so arrowing never
-  // trips the switch-tab confirm modal.
+  // H4 a11y — roving-tabindex arrow-key navigation for the bucket-source
+  // tablist (ARIA tablist keyboard pattern, MANUAL activation).
   const tablistRef = useRef<HTMLDivElement>(null);
   const onTabKeyDown = (e: ReactKeyboardEvent<HTMLDivElement>) => {
     if (!["ArrowRight", "ArrowLeft", "Home", "End"].includes(e.key)) return;
@@ -275,86 +420,151 @@ export function RecommendationBucketsStage({
     tabs[nextIdx]?.focus();
   };
 
-  const priceById = useMemo(
-    () => new Map(data.catalog.products.map((p) => [p.id, p.price])),
+  // ── the visible list ──────────────────────────────────────────────────────
+  const keep = useCallback(
+    (c: BucketCard) =>
+      c.type !== "product" || statusKeeps(status, c.status ?? null, isOn(idOf(c.type, c.key))),
+    [status, isOn],
+  );
+  const visible = useMemo(
+    () => visibleCards(cardsByTab[activeTab], order, q, sort, keep),
+    [cardsByTab, activeTab, order, q, sort, keep],
+  );
+  const windowed = visible.slice(0, shown);
+  const plan = bulkPlan(windowed, isOn);
+  const statusCounts = useMemo(() => {
+    let draft = 0;
+    let archived = 0;
+    for (const p of data.catalog.products) {
+      if (p.status === "draft") draft++;
+      else if (p.status === "archived") archived++;
+    }
+    return { draft, archived };
+  }, [data.catalog.products]);
+  const hasStatuses = data.catalog.products.some((p) => p.status !== null);
+
+  const listRef = useRef<HTMLDivElement>(null);
+  // The window resets on a tab change, a new search, a sort change and a
+  // status change — and the list scrolls back to the top with it, or a list
+  // still sitting at its bottom re-fires the scroll-load on the next render.
+  const resetWindow = useCallback(() => {
+    setShown(WINDOW);
+    if (listRef.current) listRef.current.scrollTop = 0;
+  }, []);
+  const onListScroll = () => {
+    const el = listRef.current;
+    if (!el) return;
+    if (el.scrollTop + el.clientHeight < el.scrollHeight - 160) return;
+    if (shown >= visible.length) return;
+    setShown((n) => n + WINDOW);
+  };
+
+  // Select all / Clear all — one control, always confirms, acts on the LOADED
+  // window and counts what will actually change (§03).
+  const bulk = () => {
+    if (windowed.length === 0) return;
+    const more = visible.length - windowed.length;
+    const scope = more > 0 ? ` That is everything currently shown — scroll the list to reach the other ${more}.` : "";
+    const matching = q ? ` Only the rows matching “${search.trim()}” — not the whole tab.` : "";
+    const done = () => {
+      clearUndo();
+      setJustAdded(null);
+    };
+    if (plan.mode === "clear") {
+      const referenced = plan.cards.filter((c) => referencedSet.has(idOf(c.type, c.key))).length;
+      const n = plan.cards.length;
+      setConfirm({
+        title: `Remove ${n} ${noun(activeTab, n)}?`,
+        body:
+          "They stop being results this quiz can return." +
+          matching +
+          scope +
+          (referenced
+            ? ` ${referenced} of them ${referenced === 1 ? "is" : "are"} already used by your questions — the Questions step will flag anything that breaks.`
+            : ""),
+        yes: `Remove ${n}`,
+        run: () => {
+          setOverlay((prev) => {
+            const next = new Map(prev);
+            for (const c of plan.cards) next.set(idOf(c.type, c.key), null);
+            return next;
+          });
+          fetcher.submit(
+            { intent: "clear-visible", type: activeTab, keys: plan.cards.map((c) => c.key).join(",") },
+            { method: "post" },
+          );
+          done();
+        },
+      });
+      return;
+    }
+    const n = plan.cards.length;
+    setConfirm({
+      title: `Add ${n} ${noun(activeTab, n)}?`,
+      body: "Each one becomes a result this quiz can return." + matching + scope,
+      yes: `Add ${n}`,
+      run: () => {
+        setOverlay((prev) => {
+          const next = new Map(prev);
+          for (const c of plan.cards) next.set(idOf(c.type, c.key), c);
+          return next;
+        });
+        fetcher.submit(
+          { intent: "select-all", type: activeTab, keys: plan.cards.map((c) => c.key).join(",") },
+          { method: "post" },
+        );
+        done();
+      },
+    });
+  };
+
+  // ── Custom tab: the group wizard ──────────────────────────────────────────
+  const wizProducts = useMemo<WizProduct[]>(
+    () =>
+      data.catalog.products.map((p) => ({
+        id: p.id,
+        title: p.title,
+        imageUrl: p.imageUrl,
+        tags: p.tags,
+        collectionIds: p.collectionIds,
+        metafieldValues: p.metafieldValues,
+      })),
     [data.catalog.products],
   );
-
-  const cardsForTab = (type: BucketType): BucketCard[] => {
-    if (type === "product")
-      return data.catalog.products.map((p) => ({
-        key: p.id,
-        type,
-        name: p.title,
-        count: 1,
-        thumbnailUrl: p.imageUrl,
-      }));
-    const src = type === "tag" ? data.catalog.tags : data.catalog.collections;
-    return src.map((t) => ({ key: t.key, type, name: t.label, count: t.count, thumbnailUrl: null }));
-  };
-
-  const visible = useMemo(() => {
-    const all = cardsForTab(activeTab);
-    return q ? all.filter((c) => c.name.toLowerCase().includes(q)) : all;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeTab, q, data.catalog]);
-
-  const visibleKeys = visible.map((c) => c.key);
-  const allVisibleOn = visibleKeys.length > 0 && visibleKeys.every((k) => isOn(activeTab, k));
-
-  const selectAllVisible = () => {
-    setOverlay((prev) => {
-      const next = new Map(prev);
-      for (const c of visible) next.set(idOf(c.type, c.key), c);
-      return next;
-    });
+  const wizTags = useMemo(
+    () => [...new Set(data.catalog.products.flatMap((p) => p.tags))].sort(),
+    [data.catalog.products],
+  );
+  const submitGroup: GroupWizardSubmit = (payload) => {
     fetcher.submit(
-      { intent: "select-all", type: activeTab, keys: visibleKeys.join(",") },
+      {
+        intent: "create-group",
+        name: payload.name,
+        description: payload.description,
+        membership: JSON.stringify(payload.membership),
+        persona: payload.persona ? JSON.stringify(payload.persona) : "",
+      },
       { method: "post" },
     );
+    setWizardOpen(false);
   };
+  // The created group lands through the loader; flash its row on the Custom tab.
+  const handledGroup = useRef<string | null>(null);
+  useEffect(() => {
+    const r = result as (ActionResult & { groupId?: string; added?: boolean }) | null;
+    if (!r || r.intent !== "create-group" || !r.ok || !r.groupId) return;
+    if (handledGroup.current === r.groupId) return;
+    handledGroup.current = r.groupId;
+    setActiveTab("group");
+    setSort(defaultSortFor("group"));
+    setSearch("");
+    resetWindow();
+    if (r.added) setJustAdded(idOf("group", r.groupId));
+  }, [result, resetWindow]);
 
-  const clearVisible = () => {
-    const run = () => {
-      setOverlay((prev) => {
-        const next = new Map(prev);
-        for (const k of visibleKeys) next.set(idOf(activeTab, k), null);
-        return next;
-      });
-      fetcher.submit(
-        { intent: "clear-visible", type: activeTab, keys: visibleKeys.join(",") },
-        { method: "post" },
-      );
-    };
-    // §6 — a filtered bulk clear can remove referenced selections a single
-    // toggle would have warned about; gate it the same way.
-    const referencedCleared = visibleKeys.filter(
-      (k) => isOn(activeTab, k) && referencedSet.has(idOf(activeTab, k)),
-    );
-    if (referencedCleared.length > 0) setBulkWarn({ count: referencedCleared.length, run });
-    else run();
-  };
-
-  const selectedList = [...selected.values()];
+  // ── Continue (the funnel bar) ─────────────────────────────────────────────
   const count = selectedList.length;
   const continuing = pendingIntent === "continue-buckets";
-  const resyncing = pendingIntent === "resync";
-  const resyncResult = result && result.intent === "resync" ? result : null;
-  const tabCounts: Record<BucketType, number> = {
-    product: data.catalog.products.length,
-    tag: data.catalog.tags.length,
-    collection: data.catalog.collections.length,
-  };
-  const activeLabel = TAB_META.find((t) => t.type === activeTab)?.label ?? "";
-
-  const lockedType = count > 0 ? selectedList[0]?.type ?? null : null;
-  const typeChip = lockedType ? TAB_META.find((t) => t.type === lockedType)?.label ?? null : null;
-
-  // One-line-chrome §1.3 — the step's Continue lives in the bar; publish the
-  // gate (≥1 recommendation), the flow-specific label, and the intercept
-  // behavior through the funnel-chrome bridge. Handlers ride a ref so they
-  // stay referentially stable (the bridge's publish contract); the OPTIMISTIC
-  // count drives the gate, so the button enables on the first pick.
   const fetcherRef = useRef(fetcher);
   fetcherRef.current = fetcher;
   const hasGoalFirst = Boolean(goalFirst);
@@ -372,8 +582,6 @@ export function RecommendationBucketsStage({
     pendingIntent === "flow3-confirm" ||
     pendingIntent === "shape-goal-build" ||
     pendingIntent === "manual-build";
-  // Owner edit (2026-08-18) — one label for every flow; the goal/template
-  // flows no longer say "Generate my quiz".
   const continueLabel =
     continuing || pendingIntent === "flow1-confirm" || pendingIntent === "flow3-confirm"
       ? "Saving…"
@@ -391,18 +599,7 @@ export function RecommendationBucketsStage({
   );
   useFunnelBar(barOverride);
 
-  // QRTZ-G1 — speculative question-gen prefetch: once the chosen pool SETTLES
-  // (≥1 recommendation, the shared mutation fetcher idle, and no pool change
-  // for 5s), ping the server's `speculate` intent. Fire-and-forget: the server
-  // owns every decision (signature, budget, one-at-a-time, supersede) and
-  // nothing about it is visible here — Continue simply lands faster when the
-  // speculation hit. A SEPARATE fetcher so a settle ping can never cancel an
-  // in-flight bucket write (one Remix fetcher = one in-flight submission).
-  // Decider-only, and only on flows whose Continue chain is deterministic at
-  // settle time: goal-first (pre-pick ready) and the plain flow (whose pop-up
-  // "Generate with AI" runs the derived-goal chain). FLOW-3 keeps the normal
-  // path. Re-arms only when the pool identity changes, so an idle merchant
-  // never generates repeat pings (the server would skip them anyway).
+  // QRTZ-G1 — speculative question-gen prefetch once the pool settles (5s).
   const specFetcher = useFetcher();
   const specFetcherRef = useRef(specFetcher);
   specFetcherRef.current = specFetcher;
@@ -419,82 +616,129 @@ export function RecommendationBucketsStage({
     return () => window.clearTimeout(t);
   }, [poolKey, poolCount, mutationState, specEligible]);
 
-  // One-line-chrome §2.3 — the tip earns its place only when the grouping
-  // choice is genuinely ambiguous: ≥20 products AND more than one viable
-  // grouping (≥2 collections or ≥5 tags). For a small store it states the
-  // obvious and costs trust — render the title row alone.
-  const tipEligible =
-    data.catalog.products.length >= 20 &&
-    (data.catalog.collections.length >= 2 || data.catalog.tags.length >= 5);
-  const showTip =
-    tipEligible && !dismissed && !goalFirst && !templateFirst && Boolean(data.suggestion.message);
+  // ── the rail: measured five-row cut + the landed flash ───────────────────
+  const railListRef = useRef<HTMLDivElement>(null);
+  const [railMax, setRailMax] = useState<number | null>(null);
+  const { groups: railGroups, products: railProducts } = railComposition(selectedList);
+  useEffect(() => {
+    const rl = railListRef.current;
+    if (!rl) {
+      setRailMax(null);
+      return;
+    }
+    const rows = rl.querySelectorAll<HTMLElement>(".qz-rb-rail-row");
+    if (rows.length <= RAIL_ROWS) {
+      setRailMax(null);
+      return;
+    }
+    const fifth = rows[RAIL_ROWS - 1]!;
+    setRailMax(fifth.getBoundingClientRect().bottom - rl.getBoundingClientRect().top);
+  }, [selectedList.length, railGroups.length, railProducts.length]);
+  useEffect(() => {
+    if (!justAdded) return;
+    const rl = railListRef.current;
+    const el = rl?.querySelector<HTMLElement>(`[data-row="${CSS.escape(justAdded)}"]`);
+    if (rl && el) {
+      // scrollTop on the rail list directly — scrollIntoView moves the page too.
+      const lr = rl.getBoundingClientRect();
+      const er = el.getBoundingClientRect();
+      if (er.top < lr.top) rl.scrollTop += er.top - lr.top;
+      else if (er.bottom > lr.bottom) rl.scrollTop += er.bottom - lr.bottom;
+    }
+    const t = window.setTimeout(() => setJustAdded(null), 1600);
+    return () => window.clearTimeout(t);
+  }, [justAdded]);
+
+  // ── the AI pill ───────────────────────────────────────────────────────────
+  const retrying = pendingIntent === "retry-gen";
+  const onRetry = () => fetcher.submit({ intent: "retry-gen" }, { method: "post" });
+  const aiPill = (() => {
+    if (goalFirst?.prepick === "picking" && data.genStalled) {
+      return (
+        <div className="qz-rb-aicorner">
+          <span className="qz-rb-aipill is-warn" role="status">
+            <span aria-hidden>◷</span> This is taking longer than it should.
+          </span>
+          <button type="button" className="qz-btn qz-btn-sm" disabled={retrying} onClick={onRetry}>
+            {retrying ? "Restarting…" : "Try again"}
+          </button>
+        </div>
+      );
+    }
+    if (goalFirst?.prepick === "picking") {
+      return (
+        <div className="qz-rb-aicorner">
+          <span className="qz-rb-aipill is-busy" role="status" aria-live="polite">
+            <span className="qz-rb-spark" aria-hidden>✦</span> Choosing recommendations for your goal…{" "}
+            <b>your picks are kept</b>.
+          </span>
+        </div>
+      );
+    }
+    if (goalFirst?.prepick === "failed") {
+      return (
+        <div className="qz-rb-aicorner">
+          <span className="qz-rb-aipill is-warn" role="status">
+            <span aria-hidden>⚠</span> We couldn&rsquo;t pick these automatically — choose below.
+          </span>
+          <button type="button" className="qz-btn qz-btn-sm" disabled={retrying} onClick={onRetry}>
+            {retrying ? "Retrying…" : "Try again"}
+          </button>
+        </div>
+      );
+    }
+    if (!aiPicks) return null;
+    const n = aiPicks.keys.length;
+    // Undo is a SIBLING, never nested inside the pill.
+    return (
+      <div className="qz-rb-aicorner">
+        <button
+          type="button"
+          className="qz-rb-aipill"
+          onClick={() => setAiOpen(true)}
+          aria-haspopup="dialog"
+        >
+          <span className="qz-rb-spark" aria-hidden>✦</span>
+          {aiApplied ? `Applied ${n}` : `AI picked ${n}`}
+        </button>
+        {undoLive && aiPrior ? (
+          <button type="button" className="qz-rb-aiundo" onClick={revertPicks}>
+            Undo
+          </button>
+        ) : null}
+      </div>
+    );
+  })();
+
+  const openPeek = (card: BucketCard, back: "ai" | null = null) => {
+    if (back === "ai") setAiOpen(false);
+    setPeek({ card, back });
+  };
+  const closePeek = () => {
+    const back = peek?.back ?? null;
+    setPeek(null);
+    if (back === "ai") setAiOpen(true);
+  };
+
+  const activeNoun = noun(activeTab, 2);
+  const emptyCopy = q
+    ? "No matches."
+    : activeTab === "group"
+      ? "No groups yet — create one above."
+      : activeTab === "product" && status !== "all" && data.catalog.products.length > 0
+        ? `No ${STATUS_LABEL[status].toLowerCase()} products.`
+        : "Nothing here yet — sync your catalog to populate this tab.";
+  const ledger = hasStatuses && activeTab === "product" ? ledgerHidden(status, statusCounts) : [];
 
   return (
     <div className="qz-rb">
-      {/* Owner edit (2026-08-02) — the tip moved OUT of the title row to its
-          own row directly under the heading; the title stands alone. */}
       <div className="qz-rb-titlerow">
-        {/* QRTZ-S5 — mock s10 step title, verbatim. */}
         <h2 className="qz-h2" style={{ margin: 0 }}>
           What should this quiz recommend?
         </h2>
       </div>
-      {showTip ? (
-        <div className="qz-rb-tiprow">
-          {applied ? (
-            <div className="qz-rb-tip is-applied" role="status">
-              <span className="qz-rb-tip-star" aria-hidden><Check size={13} strokeWidth={2.8} /></span>
-              <span className="qz-rb-tip-label">Tip</span>
-              <strong className="qz-rb-tip-sug">
-                Applied — {data.suggestion.message.replace(/^Use |^Start with /, "using ")}
-              </strong>
-              <button type="button" className="qz-rb-tip-use" onClick={undoApply}>
-                Undo
-              </button>
-              <button
-                type="button"
-                className="qz-rb-tip-x"
-                aria-label="Dismiss tip"
-                onClick={dismissTip}
-              >
-                <X size={12} aria-hidden />
-              </button>
-            </div>
-          ) : (
-            <div className="qz-rb-tip">
-              <span className="qz-rb-tip-star" aria-hidden>✦</span>
-              <span className="qz-rb-tip-label">Tip</span>
-              <strong className="qz-rb-tip-sug">{data.suggestion.message}</strong>
-              {data.suggestion.apply ? (
-                <button type="button" className="qz-rb-tip-use" onClick={useThis}>
-                  Use this
-                </button>
-              ) : null}
-              <button
-                type="button"
-                className="qz-rb-tip-x"
-                aria-label="Dismiss tip"
-                onClick={dismissTip}
-              >
-                <X size={12} aria-hidden />
-              </button>
-            </div>
-          )}
-        </div>
-      ) : null}
 
-      {/* FLOW-1/FLOW-3 lifecycle banners — functional status (the pre-pick /
-          template narration), not advice; they stay. */}
-      {goalFirst ? (
-        <GoalFirstBanner
-          state={goalFirst}
-          stalled={data.genStalled}
-          goalText={data.goal?.goal_text ?? ""}
-          count={count}
-          retrying={pendingIntent === "retry-gen"}
-          onRetry={() => fetcher.submit({ intent: "retry-gen" }, { method: "post" })}
-        />
-      ) : templateFirst ? (
+      {templateFirst ? (
         <div className="qz-rb-banner is-applied qz-gf-banner" role="status">
           <span className="qz-rb-banner-icon" aria-hidden><Check size={17} strokeWidth={2.6} /></span>
           <div className="qz-rb-banner-body">
@@ -511,203 +755,333 @@ export function RecommendationBucketsStage({
 
       <div className="qz-rb-split">
         <div className="qz-rb-main">
-          {/* §2.1 — the picker */}
           <QzCard flush className="qz-rb-browser">
-        <div
-          className="qz-rb-tabs"
-          role="tablist"
-          aria-label="Recommendation type"
-          ref={tablistRef}
-          onKeyDown={onTabKeyDown}
-        >
-          {TAB_META.map((t) => {
-            const n = tabCounts[t.type];
-            const on = t.type === activeTab;
-            // §3 — selecting anything locks the type: the other tabs MUTE (no
-            // lock icon) but stay CLICKABLE — the click opens the switch-confirm
-            // modal, which is the path to switching, not a dead end.
-            const muted = count > 0 && !on;
-            return (
-              <button
-                key={t.type}
-                type="button"
-                role="tab"
-                aria-selected={on}
-                // Roving tabindex: only the selected tab is in the Tab order; ←/→
-                // move between tabs (onTabKeyDown focuses the others programmatically).
-                tabIndex={on ? 0 : -1}
-                className={`qz-rb-tab${on ? " is-active" : ""}${muted ? " is-muted" : ""}`}
-                disabled={n === 0 && t.type !== "product"}
-                onClick={() => switchTab(t.type)}
+            {/* tabs + the AI corner */}
+            <div className="qz-rb-panehd">
+              <div
+                className="qz-rb-tabs"
+                role="tablist"
+                aria-label="Recommendation type"
+                ref={tablistRef}
+                onKeyDown={onTabKeyDown}
               >
-                {t.label}
-                <span className="qz-rb-tab-n">{n}</span>
-              </button>
-            );
-          })}
-        </div>
+                {TAB_META.map((t) => {
+                  const on = t.type === activeTab;
+                  const sn = selectedList.filter((c) => c.type === t.type).length;
+                  const total = totals[t.type];
+                  return (
+                    <button
+                      key={t.type}
+                      type="button"
+                      role="tab"
+                      aria-selected={on}
+                      tabIndex={on ? 0 : -1}
+                      aria-label={`${t.label}, ${total} available${sn ? `, ${sn} selected` : ""}`}
+                      className={`qz-rb-tab${on ? " is-active" : ""}`}
+                      onClick={() => switchTab(t.type)}
+                    >
+                      {t.label}
+                      {sn ? <span className="qz-rb-tab-n">{sn}</span> : null}
+                    </button>
+                  );
+                })}
+              </div>
+              {aiPill}
+            </div>
 
-        <div className="qz-rb-toolbar">
-          <QzInput
-            type="search"
-            placeholder={`Search ${activeLabel.toLowerCase()}…`}
-            value={search}
-            onChange={(e) => setSearch(e.currentTarget.value)}
-            aria-label="Search the catalog"
-          />
-          <button
-            type="button"
-            className="qz-rb-selall"
-            onClick={allVisibleOn ? clearVisible : selectAllVisible}
-            disabled={visible.length === 0}
-          >
-            {allVisibleOn ? "Clear visible" : "Select all"}
-          </button>
-        </div>
+            {/* the ONE narrowing line — group tabs only (decision 6 rewording) */}
+            {activeTab !== "product" ? (
+              <div className="qz-rb-narrow">
+                <span className="qz-rb-narrow-ic" aria-hidden>⌥</span>
+                <span>A group is the starting set — a later question can narrow one that holds several products.</span>
+                <button type="button" className="qz-rb-narrow-link" onClick={() => setHowOpen(true)}>
+                  How narrowing works →
+                </button>
+              </div>
+            ) : null}
 
-        {visible.length === 0 ? (
-          <div className="qz-rb-empty qz-dim">
-            {q ? "No matches." : "Nothing here yet — sync your catalog to populate this tab."}
-          </div>
-        ) : (
-          <div className={`qz-rb-grid${activeTab === "product" ? " is-products" : ""}`}>
-            {visible.map((c) => {
-              const on = isOn(c.type, c.key);
-              const price = activeTab === "product" ? priceById.get(c.key) ?? null : null;
-              return (
-                // §2.4 markup note — a picker row is role="checkbox", NOT a
-                // <button>: it contains the "N products →" button, and nested
-                // interactive elements break the parser and screen readers.
-                <div
-                  key={c.key}
-                  role="checkbox"
-                  tabIndex={0}
-                  aria-checked={on}
-                  className={`qz-rb-card${on ? " is-on" : ""}`}
-                  onClick={() => toggle(c)}
-                  onKeyDown={(event) => {
-                    if (event.key !== "Enter" && event.key !== " ") return;
-                    event.preventDefault();
-                    toggle(c);
+            <div className="qz-rb-toolbar">
+              <QzInput
+                type="search"
+                placeholder={`Search ${activeNoun}…`}
+                value={search}
+                onChange={(e) => {
+                  const v = e.currentTarget.value;
+                  setSearch(v);
+                  resetWindow();
+                  if (!v.trim()) rebuildOrder(activeTab, sort);
+                }}
+                aria-label="Search the catalog"
+              />
+              <select
+                className="qz-select qz-rb-sortsel"
+                aria-label="Sort"
+                value={sort}
+                onChange={(e) => {
+                  const m = e.currentTarget.value as SortMode;
+                  setSort(m);
+                  resetWindow();
+                  rebuildOrder(activeTab, m);
+                }}
+              >
+                {sortsFor(activeTab).map((m) => (
+                  <option key={m} value={m}>
+                    {SORT_LABEL[m]}
+                  </option>
+                ))}
+              </select>
+              {activeTab === "product" && hasStatuses ? (
+                <select
+                  className="qz-select qz-rb-statsel"
+                  aria-label="Status"
+                  value={status}
+                  onChange={(e) => {
+                    setStatus(e.currentTarget.value as StatusFilter);
+                    resetWindow();
+                    rebuildOrder(activeTab, sort);
                   }}
                 >
-                  <span className={`qz-rb-thumb${c.thumbnailUrl ? "" : " is-placeholder"}`}>
-                    {c.thumbnailUrl ? (
-                      <img src={c.thumbnailUrl} alt="" loading="lazy" />
+                  {(Object.keys(STATUS_LABEL) as StatusFilter[]).map((k) => (
+                    <option key={k} value={k}>
+                      {STATUS_LABEL[k]}
+                    </option>
+                  ))}
+                </select>
+              ) : null}
+              <button
+                type="button"
+                className="qz-rb-selall"
+                onClick={bulk}
+                disabled={windowed.length === 0}
+                aria-label={`${plan.mode === "clear" ? "Clear the" : "Select the"} ${windowed.length} ${noun(activeTab, windowed.length)} shown`}
+              >
+                {plan.mode === "clear" ? "Clear all" : "Select all"}
+              </button>
+            </div>
+
+            <div className="qz-rb-grid" ref={listRef} onScroll={onListScroll}>
+              {activeTab === "group" && !q ? (
+                <button type="button" className="qz-rb-newgrp" onClick={() => setWizardOpen(true)}>
+                  <span className="qz-rb-newgrp-plus" aria-hidden>+</span>
+                  <span className="qz-rb-newgrp-body">
+                    New group
+                    <small>Combine tags, collections or hand-picked products into one result</small>
+                  </span>
+                </button>
+              ) : null}
+              {windowed.length === 0 ? (
+                <div className="qz-rb-empty qz-dim">{emptyCopy}</div>
+              ) : (
+                windowed.map((c) => {
+                  const id = idOf(c.type, c.key);
+                  const on = isOn(id);
+                  const right =
+                    c.type === "product" ? (
+                      c.variants && c.variants.length ? (
+                        <button
+                          type="button"
+                          className="qz-rb-vars"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            openPeek(c);
+                          }}
+                          aria-label={`View the ${c.variants.length} variants of ${c.name}`}
+                        >
+                          <b>{c.variantOption}</b> · {c.variants.map((v) => v.value).join(", ")}
+                        </button>
+                      ) : (
+                        <span className="qz-rb-vars is-none" />
+                      )
                     ) : (
-                      <BucketGlyph type={c.type} />
-                    )}
-                  </span>
-                  <span className="qz-rb-card-body">
-                    <span className="qz-rb-card-name">{c.name}</span>
-                    {SUB_LABEL[activeTab] ? (
-                      <span className="qz-rb-card-sub">{SUB_LABEL[activeTab]}</span>
-                    ) : null}
-                  </span>
-                  {/* Mock row order: name · spacer · selcheck · count-pill/price. */}
-                  <span className={`qz-rb-check${on ? " is-on" : ""}`} aria-hidden>
-                    {on ? <Check size={12} strokeWidth={2.8} /> : null}
-                  </span>
-                  {activeTab === "product" ? (
-                    <span className="qz-rb-pricetag">
-                      {price != null ? `$${price.toFixed(2)}` : "—"}
-                    </span>
-                  ) : (
-                    <button
-                      type="button"
-                      className="qz-rb-count-link"
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        setBucketPreview(c);
+                      <span className="qz-rb-vars is-grp">
+                        Group of{" "}
+                        <button
+                          type="button"
+                          className="qz-rb-cntb"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            openPeek(c);
+                          }}
+                          aria-label={`View the ${c.count} ${c.count === 1 ? "product" : "products"} in ${c.name}`}
+                        >
+                          {c.count} product{c.count === 1 ? "" : "s"}
+                        </button>
+                      </span>
+                    );
+                  return (
+                    // A picker row is role="checkbox", NOT a <button>: it
+                    // contains the count/variants button, and nested
+                    // interactive elements break the parser (§10, hit thrice).
+                    <div
+                      key={id}
+                      role="checkbox"
+                      tabIndex={0}
+                      aria-checked={on}
+                      className={`qz-rb-card${on ? " is-on" : ""}`}
+                      onClick={() => toggle(c)}
+                      onKeyDown={(event) => {
+                        if (event.key !== "Enter" && event.key !== " ") return;
+                        event.preventDefault();
+                        toggle(c);
                       }}
                     >
-                      {c.count} product{c.count === 1 ? "" : "s"} <span aria-hidden>→</span>
-                    </button>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </QzCard>
+                      <span className={`qz-rb-thumb${c.thumbnailUrl ? "" : " is-placeholder"}`}>
+                        {c.thumbnailUrl ? (
+                          <img src={c.thumbnailUrl} alt="" loading="lazy" />
+                        ) : (
+                          <BucketGlyph type={c.type} />
+                        )}
+                      </span>
+                      <span className="qz-rb-card-body">
+                        <span className="qz-rb-card-name">{c.name}</span>
+                      </span>
+                      {c.type === "product" && c.status && c.status !== "active" ? (
+                        <span className={`qz-rb-stat is-${c.status}`}>{c.status}</span>
+                      ) : null}
+                      {right}
+                    </div>
+                  );
+                })
+              )}
+              {shown < visible.length ? (
+                // The keyboard/AT route past row 25 — scroll-loading never
+                // fires from focus movement.
+                <button
+                  type="button"
+                  className="qz-rb-loadmore"
+                  onClick={() => setShown((n) => n + WINDOW)}
+                >
+                  Show {Math.min(WINDOW, visible.length - shown)} more
+                </button>
+              ) : null}
+            </div>
 
-          {/* Mock underrow: quiet accent-ink text link (↻ Refresh catalog).
-              §1.5 — the step-level ← Back is gone; the bar's ‹ owns it. */}
-          <div className="qz-rb-underrow">
-            <button
-              type="button"
-              className="qz-rb-underlink"
-              onClick={() => fetcher.submit({ intent: "resync" }, { method: "post" })}
-              disabled={resyncing}
-            >
-              {resyncing ? "Refreshing…" : <><RotateCcw size={13} aria-hidden /> Refresh catalog</>}
-            </button>
-            {resyncResult ? (
-              <span className="qz-dim" style={{ fontSize: 12 }}>
-                {resyncResult.ok
-                  ? "Catalog refreshed."
-                  : resyncResult.error ?? "Couldn't refresh from here."}
+            <div className="qz-rb-listfoot" aria-live="polite">
+              <span>
+                Showing <b>{windowed.length}</b> of <b>{visible.length}</b>
+                {q ? " matching" : ""}
+                {activeTab === "product" && hasStatuses && status !== "all"
+                  ? ` ${STATUS_LABEL[status].toLowerCase()}`
+                  : ""}
+                {ledger.length ? (
+                  <>
+                    {" · "}
+                    <button
+                      type="button"
+                      className="qz-rb-archtog"
+                      onClick={() => {
+                        setStatus("all");
+                        resetWindow();
+                        rebuildOrder(activeTab, sort);
+                      }}
+                    >
+                      {ledger.join(", ")} not shown
+                    </button>
+                  </>
+                ) : null}
               </span>
-            ) : null}
-          </div>
+            </div>
+          </QzCard>
         </div>
 
-        {/* §2.2 — "Your recommendations" rail (sticky) */}
-        <aside className="qz-rb-rail" aria-label="Your recommendations">
+        {/* §04 — the Results rail (sticky) */}
+        <aside className="qz-rb-rail" aria-label="Results this quiz can return">
           <div className="qz-rb-rail-head">
-            <strong>Your recommendations</strong>
-            <span className="qz-row" style={{ gap: 6 }}>
-              {typeChip && lockedType ? (
-                <QzBadge tone={TYPE_BADGE[lockedType]}>{typeChip}</QzBadge>
+            <span className="qz-rb-rail-title">
+              <strong>Results</strong>
+              {count ? (
+                <span className="qz-rb-rail-sub">
+                  {railGroups.length ? (
+                    <>
+                      <b>{railGroups.length}</b> group{railGroups.length === 1 ? "" : "s"}
+                    </>
+                  ) : null}
+                  {railGroups.length && railProducts.length ? " · " : ""}
+                  {railProducts.length ? (
+                    <>
+                      <b>{railProducts.length}</b> product{railProducts.length === 1 ? "" : "s"}
+                    </>
+                  ) : null}
+                </span>
               ) : null}
-              <span className="qz-rb-count">{count}</span>
             </span>
+            <span className="qz-rb-count">{count}</span>
           </div>
           {count === 0 ? (
             <div className="qz-rb-rail-empty">
               <div className="qz-rb-rail-empty-ic" aria-hidden>🗂️</div>
-              <p>
-                Nothing added yet — click{" "}
-                {activeTab === "product" ? "a product" : activeTab === "tag" ? "a tag" : "a collection"}{" "}
-                to add it.
-              </p>
+              <p>Nothing added yet — click a row to add it.</p>
             </div>
           ) : (
-            <div className="qz-rb-rail-list">
-              {selectedList.map((c) => (
-                <div key={idOf(c.type, c.key)} className="qz-rb-rail-row">
-                  <span className="qz-rb-chip-thumb">
-                    {c.thumbnailUrl ? (
-                      <img src={c.thumbnailUrl} alt="" loading="lazy" />
-                    ) : (
-                      <BucketGlyph type={c.type} size={14} />
-                    )}
-                  </span>
-                  <span className="qz-rb-chip-body">
-                    <span className="qz-rb-chip-name">{c.name}</span>
-                    <span className="qz-rb-card-meta qz-dim">
-                      {c.type === "product" ? "product" : `${c.count} product${c.count === 1 ? "" : "s"}`}
-                    </span>
-                  </span>
-                  <button
-                    type="button"
-                    className="qz-rb-chip-x"
-                    aria-label={`Remove ${c.name}`}
-                    onClick={() => toggle(c)}
-                  >
-                    <X size={13} aria-hidden />
-                  </button>
-                </div>
-              ))}
+            <div
+              className={`qz-rb-rail-list${railMax ? " is-fade" : ""}`}
+              ref={railListRef}
+              style={railMax ? { maxHeight: railMax } : undefined}
+            >
+              {[
+                { label: "Groups", items: railGroups },
+                { label: "Products", items: railProducts },
+              ]
+                .filter((s) => s.items.length)
+                .map((section, _i, secs) => (
+                  <div key={section.label} className="qz-rb-rail-sec">
+                    {secs.length > 1 ? (
+                      <div className="qz-rb-rail-seclab">
+                        {section.label}
+                        <span>{section.items.length}</span>
+                      </div>
+                    ) : null}
+                    {section.items.map((c) => {
+                      const id = idOf(c.type, c.key);
+                      return (
+                        // A div role="button", never a <button>: it contains the ✕.
+                        <div
+                          key={id}
+                          data-row={id}
+                          role="button"
+                          tabIndex={0}
+                          aria-label={`View ${c.name}`}
+                          className={`qz-rb-rail-row${justAdded === id ? " is-new" : ""}`}
+                          onClick={() => openPeek(c)}
+                          onKeyDown={(event) => {
+                            if (event.key !== "Enter" && event.key !== " ") return;
+                            event.preventDefault();
+                            openPeek(c);
+                          }}
+                        >
+                          <span className="qz-rb-chip-thumb">
+                            {c.type === "product" && c.thumbnailUrl ? (
+                              <img src={c.thumbnailUrl} alt="" loading="lazy" />
+                            ) : (
+                              <BucketGlyph type={c.type} size={14} />
+                            )}
+                          </span>
+                          <span className="qz-rb-chip-body">
+                            <span className="qz-rb-chip-name">{c.name}</span>
+                            {c.type !== "product" ? (
+                              <span className="qz-rb-card-meta qz-dim">
+                                {deliverableCopy(c.deliverableCount ?? c.count, c.count)}
+                              </span>
+                            ) : null}
+                          </span>
+                          <button
+                            type="button"
+                            className="qz-rb-chip-x"
+                            aria-label={`Remove ${c.name}`}
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              toggle(c);
+                            }}
+                          >
+                            <X size={13} aria-hidden />
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ))}
             </div>
           )}
-          {count === 1 ? (
-            <p className="qz-rb-warn">
-              One recommendation means every shopper sees the same products. Add a few more so
-              the quiz can actually differentiate.
-            </p>
-          ) : null}
-          {/* §2.4 — the rail foot keeps Preview; Continue moved to the bar. */}
           <div className="qz-rb-rail-foot">
             <button
               type="button"
@@ -722,18 +1096,6 @@ export function RecommendationBucketsStage({
       </div>
 
       {/* overlays */}
-      {lockTarget ? (
-        <TabLockModal
-          targetLabel={TAB_META.find((t) => t.type === lockTarget)?.label ?? ""}
-          currentNoun={TYPE_NOUN[lockedType ?? activeTab][count === 1 ? 0 : 1]}
-          count={count}
-          onConfirm={() => {
-            doSwitchTab(lockTarget, true);
-            setLockTarget(null);
-          }}
-          onCancel={() => setLockTarget(null)}
-        />
-      ) : null}
       {removeWarn ? (
         <RemoveWarnModal
           name={removeWarn.name}
@@ -744,20 +1106,48 @@ export function RecommendationBucketsStage({
           onCancel={() => setRemoveWarn(null)}
         />
       ) : null}
-      {bulkWarn ? (
-        <BulkWarnModal
-          count={bulkWarn.count}
+      {confirm ? (
+        <ConfirmModal
+          title={confirm.title}
+          body={confirm.body}
+          yes={confirm.yes}
           onConfirm={() => {
-            bulkWarn.run();
-            setBulkWarn(null);
+            const c = confirm;
+            setConfirm(null);
+            c.run();
           }}
-          onCancel={() => setBulkWarn(null)}
+          onCancel={() => {
+            const back = confirm.back;
+            setConfirm(null);
+            if (back === "ai") setAiOpen(true);
+          }}
         />
       ) : null}
+      {aiOpen && aiPicks ? (
+        <AiPicksModal
+          picks={aiPicks.keys.map((k) => cardFor(aiPicks.type, k))}
+          type={aiPicks.type}
+          subline={
+            picksFromGoal && data.goal?.goal_text
+              ? `Based on “${(data.goal.goal_text.split("\n")[0] ?? "").slice(0, 140)}”`
+              : data.suggestion.message
+          }
+          rationale={picksFromGoal ? goalFirst?.rationale : data.suggestion.reason}
+          applied={aiApplied}
+          canRevert={aiApplied && aiPrior !== null}
+          onApply={applyPicks}
+          onRevert={revertPicks}
+          onPeek={(card) => openPeek(card, "ai")}
+          onClose={() => setAiOpen(false)}
+        />
+      ) : null}
+      {howOpen ? <NarrowingModal onClose={() => setHowOpen(false)} /> : null}
       {previewOpen && count > 0 ? (
         <ResultsPreviewDrawer
           selections={selectedList}
           products={data.catalog.products}
+          groups={data.catalog.groups}
+          money={money}
           designTokens={data.designTokens ?? null}
           onClose={() => setPreviewOpen(false)}
         />
@@ -775,46 +1165,121 @@ export function RecommendationBucketsStage({
           onClose={() => setInterceptOpen(false)}
         />
       ) : null}
-      {bucketPreview ? (
+      {peek ? (
         <BucketProductsModal
-          bucket={bucketPreview}
+          bucket={peek.card}
           products={data.catalog.products}
-          onClose={() => setBucketPreview(null)}
+          groups={data.catalog.groups}
+          money={money}
+          onClose={closePeek}
         />
       ) : null}
+      <GroupWizard
+        open={wizardOpen}
+        onClose={() => setWizardOpen(false)}
+        tags={wizTags}
+        collections={data.collections.map((c) => ({ id: c.collectionId, title: c.title }))}
+        metafieldConditions={data.catalog.metafieldConditions}
+        products={wizProducts}
+        onSubmit={submitGroup}
+      />
     </div>
   );
 }
 
+// ── members of a bucket, client-side from the catalog ───────────────────────
+function membersOf(
+  bucket: BucketCard,
+  products: FunnelData["catalog"]["products"],
+  groups: FunnelData["catalog"]["groups"],
+): FunnelData["catalog"]["products"] {
+  if (bucket.type === "tag") return products.filter((p) => p.tagKeys.includes(bucket.key));
+  if (bucket.type === "collection")
+    return products.filter((p) => p.collectionIds.includes(bucket.key));
+  if (bucket.type === "group") {
+    const ids = new Set(groups.find((g) => g.key === bucket.key)?.productIds ?? []);
+    return products.filter((p) => ids.has(p.id));
+  }
+  return products.filter((p) => p.id === bucket.key);
+}
+
+// The row preview: a group's members with prices, or a product's variants
+// with per-variant stock (§03 — display only; the engine does not read
+// oos_behavior yet, §12).
 function BucketProductsModal({
   bucket,
   products,
+  groups,
+  money,
   onClose,
 }: {
   bucket: BucketCard;
   products: FunnelData["catalog"]["products"];
+  groups: FunnelData["catalog"]["groups"];
+  money: (v: number) => string;
   onClose: () => void;
 }) {
-  const members = bucket.type === "tag"
-    ? products.filter((product) => product.tagKeys.includes(bucket.key))
-    : bucket.type === "collection"
-      ? products.filter((product) => product.collectionIds.includes(bucket.key))
-      : products.filter((product) => product.id === bucket.key);
+  if (bucket.type === "product") {
+    const p = products.find((x) => x.id === bucket.key);
+    const vs = p?.variants ?? [];
+    return (
+      <QzModal
+        open
+        onClose={onClose}
+        size="md"
+        title={
+          <span className="qz-rb-modal-title">
+            <span className="qz-rb-modal-icon"><BucketGlyph type="product" size={17} /></span>
+            <span className="qz-rb-modal-copy">
+              <span>{bucket.name}</span>
+              <span className="qz-rb-modal-meta">
+                {vs.length
+                  ? `${vs.length} variants pulled in from Shopify`
+                  : "One variant — no options set"}
+              </span>
+            </span>
+          </span>
+        }
+        footer={<button type="button" className="qz-btn qz-btn-accent" onClick={onClose}>Done</button>}
+      >
+        {vs.length ? (
+          <div className="qz-rb-product-list">
+            {vs.map((v) => (
+              <div key={v.value} className="qz-rb-product-row">
+                <span className="qz-rb-product-copy">
+                  <strong>
+                    {v.name}: {v.value}
+                  </strong>
+                </span>
+                <span className={`qz-rb-stock${v.available ? "" : " is-out"}`}>
+                  {v.available ? "In stock" : "Sold out"}
+                </span>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="qz-dim" style={{ margin: 0, fontSize: 13 }}>
+            This product has a single variant, so there is nothing for a later question to
+            choose between.
+          </p>
+        )}
+      </QzModal>
+    );
+  }
+  const members = membersOf(bucket, products, groups);
+  const kind = bucket.type === "collection" ? "collection" : bucket.type === "tag" ? "tag" : "group";
   return (
     <QzModal
       open
       onClose={onClose}
       size="md"
       title={
-        // Mock mhead (EXACT): icon tile · name over a "N products in this
-        // collection/tag" meta line. No count badge.
         <span className="qz-rb-modal-title">
           <span className="qz-rb-modal-icon"><BucketGlyph type={bucket.type} size={17} /></span>
           <span className="qz-rb-modal-copy">
             <span>{bucket.name}</span>
             <span className="qz-rb-modal-meta">
-              {members.length} product{members.length === 1 ? "" : "s"} in this{" "}
-              {bucket.type === "collection" ? "collection" : "tag"}
+              {members.length} product{members.length === 1 ? "" : "s"} in this {kind}
             </span>
           </span>
         </span>
@@ -829,8 +1294,11 @@ function BucketProductsModal({
             </span>
             <span className="qz-rb-product-copy">
               <strong>{product.title}</strong>
-              <span className="qz-dim">{product.price != null ? `$${product.price.toFixed(2)}` : "Price unavailable"}</span>
+              <span className="qz-dim">{product.price != null ? money(product.price) : "Price unavailable"}</span>
             </span>
+            {product.status && product.status !== "active" ? (
+              <span className={`qz-rb-stat is-${product.status}`}>{product.status}</span>
+            ) : null}
           </div>
         )) : <p className="qz-dim" style={{ margin: 0 }}>No matching products are currently available.</p>}
       </div>
@@ -838,19 +1306,166 @@ function BucketProductsModal({
   );
 }
 
-// Step-1 start modal (start-modal-flow.html mock screen 1, EXACT). FLOW-2
-// (funnel-reconfig): this pop-up survives ONLY in the manual flow — goal-first
-// and template-first drafts confirm straight through flow1/flow3-confirm and
-// never see it. Three stacked TITLE-ONLY rows, each with a trailing arrow:
-//  • Generate with AI (primary: accent border + tint, pulsing ✦ tile, mono
-//    RECOMMENDED tag) → continue-buckets, whose decider branch runs the
-//    HEADLESS typing→templating→build chain and lands on Questions (Shape is
-//    unreachable for new drafts).
-//  • Write your goal (✎) → the Flow-1 /studio/goal front door (the old
-//    in-modal goal-brief second screen is retired in favor of that page —
-//    reuse, not duplication; the goal flow re-claims this pristine draft).
-//  • Start from blank (▢) → manual-build → the blank Questions canvas.
-// Esc/scrim closes with nothing changed.
+// §05 — the AI Picks dialog. Titled AI Picks, sub-lined with the provenance;
+// each row's count opens its members (a count of one shows nothing); Apply →
+// Applied (disabled) with Revert beside it while the picks are still the
+// selected picks AND a session snapshot exists.
+function AiPicksModal({
+  picks,
+  type,
+  subline,
+  rationale,
+  applied,
+  canRevert,
+  onApply,
+  onRevert,
+  onPeek,
+  onClose,
+}: {
+  picks: BucketCard[];
+  type: BucketType;
+  subline: string;
+  rationale?: string;
+  applied: boolean;
+  canRevert: boolean;
+  onApply: () => void;
+  onRevert: () => void;
+  onPeek: (card: BucketCard) => void;
+  onClose: () => void;
+}) {
+  return (
+    <QzModal
+      open
+      onClose={onClose}
+      size="md"
+      title={
+        <span className="qz-rb-modal-title">
+          <span className="qz-rb-modal-icon" aria-hidden>✦</span>
+          <span className="qz-rb-modal-copy">
+            <span>AI Picks</span>
+            <span className="qz-rb-modal-meta qz-rb-modal-goal">{subline}</span>
+          </span>
+        </span>
+      }
+      footer={
+        <div className="qz-row" style={{ width: "100%", gap: 8 }}>
+          {canRevert ? (
+            <button type="button" className="qz-btn" onClick={onRevert}>
+              Revert
+            </button>
+          ) : null}
+          <span style={{ marginLeft: "auto" }} />
+          <button type="button" className="qz-btn qz-btn-accent" disabled={applied} onClick={onApply}>
+            {applied ? "Applied" : "Apply"}
+          </button>
+        </div>
+      }
+    >
+      <div className="qz-rb-airows">
+        {picks.map((c) => (
+          <div key={c.key} className="qz-rb-airow">
+            <span className="qz-rb-airow-ic"><BucketGlyph type={type} size={12} /></span>
+            <span className="qz-rb-airow-name">{c.name}</span>
+            {c.count > 1 ? (
+              <button
+                type="button"
+                className="qz-rb-cntb"
+                onClick={() => onPeek(c)}
+                aria-label={`View the ${c.count} products in ${c.name}`}
+              >
+                {c.count} products
+              </button>
+            ) : null}
+          </div>
+        ))}
+      </div>
+      {rationale ? (
+        <p className="qz-dim" style={{ margin: "12px 0 0", fontSize: 13 }}>{rationale}</p>
+      ) : null}
+    </QzModal>
+  );
+}
+
+// The narrowing explainer (§03 — the one genuinely new element).
+function NarrowingModal({ onClose }: { onClose: () => void }) {
+  return (
+    <QzModal
+      open
+      onClose={onClose}
+      size="md"
+      title={
+        <span className="qz-rb-modal-title">
+          <span className="qz-rb-modal-icon" aria-hidden>⌥</span>
+          <span className="qz-rb-modal-copy">
+            <span>How narrowing works</span>
+            <span className="qz-rb-modal-meta">A group is the starting set, not the final list.</span>
+          </span>
+        </span>
+      }
+      footer={<button type="button" className="qz-btn qz-btn-accent" onClick={onClose}>Got it</button>}
+    >
+      <p className="qz-rb-mlbl">Example — a shirt store</p>
+      <div className="qz-rb-chain">
+        <div className="qz-rb-chain-l">
+          <span className="qz-rb-chain-bar"><span className="qz-rb-chain-d">12</span><span className="qz-rb-chain-n" /></span>
+          <span className="qz-rb-chain-x"><b>Result: Hawaiian Shirts</b><span>The group you pick here.</span></span>
+        </div>
+        <div className="qz-rb-chain-l">
+          <span className="qz-rb-chain-bar"><span className="qz-rb-chain-d">4</span><span className="qz-rb-chain-n" /></span>
+          <span className="qz-rb-chain-x"><b>&ldquo;What size are you?&rdquo;</b><span>Narrows by variant option · Size</span></span>
+        </div>
+        <div className="qz-rb-chain-l">
+          <span className="qz-rb-chain-bar"><span className="qz-rb-chain-d is-end">2</span></span>
+          <span className="qz-rb-chain-x"><b>&ldquo;Bold or muted print?&rdquo;</b><span>Narrows by tag · print. The shopper sees 2, not 12.</span></span>
+        </div>
+      </div>
+      <p className="qz-rb-mlbl">Narrow by</p>
+      <div className="qz-rb-by">
+        <span>Variant option</span><span>Tag family</span><span>Product type</span><span>Metafield</span>
+      </div>
+    </QzModal>
+  );
+}
+
+// The Select-all / Clear-all / Override confirm — an in-page modal, never a
+// native confirm() (suppressed inside a sandboxed frame).
+function ConfirmModal({
+  title,
+  body,
+  yes,
+  onConfirm,
+  onCancel,
+}: {
+  title: string;
+  body: string;
+  yes: string;
+  onConfirm: () => void;
+  onCancel: () => void;
+}) {
+  return (
+    <QzModal
+      open
+      onClose={onCancel}
+      size="sm"
+      title={title}
+      footer={
+        <>
+          <button type="button" className="qz-btn qz-btn-ghost" onClick={onCancel}>
+            Cancel
+          </button>
+          <button type="button" className="qz-btn qz-btn-accent" onClick={onConfirm}>
+            {yes}
+          </button>
+        </>
+      }
+    >
+      <p className="qz-dim" style={{ margin: 0, fontSize: 13.5 }}>{body}</p>
+    </QzModal>
+  );
+}
+
+// Step-1 start modal (start-modal-flow.html mock screen 1, EXACT). FLOW-2:
+// survives ONLY in the manual flow.
 function StartInterceptModal({
   onAiTemplates,
   onManual,
@@ -861,9 +1476,7 @@ function StartInterceptModal({
   onClose: () => void;
 }) {
   return (
-    // Mock modal envelope: min(560px, 100%) — narrower than the DS md (640).
     <QzModal open onClose={onClose} size="md" width={560}>
-      {/* Owner edit (2026-08-02) — wording. */}
       <h2 className="qz-sm-title">What is your goal for the quiz?</h2>
       <div className="qz-sm-rows">
         <button type="button" className="qz-sm-row is-pri" onClick={onAiTemplates}>
@@ -890,88 +1503,8 @@ function StartInterceptModal({
   );
 }
 
-// Confirm switching the bucket source when buckets already exist (they're tied to
-// the current source, so switching clears them).
-function TabLockModal({
-  targetLabel,
-  currentNoun,
-  count,
-  onConfirm,
-  onCancel,
-}: {
-  targetLabel: string;
-  currentNoun: string;
-  count: number;
-  onConfirm: () => void;
-  onCancel: () => void;
-}) {
-  // §3 — a modal, not a toast: it names the cost (your selections are removed)
-  // and offers the path to yes in one gesture. Destructive-and-final → modal.
-  return (
-    <QzModal
-      open
-      onClose={onCancel}
-      size="sm"
-      title={<>Switch to {targetLabel}?</>}
-      footer={
-        <>
-          <button type="button" className="qz-btn qz-btn-ghost" onClick={onCancel}>
-            Cancel
-          </button>
-          <button type="button" className="qz-btn qz-btn-accent" onClick={onConfirm}>
-            Switch types
-          </button>
-        </>
-      }
-    >
-      <p className="qz-dim" style={{ margin: 0, fontSize: 13.5 }}>
-        You have {count} {currentNoun} selected. Switching will remove{" "}
-        {count === 1 ? "it" : "them all"} and let you pick {targetLabel.toLowerCase()} instead.
-      </p>
-    </QzModal>
-  );
-}
-
-// §6 for the bulk paths (Use-this / Clear-visible) — same consequence, plural
-// framing. Confirming runs the deferred bulk action.
-function BulkWarnModal({
-  count,
-  onConfirm,
-  onCancel,
-}: {
-  count: number;
-  onConfirm: () => void;
-  onCancel: () => void;
-}) {
-  return (
-    <QzModal
-      open
-      onClose={onCancel}
-      size="sm"
-      title={<>Remove {count} referenced recommendation{count === 1 ? "" : "s"}?</>}
-      footer={
-        <>
-          <button type="button" className="qz-btn qz-btn-ghost" onClick={onCancel}>
-            Cancel
-          </button>
-          <button type="button" className="qz-btn qz-btn-accent" onClick={onConfirm}>
-            Continue
-          </button>
-        </>
-      }
-    >
-      <p className="qz-dim" style={{ margin: 0, fontSize: 13.5 }}>
-        Your questions already point at {count === 1 ? "one of these" : "some of these"}{" "}
-        recommendations. Continuing can leave broken mappings — the Questions step will flag
-        anything that breaks so you can fix it there.
-      </p>
-    </QzModal>
-  );
-}
-
 // §6 downstream integrity — removing a selection the draft's questions already
-// reference gets a warn-first confirm (Step 3's validation catches anything
-// broken on the next visit; this names the consequence at the source).
+// reference gets a warn-first confirm.
 function RemoveWarnModal({
   name,
   onConfirm,
@@ -1007,21 +1540,20 @@ function RemoveWarnModal({
 }
 
 // §5 — the results-page preview drawer: a brand-themed phone preview of what a
-// shopper would see for each selected recommendation. The point is to make the
-// DIFFERENCE between recommendation types felt: an individual product previews
-// as a focused single-product screen; a collection/tag previews as a grid (no
-// hero — hero selection is a Results-page decision the merchant hasn't made
-// yet, so implying one here would be dishonest). Members resolve client-side
-// from the catalog; the theme is the draft's resolved design tokens (the same
-// tokens the eventual quiz renders with) — never admin styling.
+// shopper would see for each selected recommendation. A product previews as a
+// focused single-product screen; a group as a grid.
 function ResultsPreviewDrawer({
   selections,
   products,
+  groups,
+  money,
   designTokens,
   onClose,
 }: {
   selections: BucketCard[];
   products: FunnelData["catalog"]["products"];
+  groups: FunnelData["catalog"]["groups"];
+  money: (v: number) => string;
   designTokens: DesignTokens | null;
   onClose: () => void;
 }) {
@@ -1039,36 +1571,22 @@ function ResultsPreviewDrawer({
     [resolved],
   );
 
-  const members = useMemo(() => {
-    if (!sel) return [];
-    if (sel.type === "tag") return products.filter((p) => p.tagKeys.includes(sel.key));
-    if (sel.type === "collection") return products.filter((p) => p.collectionIds.includes(sel.key));
-    return products.filter((p) => p.id === sel.key);
-  }, [sel, products]);
+  const members = useMemo(() => (sel ? membersOf(sel, products, groups) : []), [sel, products, groups]);
 
   if (!sel) return null;
   const isProduct = sel.type === "product";
   const hero = members[0] ?? null;
   const shown = members.slice(0, 6);
   const overflow = members.length - shown.length;
+  const kind = sel.type === "tag" ? "tag" : sel.type === "collection" ? "collection" : "group";
   const descriptor = isProduct
     ? "Single-product layout — one focused product screen"
-    : `Multi-product layout — ${members.length} product${members.length === 1 ? "" : "s"} from this ${sel.type === "tag" ? "tag" : "collection"}`;
-  // The CTA sits on the brand primary — pick a contrast-safe text color (the
-  // runtime does the same; a hardcoded white fails on light brand primaries).
+    : `Multi-product layout — ${members.length} product${members.length === 1 ? "" : "s"} from this ${kind}`;
   const ctaText = suggestContrastText(resolved.colors?.primary ?? "#5563DE");
 
   return (
     <QzDrawer open onClose={onClose} title="Results page preview" width="min(496px, 94vw)">
-      <div
-        style={{
-          display: "flex",
-          flexDirection: "column",
-          gap: 10,
-          height: "100%",
-          overflow: "hidden",
-        }}
-      >
+      <div style={{ display: "flex", flexDirection: "column", gap: 10, height: "100%", overflow: "hidden" }}>
         {fontUrl ? <link rel="stylesheet" href={fontUrl} /> : null}
         {selections.length > 1 ? (
           <div className="qz-rb-pvtabs" role="tablist" aria-label="Previewed recommendation">
@@ -1089,13 +1607,6 @@ function ResultsPreviewDrawer({
         <p className="qz-dim" style={{ margin: 0, fontSize: 12 }}>
           Themed with your brand identity · real product data.
         </p>
-
-        {/* viewport/2026-08 — the canonical DeviceFrame phone (390×745, always
-            whole, scaled to fit), replacing this drawer's old bespoke 300×500
-            frame. showFold={false} per QRTZ-G45 (Results surfaces hide the
-            fold marker); resetKey resets scroll when the previewed pick
-            changes. The screen skin (.qz-rb-pvscreen) paints the brand vars —
-            the devframe owns geometry, radius and elevation. */}
         <DeviceFrame
           tier="phone"
           resetKey={idOf(sel.type, sel.key)}
@@ -1109,27 +1620,17 @@ function ResultsPreviewDrawer({
                   {hero.imageUrl ? (
                     <img className="qz-rb-pv-heroimg" src={hero.imageUrl} alt="" loading="lazy" />
                   ) : (
-                    <div className="qz-rb-pv-heroimg qz-rb-pv-noimg" aria-hidden>
-                      📦
-                    </div>
+                    <div className="qz-rb-pv-heroimg qz-rb-pv-noimg" aria-hidden>📦</div>
                   )}
                   <strong className="qz-rb-pv-name">{hero.title}</strong>
-                  {hero.description ? (
-                    <p className="qz-rb-pv-desc">{hero.description}</p>
-                  ) : null}
+                  {hero.description ? <p className="qz-rb-pv-desc">{hero.description}</p> : null}
                   <p className="qz-rb-ghost">✦ AI personalizes at quiz time</p>
                   <div className="qz-rb-pv-buyrow">
-                    <span className="qz-rb-pv-price">
-                      {hero.price != null ? `$${hero.price.toFixed(2)}` : ""}
-                    </span>
-                    <span className="qz-rb-pv-cta" style={{ color: ctaText }}>
-                      Add to cart
-                    </span>
+                    <span className="qz-rb-pv-price">{hero.price != null ? money(hero.price) : ""}</span>
+                    <span className="qz-rb-pv-cta" style={{ color: ctaText }}>Add to cart</span>
                   </div>
                 </div>
               ) : (
-                // The product left the catalog since selection — say so honestly
-                // instead of rendering an empty grid.
                 <div className="qz-rb-pv-single">
                   <p className="qz-rb-ghost">
                     This product is no longer in your synced catalog — refresh the catalog or
@@ -1149,14 +1650,10 @@ function ResultsPreviewDrawer({
                       {p.imageUrl ? (
                         <img src={p.imageUrl} alt="" loading="lazy" />
                       ) : (
-                        <div className="qz-rb-pv-noimg" aria-hidden>
-                          📦
-                        </div>
+                        <div className="qz-rb-pv-noimg" aria-hidden>📦</div>
                       )}
                       <span className="qz-rb-pvtile-name">{p.title}</span>
-                      <span className="qz-rb-pvtile-price">
-                        {p.price != null ? `$${p.price.toFixed(2)}` : ""}
-                      </span>
+                      <span className="qz-rb-pvtile-price">{p.price != null ? money(p.price) : ""}</span>
                     </div>
                   ))}
                 </div>
@@ -1165,7 +1662,6 @@ function ResultsPreviewDrawer({
             )}
           </div>
         </DeviceFrame>
-
         <div className="qz-rb-pvfoot">
           <span className="qz-dim" style={{ fontSize: 12, minWidth: 0 }}>
             <strong style={{ fontWeight: 600 }}>{sel.name}</strong> · {descriptor}
@@ -1178,125 +1674,3 @@ function ResultsPreviewDrawer({
     </QzDrawer>
   );
 }
-
-// §4 — the AI recommendation banner: an ACTION, not advice. "Use this" applies
-// the concrete recommended set in one click; "Not now" dismisses for the
-// session. The why-line carries real catalog numbers.
-// FLOW-1 — the goal pre-pick's lifecycle banner (replaces the generic AI tip on
-// goal-first drafts). Four states: picking (the detached job runs; the page
-// polls), stalled (the shared 200s backstop → Retry), ready (the pick landed —
-// refine + continue), failed (four-outcome copy + Retry; the browser below is
-// always the manual way forward).
-function GoalFirstBanner({
-  state,
-  stalled,
-  goalText,
-  count,
-  retrying,
-  onRetry,
-}: {
-  state: NonNullable<FunnelData["goalFirst"]>;
-  stalled: boolean;
-  goalText: string;
-  count: number;
-  retrying: boolean;
-  onRetry: () => void;
-}) {
-  const goalLine = goalText.split("\n")[0] ?? "";
-  const excerpt = goalLine.length > 110 ? `${goalLine.slice(0, 110)}…` : goalLine;
-  // QRTZ-S5 (mock s10 "Why these?") — the AI rationale is on-demand, not
-  // ambient: a quiet button reveals it (ready state only).
-  const [showWhy, setShowWhy] = useState(false);
-
-  if (state.prepick === "picking" && stalled) {
-    return (
-      <div className="qz-rb-banner is-weak qz-gf-banner" role="status">
-        <span className="qz-rb-banner-icon" aria-hidden>◷</span>
-        <div className="qz-rb-banner-body">
-          <div className="qz-rb-banner-head">
-            <strong>This is taking longer than it should</strong>
-          </div>
-          <p className="qz-dim" style={{ margin: 0, fontSize: 13 }}>
-            The product pick seems to have stalled. Re-run it, or choose your products below.
-          </p>
-        </div>
-        <div className="qz-rb-banner-actions">
-          <button type="button" className="qz-btn qz-btn-accent qz-btn-sm" disabled={retrying} onClick={onRetry}>
-            {retrying ? "Restarting…" : "Try again"}
-          </button>
-        </div>
-      </div>
-    );
-  }
-
-  if (state.prepick === "picking") {
-    return (
-      <div className="qz-rb-banner is-strong qz-gf-banner" role="status" aria-live="polite">
-        <span className="qz-rb-banner-icon qz-gf-spark" aria-hidden>✦</span>
-        <div className="qz-rb-banner-body">
-          <div className="qz-rb-banner-head">
-            <strong>Choosing the best products for your goal…</strong>
-          </div>
-          <p className="qz-dim" style={{ margin: 0, fontSize: 13 }}>
-            {excerpt ? <>“{excerpt}” — </> : null}
-            they&rsquo;ll appear here in a moment, ready to refine.
-          </p>
-        </div>
-      </div>
-    );
-  }
-
-  if (state.prepick === "failed") {
-    return (
-      <div className="qz-rb-banner is-weak qz-gf-banner" role="status">
-        <span className="qz-rb-banner-icon" aria-hidden>!</span>
-        <div className="qz-rb-banner-body">
-          <div className="qz-rb-banner-head">
-            <strong>Products weren&rsquo;t picked automatically</strong>
-          </div>
-          <p className="qz-dim" style={{ margin: 0, fontSize: 13 }}>
-            {state.error ?? "We couldn't pick products for that goal — try again, or choose them below."}
-          </p>
-        </div>
-        <div className="qz-rb-banner-actions">
-          <button type="button" className="qz-btn qz-btn-accent qz-btn-sm" disabled={retrying} onClick={onRetry}>
-            {retrying ? "Retrying…" : "Try again"}
-          </button>
-        </div>
-      </div>
-    );
-  }
-
-  // ready
-  return (
-    <div className="qz-rb-banner is-applied qz-gf-banner" role="status">
-      <span className="qz-rb-banner-icon" aria-hidden><Check size={17} strokeWidth={2.6} /></span>
-      <div className="qz-rb-banner-body">
-        <div className="qz-rb-banner-head">
-          <strong>
-            {count > 0
-              ? `AI picked ${count} recommendation${count === 1 ? "" : "s"} for your goal`
-              : "AI picked recommendations for your goal"}
-          </strong>
-          {state.rationale ? (
-            <button
-              type="button"
-              className="qz-rb-why"
-              aria-expanded={showWhy}
-              onClick={() => setShowWhy((v) => !v)}
-            >
-              Why these?
-            </button>
-          ) : null}
-        </div>
-        {showWhy && state.rationale ? (
-          <p className="qz-dim" style={{ margin: 0, fontSize: 13 }}>{state.rationale}</p>
-        ) : null}
-        <p className="qz-dim" style={{ margin: 0, fontSize: 13 }}>
-          Refine the selection below, then generate your quiz.
-        </p>
-      </div>
-    </div>
-  );
-}
-

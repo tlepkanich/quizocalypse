@@ -1603,6 +1603,16 @@ export const BuildSession = z.object({
       error: z.string().optional(),
       rationale: z.string().optional(),
       question_length: z.number().int().min(3).max(7).optional(),
+      // Step-1 tweaks (§02 item 4) — WHAT the pre-pick chose, held on the
+      // session so the AI Picks dialog can offer it whether or not it was
+      // written as buckets (a non-empty selection is never overwritten; the
+      // merchant applies from the pill instead). OPTIONAL WITHOUT DEFAULT.
+      picks: z
+        .object({
+          type: z.enum(["product", "tag", "collection"]),
+          keys: z.array(z.string()),
+        })
+        .optional(),
     })
     .optional(),
   // FLOW-2 (funnel-reconfig Flow 2) — the manual flow's pop-up "Generate with
@@ -1637,7 +1647,9 @@ export const BuildSession = z.object({
   // The actual buckets live as Category rows, not here.
   bucket_browser: z
     .object({
-      active_tab: z.enum(["product", "tag", "collection"]).optional(),
+      // Step-1 tweaks — widened to admit the Custom tab ("group"). A widening
+      // of an existing .optional() field: legacy docs round-trip byte-identical.
+      active_tab: z.enum(["product", "tag", "collection", "group"]).optional(),
       banner_dismissed: z.boolean().default(false),
     })
     .optional(),

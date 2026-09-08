@@ -757,7 +757,20 @@ body[data-qz] .qz-btn:focus-visible { outline: none; box-shadow: var(--qz-shadow
 .qz-wstep.is-active { background: var(--qz-accent-wash); color: var(--qz-accent-ink); font-weight: 700; }
 .qz-wstep.is-done { background: var(--qz-live-wash); color: var(--qz-ok); }
 .qz-wpanel { animation: qz-steploader-fade var(--qz-dur) var(--qz-ease); }
-.qz-wsrc { border: 1px solid var(--qz-rule); border-radius: var(--qz-radius-lg); padding: 12px 14px; margin-bottom: 10px; }
+.qz-wsrc { border: 1px solid var(--qz-rule); border-radius: var(--qz-radius-lg); padding: 12px 14px; margin-bottom: 10px; flex: none; }
+/* Step-1 tweaks §06 — a section's OPTIONS as toggle chips: ten whole chips,
+   an inline "+N more" full expand, a search past twelve. No inner scroll. */
+.qz-wsrc-q { margin-bottom: 8px; padding: 7px 11px; font-size: 12.5px; }
+.qz-wsrc-chips { display: flex; flex-wrap: wrap; gap: 7px; }
+.qz-wsrc-chip {
+  font: inherit; font-size: 13px; font-weight: 600; color: var(--qz-ink-3); background: var(--qz-paper);
+  border: 1px solid var(--qz-rule-strong); border-radius: var(--qz-radius-pill); padding: 4px 11px; cursor: pointer;
+  max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.qz-wsrc-chip:hover { border-color: var(--qz-accent-line); }
+.qz-wsrc-chip.is-on { background: var(--qz-accent); border-color: var(--qz-accent); color: #fff; }
+.qz-wsrc-chip.is-more { color: var(--qz-accent-ink); background: var(--qz-accent-wash); border-color: var(--qz-accent-line); border-style: dashed; }
+.qz-wsrc-chip.is-more:hover { background: var(--qz-accent-tint); border-color: var(--qz-accent); }
 .qz-wsrc-head { display: flex; align-items: center; gap: 9px; margin-bottom: 9px; }
 .qz-wsrc-icon { width: 26px; height: 26px; border-radius: 7px; flex: none; display: inline-flex; align-items: center; justify-content: center; }
 .qz-wsrc-icon.src-tag  { background: var(--qz-src-tag-bg);  color: var(--qz-src-tag); }
@@ -1929,50 +1942,11 @@ body[data-qz] ::selection { background: var(--qz-ink); color: var(--qz-cream); }
    row; the tip is ONE line: ✦ TIP · the suggestion · ✕. Nothing else. */
 .qz-rb-titlerow { display: flex; align-items: center; gap: 20px; flex-wrap: wrap; margin-bottom: 2px; }
 .qz-rb-titlerow .qz-h2 { flex: none; }
-/* Owner edit (2026-08-02) — the tip sits on its own row under the heading. */
-.qz-rb-tiprow { display: flex; margin: 6px 0 2px; }
-.qz-rb-tip {
-  display: inline-flex; align-items: center; gap: 8px; flex: none; min-width: 0;
-  border: 1px solid color-mix(in srgb, var(--qz-accent) 18%, var(--qz-rule));
-  background: color-mix(in srgb, var(--qz-accent) 3%, var(--qz-paper));
-  border-radius: var(--qz-radius-pill); padding: 5px 6px 5px 13px;
-}
-.qz-rb-tip-star { color: var(--qz-accent); font-size: 13px; flex: none; }
-.qz-rb-tip-label {
-  font: 700 11px/1.2 var(--qz-font-body); text-transform: uppercase;
-  letter-spacing: .09em; color: var(--qz-accent-ink); flex: none;
-}
-.qz-rb-tip-sug {
-  font-size: 13px; font-weight: 600; color: var(--qz-ink); min-width: 0;
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-}
-/* Owner correction — the tip keeps its APPLY action: a compact "Use this"
-   inside the pill; once applied the pill flips to the ok wash + Undo.
-   QRTZ-O6 — the mock's .tip .btn-primary is OUTLINED (surface bg,
-   accent-ink text, accent border; hover accent-wash), not filled. */
-.qz-rb-tip-use {
-  flex: none; border: 1px solid var(--qz-accent); background: var(--qz-paper); color: var(--qz-accent-ink);
-  font-size: 11.5px; font-weight: 600; padding: 4px 10px; border-radius: var(--qz-radius-pill);
-  cursor: pointer; font-family: inherit; transition: background .15s ease;
-}
-.qz-rb-tip-use:hover { background: var(--qz-accent-wash); }
-body[data-qz] .qz-rb-tip-use:focus-visible { outline: 2px solid var(--qz-accent); outline-offset: 2px; }
-.qz-rb-tip.is-applied {
-  border-color: color-mix(in srgb, var(--qz-ok) 32%, var(--qz-rule));
-  background: color-mix(in srgb, var(--qz-ok) 6%, var(--qz-paper));
-}
-.qz-rb-tip.is-applied .qz-rb-tip-star { color: var(--qz-ok); display: grid; place-items: center; }
-.qz-rb-tip.is-applied .qz-rb-tip-use { background: var(--qz-paper); color: var(--qz-ink-3); border: 1px solid var(--qz-rule); }
-.qz-rb-tip.is-applied .qz-rb-tip-use:hover { background: var(--qz-cream-2); }
-.qz-rb-tip-x {
-  flex: none; display: grid; place-items: center; border: none; background: transparent;
-  color: var(--qz-ink-25); cursor: pointer; padding: 6px 8px; border-radius: var(--qz-radius-pill); line-height: 1;
-}
-.qz-rb-tip-x:hover { background: var(--qz-cream-2); color: var(--qz-ink-3); }
-body[data-qz] .qz-rb-tip-x:focus-visible { outline: 2px solid var(--qz-accent); outline-offset: 2px; }
+/* Step-1 tweaks — the inline tip row (.qz-rb-tip*) retired: the heuristic
+   tip and the goal pre-pick banner are ONE pill in the tab strip's corner
+   (.qz-rb-aicorner below). */
 @media (max-width: 720px) { /* --qz-bp-sm */
   .qz-rb-titlerow { gap: 12px; }
-  .qz-rb-tip-sug { max-width: 52vw; }
 }
 
 /* AI suggestion banner */
@@ -2000,6 +1974,9 @@ body[data-qz] .qz-rb-tip-x:focus-visible { outline: 2px solid var(--qz-accent); 
 .qz-rb-browser { overflow: hidden; }
 /* step1-final-page mock (EXACT): pill tabs — cream fill; active = white fill,
    accent border, accent-ink text + a whisper of shadow. No underline row. */
+/* Step-1 tweaks §03/§05 — the tab strip shares its row with the AI corner. */
+.qz-rb-panehd { display: flex; align-items: flex-start; gap: 12px; }
+.qz-rb-panehd .qz-rb-tabs { flex: 1 1 auto; min-width: 0; flex-wrap: wrap; }
 .qz-rb-tabs { display: flex; gap: 6px; padding: 14px 14px 0; }
 .qz-rb-tab {
   display: inline-flex; align-items: center; gap: 7px;
@@ -2015,28 +1992,128 @@ body[data-qz] .qz-rb-tip-x:focus-visible { outline: 2px solid var(--qz-accent); 
 }
 .qz-rb-tab:disabled { opacity: 0.4; cursor: not-allowed; }
 .qz-rb-tab-n {
-  /* Mock renders the count faint (ink-25); --qz-ink-3 kept DELIBERATELY — the
-     11px count must clear WCAG AA 4.5:1 on the cream pill (a11y wins). */
-  font-size: 11.5px; font-weight: 600; color: var(--qz-ink-3);
+  /* A tab prints its OWN picks and nothing else (totals live in aria-label).
+     --qz-ink-3 kept DELIBERATELY — 11.5px must clear WCAG AA 4.5:1 on cream. */
+  font-size: 11.5px; font-weight: 800; color: var(--qz-ink-3);
+  font-variant-numeric: tabular-nums;
 }
-.qz-rb-tab.is-active .qz-rb-tab-n { color: var(--qz-accent); }
+.qz-rb-tab.is-active .qz-rb-tab-n { color: var(--qz-accent-ink); }
+/* §10 — the global focus ring (body[data-qz] :focus-visible, accent) would
+   imitate selection on a tab or a row; scope an INK outline to win. */
+body[data-qz] .qz-rb-tab:focus-visible,
+body[data-qz] .qz-rb-card:focus-visible,
+body[data-qz] .qz-rb-rail-row:focus-visible {
+  outline: 2px solid var(--qz-ink); outline-offset: 2px; box-shadow: none;
+}
+
+/* §05 — the AI corner: ONE pill (✦ AI picked 9 / Applied 9) + Undo as a
+   SIBLING, 14px inside the pane's edge. */
+.qz-rb-aicorner { flex: none; display: flex; align-items: center; gap: 8px; padding: 14px 14px 0 0; flex-wrap: wrap; justify-content: flex-end; }
+.qz-rb-aipill {
+  display: inline-flex; align-items: center; gap: 8px; white-space: nowrap; line-height: 1;
+  font: inherit; font-size: 13px; font-weight: 700; color: var(--qz-accent-ink);
+  background: var(--qz-accent-wash); border: 1px solid var(--qz-accent-line);
+  border-radius: var(--qz-radius-pill); padding: 8px 14px; cursor: pointer;
+}
+.qz-rb-aipill:hover { background: var(--qz-accent-tint); border-color: var(--qz-accent); }
+.qz-rb-aipill.is-busy, .qz-rb-aipill.is-warn { cursor: default; font-weight: 600; white-space: normal; text-align: left; line-height: 1.3; max-width: 320px; }
+.qz-rb-aipill.is-busy b { font-weight: 800; }
+.qz-rb-aipill.is-warn { color: var(--qz-warn); background: var(--qz-warn-tint); border-color: color-mix(in srgb, var(--qz-warn) 30%, transparent); }
+.qz-rb-spark { display: inline-block; }
+@media (prefers-reduced-motion: no-preference) {
+  .qz-rb-aipill.is-busy .qz-rb-spark { animation: qz-gf-pulse 2.2s ease-in-out infinite; transform-origin: center; }
+}
+.qz-rb-aiundo {
+  font: inherit; font-size: 13px; font-weight: 700; color: var(--qz-ink-3); background: none; border: none;
+  padding: 0; cursor: pointer; white-space: nowrap;
+  text-decoration: underline; text-decoration-color: var(--qz-rule-strong); text-underline-offset: 3px;
+}
+.qz-rb-aiundo:hover { color: var(--qz-accent-ink); text-decoration-color: var(--qz-accent); }
+/* One mechanism: the fade is a CSS animation of the SAME 5 s as the JS
+   removal, so the two can never drift apart in a throttled tab. */
+@media (prefers-reduced-motion: no-preference) {
+  .qz-rb-aiundo { animation: qz-rb-undofade 5s linear forwards; }
+  @keyframes qz-rb-undofade { 0%, 90% { opacity: 1; } 100% { opacity: 0; } }
+}
+
+/* §03 — the ONE narrowing line, group tabs only. It sits where the toolbar
+   would: the tab strip has no bottom padding (the toolbar supplies it), so
+   the strip carries its own 13px or its top border cuts through the tabs. */
+.qz-rb-narrow {
+  display: flex; align-items: center; gap: 8px; padding: 13px 14px; margin-top: 13px;
+  background: var(--qz-cream-2); border-top: 1px solid var(--qz-rule); border-bottom: 1px solid var(--qz-rule);
+  font-size: 12.5px; color: var(--qz-ink-4);
+}
+.qz-rb-narrow-ic { flex: none; opacity: .6; }
+.qz-rb-narrow-link {
+  margin-left: auto; font: inherit; font-size: 12.5px; font-weight: 700; color: var(--qz-accent-ink);
+  background: none; border: none; padding: 0; cursor: pointer; white-space: nowrap;
+  text-decoration: underline; text-underline-offset: 2px;
+}
 
 .qz-rb-toolbar { display: flex; gap: 8px; align-items: center; padding: 13px 14px 12px; }
-.qz-rb-toolbar .qz-input { flex: 1 1 auto; }
-.qz-rb-selall {
-  border: none; background: transparent; color: var(--qz-accent-ink);
-  font-size: 12.5px; white-space: nowrap; cursor: pointer; font-family: inherit;
-  padding: 6px 8px; border-radius: 8px;
+.qz-rb-toolbar .qz-input { flex: 1 1 auto; min-width: 0; }
+/* §03 — search · sort · status · one button. The selects carry FIXED widths:
+   a <select> sizes to its chosen option, so the search would jump otherwise. */
+.qz-rb-sortsel, .qz-rb-statsel {
+  flex: none; width: auto; font-size: 12.5px; font-weight: 600; color: var(--qz-ink-3);
+  padding: 10px 10px; cursor: pointer;
 }
-.qz-rb-selall:hover:not(:disabled) { background: var(--qz-cream-2); }
-.qz-rb-selall:disabled { opacity: .45; cursor: not-allowed; }
+.qz-rb-sortsel { width: 144px; }
+.qz-rb-statsel { width: 116px; }
+/* Select all ↔ Clear all — underlined text, no button chrome (a shortcut, not
+   a step in the flow); stays a real <button>. */
+.qz-rb-selall {
+  flex: none; border: none; background: transparent; color: var(--qz-ink-3);
+  font-size: 12.5px; font-weight: 600; white-space: nowrap; cursor: pointer; font-family: inherit;
+  padding: 0; margin-left: 8px; line-height: 1;
+  text-decoration: underline; text-decoration-color: var(--qz-rule-strong); text-underline-offset: 3px;
+}
+.qz-rb-selall:hover:not(:disabled) { color: var(--qz-accent-ink); text-decoration-color: var(--qz-accent); }
+.qz-rb-selall:disabled { opacity: .4; cursor: default; }
 .qz-rb-empty { padding: 28px 16px; text-align: center; font-size: 13.5px; }
+/* The Custom tab's empty state IS the New-group affordance: the row tile's
+   42px on the row's inset, so "New group" starts at the same x as a row. */
+.qz-rb-newgrp {
+  display: flex; align-items: center; gap: 12px; width: 100%; padding: 10px 12px; text-align: left;
+  border: 1.5px dashed var(--qz-rule-strong); border-radius: var(--qz-radius-lg); background: var(--qz-paper);
+  color: var(--qz-ink); font: inherit; font-size: 14px; font-weight: 600; cursor: pointer;
+}
+.qz-rb-newgrp:hover { border-color: var(--qz-accent); background: var(--qz-accent-tint); color: var(--qz-accent-ink); }
+.qz-rb-newgrp-plus {
+  flex: none; width: 42px; height: 42px; border-radius: var(--qz-radius); display: grid; place-items: center;
+  background: var(--qz-cream-2); color: var(--qz-ink-4); font-size: 21px; font-weight: 700; line-height: 1;
+}
+.qz-rb-newgrp:hover .qz-rb-newgrp-plus, .qz-rb-newgrp:focus-visible .qz-rb-newgrp-plus { background: var(--qz-accent); color: #fff; }
+.qz-rb-newgrp-body { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.qz-rb-newgrp small { display: block; font-weight: 400; font-size: 12px; color: var(--qz-ink-4); }
+/* The keyboard/AT route past row 25 — visually quiet. */
+.qz-rb-loadmore {
+  align-self: flex-start; border: none; background: none; padding: 4px 2px; font: inherit; font-size: 12.5px;
+  font-weight: 600; color: var(--qz-ink-4); cursor: pointer;
+  text-decoration: underline; text-decoration-color: var(--qz-rule-strong); text-underline-offset: 3px;
+}
+.qz-rb-loadmore:hover { color: var(--qz-accent-ink); }
+/* The footer is the list's own status ledger, PINNED to the widget. */
+.qz-rb-listfoot {
+  display: flex; align-items: center; gap: 12px; padding: 11px 14px;
+  border-top: 1px solid var(--qz-rule); background: var(--qz-cream-2);
+  font-size: 12.5px; color: var(--qz-ink-4); font-variant-numeric: tabular-nums;
+}
+.qz-rb-listfoot b { color: var(--qz-ink-3); font-weight: 700; }
+.qz-rb-archtog {
+  background: none; border: none; padding: 0; font: inherit; font-size: 12.5px; font-weight: 600;
+  color: var(--qz-ink-4); cursor: pointer;
+  text-decoration: underline; text-decoration-color: var(--qz-rule-strong); text-underline-offset: 3px;
+}
+.qz-rb-archtog:hover { color: var(--qz-accent-ink); text-decoration-color: var(--qz-accent); }
 
+/* 25 rows load; the list keeps 460px and scrolls INSIDE (windowing, never a
+   taller box — a list taller than the screen scrolls its own footer away). */
 .qz-rb-grid {
-  display: grid; grid-template-columns: 1fr; gap: 9px;
+  display: flex; flex-direction: column; gap: 9px;
   padding: 14px; max-height: 460px; overflow-y: auto;
 }
-.qz-rb-grid.is-products { grid-template-columns: 1fr; }
 
 .qz-rb-card {
   display: flex; align-items: center; gap: 12px; text-align: left;
@@ -2048,45 +2125,49 @@ body[data-qz] .qz-rb-tip-x:focus-visible { outline: 2px solid var(--qz-accent); 
   border-color: color-mix(in srgb, var(--qz-accent) 32%, var(--qz-paper));
   box-shadow: 0 1px 3px color-mix(in srgb, var(--qz-accent) 8%, transparent);
 }
-.qz-rb-card.is-on { border-color: var(--qz-accent); background: var(--qz-accent-tint); }
+/* Selection is border + tint — no tick (decision 1: the second, non-chromatic
+   channel is BORDER WEIGHT, 2px selected vs 1px). box-shadow carries the
+   extra pixel so the row's box never moves. */
+.qz-rb-card.is-on { border-color: var(--qz-accent); background: var(--qz-accent-tint); box-shadow: inset 0 0 0 1px var(--qz-accent); }
+/* §12 accent diet — the icon tile is NEUTRAL until the row is selected. */
 .qz-rb-thumb {
   flex: none; width: 42px; height: 42px; border-radius: var(--qz-radius); overflow: hidden;
-  background: var(--qz-accent-tint); display: grid; place-items: center; font-size: 18px;
+  background: var(--qz-cream-2); color: var(--qz-ink-4); display: grid; place-items: center; font-size: 18px;
 }
+.qz-rb-card.is-on .qz-rb-thumb { background: var(--qz-paper); color: var(--qz-accent-ink); }
 .qz-rb-thumb img { width: 100%; height: 100%; object-fit: cover; }
-.qz-rb-thumb.is-placeholder, .qz-rb-product-image.is-placeholder {
-  color: var(--qz-accent); position: relative; overflow: hidden;
-  background: linear-gradient(110deg, var(--qz-accent-tint) 18%, var(--qz-paper) 42%, var(--qz-accent-tint) 68%);
-  background-size: 220% 100%; animation: qz-rb-placeholder 2.6s ease-in-out infinite;
-}
-@keyframes qz-rb-placeholder { to { background-position: -220% 0; } }
-@media (prefers-reduced-motion: reduce) { .qz-rb-thumb.is-placeholder, .qz-rb-product-image.is-placeholder { animation: none; } }
+.qz-rb-product-image.is-placeholder { color: var(--qz-ink-4); }
 .qz-rb-card-body { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
 .qz-rb-card-name { font-weight: 600; font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.qz-rb-card-sub { font-size: 12px; color: var(--qz-ink-4); }
 .qz-rb-card-meta { font-size: 12px; }
-.qz-rb-pricetag { flex: none; font-size: 12.5px; color: var(--qz-ink-3); font-weight: 500; }
-.qz-rb-check {
-  flex: none; width: 20px; height: 20px; border-radius: var(--qz-radius-pill);
-  border: 0; display: grid; place-items: center; font-size: 12px; color: #fff;
-  opacity: 0;
+/* §03 rows — ONE line: name, [status badge], and a right column flush to the
+   row's right edge on every tab: the group count (the count IS the control)
+   or the variant list (fades on the LEFT, because the column is right-aligned). */
+.qz-rb-vars {
+  flex: none; width: 196px; font-size: 12px; color: var(--qz-ink-3); white-space: nowrap; overflow: hidden;
+  background: none; border: none; padding: 8px 0; font-family: inherit; text-align: right; cursor: pointer;
+  -webkit-mask-image: linear-gradient(to right, transparent, #000 26px);
+          mask-image: linear-gradient(to right, transparent, #000 26px);
 }
-.qz-rb-check.is-on { background: var(--qz-accent); opacity: 1; }
-/* Mock countpill: bordered white pill, accent-ink label, tint on hover. */
-.qz-rb-count-link {
-  flex: none; display: inline-flex; align-items: center; gap: 6px;
-  border: 1px solid var(--qz-rule); background: var(--qz-paper);
-  color: var(--qz-accent-ink); font-size: 12px; font-weight: 500;
-  padding: 7px 12px; border-radius: var(--qz-radius); cursor: pointer; white-space: nowrap;
+.qz-rb-vars:hover { color: var(--qz-accent-ink); }
+.qz-rb-vars b { font-weight: 700; color: var(--qz-ink-4); }
+.qz-rb-vars.is-none { cursor: default; -webkit-mask-image: none; mask-image: none; }
+.qz-rb-vars.is-grp { color: var(--qz-ink-4); cursor: default; -webkit-mask-image: none; mask-image: none; }
+@media (max-width: 700px) { .qz-rb-vars { width: 120px; } }
+.qz-rb-cntb {
+  font: inherit; font-size: 12px; font-weight: 600; color: var(--qz-ink-3); background: none; border: none; padding: 0; cursor: pointer;
+  text-decoration: underline; text-decoration-color: var(--qz-rule-strong); text-underline-offset: 3px;
 }
-.qz-rb-count-link:hover {
-  background: var(--qz-accent-tint); border-color: var(--qz-accent-wash);
+.qz-rb-cntb:hover { color: var(--qz-accent-ink); text-decoration-color: var(--qz-accent); }
+/* Draft / archived carry a badge; active does not (marking the exception). */
+.qz-rb-stat {
+  flex: none; font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase;
+  padding: 3px 7px; border-radius: var(--qz-radius-sm); border: 1px solid var(--qz-rule);
+  background: var(--qz-cream-2); color: var(--qz-ink-4);
 }
-/* ═══ QRTZ-F1 ═══ real focus treatment (wash + ring), scoped to win (D1). */
-body[data-qz] .qz-rb-count-link:focus-visible {
-  background: var(--qz-accent-tint); border-color: var(--qz-accent-wash);
-  outline: none; box-shadow: var(--qz-shadow-focus);
-}
+.qz-rb-stat.is-archived { color: var(--qz-ink-25); }
+.qz-rb-stock { flex: none; margin-left: auto; font-size: 12px; color: var(--qz-ink-4); font-variant-numeric: tabular-nums; }
+.qz-rb-stock.is-out { color: var(--qz-crit); }
 /* Mock railEmpty: dashed lavender box, glyph, quiet copy. */
 .qz-rb-rail-empty {
   margin: 4px 0; border: 1px dashed color-mix(in srgb, var(--qz-accent) 14%, var(--qz-rule));
@@ -2119,13 +2200,9 @@ body[data-qz] .qz-rb-count-link:focus-visible {
   color: var(--qz-ink-4); font-size: 12px; padding: 2px 5px; border-radius: var(--qz-radius-pill); line-height: 1;
 }
 .qz-rb-chip-x:hover { color: var(--qz-ink); background: var(--qz-cream-2); }
-/* Mock rwarn (EXACT): the amber one-recommendation warning. Mock amber hexes
-   (#FAEEDA / #854F0B) → the DS warn pair (QRTZ-OA: this is a WARNING, not a
-   gold-signature moment — it must not follow the gold→violet re-point). */
-.qz-rb-warn {
-  margin: 0; font-size: 11.5px; line-height: 1.45; color: var(--qz-warn);
-  background: var(--qz-warn-wash); border-radius: var(--qz-radius); padding: 8px 11px;
-}
+/* (The amber one-recommendation notice — .qz-rb-warn — is off this screen:
+   Step-1 tweaks §08; its copy is preserved in the component for the
+   per-page AI surface.) */
 
 /* Stepper */
 .qz-rb-stepper {
@@ -3404,8 +3481,7 @@ body[data-qz] .qz-ql-adel:focus-visible { outline: none; box-shadow: var(--qz-sh
 .qz-rb-underlink:disabled { opacity: .5; cursor: default; }
 /* The card grid lost its wrapper div — keep the 100+ scroll optimization. */
 .qz-rb-grid > .qz-rb-card { content-visibility: auto; contain-intrinsic-size: 0 66px; }
-/* §3 — a locked type mutes the other tabs (no lock icon); they stay clickable. */
-.qz-rb-tab.is-muted { opacity: .55; }
+/* (A tab is a VIEW now — the muted/locked tab treatment is retired.) */
 
 .qz-rb-rail {
   /* §2.2 — clear the sticky top bar plus a 16px breath. */
@@ -3414,20 +3490,77 @@ body[data-qz] .qz-ql-adel:focus-visible { outline: none; box-shadow: var(--qz-sh
   border: 1px solid color-mix(in srgb, var(--qz-accent) 18%, var(--qz-rule)); border-radius: var(--qz-radius);
   background: var(--qz-paper); box-shadow: 0 14px 34px -24px color-mix(in srgb, var(--qz-accent) 42%, transparent);
 }
-.qz-rb-rail-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+.qz-rb-rail-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+/* §04 — "Results", a composition sub-line, the total badge on the same row. */
+.qz-rb-rail-title { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.qz-rb-rail-title strong { font-size: 17px; font-weight: 700; line-height: 1.3; letter-spacing: -.02em; color: var(--qz-ink); }
+.qz-rb-rail-sub { font-size: 12px; color: var(--qz-ink-4); font-variant-numeric: tabular-nums; }
+.qz-rb-rail-sub b { color: var(--qz-ink-3); font-weight: 700; }
 .qz-rb-count {
   display: inline-grid; place-items: center; min-width: 22px; height: 22px;
   padding: 0 6px; border-radius: var(--qz-radius-pill); font-size: 12px; font-weight: 600;
-  background: var(--qz-cream-2); color: var(--qz-ink-2);
+  background: var(--qz-cream-2); color: var(--qz-ink-2); font-variant-numeric: tabular-nums;
 }
-.qz-rb-rail-list { display: flex; flex-direction: column; gap: 6px; max-height: 44vh; overflow-y: auto; }
+/* The five-row cut is MEASURED (inline max-height from the fifth real row);
+   the fade marks continuation, it does not truncate access (still scrolls). */
+.qz-rb-rail-list { display: flex; flex-direction: column; gap: 6px; overflow-y: auto; }
+.qz-rb-rail-list.is-fade {
+  -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 26px), transparent);
+          mask-image: linear-gradient(to bottom, #000 calc(100% - 26px), transparent);
+}
+.qz-rb-rail-sec { display: flex; flex-direction: column; gap: 6px; }
+.qz-rb-rail-seclab {
+  display: flex; align-items: baseline; justify-content: space-between; gap: 8px; padding: 4px 2px 0;
+  font-size: 11px; font-weight: 700; letter-spacing: .09em; text-transform: uppercase; color: var(--qz-ink-4);
+}
+.qz-rb-rail-seclab span { font-variant-numeric: tabular-nums; color: var(--qz-ink-25); letter-spacing: 0; }
+/* Rows open the same preview as the list: div role="button" (it contains ✕). */
 .qz-rb-rail-row {
-  display: flex; align-items: center; gap: 8px;
+  display: flex; align-items: center; gap: 8px; flex: none; min-height: 44px;
   padding: 6px; border: 1px solid var(--qz-rule); border-radius: var(--qz-radius-sm);
-  background: var(--qz-cream);
+  background: var(--qz-cream); cursor: pointer;
 }
+.qz-rb-rail-row:hover { border-color: var(--qz-accent-line); }
+.qz-rb-rail-row:hover .qz-rb-chip-name { color: var(--qz-accent-ink); }
 .qz-rb-rail-row .qz-rb-chip-body { display: flex; flex-direction: column; gap: 1px; min-width: 0; flex: 1 1 auto; }
 .qz-rb-rail-row .qz-rb-chip-name { max-width: none; }
+/* A pick confirms itself: the row that just landed flashes. */
+.qz-rb-rail-row.is-new { border-color: var(--qz-accent); background: var(--qz-accent-tint); }
+@media (prefers-reduced-motion: no-preference) {
+  .qz-rb-rail-row.is-new { animation: qz-rb-landed 1.5s var(--qz-ease) forwards; }
+  @keyframes qz-rb-landed {
+    0% { border-color: var(--qz-accent); background: var(--qz-accent-wash); box-shadow: 0 0 0 3px var(--qz-accent-tint); }
+    60% { border-color: var(--qz-accent); background: var(--qz-accent-tint); box-shadow: 0 0 0 3px transparent; }
+    100% { border-color: var(--qz-rule); background: var(--qz-cream); box-shadow: none; }
+  }
+}
+/* §12 — the rail tile is neutral too; a group gets the glyph, never a photo. */
+.qz-rb-chip-thumb { color: var(--qz-ink-4); }
+
+/* §05 — the AI Picks dialog rows; §03 — the narrowing explainer chain. */
+.qz-rb-modal-goal { font-style: italic; white-space: normal; }
+.qz-rb-airows { display: flex; flex-direction: column; gap: 8px; }
+.qz-rb-airow {
+  display: flex; align-items: center; gap: 8px; padding: 8px; border: 1px solid var(--qz-rule);
+  border-radius: var(--qz-radius-sm); background: var(--qz-cream);
+}
+.qz-rb-airow-ic { flex: none; width: 24px; height: 24px; border-radius: var(--qz-radius-sm); background: var(--qz-accent-tint); color: var(--qz-accent-ink); display: grid; place-items: center; }
+.qz-rb-airow-name { flex: 1 1 auto; font-size: 14px; font-weight: 600; color: var(--qz-ink); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.qz-rb-mlbl { margin: 0 0 8px; font-size: 11px; font-weight: 700; letter-spacing: .09em; text-transform: uppercase; color: var(--qz-ink-4); }
+.qz-rb-chain { display: flex; flex-direction: column; margin-bottom: 14px; }
+.qz-rb-chain-l { display: flex; gap: 12px; }
+.qz-rb-chain-bar { flex: none; width: 28px; display: flex; flex-direction: column; align-items: center; }
+.qz-rb-chain-d {
+  width: 28px; height: 28px; border-radius: var(--qz-radius-pill); background: var(--qz-accent-wash); border: 1px solid var(--qz-accent-line);
+  color: var(--qz-accent-ink); display: grid; place-items: center; font-size: 11px; font-weight: 800; font-variant-numeric: tabular-nums;
+}
+.qz-rb-chain-d.is-end { background: var(--qz-accent); border-color: var(--qz-accent); color: #fff; }
+.qz-rb-chain-n { width: 2px; flex: 1 1 auto; min-height: 16px; background: var(--qz-accent-line); }
+.qz-rb-chain-x { flex: 1 1 auto; padding-bottom: 12px; min-width: 0; }
+.qz-rb-chain-x b { display: block; font-size: 14px; color: var(--qz-ink); }
+.qz-rb-chain-x span { font-size: 14px; color: var(--qz-ink-4); }
+.qz-rb-by { display: flex; flex-wrap: wrap; gap: 8px; }
+.qz-rb-by span { font-size: 11px; font-weight: 600; color: var(--qz-ink-3); background: var(--qz-cream-2); border: 1px solid var(--qz-rule); border-radius: var(--qz-radius-pill); padding: 4px 8px; }
 .qz-rb-rail-foot { display: flex; flex-direction: column; gap: 8px; padding-top: 4px; }
 .qz-rb-rail-foot .qz-btn { width: 100%; justify-content: center; }
 .qz-rb-rail-foot .qz-tooltip-wrap { width: 100%; }

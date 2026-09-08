@@ -27,9 +27,10 @@ import {
   bucketRowsFor,
   addBuckets,
   removeBuckets,
-  clearBuckets,
   type BucketType,
 } from "./step1Build.server";
+import { isBucketType, setBucketsKeptKeys, setBucketsLeaverIds } from "./bucketPersist";
+import { createShopGroup, groupInputFromForm } from "./groupCreate.server";
 import {
   startStep2Types,
   startStep2Templates,
@@ -213,7 +214,7 @@ async function runStep1FunnelActionImpl(
   // key(s) were toggled (the persistConfirmedGroups trust boundary).
   if (intent === "toggle-bucket" || intent === "select-all" || intent === "clear-visible") {
     const rawType = String(form.get("type") ?? "");
-    if (rawType !== "product" && rawType !== "tag" && rawType !== "collection") {
+    if (!isBucketType(rawType)) {
       return json({ intent, ok: false, error: "Unknown bucket type." }, { status: 400 });
     }
     const type: BucketType = rawType;
@@ -234,6 +235,7 @@ async function runStep1FunnelActionImpl(
         inputs.collections,
         inputs.productTitleById,
         inputs.collectionTitleById,
+        inputs.groups,
       );
       if (!row) {
         return json({ intent, ok: false, error: "That item is no longer available." }, { status: 400 });
@@ -258,53 +260,54 @@ async function runStep1FunnelActionImpl(
       inputs.collections,
       inputs.productTitleById,
       inputs.collectionTitleById,
+      inputs.groups,
     );
     await addBuckets(shop.id, quiz.id, rows);
     return json({ intent, ok: true });
   }
 
-  // Bulk replace the whole (homogeneous) selection — the §4 AI banner's
-  // "Use this" and its Undo both swap the full set. Empty keys = clear-all
-  // (the Undo of an apply over an empty selection). Same trust boundary as
-  // select-all: the client sends WHICH keys, membership is always re-resolved
+  // Bulk replace ONE TYPE's half of the selection — the AI Picks pill's Apply,
+  // its 5 s Undo and the dialog's Revert all swap the suggested type's keys
+  // and leave every other type alone (Step-1 tweaks §05: a heterogeneous
+  // selection is allowed, so a whole-selection swap would destroy the
+  // merchant's other picks). Empty keys = clear that type. Same trust boundary
+  // as select-all: the client sends WHICH keys, membership is re-resolved
   // server-side. DIFF-based (review-caught): a clear-then-add would rotate
   // EVERY Category id, orphaning the draft's answer/rule target_ids even for
-  // keys present in BOTH sets — so rows whose (source, sourceRef) stays in
-  // the requested set are KEPT (their ids survive), only leavers delete and
-  // only newcomers create. No clear-all window mid-write either.
+  // keys present in BOTH sets — so rows whose (source, sourceRef) stays are
+  // KEPT (their ids survive), only leavers delete and only newcomers create.
+  // §02 item 3 — two live data-loss bugs closed here: leavers are scoped to
+  // the type being replaced (no cross-type collateral) AND Logic-tab rule
+  // targets (discoveryRunId "logic-tab-*") are never leavers — deleting one
+  // dangles every rule pointing at it and hard-blocks publish.
   if (intent === "set-buckets") {
     const rawType = String(form.get("type") ?? "");
-    if (rawType !== "product" && rawType !== "tag" && rawType !== "collection") {
+    if (!isBucketType(rawType)) {
       return json({ intent, ok: false, error: "Unknown recommendation type." }, { status: 400 });
     }
     const keys = String(form.get("keys") ?? "")
       .split(",")
       .map((s) => s.trim())
       .filter(Boolean);
-    const wanted = new Set(keys.map((k) => `${rawType}:${k}`));
-    const normSource = (s: string) => (s === "smart_collection" ? "collection" : s);
     const existing = await prisma.category.findMany({
       where: { shopId: shop.id, quizId: quiz.id },
-      select: { id: true, source: true, sourceRef: true },
+      select: { id: true, source: true, sourceRef: true, discoveryRunId: true },
     });
-    const staysFor = (c: { source: string; sourceRef: string | null }) =>
-      Boolean(c.sourceRef) && wanted.has(`${normSource(c.source)}:${c.sourceRef}`);
-    const leaverIds = existing.filter((c) => !staysFor(c)).map((c) => c.id);
+    const leaverIds = setBucketsLeaverIds(existing, rawType, keys);
     if (leaverIds.length > 0) {
       await prisma.category.deleteMany({ where: { id: { in: leaverIds } } });
     }
-    const keptKeys = new Set(
-      existing.filter(staysFor).map((c) => `${normSource(c.source)}:${c.sourceRef}`),
-    );
-    const missing = keys.filter((k) => !keptKeys.has(`${rawType}:${k}`));
+    const keptKeys = setBucketsKeptKeys(existing, rawType, keys);
+    const missing = keys.filter((k) => !keptKeys.has(k));
     if (missing.length > 0) {
       const inputs = await loadBucketInputs(shop.id);
       const rows = bucketRowsFor(
-        missing.map((key) => ({ type: rawType as BucketType, key })),
+        missing.map((key) => ({ type: rawType, key })),
         inputs.products,
         inputs.collections,
         inputs.productTitleById,
         inputs.collectionTitleById,
+        inputs.groups,
       );
       await addBuckets(shop.id, quiz.id, rows);
     }
@@ -320,28 +323,54 @@ async function runStep1FunnelActionImpl(
     return json({ intent, ok: true });
   }
 
+  // A tab is a VIEW, not a mode (Step-1 tweaks §03): switching never touches
+  // the selection. The former `clear=true` (TabLockModal) and the dead
+  // `dismiss` flag are gone.
   if (intent === "switch-tab") {
     const rawType = String(form.get("type") ?? "");
-    if (rawType !== "product" && rawType !== "tag" && rawType !== "collection") {
+    if (!isBucketType(rawType)) {
       return json({ intent, ok: false, error: "Unknown bucket type." }, { status: 400 });
     }
-    // A type change with existing buckets clears them (the client only sends
-    // clear=true after the TabLockModal confirm).
-    if (String(form.get("clear") ?? "") === "true") await clearBuckets(shop.id, quiz.id);
-    // A non-suggested tab click also dismisses the AI banner — folded in here so
-    // one submit does both (a single fetcher can't fire two intents).
-    const dismiss = String(form.get("dismiss") ?? "") === "true";
     const browser = session.bucket_browser;
     const next: BuildSession = {
       ...session,
       bucket_browser: {
         ...(browser ?? {}),
         active_tab: rawType,
-        banner_dismissed: dismiss || (browser?.banner_dismissed ?? false),
+        banner_dismissed: browser?.banner_dismissed ?? false,
       },
     };
     await writeDoc(quiz.id, { ...doc, build_session: next });
     return json({ intent, ok: true });
+  }
+
+  // Step-1 tweaks (§03 Custom tab) — "New group" from the picker: ONE create
+  // action shared with /studio/groups (createShopGroup), then the new
+  // shop-global group is added to THIS quiz as a `group` bucket and the picker
+  // lands on the Custom tab. The client flashes the row from the returned id.
+  if (intent === "create-group") {
+    const created = await createShopGroup(shop.id, groupInputFromForm(form));
+    if (created.productIds.length === 0) {
+      return json({ intent, ok: true, groupId: created.id, added: false });
+    }
+    await addBuckets(shop.id, quiz.id, [
+      {
+        source: "group",
+        sourceRef: created.id,
+        name: created.name,
+        tags: created.tags,
+        productIds: created.productIds,
+      },
+    ]);
+    const next: BuildSession = {
+      ...session,
+      bucket_browser: {
+        banner_dismissed: session.bucket_browser?.banner_dismissed ?? false,
+        active_tab: "group",
+      },
+    };
+    await writeDoc(quiz.id, { ...doc, build_session: next });
+    return json({ intent, ok: true, groupId: created.id, added: true });
   }
 
   // Kept for legacy in-flight sessions only — since the Step-1 spec (§4),

@@ -8,7 +8,11 @@ import {
   type GroupingProduct,
   type GroupingCollection,
 } from "./categoryGrouping";
-import { curatedBucketRows, computeBucketMembershipRefresh } from "./bucketPersist";
+import {
+  curatedBucketRows,
+  computeBucketMembershipRefresh,
+  type GroupSource,
+} from "./bucketPersist";
 import { reportError } from "./log.server";
 
 export const toGroupingProduct = (p: {
@@ -33,10 +37,16 @@ export async function loadBucketInputs(shopId: string): Promise<{
   collections: GroupingCollection[];
   productTitleById: Map<string, string>;
   collectionTitleById: Map<string, string>;
+  /** Step-1 tweaks — the shop-global groups the Custom tab offers. */
+  groups: GroupSource[];
 }> {
-  const [productRows, collectionRows] = await Promise.all([
+  const [productRows, collectionRows, groupRows] = await Promise.all([
     prisma.product.findMany({ where: { shopId } }),
     prisma.collection.findMany({ where: { shopId }, select: { collectionId: true, title: true } }),
+    prisma.category.findMany({
+      where: { shopId, quizId: null },
+      select: { id: true, name: true, tags: true, productIds: true },
+    }),
   ]);
   const products = productRows.map(toGroupingProduct);
   return {
@@ -44,6 +54,7 @@ export async function loadBucketInputs(shopId: string): Promise<{
     collections: hydrateCollectionProducts(collectionRows, products),
     productTitleById: new Map(productRows.map((p) => [p.productId, p.title])),
     collectionTitleById: new Map(collectionRows.map((c) => [c.collectionId, c.title])),
+    groups: groupRows,
   };
 }
 

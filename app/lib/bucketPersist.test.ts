@@ -5,6 +5,11 @@ import {
   curatedBucketRows,
   sameIdSet,
   computeBucketMembershipRefresh,
+  deliverableCount,
+  isBucketType,
+  setBucketsKeptKeys,
+  setBucketsLeaverIds,
+  type ExistingBucketRow,
   type RefreshableBucketRow,
 } from "./bucketPersist";
 import {
@@ -212,5 +217,75 @@ describe("computeBucketMembershipRefresh", () => {
       refreshRow({ id: "r4", source: "collection", sourceRef: null, productIds: ["p9"] }),
     ];
     expect(computeBucketMembershipRefresh(rows, products, liveCollections)).toEqual([]);
+  });
+});
+
+// ── Step-1 tweaks: the fourth bucket type, the set-buckets leaver scope, the
+// deliverable count ─────────────────────────────────────────────────────────
+describe("bucketRowFor — group (Custom tab)", () => {
+  const groups = [
+    { id: "g1", name: "Gift-ready", tags: ["gift"], productIds: ["p1", "p3"] },
+    { id: "g0", name: "Empty group", tags: [], productIds: [] },
+  ];
+  it("resolves a shop-global group to source 'group' keyed on the Category id, copying its members", () => {
+    expect(
+      bucketRowFor("group", "g1", products, collections, productTitleById, collectionTitleById, groups),
+    ).toEqual({ source: "group", sourceRef: "g1", name: "Gift-ready", tags: ["gift"], productIds: ["p1", "p3"] });
+  });
+  it("an unknown or empty group → null", () => {
+    expect(bucketRowFor("group", "nope", products, collections, productTitleById, collectionTitleById, groups)).toBeNull();
+    expect(bucketRowFor("group", "g0", products, collections, productTitleById, collectionTitleById, groups)).toBeNull();
+  });
+  it("bucketRowsFor threads the groups through", () => {
+    const rows = bucketRowsFor(
+      [{ type: "group", key: "g1" }, { type: "product", key: "p2" }],
+      products, collections, productTitleById, collectionTitleById, groups,
+    );
+    expect(rows.map((r) => `${r.source}:${r.sourceRef}`)).toEqual(["group:g1", "product:p2"]);
+  });
+  it("isBucketType admits exactly the four", () => {
+    expect(["product", "tag", "collection", "group"].every(isBucketType)).toBe(true);
+    expect(isBucketType("metafield")).toBe(false);
+    expect(isBucketType("")).toBe(false);
+  });
+});
+
+describe("setBucketsLeaverIds — type-scoped, logic-tab exempt", () => {
+  const existing: ExistingBucketRow[] = [
+    { id: "t-old", source: "tag", sourceRef: "winter", discoveryRunId: "rb_buckets" },
+    { id: "t-keep", source: "tag", sourceRef: "snow", discoveryRunId: "rb_buckets" },
+    { id: "t-rule", source: "tag", sourceRef: "park", discoveryRunId: "logic-tab-q1" },
+    { id: "p-1", source: "product", sourceRef: "p1", discoveryRunId: "rb_buckets" },
+    { id: "c-1", source: "smart_collection", sourceRef: "c1", discoveryRunId: "rb_buckets" },
+    { id: "g-1", source: "group", sourceRef: "g1", discoveryRunId: "rb_buckets" },
+    { id: "ai-1", source: "ai", sourceRef: null, discoveryRunId: "disc_1" },
+  ];
+  it("applying tags deletes only the tag rows not wanted — products, collections and groups survive", () => {
+    expect(setBucketsLeaverIds(existing, "tag", ["snow", "fresh"])).toEqual(["t-old"]);
+    expect([...setBucketsKeptKeys(existing, "tag", ["snow", "fresh"])]).toEqual(["snow"]);
+  });
+  it("a Logic-tab rule target of the SAME type is never a leaver", () => {
+    expect(setBucketsLeaverIds(existing, "tag", [])).toEqual(["t-old", "t-keep"]);
+  });
+  it("smart_collection normalises to collection", () => {
+    expect(setBucketsLeaverIds(existing, "collection", ["c9"])).toEqual(["c-1"]);
+    expect(setBucketsLeaverIds(existing, "collection", ["c1"])).toEqual([]);
+  });
+  it("clearing the group half leaves every other type alone", () => {
+    expect(setBucketsLeaverIds(existing, "group", [])).toEqual(["g-1"]);
+  });
+});
+
+describe("deliverableCount — through isSellable, not a status test", () => {
+  const byId = new Map([
+    ["a", { inventory_in_stock: true, price: "10", status: "ACTIVE" }],
+    ["d", { inventory_in_stock: true, price: "10", status: "DRAFT" }],
+    ["z", { inventory_in_stock: false, price: "0", status: "ACTIVE" }], // $0 + out of stock
+    ["o", { inventory_in_stock: false, price: "12", status: "active" }], // real OOS keeps
+    ["legacy", { inventory_in_stock: true, price: "5" }], // no status → pre-fix behaviour
+  ]);
+  it("counts only what the runtime would surface", () => {
+    expect(deliverableCount(["a", "d", "z", "o", "legacy", "missing"], byId)).toBe(3);
+    expect(deliverableCount([], byId)).toBe(0);
   });
 });

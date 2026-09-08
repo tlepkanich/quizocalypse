@@ -3,6 +3,7 @@ import {
   MAX_PREPICK_KEYS,
   foldGoalBrief,
   friendlyPrepickError,
+  prepickWritePolicy,
   resolveGoalPickRows,
   type BucketResolveInputs,
 } from "./goalPrepick";
@@ -104,5 +105,15 @@ describe("friendlyPrepickError (four-outcome copy)", () => {
     const msg = friendlyPrepickError(new Error("ZodError: strategy invalid"));
     expect(msg).toMatch(/couldn't pick products/);
     expect(msg).not.toMatch(/Zod/);
+  });
+});
+
+describe("prepickWritePolicy — never overwrite a non-empty selection", () => {
+  it("writes only into an empty selection", () => {
+    expect(prepickWritePolicy(0)).toBe("write");
+  });
+  it("keeps anything the merchant picked while the job ran (and on retry)", () => {
+    expect(prepickWritePolicy(1)).toBe("keep");
+    expect(prepickWritePolicy(9)).toBe("keep");
   });
 });

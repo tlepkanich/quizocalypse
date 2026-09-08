@@ -61,3 +61,12 @@ export function friendlyPrepickError(err: unknown): string {
   }
   return "We couldn't pick products for that goal — try again, or choose them below.";
 }
+
+// Step-1 tweaks (§02 item 4) — the pre-pick may write buckets ONLY when the
+// selection is empty. A non-empty selection (picked while the job ran, or
+// carried by a re-claimed draft) is never overwritten: the pick lands as
+// "ready", is held on the session, and the merchant applies it from the AI
+// Picks pill. retry-gen re-runs the same job and takes the same gate.
+export function prepickWritePolicy(existingBucketCount: number): "write" | "keep" {
+  return existingBucketCount > 0 ? "keep" : "write";
+}

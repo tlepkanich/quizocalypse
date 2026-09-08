@@ -1,0 +1,534 @@
+<title>Step 1 Dev Handoff</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Figtree:wght@300..900&display=swap">
+<style>
+:root{
+  color-scheme:light;
+  --paper:#FFFFFF; --cream-2:#F5F4F8; --ground:#F5F4F8;
+  --ink:#201C2E; --ink-3:#4E4860; --ink-4:#645E78; --ink-25:#B4AFC4;
+  --rule:#E4E1EC; --rule-2:#EFEDF4; --rule-strong:#948EA6;
+  --accent:#5B45D6; --accent-2:#4A36B8; --accent-ink:#4A36B8;
+  --accent-wash:#EFECFD; --accent-line:#D5CDF8;
+  --ok:#0F6B45; --warn:#8A5300; --crit:#A5241C;
+  --r-sm:4px; --r:6px; --r-lg:8px;
+  --font:"Figtree",-apple-system,"Segoe UI","Helvetica Neue",sans-serif;
+  --t-h1:24px; --t-h2:17px; --t-h3:15px; --t-body:14px; --t-label:11px;
+  --lift-1:0 1px 2px rgba(32,28,46,.05);
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--ground);color:var(--ink-3);font-family:var(--font);
+  font-size:var(--t-body);line-height:1.6;-webkit-font-smoothing:antialiased}
+a{color:var(--accent-ink)}
+:focus-visible{outline:2px solid var(--ink);outline-offset:2px;border-radius:var(--r-sm)}
+
+.mast{background:var(--ink);color:#fff;padding:40px 32px 34px}
+.mast-in{max-width:1180px;margin:0 auto}
+.eyebrow{font-size:var(--t-label);font-weight:700;letter-spacing:.09em;text-transform:uppercase;color:#B8B1D8;margin-bottom:10px}
+.mast h1{margin:0 0 12px;font-size:clamp(26px,4vw,36px);font-weight:700;line-height:1.1;letter-spacing:-.025em}
+.mast p{margin:0;max-width:74ch;color:#CFC9E4;font-size:15px}
+.mast em,.mast strong{color:#fff}   /* the global ink colours are dark-on-dark here */
+.mast code{background:rgba(255,255,255,.12);border-color:rgba(255,255,255,.2);color:#fff}
+.mast .meta{margin-top:18px;display:flex;flex-wrap:wrap;gap:8px}
+.mast .meta span{font-size:12px;font-weight:600;background:rgba(255,255,255,.1);
+  border:1px solid rgba(255,255,255,.16);border-radius:var(--r);padding:5px 10px;color:#E6E2F4}
+
+.shell{max-width:1180px;margin:0 auto;padding:28px 32px 90px;display:grid;
+  grid-template-columns:236px minmax(0,1fr);gap:40px;align-items:start}
+@media(max-width:1024px){.shell{grid-template-columns:1fr;gap:20px;padding:24px 20px 70px}.toc{position:static!important}}
+
+.toc{position:sticky;top:24px;font-size:13px}
+.toc b{display:block;font-size:var(--t-label);font-weight:700;letter-spacing:.09em;
+  text-transform:uppercase;color:var(--ink-4);margin-bottom:10px}
+.toc a{display:block;padding:5px 0;color:var(--ink-3);text-decoration:none;border-left:2px solid var(--rule);padding-left:12px}
+.toc a:hover{color:var(--accent-ink);border-left-color:var(--accent)}
+.toc .n{color:var(--ink-25);font-variant-numeric:tabular-nums;margin-right:7px}
+
+section{background:var(--paper);border:1px solid var(--rule);border-radius:var(--r-lg);
+  padding:26px 28px;margin-bottom:18px;box-shadow:var(--lift-1)}
+@media(max-width:640px){section{padding:20px 18px}}
+section>h2{margin:0 0 4px;font-size:var(--t-h1);font-weight:700;letter-spacing:-.02em;color:var(--ink);line-height:1.2}
+section>.lede{margin:0 0 20px;color:var(--ink-4);max-width:78ch}
+h3{margin:24px 0 6px;font-size:var(--t-h2);font-weight:700;letter-spacing:-.01em;color:var(--ink);line-height:1.3}
+h3:first-of-type{margin-top:0}
+p{margin:0 0 10px;max-width:80ch}
+ul{margin:0 0 12px;padding-left:20px;max-width:80ch}
+li{margin-bottom:6px}
+code{font-family:inherit;font-size:.93em;font-weight:600;background:var(--cream-2);
+  border:1px solid var(--rule-2);border-radius:var(--r-sm);padding:1px 5px;color:var(--ink);overflow-wrap:anywhere}
+strong{color:var(--ink)}
+em{color:var(--ink-3)}
+
+.tag{display:inline-flex;align-items:center;font-size:10.5px;font-weight:800;letter-spacing:.08em;
+  text-transform:uppercase;border-radius:var(--r-sm);padding:3px 8px;white-space:nowrap;vertical-align:2px}
+.t-server{background:var(--ink);color:#fff}
+.t-ui{background:var(--cream-2);color:var(--ink-4);border:1px solid var(--rule)}
+.t-data{background:var(--cream-2);color:var(--ink-4);border:1px solid var(--rule-strong)}
+.t-decide{background:#F6EEE2;color:var(--warn);border:1px solid #E2CFAE}
+.t-trap{background:#FAEBEA;color:var(--crit);border:1px solid #E9C9C6}
+.t-settled{background:#E7F3ED;color:var(--ok);border:1px solid #BEDBCB}
+
+.item{border-top:1px solid var(--rule-2);padding:18px 0 4px}
+.item:first-of-type{border-top:none;padding-top:0}
+.item-h{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;margin-bottom:6px}
+.item-h h3{margin:0}
+.where{display:block;margin-top:8px;font-size:12px;color:var(--ink-4);overflow-wrap:anywhere;
+  border-left:2px solid var(--rule);padding-left:10px}
+.where b{color:var(--ink-3);font-weight:700}
+
+.call{border:1px solid var(--rule-strong);border-radius:var(--r);background:var(--cream-2);
+  padding:14px 16px;margin:12px 0;font-size:13.5px}
+.call b.lab{display:block;font-size:var(--t-label);font-weight:800;letter-spacing:.09em;
+  text-transform:uppercase;color:var(--ink-4);margin-bottom:5px}
+.call.crit{border-color:#E9C9C6;background:#FAEBEA}
+.call.crit b.lab{color:var(--crit)}
+
+table{width:100%;border-collapse:collapse;font-size:13px;margin:10px 0 14px}
+.tw{overflow-x:auto}
+th{text-align:left;font-size:var(--t-label);font-weight:700;letter-spacing:.08em;text-transform:uppercase;
+  color:var(--ink-4);border-bottom:1px solid var(--rule);padding:0 12px 7px 0;white-space:nowrap}
+td{border-bottom:1px solid var(--rule-2);padding:9px 12px 9px 0;vertical-align:top}
+td:first-child{color:var(--ink);font-weight:600}
+tr:last-child td{border-bottom:none}
+.num{font-variant-numeric:tabular-nums}
+
+ol.steps{counter-reset:s;list-style:none;padding-left:0;margin:0}
+ol.steps>li{counter-increment:s;position:relative;padding-left:34px;margin-bottom:12px}
+ol.steps>li::before{content:counter(s);position:absolute;left:0;top:1px;width:22px;height:22px;
+  border-radius:var(--r-sm);background:var(--cream-2);border:1px solid var(--rule);
+  display:grid;place-items:center;font-size:11px;font-weight:800;color:var(--ink-4);font-variant-numeric:tabular-nums}
+.foot{max-width:1180px;margin:0 auto;padding:0 32px 60px;font-size:12.5px;color:var(--ink-4)}
+</style>
+
+<div class="mast"><div class="mast-in">
+  <div class="eyebrow">Wiskr · Step 1 Recommendations</div>
+  <h1>Dev handoff — what to build, and what it touches</h1>
+  <p>Everything from the Step 1 design pass, reorganised for implementation rather than chronology. The mock is the reference for behaviour; this is the reference for <em>where the code goes and what else moves when it does</em>. Where the mock and this document disagree, this document is the later decision.</p>
+  <p style="margin-top:10px"><strong>Revision 2.</strong> Every claim below was re-verified against <code>origin/main</code> at <code>eaa4000</code>. Revision 1 was wrong in four ways that would have produced shipped bugs; those are corrected here and called out where they mattered.</p>
+  <div class="meta">
+    <span>6 server changes</span><span>1 loader payload gap</span><span>0 Prisma migrations</span>
+    <span>1 Zod widening</span><span>2 gates settled</span><span>6 decisions open</span><span>Verified against eaa4000</span>
+  </div>
+</div></div>
+
+<div class="shell">
+<nav class="toc">
+  <b>Contents</b>
+  <a href="#invariants"><span class="n">01</span>Before you touch anything</a>
+  <a href="#server"><span class="n">02</span>Server &amp; loader changes</a>
+  <a href="#picker"><span class="n">03</span>The picker</a>
+  <a href="#rail"><span class="n">04</span>The Results rail</a>
+  <a href="#ai"><span class="n">05</span>AI Picks</a>
+  <a href="#wizard"><span class="n">06</span>Custom group wizard</a>
+  <a href="#ds"><span class="n">07</span>Design system</a>
+  <a href="#blast"><span class="n">08</span>Cross-product impact</a>
+  <a href="#decisions"><span class="n">09</span>Owner decisions</a>
+  <a href="#traps"><span class="n">10</span>Implementation traps</a>
+  <a href="#verify"><span class="n">11</span>Verification</a>
+  <a href="#future"><span class="n">12</span>Known future work</a>
+</nav>
+
+<main>
+
+<section id="invariants">
+<h2>01 · Before you touch anything</h2>
+<p class="lede">Five rules. All have shipped-incident history, and two of them are the reason revision 1 of this document was wrong.</p>
+
+<div class="call crit"><b class="lab">The dual-model split</b>
+<code>Quiz.logic_model: z.enum(["decider"]).optional()</code> — absent means a legacy points/ladder doc. <strong>Every new behaviour here is decider-gated, and legacy docs stay byte-identical.</strong> New schema fields are <code>.optional()</code>, never <code>.default()</code> — a default rewrites every legacy doc on the next parse-save round trip.</div>
+
+<div class="call crit"><b class="lab">Read shipped state off origin/main — twice over</b>
+<strong>(a) Not the working tree.</strong> The local <code>builder</code> branch is far behind main and still carries Quicksand and pre-Quartz radius literals, so it looks as though the token swap never landed. It did. Use <code>git show origin/main:&lt;path&gt;</code>. This document is pinned to <code>eaa4000</code> (2026-09-07); re-check anything load-bearing against current main.<br>
+<strong>(b) Not <code>docs/design/brand-2026/quartz-tokens.css</code>.</strong> That file is the handoff <em>proposal</em>. Its type ramp (42/38/26/16.5/14.5) is <strong>not what shipped</strong> — main ships 30/24/17/15/14/11. Revision 1 built §07 from the proposal and got every type size wrong.</div>
+
+<p><strong>The byte pin.</strong> After every deploy, <code>curl -sS …/q/cmqqcb0ao004mqvkwjug7t0ya.json | shasum -a 256</code> must still start <code>c02ccaec98a0fe9e</code>. That is the dual-model invariant made checkable. Nothing here should change it; if it changes, stop.</p>
+
+<p><strong>The gate chain, unpiped, before every commit.</strong> A <code>;</code> chain once shipped type errors that 500&rsquo;d production SSR.<br>
+<code>npm run typecheck &amp;&amp; npm test -- --run &amp;&amp; npm run build &amp;&amp; npm run lint &amp;&amp; node scripts/check-tokens.mjs</code></p>
+
+<p><strong>The behaviour reference</strong> is the mock at <code>scratchpad/step1-tweaks.html</code> — a self-contained page with 40 numbered changes and inline rationale. Where it and this document differ, this document is later; §06 and §08 name the two places they deliberately diverge.</p>
+
+<div class="call"><b class="lab">Deliberately unchanged — do not touch</b>
+The page heading, the card and row chrome beyond what §03 lists, the <em>Preview results page</em> footer, the row preview modal, the tab strip&rsquo;s roving-tabindex <code>tablist</code> keyboard handling (<code>RecommendationBucketsStage.tsx:255+</code> — already correct, do not respecify), and <code>.qz-picklist</code> (<code>quizocalypse.css:781</code>), which belongs to the separate &ldquo;+ Add&rdquo; picker dialog.</div>
+</section>
+
+<section id="server">
+<h2>02 · Server &amp; loader changes</h2>
+<p class="lede">Six changes below the component, two of which are live data-loss bugs that exist today independent of any redesign. Everything in §03–§06 is presentation on top of these.</p>
+
+<div class="item">
+<div class="item-h"><h3>1 · Ship <code>status</code> and variant data in the picker payload</h3><span class="tag t-server">Server</span><span class="tag t-data">Payload</span></div>
+<p><code>catalogProducts</code> ships <code>id, title, imageUrl, price, description, tagKeys, collectionIds</code>. Three fields are missing that the UI now depends on:</p>
+<ul>
+<li><strong><code>status</code></strong> — the builder index (<code>:286</code>) and the publish bake (<code>quizPublish.ts:616</code>) both carry it; the picker is the only surface that does not. Without it a merchant can pick a draft, watch it land in Results looking like a real recommendation, publish, and never have it recommended.</li>
+<li><strong>variant options</strong> — <code>variantOptionsOf()</code> already exists and already drops Shopify&rsquo;s placeholder <code>Title: "Default Title"</code>, so &ldquo;has real variants&rdquo; is a well-defined question.</li>
+<li><strong>per-variant availability</strong> — for the variant preview&rsquo;s in-stock / sold-out column.</li>
+</ul>
+<p>The catalog block is <strong>ungated</strong> (<code>:415</code> sits outside the stage gates that guard <code>questionBuilder</code> at <code>:295</code> and <code>recPage</code> at <code>:311</code>) and the underlying read has no take/select/cursor, which is why descriptions are already sliced to 220 chars at <code>:161-163</code>. Add a response-size budget assertion with the new fields; do not rely on eyeballing it.</p>
+<span class="where"><b>funnelLoader.server.ts:155–169</b> catalogProducts · <b>:286</b> builder index · <b>quizPublish.ts:616</b> — copy the derivation, no drift</span>
+</div>
+
+<div class="item">
+<div class="item-h"><h3>2 · Allow a heterogeneous selection</h3><span class="tag t-server">Server</span><span class="tag t-ui">UI</span></div>
+<p>A merchant can hold products, tags, collections and custom groups at once. <strong>Persistence never required otherwise</strong> — each bucket is one <code>Category</code> row, and <code>addBuckets</code>/<code>removeBuckets</code> are per-row and additive. But three <em>intent guards</em> and one client modal do enforce it, so this is four edits, not the two revision 1 claimed:</p>
+<ul>
+<li><code>funnelIntents.server.ts:216</code> (toggle-bucket / select-all / clear-visible), <code>:277</code> (set-buckets), <code>:325</code> (switch-tab) each reject anything outside the three-member union.</li>
+<li><code>switchTab</code> opens <code>TabLockModal</code> and posts <code>clear=true</code>, which runs <code>clearBuckets()</code>. Delete the modal and the flag.</li>
+</ul>
+<div class="call"><b class="lab">The key is logical, not enforced</b><code>(shopId, quizId, source, sourceRef)</code> has <strong>no <code>@@unique</code></strong> in <code>schema.prisma</code>. It is held by <code>addBuckets</code>&rsquo; deleteMany-then-create transaction (<code>step1Build.server.ts:112-119</code>), so a concurrent writer can still create a duplicate. Do not go looking for the constraint.</div>
+<span class="where"><b>funnelIntents.server.ts:216, :277, :325, :330</b> · <b>RecommendationBucketsStage.tsx:164</b> the homogeneity comment, <b>:246–254</b> switchTab, TabLockModal · <b>step1Build.server.ts:106</b> addBuckets, <b>:137</b> clearBuckets</span>
+</div>
+
+<div class="item">
+<div class="item-h"><h3>3 · Fix the two live bugs in <code>set-buckets</code></h3><span class="tag t-server">Server</span><span class="tag t-trap">Data loss</span></div>
+<p><code>leaverIds</code> is computed as <em>everything not in <code>wanted</code></em> (<code>:292</code>), and <code>existing</code> is selected at <code>:286-289</code> with no <code>discoveryRunId</code> in the <code>where</code> or the <code>select</code>. That is <strong>two</strong> defects, not one:</p>
+<ul>
+<li><strong>Cross-type collateral</strong> — <code>wanted</code> is single-typed, so applying a suggestion deletes the merchant&rsquo;s picks of every other type.</li>
+<li><strong>Logic-tab rule targets</strong> — <code>api.categories.ensure-targets.tsx:115-127</code> writes rows with <code>discoveryRunId: \`logic-tab-${quizId}\`</code>. Those are real leaver candidates here. Deleting one dangles every rule that points at it and <strong>hard-blocks publish</strong>. Type-scoping alone does not fix this: a same-type Logic-tab target is still deleted.</li>
+</ul>
+<p>Both, together:</p>
+<p><code>existing.filter((c) =&gt; normSource(c.source) === rawType &amp;&amp; !staysFor(c) &amp;&amp; !c.discoveryRunId.startsWith("logic-tab-"))</code></p>
+<p>Add <code>discoveryRunId: true</code> to the select at <code>:288</code>. It is non-nullable in <code>schema.prisma</code>, so no optional chaining.</p>
+<div class="call crit"><b class="lab">Revision 1 got this half-right, and that is worse than wrong</b>
+It prescribed the type-scoping only, and attached a &ldquo;keep the exemption&rdquo; note to <code>clearBuckets</code> — which is the one function that <em>already has</em> the exemption (<code>step1Build.server.ts:139</code>, alongside <code>persistConfirmedGroups</code> at <code>:63</code>). <code>set-buckets</code> has never had it. A dev following revision 1 would have believed this bug closed while shipping the publish-blocking half.</div>
+<span class="where"><b>funnelIntents.server.ts:275–318</b>, <b>:286-289</b> select, <b>:292</b> leaverIds · <b>step1Build.server.ts:63, :139</b> the existing exemptions · <b>api.categories.ensure-targets.tsx:115-127</b></span>
+</div>
+
+<div class="item">
+<div class="item-h"><h3>4 · Never overwrite a non-empty selection</h3><span class="tag t-server">Server</span><span class="tag t-trap">Data loss</span></div>
+<p>The goal pre-pick calls <code>clearBuckets</code> twice while the picker is live: <code>goalPrepick.server.ts:62</code> on begin, and <code>:207</code> again before <code>addBuckets</code> (&ldquo;clearing again keeps a Retry honest&rdquo;). <strong>Anything the merchant picks while <code>goal_first.prepick === "picking"</code> is destroyed when the job lands</strong>, and <code>retry-gen</code> re-runs it. The stalled state actively tells the merchant to pick their own products, then deletes that work.</p>
+<p>Gate both calls: the pre-pick may write buckets only when the selection is empty. If it is non-empty, land as <code>ready</code>, leave the selection alone, and let the merchant Apply from the pill in §05. <code>retry-gen</code> takes the same gate.</p>
+<p>This is the bug the whole arrival redesign exists to fix. Ship it <em>with</em> the tweaks, not after them.</p>
+<span class="where"><b>goalPrepick.server.ts:62</b> beginGoalFirstFlow, <b>:207</b> the pick handler · the <code>retry-gen</code> intent · <b>step1Funnel.server.ts</b> genStalled (~200 s <code>updatedAt</code>)</span>
+</div>
+
+<div class="item">
+<div class="item-h"><h3>5 · Admit a fourth bucket type</h3><span class="tag t-server">Server</span><span class="tag t-trap">Blocks §03</span></div>
+<p><strong>The Custom tab persists nothing today.</strong> The <code>Category</code> system, <code>GroupWizard</code>, <code>/studio/groups</code> and <code>groupMembership.ts</code> all ship — but the <em>bucket type</em> does not, and six places reject a fourth:</p>
+<ul>
+<li><code>BucketType</code> is a closed three-member union — <code>bucketPersist.ts:16</code>, duplicated verbatim at <code>stagesShared.tsx:22</code>.</li>
+<li>Three intent guards 400 on anything else — <code>funnelIntents.server.ts:216, :277, :325</code>.</li>
+<li><code>BROWSER_SOURCES</code> (<code>funnelLoader.server.ts:175</code>) filters a custom-sourced row out of the shelf.</li>
+<li><code>bucketRowFor</code> (<code>bucketPersist.ts:29</code>) has no branch that resolves one.</li>
+<li>The tab cannot be remembered: <code>bucket_browser.active_tab</code> is <code>z.enum(["product","tag","collection"])</code> (<code>quizSchema.ts:1640</code>).</li>
+</ul>
+<p>Widen all six. The Zod change is a <strong>widening of an existing <code>.optional()</code> field</strong>, so legacy docs stay byte-identical and no Prisma migration is needed.</p>
+<div class="call crit"><b class="lab">Two contracts to settle before writing any of it</b>
+<strong>(a) Key identity.</strong> The row must be <code>source: "group"</code>, <code>sourceRef: &lt;Category id&gt;</code>. Wizard groups are currently created with <code>sourceRef: null</code> and <code>source: dominantSource(membership)</code>, which returns <code>"tag"</code> for any group containing tags (<code>studio.groups.tsx:184-195</code>, <code>groupMembership.ts:82</code>). Reuse that and the type-scoped delete in item 3 will treat a custom group as a tag and delete it.<br>
+<strong>(b) Bake resolution.</strong> Publish must resolve a group bucket through its stored <code>productIds</code> — the same path a collection takes (<code>bucketRowFor</code> → <code>quizPublish.ts:524-538</code>).</div>
+</div>
+
+<div class="item">
+<div class="item-h"><h3>6 · Ship a deliverable count for the rail</h3><span class="tag t-server">Server</span><span class="tag t-settled">Scoped by decision 8</span></div>
+<p><em>&ldquo;Group of 44 products&rdquo;</em> counts every member. The runtime filters the pool through <code>isSellable</code> (<code>recommendationEngine.ts:122</code>), which drops non-<code>active</code> products <strong>on any bake that carries <code>status</code></strong> (new publishes; older bakes have no <code>status</code> and keep their exact pre-fix behaviour) <strong>and</strong> drops anything both out of stock and priced ≤ 0. So a group advertised as 44 can deliver 38.</p>
+<p><strong>Decision 8 settled how to say that: by context.</strong> The picker keeps the group&rsquo;s real size — it is browsing a catalogue and 44 is true. The <strong>rail</strong> shows what the quiz will return, because that is the question it answers.</p>
+<p><strong>What to build.</strong> One field: a <code>deliverableCount</code> per bucket, computed server-side in the loader where full <code>Product</code> rows are already in hand (<code>funnelLoader.server.ts:41</code>). Derive it through <code>isSellable</code> itself, not through a status test — status alone is <em>closer</em>, not equal, because of the $0-and-out-of-stock rule. Render it in the rail only (§04).</p>
+<div class="call"><b class="lab">Why not fix the count everywhere</b>
+Because there is no single place to fix it. <code>git grep -n "productIds\.length" origin/main -- app/</code> returns ~50 hits across ~25 files, each writing its own expression, and the Logic tab&rsquo;s counts are not <code>Category</code>-derived at all — they are tallied from <code>productIndex</code> (<code>QuestionWindow.tsx:320-358</code>). Decision 8 avoids that migration rather than paying for it. <strong>If a later surface needs the honest number, lift the loader&rsquo;s derivation into a shared <code>deliverableCount(category, products)</code> rather than writing a second expression.</strong></div>
+<span class="where"><b>funnelLoader.server.ts:41</b> the product read, <b>:182</b> the current raw count · <b>recommendationEngine.ts:118–129</b> isSellable · rail render (§04)</span>
+</div>
+</section>
+
+<section id="picker">
+<h2>03 · The picker</h2>
+<p class="lede">Left panel: tabs, toolbar, list, footer. Geometry is pinned to the shipped stylesheet — see §07.</p>
+
+<h3>Tabs</h3>
+<ul>
+<li><strong>Four tabs</strong>: Products · Tags · Collections · <strong>Custom</strong>. Custom requires §02 item 5 first — it cannot persist without it.</li>
+<li><strong>A tab prints its own picks and nothing else</strong> — <em>Tags 9</em>. Not the catalogue total: at the live 588px picker width, four tabs each printing a total plus the AI pill overflows by 52px, and the fix bought back only 21px. Totals live in each tab&rsquo;s <code>aria-label</code>.</li>
+<li><strong>Switching tabs never touches the selection.</strong> A tab is a view, not a mode.</li>
+<li><strong>The Custom rename is tab-label only.</strong> Sentences still say <em>group</em> — <em>&ldquo;Add all 2 groups?&rdquo;</em>, <em>New group</em>, <em>Group of 38 products</em>. A find-and-replace produces <em>&ldquo;Add all 2 customs?&rdquo;</em> and a <em>&ldquo;Search custom…&rdquo;</em> placeholder. The placeholder takes the plural noun.</li>
+<li><strong>Focus must not imitate selection.</strong> A selected row is <code>--qz-accent-tint</code> fill + <code>--qz-accent</code> border (<code>:2051</code> — <em>not</em> <code>--qz-accent-wash</code>, whose own comment says &ldquo;selected rows&rdquo; and will be picked by mistake). Focus is a dark <code>--qz-ink</code> outline. Fields keep the Quartz accent ring, which is what <code>.qz-input:focus</code> already does. <strong>See the specificity trap in §10 — a bare class selector loses to the global rule.</strong></li>
+</ul>
+
+<h3>Toolbar — search · sort · one button</h3>
+<ul>
+<li><strong>Sort</strong> is a native <code>&lt;select&gt;</code>, not a popover. Per-tab: <em>Tags</em> and <em>Custom</em> get Most products · Fewest products · A–Z · Z–A; <strong>Products and Collections get A–Z · Z–A only</strong> — a product has no member count, and a collection is something you already know the name of. <em>(Collections is pending decision 4.)</em></li>
+<li><strong>Selected-first is a grouping, and it has two unstated rules.</strong> The sort runs inside each group. <strong>(a)</strong> The order is <strong>frozen</strong> between rebuilds — load, tab change, search, sort change — because re-partitioning on every toggle teleports the clicked row to the top and slides the next row under the cursor. <strong>(b)</strong> While a search is active the frozen order is bypassed entirely: the result is a flat sorted list with selections interleaved. Without (b) a dev implements selected-first unconditionally and diverges on every search.</li>
+<li><strong>Status filter</strong> — Active · Draft · Archived · All statuses. <em>Active</em> is the default because it is the only state the runtime surfaces. <strong>Products only</strong>; the other three tabs have no Shopify status, so the control is not rendered there rather than rendered dead.</li>
+<li><strong>Select all / Clear all</strong> — one control, no menu, and it always confirms. It acts on <strong>the loaded window</strong>, not the whole filtered set. The dialog counts <strong>what will actually change</strong>: with 9 of the 25 loaded rows already picked it offers <em>Add 16</em>, not <em>Add 25</em>. Clear all removes the whole window. With nothing in the window — a search with no matches — the control is <strong>disabled</strong>, so it never offers <em>Select all 0</em>. Under a partially-loaded list the dialog names the remainder: <em>&ldquo;That is everything currently shown — expand the list to reach the other 283.&rdquo;</em></li>
+<li>Both selects carry <strong>fixed widths</strong>. A <code>&lt;select&gt;</code> sizes to its chosen option, so without them the search field jumps every time the sort changes.</li>
+</ul>
+
+<h3>Rows</h3>
+<ul>
+<li><strong>One line each.</strong> Today&rsquo;s row is thumb + name + <code>SUB_LABEL</code> second line + check glyph + price (products) / count-link (<code>RecommendationBucketsStage.tsx:580-625</code>). Explicitly: the <strong>42px thumbnail stays</strong>; the <strong><code>SUB_LABEL</code> second line goes</strong>; the <strong>check glyph goes</strong>; the <strong>price goes</strong>; the count-link is replaced per the next bullet. What remains is a name and one right-hand column.</li>
+<li><strong>The picker&rsquo;s count is the group&rsquo;s real size and does not change</strong> (decision 8) — <em>Group of 44 products</em>, all members. The deliverable number lives in the rail only (§04).</li>
+<li><strong>The right column is flush to the row&rsquo;s right edge on every tab</strong> and carries: <em>Group of <u>13 products</u></em> for groups, the variant list (<em>Size · S, M, L, XL</em>) for products. A single-variant product shows <strong>nothing</strong> — not a dash. A long variant list fades on the <em>left</em>, because the column is right-aligned.</li>
+<li><strong>The count is the control</strong> — <code>View →</code> is deleted and the underlined number opens the members. <strong>This applies to list rows and the AI Picks dialog only.</strong> In the rail the row itself is the control and the count stays plain text (§04) — read literally the other way, this sentence tells you to nest a button inside a <code>role="button"</code>, which is the trap §10 records as hit three times.</li>
+<li>The count button needs an accessible name: <code>aria-label="View the 3 products in acne"</code>. The visible text alone leaves &ldquo;13 products&rdquo; as the accessible name for every row.</li>
+<li><strong>Selection is border + tint only</strong> — no tick. See §09 decision 1.</li>
+<li>Draft and archived products carry a status badge; <strong>active products do not</strong>. Marking the exception is legible; marking the rule is 25 rows all shouting ACTIVE.</li>
+</ul>
+
+<h3>List &amp; footer</h3>
+<ul>
+<li><strong>25 rows load; reaching the bottom loads 25 more.</strong> No Expand button. The list keeps live&rsquo;s <code>max-height: 460px</code> and scrolls internally, so the widget and its footer stay on screen at any catalogue size.</li>
+<li><strong>The footer is one left-aligned line</strong>: <em>Showing <strong>25</strong> of <strong>308</strong> active · <u>20 draft, 11 archived not shown</u></em>. The underlined part is also the control — it switches to All statuses. It appends <em>&ldquo; matching&rdquo;</em> under an active search. <strong>The ledger renders on Products only</strong>, and only for statuses not currently shown; on the other tabs the footer is a bare <em>Showing N of M</em>.</li>
+<li>Filtered to Active, the row badge only fires on rows the merchant <em>cannot see</em>. Without the ledger they have no way to learn drafts exist. This line is the answer to &ldquo;where do I see Active vs Draft&rdquo;.</li>
+<li><strong>No count of what is left.</strong> <em>Showing 25 of 308</em> already carries it.</li>
+</ul>
+
+<h3>The narrowing line — the one genuinely new element</h3>
+<p>Shown <strong>once above the list, not per row</strong>; <strong>absent on the Products tab</strong>; opens an explainer modal. Copy is pending decision 6. Its insertion has a layout trap — see §10.</p>
+
+<h3>States that must be specified before build</h3>
+<ul>
+<li><strong>Empty or still-syncing catalogue</strong> — a fresh install hits this on the funnel&rsquo;s first screen.</li>
+<li><strong>The Custom tab is empty for every shop</strong> until someone builds a group, so its empty state must <em>be</em> the New-group affordance, not a message beside one.</li>
+<li><strong>Zero search matches</strong>, and <strong>a status filter with zero matches</strong> — including the ledger&rsquo;s grammar when both trailing counts are zero and the underlined control has nothing to switch to.</li>
+<li><strong>A selected row that the current filter or search excludes.</strong> Status defaults to Active, so a previously-picked draft stays in the rail but leaves the list; Clear all acts on the loaded window and cannot reach it; the rail has no status badge, so the pick looks healthy; the ledger counts unshown <em>rows</em>, never unshown <em>picks</em>. <strong>Pick one rule:</strong> selected rows are always shown regardless of filter, or the rail carries the badge and the ledger counts hidden picks.</li>
+</ul>
+
+<h3>Accessibility this document introduces</h3>
+<ul>
+<li><strong>Deleting the Expand button removes the only keyboard route past row 25</strong> — scroll-triggered loading never fires from focus movement. Either focus reaching the last row also loads, or a visually quiet &ldquo;load more&rdquo; stays for keyboard and AT.</li>
+<li>No live-region spec for 25 appended rows, or for the self-rewriting ledger — which is also a control and needs an element type and accessible name.</li>
+<li>Focus return after each modal close, after ✕ removes a rail row, and after Apply (where Undo appears elsewhere on screen).</li>
+<li><kbd>Esc</kbd> from the members preview returns to the AI dialog, not the page — §05 specifies only the Cancel path, which is exactly the mouse-tested / keyboard-untested split that shipped broken in the mock.</li>
+</ul>
+<span class="where"><b>RecommendationBucketsStage.tsx</b> — TAB_META, SUB_LABEL, row markup <b>:580–625</b>, selectAllVisible <b>:305–316</b> · <b>quizocalypse.css</b> .qz-rb-toolbar <b>:2024</b>, .qz-rb-grid <b>:2035</b>, .qz-rb-card <b>:2041</b>, .qz-rb-underrow <b>:3396</b></span>
+</section>
+
+<section id="rail">
+<h2>04 · The Results rail</h2>
+<ul>
+<li><strong>Titled <em>Results</em></strong>, with a composition sub-line: <em><strong>9</strong> groups · <strong>2</strong> products</em>. <em>Your recommendations · 11</em> never said whether 11 meant eleven products or eleven sets of forty. <strong>The header keeps its total count badge on the right of the same row</strong> — title, sub-line and badge, not the sub-line alone.</li>
+<li><strong>Sections are Groups and Products</strong> — not the four source tabs. The tab a thing came from is a fact about the merchant&rsquo;s route, not about the quiz. Section headers render only when both kinds are present, each with its own count.</li>
+<li><strong>The rail&rsquo;s count is the deliverable one</strong> (decision 8, §02 item 6) — and the two numbers must not read as a contradiction with the picker. <strong>Copy rule:</strong> when deliverable equals total, print <em>44 products</em>. When they differ, print <em><strong>38</strong> of 44 products</em>. That form shows the gap and explains itself, needs no extra sentence, and appears only where the merchant is looking at output.</li>
+<li><strong>Non-product buckets use the glyph, never a member&rsquo;s photo.</strong> Today <code>cardFor</code>/<code>cardsForTab</code> give four tags one shared picture and render &ldquo;dryness&rdquo; as a red square.</li>
+<li><strong>Rows open the same preview</strong> as the list. The row must be a <code>div role="button"</code>, <strong>never a <code>&lt;button&gt;</code></strong> — it contains the ✕, and the ✕ resolves first. The count inside it stays plain text.</li>
+<li><strong>A pick confirms itself</strong>: the row that just landed flashes and the rail scrolls it into its own frame. Set <code>scrollTop</code> on the rail list directly — <code>scrollIntoView</code> moves the page too. Bulk actions skip the flash.</li>
+<li><strong>The five-row cut is measured</strong> from the fifth real row, not calculated: section headers make any fixed-pitch arithmetic wrong. The list still scrolls (<code>overflow-y: auto</code>, <code>:3423</code>) — the fade marks continuation, it does not truncate access. <strong>No count line under it.</strong></li>
+<li>Keep the shipped accent-tinted border, violet shadow and <code>position: sticky</code> — those are deliberate, not drift.</li>
+</ul>
+<div class="call"><b class="lab">On the name</b><em>Results</em> collides with step 04 in the stepper, and it should. Step 1 chooses the results; step 04 designs how they look. The app calling them two different things was the confusing part. <strong>Do not rename this to avoid the clash.</strong></div>
+<span class="where"><b>RecommendationBucketsStage.tsx</b> — rail header, .qz-rb-rail-list render, cardFor/cardsForTab <b>:197–205</b>, <b>:284–295</b> · <b>quizocalypse.css:3410</b> .qz-rb-rail, <b>:3423</b> list</span>
+</section>
+
+<section id="ai">
+<h2>05 · AI Picks</h2>
+<p class="lede">Two shipped surfaces collapse into one pill. Naming them correctly matters — revision 1 pointed at the wrong component and lost four states.</p>
+
+<div class="call crit"><b class="lab">Which surfaces, and which AI</b>
+The pill replaces <strong>both</strong> the inline tip row <code>.qz-rb-tiprow</code> (<code>RecommendationBucketsStage.tsx:442–484</code> — ✦ / Tip / Use this / Applied / Undo / ✕) <strong>and</strong> <code>GoalFirstBanner</code> (<code>:1185–1302</code>), which are mutually exclusive via <code>!goalFirst</code> at <code>:430</code>. Revision 1 cited only <code>GoalFirstBanner</code> and described the tip row&rsquo;s controls, which that component does not have.<br><br>
+They are also <strong>two different AIs</strong>. &ldquo;AI Picks&rdquo; as specified here is the <em>deterministic heuristic</em> in <code>bucketDetect.ts</code>; <code>goalPrepick.server.ts</code> is the genuinely-AI goal pre-pick. The pill must not attribute picks to the goal unless <code>goal_first.prepick</code> produced them.</div>
+
+<h3>Four states, not two</h3>
+<p>Inheriting <code>GoalFirstBanner</code> means inheriting its lifecycle. Specify copy for each: <strong>picking</strong> (a detached gen job is in flight — say what the picker can be used for meanwhile, and that existing picks are kept), <strong>stalled</strong> (the <code>genStalled</code> ~200 s <code>updatedAt</code> backstop, with <em>Try again</em> → <code>retry-gen</code>), <strong>failed</strong> (with <em>Try again</em>), and <strong>ready / applied</strong>. Dropping the first three changes the AI&rsquo;s identity halfway through the flow and removes the only retry path.</p>
+
+<h3>The dialog</h3>
+<ul>
+<li><strong>Titled <em>AI Picks</em></strong>, sub-lined <em>Based on &ldquo;…the goal…&rdquo;</em>. The goal moves out of the body, where it competed with the list; it is provenance, so it belongs with the title.</li>
+<li><strong>Each row&rsquo;s count opens that item&rsquo;s members.</strong> A count of one shows nothing at all — the row already names the only thing in it.</li>
+<li><strong>Apply → Applied</strong> (disabled), with <strong>Revert</strong> beside it.</li>
+<li><strong>The Override confirm fires on an existing selection <em>of the type being applied</em></strong> — not on any selection. A merchant holding only products, when the suggestion is tags, has nothing replaced and should fall straight through. Implemented as &ldquo;an existing selection blocks&rdquo;, the dialog fires reading <em>&ldquo;0 tags are already selected&rdquo;</em>. Its Cancel returns to the AI dialog, not the page.</li>
+</ul>
+
+<div class="call crit"><b class="lab">Apply and revert are scoped to <code>apply.type</code> — both of them</b>
+<strong>The suggestion is not always tags.</strong> <code>suggestBucketStrategy</code> returns <code>suggestedType: "product"</code> with <code>applyFromProducts()</code> below <code>SMALL_CATALOG</code>, and has a <code>collection</code> branch above it — <code>apply.type</code> is <code>product | tag | collection</code> (<code>bucketDetect.ts:110-146</code>). A tag-scoped Apply is wrong for two of three cases, including the small-catalogue shape most new installs have.<br><br>
+Apply replaces that <em>one</em> type&rsquo;s half of the selection and leaves the other three alone. <strong>Revert must be scoped identically</strong> — delete the suggested type&rsquo;s keys, restore the keys of that same type that were selected before. Restoring a whole-selection snapshot silently discards anything added <em>since</em> the apply: the same stale-state-over-newer-intent bug as §02 item 4 and the undo window below. It arrived by three separate routes in one design pass; assume a fourth.</div>
+
+<h3>Revert and Undo — three invalidation rules</h3>
+<ul>
+<li><strong>Revert needs two conditions</strong>: the picks are still selected <em>and</em> a prior-key snapshot exists from an apply in this session. With the picks pre-selected and no snapshot — the opening state, and every return visit — the dialog shows a disabled <em>Applied</em> and <strong>no Revert</strong>. Decide whether the prior keys persist or Revert is explicitly session-scoped, and say which.</li>
+<li><strong>The 5 s Undo is cleared immediately</strong> by any row toggle and by either direction of Select all / Clear all, because the snapshot it would restore is stale. That invalidation is what actually bounds the risk decision 2 debates.</li>
+<li><strong>Applying force-switches</strong> the picker to the suggested type&rsquo;s tab and clears the search.</li>
+</ul>
+<span class="where"><b>RecommendationBucketsStage.tsx</b> — tip row <b>:442–484</b>, showTip <b>:429-430</b>, dismissTip <b>:186</b>, setSelection <b>:207–216</b>, useThis <b>:218</b>, undoApply <b>:238</b> · GoalFirstBanner <b>:1185–1302</b> · <b>bucketDetect.ts:110–146</b> · the <code>switch-tab</code> <code>dismiss</code> flag is <strong>already dead</strong> (<code>funnelIntents.server.ts:333</code> has no client caller) — delete the server read rather than wiring it</span>
+</section>
+
+<section id="wizard">
+<h2>06 · Custom group wizard</h2>
+<div class="call crit"><b class="lab">There is no scroll box to remove</b>
+Revision 1 sent the dev hunting for <code>.qz-gw-src-b</code> and a <code>max-height: 104px</code>. <strong>Neither exists</strong> — <code>git grep "qz-gw" origin/main</code> returns zero hits repo-wide. The real wrapper is <code>.qz-wsrc</code> (<code>quizocalypse.css:760</code>) around an <strong>uncapped wrapping flex row</strong> (<code>GroupWizard.tsx:143-163</code>, body at <code>:149</code>): nothing is clipped today, the sections simply grow unbounded. The clipping described in the mock is a property of the mock.</div>
+<ul>
+<li><strong>Cap each source section at ten whole chips</strong> plus an inline <code>+N more</code> expander. No inner scrollbars; the modal body scrolls. Leave <code>.qz-picklist</code> (<code>:781</code>, <code>max-height: 46vh</code>) alone — that is the separate &ldquo;+ Add&rdquo; picker dialog.</li>
+<li><strong>Past twelve options a section gets its own search.</strong> An expander alone is useless at the real numbers — <em>+329 more</em> on products is a wall, not a list, and the dialog promises &ldquo;combine anything in your catalogue&rdquo;.</li>
+<li><strong>Filtering re-renders, which destroys focus.</strong> Put focus and the caret back afterwards or the merchant types one character per click.</li>
+<li><strong>Divergence from the mock, deliberate:</strong> the mock&rsquo;s <code>+N more</code> is a 10↔60 toggle, not a full expand — on Tags it reads <em>+218 more</em> collapsed and <em>+168 more</em> expanded. <strong>Build the full expand.</strong> A dev diffing against the mock would otherwise read this as their own bug.</li>
+<li><strong>Two revision-1 bullets were mock-only and are withdrawn:</strong> the string <em>&ldquo;It becomes reusable in Logic and Results too.&rdquo;</em> does not exist in <code>GroupWizard.tsx</code> (step 2 is name + note, <code>:192-204</code>), and <em>Back sits left</em> is already the shipped layout (<code>:118-128</code>: Cancel · spacer · Back · primary) — no change needed.</li>
+</ul>
+<span class="where"><b>GroupWizard.tsx:143–163</b> source-section bodies, body <b>:149</b>, footer <b>:118–128</b>, step 2 <b>:192–204</b> · <b>quizocalypse.css:760</b> .qz-wsrc · <b>groupMembership.ts</b> resolveMembership (a union across tags, collections, metafields and hand-picked products)</span>
+</section>
+
+<section id="ds">
+<h2>07 · Design system</h2>
+<p class="lede">Quartz shipped. Values below are from <code>origin/main</code> — see the §01 warning about the proposal file.</p>
+
+<h3>Geometry — do not change these</h3>
+<div class="tw"><table>
+<tr><th>What</th><th>Value</th><th>Source</th></tr>
+<tr><td>Funnel page</td><td class="num">max-width 1000 · padding 28/24/72</td><td><code>quizocalypse.css:799</code></td></tr>
+<tr><td>Split</td><td class="num">minmax(0,1fr) 320px · gap 44 · breaks 1024</td><td><code>:3389</code></td></tr>
+<tr><td>Measured</td><td class="num">picker 588 · gutter 44 · rail 320</td><td>stated in the CSS comment</td></tr>
+<tr><td>List</td><td class="num">max-height 460 · padding 14 · gap 9</td><td><code>:2035</code></td></tr>
+<tr><td>Row</td><td class="num">padding 10/12 · gap 12 · thumb 42</td><td><code>:2041</code></td></tr>
+<tr><td>Tabs / toolbar</td><td class="num">14/14/0 gap 6 · 13/14/12 gap 8</td><td><code>:2003</code>, <code>:2024</code></td></tr>
+<tr><td>Rail</td><td class="num">padding 16 · gap 10 · list gap 6, max-height 44vh</td><td><code>:3410</code>, <code>:3423</code></td></tr>
+</table></div>
+
+<h3>Type — the shipped scale</h3>
+<p><strong>30 display · 24 h1 · 17 h2 · 15 h3 · 14 body · 11 label.</strong> Page and panel titles are <strong>17/700</strong> (<code>.qz-h2</code>). Tabs 13/500, tab count 11.5/600, Select all 12.5, row name 14/600, row meta 12, count link 12/500, rail name 13/600, empty state 13.5, footer 12.5.</p>
+
+<h3>Shape, depth, motion</h3>
+<ul>
+<li>Radii <strong>6 / 4 / 8</strong>, and <code>--qz-radius-pill: 6px</code> — nothing is a full pill except a spinner.</li>
+<li>Three lifts; content is flat, only overlays cast. One curve, <code>cubic-bezier(.2,.7,.3,1)</code>.</li>
+<li>Dark mode was cut (owner, 2026-08-09); <code>color-scheme: light</code> is declared.</li>
+<li><strong><code>--qz-font-mono</code> is deleted</strong> on main. Former label sites are Figtree 700 uppercase +.09em; numeric sites are body + <code>tabular-nums</code>.</li>
+<li><strong>The accent rule, from the stylesheet itself:</strong> spend it on three things only — primary action, current selection, focused field. Never a heading, chip, tag, chart bar or icon.</li>
+<li><code>[data-qz-surface="editor"]</code> neutralises the accent because the merchant is looking at <em>their</em> brand. <strong>It does not apply here</strong> — on this screen they are choosing products, not designing.</li>
+</ul>
+
+<h3>Below 1024px — unspecified, and the overflow risk is measured</h3>
+<p>The tab strip was <strong>52px over at 588px</strong> and the fix bought back 21px. At 375px, four tabs plus the pill plus per-tab counts, and a toolbar of search + two fixed-width selects + Select all, cannot fit. Before build, state: whether the rail stacks above or below, whether its <code>position: sticky</code> survives stacking, whether a 460px inner-scrolling list is acceptable inside page scroll on touch, and the toolbar&rsquo;s wrap rule.</p>
+</section>
+
+<section id="blast">
+<h2>08 · Cross-product impact</h2>
+<p class="lede">What moves outside Step 1. Two rows here were wrong in revision 1 in ways that change the recommendation.</p>
+
+<div class="tw"><table>
+<tr><th>Change</th><th>What else it touches</th></tr>
+<tr><td>Heterogeneous selection</td><td>Nothing downstream <strong>of generation</strong>: the only branch on <code>source</code> in the build path is <code>curatedBucketRows</code>&rsquo; <code>!== "ai"</code> filter (<code>bucketPersist.ts:66</code>), and <code>loadConfirmedBuckets</code> narrows to <code>{name, tags}</code> (<code>step1Build.server.ts:151</code>). <strong>But publish and runtime do read it</strong> — it bakes into <code>target_index.type</code> (<code>quizPublish.ts:539-542</code>) and a product-sourced target renders <strong>hero-only with an empty grid</strong> (<code>recommendDecider.ts:395</code>). Today&rsquo;s homogeneous selection means a quiz&rsquo;s result pages all take one shape; a mixed selection produces <strong>mixed shapes on the same quiz</strong>. That is decision 7, not a verified no-op.</td></tr>
+<tr><td>Custom tab</td><td>Shop-global groups are <strong>already</strong> reachable from a quiz: <code>funnelLoader.server.ts:77-81</code> loads <code>quizId: null</code> rows and merges them at <code>:253</code> into the Logic and Rec Page pickers, whose comment reads <em>&ldquo;Kept OUT of the raw categories above so Step-1&rsquo;s own grouping is unaffected&rdquo;</em>. What the Custom tab adds is <strong>Step-1</strong> reachability, which that decision deliberately excluded. The open question is not cross-quiz reach — it is whether Step-1 grouping should now write against shop-global rows.</td></tr>
+<tr><td>Deliverable counts</td><td><strong>Contained by decision 8.</strong> One loader field, rendered in the rail only — the ~50 raw <code>productIds.length</code> call sites across ~25 files are left alone, deliberately. Note the Results-step count is on the <strong>legacy</strong> step (<code>ResultSettingsPanel.tsx:428/440</code>); the decider Results step renders no member count, so there was nothing to change there anyway.</td></tr>
+<tr><td>Advisories removed</td><td>The containment notice is specified but never built. <strong>The one-recommendation notice ships today</strong> (<code>RecommendationBucketsStage.tsx:704-709</code>, <code>.qz-rb-warn</code>) — removing it is a deliberate <strong>regression of live behaviour</strong>, not a deferral. Preserve the copy verbatim for the per-page AI surface.</td></tr>
+<tr><td>The mock&rsquo;s 25-recommendation ceiling</td><td>Not carried forward. <strong>No such cap exists in shipped code</strong>, so there is nothing to remove. Not the same 25 as §03&rsquo;s page size.</td></tr>
+<tr><td>Status filter</td><td>Behaviour-neutral: <code>isSellable</code> already drops non-active products at recommendation time on bakes that carry <code>status</code>. This is about honesty in the picker, not a runtime change.</td></tr>
+<tr><td>Loader payload growth</td><td>Three fields × catalogue size, on an <strong>ungated, uncapped</strong> read (<code>:415</code>, no take/select/cursor at <code>:41</code>). The loader already slices descriptions to 220 chars for exactly this reason. Add a size-budget assertion, not a manual check.</td></tr>
+</table></div>
+
+<h3>Deliberately not built</h3>
+<p><strong>Most-specific-wins subtraction.</strong> When a product is picked <em>and</em> a group containing it is picked, one result becomes a strict subset of another. We considered subtracting at bake time and <strong>decided against it</strong>: overlap predates multi-type selection (two tags have always shared products), subtraction is the app silently editing stated intent, and it introduces an emptied-group failure mode that does not exist today. <code>applyRuleAction("hide")</code> already expresses it per-branch for merchants who want it.</p>
+<p><em>What would change the decision:</em> measure it. Count published quizzes where one target&rsquo;s members are a subset of another&rsquo;s. If it is rare, a warning is enough permanently.</p>
+</section>
+
+<section id="decisions">
+<h2>09 · Owner decisions</h2>
+<p class="lede">Eight calls that are not the dev&rsquo;s. <strong>The two that gated work are answered</strong> (7 and 8, below); the remaining six block nothing.</p>
+
+<div class="call crit"><b class="lab">Start here — two bug fixes need no decision at all</b>
+<strong>§02 item 3 (the two <code>set-buckets</code> bugs) and §02 item 4 (the pre-pick clobber) are live data-loss defects that exist today, independent of this redesign.</strong> No design input, no owner call, no other section. They are the highest-value thing in this document and should ship first, on their own, with the tests in §11.</div>
+
+<div class="tw"><table>
+<tr><th>Decision</th><th>Status</th><th>Effect on the plan</th></tr>
+<tr><td>7 · Mixed result-page shapes</td><td class="num"><strong>Settled — accept</strong></td><td>§02 item 2 and §03 are unblocked. No runtime or bake work.</td></tr>
+<tr><td>8 · What a group count shows</td><td class="num"><strong>Settled — split by context</strong></td><td>§02 item 6 drops from ~25 files to <strong>two surfaces</strong> plus one loader field.</td></tr>
+<tr><td>3 · Should dismissal persist</td><td class="num">Scopes §05</td><td>&ldquo;Yes&rdquo; adds a server write path that does not exist today. &ldquo;No&rdquo; is zero work — it is already session-only.</td></tr>
+<tr><td>1 · Colour-only selection</td><td class="num">Open, non-blocking</td><td>CSS. Decide at design review.</td></tr>
+<tr><td>2 · Undo window length</td><td class="num">Open, non-blocking</td><td>One constant.</td></tr>
+<tr><td>4 · Collection size sorts</td><td class="num">Open, non-blocking</td><td>One array entry.</td></tr>
+<tr><td>5 · Figtree for identifiers</td><td class="num">Open, non-blocking</td><td>Affects this document, not the product.</td></tr>
+<tr><td>6 · Narrowing-line copy</td><td class="num">Open, non-blocking</td><td>The element gets built either way; only the sentence is open.</td></tr>
+</table></div>
+
+<div class="item"><div class="item-h"><h3>1 · Selection is carried by colour alone</h3><span class="tag t-decide">Decide</span></div>
+<p>Dropping the tick leaves border + tint as the only signal — a WCAG 1.4.1 problem for sighted colour-blind merchants (<code>aria-checked</code> covers screen readers, so that is not the exposure). <strong>Recommendation:</strong> if it needs a second channel, make it <strong>border weight</strong> — 2px selected against 1px unselected. Non-chromatic, costs no ink, does not bring the glyph back.</p></div>
+
+<div class="item"><div class="item-h"><h3>2 · The undo window is 5 seconds</h3><span class="tag t-decide">Decide</span></div>
+<p>What is being undone is a change to the rail, and glancing right to see what moved costs a couple of seconds. Note the risk is already bounded by the invalidation rules in §05 — any edit clears the snapshot. <strong>Recommendation:</strong> 8–10 s, or &ldquo;until the next click anywhere&rdquo;. Five ships unless you say otherwise.</p></div>
+
+<div class="item"><div class="item-h"><h3>3 · Should dismissal persist at all?</h3><span class="tag t-decide">Decide</span></div>
+<p><strong>Revision 1 stated this backwards.</strong> Today the ✕ dismisses <strong>for the session only</strong> — <code>dismissTip</code> writes <code>sessionStorage</code> (<code>RecommendationBucketsStage.tsx:186-189</code>, key <code>qz-rb-nb-${quizId}</code>) with no server write. <code>banner_dismissed</code> (<code>quizSchema.ts:1641</code>) is read at <code>:87</code> but honoured only as a legacy value, and its sole writer has no client caller. A new session brings the tip back. Making the pill one-way per quiz is a <strong>behaviour change requiring a rebuilt write path</strong>. Decide whether dismissal should persist, and whether a route back to the picks is needed either way.</p></div>
+
+<div class="item"><div class="item-h"><h3>4 · Collections lost their size sorts</h3><span class="tag t-decide">Decide</span></div>
+<p>Collections now offer A–Z / Z–A only. <em>Most products</em> was the shipped default there and size is not meaningless on an 18-collection list. <strong>One array entry to restore</strong> if merchants turn out to use it.</p></div>
+
+<div class="item"><div class="item-h"><h3>5 · Code identifiers are now Figtree</h3><span class="tag t-decide">Decide</span></div>
+<p>Quartz deleted <code>--qz-font-mono</code>, and that is applied. This document is full of <code>file.tsx:123</code> references, which is exactly the alignment case the original decision flagged as needing a human. <strong>Recommendation:</strong> accept for product UI; revisit for developer-facing surfaces.</p></div>
+
+<div class="item"><div class="item-h"><h3>6 · The narrowing line overpromises</h3><span class="tag t-decide">Decide</span></div>
+<p><em>&ldquo;Groups can be narrowed by a later question&rdquo;</em> is false for a group that resolves to one multi-variant product — a narrowing question cannot reduce a one-product pool. Shown once and hidden on Products, which limits the damage without fixing the sentence. <strong>Recommendation:</strong> reword to name the condition, or suppress it when every picked group has one member.</p></div>
+
+<div class="item"><div class="item-h"><h3>7 · Mixed selection produces mixed result-page shapes</h3><span class="tag t-settled">Settled · accept</span></div>
+<p>A product-sourced target bakes as <code>target_index.type: "product"</code> and renders <strong>hero-only, no grid</strong>; tag and collection targets render hero + grid. Today&rsquo;s forced homogeneity means every result page in a quiz looks the same. Allowing mixed selection means one quiz can serve both shapes depending on the answer. <strong>Settled: accepted.</strong> A one-product result <em>should</em> look different — there is nothing to put in a grid. No runtime or bake work; this is current engine behaviour, newly visible. <strong>§02 item 2 and §03 are unblocked.</strong></p>
+<p>It is also a temporary call, not a permanent one — see §12. Result-page mapping will make shape an explicit per-result choice and replace this derivation outright, which is why <strong>no new code may derive presentation from <code>source</code></strong> in the meantime.</p></div>
+
+<div class="item"><div class="item-h"><h3>8 · What number should a group count show?</h3><span class="tag t-settled">Settled · split by context</span></div>
+<p><strong>Settled: the number depends on which question the surface is answering.</strong></p>
+<ul>
+<li><strong>The picker shows the group&rsquo;s real size</strong> — <em>Group of 44 products</em>. You are browsing a catalogue, and 44 is a true fact about that tag. <strong>Unchanged from today; no work.</strong></li>
+<li><strong>The rail shows what the quiz will actually return.</strong> You are looking at output, so the number must be the one <code>isSellable</code> will pass.</li>
+</ul>
+<p>This drops §02 item 6 from a ~25-file migration to <strong>one loader field and one render site</strong>. See §02 item 6 for the shape, and §04 for the copy rule that keeps the two numbers from reading as a contradiction.</p></div>
+</section>
+
+<section id="traps">
+<h2>10 · Implementation traps</h2>
+<p class="lede">Concrete failures from the design pass. <strong>Three are prototype-only</strong> — kept for the lesson, marked so you do not go looking for them in a React component.</p>
+
+<div class="tw"><table>
+<tr><th>Trap</th><th>What happens</th><th>Fix</th></tr>
+<tr><td>Nested <code>&lt;button&gt;</code></td><td>Invalid HTML; the parser auto-closes the outer element and the row&rsquo;s layout collapses. <strong>Hit three times.</strong></td><td>Rows are <code>div role="checkbox"</code> / <code>role="button"</code>. The component already carries a comment saying so — now load-bearing on every tab, and see §03&rsquo;s scoping of &ldquo;the count is the control&rdquo;.</td></tr>
+<tr><td>Global focus ring outranks a bare class</td><td>Main ships <code>body[data-qz] :focus-visible { outline: 3px solid var(--qz-accent) }</code> (<code>:314</code>), specificity (0,2,1), on a rule whose comment says &ldquo;NEVER removed&rdquo;. A naive <code>.qz-rb-card:focus-visible</code> is (0,2,0) and loses — you get the accent outline §03 forbids.</td><td>Scope it to win: <code>body[data-qz] .qz-rb-card:focus-visible { outline-color: var(--qz-ink) }</code>. Precedent at <code>:1959</code>, <code>:1972</code>, <code>:2085-2088</code>.</td></tr>
+<tr><td>Inserting the narrowing strip</td><td>The tab strip ships <code>padding: 14px 14px 0</code> — no bottom. A full-bleed strip butts against the tabs and its top border reads as a line cut <em>through</em> them.</td><td>The strip carries its own 13px. Live gets away with the missing padding because the toolbar supplies it.</td></tr>
+<tr><td>Flex child shrinks before parent scrolls</td><td>All four wizard sections silently clipped by 28px while the body never scrolled.</td><td><code>flex: none</code> on the modal body&rsquo;s children (<code>.qz-modal</code> body, not the mock&rsquo;s <code>.mb</code>). Measure the <strong>wrapper</strong>, not the inner box — checking the inner box is why this survived a test.</td></tr>
+<tr><td>Bottom-sticky on a last child</td><td>Never engages: an element flush with its parent&rsquo;s bottom edge has zero travel.</td><td>Do not grow a list past the viewport. Window the rows instead.</td></tr>
+<tr><td><code>overflow: hidden</code> on an ancestor</td><td>Makes it the scroll container and kills any sticky descendant.</td><td>Clip at the element that needs it, not the card.</td></tr>
+<tr><td><code>&lt;select&gt;</code> sizes to its chosen option</td><td>The search field jumps every time the sort changes.</td><td>Fixed widths on both selects.</td></tr>
+<tr><td>The undo timer <span class="tag t-ui">Timing</span></td><td>Arming it inside <code>render()</code> makes the window immortal. Running the fade on a second timer drifts from the removal in a throttled tab — measured still visible at 5.3 s.</td><td>Arm once at apply. One CSS animation matched to the single JS timer.</td></tr>
+<tr><td>Prototype-only <span class="tag t-ui">Mock</span></td><td><code>innerHTML</code> resetting <code>scrollTop</code>; re-binding listeners in render; native <code>confirm()</code> suppressed in a sandboxed frame. <strong>None can occur in <code>RecommendationBucketsStage.tsx</code></strong> — it is React and already uses <code>QzModal</code>/<code>TabLockModal</code>.</td><td>No action. Kept because the lessons generalise: preserve scroll across re-render, bind once, never a native dialog.</td></tr>
+</table></div>
+</section>
+
+<section id="verify">
+<h2>11 · Verification</h2>
+
+<h3>Automated — required, because the dangerous paths fail silently</h3>
+<ul>
+<li><strong>Server unit tests for the <code>set-buckets</code> leaver scope</strong> with a mixed-type fixture, <em>and</em> for the <code>logic-tab-</code> exemption across every delete path.</li>
+<li><strong>Apply → add a product → Revert → the product survives.</strong> The regression test for §05&rsquo;s scoping.</li>
+<li><strong>Prepick-clobber tests:</strong> select during <code>picking</code>, and <code>retry-gen</code>. Both must leave a non-empty selection intact.</li>
+<li><strong>Loader payload shape</strong> for the new fields, including <code>variantOptionsOf</code>&rsquo;s <code>Default Title</code> drop, plus a <strong>response-size budget assertion</strong>.</li>
+<li><strong>A written 2-lens adversarial self-review</strong> — §02 is persistence work, and CLAUDE.md requires one.</li>
+</ul>
+
+<h3>Manual</h3>
+<ol class="steps">
+<li><strong>Gates, unpiped.</strong> <code>npm run typecheck &amp;&amp; npm test -- --run &amp;&amp; npm run build &amp;&amp; npm run lint &amp;&amp; node scripts/check-tokens.mjs</code></li>
+<li><strong>The byte pin.</strong> <code>curl -sS …/q/cmqqcb0ao004mqvkwjug7t0ya.json | shasum -a 256</code> — first 16 chars still <code>c02ccaec98a0fe9e</code>. Never republish that quiz.</li>
+<li><strong>Watch the deploy unpiped.</strong> <code>gh run watch &lt;id&gt; --exit-status</code>. Piping to <code>tail</code> masks the exit code; a failed deploy once read as success. CI runs the post-deploy e2e smoke itself — do not add a manual <code>npm run e2e</code> step.</li>
+<li><strong>Legacy round-trip.</strong> Load a points/ladder doc, autosave it, diff the JSON. Zero delta.</li>
+<li><strong>Mixed selection end-to-end.</strong> Pick 2 products + 3 tags + a collection + a custom group, publish, confirm all four land as targets, generation still runs, and check the result-page shapes against decision 7.</li>
+<li><strong>Draft path.</strong> Pick a draft product, publish, confirm it is <strong>never surfaced as a recommendation</strong>. It <em>does</em> appear in <code>/q/:id.json</code>&rsquo;s <code>product_index</code> carrying its <code>status</code> — the bake is unfiltered (<code>quizPublish.ts:561-567</code>) and a picked target&rsquo;s members are forced in unconditionally (<code>:551-553</code>). <code>isSellable</code> drops it at <em>recommendation</em> time. <strong>Assert on the recommended set, not on payload absence</strong>, and do not &ldquo;fix&rdquo; this by status-filtering <code>productIndex</code> at bake — the target map is deliberately intersected with synced members (<code>:530-532</code>) and a filter there would dangle target entries.</li>
+<li><strong>Screenshots for interactive state.</strong> Drawers, the scope of a scrolling list, the sticky rail. A 200 plus DOM markers is not proof — a pointer-trapped overlay renders fine and is unclickable.</li>
+</ol>
+<p style="margin-top:14px">Fixtures, probe recipes and seed/restore contracts: <code>e2e/README.md</code>. Local and deploy databases never share fixtures.</p>
+</section>
+
+<section id="future">
+<h2>12 · Known future work</h2>
+<p class="lede">Not in scope. Listed because each one changes what a decision here is worth, and because building too tightly against today&rsquo;s shape makes them expensive later.</p>
+
+<div class="item">
+<div class="item-h"><h3>Result-page mapping, by result selection</h3><span class="tag t-decide">Planned</span></div>
+<p>A merchant will eventually choose the <strong>result page</strong> per recommendation, rather than having it implied by what kind of bucket the recommendation is.</p>
+<p><strong>Why it matters to work happening now.</strong> Today the shape is implicit and derived: publish bakes <code>target_index.type</code> from the bucket&rsquo;s <code>source</code> (<code>quizPublish.ts:539-542</code>), and the runtime branches on it — a <code>product</code>-shaped target renders <strong>hero-only with an empty grid</strong> (<code>recommendDecider.ts:395</code>) while tag and collection targets render hero + grid. Decision 7 exists only because heterogeneous selection makes that implicit rule visible for the first time.</p>
+<div class="call crit"><b class="lab">The one instruction that follows from this</b>
+<strong>Do not add new logic that derives presentation from <code>source</code>, and do not let &ldquo;product means hero-only&rdquo; leak into any new call site.</strong> Keep the existing derivation exactly where it is, in the bake. When mapping lands, shape becomes an explicit stored field and that single derivation is the only thing that has to give way — provided nothing else has started copying it.</div>
+<p><strong>What it makes cheap.</strong> Decision 7 stops being permanent. If mixed shapes turn out to bother anyone, mapping is the fix — so accepting them now only has to hold until then.</p>
+</div>
+
+<div class="item">
+<div class="item-h"><h3>The per-page AI surface</h3><span class="tag t-decide">Planned</span></div>
+<p>The advisories removed in §08 are destined for a per-page AI surface that can hold all of them and be argued with — which a paragraph wedged under a rail cannot.</p>
+<p><strong>Preserve two things on the way out.</strong> The one-recommendation notice <strong>ships today</strong> (<code>RecommendationBucketsStage.tsx:704-709</code>), so removing it is a live regression — keep its copy verbatim. And keep the containment detection written down: a selected product is either inside a selected group or it is not, which is cheap and should not need re-deriving.</p>
+<p><strong>Do not let the 25-recommendation ceiling come back with them.</strong> It counted recommendations and never looked at their membership, which is why it fired hardest on the merchants with the largest catalogues.</p>
+</div>
+
+<div class="item">
+<div class="item-h"><h3>Out-of-stock behaviour, configured per result</h3><span class="tag t-decide">Planned</span></div>
+<p><code>oos_behavior</code> exists in the schema and the runtime does <strong>not</strong> read it — <code>recommendDecider.ts:386-417</code> applies a hardcoded stock policy. Per-variant availability already exists on the product card, and the runtime already swaps the CTA for email capture on a sold-out variant.</p>
+<p>§03 surfaces per-variant stock in the picker&rsquo;s variant preview for the first time. That is <strong>display only</strong>. It must not start implying a configurability the engine does not yet have.</p>
+</div>
+</section>
+
+</main>
+</div>
+
+<div class="foot">Revision 2 · verified against <code>origin/main</code> at <code>eaa4000</code> (2026-09-07) by a 13-agent audit: 114 claims confirmed accurate, 37 corrected. Behaviour reference: <code>scratchpad/step1-tweaks.html</code>, 40 numbered changes with inline rationale — §06 and §08 name where this document deliberately overrides it.</div>
+
+</body></html>

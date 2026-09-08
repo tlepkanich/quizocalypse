@@ -12,31 +12,16 @@ import { QzPage, QzEmpty } from "../components/qz";
 import { GroupWizard, type WizProduct } from "../components/studio/GroupWizard";
 import { PersonaExplainerStrip } from "../components/studio/PersonaExplainerStrip";
 import {
-  dominantSource,
+  metafieldValuesOf,
   normalizeMembership,
-  resolveMembership,
-  MembershipSchema,
-  PersonaSchema,
   type Membership,
-  type Persona,
-  type ResolvableProduct,
   type StoredMembership,
 } from "../lib/groupMembership";
+import { createShopGroup, groupInputFromForm } from "../lib/groupCreate.server";
 
 const SRC_ORDER = ["tag", "col", "meta", "man"] as const;
 type Src = (typeof SRC_ORDER)[number];
 
-// Flatten a product's metafields Json ({ "ns.key": { value } } or primitives)
-// into "ns.key: value" condition strings.
-function metafieldValuesOf(mf: unknown): string[] {
-  if (!mf || typeof mf !== "object") return [];
-  const out: string[] = [];
-  for (const [k, v] of Object.entries(mf as Record<string, unknown>)) {
-    const val = v && typeof v === "object" && "value" in (v as object) ? String((v as { value: unknown }).value) : String(v);
-    out.push(`${k}: ${val}`);
-  }
-  return out;
-}
 
 function dominantAccent(m: Membership, fallbackSource: string): Src {
   if (m.tags.length) return "tag";
@@ -148,55 +133,8 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   }
 
   if (intent !== "create-group") return json({ ok: false }, { status: 400 });
-
-  const name = String(form.get("name") ?? "").trim() || "New group";
-  const description = String(form.get("description") ?? "").trim();
-
-  // Zod boundary: validate the submitted membership + persona (§ invariant).
-  const parseJson = (s: string): unknown => {
-    try {
-      return JSON.parse(s);
-    } catch {
-      return null;
-    }
-  };
-  const memParsed = MembershipSchema.safeParse(parseJson(String(form.get("membership") ?? "{}")) ?? {});
-  const membership = memParsed.success ? memParsed.data : MembershipSchema.parse({});
-  const personaRaw = String(form.get("persona") ?? "");
-  const personaParsed = personaRaw ? PersonaSchema.safeParse(parseJson(personaRaw)) : null;
-  const persona: Persona | null = personaParsed?.success ? personaParsed.data : null;
-
-  // Resolve productIds server-side from the shop's live catalog.
-  const products = await prisma.product.findMany({
-    where: { shopId: shop.id },
-    select: { productId: true, tags: true, collectionIds: true, metafields: true },
-  });
-  const resolvable: ResolvableProduct[] = products.map((p) => ({
-    id: p.productId,
-    tags: p.tags,
-    collectionIds: p.collectionIds,
-    metafieldValues: metafieldValuesOf(p.metafields),
-  }));
-  const productIds = resolveMembership(membership, resolvable);
-  const src = dominantSource(membership);
-  const stored: StoredMembership = { ...membership, persona };
-
-  await prisma.category.create({
-    data: {
-      shopId: shop.id,
-      quizId: null,
-      name,
-      description,
-      tags: membership.tags,
-      productIds,
-      source: src,
-      sourceRef: null,
-      manualProductIds: membership.manual,
-      membership: stored as never,
-      discoveryRunId: `manual-${Date.now().toString(36)}`,
-      rationale: null,
-    },
-  });
+  // Step-1 tweaks — ONE create action, shared with the funnel's Custom tab.
+  await createShopGroup(shop.id, groupInputFromForm(form));
   return redirect("/studio/groups");
 };
 

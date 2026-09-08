@@ -17,6 +17,10 @@ import { inverseCollectionIndex } from "./categoryGrouping";
 import { toGroupingProduct } from "./bucketPersist.server";
 import { flattenMetafields, variantOptionsOf } from "./productIndexing";
 import { MIN_GOAL_CHARS, loadFunnelDraft, type FunnelShop } from "./funnelDraft.server";
+import { deliverableCount, type SellableProduct } from "./bucketPersist";
+import { metafieldValuesOf } from "./groupMembership";
+import { catalogProductPayload, checkCatalogPayloadBudget } from "./funnelCatalogPayload";
+import { logFor } from "./log.server";
 
 // The loader payload (serialized to FunnelData on the client). Pure data — the
 // route wraps it in json().
@@ -152,27 +156,71 @@ export async function loadStep1FunnelData(
     .filter((c) => c.count > 0)
     .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label));
 
-  const catalogProducts = products.map((p) => ({
-    id: p.productId,
-    title: p.title,
-    imageUrl: p.imageUrl ?? null,
-    price: p.priceMin != null ? Number(p.priceMin) : null,
-    // Step-1 spec §5: the single-product preview screen shows a description
-    // clamped to 3 lines — slice server-side so 100+ products don't bloat the
-    // payload with full descriptions.
-    description: p.descriptionText ? p.descriptionText.slice(0, 220) : null,
-    // Normalized tag keys + collection ids so the results-page preview drawer
-    // can list a tag/collection's members client-side (these match the bucket
-    // key identities).
-    tagKeys: normalizeTags(p.tags, new Set()),
-    collectionIds: p.collectionIds,
-  }));
+  // Step-1 tweaks (§02 item 1) — the picker payload now carries status, the
+  // variant options (+ per-variant availability) and, for the group wizard,
+  // the raw tags + flattened metafield values. ONE derivation, shared with the
+  // builder index and the publish bake (productIndexing) — no drift.
+  const catalogProducts = products.map((p) =>
+    catalogProductPayload({
+      productId: p.productId,
+      title: p.title,
+      imageUrl: p.imageUrl ?? null,
+      priceMin: p.priceMin != null ? Number(p.priceMin) : null,
+      descriptionText: p.descriptionText,
+      tags: p.tags,
+      collectionIds: p.collectionIds,
+      status: p.status,
+      variants: p.variants,
+      metafields: p.metafields,
+      tagKeys: normalizeTags(p.tags, new Set()),
+      metafieldValues: metafieldValuesOf(p.metafields),
+    }),
+  );
+  // The catalog block is ungated and uncapped — assert its size instead of
+  // eyeballing it (a warn, never a throw: a big shop must still load).
+  const budget = checkCatalogPayloadBudget(catalogProducts);
+  if (!budget.ok) {
+    logFor("funnelLoader").warn(
+      { shopId: shop.id, bytes: budget.bytes, limit: budget.limit, products: products.length },
+      "funnel catalog payload over budget",
+    );
+  }
+  // The shop's currency (one per Shopify shop) — the picker never hardcodes $.
+  const currency = products.find((p) => p.currency)?.currency ?? null;
 
-  // Current selections from the quiz's Category rows. The browser only manages
-  // product/tag/collection sources; legacy product_type/metafield/ai rows (from
-  // a pre-RB confirm-grouping draft) are simply not shown as shelf buckets.
+  // Step-1 tweaks (§03 Custom tab) — the shop-global groups (quizId null) as
+  // Custom-tab rows. Reachable from Step 1 now; the Logic/Rec pickers already
+  // merge them (accountGroups → builderCategories below).
+  const catalogGroups = accountGroups.map((g) => ({
+    key: g.id,
+    label: g.name,
+    count: g.productIds.length,
+    productIds: g.productIds,
+  }));
+  const metafieldConditions = [...new Set(products.flatMap((p) => metafieldValuesOf(p.metafields)))].sort();
+
+  // Current selections from the quiz's Category rows. The browser manages
+  // product/tag/collection/group sources; legacy product_type/metafield/ai
+  // rows (from a pre-RB confirm-grouping draft) are simply not shown.
   const imageByProductId = new Map(products.map((p) => [p.productId, p.imageUrl ?? null]));
-  const BROWSER_SOURCES = new Set(["product", "tag", "collection", "smart_collection"]);
+  // §02 item 6 — the deliverable count, through isSellable itself (rendered in
+  // the Results rail only; the picker keeps the group's real size).
+  const sellableById = new Map<string, SellableProduct>(
+    products.map((p) => {
+      const variants = (p.variants ?? []) as Array<{ inventoryQuantity?: number | null }>;
+      return [
+        p.productId,
+        {
+          inventory_in_stock: variants.some(
+            (v) => typeof v.inventoryQuantity === "number" && v.inventoryQuantity > 0,
+          ),
+          price: p.priceMin != null ? String(p.priceMin) : null,
+          ...(p.status ? { status: p.status } : {}),
+        },
+      ];
+    }),
+  );
+  const BROWSER_SOURCES = new Set(["product", "tag", "collection", "smart_collection", "group"]);
   const buckets = categories
     .filter((c) => c.sourceRef && BROWSER_SOURCES.has(c.source))
     .map((c) => ({
@@ -180,9 +228,11 @@ export async function loadStep1FunnelData(
       type: (c.source === "smart_collection" ? "collection" : c.source) as BucketType,
       name: c.name,
       count: c.productIds.length,
+      deliverableCount: deliverableCount(c.productIds, sellableById),
+      // §04 — non-product buckets use the glyph, never a member's photo.
       thumbnailUrl:
-        c.productIds.map((pid) => imageByProductId.get(pid)).find((u): u is string => Boolean(u)) ??
-        null,
+        c.source === "product" ? imageByProductId.get(c.productIds[0] ?? "") ?? null : null,
+      productIds: c.productIds,
     }));
 
   const browser = session.bucket_browser;
@@ -412,7 +462,14 @@ export async function loadStep1FunnelData(
       starterTemplates.map((t) => ({ id: t.id, name: t.name, template: t.template })),
     ),
     // ── Recommendation Buckets (RB Step 1) ──
-    catalog: { products: catalogProducts, tags: catalogTags, collections: catalogCollections },
+    catalog: {
+      products: catalogProducts,
+      tags: catalogTags,
+      collections: catalogCollections,
+      groups: catalogGroups,
+      metafieldConditions,
+      currency,
+    },
     suggestion,
     buckets,
     activeTab,

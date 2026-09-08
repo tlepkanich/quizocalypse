@@ -7,14 +7,32 @@ import {
   emptyMembership,
   resolveMembership,
   type Membership,
+  type Persona,
   type ResolvableProduct,
 } from "../../lib/groupMembership";
+import { autoGroupName } from "../../lib/bucketSelection";
 
 // P3 Edit 2 (§16) — the 3-step "New group" wizard: Define (mix 4 sources) →
 // Name & note → Persona. Live preview resolves membership client-side. Submits
 // to the /studio/groups create action. Reuses QzModal (Phase 2 Edit 3).
 export type WizProduct = ResolvableProduct & { title: string; imageUrl: string | null };
 type SrcKey = keyof Membership; // "tags" | "collections" | "metafields" | "manual"
+
+/** Step-1 tweaks — the funnel's Custom tab submits through its own fetcher
+ *  (the `create-group` intent) instead of the /studio/groups Form. */
+export type GroupWizardSubmit = (payload: {
+  name: string;
+  description: string;
+  membership: Membership;
+  persona: Persona | null;
+}) => void;
+
+// Step-1 tweaks §06 — a source section shows its OPTIONS as toggle chips,
+// capped at ten whole chips plus an inline "+N more" (a FULL expand — the
+// mock's 10↔60 toggle is a property of the mock); past twelve options the
+// section gets its own search. No inner scrollbars; the modal body scrolls.
+const SRC_CAP = 10;
+const SRC_SEARCHABLE = 12;
 
 const SOURCES: { key: SrcKey; label: string; src: "tag" | "col" | "meta" | "man"; icon: ReactNode; empty: string }[] = [
   { key: "tags", label: "Tags", src: "tag", icon: <Tag size={15} aria-hidden />, empty: "No tags yet" },
@@ -30,6 +48,7 @@ export function GroupWizard({
   collections,
   metafieldConditions,
   products,
+  onSubmit,
 }: {
   open: boolean;
   onClose: () => void;
@@ -37,10 +56,16 @@ export function GroupWizard({
   collections: { id: string; title: string }[];
   metafieldConditions: string[];
   products: WizProduct[];
+  /** When given, the wizard calls this instead of posting the hidden Form. */
+  onSubmit?: GroupWizardSubmit;
 }) {
   const [step, setStep] = useState(1);
   const [mem, setMem] = useState<Membership>(emptyMembership());
   const [name, setName] = useState("");
+  // The name auto-suggests from the parts until the merchant touches it.
+  const [nameTouched, setNameTouched] = useState(false);
+  const [srcQuery, setSrcQuery] = useState<Partial<Record<SrcKey, string>>>({});
+  const [srcOpen, setSrcOpen] = useState<Partial<Record<SrcKey, boolean>>>({});
   const [description, setDescription] = useState("");
   const [personaOn, setPersonaOn] = useState(false);
   const [personaName, setPersonaName] = useState("");
@@ -58,6 +83,9 @@ export function GroupWizard({
     setStep(1);
     setMem(emptyMembership());
     setName("");
+    setNameTouched(false);
+    setSrcQuery({});
+    setSrcOpen({});
     setDescription("");
     setPersonaOn(false);
     setPersonaName("");
@@ -75,6 +103,22 @@ export function GroupWizard({
 
   const removeFrom = (key: SrcKey, v: string) =>
     setMem((m) => ({ ...m, [key]: m[key].filter((x) => x !== v) }));
+  const toggleIn = (key: SrcKey, v: string) =>
+    setMem((m) => ({
+      ...m,
+      [key]: m[key].includes(v) ? m[key].filter((x) => x !== v) : [...m[key], v],
+    }));
+  const suggestedName = useMemo(
+    () =>
+      autoGroupName([
+        ...mem.tags,
+        ...mem.collections.map((c) => colTitle.get(c) ?? c),
+        ...mem.metafields,
+        ...mem.manual.map((p) => productTitle.get(p) ?? p),
+      ]),
+    [mem, colTitle, productTitle],
+  );
+  const effectiveName = nameTouched ? name : suggestedName;
 
   const pickerOptions = (key: SrcKey): { id: string; label: string; img?: string | null }[] => {
     if (key === "tags") return tags.map((t) => ({ id: t, label: t }));
@@ -86,6 +130,18 @@ export function GroupWizard({
   const steps = ["Define", "Name & note", "Persona"];
   const next = () => {
     if (step === 3) {
+      if (onSubmit) {
+        onSubmit({
+          name: effectiveName.trim() || "New group",
+          description,
+          membership: mem,
+          persona: personaOn
+            ? { name: personaName, description: personaDesc, image: personaImage || null }
+            : null,
+        });
+        reset();
+        return;
+      }
       formRef.current?.requestSubmit();
       return;
     }
@@ -96,7 +152,7 @@ export function GroupWizard({
     <>
       <Form method="post" ref={formRef} style={{ display: "none" }}>
         <input type="hidden" name="intent" value="create-group" />
-        <input type="hidden" name="name" value={name} />
+        <input type="hidden" name="name" value={effectiveName} />
         <input type="hidden" name="description" value={description} />
         <input type="hidden" name="membership" value={JSON.stringify(mem)} />
         <input
@@ -146,20 +202,88 @@ export function GroupWizard({
                   <span className="qz-wsrc-name">{s.label}</span>
                   <button type="button" className="qz-wsrc-add" onClick={() => setPicker(s.key)}>+ Add</button>
                 </div>
-                <div className="qz-row" style={{ flexWrap: "wrap", gap: 7 }}>
-                  {mem[s.key].length === 0 ? (
-                    <span className="qz-dim" style={{ fontSize: 12 }}>{s.empty}</span>
-                  ) : (
-                    mem[s.key].map((v) => (
-                      <span key={v} className={`qz-src-chip src-${s.src}`}>
-                        {labelFor(s.key, v)}
-                        <button type="button" className="qz-chip-x" aria-label="Remove" onClick={() => removeFrom(s.key, v)}>
-                          <X size={12} aria-hidden />
-                        </button>
-                      </span>
-                    ))
-                  )}
-                </div>
+                {(() => {
+                  const options = pickerOptions(s.key);
+                  const query = (srcQuery[s.key] ?? "").trim().toLowerCase();
+                  const hits = query
+                    ? options.filter((o) => o.label.toLowerCase().includes(query))
+                    : options;
+                  const open = Boolean(srcOpen[s.key]) || Boolean(query);
+                  const shown = open ? hits : hits.slice(0, SRC_CAP);
+                  const hidden = hits.length - shown.length;
+                  const selected = mem[s.key];
+                  return (
+                    <>
+                      {options.length > SRC_SEARCHABLE ? (
+                        <input
+                          className="qz-input qz-wsrc-q"
+                          type="search"
+                          aria-label={`Search ${s.label.toLowerCase()}`}
+                          placeholder={`Search ${s.label.toLowerCase()}…`}
+                          value={srcQuery[s.key] ?? ""}
+                          onChange={(e) => {
+                            const v = e.currentTarget.value;
+                            setSrcQuery((q) => ({ ...q, [s.key]: v }));
+                            setSrcOpen((o) => ({ ...o, [s.key]: false }));
+                          }}
+                        />
+                      ) : null}
+                      <div className="qz-wsrc-chips">
+                        {options.length === 0 ? (
+                          <span className="qz-dim" style={{ fontSize: 12 }}>{s.empty}</span>
+                        ) : hits.length === 0 ? (
+                          <span className="qz-dim" style={{ fontSize: 12 }}>No matches.</span>
+                        ) : (
+                          shown.map((o) => {
+                            const on = selected.includes(o.id);
+                            return (
+                              <button
+                                key={o.id}
+                                type="button"
+                                className={`qz-wsrc-chip${on ? " is-on" : ""}`}
+                                aria-pressed={on}
+                                onClick={() => toggleIn(s.key, o.id)}
+                              >
+                                {o.label}
+                              </button>
+                            );
+                          })
+                        )}
+                        {hidden > 0 ? (
+                          <button
+                            type="button"
+                            className="qz-wsrc-chip is-more"
+                            onClick={() => setSrcOpen((o) => ({ ...o, [s.key]: true }))}
+                          >
+                            +{hidden} more
+                          </button>
+                        ) : open && !query && options.length > SRC_CAP ? (
+                          <button
+                            type="button"
+                            className="qz-wsrc-chip is-more"
+                            onClick={() => setSrcOpen((o) => ({ ...o, [s.key]: false }))}
+                          >
+                            Show fewer
+                          </button>
+                        ) : null}
+                      </div>
+                      {selected.some((v) => !options.some((o) => o.id === v)) ? (
+                        <div className="qz-row" style={{ flexWrap: "wrap", gap: 7, marginTop: 8 }}>
+                          {selected
+                            .filter((v) => !options.some((o) => o.id === v))
+                            .map((v) => (
+                              <span key={v} className={`qz-src-chip src-${s.src}`}>
+                                {labelFor(s.key, v)}
+                                <button type="button" className="qz-chip-x" aria-label="Remove" onClick={() => removeFrom(s.key, v)}>
+                                  <X size={12} aria-hidden />
+                                </button>
+                              </span>
+                            ))}
+                        </div>
+                      ) : null}
+                    </>
+                  );
+                })()}
               </div>
             ))}
             <div className="qz-wpreview">
@@ -193,7 +317,16 @@ export function GroupWizard({
           <div className="qz-wpanel">
             <div className="qz-field">
               <label className="qz-field-label">Group name</label>
-              <input className="qz-input" value={name} onChange={(e) => setName(e.target.value)} placeholder="The Glow Chaser" autoFocus />
+              <input
+                className="qz-input"
+                value={effectiveName}
+                onChange={(e) => {
+                  setName(e.target.value);
+                  setNameTouched(true);
+                }}
+                placeholder="The Glow Chaser"
+                autoFocus
+              />
             </div>
             <div className="qz-field" style={{ marginTop: 12 }}>
               <label className="qz-field-label">Note / description</label>

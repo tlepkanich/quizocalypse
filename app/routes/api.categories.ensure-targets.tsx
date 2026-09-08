@@ -6,6 +6,7 @@ import {
   resolveMembership,
   type Membership,
   type ResolvableProduct,
+  metafieldValuesOf,
 } from "../lib/groupMembership";
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -30,19 +31,6 @@ const ResourceSchema = z.object({
   name: z.string().min(1).max(200),
 });
 
-// The membership metafield-value convention (studio.groups' metafieldValuesOf).
-function metafieldValuesOf(mf: unknown): string[] {
-  if (!mf || typeof mf !== "object") return [];
-  const out: string[] = [];
-  for (const [k, v] of Object.entries(mf as Record<string, unknown>)) {
-    const val =
-      v && typeof v === "object" && "value" in (v as object)
-        ? String((v as { value: unknown }).value)
-        : String(v);
-    out.push(`${k}: ${val}`);
-  }
-  return out;
-}
 
 const BodySchema = z.object({
   quizId: z.string().min(1),
