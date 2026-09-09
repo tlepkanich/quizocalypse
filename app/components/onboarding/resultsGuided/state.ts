@@ -28,7 +28,7 @@ export const GUIDED_DEFAULTS = {
   privacyLabel: "Privacy Policy",
   privacyUrl: "/policies/privacy-policy",
   loadingOn: true,
-  loadingMs: 2000,
+  loadingMs: 1600,
   loadingNamed: true,
   loadingSteps: ["Reading your answers", "Scoring products", "Picking your best matches"],
   extrasOn: false,
@@ -49,9 +49,9 @@ export const GATE_COPY: Record<string, { headline: string; copy: string; cta: st
     cta: "Show my results",
   },
   inline: {
-    headline: "Want these emailed to you?",
-    copy: "We’ll send this match list to your inbox.",
-    cta: "Email me my matches",
+    headline: "Save your details",
+    copy: "Share your contact details with the store.",
+    cta: "Save my details",
   },
   discount: {
     headline: "Submit your email to unlock the discount",
@@ -75,23 +75,27 @@ export function resolveGuided(doc: Quiz): GuidedConfig {
     const v = g[k as keyof RecPageGlobal];
     if (v !== undefined) (merged as Record<string, unknown>)[k] = v;
   }
+  // Explicit older loading configurations used a two-second fallback;
+  // wholly absent loading settings still use the original 1.6-second beats.
+  if (g.loadingMs === undefined && (g.loadingOn === true || g.loadingNamed !== undefined || (g.loadingSteps?.length ?? 0) > 0)) merged.loadingMs = 2000;
   return merged;
 }
 
 /** Sparse global patch (mock: value equal to its default clears the key).
  *  capturePlacement also keeps the runtime's wired `captureEmail` gate in
- *  sync: "before" → true, "none" → false (inline/discount leave it false —
- *  the runtime's gate screen is the "before" placement). */
+ *  sync: "before" and "inline" → true, "none" and "discount" → false.
+ *  Inline additionally opts into the new on-results form. */
 export function patchGuided(doc: Quiz, patch: Partial<RecPageGlobal>): Quiz {
   const full: Partial<RecPageGlobal> = { ...patch };
   if (patch.capturePlacement !== undefined) {
-    full.captureEmail = patch.capturePlacement === "before" ? undefined : false;
+    full.captureEmail = ["before", "inline"].includes(patch.capturePlacement) ? undefined : false;
+    full.captureInlineOn = patch.capturePlacement === "inline" ? true : undefined;
     // undefined → the read-time default (ON) renders; explicit false = off.
   }
   const sparse: Record<string, unknown> = {};
   const defaults = { ...GUIDED_DEFAULTS } as Record<string, unknown>;
   for (const [k, v] of Object.entries(full)) {
-    sparse[k] = deepEqual(v, defaults[k]) ? undefined : v;
+    sparse[k] = k === "loadingMs" ? v : deepEqual(v, defaults[k]) ? undefined : v;
   }
   return setRecPageGlobal(doc, sparse as Partial<RecPageGlobal>);
 }
@@ -159,7 +163,7 @@ export const combinesUnset = (d: GuidedDiscount): boolean =>
    than silently dropped. Update this map as the runtime seams land. */
 // rg-wiring (2026-08-18): the client-runtime seams landed — an explicit
 // non-default value now renders on the published page. Still false: the
-// three that need SERVER work (inline/discount placements need the on-submit
+// settings that need SERVER work (discount placement needs on-submit
 // code mint; advanced discount needs eligibility/expiry enforcement and
 // Klaviyo/Rivo delivery integrations).
 export const WIRED: Record<string, boolean> = {
@@ -178,7 +182,7 @@ export const WIRED: Record<string, boolean> = {
   discount_advanced: false, // code_mode/eligibility/expiry-hours/scope/combines/purchase/deliver
   placement_before: true, // captureEmail gate screen
   placement_none: true,
-  placement_inline: false,
+  placement_inline: true,
   placement_discount: false, // needs the server-side mint on submit (discount.server seam exists)
   captureRequired: true,
   captureWording: true,

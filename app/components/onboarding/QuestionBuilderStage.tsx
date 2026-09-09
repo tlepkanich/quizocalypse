@@ -6,6 +6,7 @@ import type { BuilderCategory, BuilderCollection } from "../builder/stepProps";
 import { useQuizDraft } from "../studio/useQuizDraft";
 import { QuestionsLogicLayout } from "./questionsLogic/QuestionsLogicLayout";
 import { Step3Shell } from "./questionsLogicV3/Step3Shell";
+import { QuestionsWalkthrough } from "./questionsWalkthrough/QuestionsWalkthrough";
 
 // ════════════════════════════════════════════════════════════════════════════
 // QuestionBuilderStage — Step 3 of the create funnel ("Questions & Logic"), the
@@ -57,8 +58,18 @@ export function QuestionBuilderStage({
   lastSyncAt?: string | null;
   shopifyAdminDomain?: string | null;
 }) {
-  const { doc, commit, isSaving, savedAt, saveError, retrySave, flushSave, beginAiEdit, applyAiResult, endAiEdit } =
-    useQuizDraft(initialDoc);
+  const {
+    doc,
+    commit,
+    isSaving,
+    savedAt,
+    saveError,
+    retrySave,
+    flushSave,
+    beginAiEdit,
+    applyAiResult,
+    endAiEdit,
+  } = useQuizDraft(initialDoc);
   // QL3-P5 — the flip: decider docs render the Step-3 v3 shell UNCONDITIONALLY
   // (the ?step3=v3 flag is retired); legacy (points/ladder) docs keep the
   // QuestionsLogicLayout surface unchanged.
@@ -75,14 +86,18 @@ export function QuestionBuilderStage({
   fetcherRef.current = fetcher;
   // Questions → Logic; Logic → Results. Legacy docs keep the one combined
   // step, so their Continue always heads to the Results step.
-  const continueIntent = useV3 && mode === "questions" ? "to-logic" : "to-rec-page";
+  const continueIntent =
+    useV3 && mode === "questions" ? "to-logic" : "to-rec-page";
   const submitContinue = useCallback(() => {
     fetcherRef.current.submit({ intent: continueIntent }, { method: "post" });
   }, [continueIntent]);
   // Logic-step §2 — the style chooser's persist. build_session is server-owned,
   // so the pick rides an intent (never the JSON autosave). Stable via the ref.
   const submitLogicStyle = useCallback((style: "rules" | "attributes") => {
-    fetcherRef.current.submit({ intent: "set-logic-style", style }, { method: "post" });
+    fetcherRef.current.submit(
+      { intent: "set-logic-style", style },
+      { method: "post" },
+    );
   }, []);
 
   const [regeneratingId, setRegeneratingId] = useState<string | null>(null);
@@ -121,12 +136,20 @@ export function QuestionBuilderStage({
     const pendingId = awaitingRegen.current;
     if (!pendingId || fetcher.state !== "idle") return;
     const data = fetcher.data as
-      | { intent?: string; nodeId?: string; ok?: boolean; doc?: Quiz; code?: string; error?: string }
+      | {
+          intent?: string;
+          nodeId?: string;
+          ok?: boolean;
+          doc?: Quiz;
+          code?: string;
+          error?: string;
+        }
       | undefined;
     // Only consume the response for the node we awaited — the server echoes nodeId,
     // so this can't process a stale Back/Continue or prior-regenerate response on
     // the shared fetcher (independent of React's render batching).
-    if (!data || data.intent !== "regenerate-node" || data.nodeId !== pendingId) return;
+    if (!data || data.intent !== "regenerate-node" || data.nodeId !== pendingId)
+      return;
     awaitingRegen.current = null;
     setRegeneratingId(null);
     if (data.ok && data.doc) {
@@ -154,6 +177,30 @@ export function QuestionBuilderStage({
     [],
   );
 
+  if (useV3 && mode === "questions") {
+    return (
+      <QuestionsWalkthrough
+        doc={doc}
+        commit={commit}
+        isSaving={isSaving}
+        savedAt={savedAt}
+        saveError={saveError}
+        onRetry={retrySave}
+        navigating={navigating}
+        onContinue={submitContinue}
+        regen={{
+          regeneratingId,
+          undoNodeId,
+          regenError,
+          onRegenerate: startRegenerate,
+          onUndoRegenerate: undoRegenerate,
+          onDismissRegenError: () => setRegenError(null),
+        }}
+      />
+    );
+  }
+  // Step3Shell's content mode and phone components remain parked for the
+  // owner-requested future A/B comparison. No experiment is active yet.
   if (useV3) {
     return (
       <Step3Shell

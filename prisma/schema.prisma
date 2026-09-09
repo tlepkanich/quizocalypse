@@ -301,6 +301,10 @@ model EmailCapture {
   // rg-wiring (2026-08-18) — the guided flow's marketing-consent checkbox:
   // null = the quiz never asked; true/false = the shopper's explicit answer.
   marketingConsent Boolean?
+  // WIS-025: client-reported terms/SMS disclosure and checkbox state.
+  // The server stamps receipt time; notice mode is not an affirmative tick.
+  consentEvidence Json?
+  consentRecordedAt DateTime?
   capturedAt DateTime @default(now())
 
   quiz Quiz @relation(fields: [quizId], references: [id], onDelete: Cascade)

@@ -10,3 +10,4 @@ export * from "./mutations/nodeMutations";
 export * from "./mutations/edgeMutations";
 export * from "./mutations/resultMutations";
 export * from "./mutations/deciderMutations";
+export * from "./mutations/designMutations";

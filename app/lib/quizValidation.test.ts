@@ -42,6 +42,14 @@ function makeQuiz(extra: Partial<Parameters<typeof Quiz.parse>[0]> = {}) {
 }
 
 describe("validateQuiz", () => {
+  it("blocks inherited email gates only on decider documents", () => {
+    const base = makeQuiz();
+    const nodes = [...base.nodes, { id: "capture", type: "email_gate", position: { x: 0, y: 0 }, data: { headline: "Email" } }];
+    const legacy = Quiz.parse({ ...base, nodes });
+    const decider = Quiz.parse({ ...base, nodes, logic_model: "decider" });
+    expect(validateQuiz(legacy).some(i => i.kind === "decider_email_gate")).toBe(false);
+    expect(validateQuiz(decider)).toContainEqual(expect.objectContaining({ nodeId: "capture", kind: "decider_email_gate" }));
+  });
   it("returns no issues for a well-formed linear quiz", () => {
     expect(validateQuiz(makeQuiz())).toEqual([]);
   });

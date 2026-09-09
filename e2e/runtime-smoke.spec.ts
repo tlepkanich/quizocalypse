@@ -208,7 +208,7 @@ test("locale: fr serves lang=fr, unknown falls back to en", async ({ page }) => 
 // events → productPerformance → loader → leaderboard chain — a dropped product_id
 // from any payload empties the row and reds the gate. Needs the studio cookie
 // (STUDIO_ACCESS_TOKEN, sourced by ship.sh); skips locally without it.
-test("product analytics: events aggregate into the Top-products leaderboard", async ({ page }) => {
+test("product analytics: events aggregate into the Products table", async ({ page }) => {
   const token = process.env.STUDIO_ACCESS_TOKEN;
   test.skip(!token, "STUDIO_ACCESS_TOKEN not set");
   const quizId = process.env.SMOKE_PP_QUIZ || "cmqwbjef4001gqvl1gpr2hrzx";
@@ -224,6 +224,8 @@ test("product analytics: events aggregate into the Top-products leaderboard", as
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
           events: [
+            // Current analytics cohorts sessions by engagement.
+            { quiz_id: quiz, session_id: sess, event_type: "quiz_engaged", payload: {} },
             { quiz_id: quiz, session_id: sess, event_type: "recommendation_viewed", payload: { product_ids: [p] } },
             { quiz_id: quiz, session_id: sess, event_type: "recommendation_clicked", payload: { product_id: p } },
             { quiz_id: quiz, session_id: sess, event_type: "add_to_cart", payload: { product_id: p } },
@@ -241,7 +243,7 @@ test("product analytics: events aggregate into the Top-products leaderboard", as
   const row = (await page.evaluate(async ([quiz, p]) => {
     const u = `/studio/${quiz}/analytics?_data=routes%2Fstudio.%24id_.analytics`;
     const d = await (await fetch(u, { headers: { accept: "application/json" } })).json();
-    return (d.topProducts ?? []).find((x: { productId: string }) => x.productId === p) ?? null;
+    return (d.data?.products ?? []).find((x: { productId: string }) => x.productId === p) ?? null;
   }, [quizId, pid])) as {
     impressions: number;
     clicks: number;

@@ -243,6 +243,10 @@ export function resolveTarget(
     if (baseTargetId) {
       return {
         targetId: baseTargetId,
+        // The action acts on the WHOLE base union, not just the anchor —
+        // otherwise a show/hide/prioritize rule would silently drop the
+        // other selected answers' products.
+        ...(baseTargets.length > 1 ? { targetIds: baseTargets } : {}),
         matchedRuleId: actionRule.id,
         ruleAction: actionRule.action ?? null,
         ruleTargetId: targets[0]!,

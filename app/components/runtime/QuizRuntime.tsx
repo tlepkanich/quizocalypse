@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { captureMode } from "../../lib/captureMode";
+import { InlineDeciderCapture } from "./views/InlineDeciderCapture";
 import { ChromeContext, CHROME_TOKENS, useChrome, type ChromeToken } from "./chromeStrings";
 import { FoxMark } from "../chrome/FoxMark";
 import { tagToAnswerText, reasonsForProduct } from "../../lib/matchReasons";
@@ -500,7 +502,7 @@ export function QuizRuntime(props: QuizRuntimeProps) {
     return {
       targetId: resolved.targetId,
       answerIds,
-      captureNeeded: Boolean(cfg.captureEmail || cfg.captureName || cfg.capturePhone),
+      captureNeeded: captureMode(cfg) === "gate",
     };
   }, [isPreview, isDecider, aiCopyEnabled, quizId, currentNodeId, path, doc]);
 
@@ -1599,6 +1601,7 @@ export function QuizRuntime(props: QuizRuntimeProps) {
           content = (
             <DeciderResultView
               decider={explained.decider}
+              inlineCapture={captureMode(cfg) === "inline" ? <InlineDeciderCapture config={cfg} styles={styles} quizId={quizId} sessionId={sessionIdRef.current} shopDomain={shopDomain} /> : undefined}
               fallback={fallback}
               quizId={quizId}
               sessionId={sessionIdRef.current}
@@ -1665,11 +1668,12 @@ export function QuizRuntime(props: QuizRuntimeProps) {
           // the capture screen is skipped entirely.
           const wantCapture =
             !captureDone &&
-            (cfg.captureEmail || cfg.captureName || cfg.capturePhone);
+            captureMode(cfg) === "gate";
           if (wantCapture) {
             content = (
               <DeciderCaptureView
                 config={cfg}
+                shopDomain={shopDomain}
                 styles={styles}
                 quizId={quizId}
                 sessionId={sessionIdRef.current}

@@ -123,14 +123,6 @@ function pickType(value: string) {
   act(() => radio.click());
 }
 
-function buttonByText(text: string): HTMLButtonElement {
-  const btn = Array.from(document.body.querySelectorAll("button")).find(
-    (b) => b.textContent?.trim() === text,
-  );
-  if (!btn) throw new Error(`no button "${text}"`);
-  return btn;
-}
-
 describe("TypeChipSelector — decider BLOCK dialog", () => {
   it("QWIDGET decision 2 — decider → multi-select commits DIRECTLY and keeps the role (no block dialog)", () => {
     const d = doc();
