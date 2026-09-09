@@ -92,6 +92,104 @@ const cfg = (patch: Partial<ResolvedRecPageConfig> = {}): ResolvedRecPageConfig 
   ...patch,
 });
 
+// ── QWIDGET decision 3 — a multi-select decider unions its selected targets ──
+describe("resolveTarget — multi-select decider (QWIDGET decision 3)", () => {
+  const multiDoc = () =>
+    deciderDoc({
+      nodes: [
+        { id: "intro", type: "intro", position: { x: 0, y: 0 }, data: { headline: "Hi" } },
+        {
+          id: "q2",
+          type: "question",
+          position: { x: 0, y: 0 },
+          data: {
+            text: "What do you wear?",
+            question_type: "multi_select",
+            role: "decides",
+            answers: [
+              { id: "rings", text: "Rings", tags: [], edge_handle_id: "h1", target_id: "cat_rings" },
+              { id: "necklaces", text: "Necklaces", tags: [], edge_handle_id: "h2", target_id: "cat_neck" },
+              { id: "bands", text: "Bands", tags: [], edge_handle_id: "h3", target_id: "cat_rings" },
+              { id: "other", text: "Other", tags: [], edge_handle_id: "h4" },
+              { id: "earrings", text: "Earrings", tags: [], edge_handle_id: "h5", target_id: "cat_ear" },
+            ],
+          },
+        },
+        { id: "r1", type: "result", position: { x: 0, y: 0 }, data: { headline: "Match", fallback_collection_id: "c1" } },
+      ],
+      edges: [
+        { id: "e1", source: "intro", target: "q2" },
+        { id: "e3", source: "q2", target: "r1" },
+      ],
+    });
+
+  it("one selected mapped answer → shape-identical to today (no targetIds key)", () => {
+    expect(resolveTarget(["necklaces"], multiDoc())).toEqual({ targetId: "cat_neck", matchedRuleId: null });
+  });
+
+  it("three selected → targetIds in the decider's AUTHORED order, deduped, anchor first", () => {
+    expect(resolveTarget(["earrings", "rings", "necklaces"], multiDoc())).toEqual({
+      targetId: "cat_rings",
+      targetIds: ["cat_rings", "cat_neck", "cat_ear"],
+      matchedRuleId: null,
+    });
+  });
+
+  it("tick order does not change the result", () => {
+    const a = resolveTarget(["earrings", "necklaces", "rings"], multiDoc());
+    const b = resolveTarget(["rings", "necklaces", "earrings"], multiDoc());
+    expect(a).toEqual(b);
+  });
+
+  it("two answers mapped to the same bucket → one entry and NO targetIds key", () => {
+    expect(resolveTarget(["rings", "bands"], multiDoc())).toEqual({ targetId: "cat_rings", matchedRuleId: null });
+  });
+
+  it("an unmapped selected answer contributes nothing", () => {
+    expect(resolveTarget(["other", "necklaces"], multiDoc())).toEqual({ targetId: "cat_neck", matchedRuleId: null });
+    expect(resolveTarget(["other"], multiDoc())).toBeNull();
+  });
+
+  it("an action rule keeps the union as its base mapping (anchor = first authored)", () => {
+    const doc = multiDoc();
+    const withRule = {
+      ...doc,
+      decision_rules: [
+        {
+          id: "rule_1",
+          conditions: [{ question_id: "q2", answer_id: "rings", op: "is" as const }],
+          target_id: "cat_pin",
+          action: "prioritize" as const,
+        },
+      ],
+    };
+    const r = resolveTarget(["necklaces", "rings"], withRule);
+    expect(r?.targetId).toBe("cat_rings");
+    expect(r?.matchedRuleId).toBe("rule_1");
+    expect(r?.ruleAction).toBe("prioritize");
+  });
+
+  it("the engine pools the deduped union and never takes the hero-only shape", () => {
+    const doc = multiDoc();
+    const out = recommendForResultExplained({
+      quiz: doc,
+      productIndex: [P("p1"), P("p2"), P("p3")],
+      selectedAnswerIds: ["rings", "necklaces"],
+      resultNodeId: "r1",
+      targetProductIdsMap: { cat_rings: ["p1"], cat_neck: ["p2", "p1"], cat_ear: ["p3"] },
+      // The anchor is a single-PRODUCT bucket: alone it would take the
+      // hero-only branch; as a union it must pool hero + grid.
+      targetIndex: {
+        cat_rings: { type: "product", name: "Rings" },
+        cat_neck: { type: "collection", name: "Necklaces" },
+        cat_ear: { type: "collection", name: "Earrings" },
+      },
+    });
+    expect(out.products.map((p) => p.product_id)).toEqual(["p1", "p2"]);
+    expect(out.poolSize).toBe(2);
+  });
+});
+
 // ── resolveTarget (§2) ──────────────────────────────────────────────────────
 
 describe("resolveTarget — rules → deciding mapping → null (§2)", () => {

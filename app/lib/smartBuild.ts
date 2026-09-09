@@ -400,8 +400,10 @@ export function applyDeciderQuestionFlow(
   // mapping. NOTE: generated.email_gate is intentionally ignored here.
   const questions = generated.questions.map(normalizeQuestionSpec);
   let deciderIdx = pickDeciderIndex(questions, buckets);
-  // No eligible decider (every question multi_select/freeform — the prompt
-  // only steers, it can't guarantee): COERCE the first non-freeform question
+  // No eligible decider (QWIDGET decision 2: a multi-select may decide, so
+  // this is now only every question being freeform, or none mapping to two
+  // distinct targets — the prompt ignored the instruction): coerce the first
+  // non-freeform question
   // to single_select and elect it, so the built doc passes V1 instead of
   // silently failing at publish. An all-freeform flow elects nothing — the
   // Step-3 no-decider guard then walks the merchant through promoting one.

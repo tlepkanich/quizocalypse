@@ -353,6 +353,36 @@ export function QzPopover({
     setPos({ top: side === "bottom" ? r.bottom + 8 : r.top - 8, left, side });
   }, [open, placement, maxWidth, measureRef]);
 
+  // QWIDGET — a SECOND pass once the content has rendered: the first
+  // placement estimates the height (240px before the popover exists), so a
+  // tall picker opened from a row near the fold could hang off the bottom of
+  // a fixed-position box with no way to reach its footer. Flip upward when
+  // there is more room above, else clamp the height to the room below (the
+  // box scrolls; sticky footers stay in reach).
+  const [maxH, setMaxH] = useState<number | null>(null);
+  useLayoutEffect(() => {
+    if (!open || !pos || !popRef.current) {
+      setMaxH(null);
+      return;
+    }
+    const margin = 8;
+    const h = popRef.current.getBoundingClientRect().height;
+    const anchorRect = (measureRef?.current ?? anchorRef.current)?.getBoundingClientRect();
+    if (pos.side === "bottom") {
+      const room = window.innerHeight - margin - pos.top;
+      if (h <= room) return;
+      const roomAbove = (anchorRect?.top ?? 0) - 8 - margin;
+      if (roomAbove > room && roomAbove >= 140) {
+        setPos({ top: (anchorRect?.top ?? 0) - 8, left: pos.left, side: "top" });
+      } else {
+        setMaxH(Math.max(140, Math.floor(room)));
+      }
+    } else {
+      const room = pos.top - margin;
+      if (h > room) setMaxH(Math.max(140, Math.floor(room)));
+    }
+  }, [open, pos, measureRef]);
+
   // Outside-click + Esc.
   useEffect(() => {
     if (!open) return;
@@ -397,6 +427,7 @@ export function QzPopover({
                 bottom: pos.side === "top" ? window.innerHeight - pos.top : undefined,
                 left: pos.left,
                 maxWidth,
+                ...(maxH ? { maxHeight: maxH } : {}),
               }}
             >
               {content}

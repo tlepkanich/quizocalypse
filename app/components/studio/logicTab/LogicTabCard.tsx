@@ -1,11 +1,9 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
-import type { ReactNode } from "react";
-import type { Quiz, Answer } from "../../../lib/quizSchema";
+import type { Quiz } from "../../../lib/quizSchema";
 import type { BuilderCategory, BuilderCollection } from "../../builder/stepProps";
 import type { IndexedProduct } from "../../../lib/recommendationEngine";
 import type { OrderedQuestion } from "../../../lib/questionOrder";
 import {
-  answerNextNode,
   deadRules,
   halfBuiltRules,
   overbroadRules,
@@ -15,21 +13,17 @@ import {
   duplicateDecisionRule,
   moveDecisionRule,
   removeDecisionRule,
-  setAnswerFilterValues,
 } from "../../../lib/quizMutations";
-import { filterAnswerMatchCount } from "../../../lib/filterMatching";
 import { ruleTargets } from "../../../lib/recommendDecider";
 import { buildAttributeReadout } from "../../../lib/attributeClustering";
-import type { AttributeReadout } from "../../../lib/attributeClustering";
-import { ProductCountButton, QuestionRoleControl, RouteMenuButton } from "./LogicTabMenus";
 import { useQzToast } from "../../qz-toast";
 import { CreateRuleModal, type CreateRuleFlow } from "./CreateRuleModal";
+import { LogicQuestionWidget } from "./LogicQuestionWidget";
 import { PasteRulesModal } from "./PasteRulesModal";
 import { AddQuestionModal } from "./AddQuestionModal";
 import { QuestionWindow } from "./QuestionWindow";
 import { ExplainerSheet, type ExplainerKind } from "./Explainers";
-import { answerHasSelection, narrowFieldOptions } from "./logicTabFields";
-import { ValuePickerPopover, type FilterValueSet } from "./ValuePickerPopover";
+import { narrowFieldOptions } from "./logicTabFields";
 import { RulesSetupScaffold } from "./RulesSetupScaffold";
 import { CoverageSidebar } from "./CoverageSidebar";
 
@@ -66,12 +60,6 @@ function ruleVerb(action: "show" | "hide" | "prioritize" | undefined): string {
   return action;
 }
 
-// The λ chip's verb on an info row ("λ1 lifts Gift cards" — Live detailPanel).
-function ruleChipVerb(action: "show" | "hide" | "prioritize" | undefined): string {
-  if (action === "prioritize") return "lifts";
-  if (action === "hide") return "hides";
-  return "shows";
-}
 
 // §3.3 — a target that is not a product gets a trailing muted kind.
 function targetKind(cat: BuilderCategory | undefined): string | null {
@@ -82,35 +70,7 @@ function targetKind(cat: BuilderCategory | undefined): string | null {
   return null;
 }
 
-// The role a row RENDERS with — Live K: in Rules only "the role stops
-// existing in that style", every question reads as info.
-type DisplayRole = "decides" | "filter" | "info";
-function displayRole(
-  role: "decides" | "qualifier" | "filter" | undefined,
-  rulesOnly: boolean,
-): DisplayRole {
-  if (rulesOnly) return "info";
-  if (role === "decides") return "decides";
-  if (role === "filter") return "filter";
-  return "info";
-}
 
-/** The answer's CURRENT stored values as one full-set payload — the base
- *  every chip-remove edit subtracts from (setAnswerFilterValues is a
- *  full-set write; a partial payload would wipe the rest). */
-function baseValueSet(a: Answer): FilterValueSet {
-  const collection_filters = [
-    ...(a.collection_filter ? [a.collection_filter] : []),
-    ...(a.collection_filters ?? []),
-  ].filter((c, i, all) => Boolean(c) && all.indexOf(c) === i);
-  return {
-    tags: [...a.tags],
-    ...(collection_filters.length ? { collection_filters } : {}),
-    metafield_filters: [...(a.metafield_filters ?? [])],
-    variant_filters: [...(a.variant_filters ?? [])],
-    product_type_filters: [...(a.product_type_filters ?? [])],
-  };
-}
 
 export function LogicTabCard({
   doc,
@@ -520,106 +480,28 @@ export function LogicTabCard({
     </section>
   );
 
-  // ── the workspace grid (Live .lgrid — rail + ONE detail panel) ─────────────
+  // ── the QUESTION widget (QWIDGET) — rail + ONE pane, its own file ────────
   const grid = (
-    <div className="qz-lw-grid">
-      <div className="qz-lw-rail">
-        <div className="qz-lw-railhead">
-          <span className="qz-lw-railh">Questions</span>
-          <button
-            type="button"
-            className="qz-lw-howmini"
-            aria-label="How questions work"
-            title="How questions work"
-            onClick={() => setExplainer("questions")}
-          >
-            ✦
-          </button>
-        </div>
-        {questions.map((q) => {
-          const role = displayRole(q.node.data.role, rulesOnly);
-          const answers = q.node.data.answers;
-          let dot = "is-info";
-          let status: string = "Info only";
-          if (role === "decides") {
-            dot = "is-dec";
-            status = "Picks the result";
-          } else if (role === "filter") {
-            const mapped = answers.filter(
-              (a) => a.no_preference === true || answerHasSelection(a),
-            ).length;
-            if (mapped === 0) {
-              dot = "is-bad";
-              status = "Narrows · no effect";
-            } else {
-              dot = "is-nar";
-              status = `Narrows · ${mapped} of ${answers.length} mapped`;
-            }
-          }
-          const on = selected?.node.id === q.node.id;
-          return (
-            <button
-              key={q.node.id}
-              type="button"
-              className={`qz-lw-qi${on ? " is-on" : ""}`}
-              data-node-id={q.node.id}
-              aria-pressed={on}
-              onClick={() => setSelectedId(q.node.id)}
-            >
-              <span className="qz-lw-qn">{q.qIndex}</span>
-              <span className="qz-lw-qbody">
-                <span className="qz-lw-qt">{q.node.data.text}</span>
-                <span className="qz-lw-qr">
-                  <span className={`qz-lw-dot ${dot}`} aria-hidden />
-                  {status}
-                </span>
-              </span>
-            </button>
-          );
-        })}
-        {commit && quizId ? (
-          <button
-            type="button"
-            className="qz-lw-qadd"
-            onClick={() => setAddOpen(true)}
-          >
-            + Add question
-          </button>
-        ) : null}
-      </div>
-      <div className="qz-lw-detail">
-        {selected ? (
-          <DetailPanel
-            key={selected.node.id}
-            doc={doc}
-            q={selected}
-            questions={questions}
-            rulesOnly={rulesOnly}
-            catById={catById}
-            colTitleById={colTitleById}
-            productIndex={productIndex}
-            readout={readout}
-            qIndexByNodeId={qIndexByNodeId}
-            commit={commit}
-            deciderQIndex={deciderQIndex}
-            hasNarrowFields={hasNarrowFields}
-            lastSyncAt={lastSyncAt}
-            shopifyAdminDomain={shopifyAdminDomain}
-            rulesByAnswer={rulesByAnswer}
-            onOpenWindow={
-              commit
-                ? (nodeId, answerId) => {
-                    setCreateOpen(false);
-                    setQwin({ nodeId, answerId });
-                  }
-                : undefined
-            }
-          />
-        ) : (
-          <p className="qz-ltab-empty">No questions yet.</p>
-        )}
-      </div>
-    </div>
+    <LogicQuestionWidget
+      doc={doc}
+      questions={questions}
+      categories={allCategories}
+      colTitleById={colTitleById}
+      productIndex={productIndex}
+      readout={readout}
+      qIndexByNodeId={qIndexByNodeId}
+      commit={commit}
+      rulesOnly={rulesOnly}
+      deciderQIndex={deciderQIndex}
+      hasNarrowFields={hasNarrowFields}
+      lastSyncAt={lastSyncAt}
+      shopifyAdminDomain={shopifyAdminDomain}
+      rulesByAnswer={rulesByAnswer}
+      selectedId={selected?.node.id ?? null}
+      onSelect={setSelectedId}
+      onAddQuestion={commit && quizId ? () => setAddOpen(true) : undefined}
+      onExplain={() => setExplainer("questions")}
+    />
   );
 
   return (
@@ -822,467 +704,4 @@ function RuleSentence({
       ) : null}
     </>
   );
-}
-
-// ── the ONE detail panel (Live detailPanel) ─────────────────────────────────
-
-function DetailPanel({
-  doc,
-  q,
-  questions,
-  rulesOnly,
-  catById,
-  colTitleById,
-  productIndex,
-  readout,
-  qIndexByNodeId,
-  commit,
-  deciderQIndex,
-  hasNarrowFields,
-  lastSyncAt,
-  shopifyAdminDomain,
-  rulesByAnswer,
-  onOpenWindow,
-}: {
-  doc: QuizDoc;
-  q: OrderedQuestion;
-  questions: OrderedQuestion[];
-  rulesOnly: boolean;
-  catById: Map<string, BuilderCategory>;
-  colTitleById: Map<string, string>;
-  productIndex: IndexedProduct[];
-  readout: AttributeReadout;
-  qIndexByNodeId: Map<string, number>;
-  commit?: (doc: QuizDoc) => void;
-  deciderQIndex: number | null;
-  hasNarrowFields: boolean;
-  lastSyncAt?: string | null;
-  shopifyAdminDomain?: string | null;
-  rulesByAnswer: Map<
-    string,
-    Array<{ index: number; rule: NonNullable<QuizDoc["decision_rules"]>[number] }>
-  >;
-  /** UNIFIED — opens the question window (the decides mapping cells). */
-  onOpenWindow?: (nodeId: string, answerId: string | null) => void;
-}) {
-  const role = displayRole(q.node.data.role, rulesOnly);
-  const rawRole = q.node.data.role;
-  const answers = q.node.data.answers;
-  const total = productIndex.length;
-  const keys = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
-  // The info view's last column IS "Rules" (Live detailPanel comment).
-  const infoCols = role === "info";
-
-  // Read-only fallback (previews, tests) — the same pill as static spans.
-  const pillLabel =
-    rawRole === "decides" ? "Picks the result" : rawRole === "filter" ? "Narrows" : "Asked only";
-
-  return (
-    <div className="qz-lw-panel" data-node-id={q.node.id}>
-      {/* Live .drole — the role leads the panel on its own labelled row;
-          HIDDEN entirely in Rules only (the role stops existing there). */}
-      {!rulesOnly ? (
-        <div className="qz-lw-drole">
-          <span className="qz-lw-drl">Role</span>
-          {commit ? (
-            <QuestionRoleControl
-              variant="table"
-              doc={doc}
-              node={q.node}
-              qIndex={q.qIndex}
-              deciderQIndex={deciderQIndex}
-              productIndex={productIndex}
-              hasNarrowFields={hasNarrowFields}
-              onCommit={commit}
-            />
-          ) : (
-            <span
-              className={`qz-ltab-pill${rawRole === "decides" ? " is-start" : ""}`}
-            >
-              {pillLabel}
-            </span>
-          )}
-        </div>
-      ) : null}
-      <div className="qz-lw-dhead">
-        <h3>{q.node.data.text}</h3>
-      </div>
-      {answers.length === 0 ? (
-        <p className="qz-ltab-empty">
-          <span className="qz-ltab-muted">—</span> no answer options
-        </p>
-      ) : (
-        <div className="qz-lw-at">
-          <div className="qz-lw-ah">
-            <span />
-            <span>Answer</span>
-            <span>Maps to</span>
-            <span className="is-r">{infoCols ? "Rules" : "Products"}</span>
-            {/* KEPT — the skip-logic routing surface (owner-resolved). */}
-            <span>Then go to</span>
-          </div>
-          {answers.map((a, i) => (
-            <AnswerRow
-              key={a.id}
-              doc={doc}
-              q={q}
-              answer={a}
-              answerKey={keys[i] ?? String(i + 1)}
-              role={role}
-              questions={questions}
-              catById={catById}
-              colTitleById={colTitleById}
-              productIndex={productIndex}
-              readout={readout}
-              qIndexByNodeId={qIndexByNodeId}
-              commit={commit}
-              total={total}
-              lastSyncAt={lastSyncAt}
-              shopifyAdminDomain={shopifyAdminDomain}
-              rulesForAnswer={rulesByAnswer.get(a.id) ?? []}
-              onOpenWindow={onOpenWindow}
-            />
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
-function AnswerRow({
-  doc,
-  q,
-  answer,
-  answerKey,
-  role,
-  questions,
-  catById,
-  colTitleById,
-  productIndex,
-  readout,
-  qIndexByNodeId,
-  commit,
-  total,
-  lastSyncAt,
-  shopifyAdminDomain,
-  rulesForAnswer,
-  onOpenWindow,
-}: {
-  doc: QuizDoc;
-  q: OrderedQuestion;
-  answer: Answer;
-  answerKey: string;
-  role: DisplayRole;
-  questions: OrderedQuestion[];
-  catById: Map<string, BuilderCategory>;
-  colTitleById: Map<string, string>;
-  productIndex: IndexedProduct[];
-  readout: AttributeReadout;
-  qIndexByNodeId: Map<string, number>;
-  commit?: (doc: QuizDoc) => void;
-  total: number;
-  lastSyncAt?: string | null;
-  shopifyAdminDomain?: string | null;
-  rulesForAnswer: Array<{
-    index: number;
-    rule: NonNullable<QuizDoc["decision_rules"]>[number];
-  }>;
-  onOpenWindow?: (nodeId: string, answerId: string | null) => void;
-}) {
-  const writeValues = (values: FilterValueSet) => {
-    if (!commit) return;
-    commit(setAnswerFilterValues(doc, q.node.id, answer.id, values));
-  };
-
-  // ── Maps-to cell (Live row states) ────────────────────────────────────────
-  let mapping: ReactNode;
-  if (role === "info") {
-    // λ chips of the rules READING this answer, or the dashed no-effect chip.
-    mapping =
-      rulesForAnswer.length > 0 ? (
-        rulesForAnswer.map(({ index, rule }) => {
-          const tid = ruleTargets(rule)[0];
-          const cat = tid ? catById.get(tid) : undefined;
-          return (
-            <span key={rule.id} className="qz-lw-vchip is-rule">
-              λ{index} {ruleChipVerb(rule.action)}{" "}
-              {cat ? cat.name : "(deleted target)"}
-            </span>
-          );
-        })
-      ) : (
-        <span className="qz-lw-vchip is-all">no effect yet</span>
-      );
-  } else if (role === "decides") {
-    // Reuse the decides mapping door — the cell opens the QuestionWindow
-    // focused on this answer, exactly as before.
-    const cat = answer.target_id ? catById.get(answer.target_id) : undefined;
-    const chip = answer.target_id ? (
-      cat ? (
-        <span className="qz-lw-vchip">{cat.name}</span>
-      ) : (
-        <span className="qz-ltab-bad">(deleted target)</span>
-      )
-    ) : (
-      <span className="qz-lw-vadd is-empty">+ Map this answer</span>
-    );
-    mapping = onOpenWindow ? (
-      <button
-        type="button"
-        className="qz-ltab-cellbtn qz-qwin-mapcell"
-        onClick={() => onOpenWindow(q.node.id, answer.id)}
-      >
-        {chip}
-      </button>
-    ) : (
-      chip
-    );
-  } else if (answer.no_preference) {
-    // The dashed "Keeps everything" chip; × clears no_preference.
-    mapping = (
-      <span className="qz-lw-vchip is-all">
-        Keeps everything
-        {commit ? (
-          <button
-            type="button"
-            className="qz-lw-x"
-            aria-label="Stop keeping everything"
-            onClick={() => writeValues({ tags: [] })}
-          >
-            ×
-          </button>
-        ) : null}
-      </span>
-    );
-  } else {
-    // Narrowing answer — one chip per mapped value + the "+ value" picker.
-    const chips: Array<{ key: string; label: string; removed: FilterValueSet }> = [];
-    answer.tags.forEach((t, ti) => {
-      const ci = t.indexOf(":");
-      const label = ci > 0 && ci < t.length - 1 ? t.slice(ci + 1) : t;
-      const removed = baseValueSet(answer);
-      removed.tags = answer.tags.filter((_, j) => j !== ti);
-      chips.push({ key: `t:${t}:${ti}`, label, removed });
-    });
-    const cols = [
-      ...(answer.collection_filter ? [answer.collection_filter] : []),
-      ...(answer.collection_filters ?? []),
-    ].filter((c, i, all) => Boolean(c) && all.indexOf(c) === i);
-    cols.forEach((cid) => {
-      const removed = baseValueSet(answer);
-      removed.collection_filters = cols.filter((c) => c !== cid);
-      if (!removed.collection_filters.length) delete removed.collection_filters;
-      chips.push({ key: `c:${cid}`, label: colTitleById.get(cid) ?? cid, removed });
-    });
-    (answer.metafield_filters ?? []).forEach((m, mi) => {
-      const removed = baseValueSet(answer);
-      removed.metafield_filters = (answer.metafield_filters ?? []).filter(
-        (_, j) => j !== mi,
-      );
-      chips.push({ key: `m:${m.key}:${m.value}:${mi}`, label: m.value, removed });
-    });
-    (answer.variant_filters ?? []).forEach((v, vi) => {
-      const removed = baseValueSet(answer);
-      removed.variant_filters = (answer.variant_filters ?? []).filter(
-        (_, j) => j !== vi,
-      );
-      chips.push({ key: `v:${v.name}:${v.value}:${vi}`, label: v.value, removed });
-    });
-    (answer.product_type_filters ?? []).forEach((p, pi) => {
-      const removed = baseValueSet(answer);
-      removed.product_type_filters = (answer.product_type_filters ?? []).filter(
-        (_, j) => j !== pi,
-      );
-      chips.push({ key: `p:${p}:${pi}`, label: p, removed });
-    });
-
-    const picker = commit ? (
-      <ValuePickerPopover
-        trigger={
-          chips.length > 0 ? (
-            <button type="button" className="qz-lw-vadd">
-              + value
-            </button>
-          ) : (
-            <button type="button" className="qz-lw-vadd is-empty">
-              + Map this answer
-            </button>
-          )
-        }
-        answer={answer}
-        siblingAnswers={q.node.data.answers}
-        readout={readout}
-        productIndex={productIndex}
-        onApply={writeValues}
-      />
-    ) : null;
-
-    mapping = (
-      <>
-        {chips.map((c) => (
-          <span key={c.key} className="qz-lw-vchip">
-            {c.label}
-            {commit ? (
-              <button
-                type="button"
-                className="qz-lw-x"
-                aria-label={`Remove ${c.label}`}
-                onClick={() => writeValues(c.removed)}
-              >
-                ×
-              </button>
-            ) : null}
-          </span>
-        ))}
-        {picker}
-      </>
-    );
-  }
-
-  // ── the count / rules column ──────────────────────────────────────────────
-  let countCell: ReactNode;
-  let countClass = "qz-lw-acount";
-  if (role === "info") {
-    countCell =
-      rulesForAnswer.length > 0 ? (
-        <>{rulesForAnswer.length === 1 ? "1 rule" : `${rulesForAnswer.length} rules`}</>
-      ) : (
-        <span className="qz-lw-dash">—</span>
-      );
-  } else if (role === "decides") {
-    const cat = answer.target_id ? catById.get(answer.target_id) : undefined;
-    if (!cat) {
-      countCell = <span className="qz-lw-dash">—</span>;
-    } else {
-      const n = cat.productIds.length;
-      const label = (
-        <span className="qz-lw-cnum">
-          <b>{n}</b> <span className="qz-lw-of">{n === 1 ? "product" : "products"}</span>
-        </span>
-      );
-      if (n === 0) countClass += " is-zero";
-      countCell = commit ? (
-        <ProductCountButton
-          answer={answer}
-          role="decides"
-          catById={catById}
-          productIndex={productIndex}
-          label={label}
-          answerKey={answerKey}
-          lastSyncAt={lastSyncAt}
-          shopifyAdminDomain={shopifyAdminDomain}
-        />
-      ) : (
-        label
-      );
-    }
-  } else if (answer.no_preference) {
-    const label = <>all {total}</>;
-    countCell = commit ? (
-      <ProductCountButton
-        answer={answer}
-        role="filter"
-        catById={catById}
-        productIndex={productIndex}
-        label={label}
-        answerKey={answerKey}
-        lastSyncAt={lastSyncAt}
-        shopifyAdminDomain={shopifyAdminDomain}
-      />
-    ) : (
-      label
-    );
-  } else {
-    const count = filterAnswerMatchCount(answer, productIndex);
-    if (count === null) {
-      countClass += " is-unset";
-      countCell = <>not set</>;
-    } else {
-      if (count === 0) countClass += " is-zero";
-      const label = (
-        <span className="qz-lw-cnum">
-          <b>{count}</b> <span className="qz-lw-of">of {total}</span>
-        </span>
-      );
-      countCell = commit ? (
-        <ProductCountButton
-          answer={answer}
-          role="filter"
-          catById={catById}
-          productIndex={productIndex}
-          label={label}
-          answerKey={answerKey}
-          lastSyncAt={lastSyncAt}
-          shopifyAdminDomain={shopifyAdminDomain}
-        />
-      ) : (
-        label
-      );
-    }
-  }
-
-  // ── the kept Then-go-to column ────────────────────────────────────────────
-  const route = (
-    <RouteCell doc={doc} q={q} answer={answer} qIndexByNodeId={qIndexByNodeId} />
-  );
-
-  return (
-    <div className="qz-lw-ar">
-      <span className="qz-lw-akey">{answerKey}</span>
-      <span className="qz-lw-atext" title={answer.text}>
-        {answer.text}
-      </span>
-      <span className="qz-lw-acell">{mapping}</span>
-      <span className={countClass}>{countCell}</span>
-      <span className="qz-lw-aroute">
-        {commit ? (
-          <RouteMenuButton
-            doc={doc}
-            q={q}
-            answer={answer}
-            questions={questions}
-            commit={commit}
-            label={route}
-          />
-        ) : (
-          route
-        )}
-      </span>
-    </div>
-  );
-}
-
-// §5.4 — "Then go to": next question (muted) · → Q4 · → results. Content
-// steps (message / product-cards / …) between questions are walked through —
-// the merchant routes between QUESTIONS; the logic surfaces never number
-// content steps (questionOrder's rule).
-function RouteCell({
-  doc,
-  q,
-  answer,
-  qIndexByNodeId,
-}: {
-  doc: QuizDoc;
-  q: OrderedQuestion;
-  answer: Answer;
-  qIndexByNodeId: Map<string, number>;
-}) {
-  let nextId = answerNextNode(doc, q.node.id, answer.edge_handle_id);
-  // Bounded walk past non-question, non-terminal steps (a cycle can't recurse
-  // forever — routing is forward-only, but stay defensive on malformed docs).
-  for (let hops = 0; nextId && hops < 24; hops++) {
-    const cur = nextId;
-    if (qIndexByNodeId.has(cur)) break;
-    const node = doc.nodes.find((n) => n.id === cur);
-    if (!node || node.type === "result" || node.type === "end") break;
-    nextId = doc.edges.find((e) => e.source === cur)?.target ?? null;
-  }
-  if (!nextId) return <span className="qz-ltab-muted">—</span>;
-  const nextQ = qIndexByNodeId.get(nextId);
-  // Mock .goto-val — the → prefix rides the CSS ::before; labels are "Next
-  // question" / "Results"; a skip route keeps the Q-number.
-  if (nextQ === undefined) return <span className="qz-ltab-gotoval">Results</span>;
-  if (nextQ === q.qIndex + 1)
-    return <span className="qz-ltab-gotoval">Next question</span>;
-  return <span className="qz-ltab-gotoval">Q{nextQ}</span>;
 }

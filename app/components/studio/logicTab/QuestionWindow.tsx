@@ -815,8 +815,8 @@ export function QuestionWindow({
   if (typeof document === "undefined") return null;
 
   const decider = questions.find((x) => x.node.data.role === "decides");
-  const cannotDecide =
-    q.node.data.question_type === "multi_select" || isFreeformType(q.node.data.question_type);
+  // QWIDGET decision 2 — a multi-select may decide; only freeform cannot.
+  const cannotDecide = isFreeformType(q.node.data.question_type);
   const chipCounts: Record<Exclude<Badge, "set">, number> = {
     tag: allRows.filter((r) => r.badge === "tag").length,
     collection: colRows.length,
@@ -914,7 +914,7 @@ export function QuestionWindow({
                 >
                   {/* QRTZ-OB1 — the ◆ glyph is gone with the vocabulary. */}
                   <b>{j.n}</b>
-                  <span>{j.k === "decides" && cannotDecide ? "needs single-answer choices" : sub}</span>
+                  <span>{j.k === "decides" && cannotDecide ? "needs answers to choose from" : sub}</span>
                 </button>
               );
             })}

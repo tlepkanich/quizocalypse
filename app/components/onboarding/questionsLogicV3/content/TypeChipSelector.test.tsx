@@ -132,19 +132,18 @@ function buttonByText(text: string): HTMLButtonElement {
 }
 
 describe("TypeChipSelector — decider BLOCK dialog", () => {
-  it("decider → multi-select is REFUSED: block dialog opens, onCommit is never called", () => {
+  it("QWIDGET decision 2 — decider → multi-select commits DIRECTLY and keeps the role (no block dialog)", () => {
     const d = doc();
     const onCommit = vi.fn();
     mount(createElement(TypeChipSelector, { doc: d, node: questionNode(d, "q2"), onCommit }));
 
     pickType("multi_select");
-    const dialog = document.body.querySelector('[role="dialog"]');
-    expect(dialog?.textContent).toContain("Multi-select can't decide the result");
-    expect(onCommit).not.toHaveBeenCalled();
-
-    act(() => buttonByText("Got it").click());
     expect(document.body.querySelector('[role="dialog"]')).toBeNull();
-    expect(onCommit).not.toHaveBeenCalled(); // doc untouched end to end
+    expect(onCommit).toHaveBeenCalledTimes(1);
+    const next = onCommit.mock.calls[0]![0];
+    const q2 = next.nodes.find((n: { id: string }) => n.id === "q2");
+    expect(q2.data.question_type).toBe("multi_select");
+    expect(q2.data.role).toBe("decides"); // a multi-select may decide — no auto-demote
   });
 
   it("QZY-3 — the picker is curated: no freeform picks offered", () => {

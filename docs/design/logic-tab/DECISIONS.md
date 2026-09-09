@@ -120,3 +120,18 @@ table cell, derives the NARROWS pill from the answers (MIXED state), and adds
 "Map N answers for me" — adopting it is an OPEN owner decision. Mock token
 names (`--ac`, `--ink`, `--s1..s6`) map onto the repo system: `--ac` →
 `--qz-accent`; no hex literals in new `.tsx` (check-tokens gate).
+
+## QWIDGET — the question widget (2026-09-09, owner-locked 2026-09-08)
+
+Source: the "Question Widget" artifact (`question-widget.artifact.html`) and
+its dev handoff (`question-widget-handoff.artifact.html`). Where the mock and
+the handoff differ, the handoff is the spec.
+
+| # | Decision | Consequence |
+|---|---|---|
+| **1** | One deciding answer points at exactly one recommendation. G9 stands; `Answer.target_id` stays singular. | No schema change. The mock's several-chips-per-cell is NOT built: one chip, one clear ×, placing REPLACES (an occupied cell reads *Replace {old} with {new}*). |
+| **2** | A multi-select question may be the deciding question. | The five mutation/lib guards lifted together (`setQuestionRole`, `moveDecider`, `setQuestionType`'s demote, `pickDeciderIndex`, `proposeDeciderFromLegacy` + `executeDeciderUpgrade`); the four UI surfaces stop refusing it; only FREEFORM types still cannot decide. |
+| **3** | Several selected mapped answers union their targets' products. | `resolveTarget` collects every selected mapped answer in the decider's AUTHORED order, dedupes to first occurrence, and emits `targetIds` only when more than one survives — single-answer resolutions keep today's exact shape. The engine's existing `targetIds` union channel does the rest (no hero-only shape for a union). This also closes the live truncation bug for multi-select deciders that reached main through the raw `question_type` writers. |
+| **Routing** | Option A — keep first-authored-wins; surface the warning. | The Logic widget calls `routingConflicts` on a multi-select decider and shows the conflicts under its rows. No runtime change, no legacy risk. No publish gate (a V7) was added — owner call. |
+| **Tray vs picker** | Both surfaces offer every step-1 recommendation. | The tray greys a used card and slides it last; the picker still offers it (two answers may share a target — natural under a multi-select decider). |
+| **Pool** | "Recommendations from step 1" = this quiz's own Category rows (`quizId` set). | Shop-global groups stay in the Logic/Results pickers, never in the tray. |

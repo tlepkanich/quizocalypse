@@ -24,11 +24,9 @@ export function setQuestionRole(
   if (doc.logic_model !== "decider") return doc;
   const node = doc.nodes.find((n) => n.id === nodeId);
   if (!node || node.type !== "question") return doc;
-  if (
-    role === "decides" &&
-    (node.data.question_type === "multi_select" || isFreeformType(node.data.question_type))
-  )
-    return doc;
+  // QWIDGET decision 2 — a multi-select may decide (its selected answers
+  // union their targets); only freeform types (no discrete answers) cannot.
+  if (role === "decides" && isFreeformType(node.data.question_type)) return doc;
   return {
     ...doc,
     nodes: doc.nodes.map((n) => {
@@ -99,11 +97,8 @@ export function moveDecider(doc: QuizDoc, toNodeId: string): QuizDoc {
   if (doc.logic_model !== "decider") return doc;
   const target = doc.nodes.find((n) => n.id === toNodeId);
   if (!target || target.type !== "question") return doc;
-  if (
-    target.data.question_type === "multi_select" ||
-    isFreeformType(target.data.question_type)
-  )
-    return doc;
+  // QWIDGET decision 2 — multi-select may decide; freeform still cannot.
+  if (isFreeformType(target.data.question_type)) return doc;
   if (target.data.role === "decides") return doc;
   return {
     ...doc,

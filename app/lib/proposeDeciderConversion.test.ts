@@ -252,19 +252,21 @@ describe("proposeDeciderFromLegacy", () => {
     });
   });
 
-  it("never proposes a multi_select or freeform question", () => {
+  it("never proposes a freeform question; a multi-select stays eligible (QWIDGET decision 2)", () => {
     const doc = legacyDoc();
-    const multi = Quiz.parse({
-      ...doc,
-      nodes: doc.nodes.map((n) =>
-        n.id === "q1" && n.type === "question"
-          ? { ...n, data: { ...n.data, question_type: "multi_select" } }
-          : n,
-      ),
-    });
-    const p = proposeDeciderFromLegacy(multi, CATS);
-    expect(p).not.toBeNull();
-    expect(p!.decidingQuestionNodeId).toBe("q2"); // q1 disqualified
+    const retype = (question_type: string) =>
+      Quiz.parse({
+        ...doc,
+        nodes: doc.nodes.map((n) =>
+          n.id === "q1" && n.type === "question" ? { ...n, data: { ...n.data, question_type } } : n,
+        ),
+      });
+    const text = proposeDeciderFromLegacy(retype("text"), CATS);
+    expect(text).not.toBeNull();
+    expect(text!.decidingQuestionNodeId).toBe("q2"); // q1 disqualified
+    const multi = proposeDeciderFromLegacy(retype("multi_select"), CATS);
+    expect(multi).not.toBeNull();
+    expect(multi!.decidingQuestionNodeId).toBe(proposeDeciderFromLegacy(doc, CATS)!.decidingQuestionNodeId);
   });
 });
 

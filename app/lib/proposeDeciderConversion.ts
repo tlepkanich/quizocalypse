@@ -154,7 +154,8 @@ export function proposeDeciderFromLegacy(
   let winnerTargets: (string | null)[] = [];
   let bestScore = 0;
   for (const q of orderedQuestions) {
-    if (q.data.question_type === "multi_select" || isFreeformType(q.data.question_type)) continue;
+    // QWIDGET decision 2 — multi-select may decide; freeform still cannot.
+    if (isFreeformType(q.data.question_type)) continue;
     const targets = q.data.answers.map((a) => realTargetFor(a, categories));
     const distinct = new Set(targets.filter((t): t is string => t !== null)).size;
     if (distinct > bestScore && dominatesEveryPath(doc, q.id)) {
@@ -259,7 +260,9 @@ export function executeDeciderUpgrade(doc: QuizDoc, proposal: DeciderProposal): 
     (n): n is ResultNode => n.id === proposal.keptResultNodeId && n.type === "result",
   );
   if (!decider || !kept) return doc;
-  if (decider.data.question_type === "multi_select" || isFreeformType(decider.data.question_type)) {
+  // (:157 and here lift TOGETHER — lifting one without the other makes the
+  // wizard appear to run and do nothing.)
+  if (isFreeformType(decider.data.question_type)) {
     return doc;
   }
 

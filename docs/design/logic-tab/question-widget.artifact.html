@@ -1,0 +1,1559 @@
+<title>Question Widget</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Figtree:ital,wght@0,400..800&display=swap">
+<style>
+/* Quartz tokens — app/styles/quizocalypse.css @ origin/main. Light only by
+   owner ruling (2026-08-09); every ground is painted explicitly. */
+:root{
+  --paper:#FFFFFF; --ground:#F5F4F8; --wash:#F5F4F8; --cell:#FBFAFD;
+  --ink:#201C2E; --ink-3:#4E4860; --ink-4:#645E78; --ink-25:#B4AFC4;
+  --rule:#E4E1EC; --rule-2:#EFEDF4; --rule-strong:#948EA6; --line-2:#CFCADD;
+  --accent:#5B45D6; --accent-ink:#4A36B8; --accent-wash:#EFECFD; --accent-line:#D5CDF8;
+  --warn:#8A5300; --warn-wash:#FBF3E4; --warn-line:#E9D9B5; --ok:#0F6B45;
+  --r:6px; --r-sm:4px; --r-lg:8px;
+  --lift:0 1px 2px rgba(32,28,46,.05);
+  --lift-2:0 12px 30px -10px rgba(32,28,46,.26),0 1px 2px rgba(32,28,46,.07);
+  --font:"Figtree",-apple-system,"Segoe UI","Helvetica Neue",sans-serif;
+  --ease:cubic-bezier(.2,.7,.3,1);
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--ground);color:var(--ink);font-family:var(--font);
+  font-size:15px;line-height:1.6;-webkit-font-smoothing:antialiased}
+.wrap{max-width:1180px;margin:0 auto;padding:36px 22px 76px}
+.eyebrow{font-size:11px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;
+  color:var(--ink-4);margin:0 0 10px}
+h1.pg{font-size:33px;line-height:1.12;font-weight:800;letter-spacing:-.022em;margin:0 0 13px;
+  text-wrap:balance;max-width:20ch}
+.lede{font-size:16px;line-height:1.6;color:var(--ink-3);margin:0;max-width:68ch}
+.lede b{color:var(--ink);font-weight:700}
+code{font-family:var(--font);font-weight:700;color:var(--ink);background:var(--wash);
+  padding:1px 6px;border-radius:var(--r-sm);font-size:.93em}
+
+.sw{display:flex;flex-wrap:wrap;gap:6px;margin:30px 0 0;padding:6px;background:var(--paper);
+  border:1px solid var(--rule);border-radius:var(--r-lg);box-shadow:var(--lift);
+  position:sticky;top:12px;z-index:40}
+.sw button{flex:1 1 auto;min-width:170px;text-align:left;cursor:pointer;font-family:inherit;
+  font-size:13.5px;font-weight:600;color:var(--ink-3);background:transparent;
+  border:1px solid transparent;border-radius:var(--r);padding:9px 13px;
+  transition:background var(--ease) 130ms}
+.sw button .k{display:block;font-size:10px;font-weight:700;letter-spacing:.09em;
+  text-transform:uppercase;color:var(--ink-4);margin-bottom:2px}
+.sw button:hover{background:var(--wash)}
+.sw button[aria-selected="true"]{background:var(--accent-wash);border-color:var(--accent-line);
+  color:var(--accent-ink)}
+.sw button[aria-selected="true"] .k{color:var(--accent-ink)}
+.sw button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+.bulk{display:inline-flex;align-items:center;gap:9px;margin:22px 0 0;padding:9px 13px;
+  border:1px solid var(--rule);border-radius:var(--r-lg);background:var(--paper);
+  font-size:13.5px;color:var(--ink-3);cursor:pointer;box-shadow:var(--lift)}
+.bulk b{color:var(--ink);font-weight:700}
+.bulk input{width:15px;height:15px;accent-color:var(--accent);cursor:pointer}
+.stage{margin-top:20px;border:1px solid var(--rule);border-radius:var(--r-lg);
+  background:var(--paper);box-shadow:var(--lift);overflow:hidden}
+.fit{overflow:hidden;position:relative}
+.fit>.mk{transform-origin:top left}
+.panel{display:none}.panel.show{display:block}
+
+/* ══════════════ shared mock chrome ══════════════ */
+.mk{width:1120px;background:var(--paper);color:var(--ink-3);font-size:14px;position:relative}
+/* Step-1 recommendations, opened from the Logic step. It answers the one
+   question you can only answer from here: which results nothing points at. */
+.scrim{position:absolute;inset:0;z-index:80;background:rgba(32,28,46,.42);
+  display:flex;align-items:center;justify-content:center;padding:36px}
+.sheet{width:660px;max-height:100%;display:flex;flex-direction:column;background:var(--paper);
+  border:1px solid var(--line-2);border-radius:var(--r-lg);box-shadow:var(--lift-2);
+  overflow:hidden;cursor:default}
+.sheet-h{display:flex;align-items:center;gap:12px;padding:15px 18px;
+  border-bottom:1px solid var(--rule)}
+.sheet-h h4{margin:0;font-size:16px;font-weight:800;color:var(--ink)}
+.sheet-h .c{font-size:12.5px;color:var(--ink-25);font-variant-numeric:tabular-nums}
+.sheet-h .x{margin-left:auto;width:28px;height:28px;border:0;background:none;color:var(--ink-25);
+  border-radius:var(--r);cursor:pointer;font-size:17px;line-height:1;font-family:inherit}
+.sheet-h .x:hover{background:var(--wash);color:var(--ink)}
+.sheet-b{overflow:auto;padding:6px 0 10px}
+.sheet-g{font-size:9.5px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;
+  color:var(--ink-25);padding:12px 18px 5px}
+.rrow{display:grid;grid-template-columns:30px 1fr auto;gap:12px;align-items:center;
+  padding:8px 18px}
+.rrow:hover{background:var(--cell)}
+.rrow .sw3{width:30px;height:30px;border-radius:var(--r-sm);background:var(--accent-wash);
+  border:1px solid var(--accent-line)}
+.rrow .nm{font-size:14px;font-weight:600;color:var(--ink);min-width:0;overflow:hidden;
+  text-overflow:ellipsis;white-space:nowrap}
+.rrow .nm em{display:block;font-style:normal;font-size:12px;font-weight:400;color:var(--ink-25)}
+.rrow .use{font-size:12px;color:var(--ink-25);white-space:nowrap;
+  font-variant-numeric:tabular-nums}
+.rrow .use.none{color:var(--warn);font-weight:600}
+.sheet-f{display:flex;align-items:center;gap:10px;padding:12px 18px;
+  border-top:1px solid var(--rule);background:var(--cell)}
+.sheet-f .note{flex:1;font-size:12.5px;color:var(--ink-4)}
+.sheet-f .note b{color:var(--ink);font-weight:700}
+.sheet-f .sec{background:var(--paper);color:var(--ink);border:1px solid var(--rule-strong);
+  border-radius:var(--r);padding:7px 14px;font:inherit;font-size:13px;font-weight:700;
+  cursor:pointer}
+.sheet-f .pri{background:var(--accent);color:#fff;border:0;border-radius:var(--r);
+  padding:7px 15px;font:inherit;font-size:13px;font-weight:700;cursor:pointer}
+.mk-step{display:flex;align-items:center;padding:10px 22px;border-bottom:1px solid var(--rule)}
+.mk-step .s{display:flex;align-items:center;gap:7px;font-size:12.5px;font-weight:600;
+  color:var(--ink-25);white-space:nowrap;padding:4px 9px;border-radius:var(--r)}
+.mk-step .s.done{color:var(--ink-4)}
+.mk-step .s.now{color:var(--ink);font-weight:700;background:var(--wash)}
+.mk-step .n{width:19px;height:19px;border-radius:var(--r-sm);display:grid;place-items:center;
+  font-size:10px;font-weight:700;background:var(--wash);color:var(--ink-4);
+  font-variant-numeric:tabular-nums}
+.mk-step .s.now .n{background:var(--ink);color:#fff}
+.mk-step .s.done .n{background:transparent}
+.mk-step .bar{flex:1;height:1px;background:var(--rule);margin:0 8px}
+.mk-step .cta{margin-left:14px;background:var(--accent);color:#fff;border:0;border-radius:var(--r);
+  padding:7px 17px;font:inherit;font-size:13px;font-weight:700;cursor:pointer}
+.mk-body{padding:24px 26px 28px}
+.mk-h{font-size:22px;font-weight:800;letter-spacing:-.016em;color:var(--ink);margin:0 0 3px;
+  line-height:1.2}
+.mk-say{margin:0 0 18px;font-size:14.5px;line-height:1.55;color:var(--ink-4);max-width:70ch}
+.mk-say b{color:var(--ink-3);font-weight:700}
+
+
+/* two panes */
+.two{display:grid;border:1px solid var(--rule);border-radius:var(--r-lg);overflow:visible;
+  background:var(--paper)}
+.rail{border-right:1px solid var(--rule);background:var(--cell);padding:12px;
+  border-radius:var(--r-lg) 0 0 var(--r-lg)}
+.qtxt{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.rail-h{display:flex;align-items:center;justify-content:space-between;font-size:10px;
+  font-weight:700;letter-spacing:.09em;text-transform:uppercase;color:var(--ink-25);
+  padding:2px 8px 9px}
+.pane{padding:18px 20px;min-width:0}
+.pane-h{display:flex;align-items:flex-start;justify-content:space-between;gap:20px;
+  margin-bottom:16px}
+.pane-t{margin:0;font-size:18px;font-weight:700;line-height:1.35;color:var(--ink);max-width:46ch}
+/* the tray divides the header from the answers on a deciding question; where
+   there is no tray this stands in for it, so the list always has a top edge */
+.prule{height:1px;background:var(--rule);margin:0 0 16px}
+
+/* the role control — text with a caret, an edge only on reach */
+.anchor{position:relative;flex:0 0 auto}
+.rolebtn{display:inline-flex;align-items:center;gap:7px;font:inherit;font-size:13px;
+  font-weight:700;color:var(--ink);background:transparent;border:1px solid transparent;
+  border-radius:var(--r);padding:5px 9px;cursor:pointer;white-space:nowrap}
+.rolebtn:hover{background:var(--wash);border-color:var(--rule)}
+.rolebtn .cv{color:var(--ink-25);font-size:9px}
+.rolebtn.open{background:var(--accent-wash);border-color:var(--accent-line);color:var(--accent-ink)}
+
+/* answer rows */
+.arow{display:grid;align-items:center;gap:14px;border-bottom:1px solid var(--rule-2)}
+.arow:last-of-type{border-bottom:0}
+.akey{font-size:11px;color:var(--ink-25);font-variant-numeric:tabular-nums}
+.atext{color:var(--ink);font-size:14.5px;line-height:1.45;min-width:0}
+.vbtn{display:flex;align-items:center;flex-wrap:wrap;gap:4px;width:100%;font:inherit;
+  font-size:13px;font-weight:600;color:var(--ink);background:transparent;
+  border:1px solid transparent;border-radius:var(--r);padding:3px 6px;cursor:pointer;
+  text-align:left}
+.vbtn:hover{background:var(--wash);border-color:var(--rule)}
+.vbtn .cv{margin-left:auto;color:var(--ink-25);font-size:9px;padding-left:4px}
+.vbtn .chip{display:inline-block;padding:2px 7px;border-radius:var(--r-sm);
+  background:var(--accent-wash);color:var(--accent-ink);font-size:12.5px;font-weight:600}
+.vbtn .chip .qf{color:var(--ink-25);font-weight:500;padding-left:6px}
+.vbtn.empty{color:var(--ink-25);font-weight:500}
+.vbtn.empty:hover{color:var(--accent-ink)}
+.vbtn.open{background:var(--accent-wash);border-color:var(--accent-line)}
+/* The CELL is the white square. The name, the count and the clear button are
+   siblings inside it — a button cannot contain a button, so the box has to be
+   the wrapper rather than the control. */
+.cell{display:flex;align-items:center;gap:2px;width:100%;background:transparent;
+  cursor:pointer;
+  border:1px solid transparent;border-radius:var(--r);padding:2px 3px 2px 2px;
+  transition:border-color var(--ease) 130ms,background var(--ease) 130ms}
+.cell:hover{background:var(--paper);border-color:var(--rule)}
+.cell.open{background:var(--paper);border-color:var(--accent-line)}
+.cell:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+.cell.blank{border-style:dashed;border-color:var(--line-2);background:transparent}
+.cell.blank:hover{border-color:var(--accent)}
+.cell .vbtn{flex:1;min-width:0;border:0;background:none;padding:4px 7px}
+.cell .vbtn:hover{background:none;border-color:transparent}
+.cell .vbtn.ai{border:0}
+.xclr{flex:0 0 20px;width:20px;height:22px;border:0;background:none;color:var(--ink-25);
+  border-radius:var(--r-sm);cursor:pointer;font-size:14px;line-height:1;font-family:inherit;
+  opacity:0;transition:opacity var(--ease) 130ms}
+.cell:hover .xclr,.cell:focus-within .xclr{opacity:1}
+.xclr:hover{background:var(--crit-wash);color:var(--crit)}
+/* an AI-filled cell flashes purple and settles — enough to catch the eye,
+   gone before it becomes furniture */
+.cell.ai{animation:aiflash 2.8s var(--ease) forwards}
+@keyframes aiflash{
+  0%,65%{background:var(--accent-wash);border-color:var(--accent)}
+  100%{background:transparent;border-color:transparent}
+}
+@media (prefers-reduced-motion:reduce){
+  .cell.ai{animation:none;background:var(--accent-wash);border-color:var(--accent)}
+}
+
+/* Routing lives on the answer. The DEFAULT is near-silent — six identical
+   loud cells were the noise problem; six near-invisible ones let the single
+   overridden row be the thing you see. */
+.gobtn{display:inline-flex;align-items:center;gap:5px;width:100%;font:inherit;font-size:12.5px;
+  font-weight:500;color:var(--ink-25);background:transparent;border:1px solid transparent;
+  border-radius:var(--r);padding:3px 6px;cursor:pointer;white-space:nowrap}
+.gobtn:hover{background:var(--wash);border-color:var(--rule);color:var(--ink-3)}
+.gobtn.set{color:var(--ink);font-weight:600}
+.gobtn.open{background:var(--accent-wash);border-color:var(--accent-line);color:var(--accent-ink)}
+
+/* ── the picker (shared by all three) ─────────────────────────────────── */
+.pop{position:absolute;top:calc(100% + 5px);right:0;z-index:60;min-width:392px;
+  max-height:452px;overflow:auto;background:var(--paper);border:1px solid var(--line-2);
+  border-radius:var(--r-lg);box-shadow:var(--lift-2),0 0 0 4px rgba(32,28,46,.03);
+  padding:0;cursor:default}
+.pop.up{top:auto;bottom:calc(100% + 5px)}
+.pop.left{left:0;right:auto}
+.pop.narrow{min-width:172px}
+.pop-top{position:sticky;top:0;z-index:2;background:var(--paper);padding:6px 6px 7px;
+  border-bottom:1px solid var(--rule-2);border-radius:var(--r-lg) var(--r-lg) 0 0}
+.pop-top input{width:100%;font:inherit;font-size:13px;padding:6px 9px;color:var(--ink);
+  border:1px solid var(--rule-strong);border-radius:var(--r);background:var(--paper)}
+.pop-top input:focus-visible{outline:2px solid var(--accent);outline-offset:-1px}
+/* The step-1 recommendations, laid out as a palette you empty. Mapped chips
+   grey out and `order:2` slides them to the end on their own, so what is left
+   to do stays at the front. */
+/* Neutral, not purple: it sat directly under a purple alert and the two
+   competed. Purple now means one thing here — the chip you have armed. */
+.tray{margin:0 0 16px;padding:9px 12px 11px;border:1px solid var(--rule);
+  background:var(--cell);border-radius:var(--r-lg)}
+/* the label and the actions hold the top line to themselves so the names below
+   can wrap freely without either one drifting into the middle of them */
+.tray-h{display:flex;align-items:center;gap:12px;min-height:24px}
+.tray-c{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin-top:7px}
+.tray .lb{flex:1;font-size:9.5px;font-weight:700;letter-spacing:.09em;
+  text-transform:uppercase;color:var(--ink-25);white-space:nowrap}
+/* a picture and a name, sized to be hit without aiming */
+.tcard{display:inline-flex;align-items:center;gap:9px;max-width:230px;
+  font:inherit;font-size:13px;font-weight:600;color:var(--ink);
+  background:var(--paper);border:1px solid var(--rule);border-radius:var(--r);
+  padding:4px 11px 4px 4px;cursor:pointer;
+  transition:border-color var(--ease) 130ms,box-shadow var(--ease) 130ms}
+.tcard:hover{border-color:var(--line-2);box-shadow:var(--lift)}
+.tcard.armed{border-color:var(--accent);background:var(--accent-wash);
+  color:var(--accent-ink);font-weight:700;box-shadow:var(--lift)}
+.tcard .tname{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+.thumb{width:30px;height:30px;flex:0 0 30px;border-radius:var(--r-sm);
+  background:linear-gradient(145deg,hsl(var(--h) 30% 91%),hsl(var(--h) 26% 83%));
+  box-shadow:inset 0 0 0 1px rgba(32,28,46,.05)}
+.tcard.armed .thumb{box-shadow:inset 0 0 0 1px rgba(91,69,214,.22)}
+.tray .act{display:flex;align-items:center;gap:6px;flex:0 0 auto}
+.tray .tw2{display:inline-flex}
+.tray .tmore{align-self:center;font:inherit;font-size:13px;font-weight:600;
+  color:var(--ink-3);background:none;border:1px dashed var(--line-2);
+  border-radius:var(--r);padding:9px 12px;cursor:pointer;white-space:nowrap;
+  font-variant-numeric:tabular-nums}
+.tray .tmore:hover{color:var(--accent-ink);background:var(--accent-wash)}
+/* only the horizontal anchor here — setting `top` too would outrank .pop.up
+   (3 classes vs 2), leaving a flipped popover with both top and bottom set
+   and its height collapsed to nothing. */
+.tray .tw2 .pop{left:0;right:auto}
+.tray .plus{width:24px;height:24px;flex:0 0 24px;border-radius:var(--r);
+  border:1px solid transparent;background:none;color:var(--ink-25);
+  font-size:16px;line-height:1;cursor:pointer;font-family:inherit}
+.tray .plus:hover{color:var(--accent-ink);background:var(--accent-wash)}
+.cell.drop{border-style:dashed;border-color:var(--accent);background:var(--accent-wash)}
+.cell.drop .vbtn{color:var(--accent-ink);font-weight:700}
+/* the mapping column says what KIND of thing it holds — the one genuinely
+   ambiguous cell once the table headers are gone */
+.acap{display:grid;gap:14px;padding:0 0 7px;border-bottom:1px solid var(--rule)}
+.acap span{font-size:9.5px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;
+  color:var(--ink-25)}
+.acap .k1{color:var(--accent-ink)}
+/* one plain-English line saying what this question's answers do */
+.helpbtn{font:inherit;font-size:13.5px;font-weight:700;color:var(--accent-ink);background:none;
+  border:0;padding:0 0 0 4px;cursor:pointer}
+.helpbtn:hover{text-decoration:underline}
+.help{margin:-8px 0 18px;padding:13px 16px;border:1px solid var(--rule);
+  border-radius:var(--r-lg);background:var(--cell);max-width:78ch}
+.help dl{margin:0;display:grid;gap:9px}
+.help dt{font-size:13px;font-weight:800;color:var(--ink)}
+.help dd{margin:2px 0 0;font-size:13px;line-height:1.5;color:var(--ink-4)}
+.dest{display:flex;align-items:flex-start;gap:14px;margin:0 6px;padding:9px 10px;
+  border-radius:var(--r-sm)}
+.dest+.dest{border-top:1px solid var(--rule-2)}
+.dest .dn{flex:1;min-width:0}
+.dest .dn b{display:block;font-size:13.5px;font-weight:700;color:var(--ink)}
+.dest .dn em{display:block;font-style:normal;font-size:12.5px;color:var(--ink-4);margin-top:2px}
+.dest .ds{flex:0 0 auto;font-size:10px;font-weight:700;letter-spacing:.07em;
+  text-transform:uppercase;color:var(--ink-25);background:var(--wash);border-radius:var(--r-sm);
+  padding:3px 8px;margin-top:2px}
+.dest .ds.on{color:var(--ok);background:#E7F3ED}
+.dest.off .dn b{color:var(--ink-4)}
+.dest.off .dn em{color:var(--ink-25)}
+.cfin{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin:2px 6px 6px;
+  padding:8px 9px;background:var(--cell);border:1px solid var(--rule);border-radius:var(--r)}
+.cfin-back{flex:0 0 auto;font:inherit;font-size:12px;font-weight:700;color:var(--ink-4);
+  background:none;border:0;padding:4px 6px;cursor:pointer}
+.cfin-back:hover{color:var(--accent-ink)}
+.cfin-opt{flex:1 1 140px;text-align:left;font:inherit;font-size:12.5px;font-weight:700;
+  color:var(--ink);background:var(--paper);border:1px solid var(--rule);border-radius:var(--r);
+  padding:6px 9px;cursor:pointer}
+.cfin-opt em{display:block;font-style:normal;font-size:11.5px;font-weight:500;
+  color:var(--ink-25);margin-top:1px}
+.cfin-opt.swap{border-left:3px solid var(--warn-line)}
+.cfin-opt.swap:hover{background:var(--warn-wash);border-left-color:var(--warn)}
+.cfin-opt.create{border-left:3px solid var(--accent);color:var(--accent-ink)}
+.cfin-opt.create:hover{background:var(--accent-wash)}
+.cfin-name{flex:1 1 150px;font:inherit;font-size:13px;font-weight:600;padding:6px 9px;
+  color:var(--ink);border:1px solid var(--accent);border-radius:var(--r);background:var(--paper)}
+.cfin-save{flex:0 0 auto;background:var(--accent);color:#fff;border:0;border-radius:var(--r);
+  padding:6px 12px;font:inherit;font-size:12.5px;font-weight:700;cursor:pointer}
+.cfin-meta{flex:0 0 100%;font-size:11.5px;color:var(--ink-25);padding-left:6px}
+.cf{padding:14px 16px 6px}
+.cf p{margin:0 0 12px;font-size:13.5px;line-height:1.5;color:var(--ink-3)}
+.cf p b{color:var(--ink);font-weight:700}
+/* The two routes differ in KIND — one swaps what is there, one creates
+   something new — so they are coloured by that, not styled identically. */
+.cfo{display:block;width:100%;text-align:left;font:inherit;background:var(--paper);
+  border:1px solid var(--rule);border-radius:var(--r);padding:10px 12px;cursor:pointer;
+  margin-bottom:8px}
+.cfo .tag{display:block;font-size:11px;font-weight:800;letter-spacing:.06em;
+  text-transform:uppercase;margin-bottom:5px;color:var(--ink-3)}
+.cfo em{display:block;font-style:normal;font-size:12.5px;color:var(--ink-4);margin-top:3px}
+.cfo.swap{border-left:3px solid var(--warn-line)}
+.cfo.swap:hover{border-color:var(--rule-strong);border-left-color:var(--warn);
+  background:var(--warn-wash)}
+.cfo.swap .tag{color:var(--warn)}
+.cfo.create{border-color:var(--accent-line);background:var(--accent-wash);
+  border-left:3px solid var(--accent)}
+.cfo.create:hover{border-color:var(--accent);background:var(--paper)}
+.cfo.create .tag{color:var(--accent-ink)}
+.cfname{padding:2px 0 0}
+.cfname label{display:block;font-size:9.5px;font-weight:700;letter-spacing:.09em;
+  text-transform:uppercase;color:var(--ink-25);margin:0 0 5px}
+.cfname input{width:100%;font:inherit;font-size:14px;font-weight:600;padding:8px 10px;
+  color:var(--ink);border:1px solid var(--accent);border-radius:var(--r);
+  background:var(--paper)}
+.cfname input:focus-visible{outline:2px solid var(--accent);outline-offset:-1px}
+.cfname .meta{margin:9px 0 0;font-size:12.5px;color:var(--ink-4)}
+.cfname .meta b{color:var(--ink);font-weight:700}
+.cfname .prev{display:flex;flex-wrap:wrap;gap:4px;margin-top:8px}
+.cfname .prev span{font-size:11.5px;color:var(--ink-4);background:var(--wash);
+  border-radius:var(--r-sm);padding:2px 7px}
+/* the CELL draws the box now — a bordered chip inside it was two rounded
+   rectangles saying the same thing */
+.vbtn .chip.res{background:none;border:0;padding:0;color:var(--ink);font-weight:700}
+/* ── a cell holds several recommendations, each removable on its own ───── */
+.chips{display:flex;align-items:center;flex-wrap:wrap;gap:3px 4px;flex:1;min-width:0;
+  padding:3px 4px}
+.cw{display:inline-flex;align-items:center;position:relative;border-radius:var(--r-sm);
+  max-width:100%}
+.cw:hover{background:var(--wash)}
+.chips .chip{display:inline-flex;align-items:center;gap:5px;padding:2px 4px 2px 6px;
+  border-radius:var(--r-sm);font-size:13px;font-weight:700;color:var(--ink);
+  background:none;border:0;font-family:inherit;max-width:100%;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.chips button.chip{cursor:pointer}
+.chips button.chip:hover,.chips button.chip.on{color:var(--accent-ink)}
+.chips .chip .cn{font-size:11px;font-weight:600;color:var(--ink-25);
+  font-variant-numeric:tabular-nums}
+.chips .chip .qf{color:var(--ink-25);font-weight:500;padding-left:5px}
+/* one ×, one chip. Hidden until the row is under the pointer so six answers do
+   not read as six delete buttons. */
+.xone{width:16px;height:16px;flex:0 0 16px;border:0;background:none;color:var(--ink-25);
+  font-size:12px;line-height:1;cursor:pointer;font-family:inherit;border-radius:3px;
+  margin-right:2px;opacity:0;transition:opacity var(--ease) 120ms}
+.arow:hover .xone,.cw:focus-within .xone{opacity:.75}
+.xone:hover{opacity:1;background:var(--paper);color:var(--ink)}
+/* the add affordance sits where the next chip would go */
+/* a label, not a button — the click target is the whole cell */
+.placesay{font-size:12px;font-weight:700;color:var(--accent-ink);padding:2px 6px;
+  white-space:nowrap}
+.pop-n{flex:1;font-size:12px;color:var(--ink-25);font-variant-numeric:tabular-nums}
+.cnt{flex:0 0 auto;font:inherit;font-size:12px;font-weight:600;color:var(--ink-25);
+  background:none;border:1px solid transparent;border-radius:var(--r-sm);padding:3px 7px;
+  cursor:pointer;font-variant-numeric:tabular-nums;white-space:nowrap}
+.cnt.flat{cursor:default;opacity:.55}
+.cnt.flat:hover{color:var(--ink-25);border-color:transparent;background:none}
+.cnt:hover{color:var(--accent-ink);border-color:var(--accent-line);background:var(--accent-wash)}
+/* Info only: the stored values are KEPT but inert — switching roles is lossless
+   in the schema, so they are shown greyed rather than deleted. */
+.vinert{display:flex;align-items:center;flex-wrap:wrap;gap:4px;padding:3px 6px;
+  font-size:13px;color:var(--ink-25)}
+.vinert .chip{display:inline-block;padding:2px 7px;border-radius:var(--r-sm);
+  background:var(--wash);color:var(--ink-25);font-size:12.5px;font-weight:600}
+.undob{width:24px;height:24px;flex:0 0 24px;border:0;background:none;color:var(--ink-25);
+  font-size:15px;line-height:1;cursor:pointer;font-family:inherit;border-radius:var(--r);
+  transition:color var(--ease) 130ms,background var(--ease) 130ms}
+.undob:hover{color:var(--accent-ink);background:var(--accent-wash)}
+.aibtn{display:inline-flex;align-items:center;gap:6px;font:inherit;font-size:12.5px;
+  font-weight:700;color:var(--accent-ink);background:var(--accent-wash);
+  border:1px solid var(--accent-line);border-radius:var(--r);padding:5px 10px;cursor:pointer;
+  white-space:nowrap}
+.aibtn:hover{background:var(--paper);border-color:var(--accent)}
+.pane-acts{display:flex;align-items:center;gap:8px;flex:0 0 auto}
+.pop-d.flat{cursor:default;opacity:.55}
+.pop-d.flat:hover{background:none;color:var(--ink-25)}
+.pop-cats{display:flex;flex-wrap:nowrap;gap:5px;margin-top:6px;overflow-x:auto;
+  scrollbar-width:none;-webkit-overflow-scrolling:touch}
+.pop-cats::-webkit-scrollbar{display:none}
+.pop-cat{display:inline-flex;flex:0 0 auto;align-items:center;gap:6px;font:inherit;
+  font-size:11.5px;font-weight:600;color:var(--ink-3);background:var(--paper);
+  border:1px solid var(--rule);border-radius:var(--r);padding:4px 8px;cursor:pointer}
+.pop-cat .n{color:var(--ink-25);font-size:11px;font-variant-numeric:tabular-nums}
+.pop-cat:hover{border-color:var(--accent)}
+.pop-cat.on{background:var(--accent-wash);border-color:var(--accent-line);color:var(--accent-ink)}
+.pop-cat.on .n{color:var(--accent-ink)}
+.pop-grp{padding:0 6px}
+.pop-g{font-size:9.5px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;
+  color:var(--ink-25);padding:9px 9px 3px}
+.pop-row{display:flex;align-items:center;gap:0}
+.pop-row .pop-i{flex:1;min-width:0}
+.pop-i{display:flex;align-items:center;gap:8px;width:100%;font:inherit;font-size:13.5px;
+  padding:5px 9px;border:0;background:none;border-radius:var(--r-sm);cursor:pointer;
+  color:var(--ink);text-align:left}
+/* hover is "about to", selected is "done" — they were the same wash, so the
+   row you were pointing at looked identical to the one already chosen */
+.pop-i:hover{background:var(--cell)}
+.pop-i.on{background:var(--accent-wash);color:var(--accent-ink);font-weight:700}
+.pop-i .tk{width:11px;flex:0 0 11px;color:var(--accent-ink);font-size:11px}
+.pop-i .bx{width:14px;height:14px;flex:0 0 14px;border:1px solid var(--rule-strong);
+  border-radius:var(--r-sm);display:inline-flex;align-items:center;justify-content:center;
+  font-size:9px;color:#fff;line-height:1}
+.pop-i.on .bx{background:var(--accent);border-color:var(--accent)}
+.pop-i .q{color:var(--ink-25);font-size:11.5px;font-weight:500;padding-left:7px}
+.pop-i.on .q{color:var(--accent-ink)}
+.pop-i .n{margin-left:auto;color:var(--ink-25);font-size:12px;font-variant-numeric:tabular-nums}
+.pop-i .hd{flex:0 0 auto;font-weight:700}
+.pop-i .sub{flex:1;min-width:0;color:var(--ink-25);font-size:12.5px;overflow:hidden;
+  text-overflow:ellipsis;white-space:nowrap}
+.pop-i.on .sub{color:var(--accent-ink)}
+.pop-i.off{color:var(--ink-25);cursor:not-allowed}
+.pop-i.off:hover{background:none}
+/* the product count is NOT part of the selection — it sits with the chevron,
+   and that whole area opens the products behind the value. */
+.pop-d{display:inline-flex;align-items:center;gap:9px;flex:0 0 auto;height:28px;border:0;
+  background:none;color:var(--ink-25);border-radius:var(--r-sm);cursor:pointer;font:inherit;
+  font-size:12px;font-variant-numeric:tabular-nums;padding:0 8px 0 10px;line-height:1}
+.pop-d .cv{font-size:13px}
+.pop-d:hover{background:var(--accent-wash);color:var(--accent-ink)}
+.pop-hd{display:flex;align-items:center;gap:6px}
+.pop-hd input{flex:1;min-width:0}
+.pop-x{flex:0 0 28px;width:28px;height:30px;border:0;background:none;color:var(--ink-25);
+  border-radius:var(--r);cursor:pointer;font-size:16px;line-height:1;font-family:inherit}
+.pop-x:hover{background:var(--wash);color:var(--ink)}
+.pop-cancel{margin-right:auto;background:none;border:1px solid var(--rule);
+  border-radius:var(--r);padding:6px 13px;font:inherit;font-size:12.5px;font-weight:700;
+  color:var(--ink-3);cursor:pointer}
+.pop-cancel:hover{border-color:var(--rule-strong);color:var(--ink)}
+.pop-back{display:inline-flex;align-items:center;gap:6px;margin-right:auto;background:none;
+  border:1px solid var(--rule);border-radius:var(--r);cursor:pointer;font:inherit;
+  font-size:12.5px;font-weight:700;color:var(--ink-3);padding:6px 13px}
+.pop-back:hover{border-color:var(--accent);color:var(--accent-ink)}
+.pop-title{flex:1;min-width:0;font-size:14px;font-weight:700;color:var(--ink);
+  padding:2px 2px 4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pop-title span{color:var(--ink-4);font-weight:600}
+.pp{display:flex;align-items:center;gap:10px;margin:0 6px;padding:6px 9px;
+  border-radius:var(--r-sm)}
+.pp:hover{background:var(--cell)}
+.pp .sw2{width:28px;height:28px;flex:0 0 28px;border-radius:var(--r-sm);
+  background:linear-gradient(145deg,hsl(var(--h,250) 30% 91%),hsl(var(--h,250) 26% 83%));
+  box-shadow:inset 0 0 0 1px rgba(32,28,46,.05)}
+.pp .nm{font-size:13.5px;color:var(--ink);min-width:0;overflow:hidden;
+  text-overflow:ellipsis;white-space:nowrap}
+.pp .ty{margin-left:auto;font-size:11.5px;color:var(--ink-25);white-space:nowrap}
+.pop-more{padding:9px 12px 2px;font-size:12px;color:var(--ink-25)}
+.pop-none{padding:14px;color:var(--ink-25);font-size:13px}
+.pop-foot{position:sticky;bottom:0;z-index:2;background:var(--paper);
+  border-top:1px solid var(--rule-2);display:flex;align-items:center;justify-content:flex-end;
+  padding:7px 6px;border-radius:0 0 var(--r-lg) var(--r-lg)}
+.mgall{margin-right:auto;font:inherit;font-size:12.5px;font-weight:700;color:var(--ink-4);
+  background:none;border:0;padding:6px 2px;cursor:pointer}
+.mgall:hover{color:var(--accent-ink);text-decoration:underline}
+.pop-done{background:var(--accent);color:#fff;border:0;border-radius:var(--r);padding:6px 14px;
+  font:inherit;font-size:12.5px;font-weight:700;cursor:pointer}
+
+/* ══════════ FORMAT A — the live layout, corrected ══════════ */
+.fA .two{grid-template-columns:296px 1fr}
+.fA .ri{display:grid;grid-template-columns:18px 1fr;gap:9px;padding:9px 10px;
+  border-radius:var(--r);cursor:pointer;margin-bottom:1px;position:relative}
+.fA .ri:hover{background:var(--paper)}
+.fA .ri.on{background:var(--paper);box-shadow:var(--lift)}
+.fA .ri.on:before{content:"";position:absolute;left:0;top:8px;bottom:8px;width:2px;
+  border-radius:1px;background:var(--accent)}
+.fA .ri .tw{min-width:0}
+.fA .ri .n{font-size:11px;color:var(--ink-25);font-variant-numeric:tabular-nums;line-height:1.5}
+.fA .ri .qtxt{font-size:13.5px;line-height:1.4;color:var(--ink-3)}
+.fA .ri.on .qtxt{color:var(--ink);font-weight:600}
+.fA .ri .r{display:block;margin-top:3px;font-size:11.5px;color:var(--ink-25)}
+.fA .ri.dec .r{color:var(--accent-ink);font-weight:600}
+.fA .add{width:100%;margin-top:8px;border:1px dashed var(--line-2);background:none;
+  border-radius:var(--r);padding:9px;font:inherit;font-size:12.5px;color:var(--ink-25);
+  cursor:pointer}
+.fA .add:hover{border-color:var(--accent);color:var(--accent-ink)}
+.fA .ah .k1{color:var(--accent-ink)}
+.fA .ah{display:grid;gap:14px;grid-template-columns:20px 1fr 216px 104px;padding:0 0 7px;
+  border-bottom:1px solid var(--rule);font-size:10px;font-weight:700;letter-spacing:.09em;
+  text-transform:uppercase;color:var(--ink-25)}
+.fA .ah .r{text-align:right}
+.fA .arow{grid-template-columns:20px 1fr 216px 104px;padding:7px 0}
+
+/* ══════════ FORMAT B — no table, roles visible in the rail ══════════ */
+.fB .two{grid-template-columns:318px 1fr}
+.fB .ri{display:flex;align-items:flex-start;gap:9px;padding:9px 10px;border-radius:var(--r);
+  cursor:pointer;margin-bottom:1px}
+.fB .ri:hover{background:var(--paper)}
+.fB .ri.on{background:var(--paper);box-shadow:var(--lift)}
+.fB .ri .n{font-size:11px;color:var(--ink-25);font-variant-numeric:tabular-nums;
+  line-height:1.6;flex:0 0 14px}
+.fB .ri .qtxt{font-size:13.5px;line-height:1.4;color:var(--ink-3);flex:1;min-width:0}
+.fB .ri.on .qtxt{color:var(--ink);font-weight:600}
+.fB .tag{flex:0 0 auto;font-size:9.5px;font-weight:700;letter-spacing:.06em;
+  text-transform:uppercase;padding:2px 6px;border-radius:var(--r-sm);
+  background:var(--wash);color:var(--ink-25);margin-top:2px}
+.fB .tag.dec{background:var(--accent-wash);color:var(--accent-ink)}
+.fB .tag.fil{background:var(--wash);color:var(--ink-3)}
+.fB .arow{grid-template-columns:20px 1fr 216px 104px;padding:9px 0}
+
+
+/* ══════════ FORMAT C — the rail is grouped by what questions do ══════════ */
+.fC .two{grid-template-columns:300px 1fr}
+.fC .grp{margin-bottom:12px}
+.fC .gh{display:flex;align-items:center;gap:8px;font-size:9.5px;font-weight:700;
+  letter-spacing:.09em;text-transform:uppercase;color:var(--ink-25);padding:4px 10px 6px}
+.fC .gh .c{margin-left:auto;font-variant-numeric:tabular-nums}
+.fC .grp.dec .gh{color:var(--accent-ink)}
+.fC .ri{display:grid;grid-template-columns:18px 1fr;gap:9px;padding:8px 10px;
+  border-radius:var(--r);cursor:pointer;margin-bottom:1px}
+.fC .ri:hover{background:var(--paper)}
+.fC .ri.on{background:var(--paper);box-shadow:var(--lift)}
+.fC .ri .n{font-size:11px;color:var(--ink-25);font-variant-numeric:tabular-nums;line-height:1.5}
+.fC .ri .qtxt{font-size:13.5px;line-height:1.4;color:var(--ink-3)}
+.fC .ri.on .qtxt{color:var(--ink);font-weight:600}
+.fC .gempty{margin:0 10px;padding:10px 12px;border:1px dashed var(--line-2);
+  border-radius:var(--r);background:var(--paper);font-size:12.5px;color:var(--ink-4)}
+.fC .gempty.hot{border-color:var(--accent-line);background:var(--accent-wash);
+  color:var(--accent-ink)}
+.fC .gempty b{font-weight:700;color:var(--ink-3)}
+.fC .gempty.hot b{color:var(--accent-ink)}
+.fC .gempty button{display:block;margin-top:6px;background:none;border:0;padding:0;
+  font:inherit;font-size:12.5px;font-weight:700;color:var(--accent-ink);cursor:pointer;
+  text-decoration:underline}
+.fC .arow{grid-template-columns:20px 1fr 216px 104px;padding:8px 0}
+
+.fC .cap{font-size:10px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;
+  color:var(--ink-25);margin:0 0 6px}
+
+/* notes */
+.notes{margin-top:18px;padding:20px 22px;background:var(--paper);border:1px solid var(--rule);
+  border-radius:var(--r-lg)}
+.notes h3{margin:0 0 12px;font-size:11px;font-weight:700;letter-spacing:.09em;
+  text-transform:uppercase;color:var(--ink-4)}
+.notes ul{margin:0;padding:0;list-style:none;display:grid;gap:11px}
+.notes li{position:relative;padding-left:22px;font-size:14.5px;line-height:1.58;
+  color:var(--ink-3);max-width:88ch}
+.notes li:before{content:"";position:absolute;left:0;top:9px;width:6px;height:6px;
+  border-radius:var(--r-sm);background:var(--accent-line)}
+.notes li b{color:var(--ink);font-weight:700}
+.notes li em{font-style:italic}
+@media (max-width:820px){
+  .wrap{padding:22px 13px 52px}
+  h1.pg{font-size:26px}
+  .sw{position:static}
+}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+
+<div class="wrap">
+  <p class="eyebrow">Funnel · Step 03 · Filter + Rules</p>
+  <h1 class="pg">The question widget</h1>
+  <p class="lede">The chosen layout, on its own. This is <b>the questions widget only</b> — the
+  STYLE header above it and the Rules widget below it are unchanged and are not part of this
+  update. Everything here is live: pick a question in the rail, change its role, click a cell to
+  map it, drop a card from the tray, remove one mapping at a time.</p>
+
+  <label class="bulk"><input type="checkbox" id="bulk"> Simulate a shop with <b>200 recommendations</b> — see how the tray copes</label>
+  <section class="panel show" data-p="B">
+    <div class="stage"><div class="fit"><div class="mk fB" id="mkB"></div></div></div>
+    <div class="notes">
+      <h3>What this widget does</h3>
+      <ul>
+        <li><b>Picks results and Narrows map to different things, so they get different pickers.</b>
+        On the deciding question an answer points at a <em>step-1 recommendation</em>; on a
+        narrowing question it points at a <em>catalog value</em>. Both open the same shape of
+        control — search, category chips, tick several, Done — because the act is the same even
+        though the pool is not.</li>
+        <li><b>The tray is the step-1 output, as cards.</b> A thumbnail and a name, sized to click
+        without aiming. Clicking one opens what is inside it; clicking it again arms it, and then
+        any answer cell will take it.</li>
+        <li><b>The tray fills two rows and then stops.</b> How many cards that is cannot be a fixed
+        number — names run 67px to 175px and the pane is fluid — so the widget measures after
+        layout and hides whatever lands on a third row, handing the remainder to <em>See N
+        more</em>. Tick the box above to load 200 recommendations and watch it hold.</li>
+        <li><b>An answer can hold more than one mapping, and each one leaves on its own.</b> Every
+        mapping is a chip with its own ×. Placing from the tray <em>adds</em>; it never silently
+        replaces what is already there.</li>
+        <li><b>The cell is the button.</b> There is no <code>+</code> to find — clicking the white
+        space of a cell opens its picker. The chips and their ×s stop the click, so the three
+        targets inside one cell stay distinct.</li>
+        <li><b>Ticking stages, Done writes.</b> Nothing changes in the row until you commit, and
+        Cancel restores what was there — a Cancel that keeps your edits is just a second Done.</li>
+        <li><b>A mapped value keeps the field it came from.</b> "dry" alone reads as a tag when it
+        is really the <code>skin_type</code> metafield. It could never mis-route the engine — each
+        kind is stored in its own array and matched against different product data — but a label
+        implying the wrong kind sends a merchant looking in the wrong place in Shopify.</li>
+        <li><b>The cell you changed flashes</b> briefly, so when a picker closes your eye lands on
+        what moved.</li>
+        <li><b>One explainer, at the top.</b> <em>How this works</em> holds the three role
+        definitions instead of repeating a line under every question.</li>
+      </ul>
+      <h3>Not in scope</h3>
+      <ul>
+        <li>The <b>STYLE header</b> (Attributes + Rules, Check my logic, Switch to rules only) and
+        the <b>Rules widget</b> below the table are unchanged. Nothing in this update touches
+        them.</li>
+        <li>The <b>✦ Map</b> AI-fill button was removed from this widget. The undo affordance it
+        used still exists in the code and is dormant.</li>
+      </ul>
+    </div>
+  </section>
+
+</div>
+
+<script>
+(function(){
+/* ── one model, three views ─────────────────────────────────────────────── */
+var TOTAL=24;
+var Q=[
+ {i:1,t:'A few hours after washing your face, how does your skin feel without any products on it?',
+  role:'decides',ans:[
+   ['Tight or rough, like it needs a drink of water',[['dryness',4]],null,'r1'],
+   ['Shiny across the forehead, nose, or chin, sometimes with breakouts',[['acne',3]],null,'r2'],
+   ['Easily flushed or reactive, with visible redness',[['redness',4]],null,'r3'],
+   ['Flat and a bit grey, not bad, just lacking glow',[['dullness',3]],null,'r4'],
+   ['Fine and small lines are starting to show',[['fine-lines',4]],null,null],
+   ['Easily irritated by new products or changes in routine',[['sensitive',4]],null,null]]},
+ {i:2,t:'Which of the following skin attributes best describes yours? Select all that apply.',
+  role:'info',ans:[
+   ['Dry',[['dry',7,'skin_type']]],['Oily',[['oily',5,'skin_type']]],
+   ['Combination',[['combination',8,'skin_type']]],['Normal',[['normal',4,'skin_type']]]]},
+ {i:3,t:'Which regimen steps do you already have covered? Select everything that is part of your current routine.',
+  role:'info',ans:[
+   ['Cleanser',[]],['Serum',[]],['Moisturiser',[]],['SPF',[]],['Nothing yet',[]]]},
+ {i:4,t:'How does your skin typically respond to richer, heavier textures?',
+  role:'info',ans:[
+   ['Loves them',[['cream',9]]],['Fine either way',[]],['Breaks out',[['gel',6]]],
+   ['Feels greasy',[['gel',6]]]]},
+ {i:5,t:'How much time are you realistically able to give your skincare routine each day?',
+  role:'info',ans:[
+   ['Under two minutes',[]],['Five minutes',[]],['Ten minutes or more',[]]]}
+];
+var FIELDS=[
+ {kind:'Tags',label:'concern',vals:[['dryness',4],['acne',3],['redness',4],['dullness',3],
+   ['fine-lines',4],['sensitive',4]]},
+ {kind:'Tags',label:'texture',vals:[['cream',9],['gel',6],['oil',4],['balm',3]]},
+ {kind:'Metafields',label:'custom.skin_type',vals:[['dry',7],['oily',5],['combination',8],
+   ['normal',4]]},
+ {kind:'Variant options',label:'Size',vals:[['30 ml',12],['50 ml',9],['100 ml',5]]},
+ {kind:'Variant options',label:'Volume',vals:[['30 ml',4],['200 ml',3]]},
+ {kind:'Product type',label:'',vals:[['Serum',8],['Moisturiser',7],['Cleanser',5],['Mask',3],
+   ['Oil',3]]}
+];
+/* Step-1 Recommendations. A DECIDING answer stores Answer.target_id — one of
+   these — NOT a catalog tag. Quoting the schema: "on the DECIDING question
+   only, the recommendation target this answer direct-maps to (a Step-1
+   Category id: an individual product, a collection, or a tag bucket)". */
+var RESULTS=[
+ {id:'r1',name:'Barrier Rescue Set',src:'Collections',prods:['Barrier Repair Cream',
+   'Ceramide Moisturiser','Squalane Facial Oil','Panthenol Mist','Oat Cleansing Balm',
+   'Rosehip Repair Balm']},
+ {id:'r2',name:'Clarifying Routine',src:'Collections',prods:['Salicylic Cleanser',
+   'Azelaic Acid 10%','Zinc Clarifying Lotion','Niacinamide 10%','Green Tea Toner']},
+ {id:'r3',name:'Calm & Soothe Set',src:'Collections',prods:['Centella Calming Gel',
+   'Panthenol Mist','Oat Cleansing Balm','Ceramide Moisturiser']},
+ {id:'r4',name:'Brightening Routine',src:'Collections',prods:['Vitamin C Ampoule',
+   'Niacinamide 10%','Lactic Acid 5%','Rice Enzyme Powder','Green Tea Toner']},
+ {id:'r5',name:'Line Smoothing Set',src:'Collections',prods:['Retinal Night Oil',
+   'Peptide Eye Cream','Copper Peptide Serum','Bakuchiol Elixir']},
+ {id:'r6',name:'Gentle Starter Kit',src:'Collections',prods:['Gentle Milk Cleanser',
+   'Ceramide Moisturiser','Mineral SPF 50']},
+ {id:'r7',name:'Hydrating Serum',src:'Single products',prods:['Hydrating Serum']},
+ {id:'r8',name:'Overnight Recovery Mask',src:'Single products',prods:['Overnight Sleeping Mask']},
+ {id:'r9',name:'best-seller',src:'Tag buckets',prods:['Hydrating Serum','Niacinamide 10%',
+   'Mineral SPF 50','Retinal Night Oil','Vitamin C Ampoule','Gentle Milk Cleanser',
+   'Ceramide Moisturiser','Salicylic Cleanser']}
+];
+RESULTS.forEach(function(r){r.n=r.prods.length;});
+var RSRC=['Collections','Single products','Tag buckets','Custom groups'];
+/* Everything else in the shop. Reachable from the picker, but behind the
+   recommendations — picking one adds it to step 1 rather than pretending a
+   deciding answer can target something that is not a Category. */
+var STORE={
+ 'Collections':[['Cleansers',7],['Moisturisers',9],['Sun care',4],['Masks',5],['Serums',11]],
+ 'Products':[['Green Tea Toner',1],['Rice Enzyme Powder',1],['Copper Peptide Serum',1],
+   ['Bakuchiol Elixir',1],['Marula Nourishing Oil',1]],
+ 'Tag buckets':[['best-seller',8],['vegan',12],['fragrance-free',9],['travel-size',6]]
+};
+var SKINDS=['Collections','Products','Tag buckets'];
+var resById=function(id){return RESULTS.filter(function(r){return r.id===id;})[0]||null;};
+var KINDS=['Tags','Metafields','Variant options','Product type'];
+var ROLES=[['decides','Picks results'],['filter','Narrows results'],['info','Info only']];
+var RLABEL={decides:'Picks results',filter:'Narrows results',info:'Info only'};
+var CATALOG=['Barrier Repair Cream','Hydrating Serum','Niacinamide 10%','Gentle Milk Cleanser',
+ 'Retinal Night Oil','Ceramide Moisturiser','Vitamin C Ampoule','Azelaic Acid 10%',
+ 'Squalane Facial Oil','Centella Calming Gel','Peptide Eye Cream','Salicylic Cleanser',
+ 'Overnight Sleeping Mask','Mineral SPF 50','Rosehip Repair Balm','Panthenol Mist'];
+var TYPES=['Serum','Moisturiser','Cleanser','Oil','Mask','Toner'];
+
+var sel=1, pop=null;
+var esc=function(x){return String(x).replace(/[&<>"]/g,function(c){
+  return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];});};
+var vals=function(a){return a[1]||[];};
+/* SCHEMA NOTE — this mock is ahead of quizSchema.ts. `Answer.target_id` is
+   SINGULAR there; letting an answer carry several recommendations needs either
+   `target_ids: string[]` on the answer or one DecisionRule per answer (rules
+   already take `target_ids` and the engine unions the members). Nothing here
+   works on today's schema without that change. */
+var tgts=function(a){var t=a[3];
+  return !t?[]:(Array.isArray(t)?t:[t]);};
+function setTgts(a,list){a[3]=list.length?list.slice():null;}
+function addTgt(a,id){var l=tgts(a); if(l.indexOf(id)<0){l.push(id); setTgts(a,l);} }
+function dropTgt(a,id){setTgts(a,tgts(a).filter(function(x){return x!==id;}));}
+/* the union of everything an answer points at — two recommendations sharing a
+   product must not count it twice */
+function reach(a){var seen={},n=0;
+  tgts(a).forEach(function(id){var r=resById(id); if(!r) return;
+    ensureProds(r).forEach(function(pn){ if(!seen[pn]){seen[pn]=1;n++;} });});
+  return n;}
+var matched=function(q){return q.ans.filter(function(a){return vals(a).length;}).length;};
+var qById=function(i){return Q.filter(function(q){return q.i===i;})[0];};
+/* The rail only has to make a question recognisable. The trailing instruction
+   ("Select all that apply.") is identical across questions, so it is dropped
+   before the two-line clamp — the clamp then spends its space on the words
+   that actually differ. Full text stays on hover. */
+var clip=function(t,n){return t.length>n?t.slice(0,n-1).trim()+'…':t;};
+var shortQ=function(t){
+  var i=t.indexOf('?');
+  if(i>0&&i<t.length-1) return t.slice(0,i+1);
+  var j=t.indexOf('. ');
+  return j>0?t.slice(0,j+1):t;
+};
+function seed(s){var t=0;for(var i=0;i<s.length;i++)t+=s.charCodeAt(i)*(i+1);return t;}
+function productsFor(name,count){
+  var st=seed(name),n=Math.min(14,count),o=[];
+  for(var i=0;i<n;i++) o.push([CATALOG[(st+i*7)%CATALOG.length],TYPES[(st+i*3)%TYPES.length]]);
+  return o;
+}
+
+/* ── the picker ─────────────────────────────────────────────────────────── */
+function drillPop(d){
+  var list=productsFor(d.name,d.count).map(function(p){
+    return '<div class="pp">'+'<span class="sw2" style="--h:'+hueOf(p[0])+'"></span>'+'<span class="nm">'+esc(p[0])+
+      '</span><span class="ty">'+esc(p[1])+'</span></div>';}).join('');
+  var shown=Math.min(14,d.count);
+  return '<div class="pop left" data-pop><div class="pop-top">'+
+    '<div class="pop-hd"><div class="pop-title">'+esc(d.name)+' <span>· '+d.count+
+    ' products</span></div><button class="pop-x" data-cancel aria-label="Cancel">×</button>'+
+    '</div></div>'+
+    list+(d.count>shown?'<div class="pop-more">Showing '+shown+' of '+d.count+'</div>':'')+
+    '<div class="pop-foot"><button class="pop-back" data-back>‹ Back</button>'+
+    '<button class="pop-done" data-done>Done</button></div></div>';
+}
+/* Grouped by KIND only. The "concern"/"texture" family names come from the
+   merchant's own tag prefixes — showing them presumes a vocabulary they may
+   not use, and a value's own name is the thing they recognise. */
+function groups(){
+  /* Tags are flat strings, so a tag value stands alone. Metafields and variant
+     options match on an EXACT field name (filterMatching: variant_options[name]
+     includes value), so "30 ml" under Size is a different filter from "30 ml"
+     under Volume — those values carry their field. */
+  var QUAL={'Metafields':1,'Variant options':1};
+  return KINDS.map(function(k){
+    var v=[];
+    FIELDS.forEach(function(f){ if(f.kind===k)
+      v=v.concat(f.vals.map(function(x){
+        return QUAL[k]?[x[0],x[1],f.label.split('.').pop()]:[x[0],x[1],''];})); });
+    return {kind:k,vals:v};
+  }).filter(function(g){return g.vals.length;});
+}
+/* The picks-results picker. Same chrome as the narrows picker on purpose:
+   search, category chips, tick several, Done applies them in one go. The pool
+   is ONLY what step 1 produced — collections, tag buckets, single products and
+   custom groups the merchant chose. The catalog at large is not on offer here;
+   this question chooses between the outcomes that already exist. */
+function pickPop(q,ai){
+  if(pop.d) return drillPop(pop.d);
+  var cur=(pop.draft||[]).slice();
+  var qs=(pop.s||'').trim().toLowerCase();
+  var pool=RESULTS.filter(function(r){
+    if(!qs) return true;
+    return r.name.toLowerCase().indexOf(qs)>-1||
+      ensureProds(r).join(' ').toLowerCase().indexOf(qs)>-1;});
+  var all=pool.length;
+  var cats='<button class="pop-cat'+(pop.k?'':' on')+'" data-cat="">All <span class="n">'+all+
+    '</span></button>'+RSRC.map(function(src){
+      var c=pool.filter(function(r){return r.src===src;}).length;
+      if(!c) return '';
+      return '<button class="pop-cat'+(pop.k===src?' on':'')+'" data-cat="'+esc(src)+'">'+
+        esc(src)+' <span class="n">'+c+'</span></button>';}).join('');
+  var body=RSRC.map(function(src){
+    if(pop.k&&pop.k!==src) return '';
+    var rs=pool.filter(function(r){return r.src===src;});
+    if(!rs.length) return '';
+    return '<div class="pop-grp"><div class="pop-g">'+esc(src)+'</div>'+rs.map(function(r){
+      var on=cur.indexOf(r.id)>=0;
+      return '<div class="pop-row"><button class="pop-i'+(on?' on':'')+'" data-rtog="'+r.id+
+        '"><span class="bx">'+(on?'✓':'')+'</span>'+esc(r.name)+'</button>'+
+        '<button class="pop-d'+(r.n<2?' flat':'')+'" data-drill="'+esc(r.name)+'|'+r.n+
+        '|r"'+(r.n<2?' disabled':'')+' aria-label="See the '+r.n+' products in '+
+        esc(r.name)+'">'+r.n+'<span class="cv">›</span></button></div>';}).join('')+'</div>';
+  }).join('')||'<div class="pop-none">Nothing matches.</div>';
+  var added=cur.length;
+  return '<div class="pop left up fixedup" data-pop><div class="pop-top">'+
+    '<div class="pop-hd"><input type="text" placeholder="Search your recommendations…" '+
+    'data-picksearch value="'+esc(pop.s||'')+'" aria-label="Search your recommendations">'+
+    '<button class="pop-x" data-cancel aria-label="Cancel">×</button></div>'+
+    '<div class="pop-cats">'+cats+'</div></div>'+body+
+    '<div class="pop-foot"><span class="pop-n">'+added+' selected</span>'+
+    '<button class="pop-cancel" data-cancel>Cancel</button>'+
+    '<button class="pop-done" data-done>Done</button></div></div>';
+}
+function valuePop(q,ai){
+  if(pop.d) return drillPop(pop.d);
+  var cur=vals(q.ans[ai]).map(function(v){return v[0];});
+  var G=groups();
+  var all=G.reduce(function(t,g){return t+g.vals.length;},0);
+  var cats='<button class="pop-cat'+(pop.k?'':' on')+'" data-cat="">All <span class="n">'+all+
+    '</span></button>'+G.map(function(g){
+      return '<button class="pop-cat'+(pop.k===g.kind?' on':'')+'" data-cat="'+esc(g.kind)+'">'+
+        esc(g.kind)+' <span class="n">'+g.vals.length+'</span></button>';}).join('');
+  var body=G.filter(function(g){return !pop.k||g.kind===pop.k;}).map(function(g){
+    return '<div class="pop-grp"><div class="pop-g">'+esc(g.kind)+'</div>'+
+      g.vals.map(function(v){
+        var on=cur.indexOf(v[0])>=0;
+        return '<div class="pop-row"><button class="pop-i'+(on?' on':'')+'" data-tog="'+
+          esc(v[0])+'" data-cnt="'+v[1]+'" data-qual="'+esc(v[2]||'')+
+          '" data-a="'+ai+'"><span class="bx">'+(on?'✓':'')+
+          '</span>'+esc(v[0])+(v[2]?'<span class="q">'+esc(v[2])+'</span>':'')+'</button>'+
+          '<button class="pop-d" data-drill="'+esc(v[0])+'|'+v[1]+'|v" aria-label="See the '+
+          v[1]+' products matching '+esc(v[0])+'">'+v[1]+
+          '<span class="cv">›</span></button>'+
+          '</div>';}).join('')+'</div>';
+  }).join('')||'<div class="pop-none">Nothing in this category.</div>';
+  return '<div class="pop left" data-pop><div class="pop-top">'+
+    '<div class="pop-hd"><input type="text" placeholder="Search values…" data-popsearch '+
+    'aria-label="Search values"><button class="pop-x" data-cancel aria-label="Cancel">×</button>'+
+    '</div><div class="pop-cats">'+cats+'</div></div>'+body+
+    '<div class="pop-foot"><button class="pop-cancel" data-cancel>Cancel</button>'+
+    '<button class="pop-done" data-done>Done</button></div></div>';
+}
+/* Every role is always selectable. Gating "Narrows" on already-having-values
+   was circular — you could never map values to unlock the role that shows the
+   mapping column. Pick the job first, then fill it in. */
+function rolePop(q){
+  return '<div class="pop narrow" data-pop>'+ROLES.map(function(r){
+    return '<button class="pop-i'+(q.role===r[0]?' on':'')+'" data-setrole="'+r[0]+
+      '"><span class="tk">'+(q.role===r[0]?'✓':'')+'</span>'+r[1]+'</button>';}).join('')+
+    '</div>';
+}
+/* Same chrome as the narrows picker — search, category chips, compact rows —
+   but the recommendations you already built are the default and the first
+   thing shown. The other chips are the escape hatch, not the main road. */
+function unionProds(a,b){
+  var o=a.prods.slice();
+  b.prods.forEach(function(p){ if(o.indexOf(p)<0) o.push(p); });
+  return o;
+}
+var SRCWORD={'Collections':'collection','Single products':'product',
+  'Tag buckets':'tag bucket','Custom groups':'custom group'};
+/* a value keeps the field it came from — "dry" alone reads as a tag when it is
+   actually a metafield, and the two match against different product data */
+function vlabel(a){
+  var v=vals(a);
+  if(!v.length) return 'Choose a value';
+  return v.map(function(x){
+    return '<span class="chip">'+esc(x[0])+
+      (x[2]?'<span class="qf">'+esc(x[2])+'</span>':'')+'</span>';}).join('');
+}
+function tlabelId(id){
+  var r=id?resById(id):null;
+  return r?'<span class="chip res">'+esc(r.name)+'</span>':'Choose a result';
+}
+/* what the mapping column holds, in the merchant's terms */
+/* Mirrors providerRegistry's availability model: "via_zapier" means reachable
+   through the generic webhook + Zapier today; "soon" is a direct connector we
+   have not built. Shown so the merchant knows the data is not a dead end. */
+/* NOTHING CALLS THIS. Its trigger, the "Where it can go" link on the Info only
+   description, was cut. Kept because the webhook / ESP list inside it was
+   specified, and re-attaching it is a one-line change if it is wanted back. */
+function destPop(){
+  var rows=[
+    ['Send to a webhook','Every response posted to your endpoint.','Available',true],
+    ['Zapier','6,000+ tools, through the same webhook.','Available',true],
+    ['Connect your ESP directly','Klaviyo, Attentive, Mailchimp, Omnisend.','Coming soon',false]
+  ].map(function(r){
+    return '<div class="dest'+(r[3]?'':' off')+'"><span class="dn"><b>'+esc(r[0])+'</b>'+
+      '<em>'+esc(r[1])+'</em></span><span class="ds'+(r[3]?' on':'')+'">'+esc(r[2])+
+      '</span></div>';}).join('');
+  return '<div class="pop left" data-pop style="min-width:372px">'+
+    '<div class="pop-top"><div class="pop-hd">'+
+    '<div class="pop-title">Where these answers can go</div>'+
+    '<button class="pop-x" data-closedest aria-label="Close">×</button></div></div>'+
+    rows+'<div class="pop-foot"><button class="pop-done" data-closedest>Done</button>'+
+    '</div></div>';
+}
+function mapCap(q){
+  return q.role==='decides' ? 'Recommendation from step 1'
+       : q.role==='filter'  ? 'Catalog value to match'
+       : 'Not used, kept if you switch back';
+}
+function usedBy(id){
+  var n=0;
+  Q.forEach(function(q){ if(q.role!=='decides') return;
+    q.ans.forEach(function(a){ if(tgts(a).indexOf(id)>=0) n++; }); });
+  return n;
+}
+function recsSheet(){
+  var unused=RESULTS.filter(function(r){return !usedBy(r.id);}).length;
+  var body=RSRC.map(function(src){
+    var rows=RESULTS.filter(function(r){return r.src===src;});
+    if(!rows.length) return '';
+    return '<div class="sheet-g">'+esc(src)+'</div>'+rows.map(function(r){
+      var u=usedBy(r.id);
+      return '<div class="rrow"><span class="sw3"></span>'+
+        '<span class="nm">'+esc(r.name)+'<em>'+r.n+' product'+(r.n===1?'':'s')+'</em></span>'+
+        '<span class="use'+(u?'':' none')+'">'+(u?'used by '+u+' answer'+(u===1?'':'s')
+          :'not used yet')+'</span></div>';}).join('');}).join('');
+  return '<div class="scrim" data-scrim><div class="sheet" data-sheet>'+
+    '<div class="sheet-h"><h4>Recommendations</h4>'+
+    '<span class="c">'+RESULTS.length+' built in step 1</span>'+
+    '<button class="x" data-closerecs aria-label="Close">×</button></div>'+
+    '<div class="sheet-b">'+body+'</div>'+
+    '<div class="sheet-f"><span class="note">'+
+    (unused?'<b>'+unused+'</b> not pointed at by any answer, so a shopper can never reach them.'
+           :'Every recommendation is reachable.')+
+    '</span><button class="sec" data-closerecs>Close</button></div></div></div>';
+}
+function stepper(){
+  return '<div class="mk-step">'+
+    '<span class="s done"><span class="n">✓</span>Recommendations</span><span class="bar"></span>'+
+    '<span class="s done"><span class="n">✓</span>Questions</span><span class="bar"></span>'+
+    '<span class="s now"><span class="n">03</span>Logic</span><span class="bar"></span>'+
+    '<span class="s"><span class="n">04</span>Results</span>'+
+    '<button class="cta">Continue</button></div>';
+}
+var helpOpen=false;
+/* One explainer for the whole step instead of a line under every question —
+   the same three sentences were being re-read on every click. */
+function helpBox(){
+  return '<div class="help"><dl>'+
+    '<div><dt>Picks results</dt><dd>Each answer maps to one of the recommendations you '+
+    'built in step 1. Exactly one question does this.</dd></div>'+
+    '<div><dt>Narrows results</dt><dd>Each answer maps to a value already on your products, '+
+    'such as a tag, metafield, variant option or product type, to filter what is left.</dd></div>'+
+    '<div><dt>Info only</dt><dd>Info collected as zero party data only. Does not impact quiz '+
+    'results shown.</dd></div></dl></div>';
+}
+function roleControl(q){
+  var isPop=pop&&pop.t==='role';
+  /* the AI action lives in the tray for a deciding question; a narrowing one
+     still needs it here, where there is no tray */
+  var gap=q.role==='filter'?unmapped(q):0;
+  return '<span class="pane-acts">'+
+    (q.role==='filter'?aiUndoBtn(q):'')+
+    '<span class="anchor"><button class="rolebtn'+(isPop?' open':'')+'" data-role>'+
+    RLABEL[q.role]+'<span class="cv">▾</span></button>'+(isPop?rolePop(q):'')+'</span></span>';
+}
+function goLabel(q,a){
+  var g=a[2];
+  if(!g||g==='next') return ['Next',false];
+  if(g==='results') return ['Results',true];
+  return ['Q'+g.slice(2),true];
+}
+function gotoPop(q,ai){
+  var cur=q.ans[ai][2]||'next';
+  var opts=[['next','Next','the following question']];
+  Q.forEach(function(x){ if(x.i>q.i) opts.push(['q:'+x.i,'Q'+x.i,x.t]); });
+  opts.push(['results','Results','skip the rest']);
+  return '<div class="pop narrow" data-pop style="min-width:300px;max-width:322px">'+
+    opts.map(function(o){
+    return '<button class="pop-i'+(cur===o[0]?' on':'')+'" data-setgo="'+o[0]+'" data-a="'+ai+
+      '"><span class="tk">'+(cur===o[0]?'✓':'')+'</span><b class="hd">'+esc(o[1])+
+      '</b><span class="sub">'+esc(o[2])+'</span></button>';}).join('')+'</div>';
+}
+var armed=null;
+/* the panel closes and the row is simply different — nothing takes your eye to
+   what you just changed. The same flash the AI pass uses, on a manual edit. */
+var chg=null, chgTimer=null;
+function markChanged(qi,ai){
+  chg={q:qi,a:ai};
+  if(chgTimer) clearTimeout(chgTimer);
+  chgTimer=setTimeout(function(){chg=null;render();},2600);
+}
+function chgHit(q,n){return !!chg&&chg.q===q.i&&chg.a===n;}
+/* Recommendations added from the shop carry a count but no product list until
+   someone looks — materialise it once so the preview and any edit act on the
+   same array. */
+function ensureProds(r){
+  if(r.prods.length!==r.n) r.prods=productsFor(r.name,r.n).map(function(x){return x[0];});
+  return r.prods;
+}
+function browsePop(q){
+  var taken={}; q.ans.forEach(function(a){ tgts(a).forEach(function(id){taken[id]=1;}); });
+  var free=RESULTS.filter(function(r){return !taken[r.id];});
+  var rows=RSRC.map(function(src){
+    var rs=free.filter(function(r){return r.src===src;});
+    if(!rs.length) return '';
+    return '<div class="pop-grp"><div class="pop-g">'+esc(src)+'</div>'+rs.map(function(r){
+      return '<div class="pop-row"><button class="pop-i" data-arm="'+r.id+
+        '"><span class="tk"></span>'+esc(r.name)+'</button>'+
+        '<span class="pop-d" style="cursor:default">'+r.n+'</span></div>';}).join('')+'</div>';
+  }).join('');
+  return '<div class="pop left up fixedup" data-pop style="min-width:392px">'+
+    '<div class="pop-top">'+
+    '<div class="pop-hd"><input type="text" placeholder="Search recommendations…" '+
+    'data-popsearch aria-label="Search recommendations">'+
+    '<button class="pop-x" data-closerec aria-label="Close">×</button></div>'+
+    '</div>'+rows+
+    '<div class="pop-foot"><button class="pop-done" data-closerec>Done</button></div></div>';
+}
+/* A quick view, nothing more: the products in the group. No close button, no
+   footer — clicking the chip again or anywhere else dismisses it. Editing lives
+   in step 1, not here. */
+function recPop(r,fixedUp){
+  /* from the tray it must open UPWARD — downward it covers the answer rows,
+     which are exactly where the chip is heading */
+  return '<div class="pop'+(fixedUp?' up fixedup':'')+'" data-pop style="min-width:320px">'+
+    '<div class="pop-top"><div class="pop-title">'+esc(r.name)+
+    ' <span>· '+esc(SRCWORD[r.src])+'</span></div></div>'+
+    ensureProds(r).map(function(nm){
+      return '<div class="pp">'+'<span class="sw2" style="--h:'+hueOf(nm)+'"></span>'+'<span class="nm">'+esc(nm)+
+        '</span></div>';}).join('')+'</div>';
+}
+/* Stand-in for the product shot. Real photos arrive from the Shopify index;
+   until then a deterministic tint per recommendation is more honest than one
+   grey square repeated, because it shows how the row reads as a grid of
+   distinct things. Low saturation on purpose — this is a thumbnail rail, not
+   a palette, and the only saturated thing in the tray is the armed card. */
+function hueOf(str){
+  var h=0; for(var i=0;i<str.length;i++) h=(h*31+str.charCodeAt(i))%360;
+  return h;
+}
+function thumb(r){
+  var h=hueOf(r.name);
+  return '<span class="thumb" aria-hidden style="--h:'+h+'"></span>';
+}
+function recTray(q){
+  if(q.role!=='decides') return '';
+  var taken={}; q.ans.forEach(function(a){ tgts(a).forEach(function(id){taken[id]=1;}); });
+  /* Used recommendations are ALREADY on the answer rows — repeating them here
+     greyed out was the same list twice. The tray holds only what is still
+     free to place. */
+  var free=RESULTS.filter(function(r){return !taken[r.id];});
+  /* How many names fit in two rows is not a number you can hard-code: they run
+     67px to 175px wide and the pane is fluid. So render the pool, then let
+     fitTray() measure and hide whatever lands on a third row. HARD only stops
+     a 200-recommendation shop building 200 nodes to hide 190 of them. */
+  var HARD=40, pool=free.slice(0,HARD), beyond=free.length-pool.length;
+  var chips=pool.map(function(r){
+    var isPop=pop&&pop.t==='rec'&&pop.id===r.id&&pop.a===undefined;
+    return '<span class="anchor tw2"><button class="tcard'+
+      (armed===r.id||isPop?' armed':'')+'" data-arm="'+r.id+'">'+
+      thumb(r)+'<span class="tname">'+esc(r.name)+'</span></button>'+
+      (isPop?recPop(r,true):'')+'</span>';}).join('');
+  /* trailing the names, where you run out of them — not a count up front that
+     has to be decoded before you can read the list it labels. fitTray fills in
+     the number and shows it only if something actually had to be hidden. */
+  var more='<span class="anchor tw2 twmore" data-beyond="'+beyond+'" style="display:none">'+
+    '<button class="tmore" data-browse>See more</button>'+
+    (pop&&pop.t==='browse'?browsePop(q):'')+'</span>';
+  /* the chips are the groups built in step 1 — say so, or they read as
+     free-floating product names that appeared from nowhere */
+  return '<div class="tray">'+
+    '<div class="tray-h"><span class="lb">Recommendations from step 1</span>'+
+    '<span class="act">'+
+      aiUndoBtn(q)+
+      '<span class="anchor"><button class="plus" data-add aria-label="Add a recommendation">'+
+      '+</button>'+(pop&&pop.t==='add'?addPop():'')+'</span></span></div>'+
+    '<div class="tray-c">'+
+      (free.length?chips+more:'<span class="lb">every one of them is placed</span>')+
+    '</div></div>';
+}
+/* Same shape as the narrows picker — search, category chips, checkbox rows
+   with a count and a drill-in, Cancel / Done — but over the shop's own
+   collections, products and tag buckets. Multi-select, because adding five
+   collections one modal at a time is the wrong shape of work. */
+function addPop(){
+  if(pop.d) return drillPop(pop.d);
+  var k=pop.k||'', picked=pop.picked||{};
+  var have={}; RESULTS.forEach(function(r){have[r.name]=1;});
+  var all=SKINDS.reduce(function(t,x){return t+STORE[x].length;},0);
+  var cats='<button class="pop-cat'+(k?'':' on')+'" data-acat="">All <span class="n">'+all+
+    '</span></button>'+SKINDS.map(function(x){
+      return '<button class="pop-cat'+(k===x?' on':'')+'" data-acat="'+esc(x)+'">'+esc(x)+
+        ' <span class="n">'+STORE[x].length+'</span></button>';}).join('');
+  var body=SKINDS.filter(function(x){return !k||k===x;}).map(function(x){
+    return '<div class="pop-grp"><div class="pop-g">'+esc(x)+'</div>'+
+      STORE[x].map(function(it){
+        var added=!!have[it[0]], on=!!picked[it[0]];
+        return '<div class="pop-row"><button class="pop-i'+(on||added?' on':'')+
+          (added?' off':'')+'" data-pickrec="'+esc(it[0])+'|'+it[1]+'|'+esc(x)+'"'+
+          (added?' disabled':'')+'><span class="bx">'+(on||added?'✓':'')+'</span>'+
+          esc(it[0])+(added?'<span class="q">already added</span>':'')+'</button>'+
+          '<button class="pop-d" data-drill="'+esc(it[0])+'|'+it[1]+'|v" aria-label="See the '+
+          it[1]+' products in '+esc(it[0])+'">'+it[1]+'<span class="cv">›</span></button></div>';
+      }).join('')+'</div>';}).join('');
+  var n=Object.keys(picked).length;
+  return '<div class="pop" data-pop style="min-width:392px">'+
+    '<div class="pop-top"><div class="pop-hd">'+
+    '<input type="text" placeholder="Search your shop…" data-popsearch aria-label="Search">'+
+    '<button class="pop-x" data-addcancel aria-label="Cancel">×</button></div>'+
+    '<div class="pop-cats">'+cats+'</div></div>'+body+
+    '<div class="pop-foot"><button class="mgall" data-recs>Manage all</button>'+
+    '<button class="pop-cancel" data-addcancel>Cancel</button>'+
+    '<button class="pop-done" data-adddone>Add'+(n?' '+n:'')+'</button></div></div>';
+}
+function mapCapRow(q,cols){
+  /* the columns name themselves now — the chips are obviously recommendations
+     and the arrows are obviously routing */
+  return '';
+  /* eslint-disable no-unreachable */
+  return '<div class="acap" style="grid-template-columns:'+cols+'"><span></span><span></span>'+
+    '<span class="'+(q.role==='decides'?'k1':'')+'">'+esc(mapCap(q))+'</span>'+
+    '<span>Then go to</span></div>';
+}
+function answerRows(q,keys){
+  var dec=q.role==='decides', inert=q.role==='info';
+  return q.ans.map(function(a,n){
+    var isPop=pop&&pop.t==='val'&&pop.a===n;
+    var isGo=pop&&pop.t==='goto'&&pop.a===n;
+    var g=goLabel(q,a);
+    return '<div class="arow"><span class="akey">'+(keys?'ABCDEF'[n]:n+1)+'</span>'+
+      '<span class="atext">'+esc(a[0])+'</span>'+
+      (inert
+        ? '<span class="vinert">'+(vals(a).length
+            ? vals(a).map(function(x){return '<span class="chip">'+esc(x[0])+'</span>';}).join('')
+            : '—')+'</span>'
+        : (function(){
+            /* Chips, not one label. Every recommendation an answer points at is
+               its own chip with its own ×, because the old single × cleared the
+               whole cell and there was no way to drop just one. */
+            var has=(dec?tgts(a):vals(a)).length>0;
+            var body=dec
+              ? tgts(a).map(function(id){
+                  var r=resById(id); if(!r) return '';
+                  var peek=pop&&pop.t==='rec'&&pop.id===id&&pop.a===n;
+                  return '<span class="anchor cw"><button class="chip res'+(peek?' on':'')+
+                    '" data-peek="'+id+'" data-a="'+n+'">'+esc(r.name)+
+                    '<span class="cn">'+r.n+'</span></button>'+
+                    (peek?recPop(r):'')+
+                    '<button class="xone" data-xone="'+id+'" data-a="'+n+
+                    '" aria-label="Remove '+esc(r.name)+' from this answer">×</button></span>';
+                }).join('')
+              : vals(a).map(function(x){
+                  return '<span class="cw"><span class="chip">'+esc(x[0])+
+                    (x[2]?'<span class="qf">'+esc(x[2])+'</span>':'')+'</span>'+
+                    '<button class="xone" data-xval="'+esc(x[0])+'" data-a="'+n+
+                    '" aria-label="Remove '+esc(x[0])+' from this answer">×</button></span>';
+                }).join('');
+            /* No + to hunt for: the cell itself is the target. The chips and
+               their ×s stop propagation, so the only thing a click on the white
+               space can mean is "open the picker". */
+            return '<span class="anchor cell'+(has?'':' blank')+(dec&&armed?' drop':'')+
+              (isPop?' open':'')+(aiHit(q,n)||chgHit(q,n)?' ai':'')+
+              '" data-val="'+n+'" tabindex="0" role="button" aria-label="'+
+              (has?'Edit this answer\'s mapping':'Choose a mapping for this answer')+'">'+
+              (has
+                ? '<span class="chips">'+body+
+                  (dec&&armed?'<span class="placesay">Place here</span>':'')+'</span>'
+                : '<span class="vbtn empty">'+
+                  (dec&&armed?'Place '+esc(resById(armed).name)+' here'
+                             :(dec?'Choose a result':'Choose a value'))+
+                  '<span class="cv">'+(dec&&armed?'':'▾')+'</span></span>')+
+              (isPop?(dec?pickPop(q,n):valuePop(q,n)):'')+'</span>';})())+
+      '<span class="anchor"><button class="gobtn'+(g[1]?' set':'')+(isGo?' open':'')+
+      '" data-go="'+n+'">→ '+esc(g[0])+'</button>'+(isGo?gotoPop(q,n):'')+'</span></div>';
+  }).join('');
+}
+function unmapped(q){
+  return q.role==='decides'
+    ? q.ans.filter(function(a){return !tgts(a).length;}).length
+    : q.role==='filter' ? q.ans.length-matched(q) : 0;
+}
+/* The same AI pass that drafts the logic fills these in — a deciding answer
+   gets a Step-1 result, a narrowing answer gets catalog values. */
+var aiMark=null, aiFlash=false, aiTimer=null, aiUndoTimer=null;
+function aiMap(q){
+  var touched=[];
+  if(q.role==='decides'){
+    var used=[]; q.ans.forEach(function(a){used=used.concat(tgts(a));});
+    q.ans.forEach(function(a,n){
+      if(tgts(a).length) return;
+      for(var i=0;i<RESULTS.length;i++){
+        if(used.indexOf(RESULTS[i].id)<0){
+          setTgts(a,[RESULTS[i].id]); used.push(RESULTS[i].id);
+          touched.push({i:n,prev:null}); return;}
+      }
+    });
+  }else if(q.role==='filter'){
+    var pool=[]; FIELDS.forEach(function(f){pool=pool.concat(f.vals);});
+    q.ans.forEach(function(a,n){
+      if(!vals(a).length){ a[1]=[pool[(n*3+1)%pool.length]]; touched.push({i:n,prev:[]}); } });
+  }
+  /* the merchant has to be able to see what it did and take it back */
+  aiMark=touched.length?{q:q.i,items:touched}:null;
+  aiFlash=!!touched.length;
+  if(aiTimer) clearTimeout(aiTimer);
+  if(aiFlash) aiTimer=setTimeout(function(){aiFlash=false;render();},3000);
+  /* the way back is offered for a beat, then the row is just the row again */
+  if(aiUndoTimer) clearTimeout(aiUndoTimer);
+  if(aiMark) aiUndoTimer=setTimeout(function(){aiMark=null;render();},4000);
+}
+function aiHit(q,n){
+  if(!aiFlash||!aiMark||aiMark.q!==q.i) return false;
+  return aiMark.items.some(function(x){return x.i===n;});
+}
+/* Undo is offered for exactly as long as nothing else has happened. Any edit —
+   here or anywhere — closes that window, so the button never outlives the state
+   it would restore. Call sites pass a cell; the window is not per-cell. */
+function aiClear(){ aiMark=null; }
+/* the flash already says what happened and where — this only has to offer the
+   way back, from the slot the ✦ Map button just vacated */
+function aiUndoBtn(q){
+  if(!aiMark||aiMark.q!==q.i) return '';
+  return '<button class="undob" data-aiundo title="Undo the AI mapping" '+
+    'aria-label="Undo the AI mapping">↺</button>';
+}
+
+/* ── the three formats ──────────────────────────────────────────────────── */
+function viewB(){
+  var q=qById(sel);
+  var rail=Q.map(function(x){
+    var cls=x.role==='decides'?'dec':(x.role==='filter'?'fil':'');
+    var short={decides:'Picks',filter:'Narrows',info:'Info'}[x.role];
+    return '<div class="ri'+(x.i===sel?' on':'')+'" data-q="'+x.i+'" title="'+esc(x.t)+'">'+
+      '<span class="n">'+x.i+'</span><span class="qtxt">'+esc(shortQ(x.t))+'</span>'+
+      '<span class="tag '+cls+'">'+short+'</span></div>';}).join('');
+  return stepper()+'<div class="mk-body">'+
+    '<h2 class="mk-h">What should each answer do?</h2>'+
+    '<p class="mk-say">Pick the one question that decides the category. '+
+    '<button class="helpbtn" data-help>How this works '+(helpOpen?'▾':'▸')+'</button></p>'+
+    (helpOpen?helpBox():'')+
+    '<div class="two"><div class="rail"><div class="rail-h"><span>Questions</span>'+
+    '<span>'+Q.length+'</span></div>'+rail+'</div>'+
+    '<div class="pane"><div class="pane-h"><h3 class="pane-t">'+esc(q.t)+'</h3>'+
+    roleControl(q)+'</div>'+
+    (recTray(q)||'<div class="prule"></div>')+
+    mapCapRow(q,'20px 1fr 216px 104px')+answerRows(q,true)+
+    '</div></div></div>';
+}
+
+/* ── render + wiring ────────────────────────────────────────────────────── */
+var recsOpen=false;
+function render(){
+  var el=document.getElementById('mkB');
+  el.innerHTML=viewB()+(recsOpen?recsSheet():'');
+  wire(el); fit();
+}
+function wire(el){
+  el.querySelectorAll('[data-q]').forEach(function(b){
+    b.addEventListener('click',function(){sel=+b.dataset.q;pop=null;armed=null;
+      aiMark=null;render();});});
+  el.querySelectorAll('[data-role]').forEach(function(b){
+    b.addEventListener('click',function(e){e.stopPropagation();
+      pop=(pop&&pop.t==='role')?null:{t:'role'};render();});});
+  el.querySelectorAll('[data-arm]').forEach(function(b){
+    b.addEventListener('click',function(e){e.stopPropagation();
+      if(b.disabled) return;
+      var id=b.dataset.arm;
+      /* one click both arms it and shows what is inside — the chip stays lit so
+         it is obvious an answer is waiting for it */
+      var same=armed===id, r=resById(id);
+      armed=same?null:id;
+      pop=(same||!r||r.n<2)?null:{t:'rec',id:id};
+      render();});});
+  el.querySelectorAll('[data-browse]').forEach(function(b){
+    b.addEventListener('click',function(e){e.stopPropagation();
+      pop=(pop&&pop.t==='browse')?null:{t:'browse'}; armed=null; render();
+      var f=el.querySelector('[data-popsearch]'); if(f) f.focus();});});
+  el.querySelectorAll('[data-closedest]').forEach(function(b){
+    b.addEventListener('click',function(e){e.stopPropagation(); pop=null; render();});});
+  el.querySelectorAll('[data-closerec]').forEach(function(b){
+    b.addEventListener('click',function(e){e.stopPropagation(); pop=null; render();});});
+  el.querySelectorAll('[data-peek]').forEach(function(b){
+    b.addEventListener('click',function(e){e.stopPropagation();
+      var id=b.dataset.peek, ai=+b.dataset.a;
+      pop=(pop&&pop.t==='rec'&&pop.id===id&&pop.a===ai)?null:{t:'rec',id:id,a:ai};
+      armed=null; render();});});
+  /* one chip, one ×. Removing a recommendation from an answer leaves the rest
+     of that answer alone — the old × cleared the whole cell. */
+  el.querySelectorAll('[data-xone]').forEach(function(b){
+    b.addEventListener('click',function(e){e.stopPropagation();
+      var n=+b.dataset.a, q=qById(sel);
+      aiClear(q,n); dropTgt(q.ans[n],b.dataset.xone);
+      markChanged(sel,n); pop=null; render();});});
+  el.querySelectorAll('[data-xval]').forEach(function(b){
+    b.addEventListener('click',function(e){e.stopPropagation();
+      var n=+b.dataset.a, q=qById(sel), v=b.dataset.xval;
+      aiClear(q,n);
+      q.ans[n][1]=vals(q.ans[n]).filter(function(x){return x[0]!==v;});
+      if(matched(q)===0&&q.role!=='info') q.role='info';
+      markChanged(sel,n); pop=null; render();});});
+  el.querySelectorAll('[data-val]').forEach(function(b){
+    /* the cell is a div-shaped button now, so it has to answer the keyboard */
+    b.addEventListener('keydown',function(e){
+      if(e.key!=='Enter'&&e.key!==' ') return;
+      e.preventDefault(); e.stopPropagation(); b.click();});
+    b.addEventListener('click',function(e){e.stopPropagation();
+      var n=+b.dataset.val, q0=qById(sel);
+      /* an armed tray chip still drops straight in, and it ADDS — the cell can
+         hold several recommendations, so placing never silently replaces one */
+      if(q0.role==='decides'&&armed){
+        aiClear(q0,n); addTgt(q0.ans[n],armed); markChanged(sel,n);
+        armed=null; pop=null; render(); return;
+      }
+      if(pop&&pop.t==='val'&&pop.a===n){pop=null;}
+      else{
+        /* snapshot so Cancel can actually undo — a Cancel that keeps your
+           edits is just a second Done. */
+        pop={t:'val',a:n,k:'',s:'',snap:q0.role==='decides'
+          ? tgts(q0.ans[n])
+          : JSON.parse(JSON.stringify(vals(q0.ans[n])))};
+        if(q0.role==='decides') pop.draft=tgts(q0.ans[n]);
+      }
+      render();
+      var f=el.querySelector('[data-popsearch]')||el.querySelector('[data-picksearch]');
+      if(f) f.focus();});});
+  /* ticking inside the picker only stages — Done is still the only write */
+  el.querySelectorAll('[data-rtog]').forEach(function(b){
+    b.addEventListener('click',function(e){e.stopPropagation();
+      var id=b.dataset.rtog, d=(pop.draft||[]).slice(), at=d.indexOf(id);
+      if(at>=0) d.splice(at,1); else d.push(id);
+      pop.draft=d; render();});});
+  el.querySelectorAll('[data-picksearch]').forEach(function(f){
+    f.addEventListener('click',function(e){e.stopPropagation();});
+    f.addEventListener('input',function(){pop.s=f.value;render();});});
+  el.querySelectorAll('[data-cancel]').forEach(function(b){
+    b.addEventListener('click',function(e){e.stopPropagation();
+      if(pop&&pop.t==='val'&&pop.snap!==undefined){
+        var a=qById(sel).ans[pop.a];
+        if(qById(sel).role==='decides') setTgts(a,pop.snap||[]); else a[1]=pop.snap;
+      }
+      var q=qById(sel);
+      if(matched(q)===0&&q.role!=='info') q.role='info';
+      pop=null; render();});});
+  el.querySelectorAll('[data-setrole]').forEach(function(b){
+    b.addEventListener('click',function(e){e.stopPropagation(); if(b.disabled) return;
+      var role=b.dataset.setrole;
+      aiClear();
+      Q.forEach(function(x){
+        if(x.i===sel) x.role=role;
+        /* only ONE question can decide — promoting one demotes the other */
+        else if(role==='decides'&&x.role==='decides') x.role='info';});
+      pop=null; armed=null; render();});});
+  el.querySelectorAll('[data-go]').forEach(function(b){
+    b.addEventListener('click',function(e){e.stopPropagation();
+      var n=+b.dataset.go;
+      pop=(pop&&pop.t==='goto'&&pop.a===n)?null:{t:'goto',a:n};
+      render();});});
+  el.querySelectorAll('[data-setgo]').forEach(function(b){
+    b.addEventListener('click',function(e){e.stopPropagation();
+      qById(sel).ans[+b.dataset.a][2]=b.dataset.setgo;
+      pop=null; render();});});
+  el.querySelectorAll('[data-add]').forEach(function(b){
+    b.addEventListener('click',function(e){e.stopPropagation();
+      pop=(pop&&pop.t==='add')?null:{t:'add',k:'',picked:{}};
+      armed=null; render();
+      var f=el.querySelector('[data-popsearch]'); if(f) f.focus();});});
+  el.querySelectorAll('[data-acat]').forEach(function(b){
+    b.addEventListener('click',function(e){e.stopPropagation();
+      pop.k=b.dataset.acat; render();});});
+  el.querySelectorAll('[data-pickrec]').forEach(function(b){
+    b.addEventListener('click',function(e){e.stopPropagation();
+      if(b.disabled) return;
+      pop.picked=pop.picked||{};
+      var nm=b.dataset.pickrec.split('|')[0];
+      if(pop.picked[nm]) delete pop.picked[nm]; else pop.picked[nm]=b.dataset.pickrec;
+      render();});});
+  el.querySelectorAll('[data-addcancel]').forEach(function(b){
+    b.addEventListener('click',function(e){e.stopPropagation(); pop=null; render();});});
+  el.querySelectorAll('[data-adddone]').forEach(function(b){
+    b.addEventListener('click',function(e){e.stopPropagation();
+      aiClear();
+      Object.keys(pop.picked||{}).forEach(function(nm){
+        var p=pop.picked[nm].split('|');
+        /* added to the pool, not assigned — the merchant places it themselves */
+        var n={id:'ra'+RESULTS.length+nm.length,name:p[0],prods:[],
+          src:p[2]==='Collections'?'Collections'
+             :p[2]==='Tag buckets'?'Tag buckets':'Single products'};
+        n.n=+p[1];
+        RESULTS.push(n);});
+      pop=null; render();});});
+  el.querySelectorAll('[data-rcat]').forEach(function(b){
+    b.addEventListener('click',function(e){e.stopPropagation();
+      pop.rk=b.dataset.rcat; render();
+      var f=el.querySelector('[data-popsearch]'); if(f) f.focus();});});
+  el.querySelectorAll('[data-addtarget]').forEach(function(b){
+    b.addEventListener('click',function(e){e.stopPropagation();
+      var p=b.dataset.addtarget.split('|');
+      /* a deciding answer can only target a Category, so adopting a shop object
+         CREATES the recommendation rather than bypassing it */
+      var id='rn'+RESULTS.length;
+      RESULTS.push({id:id,name:p[0],n:+p[1],prods:[],
+        src:p[2]==='Collections'?'Collections'
+           :p[2]==='Tag buckets'?'Tag buckets':'Single products'});
+      qById(sel).ans[+b.dataset.a][3]=id;
+      pop=null; render();});});
+  el.querySelectorAll('[data-help]').forEach(function(b){
+    b.addEventListener('click',function(e){e.stopPropagation();
+      helpOpen=!helpOpen; render();});});
+  el.querySelectorAll('[data-recs]').forEach(function(b){
+    b.addEventListener('click',function(e){e.stopPropagation();
+      recsOpen=true; pop=null; render();});});
+  el.querySelectorAll('[data-closerecs]').forEach(function(b){
+    b.addEventListener('click',function(e){e.stopPropagation();recsOpen=false;render();});});
+  el.querySelectorAll('[data-scrim]').forEach(function(b){
+    b.addEventListener('click',function(e){
+      if(e.target===b){e.stopPropagation();recsOpen=false;render();}});});
+  el.querySelectorAll('[data-sheet]').forEach(function(b){
+    b.addEventListener('click',function(e){e.stopPropagation();});});
+  el.querySelectorAll('[data-ai]').forEach(function(b){
+    b.addEventListener('click',function(e){e.stopPropagation();
+      aiMap(qById(sel)); pop=null; armed=null; render();});});
+  el.querySelectorAll('[data-aiundo]').forEach(function(b){
+    b.addEventListener('click',function(e){e.stopPropagation();
+      var q=qById(aiMark.q);
+      aiMark.items.forEach(function(x){
+        if(q.role==='decides') q.ans[x.i][3]=x.prev; else q.ans[x.i][1]=x.prev||[];});
+      aiMark=null; render();});});
+  el.querySelectorAll('[data-cat]').forEach(function(b){
+    b.addEventListener('click',function(e){e.stopPropagation();pop.k=b.dataset.cat;render();});});
+  el.querySelectorAll('[data-tog]').forEach(function(b){
+    b.addEventListener('click',function(e){e.stopPropagation();
+      var q=qById(sel), a=q.ans[+b.dataset.a], list=vals(a), v=b.dataset.tog, at=-1;
+      aiClear(q,+b.dataset.a);
+      list.forEach(function(x,n){if(x[0]===v) at=n;});
+      if(at>=0) list.splice(at,1); else list.push([v,+b.dataset.cnt,b.dataset.qual||'']);
+      a[1]=list;
+      if(matched(q)===0&&q.role!=='info') q.role='info';
+      render(); var f=el.querySelector('[data-popsearch]'); if(f) f.focus();});});
+  el.querySelectorAll('[data-drill]').forEach(function(b){
+    b.addEventListener('click',function(e){e.stopPropagation();
+      var p=b.dataset.drill.split('|');
+      pop.d={name:p[0],count:+p[1],kind:p[2]}; render();});});
+  el.querySelectorAll('[data-back]').forEach(function(b){
+    b.addEventListener('click',function(e){e.stopPropagation();pop.d=null;render();
+      var f=el.querySelector('[data-popsearch]'); if(f) f.focus();});});
+  el.querySelectorAll('[data-done]').forEach(function(b){
+    b.addEventListener('click',function(e){e.stopPropagation();
+      /* the ONLY place a staged pick is written */
+      if(pop&&pop.t==='val'&&pop.draft!==undefined){
+        var q=qById(sel);
+        if(tgts(q.ans[pop.a]).join(',')!==(pop.draft||[]).join(',')){
+          aiClear(q,pop.a); setTgts(q.ans[pop.a],pop.draft||[]); markChanged(sel,pop.a);
+        }
+      }
+      pop=null;render();});});
+  el.querySelectorAll('[data-pop]').forEach(function(p){
+    p.addEventListener('click',function(e){e.stopPropagation();});});
+  var f=el.querySelector('[data-popsearch]');
+  if(f){
+    f.addEventListener('click',function(e){e.stopPropagation();});
+    f.addEventListener('input',function(){
+      var t=f.value.trim().toLowerCase();
+      f.closest('.pop').querySelectorAll('.pop-grp').forEach(function(g){
+        var any=0;
+        g.querySelectorAll('.pop-i').forEach(function(i){
+          var hit=!t||i.textContent.toLowerCase().indexOf(t)>=0;
+          i.style.display=hit?'':'none'; if(hit) any++;});
+        g.style.display=any?'':'none';});});
+  }
+}
+document.addEventListener('click',function(){if(pop){pop=null;render();}});
+
+var bulk=document.getElementById('bulk');
+if(bulk) bulk.addEventListener('change',function(){
+  if(bulk.checked){
+    for(var i=1;i<=191;i++) RESULTS.push({id:'bulk'+i,name:'Bundle '+i,src:'Collections',
+      prods:[],n:2+(i%7)});
+  }else{
+    for(var j=RESULTS.length-1;j>=0;j--) if(String(RESULTS[j].id).indexOf('bulk')===0)
+      RESULTS.splice(j,1);
+    Q.forEach(function(q){q.ans.forEach(function(a){
+      setTgts(a,tgts(a).filter(function(id){return id.indexOf('bulk')!==0;}));});});
+  }
+  pop=null; armed=null; render();
+});
+
+/* the mock is a fixed 1120px canvas that scales; menus must respect BOTH the
+   frame and the browser window. */
+/* Fill two rows, then overflow. Runs after every render because the answer
+   rows above it change width with the question. */
+function fitTray(){
+  var c=document.querySelector('.panel.show .tray-c');
+  if(!c) return;
+  var wrap=c.querySelector('.twmore');
+  var chips=[].slice.call(c.children).filter(function(x){
+    return x.classList.contains('tw2')&&!x.classList.contains('twmore');});
+  if(!chips.length) return;
+  chips.forEach(function(x){x.style.display='';});
+  if(wrap) wrap.style.display='none';
+  var beyond=wrap?(+wrap.dataset.beyond||0):0;
+  /* walk the chips until one starts a third row */
+  var rows=[], keep=chips.length;
+  for(var i=0;i<chips.length;i++){
+    var t=chips[i].offsetTop;
+    if(rows.indexOf(t)<0) rows.push(t);
+    if(rows.length>2){ keep=i; break; }
+  }
+  if(keep>=chips.length&&!beyond) return;
+  if(!wrap) return;
+  var btn=wrap.querySelector('.tmore'), row2=rows[1];
+  /* showing the button can itself push a chip onto row three, so give it back
+     one slot at a time until it lands inside the two rows */
+  for(var guard=0; guard<chips.length+2; guard++){
+    chips.forEach(function(x,n){x.style.display=n<keep?'':'none';});
+    wrap.style.display='';
+    btn.textContent='See '+(chips.length-keep+beyond)+' more';
+    if(row2===undefined||wrap.offsetTop<=row2||keep<=1) break;
+    keep--;
+  }
+}
+function placePops(){
+  var f=document.querySelector('.panel.show .fit');
+  var pp=f&&f.querySelector('.pop');
+  if(!f||!pp) return;
+  pp.classList.remove('up'); pp.style.maxHeight='';
+  var sc=(f.clientWidth/1120)||1;
+  var fr=f.getBoundingClientRect();
+  var vh=window.innerHeight||document.documentElement.clientHeight;
+  var top=Math.max(fr.top,8), bot=Math.min(fr.bottom,vh-8);
+  var ar=pp.parentElement.getBoundingClientRect();
+  var below=(bot-ar.bottom-12)/sc, above=(ar.top-top-12)/sc, CAP=452;
+  /* the tray preview PREFERS up so it does not cover the answers, but never at
+     the cost of rendering off the top of the window */
+  if(pp.classList.contains('fixedup')){ if(above>=140) pp.classList.add('up'); }
+  else if(Math.min(CAP,pp.scrollHeight)>below&&above>below) pp.classList.add('up');
+  var room=pp.classList.contains('up')?above:below;
+  pp.style.maxHeight=Math.max(140,Math.min(CAP,Math.floor(room)))+'px';
+  /* and inside it horizontally — a left-anchored menu on a right-hand column
+     would otherwise be clipped by .fit */
+  pp.style.transform='';
+  var pr=pp.getBoundingClientRect(), dx=0;
+  if(pr.right>fr.right-10) dx=(fr.right-10-pr.right)/sc;
+  else if(pr.left<fr.left+10) dx=(fr.left+10-pr.left)/sc;
+  if(dx) pp.style.transform='translateX('+Math.round(dx)+'px)';
+}
+function fit(){
+  document.querySelectorAll('.fit').forEach(function(f){
+    var m=f.firstElementChild; if(!m||!f.clientWidth) return;
+    var s=Math.min(1,f.clientWidth/1120);
+    m.style.transform='scale('+s+')';
+    f.style.height=(m.offsetHeight*s)+'px';});
+  /* before placePops: hiding overflow chips changes the tray height, which
+     changes how much room a popover has above it */
+  fitTray();
+  placePops();
+}
+window.addEventListener('resize',fit);
+window.addEventListener('scroll',placePops,{passive:true});
+if(document.fonts&&document.fonts.ready) document.fonts.ready.then(fit);
+render();
+setTimeout(fit,140);
+})();
+</script>
+
+</body></html>

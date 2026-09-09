@@ -33,9 +33,13 @@ export type TargetShape = "product" | "collection" | "tag";
 
 export interface ResolvedTarget {
   targetId: string;
-  /** Logic tab (HANDOFF G1) — set ONLY when a replace rule carries several
-   *  targets: the full ordered list (targetId === targetIds[0], the config/
-   *  persona anchor). The pool is the union of every entry's members. */
+  /** The full ordered target list when the resolution carries SEVERAL —
+   *  two producers: a replace rule with several targets (Logic tab, HANDOFF
+   *  G1), or a multi-select deciding question where the shopper selected
+   *  several mapped answers (QWIDGET decision 3, authored order, deduped).
+   *  targetId === targetIds[0] is the config/persona anchor; the pool is the
+   *  union of every entry's members. Absent on a single-target resolution
+   *  (shape-identical to before). */
   targetIds?: string[];
   /** The rule that overrode the direct mapping, or null when the deciding
    *  answer's own mapping produced the target. */
@@ -180,9 +184,14 @@ export function settingsForTarget(
   return { ...global, ...sparse };
 }
 
-/** Spec §2 — resolve the shopper's ONE target: rules top→bottom (first full
- *  AND-match wins), else the deciding answer's direct mapping, else null
+/** Spec §2 — resolve the shopper's target: rules top→bottom (first full
+ *  AND-match wins), else the deciding question's direct mapping, else null
  *  (→ the rec-page fallback layer; §2 "if neither produces a result").
+ *  QWIDGET decision 3 — on a multi-select decider EVERY selected mapped
+ *  answer contributes: the targets are collected in AUTHORED order (never
+ *  click order — a byte-identical page whatever the tick sequence), deduped
+ *  to first occurrence, and emitted as `targetIds` only when more than one
+ *  survives, so single-answer resolutions keep today's exact shape.
  *
  *  Condition semantics: op "is" = the answer id IS among the shopper's
  *  selections; "is_not" = it is NOT (an unanswered/skipped question satisfies
@@ -216,11 +225,18 @@ export function resolveTarget(
   const decider = doc.nodes.find(
     (n) => n.type === "question" && n.data.role === "decides",
   );
-  const picked =
+  // Iterate the decider's answers (authored order), not selectedAnswerIds.
+  const baseTargets =
     decider && decider.type === "question"
-      ? decider.data.answers.find((a) => selected.has(a.id) && a.target_id)
-      : undefined;
-  const baseTargetId = picked?.target_id ?? null;
+      ? [
+          ...new Set(
+            decider.data.answers.flatMap((a) =>
+              selected.has(a.id) && a.target_id ? [a.target_id] : [],
+            ),
+          ),
+        ]
+      : [];
+  const baseTargetId = baseTargets[0] ?? null;
 
   if (actionRule) {
     const targets = ruleTargets(actionRule);
@@ -244,7 +260,11 @@ export function resolveTarget(
   }
 
   if (!baseTargetId) return null;
-  return { targetId: baseTargetId, matchedRuleId: null };
+  return {
+    targetId: baseTargetId,
+    ...(baseTargets.length > 1 ? { targetIds: baseTargets } : {}),
+    matchedRuleId: null,
+  };
 }
 
 /** QZY-1 (spec §6.1) — apply the winning rule's list action to the resolved

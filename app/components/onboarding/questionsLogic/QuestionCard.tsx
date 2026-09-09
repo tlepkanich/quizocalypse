@@ -106,13 +106,15 @@ export function QuestionCard({
   }, [deciderMode, doc, node.id, categories]);
   // LOGIC v2 role state (decider docs only).
   const isDecider = deciderMode && data.role === "decides";
-  const cannotDecide = data.question_type === "multi_select" || freeform;
+  // QWIDGET decision 2 — a multi-select may decide (its selected answers
+  // union their targets); only freeform cannot.
+  const cannotDecide = freeform;
   const roleTooltip = isDecider
     ? "This question decides the result. Click to demote it to a qualifier (you'll need to pick another decider before publishing)."
-    : data.question_type === "multi_select"
-      ? "Multi-select questions collect data but can't decide the result. Use a rule for combination logic."
-      : freeform
-        ? "Open-ended questions collect data but can't decide the result."
+    : freeform
+      ? "Open-ended questions collect data but can't decide the result."
+      : data.question_type === "multi_select"
+        ? "Make this the deciding question. Each answer picks one result; a shopper who picks several answers sees those results together."
         : "Make this the deciding question — its answers directly pick the shopper's result.";
   const len = data.text.length;
   // Auto-grow the question textarea to fit pre-filled text (AI-built questions

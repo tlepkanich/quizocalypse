@@ -1,0 +1,656 @@
+<title>Question Widget Rebuild</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Figtree:ital,wght@0,400..800&family=JetBrains+Mono:wght@400;700&display=swap">
+<style>
+/* Quartz tokens — app/styles/quizocalypse.css @ origin/main. Light only by
+   owner ruling (2026-08-09); every ground is painted explicitly. */
+:root{
+  --paper:#FFFFFF; --ground:#F5F4F8; --wash:#F5F4F8; --cell:#FBFAFD;
+  --ink:#201C2E; --ink-3:#4E4860; --ink-4:#645E78; --ink-25:#B4AFC4;
+  --rule:#E4E1EC; --rule-2:#EFEDF4; --line-2:#CFCADD;
+  --accent:#5B45D6; --accent-ink:#4A36B8; --accent-wash:#EFECFD; --accent-line:#D5CDF8;
+  --warn:#8A5300; --warn-wash:#FBF3E4; --warn-line:#E9D9B5;
+  --crit:#A32219; --crit-wash:#FCF0EE; --crit-line:#F0CFCB;
+  --ok:#0F6B45; --ok-wash:#ECF6F1; --ok-line:#C6E4D6;
+  --r:6px; --r-sm:4px; --r-lg:8px;
+  --lift:0 1px 2px rgba(32,28,46,.05);
+  --font:"Figtree",-apple-system,"Segoe UI","Helvetica Neue",sans-serif;
+  --mono:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--ground);color:var(--ink);font-family:var(--font);
+  font-size:15.5px;line-height:1.62;-webkit-font-smoothing:antialiased}
+.shell{max-width:1180px;margin:0 auto;padding:38px 24px 90px;
+  display:grid;grid-template-columns:196px minmax(0,1fr);gap:44px;align-items:start}
+
+.toc{position:sticky;top:22px;font-size:13px;line-height:1.5}
+.toc .th{font-size:9.5px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;
+  color:var(--ink-25);margin:0 0 10px}
+.toc a{display:block;color:var(--ink-3);text-decoration:none;padding:4px 9px;
+  border-radius:var(--r-sm);border-left:2px solid var(--rule)}
+.toc a:hover{color:var(--accent-ink);background:var(--accent-wash);border-left-color:var(--accent)}
+.toc a .n{display:inline-block;width:18px;color:var(--ink-25);font-variant-numeric:tabular-nums}
+.toc a.warn{color:var(--crit)}
+.toc a.warn:hover{background:var(--crit-wash);border-left-color:var(--crit)}
+
+main{min-width:0}
+.eyebrow{font-size:10.5px;font-weight:800;letter-spacing:.11em;text-transform:uppercase;
+  color:var(--ink-25);margin:0 0 12px}
+h1{font-size:38px;line-height:1.08;font-weight:800;letter-spacing:-.024em;margin:0 0 16px;
+  text-wrap:balance;max-width:16ch}
+.lede{font-size:17px;line-height:1.58;color:var(--ink-3);margin:0 0 24px;max-width:68ch}
+.lede b{color:var(--ink);font-weight:700}
+h2{font-size:22px;font-weight:800;letter-spacing:-.015em;margin:48px 0 6px;
+  padding-top:24px;border-top:1px solid var(--rule);text-wrap:balance}
+h2 .hn{color:var(--ink-25);font-variant-numeric:tabular-nums;margin-right:12px;font-weight:700}
+h3{font-size:15px;font-weight:800;margin:26px 0 6px;color:var(--accent-ink)}
+p{margin:0 0 11px;max-width:74ch}
+ul,ol{margin:0 0 13px;padding-left:0;list-style:none;max-width:74ch}
+li{position:relative;padding-left:19px;margin-bottom:6px;color:var(--ink-3)}
+li:before{content:"";position:absolute;left:3px;top:9px;width:5px;height:5px;
+  border-radius:50%;background:var(--line-2)}
+ol{counter-reset:o}
+ol>li{counter-increment:o;padding-left:26px}
+ol>li:before{content:counter(o) ".";width:auto;height:auto;background:none;border-radius:0;
+  left:0;top:0;font-size:13px;font-weight:700;color:var(--ink-25);
+  font-variant-numeric:tabular-nums}
+li b,p b{color:var(--ink);font-weight:700}
+em{font-style:italic}
+code{font-family:var(--mono);font-size:.85em;background:var(--wash);color:var(--ink);
+  padding:1.5px 5px;border-radius:var(--r-sm);border:1px solid var(--rule-2);
+  word-break:break-word}
+pre{margin:0 0 15px;padding:14px 16px;background:var(--cell);border:1px solid var(--rule);
+  border-radius:var(--r-lg);overflow-x:auto}
+pre code{font-size:12.5px;line-height:1.6;background:none;border:0;padding:0;
+  white-space:pre;color:var(--ink-3)}
+pre code b{color:var(--ink);font-weight:700}
+pre code i{color:var(--ink-25);font-style:normal}
+.tw{overflow-x:auto;margin:0 0 16px;border:1px solid var(--rule);border-radius:var(--r-lg);
+  background:var(--paper)}
+table{border-collapse:collapse;width:100%;font-size:13.5px;min-width:520px}
+th{text-align:left;font-size:9.5px;font-weight:800;letter-spacing:.09em;text-transform:uppercase;
+  color:var(--ink-25);padding:10px 14px;border-bottom:1px solid var(--rule);
+  background:var(--cell);white-space:nowrap}
+td{padding:10px 14px;border-bottom:1px solid var(--rule-2);color:var(--ink-3);
+  vertical-align:top;line-height:1.48}
+tr:last-child td{border-bottom:0}
+td b{color:var(--ink)}
+td code{font-size:12px}
+.ref td:first-child{width:150px;color:var(--ink);font-weight:700}
+.box{margin:0 0 16px;padding:14px 17px;border-radius:var(--r-lg);
+  border:1px solid var(--rule);background:var(--paper);border-left-width:3px}
+.box>:last-child{margin-bottom:0}
+.box .bt{display:block;font-size:10px;font-weight:800;letter-spacing:.09em;
+  text-transform:uppercase;margin-bottom:6px}
+.box.stop{border-color:var(--crit-line);border-left-color:var(--crit);background:var(--crit-wash)}
+.box.stop .bt{color:var(--crit)}
+.box.care{border-color:var(--warn-line);border-left-color:var(--warn);background:var(--warn-wash)}
+.box.care .bt{color:var(--warn)}
+.box.good{border-color:var(--ok-line);border-left-color:var(--ok);background:var(--ok-wash)}
+.box.good .bt{color:var(--ok)}
+.box p,.box li{color:var(--ink-3)}
+a{color:var(--accent-ink);text-decoration-color:var(--accent-line);text-underline-offset:2px}
+a:hover{text-decoration-color:var(--accent)}
+:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+@media (max-width:900px){
+  .shell{grid-template-columns:1fr;gap:24px;padding:26px 18px 70px}
+  .toc{position:static;border-bottom:1px solid var(--rule);padding-bottom:14px}
+  .toc a{display:inline-block;border-left:0;border-bottom:2px solid var(--rule)}
+  h1{font-size:30px}
+}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+</style>
+
+<div class="shell">
+<nav class="toc" aria-label="Contents">
+  <p class="th">Contents</p>
+  <a href="#s1"><span class="n">1</span>Decisions</a>
+  <a href="#s2"><span class="n">2</span>Scope</a>
+  <a href="#s3"><span class="n">3</span>The widget</a>
+  <a href="#s4"><span class="n">4</span>The engine</a>
+  <a href="#s5"><span class="n">5</span>Guards to lift</a>
+  <a href="#s6" class="warn"><span class="n">6</span>Routing</a>
+  <a href="#s7"><span class="n">7</span>Known gaps</a>
+  <a href="#s8"><span class="n">8</span>Build order</a>
+  <a href="#s9"><span class="n">9</span>Verification</a>
+</nav>
+
+<main>
+  <p class="eyebrow">Funnel · Logic step · developer handoff</p>
+  <h1>The question widget</h1>
+  <p class="lede">Rebuild the <b>questions widget</b> on the Logic step, and let a multi-select
+  question decide the result. <b>No schema change.</b> One engine function changes; the rest is UI
+  and lifting guards. The Rules widget and the STYLE bar do not change.</p>
+
+  <div class="tw"><table class="ref">
+    <tr><td>Design mock</td><td><a href="https://claude.ai/code/artifact/67314b28-d35e-4542-8837-7a5eca92e2f9">Question Widget</a> — live and clickable</td></tr>
+    <tr><td>Applies to</td><td><code>Quiz.logic_model === "decider"</code> only. Legacy points/ladder docs untouched.</td></tr>
+    <tr><td>Blast radius</td><td><code>LogicTabCard.tsx</code> (four symbols), <code>QuestionWindow.tsx</code>, <code>LogicTabMenus.tsx</code>, <code>ValuePickerPopover.tsx</code>, <code>Explainers.tsx</code> (one array), <code>recommendDecider.ts</code> (one function), five guard sites, and one CSS block. No schema change. No migration.</td></tr>
+    <tr><td>Suggested prefix</td><td><code>QWIDGET(P1…)</code> — <code>LOGIC-TAB</code> has consumed P0–P12.</td></tr>
+  </table></div>
+
+  <div class="box care">
+    <span class="bt">The mock is ahead of decision 1</span>
+    <p>The linked mock lets one answer hold several recommendations. <b>Decision 1 says it cannot.</b>
+    Where the mock and this document differ, <b>this document is the spec</b>. §3 lists exactly what
+    the mock shows that must not be built.</p>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════════════ -->
+  <h2 id="s1"><span class="hn">1</span>Decisions</h2>
+  <p class="sub">Owner-locked, 2026-09-08. Record these in
+  <code>docs/design/logic-tab/DECISIONS.md</code>.</p>
+
+  <div class="tw"><table>
+    <tr><th>#</th><th>Decision</th><th>Consequence</th></tr>
+    <tr>
+      <td><b>1</b></td>
+      <td><b>One deciding answer points at exactly one recommendation.</b> G9 stands.
+      <code>Answer.target_id</code> stays <code>z.string().optional()</code>.</td>
+      <td>No schema change. No <code>target_ids</code> on <code>Answer</code>. No read-site sweep.
+      The publish bake already handles it — <code>collectDeciderTargetIds</code> collects every
+      deciding answer’s target today (<code>quizPublish.ts:130-138</code>).</td>
+    </tr>
+    <tr>
+      <td><b>2</b></td>
+      <td><b>A multi-select question may be the deciding question.</b></td>
+      <td>Five guards lift (§5). Four admin surfaces stop refusing it. This is where “rings
+      <em>and</em> necklaces” comes from — each answer still maps to one bucket; the shopper picks
+      several.</td>
+    </tr>
+    <tr>
+      <td><b>3</b></td>
+      <td><b>Several selected mapped answers union their targets’ products.</b></td>
+      <td>One function changes: <code>resolveTarget</code>. The union plumbing downstream already
+      exists and needs no edit (§4).</td>
+    </tr>
+  </table></div>
+
+  <div class="box stop">
+    <span class="bt">Decision 3 closes a live bug — this is not just new behaviour</span>
+    <p>A multi-select decider is <b>already reachable on <code>origin/main</code></b>. Three
+    surfaces write <code>question_type</code> raw through <code>updateNodeData</code>, bypassing
+    <code>setQuestionType</code>’s demote: <code>ContentTab.tsx:495</code>,
+    <code>app.quizzes.$id.tsx:2171-2180</code>, and the AI edit op
+    <code>quizEdit.ts:634-641</code>.</p>
+    <p>Such a quiz <b>publishes clean</b> — no validation rule inspects <code>question_type</code>
+    (<code>quizValidation.ts:112-202</code>) — and then ships the truncation at
+    <code>recommendDecider.ts:219-222</code> to shoppers: every selected answer after the first
+    authored one is silently discarded. Decision 3 fixes that path, not only the new one.</p>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════════════ -->
+  <h2 id="s2"><span class="hn">2</span>Scope</h2>
+
+  <div class="tw"><table>
+    <tr><th>Region</th><th>Where</th><th>Change</th></tr>
+    <tr><td><b>STYLE bar</b></td><td><code>questionsLogicV3/Step3Shell.tsx:477-511</code> — <code>div.qz-lsb</code></td><td>None</td></tr>
+    <tr><td><b>Questions widget</b></td><td><code>studio/logicTab/LogicTabCard.tsx</code> — <code>grid</code> :524-623, <code>DetailPanel</code> :829-950, <code>AnswerRow</code> :952-1253, <code>RouteCell</code> :1259-1288, shared mount region :625-720</td><td><b>This doc</b></td></tr>
+    <tr><td><b>Rules widget</b></td><td><code>LogicTabCard.tsx</code> — <code>ledger</code> :268-522, <code>RuleSentence</code> :721-827</td><td>None</td></tr>
+  </table></div>
+
+  <p><b>There is no component boundary.</b> <code>grid</code> and <code>ledger</code> are JSX
+  consts inside one function body, returned together and ordered by <code>rulesOnly</code>. The
+  boundary is the symbol names; line numbers are a snapshot and shift on your first edit.</p>
+
+  <p><b>Also edit in full:</b> <code>QuestionWindow.tsx</code>, <code>LogicTabMenus.tsx</code>,
+  <code>ValuePickerPopover.tsx</code>, <code>AddQuestionModal.tsx</code> (all under
+  <code>app/components/studio/logicTab/</code>). <b>Scoped:</b>
+  <code>Explainers.tsx</code> — <code>questionsSteps()</code> :372-536 only;
+  <code>rulesSteps()</code> :249-371 shares its local <code>FlowNode</code> /
+  <code>FlowArrow</code> / <code>SplitCards</code> / <code>Chunk</code> / <code>LedgerRow</code>
+  helpers, so changing a helper changes the rules explainer too.</p>
+
+  <p><b>CSS</b> lands in <code>app/styles/quizocalypse.css</code>, where the questions table
+  (<code>.qz-lw-ah</code> / <code>.qz-lw-ar</code>, from :7783) and the rules ledger
+  (<code>.qz-lw-rzone</code>, from :7854) sit seventy lines apart. Edit the former, add beside it,
+  leave the latter. New colours come from <code>--qz-*</code> tokens or
+  <code>scripts/check-tokens.mjs</code> fails the gate.</p>
+
+  <div class="box care">
+    <span class="bt">Three things inside the forbidden range</span>
+    <p><b>The ledger calls <code>setQwin(null)</code> at five sites</b> — :296, :307, :338, :470,
+    :494 — to close the question window. If you retire <code>QuestionWindow</code> as the
+    target-selection door, retarget those five at the replacement’s close handler or leave
+    <code>qwin</code> alive as a no-op shim. Nothing else in :268-522 changes.</p>
+    <p><b>The <code>✦</code> at :284 is the Rules ledger’s “How rules work” trigger.</b> Do not
+    touch it. The one at :536 is the grid’s, and is yours. Neither is an AI action.</p>
+    <p><b><code>switchedOn</code></b> (:226-228) counts question roles and renders inside the
+    <em>ledger’s</em> empty state (:344-354) — the “Your 1 switched-on question is deciding
+    everything” line. Changing role handling changes that string.</p>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════════════ -->
+  <h2 id="s3"><span class="hn">3</span>The widget</h2>
+
+  <h3>3.1 What is new</h3>
+  <div class="tw"><table>
+    <tr><th>New</th><th>Rule</th><th>Risk</th></tr>
+    <tr>
+      <td><b>Recommendations tray</b></td>
+      <td>A band above the answer table labelled <code>RECOMMENDATIONS FROM STEP 1</code>, holding
+      the step-1 buckets as cards (30px thumbnail + name). Renders only for
+      <code>role === "decides"</code>; a hairline rule stands in otherwise, so the answer list
+      always has a top edge.</td>
+      <td>Real product images come from the baked index. The mock’s tinted squares are
+      placeholders, not a design element.</td>
+    </tr>
+    <tr>
+      <td><b>Two-row measured overflow</b></td>
+      <td>The tray fills two rows, then a <code>See N more</code> tile. How many cards that is
+      cannot be a constant — names run 67–175px and the pane is fluid — so measure
+      <code>offsetTop</code> after layout, hide whatever starts a third row, and give back a slot
+      if revealing the button pushes one over. A <code>ResizeObserver</code> is the production
+      form of the mock’s resize + <code>fonts.ready</code> + boot-timer trio.</td>
+      <td>Hard-coding a card count. Wrong at every other width and every other merchant’s product
+      names.</td>
+    </tr>
+    <tr>
+      <td><b>Arm and place</b></td>
+      <td>Click a card to arm it and see what is inside; click an answer cell to assign it.
+      <b>Assigning replaces</b> whatever that answer held — one answer, one recommendation.</td>
+      <td>An occupied cell must say <b>“Replace {old} with {new}”</b>, not “Place here”. A
+      one-click drop that silently discards a mapping the merchant made is the failure this
+      wording prevents.</td>
+    </tr>
+    <tr>
+      <td><b>The cell is the button</b></td>
+      <td>No <code>+</code>. Clicking a cell’s white space opens its picker. The chip and its clear
+      × stop propagation.</td>
+      <td>Leaving the cell a <code>&lt;div&gt;</code>. It needs <code>role="button"</code>,
+      <code>tabindex="0"</code> and Enter/Space, or it is keyboard-unreachable.</td>
+    </tr>
+    <tr>
+      <td><b>Picks picker, in the cell</b></td>
+      <td>Replaces the full-screen <code>QuestionWindow</code> for target selection. Search,
+      category chips, <b>single-select rows</b>, a <code>›</code> drill-in to the products behind
+      any row. Pool is step-1 output only, grouped Collections / Single products / Tag buckets /
+      Custom groups.</td>
+      <td>Leaving both doors wired. Two ways to do one job is what this removes. Rows are radios —
+      do not announce them as checkboxes.</td>
+    </tr>
+    <tr>
+      <td><b>Narrows picker, same chrome</b></td>
+      <td>Same shape, different pool: catalog values. <b>Stays multi-select</b> — narrowing has
+      always been list-valued and decision 1 does not touch it. Per-value × on each chip.</td>
+      <td><code>setAnswerFilterValues</code> is a <b>full-set write</b>. Removing one value means
+      rebuilding the whole payload without it, the way <code>baseValueSet</code> already does
+      (<code>LogicTabCard.tsx:98-111</code>). A partial payload wipes the answer’s other filter
+      families.</td>
+    </tr>
+    <tr>
+      <td><b>Staged draft — narrows only</b></td>
+      <td>Ticking stages nothing; <b>Done</b> writes, <b>Cancel</b> restores. The picks picker
+      writes on click and closes, matching the other single-valued pickers.</td>
+      <td>Committing per tick. Each one fires a 700 ms debounced whole-doc PUT. Take the snapshot
+      as an explicit copy, not a reference to the live array.</td>
+    </tr>
+    <tr>
+      <td><b>Info rows are inert</b></td>
+      <td>Stored values render as greyed non-interactive chips, or an em dash when empty. No
+      picker, no drop target, no ×.</td>
+      <td>Clearing the answer instead. <b>Narrowing values survive a role change both ways</b> —
+      <code>setQuestionRole</code> does not touch them. Deciding targets are the opposite and
+      always have been: <code>moveDecider</code> destructure-drops <code>target_id</code> on
+      promote (:124-131) and demote (:136-145), by design.</td>
+    </tr>
+    <tr>
+      <td><b>No PRODUCTS column</b></td>
+      <td>Four columns: key · answer · mapping · then-go-to. The count moves inside the mapping
+      chip, next to the thing it counts. The uppercase header row goes with it.</td>
+      <td>Losing the popover behind the count. <code>ProductCountButton</code> is how a merchant
+      sees <em>which</em> products a mapping resolves to; that has to survive somewhere.</td>
+    </tr>
+    <tr>
+      <td><b>One explainer</b></td>
+      <td>A single <em>How this works</em> disclosure holds the three role definitions, replacing
+      per-question descriptions.</td>
+      <td>—</td>
+    </tr>
+  </table></div>
+
+  <h3>3.2 Copy</h3>
+  <div class="tw"><table>
+    <tr><td><b>Picks results</b></td><td>Each answer maps to one of the recommendations you built in step 1. Exactly one question does this.</td></tr>
+    <tr><td><b>Narrows results</b></td><td>Each answer maps to a value already on your products, such as a tag, metafield, variant option or product type, to filter what is left.</td></tr>
+    <tr><td><b>Info only</b></td><td>Info collected as zero party data only. Does not impact quiz results shown.</td></tr>
+    <tr><td>Tray label</td><td><code>RECOMMENDATIONS FROM STEP 1</code></td></tr>
+    <tr><td>Tray overflow</td><td><code>See {n} more</code></td></tr>
+    <tr><td>Empty cell</td><td><code>Choose a result</code> · <code>Choose a value</code></td></tr>
+    <tr><td>Armed, empty cell</td><td><code>Place {name} here</code></td></tr>
+    <tr><td>Armed, occupied cell</td><td><code>Replace {old} with {new}</code></td></tr>
+  </table></div>
+  <p><b>No em dashes in merchant-facing copy.</b> Owner instruction, 2026-09-07.</p>
+
+  <h3>3.3 Do not build what the mock shows</h3>
+  <p>The mock predates decision 1. These parts of it are cut:</p>
+  <ul>
+    <li><b>Several chips in a deciding cell.</b> One chip, from <code>a.target_id</code>.</li>
+    <li><b>Per-chip × on a deciding cell.</b> With one mapping, removing the chip <em>is</em>
+    clearing the cell — one control, labelled “Clear this answer’s result”. The clear is
+    <code>setAnswerTarget(doc, nodeId, answerId, null)</code>, which destructure-drops the key.</li>
+    <li><b>Placing appends.</b> It replaces.</li>
+    <li><b>Multi-select ticking, the staged draft and the “N selected” footer in the picks
+    picker.</b> A single-target picker can only read 0 or 1 selected, which implies more can be
+    added. Use the footer slot for the selected recommendation’s product count instead.</li>
+    <li><b>The union product count on an answer.</b> The count is just that bucket’s size. The
+    union is real but it lives at the <em>shopper’s selection</em>, not the answer.</li>
+  </ul>
+  <p><b>Two inconsistencies in the mock to resolve while building:</b> the tray hides any bucket
+  used by any answer, while the cell picker offers the full list — so the same bucket is
+  un-placeable from one surface and freely placeable from the other. Two answers sharing a target
+  is legal and, under a multi-select decider, a natural authoring move. Pick one rule and make
+  both surfaces obey it. Separately, the mock’s browse list is unreachable when nothing
+  overflowed, because its trigger stays hidden.</p>
+
+  <h3>3.4 Accessibility</h3>
+  <ul>
+    <li>The cell is a real control: <code>role="button"</code>, <code>tabindex="0"</code>,
+    Enter/Space. Nested chip and clear × are real buttons that stop propagation.</li>
+    <li>Picks picker rows are radios with <code>aria-checked</code>; narrows rows are checkboxes
+    with <code>aria-pressed</code>. The difference must be announced.</li>
+    <li>The clear × needs a name that says what it clears, not a bare ×. It is opacity-hidden until
+    hover, so it must appear on <code>:focus-within</code>.</li>
+    <li>Focus ring <code>2px solid var(--qz-accent)</code>, <code>outline-offset: 1px</code>, never
+    removed. Colour is never the only signal.</li>
+    <li>Thumbnails are decorative — <code>aria-hidden</code> — until real images land.</li>
+  </ul>
+
+  <!-- ═══════════════════════════════════════════════════════════════ -->
+  <h2 id="s4"><span class="hn">4</span>The engine</h2>
+
+  <p><b>One function changes.</b> <code>resolveTarget</code> takes the first selected mapped answer
+  in authored order and discards the rest:</p>
+<pre><code><i>// app/lib/recommendDecider.ts:216-223 — today</i>
+const picked = decider &amp;&amp; decider.type === "question"
+  ? decider.data.answers.find((a) =&gt; selected.has(a.id) &amp;&amp; a.target_id)
+  : undefined;
+const baseTargetId = picked?.target_id ?? null;</code></pre>
+
+  <p>Collect all of them instead, then emit the list at the final return (:246-247):</p>
+<pre><code>const baseTargets = decider &amp;&amp; decider.type === "question"
+  ? [...new Set(decider.data.answers.flatMap(
+      (a) =&gt; (selected.has(a.id) &amp;&amp; a.target_id ? [a.target_id] : [])))]
+  : [];
+const baseTargetId = baseTargets[0] ?? null;
+
+<i>// …and at the return:</i>
+return {
+  targetId: baseTargetId,
+  ...(baseTargets.length &gt; 1 ? { <b>targetIds</b>: baseTargets } : {}),
+  matchedRuleId: null,
+};</code></pre>
+
+  <p>Four properties are load-bearing:</p>
+  <ul>
+    <li><b>Iterate <code>decider.data.answers</code>, not <code>selectedAnswerIds</code></b> — a
+    shopper who ticks the boxes in a different sequence must get a byte-identical page.</li>
+    <li><b><code>new Set</code> dedupes</b> to first occurrence. Two answers may legitimately point
+    at the same bucket.</li>
+    <li><b><code>flatMap</code>, not <code>filter().map()</code></b> — <code>a.target_id</code>
+    type-narrows without a non-null assertion.</li>
+    <li><b>The <code>length &gt; 1</code> conditional spread is mandatory.</b> It keeps
+    single-answer resolutions shape-identical to today, which is what every <code>toEqual</code>
+    in <code>recommendDecider.test.ts</code> and the <code>pathEnumeration</code> snapshot assert
+    against.</li>
+  </ul>
+
+  <div class="box good">
+    <span class="bt">Everything downstream already works</span>
+    <p>Reuse the existing <code>ResolvedTarget.targetIds</code> channel and
+    <code>recommendationEngine.ts</code> needs <b>no edit</b>:</p>
+    <ul>
+      <li>:411-419 already unions members with first-occurrence dedupe when
+      <code>targetIds</code> is set.</li>
+      <li>:450-452 already forces <code>targetShape: undefined</code> for a union. This matters:
+      without it, an anchor answer pointing at a single-product bucket sends the page down the
+      hero-only branch (<code>recommendDecider.ts:395-398</code>), which computes the union and
+      then throws it away while <code>poolSize</code> still reports the union size — nothing looks
+      wrong.</li>
+      <li>:441-445 already sets <code>poolAdjusted</code> on <code>Boolean(resolved.targetIds)</code>.</li>
+      <li><code>narrowIdsByFilters</code> operates on a flat id list and never reads a target id,
+      so filters narrow a union exactly as they narrow one bucket.</li>
+    </ul>
+  </div>
+
+  <p><b>Two comments become false and must be rewritten</b>, or they will mislead every future
+  reader: <code>ResolvedTarget.targetIds</code>’ docblock (:34-39) says it is “set ONLY when a
+  replace rule carries several targets” — there are now two producers. And
+  <code>resolveTarget</code>’s docblock (:183-190) says it resolves “the shopper’s ONE target”.
+  Same for <code>quizSchema.ts:337-349</code>, whose role comment still reads “multi-select
+  questions are auto-qualifier (§2.2)”. All three are comment-only; no field changes.</p>
+
+  <p><b>The anchor.</b> <code>targetId === targetIds[0]</code> — the first authored mapped answer
+  the shopper selected. It anchors the rec-page config
+  (<code>settingsForTarget</code>, <code>recommendationEngine.ts:399</code>), the persona shown
+  above the pool (:478-480), and the synthetic pool write (:455-457). <b>Consequence to accept
+  deliberately:</b> the headline and persona a shopper sees are decided by the merchant’s answer
+  ordering. Pool order follows the same rule — anchor’s members first, then each later target’s
+  unseen members — so with the default <code>collection_order</code> hero logic, the hero is the
+  anchor bucket’s first baked member.</p>
+
+  <p><b>The action-rule branch needs nothing.</b> A rule with an action sets
+  <code>actionRule</code> and falls through to the base mapping, which now carries the union; the
+  branch at :225-234 stays as it is.</p>
+
+  <!-- ═══════════════════════════════════════════════════════════════ -->
+  <h2 id="s5"><span class="hn">5</span>Guards to lift</h2>
+  <p>Decision 2 is unreachable until all of these lift. Each duplicates the same predicate
+  locally.</p>
+
+  <h3>Mutations and lib — five, not two</h3>
+  <div class="tw"><table>
+    <tr><th>Site</th><th>What it does</th></tr>
+    <tr><td><code>deciderMutations.ts:27-31</code> — <code>setQuestionRole</code></td><td>Refuses <code>decides</code> for multi_select. Conditional on the requested role, so those questions can still be set to filter/qualifier. Silent no-op.</td></tr>
+    <tr><td><code>deciderMutations.ts:102-106</code> — <code>moveDecider</code></td><td>Only ever promotes, so its guard is unconditional. Silent no-op.</td></tr>
+    <tr><td><code>questionMutations.ts:522</code> — <code>setQuestionType</code></td><td><b>Demotes an existing decider to qualifier</b> when its type changes to multi_select. Not <code>logic_model</code>-gated. Left in place, changing a decider’s type silently strips its role.</td></tr>
+    <tr><td><code>deciderMapping.ts:66</code> — <code>pickDeciderIndex</code></td><td>Skips multi_select when the funnel picks a decider automatically.</td></tr>
+    <tr><td><code>proposeDeciderConversion.ts:157</code> and <code>:262</code></td><td>Never proposes one, and <code>executeDeciderUpgrade</code> returns the doc <b>unchanged with no warning</b> if a proposal names one. <b>Lift :157 without :262 and the wizard appears to run and does nothing.</b></td></tr>
+  </table></div>
+
+  <h3>UI — four surfaces</h3>
+  <div class="tw"><table>
+    <tr><th>Surface</th><th>Site</th></tr>
+    <tr><td>Logic tab role menu — <code>cannotDecide</code>, option disabled, sub-label “needs single-answer choices”</td><td><code>LogicTabMenus.tsx:437-438, :530-531, :540</code></td></tr>
+    <tr><td>Question window role spine</td><td><code>QuestionWindow.tsx:818-819, :912, :917</code></td></tr>
+    <tr><td>Funnel type chips — intercepts <em>before</em> the mutation with a hard block modal titled “Multi-select can’t decide the result”</td><td><code>TypeChipSelector.tsx:209-212, :398-411</code></td></tr>
+    <tr><td>Legacy points card tooltip</td><td><code>QuestionCard.tsx:109, :112-113, :185</code></td></tr>
+  </table></div>
+
+  <p><b>Four merchant-facing strings assert the old rule and become wrong.</b> The block-modal body
+  (“shoppers must pick exactly one”), the tooltip “Multi-select questions collect data but can’t
+  decide the result. Use a rule for combination logic.” — now actively misleading, since the union
+  <em>is</em> the combination logic — and the two “needs single-answer choices” sub-labels.</p>
+
+  <!-- ═══════════════════════════════════════════════════════════════ -->
+  <h2 id="s6"><span class="hn">6</span>Routing — needs a decision</h2>
+
+  <div class="box stop">
+    <span class="bt">Several selected answers, several routes, one winner</span>
+    <p>A multi-select question advances using the <code>edge_handle_id</code> of the <b>first
+    checked answer in authored order</b> — not click order, not the question default:</p>
+    <p><code>const first = node.data.answers.find((a) =&gt; checked[a.id]); onAdvance(selectedIds, first ? first.edge_handle_id : null)</code>
+    — <code>QuestionView.tsx:410</code> and <code>:423</code>, the only two multi-select commit
+    sites.</p>
+    <p>Every other checked answer’s route is <b>silently discarded</b>. Nothing merges, warns, or
+    errors. Reordering answers in the builder silently re-routes shoppers.</p>
+  </div>
+
+  <p>This is live today, not hypothetical: <code>Answer.edge_handle_id</code> is required on every
+  answer regardless of type, <code>setAnswerRoute</code> has no type gate, and the Logic tab renders
+  <code>RouteMenuButton</code> on every answer row with no multi-select exclusion
+  (<code>LogicTabCard.tsx:1239</code>). Decision 2 makes it matter, because the deciding question is
+  where divergent routing is most likely to be authored.</p>
+
+  <p>The ambiguity is already <em>acknowledged</em> in code and shown nowhere useful:
+  <code>routeTrace.ts:207-212</code> emits a <code>warn</code> — “Per-answer routing on a
+  multi-select is ambiguous when several answers are picked” — but
+  <code>routingConflicts</code> is rendered <b>only by the old ContextPanel</b>. The Logic tab
+  never calls it, so the surface where routes are actually authored shows nothing.</p>
+
+  <h3>The two options</h3>
+  <div class="tw"><table>
+    <tr><th>Option</th><th>Cost</th></tr>
+    <tr>
+      <td><b>A. Keep first-authored-wins; surface the warning.</b> Call <code>routingConflicts</code>
+      from the Logic tab and show it on the deciding question’s rows.</td>
+      <td><b>Low.</b> No runtime change, no legacy risk. The rule stays implicit but stops being
+      invisible. <em>Recommended.</em></td>
+    </tr>
+    <tr>
+      <td><b>B. Disable per-answer routing on a multi-select decider.</b> One route for the whole
+      question; the THEN GO TO cell collapses to a single control.</td>
+      <td><b>Medium.</b> Unambiguous, but it removes an authorable capability from shipped docs and
+      needs a migration story for quizzes that already use it.</td>
+    </tr>
+  </table></div>
+
+  <div class="box care">
+    <span class="bt">Do not simply “fix” the tie-break</span>
+    <p>The first-authored-wins rule lives in shared runtime code with <b>no
+    <code>logic_model</code> branch</b> — the same component serves legacy points/ladder docs.
+    Changing it changes behaviour for already-published legacy quizzes at <code>/q</code>, and
+    because it changes no <code>publishedJson</code> bytes, <b>the byte pin stays green and will
+    not catch it</b>. If the tie-break must change, gate it on
+    <code>doc.logic_model === "decider"</code>.</p>
+    <p>No test pins the current behaviour either way — <code>routeTrace.test.ts</code> asserts only
+    that the warning fires. Add a <code>QuestionView</code>-level test for whichever rule you
+    choose.</p>
+  </div>
+
+  <p><b>Separately, publish has no gate for this at all.</b> <code>quizValidation</code>’s decider
+  rules (V1 missing_decider, V2 decider_bypass, V3 decider_optional, V4 unmapped_decider_answer)
+  never inspect <code>question_type</code>. The old safety came entirely from the mutations
+  refusing to create the state. Lifting the guards leaves zero publish-side check — consider a V7
+  for conflicting per-answer routes on a multi-select decider.</p>
+
+  <!-- ═══════════════════════════════════════════════════════════════ -->
+  <h2 id="s7"><span class="hn">7</span>Known gaps this creates</h2>
+  <p>Not blocking. Ship the widget, then decide these — but ship them knowingly, because each is a
+  place where a union looks fine and reports wrong.</p>
+
+  <div class="tw"><table>
+    <tr><th>Gap</th><th>Effect</th><th>Fix</th></tr>
+    <tr>
+      <td><b>Analytics see the anchor only</b><br><code>DeciderViews.tsx:545</code>, <code>recommendationEngine.ts:160-179, :471-472</code></td>
+      <td>The completion event writes one <code>resolved_target_id</code>, so a three-target union is indistinguishable from selecting the anchor alone. Per-target conversion over-attributes to whichever bucket sits earliest in answer order. The persona page’s “matched by N shoppers” proof under-counts every session that reached it as a non-first union member.</td>
+      <td>Thread <code>targetIds?: string[]</code> onto the <code>decider</code> payload and widen the persona query. <code>Event.payload</code> is JSON — no migration.</td>
+    </tr>
+    <tr>
+      <td><b>AI rec-copy grounds on the anchor</b><br><code>q.$id.rec-copy.tsx:136, :140-141</code></td>
+      <td>Cache key is <code>recCopyCacheKey(id, sessionId, resolved.targetId)</code>, so two different unions sharing an anchor — {A}, {A,B}, {A,C} — collide within a session. The model gets all the shopper’s answer texts but only the anchor’s name and first product, so the copy can describe products the pool never surfaced.</td>
+      <td>Key on the full resolved list; ground the hero on the union pool. Keep the client mirror at <code>QuizRuntime.tsx:496-504</code> in sync.</td>
+    </tr>
+    <tr>
+      <td><b>The grid still caps at the anchor’s <code>gridMax</code></b><br><code>recommendDecider.ts:99, :405</code></td>
+      <td>A union across three buckets still shows hero + 3 grid items by default. Merchants will read that as “my union isn’t working”.</td>
+      <td>Product call, not a bug. Decide whether <code>gridMax</code> should scale with the union.</td>
+    </tr>
+    <tr>
+      <td><b>Authoring previews render one bucket</b><br><code>RecPageV2Preview.tsx:31-33</code>, <code>Step4Results.tsx:506</code></td>
+      <td>Both call <code>targetProducts</code> with a hand-picked target and never go through <code>resolveTarget</code>, so a merchant configuring a multi-select decider previews something no multi-selecting shopper gets.</td>
+      <td>Known gap. Say so in the UI or route the preview through <code>resolveTarget</code>.</td>
+    </tr>
+    <tr>
+      <td><b>Path tools model one answer at a time</b><br><code>pathAnalyzer.ts:36-47</code>, <code>pathEnumeration.ts:196-203</code>, <code>pathQuality.server.ts:55-62</code></td>
+      <td>“Test all paths”, the THEN GO TO cell and the AI path-quality review all show what each answer does <em>if picked alone</em>. None models a multi-pick, so the union result — the one most likely to read badly, since the copy is the anchor’s and the products are not — is never evaluated.</td>
+      <td>Out of scope here. Worth a follow-up ticket.</td>
+    </tr>
+  </table></div>
+
+  <p><b>Swept and confirmed needing no change:</b> the publish untargeted gate
+  (<code>quizPublish.ts:489-505</code> — every answer still needs exactly one target),
+  <code>collectDeciderTargetIds</code>, the target bake,
+  <code>questionOrder.unmappedDeciderAnswers</code>, <code>bucketReconcile</code>, and
+  <code>quizAnalytics</code>’ product-to-group membership (union semantics only add
+  reachability).</p>
+
+  <!-- ═══════════════════════════════════════════════════════════════ -->
+  <h2 id="s8"><span class="hn">8</span>Build order</h2>
+  <ol>
+    <li><b>Engine.</b> <code>resolveTarget</code>’s collect + emit, plus the three comment
+    corrections. Unit test: one selected mapped answer is shape-identical to today; two produce
+    <code>targetIds</code> in authored order; click order does not change the result.
+    <em>Verify with the byte pin.</em> This alone fixes the live truncation bug in §1.</li>
+    <li><b>Guards.</b> All five mutation/lib sites together — :157 and :262 in the same commit or
+    the wizard silently no-ops. Then the four UI surfaces and the four strings.</li>
+    <li><b>Routing.</b> Decide §6, then implement. Option A is a Logic-tab call to
+    <code>routingConflicts</code> and a row-level warning.</li>
+    <li><b>Cell rendering.</b> One chip, the clear ×, the cell as the control, the inert info
+    branch. Ships on its own — a visual change over existing data.</li>
+    <li><b>The pickers.</b> Narrows first: it proves the chrome with no engine dependency. Then the
+    picks picker as single-select radios.</li>
+    <li><b>The tray.</b> Cards, arming, replace-on-place, then the measured overflow last — it is
+    the only piece that cannot be verified without a real viewport.</li>
+  </ol>
+  <p>Steps 1 and 2 are invisible to merchants and behind the decider gate. Steps 4–6 are pure UI
+  and depend on nothing above them, so they can run in parallel.</p>
+
+  <!-- ═══════════════════════════════════════════════════════════════ -->
+  <h2 id="s9"><span class="hn">9</span>Verification</h2>
+
+  <h4>Gate chain — unpiped, before every commit</h4>
+<pre><code>npm run typecheck &amp;&amp; npm test -- --run &amp;&amp; npm run build &amp;&amp; npm run lint &amp;&amp; node scripts/check-tokens.mjs</code></pre>
+
+  <h4>Byte pin — after every deploy</h4>
+<pre><code>curl -sS https://quizocalypse-studio.fly.dev/q/cmqqcb0ao004mqvkwjug7t0ya.json | shasum -a 256</code></pre>
+  <p>First 16 chars must be <code>c02ccaec98a0fe9e</code>. Never republish that quiz. <b>Note it
+  cannot catch a runtime-only regression</b> — see the §6 warning.</p>
+
+  <h4>Engine</h4>
+  <ul>
+    <li>One mapped answer selected → the resolved object is byte-identical to today, with no
+    <code>targetIds</code> key.</li>
+    <li>Three mapped answers selected → <code>targetIds</code> in the decider node’s authored
+    order, deduped; the pool is their deduped union; <code>targetShape</code> is
+    <code>undefined</code>.</li>
+    <li>Tick the same three in a different sequence → identical output.</li>
+    <li>Two answers mapped to the same bucket, both selected → one entry, and no
+    <code>targetIds</code> key (length 1 after dedupe).</li>
+    <li>Anchor answer maps to a single-product bucket, plus one other selected → hero + grid, not
+    the hero-only page.</li>
+    <li>A narrowing question on top of a union → the filter intersects the union.</li>
+    <li>A legacy doc (<code>logic_model !== "decider"</code>) reaches none of it.</li>
+  </ul>
+
+  <h4>Interactive — screenshots, not DOM markers</h4>
+  <p>A 200 plus DOM markers is not proof for popovers; a pointer-trapped overlay renders fine and
+  is unclickable.</p>
+  <ol>
+    <li>Click a cell’s white space → the picker opens. Click inside it → it stays open.</li>
+    <li>Pick a second recommendation for an answer that already has one → the first is replaced,
+    and the cell only ever shows one chip.</li>
+    <li>Arm a tray card, hover an occupied cell → it reads <b>Replace {old} with {new}</b>.</li>
+    <li>Narrows: tick three values, Cancel → zero network writes. Watch the network panel.</li>
+    <li>Narrows: remove one value with its × → the answer’s other filter families survive.</li>
+    <li>Set a mapped Narrows question to Info and back → values survive byte-identically and render
+    inert in between.</li>
+    <li>Promote a multi-select question to Picks the result → it works, from all four surfaces.</li>
+    <li>200 recommendations → the tray still occupies two rows and <code>See N more</code> counts
+    everything unseen. Resize narrow and wide → it re-measures both ways.</li>
+    <li>Keyboard only: tab to a cell, Enter opens, Escape closes, the clear × is reachable with a
+    visible focus ring.</li>
+    <li>Publish with one deciding answer unmapped → the untargeted gate still blocks.</li>
+  </ol>
+
+  <h4>End to end</h4>
+  <ul>
+    <li>Author a multi-select decider, select two mapped answers, and assert <code>/q</code> serves
+    the union pool. Probe recipes and the fixture map are in <code>e2e/README.md</code>; local
+    fixture <code>cmr7khgd50001vkhscvox8dgt</code>.</li>
+    <li><b>2-lens adversarial self-review, written</b> — this touches the runtime engine.</li>
+  </ul>
+
+  <h4>Guardrails</h4>
+  <ul>
+    <li>Decider-gate every new behaviour; legacy docs stay byte-identical. New mutations
+    early-return unchanged when <code>logic_model !== "decider"</code>.</li>
+    <li>Legacy fields are parsed forever. Deprecate in docs and UI, never delete the parse.</li>
+    <li>Zod at boundaries, no <code>any</code>, strict TS, pino.</li>
+    <li>No raw hex — <code>--qz-*</code> tokens only.</li>
+  </ul>
+</main>
+</div>
+
+</body></html>

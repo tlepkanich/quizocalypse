@@ -1,4 +1,5 @@
 import type { z } from "zod";
+import type { FilterValueSet } from "./ValuePickerPopover";
 import type { Answer, Quiz } from "../../../lib/quizSchema";
 import type { IndexedProduct } from "../../../lib/recommendationEngine";
 import type { BuilderCategory } from "../../builder/stepProps";
@@ -598,3 +599,20 @@ export const ROLE_JOBS = [
 /** Mock .pop-foot (shared.mjs line 451), verbatim — the one-decider rule. */
 export const ROLE_FOOT =
   "One question picks the result. Every other question narrows on a single attribute.";
+
+/** The answer's CURRENT stored values as one full-set payload — the base
+ *  every chip-remove edit subtracts from (setAnswerFilterValues is a
+ *  full-set write; a partial payload would wipe the rest). */
+export function baseValueSet(a: AnswerT): FilterValueSet {
+  const collection_filters = [
+    ...(a.collection_filter ? [a.collection_filter] : []),
+    ...(a.collection_filters ?? []),
+  ].filter((c, i, all) => Boolean(c) && all.indexOf(c) === i);
+  return {
+    tags: [...a.tags],
+    ...(collection_filters.length ? { collection_filters } : {}),
+    metafield_filters: [...(a.metafield_filters ?? [])],
+    variant_filters: [...(a.variant_filters ?? [])],
+    product_type_filters: [...(a.product_type_filters ?? [])],
+  };
+}

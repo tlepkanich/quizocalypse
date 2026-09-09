@@ -338,9 +338,11 @@ export const QuestionDataObject = z.object({
   // first-class role. "decides": exactly ONE per quiz; its answers direct-map
   // to targets (Answer.target_id) and it is forced Required. "qualifier":
   // assigns nothing — routing/zero-party data only (the bucket column never
-  // renders on it). Only meaningful when the quiz's logic_model is "decider";
-  // multi-select questions are auto-qualifier (§2.2). Additive/optional →
-  // absent on every legacy doc.
+  // renders on it). Only meaningful when the quiz's logic_model is "decider".
+  // QWIDGET decision 2 — a multi-select question MAY decide: each answer
+  // still maps to one target; several selected answers union their targets
+  // (resolveTarget). Freeform types still cannot (no discrete answers).
+  // Additive/optional → absent on every legacy doc.
   // QZY-1 (quiz-logic spec §3) adds "filter": narrows the pool by an
   // attribute value per answer (tags/collection_filter — the machinery the
   // engine already reads). UI vocabulary (QRTZ-OB1): decides = "Picks the

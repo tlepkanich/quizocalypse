@@ -513,14 +513,12 @@ export function setQuestionType(
               ...n.data,
               question_type: newType,
               answers,
-              // LOGIC v2 §2.2 — multi-select can never decide (one answer →
-              // one target breaks with multiple picks), and neither can
-              // freeform types (no discrete answers to map) — the SAME
-              // predicate setQuestionRole refuses to promote. Switching a
-              // DECIDING question to either auto-demotes it to qualifier in
-              // the same mutation (no race with a separate role write).
-              ...((newType === "multi_select" || isFreeformType(newType)) &&
-              n.data.role === "decides"
+              // QWIDGET decision 2 — a multi-select MAY decide now (its
+              // selected answers union their targets), so only a FREEFORM
+              // type (no discrete answers to map) auto-demotes a deciding
+              // question — the SAME predicate setQuestionRole refuses to
+              // promote. Same mutation, no race with a separate role write.
+              ...(isFreeformType(newType) && n.data.role === "decides"
                 ? { role: "qualifier" as const }
                 : {}),
             },

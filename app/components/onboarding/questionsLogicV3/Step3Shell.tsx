@@ -446,19 +446,21 @@ export function Step3Shell({
                 </>
               ) : (
                 <>
-                  <b>First</b> pick which question decides how to prioritize your
-                  set of products.
+                  {/* QWIDGET §3.2 — ONE explainer holds the three role
+                      definitions (it replaces per-question descriptions). */}
+                  <b>Picks results.</b> Each answer maps to one of the
+                  recommendations you built in step 1. Exactly one question does this.
                   <span className="qz-ls-ll">
-                    <b>Some</b> narrow that set by matching answers to values
-                    already in your catalog.
+                    <b>Narrows results.</b> Each answer maps to a value already on your
+                    products, such as a tag, metafield, variant option or product type,
+                    to filter what is left.
                   </span>
                   <span className="qz-ls-ll">
-                    <b>The rest</b> just collect an answer and leave the products
-                    alone.
+                    <b>Info only.</b> Info collected as zero party data only. Does not
+                    impact quiz results shown.
                   </span>
                   <span className="qz-ls-ll">
-                    <b>Rules</b> at the bottom cover anything those three cannot
-                    say.
+                    <b>Rules</b> at the bottom cover anything those three cannot say.
                   </span>
                 </>
               )}

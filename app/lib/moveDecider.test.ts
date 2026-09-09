@@ -142,9 +142,18 @@ describe("moveDecider (quiz-step3 v3 §5.4)", () => {
     expect(() => Quiz.parse(out)).not.toThrow();
   });
 
-  it("no-ops: multi_select target, same-node, unknown node, legacy doc", () => {
+  it("QWIDGET decision 2 — a multi-select question CAN take the decider", () => {
     const doc = deciderDoc();
-    expect(moveDecider(doc, "qm")).toBe(doc); // multi cannot decide
+    const out = moveDecider(doc, "qm");
+    expect(out).not.toBe(doc);
+    const qm = out.nodes.find((n) => n.id === "qm");
+    expect(qm && qm.type === "question" ? qm.data.role : null).toBe("decides");
+    const q1 = out.nodes.find((n) => n.id === "q1");
+    expect(q1 && q1.type === "question" ? q1.data.role : null).toBe("qualifier");
+  });
+
+  it("no-ops: same-node, unknown node, legacy doc", () => {
+    const doc = deciderDoc();
     expect(moveDecider(doc, "q1")).toBe(doc); // already the decider
     expect(moveDecider(doc, "nope")).toBe(doc); // unknown
     const { logic_model: _lm, ...legacyRaw } = doc;

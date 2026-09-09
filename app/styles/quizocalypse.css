@@ -7983,6 +7983,186 @@ body[data-qz] .qz-cust-row:focus-visible {
 .qz-lw-dash { color: var(--qz-ink-25); }
 .qz-lw-aroute { min-width: 0; }
 
+/* ══ QWIDGET — the question widget (Format B), rebuilt to the "Question
+   Widget" artifact. Rail rows carry a ROLE tag; the pane holds the title, a
+   text-with-caret role control, the RECOMMENDATIONS FROM STEP 1 tray (or a
+   hairline), and four-column answer rows: key · answer · mapping · go-to.
+   The CELL is the control; chips, counts and ×s are buttons inside it. ══ */
+.qz-lw-grid--b { grid-template-columns: 318px minmax(0, 1fr); }
+.qz-lw-railn { font-size: 10px; color: var(--qz-ink-25); font-variant-numeric: tabular-nums; }
+.qz-lw-grid--b .qz-lw-qi { display: flex; align-items: flex-start; gap: 9px; padding: 9px 10px; }
+.qz-lw-grid--b .qz-lw-qn { flex: 0 0 14px; line-height: 1.6; padding-top: 0; }
+.qz-lw-qtxt {
+  flex: 1; min-width: 0; font-size: 13.5px; line-height: 1.4; color: var(--qz-ink-3);
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+}
+.qz-lw-qi.is-on .qz-lw-qtxt { color: var(--qz-ink); font-weight: 600; }
+.qz-lw-qi.is-on, .qz-lw-qi.is-on:hover { background: var(--qz-paper); box-shadow: var(--qz-lift-1); }
+.qz-lw-qtag {
+  flex: 0 0 auto; font-size: 9.5px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase;
+  padding: 2px 6px; border-radius: var(--qz-radius-sm); background: var(--qz-cream-2); color: var(--qz-ink-25); margin-top: 2px;
+}
+.qz-lw-qtag.is-decides { background: var(--qz-accent-wash); color: var(--qz-accent-ink); }
+.qz-lw-qtag.is-filter { background: var(--qz-cream-2); color: var(--qz-ink-3); }
+/* the pane */
+.qz-lw-pane { padding: 18px 20px; min-width: 0; }
+.qz-lw-paneh { display: flex; align-items: flex-start; justify-content: space-between; gap: 20px; margin-bottom: 16px; }
+.qz-lw-panet { margin: 0; font-size: 18px; font-weight: 700; line-height: 1.35; color: var(--qz-ink); max-width: 46ch; }
+.qz-lw-prule { height: 1px; background: var(--qz-rule); margin: 0 0 16px; }
+.qz-lw-rolestack { display: grid; gap: 5px; justify-items: end; flex: 0 0 auto; }
+.qz-lw-rolebtn {
+  display: inline-flex; align-items: center; gap: 7px; font: inherit; font-size: 13px; font-weight: 700;
+  color: var(--qz-ink); background: transparent; border: 1px solid transparent; border-radius: var(--qz-radius);
+  padding: 5px 9px; cursor: pointer; white-space: nowrap;
+}
+.qz-lw-rolebtn:hover { background: var(--qz-cream-2); border-color: var(--qz-rule); }
+.qz-lw-rolebtn.is-open { background: var(--qz-accent-wash); border-color: var(--qz-accent-line); color: var(--qz-accent-ink); }
+.qz-lw-rolebtn.is-static { cursor: default; }
+.qz-lw-rolebtn-cv { color: var(--qz-ink-25); font-size: 9px; }
+/* the tray — neutral, not purple: purple means one thing here, the armed card */
+.qz-lw-tray {
+  margin: 0 0 16px; padding: 9px 12px 11px; border: 1px solid var(--qz-rule);
+  background: var(--qz-ls-cell-bg); border-radius: var(--qz-radius-lg);
+}
+.qz-lw-tray-h { display: flex; align-items: center; gap: 12px; min-height: 24px; }
+.qz-lw-tray-lb { flex: 1; font-size: 9.5px; font-weight: 700; letter-spacing: .09em; text-transform: uppercase; color: var(--qz-ink-25); white-space: nowrap; }
+.qz-lw-tray-hint { font-size: 12px; font-weight: 600; color: var(--qz-accent-ink); }
+.qz-lw-tray-c { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 7px; }
+.qz-lw-tw { display: inline-flex; }
+.qz-lw-tcard {
+  display: inline-flex; align-items: center; gap: 9px; max-width: 230px;
+  font: inherit; font-size: 13px; font-weight: 600; color: var(--qz-ink);
+  background: var(--qz-paper); border: 1px solid var(--qz-rule); border-radius: var(--qz-radius);
+  padding: 4px 11px 4px 4px; cursor: pointer;
+  transition: border-color var(--qz-dur) var(--qz-ease), box-shadow var(--qz-dur) var(--qz-ease);
+}
+.qz-lw-tcard:hover { border-color: var(--qz-ls-line2); box-shadow: var(--qz-lift-1); }
+.qz-lw-tcard.is-armed { border-color: var(--qz-accent); background: var(--qz-accent-wash); color: var(--qz-accent-ink); font-weight: 700; box-shadow: var(--qz-lift-1); }
+.qz-lw-tcard.is-used { color: var(--qz-ink-25); }
+.qz-lw-tcard.is-used .qz-lw-thumb { opacity: .55; }
+.qz-lw-tcard:disabled { cursor: default; }
+.qz-lw-tname { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.qz-lw-thumb {
+  width: 30px; height: 30px; flex: 0 0 30px; border-radius: var(--qz-radius-sm); object-fit: cover;
+  background: linear-gradient(145deg, var(--qz-accent-wash), var(--qz-cream-2));
+  box-shadow: inset 0 0 0 1px rgba(32, 28, 46, .05);
+}
+.qz-lw-tmore {
+  align-self: center; font: inherit; font-size: 13px; font-weight: 600; color: var(--qz-ink-3);
+  background: none; border: 1px dashed var(--qz-ls-line2); border-radius: var(--qz-radius);
+  padding: 9px 12px; cursor: pointer; white-space: nowrap; font-variant-numeric: tabular-nums;
+}
+.qz-lw-tmore:hover { color: var(--qz-accent-ink); background: var(--qz-accent-wash); }
+/* answer rows: key · answer · mapping · then-go-to (no PRODUCTS column) */
+.qz-lw-arows { display: flex; flex-direction: column; }
+.qz-lw-arow {
+  display: grid; grid-template-columns: 20px minmax(0, 1fr) 236px 104px; gap: 14px;
+  align-items: center; padding: 9px 0; border-bottom: 1px solid var(--qz-rule-2);
+}
+.qz-lw-arow:last-of-type { border-bottom: 0; }
+.qz-lw-arow .qz-lw-akey { font-size: 11px; color: var(--qz-ink-25); }
+.qz-lw-arow .qz-lw-atext { color: var(--qz-ink); font-size: 14.5px; line-height: 1.45; min-width: 0; font-weight: 400; }
+.qz-lw-acellw { min-width: 0; }
+/* only the CELL's own anchor stretches — the count button's anchor inside
+   the chip must keep its shrink-to-fit width or it squeezes the name */
+.qz-lw-acellw > .qz-popover-anchor { display: flex; width: 100%; }
+/* The CELL is the white square: the chip, the count and the clear × are
+   siblings inside it (a button cannot contain a button). */
+.qz-lw-cell {
+  display: flex; align-items: center; gap: 2px; width: 100%; background: transparent; cursor: pointer;
+  border: 1px solid transparent; border-radius: var(--qz-radius); padding: 2px 3px 2px 2px; min-height: 30px;
+  transition: border-color var(--qz-dur) var(--qz-ease), background var(--qz-dur) var(--qz-ease);
+}
+.qz-lw-cell:hover { background: var(--qz-paper); border-color: var(--qz-rule); }
+.qz-lw-cell.is-open { background: var(--qz-paper); border-color: var(--qz-accent-line); }
+body[data-qz] .qz-lw-cell:focus-visible { outline: 2px solid var(--qz-accent); outline-offset: 1px; }
+.qz-lw-cell.is-blank { border-style: dashed; border-color: var(--qz-ls-line2); }
+.qz-lw-cell.is-blank:hover { border-color: var(--qz-accent); }
+.qz-lw-cell.is-drop { border-style: dashed; border-color: var(--qz-accent); background: var(--qz-accent-wash); }
+/* the cell you changed flashes purple and settles */
+@media (prefers-reduced-motion: no-preference) {
+  .qz-lw-cell.is-flash { animation: qz-lw-flash 2.6s var(--qz-ease) forwards; }
+  @keyframes qz-lw-flash {
+    0%, 65% { background: var(--qz-accent-wash); border-color: var(--qz-accent); }
+    100% { background: transparent; border-color: transparent; }
+  }
+}
+@media (prefers-reduced-motion: reduce) { .qz-lw-cell.is-flash { background: var(--qz-accent-wash); border-color: var(--qz-accent); } }
+.qz-lw-vbtn {
+  display: flex; align-items: center; gap: 4px; width: 100%; font-size: 13px; font-weight: 600; color: var(--qz-ink);
+  padding: 4px 7px; text-align: left;
+}
+.qz-lw-vbtn.is-empty { color: var(--qz-ink-25); font-weight: 500; }
+.qz-lw-cell:hover .qz-lw-vbtn.is-empty { color: var(--qz-accent-ink); }
+.qz-lw-cv { margin-left: auto; color: var(--qz-ink-25); font-size: 9px; padding-left: 4px; }
+.qz-lw-placesay { font-size: 12px; font-weight: 700; color: var(--qz-accent-ink); padding: 4px 7px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.qz-lw-chips { display: flex; align-items: center; flex-wrap: wrap; gap: 3px 4px; flex: 1; min-width: 0; padding: 3px 4px; }
+.qz-lw-chipw { display: inline-flex; align-items: center; position: relative; border-radius: var(--qz-radius-sm); max-width: 100%; }
+.qz-lw-chipw:hover { background: var(--qz-cream-2); }
+.qz-lw-chip {
+  display: inline-flex; align-items: center; gap: 5px; padding: 2px 4px 2px 6px; border-radius: var(--qz-radius-sm);
+  font-size: 13px; font-weight: 700; color: var(--qz-ink); max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.qz-lw-chip.is-all { font-weight: 600; color: var(--qz-ink-4); }
+.qz-lw-qf { color: var(--qz-ink-25); font-weight: 500; padding-left: 5px; }
+/* the count lives INSIDE the chip, next to the thing it counts — and it still
+   opens the products popover */
+.qz-lw-chipw .qz-ltab-countbtn { padding: 1px 5px; font-size: 11px; }
+.qz-lw-cn { font-size: 11px; font-weight: 600; color: var(--qz-ink-25); font-variant-numeric: tabular-nums; }
+.qz-lw-cn.is-zero { color: var(--qz-crit); }
+.qz-lw-chips > .qz-popover-anchor .qz-ltab-countbtn { padding: 1px 6px; font-size: 11px; }
+/* one ×, one chip — hidden until the row is under the pointer or focused */
+.qz-lw-xone {
+  width: 16px; height: 16px; flex: 0 0 16px; border: 0; background: none; color: var(--qz-ink-25);
+  font-size: 12px; line-height: 1; cursor: pointer; font-family: inherit; border-radius: 3px; margin-right: 2px;
+  opacity: 0; transition: opacity var(--qz-dur-fast) var(--qz-ease);
+}
+.qz-lw-arow:hover .qz-lw-xone, .qz-lw-chipw:focus-within .qz-lw-xone, .qz-lw-xone:focus-visible { opacity: .85; }
+.qz-lw-xone:hover { opacity: 1; background: var(--qz-paper); color: var(--qz-crit); }
+/* Info only: the stored values are KEPT but inert */
+.qz-lw-vinert { display: flex; align-items: center; flex-wrap: wrap; gap: 4px; padding: 3px 6px; font-size: 13px; color: var(--qz-ink-25); }
+.qz-lw-ichip { display: inline-block; padding: 2px 7px; border-radius: var(--qz-radius-sm); background: var(--qz-cream-2); color: var(--qz-ink-25); font-size: 12.5px; font-weight: 600; }
+/* then-go-to: near-silent by default; the overridden row is the one you see */
+.qz-lw-aroute .qz-ltab-cellbtn { margin: 0; padding: 0; }
+.qz-lw-go {
+  display: inline-flex; align-items: center; gap: 5px; width: 100%; font-size: 12.5px; font-weight: 500;
+  color: var(--qz-ink-25); border: 1px solid transparent; border-radius: var(--qz-radius); padding: 3px 6px; white-space: nowrap;
+}
+.qz-ltab-cellbtn:hover .qz-lw-go { background: var(--qz-cream-2); border-color: var(--qz-rule); color: var(--qz-ink-3); }
+.qz-lw-go.is-set { color: var(--qz-ink); font-weight: 600; }
+/* §6 routing option A — the multi-select warning on the deciding rows */
+.qz-lw-routewarn { margin-top: 10px; padding: 9px 12px; border: 1px solid var(--qz-ls-warn-line); background: var(--qz-ls-warn-wash); border-radius: var(--qz-radius); }
+.qz-lw-routewarn p { margin: 0; font-size: 12.5px; color: var(--qz-warn); line-height: 1.5; }
+.qz-lw-routewarn p + p { margin-top: 4px; }
+.qz-lw-routewarn p.is-error { color: var(--qz-crit); }
+/* the pickers (shared chrome): title · rows with a › drill-in · foot */
+.qz-lw-vp-title { font-size: 14px; font-weight: 700; color: var(--qz-ink); padding: 2px 2px 8px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.qz-lw-vp-title span { color: var(--qz-ink-4); font-weight: 600; }
+.qz-lw-vp-row { display: flex; align-items: center; gap: 0; }
+.qz-lw-vp-row .qz-lw-vp-opt { flex: 1; min-width: 0; }
+.qz-lw-vp-opt.is-radio { grid-template-columns: 14px minmax(0, 1fr); }
+.qz-lw-vp-tk { width: 14px; color: var(--qz-accent-ink); font-size: 11px; }
+.qz-lw-vp-q { color: var(--qz-ink-25); font-size: 11.5px; font-weight: 500; padding-left: 7px; }
+.qz-lw-vp-drill {
+  display: inline-flex; align-items: center; gap: 6px; flex: 0 0 auto; height: 28px; border: 0; background: none;
+  color: var(--qz-ink-25); border-radius: var(--qz-radius-sm); cursor: pointer; font: inherit; font-size: 12px;
+  font-variant-numeric: tabular-nums; padding: 0 8px 0 10px; line-height: 1;
+}
+.qz-lw-vp-drill:hover { background: var(--qz-accent-wash); color: var(--qz-accent-ink); }
+.qz-lw-vp-drill.is-flat { cursor: default; opacity: .55; }
+.qz-lw-vp-drill.is-flat:hover { background: none; color: var(--qz-ink-25); }
+.qz-lw-vp-more { margin: 0; padding: 9px 9px 2px; font-size: 12px; color: var(--qz-ink-25); }
+.qz-lw-pp { display: flex; align-items: center; gap: 10px; padding: 6px 9px; border-radius: var(--qz-radius-sm); }
+.qz-lw-pp:hover { background: var(--qz-ls-cell-bg); }
+.qz-lw-pp-sw { width: 28px; height: 28px; flex: 0 0 28px; border-radius: var(--qz-radius-sm); object-fit: cover; background: linear-gradient(145deg, var(--qz-accent-wash), var(--qz-cream-2)); box-shadow: inset 0 0 0 1px rgba(32, 28, 46, .05); }
+.qz-lw-pp-nm { font-size: 13.5px; color: var(--qz-ink); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.qz-lw-pp-ty { margin-left: auto; font-size: 11.5px; color: var(--qz-ink-25); white-space: nowrap; }
+@media (max-width: 900px) {
+  .qz-lw-grid--b { grid-template-columns: 1fr; }
+  .qz-lw-arow { grid-template-columns: 20px minmax(0, 1fr); }
+  .qz-lw-acellw, .qz-lw-aroute { grid-column: 2; }
+}
+
 /* — the rules ledger (.rzone/.rhead/.rcard) — */
 .qz-lw-rzone {
   border: 1px solid var(--qz-rule); border-radius: var(--qz-radius-lg);

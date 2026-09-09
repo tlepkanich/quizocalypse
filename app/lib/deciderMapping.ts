@@ -63,7 +63,8 @@ export function pickDeciderIndex(
   let bestIdx = -1;
   let bestScore = 0;
   questions.forEach((q, i) => {
-    if (q.question_type === "multi_select" || isFreeformType(q.question_type)) return;
+    // QWIDGET decision 2 — multi-select may decide; freeform still cannot.
+    if (isFreeformType(q.question_type)) return;
     const distinct = new Set(mapAnswersToTargets(q.answers, buckets)).size;
     if (distinct > bestScore) {
       bestScore = distinct;

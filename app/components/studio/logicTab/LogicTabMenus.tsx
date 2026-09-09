@@ -425,8 +425,9 @@ export function QuestionRoleControl({
   hasNarrowFields: boolean;
   onCommit: Commit;
   /** Pill dress only — the flow is identical: "overview" = the ledger's
-   *  .qz-ovw-role tag, "table" = the Logic table's .qz-ltab-pill. */
-  variant: "overview" | "table";
+   *  .qz-ovw-role tag, "table" = the Logic table's .qz-ltab-pill, "pane" =
+   *  the question widget's text-with-caret role button (QWIDGET). */
+  variant: "overview" | "table" | "pane";
 }) {
   const toast = useQzToast();
   const [open, setOpen] = useState(false);
@@ -434,9 +435,21 @@ export function QuestionRoleControl({
   const role = node.data.role;
   const isDecider = role === "decides";
   const isFilter = role === "filter";
-  const cannotDecide =
-    node.data.question_type === "multi_select" || isFreeformType(node.data.question_type);
-  const label = isDecider ? "Picks the result" : isFilter ? "Narrows" : "Asked only";
+  // QWIDGET decision 2 — a multi-select may decide; only freeform cannot.
+  const cannotDecide = isFreeformType(node.data.question_type);
+  // QWIDGET §3.2 copy on the pane; the older surfaces keep their vocabulary.
+  const label =
+    variant === "pane"
+      ? isDecider
+        ? "Picks results"
+        : isFilter
+          ? "Narrows results"
+          : "Info only"
+      : isDecider
+        ? "Picks the result"
+        : isFilter
+          ? "Narrows"
+          : "Asked only";
   const derivedField = derivedNarrowField(node.data.answers);
 
   // Mirrors QuestionWindow's setJob byte-for-byte in semantics: promote via
@@ -488,7 +501,16 @@ export function QuestionRoleControl({
 
   const narrowLabel = derivedNarrowLabel(node.data.answers);
   const pill =
-    variant === "overview" ? (
+    variant === "pane" ? (
+      <button
+        type="button"
+        className={`qz-lw-rolebtn${open ? " is-open" : ""}`}
+        aria-label={`Question ${qIndex} role: ${label}`}
+      >
+        {label}
+        <span className="qz-lw-rolebtn-cv" aria-hidden>▾</span>
+      </button>
+    ) : variant === "overview" ? (
       <button
         type="button"
         className={`qz-ovw-role${isDecider ? " is-decider" : ""}`}
@@ -510,7 +532,15 @@ export function QuestionRoleControl({
     );
 
   return (
-    <div className={variant === "overview" ? "qz-ovw-rolestack" : "qz-ltab-rolestack"}>
+    <div
+      className={
+        variant === "overview"
+          ? "qz-ovw-rolestack"
+          : variant === "pane"
+            ? "qz-lw-rolestack"
+            : "qz-ltab-rolestack"
+      }
+    >
       <QzPopover
         open={open}
         onOpenChange={setOpen}
@@ -528,7 +558,7 @@ export function QuestionRoleControl({
                 j.k === "decides" ? isDecider : j.k === "filter" ? isFilter : !isDecider && !isFilter;
               const sub =
                 j.k === "decides" && cannotDecide
-                  ? "needs single-answer choices"
+                  ? "needs answers to choose from"
                   : j.k === "decides" && deciderQIndex !== null && !isDecider
                     ? `now on Q${deciderQIndex}`
                     : j.hint;
