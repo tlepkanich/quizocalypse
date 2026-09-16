@@ -39,6 +39,13 @@ describe("mergeRegeneratedAnswers", () => {
     expect(merged[0]!.points).toEqual({ snow: 2 });
   });
 
+    it("QWIDGET-M: carries the whole target_ids list on unchanged text", () => {
+    const old = [ans({ id: "a1", edge_handle_id: "h1", text: "Park laps", target_id: "cat_park", target_ids: ["cat_park", "cat_pow"] })];
+    const merged = mergeRegeneratedAnswers(old, [{ text: "Park laps", tags: [] }], gen("a_"), gen("h_"));
+    expect(merged[0]!.target_id).toBe("cat_park");
+    expect(merged[0]!.target_ids).toEqual(["cat_park", "cat_pow"]);
+  });
+
   it("LOGIC v2: carries target_id on unchanged text; drops it when reworded (absent key)", () => {
     const old: Answer[] = [
       ans({ id: "a1", edge_handle_id: "h1", text: "Park laps", target_id: "cat_park" }),

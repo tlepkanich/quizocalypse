@@ -1144,6 +1144,32 @@ describe("QWIDGET multi-select deciding answers", () => {
       matchedRuleId: null,
     });
   });
+  it("QWIDGET-M: one answer's target_ids all join the union; the anchor is its first entry", () => {
+    const d = deciderDoc();
+    const n = d.nodes.find((n) => n.id === "q2");
+    if (n?.type !== "question") throw new Error("fixture");
+    // park's answer now maps TWO recommendations (list order is authoritative).
+    n.data.answers[0]!.target_ids = ["cat_park", "cat_powder"];
+    expect(resolveTarget(["park"], d)).toEqual({
+      targetId: "cat_park",
+      targetIds: ["cat_park", "cat_powder"],
+      matchedRuleId: null,
+    });
+    // A second selected answer's target appends after the first answer's list,
+    // and a shared member dedupes to its FIRST occurrence.
+    n.data.answers[1]!.target_ids = ["cat_powder", "cat_park"];
+    expect(resolveTarget(["park", "powder"], d)).toEqual({
+      targetId: "cat_park",
+      targetIds: ["cat_park", "cat_powder"],
+      matchedRuleId: null,
+    });
+    // The mirror alone (no target_ids) still resolves single — shape pinned.
+    const single = deciderDoc();
+    expect(resolveTarget(["park"], single)).toEqual({
+      targetId: "cat_park",
+      matchedRuleId: null,
+    });
+  });
   it.each(["show", "hide", "prioritize"] as const)(
     "keeps the complete base union under a %s action",
     (action) => {

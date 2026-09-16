@@ -130,7 +130,12 @@ export function collectDeciderTargetIds(doc: QuizDoc): Set<string> {
   if (doc.logic_model !== "decider") return ids;
   for (const n of doc.nodes) {
     if (n.type !== "question" || n.data.role !== "decides") continue;
-    for (const a of n.data.answers) if (a.target_id) ids.add(a.target_id);
+    for (const a of n.data.answers) {
+      if (a.target_id) ids.add(a.target_id);
+      // QWIDGET-M — multi-mapped answers: every member must bake (same G1
+      // rule as multi-target rules two lines below).
+      for (const t of a.target_ids ?? []) ids.add(t);
+    }
   }
   for (const rule of doc.decision_rules ?? []) {
     ids.add(rule.target_id);

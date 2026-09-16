@@ -5,8 +5,9 @@ import type { BuilderCategory } from "../../builder/stepProps";
 import type { IndexedProduct } from "../../../lib/recommendationEngine";
 import type { OrderedQuestion } from "../../../lib/questionOrder";
 import type { AttributeReadout } from "../../../lib/attributeClustering";
-import { setAnswerFilterValues, setAnswerTarget } from "../../../lib/quizMutations";
+import { addAnswerTarget, removeAnswerTarget, setAnswerFilterValues } from "../../../lib/quizMutations";
 import { answerNextNode } from "../../../lib/pathAnalyzer";
+import { answerTargets } from "../../../lib/recommendDecider";
 import { routingConflicts } from "../../../lib/routeTrace";
 import { filterAnswerMatchCount } from "../../../lib/filterMatching";
 import { QzPopover } from "../../qz-overlays";
@@ -27,16 +28,18 @@ import { answerHasSelection, baseValueSet } from "./logicTabFields";
 // column: the count moves inside the mapping chip, where the products
 // popover survives.
 //
-// Decision 1 (owner-locked): one deciding answer points at exactly ONE
-// recommendation (Answer.target_id). The mock let a cell hold several —
-// that is NOT built: one chip, one clear ×, placing REPLACES.
+// Decision 1 REVISED (owner, 2026-09-16 — QWIDGET-M): a deciding answer may
+// hold SEVERAL recommendations (Answer.target_ids; target_id mirrors [0]).
+// Placing ADDS a chip, each chip carries its own ×, the picker rows are
+// checkboxes that stay open for more. The engine unions an answer's list the
+// same way it unions several selected answers' anchors (answerTargets).
 // Decision 2: a multi-select question may decide. Decision 3: several
 // selected mapped answers union their targets (resolveTarget).
 //
 // The CELL is the control (div role="button", Enter/Space) — a button cannot
 // contain a button, and the chip, its count and its × are real buttons that
-// stop propagation. The picks picker (deciding rows) is single-select and
-// writes on click; the narrows picker stages and writes on Done.
+// stop propagation. The picks picker (deciding rows) toggles and writes on
+// every click; the narrows picker stages and writes on Done.
 //
 // The tray's two-row overflow is MEASURED after layout (ResizeObserver +
 // fonts.ready), never a hard-coded card count: names run 67–175px and the
@@ -57,7 +60,8 @@ const COPY = {
   chooseResult: "Choose a result",
   chooseValue: "Choose a value",
   place: (name: string) => `Place ${name} here`,
-  replace: (old: string, next: string) => `Replace ${old} with ${next}`,
+  add: (name: string) => `Add ${name}`,
+  alreadyHere: (name: string) => `${name} is already here`,
   seeMore: (n: number) => `See ${n} more`,
   allPlaced: "Every one of them is placed",
 };
@@ -314,7 +318,7 @@ function QuestionPane({
   // answers may share a target — one rule, both surfaces obey it).
   const usedBy = useMemo(() => {
     const m = new Map<string, number>();
-    for (const a of answers) if (a.target_id) m.set(a.target_id, (m.get(a.target_id) ?? 0) + 1);
+    for (const a of answers) for (const t of answerTargets(a)) m.set(t, (m.get(t) ?? 0) + 1);
     return m;
   }, [answers]);
   // §6 routing (option A) — the multi-select first-authored-wins rule stays
@@ -325,15 +329,17 @@ function QuestionPane({
     [doc, q.node.id, q.node.data.question_type, role],
   );
 
+  // QWIDGET-M (owner, 2026-09-16) — a cell holds SEVERAL chips: placing ADDS
+  // (already-there no-ops), each chip carries its own ×.
   const place = (answer: Answer, catId: string) => {
     if (!commit) return;
-    commit(setAnswerTarget(doc, q.node.id, answer.id, catId));
+    commit(addAnswerTarget(doc, q.node.id, answer.id, catId));
     markChanged(answer.id);
     setArmed(null);
   };
-  const clearTarget = (answer: Answer) => {
+  const removeTarget = (answer: Answer, catId: string) => {
     if (!commit) return;
-    commit(setAnswerTarget(doc, q.node.id, answer.id, null));
+    commit(removeAnswerTarget(doc, q.node.id, answer.id, catId));
     markChanged(answer.id);
   };
   const writeValues = (answer: Answer, values: FilterValueSet) => {
@@ -412,7 +418,7 @@ function QuestionPane({
               recs={recs}
               armed={armed ? catById.get(armed) ?? null : null}
               onPlace={(catId) => place(a, catId)}
-              onClear={() => clearTarget(a)}
+              onRemove={(catId) => removeTarget(a, catId)}
               onWriteValues={(v) => writeValues(a, v)}
               flashing={flash === a.id}
             />
@@ -685,18 +691,20 @@ function PicksPicker({
   anchorRef,
   trigger,
   recs,
-  currentId,
+  currentIds,
   productById,
-  onPick,
+  onToggle,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   anchorRef: React.RefObject<HTMLElement | null>;
   trigger: ReactNode;
   recs: RecCard[];
-  currentId: string | null;
+  /** QWIDGET-M — the answer's WHOLE mapping; rows are checkboxes now. */
+  currentIds: string[];
   productById: Map<string, IndexedProduct>;
-  onPick: (catId: string) => void;
+  /** on=true adds, on=false removes; the picker stays open for more. */
+  onToggle: (catId: string, on: boolean) => void;
 }) {
   const [search, setSearch] = useState("");
   const [kind, setKind] = useState<RecSource | "">("");
@@ -713,7 +721,7 @@ function PicksPicker({
     if (r.cat.name.toLowerCase().includes(qs)) return true;
     return r.cat.productIds.some((id) => (productById.get(id)?.title ?? "").toLowerCase().includes(qs));
   });
-  const current = currentId ? recs.find((r) => r.cat.id === currentId) ?? null : null;
+  const picked = recs.filter((r) => currentIds.includes(r.cat.id));
   return (
     <QzPopover
       open={open}
@@ -750,14 +758,21 @@ function PicksPicker({
                 ‹ Back
               </button>
               <span className="qz-lw-vp-fbtns">
-                <button type="button" className="qz-btn qz-btn-primary qz-btn-sm" onClick={() => onPick(drill.cat.id)}>
-                  Use this
+                <button
+                  type="button"
+                  className="qz-btn qz-btn-primary qz-btn-sm"
+                  onClick={() => {
+                    onToggle(drill.cat.id, !currentIds.includes(drill.cat.id));
+                    setDrill(null);
+                  }}
+                >
+                  {currentIds.includes(drill.cat.id) ? "Remove this" : "Add this"}
                 </button>
               </span>
             </div>
           </div>
         ) : (
-          <div className="qz-lw-vp" role="radiogroup" aria-label="Recommendations from step 1">
+          <div className="qz-lw-vp" role="group" aria-label="Recommendations from step 1">
             <input
               className="qz-lw-vp-srch"
               type="search"
@@ -801,16 +816,17 @@ function PicksPicker({
                   <div key={src}>
                     <div className="qz-lw-vp-grp">{src}</div>
                     {rs.map((r) => {
-                      const on = r.cat.id === currentId;
+                      const on = currentIds.includes(r.cat.id);
                       return (
                         <div key={r.cat.id} className="qz-lw-vp-row">
-                          {/* Rows are RADIOS — a single-target picker. */}
+                          {/* QWIDGET-M — rows are CHECKBOXES: click toggles,
+                              the picker stays open so several can be added. */}
                           <button
                             type="button"
-                            role="radio"
+                            role="checkbox"
                             aria-checked={on}
                             className={`qz-lw-vp-opt is-radio${on ? " is-on" : ""}`}
-                            onClick={() => onPick(r.cat.id)}
+                            onClick={() => onToggle(r.cat.id, !on)}
                           >
                             <span className="qz-lw-vp-tk" aria-hidden>{on ? "✓" : ""}</span>
                             <span className="qz-lw-vp-ov">{r.cat.name}</span>
@@ -840,21 +856,25 @@ function PicksPicker({
                 </p>
               ) : null}
             </div>
-            {/* The footer slot carries the SELECTED recommendation's product
-                count (a single-target picker never reads "N selected"). */}
+            {/* QWIDGET-M — the footer sums the mapping: one pick reads as its
+                name + count, several read as "N picked · M products". */}
             <div className="qz-lw-vp-foot">
               <span>
-                {current ? (
+                {picked.length === 1 ? (
                   <>
-                    <b>{current.cat.name}</b> · {current.count} product{current.count === 1 ? "" : "s"}
+                    <b>{picked[0]!.cat.name}</b> · {picked[0]!.count} product{picked[0]!.count === 1 ? "" : "s"}
+                  </>
+                ) : picked.length > 1 ? (
+                  <>
+                    <b>{picked.length} picked</b> · {picked.reduce((n, r) => n + r.count, 0)} products
                   </>
                 ) : (
                   "Nothing chosen yet"
                 )}
               </span>
               <span className="qz-lw-vp-fbtns">
-                <button type="button" className="qz-btn qz-btn-sm" onClick={() => onOpenChange(false)}>
-                  Cancel
+                <button type="button" className="qz-btn qz-btn-primary qz-btn-sm" onClick={() => onOpenChange(false)}>
+                  Done
                 </button>
               </span>
             </div>
@@ -886,7 +906,7 @@ function AnswerRow({
   recs,
   armed,
   onPlace,
-  onClear,
+  onRemove,
   onWriteValues,
   flashing,
 }: {
@@ -909,7 +929,7 @@ function AnswerRow({
   recs: RecCard[];
   armed: BuilderCategory | null;
   onPlace: (catId: string) => void;
-  onClear: () => void;
+  onRemove: (targetId: string) => void;
   onWriteValues: (values: FilterValueSet) => void;
   flashing: boolean;
 }) {
@@ -920,10 +940,11 @@ function AnswerRow({
 
   // ── the mapping cell ──────────────────────────────────────────────────────
   let cell: ReactNode;
-  const cat = answer.target_id ? catById.get(answer.target_id) : undefined;
+  // QWIDGET-M — the full mapping list (target_ids, target_id mirroring [0]).
+  const targets = answerTargets(answer);
   const hasMapping =
     role === "decides"
-      ? Boolean(answer.target_id)
+      ? targets.length > 0
       : role === "filter"
         ? answer.no_preference === true || answerHasSelection(answer)
         : false;
@@ -960,52 +981,69 @@ function AnswerRow({
     );
   } else if (role === "decides") {
     const armedHere = armed && editable;
+    // QWIDGET-M — placing ADDS a chip; an armed card already in this cell
+    // says so and the click no-ops (its × is the removal path).
+    const armedPresent = armedHere ? targets.includes(armed.id) : false;
     const openPicker = () => {
       if (!editable) return;
       if (armedHere) {
-        onPlace(armed.id);
+        if (!armedPresent) onPlace(armed.id);
         return;
       }
       setPickerOpen((o) => !o);
     };
     const label = armedHere
-      ? cat
-        ? COPY.replace(cat.name, armed.name)
-        : COPY.place(armed.name)
+      ? armedPresent
+        ? COPY.alreadyHere(armed.name)
+        : targets.length
+          ? COPY.add(armed.name)
+          : COPY.place(armed.name)
       : null;
-    const chipBody = cat ? (
-      <span className="qz-lw-chipw" onClick={(e) => e.stopPropagation()}>
-        <span className="qz-lw-chip is-res">{cat.name}</span>
-        {editable ? (
-          <ProductCountButton
-            answer={answer}
-            role="decides"
-            catById={catById}
-            productIndex={productIndex}
-            label={<span className="qz-lw-cn">{cat.productIds.length}</span>}
-            answerKey={answerKey}
-            lastSyncAt={lastSyncAt}
-            shopifyAdminDomain={shopifyAdminDomain}
-          />
-        ) : (
-          <span className="qz-lw-cn">{cat.productIds.length}</span>
-        )}
-        {editable ? (
-          <button
-            type="button"
-            className="qz-lw-xone"
-            aria-label={`Clear this answer's result (${cat.name})`}
-            onClick={(e) => {
-              e.stopPropagation();
-              onClear();
-            }}
-          >
-            ×
-          </button>
-        ) : null}
-      </span>
-    ) : answer.target_id ? (
-      <span className="qz-ltab-bad">(deleted target)</span>
+    const chipBody = targets.length ? (
+      <>
+        {targets.map((tid) => {
+          const c = catById.get(tid);
+          return (
+            <span key={tid} className="qz-lw-chipw" onClick={(e) => e.stopPropagation()}>
+              {c ? (
+                <span className="qz-lw-chip is-res">{c.name}</span>
+              ) : (
+                <span className="qz-lw-chip is-res qz-ltab-bad">(deleted target)</span>
+              )}
+              {c ? (
+                editable ? (
+                  <ProductCountButton
+                    answer={answer}
+                    targetId={tid}
+                    role="decides"
+                    catById={catById}
+                    productIndex={productIndex}
+                    label={<span className="qz-lw-cn">{c.productIds.length}</span>}
+                    answerKey={answerKey}
+                    lastSyncAt={lastSyncAt}
+                    shopifyAdminDomain={shopifyAdminDomain}
+                  />
+                ) : (
+                  <span className="qz-lw-cn">{c.productIds.length}</span>
+                )
+              ) : null}
+              {editable ? (
+                <button
+                  type="button"
+                  className="qz-lw-xone"
+                  aria-label={`Remove ${c ? c.name : "this result"} from this answer`}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onRemove(tid);
+                  }}
+                >
+                  ×
+                </button>
+              ) : null}
+            </span>
+          );
+        })}
+      </>
     ) : null;
     const inner = (
       <div
@@ -1044,11 +1082,12 @@ function AnswerRow({
         anchorRef={cellRef}
         trigger={inner}
         recs={recs}
-        currentId={answer.target_id ?? null}
+        currentIds={targets}
         productById={productById}
-        onPick={(id) => {
-          setPickerOpen(false);
-          onPlace(id);
+        onToggle={(id, on) => {
+          // Stays open — the whole point of multi-map is adding several.
+          if (on) onPlace(id);
+          else onRemove(id);
         }}
       />
     ) : (

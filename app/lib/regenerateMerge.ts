@@ -27,12 +27,14 @@ export function mergeRegeneratedAnswers(
   freshId: () => string,
   freshHandle: () => string,
 ): Answer[] {
-  const carryByText = new Map<string, Pick<Answer, "points" | "points_alt" | "target_id">>();
+  const carryByText = new Map<string, Pick<Answer, "points" | "points_alt" | "target_id" | "target_ids">>();
   for (const a of oldAnswers) {
     carryByText.set(norm(a.text), {
       ...(a.points ? { points: a.points } : {}),
       ...(a.points_alt ? { points_alt: a.points_alt } : {}),
       ...(a.target_id ? { target_id: a.target_id } : {}),
+      // QWIDGET-M — carry the whole multi-map list, not just the mirror.
+      ...(a.target_ids?.length ? { target_ids: a.target_ids } : {}),
     });
   }
   return newAnswers.map((newA, idx) => {
@@ -48,6 +50,7 @@ export function mergeRegeneratedAnswers(
       ...(carried?.points ? { points: carried.points } : {}),
       ...(carried?.points_alt ? { points_alt: carried.points_alt } : {}),
       ...(carried?.target_id ? { target_id: carried.target_id } : {}),
+      ...(carried?.target_ids?.length ? { target_ids: carried.target_ids } : {}),
     };
   });
 }

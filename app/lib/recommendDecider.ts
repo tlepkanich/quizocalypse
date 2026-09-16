@@ -1,6 +1,7 @@
 import type { z } from "zod";
 import type {
   Quiz,
+  Answer,
   DecisionRule,
   RecPageGlobal,
   RecPageSettings,
@@ -8,6 +9,7 @@ import type {
 import type { IndexedProduct } from "./recommendationEngine";
 
 type QuizDoc = z.infer<typeof Quiz>;
+type AnswerT = z.infer<typeof Answer>;
 type DecisionRuleT = z.infer<typeof DecisionRule>;
 type RecPageGlobalT = z.infer<typeof RecPageGlobal>;
 type RecPageSettingsT = z.infer<typeof RecPageSettings>;
@@ -62,6 +64,21 @@ export function ruleTargets(
   rule: Pick<DecisionRuleT, "target_id" | "target_ids">,
 ): string[] {
   return rule.target_ids?.length ? rule.target_ids : [rule.target_id];
+}
+
+/** QWIDGET-M — a deciding answer's full target list, same mirror contract as
+ *  ruleTargets: `target_ids` (when present) is authoritative and target_id
+ *  mirrors its first entry; a single-mapped answer carries only target_id.
+ *  Unmapped → []. The ONE canonical reader — surfaces must not read
+ *  answer.target_id directly when they mean the whole mapping. */
+export function answerTargets(
+  answer: Pick<AnswerT, "target_id" | "target_ids">,
+): string[] {
+  return answer.target_ids?.length
+    ? answer.target_ids
+    : answer.target_id
+      ? [answer.target_id]
+      : [];
 }
 
 /** Rec-page-spec-V2 §3.1 — the spec defaults, applied at READ time so stored
@@ -226,12 +243,15 @@ export function resolveTarget(
     (n) => n.type === "question" && n.data.role === "decides",
   );
   // Iterate the decider's answers (authored order), not selectedAnswerIds.
+  // QWIDGET-M — each selected answer contributes its WHOLE target list
+  // (answerTargets), in the answer's own list order; dedupe keeps the first
+  // occurrence, so the first selected mapped answer's first target anchors.
   const baseTargets =
     decider && decider.type === "question"
       ? [
           ...new Set(
             decider.data.answers.flatMap((a) =>
-              selected.has(a.id) && a.target_id ? [a.target_id] : [],
+              selected.has(a.id) ? answerTargets(a) : [],
             ),
           ),
         ]

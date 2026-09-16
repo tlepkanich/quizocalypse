@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import { Quiz } from "./quizSchema";
 import {
   collectReferencedCategoryIds,
+  collectDeciderTargetIds,
   bakeResultPages,
   collectRecommendableProductIds,
   deriveChapters,
@@ -227,6 +228,41 @@ describe("collectReferencedCategoryIds", () => {
     });
     const ids = collectReferencedCategoryIds(doc);
     expect([...ids].sort()).toEqual(["cat_legacy", "cat_node", "cat_points", "cat_stage"]);
+  });
+});
+
+describe("collectDeciderTargetIds (QWIDGET-M multi-map answers)", () => {
+  it("collects EVERY member of a multi-mapped answer, plus rule targets", () => {
+    const doc = Quiz.parse({
+      quiz_id: "q",
+      scope: { collection_ids: [] },
+      logic_model: "decider",
+      decision_rules: [
+        { id: "r1", conditions: [], target_id: "cat_rule", target_ids: ["cat_rule", "cat_rule2"] },
+      ],
+      nodes: [
+        {
+          id: "q1",
+          type: "question",
+          position: { x: 0, y: 0 },
+          data: {
+            text: "?",
+            question_type: "multi_select",
+            role: "decides",
+            answers: [
+              { id: "a1", text: "A", tags: [], edge_handle_id: "h1", target_id: "cat_a", target_ids: ["cat_a", "cat_b"] },
+              { id: "a2", text: "B", tags: [], edge_handle_id: "h2", target_id: "cat_c" },
+            ],
+          },
+        },
+        { id: "end", type: "end", position: { x: 1, y: 0 }, data: { headline: "Bye" } },
+      ],
+      edges: [{ id: "e1", source: "q1", target: "end" }],
+      results_pages: [],
+    });
+    expect([...collectDeciderTargetIds(doc)].sort()).toEqual([
+      "cat_a", "cat_b", "cat_c", "cat_rule", "cat_rule2",
+    ]);
   });
 });
 

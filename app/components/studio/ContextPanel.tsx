@@ -956,10 +956,17 @@ export function RulesTabBody({
     let chips: ReactNode;
     let count: { text: string; bad: boolean };
     if (role === "decides") {
-      const cat = a.target_id ? catById.get(a.target_id) : undefined;
-      const n = cat?.productIds.length ?? 0;
-      chips = a.target_id ? (
-        <span className="qz-obr-chip">{cat?.name ?? "(deleted target)"}</span>
+      // QWIDGET-M — a deciding answer may map several targets; chip each,
+      // count the union of their members.
+      const tids = a.target_ids?.length ? a.target_ids : a.target_id ? [a.target_id] : [];
+      const cats = tids.map((t) => catById.get(t));
+      const n = new Set(cats.flatMap((c) => c?.productIds ?? [])).size;
+      chips = tids.length ? (
+        <>
+          {tids.map((t, ci) => (
+            <span key={t} className="qz-obr-chip">{cats[ci]?.name ?? "(deleted target)"}</span>
+          ))}
+        </>
       ) : (
         <span className="qz-obr-none">Not mapped yet</span>
       );

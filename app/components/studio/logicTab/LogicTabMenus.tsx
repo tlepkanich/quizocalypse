@@ -96,9 +96,12 @@ function popoverKind(
   role: "decides" | "qualifier" | "filter" | undefined,
   answer: Answer,
   catById: Map<string, BuilderCategory>,
+  // QWIDGET-M — a multi-mapped answer opens one popover PER chip; the caller
+  // resolves which target this popover is about.
+  catOverride?: BuilderCategory,
 ): { label: string; tone: "is-col" | "is-a" } | null {
   if (role === "decides") {
-    const cat = answer.target_id ? catById.get(answer.target_id) : undefined;
+    const cat = catOverride ?? (answer.target_id ? catById.get(answer.target_id) : undefined);
     if (!cat) return null;
     if (cat.source === "collection") return { label: "collection", tone: "is-col" };
     if (cat.source === "tag") return { label: "tag", tone: "is-a" };
@@ -129,6 +132,7 @@ export function ProductCountButton({
   answerKey,
   lastSyncAt,
   shopifyAdminDomain,
+  targetId,
 }: {
   answer: Answer;
   role: "decides" | "qualifier" | "filter" | undefined;
@@ -143,11 +147,16 @@ export function ProductCountButton({
   /** QRTZ-B2 — the Shopify ADMIN domain (null on an unconnected standalone
    *  workspace), for the mock's "Open in Shopify" footer link. */
   shopifyAdminDomain?: string | null;
+  /** QWIDGET-M — which of a multi-mapped answer's targets this popover shows
+   *  (decides only). Absent → the anchor (answer.target_id), unchanged. */
+  targetId?: string;
 }) {
   const [open, setOpen] = useState(false);
+  const decTid = role === "decides" ? (targetId ?? answer.target_id) : undefined;
+  const decCat = decTid ? catById.get(decTid) : undefined;
   const products = useMemo(() => {
     if (role === "decides") {
-      const cat = answer.target_id ? catById.get(answer.target_id) : undefined;
+      const cat = decCat;
       if (!cat) return [];
       const byId = new Map(productIndex.map((p) => [p.product_id, p]));
       return cat.productIds
@@ -161,13 +170,12 @@ export function ProductCountButton({
         ? [...productIndex]
         : (filterAnswerMatchingProducts(answer, productIndex) ?? []);
     return [];
-  }, [answer, role, catById, productIndex]);
-  const kind = popoverKind(role, answer, catById);
+  }, [answer, role, catById, productIndex, decCat]);
+  const kind = popoverKind(role, answer, catById, decCat);
   // QRTZ-H3 (mock .pp-title) — the title is the TARGET's name where one
   // exists (decides); a narrows selection has no single name (no mock
   // drawing) and keeps the answer text.
-  const targetCat =
-    role === "decides" && answer.target_id ? catById.get(answer.target_id) : undefined;
+  const targetCat = decCat;
   const ppTitle = targetCat?.name ?? answer.text;
   // QRTZ-B2 — the mock's .pp-foot "Open in Shopify": derived from the SAME
   // target the popover lists; kinds without a reliable admin URL get no link.
@@ -175,7 +183,7 @@ export function ProductCountButton({
     shopifyAdminDomain,
     role,
     answer,
-    role === "decides" && answer.target_id ? catById.get(answer.target_id) : undefined,
+    decCat,
   );
   const footSentence =
     answerKey && products.length > 0 ? (

@@ -193,6 +193,37 @@ describe("reconcileDeciderTargets (decider docs)", () => {
     expect(out.decision_rules?.[0]?.target_id).toBe("cat_gone");
   });
 
+  it("QWIDGET-M: a multi-map list drops only its DANGLING members and renormalizes the mirror", () => {
+    const base = deciderDoc();
+    const doc = Quiz.parse({
+      ...JSON.parse(JSON.stringify(base)),
+      nodes: base.nodes.map((n) =>
+        n.type === "question"
+          ? {
+              ...n,
+              data: {
+                ...n.data,
+                answers: [
+                  // gone anchor + live member → re-anchors on the live one, single form
+                  { id: "a1", text: "A", tags: [], edge_handle_id: "h1", target_id: "cat_gone", target_ids: ["cat_gone", "cat_live"] },
+                  // both gone → unmapped, both keys dropped
+                  { id: "a2", text: "B", tags: [], edge_handle_id: "h2", target_id: "cat_gone", target_ids: ["cat_gone", "cat_gone2"] },
+                ],
+              },
+            }
+          : n,
+      ),
+    });
+    const out = reconcileBucketsToResultNodes(doc, liveBuckets, "c_fb");
+    const q = out.nodes.find((n) => n.id === "q1");
+    if (q?.type !== "question") throw new Error("q1 missing");
+    expect(q.data.answers[0]?.target_id).toBe("cat_live");
+    expect(q.data.answers[0]).not.toHaveProperty("target_ids");
+    expect(q.data.answers[1]).not.toHaveProperty("target_id");
+    expect(q.data.answers[1]).not.toHaveProperty("target_ids");
+    expect(() => Quiz.parse(out)).not.toThrow();
+  });
+
   it("SKIPS the legacy result-node choreography for decider docs (no per-bucket result nodes appended)", () => {
     const out = reconcileBucketsToResultNodes(deciderDoc(), liveBuckets, "c_fb");
     expect(out.nodes.filter((n) => n.type === "result")).toHaveLength(1);

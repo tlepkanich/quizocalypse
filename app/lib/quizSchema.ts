@@ -164,6 +164,14 @@ export const Answer = z.object({
   // quiz's logic_model is "decider"; qualifiers and legacy quizzes never carry
   // it. Additive/optional → absent on every legacy doc, /q byte-identical.
   target_id: z.string().optional(),
+  // QWIDGET-M (2026-09-16, owner) — a deciding answer may map SEVERAL
+  // recommendations. Same contract as DecisionRule.target_ids (G1): target_id
+  // is parsed FOREVER as the single-target form and every writer keeps it
+  // mirroring target_ids[0]; a length-1 list normalizes back to target_id
+  // alone (target_ids absent). The engine unions members in list order; the
+  // FIRST entry anchors config/persona/analytics. Read via answerTargets() —
+  // never write target_id alone on a multi-target answer (collapses the list).
+  target_ids: z.array(z.string().min(1)).min(1).optional(),
 });
 export type Answer = z.infer<typeof Answer>;
 

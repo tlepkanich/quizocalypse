@@ -8,7 +8,7 @@
 // SURFACE on the Logic page (the tray, the picks picker, real thumbnails) and
 // the design matches the artifact (Format B rail with role tags, the pane's
 // text-with-caret role control, the tray, four-column rows with the count
-// inside the chip, the cell as the control, single-target REPLACE, the
+// inside the chip, the cell as the control, multi-map ADD with per-chip × (QWIDGET-M), the
 // narrows picker staging, inert info rows, and a multi-select question that
 // can now decide). The draft is snapshotted and restored byte-for-byte.
 //
@@ -120,45 +120,75 @@ try {
   await cellA.click({ position: { x: 225, y: 14 } }); // the cell's WHITE SPACE, past the chip
   await page.waitForSelector(".qz-popover", { timeout: 3000 });
   const picker = page.locator(".qz-popover");
-  ok("picks picker: search, source chips, RADIO rows over step-1 output only",
+  ok("picks picker: search, source chips, CHECKBOX rows over step-1 output only",
     (await picker.locator('input[type="search"]').count()) === 1 &&
-    (await picker.locator('[role="radio"]').count()) === 3 &&
+    (await picker.locator('[role="checkbox"]').count()) === 3 &&
     (await picker.locator(".qz-lw-vp-grp").allInnerTexts()).some((t) => /custom groups|tag buckets/i.test(t)));
-  ok("the current target is the checked radio", (await picker.locator('[role="radio"][aria-checked="true"]').innerText()).includes("QS Boards"));
+  ok("the current target is the checked row", (await picker.locator('[role="checkbox"][aria-checked="true"]').innerText()).includes("QS Boards"));
   ok("clicking inside keeps it open", await (async () => { await picker.locator('input[type="search"]').click(); return (await page.locator(".qz-popover").count()) === 1; })());
   await picker.locator(".qz-lw-vp-drill").first().click();
   await settle(200);
   ok("› drills into the products behind a row, ‹ Back returns", /products/.test(await picker.locator(".qz-lw-vp-title").innerText()) && (await picker.locator(".qz-lw-pp").count()) > 0);
   await picker.locator("button", { hasText: "Back" }).click();
   await settle(150);
-  await picker.locator('[role="radio"]', { hasText: "Accessory" }).first().click();
+  // QWIDGET-M — clicking a second row ADDS it: the picker STAYS OPEN, the
+  // cell grows a second chip, and the draft carries target_ids with the
+  // mirror pinned to the FIRST entry.
+  await picker.locator('[role="checkbox"]', { hasText: "Accessory" }).first().click();
   await settle(1500);
-  ok("picking REPLACES the answer's one target and closes (writes on click)",
-    (await page.locator(".qz-popover").count()) === 0 &&
-    (await rowByKey("A").locator(".qz-lw-chip.is-res").innerText()).trim() === "Accessory" &&
-    qNode(await draft(), "q1").data.answers[0].target_id !== beforeA);
-  ok("the changed cell flashes", (await rowByKey("A").locator(".qz-lw-cell.is-flash").count()) === 1);
-  ok("the tray re-sorts: QS Boards is free again and leads", (await tray.locator(".qz-lw-tcard .qz-lw-tname").first().innerText()).trim() === "QS Boards");
+  const a0 = qNode(await draft(), "q1").data.answers[0];
+  ok("clicking another row ADDS it (picker stays open, two chips, mirror = first entry)",
+    (await page.locator(".qz-popover").count()) === 1 &&
+    (await rowByKey("A").locator(".qz-lw-chip.is-res").count()) === 2 &&
+    a0.target_id === beforeA &&
+    Array.isArray(a0.target_ids) && a0.target_ids.length === 2 && a0.target_ids[0] === beforeA);
+  ok("the footer sums the mapping (N picked)", /2 picked/.test(await picker.locator(".qz-lw-vp-foot").innerText()));
   await page.screenshot({ path: `${SHOTS}/2-picker.png` });
+  await picker.locator("button", { hasText: "Done" }).click();
+  await settle(300);
+  ok("Done closes the picker", (await page.locator(".qz-popover").count()) === 0);
+  ok("the changed cell flashes", (await rowByKey("A").locator(".qz-lw-cell.is-flash").count()) === 1);
+  ok("the tray now greys ALL THREE (every one is placed)", (await tray.locator(".qz-lw-tcard.is-used").count()) === 3);
 
-  // 7 ── arm and place: an occupied cell says Replace {old} with {new}
+  // 7 ── arm and place: an armed card ADDS; one already in the cell says so
   await tray.locator(".qz-lw-tcard", { hasText: "QS Boards" }).click();
   await settle(300);
   ok("arming a card lights it and opens its peek", (await tray.locator(".qz-lw-tcard.is-armed").count()) === 1 && (await page.locator(".qz-popover .qz-lw-pp").count()) > 0);
-  ok("an occupied cell reads Replace {old} with {new}", /Replace Accessory with QS Boards/.test(await cellA.innerText()));
+  ok("a cell already holding the armed card says {name} is already here", /QS Boards is already here/.test(await cellA.innerText()));
+  await cellA.click();
+  await settle(400);
+  const a0keep = qNode(await draft(), "q1").data.answers[0];
+  ok("clicking it changes nothing (the × is the removal path)",
+    Array.isArray(a0keep.target_ids) && a0keep.target_ids.length === 2 && a0keep.target_id === beforeA);
+  await tray.locator(".qz-lw-tcard", { hasText: "QS Boards" }).click(); // disarm
+  await settle(300);
+  // per-chip ×: removing Accessory renormalizes back to the single form
+  await rowByKey("A").hover();
+  await rowByKey("A").locator(".qz-lw-chipw", { hasText: "Accessory" }).locator(".qz-lw-xone").click();
+  await settle(1500);
+  const a0b = qNode(await draft(), "q1").data.answers[0];
+  ok("a chip's × removes ONLY that one; length-1 collapses back to target_id alone",
+    (await rowByKey("A").locator(".qz-lw-chip.is-res").count()) === 1 &&
+    a0b.target_id === beforeA && !("target_ids" in a0b));
+  // an armed card over a cell that does NOT hold it reads Add {name}
+  await tray.locator(".qz-lw-tcard", { hasText: "Accessory" }).click();
+  await settle(300);
+  ok("an occupied cell without the armed card reads Add {name}", /Add Accessory/.test(await cellA.innerText()));
   await page.screenshot({ path: `${SHOTS}/3-armed.png` });
   await cellA.click();
   await settle(1500);
-  ok("placing replaces the target (one chip, never two)",
-    (await rowByKey("A").locator(".qz-lw-chip.is-res").count()) === 1 &&
-    (await rowByKey("A").locator(".qz-lw-chip.is-res").innerText()).trim() === "QS Boards" &&
+  ok("placing ADDS the chip (two again)",
+    (await rowByKey("A").locator(".qz-lw-chip.is-res").count()) === 2 &&
     (await tray.locator(".qz-lw-tcard.is-armed").count()) === 0);
-  // clear ×
+  // clear BOTH chips → the cell empties and both keys drop
   await rowByKey("A").hover();
+  await rowByKey("A").locator(".qz-lw-chipw", { hasText: "Accessory" }).locator(".qz-lw-xone").click();
+  await settle(800);
   await rowByKey("A").locator(".qz-lw-xone").click();
   await settle(1500);
-  ok("the clear × empties the cell (Choose a result) and drops the key",
-    /Choose a result/.test(await cellA.innerText()) && !("target_id" in qNode(await draft(), "q1").data.answers[0]));
+  const a0c = qNode(await draft(), "q1").data.answers[0];
+  ok("removing every chip empties the cell (Choose a result) and drops both keys",
+    /Choose a result/.test(await cellA.innerText()) && !("target_id" in a0c) && !("target_ids" in a0c));
   // keyboard: Enter opens, Escape closes
   await cellA.focus();
   await page.keyboard.press("Enter");

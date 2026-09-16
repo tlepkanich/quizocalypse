@@ -22,6 +22,9 @@ import {
   setQuestionType,
   setQuestionRole,
   setAnswerTarget,
+  addAnswerTarget,
+  removeAnswerTarget,
+  moveDecider,
   addDecisionRule,
   removeDecisionRule,
   moveDecisionRule,
@@ -825,6 +828,73 @@ describe("LOGIC v2 role/target mutations (setQuestionRole / setAnswerTarget)", (
     // No-ops: unknown node / non-question.
     expect(setAnswerTarget(doc, "nope", "q1_a1", "x")).toBe(doc);
     expect(setAnswerTarget(doc, "intro", "q1_a1", "x")).toBe(doc);
+  });
+
+  it("QWIDGET-M: addAnswerTarget builds the list (mirror = [0]); dedupe no-ops; legacy no-ops", () => {
+    const doc = deciderDoc();
+    const one = addAnswerTarget(doc, "q1", "q1_a1", "cat_park");
+    const a1 = qOf(one, "q1").data.answers.find((a) => a.id === "q1_a1");
+    // Single mapping normalizes to target_id ALONE — no target_ids key.
+    expect(a1?.target_id).toBe("cat_park");
+    expect(a1 && Object.prototype.hasOwnProperty.call(a1, "target_ids")).toBe(false);
+
+    const two = addAnswerTarget(one, "q1", "q1_a1", "cat_powder");
+    const a1b = qOf(two, "q1").data.answers.find((a) => a.id === "q1_a1");
+    expect(a1b?.target_id).toBe("cat_park"); // the mirror stays the FIRST
+    expect(a1b?.target_ids).toEqual(["cat_park", "cat_powder"]);
+    expect(() => Quiz.parse(two)).not.toThrow();
+
+    // Adding a target that is already in the list no-ops (same doc ref).
+    expect(addAnswerTarget(two, "q1", "q1_a1", "cat_park")).toBe(two);
+    // Legacy docs are untouchable.
+    const legacy = linearQuestionsDoc();
+    expect(addAnswerTarget(legacy, "q1", "q1_a1", "cat_x")).toBe(legacy);
+  });
+
+  it("QWIDGET-M: removeAnswerTarget renormalizes — 3→2 keeps the list, 2→1 collapses to target_id, 1→0 drops both", () => {
+    let doc = deciderDoc();
+    for (const t of ["cat_a", "cat_b", "cat_c"]) doc = addAnswerTarget(doc, "q1", "q1_a1", t);
+    const find = (d: typeof doc) => qOf(d, "q1").data.answers.find((a) => a.id === "q1_a1");
+
+    // Removing the ANCHOR re-anchors on the next entry.
+    const two = removeAnswerTarget(doc, "q1", "q1_a1", "cat_a");
+    expect(find(two)?.target_id).toBe("cat_b");
+    expect(find(two)?.target_ids).toEqual(["cat_b", "cat_c"]);
+
+    const one = removeAnswerTarget(two, "q1", "q1_a1", "cat_c");
+    expect(find(one)?.target_id).toBe("cat_b");
+    expect(find(one) && Object.prototype.hasOwnProperty.call(find(one), "target_ids")).toBe(false);
+
+    const none = removeAnswerTarget(one, "q1", "q1_a1", "cat_b");
+    expect(find(none) && Object.prototype.hasOwnProperty.call(find(none), "target_id")).toBe(false);
+    expect(find(none) && Object.prototype.hasOwnProperty.call(find(none), "target_ids")).toBe(false);
+    expect(() => Quiz.parse(none)).not.toThrow();
+
+    // Removing something not in the list no-ops.
+    expect(removeAnswerTarget(one, "q1", "q1_a1", "cat_zzz")).toBe(one);
+  });
+
+  it("QWIDGET-M: setAnswerTarget (replace-all) and moveDecider both drop a multi-map list", () => {
+    let doc = deciderDoc();
+    doc = addAnswerTarget(doc, "q1", "q1_a1", "cat_a");
+    doc = addAnswerTarget(doc, "q1", "q1_a1", "cat_b");
+
+    // Replace-all with a single target must not leave a stale list behind.
+    const replaced = setAnswerTarget(doc, "q1", "q1_a1", "cat_c");
+    const ar = qOf(replaced, "q1").data.answers.find((a) => a.id === "q1_a1");
+    expect(ar?.target_id).toBe("cat_c");
+    expect(ar && Object.prototype.hasOwnProperty.call(ar, "target_ids")).toBe(false);
+
+    // Clearing drops both keys.
+    const cleared = setAnswerTarget(doc, "q1", "q1_a1", null);
+    const ac = qOf(cleared, "q1").data.answers.find((a) => a.id === "q1_a1");
+    expect(ac && Object.prototype.hasOwnProperty.call(ac, "target_ids")).toBe(false);
+
+    // moveDecider wipes the whole list off the old decider (locked §5.4).
+    const moved = moveDecider(doc, "q2");
+    const am = qOf(moved, "q1").data.answers.find((a) => a.id === "q1_a1");
+    expect(am && Object.prototype.hasOwnProperty.call(am, "target_id")).toBe(false);
+    expect(am && Object.prototype.hasOwnProperty.call(am, "target_ids")).toBe(false);
   });
 
   it("setQuestionType(→multi_select) KEEPS a deciding question's role (QWIDGET decision 2)", () => {

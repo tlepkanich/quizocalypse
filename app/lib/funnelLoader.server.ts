@@ -250,6 +250,8 @@ export async function loadStep1FunnelData(
     if ("answers" in n.data && Array.isArray(n.data.answers)) {
       for (const a of n.data.answers) {
         if (a.target_id) referencedCategoryIds.add(a.target_id);
+        // QWIDGET-M — multi-mapped answers reference every member.
+        for (const t of a.target_ids ?? []) referencedCategoryIds.add(t);
         for (const k of Object.keys(a.points ?? {})) referencedCategoryIds.add(k);
         // The dormant swapped-scoring sidecar references categories too.
         for (const k of Object.keys(a.points_alt ?? {})) referencedCategoryIds.add(k);

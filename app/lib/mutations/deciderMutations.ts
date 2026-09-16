@@ -73,8 +73,10 @@ export function setAnswerTarget(
               ...n.data,
               answers: n.data.answers.map((a) => {
                 if (a.id !== answerId) return a;
-                if (targetId) return { ...a, target_id: targetId };
-                const { target_id: _cleared, ...rest } = a;
+                // QWIDGET-M — replace-all semantics: setting or clearing also
+                // drops target_ids (never leave a stale list behind an anchor).
+                const { target_id: _c1, target_ids: _c2, ...rest } = a;
+                if (targetId) return { ...rest, target_id: targetId };
                 return rest;
               }),
             },
@@ -82,6 +84,95 @@ export function setAnswerTarget(
         : n,
     ),
   };
+}
+
+// QWIDGET-M — the shared write path for the multi-map list. Normalization is
+// the G1 mirror contract: [] drops both fields, [one] writes target_id alone,
+// more writes target_id = list[0] AND target_ids = the whole list.
+function writeAnswerTargets(
+  doc: QuizDoc,
+  questionNodeId: string,
+  answerId: string,
+  nextTargets: readonly string[],
+): QuizDoc {
+  if (doc.logic_model !== "decider") return doc;
+  const node = doc.nodes.find((n) => n.id === questionNodeId);
+  if (!node || node.type !== "question") return doc;
+  return {
+    ...doc,
+    nodes: doc.nodes.map((n) =>
+      n.id === questionNodeId && n.type === "question"
+        ? {
+            ...n,
+            data: {
+              ...n.data,
+              answers: n.data.answers.map((a) => {
+                if (a.id !== answerId) return a;
+                const { target_id: _t, target_ids: _ts, ...rest } = a;
+                if (nextTargets.length === 0) return rest;
+                if (nextTargets.length === 1)
+                  return { ...rest, target_id: nextTargets[0]! };
+                return {
+                  ...rest,
+                  target_id: nextTargets[0]!,
+                  target_ids: [...nextTargets],
+                };
+              }),
+            },
+          }
+        : n,
+    ),
+  };
+}
+
+/** QWIDGET-M — append one recommendation to a deciding answer's mapping.
+ *  Already-present targets no-op (the list stays deduped, order = the order
+ *  the merchant added them). Pure + logic_model-gated. */
+export function addAnswerTarget(
+  doc: QuizDoc,
+  questionNodeId: string,
+  answerId: string,
+  targetId: string,
+): QuizDoc {
+  if (!targetId) return doc;
+  const node = doc.nodes.find((n) => n.id === questionNodeId);
+  if (!node || node.type !== "question") return doc;
+  const answer = node.data.answers.find((a) => a.id === answerId);
+  if (!answer) return doc;
+  const current = answer.target_ids?.length
+    ? answer.target_ids
+    : answer.target_id
+      ? [answer.target_id]
+      : [];
+  if (current.includes(targetId)) return doc;
+  return writeAnswerTargets(doc, questionNodeId, answerId, [...current, targetId]);
+}
+
+/** QWIDGET-M — remove ONE recommendation from a deciding answer's mapping
+ *  (the per-chip ×). Removing the last one leaves the answer unmapped (V4
+ *  then blocks publish until re-picked, same as setAnswerTarget(null)). */
+export function removeAnswerTarget(
+  doc: QuizDoc,
+  questionNodeId: string,
+  answerId: string,
+  targetId: string,
+): QuizDoc {
+  const node = doc.nodes.find((n) => n.id === questionNodeId);
+  if (!node || node.type !== "question") return doc;
+  const answer = node.data.answers.find((a) => a.id === answerId);
+  if (!answer) return doc;
+  const current = answer.target_ids?.length
+    ? answer.target_ids
+    : answer.target_id
+      ? [answer.target_id]
+      : [];
+  if (!current.includes(targetId)) return doc;
+  return writeAnswerTargets(
+    doc,
+    questionNodeId,
+    answerId,
+    current.filter((t) => t !== targetId),
+  );
 }
 
 // quiz-step3 v3 §5.4 — MOVE the decider (the flag-tab's radio semantics).
@@ -120,8 +211,8 @@ export function moveDecider(doc: QuizDoc, toNodeId: string): QuizDoc {
             role: "decides" as const,
             required: true,
             answers: n.data.answers.map((a) => {
-              if (!("target_id" in a)) return a;
-              const { target_id: _stale, ...rest } = a;
+              if (!("target_id" in a) && !("target_ids" in a)) return a;
+              const { target_id: _stale, target_ids: _staleList, ...rest } = a;
               return rest;
             }),
           },
@@ -134,8 +225,8 @@ export function moveDecider(doc: QuizDoc, toNodeId: string): QuizDoc {
             ...n.data,
             role: "qualifier" as const,
             answers: n.data.answers.map((a) => {
-              if (!("target_id" in a)) return a;
-              const { target_id: _cleared, ...rest } = a;
+              if (!("target_id" in a) && !("target_ids" in a)) return a;
+              const { target_id: _cleared, target_ids: _clearedList, ...rest } = a;
               return rest;
             }),
           },

@@ -75,10 +75,15 @@ function bindResultNode(doc: QuizDoc, nodeId: string, bucket: BucketRow): QuizDo
 // breakage + confirm-with-consequences over silent deletion). Pure.
 export function reconcileDeciderTargets(doc: QuizDoc, bucketIds: Set<string>): QuizDoc {
   let changed = false;
+  // QWIDGET-M — an answer's mapping may be a LIST (target_ids, target_id
+  // mirroring entry 0). Reconcile drops only the DANGLING members and
+  // renormalizes: [] drops both fields, [one] keeps target_id alone.
+  const answerList = (a: { target_id?: string; target_ids?: string[] }) =>
+    a.target_ids?.length ? a.target_ids : a.target_id ? [a.target_id] : [];
   const nodes = doc.nodes.map((n) => {
     if (n.type !== "question") return n;
-    const hasDangling = n.data.answers.some(
-      (a) => a.target_id && !bucketIds.has(a.target_id),
+    const hasDangling = n.data.answers.some((a) =>
+      answerList(a).some((t) => !bucketIds.has(t)),
     );
     if (!hasDangling) return n;
     changed = true;
@@ -87,9 +92,12 @@ export function reconcileDeciderTargets(doc: QuizDoc, bucketIds: Set<string>): Q
       data: {
         ...n.data,
         answers: n.data.answers.map((a) => {
-          if (!a.target_id || bucketIds.has(a.target_id)) return a;
-          const { target_id: _gone, ...rest } = a;
-          return rest;
+          const kept = answerList(a).filter((t) => bucketIds.has(t));
+          if (kept.length === answerList(a).length) return a;
+          const { target_id: _gone, target_ids: _goneList, ...rest } = a;
+          if (kept.length === 0) return rest;
+          if (kept.length === 1) return { ...rest, target_id: kept[0]! };
+          return { ...rest, target_id: kept[0]!, target_ids: kept };
         }),
       },
     };

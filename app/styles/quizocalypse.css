@@ -8073,7 +8073,9 @@ body[data-qz] .qz-cust-row:focus-visible {
 /* The CELL is the white square: the chip, the count and the clear × are
    siblings inside it (a button cannot contain a button). */
 .qz-lw-cell {
-  display: flex; align-items: center; gap: 2px; width: 100%; background: transparent; cursor: pointer;
+  /* QWIDGET-M — several chips per cell: wrap instead of overflowing the
+     236px mapping column; row-gap keeps wrapped chips readable. */
+  display: flex; flex-wrap: wrap; align-items: center; gap: 3px 2px; width: 100%; background: transparent; cursor: pointer;
   border: 1px solid transparent; border-radius: var(--qz-radius); padding: 2px 3px 2px 2px; min-height: 30px;
   transition: border-color var(--qz-dur) var(--qz-ease), background var(--qz-dur) var(--qz-ease);
 }
