@@ -4309,7 +4309,11 @@ body[data-qz] .qz-stepnav-pill:focus-visible { outline: 2px solid var(--qz-accen
 }
 /* §A2 — copy always wraps, never truncated (long unbroken strings too). */
 .qz-modal-title { margin: 0; font-size: 20px; font-weight: 700; letter-spacing: -0.02em; overflow-wrap: anywhere; padding-right: 32px; }
-.qz-modal-body { font-size: 14px; color: var(--qz-ink-3); overflow-y: auto; min-height: 0; }
+/* overflow-y:auto also clips X — full-width inputs' 3px focus ring
+   (--qz-shadow-focus) was sliced at the body edges (GroupWizard name field).
+   padding+equal negative margin moves the clip boundary out 4px while the
+   content box stays exactly where it was (net-zero geometry, every modal). */
+.qz-modal-body { font-size: 14px; color: var(--qz-ink-3); overflow-y: auto; min-height: 0; padding: 4px; margin: -4px; }
 .qz-modal-footer { display: flex; justify-content: flex-end; gap: 10px; padding-top: 4px; }
 .qz-btn-danger { background: var(--qz-paper); color: var(--qz-warn); }
 .qz-btn-danger:hover { background: var(--qz-warn); color: #fff; }
