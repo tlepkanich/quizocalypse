@@ -10,6 +10,7 @@ import {
   shadowedRules,
 } from "../../../lib/pathAnalyzer";
 import {
+  appendBankQuestion,
   duplicateDecisionRule,
   moveDecisionRule,
   removeDecisionRule,
@@ -20,7 +21,7 @@ import { useQzToast } from "../../qz-toast";
 import { CreateRuleModal, type CreateRuleFlow } from "./CreateRuleModal";
 import { LogicQuestionWidget } from "./LogicQuestionWidget";
 import { PasteRulesModal } from "./PasteRulesModal";
-import { AddQuestionModal } from "./AddQuestionModal";
+import { AddQuestionDialog } from "../AddQuestionDialog";
 import { QuestionWindow } from "./QuestionWindow";
 import { ExplainerSheet, type ExplainerKind } from "./Explainers";
 import { narrowFieldOptions } from "./logicTabFields";
@@ -565,11 +566,15 @@ export function LogicTabCard({
         />
       ) : null}
       {commit && quizId && addOpen ? (
-        <AddQuestionModal
-          doc={doc}
-          questions={questions}
+        <AddQuestionDialog
+          nextNumber={questions.length + 1}
           onClose={() => setAddOpen(false)}
-          commit={commit}
+          onSubmit={(payload) => {
+            // The ONE append path (straightThroughRun add-anchor rule); the
+            // new question lands role-less — Info only until promoted.
+            commit(appendBankQuestion(doc, payload));
+            setAddOpen(false);
+          }}
         />
       ) : null}
       {commit && qwin

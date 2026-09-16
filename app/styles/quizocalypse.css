@@ -12251,6 +12251,16 @@ button.qz-pb-row:hover { background: var(--qz-cream-2); }
   text-align: left; width: 100%; font-family: inherit;
 }
 .qz-lm-aadd:hover { border-color: var(--qz-accent-line); color: var(--qz-accent-ink); }
+/* ── ADD-QUESTION (the ONE standard dialog, owner 2026-09-16) — QzModal shell,
+   .qz-lm band interior; these are only its own additions. ── */
+.qz-adq .qz-lm-band { min-width: 0; }
+.qz-adq-tgrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+@media (max-width: 520px) { .qz-adq-tgrid { grid-template-columns: 1fr; } }
+.qz-adq-sum { font-size: 12.5px; color: var(--qz-ink-3); }
+.qz-adq-sum b { color: var(--qz-ink); }
+.qz-adq-note { margin: 2px 0 0; font-size: 12px; color: var(--qz-ink-4); }
+.qz-lm-adel:disabled { opacity: .35; cursor: default; }
+.qz-lm-adel:disabled:hover { color: inherit; }
 .qz-lm-ratingnote { font-size: 12.5px; color: var(--qz-ink-4); line-height: 1.5; }
 
 /* ═════════════════════════════════════════════════════════════════════
@@ -12450,11 +12460,6 @@ button.qz-pb-row:hover { background: var(--qz-cream-2); }
 .qz-walk-ledger p { font-size:13.5px; color:var(--qz-ink-4); }
 .qz-walk-peek { position:fixed; z-index:130; width:300px; max-height:260px; overflow:auto; padding:16px; border:1px solid var(--qz-rule); border-radius:8px; background:var(--qz-paper); color:var(--qz-ink); pointer-events:none; font-size:12.5px; }
 .qz-walk-peek ol { padding-left:18px; margin:8px 0 0; }
-.qz-walk-composer { display:grid; gap:12px; }
-.qz-walk-composer label { display:grid; gap:5px; font-size:13.5px; }
-.qz-walk-composer input,.qz-walk-composer select { padding:9px 10px; border:1px solid var(--qz-rule); border-radius:6px; background:var(--qz-paper); font:inherit; color:var(--qz-ink); }
-.qz-walk-answer-count { display:flex; gap:12px; align-items:center; }
-.qz-walk-answer-count>span:first-child { flex:1; }
 @media(max-width:640px) { .qz-walk-strip { padding:12px; gap:5px; } .qz-walk-body { padding:24px 18px; } .qz-walk-cover { padding:40px 24px; } .qz-walk-cover h1 { font-size:28px; } .qz-walk-footer { padding:16px 18px; } .qz-walk-chiprun { max-width:52%; } .qz-walk-connector { min-width:4px; } .qz-walk-ledger section { padding:14px; } }
 .qz-walk { width:100%; max-width:760px; margin-inline:auto; }
 .qz-walk-delete { padding:0; min-height:20px; height:20px; min-width:20px; line-height:20px; }

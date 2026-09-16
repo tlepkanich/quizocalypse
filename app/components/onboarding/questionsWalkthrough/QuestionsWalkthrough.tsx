@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import type { Quiz } from "../../../lib/quizSchema";
-import { deleteNode } from "../../../lib/quizMutations";
+import { appendBankQuestion, deleteNode } from "../../../lib/quizMutations";
 import { QzModal } from "../../qz-overlays";
 import {
   useFunnelBar,
@@ -17,7 +17,7 @@ import {
   unreadCopy,
 } from "./walkModel";
 import { WalkQuestion } from "./WalkQuestion";
-import { QuestionComposer } from "./QuestionComposer";
+import { AddQuestionDialog } from "../../studio/AddQuestionDialog";
 import { EmailScreen, emailSummary } from "./EmailScreen";
 
 type Props = {
@@ -547,10 +547,13 @@ export function QuestionsWalkthrough({
         You will have 10 seconds to undo.
       </QzModal>
       {modal === "composer" && (
-        <QuestionComposer
-          doc={doc}
+        <AddQuestionDialog
+          nextNumber={doc.nodes.filter((n) => n.type === "question").length + 1}
           onClose={() => setModal(null)}
-          onAdd={(next, id) => {
+          onSubmit={(payload) => {
+            const next = appendBankQuestion(doc, payload);
+            const id = next.nodes.find((n) => !doc.nodes.some((old) => old.id === n.id))?.id;
+            if (!id) return;
             commit(next);
             setModal(null);
             visit(id);
