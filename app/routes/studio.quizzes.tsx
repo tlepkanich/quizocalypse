@@ -152,6 +152,10 @@ type QuizRow = ReturnType<typeof useLoaderData<typeof loader>>["quizzes"][number
 type StatusFilter = "all" | "live" | "draft";
 type SortKey = "recent" | "name" | "oldest";
 
+// Owner ruling (2026-09-16) — both views render at most 20 quizzes at a time;
+// "View more" reveals the next 20 (client-side: the loader already ships all rows).
+const PAGE_SIZE = 20;
+
 // §R-7 — the card preview: a render of the quiz's FIRST screen in the
 // merchant's OWN brand tokens (colors/font/logo), never our violet. A brand-new
 // quiz with nothing built falls back to a neutral "New quiz · Start" placeholder.
@@ -351,9 +355,10 @@ export default function StudioQuizzes() {
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState<StatusFilter>("all");
   const [sort, setSort] = useState<SortKey>("recent");
-  // §3.6 — the table is the default view (density: 14 rows a screen against
-  // the grid's 8); the grid is the browse mode.
-  const [view, setView] = useState<"grid" | "table">("table");
+  // Owner ruling (2026-09-16) — the visual grid is the default view; the
+  // table stays as the density mode behind the toggle.
+  const [view, setView] = useState<"grid" | "table">("grid");
+  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
   const [creating, setCreating] = useState(false);
   const [recsFor, setRecsFor] = useState<string | null>(null);
   const [pendingDelete, setPendingDelete] = useState<{ id: string; name: string } | null>(null);
@@ -395,6 +400,15 @@ export default function StudioQuizzes() {
     });
     return rows;
   }, [quizzes, query, status, sort]);
+
+  // A changed search/filter/sort restarts at the first page — a stale expanded
+  // count would silently show 40+ rows of the NEW result set.
+  useEffect(() => {
+    setVisibleCount(PAGE_SIZE);
+  }, [query, status, sort]);
+
+  const visible = shown.slice(0, visibleCount);
+  const hiddenCount = shown.length - visible.length;
 
   // Where "open" leads: a mid-funnel draft resumes the setup flow where it
   // left off; everything else opens the builder.
@@ -563,7 +577,7 @@ export default function StudioQuizzes() {
               </div>
             ) : view === "grid" ? (
               <div className="qz-qcard-grid">
-                {shown.map((q) => (
+                {visible.map((q) => (
                   <article key={q.id} className="qz-qcard">
                     {/* §3.5 — state first, then their brand, the name, the numbers. */}
                     <div className="qz-qcard-head">
@@ -625,7 +639,7 @@ export default function StudioQuizzes() {
                     </tr>
                   </thead>
                   <tbody>
-                    {shown.map((q) => (
+                    {visible.map((q) => (
                       <tr key={q.id}>
                         <td>
                           <div className="qz-qtable-name">
@@ -659,6 +673,17 @@ export default function StudioQuizzes() {
                 </table>
               </div>
             )}
+            {hiddenCount > 0 ? (
+              <div className="qz-lib-viewmore">
+                <button
+                  type="button"
+                  className="qz-btn qz-btn-sm"
+                  onClick={() => setVisibleCount((c) => c + PAGE_SIZE)}
+                >
+                  View {Math.min(PAGE_SIZE, hiddenCount)} more
+                </button>
+              </div>
+            ) : null}
           </div>
         </>
       )}

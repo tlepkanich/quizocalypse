@@ -6771,7 +6771,10 @@ body[data-qz] .qz-allcard-add:focus-visible { outline: 2px solid var(--qz-accent
 
 /* ── Card — state first (header strip), their brand, the name, two figures.
    ~292px tall at minmax(258px, 1fr); 4 across on a wide monitor. ─────── */
-.qz-qcard-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(258px, 1fr)); gap: 12px; }
+/* Each track is at least ¼ of the row (minus 3 gaps), so the grid never
+   exceeds 4 tiles per row; narrower rows still collapse to 3/2/1. */
+.qz-qcard-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(max(258px, calc((100% - 36px) / 4)), 1fr)); gap: 12px; }
+.qz-lib-viewmore { display: flex; justify-content: center; margin-top: 14px; }
 .qz-qcard {
   display: flex; flex-direction: column; overflow: hidden;
   background: var(--qz-paper);
