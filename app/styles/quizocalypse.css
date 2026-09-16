@@ -12395,7 +12395,10 @@ button.qz-pb-row:hover { background: var(--qz-cream-2); }
 /* WIS-025 — Questions walkthrough. The retained phone variant keeps its CSS. */
 .qz-walk { min-height:700px; display:flex; flex-direction:column; background:var(--qz-paper); border:1px solid var(--qz-rule); border-radius:12px; color:var(--qz-ink); }
 .qz-walk-strip { position:sticky; top:var(--qz-topbar-h,58px); z-index:5; display:flex; align-items:center; gap:8px; min-height:58px; padding:12px 28px; background:var(--qz-paper); border-bottom:1px solid var(--qz-rule); border-radius:12px 12px 0 0; }
-.qz-walk-chiprun { display:flex; gap:8px; overflow-x:auto; max-width:65%; min-width:30px; scrollbar-width:thin; }
+/* padding + equal negative margin: the scroll clip would otherwise sit flush
+   on the chips, slicing a keyboard focus outline and the covered-tick's
+   descender (same clip class as .qz-modal-body). Net-zero geometry. */
+.qz-walk-chiprun { display:flex; gap:8px; overflow-x:auto; max-width:65%; min-width:30px; scrollbar-width:thin; padding:6px 8px; margin:-6px -8px; }
 .qz-walk-chiprun.is-overflow { mask-image:linear-gradient(to right,transparent,var(--qz-ink) 8px,var(--qz-ink) calc(100% - 8px),transparent); padding-inline:8px; }
 .qz-walk-chip { position:relative; flex:none; min-width:30px; height:30px; padding:0 6px; border:1px solid var(--qz-rule); border-radius:6px; background:var(--qz-cream-2); color:var(--qz-ink); font:inherit; font-size:12.5px; cursor:pointer; }
 .qz-walk-chip.is-covered { color:var(--qz-ok); background:var(--qz-ok-tint); border-color:var(--qz-ok); }
