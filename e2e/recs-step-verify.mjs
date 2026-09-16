@@ -163,7 +163,14 @@ try {
   await rb.locator(".qz-rb-toolbar input").fill(firstName.slice(0, 12));
   await settle(400);
   const hit = rows.filter({ hasText: firstName }).first();
+  // Owner 2026-09-16 — a row click PREVIEWS (products modal), never selects.
   await hit.click();
+  await page.waitForSelector(".qz-modal", { timeout: 4000 });
+  ok("clicking a row opens the preview and does NOT select it",
+    (await railCount()) === 4 && (await hit.locator(".qz-rb-addb").getAttribute("aria-pressed")) === "false");
+  await page.keyboard.press("Escape");
+  await settle(300);
+  await hit.locator(".qz-rb-addb").click();
   await settle(200);
   ok("re-adding flashes the landed row in the rail", (await rail.locator(".qz-rb-rail-row.is-new").count()) === 1 && (await railCount()) === 5);
   await settle(1500);
@@ -193,11 +200,12 @@ try {
   await settle(300);
   // frozen order: the second row stays put after picking it
   const names0 = await rows.locator(".qz-rb-card-name").allInnerTexts();
-  await rows.nth(1).click();
+  await rows.nth(1).locator(".qz-rb-addb").click();
   await settle(1200);
   const names1 = await rows.locator(".qz-rb-card-name").allInnerTexts();
   ok("a pick does not re-sort the list (frozen order)", names0[1] === names1[1] && names0[0] === names1[0], `${names0.slice(0, 3)} → ${names1.slice(0, 3)}`);
-  ok("the picked row is selected: border + tint, no tick", (await rows.nth(1).getAttribute("aria-checked")) === "true" && (await rows.nth(1).locator(".qz-rb-check").count()) === 0);
+  ok("the picked row is selected: border + tint, Added control on", (await rows.nth(1).locator(".qz-rb-addb").getAttribute("aria-pressed")) === "true" && /Added/.test(await rows.nth(1).locator(".qz-rb-addb").innerText()) && (await rows.nth(1).locator(".qz-rb-check").count()) === 0);
+  ok("the footer tally counts the whole selection", /6 selected/.test(await rb.locator(".qz-rb-selcount").innerText()));
   ok("Tags tab now prints 1; rail 6 with Groups/Products sections",
     (await tab("Tags").locator(".qz-rb-tab-n").innerText()).trim() === "1" && (await railCount()) === 6 &&
     (await rail.locator(".qz-rb-rail-seclab").count()) === 2);
@@ -209,10 +217,10 @@ try {
   await page.screenshot({ path: `${SHOTS}/3-tags-mixed.png` });
   // count button opens the members, never selects
   const cntRow = rows.nth(3);
-  const wasOn = await cntRow.getAttribute("aria-checked");
+  const wasOn = await cntRow.locator(".qz-rb-addb").getAttribute("aria-pressed");
   await cntRow.locator("button.qz-rb-cntb").click();
   await page.waitForSelector(".qz-modal", { timeout: 4000 });
-  ok("the count opens the members and does not toggle the row", /in this tag/.test(await page.locator(".qz-modal").innerText()) && (await cntRow.getAttribute("aria-checked")) === wasOn);
+  ok("the count opens the members and does not toggle the row", /in this tag/.test(await page.locator(".qz-modal").innerText()) && (await cntRow.locator(".qz-rb-addb").getAttribute("aria-pressed")) === wasOn);
   await page.keyboard.press("Escape");
   await settle(300);
   // focus ring is ink, not accent

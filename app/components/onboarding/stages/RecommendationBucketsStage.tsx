@@ -909,20 +909,25 @@ export function RecommendationBucketsStage({
                       </span>
                     );
                   return (
-                    // A picker row is role="checkbox", NOT a <button>: it
-                    // contains the count/variants button, and nested
-                    // interactive elements break the parser (§10, hit thrice).
+                    // Owner 2026-09-16 — browsing must not select: a single
+                    // row click quietly grew one quiz's recommendations to 23
+                    // and the Logic tray mirrored the pile. The ROW now
+                    // PREVIEWS (the products modal); joining the
+                    // recommendations is the explicit + Add control, which is
+                    // also the only remover. Still a <div> host: it contains
+                    // the count/variants/add buttons, and nested interactive
+                    // elements break the parser (§10, hit thrice).
                     <div
                       key={id}
-                      role="checkbox"
+                      role="button"
                       tabIndex={0}
-                      aria-checked={on}
+                      aria-label={`Preview ${c.name}`}
                       className={`qz-rb-card${on ? " is-on" : ""}`}
-                      onClick={() => toggle(c)}
+                      onClick={() => openPeek(c)}
                       onKeyDown={(event) => {
                         if (event.key !== "Enter" && event.key !== " ") return;
                         event.preventDefault();
-                        toggle(c);
+                        openPeek(c);
                       }}
                     >
                       <span className={`qz-rb-thumb${c.thumbnailUrl ? "" : " is-placeholder"}`}>
@@ -939,6 +944,22 @@ export function RecommendationBucketsStage({
                         <span className={`qz-rb-stat is-${c.status}`}>{c.status}</span>
                       ) : null}
                       {right}
+                      <button
+                        type="button"
+                        className={`qz-rb-addb${on ? " is-on" : ""}`}
+                        aria-pressed={on}
+                        aria-label={
+                          on
+                            ? `Remove ${c.name} from your recommendations`
+                            : `Add ${c.name} to your recommendations`
+                        }
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          toggle(c);
+                        }}
+                      >
+                        {on ? "✓ Added" : "+ Add"}
+                      </button>
                     </div>
                   );
                 })
@@ -957,6 +978,9 @@ export function RecommendationBucketsStage({
             </div>
 
             <div className="qz-rb-listfoot" aria-live="polite">
+              <span className={`qz-rb-selcount${count ? " is-some" : ""}`}>
+                <b>{count}</b> selected
+              </span>
               <span>
                 Showing <b>{windowed.length}</b> of <b>{visible.length}</b>
                 {q ? " matching" : ""}

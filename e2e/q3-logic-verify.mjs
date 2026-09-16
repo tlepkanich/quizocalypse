@@ -182,6 +182,14 @@ try {
     // recommended from the catalog scan — on a catalog without strong
     // attributes Rules only leads, and the sections below assert the
     // attributes workspace, so never click ".is-rec" here).
+    // Owner 2026-09-16 — the FIRST click only selects (label flips to
+    // Continue); the SECOND commits. Assert the two-step, then continue.
+    await page.locator('.qz-lsc-eng[data-pick="attributes"] .qz-lsc-go').click();
+    await page.waitForTimeout(250);
+    if ((await page.locator('[data-testid="logic-style-bar"]').count()) !== 0)
+      throw new Error("chooser committed on the FIRST click");
+    if (!/Continue/.test(await page.locator('.qz-lsc-eng[data-pick="attributes"] .qz-lsc-go').innerText()))
+      throw new Error("selected row's label did not flip to Continue");
     await page.locator('.qz-lsc-eng[data-pick="attributes"] .qz-lsc-go').click();
     await page.waitForSelector('[data-testid="logic-style-bar"]', { timeout: 8000 });
     await page.waitForTimeout(400);
