@@ -152,10 +152,15 @@ export function LogicStyleChooser({
 }) {
   const toast = useQzToast();
   const rec = recommendEngine(scan);
-  // Commit state: the click writes build_session.logic_style through the
-  // set-logic-style intent while Step3Shell renders the workspace from its
-  // local pick. Between those two the merchant could click a second engine,
-  // so the row takes the click visibly and the other rows disable.
+  // Owner 2026-09-16 — one click moved to the next page too fast. The FIRST
+  // click only SELECTS a row (the wash moves, its label flips to Continue);
+  // the SECOND click on that row commits — which is also exactly what a
+  // double-click does. Clicking a different row just moves the selection.
+  const [selected, setSelected] = useState<LogicStyle | null>(null);
+  // Commit state: the second click writes build_session.logic_style through
+  // the set-logic-style intent while Step3Shell renders the workspace from
+  // its local pick. Between those two the merchant could click a second
+  // engine, so the row takes the click visibly and the other rows disable.
   const [busy, setBusy] = useState<LogicStyle | null>(null);
 
   const order: Engine[] = [rec, ...ENGINE_ORDER.filter((e) => e !== rec)];
@@ -166,6 +171,10 @@ export function LogicStyleChooser({
       return;
     }
     if (busy) return;
+    if (selected !== engine) {
+      setSelected(engine);
+      return;
+    }
     setBusy(engine);
     onPick(engine);
   };
@@ -178,9 +187,11 @@ export function LogicStyleChooser({
           const e = ENGINES[engine];
           const isRec = engine === rec;
           const isBusy = busy === engine;
+          const isSel = selected === engine;
           const className = [
             "qz-lsc-eng",
             isRec ? "is-rec" : "",
+            isSel ? "is-sel" : "",
             isBusy ? "is-busy" : "",
           ]
             .filter(Boolean)
@@ -191,6 +202,7 @@ export function LogicStyleChooser({
               type="button"
               className={className}
               data-pick={engine}
+              aria-pressed={isSel}
               disabled={busy !== null && !isBusy}
               onClick={() => pick(engine)}
             >
@@ -200,12 +212,14 @@ export function LogicStyleChooser({
                 <span className="qz-lsc-q">{e.when}</span>
               </span>
               <Mechanic lines={e.mech} />
-              <span className={`qz-lsc-go${isRec ? "" : " is-secondary"}`}>
+              <span className={`qz-lsc-go${isRec || isSel ? "" : " is-secondary"}`}>
                 {isBusy ? (
                   <>
                     <span className="qz-lsc-spin" aria-hidden="true" />
                     Setting up…
                   </>
+                ) : isSel ? (
+                  "Continue →"
                 ) : (
                   `Use ${e.name.toLowerCase()}`
                 )}

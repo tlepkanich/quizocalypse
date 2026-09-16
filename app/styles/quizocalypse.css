@@ -5650,6 +5650,10 @@ body[data-qz] .qz-s3-editable:focus-visible {
 .qz-lsc-eng:focus-visible { outline: 2px solid var(--qz-accent); outline-offset: 2px; }
 .qz-lsc-eng.is-rec { border-color: var(--qz-accent-line); background: var(--qz-accent-wash); padding: 18px 16px; }
 .qz-lsc-eng.is-rec:hover { border-color: var(--qz-accent); }
+/* Owner 2026-09-16 — click selects first (Continue commits): the selection
+   carries the accent regardless of which row the badge recommends. */
+.qz-lsc-eng.is-sel { border-color: var(--qz-accent); background: var(--qz-accent-wash); }
+.qz-lsc-eng.is-sel:hover { border-color: var(--qz-accent); }
 .qz-lsc-eng.is-busy { cursor: progress; }
 .qz-lsc-eng:disabled { cursor: default; }
 .qz-lsc-eng:disabled:hover { border-color: var(--qz-rule); }
