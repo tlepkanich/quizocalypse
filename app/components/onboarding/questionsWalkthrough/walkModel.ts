@@ -2,7 +2,6 @@ import type { Quiz } from "../../../lib/quizSchema";
 import { orderedFlowSteps } from "../../../lib/questionOrder";
 export const EMAIL_SCREEN = "__email";
 export const OVERVIEW_SCREEN = "__overview";
-export const COVER_SCREEN = "__cover";
 export const walkSteps = (doc: Quiz) => orderedFlowSteps(doc);
 export function unreadCopy(labels: string[]): string {
   const shown = labels.slice(0, 4);

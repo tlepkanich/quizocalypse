@@ -131,9 +131,19 @@ describe("Questions walkthrough", () => {
       ["q2", 2],
     ]);
   });
+  it("opens straight on the first question — no cover page, first step covered", () => {
+    walk();
+    expect(document.body.textContent).not.toContain(
+      "Review and edit your questions and answers",
+    );
+    expect(document.body.textContent).toContain("First question");
+    // The step on screen at mount counts as reviewed without a click.
+    expect(
+      document.querySelector('[aria-label="Question 1"] .qz-walk-tick'),
+    ).not.toBeNull();
+  });
   it("opens an early read-only overview without writing quiz state", () => {
     const { commit } = walk();
-    click("Start →");
     click("Overview");
     expect(
       document.querySelector('[data-mode="read"] [role="textbox"]'),
@@ -143,7 +153,6 @@ describe("Questions walkthrough", () => {
   });
   it("review navigation never writes the session coverage to the document", () => {
     const { commit, onContinue } = walk();
-    click("Start →");
     click("Question 2");
     click("Next ›");
     expect(document.querySelector(".qz-walk-email-title")?.textContent).toBe(
@@ -159,9 +168,36 @@ describe("Questions walkthrough", () => {
     click("Continue anyway");
     expect(onContinue).toHaveBeenCalledOnce();
   });
+  it("the edit-mode overview edits wording inline through the doc", () => {
+    const { commit } = walk();
+    click("Question 2");
+    click("Next ›"); // → email capture
+    click("Finish ›"); // → the Overview screen (edit ledger)
+    const answer = document.querySelector<HTMLElement>(
+      '[data-mode="edit"] [aria-label="Question 1 answer 1"]',
+    );
+    expect(answer).not.toBeNull();
+    answer!.textContent = "Alpha Prime";
+    act(() => answer!.dispatchEvent(new Event("input", { bubbles: true })));
+    const afterAnswer = commit.mock.lastCall?.[0] as Quiz;
+    const q1 = afterAnswer.nodes.find((n) => n.id === "q1");
+    expect(q1?.type === "question" && q1.data.answers[0]?.text).toBe(
+      "Alpha Prime",
+    );
+    const title = document.querySelector<HTMLElement>(
+      '[data-mode="edit"] [aria-label="Question 2 text"]',
+    );
+    expect(title).not.toBeNull();
+    title!.textContent = "Second question, sharper";
+    act(() => title!.dispatchEvent(new Event("input", { bubbles: true })));
+    const afterTitle = commit.mock.lastCall?.[0] as Quiz;
+    const q2 = afterTitle.nodes.find((n) => n.id === "q2");
+    expect(q2?.type === "question" && q2.data.text).toBe(
+      "Second question, sharper",
+    );
+  });
   it("two-answer deletion is disabled and question deletion requires a confirm", () => {
     const { commit } = walk();
-    click("Start →");
     expect(
       document.querySelector<HTMLButtonElement>(
         '[aria-label="Delete answer 1"]',
@@ -176,7 +212,6 @@ describe("Questions walkthrough", () => {
   it("enables regeneration only after confirmation", () => {
     regen.onRegenerate.mockClear();
     walk();
-    click("Start →");
     click("↻ Regenerate");
     expect(regen.onRegenerate).not.toHaveBeenCalled();
     click("Regenerate");

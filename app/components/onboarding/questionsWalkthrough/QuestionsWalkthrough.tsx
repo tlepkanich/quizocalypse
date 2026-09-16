@@ -9,8 +9,9 @@ import {
   type FunnelBarOverride,
 } from "../funnelChrome";
 import type { RegenApi } from "../questionsLogicV3/Step3Shell";
+import { updateNodeData } from "../../studio/studioDoc";
+import { EditableText } from "../questionsLogicV3/content/EditableText";
 import {
-  COVER_SCREEN,
   EMAIL_SCREEN,
   OVERVIEW_SCREEN,
   walkSteps,
@@ -47,7 +48,9 @@ export function QuestionsWalkthrough({
     () => [...steps.map((s) => s.node.id), EMAIL_SCREEN],
     [steps],
   );
-  const [selected, setSelected] = useState(COVER_SCREEN);
+  // Owner ruling (2026-09-16) — no intro/cover page: the walkthrough opens
+  // straight on the first step, chip strip visible.
+  const [selected, setSelected] = useState<string | null>(null);
   const [covered, setCovered] = useState<Set<string>>(() => new Set());
   const [modal, setModal] = useState<
     "gate" | "overview" | "delete" | "regenerate" | "composer" | null
@@ -60,9 +63,7 @@ export function QuestionsWalkthrough({
   const [overflow, setOverflow] = useState(false);
   const cancel = useRef<HTMLButtonElement>(null);
   const active =
-    selected === COVER_SCREEN ||
-    selected === OVERVIEW_SCREEN ||
-    ids.includes(selected)
+    selected !== null && (selected === OVERVIEW_SCREEN || ids.includes(selected))
       ? selected
       : ids[0]!;
   const unread = useMemo(
@@ -73,10 +74,16 @@ export function QuestionsWalkthrough({
   const current = steps.find((s) => s.node.id === active);
   const visit = useCallback((id: string) => {
     setSelected(id);
-    if (id !== COVER_SCREEN && id !== OVERVIEW_SCREEN)
-      setCovered((old) => new Set([...old, id]));
+    if (id !== OVERVIEW_SCREEN) setCovered((old) => new Set([...old, id]));
     setPeek(null);
   }, []);
+  // With the cover gone, the first step is on screen from mount without a
+  // visit() — mark whatever is showing as reviewed, or the Continue gate
+  // would insist Q1 was never read.
+  useEffect(() => {
+    if (active === OVERVIEW_SCREEN || !ids.includes(active)) return;
+    setCovered((old) => (old.has(active) ? old : new Set([...old, active])));
+  }, [active, ids]);
   const openGate = useCallback(() => setModal("gate"), []);
   const bar = useMemo<FunnelBarOverride>(
     () => ({
@@ -149,7 +156,7 @@ export function QuestionsWalkthrough({
   };
   const peekNode = steps.find((s) => s.node.id === peek?.id)?.node;
   const navigate = (direction: number) => {
-    const order = [COVER_SCREEN, ...ids, OVERVIEW_SCREEN];
+    const order = [...ids, OVERVIEW_SCREEN];
     const idx = order.indexOf(active);
     visit(order[Math.max(0, Math.min(order.length - 1, idx + direction))]!);
   };
@@ -160,7 +167,26 @@ export function QuestionsWalkthrough({
           <div className="qz-walk-ledger-heading">
             <h3>
               {s.qIndex ? `Q${s.qIndex} · ` : ""}
-              {titleFor(s.node.id)}
+              {/* Owner ruling (2026-09-16) — the edit-mode overview is a
+                  direct editor: wording commits inline through the same
+                  updateNodeData path as WalkQuestion, autosaved by the
+                  draft debounce. Read mode (the early-peek modal) stays
+                  plain text and never writes. */}
+              {mode === "edit" &&
+              (s.node.type === "question" || s.node.type === "message") ? (
+                <EditableText
+                  value={titleFor(s.node.id)}
+                  maxLength={150}
+                  ariaLabel={
+                    s.qIndex ? `Question ${s.qIndex} text` : "Message heading"
+                  }
+                  onCommit={(text) =>
+                    commit(updateNodeData(doc, s.node.id, { text }))
+                  }
+                />
+              ) : (
+                titleFor(s.node.id)
+              )}
             </h3>
             {s.node.type === "question" && (
               <span>{s.node.data.answers.length} answers</span>
@@ -177,8 +203,29 @@ export function QuestionsWalkthrough({
           </div>
           {s.node.type === "question" ? (
             <ol>
-              {s.node.data.answers.map((a) => (
-                <li key={a.id}>{a.text}</li>
+              {s.node.data.answers.map((a, i) => (
+                <li key={a.id}>
+                  {mode === "edit" ? (
+                    <EditableText
+                      value={a.text}
+                      maxLength={60}
+                      ariaLabel={`${s.qIndex ? `Question ${s.qIndex} answer` : "Answer"} ${i + 1}`}
+                      onCommit={(text) =>
+                        commit(
+                          updateNodeData(doc, s.node.id, {
+                            answers: (
+                              s.node.data as { answers: { id: string; text: string }[] }
+                            ).answers.map((old) =>
+                              old.id === a.id ? { ...old, text } : old,
+                            ),
+                          }),
+                        )
+                      }
+                    />
+                  ) : (
+                    a.text
+                  )}
+                </li>
               ))}
             </ol>
           ) : (
@@ -221,8 +268,7 @@ export function QuestionsWalkthrough({
     .map(titleFor);
   return (
     <div className="qz-walk" data-testid="questions-walkthrough">
-      {active !== COVER_SCREEN && (
-        <div className="qz-walk-strip">
+      <div className="qz-walk-strip">
           <div
             ref={strip}
             className={`qz-walk-chiprun${overflow ? " is-overflow" : ""}`}
@@ -297,33 +343,7 @@ export function QuestionsWalkthrough({
           >
             Overview
           </button>
-        </div>
-      )}
-      {active === COVER_SCREEN ? (
-        <div className="qz-walk-cover">
-          <h1>Review and edit your questions and answers</h1>
-          <p>
-            {steps.filter((s) => s.kind === "question").length} questions and{" "}
-            {steps.reduce(
-              (n, s) =>
-                n +
-                (s.node.type === "question" ? s.node.data.answers.length : 0),
-              0,
-            )}{" "}
-            answers, written from your catalog. Read them the way a shopper will
-            and change anything that doesn’t sound like you. They’re what your
-            recommendations get built from.
-          </p>
-          <button
-            type="button"
-            className="qz-btn qz-btn-primary"
-            onClick={() => visit(ids[0]!)}
-          >
-            Start →
-          </button>
-        </div>
-      ) : (
-        <>
+      </div>
           <div className="qz-walk-body">
             {active === OVERVIEW_SCREEN ? (
               <>
@@ -415,8 +435,6 @@ export function QuestionsWalkthrough({
                   : "Next ›"}
             </button>
           </footer>
-        </>
-      )}
       <QzModal
         open={modal === "gate"}
         onClose={() => setModal(null)}
