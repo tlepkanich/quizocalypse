@@ -59,29 +59,26 @@ try {
   ok("peek lists product rows", rows > 0, `${rows} rows`);
   const firstPrice = (await page.locator(".qz-rb-product-row .qz-dim").first().textContent()) ?? "";
   ok("row shows a price line", firstPrice.trim().length > 0, firstPrice.trim());
-  ok("footer has Add", await page.locator(".qz-modal-footer button", { hasText: "Add" }).first().isVisible());
   ok("footer has Back", await page.locator(".qz-modal-footer button", { hasText: "Back" }).first().isVisible());
   ok("Done button gone", (await page.locator(".qz-modal-footer button", { hasText: "Done" }).count()) === 0);
   await page.screenshot({ path: `${SHOTS}/2-peek.png` });
 
-  // Back — returns to Define with the criterion NOT selected (second click
-  // deselected, Back keeps it out — same net effect as today's double click).
+  // Back — just closes the peek; the selection is untouched.
   await page.locator(".qz-modal-footer button", { hasText: "Back" }).first().click();
   await page.waitForSelector(".qz-wsteps", { timeout: 5000 });
   ok("Back returns to Define", await page.locator(".qz-wsteps").isVisible());
-  ok("Back leaves it deselected", (await chip.getAttribute("aria-pressed")) === "false");
+  ok("Back keeps it selected", (await chip.getAttribute("aria-pressed")) === "true");
+  const countAfterBack = (await page.locator(".qz-wpreview").textContent()) ?? "";
+  ok("group preview count unchanged", countAfterBack === countAfterSelect, countAfterBack.slice(0, 40));
   await page.screenshot({ path: `${SHOTS}/3-after-back.png` });
 
-  // Click twice again, then Add — returns selected.
-  await chip.click();
-  await chip.click();
-  await page.waitForSelector(".qz-rb-product-list", { timeout: 5000 });
-  await page.locator(".qz-modal-footer button", { hasText: "Add" }).first().click();
-  await page.waitForSelector(".qz-wsteps", { timeout: 5000 });
-  ok("Add returns selected", (await chip.getAttribute("aria-pressed")) === "true");
-  const countAfterAdd = (await page.locator(".qz-wpreview").textContent()) ?? "";
-  ok("group preview count restored", countAfterAdd === countAfterSelect, countAfterAdd.slice(0, 40));
-  await page.screenshot({ path: `${SHOTS}/4-after-add.png` });
+  // Deselect still works through the "+ Add" source picker (uncheck + confirm).
+  const colSectionAdd = colSection.locator(".qz-wsrc-add");
+  await colSectionAdd.click();
+  const pickRow = page.locator(".qz-prow.is-sel", { hasText: chipLabel }).first();
+  await pickRow.click();
+  await page.locator(".qz-modal-footer button", { hasText: "Add selected" }).last().click();
+  ok("picker deselect works", (await chip.getAttribute("aria-pressed")) === "false");
 
   // Manual products keep the plain toggle (no peek).
   const manSection = page.locator(".qz-wsrc", { hasText: "Manual products" });

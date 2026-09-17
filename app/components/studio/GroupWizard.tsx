@@ -85,7 +85,7 @@ export function GroupWizard({
   const [personaImage, setPersonaImage] = useState("");
   const [picker, setPicker] = useState<SrcKey | null>(null);
   // A second click on a selected chip expands the modal in place into this
-  // criterion's product list ("Add" re-includes it, "Back" leaves it out).
+  // criterion's product list. The selection is untouched; "Back" just closes.
   const [peek, setPeek] = useState<{ key: PeekKey; id: string } | null>(null);
   const formRef = useRef<HTMLFormElement>(null);
 
@@ -162,13 +162,6 @@ export function GroupWizard({
 
   const peekSrc = peek ? SOURCES.find((x) => x.key === peek.key) : null;
   const peekKind = peek?.key === "collections" ? "collection" : peek?.key === "tags" ? "tag" : "metafield";
-  const peekSelected = peek ? mem[peek.key].includes(peek.id) : false;
-  const addPeeked = () => {
-    if (!peek) return;
-    const { key, id } = peek;
-    setMem((m) => (m[key].includes(id) ? m : { ...m, [key]: [...m[key], id] }));
-    setPeek(null);
-  };
 
   const steps = ["Define", "Name & note", "Persona"];
   const next = () => {
@@ -232,10 +225,9 @@ export function GroupWizard({
           peek ? (
             <div className="qz-row" style={{ width: "100%", gap: 10 }}>
               <span style={{ marginLeft: "auto" }} />
-              <button type="button" className="qz-btn qz-btn-sm" onClick={() => setPeek(null)}>Back</button>
-              {!peekSelected ? (
-                <button type="button" className="qz-btn qz-btn-primary qz-btn-sm" onClick={addPeeked}>Add</button>
-              ) : null}
+              <button type="button" className="qz-btn qz-btn-primary qz-btn-sm" onClick={() => setPeek(null)}>
+                Back
+              </button>
             </div>
           ) : (
             <div className="qz-row" style={{ width: "100%", gap: 10 }}>
@@ -338,10 +330,13 @@ export function GroupWizard({
                                 className={`qz-wsrc-chip${on ? " is-on" : ""}`}
                                 aria-pressed={on}
                                 onClick={() => {
-                                  toggleIn(s.key, o.id);
-                                  // Second click: deselects as before AND expands
+                                  // Second click: keep the selection and expand
                                   // the modal into this criterion's product list.
-                                  if (on && s.key !== "manual") setPeek({ key: s.key, id: o.id });
+                                  if (on && s.key !== "manual") {
+                                    setPeek({ key: s.key, id: o.id });
+                                    return;
+                                  }
+                                  toggleIn(s.key, o.id);
                                 }}
                               >
                                 {o.label}
