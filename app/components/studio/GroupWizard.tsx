@@ -1,7 +1,7 @@
 import { useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { Form } from "@remix-run/react";
-import { Database, Eye, Folder, Hand, Tag, X } from "lucide-react";
+import { Box, Database, Eye, Folder, Hand, Tag, X } from "lucide-react";
 import { QzModal } from "../qz-overlays";
 import {
   emptyMembership,
@@ -15,8 +15,17 @@ import { autoGroupName } from "../../lib/bucketSelection";
 // P3 Edit 2 (§16) — the 3-step "New group" wizard: Define (mix 4 sources) →
 // Name & note → Persona. Live preview resolves membership client-side. Submits
 // to the /studio/groups create action. Reuses QzModal (Phase 2 Edit 3).
-export type WizProduct = ResolvableProduct & { title: string; imageUrl: string | null };
+export type WizProduct = ResolvableProduct & {
+  title: string;
+  imageUrl: string | null;
+  /** Optional (the criterion peek renders these when the caller has them). */
+  price?: number | null;
+  status?: string | null;
+};
 type SrcKey = keyof Membership; // "tags" | "collections" | "metafields" | "manual"
+// Criterion peek — every source except hand-picked products (an individual
+// product has no member list to expand into).
+type PeekKey = Exclude<SrcKey, "manual">;
 
 /** Step-1 tweaks — the funnel's Custom tab submits through its own fetcher
  *  (the `create-group` intent) instead of the /studio/groups Form. */
@@ -48,6 +57,7 @@ export function GroupWizard({
   collections,
   metafieldConditions,
   products,
+  currency,
   onSubmit,
 }: {
   open: boolean;
@@ -56,6 +66,8 @@ export function GroupWizard({
   collections: { id: string; title: string }[];
   metafieldConditions: string[];
   products: WizProduct[];
+  /** ISO 4217 code for the peek's price lines; bare numbers when absent. */
+  currency?: string | null;
   /** When given, the wizard calls this instead of posting the hidden Form. */
   onSubmit?: GroupWizardSubmit;
 }) {
@@ -72,12 +84,32 @@ export function GroupWizard({
   const [personaDesc, setPersonaDesc] = useState("");
   const [personaImage, setPersonaImage] = useState("");
   const [picker, setPicker] = useState<SrcKey | null>(null);
+  // A second click on a selected chip expands the modal in place into this
+  // criterion's product list ("Add" re-includes it, "Back" leaves it out).
+  const [peek, setPeek] = useState<{ key: PeekKey; id: string } | null>(null);
   const formRef = useRef<HTMLFormElement>(null);
 
   const colTitle = useMemo(() => new Map(collections.map((c) => [c.id, c.title])), [collections]);
   const productTitle = useMemo(() => new Map(products.map((p) => [p.id, p.title])), [products]);
   const matchedIds = useMemo(() => resolveMembership(mem, products), [mem, products]);
   const previewThumbs = matchedIds.slice(0, 6).map((id) => products.find((p) => p.id === id)?.imageUrl ?? null);
+  const money = useMemo(() => {
+    if (currency) {
+      try {
+        const fmt = new Intl.NumberFormat(undefined, { style: "currency", currency });
+        return (v: number) => fmt.format(v);
+      } catch {
+        /* unknown code — fall through to the bare number */
+      }
+    }
+    return (v: number) => v.toFixed(2);
+  }, [currency]);
+  const peekMembers = useMemo(() => {
+    if (!peek) return [];
+    if (peek.key === "tags") return products.filter((p) => p.tags.includes(peek.id));
+    if (peek.key === "collections") return products.filter((p) => p.collectionIds.includes(peek.id));
+    return products.filter((p) => p.metafieldValues.includes(peek.id));
+  }, [peek, products]);
 
   const reset = () => {
     setStep(1);
@@ -92,6 +124,7 @@ export function GroupWizard({
     setPersonaDesc("");
     setPersonaImage("");
     setPicker(null);
+    setPeek(null);
   };
   const close = () => {
     onClose();
@@ -125,6 +158,16 @@ export function GroupWizard({
     if (key === "collections") return collections.map((c) => ({ id: c.id, label: c.title }));
     if (key === "metafields") return metafieldConditions.map((m) => ({ id: m, label: m }));
     return products.map((p) => ({ id: p.id, label: p.title, img: p.imageUrl }));
+  };
+
+  const peekSrc = peek ? SOURCES.find((x) => x.key === peek.key) : null;
+  const peekKind = peek?.key === "collections" ? "collection" : peek?.key === "tags" ? "tag" : "metafield";
+  const peekSelected = peek ? mem[peek.key].includes(peek.id) : false;
+  const addPeeked = () => {
+    if (!peek) return;
+    const { key, id } = peek;
+    setMem((m) => (m[key].includes(id) ? m : { ...m, [key]: [...m[key], id] }));
+    setPeek(null);
   };
 
   const steps = ["Define", "Name & note", "Persona"];
@@ -168,22 +211,74 @@ export function GroupWizard({
 
       <QzModal
         open={open}
-        onClose={close}
+        onClose={peek ? () => setPeek(null) : close}
         size="md"
-        title="Create a group"
+        title={
+          peek ? (
+            <span className="qz-rb-modal-title">
+              <span className="qz-rb-modal-icon">{peekSrc?.icon}</span>
+              <span className="qz-rb-modal-copy">
+                <span>{labelFor(peek.key, peek.id)}</span>
+                <span className="qz-rb-modal-meta">
+                  {peekMembers.length} product{peekMembers.length === 1 ? "" : "s"} in this {peekKind}
+                </span>
+              </span>
+            </span>
+          ) : (
+            "Create a group"
+          )
+        }
         footer={
-          <div className="qz-row" style={{ width: "100%", gap: 10 }}>
-            <button type="button" className="qz-btn qz-btn-sm" onClick={close}>Cancel</button>
-            <span style={{ marginLeft: "auto" }} />
-            {step > 1 ? (
-              <button type="button" className="qz-btn qz-btn-sm" onClick={() => setStep((s) => s - 1)}>Back</button>
-            ) : null}
-            <button type="button" className="qz-btn qz-btn-primary qz-btn-sm" onClick={next}>
-              {step === 3 ? "Create group" : "Next"}
-            </button>
-          </div>
+          peek ? (
+            <div className="qz-row" style={{ width: "100%", gap: 10 }}>
+              <span style={{ marginLeft: "auto" }} />
+              <button type="button" className="qz-btn qz-btn-sm" onClick={() => setPeek(null)}>Back</button>
+              {!peekSelected ? (
+                <button type="button" className="qz-btn qz-btn-primary qz-btn-sm" onClick={addPeeked}>Add</button>
+              ) : null}
+            </div>
+          ) : (
+            <div className="qz-row" style={{ width: "100%", gap: 10 }}>
+              <button type="button" className="qz-btn qz-btn-sm" onClick={close}>Cancel</button>
+              <span style={{ marginLeft: "auto" }} />
+              {step > 1 ? (
+                <button type="button" className="qz-btn qz-btn-sm" onClick={() => setStep((s) => s - 1)}>Back</button>
+              ) : null}
+              <button type="button" className="qz-btn qz-btn-primary qz-btn-sm" onClick={next}>
+                {step === 3 ? "Create group" : "Next"}
+              </button>
+            </div>
+          )
         }
       >
+        {peek ? (
+          <div className="qz-rb-product-list">
+            {peekMembers.length ? (
+              peekMembers.map((p) => {
+                // Sync-shaped rows carry "ACTIVE"/"DRAFT"; the funnel catalog
+                // lower-cases. Normalize here; only non-active gets a badge.
+                const status = p.status?.toLowerCase();
+                return (
+                  <div key={p.id} className="qz-rb-product-row">
+                    <span className={`qz-rb-product-image${p.imageUrl ? "" : " is-placeholder"}`}>
+                      {p.imageUrl ? <img src={p.imageUrl} alt="" loading="lazy" /> : <Box size={18} aria-hidden />}
+                    </span>
+                    <span className="qz-rb-product-copy">
+                      <strong>{p.title}</strong>
+                      <span className="qz-dim">{p.price != null ? money(p.price) : "Price unavailable"}</span>
+                    </span>
+                    {status && status !== "active" ? (
+                      <span className={`qz-rb-stat is-${status}`}>{status}</span>
+                    ) : null}
+                  </div>
+                );
+              })
+            ) : (
+              <p className="qz-dim" style={{ margin: 0 }}>No matching products are currently available.</p>
+            )}
+          </div>
+        ) : (
+          <>
         <div className="qz-wsteps" aria-hidden>
           {steps.map((s, i) => (
             <div key={s} className={`qz-wstep${i + 1 === step ? " is-active" : ""}${i + 1 < step ? " is-done" : ""}`}>
@@ -242,7 +337,12 @@ export function GroupWizard({
                                 type="button"
                                 className={`qz-wsrc-chip${on ? " is-on" : ""}`}
                                 aria-pressed={on}
-                                onClick={() => toggleIn(s.key, o.id)}
+                                onClick={() => {
+                                  toggleIn(s.key, o.id);
+                                  // Second click: deselects as before AND expands
+                                  // the modal into this criterion's product list.
+                                  if (on && s.key !== "manual") setPeek({ key: s.key, id: o.id });
+                                }}
                               >
                                 {o.label}
                               </button>
@@ -362,6 +462,8 @@ export function GroupWizard({
             )}
           </div>
         ) : null}
+          </>
+        )}
       </QzModal>
 
       {/* Source picker (nested modal) */}

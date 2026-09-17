@@ -42,7 +42,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     prisma.category.findMany({ where: { shopId: shop.id, quizId: null }, orderBy: { createdAt: "desc" } }),
     prisma.product.findMany({
       where: { shopId: shop.id },
-      select: { productId: true, title: true, imageUrl: true, tags: true, collectionIds: true, metafields: true },
+      select: { productId: true, title: true, imageUrl: true, tags: true, collectionIds: true, metafields: true, priceMin: true, status: true, currency: true },
     }),
     prisma.collection.findMany({ where: { shopId: shop.id }, select: { collectionId: true, title: true } }),
     prisma.quiz.findMany({ where: { shopId: shop.id }, select: { id: true, name: true, status: true, draftJson: true } }),
@@ -72,6 +72,8 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     tags: p.tags,
     collectionIds: p.collectionIds,
     metafieldValues: metafieldValuesOf(p.metafields),
+    price: p.priceMin != null ? Number(p.priceMin) : null,
+    status: p.status,
   }));
   const allTags = [...new Set(products.flatMap((p) => p.tags))].sort();
   const metafieldConditions = [...new Set(wizProducts.flatMap((p) => p.metafieldValues))].sort();
@@ -84,6 +86,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       collections: collections.map((c) => ({ id: c.collectionId, title: c.title })),
       metafieldConditions,
       products: wizProducts,
+      currency: products.find((p) => p.currency)?.currency ?? null,
     },
     groups: groups.map((g) => {
       const m = normalizeMembership(g.membership);
@@ -324,6 +327,7 @@ export default function StudioGroups() {
         collections={wizard.collections}
         metafieldConditions={wizard.metafieldConditions}
         products={wizard.products}
+        currency={wizard.currency}
       />
 
       {/* §G18 — delete a Group: warn + list affected live quizzes. */}

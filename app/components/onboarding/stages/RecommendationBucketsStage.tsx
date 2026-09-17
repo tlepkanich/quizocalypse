@@ -528,6 +528,8 @@ export function RecommendationBucketsStage({
         tags: p.tags,
         collectionIds: p.collectionIds,
         metafieldValues: p.metafieldValues,
+        price: p.price,
+        status: p.status,
       })),
     [data.catalog.products],
   );
@@ -1205,6 +1207,7 @@ export function RecommendationBucketsStage({
         collections={data.collections.map((c) => ({ id: c.collectionId, title: c.title }))}
         metafieldConditions={data.catalog.metafieldConditions}
         products={wizProducts}
+        currency={data.catalog.currency}
         onSubmit={submitGroup}
       />
     </div>
