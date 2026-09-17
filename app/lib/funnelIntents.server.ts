@@ -63,6 +63,7 @@ import { buildScopedIndex } from "./catalogIndex";
 import { mergeRegeneratedAnswers } from "./regenerateMerge";
 import { toGroupingProduct, loadBucketInputs, loadGenerationBuckets } from "./bucketPersist.server";
 import { FUNNEL_STEPS, stepIndex, type FunnelStep } from "./funnelStages";
+import { seedIntroBestPractice } from "./seedQuiz";
 import {
   MIN_GOAL_CHARS,
   loadFunnelDraft,
@@ -1949,6 +1950,11 @@ async function runStep1FunnelActionImpl(
     // last design/rec edits already live on the draft (autosaved), so nothing else
     // to apply.
     if (session.built) {
+      // Intro best-practice upgrade (owner 2026-09-16) — an UNTOUCHED seed
+      // intro subtext graduates to "N questions – 1 minute." (+ discount hook)
+      // now that the question count is known. Merchant edits are never rewritten.
+      const upgraded = seedIntroBestPractice(doc);
+      if (upgraded !== doc) await writeDoc(quiz.id, upgraded);
       // Graduate the draft out of the "step1" in-flight state: the funnel is done,
       // so it should now appear in the gallery AND "Create new quiz" should start a
       // FRESH draft instead of resuming this finished one (findOrCreateStep1Draft
