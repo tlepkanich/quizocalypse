@@ -10,6 +10,7 @@ import { QzCard, QzSegmented } from "../components/qz";
 import { QzMenu, QzModal, QzPopover } from "../components/qz-overlays";
 import { computeBenchmarks } from "../lib/quizBenchmarks";
 import { quizCardFacts, type QuizCardThumb } from "../lib/quizLibraryCard";
+import { QuizQuestionThumbnail } from "../components/studio/QuizQuestionThumbnail";
 import { publishQuiz } from "../lib/quizPublish";
 import { refreshBucketMembership } from "../lib/bucketPersist.server";
 import { formatDate } from "../lib/formatDate";
@@ -156,10 +157,10 @@ type SortKey = "recent" | "name" | "oldest";
 // "View more" reveals the next 20 (client-side: the loader already ships all rows).
 const PAGE_SIZE = 20;
 
-// §R-7 — the card preview: a render of the quiz's FIRST screen in the
-// merchant's OWN brand tokens (colors/font/logo), never our violet. A brand-new
-// quiz with nothing built falls back to a neutral "New quiz · Start" placeholder.
+// Decider cards sample an authored question in the merchant's brand. Legacy
+// docs and drafts without questions retain the existing intro/empty thumbnail.
 function QuizCardPreview({ thumb, compact }: { thumb: QuizCardThumb; compact?: boolean }) {
+  if (thumb.question) return <QuizQuestionThumbnail thumb={thumb} />;
   if (thumb.isNew) {
     return (
       <div className={`qz-qprev qz-qprev-empty${compact ? " is-compact" : ""}`} aria-hidden>
@@ -586,7 +587,7 @@ export default function StudioQuizzes() {
                     </div>
 
                     <div
-                      className="qz-qcard-preview"
+                      className={`qz-qcard-preview${q.thumb.question ? " has-question" : ""}`}
                       role="button"
                       tabIndex={0}
                       aria-label={q.inSetup ? `Resume setting up ${q.name}` : `Open ${q.name} in the builder`}
