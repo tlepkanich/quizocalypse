@@ -2,6 +2,37 @@ import { Quiz } from "./quizSchema";
 import { HOUSE_TOKENS } from "./themePresets";
 import { stripAutoQuizDate } from "./dialDirectives";
 
+// The seed intro subtext, exported so the funnel-graduation upgrade below can
+// recognise an UNTOUCHED intro (a merchant-edited subtext is never rewritten).
+export const SEED_INTRO_SUBTEXT =
+  "Answer a few quick questions and we'll point you to the right products.";
+
+// Owner 2026-09-16 — when the funnel graduates a built quiz into the builder,
+// an untouched seed subtext upgrades to the best-practice pattern
+// ("5 questions – 1 minute.", plus the discount hook when one is configured).
+// Pure; returns the SAME doc object when nothing changes.
+export function seedIntroBestPractice(doc: Quiz): Quiz {
+  const intro = doc.nodes.find((n) => n.type === "intro");
+  if (!intro || intro.type !== "intro" || intro.data.subtext !== SEED_INTRO_SUBTEXT) return doc;
+  const questionCount = doc.nodes.filter((n) => n.type === "question").length;
+  if (questionCount === 0) return doc;
+  const dc = doc.discount_config;
+  const discountHook = dc?.enabled
+    ? dc.kind === "percentage"
+      ? ` Unlock your ${dc.value}% discount at the end!`
+      : " Unlock your discount at the end!"
+    : "";
+  const subtext = `${questionCount} question${questionCount === 1 ? "" : "s"} – ${
+    questionCount <= 7 ? "1 minute" : "2 minutes"
+  }.${discountHook}`;
+  return {
+    ...doc,
+    nodes: doc.nodes.map((n) =>
+      n.id === intro.id && n.type === "intro" ? { ...n, data: { ...n.data, subtext } } : n,
+    ),
+  };
+}
+
 // Minimal valid quiz a fresh "New quiz" creates — an intro + one starter
 // question, wired. The merchant then groups products into buckets (Step 1),
 // which creates result pages, and builds questions manually or via Smart Build.

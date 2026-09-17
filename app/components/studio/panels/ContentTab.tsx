@@ -168,6 +168,21 @@ export function ContentTab({
     case "intro":
       return (
         <>
+          {/* Intro pages are optional (owner 2026-09-16) — the toggle writes
+              data.hidden; the node stays in the graph as the flow anchor. */}
+          <label style={{ display: "inline-flex", gap: 8, alignItems: "center", fontSize: 13 }}>
+            <input
+              type="checkbox"
+              checked={!d.hidden}
+              onChange={(e) => set({ hidden: e.target.checked ? undefined : true })}
+            />
+            Show an intro page
+          </label>
+          <p className="qz-dim" style={{ margin: 0, fontSize: 11.5, lineHeight: 1.5 }}>
+            Intro pages are optional — switched off, shoppers start on the first
+            question. Worth A/B testing for quiz completions. Best-practice copy:
+            “5 questions – 1 minute. Unlock your 15% discount at the end!”
+          </p>
           {text("headline", "Headline")}
           {text("subtext", "Subtext", true)}
           {text("button_label", "Button label")}

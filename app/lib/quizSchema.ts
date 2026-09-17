@@ -185,6 +185,11 @@ export const IntroData = z.object({
   subtext: z.string().default(""),
   button_label: z.string().default("Start"),
   hero_image_url: z.string().url().optional(),
+  // Intro pages are optional (owner 2026-09-16): true = the published quiz
+  // never renders this screen — shoppers start on the intro's outbound step.
+  // The node itself stays in the graph (orderFlow walks from it). `.optional()`
+  // and never `.default()` so legacy docs round-trip byte-identical.
+  hidden: z.boolean().optional(),
 });
 
 // Optional config for the freeform input rendering (text / email types).

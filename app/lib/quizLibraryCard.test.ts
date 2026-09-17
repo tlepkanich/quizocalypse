@@ -41,4 +41,53 @@ describe("§R-7 quizCardFacts", () => {
     expect(quizCardFacts({ nodes: "not-an-array" }).questions).toBe(0);
     expect(quizCardFacts(42).thumb.headline).toBe("New quiz");
   });
+
+  it("uses authored decider questions instead of a generic intro, without changing the doc", () => {
+    const doc = {
+      logic_model: "decider",
+      nodes: [
+        { type: "intro", data: { headline: "New quiz" } },
+        { type: "question", data: {
+          text: "Where do you ride?", question_type: "image_tile",
+          answers: ["Powder", "Park", "Groomers", "Everywhere"].map((text) => ({ text, image_url: `https://example.com/${text}.jpg` })),
+        } },
+      ],
+    };
+    const before = JSON.stringify(doc);
+    const thumb = quizCardFacts(doc).thumb;
+    expect(thumb.isNew).toBe(false);
+    expect(thumb.headline).toBe("Where do you ride?");
+    expect(thumb.question?.answers.map((a) => a.text)).toEqual(["Powder", "Park", "Groomers"]);
+    expect(thumb.question?.remainingAnswers).toBe(1);
+    expect(thumb.question?.tiles).toBe(true);
+    expect(JSON.stringify(doc)).toBe(before);
+    expect(quizCardFacts({ ...doc, logic_model: undefined }).thumb.question).toBeUndefined();
+    expect(quizCardFacts({ ...doc, logic_model: undefined }).thumb.headline).toBe("New quiz");
+  });
+
+  it("skips unfinished questions and respects hidden answer media", () => {
+    const thumb = quizCardFacts({ logic_model: "decider", nodes: [
+      { type: "question", data: { text: "", question_type: "text" } },
+      { type: "question", data: {
+        text: "Your style?", question_type: "image_picker",
+        answer_display: { show_media: false },
+        answers: [null, { text: "Classic", image_url: "https://example.com/classic.jpg" }],
+      } },
+    ] }).thumb;
+    expect(thumb.question?.text).toBe("Your style?");
+    expect(thumb.question?.answers).toEqual([{ text: "Classic", imageUrl: undefined }]);
+    expect(thumb.question?.tiles).toBe(false);
+  });
+
+  it("keeps freeform input metadata and drops unsafe image URLs", () => {
+    const thumb = quizCardFacts({ logic_model: "decider", nodes: [
+      { type: "question", data: {
+        text: "What is your name?", question_type: "text",
+        image_url: "file:///private/image.png", input_config: { placeholder: "First name" }, answers: [],
+      } },
+    ] }).thumb;
+    expect(thumb.question?.type).toBe("text");
+    expect(thumb.question?.placeholder).toBe("First name");
+    expect(thumb.question?.imageUrl).toBeUndefined();
+  });
 });

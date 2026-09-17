@@ -1,6 +1,8 @@
 import { resolveDesignTokens } from "./designTokens";
+import { z } from "zod";
+import { QuestionType } from "./quizSchema";
 
-// §R-7 — the per-card facts + screen-1 thumbnail data for the Quizzes library.
+// Per-card facts + bounded thumbnail data for the Quizzes library.
 // Pure + defensive: reads a loosely-typed quiz doc (draftJson) WITHOUT a full
 // Zod parse, so a legacy/odd doc can never throw the library loader. Facts are
 // cosmetic — a missing field just falls back.
@@ -18,6 +20,7 @@ interface LooseNode {
   };
 }
 interface LooseDoc {
+  logic_model?: string;
   nodes?: LooseNode[];
   design_tokens?: {
     colors?: { primary?: string; background?: string; text?: string };
@@ -27,6 +30,8 @@ interface LooseDoc {
 }
 
 export interface QuizCardThumb {
+  /** Bounded, read-only sample of an authored decider question. */
+  question?: QuizCardQuestion;
   // §R-7 card preview: the quiz's first screen rendered in the MERCHANT's brand.
   headline: string;
   subtext: string;
@@ -47,6 +52,58 @@ export interface QuizCardFacts {
 }
 
 const DEFAULTS = resolveDesignTokens().colors ?? {};
+
+const previewImage = z.string().refine((url) =>
+  /^https?:\/\//i.test(url) || (url.startsWith("/") && !url.startsWith("//")),
+).optional().catch(undefined);
+const previewQuestion = z.object({
+  type: z.literal("question"),
+  data: z.object({
+    text: z.string().trim().min(1),
+    question_type: QuestionType,
+    image_url: previewImage,
+    answers: z.array(z.object({
+      text: z.string().trim().min(1),
+      image_url: previewImage,
+    }).nullable().catch(null)).catch([]),
+    input_config: z.object({ placeholder: z.string().optional() }).optional().catch(undefined),
+    answer_display: z.object({
+      mode: z.enum(["list", "icon", "cards", "tiles", "pills"]).optional(),
+      show_media: z.boolean().optional(),
+    }).optional().catch(undefined),
+  }),
+});
+
+export interface QuizCardQuestion {
+  text: string;
+  type: z.infer<typeof QuestionType>;
+  imageUrl?: string;
+  answers: Array<{ text: string; imageUrl?: string }>;
+  remainingAnswers: number;
+  placeholder?: string;
+  tiles: boolean;
+}
+
+function questionSample(nodes: LooseNode[]): QuizCardQuestion | undefined {
+  for (const node of nodes) {
+    const parsed = previewQuestion.safeParse(node);
+    if (!parsed.success) continue;
+    const q = parsed.data.data;
+    const answers = q.answers.filter((a) => a !== null);
+    const showMedia = q.answer_display?.show_media !== false;
+    return {
+      text: q.text,
+      type: q.question_type,
+      imageUrl: q.image_url,
+      answers: answers.slice(0, 3).map((a) => ({ text: a.text, imageUrl: showMedia ? a.image_url : undefined })),
+      remainingAnswers: Math.max(0, answers.length - 3),
+      placeholder: q.input_config?.placeholder,
+      tiles: showMedia && answers.some((a) => a.image_url) &&
+        (q.answer_display?.mode === "tiles" || q.answer_display?.mode === "cards" ||
+          (!q.answer_display?.mode && ["image_tile", "image_picker", "swatch"].includes(q.question_type))),
+    };
+  }
+}
 
 export function quizCardFacts(doc: unknown): QuizCardFacts {
   const d = (doc && typeof doc === "object" ? doc : {}) as LooseDoc;
@@ -73,12 +130,14 @@ export function quizCardFacts(doc: unknown): QuizCardFacts {
   // A first screen that's still the default "New quiz" (or empty) with no brand
   // color set → the neutral placeholder, not a fake brand render.
   const isNew = (!headline || /^new quiz$/i.test(headline)) && !c.primary;
+  const question = d.logic_model === "decider" ? questionSample(nodes) : undefined;
   return {
     questions,
     personas,
     targetIds: [...targets],
     thumb: {
-      headline: headline || "New quiz",
+      ...(question ? { question } : {}),
+      headline: question?.text || headline || "New quiz",
       subtext: intro?.data?.subtext?.trim() || "",
       buttonLabel: intro?.data?.button_label?.trim() || "Start",
       logoUrl: d.design_tokens?.logo?.url ?? null,
@@ -86,7 +145,7 @@ export function quizCardFacts(doc: unknown): QuizCardFacts {
       primary: c.primary || DEFAULTS.primary || "rgb(109,90,230)",
       text: c.text || DEFAULTS.text || "rgb(26,26,26)",
       font: d.design_tokens?.typography?.heading?.family || d.design_tokens?.typography?.body?.family || null,
-      isNew,
+      isNew: question ? false : isNew,
     },
   };
 }

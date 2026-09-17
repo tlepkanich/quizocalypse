@@ -280,9 +280,24 @@ export function QuizRuntime(props: QuizRuntimeProps) {
     () => doc.nodes.find((n) => n.type === "intro") ?? doc.nodes[0],
     [doc.nodes],
   );
-  const [currentNodeId, setCurrentNodeId] = useState<string | null>(
-    introNode ? introNode.id : null,
-  );
+  // Intro pages are optional (owner 2026-09-16) — an intro with data.hidden
+  // never renders: the quiz opens on the intro's outbound step, and the intro
+  // never enters `path` or history (Back from the first question leaves the
+  // page). Only a plain first hop skips — a branch target needs answer context
+  // the start doesn't have, so that shape falls back to showing the intro.
+  // Docs without the flag (every legacy doc) resolve to the intro id exactly
+  // as before.
+  const introHidden = introNode?.type === "intro" && introNode.data.hidden === true;
+  const startNodeId = useMemo(() => {
+    if (!introNode) return null;
+    if (introHidden) {
+      const targetId = doc.edges.find((e) => e.source === introNode.id)?.target;
+      const target = targetId ? doc.nodes.find((n) => n.id === targetId) : null;
+      if (target && target.type !== "branch") return target.id;
+    }
+    return introNode.id;
+  }, [doc, introNode, introHidden]);
+  const [currentNodeId, setCurrentNodeId] = useState<string | null>(startNodeId);
   const [path, setPath] = useState<PathStep[]>([]);
   // Experiences E4 — theater gates before the result render. Reset on every
   // node change so a jump-back + new path replays them.
@@ -575,6 +590,8 @@ export function QuizRuntime(props: QuizRuntimeProps) {
   // integration node can forward it to Klaviyo.
   const contactRef = useRef<{ email?: string; name?: string; phone?: string }>({});
   const resumedRef = useRef(false);
+  // Hidden-intro engagement latch — see gotoNextFrom.
+  const engagedFiredRef = useRef(false);
 
   // Restore BEFORE the analytics effect (effect order = declaration order) so a
   // resumed visit reuses the saved sessionId and doesn't re-fire quiz_started.
@@ -596,10 +613,10 @@ export function QuizRuntime(props: QuizRuntimeProps) {
       if (s.ab) abRef.current = s.ab;
       const savedPath = Array.isArray(s.path) ? s.path : [];
       const savedNodeId = s.currentNodeId ?? null;
-      const introId = introNode ? introNode.id : null;
       // Only treat it as a "resume" (suppress a duplicate quiz_started) if
-      // there's real progress — a reset-then-reload sits at the intro.
-      if (savedPath.length > 0 || (savedNodeId !== null && savedNodeId !== introId)) {
+      // there's real progress — a reset-then-reload sits at the START node
+      // (the intro, or the first step when the intro is hidden).
+      if (savedPath.length > 0 || (savedNodeId !== null && savedNodeId !== startNodeId)) {
         resumedRef.current = true;
       }
       // Resuming onto a result page means the quiz was already completed — don't
@@ -611,7 +628,7 @@ export function QuizRuntime(props: QuizRuntimeProps) {
     } catch {
       // disabled / malformed storage → start fresh
     }
-  }, [stateKey, version, doc, introNode, isPreview]);
+  }, [stateKey, version, doc, startNodeId, isPreview]);
 
   useEffect(() => {
     // Preview fires no analytics: a no-op client means every `?.track(...)`
@@ -797,7 +814,7 @@ export function QuizRuntime(props: QuizRuntimeProps) {
   };
 
   function reset() {
-    setCurrentNodeId(introNode ? introNode.id : null);
+    setCurrentNodeId(startNodeId);
     setPath([]);
     previewViewedRef.current = false;
     completedRef.current = false;
@@ -1002,6 +1019,13 @@ export function QuizRuntime(props: QuizRuntimeProps) {
     const sourceNode = doc.nodes.find((n) => n.id === nodeId);
     if (sourceNode?.type === "intro") {
       analyticsRef.current?.track("quiz_engaged", {});
+    } else if (introHidden && !engagedFiredRef.current) {
+      // Hidden intro — there is no Start click, so "engaged" fires on the
+      // FIRST advance instead (answering the first step). Once per mount;
+      // resumes re-fire at most once more and the benchmarks dedupe on
+      // (quizId, eventType, sessionId). Legacy docs never take this branch.
+      analyticsRef.current?.track("quiz_engaged", {});
+      engagedFiredRef.current = true;
     }
     // Forward the just-picked answer so a branch conditioning on THIS question
     // (rules tag/answer_id, or points-winner plurality) resolves against the
