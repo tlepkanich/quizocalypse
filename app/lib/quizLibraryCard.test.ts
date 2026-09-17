@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { quizCardFacts } from "./quizLibraryCard";
+import { quizCardFacts, quizCardProducts } from "./quizLibraryCard";
 
 describe("§R-7 quizCardFacts", () => {
   it("counts questions and distinct persona targets, reads the intro thumb", () => {
@@ -42,52 +42,40 @@ describe("§R-7 quizCardFacts", () => {
     expect(quizCardFacts(42).thumb.headline).toBe("New quiz");
   });
 
-  it("uses authored decider questions instead of a generic intro, without changing the doc", () => {
+  it("reads results settings and independent results branding without modifying the doc", () => {
     const doc = {
-      logic_model: "decider",
-      nodes: [
-        { type: "intro", data: { headline: "New quiz" } },
-        { type: "question", data: {
-          text: "Where do you ride?", question_type: "image_tile",
-          answers: ["Powder", "Park", "Groomers", "Everywhere"].map((text) => ({ text, image_url: `https://example.com/${text}.jpg` })),
-        } },
-      ],
+      logic_model: "decider", nodes: [], design_linked: false,
+      design_tokens: { colors: { primary: "#111111" } },
+      rec_page_design: { colors: { primary: "#005544", background: "#ffffff" } },
+      rec_page_settings: { global: { headline: "Your winter essentials", layout: "grid", imgFit: "cover" } },
     };
     const before = JSON.stringify(doc);
-    const thumb = quizCardFacts(doc).thumb;
-    expect(thumb.isNew).toBe(false);
-    expect(thumb.headline).toBe("Where do you ride?");
-    expect(thumb.question?.answers.map((a) => a.text)).toEqual(["Powder", "Park", "Groomers"]);
-    expect(thumb.question?.remainingAnswers).toBe(1);
-    expect(thumb.question?.tiles).toBe(true);
+    const { thumb } = quizCardFacts(doc);
+    expect(thumb.results).toEqual({ headline: "Your winter essentials", layout: "grid", imgFit: "cover" });
+    expect(thumb.primary).toBe("#005544");
     expect(JSON.stringify(doc)).toBe(before);
-    expect(quizCardFacts({ ...doc, logic_model: undefined }).thumb.question).toBeUndefined();
-    expect(quizCardFacts({ ...doc, logic_model: undefined }).thumb.headline).toBe("New quiz");
+    expect(quizCardFacts({ ...doc, design_linked: true }).thumb.primary).toBe("#111111");
+    expect(quizCardFacts({ ...doc, logic_model: undefined }).thumb.results).toBeUndefined();
+    expect(quizCardFacts({ ...doc, logic_model: undefined }).thumb.primary).toBe("#111111");
   });
 
-  it("skips unfinished questions and respects hidden answer media", () => {
-    const thumb = quizCardFacts({ logic_model: "decider", nodes: [
-      { type: "question", data: { text: "", question_type: "text" } },
-      { type: "question", data: {
-        text: "Your style?", question_type: "image_picker",
-        answer_display: { show_media: false },
-        answers: [null, { text: "Classic", image_url: "https://example.com/classic.jpg" }],
-      } },
-    ] }).thumb;
-    expect(thumb.question?.text).toBe("Your style?");
-    expect(thumb.question?.answers).toEqual([{ text: "Classic", imageUrl: undefined }]);
-    expect(thumb.question?.tiles).toBe(false);
+  it("uses results defaults for an unfinished decider draft without reading questions", () => {
+    const { thumb } = quizCardFacts({ logic_model: "decider", nodes: [{ type: "question", data: { text: "Never show this" } }] });
+    expect(thumb.results).toEqual({ headline: "Your perfect match", layout: "hero_grid", imgFit: "contain" });
+    expect(JSON.stringify(thumb)).not.toContain("Never show this");
   });
 
-  it("keeps freeform input metadata and drops unsafe image URLs", () => {
-    const thumb = quizCardFacts({ logic_model: "decider", nodes: [
-      { type: "question", data: {
-        text: "What is your name?", question_type: "text",
-        image_url: "file:///private/image.png", input_config: { placeholder: "First name" }, answers: [],
-      } },
-    ] }).thumb;
-    expect(thumb.question?.type).toBe("text");
-    expect(thumb.question?.placeholder).toBe("First name");
-    expect(thumb.question?.imageUrl).toBeUndefined();
+  it("bounds product samples, deduplicates them, and prefers safe real photography", () => {
+    const products = [
+      { id: "1", title: "One", imageUrl: null },
+      { id: "2", title: "Two", imageUrl: "file:///private/photo.jpg" },
+      { id: "3", title: "Three", imageUrl: "https://example.com/three.jpg" },
+      { id: "3", title: "Three", imageUrl: "https://example.com/three.jpg" },
+      { id: "4", title: "Four", imageUrl: "/four.jpg" },
+    ];
+    const before = JSON.stringify(products);
+    expect(quizCardProducts(products).map((p) => p.id)).toEqual(["3", "4", "1"]);
+    expect(quizCardProducts([products[1]!])[0]?.imageUrl).toBeNull();
+    expect(JSON.stringify(products)).toBe(before);
   });
 });

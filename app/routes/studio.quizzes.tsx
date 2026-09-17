@@ -9,8 +9,8 @@ import prisma from "../db.server";
 import { QzCard, QzSegmented } from "../components/qz";
 import { QzMenu, QzModal, QzPopover } from "../components/qz-overlays";
 import { computeBenchmarks } from "../lib/quizBenchmarks";
-import { quizCardFacts, type QuizCardThumb } from "../lib/quizLibraryCard";
-import { QuizQuestionThumbnail } from "../components/studio/QuizQuestionThumbnail";
+import { quizCardFacts, quizCardProducts, type QuizCardThumb, type QuizCardProduct } from "../lib/quizLibraryCard";
+import { QuizResultsThumbnail } from "../components/studio/QuizResultsThumbnail";
 import { publishQuiz } from "../lib/quizPublish";
 import { refreshBucketMembership } from "../lib/bucketPersist.server";
 import { formatDate } from "../lib/formatDate";
@@ -44,8 +44,13 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   // pull the first 8 named products (with photos) for the read-only popover.
   const factsById = new Map(quizzes.map((q) => [q.id, quizCardFacts(q.draftJson)]));
   const allTargetIds = [...new Set([...factsById.values()].flatMap((f) => f.targetIds))];
-  const cats = allTargetIds.length
-    ? await prisma.category.findMany({ where: { shopId: shop.id, id: { in: allTargetIds } }, select: { id: true, productIds: true } })
+  const previewQuizIds = quizzes.filter((q) => factsById.get(q.id)?.thumb.results).map((q) => q.id);
+  const cats = allTargetIds.length || previewQuizIds.length
+    ? await prisma.category.findMany({
+      where: { shopId: shop.id, OR: [{ id: { in: allTargetIds } }, { quizId: { in: previewQuizIds } }] },
+      select: { id: true, quizId: true, productIds: true },
+      orderBy: { id: "asc" },
+    })
     : [];
   const catProducts = new Map(cats.map((c) => [c.id, c.productIds]));
   const allProductIds = [...new Set(cats.flatMap((c) => c.productIds))];
@@ -69,6 +74,16 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
         const p = productById.get(id);
         return { id, title: p?.title ?? "Untitled product", imageUrl: p?.imageUrl ?? null };
       });
+      // Results thumbnails sample this quiz's catalog, including selected
+      // groups in unfinished drafts. Never pull unrelated shop products.
+      const previewIds = [...new Set([
+        ...recProductIds,
+        ...cats.filter((c) => c.quizId === q.id).flatMap((c) => c.productIds),
+      ])];
+      const previewProducts = facts.thumb.results ? quizCardProducts(previewIds.flatMap((id) => {
+        const p = productById.get(id);
+        return p ? [{ id, title: p.title, imageUrl: p.imageUrl }] : [];
+      })) : [];
       return {
         id: q.id,
         name: q.name,
@@ -82,6 +97,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
         personas: facts.personas,
         recs: recProductIds.length,
         recProducts,
+        previewProducts,
         thumb: facts.thumb,
       };
     }),
@@ -157,10 +173,9 @@ type SortKey = "recent" | "name" | "oldest";
 // "View more" reveals the next 20 (client-side: the loader already ships all rows).
 const PAGE_SIZE = 20;
 
-// Decider cards sample an authored question in the merchant's brand. Legacy
-// docs and drafts without questions retain the existing intro/empty thumbnail.
-function QuizCardPreview({ thumb, compact }: { thumb: QuizCardThumb; compact?: boolean }) {
-  if (thumb.question) return <QuizQuestionThumbnail thumb={thumb} />;
+// Image-led results compositions for decider quizzes; legacy thumbnails stay intact.
+function QuizCardPreview({ thumb, products, compact }: { thumb: QuizCardThumb; products: QuizCardProduct[]; compact?: boolean }) {
+  if (thumb.results) return <QuizResultsThumbnail thumb={thumb} products={products} />;
   if (thumb.isNew) {
     return (
       <div className={`qz-qprev qz-qprev-empty${compact ? " is-compact" : ""}`} aria-hidden>
@@ -587,14 +602,14 @@ export default function StudioQuizzes() {
                     </div>
 
                     <div
-                      className={`qz-qcard-preview${q.thumb.question ? " has-question" : ""}`}
+                      className={`qz-qcard-preview${q.thumb.results ? " has-results" : ""}`}
                       role="button"
                       tabIndex={0}
                       aria-label={q.inSetup ? `Resume setting up ${q.name}` : `Open ${q.name} in the builder`}
                       onClick={() => navigate(openTo(q))}
                       onKeyDown={(e) => { if (e.key === "Enter") navigate(openTo(q)); }}
                     >
-                      <div className="qz-qcard-shot"><QuizCardPreview thumb={q.thumb} /></div>
+                      <div className="qz-qcard-shot"><QuizCardPreview thumb={q.thumb} products={q.previewProducts} /></div>
                       <div className="qz-qcard-float">
                         {/* Preview moved to the ⋯ menu. One action here, never two. */}
                         <button

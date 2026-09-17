@@ -1,6 +1,6 @@
 import { resolveDesignTokens } from "./designTokens";
 import { z } from "zod";
-import { QuestionType } from "./quizSchema";
+import { DesignTokens, RecPageGlobal } from "./quizSchema";
 
 // Per-card facts + bounded thumbnail data for the Quizzes library.
 // Pure + defensive: reads a loosely-typed quiz doc (draftJson) WITHOUT a full
@@ -21,6 +21,9 @@ interface LooseNode {
 }
 interface LooseDoc {
   logic_model?: string;
+  design_linked?: boolean;
+  rec_page_design?: unknown;
+  rec_page_settings?: { global?: unknown };
   nodes?: LooseNode[];
   design_tokens?: {
     colors?: { primary?: string; background?: string; text?: string };
@@ -30,8 +33,8 @@ interface LooseDoc {
 }
 
 export interface QuizCardThumb {
-  /** Bounded, read-only sample of an authored decider question. */
-  question?: QuizCardQuestion;
+  /** A results-page composition, without pretending to compute a winner. */
+  results?: QuizCardResults;
   // §R-7 card preview: the quiz's first screen rendered in the MERCHANT's brand.
   headline: string;
   subtext: string;
@@ -53,56 +56,27 @@ export interface QuizCardFacts {
 
 const DEFAULTS = resolveDesignTokens().colors ?? {};
 
-const previewImage = z.string().refine((url) =>
-  /^https?:\/\//i.test(url) || (url.startsWith("/") && !url.startsWith("//")),
-).optional().catch(undefined);
-const previewQuestion = z.object({
-  type: z.literal("question"),
-  data: z.object({
-    text: z.string().trim().min(1),
-    question_type: QuestionType,
-    image_url: previewImage,
-    answers: z.array(z.object({
-      text: z.string().trim().min(1),
-      image_url: previewImage,
-    }).nullable().catch(null)).catch([]),
-    input_config: z.object({ placeholder: z.string().optional() }).optional().catch(undefined),
-    answer_display: z.object({
-      mode: z.enum(["list", "icon", "cards", "tiles", "pills"]).optional(),
-      show_media: z.boolean().optional(),
-    }).optional().catch(undefined),
-  }),
-});
-
-export interface QuizCardQuestion {
-  text: string;
-  type: z.infer<typeof QuestionType>;
-  imageUrl?: string;
-  answers: Array<{ text: string; imageUrl?: string }>;
-  remainingAnswers: number;
-  placeholder?: string;
-  tiles: boolean;
+export interface QuizCardResults {
+  headline: string;
+  layout: "hero_grid" | "grid" | "list" | "single_hero";
+  imgFit: "cover" | "contain";
 }
 
-function questionSample(nodes: LooseNode[]): QuizCardQuestion | undefined {
-  for (const node of nodes) {
-    const parsed = previewQuestion.safeParse(node);
-    if (!parsed.success) continue;
-    const q = parsed.data.data;
-    const answers = q.answers.filter((a) => a !== null);
-    const showMedia = q.answer_display?.show_media !== false;
-    return {
-      text: q.text,
-      type: q.question_type,
-      imageUrl: q.image_url,
-      answers: answers.slice(0, 3).map((a) => ({ text: a.text, imageUrl: showMedia ? a.image_url : undefined })),
-      remainingAnswers: Math.max(0, answers.length - 3),
-      placeholder: q.input_config?.placeholder,
-      tiles: showMedia && answers.some((a) => a.image_url) &&
-        (q.answer_display?.mode === "tiles" || q.answer_display?.mode === "cards" ||
-          (!q.answer_display?.mode && ["image_tile", "image_picker", "swatch"].includes(q.question_type))),
-    };
-  }
+export interface QuizCardProduct {
+  id: string;
+  title: string;
+  imageUrl: string | null;
+}
+
+const previewImage = z.string().refine((url) =>
+  /^https?:\/\//i.test(url) || (url.startsWith("/") && !url.startsWith("//")),
+);
+
+/** Prefer real photography, but retain named products when photos are absent. */
+export function quizCardProducts(products: readonly QuizCardProduct[]): QuizCardProduct[] {
+  const unique = [...new Map(products.map((p) => [p.id, p])).values()];
+  return unique.map((p) => ({ ...p, imageUrl: previewImage.safeParse(p.imageUrl).success ? p.imageUrl : null }))
+    .sort((a, b) => Number(Boolean(b.imageUrl)) - Number(Boolean(a.imageUrl))).slice(0, 3);
 }
 
 export function quizCardFacts(doc: unknown): QuizCardFacts {
@@ -125,27 +99,37 @@ export function quizCardFacts(doc: unknown): QuizCardFacts {
   const personas = targets.size > 0 ? targets.size : resultNodes;
 
   const intro = nodes.find((n) => n?.type === "intro");
-  const c = d.design_tokens?.colors ?? {};
+  const isDecider = d.logic_model === "decider";
+  const resultDesign = isDecider && d.design_linked === false
+    ? DesignTokens.safeParse(d.rec_page_design) : null;
+  const tokens = resultDesign?.success ? resultDesign.data : d.design_tokens;
+  const c = tokens?.colors ?? {};
   const headline = intro?.data?.headline?.trim() || "";
   // A first screen that's still the default "New quiz" (or empty) with no brand
   // color set → the neutral placeholder, not a fake brand render.
   const isNew = (!headline || /^new quiz$/i.test(headline)) && !c.primary;
-  const question = d.logic_model === "decider" ? questionSample(nodes) : undefined;
+  const settings = RecPageGlobal.safeParse(d.rec_page_settings?.global);
+  const config = settings.success ? settings.data : {};
+  const results: QuizCardResults | undefined = isDecider ? {
+    headline: config.headline?.trim() || "Your perfect match",
+    layout: config.layout || "hero_grid",
+    imgFit: config.imgFit || "contain",
+  } : undefined;
   return {
     questions,
     personas,
     targetIds: [...targets],
     thumb: {
-      ...(question ? { question } : {}),
-      headline: question?.text || headline || "New quiz",
+      ...(results ? { results } : {}),
+      headline: headline || "New quiz",
       subtext: intro?.data?.subtext?.trim() || "",
       buttonLabel: intro?.data?.button_label?.trim() || "Start",
-      logoUrl: d.design_tokens?.logo?.url ?? null,
+      logoUrl: tokens?.logo?.url ?? null,
       bg: c.background || DEFAULTS.background || "rgb(255,255,255)",
       primary: c.primary || DEFAULTS.primary || "rgb(109,90,230)",
       text: c.text || DEFAULTS.text || "rgb(26,26,26)",
-      font: d.design_tokens?.typography?.heading?.family || d.design_tokens?.typography?.body?.family || null,
-      isNew: question ? false : isNew,
+      font: tokens?.typography?.heading?.family || tokens?.typography?.body?.family || null,
+      isNew,
     },
   };
 }
