@@ -140,16 +140,21 @@ export function PasteRulesModal({
         className="qz-lm qz-lm-paste"
         role="dialog"
         aria-modal="true"
-        aria-label="Paste rules"
+        aria-label="Paste your recommendation rules"
       >
         <header className="qz-lm-h">
-          <h2>Paste rules</h2>
+          <h2>Paste your recommendation rules</h2>
           <button type="button" className="qz-lm-close" aria-label="Close" onClick={onClose}>
             ×
           </button>
         </header>
 
         <div className="qz-lm-b">
+          <p id="paste-rules-help" className="qz-lm-pintro">
+            Tell us who should see what. Use one rule per line in the format
+            below, with the answer and result names from your quiz. We’ll show
+            you what matches before you add anything.
+          </p>
           <div className="qz-lm-pastegrid">
             {/* ── left: the box ── */}
             <div>
@@ -161,6 +166,7 @@ export function PasteRulesModal({
                   rows={6}
                   onChange={(e) => setText(e.target.value)}
                   aria-label="Rules, one per line"
+                  aria-describedby="paste-rules-help"
                 />
                 {text.length === 0 ? (
                   // A bare textarea teaches nothing — the ghost carries the
@@ -201,7 +207,7 @@ export function PasteRulesModal({
             {/* ── right: the format (empty) / what we understood (typed) ── */}
             {!hasText ? (
               <div>
-                <div className="qz-lm-plabel">The format</div>
+                <div className="qz-lm-plabel">How to write a rule</div>
                 <div className="qz-lm-fmtcard">
                   <div className="qz-lm-fmtline">One rule per line</div>
                   <div className="qz-lm-exline">
@@ -245,7 +251,7 @@ export function PasteRulesModal({
                 </div>
                 {seeds.length > 0 ? (
                   <div className="qz-lm-fmtcard">
-                    <div className="qz-lm-fmtline">From this quiz, to copy:</div>
+                    <div className="qz-lm-fmtline">Start with your quiz’s answers</div>
                     {seeds.map((s) => (
                       <div key={s.line} className="qz-lm-fmtex">
                         when{" "}
@@ -263,14 +269,14 @@ export function PasteRulesModal({
                       className="qz-btn qz-lm-seedbtn"
                       onClick={() => setText(seeds.map((s) => s.line).join("\n"))}
                     >
-                      Use these as a starting point
+                      Try these examples
                     </button>
                   </div>
                 ) : null}
               </div>
             ) : (
               <div>
-                <div className="qz-lm-plabel">What we understood</div>
+                <div className="qz-lm-plabel">Review your rules</div>
                 <div
                   className={`qz-lm-psum ${badLines.length === 0 ? "is-ok" : "is-warn"}`}
                   aria-live="polite"
@@ -326,11 +332,10 @@ export function PasteRulesModal({
                     (case + spacing), never the partial-text matching it
                     doesn't do. */}
                 <div className="qz-lm-pguar">
-                  Capitalisation and spacing are forgiven — names must match your
-                  answers word for word.{" "}
+                  Answer and result names must match your quiz. Capitalisation
+                  and extra spaces don’t matter.{" "}
                   <b>
-                    Anything we cannot match is listed here and skipped, never
-                    guessed.
+                    Unmatched lines won’t be added. Edit them here to try again.
                   </b>
                 </div>
               </div>
@@ -339,7 +344,7 @@ export function PasteRulesModal({
         </div>
 
         <footer className="qz-lm-f">
-          <span>Pasted rules are created in order and edit like any other.</span>
+          <span>Nothing is added until you confirm. You can edit rules later.</span>
           <span className="qz-lm-fright">
             <button type="button" className="qz-btn" onClick={onClose}>
               Cancel
@@ -351,8 +356,8 @@ export function PasteRulesModal({
               onClick={handleCreate}
             >
               {!hasText
-                ? "Check rules"
-                : `Create ${okLines.length} ${okLines.length === 1 ? "rule" : "rules"}`}
+                ? "Add rules"
+                : `Add ${okLines.length} ${okLines.length === 1 ? "rule" : "rules"}`}
             </button>
           </span>
         </footer>

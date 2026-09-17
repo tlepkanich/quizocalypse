@@ -12218,6 +12218,7 @@ button.qz-pb-row:hover { background: var(--qz-cream-2); }
 .qz-lm-pl2 b { color: var(--qz-ink); font-weight: 600; }
 .qz-lm-pe { display: block; font-size: 11.5px; color: var(--qz-ok); margin-top: 3px; }
 .qz-lm-pres.is-bad .qz-lm-pe { color: var(--qz-crit); }
+.qz-lm-pintro { margin: 0 0 16px; max-width: 65ch; font-size: 13px; color: var(--qz-ink); line-height: 1.55; }
 .qz-lm-pguar { margin-top: 12px; font-size: 12px; color: var(--qz-ink-4); line-height: 1.55; }
 .qz-lm-pguar b { color: var(--qz-ink-3); font-weight: 600; }
 
