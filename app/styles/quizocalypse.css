@@ -2183,7 +2183,10 @@ body[data-qz] .qz-rb-rail-row:focus-visible {
 .qz-rb-stock.is-out { color: var(--qz-crit); }
 /* Mock railEmpty: dashed lavender box, glyph, quiet copy. */
 .qz-rb-rail-empty {
-  margin: 4px 0; border: 1px dashed color-mix(in srgb, var(--qz-accent) 14%, var(--qz-rule));
+  /* Same box as the filled list (see --qz-rb-rail-h) — centered copy. */
+  height: var(--qz-rb-rail-h); box-sizing: border-box;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  margin: 0; border: 1px dashed color-mix(in srgb, var(--qz-accent) 14%, var(--qz-rule));
   border-radius: var(--qz-radius); background: var(--qz-accent-tint);
   padding: 20px 14px; text-align: center;
 }
@@ -3514,9 +3517,15 @@ body[data-qz] .qz-ql-adel:focus-visible { outline: none; box-shadow: var(--qz-sh
   padding: 0 6px; border-radius: var(--qz-radius-pill); font-size: 12px; font-weight: 600;
   background: var(--qz-cream-2); color: var(--qz-ink-2); font-variant-numeric: tabular-nums;
 }
-/* The five-row cut is MEASURED (inline max-height from the fifth real row);
-   the fade marks continuation, it does not truncate access (still scrolls). */
-.qz-rb-rail-list { display: flex; flex-direction: column; gap: 6px; overflow-y: auto; }
+/* ONE fixed height for the list AND the empty state, so the rail never grows
+   or shrinks as picks land (owner 2026-09-29). Sized to hold five two-line
+   group rows plus a section label. The fade marks continuation, it does not
+   truncate access (still scrolls). */
+.qz-rb-rail { --qz-rb-rail-h: 296px; }
+.qz-rb-rail-list {
+  display: flex; flex-direction: column; gap: 6px; overflow-y: auto;
+  height: var(--qz-rb-rail-h); box-sizing: border-box;
+}
 .qz-rb-rail-list.is-fade {
   -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 26px), transparent);
           mask-image: linear-gradient(to bottom, #000 calc(100% - 26px), transparent);

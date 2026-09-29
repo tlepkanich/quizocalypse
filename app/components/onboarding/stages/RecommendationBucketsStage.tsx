@@ -8,7 +8,8 @@
 // count as the control; selected-first FROZEN order; a 25-row window that
 // loads on scroll; a status filter on Products; a footer ledger; the rail is
 // "Results" with a composition sub-line, Groups/Products sections, the
-// deliverable count, a flash on add and a measured five-row fade; the AI
+// deliverable count, a flash on add and a fixed-height list that fades on
+// overflow; the AI
 // (both the heuristic tip and the goal pre-pick) is ONE pill in the tab
 // strip's corner opening the AI Picks dialog, whose Apply/Undo/Revert are
 // scoped to the suggested TYPE; and the Custom tab creates groups through
@@ -81,8 +82,6 @@ const TAB_META: Array<{ type: BucketType; label: string }> = [
 const WINDOW = 25;
 // The 5 s Undo (decision 2 — five ships unless the owner says otherwise).
 const UNDO_MS = 5000;
-// The rail cuts at the FIFTH real row (measured, not calculated).
-const RAIL_ROWS = 5;
 
 // The one-recommendation notice is OFF this screen (§08 advisories removed);
 // its copy is preserved verbatim for the per-page AI surface.
@@ -618,23 +617,17 @@ export function RecommendationBucketsStage({
     return () => window.clearTimeout(t);
   }, [poolKey, poolCount, mutationState, specEligible]);
 
-  // ── the rail: measured five-row cut + the landed flash ───────────────────
+  // ── the rail: fixed-height list (CSS) + overflow fade + the landed flash ──
+  // Owner 2026-09-29: the rail never resizes as picks land — the list box is
+  // one fixed height (--qz-rb-rail-h) whether it holds 0, 5 or 50 rows. The
+  // old measured fifth-row cut varied with row mix (group rows carry a meta
+  // line; section labels appear only when both kinds are picked).
   const railListRef = useRef<HTMLDivElement>(null);
-  const [railMax, setRailMax] = useState<number | null>(null);
+  const [railOverflow, setRailOverflow] = useState(false);
   const { groups: railGroups, products: railProducts } = railComposition(selectedList);
   useEffect(() => {
     const rl = railListRef.current;
-    if (!rl) {
-      setRailMax(null);
-      return;
-    }
-    const rows = rl.querySelectorAll<HTMLElement>(".qz-rb-rail-row");
-    if (rows.length <= RAIL_ROWS) {
-      setRailMax(null);
-      return;
-    }
-    const fifth = rows[RAIL_ROWS - 1]!;
-    setRailMax(fifth.getBoundingClientRect().bottom - rl.getBoundingClientRect().top);
+    setRailOverflow(rl ? rl.scrollHeight > rl.clientHeight : false);
   }, [selectedList.length, railGroups.length, railProducts.length]);
   useEffect(() => {
     if (!justAdded) return;
@@ -1015,6 +1008,8 @@ export function RecommendationBucketsStage({
           <div className="qz-rb-rail-head">
             <span className="qz-rb-rail-title">
               <strong>Results</strong>
+              {/* The sub-line always renders (a blank line at zero) so the
+                  rail head keeps its height as the first pick lands. */}
               {count ? (
                 <span className="qz-rb-rail-sub">
                   {railGroups.length ? (
@@ -1029,7 +1024,11 @@ export function RecommendationBucketsStage({
                     </>
                   ) : null}
                 </span>
-              ) : null}
+              ) : (
+                <span className="qz-rb-rail-sub" aria-hidden>
+                  {" "}
+                </span>
+              )}
             </span>
             <span className="qz-rb-count">{count}</span>
           </div>
@@ -1040,9 +1039,8 @@ export function RecommendationBucketsStage({
             </div>
           ) : (
             <div
-              className={`qz-rb-rail-list${railMax ? " is-fade" : ""}`}
+              className={`qz-rb-rail-list${railOverflow ? " is-fade" : ""}`}
               ref={railListRef}
-              style={railMax ? { maxHeight: railMax } : undefined}
             >
               {[
                 { label: "Groups", items: railGroups },
