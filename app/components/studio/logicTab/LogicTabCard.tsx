@@ -2,7 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useReducer, useRef, u
 import type { Quiz } from "../../../lib/quizSchema";
 import type { BuilderCategory, BuilderCollection } from "../../builder/stepProps";
 import type { IndexedProduct } from "../../../lib/recommendationEngine";
-import type { OrderedQuestion } from "../../../lib/questionOrder";
+import { orderedQuestions, type OrderedQuestion } from "../../../lib/questionOrder";
 import type { LogicStyle } from "../../../lib/logicStyle";
 import { appendBankQuestion } from "../../../lib/quizMutations";
 import { ruleTargets } from "../../../lib/recommendDecider";
@@ -11,7 +11,7 @@ import { buildAttributeReadout } from "../../../lib/attributeClustering";
 import { useQzToast } from "../../qz-toast";
 import type { SaveOutcome, SaveToken } from "../saveTracker";
 import { CreateRuleModal, type CreateRuleFlow } from "./CreateRuleModal";
-import { LogicQuestionWidget } from "./LogicQuestionWidget";
+import { LogicQuestionWidget, type PaneFocusRequest } from "./LogicQuestionWidget";
 import { PasteRulesModal } from "./PasteRulesModal";
 import { AddQuestionDialog } from "../AddQuestionDialog";
 import { QuestionWindow } from "./QuestionWindow";
@@ -167,6 +167,8 @@ export function LogicTabCard({
   docRef.current = doc;
   const getLatestDoc = useCallback(() => docRef.current, []);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  // A focus request naming a control of the question (the pane focuses it).
+  const [paneFocus, setPaneFocus] = useState<PaneFocusRequest | null>(null);
   const selected = questions.find((q) => q.node.id === selectedId) ?? questions[0] ?? null;
 
   const allCategories = useMemo(() => {
@@ -303,6 +305,13 @@ export function LogicTabCard({
     switch (req.kind) {
       case "question":
         setSelectedId(req.id);
+        if (req.control)
+          setPaneFocus({
+            nonce: req.nonce,
+            questionId: req.id,
+            control: req.control,
+            ...(req.answerId ? { answerId: req.answerId } : {}),
+          });
         pendingScroll.current = () =>
           scrollTo(`.qz-lw-rail [data-node-id="${CSS.escape(req.id)}"]`);
         break;
@@ -425,6 +434,9 @@ export function LogicTabCard({
       readout={readout}
       qIndexByNodeId={qIndexByNodeId}
       commit={commit}
+      commitTracked={commit ? commitTracked : undefined}
+      undo={commit ? undo : undefined}
+      focusRequest={paneFocus}
       rulesOnly={false}
       deciderQIndex={deciderQIndex}
       hasNarrowFields={hasNarrowFields}
@@ -598,7 +610,10 @@ export function LogicTabCard({
             setAddOpen(false);
             if (added) {
               setSelectedId(added.id);
-              toast(QUESTION_COPY.added(questions.length + 1));
+              // Its real number in the flow after the commit (it can land
+              // mid-flow when orphans follow the straight-through run).
+              const n = orderedQuestions(next).find((x) => x.node.id === added.id)?.qIndex;
+              toast(QUESTION_COPY.added(n ?? questions.length + 1));
             }
           }}
         />

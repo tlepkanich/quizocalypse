@@ -300,3 +300,212 @@ export function joinNumbers(list: readonly number[]): string {
   if (list.length <= 1) return String(list[0] ?? "");
   return `${list.slice(0, -1).join(", ")} and ${list[list.length - 1]}`;
 }
+
+// ── Filter Results + Rules · the question rail and pane (mock railItems,
+//    pane, roleMenu, picker, vpHTML, routeMenu, typeMenu, trayMoreHTML,
+//    aqHTML). Stored roles decides / filter / qualifier never change. ──
+
+export const RAIL_COPY = {
+  kicker: "Questions",
+  addQuestion: "+ Add question",
+  countsLabel: "Question roles",
+};
+
+export const PANE_COPY = {
+  questionLabel: (n: number) => `Question ${n} text`,
+  answerLabel: (key: string) => `Answer ${key} text`,
+  pointLabel: (n: number) => `Point ${n} label`,
+  addLabel: "Add label",
+  noAnswers: "no answer options",
+  noQuestions: "No questions yet.",
+  chooseValue: "Choose a value",
+  keepsEverything: "Keeps everything",
+  stopKeeping: "Stop keeping everything",
+  place: (name: string) => `Place ${name} here`,
+  add: (name: string) => `Add ${name}`,
+  alreadyHere: (name: string) => `${name} is already here`,
+  removeTarget: (name: string) => `Remove ${name} from this answer`,
+  removeValue: (label: string) => `Remove ${label} from this answer`,
+  deletedTarget: "recommendation deleted",
+  cellPicks: (answer: string) => `Choose a result for ${answer}`,
+  cellValues: (answer: string) => `Choose values for ${answer}`,
+  routeNote: "The first checked answer, in the order above, decides where the shopper goes next.",
+};
+
+/** The tray on the picking question (mock pane .tray, trayMoreHTML). */
+export const TRAY_COPY = {
+  label: RECOMMENDATIONS,
+  empty: "No recommendations yet",
+  chipTip: (name: string, n: number, placed: boolean) =>
+    `${name} · ${n} product${n === 1 ? "" : "s"}${placed ? " · placed" : ""}`,
+  moreLabel: (n: number) => `${n} more recommendations`,
+  all: (n: number) => `All recommendations · ${n}`,
+  search: "Search recommendations",
+  rowNote: (n: number, placed: boolean) =>
+    `${placed ? "placed · " : ""}${n} product${n === 1 ? "" : "s"}`,
+  nothingMatches: "Nothing matches.",
+};
+
+/** The picks picker on a Picks cell (mock picker). */
+export const PICKER_COPY = {
+  title: CHOOSE_A_RESULT,
+  search: "Search recommendations",
+  fresh: (n: number) => `No answer shows this yet · ${n} product${n === 1 ? "" : "s"}`,
+  used: (n: number) => `Already on an answer · ${n} product${n === 1 ? "" : "s"}`,
+  nothingMatches: "Nothing matches.",
+  empty: "No recommendations yet.",
+  drill: (n: number, name: string) => `See the ${n} products in ${name}`,
+  products: (n: number) => `${n} product${n === 1 ? "" : "s"}`,
+  back: "‹ Back",
+  addThis: "Add this",
+  removeThis: "Remove this",
+  showing: (shown: number, total: number) => `Showing ${shown} of ${total}`,
+  all: "All",
+  kinds: {
+    collection: "Collections",
+    product: "Products",
+    tag: "Tags",
+    group: "Custom groups",
+  },
+};
+
+/** The value picker on a Narrows cell (mock vpHTML). */
+export const VALUE_COPY = {
+  title: (answer: string) => `${answer} · keeps`,
+  search: "Search tags, metafields, variants…",
+  searchLabel: "Search values",
+  tabsLabel: "Source",
+  tabs: {
+    all: "All",
+    tag_family: "Tags",
+    metafield: "Metafields",
+    variant_option: "Variants",
+    product_type: "Product types",
+  },
+  group: {
+    tag_family: "Tag",
+    metafield: "Metafield",
+    variant_option: "Variant",
+    product_type: "Product type",
+  },
+  keepsEverything: "Keeps everything",
+  noNarrowing: "no narrowing",
+  selectAll: "Select all",
+  clearAll: "Clear all",
+  products: (n: number) => `${n} product${n === 1 ? "" : "s"}`,
+  drill: (n: number, value: string) => `See the ${n} products matching ${value}`,
+  nothingSelected: "Nothing selected",
+  selected: (n: number) => `${n} selected`,
+  union: (u: number, total: number) => `${u} of ${total} products`,
+  none: "No catalogue values to pick from yet.",
+  nothingMatches: (q: string) => `Nothing matches “${q}”.`,
+  noProducts: "No products carry this value.",
+  cancel: "Cancel",
+  done: "Done",
+  back: "‹ Back",
+};
+
+/** The route menu (mock routeMenu). */
+export const ROUTE_COPY = {
+  next: "Next",
+  results: "Results",
+  title: (answer: string) => `${answer} · goes to`,
+  menuLabel: (answer: string) => `Where “${answer}” goes`,
+  nextQuestion: "The next question",
+  lastQuestion: "the results (this is the last question)",
+  skips: (n: number) => `skips ${n} question${n === 1 ? "" : "s"}`,
+  straight: "Straight to the results",
+};
+
+/** The role menu's loss lines and the D9 toast (mock roleMenu, moveRole). */
+export const ROLE_LOSS_COPY = {
+  moves: (k: number) => ` · moves it from Q${k} and clears Q${k}'s mapping`,
+  clearsValues: (n: number) => ` · clears Q${n}'s values`,
+  cannotPick: "needs answers to choose from",
+  targets: (q: number, n: number) =>
+    `Q${q}'s ${n} recommendation${n === 1 ? " was" : "s were"} removed`,
+  values: (q: number, n: number) => `Q${q}'s ${n} value${n === 1 ? " was" : "s were"} removed`,
+  pillLabel: (n: number, role: string) => `Question ${n} role: ${role}`,
+  narrowApplied: (field: string, mapped: number, unmatched: number) =>
+    unmatched > 0
+      ? `Now narrows by ${field}. Map ${unmatched} answer${unmatched === 1 ? "" : "s"} below`
+      : `Now narrows by ${field}. ${mapped} answer${mapped === 1 ? "" : "s"} mapped, check them`,
+  attrChoose: "Choose attribute",
+  attrChooseTip: "Choose the attribute this question narrows by",
+  attrTip: (label: string) => `Narrows on ${label}. Click to change the attribute`,
+};
+
+/** The type line and the Question type popover (mock typeMeta, typeMenu). */
+export const TYPE_COPY = {
+  title: "Question type",
+  single: "Single select",
+  multi: "Multi-select",
+  five: "Five-point scale",
+  scale: "Scale",
+  image: "Image select",
+  multiLine: (min: number, max: number) =>
+    `Multi-select · pick ${min === max ? min : `${min}–${max}`}`,
+  scaleLine: (n: number) => `Scale · 1–${n}`,
+  /** D10 is open: the tooltip only promises what happens today (answers kept). */
+  tip: "Change the question type. Your answers are kept.",
+  min: "Min",
+  max: "Max",
+  points: "Points",
+  minLabel: "minimum selections",
+  maxLabel: "maximum selections",
+  pointsLabel: "scale points",
+  lowPlaceholder: "Label for 1 (optional)",
+  highPlaceholder: (n: number) => `Label for ${n} (optional)`,
+  lowLabel: "Label for the low end of the scale",
+  highLabel: "Label for the high end of the scale",
+  note: (n: number) => `Scale runs 1 → ${n}. Labels optional.`,
+  scaleCap: "Scale takes up to 10 answers",
+  anyOf: (q: number) => `Rules on Q${q} now match any of their answers`,
+  removePointTip: (n: number, text: string | null, mapped: boolean) =>
+    `Removes point ${n}${text ? ` · “${text}”` : ""}${mapped ? " and its mapping" : ""}`,
+  pointRemoved: (n: number, q: number, mapped: boolean) =>
+    `Removed point ${n} from Q${q}${mapped ? " · its mapping went with it" : ""}`,
+  overMax: (q: number, rules: readonly number[], max: number, needs: number) =>
+    rules.length > 1
+      ? `Rules ${joinNumbers(rules)} can never run now: they need more Q${q} answers than shoppers can pick`
+      : `Rule ${rules[0]} can never run now: it needs all ${needs} of its Q${q} answers and shoppers can pick ${max}`,
+};
+
+/** The most answers a question can have: appendBankQuestion keeps the
+ *  first 12 (questionMutations.ts), so the dialog caps there and says so. */
+export const MAX_QUESTION_ANSWERS = 12;
+
+/** Add a question (mock aqHTML; handoff "Add a question"). The type names
+ *  are the Question type popover's (D18: one spelling). */
+export const ADD_QUESTION_COPY = {
+  title: "Add a question",
+  types: [
+    { type: "single_select" as const, name: TYPE_COPY.single, hint: "they pick one answer" },
+    { type: "multi_select" as const, name: TYPE_COPY.multi, hint: "they pick several" },
+    { type: "image_tile" as const, name: TYPE_COPY.image, hint: "answers show as image tiles" },
+    { type: "rating" as const, name: TYPE_COPY.five, hint: "they rate from 1 to 5" },
+  ],
+  bandType: "Type",
+  bandQuestion: "Question",
+  bandAnswers: "Answers",
+  placeholder: "Type your question",
+  answerPlaceholder: "Answer text",
+  hint: (filled: number) => (filled < 2 ? `${filled} of 2 needed` : `${filled} answers`),
+  fiveNote: "A five-point scale generates the answers itself: 1 to 5, nothing to type.",
+  imageNote: "Images attach on the question once it exists.",
+  cap: (n: number) => `${n} answers is the most a question can have.`,
+  addAnswer: "+ Add answer",
+  grip: (n: number) => `Reorder answer ${n}. Drag it, or use the arrow keys.`,
+  deleteAnswer: (n: number) => `Delete answer ${n}`,
+  cancel: "Cancel",
+  add: "Add question",
+};
+
+/** Answer keys A…Z, then AA, AB… (mock letterKey, B58 backstop). */
+export function letterKey(index: number): string {
+  let s = "";
+  for (let i = index + 1; i > 0; i = Math.floor((i - 1) / 26)) {
+    s = String.fromCharCode(65 + ((i - 1) % 26)) + s;
+  }
+  return s;
+}
