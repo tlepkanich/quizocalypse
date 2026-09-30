@@ -1,0 +1,1898 @@
+<!doctype html><html><head><!-- frame-runtime --><!-- /frame-runtime --><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#faf9f5;color:#141413}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<meta charset="utf-8">
+<title>Logic Step Mock</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700;800&display=swap">
+<style>
+/* Wiskr admin is a single light look (Quartz tokens, pulled from the live deploy). */
+:root{
+  --paper:#FFFFFF; --ground:#F5F4F8; --cell:#FAF9FC;
+  --ink:#201C2E; --ink3:#4E4860; --ink4:#645E78; --ink25:#B4AFC4;
+  --rule:#E4E1EC; --rule2:#EFEDF4; --line2:#CFCADC; --rule-strong:#948EA6;
+  --accent:#5B45D6; --accent-ink:#4A36B8; --accent-wash:#EFECFD; --accent-line:#D5CDF8;
+  --ok:#0F6B45; --ok-wash:#E7F3ED; --ok-line:#BFE0CF;
+  --warn:#8A5300; --warn-wash:#FBF1E0; --warn-line:#EDD3A4; --warn-dot:#C98A1B;
+  --crit:#A5241C; --crit-wash:#FBEDEC; --crit-line:#EFCBC7;
+  --res:#1D4F91; --res-wash:#EAF2FE; --res-line:#C9DCFB;
+  --scrim:rgba(32,28,46,.45);
+  --r:6px; --r-sm:4px; --r-lg:8px;
+  --lift:0 1px 2px rgba(32,28,46,.08),0 0 0 1px rgba(32,28,46,.04);
+  --pop:0 12px 32px rgba(32,28,46,.16),0 0 0 1px rgba(32,28,46,.06);
+}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html,body{height:100%}
+body{margin:0;background:var(--ground);color:var(--ink);font:400 14px/1.45 "Figtree",-apple-system,"Segoe UI","Helvetica Neue",sans-serif}
+button{font:inherit;color:inherit;cursor:pointer}
+button:focus-visible,select:focus-visible,input:focus-visible,[tabindex]:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+
+/* ── artifact shell (not part of the product) ── */
+.shell{padding-block:14px 12px;padding-inline:16px;max-width:1240px;margin:0 auto;display:flex;flex-wrap:wrap;align-items:center;gap:8px 16px}
+.shell h1{margin:0;font-size:15px;font-weight:700;letter-spacing:-.01em}
+.shell label{display:inline-flex;align-items:center;gap:7px;font-size:13px;color:var(--ink3)}
+.stagewrap{overflow-x:auto;border-top:1px solid var(--rule);background:var(--paper)}
+.stage{min-width:1200px;min-height:760px;background:var(--paper)}
+
+/* ── funnel bar ── */
+.fbar{display:flex;align-items:center;height:54px;border-bottom:1px solid var(--rule);padding:0 16px 0 0}
+.fbar .logo{width:56px;height:54px;display:grid;place-items:center;border-right:1px solid var(--rule);margin-right:16px}
+.fsteps{flex:1;display:flex;align-items:center}
+.fstep{display:inline-flex;align-items:center;gap:8px;font-size:13px;color:var(--ink3);padding:6px 12px;border-radius:var(--r);white-space:nowrap}
+.fstep.done{background:var(--accent-wash);color:var(--accent-ink);font-weight:500}
+.fstep.now{color:var(--ink);font-weight:600}
+.fstep .n{font-size:10.5px;font-weight:600;width:22px;height:22px;border-radius:var(--r-sm);display:grid;place-items:center;background:var(--rule2);color:var(--ink4)}
+.fstep.now .n{background:var(--accent);color:#fff}
+.fline{flex:1;height:2px;background:var(--rule2);min-width:24px}
+.fbar .back{border:0;background:none;width:44px;height:54px;border-left:1px solid var(--rule);margin-left:16px;color:var(--ink3)}
+.cta{border:0;background:var(--accent);color:#fff;font-size:13.5px;font-weight:600;padding:9px 16px;border-radius:var(--r)}
+.cta.blocked{background:var(--paper);color:var(--crit);box-shadow:inset 0 0 0 1px var(--crit)}
+.work{max-width:1256px;margin:0 auto;padding:22px 16px 40px}
+
+/* ── card: rail · pane · rules column ── */
+.card{border:1px solid var(--rule);border-radius:var(--r-lg);background:var(--paper);overflow:hidden}
+.grid3{display:grid;grid-template-columns:262px minmax(0,1fr) 304px}
+.rail{border-right:1px solid var(--rule);background:var(--cell);padding:12px;min-height:480px;display:flex;flex-direction:column}
+.railcount{margin-top:auto;padding:14px 8px 2px;font-size:12px;color:var(--ink4);display:flex;flex-wrap:wrap;gap:4px 12px}
+.railcount .dot{margin:0 5px 1px 0}
+.railhead{display:flex;align-items:center;gap:6px;padding:5px 8px 8px}
+.kick{font-size:10px;letter-spacing:.05em;text-transform:uppercase;color:var(--ink4);font-weight:600}
+.railn{font-size:10px;color:var(--ink25);font-variant-numeric:tabular-nums}
+.qi{display:flex;align-items:flex-start;gap:9px;width:100%;padding:9px 10px;border:0;background:none;border-radius:var(--r);text-align:left}
+.qi:hover{background:var(--ground)}
+.qi.on,.qi.on:hover{background:var(--paper);box-shadow:var(--lift)}
+.qn{flex:0 0 14px;font-size:11px;line-height:1.6;color:var(--ink4);font-variant-numeric:tabular-nums}
+.qtxt{flex:1;min-width:0;font-size:13.5px;line-height:1.4;color:var(--ink3);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.qi.on .qtxt{color:var(--ink);font-weight:600}
+.qtag{flex:0 0 auto;font-size:9.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;padding:2px 6px;border-radius:var(--r-sm);background:var(--ground);color:var(--ink25);margin-top:2px}
+.qtag.decides{background:var(--accent-wash);color:var(--accent-ink)}
+.qtag.filter{background:var(--ok-wash);color:var(--ok)}
+.qadd{width:100%;text-align:left;padding:11px 13px;margin-top:6px;border-radius:var(--r);font-size:13px;color:var(--ink4);border:1px dashed var(--line2);background:none}
+.qadd:hover{border-color:var(--accent-line);color:var(--accent-ink)}
+
+.pane{padding:18px 20px;min-width:0}
+.paneh{display:flex;align-items:flex-start;justify-content:space-between;gap:20px;margin-bottom:16px}
+.paneh h3{flex:1;min-width:0;margin:0;font-size:16px;font-weight:700;line-height:1.35}
+.rolebtn{display:inline-flex;align-items:center;gap:7px;font-size:13px;font-weight:700;background:transparent;border:1px solid transparent;border-radius:var(--r);padding:5px 9px;white-space:nowrap;flex:0 0 auto}
+.rolebtn:hover{background:var(--ground);border-color:var(--rule)}
+.cv{color:var(--ink25);font-size:9px}
+.prule{height:1px;background:var(--rule);margin:0 0 8px}
+.tray{display:flex;align-items:center;gap:10px;margin:0 0 10px;padding:6px 8px 6px 12px;border:1px solid var(--rule);background:var(--cell);border-radius:var(--r-lg)}
+.tray .tray-lb{flex:none}
+.tray-h{display:flex;align-items:center;gap:12px;min-height:24px}
+.tray-lb{flex:1;font-size:9.5px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;color:var(--ink25)}
+.tray-hint{font-size:12px;font-weight:600;color:var(--accent-ink)}
+.tray-c{flex:1;min-width:0;display:flex;flex-wrap:nowrap;gap:6px;overflow:hidden}
+.tchip{flex:none;max-width:170px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;border:1px solid var(--rule);background:var(--paper);border-radius:var(--r);padding:3px 9px;font-size:12.5px;font-weight:600;color:var(--ink)}
+.tchip:hover{border-color:var(--line2)}
+.tchip.fresh{color:var(--ok);border-color:var(--ok-line)}
+.tchip.fresh:not(.armed):hover{border-color:var(--ok)}
+.tchip.armed{border-color:var(--accent);background:var(--accent-wash);color:var(--accent-ink)}
+.tchip.tmore{border-style:dashed;color:var(--ink4)}
+.tchip.tmore:hover{border-color:var(--accent);color:var(--accent-ink)}
+.tcard{display:inline-flex;align-items:center;gap:9px;font-size:13px;font-weight:600;background:var(--paper);border:1px solid var(--rule);border-radius:var(--r);padding:4px 11px 4px 4px}
+.tcard:hover{border-color:var(--line2);box-shadow:var(--lift)}
+.tcard.armed{border-color:var(--accent);background:var(--accent-wash);color:var(--accent-ink);font-weight:700}
+.tcard.used{color:var(--ink25)}
+.tcard.used .thumb{opacity:.55}
+.thumb{width:30px;height:30px;flex:0 0 30px;border-radius:var(--r-sm);box-shadow:inset 0 0 0 1px rgba(32,28,46,.05)}
+.thumb.sm{width:22px;height:22px;flex-basis:22px}
+
+.arow{display:grid;grid-template-columns:18px minmax(0,1fr) 200px 78px;gap:10px;align-items:center;padding:9px 0;border-bottom:1px solid var(--rule2)}
+.arow:last-child{border-bottom:0}
+.akey{font-size:11px;color:var(--ink25)}
+.atext{font-size:14.5px;min-width:0}
+.cell{display:flex;flex-wrap:wrap;align-items:center;gap:3px 2px;width:100%;min-height:30px;border:1px solid transparent;border-radius:var(--r);padding:2px 3px 2px 2px;cursor:pointer}
+.cell:hover{background:var(--paper);border-color:var(--rule)}
+.cell.blank{border-style:dashed;border-color:var(--line2)}
+.cell.blank:hover{border-color:var(--accent)}
+.cell.drop{border-style:dashed;border-color:var(--accent);background:var(--accent-wash)}
+.cell.inert{cursor:default}
+.cell.inert:hover{background:none;border-color:transparent}
+.vbtn{display:flex;align-items:center;width:100%;font-size:13px;font-weight:500;color:var(--ink25);padding:4px 7px}
+.cell:hover .vbtn{color:var(--accent-ink)}
+.vbtn .cv{margin-left:auto}
+.arow .cell{justify-content:center}
+.arow .vbtn{justify-content:center;gap:6px}
+.arow .vbtn .cv{margin-left:0}
+.chipw{display:inline-flex;align-items:center;border-radius:var(--r-sm);padding-left:6px}
+.chipw:hover{background:var(--ground)}
+.chip{font-size:13px;font-weight:700}
+.cn{font-size:11px;font-weight:600;color:var(--ink25);padding:0 5px;font-variant-numeric:tabular-nums}
+.xone{width:16px;height:16px;border:0;background:none;color:var(--ink25);font-size:12px;line-height:1;border-radius:3px;opacity:0;padding:0}
+.arow:hover .xone,.rrow:hover .xone,.xone:focus-visible{opacity:.85}
+.xone:hover{color:var(--crit);opacity:1}
+/* D11/B19: order is priority in both styles, so every rule row carries ↑/↓ beside its trash — shown on
+   hover and on keyboard focus, holding their place the rest of the time so a row never reflows. */
+.mv{display:inline-flex;gap:2px;flex:none}
+.mv .xone{font-size:11px}
+.mv .xone:hover{color:var(--accent-ink)}
+.mv .xone:disabled{visibility:hidden;cursor:default}
+.rr:focus-within .xone,.rrow:focus-within .xone{opacity:.85}
+.rr:focus-within .grip{opacity:1}
+.dash{color:var(--ink25);padding-left:7px}
+.lchip{display:inline-flex;font-size:12px;font-weight:600;background:var(--warn-wash);color:var(--warn);border:1px solid var(--warn-line);border-radius:var(--r-sm);padding:1px 6px;margin-left:4px;cursor:pointer}
+.go{display:inline-flex;align-items:center;gap:5px;font-size:12.5px;font-weight:500;color:var(--ink25);border:1px solid transparent;border-radius:var(--r);padding:3px 6px;background:none;white-space:nowrap}
+.go:hover{border-color:var(--rule);color:var(--ink3)}
+.go.set{color:var(--ink);font-weight:600}
+
+.btn{border:1px solid var(--rule-strong);background:var(--paper);border-radius:var(--r);padding:5px 11px;font-size:12.5px;font-weight:600;color:var(--ink3);white-space:nowrap}
+.btn:hover{border-color:var(--ink3);color:var(--ink)}
+.btn.pri{border-color:var(--accent);background:var(--accent);color:#fff}
+.btn.ghost{border-color:transparent;background:none}
+.btn.ghost:hover{background:var(--ground);border-color:var(--rule)}
+.btn:disabled{border-color:var(--rule);background:var(--ground);color:var(--ink25);cursor:default}
+.badge{display:inline-grid;place-items:center;min-width:16px;height:16px;padding:0 4px;border-radius:8px;font-size:10.5px;font-weight:700;background:var(--crit);color:#fff;margin-left:6px}
+
+.rcol{position:relative;border-left:1px solid var(--rule);background:var(--cell);min-width:0}
+.rcol-in{position:absolute;inset:0;padding:14px;display:flex;flex-direction:column;gap:10px}
+.rcol-h{display:flex;align-items:center;gap:8px}
+.rcol-h h4{margin:0;font-size:14.5px;font-weight:700;flex:1}
+.rcol p{margin:0;font-size:12.5px;color:var(--ink4)}
+.rlist{flex:0 1 auto;min-height:0;overflow-y:auto;background:var(--paper);border:1px solid var(--rule);border-radius:var(--r)}
+/* B62: the column is pinned to the grid row, so extra rules scroll inside the list. The count says how
+   many there are and the fade says there is more below — macOS overlay scrollbars show neither. */
+.rlistw{position:relative;flex:0 1 auto;min-height:0;display:flex;flex-direction:column}
+.rlistw.more::after{content:"";position:absolute;left:1px;right:1px;bottom:1px;height:40px;border-radius:0 0 var(--r) var(--r);background:linear-gradient(rgba(255,255,255,0),var(--paper));pointer-events:none}
+.rcount{margin-left:6px;font-size:12px;font-weight:600;color:var(--ink25);font-variant-numeric:tabular-nums}
+.rempty{padding:10px 12px;font-size:12.5px;color:var(--ink3)}
+.rrow{display:flex;gap:8px;align-items:flex-start;padding:9px 8px 9px 10px;border-bottom:1px solid var(--rule2);font-size:13px;line-height:1.7;cursor:pointer}
+.rrow:last-child{border-bottom:0}
+.rrow:hover{background:var(--cell)}
+.rnum{flex:0 0 20px;height:20px;display:grid;place-items:center;font-size:11px;font-weight:600;color:var(--ink4);background:var(--ground);border-radius:var(--r-sm);margin-top:1px}
+.rsay{flex:1;min-width:0;color:var(--ink4)}
+/* B47: a chip never breaks across lines — a split chip draws half a border and reads as two conditions */
+.cchip{background:var(--ground);border:1px solid var(--rule);border-radius:var(--r-sm);padding:1px 5px;font-weight:600;color:var(--ink);white-space:nowrap}
+.cchip i{font-style:normal;color:var(--ink4);font-weight:500;margin-right:4px}
+.cchip.v{background:var(--accent-wash);border-color:var(--accent-line);color:var(--accent-ink)}
+.cchip.res{background:var(--res-wash);border-color:var(--res-line);color:var(--res)}
+.rcol-f{margin-top:auto;display:flex;gap:4px}
+.link{border:0;background:none;padding:3px 6px;border-radius:var(--r-sm);font-size:12.5px;font-weight:600;color:var(--accent-ink)}
+.link:hover{background:var(--accent-wash)}
+.status{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 16px;border-bottom:1px solid var(--rule);padding:8px 12px 8px 20px}
+.stitle{display:inline-flex;align-items:baseline;gap:8px;border:0;background:none;padding:2px 8px;margin-left:-8px;border-radius:var(--r);font-size:20px;font-weight:700;letter-spacing:-.015em;line-height:1.25;color:var(--ink)}
+.stitle:hover{background:var(--ground)}
+.stitle .cv{font-size:11px;color:var(--ink4)}
+.sdesc{flex:1;min-width:280px;display:flex;flex-direction:column;gap:2px}
+.status b{color:var(--ink);font-weight:700;font-size:20px;letter-spacing:-.015em;line-height:1.25}
+.status-l{display:flex;flex-direction:column;gap:5px;min-width:0}
+.status-l>div{display:flex;align-items:baseline;gap:12px}
+.status .link{font-size:13px;padding:2px 6px}
+.status-p{margin:0;font-size:13.5px;line-height:1.5;color:var(--ink4)}
+.status .more{display:inline-flex;align-items:center;gap:3px;margin-left:8px;border:0;background:none;padding:1px 5px;border-radius:var(--r-sm);font-size:12.5px;font-weight:600;color:var(--accent-ink)}
+.status .more:hover{background:var(--accent-wash)}
+.status .more span{font-size:9px}
+.status .more.open span{transform:rotate(180deg)}
+.status .sp{flex:1}
+.dot{width:6px;height:6px;border-radius:50%;display:inline-block;margin:0 5px 1px 10px}
+.dot.d{background:var(--accent)}.dot.f{background:var(--ok)}.dot.i{background:var(--ink25)}
+
+/* ── popovers ── */
+/* B27: a popover capped to the room beside its anchor scrolls inside itself, so the ones with no
+   .vplist of their own (Fix issues, the role / route / type menus) never run off the screen. */
+#pop{position:absolute;z-index:50;background:var(--paper);border-radius:var(--r-lg);box-shadow:var(--pop);padding:10px;font-size:13px;overflow-y:auto}
+/* B60: a popover has a fixed width, so a 60-character answer in its title breaks rather than paints outside */
+.pt{font-size:12px;font-weight:700;padding:4px 8px 8px;overflow-wrap:anywhere}
+.mi{display:flex;align-items:center;gap:10px;width:100%;border:0;background:none;border-radius:var(--r);padding:7px 8px;text-align:left;font-size:13.5px}
+.mi:hover{background:var(--ground)}
+.mi.on{background:var(--accent-wash);color:var(--accent-ink)}
+.mi .h{margin-left:auto;font-size:11.5px;color:var(--ink4);text-align:right}
+.mi.tl{font-weight:600}
+.mi.tl.fresh:not(.on){color:var(--ok)}
+.ck{width:15px;height:15px;border:1px solid var(--line2);border-radius:3px;display:grid;place-items:center;font-size:10px;color:#fff;flex:0 0 15px;background:var(--paper)}
+.on>.ck{background:var(--accent);border-color:var(--accent)}
+.pfoot{border-top:1px solid var(--rule2);margin-top:8px;padding:9px 8px 2px;font-size:12px;color:var(--ink4);text-align:center}
+.vptools{display:flex;flex-direction:column;gap:8px;padding:0 8px 8px;border-bottom:1px solid var(--rule2)}
+.vpsearch{width:100%;border:1px solid var(--rule-strong);border-radius:var(--r);padding:6px 9px;font:inherit;font-size:13px;color:var(--ink);background:var(--paper)}
+.vptabs{display:flex;flex-wrap:wrap;gap:4px}
+.vptabs button{border:1px solid var(--rule);background:var(--paper);border-radius:999px;padding:2px 9px;font-size:12px;color:var(--ink3)}
+.vptabs button[aria-pressed="true"]{background:var(--ink);border-color:var(--ink);color:#fff}
+.vptabs .c{font-size:10.5px;color:var(--ink25);margin-left:4px}
+.vptabs button[aria-pressed="true"] .c{color:#C9C4D6}
+.vplist{max-height:300px;overflow-y:auto;padding:2px 0 4px}
+.vpg{display:flex;align-items:center;gap:8px;padding:10px 8px 3px;font-size:10px;letter-spacing:.07em;text-transform:uppercase;font-weight:700;color:var(--ink4)}
+.vpg span{flex:1}
+.vpall{border:0;background:none;padding:1px 4px;border-radius:var(--r-sm);font-size:11.5px;font-weight:600;color:var(--accent-ink);text-transform:none;letter-spacing:0}
+.vpall:hover{background:var(--accent-wash)}
+.vpnone{padding:14px 8px;text-align:center;font-size:12.5px;color:var(--ink4)}
+.vpfoot{display:flex;align-items:center;gap:6px;border-top:1px solid var(--rule2);margin-top:2px;padding:9px 2px 1px 8px;font-size:12.5px;color:var(--ink4)}
+.vpfoot span{flex:1}
+.vpfoot b{color:var(--ink)}
+.chip.all{font-weight:600;color:var(--ink4)}
+.mi.mi2{flex-direction:column;align-items:flex-start;gap:1px;padding:7px 10px}
+.mi2 .t{font-size:13.5px}
+.mi2 .d{font-size:11.5px;color:var(--ink4)}
+.mi2.on .d{color:var(--accent-ink)}
+.mi.pk{color:var(--ink);font-weight:600}
+.mi.pk.fresh{color:var(--ok);font-weight:600}
+.mi.pk.on{color:var(--ink);font-weight:600}
+/* ── Table view: the whole logic as a sheet ── */
+.vseg2{display:inline-flex;background:var(--rule2);border-radius:var(--r);padding:2px}
+.vseg2 button{border:0;background:none;padding:4px 11px;border-radius:var(--r-sm);font-size:12.5px;font-weight:600;color:var(--ink4)}
+.vseg2 button[aria-pressed="true"]{background:var(--paper);color:var(--ink);box-shadow:var(--lift)}
+.tview{padding:14px 20px 20px;display:flex;flex-direction:column;gap:18px}
+.tsheet-h{display:flex;align-items:baseline;gap:8px;margin-bottom:6px}
+.tsheet-h h3{margin:0;font-size:10px;letter-spacing:.07em;text-transform:uppercase;font-weight:700;color:var(--ink4)}
+.tsheet-h span{font-size:11.5px;color:var(--ink25)}
+.twrap{overflow-x:auto;border:1px solid var(--rule);border-radius:var(--r)}
+.xl{width:100%;border-collapse:collapse;font-size:13px;line-height:1.4}
+.xl th{background:var(--ground);text-align:left;font-size:11.5px;font-weight:700;color:var(--ink3);padding:7px 10px;border-bottom:1px solid var(--rule);border-right:1px solid var(--rule2);white-space:nowrap}
+.xl td{padding:7px 10px;border-top:1px solid var(--rule2);border-right:1px solid var(--rule2);vertical-align:top;color:var(--ink)}
+.xl th:last-child,.xl td:last-child{border-right:0}
+.xl tbody tr:first-child td{border-top:0}
+.xl tr.grp td{border-top:1px solid var(--rule)}
+.xl tr.tgo{cursor:pointer}
+.xl tr.tgo:hover td{background:var(--cell)}
+.xl tr.muted td{color:var(--ink4);background:var(--cell)}
+.xl td.k{width:40px;color:var(--ink4);font-weight:600;font-variant-numeric:tabular-nums}
+.xl td.qt{width:26%;color:var(--ink3)}
+.xl td.num{font-variant-numeric:tabular-nums}
+.xl td.dim{color:var(--ink4);white-space:nowrap}
+.xl td.res{color:var(--res);font-weight:600}
+.xl td.verb{color:var(--accent-ink);font-weight:600;white-space:nowrap}
+.xl td.does{white-space:nowrap;font-weight:600;font-size:12.5px}
+.xl td.does.decides{color:var(--accent-ink)}
+.xl td.does.filter{color:var(--ok)}
+.xl td.does.info{color:var(--ink4);font-weight:500}
+.xl td.unset{color:var(--warn);font-weight:600}
+/* D14 (R3): "Has a rule" is the settled state, not a green success */
+.xl td.ok{color:var(--ink);font-weight:600}
+.tnote{margin:0;font-size:12px;color:var(--ink4)}
+.cj{font-weight:800;color:var(--ink)}
+.qlab{font-style:normal;font-weight:600;color:var(--ink4);margin-right:3px}
+.ed{display:block;border-radius:3px;outline:none;cursor:text;padding:1px 4px;margin:-1px -4px}
+.ed:hover{background:var(--ground)}
+.ed:focus{background:var(--paper);box-shadow:0 0 0 2px var(--accent-line)}
+.paneh h3 .ed,.atext .ed{display:inline}
+/* a numbered scale point is an empty editable: it shows its end label, or "Add label", until it is named */
+.ed[data-pt]{display:inline-block}
+.ed[data-pt]:empty{min-width:7em}
+.ed[data-pt]:empty::before{content:attr(data-ph);color:var(--ink4)}
+.tbtn{display:inline-flex;align-items:center;gap:6px;border:1px solid transparent;background:none;border-radius:var(--r-sm);padding:2px 6px;margin:-3px -7px;font:inherit;color:inherit;text-align:left}
+.tbtn:hover{border-color:var(--rule);background:var(--paper)}
+.tbtn .cv{font-size:9px;color:var(--ink25)}
+.xl .tbtn.does{font-weight:600;font-size:12.5px;white-space:nowrap}
+.xl .tbtn.does.decides{color:var(--accent-ink)}
+.xl .tbtn.does.filter{color:var(--ok)}
+.xl .tbtn.does.info{color:var(--ink4);font-weight:500}
+.xl .tbtn.res{color:var(--res);font-weight:600}
+.xl .tbtn.unset{color:var(--warn);font-weight:600}
+.xl .tbtn.dim{color:var(--ink4);white-space:nowrap}
+.xl .dim2{color:var(--ink25)}
+.xl tr.tgo{cursor:pointer}
+.xl tr.tgo:hover td{background:var(--cell)}
+.iox{display:inline-flex;border:1px solid var(--rule-strong);border-radius:var(--r);overflow:hidden}
+.iox button{border:0;background:var(--paper);padding:5px 11px;font-size:12.5px;font-weight:600;color:var(--ink3)}
+.iox button+button{border-left:1px solid var(--rule)}
+.iox button:hover{background:var(--ground);color:var(--ink)}
+/* B37: while a save is pending Export stays off, and looks off */
+.iox button:disabled{background:var(--paper);color:var(--ink25);cursor:default}
+
+.find{display:flex;gap:9px;align-items:flex-start;width:100%;border:0;background:none;text-align:left;padding:8px;border-radius:var(--r);font-size:13px;color:var(--ink3)}
+button.find:hover{background:var(--ground)}
+.sv{flex:0 0 8px;width:8px;height:8px;border-radius:50%;margin-top:6px}
+.sv.crit{background:var(--crit)}.sv.warn{background:var(--warn-dot)}.sv.note{background:var(--ink25)}.sv.ok{background:var(--ok)}
+
+/* ══ Create a rule — the window ══
+   Width hugs the widest answer row (capped at six buckets); a row with more
+   scrolls sideways inside itself. Questions scroll; THEN, the recommendations
+   and the footer stay put. */
+#modal{position:fixed;inset:0;z-index:40;background:var(--scrim);display:grid;place-items:center;padding:calc(16px + env(safe-area-inset-top,0px)) 16px calc(16px + env(safe-area-inset-bottom,0px))}
+/* an open window locks the page behind it: the wheel over the scrim can't scroll the page (or carry a popover away) */
+html:has(#modal:not([hidden]),#aqm:not([hidden]),#addrec:not([hidden])){overflow:hidden}
+.mbox{display:flex;flex-direction:column;width:fit-content;min-width:min(680px,100%);max-width:100%;max-height:100%;background:var(--paper);border-radius:var(--r-lg);box-shadow:var(--pop);overflow:hidden}
+.mhead{flex:none;display:flex;align-items:center;padding:5px 8px 5px 22px;border-bottom:1px solid var(--rule2)}
+.mhead h2{margin:0;flex:1;font-size:10.5px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--ink4)}
+.mx{width:24px;height:24px;border:1px solid transparent;background:none;border-radius:var(--r-sm);color:var(--ink25);font-size:14px;line-height:1}
+.mx:hover{background:var(--ground);border-color:var(--rule)}
+.mscroll{flex:1 1 auto;min-height:0;overflow-y:auto}
+.mq{padding:0 22px}
+.mrow{display:grid;grid-template-columns:22px 184px 44px minmax(0,auto);gap:10px;align-items:center;padding:9px 0;border-bottom:1px solid var(--rule2)}
+.mrow:last-child{border-bottom:0}
+.mqn{font-size:11.5px;font-weight:700;color:var(--ink25);font-variant-numeric:tabular-nums}
+.mtag{display:inline-block;vertical-align:2px;margin-left:6px;font-size:9px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--accent-ink);background:var(--accent-wash);border-radius:var(--r-sm);padding:1px 5px}
+.mqt{font-size:13.5px;font-weight:400;line-height:1.3;color:var(--ink)}
+.mrow.live .mqn{color:var(--accent-ink)}
+.mop{display:flex;flex-direction:column;gap:4px;align-items:stretch}
+.opb{border:1px solid var(--rule);background:var(--paper);border-radius:var(--r-sm);padding:3px 4px;font-size:12px;font-weight:600;color:var(--ink3);text-align:center;white-space:nowrap}
+.opb:hover{border-color:var(--line2);color:var(--ink)}
+.opb.not{background:var(--warn-wash);border-color:var(--warn-line);color:var(--warn)}
+.opb.sub{padding:2px 2px;font-size:10.5px;font-weight:500;border-style:dashed}
+.opb.sub[disabled]{cursor:default;color:var(--ink25);border-color:var(--rule2)}
+/* D12 (R5): on an "is not" row the any/all toggle is HIDDEN, not dimmed — nothing to read, nothing to
+   focus, nothing announced. It keeps its slot so the row never reflows when the verb is switched. */
+.opb.sub.gone{visibility:hidden}
+.manswrap{position:relative;min-width:0}
+.mans{display:flex;gap:8px;max-width:676px;overflow-x:auto;padding:2px 2px 6px;scrollbar-width:thin}
+.manswrap.more::after{content:"";position:absolute;top:0;right:0;bottom:6px;width:44px;background:linear-gradient(90deg,rgba(255,255,255,0),var(--paper));pointer-events:none}
+.bk{flex:0 0 104px;height:68px;border:1px solid var(--rule);background:var(--paper);border-radius:var(--r);padding:0 9px;text-align:left;font-size:12.5px;line-height:1.3;color:var(--ink3)}
+.bk span{display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+.bk:hover{border-color:var(--line2);color:var(--ink)}
+.bk.on{background:var(--accent-wash);border-color:var(--accent);color:var(--accent-ink);font-weight:600}
+.mrow.isnot .bk.on{background:var(--warn-wash);border-color:var(--warn-dot);color:var(--warn)}
+.mthen{display:flex;flex-wrap:wrap;align-items:center;gap:10px 14px;padding:18px 12px 0 22px}
+.msp{flex:1}
+.mqlab{font-size:10px;letter-spacing:.06em;text-transform:uppercase;font-weight:700;color:var(--ink4);padding:16px 0 0}
+.mlab{font-size:10px;letter-spacing:.06em;text-transform:uppercase;font-weight:700;color:var(--ink4)}
+.vseg{display:inline-flex;background:var(--ground);border:1px solid var(--rule);border-radius:var(--r);padding:2px}
+.vseg button{border:0;background:none;padding:3px 10px;border-radius:var(--r-sm);font-size:12px;font-weight:400;color:var(--ink4)}
+/* B48: the chosen verb says so with aria-pressed, and the style reads the same attribute */
+.vseg button[aria-pressed="true"]{background:var(--paper);color:var(--ink);box-shadow:var(--lift)}
+.vhint{font-size:12.5px;color:var(--ink4)}
+.mband{padding:12px 22px 16px;border-bottom:1px solid var(--rule);contain:inline-size}
+.mband-in{border:1px solid var(--rule);background:var(--cell);border-radius:var(--r-lg);padding:9px 12px 11px}
+.mband-h{display:flex;flex-wrap:wrap;align-items:center;gap:8px;min-height:24px}
+.mband-h .tray-lb{flex:0 0 auto}
+.frac{font-size:11px;font-weight:600;color:var(--ink4);font-variant-numeric:tabular-nums}
+.frac b{color:var(--warn)}
+/* D14 (R3): all of them settled reads black, not green — green here is "not placed" */
+.frac.all b{color:var(--ink)}
+.mband-h .sp{flex:1}
+.addelse{border:1px dashed var(--line2);background:none;border-radius:var(--r);padding:3px 9px;font-size:12px;font-weight:600;color:var(--ink4)}
+.addelse:hover{border-color:var(--accent-line);color:var(--accent-ink)}
+.mrecs{display:flex;flex-wrap:wrap;gap:6px;margin-top:7px}
+.rc.more{border-style:dashed;color:var(--ink4)}
+.rc.more:hover{border-color:var(--accent);color:var(--accent-ink)}
+.rc{display:inline-flex;align-items:center;gap:8px;font-size:13px;font-weight:600;background:var(--paper);border:1px solid var(--rule);border-radius:var(--r);padding:6px 10px 6px 8px}
+.rc:hover{border-color:var(--line2);box-shadow:var(--lift)}
+.rc.on{border-color:var(--accent);background:var(--accent-wash);color:var(--accent-ink)}
+.rc .n{font-size:11px;font-weight:600;color:var(--ink25);font-variant-numeric:tabular-nums}
+.rc .st{width:7px;height:7px;border-radius:50%;background:var(--warn-dot)}
+/* D14 (R3): green is reserved for "not placed on any answer" — the tray, the picker and the tray's
+   "+N more" all mean that by it, and two opposite greens were on screen at once (the tray behind this
+   window painted `dryness` green for NOT placed while this dot painted it green for covered). Done
+   takes D14's own word for settled instead: black. Amber still means "this one needs a rule". */
+.rc .st.done{background:var(--ink)}
+.mfoot{flex:none;display:flex;flex-wrap:wrap;align-items:flex-start;gap:8px 8px;padding:13px 14px 13px 22px;background:var(--ground);border-top:1px solid var(--rule)}
+/* the live sentence stops at three lines and scrolls, so a long rule never eats the questions */
+.msay{flex:1 1 260px;min-width:0;contain:inline-size;font-size:13px;color:var(--ink4);line-height:1.8;padding-top:3px;max-height:calc(3 * 1.8em + 3px);overflow-y:auto;overscroll-behavior:contain}
+.mfoot .btn{padding:8px 14px;font-size:13.5px}
+@media (max-width:720px){
+  .mrow{grid-template-columns:24px minmax(0,1fr) auto;gap:8px 10px}
+  .manswrap{grid-column:1/-1}
+  .mop{flex-direction:row}
+}
+/* only the toast's Undo takes clicks; placeToast lifts it above an open window's footer */
+#toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--ink);color:#fff;font-size:13px;padding:9px 14px;border-radius:var(--r);z-index:60;max-width:calc(100% - 32px);pointer-events:none}
+
+/* ══ Rules only: the rules row, and what sits under it ══ */
+.shell .seg{display:inline-flex;flex-wrap:wrap;gap:2px;background:var(--rule2);border-radius:var(--r-lg);padding:3px}
+.shell .seg button{border:0;background:none;padding:6px 11px;border-radius:var(--r);font-size:13px;font-weight:600;color:var(--ink4)}
+.shell .seg button[aria-pressed="true"]{background:var(--paper);color:var(--ink);box-shadow:var(--lift)}
+.shell .sp{flex:1}
+.pitch{max-width:1240px;margin:0 auto;padding:0 16px 12px;font-size:13.5px;line-height:1.5;color:var(--ink3)}
+.rband{padding:16px 20px;border-bottom:1px solid var(--rule)}
+.sact{display:flex;align-items:center;gap:10px;align-self:center;margin-left:auto}
+.sact .btn.pri{padding:6px 13px;font-size:13px}
+.rband-h{display:flex;align-items:center;gap:8px;margin-bottom:10px}
+.rband-h h3{margin:0;font-size:15px;font-weight:700}
+.rband-h .cnt{font-size:12px;font-weight:600;color:var(--ink25);font-variant-numeric:tabular-nums}
+.rband-h .sub{flex:1;min-width:0;font-size:12.5px;color:var(--ink4);padding-left:4px}
+.rband-h .btn.pri{padding:7px 14px;font-size:13px}
+/* B48: the rules are an ordered list — order is priority — and the row is not a fake button with real
+   buttons inside it. The label is its own button (.rbody); the trash and ↑/↓ are its siblings. The
+   flex gaps move onto .rbody unchanged, so the row draws exactly as it did. */
+.rlist2{border:1px solid var(--rule);border-radius:var(--r-lg);overflow:hidden;list-style:none;margin:0;padding:0}
+.rr .rbody,.rrow .rbody{display:flex;flex:1;min-width:0;border:0;background:none;padding:0;margin:0;font:inherit;color:inherit;text-align:left;cursor:pointer}
+.rr .rbody{align-items:center;gap:10px}
+.rrow .rbody{align-items:flex-start;gap:8px}
+.tgob{border:0;background:none;padding:0;margin:0;font:inherit;color:inherit;text-align:left;cursor:pointer;vertical-align:baseline}
+.rr{display:flex;align-items:center;gap:10px;padding:8px 10px 8px 6px;border-bottom:1px solid var(--rule2);cursor:pointer;background:var(--paper)}
+.rr:hover{background:var(--cell)}
+.rr:last-child{border-bottom:0}
+.rr .grip{width:12px;flex:none;font-size:12px;color:var(--ink25);opacity:0;cursor:grab;text-align:center}
+.rr:hover .grip{opacity:1}
+.rr .rn{flex:none;min-width:22px;height:22px;border-radius:var(--r-sm);background:var(--ground);display:grid;place-items:center;font-size:11.5px;font-weight:700;color:var(--ink4);font-variant-numeric:tabular-nums}
+.rr .rs{flex:1;min-width:0;font-size:13px;line-height:1.75;color:var(--ink4)}
+.rr.dead .rsent,.rrow.dead .rsent{opacity:.6}
+.rtag{display:inline-block;margin-left:6px;font-size:11px;font-weight:600;color:var(--crit);background:var(--crit-wash);border-radius:var(--r-sm);padding:1px 6px}
+.rr:hover .xone,.rr .xone:focus-visible{opacity:.85}
+.rr.dragging{opacity:.4}
+/* B18: the line is drawn on the edge the rule will land on — above the row, or below it when the drag
+   is heading down, so where the line is is where the rule goes. */
+.rr.over{box-shadow:inset 0 2px 0 var(--accent)}
+.rr.under{box-shadow:inset 0 -2px 0 var(--accent)}
+.relse{padding:9px 12px 9px 50px;font-size:12.5px;color:var(--ink4);background:var(--cell)}
+.relse b{color:var(--ink3);font-weight:600}
+.rempty2{display:flex;flex-direction:column;align-items:center;gap:10px;padding:22px 16px;border:1px dashed var(--line2);border-radius:var(--r-lg);text-align:center;font-size:13.5px;color:var(--ink4)}
+.rempty2 b{color:var(--ink)}
+.rempty2 .btn.pri{padding:7px 14px;font-size:13px}
+.viz{padding:12px 20px 16px;background:var(--cell)}
+.viz-h{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 10px;margin-bottom:8px}
+.viz-h h3{margin:0;font-size:10px;letter-spacing:.07em;text-transform:uppercase;font-weight:700;color:var(--ink4)}
+.viz-h .sub{font-size:12px;color:var(--ink4)}
+.viz-h .sub b{color:var(--ink);font-variant-numeric:tabular-nums}
+.viz-h .sp{flex:1}
+.sd{width:7px;height:7px;flex:none;border-radius:50%;background:var(--warn-dot)}
+/* D14 (R3): same system as .rc .st — amber needs a rule, black has one, and green stays the tray's */
+.sd.on{background:var(--ink)}
+.rref{border:1px solid var(--rule);background:var(--paper);border-radius:var(--r-sm);padding:1px 7px;font-size:12px;font-weight:600;color:var(--ink3)}
+.rref:hover{border-color:var(--accent);color:var(--accent-ink)}
+/* 1 · recommendations */
+.recrow{display:flex;flex-wrap:nowrap;gap:6px;overflow:hidden}
+.recrow>*{flex:none}
+.rpill{display:inline-flex;align-items:center;gap:7px;border:1px solid var(--rule);background:var(--paper);border-radius:var(--r);padding:6px 12px 6px 11px;font-size:13.5px;font-weight:600;color:var(--ink)}
+.rpill .sd{width:8px;height:8px}
+.rpill.none{border-style:dashed;border-color:var(--warn-line)}
+.rpill.none .add{font-weight:600;color:var(--accent-ink)}
+.rpill.none:hover{border-color:var(--accent)}
+.rpill.add{border-style:dashed;border-color:var(--line2);background:none;color:var(--ink4)}
+.rpill.add:hover{border-color:var(--accent);color:var(--accent-ink)}
+.rr.lit{background:var(--accent-wash)}
+/* Add recommendations — the window */
+#addrec{position:fixed;inset:0;z-index:45;background:var(--scrim);display:grid;place-items:center;padding:16px}
+.arbox{width:min(580px,100%);max-height:min(640px,100%);display:flex;flex-direction:column;background:var(--paper);border-radius:var(--r-lg);box-shadow:var(--pop);overflow:hidden}
+.arhead{display:flex;align-items:center;padding:12px 12px 12px 20px;border-bottom:1px solid var(--rule)}
+.arhead h2{margin:0;flex:1;font-size:16px;font-weight:700}
+.artools{display:flex;flex-direction:column;gap:10px;padding:12px 20px 10px;border-bottom:1px solid var(--rule2)}
+.arsearch{width:100%;border:1px solid var(--rule-strong);border-radius:var(--r);padding:8px 10px;font:inherit;font-size:13.5px;color:var(--ink);background:var(--paper)}
+.artabs{display:flex;flex-wrap:wrap;gap:4px}
+.artabs button{border:1px solid var(--rule);background:var(--paper);border-radius:999px;padding:3px 11px;font-size:12.5px;color:var(--ink3)}
+.artabs button[aria-pressed="true"]{background:var(--ink);border-color:var(--ink);color:#fff}
+.artabs .c{font-size:11px;color:var(--ink25);margin-left:4px}
+.artabs button[aria-pressed="true"] .c{color:#C9C4D6}
+.arlist{flex:1;min-height:0;overflow-y:auto;padding:6px 10px 10px}
+.argrp{font-size:10px;letter-spacing:.07em;text-transform:uppercase;font-weight:700;color:var(--ink4);padding:10px 10px 4px}
+.arnote{font-size:12px;color:var(--ink4);padding:2px 10px 6px}
+.arrow{display:flex;align-items:center;gap:10px;width:100%;border:0;background:none;border-radius:var(--r);padding:7px 10px;text-align:left;font-size:13.5px;color:var(--ink)}
+.arrow:hover{background:var(--ground)}
+.arrow.on{background:var(--accent-wash);color:var(--accent-ink)}
+.arrow:disabled{cursor:default;background:none;color:var(--ink25)}
+/* B53: a row already in the quiz is checked-and-disabled, not empty — the base .ck draws #fff on white */
+.arrow:disabled>.ck{background:var(--ground);color:var(--ink4)}
+.arrow .kd{font-size:10.5px;font-weight:600;color:var(--ink4);background:var(--ground);border-radius:var(--r-sm);padding:1px 6px}
+.arrow .ct{margin-left:auto;font-size:12px;color:var(--ink4);white-space:nowrap}
+.arrow .nm{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.arempty{padding:18px 10px;text-align:center;font-size:13px;color:var(--ink4)}
+.arfoot{display:flex;align-items:center;gap:8px;padding:11px 14px 11px 20px;background:var(--ground);border-top:1px solid var(--rule)}
+.arfoot span{flex:1;font-size:13px;color:var(--ink4)}
+.arfoot .btn{padding:8px 14px;font-size:13.5px}
+.tundo{border:0;background:none;color:#C9BFFF;font-weight:700;margin-left:10px;padding:0;pointer-events:auto}
+@media (prefers-reduced-motion:no-preference){.tcard,.cell,.qi,.bk,.rc,.tpick,.ach,.mn{transition:background .12s,border-color .12s}}
+/* ══ Delete a rule: a trash on hover in the rule lists, a faint trash column on the
+   Table's Rules sheet, and "Delete rule" in the rule window. Every delete has Undo. ══ */
+.xdel{display:inline-grid;place-items:center;width:22px;height:22px;flex:none}
+.xl th.tact,.xl td.tact{width:34px;padding:3px 6px 0 0;text-align:right}
+.tdel{display:inline-grid;place-items:center;width:26px;height:26px;border:1px solid transparent;border-radius:var(--r-sm);background:none;color:var(--ink25);padding:0}
+.xl tr:hover .tdel{color:var(--ink4)}
+.tdel:hover,.tdel:focus-visible{color:var(--crit);background:var(--crit-wash);border-color:var(--crit-line)}
+.mdel{display:inline-flex;align-items:center;gap:6px;border:1px solid transparent;background:none;border-radius:var(--r-sm);padding:3px 8px;font-size:12.5px;font-weight:500;color:var(--ink4)}
+.mdel:hover:not(:disabled),.mdel:focus-visible{color:var(--crit);background:var(--crit-wash);border-color:var(--crit-line)}
+/* D11: Duplicate sits beside Delete rule in the window's top row — same shape, not the destructive
+   colour, and dimmed while the rule on screen is one the window would refuse to save */
+.mdup:hover:not(:disabled),.mdup:focus-visible{color:var(--accent-ink);background:var(--accent-wash);border-color:var(--accent-line)}
+.mdup:disabled{color:var(--ink25);cursor:default}
+/* ══ Save feedback on inline text edits: typing stays silent; once the edit is
+   committed (Enter or click away) a small pill at the end of the text shows
+   Saving… then Saved, then fades. It floats over the row, so nothing reflows. ══ */
+#svb{position:fixed;z-index:30;display:inline-flex;align-items:center;gap:5px;height:20px;padding:0 8px 0 6px;border-radius:999px;font-size:11.5px;font-weight:600;line-height:1;white-space:nowrap;pointer-events:none;transition:opacity .4s}
+#svb.saving{background:var(--ground);color:var(--ink4)}
+#svb.saved{background:var(--ok-wash);color:var(--ok)}
+#svb.fade{opacity:0}
+#svb .spin{width:10px;height:10px;border:1.5px solid var(--line2);border-top-color:var(--accent);border-radius:50%;animation:svspin .7s linear infinite}
+@keyframes svspin{to{transform:rotate(360deg)}}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
+/* ══ Question types — the live Questions step's vocabulary (TypeChipSelector):
+   a type line under the question opens Question type + per-type settings
+   (Multi-select Min/Max; Scale points + end labels). ══ */
+.phl{flex:1;min-width:0}
+.qtype{display:inline-flex;align-items:center;gap:6px;margin:5px 0 0 -7px;border:1px solid transparent;background:none;border-radius:var(--r-sm);padding:2px 7px;font-size:12.5px;font-weight:500;color:var(--ink4)}
+.qtype:hover{background:var(--ground);border-color:var(--rule);color:var(--ink)}
+.qtype .cv{font-size:9px;color:var(--ink25)}
+.akey.num{font-size:13px;font-weight:700;color:var(--ink3)}
+.ptlab{font-size:13.5px;color:var(--ink4)}
+.tpt .rd{width:14px;height:14px;border:1.5px solid var(--line2);border-radius:50%;flex:none;box-sizing:border-box;background:var(--paper)}
+.tpt.on{background:none;color:var(--ink);font-weight:600}
+.tpt.on .rd{border:4.5px solid var(--accent)}
+.tpset{border-top:1px solid var(--rule2);margin:6px 0 0;padding:10px 8px 4px;display:flex;flex-direction:column;gap:8px}
+.tprow{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.tplb{font-size:12.5px;font-weight:600;color:var(--ink3)}
+.stp{display:inline-flex;align-items:center;border:1px solid var(--rule);border-radius:var(--r);overflow:hidden}
+.stp button{width:26px;height:24px;border:0;background:var(--paper);font-size:14px;line-height:1;color:var(--ink3);padding:0}
+.stp button:hover:not(:disabled){background:var(--ground)}
+.stp button:disabled{color:var(--ink25);cursor:default}
+.stv{min-width:28px;text-align:center;font-size:12.5px;font-weight:700;font-variant-numeric:tabular-nums;border-inline:1px solid var(--rule);line-height:24px}
+.tplab{width:100%;box-sizing:border-box;border:1px solid var(--rule);border-radius:var(--r);padding:6px 8px;font:inherit;font-size:12.5px;color:var(--ink)}
+.tplab:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 2px var(--accent-line)}
+.tpnote{font-size:11.5px;color:var(--ink4)}
+.bk.pt{flex:0 0 58px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;padding:0 4px;text-align:center}
+.bk.pt .ptn{font-size:16px;font-weight:700;color:var(--ink)}
+.bk.pt .ptl{font-size:10px;line-height:1.15;color:var(--ink4)}
+.bk.pt.on .ptn{color:var(--accent-ink)}
+.mwarn{grid-column:2/-1;font-size:12px;color:var(--warn);background:var(--warn-wash);border:1px solid var(--warn-line);border-radius:var(--r-sm);padding:4px 8px}
+/* ══ Add a question — the live AddQuestionDialog: Type / Question / Answers,
+   nothing else (role, mapping and settings happen on the question after). ══ */
+#aqm{position:fixed;inset:0;z-index:40;background:var(--scrim);display:grid;place-items:center;padding:16px}
+.aqbox{width:min(620px,100%);max-height:100%;display:flex;flex-direction:column;background:var(--paper);border-radius:var(--r-lg);box-shadow:var(--pop);overflow:hidden}
+.aqh{display:flex;align-items:center;padding:14px 12px 8px 22px}
+.aqh h2{flex:1;margin:0;font-size:16px;font-weight:700}
+.aqbody{flex:1 1 auto;min-height:0;overflow-y:auto;padding:0 22px 14px}
+.aqband{padding:12px 0 14px;border-top:1px solid var(--rule2)}
+.aqband:first-child{border-top:0;padding-top:6px}
+.aqbh{display:flex;align-items:center;gap:8px;margin-bottom:10px}
+.aqbn{width:18px;height:18px;border-radius:50%;background:var(--accent-wash);color:var(--accent-ink);font-size:11px;font-weight:700;display:grid;place-items:center}
+.aqbt{font-size:13px;font-weight:700}
+.aqbhint{margin-left:auto;font-size:12px;color:var(--ink4)}
+.aqtgrid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
+.aqt{display:flex;flex-direction:column;gap:3px;text-align:left;border:1px solid var(--rule);background:var(--paper);border-radius:var(--r);padding:9px 10px}
+.aqt:hover{border-color:var(--line2)}
+.aqt.on{border-color:var(--accent);background:var(--accent-wash)}
+.aqtn{font-size:13px;font-weight:700;color:var(--ink)}
+.aqt.on .aqtn{color:var(--accent-ink)}
+.aqtd{font-size:11.5px;color:var(--ink4);line-height:1.3}
+.aqfi,.aqai{width:100%;box-sizing:border-box;border:1px solid var(--rule);border-radius:var(--r);padding:8px 10px;font:inherit;font-size:14px;color:var(--ink);background:var(--paper)}
+.aqfi:focus,.aqai:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 2px var(--accent-line)}
+.aqrow{display:grid;grid-template-columns:18px 14px minmax(0,1fr) 26px;gap:8px;align-items:center;margin-bottom:6px}
+.aqgrip{border:0;background:none;color:var(--ink25);font-size:12px;letter-spacing:-2px;cursor:grab;padding:0;touch-action:none;user-select:none}
+.aqrow.dragging{opacity:.4}
+.aqrow.over{box-shadow:inset 0 2px 0 var(--accent)}
+.aqkey{font-size:11px;color:var(--ink25);text-align:center}
+.aqdel{width:26px;height:26px;border:1px solid transparent;background:none;border-radius:var(--r-sm);color:var(--ink25);font-size:14px;padding:0}
+.aqdel:hover:not(:disabled){color:var(--crit);background:var(--crit-wash);border-color:var(--crit-line)}
+.aqdel:disabled{opacity:.35;cursor:default}
+.aqadd2{border:1px dashed var(--line2);background:none;border-radius:var(--r);padding:6px 10px;font-size:12.5px;font-weight:600;color:var(--ink4);margin:2px 0 0 40px}
+.aqadd2:hover{border-color:var(--accent);color:var(--accent-ink)}
+.aqnote{margin:8px 0 0;font-size:12.5px;color:var(--ink4)}
+.aqfoot{display:flex;align-items:center;gap:10px;padding:12px 14px 12px 22px;background:var(--ground);border-top:1px solid var(--rule)}
+.aqsum{font-size:13px;color:var(--ink4)}
+.aqsum b{color:var(--ink)}
+.aqfoot .sp{flex:1}
+.aqfoot .btn{padding:8px 14px;font-size:13.5px}
+</style>
+
+<div class="shell">
+  <h1 id="shellh1">Logic step · Rules only</h1>
+  <span class="sp"></span>
+  <label for="stress"><input type="checkbox" id="stress"> 10 answers on Q5</label>
+  <label for="stress30"><input type="checkbox" id="stress30"> 30 recommendations</label>
+  <button type="button" class="link" data-act="reset">Reset</button>
+  <button type="button" class="link" data-act="wipe">Show it empty</button>
+</div>
+<p class="pitch" id="pitch"></p>
+<div class="stagewrap"><div class="stage" id="stage"></div></div>
+<div id="pop" tabindex="-1" hidden></div>
+<div id="modal" hidden></div>
+<div id="aqm" hidden></div>
+<div id="addrec" hidden></div>
+<div id="toast" hidden></div>
+<!-- B32: #toast is shown and hidden with the hidden attribute, so it leaves the accessibility tree
+     between messages and cannot be the live region itself. This one is always there. -->
+<div id="toastlive" class="sr" role="status" aria-atomic="true"></div>
+<div id="svb" hidden aria-hidden="true"></div><div id="svlive" class="sr" aria-live="polite"></div>
+<input type="file" id="impfile" accept=".xlsx,.xls,.csv" hidden>
+
+<script>
+const $=s=>document.querySelector(s);
+const TRASH=`<svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.5 4.5h11M6.5 4.5V3h3v1.5M4 4.5l.6 8.2c.05.7.6 1.3 1.3 1.3h4.2c.7 0 1.25-.6 1.3-1.3L12 4.5"/></svg>`;
+const CHECK=`<svg viewBox="0 0 12 12" width="11" height="11" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.2 6.4 4.8 9 9.8 3.2"/></svg>`;
+const COPY=`<svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5.5" y="5.5" width="8" height="8" rx="1.4"/><path d="M10.5 3.2A1.7 1.7 0 0 0 8.8 2H4.2A1.7 1.7 0 0 0 2.5 3.7v4.6c0 .8.5 1.4 1.2 1.6"/></svg>`;
+const RECS=[["fine-lines",4,24],["acne",3,205],["dryness",4,4],["redness",4,338],["dullness",3,48],["sensitive",4,150]].map(([id,n,h])=>({id,n,h}));
+const RECS0=RECS.map(r=>({...r}));
+/* The catalogue the Add recommendations window reads — stand-ins. The six
+   starting recommendations are the live quiz's tag buckets. */
+const CATALOG=[
+ ...[["Moisturizers",21],["Serums",18],["Cleansers",14],["Sun care",9],["Best sellers",24],["New arrivals",12]].map(([name,n])=>({kind:"collection",name,n})),
+ ...[["fine-lines",4],["acne",3],["dryness",4],["redness",4],["dullness",3],["sensitive",4],["fragrance-free",31],["vegan",44],["oily-skin",19],["anti-aging",26]].map(([name,n])=>({kind:"tag",name,n})),
+ ...["Retinol Night Serum","Vitamin C Glow Serum","Ceramide Barrier Cream","Niacinamide Clarifying Serum","Calming Cica Cream","Hyaluronic Acid Serum","Clay Detox Mask","Tinted Mineral SPF 50","Gentle Oat Cleanser","Soothing PHA Mist"].map(name=>({kind:"product",name,n:1})),
+ ...[["Morning routine set",5],["Travel minis",7],["Holiday bundle",4]].map(([name,n])=>({kind:"group",name,n})),
+];
+const KIND={collection:"Collection",tag:"Tag",product:"Product",group:"Custom group"};
+const AR_TABS=[["all","All"],["collection","Collections"],["tag","Tags"],["product","Products"],["group","Custom groups"]];
+let AR=null; // the Add recommendations window: {tab,q,sel:[names]}
+const rec=id=>RECS.find(r=>r.id===id);
+/* What a narrowing answer can keep: tags, metafields, variant options and
+   product types from the catalog (stand-in values and counts). */
+const VSRC=[["tag","Tags"],["mf","Metafields"],["vo","Variants"],["type","Product types"]];
+const VGROUPS=[
+ {src:"tag",attr:"",vals:[["fragrance-free",31],["vegan",44],["bestseller",24],["oily-skin",19],["dry-skin",22],["sensitive-skin",17]]},
+ {src:"mf",attr:"Skin type",vals:[["Dry",41],["Oily",33],["Combination",28],["Sensitive",26],["Normal",37]]},
+ {src:"mf",attr:"Area",vals:[["Face",212],["Eyes",14],["Lips",9],["Neck",6]]},
+ {src:"mf",attr:"Concern",vals:[["Acne",18],["Redness",15],["Dullness",20],["Fine lines",23],["Dehydration",27]]},
+ {src:"vo",attr:"Size",vals:[["15 ml",22],["30 ml",48],["50 ml",61],["100 ml",19]]},
+ {src:"vo",attr:"Finish",vals:[["Matte",12],["Dewy",16],["Natural",21]]},
+ {src:"type",attr:"Product type",vals:[["Cleanser",38],["Toner",21],["Serum",64],["Moisturizer",52],["SPF",17],["Mask",29],["Eye cream",14]]},
+];
+const vkey=(g,v)=>`${g.src}:${g.attr}:${v}`;
+const VALMAP={};VGROUPS.forEach(g=>g.vals.forEach(([v,n])=>{VALMAP[vkey(g,v)]={src:g.src,attr:g.attr,v,n,short:g.src==="tag"||g.src==="type"?v:`${g.attr} · ${v}`}}));
+const SRC_NAME={tag:"Tag",mf:"Metafield",vo:"Variant",type:"Product type"};
+const escA=x=>String(x).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+let VP=null; // the value picker's staged draft: {ai,draft,any,tab,q}
+/* D16: every answer carries a stable id. The export writes it in the do-not-edit "Answer ID"
+   column, so Import updates answers in place and never by row position (B4). */
+let AID=0;
+const A=(t,targets=[])=>({t,targets,values:[],route:null,aid:"a"+(++AID)});
+const EXTRA=["Ceramides for a stronger barrier","Peptides for firmness","Salicylic acid for breakouts","Azelaic acid for redness"];
+const S={
+  sel:"q1", style:"rules", armed:null, uid:6, 
+  qs:[
+    {id:"q1",role:"decides",text:"A few hours after cleansing, with no products on, how does your skin feel?",answers:[A("Tight and flaky in patches",["dryness"]),A("Shiny all over, pores visible",["acne"]),A("Blotchy or reactive, flushes easily",["redness"]),A("Dull and a bit uneven in tone",["dullness"]),A("Fine lines look more pronounced",["fine-lines"]),A("Stings or itches with most products",["sensitive"])]},
+    {id:"q2",role:"info",type:"multi",text:"Which areas of your face do you pay the most attention to?",answers:[A("Forehead and nose"),A("Cheeks"),A("Around the eyes"),A("Jawline and chin"),A("My whole face equally")]},
+    {id:"q3",role:"info",text:"How many steps are you realistically willing to do each morning?",answers:[A("One or two, keep it simple"),A("Three to four, a solid foundation"),A("Five or more, I enjoy a full routine")]},
+    {id:"q4",role:"info",text:"Does your skin tend to feel different in the evening than it did in the morning?",answers:[A("Yes, it gets oilier through the day"),A("Yes, it gets drier and more sensitive"),A("Not really, it stays about the same")]},
+    {id:"q5",role:"info",type:"multi",text:"Are there any ingredients you already know work well for your skin?",answers:[A("Vitamin C for brightness"),A("Retinol for smoothing lines"),A("Niacinamide for pore size and tone"),A("PHAs or gentle exfoliation"),A("Barrier-supporting ingredients like ceramides"),A("None of these or not sure")]},
+  ],
+  rules:[],
+};
+/* every rule carries a stable id, so an open rule window edits the rule it opened wherever it has moved to */
+let RID=0;const rid=()=>"r"+(++RID);
+const SEED=()=>[
+  {conds:{q1:[0],q4:[1]},not:{},all:{},verb:"show",recs:["dryness"]},
+  {conds:{q1:[1]},not:{},all:{},verb:"show",recs:["acne"]},
+  {conds:{q1:[2]},not:{},all:{},verb:"show",recs:["redness"]},
+  {conds:{q1:[3]},not:{},all:{},verb:"show",recs:["dullness"]},
+  {conds:{q1:[4]},not:{},all:{},verb:"show",recs:["fine-lines"]},
+].map(r=>({...r,id:rid()}));
+S.rules=SEED();
+const QS0=JSON.stringify(S.qs); // Reset puts the questions (and their answer mappings) back too
+let M=null; // the Create-a-rule draft: {edit:rule id|null,conds:{qid:[ai]},not:{},all:{},verb,recs:[]}
+
+const roleOf=q=>S.style==="rules"?"info":q.role;
+const TAG={decides:"Picks",filter:"Narrows",info:"Info"};
+const BTN={decides:"Picks results",filter:"Narrows results",info:"Info only"};
+const JOBS=[["decides","Picks the result","each answer maps to a product group"],["filter","Narrows","filters down the product groups"],["info","Info only","collects the data only"]];
+const VERBS=[["show","Show","these become the results"],["pin","Pin","these move to the top"],["hide","Hide","these never show"]];
+/* D2: in Rules only the first matching rule IS the whole result, so the window offers Show alone —
+   Pin and Hide only mean anything in Filter Results + Rules, where the answers already built a base
+   pool, and both stay there. A rule written in Filter style and opened here reads as Show and says
+   what saving will do (fitDraft), rather than changing quietly. */
+const winVerbs=()=>S.style==="rules"?VERBS.filter(([k])=>k==="show"):VERBS;
+/* D2 (R7): the window was the only place that honoured this. In Rules only the first matching rule IS
+   the whole result, so Show / Pin / Hide have nothing to choose between — the verb is not part of a rule
+   there, and the rows, the Table and the export all read the rule the way the style runs it. The stored
+   verb is left alone until the merchant saves the rule (the window's hint says what saving will do), so
+   switching back to Filter Results + Rules finds the Pin and Hide rules exactly as they were. */
+const effVerb=r=>S.style==="rules"?"show":r.verb;
+const thumb=(r,sm)=>`<span class="thumb${sm?" sm":""}" style="background:linear-gradient(145deg,hsl(${r.h} 55% 86%),hsl(${r.h} 38% 70%))"></span>`;
+const qIndex=id=>S.qs.findIndex(q=>q.id===id)+1;
+/* B40: the question an open Table popover edits. S.sel is the Edit view's selection and stays where the
+   merchant left it, so opening (or cancelling) a Table menu never moves it. Cleared by closePop. */
+let PQ=null;
+const curQ=()=>S.qs.find(q=>q.id===(PQ||S.sel))||S.qs[0];
+const isLastQ=q=>S.qs[S.qs.length-1]===q;
+/* ══ Question types (live QuestionType + the Questions step's settings):
+   single · multi (min–max picks) · image · scale (points are real answers,
+   optional end labels; "Five-point" is the 1–5 preset). ══ */
+const TYPE_LABEL={single:"Single select",multi:"Multi-select",image:"Image select",scale:"Scale"};
+const qtype=q=>q.type||"single";
+const isFive=q=>qtype(q)==="scale"&&q.five&&q.answers.length===5;
+const typeName=q=>isFive(q)?"Five-point scale":TYPE_LABEL[qtype(q)];
+const mmin=q=>Math.max(1,Math.min(q.min||1,q.answers.length));
+const mmax=q=>Math.max(mmin(q),Math.min(q.max||q.answers.length,q.answers.length));
+function typeMeta(q){const t=qtype(q);return t==="multi"?`Multi-select · pick ${mmin(q)===mmax(q)?mmin(q):mmin(q)+"–"+mmax(q)}`:t==="scale"&&!isFive(q)?`Scale · 1–${q.answers.length}`:typeName(q)}
+/* a scale point whose text is just its number carries no label of its own */
+const isPt=(q,i)=>qtype(q)==="scale"&&q.answers[i].t===String(i+1);
+const endLab=(q,i)=>i===0?(q.lo||""):i===q.answers.length-1?(q.hi||""):"";
+/* answer keys stay inside A–Z: the Add-a-question dialog caps answers at MAX_ANS and letterKey
+   is the backstop (AA, AB…) if anything ever gets past it */
+const MAX_ANS=26;
+const letterKey=i=>{let s="";for(i++;i>0;i=Math.floor((i-1)/26))s=String.fromCharCode(65+(i-1)%26)+s;return s};
+const akey=(q,i)=>qtype(q)==="scale"?String(i+1):letterKey(i);
+/* Every answer is editable, numbered points included: a point shows its end label (or "Add label")
+   as placeholder text and can be named, and a point emptied again falls back to its number. A text
+   answer on an end of a scale shows that end's label beside it, so the label is never invisible. */
+const ptEd=(q,i,a)=>`<span class="ed" contenteditable="true" spellcheck="false" data-edit="a" data-q="${q.id}" data-a="${i}"${isPt(q,i)?` data-pt="${i+1}" data-ph="${escA(endLab(q,i)||"Add label")}"`:""}>${isPt(q,i)?"":escA(a.t)}</span>`;
+const endCap=(q,i)=>qtype(q)==="scale"&&!isPt(q,i)&&endLab(q,i)?`<span class="ptlab"> · ${escA(endLab(q,i))}</span>`:"";
+/* how an answer reads outside its own question (rule sentences, the When column) */
+const ansText=(q,i)=>qtype(q)==="scale"?`Q${qIndex(q.id)} = ${q.answers[i].t}`:q.answers[i].t;
+/* how an answer reads in the Table and the export: never the bare text, always which question it is on (D17) */
+const ansMach=(q,i)=>`Q${qIndex(q.id)} = ${q.answers[i].t}`;
+function setPoints(q,n){n=Math.max(2,Math.min(10,n));while(q.answers.length<n)q.answers.push(A(String(q.answers.length+1)));
+  if(q.answers.length>n){q.answers.length=n;eachRule(r=>{if(r.conds[q.id])r.conds[q.id]=r.conds[q.id].filter(i=>i<n)})}}
+const stepper=(act,qid,v,lo,hi,label,tip)=>`<span class="stp"><button type="button" aria-label="Decrease ${label}"${tip?` title="${escA(tip)}"`:""} data-act="${act}" data-q="${qid}" data-d="-1"${v<=lo?" disabled":""}>−</button><span class="stv">${v}</span><button type="button" aria-label="Increase ${label}" data-act="${act}" data-q="${qid}" data-d="1"${v>=hi?" disabled":""}>+</button></span>`;
+/* the '−' says which point it takes off, and whether that point carries anything */
+function ptsTip(q){const i=q.answers.length-1;if(i<2)return "";const a=q.answers[i],m=a.targets.length+a.values.length;
+  return `Removes point ${i+1}${isPt(q,i)?"":` · “${a.t}”`}${m?` and its mapping${m>1?"s":""}`:""}`}
+function typeMenu(qid){const q=S.qs.find(x=>x.id===qid);if(!q)return "";const t=qtype(q),cur=isFive(q)?"five":t;
+  const opts=[["single","Single select"],["multi","Multi-select"],["five","Five-point scale"],["scale","Scale"]];
+  if(!opts.some(o=>o[0]===cur))opts.unshift([cur,typeName(q)]);
+  let set="";
+  if(t==="multi")set=`<div class="tpset"><div class="tprow"><span class="tplb">Min</span>${stepper("tmin",q.id,mmin(q),1,mmax(q),"minimum selections")}</div><div class="tprow"><span class="tplb">Max</span>${stepper("tmax",q.id,mmax(q),mmin(q),q.answers.length,"maximum selections")}</div></div>`;
+  /* B64: "Max" is the Multi-select panel's word for how many answers a shopper may pick. This stepper
+     sets how many points the scale has, which is a different thing, so it says so. */
+  else if(t==="scale"){const n=q.answers.length;set=`<div class="tpset"><div class="tprow"><span class="tplb">Points</span>${stepper("tpts",q.id,n,2,10,"scale points",ptsTip(q))}</div><input class="tplab" id="tp-lo" data-q="${q.id}" value="${escA(q.lo||"")}" placeholder="Label for 1 (optional)" aria-label="Label for the low end of the scale" maxlength="40"><input class="tplab" id="tp-hi" data-q="${q.id}" value="${escA(q.hi||"")}" placeholder="Label for ${n} (optional)" aria-label="Label for the high end of the scale" maxlength="40"><div class="tpnote">Scale runs 1 → ${n}. Labels optional.</div></div>`}
+  /* B29: one tab stop for the whole group — the chosen type. The arrows move between the radios. */
+  return `<div class="pt" id="qtypelab">Question type</div><div role="radiogroup" aria-labelledby="qtypelab">${opts.map(([k,n])=>`<button type="button" class="mi tpt${k===cur?" on":""}" role="radio" aria-checked="${k===cur}" tabindex="${k===cur?0:-1}" data-act="settype" data-q="${q.id}" data-t="${k}"><span class="rd"></span>${n}</button>`).join("")}</div>${set}`}
+/* the tooltip promises only what the change actually does: above 5 answers Five-point trims, above 10 Scale does too */
+const typeTip=q=>`Change the question type${q.answers.length>10?" — Five-point keeps the first 5 answers, Scale the first 10":q.answers.length>5?" — Five-point keeps only the first 5 answers":" — your answers are kept"}`;
+const typeBtn=(q,cls)=>`<button type="button" class="${cls}" aria-haspopup="dialog" aria-expanded="false" title="${escA(typeTip(q))}" data-act="qtype" data-q="${q.id}">${escA(typeMeta(q))}<span class="cv">▾</span></button>`;
+/* ══ Add a question — the live Questions step's dialog (AddQuestionDialog):
+   type, title, answers, nothing else. ══ */
+/* B64: the cards name the types the way the question type menu names them (TYPE_LABEL/typeName) —
+   "Multi select" and "Five point" were the same two types under a second spelling. */
+const AQ_TYPES=[["single","Single select","they pick one answer"],["multi","Multi-select","they pick several"],["image","Image select","answers show as image tiles"],["five","Five-point scale","they rate from 1 to 5"]];
+let AQ=null;
+const aqFilled=()=>AQ.rows.map(t=>t.trim()).filter(Boolean);
+const aqCount=()=>AQ.type==="five"?5:aqFilled().length;
+const aqOk=()=>AQ.title.trim().length>0&&(AQ.type==="five"||aqFilled().length>=2);
+function aqFoot(){const n=aqCount();return `Adds <b>Q${S.qs.length+1}</b> with ${n} ${n===1?"answer":"answers"}`}
+/* the hint counts answers that are actually filled in, the same bar Add question is held to */
+const aqHint=()=>{const n=aqFilled().length;return n<2?`${n} of 2 needed`:`${n} answers`};
+function aqHTML(){const five=AQ.type==="five";
+  return `<div class="aqbox" role="dialog" aria-modal="true" aria-label="Add a question"><div class="aqh"><h2>Add a question</h2><button type="button" class="mx" aria-label="Close" data-act="aqclose">×</button></div><div class="aqbody">
+<section class="aqband"><div class="aqbh"><span class="aqbn">1</span><span class="aqbt">Type</span></div><div class="aqtgrid">${AQ_TYPES.map(([k,n,h])=>`<button type="button" class="aqt${AQ.type===k?" on":""}" aria-pressed="${AQ.type===k}" data-act="aqtype" data-t="${k}"><span class="aqtn">${n}</span><span class="aqtd">${h}</span></button>`).join("")}</div></section>
+<section class="aqband"><div class="aqbh"><span class="aqbn">2</span><span class="aqbt">Question</span></div><input id="aq-title" class="aqfi" maxlength="150" placeholder="How does your skin feel by the end of the day?" aria-label="Question" value="${escA(AQ.title)}"></section>
+<section class="aqband"><div class="aqbh"><span class="aqbn">3</span><span class="aqbt">Answers</span>${five?"":`<span class="aqbhint" aria-live="polite">${aqHint()}</span>`}</div>${five?`<p class="aqnote">A five-point scale generates the answers itself — 1 to 5, nothing to type.</p>`:
+  AQ.rows.map((t,i)=>`<div class="aqrow"><button type="button" class="aqgrip" title="Reorder — drag, or use the arrow keys" aria-label="Reorder answer ${i+1} — drag or use the arrow keys" data-i="${i}">⋮⋮</button><span class="aqkey">${letterKey(i)}</span><input class="aqai" data-i="${i}" maxlength="60" placeholder="Answer text" aria-label="Answer ${i+1}" value="${escA(t)}"><button type="button" class="aqdel" aria-label="Delete answer ${i+1}" data-act="aqdel" data-i="${i}"${AQ.rows.length<=2?" disabled":""}>×</button></div>`).join("")+(AQ.rows.length<MAX_ANS?`<button type="button" class="aqadd2" data-act="aqrow">+ Add answer</button>`:`<p class="aqnote">${MAX_ANS} answers is the most a question can have.</p>`)+`${AQ.type==="image"?`<p class="aqnote">Images attach on the question once it exists.</p>`:""}`}</section></div>
+<div class="aqfoot"><span class="aqsum">${aqFoot()}</span><span class="sp"></span><button type="button" class="btn" data-act="aqclose">Cancel</button><button type="button" class="btn pri" data-act="aqadd"${aqOk()?"":" disabled"}>Add question</button></div></div>`}
+/* the rebuild keeps the answer list where the merchant left it (drawAR, drawModal and drawVP do the same) */
+function drawAQ(focus){const el=$("#aqm"),was=!el.hidden;winOpening(el,!!AQ);
+  if(!AQ){el.hidden=true;el.innerHTML="";winSync();placeToast();if(was)winRestore(el,'#stage [data-act="addq"]');return}
+  const ob=el.querySelector(".aqbody"),top=ob?ob.scrollTop:0;
+  el.hidden=false;el.innerHTML=aqHTML();el.querySelector(".aqbody").scrollTop=top;winSync();placeToast();
+  if(focus){const f=el.querySelector(focus);if(f){f.focus();if(f.setSelectionRange)f.setSelectionRange(f.value.length,f.value.length)}}
+  else winFocusIn(el)}
+function aqSync(){const el=$("#aqm");if(!AQ||!el)return;const s=el.querySelector(".aqsum");if(s)s.innerHTML=aqFoot();const h=el.querySelector(".aqbhint");if(h)h.textContent=aqHint();const b=el.querySelector('[data-act="aqadd"]');if(b)b.disabled=!aqOk()}
+const styleName=()=>S.style==="attributes"?"Filter Results + Rules":"Rules only";
+const STYLE_HINT={attributes:["Choose the question that decides your Results category.","Use the questions to filter them down with tags, variants, or custom groups. Make rules to prioritize specific behaviors."],rules:["Every outcome is a rule you write: which products to show, based on how someone answered.",""]};
+/* one line by default; More opens the rest, remembered per viewer */
+let hintOpen=false;try{hintOpen=localStorage.getItem("lg-hint")==="1"}catch(e){}
+function hintHTML(){const [lead,more]=STYLE_HINT[S.style];
+  return `<p class="status-p">${lead}${more?`<button type="button" class="more${hintOpen?" open":""}" aria-expanded="${hintOpen}" data-act="hint">${hintOpen?"Less":"More"}<span aria-hidden="true">▾</span></button>`:""}</p>${more&&hintOpen?`<p class="status-p">${more}</p>`:""}`}
+const short=t=>t.length>30?t.slice(0,28).trimEnd()+"…":t;
+
+/* D17: a group names its question only when the same answer text also sits on another question */
+const dupAns=(q,i)=>{const t=low(q.answers[i].t);return S.qs.some(x=>x!==q&&x.answers.some(a=>low(a.t)===t))};
+/* D17 grammar: verb first, answers only, one bracketed group per question, bold joins, "not (…)" for a
+   negated group, and the full text on hover wherever short() cut it. The bracket sits against its chip
+   (no space between), so a line never breaks between "(" and the answer it opens.
+   D12: "is not" means none of these answers, so a negated group always joins with "or". */
+function sentence(r,bare){const cj=w=>` <b class="cj">${w}</b> `;
+  const parts=Object.keys(r.conds).filter(k=>r.conds[k].length).sort((a,b)=>qIndex(a)-qIndex(b)).map(k=>{const q=S.qs.find(x=>x.id===k);if(!q)return "";
+    const j=!r.not[k]&&r.all[k]?"and":"or";
+    const chips=r.conds[k].map((i,x)=>{const ns=x&&qtype(q)==="scale",full=ns?q.answers[i].t:ansText(q,i),t=short(full);
+      return `<span class="cchip" data-sq="${k}" data-sa="${i}"${ns?' data-ns="1"':""}${t===full?"":` title="${escA(full)}"`}>${escA(t)}</span>`}).join(cj(j));
+    const lab=bare&&qtype(q)!=="scale"&&r.conds[k].some(i=>dupAns(q,i))?`<i class="qlab">Q${qIndex(k)}</i>`:"";
+    return (bare?(r.not[k]?`<b class="cj">not</b> `:""):`<span class="cchip"><i>Q${qIndex(k)}</i>${r.not[k]?"is not":"is"}</span> `)+lab+(r.conds[k].length>1||r.not[k]?`(${chips})`:chips)});
+  const v=VERBS.find(x=>x[0]===effVerb(r))[1];
+  return `<span class="cchip v">${v}</span> `+(r.recs.length?r.recs.map(x=>`<span class="cchip res">${escA(x)}</span>`).join(" "):"…")+(parts.length?" when "+parts.join(cj("and")):" when …")}
+/* A rule covers a recommendation only if it can put it in front of a shopper: it lists it, it can run
+   (deadWhy: complete, possible, no earlier rule catches everyone first) and its verb adds. In Filter
+   Results + Rules the answers already built a pool, so only Show adds — Hide never does, and with a
+   mapped deciding answer Pin only reorders (applyRuleAction). In Rules only there is no pool to add to:
+   the first matching rule's recommendations ARE the result, whatever verb the document happens to carry
+   (D2/effVerb), so every rule that can run shows what it lists. */
+const showsRecs=(r,i)=>(S.style==="rules"||r.verb==="show")&&!deadWhy(i);
+const rulesShowing=id=>S.rules.map((r,i)=>r.recs.includes(id)&&showsRecs(r,i)?i+1:0).filter(Boolean);
+const ruleCount=id=>rulesShowing(id).length;
+/* In Filter Results + Rules an answer mapping already recommends a group, so only what nothing reaches needs a rule */
+const recMapped=id=>S.style==="attributes"&&S.qs.some(q=>q.role==="decides"&&q.answers.some(a=>a.targets.includes(id)));
+const ruleShows=id=>ruleCount(id)>0;
+const recCovered=id=>recMapped(id)||ruleShows(id);
+
+/* ── Rules only: the model the five versions read ── */
+const $$=s=>[...document.querySelectorAll(s)];
+const condQs=r=>S.qs.map(q=>q.id).filter(k=>(r.conds[k]||[]).length);
+const complete=r=>condQs(r).length>0&&r.recs.length>0;
+/* "all of" more answers than a multi-select lets them pick can never happen (under "is not" it always does) */
+const overMax=(r,q)=>qtype(q)==="multi"&&!!r.all[q.id]&&(r.conds[q.id]||[]).length>mmax(q);
+const overQ=r=>S.qs.find(q=>overMax(r,q)&&!r.not[q.id]);
+const impossible=r=>!!overQ(r);
+/* First match wins, so rule i never runs when every shopper it would catch is caught by an earlier rule,
+   whatever that rule does. The check enumerates what shoppers can answer on the questions the rules
+   name (single: one answer; multi: every pick set within Min–Max; "is not" also holds for a skipped or
+   unnamed answer), walks only the branches rule i allows, and keeps the earlier rules still possible on
+   each. Once the first live rule is fully decided it catches that branch; if none is left, somebody gets
+   through. Returns the earlier rules that catch everyone (row indexes): one rule when one is enough on
+   its own, else the union that does it together. null = the rule can run. */
+function picksFor(q,named){const out=[],other=q.answers.length-named.length,at=qIndex(q.id);
+  const skip=S.qs.slice(0,at-1).some(p=>p.answers.some(a=>a.route&&(a.route==="end"||qIndex(a.route)>at)));
+  if(qtype(q)!=="multi"){named.forEach(i=>out.push([i]));if(other||skip)out.push([]);return out}
+  for(let m=0;m<1<<named.length;m++){const s=named.filter((_,b)=>m>>b&1);if(skip&&!s.length||s.length<=mmax(q)&&s.length+other>=mmin(q))out.push(s)}
+  return out}
+const holds=(r,k,p)=>{const c=r.conds[k]||[];if(!c.length)return true;const hit=r.all[k]?c.every(i=>p.includes(i)):c.some(i=>p.includes(i));return r.not[k]?!hit:hit};
+function shadowedBy(i){const r=S.rules[i];if(!r||!complete(r)||impossible(r))return null;
+  const earlier=S.rules.slice(0,i).filter(e=>e&&complete(e));if(!earlier.length)return null;
+  const set=[...earlier,r],qs=S.qs.filter(q=>set.some(x=>(x.conds[q.id]||[]).length)),pos={};qs.forEach((q,x)=>pos[q.id]=x);
+  const opts=qs.map(q=>picksFor(q,[...new Set(set.flatMap(x=>x.conds[q.id]||[]))].sort((a,b)=>a-b)).filter(p=>holds(r,q.id,p)));
+  if(opts.some(o=>!o.length)||opts.reduce((n,o)=>n*o.length,1)>2e5)return null; // matches nobody (its own warning), or too big to walk: no tag
+  const by=new Set();
+  const walk=(d,live)=>{if(!live.length)return false;if(condQs(live[0]).every(k=>pos[k]<d)){by.add(S.rules.indexOf(live[0]));return true}
+    return opts[d].every(p=>walk(d+1,live.filter(e=>holds(e,qs[d].id,p))))};
+  const one=earlier.find(e=>walk(0,[e]));if(one)return [S.rules.indexOf(one)];
+  by.clear();return walk(0,earlier)?[...by].sort((a,b)=>a-b):null}
+const nlist=a=>a.length>1?a.slice(0,-1).join(", ")+" and "+a[a.length-1]:String(a[0]);
+/* why rule i can never run, or null: one flag, the same wherever rules are listed. Cached per state,
+   because coverage asks for every rule's flag for every recommendation on each render. */
+let DW={fp:"",v:[]};
+const dwFp=()=>JSON.stringify([S.rules,S.qs.map(q=>[q.id,q.type,q.min,q.max,q.answers.length,q.answers.map(a=>a.route||0)])]);
+function deadCalc(i){const r=S.rules[i];if(!r)return null;
+  if(!complete(r))return `no ${condQs(r).length?"recommendation":r.recs.length?"answers":"answers or recommendation"} left`;
+  const q=overQ(r);if(q)return `needs more Q${qIndex(q.id)} answers than they can pick`;
+  const sh=shadowedBy(i);return sh?`rule${sh.length>1?"s":""} ${nlist(sh.map(j=>j+1))} catch${sh.length>1?"":"es"} them first`:null}
+function deadWhy(i){const fp=dwFp();if(DW.fp!==fp)DW={fp,v:[]};if(DW.v[i]===undefined)DW.v[i]=deadCalc(i);return DW.v[i]}
+const deadTag=i=>{const w=deadWhy(i);return w?`<span class="rtag">never runs · ${w}</span>`:""};
+/* what a removal did to the rules: which lost answers on q (or, with q null, a recommendation), and which never run now */
+const rkeys=()=>S.rules.map(r=>JSON.stringify([r.conds,r.recs]));
+function lossMsg(was,q){const now=rkeys(),nc=c=>Object.values(c).reduce((n,a)=>n+a.length,0);let lost=0;
+  const hit=S.rules.map((r,i)=>{if(was[i]===undefined||now[i]===was[i])return 0;const w=JSON.parse(was[i]);lost+=q?nc(w[0])-nc(r.conds):w[1].length-r.recs.length;return i+1}).filter(Boolean);if(!hit.length)return "";
+  const dead=hit.filter(n=>!complete(S.rules[n-1])),one=hit.length===1;
+  return `Rule${one?"":"s"} ${nlist(hit)} lost ${q?`${lost===1?"an answer":"answers"} on Q${qIndex(q.id)}`:lost===1?"a recommendation":"recommendations"}`+(dead.length?` · ${dead.length===hit.length?(one?"it never runs":"they never run"):`rule${dead.length>1?"s":""} ${nlist(dead)} never run${dead.length>1?"":"s"}`} now`:"")}
+/* a removal says what it broke; while a delete's Undo is still up that toast stays (the rows carry the flag) */
+const lossToast=m=>{if(m&&!undoLive())toast(m)};
+/* Undo. While its toast is up, further deletes, moves and clears join the same entry, so one
+   Undo takes back the whole run (a second delete used to overwrite the first). The entry keeps
+   the rules from before the run. eachRule keeps it in step when answers or recommendations are
+   removed, and fitRule checks it again on the way back, so Undo never restores a reference to
+   an answer or recommendation that is gone. */
+let UNDO=null;
+const undoLive=()=>!!UNDO&&!$("#toast").hidden&&!!$('#toast [data-act="undo"]');
+function snap(del){if(!undoLive())UNDO={rules:JSON.parse(JSON.stringify(S.rules)),n:0,dels:0};UNDO.n++;if(del)UNDO.dels++}
+/* every rule the mock holds: the list, the open draft, and what a pending Undo would bring back */
+const eachRule=f=>{S.rules.forEach(f);if(M)f(M);if(UNDO)UNDO.rules.forEach(f)};
+function fitRule(r){Object.keys(r.conds).forEach(k=>{const q=S.qs.find(x=>x.id===k);if(!q){delete r.conds[k];delete r.not[k];delete r.all[k];return}
+    r.conds[k]=r.conds[k].filter(i=>i<q.answers.length);if(qtype(q)!=="multi")delete r.all[k]});
+  r.recs=r.recs.filter(rec);return r}
+function toastU(m){const t=$("#toast"),u=UNDO,more=u&&u.n>1&&u.dels<u.n;t.innerHTML=m+(u?`<button type="button" class="tundo" data-act="undo">${more?(u.n===2?"Undo both":`Undo all ${u.n}`):"Undo"}</button>`:"");t.hidden=false;toastShow(6000)}
+/* Question-shape Undo. Moving "Picks results", or a type or point change, can take answers and
+   their mappings away; each one says what went and offers one Undo that puts the questions and
+   the rule conditions that moved with them back. Its own slot, so the rules Undo above is never
+   overwritten: while that one's toast is still up this message waits, like every loss message. */
+let QUNDO=null;
+const qundoLive=()=>!!QUNDO&&!$("#toast").hidden&&!!$('#toast [data-act="qundo"]');
+function qsnap(){if(!qundoLive())QUNDO={qs:JSON.parse(JSON.stringify(S.qs)),rules:JSON.parse(JSON.stringify(S.rules)),sel:S.sel}}
+/* what this run took off a question, counted from the snapshot, so one Undo and one message agree */
+function qLostMsg(q,why){const b=QUNDO&&QUNDO.qs.find(x=>x.id===q.id);if(!b)return "";
+  const gone=b.answers.length-q.answers.length;if(gone<1)return "";
+  const maps=b.answers.slice(q.answers.length).reduce((n,a)=>n+a.targets.length+a.values.length,0);
+  return `Removed ${gone} answer${gone>1?"s":""} from Q${qIndex(q.id)}`+(why?" "+why:"")+(maps?` · ${maps} mapping${maps>1?"s":""} gone`:"")}
+function toastQ(m){if(!m||undoLive())return;const t=$("#toast");t.innerHTML=escA(m)+(QUNDO?`<button type="button" class="tundo" data-act="qundo">Undo</button>`:"");t.hidden=false;toastShow(6000)}
+/* ══ One path per shape change, whatever asked for it: the menu, the Table or Import (D9, B24) ══ */
+/* D9 (B6): ONE policy for every role. A question that gives up a job gives up what that job stored on
+   its answers — whichever job it is. Moving "Picks results" clears both questions' recommendations (the
+   locked rule), and leaving "Narrows" clears that question's values the same way, instead of parking
+   them where nothing on the page can reach them and no Undo can offer them back. Both losses are named
+   in the same toast and both come back with its one Undo. */
+const roleLose=(q,k)=>k==="decides"?(S.qs.find(x=>x.role==="decides"&&x!==q)||null):(q.role==="decides"?q:null);
+const roleLossN=(q,k)=>{const l=roleLose(q,k);return l?l.answers.reduce((s,a)=>s+a.targets.length,0):0};
+/* what leaving Narrows gives up: every value kept on an answer, and every "Keeps everything" */
+const filtLose=(q,k)=>q.role==="filter"&&k!=="filter"?q:null;
+const filtLossN=(q,k)=>filtLose(q,k)?q.answers.reduce((s,a)=>s+a.values.length+(a.any?1:0),0):0;
+const roleLossAny=(q,k)=>roleLossN(q,k)+filtLossN(q,k);
+function moveRole(q,k){const lose=roleLose(q,k),n=roleLossN(q,k),fn=filtLossN(q,k),old=k==="decides"?S.qs.find(x=>x.role==="decides"&&x!==q):null;
+  if(old){old.role="info";old.answers.forEach(a=>a.targets=[])}
+  if(k!=="decides")q.answers.forEach(a=>a.targets=[]);
+  if(fn||filtLose(q,k))q.answers.forEach(a=>{a.values=[];delete a.any});
+  q.role=k;
+  return [n?`Q${qIndex(lose.id)}'s ${n} recommendation${n>1?"s were":" was"} removed`:"",
+    fn?`Q${qIndex(q.id)}'s ${fn} value${fn>1?"s were":" was"} removed`:""].filter(Boolean).join(" · ")}
+/* only a multi-select can need ALL of its answers; the others are answered once */
+const allOfMsg=(n,q)=>n?`${n} all-of rule${n>1?"s":""} on Q${qIndex(q.id)} now match${n>1?"":"es"} any of ${n>1?"their":"its"} answers`:"";
+function dropAllOf(q){let n=0;[...S.rules,...(M?[M]:[])].forEach(r=>{if(r.all[q.id]){delete r.all[q.id];n++}});
+  if(UNDO)UNDO.rules.forEach(r=>{delete r.all[q.id]});return n}
+
+function findings(){
+  const f=[];const dec=S.qs.find(q=>q.role==="decides");
+  if(S.style==="attributes"){
+    if(!dec)f.push({sv:"crit",act:"fixpick",t:"No question picks the result. Give one question that job."});
+    else{const n=dec.answers.filter(a=>!a.targets.length).length;
+      if(n)f.push({sv:"crit",q:dec.id,t:`Q${qIndex(dec.id)} · ${n} answer${n>1?"s have":" has"} no recommendation`});
+      /* routes, walked forward from Q1: an answer that jumps past the deciding question leaves that shopper with no result (the publish gate's decider_bypass) */
+      const d=S.qs.indexOf(dec),reach=new Set([0]);
+      for(let i=0;i<d;i++){if(!reach.has(i))continue;const q=S.qs[i];q.answers.forEach(a=>{const n=a.route==="end"?Infinity:a.route?S.qs.findIndex(x=>x.id===a.route):i+1;
+        if(n>d)f.push({sv:"crit",q:q.id,t:`Q${i+1} · “${escA(short(a.t))}” ${a.route==="end"?"goes straight to the results":`skips to Q${n+1}`} without answering Q${d+1}, the question that picks the result`});else reach.add(n)})}
+      RECS.filter(r=>!recCovered(r.id)).forEach(r=>f.push({sv:"warn",q:dec.id,t:`“${escA(r.id)}” is never recommended`}));}
+    /* an answer set to Keeps everything was chosen on purpose; only an unset one is reported */
+    S.qs.filter(q=>q.role==="filter").forEach(q=>{const n=q.answers.filter(a=>!a.values.length&&!a.any).length;
+      if(n)f.push({sv:"warn",q:q.id,t:`Q${qIndex(q.id)} · ${n} answer${n>1?"s keep":" keeps"} everything (no value chosen)`});});
+  }else if(!S.rules.length)f.push({sv:"crit",t:"Rules only needs at least one rule to show anything."});
+  /* D2 (R7): in Rules only a rule shows what it lists as soon as it can run, so the only way nothing
+     shows is that no rule can run — "Add a Show rule" was advice for a verb this style does not have. */
+  else{if(!S.rules.some((r,i)=>showsRecs(r,i)))f.push({sv:"crit",t:"None of your rules can ever run."});
+    RECS.filter(r=>!recCovered(r.id)).forEach(r=>f.push({sv:"warn",t:`“${escA(r.id)}” is never recommended`}));}
+  /* one flag per rule that can never run, the same one the lists show: no answers or recommendation left blocks (the rule window's own bar), the rest warn */
+  S.rules.forEach((r,i)=>{const w=deadWhy(i);if(!w)return;const q=overQ(r);
+    f.push(!complete(r)?{sv:"crit",i,t:`Rule ${i+1} has ${w}, so it never runs`}:q?{sv:"warn",i,t:`Rule ${i+1} never runs: it needs all ${r.conds[q.id].length} of its Q${qIndex(q.id)} answers and they can pick ${mmax(q)}`}:{sv:"warn",i,t:`Rule ${i+1} never runs: ${w}`})});
+  f.push({sv:"note",t:"56 of 339 products are not live, so shoppers will never see them."});
+  return f;
+}
+const blocking=()=>findings().filter(x=>x.sv==="crit").length;
+
+/* ── page ── */
+/* D4 (parked 2026-09-22): the check popover shows the findings and opens from the CTA — nothing else.
+   The "N to review" link beside Continue is the diagnostics affordance the owner parked, so it is not
+   built here; when diagnostics land they hang off this popover's footer. */
+function fbar(){const f=findings(),b=f.filter(x=>x.sv==="crit").length;return `<div class="fbar"><span class="logo"><svg width="24" height="24" viewBox="0 0 24 24"><path d="M3 3l5 5h8l5-5-1 10-8 8-8-8z" fill="#5B45D6"/></svg></span>
+<div class="fsteps"><span class="fstep done">✓&nbsp; Recommendations</span><span class="fline"></span><span class="fstep done">✓&nbsp; Questions</span><span class="fline"></span><span class="fstep now"><span class="n">03</span>Logic</span><span class="fline"></span><span class="fstep"><span class="n">04</span>Results</span></div>
+<button type="button" class="back" aria-label="Back" data-act="stub" data-m="Back to Questions">‹</button>
+${b?`<button type="button" class="cta blocked" aria-haspopup="dialog" aria-expanded="false" data-act="check">Fix ${b} issue${b>1?"s":""} to continue</button>`:`<button type="button" class="cta" data-act="stub" data-m="Continues to Results">Continue →</button>`}</div>`}
+
+function railItems(){return S.qs.map((q,i)=>{const r=roleOf(q);return `<button type="button" class="qi${S.sel===q.id?" on":""}" data-act="sel" data-q="${q.id}" title="${escA(q.text)}"><span class="qn">${i+1}</span><span class="qtxt">${escA(q.text)}</span><span class="qtag ${r}">${TAG[r]}</span></button>`}).join("")+`<button type="button" class="qadd" data-act="addq">+ Add question</button>`}
+
+/* B68: the per-answer "which rules touch this answer" badge was cut, so its scaffolding (rulesFor, lam)
+   is gone with it, and the Rules-only branch of the role control is gone too — pane() only ever runs in
+   Filter Results + Rules, where the control is always a real button. */
+function pane(q){const r=roleOf(q);
+  const rows=q.answers.map((a,i)=>{
+    let cell;
+    if(r==="decides"){cell=a.targets.length?a.targets.map(t=>`<span class="chipw"><span class="chip">${escA(t)}</span><span class="cn">${rec(t)?rec(t).n:"missing"}</span><button type="button" class="xone" aria-label="Remove ${escA(t)}" data-act="untarget" data-a="${i}" data-r="${escA(t)}">×</button></span>`).join(""):`<span class="vbtn">${S.armed?`Place ${escA(S.armed)} here`:"Choose a result"}<span class="cv">▾</span></span>`;
+      cell=`<div class="cell${a.targets.length?"":" blank"}${S.armed?" drop":""}" role="button" tabindex="0" aria-haspopup="dialog" aria-expanded="false" data-act="cell" data-a="${i}">${cell}</div>`}
+    else if(r==="filter"){cell=a.any?`<span class="chipw"><span class="chip all">Keeps everything</span><button type="button" class="xone" aria-label="Clear" data-act="unany" data-a="${i}">×</button></span>`
+        :a.values.length?a.values.map(v=>{const m=VALMAP[v];return `<span class="chipw" title="${escA(SRC_NAME[m.src]+(m.attr&&m.src!=="type"?" · "+m.attr:""))}"><span class="chip">${escA(m.short)}</span><span class="cn">${m.n}</span><button type="button" class="xone" aria-label="Remove ${escA(m.short)}" data-act="unvalue" data-a="${i}" data-r="${escA(v)}">×</button></span>`}).join(""):`<span class="vbtn">Choose a value<span class="cv">▾</span></span>`;
+      cell=`<div class="cell${a.values.length||a.any?"":" blank"}" role="button" tabindex="0" aria-haspopup="dialog" aria-expanded="false" data-act="cell" data-a="${i}">${cell}</div>`}
+    else cell=`<div class="cell inert"><span class="dash">—</span></div>`;
+    const gp=`aria-haspopup="menu" aria-expanded="false"`;
+    const go=a.route?`<button type="button" class="go set" ${gp} data-act="route" data-a="${i}">→ ${a.route==="end"?"Results":"Q"+qIndex(a.route)}</button>`:`<button type="button" class="go" ${gp} data-act="route" data-a="${i}">→ ${isLastQ(q)?"Results":"Next"}</button>`;
+    return `<div class="arow"><span class="akey${qtype(q)==="scale"?" num":""}">${akey(q,i)}</span><span class="atext">${ptEd(q,i,a)}${endCap(q,i)}</span><div>${cell}</div><div>${go}</div></div>`}).join("");
+  const used=new Set(q.answers.flatMap(a=>a.targets));
+  const tray=r==="decides"?`<div class="tray"><span class="tray-lb">Recommendations</span><div class="tray-c">${RECS.map(x=>`<button type="button" class="tchip${S.armed===x.id?" armed":""}${used.has(x.id)?" used":" fresh"}" data-fit title="${escA(x.id)} · ${x.n} products${used.has(x.id)?" · placed":""}" data-act="arm" data-r="${escA(x.id)}">${escA(x.id)}</button>`).join("")}<button type="button" class="tchip tmore" aria-haspopup="dialog" aria-expanded="false" data-more data-act="trayMore" hidden>+0 more</button></div></div>`:`<div class="prule"></div>`;
+  const rb=`<button type="button" class="rolebtn" aria-haspopup="menu" aria-expanded="false" data-act="role">${BTN[r]} <span class="cv">▾</span></button>`;
+  return `<div class="pane"><div class="paneh"><div class="phl"><h3><span class="ed" contenteditable="true" spellcheck="false" data-edit="q" data-q="${q.id}">${escA(q.text)}</span></h3>${typeBtn(q,"qtype")}</div>${rb}</div>${tray}<div class="arows">${rows}</div></div>`}
+
+/* the empty state agrees with the check: without a question that picks the result, nothing decides anything yet */
+function ruleRows(){if(!S.rules.length){const dec=S.qs.some(q=>q.role==="decides"),n=S.qs.filter(q=>roleOf(q)!=="info").length;return `<div class="rempty">No rules yet. ${dec?`Your <b>${n}</b> switched-on question${n===1?" is":"s are"} deciding everything.`:"No question picks the result yet, so nothing shows. Set one question to <b>Picks results</b>."}</div>`}
+  return S.rules.map((r,i)=>{const t=deadTag(i);return `<div class="rrow${t?" dead":""}" data-act="editrule" data-i="${i}" title="Click to edit · use ↑ ↓ to reorder"><button type="button" class="rbody" data-act="editrule" data-i="${i}" title="Click to edit · use ↑ ↓ to reorder"><span class="rnum">${i+1}</span><span class="rsay"><span class="rsent">${sentence(r,true)}</span>${t}</span></button>${mvBtns(i,S.rules.length)}<button type="button" class="xone xdel" title="Delete rule" aria-label="Delete rule ${i+1}" data-act="delrule" data-i="${i}">${TRASH}</button></div>`}).join("")}
+
+function statusHead(){return `<div class="status"><button type="button" class="stitle" aria-haspopup="menu" aria-expanded="false" title="Change how this quiz decides" data-act="stylemenu">${styleName()}<span class="cv" aria-hidden="true">▾</span></button><div class="sdesc">${hintHTML()}</div>${headRight()}</div>`}
+function renderFilter(){if(S.view==="table")return fbar()+`<div class="work"><div class="card">${statusHead()}${tableHTML()}</div></div>`;const b=blocking();const c={decides:0,filter:0,info:0};S.qs.forEach(q=>c[roleOf(q)]++);
+  return fbar()+`<div class="work"><div class="card">${statusHead()}<div class="grid3"><div class="rail"><div class="railhead"><span class="kick">Questions</span><span class="railn">${S.qs.length}</span></div>${railItems()}<div class="railcount"><span><i class="dot d"></i>${TAG.decides} ${c.decides}</span><span><i class="dot f"></i>${TAG.filter} ${c.filter}</span><span><i class="dot i"></i>${TAG.info} ${c.info}</span></div></div>${pane(curQ())}
+<div class="rcol"><div class="rcol-in"><div class="rcol-h"><h4>Rules<span class="rcount">${S.rules.length}</span></h4><button type="button" class="btn pri" data-act="addrule">+ Add</button></div><p>Exceptions that run on top of the answers.</p><div class="rlistw"><div class="rlist">${ruleRows()}</div></div><div class="rcol-f"><button type="button" class="link" data-act="stub" data-m="Opens the existing Paste rules window">Paste rules</button></div></div></div></div></div></div>`}
+
+
+/* ══ Rules only ══ */
+function rulesBand(){const n=S.rules.length;
+  const rows=S.rules.map((r,i)=>{const t=deadTag(i);
+    return `<li class="rr${t?" dead":""}" draggable="true" data-ri="${i}" data-act="editrule" data-i="${i}" title="Click to edit · drag or use ↑ ↓ to reorder"><span class="grip" aria-hidden="true">⠿</span><button type="button" class="rbody" data-act="editrule" data-i="${i}" title="Click to edit · drag or use ↑ ↓ to reorder"><span class="rn">${i+1}</span><span class="rs"><span class="rsent">${sentence(r,true)}</span>${t}</span></button>${mvBtns(i,n)}<button type="button" class="xone xdel" title="Delete rule" aria-label="Delete rule ${i+1}" data-act="delrule" data-i="${i}">${TRASH}</button></li>`}).join("");
+  return `<div class="rband">
+${n?`<ol class="rlist2" aria-label="Rules, run top to bottom">${rows}</ol>`:`<div class="rempty2"><span><b>No rules yet.</b> In Rules only every result comes from a rule, so nothing shows until you create one.</span><button type="button" class="btn pri" data-act="addrule">Create your first rule</button></div>`}</div>`}
+
+/* B49: a pill lights the rules that list it, so the pill has to say the same thing in text — and be
+   reachable from the keyboard, which a plain span was not. */
+const rulesListing=id=>S.rules.map((r,i)=>r.recs.includes(id)?i+1:0).filter(Boolean);
+function vizRecs(){const done=RECS.filter(r=>ruleCount(r.id)).length;
+  return `<div class="viz-h"><h3>Your recommendations</h3><span class="sub"><b>${done}/${RECS.length}</b> have a rule</span></div><div class="recrow">`+[...RECS].sort((a,b)=>(ruleCount(a.id)?1:0)-(ruleCount(b.id)?1:0)).map(r=>ruleCount(r.id)
+      ?(x=>`<span class="rpill" data-fit data-r="${escA(r.id)}" tabindex="0" aria-label="${escA(r.id)} · ${x.length?`used by rule${x.length>1?"s":""} ${nlist(x)}`:"no rule uses it"}"><span class="sd on"></span>${escA(r.id)}</span>`)(rulesListing(r.id))
+      :`<button type="button" class="rpill none" data-fit data-r="${escA(r.id)}" data-act="createFor"><span class="sd"></span>${escA(r.id)}<span class="add">+ Create a rule</span></button>`).join("")
+    +`<button type="button" class="rpill add" aria-haspopup="dialog" aria-expanded="false" data-more data-act="stripMore" hidden>+0 more</button><button type="button" class="rpill add" data-act="addRecs">+ Add recommendations</button></div>`}
+
+/* B62: the Rules column is pinned to the grid row, so it scrolls inside itself. The fade says there is
+   more below (macOS overlay scrollbars say nothing), and the list keeps its place across a re-render
+   instead of jumping back to rule 1 every time a question is selected or a rule is saved. */
+function markRules(){const l=document.querySelector(".rcol .rlist");if(l)l.parentElement.classList.toggle("more",l.scrollHeight-l.clientHeight-l.scrollTop>4)}
+/* an open check popover redraws with the current findings (its anchor going away closes it, as any popover's does) */
+function render(){const k=document.querySelector(".rcol .rlist"),t=k?k.scrollTop:0;
+  renderInner();
+  const l=document.querySelector(".rcol .rlist");if(l){l.scrollTop=t;l.addEventListener("scroll",markRules,{passive:true})}
+  markRules();fitRows();svPlace();paintLit();if(pop&&pop.build===checkPop)drawPop();else{placePop();popAria()}}
+function renderInner(){
+  $("#stage").innerHTML=S.style==="rules"?fbar()+`<div class="work"><div class="card">${statusHead()}${S.view==="table"?tableHTML():rulesBand()+`<div class="viz">${vizRecs()}</div>`}</div></div>`:renderFilter();
+  /* R8: the artifact's own heading names the style on screen — it used to be frozen at "Rules only"
+     above a card titled "Filter Results + Rules". Mock chrome, but it is the first line of the handoff. */
+  $("#shellh1").textContent=`Logic step · ${styleName()}`;
+  $("#pitch").textContent=S.style==="rules"?"Rules only: the rules are the page. Under them, the recommendations they point at and the ones still missing a rule.":"Filter Results + Rules, as it stands. Click the title to switch back to Rules only."}
+
+/* ── Add recommendations ── */
+const inQuiz=name=>RECS.some(r=>r.id===name);
+/* B54: one match test feeds the list and the tab counts, so the tabs can't say "Tags 10" over 3 results */
+function arHTML(){const q=AR.q.trim().toLowerCase(),hit=c=>!q||c.name.toLowerCase().includes(q),pool=CATALOG.filter(c=>(AR.tab==="all"||c.kind===AR.tab)&&hit(c));
+  const count=k=>CATALOG.filter(c=>(k==="all"||c.kind===k)&&hit(c)).length;
+  const row=c=>{const had=inQuiz(c.name),on=AR.sel.includes(c.name);
+    return `<button type="button" class="arrow${on?" on":""}" role="checkbox" aria-checked="${on||had}" ${had?"disabled":""} data-act="arTog" data-n="${escA(c.name)}"><span class="ck">${on||had?"✓":""}</span><span class="nm">${escA(c.name)}</span>${AR.tab==="all"?`<span class="kd">${KIND[c.kind]}</span>`:""}<span class="ct">${had?"In this quiz":c.n===1?"1 product":c.n+" products"}</span></button>`};
+  let list;
+  if(!pool.length)list=`<div class="arempty">Nothing matches “${escA(AR.q)}”.</div>`;
+  else if(AR.tab==="all")list=["collection","tag","product","group"].map(k=>{const g=pool.filter(c=>c.kind===k);return g.length?`<div class="argrp">${AR_TABS.find(t=>t[0]===k)[1]}</div>${g.map(row).join("")}`:""}).join("");
+  else list=(AR.tab==="group"?`<div class="arnote">Groups you made on the Recommendations step.</div>`:"")+pool.map(row).join("");
+  const n=AR.sel.length;
+  return `<div class="arbox" role="dialog" aria-modal="true" aria-label="Add recommendations">
+<div class="arhead"><h2>Add recommendations</h2><button type="button" class="mx" aria-label="Close" data-act="arClose">×</button></div>
+<div class="artools"><input class="arsearch" id="ar-q" type="search" placeholder="Search products, collections, tags, groups" aria-label="Search" value="${escA(AR.q)}">
+<div class="artabs" role="group" aria-label="Kind">${AR_TABS.map(([k,l])=>`<button type="button" aria-pressed="${AR.tab===k}" data-act="arTab" data-t="${k}">${l}<span class="c">${count(k)}</span></button>`).join("")}</div></div>
+<div class="arlist">${list}</div>
+<div class="arfoot"><span>${n?`<b>${n}</b> selected`:"Pick what shoppers could be shown"}</span><button type="button" class="btn" data-act="arClose">Cancel</button><button type="button" class="btn pri" data-act="arAdd"${n?"":" disabled"}>${n?`Add ${n} recommendation${n>1?"s":""}`:"Add recommendations"}</button></div></div>`}
+/* B54: the window is built once when it opens; after that only the tabs, the list and the footer are
+   swapped, so the search box is never replaced — its caret stays put and an IME composition survives.
+   `top` says where the list should sit: a new query or tab passes 0 (results start at the top), ticking
+   a row passes nothing and keeps the place. */
+function drawAR(open,top){const el=$("#addrec"),was=!el.hidden;winOpening(el,!!AR);
+  if(!AR){el.hidden=true;el.innerHTML="";winSync();placeToast();if(was)winRestore(el,'#stage [data-act="addRecs"]');return}
+  const keep=!open&&el.querySelector(".arlist");if(top===undefined)top=keep?keep.scrollTop:0;el.hidden=false;
+  /* the swap takes the focused row or tab with it, so ticking with the keyboard doesn't drop focus to the page */
+  const a=document.activeElement,fk=keep&&a&&a.closest&&a.closest("#addrec")&&(a.dataset.n!==undefined?`[data-n="${CSS.escape(a.dataset.n)}"]`:a.dataset.t!==undefined?`[data-t="${CSS.escape(a.dataset.t)}"]`:"");
+  if(keep){const t=document.createElement("template");t.innerHTML=arHTML();
+    for(const c of ["artabs","arlist","arfoot"])el.querySelector("."+c).replaceWith(t.content.querySelector("."+c));
+    if(fk){const f=el.querySelector(fk);if(f)f.focus({preventScroll:true})}}
+  else{el.innerHTML=arHTML();if(open){const i=$("#ar-q");i.focus();i.setSelectionRange(i.value.length,i.value.length)}}
+  el.querySelector(".arlist").scrollTop=top;winSync();winFocusIn(el);placeToast()}
+
+/* ══ Table view: the whole logic as a sheet. The export writes these same rows. ══ */
+const IS_RULES_ROW=true;
+/* B37: "a save is pending" lives here, not on the clicked button — any re-render swaps that node out */
+let DL=null,XBUSY=false;(async()=>{try{if(!window.claude||!window.claude.use)return;DL=await window.claude.use("downloads");if(DL)render()}catch(e){DL=null}})();
+const DOES={decides:"Picks results",filter:"Narrows",info:"Info only"};
+/* B64: the last question has no next question, so an unset route there goes to the results */
+const nextText=(a,q)=>!a.route?(q&&isLastQ(q)?"Results (last question)":"Next question"):a.route==="end"?"Straight to results":`Skips to Q${qIndex(a.route)}`;
+/* D17: machine form here (Qn = answer). D12: a negated group means none of these answers, never "all of" */
+function whenParts(r){return Object.keys(r.conds).filter(k=>r.conds[k].length).sort((a,b)=>qIndex(a)-qIndex(b)).map(k=>{const q=S.qs.find(x=>x.id===k);return{k,idx:r.conds[k],not:!!r.not[k],join:!r.not[k]&&r.all[k]?"and":"or",ans:r.conds[k].map(i=>ansMach(q,i))}})}
+/* the export has no bold, so its joins are capitals; the table bolds the same capitals (R6) */
+function whenText(r){const ps=whenParts(r);if(!ps.length)return "(no answers)";return ps.map(x=>(x.not?"NOT ":"")+(x.ans.length>1||x.not?`(${x.ans.join(` ${x.join.toUpperCase()} `)})`:x.ans[0])).join(" AND ")}
+/* R6: the Table is captioned as the sheet the export writes, so its cell has to BE that cell — a
+   merchant who copies one into the workbook must get a row Import accepts. The joins are the file's
+   capitals (lowercase "and"/"or" are answer text to parseWhen, which is why " AND " is the token);
+   only the weight is the Table's own. */
+function whenHTML(r){const ps=whenParts(r);if(!ps.length)return "(no answers)";const cj=w=>` <b class="cj">${w}</b> `;return ps.map(x=>{const a=x.ans.map((t,j)=>`<span data-sq="${x.k}" data-sa="${x.idx[j]}" data-full="1">${escA(t)}</span>`);return (x.not?`<b class="cj">NOT</b> `:"")+(a.length>1||x.not?`(${a.join(cj(x.join.toUpperCase()))})`:a[0])}).join(cj("AND"))}
+/* D16: the file carries identity as well as text, and writes nothing its own Import rejects —
+   a name with a comma is quoted CSV-style, and an empty list is an empty cell, never "(none)"
+   or "(not set)" (B23). The Table keeps its own copy in `cells`; `x` is what the file gets. */
+const qName=n=>/[",]/.test(String(n))?'"'+String(n).replace(/"/g,'""')+'"':String(n);
+const nameList=xs=>xs.map(qName).join(", ");
+const whenX=r=>whenParts(r).length?whenText(r):"";
+function sheets(){
+  const verb=r=>VERBS.find(v=>v[0]===effVerb(r))[1];   // D2 (R7): the style's verb, the same one the rows read
+  const rules={name:"Rules",cols:["#","What happens","Recommendations","When they answer"],widths:[5,14,26,80],
+    xcols:["#","What happens","Recommendations","When they answer","Rule ID"],xwidths:[5,14,26,80,14],
+    rows:S.rules.map((r,i)=>({cells:[i+1,verb(r),r.recs.join(", ")||"(none)",whenText(r)],x:[i+1,verb(r),nameList(r.recs),whenX(r),r.id],html3:whenHTML(r),act:"editrule",i,muted:!!deadWhy(i)}))};
+  if(S.style==="rules"){
+    const recs={name:"Recommendations",cols:["Recommendation","Products","Shown by rules","Status"],widths:[24,10,16,14],
+      rows:RECS.map(r=>{const by=rulesShowing(r.id),has=by.length>0;return{cells:[r.id,r.n,by.join(", ")||"—",has?"Has a rule":"Needs a rule"],warn:!has,act:has?null:"createFor",r:r.id}})};
+    return [rules,recs]}
+  const answers={name:"Answers",cols:["Q","Question","Type","Answer","What it does","Shows / keeps","Then"],widths:[5,52,22,36,14,34,20],
+    xcols:["Q","Question","Type","Answer","What it does","Shows / keeps","Then","Answer ID"],xwidths:[5,52,22,36,14,34,20,14],rows:[]};
+  S.qs.forEach((q,qi)=>{const role=roleOf(q);q.answers.forEach((a,ai)=>{
+    const val=role==="decides"?(a.targets.join(", ")||"(not set)"):role==="filter"?(a.any?"Keeps everything":a.values.map(v=>VALMAP[v].short).join(", ")||"(not set)"):"—";
+    const xval=role==="decides"?nameList(a.targets):role==="filter"?(a.any?"Keeps everything":nameList(a.values.map(v=>VALMAP[v].short))):"";
+    answers.rows.push({cells:[`Q${qi+1}`,q.text,typeMeta(q),a.t,DOES[role],val,nextText(a,q)],x:[`Q${qi+1}`,q.text,typeMeta(q),a.t,DOES[role],xval,nextText(a,q),a.aid],first:ai===0,role,unset:val==="(not set)",q:q.id,ai})})});
+  return [rules,answers]}
+function tableHTML(){return `<div class="tview">`+sheets().map(sh=>`<section class="tsheet"><div class="twrap"><table class="xl"><thead><tr>${sh.cols.map(c=>`<th>${c}</th>`).join("")}${sh.name==="Rules"?`<th class="tact"><span class="sr">Delete</span></th>`:""}</tr></thead><tbody>${sh.rows.length?sh.rows.map(r=>{const c=r.cells;let tds;
+    if(sh.name==="Answers"){const q=S.qs.find(x=>x.id===r.q),a=q.answers[r.ai];
+      tds=`<td class="k">${r.first?c[0]:""}</td><td class="qt">${r.first?`<span class="ed" contenteditable="true" spellcheck="false" data-edit="q" data-q="${q.id}">${escA(q.text)}</span>`:""}</td>`+
+        `<td>${r.first?typeBtn(q,"tbtn dim"):""}</td>`+
+        `<td>${isPt(q,r.ai)?`<b>${r.ai+1}</b> `:""}${ptEd(q,r.ai,a)}${endCap(q,r.ai)}</td>`+
+        `<td>${r.first?`<button type="button" class="tbtn does ${r.role}" aria-haspopup="menu" aria-expanded="false" data-act="trole" data-q="${q.id}">${c[4]}<span class="cv">▾</span></button>`:""}</td>`+
+        `<td>${r.role==="info"?`<span class="dim2">—</span>`:`<button type="button" class="tbtn${r.role==="decides"?" res":""}${r.unset?" unset":""}" aria-haspopup="dialog" aria-expanded="false" data-act="tval" data-q="${q.id}" data-a="${r.ai}">${escA(c[5])}<span class="cv">▾</span></button>`}</td>`+
+        `<td><button type="button" class="tbtn dim" aria-haspopup="menu" aria-expanded="false" data-act="troute" data-q="${q.id}" data-a="${r.ai}">${c[6]}<span class="cv">▾</span></button></td>`}
+    else if(sh.name==="Rules")tds=`<td class="k"><button type="button" class="tgob" data-act="editrule" data-i="${r.i}" aria-label="Edit rule ${r.i+1}">${c[0]}</button></td><td class="verb">${c[1]}</td><td class="res">${escA(c[2])}</td><td>${r.html3||c[3]}${deadTag(r.i)}</td><td class="tact">${r.act==="editrule"?`<button type="button" class="tdel" title="Delete rule" aria-label="Delete rule ${r.i+1}" data-act="delrule" data-i="${r.i}">${TRASH}</button>`:""}</td>`;
+    else tds=`<td class="res">${r.act==="createFor"?`<button type="button" class="tgob" data-act="createFor" data-r="${escA(r.r)}" aria-label="Create a rule for ${escA(r.r)}">${escA(c[0])}</button>`:escA(c[0])}</td><td class="num">${c[1]}</td><td>${c[2]}</td><td class="${r.warn?"unset":"ok"}">${c[3]}</td>`;
+    /* B48: the row stays clickable for a mouse, but it is not a tab stop with no role — the first cell
+       carries the real button, so assistive tech sees a named control instead of a bare table row. */
+    const go=r.act==="editrule"?` data-act="editrule" data-i="${r.i}"`:r.act==="createFor"?` data-act="createFor" data-r="${escA(r.r)}"`:"";
+    return `<tr class="${r.first?"grp ":""}${r.muted?"muted ":""}${go?"tgo":""}"${go}>${tds}</tr>`}).join(""):`<tr><td colspan="${sh.cols.length+(sh.name==="Rules"?1:0)}" class="dim">Nothing yet</td></tr>`}</tbody></table></div></section>`).join("")+`</div>`}
+function headRight(){
+  const seg=`<span class="vseg2" role="group" aria-label="View"><button type="button" aria-pressed="${S.view!=="table"}" data-act="vw" data-v="edit">Edit</button><button type="button" aria-pressed="${S.view==="table"}" data-act="vw" data-v="table">Table</button></span>`;
+  const exp=S.view==="table"?`<span class="iox"><button type="button" data-act="imp" title="Apply changes from a spreadsheet">Import</button>${DL?`<button type="button" data-act="xport" title="Download as an Excel file — the same file Import reads back"${XBUSY?" disabled":""}>Export</button>`:""}</span>`:"";
+  const acts=IS_RULES_ROW&&S.style==="rules"&&S.view!=="table"?`<button type="button" class="link" data-act="stub" data-m="Opens the existing Paste rules window">Paste rules</button><button type="button" class="btn pri" data-act="addrule">Create a rule</button>`:"";
+  return `<div class="sact">${acts}${exp}${seg}</div>`}
+let XLSX_P=null;
+/* D16 (R1): SheetJS CE 0.20.3 from the official SheetJS CDN, as a lazy chunk — never the npm xlsx
+   0.18.5 build, which has published CVEs and is exactly what Import hands merchant files to. cdnjs
+   does not host 0.20.3 at all, which is why the wrong build used to be here. */
+const XLSX_SRC="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js";
+const loadXLSX=()=>XLSX_P||(XLSX_P=new Promise((ok,no)=>{if(window.XLSX)return ok(window.XLSX);const el=document.createElement("script");el.src=XLSX_SRC;el.onload=()=>ok(window.XLSX);el.onerror=()=>{XLSX_P=null;no(new Error("load"))};document.head.appendChild(el)}));
+/* D16-template: Export doubles as the template, so a quiz with no rules still gets the headers,
+   the id column and one example row. Its reserved Rule ID is the only marker — no column is added,
+   and Import skips that row whatever its capitalisation. */
+const EXAMPLE_ID="EXAMPLE";
+const exampleRule=()=>{const q=S.qs.find(x=>x.answers.length);
+  return [1,"Show",nameList(RECS.length?[RECS[0].id]:["your recommendation"]),q?ansMach(q,0):"Q1 = your answer",EXAMPLE_ID]};
+async function buildWorkbook(){const X=await loadXLSX(),wb=X.utils.book_new();
+  sheets().forEach(sh=>{const cells=sh.rows.map(r=>r.x||r.cells);
+    if(sh.name==="Rules"&&!cells.length)cells.push(exampleRule());
+    const ws=X.utils.aoa_to_sheet([sh.xcols||sh.cols,...cells]);ws["!cols"]=(sh.xwidths||sh.widths).map(w=>({wch:w}));X.utils.book_append_sheet(wb,ws,sh.name)});
+  return X.write(wb,{type:"array",bookType:"xlsx"})}
+
+/* One row, never more: trailing chips collapse into "+N more". */
+function fitRow(row){if(!row)return;const items=[...row.querySelectorAll("[data-fit]")],more=row.querySelector("[data-more]");if(!more)return;
+  items.forEach(c=>c.hidden=false);more.hidden=true;if(row.scrollWidth<=row.clientWidth+1)return;
+  /* B52: what is armed is never collapsed away — armed from "+N more" it is always one of the trailing
+     chips, so it used to be hidden again the moment it was picked and nothing said what was waiting. */
+  more.hidden=false;let n=0;for(let i=items.length-1;i>=0&&row.scrollWidth>row.clientWidth+1;i--){if(items[i].classList.contains("armed"))continue;items[i].hidden=true;n++;more.textContent=`+${n} more`}}
+function fitRows(){$$fit(".tray-c").forEach(fitRow);$$fit(".recrow").forEach(fitRow);fitTwoRows(document.querySelector("#modal .mrecs"))}
+const $$fit=q=>[...document.querySelectorAll(q)];
+let TRQ="";
+function trayMoreHTML(){const used=new Set(curQ().answers.flatMap(a=>a.targets)),q=TRQ.trim().toLowerCase(),list=RECS.filter(r=>!q||r.id.toLowerCase().includes(q));
+  return `<div class="pt">All recommendations · ${RECS.length}</div><div class="vptools" style="border:0;padding-bottom:4px"><input id="tr-q" class="vpsearch" type="search" placeholder="Search recommendations" aria-label="Search recommendations" value="${escA(TRQ)}"></div><div class="vplist">${list.map(r=>`<button type="button" class="mi tl${S.armed===r.id?" on":""}${used.has(r.id)?"":" fresh"}" data-act="arm" data-r="${escA(r.id)}">${escA(r.id)}<span class="h">${used.has(r.id)?"placed · ":""}${r.n} products</span></button>`).join("")||`<div class="vpnone">Nothing matches.</div>`}</div>`}
+/* B27: the same list the tray's "+N more" and the window's "See N more" show, so it searches the same
+   way — with 30 recommendations the strip's list is 30 rows long and scrolling was the only way down. */
+let SMQ="";
+function stripMoreHTML(){const q=SMQ.trim().toLowerCase(),list=[...RECS].sort((a,b)=>(ruleCount(a.id)?1:0)-(ruleCount(b.id)?1:0)).filter(r=>!q||r.id.toLowerCase().includes(q));
+  return `<div class="pt">All recommendations · ${RECS.length}</div><div class="vptools" style="border:0;padding-bottom:4px"><input id="sm-q" class="vpsearch" type="search" placeholder="Search recommendations" aria-label="Search recommendations" value="${escA(SMQ)}"></div><div class="vplist">`+(list.map(r=>ruleCount(r.id)
+    ?`<div class="mi" style="cursor:default"><span class="sd on"></span>${escA(r.id)}<span class="h">has a rule</span></div>`
+    :`<button type="button" class="mi" data-act="createFor" data-r="${escA(r.id)}"><span class="sd"></span>${escA(r.id)}<span class="h">+ Create a rule</span></button>`).join("")||`<div class="vpnone">Nothing matches.</div>`)+`</div>`}
+
+/* Two rows at most. Picked ones get priority: unpicked chips go behind "See N more" first, and
+   only picks that still don't fit follow, counted as "See N more · P picked". */
+function fitTwoRows(wrap){if(!wrap)return;const items=[...wrap.querySelectorAll("[data-fit2]")],more=wrap.querySelector("[data-more2]");if(!more)return;
+  items.forEach(c=>c.hidden=false);more.hidden=true;
+  const rows=()=>new Set([...wrap.children].filter(c=>!c.hidden).map(c=>c.offsetTop)).size;
+  if(rows()<=2)return;more.hidden=false;let n=0,p=0;const lab=()=>more.textContent=`See ${n+p} more`+(p?` · ${p} picked`:"");lab();
+  for(const pass of ["0","1"])for(let i=items.length-1;i>=0&&rows()>2;i--){const c=items[i];if(c.hidden||c.dataset.on!==pass)continue;c.hidden=true;pass==="1"?p++:n++;lab()}
+  if(!n&&!p)more.hidden=true}
+let MRQ="";
+function mrecMoreHTML(){const q=MRQ.trim().toLowerCase(),list=[...RECS].sort((a,b)=>(recCovered(a.id)?1:0)-(recCovered(b.id)?1:0)).filter(r=>!q||r.id.toLowerCase().includes(q));
+  return `<div class="pt">All recommendations · ${RECS.length}</div><div class="vptools" style="border:0;padding-bottom:4px"><input id="mr-q" class="vpsearch" type="search" placeholder="Search recommendations" aria-label="Search recommendations" value="${escA(MRQ)}"></div><div class="vplist">${list.map(r=>{const on=M&&M.recs.includes(r.id),n=ruleCount(r.id);return `<button type="button" class="mi${on?" on":""}" role="checkbox" aria-checked="${!!on}" data-act="mrecPick" data-r="${escA(r.id)}"><span class="ck">${on?"✓":""}</span>${escA(r.id)}<span class="h">${r.n} products · ${n?"has a rule":recMapped(r.id)?"mapped from an answer":"needs a rule"}</span></button>`}).join("")||`<div class="vpnone">Nothing matches.</div>`}</div><div class="vpfoot"><span>${M&&M.recs.length?`<b>${M.recs.length}</b> picked`:"Pick what this rule shows"}</span><button type="button" class="btn pri" data-act="close">Done</button></div>`}
+
+/* ══ Import ══ D16: the file carries identity as well as text (Rule ID, Answer ID, "Qn = answer"),
+   so a round trip is exact. A column the file does not have means "leave this field unchanged",
+   never "clear it" (B5). The Answers sheet updates answers in place, matched inside their own
+   question and by id, and never adds or deletes them (B4). The Rules sheet stays all-or-nothing
+   but names the row and the reason it was rejected (B22, D16). The Recommendations sheet is
+   read-only and edits to it are reported as ignored (B36). */
+const nrm=v=>String(v==null?"":v).replace(/\s+/g," ").trim(),low=v=>nrm(v).toLowerCase();
+function splitTop(t,sep){const out=[];let d=0,cur="";for(let i=0;i<t.length;i++){const ch=t[i];if(ch==="(")d++;else if(ch===")")d--;if(d===0&&t.startsWith(sep,i)){out.push(cur);cur="";i+=sep.length-1;continue}cur+=ch}out.push(cur);return out.map(x=>x.trim()).filter(Boolean)}
+/* a list cell is CSV-quoted on the way out (nameList), so a name with a comma reads back whole (B23) */
+function splitNames(t){t=nrm(t);const out=[];let i=0;
+  while(i<t.length){
+    if(t[i]==='"'){let s="";i++;
+      while(i<t.length){if(t[i]==='"'){if(t[i+1]==='"'){s+='"';i+=2;continue}i++;break}s+=t[i++]}
+      out.push(s.trim());const j=t.indexOf(",",i);i=j<0?t.length:j+1}
+    else{let j=t.indexOf(",",i);if(j<0)j=t.length;out.push(t.slice(i,j).trim());i=j+1}}
+  return out.filter(Boolean)}
+function parseType(s){s=low(s).replace(/-/g,"–").replace("multi–select","multi-select").replace("five–point","five-point");let m;
+  if(s==="single select")return{type:null};if(s==="image select")return{type:"image"};if(s==="five-point scale")return{type:"scale",five:true,n:5};
+  if(m=/^scale · 1–(\d+)$/.exec(s))return{type:"scale",five:false,n:+m[1]};
+  if(m=/^multi-select · pick (\d+)(?:–(\d+))?$/.exec(s))return{type:"multi",min:+m[1],max:+(m[2]||m[1])};return undefined}
+/* D1: the Answers sheet is read before the Rules sheet (a renamed answer has to be in place before
+   "When they answer" is read), so the rules' own exported text would name an answer that no longer
+   exists — and ONE rename used to reject EVERY rule, losing any deliberate rule edit in the same file.
+   The answer texts as they were when the file was written are kept for the length of one import and
+   consulted when the current text misses, so a rename and a rule edit travel together. Conditions are
+   stored as indexes, so the row that comes back is the same row. */
+let PREVT=null;
+const prevHits=t=>PREVT?PREVT.filter(h=>h.t===low(t)&&h.i<h.q.answers.length):[];
+/* B3: an answer is found inside its own question. Bare text still works, but only when exactly one
+   question carries it — otherwise the row is named, never silently moved to another question. */
+const ansHits=t=>{const now=S.qs.map(q=>({q,i:q.answers.findIndex(a=>low(a.t)===low(t))})).filter(h=>h.i>=0);
+  return now.length?now:prevHits(t).map(h=>({q:h.q,i:h.i}))};
+function findAnswer(t){t=nrm(t);const m=/^Q(\d+)\s*=\s*(.+)$/i.exec(t);
+  if(m){const q=S.qs[+m[1]-1];if(!q)return null;let i=q.answers.findIndex(a=>low(a.t)===low(m[2]));
+    if(i<0){const h=prevHits(m[2]).find(x=>x.q===q);if(h)i=h.i}
+    return i>=0?{q,i}:null}
+  const h=ansHits(t);return h.length===1?h[0]:null}
+function whyNoAnswer(t){const h=ansHits(t);
+  return h.length>1?`“${t}” is an answer on ${h.map(x=>"Q"+qIndex(x.q.id)).join(" and ")} — write it as Q${qIndex(h[h.length-1].q.id)} = ${t}`:`“${t}” isn't an answer in the quiz`}
+/* {conds,not,all,anyof} or {err:"why"}. D12: "is not" and "all of" can't be combined, and all-of only
+   survives on a multi-select — the rule the rule window already enforces (B24). */
+function parseWhen(t){t=nrm(t);if(!t||t==="(no answers)")return{conds:{},not:{},all:{},anyof:[]};
+  const conds={},not={},all={},anyof=[];
+  for(let part of splitTop(t," AND ")){let neg=false;if(/^NOT /i.test(part)){neg=true;part=part.slice(4).trim()}
+    let ans=[part],isAll=false;
+    if(part.startsWith("(")&&part.endsWith(")")){const inner=part.slice(1,-1);isAll=inner.includes(" AND ");ans=splitTop(inner,isAll?" AND ":" OR ")}
+    if(neg&&isAll)return{err:`“is not” and “all of” can't be combined — write it as NOT (${ans.join(" OR ")})`};
+    const hits=ans.map(findAnswer),miss=hits.findIndex(h=>!h);
+    if(miss>=0)return{err:whyNoAnswer(ans[miss])};
+    const q=hits[0].q,qid=q.id;
+    if(hits.some(h=>h.q.id!==qid))return{err:`“${part}” mixes answers from more than one question`};
+    if(conds[qid])return{err:`Q${qIndex(qid)} appears twice — put its answers in one group`};
+    conds[qid]=hits.map(h=>h.i).sort((x,y)=>x-y);
+    if(neg)not[qid]=true;else if(isAll){if(qtype(q)==="multi")all[qid]=true;else anyof.push(q)}}
+  return{conds,not,all,anyof}}
+/* B25: one standard shape, so "the same rule" compares equal however it was stored, and a count of
+   max(old,new) − the longest unchanged run, so an insert, a delete, an edit or a move each count once. */
+function canonRule(r){const conds={},not={},all={};
+  S.qs.forEach(q=>{const a=[...(r.conds[q.id]||[])].sort((x,y)=>x-y);if(!a.length)return;conds[q.id]=a;
+    if(r.not[q.id])not[q.id]=true;else if(r.all[q.id]&&a.length>1&&qtype(q)==="multi")all[q.id]=true});
+  return JSON.stringify([conds,not,all,r.verb,[...r.recs]])}
+function ruleDiff(a,b){const ka=a.map(canonRule),kb=b.map(canonRule),L=[];
+  for(let i=0;i<=ka.length;i++)L.push(new Array(kb.length+1).fill(0));
+  for(let i=ka.length-1;i>=0;i--)for(let j=kb.length-1;j>=0;j--)L[i][j]=ka[i]===kb[j]?L[i+1][j+1]+1:Math.max(L[i+1][j],L[i][j+1]);
+  return Math.max(ka.length,kb.length)-L[0][0]}
+/* D1: one import, one snapshot of the answer texts the file was written from (see PREVT above) */
+function applyImport(wb,X){PREVT=S.qs.flatMap(q=>q.answers.map((a,i)=>({q,i,t:low(a.t)})));
+  try{return applyImportIn(wb,X)}finally{PREVT=null}}
+function applyImportIn(wb,X){let changes=0,skipped=0;const notes=[],note=m=>{if(m&&!notes.includes(m))notes.push(m)};
+  const recBy=n=>RECS.find(r=>low(r.id)===low(n));
+  const grab=n=>X.utils.sheet_to_json(wb.Sheets[n],{header:1,defval:""});
+  const kindOf={};for(const n of wb.SheetNames){const h=(grab(n)[0]||[]).map(low);
+    kindOf[n]=h.includes("what happens")&&h.includes("when they answer")?"rules"
+      :h.includes("answer")&&(h.includes("q")||h.includes("shows / keeps"))?"answers"
+      :h.includes("recommendation")&&h.includes("status")?"recs":""}
+  /* the read-only sheet is checked against what was exported, then answers, then the rules that
+     point at them: a renamed answer has to be in place before "When they answer" is read */
+  const ORDER={recs:0,answers:1,rules:2};
+  for(const name of [...wb.SheetNames].sort((a,b)=>(ORDER[kindOf[a]]||0)-(ORDER[kindOf[b]]||0))){
+    const kind=kindOf[name];if(!kind)continue;
+    const rows=grab(name);if(!rows.length)continue;
+    const head=rows[0].map(low),ci=k=>head.indexOf(k),cell=(r,k)=>ci(k)<0?undefined:nrm(r[ci(k)]);
+    const body=rows.slice(1).filter(r=>r.some(c=>nrm(c)!==""));
+    if(kind==="rules"){const hasRid=ci("rule id")>=0,next=[],used=new Set(),
+        claimed=new Set(body.map(r=>cell(r,"rule id")).filter(Boolean));
+      let bad=0,why1="",ex=0,last=-Infinity,renum=false,seq=0;
+      for(const r of body){const num=cell(r,"#")||"",rid0=cell(r,"rule id")||"";
+        if(num==="—")continue;
+        if(low(rid0)===low(EXAMPLE_ID)){ex++;continue}
+        seq++;if(num){const v=parseFloat(num);if(!(v>last))renum=true;last=v}
+        const base=hasRid&&rid0?S.rules.find(x=>x.id===rid0):null;
+        let why="",recs=[];
+        const vt=cell(r,"what happens");let verb=({show:"show",pin:"pin",hide:"hide"})[low(vt)];
+        /* D2 (R7): in Rules only every rule reads and runs as Show, so that is what Export writes — a
+           "Show" cell on a rule the document stores as Pin or Hide is the same rule, not an edit. */
+        if(S.style==="rules"&&verb==="show"&&base)verb=base.verb;
+        if(!verb)why=vt?`“${vt}” isn't Show, Pin or Hide`:"What happens is empty — write Show, Pin or Hide";
+        const rc=cell(r,"recommendations");
+        if(rc===undefined)recs=base?[...base.recs]:[];
+        else{const parts=splitNames(rc).filter(x=>low(x)!=="(none)"),hit=parts.map(recBy),m=hit.findIndex(x=>!x);
+          if(m>=0){if(!why)why=`there's no recommendation called “${parts[m]}”`}else recs=hit.map(x=>x.id)}
+        const wc=cell(r,"when they answer"),w=wc===undefined?(base?{conds:base.conds,not:base.not,all:base.all,anyof:[]}:{conds:{},not:{},all:{},anyof:[]}):parseWhen(wc);
+        if(w.err&&!why)why=w.err;
+        if(why){bad++;if(!why1)why1=`Rule ${num||seq}: ${why}`;continue}
+        w.anyof.forEach(q=>note(`Q${qIndex(q.id)} isn't multi-select, so its rules match any of their answers`));
+        /* the row's own id first; otherwise the rule that sits in that place, as long as no other
+           row has claimed it. Only a row with no identity at all gets a new one. */
+        let id=rid0&&!used.has(rid0)&&S.rules.some(x=>x.id===rid0)?rid0:"";
+        if(!id){const p=S.rules[next.length];if(p&&!used.has(p.id)&&!claimed.has(p.id))id=p.id}
+        used.add(id=id||rid());
+        next.push({conds:w.conds,not:w.not,all:w.all,verb,recs,id})}
+      if(bad){skipped+=bad;note(`No rule changed — ${why1}${bad>1?` (+${bad-1} more row${bad>2?"s":""})`:""}. Fix it and import again`)}
+      else{const d=ruleDiff(S.rules,next);if(d){S.rules=next;changes+=d}}
+      if(ex)note(ex>1?`Ignored ${ex} example rows`:"Ignored the example row");
+      if(renum)note("# ignored: rules keep their row order, so move rows to reorder")}
+    else if(kind==="answers"){const hasAid=ci("answer id")>=0,byId=new Map();
+      if(hasAid)S.qs.forEach(q=>q.answers.forEach((a,i)=>byId.set(a.aid,{q,i})));
+      const rowQ=new Map(),pair=new Map(),grp=new Map(),firstOf=new Map();
+      for(const r of body){let q=null,i=-1;
+        const av=hasAid?cell(r,"answer id"):"";
+        if(av&&byId.has(av)){const h=byId.get(av);q=h.q;i=h.i}
+        if(!q){const m=/^Q(\d+)$/i.exec(cell(r,"q")||"");if(m)q=S.qs[+m[1]-1]||null}
+        if(!q){skipped++;note(`A row for “${cell(r,"answer")||cell(r,"q")||"?"}” isn't in the quiz — import never adds answers`);continue}
+        rowQ.set(r,q);if(!grp.has(q)){grp.set(q,[]);firstOf.set(q,r)}grp.get(q).push(r);
+        if(i>=0)pair.set(r,i)}
+      /* what is left after the ids: match by text inside the question, then pair one-for-one only
+         when the counts line up (a rename). Never guess across a deleted or inserted row (B4). */
+      grp.forEach((rs,q)=>{const took=new Set();rs.forEach(r=>{if(pair.has(r))took.add(pair.get(r))});
+        const rest=rs.filter(r=>!pair.has(r));
+        rest.forEach(r=>{const t=cell(r,"answer"),i=t===undefined?-1:q.answers.findIndex((a,k)=>!took.has(k)&&low(a.t)===low(t));if(i>=0){took.add(i);pair.set(r,i)}});
+        const openR=rest.filter(r=>!pair.has(r)),openA=q.answers.map((_,k)=>k).filter(k=>!took.has(k));
+        if(openR.length&&openR.length===openA.length)openR.forEach((r,j)=>{pair.set(r,openA[j]);took.add(openA[j])});
+        else if(openR.length){skipped+=openR.length;note(`Q${qIndex(q.id)}: ${openR.length} row${openR.length>1?"s aren't answers":" isn't an answer"} in the quiz — import never adds answers`)}
+        const gone=q.answers.length-took.size;
+        if(gone>0)note(`Q${qIndex(q.id)}: ${gone} answer${gone>1?"s aren't":" isn't"} in the file — import never deletes answers`)});
+      for(const r of body){const q=rowQ.get(r);if(!q)continue;
+        if(firstOf.get(q)===r){
+          const qt=cell(r,"question");if(qt&&qt!==q.text){q.text=qt.slice(0,150);changes++}
+          const tv=cell(r,"type");
+          if(tv){const p=parseType(tv),no=!p?`“${tv}” isn't a question type`
+              :p.type==="scale"&&p.n!==q.answers.length?`“${tv}” doesn't fit its ${q.answers.length} answers`
+              :p.type==="multi"&&(p.min<1||p.min>p.max||p.max>q.answers.length)?`“${tv}” asks for more picks than it has answers`:"";
+            if(no){skipped++;note(`Q${qIndex(q.id)}: ${no}`)}
+            else{const was=typeMeta(q);
+              if(p.type)q.type=p.type;else delete q.type;
+              if(p.type==="scale")q.five=p.five;else{delete q.five;delete q.lo;delete q.hi}
+              /* R4: only write what the file actually changes. "Multi-select · pick 1–5" on a question
+                 that never carried min/max is what typeMeta already reads off it, so setting the keys
+                 would make a pure round trip rewrite the document (and, in the app, dirty the draft and
+                 fire an autosave on a no-op import). */
+              if(p.type==="multi"){const lo=mmin(q),hi=mmax(q);if(p.min!==lo)q.min=p.min;if(p.max!==hi)q.max=p.max}
+              else{delete q.min;delete q.max;const n=dropAllOf(q);if(n){changes+=n;note(allOfMsg(n,q))}}
+              if(typeMeta(q)!==was)changes++}}
+          const dv=cell(r,"what it does");
+          if(dv!==undefined){const rl=({"picks results":"decides","narrows":"filter","info only":"info"})[low(dv)];
+            if(!rl){if(dv){skipped++;note(`Q${qIndex(q.id)}: “${dv}” isn't Picks results, Narrows or Info only`)}}
+            else if(rl!==q.role){const msg=moveRole(q,rl);changes++;note(msg)}}}
+        const a=q.answers[pair.get(r)];if(!a)continue;
+        const at=cell(r,"answer");if(at&&at.slice(0,60)!==a.t){a.t=at.slice(0,60);changes++}
+        const sv=cell(r,"shows / keeps");
+        if(sv!==undefined){const list=sv&&sv!=="(not set)"&&sv!=="—"?splitNames(sv):[];
+          if(q.role==="decides"){const hit=list.map(recBy),m=hit.findIndex(x=>!x);
+            if(m>=0){skipped++;note(`Q${qIndex(q.id)}: there's no recommendation called “${list[m]}”`)}
+            else{const nx=hit.map(x=>x.id);if(JSON.stringify(nx)!==JSON.stringify(a.targets)){a.targets=nx;changes++}}}
+          else if(q.role==="filter"){if(low(sv)==="keeps everything"){if(!a.any){a.any=true;a.values=[];changes++}}
+            else{const keys=list.map(l=>Object.keys(VALMAP).find(k=>low(VALMAP[k].short)===low(l))),m=keys.findIndex(k=>!k);
+              if(m>=0){skipped++;note(`Q${qIndex(q.id)}: “${list[m]}” isn't a value you can keep`)}
+              else if(a.any||JSON.stringify(keys)!==JSON.stringify(a.values)){a.values=keys;a.any=false;changes++}}}}
+        const nx=cell(r,"then");
+        if(nx!==undefined){const th=low(nx);let route;
+          if(!th||th==="next question"||th==="results (last question)")route=null;
+          else if(th==="straight to results")route="end";
+          else{const mm=/^skips to q(\d+)$/.exec(th),tq=mm&&S.qs[+mm[1]-1];route=tq&&S.qs.indexOf(tq)>S.qs.indexOf(q)+1?tq.id:undefined}
+          if(route===undefined){skipped++;note(`Q${qIndex(q.id)}: “${nx}” isn't somewhere this answer can go`)}
+          else if(route!==(a.route||null)){a.route=route;changes++}}}}
+    else{/* B36: every column here is derived, so the sheet is read-only — but say so */
+      const want=RECS.map(r=>{const by=rulesShowing(r.id);return [r.id,String(r.n),by.join(", ")||"—",by.length?"Has a rule":"Needs a rule"]});
+      const got=body.map(r=>[cell(r,"recommendation"),cell(r,"products"),cell(r,"shown by rules"),cell(r,"status")]);
+      if(got.length!==want.length||got.some((g,i)=>g.some((v,j)=>v!==undefined&&v!==want[i][j])))
+        note("Recommendations sheet is read-only, so edits there were ignored")}}
+  /* a file whose headers were renamed used to import as a cheerful "Nothing changed" */
+  if(!wb.SheetNames.some(n=>kindOf[n]))note("Nothing in that file matched the Rules or Answers sheet — import the file Export writes");
+  return{changes,skipped,notes}}
+/* B30/B32: the trash that was pressed is gone with its rule, so the toast's Undo takes focus (it is the
+   only way back and it expires); when the toast goes, focus lands on the rule that took this one's place. */
+function delRule(i){snap(true);snap.i=i;S.rules.splice(i,1);closePop();render();
+  toastBack=`#stage [data-act="delrule"][data-i="${Math.min(i,S.rules.length-1)}"]`;
+  toastU(UNDO.dels>1?`${UNDO.dels} rules deleted`:`Rule ${i+1} deleted`)}
+/* ══ D11/B19: order is priority in both styles (first match wins), so a rule can be moved without a
+   mouse. One move whatever asked for it — the row's ↑/↓, Alt+Arrow on a focused row, or a drag — and it
+   joins the open Undo run the way a delete does. Focus follows the rule to its new row. ══ */
+const mvBtns=(i,n)=>`<span class="mv"><button type="button" class="xone" data-act="mvrule" data-i="${i}" data-d="-1" aria-label="Move rule ${i+1} up" title="Move up"${i===0?" disabled":""}>↑</button><button type="button" class="xone" data-act="mvrule" data-i="${i}" data-d="1" aria-label="Move rule ${i+1} down" title="Move down"${i===n-1?" disabled":""}>↓</button></span>`;
+function moveRule(i,j,focus){if(i<0||i>=S.rules.length||j<0||j>=S.rules.length||i===j)return;
+  snap();snap.i=j;S.rules.splice(j,0,S.rules.splice(i,1)[0]);closePop();render();
+  toastBack=`#stage .rbody[data-act="editrule"][data-i="${j}"]`;toastU(`Rule ${i+1} moved to position ${j+1}`);
+  const f=focus&&(document.querySelector(focus+":not(:disabled)")||document.querySelector(`.rbody[data-act="editrule"][data-i="${j}"]`));if(f)f.focus()}
+/* ══ Save feedback on inline text edits (see the CSS note) ══ */
+let SV=null;
+const svSel=k=>`.ed[data-edit="${k.edit}"][data-q="${k.q}"]`+(k.edit==="a"?`[data-a="${k.a}"]`:"");
+function svPlace(){const b=$("#svb");if(!b)return;const ed=SV&&document.querySelector(svSel(SV.k));
+  if(!ed||ed===document.activeElement){b.hidden=true;b.dataset.st="";return}
+  if(b.dataset.st!==SV.st){b.className=SV.st;b.innerHTML=SV.st==="saving"?`<span class="spin"></span>Saving…`:`${CHECK}Saved`;b.dataset.st=SV.st}
+  /* B61: the pill stays inside the text's own column (the h3, the .atext cell, the table cell). Where
+     there is no room beside the last line it drops under the end of it, so it never paints over
+     "Picks results", the mapping cell or the next Table button. Measured unhidden — a hidden pill is 0px
+     wide — and decided once per save, on the wider "Saving…", so it doesn't jump when it says "Saved". */
+  b.hidden=false;const rg=document.createRange();rg.selectNodeContents(ed);const rs=rg.getClientRects(),e=rs.length?rs[rs.length-1]:ed.getBoundingClientRect();
+  const col=ed.parentElement.getBoundingClientRect(),w=b.offsetWidth;
+  if(SV.under==null)SV.under=e.right+8+w>col.right;
+  const x=SV.under?Math.max(col.left,Math.min(e.right,col.right)-w):e.right+8;
+  /* D5: under the line only while there is room under it. On the bottom row of the viewport the pill
+     goes above the line instead — it is position:fixed, so "under" used to mean off the screen and the
+     edit looked as if it had saved nothing at all. */
+  const h=b.offsetHeight||20;let y=SV.under?e.bottom+2:e.top+e.height/2-10,x2=x;
+  if(y+h>innerHeight-4){
+    /* No room under the line: never fall back onto the text itself. Sit beside the last line while the
+       pill fits before the window edge; otherwise clear the whole field by going above its FIRST line,
+       since above the last line is still on top of the line before it in a wrapped cell. */
+    const first=rs.length?rs[0]:e;
+    if(e.right+8+w<=innerWidth-4){x2=e.right+8;y=e.top+e.height/2-h/2}
+    else{y=Math.max(4,first.top-h-2)}
+  }
+  /* A line at the very top or bottom edge of the window would put the pill half off it. */
+  y=Math.min(Math.max(4,y),innerHeight-h-4);
+  b.style.left=Math.round(x2)+"px";b.style.top=Math.round(y)+"px"}
+function svStart(k){if(SV)clearTimeout(SV.t);clearInterval(svStart.i);SV={k,st:"saving"};svPlace();
+  /* The row can move under the pill after it is placed — a re-render, a toast, a cell that rewraps —
+     and a layout shift fires no scroll event, so keep it pinned to its own text while it is on screen. */
+  svStart.i=setInterval(svPlace,120);
+  SV.t=setTimeout(()=>{SV.st="saved";svPlace();$("#svlive").textContent="Saved";
+    SV.t=setTimeout(()=>{SV.st="saved fade";svPlace();
+      SV.t=setTimeout(()=>{SV=null;svPlace();clearInterval(svStart.i);$("#svlive").textContent=""},400)},1500)},650)}
+/* keeps the other places that show this text in step while typing (rail, rule sentences) */
+function syncText(t){const v=t.textContent,q=t.dataset.q,qq=S.qs.find(x=>x.id===q),mach=`Q${qIndex(q)} = ${v}`,lab=qq&&qtype(qq)==="scale"?mach:v;
+  if(t.dataset.edit==="q")document.querySelectorAll(`.qi[data-q="${q}"]`).forEach(n=>{n.title=v;const x=n.querySelector(".qtxt");if(x)x.textContent=v});
+  else document.querySelectorAll(`[data-sq="${q}"][data-sa="${t.dataset.a}"]`).forEach(n=>{const l=n.dataset.full?mach:n.dataset.ns?v:lab,s=n.dataset.full?l:short(l);n.textContent=s;
+    /* B20: a chip that is cut keeps the whole answer on hover, and one that grew back drops the tooltip */
+    if(!n.dataset.full){if(s===l)n.removeAttribute("title");else n.title=l}});
+  if(t.dataset.edit==="a")syncSentences()}
+/* D17 (D4): whether a group names its question is decided by the OTHER questions' answers (dupAns), so
+   renaming one answer can add or drop a "Q1" label on a rule that does not even mention it. Patching the
+   chip text is not enough — the sentences are redrawn in place after every inline answer edit. The text
+   being typed lives in the pane or the Answers sheet, never inside a sentence, so nothing loses focus. */
+function syncSentences(){document.querySelectorAll("#stage .rsent").forEach(el=>{const row=el.closest("[data-i]");if(!row)return;
+  const r=S.rules[+row.dataset.i];if(r)el.innerHTML=sentence(r,true)})}
+let IMP_UNDO=null;
+function toastImp(m){const t=$("#toast");t.innerHTML=m+(IMP_UNDO?`<button type="button" class="tundo" data-act="impUndo">Undo</button>`:"");t.hidden=false;toastShow(7000)}
+/* B26: a CSV is decoded here, as UTF-8 (with or without a byte-order mark) and Windows-1252 after
+   that. The reader is only handed the bytes for the formats it already gets right — xlsx, xls and
+   UTF-16 text — because on a plain UTF-8 CSV it reads one byte per character and mangles every
+   accent, dash and curly quote into an edit. */
+async function importFile(file){const before=JSON.stringify({qs:S.qs,rules:S.rules});let X,wb;
+  try{X=await loadXLSX()}catch(e){toast("Couldn't load the spreadsheet reader. Check your connection and try again");return}
+  try{const u8=new Uint8Array(await file.arrayBuffer());
+    const bin=(u8[0]===0x50&&u8[1]===0x4B)||(u8[0]===0xD0&&u8[1]===0xCF)||(u8[0]===0xFF&&u8[1]===0xFE)||(u8[0]===0xFE&&u8[1]===0xFF);
+    if(bin)wb=X.read(u8,{type:"array"});
+    else{let txt;try{txt=new TextDecoder("utf-8",{fatal:true}).decode(u8)}catch(e){txt=new TextDecoder("windows-1252").decode(u8)}
+      wb=X.read(txt,{type:"string"})}}
+  catch(e){toast("Couldn't read that file");return}
+  const {changes,skipped,notes}=applyImport(wb,X);
+  if(!changes&&!skipped&&!notes.length){toast("Nothing changed");return}
+  /* two reasons fit the line; the rest are counted so the toast never runs off the card */
+  const why=notes.slice(0,2).map(n=>` · ${escA(n)}`).join("")+(notes.length>2?` · +${notes.length-2} more`:"");
+  IMP_UNDO=changes?before:null;closePop();render();
+  toastImp((changes?`Imported ${changes} change${changes===1?"":"s"}`:"Nothing changed")+(skipped?` · ${skipped} skipped`:"")+why)}
+
+/* ── Create a rule ── */
+function modalHTML(){
+  const rows=S.qs.map((q,qi)=>{const picked=M.conds[q.id]||[];const two=picked.length>1;
+    /* D12 (R5): "is not" means none of these answers, so there is no any/all choice left to offer —
+       the toggle is hidden outright (not a dimmed ghost control), keeping only its slot so the row
+       does not reflow when the verb is switched. What it used to explain now hangs off the is/is-not
+       button itself, which is the control that is still there. The two can never be combined
+       (fitDraft, tidy). A single-select keeps its dimmed "any of": there the row IS still an any-of. */
+    const join=two?(M.not[q.id]?`<span class="opb sub gone" aria-hidden="true">any of</span>`
+      :qtype(q)==="multi"?`<button type="button" class="opb sub" data-act="mall" data-q="${q.id}" title="Click to switch">${M.all[q.id]?"all of":"any of"} ⇄</button>`:`<button type="button" class="opb sub" disabled title="A shopper answers this question once, so two answers here can only mean either of them">any of</button>`):"";
+    const nottip=M.not[q.id]?"“is not” means none of these answers — a shopper who picks any one of them doesn't match this rule. Click to switch back":"Click to switch between is and is not";
+    return `<div class="mrow${picked.length?" live":""}${M.not[q.id]?" isnot":""}"><div class="mqn">Q${qi+1}</div><div class="mqt">${escA(q.text.replace(/\?$/,""))}${qtype(q)!=="single"?`<span class="mtag">${escA(typeMeta(q))}</span>`:""}</div>
+<div class="mop"><button type="button" class="opb${M.not[q.id]?" not":""}" data-act="mnot" data-q="${q.id}" title="${escA(nottip)}">${M.not[q.id]?"is not":"is"}</button>${join}</div>
+<div class="manswrap"><div class="mans" data-q="${q.id}">${q.answers.map((a,i)=>`<button type="button" class="bk${isPt(q,i)?" pt":""}${picked.includes(i)?" on":""}" aria-pressed="${picked.includes(i)}" title="${escA(a.t)}" data-act="mans" data-q="${q.id}" data-a="${i}">${isPt(q,i)?`<span class="ptn">${i+1}</span>${endLab(q,i)?`<span class="ptl">${escA(endLab(q,i))}</span>`:""}`:`<span>${escA(a.t)}</span>${qtype(q)==="scale"&&endLab(q,i)?`<span class="ptl">${escA(endLab(q,i))}</span>`:""}`}</button>`).join("")}</div></div>${overMax(M,q)?`<div class="mwarn">They can pick at most ${mmax(q)} here, so all ${picked.length} can never happen together. Pick ${mmax(q)} or fewer, or switch to any of.</div>`:""}</div>`}).join("");
+  const done=RECS.filter(r=>recCovered(r.id)).length;
+  const order=[...RECS].sort((a,b)=>(recCovered(a.id)?1:0)-(recCovered(b.id)?1:0));
+  /* a rule that can never match can't be saved (the same bar as no answer or no recommendation) */
+  const ok=Object.values(M.conds).some(a=>a.length)&&M.recs.length&&!impossible(M);
+  /* D2: a Pin or Hide rule opened in Rules only reads as Show, and the hint line says so instead of
+     describing a verb this style doesn't have. Cancel leaves the stored rule exactly as it was. */
+  const hint=M.was?`${VERBS.find(v=>v[0]===M.was)[1]} only works in Filter Results + Rules · saving makes this a Show rule`:VERBS.find(v=>v[0]===M.verb)[2];
+  return `<div class="mbox" role="dialog" aria-modal="true" aria-label="${M.edit===null?"Create a rule":"Edit rule"}">
+<div class="mscroll"><div class="mthen"><span class="mlab" id="mverblab">What happens</span><span class="vseg" role="group" aria-labelledby="mverblab">${winVerbs().map(([k,n])=>`<button type="button" aria-pressed="${M.verb===k}" data-act="mverb" data-v="${k}">${n}</button>`).join("")}</span><span class="vhint">${hint}</span><span class="msp"></span>${M.edit!==null?`<button type="button" class="mdel mdup" data-act="mdup" title="Make a copy of this rule, just below it"${ok?"":" disabled"}>${COPY}Duplicate</button><button type="button" class="mdel" data-act="mdel">${TRASH}Delete rule</button>`:""}<button type="button" class="mx" aria-label="Close" data-act="mclose">×</button></div>
+<div class="mband"><div class="mband-in"><div class="mband-h"><span class="tray-lb">Your recommendations</span><span class="frac${done===RECS.length?" all":""}"><b>${done}/${RECS.length}</b> ${S.style==="attributes"?"are covered":"have a rule"}</span><span class="sp"></span><button type="button" class="addelse" data-act="addRecs">+ Add recommendations</button></div>
+<div class="mrecs">${order.map(r=>{const n=ruleCount(r.id),on=M.recs.includes(r.id);return `<button type="button" class="rc${on?" on":""}" aria-pressed="${on}" data-fit2 data-on="${on?1:0}" data-act="mrec" data-r="${escA(r.id)}" title="${n?n+" rule"+(n>1?"s":""):recMapped(r.id)?"Mapped from an answer · no rule needed":"Needs a rule"}"><span class="ck">${on?"✓":""}</span>${escA(r.id)}<span class="n">${r.n}</span><span class="st${recCovered(r.id)?" done":""}"></span></button>`}).join("")}<button type="button" class="rc more" aria-haspopup="dialog" aria-expanded="false" data-more2 data-act="mrecMore" hidden>See 0 more</button></div></div></div>
+<div class="mq"><div class="mqlab">When they answer</div>${rows}</div></div>
+<div class="mfoot"><span class="msay">${sentence(M,true)}</span><button type="button" class="btn" data-act="mclose">Cancel</button><button type="button" class="btn" data-act="msave" data-more="1"${ok?"":" disabled"}>${M.edit===null?"Create &amp; add another":"Save &amp; add another"}</button><button type="button" class="btn pri" data-act="msave"${ok?"":" disabled"}>${M.edit===null?"Create rule":"Save rule"}</button></div></div>`}
+function markMore(){document.querySelectorAll(".mans").forEach(el=>el.parentElement.classList.toggle("more",el.scrollWidth-el.clientWidth-el.scrollLeft>4))}
+/* The rule window is modal for real: while it is open the page behind it is inert (no Tab, Enter or
+   click reaches the rules under it), focus moves in when it opens or starts a new draft and goes back
+   to whatever opened it on close. A new draft (fresh) starts scrolled to the top; a redraw of the
+   same draft keeps its scroll. */
+/* B31: one focus contract for all three windows. Only the topmost one takes input — the page behind it
+   and any window under it go inert, so Tab and Enter can no longer reach a rule's trash through the
+   scrim. Focus moves in when a window opens and goes back to whatever opened it when it closes, after
+   the render that replaced that control. */
+const BG=[".shell","#pitch",".stagewrap"],WINS=["#addrec","#aqm","#modal"];
+const topWin=()=>WINS.map(s=>$(s)).find(x=>x&&!x.hidden)||null;
+function winSync(){const top=topWin();BG.forEach(s=>$(s).inert=!!top);WINS.forEach(s=>{const el=$(s);el.inert=!el.hidden&&el!==top})}
+const winOpening=(el,on)=>{if(on&&el.hidden)el._back=fkey(document.activeElement)};
+/* the wait lets the render that closing usually triggers replace the opener first. A window that closes
+   over another one (Add recommendations over the rule window) still hands focus back to the control that
+   opened it — canFocus refuses an opener that is inert behind a window that is now on top. */
+function winRestore(el,fb){const b=el._back;el._back=null;setTimeout(()=>refocus(b,fb))}
+/* a redraw that lost the focused control hands focus to the window's first one, never to the page */
+function winFocusIn(el){if(el.contains(document.activeElement))return;
+  const f=[...el.querySelectorAll(FOCSEL)].find(canFocus);if(f)f.focus({preventScroll:true})}
+function drawModal(fresh){const el=$("#modal"),was=!el.hidden;winOpening(el,!!M);
+  if(!M){el.hidden=true;el.innerHTML="";winSync();placePop();placeToast();
+    if(was)winRestore(el,'#stage [data-act="addrule"]');return}
+  const keep={};const mq=!fresh&&el.querySelector(".mscroll");const top=mq?mq.scrollTop:0;if(!fresh)el.querySelectorAll(".mans").forEach(x=>keep[x.dataset.q]=x.scrollLeft);
+  el.hidden=false;el.innerHTML=modalHTML();winSync();fitTwoRows(el.querySelector(".mrecs"));
+  el.querySelector(".mscroll").scrollTop=top;el.querySelectorAll(".mans").forEach(x=>{x.scrollLeft=keep[x.dataset.q]||0;x.addEventListener("scroll",markMore,{passive:true})});markMore();placePop();placeToast();
+  if(!was||fresh){const f=el.querySelector('.vseg [aria-pressed="true"]')||el.querySelector(".mbox button");if(f)f.focus({preventScroll:true})}}
+const blank=()=>({edit:null,conds:{},not:{},all:{},verb:"show",recs:[]});
+/* What a draft saves: only questions with picks (in question order), "is not" only where there are
+   picks, "all of" only on 2+ picks of a multi-select and never beside "is not" (D12). The stored rule
+   says exactly its sentence. */
+function tidy(d){const r={conds:{},not:{},all:{},verb:d.verb,recs:[...d.recs]};
+  S.qs.forEach(q=>{const a=d.conds[q.id]||[];if(!a.length)return;r.conds[q.id]=[...a];if(d.not[q.id])r.not[q.id]=true;else if(d.all[q.id]&&a.length>1&&qtype(q)==="multi")r.all[q.id]=true});return r}
+/* What the window may hold, whatever the stored rule says. D12: "is not" means none of these answers,
+   so it can never also be "all of" — a rule that carried both (written before this rule, or pasted in)
+   opens as none-of and saves that way, instead of being handed back wrongly. D2: in Rules only the only
+   verb is Show, so a Pin or Hide rule made in Filter style opens as Show and the hint says so. */
+function fitDraft(d){Object.keys(d.not).forEach(k=>{if(d.not[k])delete d.all[k]});
+  if(S.style==="rules"&&d.verb!=="show"){d.was=d.verb;d.verb="show"}return d}
+/* after an Undo swaps the list, an open edit stays on its rule (by id); if the rule is gone, its window closes */
+function keepM(){if(!M)return;if(M.edit!==null&&!S.rules.some(r=>r.id===M.edit)){M=null;drawModal();toast("Undone. The rule you had open is gone, so its window closed");return}drawModal()}
+
+/* ══ Keyboard and assistive technology (B29-B32) ══
+   Every draw rewrites its container's innerHTML, which destroys whatever had focus. So a control is
+   remembered by WHAT it is — its host plus its data-* — and put back after the redraw; and after an
+   action that took its control away, focus goes to the nearest thing that makes sense instead of
+   dropping to <body>, where the next Tab restarts from the top of the page. */
+const FOCSEL='button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled]),a[href],[tabindex]:not([tabindex="-1"]),[contenteditable="true"]';
+const FHOSTS="#stage,#pop,#modal,#aqm,#addrec,#toast,.shell";
+const canFocus=el=>!!el&&el.isConnected&&!el.disabled&&el.matches(FOCSEL)&&el.getClientRects().length>0&&!el.closest("[inert]");
+/* something visible already has focus, so nothing should be taken from it */
+const hasFocus=()=>{const a=document.activeElement;return !!a&&a!==document.body&&a.isConnected&&a.getClientRects().length>0};
+/* data-on flips when a recommendation chip is picked, so it is never part of a control's identity */
+function fkey(el){if(!el||el===document.body||!el.dataset)return null;
+  if(el.id)return "#"+CSS.escape(el.id);
+  const h=el.closest&&el.closest(FHOSTS);if(!h||!el.dataset.act)return null;
+  return (h.id?"#"+h.id:".shell")+" "+Object.keys(el.dataset).filter(k=>k!=="on")
+    .map(k=>`[data-${k.replace(/[A-Z]/g,c=>"-"+c.toLowerCase())}="${CSS.escape(el.dataset[k])}"]`).join("")}
+/* the first candidate that can really take focus — a selector can match a row and the button inside it */
+function refocus(...sels){if(hasFocus())return true;
+  for(const s of sels){if(!s)continue;for(const el of document.querySelectorAll(s))if(canFocus(el)){el.focus({preventScroll:true});return true}}
+  return false}
+
+/* ── popover ── */
+let pop=null,popBack=null;
+/* A popover keeps its anchor as a selector, so it follows the anchor through re-renders,
+   scrolling and resizing, and closes once the anchor is gone or scrolled out of view. */
+const popSel=d=>Object.entries(d).map(([k,v])=>`[data-${k.replace(/[A-Z]/g,c=>"-"+c.toLowerCase())}="${CSS.escape(v)}"]`).join("");
+function openPop(anchor,build,w,right){const key=JSON.stringify(anchor.dataset);if(pop&&pop.key===key){closePop(true);return}
+  popBack=fkey(anchor);pop={build,w,right,key,sel:popSel(anchor.dataset)};drawPop();popFocus()}
+/* B29: opening moves focus to what the popover is about — the chosen item in a menu, otherwise its
+   search box, otherwise its first control. #pop itself is the last resort (it is tabindex="-1"). */
+function popFocus(){const el=$("#pop");
+  const t=el.querySelector('[role="radio"][aria-checked="true"],[role="menuitemradio"][aria-checked="true"]')||el.querySelector('input[type="search"]')||[...el.querySelectorAll(FOCSEL)].find(canFocus)||el;
+  t.focus({preventScroll:true})}
+/* the trigger says whether its popover is open */
+function popAria(){document.querySelectorAll('[aria-haspopup][aria-expanded="true"]').forEach(x=>x.setAttribute("aria-expanded","false"));
+  if(!pop||!pop.sel)return;const a=document.querySelector(pop.sel);if(a&&a.hasAttribute("aria-haspopup"))a.setAttribute("aria-expanded","true")}
+function placePop(){if(!pop)return;const a=document.querySelector(pop.sel);if(!a||!a.getClientRects().length){closePop();return}const r=a.getBoundingClientRect();
+  for(let p=a.parentElement;p;p=p.parentElement)if(p.matches(".mscroll,.twrap,.stagewrap")){const c=p.getBoundingClientRect();if(r.bottom<=c.top||r.top>=c.bottom||r.right<=c.left||r.left>=c.right){closePop();return}}
+  /* D2: the window is a scrolling box too. A popover whose anchor has left the viewport used to stay
+     open, clamped to the top edge and squashed to its 120px floor, pointing at whatever row happened to
+     be under it. It goes with its anchor, like every other "scrolled out of view". */
+  if(r.bottom<=0||r.top>=innerHeight||r.right<=0||r.left>=innerWidth){closePop();return}
+  const el=$("#pop"),w=Math.min(pop.w,innerWidth-16);el.style.width=w+"px";
+  el.style.left=Math.max(8,Math.min(pop.right?r.right-w:r.left,innerWidth-w-8))+scrollX+"px";
+  /* B27: below the anchor when it fits; otherwise above it when there is more room there, and capped
+     to that room either way. The long list inside (.vplist) gives up its height first, so the title,
+     the search box and Cancel/Done stay visible; a popover with no list scrolls inside itself.
+     The direction is decided once per open (pop.up), so redraws don't make it jump. */
+  el.style.maxHeight="";const list=el.querySelector(".vplist");if(list)list.style.maxHeight="";
+  const below=innerHeight-r.bottom-14,above=r.top-14,h=el.offsetHeight;
+  if(pop.up===undefined)pop.up=h>below&&above>below;
+  const room=Math.max(120,pop.up?above:below);
+  if(h>room&&list)list.style.maxHeight=Math.max(96,list.offsetHeight-(h-room))+"px";
+  el.style.maxHeight=room+"px";
+  el.style.top=Math.max(scrollY+8,(pop.up?r.top-6-el.offsetHeight:r.bottom+6)+scrollY)+"px"}
+/* B29/B30: a redraw rebuilds the list, so the item that had focus is found again by its data-*; and the
+   popover names itself — a menu through its own [role=menu], anything else as a small dialog titled by
+   the .pt line it already shows. */
+function drawPop(){const el=$("#pop");
+  if(!pop){el.hidden=true;el.removeAttribute("role");el.removeAttribute("aria-label");popAria();return}
+  const a=document.activeElement,keep=el.contains(a)?fkey(a):null;
+  el.hidden=false;el.innerHTML=pop.build();
+  const menu=el.querySelector('[role="menu"]'),pt=el.querySelector(".pt");
+  if(menu){el.removeAttribute("role");el.removeAttribute("aria-label")}
+  else{el.setAttribute("role","dialog");el.setAttribute("aria-label",pt?pt.textContent:"Options")}
+  placePop();popAria();
+  if(keep&&!el.contains(document.activeElement)){const n=document.querySelector(keep);if(canFocus(n))n.focus({preventScroll:true})}}
+/* closing hands focus back to the trigger — synchronously, and again after the render that most
+   handlers run straight after, which replaces the trigger node. Only when nothing else took focus. */
+function closePop(back){const sel=pop&&pop.sel,had=$("#pop").contains(document.activeElement);
+  pop=null;PQ=null;popBack=null;drawPop();
+  if(!sel||!(back||had))return;
+  const put=()=>{if(hasFocus())return;const a=document.querySelector(sel);if(canFocus(a))a.focus({preventScroll:true})};
+  put();queueMicrotask(put)}
+function toast(m){const t=$("#toast");t.textContent=m;t.hidden=false;toastShow(2200)}
+/* ══ B32: the toast is the only way back from a delete, so it has to be announced, reachable and
+   patient. It is announced through a live region that is always in the tree (#toast itself leaves it
+   between messages); its Undo takes focus when the action just destroyed whatever had it; the timer
+   stops while it is focused or hovered and restarts on the way out; and Ctrl/Cmd+Z reaches the Undo
+   without a single Tab. When the toast goes while holding focus, focus lands where the message was
+   about instead of on <body>. ══ */
+let toastBack=null;
+function toastLive(){const t=$("#toast"),u=t.querySelector(".tundo");
+  const m=[...t.childNodes].filter(n=>n!==u).map(n=>n.textContent).join("").trim();
+  $("#toastlive").textContent=m+(u?". Press Undo, or Ctrl+Z, to bring it back.":"")}
+/* Nothing inside a pointer-events:none subtree ever matches :hover, so "the pointer is on it" is
+   tracked from the enter/leave events instead — asking the CSS would let the timer run out under the
+   pointer. Keyboard focus is different: :focus-visible is exactly the "someone is on this" signal, so a
+   mouse delete (no ring) still times out normally while a keyboard one waits. */
+let toastHot=false;
+const toastHold=()=>toastHot||!!$("#toast").querySelector(":focus-visible");
+function toastArm(ms){const t=$("#toast");clearTimeout(toast.t);toast.ms=ms;
+  if(t.hidden||toastHold())return;
+  toast.t=setTimeout(()=>hideToast(),ms)}
+function toastShow(ms){const u=$("#toast .tundo");toastLive();
+  if(u&&!hasFocus())u.focus({preventScroll:true});
+  toastArm(ms);placeToast()}
+function hideToast(quiet){const t=$("#toast");if(t.hidden)return;const had=t.contains(document.activeElement);
+  t.hidden=true;toastHot=false;clearTimeout(toast.t);$("#toastlive").textContent="";placeToast();
+  const b=toastBack;toastBack=null;
+  if(had&&!quiet)refocus(b,'#stage [data-act="addrule"]',"#stage .stitle")}
+/* D6: a toast never sits on an open window — not on its footer (the sentence and the buttons) and not
+   on the answers above it. Lifting the toast clear of the footer only moved the problem up into the
+   window body: with a three-line sentence it landed on the Q5 answer chips, hiding the very one that
+   had just been picked. So the toast keeps its home at the bottom of the screen and the WINDOW gives up
+   the strip it needs — the overlay reserves it, the box re-centres inside what is left, and its own
+   scroll absorbs the difference. Nothing is ever behind the message. */
+function placeToast(){const t=$("#toast"),wins=WINS.map(s=>$(s)).filter(x=>x&&!x.hidden);
+  t.style.bottom="";
+  if(t.hidden){wins.forEach(w=>w.style.paddingBottom="");return}
+  const h=Math.round(t.getBoundingClientRect().height)+28;
+  wins.forEach(w=>w.style.paddingBottom=`calc(${h}px + env(safe-area-inset-bottom,0px))`)}
+
+/* B68: the "How this works" / "How rules work" popovers were cut — nothing renders their buttons, so
+   the templates, their actions and their CSS are gone. If the copy is wanted again it belongs in the
+   hint line under the title, which is where the rest of the explaining now lives. */
+/* B29: a menu says it is a menu, and each item says which one is chosen, so a screen reader announces
+   "Info only, menu item, 3 of 3, selected" instead of three unlabelled buttons. */
+const menuWrap=(label,items)=>`<div role="menu" aria-label="${escA(label)}">${items}</div>`;
+const mitem=(on,cls,body,attrs)=>`<button type="button" class="mi${cls?" "+cls:""}${on?" on":""}" role="menuitemradio" aria-checked="${!!on}" ${attrs}>${body}</button>`;
+function roleMenu(){const q=curQ();const dec=S.qs.find(x=>x.role==="decides");return `<div class="pt">Question ${qIndex(q.id)} does</div>`+menuWrap(`Question ${qIndex(q.id)} does`,JOBS.map(([k,n,h])=>mitem(q.role===k,"mi2",`<span class="t">${n}</span><span class="d">${h}${k==="decides"&&dec&&dec.id!==q.id?` · moves it from Q${qIndex(dec.id)} and clears Q${qIndex(dec.id)}'s mapping`:""}${filtLossN(q,k)?` · clears Q${qIndex(q.id)}'s values`:""}</span>`,`data-act="setrole" data-r="${k}"`)).join(""))+`<div class="pfoot">Only one question can pick the result.</div>`}
+function styleMenu(){return `<div class="pt">Logic style</div>`+menuWrap("Logic style",[["attributes","Filter Results + Rules","answers map, rules add exceptions"],["rules","Rules only","every outcome is a rule you write"]].map(([k,n,h])=>mitem(S.style===k,"",`${n}<span class="h">${h}</span>`,`data-act="setstyle" data-s="${k}"`)).join(""))}
+let PKQ="";
+function picker(ai){const q=curQ(),a=q.answers[ai];if(roleOf(q)!=="decides")return "";
+  const used=new Set(q.answers.flatMap(b=>b.targets)),s2=PKQ.trim().toLowerCase(),list=RECS.filter(x=>!s2||x.id.toLowerCase().includes(s2));
+  return `<div class="pt">Choose a result</div>${RECS.length>8?`<div class="vptools" style="border:0;padding-bottom:4px"><input id="pk-q" class="vpsearch" type="search" placeholder="Search recommendations" aria-label="Search recommendations" value="${escA(PKQ)}"></div>`:""}<div class="vplist">`+
+    list.map(x=>{const on=a.targets.includes(x.id),fresh=!used.has(x.id);return `<button type="button" class="mi pk${on?" on":""}${fresh?" fresh":""}" role="checkbox" aria-checked="${on}" title="${fresh?"No answer shows this yet":"Already on an answer"} · ${x.n} products" data-act="toggletarget" data-a="${ai}" data-r="${escA(x.id)}"><span class="ck">${on?"✓":""}</span>${escA(x.id)}</button>`}).join("")+
+    (list.length?"":`<div class="vpnone">Nothing matches.</div>`)+`</div>`}
+function vpHTML(){const a=curQ().answers[VP.ai],d=VP.draft,q=VP.q.trim().toLowerCase();
+  const fit=g=>g.vals.filter(([v])=>!q||v.toLowerCase().includes(q)||g.attr.toLowerCase().includes(q));
+  const groups=VGROUPS.filter(g=>VP.tab==="all"||g.src===VP.tab).map(g=>({g,vals:fit(g)})).filter(x=>x.vals.length);
+  const cnt=k=>VGROUPS.filter(g=>k==="all"||g.src===k).reduce((n,g)=>n+g.vals.length,0);
+  const list=groups.map(({g,vals})=>{const keys=vals.map(([v])=>vkey(g,v)),allOn=keys.every(k=>d.includes(k));
+    return `<div class="vpg"><span>${escA(g.src==="tag"?"Tags":g.src==="type"?"Product type":SRC_NAME[g.src]+" · "+g.attr)}</span><button type="button" class="vpall" data-act="vpAll" data-g="${VGROUPS.indexOf(g)}">${allOn?"Clear all":"Select all"}</button></div>`+
+      vals.map(([v,n])=>{const k=vkey(g,v),on=d.includes(k);return `<button type="button" class="mi${on?" on":""}" role="checkbox" aria-checked="${on}" data-act="vpTog" data-k="${escA(k)}"><span class="ck">${on?"✓":""}</span>${escA(v)}<span class="h">${n} products</span></button>`}).join("")}).join("");
+  return `<div class="pt">${escA(a.t)} · keeps</div>
+<div class="vptools"><input id="vp-q" class="vpsearch" type="search" placeholder="Search tags, metafields, variants…" aria-label="Search values" value="${escA(VP.q)}"><div class="vptabs" role="group" aria-label="Source">${[["all","All"],...VSRC].map(([k,l])=>`<button type="button" aria-pressed="${VP.tab===k}" data-act="vpTab" data-t="${k}">${l}<span class="c">${cnt(k)}</span></button>`).join("")}</div></div>
+<div class="vplist">${VP.tab==="all"&&!q?`<button type="button" class="mi${VP.any?" on":""}" role="checkbox" aria-checked="${VP.any}" data-act="vpAny"><span class="ck">${VP.any?"✓":""}</span>Keeps everything<span class="h">no narrowing</span></button>`:""}${list||`<div class="vpnone">Nothing matches “${escA(VP.q)}”.</div>`}</div>
+<div class="vpfoot"><span>${VP.any?"Keeps everything":d.length?`<b>${d.length}</b> selected`:"Nothing selected"}</span><button type="button" class="btn ghost" data-act="close">Cancel</button><button type="button" class="btn pri" data-act="vpDone">Done</button></div>`}
+function drawVP(focus){const l=$("#pop .vplist"),top=l?l.scrollTop:0;drawPop();const n=$("#pop .vplist");if(n)n.scrollTop=top;
+  if(focus){const inp=$("#vp-q");if(inp){inp.focus();inp.setSelectionRange(inp.value.length,inp.value.length)}}}
+function routeMenu(ai){const q=curQ(),a=q.answers[ai],i=qIndex(q.id);const later=S.qs.slice(i);
+  return `<div class="pt">${escA(a.t)} · goes to</div>`+menuWrap(`Where “${a.t}” goes`,
+    mitem(!a.route,"mi2",`<span class="t">The next question</span><span class="d">${S.qs[i]?escA(short(S.qs[i].text)):"the results (this is the last question)"}</span>`,`data-act="setroute" data-a="${ai}" data-r=""`)
+    +later.slice(1).map((x,k)=>mitem(a.route===x.id,"",`Q${qIndex(x.id)}<span class="h">skips ${k+1} question${k?"s":""}</span>`,`data-act="setroute" data-a="${ai}" data-r="${x.id}"`)).join("")
+    +mitem(a.route==="end","","Straight to the results",`data-act="setroute" data-a="${ai}" data-r="end"`))}
+/* a finding about a question opens that question; one about a rule opens that rule */
+function checkPop(){const f=findings(),b=f.filter(x=>x.sv==="crit").length,w=f.filter(x=>x.sv==="warn").length;
+  return `<div class="pt">${b?`${b} thing${b>1?"s":""} to fix before you continue`:w?`${w} thing${w>1?"s":""} to review · you can still continue`:"Nothing to fix"}</div>`+f.map(x=>{const go=x.q?` data-act="goto" data-q="${x.q}"`:x.i!=null?` data-act="editrule" data-i="${x.i}"`:x.act?` data-act="${x.act}"`:"";return go?`<button type="button" class="find"${go}><span class="sv ${x.sv}"></span>${x.t}</button>`:`<div class="find"><span class="sv ${x.sv}"></span>${x.t}</div>`}).join("")}
+
+/* ── actions ── */
+/* D7: the last message the Max stepper wrote, so a later step can replace it with current numbers or
+   take it back — and never touch a toast something else put there */
+let MAXMSG="";
+const ACT={
+  sel(el){S.sel=el.dataset.q;S.armed=null;closePop();render()},
+  addq(){closePop();AQ={type:"single",title:"",rows:["",""]};drawAQ("#aq-title")},
+  aqclose(){AQ=null;drawAQ()},
+  aqtype(el){AQ.type=el.dataset.t;drawAQ(`.aqt[data-t="${AQ.type}"]`)},
+  aqrow(){if(AQ.rows.length>=MAX_ANS)return;AQ.rows.push("");drawAQ(`.aqai[data-i="${AQ.rows.length-1}"]`);const b=$("#aqm .aqadd2");if(b)b.scrollIntoView({block:"nearest"})},
+  /* focus lands on the row that took this one's place (or the new last row), and the list stays put */
+  aqdel(el){if(AQ.rows.length<=2)return;const i=+el.dataset.i;AQ.rows.splice(i,1);const j=Math.min(i,AQ.rows.length-1);
+    drawAQ(AQ.rows.length>2?`.aqdel[data-i="${j}"]`:`.aqai[data-i="${j}"]`)},
+  aqadd(){if(!aqOk())return;const id="q"+S.uid++,t=AQ.type;const q={id,role:"info",text:AQ.title.trim(),answers:(t==="five"?["1","2","3","4","5"]:aqFilled()).map(x=>A(x))};
+    if(t==="multi")q.type="multi";else if(t==="image")q.type="image";else if(t==="five"){q.type="scale";q.five=true}
+    S.qs.push(q);S.sel=id;AQ=null;drawAQ();closePop();render();toast(`Q${S.qs.length} added`)},
+  qtype(el){openPop(el,()=>typeMenu(el.dataset.q),240,false)},
+  /* a type change that drops answers takes a snapshot first, names what went, and offers Undo;
+     2–10 points holds on conversion too, so the next '−' takes off one point, not several (B43) */
+  settype(el){const q=S.qs.find(x=>x.id===el.dataset.q),k=el.dataset.t;if(!q||k===(isFive(q)?"five":qtype(q)))return;
+    const had=q.answers.length,was=rkeys(),parts=[];
+    const flips=k==="multi"?0:[...S.rules,...(M?[M]:[])].filter(r=>r.all[q.id]).length;
+    if((k==="five"&&had>5)||(k==="scale"&&(had>10||had<2))||flips)qsnap();
+    if(k==="five"){q.type="scale";q.five=true;setPoints(q,5)}
+    else if(k==="scale"){q.type="scale";q.five=false;setPoints(q,had)}
+    else{if(k==="single")delete q.type;else q.type=k;delete q.five;delete q.lo;delete q.hi}
+    const gone=had-q.answers.length;
+    if(gone>0)parts.push(qLostMsg(q,k==="five"?"to make five points":"— a scale runs up to 10 points"));
+    if(k!=="multi"){delete q.min;delete q.max;parts.push(allOfMsg(dropAllOf(q),q))}
+    const lost=lossMsg(was,q);if(lost)parts.push(lost);
+    render();drawPop();const msg=parts.filter(Boolean).join(" · ");
+    if(gone>0||flips)toastQ(msg);else lossToast(msg)},
+  tmin(el){const q=S.qs.find(x=>x.id===el.dataset.q);q.min=Math.max(1,Math.min(mmax(q),mmin(q)+ +el.dataset.d));render();drawPop()},
+  /* a lower Max can leave an all-of rule needing more picks than shoppers get: say which rules cannot
+     run. D7: the message is re-made on EVERY step, so its numbers always agree with the stepper on
+     screen — it used to be written once, on the click that first broke a rule, and then sit there
+     saying "shoppers can pick 4" while the stepper read 2. When the last one is possible again the
+     message goes with it, but only if it is still this stepper's message. */
+  tmax(el){const q=S.qs.find(x=>x.id===el.dataset.q);q.max=Math.max(mmin(q),Math.min(q.answers.length,mmax(q)+ +el.dataset.d));
+    const hit=S.rules.map((r,i)=>overMax(r,q)&&!r.not[q.id]?i+1:0).filter(Boolean),k=`Q${qIndex(q.id)}`;render();drawPop();
+    if(hit.length)toast(MAXMSG=hit.length>1?`Rules ${hit.join(", ")} can never run now: they need more ${k} answers than shoppers can pick`:`Rule ${hit[0]} can never run now: it needs all ${S.rules[hit[0]-1].conds[q.id].length} of its ${k} answers and shoppers can pick ${mmax(q)}`);
+    else if(MAXMSG&&$("#toast").textContent===MAXMSG){MAXMSG="";hideToast(true)}},
+  /* fewer points can take answers out of rules: say which rules lost one and which never run now */
+  tpts(el){const q=S.qs.find(x=>x.id===el.dataset.q),d=+el.dataset.d,was=rkeys(),had=q.answers.length;
+    if(d<0)qsnap();
+    setPoints(q,had+d);render();drawPop();
+    const gone=had-q.answers.length,msg=[gone>0?qLostMsg(q):"",lossMsg(was,q)].filter(Boolean).join(" · ");
+    if(gone>0)toastQ(msg);else lossToast(msg)},
+  role(el){openPop(el,roleMenu,300,true)},
+  /* moving the job still clears both questions' mappings, and says whose went, with an Undo that
+     puts the role and every one of them back (D9). No confirm in the way. */
+  setrole(el){const q=curQ(),k=el.dataset.r;if(q.role===k){S.armed=null;closePop();render();return}
+    if(roleLossAny(q,k))qsnap();
+    const msg=moveRole(q,k);S.armed=null;closePop();render();toastQ(msg)},
+  qundo(){if(!QUNDO)return;S.qs=QUNDO.qs;S.rules=QUNDO.rules.map(fitRule);S.sel=QUNDO.sel;QUNDO=null;UNDO=null;hideToast(true);closePop();render();
+    refocus(`#stage [data-act="sel"][data-q="${S.sel}"]`,"#stage .stitle")},
+  arm(el){S.armed=S.armed===el.dataset.r?null:el.dataset.r;closePop();render()},
+  cell(el){const ai=+el.dataset.a,a=curQ().answers[ai];if(S.armed&&roleOf(curQ())==="decides"){if(!a.targets.includes(S.armed))a.targets.push(S.armed);S.armed=null;closePop();render();return}
+    if(roleOf(curQ())==="filter"){VP={ai,draft:[...a.values],any:!!a.any,tab:"all",q:""};openPop(el,vpHTML,370,false);return}
+    PKQ="";openPop(el,()=>picker(ai),240,false);const pk=$("#pk-q");if(pk)pk.focus()},
+  toggletarget(el){const a=curQ().answers[+el.dataset.a],r=el.dataset.r;a.targets=a.targets.includes(r)?a.targets.filter(x=>x!==r):[...a.targets,r];render();drawPop()},
+  untarget(el){const a=curQ().answers[+el.dataset.a];a.targets=a.targets.filter(x=>x!==el.dataset.r);closePop();render()},
+  close(){VP=null;closePop()},
+  /* B40: a Table popover points itself at its own row through PQ; the Edit selection is left alone,
+     so Escape, an outside click or a committed edit all leave the merchant where they were. */
+  trole(el){PQ=el.dataset.q;openPop(el,roleMenu,300,false)},
+  tval(el){PQ=el.dataset.q;const ai=+el.dataset.a,q=curQ(),a=q.answers[ai];
+    if(roleOf(q)==="filter"){VP={ai,draft:[...a.values],any:!!a.any,tab:"all",q:""};openPop(el,vpHTML,370,true);return}
+    PKQ="";openPop(el,()=>picker(ai),240,false)},
+  troute(el){PQ=el.dataset.q;const ai=+el.dataset.a;openPop(el,()=>routeMenu(ai),280,true)},
+  imp(){closePop();const f=$("#impfile");f.value="";f.click()},
+  impUndo(){if(!IMP_UNDO)return;const x=JSON.parse(IMP_UNDO);S.qs=x.qs;S.qs.forEach(q=>q.answers.forEach(a=>a.targets=a.targets.filter(rec)));S.rules=x.rules.map(fitRule);if(M)fitRule(M);IMP_UNDO=null;hideToast(true);keepM();render();
+    refocus('#stage [data-act="imp"]',"#stage .stitle")},
+  mrecMore(el){MRQ="";openPop(el,mrecMoreHTML,340,false);const i=$("#mr-q");if(i)i.focus()},
+  mrecPick(el){if(!M){closePop();return}const r=el.dataset.r;M.recs=M.recs.includes(r)?M.recs.filter(x=>x!==r):[...M.recs,r];const l=$("#pop .vplist"),top=l?l.scrollTop:0;drawModal();drawPop();const n=$("#pop .vplist");if(n)n.scrollTop=top},
+  trayMore(el){TRQ="";openPop(el,trayMoreHTML,300,true);const i=$("#tr-q");if(i)i.focus()},
+  stripMore(el){SMQ="";openPop(el,stripMoreHTML,300,false);const i=$("#sm-q");if(i)i.focus()},
+  vw(el){S.view=el.dataset.v;closePop();render()},
+  /* B37: the pending state is a variable, so a re-render (or the Edit/Table switch) cannot hand
+     back an enabled Export. The live node is updated instead of re-rendering: a render would take
+     focus off a cell someone is still editing. */
+  async xport(){if(!DL||XBUSY)return;XBUSY=true;const off=$('[data-act="xport"]');if(off)off.disabled=true;
+    try{const buf=await buildWorkbook();await DL.save({filename:"quiz-logic.xlsx",data:buf});toast("Exported quiz-logic.xlsx")}
+    catch(e){const c=e&&e.code;if(c==="rate_limited")toast("A save is already waiting for you");else if(e&&e.message==="load")toast("Couldn't load the Excel writer. Check your connection and try again");else if(c!=="declined")toast("Export isn't available here")}
+    finally{XBUSY=false;const on=$('[data-act="xport"]');if(on)on.disabled=false}},
+  vpTab(el){VP.tab=el.dataset.t;drawVP()},
+  vpTog(el){const k=el.dataset.k;VP.any=false;VP.draft=VP.draft.includes(k)?VP.draft.filter(x=>x!==k):[...VP.draft,k];drawVP()},
+  vpAny(){VP.any=!VP.any;if(VP.any)VP.draft=[];drawVP()},
+  vpAll(el){const g=VGROUPS[+el.dataset.g],q=VP.q.trim().toLowerCase(),keys=g.vals.filter(([v])=>!q||v.toLowerCase().includes(q)||g.attr.toLowerCase().includes(q)).map(([v])=>vkey(g,v));
+    const allOn=keys.every(k=>VP.draft.includes(k));VP.any=false;VP.draft=allOn?VP.draft.filter(k=>!keys.includes(k)):[...new Set([...VP.draft,...keys])];drawVP()},
+  vpDone(){const a=curQ().answers[VP.ai];a.values=[...VP.draft];a.any=VP.any;VP=null;closePop();render()},
+  unany(el){curQ().answers[+el.dataset.a].any=false;closePop();render()},
+  unvalue(el){const a=curQ().answers[+el.dataset.a];a.values=a.values.filter(x=>x!==el.dataset.r);closePop();render()},
+  route(el){const ai=+el.dataset.a;openPop(el,()=>routeMenu(ai),280,true)},
+  setroute(el){curQ().answers[+el.dataset.a].route=el.dataset.r||null;closePop();render()},
+  /* B29: 330px cut "Filter Results + Rules" and its hint onto two lines each */
+  stylemenu(el){openPop(el,styleMenu,400,false)},
+  setstyle(el){if(S.style!==el.dataset.s){S.style=el.dataset.s;S.view="edit"}S.armed=null;closePop();render()},
+  check(el){openPop(el,checkPop,360,true)},
+  /* a finding takes you to its question in Edit view, wherever you were (the Table has no selection to show) */
+  goto(el){S.sel=el.dataset.q;S.view="edit";S.armed=null;closePop();render()},
+  /* the only blocker with no question of its own: it opens the "Question N does" menu on the question you are on */
+  fixpick(){closePop();S.view="edit";render();const b=$("#stage .rolebtn[data-act='role']");if(b)ACT.role(b)},
+  addrule(){closePop();M=blank();drawModal(true)},
+  /* the window holds the rule's id, not its row number, so Save and Delete find it wherever it is now */
+  editrule(el){const r=S.rules[+el.dataset.i];if(!r)return;closePop();M=fitDraft(JSON.parse(JSON.stringify({...r,edit:r.id})));drawModal(true)},
+  delrule(el){delRule(+el.dataset.i)},
+  mvrule(el){const i=+el.dataset.i,d=+el.dataset.d;moveRule(i,i+d,`[data-act="mvrule"][data-i="${i+d}"][data-d="${d}"]`)},
+  mdel(){const i=S.rules.findIndex(x=>x.id===M.edit);M=null;drawModal();if(i>=0)delRule(i);else{render();toast("That rule was already removed")}},
+  /* D11: Duplicate copies the rule you are looking at — unsaved edits and all — into the row just
+     below it, and the window moves onto the copy, so the next thing you change is the copy and never
+     the original. Copying writes what is on screen, so it is held to the same bar as Save (disabled
+     while the rule has no answers, no recommendation, or can never match). It joins the open Undo run
+     the way a delete or a move does. Under first-match-wins a copy sitting directly under its
+     original is caught by it, which is why the new row says "never runs" until you change it. */
+  mdup(){const i=S.rules.findIndex(x=>x.id===M.edit);
+    if(i<0){M=null;drawModal();render();toast("That rule was removed, so there was nothing to copy");return}
+    snap();snap.i=i;S.rules[i]={...tidy(M),id:M.edit};
+    const copy={...tidy(M),id:rid()};S.rules.splice(i+1,0,copy);
+    M=fitDraft(JSON.parse(JSON.stringify({...copy,edit:copy.id})));drawModal();render();
+    const b=$('#modal [data-act="mdup"]');if(b)b.focus({preventScroll:true});
+    toastBack='#modal [data-act="mdup"]';toastU(`Rule ${i+2} is a copy of rule ${i+1} · you are editing the copy`)},
+  /* under two picks there is no join to show, so "all of" goes back to the default any-of */
+  mans(el){const q=el.dataset.q,i=+el.dataset.a,cur=M.conds[q]||[];M.conds[q]=cur.includes(i)?cur.filter(x=>x!==i):[...cur,i].sort((a,b)=>a-b);if(M.conds[q].length<2)delete M.all[q];drawModal()},
+  /* D12: "is not" means none of these answers, so switching it on takes any "all of" with it, and
+     while it is on there is no all-of to switch (the toggle isn't drawn; the guard says why). */
+  mnot(el){const q=el.dataset.q;M.not[q]=!M.not[q];if(M.not[q])delete M.all[q];drawModal()},
+  mall(el){const q=el.dataset.q;if(M.not[q])return;M.all[q]=!M.all[q];drawModal()},
+  mverb(el){M.verb=el.dataset.v;drawModal()},
+  mrec(el){const r=el.dataset.r;M.recs=M.recs.includes(r)?M.recs.filter(x=>x!==r):[...M.recs,r];drawModal()},
+  msave(el){const {edit}=M,rule=tidy(M),at=edit===null?-1:S.rules.findIndex(x=>x.id===edit);
+    if(edit!==null&&at<0){M=null;drawModal();render();toast("That rule was removed, so nothing was saved");return}
+    if(edit===null)S.rules.push({...rule,id:rid()});else S.rules[at]={...rule,id:edit};
+    toast(edit===null?"Rule created":"Rule saved");M=el.dataset.more?blank():null;drawModal(true);render();
+    /* B62: a new rule goes on the end, so bring the end of the list into view rather than leaving it hidden */
+    const l=document.querySelector(".rcol .rlist");if(l&&edit===null){l.scrollTop=l.scrollHeight;markRules()}},
+  mclose(){M=null;drawModal()},
+  reset(){S.qs=JSON.parse(QS0);Object.assign(S,{sel:"q1",armed:null,view:"edit",uid:6,style:"rules"});RID=0;S.rules=SEED();RECS.length=0;RECS0.forEach(r=>RECS.push({...r}));
+    UNDO=null;QUNDO=null;IMP_UNDO=null;M=null;drawModal();AQ=null;drawAQ();VP=null;AR=null;drawAR();$("#stress").checked=$("#stress30").checked=false;closePop();render();toast("Back to the sample rules")},
+  wipe(){snap();S.rules=[];S.style="rules";closePop();render();toastU("Cleared. This is a new Rules-only quiz")},
+  /* B32: Undo puts focus on the rule it brought back, so the next Tab carries on from there */
+  undo(){if(!UNDO)return;S.rules=UNDO.rules.map(fitRule);UNDO=null;hideToast(true);keepM();render();
+    const i=snap.i==null?0:Math.min(snap.i,S.rules.length-1);snap.i=null;
+    refocus(`#stage .rbody[data-act="editrule"][data-i="${i}"]`,'#stage [data-act="editrule"]','#stage [data-act="addrule"]')},
+  createFor(el){closePop();M=blank();M.recs=[el.dataset.r];drawModal(true)},
+  addRecs(){closePop();AR={tab:"all",q:"",sel:[]};drawAR(true)},
+  arTab(el){AR.tab=el.dataset.t;drawAR(false,0)},
+  arTog(el){const n=el.dataset.n;AR.sel=AR.sel.includes(n)?AR.sel.filter(x=>x!==n):[...AR.sel,n];drawAR()},
+  arClose(){AR=null;drawAR()},
+  arAdd(){const added=AR.sel.map(name=>{const c=CATALOG.find(x=>x.name===name);let h=0;for(const ch of name)h=(h*31+ch.charCodeAt(0))%360;return{id:name,n:c.n,h,kind:c.kind}});
+    added.forEach(r=>RECS.push(r));if(M)added.forEach(r=>{if(!M.recs.includes(r.id))M.recs.push(r.id)});
+    const k=added.length;AR=null;drawAR();drawModal();render();
+    toast(M?`Added and picked for this rule`:`Added ${k} recommendation${k>1?"s":""}. ${k>1?"Each needs":"It needs"} a rule`)},
+  hint(){hintOpen=!hintOpen;try{localStorage.setItem("lg-hint",hintOpen?"1":"0")}catch(e){}render()},
+  stub(el){toast(el.dataset.m)},
+};
+/* a click anywhere but the popover closes it first (its own anchor still toggles it), so no action leaves a stale one open */
+/* B30: the control that was used keeps focus across the re-render its action triggered; one that is
+   gone hands focus to the popover's trigger. Only when the handler did not place focus itself. */
+document.addEventListener("click",e=>{const el=e.target.closest("[data-act]");if(pop&&!e.target.closest("#pop")&&!(el&&JSON.stringify(el.dataset)===pop.key))closePop();if(!el||el.disabled)return;
+  const k=el.contains(document.activeElement)?fkey(el):null,back=el.closest("#pop")?popBack:null;
+  ACT[el.dataset.act](el);if(k||back)refocus(k,back)});
+document.addEventListener("keydown",e=>{if(e.key==="Escape"){const k0=fkey(document.activeElement);
+    if(pop)closePop(true);else if(AQ){AQ=null;drawAQ()}else if(AR){AR=null;drawAR()}else if(M){M=null;drawModal()}else if(S.armed){S.armed=null;render();refocus(k0)}}
+  if((e.key==="Enter"||e.key===" ")&&e.target.matches("div[data-act]")){e.preventDefault();const k=fkey(e.target);ACT[e.target.dataset.act](e.target);refocus(k)}});
+/* B29: a popover is operable from the keyboard — arrows walk its items (a roving tabindex keeps a
+   radiogroup one tab stop), Home/End jump to the ends, and Tab out of it closes it and carries on
+   from the trigger instead of landing in whatever the popover happens to sit in front of. */
+document.addEventListener("keydown",e=>{if(!pop||!e.target.closest||!e.target.closest("#pop"))return;
+  const el=$("#pop");
+  if(e.key==="Tab"){const f=[...el.querySelectorAll(FOCSEL)].filter(canFocus),i=f.indexOf(document.activeElement);
+    if(el.querySelector('[role="menu"]')||i<0||(e.shiftKey?i===0:i===f.length-1))closePop(true);return}
+  if(e.key!=="ArrowDown"&&e.key!=="ArrowUp"&&e.key!=="Home"&&e.key!=="End")return;
+  const a=document.activeElement;
+  if(a&&a.matches("input,textarea")&&e.key!=="ArrowDown")return; // the caret keeps its own arrows
+  const items=[...el.querySelectorAll('.mi:not([disabled]),button.find')].filter(canFocus);if(!items.length)return;
+  e.preventDefault();const i=items.indexOf(a),
+    j=e.key==="Home"?0:e.key==="End"?items.length-1:i<0?(e.key==="ArrowDown"?0:items.length-1):(i+(e.key==="ArrowDown"?1:-1)+items.length)%items.length;
+  const t=items[j];
+  if(t.getAttribute("role")==="radio")items.forEach(x=>{if(x.getAttribute("role")==="radio")x.tabIndex=x===t?0:-1});
+  t.focus()});
+/* B31: Tab stays inside the topmost window, and anything that lost focus behind it is pulled back in */
+document.addEventListener("keydown",e=>{if(e.key!=="Tab")return;const w=topWin();if(!w)return;
+  if(e.target.closest&&e.target.closest("#pop"))return;
+  const f=[...w.querySelectorAll(FOCSEL)].filter(canFocus);if(!f.length)return;
+  const a=document.activeElement,i=f.indexOf(a);
+  if(!w.contains(a)){e.preventDefault();f[0].focus();return}
+  if(e.shiftKey?i<=0:i>=f.length-1){e.preventDefault();(e.shiftKey?f[f.length-1]:f[0]).focus()}},true);
+/* B32: the timer stops while the toast is hovered or holds a visible focus, and starts again after */
+$("#toast").addEventListener("mouseenter",()=>{toastHot=true;clearTimeout(toast.t)});
+$("#toast").addEventListener("mouseleave",()=>{toastHot=false;setTimeout(()=>toastArm(toast.ms||6000))});
+$("#toast").addEventListener("focusin",()=>{if(toastHold())clearTimeout(toast.t)});
+$("#toast").addEventListener("focusout",()=>setTimeout(()=>toastArm(toast.ms||6000)));
+/* B32: Undo without a Tab. Only while its button is showing — UNDO outlives the toast, so an
+   unconditional shortcut would later roll back edits made after it. */
+document.addEventListener("keydown",e=>{if(!(e.metaKey||e.ctrlKey)||e.shiftKey||String(e.key).toLowerCase()!=="z")return;
+  if(e.target.closest&&e.target.closest("input,textarea,[contenteditable=true]"))return;
+  const b=document.querySelector("#toast:not([hidden]) .tundo");if(!b)return;e.preventDefault();ACT[b.dataset.act](b)});
+/* The answers this box adds are flagged, so unticking removes exactly those, however Q5 was cut or
+   grown in between, and every rule's picks move with the answers that stay. A scale gets points. */
+$("#stress").addEventListener("change",e=>{const q=S.qs.find(x=>x.id==="q5");if(!q)return;let m="";QUNDO=null;
+  if(e.target.checked){const n=q.answers.length;if(qtype(q)==="scale")setPoints(q,10);else EXTRA.forEach(t=>q.answers.push(A(t)));q.answers.slice(n).forEach(a=>a.stress=true)}
+  else{const was=rkeys(),keep=q.answers.map((a,i)=>a.stress?-1:i).filter(i=>i>=0),to=new Map(keep.map((o,n)=>[o,n]));q.answers=keep.map(i=>q.answers[i]);eachRule(r=>{if(r.conds.q5)r.conds.q5=r.conds.q5.filter(i=>to.has(i)).map(i=>to.get(i))});m=lossMsg(was,q)}
+  render();drawModal();lossToast(m)});
+window.addEventListener("resize",markMore);
+document.addEventListener("input",e=>{if(e.target.id==="vp-q"&&VP){VP.q=e.target.value;drawVP(true)}});
+document.addEventListener("input",e=>{if(e.target.id==="pk-q"){PKQ=e.target.value;drawPop();const i=$("#pk-q");if(i){i.focus();i.setSelectionRange(i.value.length,i.value.length)}}});
+document.addEventListener("input",e=>{if(e.target.id==="mr-q"){MRQ=e.target.value;drawPop();const i=$("#mr-q");if(i){i.focus();i.setSelectionRange(i.value.length,i.value.length)}}});
+document.addEventListener("input",e=>{if(e.target.id==="tr-q"){TRQ=e.target.value;drawPop();const i=$("#tr-q");if(i){i.focus();i.setSelectionRange(i.value.length,i.value.length)}}});
+document.addEventListener("input",e=>{if(e.target.id==="sm-q"){SMQ=e.target.value;drawPop();const i=$("#sm-q");if(i){i.focus();i.setSelectionRange(i.value.length,i.value.length)}}});
+window.addEventListener("resize",fitRows);window.addEventListener("resize",placeToast);window.addEventListener("resize",markRules);
+window.addEventListener("resize",placePop);document.addEventListener("scroll",e=>{if(pop&&!(e.target.closest&&e.target.closest("#pop")))placePop()},true);
+document.addEventListener("input",e=>{const t=e.target;
+  if(AQ&&t.id==="aq-title"){AQ.title=t.value;aqSync()}else if(AQ&&t.classList&&t.classList.contains("aqai")){AQ.rows[+t.dataset.i]=t.value;aqSync()}
+  else if(t.id==="tp-lo"||t.id==="tp-hi"){const q=S.qs.find(x=>x.id===t.dataset.q);if(q){q[t.id==="tp-lo"?"lo":"hi"]=t.value;render()}}});
+document.addEventListener("keydown",e=>{const t=e.target;if(!AQ||!t.classList||!t.classList.contains("aqgrip"))return;const i=+t.dataset.i,j=e.key==="ArrowUp"?i-1:e.key==="ArrowDown"?i+1:null;if(j===null)return;e.preventDefault();if(j<0||j>=AQ.rows.length)return;const [row]=AQ.rows.splice(i,1);AQ.rows.splice(j,0,row);drawAQ(`.aqgrip[data-i="${j}"]`)});
+/* the grip shows cursor:grab, so it drags: the row takes the slot of the row under the pointer,
+   the same drop the rule list does. The arrow keys still work. */
+let aqDrag=null;
+document.addEventListener("pointerdown",e=>{const g=e.target.closest&&e.target.closest(".aqgrip");if(!AQ||!g||e.button!==0)return;
+  e.preventDefault();aqDrag={from:+g.dataset.i,to:+g.dataset.i};g.setPointerCapture(e.pointerId);g.closest(".aqrow").classList.add("dragging")});
+document.addEventListener("pointermove",e=>{if(!aqDrag)return;const rows=$$("#aqm .aqrow");if(!rows.length)return;let to=0;
+  rows.forEach((r,k)=>{if(e.clientY>=r.getBoundingClientRect().top)to=k});aqDrag.to=to;
+  rows.forEach((r,k)=>r.classList.toggle("over",k===to&&to!==aqDrag.from))});
+document.addEventListener("pointerup",()=>{if(!aqDrag)return;const {from,to}=aqDrag;aqDrag=null;if(!AQ)return;
+  if(to!==from){const [row]=AQ.rows.splice(from,1);AQ.rows.splice(to,0,row)}drawAQ(`.aqgrip[data-i="${to}"]`)});
+document.addEventListener("pointercancel",()=>{if(!aqDrag)return;aqDrag=null;if(AQ)drawAQ()});
+document.addEventListener("focusin",e=>{const t=e.target;if(t.dataset&&t.dataset.edit){t.dataset.orig=t.textContent;if(SV&&t.matches(svSel(SV.k))){clearTimeout(SV.t);SV=null;svPlace()}}});
+/* inline edits are capped where Add a question caps them: a title at 150, an answer at 60 —
+   held while typing, on paste, and again on commit */
+const EDIT_MAX={q:150,a:60};
+const editRoom=t=>{const s=getSelection();return (EDIT_MAX[t.dataset.edit]||150)-t.textContent.length+(s.rangeCount&&t.contains(s.anchorNode)?s.toString().length:0)};
+document.addEventListener("beforeinput",e=>{const t=e.target;if(!t.dataset||!t.dataset.edit||!/^insert/.test(e.inputType))return;if((e.data||"").length>editRoom(t))e.preventDefault()});
+/* D3: a scale point emptied again goes back to its number instead of becoming blank — and it does that
+   from the QUESTION, not from a data-pt the last full render happened to leave on the span, so a point
+   that has been named (and has therefore lost the attribute) can be cleared back to its number too. The
+   attributes are kept in step here, so the "Add label" placeholder comes back the moment the field is
+   emptied rather than waiting for the next render. */
+document.addEventListener("input",e=>{const t=e.target;if(!t.dataset||!t.dataset.edit)return;const q=S.qs.find(x=>x.id===t.dataset.q);if(!q)return;const v=t.textContent;
+  if(t.dataset.edit==="q")q.text=v;
+  else{const i=+t.dataset.a,sc=qtype(q)==="scale";q.answers[i].t=v.trim()?v:(sc?String(i+1):v);
+    if(sc){if(isPt(q,i)){t.dataset.pt=String(i+1);t.dataset.ph=endLab(q,i)||"Add label"}else{delete t.dataset.pt;delete t.dataset.ph}}}
+  syncText(t)});
+document.addEventListener("keydown",e=>{const t=e.target;if(!t.dataset||!t.dataset.edit)return;if(e.key==="Enter"){e.preventDefault();t.blur()}else if(e.key==="Escape"){e.stopPropagation();t.textContent=t.dataset.orig||"";t.dispatchEvent(new Event("input",{bubbles:true}));t.blur()}},true);
+/* D3: an empty field is a slip everywhere except on a scale point, which has its number to fall back on
+   — there clearing the label is a real edit, so it is committed (and confirmed) instead of silently
+   restoring the label the merchant just deleted. */
+document.addEventListener("focusout",e=>{const t=e.target;if(!t.dataset||!t.dataset.edit)return;
+  const qq=S.qs.find(x=>x.id===t.dataset.q),sc=t.dataset.edit==="a"&&qq&&qtype(qq)==="scale";
+  const v=t.textContent.replace(/\s+/g," ").trim().slice(0,EDIT_MAX[t.dataset.edit]||150).trim();
+  t.textContent=v||(sc?"":(t.dataset.orig||""));t.dispatchEvent(new Event("input",{bubbles:true}));
+  const o=(t.dataset.orig||"").replace(/\s+/g," ").trim();if((v||sc)&&v!==o)svStart({edit:t.dataset.edit,q:t.dataset.q,a:t.dataset.a})});
+document.addEventListener("scroll",()=>{if(SV)svPlace()},true);window.addEventListener("resize",()=>{if(SV)svPlace()});
+document.addEventListener("paste",e=>{const t=e.target.closest&&e.target.closest("[data-edit]");if(!t)return;e.preventDefault();const x=(e.clipboardData||window.clipboardData).getData("text").replace(/\s+/g," ");document.execCommand("insertText",false,x.slice(0,Math.max(0,editRoom(t))))});
+$("#impfile").addEventListener("change",e=>{const f=e.target.files&&e.target.files[0];if(f)importFile(f)});
+
+const EXTRA_RECS=[["hydration",22],["oil-control",17],["anti-aging",26],["brightening",19],["pores",12],["texture",15],["dark-spots",11],["firming",14],["barrier-repair",18],["calming",13],["exfoliation",16],["sun-care",9],["eye-care",8],["lip-care",6],["body-care",21],["mens-skincare",10],["teen-skin",7],["mature-skin",12],["pregnancy-safe",9],["fragrance-free",31],["vegan",44],["travel-size",20],["gift-sets",5],["bestsellers",24]].map(([id,n],i)=>({id,n,h:(i*47)%360,extra:true}));
+/* unticking removes only what this box added (flagged extra); one the merchant added under the same name stays */
+$("#stress30").addEventListener("change",e=>{let m="";QUNDO=null;if(e.target.checked){EXTRA_RECS.forEach(r=>{if(!RECS.some(x=>x.id===r.id))RECS.push({...r})})}else{const was=rkeys(),gone=new Set(RECS.filter(r=>r.extra).map(r=>r.id));for(let i=RECS.length-1;i>=0;i--)if(RECS[i].extra)RECS.splice(i,1);S.qs.forEach(q=>q.answers.forEach(a=>a.targets=a.targets.filter(t=>!gone.has(t))));eachRule(r=>r.recs=r.recs.filter(t=>!gone.has(t)));if(gone.has(S.armed))S.armed=null;m=lossMsg(was,null)}closePop();render();drawModal();lossToast(m)});if(document.fonts&&document.fonts.ready)document.fonts.ready.then(fitRows);
+/* drag a rule to reorder it; order is priority in both styles (first match wins), and the ↑/↓ on every
+   row do the same thing without a mouse.
+   B18: one calculation feeds both the line and the drop, so the rule lands where the line is. Which half
+   of the row the pointer is in says above or below, and the index allows for the rule being lifted out
+   first (everything after it moves up one). A drop that would not move anything draws no line. */
+let dragI=null;
+const dropAt=(e,el)=>{const b=el.getBoundingClientRect(),after=e.clientY>b.top+b.height/2;let at=+el.dataset.ri+(after?1:0);if(at>dragI)at--;return{at,after}};
+document.addEventListener("dragstart",e=>{const el=e.target.closest&&e.target.closest(".rr[data-ri]");if(!el)return;dragI=+el.dataset.ri;el.classList.add("dragging");e.dataTransfer.effectAllowed="move";e.dataTransfer.setData("text/plain","rule")});
+document.addEventListener("dragover",e=>{const el=e.target.closest&&e.target.closest(".rr[data-ri]");if(!el||dragI===null)return;e.preventDefault();
+  $$(".rr.over,.rr.under").forEach(x=>x.classList.remove("over","under"));const d=dropAt(e,el);if(d.at!==dragI)el.classList.add(d.after?"under":"over")});
+document.addEventListener("drop",e=>{const el=e.target.closest&&e.target.closest(".rr[data-ri]");if(!el||dragI===null)return;e.preventDefault();const from=dragI,to=dropAt(e,el).at;dragI=null;
+  $$(".rr.dragging,.rr.over,.rr.under").forEach(x=>x.classList.remove("dragging","over","under"));if(to!==from)moveRule(from,to);else render()});
+document.addEventListener("dragend",()=>{dragI=null;$$(".rr.dragging,.rr.over,.rr.under").forEach(x=>x.classList.remove("dragging","over","under"))});
+/* the same move from the keyboard, on a focused row in either style */
+document.addEventListener("keydown",e=>{if(!e.altKey||(e.key!=="ArrowUp"&&e.key!=="ArrowDown")||!e.target.closest)return;
+  const row=e.target.closest('.rr[data-i],.rrow[data-i]');if(!row)return;
+  e.preventDefault();const i=+row.dataset.i,j=i+(e.key==="ArrowUp"?-1:1);
+  moveRule(i,j,`.${row.classList.contains("rr")?"rr":"rrow"}[data-i="${j}"] .rbody`)});
+document.addEventListener("input",e=>{if(e.target.id==="ar-q"&&AR){AR.q=e.target.value;drawAR(false,0)}});
+/* B49: which rows are lit is worked out from the one hovered-or-focused recommendation every time the
+   rows are drawn, instead of being cached behind an early return that a re-render invalidates. The
+   highlight clears when the pointer leaves the window, and focus lights the same rows as hover. */
+let lit=null;
+function paintLit(){$$(".rr.lit").forEach(x=>x.classList.remove("lit"));
+  if(lit)S.rules.forEach((r,i)=>{if(r.recs.includes(lit)){const row=$(`.rr[data-ri="${i}"]`);if(row)row.classList.add("lit")}})}
+function setLit(id){if(id===lit)return;lit=id;paintLit()}
+const pillOf=t=>{const p=t&&t.closest&&t.closest(".rpill[data-r]");return p?p.dataset.r:null};
+document.addEventListener("mouseover",e=>setLit(pillOf(e.target)));
+document.addEventListener("mouseout",e=>{if(!e.relatedTarget)setLit(null)}); // the pointer left the window
+document.addEventListener("focusin",e=>{const id=pillOf(e.target);if(id)setLit(id)});
+document.addEventListener("focusout",e=>{if(pillOf(e.target)&&!pillOf(e.relatedTarget))setLit(null)});
+render();
+</script>
+
+</body></html>
