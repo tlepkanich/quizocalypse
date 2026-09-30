@@ -8,12 +8,13 @@ import { useQuizDraft } from "./useQuizDraft";
 
 /* A controllable stand-in for Remix's useFetcher: submit() flips it busy,
    finish()/crash() bring it back to idle with (or without) new data. */
-type FakeData = { ok: boolean; savedAt?: string; error?: string } | undefined;
+type FakeData = { ok: boolean; savedAt?: string; error?: string; stale?: boolean } | undefined;
 const fake: {
   submits: number;
+  bodies: string[];
   finish: (data: FakeData) => void;
   crash: () => void;
-} = { submits: 0, finish: () => {}, crash: () => {} };
+} = { submits: 0, bodies: [], finish: () => {}, crash: () => {} };
 
 vi.mock("@remix-run/react", async () => {
   const React = await import("react");
@@ -28,7 +29,8 @@ vi.mock("@remix-run/react", async () => {
       return {
         state: st.state,
         data: st.data,
-        submit: () => {
+        submit: (body: string) => {
+          fake.bodies.push(body);
           fake.submits += 1;
           setSt((s) => ({ ...s, state: "submitting" }));
         },
@@ -55,6 +57,7 @@ let host: HTMLDivElement | null = null;
 beforeEach(() => {
   vi.useFakeTimers();
   fake.submits = 0;
+  fake.bodies = [];
   host = document.createElement("div");
   document.body.appendChild(host);
   root = createRoot(host);
@@ -151,5 +154,29 @@ describe("useQuizDraft — D8 save tokens and awaitable flush", () => {
 
   it("with nothing committed, flush() is already saved", async () => {
     await expect(draft().flush()).resolves.toBe("saved");
+  });
+});
+
+describe("useQuizDraft — P2-11 ordered saves", () => {
+  it("every PUT carries this session's id and the commit sequence it saves", () => {
+    act(() => draft().commit(docB));
+    act(() => void draft().flush());
+    act(() => draft().commit(docA));
+    act(() => void draft().flush());
+    const saves = fake.bodies.map((b) => (JSON.parse(b) as { save: { id: string; seq: number } }).save);
+    expect(saves).toHaveLength(2);
+    expect(saves[0]!.id).toBe(saves[1]!.id);
+    expect(saves.map((s) => s.seq)).toEqual([1, 2]);
+  });
+
+  it("a stale reply (a newer save already landed) settles saved and is not an error", () => {
+    let tok = draft().pendingToken();
+    act(() => {
+      tok = draft().commitTracked(docB);
+    });
+    act(() => void draft().flush());
+    act(() => fake.finish({ ok: false, stale: true, error: "A newer save already landed." }));
+    expect(tok.status()).toBe("saved");
+    expect(draft().saveError).toBeNull();
   });
 });

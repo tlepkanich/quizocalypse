@@ -175,6 +175,20 @@ export async function writeDoc(quizId: string, doc: Quiz) {
   });
 }
 
+/** A draft write that cannot go ahead. Thrown by writeSession/writeContent
+ *  instead of a Response, so the funnel action returns it as JSON the
+ *  client's save state reads (a thrown Response would reach the route's
+ *  ErrorBoundary and the autosave would never learn it failed). */
+export class DraftWriteError extends Error {
+  constructor(
+    message: string,
+    readonly status: 404 | 422,
+  ) {
+    super(message);
+    this.name = "DraftWriteError";
+  }
+}
+
 // Logic step redesign (handoff "Continue and Back") — the stage intents must
 // change ONLY build_session. writeDoc writes back the whole doc the intent
 // read at the start of its request, so an autosave PUT that landed in
@@ -182,13 +196,14 @@ export async function writeDoc(quizId: string, doc: Quiz) {
 // writeSession re-reads the draft under a row lock (SELECT … FOR UPDATE,
 // one interactive transaction) and replaces only build_session, merging
 // `patch` over the session it finds THERE.
+
 export async function writeSession(quizId: string, patch: Partial<BuildSession>) {
   await prisma.$transaction(async (tx) => {
     await tx.$queryRaw`SELECT "id" FROM "Quiz" WHERE "id" = ${quizId} FOR UPDATE`;
     const row = await tx.quiz.findUnique({ where: { id: quizId }, select: { draftJson: true } });
-    if (!row) throw new Response("Quiz not found", { status: 404 });
+    if (!row) throw new DraftWriteError("Quiz not found", 404);
     const parsed = Quiz.safeParse(row.draftJson);
-    if (!parsed.success) throw new Response("Draft is not readable", { status: 422 });
+    if (!parsed.success) throw new DraftWriteError("Draft is not readable", 422);
     const session: BuildSession = parsed.data.build_session ?? BuildSession.parse({});
     await tx.quiz.update({
       where: { id: quizId },
@@ -201,18 +216,40 @@ export async function writeSession(quizId: string, patch: Partial<BuildSession>)
 // with the build_session found under the same row lock, so a navigation
 // intent that landed first can never be rewound by a PUT that read the
 // session before it (the stage is owned by the intents, never the PUT).
-export async function writeContent(quizId: string, doc: Quiz) {
-  await prisma.$transaction(async (tx) => {
+//
+// P2-11 — `save` orders the writes of one editing session: a PUT carrying an
+// OLDER commit sequence than the newest one applied for the same session id
+// is refused ("stale") and writes nothing, so a PUT the client aborted but
+// that reached the server late can never overwrite a newer save. The check
+// runs under the same row lock as the write. A new session id (a reload, a
+// second tab) always writes, as before; a PUT without `save` writes as before.
+export type SaveStamp = { id: string; seq: number };
+
+export async function writeContent(
+  quizId: string,
+  doc: Quiz,
+  save?: SaveStamp,
+): Promise<"written" | "stale"> {
+  return prisma.$transaction(async (tx) => {
     await tx.$queryRaw`SELECT "id" FROM "Quiz" WHERE "id" = ${quizId} FOR UPDATE`;
     const row = await tx.quiz.findUnique({ where: { id: quizId }, select: { draftJson: true } });
-    if (!row) throw new Response("Quiz not found", { status: 404 });
+    if (!row) throw new DraftWriteError("Quiz not found", 404);
     const current = Quiz.safeParse(row.draftJson);
-    if (!current.success) throw new Response("Draft is not readable", { status: 422 });
+    if (!current.success) throw new DraftWriteError("Draft is not readable", 422);
     // Same default the request-start read used (loadFunnelDraft).
     const session: BuildSession = current.data.build_session ?? BuildSession.parse({});
+    if (isStaleSave(session.autosave, save)) return "stale";
+    const nextSession: BuildSession = save ? { ...session, autosave: save } : session;
     await tx.quiz.update({
       where: { id: quizId },
-      data: { draftJson: Quiz.parse({ ...doc, build_session: session }) as never },
+      data: { draftJson: Quiz.parse({ ...doc, build_session: nextSession }) as never },
     });
+    return "written";
   });
+}
+
+/** True when `incoming` is an older commit of the session that wrote last.
+ *  Equal sequences write (a retry of a save whose response was lost). */
+export function isStaleSave(last: SaveStamp | undefined, incoming: SaveStamp | undefined): boolean {
+  return !!last && !!incoming && last.id === incoming.id && incoming.seq < last.seq;
 }

@@ -1704,6 +1704,14 @@ export const BuildSession = z.object({
   // opening on it. The engine, validation, report and publish NEVER read it
   // (build_session is stripped at publish). OPTIONAL WITHOUT DEFAULT.
   logic_style: z.enum(["rules", "attributes"]).optional(),
+  // Logic step P2-11 — the newest autosave applied to this draft: the
+  // editing session's id and its commit sequence. Written ONLY by the
+  // funnel's autosave PUT (writeContent, under the row lock) so a PUT that
+  // was aborted client-side but reaches the server late cannot overwrite a
+  // newer save. Scratch state (stripped at publish). OPTIONAL WITHOUT DEFAULT.
+  autosave: z
+    .object({ id: z.string().min(1).max(64), seq: z.number().int().nonnegative() })
+    .optional(),
 });
 export type BuildSession = z.infer<typeof BuildSession>;
 

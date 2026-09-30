@@ -6,6 +6,13 @@ import { createSaveTracker, type SaveOutcome, type SaveToken } from "./saveTrack
 
 type QuizDoc = Quiz;
 
+/** A random id for one editing session (P2-11). */
+function newSaveSessionId(): string {
+  const c = typeof globalThis !== "undefined" ? globalThis.crypto : undefined;
+  if (c && typeof c.randomUUID === "function") return c.randomUUID();
+  return `s${Date.now().toString(36)}${Math.random().toString(36).slice(2, 10)}`;
+}
+
 // Shared draft plumbing for the studio shells: local doc state + a debounced
 // JSON-PUT autosave to the route action (the exact contract BuilderShell uses
 // inline). Extracted so the AI-first workspace and the advanced builder can't
@@ -36,7 +43,7 @@ type QuizDoc = Quiz;
 // pill subscribes to a token, so "Saved" never shows before the save did.
 export function useQuizDraft(initial: QuizDoc) {
   const [doc, setDoc] = useState<QuizDoc>(initial);
-  const saveFetcher = useFetcher<{ ok: boolean; savedAt?: string; error?: string }>();
+  const saveFetcher = useFetcher<{ ok: boolean; savedAt?: string; error?: string; stale?: boolean }>();
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   // The doc a pending (debounced) autosave will PUT — lets beginAiEdit flush it
   // immediately instead of waiting out the debounce.
@@ -58,11 +65,19 @@ export function useQuizDraft(initial: QuizDoc) {
   if (!trackerRef.current) trackerRef.current = createSaveTracker();
   const tracker = trackerRef.current;
 
+  // P2-11 — this editing session's id. Each PUT carries it with the commit
+  // sequence it saves, so the funnel's server refuses a late-arriving older
+  // PUT (one this hook aborted) instead of letting it overwrite a newer save.
+  // Routes that don't read `save` ignore it.
+  const sessionIdRef = useRef<string | null>(null);
+  if (!sessionIdRef.current) sessionIdRef.current = newSaveSessionId();
+
   const submitSave = useCallback(
     (next: QuizDoc) => {
       pending.current = null;
       tracker.sent();
-      saveFetcher.submit(JSON.stringify({ doc: next }), {
+      const save = { id: sessionIdRef.current!, seq: tracker.state.seq };
+      saveFetcher.submit(JSON.stringify({ doc: next, save }), {
         method: "PUT",
         encType: "application/json",
       });
@@ -154,8 +169,13 @@ export function useQuizDraft(initial: QuizDoc) {
     saveFetcher.data?.ok && saveFetcher.data.savedAt ? saveFetcher.data.savedAt : null;
   // Surface a failed autosave so the funnel can show an "Unable to save · Retry"
   // chip (Questions & Logic spec §5). Additive — existing consumers ignore it.
+  // A stale reply (P2-11) means a newer save of this session already landed:
+  // nothing to retry, so it is not an error.
   const saveError =
-    saveFetcher.state === "idle" && saveFetcher.data && !saveFetcher.data.ok
+    saveFetcher.state === "idle" &&
+    saveFetcher.data &&
+    !saveFetcher.data.ok &&
+    !saveFetcher.data.stale
       ? (saveFetcher.data.error ?? "Unable to save")
       : null;
   // Re-PUT the current doc (the source of truth) after a save failure.
@@ -204,7 +224,9 @@ export function useQuizDraft(initial: QuizDoc) {
     const data = saveFetcher.data;
     const fresh = data !== lastData.current;
     lastData.current = data;
-    tracker.result(fresh && !!data?.ok);
+    // Stale = the server already holds a NEWER commit of this session, which
+    // includes this one, so the carried sequence is saved.
+    tracker.result(fresh && (!!data?.ok || data?.stale === true));
   }, [saveFetcher.state, saveFetcher.data, tracker]);
 
   return {

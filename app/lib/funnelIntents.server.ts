@@ -9,6 +9,7 @@ import {
   unstable_parseMultipartFormData,
   unstable_createMemoryUploadHandler,
 } from "@remix-run/node";
+import { z } from "zod";
 import prisma from "../db.server";
 import { logFor } from "./log.server";
 import { checkAiBudget, withAiSpendRecording } from "./aiBudget.server";
@@ -70,8 +71,14 @@ import {
   writeDoc,
   writeSession,
   writeContent,
+  DraftWriteError,
   type FunnelShop,
 } from "./funnelDraft.server";
+
+const SaveStampBody = z.object({
+  id: z.string().min(1).max(64),
+  seq: z.number().int().nonnegative(),
+});
 
 // The funnel's action — every stage transition. `builderPath` is surface-specific
 // (studio → /studio/:id?mode=ai, embedded → /app/quizzes/:id/studio?mode=ai) so
@@ -91,6 +98,11 @@ export async function runStep1FunnelAction(
     return await runStep1FunnelActionImpl(shop, quizId, request, opts);
   } catch (err) {
     if (err instanceof Response) throw err;
+    // writeContent / writeSession refusals: a JSON error the client's save
+    // state reads, never a thrown Response (item 8).
+    if (err instanceof DraftWriteError) {
+      return json({ ok: false, error: err.message }, { status: err.status });
+    }
     logFor("step1Funnel").error({ err, quizId }, "action failed");
     return json(
       { ok: false, error: "Couldn't save your change — please try again." },
@@ -115,7 +127,7 @@ async function runStep1FunnelActionImpl(
   // request.formData() — a JSON body has no form fields to read.
   const contentType = request.headers.get("content-type") ?? "";
   if (contentType.includes("application/json")) {
-    const body = (await request.json()) as { doc: unknown };
+    const body = (await request.json()) as { doc: unknown; save?: unknown };
     const parsed = Quiz.safeParse(body.doc);
     if (!parsed.success) {
       return json(
@@ -123,13 +135,22 @@ async function runStep1FunnelActionImpl(
         { status: 400 },
       );
     }
+    // P2-11 — the editing session's commit sequence (useQuizDraft). Absent
+    // or malformed → an unordered write, exactly as before.
+    const stamp = SaveStampBody.safeParse(body.save);
+    const save = stamp.success ? stamp.data : undefined;
     // Autosave persists DOC CONTENT only. build_session / stage is owned by the
     // navigation intents — so we keep the SERVER's current session, never the
     // client doc's. Logic step redesign: that session is re-read under a row
     // lock in the same transaction as the write (writeContent), so a PUT that
     // overlaps a stage transition can never rewind the stage, and the stage
     // intents (writeSession) can never overwrite the content this PUT wrote.
-    await writeContent(quiz.id, parsed.data);
+    const written = await writeContent(quiz.id, parsed.data, save);
+    if (written === "stale") {
+      // A newer save of this session already landed; this older one wrote
+      // nothing. The client that sent it has moved on (it aborted this PUT).
+      return json({ ok: false, stale: true, error: "A newer save already landed." }, { status: 409 });
+    }
     return json({ ok: true, savedAt: new Date().toISOString() });
   }
 
