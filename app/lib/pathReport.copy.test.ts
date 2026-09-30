@@ -273,6 +273,16 @@ describe("report grouping and wording (handoff §13)", () => {
     expect(find(r, "R0")!.findings[0]!.message).toBe(REPORT_COPY.styleNotSaved);
     const v1 = find(r, "V1")!.findings[0]!.message;
     expect(v1).toBe(`${REPORT_COPY.noPicker} ${REPORT_COPY.styleNotSaved}`);
+    // A finding without a closing period gets one before the sentence.
+    const v4 = buildTier1Report(
+      Quiz.parse({ ...DOCS.styleNote, nodes: DOCS.v4.nodes }),
+      BUCKETS,
+      undefined,
+      { styleNote: true },
+    );
+    expect(find(v4, "V4")?.findings[0]?.message).toBe(
+      `${REPORT_COPY.answersNoRec("Q2", 2)}. ${REPORT_COPY.styleNotSaved}`,
+    );
     // Without the host opting in, nothing is appended.
     const plain = buildTier1Report(DOCS.styleNote, BUCKETS);
     expect(find(plain, "V1")!.findings[0]!.message).toBe(REPORT_COPY.noPicker);

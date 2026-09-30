@@ -561,7 +561,10 @@ export function buildTier1Report(
   // to fix a control the screen does not draw without knowing why.
   const explain = (fs: Tier1Finding[]): Tier1Finding[] =>
     r0.length > 0
-      ? fs.map((f) => ({ ...f, message: `${f.message} ${REPORT_COPY.styleNotSaved}` }))
+      ? fs.map((f) => ({
+          ...f,
+          message: `${f.message}${/[.!?]$/.test(f.message) ? "" : "."} ${REPORT_COPY.styleNotSaved}`,
+        }))
       : fs;
   const T = REPORT_COPY.titles;
   const pickingChecks: Tier1Check[] = rulesOnly
