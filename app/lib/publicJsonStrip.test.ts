@@ -48,6 +48,28 @@ describe("/q/:id.json public payload (HII-6 strip round-trip)", () => {
     expect(body.design_tokens).toEqual({ colors: { primary: "#111" } });
   });
 
+  it("never serves integration credentials or decider discount codes", async () => {
+    p.quiz.findFirst.mockResolvedValue({
+      status: "published",
+      publishedJson: {
+        quiz_id: "q1",
+        logic_model: "decider",
+        nodes: [
+          {
+            id: "int",
+            type: "integration",
+            data: { actions: [{ kind: "klaviyo", api_key: "pk_live_x", label: "K" }] },
+          },
+        ],
+        discount_config: { enabled: true, code: "QUIZ-AAAAAA", static_code: "S10" },
+      },
+    });
+    const text = await (await loader(loaderArgs("q1"))).text();
+    expect(text).not.toContain("pk_live_x");
+    expect(text).not.toContain("QUIZ-AAAAAA");
+    expect(text).not.toContain("S10");
+  });
+
   it("404s when the quiz is missing or has no publishedJson (unpublished)", async () => {
     p.quiz.findFirst.mockResolvedValue(null);
     expect((await loader(loaderArgs("missing"))).status).toBe(404);
@@ -58,5 +80,51 @@ describe("/q/:id.json public payload (HII-6 strip round-trip)", () => {
   it("400s on a missing id param (before any DB hit)", async () => {
     expect((await loader(loaderArgs(undefined))).status).toBe(400);
     expect(p.quiz.findFirst).not.toHaveBeenCalled();
+  });
+});
+
+// /q/:id.embed.json is newer than the credential strip; it rides the same
+// stripPublicDoc seam (runtimePayload.server.ts) — pin that it stays there.
+describe("/q/:id.embed.json public payload (credential + code redaction)", () => {
+  it("serves no integration credentials and no decider discount code", async () => {
+    const { Quiz } = await import("./quizSchema");
+    const { loader: embedLoader } = await import("../routes/q.$id[.]embed[.]json");
+    const doc = Quiz.parse({
+      quiz_id: "e1",
+      logic_model: "decider",
+      scope: { collection_ids: [] },
+      nodes: [
+        { id: "intro", type: "intro", position: { x: 0, y: 0 }, data: { headline: "Hi" } },
+        {
+          id: "int",
+          type: "integration",
+          position: { x: 1, y: 0 },
+          data: {
+            actions: [
+              { kind: "klaviyo", api_key: "pk_embed_secret" },
+              { kind: "webhook", url: "https://hook.example", secret: "embed-shh" },
+            ],
+          },
+        },
+      ],
+      edges: [],
+      discount_config: { enabled: true, code: "QUIZ-EMBED1" },
+    });
+    p.quiz.findFirst.mockResolvedValue({
+      id: "e1",
+      name: "Embed",
+      status: "published",
+      version: 1,
+      publishedJson: { ...doc, product_index: [], shop_domain: "s.myshopify.com" },
+      shop: { aiRecCopyEnabled: true },
+    });
+    const request = new Request("https://app.example/q/e1.embed.json");
+    const res = await embedLoader({ request, params: { id: "e1" }, context: {} } as unknown as LoaderFunctionArgs);
+    expect(res.status).toBe(200);
+    const text = await res.text();
+    expect(text).toContain('"integration"');
+    expect(text).not.toContain("pk_embed_secret");
+    expect(text).not.toContain("embed-shh");
+    expect(text).not.toContain("QUIZ-EMBED1");
   });
 });

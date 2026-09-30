@@ -10,11 +10,14 @@ export function FeedbackWidget({
   quizId,
   sessionId,
   outcomeId,
+  preview,
 }: {
   config: ResolvedEngagement["feedback"];
   quizId: string;
   sessionId: string;
   outcomeId?: string;
+  // Results handoff §4 defect 4 — builder clicks are not shopper feedback.
+  preview?: boolean;
 }) {
   const [sent, setSent] = useState(false);
   const [text, setText] = useState("");
@@ -24,6 +27,7 @@ export function FeedbackWidget({
     if (sent) return;
     setPicked(rating);
     setSent(true);
+    if (preview) return;
     try {
       void fetch(apiUrl("/feedback"), {
         method: "POST",

@@ -386,6 +386,10 @@ async function handleQuizEditorActionImpl(
       // Create the recommendation discount (if enabled + not yet created) and
       // persist its code to the draft so publishQuiz bakes it into
       // publishedJson. Discount failures don't block publishing.
+      // Legacy docs only (results handoff §4 defect 2): the decider results
+      // page never reads a doc-level code, so a shared code minted here was a
+      // live, never-expiring discount published for nothing. Decider quizzes
+      // mint per shopper instead.
       let discountWarning: string | undefined;
       const draft = await prisma.quiz.findFirst({
         where: { id, shopId: shop.id },
@@ -394,6 +398,7 @@ async function handleQuizEditorActionImpl(
       const parsedDraft = draft ? Quiz.safeParse(draft.draftJson) : null;
       if (
         parsedDraft?.success &&
+        parsedDraft.data.logic_model !== "decider" &&
         parsedDraft.data.discount_config.enabled &&
         !parsedDraft.data.discount_config.code
       ) {

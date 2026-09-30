@@ -14,6 +14,7 @@ import {
   shortDescription,
   stripPublicDoc,
   stripPublicJsonPayload,
+  usedMetafieldKeys,
   type PublishedQuiz,
 } from "./quizPublish";
 import { recommendForResult, type IndexedProduct } from "./recommendationEngine";
@@ -80,6 +81,90 @@ describe("stripPublicDoc", () => {
   it("is a structural no-op when neither editor-only key is present", () => {
     const doc = { quiz_id: "q10", nodes: [] };
     expect(stripPublicDoc(doc)).toEqual({ quiz_id: "q10", nodes: [] });
+  });
+
+  // Results handoff §4 defect 0 — integration credentials are read back by
+  // the server route from the DB; the public doc must never carry them.
+  it("redacts integration api_key + webhook secret, keeping every other key in place", () => {
+    const doc = {
+      quiz_id: "q11",
+      nodes: [
+        { id: "intro", type: "intro", data: { title: "Hi" } },
+        {
+          id: "int1",
+          type: "integration",
+          data: {
+            label: "Sync",
+            actions: [
+              { kind: "klaviyo", api_key: "pk_live_secret", list_id: "Ab12Cd", label: "K" },
+              { kind: "webhook", url: "https://hook.example", secret: "shh", label: "W" },
+            ],
+            continue_on_error: true,
+          },
+        },
+      ],
+      design_linked: true,
+    };
+    const out = stripPublicDoc(doc);
+    const raw = JSON.stringify(out);
+    expect(raw).not.toContain("pk_live_secret");
+    expect(raw).not.toContain("shh");
+    expect(out.nodes[0]).toBe(doc.nodes[0]);
+    expect(out.nodes[1]).toEqual({
+      id: "int1",
+      type: "integration",
+      data: {
+        label: "Sync",
+        actions: [
+          { kind: "klaviyo", list_id: "Ab12Cd", label: "K" },
+          { kind: "webhook", url: "https://hook.example", label: "W" },
+        ],
+        continue_on_error: true,
+      },
+    });
+    expect(Object.keys(out)).toEqual(["quiz_id", "nodes", "design_linked"]);
+    // The stored doc is never mutated — the integration route reads it.
+    expect(doc.nodes[1]).toHaveProperty("data.actions.0.api_key", "pk_live_secret");
+  });
+
+  // Results handoff §4 defect 2 — the decider page never reads a doc-level
+  // code; legacy pages render discount_config.code as their banner.
+  it("redacts discount codes: code on decider docs only, static/existing on all", () => {
+    const dc = {
+      enabled: true,
+      kind: "percentage",
+      value: 10,
+      code: "QUIZ-AB12CD",
+      static_code: "SAVE10",
+      existing_code: "WELCOME",
+      title: "Quiz reward",
+    };
+    const decider = stripPublicDoc({ quiz_id: "d", logic_model: "decider", discount_config: dc });
+    expect(decider.discount_config).toEqual({
+      enabled: true,
+      kind: "percentage",
+      value: 10,
+      title: "Quiz reward",
+    });
+    const legacy = stripPublicDoc({ quiz_id: "l", discount_config: dc });
+    expect(legacy.discount_config).toEqual({
+      enabled: true,
+      kind: "percentage",
+      value: 10,
+      code: "QUIZ-AB12CD",
+      title: "Quiz reward",
+    });
+    expect(Object.keys(legacy.discount_config)).toEqual(["enabled", "kind", "value", "code", "title"]);
+  });
+
+  it("serializes a doc with no secrets byte-identically (the byte-pin contract)", () => {
+    const doc = {
+      edges: [],
+      nodes: [{ id: "n", type: "question", data: {} }],
+      discount_config: { kind: "percentage", title: "Quiz reward", value: 15, enabled: true },
+      product_index: [{ product_id: "p1" }],
+    };
+    expect(JSON.stringify(stripPublicDoc(doc))).toBe(JSON.stringify(doc));
   });
 });
 
@@ -451,6 +536,38 @@ describe("publishQuiz — byte-stability when net-new optional fields are unset"
     };
     return { prisma: prisma as unknown as PrismaClient, getCaptured: () => captured };
   }
+
+  // Results handoff §4 defect 3 — the public index carries only metafields
+  // something on the shopper side reads, never the whole synced namespace.
+  it("bakes only the metafields the quiz reads into product_index", async () => {
+    const { prisma, getCaptured } = mockPrisma(minimalDraft());
+    (prisma as unknown as { product: { findMany: () => Promise<unknown[]> } }).product.findMany =
+      async () => [
+        {
+          productId: "gid://shopify/Product/1",
+          title: "Serum",
+          handle: "serum",
+          priceMin: 10,
+          imageUrl: null,
+          tags: [],
+          collectionIds: ["gid://shopify/Collection/fallback"],
+          variants: [],
+          status: "ACTIVE",
+          metafields: {
+            "reviews.rating": { value: "4.6", type: "rating" },
+            "__rank_bestseller": "7",
+            "internal.unit_cost": "3.10",
+            "supplier.notes": "net-30, call Dana",
+          },
+        },
+      ];
+    await publishQuiz(prisma, { quizId: "q1row", shopId: "shop1" });
+    const wire = JSON.parse(JSON.stringify(getCaptured())) as PublishedQuiz;
+    const baked = wire.product_index.find((p) => p.product_id === "gid://shopify/Product/1");
+    expect(baked?.metafields).toEqual({ "reviews.rating": "4.6", "__rank_bestseller": "7" });
+    expect(JSON.stringify(wire)).not.toContain("unit_cost");
+    expect(JSON.stringify(wire)).not.toContain("Dana");
+  });
 
   it("strips draft scratch + omits every unset net-new optional key from publishedJson", async () => {
     const { prisma, getCaptured } = mockPrisma(minimalDraft());
@@ -1192,5 +1309,26 @@ describe("boundedAiCall", () => {
     });
     expect(v).toBe("fb");
     expect(timedOut).toBe(true);
+  });
+});
+
+describe("usedMetafieldKeys (results handoff §4 defect 3)", () => {
+  it("collects metafield_key, metafield_filters keys and mf: narrow fields anywhere in the doc", () => {
+    const used = usedMetafieldKeys({
+      nodes: [
+        {
+          type: "question",
+          data: {
+            narrow_field: "mf:custom.finish",
+            answers: [{ metafield_filters: [{ key: "custom.skin_type", value: "oily" }] }],
+          },
+        },
+        { type: "result", data: { metafield_key: "custom.tier", metafield_value: "pro" } },
+      ],
+    });
+    for (const key of ["custom.finish", "custom.skin_type", "custom.tier", "reviews.rating", "__rank_rating"]) {
+      expect(used.has(key)).toBe(true);
+    }
+    expect(used.has("internal.unit_cost")).toBe(false);
   });
 });

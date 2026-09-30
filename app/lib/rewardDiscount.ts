@@ -6,8 +6,8 @@ import type { ResolvedEngagement } from "./engagementSchema";
 // engagement reward config (§L RewardSettings) + a server-picked value into a
 // SINGLE-USE, EXPIRING DiscountConfig that the proven `buildDiscountInput`
 // (discount.server.ts) then shapes into a discountCodeBasicCreate mutation.
-// The per-shopper code is deterministic by sessionId so a retry reuses it (the
-// QuizReward row is the primary idempotency guard; this is the backstop).
+// The per-shopper code is random (see rewardCode); a retry reuses the code
+// stored on the QuizReward row, which is the idempotency guard.
 // ════════════════════════════════════════════════════════════════════════════
 
 export type ResolvedReward = ResolvedEngagement["reward"];

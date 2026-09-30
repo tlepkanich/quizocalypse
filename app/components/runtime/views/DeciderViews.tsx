@@ -846,7 +846,7 @@ export function DeciderResultView({
       {inlineCapture}
       {/* §L L3 — engagement widgets (present only when the merchant opted in). */}
       {engagement?.reward.enabled && quizId && sessionId ? (
-        <RewardReveal config={engagement.reward} quizId={quizId} sessionId={sessionId} />
+        <RewardReveal config={engagement.reward} quizId={quizId} sessionId={sessionId} preview={isPreviewMode} />
       ) : null}
       {engagement?.referral.enabled && quizId && sessionId ? (
         <ReferralShare config={engagement.referral} quizId={quizId} sessionId={sessionId} preview={isPreviewMode} />
@@ -857,6 +857,7 @@ export function DeciderResultView({
           quizId={quizId}
           sessionId={sessionId}
           outcomeId={resultNodeId}
+          preview={isPreviewMode}
         />
       ) : null}
       {engagement?.share.enabled ? (
