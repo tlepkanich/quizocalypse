@@ -181,6 +181,9 @@
   --qz-ls-crit-line: #E8C4C0;
   --qz-ls-cell-bg:   #FBFAFD;
   --qz-radius-toast: 6px;
+  /* Toast action (D7 Undo) — the mock's violet-on-ink .tundo (#C9BFFF); no
+     existing token is light enough to read on --qz-ink. */
+  --qz-accent-on-ink: #C9BFFF;
   --qz-radius-pill:  6px;   /* DELIBERATE: pills become rounded rects */
   --qz-phone-r:      20px;  /* NEW — phone-preview corner; device geometry,
                                deliberately not on the --radius scale */
@@ -4337,6 +4340,17 @@ body[data-qz] .qz-stepnav-pill:focus-visible { outline: 2px solid var(--qz-accen
    content box stays exactly where it was (net-zero geometry, every modal). */
 .qz-modal-body { font-size: 14px; color: var(--qz-ink-3); overflow-y: auto; min-height: 0; padding: 4px; margin: -4px; }
 .qz-modal-footer { display: flex; justify-content: flex-end; gap: 10px; padding-top: 4px; }
+/* LOGIC-STEP Phase 3 (mock placeToast, B34): while a toast is up QzToastProvider
+   publishes --qz-toast-reserve (toast height + 28px) on :root. The window gives
+   up that strip at the bottom — the scrim pads by it, the box re-centres in
+   what is left and its own scroll absorbs the difference — so a toast never
+   covers a window's footer. Unset (no toast) = the original 24px / 90vh. */
+.qz-modal-scrim {
+  padding-bottom: max(24px, calc(var(--qz-toast-reserve, 0px) + env(safe-area-inset-bottom, 0px)));
+  transition: padding-bottom var(--qz-dur) var(--qz-ease);
+}
+.qz-modal { max-height: min(90vh, calc(100vh - 24px - var(--qz-toast-reserve, -100vh))); }
+@media (prefers-reduced-motion: reduce) { .qz-modal-scrim { transition: none; } }
 .qz-btn-danger { background: var(--qz-paper); color: var(--qz-warn); }
 .qz-btn-danger:hover { background: var(--qz-warn); color: #fff; }
 
@@ -4410,18 +4424,33 @@ body[data-qz] .qz-stepnav-pill:focus-visible { outline: 2px solid var(--qz-accen
   animation: qz-popover-in var(--qz-dur-fast) var(--qz-ease);
 }
 
-/* — Toast (§7.5): bottom-center ink pill, queue of 1, non-interactive — */
+/* — Toast (§7.5): bottom-center ink pill, queue of 1 ————————————————
+   Logic-step mock #toast geometry (2026-09 LOGIC-STEP): bottom 20px plus the
+   safe-area inset, 9px 14px, 13px text, capped so a long D9 sentence wraps
+   inside the pill. The pill stays pointer-events:none; 2026-09-22 owner
+   ruling D7 adds ONE optional action button (.qz-toast-action, mock .tundo),
+   which alone takes the pointer. */
 @keyframes qz-toast-in { from { opacity: 0; transform: translate(-50%, 16px); } to { opacity: 1; transform: translate(-50%, 0); } }
 .qz-toast {
-  position: fixed; bottom: 28px; left: 50%; transform: translateX(-50%);
+  position: fixed; left: 50%; transform: translateX(-50%);
+  bottom: calc(20px + env(safe-area-inset-bottom, 0px));
   z-index: var(--qz-z-toast);
-  background: var(--qz-ink); color: var(--qz-cream);
-  font-size: 13px; font-weight: 500;
-  padding: 10px 18px; border-radius: var(--qz-radius-toast);
+  background: var(--qz-ink); color: var(--qz-on-accent);
+  font-size: 13px; line-height: 1.45;
+  padding: 9px 14px; border-radius: var(--qz-radius-toast);
+  max-width: min(560px, calc(100% - 32px));
   box-shadow: var(--qz-lift-3);
   pointer-events: none;
   animation: qz-toast-in var(--qz-dur) var(--qz-ease);
 }
+.qz-toast-action {
+  border: 0; background: none; padding: 0; margin-left: 10px;
+  font: inherit; font-weight: 700; color: var(--qz-accent-on-ink);
+  cursor: pointer; pointer-events: auto;
+  border-radius: var(--qz-radius-sm);
+}
+.qz-toast-action:focus-visible { outline: 2px solid var(--qz-accent-on-ink); outline-offset: 2px; }
+@media (prefers-reduced-motion: reduce) { .qz-toast { animation: none; } }
 
 /* ════════════════════════════════════════════════════════════════════════════
    QL3-P1 — Step-3 two-view shell (.qz-s3-*), decider docs behind ?step3=v3.

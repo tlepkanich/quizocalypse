@@ -6,6 +6,7 @@ import { authenticate } from "../shopify.server";
 import prisma from "../db.server";
 import { loadStep1FunnelData, runStep1FunnelAction } from "../lib/step1Funnel.server";
 import { Step1Funnel } from "../components/onboarding/Step1Funnel";
+import { QzToastProvider } from "../components/qz-toast";
 
 // Builder Re-work Step 1 — the EMBEDDED (Shopify-admin) funnel twin. Same shared
 // shop-scoped loader/action as the studio funnel; only the auth + the pick
@@ -41,7 +42,11 @@ export default function AppOnboardingFunnel() {
   return (
     <>
       <TitleBar title="Set up your quiz" />
-      <Step1Funnel data={data} />
+      {/* D21 (owner 2026-09-22): the embedded twin gets the toast provider the
+          studio twin already has, so an Undo toast is never silently a no-op. */}
+      <QzToastProvider>
+        <Step1Funnel data={data} />
+      </QzToastProvider>
     </>
   );
 }
