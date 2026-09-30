@@ -12,6 +12,7 @@ import {
   narrowIdsByFilters,
   type AppliedFilter,
 } from "./filterMatching";
+import { engineLogicStyle } from "./logicStyle";
 
 type QuizDoc = z.infer<typeof Quiz>;
 type ResultDataT = z.infer<typeof ResultData>;
@@ -393,7 +394,9 @@ export function recommendForResultExplained(
     const resolved = resolveTarget(selectedAnswerIds, quiz);
     if (!resolved) {
       // No rule matched + no decider answer mapping → the rec-page fallback
-      // layer owns what renders (§6). Impossible post-validation (V1/V2).
+      // layer owns what renders (§6). In Filter Results + Rules the V1/V2
+      // publish gates make this impossible; in Rules only (logic_style
+      // "rules", D1) it is every shopper no rule catches.
       return { products: [], rungUsed: null, poolSize: 0, oosSwapped: false, tagBag: {} };
     }
     const config = settingsForTarget(quiz.rec_page_settings, resolved.targetId);
@@ -417,7 +420,12 @@ export function recommendForResultExplained(
           ),
         ]
       : (input.targetProductIdsMap?.[resolved.targetId] ?? []);
-    const hasFilters = filterQuestions(quiz).length > 0;
+    // Logic step D1 — THE one place Rules only skips narrowing: stored filter
+    // roles/values stay on the doc and are inert (switching back restores
+    // them). engineLogicStyle is "attributes" for every doc without the
+    // field, so this is byte-identical for all existing decider docs.
+    const hasFilters =
+      engineLogicStyle(quiz) !== "rules" && filterQuestions(quiz).length > 0;
     const narrowed = hasFilters
       ? narrowIdsByFilters(
           baseIds,

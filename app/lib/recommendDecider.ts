@@ -7,6 +7,7 @@ import type {
   RecPageSettings,
 } from "./quizSchema";
 import type { IndexedProduct } from "./recommendationEngine";
+import { engineLogicStyle } from "./logicStyle";
 
 type QuizDoc = z.infer<typeof Quiz>;
 type AnswerT = z.infer<typeof Answer>;
@@ -213,12 +214,21 @@ export function settingsForTarget(
  *  Condition semantics: op "is" = the answer id IS among the shopper's
  *  selections; "is_not" = it is NOT (an unanswered/skipped question satisfies
  *  "is_not" — the shopper's answer is not X because there is no answer).
- *  A rule with zero conditions is half-built (V9) and never fires. */
+ *  A rule with zero conditions is half-built (V9) and never fires.
+ *
+ *  Logic step D1 — Rules only (`engineLogicStyle(doc) === "rules"`, i.e. a
+ *  decider doc storing `logic_style: "rules"`): question roles and answer
+ *  mappings are IGNORED — there is never a base. The first matching rule
+ *  decides: a legacy action-less, show or prioritize rule's own targets ARE
+ *  the result (the no-base path below); a first-matching hide, or no match,
+ *  resolves null (the runtime's fallback layer owns what renders). Absent /
+ *  "attributes" resolves exactly as before. */
 export function resolveTarget(
   selectedAnswerIds: readonly string[],
-  doc: Pick<QuizDoc, "nodes" | "decision_rules">,
+  doc: Pick<QuizDoc, "nodes" | "decision_rules" | "logic_model" | "logic_style">,
 ): ResolvedTarget | null {
   const selected = new Set(selectedAnswerIds);
+  const rulesOnly = engineLogicStyle(doc) === "rules";
 
   // First matching rule wins and evaluation stops (spec §6 precedence) —
   // whether it replaces the target (legacy, no action) or post-processes the
@@ -239,9 +249,11 @@ export function resolveTarget(
     break;
   }
 
-  const decider = doc.nodes.find(
-    (n) => n.type === "question" && n.data.role === "decides",
-  );
+  // Rules only never reads the picking question (D1): no base, so an
+  // action rule takes the no-base path and no match resolves null.
+  const decider = rulesOnly
+    ? undefined
+    : doc.nodes.find((n) => n.type === "question" && n.data.role === "decides");
   // Iterate the decider's answers (authored order), not selectedAnswerIds.
   // QWIDGET-M — each selected answer contributes its WHOLE target list
   // (answerTargets), in the answer's own list order; dedupe keeps the first
@@ -517,8 +529,11 @@ export interface DeciderFallback {
  *  hide), then safetyNetCol as the global last resort. Members come from
  *  product_index (publish unions both collections in — no live fetch); only
  *  in-stock products qualify (a fallback of sold-out items helps nobody).
- *  The no-target-RESOLVED case is prevented at build time by V1/V2 and is
- *  deliberately not handled here. */
+ *  This covers a target that RESOLVED but is empty. The no-target-resolved
+ *  case is not handled here: in Filter Results + Rules the V1/V2 publish
+ *  gates prevent it, but in Rules only (logic_style "rules", D1) it is the
+ *  normal outcome for every shopper no rule catches (and for a first-matching
+ *  hide) — the runtime safety net for that case is separate work. */
 export function deciderFallbackProducts(
   config: ResolvedRecPageConfig,
   productIndex: readonly IndexedProduct[],
