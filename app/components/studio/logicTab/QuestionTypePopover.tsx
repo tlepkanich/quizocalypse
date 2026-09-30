@@ -124,9 +124,13 @@ export function QuestionTypePopover({
   commit,
   getLatestDoc,
   undo,
+  table,
 }: {
   doc: QuizDoc;
   q: OrderedQuestion;
+  /** The Table's dress for the SAME popover (mock typeBtn "tbtn dim"): its
+   *  accessible name. Nothing here moves the Edit selection (B40). */
+  table?: { ariaLabel: string };
   /** Absent = read-only: the type line renders as text. */
   commit?: (doc: QuizDoc) => void;
   getLatestDoc: () => QuizDoc;
@@ -151,7 +155,7 @@ export function QuestionTypePopover({
   }, [open]);
 
   if (!commit) {
-    return <span className="qz-lg-qtype is-static">{line}</span>;
+    return <span className={table ? "qz-lg-tdim" : "qz-lg-qtype is-static"}>{line}</span>;
   }
 
   const options = OPTIONS.some((o) => o.pick === cur)
@@ -307,7 +311,12 @@ export function QuestionTypePopover({
       className="qz-lg-pop"
       offset={6}
       trigger={
-        <button type="button" className="qz-lg-qtype" title={TYPE_COPY.tip} data-pane-control="type">
+        <button
+          type="button"
+          className={table ? "qz-lg-tbtn is-dim" : "qz-lg-qtype"}
+          title={TYPE_COPY.tip}
+          {...(table ? { "aria-label": table.ariaLabel } : { "data-pane-control": "type" })}
+        >
           {line}
           <span className="qz-lg-cv" aria-hidden>
             ▾

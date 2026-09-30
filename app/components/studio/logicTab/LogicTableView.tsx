@@ -1,7 +1,6 @@
-import { Fragment, useEffect, useMemo, useRef, useState } from "react";
-import type { MouseEvent, ReactNode } from "react";
+import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import type { KeyboardEvent, MouseEvent, ReactNode } from "react";
 import type { Answer, Quiz } from "../../../lib/quizSchema";
-import { isFreeformType } from "../../../lib/quizSchema";
 import type { LogicStyle } from "../../../lib/logicStyle";
 import type { OrderedQuestion } from "../../../lib/questionOrder";
 import type { RuleStatus } from "../../../lib/ruleStatus";
@@ -9,43 +8,33 @@ import type { IndexedProduct } from "../../../lib/recommendationEngine";
 import type { AttributeReadout } from "../../../lib/attributeClustering";
 import {
   addAnswerTarget,
-  changeQuestionRole,
+  moveDecisionRule,
   removeAnswerTarget,
   removeDecisionRule,
   restoreDecisionRules,
   setAnswerFilterValues,
-  setAnswerRoute,
-  setAnswerText,
   setQuestionText,
-  setScaleEndLabels,
-  ANSWER_TEXT_MAX,
   QUESTION_TEXT_MAX,
-  SCALE_LABEL_MAX,
 } from "../../../lib/quizMutations";
 import {
-  answerDestination,
-  applyQuestionType,
-  logicPartsInverse,
   logicSheets,
   type AnswerSheetRow,
   type AnySheet,
-  type ParsedType,
   type RecSheetRow,
   type RuleSheetRow,
   type WhenParts,
 } from "../../../lib/logicSheets";
 import { answerTargets } from "../../../lib/recommendDecider";
 import type { BuilderCategory } from "../../builder/stepProps";
-import { QzMenu, QzPopover, type QzMenuItem } from "../../qz-overlays";
-import { useQzToast } from "../../qz-toast";
 import type { SaveToken } from "../saveTracker";
 import type { RulesUndo } from "./RulesList";
 import { ruleTags } from "./RulesList";
 import { InlineText } from "./InlineText";
 import { ValuePickerPopover, type FilterValueSet } from "./ValuePickerPopover";
-import { AttributePickerDialog } from "./AttributePickerDialog";
-import { answerHasSelection, applyNarrowField, narrowAppliedToast } from "./logicTabFields";
-import { CHOOSE_A_RESULT, ROLE_MENU, RULE_COPY, SHEET_COPY } from "./logicCopy";
+import { QuestionRoleControl, RouteMenuButton } from "./LogicTabMenus";
+import { QuestionTypePopover } from "./QuestionTypePopover";
+import { AnswerTextField, PicksPicker, recCards, useDocStore, type DocStore } from "./LogicQuestionWidget";
+import { CHOOSE_A_RESULT, RULE_COPY, SHEET_COPY } from "./logicCopy";
 
 // ════════════════════════════════════════════════════════════════════════════
 // Logic step redesign — the Table view (mock tableHTML / sheets; handoff
@@ -56,26 +45,23 @@ import { CHOOSE_A_RESULT, ROLE_MENU, RULE_COPY, SHEET_COPY } from "./logicCopy";
 //   Rules sheet      "#" is a real button ("Edit rule N"); the row click
 //                    calls the same action (never role=button on the tr,
 //                    B48). Verb, recommendations, the When cell with bold
-//                    joins, the rule's tags from the one status (D3), and a
-//                    faint trash that deletes with the card's Undo (D7;
-//                    deletes inside one toast accumulate).
-//   Answers sheet    (Filter Results + Rules) Q, question and answer as
-//                    InlineText, Type / What it does / Shows / keeps / Then
-//                    as .tbtn popover triggers. Every write is the Edit
-//                    view's mutation, against the latest doc. Popovers take
-//                    the row's question as data: nothing here moves the
-//                    Edit view's selection (B40).
+//                    joins, the rule's tags from the one status (D3). The
+//                    last cell holds ↑/↓ (revealed on hover and focus, like
+//                    the Edit rows; Alt+Arrow on a focused row) and a faint
+//                    trash. Moves and deletes join the card's ONE Undo run
+//                    (D7), which counts the deletes whichever surface made
+//                    them; focus follows the RulesList rules.
+//   Answers sheet    (Filter Results + Rules) the Edit pane's OWN controls,
+//                    in the Table's dress: the question and answer texts
+//                    (InlineText, keystroke draft + commit on Enter/blur),
+//                    QuestionTypePopover, QuestionRoleControl, the "Choose a
+//                    result" picker / the value picker, and the route menu.
+//                    Every write is the Edit view's mutation against the
+//                    latest doc. Popovers take the row's question as data:
+//                    nothing here moves the Edit view's selection (B40).
 //   Recommendations  (Rules only) read-only status; a "Needs a rule" row's
 //                    name opens "Create a rule" with it picked.
-//
-// Integration notes: the Type cell uses a small type menu built on the same
-// write the Question type popover uses (applyQuestionType: answers kept,
-// Five-point stamps the preset, leaving multi-select converts all-of); swap
-// in agent D's QuestionTypePopover once both land. The role menu runs the
-// one D9 path (changeQuestionRole) with a named toast and Undo.
 // ════════════════════════════════════════════════════════════════════════════
-
-type QuizDoc = Quiz;
 
 export type LogicTableViewProps = {
   doc: Quiz;
@@ -100,6 +86,8 @@ export type LogicTableViewProps = {
   hasNarrowFields?: boolean;
 };
 
+type SheetProps = LogicTableViewProps & { store: DocStore };
+
 const TRASH = (
   <svg
     viewBox="0 0 16 16"
@@ -122,7 +110,7 @@ const Caret = () => (
   </span>
 );
 
-const truncate = (s: string, n = 34) => (s.length > n ? `${s.slice(0, n - 1)}…` : s);
+const NO_PRODUCTS: IndexedProduct[] = [];
 
 /** The sheet's scroll wrapper: a keyboard stop only when it scrolls. */
 function SheetWrap({ label, children }: { label: string; children: ReactNode }) {
@@ -186,6 +174,9 @@ function WhenCell({ parts }: { parts: WhenParts }) {
 
 export function LogicTableView(props: LogicTableViewProps) {
   const { doc, style, categories, recommendations, statuses, collectionTitles } = props;
+  // The newest doc this view knows (a keystroke commit and a click in the
+  // same event must never overwrite each other), shared with the Edit pane.
+  const store = useDocStore(doc, props.commit, props.commitTracked);
   const sheets = useMemo(
     () =>
       logicSheets(doc, {
@@ -202,7 +193,7 @@ export function LogicTableView(props: LogicTableViewProps) {
       {sheets.map((sh) => (
         <section key={sh.kind} className="qz-lg-tsheet" data-sheet={sh.kind}>
           <SheetWrap label={sh.name}>
-            <SheetTable sheet={sh} {...props} />
+            <SheetTable sheet={sh} {...props} store={store} />
           </SheetWrap>
         </section>
       ))}
@@ -210,7 +201,7 @@ export function LogicTableView(props: LogicTableViewProps) {
   );
 }
 
-function SheetTable(props: LogicTableViewProps & { sheet: AnySheet }) {
+function SheetTable(props: SheetProps & { sheet: AnySheet }) {
   const { sheet } = props;
   if (sheet.kind === "rules") return <RulesTable {...props} rows={sheet.rows} cols={sheet.cols} />;
   if (sheet.kind === "recommendations") return <RecsTable {...props} rows={sheet.rows} cols={sheet.cols} />;
@@ -244,6 +235,8 @@ function Empty({ span }: { span: number }) {
 
 // ── Rules sheet ─────────────────────────────────────────────────────────────
 
+type PendingFocus = { ruleId: string; control: "up" | "down" | "body" } | null;
+
 function RulesTable({
   rows,
   cols,
@@ -251,38 +244,94 @@ function RulesTable({
   style,
   statuses,
   commit,
-  getLatestDoc,
+  store,
   undo,
   onEditRule,
-}: LogicTableViewProps & { rows: RuleSheetRow[]; cols: readonly string[] }) {
+}: SheetProps & { rows: RuleSheetRow[]; cols: readonly string[] }) {
   const tbodyRef = useRef<HTMLTableSectionElement>(null);
-  const runDeletes = useRef(0);
+  const pendingFocus = useRef<PendingFocus>(null);
   const editable = !!commit;
   const rulesById = useMemo(() => new Map((doc.decision_rules ?? []).map((r) => [r.id, r])), [doc.decision_rules]);
 
+  const rowEl = (ruleId: string) =>
+    tbodyRef.current?.querySelector<HTMLElement>(`[data-rule-id="${CSS.escape(ruleId)}"]`) ?? null;
+
+  // Focus follows a moved rule once the re-render lands (RulesList rules).
+  useLayoutEffect(() => {
+    const want = pendingFocus.current;
+    if (!want) return;
+    pendingFocus.current = null;
+    const row = rowEl(want.ruleId);
+    if (!row) return;
+    const pick = (sel: string) => row.querySelector<HTMLButtonElement>(sel);
+    let target: HTMLButtonElement | null = null;
+    if (want.control === "body") target = pick(".qz-lg-tgob");
+    else {
+      const same = pick(`[data-move="${want.control}"]`);
+      const other = pick(`[data-move="${want.control === "up" ? "down" : "up"}"]`);
+      target = same && !same.disabled ? same : other && !other.disabled ? other : pick(".qz-lg-tgob");
+    }
+    target?.focus();
+  }, [rows]);
+
+  const focusRuleBody = (ruleId: string) => {
+    window.requestAnimationFrame(() => rowEl(ruleId)?.querySelector<HTMLElement>(".qz-lg-tgob")?.focus());
+  };
+
+  // After a delete (mock toastBack): the trash of the row that took its
+  // place, else the new last row's, else the header's first control — never
+  // <body>.
   const focusAfterDelete = (index: number) => () => {
-    const btns = tbodyRef.current ? Array.from(tbodyRef.current.querySelectorAll<HTMLElement>(".qz-lg-tgob")) : [];
-    (btns[index] ?? btns[btns.length - 1])?.focus();
+    const body = tbodyRef.current;
+    const trashes = body ? Array.from(body.querySelectorAll<HTMLElement>(".qz-lg-tdel")) : [];
+    const card = body?.closest('[data-testid="logic-tab-card"]') ?? document;
+    const target =
+      trashes[index] ??
+      trashes[trashes.length - 1] ??
+      card.querySelector<HTMLElement>(".qz-lg-iox button:not(:disabled), [data-testid='logic-style-title']");
+    target?.focus();
   };
 
   const deleteRule = (ruleId: string) => {
     if (!commit) return;
-    const latest = getLatestDoc();
+    const latest = store.latest();
     const index = (latest.decision_rules ?? []).findIndex((r) => r.id === ruleId);
     if (index < 0) return;
     const rule = latest.decision_rules![index]!;
     const next = removeDecisionRule(latest, ruleId);
     if (next === latest) return;
-    commit(next);
+    store.put(next);
     if (!undo) return;
-    if (!undo.isLive()) runDeletes.current = 0;
-    runDeletes.current += 1;
     undo.push({
-      message: runDeletes.current > 1 ? RULE_COPY.deletedMany(runDeletes.current) : RULE_COPY.deleted(index + 1),
+      message: RULE_COPY.deletedRun(index + 1),
       inverse: (d) => restoreDecisionRules(d, [{ rule, index }]),
       isDelete: true,
       focusAction: true,
       returnFocus: focusAfterDelete(index),
+      focusAfter: () => focusRuleBody(rule.id),
+    });
+  };
+
+  // The ONE move (RulesList moveRule): ↑/↓ or Alt+Arrow, RULE_COPY.moved
+  // with an Undo that moves the rule back.
+  const moveRule = (ruleId: string, shownFrom: number, to: number, control: "up" | "down" | "body") => {
+    if (!commit) return;
+    const latest = store.latest();
+    const latestRules = latest.decision_rules ?? [];
+    const from = latestRules.findIndex((r) => r.id === ruleId);
+    if (from < 0 || from !== shownFrom || to < 0 || to >= latestRules.length || to === from) return;
+    const next = moveDecisionRule(latest, ruleId, to);
+    if (next === latest) return;
+    pendingFocus.current = { ruleId, control };
+    store.put(next);
+    if (!undo) return;
+    undo.push({
+      message: RULE_COPY.moved(from + 1, to + 1),
+      inverse: (d) => {
+        const at = (d.decision_rules ?? []).findIndex((r) => r.id === ruleId);
+        return at < 0 ? d : moveDecisionRule(d, ruleId, from);
+      },
+      focusAfter: () => focusRuleBody(ruleId),
     });
   };
 
@@ -303,7 +352,7 @@ function RulesTable({
         {rows.length === 0 ? (
           <Empty span={span} />
         ) : (
-          rows.map((row) => {
+          rows.map((row, i) => {
             const status = statuses.get(row.ruleId);
             const rule = rulesById.get(row.ruleId);
             const tags = rule ? ruleTags(rule, status, style) : [];
@@ -313,12 +362,18 @@ function RulesTable({
               if ((e.target as HTMLElement).closest("button")) return;
               open();
             };
+            const onRowKey = (e: KeyboardEvent<HTMLTableRowElement>) => {
+              if (!editable || !e.altKey || (e.key !== "ArrowUp" && e.key !== "ArrowDown")) return;
+              e.preventDefault();
+              moveRule(row.ruleId, i, i + (e.key === "ArrowUp" ? -1 : 1), "body");
+            };
             return (
               <tr
                 key={row.ruleId}
                 className={`${onEditRule ? "is-go" : ""}${muted ? " is-muted" : ""}`}
                 data-rule-id={row.ruleId}
                 onClick={onEditRule ? onRowClick : undefined}
+                onKeyDown={editable ? onRowKey : undefined}
               >
                 <td className="is-k">
                   {onEditRule ? (
@@ -332,9 +387,9 @@ function RulesTable({
                 <td className="is-verb">{row.verb}</td>
                 <td className="is-res">
                   {row.targets.length
-                    ? row.targets.map((t, i) => (
-                        <Fragment key={`${t.id}:${i}`}>
-                          {i > 0 ? ", " : null}
+                    ? row.targets.map((t, ti) => (
+                        <Fragment key={`${t.id}:${ti}`}>
+                          {ti > 0 ? ", " : null}
                           <span className={t.missing ? "qz-lg-tmiss" : undefined}>{t.name}</span>
                         </Fragment>
                       ))
@@ -352,6 +407,30 @@ function RulesTable({
                 </td>
                 {editable ? (
                   <td className="is-tact">
+                    <span className="qz-lg-mv qz-lg-tmv">
+                      <button
+                        type="button"
+                        className="qz-lg-xone"
+                        data-move="up"
+                        aria-label={RULE_COPY.moveUp(row.number)}
+                        title={RULE_COPY.moveUpTip}
+                        disabled={i === 0}
+                        onClick={() => moveRule(row.ruleId, i, i - 1, "up")}
+                      >
+                        ↑
+                      </button>
+                      <button
+                        type="button"
+                        className="qz-lg-xone"
+                        data-move="down"
+                        aria-label={RULE_COPY.moveDown(row.number)}
+                        title={RULE_COPY.moveDownTip}
+                        disabled={i === rows.length - 1}
+                        onClick={() => moveRule(row.ruleId, i, i + 1, "down")}
+                      >
+                        ↓
+                      </button>
+                    </span>
                     <button
                       type="button"
                       className="qz-lg-tdel"
@@ -378,7 +457,7 @@ function RecsTable({
   rows,
   cols,
   onCreateFor,
-}: LogicTableViewProps & { rows: RecSheetRow[]; cols: readonly string[] }) {
+}: SheetProps & { rows: RecSheetRow[]; cols: readonly string[] }) {
   return (
     <table className="qz-lg-xl" aria-label={SHEET_COPY.recommendations}>
       <Head cols={cols} />
@@ -425,303 +504,158 @@ function RecsTable({
 
 // ── Answers sheet (Filter Results + Rules) ─────────────────────────────────
 
-type CellCtx = LogicTableViewProps & {
+type CellCtx = SheetProps & {
   q: OrderedQuestion;
   answer: Answer;
   row: AnswerSheetRow;
+  deciderQIndex: number | null;
 };
 
-function useWrite(props: LogicTableViewProps) {
-  const toast = useQzToast();
-  const { commit, commitTracked, getLatestDoc, undo } = props;
-  /** One commit of `fn(latest)`; returns the save token when tracked. */
-  const write = (fn: (d: QuizDoc) => QuizDoc): { before: QuizDoc; after: QuizDoc; token?: SaveToken } | null => {
-    if (!commit) return null;
-    const before = getLatestDoc();
-    const after = fn(before);
-    if (after === before) return null;
-    if (commitTracked) return { before, after, token: commitTracked(after) };
-    commit(after);
-    return { before, after };
-  };
-  /** A write announced with Undo (inverse restores only what it changed). */
-  const announce = (message: string, before: QuizDoc, after: QuizDoc) => {
-    const inverse = logicPartsInverse(before, after);
-    if (undo && inverse) undo.push({ message, inverse });
-    else toast(message);
-  };
-  return { write, announce, toast };
-}
-
-function AnswersTable(props: LogicTableViewProps & { rows: AnswerSheetRow[]; cols: readonly string[] }) {
+function AnswersTable(props: SheetProps & { rows: AnswerSheetRow[]; cols: readonly string[] }) {
   const { rows, cols, questions } = props;
   const nodes = useMemo(() => new Map(questions.map((q) => [q.node.id, q])), [questions]);
-  const [narrowFor, setNarrowFor] = useState<string | null>(null);
-  const { write, toast } = useWrite(props);
-  const narrowQ = narrowFor ? nodes.get(narrowFor) : undefined;
+  const deciderQIndex = questions.find((q) => q.node.data.role === "decides")?.qIndex ?? null;
   return (
-    <>
-      <table className="qz-lg-xl" aria-label={SHEET_COPY.answers}>
-        <Head cols={cols} />
-        <tbody>
-          {rows.length === 0 ? (
-            <Empty span={cols.length} />
-          ) : (
-            rows.map((row, ri) => {
-              const q = nodes.get(row.questionId);
-              const answer = q?.node.data.answers.find((a) => a.id === row.answerId);
-              if (!q || !answer) return null;
-              const c: CellCtx = { ...props, q, answer, row };
-              return (
-                <tr
-                  key={row.answerId}
-                  className={row.first && ri > 0 ? "is-grp" : undefined}
-                  data-node-id={row.questionId}
-                  data-answer-id={row.answerId}
-                >
-                  <td className="is-k">{row.first ? `Q${row.qIndex}` : ""}</td>
-                  <td className="is-qt">{row.first ? <QuestionText {...c} /> : null}</td>
-                  <td>{row.first ? <TypeCell {...c} /> : null}</td>
-                  <td>
-                    <AnswerText {...c} />
-                  </td>
-                  <td>{row.first ? <RoleCell {...c} onNarrowPick={() => setNarrowFor(q.node.id)} /> : null}</td>
-                  <td>
-                    <ShowsCellView {...c} />
-                  </td>
-                  <td>
-                    <ThenCell {...c} />
-                  </td>
-                </tr>
-              );
-            })
-          )}
-        </tbody>
-      </table>
-      {narrowQ && props.productIndex ? (
-        <AttributePickerDialog
-          qIndex={narrowQ.qIndex}
-          productIndex={props.productIndex}
-          currentField={null}
-          onCancel={() => setNarrowFor(null)}
-          onUse={(field) => {
-            setNarrowFor(null);
-            let applied: ReturnType<typeof applyNarrowField> = null;
-            const res = write((d) => {
-              applied = applyNarrowField(d, narrowQ.node.id, props.productIndex ?? [], field);
-              return applied ? applied.doc : d;
-            });
-            const a = applied as ReturnType<typeof applyNarrowField>;
-            if (res && a) toast(narrowAppliedToast(narrowQ.node.data.text, field, a.mapped, a.unmatched));
-          }}
-        />
-      ) : null}
-    </>
+    <table className="qz-lg-xl" aria-label={SHEET_COPY.answers}>
+      <Head cols={cols} />
+      <tbody>
+        {rows.length === 0 ? (
+          <Empty span={cols.length} />
+        ) : (
+          rows.map((row, ri) => {
+            const q = nodes.get(row.questionId);
+            const answer = q?.node.data.answers.find((a) => a.id === row.answerId);
+            if (!q || !answer) return null;
+            const c: CellCtx = { ...props, q, answer, row, deciderQIndex };
+            return (
+              <tr
+                key={row.answerId}
+                className={row.first && ri > 0 ? "is-grp" : undefined}
+                data-node-id={row.questionId}
+                data-answer-id={row.answerId}
+              >
+                <td className="is-k">{row.first ? `Q${row.qIndex}` : ""}</td>
+                <td className="is-qt">{row.first ? <QuestionText {...c} /> : null}</td>
+                <td>{row.first ? <TypeCell {...c} /> : null}</td>
+                <td>
+                  <AnswerCell {...c} />
+                </td>
+                <td>{row.first ? <RoleCell {...c} /> : null}</td>
+                <td>
+                  <ShowsCellView {...c} />
+                </td>
+                <td>
+                  <ThenCell {...c} />
+                </td>
+              </tr>
+            );
+          })
+        )}
+      </tbody>
+    </table>
   );
 }
 
+/** The question text, as the pane's title: every keystroke writes, the end
+ *  of the edit commits tracked (save pill). */
 function QuestionText(c: CellCtx) {
-  const { write } = useWrite(c);
+  const { store } = c;
+  const id = c.q.node.id;
   return (
     <InlineText
       value={c.q.node.data.text}
       maxLength={QUESTION_TEXT_MAX}
       ariaLabel={SHEET_COPY.questionLabel(c.q.qIndex)}
       {...(c.commit
-        ? { onCommit: (next: string) => write((d) => setQuestionText(d, c.q.node.id, next))?.token }
+        ? {
+            onDraftChange: (text: string) => store.put(setQuestionText(store.latest(), id, text)),
+            onCommit: (text: string) => store.putTracked(setQuestionText(store.latest(), id, text)),
+          }
         : {})}
     />
   );
 }
 
-function AnswerText(c: CellCtx) {
-  const { write } = useWrite(c);
+/** The answer text: the pane's own field (mock ptEd + endCap), with the
+ *  point number in bold before a numbered scale point. */
+function AnswerCell(c: CellCtx) {
   const node = c.q.node;
   const i = c.row.answerIndex;
   const isScale = node.data.question_type === "rating";
   const isPoint = isScale && c.answer.text === String(i + 1);
-  if (isPoint) {
-    // B45: a numbered point shows its number; the two ends carry the
-    // scale's end labels, editable here.
-    const last = i === node.data.answers.length - 1;
-    const end = i === 0 ? "lo" : last ? "hi" : null;
-    const label =
-      end === "lo"
-        ? node.data.scale_config?.endpoint_label_min
-        : end === "hi"
-          ? node.data.scale_config?.endpoint_label_max
-          : undefined;
-    return (
-      <span className="qz-lg-tpt">
-        <b>{i + 1}</b>
-        {end ? (
-          <>
-            {" "}
-            <InlineText
-              value={label ?? ""}
-              maxLength={SCALE_LABEL_MAX}
-              allowEmpty
-              placeholder="Add label"
-              inline
-              ariaLabel={SHEET_COPY.answerLabel(c.q.qIndex, i + 1)}
-              {...(c.commit
-                ? {
-                    onCommit: (next: string) =>
-                      write((d) =>
-                        setScaleEndLabels(d, node.id, end === "lo" ? next : undefined, end === "hi" ? next : undefined),
-                      )?.token,
-                  }
-                : {})}
-            />
-          </>
-        ) : null}
-      </span>
-    );
-  }
+  const last = node.data.answers.length - 1;
+  const endLabel = !isScale
+    ? ""
+    : i === 0
+      ? (node.data.scale_config?.endpoint_label_min ?? "")
+      : i === last
+        ? (node.data.scale_config?.endpoint_label_max ?? "")
+        : "";
   return (
-    <InlineText
-      value={c.answer.text}
-      maxLength={ANSWER_TEXT_MAX}
-      ariaLabel={SHEET_COPY.answerLabel(c.q.qIndex, i + 1)}
-      {...(c.commit
-        ? { onCommit: (next: string) => write((d) => setAnswerText(d, node.id, c.answer.id, next))?.token }
-        : {})}
-    />
+    <>
+      {isPoint ? (
+        <>
+          <b>{i + 1}</b>{" "}
+        </>
+      ) : null}
+      <AnswerTextField
+        store={c.store}
+        q={c.q}
+        answer={c.answer}
+        index={i}
+        endLabel={endLabel}
+        editable={!!c.commit}
+        ariaLabel={SHEET_COPY.answerLabel(c.q.qIndex, i + 1)}
+        className="qz-lg-tatext"
+      />
+    </>
   );
 }
 
-type TypePick = "single" | "multi" | "five" | "scale";
-
+/** The Question type popover the pane uses (changeQuestionType, its Undo). */
 function TypeCell(c: CellCtx) {
-  const { write, announce } = useWrite(c);
-  const node = c.q.node;
-  const t = node.data.question_type;
-  const five = t === "rating" && node.data.scale_config?.min === 1 && node.data.scale_config?.max === 5;
-  const current: TypePick | null =
-    t === "single_select" ? "single" : t === "multi_select" ? "multi" : t === "rating" ? (five ? "five" : "scale") : null;
-  const label = c.row.type;
-  if (!c.commit || isFreeformType(t)) return <span className="qz-lg-tdim">{label}</span>;
-  const count = node.data.answers.length;
-  const pick = (k: TypePick) => {
-    if (k === current) return;
-    const p: ParsedType =
-      k === "single"
-        ? { type: "single_select" }
-        : k === "multi"
-          ? { type: "multi_select", min: 1, max: count }
-          : k === "five"
-            ? { type: "rating", five: true, n: 5 }
-            : { type: "rating", five: false, n: count };
-    let converted = 0;
-    const res = write((d) => {
-      const r = applyQuestionType(d, node.id, p);
-      converted = r.converted;
-      return r.doc;
-    });
-    if (!res) return;
-    const names: Record<TypePick, string> = {
-      single: SHEET_COPY.type.single,
-      multi: "Multi-select",
-      five: SHEET_COPY.type.five,
-      scale: "Scale",
-    };
-    const msg = SHEET_COPY.typeChanged(c.q.qIndex, names[k]);
-    announce(converted ? `${msg}. ${SHEET_COPY.anyOfNow(c.q.qIndex)}` : msg, res.before, res.after);
-  };
-  const items: QzMenuItem[] = [
-    ...(current === null ? [{ label, onSelect: () => {}, checked: true }] : []),
-    { label: SHEET_COPY.type.single, onSelect: () => pick("single"), checked: current === "single" },
-    { label: "Multi-select", onSelect: () => pick("multi"), checked: current === "multi" },
-    { label: SHEET_COPY.type.five, onSelect: () => pick("five"), checked: current === "five" },
-    { label: "Scale", onSelect: () => pick("scale"), checked: current === "scale" },
-  ];
+  const { store } = c;
   return (
-    <QzMenu
-      title={SHEET_COPY.typeMenuTitle}
-      ariaLabel={SHEET_COPY.typeMenuTitle}
-      width={220}
-      items={items}
-      trigger={
-        <button type="button" className="qz-lg-tbtn is-dim" aria-label={SHEET_COPY.typeLabel(c.q.qIndex, label)}>
-          {label}
-          <Caret />
-        </button>
-      }
+    <QuestionTypePopover
+      doc={c.doc}
+      q={c.q}
+      {...(c.commit ? { commit: store.put } : {})}
+      getLatestDoc={store.latest}
+      {...(c.undo ? { undo: c.undo } : {})}
+      table={{ ariaLabel: SHEET_COPY.typeLabel(c.q.qIndex, c.row.type) }}
     />
   );
 }
 
-function RoleCell(c: CellCtx & { onNarrowPick: () => void }) {
-  const { write, announce } = useWrite(c);
-  const node = c.q.node;
-  const role = c.row.role;
-  const label = c.row.does;
-  if (!c.commit) return <span className={`qz-lg-tdoes is-${role}`}>{label}</span>;
-  const cannotDecide = isFreeformType(node.data.question_type);
-  const decider = c.questions.find((x) => x.node.data.role === "decides");
-  const qn = (id: string) => c.questions.find((x) => x.node.id === id)?.qIndex ?? 0;
-  const set = (k: "decides" | "filter" | "info") => {
-    if (k === role) return;
-    if (
-      k === "filter" &&
-      c.hasNarrowFields &&
-      c.productIndex &&
-      !node.data.answers.some((a) => a.no_preference === true || answerHasSelection(a))
-    ) {
-      // D19 kept: a Narrows flip with no values opens the attribute dialog.
-      c.onNarrowPick();
-      return;
-    }
-    let lost: ReturnType<typeof changeQuestionRole>["lost"] = {};
-    const res = write((d) => {
-      const r = changeQuestionRole(d, node.id, k === "info" ? "qualifier" : k);
-      lost = r.lost;
-      return r.doc;
-    });
-    if (!res) return;
-    const l = lost as ReturnType<typeof changeQuestionRole>["lost"];
-    const parts = [
-      k === "decides" ? SHEET_COPY.roleMoved(c.q.qIndex) : SHEET_COPY.roleChanged(c.q.qIndex, SHEET_COPY.does[k]),
-    ];
-    if (l.targets) parts.push(SHEET_COPY.roleLost(qn(l.targets.nodeId), l.targets.count));
-    if (l.values) parts.push(SHEET_COPY.valuesLost(qn(l.values.nodeId), l.values.count));
-    announce(parts.join(". "), res.before, res.after);
-  };
-  const items: QzMenuItem[] = ROLE_MENU.map((j) => ({
-    label: j.n,
-    hint:
-      j.k === "decides" && cannotDecide
-        ? "needs answers to choose from"
-        : j.k === "decides" && decider && decider.node.id !== node.id
-          ? `now on Q${decider.qIndex}`
-          : j.hint,
-    checked: j.k === role,
-    disabled: j.k === "decides" && cannotDecide,
-    onSelect: () => set(j.k),
-  }));
+/** The ONE role control (D9), in the Table's dress. */
+function RoleCell(c: CellCtx) {
+  const { store } = c;
+  if (!c.commit) return <span className={`qz-lg-tdoes is-${c.row.role}`}>{c.row.does}</span>;
   return (
-    <QzMenu
-      title={SHEET_COPY.roleMenuTitle(c.q.qIndex)}
-      ariaLabel={SHEET_COPY.roleMenuTitle(c.q.qIndex)}
-      width={360}
-      items={items}
-      trigger={
-        <button
-          type="button"
-          className={`qz-lg-tbtn is-does is-${role}`}
-          aria-label={SHEET_COPY.roleLabel(c.q.qIndex, label)}
-        >
-          {label}
-          <Caret />
-        </button>
-      }
+    <QuestionRoleControl
+      variant="table"
+      doc={c.doc}
+      node={c.q.node}
+      qIndex={c.q.qIndex}
+      deciderQIndex={c.deciderQIndex}
+      productIndex={c.productIndex ?? NO_PRODUCTS}
+      hasNarrowFields={!!c.hasNarrowFields && !!c.productIndex}
+      onCommit={store.put}
+      getLatestDoc={store.latest}
+      {...(c.undo ? { undo: c.undo } : {})}
     />
   );
 }
 
 function ShowsCellView(c: CellCtx) {
-  const { write } = useWrite(c);
+  const { store } = c;
   const [open, setOpen] = useState(false);
+  const btnRef = useRef<HTMLButtonElement>(null);
+  const recs = useMemo(() => recCards(c.recommendations), [c.recommendations]);
+  const productById = useMemo(
+    () => new Map((c.productIndex ?? NO_PRODUCTS).map((p) => [p.product_id, p])),
+    [c.productIndex],
+  );
   const shows = c.row.shows;
   const node = c.q.node;
   if (shows.kind === "info") return <span className="qz-lg-dim2">{SHEET_COPY.empty}</span>;
@@ -729,8 +663,12 @@ function ShowsCellView(c: CellCtx) {
   if (shows.kind === "picks") {
     const unset = shows.targets.length === 0;
     const text = unset ? CHOOSE_A_RESULT : shows.targets.map((t) => t.name).join(", ");
+    if (!c.commit) return <span className={`qz-lg-tres${unset ? " is-unset" : ""}`}>{text}</span>;
+    const usedBy = new Map<string, number>();
+    for (const a of node.data.answers) for (const t of answerTargets(a)) usedBy.set(t, (usedBy.get(t) ?? 0) + 1);
     const trigger = (
       <button
+        ref={btnRef}
         type="button"
         className={`qz-lg-tbtn is-res${unset ? " is-unset" : ""}`}
         aria-label={SHEET_COPY.showsLabel(c.q.qIndex, aLabel, text)}
@@ -746,51 +684,22 @@ function ShowsCellView(c: CellCtx) {
         <Caret />
       </button>
     );
-    if (!c.commit) return <span className={`qz-lg-tres${unset ? " is-unset" : ""}`}>{text}</span>;
-    const picked = new Set(answerTargets(c.answer));
     return (
-      <QzPopover
+      <PicksPicker
         open={open}
         onOpenChange={setOpen}
-        ariaHaspopup="dialog"
-        ariaLabel={CHOOSE_A_RESULT}
-        manageFocus
-        width={280}
+        anchorRef={btnRef}
         trigger={trigger}
-        content={
-          <div className="qz-lg-tpick">
-            <div className="qz-lg-tpick-h">{CHOOSE_A_RESULT}</div>
-            <div className="qz-lg-tpick-l" data-qz-pop-list>
-              {c.recommendations.map((r) => {
-                const on = picked.has(r.id);
-                return (
-                  <button
-                    key={r.id}
-                    type="button"
-                    role="checkbox"
-                    aria-checked={on}
-                    className={`qz-lg-tpick-i${on ? " is-on" : ""}`}
-                    onClick={() =>
-                      write((d) =>
-                        on ? removeAnswerTarget(d, node.id, c.answer.id, r.id) : addAnswerTarget(d, node.id, c.answer.id, r.id),
-                      )
-                    }
-                  >
-                    <span className="qz-lg-tpick-ck" aria-hidden="true">
-                      {on ? "✓" : ""}
-                    </span>
-                    <span className="qz-lg-tpick-n">{r.name}</span>
-                    <span className="qz-lg-tpick-c">{r.productIds.length}</span>
-                  </button>
-                );
-              })}
-            </div>
-            <div className="qz-lg-tpick-f">
-              <button type="button" className="qz-lg-btn is-pri" onClick={() => setOpen(false)}>
-                {SHEET_COPY.pickerDone}
-              </button>
-            </div>
-          </div>
+        recs={recs}
+        usedBy={usedBy}
+        currentIds={answerTargets(c.answer)}
+        productById={productById}
+        onToggle={(id, on) =>
+          store.put(
+            on
+              ? addAnswerTarget(store.latest(), node.id, c.answer.id, id)
+              : removeAnswerTarget(store.latest(), node.id, c.answer.id, id),
+          )
         }
       />
     );
@@ -798,8 +707,12 @@ function ShowsCellView(c: CellCtx) {
   // Narrows.
   const unset = !shows.keepsAll && shows.values.length === 0;
   const text = c.row.showsText;
+  if (!c.commit || !c.readout || !c.productIndex) {
+    return <span className={`qz-lg-tval${unset ? " is-unset" : ""}`}>{text}</span>;
+  }
   const trigger = (
     <button
+      ref={btnRef}
       type="button"
       className={`qz-lg-tbtn is-val${unset ? " is-unset" : ""}`}
       aria-label={SHEET_COPY.showsLabel(c.q.qIndex, aLabel, text)}
@@ -808,77 +721,36 @@ function ShowsCellView(c: CellCtx) {
       <Caret />
     </button>
   );
-  if (!c.commit || !c.readout || !c.productIndex) {
-    return <span className={`qz-lg-tval${unset ? " is-unset" : ""}`}>{text}</span>;
-  }
   return (
     <ValuePickerPopover
       open={open}
       onOpenChange={setOpen}
+      anchorRef={btnRef}
       trigger={trigger}
       answer={c.answer}
       siblingAnswers={node.data.answers}
       readout={c.readout}
       productIndex={c.productIndex}
       onApply={(values: FilterValueSet) => {
-        write((d) => setAnswerFilterValues(d, node.id, c.answer.id, values));
+        store.put(setAnswerFilterValues(store.latest(), node.id, c.answer.id, values));
         setOpen(false);
       }}
     />
   );
 }
 
+/** The pane's route menu (mock troute: the same routeMenu). */
 function ThenCell(c: CellCtx) {
-  const { write } = useWrite(c);
-  const label = c.row.then;
-  const aLabel = c.answer.text;
-  if (!c.commit) return <span className="qz-lg-tdim">{label}</span>;
-  const q = c.q;
-  const qIndexByNode = new Map(c.questions.map((x) => [x.node.id, x.qIndex]));
-  const dest = answerDestination(c.doc, q, c.answer, qIndexByNode, c.questions.length);
-  const nextQ = c.questions.find((x) => x.qIndex === q.qIndex + 1);
-  const later = c.questions.filter((x) => x.qIndex > q.qIndex + 1);
-  const resultNode = c.doc.nodes.find((n) => n.type === "result") ?? c.doc.nodes.find((n) => n.type === "end");
-  const go = (target: string | null) => write((d) => setAnswerRoute(d, q.node.id, c.answer.id, target));
-  const items: QzMenuItem[] = [
-    ...(nextQ
-      ? [
-          {
-            label: SHEET_COPY.then.next,
-            hint: truncate(nextQ.node.data.text, 28),
-            checked: dest.kind === "next",
-            onSelect: () => go(null),
-          },
-        ]
-      : []),
-    ...later.map((x) => ({
-      label: SHEET_COPY.then.skip(x.qIndex),
-      hint: truncate(x.node.data.text, 28),
-      checked: dest.kind === "skip" && dest.nodeId === x.node.id,
-      onSelect: () => go(x.node.id),
-    })),
-    ...(resultNode
-      ? [
-          {
-            label: SHEET_COPY.then.results,
-            checked: dest.kind === "results",
-            onSelect: () => (dest.kind === "results" ? undefined : go(resultNode.id)),
-          },
-        ]
-      : []),
-  ];
+  const { store } = c;
   return (
-    <QzMenu
-      title={SHEET_COPY.routeMenuTitle(truncate(aLabel, 28))}
-      ariaLabel={SHEET_COPY.routeMenuTitle(aLabel)}
-      width={300}
-      items={items}
-      trigger={
-        <button type="button" className="qz-lg-tbtn is-dim" aria-label={SHEET_COPY.thenLabel(q.qIndex, aLabel, label)}>
-          {label}
-          <Caret />
-        </button>
-      }
+    <RouteMenuButton
+      doc={c.doc}
+      q={c.q}
+      answer={c.answer}
+      questions={c.questions}
+      {...(c.commit ? { commit: store.put } : {})}
+      getLatestDoc={store.latest}
+      table={{ label: c.row.then, ariaLabel: SHEET_COPY.thenLabel(c.q.qIndex, c.answer.text, c.row.then) }}
     />
   );
 }

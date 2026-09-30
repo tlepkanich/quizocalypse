@@ -88,7 +88,8 @@ describe("LogicTableView", () => {
     const ans = textRows(tables[1]!);
     expect(ans[0]!.slice(0, 3)).toEqual(["Q1", "Skin feel", "Single select"]);
     expect(ans[1]![0]).toBe("");
-    expect(ans.at(-1)![6]).toBe("Straight to results");
+    // An unset route on the last question (mock nextText).
+    expect(ans.at(-1)![6]).toBe("Results (last question)");
   });
 
   it("Rules only: Rules then Recommendations; a Needs a rule row opens Create a rule", () => {
@@ -133,7 +134,7 @@ describe("LogicTableView", () => {
     act(() => el.querySelector<HTMLButtonElement>('button[aria-label="Delete rule 1"]')!.click());
     expect(onEditRule).toHaveBeenCalledTimes(1);
     expect(current.decision_rules!.map((r) => r.id)).toEqual(["r2", "r3"]);
-    expect(pushes[0]!.message).toBe("Rule 1 deleted");
+    expect((pushes[0]!.message as (n: number) => string)(1)).toBe("Rule 1 deleted");
     const restored = pushes[0]!.inverse(current);
     expect(restored.decision_rules!.map((r) => r.id)).toEqual(["r1", "r2", "r3"]);
   });

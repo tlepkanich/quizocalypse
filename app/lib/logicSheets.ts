@@ -320,11 +320,13 @@ export function questionTypeLabel(node: QuestionNode): string {
 export type Destination =
   | { kind: "next" }
   | { kind: "skip"; qIndex: number; nodeId: string }
-  | { kind: "results" };
+  | { kind: "results" }
+  /** An unset route on the last question (mock nextText). */
+  | { kind: "last" };
 
 /** Where an answer really goes (B64): walk past content steps to the next
- *  question or the results. An unset route on the last question goes to the
- *  results. */
+ *  question or the results. An unset route on the last question reads
+ *  "Results (last question)"; "Straight to results" is an explicit route. */
 export function answerDestination(
   doc: QuizDoc,
   q: OrderedQuestion,
@@ -340,9 +342,11 @@ export function answerDestination(
     if (!node || node.type === "result" || node.type === "end") break;
     nextId = doc.edges.find((e) => e.source === cur)?.target ?? null;
   }
-  if (!nextId) return q.qIndex >= lastIndex ? { kind: "results" } : { kind: "next" };
+  const own = doc.edges.some((e) => e.source === q.node.id && e.source_handle === answer.edge_handle_id);
+  const unsetLast = !own && q.qIndex >= lastIndex;
+  if (!nextId) return unsetLast ? { kind: "last" } : q.qIndex >= lastIndex ? { kind: "results" } : { kind: "next" };
   const nq = qIndexByNode.get(nextId);
-  if (nq === undefined) return { kind: "results" };
+  if (nq === undefined) return unsetLast ? { kind: "last" } : { kind: "results" };
   if (nq === q.qIndex + 1) return { kind: "next" };
   return { kind: "skip", qIndex: nq, nodeId: nextId };
 }
@@ -352,7 +356,9 @@ export function destinationText(d: Destination): string {
     ? SHEET_COPY.then.next
     : d.kind === "results"
       ? SHEET_COPY.then.results
-      : SHEET_COPY.then.skip(d.qIndex);
+      : d.kind === "last"
+        ? SHEET_COPY.then.last
+        : SHEET_COPY.then.skip(d.qIndex);
 }
 
 /** A Narrows answer's values, each with its kind (D16: the file writes the
@@ -1671,9 +1677,9 @@ function importAnswers(s: ReadSheet, base: QuizDoc, ctx: SheetContext, b: BuildB
     const t = low(tv);
     let target: string | null | undefined;
     let want: string;
-    if (!t || t === low(SHEET_COPY.then.next)) {
+    if (!t || t === low(SHEET_COPY.then.next) || t === low(SHEET_COPY.then.last)) {
       target = null;
-      want = q.qIndex >= last ? SHEET_COPY.then.results : SHEET_COPY.then.next;
+      want = q.qIndex >= last ? SHEET_COPY.then.last : SHEET_COPY.then.next;
     } else if (t === low(SHEET_COPY.then.results)) {
       target = resultNode?.id;
       want = SHEET_COPY.then.results;

@@ -118,11 +118,18 @@ function displayRole(
   return "info";
 }
 
-/** One recommendation as the pane sees it. */
-interface RecCard {
+/** One recommendation as the pane (and the Table's picker) sees it. */
+export interface RecCard {
   cat: BuilderCategory;
   kind: RecKind;
   count: number;
+}
+
+/** This quiz's own recommendations as picker cards (D15: quizId set). */
+export function recCards(categories: readonly BuilderCategory[]): RecCard[] {
+  return categories
+    .filter((c) => c.quizId != null)
+    .map((c) => ({ cat: c, kind: recKindOf(c), count: c.productIds.length }));
 }
 
 /** D14 (open half): the tray's order lives HERE and nowhere else. Catalogue
@@ -137,7 +144,7 @@ function trayOrder(
 /** The newest document this widget knows: the host's `doc` prop, or a
  *  commit made here that the host has not rendered back yet (a blur commit
  *  and a click in the same event must never overwrite each other). */
-function useDocStore(
+export function useDocStore(
   doc: QuizDoc,
   commit: Commit | undefined,
   commitTracked: ((doc: QuizDoc) => SaveToken) | undefined,
@@ -168,7 +175,7 @@ function useDocStore(
   );
   return { latest, put, putTracked };
 }
-type DocStore = ReturnType<typeof useDocStore>;
+export type DocStore = ReturnType<typeof useDocStore>;
 
 export function LogicQuestionWidget({
   doc,
@@ -235,17 +242,7 @@ export function LogicQuestionWidget({
   // The pool is this quiz's own Category rows (quizId set): the
   // recommendations step 1 picked, the groups it created, the rule targets it
   // materialised (D15). Shop-global groups stay out.
-  const recs = useMemo<RecCard[]>(
-    () =>
-      categories
-        .filter((c) => c.quizId != null)
-        .map((c) => ({
-          cat: c,
-          kind: recKindOf(c),
-          count: c.productIds.length,
-        })),
-    [categories],
-  );
+  const recs = useMemo<RecCard[]>(() => recCards(categories), [categories]);
 
   // Arm and place — one armed chip per widget. Disarmed by another question,
   // a role change, a style change (the card remounts on it) and Esc.
@@ -783,7 +780,8 @@ function RecTray({
 }
 
 // ── the picks picker (mock picker): checkbox rows, writes on every click ────
-function PicksPicker({
+// Shared with the Table's Picks cells (mock tval → the same picker).
+export function PicksPicker({
   open,
   onOpenChange,
   anchorRef,
@@ -995,6 +993,64 @@ function PicksPicker({
   );
 }
 
+// ── an answer's text (mock ptEd + endCap), shared with the Table ──────────
+// Inline, 60. A scale point stores its NUMBER as its text: it shows empty,
+// with its end label (or "Add label") as the placeholder, and emptying a
+// named point stores the number again. A named end point keeps the scale's
+// end label as a quiet caption after it (read-only here: the end labels are
+// edited in the Question type popover). Every keystroke writes (the rule
+// sentences follow); the end of the edit commits tracked (D8 pill).
+export function AnswerTextField({
+  store,
+  q,
+  answer,
+  index,
+  endLabel,
+  editable,
+  ariaLabel,
+  className,
+}: {
+  store: DocStore;
+  q: OrderedQuestion;
+  answer: Answer;
+  index: number;
+  /** The scale's end label on the first / last point ("" elsewhere). */
+  endLabel: string;
+  editable: boolean;
+  ariaLabel: string;
+  className: string;
+}) {
+  const colRef = useRef<HTMLSpanElement>(null);
+  const isScale = q.node.data.question_type === "rating";
+  const point = String(index + 1);
+  const isPoint = isScale && answer.text === point;
+  const writeText = (text: string, tracked: boolean) => {
+    const next = setAnswerText(store.latest(), q.node.id, answer.id, text || point);
+    return tracked ? store.putTracked(next) : store.put(next);
+  };
+  return (
+    <span className={className} ref={colRef}>
+      <InlineText
+        value={isPoint ? "" : answer.text}
+        maxLength={ANSWER_TEXT_MAX}
+        ariaLabel={ariaLabel}
+        inline
+        columnRef={colRef}
+        {...(isScale ? { allowEmpty: true, placeholder: endLabel || PANE_COPY.addLabel } : {})}
+        {...(editable
+          ? {
+              onDraftChange: (t: string) => {
+                if (t || isScale) writeText(t, false);
+              },
+              onCommit: (t: string) => writeText(t, true),
+            }
+          : {})}
+      />
+      {isScale && !isPoint && endLabel ? <span className="qz-lg-ptlab"> · {endLabel}</span> : null}
+    </span>
+  );
+}
+
 // ── one answer row: key · answer · cell · route (mock .arow) ───────────────
 function AnswerRow({
   doc,
@@ -1052,50 +1108,21 @@ function AnswerRow({
   flashing: boolean;
 }) {
   const cellRef = useRef<HTMLDivElement>(null);
-  const textColRef = useRef<HTMLSpanElement>(null);
   const [pickerOpen, setPickerOpen] = useState(false);
   const total = productIndex.length;
 
   // ── the answer text (inline, 60; a scale point stores its number) ─────
-  const point = String(index + 1);
-  const isPoint = isScale && answer.text === point;
-  const writeText = (text: string, tracked: boolean) => {
-    const next = setAnswerText(
-      store.latest(),
-      q.node.id,
-      answer.id,
-      text || point,
-    );
-    return tracked ? store.putTracked(next) : store.put(next);
-  };
   const textCell = (
-    <span className="qz-lg-atext" ref={textColRef}>
-      <InlineText
-        value={isPoint ? "" : answer.text}
-        maxLength={ANSWER_TEXT_MAX}
-        ariaLabel={
-          isScale
-            ? PANE_COPY.pointLabel(index + 1)
-            : PANE_COPY.answerLabel(answerKey)
-        }
-        inline
-        columnRef={textColRef}
-        {...(isScale
-          ? { allowEmpty: true, placeholder: endLabel || PANE_COPY.addLabel }
-          : {})}
-        {...(editable
-          ? {
-              onDraftChange: (t: string) => {
-                if (t || isScale) writeText(t, false);
-              },
-              onCommit: (t: string) => writeText(t, true),
-            }
-          : {})}
-      />
-      {isScale && !isPoint && endLabel ? (
-        <span className="qz-lg-ptlab"> · {endLabel}</span>
-      ) : null}
-    </span>
+    <AnswerTextField
+      store={store}
+      q={q}
+      answer={answer}
+      index={index}
+      endLabel={endLabel}
+      editable={editable}
+      ariaLabel={isScale ? PANE_COPY.pointLabel(index + 1) : PANE_COPY.answerLabel(answerKey)}
+      className="qz-lg-atext"
+    />
   );
 
   // ── the cell ───────────────────────────────────────────────────────────

@@ -109,8 +109,9 @@ describe("serializing", () => {
     expect(files[6]!.slice(2, 6)).toEqual(["Multi-select · pick 1–2", "Cheeks", "Narrows", "Tag: cheeks"]);
     expect(files[8]![5]).toBe("Keeps everything");
     expect(files[9]![2]).toBe("Scale · 1–5");
-    // B64: the last question's unset route goes to the results.
-    expect(files[13]![6]).toBe("Straight to results");
+    // B64 + mock nextText: the last question's unset route reads as the
+    // results; "Straight to results" is only an explicit route.
+    expect(files[13]![6]).toBe("Results (last question)");
     // Question-level cells repeat on every file row.
     expect(files[1]!.slice(0, 3)).toEqual(["Q1", "Skin feel", "Single select"]);
   });

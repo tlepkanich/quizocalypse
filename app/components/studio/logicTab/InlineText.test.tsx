@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { createRoot, type Root } from "react-dom/client";
-import { act, createElement } from "react";
+import { act, createElement, useState } from "react";
 
 import { createSaveTracker } from "../saveTracker";
 import { placeSavePill } from "./FieldSavePill";
@@ -19,6 +19,27 @@ function mount(props: Partial<InlineTextProps> & { value: string }) {
       createElement("div", null, createElement(InlineText, full), createElement("button", { id: "after" }, "Next")),
     ),
   );
+  return document.body.querySelector<HTMLElement>(".qz-ed");
+}
+
+/** A host that stores what the field commits (like a mutation that accepts
+    it) unless `refuse` says no — the field then re-syncs to the stored text. */
+function mountStored(props: Partial<InlineTextProps> & { value: string; refuse?: (t: string) => boolean }) {
+  const { refuse, ...rest } = props;
+  function Host() {
+    const [value, setValue] = useState(rest.value);
+    return createElement(InlineText, {
+      maxLength: 60,
+      ariaLabel: "Question 1, answer A",
+      ...rest,
+      value,
+      onCommit: (t: string) => {
+        rest.onCommit?.(t);
+        if (!refuse?.(t)) setValue(t);
+      },
+    });
+  }
+  act(() => root!.render(createElement("div", null, createElement(Host), createElement("button", { id: "after" }, "Next"))));
   return document.body.querySelector<HTMLElement>(".qz-ed");
 }
 
@@ -89,7 +110,7 @@ describe("InlineText", () => {
   it("Enter commits the normalized text, writes it back and moves focus to the next control", () => {
     const onCommit = vi.fn();
     const onDraftChange = vi.fn();
-    const el = mount({ value: "Yes", onCommit, onDraftChange })!;
+    const el = mountStored({ value: "Yes", onCommit, onDraftChange })!;
     focus(el);
     type(el, "  Yes   please ");
     expect(onDraftChange).toHaveBeenLastCalledWith("  Yes   please ");
@@ -117,6 +138,16 @@ describe("InlineText", () => {
     expect(document.activeElement).not.toBe(document.body);
   });
 
+  it("text the mutation refused does not stay on screen (P2-9)", () => {
+    const onCommit = vi.fn();
+    const el = mountStored({ value: "Yes", onCommit, refuse: () => true })!;
+    focus(el);
+    type(el, "Duplicate");
+    act(() => el.blur());
+    expect(onCommit).toHaveBeenCalledWith("Duplicate");
+    expect(el.textContent).toBe("Yes");
+  });
+
   it("an emptied field restores the snapshot and reports no change", () => {
     const onCommit = vi.fn();
     const el = mount({ value: "Yes", onCommit })!;
@@ -129,7 +160,7 @@ describe("InlineText", () => {
 
   it("allowEmpty (scale points) commits the empty text and keeps the placeholder", () => {
     const onCommit = vi.fn();
-    const el = mount({ value: "Calm", onCommit, allowEmpty: true, placeholder: "Add label" })!;
+    const el = mountStored({ value: "Calm", onCommit, allowEmpty: true, placeholder: "Add label" })!;
     expect(el.getAttribute("data-ph")).toBe("Add label");
     focus(el);
     type(el, "");

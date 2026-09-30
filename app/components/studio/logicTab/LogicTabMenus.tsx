@@ -33,7 +33,11 @@ import {
   ROLE_MENU,
   ROLE_MENU_FOOT,
   ROUTE_COPY,
+  SHEET_COPY,
 } from "./logicCopy";
+
+/** The Table's words for a role (the sheet's "What it does" column). */
+const ROLE_TABLE = SHEET_COPY.does;
 
 // ════════════════════════════════════════════════════════════════════════════
 // Logic tab — the popovers behind the question pane's controls: the product
@@ -339,6 +343,7 @@ export function RouteMenuButton({
   questions,
   commit,
   getLatestDoc,
+  table,
 }: {
   doc: QuizDoc;
   q: OrderedQuestion;
@@ -347,6 +352,9 @@ export function RouteMenuButton({
   /** Absent = read-only: the label renders without a menu. */
   commit?: Commit;
   getLatestDoc?: () => QuizDoc;
+  /** The Table's dress for the SAME menu (mock troute): its cell text and
+   *  accessible name; the popover never touches the Edit selection (B40). */
+  table?: { label: string; ariaLabel: string };
 }) {
   const [open, setOpen] = useState(false);
   const route = answerRoute(doc, q, answer, questions);
@@ -366,6 +374,7 @@ export function RouteMenuButton({
     </>
   );
   if (!commit) {
+    if (table) return <span className="qz-lg-tdim">{table.label}</span>;
     return <span className={`qz-lg-go is-static${route.set ? " is-set" : ""}`}>{label}</span>;
   }
   const item = (on: boolean, cls: string, body: ReactNode, onPick: () => void, key: string) => (
@@ -393,15 +402,24 @@ export function RouteMenuButton({
       className="qz-lg-pop"
       offset={6}
       trigger={
-        <button
-          type="button"
-          className={`qz-lg-go${route.set ? " is-set" : ""}`}
-          aria-label={`${answer.text} goes to ${route.label}`}
-          data-pane-control="route"
-          data-answer-id={answer.id}
-        >
-          {label}
-        </button>
+        table ? (
+          <button type="button" className="qz-lg-tbtn is-dim" aria-label={table.ariaLabel}>
+            {table.label}
+            <span className="qz-lg-cv" aria-hidden>
+              ▾
+            </span>
+          </button>
+        ) : (
+          <button
+            type="button"
+            className={`qz-lg-go${route.set ? " is-set" : ""}`}
+            aria-label={ROUTE_COPY.goesTo(answer.text, route.label)}
+            data-pane-control="route"
+            data-answer-id={answer.id}
+          >
+            {label}
+          </button>
+        )
       }
       content={
         <>
@@ -513,7 +531,8 @@ export function QuestionRoleControl({
   hasNarrowFields: boolean;
   onCommit: Commit;
   /** Trigger dress only: "pane" = the question pane's text with a caret,
-   *  "overview" = the Questions step ledger's tag, "table" = the pill. */
+   *  "overview" = the Questions step ledger's tag, "table" = the Logic
+   *  Table's "What it does" cell (mock trole: no attribute slot). */
   variant: "overview" | "table" | "pane";
   /** The host's Undo run; absent = the loss toast carries no Undo. */
   undo?: PaneUndo;
@@ -622,11 +641,11 @@ export function QuestionRoleControl({
     ) : (
       <button
         type="button"
-        className={`qz-ltab-pill${isDecider ? " is-start" : ""} qz-ltab-pill-btn`}
-        aria-label={ROLE_LOSS_COPY.pillLabel(qIndex, label)}
+        className={`qz-lg-tbtn is-does is-${cur}`}
+        aria-label={ROLE_LOSS_COPY.pillLabel(qIndex, ROLE_TABLE[cur])}
       >
-        {label}{" "}
-        <span className="qz-ltab-caret" aria-hidden>
+        {ROLE_TABLE[cur]}
+        <span className="qz-lg-cv" aria-hidden>
           ▾
         </span>
       </button>
@@ -640,7 +659,7 @@ export function QuestionRoleControl({
           ? "qz-ovw-rolestack"
           : variant === "pane"
             ? "qz-lg-rolestack"
-            : "qz-ltab-rolestack"
+            : "qz-lg-trole"
       }
     >
       <QzPopover
@@ -689,7 +708,7 @@ export function QuestionRoleControl({
           </>
         }
       />
-      {isFilter ? (
+      {isFilter && variant !== "table" ? (
         hasNarrowFields ? (
           narrowLabel === "nothing yet" ? (
             <button

@@ -2,6 +2,7 @@ import {
   useCallback,
   useEffect,
   useLayoutEffect,
+  useReducer,
   useRef,
   useState,
   type RefObject,
@@ -35,7 +36,9 @@ import { FieldSavePill } from "./FieldSavePill";
      for scale points, whose host stores the point number and shows a
      `placeholder`). The final text is written back into the field; if it
      differs from the snapshot, `onCommit(final)` runs and, when it returns
-     a SaveToken, the field save pill shows (D8).
+     a SaveToken, the field save pill shows (D8). After the edit the field
+     re-syncs to the STORED value, so text a mutation refused never stays
+     on screen as if it had been saved.
    • textContent only — never innerHTML (B21). */
 
 /** Collapse whitespace runs (line breaks, tabs, NBSP) to one space, trim,
@@ -142,6 +145,9 @@ export function InlineText({
   const props = useRef({ maxLength, onCommit, onDraftChange, allowEmpty, onExit });
   props.current = { maxLength, onCommit, onDraftChange, allowEmpty, onExit };
   const editable = !!onCommit;
+  // Bumped at the end of an edit: the effect below then writes the stored
+  // value back even when it did not change (a refused commit).
+  const [resync, bumpResync] = useReducer((n: number) => n + 1, 0);
 
   // The invariant: never rewrite the DOM under a focused caret.
   useLayoutEffect(() => {
@@ -149,7 +155,7 @@ export function InlineText({
     if (!el || !editable) return;
     if (document.activeElement === el) return;
     if ((el.textContent ?? "") !== value) el.textContent = value;
-  }, [value, editable]);
+  }, [value, editable, resync]);
 
   const report = useCallback((el: HTMLElement) => {
     const text = el.textContent ?? "";
@@ -267,6 +273,7 @@ export function InlineText({
     if (final === normalizeInlineText(orig, max)) return;
     const saved = commit?.(final);
     if (saved) setToken(saved);
+    bumpResync();
   };
 
   if (!editable) {

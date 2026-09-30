@@ -327,6 +327,8 @@ export const SHEET_COPY = {
   then: {
     next: "Next question",
     results: "Straight to results",
+    /** An unset route on the last question (mock nextText). */
+    last: "Results (last question)",
     skip: (n: number) => `Skips to Q${n}`,
   },
   type: {
@@ -577,6 +579,7 @@ export const ROUTE_COPY = {
   lastQuestion: "the results (this is the last question)",
   skips: (n: number) => `skips ${n} question${n === 1 ? "" : "s"}`,
   straight: "Straight to the results",
+  goesTo: (answer: string, where: string) => `${answer} goes to ${where}`,
 };
 
 /** The role menu's loss lines and the D9 toast (mock roleMenu, moveRole). */
