@@ -5,8 +5,7 @@ import { Link, useLoaderData } from "@remix-run/react";
 import { requireStudioAccess, resolveStudioShop } from "../lib/studioAccess.server";
 import prisma from "../db.server";
 import { QzPage, QzCard } from "../components/qz";
-import { MIN_GOAL_CHARS } from "../lib/funnelDraft.server";
-import { beginGoalFirstFlow } from "../lib/goalPrepick.server";
+import { createGoalQuizForShop } from "../lib/home.server";
 import { EMPTY_GOAL_BRIEF, GoalBox, useGoalCreate, type GoalBrief } from "../components/studio/GoalBox";
 
 // FLOW-1 (funnel-reconfig Flow 1) — the "Write Your Goal" front door. The
@@ -29,21 +28,9 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 export const action = async ({ request }: ActionFunctionArgs) => {
   await requireStudioAccess(request);
   const shop = await resolveStudioShop();
-  const form = await request.formData();
-  const goal = String(form.get("goal") ?? "").trim().slice(0, 500);
-  if (goal.length < MIN_GOAL_CHARS) {
-    return json(
-      { ok: false, error: `Add a little more detail (at least ${MIN_GOAL_CHARS} characters).` },
-      { status: 400 },
-    );
-  }
-  const lengthRaw = Number(form.get("length"));
-  const questionLength =
-    Number.isInteger(lengthRaw) && lengthRaw >= 3 && lengthRaw <= 12 ? lengthRaw : null;
-  // HOME-3 — only an explicit "0" turns the intro off; absent keeps it.
-  const intro = form.get("intro") !== "0";
-  const quizId = await beginGoalFirstFlow(shop, { goal, questionLength, intro });
-  return redirect(`/studio/onboarding/${quizId}`);
+  const result = await createGoalQuizForShop(shop, await request.formData());
+  if (!result.ok) return json(result, { status: 400 });
+  return redirect(`/studio/onboarding/${result.quizId}`);
 };
 
 export default function StudioGoal() {

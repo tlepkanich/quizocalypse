@@ -1,8 +1,14 @@
 // app/routes/app._index.tsx
-// Wiskr dashboard, redesigned in Grid Notebook style.
-// Same loader/action behavior as the original — only the JSX is rebuilt.
+// The embedded (Shopify admin) Home. HOME-3 (first-run handoff §12): the same
+// Home as the standalone /studio — screen 2 (no quiz: the two-panel create
+// card) and screen 3 (with a quiz: reminder, two-row create module, Also
+// waiting + Last 30 days, Your quizzes) via the shared <HomeScreens> +
+// loadHomeForShop. NEVER screen 1: no modal on page load (Built for Shopify
+// 4.3.3), so allowDialog is false here in both the loader and the action.
+// Owner 2026-09-29: the embedded-only catalog features stay — sync banners
+// above the Home screens; Resync, tag enrichment and What's new below them.
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, type ReactNode } from "react";
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "@remix-run/node";
 import { json } from "@remix-run/node";
 import { useFetcher, useLoaderData, Link } from "@remix-run/react";
@@ -11,17 +17,10 @@ import { authenticate } from "../shopify.server";
 import prisma from "../db.server";
 import { formatDate } from "../lib/formatDate";
 import { syncCatalog } from "../jobs/catalogSync";
-import {
-  QzPage,
-  QzPageHeader,
-  QzButton,
-  QzCard,
-  QzBadge,
-  QzBanner,
-  QzStat,
-  QzStatGrid,
-  QzTooltip,
-} from "../components/qz";
+import { HOME_INTENTS, loadHomeForShop, runHomeIntentForShop } from "../lib/home.server";
+import { APP_HOME_LINKS } from "../lib/homeFeed";
+import { HomeScreens } from "../components/studio/HomeScreens";
+import { QzButton, QzCard, QzBadge, QzBanner, QzTooltip } from "../components/qz";
 import {
   LATEST_RELEASES,
   type Release,
@@ -34,50 +33,46 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { session } = await authenticate.admin(request);
   const shop = await prisma.shop.findUnique({
     where: { shopDomain: session.shop },
-    include: {
-      _count: { select: { products: true, collections: true, quizzes: true } },
-    },
+    include: { _count: { select: { products: true, collections: true } } },
   });
 
-  // Pull a couple of recent quizzes for the dashboard preview.
-  const recent = shop
-    ? await prisma.quiz.findMany({
-        where: { shopId: shop.id },
-        select: {
-          id: true,
-          name: true,
-          status: true,
-          version: true,
-          updatedAt: true,
-        },
-        orderBy: { updatedAt: "desc" },
-        take: 3,
-      })
-    : [];
-
   return json({
-    shopDomain: session.shop,
+    // Null only before the first catalog sync creates the Shop row; the
+    // mount-time auto-resync below creates it and revalidates.
+    home: shop ? await loadHomeForShop(shop, { links: APP_HOME_LINKS, allowDialog: false }) : null,
     lastSyncAt: shop?.lastSyncAt?.toISOString() ?? null,
     lastSyncStatus: shop?.lastSyncStatus ?? null,
     lastSyncError: shop?.lastSyncError ?? null,
     productCount: shop?._count.products ?? 0,
     collectionCount: shop?._count.collections ?? 0,
-    quizCount: shop?._count.quizzes ?? 0,
-    recent: recent.map((q) => ({ ...q, updatedAt: q.updatedAt.toISOString() })),
   });
 };
 
+const isHomeIntent = (v: FormDataEntryValue | null) =>
+  (HOME_INTENTS as readonly string[]).includes(String(v ?? ""));
+
 export const action = async ({ request }: ActionFunctionArgs) => {
   const { session, admin } = await authenticate.admin(request);
+  const form = await request.formData();
+  // Home's own writes (dismiss-reminder) carry an intent; the Resync button
+  // posts nothing.
+  if (isHomeIntent(form.get("intent"))) {
+    const shop = await prisma.shop.findUnique({ where: { shopDomain: session.shop } });
+    if (!shop) return json({ ok: false as const }, { status: 404 });
+    const ok = await runHomeIntentForShop(shop, form, { allowDialog: false });
+    return ok ? json({ ok: true as const }) : json({ ok: false as const }, { status: 400 });
+  }
   const result = await syncCatalog(admin, session.shop);
-  return json({ ok: true, result });
+  return json({ ok: true as const, result });
 };
 
 export default function Index() {
   const data = useLoaderData<typeof loader>();
-  const fetcher = useFetcher<typeof action>();
+  // The Resync fetcher only ever hits the sync branch of the action.
+  const fetcher = useFetcher<{ ok: boolean; result?: { productCount: number; collectionCount: number } }>();
   const isResyncing =
     fetcher.state !== "idle" && fetcher.formMethod === "POST";
+  const synced = fetcher.data?.result ?? null;
 
   // Tag enrichment: separate fetcher so it doesn't interfere with the
   // resync button's state. Auto-loops while `remaining > 0` so one
@@ -155,172 +150,67 @@ export default function Index() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  return (
-    <QzPage>
-      <TitleBar title="Wiskr" />
+  const banners: ReactNode[] = [];
+  if (data.lastSyncStatus === "error") {
+    banners.push(
+      <QzBanner key="error" tone="crit" title="Last catalog sync failed">
+        {data.lastSyncError ?? "Unknown error"}
+      </QzBanner>,
+    );
+  }
+  if (data.lastSyncStatus === "partial") {
+    banners.push(
+      <QzBanner key="partial" tone="warn" title="Catalog synced with skipped rows">
+        {data.lastSyncError ??
+          "Some products or collections were skipped during the last sync. Resync to retry."}
+      </QzBanner>,
+    );
+  }
+  if (isStale) {
+    banners.push(
+      <QzBanner key="stale" tone="warn" title="Catalog data is stale">
+        The last successful sync was more than 48 hours ago. Resync to pull
+        the latest products before generating a quiz.
+      </QzBanner>,
+    );
+  }
+  const top = banners.length > 0 ? <>{banners}</> : null;
 
-      {data.lastSyncStatus === "error" && (
-        <QzBanner tone="crit" title="Last catalog sync failed">
-          {data.lastSyncError ?? "Unknown error"}
-        </QzBanner>
-      )}
-      {data.lastSyncStatus === "partial" && (
-        <QzBanner tone="warn" title="Catalog synced with skipped rows">
-          {data.lastSyncError ??
-            "Some products or collections were skipped during the last sync. Resync to retry."}
-        </QzBanner>
-      )}
-      {isStale && (
-        <QzBanner tone="warn" title="Catalog data is stale">
-          The last successful sync was more than 48 hours ago. Resync to pull
-          the latest products before generating a quiz.
-        </QzBanner>
-      )}
-
-      <QzPageHeader
-        eyebrow="Welcome back"
-        title={
-          <>
-            Good morning,{" "}
-            <span className="qz-serif-italic">{shortDomain(data.shopDomain)}.</span>
-          </>
-        }
-        subtitle={
-          <>
-            Your catalog is fresh and{" "}
-            <strong style={{ color: "var(--qz-ink)", fontWeight: 600 }}>
-              {data.quizCount} quizzes
-            </strong>{" "}
-            are configured. Pick up where you left off, or generate a new one
-            from your catalog.
-          </>
-        }
-        actions={
-          <>
-            <QzButton
-              onClick={() => fetcher.submit({}, { method: "POST" })}
-              disabled={isResyncing}
-            >
-              {isResyncing ? "Syncing…" : "Resync catalog"}
-            </QzButton>
-            <QzButton
-              onClick={startEnrichment}
-              disabled={isEnriching || data.productCount === 0}
-            >
-              {enrichLabel}
-            </QzButton>
-            <Link to="/app/quizzes/new">
-              <QzButton variant="ghost" disabled={data.productCount === 0}>
-                Blank quiz
-              </QzButton>
-            </Link>
-            <Link to="/app/onboarding/brand">
-              <QzButton variant="accent" disabled={data.productCount === 0}>
-                New AI quiz
-              </QzButton>
-            </Link>
-          </>
-        }
-      />
-
-      <QzStatGrid>
-        <QzStat
-          label="Products in catalog"
-          value={data.productCount}
-          delta={`Synced ${lastSyncRelative}`}
-        />
-        <QzStat
-          label="Collections"
-          value={data.collectionCount}
-          delta={`From ${data.shopDomain}`}
-        />
-        <QzStat
-          label="Quizzes"
-          value={data.quizCount}
-          delta={data.quizCount === 0 ? "Generate your first" : "Tap a quiz to edit"}
-        />
-      </QzStatGrid>
-
-      <section
-        className="qz-mt-48 qz-responsive-grid"
-        style={{
-          display: "grid",
-          gridTemplateColumns: "minmax(0, 1.6fr) minmax(0, 1fr)",
-          gap: 32,
-        }}
-      >
-        <div className="qz-col qz-gap-24">
-          <div className="qz-section-head">
-            <div>
-              <div className="qz-label">Recent</div>
-              <h2 className="qz-h1 qz-mt-8">Quizzes you've been working on</h2>
-            </div>
-            <Link to="/app/quizzes">
-              <QzButton variant="ghost" size="sm">View all →</QzButton>
-            </Link>
-          </div>
-
-          {data.recent.length === 0 ? (
-            <QzCard dashed>
-              <div className="qz-label">No quizzes yet</div>
-              <p className="qz-h2 qz-mt-8">
-                Start with a template or let AI build one from your catalog.
-              </p>
-              <div className="qz-row qz-mt-16" style={{ gap: 10, flexWrap: "wrap" }}>
-                <Link to="/app/onboarding/brand" style={{ display: "inline-block" }}>
-                  <QzButton variant="accent">Guided setup →</QzButton>
-                </Link>
-                <Link to="/app/quizzes/new" style={{ display: "inline-block" }}>
-                  <QzButton variant="ghost">Blank quiz</QzButton>
-                </Link>
-              </div>
-            </QzCard>
-          ) : (
-            <div className="qz-col qz-gap-16">
-              {data.recent.map((q) => (
-                <Link
-                  key={q.id}
-                  to={`/app/quizzes/${q.id}/studio`}
-                  style={{ textDecoration: "none", color: "inherit" }}
-                >
-                  <QzCard style={{ cursor: "pointer" }}>
-                    <div
-                      className="qz-row qz-row-between"
-                      style={{ alignItems: "flex-start" }}
-                    >
-                      <div style={{ minWidth: 0, flex: 1 }}>
-                        <div className="qz-row qz-gap-8" style={{ alignItems: "center" }}>
-                          <QzBadge tone={q.status === "published" ? "ok" : "draft"}>
-                            {q.status}
-                          </QzBadge>
-                          <span className="qz-mono qz-dim">v{q.version}</span>
-                        </div>
-                        <h3 className="qz-h2 qz-mt-8">{q.name}</h3>
-                        <p className="qz-mono qz-dim qz-mt-8" style={{ margin: 0 }}>
-                          Updated {formatDate(q.updatedAt)}
-                        </p>
-                      </div>
-                      <QzButton variant="ghost" size="sm">Open →</QzButton>
-                    </div>
-                  </QzCard>
-                </Link>
-              ))}
-            </div>
-          )}
+  const bottom = (
+    <>
+      <section className="hm3-card hm3-sync" aria-labelledby="app-sec-catalog">
+        <div className="hm3-sechead">
+          <p className="hm3-lbl" id="app-sec-catalog">
+            Catalog
+          </p>
+          <Link className="hm3-link" to="/app/categories">
+            Categories
+          </Link>
         </div>
-
-        <div className="qz-col qz-gap-24">
-          <WhatsNewCard releases={LATEST_RELEASES} />
+        <p className="hm3-sync-line">
+          {data.productCount} products · {data.collectionCount} collections · Synced{" "}
+          {lastSyncRelative}
+        </p>
+        <div className="hm3-sync-acts">
+          <QzButton
+            onClick={() => fetcher.submit({}, { method: "POST" })}
+            disabled={isResyncing}
+          >
+            {isResyncing ? "Syncing…" : "Resync catalog"}
+          </QzButton>
+          <QzButton
+            onClick={startEnrichment}
+            disabled={isEnriching || data.productCount === 0}
+          >
+            {enrichLabel}
+          </QzButton>
         </div>
       </section>
 
-      {fetcher.data?.ok && (
-        <div className="qz-mt-24">
-          <QzBanner tone="ok" title="Catalog synced">
-            Synced {fetcher.data.result.productCount} products and{" "}
-            {fetcher.data.result.collectionCount} collections.
-          </QzBanner>
-        </div>
+      {synced && (
+        <QzBanner tone="ok" title="Catalog synced">
+          Synced {synced.productCount} products and {synced.collectionCount} collections.
+        </QzBanner>
       )}
 
       {/* Enrichment summary: shows once a run finishes with no further
@@ -329,30 +219,48 @@ export default function Index() {
       {enrichFetcher.data?.ok &&
         !enrichRunningRef.current &&
         enrichDoneRef.current > 0 && (
-          <div className="qz-mt-24">
-            <QzBanner
-              tone={
-                (enrichFetcher.data.shopifyErrors?.length ?? 0) +
-                  (enrichFetcher.data.enrichmentErrors?.length ?? 0) >
-                0
-                  ? "warn"
-                  : "ok"
-              }
-              title={`Enriched ${enrichDoneRef.current} product${enrichDoneRef.current === 1 ? "" : "s"}`}
-            >
-              {(enrichFetcher.data.shopifyErrors?.length ?? 0) === 0 &&
-              (enrichFetcher.data.enrichmentErrors?.length ?? 0) === 0
-                ? "Tags merged into Prisma and pushed back to Shopify."
-                : `${enrichFetcher.data.enrichmentErrors?.length ?? 0} enrichment failures, ${enrichFetcher.data.shopifyErrors?.length ?? 0} Shopify push failures. The local catalog still has the enriched tags.`}
-            </QzBanner>
-          </div>
+          <QzBanner
+            tone={
+              (enrichFetcher.data.shopifyErrors?.length ?? 0) +
+                (enrichFetcher.data.enrichmentErrors?.length ?? 0) >
+              0
+                ? "warn"
+                : "ok"
+            }
+            title={`Enriched ${enrichDoneRef.current} product${enrichDoneRef.current === 1 ? "" : "s"}`}
+          >
+            {(enrichFetcher.data.shopifyErrors?.length ?? 0) === 0 &&
+            (enrichFetcher.data.enrichmentErrors?.length ?? 0) === 0
+              ? "Tags merged into Prisma and pushed back to Shopify."
+              : `${enrichFetcher.data.enrichmentErrors?.length ?? 0} enrichment failures, ${enrichFetcher.data.shopifyErrors?.length ?? 0} Shopify push failures. The local catalog still has the enriched tags.`}
+          </QzBanner>
         )}
-    </QzPage>
-  );
-}
 
-function shortDomain(d: string) {
-  return d.replace(/\.myshopify\.com$/, "");
+      <WhatsNewCard releases={LATEST_RELEASES} />
+    </>
+  );
+
+  return (
+    <>
+      <TitleBar title="Wiskr" />
+      {data.home ? (
+        <HomeScreens
+          data={data.home}
+          links={APP_HOME_LINKS}
+          goalAction="/app/goal"
+          top={top}
+          bottom={bottom}
+        />
+      ) : (
+        <div className="hm3 is-first">
+          <div className="hm3-col hm3-stack">
+            {top}
+            {bottom}
+          </div>
+        </div>
+      )}
+    </>
+  );
 }
 
 // Compact "What's new" card for the dashboard right column. Lists the

@@ -5,8 +5,9 @@ import type { action as goalAction } from "../../routes/studio.goal";
 // HOME-3 (first-run handoff §5, §9) — THE goal box. Every place the app asks
 // "what should this quiz do" mounts this one component and asks for three
 // things only: the goal, the number of questions, the intro screen. It posts
-// to /studio/goal's action (FLOW-1), which claims the decider draft and
-// redirects into onboarding; a too-short goal renders that action's 400 copy.
+// to /studio/goal's action (FLOW-1; /app/goal on the embedded Home), which
+// claims the decider draft and redirects into onboarding; a too-short goal
+// renders that action's 400 copy.
 //
 // Densities:  dialog — the first-open pop-up (21px goal)
 //             page   — Home with no quiz, the goal page (20px)
@@ -27,11 +28,12 @@ export function goalBriefFields(brief: GoalBrief): Record<string, string> {
   return fields;
 }
 
-export function useGoalCreate() {
+/** `action` is the surface's goal route: /studio/goal, or /app/goal when
+    embedded (Shopify auth — the studio route would reject it). */
+export function useGoalCreate(action = "/studio/goal") {
   const fetcher = useFetcher<typeof goalAction>();
   return {
-    create: (brief: GoalBrief) =>
-      fetcher.submit(goalBriefFields(brief), { method: "post", action: "/studio/goal" }),
+    create: (brief: GoalBrief) => fetcher.submit(goalBriefFields(brief), { method: "post", action }),
     busy: fetcher.state !== "idle",
     error: fetcher.data && !fetcher.data.ok ? fetcher.data.error : null,
   };

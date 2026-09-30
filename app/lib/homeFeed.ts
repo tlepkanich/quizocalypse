@@ -34,10 +34,59 @@ export interface HomeQueueQuiz {
   starts: number;
 }
 
+/* ── Where Home links to ───────────────────────────────────────────────────
+   Home renders on two surfaces (first-run handoff §12): the standalone
+   /studio and the embedded Shopify /app. Every destination goes through one
+   of these maps, so the queue and the page never hard-code a surface. */
+
+export interface HomeLinks {
+  /** A draft still in the setup funnel. */
+  setup: (quizId: string) => string;
+  /** A built quiz in the editor. */
+  editor: (quizId: string) => string;
+  /** Where a live quiz gets added to the store. */
+  embed: (quizId: string) => string;
+  /** Where captured emails get a destination. */
+  integrations: string;
+  templates: string;
+  /** The step-by-step funnel — the non-AI-first path (FLOW-2). */
+  scratch: string;
+  quizzes: string;
+  analytics: string;
+}
+
+export const STUDIO_HOME_LINKS: HomeLinks = {
+  setup: (id) => `/studio/onboarding/${id}`,
+  editor: (id) => `/studio/${id}`,
+  embed: (id) => `/studio/${id}/embed`,
+  integrations: "/studio/integrations",
+  templates: "/studio/templates",
+  scratch: "/studio/onboarding",
+  quizzes: "/studio/quizzes",
+  analytics: "/studio/analytics",
+};
+
+// The embedded Shopify admin. /app has no embed page and no integrations
+// page of its own — owner 2026-09-29: "Add to store" opens the builder
+// (publish lives there, and it stays inside the admin iframe) and "Connect"
+// opens the captured-emails list.
+export const APP_HOME_LINKS: HomeLinks = {
+  setup: (id) => `/app/onboarding/${id}`,
+  editor: (id) => `/app/quizzes/${id}/studio`,
+  embed: (id) => `/app/quizzes/${id}/studio`,
+  integrations: "/app/captures",
+  templates: "/app/onboarding",
+  scratch: "/app/onboarding?start=funnel",
+  quizzes: "/app/quizzes",
+  analytics: "/app/analytics",
+};
+
 export function buildHomeQueue(input: {
   quizzes: HomeQueueQuiz[]; // most recently edited first
   emailsWithoutDestination: boolean;
+  links: HomeLinks;
 }): HomeWaitItem[] {
+  const { links } = input;
   const items: HomeWaitItem[] = [];
   const setup = input.quizzes.find((q) => q.inSetup);
   if (setup) {
@@ -47,7 +96,7 @@ export function buildHomeQueue(input: {
       title: setup.stalled
         ? `Setup stalled on “${setup.name}”`
         : `Finish setting up “${setup.name}”`,
-      href: `/studio/onboarding/${setup.id}`,
+      href: links.setup(setup.id),
       stepIndex: setup.stepIndex,
     });
   }
@@ -57,7 +106,7 @@ export function buildHomeQueue(input: {
       kind: "publish",
       key: `publish:${draft.id}`,
       title: `Publish “${draft.name}”`,
-      href: `/studio/${draft.id}`,
+      href: links.editor(draft.id),
     });
   }
   const unvisited = input.quizzes.find((q) => q.status === "published" && q.starts === 0);
@@ -66,7 +115,7 @@ export function buildHomeQueue(input: {
       kind: "store",
       key: `store:${unvisited.id}`,
       title: `Add “${unvisited.name}” to your store`,
-      href: `/studio/${unvisited.id}/embed`,
+      href: links.embed(unvisited.id),
     });
   }
   if (input.emailsWithoutDestination) {
@@ -74,7 +123,7 @@ export function buildHomeQueue(input: {
       kind: "emails",
       key: "emails",
       title: "Send your captured emails somewhere",
-      href: "/studio/integrations",
+      href: links.integrations,
     });
   }
   return items;

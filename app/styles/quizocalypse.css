@@ -10524,6 +10524,11 @@ body[data-qz] .qz-lw-cell:focus-visible { outline: 2px solid var(--qz-accent); o
 .hm3-also { padding: 20px 24px 10px; }
 .hm3-stats { padding: 20px 22px; }
 .hm3-stats .hm3-sechead { margin-bottom: 18px; }
+/* Embedded /app only — the catalog card under the Home screens (owner
+   2026-09-29: Resync + tag enrichment stay on the embedded Home). */
+.hm3-sync { padding: 20px 22px; }
+.hm3-sync-line { margin: 12px 0 14px; font-size: 13.5px; color: var(--qz-ink-3); }
+.hm3-sync-acts { display: flex; flex-wrap: wrap; gap: 10px; }
 .hm3-row {
   display: flex; align-items: center; gap: 14px; min-height: 58px; padding: 13px 0;
   border-bottom: 1px solid var(--qz-rule-2);
@@ -10622,7 +10627,7 @@ body[data-qz] .qz-lw-cell:focus-visible { outline: 2px solid var(--qz-accent); o
   .hm3-next { grid-template-columns: minmax(0, 1fr); }
   .hm3-next-side { padding: 18px 16px 0; }
   .hm3-next-body, .hm3-make-body { padding-inline: 16px; }
-  .hm3-also, .hm3-stats, .hm3-quizzes, .hm3-quizzes.is-ingrid { padding-inline: 16px; }
+  .hm3-also, .hm3-stats, .hm3-sync, .hm3-quizzes, .hm3-quizzes.is-ingrid { padding-inline: 16px; }
   .hm3-qmeter, .hm3-qnum { display: none; }
   /* Narrow: the tag drops under the name instead of squeezing it. */
   .hm3-qname, .hm3-quizzes.is-ingrid .hm3-qname { grid-template-columns: minmax(0, 1fr); row-gap: 4px; }

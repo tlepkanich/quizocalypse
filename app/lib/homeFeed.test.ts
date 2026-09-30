@@ -5,8 +5,12 @@ import {
   editedLabel,
   sparkHeights,
   splitHomeQueue,
+  APP_HOME_LINKS,
+  STUDIO_HOME_LINKS,
   type HomeQueueQuiz,
 } from "./homeFeed";
+
+const links = STUDIO_HOME_LINKS;
 
 const quiz = (over: Partial<HomeQueueQuiz>): HomeQueueQuiz => ({
   id: "q1",
@@ -28,6 +32,7 @@ describe("buildHomeQueue", () => {
         quiz({ id: "setup", name: "Setup", inSetup: true, stepIndex: 2 }),
       ],
       emailsWithoutDestination: true,
+      links,
     });
     expect(items.map((i) => i.kind)).toEqual(["setup", "publish", "store", "emails"]);
     expect(items[0]).toMatchObject({ href: "/studio/onboarding/setup", stepIndex: 2 });
@@ -38,14 +43,36 @@ describe("buildHomeQueue", () => {
     const [item] = buildHomeQueue({
       quizzes: [quiz({ inSetup: true, stalled: true })],
       emailsWithoutDestination: false,
+      links,
     });
     expect(item).toMatchObject({ kind: "stalled", title: "Setup stalled on “Serum Finder”" });
+  });
+
+  it("links into the embedded app with the same keys (§12)", () => {
+    const input = {
+      quizzes: [
+        quiz({ id: "live", status: "published", starts: 0 }),
+        quiz({ id: "draft" }),
+        quiz({ id: "setup", inSetup: true }),
+      ],
+      emailsWithoutDestination: true,
+    };
+    const app = buildHomeQueue({ ...input, links: APP_HOME_LINKS });
+    expect(app.map((i) => i.href)).toEqual([
+      "/app/onboarding/setup",
+      "/app/quizzes/draft/studio",
+      "/app/quizzes/live/studio",
+      "/app/captures",
+    ]);
+    // A reminder dismissed on one surface stays dismissed on the other.
+    expect(app.map((i) => i.key)).toEqual(buildHomeQueue({ ...input, links }).map((i) => i.key));
   });
 
   it("skips a live quiz that already has starts", () => {
     const items = buildHomeQueue({
       quizzes: [quiz({ status: "published", starts: 4 })],
       emailsWithoutDestination: false,
+      links,
     });
     expect(items).toEqual([]);
   });
@@ -55,6 +82,7 @@ describe("splitHomeQueue", () => {
   const items = buildHomeQueue({
     quizzes: [quiz({ id: "d" })],
     emailsWithoutDestination: true,
+      links,
   });
 
   it("leads with the first item", () => {
@@ -70,7 +98,7 @@ describe("splitHomeQueue", () => {
   });
 
   it("never leads with emails", () => {
-    const emailsOnly = buildHomeQueue({ quizzes: [], emailsWithoutDestination: true });
+    const emailsOnly = buildHomeQueue({ quizzes: [], emailsWithoutDestination: true, links });
     expect(splitHomeQueue(emailsOnly, null)).toEqual({ next: null, also: emailsOnly });
   });
 });
