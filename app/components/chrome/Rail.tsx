@@ -14,6 +14,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { Wordmark } from "./Wordmark";
+import { FoxMark } from "./FoxMark";
 
 /* Design-system-V2 §7.7 — the left nav rail for the standalone /studio shell.
    QRTZ-S1 restyled it to the Quartz Rail mock (_src/quartz.mjs +
@@ -56,7 +57,7 @@ const NAV: RailItem[] = [
   // /studio/customers redirects there; the export resource route survives.
   { to: "/studio/integrations", label: "Integrations", icon: Plug },
   { to: "/studio/settings", label: "Settings", icon: Settings },
-  { to: "/studio/email", label: "Email Automation", icon: Mail },
+  { to: "/studio/email", label: "Email", icon: Mail },
   // { to: "/studio/ab", label: "A/B testing", icon: FlaskConical, soon: true },
   // { to: "/studio/ai-agent", label: "AI Agent", icon: Sparkles, soon: true },
 ];
@@ -87,7 +88,9 @@ export function Rail() {
   return (
     <aside className={collapsed ? "qz-rail is-collapsed" : "qz-rail"}>
       <div className="qz-rail-head">
-        <Wordmark compact={collapsed} />
+        {/* HOME-3 (handoff §13.3) — the wordmark alone; the collapsed rail
+            keeps the mark, since the logotype is hidden there. */}
+        <Wordmark compact={collapsed} mark={false} />
       </div>
 
       <nav className="qz-rail-nav" aria-label="Studio navigation">
@@ -126,8 +129,9 @@ export function Rail() {
 
       <div className="qz-rail-foot">
         <div className="qz-rail-account">
+          {/* The Wiskr mark marks the row that belongs to the person using the app. */}
           <span className="qz-rail-avatar" aria-hidden="true">
-            M
+            <FoxMark size={22} />
           </span>
           <span className="qz-rail-label">My account</span>
           {/* Quartz: dark mode is CUT (owner, 2026-08-09) — the theme toggle

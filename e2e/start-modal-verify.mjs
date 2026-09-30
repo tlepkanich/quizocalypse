@@ -85,8 +85,8 @@ await page.screenshot({ path: `${DIR}/sm-screen1.png` });
 await page.locator('a.qz-sm-row[href="/studio/goal"]').click();
 await page.waitForURL(/\/studio\/goal/, { timeout: 10000 });
 await page.waitForSelector(".qz-goal-page", { timeout: 15000 });
-check("write-goal lands on the goal page (brief tracker present)", (await page.locator(".qz-sm-track").count()) === 1);
-check("goal page CTA gated like the old brief", await page.locator(".qz-sm-gen").isDisabled());
+// HOME-3 — the goal page mounts the shared goal box (goal · count · intro).
+check("write-goal lands on the goal page (goal box present)", (await page.locator("#qz-goal-goal").count()) === 1);
 await page.screenshot({ path: `${DIR}/sm-goal-page.png` });
 
 // ── Esc/scrim closes the modal without submitting ───────────────────────────

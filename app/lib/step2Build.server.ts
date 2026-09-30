@@ -724,6 +724,7 @@ export async function buildQuizFromPicked(
     logic_model?: string;
     rec_page_settings?: unknown;
     logic_style?: unknown;
+    build_session?: { goal_first?: { intro?: unknown; question_length?: unknown } };
   } | null;
   let draftTokens = draftRaw?.design_tokens ?? null;
   // DGN-1 late-adopt — a draft created before the shop's brand identity finished
@@ -753,6 +754,17 @@ export async function buildQuizFromPicked(
   const logicStyleRaw = logicModel ? draftRaw?.logic_style : undefined;
   const logicStyle =
     logicStyleRaw === "rules" || logicStyleRaw === "attributes" ? logicStyleRaw : undefined;
+  // HOME-3 — the Home composer's "Intro screen" off rides the goal-first
+  // brief; the re-seed below drops build_session, so thread it through.
+  const hideIntro = logicModel != null && draftRaw?.build_session?.goal_first?.intro === false;
+  // HOME-3 (handoff §10.1) — an explicit count is a pin, not a hint: the
+  // template pass may return a different question_count for a pinned range,
+  // so the build's target is the merchant's number. Auto (absent) → the pick.
+  const pinnedRaw = draftRaw?.build_session?.goal_first?.question_length;
+  const pinnedCount =
+    logicModel != null && typeof pinnedRaw === "number" && Number.isInteger(pinnedRaw)
+      ? pinnedRaw
+      : undefined;
 
   // FAST F2 — resolve the concurrent prep (already settled or nearly so by the
   // time the template pass + category writes above finish). undefined (absent
@@ -770,7 +782,7 @@ export async function buildQuizFromPicked(
       quizId,
       name: buildName,
       goalPrompt,
-      questionCount: picked.question_count,
+      questionCount: pinnedCount ?? picked.question_count,
       tone: "friendly",
       flow: {
         welcome_message: false,
@@ -781,6 +793,7 @@ export async function buildQuizFromPicked(
       ...(logicModel ? { logicModel } : {}),
       ...(recPageSettings ? { recPageSettings } : {}),
       ...(logicStyle ? { logicStyle } : {}),
+      ...(hideIntro ? { hideIntro } : {}),
       ...(enabledBuckets.length ? { preResolvedBuckets: enabledBuckets } : {}),
       ...(directionOk
         ? { directionAngle: rich.angle, sampleQuestionSeeds: rich.sample_questions }

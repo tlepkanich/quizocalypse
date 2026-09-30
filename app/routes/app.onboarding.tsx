@@ -23,6 +23,11 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     select: { id: true },
   });
   if (!shop) throw new Response("Shop not found", { status: 404 });
+  // HOME-3 — Home's "Start from scratch" link: straight into the resumable
+  // funnel, as /studio/onboarding does for the standalone surface.
+  if (new URL(request.url).searchParams.get("start") === "funnel") {
+    return redirect(`/app/onboarding/${await findOrCreateStep1Draft(shop.id)}`);
+  }
   const [productCount, firstCollection] = await Promise.all([
     prisma.product.count({ where: { shopId: shop.id } }),
     prisma.collection.findFirst({ where: { shopId: shop.id }, select: { collectionId: true } }),

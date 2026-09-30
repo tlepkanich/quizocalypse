@@ -722,24 +722,14 @@ async function runStep1FunnelActionImpl(
         { status: 400 },
       );
     }
-    // Goal-brief fields (start-modal-flow mock) — optional sharpeners. Audience
-    // + factors fold into the stored goal text (it IS the brief, and every goal
-    // consumer — prompts, prefills — should see the whole thing). Length pins
-    // the synthetic type's question_range to an exact count, which the template
-    // pass reads as its question-count instruction. Absent fields (the Shape
-    // page's plain write-your-goal card sends none) keep today's behavior.
-    const audience = String(form.get("audience") ?? "").trim().slice(0, 200);
-    const factors = String(form.get("factors") ?? "").trim().slice(0, 200);
+    // HOME-3 (first-run handoff §9) — every goal box asks for three things:
+    // goal, question count, intro screen. Audience / deciding factors are gone
+    // (no UI sent them here). An explicit length (3–12) pins the synthetic
+    // type's question_range; absent keeps the 4–7 default.
     const lengthRaw = Number(form.get("length"));
     const questionLength =
-      Number.isInteger(lengthRaw) && lengthRaw >= 3 && lengthRaw <= 7 ? lengthRaw : null;
-    const goalBrief = [
-      goal,
-      audience ? `Audience: ${audience}` : "",
-      factors ? `Deciding factors: ${factors}` : "",
-    ]
-      .filter(Boolean)
-      .join("\n");
+      Number.isInteger(lengthRaw) && lengthRaw >= 3 && lengthRaw <= 12 ? lengthRaw : null;
+    const goalBrief = goal;
     // LOGIC v2 (L2-10d) — decider drafts are always direct; legacy keeps the
     // weighted default (the merchant can switch later in the Question Builder).
     const scoring =

@@ -15,19 +15,6 @@ export interface BucketResolveInputs {
   collectionTitleById: Map<string, string>;
 }
 
-// Fold the goal brief's optional sharpeners into ONE stored goal text — the
-// same shape shape-goal-build persists, so every downstream goal consumer
-// (prompts, prefills) sees the whole brief.
-export function foldGoalBrief(goal: string, audience: string, factors: string): string {
-  return [
-    goal.trim().slice(0, 500),
-    audience.trim() ? `Audience: ${audience.trim().slice(0, 200)}` : "",
-    factors.trim() ? `Deciding factors: ${factors.trim().slice(0, 200)}` : "",
-  ]
-    .filter(Boolean)
-    .join("\n");
-}
-
 // De-duplicate + cap the AI's keys, then resolve them to persistable rows.
 // Hallucinated / stale keys drop silently inside bucketRowsFor (null rows) —
 // the AI can only ever select things the merchant could have clicked.
