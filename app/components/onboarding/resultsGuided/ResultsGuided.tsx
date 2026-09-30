@@ -172,6 +172,7 @@ export function ResultsGuided({
   quizId: string;
   initialDoc: Quiz;
   productIndex: IndexedProduct[];
+  /** The catalog's collections — the discount editor's "Specific collections". */
   collections: BuilderCollection[];
   designTokens?: DesignTokens | null;
   /** The storefront domain policy links resolve against (handoff §9). */
@@ -182,7 +183,6 @@ export function ResultsGuided({
   onOpenBuilder: () => void;
 }) {
   void quizId;
-  void collections;
   const { doc, commit, isSaving, savedAt, saveError, retrySave } = useQuizDraft(initialDoc);
   const cfg = resolveGuided(doc);
   const disc = resolveDiscount(doc);
@@ -1093,6 +1093,8 @@ export function ResultsGuided({
         <DiscountEditor
           doc={doc}
           lockedToDynamic={cfg.unlock && cfg.where !== "none"}
+          collections={collections}
+          productIndex={productIndex}
           onCommit={(next) => save(writeSession(next, { unlock_deferred: undefined }))}
           onClose={() => setModal(null)}
         />

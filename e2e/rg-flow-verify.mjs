@@ -127,6 +127,35 @@ try {
   await page.locator("button[aria-label='Require the email to unlock it']").click();
   await settle();
 
+  // gdisc — the editor: order by default, read-back last, Save blockers.
+  await page.locator(".qz-rg-addbtn").click();
+  await page.waitForSelector(".qz-rg-deditor");
+  const heads = (await page.locator(".qz-rg-deditor .qz-rg-grpdiv").allTextContents()).map((t) => t.trim());
+  ok("editor sections in Shopify's order, read-back last",
+    heads[0] === "Basics" && heads[1] === "Discount code" && heads.at(-1) === "What this creates in Shopify", JSON.stringify(heads));
+  ok("order discount by default",
+    (await page.locator("[aria-label='Discount type'] button[aria-pressed='true']").innerText()).trim() === "Amount off orders");
+  await page.fill("input[aria-label='Discount value']", "0");
+  ok("a 0% value blocks Save", (await text(".qz-rg-saveblock")) === "A 0% / $0 reward takes nothing off. Give it a value.",
+    await text(".qz-rg-saveblock"));
+  await page.fill("input[aria-label='Discount value']", "15");
+  await page.locator("[aria-label='Discount type'] button", { hasText: "Free shipping" }).click();
+  ok("free shipping hides the value field", (await page.locator("input[aria-label='Discount value']").count()) === 0);
+  await page.locator("[aria-label='Discount type'] button", { hasText: "Amount off orders" }).click();
+  await page.fill("input[aria-label='Discount value']", "15");
+  await page.screenshot({ path: `${SHOTS}/3a-editor.png`, fullPage: true });
+  await page.locator("button", { hasText: "Save discount" }).click();
+  await settle();
+  ok("the discount row replaces Create", (await page.locator(".qz-rg-coupon").count()) === 1 && (await page.locator(".qz-rg-addbtn").count()) === 0);
+  ok("row reads the name and the masked code", (await text(".qz-rg-coupon .qz-rg-ct")).includes("15% off your order")
+    && (await text(".qz-rg-coupon .qz-rg-ct")).includes("QUIZ-••••••"), await text(".qz-rg-coupon .qz-rg-ct"));
+  const stored = (await prisma.quiz.findUnique({ where: { id: QUIZ } })).draftJson.discount_config;
+  await page.waitForTimeout(1200);
+  const saved = (await prisma.quiz.findUnique({ where: { id: QUIZ } })).draftJson.discount_config;
+  ok("autosave stored configured + enabled, no retired keys",
+    saved.configured === true && saved.enabled === true && !("auto_apply" in saved) && !("scope" in saved), JSON.stringify(saved ?? stored));
+  await page.screenshot({ path: `${SHOTS}/3a-with-discount.png` });
+
   await forward();
   await settle();
   ok("forward walks to the Loading tab (same step)", (await text(".qz-rg-stab.is-on")) === "Loading" && (await title()) === "Do you want their email?");

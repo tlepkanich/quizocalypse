@@ -12571,3 +12571,16 @@ button.qz-pb-row:hover { background: var(--qz-cream-2); }
 
 .qz-rg-termspv a { color: var(--qz-accent-ink); }
 .qz-rg-termspv p { margin: 0 0 4px; }
+/* §8 — the discount editor: one 680px column, Shopify's section order. */
+.qz-rg-deditor { display: flex; flex-direction: column; gap: 4px; }
+.qz-rg-dgroup .qz-rg-grpdiv { margin: 14px 0 8px; font-size: 12.5px; }
+.qz-rg-seg { display: flex; flex-wrap: wrap; }
+.qz-rg-seg button:disabled { opacity: .45; cursor: not-allowed; }
+.qz-rg-dgroup .qz-input { margin-top: 8px; }
+.qz-rg-dpick { max-height: 180px; overflow-y: auto; margin-top: 8px; padding: 4px 8px; border: 1px solid var(--qz-rule); border-radius: var(--qz-radius); }
+.qz-rg-dread { margin-top: 10px; padding: 12px 14px; border-radius: var(--qz-radius); background: var(--qz-cream); border: 1px solid var(--qz-rule); }
+.qz-rg-dread .qz-rg-grpdiv { margin: 0 0 8px; border-top: 0; padding-top: 0; }
+.qz-rg-dread dl { margin: 0; display: grid; gap: 6px; }
+.qz-rg-dread dl > div { display: grid; grid-template-columns: 96px minmax(0, 1fr); gap: 10px; font-size: 12.5px; }
+.qz-rg-dread dt { color: var(--qz-ink-4); font-weight: 600; }
+.qz-rg-dread dd { margin: 0; color: var(--qz-ink); line-height: 1.45; }
