@@ -33,6 +33,7 @@ import { NODE_LABEL } from "./panels/nodeMeta";
 import type { PickerProduct } from "./ImagePicker";
 import { MediaPicker } from "./MediaPicker";
 import { copyOptionMediaToAll } from "../../lib/answerDisplay";
+import { ROLE_BUTTON, ROLE_MENU } from "./logicTab/logicCopy";
 
 // ════════════════════════════════════════════════════════════════════════════
 // ContextPanel (Unified P2) — the right-hand contextual editor of the unified
@@ -893,8 +894,9 @@ function LayerSelector({
 // focus-trapped) sized for the full viewport — they cannot render in this
 // panel's ~294 content px, so this is the honest compact summary instead.
 // Vocabulary is the mock's (GAPS §A item 7): "Picks the result" / "Narrows
-// on …" / "Maps to". Display strings are written HERE, not imported from
-// logicTab (whose rename ships separately).
+// on …" / "Maps to". D18 (owner 2026-09-22): the role NAMES come from the
+// shared Logic copy module (logicTab/logicCopy.ts), so the inspector and the
+// Logic step can never disagree ("Asked only" became "Info only").
 export function RulesTabBody({
   node,
   categories,
@@ -920,7 +922,7 @@ export function RulesTabBody({
   const narrowLabel = role === "filter" ? derivedNarrowLabel(answers) : null;
   const roleLine =
     role === "decides"
-      ? "Picks the result"
+      ? ROLE_MENU[0]!.n
       : role === "filter"
         ? narrowLabel === "nothing yet"
           ? "Narrows — nothing mapped yet"
@@ -929,7 +931,7 @@ export function RulesTabBody({
             : narrowLabel === "anything"
               ? "Narrows the products"
               : `Narrows on ${narrowLabel}`
-        : "Asked only";
+        : ROLE_BUTTON.info;
 
   // Chip labels for a narrowing answer, from the answer's RAW fields (keeps
   // the merchant's casing; family tags "Fit:Slim" read as their value).
