@@ -113,6 +113,7 @@ export function LogicHeader({
             width={400}
             className="qz-lg-pop qz-lg-stylemenu"
             testId="logic-style-menu"
+            offset={6}
             {...(styleMenuOpen !== undefined ? { open: styleMenuOpen } : {})}
             {...(onStyleMenuOpenChange ? { onOpenChange: onStyleMenuOpenChange } : {})}
             items={LOGIC_STYLE_MENU.items.map((it) => ({

@@ -827,8 +827,8 @@ export function PicksPicker({
     <QzPopover
       open={open}
       onOpenChange={onOpenChange}
-      width={300}
-      maxWidth={300}
+      width={240}
+      maxWidth={240}
       manageFocus
       closeOnAnchorHidden
       ariaLabel={PICKER_COPY.title}

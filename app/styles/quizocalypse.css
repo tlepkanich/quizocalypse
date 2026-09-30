@@ -12457,7 +12457,7 @@ body[data-qz] .qz-ed:focus-visible {
    The Logic workspace card built to docs/design/logic-tab/rules-row/index.html
    at the mock's 100% sizes (D20). Mock class → .qz-lg-<mock name>; every
    colour is a --qz-* token (the mock's :root hexes map one for one:
-   --ground → --qz-cream-2, --cell → --qz-ls-cell-bg, --line2 → --qz-ls-line2,
+   --ground → --qz-cream-2, --cell → --qz-lg-cell, --line2 → --qz-ls-line2,
    --warn-line → --qz-ls-warn-line, --crit-wash → --qz-ls-crit-wash). The few
    values Quartz has no token for are declared below as --qz-lg-*.
    Shared by the funnel's Logic step and the builder's Logic view (the
@@ -12467,6 +12467,7 @@ body[data-qz] .qz-ed:focus-visible {
   --qz-lg-pop: 0 12px 32px rgba(32, 28, 46, 0.16), 0 0 0 1px rgba(32, 28, 46, 0.06); /* mock --pop */
   --qz-lg-warn-dot: #C98A1B;  /* mock --warn-dot: "needs a rule" dot */
   --qz-lg-res: #1D4F91;       /* mock --res: recommendation chips in sentences */
+  --qz-lg-cell: #FAF9FC;      /* mock --cell (the older --qz-ls-cell-bg is a shade off) */
   --qz-lg-res-wash: #EAF2FE;  /* mock --res-wash */
   --qz-lg-res-line: #C9DCFB;  /* mock --res-line */
   /* D20 size tokens (100%); a later scale factor multiplies these. */
@@ -12569,7 +12570,7 @@ body[data-qz] .qz-ed:focus-visible {
 .qz-lg-iox button:disabled { background: var(--qz-paper); color: var(--qz-ink-25); cursor: default; }
 
 /* — popovers on this screen (mock #pop / .pt / .mi) — */
-.qz-popover.qz-lg-pop { padding: 10px; font-size: 13px; box-shadow: var(--qz-lg-pop); border-radius: var(--qz-radius-lg); }
+.qz-popover.qz-lg-pop { padding: 10px; font-size: 13px; line-height: 1.45; box-shadow: var(--qz-lg-pop); border-radius: var(--qz-radius-lg); }
 .qz-lg-pop .qz-menu { margin: 0; min-width: 0; }
 .qz-lg-pop .qz-menu-title, .qz-lg-pt {
   font-size: 12px; font-weight: 700; color: var(--qz-ink);
@@ -12632,7 +12633,7 @@ button.qz-lg-find:hover { background: var(--qz-cream-2); }
 /* the rules column (mock .rcol / .rcol-in / .rlist / .rrow) — it fills its
    grid cell absolutely, so extra rules scroll inside it and never grow the
    card; the fade says there is more below (B62) */
-.qz-lg-rcol { position: relative; border-left: 1px solid var(--qz-rule); background: var(--qz-ls-cell-bg); min-width: 0; }
+.qz-lg-rcol { position: relative; border-left: 1px solid var(--qz-rule); background: var(--qz-lg-cell); min-width: 0; }
 .qz-lg-rcol-in { position: absolute; inset: 0; padding: 14px; display: flex; flex-direction: column; gap: 10px; }
 .qz-lg-rcol-h { display: flex; align-items: center; gap: 8px; }
 .qz-lg-rcol-h h4 { margin: 0; flex: 1; font-size: 14.5px; font-weight: 700; color: var(--qz-ink); }
@@ -12657,7 +12658,7 @@ button.qz-lg-find:hover { background: var(--qz-cream-2); }
   border-bottom: 1px solid var(--qz-rule-2); font-size: 13px; line-height: 1.7; cursor: pointer;
 }
 .qz-lg-rrow:last-child { border-bottom: 0; }
-.qz-lg-rrow:hover { background: var(--qz-ls-cell-bg); }
+.qz-lg-rrow:hover { background: var(--qz-lg-cell); }
 .qz-lg-rnum {
   flex: 0 0 20px; height: 20px; display: grid; place-items: center; margin-top: 1px;
   font-size: 11px; font-weight: 600; color: var(--qz-ink-4);
@@ -12715,7 +12716,7 @@ button.qz-lg-find:hover { background: var(--qz-cream-2); }
   display: flex; align-items: center; gap: 10px; padding: 8px 10px 8px 6px;
   border-bottom: 1px solid var(--qz-rule-2); background: var(--qz-paper); cursor: pointer;
 }
-.qz-lg-rr:hover { background: var(--qz-ls-cell-bg); }
+.qz-lg-rr:hover { background: var(--qz-lg-cell); }
 .qz-lg-rr:last-child { border-bottom: 0; }
 .qz-lg-grip { width: 12px; flex: none; font-size: 12px; color: var(--qz-ink-25); opacity: 0; cursor: grab; text-align: center; }
 .qz-lg-rr:hover .qz-lg-grip, .qz-lg-rr:focus-within .qz-lg-grip { opacity: 1; }
@@ -12742,7 +12743,7 @@ button.qz-lg-find:hover { background: var(--qz-cream-2); }
 .qz-lg-rempty2 .qz-lg-btn.is-pri { padding: 7px 14px; font-size: 13px; }
 
 /* — Your recommendations (mock .viz / .recrow / .rpill / .sd) — */
-.qz-lg-viz { padding: 12px 20px 16px; background: var(--qz-ls-cell-bg); }
+.qz-lg-viz { padding: 12px 20px 16px; background: var(--qz-lg-cell); }
 .qz-lg-viz-h { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; margin-bottom: 8px; }
 .qz-lg-viz-h h3 {
   margin: 0; font-size: 10px; letter-spacing: 0.07em; text-transform: uppercase;
@@ -12833,7 +12834,7 @@ button.qz-lg-rpill { cursor: pointer; }
 
 /* — Your recommendations — */
 .qz-lg-mband { padding: 12px 22px 16px; border-bottom: 1px solid var(--qz-rule); contain: inline-size; }
-.qz-lg-mband-in { border: 1px solid var(--qz-rule); background: var(--qz-ls-cell-bg); border-radius: var(--qz-radius-lg); padding: 9px 12px 11px; }
+.qz-lg-mband-in { border: 1px solid var(--qz-rule); background: var(--qz-lg-cell); border-radius: var(--qz-radius-lg); padding: 9px 12px 11px; }
 .qz-lg-mband.is-builder { contain: none; }
 .qz-lg-mband-h { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; min-height: 24px; }
 .qz-lg-tray-lb { flex: 0 0 auto; font-size: 9.5px; font-weight: 700; letter-spacing: .09em; text-transform: uppercase; color: var(--qz-ink-25); }
@@ -13017,7 +13018,7 @@ button.qz-lg-rpill { cursor: pointer; }
    Mock sizes at 100% (D20); every colour a --qz-* token. ══ */
 
 /* — the rail (mock .rail / .railhead / .qi / .qtag / .qadd / .railcount) — */
-.qz-lg-grid > .qz-lg-rail { background: var(--qz-ls-cell-bg); }
+.qz-lg-grid > .qz-lg-rail { background: var(--qz-lg-cell); }
 .qz-lg-railhead { display: flex; align-items: center; gap: 6px; padding: 5px 8px 8px; }
 .qz-lg-kick {
   font-size: 10px; letter-spacing: 0.05em; text-transform: uppercase;
@@ -13027,7 +13028,7 @@ button.qz-lg-rpill { cursor: pointer; }
 .qz-lg-qi {
   display: flex; align-items: flex-start; gap: 9px; width: 100%;
   padding: 9px 10px; border: 0; background: none; border-radius: var(--qz-radius);
-  text-align: left; font-family: inherit; color: inherit; cursor: pointer;
+  text-align: left; font: inherit; color: inherit; cursor: pointer;
 }
 .qz-lg-qi:hover { background: var(--qz-cream-2); }
 .qz-lg-qi.is-on, .qz-lg-qi.is-on:hover { background: var(--qz-paper); box-shadow: var(--qz-lg-lift); }
@@ -13098,7 +13099,7 @@ button.qz-lg-rpill { cursor: pointer; }
 /* — the tray (mock .tray / .tray-lb / .tray-c / .tchip) — one row (D14) — */
 .qz-lg-tray {
   display: flex; align-items: center; gap: 10px; margin: 0 0 10px; padding: 6px 8px 6px 12px;
-  border: 1px solid var(--qz-rule); background: var(--qz-ls-cell-bg); border-radius: var(--qz-radius-lg);
+  border: 1px solid var(--qz-rule); background: var(--qz-lg-cell); border-radius: var(--qz-radius-lg);
 }
 .qz-lg-tray-lb {
   flex: none; font-size: 9.5px; font-weight: 700; letter-spacing: 0.09em; text-transform: uppercase;
@@ -13316,8 +13317,8 @@ button.qz-lg-rpill { cursor: pointer; }
 .qz-lg-xl tbody tr:first-child td { border-top: 0; }
 .qz-lg-xl tr.is-grp td { border-top: 1px solid var(--qz-rule); }
 .qz-lg-xl tr.is-go { cursor: pointer; }
-.qz-lg-xl tr.is-go:hover td { background: var(--qz-ls-cell-bg); }
-.qz-lg-xl tr.is-muted td { color: var(--qz-ink-4); background: var(--qz-ls-cell-bg); }
+.qz-lg-xl tr.is-go:hover td { background: var(--qz-lg-cell); }
+.qz-lg-xl tr.is-muted td { color: var(--qz-ink-4); background: var(--qz-lg-cell); }
 .qz-lg-xl td.is-k { width: 40px; color: var(--qz-ink-4); font-weight: 600; font-variant-numeric: tabular-nums; }
 .qz-lg-xl td.is-qt { width: 26%; color: var(--qz-ink-3); }
 .qz-lg-xl td.is-num { font-variant-numeric: tabular-nums; }
@@ -13382,3 +13383,31 @@ button.qz-lg-rpill { cursor: pointer; }
 }
 .qz-lg-iox button:not(:disabled) { cursor: pointer; }
 .qz-lg-iox button[aria-busy="true"] { cursor: progress; }
+
+/* ══ Logic step · Table fixes (fix agent H) ══ */
+/* The Rules sheet's ↑/↓ (P1-7): the Edit rows' controls, revealed on hover
+   and keyboard focus, laid over the end of the When cell so the sheet keeps
+   the mock's column widths. The strip takes the row's ground so the text
+   under it never shows through. */
+.qz-lg-xl td.is-tact { position: relative; }
+.qz-lg-tmv {
+  position: absolute; right: 100%; top: 3px; height: 26px; align-items: center; padding: 0 2px 0 6px;
+  background: var(--qz-paper); opacity: 0; pointer-events: none;
+}
+.qz-lg-xl tr.is-go:hover .qz-lg-tmv, .qz-lg-xl tr.is-muted .qz-lg-tmv { background: var(--qz-lg-cell); }
+.qz-lg-xl tr:hover .qz-lg-tmv, .qz-lg-xl tr:focus-within .qz-lg-tmv { opacity: 1; pointer-events: auto; }
+.qz-lg-tmv .qz-lg-xone { width: 20px; height: 22px; opacity: 0.85; }
+.qz-lg-tmv .qz-lg-xone:focus-visible { outline: 2px solid var(--qz-accent); outline-offset: -2px; }
+/* the answer text: the pane's field in a Table cell (mock ptEd + endCap) */
+.qz-lg-tatext .qz-lg-ptlab { color: var(--qz-ink-4); }
+.qz-lg-trole { display: inline; }
+/* A popover measures its trigger's WRAPPER span (qz-overlays), so a trigger
+   that pulls itself left with a negative margin opened its popover that
+   many px right of the mock's (mock openPop anchors the button itself). The
+   pull moves onto the wrapper; the button keeps its place on screen. */
+.qz-popover-anchor:has(> .qz-lg-stitle) { margin-left: -8px; }
+.qz-popover-anchor > .qz-lg-stitle { margin-left: 0; }
+.qz-popover-anchor:has(> .qz-lg-qtype) { margin: 5px 0 0 -7px; }
+.qz-popover-anchor > .qz-lg-qtype { margin: 0; }
+.qz-popover-anchor:has(> .qz-lg-tbtn) { margin: -3px -7px; }
+.qz-popover-anchor > .qz-lg-tbtn { margin: 0; }

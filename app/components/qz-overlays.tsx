@@ -782,6 +782,7 @@ export function QzMenu({
   onOpenChange,
   className,
   testId,
+  offset,
 }: {
   trigger: ReactNode;
   items: QzMenuItem[];
@@ -801,6 +802,8 @@ export function QzMenu({
   className?: string;
   /** data-testid on the role=menu list. */
   testId?: string;
+  /** Gap between trigger and menu, px (QzPopover's default when absent). */
+  offset?: number;
 }) {
   const [uncontrolled, setUncontrolled] = useState(false);
   const open = controlledOpen ?? uncontrolled;
@@ -824,6 +827,7 @@ export function QzMenu({
       trigger={trigger}
       ariaHaspopup="menu"
       manageFocus={manageFocus}
+      {...(offset !== undefined ? { offset } : {})}
       content={
         <>
           {title ? <div className="qz-menu-title">{title}</div> : null}

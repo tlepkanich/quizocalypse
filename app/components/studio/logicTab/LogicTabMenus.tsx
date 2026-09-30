@@ -56,7 +56,8 @@ type Commit = (doc: QuizDoc) => void;
 /** The Undo seam a host passes (LogicTabCard's one useLogicUndo run). */
 export type PaneUndo = { push: (p: LogicUndoPush<QuizDoc>) => void };
 
-const truncate = (s: string, n = 34) => (s.length > n ? `${s.slice(0, n - 1)}…` : s);
+/** The mock's short(): past 30 characters, the first 28 (trimmed) and "…". */
+const short = (t: string) => (t.length > 30 ? `${t.slice(0, 28).trimEnd()}…` : t);
 
 // ── the product menu — behind every count ──────────────────────────────────
 // QRTZ-S6/H3 — the popover's kind, for the title tag + the footer sentence
@@ -368,11 +369,10 @@ export function RouteMenuButton({
     const next = setAnswerRoute(latest, q.node.id, answer.id, target);
     if (next !== latest) commit(next);
   };
-  const label = (
-    <>
-      <span aria-hidden>→</span> {route.label}
-    </>
-  );
+  // One text run (mock .go "→ Next"): a separate arrow span became its own
+  // flex item and took the 5px gap on top of the space. The button carries
+  // its own aria-label, so the arrow never reaches a screen reader.
+  const label = <>{`→ ${route.label}`}</>;
   if (!commit) {
     if (table) return <span className="qz-lg-tdim">{table.label}</span>;
     return <span className={`qz-lg-go is-static${route.set ? " is-set" : ""}`}>{label}</span>;
@@ -431,7 +431,7 @@ export function RouteMenuButton({
               <>
                 <span className="qz-lg-mi2-t">{ROUTE_COPY.nextQuestion}</span>
                 <span className="qz-lg-mi2-d">
-                  {nextQ ? truncate(nextQ.node.data.text) : ROUTE_COPY.lastQuestion}
+                  {nextQ ? short(nextQ.node.data.text) : ROUTE_COPY.lastQuestion}
                 </span>
               </>,
               () => go(null),
