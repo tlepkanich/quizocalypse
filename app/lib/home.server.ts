@@ -205,7 +205,10 @@ export async function loadHomeForShop(
                 ? "Not enough data yet"
                 : `${rate.text} completion`
             : "Ready to publish",
-        num: live && b && b.started > 0 ? `${fmtNum(b.started)} starts` : editedLabel(q.updatedAt, now),
+        num:
+          live && b && b.started > 0
+            ? `${fmtNum(b.started)} ${b.started === 1 ? "start" : "starts"}`
+            : editedLabel(q.updatedAt, now),
       };
     }),
   };
