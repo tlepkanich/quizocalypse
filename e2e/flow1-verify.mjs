@@ -78,18 +78,17 @@ try {
   await page.waitForSelector(".qz-goal-page", { timeout: 20000 });
   check("goal page renders (title + brief tracker)",
     (await page.locator("h1", { hasText: "Write your goal" }).count()) === 1 &&
-    (await page.locator(".qz-sm-track").count()) === 1);
-  const cta = page.locator(".qz-sm-gen");
-  check("CTA disabled before goal + length", await cta.isDisabled());
+    (await page.locator("#qz-goal-goal").count()) === 1);
+  // HOME-3 (first-run handoff §9) — the shared goal box: goal, question
+  // count (Auto | 3–12), intro screen. No audience / factors fields.
+  check("no audience / factors fields",
+    (await page.locator("#qz-goal-aud, #qz-goal-fac").count()) === 0);
+  const cta = page.locator(".hm3-btn", { hasText: "Create quiz" });
   await page.screenshot({ path: `${DIR}/${MODE}-1-goal-entry.png`, fullPage: true });
 
   await page.fill("#qz-goal-goal", GOAL_TEXT);
-  await page.fill("#qz-goal-aud", "First-time riders buying a starter setup");
-  await page.fill("#qz-goal-fac", "Terrain, experience level, budget");
-  check("CTA still disabled without a length", await cta.isDisabled());
-  await page.locator(".qz-sm-segb", { hasText: /^5$/ }).click();
-  check("CTA enables once goal + length are set", !(await cta.isDisabled()));
-  check("tracker reads 4 of 4", (await page.locator(".qz-sm-tcnt").textContent())?.trim() === "4 of 4 complete");
+  await page.selectOption("#qz-goal-count", "5");
+  check("CTA enabled with the goal alone", !(await cta.isDisabled()));
   await page.screenshot({ path: `${DIR}/${MODE}-2-goal-filled.png`, fullPage: true });
 
   // ── 2 · Submit → draft created, lands on the recs step ────────────────────
@@ -106,10 +105,8 @@ try {
     d.session.stage === "grouping" &&
     d.session.goal_first != null,
     `prepick=${d.session.goal_first?.prepick}`);
-  check("goal brief folded into session.goal",
-    (d.session.goal?.goal_text ?? "").startsWith(GOAL_TEXT) &&
-    (d.session.goal?.goal_text ?? "").includes("Audience:") &&
-    (d.session.goal?.goal_text ?? "").includes("Deciding factors:"));
+  check("goal stored on its own (no folded brief lines)",
+    (d.session.goal?.goal_text ?? "") === GOAL_TEXT);
   check("question length captured", d.session.goal_first?.question_length === 5);
 
   await page.waitForSelector(".qz-rb", { timeout: 20000 });

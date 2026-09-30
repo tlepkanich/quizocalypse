@@ -19,6 +19,7 @@ import { parseBrandIdentitySafe } from "./brandIdentity";
 import { normalizeTags } from "./enrichTags";
 import { suggestBucketStrategy } from "./bucketDetect";
 import { inverseCollectionIndex } from "./categoryGrouping";
+import { setIntroHidden } from "./seedQuiz";
 import { loadBucketInputs, toGroupingProduct } from "./bucketPersist.server";
 import {
   bucketRowsFor,
@@ -33,7 +34,7 @@ import {
   writeGenProgress,
 } from "./step2Build.server";
 import { claimGoalFirstDraft, loadFunnelDraft, writeDoc } from "./funnelDraft.server";
-import { foldGoalBrief, friendlyPrepickError, prepickWritePolicy, resolveGoalPickRows } from "./goalPrepick";
+import { friendlyPrepickError, prepickWritePolicy, resolveGoalPickRows } from "./goalPrepick";
 
 // Candidate-product cap for the prompt (large catalogs steer through tags /
 // collections anyway; the list is marked truncated past this).
@@ -43,9 +44,9 @@ const MAX_CANDIDATE_PRODUCTS = 150;
 
 export interface GoalFirstBrief {
   goal: string;
-  audience: string;
-  factors: string;
   questionLength: number | null;
+  /** false = build the quiz with its intro screen hidden. */
+  intro: boolean;
 }
 
 // Claim (or seed) the goal-first draft, write the brief + the flow marker onto
@@ -62,7 +63,9 @@ export async function beginGoalFirstFlow(
   // until they say otherwise; the new pick lands as "ready" and is applied
   // from the AI Picks pill. (Formerly an unconditional clearBuckets here.)
   if ((await countBuckets(shop.id, quizId)) === 0) await clearBuckets(shop.id, quizId);
-  const goalBrief = foldGoalBrief(brief.goal, brief.audience, brief.factors);
+  // HOME-3 (handoff §9) — the goal is stored on its own; audience / deciding
+  // factors are no longer asked for anywhere.
+  const goalBrief = brief.goal.trim().slice(0, 500);
   const next = BuildSession.parse({
     ...session,
     stage: "grouping",
@@ -70,6 +73,7 @@ export async function beginGoalFirstFlow(
     goal_first: {
       prepick: "picking",
       ...(brief.questionLength ? { question_length: brief.questionLength } : {}),
+      ...(brief.intro ? {} : { intro: false as const }),
     },
     gen_error: undefined,
     gen_progress: undefined,
@@ -78,7 +82,9 @@ export async function beginGoalFirstFlow(
     rich_templates: [],
     picked_template: undefined,
   });
-  await writeDoc(quizId, { ...doc, build_session: next });
+  // The draft's own intro follows the switch too, so a build that falls back
+  // to the blank-Questions skeleton (which keeps this doc) honors it.
+  await writeDoc(quizId, { ...setIntroHidden(doc, !brief.intro), build_session: next });
   startGoalPrepick(shop.id, quizId);
   return quizId;
 }

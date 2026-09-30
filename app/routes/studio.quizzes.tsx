@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "@remix-run/node";
 import { json, redirect } from "@remix-run/node";
 import { Prisma } from "@prisma/client";
-import { Link, useFetcher, useLoaderData, useNavigate, useSubmit, useNavigation } from "@remix-run/react";
+import { Link, useLoaderData, useNavigate, useSubmit, useNavigation } from "@remix-run/react";
 import { Search } from "lucide-react";
 import { requireStudioAccess, resolveStudioShop } from "../lib/studioAccess.server";
 import prisma from "../db.server";
@@ -14,7 +14,7 @@ import { QuizResultsThumbnail } from "../components/studio/QuizResultsThumbnail"
 import { publishQuiz } from "../lib/quizPublish";
 import { refreshBucketMembership } from "../lib/bucketPersist.server";
 import { formatDate } from "../lib/formatDate";
-import type { action as goalAction } from "./studio.goal";
+import { EMPTY_GOAL_BRIEF, GoalBox, useGoalCreate, type GoalBrief } from "../components/studio/GoalBox";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   await requireStudioAccess(request);
@@ -241,116 +241,28 @@ function RecsPop({ q }: { q: QuizRow }) {
 // redirects to /studio/onboarding/:quizId; a too-short goal renders the
 // action's honest 400 copy inline instead of blocking silently.
 function CreateQuizDialog({ onClose }: { onClose: () => void }) {
-  const fetcher = useFetcher<typeof goalAction>();
-  const busy = fetcher.state !== "idle";
-  const [goal, setGoal] = useState("");
-  const [audience, setAudience] = useState("");
-  const [factors, setFactors] = useState("");
-  const [lengthText, setLengthText] = useState("5–7 questions");
-  const [briefOpen, setBriefOpen] = useState(false);
+  // HOME-3 (first-run handoff §9) — the shared GoalBox: goal, question count
+  // (Auto | 3–12), intro screen. No audience / factors, no length regex.
+  const { create, busy, error } = useGoalCreate();
+  const [brief, setBriefState] = useState<GoalBrief>(EMPTY_GOAL_BRIEF);
+  const setBrief = (next: Partial<GoalBrief>) => setBriefState((b) => ({ ...b, ...next }));
   const taRef = useRef<HTMLTextAreaElement>(null);
-  const error = fetcher.data && !fetcher.data.ok ? fetcher.data.error : null;
-
-  const grow = () => {
-    const el = taRef.current;
-    if (!el) return;
-    el.style.height = "auto";
-    el.style.height = `${el.scrollHeight}px`;
-  };
-
-  const start = () => {
-    if (busy) return;
-    if (!goal.trim()) {
-      taRef.current?.focus();
-      return;
-    }
-    const fields: Record<string, string> = {
-      goal: goal.trim(),
-      audience: audience.trim(),
-      factors: factors.trim(),
-    };
-    // First 3–7 digit in the free-text length maps onto the existing numeric
-    // contract; anything else simply omits it (the action nulls it).
-    const num = lengthText.match(/[3-7]/);
-    if (num) fields.length = num[0];
-    fetcher.submit(fields, { method: "post", action: "/studio/goal" });
-  };
 
   return (
     <QzModal open width={620} className="qz-create-modal" onClose={onClose} initialFocusRef={taRef}>
       <h2 className="qz-display" style={{ fontSize: 25, textAlign: "center", margin: "0 0 16px", color: "var(--qz-ink)" }}>
         What should this quiz help someone decide?
       </h2>
-      <div className="qz-goalbox">
-        <label className="qz-sr-only" htmlFor="qz-create-goal">Your goal</label>
-        <textarea
-          id="qz-create-goal"
-          ref={taRef}
-          rows={2}
-          value={goal}
-          placeholder="Help first-time buyers pick the right snowboard for their terrain and skill level"
-          onChange={(e) => {
-            setGoal(e.target.value);
-            grow();
-          }}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" && !e.shiftKey) {
-              e.preventDefault();
-              start();
-            }
-          }}
-        />
-        <div className={briefOpen ? "qz-goalbox-brief is-open" : "qz-goalbox-brief"}>
-          <div>
-            <label htmlFor="qz-create-aud">Who is it for</label>
-            <input
-              id="qz-create-aud"
-              className="qz-input"
-              type="text"
-              value={audience}
-              placeholder="First-time buyers, 18–34, buying their own board"
-              onChange={(e) => setAudience(e.target.value)}
-            />
-          </div>
-          <div>
-            <label htmlFor="qz-create-fac">What decides the answer</label>
-            <input
-              id="qz-create-fac"
-              className="qz-input"
-              type="text"
-              value={factors}
-              placeholder="Terrain, skill level, height and weight, budget"
-              onChange={(e) => setFactors(e.target.value)}
-            />
-          </div>
-          <div>
-            <label htmlFor="qz-create-len">How long</label>
-            <input
-              id="qz-create-len"
-              className="qz-input"
-              type="text"
-              value={lengthText}
-              onChange={(e) => setLengthText(e.target.value)}
-            />
-          </div>
-        </div>
-        <div className="qz-goalbox-foot">
-          <button type="button" className="qz-goalbox-more" aria-expanded={briefOpen} onClick={() => setBriefOpen((o) => !o)}>
-            ＋ Audience, factors, length ⌄
-          </button>
-          <button
-            type="button"
-            className="qz-goalbox-go"
-            aria-label="Start setup with this goal"
-            aria-busy={busy}
-            disabled={busy}
-            onClick={start}
-          >
-            →
-          </button>
-        </div>
-      </div>
-      {error ? <p className="qz-goal-err" role="alert">{error}</p> : null}
+      <GoalBox
+        id="qz-create"
+        density="dialog"
+        brief={brief}
+        setBrief={setBrief}
+        onCreate={() => create(brief)}
+        busy={busy}
+        error={error}
+        inputRef={taRef}
+      />
       <div className="qz-goal-extras">
         <Link to="/studio/templates" className="qz-btn qz-btn-sm">Browse templates</Link>
         <Link to="/studio/new" className="qz-btn qz-btn-sm">Start from scratch</Link>

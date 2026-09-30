@@ -9,7 +9,9 @@ import { FoxMark } from "./FoxMark";
    redrawn. The logotype is dark indigo on a transparent ground, so it reads
    on the light admin chrome only. Replaces the Quartz cat + typeset name
    (QRTZ-G6). `compact` renders the mark alone (collapsed rail / small-scale
-   contexts). `onClick` (one-line-chrome §1.1) lets the funnel intercept the
+   contexts). `mark={false}` drops the fox and keeps the logotype (the
+   expanded studio rail — HOME-3 / first-run handoff §13.3: the fox moves to
+   the account row). `onClick` (one-line-chrome §1.1) lets the funnel intercept the
    home click with its leave-confirm dialog (preventDefault + open). */
 
 const NAME_H = 20; // rendered logotype height — ≈ the old 17px typeset name
@@ -19,18 +21,22 @@ export function Wordmark({
   to = "/studio",
   name = "Wiskr",
   compact = false,
+  mark = true,
   onClick,
 }: {
   to?: string;
   name?: string;
   compact?: boolean;
+  mark?: boolean;
   onClick?: (e: React.MouseEvent) => void;
 }) {
   return (
     <Link to={to} className="qz-wordmark" aria-label={`${name} — home`} onClick={onClick}>
-      <span className="qz-wordmark-mono" aria-hidden="true">
-        <FoxMark size={28} />
-      </span>
+      {mark || compact ? (
+        <span className="qz-wordmark-mono" aria-hidden="true">
+          <FoxMark size={28} />
+        </span>
+      ) : null}
       {compact ? null : (
         <svg
           className="qz-wordmark-name"

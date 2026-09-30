@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { suggestQuizGoal } from "./goalSuggest";
+import { singularizeName, suggestCatalogStarter, suggestQuizGoal } from "./goalSuggest";
 
 describe("suggestQuizGoal", () => {
   it("matches a skincare store to the skincare goal", () => {
@@ -76,5 +76,36 @@ describe("suggestQuizGoal", () => {
       groupNames: [],
     });
     expect(goal).toContain("skincare routine");
+  });
+});
+
+describe("singularizeName", () => {
+  it.each([
+    ["Moisturizers", "Moisturizer"],
+    ["Serums", "Serum"],
+    ["Snowboards", "Snowboard"],
+    ["Accessories", "Accessory"],
+    ["Brushes", "Brush"],
+    ["Boxes", "Box"],
+    ["Snowboard Bindings", "Snowboard Binding"],
+    ["Glass", "Glass"],
+    ["Cactus", "Cactus"],
+    ["Automated Collection", "Automated Collection"],
+    ["Gas", "Gas"],
+  ])("%s → %s", (input, out) => {
+    expect(singularizeName(input)).toBe(out);
+  });
+});
+
+describe("suggestCatalogStarter", () => {
+  it("names the vertical", () => {
+    expect(suggestCatalogStarter("Clean serums and moisturizers for dry skin").label).toBe(
+      "Skincare routine",
+    );
+  });
+  it("falls back to a generic product match", () => {
+    const s = suggestCatalogStarter(null);
+    expect(s.label).toBe("Product match");
+    expect(s.goal).toBe(suggestQuizGoal({ identitySummary: null }));
   });
 });

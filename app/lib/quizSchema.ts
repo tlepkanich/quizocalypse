@@ -1617,7 +1617,12 @@ export const BuildSession = z.object({
       prepick: z.enum(["picking", "ready", "failed"]),
       error: z.string().optional(),
       rationale: z.string().optional(),
-      question_length: z.number().int().min(3).max(7).optional(),
+      // HOME-3 — the Home composer offers 3–12 (was 3–7).
+      question_length: z.number().int().min(3).max(12).optional(),
+      // HOME-3 — the Home composer's "Intro screen" switch. Written ONLY as
+      // `false` (absent = the intro shows): the build re-seed hides the intro
+      // (data.hidden) when it reads false. OPTIONAL WITHOUT DEFAULT.
+      intro: z.literal(false).optional(),
       // Step-1 tweaks (§02 item 4) — WHAT the pre-pick chose, held on the
       // session so the AI Picks dialog can offer it whether or not it was
       // written as buckets (a non-empty selection is never overwritten; the

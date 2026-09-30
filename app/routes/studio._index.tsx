@@ -1,269 +1,279 @@
-import type { LoaderFunctionArgs } from "@remix-run/node";
+import type { ActionFunctionArgs, LoaderFunctionArgs } from "@remix-run/node";
 import { json } from "@remix-run/node";
 import { Link, useFetcher, useLoaderData } from "@remix-run/react";
-import { useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
+import { z } from "zod";
 import { requireStudioAccess, resolveStudioShop } from "../lib/studioAccess.server";
 import prisma from "../db.server";
 import { computeBenchmarks, type BenchmarkEventRow } from "../lib/quizBenchmarks";
 import { Quiz } from "../lib/quizSchema";
-import { stepNumber, TOTAL_STEPS } from "../lib/funnelStages";
-import { MIN_GOAL_CHARS } from "../lib/funnelDraft.server";
-import { QzStat, QzSectionHeader } from "../components/qz";
-import { formatDate } from "../lib/formatDate";
-import type { action as goalAction } from "./studio.goal";
+import { FUNNEL_STEPS, stepIndex, TOTAL_STEPS } from "../lib/funnelStages";
+import { isDetachedJobStalled } from "../lib/stall.server";
+import { parseBrandIdentitySafe } from "../lib/brandIdentity";
+import { suggestCatalogStarter } from "../lib/goalSuggest";
+import { detectGroupingDimension } from "../lib/groupingDetect";
+import { toGroupingProduct } from "../lib/bucketPersist.server";
+import { formatPctRange, gateRate } from "../lib/analyticsConfidence";
+import {
+  buildHomeQueue,
+  buildHomeStarters,
+  editedLabel,
+  sparkHeights,
+  splitHomeQueue,
+  type HomeStarter,
+  type HomeWaitItem,
+} from "../lib/homeFeed";
+import { parseHomeState, withDialogShown, withReminderDismissed } from "../lib/homeState";
+import { QzModal } from "../components/qz-overlays";
+import {
+  EMPTY_GOAL_BRIEF,
+  GOAL_PLACEHOLDER,
+  GoalArt,
+  GoalBox,
+  GoalIc,
+  useGoalCreate,
+  type GoalBrief,
+} from "../components/studio/GoalBox";
 
-// QRTZ-S1 — Home rebuilt to the Quartz mock (docs/design/brand-2026/_src/
-// home.mjs, s09): ONE page, two states. Before the first quiz the goal
-// composer sits optically centred with a first-run design nudge; after it the
-// SAME composer (byte-identical) tops three sections — the "Pick up where you
-// left off" checklist, "Last 30 days" stats, and "Your quizzes". The old
-// dashboard (welcome banner, hero art, gradient, sparkle, week chart) is gone
-// per the mock — flat Quartz has none of them.
-//
-// FLOW-1 stays the contract (owner 2026-07-25): the composer POSTS
-// goal/audience/factors/length to /studio/goal's action, which claims the
-// decider draft, kicks the AI product pre-pick and redirects into onboarding.
-// The brief (audience/factors/length) is folded inline behind the
-// "Audience, factors, length" disclosure; length NEVER blocks the draft.
+// HOME-3 — Home, built to the first-run handoff (docs: FIRST-RUN-HANDOFF.md,
+// 2026-09-22) and its mock ("Wiskr Home — three screens"):
+//  1. First open — a dialog over screen 2, shown by itself ONCE per shop
+//     (Shop.homeState.goalDialogShownAt), and only when there are products.
+//  2. No quiz yet — the two-panel create card, centred. The resting state for
+//     any shop with no quiz, forever.
+//  3. With a quiz — the one-step reminder (or the full create card when
+//     nothing waits / it was dismissed), the two-row create module, Also
+//     waiting + Last 30 days, Your quizzes.
+// Every create surface is the shared GoalBox (goal · questions · intro).
 
 const fmtNum = (n: number) => n.toLocaleString("en-US");
 
-type Delta = { text: string; up: boolean } | null;
+type Rate = { state: "confident" | "provisional" | "suppressed"; text: string; pct: number };
+
+/** Completion is gated (analyticsConfidence §7.3): a point rate only at 200+
+    engaged sessions, a Wilson range from 50, nothing below. */
+function gatedCompletion(completed: number, started: number): Rate {
+  const g = gateRate("completion_rate", completed, started);
+  return {
+    state: g.state,
+    text: g.state === "confident" ? `${Math.round(g.rate * 100)}%` : formatPctRange(g.interval),
+    pct: Math.round(g.rate * 100),
+  };
+}
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   await requireStudioAccess(request);
   const shop = await resolveStudioShop();
+  const home = parseHomeState(shop.homeState);
 
-  // Owner correction (2026-08-01) — mid-funnel drafts (buildState "step1") are
-  // VISIBLE in the lists; their rows route back into the funnel.
   const quizzes = await prisma.quiz.findMany({
     where: { shopId: shop.id },
-    select: {
-      id: true,
-      name: true,
-      status: true,
-      updatedAt: true,
-      buildState: true,
-      draftJson: true,
-    },
+    select: { id: true, name: true, status: true, updatedAt: true, buildState: true, draftJson: true },
     orderBy: { updatedAt: "desc" },
   });
   const quizIds = quizzes.map((q) => q.id);
+  const noQuiz = quizzes.length === 0;
 
-  // Two rolling 30-day windows: current (for the stat values) and previous
-  // (for the deltas). All-time rows still feed the per-quiz meta + todos.
   const now = Date.now();
   const since30 = new Date(now - 30 * 24 * 3600 * 1000);
-  const since60 = new Date(now - 60 * 24 * 3600 * 1000);
   const funnelWhere = {
     quizId: { in: quizIds },
     eventType: { in: ["quiz_engaged", "quiz_completed"] },
   };
-  const funnelSelect = { quizId: true, eventType: true, sessionId: true } as const;
+  const funnelSelect = { quizId: true, eventType: true, sessionId: true, ts: true } as const;
   const funnelDistinct = ["quizId", "eventType", "sessionId"] as const;
 
-  const [allRows, curRows, prevRows, contacts, emailsCur, emailsPrev] = await Promise.all([
-    prisma.event.findMany({
-      where: funnelWhere,
-      select: funnelSelect,
-      distinct: [...funnelDistinct],
-    }),
+  const [allRows, curRows, prevRows, contacts, emailsCur, products, collections] = await Promise.all([
+    prisma.event.findMany({ where: funnelWhere, select: funnelSelect, distinct: [...funnelDistinct] }),
     prisma.event.findMany({
       where: { ...funnelWhere, ts: { gte: since30 } },
       select: funnelSelect,
       distinct: [...funnelDistinct],
     }),
     prisma.event.findMany({
-      where: { ...funnelWhere, ts: { gte: since60, lt: since30 } },
+      where: {
+        ...funnelWhere,
+        eventType: "quiz_engaged",
+        ts: { gte: new Date(now - 60 * 24 * 3600 * 1000), lt: since30 },
+      },
       select: funnelSelect,
       distinct: [...funnelDistinct],
     }),
     prisma.emailCapture.count({ where: { quiz: { shopId: shop.id } } }),
-    prisma.emailCapture.count({
-      where: { quiz: { shopId: shop.id }, capturedAt: { gte: since30 } },
-    }),
-    prisma.emailCapture.count({
-      where: { quiz: { shopId: shop.id }, capturedAt: { gte: since60, lt: since30 } },
-    }),
+    prisma.emailCapture.count({ where: { quiz: { shopId: shop.id }, capturedAt: { gte: since30 } } }),
+    // Starters (and the dialog's product gate) only matter before the first quiz.
+    noQuiz ? prisma.product.findMany({ where: { shopId: shop.id } }) : [],
+    noQuiz ? prisma.collection.findMany({ where: { shopId: shop.id } }) : [],
   ]);
 
   const benchmarks = computeBenchmarks(allRows);
   const tally = (rows: BenchmarkEventRow[]) => {
-    const b = computeBenchmarks(rows);
     let started = 0;
     let completed = 0;
-    for (const q of Object.values(b.byQuiz)) {
+    for (const q of Object.values(computeBenchmarks(rows).byQuiz)) {
       started += q.started;
       completed += q.completed;
     }
     return { started, completed };
   };
   const cur = tally(curRows);
-  const prev = tally(prevRows);
+  const prevStarts = tally(prevRows).started;
 
-  // Deltas render only when the previous window has signal — no "+∞%".
-  const startsDelta: Delta =
-    prev.started > 0 && cur.started !== prev.started
+  // Only the Starts change ships (handoff §16.3): a completion or email delta
+  // nobody can explain is worse than none. Grey unless it went up.
+  const startsDelta =
+    prevStarts > 0 && cur.started !== prevStarts
       ? {
-          text: `${cur.started > prev.started ? "+" : "−"}${Math.abs(
-            Math.round(((cur.started - prev.started) / prev.started) * 100),
-          )}%`,
-          up: cur.started > prev.started,
-        }
-      : null;
-  const curRate = cur.started > 0 ? Math.round((cur.completed / cur.started) * 100) : null;
-  const prevRate = prev.started > 0 ? Math.round((prev.completed / prev.started) * 100) : null;
-  const completionDelta: Delta =
-    curRate != null && prevRate != null && curRate !== prevRate
-      ? {
-          text: `${curRate > prevRate ? "+" : "−"}${Math.abs(curRate - prevRate)} pts`,
-          up: curRate > prevRate,
-        }
-      : null;
-  const emailsDelta: Delta =
-    emailsCur !== emailsPrev
-      ? {
-          text: `${emailsCur > emailsPrev ? "+" : "−"}${Math.abs(emailsCur - emailsPrev)}`,
-          up: emailsCur > emailsPrev,
+          text: `${cur.started > prevStarts ? "+" : "−"}${Math.abs(
+            Math.round(((cur.started - prevStarts) / prevStarts) * 100),
+          )}% on the month before`,
+          up: cur.started > prevStarts,
         }
       : null;
 
-  // One light doc peek per quiz (same Quiz.safeParse pattern as the
-  // integrations loader): the funnel stage for "K of 4 steps" + whether any
-  // integration node has a destination wired.
-  const peek = new Map<string, { stage: string | null; hasIntegration: boolean }>();
+  // One light doc peek per quiz: funnel step, stall, integration wiring.
+  const peek = new Map<string, { stepIndex: number; stalled: boolean; hasIntegration: boolean }>();
   for (const q of quizzes) {
     const parsed = Quiz.safeParse(q.draftJson);
-    if (!parsed.success) {
-      peek.set(q.id, { stage: null, hasIntegration: false });
-      continue;
-    }
+    const session = parsed.success ? parsed.data.build_session : undefined;
+    const stage = session?.stage ?? "grouping";
+    const genInFlight =
+      stage === "typing" ||
+      stage === "templating" ||
+      (stage === "grouping" && session?.goal_first?.prepick === "picking");
     peek.set(q.id, {
-      stage: parsed.data.build_session?.stage ?? null,
-      hasIntegration: parsed.data.nodes.some(
-        (n) => n.type === "integration" && n.data.actions.length > 0,
-      ),
+      stepIndex: stepIndex(stage),
+      stalled: Boolean(session?.gen_error) || (genInFlight && isDetachedJobStalled(q.updatedAt, now)),
+      hasIntegration: parsed.success
+        ? parsed.data.nodes.some((n) => n.type === "integration" && n.data.actions.length > 0)
+        : false,
     });
   }
   const anyIntegration = [...peek.values()].some((p) => p.hasIntegration);
-  const designSet = shop.brandIdentity != null;
 
-  // "Pick up where you left off" — mock order (distance to revenue): a
-  // built-but-unpublished quiz earns nothing → published-with-zero-starts →
-  // captured emails going nowhere → design polish that cascades.
-  const publishCandidate = quizzes.find(
-    (q) => q.status !== "published" && q.buildState == null,
-  );
-  const embedCandidate = quizzes.find(
-    (q) => q.status === "published" && (benchmarks.byQuiz[q.id]?.started ?? 0) === 0,
-  );
-  const todos: Array<{
-    kind: "publish" | "embed" | "emails" | "design";
-    title: string;
-    sub: string;
-    href: string;
-  }> = [];
-  if (publishCandidate) {
-    todos.push({
-      kind: "publish",
-      title: `Publish “${publishCandidate.name}”`,
-      sub: `Edited ${formatDate(publishCandidate.updatedAt)} · nothing is live until you publish`,
-      href: `/studio/${publishCandidate.id}`,
-    });
-  }
-  if (embedCandidate) {
-    todos.push({
-      kind: "embed",
-      title: `Add “${embedCandidate.name}” to your store`,
-      sub: "Published, but no shopper has reached it yet",
-      href: `/studio/${embedCandidate.id}/embed`,
-    });
-  }
-  if (contacts > 0 && !anyIntegration) {
-    todos.push({
-      kind: "emails",
-      title: "Send captured emails somewhere",
-      sub: `${contacts} address${contacts === 1 ? "" : "es"} collected, no destination connected`,
-      href: "/studio/integrations",
-    });
-  }
-  if (!designSet) {
-    todos.push({
-      kind: "design",
-      title: "Set up your global design",
-      sub: "Colors and fonts flow into every quiz you build",
-      href: "/studio/brand",
+  const queue = buildHomeQueue({
+    quizzes: quizzes.map((q) => ({
+      id: q.id,
+      name: q.name,
+      status: q.status,
+      inSetup: q.buildState === "step1",
+      stepIndex: peek.get(q.id)?.stepIndex ?? 0,
+      stalled: peek.get(q.id)?.stalled ?? false,
+      starts: benchmarks.byQuiz[q.id]?.started ?? 0,
+    })),
+    emailsWithoutDestination: contacts > 0 && !anyIntegration,
+  });
+
+  let starters: HomeStarter[] = [];
+  if (noQuiz && products.length > 0) {
+    const detect = detectGroupingDimension(
+      products.map(toGroupingProduct),
+      collections.map((c) => ({ collectionId: c.collectionId, title: c.title })),
+    );
+    starters = buildHomeStarters({
+      productCount: products.length,
+      catalog: suggestCatalogStarter(parseBrandIdentitySafe(shop.brandIdentity)?.summary ?? null),
+      groups: detect.proposed.map((g) => ({ name: g.name, size: g.productIds.length })),
     });
   }
 
   return json({
-    hasQuizzes: quizzes.length > 0,
-    totalQuizzes: quizzes.length,
-    minGoalChars: MIN_GOAL_CHARS,
-    designSet,
-    todos,
+    hasQuizzes: !noQuiz,
+    // §2 canOpenDialog: standalone studio only (this route), once per shop,
+    // and never for a shop with nothing to recommend from.
+    showDialog: noQuiz && products.length > 0 && !home.goalDialogShownAt,
+    starters,
+    queue,
+    dismissedKey: home.reminder?.key ?? null,
     stats: {
       starts: cur.started,
       startsDelta,
-      completion: curRate,
-      completionDelta,
+      completion: gatedCompletion(cur.completed, cur.started),
       emails: emailsCur,
-      emailsDelta,
-      published: quizzes.filter((q) => q.status === "published").length,
+      spark: sparkHeights(
+        curRows.filter((r) => r.eventType === "quiz_engaged").map((r) => r.ts),
+        since30.getTime(),
+        now,
+      ),
     },
     rows: quizzes.slice(0, 4).map((q) => {
       const b = benchmarks.byQuiz[q.id];
       const inSetup = q.buildState === "step1";
-      const meta = inSetup
-        ? `Edited ${formatDate(q.updatedAt)} · ${stepNumber(
-            peek.get(q.id)?.stage ?? "grouping",
-          )} of ${TOTAL_STEPS} steps`
-        : b && b.started > 0 && b.rate != null
-          ? `${fmtNum(b.started)} starts · ${b.rate}% completion`
-          : `Edited ${formatDate(q.updatedAt)}`;
+      const live = q.status === "published";
+      const rate = live && b && b.started > 0 ? gatedCompletion(b.completed, b.started) : null;
       return {
         id: q.id,
         name: q.name,
         href: inSetup ? `/studio/onboarding/${q.id}` : `/studio/${q.id}`,
-        meta,
-        chip: q.status === "published" ? ("live" as const) : inSetup ? ("setup" as const) : ("draft" as const),
+        tag: live ? ("live" as const) : inSetup ? ("setup" as const) : ("draft" as const),
+        stepsDone: inSetup ? (peek.get(q.id)?.stepIndex ?? 0) : null,
+        barPct: rate?.state === "confident" ? rate.pct : null,
+        sentence: inSetup
+          ? `Step ${(peek.get(q.id)?.stepIndex ?? 0) + 1} of ${TOTAL_STEPS}`
+          : live
+            ? !rate
+              ? "No starts yet"
+              : rate.state === "suppressed"
+                ? "Not enough data yet"
+                : `${rate.text} completion`
+            : "Ready to publish",
+        num: live && b && b.started > 0 ? `${fmtNum(b.started)} starts` : editedLabel(q.updatedAt, now),
       };
     }),
   });
 };
 
-/* ── Icons — verbatim paths from home.mjs (24 viewBox, stroke 1.7) ────────── */
+// Two small writes to Shop.homeState. Stored on the shop, not the browser:
+// a cache clear or a second device must not resurrect either (§2, §7.4).
+const HomeIntent = z.discriminatedUnion("intent", [
+  z.object({ intent: z.literal("dialog-shown") }),
+  z.object({ intent: z.literal("dismiss-reminder"), key: z.string().min(1).max(200) }),
+]);
 
-function HmIcon({
-  d,
-  className,
-  width,
-  height,
-}: {
-  d: ReactNode;
-  className?: string;
-  width?: number;
-  height?: number;
-}) {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.7"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      className={className}
-      width={width}
-      height={height}
-      aria-hidden="true"
-    >
-      {d}
-    </svg>
-  );
-}
+export const action = async ({ request }: ActionFunctionArgs) => {
+  await requireStudioAccess(request);
+  const shop = await resolveStudioShop();
+  const parsed = HomeIntent.safeParse(Object.fromEntries(await request.formData()));
+  if (!parsed.success) return json({ ok: false as const }, { status: 400 });
+  const state = parseHomeState(shop.homeState);
+  const next =
+    parsed.data.intent === "dialog-shown"
+      ? withDialogShown(state, new Date())
+      : withReminderDismissed(state, parsed.data.key, new Date());
+  if (next !== state) await prisma.shop.update({ where: { id: shop.id }, data: { homeState: next } });
+  return json({ ok: true as const });
+};
 
-const I = {
+/* ── Icons (24 viewBox, the mock's lucide set) ──────────────────────────── */
+
+const ICON = {
+  arrow: (
+    <>
+      <path d="M5 12h14" />
+      <path d="m12 5 7 7-7 7" />
+    </>
+  ),
+  chev: <path d="m9 18 6-6-6-6" />,
+  x: (
+    <>
+      <path d="M18 6 6 18" />
+      <path d="m6 6 12 12" />
+    </>
+  ),
+  plus: (
+    <>
+      <path d="M5 12h14" />
+      <path d="M12 5v14" />
+    </>
+  ),
+  grid: (
+    <>
+      <rect width="7" height="7" x="3" y="3" rx="1" />
+      <rect width="7" height="7" x="14" y="3" rx="1" />
+      <rect width="7" height="7" x="14" y="14" rx="1" />
+      <rect width="7" height="7" x="3" y="14" rx="1" />
+    </>
+  ),
   globe: (
     <>
       <circle cx="12" cy="12" r="9" />
@@ -271,314 +281,503 @@ const I = {
       <path d="M12 3a14 14 0 0 1 0 18 14 14 0 0 1 0-18Z" />
     </>
   ),
-  box: (
+  clock: (
     <>
-      <path d="M4 7.5 12 3.5l8 4v9l-8 4-8-4Z" />
-      <path d="M4 7.5 12 11.5l8-4" />
-      <path d="M12 11.5v9" />
+      <circle cx="12" cy="12" r="10" />
+      <path d="M12 6v6l4 2" />
+    </>
+  ),
+  layers: (
+    <>
+      <path d="M12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83z" />
+      <path d="M2 12a1 1 0 0 0 .58.91l8.6 3.91a2 2 0 0 0 1.65 0l8.58-3.9A1 1 0 0 0 22 12" />
+      <path d="M2 17a1 1 0 0 0 .58.91l8.6 3.91a2 2 0 0 0 1.65 0l8.58-3.9A1 1 0 0 0 22 17" />
     </>
   ),
   mail: (
     <>
-      <rect x="3" y="5" width="18" height="14" rx="2" />
-      <path d="m3.6 6.5 8.4 6 8.4-6" />
+      <path d="m22 7-8.991 5.727a2 2 0 0 1-2.009 0L2 7" />
+      <rect x="2" y="4" width="20" height="16" rx="2" />
     </>
   ),
-  palette: (
+  store: (
     <>
-      <path d="M12 3a9 9 0 1 0 0 18c1 0 1.6-.7 1.6-1.5 0-1.4-1-1.6-1-2.6 0-.8.7-1.4 1.5-1.4H16a5 5 0 0 0 5-5c0-4-4-7.5-9-7.5Z" />
-      <circle cx="8" cy="11" r="1.1" fill="currentColor" stroke="none" />
-      <circle cx="12" cy="8" r="1.1" fill="currentColor" stroke="none" />
-      <circle cx="16" cy="10.5" r="1.1" fill="currentColor" stroke="none" />
-    </>
-  ),
-  grid: (
-    <>
-      <rect x="3" y="3" width="7.5" height="7.5" rx="1.5" />
-      <rect x="13.5" y="3" width="7.5" height="7.5" rx="1.5" />
-      <rect x="3" y="13.5" width="7.5" height="7.5" rx="1.5" />
-      <rect x="13.5" y="13.5" width="7.5" height="7.5" rx="1.5" />
-    </>
-  ),
-  plus: (
-    <>
-      <path d="M12 4.5v15" />
-      <path d="M4.5 12h15" />
-    </>
-  ),
-  copy: (
-    <>
-      <rect x="8.5" y="8.5" width="12" height="12" rx="2" />
-      <path d="M15.5 4.5h-9a2 2 0 0 0-2 2v9" />
-    </>
-  ),
-  chev: <path d="m9 6 6 6-6 6" />,
-  chevDown: <path d="m6 9 6 6 6-6" />,
-  arrow: (
-    <>
-      <path d="M5 12h13" />
-      <path d="m12.5 6 6 6-6 6" />
+      <path d="M15 21v-5a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v5" />
+      <path d="M17.774 10.31a1.12 1.12 0 0 0-1.549 0 2.5 2.5 0 0 1-3.451 0 1.12 1.12 0 0 0-1.548 0 2.5 2.5 0 0 1-3.452 0 1.12 1.12 0 0 0-1.549 0 2.5 2.5 0 0 1-3.77-3.248l2.889-4.184A2 2 0 0 1 7 2h10a2 2 0 0 1 1.653.873l2.895 4.192a2.5 2.5 0 0 1-3.774 3.244" />
+      <path d="M4 10.95V19a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8.05" />
     </>
   ),
 };
 
-const TODO_ICON = { publish: I.globe, embed: I.box, emails: I.mail, design: I.palette };
+/* Per-kind copy (§7.3, §7.5): the reminder's button, a plain Also-waiting
+   row's action, and the action a DISMISSED reminder keeps as its row (§7.4). */
+const WAIT: Record<
+  HomeWaitItem["kind"],
+  { icon: ReactNode; tag: [string, string] | null; lead: string; row: string; demoted: string }
+> = {
+  stalled: { icon: ICON.clock, tag: ["setup", "Paused"], lead: "Open setup", row: "Open", demoted: "Open" },
+  setup: { icon: ICON.layers, tag: ["setup", "In setup"], lead: "Continue setup", row: "Resume", demoted: "Resume" },
+  publish: { icon: ICON.globe, tag: ["draft", "Draft"], lead: "Review and publish", row: "Review", demoted: "Review" },
+  store: { icon: ICON.store, tag: ["live", "Live"], lead: "Add to store", row: "Embed", demoted: "Add to store" },
+  emails: { icon: ICON.mail, tag: null, lead: "Connect", row: "Connect", demoted: "Connect" },
+};
 
-/* ── The composer — byte-identical between the two page states ────────────── */
+const QUESTION = "What type of quiz do you want to create?";
 
-function Composer({ minGoalChars }: { minGoalChars: number }) {
-  const fetcher = useFetcher<typeof goalAction>();
-  const busy = fetcher.state !== "idle";
-  const [goal, setGoal] = useState("");
-  const [audience, setAudience] = useState("");
-  const [factors, setFactors] = useState("");
-  // "How long" defaults from the goal shape and NEVER blocks the draft — the
-  // action treats an unparseable length as "let the AI decide" (null).
-  const [lengthText, setLengthText] = useState("5–7 questions");
-  const [briefOpen, setBriefOpen] = useState(false);
-  const taRef = useRef<HTMLTextAreaElement>(null);
-  const ready = goal.trim().length >= minGoalChars;
-  const error = fetcher.data && !fetcher.data.ok ? fetcher.data.error : null;
+/* ── The full create card (screen 2, and screen 3's top slot) ───────────── */
 
-  // rows=1, grows with the goal.
-  const grow = () => {
-    const el = taRef.current;
-    if (!el) return;
-    el.style.height = "auto";
-    el.style.height = `${el.scrollHeight}px`;
-  };
-
-  const draft = () => {
-    if (busy) return;
-    // The mock's rule: the composer never silently blocks. Empty → point at
-    // the field; short → submit anyway and let the action's honest 400 copy
-    // ("Add a little more detail…") render in the hm-error line below.
-    if (!goal.trim()) {
-      taRef.current?.focus();
-      return;
-    }
-    const fields: Record<string, string> = {
-      goal: goal.trim(),
-      audience: audience.trim(),
-      factors: factors.trim(),
-    };
-    // First 3–7 digit in the free-text length maps onto the existing numeric
-    // contract; anything else simply omits it (the action nulls it).
-    const num = lengthText.match(/[3-7]/);
-    if (num) fields.length = num[0];
-    fetcher.submit(fields, { method: "post", action: "/studio/goal" });
-  };
-
+function CreateCard({
+  headingRef,
+  first,
+  starters,
+  onStarter,
+  activeGoal,
+  children,
+}: {
+  headingRef?: React.RefObject<HTMLHeadingElement>;
+  first: boolean;
+  starters: HomeStarter[];
+  onStarter: (s: HomeStarter) => void;
+  activeGoal: string;
+  children: ReactNode;
+}) {
   return (
-    <>
-      <div className="hm-composer">
-        <label className="qz-sr-only" htmlFor="hm-goal">
-          Your goal
-        </label>
-        <textarea
-          id="hm-goal"
-          ref={taRef}
-          rows={1}
-          value={goal}
-          placeholder="Help first-time buyers pick the right snowboard for their terrain and skill level"
-          onChange={(e) => {
-            setGoal(e.target.value);
-            grow();
-          }}
-          onKeyDown={(e) => {
-            // The 1-row composer submits on Enter (Shift+Enter for a newline).
-            if (e.key === "Enter" && !e.shiftKey) {
-              e.preventDefault();
-              draft();
-            }
-          }}
-        />
-        <div className={briefOpen ? "hm-brief is-open" : "hm-brief"}>
-          <div className="hm-brief-row">
-            <label htmlFor="hm-aud">Who is it for</label>
-            <input
-              id="hm-aud"
-              type="text"
-              value={audience}
-              placeholder="First-time buyers, 18–34, buying their own board"
-              onChange={(e) => setAudience(e.target.value)}
-            />
-          </div>
-          <div className="hm-brief-row">
-            <label htmlFor="hm-fac">What decides the answer</label>
-            <input
-              id="hm-fac"
-              type="text"
-              value={factors}
-              placeholder="Terrain, skill level, height and weight, budget"
-              onChange={(e) => setFactors(e.target.value)}
-            />
-          </div>
-          <div className="hm-brief-row">
-            <label htmlFor="hm-len">How long</label>
-            <input
-              id="hm-len"
-              type="text"
-              value={lengthText}
-              onChange={(e) => setLengthText(e.target.value)}
-            />
-            <p className="hm-brief-note">
-              Defaulted from your goal. Change it or leave it — it never blocks the draft.
-            </p>
-          </div>
-        </div>
-        <div className="hm-bar">
-          <button
-            className="hm-addmore"
-            type="button"
-            aria-expanded={briefOpen}
-            onClick={() => setBriefOpen((o) => !o)}
-          >
-            <HmIcon d={I.plus} width={14} height={14} />
-            Audience, factors, length
-            <HmIcon d={I.chevDown} className="hm-chev" width={13} height={13} />
-          </button>
-          <span className="hm-grow" />
-          <button
-            className={busy ? "hm-go is-ready is-busy" : ready ? "hm-go is-ready" : "hm-go"}
-            type="button"
-            aria-label={busy ? "Drafting your quiz…" : "Draft my quiz"}
-            aria-busy={busy}
-            disabled={busy}
-            onClick={draft}
-          >
-            {busy ? <span className="hm-go-ring" aria-hidden /> : <HmIcon d={I.arrow} />}
-          </button>
-        </div>
+    <section className="hm3-card hm3-make" aria-labelledby="hm3-q">
+      <div className="hm3-make-art" aria-hidden="true">
+        <GoalArt />
       </div>
-      {error ? (
-        <p className="hm-error" role="alert">
-          {error}
-        </p>
-      ) : null}
-
-      <div className="hm-modes">
-        <Link className="hm-mode" to="/studio/templates">
-          <HmIcon d={I.grid} />
-          Browse templates
-        </Link>
-        {/* FLOW-2 — the step-by-step funnel is the non-AI-first path. */}
-        <Link className="hm-mode" to="/studio/onboarding">
-          <HmIcon d={I.plus} />
-          Start from scratch
-        </Link>
-        {/* Duplicate lives in each quiz row's ⋯ menu on the quizzes page. */}
-        <Link className="hm-mode" to="/studio/quizzes">
-          <HmIcon d={I.copy} />
-          Duplicate a quiz
-        </Link>
+      <div className="hm3-make-body">
+        <h1 className="hm3-q" id="hm3-q" ref={headingRef} tabIndex={-1}>
+          {QUESTION}
+        </h1>
+        {children}
+        {first && starters.length > 0 ? (
+          <div className="hm3-catalog">
+            <span>Or start from your catalog</span>
+            <div className="hm3-chips">
+              {starters.map((s) => (
+                <button
+                  key={s.meta}
+                  type="button"
+                  className="hm3-chip"
+                  aria-label={s.goal}
+                  title={s.goal}
+                  aria-pressed={activeGoal === s.goal}
+                  onClick={() => onStarter(s)}
+                >
+                  <span className="hm3-chip-art" aria-hidden="true" />
+                  <b>{s.label}</b>
+                  <span className="hm3-chip-meta">{s.meta}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        ) : null}
+        {first ? (
+          <div className="hm3-altrow">
+            <span>Or start another way</span>
+            <Link className="hm3-quiet" to="/studio/templates">
+              <GoalIc>{ICON.grid}</GoalIc> Browse templates
+            </Link>
+            {/* FLOW-2 — the step-by-step funnel is the non-AI-first path. */}
+            <Link className="hm3-quiet" to="/studio/onboarding">
+              <GoalIc>{ICON.plus}</GoalIc> Start from scratch
+            </Link>
+          </div>
+        ) : null}
       </div>
-    </>
+    </section>
   );
 }
 
-export default function StudioHome() {
-  const data = useLoaderData<typeof loader>();
-  const state = data.hasQuizzes ? "has" : "none";
-  const { stats } = data;
+/* ── The reminder (§7.2) ────────────────────────────────────────────────── */
 
+function Ring({ done, total, warn }: { done: number; total: number; warn: boolean }) {
+  const c = 138.2; // 2π × 22
+  const on = Math.max(0, Math.min(1, done / total)) * c;
   return (
-    <div className={`home2 is-${state}`}>
-      <div className="hm-top">
-        <div className="hm-col">
-          <h1 className="hm-h1">What should this quiz help someone decide?</h1>
-          <Composer minGoalChars={data.minGoalChars} />
-          {state === "none" && !data.designSet ? (
-            <Link to="/studio/brand" className="hm-nudge">
-              <HmIcon d={I.palette} />
-              Set up your global design — colors and fonts flow into every quiz
-            </Link>
-          ) : null}
+    <span className={warn ? "hm3-ring is-warn" : "hm3-ring"}>
+      <svg width="52" height="52" viewBox="0 0 52 52" aria-hidden="true">
+        <circle className="trk" cx="26" cy="26" r="22" />
+        <circle className="val" cx="26" cy="26" r="22" strokeDasharray={`${on.toFixed(1)} ${c}`} />
+      </svg>
+      <b>
+        {done}/{total}
+      </b>
+    </span>
+  );
+}
+
+function NextCard({ item, onDismiss }: { item: HomeWaitItem; onDismiss: () => void }) {
+  const w = WAIT[item.kind];
+  const setup = item.kind === "setup" || item.kind === "stalled";
+  const now = item.stepIndex ?? 0;
+  return (
+    <section className="hm3-card hm3-next" aria-labelledby="hm3-next-title">
+      <div className="hm3-next-side">
+        <div className="hm3-next-tile">
+          {setup ? (
+            <>
+              <Ring done={now} total={TOTAL_STEPS} warn={item.kind === "stalled"} />
+              <span>
+                Setup steps
+                <br />
+                done
+              </span>
+            </>
+          ) : (
+            <>
+              <span className={item.kind === "store" ? "hm3-medal is-live" : "hm3-medal"}>
+                <GoalIc>{w.icon}</GoalIc>
+              </span>
+              <span>
+                {item.kind === "store" ? "Live, no" : "Built,"}
+                <br />
+                {item.kind === "store" ? "visits yet" : "not live"}
+              </span>
+            </>
+          )}
         </div>
       </div>
+      <div className="hm3-next-body">
+        <div className="hm3-sechead">
+          <p className="hm3-lbl">Next step</p>
+          {w.tag ? <span className={`hm3-tag is-${w.tag[0]}`}>{w.tag[1]}</span> : null}
+        </div>
+        <h2 className="hm3-next-title" id="hm3-next-title">
+          {item.title}
+        </h2>
+        {setup ? (
+          <ol className="hm3-steps" aria-label={`Step ${now + 1} of ${TOTAL_STEPS}`}>
+            {FUNNEL_STEPS.map((s, i) => (
+              <li
+                key={s.stage}
+                className={
+                  i < now ? "is-done" : i === now ? (item.kind === "stalled" ? "is-stall" : "is-now") : ""
+                }
+              >
+                <span>{s.short}</span>
+              </li>
+            ))}
+          </ol>
+        ) : null}
+        <div className="hm3-next-acts">
+          <Link className="hm3-btn hm3-btn-sm" to={item.href}>
+            {w.lead} <GoalIc size={14}>{ICON.arrow}</GoalIc>
+          </Link>
+        </div>
+      </div>
+      <button type="button" className="hm3-cardx" aria-label="Move this into Also waiting" onClick={onDismiss}>
+        <GoalIc size={14}>{ICON.x}</GoalIc>
+      </button>
+    </section>
+  );
+}
 
-      {state === "has" ? (
-        <div className="hm-below">
-          <div className="hm-col">
-            {data.todos.length > 0 ? (
-              <section className="hm-section">
-                <QzSectionHeader
-                  title="Pick up where you left off"
-                  count={`${data.todos.length} to do`}
-                />
-                <div className="hm-card">
-                  {data.todos.map((t) => (
-                    <Link key={t.kind} to={t.href} className="hm-todo">
-                      <span className="hm-todo-ico">
-                        <HmIcon d={TODO_ICON[t.kind]} />
+/* ── Your quizzes (§7.7) — four fixed tracks ────────────────────────────── */
+
+type LoaderData = ReturnType<typeof useLoaderData<typeof loader>>;
+
+function QuizRows({ rows }: { rows: LoaderData["rows"] }) {
+  return (
+    <div className="hm3-qrows">
+      {rows.map((q) => (
+        <Link key={q.id} to={q.href} className="hm3-qrow">
+          <span className="hm3-qmark" aria-hidden="true">
+            {q.name.trim().charAt(0).toUpperCase() || "Q"}
+          </span>
+          <span className="hm3-qname">
+            <b>{q.name}</b>
+            <span className={`hm3-tag is-${q.tag}`}>
+              {q.tag === "live" ? "Live" : q.tag === "setup" ? "In setup" : "Draft"}
+            </span>
+          </span>
+          <span className="hm3-qmeter">
+            {/* The figure track is always reserved, empty or not. */}
+            <span className="hm3-qfig" aria-hidden="true">
+              {q.barPct != null ? (
+                <span className="hm3-bar">
+                  <i style={{ width: `${q.barPct}%` }} />
+                </span>
+              ) : q.stepsDone != null ? (
+                <span className="hm3-dots">
+                  {FUNNEL_STEPS.map((s, i) => (
+                    <i key={s.stage} className={i < (q.stepsDone ?? 0) ? "is-on" : undefined} />
+                  ))}
+                </span>
+              ) : null}
+            </span>
+            <span>{q.sentence}</span>
+          </span>
+          <span className="hm3-qnum">{q.num}</span>
+          <span className="hm3-chev">
+            <GoalIc>{ICON.chev}</GoalIc>
+          </span>
+        </Link>
+      ))}
+    </div>
+  );
+}
+
+/* ── Page ───────────────────────────────────────────────────────────────── */
+
+export default function StudioHome() {
+  const data = useLoaderData<typeof loader>();
+  const { create, busy, error } = useGoalCreate();
+  const homeFetcher = useFetcher<typeof action>();
+
+  // ONE brief shared by every goal box on the page (dialog, card, row): the
+  // goal, count and switch survive the dialog's close (§3).
+  const [brief, setBriefState] = useState<GoalBrief>(EMPTY_GOAL_BRIEF);
+  const setBrief = (next: Partial<GoalBrief>) => setBriefState((b) => ({ ...b, ...next }));
+  const onCreate = () => create(brief);
+
+  const [dialogOpen, setDialogOpen] = useState(data.showDialog);
+  const [example, setExample] = useState(0);
+  const [dismissedKey, setDismissedKey] = useState(data.dismissedKey);
+  const headingRef = useRef<HTMLHeadingElement>(null);
+  const dialogGoalRef = useRef<HTMLTextAreaElement>(null);
+  const pageGoalRef = useRef<HTMLTextAreaElement>(null);
+
+  // It opens by itself once per shop: record that it opened, so every exit —
+  // ✕, Esc, scrim, Create, or simply navigating away — counts.
+  const markedRef = useRef(false);
+  useEffect(() => {
+    if (!data.showDialog || markedRef.current) return;
+    markedRef.current = true;
+    homeFetcher.submit({ intent: "dialog-shown" }, { method: "post" });
+  }, [data.showDialog, homeFetcher]);
+
+  const closeDialog = () => {
+    setDialogOpen(false);
+    // Nothing on the page opened it: focus lands on screen 2's question, after
+    // QzModal's own focus-restore runs on unmount.
+    requestAnimationFrame(() => headingRef.current?.focus());
+  };
+
+  const box = (id: string, density: "dialog" | "page" | "card" | "row", ref?: React.RefObject<HTMLTextAreaElement>) => (
+    <GoalBox
+      id={id}
+      density={density}
+      brief={brief}
+      setBrief={setBrief}
+      onCreate={onCreate}
+      busy={busy}
+      error={error}
+      inputRef={ref}
+    />
+  );
+
+  if (!data.hasQuizzes) {
+    const examples = data.starters;
+    const exampleGoal = examples.length > 0 ? examples[example % examples.length]!.goal : null;
+    return (
+      <div className="hm3 is-first">
+        <div className="hm3-col">
+          <CreateCard
+            headingRef={headingRef}
+            first
+            starters={data.starters}
+            activeGoal={brief.goal}
+            onStarter={(s) => {
+              setBrief({ goal: s.goal });
+              // Selected, so the next keystroke replaces it (§4.2).
+              requestAnimationFrame(() => {
+                pageGoalRef.current?.focus();
+                pageGoalRef.current?.select();
+              });
+            }}
+          >
+            {dialogOpen ? <PassiveBox goal={brief.goal} /> : box("hm3-first", "page", pageGoalRef)}
+          </CreateCard>
+        </div>
+        <QzModal
+          open={dialogOpen}
+          onClose={closeDialog}
+          size="md"
+          width={640}
+          className="hm3-pop"
+          initialFocusRef={dialogGoalRef}
+          title="Describe what you're trying to build, and I'll start it for you."
+        >
+          {box("hm3-pop", "dialog", dialogGoalRef)}
+          {exampleGoal ? (
+            <div className="hm3-example">
+              <p>
+                <b>For example:</b> {exampleGoal}
+              </p>
+              <span className="hm3-example-acts">
+                <button
+                  type="button"
+                  className="hm3-linkq"
+                  onClick={() => {
+                    setBrief({ goal: exampleGoal });
+                    dialogGoalRef.current?.focus();
+                  }}
+                >
+                  Use this
+                </button>
+                {examples.length > 1 ? (
+                  <>
+                    <span aria-hidden="true">·</span>
+                    <button type="button" className="hm3-linkq" onClick={() => setExample((n) => n + 1)}>
+                      try another
+                    </button>
+                  </>
+                ) : null}
+              </span>
+            </div>
+          ) : null}
+        </QzModal>
+      </div>
+    );
+  }
+
+  const { next, also } = splitHomeQueue(data.queue, dismissedKey);
+  const { stats } = data;
+  const dismiss = () => {
+    if (!next) return;
+    setDismissedKey(next.key);
+    homeFetcher.submit({ intent: "dismiss-reminder", key: next.key }, { method: "post" });
+  };
+
+  const quizCard = (inGrid: boolean) => (
+    <section
+      className={inGrid ? "hm3-card hm3-quizzes is-ingrid" : "hm3-card hm3-quizzes"}
+      aria-labelledby="hm3-sec-quizzes"
+    >
+      <div className="hm3-sechead">
+        <p className="hm3-lbl" id="hm3-sec-quizzes">
+          Your quizzes
+        </p>
+        <Link className="hm3-link" to="/studio/quizzes">
+          All quizzes
+        </Link>
+      </div>
+      <QuizRows rows={data.rows} />
+    </section>
+  );
+
+  const statsCard = (
+    <section className="hm3-card hm3-stats" aria-labelledby="hm3-sec-stats">
+      <div className="hm3-sechead">
+        <p className="hm3-lbl" id="hm3-sec-stats">
+          Last 30 days
+        </p>
+        <Link className="hm3-link" to="/studio/analytics">
+          Analytics
+        </Link>
+      </div>
+      <div className="hm3-tiles">
+        <div className="hm3-tile2 is-wide">
+          <p className="hm3-lbl">Starts</p>
+          <b>{fmtNum(stats.starts)}</b>
+          {stats.startsDelta ? (
+            <span className={stats.startsDelta.up ? "hm3-d is-up" : "hm3-d"}>{stats.startsDelta.text}</span>
+          ) : null}
+          <span className="hm3-spark" aria-hidden="true">
+            {stats.spark.map((h, i) => (
+              <i
+                key={i}
+                className={i === stats.spark.length - 1 ? "is-last" : undefined}
+                style={{ height: `${Math.max(h, 4)}%` }}
+              />
+            ))}
+          </span>
+        </div>
+        <div className="hm3-tile2">
+          <p className="hm3-lbl">Completion</p>
+          {stats.completion.state === "suppressed" ? (
+            <>
+              <b>—</b>
+              <span className="hm3-d">Not enough data yet</span>
+            </>
+          ) : (
+            <b className={stats.completion.state === "provisional" ? "is-range" : undefined}>
+              {stats.completion.text}
+            </b>
+          )}
+        </div>
+        <div className="hm3-tile2">
+          <p className="hm3-lbl">Emails</p>
+          <b>{fmtNum(stats.emails)}</b>
+        </div>
+      </div>
+    </section>
+  );
+
+  return (
+    <div className="hm3 is-live">
+      <div className="hm3-col hm3-stack">
+        {/* Dismissing swaps the top slot — announce it (§14). */}
+        <div className="hm3-stack" aria-live="polite">
+          {next ? (
+            <>
+              <h1 className="qz-sr-only">{QUESTION}</h1>
+              <NextCard item={next} onDismiss={dismiss} />
+              <section className="hm3-card hm3-makerow" aria-label="Create a quiz">
+                <div className="hm3-makerow-art" aria-hidden="true">
+                  <GoalArt mini />
+                </div>
+                <div className="hm3-makerow-body">{box("hm3-row", "row")}</div>
+              </section>
+            </>
+          ) : (
+            <CreateCard first={false} starters={[]} onStarter={() => undefined} activeGoal={brief.goal}>
+              {box("hm3-live", "card")}
+            </CreateCard>
+          )}
+        </div>
+
+        {also.length > 0 ? (
+          <>
+            <div className="hm3-grid2">
+              <section className="hm3-card hm3-also" aria-labelledby="hm3-sec-also">
+                <div className="hm3-sechead">
+                  <p className="hm3-lbl" id="hm3-sec-also">
+                    Also waiting
+                  </p>
+                </div>
+                <div>
+                  {also.map((a) => (
+                    <div key={a.key} className="hm3-row">
+                      <span className="hm3-tile" aria-hidden="true">
+                        <GoalIc>{WAIT[a.kind].icon}</GoalIc>
                       </span>
-                      <span className="hm-todo-main">
-                        <b>{t.title}</b>
-                        <span>{t.sub}</span>
-                      </span>
-                      <HmIcon d={I.chev} className="hm-todo-chev" width={16} height={16} />
-                    </Link>
+                      <b className="hm3-rowtitle">{a.title}</b>
+                      <Link className="hm3-rowact" to={a.href}>
+                        {a.key === dismissedKey ? WAIT[a.kind].demoted : WAIT[a.kind].row}{" "}
+                        <GoalIc>{ICON.chev}</GoalIc>
+                      </Link>
+                    </div>
                   ))}
                 </div>
               </section>
-            ) : null}
-
-            <section className="hm-section">
-              <QzSectionHeader
-                title="Last 30 days"
-                action={<Link to="/studio/analytics">Full analytics</Link>}
-              />
-              <div className="hm-stats">
-                <QzStat
-                  label="Starts"
-                  value={fmtNum(stats.starts)}
-                  delta={stats.startsDelta?.text}
-                  deltaTone={stats.startsDelta?.up ? "up" : undefined}
-                />
-                <QzStat
-                  label="Completion"
-                  value={stats.completion != null ? `${stats.completion}%` : "—"}
-                  delta={stats.completionDelta?.text}
-                  deltaTone={stats.completionDelta?.up ? "up" : undefined}
-                />
-                <QzStat
-                  label="Emails"
-                  value={fmtNum(stats.emails)}
-                  delta={stats.emailsDelta?.text}
-                  deltaTone={stats.emailsDelta?.up ? "up" : undefined}
-                />
-                {/* Revenue needs order attribution the app doesn't collect yet —
-                    the 4th tile stays the honest published count. */}
-                <QzStat label="Published quizzes" value={String(stats.published)} />
-              </div>
-            </section>
-
-            <section className="hm-section">
-              <QzSectionHeader
-                title="Your quizzes"
-                action={<Link to="/studio/quizzes">All {data.totalQuizzes}</Link>}
-              />
-              <div className="hm-card">
-                {data.rows.map((q) => (
-                  <Link key={q.id} to={q.href} className="hm-qrow">
-                    <span className="hm-qrow-main">
-                      <b>{q.name}</b>
-                      <span>{q.meta}</span>
-                    </span>
-                    <span
-                      className={`hm-chip${
-                        q.chip === "live" ? " is-live" : q.chip === "setup" ? " is-setup" : ""
-                      }`}
-                    >
-                      {q.chip === "live" ? "Live" : q.chip === "setup" ? "In setup" : "Draft"}
-                    </span>
-                  </Link>
-                ))}
-              </div>
-            </section>
+              {statsCard}
+            </div>
+            {quizCard(false)}
+          </>
+        ) : (
+          // All caught up (§7.8): no card saying so — Your quizzes moves up
+          // into the slot beside Last 30 days.
+          <div className="hm3-grid2">
+            {quizCard(true)}
+            {statsCard}
           </div>
-        </div>
-      ) : null}
+        )}
+      </div>
+    </div>
+  );
+}
+
+/* Behind the dialog the page shows the same goal, read-only — two live
+   textareas with one id would collide while the dialog is open. */
+function PassiveBox({ goal }: { goal: string }) {
+  return (
+    <div className="hm3-goal is-page" aria-hidden="true">
+      <div className="hm3-box">
+        <div className="hm3-passive">{goal || GOAL_PLACEHOLDER}</div>
+      </div>
     </div>
   );
 }
