@@ -23,6 +23,9 @@ import { X } from "lucide-react";
    position:fixed gets pointer-trapped by container-type/zoom transforms).
    Z ladder: drawer 80 · modal 120 · toast 200. Modal-over-drawer is the
    ONE legal stack (the drawer's unsaved-changes intercept).
+   AMENDED (owner, D15/D24, 2026-09-22): "Add recommendations" may open as
+   a modal over the Logic step's rule window — the one modal-over-modal
+   stack. The window under it goes inert; Esc closes the top one only.
 
    LOGIC-STEP Phase 3 (2026-09) upgrades, all opt-in where they could change
    an existing screen:
@@ -101,7 +104,7 @@ function usePortalReady(): boolean {
 /** Make every body child except `keep` (and live regions / toasts marked
     data-qz-keep-live) inert while `active` — the mock's winSync. Restores
     only what it set, so stacked windows unwind correctly. */
-function useInertBackground(keepRef: RefObject<HTMLElement | null>, active: boolean) {
+export function useInertBackground(keepRef: RefObject<HTMLElement | null>, active: boolean) {
   useEffect(() => {
     const keep = keepRef.current;
     if (!active || !keep) return;
@@ -122,7 +125,7 @@ function useInertBackground(keepRef: RefObject<HTMLElement | null>, active: bool
 }
 
 /** Opt-in page-scroll lock while `active`. */
-function useScrollLock(active: boolean) {
+export function useScrollLock(active: boolean) {
   useEffect(() => {
     if (!active) return;
     const root = document.documentElement;

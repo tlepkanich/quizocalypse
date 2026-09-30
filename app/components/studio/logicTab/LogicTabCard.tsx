@@ -556,8 +556,9 @@ export function LogicTabCard({
           productIndex={productIndex}
           quizId={quizId}
           open={createOpen}
-          editRule={editRuleId ? rules.find((r) => r.id === editRuleId) ?? null : null}
+          editRuleId={editRuleId}
           flow={ruleFlow}
+          {...(catalog ? { catalog } : {})}
           style={style}
           {...(createTargets ? { initialTargetIds: createTargets } : {})}
           undo={undo}
@@ -608,6 +609,7 @@ export function LogicTabCard({
           quizId={quizId}
           {...(catalog ? { catalog } : {})}
           categories={allCategories}
+          productIndex={productIndex}
           onCategoriesCreated={(cats) => setExtraCats((prev) => [...prev, ...cats])}
           onClose={() => setAddRecsOpen(false)}
         />

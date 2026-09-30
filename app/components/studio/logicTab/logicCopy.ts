@@ -194,6 +194,107 @@ export const CHECK_COPY = {
   label: "Checks",
 };
 
+// ── The rule window (agent E; mock modalHTML, ACT.m*, D12, D13, D24) ──
+
+export const RULE_WINDOW_COPY = {
+  createLabel: "Create a rule",
+  editLabel: "Edit rule",
+  whatHappens: "What happens",
+  whenTheyAnswer: "When they answer",
+  /** D2 (Rules only): a stored Pin / Hide opens as Show and says so. */
+  onlyInFilter: (verbName: string) =>
+    `${verbName} only works in ${LOGIC_STYLE_NAME.attributes} · saving makes this a Show rule`,
+  legacyNote: "This older rule replaces the results outright. Saving on Show keeps that behavior.",
+  matchAnyNote: "This rule matches when any one of these questions matches. Saving keeps that.",
+  duplicate: "Duplicate",
+  duplicateTip: "Make a copy of this rule, just below it",
+  deleteRule: "Delete rule",
+  close: "Close",
+  frac: { attributes: "are covered", rules: "have a rule" } as const,
+  chipRules: (n: number) => `${n} rule${n === 1 ? "" : "s"}`,
+  chipMapped: "Mapped from an answer · no rule needed",
+  chipNeeds: "Needs a rule",
+  rowHasRule: "has a rule",
+  rowMapped: "mapped from an answer",
+  rowNeeds: "needs a rule",
+  pickedFoot: "picked",
+  pickFoot: "Pick what this rule shows",
+  done: "Done",
+  deletedRecommendation: "recommendation deleted",
+  deletedAnswer: "answer deleted",
+  deletedQuestion: "Deleted question",
+  removeDeleted: "Click to remove it from this rule",
+  isTip: "Click to switch between is and is not",
+  isNotTip:
+    "“is not” means none of these answers: a shopper who picks any one of them doesn't match this rule. Click to switch back",
+  joinTip: "Click to switch",
+  fixedJoinTip: "A shopper answers this question once, so two answers here can only mean either of them",
+  impossible: (max: number, picked: number) =>
+    `They can pick at most ${max} here, so all ${picked} can never happen together. Pick ${max} or fewer, or switch to any of.`,
+  cancel: "Cancel",
+  createAnother: "Create & add another",
+  saveAnother: "Save & add another",
+  create: "Create rule",
+  save: "Save rule",
+  saving: "Saving…",
+  created: "Rule created",
+  saved: "Rule saved",
+  addedPicked: "Added and picked for this rule",
+  gone: "Undone. The rule you had open is gone, so its window closed",
+  goneOnSave: "That rule was removed, so nothing was saved.",
+  goneOnDelete: "That rule was already removed",
+  goneOnCopy: "That rule was removed, so there was nothing to copy",
+  copied: (copyN: number, origN: number) => `Rule ${copyN} is a copy of rule ${origN} · you are editing the copy`,
+  offline: "Couldn't reach the server. The rule wasn't saved.",
+  addFailed: "Couldn't add those recommendations. Try again.",
+  peekTitle: (name: string) => `Inside ${name}`,
+  peekEmpty: "No products in this group yet",
+  peekMore: (n: number) => `+${n} more`,
+  peekLabel: (count: string, name: string) => `${count} in ${name}`,
+};
+
+/** The question-type tag on a rule-window row (mock typeMeta). */
+export const QUESTION_TYPE_TAG = {
+  multi: (min: number, max: number) => `Multi-select · pick ${min === max ? min : `${min}–${max}`}`,
+  scale: (n: number) => `Scale · 1–${n}`,
+  five: "Five-point scale",
+};
+
+// ── Add recommendations (agent E; mock arHTML, ACT.ar*, D15) ──
+
+export const ADD_RECS_COPY = {
+  title: "Add recommendations",
+  search: "Search products, collections, tags, groups",
+  searchLabel: "Search the catalogue",
+  kindGroup: "Kind",
+  tabs: { all: "All", collection: "Collections", tag: "Tags", product: "Products", group: "Custom groups" },
+  kind: { collection: "Collection", tag: "Tag", product: "Product", group: "Custom group" },
+  groupsNote: "Groups you made on the Recommendations step.",
+  inQuiz: "In this quiz",
+  nothingMatches: (q: string) => `Nothing matches “${q}”.`,
+  noCatalogue: "The catalogue isn't available here yet.",
+  footEmpty: "Pick what shoppers could be shown",
+  selected: "selected",
+  cancel: "Cancel",
+  addNone: "Add recommendations",
+  add: (n: number) => `Add ${n} recommendation${n === 1 ? "" : "s"}`,
+  adding: "Adding…",
+  added: (n: number) =>
+    `Added ${n} recommendation${n === 1 ? "" : "s"}. ${n === 1 ? "It needs" : "Each needs"} a rule`,
+  offlineNone: "Couldn't reach the server. Nothing was added.",
+  offlineSome: (k: number, n: number) => `Couldn't reach the server. ${k} of ${n} recommendations were added.`,
+  skipped: (why: "empty" | "not_found") =>
+    `1 wasn't added: ${why === "empty" ? "it has no products" : "it is no longer in the catalogue"}.`,
+  skippedMany: (n: number) => `${n} weren't added: they have no products or are no longer in the catalogue.`,
+};
+
+// ── Paste rules (agent E; D13) ──
+
+export const PASTE_COPY = {
+  created: (n: number) =>
+    `${n} rule${n === 1 ? "" : "s"} created. Rules run top to bottom, first match applies`,
+};
+
 /** "1", "1 and 3", "1, 2 and 4" (mock nlist). */
 export function joinNumbers(list: readonly number[]): string {
   if (list.length <= 1) return String(list[0] ?? "");
